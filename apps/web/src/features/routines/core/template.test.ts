@@ -9,18 +9,19 @@ import {
 } from './template';
 
 describe('sharesAsTemplate', () => {
-  const draft = createEmptyDraft('model');
+  const task = {
+    steps: [{ type: 'agent' as const, model: 'model', instructions: 'Plan' }],
+  };
   const definition = {
     name: 'remind',
     title: 'Remind me',
     inputs: [],
     steps: [],
-    apps: [],
   };
 
   it('shares a routine of its own steps', () => {
-    expect(sharesAsTemplate(draft)).toBe(true);
-    expect(sharesAsTemplate({ ...draft, subRoutines: [], inputs: [] })).toBe(
+    expect(sharesAsTemplate(task)).toBe(true);
+    expect(sharesAsTemplate({ ...task, sub_routines: [], inputs: [] })).toBe(
       true
     );
   });
@@ -28,16 +29,16 @@ describe('sharesAsTemplate', () => {
   it('keeps a copy, and a routine with sub-routines or input values, unshared', () => {
     expect(
       sharesAsTemplate({
-        ...draft,
-        copy: { subRoutine: 'remind', inputs: { taskId: 't' } },
+        sub_routine: 'remind',
+        inputs: { taskId: 't' },
       })
     ).toBe(false);
-    expect(sharesAsTemplate({ ...draft, subRoutines: [definition] })).toBe(
+    expect(sharesAsTemplate({ ...task, sub_routines: [definition] })).toBe(
       false
     );
     expect(
       sharesAsTemplate({
-        ...draft,
+        ...task,
         inputs: [{ type: 'text', name: 'taskId', label: 'Task', value: 't' }],
       })
     ).toBe(false);

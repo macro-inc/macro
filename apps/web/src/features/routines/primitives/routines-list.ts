@@ -11,7 +11,6 @@ import {
   triggerKind,
 } from '../core/routine-triggers';
 import { runOutcome, stepsForRun, summarizeRun } from '../core/step-history';
-import { sharesAsTemplate } from '../core/template';
 import type { RoutineRow } from '../core/types';
 
 /** Today's runs show their time; older ones their day. */
@@ -103,8 +102,7 @@ export function createRoutineRows(
       enabled: routine.enabled,
       isCopy: routine.isCopy,
       editable: routine.ownerId === userId(),
-      // A routine the editor can't show is left for the scheduler to decide.
-      shareable: !draft || sharesAsTemplate(draft),
+      shareable: routine.shareable,
       pausedByParent: routine.parent?.pausedByParent ?? false,
     };
   };

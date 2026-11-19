@@ -1626,8 +1626,8 @@ the saved routine. The owner's own mention and the schedules' time zone fill in
 as whoever activates it; other references stay the same for everyone, and
 re-sharing keeps the fills an earlier template set.
 
-In a channel composer (including thread replies), the owner's routines appear
-under **Routines** in the `@` menu. Picking one publishes its template the same
+In a channel composer (including thread replies), routines the owner can share
+as templates appear under **Routines** in the `@` menu. Picking one publishes its template the same
 way, then inserts the mention, so everyone in the channel gets a card they can
 activate from. If publishing fails, the mention is not inserted.
 

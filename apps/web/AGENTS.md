@@ -1750,8 +1750,8 @@ and never on phones. Its backend-free check is
 
 Cognition, routines, preview control, and MCP share `agent_harness_service`.
 Agent replies can use the existing `m-document-mention` format with
-`blockName: "routine"`; the `@` menu offers routines only to their owner in
-channel composers, where picking one shares it as a template.
+`blockName: "routine"`; the `@` menu in a channel composer offers the viewer's
+own routines whose saved tasks can be published as templates.
 Macro `/app` links in agent replies (transcripts and agent channel messages)
 open in a new split like mention chips: `AgentReplyLinks` provides the opener
 that `LinkWithPreview` consults before `openExternalUrl`; keep other surfaces'

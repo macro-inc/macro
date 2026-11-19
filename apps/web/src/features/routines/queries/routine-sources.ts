@@ -16,6 +16,7 @@ import type { RoutineSnapshot } from '../core/routine';
 import { withDraftSteps } from '../core/routine-draft';
 import { programSteps } from '../core/routine-steps';
 import { subRoutinesFromWire } from '../core/sub-routines';
+import { sharesAsTemplate } from '../core/template';
 import { scheduleToEntity } from './entities';
 import {
   draftFromSchedule,
@@ -63,6 +64,7 @@ function toRoutine(schedule: ScheduledActionResponse): RoutineSnapshot {
       schedule.description,
     ]),
     isCopy: 'sub_routine' in schedule.task,
+    shareable: sharesAsTemplate(schedule.task),
     draft: draftFromSchedule(schedule),
     templateId: schedule.template_id ?? undefined,
     lastRun: schedule.last_run ? toHistoryRecord(schedule.last_run) : undefined,

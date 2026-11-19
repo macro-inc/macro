@@ -55,6 +55,7 @@ vi.mock('./queries/routine-sources', () => ({
         revision: 1,
         configurationKey: 'briefing',
         isCopy: false,
+        shareable: true,
       },
     ],
     loading: () => false,

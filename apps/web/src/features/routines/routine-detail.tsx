@@ -22,7 +22,6 @@ import { useSystemSkillsQuery } from '@queries/storage/system-skills';
 import { getOwner, onMount, Show } from 'solid-js';
 import { EntityAppearanceTrigger } from '../entity-appearance/entity-appearance';
 import { getErrorMessage } from './core/routine-draft';
-import { sharesAsTemplate } from './core/template';
 import {
   createAgentHistoryMetadata,
   createChatHistoryMetadata,
@@ -104,11 +103,6 @@ export function RoutineDetail(props: {
     });
   };
   const owner = getOwner();
-  // A routine the editor can't show is left for the scheduler to decide.
-  const shareable = () => {
-    const draft = source.routine()?.draft;
-    return !draft || sharesAsTemplate(draft);
-  };
   const share = () => {
     const routine = source.routine();
     if (!routine) return;
@@ -206,7 +200,9 @@ export function RoutineDetail(props: {
           if (!copied) toast.alert('Could not copy prompt');
           return copied;
         }}
-        onShare={sharing().enabled && shareable() ? share : undefined}
+        onShare={
+          sharing().enabled && source.routine()?.shareable ? share : undefined
+        }
         onCompose={compose}
         onOpenTemplate={sharing().enabled ? open : undefined}
         onOpenRoutine={open}

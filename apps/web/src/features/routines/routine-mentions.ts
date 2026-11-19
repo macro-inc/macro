@@ -5,11 +5,11 @@ import { useUserId } from '@core/context/user';
 import { queryReadyGate } from '@queries/gate';
 import { createLazyMemo } from '@solid-primitives/memo';
 import type { Accessor } from 'solid-js';
+import { sharesAsTemplate } from './core/template';
 import { useSchedulesQuery } from './queries/schedules';
 
 /**
- * The viewer's own routines for a channel's mention menu. Only an owner can
- * share a routine, so nobody else's are offered.
+ * The viewer's own routines that can be shared in a channel's mention menu.
  */
 export function useRoutineMentionSource(
   searchTerm: Accessor<string>,
@@ -25,6 +25,7 @@ export function useRoutineMentionSource(
     return query.data.flatMap((routine) =>
       routine.id &&
       routine.owner === userId() &&
+      sharesAsTemplate(routine.task) &&
       routine.name.toLocaleLowerCase().includes(term)
         ? [
             {

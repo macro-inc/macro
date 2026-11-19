@@ -18,6 +18,8 @@ export type RoutineSnapshot = {
   configurationKey: string;
   /** Its steps come from a named definition on its parent. */
   isCopy: boolean;
+  /** Its saved task can be published as a template. */
+  shareable: boolean;
   draft?: ScheduleDraft;
   /** The shared template this routine was activated from. */
   templateId?: string;

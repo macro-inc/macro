@@ -76,6 +76,7 @@ const listed: RoutineSnapshot = {
   revision: 1,
   configurationKey: 'follow-up',
   isCopy: false,
+  shareable: true,
   parent: { id: 'triage', createdByRunId: 'run', pausedByParent: false },
 };
 

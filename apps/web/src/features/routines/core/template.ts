@@ -1,5 +1,6 @@
 import type {
   ActionTrigger,
+  RoutineTask,
   RoutineTemplate,
   ShareRoutineTemplate,
   TemplateVariable,
@@ -159,8 +160,12 @@ function routineTimezone(draft: ScheduleDraft | undefined) {
  * copy, whose steps are its parent's, nor a routine with sub-routines or
  * input values, since a template offers only the references in its own steps.
  */
-export function sharesAsTemplate(draft: ScheduleDraft): boolean {
-  return !draft.copy && !draft.subRoutines?.length && !draft.inputs?.length;
+export function sharesAsTemplate(task: RoutineTask): boolean {
+  if ('sub_routine' in task) return false;
+  return !(
+    'steps' in task &&
+    (task.sub_routines?.length || task.inputs?.length)
+  );
 }
 
 /**

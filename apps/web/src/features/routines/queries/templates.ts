@@ -22,7 +22,7 @@ import {
   useQuery,
 } from '@tanstack/solid-query';
 import type { Accessor } from 'solid-js';
-import { templateShareBody } from '../core/template';
+import { sharesAsTemplate, templateShareBody } from '../core/template';
 import { scheduledActionKeys } from './keys';
 import { draftFromSchedule } from './routine-draft';
 import { routineQueryOptions } from './routines';
@@ -81,6 +81,9 @@ export async function publishRoutineTemplate(
     queryClient.fetchQuery(routineQueryOptions(scheduleId)),
     queryClient.fetchQuery(routineTemplateQueryOptions(scheduleId)),
   ]);
+  if (!sharesAsTemplate(routine.task)) {
+    throw new Error('This routine cannot be shared as a template.');
+  }
   const body = templateShareBody({
     draft: draftFromSchedule(routine),
     authorId: routine.owner,

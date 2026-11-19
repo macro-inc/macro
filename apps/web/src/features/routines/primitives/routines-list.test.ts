@@ -19,6 +19,7 @@ function routine(
     revision: 1,
     configurationKey: id,
     isCopy: false,
+    shareable: true,
     parent,
   };
 }
@@ -93,17 +94,10 @@ describe('createRoutineRows', () => {
   it('offers sharing only for a routine the scheduler takes as a template', () => {
     createRoot((dispose) => {
       const draft = createEmptyDraft('model');
-      const definition = {
-        name: 'remind',
-        title: 'Remind me',
-        inputs: [],
-        steps: [],
-        apps: [],
-      };
       const rows = createRoutineRows(
         source(
           [
-            { ...PARENT, draft: { ...draft, subRoutines: [definition] } },
+            { ...PARENT, shareable: false },
             { ...OTHER, draft },
           ],
           []
