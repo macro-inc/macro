@@ -160,6 +160,30 @@ pub struct RepoLimits {
     /// Pushes are rejected once the repo reaches this size; one push may not
     /// carry more than the remaining room.
     pub max_repo_size_bytes: u64,
+    /// Bounds on the git processes requests start.
+    pub git: GitProcessLimits,
+}
+
+/// Bounds on the `git http-backend` processes one replica runs, so a leaked
+/// token or a flood of clones cannot exhaust it.
+#[derive(Debug, Clone, Copy)]
+pub struct GitProcessLimits {
+    /// Git processes one replica runs at once, across every repo.
+    pub max_processes: usize,
+    /// Git processes one replica runs at once for one repo.
+    pub max_processes_per_repo: usize,
+    /// Most bytes a fetch request body (negotiation) may carry on the wire.
+    pub max_fetch_request_bytes: u64,
+}
+
+impl Default for GitProcessLimits {
+    fn default() -> Self {
+        Self {
+            max_processes: 32,
+            max_processes_per_repo: 4,
+            max_fetch_request_bytes: 8 * 1024 * 1024,
+        }
+    }
 }
 
 /// Errors from the agent git domain.
@@ -194,6 +218,9 @@ pub enum AgentGitError {
     /// Another push or a management change holds the repo; retry shortly.
     #[error("the repository is busy; retry shortly")]
     RepoBusy,
+    /// Every git process slot, for the replica or for this repo, is taken.
+    #[error("too many git requests in progress; retry shortly")]
+    ServerBusy,
     /// `main` has no readable `config/voice.json`.
     #[error("the agent's repo has no valid config/voice.json")]
     NoVoice,

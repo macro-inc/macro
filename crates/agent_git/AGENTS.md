@@ -63,11 +63,15 @@ standalone `bun.lock` (`tooling/scripts/starter-agent-lock.sh`).
 - Credentials: HTTP Basic password = repo token (read and push, own repo
   only); otherwise a Macro user credential (cookie, bearer, or
   `x-macro-user-api-key`, e.g. via `git -c http.extraHeader=...`) of a team
-  admin or owner reads only.
+  admin or owner reads only. Missing repos, bad tokens, non-admin users and
+  the rollout off all get the same 401, so none reveals that an agent exists;
+  only an admin's push is 403.
 - Creating again for the same team keeps the repo and replaces the token
   (explicit re-key); another team is 409.
 - Directories are `<sha256(user id)>.git`. Delete removes the directory before
-  the row; the `"User"` cascade alone leaves the directory behind.
+  the row; the `"User"` cascade alone leaves the directory behind. A create
+  whose row write fails removes the directory it just made (not one that was
+  already there).
 - Push limits: size is measured before each push (refused at the cap, and one
   push may not carry more than the remaining room); the rate limit is a
   token bucket in the repo's `agent_repos` row (`push_tokens`), shared by
@@ -78,12 +82,18 @@ standalone `bun.lock` (`tooling/scripts/starter-agent-lock.sh`).
   same lock. git's own lockfiles stay as the second guard.
 - Receive-pack rejects every Content-Encoding with 415; the remaining quota is
   also passed to git as `receive.maxInputSize`. Both receive/transfer object
-  fsck checks are enabled through process config. Missing repos and bad tokens
-  share the same 401 response.
+  fsck checks are enabled through process config.
+- Git process bounds (`GitProcessLimits`, per replica, in memory): 32 git
+  requests at once, 4 per repo, else 503 with `Retry-After`; the slot is held
+  until the response ends. Fetch (upload-pack) request bodies are capped at
+  8 MiB on the wire. Every git process runs in its own process group and is
+  killed with it after `GIT_REQUEST_DEADLINE` (10 min), which also releases a
+  push's lock. These bound fetches instead of a per-minute fetch budget, which
+  would cost a Postgres write per clone.
 - git runs with a cleared environment so `APP_SECRETS_JSON` never reaches it.
 - `enable-agent-teammates` off for the repo agent's creator (the
   `creators` adapter, `agent_credentials::rollout`) makes the repo look absent
-  to every credential. Never evaluate it for the agent's own account: PostHog
+  (401) to every credential. Never evaluate it for the agent's own account: PostHog
   targeting never matches it.
 
 - `POST /internal/repos/ensure` is internal-only recovery: supply the original

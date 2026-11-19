@@ -75,12 +75,12 @@ pub trait RepoStore: Send + Sync + 'static {
     type Err: std::error::Error + Send + Sync + 'static;
 
     /// Create the bare repo with `files` as its initial commit. A repo that
-    /// already exists is left as is.
+    /// already exists is left as is. `true` when this call created it.
     fn create_repo(
         &self,
         agent_user_id: &MacroUserIdStr<'_>,
         files: &[RenderedFile],
-    ) -> impl Future<Output = Result<(), Self::Err>> + Send;
+    ) -> impl Future<Output = Result<bool, Self::Err>> + Send;
 
     /// Delete the bare repo; a missing repo is fine.
     fn delete_repo(

@@ -17,6 +17,10 @@ use crate::outbound::repo_directories::{RepoDirectories, git_command};
 const MAX_HEADER_BYTES: usize = 64 * 1024;
 /// Most headers git sends on one response.
 const MAX_HEADERS: usize = 32;
+/// Longest a git request may run, from spawn to exit. Past it the process
+/// group is killed, so a client that trickles bytes cannot hold a process, or
+/// a push's repo lock, forever.
+pub const GIT_REQUEST_DEADLINE: std::time::Duration = std::time::Duration::from_secs(10 * 60);
 
 /// Errors from [`GitHttpBackend`].
 #[derive(Debug, thiserror::Error)]
@@ -34,12 +38,22 @@ pub enum GitHttpBackendError {
 pub struct GitHttpBackend {
     directories: RepoDirectories,
     tasks: TaskTracker,
+    deadline: std::time::Duration,
 }
 
 impl GitHttpBackend {
-    /// Serve repos under `directories`; the owner closes and drains `tasks` at shutdown.
-    pub fn new(directories: RepoDirectories, tasks: TaskTracker) -> Self {
-        Self { directories, tasks }
+    /// Serve repos under `directories`, killing each git process that runs
+    /// past `deadline`; the owner closes and drains `tasks` at shutdown.
+    pub fn new(
+        directories: RepoDirectories,
+        tasks: TaskTracker,
+        deadline: std::time::Duration,
+    ) -> Self {
+        Self {
+            directories,
+            tasks,
+            deadline,
+        }
     }
 }
 
@@ -144,7 +158,11 @@ impl GitBackend for GitHttpBackend {
             .env("QUERY_STRING", query)
             .stdin(Stdio::piped())
             .stdout(Stdio::piped())
-            .stderr(Stdio::piped());
+            .stderr(Stdio::piped())
+            // Its own process group, so the deadline kills the git commands
+            // http-backend starts (upload-pack, pack-objects) with it.
+            .process_group(0)
+            .kill_on_drop(true);
 
         command
             .env(
@@ -180,6 +198,10 @@ impl GitBackend for GitHttpBackend {
         }
 
         let mut child = command.spawn()?;
+        let process_group = child
+            .id()
+            .and_then(|id| i32::try_from(id).ok())
+            .and_then(rustix::process::Pid::from_raw);
         let (Some(mut stdin), Some(stdout), Some(mut stderr)) =
             (child.stdin.take(), child.stdout.take(), child.stderr.take())
         else {
@@ -222,18 +244,41 @@ impl GitBackend for GitHttpBackend {
             .instrument(input_span),
         );
         let process_span = tracing::Span::current();
+        let deadline = self.deadline;
         self.tasks.spawn(
             async move {
                 let _process_finished = process_finished;
-                let mut output = String::new();
-                if stderr.read_to_string(&mut output).await.is_ok() && !output.is_empty() {
-                    tracing::warn!(
-                        stderr_bytes = output.len() as i64,
-                        "git http-backend stderr"
-                    );
-                }
+                let finished = tokio::time::timeout(deadline, async {
+                    let mut output = String::new();
+                    if stderr.read_to_string(&mut output).await.is_ok() && !output.is_empty() {
+                        tracing::warn!(
+                            stderr_bytes = output.len() as i64,
+                            "git http-backend stderr"
+                        );
+                    }
+                    child.wait().await
+                })
+                .await;
+                let Ok(finished) = finished else {
+                    tracing::Span::current().record("otel.status_code", "ERROR");
+                    tracing::Span::current().record("git.rejected_reason", "deadline");
+                    tracing::warn!(?deadline, "git request ran past its deadline; killing it");
+                    // Killing the group closes every pipe git holds, so the
+                    // response ends and the request pump is cancelled.
+                    if let Some(group) = process_group {
+                        let _ = rustix::process::kill_process_group(
+                            group,
+                            rustix::process::Signal::KILL,
+                        )
+                        .inspect_err(|error| {
+                            tracing::warn!(error = %error, "could not kill the git process group");
+                        });
+                    }
+                    let _ = child.kill().await;
+                    return;
+                };
 
-                match child.wait().await {
+                match finished {
                     Ok(status) if !status.success() => {
                         tracing::Span::current().record("otel.status_code", "ERROR");
                         tracing::Span::current().record("git.rejected_reason", "backend_exit");

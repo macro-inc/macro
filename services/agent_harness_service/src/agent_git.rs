@@ -10,12 +10,12 @@ use std::path::Path;
 use std::process::Command;
 use std::sync::Arc;
 
-use agent_git::domain::models::RepoLimits;
+use agent_git::domain::models::{GitProcessLimits, RepoLimits};
 use agent_git::domain::service::{AgentGitAdapters, AgentGitServiceImpl};
 use agent_git::domain::template::WORKSPACE_TEMPLATE;
 use agent_git::inbound::http::{AgentGitRouterState, agent_git_router};
 use agent_git::outbound::bare_repo_store::BareRepoStore;
-use agent_git::outbound::git_http_backend::GitHttpBackend;
+use agent_git::outbound::git_http_backend::{GIT_REQUEST_DEADLINE, GitHttpBackend};
 use agent_git::outbound::pg_repo_repository::PgRepoRepository;
 use agent_git::outbound::push_rate_limiter::PgPushRateLimiter;
 use agent_git::outbound::repo_directories::RepoDirectories;
@@ -77,12 +77,13 @@ where
                 pool.clone(),
             )),
             limiter: PgPushRateLimiter::new(pool.clone(), settings.pushes_per_minute),
-            backend: GitHttpBackend::new(directories, git_tasks),
+            backend: GitHttpBackend::new(directories, git_tasks, GIT_REQUEST_DEADLINE),
             creators: agent_credentials::rollout::PgAgentCreators::new(pool),
             flags: feature_flags,
         },
         RepoLimits {
             max_repo_size_bytes: settings.max_repo_size_bytes,
+            git: GitProcessLimits::default(),
         },
         WORKSPACE_TEMPLATE,
     );
