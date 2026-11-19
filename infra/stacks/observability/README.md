@@ -607,9 +607,9 @@ hand-published AMI (matched by `ImageSHA256`) and tag it.
 Use SSM Session Manager with the `instanceId` output. On the host:
 
 ```bash
-sudo systemctl status observability-bootstrap observability-secrets grafana loki tempo prometheus alloy alloy-ingest nginx
+sudo systemctl status observability-bootstrap observability-secrets nginx postgresql goalert macro-alerts-relay alloy
 sudo journalctl -u observability-bootstrap -u observability-secrets --since boot
-sudo journalctl -u grafana -u loki -u tempo -u prometheus -u alloy -u alloy-ingest -u nginx --since '30 minutes ago'
+sudo journalctl -u nginx -u goalert -u macro-alerts-relay -u alloy --since '30 minutes ago'
 ```
 
 Nonsecret runtime values arrive as versioned, compressed JSON in EC2 user-data.

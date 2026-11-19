@@ -56,14 +56,11 @@ const amiId = aws.ec2
 // Validate operator input before registering any infrastructure resources.
 validateSettings({
   region,
-  grafanaHost,
   otlpHost,
   oncallHost,
   secretArn,
-  alarmTopicArn,
   volumeId: 'vol-0',
-  logsBucket: 'validate-logs',
-  tracesBucket: 'validate-traces',
+  backupBucket: 'validate-backup',
 });
 validateRegionalArn(alarmTopicArn, 'sns', region);
 const ciIngestSecretArn =
@@ -302,18 +299,17 @@ const instance = new aws.ec2.Instance(
     },
     userDataReplaceOnChange: true,
     userDataBase64: pulumi
-      .all([data.id, logs.bucket, traces.bucket])
-      .apply(([volumeId, logsBucket, tracesBucket]) =>
+      .all([data.id, logs.bucket])
+      .apply(([volumeId, backupBucket]) =>
         renderUserData({
           region,
-          grafanaHost,
           otlpHost,
           oncallHost,
           secretArn,
-          alarmTopicArn,
           volumeId,
-          logsBucket,
-          tracesBucket,
+          // GoAlert's dumps have always gone under `goalert/` in the logs
+          // bucket; the cluster's Loki owns the rest of it.
+          backupBucket,
         })
       ),
     tags,
@@ -354,35 +350,10 @@ const listener = new aws.lb.Listener('observability-https', {
     },
   ],
 });
-// In prod, Grafana and OTLP ingest are the observability cluster's
-// (infra/k8s/observability/aws adds their listener rules on this listener),
-// and the host serves only GoAlert through the ALB. A dev stack has no
-// cluster, so its host still serves them.
-const uiTarget =
-  stack === 'prod'
-    ? undefined
-    : new aws.lb.TargetGroup('observability', {
-        port: 8080,
-        protocol: 'HTTP',
-        targetType: 'instance',
-        vpcId: vpc.vpcId,
-        healthCheck: { path: '/healthz', matcher: '200', interval: 30 },
-        deregistrationDelay: 30,
-        tags,
-      });
-if (uiTarget) {
-  new aws.lb.TargetGroupAttachment('observability', {
-    targetGroupArn: uiTarget.arn,
-    targetId: instance.id,
-    port: 8080,
-  });
-  new aws.lb.ListenerRule('observability-hosts', {
-    listenerArn: listener.arn,
-    priority: 1,
-    conditions: [{ hostHeader: { values: [grafanaHost, otlpHost] } }],
-    actions: [{ type: 'forward', targetGroupArn: uiTarget.arn }],
-  });
-}
+// Grafana and OTLP ingest are the observability cluster's
+// (infra/k8s/observability/aws adds their listener rules on this listener);
+// the host runs only GoAlert. A stack without a cluster, such as dev, answers
+// 404 on both names (README, "Dev stacks").
 const oncallTarget = new aws.lb.TargetGroup('observability-oncall', {
   port: 8080,
   protocol: 'HTTP',
@@ -467,19 +438,6 @@ new aws.cloudwatch.MetricAlarm('observability-instance', {
   dimensions: { InstanceId: instance.id },
   treatMissingData: 'breaching',
 });
-if (uiTarget) {
-  new aws.cloudwatch.MetricAlarm('observability-ui', {
-    ...alarm,
-    namespace: 'AWS/ApplicationELB',
-    metricName: 'UnHealthyHostCount',
-    threshold: 0,
-    dimensions: {
-      LoadBalancer: alb.arnSuffix,
-      TargetGroup: uiTarget.arnSuffix,
-    },
-    treatMissingData: 'breaching',
-  });
-}
 // Paging must not depend on GoAlert to report that GoAlert is down. On-call
 // phones subscribe to this topic by SMS directly (see README).
 new aws.cloudwatch.MetricAlarm('observability-goalert', {

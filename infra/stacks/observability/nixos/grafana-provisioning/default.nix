@@ -1,9 +1,9 @@
 # Everything Grafana provisions, as plain data: datasources, dashboards, alert
-# rules, contact points and the notification policy. The NixOS host
-# (`../services.nix`) imports it, and the cluster's Grafana is to import it
-# too, so the two show the same dashboards and evaluate the same rules.
+# rules, contact points and the notification policy. The observability
+# cluster's Grafana (`infra/k8s/observability/cluster`) imports it; the NixOS
+# host no longer runs Grafana, and its image does not read this directory.
 #
-# Only what differs between them is a parameter:
+# What depends on where Grafana runs is a parameter:
 # - `goalertUrl`: GoAlert's base URL, without a trailing slash.
 # - `datasourceUrls`: the `prometheus`, `loki` and `tempo` query endpoints.
 #
