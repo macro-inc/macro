@@ -34,7 +34,7 @@ const item: Case = {
 const copy = (id: string) => ({ ...parent, id, task: { sub_routine: 'remind' } });
 const copyCase = { ...item, run: { ...item.run!, runCopies: true } };
 
-function fixture(children: SavedRoutine[], failReply = false) {
+function fixture(children: SavedRoutine[], { failReply = false, earlierRun = false } = {}) {
   const db = (async (parts: TemplateStringsArray, ...args: unknown[]) => {
     if (parts.join('').includes('from agent_session_log')) {
       if (failReply && args[0] === 'failed-copy') throw new Error('reply read failed');
@@ -42,23 +42,32 @@ function fixture(children: SavedRoutine[], failReply = false) {
     }
     return [];
   }) as unknown as SQL;
-  spyOn(Bun, 'sleep').mockResolvedValue(undefined);
+  const sleep = spyOn(Bun, 'sleep').mockResolvedValue(undefined);
+  let copyReads = 0;
   const fetch = spyOn(globalThis, 'fetch').mockImplementation(async (input, init) => {
     const url = new URL(String(input));
     if (url.searchParams.has('parent')) return Response.json(children);
+    const id = url.pathname.split('/').at(-2);
     if (url.pathname.endsWith('/history')) {
-      const id = url.pathname.split('/').at(-2);
-      return Response.json([{
+      const record = (resourceId?: string) => ({
         start_time: new Date().toISOString(),
         is_success: true,
-        result: id === 'parent' ? {} : { resource: { type: 'agent', id } },
-      }]);
+        resource_id: resourceId,
+        result: resourceId ? { resource: { type: 'agent', id: resourceId } } : {},
+      });
+      if (earlierRun && id !== 'parent') {
+        copyReads++;
+        return Response.json(copyReads === 1 ? [record('earlier-run')] : [record(id), record('earlier-run')]);
+      }
+      return Response.json([record(id === 'parent' ? undefined : id)]);
     }
-    if (init?.method === 'POST' || init?.method === 'DELETE') return new Response(null);
+    if (init?.method === 'POST') return Response.json({ resource: id === 'parent' ? null : { id } });
+    if (init?.method === 'DELETE') return new Response(null);
     throw new Error(`unexpected request: ${url}`);
   });
   return {
     fetch,
+    sleep,
     run: (testCase: Case = item) =>
       runCheck(stack, db, tokens, testCase, { outcome: 'routine' }, parent, {
         ids: {},
@@ -72,12 +81,26 @@ function fixture(children: SavedRoutine[], failReply = false) {
 afterEach(() => mock.restore());
 
 test('a copy reply read failure leaves the other copy results available', async () => {
-  const check = fixture([copy('failed-copy'), copy('other-copy')], true);
+  const check = fixture([copy('failed-copy'), copy('other-copy')], { failReply: true });
   const result = await check.run(copyCase);
   expect(result?.effects.copies?.map((copy) => copy.runs?.map((run) => run.reply))).toEqual([
     [],
     ['Reminder'],
   ]);
+});
+
+test('copy completion waits for the run started by execute', async () => {
+  const check = fixture([copy('definition-copy')], { earlierRun: true });
+  const result = await check.run(copyCase);
+  expect(result?.effects.copies?.[0]?.runs).toEqual([
+    { isSuccess: true, result: { resource: { type: 'agent', id: 'definition-copy' } }, reply: 'Reminder' },
+  ]);
+  expect(check.sleep).toHaveBeenCalledWith(2000);
+  const requests = check.fetch.mock.calls.filter(([url]) => String(url).includes('/definition-copy/'));
+  expect(requests).toHaveLength(3);
+  const signal = requests[0][1]?.signal;
+  expect(signal).toBeInstanceOf(AbortSignal);
+  expect(requests.every(([, init]) => init?.signal === signal)).toBe(true);
 });
 
 test('only cases that check copy behavior execute definition copies', async () => {

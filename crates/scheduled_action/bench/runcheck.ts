@@ -2,7 +2,7 @@
 // drafted routine, fire its trigger once with a made-up event, and read what
 // the run changed straight from the stack's database.
 
-import { SQL } from 'bun';
+import type { SQL } from 'bun';
 
 import type { Case, Context, CopyMade, DraftResult, Effects, Fire } from './cases';
 import { restoreStatuses, seedId, setTaskStatus, taskStatus } from './setup';
@@ -11,6 +11,7 @@ import { OWNER, PERSON_KEYS, SCENARIO_NAME, userId } from './workspace';
 
 /** Tokens for every seeded person, by key. */
 export type Tokens = Record<string, string>;
+type RoutineRequest = RequestInit & { token: string };
 
 /** A routine as the scheduled-action API returns it. */
 export type SavedRoutine = {
@@ -64,21 +65,26 @@ async function copiesOf(at: Stack, token: string, parent: SavedRoutine, since: D
  */
 async function runCopy(at: Stack, token: string, db: SQL, id: string): Promise<Effects['runs']> {
   const since = new Date();
-  const started = performance.now();
+  const request = { token, signal: AbortSignal.timeout(RUN_TIMEOUT_MS) };
   try {
-    await call(`${routines(at)}/${id}/execute`, { method: 'POST', token });
-    for (;;) {
-      const runs = await runsSince(at, token, id, since);
+    const started = await call<{ resource?: { id: string } | null; chat_id?: string | null } | undefined>(
+      `${routines(at)}/${id}/execute`,
+      { ...request, method: 'POST' },
+    );
+    const resourceId = started?.resource?.id ?? started?.chat_id ?? undefined;
+    // Execute waits for preparation. History gets the record after the run finishes.
+    while (!request.signal.aborted) {
+      const runs = await runsSince(at, request, id, since, resourceId);
       if (runs.length) {
         await Bun.sleep(SETTLE_MS);
-        return await withReplies(db, await runsSince(at, token, id, since));
+        return await withReplies(db, runs);
       }
-      if (performance.now() - started > RUN_TIMEOUT_MS) return [];
       await Bun.sleep(2000);
     }
   } catch {
     return [];
   }
+  return [];
 }
 
 const routines = (at: Stack) => `${at.harness}/scheduled-action/scheduled-actions`;
@@ -203,15 +209,22 @@ export async function channelsMade(db: SQL, since: Date): Promise<string[]> {
 /** Whether a trigger fires on events (as opposed to a schedule or a time). */
 export const onEvents = (trigger: unknown) => JSON.stringify(trigger ?? null).includes('"events"');
 
-type RunRecord = { start_time: string; end_time: string; is_success: boolean; result: unknown };
+type RunRecord = {
+  start_time: string;
+  end_time: string;
+  resource_id?: string | null;
+  is_success: boolean;
+  result: unknown;
+};
 // Builds before sub-routines list bare records; later ones wrap each with what its run created.
 type HistoryEntry = RunRecord | { record: RunRecord };
 
-async function runsSince(at: Stack, token: string, id: string, since: Date) {
-  const history = await call<HistoryEntry[]>(`${routines(at)}/${id}/history`, { token });
+async function runsSince(at: Stack, request: RoutineRequest, id: string, since: Date, resourceId?: string) {
+  const history = await call<HistoryEntry[]>(`${routines(at)}/${id}/history`, request);
   return history
     .map((entry) => ('record' in entry ? entry.record : entry))
     .filter((record) => new Date(record.start_time).getTime() >= since.getTime() - 1000)
+    .filter((record) => resourceId === undefined || record.resource_id === resourceId)
     .map((record) => ({ isSuccess: record.is_success, result: record.result }));
 }
 
@@ -328,7 +341,7 @@ export async function runCheck(
   try {
     if (!error) {
       for (;;) {
-        runs = await runsSince(at, owner, routine.id, t0);
+        runs = await runsSince(at, { token: owner }, routine.id, t0);
         if (runs.length) break;
         const waited = performance.now() - started;
         if (waited > RUN_TIMEOUT_MS) {
@@ -345,7 +358,7 @@ export async function runCheck(
     }
     ms = performance.now() - started;
     if (runs.length) await Bun.sleep(SETTLE_MS);
-    runs = runs.length ? await withReplies(db, await runsSince(at, owner, routine.id, t0)) : runs;
+    runs = runs.length ? await withReplies(db, await runsSince(at, { token: owner }, routine.id, t0)) : runs;
     const copies = await copiesOf(at, owner, routine, t0);
     if (item.run.runCopies) {
       await Promise.all(

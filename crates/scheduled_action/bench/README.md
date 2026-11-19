@@ -77,6 +77,9 @@ draft on a busy machine can be told apart.
   child of the routine made from a second before it was fired (the clock
   starts before the fire request, so its tolerance is to that request).
   An ordinary child is listed in the evidence but never run by the check.
+  Executing a copy returns when its run is prepared. The check polls its
+  finished history for up to four minutes, matching the transcript ID when
+  the execute response has one and using the start time otherwise.
   A reply's mentions are read with the
   names their items have when the check runs, so `reread` of a saved
   result can differ once an item is renamed. The routine is saved with the sub-routines it defines, so the stack's
