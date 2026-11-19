@@ -1,0 +1,23 @@
+nix/cloud-storage.nix
+  s_f3a48b3a685142::t_0adde06f5529ab 233-235
+crates/code_mode_assets/src/lib.rs
+  s_f3a48b3a685142::t_0adde06f5529ab 27-42
+crates/code_mode_assets/build.rs
+  s_f3a48b3a685142::t_0adde06f5529ab 17-19,21,23,36
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.7.7",
+  "base_commit_sha": "2f21ce92873e22a85da89ac467ad84b6f4d8e300",
+  "prompts": {},
+  "sessions": {
+    "s_f3a48b3a685142": {
+      "agent_id": {
+        "tool": "claude",
+        "id": "65b2bcf0-02e2-4f2c-88ae-8e6cea990f9a",
+        "model": "claude-opus-5-5"
+      },
+      "human_author": "Eric Hayes <56524199+ehayes2000@users.noreply.github.com>"
+    }
+  }
+}
