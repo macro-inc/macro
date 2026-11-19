@@ -323,8 +323,11 @@ documents a run deletes), `updated` (documents deleted, 0 in a dry run), and
 `cursor`, the last message id it finished. Each page's
 `search.deleted_chat_messages.page` span also records `gone_with_chat`, how
 many of its gone messages belong to a chat whose row is gone too, and
-`gone_sample`, up to 10 of them as `chat_id:message_id`, to check a dry run's
-finds against `ChatMessage` before the real run.
+`gone_sample`, up to 10 of them as `chat_id:message_id`. Traces keep few of
+these pages, so each page with gone messages also logs one `info` event, "chat
+message repair page found messages whose row is gone", with `job_id`,
+`dry_run`, `gone`, `gone_with_chat` and `gone_sample`. Check a dry run's finds
+against `ChatMessage` from those events before the real run.
 
 It reads at most `messages_per_second` (default 1000) indexed messages a
 second, in pages of `page_size` (default 500, at most 1000), and deletes with
@@ -341,15 +344,18 @@ resumes the same way.
 
 ### Against dev (deployed service)
 
-```bash
-AUTH_KEY=$(aws secretsmanager get-secret-value \
-  --secret-id document-storage-service-auth-key-dev \
-  --region us-east-1 --query SecretString --output text)
+The internal routes are behind the gateway: `https://dev-gateway.macro.com/search-processing`
+on dev and `https://gateway.macro.com/search-processing` in production
+(`SearchProcessingServiceUrl` in `crates/macro_service_urls`). They take the
+service's `INTERNAL_API_KEY`, which `doppler run` hands to curl without printing
+it:
 
-curl -X POST https://search-processing-dev.macro.com/internal/backfill/calls \
-  -H "Content-Type: application/json" \
-  -H "x-internal-auth-key: $AUTH_KEY" \
-  -d '{}'
+```bash
+doppler run -p search-processing-service -c dev -- sh -c '
+  curl -X POST https://dev-gateway.macro.com/search-processing/internal/backfill/calls \
+    -H "Content-Type: application/json" \
+    -H "x-internal-auth-key: $INTERNAL_API_KEY" \
+    -d "{}"'
 ```
 
 Dev sps consumes the shared `search-event-queue-dev`; backfill messages will interleave with normal ingest. If the deploy brings a mapping change, recreate the relevant index (via `infra/stacks/opensearch/helpers/scripts/create_indices.ts`) before triggering the backfill so stale-mapping docs don't linger.
