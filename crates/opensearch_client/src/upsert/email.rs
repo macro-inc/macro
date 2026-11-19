@@ -1,7 +1,7 @@
 use models_opensearch::SearchIndex;
 
 use super::BulkUpsertResult;
-use super::properties::IndexedProperty;
+use super::properties::{IndexedProperty, PropertyUpdate};
 use crate::{
     Result,
     date_format::EpochMillis,
@@ -149,15 +149,16 @@ pub(crate) async fn bulk_upsert_email_messages(
 /// Update only the denormalized `properties` on every message doc of a
 /// thread, without touching content. The emails index is flat (one doc per
 /// message sharing the thread's `entity_id`), so this is an update-by-query
-/// rather than a single-doc update. Zero matched docs is a no-op — the
-/// thread isn't indexed yet, so the next full index will include the
-/// properties. Version conflicts proceed: a concurrent full reindex writes
-/// the same freshly-fetched values.
+/// rather than a single-doc update. Zero matched docs changes nothing and is
+/// [`PropertyUpdate::NotIndexed`]: the thread isn't indexed yet, so the next
+/// full index will include the properties. Version conflicts proceed: a
+/// concurrent full reindex writes the same freshly-fetched values, so a
+/// matched message counts as applied whether or not this update wrote it.
 pub(crate) async fn update_email_thread_properties(
     client: &opensearch::OpenSearch,
     thread_id: &str,
     properties: &[IndexedProperty],
-) -> Result<()> {
+) -> Result<PropertyUpdate> {
     let properties_value =
         serde_json::to_value(properties).map_err(|err| OpensearchClientError::Unknown {
             details: err.to_string(),
@@ -210,8 +211,15 @@ pub(crate) async fn update_email_thread_properties(
                 operation: OpensearchOperation::UpdateEmailThreadProperties,
             });
         }
+        if body["total"].as_u64() == Some(0) {
+            tracing::debug!(
+                thread_id=%thread_id,
+                "email thread not indexed yet; no message to update"
+            );
+            return Ok(PropertyUpdate::NotIndexed);
+        }
         tracing::trace!(thread_id=%thread_id, "email thread properties updated");
-        return Ok(());
+        return Ok(PropertyUpdate::Applied);
     }
     let body = response.text().await.map_err(|err| {
         OpensearchClientError::deserialization_failed(
