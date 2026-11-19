@@ -1,0 +1,44 @@
+no-access-shown-as-unavailable	ACC-01	FAILED	Error: expect(locator).toBeVisible() failed | Locator: getByRole('main').getByRole('status').filter({ has: getByRole('heading', { name: 'You don\'t have access 
+no-access-shown-as-unavailable	ACC-02	FAILED	Error: expect(locator).toBeVisible() failed | Locator: getByRole('main').getByRole('status').filter({ has: getByRole('heading', { name: 'You don\'t have access 
+no-access-shown-as-unavailable	ACC-03	FAILED	Test timeout of 90000ms exceeded.
+no-access-shown-as-unavailable	ACC-04	FAILED	Test timeout of 90000ms exceeded.
+no-access-shown-as-unavailable	ACC-05	FAILED	Test timeout of 90000ms exceeded.
+no-access-shown-as-unavailable	ACC-06	PASSED	
+no-access-shown-as-unavailable	ACC-07	FAILED	Error: expect(locator).toBeVisible() failed | Locator: getByRole('main').getByRole('status').filter({ has: getByRole('heading', { name: 'You don\'t have access 
+no-access-shown-as-unavailable	ACC-08	PASSED	
+no-access-shown-as-unavailable	ACC-09	PASSED	
+no-access-shown-as-unavailable	CHN-01	PASSED	
+no-access-shown-as-unavailable	CHN-02	PASSED	
+no-access-shown-as-unavailable	CHN-03	PASSED	
+no-access-shown-as-unavailable	CHN-04	PASSED	Error: expect(locator).toContainText(expected) failed | Locator: getByRole('main').locator('[data-view-shell-top-bar]')
+no-access-shown-as-unavailable	CHN-05	PASSED	
+no-access-shown-as-unavailable	CHN-06	PASSED	
+no-access-shown-as-unavailable	CHN-07	PASSED	
+no-access-shown-as-unavailable	CHN-08	PASSED	Error: expect(locator).toHaveCount(expected) failed | Locator:  getByRole('tree', { name: 'Conversations' }).locator('[data-key="favorite:channel:01a1de4a-90e7-
+no-access-shown-as-unavailable	CHN-09	PASSED	
+no-access-shown-as-unavailable	CHN-10	PASSED	
+no-access-shown-as-unavailable	CHN-11	PASSED	
+no-access-shown-as-unavailable	CHN-12	PASSED	
+no-access-shown-as-unavailable	CHN-13	PASSED	
+no-access-shown-as-unavailable	CHN-14	PASSED	Error: expect(locator).toBeVisible() failed | Locator: getByRole('main').getByText('Channel e2e-mwhkdmwnubut created')
+no-access-shown-as-unavailable	CHN-15	PASSED	Error: expect(locator).toHaveCount(expected) failed | Locator:  locator('[data-input-id="channel-input-01a1de4a-b0c2-76a4-9b7a-be3e21b85a10"]')
+no-access-shown-as-unavailable	KEY-01	PASSED	
+no-access-shown-as-unavailable	KEY-02	PASSED	
+no-access-shown-as-unavailable	KEY-03	PASSED	
+no-access-shown-as-unavailable	KEY-04	PASSED	
+no-access-shown-as-unavailable	KEY-05	PASSED	
+no-access-shown-as-unavailable	KEY-06	PASSED	Error: expect(locator).toBeFocused() failed | Locator:  locator('[data-input-id="thread-reply-input-01a1de4a-ea0c-7beb-8c91-6275c232e504"] [contenteditable]')
+no-access-shown-as-unavailable	KEY-07	PASSED	
+no-access-shown-as-unavailable	KEY-08	PASSED	
+no-access-shown-as-unavailable	KEY-12	PASSED	
+no-access-shown-as-unavailable	KEY-09	PASSED	
+no-access-shown-as-unavailable	KEY-10	PASSED	
+no-access-shown-as-unavailable	KEY-11	PASSED	
+no-access-shown-as-unavailable	MEM-01	PASSED	
+no-access-shown-as-unavailable	MEM-02	PASSED	
+no-access-shown-as-unavailable	MEM-03	PASSED	Error: expect(locator).toHaveCount(expected) failed | Locator:  locator('[data-input-id="channel-input-01a1de4b-0cb9-7f84-85f1-7f4a79558569"]')
+no-access-shown-as-unavailable	MEM-04	FAILED	Error: expect(locator).toBeVisible() failed | Locator: getByRole('main').getByRole('status').filter({ has: getByRole('heading', { name: 'You don\'t have access 
+no-access-shown-as-unavailable	MEM-05	PASSED	
+no-access-shown-as-unavailable	MEM-06	PASSED	
+no-access-shown-as-unavailable	MEM-07	PASSED	
+no-access-shown-as-unavailable	MEM-08	PASSED	

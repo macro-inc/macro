@@ -1,0 +1,13 @@
+diff --git a/apps/web/src/lib/queries/messages/timeline.ts b/apps/web/src/lib/queries/messages/timeline.ts
+index 3f8cad8fba..1ff151a84a 100644
+--- a/apps/web/src/lib/queries/messages/timeline.ts
++++ b/apps/web/src/lib/queries/messages/timeline.ts
+@@ -200,7 +200,7 @@ async function fetchMessageTimelinePage(
+     limit: pageParam ? 100 : 50,
+     cursor: pageParam?.next_cursor ?? pageParam?.previous_cursor,
+     direction: pageParam?.previous_cursor ? 'newer' : 'older',
+-    around: !pageParam ? loadAroundMessageId : null,
++    around: null,
+     // Annotation layout recovers missed deletions from the same document
+     // roots used by Discussion, whose projection hides deleted threads.
+     include_deleted_threads: parent.type === 'document',

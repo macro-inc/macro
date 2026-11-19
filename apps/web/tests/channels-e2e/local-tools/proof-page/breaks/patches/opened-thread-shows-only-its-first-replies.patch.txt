@@ -1,0 +1,13 @@
+diff --git a/apps/web/src/features/channel/Thread/create-thread-reply-view.ts b/apps/web/src/features/channel/Thread/create-thread-reply-view.ts
+index 4eb8a5f4aa..98b556cfb9 100644
+--- a/apps/web/src/features/channel/Thread/create-thread-reply-view.ts
++++ b/apps/web/src/features/channel/Thread/create-thread-reply-view.ts
+@@ -16,7 +16,7 @@ export function createThreadReplyView<T>(options: {
+     options.hideCollapsedPreview
+       ? 0
+       : Math.min(options.preview().length, COLLAPSED_REPLY_PREVIEW_LIMIT);
+-  const activeReplies = () => options.loaded() ?? options.preview();
++  const activeReplies = () => options.preview();
+   const displayReplies = createMemo(() =>
+     options.isExpanded()
+       ? activeReplies()

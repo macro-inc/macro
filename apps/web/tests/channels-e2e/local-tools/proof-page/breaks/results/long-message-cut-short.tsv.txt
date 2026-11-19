@@ -1,0 +1,29 @@
+long-message-cut-short	CMP-01	PASSED	
+long-message-cut-short	CMP-02	PASSED	
+long-message-cut-short	CMP-03	PASSED	
+long-message-cut-short	CMP-13	PASSED	
+long-message-cut-short	CMP-04	PASSED	
+long-message-cut-short	CMP-05	PASSED	
+long-message-cut-short	CMP-06	PASSED	
+long-message-cut-short	CMP-07	PASSED	
+long-message-cut-short	CMP-08	PASSED	
+long-message-cut-short	CMP-09	PASSED	
+long-message-cut-short	CMP-10	PASSED	
+long-message-cut-short	CMP-11	PASSED	
+long-message-cut-short	CMP-12	FAILED	Error: expect(locator).toHaveText(expected) failed | Locator:  locator('[data-channel-scroll]').locator('[data-message-content]')
+long-message-cut-short	DM-01	PASSED	
+long-message-cut-short	DM-02	PASSED	
+long-message-cut-short	DM-03	PASSED	
+long-message-cut-short	DM-04	PASSED	
+long-message-cut-short	DM-05	PASSED	
+long-message-cut-short	DM-06	PASSED	Error: expect(locator).toBeVisible() failed | Locator: getByRole('option', { name: /Ben Member/ })
+long-message-cut-short	UNR-01	PASSED	
+long-message-cut-short	UNR-02	PASSED	
+long-message-cut-short	UNR-03	PASSED	
+long-message-cut-short	UNR-04	PASSED	
+long-message-cut-short	UNR-05	PASSED	Error: expect(locator).toHaveText(expected) failed | Locator: getByRole('tree', { name: 'Conversations' }).getByRole('treeitem').filter({ hasText: 'unr-mwhlfe6b
+long-message-cut-short	UNR-06	PASSED	
+long-message-cut-short	UNR-07	PASSED	
+long-message-cut-short	UNR-08	PASSED	
+long-message-cut-short	UNR-09	PASSED	Error: expect(locator).toBeVisible() failed | Locator: getByRole('tree', { name: 'Conversations' }).getByRole('treeitem').filter({ hasText: 'unr-mwhlfkzif7dh-fr
+long-message-cut-short	UNR-10	PASSED	

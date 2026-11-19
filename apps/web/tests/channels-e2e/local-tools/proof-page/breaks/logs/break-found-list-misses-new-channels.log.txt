@@ -1,0 +1,54 @@
+path "/home/teo/.herdr/worktrees/macro/synoet-channels-e2e-base/apps/web" does not contain a 'flake.nix', searching up
+warning: Git tree '/home/teo/.herdr/worktrees/macro/synoet-channels-e2e-base' is dirty
+
+Running 2 tests using 2 workers
+
+2026/11/15 09:43:46 socat[1940053] E write(6, 0x60be1e25c000, 24): Broken pipe
+  ✓  2 tests/channels-e2e/unread.spec.ts:367:1 › UNR-10 a row found with “Search conversations” is marked unread at once when a message arrives (13.0s)
+2026/11/15 09:44:02 socat[1939794] E write(6, 0x60be1e25c000, 24): Broken pipe
+2026/11/15 09:44:02 socat[1939858] E write(6, 0x60be1e25c000, 24): Broken pipe
+  ✘  1 tests/channels-e2e/unread.spec.ts:311:1 › UNR-08 a channel I am added to appears in my list at once, and opens (28.9s)
+
+
+  1) tests/channels-e2e/unread.spec.ts:311:1 › UNR-08 a channel I am added to appears in my list at once, and opens 
+
+    Error: expect(locator).toBeVisible() failed
+
+    Locator: getByRole('tree', { name: 'Conversations' }).getByRole('treeitem').filter({ hasText: 'unr-mwhnd4ntd4t9-added' })
+    Expected: visible
+    Timeout: 15000ms
+    Error: element(s) not found
+
+    Call log:
+      - Expect "toBeVisible" with timeout 15000ms
+      - waiting for getByRole('tree', { name: 'Conversations' }).getByRole('treeitem').filter({ hasText: 'unr-mwhnd4ntd4t9-added' })
+
+
+      328 |   await ada.post(added.id, 'welcome');
+      329 |
+    > 330 |   await expect(row).toBeVisible();
+          |                     ^
+      331 |   await row.click();
+      332 |   const view = new ChannelView(benPage, added.id);
+      333 |   await view.shown();
+        at /home/teo/.herdr/worktrees/macro/synoet-channels-e2e-base/apps/web/tests/channels-e2e/unread.spec.ts:330:21
+
+    attachment #1: screenshot (image/png) ──────────────────────────────────────────────────────────
+    ../../../../../../.cache/channels-e2e/runs/24909-break-found-list-misses-new-channels/test-results/unread-UNR-08-a-channel-I--6f594-n-my-list-at-once-and-opens/test-failed-1.png
+    ────────────────────────────────────────────────────────────────────────────────────────────────
+
+    Error Context: ../../../../../../.cache/channels-e2e/runs/24909-break-found-list-misses-new-channels/test-results/unread-UNR-08-a-channel-I--6f594-n-my-list-at-once-and-opens/error-context.md
+
+    attachment #3: trace (application/zip) ─────────────────────────────────────────────────────────
+    ../../../../../../.cache/channels-e2e/runs/24909-break-found-list-misses-new-channels/test-results/unread-UNR-08-a-channel-I--6f594-n-my-list-at-once-and-opens/trace.zip
+    Usage:
+
+        npx playwright show-trace ../../../../../../.cache/channels-e2e/runs/24909-break-found-list-misses-new-channels/test-results/unread-UNR-08-a-channel-I--6f594-n-my-list-at-once-and-opens/trace.zip
+
+    ────────────────────────────────────────────────────────────────────────────────────────────────
+
+  1 failed
+    tests/channels-e2e/unread.spec.ts:311:1 › UNR-08 a channel I am added to appears in my list at once, and opens 
+  1 passed (45.6s)
+2026/11/15 09:44:03 socat[1903810] W exiting on signal 15
+2026/11/15 09:44:03 socat[1898393] W exiting on signal 15

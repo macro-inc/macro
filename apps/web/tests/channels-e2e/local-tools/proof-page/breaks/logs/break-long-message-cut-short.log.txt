@@ -1,0 +1,169 @@
+path "/home/teo/.herdr/worktrees/macro/synoet-channels-e2e-base/apps/web" does not contain a 'flake.nix', searching up
+warning: Git tree '/home/teo/.herdr/worktrees/macro/synoet-channels-e2e-base' is dirty
+
+Running 29 tests using 4 workers
+
+2026/11/15 08:48:45 socat[935782] E write(6, 0x650d93166000, 24): Broken pipe
+2026/11/15 08:48:45 socat[936073] E write(6, 0x650d93166000, 24): Broken pipe
+2026/11/15 08:48:45 socat[940163] E write(6, 0x650d93166000, 24): Broken pipe
+2026/11/15 08:48:46 socat[939774] E write(6, 0x650d93166000, 24): Broken pipe
+2026/11/15 08:48:46 socat[939915] E write(6, 0x650d93166000, 24): Broken pipe
+2026/11/15 08:48:46 socat[954555] E write(6, 0x650d93166000, 24): Broken pipe
+2026/11/15 08:48:46 socat[954912] E write(6, 0x650d93166000, 24): Broken pipe
+  ✓   4 tests/channels-e2e/composer.spec.ts:47:1 › CMP-02 a draft is still in the composer after a reload (13.4s)
+2026/11/15 08:48:47 socat[936336] E write(6, 0x650d93166000, 24): Broken pipe
+2026/11/15 08:48:47 socat[955289] E write(6, 0x650d93166000, 24): Broken pipe
+  ✓   1 tests/channels-e2e/composer.spec.ts:93:1 › CMP-13 a message shown as sent is still sent when the page is reloaded at once (14.3s)
+2026/11/15 08:48:47 socat[932894] E read(6, 0x650d93166000, 8192): Connection reset by peer
+2026/11/15 08:48:47 socat[932895] E write(6, 0x55555561e000, 24): Broken pipe
+2026/11/15 08:48:47 socat[936317] E write(6, 0x650d93166000, 24): Broken pipe
+  ✓   3 tests/channels-e2e/composer.spec.ts:21:1 › CMP-01 a draft stays in its channel while I look at another one, and is not shown there (14.6s)
+2026/11/15 08:48:48 socat[904523] W waitpid(-1, {}, WNOHANG): no (more) child has exited
+2026/11/15 08:48:48 socat[936220] E write(6, 0x650d93166000, 24): Broken pipe
+2026/11/15 08:48:48 socat[957116] E write(6, 0x650d93166000, 24): Broken pipe
+  ✓   2 tests/channels-e2e/composer.spec.ts:67:1 › CMP-03 sending a message clears its draft, and a reload does not bring it back (15.0s)
+2026/11/15 08:48:50 socat[959086] E write(6, 0x650d93166000, 24): Broken pipe
+  ✓   5 tests/channels-e2e/composer.spec.ts:121:1 › CMP-04 the send button is off while the composer is empty, and after sending I can go on typing (3.7s)
+2026/11/15 08:48:54 socat[960248] E write(6, 0x650d93166000, 24): Broken pipe
+  ✓   6 tests/channels-e2e/composer.spec.ts:148:1 › CMP-05 a person picked from the @ menu is named in the message for both people, live (7.5s)
+2026/11/15 08:48:55 socat[962699] E write(6, 0x650d93166000, 24): Broken pipe
+2026/11/15 08:48:55 socat[962047] E write(6, 0x650d93166000, 24): Broken pipe
+2026/11/15 08:48:55 socat[963541] E write(6, 0x650d93166000, 24): Broken pipe
+  ✓   8 tests/channels-e2e/composer.spec.ts:208:1 › CMP-07 a text file and a picture attached to a message show before sending, for both people, and under Attachments (7.7s)
+2026/11/15 08:48:57 socat[961484] E write(6, 0x650d93166000, 24): Broken pipe
+2026/11/15 08:48:57 socat[963247] E write(6, 0x650d93166000, 24): Broken pipe
+2026/11/15 08:48:57 socat[962972] E write(6, 0x650d93166000, 24): Broken pipe
+  ✓   7 tests/channels-e2e/composer.spec.ts:178:1 › CMP-06 @here picked from the @ menu is sent as a mention of everyone here (9.6s)
+2026/11/15 08:48:57 socat[970695] E write(6, 0x650d93166000, 24): Broken pipe
+  ✓   9 tests/channels-e2e/composer.spec.ts:265:1 › CMP-08 a file can be sent on its own, with no text (7.1s)
+2026/11/15 08:48:58 socat[973561] E write(6, 0x650d93166000, 24): Broken pipe
+  ✓  11 tests/channels-e2e/composer.spec.ts:329:1 › CMP-10 typing reported from the other person’s other device shows “… is typing”, and goes when they stop (2.8s)
+2026/11/15 08:49:01 socat[976392] E write(6, 0x650d93166000, 24): Broken pipe
+2026/11/15 08:49:01 socat[972799] E write(6, 0x650d93166000, 24): Broken pipe
+  ✓  10 tests/channels-e2e/composer.spec.ts:303:1 › CMP-09 while the other person types in their composer I see “… is typing”, until they send (6.3s)
+2026/11/15 08:49:03 socat[973540] E read(6, 0x650d93166000, 8192): Connection reset by peer
+2026/11/15 08:49:03 socat[973541] E write(6, 0x55555561e000, 24): Broken pipe
+2026/11/15 08:49:03 socat[976382] E write(6, 0x650d93166000, 24): Broken pipe
+2026/11/15 08:49:03 socat[981048] E write(6, 0x650d93166000, 24): Broken pipe
+  ✓  12 tests/channels-e2e/composer.spec.ts:349:1 › CMP-11 text pasted into the composer is sent as it was copied (6.2s)
+2026/11/15 08:49:05 socat[982463] E write(6, 0x650d93166000, 24): Broken pipe
+2026/11/15 08:49:06 socat[904523] W waitpid(-1, {}, WNOHANG): no (more) child has exited
+2026/11/15 08:49:07 socat[978146] E write(6, 0x650d93166000, 24): Broken pipe
+2026/11/15 08:49:07 socat[978877] E write(6, 0x650d93166000, 24): Broken pipe
+2026/11/15 08:49:07 socat[980092] E read(6, 0x650d93166000, 8192): Connection reset by peer
+2026/11/15 08:49:07 socat[980093] E write(6, 0x55555561e000, 24): Broken pipe
+2026/11/15 08:49:07 socat[905866] W waitpid(-1, {}, WNOHANG): no (more) child has exited
+2026/11/15 08:49:07 socat[989034] E write(6, 0x650d93166000, 24): Broken pipe
+  ✓  14 tests/channels-e2e/direct-messages.spec.ts:22:1 › DM-01 a direct message I start reaches the other person at once under “Direct messages”, and they can answer (8.6s)
+2026/11/15 08:49:08 socat[985522] E write(6, 0x650d93166000, 24): Broken pipe
+2026/11/15 08:49:08 socat[985566] E write(6, 0x650d93166000, 24): Broken pipe
+2026/11/15 08:49:09 socat[984152] E write(6, 0x650d93166000, 24): Broken pipe
+2026/11/15 08:49:09 socat[984192] E write(6, 0x650d93166000, 24): Broken pipe
+2026/11/15 08:49:09 socat[993241] E write(6, 0x650d93167000, 24): Broken pipe
+2026/11/15 08:49:09 socat[993265] E write(6, 0x650d93167000, 24): Broken pipe
+  ✓  15 tests/channels-e2e/direct-messages.spec.ts:66:1 › DM-02 writing to the same person again from “New direct message” continues the one conversation (8.2s)
+2026/11/15 08:49:10 socat[989031] E write(6, 0x650d93166000, 24): Broken pipe
+2026/11/15 08:49:10 socat[989281] E write(6, 0x650d93166000, 24): Broken pipe
+2026/11/15 08:49:11 socat[995137] E write(6, 0x650d93167000, 24): Broken pipe
+  ✓  18 tests/channels-e2e/direct-messages.spec.ts:228:1 › DM-05 a conversation with someone I never wrote to opens empty, saying “Say hello”, and nothing can be sent until I type (1.8s)
+2026/11/15 08:49:13 socat[985802] E write(6, 0x650d93166000, 24): Broken pipe
+2026/11/15 08:49:13 socat[985846] E write(6, 0x650d93166000, 24): Broken pipe
+2026/11/15 08:49:13 socat[996821] E write(6, 0x650d93167000, 24): Broken pipe
+  ✓  16 tests/channels-e2e/direct-messages.spec.ts:122:1 › DM-03 “Message …” on a channel’s participant opens my conversation with them, the same one every time (10.2s)
+2026/11/15 08:49:15 socat[993128] E write(6, 0x650d93167000, 24): Broken pipe
+2026/11/15 08:49:15 socat[993183] E write(6, 0x650d93167000, 24): Broken pipe
+2026/11/15 08:49:15 socat[994996] E write(6, 0x650d93167000, 24): Broken pipe
+2026/11/15 08:49:15 socat[996808] E write(6, 0x650d93167000, 24): Broken pipe
+2026/11/15 08:49:15 socat[904523] W waitpid(-1, {}, WNOHANG): no (more) child has exited
+2026/11/15 08:49:15 socat[996981] E write(6, 0x650d93167000, 24): Broken pipe
+  ✓  17 tests/channels-e2e/direct-messages.spec.ts:173:1 › DM-04 a named group started from “New direct message” reaches everyone I put in it (8.7s)
+2026/11/15 08:49:17 socat[976366] E write(6, 0x650d93166000, 24): Broken pipe
+2026/11/15 08:49:17 socat[976395] E write(6, 0x650d93166000, 24): Broken pipe
+2026/11/15 08:49:17 socat[981516] E write(6, 0x650d93166000, 24): Broken pipe
+  ✘  13 tests/channels-e2e/composer.spec.ts:372:1 › CMP-12 a message of 2,499 characters is sent whole (20.1s)
+2026/11/15 08:49:18 socat[1005017] E write(6, 0x650d93167000, 24): Broken pipe
+2026/11/15 08:49:19 socat[1005913] E write(6, 0x650d93167000, 24): Broken pipe
+2026/11/15 08:49:19 socat[1005468] E write(6, 0x650d93167000, 24): Broken pipe
+  ✓  21 tests/channels-e2e/unread.spec.ts:87:1 › UNR-02 a channel with unread messages opens with “New” above the first of them, and “Mark as read” removes it (3.7s)
+2026/11/15 08:49:19 socat[1005926] E write(6, 0x650d93167000, 24): Broken pipe
+2026/11/15 08:49:19 socat[1009451] E write(6, 0x650d93167000, 24): Broken pipe
+  ✓  20 tests/channels-e2e/unread.spec.ts:38:1 › UNR-01 a message in a channel I do not have open marks its row unread at once; opening it clears the mark, also after reload (6.1s)
+2026/11/15 08:49:22 socat[1010917] E write(6, 0x650d93167000, 24): Broken pipe
+2026/11/15 08:49:22 socat[905866] W waitpid(-1, {}, WNOHANG): no (more) child has exited
+2026/11/15 08:49:22 socat[1010926] E write(6, 0x650d93167000, 24): Broken pipe
+  ✓  22 tests/channels-e2e/unread.spec.ts:122:1 › UNR-03 my own messages never mark a channel unread for me (3.3s)
+2026/11/15 08:49:25 socat[1013705] E write(6, 0x650d93167000, 24): Broken pipe
+  ✓  23 tests/channels-e2e/unread.spec.ts:155:1 › UNR-04 scrolled up in an open channel, a new message shows “1 unread … below”, which leads to it (5.6s)
+2026/11/15 08:49:27 socat[1018729] E write(6, 0x650d93167000, 24): Broken pipe
+2026/11/15 08:49:27 socat[905866] W waitpid(-1, {}, WNOHANG): no (more) child has exited
+2026/11/15 08:49:27 socat[1020211] E write(6, 0x650d93167000, 24): Broken pipe
+  ✓  26 tests/channels-e2e/unread.spec.ts:272:1 › UNR-07 a member who never opened a channel sees it unread, and opening it shows every message and clears the mark (2.4s)
+2026/11/15 08:49:27 socat[1013858] E write(6, 0x650d93167000, 24): Broken pipe
+2026/11/15 08:49:27 socat[1013862] E write(6, 0x650d93167000, 24): Broken pipe
+2026/11/15 08:49:28 socat[998242] E write(6, 0x650d93167000, 24): Broken pipe
+  ✘  19 tests/channels-e2e/direct-messages.spec.ts:270:1 › DM-06 typing a teammate’s name in “New direct message” offers that person (17.4s)
+2026/11/15 08:49:29 socat[1023145] E write(6, 0x650d93167000, 24): Broken pipe
+  ✓  25 tests/channels-e2e/unread.spec.ts:218:1 › UNR-06 a muted channel shows a crossed bell and is not marked unread by new messages; unmuted, it is again (7.4s)
+2026/11/15 08:49:30 socat[1013938] E write(6, 0x650d93167000, 24): Broken pipe
+2026/11/15 08:49:30 socat[1014371] E write(6, 0x650d93167000, 24): Broken pipe
+2026/11/15 08:49:30 socat[1012682] E write(6, 0x650d93167000, 24): Broken pipe
+  ✘  24 tests/channels-e2e/unread.spec.ts:187:1 › UNR-05 a mention of me in a channel I do not have open shows a count of mentions on its row (10.4s)
+2026/11/15 08:49:31 socat[1022242] E write(6, 0x650d93167000, 24): Broken pipe
+2026/11/15 08:49:31 socat[1023130] E write(6, 0x650d93167000, 24): Broken pipe
+  ✓  27 tests/channels-e2e/unread.spec.ts:311:1 › UNR-08 a channel I am added to appears in my list at once, and opens (3.8s)
+2026/11/15 08:49:32 socat[1025178] E write(6, 0x650d93167000, 24): Broken pipe
+2026/11/15 08:49:32 socat[1025258] E write(6, 0x650d93167000, 24): Broken pipe
+  ✓  29 tests/channels-e2e/unread.spec.ts:367:1 › UNR-10 a row found with “Search conversations” is marked unread at once when a message arrives (3.2s)
+2026/11/15 08:49:37 socat[1023998] E write(6, 0x650d93167000, 24): Broken pipe
+2026/11/15 08:49:37 socat[1024407] E write(6, 0x650d93167000, 24): Broken pipe
+  ✘  28 tests/channels-e2e/unread.spec.ts:339:1 › UNR-09 the first message in a new channel marks it unread for the other member (8.2s)
+
+
+  1) tests/channels-e2e/composer.spec.ts:372:1 › CMP-12 a message of 2,499 characters is sent whole 
+
+    Error: expect(locator).toHaveText(expected) failed
+
+    Locator:  locator('[data-channel-scroll]').locator('[data-message-content]')
+    Expected: "abcdefghi abcdefghi abcdefghi abcdefghi abcdefghi abcdefghi abcdefghi abcdefghi abcdefghi abcdefghi abcdefghi abcdefghi abcdefghi abcdefghi abcdefghi abcdefghi abcdefghi abcdefghi abcdefghi abcdefghi abcdefghi abcdefghi abcdefghi abcdefghi abcdefghi abcdefghi abcdefghi abcdefghi abcdefghi abcdefghi abcdefghi abcdefghi abcdefghi abcdefghi abcdefghi abcdefghi abcdefghi abcdefghi abcdefghi abcdefghi abcdefghi abcdefghi abcdefghi abcdefghi abcdefghi abcdefghi abcdefghi abcdefghi abcdefghi abcdefghi abcdefghi abcdefghi abcdefghi abcdefghi abcdefghi abcdefghi abcdefghi abcdefghi abcdefghi abcdefghi abcdefghi abcdefghi abcdefghi abcdefghi abcdefghi abcdefghi abcdefghi abcdefghi abcdefghi abcdefghi abcdefghi abcdefghi abcdefghi abcdefghi abcdefghi abcdefghi abcdefghi abcdefghi abcdefghi abcdefghi abcdefghi abcdefghi abcdefghi abcdefghi abcdefghi abcdefghi abcdefghi abcdefghi abcdefghi abcdefghi abcdefghi abcdefghi abcdefghi abcdefghi abcdefghi abcdefghi abcdefghi abcdefghi abcdefghi abcdefghi abcdefghi abcdefghi abcdefghi abcdefghi abcdefghi abcdefghi abcdefghi abcdefghi abcdefghi abcdefghi abcdefghi abcdefghi abcdefghi abcdefghi abcdefghi abcdefghi abcdefghi abcdefghi abcdefghi abcdefghi abcdefghi abcdefghi abcdefghi abcdefghi abcdefghi abcdefghi abcdefghi abcdefghi abcdefghi abcdefghi abcdefghi abcdefghi abcdefghi abcdefghi abcdefghi abcdefghi abcdefghi abcdefghi abcdefghi abcdefghi abcdefghi abcdefghi abcdefghi abcdefghi abcdefghi abcdefghi abcdefghi abcdefghi abcdefghi abcdefghi abcdefghi abcdefghi abcdefghi abcdefghi abcdefghi abcdefghi abcdefghi abcdefghi abcdefghi abcdefghi abcdefghi abcdefghi abcdefghi abcdefghi abcdefghi abcdefghi abcdefghi abcdefghi abcdefghi abcdefghi abcdefghi abcdefghi abcdefghi abcdefghi abcdefghi abcdefghi abcdefghi abcdefghi abcdefghi abcdefghi abcdefghi abcdefghi abcdefghi abcdefghi abcdefghi abcdefghi abcdefghi abcdefghi abcdefghi abcdefghi abcdefghi abcdefghi abcdefghi abcdefghi abcdefghi abcdefghi abcdefghi abcdefghi abcdefghi abcdefghi abcdefghi abcdefghi abcdefghi abcdefghi abcdefghi abcdefghi abcdefghi abcdefghi abcdefghi abcdefghi abcdefghi abcdefghi abcdefghi abcdefghi abcdefghi abcdefghi abcdefghi abcdefghi abcdefghi abcdefghi abcdefghi abcdefghi abcdefghi abcdefghi abcdefghi abcdefghi abcdefghi abcdefghi abcdefghi abcdefghi abcdefghi abcdefghi abcdefghi abcdefghi abcdefghi abcdefghi abcdefghi abcdefghi abcdefghi abcdefghi abcdefghi abcdefghi abcdefghi abcdefghi abcdefghi abcdefghi abcdefghi abcdefghi abcdefghi abcdefghi"
+    Received: "abcdefghi abcdefghi abcdefghi abcdefghi abcdefghi abcdefghi abcdefghi abcdefghi abcdefghi abcdefghi abcdefghi abcdefghi abcdefghi abcdefghi abcdefghi abcdefghi abcdefghi abcdefghi abcdefghi abcdefghi abcdefghi abcdefghi abcdefghi abcdefghi abcdefghi abcdefghi abcdefghi abcdefghi abcdefghi abcdefghi abcdefghi abcdefghi abcdefghi abcdefghi abcdefghi abcdefghi abcdefghi abcdefghi abcdefghi abcdefghi abcdefghi abcdefghi abcdefghi abcdefghi abcdefghi abcdefghi abcdefghi abcdefghi abcdefghi abcdefghi abcdefghi abcdefghi abcdefghi abcdefghi abcdefghi abcdefghi abcdefghi abcdefghi abcdefghi abcdefghi abcdefghi abcdefghi abcdefghi abcdefghi abcdefghi abcdefghi abcdefghi abcdefghi abcdefghi abcdefghi abcdefghi abcdefghi abcdefghi abcdefghi abcdefghi abcdefghi abcdefghi abcdefghi abcdefghi abcdefghi abcdefghi abcdefghi abcdefghi abcdefghi abcdefghi abcdefghi abcdefghi abcdefghi abcdefghi abcdefghi abcdefghi abcdefghi abcdefghi abcdefghi abcdefghi abcdefghi abcdefghi abcdefghi abcdefghi abcdefghi abcdefghi abcdefghi abcdefghi abcdefghi abcdefghi abcdefghi abcdefghi abcdefghi abcdefghi abcdefghi abcdefghi abcdefghi abcdefghi abcdefghi abcdefghi abcdefghi abcdefghi abcdefghi abcdefghi abcdefghi abcdefghi abcdefghi abcdefghi abcdefghi abcdefghi abcdefghi abcdefghi abcdefghi abcdefghi abcdefghi abcdefghi abcdefghi abcdefghi abcdefghi abcdefghi abcdefghi abcdefghi abcdefghi abcdefghi abcdefghi abcdefghi abcdefghi abcdefghi abcdefghi abcdefghi abcdefghi abcdefghi abcdefghi abcdefghi abcdefghi abcdefghi abcdefghi abcdefghi abcdefghi abcdefghi abcdefghi abcdefghi abcdefghi abcdefghi abcdefghi abcdefghi abcdefghi abcdefghi abcdefghi abcdefghi abcdefghi abcdefghi abcdefghi abcdefghi abcdefghi abcdefghi abcdefghi abcdefghi abcdefghi abcdefghi abcdefghi abcdefghi abcdefghi abcdefghi abcdefghi abcdefghi abcdefghi abcdefghi abcdefghi abcdefghi abcdefghi abcdefghi abcdefghi abcdefghi abcdefghi abcdefghi abcdefghi abcdefghi abcdefghi abcdefghi abcdefghi abcdefghi abcdefghi abcdefghi abcdefghi "
+    Timeout:  15000ms
+
+    Call log:
+      - Expect "toHaveText" with timeout 15000ms
+      - waiting for locator('[data-channel-scroll]').locator('[data-message-content]')
+        34 × locator resolved to <div data-message-content="" class="whitespace-pre-wrap wrap-break-word max-w-full text-base">…</div>
+           - unexpected value "abcdefghi abcdefghi abcdefghi abcdefghi abcdefghi abcdefghi abcdefghi abcdefghi abcdefghi abcdefghi abcdefghi abcdefghi abcdefghi abcdefghi abcdefghi abcdefghi abcdefghi abcdefghi abcdefghi abcdefghi abcdefghi abcdefghi abcdefghi abcdefghi abcdefghi abcdefghi abcdefghi abcdefghi abcdefghi abcdefghi abcdefghi abcdefghi abcdefghi abcdefghi abcdefghi abcdefghi abcdefghi abcdefghi abcdefghi abcdefghi abcdefghi abcdefghi abcdefghi abcdefghi abcdefghi abcdefghi abcdefghi abcdefghi abcdefghi abcdefghi abcdefghi abcdefghi abcdefghi abcdefghi abcdefghi abcdefghi abcdefghi abcdefghi abcdefghi abcdefghi abcdefghi abcdefghi abcdefghi abcdefghi abcdefghi abcdefghi abcdefghi abcdefghi abcdefghi abcdefghi abcdefghi abcdefghi abcdefghi abcdefghi abcdefghi abcdefghi abcdefghi abcdefghi abcdefghi abcdefghi abcdefghi abcdefghi abcdefghi abcdefghi abcdefghi abcdefghi abcdefghi abcdefghi abcdefghi abcdefghi abcdefghi abcdefghi abcdefghi abcdefghi abcdefghi abcdefghi abcdefghi abcdefghi abcdefghi abcdefghi abcdefghi abcdefghi abcdefghi abcdefghi abcdefghi abcdefghi abcdefghi abcdefghi abcdefghi abcdefghi abcdefghi abcdefghi abcdefghi abcdefghi abcdefghi abcdefghi abcdefghi abcdefghi abcdefghi abcdefghi abcdefghi abcdefghi abcdefghi abcdefghi abcdefghi abcdefghi abcdefghi abcdefghi abcdefghi abcdefghi abcdefghi abcdefghi abcdefghi abcdefghi abcdefghi abcdefghi abcdefghi abcdefghi abcdefghi abcdefghi abcdefghi abcdefghi abcdefghi abcdefghi abcdefghi abcdefghi abcdefghi abcdefghi abcdefghi abcdefghi abcdefghi abcdefghi abcdefghi abcdefghi abcdefghi abcdefghi abcdefghi abcdefghi abcdefghi abcdefghi abcdefghi abcdefghi abcdefghi abcdefghi abcdefghi abcdefghi abcdefghi abcdefghi abcdefghi abcdefghi abcdefghi abcdefghi abcdefghi abcdefghi abcdefghi abcdefghi abcdefghi abcdefghi abcdefghi abcdefghi abcdefghi abcdefghi abcdefghi abcdefghi abcdefghi abcdefghi abcdefghi abcdefghi abcdefghi abcdefghi abcdefghi abcdefghi abcdefghi abcdefghi abcdefghi abcdefghi abcdefghi abcdefghi abcdefghi abcdefghi "
+
+
+      390 |   for (const each of [view, benView]) {
+      391 |     const content = each.list.locator('[data-message-content]');
+    > 392 |     await expect(content).toHaveText(long);
+          |                           ^
+      393 |     expect((await content.innerText()).length).toBe(2499);
+      394 |   }
+      395 |   await expect(view.composerText).toHaveText('');
+        at /home/teo/.herdr/worktrees/macro/synoet-channels-e2e-base/apps/web/tests/channels-e2e/composer.spec.ts:392:27
+
+    attachment #1: screenshot (image/png) ──────────────────────────────────────────────────────────
+    ../../../../../../.cache/channels-e2e/runs/24909-break-long-message-cut-short/test-results/composer-CMP-12-a-message-of-2-499-characters-is-sent-whole/test-failed-1.png
+    ────────────────────────────────────────────────────────────────────────────────────────────────
+
+    attachment #2: screenshot (image/png) ──────────────────────────────────────────────────────────
+    ../../../../../../.cache/channels-e2e/runs/24909-break-long-message-cut-short/test-results/composer-CMP-12-a-message-of-2-499-characters-is-sent-whole/test-failed-2.png
+    ────────────────────────────────────────────────────────────────────────────────────────────────
+
+    Error Context: ../../../../../../.cache/channels-e2e/runs/24909-break-long-message-cut-short/test-results/composer-CMP-12-a-message-of-2-499-characters-is-sent-whole/error-context.md
+
+    attachment #4: trace (application/zip) ─────────────────────────────────────────────────────────
+    ../../../../../../.cache/channels-e2e/runs/24909-break-long-message-cut-short/test-results/composer-CMP-12-a-message-of-2-499-characters-is-sent-whole/trace.zip
+    Usage:
+
+        npx playwright show-trace ../../../../../../.cache/channels-e2e/runs/24909-break-long-message-cut-short/test-results/composer-CMP-12-a-message-of-2-499-characters-is-sent-whole/trace.zip
+
+    ────────────────────────────────────────────────────────────────────────────────────────────────
+
+  1 failed
+    tests/channels-e2e/composer.spec.ts:372:1 › CMP-12 a message of 2,499 characters is sent whole ─
+  28 passed (1.3m)
+2026/11/15 08:49:37 socat[905866] W exiting on signal 15
+2026/11/15 08:49:37 socat[904523] W exiting on signal 15

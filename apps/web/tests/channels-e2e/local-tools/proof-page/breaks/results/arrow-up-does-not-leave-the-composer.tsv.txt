@@ -1,0 +1,5 @@
+arrow-up-does-not-leave-the-composer	KEY-05	FAILED	Error: expect(locator).toContainText(expected) failed | Locator: locator('[data-channel-scroll]').locator('[data-message][data-selected]')
+arrow-up-does-not-leave-the-composer	KEY-06	PASSED	Error: expect(locator).toBeFocused() failed | Locator:  locator('[data-channel-message-list]')
+arrow-up-does-not-leave-the-composer	KEY-07	PASSED	
+arrow-up-does-not-leave-the-composer	KEY-08	PASSED	
+arrow-up-does-not-leave-the-composer	KEY-09	PASSED	

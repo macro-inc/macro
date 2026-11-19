@@ -1,0 +1,309 @@
+path "/home/teo/.herdr/worktrees/macro/synoet-channels-e2e-base/apps/web" does not contain a 'flake.nix', searching up
+warning: Git tree '/home/teo/.herdr/worktrees/macro/synoet-channels-e2e-base' is dirty
+
+Running 44 tests using 4 workers
+
+2026/11/15 08:21:51 socat[2279234] E write(6, 0x608287375000, 24): Broken pipe
+2026/11/15 08:21:51 socat[2279270] E write(6, 0x608287375000, 24): Broken pipe
+  ✓   1 tests/channels-e2e/access.spec.ts:39:1 › ACC-02 a person outside the team who opens a private channel’s address sees no messages (1.9s)
+2026/11/15 08:21:52 socat[2279267] E write(6, 0x608287375000, 24): Broken pipe
+  ✓   2 tests/channels-e2e/access.spec.ts:13:1 › ACC-01 a teammate who is not in a private channel sees no messages and is offered to ask to join (2.1s)
+2026/11/15 08:22:05 socat[2283411] E write(6, 0x608287375000, 24): Broken pipe
+  ✓   6 tests/channels-e2e/access.spec.ts:168:1 › ACC-06 a teammate finds a team channel they are not in by its name and joins it (13.9s)
+2026/11/15 08:22:07 socat[2242459] W waitpid(-1, {}, WNOHANG): no (more) child has exited
+2026/11/15 08:22:07 socat[2244011] W waitpid(-1, {}, WNOHANG): no (more) child has exited
+2026/11/15 08:22:07 socat[2306956] E write(6, 0x608287375000, 24): Broken pipe
+  ✓   7 tests/channels-e2e/access.spec.ts:207:1 › ACC-07 a person outside the team cannot read a team channel or find it to join (1.8s)
+2026/11/15 08:22:12 socat[2309491] E write(6, 0x608287376000, 24): Broken pipe
+  ✓   8 tests/channels-e2e/access.spec.ts:243:1 › ACC-08 the address of a channel that does not exist says the conversation is unavailable (4.3s)
+2026/11/15 08:22:13 socat[2283249] E write(6, 0x608287375000, 24): Broken pipe
+2026/11/15 08:22:13 socat[2283324] E write(6, 0x608287375000, 24): Broken pipe
+  ✓   9 tests/channels-e2e/access.spec.ts:259:1 › ACC-09 a signed-out person who opens a channel’s address is asked to log in and sees nothing of it (1.9s)
+  ✘   5 tests/channels-e2e/access.spec.ts:139:1 › ACC-05 a withdrawn request can no longer be approved (21.4s)
+2026/11/15 08:22:20 socat[2328615] E write(6, 0x608287376000, 24): Broken pipe
+2026/11/15 08:22:24 socat[2331944] E write(6, 0x608287376000, 24): Broken pipe
+  ✓  11 tests/channels-e2e/channels.spec.ts:53:1 › CHN-02 a team channel made in the app appears for a teammate under the team’s channels and can be read (10.3s)
+2026/11/15 08:22:24 socat[2244011] W waitpid(-1, {}, WNOHANG): no (more) child has exited
+2026/11/15 08:22:26 socat[2352871] E write(6, 0x608287376000, 24): Broken pipe
+  ✓  10 tests/channels-e2e/channels.spec.ts:23:1 › CHN-01 a private channel made in the app opens empty, shows in the list and takes its first message (12.8s)
+2026/11/15 08:22:31 socat[2361519] E write(6, 0x608287376000, 24): Broken pipe
+2026/11/15 08:22:31 socat[2361644] E write(6, 0x608287376000, 24): Broken pipe
+2026/11/15 08:22:31 socat[2357250] E write(6, 0x608287376000, 24): Broken pipe
+2026/11/15 08:22:31 socat[2357328] E write(6, 0x608287376000, 24): Broken pipe
+  ✓  12 tests/channels-e2e/channels.spec.ts:105:1 › CHN-03 renaming a channel updates its header and list row, and tells both members in the channel (7.0s)
+2026/11/15 08:22:35 socat[2368399] E write(6, 0x608287376000, 24): Broken pipe
+2026/11/15 08:22:37 socat[2371956] E write(6, 0x608287376000, 24): Broken pipe
+  ✓  14 tests/channels-e2e/channels.spec.ts:176:1 › CHN-05 a channel can be made a favorite and taken out again, and both survive a reload (7.6s)
+2026/11/15 08:22:39 socat[2376959] E write(6, 0x608287376000, 24): Broken pipe
+2026/11/15 08:22:44 socat[2386350] E write(6, 0x608287376000, 24): Broken pipe
+2026/11/15 08:22:44 socat[2386432] E write(6, 0x608287376000, 24): Broken pipe
+2026/11/15 08:22:44 socat[2381700] E write(6, 0x608287376000, 24): Broken pipe
+2026/11/15 08:22:44 socat[2381853] E write(6, 0x608287376000, 24): Broken pipe
+  ✓  15 tests/channels-e2e/channels.spec.ts:206:1 › CHN-06 Copy Link gives an address that opens the channel for another member (5.0s)
+2026/11/15 08:22:49 socat[2360030] E write(6, 0x608287376000, 24): Broken pipe
+2026/11/15 08:22:49 socat[2360330] E write(6, 0x608287376000, 24): Broken pipe
+2026/11/15 08:22:49 socat[2364264] E write(6, 0x608287376000, 24): Broken pipe
+2026/11/15 08:22:49 socat[2364311] E write(6, 0x608287376000, 24): Broken pipe
+  ✘  13 tests/channels-e2e/channels.spec.ts:143:1 › CHN-04 a rename shows in the header of a member who has the channel open (22.8s)
+2026/11/15 08:22:49 socat[2392866] E write(6, 0x608287376000, 24): Broken pipe
+2026/11/15 08:22:52 socat[2391521] E write(6, 0x608287376000, 24): Broken pipe
+2026/11/15 08:22:54 socat[2397237] E write(6, 0x608287376000, 24): Broken pipe
+2026/11/15 08:22:54 socat[2397284] E write(6, 0x608287376000, 24): Broken pipe
+2026/11/15 08:22:54 socat[2400508] E write(6, 0x608287376000, 24): Broken pipe
+  ✓  16 tests/channels-e2e/channels.spec.ts:230:1 › CHN-07 deleting a channel removes it for its owner at once, and its address no longer opens for anyone (10.5s)
+2026/11/15 08:22:57 socat[2404650] E write(6, 0x608287376000, 24): Broken pipe
+2026/11/15 08:22:57 socat[2404842] E write(6, 0x608287376000, 24): Broken pipe
+  ✓  18 tests/channels-e2e/channels.spec.ts:299:1 › CHN-09 a member who does not own the channel is not offered Delete (2.8s)
+2026/11/15 08:23:00 socat[2408868] E read(6, 0x608287376000, 8192): Connection reset by peer
+2026/11/15 08:23:00 socat[2408869] E write(6, 0x55555561e000, 24): Broken pipe
+2026/11/15 08:23:00 socat[2412123] E write(6, 0x608287376000, 24): Broken pipe
+  ✓  19 tests/channels-e2e/channels.spec.ts:317:1 › CHN-10 the Participants tab lists the channel’s members by name, with the owner marked (2.4s)
+2026/11/15 08:23:02 socat[2415003] E write(6, 0x608287376000, 24): Broken pipe
+  ✓  20 tests/channels-e2e/channels.spec.ts:340:1 › CHN-11 the Attachments tab of a channel with no files says there are none (2.4s)
+2026/11/15 08:23:06 socat[2418687] E write(6, 0x608287376000, 24): Broken pipe
+2026/11/15 08:23:06 socat[2418693] E write(6, 0x608287376000, 24): Broken pipe
+  ✓  21 tests/channels-e2e/channels.spec.ts:362:1 › CHN-12 going to another tab and back keeps the message list where it was (3.4s)
+2026/11/15 08:23:08 socat[2424877] E write(6, 0x608287376000, 24): Broken pipe
+  ✓  22 tests/channels-e2e/channels.spec.ts:390:1 › CHN-13 a channel’s history starts with “Channel <name> created” (2.1s)
+2026/11/15 08:23:09 socat[2242459] W waitpid(-1, {}, WNOHANG): no (more) child has exited
+2026/11/15 08:23:09 socat[2244011] W waitpid(-1, {}, WNOHANG): no (more) child has exited
+2026/11/15 08:23:09 socat[2397524] E write(6, 0x608287376000, 24): Broken pipe
+  ✘  17 tests/channels-e2e/channels.spec.ts:273:1 › CHN-08 a deleted channel leaves its owner’s Favorites too (19.7s)
+2026/11/15 08:23:20 socat[2283867] E write(6, 0x608287375000, 24): Broken pipe
+2026/11/15 08:23:20 socat[2284243] E write(6, 0x608287375000, 24): Broken pipe
+2026/11/15 08:23:20 socat[2284431] E write(6, 0x608287375000, 24): Broken pipe
+2026/11/15 08:23:20 socat[2279091] E write(6, 0x608287375000, 24): Broken pipe
+2026/11/15 08:23:20 socat[2279256] E write(6, 0x608287375000, 24): Broken pipe
+2026/11/15 08:23:20 socat[2279334] E write(6, 0x608287375000, 24): Broken pipe
+  ✘   4 tests/channels-e2e/access.spec.ts:104:1 › ACC-04 a denied request tells the person so and shows them nothing of the channel (1.5m)
+  ✘   3 tests/channels-e2e/access.spec.ts:61:1 › ACC-03 a request to join reaches the owner at once, and approving it lets the person in at once (1.5m)
+2026/11/15 08:23:24 socat[2447029] E write(6, 0x608287376000, 24): Broken pipe
+2026/11/15 08:23:24 socat[2447253] E write(6, 0x608287376000, 24): Broken pipe
+  ✓  26 tests/channels-e2e/find-and-keys.spec.ts:75:1 › KEY-02 find brings an old message far up a long history into view (2.9s)
+2026/11/15 08:23:24 socat[2447310] E write(6, 0x608287376000, 24): Broken pipe
+2026/11/15 08:23:24 socat[2447315] E write(6, 0x608287376000, 24): Broken pipe
+  ✓  25 tests/channels-e2e/find-and-keys.spec.ts:26:1 › KEY-01 find counts the messages that match and steps through them, newest first (3.1s)
+2026/11/15 08:23:25 socat[2428359] E write(6, 0x608287376000, 24): Broken pipe
+  ✘  23 tests/channels-e2e/channels.spec.ts:410:1 › CHN-14 a brand-new channel with no messages shows its “Channel <name> created” line (16.9s)
+2026/11/15 08:23:25 socat[2244011] W waitpid(-1, {}, WNOHANG): no (more) child has exited
+2026/11/15 08:23:25 socat[2242459] W waitpid(-1, {}, WNOHANG): no (more) child has exited
+2026/11/15 08:23:26 socat[2431164] E write(6, 0x608287376000, 24): Broken pipe
+  ✘  24 tests/channels-e2e/channels.spec.ts:429:1 › CHN-15 a channel deleted elsewhere closes on its owner’s open page (17.0s)
+2026/11/15 08:23:26 socat[2451791] E write(6, 0x608287376000, 24): Broken pipe
+2026/11/15 08:23:26 socat[2451807] E write(6, 0x608287376000, 24): Broken pipe
+  ✓  27 tests/channels-e2e/find-and-keys.spec.ts:95:1 › KEY-03 find for words nobody wrote says there are no matches (2.6s)
+2026/11/15 08:23:26 socat[2451767] E write(6, 0x608287376000, 24): Broken pipe
+2026/11/15 08:23:26 socat[2451799] E write(6, 0x608287376000, 24): Broken pipe
+  ✓  28 tests/channels-e2e/find-and-keys.spec.ts:119:1 › KEY-04 the find bar closes with its button and with Escape, and the channel still takes a message (2.6s)
+2026/11/15 08:23:27 socat[2450644] E write(6, 0x608287376000, 24): Broken pipe
+  ✓  29 tests/channels-e2e/find-and-keys.spec.ts:143:1 › KEY-05 the arrow keys walk from the composer up the messages and back down into the composer (2.6s)
+2026/11/15 08:23:27 socat[2451917] E write(6, 0x608287376000, 24): Broken pipe
+2026/11/15 08:23:29 socat[2455369] E write(6, 0x608287376000, 24): Broken pipe
+  ✓  31 tests/channels-e2e/find-and-keys.spec.ts:215:1 › KEY-07 “e” on a person’s own selected message edits it (2.6s)
+2026/11/15 08:23:30 socat[2456077] E write(6, 0x608287376000, 24): Broken pipe
+  ✓  33 tests/channels-e2e/find-and-keys.spec.ts:273:1 › KEY-12 Backspace on a person’s own selected message deletes it once confirmed (2.5s)2026/11/15 08:23:30 socat[2456099] E write(6, 0x608287376000, 24): Broken pipe
+
+2026/11/15 08:23:32 socat[2458194] E write(6, 0x608287376000, 24): Broken pipe
+2026/11/15 08:23:32 socat[2458255] E write(6, 0x608287376000, 24): Broken pipe
+  ✓  34 tests/channels-e2e/find-and-keys.spec.ts:298:1 › KEY-09 Shift+G in the message list goes to the latest message (2.6s)
+2026/11/15 08:23:32 socat[2458451] E write(6, 0x608287376000, 24): Broken pipe
+2026/11/15 08:23:32 socat[2458550] E write(6, 0x608287376000, 24): Broken pipe
+  ✓  35 tests/channels-e2e/find-and-keys.spec.ts:326:1 › KEY-10 choosing a channel in the list puts the cursor in its composer (2.6s)
+2026/11/15 08:23:34 socat[2462101] E write(6, 0x608287376000, 24): Broken pipe
+2026/11/15 08:23:34 socat[2242459] W waitpid(-1, {}, WNOHANG): no (more) child has exited
+2026/11/15 08:23:34 socat[2244011] W waitpid(-1, {}, WNOHANG): no (more) child has exited
+2026/11/15 08:23:34 socat[2462481] E write(6, 0x608287376000, 24): Broken pipe
+  ✓  36 tests/channels-e2e/find-and-keys.spec.ts:350:1 › KEY-11 Escape steps out of the composer to the messages, then to the list of conversations (2.2s)
+2026/11/15 08:23:38 socat[2242459] W waitpid(-1, {}, WNOHANG): no (more) child has exited
+2026/11/15 08:23:38 socat[2476389] E write(6, 0x608287376000, 24): Broken pipe
+2026/11/15 08:23:38 socat[2471485] E write(6, 0x608287376000, 24): Broken pipe
+  ✓  38 tests/channels-e2e/members.spec.ts:71:1 › MEM-02 the owner removes a person in the Participants tab and everyone who stays is told (4.7s)
+2026/11/15 08:23:40 socat[2471908] E write(6, 0x608287376000, 24): Broken pipe
+2026/11/15 08:23:40 socat[2472549] E write(6, 0x608287376000, 24): Broken pipe
+2026/11/15 08:23:40 socat[2477070] E write(6, 0x608287376000, 24): Broken pipe
+2026/11/15 08:23:40 socat[2477358] E write(6, 0x608287376000, 24): Broken pipe
+2026/11/15 08:23:40 socat[2242459] W waitpid(-1, {}, WNOHANG): no (more) child has exited
+2026/11/15 08:23:40 socat[2465125] E write(6, 0x608287376000, 24): Broken pipe
+  ✓  37 tests/channels-e2e/members.spec.ts:18:1 › MEM-01 a person invited from the app gets the channel at once, with what was said before and after (7.6s)
+2026/11/15 08:23:43 socat[2455210] E write(6, 0x608287376000, 24): Broken pipe
+  ✘  30 tests/channels-e2e/find-and-keys.spec.ts:177:1 › KEY-06 Enter on a selected message opens a reply to that message (17.3s)
+2026/11/15 08:23:44 socat[2455568] E write(6, 0x608287376000, 24): Broken pipe
+  ✘  32 tests/channels-e2e/find-and-keys.spec.ts:247:1 › KEY-08 Backspace on a person’s own selected message asks first, and Escape keeps the message (17.6s)
+2026/11/15 08:23:45 socat[2489074] E write(6, 0x608287376000, 24): Broken pipe
+2026/11/15 08:23:46 socat[2502982] E write(6, 0x608287376000, 24): Broken pipe
+2026/11/15 08:23:46 socat[2494484] E write(6, 0x608287376000, 24): Broken pipe
+  ✓  40 tests/channels-e2e/members.spec.ts:139:1 › MEM-04 a removed person never sees what is said after, and after a reload cannot open the channel (6.6s)
+2026/11/15 08:23:48 socat[2504609] E write(6, 0x608287376000, 24): Broken pipe
+2026/11/15 08:23:48 socat[2504724] E write(6, 0x608287376000, 24): Broken pipe
+  ✓  42 tests/channels-e2e/members.spec.ts:214:1 › MEM-06 a channel opened afresh shows who was added and removed between the right messages (3.2s)
+2026/11/15 08:23:50 socat[2494806] E write(6, 0x608287376000, 24): Broken pipe
+2026/11/15 08:23:50 socat[2498580] E write(6, 0x608287376000, 24): Broken pipe
+  ✓  41 tests/channels-e2e/members.spec.ts:178:1 › MEM-05 people added and removed while the channel is open show as lines between the right messages (6.6s)
+2026/11/15 08:23:50 socat[2503957] E write(6, 0x608287376000, 24): Broken pipe
+2026/11/15 08:23:50 socat[2507214] E write(6, 0x608287376000, 24): Broken pipe
+  ✓  43 tests/channels-e2e/members.spec.ts:239:1 › MEM-07 a member who does not own the channel cannot remove its owner (3.8s)
+2026/11/15 08:23:51 socat[2511359] E write(6, 0x608287376000, 24): Broken pipe
+  ✓  44 tests/channels-e2e/members.spec.ts:269:1 › MEM-08 a person added while their app was closed finds the channel in the list when they open it (3.0s)
+2026/11/15 08:23:56 socat[2485673] E write(6, 0x608287376000, 24): Broken pipe
+  ✘  39 tests/channels-e2e/members.spec.ts:111:1 › MEM-03 a person removed while the channel is open loses it at once (17.1s)
+
+
+  1) tests/channels-e2e/access.spec.ts:61:1 › ACC-03 a request to join reaches the owner at once, and approving it lets the person in at once 
+
+    Test timeout of 90000ms exceeded.
+
+    Error: locator.click: Test timeout of 90000ms exceeded.
+    Call log:
+      - waiting for getByRole('button', { name: 'Approve' })
+
+
+      83 |   );
+      84 |   await expect(request).toBeVisible();
+    > 85 |   await page.getByRole('button', { name: 'Approve' }).click();
+         |                                                       ^
+      86 |   await expect(view.list.getByText('Approved by Ada Owner')).toBeVisible();
+      87 |
+      88 |   // Cy is in without a reload, with everything said before.
+        at /home/teo/.herdr/worktrees/macro/synoet-channels-e2e-base/apps/web/tests/channels-e2e/access.spec.ts:85:55
+
+    attachment #1: screenshot (image/png) ──────────────────────────────────────────────────────────
+    ../../../../../../.cache/channels-e2e/runs/24909-break-join-request-not-shown-to-members/test-results/access-ACC-03-a-request-to-2ca38--lets-the-person-in-at-once/test-failed-1.png
+    ────────────────────────────────────────────────────────────────────────────────────────────────
+
+    attachment #2: screenshot (image/png) ──────────────────────────────────────────────────────────
+    ../../../../../../.cache/channels-e2e/runs/24909-break-join-request-not-shown-to-members/test-results/access-ACC-03-a-request-to-2ca38--lets-the-person-in-at-once/test-failed-2.png
+    ────────────────────────────────────────────────────────────────────────────────────────────────
+
+    Error Context: ../../../../../../.cache/channels-e2e/runs/24909-break-join-request-not-shown-to-members/test-results/access-ACC-03-a-request-to-2ca38--lets-the-person-in-at-once/error-context.md
+
+    attachment #4: trace (application/zip) ─────────────────────────────────────────────────────────
+    ../../../../../../.cache/channels-e2e/runs/24909-break-join-request-not-shown-to-members/test-results/access-ACC-03-a-request-to-2ca38--lets-the-person-in-at-once/trace.zip
+    Usage:
+
+        npx playwright show-trace ../../../../../../.cache/channels-e2e/runs/24909-break-join-request-not-shown-to-members/test-results/access-ACC-03-a-request-to-2ca38--lets-the-person-in-at-once/trace.zip
+
+    ────────────────────────────────────────────────────────────────────────────────────────────────
+
+  2) tests/channels-e2e/access.spec.ts:104:1 › ACC-04 a denied request tells the person so and shows them nothing of the channel 
+
+    Test timeout of 90000ms exceeded.
+
+    Error: locator.click: Test timeout of 90000ms exceeded.
+    Call log:
+      - waiting for getByRole('button', { name: 'Deny' })
+
+
+      122 |   ).toBeVisible();
+      123 |
+    > 124 |   await page.getByRole('button', { name: 'Deny' }).click();
+          |                                                    ^
+      125 |
+      126 |   await expect(view.list.getByText('Denied by Ada Owner')).toBeVisible();
+      127 |   await expect(page.getByRole('button', { name: 'Approve' })).toHaveCount(0);
+        at /home/teo/.herdr/worktrees/macro/synoet-channels-e2e-base/apps/web/tests/channels-e2e/access.spec.ts:124:52
+
+    attachment #1: screenshot (image/png) ──────────────────────────────────────────────────────────
+    ../../../../../../.cache/channels-e2e/runs/24909-break-join-request-not-shown-to-members/test-results/access-ACC-04-a-denied-req-62a52-them-nothing-of-the-channel/test-failed-1.png
+    ────────────────────────────────────────────────────────────────────────────────────────────────
+
+    attachment #2: screenshot (image/png) ──────────────────────────────────────────────────────────
+    ../../../../../../.cache/channels-e2e/runs/24909-break-join-request-not-shown-to-members/test-results/access-ACC-04-a-denied-req-62a52-them-nothing-of-the-channel/test-failed-2.png
+    ────────────────────────────────────────────────────────────────────────────────────────────────
+
+    Error Context: ../../../../../../.cache/channels-e2e/runs/24909-break-join-request-not-shown-to-members/test-results/access-ACC-04-a-denied-req-62a52-them-nothing-of-the-channel/error-context.md
+
+    attachment #4: trace (application/zip) ─────────────────────────────────────────────────────────
+    ../../../../../../.cache/channels-e2e/runs/24909-break-join-request-not-shown-to-members/test-results/access-ACC-04-a-denied-req-62a52-them-nothing-of-the-channel/trace.zip
+    Usage:
+
+        npx playwright show-trace ../../../../../../.cache/channels-e2e/runs/24909-break-join-request-not-shown-to-members/test-results/access-ACC-04-a-denied-req-62a52-them-nothing-of-the-channel/trace.zip
+
+    ────────────────────────────────────────────────────────────────────────────────────────────────
+
+  3) tests/channels-e2e/access.spec.ts:139:1 › ACC-05 a withdrawn request can no longer be approved 
+
+    Error: expect(locator).toBeVisible() failed
+
+    Locator: getByRole('button', { name: 'Approve' })
+    Expected: visible
+    Timeout: 15000ms
+    Error: element(s) not found
+
+    Call log:
+      - Expect "toBeVisible" with timeout 15000ms
+      - waiting for getByRole('button', { name: 'Approve' })
+
+
+      151 |   await cyPage.goto(`/app/channel/${channel.id}`);
+      152 |   await cyPage.getByRole('button', { name: 'Ask to join' }).click();
+    > 153 |   await expect(page.getByRole('button', { name: 'Approve' })).toBeVisible();
+          |                                                               ^
+      154 |
+      155 |   await cyPage.getByRole('button', { name: 'Withdraw request' }).click();
+      156 |
+        at /home/teo/.herdr/worktrees/macro/synoet-channels-e2e-base/apps/web/tests/channels-e2e/access.spec.ts:153:63
+
+    attachment #1: screenshot (image/png) ──────────────────────────────────────────────────────────
+    ../../../../../../.cache/channels-e2e/runs/24909-break-join-request-not-shown-to-members/test-results/access-ACC-05-a-withdrawn-request-can-no-longer-be-approved/test-failed-2.png
+    ────────────────────────────────────────────────────────────────────────────────────────────────
+
+    attachment #2: screenshot (image/png) ──────────────────────────────────────────────────────────
+    ../../../../../../.cache/channels-e2e/runs/24909-break-join-request-not-shown-to-members/test-results/access-ACC-05-a-withdrawn-request-can-no-longer-be-approved/test-failed-1.png
+    ────────────────────────────────────────────────────────────────────────────────────────────────
+
+    Error Context: ../../../../../../.cache/channels-e2e/runs/24909-break-join-request-not-shown-to-members/test-results/access-ACC-05-a-withdrawn-request-can-no-longer-be-approved/error-context.md
+
+    attachment #4: trace (application/zip) ─────────────────────────────────────────────────────────
+    ../../../../../../.cache/channels-e2e/runs/24909-break-join-request-not-shown-to-members/test-results/access-ACC-05-a-withdrawn-request-can-no-longer-be-approved/trace.zip
+    Usage:
+
+        npx playwright show-trace ../../../../../../.cache/channels-e2e/runs/24909-break-join-request-not-shown-to-members/test-results/access-ACC-05-a-withdrawn-request-can-no-longer-be-approved/trace.zip
+
+    ────────────────────────────────────────────────────────────────────────────────────────────────
+
+  4) tests/channels-e2e/find-and-keys.spec.ts:247:1 › KEY-08 Backspace on a person’s own selected message asks first, and Escape keeps the message 
+
+    Error: expect(locator).toBeVisible() failed
+
+    Locator: getByRole('dialog', { name: 'Delete message' })
+    Expected: visible
+    Timeout: 15000ms
+    Error: element(s) not found
+
+    Call log:
+      - Expect "toBeVisible" with timeout 15000ms
+      - waiting for getByRole('dialog', { name: 'Delete message' })
+
+
+      262 |   await page.keyboard.press('Backspace');
+      263 |   const dialog = page.getByRole('dialog', { name: 'Delete message' });
+    > 264 |   await expect(dialog).toBeVisible();
+          |                        ^
+      265 |
+      266 |   // Escape answers no.
+      267 |   await page.keyboard.press('Escape');
+        at /home/teo/.herdr/worktrees/macro/synoet-channels-e2e-base/apps/web/tests/channels-e2e/find-and-keys.spec.ts:264:24
+
+    attachment #1: screenshot (image/png) ──────────────────────────────────────────────────────────
+    ../../../../../../.cache/channels-e2e/runs/24909-break-join-request-not-shown-to-members/test-results/find-and-keys-KEY-08-Backs-48187-nd-Escape-keeps-the-message/test-failed-1.png
+    ────────────────────────────────────────────────────────────────────────────────────────────────
+
+    Error Context: ../../../../../../.cache/channels-e2e/runs/24909-break-join-request-not-shown-to-members/test-results/find-and-keys-KEY-08-Backs-48187-nd-Escape-keeps-the-message/error-context.md
+
+    attachment #3: trace (application/zip) ─────────────────────────────────────────────────────────
+    ../../../../../../.cache/channels-e2e/runs/24909-break-join-request-not-shown-to-members/test-results/find-and-keys-KEY-08-Backs-48187-nd-Escape-keeps-the-message/trace.zip
+    Usage:
+
+        npx playwright show-trace ../../../../../../.cache/channels-e2e/runs/24909-break-join-request-not-shown-to-members/test-results/find-and-keys-KEY-08-Backs-48187-nd-Escape-keeps-the-message/trace.zip
+
+    ────────────────────────────────────────────────────────────────────────────────────────────────
+
+  4 failed
+    tests/channels-e2e/access.spec.ts:61:1 › ACC-03 a request to join reaches the owner at once, and approving it lets the person in at once 
+    tests/channels-e2e/access.spec.ts:104:1 › ACC-04 a denied request tells the person so and shows them nothing of the channel 
+    tests/channels-e2e/access.spec.ts:139:1 › ACC-05 a withdrawn request can no longer be approved ─
+    tests/channels-e2e/find-and-keys.spec.ts:247:1 › KEY-08 Backspace on a person’s own selected message asks first, and Escape keeps the message 
+  40 passed (2.4m)
+2026/11/15 08:23:56 socat[2244011] W exiting on signal 15
+2026/11/15 08:23:56 socat[2242459] W waitpid(-1, {}, WNOHANG): no (more) child has exited
+2026/11/15 08:23:56 socat[2242459] W exiting on signal 15

@@ -1,0 +1,28 @@
+opened-thread-shows-only-its-first-replies	MSG-01	PASSED	
+opened-thread-shows-only-its-first-replies	MSG-02	PASSED	
+opened-thread-shows-only-its-first-replies	MSG-03	PASSED	
+opened-thread-shows-only-its-first-replies	MSG-04	PASSED	
+opened-thread-shows-only-its-first-replies	MSG-05	PASSED	
+opened-thread-shows-only-its-first-replies	MSG-06	PASSED	
+opened-thread-shows-only-its-first-replies	MSG-07	PASSED	
+opened-thread-shows-only-its-first-replies	MSG-08	PASSED	
+opened-thread-shows-only-its-first-replies	MSG-09	PASSED	
+opened-thread-shows-only-its-first-replies	MSG-10	PASSED	
+opened-thread-shows-only-its-first-replies	MSG-11	PASSED	
+opened-thread-shows-only-its-first-replies	MSG-12	PASSED	
+opened-thread-shows-only-its-first-replies	MSG-13	PASSED	
+opened-thread-shows-only-its-first-replies	MSG-14	PASSED	
+opened-thread-shows-only-its-first-replies	MSG-15	PASSED	
+opened-thread-shows-only-its-first-replies	MSG-16	PASSED	
+opened-thread-shows-only-its-first-replies	MSG-17	PASSED	
+opened-thread-shows-only-its-first-replies	MSG-18	PASSED	Error: expect(received).toEqual(expected) // deep equality | - Expected  - 3
+opened-thread-shows-only-its-first-replies	THR-01	PASSED	
+opened-thread-shows-only-its-first-replies	THR-02	FAILED	Error: expect(received).toEqual(expected) // deep equality | - Expected  - 1
+opened-thread-shows-only-its-first-replies	THR-03	FAILED	Error: expect(received).toEqual(expected) // deep equality | - Expected  - 13
+opened-thread-shows-only-its-first-replies	THR-04	PASSED	
+opened-thread-shows-only-its-first-replies	THR-05	PASSED	
+opened-thread-shows-only-its-first-replies	THR-06	PASSED	
+opened-thread-shows-only-its-first-replies	THR-07	FAILED	Error: expect(received).toEqual(expected) // deep equality | - Expected  - 2
+opened-thread-shows-only-its-first-replies	THR-08	FAILED	Error: expect(received).toEqual(expected) // deep equality | - Expected  - 2
+opened-thread-shows-only-its-first-replies	THR-09	PASSED	
+opened-thread-shows-only-its-first-replies	THR-10	PASSED	Error: expect(locator).toBeFocused() failed | Locator:  locator('[data-input-id="thread-reply-input-01a1de33-fd4c-7cf9-88e3-914c2063fffe"]').getByRole('textbox'

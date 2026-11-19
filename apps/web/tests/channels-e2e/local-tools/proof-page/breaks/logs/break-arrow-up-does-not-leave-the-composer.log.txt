@@ -1,0 +1,63 @@
+path "/home/teo/.herdr/worktrees/macro/synoet-channels-e2e-base/apps/web" does not contain a 'flake.nix', searching up
+warning: Git tree '/home/teo/.herdr/worktrees/macro/synoet-channels-e2e-base' is dirty
+
+Running 5 tests using 4 workers
+
+2026/11/15 10:00:15 socat[3527035] E write(6, 0x5b8f4e0d4000, 24): Broken pipe
+2026/11/15 10:00:15 socat[3527052] E write(6, 0x5b8f4e0d4000, 24): Broken pipe
+  ✓  4 tests/channels-e2e/find-and-keys.spec.ts:275:1 › KEY-08 Backspace on a person’s own selected message asks first, and Escape keeps the message (2.3s)
+2026/11/15 10:00:16 socat[3527037] E write(6, 0x5b8f4e0d4000, 24): Broken pipe
+  ✓  3 tests/channels-e2e/find-and-keys.spec.ts:247:1 › KEY-07 “e” on a person’s own selected message edits it (2.8s)
+2026/11/15 10:00:20 socat[3527812] E write(6, 0x5b8f4e0d4000, 24): Broken pipe
+2026/11/15 10:00:20 socat[3518994] W waitpid(-1, {}, WNOHANG): no (more) child has exited
+2026/11/15 10:00:20 socat[3528404] E write(6, 0x5b8f4e0d4000, 24): Broken pipe
+  ✓  5 tests/channels-e2e/find-and-keys.spec.ts:319:1 › KEY-09 Shift+G in the message list goes to the latest message (4.8s)
+2026/11/15 10:00:30 socat[3527058] E write(6, 0x5b8f4e0d4000, 24): Broken pipe
+  ✘  1 tests/channels-e2e/find-and-keys.spec.ts:209:1 › KEY-06 Enter on a selected message opens a reply to that message (17.1s)
+2026/11/15 10:00:30 socat[3527050] E write(6, 0x5b8f4e0d4000, 24): Broken pipe
+  ✘  2 tests/channels-e2e/find-and-keys.spec.ts:163:1 › KEY-05 the arrow keys walk from the composer up the messages and back down into the composer (17.4s)
+
+
+  1) tests/channels-e2e/find-and-keys.spec.ts:163:1 › KEY-05 the arrow keys walk from the composer up the messages and back down into the composer 
+
+    Error: expect(locator).toContainText(expected) failed
+
+    Locator: locator('[data-channel-scroll]').locator('[data-message][data-selected]')
+    Expected substring: "third"
+    Timeout: 15000ms
+    Error: element(s) not found
+
+    Call log:
+      - Expect "toContainText" with timeout 15000ms
+      - waiting for locator('[data-channel-scroll]').locator('[data-message][data-selected]')
+
+
+      178 |   // back a moment after ArrowUp selected the message, so the next key is
+      179 |   // typed into it. Escape, which does not have the defect, goes on from there.
+    > 180 |   await expect(selected(view)).toContainText('third');
+          |                                ^
+      181 |   await failsSometimes(async () => {
+      182 |     await expect(list).toBeFocused({ timeout: 5000 });
+      183 |     await expect(view.composerText).not.toBeFocused();
+        at /home/teo/.herdr/worktrees/macro/synoet-channels-e2e-base/apps/web/tests/channels-e2e/find-and-keys.spec.ts:180:32
+
+    attachment #1: screenshot (image/png) ──────────────────────────────────────────────────────────
+    ../../../../../../.cache/channels-e2e/runs/24909-break-arrow-up-does-not-leave-the-composer/test-results/find-and-keys-KEY-05-the-a-c5102-back-down-into-the-composer/test-failed-1.png
+    ────────────────────────────────────────────────────────────────────────────────────────────────
+
+    Error Context: ../../../../../../.cache/channels-e2e/runs/24909-break-arrow-up-does-not-leave-the-composer/test-results/find-and-keys-KEY-05-the-a-c5102-back-down-into-the-composer/error-context.md
+
+    attachment #3: trace (application/zip) ─────────────────────────────────────────────────────────
+    ../../../../../../.cache/channels-e2e/runs/24909-break-arrow-up-does-not-leave-the-composer/test-results/find-and-keys-KEY-05-the-a-c5102-back-down-into-the-composer/trace.zip
+    Usage:
+
+        npx playwright show-trace ../../../../../../.cache/channels-e2e/runs/24909-break-arrow-up-does-not-leave-the-composer/test-results/find-and-keys-KEY-05-the-a-c5102-back-down-into-the-composer/trace.zip
+
+    ────────────────────────────────────────────────────────────────────────────────────────────────
+
+  1 failed
+    tests/channels-e2e/find-and-keys.spec.ts:163:1 › KEY-05 the arrow keys walk from the composer up the messages and back down into the composer 
+  4 passed (19.1s)
+2026/11/15 10:00:31 socat[3518994] W waitpid(-1, {}, WNOHANG): no (more) child has exited
+2026/11/15 10:00:31 socat[3519117] W exiting on signal 15
+2026/11/15 10:00:31 socat[3518994] W exiting on signal 15

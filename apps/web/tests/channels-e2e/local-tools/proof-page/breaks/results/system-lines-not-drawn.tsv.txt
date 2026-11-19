@@ -1,0 +1,44 @@
+system-lines-not-drawn	ACC-01	PASSED	
+system-lines-not-drawn	ACC-02	PASSED	
+system-lines-not-drawn	ACC-03	PASSED	
+system-lines-not-drawn	ACC-04	PASSED	
+system-lines-not-drawn	ACC-05	PASSED	
+system-lines-not-drawn	ACC-06	FAILED	Error: the last messages and system lines in the list | the last messages and system lines in the list
+system-lines-not-drawn	ACC-07	PASSED	
+system-lines-not-drawn	ACC-08	PASSED	
+system-lines-not-drawn	ACC-09	PASSED	
+system-lines-not-drawn	CHN-01	PASSED	
+system-lines-not-drawn	CHN-02	PASSED	
+system-lines-not-drawn	CHN-03	FAILED	Error: the last messages and system lines in the list | the last messages and system lines in the list
+system-lines-not-drawn	CHN-04	PASSED	Error: expect(locator).toBeVisible() failed | Locator: locator('[data-channel-scroll] [data-system-activity]').filter({ hasText: 'renamed the channel to renamed
+system-lines-not-drawn	CHN-05	PASSED	
+system-lines-not-drawn	CHN-06	PASSED	
+system-lines-not-drawn	CHN-07	PASSED	
+system-lines-not-drawn	CHN-08	PASSED	Error: expect(locator).toHaveCount(expected) failed | Locator:  getByRole('tree', { name: 'Conversations' }).locator('[data-key="favorite:channel:01a1de37-9625-
+system-lines-not-drawn	CHN-09	PASSED	
+system-lines-not-drawn	CHN-10	PASSED	
+system-lines-not-drawn	CHN-11	PASSED	
+system-lines-not-drawn	CHN-12	PASSED	
+system-lines-not-drawn	CHN-13	PASSED	
+system-lines-not-drawn	CHN-14	PASSED	Error: expect(locator).toBeVisible() failed | Locator: getByRole('main').getByText('Channel e2e-mwhjn2890cde created')
+system-lines-not-drawn	CHN-15	PASSED	Error: expect(locator).toHaveCount(expected) failed | Locator:  locator('[data-input-id="channel-input-01a1de37-c700-76dd-93f6-29d873202d31"]')
+system-lines-not-drawn	KEY-01	PASSED	
+system-lines-not-drawn	KEY-02	PASSED	
+system-lines-not-drawn	KEY-03	PASSED	
+system-lines-not-drawn	KEY-04	PASSED	
+system-lines-not-drawn	KEY-05	PASSED	
+system-lines-not-drawn	KEY-06	PASSED	Error: expect(locator).toBeFocused() failed | Locator:  locator('[data-input-id="thread-reply-input-01a1de37-f350-7dc4-bd7f-d0c1fadb8ef8"] [contenteditable]')
+system-lines-not-drawn	KEY-07	PASSED	
+system-lines-not-drawn	KEY-08	PASSED	
+system-lines-not-drawn	KEY-12	PASSED	
+system-lines-not-drawn	KEY-09	PASSED	
+system-lines-not-drawn	KEY-10	PASSED	
+system-lines-not-drawn	KEY-11	PASSED	
+system-lines-not-drawn	MEM-01	FAILED	Error: the last messages and system lines in the list | the last messages and system lines in the list
+system-lines-not-drawn	MEM-02	FAILED	Error: the last messages and system lines in the list | the last messages and system lines in the list
+system-lines-not-drawn	MEM-03	PASSED	Error: expect(locator).toHaveCount(expected) failed | Locator:  locator('[data-input-id="channel-input-01a1de38-1f5b-75c9-92c1-aed22f54ff8c"]')
+system-lines-not-drawn	MEM-04	FAILED	Error: expect(locator).toBeVisible() failed | Locator: locator('[data-channel-scroll] [data-system-activity]').filter({ hasText: 'Ada Owner removed Cy Teammate'
+system-lines-not-drawn	MEM-05	FAILED	Error: expect(locator).toBeVisible() failed | Locator: locator('[data-channel-scroll] [data-system-activity]').filter({ hasText: 'Ada Owner added Cy Teammate' }
+system-lines-not-drawn	MEM-06	FAILED	Error: the last messages and system lines in the list | the last messages and system lines in the list
+system-lines-not-drawn	MEM-07	PASSED	
+system-lines-not-drawn	MEM-08	FAILED	Error: the last messages and system lines in the list | the last messages and system lines in the list

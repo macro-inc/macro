@@ -1,0 +1,44 @@
+signed-out-not-offered-login	ACC-01	PASSED	
+signed-out-not-offered-login	ACC-02	PASSED	
+signed-out-not-offered-login	ACC-03	PASSED	
+signed-out-not-offered-login	ACC-04	PASSED	
+signed-out-not-offered-login	ACC-05	PASSED	
+signed-out-not-offered-login	ACC-06	PASSED	
+signed-out-not-offered-login	ACC-07	PASSED	
+signed-out-not-offered-login	ACC-08	PASSED	
+signed-out-not-offered-login	ACC-09	FAILED	Error: expect(locator).toBeVisible() failed | Locator: getByRole('button', { name: 'Login' })
+signed-out-not-offered-login	CHN-01	PASSED	
+signed-out-not-offered-login	CHN-02	PASSED	
+signed-out-not-offered-login	CHN-03	PASSED	
+signed-out-not-offered-login	CHN-04	PASSED	Error: expect(locator).toContainText(expected) failed | Locator: getByRole('main').locator('[data-view-shell-top-bar]')
+signed-out-not-offered-login	CHN-05	PASSED	
+signed-out-not-offered-login	CHN-06	PASSED	
+signed-out-not-offered-login	CHN-07	PASSED	
+signed-out-not-offered-login	CHN-08	PASSED	Error: expect(locator).toHaveCount(expected) failed | Locator:  getByRole('tree', { name: 'Conversations' }).locator('[data-key="favorite:channel:01a1de4f-ae57-
+signed-out-not-offered-login	CHN-09	PASSED	
+signed-out-not-offered-login	CHN-10	PASSED	
+signed-out-not-offered-login	CHN-11	PASSED	
+signed-out-not-offered-login	CHN-12	PASSED	
+signed-out-not-offered-login	CHN-13	PASSED	
+signed-out-not-offered-login	CHN-14	PASSED	Error: expect(locator).toBeVisible() failed | Locator: getByRole('main').getByText('Channel e2e-mwhkkwvdodbn created')
+signed-out-not-offered-login	CHN-15	PASSED	Error: expect(locator).toHaveCount(expected) failed | Locator:  locator('[data-input-id="channel-input-01a1de4f-dbd6-72bf-8c97-ba17ec1873f9"]')
+signed-out-not-offered-login	KEY-01	PASSED	
+signed-out-not-offered-login	KEY-02	PASSED	
+signed-out-not-offered-login	KEY-03	PASSED	
+signed-out-not-offered-login	KEY-04	PASSED	
+signed-out-not-offered-login	KEY-05	PASSED	
+signed-out-not-offered-login	KEY-06	PASSED	Error: expect(locator).toBeFocused() failed | Locator:  locator('[data-input-id="thread-reply-input-01a1de50-0882-7385-946b-03e154e6e0d6"] [contenteditable]')
+signed-out-not-offered-login	KEY-07	PASSED	
+signed-out-not-offered-login	KEY-08	PASSED	
+signed-out-not-offered-login	KEY-12	PASSED	
+signed-out-not-offered-login	KEY-09	PASSED	
+signed-out-not-offered-login	KEY-10	PASSED	
+signed-out-not-offered-login	KEY-11	PASSED	
+signed-out-not-offered-login	MEM-01	PASSED	
+signed-out-not-offered-login	MEM-02	PASSED	
+signed-out-not-offered-login	MEM-03	PASSED	Error: expect(locator).toHaveCount(expected) failed | Locator:  locator('[data-input-id="channel-input-01a1de50-30b7-7c84-862d-612bbec296d2"]')
+signed-out-not-offered-login	MEM-04	PASSED	
+signed-out-not-offered-login	MEM-05	PASSED	
+signed-out-not-offered-login	MEM-06	PASSED	
+signed-out-not-offered-login	MEM-07	PASSED	
+signed-out-not-offered-login	MEM-08	PASSED	

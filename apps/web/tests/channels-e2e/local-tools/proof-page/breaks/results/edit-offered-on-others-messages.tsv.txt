@@ -1,0 +1,28 @@
+edit-offered-on-others-messages	MSG-01	PASSED	
+edit-offered-on-others-messages	MSG-02	PASSED	
+edit-offered-on-others-messages	MSG-03	PASSED	
+edit-offered-on-others-messages	MSG-04	PASSED	
+edit-offered-on-others-messages	MSG-05	PASSED	
+edit-offered-on-others-messages	MSG-06	PASSED	
+edit-offered-on-others-messages	MSG-07	PASSED	
+edit-offered-on-others-messages	MSG-08	PASSED	
+edit-offered-on-others-messages	MSG-09	PASSED	
+edit-offered-on-others-messages	MSG-10	PASSED	
+edit-offered-on-others-messages	MSG-11	PASSED	
+edit-offered-on-others-messages	MSG-12	FAILED	Error: expect(locator).toHaveCount(expected) failed | Locator:  locator('[data-channel-scroll]').locator('[data-message-id="01a1de29-6d64-7f6f-aa55-490080fdf9ae
+edit-offered-on-others-messages	MSG-13	PASSED	
+edit-offered-on-others-messages	MSG-14	PASSED	
+edit-offered-on-others-messages	MSG-15	PASSED	
+edit-offered-on-others-messages	MSG-16	PASSED	
+edit-offered-on-others-messages	MSG-17	PASSED	
+edit-offered-on-others-messages	MSG-18	PASSED	Error: expect(received).toEqual(expected) // deep equality | - Expected  - 1
+edit-offered-on-others-messages	THR-01	PASSED	
+edit-offered-on-others-messages	THR-02	PASSED	
+edit-offered-on-others-messages	THR-03	PASSED	
+edit-offered-on-others-messages	THR-04	PASSED	
+edit-offered-on-others-messages	THR-05	PASSED	
+edit-offered-on-others-messages	THR-06	PASSED	
+edit-offered-on-others-messages	THR-07	PASSED	
+edit-offered-on-others-messages	THR-08	PASSED	
+edit-offered-on-others-messages	THR-09	PASSED	
+edit-offered-on-others-messages	THR-10	PASSED	Error: expect(locator).toBeFocused() failed | Locator:  locator('[data-input-id="thread-reply-input-01a1de29-d78e-7cdf-8287-fa66f8060b15"]').getByRole('textbox'

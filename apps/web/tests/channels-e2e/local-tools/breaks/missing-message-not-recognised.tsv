@@ -1,0 +1,21 @@
+missing-message-not-recognised	CHN-12	PASSED	
+missing-message-not-recognised	KEY-09	PASSED	
+missing-message-not-recognised	NAV-01	PASSED	
+missing-message-not-recognised	NAV-02	PASSED	
+missing-message-not-recognised	NAV-03	PASSED	
+missing-message-not-recognised	NAV-04	FAILED	Error: expect(locator).toBeVisible() failed | Locator: getByText('Message no longer available')
+missing-message-not-recognised	NAV-05	PASSED	Error: lost my place below "history 148": the list shows ["history 217","history 218","history 219","history 220","history 221","history 222","history 223","his
+missing-message-not-recognised	NAV-06	PASSED	
+missing-message-not-recognised	NAV-07	PASSED	
+missing-message-not-recognised	MSG-16	PASSED	
+missing-message-not-recognised	OPEN-01	PASSED	
+missing-message-not-recognised	OPEN-02	PASSED	
+missing-message-not-recognised	REC-01	PASSED	
+missing-message-not-recognised	REC-02	PASSED	
+missing-message-not-recognised	REC-03	PASSED	
+missing-message-not-recognised	SCROLL-01	PASSED	
+missing-message-not-recognised	SCROLL-02	PASSED	
+missing-message-not-recognised	SCROLL-03	PASSED	
+missing-message-not-recognised	SCROLL-04	PASSED	
+missing-message-not-recognised	TAB-01	PASSED	
+missing-message-not-recognised	TAB-02	PASSED	

@@ -1,0 +1,688 @@
+path "/home/teo/.herdr/worktrees/macro/synoet-channels-e2e-base/apps/web" does not contain a 'flake.nix', searching up
+warning: Git tree '/home/teo/.herdr/worktrees/macro/synoet-channels-e2e-base' is dirty
+
+Running 21 tests using 4 workers
+
+2026/11/15 09:11:48 socat[3153203] E write(6, 0x5eb40df52000, 24): Broken pipe
+2026/11/15 09:11:48 socat[3153272] E write(6, 0x5eb40df52000, 24): Broken pipe
+  ✓   1 tests/channels-e2e/location.spec.ts:24:1 › NAV-02 a link to an old message, pages back, shows it between its neighbours (10.5s)
+2026/11/15 09:11:48 socat[3153280] E write(6, 0x5eb40df52000, 24): Broken pipe
+  ✓   4 tests/channels-e2e/location.spec.ts:7:1 › NAV-01 a link to a recent message opens the channel on that message and marks it (11.0s)
+2026/11/15 09:11:50 socat[3176781] E write(6, 0x5eb40df52000, 24): Broken pipe
+  ✓   5 tests/channels-e2e/location.spec.ts:47:1 › NAV-03 a link to a reply deep in an old thread opens the thread on that reply (2.7s)
+2026/11/15 09:11:55 socat[3153191] E write(6, 0x5eb40df52000, 24): Broken pipe
+2026/11/15 09:11:55 socat[3153258] E write(6, 0x5eb40df52000, 24): Broken pipe
+  ✘   2 tests/channels-e2e/find-and-keys.spec.ts:313:1 › KEY-09 Shift+G in the message list goes to the latest message (17.3s)
+2026/11/15 09:11:55 socat[3153198] E write(6, 0x5eb40df52000, 24): Broken pipe
+2026/11/15 09:11:55 socat[3153267] E write(6, 0x5eb40df52000, 24): Broken pipe
+  ✘   3 tests/channels-e2e/channels.spec.ts:362:1 › CHN-12 going to another tab and back keeps the message list where it was (18.2s)
+2026/11/15 09:11:58 socat[3190319] E write(6, 0x5eb40df52000, 24): Broken pipe
+2026/11/15 09:11:58 socat[3190324] E write(6, 0x5eb40df52000, 24): Broken pipe
+2026/11/15 09:11:59 socat[3192581] E write(6, 0x5eb40df52000, 24): Broken pipe
+2026/11/15 09:12:01 socat[3180143] E write(6, 0x5eb40df52000, 24): Broken pipe
+  ✘   7 tests/channels-e2e/location.spec.ts:97:1 › NAV-05 reading forward from an old message reaches the latest with nothing missing or repeated (10.5s)
+2026/11/15 09:12:01 socat[3194405] E write(6, 0x5eb40df52000, 24): Broken pipe
+2026/11/15 09:12:01 socat[3194496] E write(6, 0x5eb40df52000, 24): Broken pipe
+  ✓   9 tests/channels-e2e/location.spec.ts:137:1 › NAV-07 “Copy link” on a message gives a link that opens the channel on it (4.7s)
+2026/11/15 09:12:06 socat[3177270] E write(6, 0x5eb40df52000, 24): Broken pipe
+2026/11/15 09:12:06 socat[3177283] E write(6, 0x5eb40df52000, 24): Broken pipe
+  ✘   6 tests/channels-e2e/location.spec.ts:75:1 › NAV-04 a link to a message that does not exist says so and shows the latest messages (18.1s)
+2026/11/15 09:12:14 socat[3189186] E write(6, 0x5eb40df52000, 24): Broken pipe
+2026/11/15 09:12:14 socat[3128487] W waitpid(-1, {}, WNOHANG): no (more) child has exited
+2026/11/15 09:12:14 socat[3189423] E write(6, 0x5eb40df52000, 24): Broken pipe
+  ✘   8 tests/channels-e2e/location.spec.ts:120:1 › NAV-06 scrolling down from an old message offers “Scroll to bottom”, which returns to the latest messages (18.6s)
+2026/11/15 09:12:17 socat[3197894] E write(6, 0x5eb40df52000, 24): Broken pipe
+2026/11/15 09:12:17 socat[3197961] E write(6, 0x5eb40df52000, 24): Broken pipe
+  ✘  10 tests/channels-e2e/messages.spec.ts:623:1 › MSG-16 a message sent to another channel does not appear in the open one (16.4s)
+2026/11/15 09:12:18 socat[3198732] E write(6, 0x5eb40df52000, 24): Broken pipe
+2026/11/15 09:12:18 socat[3198968] E write(6, 0x5eb40df52000, 24): Broken pipe
+  ✘  11 tests/channels-e2e/open.spec.ts:13:1 › OPEN-01 a channel opened by its address shows its latest messages in order, at the end (17.1s)
+2026/11/15 09:12:24 socat[3128093] W waitpid(-1, {}, WNOHANG): no (more) child has exited
+2026/11/15 09:12:24 socat[3207666] E write(6, 0x5eb40df52000, 24): Broken pipe
+  ✘  12 tests/channels-e2e/open.spec.ts:35:1 › OPEN-02 switching between channels in the list shows each channel’s own messages (16.8s)
+2026/11/15 09:12:31 socat[3220394] E write(6, 0x5eb40df53000, 24): Broken pipe
+2026/11/15 09:12:31 socat[3220491] E write(6, 0x5eb40df53000, 24): Broken pipe
+  ✘  13 tests/channels-e2e/reconnect.spec.ts:6:1 › REC-01 after the connection comes back, messages sent meanwhile appear in order without a reload (16.3s)
+2026/11/15 09:12:35 socat[3224666] E write(6, 0x5eb40df53000, 24): Broken pipe
+  ✘  14 tests/channels-e2e/reconnect.spec.ts:36:1 › REC-02 a message sent with no connection is neither lost nor sent twice (17.1s)
+2026/11/15 09:12:36 socat[3226836] E write(6, 0x5eb40df53000, 24): Broken pipe
+2026/11/15 09:12:36 socat[3226842] E write(6, 0x5eb40df53000, 24): Broken pipe
+  ✘  15 tests/channels-e2e/reconnect.spec.ts:81:1 › REC-03 a message that arrives while the page is hidden is there when the person comes back (17.2s)
+2026/11/15 09:12:40 socat[3251890] E write(6, 0x5eb40df53000, 24): Broken pipe
+  ✓  18 tests/channels-e2e/scroll.spec.ts:55:1 › SCROLL-03 at the end of the channel, a message from someone else arrives in view (4.3s)
+2026/11/15 09:12:41 socat[3233341] E write(6, 0x5eb40df53000, 24): Broken pipe
+2026/11/15 09:12:41 socat[3128093] W waitpid(-1, {}, WNOHANG): no (more) child has exited
+2026/11/15 09:12:41 socat[3128487] W waitpid(-1, {}, WNOHANG): no (more) child has exited
+2026/11/15 09:12:41 socat[3233880] E write(6, 0x5eb40df53000, 24): Broken pipe
+  ✘  16 tests/channels-e2e/scroll.spec.ts:7:1 › SCROLL-01 scrolling back to the start of a long channel shows every message once, in order (16.8s)
+2026/11/15 09:12:46 socat[3254319] E write(6, 0x5eb40df53000, 24): Broken pipe
+  ✓  19 tests/channels-e2e/scroll.spec.ts:78:1 › SCROLL-04 scrolled up, a message from someone else does not move what is being read (8.7s)
+2026/11/15 09:12:53 socat[3128093] W waitpid(-1, {}, WNOHANG): no (more) child has exited
+2026/11/15 09:12:53 socat[3128487] W waitpid(-1, {}, WNOHANG): no (more) child has exited
+2026/11/15 09:12:53 socat[3246498] E write(6, 0x5eb40df53000, 24): Broken pipe
+  ✘  17 tests/channels-e2e/scroll.spec.ts:26:1 › SCROLL-02 scrolling back down from far up offers “Scroll to bottom”, which returns to the latest message (21.4s)
+2026/11/15 09:12:59 socat[3255062] E write(6, 0x5eb40df53000, 24): Broken pipe
+2026/11/15 09:12:59 socat[3258707] E write(6, 0x5eb40df53000, 24): Broken pipe
+2026/11/15 09:12:59 socat[3128487] W waitpid(-1, {}, WNOHANG): no (more) child has exited
+2026/11/15 09:12:59 socat[3258939] E write(6, 0x5eb40df53000, 24): Broken pipe
+2026/11/15 09:12:59 socat[3255078] E write(6, 0x5eb40df53000, 24): Broken pipe
+  ✘  20 tests/channels-e2e/two-tabs.spec.ts:6:1 › TAB-01 a message sent in one window shows once in the same person’s other window (18.9s)
+2026/11/15 09:13:01 socat[3259239] E write(6, 0x5eb40df53000, 24): Broken pipe
+2026/11/15 09:13:01 socat[3263767] E write(6, 0x5eb40df53000, 24): Broken pipe
+2026/11/15 09:13:01 socat[3259329] E write(6, 0x5eb40df53000, 24): Broken pipe
+2026/11/15 09:13:01 socat[3128093] W waitpid(-1, {}, WNOHANG): no (more) child has exited
+  ✘  21 tests/channels-e2e/two-tabs.spec.ts:29:1 › TAB-02 an edit, a reaction and a deletion made in one window show in the other (19.1s)
+
+
+  1) tests/channels-e2e/channels.spec.ts:362:1 › CHN-12 going to another tab and back keeps the message list where it was 
+
+    Error: the last messages in the list
+
+    the last messages in the list
+
+    expect(received).toEqual(expected) // deep equality
+
+    - Expected  - 1
+    + Received  + 1
+
+      Array [
+    -   "history 230",
+    +   "history 229",
+      ]
+
+    Call Log:
+    - Timeout 15000ms exceeded while waiting on the predicate
+
+       at harness/channel.ts:186
+
+      184 |         message: 'the last messages in the list',
+      185 |       })
+    > 186 |       .toEqual(expected);
+          |        ^
+      187 |   }
+      188 |
+      189 |   /** How far the list is from showing its very end, in pixels. */
+        at ChannelView.expectEndsWith (/home/teo/.herdr/worktrees/macro/synoet-channels-e2e-base/apps/web/tests/channels-e2e/harness/channel.ts:186:8)
+        at /home/teo/.herdr/worktrees/macro/synoet-channels-e2e-base/apps/web/tests/channels-e2e/channels.spec.ts:368:14
+
+    attachment #1: screenshot (image/png) ──────────────────────────────────────────────────────────
+    ../../../../../../.cache/channels-e2e/runs/24909-break-page-loses-a-message/test-results/channels-CHN-12-going-to-a-89709-e-message-list-where-it-was/test-failed-1.png
+    ────────────────────────────────────────────────────────────────────────────────────────────────
+
+    Error Context: ../../../../../../.cache/channels-e2e/runs/24909-break-page-loses-a-message/test-results/channels-CHN-12-going-to-a-89709-e-message-list-where-it-was/error-context.md
+
+    attachment #3: trace (application/zip) ─────────────────────────────────────────────────────────
+    ../../../../../../.cache/channels-e2e/runs/24909-break-page-loses-a-message/test-results/channels-CHN-12-going-to-a-89709-e-message-list-where-it-was/trace.zip
+    Usage:
+
+        npx playwright show-trace ../../../../../../.cache/channels-e2e/runs/24909-break-page-loses-a-message/test-results/channels-CHN-12-going-to-a-89709-e-message-list-where-it-was/trace.zip
+
+    ────────────────────────────────────────────────────────────────────────────────────────────────
+
+  2) tests/channels-e2e/find-and-keys.spec.ts:313:1 › KEY-09 Shift+G in the message list goes to the latest message 
+
+    Error: the last messages in the list
+
+    the last messages in the list
+
+    expect(received).toEqual(expected) // deep equality
+
+    - Expected  - 1
+    + Received  + 1
+
+      Array [
+    -   "history 230",
+    +   "history 229",
+      ]
+
+    Call Log:
+    - Timeout 15000ms exceeded while waiting on the predicate
+
+       at harness/channel.ts:186
+
+      184 |         message: 'the last messages in the list',
+      185 |       })
+    > 186 |       .toEqual(expected);
+          |        ^
+      187 |   }
+      188 |
+      189 |   /** How far the list is from showing its very end, in pixels. */
+        at ChannelView.expectEndsWith (/home/teo/.herdr/worktrees/macro/synoet-channels-e2e-base/apps/web/tests/channels-e2e/harness/channel.ts:186:8)
+        at /home/teo/.herdr/worktrees/macro/synoet-channels-e2e-base/apps/web/tests/channels-e2e/find-and-keys.spec.ts:319:14
+
+    attachment #1: screenshot (image/png) ──────────────────────────────────────────────────────────
+    ../../../../../../.cache/channels-e2e/runs/24909-break-page-loses-a-message/test-results/find-and-keys-KEY-09-Shift-0afb1--goes-to-the-latest-message/test-failed-1.png
+    ────────────────────────────────────────────────────────────────────────────────────────────────
+
+    Error Context: ../../../../../../.cache/channels-e2e/runs/24909-break-page-loses-a-message/test-results/find-and-keys-KEY-09-Shift-0afb1--goes-to-the-latest-message/error-context.md
+
+    attachment #3: trace (application/zip) ─────────────────────────────────────────────────────────
+    ../../../../../../.cache/channels-e2e/runs/24909-break-page-loses-a-message/test-results/find-and-keys-KEY-09-Shift-0afb1--goes-to-the-latest-message/trace.zip
+    Usage:
+
+        npx playwright show-trace ../../../../../../.cache/channels-e2e/runs/24909-break-page-loses-a-message/test-results/find-and-keys-KEY-09-Shift-0afb1--goes-to-the-latest-message/trace.zip
+
+    ────────────────────────────────────────────────────────────────────────────────────────────────
+
+  3) tests/channels-e2e/location.spec.ts:75:1 › NAV-04 a link to a message that does not exist says so and shows the latest messages 
+
+    Error: the last messages in the list
+
+    the last messages in the list
+
+    expect(received).toEqual(expected) // deep equality
+
+    - Expected  - 1
+    + Received  + 0
+
+      Array [
+        "kept one",
+    -   "kept two",
+      ]
+
+    Call Log:
+    - Timeout 15000ms exceeded while waiting on the predicate
+
+       at harness/channel.ts:186
+
+      184 |         message: 'the last messages in the list',
+      185 |       })
+    > 186 |       .toEqual(expected);
+          |        ^
+      187 |   }
+      188 |
+      189 |   /** How far the list is from showing its very end, in pixels. */
+        at ChannelView.expectEndsWith (/home/teo/.herdr/worktrees/macro/synoet-channels-e2e-base/apps/web/tests/channels-e2e/harness/channel.ts:186:8)
+        at /home/teo/.herdr/worktrees/macro/synoet-channels-e2e-base/apps/web/tests/channels-e2e/location.spec.ts:91:14
+
+    attachment #1: screenshot (image/png) ──────────────────────────────────────────────────────────
+    ../../../../../../.cache/channels-e2e/runs/24909-break-page-loses-a-message/test-results/location-NAV-04-a-link-to--52799-d-shows-the-latest-messages/test-failed-1.png
+    ────────────────────────────────────────────────────────────────────────────────────────────────
+
+    Error Context: ../../../../../../.cache/channels-e2e/runs/24909-break-page-loses-a-message/test-results/location-NAV-04-a-link-to--52799-d-shows-the-latest-messages/error-context.md
+
+    attachment #3: trace (application/zip) ─────────────────────────────────────────────────────────
+    ../../../../../../.cache/channels-e2e/runs/24909-break-page-loses-a-message/test-results/location-NAV-04-a-link-to--52799-d-shows-the-latest-messages/trace.zip
+    Usage:
+
+        npx playwright show-trace ../../../../../../.cache/channels-e2e/runs/24909-break-page-loses-a-message/test-results/location-NAV-04-a-link-to--52799-d-shows-the-latest-messages/trace.zip
+
+    ────────────────────────────────────────────────────────────────────────────────────────────────
+
+  4) tests/channels-e2e/location.spec.ts:120:1 › NAV-06 scrolling down from an old message offers “Scroll to bottom”, which returns to the latest messages 
+
+    Error: expect(locator).toBeInViewport() failed
+
+    Locator: locator('[data-channel-scroll]').locator('[data-message]').filter({ has: locator('[data-message-content]').getByText('history 230', { exact: true }) })
+    Expected: in viewport
+    Timeout: 15000ms
+    Error: element(s) not found
+
+    Call log:
+      - Expect "toBeInViewport" with timeout 15000ms
+      - waiting for locator('[data-channel-scroll]').locator('[data-message]').filter({ has: locator('[data-message-content]').getByText('history 230', { exact: true }) })
+
+
+      128 |   await (await view.scrollDownUntilOffered()).click();
+      129 |
+    > 130 |   await expect(view.message(historyText(HISTORY_LENGTH))).toBeInViewport();
+          |                                                           ^
+      131 |   await view.expectEndsWith(history.texts.slice(-5));
+      132 |   await view.expectAtBottom();
+      133 | });
+        at /home/teo/.herdr/worktrees/macro/synoet-channels-e2e-base/apps/web/tests/channels-e2e/location.spec.ts:130:59
+
+    attachment #1: screenshot (image/png) ──────────────────────────────────────────────────────────
+    ../../../../../../.cache/channels-e2e/runs/24909-break-page-loses-a-message/test-results/location-NAV-06-scrolling--ee522-urns-to-the-latest-messages/test-failed-1.png
+    ────────────────────────────────────────────────────────────────────────────────────────────────
+
+    Error Context: ../../../../../../.cache/channels-e2e/runs/24909-break-page-loses-a-message/test-results/location-NAV-06-scrolling--ee522-urns-to-the-latest-messages/error-context.md
+
+    attachment #3: trace (application/zip) ─────────────────────────────────────────────────────────
+    ../../../../../../.cache/channels-e2e/runs/24909-break-page-loses-a-message/test-results/location-NAV-06-scrolling--ee522-urns-to-the-latest-messages/trace.zip
+    Usage:
+
+        npx playwright show-trace ../../../../../../.cache/channels-e2e/runs/24909-break-page-loses-a-message/test-results/location-NAV-06-scrolling--ee522-urns-to-the-latest-messages/trace.zip
+
+    ────────────────────────────────────────────────────────────────────────────────────────────────
+
+  5) tests/channels-e2e/messages.spec.ts:623:1 › MSG-16 a message sent to another channel does not appear in the open one 
+
+    Error: expect(received).toEqual(expected) // deep equality
+
+    - Expected  - 3
+    + Received  + 1
+
+    - Array [
+    -   "open channel start",
+    - ]
+    + Array []
+
+    Call Log:
+    - Timeout 15000ms exceeded while waiting on the predicate
+
+      633 |   const view = new Conversation(page, open.id);
+      634 |   await view.open();
+    > 635 |   await expect.poll(() => view.topLevel()).toEqual(['open channel start']);
+          |                                            ^
+      636 |
+      637 |   await ben.post(other.id, 'meant for the other channel');
+      638 |   // This one comes after it, so the first has been delivered by now.
+        at /home/teo/.herdr/worktrees/macro/synoet-channels-e2e-base/apps/web/tests/channels-e2e/messages.spec.ts:635:44
+
+    attachment #1: screenshot (image/png) ──────────────────────────────────────────────────────────
+    ../../../../../../.cache/channels-e2e/runs/24909-break-page-loses-a-message/test-results/messages-MSG-16-a-message--c8cb2--not-appear-in-the-open-one/test-failed-1.png
+    ────────────────────────────────────────────────────────────────────────────────────────────────
+
+    Error Context: ../../../../../../.cache/channels-e2e/runs/24909-break-page-loses-a-message/test-results/messages-MSG-16-a-message--c8cb2--not-appear-in-the-open-one/error-context.md
+
+    attachment #3: trace (application/zip) ─────────────────────────────────────────────────────────
+    ../../../../../../.cache/channels-e2e/runs/24909-break-page-loses-a-message/test-results/messages-MSG-16-a-message--c8cb2--not-appear-in-the-open-one/trace.zip
+    Usage:
+
+        npx playwright show-trace ../../../../../../.cache/channels-e2e/runs/24909-break-page-loses-a-message/test-results/messages-MSG-16-a-message--c8cb2--not-appear-in-the-open-one/trace.zip
+
+    ────────────────────────────────────────────────────────────────────────────────────────────────
+
+  6) tests/channels-e2e/open.spec.ts:13:1 › OPEN-01 a channel opened by its address shows its latest messages in order, at the end 
+
+    Error: the last messages in the list
+
+    the last messages in the list
+
+    expect(received).toEqual(expected) // deep equality
+
+    - Expected  - 1
+    + Received  + 0
+
+    @@ -8,7 +8,6 @@
+        "open 007",
+        "open 008",
+        "open 009",
+        "open 010",
+        "open 011",
+    -   "open 012",
+      ]
+
+    Call Log:
+    - Timeout 15000ms exceeded while waiting on the predicate
+
+       at harness/channel.ts:186
+
+      184 |         message: 'the last messages in the list',
+      185 |       })
+    > 186 |       .toEqual(expected);
+          |        ^
+      187 |   }
+      188 |
+      189 |   /** How far the list is from showing its very end, in pixels. */
+        at ChannelView.expectEndsWith (/home/teo/.herdr/worktrees/macro/synoet-channels-e2e-base/apps/web/tests/channels-e2e/harness/channel.ts:186:8)
+        at /home/teo/.herdr/worktrees/macro/synoet-channels-e2e-base/apps/web/tests/channels-e2e/open.spec.ts:28:14
+
+    attachment #1: screenshot (image/png) ──────────────────────────────────────────────────────────
+    ../../../../../../.cache/channels-e2e/runs/24909-break-page-loses-a-message/test-results/open-OPEN-01-a-channel-ope-7da4d-essages-in-order-at-the-end/test-failed-1.png
+    ────────────────────────────────────────────────────────────────────────────────────────────────
+
+    Error Context: ../../../../../../.cache/channels-e2e/runs/24909-break-page-loses-a-message/test-results/open-OPEN-01-a-channel-ope-7da4d-essages-in-order-at-the-end/error-context.md
+
+    attachment #3: trace (application/zip) ─────────────────────────────────────────────────────────
+    ../../../../../../.cache/channels-e2e/runs/24909-break-page-loses-a-message/test-results/open-OPEN-01-a-channel-ope-7da4d-essages-in-order-at-the-end/trace.zip
+    Usage:
+
+        npx playwright show-trace ../../../../../../.cache/channels-e2e/runs/24909-break-page-loses-a-message/test-results/open-OPEN-01-a-channel-ope-7da4d-essages-in-order-at-the-end/trace.zip
+
+    ────────────────────────────────────────────────────────────────────────────────────────────────
+
+  7) tests/channels-e2e/open.spec.ts:35:1 › OPEN-02 switching between channels in the list shows each channel’s own messages 
+
+    Error: the last messages in the list
+
+    the last messages in the list
+
+    expect(received).toEqual(expected) // deep equality
+
+    - Expected  - 1
+    + Received  + 0
+
+      Array [
+        "first 001",
+        "first 002",
+        "first 003",
+        "first 004",
+    -   "first 005",
+      ]
+
+    Call Log:
+    - Timeout 15000ms exceeded while waiting on the predicate
+
+       at harness/channel.ts:186
+
+      184 |         message: 'the last messages in the list',
+      185 |       })
+    > 186 |       .toEqual(expected);
+          |        ^
+      187 |   }
+      188 |
+      189 |   /** How far the list is from showing its very end, in pixels. */
+        at ChannelView.expectEndsWith (/home/teo/.herdr/worktrees/macro/synoet-channels-e2e-base/apps/web/tests/channels-e2e/harness/channel.ts:186:8)
+        at /home/teo/.herdr/worktrees/macro/synoet-channels-e2e-base/apps/web/tests/channels-e2e/open.spec.ts:50:19
+
+    attachment #1: screenshot (image/png) ──────────────────────────────────────────────────────────
+    ../../../../../../.cache/channels-e2e/runs/24909-break-page-loses-a-message/test-results/open-OPEN-02-switching-bet-95a01-each-channel’s-own-messages/test-failed-1.png
+    ────────────────────────────────────────────────────────────────────────────────────────────────
+
+    Error Context: ../../../../../../.cache/channels-e2e/runs/24909-break-page-loses-a-message/test-results/open-OPEN-02-switching-bet-95a01-each-channel’s-own-messages/error-context.md
+
+    attachment #3: trace (application/zip) ─────────────────────────────────────────────────────────
+    ../../../../../../.cache/channels-e2e/runs/24909-break-page-loses-a-message/test-results/open-OPEN-02-switching-bet-95a01-each-channel’s-own-messages/trace.zip
+    Usage:
+
+        npx playwright show-trace ../../../../../../.cache/channels-e2e/runs/24909-break-page-loses-a-message/test-results/open-OPEN-02-switching-bet-95a01-each-channel’s-own-messages/trace.zip
+
+    ────────────────────────────────────────────────────────────────────────────────────────────────
+
+  8) tests/channels-e2e/reconnect.spec.ts:6:1 › REC-01 after the connection comes back, messages sent meanwhile appear in order without a reload 
+
+    Error: the last messages in the list
+
+    the last messages in the list
+
+    expect(received).toEqual(expected) // deep equality
+
+    - Expected  - 1
+    + Received  + 0
+
+      Array [
+        "before one",
+    -   "before two",
+      ]
+
+    Call Log:
+    - Timeout 15000ms exceeded while waiting on the predicate
+
+       at harness/channel.ts:186
+
+      184 |         message: 'the last messages in the list',
+      185 |       })
+    > 186 |       .toEqual(expected);
+          |        ^
+      187 |   }
+      188 |
+      189 |   /** How far the list is from showing its very end, in pixels. */
+        at ChannelView.expectEndsWith (/home/teo/.herdr/worktrees/macro/synoet-channels-e2e-base/apps/web/tests/channels-e2e/harness/channel.ts:186:8)
+        at /home/teo/.herdr/worktrees/macro/synoet-channels-e2e-base/apps/web/tests/channels-e2e/reconnect.spec.ts:17:14
+
+    attachment #1: screenshot (image/png) ──────────────────────────────────────────────────────────
+    ../../../../../../.cache/channels-e2e/runs/24909-break-page-loses-a-message/test-results/reconnect-REC-01-after-the-ccf04-r-in-order-without-a-reload/test-failed-1.png
+    ────────────────────────────────────────────────────────────────────────────────────────────────
+
+    Error Context: ../../../../../../.cache/channels-e2e/runs/24909-break-page-loses-a-message/test-results/reconnect-REC-01-after-the-ccf04-r-in-order-without-a-reload/error-context.md
+
+    attachment #3: trace (application/zip) ─────────────────────────────────────────────────────────
+    ../../../../../../.cache/channels-e2e/runs/24909-break-page-loses-a-message/test-results/reconnect-REC-01-after-the-ccf04-r-in-order-without-a-reload/trace.zip
+    Usage:
+
+        npx playwright show-trace ../../../../../../.cache/channels-e2e/runs/24909-break-page-loses-a-message/test-results/reconnect-REC-01-after-the-ccf04-r-in-order-without-a-reload/trace.zip
+
+    ────────────────────────────────────────────────────────────────────────────────────────────────
+
+  9) tests/channels-e2e/reconnect.spec.ts:36:1 › REC-02 a message sent with no connection is neither lost nor sent twice 
+
+    Error: expect(locator).toBeVisible() failed
+
+    Locator: locator('[data-channel-scroll]').locator('[data-message]').filter({ has: locator('[data-message-content]').getByText('before', { exact: true }) })
+    Expected: visible
+    Timeout: 15000ms
+    Error: element(s) not found
+
+    Call log:
+      - Expect "toBeVisible" with timeout 15000ms
+      - waiting for locator('[data-channel-scroll]').locator('[data-message]').filter({ has: locator('[data-message-content]').getByText('before', { exact: true }) })
+
+
+      45 |   const view = new ChannelView(page, channel.id);
+      46 |   await view.open();
+    > 47 |   await expect(view.message('before')).toBeVisible();
+         |                                        ^
+      48 |
+      49 |   await context.setOffline(true);
+      50 |   await view.send('written offline');
+        at /home/teo/.herdr/worktrees/macro/synoet-channels-e2e-base/apps/web/tests/channels-e2e/reconnect.spec.ts:47:40
+
+    attachment #1: screenshot (image/png) ──────────────────────────────────────────────────────────
+    ../../../../../../.cache/channels-e2e/runs/24909-break-page-loses-a-message/test-results/reconnect-REC-02-a-message-57eaf-neither-lost-nor-sent-twice/test-failed-1.png
+    ────────────────────────────────────────────────────────────────────────────────────────────────
+
+    Error Context: ../../../../../../.cache/channels-e2e/runs/24909-break-page-loses-a-message/test-results/reconnect-REC-02-a-message-57eaf-neither-lost-nor-sent-twice/error-context.md
+
+    attachment #3: trace (application/zip) ─────────────────────────────────────────────────────────
+    ../../../../../../.cache/channels-e2e/runs/24909-break-page-loses-a-message/test-results/reconnect-REC-02-a-message-57eaf-neither-lost-nor-sent-twice/trace.zip
+    Usage:
+
+        npx playwright show-trace ../../../../../../.cache/channels-e2e/runs/24909-break-page-loses-a-message/test-results/reconnect-REC-02-a-message-57eaf-neither-lost-nor-sent-twice/trace.zip
+
+    ────────────────────────────────────────────────────────────────────────────────────────────────
+
+  10) tests/channels-e2e/reconnect.spec.ts:81:1 › REC-03 a message that arrives while the page is hidden is there when the person comes back 
+
+    Error: expect(locator).toBeVisible() failed
+
+    Locator: locator('[data-channel-scroll]').locator('[data-message]').filter({ has: locator('[data-message-content]').getByText('before', { exact: true }) })
+    Expected: visible
+    Timeout: 15000ms
+    Error: element(s) not found
+
+    Call log:
+      - Expect "toBeVisible" with timeout 15000ms
+      - waiting for locator('[data-channel-scroll]').locator('[data-message]').filter({ has: locator('[data-message-content]').getByText('before', { exact: true }) })
+
+
+      90 |   const view = new ChannelView(page, channel.id);
+      91 |   await view.open();
+    > 92 |   await expect(view.message('before')).toBeVisible();
+         |                                        ^
+      93 |
+      94 |   // Another tab in front hides the channel's page, as switching tabs does.
+      95 |   const other = await context.newPage();
+        at /home/teo/.herdr/worktrees/macro/synoet-channels-e2e-base/apps/web/tests/channels-e2e/reconnect.spec.ts:92:40
+
+    attachment #1: screenshot (image/png) ──────────────────────────────────────────────────────────
+    ../../../../../../.cache/channels-e2e/runs/24909-break-page-loses-a-message/test-results/reconnect-REC-03-a-message-7264e--when-the-person-comes-back/test-failed-1.png
+    ────────────────────────────────────────────────────────────────────────────────────────────────
+
+    Error Context: ../../../../../../.cache/channels-e2e/runs/24909-break-page-loses-a-message/test-results/reconnect-REC-03-a-message-7264e--when-the-person-comes-back/error-context.md
+
+    attachment #3: trace (application/zip) ─────────────────────────────────────────────────────────
+    ../../../../../../.cache/channels-e2e/runs/24909-break-page-loses-a-message/test-results/reconnect-REC-03-a-message-7264e--when-the-person-comes-back/trace.zip
+    Usage:
+
+        npx playwright show-trace ../../../../../../.cache/channels-e2e/runs/24909-break-page-loses-a-message/test-results/reconnect-REC-03-a-message-7264e--when-the-person-comes-back/trace.zip
+
+    ────────────────────────────────────────────────────────────────────────────────────────────────
+
+  11) tests/channels-e2e/scroll.spec.ts:7:1 › SCROLL-01 scrolling back to the start of a long channel shows every message once, in order 
+
+    Error: the last messages in the list
+
+    the last messages in the list
+
+    expect(received).toEqual(expected) // deep equality
+
+    - Expected  - 1
+    + Received  + 1
+
+      Array [
+    +   "history 225",
+        "history 226",
+        "history 227",
+        "history 228",
+        "history 229",
+    -   "history 230",
+      ]
+
+    Call Log:
+    - Timeout 15000ms exceeded while waiting on the predicate
+
+       at harness/channel.ts:186
+
+      184 |         message: 'the last messages in the list',
+      185 |       })
+    > 186 |       .toEqual(expected);
+          |        ^
+      187 |   }
+      188 |
+      189 |   /** How far the list is from showing its very end, in pixels. */
+        at ChannelView.expectEndsWith (/home/teo/.herdr/worktrees/macro/synoet-channels-e2e-base/apps/web/tests/channels-e2e/harness/channel.ts:186:8)
+        at /home/teo/.herdr/worktrees/macro/synoet-channels-e2e-base/apps/web/tests/channels-e2e/scroll.spec.ts:14:14
+
+    attachment #1: screenshot (image/png) ──────────────────────────────────────────────────────────
+    ../../../../../../.cache/channels-e2e/runs/24909-break-page-loses-a-message/test-results/scroll-SCROLL-01-scrolling-4ab68-every-message-once-in-order/test-failed-1.png
+    ────────────────────────────────────────────────────────────────────────────────────────────────
+
+    Error Context: ../../../../../../.cache/channels-e2e/runs/24909-break-page-loses-a-message/test-results/scroll-SCROLL-01-scrolling-4ab68-every-message-once-in-order/error-context.md
+
+    attachment #3: trace (application/zip) ─────────────────────────────────────────────────────────
+    ../../../../../../.cache/channels-e2e/runs/24909-break-page-loses-a-message/test-results/scroll-SCROLL-01-scrolling-4ab68-every-message-once-in-order/trace.zip
+    Usage:
+
+        npx playwright show-trace ../../../../../../.cache/channels-e2e/runs/24909-break-page-loses-a-message/test-results/scroll-SCROLL-01-scrolling-4ab68-every-message-once-in-order/trace.zip
+
+    ────────────────────────────────────────────────────────────────────────────────────────────────
+
+  12) tests/channels-e2e/scroll.spec.ts:26:1 › SCROLL-02 scrolling back down from far up offers “Scroll to bottom”, which returns to the latest message 
+
+    Error: expect(locator).toBeInViewport() failed
+
+    Locator: locator('[data-channel-scroll]').locator('[data-message]').filter({ has: locator('[data-message-content]').getByText('filler 70', { exact: true }) })
+    Expected: in viewport
+    Timeout: 15000ms
+    Error: element(s) not found
+
+    Call log:
+      - Expect "toBeInViewport" with timeout 15000ms
+      - waiting for locator('[data-channel-scroll]').locator('[data-message]').filter({ has: locator('[data-message-content]').getByText('filler 70', { exact: true }) })
+
+
+      47 |   await (await view.scrollDownUntilOffered()).click();
+      48 |
+    > 49 |   await expect(view.message('filler 70')).toBeInViewport();
+         |                                           ^
+      50 |   await view.expectAtBottom();
+      51 | });
+      52 |
+        at /home/teo/.herdr/worktrees/macro/synoet-channels-e2e-base/apps/web/tests/channels-e2e/scroll.spec.ts:49:43
+
+    attachment #1: screenshot (image/png) ──────────────────────────────────────────────────────────
+    ../../../../../../.cache/channels-e2e/runs/24909-break-page-loses-a-message/test-results/scroll-SCROLL-02-scrolling-1b198-turns-to-the-latest-message/test-failed-1.png
+    ────────────────────────────────────────────────────────────────────────────────────────────────
+
+    Error Context: ../../../../../../.cache/channels-e2e/runs/24909-break-page-loses-a-message/test-results/scroll-SCROLL-02-scrolling-1b198-turns-to-the-latest-message/error-context.md
+
+    attachment #3: trace (application/zip) ─────────────────────────────────────────────────────────
+    ../../../../../../.cache/channels-e2e/runs/24909-break-page-loses-a-message/test-results/scroll-SCROLL-02-scrolling-1b198-turns-to-the-latest-message/trace.zip
+    Usage:
+
+        npx playwright show-trace ../../../../../../.cache/channels-e2e/runs/24909-break-page-loses-a-message/test-results/scroll-SCROLL-02-scrolling-1b198-turns-to-the-latest-message/trace.zip
+
+    ────────────────────────────────────────────────────────────────────────────────────────────────
+
+  13) tests/channels-e2e/two-tabs.spec.ts:6:1 › TAB-01 a message sent in one window shows once in the same person’s other window 
+
+    Error: expect(locator).toBeVisible() failed
+
+    Locator: locator('[data-channel-scroll]').locator('[data-message]').filter({ has: locator('[data-message-content]').getByText('before', { exact: true }) })
+    Expected: visible
+    Timeout: 15000ms
+    Error: element(s) not found
+
+    Call log:
+      - Expect "toBeVisible" with timeout 15000ms
+      - waiting for locator('[data-channel-scroll]').locator('[data-message]').filter({ has: locator('[data-message-content]').getByText('before', { exact: true }) })
+
+
+      16 |   const second = new ChannelView(await context.newPage(), channel.id);
+      17 |   await second.open();
+    > 18 |   await expect(second.message('before')).toBeVisible();
+         |                                          ^
+      19 |
+      20 |   await page.bringToFront();
+      21 |   await first.send('from the first window');
+        at /home/teo/.herdr/worktrees/macro/synoet-channels-e2e-base/apps/web/tests/channels-e2e/two-tabs.spec.ts:18:42
+
+    attachment #1: screenshot (image/png) ──────────────────────────────────────────────────────────
+    ../../../../../../.cache/channels-e2e/runs/24909-break-page-loses-a-message/test-results/two-tabs-TAB-01-a-message--a022c--same-person’s-other-window/test-failed-2.png
+    ────────────────────────────────────────────────────────────────────────────────────────────────
+
+    attachment #2: screenshot (image/png) ──────────────────────────────────────────────────────────
+    ../../../../../../.cache/channels-e2e/runs/24909-break-page-loses-a-message/test-results/two-tabs-TAB-01-a-message--a022c--same-person’s-other-window/test-failed-1.png
+    ────────────────────────────────────────────────────────────────────────────────────────────────
+
+    Error Context: ../../../../../../.cache/channels-e2e/runs/24909-break-page-loses-a-message/test-results/two-tabs-TAB-01-a-message--a022c--same-person’s-other-window/error-context.md
+
+    attachment #4: trace (application/zip) ─────────────────────────────────────────────────────────
+    ../../../../../../.cache/channels-e2e/runs/24909-break-page-loses-a-message/test-results/two-tabs-TAB-01-a-message--a022c--same-person’s-other-window/trace.zip
+    Usage:
+
+        npx playwright show-trace ../../../../../../.cache/channels-e2e/runs/24909-break-page-loses-a-message/test-results/two-tabs-TAB-01-a-message--a022c--same-person’s-other-window/trace.zip
+
+    ────────────────────────────────────────────────────────────────────────────────────────────────
+
+  14) tests/channels-e2e/two-tabs.spec.ts:29:1 › TAB-02 an edit, a reaction and a deletion made in one window show in the other 
+
+    Error: expect(locator).toBeVisible() failed
+
+    Locator: locator('[data-channel-scroll]').locator('[data-message]').filter({ has: locator('[data-message-content]').getByText('to delete', { exact: true }) })
+    Expected: visible
+    Timeout: 15000ms
+    Error: element(s) not found
+
+    Call log:
+      - Expect "toBeVisible" with timeout 15000ms
+      - waiting for locator('[data-channel-scroll]').locator('[data-message]').filter({ has: locator('[data-message-content]').getByText('to delete', { exact: true }) })
+
+
+      43 |   const second = new ChannelView(await context.newPage(), channel.id);
+      44 |   await second.open();
+    > 45 |   await expect(second.message('to delete')).toBeVisible();
+         |                                             ^
+      46 |
+      47 |   await page.bringToFront();
+      48 |   await first.action(first.messageById(edited.id), 'edit');
+        at /home/teo/.herdr/worktrees/macro/synoet-channels-e2e-base/apps/web/tests/channels-e2e/two-tabs.spec.ts:45:45
+
+    attachment #1: screenshot (image/png) ──────────────────────────────────────────────────────────
+    ../../../../../../.cache/channels-e2e/runs/24909-break-page-loses-a-message/test-results/two-tabs-TAB-02-an-edit-a--cd4de-ne-window-show-in-the-other/test-failed-2.png
+    ────────────────────────────────────────────────────────────────────────────────────────────────
+
+    attachment #2: screenshot (image/png) ──────────────────────────────────────────────────────────
+    ../../../../../../.cache/channels-e2e/runs/24909-break-page-loses-a-message/test-results/two-tabs-TAB-02-an-edit-a--cd4de-ne-window-show-in-the-other/test-failed-1.png
+    ────────────────────────────────────────────────────────────────────────────────────────────────
+
+    Error Context: ../../../../../../.cache/channels-e2e/runs/24909-break-page-loses-a-message/test-results/two-tabs-TAB-02-an-edit-a--cd4de-ne-window-show-in-the-other/error-context.md
+
+    attachment #4: trace (application/zip) ─────────────────────────────────────────────────────────
+    ../../../../../../.cache/channels-e2e/runs/24909-break-page-loses-a-message/test-results/two-tabs-TAB-02-an-edit-a--cd4de-ne-window-show-in-the-other/trace.zip
+    Usage:
+
+        npx playwright show-trace ../../../../../../.cache/channels-e2e/runs/24909-break-page-loses-a-message/test-results/two-tabs-TAB-02-an-edit-a--cd4de-ne-window-show-in-the-other/trace.zip
+
+    ────────────────────────────────────────────────────────────────────────────────────────────────
+
+  14 failed
+    tests/channels-e2e/channels.spec.ts:362:1 › CHN-12 going to another tab and back keeps the message list where it was 
+    tests/channels-e2e/find-and-keys.spec.ts:313:1 › KEY-09 Shift+G in the message list goes to the latest message 
+    tests/channels-e2e/location.spec.ts:75:1 › NAV-04 a link to a message that does not exist says so and shows the latest messages 
+    tests/channels-e2e/location.spec.ts:120:1 › NAV-06 scrolling down from an old message offers “Scroll to bottom”, which returns to the latest messages 
+    tests/channels-e2e/messages.spec.ts:623:1 › MSG-16 a message sent to another channel does not appear in the open one 
+    tests/channels-e2e/open.spec.ts:13:1 › OPEN-01 a channel opened by its address shows its latest messages in order, at the end 
+    tests/channels-e2e/open.spec.ts:35:1 › OPEN-02 switching between channels in the list shows each channel’s own messages 
+    tests/channels-e2e/reconnect.spec.ts:6:1 › REC-01 after the connection comes back, messages sent meanwhile appear in order without a reload 
+    tests/channels-e2e/reconnect.spec.ts:36:1 › REC-02 a message sent with no connection is neither lost nor sent twice 
+    tests/channels-e2e/reconnect.spec.ts:81:1 › REC-03 a message that arrives while the page is hidden is there when the person comes back 
+    tests/channels-e2e/scroll.spec.ts:7:1 › SCROLL-01 scrolling back to the start of a long channel shows every message once, in order 
+    tests/channels-e2e/scroll.spec.ts:26:1 › SCROLL-02 scrolling back down from far up offers “Scroll to bottom”, which returns to the latest message 
+    tests/channels-e2e/two-tabs.spec.ts:6:1 › TAB-01 a message sent in one window shows once in the same person’s other window 
+    tests/channels-e2e/two-tabs.spec.ts:29:1 › TAB-02 an edit, a reaction and a deletion made in one window show in the other 
+  7 passed (1.6m)
+2026/11/15 09:13:02 socat[3128487] W exiting on signal 15
+2026/11/15 09:13:02 socat[3128093] W exiting on signal 15

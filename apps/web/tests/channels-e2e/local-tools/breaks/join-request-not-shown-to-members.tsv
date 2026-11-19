@@ -1,0 +1,44 @@
+join-request-not-shown-to-members	ACC-01	PASSED	
+join-request-not-shown-to-members	ACC-02	PASSED	
+join-request-not-shown-to-members	ACC-03	FAILED	Test timeout of 90000ms exceeded.
+join-request-not-shown-to-members	ACC-04	FAILED	Test timeout of 90000ms exceeded.
+join-request-not-shown-to-members	ACC-05	FAILED	Error: expect(locator).toBeVisible() failed | Locator: getByRole('button', { name: 'Approve' })
+join-request-not-shown-to-members	ACC-06	PASSED	
+join-request-not-shown-to-members	ACC-07	PASSED	
+join-request-not-shown-to-members	ACC-08	PASSED	
+join-request-not-shown-to-members	ACC-09	PASSED	
+join-request-not-shown-to-members	CHN-01	PASSED	
+join-request-not-shown-to-members	CHN-02	PASSED	
+join-request-not-shown-to-members	CHN-03	PASSED	
+join-request-not-shown-to-members	CHN-04	PASSED	Error: expect(locator).toContainText(expected) failed | Locator: getByRole('main').locator('[data-view-shell-top-bar]')
+join-request-not-shown-to-members	CHN-05	PASSED	
+join-request-not-shown-to-members	CHN-06	PASSED	
+join-request-not-shown-to-members	CHN-07	PASSED	
+join-request-not-shown-to-members	CHN-08	PASSED	Error: expect(locator).toHaveCount(expected) failed | Locator:  getByRole('tree', { name: 'Conversations' }).locator('[data-key="favorite:channel:01a1de4d-4a20-
+join-request-not-shown-to-members	CHN-09	PASSED	
+join-request-not-shown-to-members	CHN-10	PASSED	
+join-request-not-shown-to-members	CHN-11	PASSED	
+join-request-not-shown-to-members	CHN-12	PASSED	
+join-request-not-shown-to-members	CHN-13	PASSED	
+join-request-not-shown-to-members	CHN-14	PASSED	Error: expect(locator).toBeVisible() failed | Locator: getByRole('main').getByText('Channel e2e-mwhkhpcbm7o2 created')
+join-request-not-shown-to-members	CHN-15	PASSED	Error: expect(locator).toHaveCount(expected) failed | Locator:  locator('[data-input-id="channel-input-01a1de4d-972d-7d96-ba63-d0bca6be2100"]')
+join-request-not-shown-to-members	KEY-01	PASSED	
+join-request-not-shown-to-members	KEY-02	PASSED	
+join-request-not-shown-to-members	KEY-03	PASSED	
+join-request-not-shown-to-members	KEY-04	PASSED	
+join-request-not-shown-to-members	KEY-05	PASSED	
+join-request-not-shown-to-members	KEY-06	PASSED	Error: expect(locator).toBeFocused() failed | Locator:  locator('[data-input-id="thread-reply-input-01a1de4d-d9b9-714a-8798-a9759d93be65"] [contenteditable]')
+join-request-not-shown-to-members	KEY-07	PASSED	
+join-request-not-shown-to-members	KEY-08	FAILED	Error: expect(locator).toBeVisible() failed | Locator: getByRole('dialog', { name: 'Delete message' })
+join-request-not-shown-to-members	KEY-12	PASSED	
+join-request-not-shown-to-members	KEY-09	PASSED	
+join-request-not-shown-to-members	KEY-10	PASSED	
+join-request-not-shown-to-members	KEY-11	PASSED	
+join-request-not-shown-to-members	MEM-01	PASSED	
+join-request-not-shown-to-members	MEM-02	PASSED	
+join-request-not-shown-to-members	MEM-03	PASSED	Error: expect(locator).toHaveCount(expected) failed | Locator:  locator('[data-input-id="channel-input-01a1de4e-0ae9-7642-a2c7-3603d0999461"]')
+join-request-not-shown-to-members	MEM-04	PASSED	
+join-request-not-shown-to-members	MEM-05	PASSED	
+join-request-not-shown-to-members	MEM-06	PASSED	
+join-request-not-shown-to-members	MEM-07	PASSED	
+join-request-not-shown-to-members	MEM-08	PASSED	

@@ -1,0 +1,12 @@
+diff --git a/apps/web/src/features/channel/Channel/message-grouping-meta.ts b/apps/web/src/features/channel/Channel/message-grouping-meta.ts
+index bef3ba3c7c..abc5c47d47 100644
+--- a/apps/web/src/features/channel/Channel/message-grouping-meta.ts
++++ b/apps/web/src/features/channel/Channel/message-grouping-meta.ts
+@@ -21,6 +21,7 @@ export function shouldGroupWithPreviousMessage(
+   current: GroupableMessage,
+   previous: GroupableMessage | undefined
+ ): boolean {
++  if (current) return false;
+   if (!previous) return false;
+   if (current.sender_id !== previous.sender_id) return false;
+   // Agent messages share the Macro bot's sender_id but carry the triggering

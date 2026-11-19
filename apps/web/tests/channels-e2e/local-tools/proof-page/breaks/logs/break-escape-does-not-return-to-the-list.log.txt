@@ -1,0 +1,88 @@
+path "/home/teo/.herdr/worktrees/macro/synoet-channels-e2e-base/apps/web" does not contain a 'flake.nix', searching up
+warning: Git tree '/home/teo/.herdr/worktrees/macro/synoet-channels-e2e-base' is dirty
+
+Running 12 tests using 4 workers
+
+2026/11/15 09:44:44 socat[2052119] E write(6, 0x600379a4e000, 24): Broken pipe
+  ✓   3 tests/channels-e2e/find-and-keys.spec.ts:95:1 › KEY-03 find for words nobody wrote says there are no matches (2.8s)
+2026/11/15 09:44:44 socat[2051768] E write(6, 0x600379a4e000, 24): Broken pipe
+2026/11/15 09:44:44 socat[2051955] E write(6, 0x600379a4e000, 24): Broken pipe
+  ✓   4 tests/channels-e2e/find-and-keys.spec.ts:119:1 › KEY-04 the find bar closes with its button and with Escape, and the channel still takes a message (2.9s)
+2026/11/15 09:44:45 socat[2051682] E write(6, 0x600379a4e000, 24): Broken pipe
+2026/11/15 09:44:45 socat[2051698] E write(6, 0x600379a4e000, 24): Broken pipe
+  ✓   2 tests/channels-e2e/find-and-keys.spec.ts:75:1 › KEY-02 find brings an old message far up a long history into view (3.3s)
+2026/11/15 09:44:47 socat[2054891] E write(6, 0x600379a4e000, 24): Broken pipe
+  ✓   1 tests/channels-e2e/find-and-keys.spec.ts:26:1 › KEY-01 find counts the messages that match and steps through them, newest first (5.1s)
+2026/11/15 09:44:48 socat[2059241] E write(6, 0x600379a4e000, 24): Broken pipe
+  ✓   7 tests/channels-e2e/find-and-keys.spec.ts:235:1 › KEY-07 “e” on a person’s own selected message edits it (3.0s)
+  ✓   5 tests/channels-e2e/find-and-keys.spec.ts:163:1 › KEY-05 the arrow keys walk from the composer up the messages and back down into the composer (3.5s)
+2026/11/15 09:44:48 socat[2058162] E read(6, 0x600379a4e000, 8192): Connection reset by peer
+2026/11/15 09:44:48 socat[2058969] E write(6, 0x600379a4e000, 24): Broken pipe
+2026/11/15 09:44:48 socat[2058163] E write(6, 0x555555624000, 24): Broken pipe
+2026/11/15 09:44:48 socat[2048249] W waitpid(-1, {}, WNOHANG): no (more) child has exited
+2026/11/15 09:44:48 socat[2047785] W waitpid(-1, {}, WNOHANG): no (more) child has exited
+2026/11/15 09:44:48 socat[2059003] E write(6, 0x600379a4e000, 24): Broken pipe
+2026/11/15 09:44:49 socat[2061338] E write(6, 0x600379a4e000, 24): Broken pipe
+2026/11/15 09:44:49 socat[2060170] E write(6, 0x600379a4e000, 24): Broken pipe
+2026/11/15 09:44:49 socat[2047785] W waitpid(-1, {}, WNOHANG): no (more) child has exited
+2026/11/15 09:44:49 socat[2061389] E write(6, 0x600379a4f000, 24): Broken pipe
+  ✓   8 tests/channels-e2e/find-and-keys.spec.ts:263:1 › KEY-08 Backspace on a person’s own selected message asks first, and Escape keeps the message (2.4s)
+2026/11/15 09:44:51 socat[2063410] E write(6, 0x600379a4f000, 24): Broken pipe
+  ✓   9 tests/channels-e2e/find-and-keys.spec.ts:285:1 › KEY-12 Backspace on a person’s own selected message deletes it once confirmed (3.1s)
+2026/11/15 09:44:52 socat[2063011] E write(6, 0x600379a4f000, 24): Broken pipe
+2026/11/15 09:44:52 socat[2063064] E write(6, 0x600379a4f000, 24): Broken pipe
+  ✓  10 tests/channels-e2e/find-and-keys.spec.ts:307:1 › KEY-09 Shift+G in the message list goes to the latest message (3.7s)
+2026/11/15 09:44:52 socat[2070016] E write(6, 0x600379a4f000, 24): Broken pipe
+2026/11/15 09:44:52 socat[2070024] E write(6, 0x600379a4f000, 24): Broken pipe
+  ✓  11 tests/channels-e2e/find-and-keys.spec.ts:332:1 › KEY-10 choosing a channel in the list puts the cursor in its composer (2.7s)
+2026/11/15 09:45:02 socat[2058997] E write(6, 0x600379a4e000, 24): Broken pipe
+2026/11/15 09:45:02 socat[2059036] E write(6, 0x600379a4e000, 24): Broken pipe
+  ✘   6 tests/channels-e2e/find-and-keys.spec.ts:197:1 › KEY-06 Enter on a selected message opens a reply to that message (17.5s)
+2026/11/15 09:45:08 socat[2071324] E write(6, 0x600379a4f000, 24): Broken pipe
+  ✘  12 tests/channels-e2e/find-and-keys.spec.ts:356:1 › KEY-11 Escape steps out of the composer to the messages, then to the list of conversations (17.5s)
+
+
+  1) tests/channels-e2e/find-and-keys.spec.ts:356:1 › KEY-11 Escape steps out of the composer to the messages, then to the list of conversations 
+
+    Error: expect(locator).toBeFocused() failed
+
+    Locator:  getByRole('tree', { name: 'Conversations' })
+    Expected: focused
+    Received: inactive
+    Timeout:  15000ms
+
+    Call log:
+      - Expect "toBeFocused" with timeout 15000ms
+      - waiting for getByRole('tree', { name: 'Conversations' })
+        33 × locator resolved to <div role="tree" tabindex="-1" aria-label="Conversations" class="flex min-h-0 flex-1 flex-col outline-none">…</div>
+           - unexpected value "inactive"
+
+
+      370 |
+      371 |   await page.keyboard.press('Escape');
+    > 372 |   await expect(page.getByRole('tree', { name: 'Conversations' })).toBeFocused();
+          |                                                                   ^
+      373 | });
+      374 |
+        at /home/teo/.herdr/worktrees/macro/synoet-channels-e2e-base/apps/web/tests/channels-e2e/find-and-keys.spec.ts:372:67
+
+    attachment #1: screenshot (image/png) ──────────────────────────────────────────────────────────
+    ../../../../../../.cache/channels-e2e/runs/24909-break-escape-does-not-return-to-the-list/test-results/find-and-keys-KEY-11-Escap-da978-o-the-list-of-conversations/test-failed-1.png
+    ────────────────────────────────────────────────────────────────────────────────────────────────
+
+    Error Context: ../../../../../../.cache/channels-e2e/runs/24909-break-escape-does-not-return-to-the-list/test-results/find-and-keys-KEY-11-Escap-da978-o-the-list-of-conversations/error-context.md
+
+    attachment #3: trace (application/zip) ─────────────────────────────────────────────────────────
+    ../../../../../../.cache/channels-e2e/runs/24909-break-escape-does-not-return-to-the-list/test-results/find-and-keys-KEY-11-Escap-da978-o-the-list-of-conversations/trace.zip
+    Usage:
+
+        npx playwright show-trace ../../../../../../.cache/channels-e2e/runs/24909-break-escape-does-not-return-to-the-list/test-results/find-and-keys-KEY-11-Escap-da978-o-the-list-of-conversations/trace.zip
+
+    ────────────────────────────────────────────────────────────────────────────────────────────────
+
+  1 failed
+    tests/channels-e2e/find-and-keys.spec.ts:356:1 › KEY-11 Escape steps out of the composer to the messages, then to the list of conversations 
+  11 passed (28.9s)
+2026/11/15 09:45:09 socat[2048249] W waitpid(-1, {}, WNOHANG): no (more) child has exited
+2026/11/15 09:45:09 socat[2048249] W exiting on signal 15
+2026/11/15 09:45:09 socat[2047785] W exiting on signal 15

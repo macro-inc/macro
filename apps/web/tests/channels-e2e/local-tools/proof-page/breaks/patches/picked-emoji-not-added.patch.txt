@@ -1,0 +1,13 @@
+diff --git a/apps/web/src/features/channel/Message/EmojiReactionPopover.tsx b/apps/web/src/features/channel/Message/EmojiReactionPopover.tsx
+index e9784cc1f8..bb4da096c8 100644
+--- a/apps/web/src/features/channel/Message/EmojiReactionPopover.tsx
++++ b/apps/web/src/features/channel/Message/EmojiReactionPopover.tsx
+@@ -78,7 +78,7 @@ export function EmojiReactionPopover(props: EmojiReactionPopoverProps) {
+                 <EmojiSelector
+                   nameFilter={query()}
+                   onEmojiClick={(emoji) => {
+-                    local.onEmojiSelect(emoji.emoji);
++                    if (!emoji) local.onEmojiSelect("");
+                     local.onOpenChange(false);
+                   }}
+                 />

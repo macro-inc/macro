@@ -1,0 +1,28 @@
+copy-text-copies-nothing	MSG-01	PASSED	
+copy-text-copies-nothing	MSG-02	PASSED	
+copy-text-copies-nothing	MSG-03	PASSED	
+copy-text-copies-nothing	MSG-04	PASSED	
+copy-text-copies-nothing	MSG-05	PASSED	
+copy-text-copies-nothing	MSG-06	PASSED	
+copy-text-copies-nothing	MSG-07	PASSED	
+copy-text-copies-nothing	MSG-08	PASSED	
+copy-text-copies-nothing	MSG-09	PASSED	
+copy-text-copies-nothing	MSG-10	PASSED	
+copy-text-copies-nothing	MSG-11	PASSED	
+copy-text-copies-nothing	MSG-12	PASSED	
+copy-text-copies-nothing	MSG-13	PASSED	
+copy-text-copies-nothing	MSG-14	PASSED	
+copy-text-copies-nothing	MSG-15	PASSED	
+copy-text-copies-nothing	MSG-16	PASSED	
+copy-text-copies-nothing	MSG-17	FAILED	Error: expect(received).toBe(expected) // Object.is equality | Expected: "copy exactly this, please"
+copy-text-copies-nothing	MSG-18	PASSED	Error: expect(received).toEqual(expected) // deep equality | - Expected  - 2
+copy-text-copies-nothing	THR-01	PASSED	
+copy-text-copies-nothing	THR-02	FAILED	ReferenceError: failsSometimes is not defined |   83 |   // Known defect on main, about one run in five on a busy machine: a reply
+copy-text-copies-nothing	THR-03	PASSED	
+copy-text-copies-nothing	THR-04	PASSED	
+copy-text-copies-nothing	THR-05	PASSED	
+copy-text-copies-nothing	THR-06	PASSED	
+copy-text-copies-nothing	THR-07	PASSED	
+copy-text-copies-nothing	THR-08	PASSED	
+copy-text-copies-nothing	THR-09	PASSED	
+copy-text-copies-nothing	THR-10	PASSED	Error: expect(locator).toBeFocused() failed | Locator:  locator('[data-input-id="thread-reply-input-01a1de30-1c28-78e0-be4b-af03d42082fd"]').getByRole('textbox'

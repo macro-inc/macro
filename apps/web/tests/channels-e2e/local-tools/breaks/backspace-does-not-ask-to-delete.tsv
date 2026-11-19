@@ -1,0 +1,12 @@
+backspace-does-not-ask-to-delete	KEY-01	PASSED	
+backspace-does-not-ask-to-delete	KEY-02	PASSED	
+backspace-does-not-ask-to-delete	KEY-03	PASSED	
+backspace-does-not-ask-to-delete	KEY-04	PASSED	
+backspace-does-not-ask-to-delete	KEY-05	PASSED	
+backspace-does-not-ask-to-delete	KEY-06	PASSED	Error: expect(locator).toBeFocused() failed | Locator:  locator('[data-input-id="thread-reply-input-01a1de9f-f0df-77a3-a441-ba516534eac5"] [contenteditable]')
+backspace-does-not-ask-to-delete	KEY-07	PASSED	
+backspace-does-not-ask-to-delete	KEY-08	FAILED	Error: expect(locator).toBeVisible() failed | Locator: getByRole('dialog', { name: 'Delete message' })
+backspace-does-not-ask-to-delete	KEY-12	FAILED	Error: expect(locator).toBeVisible() failed | Locator: getByRole('dialog', { name: 'Delete message' })
+backspace-does-not-ask-to-delete	KEY-09	PASSED	
+backspace-does-not-ask-to-delete	KEY-10	PASSED	
+backspace-does-not-ask-to-delete	KEY-11	PASSED	

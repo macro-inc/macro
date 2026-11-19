@@ -1,0 +1,208 @@
+path "/home/teo/.herdr/worktrees/macro/synoet-channels-e2e-base/apps/web" does not contain a 'flake.nix', searching up
+warning: Git tree '/home/teo/.herdr/worktrees/macro/synoet-channels-e2e-base' is dirty
+
+Running 29 tests using 4 workers
+
+2026/11/15 08:50:45 socat[1123659] E write(6, 0x5ad9c2e25000, 24): Broken pipe
+2026/11/15 08:50:45 socat[1123766] E write(6, 0x5ad9c2e25000, 24): Broken pipe
+2026/11/15 08:50:46 socat[1127882] E write(6, 0x5ad9c2e25000, 24): Broken pipe
+2026/11/15 08:50:47 socat[1138616] E write(6, 0x5ad9c2e25000, 24): Broken pipe
+2026/11/15 08:50:47 socat[1138631] E write(6, 0x5ad9c2e25000, 24): Broken pipe
+  ✓   1 tests/channels-e2e/composer.spec.ts:47:1 › CMP-02 a draft is still in the composer after a reload (10.1s)
+2026/11/15 08:50:47 socat[1123787] E write(6, 0x5ad9c2e25000, 24): Broken pipe
+2026/11/15 08:50:47 socat[1123808] E write(6, 0x5ad9c2e25000, 24): Broken pipe
+2026/11/15 08:50:47 socat[1138766] E write(6, 0x5ad9c2e25000, 24): Broken pipe
+2026/11/15 08:50:47 socat[1138810] E write(6, 0x5ad9c2e25000, 24): Broken pipe
+  ✓   4 tests/channels-e2e/composer.spec.ts:93:1 › CMP-13 a message shown as sent is still sent when the page is reloaded at once (10.6s)
+2026/11/15 08:50:47 socat[1128998] E write(6, 0x5ad9c2e25000, 24): Broken pipe
+2026/11/15 08:50:47 socat[1129316] E write(6, 0x5ad9c2e25000, 24): Broken pipe
+2026/11/15 08:50:48 socat[1123804] E write(6, 0x5ad9c2e25000, 24): Broken pipe
+  ✓   2 tests/channels-e2e/composer.spec.ts:21:1 › CMP-01 a draft stays in its channel while I look at another one, and is not shown there (11.2s)
+2026/11/15 08:50:49 socat[1123812] E write(6, 0x5ad9c2e25000, 24): Broken pipe
+2026/11/15 08:50:49 socat[1141530] E write(6, 0x5ad9c2e25000, 24): Broken pipe
+2026/11/15 08:50:49 socat[1141596] E write(6, 0x5ad9c2e25000, 24): Broken pipe
+  ✓   3 tests/channels-e2e/composer.spec.ts:67:1 › CMP-03 sending a message clears its draft, and a reload does not bring it back (12.3s)
+2026/11/15 08:50:49 socat[1141328] E write(6, 0x5ad9c2e25000, 24): Broken pipe
+2026/11/15 08:50:49 socat[1141445] E write(6, 0x5ad9c2e25000, 24): Broken pipe
+  ✓   5 tests/channels-e2e/composer.spec.ts:121:1 › CMP-04 the send button is off while the composer is empty, and after sending I can go on typing (2.6s)
+2026/11/15 08:50:53 socat[1141689] E write(6, 0x5ad9c2e25000, 24): Broken pipe
+2026/11/15 08:50:53 socat[1143358] E write(6, 0x5ad9c2e25000, 24): Broken pipe
+2026/11/15 08:50:53 socat[1143593] E write(6, 0x5ad9c2e25000, 24): Broken pipe
+  ✓   6 tests/channels-e2e/composer.spec.ts:148:1 › CMP-05 a person picked from the @ menu is named in the message for both people, live (5.6s)
+2026/11/15 08:50:54 socat[1143703] E write(6, 0x5ad9c2e25000, 24): Broken pipe
+2026/11/15 08:50:54 socat[1145619] E write(6, 0x5ad9c2e25000, 24): Broken pipe
+2026/11/15 08:50:54 socat[1147065] E write(6, 0x5ad9c2e25000, 24): Broken pipe
+  ✓   8 tests/channels-e2e/composer.spec.ts:208:1 › CMP-07 a text file and a picture attached to a message show before sending, for both people, and under Attachments (5.4s)
+2026/11/15 08:50:54 socat[1143777] E write(6, 0x5ad9c2e25000, 24): Broken pipe
+2026/11/15 08:50:55 socat[1147555] E write(6, 0x5ad9c2e25000, 24): Broken pipe
+  ✓   9 tests/channels-e2e/composer.spec.ts:265:1 › CMP-08 a file can be sent on its own, with no text (5.4s)
+2026/11/15 08:50:55 socat[1147808] E write(6, 0x5ad9c2e25000, 24): Broken pipe
+2026/11/15 08:50:55 socat[1141972] E write(6, 0x5ad9c2e25000, 24): Broken pipe
+2026/11/15 08:50:55 socat[1142007] E write(6, 0x5ad9c2e25000, 24): Broken pipe
+2026/11/15 08:50:55 socat[1143901] E write(6, 0x5ad9c2e25000, 24): Broken pipe
+2026/11/15 08:50:55 socat[1143989] E write(6, 0x5ad9c2e25000, 24): Broken pipe
+  ✓   7 tests/channels-e2e/composer.spec.ts:178:1 › CMP-06 @here picked from the @ menu is sent as a mention of everyone here (7.3s)
+2026/11/15 08:50:59 socat[1151454] E write(6, 0x5ad9c2e25000, 24): Broken pipe
+2026/11/15 08:50:59 socat[1154976] E write(6, 0x5ad9c2e25000, 24): Broken pipe
+2026/11/15 08:50:59 socat[1154986] E write(6, 0x5ad9c2e25000, 24): Broken pipe
+  ✓  12 tests/channels-e2e/composer.spec.ts:349:1 › CMP-11 text pasted into the composer is sent as it was copied (4.5s)
+2026/11/15 08:51:01 socat[1152656] E write(6, 0x5ad9c2e25000, 24): Broken pipe
+2026/11/15 08:51:01 socat[1155123] E write(6, 0x5ad9c2e25000, 24): Broken pipe
+2026/11/15 08:51:01 socat[1152941] E write(6, 0x5ad9c2e25000, 24): Broken pipe
+2026/11/15 08:51:01 socat[1155146] E write(6, 0x5ad9c2e25000, 24): Broken pipe
+  ✓  13 tests/channels-e2e/composer.spec.ts:372:1 › CMP-12 a message of 2,499 characters is sent whole (5.7s)
+2026/11/15 08:51:06 socat[1159938] E write(6, 0x5ad9c2e25000, 24): Broken pipe
+2026/11/15 08:51:07 socat[1158992] E write(6, 0x5ad9c2e25000, 24): Broken pipe
+2026/11/15 08:51:07 socat[1167637] E write(6, 0x5ad9c2e25000, 24): Broken pipe
+  ✓  14 tests/channels-e2e/direct-messages.spec.ts:22:1 › DM-01 a direct message I start reaches the other person at once under “Direct messages”, and they can answer (8.2s)
+2026/11/15 08:51:09 socat[1162983] E write(6, 0x5ad9c2e25000, 24): Broken pipe
+2026/11/15 08:51:10 socat[1159519] E write(6, 0x5ad9c2e25000, 24): Broken pipe
+2026/11/15 08:51:10 socat[1159523] E write(6, 0x5ad9c2e25000, 24): Broken pipe
+2026/11/15 08:51:10 socat[1170443] E write(6, 0x5ad9c2e25000, 24): Broken pipe
+2026/11/15 08:51:10 socat[1160740] E write(6, 0x5ad9c2e25000, 24): Broken pipe
+2026/11/15 08:51:10 socat[1170800] E write(6, 0x5ad9c2e25000, 24): Broken pipe
+  ✓  15 tests/channels-e2e/direct-messages.spec.ts:66:1 › DM-02 writing to the same person again from “New direct message” continues the one conversation (9.4s)
+2026/11/15 08:51:12 socat[1151334] E write(6, 0x5ad9c2e25000, 24): Broken pipe
+2026/11/15 08:51:12 socat[1151338] E write(6, 0x5ad9c2e25000, 24): Broken pipe
+  ✘  11 tests/channels-e2e/composer.spec.ts:329:1 › CMP-10 typing reported from the other person’s other device shows “… is typing”, and goes when they stop (17.2s)
+2026/11/15 08:51:12 socat[1102953] W waitpid(-1, {}, WNOHANG): no (more) child has exited
+2026/11/15 08:51:12 socat[1151432] E write(6, 0x5ad9c2e25000, 24): Broken pipe
+2026/11/15 08:51:12 socat[1151458] E write(6, 0x5ad9c2e25000, 24): Broken pipe
+2026/11/15 08:51:13 socat[1150366] E write(6, 0x5ad9c2e25000, 24): Broken pipe
+2026/11/15 08:51:13 socat[1150594] E write(6, 0x5ad9c2e25000, 24): Broken pipe
+2026/11/15 08:51:13 socat[1172283] E write(6, 0x5ad9c2e25000, 24): Broken pipe
+  ✘  10 tests/channels-e2e/composer.spec.ts:303:1 › CMP-09 while the other person types in their composer I see “… is typing”, until they send (19.7s)
+2026/11/15 08:51:14 socat[1178862] E write(6, 0x5ad9c2e26000, 24): Broken pipe
+2026/11/15 08:51:14 socat[1179050] E write(6, 0x5ad9c2e26000, 24): Broken pipe
+  ✓  18 tests/channels-e2e/direct-messages.spec.ts:228:1 › DM-05 a conversation with someone I never wrote to opens empty, saying “Say hello”, and nothing can be sent until I type (1.9s)
+2026/11/15 08:51:15 socat[1169153] E write(6, 0x5ad9c2e25000, 24): Broken pipe
+2026/11/15 08:51:15 socat[1169310] E write(6, 0x5ad9c2e25000, 24): Broken pipe
+2026/11/15 08:51:15 socat[1179417] E write(6, 0x5ad9c2e26000, 24): Broken pipe
+  ✓  16 tests/channels-e2e/direct-messages.spec.ts:122:1 › DM-03 “Message …” on a channel’s participant opens my conversation with them, the same one every time (7.9s)
+2026/11/15 08:51:18 socat[1181412] E write(6, 0x5ad9c2e26000, 24): Broken pipe
+2026/11/15 08:51:19 socat[1182999] E write(6, 0x5ad9c2e26000, 24): Broken pipe
+2026/11/15 08:51:19 socat[1183420] E write(6, 0x5ad9c2e26000, 24): Broken pipe
+  ✓  21 tests/channels-e2e/unread.spec.ts:87:1 › UNR-02 a channel with unread messages opens with “New” above the first of them, and “Mark as read” removes it (3.8s)
+2026/11/15 08:51:19 socat[1187372] E write(6, 0x5ad9c2e26000, 24): Broken pipe
+2026/11/15 08:51:19 socat[1187384] E write(6, 0x5ad9c2e26000, 24): Broken pipe
+  ✓  20 tests/channels-e2e/unread.spec.ts:38:1 › UNR-01 a message in a channel I do not have open marks its row unread at once; opening it clears the mark, also after reload (5.0s)
+2026/11/15 08:51:20 socat[1174585] E write(6, 0x5ad9c2e25000, 24): Broken pipe
+2026/11/15 08:51:20 socat[1175325] E write(6, 0x5ad9c2e25000, 24): Broken pipe
+2026/11/15 08:51:20 socat[1178360] E write(6, 0x5ad9c2e26000, 24): Broken pipe
+2026/11/15 08:51:20 socat[1180085] E write(6, 0x5ad9c2e26000, 24): Broken pipe
+2026/11/15 08:51:20 socat[1180149] E write(6, 0x5ad9c2e26000, 24): Broken pipe
+  ✓  17 tests/channels-e2e/direct-messages.spec.ts:173:1 › DM-04 a named group started from “New direct message” reaches everyone I put in it (9.5s)
+2026/11/15 08:51:22 socat[1188430] E write(6, 0x5ad9c2e26000, 24): Broken pipe
+2026/11/15 08:51:22 socat[1188456] E write(6, 0x5ad9c2e26000, 24): Broken pipe
+  ✓  22 tests/channels-e2e/unread.spec.ts:122:1 › UNR-03 my own messages never mark a channel unread for me (3.1s)
+2026/11/15 08:51:25 socat[1191083] E write(6, 0x5ad9c2e26000, 24): Broken pipe
+  ✓  23 tests/channels-e2e/unread.spec.ts:155:1 › UNR-04 scrolled up in an open channel, a new message shows “1 unread … below”, which leads to it (5.4s)
+2026/11/15 08:51:27 socat[1197059] E write(6, 0x5ad9c2e26000, 24): Broken pipe
+2026/11/15 08:51:27 socat[1195754] E write(6, 0x5ad9c2e26000, 24): Broken pipe
+2026/11/15 08:51:27 socat[1197147] E write(6, 0x5ad9c2e26000, 24): Broken pipe
+  ✓  26 tests/channels-e2e/unread.spec.ts:272:1 › UNR-07 a member who never opened a channel sees it unread, and opening it shows every message and clears the mark (2.4s)
+2026/11/15 08:51:28 socat[1194970] E write(6, 0x5ad9c2e26000, 24): Broken pipe
+2026/11/15 08:51:30 socat[1193628] E write(6, 0x5ad9c2e26000, 24): Broken pipe
+2026/11/15 08:51:30 socat[1189132] E write(6, 0x5ad9c2e26000, 24): Broken pipe
+2026/11/15 08:51:30 socat[1189402] E write(6, 0x5ad9c2e26000, 24): Broken pipe
+  ✘  24 tests/channels-e2e/unread.spec.ts:187:1 › UNR-05 a mention of me in a channel I do not have open shows a count of mentions on its row (10.2s)
+2026/11/15 08:51:30 socat[1202089] E write(6, 0x5ad9c2e26000, 24): Broken pipe
+  ✓  25 tests/channels-e2e/unread.spec.ts:218:1 › UNR-06 a muted channel shows a crossed bell and is not marked unread by new messages; unmuted, it is again (7.8s)
+2026/11/15 08:51:31 socat[1200714] E write(6, 0x5ad9c2e26000, 24): Broken pipe
+  ✓  27 tests/channels-e2e/unread.spec.ts:311:1 › UNR-08 a channel I am added to appears in my list at once, and opens (3.8s)
+2026/11/15 08:51:31 socat[1180905] E write(6, 0x5ad9c2e26000, 24): Broken pipe
+2026/11/15 08:51:31 socat[1181102] E write(6, 0x5ad9c2e26000, 24): Broken pipe
+  ✘  19 tests/channels-e2e/direct-messages.spec.ts:270:1 › DM-06 typing a teammate’s name in “New direct message” offers that person (17.8s)
+2026/11/15 08:51:33 socat[1204695] E write(6, 0x5ad9c2e26000, 24): Broken pipe
+2026/11/15 08:51:33 socat[1204705] E write(6, 0x5ad9c2e26000, 24): Broken pipe
+  ✓  29 tests/channels-e2e/unread.spec.ts:367:1 › UNR-10 a row found with “Search conversations” is marked unread at once when a message arrives (3.3s)
+2026/11/15 08:51:33 socat[1100902] W waitpid(-1, {}, WNOHANG): no (more) child has exited
+2026/11/15 08:51:38 socat[1204683] E write(6, 0x5ad9c2e26000, 24): Broken pipe
+  ✘  28 tests/channels-e2e/unread.spec.ts:339:1 › UNR-09 the first message in a new channel marks it unread for the other member (8.5s)
+
+
+  1) tests/channels-e2e/composer.spec.ts:303:1 › CMP-09 while the other person types in their composer I see “… is typing”, until they send 
+
+    Error: expect(locator).toBeVisible() failed
+
+    Locator: locator('[data-channel-scroll]').getByText('Ben Member is typing', { exact: true })
+    Expected: visible
+    Timeout: 15000ms
+    Error: element(s) not found
+
+    Call log:
+      - Expect "toBeVisible" with timeout 15000ms
+      - waiting for locator('[data-channel-scroll]').getByText('Ben Member is typing', { exact: true })
+
+
+      318 |   await benView.composerText.click();
+      319 |   await benPage.keyboard.type('yes, writing');
+    > 320 |   await expect(typingLine(page, 'Ben Member')).toBeVisible();
+          |                                                ^
+      321 |
+      322 |   await benPage.keyboard.press('Enter');
+      323 |   await expect(view.message('yes, writing')).toBeVisible();
+        at /home/teo/.herdr/worktrees/macro/synoet-channels-e2e-base/apps/web/tests/channels-e2e/composer.spec.ts:320:48
+
+    attachment #1: screenshot (image/png) ──────────────────────────────────────────────────────────
+    ../../../../../../.cache/channels-e2e/runs/24909-break-typing-line-never-shows/test-results/composer-CMP-09-while-the--88335--is-typing”-until-they-send/test-failed-1.png
+    ────────────────────────────────────────────────────────────────────────────────────────────────
+
+    attachment #2: screenshot (image/png) ──────────────────────────────────────────────────────────
+    ../../../../../../.cache/channels-e2e/runs/24909-break-typing-line-never-shows/test-results/composer-CMP-09-while-the--88335--is-typing”-until-they-send/test-failed-2.png
+    ────────────────────────────────────────────────────────────────────────────────────────────────
+
+    Error Context: ../../../../../../.cache/channels-e2e/runs/24909-break-typing-line-never-shows/test-results/composer-CMP-09-while-the--88335--is-typing”-until-they-send/error-context.md
+
+    attachment #4: trace (application/zip) ─────────────────────────────────────────────────────────
+    ../../../../../../.cache/channels-e2e/runs/24909-break-typing-line-never-shows/test-results/composer-CMP-09-while-the--88335--is-typing”-until-they-send/trace.zip
+    Usage:
+
+        npx playwright show-trace ../../../../../../.cache/channels-e2e/runs/24909-break-typing-line-never-shows/test-results/composer-CMP-09-while-the--88335--is-typing”-until-they-send/trace.zip
+
+    ────────────────────────────────────────────────────────────────────────────────────────────────
+
+  2) tests/channels-e2e/composer.spec.ts:329:1 › CMP-10 typing reported from the other person’s other device shows “… is typing”, and goes when they stop 
+
+    Error: expect(locator).toBeVisible() failed
+
+    Locator: locator('[data-channel-scroll]').getByText('Ben Member is typing', { exact: true })
+    Expected: visible
+    Timeout: 15000ms
+    Error: element(s) not found
+
+    Call log:
+      - Expect "toBeVisible" with timeout 15000ms
+      - waiting for locator('[data-channel-scroll]').getByText('Ben Member is typing', { exact: true })
+
+
+      339 |
+      340 |   await ben.typing(channel.id);
+    > 341 |   await expect(typingLine(page, 'Ben Member')).toBeVisible();
+          |                                                ^
+      342 |
+      343 |   await ben.typing(channel.id, false);
+      344 |   await expect(typingLine(page, 'Ben Member')).toBeHidden({ timeout: 5_000 });
+        at /home/teo/.herdr/worktrees/macro/synoet-channels-e2e-base/apps/web/tests/channels-e2e/composer.spec.ts:341:48
+
+    attachment #1: screenshot (image/png) ──────────────────────────────────────────────────────────
+    ../../../../../../.cache/channels-e2e/runs/24909-break-typing-line-never-shows/test-results/composer-CMP-10-typing-rep-74d5d-ng”-and-goes-when-they-stop/test-failed-1.png
+    ────────────────────────────────────────────────────────────────────────────────────────────────
+
+    Error Context: ../../../../../../.cache/channels-e2e/runs/24909-break-typing-line-never-shows/test-results/composer-CMP-10-typing-rep-74d5d-ng”-and-goes-when-they-stop/error-context.md
+
+    attachment #3: trace (application/zip) ─────────────────────────────────────────────────────────
+    ../../../../../../.cache/channels-e2e/runs/24909-break-typing-line-never-shows/test-results/composer-CMP-10-typing-rep-74d5d-ng”-and-goes-when-they-stop/trace.zip
+    Usage:
+
+        npx playwright show-trace ../../../../../../.cache/channels-e2e/runs/24909-break-typing-line-never-shows/test-results/composer-CMP-10-typing-rep-74d5d-ng”-and-goes-when-they-stop/trace.zip
+
+    ────────────────────────────────────────────────────────────────────────────────────────────────
+
+  2 failed
+    tests/channels-e2e/composer.spec.ts:303:1 › CMP-09 while the other person types in their composer I see “… is typing”, until they send 
+    tests/channels-e2e/composer.spec.ts:329:1 › CMP-10 typing reported from the other person’s other device shows “… is typing”, and goes when they stop 
+  27 passed (1.3m)
+2026/11/15 08:51:39 socat[1100902] W waitpid(-1, {}, WNOHANG): no (more) child has exited
+2026/11/15 08:51:39 socat[1102953] W exiting on signal 15
+2026/11/15 08:51:39 socat[1100902] W exiting on signal 15

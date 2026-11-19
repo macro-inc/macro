@@ -1,0 +1,1927 @@
+send-button-does-nothing	MSG-01	PASSED	
+send-button-does-nothing	MSG-02	FAILED	Error: expect(received).toEqual(expected) // deep equality | - Expected  - 1
+send-button-does-nothing	MSG-03	PASSED	
+send-button-does-nothing	MSG-04	PASSED	
+send-button-does-nothing	MSG-05	PASSED	
+send-button-does-nothing	MSG-06	PASSED	
+send-button-does-nothing	MSG-07	PASSED	
+send-button-does-nothing	MSG-08	PASSED	
+send-button-does-nothing	MSG-09	PASSED	
+send-button-does-nothing	MSG-10	PASSED	
+send-button-does-nothing	MSG-11	PASSED	
+send-button-does-nothing	MSG-12	PASSED	
+send-button-does-nothing	MSG-13	PASSED	
+send-button-does-nothing	MSG-14	PASSED	
+send-button-does-nothing	MSG-15	PASSED	
+send-button-does-nothing	MSG-16	PASSED	
+send-button-does-nothing	MSG-17	PASSED	
+send-button-does-nothing	MSG-18	PASSED	Error: expect(received).toEqual(expected) // deep equality | - Expected  - 3
+send-button-does-nothing	THR-01	PASSED	
+send-button-does-nothing	THR-02	PASSED	
+send-button-does-nothing	THR-03	PASSED	
+send-button-does-nothing	THR-04	PASSED	
+send-button-does-nothing	THR-05	PASSED	
+send-button-does-nothing	THR-06	PASSED	
+send-button-does-nothing	THR-07	PASSED	
+send-button-does-nothing	THR-08	PASSED	
+send-button-does-nothing	THR-09	PASSED	
+send-button-does-nothing	THR-10	PASSED	Error: expect(locator).toBeFocused() failed | Locator:  locator('[data-input-id="thread-reply-input-01a1de18-62d6-7019-ba6e-02bf10050dca"]').getByRole('textbox'
+new-message-goes-above-the-last	MSG-01	FAILED	Error: expect(received).toEqual(expected) // deep equality | - Expected  - 1
+new-message-goes-above-the-last	MSG-02	FAILED	Error: expect(received).toEqual(expected) // deep equality | - Expected  - 1
+new-message-goes-above-the-last	MSG-03	FAILED	Error: expect(received).toEqual(expected) // deep equality | - Expected  - 1
+new-message-goes-above-the-last	MSG-04	PASSED	
+new-message-goes-above-the-last	MSG-05	PASSED	
+new-message-goes-above-the-last	MSG-06	FAILED	Error: expect(received).toEqual(expected) // deep equality | - Expected  - 1
+new-message-goes-above-the-last	MSG-07	PASSED	
+new-message-goes-above-the-last	MSG-08	PASSED	
+new-message-goes-above-the-last	MSG-09	FAILED	Error: expect(received).toEqual(expected) // deep equality | - Expected  - 1
+new-message-goes-above-the-last	MSG-10	PASSED	
+new-message-goes-above-the-last	MSG-11	PASSED	
+new-message-goes-above-the-last	MSG-12	PASSED	
+new-message-goes-above-the-last	MSG-13	PASSED	
+new-message-goes-above-the-last	MSG-14	PASSED	
+new-message-goes-above-the-last	MSG-15	PASSED	
+new-message-goes-above-the-last	MSG-16	FAILED	Error: expect(received).toEqual(expected) // deep equality | - Expected  - 1
+new-message-goes-above-the-last	MSG-17	PASSED	
+new-message-goes-above-the-last	MSG-18	PASSED	Error: expect(received).toEqual(expected) // deep equality | - Expected  - 1
+new-message-goes-above-the-last	THR-01	PASSED	
+new-message-goes-above-the-last	THR-02	PASSED	
+new-message-goes-above-the-last	THR-03	PASSED	
+new-message-goes-above-the-last	THR-04	PASSED	
+new-message-goes-above-the-last	THR-05	PASSED	
+new-message-goes-above-the-last	THR-06	PASSED	
+new-message-goes-above-the-last	THR-07	PASSED	
+new-message-goes-above-the-last	THR-08	PASSED	
+new-message-goes-above-the-last	THR-09	PASSED	
+new-message-goes-above-the-last	THR-10	PASSED	Error: expect(locator).toBeFocused() failed | Locator:  locator('[data-input-id="thread-reply-input-01a1de1a-78b6-7a57-932e-900b570f5edd"]').getByRole('textbox'
+shift-enter-sends	MSG-01	PASSED	
+shift-enter-sends	MSG-02	PASSED	
+shift-enter-sends	MSG-03	PASSED	
+shift-enter-sends	MSG-04	FAILED	Error: expect(locator).toHaveCount(expected) failed | Locator:  locator('[data-channel-scroll]').locator('[data-message]')
+shift-enter-sends	MSG-05	PASSED	
+shift-enter-sends	MSG-06	PASSED	
+shift-enter-sends	MSG-07	PASSED	
+shift-enter-sends	MSG-08	PASSED	
+shift-enter-sends	MSG-09	PASSED	
+shift-enter-sends	MSG-10	PASSED	
+shift-enter-sends	MSG-11	PASSED	
+shift-enter-sends	MSG-12	PASSED	
+shift-enter-sends	MSG-13	PASSED	
+shift-enter-sends	MSG-14	PASSED	
+shift-enter-sends	MSG-15	PASSED	
+shift-enter-sends	MSG-16	PASSED	
+shift-enter-sends	MSG-17	PASSED	
+shift-enter-sends	MSG-18	PASSED	Error: expect(received).toEqual(expected) // deep equality | - Expected  - 3
+shift-enter-sends	THR-01	PASSED	
+shift-enter-sends	THR-02	PASSED	
+shift-enter-sends	THR-03	PASSED	
+shift-enter-sends	THR-04	PASSED	
+shift-enter-sends	THR-05	PASSED	
+shift-enter-sends	THR-06	PASSED	
+shift-enter-sends	THR-07	PASSED	
+shift-enter-sends	THR-08	PASSED	
+shift-enter-sends	THR-09	PASSED	
+shift-enter-sends	THR-10	PASSED	Error: expect(locator).toBeFocused() failed | Locator:  locator('[data-input-id="thread-reply-input-01a1de1c-594f-7aad-9b5e-f3206f1e1e80"]').getByRole('textbox'
+bold-shown-plain	MSG-01	PASSED	
+bold-shown-plain	MSG-02	PASSED	
+bold-shown-plain	MSG-03	PASSED	
+bold-shown-plain	MSG-04	PASSED	
+bold-shown-plain	MSG-05	FAILED	Error: expect(locator).toHaveCSS(expected) failed | Locator: locator('[data-channel-scroll]').getByText('bold', { exact: true })
+bold-shown-plain	MSG-06	PASSED	
+bold-shown-plain	MSG-07	PASSED	
+bold-shown-plain	MSG-08	PASSED	
+bold-shown-plain	MSG-09	PASSED	
+bold-shown-plain	MSG-10	PASSED	
+bold-shown-plain	MSG-11	PASSED	
+bold-shown-plain	MSG-12	PASSED	
+bold-shown-plain	MSG-13	PASSED	
+bold-shown-plain	MSG-14	PASSED	
+bold-shown-plain	MSG-15	PASSED	
+bold-shown-plain	MSG-16	PASSED	
+bold-shown-plain	MSG-17	PASSED	
+bold-shown-plain	MSG-18	PASSED	Error: expect(received).toEqual(expected) // deep equality | - Expected  - 3
+bold-shown-plain	THR-01	PASSED	
+bold-shown-plain	THR-02	PASSED	
+bold-shown-plain	THR-03	PASSED	
+bold-shown-plain	THR-04	PASSED	
+bold-shown-plain	THR-05	PASSED	
+bold-shown-plain	THR-06	PASSED	
+bold-shown-plain	THR-07	PASSED	
+bold-shown-plain	THR-08	PASSED	
+bold-shown-plain	THR-09	PASSED	
+bold-shown-plain	THR-10	PASSED	Error: expect(locator).toBeFocused() failed | Locator:  locator('[data-input-id="thread-reply-input-01a1de1e-593d-796d-aa63-058ac8a80c6f"]').getByRole('textbox'
+every-message-repeats-its-author	MSG-01	PASSED	
+every-message-repeats-its-author	MSG-02	PASSED	
+every-message-repeats-its-author	MSG-03	PASSED	
+every-message-repeats-its-author	MSG-04	PASSED	
+every-message-repeats-its-author	MSG-05	PASSED	
+every-message-repeats-its-author	MSG-06	FAILED	Error: expect(locator).toHaveCount(expected) failed | Locator:  locator('[data-channel-scroll]').getByText('Ada Owner', { exact: true })
+every-message-repeats-its-author	MSG-07	PASSED	
+every-message-repeats-its-author	MSG-08	PASSED	
+every-message-repeats-its-author	MSG-09	PASSED	
+every-message-repeats-its-author	MSG-10	PASSED	
+every-message-repeats-its-author	MSG-11	PASSED	
+every-message-repeats-its-author	MSG-12	PASSED	
+every-message-repeats-its-author	MSG-13	PASSED	
+every-message-repeats-its-author	MSG-14	PASSED	
+every-message-repeats-its-author	MSG-15	PASSED	
+every-message-repeats-its-author	MSG-16	PASSED	
+every-message-repeats-its-author	MSG-17	PASSED	
+every-message-repeats-its-author	MSG-18	PASSED	Error: expect(received).toEqual(expected) // deep equality | - Expected  - 3
+every-message-repeats-its-author	THR-01	PASSED	
+every-message-repeats-its-author	THR-02	PASSED	
+every-message-repeats-its-author	THR-03	PASSED	
+every-message-repeats-its-author	THR-04	PASSED	
+every-message-repeats-its-author	THR-05	PASSED	
+every-message-repeats-its-author	THR-06	PASSED	
+every-message-repeats-its-author	THR-07	PASSED	
+every-message-repeats-its-author	THR-08	PASSED	
+every-message-repeats-its-author	THR-09	PASSED	
+every-message-repeats-its-author	THR-10	PASSED	Error: expect(locator).toBeFocused() failed | Locator:  locator('[data-input-id="thread-reply-input-01a1de20-110f-7098-b517-c3a50bb3d2c2"]').getByRole('textbox'
+edit-keeps-the-old-text	MSG-01	PASSED	
+edit-keeps-the-old-text	MSG-02	PASSED	
+edit-keeps-the-old-text	MSG-03	PASSED	
+edit-keeps-the-old-text	MSG-04	PASSED	
+edit-keeps-the-old-text	MSG-05	PASSED	
+edit-keeps-the-old-text	MSG-06	PASSED	
+edit-keeps-the-old-text	MSG-07	FAILED	Error: expect(received).toEqual(expected) // deep equality | - Expected  - 1
+edit-keeps-the-old-text	MSG-08	FAILED	Error: expect(received).toEqual(expected) // deep equality | - Expected  - 1
+edit-keeps-the-old-text	MSG-09	PASSED	
+edit-keeps-the-old-text	MSG-10	PASSED	
+edit-keeps-the-old-text	MSG-11	PASSED	
+edit-keeps-the-old-text	MSG-12	PASSED	
+edit-keeps-the-old-text	MSG-13	PASSED	
+edit-keeps-the-old-text	MSG-14	PASSED	
+edit-keeps-the-old-text	MSG-15	PASSED	
+edit-keeps-the-old-text	MSG-16	PASSED	
+edit-keeps-the-old-text	MSG-17	PASSED	
+edit-keeps-the-old-text	MSG-18	PASSED	Error: expect(received).toEqual(expected) // deep equality | - Expected  - 3
+edit-keeps-the-old-text	THR-01	PASSED	
+edit-keeps-the-old-text	THR-02	PASSED	
+edit-keeps-the-old-text	THR-03	PASSED	
+edit-keeps-the-old-text	THR-04	FAILED	Error: expect(received).toEqual(expected) // deep equality | - Expected  - 1
+edit-keeps-the-old-text	THR-05	PASSED	
+edit-keeps-the-old-text	THR-06	PASSED	
+edit-keeps-the-old-text	THR-07	PASSED	
+edit-keeps-the-old-text	THR-08	PASSED	
+edit-keeps-the-old-text	THR-09	PASSED	
+edit-keeps-the-old-text	THR-10	PASSED	Error: expect(locator).toBeFocused() failed | Locator:  locator('[data-input-id="thread-reply-input-01a1de21-ed37-78b4-a395-b26b759666d6"]').getByRole('textbox'
+e-key-does-not-edit	MSG-01	PASSED	
+e-key-does-not-edit	MSG-02	PASSED	
+e-key-does-not-edit	MSG-03	PASSED	
+e-key-does-not-edit	MSG-04	PASSED	
+e-key-does-not-edit	MSG-05	PASSED	
+e-key-does-not-edit	MSG-06	PASSED	
+e-key-does-not-edit	MSG-07	PASSED	
+e-key-does-not-edit	MSG-08	FAILED	Error: expect(locator).toHaveText(expected) failed | Locator: locator('[data-input-id="edit-message-input-01a1de23-4777-7065-a947-3fcdc8b9d30d"]').getByRole('te
+e-key-does-not-edit	MSG-09	PASSED	
+e-key-does-not-edit	MSG-10	PASSED	
+e-key-does-not-edit	MSG-11	PASSED	
+e-key-does-not-edit	MSG-12	PASSED	
+e-key-does-not-edit	MSG-13	PASSED	
+e-key-does-not-edit	MSG-14	PASSED	
+e-key-does-not-edit	MSG-15	PASSED	
+e-key-does-not-edit	MSG-16	PASSED	
+e-key-does-not-edit	MSG-17	PASSED	
+e-key-does-not-edit	MSG-18	PASSED	Error: expect(received).toEqual(expected) // deep equality | - Expected  - 3
+e-key-does-not-edit	THR-01	PASSED	
+e-key-does-not-edit	THR-02	PASSED	
+e-key-does-not-edit	THR-03	PASSED	
+e-key-does-not-edit	THR-04	PASSED	
+e-key-does-not-edit	THR-05	PASSED	
+e-key-does-not-edit	THR-06	PASSED	
+e-key-does-not-edit	THR-07	PASSED	
+e-key-does-not-edit	THR-08	PASSED	
+e-key-does-not-edit	THR-09	PASSED	
+e-key-does-not-edit	THR-10	PASSED	Error: expect(locator).toBeFocused() failed | Locator:  locator('[data-input-id="thread-reply-input-01a1de23-c49d-7a05-8059-fce2f9cc5400"]').getByRole('textbox'
+cancel-saves-the-edit	MSG-01	PASSED	
+cancel-saves-the-edit	MSG-02	PASSED	
+cancel-saves-the-edit	MSG-03	PASSED	
+cancel-saves-the-edit	MSG-04	PASSED	
+cancel-saves-the-edit	MSG-05	PASSED	
+cancel-saves-the-edit	MSG-06	PASSED	
+cancel-saves-the-edit	MSG-07	PASSED	
+cancel-saves-the-edit	MSG-08	PASSED	
+cancel-saves-the-edit	MSG-09	FAILED	Error: expect(received).toEqual(expected) // deep equality | - Expected  - 1
+cancel-saves-the-edit	MSG-10	PASSED	
+cancel-saves-the-edit	MSG-11	PASSED	
+cancel-saves-the-edit	MSG-12	PASSED	
+cancel-saves-the-edit	MSG-13	PASSED	
+cancel-saves-the-edit	MSG-14	PASSED	
+cancel-saves-the-edit	MSG-15	PASSED	
+cancel-saves-the-edit	MSG-16	PASSED	
+cancel-saves-the-edit	MSG-17	PASSED	
+cancel-saves-the-edit	MSG-18	PASSED	Error: expect(received).toEqual(expected) // deep equality | - Expected  - 2
+cancel-saves-the-edit	THR-01	PASSED	
+cancel-saves-the-edit	THR-02	PASSED	
+cancel-saves-the-edit	THR-03	PASSED	
+cancel-saves-the-edit	THR-04	PASSED	
+cancel-saves-the-edit	THR-05	PASSED	
+cancel-saves-the-edit	THR-06	PASSED	
+cancel-saves-the-edit	THR-07	PASSED	
+cancel-saves-the-edit	THR-08	PASSED	
+cancel-saves-the-edit	THR-09	PASSED	
+cancel-saves-the-edit	THR-10	PASSED	Error: expect(locator).toBeFocused() failed | Locator:  locator('[data-input-id="thread-reply-input-01a1de25-9dab-7b7e-ae5d-047997ea41b7"]').getByRole('textbox'
+delete-leaves-the-message	MSG-01	PASSED	
+delete-leaves-the-message	MSG-02	PASSED	
+delete-leaves-the-message	MSG-03	PASSED	
+delete-leaves-the-message	MSG-04	PASSED	
+delete-leaves-the-message	MSG-05	PASSED	
+delete-leaves-the-message	MSG-06	PASSED	
+delete-leaves-the-message	MSG-07	PASSED	
+delete-leaves-the-message	MSG-08	PASSED	
+delete-leaves-the-message	MSG-09	PASSED	
+delete-leaves-the-message	MSG-10	FAILED	Error: expect(received).toEqual(expected) // deep equality | - Expected  - 0
+delete-leaves-the-message	MSG-11	FAILED	Error: expect(received).toEqual(expected) // deep equality | - Expected  - 1
+delete-leaves-the-message	MSG-12	PASSED	
+delete-leaves-the-message	MSG-13	PASSED	
+delete-leaves-the-message	MSG-14	PASSED	
+delete-leaves-the-message	MSG-15	PASSED	
+delete-leaves-the-message	MSG-16	PASSED	
+delete-leaves-the-message	MSG-17	PASSED	
+delete-leaves-the-message	MSG-18	PASSED	Error: expect(received).toEqual(expected) // deep equality | - Expected  - 2
+delete-leaves-the-message	THR-01	PASSED	
+delete-leaves-the-message	THR-02	FAILED	Error: expect(received).toEqual(expected) // deep equality | - Expected  - 1
+delete-leaves-the-message	THR-03	PASSED	
+delete-leaves-the-message	THR-04	PASSED	
+delete-leaves-the-message	THR-05	FAILED	Error: expect(received).toEqual(expected) // deep equality | - Expected  - 0
+delete-leaves-the-message	THR-06	PASSED	
+delete-leaves-the-message	THR-07	PASSED	
+delete-leaves-the-message	THR-08	PASSED	
+delete-leaves-the-message	THR-09	PASSED	
+delete-leaves-the-message	THR-10	PASSED	Error: expect(locator).toBeFocused() failed | Locator:  locator('[data-input-id="thread-reply-input-01a1de27-b1dc-7054-8afa-2540e8bbbf1c"]').getByRole('textbox'
+edit-offered-on-others-messages	MSG-01	PASSED	
+edit-offered-on-others-messages	MSG-02	PASSED	
+edit-offered-on-others-messages	MSG-03	PASSED	
+edit-offered-on-others-messages	MSG-04	PASSED	
+edit-offered-on-others-messages	MSG-05	PASSED	
+edit-offered-on-others-messages	MSG-06	PASSED	
+edit-offered-on-others-messages	MSG-07	PASSED	
+edit-offered-on-others-messages	MSG-08	PASSED	
+edit-offered-on-others-messages	MSG-09	PASSED	
+edit-offered-on-others-messages	MSG-10	PASSED	
+edit-offered-on-others-messages	MSG-11	PASSED	
+edit-offered-on-others-messages	MSG-12	FAILED	Error: expect(locator).toHaveCount(expected) failed | Locator:  locator('[data-channel-scroll]').locator('[data-message-id="01a1de29-6d64-7f6f-aa55-490080fdf9ae
+edit-offered-on-others-messages	MSG-13	PASSED	
+edit-offered-on-others-messages	MSG-14	PASSED	
+edit-offered-on-others-messages	MSG-15	PASSED	
+edit-offered-on-others-messages	MSG-16	PASSED	
+edit-offered-on-others-messages	MSG-17	PASSED	
+edit-offered-on-others-messages	MSG-18	PASSED	Error: expect(received).toEqual(expected) // deep equality | - Expected  - 1
+edit-offered-on-others-messages	THR-01	PASSED	
+edit-offered-on-others-messages	THR-02	PASSED	
+edit-offered-on-others-messages	THR-03	PASSED	
+edit-offered-on-others-messages	THR-04	PASSED	
+edit-offered-on-others-messages	THR-05	PASSED	
+edit-offered-on-others-messages	THR-06	PASSED	
+edit-offered-on-others-messages	THR-07	PASSED	
+edit-offered-on-others-messages	THR-08	PASSED	
+edit-offered-on-others-messages	THR-09	PASSED	
+edit-offered-on-others-messages	THR-10	PASSED	Error: expect(locator).toBeFocused() failed | Locator:  locator('[data-input-id="thread-reply-input-01a1de29-d78e-7cdf-8287-fa66f8060b15"]').getByRole('textbox'
+reaction-not-shown	MSG-01	PASSED	
+reaction-not-shown	MSG-02	PASSED	
+reaction-not-shown	MSG-03	PASSED	
+reaction-not-shown	MSG-04	PASSED	
+reaction-not-shown	MSG-05	PASSED	
+reaction-not-shown	MSG-06	PASSED	
+reaction-not-shown	MSG-07	PASSED	
+reaction-not-shown	MSG-08	PASSED	
+reaction-not-shown	MSG-09	PASSED	
+reaction-not-shown	MSG-10	PASSED	
+reaction-not-shown	MSG-11	PASSED	
+reaction-not-shown	MSG-12	PASSED	
+reaction-not-shown	MSG-13	FAILED	Error: expect(received).toEqual(expected) // deep equality | - Expected  - 3
+reaction-not-shown	MSG-14	FAILED	Error: expect(received).toEqual(expected) // deep equality | - Expected  - 3
+reaction-not-shown	MSG-15	FAILED	Error: expect(received).toEqual(expected) // deep equality | - Expected  - 3
+reaction-not-shown	MSG-16	PASSED	
+reaction-not-shown	MSG-17	PASSED	
+reaction-not-shown	MSG-18	PASSED	Error: expect(received).toEqual(expected) // deep equality | - Expected  - 2
+reaction-not-shown	THR-01	PASSED	
+reaction-not-shown	THR-02	PASSED	
+reaction-not-shown	THR-03	PASSED	
+reaction-not-shown	THR-04	PASSED	
+reaction-not-shown	THR-05	PASSED	
+reaction-not-shown	THR-06	FAILED	Error: expect(received).toEqual(expected) // deep equality | - Expected  - 3
+reaction-not-shown	THR-07	PASSED	
+reaction-not-shown	THR-08	PASSED	
+reaction-not-shown	THR-09	PASSED	
+reaction-not-shown	THR-10	PASSED	Error: expect(locator).toBeFocused() failed | Locator:  locator('[data-input-id="thread-reply-input-01a1de2c-0c2d-772b-b7e0-4b697be93890"]').getByRole('textbox'
+picked-emoji-not-added	MSG-01	PASSED	
+picked-emoji-not-added	MSG-02	PASSED	
+picked-emoji-not-added	MSG-03	PASSED	
+picked-emoji-not-added	MSG-04	PASSED	
+picked-emoji-not-added	MSG-05	PASSED	
+picked-emoji-not-added	MSG-06	PASSED	
+picked-emoji-not-added	MSG-07	PASSED	
+picked-emoji-not-added	MSG-08	PASSED	
+picked-emoji-not-added	MSG-09	PASSED	
+picked-emoji-not-added	MSG-10	PASSED	
+picked-emoji-not-added	MSG-11	PASSED	
+picked-emoji-not-added	MSG-12	PASSED	
+picked-emoji-not-added	MSG-13	PASSED	
+picked-emoji-not-added	MSG-14	FAILED	Error: expect(received).toEqual(expected) // deep equality | - Expected  - 3
+picked-emoji-not-added	MSG-15	PASSED	
+picked-emoji-not-added	MSG-16	PASSED	
+picked-emoji-not-added	MSG-17	PASSED	
+picked-emoji-not-added	MSG-18	PASSED	Error: expect(received).toEqual(expected) // deep equality | - Expected  - 3
+picked-emoji-not-added	THR-01	PASSED	
+picked-emoji-not-added	THR-02	FAILED	ReferenceError: failsSometimes is not defined |   83 |   // Known defect on main, about one run in five on a busy machine: a reply
+picked-emoji-not-added	THR-03	PASSED	
+picked-emoji-not-added	THR-04	PASSED	
+picked-emoji-not-added	THR-05	PASSED	
+picked-emoji-not-added	THR-06	PASSED	
+picked-emoji-not-added	THR-07	PASSED	
+picked-emoji-not-added	THR-08	PASSED	
+picked-emoji-not-added	THR-09	PASSED	
+picked-emoji-not-added	THR-10	PASSED	Error: expect(locator).toBeFocused() failed | Locator:  locator('[data-input-id="thread-reply-input-01a1de2d-f251-7fdf-911d-eacca5377eb6"]').getByRole('textbox'
+copy-text-copies-nothing	MSG-01	PASSED	
+copy-text-copies-nothing	MSG-02	PASSED	
+copy-text-copies-nothing	MSG-03	PASSED	
+copy-text-copies-nothing	MSG-04	PASSED	
+copy-text-copies-nothing	MSG-05	PASSED	
+copy-text-copies-nothing	MSG-06	PASSED	
+copy-text-copies-nothing	MSG-07	PASSED	
+copy-text-copies-nothing	MSG-08	PASSED	
+copy-text-copies-nothing	MSG-09	PASSED	
+copy-text-copies-nothing	MSG-10	PASSED	
+copy-text-copies-nothing	MSG-11	PASSED	
+copy-text-copies-nothing	MSG-12	PASSED	
+copy-text-copies-nothing	MSG-13	PASSED	
+copy-text-copies-nothing	MSG-14	PASSED	
+copy-text-copies-nothing	MSG-15	PASSED	
+copy-text-copies-nothing	MSG-16	PASSED	
+copy-text-copies-nothing	MSG-17	FAILED	Error: expect(received).toBe(expected) // Object.is equality | Expected: "copy exactly this, please"
+copy-text-copies-nothing	MSG-18	PASSED	Error: expect(received).toEqual(expected) // deep equality | - Expected  - 2
+copy-text-copies-nothing	THR-01	PASSED	
+copy-text-copies-nothing	THR-02	FAILED	ReferenceError: failsSometimes is not defined |   83 |   // Known defect on main, about one run in five on a busy machine: a reply
+copy-text-copies-nothing	THR-03	PASSED	
+copy-text-copies-nothing	THR-04	PASSED	
+copy-text-copies-nothing	THR-05	PASSED	
+copy-text-copies-nothing	THR-06	PASSED	
+copy-text-copies-nothing	THR-07	PASSED	
+copy-text-copies-nothing	THR-08	PASSED	
+copy-text-copies-nothing	THR-09	PASSED	
+copy-text-copies-nothing	THR-10	PASSED	Error: expect(locator).toBeFocused() failed | Locator:  locator('[data-input-id="thread-reply-input-01a1de30-1c28-78e0-be4b-af03d42082fd"]').getByRole('textbox'
+reply-goes-to-the-channel	MSG-01	PASSED	
+reply-goes-to-the-channel	MSG-02	PASSED	
+reply-goes-to-the-channel	MSG-03	PASSED	
+reply-goes-to-the-channel	MSG-04	PASSED	
+reply-goes-to-the-channel	MSG-05	PASSED	
+reply-goes-to-the-channel	MSG-06	PASSED	
+reply-goes-to-the-channel	MSG-07	PASSED	
+reply-goes-to-the-channel	MSG-08	PASSED	
+reply-goes-to-the-channel	MSG-09	PASSED	
+reply-goes-to-the-channel	MSG-10	PASSED	
+reply-goes-to-the-channel	MSG-11	PASSED	
+reply-goes-to-the-channel	MSG-12	PASSED	
+reply-goes-to-the-channel	MSG-13	PASSED	
+reply-goes-to-the-channel	MSG-14	PASSED	
+reply-goes-to-the-channel	MSG-15	PASSED	
+reply-goes-to-the-channel	MSG-16	PASSED	
+reply-goes-to-the-channel	MSG-17	PASSED	
+reply-goes-to-the-channel	MSG-18	PASSED	Error: expect(received).toEqual(expected) // deep equality | - Expected  - 2
+reply-goes-to-the-channel	THR-01	FAILED	Error: expect(received).toEqual(expected) // deep equality | - Expected  - 3
+reply-goes-to-the-channel	THR-02	FAILED	Error: expect(received).toEqual(expected) // deep equality | - Expected  - 0
+reply-goes-to-the-channel	THR-03	PASSED	
+reply-goes-to-the-channel	THR-04	PASSED	
+reply-goes-to-the-channel	THR-05	PASSED	
+reply-goes-to-the-channel	THR-06	PASSED	
+reply-goes-to-the-channel	THR-07	PASSED	
+reply-goes-to-the-channel	THR-08	PASSED	
+reply-goes-to-the-channel	THR-09	FAILED	Error: expect(received).toEqual(expected) // deep equality | - Expected  - 1
+reply-goes-to-the-channel	THR-10	PASSED	Error: expect(locator).toBeFocused() failed | Locator:  locator('[data-input-id="thread-reply-input-01a1de32-13d9-7965-9369-e7b3b83f9b67"]').getByRole('textbox'
+opened-thread-shows-only-its-first-replies	MSG-01	PASSED	
+opened-thread-shows-only-its-first-replies	MSG-02	PASSED	
+opened-thread-shows-only-its-first-replies	MSG-03	PASSED	
+opened-thread-shows-only-its-first-replies	MSG-04	PASSED	
+opened-thread-shows-only-its-first-replies	MSG-05	PASSED	
+opened-thread-shows-only-its-first-replies	MSG-06	PASSED	
+opened-thread-shows-only-its-first-replies	MSG-07	PASSED	
+opened-thread-shows-only-its-first-replies	MSG-08	PASSED	
+opened-thread-shows-only-its-first-replies	MSG-09	PASSED	
+opened-thread-shows-only-its-first-replies	MSG-10	PASSED	
+opened-thread-shows-only-its-first-replies	MSG-11	PASSED	
+opened-thread-shows-only-its-first-replies	MSG-12	PASSED	
+opened-thread-shows-only-its-first-replies	MSG-13	PASSED	
+opened-thread-shows-only-its-first-replies	MSG-14	PASSED	
+opened-thread-shows-only-its-first-replies	MSG-15	PASSED	
+opened-thread-shows-only-its-first-replies	MSG-16	PASSED	
+opened-thread-shows-only-its-first-replies	MSG-17	PASSED	
+opened-thread-shows-only-its-first-replies	MSG-18	PASSED	Error: expect(received).toEqual(expected) // deep equality | - Expected  - 3
+opened-thread-shows-only-its-first-replies	THR-01	PASSED	
+opened-thread-shows-only-its-first-replies	THR-02	FAILED	Error: expect(received).toEqual(expected) // deep equality | - Expected  - 1
+opened-thread-shows-only-its-first-replies	THR-03	FAILED	Error: expect(received).toEqual(expected) // deep equality | - Expected  - 13
+opened-thread-shows-only-its-first-replies	THR-04	PASSED	
+opened-thread-shows-only-its-first-replies	THR-05	PASSED	
+opened-thread-shows-only-its-first-replies	THR-06	PASSED	
+opened-thread-shows-only-its-first-replies	THR-07	FAILED	Error: expect(received).toEqual(expected) // deep equality | - Expected  - 2
+opened-thread-shows-only-its-first-replies	THR-08	FAILED	Error: expect(received).toEqual(expected) // deep equality | - Expected  - 2
+opened-thread-shows-only-its-first-replies	THR-09	PASSED	
+opened-thread-shows-only-its-first-replies	THR-10	PASSED	Error: expect(locator).toBeFocused() failed | Locator:  locator('[data-input-id="thread-reply-input-01a1de33-fd4c-7cf9-88e3-914c2063fffe"]').getByRole('textbox'
+new-channel-not-opened	ACC-01	PASSED	
+new-channel-not-opened	ACC-02	PASSED	
+new-channel-not-opened	ACC-03	PASSED	
+new-channel-not-opened	ACC-04	PASSED	
+new-channel-not-opened	ACC-05	PASSED	
+new-channel-not-opened	ACC-06	PASSED	
+new-channel-not-opened	ACC-07	PASSED	
+new-channel-not-opened	ACC-08	PASSED	
+new-channel-not-opened	ACC-09	PASSED	
+new-channel-not-opened	CHN-01	FAILED	Error: expect(page).toHaveURL(expected) failed | Expected pattern: /\/channels?\/[0-9a-f-]{36}/
+new-channel-not-opened	CHN-02	FAILED	Error: expect(page).toHaveURL(expected) failed | Expected pattern: /\/channels?\/[0-9a-f-]{36}/
+new-channel-not-opened	CHN-03	PASSED	
+new-channel-not-opened	CHN-04	PASSED	Error: expect(locator).toContainText(expected) failed | Locator: getByRole('main').locator('[data-view-shell-top-bar]')
+new-channel-not-opened	CHN-05	PASSED	
+new-channel-not-opened	CHN-06	PASSED	
+new-channel-not-opened	CHN-07	PASSED	
+new-channel-not-opened	CHN-08	PASSED	Error: expect(locator).toHaveCount(expected) failed | Locator:  getByRole('tree', { name: 'Conversations' }).locator('[data-key="favorite:channel:01a1de35-9036-
+new-channel-not-opened	CHN-09	PASSED	
+new-channel-not-opened	CHN-10	PASSED	
+new-channel-not-opened	CHN-11	PASSED	
+new-channel-not-opened	CHN-12	PASSED	
+new-channel-not-opened	CHN-13	PASSED	
+new-channel-not-opened	CHN-14	PASSED	Error: expect(locator).toBeVisible() failed | Locator: getByRole('main').getByText('Channel e2e-mwhjk5iglqip created')
+new-channel-not-opened	CHN-15	PASSED	Error: expect(locator).toHaveCount(expected) failed | Locator:  locator('[data-input-id="channel-input-01a1de35-b6c8-786c-b40d-8958a6764199"]')
+new-channel-not-opened	KEY-01	PASSED	
+new-channel-not-opened	KEY-02	PASSED	
+new-channel-not-opened	KEY-03	PASSED	
+new-channel-not-opened	KEY-04	PASSED	
+new-channel-not-opened	KEY-05	PASSED	
+new-channel-not-opened	KEY-06	PASSED	Error: expect(locator).toBeFocused() failed | Locator:  locator('[data-input-id="thread-reply-input-01a1de35-e066-7652-b986-16573515be25"] [contenteditable]')
+new-channel-not-opened	KEY-07	PASSED	
+new-channel-not-opened	KEY-08	PASSED	
+new-channel-not-opened	KEY-12	PASSED	
+new-channel-not-opened	KEY-09	PASSED	
+new-channel-not-opened	KEY-10	PASSED	
+new-channel-not-opened	KEY-11	PASSED	
+new-channel-not-opened	MEM-01	PASSED	
+new-channel-not-opened	MEM-02	PASSED	
+new-channel-not-opened	MEM-03	PASSED	Error: expect(locator).toHaveCount(expected) failed | Locator:  locator('[data-input-id="channel-input-01a1de36-06ba-7cb2-9c79-11cd0c7ee1e7"]')
+new-channel-not-opened	MEM-04	PASSED	
+new-channel-not-opened	MEM-05	PASSED	
+new-channel-not-opened	MEM-06	PASSED	
+new-channel-not-opened	MEM-07	PASSED	
+new-channel-not-opened	MEM-08	PASSED	
+system-lines-not-drawn	ACC-01	PASSED	
+system-lines-not-drawn	ACC-02	PASSED	
+system-lines-not-drawn	ACC-03	PASSED	
+system-lines-not-drawn	ACC-04	PASSED	
+system-lines-not-drawn	ACC-05	PASSED	
+system-lines-not-drawn	ACC-06	FAILED	Error: the last messages and system lines in the list | the last messages and system lines in the list
+system-lines-not-drawn	ACC-07	PASSED	
+system-lines-not-drawn	ACC-08	PASSED	
+system-lines-not-drawn	ACC-09	PASSED	
+system-lines-not-drawn	CHN-01	PASSED	
+system-lines-not-drawn	CHN-02	PASSED	
+system-lines-not-drawn	CHN-03	FAILED	Error: the last messages and system lines in the list | the last messages and system lines in the list
+system-lines-not-drawn	CHN-04	PASSED	Error: expect(locator).toBeVisible() failed | Locator: locator('[data-channel-scroll] [data-system-activity]').filter({ hasText: 'renamed the channel to renamed
+system-lines-not-drawn	CHN-05	PASSED	
+system-lines-not-drawn	CHN-06	PASSED	
+system-lines-not-drawn	CHN-07	PASSED	
+system-lines-not-drawn	CHN-08	PASSED	Error: expect(locator).toHaveCount(expected) failed | Locator:  getByRole('tree', { name: 'Conversations' }).locator('[data-key="favorite:channel:01a1de37-9625-
+system-lines-not-drawn	CHN-09	PASSED	
+system-lines-not-drawn	CHN-10	PASSED	
+system-lines-not-drawn	CHN-11	PASSED	
+system-lines-not-drawn	CHN-12	PASSED	
+system-lines-not-drawn	CHN-13	PASSED	
+system-lines-not-drawn	CHN-14	PASSED	Error: expect(locator).toBeVisible() failed | Locator: getByRole('main').getByText('Channel e2e-mwhjn2890cde created')
+system-lines-not-drawn	CHN-15	PASSED	Error: expect(locator).toHaveCount(expected) failed | Locator:  locator('[data-input-id="channel-input-01a1de37-c700-76dd-93f6-29d873202d31"]')
+system-lines-not-drawn	KEY-01	PASSED	
+system-lines-not-drawn	KEY-02	PASSED	
+system-lines-not-drawn	KEY-03	PASSED	
+system-lines-not-drawn	KEY-04	PASSED	
+system-lines-not-drawn	KEY-05	PASSED	
+system-lines-not-drawn	KEY-06	PASSED	Error: expect(locator).toBeFocused() failed | Locator:  locator('[data-input-id="thread-reply-input-01a1de37-f350-7dc4-bd7f-d0c1fadb8ef8"] [contenteditable]')
+system-lines-not-drawn	KEY-07	PASSED	
+system-lines-not-drawn	KEY-08	PASSED	
+system-lines-not-drawn	KEY-12	PASSED	
+system-lines-not-drawn	KEY-09	PASSED	
+system-lines-not-drawn	KEY-10	PASSED	
+system-lines-not-drawn	KEY-11	PASSED	
+system-lines-not-drawn	MEM-01	FAILED	Error: the last messages and system lines in the list | the last messages and system lines in the list
+system-lines-not-drawn	MEM-02	FAILED	Error: the last messages and system lines in the list | the last messages and system lines in the list
+system-lines-not-drawn	MEM-03	PASSED	Error: expect(locator).toHaveCount(expected) failed | Locator:  locator('[data-input-id="channel-input-01a1de38-1f5b-75c9-92c1-aed22f54ff8c"]')
+system-lines-not-drawn	MEM-04	FAILED	Error: expect(locator).toBeVisible() failed | Locator: locator('[data-channel-scroll] [data-system-activity]').filter({ hasText: 'Ada Owner removed Cy Teammate'
+system-lines-not-drawn	MEM-05	FAILED	Error: expect(locator).toBeVisible() failed | Locator: locator('[data-channel-scroll] [data-system-activity]').filter({ hasText: 'Ada Owner added Cy Teammate' }
+system-lines-not-drawn	MEM-06	FAILED	Error: the last messages and system lines in the list | the last messages and system lines in the list
+system-lines-not-drawn	MEM-07	PASSED	
+system-lines-not-drawn	MEM-08	FAILED	Error: the last messages and system lines in the list | the last messages and system lines in the list
+favorite-does-nothing	ACC-01	PASSED	
+favorite-does-nothing	ACC-02	PASSED	
+favorite-does-nothing	ACC-03	PASSED	
+favorite-does-nothing	ACC-04	PASSED	
+favorite-does-nothing	ACC-05	PASSED	
+favorite-does-nothing	ACC-06	PASSED	
+favorite-does-nothing	ACC-07	PASSED	
+favorite-does-nothing	ACC-08	PASSED	
+favorite-does-nothing	ACC-09	PASSED	
+favorite-does-nothing	CHN-01	PASSED	
+favorite-does-nothing	CHN-02	PASSED	
+favorite-does-nothing	CHN-03	PASSED	
+favorite-does-nothing	CHN-04	PASSED	Error: expect(locator).toContainText(expected) failed | Locator: getByRole('main').locator('[data-view-shell-top-bar]')
+favorite-does-nothing	CHN-05	FAILED	Error: expect(locator).toHaveText(expected) failed | Locator: getByRole('tree', { name: 'Conversations' }).locator('[data-key="favorite:channel:01a1de39-ac4a-7f
+favorite-does-nothing	CHN-06	PASSED	
+favorite-does-nothing	CHN-07	PASSED	
+favorite-does-nothing	CHN-08	PASSED	Error: expect(locator).toHaveText(expected) failed | Locator: getByRole('tree', { name: 'Conversations' }).locator('[data-key="favorite:channel:01a1de39-c026-70
+favorite-does-nothing	CHN-09	PASSED	
+favorite-does-nothing	CHN-10	PASSED	
+favorite-does-nothing	CHN-11	PASSED	
+favorite-does-nothing	CHN-12	PASSED	
+favorite-does-nothing	CHN-13	PASSED	
+favorite-does-nothing	CHN-14	PASSED	Error: expect(locator).toBeVisible() failed | Locator: getByRole('main').getByText('Channel e2e-mwhjq5lo3dn8 created')
+favorite-does-nothing	CHN-15	PASSED	Error: expect(locator).toHaveCount(expected) failed | Locator:  locator('[data-input-id="channel-input-01a1de39-ff0a-7289-859d-976c4563ddca"]')
+favorite-does-nothing	KEY-01	PASSED	
+favorite-does-nothing	KEY-02	PASSED	
+favorite-does-nothing	KEY-03	PASSED	
+favorite-does-nothing	KEY-04	PASSED	
+favorite-does-nothing	KEY-05	PASSED	
+favorite-does-nothing	KEY-06	PASSED	Error: expect(locator).toBeFocused() failed | Locator:  locator('[data-input-id="thread-reply-input-01a1de3a-1c1e-7e39-846a-d4f363798397"] [contenteditable]')
+favorite-does-nothing	KEY-07	PASSED	
+favorite-does-nothing	KEY-08	PASSED	
+favorite-does-nothing	KEY-12	PASSED	
+favorite-does-nothing	KEY-09	PASSED	
+favorite-does-nothing	KEY-10	PASSED	
+favorite-does-nothing	KEY-11	PASSED	
+favorite-does-nothing	MEM-01	PASSED	
+favorite-does-nothing	MEM-02	PASSED	
+favorite-does-nothing	MEM-03	PASSED	Error: expect(locator).toHaveCount(expected) failed | Locator:  locator('[data-input-id="channel-input-01a1de3a-4bae-7424-8013-bbd970d2ffb7"]')
+favorite-does-nothing	MEM-04	PASSED	
+favorite-does-nothing	MEM-05	PASSED	
+favorite-does-nothing	MEM-06	PASSED	
+favorite-does-nothing	MEM-07	PASSED	
+favorite-does-nothing	MEM-08	PASSED	
+channel-link-opens-nothing	ACC-01	PASSED	
+channel-link-opens-nothing	ACC-02	PASSED	
+channel-link-opens-nothing	ACC-03	PASSED	
+channel-link-opens-nothing	ACC-04	PASSED	
+channel-link-opens-nothing	ACC-05	PASSED	
+channel-link-opens-nothing	ACC-06	PASSED	
+channel-link-opens-nothing	ACC-07	PASSED	
+channel-link-opens-nothing	ACC-08	PASSED	
+channel-link-opens-nothing	ACC-09	PASSED	
+channel-link-opens-nothing	CHN-01	PASSED	
+channel-link-opens-nothing	CHN-02	PASSED	
+channel-link-opens-nothing	CHN-03	PASSED	
+channel-link-opens-nothing	CHN-04	PASSED	Error: expect(locator).toContainText(expected) failed | Locator: getByRole('main').locator('[data-view-shell-top-bar]')
+channel-link-opens-nothing	CHN-05	PASSED	
+channel-link-opens-nothing	CHN-06	FAILED	Error: expect(locator).toBeVisible() failed | Locator: locator('[data-input-id="channel-input-01a1de3b-a445-7f68-8fd7-df9b9a665063"]')
+channel-link-opens-nothing	CHN-07	PASSED	
+channel-link-opens-nothing	CHN-08	PASSED	Error: expect(locator).toHaveCount(expected) failed | Locator:  getByRole('tree', { name: 'Conversations' }).locator('[data-key="favorite:channel:01a1de3b-bd30-
+channel-link-opens-nothing	CHN-09	PASSED	
+channel-link-opens-nothing	CHN-10	PASSED	
+channel-link-opens-nothing	CHN-11	PASSED	
+channel-link-opens-nothing	CHN-12	PASSED	
+channel-link-opens-nothing	CHN-13	PASSED	
+channel-link-opens-nothing	CHN-14	PASSED	Error: expect(locator).toBeVisible() failed | Locator: getByRole('main').getByText('Channel e2e-mwhjsyk45kai created')
+channel-link-opens-nothing	CHN-15	PASSED	Error: expect(locator).toHaveCount(expected) failed | Locator:  locator('[data-input-id="channel-input-01a1de3b-fcc8-73b1-a935-fc16d983a061"]')
+channel-link-opens-nothing	KEY-01	PASSED	
+channel-link-opens-nothing	KEY-02	PASSED	
+channel-link-opens-nothing	KEY-03	PASSED	
+channel-link-opens-nothing	KEY-04	PASSED	
+channel-link-opens-nothing	KEY-05	PASSED	
+channel-link-opens-nothing	KEY-06	PASSED	Error: expect(locator).toBeFocused() failed | Locator:  locator('[data-input-id="thread-reply-input-01a1de3c-3789-733e-a790-e3f98a609062"] [contenteditable]')
+channel-link-opens-nothing	KEY-07	PASSED	
+channel-link-opens-nothing	KEY-08	PASSED	
+channel-link-opens-nothing	KEY-12	PASSED	
+channel-link-opens-nothing	KEY-09	PASSED	
+channel-link-opens-nothing	KEY-10	PASSED	
+channel-link-opens-nothing	KEY-11	PASSED	
+channel-link-opens-nothing	MEM-01	PASSED	
+channel-link-opens-nothing	MEM-02	PASSED	
+channel-link-opens-nothing	MEM-03	PASSED	Error: expect(locator).toHaveCount(expected) failed | Locator:  locator('[data-input-id="channel-input-01a1de3c-7743-7de9-b22e-85bdf9ca7282"]')
+channel-link-opens-nothing	MEM-04	PASSED	
+channel-link-opens-nothing	MEM-05	PASSED	
+channel-link-opens-nothing	MEM-06	PASSED	
+channel-link-opens-nothing	MEM-07	PASSED	
+channel-link-opens-nothing	MEM-08	PASSED	
+missing-channel-shown-as-no-access	ACC-01	PASSED	
+missing-channel-shown-as-no-access	ACC-02	PASSED	
+missing-channel-shown-as-no-access	ACC-03	PASSED	
+missing-channel-shown-as-no-access	ACC-04	PASSED	
+missing-channel-shown-as-no-access	ACC-05	PASSED	
+missing-channel-shown-as-no-access	ACC-06	PASSED	
+missing-channel-shown-as-no-access	ACC-07	PASSED	
+missing-channel-shown-as-no-access	ACC-08	FAILED	Error: expect(locator).toBeVisible() failed | Locator: getByRole('heading', { name: 'Conversation unavailable' })
+missing-channel-shown-as-no-access	ACC-09	PASSED	
+missing-channel-shown-as-no-access	CHN-01	PASSED	
+missing-channel-shown-as-no-access	CHN-02	PASSED	
+missing-channel-shown-as-no-access	CHN-03	PASSED	
+missing-channel-shown-as-no-access	CHN-04	PASSED	Error: expect(locator).toContainText(expected) failed | Locator: getByRole('main').locator('[data-view-shell-top-bar]')
+missing-channel-shown-as-no-access	CHN-05	PASSED	
+missing-channel-shown-as-no-access	CHN-06	PASSED	
+missing-channel-shown-as-no-access	CHN-07	FAILED	Error: expect(locator).toBeVisible() failed | Locator: getByRole('heading', { name: 'Conversation unavailable' })
+missing-channel-shown-as-no-access	CHN-08	PASSED	Error: expect(locator).toHaveCount(expected) failed | Locator:  getByRole('tree', { name: 'Conversations' }).locator('[data-key="favorite:channel:01a1de3e-115e-
+missing-channel-shown-as-no-access	CHN-09	PASSED	
+missing-channel-shown-as-no-access	CHN-10	PASSED	
+missing-channel-shown-as-no-access	CHN-11	PASSED	
+missing-channel-shown-as-no-access	CHN-12	PASSED	
+missing-channel-shown-as-no-access	CHN-13	PASSED	
+missing-channel-shown-as-no-access	CHN-14	PASSED	Error: expect(locator).toBeVisible() failed | Locator: getByRole('main').getByText('Channel e2e-mwhjw68eieo6 created')
+missing-channel-shown-as-no-access	CHN-15	PASSED	Error: expect(locator).toHaveCount(expected) failed | Locator:  locator('[data-input-id="channel-input-01a1de3e-46f3-76ea-8b37-73abdb96e6fe"]')
+missing-channel-shown-as-no-access	KEY-01	PASSED	
+missing-channel-shown-as-no-access	KEY-02	PASSED	
+missing-channel-shown-as-no-access	KEY-03	PASSED	
+missing-channel-shown-as-no-access	KEY-04	PASSED	
+missing-channel-shown-as-no-access	KEY-05	PASSED	
+missing-channel-shown-as-no-access	KEY-06	PASSED	Error: expect(locator).toBeFocused() failed | Locator:  locator('[data-input-id="thread-reply-input-01a1de3e-7a4a-71f0-90bb-d8e6f50bd16e"] [contenteditable]')
+missing-channel-shown-as-no-access	KEY-07	PASSED	
+missing-channel-shown-as-no-access	KEY-08	PASSED	
+missing-channel-shown-as-no-access	KEY-12	PASSED	
+missing-channel-shown-as-no-access	KEY-09	PASSED	
+missing-channel-shown-as-no-access	KEY-10	PASSED	
+missing-channel-shown-as-no-access	KEY-11	PASSED	
+missing-channel-shown-as-no-access	MEM-01	PASSED	
+missing-channel-shown-as-no-access	MEM-02	PASSED	
+missing-channel-shown-as-no-access	MEM-03	PASSED	Error: expect(locator).toHaveCount(expected) failed | Locator:  locator('[data-input-id="channel-input-01a1de3e-9e6c-7e1e-9f23-e36513e22062"]')
+missing-channel-shown-as-no-access	MEM-04	PASSED	
+missing-channel-shown-as-no-access	MEM-05	PASSED	
+missing-channel-shown-as-no-access	MEM-06	PASSED	
+missing-channel-shown-as-no-access	MEM-07	PASSED	
+missing-channel-shown-as-no-access	MEM-08	PASSED	
+non-owner-offered-delete	ACC-01	PASSED	
+non-owner-offered-delete	ACC-02	PASSED	
+non-owner-offered-delete	ACC-03	PASSED	
+non-owner-offered-delete	ACC-04	PASSED	
+non-owner-offered-delete	ACC-05	PASSED	
+non-owner-offered-delete	ACC-06	PASSED	
+non-owner-offered-delete	ACC-07	PASSED	
+non-owner-offered-delete	ACC-08	PASSED	
+non-owner-offered-delete	ACC-09	PASSED	
+non-owner-offered-delete	CHN-01	PASSED	
+non-owner-offered-delete	CHN-02	PASSED	
+non-owner-offered-delete	CHN-03	PASSED	
+non-owner-offered-delete	CHN-04	PASSED	Error: expect(locator).toContainText(expected) failed | Locator: getByRole('main').locator('[data-view-shell-top-bar]')
+non-owner-offered-delete	CHN-05	PASSED	
+non-owner-offered-delete	CHN-06	PASSED	
+non-owner-offered-delete	CHN-07	PASSED	
+non-owner-offered-delete	CHN-08	PASSED	Error: expect(locator).toHaveCount(expected) failed | Locator:  getByRole('tree', { name: 'Conversations' }).locator('[data-key="favorite:channel:01a1de40-3302-
+non-owner-offered-delete	CHN-09	FAILED	Error: expect(locator).toHaveCount(expected) failed | Locator:  getByRole('menu', { name: 'Channel actions' }).getByRole('menuitem', { name: 'Delete' })
+non-owner-offered-delete	CHN-10	PASSED	
+non-owner-offered-delete	CHN-11	PASSED	
+non-owner-offered-delete	CHN-12	PASSED	
+non-owner-offered-delete	CHN-13	PASSED	
+non-owner-offered-delete	CHN-14	PASSED	Error: expect(locator).toBeVisible() failed | Locator: getByRole('main').getByText('Channel e2e-mwhjz7odblwb created')
+non-owner-offered-delete	CHN-15	PASSED	Error: expect(locator).toHaveCount(expected) failed | Locator:  locator('[data-input-id="channel-input-01a1de40-6ff6-7b96-93f5-a365d3e32d9b"]')
+non-owner-offered-delete	KEY-01	PASSED	
+non-owner-offered-delete	KEY-02	PASSED	
+non-owner-offered-delete	KEY-03	PASSED	
+non-owner-offered-delete	KEY-04	PASSED	
+non-owner-offered-delete	KEY-05	PASSED	
+non-owner-offered-delete	KEY-06	PASSED	Error: expect(locator).toBeFocused() failed | Locator:  locator('[data-input-id="thread-reply-input-01a1de40-926f-7866-8069-efa0ab76109f"] [contenteditable]')
+non-owner-offered-delete	KEY-07	PASSED	
+non-owner-offered-delete	KEY-08	PASSED	
+non-owner-offered-delete	KEY-12	PASSED	
+non-owner-offered-delete	KEY-09	PASSED	
+non-owner-offered-delete	KEY-10	PASSED	
+non-owner-offered-delete	KEY-11	PASSED	
+non-owner-offered-delete	MEM-01	PASSED	
+non-owner-offered-delete	MEM-02	PASSED	
+non-owner-offered-delete	MEM-03	PASSED	Error: expect(locator).toHaveCount(expected) failed | Locator:  locator('[data-input-id="channel-input-01a1de40-bf07-78d8-a0eb-f2a6cc7cd324"]')
+non-owner-offered-delete	MEM-04	PASSED	
+non-owner-offered-delete	MEM-05	PASSED	
+non-owner-offered-delete	MEM-06	PASSED	
+non-owner-offered-delete	MEM-07	PASSED	
+non-owner-offered-delete	MEM-08	PASSED	
+participants-tab-empty	ACC-01	PASSED	
+participants-tab-empty	ACC-02	PASSED	
+participants-tab-empty	ACC-03	PASSED	
+participants-tab-empty	ACC-04	PASSED	
+participants-tab-empty	ACC-05	PASSED	
+participants-tab-empty	ACC-06	PASSED	
+participants-tab-empty	ACC-07	PASSED	
+participants-tab-empty	ACC-08	PASSED	
+participants-tab-empty	ACC-09	PASSED	
+participants-tab-empty	CHN-01	PASSED	
+participants-tab-empty	CHN-02	PASSED	
+participants-tab-empty	CHN-03	PASSED	
+participants-tab-empty	CHN-04	PASSED	Error: expect(locator).toContainText(expected) failed | Locator: getByRole('main').locator('[data-view-shell-top-bar]')
+participants-tab-empty	CHN-05	PASSED	
+participants-tab-empty	CHN-06	PASSED	
+participants-tab-empty	CHN-07	PASSED	
+participants-tab-empty	CHN-08	PASSED	Error: expect(locator).toHaveCount(expected) failed | Locator:  getByRole('tree', { name: 'Conversations' }).locator('[data-key="favorite:channel:01a1de42-71b5-
+participants-tab-empty	CHN-09	PASSED	
+participants-tab-empty	CHN-10	FAILED	Error: expect(locator).toContainText(expected) failed | Locator: getByRole('main').getByRole('link', { name: 'Message Ada Owner' })
+participants-tab-empty	CHN-11	PASSED	
+participants-tab-empty	CHN-12	FAILED	Error: expect(locator).toBeVisible() failed | Locator: getByRole('main').getByRole('link', { name: 'Message Ben Member' })
+participants-tab-empty	CHN-13	PASSED	
+participants-tab-empty	CHN-14	PASSED	Error: expect(locator).toBeVisible() failed | Locator: getByRole('main').getByText('Channel e2e-mwhk2dnlg2j1 created')
+participants-tab-empty	CHN-15	PASSED	Error: expect(locator).toHaveCount(expected) failed | Locator:  locator('[data-input-id="channel-input-01a1de42-b9b1-75e0-89f9-bbeb0bea2a1a"]')
+participants-tab-empty	KEY-01	PASSED	
+participants-tab-empty	KEY-02	PASSED	
+participants-tab-empty	KEY-03	PASSED	
+participants-tab-empty	KEY-04	PASSED	
+participants-tab-empty	KEY-05	PASSED	
+participants-tab-empty	KEY-06	PASSED	Error: expect(locator).toBeFocused() failed | Locator:  locator('[data-input-id="thread-reply-input-01a1de42-ed65-72a4-b2d6-0e310fd4fa56"] [contenteditable]')
+participants-tab-empty	KEY-07	PASSED	
+participants-tab-empty	KEY-08	PASSED	
+participants-tab-empty	KEY-12	PASSED	
+participants-tab-empty	KEY-09	PASSED	
+participants-tab-empty	KEY-10	PASSED	
+participants-tab-empty	KEY-11	PASSED	
+participants-tab-empty	MEM-01	PASSED	
+participants-tab-empty	MEM-02	FAILED	Error: expect(locator).toBeVisible() failed | Locator: getByRole('main').getByRole('link', { name: 'Message Cy Teammate' })
+participants-tab-empty	MEM-03	PASSED	Error: expect(locator).toHaveCount(expected) failed | Locator:  locator('[data-input-id="channel-input-01a1de43-1280-7dde-9dd8-6daee275d11d"]')
+participants-tab-empty	MEM-04	PASSED	
+participants-tab-empty	MEM-05	PASSED	
+participants-tab-empty	MEM-06	PASSED	
+participants-tab-empty	MEM-07	FAILED	Error: expect(locator).toContainText(expected) failed | Locator: getByRole('main').getByRole('link', { name: 'Message Ada Owner' })
+participants-tab-empty	MEM-08	PASSED	
+attachments-tab-says-nothing-when-empty	ACC-01	PASSED	
+attachments-tab-says-nothing-when-empty	ACC-02	PASSED	
+attachments-tab-says-nothing-when-empty	ACC-03	PASSED	
+attachments-tab-says-nothing-when-empty	ACC-04	PASSED	
+attachments-tab-says-nothing-when-empty	ACC-05	PASSED	
+attachments-tab-says-nothing-when-empty	ACC-06	PASSED	
+attachments-tab-says-nothing-when-empty	ACC-07	PASSED	
+attachments-tab-says-nothing-when-empty	ACC-08	PASSED	
+attachments-tab-says-nothing-when-empty	ACC-09	PASSED	
+attachments-tab-says-nothing-when-empty	CHN-01	PASSED	
+attachments-tab-says-nothing-when-empty	CHN-02	PASSED	
+attachments-tab-says-nothing-when-empty	CHN-03	PASSED	
+attachments-tab-says-nothing-when-empty	CHN-04	PASSED	Error: expect(locator).toContainText(expected) failed | Locator: getByRole('main').locator('[data-view-shell-top-bar]')
+attachments-tab-says-nothing-when-empty	CHN-05	PASSED	
+attachments-tab-says-nothing-when-empty	CHN-06	PASSED	
+attachments-tab-says-nothing-when-empty	CHN-07	PASSED	
+attachments-tab-says-nothing-when-empty	CHN-08	PASSED	Error: expect(locator).toHaveCount(expected) failed | Locator:  getByRole('tree', { name: 'Conversations' }).locator('[data-key="favorite:channel:01a1de44-e95c-
+attachments-tab-says-nothing-when-empty	CHN-09	PASSED	
+attachments-tab-says-nothing-when-empty	CHN-10	PASSED	
+attachments-tab-says-nothing-when-empty	CHN-11	FAILED	Error: expect(locator).toBeVisible() failed | Locator: getByText('No documents in this channel yet.')
+attachments-tab-says-nothing-when-empty	CHN-12	PASSED	
+attachments-tab-says-nothing-when-empty	CHN-13	PASSED	
+attachments-tab-says-nothing-when-empty	CHN-14	PASSED	Error: expect(locator).toBeVisible() failed | Locator: getByRole('main').getByText('Channel e2e-mwhk5t4lo3t9 created')
+attachments-tab-says-nothing-when-empty	CHN-15	PASSED	Error: expect(locator).toHaveCount(expected) failed | Locator:  locator('[data-input-id="channel-input-01a1de45-289b-7009-a524-cfd1c5aa61be"]')
+attachments-tab-says-nothing-when-empty	KEY-01	PASSED	
+attachments-tab-says-nothing-when-empty	KEY-02	PASSED	
+attachments-tab-says-nothing-when-empty	KEY-03	PASSED	
+attachments-tab-says-nothing-when-empty	KEY-04	PASSED	
+attachments-tab-says-nothing-when-empty	KEY-05	PASSED	
+attachments-tab-says-nothing-when-empty	KEY-06	PASSED	Error: expect(locator).toBeFocused() failed | Locator:  locator('[data-input-id="thread-reply-input-01a1de45-6320-7a13-9b51-71924d03a556"] [contenteditable]')
+attachments-tab-says-nothing-when-empty	KEY-07	PASSED	
+attachments-tab-says-nothing-when-empty	KEY-08	PASSED	
+attachments-tab-says-nothing-when-empty	KEY-12	PASSED	
+attachments-tab-says-nothing-when-empty	KEY-09	PASSED	
+attachments-tab-says-nothing-when-empty	KEY-10	PASSED	
+attachments-tab-says-nothing-when-empty	KEY-11	PASSED	
+attachments-tab-says-nothing-when-empty	MEM-01	PASSED	
+attachments-tab-says-nothing-when-empty	MEM-02	PASSED	
+attachments-tab-says-nothing-when-empty	MEM-03	PASSED	Error: expect(locator).toHaveCount(expected) failed | Locator:  locator('[data-input-id="channel-input-01a1de45-86df-7ed4-b923-208db6848f42"]')
+attachments-tab-says-nothing-when-empty	MEM-04	PASSED	
+attachments-tab-says-nothing-when-empty	MEM-05	PASSED	
+attachments-tab-says-nothing-when-empty	MEM-06	PASSED	
+attachments-tab-says-nothing-when-empty	MEM-07	PASSED	
+attachments-tab-says-nothing-when-empty	MEM-08	PASSED	
+channel-start-line-missing	ACC-01	PASSED	
+channel-start-line-missing	ACC-02	PASSED	
+channel-start-line-missing	ACC-03	PASSED	
+channel-start-line-missing	ACC-04	PASSED	
+channel-start-line-missing	ACC-05	PASSED	
+channel-start-line-missing	ACC-06	PASSED	
+channel-start-line-missing	ACC-07	PASSED	
+channel-start-line-missing	ACC-08	PASSED	
+channel-start-line-missing	ACC-09	PASSED	
+channel-start-line-missing	CHN-01	PASSED	
+channel-start-line-missing	CHN-02	PASSED	
+channel-start-line-missing	CHN-03	PASSED	
+channel-start-line-missing	CHN-04	PASSED	Error: expect(locator).toContainText(expected) failed | Locator: getByRole('main').locator('[data-view-shell-top-bar]')
+channel-start-line-missing	CHN-05	PASSED	
+channel-start-line-missing	CHN-06	PASSED	
+channel-start-line-missing	CHN-07	PASSED	
+channel-start-line-missing	CHN-08	PASSED	Error: expect(locator).toHaveCount(expected) failed | Locator:  getByRole('tree', { name: 'Conversations' }).locator('[data-key="favorite:channel:01a1de47-3e22-
+channel-start-line-missing	CHN-09	PASSED	
+channel-start-line-missing	CHN-10	PASSED	
+channel-start-line-missing	CHN-11	PASSED	
+channel-start-line-missing	CHN-12	PASSED	
+channel-start-line-missing	CHN-13	FAILED	Error: expect(locator).toBeVisible() failed | Locator: locator('[data-channel-scroll]').getByText('Channel e2e-mwhk90fz8pom created')
+channel-start-line-missing	CHN-14	PASSED	Error: expect(locator).toBeVisible() failed | Locator: getByRole('main').getByText('Channel e2e-mwhk90hnz4ry created')
+channel-start-line-missing	CHN-15	PASSED	Error: expect(locator).toHaveCount(expected) failed | Locator:  locator('[data-input-id="channel-input-01a1de47-744e-742d-8b26-64d6c709a60d"]')
+channel-start-line-missing	KEY-01	PASSED	
+channel-start-line-missing	KEY-02	PASSED	
+channel-start-line-missing	KEY-03	PASSED	
+channel-start-line-missing	KEY-04	PASSED	
+channel-start-line-missing	KEY-05	PASSED	
+channel-start-line-missing	KEY-06	PASSED	Error: expect(locator).toBeFocused() failed | Locator:  locator('[data-input-id="thread-reply-input-01a1de47-aeeb-7c3e-bd2f-b90e1d3d4416"] [contenteditable]')
+channel-start-line-missing	KEY-07	FAILED	Error: expect(locator).toBeFocused() failed | Locator: locator('[data-input-id="edit-message-input-01a1de47-b177-7667-a36c-f43d7fd22964"] [contenteditable]')
+channel-start-line-missing	KEY-08	PASSED	
+channel-start-line-missing	KEY-12	PASSED	
+channel-start-line-missing	KEY-09	PASSED	
+channel-start-line-missing	KEY-10	PASSED	
+channel-start-line-missing	KEY-11	PASSED	
+channel-start-line-missing	MEM-01	PASSED	
+channel-start-line-missing	MEM-02	PASSED	
+channel-start-line-missing	MEM-03	PASSED	Error: expect(locator).toHaveCount(expected) failed | Locator:  locator('[data-input-id="channel-input-01a1de47-ec6b-7060-94a7-d7acd9691fa0"]')
+channel-start-line-missing	MEM-04	PASSED	
+channel-start-line-missing	MEM-05	PASSED	
+channel-start-line-missing	MEM-06	PASSED	
+channel-start-line-missing	MEM-07	PASSED	
+channel-start-line-missing	MEM-08	PASSED	
+no-access-shown-as-unavailable	ACC-01	FAILED	Error: expect(locator).toBeVisible() failed | Locator: getByRole('main').getByRole('status').filter({ has: getByRole('heading', { name: 'You don\'t have access 
+no-access-shown-as-unavailable	ACC-02	FAILED	Error: expect(locator).toBeVisible() failed | Locator: getByRole('main').getByRole('status').filter({ has: getByRole('heading', { name: 'You don\'t have access 
+no-access-shown-as-unavailable	ACC-03	FAILED	Test timeout of 90000ms exceeded.
+no-access-shown-as-unavailable	ACC-04	FAILED	Test timeout of 90000ms exceeded.
+no-access-shown-as-unavailable	ACC-05	FAILED	Test timeout of 90000ms exceeded.
+no-access-shown-as-unavailable	ACC-06	PASSED	
+no-access-shown-as-unavailable	ACC-07	FAILED	Error: expect(locator).toBeVisible() failed | Locator: getByRole('main').getByRole('status').filter({ has: getByRole('heading', { name: 'You don\'t have access 
+no-access-shown-as-unavailable	ACC-08	PASSED	
+no-access-shown-as-unavailable	ACC-09	PASSED	
+no-access-shown-as-unavailable	CHN-01	PASSED	
+no-access-shown-as-unavailable	CHN-02	PASSED	
+no-access-shown-as-unavailable	CHN-03	PASSED	
+no-access-shown-as-unavailable	CHN-04	PASSED	Error: expect(locator).toContainText(expected) failed | Locator: getByRole('main').locator('[data-view-shell-top-bar]')
+no-access-shown-as-unavailable	CHN-05	PASSED	
+no-access-shown-as-unavailable	CHN-06	PASSED	
+no-access-shown-as-unavailable	CHN-07	PASSED	
+no-access-shown-as-unavailable	CHN-08	PASSED	Error: expect(locator).toHaveCount(expected) failed | Locator:  getByRole('tree', { name: 'Conversations' }).locator('[data-key="favorite:channel:01a1de4a-90e7-
+no-access-shown-as-unavailable	CHN-09	PASSED	
+no-access-shown-as-unavailable	CHN-10	PASSED	
+no-access-shown-as-unavailable	CHN-11	PASSED	
+no-access-shown-as-unavailable	CHN-12	PASSED	
+no-access-shown-as-unavailable	CHN-13	PASSED	
+no-access-shown-as-unavailable	CHN-14	PASSED	Error: expect(locator).toBeVisible() failed | Locator: getByRole('main').getByText('Channel e2e-mwhkdmwnubut created')
+no-access-shown-as-unavailable	CHN-15	PASSED	Error: expect(locator).toHaveCount(expected) failed | Locator:  locator('[data-input-id="channel-input-01a1de4a-b0c2-76a4-9b7a-be3e21b85a10"]')
+no-access-shown-as-unavailable	KEY-01	PASSED	
+no-access-shown-as-unavailable	KEY-02	PASSED	
+no-access-shown-as-unavailable	KEY-03	PASSED	
+no-access-shown-as-unavailable	KEY-04	PASSED	
+no-access-shown-as-unavailable	KEY-05	PASSED	
+no-access-shown-as-unavailable	KEY-06	PASSED	Error: expect(locator).toBeFocused() failed | Locator:  locator('[data-input-id="thread-reply-input-01a1de4a-ea0c-7beb-8c91-6275c232e504"] [contenteditable]')
+no-access-shown-as-unavailable	KEY-07	PASSED	
+no-access-shown-as-unavailable	KEY-08	PASSED	
+no-access-shown-as-unavailable	KEY-12	PASSED	
+no-access-shown-as-unavailable	KEY-09	PASSED	
+no-access-shown-as-unavailable	KEY-10	PASSED	
+no-access-shown-as-unavailable	KEY-11	PASSED	
+no-access-shown-as-unavailable	MEM-01	PASSED	
+no-access-shown-as-unavailable	MEM-02	PASSED	
+no-access-shown-as-unavailable	MEM-03	PASSED	Error: expect(locator).toHaveCount(expected) failed | Locator:  locator('[data-input-id="channel-input-01a1de4b-0cb9-7f84-85f1-7f4a79558569"]')
+no-access-shown-as-unavailable	MEM-04	FAILED	Error: expect(locator).toBeVisible() failed | Locator: getByRole('main').getByRole('status').filter({ has: getByRole('heading', { name: 'You don\'t have access 
+no-access-shown-as-unavailable	MEM-05	PASSED	
+no-access-shown-as-unavailable	MEM-06	PASSED	
+no-access-shown-as-unavailable	MEM-07	PASSED	
+no-access-shown-as-unavailable	MEM-08	PASSED	
+join-request-not-shown-to-members	ACC-01	PASSED	
+join-request-not-shown-to-members	ACC-02	PASSED	
+join-request-not-shown-to-members	ACC-03	FAILED	Test timeout of 90000ms exceeded.
+join-request-not-shown-to-members	ACC-04	FAILED	Test timeout of 90000ms exceeded.
+join-request-not-shown-to-members	ACC-05	FAILED	Error: expect(locator).toBeVisible() failed | Locator: getByRole('button', { name: 'Approve' })
+join-request-not-shown-to-members	ACC-06	PASSED	
+join-request-not-shown-to-members	ACC-07	PASSED	
+join-request-not-shown-to-members	ACC-08	PASSED	
+join-request-not-shown-to-members	ACC-09	PASSED	
+join-request-not-shown-to-members	CHN-01	PASSED	
+join-request-not-shown-to-members	CHN-02	PASSED	
+join-request-not-shown-to-members	CHN-03	PASSED	
+join-request-not-shown-to-members	CHN-04	PASSED	Error: expect(locator).toContainText(expected) failed | Locator: getByRole('main').locator('[data-view-shell-top-bar]')
+join-request-not-shown-to-members	CHN-05	PASSED	
+join-request-not-shown-to-members	CHN-06	PASSED	
+join-request-not-shown-to-members	CHN-07	PASSED	
+join-request-not-shown-to-members	CHN-08	PASSED	Error: expect(locator).toHaveCount(expected) failed | Locator:  getByRole('tree', { name: 'Conversations' }).locator('[data-key="favorite:channel:01a1de4d-4a20-
+join-request-not-shown-to-members	CHN-09	PASSED	
+join-request-not-shown-to-members	CHN-10	PASSED	
+join-request-not-shown-to-members	CHN-11	PASSED	
+join-request-not-shown-to-members	CHN-12	PASSED	
+join-request-not-shown-to-members	CHN-13	PASSED	
+join-request-not-shown-to-members	CHN-14	PASSED	Error: expect(locator).toBeVisible() failed | Locator: getByRole('main').getByText('Channel e2e-mwhkhpcbm7o2 created')
+join-request-not-shown-to-members	CHN-15	PASSED	Error: expect(locator).toHaveCount(expected) failed | Locator:  locator('[data-input-id="channel-input-01a1de4d-972d-7d96-ba63-d0bca6be2100"]')
+join-request-not-shown-to-members	KEY-01	PASSED	
+join-request-not-shown-to-members	KEY-02	PASSED	
+join-request-not-shown-to-members	KEY-03	PASSED	
+join-request-not-shown-to-members	KEY-04	PASSED	
+join-request-not-shown-to-members	KEY-05	PASSED	
+join-request-not-shown-to-members	KEY-06	PASSED	Error: expect(locator).toBeFocused() failed | Locator:  locator('[data-input-id="thread-reply-input-01a1de4d-d9b9-714a-8798-a9759d93be65"] [contenteditable]')
+join-request-not-shown-to-members	KEY-07	PASSED	
+join-request-not-shown-to-members	KEY-08	FAILED	Error: expect(locator).toBeVisible() failed | Locator: getByRole('dialog', { name: 'Delete message' })
+join-request-not-shown-to-members	KEY-12	PASSED	
+join-request-not-shown-to-members	KEY-09	PASSED	
+join-request-not-shown-to-members	KEY-10	PASSED	
+join-request-not-shown-to-members	KEY-11	PASSED	
+join-request-not-shown-to-members	MEM-01	PASSED	
+join-request-not-shown-to-members	MEM-02	PASSED	
+join-request-not-shown-to-members	MEM-03	PASSED	Error: expect(locator).toHaveCount(expected) failed | Locator:  locator('[data-input-id="channel-input-01a1de4e-0ae9-7642-a2c7-3603d0999461"]')
+join-request-not-shown-to-members	MEM-04	PASSED	
+join-request-not-shown-to-members	MEM-05	PASSED	
+join-request-not-shown-to-members	MEM-06	PASSED	
+join-request-not-shown-to-members	MEM-07	PASSED	
+join-request-not-shown-to-members	MEM-08	PASSED	
+signed-out-not-offered-login	ACC-01	PASSED	
+signed-out-not-offered-login	ACC-02	PASSED	
+signed-out-not-offered-login	ACC-03	PASSED	
+signed-out-not-offered-login	ACC-04	PASSED	
+signed-out-not-offered-login	ACC-05	PASSED	
+signed-out-not-offered-login	ACC-06	PASSED	
+signed-out-not-offered-login	ACC-07	PASSED	
+signed-out-not-offered-login	ACC-08	PASSED	
+signed-out-not-offered-login	ACC-09	FAILED	Error: expect(locator).toBeVisible() failed | Locator: getByRole('button', { name: 'Login' })
+signed-out-not-offered-login	CHN-01	PASSED	
+signed-out-not-offered-login	CHN-02	PASSED	
+signed-out-not-offered-login	CHN-03	PASSED	
+signed-out-not-offered-login	CHN-04	PASSED	Error: expect(locator).toContainText(expected) failed | Locator: getByRole('main').locator('[data-view-shell-top-bar]')
+signed-out-not-offered-login	CHN-05	PASSED	
+signed-out-not-offered-login	CHN-06	PASSED	
+signed-out-not-offered-login	CHN-07	PASSED	
+signed-out-not-offered-login	CHN-08	PASSED	Error: expect(locator).toHaveCount(expected) failed | Locator:  getByRole('tree', { name: 'Conversations' }).locator('[data-key="favorite:channel:01a1de4f-ae57-
+signed-out-not-offered-login	CHN-09	PASSED	
+signed-out-not-offered-login	CHN-10	PASSED	
+signed-out-not-offered-login	CHN-11	PASSED	
+signed-out-not-offered-login	CHN-12	PASSED	
+signed-out-not-offered-login	CHN-13	PASSED	
+signed-out-not-offered-login	CHN-14	PASSED	Error: expect(locator).toBeVisible() failed | Locator: getByRole('main').getByText('Channel e2e-mwhkkwvdodbn created')
+signed-out-not-offered-login	CHN-15	PASSED	Error: expect(locator).toHaveCount(expected) failed | Locator:  locator('[data-input-id="channel-input-01a1de4f-dbd6-72bf-8c97-ba17ec1873f9"]')
+signed-out-not-offered-login	KEY-01	PASSED	
+signed-out-not-offered-login	KEY-02	PASSED	
+signed-out-not-offered-login	KEY-03	PASSED	
+signed-out-not-offered-login	KEY-04	PASSED	
+signed-out-not-offered-login	KEY-05	PASSED	
+signed-out-not-offered-login	KEY-06	PASSED	Error: expect(locator).toBeFocused() failed | Locator:  locator('[data-input-id="thread-reply-input-01a1de50-0882-7385-946b-03e154e6e0d6"] [contenteditable]')
+signed-out-not-offered-login	KEY-07	PASSED	
+signed-out-not-offered-login	KEY-08	PASSED	
+signed-out-not-offered-login	KEY-12	PASSED	
+signed-out-not-offered-login	KEY-09	PASSED	
+signed-out-not-offered-login	KEY-10	PASSED	
+signed-out-not-offered-login	KEY-11	PASSED	
+signed-out-not-offered-login	MEM-01	PASSED	
+signed-out-not-offered-login	MEM-02	PASSED	
+signed-out-not-offered-login	MEM-03	PASSED	Error: expect(locator).toHaveCount(expected) failed | Locator:  locator('[data-input-id="channel-input-01a1de50-30b7-7c84-862d-612bbec296d2"]')
+signed-out-not-offered-login	MEM-04	PASSED	
+signed-out-not-offered-login	MEM-05	PASSED	
+signed-out-not-offered-login	MEM-06	PASSED	
+signed-out-not-offered-login	MEM-07	PASSED	
+signed-out-not-offered-login	MEM-08	PASSED	
+find-bar-does-not-open	ACC-01	PASSED	
+find-bar-does-not-open	ACC-02	PASSED	
+find-bar-does-not-open	ACC-03	PASSED	
+find-bar-does-not-open	ACC-04	PASSED	
+find-bar-does-not-open	ACC-05	PASSED	
+find-bar-does-not-open	ACC-06	PASSED	
+find-bar-does-not-open	ACC-07	PASSED	
+find-bar-does-not-open	ACC-08	PASSED	
+find-bar-does-not-open	ACC-09	PASSED	
+find-bar-does-not-open	CHN-01	PASSED	
+find-bar-does-not-open	CHN-02	PASSED	
+find-bar-does-not-open	CHN-03	PASSED	
+find-bar-does-not-open	CHN-04	PASSED	Error: expect(locator).toContainText(expected) failed | Locator: getByRole('main').locator('[data-view-shell-top-bar]')
+find-bar-does-not-open	CHN-05	PASSED	
+find-bar-does-not-open	CHN-06	PASSED	
+find-bar-does-not-open	CHN-07	PASSED	
+find-bar-does-not-open	CHN-08	PASSED	Error: expect(locator).toHaveCount(expected) failed | Locator:  getByRole('tree', { name: 'Conversations' }).locator('[data-key="favorite:channel:01a1de51-9ea4-
+find-bar-does-not-open	CHN-09	PASSED	
+find-bar-does-not-open	CHN-10	PASSED	
+find-bar-does-not-open	CHN-11	PASSED	
+find-bar-does-not-open	CHN-12	PASSED	
+find-bar-does-not-open	CHN-13	PASSED	
+find-bar-does-not-open	CHN-14	PASSED	Error: expect(locator).toBeVisible() failed | Locator: getByRole('main').getByText('Channel e2e-mwhknm3ihi0g created')
+find-bar-does-not-open	CHN-15	PASSED	Error: expect(locator).toHaveCount(expected) failed | Locator:  locator('[data-input-id="channel-input-01a1de51-cbd0-7c8f-9eca-cc7335f482d4"]')
+find-bar-does-not-open	KEY-01	FAILED	Error: expect(locator).toBeFocused() failed | Locator: getByPlaceholder('Find')
+find-bar-does-not-open	KEY-02	FAILED	Error: expect(locator).toBeFocused() failed | Locator: getByPlaceholder('Find')
+find-bar-does-not-open	KEY-03	FAILED	Error: expect(locator).toBeFocused() failed | Locator: getByPlaceholder('Find')
+find-bar-does-not-open	KEY-04	FAILED	Error: expect(locator).toBeFocused() failed | Locator: getByPlaceholder('Find')
+find-bar-does-not-open	KEY-05	PASSED	
+find-bar-does-not-open	KEY-06	PASSED	Error: expect(locator).toBeFocused() failed | Locator:  locator('[data-input-id="thread-reply-input-01a1de52-2625-78d9-800d-db10ed1b009e"] [contenteditable]')
+find-bar-does-not-open	KEY-07	PASSED	
+find-bar-does-not-open	KEY-08	PASSED	
+find-bar-does-not-open	KEY-12	PASSED	
+find-bar-does-not-open	KEY-09	PASSED	
+find-bar-does-not-open	KEY-10	PASSED	
+find-bar-does-not-open	KEY-11	PASSED	
+find-bar-does-not-open	MEM-01	PASSED	
+find-bar-does-not-open	MEM-02	PASSED	
+find-bar-does-not-open	MEM-03	PASSED	Error: expect(locator).toHaveCount(expected) failed | Locator:  locator('[data-input-id="channel-input-01a1de52-5ff3-7a0a-b243-cc688d81d2a4"]')
+find-bar-does-not-open	MEM-04	PASSED	
+find-bar-does-not-open	MEM-05	PASSED	
+find-bar-does-not-open	MEM-06	PASSED	
+find-bar-does-not-open	MEM-07	PASSED	
+find-bar-does-not-open	MEM-08	PASSED	
+arrow-up-does-not-leave-the-composer	ACC-01	PASSED	
+arrow-up-does-not-leave-the-composer	ACC-02	PASSED	
+arrow-up-does-not-leave-the-composer	ACC-03	PASSED	
+arrow-up-does-not-leave-the-composer	ACC-04	PASSED	
+arrow-up-does-not-leave-the-composer	ACC-05	PASSED	
+arrow-up-does-not-leave-the-composer	ACC-06	PASSED	
+arrow-up-does-not-leave-the-composer	ACC-07	PASSED	
+arrow-up-does-not-leave-the-composer	ACC-08	PASSED	
+arrow-up-does-not-leave-the-composer	ACC-09	PASSED	
+arrow-up-does-not-leave-the-composer	CHN-01	PASSED	
+arrow-up-does-not-leave-the-composer	CHN-02	PASSED	
+arrow-up-does-not-leave-the-composer	CHN-03	PASSED	
+arrow-up-does-not-leave-the-composer	CHN-04	PASSED	Error: expect(locator).toContainText(expected) failed | Locator: getByRole('main').locator('[data-view-shell-top-bar]')
+arrow-up-does-not-leave-the-composer	CHN-05	PASSED	
+arrow-up-does-not-leave-the-composer	CHN-06	PASSED	
+arrow-up-does-not-leave-the-composer	CHN-07	PASSED	
+arrow-up-does-not-leave-the-composer	CHN-08	PASSED	Error: expect(locator).toHaveCount(expected) failed | Locator:  getByRole('tree', { name: 'Conversations' }).locator('[data-key="favorite:channel:01a1de53-bd72-
+arrow-up-does-not-leave-the-composer	CHN-09	PASSED	
+arrow-up-does-not-leave-the-composer	CHN-10	PASSED	
+arrow-up-does-not-leave-the-composer	CHN-11	PASSED	
+arrow-up-does-not-leave-the-composer	CHN-12	PASSED	
+arrow-up-does-not-leave-the-composer	CHN-13	PASSED	
+arrow-up-does-not-leave-the-composer	CHN-14	PASSED	Error: expect(locator).toBeVisible() failed | Locator: getByRole('main').getByText('Channel e2e-mwhkqkpjgkx7 created')
+arrow-up-does-not-leave-the-composer	CHN-15	PASSED	Error: expect(locator).toHaveCount(expected) failed | Locator:  locator('[data-input-id="channel-input-01a1de53-e7eb-73aa-8c21-b4c22cc036cd"]')
+arrow-up-does-not-leave-the-composer	KEY-01	PASSED	
+arrow-up-does-not-leave-the-composer	KEY-02	PASSED	
+arrow-up-does-not-leave-the-composer	KEY-03	PASSED	
+arrow-up-does-not-leave-the-composer	KEY-04	PASSED	
+arrow-up-does-not-leave-the-composer	KEY-05	FAILED	Error: expect(locator).toBeFocused() failed | Locator:  locator('[data-channel-message-list]')
+arrow-up-does-not-leave-the-composer	KEY-06	PASSED	Error: expect(locator).toBeFocused() failed | Locator:  locator('[data-channel-message-list]')
+arrow-up-does-not-leave-the-composer	KEY-07	FAILED	Error: expect(locator).toBeFocused() failed | Locator:  locator('[data-channel-message-list]')
+arrow-up-does-not-leave-the-composer	KEY-08	FAILED	Error: expect(locator).toBeFocused() failed | Locator:  locator('[data-channel-message-list]')
+arrow-up-does-not-leave-the-composer	KEY-12	FAILED	Error: expect(locator).toBeFocused() failed | Locator:  locator('[data-channel-message-list]')
+arrow-up-does-not-leave-the-composer	KEY-09	FAILED	Error: expect(locator).toBeFocused() failed | Locator:  locator('[data-channel-message-list]')
+arrow-up-does-not-leave-the-composer	KEY-10	PASSED	
+arrow-up-does-not-leave-the-composer	KEY-11	PASSED	
+arrow-up-does-not-leave-the-composer	MEM-01	PASSED	
+arrow-up-does-not-leave-the-composer	MEM-02	PASSED	
+arrow-up-does-not-leave-the-composer	MEM-03	PASSED	Error: expect(locator).toHaveCount(expected) failed | Locator:  locator('[data-input-id="channel-input-01a1de54-8b05-7e13-a9fc-d4217090d471"]')
+arrow-up-does-not-leave-the-composer	MEM-04	PASSED	
+arrow-up-does-not-leave-the-composer	MEM-05	PASSED	
+arrow-up-does-not-leave-the-composer	MEM-06	PASSED	
+arrow-up-does-not-leave-the-composer	MEM-07	PASSED	
+arrow-up-does-not-leave-the-composer	MEM-08	PASSED	
+composer-not-focused-on-arrival	ACC-01	PASSED	
+composer-not-focused-on-arrival	ACC-02	PASSED	
+composer-not-focused-on-arrival	ACC-03	PASSED	
+composer-not-focused-on-arrival	ACC-04	PASSED	
+composer-not-focused-on-arrival	ACC-05	PASSED	
+composer-not-focused-on-arrival	ACC-06	PASSED	
+composer-not-focused-on-arrival	ACC-07	PASSED	
+composer-not-focused-on-arrival	ACC-08	PASSED	
+composer-not-focused-on-arrival	ACC-09	PASSED	
+composer-not-focused-on-arrival	CHN-01	PASSED	
+composer-not-focused-on-arrival	CHN-02	PASSED	
+composer-not-focused-on-arrival	CHN-03	PASSED	
+composer-not-focused-on-arrival	CHN-04	PASSED	Error: expect(locator).toContainText(expected) failed | Locator: getByRole('main').locator('[data-view-shell-top-bar]')
+composer-not-focused-on-arrival	CHN-05	PASSED	
+composer-not-focused-on-arrival	CHN-06	PASSED	
+composer-not-focused-on-arrival	CHN-07	PASSED	
+composer-not-focused-on-arrival	CHN-08	PASSED	Error: expect(locator).toHaveCount(expected) failed | Locator:  getByRole('tree', { name: 'Conversations' }).locator('[data-key="favorite:channel:01a1de55-e443-
+composer-not-focused-on-arrival	CHN-09	PASSED	
+composer-not-focused-on-arrival	CHN-10	PASSED	
+composer-not-focused-on-arrival	CHN-11	PASSED	
+composer-not-focused-on-arrival	CHN-12	PASSED	
+composer-not-focused-on-arrival	CHN-13	PASSED	
+composer-not-focused-on-arrival	CHN-14	PASSED	Error: expect(locator).toBeVisible() failed | Locator: getByRole('main').getByText('Channel e2e-mwhktm3hxlfe created')
+composer-not-focused-on-arrival	CHN-15	PASSED	Error: expect(locator).toHaveCount(expected) failed | Locator:  locator('[data-input-id="channel-input-01a1de56-0f1b-78e9-8576-17fcdd98c37b"]')
+composer-not-focused-on-arrival	KEY-01	PASSED	
+composer-not-focused-on-arrival	KEY-02	PASSED	
+composer-not-focused-on-arrival	KEY-03	PASSED	
+composer-not-focused-on-arrival	KEY-04	PASSED	
+composer-not-focused-on-arrival	KEY-05	PASSED	
+composer-not-focused-on-arrival	KEY-06	PASSED	Error: expect(locator).toBeFocused() failed | Locator:  locator('[data-input-id="thread-reply-input-01a1de56-3e42-708c-8ffe-b28882a5f375"] [contenteditable]')
+composer-not-focused-on-arrival	KEY-07	FAILED	Error: expect(locator).toBeFocused() failed | Locator: locator('[data-input-id="edit-message-input-01a1de56-3f6b-7b70-8973-aa911c85d691"] [contenteditable]')
+composer-not-focused-on-arrival	KEY-08	PASSED	
+composer-not-focused-on-arrival	KEY-12	PASSED	
+composer-not-focused-on-arrival	KEY-09	PASSED	
+composer-not-focused-on-arrival	KEY-10	FAILED	Error: expect(locator).toBeFocused() failed | Locator:  locator('[data-input-id="channel-input-01a1de56-5ce7-7a70-8fcc-1cdcd89c5f00"]').locator('[contenteditabl
+composer-not-focused-on-arrival	KEY-11	PASSED	
+composer-not-focused-on-arrival	MEM-01	PASSED	
+composer-not-focused-on-arrival	MEM-02	PASSED	
+composer-not-focused-on-arrival	MEM-03	PASSED	Error: expect(locator).toHaveCount(expected) failed | Locator:  locator('[data-input-id="channel-input-01a1de56-875f-7b92-b77e-dd7ce13a878d"]')
+composer-not-focused-on-arrival	MEM-04	PASSED	
+composer-not-focused-on-arrival	MEM-05	PASSED	
+composer-not-focused-on-arrival	MEM-06	PASSED	
+composer-not-focused-on-arrival	MEM-07	PASSED	
+composer-not-focused-on-arrival	MEM-08	PASSED	
+escape-does-not-return-to-the-list	ACC-01	PASSED	
+escape-does-not-return-to-the-list	ACC-02	PASSED	
+escape-does-not-return-to-the-list	ACC-03	PASSED	
+escape-does-not-return-to-the-list	ACC-04	PASSED	
+escape-does-not-return-to-the-list	ACC-05	PASSED	
+escape-does-not-return-to-the-list	ACC-06	PASSED	
+escape-does-not-return-to-the-list	ACC-07	PASSED	
+escape-does-not-return-to-the-list	ACC-08	PASSED	
+escape-does-not-return-to-the-list	ACC-09	PASSED	
+escape-does-not-return-to-the-list	CHN-01	PASSED	
+escape-does-not-return-to-the-list	CHN-02	PASSED	
+escape-does-not-return-to-the-list	CHN-03	PASSED	
+escape-does-not-return-to-the-list	CHN-04	PASSED	Error: expect(locator).toContainText(expected) failed | Locator: getByRole('main').locator('[data-view-shell-top-bar]')
+escape-does-not-return-to-the-list	CHN-05	PASSED	
+escape-does-not-return-to-the-list	CHN-06	PASSED	
+escape-does-not-return-to-the-list	CHN-07	PASSED	
+escape-does-not-return-to-the-list	CHN-08	PASSED	Error: expect(locator).toHaveCount(expected) failed | Locator:  getByRole('tree', { name: 'Conversations' }).locator('[data-key="favorite:channel:01a1de58-246f-
+escape-does-not-return-to-the-list	CHN-09	PASSED	
+escape-does-not-return-to-the-list	CHN-10	PASSED	
+escape-does-not-return-to-the-list	CHN-11	PASSED	
+escape-does-not-return-to-the-list	CHN-12	PASSED	
+escape-does-not-return-to-the-list	CHN-13	PASSED	
+escape-does-not-return-to-the-list	CHN-14	PASSED	Error: expect(locator).toBeVisible() failed | Locator: getByRole('main').getByText('Channel e2e-mwhkwsaaj6ji created')
+escape-does-not-return-to-the-list	CHN-15	PASSED	Error: expect(locator).toHaveCount(expected) failed | Locator:  locator('[data-input-id="channel-input-01a1de58-56d6-7e2e-981b-303497be0f0a"]')
+escape-does-not-return-to-the-list	KEY-01	PASSED	
+escape-does-not-return-to-the-list	KEY-02	PASSED	
+escape-does-not-return-to-the-list	KEY-03	PASSED	
+escape-does-not-return-to-the-list	KEY-04	PASSED	
+escape-does-not-return-to-the-list	KEY-05	PASSED	
+escape-does-not-return-to-the-list	KEY-06	PASSED	Error: expect(locator).toBeFocused() failed | Locator:  locator('[data-input-id="thread-reply-input-01a1de58-82b3-7bde-9b32-372912c20f1a"] [contenteditable]')
+escape-does-not-return-to-the-list	KEY-07	PASSED	
+escape-does-not-return-to-the-list	KEY-08	PASSED	
+escape-does-not-return-to-the-list	KEY-12	PASSED	
+escape-does-not-return-to-the-list	KEY-09	PASSED	
+escape-does-not-return-to-the-list	KEY-10	PASSED	
+escape-does-not-return-to-the-list	KEY-11	FAILED	Error: expect(locator).toBeFocused() failed | Locator:  getByRole('tree', { name: 'Conversations' })
+escape-does-not-return-to-the-list	MEM-01	PASSED	
+escape-does-not-return-to-the-list	MEM-02	PASSED	
+escape-does-not-return-to-the-list	MEM-03	PASSED	Error: expect(locator).toHaveCount(expected) failed | Locator:  locator('[data-input-id="channel-input-01a1de58-be76-7622-a6ed-483c4ec52d0f"]')
+escape-does-not-return-to-the-list	MEM-04	PASSED	
+escape-does-not-return-to-the-list	MEM-05	PASSED	
+escape-does-not-return-to-the-list	MEM-06	PASSED	
+escape-does-not-return-to-the-list	MEM-07	PASSED	
+escape-does-not-return-to-the-list	MEM-08	PASSED	
+draft-shown-in-every-channel	CMP-01	FAILED	Error: expect(locator).toHaveText(expected) failed | Locator:  locator('[data-input-id="channel-input-01a1de59-fdfa-7d64-901f-a573aff62e16"]').locator('[content
+draft-shown-in-every-channel	CMP-02	PASSED	
+draft-shown-in-every-channel	CMP-03	PASSED	
+draft-shown-in-every-channel	CMP-13	PASSED	
+draft-shown-in-every-channel	CMP-04	PASSED	
+draft-shown-in-every-channel	CMP-05	PASSED	
+draft-shown-in-every-channel	CMP-06	PASSED	
+draft-shown-in-every-channel	CMP-07	PASSED	
+draft-shown-in-every-channel	CMP-08	PASSED	
+draft-shown-in-every-channel	CMP-09	PASSED	
+draft-shown-in-every-channel	CMP-10	PASSED	
+draft-shown-in-every-channel	CMP-11	PASSED	
+draft-shown-in-every-channel	CMP-12	PASSED	
+draft-shown-in-every-channel	DM-01	PASSED	
+draft-shown-in-every-channel	DM-02	PASSED	
+draft-shown-in-every-channel	DM-03	PASSED	
+draft-shown-in-every-channel	DM-04	PASSED	
+draft-shown-in-every-channel	DM-05	PASSED	
+draft-shown-in-every-channel	DM-06	PASSED	Error: expect(locator).toBeVisible() failed | Locator: getByRole('option', { name: /Ben Member/ })
+draft-shown-in-every-channel	UNR-01	PASSED	
+draft-shown-in-every-channel	UNR-02	PASSED	
+draft-shown-in-every-channel	UNR-03	PASSED	
+draft-shown-in-every-channel	UNR-04	PASSED	
+draft-shown-in-every-channel	UNR-05	PASSED	Error: expect(locator).toHaveText(expected) failed | Locator: getByRole('tree', { name: 'Conversations' }).getByRole('treeitem').filter({ hasText: 'unr-mwhl05rn
+draft-shown-in-every-channel	UNR-06	PASSED	
+draft-shown-in-every-channel	UNR-07	PASSED	
+draft-shown-in-every-channel	UNR-08	PASSED	
+draft-shown-in-every-channel	UNR-09	PASSED	Error: expect(locator).toBeVisible() failed | Locator: getByRole('tree', { name: 'Conversations' }).getByRole('treeitem').filter({ hasText: 'unr-mwhl0cg1r1el-fr
+draft-shown-in-every-channel	UNR-10	PASSED	
+draft-lost-on-reload	CMP-01	PASSED	
+draft-lost-on-reload	CMP-02	FAILED	Error: expect(locator).toHaveText(expected) failed | Locator:  locator('[data-input-id="channel-input-01a1de5b-dc17-7858-9970-237c830291c6"]').locator('[content
+draft-lost-on-reload	CMP-03	PASSED	
+draft-lost-on-reload	CMP-13	PASSED	
+draft-lost-on-reload	CMP-04	PASSED	
+draft-lost-on-reload	CMP-05	PASSED	
+draft-lost-on-reload	CMP-06	PASSED	
+draft-lost-on-reload	CMP-07	PASSED	
+draft-lost-on-reload	CMP-08	PASSED	
+draft-lost-on-reload	CMP-09	PASSED	
+draft-lost-on-reload	CMP-10	PASSED	
+draft-lost-on-reload	CMP-11	PASSED	
+draft-lost-on-reload	CMP-12	PASSED	
+draft-lost-on-reload	DM-01	PASSED	
+draft-lost-on-reload	DM-02	PASSED	
+draft-lost-on-reload	DM-03	PASSED	
+draft-lost-on-reload	DM-04	PASSED	
+draft-lost-on-reload	DM-05	PASSED	
+draft-lost-on-reload	DM-06	PASSED	Error: expect(locator).toBeVisible() failed | Locator: getByRole('option', { name: /Ben Member/ })
+draft-lost-on-reload	UNR-01	PASSED	
+draft-lost-on-reload	UNR-02	PASSED	
+draft-lost-on-reload	UNR-03	PASSED	
+draft-lost-on-reload	UNR-04	PASSED	
+draft-lost-on-reload	UNR-05	PASSED	Error: expect(locator).toHaveText(expected) failed | Locator: getByRole('tree', { name: 'Conversations' }).getByRole('treeitem').filter({ hasText: 'unr-mwhl2nm4
+draft-lost-on-reload	UNR-06	PASSED	
+draft-lost-on-reload	UNR-07	PASSED	
+draft-lost-on-reload	UNR-08	PASSED	
+draft-lost-on-reload	UNR-09	PASSED	Error: expect(locator).toBeVisible() failed | Locator: getByRole('tree', { name: 'Conversations' }).getByRole('treeitem').filter({ hasText: 'unr-mwhl2ud6igwo-fr
+draft-lost-on-reload	UNR-10	PASSED	
+sent-message-stays-as-draft	CMP-01	PASSED	
+sent-message-stays-as-draft	CMP-02	PASSED	
+sent-message-stays-as-draft	CMP-03	PASSED	
+sent-message-stays-as-draft	CMP-13	PASSED	
+sent-message-stays-as-draft	CMP-04	PASSED	
+sent-message-stays-as-draft	CMP-05	PASSED	
+sent-message-stays-as-draft	CMP-06	PASSED	
+sent-message-stays-as-draft	CMP-07	PASSED	
+sent-message-stays-as-draft	CMP-08	PASSED	
+sent-message-stays-as-draft	CMP-09	PASSED	
+sent-message-stays-as-draft	CMP-10	PASSED	
+sent-message-stays-as-draft	CMP-11	PASSED	
+sent-message-stays-as-draft	CMP-12	PASSED	
+sent-message-stays-as-draft	DM-01	PASSED	
+sent-message-stays-as-draft	DM-02	PASSED	
+sent-message-stays-as-draft	DM-03	PASSED	
+sent-message-stays-as-draft	DM-04	PASSED	
+sent-message-stays-as-draft	DM-05	PASSED	
+sent-message-stays-as-draft	DM-06	PASSED	Error: expect(locator).toBeVisible() failed | Locator: getByRole('option', { name: /Ben Member/ })
+sent-message-stays-as-draft	UNR-01	PASSED	
+sent-message-stays-as-draft	UNR-02	PASSED	
+sent-message-stays-as-draft	UNR-03	PASSED	
+sent-message-stays-as-draft	UNR-04	PASSED	
+sent-message-stays-as-draft	UNR-05	PASSED	Error: expect(locator).toHaveText(expected) failed | Locator: getByRole('tree', { name: 'Conversations' }).getByRole('treeitem').filter({ hasText: 'unr-mwhl4vhh
+sent-message-stays-as-draft	UNR-06	PASSED	
+sent-message-stays-as-draft	UNR-07	PASSED	
+sent-message-stays-as-draft	UNR-08	PASSED	
+sent-message-stays-as-draft	UNR-09	PASSED	Error: expect(locator).toBeVisible() failed | Locator: getByRole('tree', { name: 'Conversations' }).getByRole('treeitem').filter({ hasText: 'unr-mwhl52dw7jiw-fr
+sent-message-stays-as-draft	UNR-10	PASSED	
+send-button-always-on	CMP-01	PASSED	
+send-button-always-on	CMP-02	PASSED	
+send-button-always-on	CMP-03	PASSED	
+send-button-always-on	CMP-13	PASSED	
+send-button-always-on	CMP-04	FAILED	Error: expect(locator).toBeDisabled() failed | Locator:  locator('[data-input-id="channel-input-01a1de5f-58b5-7ece-a96b-9f2806d79c01"]').getByRole('button', { n
+send-button-always-on	CMP-05	PASSED	
+send-button-always-on	CMP-06	PASSED	
+send-button-always-on	CMP-07	PASSED	
+send-button-always-on	CMP-08	FAILED	Error: expect(locator).toBeDisabled() failed | Locator:  locator('[data-input-id="channel-input-01a1de5f-6ea5-7c20-802b-f7c4aba275f7"]').getByRole('button', { n
+send-button-always-on	CMP-09	PASSED	
+send-button-always-on	CMP-10	PASSED	
+send-button-always-on	CMP-11	PASSED	
+send-button-always-on	CMP-12	PASSED	
+send-button-always-on	DM-01	PASSED	
+send-button-always-on	DM-02	PASSED	
+send-button-always-on	DM-03	PASSED	
+send-button-always-on	DM-04	PASSED	
+send-button-always-on	DM-05	FAILED	Error: expect(locator).toBeDisabled() failed | Locator:  getByRole('main').getByRole('button', { name: 'Send message' })
+send-button-always-on	DM-06	PASSED	Error: expect(locator).toBeVisible() failed | Locator: getByRole('option', { name: /Ben Member/ })
+send-button-always-on	UNR-01	PASSED	
+send-button-always-on	UNR-02	PASSED	
+send-button-always-on	UNR-03	PASSED	
+send-button-always-on	UNR-04	PASSED	
+send-button-always-on	UNR-05	PASSED	Error: expect(locator).toHaveText(expected) failed | Locator: getByRole('tree', { name: 'Conversations' }).getByRole('treeitem').filter({ hasText: 'unr-mwhl7ho1
+send-button-always-on	UNR-06	PASSED	
+send-button-always-on	UNR-07	PASSED	
+send-button-always-on	UNR-08	PASSED	
+send-button-always-on	UNR-09	PASSED	Error: expect(locator).toBeVisible() failed | Locator: getByRole('tree', { name: 'Conversations' }).getByRole('treeitem').filter({ hasText: 'unr-mwhl7nxkdb4q-fr
+send-button-always-on	UNR-10	PASSED	
+mention-sent-as-plain-text	CMP-01	PASSED	
+mention-sent-as-plain-text	CMP-02	PASSED	
+mention-sent-as-plain-text	CMP-03	PASSED	
+mention-sent-as-plain-text	CMP-13	PASSED	
+mention-sent-as-plain-text	CMP-04	PASSED	
+mention-sent-as-plain-text	CMP-05	FAILED	Error: expect(locator).toBeVisible() failed | Locator: locator('[data-channel-scroll]').locator('[data-message]').filter({ has: locator('[data-message-content]'
+mention-sent-as-plain-text	CMP-06	FAILED	Error: expect(locator).toBeVisible() failed | Locator: locator('[data-channel-scroll]').locator('[data-message]').filter({ has: locator('[data-message-content]'
+mention-sent-as-plain-text	CMP-07	PASSED	
+mention-sent-as-plain-text	CMP-08	PASSED	
+mention-sent-as-plain-text	CMP-09	PASSED	
+mention-sent-as-plain-text	CMP-10	PASSED	
+mention-sent-as-plain-text	CMP-11	PASSED	
+mention-sent-as-plain-text	CMP-12	PASSED	
+mention-sent-as-plain-text	DM-01	PASSED	
+mention-sent-as-plain-text	DM-02	PASSED	
+mention-sent-as-plain-text	DM-03	PASSED	
+mention-sent-as-plain-text	DM-04	PASSED	
+mention-sent-as-plain-text	DM-05	PASSED	
+mention-sent-as-plain-text	DM-06	PASSED	Error: expect(locator).toBeVisible() failed | Locator: getByRole('option', { name: /Ben Member/ })
+mention-sent-as-plain-text	UNR-01	PASSED	
+mention-sent-as-plain-text	UNR-02	PASSED	
+mention-sent-as-plain-text	UNR-03	PASSED	
+mention-sent-as-plain-text	UNR-04	PASSED	
+mention-sent-as-plain-text	UNR-05	PASSED	Error: expect(locator).toBeVisible() failed | Locator: locator('[data-channel-scroll]').locator('[data-message]').filter({ has: locator('[data-message-content]'
+mention-sent-as-plain-text	UNR-06	PASSED	
+mention-sent-as-plain-text	UNR-07	PASSED	
+mention-sent-as-plain-text	UNR-08	PASSED	
+mention-sent-as-plain-text	UNR-09	PASSED	Error: expect(locator).toBeVisible() failed | Locator: getByRole('tree', { name: 'Conversations' }).getByRole('treeitem').filter({ hasText: 'unr-mwhla9audsbo-fr
+mention-sent-as-plain-text	UNR-10	PASSED	
+attachment-not-sent	CMP-01	PASSED	
+attachment-not-sent	CMP-02	PASSED	
+attachment-not-sent	CMP-03	PASSED	
+attachment-not-sent	CMP-13	PASSED	
+attachment-not-sent	CMP-04	PASSED	
+attachment-not-sent	CMP-05	PASSED	
+attachment-not-sent	CMP-06	PASSED	
+attachment-not-sent	CMP-07	FAILED	Error: expect(locator).toBeVisible() failed | Locator: locator('[data-channel-scroll]').locator('[data-message]').filter({ has: locator('[data-message-content]'
+attachment-not-sent	CMP-08	FAILED	Error: expect(locator).toHaveCount(expected) failed | Locator:  locator('[data-input-id="channel-input-01a1de63-3ba4-728e-bca0-97833f09de10"]').getByRole('butto
+attachment-not-sent	CMP-09	PASSED	
+attachment-not-sent	CMP-10	PASSED	
+attachment-not-sent	CMP-11	PASSED	
+attachment-not-sent	CMP-12	PASSED	
+attachment-not-sent	DM-01	PASSED	
+attachment-not-sent	DM-02	PASSED	
+attachment-not-sent	DM-03	PASSED	
+attachment-not-sent	DM-04	PASSED	
+attachment-not-sent	DM-05	PASSED	
+attachment-not-sent	DM-06	PASSED	Error: expect(locator).toBeVisible() failed | Locator: getByRole('option', { name: /Ben Member/ })
+attachment-not-sent	UNR-01	PASSED	
+attachment-not-sent	UNR-02	PASSED	
+attachment-not-sent	UNR-03	PASSED	
+attachment-not-sent	UNR-04	PASSED	
+attachment-not-sent	UNR-05	PASSED	Error: expect(locator).toHaveText(expected) failed | Locator: getByRole('tree', { name: 'Conversations' }).getByRole('treeitem').filter({ hasText: 'unr-mwhlcue5
+attachment-not-sent	UNR-06	PASSED	
+attachment-not-sent	UNR-07	PASSED	
+attachment-not-sent	UNR-08	PASSED	
+attachment-not-sent	UNR-09	PASSED	Error: expect(locator).toBeVisible() failed | Locator: getByRole('tree', { name: 'Conversations' }).getByRole('treeitem').filter({ hasText: 'unr-mwhld0oeyifz-fr
+attachment-not-sent	UNR-10	PASSED	
+long-message-cut-short	CMP-01	PASSED	
+long-message-cut-short	CMP-02	PASSED	
+long-message-cut-short	CMP-03	PASSED	
+long-message-cut-short	CMP-13	PASSED	
+long-message-cut-short	CMP-04	PASSED	
+long-message-cut-short	CMP-05	PASSED	
+long-message-cut-short	CMP-06	PASSED	
+long-message-cut-short	CMP-07	PASSED	
+long-message-cut-short	CMP-08	PASSED	
+long-message-cut-short	CMP-09	PASSED	
+long-message-cut-short	CMP-10	PASSED	
+long-message-cut-short	CMP-11	PASSED	
+long-message-cut-short	CMP-12	FAILED	Error: expect(locator).toHaveText(expected) failed | Locator:  locator('[data-channel-scroll]').locator('[data-message-content]')
+long-message-cut-short	DM-01	PASSED	
+long-message-cut-short	DM-02	PASSED	
+long-message-cut-short	DM-03	PASSED	
+long-message-cut-short	DM-04	PASSED	
+long-message-cut-short	DM-05	PASSED	
+long-message-cut-short	DM-06	PASSED	Error: expect(locator).toBeVisible() failed | Locator: getByRole('option', { name: /Ben Member/ })
+long-message-cut-short	UNR-01	PASSED	
+long-message-cut-short	UNR-02	PASSED	
+long-message-cut-short	UNR-03	PASSED	
+long-message-cut-short	UNR-04	PASSED	
+long-message-cut-short	UNR-05	PASSED	Error: expect(locator).toHaveText(expected) failed | Locator: getByRole('tree', { name: 'Conversations' }).getByRole('treeitem').filter({ hasText: 'unr-mwhlfe6b
+long-message-cut-short	UNR-06	PASSED	
+long-message-cut-short	UNR-07	PASSED	
+long-message-cut-short	UNR-08	PASSED	
+long-message-cut-short	UNR-09	PASSED	Error: expect(locator).toBeVisible() failed | Locator: getByRole('tree', { name: 'Conversations' }).getByRole('treeitem').filter({ hasText: 'unr-mwhlfkzif7dh-fr
+long-message-cut-short	UNR-10	PASSED	
+typing-line-never-shows	CMP-01	PASSED	
+typing-line-never-shows	CMP-02	PASSED	
+typing-line-never-shows	CMP-03	PASSED	
+typing-line-never-shows	CMP-13	PASSED	
+typing-line-never-shows	CMP-04	PASSED	
+typing-line-never-shows	CMP-05	PASSED	
+typing-line-never-shows	CMP-06	PASSED	
+typing-line-never-shows	CMP-07	PASSED	
+typing-line-never-shows	CMP-08	PASSED	
+typing-line-never-shows	CMP-09	FAILED	Error: expect(locator).toBeVisible() failed | Locator: locator('[data-channel-scroll]').getByText('Ben Member is typing', { exact: true })
+typing-line-never-shows	CMP-10	FAILED	Error: expect(locator).toBeVisible() failed | Locator: locator('[data-channel-scroll]').getByText('Ben Member is typing', { exact: true })
+typing-line-never-shows	CMP-11	PASSED	
+typing-line-never-shows	CMP-12	PASSED	
+typing-line-never-shows	DM-01	PASSED	
+typing-line-never-shows	DM-02	PASSED	
+typing-line-never-shows	DM-03	PASSED	
+typing-line-never-shows	DM-04	PASSED	
+typing-line-never-shows	DM-05	PASSED	
+typing-line-never-shows	DM-06	PASSED	Error: expect(locator).toBeVisible() failed | Locator: getByRole('option', { name: /Ben Member/ })
+typing-line-never-shows	UNR-01	PASSED	
+typing-line-never-shows	UNR-02	PASSED	
+typing-line-never-shows	UNR-03	PASSED	
+typing-line-never-shows	UNR-04	PASSED	
+typing-line-never-shows	UNR-05	PASSED	Error: expect(locator).toHaveText(expected) failed | Locator: getByRole('tree', { name: 'Conversations' }).getByRole('treeitem').filter({ hasText: 'unr-mwhlhyyy
+typing-line-never-shows	UNR-06	PASSED	
+typing-line-never-shows	UNR-07	PASSED	
+typing-line-never-shows	UNR-08	PASSED	
+typing-line-never-shows	UNR-09	PASSED	Error: expect(locator).toBeVisible() failed | Locator: getByRole('tree', { name: 'Conversations' }).getByRole('treeitem').filter({ hasText: 'unr-mwhli6to987q-fr
+typing-line-never-shows	UNR-10	PASSED	
+paste-inserts-nothing	CMP-01	PASSED	
+paste-inserts-nothing	CMP-02	PASSED	
+paste-inserts-nothing	CMP-03	PASSED	
+paste-inserts-nothing	CMP-13	PASSED	
+paste-inserts-nothing	CMP-04	PASSED	
+paste-inserts-nothing	CMP-05	PASSED	
+paste-inserts-nothing	CMP-06	PASSED	
+paste-inserts-nothing	CMP-07	PASSED	
+paste-inserts-nothing	CMP-08	PASSED	
+paste-inserts-nothing	CMP-09	PASSED	
+paste-inserts-nothing	CMP-10	PASSED	
+paste-inserts-nothing	CMP-11	FAILED	Error: expect(locator).toHaveText(expected) failed | Locator:  locator('[data-input-id="channel-input-01a1de68-e561-784a-b454-fc35a727c163"]').locator('[content
+paste-inserts-nothing	CMP-12	PASSED	
+paste-inserts-nothing	DM-01	PASSED	
+paste-inserts-nothing	DM-02	PASSED	
+paste-inserts-nothing	DM-03	PASSED	
+paste-inserts-nothing	DM-04	PASSED	
+paste-inserts-nothing	DM-05	PASSED	
+paste-inserts-nothing	DM-06	PASSED	Error: expect(locator).toBeVisible() failed | Locator: getByRole('option', { name: /Ben Member/ })
+paste-inserts-nothing	UNR-01	PASSED	
+paste-inserts-nothing	UNR-02	PASSED	
+paste-inserts-nothing	UNR-03	PASSED	
+paste-inserts-nothing	UNR-04	PASSED	
+paste-inserts-nothing	UNR-05	PASSED	Error: expect(locator).toHaveText(expected) failed | Locator: getByRole('tree', { name: 'Conversations' }).getByRole('treeitem').filter({ hasText: 'unr-mwhlklpt
+paste-inserts-nothing	UNR-06	PASSED	
+paste-inserts-nothing	UNR-07	PASSED	
+paste-inserts-nothing	UNR-08	PASSED	
+paste-inserts-nothing	UNR-09	PASSED	Error: expect(locator).toBeVisible() failed | Locator: getByRole('tree', { name: 'Conversations' }).getByRole('treeitem').filter({ hasText: 'unr-mwhlkr5sdy1p-fr
+paste-inserts-nothing	UNR-10	PASSED	
+unread-mark-never-shows	CMP-01	PASSED	
+unread-mark-never-shows	CMP-02	PASSED	
+unread-mark-never-shows	CMP-03	PASSED	
+unread-mark-never-shows	CMP-13	PASSED	
+unread-mark-never-shows	CMP-04	PASSED	
+unread-mark-never-shows	CMP-05	PASSED	
+unread-mark-never-shows	CMP-06	PASSED	
+unread-mark-never-shows	CMP-07	PASSED	
+unread-mark-never-shows	CMP-08	PASSED	
+unread-mark-never-shows	CMP-09	PASSED	
+unread-mark-never-shows	CMP-10	PASSED	
+unread-mark-never-shows	CMP-11	PASSED	
+unread-mark-never-shows	CMP-12	PASSED	
+unread-mark-never-shows	DM-01	PASSED	
+unread-mark-never-shows	DM-02	PASSED	
+unread-mark-never-shows	DM-03	PASSED	
+unread-mark-never-shows	DM-04	PASSED	
+unread-mark-never-shows	DM-05	PASSED	
+unread-mark-never-shows	DM-06	PASSED	Error: expect(locator).toBeVisible() failed | Locator: getByRole('option', { name: /Ben Member/ })
+unread-mark-never-shows	UNR-01	FAILED	Error: expect(locator).toBeVisible() failed | Locator: getByRole('tree', { name: 'Conversations' }).getByRole('treeitem').filter({ hasText: 'unr-mwhlmul6p2ep-ot
+unread-mark-never-shows	UNR-02	FAILED	Error: expect(locator).toBeVisible() failed | Locator: getByRole('tree', { name: 'Conversations' }).getByRole('treeitem').filter({ hasText: 'unr-mwhlmun3aw2g-ch
+unread-mark-never-shows	UNR-03	FAILED	Error: expect(locator).toBeVisible() failed | Locator: getByRole('tree', { name: 'Conversations' }).getByRole('treeitem').filter({ hasText: 'unr-mwhlmvfn59il-be
+unread-mark-never-shows	UNR-04	PASSED	
+unread-mark-never-shows	UNR-05	PASSED	Error: expect(locator).toBeVisible() failed | Locator: getByRole('tree', { name: 'Conversations' }).getByRole('treeitem').filter({ hasText: 'unr-mwhln8u5zjt2-ot
+unread-mark-never-shows	UNR-06	FAILED	Error: expect(locator).toBeVisible() failed | Locator: getByRole('tree', { name: 'Conversations' }).getByRole('treeitem').filter({ hasText: 'unr-mwhln943m1md-lo
+unread-mark-never-shows	UNR-07	FAILED	Error: expect(locator).toBeVisible() failed | Locator: getByRole('tree', { name: 'Conversations' }).getByRole('treeitem').filter({ hasText: 'unr-mwhlna4hjl8p-ch
+unread-mark-never-shows	UNR-08	PASSED	
+unread-mark-never-shows	UNR-09	PASSED	Error: expect(locator).toBeVisible() failed | Locator: getByRole('tree', { name: 'Conversations' }).getByRole('treeitem').filter({ hasText: 'unr-mwhlnf5c141c-us
+unread-mark-never-shows	UNR-10	FAILED	Error: expect(locator).toBeVisible() failed | Locator: getByRole('tree', { name: 'Conversations' }).getByRole('treeitem').filter({ hasText: 'unr-mwhlno5kq7x0-fo
+new-divider-missing	CMP-01	PASSED	
+new-divider-missing	CMP-02	PASSED	
+new-divider-missing	CMP-03	PASSED	
+new-divider-missing	CMP-13	PASSED	
+new-divider-missing	CMP-04	PASSED	
+new-divider-missing	CMP-05	PASSED	
+new-divider-missing	CMP-06	PASSED	
+new-divider-missing	CMP-07	PASSED	
+new-divider-missing	CMP-08	PASSED	
+new-divider-missing	CMP-09	PASSED	
+new-divider-missing	CMP-10	PASSED	
+new-divider-missing	CMP-11	PASSED	
+new-divider-missing	CMP-12	PASSED	
+new-divider-missing	DM-01	PASSED	
+new-divider-missing	DM-02	PASSED	
+new-divider-missing	DM-03	PASSED	
+new-divider-missing	DM-04	PASSED	
+new-divider-missing	DM-05	PASSED	
+new-divider-missing	DM-06	PASSED	Error: expect(locator).toBeVisible() failed | Locator: getByRole('option', { name: /Ben Member/ })
+new-divider-missing	UNR-01	PASSED	
+new-divider-missing	UNR-02	FAILED	Error: expect(locator).toHaveCount(expected) failed | Locator:  locator('[data-channel-scroll]').getByRole('button', { name: 'New', exact: true })
+new-divider-missing	UNR-03	PASSED	
+new-divider-missing	UNR-04	PASSED	
+new-divider-missing	UNR-05	PASSED	Error: expect(locator).toHaveText(expected) failed | Locator: getByRole('tree', { name: 'Conversations' }).getByRole('treeitem').filter({ hasText: 'unr-mwhlqcou
+new-divider-missing	UNR-06	PASSED	
+new-divider-missing	UNR-07	PASSED	
+new-divider-missing	UNR-08	PASSED	
+new-divider-missing	UNR-09	PASSED	Error: expect(locator).toBeVisible() failed | Locator: getByRole('tree', { name: 'Conversations' }).getByRole('treeitem').filter({ hasText: 'unr-mwhlqn0gg14f-fr
+new-divider-missing	UNR-10	PASSED	
+mark-as-read-does-nothing	CMP-01	PASSED	
+mark-as-read-does-nothing	CMP-02	PASSED	
+mark-as-read-does-nothing	CMP-03	PASSED	
+mark-as-read-does-nothing	CMP-13	PASSED	
+mark-as-read-does-nothing	CMP-04	PASSED	
+mark-as-read-does-nothing	CMP-05	PASSED	
+mark-as-read-does-nothing	CMP-06	PASSED	
+mark-as-read-does-nothing	CMP-07	PASSED	
+mark-as-read-does-nothing	CMP-08	PASSED	
+mark-as-read-does-nothing	CMP-09	PASSED	
+mark-as-read-does-nothing	CMP-10	PASSED	
+mark-as-read-does-nothing	CMP-11	PASSED	
+mark-as-read-does-nothing	CMP-12	PASSED	
+mark-as-read-does-nothing	DM-01	PASSED	
+mark-as-read-does-nothing	DM-02	PASSED	
+mark-as-read-does-nothing	DM-03	PASSED	
+mark-as-read-does-nothing	DM-04	PASSED	
+mark-as-read-does-nothing	DM-05	PASSED	
+mark-as-read-does-nothing	DM-06	PASSED	Error: expect(locator).toBeVisible() failed | Locator: getByRole('option', { name: /Ben Member/ })
+mark-as-read-does-nothing	UNR-01	PASSED	
+mark-as-read-does-nothing	UNR-02	FAILED	Error: expect(locator).toHaveCount(expected) failed | Locator:  locator('[data-channel-scroll]').getByRole('button', { name: 'New', exact: true })
+mark-as-read-does-nothing	UNR-03	PASSED	
+mark-as-read-does-nothing	UNR-04	PASSED	
+mark-as-read-does-nothing	UNR-05	PASSED	Error: expect(locator).toHaveText(expected) failed | Locator: getByRole('tree', { name: 'Conversations' }).getByRole('treeitem').filter({ hasText: 'unr-mwhlstke
+mark-as-read-does-nothing	UNR-06	PASSED	
+mark-as-read-does-nothing	UNR-07	PASSED	
+mark-as-read-does-nothing	UNR-08	PASSED	
+mark-as-read-does-nothing	UNR-09	PASSED	Error: expect(locator).toBeVisible() failed | Locator: getByRole('tree', { name: 'Conversations' }).getByRole('treeitem').filter({ hasText: 'unr-mwhlt3k8vg0o-fr
+mark-as-read-does-nothing	UNR-10	PASSED	
+unread-below-notice-missing	CMP-01	PASSED	
+unread-below-notice-missing	CMP-02	PASSED	
+unread-below-notice-missing	CMP-03	PASSED	
+unread-below-notice-missing	CMP-13	PASSED	
+unread-below-notice-missing	CMP-04	PASSED	
+unread-below-notice-missing	CMP-05	PASSED	
+unread-below-notice-missing	CMP-06	PASSED	
+unread-below-notice-missing	CMP-07	PASSED	
+unread-below-notice-missing	CMP-08	PASSED	
+unread-below-notice-missing	CMP-09	PASSED	
+unread-below-notice-missing	CMP-10	PASSED	
+unread-below-notice-missing	CMP-11	PASSED	
+unread-below-notice-missing	CMP-12	PASSED	
+unread-below-notice-missing	DM-01	PASSED	
+unread-below-notice-missing	DM-02	PASSED	
+unread-below-notice-missing	DM-03	PASSED	
+unread-below-notice-missing	DM-04	PASSED	
+unread-below-notice-missing	DM-05	PASSED	
+unread-below-notice-missing	DM-06	PASSED	Error: expect(locator).toBeVisible() failed | Locator: getByRole('option', { name: /Ben Member/ })
+unread-below-notice-missing	UNR-01	PASSED	
+unread-below-notice-missing	UNR-02	PASSED	
+unread-below-notice-missing	UNR-03	PASSED	
+unread-below-notice-missing	UNR-04	FAILED	Error: expect(locator).toBeVisible() failed | Locator: getByRole('button', { name: '1 unread notification stack below' })
+unread-below-notice-missing	UNR-05	PASSED	Error: expect(locator).toHaveText(expected) failed | Locator: getByRole('tree', { name: 'Conversations' }).getByRole('treeitem').filter({ hasText: 'unr-mwhlved1
+unread-below-notice-missing	UNR-06	PASSED	
+unread-below-notice-missing	UNR-07	PASSED	
+unread-below-notice-missing	UNR-08	PASSED	
+unread-below-notice-missing	UNR-09	PASSED	Error: expect(locator).toBeVisible() failed | Locator: getByRole('tree', { name: 'Conversations' }).getByRole('treeitem').filter({ hasText: 'unr-mwhlvmw1aqlj-fr
+unread-below-notice-missing	UNR-10	PASSED	
+muted-channel-shows-no-bell	CMP-01	PASSED	
+muted-channel-shows-no-bell	CMP-02	PASSED	
+muted-channel-shows-no-bell	CMP-03	PASSED	
+muted-channel-shows-no-bell	CMP-13	PASSED	
+muted-channel-shows-no-bell	CMP-04	PASSED	
+muted-channel-shows-no-bell	CMP-05	PASSED	
+muted-channel-shows-no-bell	CMP-06	PASSED	
+muted-channel-shows-no-bell	CMP-07	PASSED	
+muted-channel-shows-no-bell	CMP-08	PASSED	
+muted-channel-shows-no-bell	CMP-09	PASSED	
+muted-channel-shows-no-bell	CMP-10	PASSED	
+muted-channel-shows-no-bell	CMP-11	PASSED	
+muted-channel-shows-no-bell	CMP-12	PASSED	
+muted-channel-shows-no-bell	DM-01	PASSED	
+muted-channel-shows-no-bell	DM-02	PASSED	
+muted-channel-shows-no-bell	DM-03	PASSED	
+muted-channel-shows-no-bell	DM-04	PASSED	
+muted-channel-shows-no-bell	DM-05	PASSED	
+muted-channel-shows-no-bell	DM-06	PASSED	Error: expect(locator).toBeVisible() failed | Locator: getByRole('option', { name: /Ben Member/ })
+muted-channel-shows-no-bell	UNR-01	PASSED	
+muted-channel-shows-no-bell	UNR-02	PASSED	
+muted-channel-shows-no-bell	UNR-03	PASSED	
+muted-channel-shows-no-bell	UNR-04	PASSED	
+muted-channel-shows-no-bell	UNR-05	PASSED	Error: expect(locator).toHaveText(expected) failed | Locator: getByRole('tree', { name: 'Conversations' }).getByRole('treeitem').filter({ hasText: 'unr-mwhlxqzn
+muted-channel-shows-no-bell	UNR-06	FAILED	Error: expect(locator).toBeVisible() failed | Locator: getByRole('tree', { name: 'Conversations' }).getByRole('treeitem').filter({ hasText: 'unr-mwhlxrpdmflc-mu
+muted-channel-shows-no-bell	UNR-07	PASSED	
+muted-channel-shows-no-bell	UNR-08	PASSED	
+muted-channel-shows-no-bell	UNR-09	PASSED	Error: expect(locator).toBeVisible() failed | Locator: getByRole('tree', { name: 'Conversations' }).getByRole('treeitem').filter({ hasText: 'unr-mwhlxyznpb59-fr
+muted-channel-shows-no-bell	UNR-10	PASSED	
+new-conversation-not-listed-until-reload	CMP-01	PASSED	
+new-conversation-not-listed-until-reload	CMP-02	PASSED	
+new-conversation-not-listed-until-reload	CMP-03	FAILED	Error: the last messages in the list | the last messages in the list
+new-conversation-not-listed-until-reload	CMP-13	FAILED	Error: the last messages in the list | the last messages in the list
+new-conversation-not-listed-until-reload	CMP-04	PASSED	
+new-conversation-not-listed-until-reload	CMP-05	PASSED	
+new-conversation-not-listed-until-reload	CMP-06	PASSED	
+new-conversation-not-listed-until-reload	CMP-07	PASSED	
+new-conversation-not-listed-until-reload	CMP-08	PASSED	
+new-conversation-not-listed-until-reload	CMP-09	PASSED	
+new-conversation-not-listed-until-reload	CMP-10	PASSED	
+new-conversation-not-listed-until-reload	CMP-11	PASSED	
+new-conversation-not-listed-until-reload	CMP-12	PASSED	
+new-conversation-not-listed-until-reload	DM-01	PASSED	
+new-conversation-not-listed-until-reload	DM-02	PASSED	
+new-conversation-not-listed-until-reload	DM-03	PASSED	
+new-conversation-not-listed-until-reload	DM-04	PASSED	
+new-conversation-not-listed-until-reload	DM-05	PASSED	
+new-conversation-not-listed-until-reload	DM-06	PASSED	Error: expect(locator).toBeVisible() failed | Locator: getByRole('option', { name: /Ben Member/ })
+new-conversation-not-listed-until-reload	UNR-01	PASSED	
+new-conversation-not-listed-until-reload	UNR-02	PASSED	
+new-conversation-not-listed-until-reload	UNR-03	PASSED	
+new-conversation-not-listed-until-reload	UNR-04	PASSED	
+new-conversation-not-listed-until-reload	UNR-05	PASSED	Error: expect(locator).toHaveText(expected) failed | Locator: getByRole('tree', { name: 'Conversations' }).getByRole('treeitem').filter({ hasText: 'unr-mwhm0dqd
+new-conversation-not-listed-until-reload	UNR-06	PASSED	
+new-conversation-not-listed-until-reload	UNR-07	PASSED	
+new-conversation-not-listed-until-reload	UNR-08	PASSED	
+new-conversation-not-listed-until-reload	UNR-09	PASSED	Error: expect(locator).toBeVisible() failed | Locator: getByRole('tree', { name: 'Conversations' }).getByRole('treeitem').filter({ hasText: 'unr-mwhm0jkqikpa-fr
+new-conversation-not-listed-until-reload	UNR-10	PASSED	
+message-to-people-is-not-sent	CMP-01	PASSED	
+message-to-people-is-not-sent	CMP-02	PASSED	
+message-to-people-is-not-sent	CMP-03	PASSED	
+message-to-people-is-not-sent	CMP-13	PASSED	
+message-to-people-is-not-sent	CMP-04	PASSED	
+message-to-people-is-not-sent	CMP-05	PASSED	
+message-to-people-is-not-sent	CMP-06	PASSED	
+message-to-people-is-not-sent	CMP-07	PASSED	
+message-to-people-is-not-sent	CMP-08	PASSED	
+message-to-people-is-not-sent	CMP-09	PASSED	
+message-to-people-is-not-sent	CMP-10	PASSED	
+message-to-people-is-not-sent	CMP-11	PASSED	
+message-to-people-is-not-sent	CMP-12	PASSED	
+message-to-people-is-not-sent	DM-01	FAILED	Error: expect(page).toHaveURL(expected) failed | Expected pattern: /\/app\/channels?\/[0-9a-f-]{36}/
+message-to-people-is-not-sent	DM-02	FAILED	Error: expect(page).toHaveURL(expected) failed | Expected pattern: /\/app\/channels?\/[0-9a-f-]{36}/
+message-to-people-is-not-sent	DM-03	PASSED	
+message-to-people-is-not-sent	DM-04	FAILED	Error: expect(page).toHaveURL(expected) failed | Expected pattern: /\/app\/channels?\/[0-9a-f-]{36}/
+message-to-people-is-not-sent	DM-05	PASSED	
+message-to-people-is-not-sent	DM-06	PASSED	Error: expect(locator).toBeVisible() failed | Locator: getByRole('option', { name: /Ben Member/ })
+message-to-people-is-not-sent	UNR-01	PASSED	
+message-to-people-is-not-sent	UNR-02	PASSED	
+message-to-people-is-not-sent	UNR-03	PASSED	
+message-to-people-is-not-sent	UNR-04	PASSED	
+message-to-people-is-not-sent	UNR-05	PASSED	Error: expect(locator).toHaveText(expected) failed | Locator: getByRole('tree', { name: 'Conversations' }).getByRole('treeitem').filter({ hasText: 'unr-mwhm2rue
+message-to-people-is-not-sent	UNR-06	PASSED	
+message-to-people-is-not-sent	UNR-07	PASSED	
+message-to-people-is-not-sent	UNR-08	PASSED	
+message-to-people-is-not-sent	UNR-09	PASSED	Error: expect(locator).toBeVisible() failed | Locator: getByRole('tree', { name: 'Conversations' }).getByRole('treeitem').filter({ hasText: 'unr-mwhm2w1efkqr-fr
+message-to-people-is-not-sent	UNR-10	PASSED	
+message-link-forgets-the-conversation	CMP-01	PASSED	
+message-link-forgets-the-conversation	CMP-02	PASSED	
+message-link-forgets-the-conversation	CMP-03	PASSED	
+message-link-forgets-the-conversation	CMP-13	PASSED	
+message-link-forgets-the-conversation	CMP-04	PASSED	
+message-link-forgets-the-conversation	CMP-05	PASSED	
+message-link-forgets-the-conversation	CMP-06	PASSED	
+message-link-forgets-the-conversation	CMP-07	PASSED	
+message-link-forgets-the-conversation	CMP-08	PASSED	
+message-link-forgets-the-conversation	CMP-09	PASSED	
+message-link-forgets-the-conversation	CMP-10	PASSED	
+message-link-forgets-the-conversation	CMP-11	PASSED	
+message-link-forgets-the-conversation	CMP-12	PASSED	
+message-link-forgets-the-conversation	DM-01	PASSED	
+message-link-forgets-the-conversation	DM-02	PASSED	
+message-link-forgets-the-conversation	DM-03	FAILED	Error: expect(locator).toBeVisible() failed | Locator: locator('[data-input-id="channel-input-01a1de5a-8e36-7992-8c8b-0e76796e4a97"]')
+message-link-forgets-the-conversation	DM-04	PASSED	
+message-link-forgets-the-conversation	DM-05	PASSED	
+message-link-forgets-the-conversation	DM-06	PASSED	Error: expect(locator).toBeVisible() failed | Locator: getByRole('option', { name: /Ben Member/ })
+message-link-forgets-the-conversation	UNR-01	PASSED	
+message-link-forgets-the-conversation	UNR-02	PASSED	
+message-link-forgets-the-conversation	UNR-03	PASSED	
+message-link-forgets-the-conversation	UNR-04	PASSED	
+message-link-forgets-the-conversation	UNR-05	PASSED	Error: expect(locator).toHaveText(expected) failed | Locator: getByRole('tree', { name: 'Conversations' }).getByRole('treeitem').filter({ hasText: 'unr-mwhm52r1
+message-link-forgets-the-conversation	UNR-06	PASSED	
+message-link-forgets-the-conversation	UNR-07	PASSED	
+message-link-forgets-the-conversation	UNR-08	PASSED	
+message-link-forgets-the-conversation	UNR-09	PASSED	Error: expect(locator).toBeVisible() failed | Locator: getByRole('tree', { name: 'Conversations' }).getByRole('treeitem').filter({ hasText: 'unr-mwhm5b7062pp-fr
+message-link-forgets-the-conversation	UNR-10	PASSED	
+page-loses-a-message	CHN-12	FAILED	Error: the last messages in the list | the last messages in the list
+page-loses-a-message	KEY-09	FAILED	Error: the last messages in the list | the last messages in the list
+page-loses-a-message	NAV-01	PASSED	
+page-loses-a-message	NAV-02	PASSED	
+page-loses-a-message	NAV-03	PASSED	
+page-loses-a-message	NAV-04	FAILED	Error: the last messages in the list | the last messages in the list
+page-loses-a-message	NAV-05	PASSED	Error: lost my place below "history 148": the list shows ["history 216","history 217","history 218","history 219","history 220","history 221","history 222","his
+page-loses-a-message	NAV-06	FAILED	Error: expect(locator).toBeInViewport() failed | Locator: locator('[data-channel-scroll]').locator('[data-message]').filter({ has: locator('[data-message-conten
+page-loses-a-message	NAV-07	PASSED	
+page-loses-a-message	MSG-16	FAILED	Error: expect(received).toEqual(expected) // deep equality | - Expected  - 3
+page-loses-a-message	OPEN-01	FAILED	Error: the last messages in the list | the last messages in the list
+page-loses-a-message	OPEN-02	FAILED	Error: the last messages in the list | the last messages in the list
+page-loses-a-message	REC-01	FAILED	Error: the last messages in the list | the last messages in the list
+page-loses-a-message	REC-02	FAILED	Error: expect(locator).toBeVisible() failed | Locator: locator('[data-channel-scroll]').locator('[data-message]').filter({ has: locator('[data-message-content]'
+page-loses-a-message	REC-03	FAILED	Error: expect(locator).toBeVisible() failed | Locator: locator('[data-channel-scroll]').locator('[data-message]').filter({ has: locator('[data-message-content]'
+page-loses-a-message	SCROLL-01	FAILED	Error: the last messages in the list | the last messages in the list
+page-loses-a-message	SCROLL-02	FAILED	Error: expect(locator).toBeInViewport() failed | Locator: locator('[data-channel-scroll]').locator('[data-message]').filter({ has: locator('[data-message-conten
+page-loses-a-message	SCROLL-03	PASSED	
+page-loses-a-message	SCROLL-04	PASSED	
+page-loses-a-message	TAB-01	FAILED	Error: expect(locator).toBeVisible() failed | Locator: locator('[data-channel-scroll]').locator('[data-message]').filter({ has: locator('[data-message-content]'
+page-loses-a-message	TAB-02	FAILED	Error: expect(locator).toBeVisible() failed | Locator: locator('[data-channel-scroll]').locator('[data-message]').filter({ has: locator('[data-message-content]'
+link-target-ignored	CHN-12	PASSED	
+link-target-ignored	KEY-09	PASSED	
+link-target-ignored	NAV-01	PASSED	
+link-target-ignored	NAV-02	FAILED	Error: expect(locator).toBeInViewport() failed | Locator: locator('[data-channel-scroll]').locator('[data-message-id="01a1de7b-d990-7aa7-a0a0-eb317a6de7c8"]')
+link-target-ignored	NAV-03	FAILED	Error: expect(locator).toBeInViewport() failed | Locator: locator('[data-channel-scroll]').locator('[data-message-id="01a1de7c-0376-798a-9949-199aed20542c"]')
+link-target-ignored	NAV-04	FAILED	Error: expect(locator).toBeVisible() failed | Locator: getByText('Message no longer available')
+link-target-ignored	NAV-05	PASSED	Error: expect(locator).toBeInViewport() failed | Locator: locator('[data-channel-scroll]').locator('[data-message-id="01a1de7b-d953-7ca9-9909-3c72191aed9d"]')
+link-target-ignored	NAV-06	FAILED	Error: expect(locator).toBeInViewport() failed | Locator: locator('[data-channel-scroll]').locator('[data-message-id="01a1de7b-d990-7aa7-a0a0-eb317a6de7c8"]')
+link-target-ignored	NAV-07	PASSED	
+link-target-ignored	MSG-16	PASSED	
+link-target-ignored	OPEN-01	PASSED	
+link-target-ignored	OPEN-02	PASSED	
+link-target-ignored	REC-01	PASSED	
+link-target-ignored	REC-02	PASSED	
+link-target-ignored	REC-03	PASSED	
+link-target-ignored	SCROLL-01	PASSED	
+link-target-ignored	SCROLL-02	PASSED	
+link-target-ignored	SCROLL-03	PASSED	
+link-target-ignored	SCROLL-04	PASSED	
+link-target-ignored	TAB-01	PASSED	
+link-target-ignored	TAB-02	PASSED	
+missing-message-not-recognised	CHN-12	PASSED	
+missing-message-not-recognised	KEY-09	PASSED	
+missing-message-not-recognised	NAV-01	PASSED	
+missing-message-not-recognised	NAV-02	PASSED	
+missing-message-not-recognised	NAV-03	PASSED	
+missing-message-not-recognised	NAV-04	FAILED	Error: expect(locator).toBeVisible() failed | Locator: getByText('Message no longer available')
+missing-message-not-recognised	NAV-05	PASSED	Error: lost my place below "history 148": the list shows ["history 217","history 218","history 219","history 220","history 221","history 222","history 223","his
+missing-message-not-recognised	NAV-06	PASSED	
+missing-message-not-recognised	NAV-07	PASSED	
+missing-message-not-recognised	MSG-16	PASSED	
+missing-message-not-recognised	OPEN-01	PASSED	
+missing-message-not-recognised	OPEN-02	PASSED	
+missing-message-not-recognised	REC-01	PASSED	
+missing-message-not-recognised	REC-02	PASSED	
+missing-message-not-recognised	REC-03	PASSED	
+missing-message-not-recognised	SCROLL-01	PASSED	
+missing-message-not-recognised	SCROLL-02	PASSED	
+missing-message-not-recognised	SCROLL-03	PASSED	
+missing-message-not-recognised	SCROLL-04	PASSED	
+missing-message-not-recognised	TAB-01	PASSED	
+missing-message-not-recognised	TAB-02	PASSED	
+scroll-to-bottom-does-nothing	CHN-12	PASSED	
+scroll-to-bottom-does-nothing	KEY-09	FAILED	Error: distance of the list from its end | distance of the list from its end
+scroll-to-bottom-does-nothing	NAV-01	PASSED	
+scroll-to-bottom-does-nothing	NAV-02	PASSED	
+scroll-to-bottom-does-nothing	NAV-03	PASSED	
+scroll-to-bottom-does-nothing	NAV-04	PASSED	
+scroll-to-bottom-does-nothing	NAV-05	PASSED	Error: lost my place below "history 148": the list shows ["history 217","history 218","history 219","history 220","history 221","history 222","history 223","his
+scroll-to-bottom-does-nothing	NAV-06	FAILED	Error: expect(locator).toBeInViewport() failed | Locator: locator('[data-channel-scroll]').locator('[data-message]').filter({ has: locator('[data-message-conten
+scroll-to-bottom-does-nothing	NAV-07	PASSED	
+scroll-to-bottom-does-nothing	MSG-16	PASSED	
+scroll-to-bottom-does-nothing	OPEN-01	PASSED	
+scroll-to-bottom-does-nothing	OPEN-02	PASSED	
+scroll-to-bottom-does-nothing	REC-01	PASSED	
+scroll-to-bottom-does-nothing	REC-02	PASSED	
+scroll-to-bottom-does-nothing	REC-03	PASSED	
+scroll-to-bottom-does-nothing	SCROLL-01	PASSED	
+scroll-to-bottom-does-nothing	SCROLL-02	FAILED	Error: expect(locator).toBeInViewport() failed | Locator: locator('[data-channel-scroll]').locator('[data-message]').filter({ has: locator('[data-message-conten
+scroll-to-bottom-does-nothing	SCROLL-03	PASSED	
+scroll-to-bottom-does-nothing	SCROLL-04	FAILED	Error: expect(locator).toBeInViewport() failed | Locator: locator('[data-channel-scroll]').locator('[data-message]').filter({ has: locator('[data-message-conten
+scroll-to-bottom-does-nothing	TAB-01	PASSED	
+scroll-to-bottom-does-nothing	TAB-02	PASSED	
+list-always-follows-new-messages	CHN-12	FAILED	Error: expect(locator).toBeInViewport() failed | Locator: locator('[data-channel-scroll]').locator('[data-message-id="01a1de80-6b8e-71b6-b323-08c04cf5854e"]')
+list-always-follows-new-messages	KEY-09	PASSED	
+list-always-follows-new-messages	NAV-01	PASSED	
+list-always-follows-new-messages	NAV-02	PASSED	
+list-always-follows-new-messages	NAV-03	PASSED	
+list-always-follows-new-messages	NAV-04	PASSED	
+list-always-follows-new-messages	NAV-05	PASSED	Error: expect(locator).toBeVisible() failed | Locator: locator('[data-channel-scroll]').locator('[data-message]').filter({ has: locator('[data-message-content]'
+list-always-follows-new-messages	NAV-06	FAILED	Error: expect(locator).toBeVisible() failed | Locator: getByRole('button', { name: 'Scroll to bottom' })
+list-always-follows-new-messages	NAV-07	PASSED	
+list-always-follows-new-messages	MSG-16	PASSED	
+list-always-follows-new-messages	OPEN-01	PASSED	
+list-always-follows-new-messages	OPEN-02	PASSED	
+list-always-follows-new-messages	REC-01	PASSED	
+list-always-follows-new-messages	REC-02	PASSED	
+list-always-follows-new-messages	REC-03	PASSED	
+list-always-follows-new-messages	SCROLL-01	PASSED	
+list-always-follows-new-messages	SCROLL-02	FAILED	Error: expect(locator).toBeVisible() failed | Locator: getByRole('button', { name: 'Scroll to bottom' })
+list-always-follows-new-messages	SCROLL-03	PASSED	
+list-always-follows-new-messages	SCROLL-04	FAILED	Error: expect(locator).toBeVisible() failed | Locator: getByRole('button', { name: 'Scroll to bottom' })
+list-always-follows-new-messages	TAB-01	PASSED	
+list-always-follows-new-messages	TAB-02	PASSED	
+copied-link-loses-its-message	CHN-12	PASSED	
+copied-link-loses-its-message	KEY-09	PASSED	
+copied-link-loses-its-message	NAV-01	PASSED	
+copied-link-loses-its-message	NAV-02	PASSED	
+copied-link-loses-its-message	NAV-03	PASSED	
+copied-link-loses-its-message	NAV-04	PASSED	
+copied-link-loses-its-message	NAV-05	PASSED	Error: lost my place below "history 148": the list shows ["history 217","history 218","history 219","history 220","history 221","history 222","history 223","his
+copied-link-loses-its-message	NAV-06	PASSED	
+copied-link-loses-its-message	NAV-07	FAILED	Error: expect(received).toContain(expected) // indexOf | Expected substring: "01a1de83-b0c9-7b2a-9f10-1524f1f44137"
+copied-link-loses-its-message	MSG-16	PASSED	
+copied-link-loses-its-message	OPEN-01	PASSED	
+copied-link-loses-its-message	OPEN-02	PASSED	
+copied-link-loses-its-message	REC-01	PASSED	
+copied-link-loses-its-message	REC-02	PASSED	
+copied-link-loses-its-message	REC-03	PASSED	
+copied-link-loses-its-message	SCROLL-01	PASSED	
+copied-link-loses-its-message	SCROLL-02	PASSED	
+copied-link-loses-its-message	SCROLL-03	PASSED	
+copied-link-loses-its-message	SCROLL-04	PASSED	
+copied-link-loses-its-message	TAB-01	PASSED	
+copied-link-loses-its-message	TAB-02	PASSED	
+timeline-cache-ignores-the-channel	CHN-12	PASSED	
+timeline-cache-ignores-the-channel	KEY-09	PASSED	
+timeline-cache-ignores-the-channel	NAV-01	PASSED	
+timeline-cache-ignores-the-channel	NAV-02	PASSED	
+timeline-cache-ignores-the-channel	NAV-03	PASSED	
+timeline-cache-ignores-the-channel	NAV-04	PASSED	
+timeline-cache-ignores-the-channel	NAV-05	PASSED	Error: lost my place below "history 148": the list shows ["history 217","history 218","history 219","history 220","history 221","history 222","history 223","his
+timeline-cache-ignores-the-channel	NAV-06	PASSED	
+timeline-cache-ignores-the-channel	NAV-07	PASSED	
+timeline-cache-ignores-the-channel	MSG-16	FAILED	Error: expect(received).toEqual(expected) // deep equality | - Expected  - 1
+timeline-cache-ignores-the-channel	OPEN-01	PASSED	
+timeline-cache-ignores-the-channel	OPEN-02	FAILED	Error: the last messages in the list | the last messages in the list
+timeline-cache-ignores-the-channel	REC-01	FAILED	Error: expect(locator).toBeVisible() failed | Locator: locator('[data-channel-scroll]').locator('[data-message]').filter({ has: locator('[data-message-content]'
+timeline-cache-ignores-the-channel	REC-02	FAILED	Error: expect(locator).toBeVisible() failed | Locator: locator('[data-channel-scroll]').locator('[data-message]').filter({ has: locator('[data-message-content]'
+timeline-cache-ignores-the-channel	REC-03	FAILED	Error: the last messages in the list | the last messages in the list
+timeline-cache-ignores-the-channel	SCROLL-01	PASSED	
+timeline-cache-ignores-the-channel	SCROLL-02	PASSED	
+timeline-cache-ignores-the-channel	SCROLL-03	FAILED	Error: expect(locator).toBeInViewport() failed | Locator: locator('[data-channel-scroll]').locator('[data-message]').filter({ has: locator('[data-message-conten
+timeline-cache-ignores-the-channel	SCROLL-04	FAILED	Error: expect(received).toBeGreaterThan(expected) | Expected: > 3388
+timeline-cache-ignores-the-channel	TAB-01	FAILED	Error: the last messages in the list | the last messages in the list
+timeline-cache-ignores-the-channel	TAB-02	FAILED	Error: expect(locator).toHaveCount(expected) failed | Locator:  locator('[data-channel-scroll]').locator('[data-message-id="01a1de85-c231-7d5a-833d-e0b94e0843bd
+live-events-ignored	ACC-01	PASSED	
+live-events-ignored	ACC-02	PASSED	
+live-events-ignored	ACC-03	FAILED	Error: the last messages in the list | the last messages in the list
+live-events-ignored	ACC-04	PASSED	
+live-events-ignored	ACC-05	PASSED	
+live-events-ignored	ACC-06	PASSED	
+live-events-ignored	ACC-07	PASSED	
+live-events-ignored	ACC-08	PASSED	
+live-events-ignored	ACC-09	PASSED	
+live-events-ignored	CHN-01	PASSED	
+live-events-ignored	CHN-02	FAILED	Error: the last messages in the list | the last messages in the list
+live-events-ignored	CHN-03	PASSED	
+live-events-ignored	CHN-04	PASSED	Error: expect(locator).toContainText(expected) failed | Locator: getByRole('main').locator('[data-view-shell-top-bar]')
+live-events-ignored	CHN-05	PASSED	
+live-events-ignored	CHN-06	PASSED	
+live-events-ignored	CHN-07	PASSED	
+live-events-ignored	CHN-08	PASSED	Error: expect(locator).toHaveCount(expected) failed | Locator:  getByRole('tree', { name: 'Conversations' }).locator('[data-key="favorite:channel:01a1de87-407d-
+live-events-ignored	CHN-09	PASSED	
+live-events-ignored	CHN-10	PASSED	
+live-events-ignored	CHN-11	PASSED	
+live-events-ignored	CHN-12	PASSED	
+live-events-ignored	CHN-13	PASSED	
+live-events-ignored	CHN-14	PASSED	Error: expect(locator).toBeVisible() failed | Locator: getByRole('main').getByText('Channel e2e-mwhmqxngpqt7 created')
+live-events-ignored	CHN-15	PASSED	Error: expect(locator).toHaveCount(expected) failed | Locator:  locator('[data-input-id="channel-input-01a1de87-6c08-71c1-8865-8558b2725e21"]')
+live-events-ignored	CMP-01	PASSED	
+live-events-ignored	CMP-02	PASSED	
+live-events-ignored	CMP-03	FAILED	Error: the last messages in the list | the last messages in the list
+live-events-ignored	CMP-13	FAILED	Error: the last messages in the list | the last messages in the list
+live-events-ignored	CMP-04	PASSED	
+live-events-ignored	CMP-05	FAILED	Error: expect(locator).toBeVisible() failed | Locator: locator('[data-channel-scroll]').locator('[data-message]').filter({ has: locator('[data-message-content]'
+live-events-ignored	CMP-06	FAILED	Error: expect(locator).toBeVisible() failed | Locator: locator('[data-channel-scroll]').locator('[data-message]').filter({ has: locator('[data-message-content]'
+live-events-ignored	CMP-07	FAILED	Error: expect(locator).toBeVisible() failed | Locator: locator('[data-channel-scroll]').locator('[data-message]').filter({ has: locator('[data-message-content]'
+live-events-ignored	CMP-08	FAILED	Error: expect(locator).toBeVisible() failed | Locator: locator('[data-channel-scroll]').getByRole('link', { name: 'alone.txt' })
+live-events-ignored	CMP-09	FAILED	Error: expect(locator).toBeVisible() failed | Locator: locator('[data-channel-scroll]').getByText('Ben Member is typing', { exact: true })
+live-events-ignored	CMP-10	FAILED	Error: expect(locator).toBeVisible() failed | Locator: locator('[data-channel-scroll]').getByText('Ben Member is typing', { exact: true })
+live-events-ignored	CMP-11	FAILED	Error: the last messages in the list | the last messages in the list
+live-events-ignored	CMP-12	FAILED	Error: expect(locator).toHaveText(expected) failed | Locator: locator('[data-channel-scroll]').locator('[data-message-content]')
+live-events-ignored	DM-01	FAILED	Error: the last messages in the list | the last messages in the list
+live-events-ignored	DM-02	PASSED	
+live-events-ignored	DM-03	PASSED	
+live-events-ignored	DM-04	PASSED	
+live-events-ignored	DM-05	PASSED	
+live-events-ignored	DM-06	PASSED	Error: expect(locator).toBeVisible() failed | Locator: getByRole('option', { name: /Ben Member/ })
+live-events-ignored	KEY-01	PASSED	
+live-events-ignored	KEY-02	PASSED	
+live-events-ignored	KEY-03	PASSED	
+live-events-ignored	KEY-04	PASSED	
+live-events-ignored	KEY-05	PASSED	
+live-events-ignored	KEY-06	PASSED	Error: expect(locator).toBeFocused() failed | Locator:  locator('[data-input-id="thread-reply-input-01a1de88-b614-758e-bd5f-ee57a71b990e"] [contenteditable]')
+live-events-ignored	KEY-07	PASSED	
+live-events-ignored	KEY-08	PASSED	
+live-events-ignored	KEY-12	PASSED	
+live-events-ignored	KEY-09	PASSED	
+live-events-ignored	KEY-10	PASSED	
+live-events-ignored	KEY-11	PASSED	
+live-events-ignored	NAV-01	PASSED	
+live-events-ignored	NAV-02	PASSED	
+live-events-ignored	NAV-03	PASSED	
+live-events-ignored	NAV-04	PASSED	
+live-events-ignored	NAV-05	PASSED	Error: lost my place below "history 148": the list shows ["history 217","history 218","history 219","history 220","history 221","history 222","history 223","his
+live-events-ignored	NAV-06	PASSED	
+live-events-ignored	NAV-07	PASSED	
+live-events-ignored	MEM-01	FAILED	Error: the last messages in the list | the last messages in the list
+live-events-ignored	MEM-02	PASSED	
+live-events-ignored	MEM-03	PASSED	Error: expect(locator).toHaveCount(expected) failed | Locator:  locator('[data-input-id="channel-input-01a1de88-ff8d-7b47-9e6f-75dc5d18875d"]')
+live-events-ignored	MEM-04	FAILED	Error: the last messages in the list | the last messages in the list
+live-events-ignored	MEM-05	FAILED	Error: the last messages in the list | the last messages in the list
+live-events-ignored	MEM-06	PASSED	
+live-events-ignored	MEM-07	PASSED	
+live-events-ignored	MEM-08	PASSED	
+live-events-ignored	MSG-01	FAILED	Error: expect(received).toEqual(expected) // deep equality | - Expected  - 1
+live-events-ignored	MSG-02	FAILED	Error: expect(received).toEqual(expected) // deep equality | - Expected  - 1
+live-events-ignored	MSG-03	FAILED	Error: expect(locator).toBeVisible() failed | Locator: locator('[data-channel-scroll]').locator('[data-message]').filter({ has: locator('[data-message-content]'
+live-events-ignored	MSG-04	FAILED	Error: expect(locator).toHaveCount(expected) failed | Locator:  locator('[data-channel-scroll]').locator('[data-message]')
+live-events-ignored	MSG-05	FAILED	Error: expect(received).toEqual(expected) // deep equality | - Expected  - 3
+live-events-ignored	MSG-06	FAILED	Error: expect(locator).toBeVisible() failed | Locator: locator('[data-channel-scroll]').locator('[data-message]').filter({ has: locator('[data-message-content]'
+live-events-ignored	MSG-07	FAILED	Error: expect(received).toEqual(expected) // deep equality | - Expected  - 1
+live-events-ignored	MSG-08	FAILED	Error: expect(received).toEqual(expected) // deep equality | - Expected  - 1
+live-events-ignored	MSG-09	FAILED	Error: expect(received).toEqual(expected) // deep equality | - Expected  - 1
+live-events-ignored	MSG-10	FAILED	Error: expect(received).toEqual(expected) // deep equality | - Expected  - 0
+live-events-ignored	MSG-11	FAILED	Error: expect(received).toEqual(expected) // deep equality | - Expected  - 1
+live-events-ignored	MSG-12	PASSED	
+live-events-ignored	MSG-13	FAILED	Error: expect(received).toEqual(expected) // deep equality | - Expected  - 3
+live-events-ignored	MSG-14	FAILED	Error: expect(received).toEqual(expected) // deep equality | - Expected  - 3
+live-events-ignored	MSG-15	FAILED	Error: expect(received).toEqual(expected) // deep equality | - Expected  - 1
+live-events-ignored	MSG-16	FAILED	Error: expect(received).toEqual(expected) // deep equality | - Expected  - 1
+live-events-ignored	MSG-17	PASSED	
+live-events-ignored	MSG-18	FAILED	Error: expect(received).toEqual(expected) // deep equality | - Expected  - 4
+live-events-ignored	OPEN-01	PASSED	
+live-events-ignored	OPEN-02	PASSED	
+live-events-ignored	REC-01	FAILED	Error: expect(locator).toBeVisible() failed | Locator: locator('[data-channel-scroll]').locator('[data-message]').filter({ has: locator('[data-message-content]'
+live-events-ignored	REC-02	FAILED	Error: expect(locator).toBeVisible() failed | Locator: locator('[data-channel-scroll]').locator('[data-message]').filter({ has: locator('[data-message-content]'
+live-events-ignored	REC-03	FAILED	Error: the last messages in the list | the last messages in the list
+live-events-ignored	SCROLL-01	PASSED	
+live-events-ignored	SCROLL-02	PASSED	
+live-events-ignored	SCROLL-03	FAILED	Error: expect(locator).toBeInViewport() failed | Locator: locator('[data-channel-scroll]').locator('[data-message]').filter({ has: locator('[data-message-conten
+live-events-ignored	SCROLL-04	FAILED	Error: expect(received).toBeGreaterThan(expected) | Expected: > 3388
+live-events-ignored	THR-01	FAILED	Error: expect(received).toEqual(expected) // deep equality | - Expected  - 3
+live-events-ignored	THR-02	FAILED	Error: expect(locator).toBeVisible() failed | Locator: locator('[data-channel-scroll]').locator('[data-message]').filter({ has: locator('[data-message-content]'
+live-events-ignored	THR-03	PASSED	
+live-events-ignored	THR-04	FAILED	Error: expect(received).toEqual(expected) // deep equality | - Expected  - 1
+live-events-ignored	THR-05	FAILED	Error: expect(received).toEqual(expected) // deep equality | - Expected  - 0
+live-events-ignored	THR-06	FAILED	Error: expect(received).toEqual(expected) // deep equality | - Expected  - 3
+live-events-ignored	THR-07	FAILED	Error: expect(received).toEqual(expected) // deep equality | - Expected  - 1
+live-events-ignored	THR-08	FAILED	Error: expect(locator).toContainText(expected) failed | Locator: locator('[data-channel-scroll]').locator('[data-channel-thread-row]').filter({ has: locator('[d
+live-events-ignored	THR-09	FAILED	Error: expect(received).toEqual(expected) // deep equality | - Expected  - 1
+live-events-ignored	THR-10	PASSED	Error: expect(locator).toBeFocused() failed | Locator:  locator('[data-input-id="thread-reply-input-01a1de8b-72fb-70f5-aefe-8d1c9d06cf51"]').getByRole('textbox'
+live-events-ignored	TAB-01	FAILED	Error: the last messages in the list | the last messages in the list
+live-events-ignored	TAB-02	FAILED	Error: expect(locator).toHaveCount(expected) failed | Locator:  locator('[data-channel-scroll]').locator('[data-message-id="01a1de8b-b755-7c36-84b8-bcda8f56dad1
+live-events-ignored	UNR-01	PASSED	
+live-events-ignored	UNR-02	PASSED	
+live-events-ignored	UNR-03	PASSED	
+live-events-ignored	UNR-04	PASSED	
+live-events-ignored	UNR-05	PASSED	Error: expect(locator).toHaveText(expected) failed | Locator: getByRole('tree', { name: 'Conversations' }).getByRole('treeitem').filter({ hasText: 'unr-mwhmx48a
+live-events-ignored	UNR-06	PASSED	
+live-events-ignored	UNR-07	FAILED	Error: the last messages in the list | the last messages in the list
+live-events-ignored	UNR-08	PASSED	
+live-events-ignored	UNR-09	PASSED	Error: expect(locator).toBeVisible() failed | Locator: getByRole('tree', { name: 'Conversations' }).getByRole('treeitem').filter({ hasText: 'unr-mwhmxbsbew9m-fr
+live-events-ignored	UNR-10	PASSED	
+link-target-not-marked	NAV-01	FAILED	Error: messages marked as the target of the link | messages marked as the target of the link
+link-target-not-marked	NAV-02	FAILED	Error: messages marked as the target of the link | messages marked as the target of the link
+link-target-not-marked	NAV-03	FAILED	Error: messages marked as the target of the link | messages marked as the target of the link
+link-target-not-marked	NAV-04	PASSED	
+link-target-not-marked	NAV-05	PASSED	Error: lost my place below "history 148": the list shows ["history 217","history 218","history 219","history 220","history 221","history 222","history 223","his
+link-target-not-marked	NAV-06	PASSED	
+link-target-not-marked	NAV-07	FAILED	Error: messages marked as the target of the link | messages marked as the target of the link
+found-list-misses-new-channels	UNR-08	FAILED	Error: expect(locator).toBeVisible() failed | Locator: getByRole('tree', { name: 'Conversations' }).getByRole('treeitem').filter({ hasText: 'unr-mwhnd4ntd4t9-ad
+found-list-misses-new-channels	UNR-10	PASSED	
+escape-does-not-return-to-the-list	KEY-01	PASSED	
+escape-does-not-return-to-the-list	KEY-02	PASSED	
+escape-does-not-return-to-the-list	KEY-03	PASSED	
+escape-does-not-return-to-the-list	KEY-04	PASSED	
+escape-does-not-return-to-the-list	KEY-05	PASSED	
+escape-does-not-return-to-the-list	KEY-06	PASSED	Error: expect(locator).toBeFocused() failed | Locator:  locator('[data-input-id="thread-reply-input-01a1de98-4a62-7f93-b303-08b9afb9c573"] [contenteditable]')
+escape-does-not-return-to-the-list	KEY-07	PASSED	
+escape-does-not-return-to-the-list	KEY-08	PASSED	
+escape-does-not-return-to-the-list	KEY-12	PASSED	
+escape-does-not-return-to-the-list	KEY-09	PASSED	
+escape-does-not-return-to-the-list	KEY-10	PASSED	
+escape-does-not-return-to-the-list	KEY-11	FAILED	Error: expect(locator).toBeFocused() failed | Locator:  getByRole('tree', { name: 'Conversations' })
+e-key-does-not-edit	KEY-07	FAILED	Error: expect(locator).toBeFocused() failed | Locator: locator('[data-input-id="edit-message-input-01a1de99-4de8-70e4-afe3-fcd0ec417871"] [contenteditable]')
+e-key-does-not-edit	MSG-08	FAILED	Error: expect(locator).toHaveText(expected) failed | Locator: locator('[data-input-id="edit-message-input-01a1de99-4e38-7453-9f25-63188e50837f"]').getByRole('te
+delete-leaves-the-message	KEY-12	FAILED	Error: expect(locator).toHaveCount(expected) failed | Locator:  locator('[data-channel-scroll]').locator('[data-message]').filter({ has: locator('[data-message-
+delete-leaves-the-message	MSG-10	FAILED	Error: expect(received).toEqual(expected) // deep equality | - Expected  - 0
+delete-leaves-the-message	MSG-11	FAILED	Error: expect(received).toEqual(expected) // deep equality | - Expected  - 1
+delete-leaves-the-message	THR-05	FAILED	Error: expect(received).toEqual(expected) // deep equality | - Expected  - 0
+backspace-does-not-ask-to-delete	KEY-01	PASSED	
+backspace-does-not-ask-to-delete	KEY-02	PASSED	
+backspace-does-not-ask-to-delete	KEY-03	PASSED	
+backspace-does-not-ask-to-delete	KEY-04	PASSED	
+backspace-does-not-ask-to-delete	KEY-05	PASSED	
+backspace-does-not-ask-to-delete	KEY-06	PASSED	Error: expect(locator).toBeFocused() failed | Locator:  locator('[data-input-id="thread-reply-input-01a1de9f-f0df-77a3-a441-ba516534eac5"] [contenteditable]')
+backspace-does-not-ask-to-delete	KEY-07	PASSED	
+backspace-does-not-ask-to-delete	KEY-08	FAILED	Error: expect(locator).toBeVisible() failed | Locator: getByRole('dialog', { name: 'Delete message' })
+backspace-does-not-ask-to-delete	KEY-12	FAILED	Error: expect(locator).toBeVisible() failed | Locator: getByRole('dialog', { name: 'Delete message' })
+backspace-does-not-ask-to-delete	KEY-09	PASSED	
+backspace-does-not-ask-to-delete	KEY-10	PASSED	
+backspace-does-not-ask-to-delete	KEY-11	PASSED	
+arrow-up-does-not-leave-the-composer	KEY-05	FAILED	Error: expect(locator).toContainText(expected) failed | Locator: locator('[data-channel-scroll]').locator('[data-message][data-selected]')
+arrow-up-does-not-leave-the-composer	KEY-06	PASSED	Error: expect(locator).toBeFocused() failed | Locator:  locator('[data-channel-message-list]')
+arrow-up-does-not-leave-the-composer	KEY-07	PASSED	
+arrow-up-does-not-leave-the-composer	KEY-08	PASSED	
+arrow-up-does-not-leave-the-composer	KEY-09	PASSED	

@@ -1,0 +1,44 @@
+missing-channel-shown-as-no-access	ACC-01	PASSED	
+missing-channel-shown-as-no-access	ACC-02	PASSED	
+missing-channel-shown-as-no-access	ACC-03	PASSED	
+missing-channel-shown-as-no-access	ACC-04	PASSED	
+missing-channel-shown-as-no-access	ACC-05	PASSED	
+missing-channel-shown-as-no-access	ACC-06	PASSED	
+missing-channel-shown-as-no-access	ACC-07	PASSED	
+missing-channel-shown-as-no-access	ACC-08	FAILED	Error: expect(locator).toBeVisible() failed | Locator: getByRole('heading', { name: 'Conversation unavailable' })
+missing-channel-shown-as-no-access	ACC-09	PASSED	
+missing-channel-shown-as-no-access	CHN-01	PASSED	
+missing-channel-shown-as-no-access	CHN-02	PASSED	
+missing-channel-shown-as-no-access	CHN-03	PASSED	
+missing-channel-shown-as-no-access	CHN-04	PASSED	Error: expect(locator).toContainText(expected) failed | Locator: getByRole('main').locator('[data-view-shell-top-bar]')
+missing-channel-shown-as-no-access	CHN-05	PASSED	
+missing-channel-shown-as-no-access	CHN-06	PASSED	
+missing-channel-shown-as-no-access	CHN-07	FAILED	Error: expect(locator).toBeVisible() failed | Locator: getByRole('heading', { name: 'Conversation unavailable' })
+missing-channel-shown-as-no-access	CHN-08	PASSED	Error: expect(locator).toHaveCount(expected) failed | Locator:  getByRole('tree', { name: 'Conversations' }).locator('[data-key="favorite:channel:01a1de3e-115e-
+missing-channel-shown-as-no-access	CHN-09	PASSED	
+missing-channel-shown-as-no-access	CHN-10	PASSED	
+missing-channel-shown-as-no-access	CHN-11	PASSED	
+missing-channel-shown-as-no-access	CHN-12	PASSED	
+missing-channel-shown-as-no-access	CHN-13	PASSED	
+missing-channel-shown-as-no-access	CHN-14	PASSED	Error: expect(locator).toBeVisible() failed | Locator: getByRole('main').getByText('Channel e2e-mwhjw68eieo6 created')
+missing-channel-shown-as-no-access	CHN-15	PASSED	Error: expect(locator).toHaveCount(expected) failed | Locator:  locator('[data-input-id="channel-input-01a1de3e-46f3-76ea-8b37-73abdb96e6fe"]')
+missing-channel-shown-as-no-access	KEY-01	PASSED	
+missing-channel-shown-as-no-access	KEY-02	PASSED	
+missing-channel-shown-as-no-access	KEY-03	PASSED	
+missing-channel-shown-as-no-access	KEY-04	PASSED	
+missing-channel-shown-as-no-access	KEY-05	PASSED	
+missing-channel-shown-as-no-access	KEY-06	PASSED	Error: expect(locator).toBeFocused() failed | Locator:  locator('[data-input-id="thread-reply-input-01a1de3e-7a4a-71f0-90bb-d8e6f50bd16e"] [contenteditable]')
+missing-channel-shown-as-no-access	KEY-07	PASSED	
+missing-channel-shown-as-no-access	KEY-08	PASSED	
+missing-channel-shown-as-no-access	KEY-12	PASSED	
+missing-channel-shown-as-no-access	KEY-09	PASSED	
+missing-channel-shown-as-no-access	KEY-10	PASSED	
+missing-channel-shown-as-no-access	KEY-11	PASSED	
+missing-channel-shown-as-no-access	MEM-01	PASSED	
+missing-channel-shown-as-no-access	MEM-02	PASSED	
+missing-channel-shown-as-no-access	MEM-03	PASSED	Error: expect(locator).toHaveCount(expected) failed | Locator:  locator('[data-input-id="channel-input-01a1de3e-9e6c-7e1e-9f23-e36513e22062"]')
+missing-channel-shown-as-no-access	MEM-04	PASSED	
+missing-channel-shown-as-no-access	MEM-05	PASSED	
+missing-channel-shown-as-no-access	MEM-06	PASSED	
+missing-channel-shown-as-no-access	MEM-07	PASSED	
+missing-channel-shown-as-no-access	MEM-08	PASSED	

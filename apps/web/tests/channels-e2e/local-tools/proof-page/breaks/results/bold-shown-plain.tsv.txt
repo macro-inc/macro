@@ -1,0 +1,28 @@
+bold-shown-plain	MSG-01	PASSED	
+bold-shown-plain	MSG-02	PASSED	
+bold-shown-plain	MSG-03	PASSED	
+bold-shown-plain	MSG-04	PASSED	
+bold-shown-plain	MSG-05	FAILED	Error: expect(locator).toHaveCSS(expected) failed | Locator: locator('[data-channel-scroll]').getByText('bold', { exact: true })
+bold-shown-plain	MSG-06	PASSED	
+bold-shown-plain	MSG-07	PASSED	
+bold-shown-plain	MSG-08	PASSED	
+bold-shown-plain	MSG-09	PASSED	
+bold-shown-plain	MSG-10	PASSED	
+bold-shown-plain	MSG-11	PASSED	
+bold-shown-plain	MSG-12	PASSED	
+bold-shown-plain	MSG-13	PASSED	
+bold-shown-plain	MSG-14	PASSED	
+bold-shown-plain	MSG-15	PASSED	
+bold-shown-plain	MSG-16	PASSED	
+bold-shown-plain	MSG-17	PASSED	
+bold-shown-plain	MSG-18	PASSED	Error: expect(received).toEqual(expected) // deep equality | - Expected  - 3
+bold-shown-plain	THR-01	PASSED	
+bold-shown-plain	THR-02	PASSED	
+bold-shown-plain	THR-03	PASSED	
+bold-shown-plain	THR-04	PASSED	
+bold-shown-plain	THR-05	PASSED	
+bold-shown-plain	THR-06	PASSED	
+bold-shown-plain	THR-07	PASSED	
+bold-shown-plain	THR-08	PASSED	
+bold-shown-plain	THR-09	PASSED	
+bold-shown-plain	THR-10	PASSED	Error: expect(locator).toBeFocused() failed | Locator:  locator('[data-input-id="thread-reply-input-01a1de1e-593d-796d-aa63-058ac8a80c6f"]').getByRole('textbox'

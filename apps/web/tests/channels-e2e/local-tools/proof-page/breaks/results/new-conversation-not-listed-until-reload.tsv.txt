@@ -1,0 +1,29 @@
+new-conversation-not-listed-until-reload	CMP-01	PASSED	
+new-conversation-not-listed-until-reload	CMP-02	PASSED	
+new-conversation-not-listed-until-reload	CMP-03	FAILED	Error: the last messages in the list | the last messages in the list
+new-conversation-not-listed-until-reload	CMP-13	FAILED	Error: the last messages in the list | the last messages in the list
+new-conversation-not-listed-until-reload	CMP-04	PASSED	
+new-conversation-not-listed-until-reload	CMP-05	PASSED	
+new-conversation-not-listed-until-reload	CMP-06	PASSED	
+new-conversation-not-listed-until-reload	CMP-07	PASSED	
+new-conversation-not-listed-until-reload	CMP-08	PASSED	
+new-conversation-not-listed-until-reload	CMP-09	PASSED	
+new-conversation-not-listed-until-reload	CMP-10	PASSED	
+new-conversation-not-listed-until-reload	CMP-11	PASSED	
+new-conversation-not-listed-until-reload	CMP-12	PASSED	
+new-conversation-not-listed-until-reload	DM-01	PASSED	
+new-conversation-not-listed-until-reload	DM-02	PASSED	
+new-conversation-not-listed-until-reload	DM-03	PASSED	
+new-conversation-not-listed-until-reload	DM-04	PASSED	
+new-conversation-not-listed-until-reload	DM-05	PASSED	
+new-conversation-not-listed-until-reload	DM-06	PASSED	Error: expect(locator).toBeVisible() failed | Locator: getByRole('option', { name: /Ben Member/ })
+new-conversation-not-listed-until-reload	UNR-01	PASSED	
+new-conversation-not-listed-until-reload	UNR-02	PASSED	
+new-conversation-not-listed-until-reload	UNR-03	PASSED	
+new-conversation-not-listed-until-reload	UNR-04	PASSED	
+new-conversation-not-listed-until-reload	UNR-05	PASSED	Error: expect(locator).toHaveText(expected) failed | Locator: getByRole('tree', { name: 'Conversations' }).getByRole('treeitem').filter({ hasText: 'unr-mwhm0dqd
+new-conversation-not-listed-until-reload	UNR-06	PASSED	
+new-conversation-not-listed-until-reload	UNR-07	PASSED	
+new-conversation-not-listed-until-reload	UNR-08	PASSED	
+new-conversation-not-listed-until-reload	UNR-09	PASSED	Error: expect(locator).toBeVisible() failed | Locator: getByRole('tree', { name: 'Conversations' }).getByRole('treeitem').filter({ hasText: 'unr-mwhm0jkqikpa-fr
+new-conversation-not-listed-until-reload	UNR-10	PASSED	

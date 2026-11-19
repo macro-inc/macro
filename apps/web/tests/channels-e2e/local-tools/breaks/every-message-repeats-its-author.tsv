@@ -1,0 +1,28 @@
+every-message-repeats-its-author	MSG-01	PASSED	
+every-message-repeats-its-author	MSG-02	PASSED	
+every-message-repeats-its-author	MSG-03	PASSED	
+every-message-repeats-its-author	MSG-04	PASSED	
+every-message-repeats-its-author	MSG-05	PASSED	
+every-message-repeats-its-author	MSG-06	FAILED	Error: expect(locator).toHaveCount(expected) failed | Locator:  locator('[data-channel-scroll]').getByText('Ada Owner', { exact: true })
+every-message-repeats-its-author	MSG-07	PASSED	
+every-message-repeats-its-author	MSG-08	PASSED	
+every-message-repeats-its-author	MSG-09	PASSED	
+every-message-repeats-its-author	MSG-10	PASSED	
+every-message-repeats-its-author	MSG-11	PASSED	
+every-message-repeats-its-author	MSG-12	PASSED	
+every-message-repeats-its-author	MSG-13	PASSED	
+every-message-repeats-its-author	MSG-14	PASSED	
+every-message-repeats-its-author	MSG-15	PASSED	
+every-message-repeats-its-author	MSG-16	PASSED	
+every-message-repeats-its-author	MSG-17	PASSED	
+every-message-repeats-its-author	MSG-18	PASSED	Error: expect(received).toEqual(expected) // deep equality | - Expected  - 3
+every-message-repeats-its-author	THR-01	PASSED	
+every-message-repeats-its-author	THR-02	PASSED	
+every-message-repeats-its-author	THR-03	PASSED	
+every-message-repeats-its-author	THR-04	PASSED	
+every-message-repeats-its-author	THR-05	PASSED	
+every-message-repeats-its-author	THR-06	PASSED	
+every-message-repeats-its-author	THR-07	PASSED	
+every-message-repeats-its-author	THR-08	PASSED	
+every-message-repeats-its-author	THR-09	PASSED	
+every-message-repeats-its-author	THR-10	PASSED	Error: expect(locator).toBeFocused() failed | Locator:  locator('[data-input-id="thread-reply-input-01a1de20-110f-7098-b517-c3a50bb3d2c2"]').getByRole('textbox'

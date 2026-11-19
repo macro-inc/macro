@@ -1,0 +1,44 @@
+non-owner-offered-delete	ACC-01	PASSED	
+non-owner-offered-delete	ACC-02	PASSED	
+non-owner-offered-delete	ACC-03	PASSED	
+non-owner-offered-delete	ACC-04	PASSED	
+non-owner-offered-delete	ACC-05	PASSED	
+non-owner-offered-delete	ACC-06	PASSED	
+non-owner-offered-delete	ACC-07	PASSED	
+non-owner-offered-delete	ACC-08	PASSED	
+non-owner-offered-delete	ACC-09	PASSED	
+non-owner-offered-delete	CHN-01	PASSED	
+non-owner-offered-delete	CHN-02	PASSED	
+non-owner-offered-delete	CHN-03	PASSED	
+non-owner-offered-delete	CHN-04	PASSED	Error: expect(locator).toContainText(expected) failed | Locator: getByRole('main').locator('[data-view-shell-top-bar]')
+non-owner-offered-delete	CHN-05	PASSED	
+non-owner-offered-delete	CHN-06	PASSED	
+non-owner-offered-delete	CHN-07	PASSED	
+non-owner-offered-delete	CHN-08	PASSED	Error: expect(locator).toHaveCount(expected) failed | Locator:  getByRole('tree', { name: 'Conversations' }).locator('[data-key="favorite:channel:01a1de40-3302-
+non-owner-offered-delete	CHN-09	FAILED	Error: expect(locator).toHaveCount(expected) failed | Locator:  getByRole('menu', { name: 'Channel actions' }).getByRole('menuitem', { name: 'Delete' })
+non-owner-offered-delete	CHN-10	PASSED	
+non-owner-offered-delete	CHN-11	PASSED	
+non-owner-offered-delete	CHN-12	PASSED	
+non-owner-offered-delete	CHN-13	PASSED	
+non-owner-offered-delete	CHN-14	PASSED	Error: expect(locator).toBeVisible() failed | Locator: getByRole('main').getByText('Channel e2e-mwhjz7odblwb created')
+non-owner-offered-delete	CHN-15	PASSED	Error: expect(locator).toHaveCount(expected) failed | Locator:  locator('[data-input-id="channel-input-01a1de40-6ff6-7b96-93f5-a365d3e32d9b"]')
+non-owner-offered-delete	KEY-01	PASSED	
+non-owner-offered-delete	KEY-02	PASSED	
+non-owner-offered-delete	KEY-03	PASSED	
+non-owner-offered-delete	KEY-04	PASSED	
+non-owner-offered-delete	KEY-05	PASSED	
+non-owner-offered-delete	KEY-06	PASSED	Error: expect(locator).toBeFocused() failed | Locator:  locator('[data-input-id="thread-reply-input-01a1de40-926f-7866-8069-efa0ab76109f"] [contenteditable]')
+non-owner-offered-delete	KEY-07	PASSED	
+non-owner-offered-delete	KEY-08	PASSED	
+non-owner-offered-delete	KEY-12	PASSED	
+non-owner-offered-delete	KEY-09	PASSED	
+non-owner-offered-delete	KEY-10	PASSED	
+non-owner-offered-delete	KEY-11	PASSED	
+non-owner-offered-delete	MEM-01	PASSED	
+non-owner-offered-delete	MEM-02	PASSED	
+non-owner-offered-delete	MEM-03	PASSED	Error: expect(locator).toHaveCount(expected) failed | Locator:  locator('[data-input-id="channel-input-01a1de40-bf07-78d8-a0eb-f2a6cc7cd324"]')
+non-owner-offered-delete	MEM-04	PASSED	
+non-owner-offered-delete	MEM-05	PASSED	
+non-owner-offered-delete	MEM-06	PASSED	
+non-owner-offered-delete	MEM-07	PASSED	
+non-owner-offered-delete	MEM-08	PASSED	

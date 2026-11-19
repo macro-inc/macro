@@ -1,0 +1,29 @@
+message-link-forgets-the-conversation	CMP-01	PASSED	
+message-link-forgets-the-conversation	CMP-02	PASSED	
+message-link-forgets-the-conversation	CMP-03	PASSED	
+message-link-forgets-the-conversation	CMP-13	PASSED	
+message-link-forgets-the-conversation	CMP-04	PASSED	
+message-link-forgets-the-conversation	CMP-05	PASSED	
+message-link-forgets-the-conversation	CMP-06	PASSED	
+message-link-forgets-the-conversation	CMP-07	PASSED	
+message-link-forgets-the-conversation	CMP-08	PASSED	
+message-link-forgets-the-conversation	CMP-09	PASSED	
+message-link-forgets-the-conversation	CMP-10	PASSED	
+message-link-forgets-the-conversation	CMP-11	PASSED	
+message-link-forgets-the-conversation	CMP-12	PASSED	
+message-link-forgets-the-conversation	DM-01	PASSED	
+message-link-forgets-the-conversation	DM-02	PASSED	
+message-link-forgets-the-conversation	DM-03	FAILED	Error: expect(locator).toBeVisible() failed | Locator: locator('[data-input-id="channel-input-01a1de5a-8e36-7992-8c8b-0e76796e4a97"]')
+message-link-forgets-the-conversation	DM-04	PASSED	
+message-link-forgets-the-conversation	DM-05	PASSED	
+message-link-forgets-the-conversation	DM-06	PASSED	Error: expect(locator).toBeVisible() failed | Locator: getByRole('option', { name: /Ben Member/ })
+message-link-forgets-the-conversation	UNR-01	PASSED	
+message-link-forgets-the-conversation	UNR-02	PASSED	
+message-link-forgets-the-conversation	UNR-03	PASSED	
+message-link-forgets-the-conversation	UNR-04	PASSED	
+message-link-forgets-the-conversation	UNR-05	PASSED	Error: expect(locator).toHaveText(expected) failed | Locator: getByRole('tree', { name: 'Conversations' }).getByRole('treeitem').filter({ hasText: 'unr-mwhm52r1
+message-link-forgets-the-conversation	UNR-06	PASSED	
+message-link-forgets-the-conversation	UNR-07	PASSED	
+message-link-forgets-the-conversation	UNR-08	PASSED	
+message-link-forgets-the-conversation	UNR-09	PASSED	Error: expect(locator).toBeVisible() failed | Locator: getByRole('tree', { name: 'Conversations' }).getByRole('treeitem').filter({ hasText: 'unr-mwhm5b7062pp-fr
+message-link-forgets-the-conversation	UNR-10	PASSED	

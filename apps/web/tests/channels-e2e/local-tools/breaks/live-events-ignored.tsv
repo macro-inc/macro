@@ -1,0 +1,119 @@
+live-events-ignored	ACC-01	PASSED	
+live-events-ignored	ACC-02	PASSED	
+live-events-ignored	ACC-03	FAILED	Error: the last messages in the list | the last messages in the list
+live-events-ignored	ACC-04	PASSED	
+live-events-ignored	ACC-05	PASSED	
+live-events-ignored	ACC-06	PASSED	
+live-events-ignored	ACC-07	PASSED	
+live-events-ignored	ACC-08	PASSED	
+live-events-ignored	ACC-09	PASSED	
+live-events-ignored	CHN-01	PASSED	
+live-events-ignored	CHN-02	FAILED	Error: the last messages in the list | the last messages in the list
+live-events-ignored	CHN-03	PASSED	
+live-events-ignored	CHN-04	PASSED	Error: expect(locator).toContainText(expected) failed | Locator: getByRole('main').locator('[data-view-shell-top-bar]')
+live-events-ignored	CHN-05	PASSED	
+live-events-ignored	CHN-06	PASSED	
+live-events-ignored	CHN-07	PASSED	
+live-events-ignored	CHN-08	PASSED	Error: expect(locator).toHaveCount(expected) failed | Locator:  getByRole('tree', { name: 'Conversations' }).locator('[data-key="favorite:channel:01a1de87-407d-
+live-events-ignored	CHN-09	PASSED	
+live-events-ignored	CHN-10	PASSED	
+live-events-ignored	CHN-11	PASSED	
+live-events-ignored	CHN-12	PASSED	
+live-events-ignored	CHN-13	PASSED	
+live-events-ignored	CHN-14	PASSED	Error: expect(locator).toBeVisible() failed | Locator: getByRole('main').getByText('Channel e2e-mwhmqxngpqt7 created')
+live-events-ignored	CHN-15	PASSED	Error: expect(locator).toHaveCount(expected) failed | Locator:  locator('[data-input-id="channel-input-01a1de87-6c08-71c1-8865-8558b2725e21"]')
+live-events-ignored	CMP-01	PASSED	
+live-events-ignored	CMP-02	PASSED	
+live-events-ignored	CMP-03	FAILED	Error: the last messages in the list | the last messages in the list
+live-events-ignored	CMP-13	FAILED	Error: the last messages in the list | the last messages in the list
+live-events-ignored	CMP-04	PASSED	
+live-events-ignored	CMP-05	FAILED	Error: expect(locator).toBeVisible() failed | Locator: locator('[data-channel-scroll]').locator('[data-message]').filter({ has: locator('[data-message-content]'
+live-events-ignored	CMP-06	FAILED	Error: expect(locator).toBeVisible() failed | Locator: locator('[data-channel-scroll]').locator('[data-message]').filter({ has: locator('[data-message-content]'
+live-events-ignored	CMP-07	FAILED	Error: expect(locator).toBeVisible() failed | Locator: locator('[data-channel-scroll]').locator('[data-message]').filter({ has: locator('[data-message-content]'
+live-events-ignored	CMP-08	FAILED	Error: expect(locator).toBeVisible() failed | Locator: locator('[data-channel-scroll]').getByRole('link', { name: 'alone.txt' })
+live-events-ignored	CMP-09	FAILED	Error: expect(locator).toBeVisible() failed | Locator: locator('[data-channel-scroll]').getByText('Ben Member is typing', { exact: true })
+live-events-ignored	CMP-10	FAILED	Error: expect(locator).toBeVisible() failed | Locator: locator('[data-channel-scroll]').getByText('Ben Member is typing', { exact: true })
+live-events-ignored	CMP-11	FAILED	Error: the last messages in the list | the last messages in the list
+live-events-ignored	CMP-12	FAILED	Error: expect(locator).toHaveText(expected) failed | Locator: locator('[data-channel-scroll]').locator('[data-message-content]')
+live-events-ignored	DM-01	FAILED	Error: the last messages in the list | the last messages in the list
+live-events-ignored	DM-02	PASSED	
+live-events-ignored	DM-03	PASSED	
+live-events-ignored	DM-04	PASSED	
+live-events-ignored	DM-05	PASSED	
+live-events-ignored	DM-06	PASSED	Error: expect(locator).toBeVisible() failed | Locator: getByRole('option', { name: /Ben Member/ })
+live-events-ignored	KEY-01	PASSED	
+live-events-ignored	KEY-02	PASSED	
+live-events-ignored	KEY-03	PASSED	
+live-events-ignored	KEY-04	PASSED	
+live-events-ignored	KEY-05	PASSED	
+live-events-ignored	KEY-06	PASSED	Error: expect(locator).toBeFocused() failed | Locator:  locator('[data-input-id="thread-reply-input-01a1de88-b614-758e-bd5f-ee57a71b990e"] [contenteditable]')
+live-events-ignored	KEY-07	PASSED	
+live-events-ignored	KEY-08	PASSED	
+live-events-ignored	KEY-12	PASSED	
+live-events-ignored	KEY-09	PASSED	
+live-events-ignored	KEY-10	PASSED	
+live-events-ignored	KEY-11	PASSED	
+live-events-ignored	NAV-01	PASSED	
+live-events-ignored	NAV-02	PASSED	
+live-events-ignored	NAV-03	PASSED	
+live-events-ignored	NAV-04	PASSED	
+live-events-ignored	NAV-05	PASSED	Error: lost my place below "history 148": the list shows ["history 217","history 218","history 219","history 220","history 221","history 222","history 223","his
+live-events-ignored	NAV-06	PASSED	
+live-events-ignored	NAV-07	PASSED	
+live-events-ignored	MEM-01	FAILED	Error: the last messages in the list | the last messages in the list
+live-events-ignored	MEM-02	PASSED	
+live-events-ignored	MEM-03	PASSED	Error: expect(locator).toHaveCount(expected) failed | Locator:  locator('[data-input-id="channel-input-01a1de88-ff8d-7b47-9e6f-75dc5d18875d"]')
+live-events-ignored	MEM-04	FAILED	Error: the last messages in the list | the last messages in the list
+live-events-ignored	MEM-05	FAILED	Error: the last messages in the list | the last messages in the list
+live-events-ignored	MEM-06	PASSED	
+live-events-ignored	MEM-07	PASSED	
+live-events-ignored	MEM-08	PASSED	
+live-events-ignored	MSG-01	FAILED	Error: expect(received).toEqual(expected) // deep equality | - Expected  - 1
+live-events-ignored	MSG-02	FAILED	Error: expect(received).toEqual(expected) // deep equality | - Expected  - 1
+live-events-ignored	MSG-03	FAILED	Error: expect(locator).toBeVisible() failed | Locator: locator('[data-channel-scroll]').locator('[data-message]').filter({ has: locator('[data-message-content]'
+live-events-ignored	MSG-04	FAILED	Error: expect(locator).toHaveCount(expected) failed | Locator:  locator('[data-channel-scroll]').locator('[data-message]')
+live-events-ignored	MSG-05	FAILED	Error: expect(received).toEqual(expected) // deep equality | - Expected  - 3
+live-events-ignored	MSG-06	FAILED	Error: expect(locator).toBeVisible() failed | Locator: locator('[data-channel-scroll]').locator('[data-message]').filter({ has: locator('[data-message-content]'
+live-events-ignored	MSG-07	FAILED	Error: expect(received).toEqual(expected) // deep equality | - Expected  - 1
+live-events-ignored	MSG-08	FAILED	Error: expect(received).toEqual(expected) // deep equality | - Expected  - 1
+live-events-ignored	MSG-09	FAILED	Error: expect(received).toEqual(expected) // deep equality | - Expected  - 1
+live-events-ignored	MSG-10	FAILED	Error: expect(received).toEqual(expected) // deep equality | - Expected  - 0
+live-events-ignored	MSG-11	FAILED	Error: expect(received).toEqual(expected) // deep equality | - Expected  - 1
+live-events-ignored	MSG-12	PASSED	
+live-events-ignored	MSG-13	FAILED	Error: expect(received).toEqual(expected) // deep equality | - Expected  - 3
+live-events-ignored	MSG-14	FAILED	Error: expect(received).toEqual(expected) // deep equality | - Expected  - 3
+live-events-ignored	MSG-15	FAILED	Error: expect(received).toEqual(expected) // deep equality | - Expected  - 1
+live-events-ignored	MSG-16	FAILED	Error: expect(received).toEqual(expected) // deep equality | - Expected  - 1
+live-events-ignored	MSG-17	PASSED	
+live-events-ignored	MSG-18	FAILED	Error: expect(received).toEqual(expected) // deep equality | - Expected  - 4
+live-events-ignored	OPEN-01	PASSED	
+live-events-ignored	OPEN-02	PASSED	
+live-events-ignored	REC-01	FAILED	Error: expect(locator).toBeVisible() failed | Locator: locator('[data-channel-scroll]').locator('[data-message]').filter({ has: locator('[data-message-content]'
+live-events-ignored	REC-02	FAILED	Error: expect(locator).toBeVisible() failed | Locator: locator('[data-channel-scroll]').locator('[data-message]').filter({ has: locator('[data-message-content]'
+live-events-ignored	REC-03	FAILED	Error: the last messages in the list | the last messages in the list
+live-events-ignored	SCROLL-01	PASSED	
+live-events-ignored	SCROLL-02	PASSED	
+live-events-ignored	SCROLL-03	FAILED	Error: expect(locator).toBeInViewport() failed | Locator: locator('[data-channel-scroll]').locator('[data-message]').filter({ has: locator('[data-message-conten
+live-events-ignored	SCROLL-04	FAILED	Error: expect(received).toBeGreaterThan(expected) | Expected: > 3388
+live-events-ignored	THR-01	FAILED	Error: expect(received).toEqual(expected) // deep equality | - Expected  - 3
+live-events-ignored	THR-02	FAILED	Error: expect(locator).toBeVisible() failed | Locator: locator('[data-channel-scroll]').locator('[data-message]').filter({ has: locator('[data-message-content]'
+live-events-ignored	THR-03	PASSED	
+live-events-ignored	THR-04	FAILED	Error: expect(received).toEqual(expected) // deep equality | - Expected  - 1
+live-events-ignored	THR-05	FAILED	Error: expect(received).toEqual(expected) // deep equality | - Expected  - 0
+live-events-ignored	THR-06	FAILED	Error: expect(received).toEqual(expected) // deep equality | - Expected  - 3
+live-events-ignored	THR-07	FAILED	Error: expect(received).toEqual(expected) // deep equality | - Expected  - 1
+live-events-ignored	THR-08	FAILED	Error: expect(locator).toContainText(expected) failed | Locator: locator('[data-channel-scroll]').locator('[data-channel-thread-row]').filter({ has: locator('[d
+live-events-ignored	THR-09	FAILED	Error: expect(received).toEqual(expected) // deep equality | - Expected  - 1
+live-events-ignored	THR-10	PASSED	Error: expect(locator).toBeFocused() failed | Locator:  locator('[data-input-id="thread-reply-input-01a1de8b-72fb-70f5-aefe-8d1c9d06cf51"]').getByRole('textbox'
+live-events-ignored	TAB-01	FAILED	Error: the last messages in the list | the last messages in the list
+live-events-ignored	TAB-02	FAILED	Error: expect(locator).toHaveCount(expected) failed | Locator:  locator('[data-channel-scroll]').locator('[data-message-id="01a1de8b-b755-7c36-84b8-bcda8f56dad1
+live-events-ignored	UNR-01	PASSED	
+live-events-ignored	UNR-02	PASSED	
+live-events-ignored	UNR-03	PASSED	
+live-events-ignored	UNR-04	PASSED	
+live-events-ignored	UNR-05	PASSED	Error: expect(locator).toHaveText(expected) failed | Locator: getByRole('tree', { name: 'Conversations' }).getByRole('treeitem').filter({ hasText: 'unr-mwhmx48a
+live-events-ignored	UNR-06	PASSED	
+live-events-ignored	UNR-07	FAILED	Error: the last messages in the list | the last messages in the list
+live-events-ignored	UNR-08	PASSED	
+live-events-ignored	UNR-09	PASSED	Error: expect(locator).toBeVisible() failed | Locator: getByRole('tree', { name: 'Conversations' }).getByRole('treeitem').filter({ hasText: 'unr-mwhmxbsbew9m-fr
+live-events-ignored	UNR-10	PASSED	

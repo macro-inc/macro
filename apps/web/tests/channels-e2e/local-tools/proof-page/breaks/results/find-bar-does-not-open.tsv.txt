@@ -1,0 +1,44 @@
+find-bar-does-not-open	ACC-01	PASSED	
+find-bar-does-not-open	ACC-02	PASSED	
+find-bar-does-not-open	ACC-03	PASSED	
+find-bar-does-not-open	ACC-04	PASSED	
+find-bar-does-not-open	ACC-05	PASSED	
+find-bar-does-not-open	ACC-06	PASSED	
+find-bar-does-not-open	ACC-07	PASSED	
+find-bar-does-not-open	ACC-08	PASSED	
+find-bar-does-not-open	ACC-09	PASSED	
+find-bar-does-not-open	CHN-01	PASSED	
+find-bar-does-not-open	CHN-02	PASSED	
+find-bar-does-not-open	CHN-03	PASSED	
+find-bar-does-not-open	CHN-04	PASSED	Error: expect(locator).toContainText(expected) failed | Locator: getByRole('main').locator('[data-view-shell-top-bar]')
+find-bar-does-not-open	CHN-05	PASSED	
+find-bar-does-not-open	CHN-06	PASSED	
+find-bar-does-not-open	CHN-07	PASSED	
+find-bar-does-not-open	CHN-08	PASSED	Error: expect(locator).toHaveCount(expected) failed | Locator:  getByRole('tree', { name: 'Conversations' }).locator('[data-key="favorite:channel:01a1de51-9ea4-
+find-bar-does-not-open	CHN-09	PASSED	
+find-bar-does-not-open	CHN-10	PASSED	
+find-bar-does-not-open	CHN-11	PASSED	
+find-bar-does-not-open	CHN-12	PASSED	
+find-bar-does-not-open	CHN-13	PASSED	
+find-bar-does-not-open	CHN-14	PASSED	Error: expect(locator).toBeVisible() failed | Locator: getByRole('main').getByText('Channel e2e-mwhknm3ihi0g created')
+find-bar-does-not-open	CHN-15	PASSED	Error: expect(locator).toHaveCount(expected) failed | Locator:  locator('[data-input-id="channel-input-01a1de51-cbd0-7c8f-9eca-cc7335f482d4"]')
+find-bar-does-not-open	KEY-01	FAILED	Error: expect(locator).toBeFocused() failed | Locator: getByPlaceholder('Find')
+find-bar-does-not-open	KEY-02	FAILED	Error: expect(locator).toBeFocused() failed | Locator: getByPlaceholder('Find')
+find-bar-does-not-open	KEY-03	FAILED	Error: expect(locator).toBeFocused() failed | Locator: getByPlaceholder('Find')
+find-bar-does-not-open	KEY-04	FAILED	Error: expect(locator).toBeFocused() failed | Locator: getByPlaceholder('Find')
+find-bar-does-not-open	KEY-05	PASSED	
+find-bar-does-not-open	KEY-06	PASSED	Error: expect(locator).toBeFocused() failed | Locator:  locator('[data-input-id="thread-reply-input-01a1de52-2625-78d9-800d-db10ed1b009e"] [contenteditable]')
+find-bar-does-not-open	KEY-07	PASSED	
+find-bar-does-not-open	KEY-08	PASSED	
+find-bar-does-not-open	KEY-12	PASSED	
+find-bar-does-not-open	KEY-09	PASSED	
+find-bar-does-not-open	KEY-10	PASSED	
+find-bar-does-not-open	KEY-11	PASSED	
+find-bar-does-not-open	MEM-01	PASSED	
+find-bar-does-not-open	MEM-02	PASSED	
+find-bar-does-not-open	MEM-03	PASSED	Error: expect(locator).toHaveCount(expected) failed | Locator:  locator('[data-input-id="channel-input-01a1de52-5ff3-7a0a-b243-cc688d81d2a4"]')
+find-bar-does-not-open	MEM-04	PASSED	
+find-bar-does-not-open	MEM-05	PASSED	
+find-bar-does-not-open	MEM-06	PASSED	
+find-bar-does-not-open	MEM-07	PASSED	
+find-bar-does-not-open	MEM-08	PASSED	

@@ -1,0 +1,29 @@
+attachment-not-sent	CMP-01	PASSED	
+attachment-not-sent	CMP-02	PASSED	
+attachment-not-sent	CMP-03	PASSED	
+attachment-not-sent	CMP-13	PASSED	
+attachment-not-sent	CMP-04	PASSED	
+attachment-not-sent	CMP-05	PASSED	
+attachment-not-sent	CMP-06	PASSED	
+attachment-not-sent	CMP-07	FAILED	Error: expect(locator).toBeVisible() failed | Locator: locator('[data-channel-scroll]').locator('[data-message]').filter({ has: locator('[data-message-content]'
+attachment-not-sent	CMP-08	FAILED	Error: expect(locator).toHaveCount(expected) failed | Locator:  locator('[data-input-id="channel-input-01a1de63-3ba4-728e-bca0-97833f09de10"]').getByRole('butto
+attachment-not-sent	CMP-09	PASSED	
+attachment-not-sent	CMP-10	PASSED	
+attachment-not-sent	CMP-11	PASSED	
+attachment-not-sent	CMP-12	PASSED	
+attachment-not-sent	DM-01	PASSED	
+attachment-not-sent	DM-02	PASSED	
+attachment-not-sent	DM-03	PASSED	
+attachment-not-sent	DM-04	PASSED	
+attachment-not-sent	DM-05	PASSED	
+attachment-not-sent	DM-06	PASSED	Error: expect(locator).toBeVisible() failed | Locator: getByRole('option', { name: /Ben Member/ })
+attachment-not-sent	UNR-01	PASSED	
+attachment-not-sent	UNR-02	PASSED	
+attachment-not-sent	UNR-03	PASSED	
+attachment-not-sent	UNR-04	PASSED	
+attachment-not-sent	UNR-05	PASSED	Error: expect(locator).toHaveText(expected) failed | Locator: getByRole('tree', { name: 'Conversations' }).getByRole('treeitem').filter({ hasText: 'unr-mwhlcue5
+attachment-not-sent	UNR-06	PASSED	
+attachment-not-sent	UNR-07	PASSED	
+attachment-not-sent	UNR-08	PASSED	
+attachment-not-sent	UNR-09	PASSED	Error: expect(locator).toBeVisible() failed | Locator: getByRole('tree', { name: 'Conversations' }).getByRole('treeitem').filter({ hasText: 'unr-mwhld0oeyifz-fr
+attachment-not-sent	UNR-10	PASSED	

@@ -1,0 +1,250 @@
+path "/home/teo/.herdr/worktrees/macro/synoet-channels-e2e-base/apps/web" does not contain a 'flake.nix', searching up
+warning: Git tree '/home/teo/.herdr/worktrees/macro/synoet-channels-e2e-base' is dirty
+
+Running 29 tests using 4 workers
+
+2026/11/15 09:06:52 socat[2665127] E write(6, 0x58946d25d000, 24): Broken pipe
+2026/11/15 09:06:52 socat[2670956] E write(6, 0x58946d25d000, 24): Broken pipe
+2026/11/15 09:06:52 socat[2670970] E write(6, 0x58946d25d000, 24): Broken pipe
+2026/11/15 09:06:53 socat[2679186] E write(6, 0x58946d25d000, 24): Broken pipe
+2026/11/15 09:06:53 socat[2662810] E write(6, 0x58946d25d000, 24): Broken pipe
+2026/11/15 09:06:53 socat[2679282] E write(6, 0x58946d25d000, 24): Broken pipe
+  ✓   1 tests/channels-e2e/composer.spec.ts:47:1 › CMP-02 a draft is still in the composer after a reload (11.1s)
+2026/11/15 09:06:54 socat[2665138] E write(6, 0x58946d25d000, 24): Broken pipe
+2026/11/15 09:06:54 socat[2681125] E write(6, 0x58946d25d000, 24): Broken pipe
+2026/11/15 09:06:54 socat[2681179] E write(6, 0x58946d25d000, 24): Broken pipe
+  ✓   4 tests/channels-e2e/composer.spec.ts:93:1 › CMP-13 a message shown as sent is still sent when the page is reloaded at once (11.9s)
+2026/11/15 09:06:54 socat[2665136] E write(6, 0x58946d25d000, 24): Broken pipe
+2026/11/15 09:06:54 socat[2681305] E write(6, 0x58946d25d000, 24): Broken pipe
+2026/11/15 09:06:54 socat[2681340] E write(6, 0x58946d25d000, 24): Broken pipe
+  ✓   2 tests/channels-e2e/composer.spec.ts:67:1 › CMP-03 sending a message clears its draft, and a reload does not bring it back (12.1s)
+2026/11/15 09:06:55 socat[2665064] E write(6, 0x58946d25d000, 24): Broken pipe
+2026/11/15 09:06:55 socat[2665128] E write(6, 0x58946d25d000, 24): Broken pipe
+  ✓   3 tests/channels-e2e/composer.spec.ts:21:1 › CMP-01 a draft stays in its channel while I look at another one, and is not shown there (13.2s)
+2026/11/15 09:06:56 socat[2681732] E write(6, 0x58946d25d000, 24): Broken pipe
+  ✓   5 tests/channels-e2e/composer.spec.ts:121:1 › CMP-04 the send button is off while the composer is empty, and after sending I can go on typing (2.8s)
+2026/11/15 09:06:56 socat[2681755] E write(6, 0x58946d25d000, 24): Broken pipe
+2026/11/15 09:06:59 socat[2683579] E write(6, 0x58946d25d000, 24): Broken pipe
+2026/11/15 09:06:59 socat[2685901] E write(6, 0x58946d25d000, 24): Broken pipe
+2026/11/15 09:06:59 socat[2686039] E write(6, 0x58946d25d000, 24): Broken pipe
+  ✓   6 tests/channels-e2e/composer.spec.ts:148:1 › CMP-05 a person picked from the @ menu is named in the message for both people, live (5.1s)
+2026/11/15 09:06:59 socat[2683585] E write(6, 0x58946d25d000, 24): Broken pipe
+2026/11/15 09:06:59 socat[2683631] E write(6, 0x58946d25d000, 24): Broken pipe
+2026/11/15 09:06:59 socat[2684191] E write(6, 0x58946d25d000, 24): Broken pipe
+2026/11/15 09:06:59 socat[2686438] E write(6, 0x58946d25d000, 24): Broken pipe
+  ✓   7 tests/channels-e2e/composer.spec.ts:178:1 › CMP-06 @here picked from the @ menu is sent as a mention of everyone here (5.3s)
+2026/11/15 09:07:01 socat[2684314] E read(6, 0x58946d25d000, 8192): Connection reset by peer
+2026/11/15 09:07:01 socat[2684315] E write(6, 0x555555624000, 24): Broken pipe
+2026/11/15 09:07:01 socat[2686650] E write(6, 0x58946d25d000, 24): Broken pipe
+2026/11/15 09:07:01 socat[2688642] E write(6, 0x58946d25d000, 24): Broken pipe
+  ✓   9 tests/channels-e2e/composer.spec.ts:265:1 › CMP-08 a file can be sent on its own, with no text (5.2s)
+2026/11/15 09:07:01 socat[2688704] E write(6, 0x58946d25d000, 24): Broken pipe
+2026/11/15 09:07:01 socat[2691943] E write(6, 0x58946d25d000, 24): Broken pipe
+  ✓  11 tests/channels-e2e/composer.spec.ts:329:1 › CMP-10 typing reported from the other person’s other device shows “… is typing”, and goes when they stop (2.1s)
+2026/11/15 09:07:02 socat[2684473] E write(6, 0x58946d25d000, 24): Broken pipe
+2026/11/15 09:07:02 socat[2684883] E write(6, 0x58946d25d000, 24): Broken pipe
+2026/11/15 09:07:02 socat[2687828] E write(6, 0x58946d25d000, 24): Broken pipe
+  ✓   8 tests/channels-e2e/composer.spec.ts:208:1 › CMP-07 a text file and a picture attached to a message show before sending, for both people, and under Attachments (7.1s)
+2026/11/15 09:07:03 socat[2638145] W waitpid(-1, {}, WNOHANG): no (more) child has exited
+2026/11/15 09:07:03 socat[2693799] E write(6, 0x58946d25d000, 24): Broken pipe
+2026/11/15 09:07:04 socat[2640495] W waitpid(-1, {}, WNOHANG): no (more) child has exited
+2026/11/15 09:07:04 socat[2691408] E write(6, 0x58946d25d000, 24): Broken pipe
+  ✓  10 tests/channels-e2e/composer.spec.ts:303:1 › CMP-09 while the other person types in their composer I see “… is typing”, until they send (4.9s)
+2026/11/15 09:07:05 socat[2692842] E write(6, 0x58946d25d000, 24): Broken pipe
+2026/11/15 09:07:05 socat[2693813] E write(6, 0x58946d25d000, 24): Broken pipe
+2026/11/15 09:07:05 socat[2696922] E write(6, 0x58946d25d000, 24): Broken pipe
+2026/11/15 09:07:05 socat[2697102] E write(6, 0x58946d25d000, 24): Broken pipe
+  ✓  12 tests/channels-e2e/composer.spec.ts:349:1 › CMP-11 text pasted into the composer is sent as it was copied (4.4s)
+2026/11/15 09:07:06 socat[2640495] W waitpid(-1, {}, WNOHANG): no (more) child has exited
+2026/11/15 09:07:06 socat[2695459] E write(6, 0x58946d25d000, 24): Broken pipe
+2026/11/15 09:07:06 socat[2697363] E write(6, 0x58946d25e000, 24): Broken pipe
+  ✓  13 tests/channels-e2e/composer.spec.ts:372:1 › CMP-12 a message of 2,499 characters is sent whole (4.6s)
+2026/11/15 09:07:11 socat[2702974] E write(6, 0x58946d25e000, 24): Broken pipe
+2026/11/15 09:07:13 socat[2700873] E write(6, 0x58946d25e000, 24): Broken pipe
+2026/11/15 09:07:13 socat[2709583] E write(6, 0x58946d25e000, 24): Broken pipe
+2026/11/15 09:07:13 socat[2709593] E write(6, 0x58946d25e000, 24): Broken pipe
+  ✓  16 tests/channels-e2e/direct-messages.spec.ts:122:1 › DM-03 “Message …” on a channel’s participant opens my conversation with them, the same one every time (7.6s)
+2026/11/15 09:07:15 socat[2713809] E write(6, 0x58946d25e000, 24): Broken pipe
+  ✓  18 tests/channels-e2e/direct-messages.spec.ts:228:1 › DM-05 a conversation with someone I never wrote to opens empty, saying “Say hello”, and nothing can be sent until I type (1.7s)
+2026/11/15 09:07:23 socat[2696521] E write(6, 0x58946d25d000, 24): Broken pipe
+2026/11/15 09:07:23 socat[2699488] E write(6, 0x58946d25e000, 24): Broken pipe
+2026/11/15 09:07:24 socat[2698851] E write(6, 0x58946d25e000, 24): Broken pipe
+2026/11/15 09:07:24 socat[2699610] E write(6, 0x58946d25e000, 24): Broken pipe
+  ✘  14 tests/channels-e2e/direct-messages.spec.ts:22:1 › DM-01 a direct message I start reaches the other person at once under “Direct messages”, and they can answer (21.3s)
+2026/11/15 09:07:24 socat[2700885] E write(6, 0x58946d25e000, 24): Broken pipe
+  ✘  15 tests/channels-e2e/direct-messages.spec.ts:66:1 › DM-02 writing to the same person again from “New direct message” continues the one conversation (20.4s)
+2026/11/15 09:07:28 socat[2702100] E write(6, 0x58946d25e000, 24): Broken pipe
+2026/11/15 09:07:29 socat[2704386] E write(6, 0x58946d25e000, 24): Broken pipe
+2026/11/15 09:07:29 socat[2731725] E write(6, 0x58946d25e000, 24): Broken pipe
+2026/11/15 09:07:29 socat[2704991] E write(6, 0x58946d25e000, 24): Broken pipe
+2026/11/15 09:07:29 socat[2707064] E write(6, 0x58946d25e000, 24): Broken pipe
+2026/11/15 09:07:29 socat[2707070] E write(6, 0x58946d25e000, 24): Broken pipe
+2026/11/15 09:07:29 socat[2732375] E write(6, 0x58946d25e000, 24): Broken pipe
+2026/11/15 09:07:29 socat[2732384] E write(6, 0x58946d25e000, 24): Broken pipe
+  ✓  21 tests/channels-e2e/unread.spec.ts:87:1 › UNR-02 a channel with unread messages opens with “New” above the first of them, and “Mark as read” removes it (4.2s)
+  ✘  17 tests/channels-e2e/direct-messages.spec.ts:173:1 › DM-04 a named group started from “New direct message” reaches everyone I put in it (23.1s)
+2026/11/15 09:07:30 socat[2729818] E write(6, 0x58946d25e000, 24): Broken pipe
+2026/11/15 09:07:30 socat[2737014] E write(6, 0x58946d25e000, 24): Broken pipe
+  ✓  20 tests/channels-e2e/unread.spec.ts:38:1 › UNR-01 a message in a channel I do not have open marks its row unread at once; opening it clears the mark, also after reload (5.7s)
+2026/11/15 09:07:32 socat[2718002] E write(6, 0x58946d25e000, 24): Broken pipe
+  ✘  19 tests/channels-e2e/direct-messages.spec.ts:270:1 › DM-06 typing a teammate’s name in “New direct message” offers that person (17.4s)
+2026/11/15 09:07:33 socat[2739562] E write(6, 0x58946d25e000, 24): Broken pipe
+  ✓  22 tests/channels-e2e/unread.spec.ts:122:1 › UNR-03 my own messages never mark a channel unread for me (3.3s)
+2026/11/15 09:07:35 socat[2744466] E write(6, 0x58946d25e000, 24): Broken pipe
+2026/11/15 09:07:35 socat[2742006] E write(6, 0x58946d25e000, 24): Broken pipe
+2026/11/15 09:07:35 socat[2744491] E write(6, 0x58946d25e000, 24): Broken pipe
+  ✓  26 tests/channels-e2e/unread.spec.ts:272:1 › UNR-07 a member who never opened a channel sees it unread, and opening it shows every message and clears the mark (2.5s)
+2026/11/15 09:07:36 socat[2742048] E write(6, 0x58946d25e000, 24): Broken pipe
+2026/11/15 09:07:36 socat[2742118] E write(6, 0x58946d25e000, 24): Broken pipe
+  ✓  23 tests/channels-e2e/unread.spec.ts:155:1 › UNR-04 scrolled up in an open channel, a new message shows “1 unread … below”, which leads to it (5.5s)
+2026/11/15 09:07:38 socat[2742265] E write(6, 0x58946d25e000, 24): Broken pipe
+2026/11/15 09:07:38 socat[2742296] E write(6, 0x58946d25e000, 24): Broken pipe
+2026/11/15 09:07:39 socat[2748137] E write(6, 0x58946d25e000, 24): Broken pipe
+  ✓  27 tests/channels-e2e/unread.spec.ts:311:1 › UNR-08 a channel I am added to appears in my list at once, and opens (4.1s)
+2026/11/15 09:07:40 socat[2750800] E write(6, 0x58946d25e000, 24): Broken pipe
+  ✓  25 tests/channels-e2e/unread.spec.ts:218:1 › UNR-06 a muted channel shows a crossed bell and is not marked unread by new messages; unmuted, it is again (7.6s)
+2026/11/15 09:07:41 socat[2744433] E write(6, 0x58946d25e000, 24): Broken pipe
+2026/11/15 09:07:41 socat[2744468] E write(6, 0x58946d25e000, 24): Broken pipe
+2026/11/15 09:07:41 socat[2739955] E write(6, 0x58946d25e000, 24): Broken pipe
+2026/11/15 09:07:41 socat[2740543] E write(6, 0x58946d25e000, 24): Broken pipe
+  ✘  24 tests/channels-e2e/unread.spec.ts:187:1 › UNR-05 a mention of me in a channel I do not have open shows a count of mentions on its row (10.9s)
+2026/11/15 09:07:42 socat[2753704] E write(6, 0x58946d25e000, 24): Broken pipe
+  ✓  29 tests/channels-e2e/unread.spec.ts:367:1 › UNR-10 a row found with “Search conversations” is marked unread at once when a message arrives (2.9s)
+2026/11/15 09:07:44 socat[2748292] E write(6, 0x58946d25e000, 24): Broken pipe
+  ✘  28 tests/channels-e2e/unread.spec.ts:339:1 › UNR-09 the first message in a new channel marks it unread for the other member (8.0s)
+
+
+  1) tests/channels-e2e/direct-messages.spec.ts:22:1 › DM-01 a direct message I start reaches the other person at once under “Direct messages”, and they can answer 
+
+    Error: expect(page).toHaveURL(expected) failed
+
+    Expected pattern: /\/app\/channels?\/[0-9a-f-]{36}/
+    Received string:  "https://localhost:24909/app/component/channel-compose"
+    Timeout: 15000ms
+
+    Call log:
+      - Expect "toHaveURL" with timeout 15000ms
+        32 × locator resolved to <html lang="en" data-platform="web" data-theme-light="true" data-modality="keyboard" data-touch-device="false">…</html>
+           - unexpected value "https://localhost:24909/app/component/channel-compose"
+
+
+      40 |   await page.keyboard.press('Enter');
+      41 |
+    > 42 |   await expect(page).toHaveURL(CONVERSATION);
+         |                      ^
+      43 |   const id = openConversationId(page);
+      44 |   const view = new ChannelView(page, id);
+      45 |   await view.shown();
+        at /home/teo/.herdr/worktrees/macro/synoet-channels-e2e-base/apps/web/tests/channels-e2e/direct-messages.spec.ts:42:22
+
+    attachment #1: screenshot (image/png) ──────────────────────────────────────────────────────────
+    ../../../../../../.cache/channels-e2e/runs/24909-break-message-to-people-is-not-sent/test-results/direct-messages-DM-01-a-di-4a900-ssages”-and-they-can-answer/test-failed-1.png
+    ────────────────────────────────────────────────────────────────────────────────────────────────
+
+    attachment #2: screenshot (image/png) ──────────────────────────────────────────────────────────
+    ../../../../../../.cache/channels-e2e/runs/24909-break-message-to-people-is-not-sent/test-results/direct-messages-DM-01-a-di-4a900-ssages”-and-they-can-answer/test-failed-2.png
+    ────────────────────────────────────────────────────────────────────────────────────────────────
+
+    Error Context: ../../../../../../.cache/channels-e2e/runs/24909-break-message-to-people-is-not-sent/test-results/direct-messages-DM-01-a-di-4a900-ssages”-and-they-can-answer/error-context.md
+
+    attachment #4: trace (application/zip) ─────────────────────────────────────────────────────────
+    ../../../../../../.cache/channels-e2e/runs/24909-break-message-to-people-is-not-sent/test-results/direct-messages-DM-01-a-di-4a900-ssages”-and-they-can-answer/trace.zip
+    Usage:
+
+        npx playwright show-trace ../../../../../../.cache/channels-e2e/runs/24909-break-message-to-people-is-not-sent/test-results/direct-messages-DM-01-a-di-4a900-ssages”-and-they-can-answer/trace.zip
+
+    ────────────────────────────────────────────────────────────────────────────────────────────────
+
+  2) tests/channels-e2e/direct-messages.spec.ts:66:1 › DM-02 writing to the same person again from “New direct message” continues the one conversation 
+
+    Error: expect(page).toHaveURL(expected) failed
+
+    Expected pattern: /\/app\/channels?\/[0-9a-f-]{36}/
+    Received string:  "https://localhost:24909/app/component/channel-compose"
+    Timeout: 15000ms
+
+    Call log:
+      - Expect "toHaveURL" with timeout 15000ms
+        33 × locator resolved to <html lang="en" data-platform="web" data-theme-light="true" data-modality="keyboard" data-touch-device="false">…</html>
+           - unexpected value "https://localhost:24909/app/component/channel-compose"
+
+
+      82 |   await page.keyboard.type(first);
+      83 |   await page.keyboard.press('Enter');
+    > 84 |   await expect(page).toHaveURL(CONVERSATION);
+         |                      ^
+      85 |   const id = openConversationId(page);
+      86 |   const view = new ChannelView(page, id);
+      87 |   await view.shown();
+        at /home/teo/.herdr/worktrees/macro/synoet-channels-e2e-base/apps/web/tests/channels-e2e/direct-messages.spec.ts:84:22
+
+    attachment #1: screenshot (image/png) ──────────────────────────────────────────────────────────
+    ../../../../../../.cache/channels-e2e/runs/24909-break-message-to-people-is-not-sent/test-results/direct-messages-DM-02-writ-8cce8-tinues-the-one-conversation/test-failed-1.png
+    ────────────────────────────────────────────────────────────────────────────────────────────────
+
+    attachment #2: screenshot (image/png) ──────────────────────────────────────────────────────────
+    ../../../../../../.cache/channels-e2e/runs/24909-break-message-to-people-is-not-sent/test-results/direct-messages-DM-02-writ-8cce8-tinues-the-one-conversation/test-failed-2.png
+    ────────────────────────────────────────────────────────────────────────────────────────────────
+
+    Error Context: ../../../../../../.cache/channels-e2e/runs/24909-break-message-to-people-is-not-sent/test-results/direct-messages-DM-02-writ-8cce8-tinues-the-one-conversation/error-context.md
+
+    attachment #4: trace (application/zip) ─────────────────────────────────────────────────────────
+    ../../../../../../.cache/channels-e2e/runs/24909-break-message-to-people-is-not-sent/test-results/direct-messages-DM-02-writ-8cce8-tinues-the-one-conversation/trace.zip
+    Usage:
+
+        npx playwright show-trace ../../../../../../.cache/channels-e2e/runs/24909-break-message-to-people-is-not-sent/test-results/direct-messages-DM-02-writ-8cce8-tinues-the-one-conversation/trace.zip
+
+    ────────────────────────────────────────────────────────────────────────────────────────────────
+
+  3) tests/channels-e2e/direct-messages.spec.ts:173:1 › DM-04 a named group started from “New direct message” reaches everyone I put in it 
+
+    Error: expect(page).toHaveURL(expected) failed
+
+    Expected pattern: /\/app\/channels?\/[0-9a-f-]{36}/
+    Received string:  "https://localhost:24909/app/component/channel-compose"
+    Timeout: 15000ms
+
+    Call log:
+      - Expect "toHaveURL" with timeout 15000ms
+        34 × locator resolved to <html lang="en" data-platform="web" data-theme-light="true" data-modality="keyboard" data-touch-device="false">…</html>
+           - unexpected value "https://localhost:24909/app/component/channel-compose"
+
+
+      195 |   await page.keyboard.press('Enter');
+      196 |
+    > 197 |   await expect(page).toHaveURL(CONVERSATION);
+          |                      ^
+      198 |   const id = openConversationId(page);
+      199 |   const view = new ChannelView(page, id);
+      200 |   await view.shown();
+        at /home/teo/.herdr/worktrees/macro/synoet-channels-e2e-base/apps/web/tests/channels-e2e/direct-messages.spec.ts:197:22
+
+    attachment #1: screenshot (image/png) ──────────────────────────────────────────────────────────
+    ../../../../../../.cache/channels-e2e/runs/24909-break-message-to-people-is-not-sent/test-results/direct-messages-DM-04-a-na-e0a00-eaches-everyone-I-put-in-it/test-failed-2.png
+    ────────────────────────────────────────────────────────────────────────────────────────────────
+
+    attachment #2: screenshot (image/png) ──────────────────────────────────────────────────────────
+    ../../../../../../.cache/channels-e2e/runs/24909-break-message-to-people-is-not-sent/test-results/direct-messages-DM-04-a-na-e0a00-eaches-everyone-I-put-in-it/test-failed-3.png
+    ────────────────────────────────────────────────────────────────────────────────────────────────
+
+    attachment #3: screenshot (image/png) ──────────────────────────────────────────────────────────
+    ../../../../../../.cache/channels-e2e/runs/24909-break-message-to-people-is-not-sent/test-results/direct-messages-DM-04-a-na-e0a00-eaches-everyone-I-put-in-it/test-failed-1.png
+    ────────────────────────────────────────────────────────────────────────────────────────────────
+
+    Error Context: ../../../../../../.cache/channels-e2e/runs/24909-break-message-to-people-is-not-sent/test-results/direct-messages-DM-04-a-na-e0a00-eaches-everyone-I-put-in-it/error-context.md
+
+    attachment #5: trace (application/zip) ─────────────────────────────────────────────────────────
+    ../../../../../../.cache/channels-e2e/runs/24909-break-message-to-people-is-not-sent/test-results/direct-messages-DM-04-a-na-e0a00-eaches-everyone-I-put-in-it/trace.zip
+    Usage:
+
+        npx playwright show-trace ../../../../../../.cache/channels-e2e/runs/24909-break-message-to-people-is-not-sent/test-results/direct-messages-DM-04-a-na-e0a00-eaches-everyone-I-put-in-it/trace.zip
+
+    ────────────────────────────────────────────────────────────────────────────────────────────────
+
+  3 failed
+    tests/channels-e2e/direct-messages.spec.ts:22:1 › DM-01 a direct message I start reaches the other person at once under “Direct messages”, and they can answer 
+    tests/channels-e2e/direct-messages.spec.ts:66:1 › DM-02 writing to the same person again from “New direct message” continues the one conversation 
+    tests/channels-e2e/direct-messages.spec.ts:173:1 › DM-04 a named group started from “New direct message” reaches everyone I put in it 
+  26 passed (1.3m)
+2026/11/15 09:07:44 socat[2640495] W exiting on signal 15
+2026/11/15 09:07:44 socat[2638145] W exiting on signal 15

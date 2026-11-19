@@ -1,0 +1,226 @@
+<!doctype html><html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">
+<title>Channels suite result</title>
+<meta name="claude:viewport-fit-sides" content="cover">
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600&family=Space+Grotesk:wght@500;600&family=JetBrains+Mono:wght@400;500&display=swap">
+<style>
+:root {
+  --bg: #f7f6f2; --surface: #ffffff; --fg: #1d1f23; --muted: #5d636d; --line: #dcd9d0;
+  --accent: #2f5fd0; --bad: #b3261e; --bad-bg: #fbe9e7; --warn: #8a5a00; --warn-bg: #fdf3d7;
+  --code-bg: #efede6;
+}
+@media (prefers-color-scheme: dark) { :root:not([data-theme="light"]) {
+  --bg: #15171a; --surface: #1d2024; --fg: #e8e9eb; --muted: #a0a6b0; --line: #33373e;
+  --accent: #8fb0ff; --bad: #ff9b93; --bad-bg: #3a1d1b; --warn: #f0c76a; --warn-bg: #36290f;
+  --code-bg: #262a30; color-scheme: dark } }
+:root[data-theme="dark"] {
+  --bg: #15171a; --surface: #1d2024; --fg: #e8e9eb; --muted: #a0a6b0; --line: #33373e;
+  --accent: #8fb0ff; --bad: #ff9b93; --bad-bg: #3a1d1b; --warn: #f0c76a; --warn-bg: #36290f;
+  --code-bg: #262a30; color-scheme: dark }
+body { background: var(--bg); color: var(--fg); font: 15px/1.6 Inter, system-ui, sans-serif;
+  padding-left: max(16px, env(safe-area-inset-left, 0px)); padding-right: max(16px, env(safe-area-inset-right, 0px)); padding-block: 32px 64px; }
+main { max-width: 960px; margin: 0 auto; }
+h1, h2, h3 { font-family: "Space Grotesk", Inter, sans-serif; text-wrap: balance; line-height: 1.2; }
+h1 { font-size: 30px; margin: 0 0 8px; }
+h2 { font-size: 21px; margin: 44px 0 12px; padding-top: 20px; border-top: 1px solid var(--line); }
+h3 { font-size: 16px; margin: 24px 0 8px; }
+p, li { max-width: 72ch; }
+.lede { color: var(--muted); margin: 0 0 20px; }
+a { color: var(--accent); }
+code { font: 13px "JetBrains Mono", ui-monospace, monospace; background: var(--code-bg); padding: 1px 5px; border-radius: 4px; overflow-wrap: anywhere; }
+.verdict { background: var(--bad-bg); border: 1px solid var(--bad); border-radius: 10px; padding: 16px 18px; margin: 20px 0; }
+.verdict strong { color: var(--bad); }
+.tiles { display: grid; grid-template-columns: repeat(auto-fit, minmax(190px, 1fr)); gap: 12px; margin: 20px 0; }
+.tile { background: var(--surface); border: 1px solid var(--line); border-radius: 10px; padding: 14px 16px; min-width: 0; }
+.tile b { display: block; font: 600 24px "Space Grotesk", sans-serif; }
+.tile span { color: var(--muted); font-size: 13px; }
+.scroll { overflow-x: auto; border: 1px solid var(--line); border-radius: 10px; background: var(--surface); margin: 12px 0; }
+table { border-collapse: collapse; width: 100%; font-size: 13.5px; }
+th, td { text-align: left; vertical-align: top; padding: 8px 12px; border-bottom: 1px solid var(--line); }
+th { font-weight: 600; color: var(--muted); font-size: 12px; text-transform: uppercase; letter-spacing: .04em; white-space: nowrap; }
+tr:last-child td { border-bottom: 0; }
+td.n { white-space: nowrap; font-variant-numeric: tabular-nums; }
+.tag { display: inline-block; font-size: 12px; font-weight: 600; padding: 1px 8px; border-radius: 99px; white-space: nowrap; background: var(--warn-bg); color: var(--warn); }
+.small { font-size: 13px; color: var(--muted); }
+details { background: var(--surface); border: 1px solid var(--line); border-radius: 10px; padding: 10px 14px; margin: 10px 0; }
+summary { cursor: pointer; font-weight: 600; }
+</style>
+<main>
+<h1>Channels end-to-end suite: main against approach B</h1>
+<p class="lede">119 browser tests of what people see in channels, run unchanged on main, on main built with the GraphQL sources flag, and on approach B (channels on a local message index). 15 November 2026. Pull request <a href="https://github.com/macro-inc/macro/pull/10864">#10864</a>, CI gate green on its last commit, never to be merged.</p>
+
+<div class="verdict">
+<p style="margin:0 0 8px"><strong>B does not pass.</strong> The suite cannot give proof that B causes no channel regressions, because it found three that main does not have, with or without the flag:</p>
+<ol style="margin:0;padding-left:20px">
+<li>A message sent in the first moments after a channel opens is lost if the page is reloaded within about half a second. 9 of 10 whole-suite runs.</li>
+<li>A person's own messages, sent quickly, show out of the order they were sent. 8 of 10 runs.</li>
+<li>Removing a reaction shortly after a reload shows as removed on that page but is never sent. 6 of 8 when repeated alone.</li>
+</ol>
+<p style="margin:8px 0 0">No whole-suite run on B was clean: 10 runs, 1 to 4 failed tests each.</p>
+</div>
+
+<div class="tiles">
+<div class="tile"><b>6 of 6</b><span>whole-suite runs clean on main, flag off, at the final code</span></div>
+<div class="tile"><b>3 of 4</b><span>clean on main with the flag on, at the final code</span></div>
+<div class="tile"><b>0 of 10</b><span>clean on B</span></div>
+<div class="tile"><b>119 / 119</b><span>tests shown able to fail: 108 by a deliberate product break, 11 by a defect main has today</span></div>
+</div>
+
+<h2>The three builds</h2>
+<div class="scroll"><table>
+<tr><th>Build</th><th>What it is</th><th>Whole-suite runs</th></tr>
+<tr><td>main, flag off</td><td>The PR's base, built as production is today</td><td>Final code: 6 runs, all 119 as expected.<br>The 13 runs before it: 9 clean; 3 failed CHN-05, which was the suite's own leftovers (fixed, below); 1 failed CHN-01, unexplained.</td></tr>
+<tr><td>main, flag on</td><td>The same code built with <code>VITE_ENABLE_GRAPHQL_SOUP=true</code></td><td>Final code: 4 runs, 3 clean; 1 failed UNR-06.<br>Before it: 5 clean, then 3 of 4 failed UNR-08 (now recorded as a flag-on defect).</td></tr>
+<tr><td>B, flag on</td><td>Approach B's branch (118 commits behind main), same flag</td><td>10 runs, none clean: 118, 117, 116, 116, 117, then 117, 115, 115, 117, 117 passed.</td></tr>
+<tr><td>CI (new stack each run)</td><td>Both builds of the PR merged with main</td><td>Both jobs green on the last two commits.</td></tr>
+</table></div>
+<p>The flag is set when the app is built, and B only works with it on. Running main with the flag as well separates "B broke this" from "the flag breaks this".</p>
+<p class="small">Each build ran on its own local stack with its own seeded people. Reports and traces: <code>~/.cache/channels-e2e/saved/{final,last}-{main,on,b}-N.json</code> and the directories of the same names. "Alone" below means the test repeated by itself 8 times; "suite" means whole-suite runs.</p>
+
+<h2>Every difference between main and B</h2>
+
+<h3>B is wrong (B's own commits)</h3>
+<div class="scroll"><table>
+<tr><th>Test</th><th>What a person sees on B</th><th>main</th><th>main + flag</th><th>B</th><th>Evidence</th></tr>
+<tr><td class="n">CMP-13</td><td>Send a message right after opening a channel, reload within about half a second: the message is gone. Main posts at once; B queues the write on the device and the reload drops it.</td><td class="n">0/8</td><td class="n">0/8 alone<br>0/13 suite</td><td class="n">8/8 alone<br>9/10 suite</td><td><code>evidence/find/</code>, <code>evidence/rate-b/</code>; B's <code>lib/queries/messages/mutations.ts:446-467</code>, <code>local/writes.ts:223-253</code></td></tr>
+<tr><td class="n">MSG-18<br>MSG-03</td><td>Two people each send four messages at the same moment: a person's own four can show as "3, 4, 1, 2" or "2, 3, 4, 1". Once, a plain back-and-forth showed "ben 3" before "ben 2". On main each person's own messages always kept their order.</td><td class="n">0/19 suite</td><td class="n">0/13 suite</td><td class="n">8/10 suite<br>(MSG-03 1/10)</td><td><code>saved/final-b-{3,4,5}/</code>, <code>saved/last-b-{1..5}/</code>. Cause not traced.</td></tr>
+<tr><td class="n">MSG-13</td><td>Remove your reaction within about 1.5 s of a reload: your page shows it gone, no request leaves, the other person still sees "👍 2". Unsent for the 2.5 minutes watched.</td><td class="n">0/8</td><td class="n">0/8</td><td class="n">6/8 alone<br>5/12 probe<br>1/10 suite</td><td><code>evidence/react/</code>; B's <code>lib/queries/messages/reactions.ts:225-242</code>, <code>local/writes.ts:433-471</code></td></tr>
+</table></div>
+
+<h3>The flag is wrong, not B (main with the flag does it too)</h3>
+<div class="scroll"><table>
+<tr><th>Test</th><th>What a person sees</th><th>main</th><th>main + flag</th><th>B</th><th>Where</th></tr>
+<tr><td class="n">UNR-10</td><td>While "Search conversations" is open, a row that gets a new message is not marked unread until the search is closed.</td><td class="n">0/8</td><td class="n">every run, here and in CI</td><td class="n">every run</td><td><code>evidence/unread/</code>; <code>lib/queries/channel/unread-cache.ts:37-75</code></td></tr>
+<tr><td class="n">UNR-08</td><td>A channel you are added to is missing from the rows the list search shows.</td><td class="n">0</td><td class="n">3/4 suite, then recorded; 0 in CI</td><td class="n">0/10</td><td>Same family as UNR-10</td></tr>
+<tr><td class="n">UNR-04</td><td>Scrolled up when a message arrives: the "1 unread … below" notice sometimes never appears.</td><td class="n">0/8</td><td class="n">0/8 alone<br>2/13 suite</td><td class="n">4/8 alone<br>7/10 suite</td><td>Same files in both trees (<code>notifications.ts:19-63</code>); more frequent on B</td></tr>
+<tr><td class="n">UNR-06</td><td>After muting a channel the crossed bell did not appear on its row.</td><td class="n">0</td><td class="n">1/13 suite</td><td class="n">1/10 suite</td><td>Not traced</td></tr>
+</table></div>
+
+<h3>Depends on the machine, on main as well</h3>
+<p>These three were first recorded as constant. CI's new stack then showed the opposite of this machine, identically in two runs. In the one case traced (CHN-02 without the flag, in CI), the teammate's page re-read its list just after the channel was made and the row never appeared; why the same check passes on this machine was not established. They are recorded as intermittent defects of main; each test still checks what holds after a reload.</p>
+<div class="scroll"><table>
+<tr><th>Test</th><th>What a person sees</th><th>main, here</th><th>main, CI</th><th>main + flag, here</th><th>main + flag, CI</th><th>B, here</th></tr>
+<tr><td class="n">CHN-02</td><td>A team channel a teammate creates is missing from an open list, or goes when opened, until reload.</td><td class="n">never</td><td class="n">2/2</td><td class="n">every run</td><td class="n">0/2</td><td class="n">5/8 alone</td></tr>
+<tr><td class="n">ACC-06</td><td>After joining a team channel found by name, its row stays under "Not joined" with a Join button until reload.</td><td class="n">never</td><td class="n">0/2</td><td class="n">every run</td><td class="n">0/2</td><td class="n">every run</td></tr>
+<tr><td class="n">CHN-08</td><td>A deleted channel stays under its owner's Favorites until reload.</td><td class="n">every run</td><td class="n">2/2</td><td class="n">1/13 suite</td><td class="n">2/2</td><td class="n">1/10 suite</td></tr>
+</table></div>
+<p class="small">Code read for ACC-06: <code>lib/queries/channel/join-links.ts:149-160</code> refreshes only the REST lists. For CHN-02: <code>evidence/join/</code>.</p>
+
+<h3>Seen once on B, not settled</h3>
+<div class="scroll"><table>
+<tr><th>Test</th><th>What happened</th><th>main</th><th>B</th><th>Reading</th></tr>
+<tr><td class="n">MEM-01</td><td>The Invite dialog on B sometimes replaces the typed "Invite &lt;address&gt;" row with the known person and a note that options may be incomplete. The person can still be picked.</td><td class="n">0</td><td class="n">1/8, 3/12, 1/10</td><td><span class="tag">test assumes main's dialog</span> B is different, not shown wrong</td></tr>
+<tr><td class="n">DM-02</td><td>A new direct message's row did not appear in the other person's list within 15 s.</td><td class="n">0</td><td class="n">1/8, 1/10</td><td><span class="tag">not traced</span></td></tr>
+<tr><td class="n">CHN-12</td><td>The Participants tab did not list the other member.</td><td class="n">0</td><td class="n">1/10</td><td><span class="tag">not traced</span></td></tr>
+<tr><td class="n">MEM-03</td><td>A removed person kept the channel's composer. Main without the flag always does this.</td><td class="n">always (off)<br>0/13 (on)</td><td class="n">1/10</td><td><span class="tag">main's defect, partly present</span></td></tr>
+</table></div>
+
+<h3>Better with the flag (and so on B)</h3>
+<div class="scroll"><table>
+<tr><th>Test</th><th>Main today (flag off)</th><th>main + flag</th><th>B</th></tr>
+<tr><td class="n">DM-06</td><td>"New direct message" offers nobody for a typed name; only a whole email address works</td><td>fixed</td><td>fixed</td></tr>
+<tr><td class="n">MEM-03</td><td>A removed person keeps the channel open with a composer until reload</td><td>fixed in 13/13</td><td>fixed in 9/10</td></tr>
+<tr><td class="n">CHN-15</td><td>A channel deleted elsewhere stays open on its owner's page</td><td>fixed in 7/13</td><td>fixed in 10/10</td></tr>
+</table></div>
+
+<h3>Differences that were not the build</h3>
+<ul>
+<li><b>KEY-01, KEY-02</b> (find in channel) failed on B at first because B's stack had its search indexer stopped. With it running they pass.</li>
+<li><b>CHN-01</b> failed on B because the test looked for main's newer wording of the create dialog. The helper accepts both.</li>
+<li><b>UNR-01, UNR-03, UNR-06</b> used the list search to find their rows (the UNR-10 defect). They now read the whole list. This is the one place tests were changed after seeing B; main's result did not change.</li>
+<li><b>CHN-05</b> failed on main in 3 late runs because CHN-08's defect leaves a dead favorite each run, and the sidebar draws only the rows near its window. Setup now empties each cast's favorite channels.</li>
+</ul>
+
+<h2>What the suite covers</h2>
+<p>42 of 55 listed behaviours have tests. The list is <code>ledger/inventory.tsv</code>; CI fails if a test is not on it or a listed behaviour has neither a test nor a reason.</p>
+<div class="scroll"><table>
+<tr><th>Area</th><th>Covered</th><th>Tests</th></tr>
+<tr><td>Opening and scrolling</td><td>Latest messages in order, each channel its own; long history once and in order; scroll to bottom; live arrival without moving a reader</td><td class="n">OPEN 2, SCROLL 4</td></tr>
+<tr><td>Messages</td><td>Send (Enter, button), both people, live and after reload; simultaneous sends; formatting, links, emoji, long and pasted text; edit, delete, own-only; reactions; others' changes live; copy text</td><td class="n">MSG 18</td></tr>
+<tr><td>Threads</td><td>Replies in order for both people; folding; edit, delete, react on replies; reply focus</td><td class="n">THR 10</td></tr>
+<tr><td>Links and position</td><td>Links to a message, a reply, a missing message; Copy link; reading forward</td><td class="n">NAV 7</td></tr>
+<tr><td>Reconnect, two windows</td><td>Missed messages after a lost connection or hidden page; offline message neither lost nor doubled; one person's two windows agree</td><td class="n">REC 3, TAB 2</td></tr>
+<tr><td>Composer</td><td>Drafts per channel and across reload; send button; mentions and @here; files and pictures; typing indicator</td><td class="n">CMP 13</td></tr>
+<tr><td>Unread</td><td>Marks, the New divider, the unread notice, Mark as read, mention count, mute, list updates</td><td class="n">UNR 10</td></tr>
+<tr><td>Direct messages</td><td>Start, continue, from a participant, named groups, empty state, by name</td><td class="n">DM 6</td></tr>
+<tr><td>Channels</td><td>Create private and team; rename; favorite; channel link; delete; tabs</td><td class="n">CHN 15</td></tr>
+<tr><td>Members and access</td><td>Invite, remove, leave; no access; ask to join, approve, deny, withdraw; team channels found and joined by teammates only; signed out</td><td class="n">MEM 8, ACC 9</td></tr>
+<tr><td>Find and keyboard</td><td>Find in channel; arrows, Escape, edit and delete hotkeys</td><td class="n">KEY 12</td></tr>
+</table></div>
+
+<h3>Not covered, and why</h3>
+<div class="scroll"><table>
+<tr><th>Behaviour</th><th>Reason</th></tr>
+<tr><td>Calls from a channel</td><td>Needs media devices and a media server the local stack does not run</td></tr>
+<tr><td>Agents in channels</td><td>Needs a model provider</td></tr>
+<tr><td>Phone and tablet layouts, touch</td><td>Separate components; desktop Chromium only</td></tr>
+<tr><td>Push, email and desktop notifications, sounds</td><td>Delivered outside the page</td></tr>
+<tr><td>Slack import</td><td>Needs a Slack workspace</td></tr>
+<tr><td>Voice dictation</td><td>Needs a microphone and a transcription provider</td></tr>
+<tr><td>Custom sidebar sections</td><td>Behind its own flag; a suite of its own size</td></tr>
+<tr><td>Timed mute</td><td>Depends on wall-clock time; only "until I turn it off" is covered</td></tr>
+<tr><td>Link previews, cards, GIFs, polls</td><td>Other features' cards, covered by their suites</td></tr>
+<tr><td>Removing an attachment, drag and drop, pasted images</td><td>Not written</td></tr>
+<tr><td>Reply to a reply, reply box's send button, collapsing by pointer</td><td>Not written</td></tr>
+<tr><td>Safari and Firefox</td><td>Chromium only</td></tr>
+<tr><td>Scale: tens of thousands of messages, hundreds of members</td><td>Longest history is 230 messages</td></tr>
+</table></div>
+
+<h2>How each test was shown able to fail</h2>
+<p>For each test the product was broken on purpose where the behaviour lives, the app rebuilt, and the test watched failing. The 56 breaks, what every test did under each, and the error each test failed with are <a href="breaks/">kept here</a>; they were taken out of the committed suite on 17 November 2026. Since 17 November 2026 main has one build of the app (the GraphQL sources flag was removed), so the suite now runs once in CI and its ledgers list 8 known defects and 15 intermittent ones; the comparison on this page is of main as it was before that. 108 tests have such a proof. The other 11 assert behaviour main lacks today, so they fail on main unbroken; they are marked expected-to-fail and turn the run red when the defect is fixed.</p>
+<p>Limits of these proofs:</p>
+<ul>
+<li>The five reconnect and two-window tests, and CMP-03 and CMP-13, are proven only by a general break (the channel's messages never load, or live events are ignored). That shows they can fail, not that they fail for the exact behaviour in their title. CMP-13 has since failed on B for its own behaviour.</li>
+<li>DM-04 does not notice a group losing its name; a break of that failed nothing.</li>
+<li>DM-05's title says nothing can be sent until you type; it checks only that Send is off while empty.</li>
+<li>Eleven tests have one check that a known, intermittent defect of main fails in some runs (below). That check is recorded when it fails but cannot fail the run. On B those checks are just as silent: ACC-06, CHN-02 and UNR-04 showed on B in most runs without turning it red.</li>
+<li>The proofs were made before the last changes to CHN-02, ACC-06, CHN-08, UNR-08 and SCROLL-04; the breaks were not run again against the changed tests.</li>
+</ul>
+
+<h2>Defects in main the suite found</h2>
+<details open><summary>Fail a test in every run (12)</summary>
+<div class="scroll"><table>
+<tr><th>Test</th><th>Build</th><th>Defect</th></tr>
+<tr><td class="n">NAV-05</td><td>both</td><td>Reading forward from an old message jumps over part of the history (from message 150 to about 217 of 230)</td></tr>
+<tr><td class="n">THR-10</td><td>both</td><td>The hover Reply button opens the reply box without the keyboard in it; the first typed characters are lost</td></tr>
+<tr><td class="n">KEY-06</td><td>both</td><td>Enter on a selected message opens the reply box but leaves the keyboard in the message list</td></tr>
+<tr><td class="n">CHN-04</td><td>both</td><td>A rename does not reach the header and composer of another member who has the channel open, until reload</td></tr>
+<tr><td class="n">CHN-14</td><td>both</td><td>A new channel with no messages shows neither its created line nor an empty state</td></tr>
+<tr><td class="n">UNR-05</td><td>both</td><td>A mention shows only the plain unread mark on the row, never a count</td></tr>
+<tr><td class="n">UNR-09</td><td>both</td><td>The first message in a new channel leaves the other member's row unmarked; the second marks it</td></tr>
+<tr><td class="n">CHN-08</td><td>flag off</td><td>A deleted channel stays under its owner's Favorites until reload</td></tr>
+<tr><td class="n">CHN-15</td><td>flag off</td><td>A channel deleted elsewhere stays open, with a composer, on its owner's page until reload</td></tr>
+<tr><td class="n">MEM-03</td><td>flag off</td><td>A removed person keeps the channel open, with a composer, until reload; what they send vanishes</td></tr>
+<tr><td class="n">DM-06</td><td>flag off</td><td>New direct message offers nobody for a typed name</td></tr>
+<tr><td class="n">UNR-10</td><td>flag on</td><td>Rows shown during a list search are not marked unread</td></tr>
+</table></div></details>
+<details><summary>Show in some runs (11)</summary>
+<div class="scroll"><table>
+<tr><th>Test</th><th>Defect</th><th>Seen</th></tr>
+<tr><td class="n">MSG-18</td><td>Messages two people send at the same moment show in a different order for each until reload</td><td>most runs</td></tr>
+<tr><td class="n">KEY-05</td><td>The composer takes the keyboard back just after ArrowUp selected a message, so the next key is typed into the composer, or Backspace offers to delete the wrong message (<code>create-channel-hotkeys.ts:235</code>)</td><td>about half of whole-suite runs</td></tr>
+<tr><td class="n">CHN-02</td><td>A teammate's new team channel missing from an open list until reload</td><td>by machine, above</td></tr>
+<tr><td class="n">ACC-06</td><td>Flag on: joined team channel stays under "Not joined"</td><td>by machine, above</td></tr>
+<tr><td class="n">CHN-08</td><td>Flag on: deleted channel stays under Favorites</td><td>by machine, above</td></tr>
+<tr><td class="n">UNR-08</td><td>Flag on: a channel you are added to is missing from an open list search</td><td>3 of 4, then 0 of 4</td></tr>
+<tr><td class="n">UNR-04</td><td>Flag on: the unread notice never appears</td><td>2 of 13</td></tr>
+<tr><td class="n">CHN-15</td><td>Flag on: a channel deleted elsewhere stays open</td><td>6 of 13</td></tr>
+<tr><td class="n">THR-02</td><td>A reply shown in an open thread goes from the page again until reload</td><td>4 of 20 on a busy machine</td></tr>
+<tr><td class="n">THR-08</td><td>A reply from someone else to a closed thread does not raise its count</td><td>1 run in 15</td></tr>
+<tr><td class="n">CMP-13</td><td>A message sent just before a reload is also back in the composer as a draft</td><td>1 of 8</td></tr>
+</table></div></details>
+<p>Also noticed, without a test of their own: a renamed channel keeps its old name in search; any member can remove another; the composer could not be typed in right after joining a team channel, once; a message arriving just after leaving a channel is treated as read; a send request got no answer once on main (CHN-01, 1 of 19 runs).</p>
+
+<h2>What the suite does not prove</h2>
+<ul>
+<li><b>Nothing about the 13 uncovered behaviours</b>, including calls, agents, phones and notifications. B could break any of them unseen.</li>
+<li><b>Nothing at scale.</b> The largest channel has 230 messages; a local index is the kind of change whose problems show with large histories and many channels.</li>
+<li><b>Chromium on desktop only.</b> Not Safari, not the desktop or mobile apps, whose storage differs.</li>
+<li><b>B was tested 118 commits behind main</b>, on one machine, never on CI's stack. Three of main's defects turned out to depend on the machine; B's results may too.</li>
+<li><b>Fresh accounts.</b> Upgrade from a device's existing stored data to B's index was not exercised.</li>
+<li><b>Timing-dependent bugs are sampled, not excluded.</b> Two of B's three regressions depend on acting within a second or so of a page load; others of that kind may exist that no test happens to hit.</li>
+<li><b>Main is not perfectly steady either:</b> one unexplained failure in 19 flag-off runs, one in 13 flag-on runs.</li>
+</ul>
+
+<h2>In CI</h2>
+<p><code>Channels end-to-end</code> runs both builds on every PR that touches channel code, the suite or its stack, and is part of <code>CI gate</code>. Each job builds the stack, seeds six casts of four people, runs the suite and then checks the run against the ledger; reports and traces are kept as artifacts. Two things had to change for CI: document storage needs a larger worker stack when built without optimization (<code>RUST_MIN_STACK</code>), and the three machine-dependent defects above.</p>
+</main>

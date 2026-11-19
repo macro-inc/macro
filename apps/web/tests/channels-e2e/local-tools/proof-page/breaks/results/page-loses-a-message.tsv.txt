@@ -1,0 +1,21 @@
+page-loses-a-message	CHN-12	FAILED	Error: the last messages in the list | the last messages in the list
+page-loses-a-message	KEY-09	FAILED	Error: the last messages in the list | the last messages in the list
+page-loses-a-message	NAV-01	PASSED	
+page-loses-a-message	NAV-02	PASSED	
+page-loses-a-message	NAV-03	PASSED	
+page-loses-a-message	NAV-04	FAILED	Error: the last messages in the list | the last messages in the list
+page-loses-a-message	NAV-05	PASSED	Error: lost my place below "history 148": the list shows ["history 216","history 217","history 218","history 219","history 220","history 221","history 222","his
+page-loses-a-message	NAV-06	FAILED	Error: expect(locator).toBeInViewport() failed | Locator: locator('[data-channel-scroll]').locator('[data-message]').filter({ has: locator('[data-message-conten
+page-loses-a-message	NAV-07	PASSED	
+page-loses-a-message	MSG-16	FAILED	Error: expect(received).toEqual(expected) // deep equality | - Expected  - 3
+page-loses-a-message	OPEN-01	FAILED	Error: the last messages in the list | the last messages in the list
+page-loses-a-message	OPEN-02	FAILED	Error: the last messages in the list | the last messages in the list
+page-loses-a-message	REC-01	FAILED	Error: the last messages in the list | the last messages in the list
+page-loses-a-message	REC-02	FAILED	Error: expect(locator).toBeVisible() failed | Locator: locator('[data-channel-scroll]').locator('[data-message]').filter({ has: locator('[data-message-content]'
+page-loses-a-message	REC-03	FAILED	Error: expect(locator).toBeVisible() failed | Locator: locator('[data-channel-scroll]').locator('[data-message]').filter({ has: locator('[data-message-content]'
+page-loses-a-message	SCROLL-01	FAILED	Error: the last messages in the list | the last messages in the list
+page-loses-a-message	SCROLL-02	FAILED	Error: expect(locator).toBeInViewport() failed | Locator: locator('[data-channel-scroll]').locator('[data-message]').filter({ has: locator('[data-message-conten
+page-loses-a-message	SCROLL-03	PASSED	
+page-loses-a-message	SCROLL-04	PASSED	
+page-loses-a-message	TAB-01	FAILED	Error: expect(locator).toBeVisible() failed | Locator: locator('[data-channel-scroll]').locator('[data-message]').filter({ has: locator('[data-message-content]'
+page-loses-a-message	TAB-02	FAILED	Error: expect(locator).toBeVisible() failed | Locator: locator('[data-channel-scroll]').locator('[data-message]').filter({ has: locator('[data-message-content]'

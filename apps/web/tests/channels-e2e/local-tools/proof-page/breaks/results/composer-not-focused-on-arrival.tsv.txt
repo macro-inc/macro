@@ -1,0 +1,44 @@
+composer-not-focused-on-arrival	ACC-01	PASSED	
+composer-not-focused-on-arrival	ACC-02	PASSED	
+composer-not-focused-on-arrival	ACC-03	PASSED	
+composer-not-focused-on-arrival	ACC-04	PASSED	
+composer-not-focused-on-arrival	ACC-05	PASSED	
+composer-not-focused-on-arrival	ACC-06	PASSED	
+composer-not-focused-on-arrival	ACC-07	PASSED	
+composer-not-focused-on-arrival	ACC-08	PASSED	
+composer-not-focused-on-arrival	ACC-09	PASSED	
+composer-not-focused-on-arrival	CHN-01	PASSED	
+composer-not-focused-on-arrival	CHN-02	PASSED	
+composer-not-focused-on-arrival	CHN-03	PASSED	
+composer-not-focused-on-arrival	CHN-04	PASSED	Error: expect(locator).toContainText(expected) failed | Locator: getByRole('main').locator('[data-view-shell-top-bar]')
+composer-not-focused-on-arrival	CHN-05	PASSED	
+composer-not-focused-on-arrival	CHN-06	PASSED	
+composer-not-focused-on-arrival	CHN-07	PASSED	
+composer-not-focused-on-arrival	CHN-08	PASSED	Error: expect(locator).toHaveCount(expected) failed | Locator:  getByRole('tree', { name: 'Conversations' }).locator('[data-key="favorite:channel:01a1de55-e443-
+composer-not-focused-on-arrival	CHN-09	PASSED	
+composer-not-focused-on-arrival	CHN-10	PASSED	
+composer-not-focused-on-arrival	CHN-11	PASSED	
+composer-not-focused-on-arrival	CHN-12	PASSED	
+composer-not-focused-on-arrival	CHN-13	PASSED	
+composer-not-focused-on-arrival	CHN-14	PASSED	Error: expect(locator).toBeVisible() failed | Locator: getByRole('main').getByText('Channel e2e-mwhktm3hxlfe created')
+composer-not-focused-on-arrival	CHN-15	PASSED	Error: expect(locator).toHaveCount(expected) failed | Locator:  locator('[data-input-id="channel-input-01a1de56-0f1b-78e9-8576-17fcdd98c37b"]')
+composer-not-focused-on-arrival	KEY-01	PASSED	
+composer-not-focused-on-arrival	KEY-02	PASSED	
+composer-not-focused-on-arrival	KEY-03	PASSED	
+composer-not-focused-on-arrival	KEY-04	PASSED	
+composer-not-focused-on-arrival	KEY-05	PASSED	
+composer-not-focused-on-arrival	KEY-06	PASSED	Error: expect(locator).toBeFocused() failed | Locator:  locator('[data-input-id="thread-reply-input-01a1de56-3e42-708c-8ffe-b28882a5f375"] [contenteditable]')
+composer-not-focused-on-arrival	KEY-07	FAILED	Error: expect(locator).toBeFocused() failed | Locator: locator('[data-input-id="edit-message-input-01a1de56-3f6b-7b70-8973-aa911c85d691"] [contenteditable]')
+composer-not-focused-on-arrival	KEY-08	PASSED	
+composer-not-focused-on-arrival	KEY-12	PASSED	
+composer-not-focused-on-arrival	KEY-09	PASSED	
+composer-not-focused-on-arrival	KEY-10	FAILED	Error: expect(locator).toBeFocused() failed | Locator:  locator('[data-input-id="channel-input-01a1de56-5ce7-7a70-8fcc-1cdcd89c5f00"]').locator('[contenteditabl
+composer-not-focused-on-arrival	KEY-11	PASSED	
+composer-not-focused-on-arrival	MEM-01	PASSED	
+composer-not-focused-on-arrival	MEM-02	PASSED	
+composer-not-focused-on-arrival	MEM-03	PASSED	Error: expect(locator).toHaveCount(expected) failed | Locator:  locator('[data-input-id="channel-input-01a1de56-875f-7b92-b77e-dd7ce13a878d"]')
+composer-not-focused-on-arrival	MEM-04	PASSED	
+composer-not-focused-on-arrival	MEM-05	PASSED	
+composer-not-focused-on-arrival	MEM-06	PASSED	
+composer-not-focused-on-arrival	MEM-07	PASSED	
+composer-not-focused-on-arrival	MEM-08	PASSED	

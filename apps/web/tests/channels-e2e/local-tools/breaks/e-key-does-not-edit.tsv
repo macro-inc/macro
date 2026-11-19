@@ -1,0 +1,2 @@
+e-key-does-not-edit	KEY-07	FAILED	Error: expect(locator).toBeFocused() failed | Locator: locator('[data-input-id="edit-message-input-01a1de99-4de8-70e4-afe3-fcd0ec417871"] [contenteditable]')
+e-key-does-not-edit	MSG-08	FAILED	Error: expect(locator).toHaveText(expected) failed | Locator: locator('[data-input-id="edit-message-input-01a1de99-4e38-7453-9f25-63188e50837f"]').getByRole('te

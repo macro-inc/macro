@@ -1,0 +1,28 @@
+edit-keeps-the-old-text	MSG-01	PASSED	
+edit-keeps-the-old-text	MSG-02	PASSED	
+edit-keeps-the-old-text	MSG-03	PASSED	
+edit-keeps-the-old-text	MSG-04	PASSED	
+edit-keeps-the-old-text	MSG-05	PASSED	
+edit-keeps-the-old-text	MSG-06	PASSED	
+edit-keeps-the-old-text	MSG-07	FAILED	Error: expect(received).toEqual(expected) // deep equality | - Expected  - 1
+edit-keeps-the-old-text	MSG-08	FAILED	Error: expect(received).toEqual(expected) // deep equality | - Expected  - 1
+edit-keeps-the-old-text	MSG-09	PASSED	
+edit-keeps-the-old-text	MSG-10	PASSED	
+edit-keeps-the-old-text	MSG-11	PASSED	
+edit-keeps-the-old-text	MSG-12	PASSED	
+edit-keeps-the-old-text	MSG-13	PASSED	
+edit-keeps-the-old-text	MSG-14	PASSED	
+edit-keeps-the-old-text	MSG-15	PASSED	
+edit-keeps-the-old-text	MSG-16	PASSED	
+edit-keeps-the-old-text	MSG-17	PASSED	
+edit-keeps-the-old-text	MSG-18	PASSED	Error: expect(received).toEqual(expected) // deep equality | - Expected  - 3
+edit-keeps-the-old-text	THR-01	PASSED	
+edit-keeps-the-old-text	THR-02	PASSED	
+edit-keeps-the-old-text	THR-03	PASSED	
+edit-keeps-the-old-text	THR-04	FAILED	Error: expect(received).toEqual(expected) // deep equality | - Expected  - 1
+edit-keeps-the-old-text	THR-05	PASSED	
+edit-keeps-the-old-text	THR-06	PASSED	
+edit-keeps-the-old-text	THR-07	PASSED	
+edit-keeps-the-old-text	THR-08	PASSED	
+edit-keeps-the-old-text	THR-09	PASSED	
+edit-keeps-the-old-text	THR-10	PASSED	Error: expect(locator).toBeFocused() failed | Locator:  locator('[data-input-id="thread-reply-input-01a1de21-ed37-78b4-a395-b26b759666d6"]').getByRole('textbox'

@@ -1,0 +1,13 @@
+diff --git a/apps/web/src/features/channel/Channel/create-message-editor.ts b/apps/web/src/features/channel/Channel/create-message-editor.ts
+index 58619ddfe4..ccc407585e 100644
+--- a/apps/web/src/features/channel/Channel/create-message-editor.ts
++++ b/apps/web/src/features/channel/Channel/create-message-editor.ts
+@@ -108,7 +108,7 @@ export function createMessageEditor(
+     options.patchMessage({
+       parent: message.parent ?? options.parent(),
+       messageID: message.id,
+-      content: nextContent,
++      content: message.content,
+       mentions: authoredMentions(snapshot.mentions),
+       attachmentIDsToDelete,
+       attachmentsToAdd: newAttachments.length > 0 ? newAttachments : undefined,

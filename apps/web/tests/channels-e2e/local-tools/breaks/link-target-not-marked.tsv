@@ -1,0 +1,7 @@
+link-target-not-marked	NAV-01	FAILED	Error: messages marked as the target of the link | messages marked as the target of the link
+link-target-not-marked	NAV-02	FAILED	Error: messages marked as the target of the link | messages marked as the target of the link
+link-target-not-marked	NAV-03	FAILED	Error: messages marked as the target of the link | messages marked as the target of the link
+link-target-not-marked	NAV-04	PASSED	
+link-target-not-marked	NAV-05	PASSED	Error: lost my place below "history 148": the list shows ["history 217","history 218","history 219","history 220","history 221","history 222","history 223","his
+link-target-not-marked	NAV-06	PASSED	
+link-target-not-marked	NAV-07	FAILED	Error: messages marked as the target of the link | messages marked as the target of the link

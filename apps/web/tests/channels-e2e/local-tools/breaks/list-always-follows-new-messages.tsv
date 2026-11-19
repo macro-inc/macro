@@ -1,0 +1,21 @@
+list-always-follows-new-messages	CHN-12	FAILED	Error: expect(locator).toBeInViewport() failed | Locator: locator('[data-channel-scroll]').locator('[data-message-id="01a1de80-6b8e-71b6-b323-08c04cf5854e"]')
+list-always-follows-new-messages	KEY-09	PASSED	
+list-always-follows-new-messages	NAV-01	PASSED	
+list-always-follows-new-messages	NAV-02	PASSED	
+list-always-follows-new-messages	NAV-03	PASSED	
+list-always-follows-new-messages	NAV-04	PASSED	
+list-always-follows-new-messages	NAV-05	PASSED	Error: expect(locator).toBeVisible() failed | Locator: locator('[data-channel-scroll]').locator('[data-message]').filter({ has: locator('[data-message-content]'
+list-always-follows-new-messages	NAV-06	FAILED	Error: expect(locator).toBeVisible() failed | Locator: getByRole('button', { name: 'Scroll to bottom' })
+list-always-follows-new-messages	NAV-07	PASSED	
+list-always-follows-new-messages	MSG-16	PASSED	
+list-always-follows-new-messages	OPEN-01	PASSED	
+list-always-follows-new-messages	OPEN-02	PASSED	
+list-always-follows-new-messages	REC-01	PASSED	
+list-always-follows-new-messages	REC-02	PASSED	
+list-always-follows-new-messages	REC-03	PASSED	
+list-always-follows-new-messages	SCROLL-01	PASSED	
+list-always-follows-new-messages	SCROLL-02	FAILED	Error: expect(locator).toBeVisible() failed | Locator: getByRole('button', { name: 'Scroll to bottom' })
+list-always-follows-new-messages	SCROLL-03	PASSED	
+list-always-follows-new-messages	SCROLL-04	FAILED	Error: expect(locator).toBeVisible() failed | Locator: getByRole('button', { name: 'Scroll to bottom' })
+list-always-follows-new-messages	TAB-01	PASSED	
+list-always-follows-new-messages	TAB-02	PASSED	

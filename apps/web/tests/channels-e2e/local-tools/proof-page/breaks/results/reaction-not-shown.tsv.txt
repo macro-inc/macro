@@ -1,0 +1,28 @@
+reaction-not-shown	MSG-01	PASSED	
+reaction-not-shown	MSG-02	PASSED	
+reaction-not-shown	MSG-03	PASSED	
+reaction-not-shown	MSG-04	PASSED	
+reaction-not-shown	MSG-05	PASSED	
+reaction-not-shown	MSG-06	PASSED	
+reaction-not-shown	MSG-07	PASSED	
+reaction-not-shown	MSG-08	PASSED	
+reaction-not-shown	MSG-09	PASSED	
+reaction-not-shown	MSG-10	PASSED	
+reaction-not-shown	MSG-11	PASSED	
+reaction-not-shown	MSG-12	PASSED	
+reaction-not-shown	MSG-13	FAILED	Error: expect(received).toEqual(expected) // deep equality | - Expected  - 3
+reaction-not-shown	MSG-14	FAILED	Error: expect(received).toEqual(expected) // deep equality | - Expected  - 3
+reaction-not-shown	MSG-15	FAILED	Error: expect(received).toEqual(expected) // deep equality | - Expected  - 3
+reaction-not-shown	MSG-16	PASSED	
+reaction-not-shown	MSG-17	PASSED	
+reaction-not-shown	MSG-18	PASSED	Error: expect(received).toEqual(expected) // deep equality | - Expected  - 2
+reaction-not-shown	THR-01	PASSED	
+reaction-not-shown	THR-02	PASSED	
+reaction-not-shown	THR-03	PASSED	
+reaction-not-shown	THR-04	PASSED	
+reaction-not-shown	THR-05	PASSED	
+reaction-not-shown	THR-06	FAILED	Error: expect(received).toEqual(expected) // deep equality | - Expected  - 3
+reaction-not-shown	THR-07	PASSED	
+reaction-not-shown	THR-08	PASSED	
+reaction-not-shown	THR-09	PASSED	
+reaction-not-shown	THR-10	PASSED	Error: expect(locator).toBeFocused() failed | Locator:  locator('[data-input-id="thread-reply-input-01a1de2c-0c2d-772b-b7e0-4b697be93890"]').getByRole('textbox'

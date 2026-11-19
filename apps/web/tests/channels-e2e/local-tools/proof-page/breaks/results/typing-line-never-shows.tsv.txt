@@ -1,0 +1,29 @@
+typing-line-never-shows	CMP-01	PASSED	
+typing-line-never-shows	CMP-02	PASSED	
+typing-line-never-shows	CMP-03	PASSED	
+typing-line-never-shows	CMP-13	PASSED	
+typing-line-never-shows	CMP-04	PASSED	
+typing-line-never-shows	CMP-05	PASSED	
+typing-line-never-shows	CMP-06	PASSED	
+typing-line-never-shows	CMP-07	PASSED	
+typing-line-never-shows	CMP-08	PASSED	
+typing-line-never-shows	CMP-09	FAILED	Error: expect(locator).toBeVisible() failed | Locator: locator('[data-channel-scroll]').getByText('Ben Member is typing', { exact: true })
+typing-line-never-shows	CMP-10	FAILED	Error: expect(locator).toBeVisible() failed | Locator: locator('[data-channel-scroll]').getByText('Ben Member is typing', { exact: true })
+typing-line-never-shows	CMP-11	PASSED	
+typing-line-never-shows	CMP-12	PASSED	
+typing-line-never-shows	DM-01	PASSED	
+typing-line-never-shows	DM-02	PASSED	
+typing-line-never-shows	DM-03	PASSED	
+typing-line-never-shows	DM-04	PASSED	
+typing-line-never-shows	DM-05	PASSED	
+typing-line-never-shows	DM-06	PASSED	Error: expect(locator).toBeVisible() failed | Locator: getByRole('option', { name: /Ben Member/ })
+typing-line-never-shows	UNR-01	PASSED	
+typing-line-never-shows	UNR-02	PASSED	
+typing-line-never-shows	UNR-03	PASSED	
+typing-line-never-shows	UNR-04	PASSED	
+typing-line-never-shows	UNR-05	PASSED	Error: expect(locator).toHaveText(expected) failed | Locator: getByRole('tree', { name: 'Conversations' }).getByRole('treeitem').filter({ hasText: 'unr-mwhlhyyy
+typing-line-never-shows	UNR-06	PASSED	
+typing-line-never-shows	UNR-07	PASSED	
+typing-line-never-shows	UNR-08	PASSED	
+typing-line-never-shows	UNR-09	PASSED	Error: expect(locator).toBeVisible() failed | Locator: getByRole('tree', { name: 'Conversations' }).getByRole('treeitem').filter({ hasText: 'unr-mwhli6to987q-fr
+typing-line-never-shows	UNR-10	PASSED	

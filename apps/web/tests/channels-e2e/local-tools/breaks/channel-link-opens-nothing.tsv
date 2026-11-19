@@ -1,0 +1,44 @@
+channel-link-opens-nothing	ACC-01	PASSED	
+channel-link-opens-nothing	ACC-02	PASSED	
+channel-link-opens-nothing	ACC-03	PASSED	
+channel-link-opens-nothing	ACC-04	PASSED	
+channel-link-opens-nothing	ACC-05	PASSED	
+channel-link-opens-nothing	ACC-06	PASSED	
+channel-link-opens-nothing	ACC-07	PASSED	
+channel-link-opens-nothing	ACC-08	PASSED	
+channel-link-opens-nothing	ACC-09	PASSED	
+channel-link-opens-nothing	CHN-01	PASSED	
+channel-link-opens-nothing	CHN-02	PASSED	
+channel-link-opens-nothing	CHN-03	PASSED	
+channel-link-opens-nothing	CHN-04	PASSED	Error: expect(locator).toContainText(expected) failed | Locator: getByRole('main').locator('[data-view-shell-top-bar]')
+channel-link-opens-nothing	CHN-05	PASSED	
+channel-link-opens-nothing	CHN-06	FAILED	Error: expect(locator).toBeVisible() failed | Locator: locator('[data-input-id="channel-input-01a1de3b-a445-7f68-8fd7-df9b9a665063"]')
+channel-link-opens-nothing	CHN-07	PASSED	
+channel-link-opens-nothing	CHN-08	PASSED	Error: expect(locator).toHaveCount(expected) failed | Locator:  getByRole('tree', { name: 'Conversations' }).locator('[data-key="favorite:channel:01a1de3b-bd30-
+channel-link-opens-nothing	CHN-09	PASSED	
+channel-link-opens-nothing	CHN-10	PASSED	
+channel-link-opens-nothing	CHN-11	PASSED	
+channel-link-opens-nothing	CHN-12	PASSED	
+channel-link-opens-nothing	CHN-13	PASSED	
+channel-link-opens-nothing	CHN-14	PASSED	Error: expect(locator).toBeVisible() failed | Locator: getByRole('main').getByText('Channel e2e-mwhjsyk45kai created')
+channel-link-opens-nothing	CHN-15	PASSED	Error: expect(locator).toHaveCount(expected) failed | Locator:  locator('[data-input-id="channel-input-01a1de3b-fcc8-73b1-a935-fc16d983a061"]')
+channel-link-opens-nothing	KEY-01	PASSED	
+channel-link-opens-nothing	KEY-02	PASSED	
+channel-link-opens-nothing	KEY-03	PASSED	
+channel-link-opens-nothing	KEY-04	PASSED	
+channel-link-opens-nothing	KEY-05	PASSED	
+channel-link-opens-nothing	KEY-06	PASSED	Error: expect(locator).toBeFocused() failed | Locator:  locator('[data-input-id="thread-reply-input-01a1de3c-3789-733e-a790-e3f98a609062"] [contenteditable]')
+channel-link-opens-nothing	KEY-07	PASSED	
+channel-link-opens-nothing	KEY-08	PASSED	
+channel-link-opens-nothing	KEY-12	PASSED	
+channel-link-opens-nothing	KEY-09	PASSED	
+channel-link-opens-nothing	KEY-10	PASSED	
+channel-link-opens-nothing	KEY-11	PASSED	
+channel-link-opens-nothing	MEM-01	PASSED	
+channel-link-opens-nothing	MEM-02	PASSED	
+channel-link-opens-nothing	MEM-03	PASSED	Error: expect(locator).toHaveCount(expected) failed | Locator:  locator('[data-input-id="channel-input-01a1de3c-7743-7de9-b22e-85bdf9ca7282"]')
+channel-link-opens-nothing	MEM-04	PASSED	
+channel-link-opens-nothing	MEM-05	PASSED	
+channel-link-opens-nothing	MEM-06	PASSED	
+channel-link-opens-nothing	MEM-07	PASSED	
+channel-link-opens-nothing	MEM-08	PASSED	

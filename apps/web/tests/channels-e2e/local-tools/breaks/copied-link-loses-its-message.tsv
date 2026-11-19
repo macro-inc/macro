@@ -1,0 +1,21 @@
+copied-link-loses-its-message	CHN-12	PASSED	
+copied-link-loses-its-message	KEY-09	PASSED	
+copied-link-loses-its-message	NAV-01	PASSED	
+copied-link-loses-its-message	NAV-02	PASSED	
+copied-link-loses-its-message	NAV-03	PASSED	
+copied-link-loses-its-message	NAV-04	PASSED	
+copied-link-loses-its-message	NAV-05	PASSED	Error: lost my place below "history 148": the list shows ["history 217","history 218","history 219","history 220","history 221","history 222","history 223","his
+copied-link-loses-its-message	NAV-06	PASSED	
+copied-link-loses-its-message	NAV-07	FAILED	Error: expect(received).toContain(expected) // indexOf | Expected substring: "01a1de83-b0c9-7b2a-9f10-1524f1f44137"
+copied-link-loses-its-message	MSG-16	PASSED	
+copied-link-loses-its-message	OPEN-01	PASSED	
+copied-link-loses-its-message	OPEN-02	PASSED	
+copied-link-loses-its-message	REC-01	PASSED	
+copied-link-loses-its-message	REC-02	PASSED	
+copied-link-loses-its-message	REC-03	PASSED	
+copied-link-loses-its-message	SCROLL-01	PASSED	
+copied-link-loses-its-message	SCROLL-02	PASSED	
+copied-link-loses-its-message	SCROLL-03	PASSED	
+copied-link-loses-its-message	SCROLL-04	PASSED	
+copied-link-loses-its-message	TAB-01	PASSED	
+copied-link-loses-its-message	TAB-02	PASSED	

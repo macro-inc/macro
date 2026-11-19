@@ -1,0 +1,99 @@
+path "/home/teo/.herdr/worktrees/macro/synoet-channels-e2e-base/apps/web" does not contain a 'flake.nix', searching up
+warning: Git tree '/home/teo/.herdr/worktrees/macro/synoet-channels-e2e-base' is dirty
+
+Running 2 tests using 2 workers
+
+2026/11/15 09:45:51 socat[2177065] W waitpid(-1, {}, WNOHANG): no (more) child has exited
+2026/11/15 09:46:09 socat[2183336] E write(6, 0x57870c210000, 24): Broken pipe
+2026/11/15 09:46:09 socat[2183355] E write(6, 0x57870c210000, 24): Broken pipe
+2026/11/15 09:46:09 socat[2183603] E write(6, 0x57870c210000, 24): Broken pipe
+2026/11/15 09:46:09 socat[2183705] E write(6, 0x57870c210000, 24): Broken pipe
+  ✘  1 tests/channels-e2e/find-and-keys.spec.ts:235:1 › KEY-07 “e” on a person’s own selected message edits it (18.0s)
+  ✘  2 tests/channels-e2e/messages.spec.ts:298:1 › MSG-08 pressing E on my selected message edits it, and the other person sees the edit (18.6s)
+
+
+  1) tests/channels-e2e/find-and-keys.spec.ts:235:1 › KEY-07 “e” on a person’s own selected message edits it 
+
+    Error: expect(locator).toBeFocused() failed
+
+    Locator: locator('[data-input-id="edit-message-input-01a1de99-4de8-70e4-afe3-fcd0ec417871"] [contenteditable]')
+    Expected: focused
+    Timeout: 15000ms
+    Error: element(s) not found
+
+    Call log:
+      - Expect "toBeFocused" with timeout 15000ms
+      - waiting for locator('[data-input-id="edit-message-input-01a1de99-4de8-70e4-afe3-fcd0ec417871"] [contenteditable]')
+
+
+      249 |     `[data-input-id="edit-message-input-${mine.id}"] [contenteditable]`
+      250 |   );
+    > 251 |   await expect(editor).toBeFocused();
+          |                        ^
+      252 |   await expect(editor).toHaveText('to be edited');
+      253 |   await page.keyboard.press('ControlOrMeta+a');
+      254 |   await page.keyboard.type('edited by keyboard');
+        at /home/teo/.herdr/worktrees/macro/synoet-channels-e2e-base/apps/web/tests/channels-e2e/find-and-keys.spec.ts:251:24
+
+    attachment #1: screenshot (image/png) ──────────────────────────────────────────────────────────
+    ../../../../../../.cache/channels-e2e/runs/24909-break-e-key-does-not-edit/test-results/find-and-keys-KEY-07-“e”-o-f54f1-n-selected-message-edits-it/test-failed-1.png
+    ────────────────────────────────────────────────────────────────────────────────────────────────
+
+    Error Context: ../../../../../../.cache/channels-e2e/runs/24909-break-e-key-does-not-edit/test-results/find-and-keys-KEY-07-“e”-o-f54f1-n-selected-message-edits-it/error-context.md
+
+    attachment #3: trace (application/zip) ─────────────────────────────────────────────────────────
+    ../../../../../../.cache/channels-e2e/runs/24909-break-e-key-does-not-edit/test-results/find-and-keys-KEY-07-“e”-o-f54f1-n-selected-message-edits-it/trace.zip
+    Usage:
+
+        npx playwright show-trace ../../../../../../.cache/channels-e2e/runs/24909-break-e-key-does-not-edit/test-results/find-and-keys-KEY-07-“e”-o-f54f1-n-selected-message-edits-it/trace.zip
+
+    ────────────────────────────────────────────────────────────────────────────────────────────────
+
+  2) tests/channels-e2e/messages.spec.ts:298:1 › MSG-08 pressing E on my selected message edits it, and the other person sees the edit 
+
+    Error: expect(locator).toHaveText(expected) failed
+
+    Locator: locator('[data-input-id="edit-message-input-01a1de99-4e38-7453-9f25-63188e50837f"]').getByRole('textbox', { name: 'Edit message' })
+    Expected: "typed in a hurry"
+    Timeout: 15000ms
+    Error: element(s) not found
+
+    Call log:
+      - Expect "toHaveText" with timeout 15000ms
+      - waiting for locator('[data-input-id="edit-message-input-01a1de99-4e38-7453-9f25-63188e50837f"]').getByRole('textbox', { name: 'Edit message' })
+
+
+      314 |   await mine.messageById(original.id).click();
+      315 |   await page.keyboard.press('e');
+    > 316 |   await expect(mine.editor(original.id)).toHaveText('typed in a hurry');
+          |                                          ^
+      317 |   await expect(mine.editor(original.id)).toBeFocused();
+      318 |   await mine.retype('typed with care');
+      319 |   await page.keyboard.press('Enter');
+        at /home/teo/.herdr/worktrees/macro/synoet-channels-e2e-base/apps/web/tests/channels-e2e/messages.spec.ts:316:42
+
+    attachment #1: screenshot (image/png) ──────────────────────────────────────────────────────────
+    ../../../../../../.cache/channels-e2e/runs/24909-break-e-key-does-not-edit/test-results/messages-MSG-08-pressing-E-87288--other-person-sees-the-edit/test-failed-1.png
+    ────────────────────────────────────────────────────────────────────────────────────────────────
+
+    attachment #2: screenshot (image/png) ──────────────────────────────────────────────────────────
+    ../../../../../../.cache/channels-e2e/runs/24909-break-e-key-does-not-edit/test-results/messages-MSG-08-pressing-E-87288--other-person-sees-the-edit/test-failed-2.png
+    ────────────────────────────────────────────────────────────────────────────────────────────────
+
+    Error Context: ../../../../../../.cache/channels-e2e/runs/24909-break-e-key-does-not-edit/test-results/messages-MSG-08-pressing-E-87288--other-person-sees-the-edit/error-context.md
+
+    attachment #4: trace (application/zip) ─────────────────────────────────────────────────────────
+    ../../../../../../.cache/channels-e2e/runs/24909-break-e-key-does-not-edit/test-results/messages-MSG-08-pressing-E-87288--other-person-sees-the-edit/trace.zip
+    Usage:
+
+        npx playwright show-trace ../../../../../../.cache/channels-e2e/runs/24909-break-e-key-does-not-edit/test-results/messages-MSG-08-pressing-E-87288--other-person-sees-the-edit/trace.zip
+
+    ────────────────────────────────────────────────────────────────────────────────────────────────
+
+  2 failed
+    tests/channels-e2e/find-and-keys.spec.ts:235:1 › KEY-07 “e” on a person’s own selected message edits it 
+    tests/channels-e2e/messages.spec.ts:298:1 › MSG-08 pressing E on my selected message edits it, and the other person sees the edit 
+2026/11/15 09:46:10 socat[2177065] W waitpid(-1, {}, WNOHANG): no (more) child has exited
+2026/11/15 09:46:10 socat[2178440] W waitpid(-1, {}, WNOHANG): no (more) child has exited
+2026/11/15 09:46:10 socat[2178440] W exiting on signal 15
+2026/11/15 09:46:10 socat[2177065] W exiting on signal 15

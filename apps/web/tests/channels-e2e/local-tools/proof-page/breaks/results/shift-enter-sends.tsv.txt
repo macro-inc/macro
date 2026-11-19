@@ -1,0 +1,28 @@
+shift-enter-sends	MSG-01	PASSED	
+shift-enter-sends	MSG-02	PASSED	
+shift-enter-sends	MSG-03	PASSED	
+shift-enter-sends	MSG-04	FAILED	Error: expect(locator).toHaveCount(expected) failed | Locator:  locator('[data-channel-scroll]').locator('[data-message]')
+shift-enter-sends	MSG-05	PASSED	
+shift-enter-sends	MSG-06	PASSED	
+shift-enter-sends	MSG-07	PASSED	
+shift-enter-sends	MSG-08	PASSED	
+shift-enter-sends	MSG-09	PASSED	
+shift-enter-sends	MSG-10	PASSED	
+shift-enter-sends	MSG-11	PASSED	
+shift-enter-sends	MSG-12	PASSED	
+shift-enter-sends	MSG-13	PASSED	
+shift-enter-sends	MSG-14	PASSED	
+shift-enter-sends	MSG-15	PASSED	
+shift-enter-sends	MSG-16	PASSED	
+shift-enter-sends	MSG-17	PASSED	
+shift-enter-sends	MSG-18	PASSED	Error: expect(received).toEqual(expected) // deep equality | - Expected  - 3
+shift-enter-sends	THR-01	PASSED	
+shift-enter-sends	THR-02	PASSED	
+shift-enter-sends	THR-03	PASSED	
+shift-enter-sends	THR-04	PASSED	
+shift-enter-sends	THR-05	PASSED	
+shift-enter-sends	THR-06	PASSED	
+shift-enter-sends	THR-07	PASSED	
+shift-enter-sends	THR-08	PASSED	
+shift-enter-sends	THR-09	PASSED	
+shift-enter-sends	THR-10	PASSED	Error: expect(locator).toBeFocused() failed | Locator:  locator('[data-input-id="thread-reply-input-01a1de1c-594f-7aad-9b5e-f3206f1e1e80"]').getByRole('textbox'

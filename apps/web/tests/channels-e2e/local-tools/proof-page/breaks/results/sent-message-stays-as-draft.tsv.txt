@@ -1,0 +1,29 @@
+sent-message-stays-as-draft	CMP-01	PASSED	
+sent-message-stays-as-draft	CMP-02	PASSED	
+sent-message-stays-as-draft	CMP-03	PASSED	
+sent-message-stays-as-draft	CMP-13	PASSED	
+sent-message-stays-as-draft	CMP-04	PASSED	
+sent-message-stays-as-draft	CMP-05	PASSED	
+sent-message-stays-as-draft	CMP-06	PASSED	
+sent-message-stays-as-draft	CMP-07	PASSED	
+sent-message-stays-as-draft	CMP-08	PASSED	
+sent-message-stays-as-draft	CMP-09	PASSED	
+sent-message-stays-as-draft	CMP-10	PASSED	
+sent-message-stays-as-draft	CMP-11	PASSED	
+sent-message-stays-as-draft	CMP-12	PASSED	
+sent-message-stays-as-draft	DM-01	PASSED	
+sent-message-stays-as-draft	DM-02	PASSED	
+sent-message-stays-as-draft	DM-03	PASSED	
+sent-message-stays-as-draft	DM-04	PASSED	
+sent-message-stays-as-draft	DM-05	PASSED	
+sent-message-stays-as-draft	DM-06	PASSED	Error: expect(locator).toBeVisible() failed | Locator: getByRole('option', { name: /Ben Member/ })
+sent-message-stays-as-draft	UNR-01	PASSED	
+sent-message-stays-as-draft	UNR-02	PASSED	
+sent-message-stays-as-draft	UNR-03	PASSED	
+sent-message-stays-as-draft	UNR-04	PASSED	
+sent-message-stays-as-draft	UNR-05	PASSED	Error: expect(locator).toHaveText(expected) failed | Locator: getByRole('tree', { name: 'Conversations' }).getByRole('treeitem').filter({ hasText: 'unr-mwhl4vhh
+sent-message-stays-as-draft	UNR-06	PASSED	
+sent-message-stays-as-draft	UNR-07	PASSED	
+sent-message-stays-as-draft	UNR-08	PASSED	
+sent-message-stays-as-draft	UNR-09	PASSED	Error: expect(locator).toBeVisible() failed | Locator: getByRole('tree', { name: 'Conversations' }).getByRole('treeitem').filter({ hasText: 'unr-mwhl52dw7jiw-fr
+sent-message-stays-as-draft	UNR-10	PASSED	

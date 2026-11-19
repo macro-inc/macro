@@ -1,0 +1,2593 @@
+path "/home/teo/.herdr/worktrees/macro/synoet-channels-e2e-base/apps/web" does not contain a 'flake.nix', searching up
+warning: Git tree '/home/teo/.herdr/worktrees/macro/synoet-channels-e2e-base' is dirty
+
+Running 119 tests using 4 workers
+
+2026/11/15 09:25:40 socat[237489] E write(6, 0x604ddc144000, 24): Broken pipe
+2026/11/15 09:25:40 socat[234764] E write(6, 0x604ddc144000, 24): Broken pipe
+2026/11/15 09:25:40 socat[237514] E write(6, 0x604ddc144000, 24): Broken pipe
+  ✓    1 tests/channels-e2e/access.spec.ts:39:1 › ACC-02 a person outside the team who opens a private channel’s address sees no messages (1.6s)
+2026/11/15 09:25:40 socat[237588] E write(6, 0x604ddc144000, 24): Broken pipe
+  ✓    3 tests/channels-e2e/access.spec.ts:13:1 › ACC-01 a teammate who is not in a private channel sees no messages and is offered to ask to join (1.9s)
+2026/11/15 09:25:47 socat[239179] E write(6, 0x604ddc144000, 24): Broken pipe
+2026/11/15 09:25:48 socat[239779] E write(6, 0x604ddc144000, 24): Broken pipe
+2026/11/15 09:25:48 socat[239784] E write(6, 0x604ddc144000, 24): Broken pipe
+2026/11/15 09:25:48 socat[238532] E write(6, 0x604ddc144000, 24): Broken pipe
+2026/11/15 09:25:48 socat[238791] E write(6, 0x604ddc144000, 24): Broken pipe
+  ✓    5 tests/channels-e2e/access.spec.ts:139:1 › ACC-05 a withdrawn request can no longer be approved (8.5s)
+2026/11/15 09:25:49 socat[252346] E write(6, 0x604ddc144000, 24): Broken pipe
+2026/11/15 09:25:49 socat[252380] E write(6, 0x604ddc144000, 24): Broken pipe
+2026/11/15 09:25:49 socat[237508] E write(6, 0x604ddc144000, 24): Broken pipe
+2026/11/15 09:25:49 socat[237521] E write(6, 0x604ddc144000, 24): Broken pipe
+  ✓    4 tests/channels-e2e/access.spec.ts:104:1 › ACC-04 a denied request tells the person so and shows them nothing of the channel (10.3s)
+2026/11/15 09:25:49 socat[239035] E write(6, 0x604ddc144000, 24): Broken pipe
+2026/11/15 09:25:49 socat[239073] E write(6, 0x604ddc144000, 24): Broken pipe
+  ✓    6 tests/channels-e2e/access.spec.ts:168:1 › ACC-06 a teammate finds a team channel they are not in by its name and joins it (8.9s)
+2026/11/15 09:25:50 socat[253274] E write(6, 0x604ddc144000, 24): Broken pipe
+2026/11/15 09:25:50 socat[253287] E write(6, 0x604ddc144000, 24): Broken pipe
+  ✓    7 tests/channels-e2e/access.spec.ts:207:1 › ACC-07 a person outside the team cannot read a team channel or find it to join (1.5s)
+  ✓    9 tests/channels-e2e/access.spec.ts:259:1 › ACC-09 a signed-out person who opens a channel’s address is asked to log in and sees nothing of it (1.2s)
+  ✓    8 tests/channels-e2e/access.spec.ts:243:1 › ACC-08 the address of a channel that does not exist says the conversation is unavailable (3.3s)
+2026/11/15 09:25:52 socat[252780] E read(6, 0x604ddc144000, 8192): Connection reset by peer
+2026/11/15 09:25:52 socat[253332] E write(6, 0x604ddc144000, 24): Broken pipe
+2026/11/15 09:25:52 socat[252781] E write(6, 0x555555624000, 24): Broken pipe
+2026/11/15 09:25:52 socat[253382] E write(6, 0x604ddc144000, 24): Broken pipe
+2026/11/15 09:25:54 socat[258409] E write(6, 0x604ddc144000, 24): Broken pipe
+2026/11/15 09:25:55 socat[261748] E write(6, 0x604ddc144000, 24): Broken pipe
+2026/11/15 09:25:55 socat[261757] E write(6, 0x604ddc144000, 24): Broken pipe
+2026/11/15 09:25:58 socat[262597] E write(6, 0x604ddc144000, 24): Broken pipe
+2026/11/15 09:25:58 socat[262602] E write(6, 0x604ddc144000, 24): Broken pipe
+  ✓   10 tests/channels-e2e/channels.spec.ts:23:1 › CHN-01 a private channel made in the app opens empty, shows in the list and takes its first message (7.7s)
+2026/11/15 09:25:59 socat[211711] W waitpid(-1, {}, WNOHANG): no (more) child has exited
+2026/11/15 09:25:59 socat[261755] E write(6, 0x604ddc144000, 24): Broken pipe
+2026/11/15 09:25:59 socat[260604] E write(6, 0x604ddc144000, 24): Broken pipe
+2026/11/15 09:25:59 socat[260611] E write(6, 0x604ddc144000, 24): Broken pipe
+  ✓   12 tests/channels-e2e/channels.spec.ts:105:1 › CHN-03 renaming a channel updates its header and list row, and tells both members in the channel (6.6s)
+2026/11/15 09:26:03 socat[269520] E write(6, 0x604ddc145000, 24): Broken pipe
+2026/11/15 09:26:03 socat[269525] E write(6, 0x604ddc145000, 24): Broken pipe
+2026/11/15 09:26:03 socat[239077] E write(6, 0x604ddc144000, 24): Broken pipe
+2026/11/15 09:26:03 socat[239104] E write(6, 0x604ddc144000, 24): Broken pipe
+2026/11/15 09:26:04 socat[237564] E write(6, 0x604ddc144000, 24): Broken pipe
+  ✘    2 tests/channels-e2e/access.spec.ts:61:1 › ACC-03 a request to join reaches the owner at once, and approving it lets the person in at once (25.2s)
+2026/11/15 09:26:04 socat[275187] E write(6, 0x604ddc145000, 24): Broken pipe
+2026/11/15 09:26:04 socat[275269] E write(6, 0x604ddc145000, 24): Broken pipe
+2026/11/15 09:26:06 socat[277697] E write(6, 0x604ddc145000, 24): Broken pipe
+2026/11/15 09:26:06 socat[277764] E write(6, 0x604ddc145000, 24): Broken pipe
+  ✓   14 tests/channels-e2e/channels.spec.ts:176:1 › CHN-05 a channel can be made a favorite and taken out again, and both survive a reload (7.3s)
+2026/11/15 09:26:07 socat[259887] E write(6, 0x604ddc144000, 24): Broken pipe
+  ✘   11 tests/channels-e2e/channels.spec.ts:53:1 › CHN-02 a team channel made in the app appears for a teammate under the team’s channels and can be read (16.6s)
+2026/11/15 09:26:10 socat[281160] E write(6, 0x604ddc145000, 24): Broken pipe
+2026/11/15 09:26:10 socat[278292] E write(6, 0x604ddc145000, 24): Broken pipe
+  ✓   15 tests/channels-e2e/channels.spec.ts:206:1 › CHN-06 Copy Link gives an address that opens the channel for another member (5.3s)
+2026/11/15 09:26:11 socat[279975] E write(6, 0x604ddc145000, 24): Broken pipe
+2026/11/15 09:26:11 socat[279999] E write(6, 0x604ddc145000, 24): Broken pipe
+2026/11/15 09:26:12 socat[286246] E write(6, 0x604ddc145000, 24): Broken pipe
+  ✓   18 tests/channels-e2e/channels.spec.ts:299:1 › CHN-09 a member who does not own the channel is not offered Delete (2.4s)
+2026/11/15 09:26:13 socat[278882] E write(6, 0x604ddc145000, 24): Broken pipe
+2026/11/15 09:26:13 socat[278887] E write(6, 0x604ddc145000, 24): Broken pipe
+2026/11/15 09:26:15 socat[287471] E write(6, 0x604ddc145000, 24): Broken pipe
+2026/11/15 09:26:15 socat[287494] E write(6, 0x604ddc145000, 24): Broken pipe
+  ✓   19 tests/channels-e2e/channels.spec.ts:317:1 › CHN-10 the Participants tab lists the channel’s members by name, with the owner marked (2.3s)
+2026/11/15 09:26:16 socat[286324] E write(6, 0x604ddc145000, 24): Broken pipe
+2026/11/15 09:26:16 socat[286330] E write(6, 0x604ddc145000, 24): Broken pipe
+2026/11/15 09:26:16 socat[278532] E read(6, 0x604ddc145000, 8192): Connection reset by peer
+2026/11/15 09:26:16 socat[288195] E write(6, 0x604ddc145000, 24): Broken pipe
+2026/11/15 09:26:16 socat[278533] E write(6, 0x555555624000, 24): Broken pipe
+  ✓   16 tests/channels-e2e/channels.spec.ts:230:1 › CHN-07 deleting a channel removes it for its owner at once, and its address no longer opens for anyone (10.3s)
+2026/11/15 09:26:16 socat[288203] E write(6, 0x604ddc145000, 24): Broken pipe
+2026/11/15 09:26:17 socat[293187] E write(6, 0x604ddc145000, 24): Broken pipe
+  ✓   20 tests/channels-e2e/channels.spec.ts:340:1 › CHN-11 the Attachments tab of a channel with no files says there are none (2.0s)
+2026/11/15 09:26:18 socat[211711] W waitpid(-1, {}, WNOHANG): no (more) child has exited
+2026/11/15 09:26:18 socat[268847] E write(6, 0x604ddc145000, 24): Broken pipe
+2026/11/15 09:26:18 socat[269730] E write(6, 0x604ddc145000, 24): Broken pipe
+2026/11/15 09:26:18 socat[269769] E write(6, 0x604ddc145000, 24): Broken pipe
+  ✘   13 tests/channels-e2e/channels.spec.ts:143:1 › CHN-04 a rename shows in the header of a member who has the channel open (19.9s)
+2026/11/15 09:26:19 socat[297767] E write(6, 0x604ddc145000, 24): Broken pipe
+  ✓   22 tests/channels-e2e/channels.spec.ts:390:1 › CHN-13 a channel’s history starts with “Channel <name> created” (2.2s)
+2026/11/15 09:26:20 socat[297413] E write(6, 0x604ddc145000, 24): Broken pipe
+2026/11/15 09:26:20 socat[211215] W waitpid(-1, {}, WNOHANG): no (more) child has exited
+2026/11/15 09:26:20 socat[297420] E write(6, 0x604ddc145000, 24): Broken pipe
+  ✓   21 tests/channels-e2e/channels.spec.ts:362:1 › CHN-12 going to another tab and back keeps the message list where it was (3.4s)
+2026/11/15 09:26:23 socat[300129] E write(6, 0x604ddc145000, 24): Broken pipe
+2026/11/15 09:26:23 socat[300137] E write(6, 0x604ddc145000, 24): Broken pipe
+  ✓   25 tests/channels-e2e/composer.spec.ts:21:1 › CMP-01 a draft stays in its channel while I look at another one, and is not shown there (3.7s)
+2026/11/15 09:26:25 socat[307698] E write(6, 0x604ddc145000, 24): Broken pipe
+2026/11/15 09:26:25 socat[307942] E write(6, 0x604ddc145000, 24): Broken pipe
+2026/11/15 09:26:26 socat[307156] E write(6, 0x604ddc145000, 24): Broken pipe
+  ✓   26 tests/channels-e2e/composer.spec.ts:47:1 › CMP-02 a draft is still in the composer after a reload (3.1s)
+2026/11/15 09:26:26 socat[308182] E write(6, 0x604ddc145000, 24): Broken pipe
+2026/11/15 09:26:29 socat[280012] E write(6, 0x604ddc145000, 24): Broken pipe
+2026/11/15 09:26:29 socat[280036] E write(6, 0x604ddc145000, 24): Broken pipe
+  ✘   17 tests/channels-e2e/channels.spec.ts:273:1 › CHN-08 a deleted channel leaves its owner’s Favorites too (21.7s)
+2026/11/15 09:26:33 socat[317292] E write(6, 0x604ddc145000, 24): Broken pipe
+2026/11/15 09:26:33 socat[317329] E write(6, 0x604ddc145000, 24): Broken pipe
+2026/11/15 09:26:34 socat[298252] E write(6, 0x604ddc145000, 24): Broken pipe
+2026/11/15 09:26:34 socat[297567] E write(6, 0x604ddc145000, 24): Broken pipe
+2026/11/15 09:26:34 socat[298267] E write(6, 0x604ddc145000, 24): Broken pipe
+  ✘   23 tests/channels-e2e/channels.spec.ts:410:1 › CHN-14 a brand-new channel with no messages shows its “Channel <name> created” line (16.7s)
+2026/11/15 09:26:36 socat[299255] E write(6, 0x604ddc145000, 24): Broken pipe
+2026/11/15 09:26:36 socat[299321] E write(6, 0x604ddc145000, 24): Broken pipe
+  ✘   24 tests/channels-e2e/channels.spec.ts:429:1 › CHN-15 a channel deleted elsewhere closes on its owner’s open page (16.9s)
+  ✓   29 tests/channels-e2e/composer.spec.ts:121:1 › CMP-04 the send button is off while the composer is empty, and after sending I can go on typing (2.4s)
+2026/11/15 09:26:37 socat[324646] E write(6, 0x604ddc145000, 24): Broken pipe
+2026/11/15 09:26:37 socat[324658] E write(6, 0x604ddc145000, 24): Broken pipe
+2026/11/15 09:26:45 socat[310537] E write(6, 0x604ddc145000, 24): Broken pipe
+2026/11/15 09:26:46 socat[315392] E write(6, 0x604ddc145000, 24): Broken pipe
+2026/11/15 09:26:46 socat[315418] E write(6, 0x604ddc145000, 24): Broken pipe
+  ✘   27 tests/channels-e2e/composer.spec.ts:67:1 › CMP-03 sending a message clears its draft, and a reload does not bring it back (19.3s)
+2026/11/15 09:26:50 socat[315791] E write(6, 0x604ddc145000, 24): Broken pipe
+2026/11/15 09:26:50 socat[315889] E write(6, 0x604ddc145000, 24): Broken pipe
+2026/11/15 09:26:50 socat[322032] E write(6, 0x604ddc145000, 24): Broken pipe
+2026/11/15 09:26:50 socat[322078] E write(6, 0x604ddc145000, 24): Broken pipe
+  ✘   28 tests/channels-e2e/composer.spec.ts:93:1 › CMP-13 a message shown as sent is still sent when the page is reloaded at once (20.5s)
+2026/11/15 09:26:55 socat[325837] E write(6, 0x604ddc145000, 24): Broken pipe
+2026/11/15 09:26:55 socat[325875] E write(6, 0x604ddc145000, 24): Broken pipe
+2026/11/15 09:26:56 socat[326489] E write(6, 0x604ddc145000, 24): Broken pipe
+2026/11/15 09:26:56 socat[211711] W waitpid(-1, {}, WNOHANG): no (more) child has exited
+2026/11/15 09:26:56 socat[211215] W waitpid(-1, {}, WNOHANG): no (more) child has exited
+2026/11/15 09:26:56 socat[326512] E write(6, 0x604ddc145000, 24): Broken pipe
+  ✘   30 tests/channels-e2e/composer.spec.ts:148:1 › CMP-05 a person picked from the @ menu is named in the message for both people, live (19.7s)
+2026/11/15 09:26:56 socat[326171] E write(6, 0x604ddc145000, 24): Broken pipe
+2026/11/15 09:26:57 socat[326889] E write(6, 0x604ddc145000, 24): Broken pipe
+2026/11/15 09:26:57 socat[326902] E write(6, 0x604ddc145000, 24): Broken pipe
+  ✘   31 tests/channels-e2e/composer.spec.ts:178:1 › CMP-06 @here picked from the @ menu is sent as a mention of everyone here (20.0s)
+2026/11/15 09:27:08 socat[346351] E write(6, 0x604ddc145000, 24): Broken pipe
+2026/11/15 09:27:08 socat[347436] E write(6, 0x604ddc145000, 24): Broken pipe
+2026/11/15 09:27:08 socat[347588] E write(6, 0x604ddc145000, 24): Broken pipe
+  ✘   32 tests/channels-e2e/composer.spec.ts:208:1 › CMP-07 a text file and a picture attached to a message show before sending, for both people, and under Attachments (21.6s)
+2026/11/15 09:27:11 socat[351400] E write(6, 0x604ddc145000, 24): Broken pipe
+2026/11/15 09:27:11 socat[351925] E write(6, 0x604ddc145000, 24): Broken pipe
+2026/11/15 09:27:12 socat[357286] E write(6, 0x604ddc145000, 24): Broken pipe
+2026/11/15 09:27:12 socat[357305] E write(6, 0x604ddc145000, 24): Broken pipe
+  ✘   33 tests/channels-e2e/composer.spec.ts:265:1 › CMP-08 a file can be sent on its own, with no text (20.9s)
+2026/11/15 09:27:15 socat[365512] E write(6, 0x604ddc145000, 24): Broken pipe
+2026/11/15 09:27:15 socat[365573] E write(6, 0x604ddc145000, 24): Broken pipe
+  ✘   35 tests/channels-e2e/composer.spec.ts:329:1 › CMP-10 typing reported from the other person’s other device shows “… is typing”, and goes when they stop (17.3s)
+2026/11/15 09:27:16 socat[367403] E write(6, 0x604ddc145000, 24): Broken pipe
+2026/11/15 09:27:16 socat[367457] E write(6, 0x604ddc145000, 24): Broken pipe
+2026/11/15 09:27:17 socat[361178] E write(6, 0x604ddc145000, 24): Broken pipe
+  ✘   34 tests/channels-e2e/composer.spec.ts:303:1 › CMP-09 while the other person types in their composer I see “… is typing”, until they send (20.3s)
+2026/11/15 09:27:25 socat[401466] E write(6, 0x604ddc145000, 24): Broken pipe
+2026/11/15 09:27:25 socat[401475] E write(6, 0x604ddc145000, 24): Broken pipe
+2026/11/15 09:27:27 socat[399506] E write(6, 0x604ddc145000, 24): Broken pipe
+2026/11/15 09:27:27 socat[399948] E write(6, 0x604ddc145000, 24): Broken pipe
+2026/11/15 09:27:27 socat[410935] E write(6, 0x604ddc145000, 24): Broken pipe
+  ✓   39 tests/channels-e2e/direct-messages.spec.ts:66:1 › DM-02 writing to the same person again from “New direct message” continues the one conversation (8.8s)
+2026/11/15 09:27:29 socat[380807] E write(6, 0x604ddc145000, 24): Broken pipe
+2026/11/15 09:27:29 socat[380829] E write(6, 0x604ddc145000, 24): Broken pipe
+2026/11/15 09:27:29 socat[386526] E write(6, 0x604ddc145000, 24): Broken pipe
+2026/11/15 09:27:29 socat[386540] E write(6, 0x604ddc145000, 24): Broken pipe
+  ✘   36 tests/channels-e2e/composer.spec.ts:349:1 › CMP-11 text pasted into the composer is sent as it was copied (19.5s)
+2026/11/15 09:27:32 socat[413902] E write(6, 0x604ddc145000, 24): Broken pipe
+2026/11/15 09:27:32 socat[413911] E write(6, 0x604ddc145000, 24): Broken pipe
+2026/11/15 09:27:33 socat[388621] E write(6, 0x604ddc145000, 24): Broken pipe
+2026/11/15 09:27:33 socat[389782] E write(6, 0x604ddc145000, 24): Broken pipe
+2026/11/15 09:27:34 socat[412768] E write(6, 0x604ddc145000, 24): Broken pipe
+  ✘   37 tests/channels-e2e/composer.spec.ts:372:1 › CMP-12 a message of 2,499 characters is sent whole (20.4s)
+2026/11/15 09:27:34 socat[421505] E write(6, 0x604ddc145000, 24): Broken pipe
+  ✓   40 tests/channels-e2e/direct-messages.spec.ts:122:1 › DM-03 “Message …” on a channel’s participant opens my conversation with them, the same one every time (7.7s)
+2026/11/15 09:27:37 socat[423722] E write(6, 0x604ddc145000, 24): Broken pipe
+2026/11/15 09:27:37 socat[425176] E write(6, 0x604ddc145000, 24): Broken pipe
+  ✓   43 tests/channels-e2e/direct-messages.spec.ts:228:1 › DM-05 a conversation with someone I never wrote to opens empty, saying “Say hello”, and nothing can be sent until I type (1.8s)
+2026/11/15 09:27:37 socat[392294] E write(6, 0x604ddc145000, 24): Broken pipe
+2026/11/15 09:27:37 socat[392503] E write(6, 0x604ddc145000, 24): Broken pipe
+2026/11/15 09:27:38 socat[398996] E write(6, 0x604ddc145000, 24): Broken pipe
+2026/11/15 09:27:38 socat[399024] E write(6, 0x604ddc145000, 24): Broken pipe
+  ✘   38 tests/channels-e2e/direct-messages.spec.ts:22:1 › DM-01 a direct message I start reaches the other person at once under “Direct messages”, and they can answer (21.9s)
+2026/11/15 09:27:39 socat[419917] E write(6, 0x604ddc145000, 24): Broken pipe
+2026/11/15 09:27:39 socat[421116] E write(6, 0x604ddc145000, 24): Broken pipe
+2026/11/15 09:27:39 socat[422073] E write(6, 0x604ddc145000, 24): Broken pipe
+  ✓   41 tests/channels-e2e/direct-messages.spec.ts:173:1 › DM-04 a named group started from “New direct message” reaches everyone I put in it (9.1s)
+2026/11/15 09:27:39 socat[422048] E write(6, 0x604ddc145000, 24): Broken pipe
+2026/11/15 09:27:40 socat[429253] E write(6, 0x604ddc145000, 24): Broken pipe
+2026/11/15 09:27:40 socat[430192] E write(6, 0x604ddc145000, 24): Broken pipe
+  ✓   44 tests/channels-e2e/find-and-keys.spec.ts:26:1 › KEY-01 find counts the messages that match and steps through them, newest first (4.0s)
+2026/11/15 09:27:41 socat[432239] E write(6, 0x604ddc145000, 24): Broken pipe
+2026/11/15 09:27:41 socat[432298] E write(6, 0x604ddc145000, 24): Broken pipe
+  ✓   46 tests/channels-e2e/find-and-keys.spec.ts:95:1 › KEY-03 find for words nobody wrote says there are no matches (2.3s)
+2026/11/15 09:27:43 socat[432175] E write(6, 0x604ddc145000, 24): Broken pipe
+2026/11/15 09:27:43 socat[432191] E write(6, 0x604ddc145000, 24): Broken pipe
+  ✓   45 tests/channels-e2e/find-and-keys.spec.ts:75:1 › KEY-02 find brings an old message far up a long history into view (4.5s)
+2026/11/15 09:27:44 socat[433020] E write(6, 0x604ddc145000, 24): Broken pipe
+  ✓   47 tests/channels-e2e/find-and-keys.spec.ts:119:1 › KEY-04 the find bar closes with its button and with Escape, and the channel still takes a message (3.2s)
+2026/11/15 09:27:44 socat[433065] E write(6, 0x604ddc145000, 24): Broken pipe
+2026/11/15 09:27:44 socat[433016] E read(6, 0x604ddc145000, 8192): Connection reset by peer
+2026/11/15 09:27:44 socat[438477] E write(6, 0x604ddc145000, 24): Broken pipe
+2026/11/15 09:27:44 socat[433017] E write(6, 0x555555624000, 24): Broken pipe
+  ✓   48 tests/channels-e2e/find-and-keys.spec.ts:163:1 › KEY-05 the arrow keys walk from the composer up the messages and back down into the composer (2.7s)
+2026/11/15 09:27:44 socat[438742] E write(6, 0x604ddc145000, 24): Broken pipe
+2026/11/15 09:27:46 socat[440213] E write(6, 0x604ddc145000, 24): Broken pipe
+2026/11/15 09:27:46 socat[441391] E write(6, 0x604ddc145000, 24): Broken pipe
+  ✓   50 tests/channels-e2e/find-and-keys.spec.ts:235:1 › KEY-07 “e” on a person’s own selected message edits it (2.6s)
+2026/11/15 09:27:46 socat[441499] E write(6, 0x604ddc145000, 24): Broken pipe
+2026/11/15 09:27:46 socat[441525] E write(6, 0x604ddc145000, 24): Broken pipe
+  ✓   51 tests/channels-e2e/find-and-keys.spec.ts:263:1 › KEY-08 Backspace on a person’s own selected message asks first, and Escape keeps the message (2.4s)
+2026/11/15 09:27:49 socat[211215] W waitpid(-1, {}, WNOHANG): no (more) child has exited
+2026/11/15 09:27:49 socat[444835] E write(6, 0x604ddc145000, 24): Broken pipe
+  ✓   52 tests/channels-e2e/find-and-keys.spec.ts:285:1 › KEY-12 Backspace on a person’s own selected message deletes it once confirmed (2.8s)
+2026/11/15 09:27:50 socat[444713] E write(6, 0x604ddc145000, 24): Broken pipe
+2026/11/15 09:27:50 socat[211711] W waitpid(-1, {}, WNOHANG): no (more) child has exited
+2026/11/15 09:27:50 socat[444870] E write(6, 0x604ddc145000, 24): Broken pipe
+  ✓   53 tests/channels-e2e/find-and-keys.spec.ts:307:1 › KEY-09 Shift+G in the message list goes to the latest message (3.3s)
+2026/11/15 09:27:52 socat[451807] E write(6, 0x604ddc145000, 24): Broken pipe
+2026/11/15 09:27:52 socat[452125] E write(6, 0x604ddc145000, 24): Broken pipe
+  ✓   54 tests/channels-e2e/find-and-keys.spec.ts:332:1 › KEY-10 choosing a channel in the list puts the cursor in its composer (2.6s)
+2026/11/15 09:27:52 socat[211215] W waitpid(-1, {}, WNOHANG): no (more) child has exited
+2026/11/15 09:27:52 socat[452273] E write(6, 0x604ddc145000, 24): Broken pipe
+  ✓   55 tests/channels-e2e/find-and-keys.spec.ts:356:1 › KEY-11 Escape steps out of the composer to the messages, then to the list of conversations (2.0s)
+2026/11/15 09:27:52 socat[423292] E write(6, 0x604ddc145000, 24): Broken pipe
+  ✘   42 tests/channels-e2e/direct-messages.spec.ts:270:1 › DM-06 typing a teammate’s name in “New direct message” offers that person (17.5s)
+  ✓   57 tests/channels-e2e/location.spec.ts:24:1 › NAV-02 a link to an old message, pages back, shows it between its neighbours (2.4s)
+2026/11/15 09:27:54 socat[453764] E write(6, 0x604ddc145000, 24): Broken pipe
+2026/11/15 09:27:54 socat[453796] E write(6, 0x604ddc145000, 24): Broken pipe
+  ✓   58 tests/channels-e2e/location.spec.ts:47:1 › NAV-03 a link to a reply deep in an old thread opens the thread on that reply (2.4s)
+2026/11/15 09:27:54 socat[453759] E write(6, 0x604ddc145000, 24): Broken pipe
+  ✓   56 tests/channels-e2e/location.spec.ts:7:1 › NAV-01 a link to a recent message opens the channel on that message and marks it (2.6s)
+2026/11/15 09:27:57 socat[460974] E write(6, 0x604ddc145000, 24): Broken pipe
+2026/11/15 09:27:57 socat[461008] E write(6, 0x604ddc145000, 24): Broken pipe
+  ✓   61 tests/channels-e2e/location.spec.ts:120:1 › NAV-06 scrolling down from an old message offers “Scroll to bottom”, which returns to the latest messages (3.2s)
+  ✓   59 tests/channels-e2e/location.spec.ts:75:1 › NAV-04 a link to a message that does not exist says so and shows the latest messages (3.5s)
+2026/11/15 09:27:58 socat[460981] E write(6, 0x604ddc145000, 24): Broken pipe
+2026/11/15 09:27:58 socat[461013] E write(6, 0x604ddc145000, 24): Broken pipe
+2026/11/15 09:28:00 socat[462756] E write(6, 0x604ddc145000, 24): Broken pipe
+2026/11/15 09:28:00 socat[462886] E write(6, 0x604ddc145000, 24): Broken pipe
+2026/11/15 09:28:01 socat[440889] E write(6, 0x604ddc145000, 24): Broken pipe
+  ✘   49 tests/channels-e2e/find-and-keys.spec.ts:197:1 › KEY-06 Enter on a selected message opens a reply to that message (17.2s)
+2026/11/15 09:28:02 socat[468916] E write(6, 0x604ddc145000, 24): Broken pipe
+2026/11/15 09:28:02 socat[469106] E write(6, 0x604ddc145000, 24): Broken pipe
+  ✓   62 tests/channels-e2e/location.spec.ts:137:1 › NAV-07 “Copy link” on a message gives a link that opens the channel on it (4.7s)
+2026/11/15 09:28:05 socat[460979] E write(6, 0x604ddc145000, 24): Broken pipe
+2026/11/15 09:28:05 socat[461015] E write(6, 0x604ddc145000, 24): Broken pipe
+  ✘   60 tests/channels-e2e/location.spec.ts:97:1 › NAV-05 reading forward from an old message reaches the latest with nothing missing or repeated (10.4s)
+2026/11/15 09:28:05 socat[470675] E write(6, 0x604ddc145000, 24): Broken pipe
+2026/11/15 09:28:05 socat[211215] W waitpid(-1, {}, WNOHANG): no (more) child has exited
+2026/11/15 09:28:05 socat[470681] E write(6, 0x604ddc145000, 24): Broken pipe
+2026/11/15 09:28:05 socat[469853] E write(6, 0x604ddc145000, 24): Broken pipe
+2026/11/15 09:28:05 socat[470027] E write(6, 0x604ddc145000, 24): Broken pipe
+  ✓   64 tests/channels-e2e/members.spec.ts:71:1 › MEM-02 the owner removes a person in the Participants tab and everyone who stays is told (4.4s)
+2026/11/15 09:28:18 socat[463993] E write(6, 0x604ddc145000, 24): Broken pipe
+2026/11/15 09:28:18 socat[470215] E write(6, 0x604ddc145000, 24): Broken pipe
+2026/11/15 09:28:18 socat[470255] E write(6, 0x604ddc145000, 24): Broken pipe
+2026/11/15 09:28:18 socat[463006] E write(6, 0x604ddc145000, 24): Broken pipe
+2026/11/15 09:28:18 socat[463067] E write(6, 0x604ddc145000, 24): Broken pipe
+2026/11/15 09:28:19 socat[470683] E write(6, 0x604ddc145000, 24): Broken pipe
+  ✘   65 tests/channels-e2e/members.spec.ts:111:1 › MEM-03 a person removed while the channel is open loses it at once (16.7s)
+  ✘   63 tests/channels-e2e/members.spec.ts:18:1 › MEM-01 a person invited from the app gets the channel at once, with what was said before and after (20.8s)
+2026/11/15 09:28:21 socat[501177] E write(6, 0x604ddc145000, 24): Broken pipe
+  ✓   68 tests/channels-e2e/members.spec.ts:214:1 › MEM-06 a channel opened afresh shows who was added and removed between the right messages (2.2s)
+2026/11/15 09:28:22 socat[472612] E write(6, 0x604ddc145000, 24): Broken pipe
+2026/11/15 09:28:22 socat[472624] E write(6, 0x604ddc145000, 24): Broken pipe
+  ✘   67 tests/channels-e2e/members.spec.ts:178:1 › MEM-05 people added and removed while the channel is open show as lines between the right messages (16.6s)
+2026/11/15 09:28:22 socat[501421] E write(6, 0x604ddc145000, 24): Broken pipe
+2026/11/15 09:28:22 socat[211215] W waitpid(-1, {}, WNOHANG): no (more) child has exited
+2026/11/15 09:28:22 socat[501443] E write(6, 0x604ddc145000, 24): Broken pipe
+  ✓   69 tests/channels-e2e/members.spec.ts:239:1 › MEM-07 a member who does not own the channel cannot remove its owner (2.6s)
+2026/11/15 09:28:22 socat[211215] W waitpid(-1, {}, WNOHANG): no (more) child has exited
+2026/11/15 09:28:22 socat[472596] E write(6, 0x604ddc145000, 24): Broken pipe
+2026/11/15 09:28:22 socat[472607] E write(6, 0x604ddc145000, 24): Broken pipe
+2026/11/15 09:28:23 socat[477621] E write(6, 0x604ddc145000, 24): Broken pipe
+2026/11/15 09:28:23 socat[477924] E write(6, 0x604ddc145000, 24): Broken pipe
+2026/11/15 09:28:23 socat[502166] E write(6, 0x604ddc145000, 24): Broken pipe
+2026/11/15 09:28:23 socat[501619] E write(6, 0x604ddc145000, 24): Broken pipe
+2026/11/15 09:28:23 socat[502201] E write(6, 0x604ddc145000, 24): Broken pipe
+  ✓   70 tests/channels-e2e/members.spec.ts:269:1 › MEM-08 a person added while their app was closed finds the channel in the list when they open it (1.9s)
+  ✘   66 tests/channels-e2e/members.spec.ts:139:1 › MEM-04 a removed person never sees what is said after, and after a reload cannot open the channel (18.1s)
+2026/11/15 09:28:24 socat[211215] W waitpid(-1, {}, WNOHANG): no (more) child has exited
+2026/11/15 09:28:40 socat[502821] E write(6, 0x604ddc145000, 24): Broken pipe
+2026/11/15 09:28:40 socat[502850] E write(6, 0x604ddc145000, 24): Broken pipe
+2026/11/15 09:28:40 socat[503023] E write(6, 0x604ddc145000, 24): Broken pipe
+2026/11/15 09:28:40 socat[503172] E write(6, 0x604ddc145000, 24): Broken pipe
+2026/11/15 09:28:40 socat[502848] E write(6, 0x604ddc145000, 24): Broken pipe
+2026/11/15 09:28:40 socat[502974] E write(6, 0x604ddc145000, 24): Broken pipe
+2026/11/15 09:28:40 socat[503056] E write(6, 0x604ddc145000, 24): Broken pipe
+  ✘   71 tests/channels-e2e/messages.spec.ts:37:1 › MSG-02 a message sent with the send button shows once at the end for both people, and stays after reload (18.0s)
+  ✘   72 tests/channels-e2e/messages.spec.ts:7:1 › MSG-01 a message sent with Enter shows once at the end for both people, and stays after reload (17.7s)
+2026/11/15 09:28:41 socat[504338] E write(6, 0x604ddc145000, 24): Broken pipe
+2026/11/15 09:28:41 socat[504355] E write(6, 0x604ddc145000, 24): Broken pipe
+2026/11/15 09:28:41 socat[211215] W waitpid(-1, {}, WNOHANG): no (more) child has exited
+2026/11/15 09:28:41 socat[504353] E write(6, 0x604ddc145000, 24): Broken pipe
+2026/11/15 09:28:42 socat[211215] W waitpid(-1, {}, WNOHANG): no (more) child has exited
+2026/11/15 09:28:42 socat[505402] E write(6, 0x604ddc145000, 24): Broken pipe
+2026/11/15 09:28:42 socat[505449] E write(6, 0x604ddc145000, 24): Broken pipe
+  ✘   73 tests/channels-e2e/messages.spec.ts:71:1 › MSG-03 a quick back-and-forth between two people reads in the same order for both, each message once (18.2s)
+2026/11/15 09:28:43 socat[211711] W waitpid(-1, {}, WNOHANG): no (more) child has exited
+  ✘   74 tests/channels-e2e/messages.spec.ts:116:1 › MSG-04 a message written on several lines with Shift+Enter keeps its lines (18.6s)
+2026/11/15 09:28:59 socat[532897] E write(6, 0x604ddc145000, 24): Broken pipe
+2026/11/15 09:28:59 socat[532947] E write(6, 0x604ddc145000, 24): Broken pipe
+2026/11/15 09:29:00 socat[532900] E write(6, 0x604ddc145000, 24): Broken pipe
+2026/11/15 09:29:00 socat[532951] E write(6, 0x604ddc145000, 24): Broken pipe
+2026/11/15 09:29:00 socat[533872] E write(6, 0x604ddc145000, 24): Broken pipe
+2026/11/15 09:29:00 socat[534224] E write(6, 0x604ddc145000, 24): Broken pipe
+2026/11/15 09:29:00 socat[533873] E write(6, 0x604ddc145000, 24): Broken pipe
+2026/11/15 09:29:00 socat[534223] E write(6, 0x604ddc145000, 24): Broken pipe
+  ✘   75 tests/channels-e2e/messages.spec.ts:152:1 › MSG-05 formatting, a link, emoji and other scripts read the same for both people and after reload (18.5s)
+  ✘   76 tests/channels-e2e/messages.spec.ts:198:1 › MSG-06 messages in a row from one person and from alternating people each show under their author (18.7s)
+2026/11/15 09:29:01 socat[211215] W waitpid(-1, {}, WNOHANG): no (more) child has exited
+2026/11/15 09:29:01 socat[211711] W waitpid(-1, {}, WNOHANG): no (more) child has exited
+2026/11/15 09:29:01 socat[535765] E write(6, 0x604ddc145000, 24): Broken pipe
+2026/11/15 09:29:02 socat[541353] E write(6, 0x604ddc145000, 24): Broken pipe
+2026/11/15 09:29:02 socat[541908] E write(6, 0x604ddc145000, 24): Broken pipe
+2026/11/15 09:29:02 socat[535767] E write(6, 0x604ddc145000, 24): Broken pipe
+2026/11/15 09:29:02 socat[211711] W waitpid(-1, {}, WNOHANG): no (more) child has exited
+2026/11/15 09:29:02 socat[541352] E write(6, 0x604ddc145000, 24): Broken pipe
+2026/11/15 09:29:02 socat[541758] E write(6, 0x604ddc145000, 24): Broken pipe
+  ✘   77 tests/channels-e2e/messages.spec.ts:254:1 › MSG-07 editing my message from its buttons shows the new text and “(edited)” to both people, and after reload (19.2s)
+  ✘   78 tests/channels-e2e/messages.spec.ts:298:1 › MSG-08 pressing E on my selected message edits it, and the other person sees the edit (18.6s)
+2026/11/15 09:29:03 socat[211711] W waitpid(-1, {}, WNOHANG): no (more) child has exited
+2026/11/15 09:29:06 socat[577083] E write(6, 0x604ddc145000, 24): Broken pipe
+2026/11/15 09:29:06 socat[577096] E write(6, 0x604ddc145000, 24): Broken pipe
+  ✓   82 tests/channels-e2e/messages.spec.ts:455:1 › MSG-12 someone else’s message offers no Edit or Delete, while my own does (3.4s)
+2026/11/15 09:29:20 socat[570222] E write(6, 0x604ddc145000, 24): Broken pipe
+2026/11/15 09:29:20 socat[570236] E write(6, 0x604ddc145000, 24): Broken pipe
+2026/11/15 09:29:20 socat[570224] E write(6, 0x604ddc145000, 24): Broken pipe
+2026/11/15 09:29:20 socat[570321] E write(6, 0x604ddc145000, 24): Broken pipe
+2026/11/15 09:29:20 socat[569841] E write(6, 0x604ddc145000, 24): Broken pipe
+2026/11/15 09:29:20 socat[569903] E write(6, 0x604ddc145000, 24): Broken pipe
+2026/11/15 09:29:20 socat[577049] E write(6, 0x604ddc145000, 24): Broken pipe
+2026/11/15 09:29:20 socat[577085] E write(6, 0x604ddc145000, 24): Broken pipe
+  ✘   80 tests/channels-e2e/messages.spec.ts:376:1 › MSG-10 deleting my message, once confirmed, removes it for both people and after reload (19.4s)
+2026/11/15 09:29:21 socat[569896] E write(6, 0x604ddc145000, 24): Broken pipe
+2026/11/15 09:29:21 socat[577077] E write(6, 0x604ddc145000, 24): Broken pipe
+2026/11/15 09:29:21 socat[577093] E write(6, 0x604ddc145000, 24): Broken pipe
+  ✘   79 tests/channels-e2e/messages.spec.ts:331:1 › MSG-09 cancelling an edit, with Escape or “Discard Edit”, leaves the message as it was (20.3s)
+  ✘   81 tests/channels-e2e/messages.spec.ts:418:1 › MSG-11 a deleted message that has replies reads “This message was deleted.” and keeps its replies (18.2s)
+2026/11/15 09:29:22 socat[211711] W waitpid(-1, {}, WNOHANG): no (more) child has exited
+2026/11/15 09:29:24 socat[579550] E write(6, 0x604ddc145000, 24): Broken pipe
+2026/11/15 09:29:24 socat[579314] E write(6, 0x604ddc145000, 24): Broken pipe
+2026/11/15 09:29:24 socat[579582] E write(6, 0x604ddc145000, 24): Broken pipe
+  ✘   83 tests/channels-e2e/messages.spec.ts:491:1 › MSG-13 a quick reaction shows for both people, counts 2 when the other adds the same, and goes when removed (17.7s)
+2026/11/15 09:29:28 socat[211711] W waitpid(-1, {}, WNOHANG): no (more) child has exited
+2026/11/15 09:29:28 socat[612488] E write(6, 0x604ddc145000, 24): Broken pipe
+  ✓   87 tests/channels-e2e/messages.spec.ts:655:1 › MSG-17 “Copy Text” on a message copies its text (3.2s)
+2026/11/15 09:29:28 socat[211215] W waitpid(-1, {}, WNOHANG): no (more) child has exited
+2026/11/15 09:29:38 socat[609000] E write(6, 0x604ddc145000, 24): Broken pipe
+2026/11/15 09:29:38 socat[609281] E write(6, 0x604ddc145000, 24): Broken pipe
+2026/11/15 09:29:39 socat[609141] E write(6, 0x604ddc145000, 24): Broken pipe
+2026/11/15 09:29:39 socat[609975] E write(6, 0x604ddc145000, 24): Broken pipe
+  ✘   85 tests/channels-e2e/messages.spec.ts:582:1 › MSG-15 another person’s edit, reactions and deletion show on an open channel without reload (17.0s)
+2026/11/15 09:29:39 socat[609981] E write(6, 0x604ddc145000, 24): Broken pipe
+2026/11/15 09:29:39 socat[211215] W waitpid(-1, {}, WNOHANG): no (more) child has exited
+2026/11/15 09:29:39 socat[610063] E write(6, 0x604ddc145000, 24): Broken pipe
+  ✘   84 tests/channels-e2e/messages.spec.ts:548:1 › MSG-14 a reaction chosen in the emoji picker shows for both people and after reload (17.5s)
+  ✘   86 tests/channels-e2e/messages.spec.ts:623:1 › MSG-16 a message sent to another channel does not appear in the open one (17.3s)
+2026/11/15 09:29:42 socat[640593] E write(6, 0x604ddc145000, 24): Broken pipe
+  ✓   89 tests/channels-e2e/open.spec.ts:13:1 › OPEN-01 a channel opened by its address shows its latest messages in order, at the end (2.8s)
+2026/11/15 09:29:43 socat[640689] E write(6, 0x604ddc145000, 24): Broken pipe
+2026/11/15 09:29:43 socat[640697] E write(6, 0x604ddc145000, 24): Broken pipe
+  ✓   90 tests/channels-e2e/open.spec.ts:35:1 › OPEN-02 switching between channels in the list shows each channel’s own messages (3.3s)
+2026/11/15 09:29:48 socat[619693] E write(6, 0x604ddc145000, 24): Broken pipe
+2026/11/15 09:29:48 socat[619631] E write(6, 0x604ddc145000, 24): Broken pipe
+2026/11/15 09:29:48 socat[619699] E write(6, 0x604ddc145000, 24): Broken pipe
+  ✘   88 tests/channels-e2e/messages.spec.ts:677:1 › MSG-18 messages two people send at the same moment end in one order for both, each once (20.1s)
+2026/11/15 09:29:58 socat[640596] E write(6, 0x604ddc145000, 24): Broken pipe
+  ✘   91 tests/channels-e2e/reconnect.spec.ts:6:1 › REC-01 after the connection comes back, messages sent meanwhile appear in order without a reload (17.7s)
+2026/11/15 09:30:00 socat[642510] E write(6, 0x604ddc145000, 24): Broken pipe
+2026/11/15 09:30:00 socat[642149] E write(6, 0x604ddc145000, 24): Broken pipe
+2026/11/15 09:30:00 socat[642153] E write(6, 0x604ddc145000, 24): Broken pipe
+  ✘   93 tests/channels-e2e/reconnect.spec.ts:81:1 › REC-03 a message that arrives while the page is hidden is there when the person comes back (16.9s)
+  ✘   92 tests/channels-e2e/reconnect.spec.ts:36:1 › REC-02 a message sent with no connection is neither lost nor sent twice (17.5s)
+2026/11/15 09:30:04 socat[654797] E write(6, 0x604ddc145000, 24): Broken pipe
+2026/11/15 09:30:04 socat[654825] E write(6, 0x604ddc145000, 24): Broken pipe
+  ✓   94 tests/channels-e2e/scroll.spec.ts:7:1 › SCROLL-01 scrolling back to the start of a long channel shows every message once, in order (14.2s)
+2026/11/15 09:30:04 socat[211711] W waitpid(-1, {}, WNOHANG): no (more) child has exited
+2026/11/15 09:30:04 socat[674136] E write(6, 0x604ddc145000, 24): Broken pipe
+  ✓   95 tests/channels-e2e/scroll.spec.ts:26:1 › SCROLL-02 scrolling back down from far up offers “Scroll to bottom”, which returns to the latest message (6.0s)
+2026/11/15 09:30:05 socat[211215] W waitpid(-1, {}, WNOHANG): no (more) child has exited
+2026/11/15 09:30:05 socat[211711] W waitpid(-1, {}, WNOHANG): no (more) child has exited
+2026/11/15 09:30:20 socat[674725] E write(6, 0x604ddc145000, 24): Broken pipe
+2026/11/15 09:30:20 socat[674734] E write(6, 0x604ddc145000, 24): Broken pipe
+  ✘   96 tests/channels-e2e/scroll.spec.ts:55:1 › SCROLL-03 at the end of the channel, a message from someone else arrives in view (19.0s)
+2026/11/15 09:30:21 socat[675336] E write(6, 0x604ddc145000, 24): Broken pipe
+  ✘   97 tests/channels-e2e/scroll.spec.ts:78:1 › SCROLL-04 scrolled up, a message from someone else does not move what is being read (20.5s)
+2026/11/15 09:30:22 socat[675526] E write(6, 0x604ddc145000, 24): Broken pipe
+2026/11/15 09:30:22 socat[675541] E write(6, 0x604ddc145000, 24): Broken pipe
+2026/11/15 09:30:22 socat[211711] W waitpid(-1, {}, WNOHANG): no (more) child has exited
+2026/11/15 09:30:22 socat[211215] W waitpid(-1, {}, WNOHANG): no (more) child has exited
+2026/11/15 09:30:22 socat[675543] E write(6, 0x604ddc145000, 24): Broken pipe
+2026/11/15 09:30:23 socat[681197] E write(6, 0x604ddc145000, 24): Broken pipe
+2026/11/15 09:30:23 socat[681311] E write(6, 0x604ddc145000, 24): Broken pipe
+  ✘   98 tests/channels-e2e/threads.spec.ts:6:1 › THR-01 a reply written from “Reply” shows under its message for both people, and after reload (18.4s)
+2026/11/15 09:30:23 socat[681192] E write(6, 0x604ddc145000, 24): Broken pipe
+2026/11/15 09:30:23 socat[681298] E write(6, 0x604ddc145000, 24): Broken pipe
+2026/11/15 09:30:23 socat[211215] W waitpid(-1, {}, WNOHANG): no (more) child has exited
+  ✘   99 tests/channels-e2e/threads.spec.ts:48:1 › THR-02 replies from two people to an old message read in one order for both, and leave the channel’s order alone (18.5s)
+2026/11/15 09:30:26 socat[703674] E write(6, 0x604ddc145000, 24): Broken pipe
+2026/11/15 09:30:26 socat[704529] E write(6, 0x604ddc145000, 24): Broken pipe
+  ✓  100 tests/channels-e2e/threads.spec.ts:108:1 › THR-03 a long thread shows its first three replies and a count, opens to every reply in order, and closes again (6.1s)
+2026/11/15 09:30:40 socat[704780] E write(6, 0x604ddc145000, 24): Broken pipe
+2026/11/15 09:30:40 socat[704869] E write(6, 0x604ddc145000, 24): Broken pipe
+2026/11/15 09:30:41 socat[704775] E write(6, 0x604ddc145000, 24): Broken pipe
+2026/11/15 09:30:41 socat[704854] E write(6, 0x604ddc145000, 24): Broken pipe
+2026/11/15 09:30:41 socat[710894] E write(6, 0x604ddc145000, 24): Broken pipe
+  ✘  101 tests/channels-e2e/threads.spec.ts:171:1 › THR-04 editing my reply shows the new text and “(edited)” to the other person without reload (18.8s)
+2026/11/15 09:30:41 socat[711448] E write(6, 0x604ddc145000, 24): Broken pipe
+2026/11/15 09:30:41 socat[711464] E write(6, 0x604ddc145000, 24): Broken pipe
+2026/11/15 09:30:41 socat[710847] E write(6, 0x604ddc145000, 24): Broken pipe
+2026/11/15 09:30:41 socat[710888] E write(6, 0x604ddc145000, 24): Broken pipe
+2026/11/15 09:30:42 socat[711466] E write(6, 0x604ddc145000, 24): Broken pipe
+  ✘  102 tests/channels-e2e/threads.spec.ts:216:1 › THR-05 deleting my reply removes it for the other person without reload, and leaves the others (18.3s)
+  ✘  103 tests/channels-e2e/threads.spec.ts:253:1 › THR-06 a reaction to a reply shows on that reply for both people, and counts 2 when both react (17.5s)
+2026/11/15 09:30:42 socat[211215] W waitpid(-1, {}, WNOHANG): no (more) child has exited
+2026/11/15 09:30:44 socat[712681] E write(6, 0x604ddc145000, 24): Broken pipe
+  ✘  104 tests/channels-e2e/threads.spec.ts:302:1 › THR-07 a reply from someone else arrives at the end of an open thread without reload (17.6s)
+2026/11/15 09:30:59 socat[736095] E write(6, 0x604ddc145000, 24): Broken pipe
+2026/11/15 09:30:59 socat[736163] E write(6, 0x604ddc145000, 24): Broken pipe
+  ✘  105 tests/channels-e2e/threads.spec.ts:341:1 › THR-08 a reply from someone else to a closed thread raises its count without reload, and is there when opened (17.8s)
+2026/11/15 09:31:00 socat[736397] E write(6, 0x604ddc145000, 24): Broken pipe
+2026/11/15 09:31:00 socat[211711] W waitpid(-1, {}, WNOHANG): no (more) child has exited
+2026/11/15 09:31:00 socat[736401] E write(6, 0x604ddc145000, 24): Broken pipe
+  ✘  107 tests/channels-e2e/threads.spec.ts:436:1 › THR-10 “Reply” on a message puts the keyboard in the reply box, so typing goes there (17.4s)
+2026/11/15 09:31:00 socat[211711] W waitpid(-1, {}, WNOHANG): no (more) child has exited
+2026/11/15 09:31:00 socat[211215] W waitpid(-1, {}, WNOHANG): no (more) child has exited
+2026/11/15 09:31:00 socat[736352] E write(6, 0x604ddc145000, 24): Broken pipe
+2026/11/15 09:31:01 socat[736344] E write(6, 0x604ddc145000, 24): Broken pipe
+  ✘  106 tests/channels-e2e/threads.spec.ts:380:1 › THR-09 with replies being written to two messages, each goes to the thread it was written in (18.6s)
+2026/11/15 09:31:04 socat[760924] E write(6, 0x604ddc145000, 24): Broken pipe
+2026/11/15 09:31:04 socat[763235] E write(6, 0x604ddc145000, 24): Broken pipe
+2026/11/15 09:31:04 socat[737951] E write(6, 0x604ddc145000, 24): Broken pipe
+2026/11/15 09:31:04 socat[211215] W waitpid(-1, {}, WNOHANG): no (more) child has exited
+2026/11/15 09:31:04 socat[737961] E write(6, 0x604ddc145000, 24): Broken pipe
+2026/11/15 09:31:04 socat[741208] E write(6, 0x604ddc145000, 24): Broken pipe
+  ✘  108 tests/channels-e2e/two-tabs.spec.ts:6:1 › TAB-01 a message sent in one window shows once in the same person’s other window (19.2s)
+2026/11/15 09:31:05 socat[767607] E write(6, 0x604ddc145000, 24): Broken pipe
+2026/11/15 09:31:05 socat[759641] E write(6, 0x604ddc145000, 24): Broken pipe
+2026/11/15 09:31:05 socat[767720] E write(6, 0x604ddc145000, 24): Broken pipe
+  ✓  110 tests/channels-e2e/unread.spec.ts:38:1 › UNR-01 a message in a channel I do not have open marks its row unread at once; opening it clears the mark, also after reload (5.1s)
+2026/11/15 09:31:06 socat[766653] E write(6, 0x604ddc145000, 24): Broken pipe
+2026/11/15 09:31:06 socat[766667] E write(6, 0x604ddc145000, 24): Broken pipe
+  ✓  111 tests/channels-e2e/unread.spec.ts:87:1 › UNR-02 a channel with unread messages opens with “New” above the first of them, and “Mark as read” removes it (4.3s)
+2026/11/15 09:31:08 socat[769192] E write(6, 0x604ddc145000, 24): Broken pipe
+  ✓  112 tests/channels-e2e/unread.spec.ts:122:1 › UNR-03 my own messages never mark a channel unread for me (3.3s)
+2026/11/15 09:31:11 socat[772691] E write(6, 0x604ddc145000, 24): Broken pipe
+2026/11/15 09:31:11 socat[774558] E write(6, 0x604ddc145000, 24): Broken pipe
+  ✓  113 tests/channels-e2e/unread.spec.ts:155:1 › UNR-04 scrolled up in an open channel, a new message shows “1 unread … below”, which leads to it (5.8s)
+2026/11/15 09:31:14 socat[775866] E write(6, 0x604ddc145000, 24): Broken pipe
+2026/11/15 09:31:15 socat[775418] E write(6, 0x604ddc145000, 24): Broken pipe
+2026/11/15 09:31:15 socat[783755] E write(6, 0x604ddc145000, 24): Broken pipe
+  ✓  115 tests/channels-e2e/unread.spec.ts:218:1 › UNR-06 a muted channel shows a crossed bell and is not marked unread by new messages; unmuted, it is again (7.2s)
+2026/11/15 09:31:16 socat[775856] E write(6, 0x604ddc145000, 24): Broken pipe
+2026/11/15 09:31:16 socat[775871] E write(6, 0x604ddc145000, 24): Broken pipe
+2026/11/15 09:31:16 socat[769595] E write(6, 0x604ddc145000, 24): Broken pipe
+  ✘  114 tests/channels-e2e/unread.spec.ts:187:1 › UNR-05 a mention of me in a channel I do not have open shows a count of mentions on its row (9.8s)
+2026/11/15 09:31:20 socat[785878] E write(6, 0x604ddc145000, 24): Broken pipe
+2026/11/15 09:31:20 socat[785883] E write(6, 0x604ddc145000, 24): Broken pipe
+  ✓  117 tests/channels-e2e/unread.spec.ts:311:1 › UNR-08 a channel I am added to appears in my list at once, and opens (4.7s)
+2026/11/15 09:31:21 socat[765272] E write(6, 0x604ddc145000, 24): Broken pipe
+2026/11/15 09:31:21 socat[765459] E write(6, 0x604ddc145000, 24): Broken pipe
+2026/11/15 09:31:21 socat[766952] E write(6, 0x604ddc145000, 24): Broken pipe
+  ✘  109 tests/channels-e2e/two-tabs.spec.ts:29:1 › TAB-02 an edit, a reaction and a deletion made in one window show in the other (20.4s)
+2026/11/15 09:31:23 socat[795335] E write(6, 0x604ddc145000, 24): Broken pipe
+  ✓  119 tests/channels-e2e/unread.spec.ts:367:1 › UNR-10 a row found with “Search conversations” is marked unread at once when a message arrives (2.8s)
+2026/11/15 09:31:23 socat[786744] E write(6, 0x604ddc145000, 24): Broken pipe
+2026/11/15 09:31:23 socat[786748] E write(6, 0x604ddc145000, 24): Broken pipe
+  ✘  118 tests/channels-e2e/unread.spec.ts:339:1 › UNR-09 the first message in a new channel marks it unread for the other member (7.6s)
+2026/11/15 09:31:28 socat[777433] E write(6, 0x604ddc145000, 24): Broken pipe
+2026/11/15 09:31:28 socat[777443] E write(6, 0x604ddc145000, 24): Broken pipe
+  ✘  116 tests/channels-e2e/unread.spec.ts:272:1 › UNR-07 a member who never opened a channel sees it unread, and opening it shows every message and clears the mark (17.3s)
+
+
+  1) tests/channels-e2e/access.spec.ts:61:1 › ACC-03 a request to join reaches the owner at once, and approving it lets the person in at once 
+
+    Error: the last messages in the list
+
+    the last messages in the list
+
+    expect(received).toEqual(expected) // deep equality
+
+    - Expected  - 1
+    + Received  + 0
+
+      Array [
+        "members only one",
+        "members only two",
+    -   "thanks for letting me in",
+      ]
+
+    Call Log:
+    - Timeout 15000ms exceeded while waiting on the predicate
+
+       at harness/channel.ts:186
+
+      184 |         message: 'the last messages in the list',
+      185 |       })
+    > 186 |       .toEqual(expected);
+          |        ^
+      187 |   }
+      188 |
+      189 |   /** How far the list is from showing its very end, in pixels. */
+        at ChannelView.expectEndsWith (/home/teo/.herdr/worktrees/macro/synoet-channels-e2e-base/apps/web/tests/channels-e2e/harness/channel.ts:186:8)
+        at /home/teo/.herdr/worktrees/macro/synoet-channels-e2e-base/apps/web/tests/channels-e2e/access.spec.ts:95:14
+
+    attachment #1: screenshot (image/png) ──────────────────────────────────────────────────────────
+    ../../../../../../.cache/channels-e2e/runs/24909-break-live-events-ignored/test-results/access-ACC-03-a-request-to-2ca38--lets-the-person-in-at-once/test-failed-2.png
+    ────────────────────────────────────────────────────────────────────────────────────────────────
+
+    attachment #2: screenshot (image/png) ──────────────────────────────────────────────────────────
+    ../../../../../../.cache/channels-e2e/runs/24909-break-live-events-ignored/test-results/access-ACC-03-a-request-to-2ca38--lets-the-person-in-at-once/test-failed-1.png
+    ────────────────────────────────────────────────────────────────────────────────────────────────
+
+    Error Context: ../../../../../../.cache/channels-e2e/runs/24909-break-live-events-ignored/test-results/access-ACC-03-a-request-to-2ca38--lets-the-person-in-at-once/error-context.md
+
+    attachment #4: trace (application/zip) ─────────────────────────────────────────────────────────
+    ../../../../../../.cache/channels-e2e/runs/24909-break-live-events-ignored/test-results/access-ACC-03-a-request-to-2ca38--lets-the-person-in-at-once/trace.zip
+    Usage:
+
+        npx playwright show-trace ../../../../../../.cache/channels-e2e/runs/24909-break-live-events-ignored/test-results/access-ACC-03-a-request-to-2ca38--lets-the-person-in-at-once/trace.zip
+
+    ────────────────────────────────────────────────────────────────────────────────────────────────
+
+  2) tests/channels-e2e/channels.spec.ts:53:1 › CHN-02 a team channel made in the app appears for a teammate under the team’s channels and can be read 
+
+    Error: the last messages in the list
+
+    the last messages in the list
+
+    expect(received).toEqual(expected) // deep equality
+
+    - Expected  - 3
+    + Received  + 1
+
+    - Array [
+    -   "ben is listening",
+    - ]
+    + Array []
+
+    Call Log:
+    - Timeout 15000ms exceeded while waiting on the predicate
+
+       at harness/channel.ts:186
+
+      184 |         message: 'the last messages in the list',
+      185 |       })
+    > 186 |       .toEqual(expected);
+          |        ^
+      187 |   }
+      188 |
+      189 |   /** How far the list is from showing its very end, in pixels. */
+        at ChannelView.expectEndsWith (/home/teo/.herdr/worktrees/macro/synoet-channels-e2e-base/apps/web/tests/channels-e2e/harness/channel.ts:186:8)
+        at /home/teo/.herdr/worktrees/macro/synoet-channels-e2e-base/apps/web/tests/channels-e2e/channels.spec.ts:67:18
+
+    attachment #1: screenshot (image/png) ──────────────────────────────────────────────────────────
+    ../../../../../../.cache/channels-e2e/runs/24909-break-live-events-ignored/test-results/channels-CHN-02-a-team-cha-0f444-’s-channels-and-can-be-read/test-failed-2.png
+    ────────────────────────────────────────────────────────────────────────────────────────────────
+
+    attachment #2: screenshot (image/png) ──────────────────────────────────────────────────────────
+    ../../../../../../.cache/channels-e2e/runs/24909-break-live-events-ignored/test-results/channels-CHN-02-a-team-cha-0f444-’s-channels-and-can-be-read/test-failed-1.png
+    ────────────────────────────────────────────────────────────────────────────────────────────────
+
+    Error Context: ../../../../../../.cache/channels-e2e/runs/24909-break-live-events-ignored/test-results/channels-CHN-02-a-team-cha-0f444-’s-channels-and-can-be-read/error-context.md
+
+    attachment #4: trace (application/zip) ─────────────────────────────────────────────────────────
+    ../../../../../../.cache/channels-e2e/runs/24909-break-live-events-ignored/test-results/channels-CHN-02-a-team-cha-0f444-’s-channels-and-can-be-read/trace.zip
+    Usage:
+
+        npx playwright show-trace ../../../../../../.cache/channels-e2e/runs/24909-break-live-events-ignored/test-results/channels-CHN-02-a-team-cha-0f444-’s-channels-and-can-be-read/trace.zip
+
+    ────────────────────────────────────────────────────────────────────────────────────────────────
+
+  3) tests/channels-e2e/composer.spec.ts:67:1 › CMP-03 sending a message clears its draft, and a reload does not bring it back 
+
+    Error: the last messages in the list
+
+    the last messages in the list
+
+    expect(received).toEqual(expected) // deep equality
+
+    - Expected  - 3
+    + Received  + 1
+
+    - Array [
+    -   "sent, not a draft",
+    - ]
+    + Array []
+
+    Call Log:
+    - Timeout 15000ms exceeded while waiting on the predicate
+
+       at harness/channel.ts:186
+
+      184 |         message: 'the last messages in the list',
+      185 |       })
+    > 186 |       .toEqual(expected);
+          |        ^
+      187 |   }
+      188 |
+      189 |   /** How far the list is from showing its very end, in pixels. */
+        at ChannelView.expectEndsWith (/home/teo/.herdr/worktrees/macro/synoet-channels-e2e-base/apps/web/tests/channels-e2e/harness/channel.ts:186:8)
+        at /home/teo/.herdr/worktrees/macro/synoet-channels-e2e-base/apps/web/tests/channels-e2e/composer.spec.ts:83:14
+
+    attachment #1: screenshot (image/png) ──────────────────────────────────────────────────────────
+    ../../../../../../.cache/channels-e2e/runs/24909-break-live-events-ignored/test-results/composer-CMP-03-sending-a--c5330-load-does-not-bring-it-back/test-failed-2.png
+    ────────────────────────────────────────────────────────────────────────────────────────────────
+
+    attachment #2: screenshot (image/png) ──────────────────────────────────────────────────────────
+    ../../../../../../.cache/channels-e2e/runs/24909-break-live-events-ignored/test-results/composer-CMP-03-sending-a--c5330-load-does-not-bring-it-back/test-failed-1.png
+    ────────────────────────────────────────────────────────────────────────────────────────────────
+
+    Error Context: ../../../../../../.cache/channels-e2e/runs/24909-break-live-events-ignored/test-results/composer-CMP-03-sending-a--c5330-load-does-not-bring-it-back/error-context.md
+
+    attachment #4: trace (application/zip) ─────────────────────────────────────────────────────────
+    ../../../../../../.cache/channels-e2e/runs/24909-break-live-events-ignored/test-results/composer-CMP-03-sending-a--c5330-load-does-not-bring-it-back/trace.zip
+    Usage:
+
+        npx playwright show-trace ../../../../../../.cache/channels-e2e/runs/24909-break-live-events-ignored/test-results/composer-CMP-03-sending-a--c5330-load-does-not-bring-it-back/trace.zip
+
+    ────────────────────────────────────────────────────────────────────────────────────────────────
+
+  4) tests/channels-e2e/composer.spec.ts:93:1 › CMP-13 a message shown as sent is still sent when the page is reloaded at once 
+
+    Error: the last messages in the list
+
+    the last messages in the list
+
+    expect(received).toEqual(expected) // deep equality
+
+    - Expected  - 3
+    + Received  + 1
+
+    - Array [
+    -   "sent just before a reload",
+    - ]
+    + Array []
+
+    Call Log:
+    - Timeout 15000ms exceeded while waiting on the predicate
+
+       at harness/channel.ts:186
+
+      184 |         message: 'the last messages in the list',
+      185 |       })
+    > 186 |       .toEqual(expected);
+          |        ^
+      187 |   }
+      188 |
+      189 |   /** How far the list is from showing its very end, in pixels. */
+        at ChannelView.expectEndsWith (/home/teo/.herdr/worktrees/macro/synoet-channels-e2e-base/apps/web/tests/channels-e2e/harness/channel.ts:186:8)
+        at /home/teo/.herdr/worktrees/macro/synoet-channels-e2e-base/apps/web/tests/channels-e2e/composer.spec.ts:111:14
+
+    attachment #1: screenshot (image/png) ──────────────────────────────────────────────────────────
+    ../../../../../../.cache/channels-e2e/runs/24909-break-live-events-ignored/test-results/composer-CMP-13-a-message--bd722-he-page-is-reloaded-at-once/test-failed-1.png
+    ────────────────────────────────────────────────────────────────────────────────────────────────
+
+    attachment #2: screenshot (image/png) ──────────────────────────────────────────────────────────
+    ../../../../../../.cache/channels-e2e/runs/24909-break-live-events-ignored/test-results/composer-CMP-13-a-message--bd722-he-page-is-reloaded-at-once/test-failed-2.png
+    ────────────────────────────────────────────────────────────────────────────────────────────────
+
+    Error Context: ../../../../../../.cache/channels-e2e/runs/24909-break-live-events-ignored/test-results/composer-CMP-13-a-message--bd722-he-page-is-reloaded-at-once/error-context.md
+
+    attachment #4: trace (application/zip) ─────────────────────────────────────────────────────────
+    ../../../../../../.cache/channels-e2e/runs/24909-break-live-events-ignored/test-results/composer-CMP-13-a-message--bd722-he-page-is-reloaded-at-once/trace.zip
+    Usage:
+
+        npx playwright show-trace ../../../../../../.cache/channels-e2e/runs/24909-break-live-events-ignored/test-results/composer-CMP-13-a-message--bd722-he-page-is-reloaded-at-once/trace.zip
+
+    ────────────────────────────────────────────────────────────────────────────────────────────────
+
+  5) tests/channels-e2e/composer.spec.ts:148:1 › CMP-05 a person picked from the @ menu is named in the message for both people, live 
+
+    Error: expect(locator).toBeVisible() failed
+
+    Locator: locator('[data-channel-scroll]').locator('[data-message]').filter({ has: locator('[data-message-content]').getByText('@Ben can you look?', { exact: true }) })
+    Expected: visible
+    Timeout: 15000ms
+    Error: element(s) not found
+
+    Call log:
+      - Expect "toBeVisible" with timeout 15000ms
+      - waiting for locator('[data-channel-scroll]').locator('[data-message]').filter({ has: locator('[data-message-content]').getByText('@Ben can you look?', { exact: true }) })
+
+
+      165 |   for (const each of [view, benView]) {
+      166 |     const message = each.message('@Ben can you look?');
+    > 167 |     await expect(message).toBeVisible();
+          |                           ^
+      168 |     await expect(personMentions(message)).toHaveText(['@Ben']);
+      169 |     await expect(personMentions(message)).toHaveAttribute(
+      170 |       'data-user-id',
+        at /home/teo/.herdr/worktrees/macro/synoet-channels-e2e-base/apps/web/tests/channels-e2e/composer.spec.ts:167:27
+
+    attachment #1: screenshot (image/png) ──────────────────────────────────────────────────────────
+    ../../../../../../.cache/channels-e2e/runs/24909-break-live-events-ignored/test-results/composer-CMP-05-a-person-p-a5906-essage-for-both-people-live/test-failed-2.png
+    ────────────────────────────────────────────────────────────────────────────────────────────────
+
+    attachment #2: screenshot (image/png) ──────────────────────────────────────────────────────────
+    ../../../../../../.cache/channels-e2e/runs/24909-break-live-events-ignored/test-results/composer-CMP-05-a-person-p-a5906-essage-for-both-people-live/test-failed-1.png
+    ────────────────────────────────────────────────────────────────────────────────────────────────
+
+    Error Context: ../../../../../../.cache/channels-e2e/runs/24909-break-live-events-ignored/test-results/composer-CMP-05-a-person-p-a5906-essage-for-both-people-live/error-context.md
+
+    attachment #4: trace (application/zip) ─────────────────────────────────────────────────────────
+    ../../../../../../.cache/channels-e2e/runs/24909-break-live-events-ignored/test-results/composer-CMP-05-a-person-p-a5906-essage-for-both-people-live/trace.zip
+    Usage:
+
+        npx playwright show-trace ../../../../../../.cache/channels-e2e/runs/24909-break-live-events-ignored/test-results/composer-CMP-05-a-person-p-a5906-essage-for-both-people-live/trace.zip
+
+    ────────────────────────────────────────────────────────────────────────────────────────────────
+
+  6) tests/channels-e2e/composer.spec.ts:178:1 › CMP-06 @here picked from the @ menu is sent as a mention of everyone here 
+
+    Error: expect(locator).toBeVisible() failed
+
+    Locator: locator('[data-channel-scroll]').locator('[data-message]').filter({ has: locator('[data-message-content]').getByText('@here standup now', { exact: true }) })
+    Expected: visible
+    Timeout: 15000ms
+    Error: element(s) not found
+
+    Call log:
+      - Expect "toBeVisible" with timeout 15000ms
+      - waiting for locator('[data-channel-scroll]').locator('[data-message]').filter({ has: locator('[data-message-content]').getByText('@here standup now', { exact: true }) })
+
+
+      199 |   for (const each of [view, benView]) {
+      200 |     const message = each.message('@here standup now');
+    > 201 |     await expect(message).toBeVisible();
+          |                           ^
+      202 |     await expect(groupMentions(message)).toHaveText(['@here']);
+      203 |   }
+      204 | });
+        at /home/teo/.herdr/worktrees/macro/synoet-channels-e2e-base/apps/web/tests/channels-e2e/composer.spec.ts:201:27
+
+    attachment #1: screenshot (image/png) ──────────────────────────────────────────────────────────
+    ../../../../../../.cache/channels-e2e/runs/24909-break-live-events-ignored/test-results/composer-CMP-06-here-picke-da84f--a-mention-of-everyone-here/test-failed-1.png
+    ────────────────────────────────────────────────────────────────────────────────────────────────
+
+    attachment #2: screenshot (image/png) ──────────────────────────────────────────────────────────
+    ../../../../../../.cache/channels-e2e/runs/24909-break-live-events-ignored/test-results/composer-CMP-06-here-picke-da84f--a-mention-of-everyone-here/test-failed-2.png
+    ────────────────────────────────────────────────────────────────────────────────────────────────
+
+    Error Context: ../../../../../../.cache/channels-e2e/runs/24909-break-live-events-ignored/test-results/composer-CMP-06-here-picke-da84f--a-mention-of-everyone-here/error-context.md
+
+    attachment #4: trace (application/zip) ─────────────────────────────────────────────────────────
+    ../../../../../../.cache/channels-e2e/runs/24909-break-live-events-ignored/test-results/composer-CMP-06-here-picke-da84f--a-mention-of-everyone-here/trace.zip
+    Usage:
+
+        npx playwright show-trace ../../../../../../.cache/channels-e2e/runs/24909-break-live-events-ignored/test-results/composer-CMP-06-here-picke-da84f--a-mention-of-everyone-here/trace.zip
+
+    ────────────────────────────────────────────────────────────────────────────────────────────────
+
+  7) tests/channels-e2e/composer.spec.ts:208:1 › CMP-07 a text file and a picture attached to a message show before sending, for both people, and under Attachments 
+
+    Error: expect(locator).toBeVisible() failed
+
+    Locator: locator('[data-channel-scroll]').locator('[data-message]').filter({ has: locator('[data-message-content]').getByText('two files', { exact: true }) }).locator('[data-message-attachments]').getByRole('link', { name: 'notes.txt' })
+    Expected: visible
+    Timeout: 15000ms
+    Error: element(s) not found
+
+    Call log:
+      - Expect "toBeVisible" with timeout 15000ms
+      - waiting for locator('[data-channel-scroll]').locator('[data-message]').filter({ has: locator('[data-message-content]').getByText('two files', { exact: true }) }).locator('[data-message-attachments]').getByRole('link', { name: 'notes.txt' })
+
+
+      242 |   for (const each of [view, benView]) {
+      243 |     const files = attachmentsOf(each.message('two files'));
+    > 244 |     await expect(files.getByRole('link', { name: 'notes.txt' })).toBeVisible();
+          |                                                                  ^
+      245 |     await expect(
+      246 |       files.getByRole('button', { name: 'Open image viewer' })
+      247 |     ).toBeVisible();
+        at /home/teo/.herdr/worktrees/macro/synoet-channels-e2e-base/apps/web/tests/channels-e2e/composer.spec.ts:244:66
+
+    attachment #1: screenshot (image/png) ──────────────────────────────────────────────────────────
+    ../../../../../../.cache/channels-e2e/runs/24909-break-live-events-ignored/test-results/composer-CMP-07-a-text-fil-f431f-eople-and-under-Attachments/test-failed-1.png
+    ────────────────────────────────────────────────────────────────────────────────────────────────
+
+    attachment #2: screenshot (image/png) ──────────────────────────────────────────────────────────
+    ../../../../../../.cache/channels-e2e/runs/24909-break-live-events-ignored/test-results/composer-CMP-07-a-text-fil-f431f-eople-and-under-Attachments/test-failed-2.png
+    ────────────────────────────────────────────────────────────────────────────────────────────────
+
+    Error Context: ../../../../../../.cache/channels-e2e/runs/24909-break-live-events-ignored/test-results/composer-CMP-07-a-text-fil-f431f-eople-and-under-Attachments/error-context.md
+
+    attachment #4: trace (application/zip) ─────────────────────────────────────────────────────────
+    ../../../../../../.cache/channels-e2e/runs/24909-break-live-events-ignored/test-results/composer-CMP-07-a-text-fil-f431f-eople-and-under-Attachments/trace.zip
+    Usage:
+
+        npx playwright show-trace ../../../../../../.cache/channels-e2e/runs/24909-break-live-events-ignored/test-results/composer-CMP-07-a-text-fil-f431f-eople-and-under-Attachments/trace.zip
+
+    ────────────────────────────────────────────────────────────────────────────────────────────────
+
+  8) tests/channels-e2e/composer.spec.ts:265:1 › CMP-08 a file can be sent on its own, with no text 
+
+    Error: expect(locator).toBeVisible() failed
+
+    Locator: locator('[data-channel-scroll]').getByRole('link', { name: 'alone.txt' })
+    Expected: visible
+    Timeout: 15000ms
+    Error: element(s) not found
+
+    Call log:
+      - Expect "toBeVisible" with timeout 15000ms
+      - waiting for locator('[data-channel-scroll]').getByRole('link', { name: 'alone.txt' })
+
+
+      291 |     await expect(
+      292 |       each.list.getByRole('link', { name: 'alone.txt' })
+    > 293 |     ).toBeVisible();
+          |       ^
+      294 |     await expect(each.list.locator('[data-message-attachments]')).toHaveCount(
+      295 |       1
+      296 |     );
+        at /home/teo/.herdr/worktrees/macro/synoet-channels-e2e-base/apps/web/tests/channels-e2e/composer.spec.ts:293:7
+
+    attachment #1: screenshot (image/png) ──────────────────────────────────────────────────────────
+    ../../../../../../.cache/channels-e2e/runs/24909-break-live-events-ignored/test-results/composer-CMP-08-a-file-can-be-sent-on-its-own-with-no-text/test-failed-2.png
+    ────────────────────────────────────────────────────────────────────────────────────────────────
+
+    attachment #2: screenshot (image/png) ──────────────────────────────────────────────────────────
+    ../../../../../../.cache/channels-e2e/runs/24909-break-live-events-ignored/test-results/composer-CMP-08-a-file-can-be-sent-on-its-own-with-no-text/test-failed-1.png
+    ────────────────────────────────────────────────────────────────────────────────────────────────
+
+    Error Context: ../../../../../../.cache/channels-e2e/runs/24909-break-live-events-ignored/test-results/composer-CMP-08-a-file-can-be-sent-on-its-own-with-no-text/error-context.md
+
+    attachment #4: trace (application/zip) ─────────────────────────────────────────────────────────
+    ../../../../../../.cache/channels-e2e/runs/24909-break-live-events-ignored/test-results/composer-CMP-08-a-file-can-be-sent-on-its-own-with-no-text/trace.zip
+    Usage:
+
+        npx playwright show-trace ../../../../../../.cache/channels-e2e/runs/24909-break-live-events-ignored/test-results/composer-CMP-08-a-file-can-be-sent-on-its-own-with-no-text/trace.zip
+
+    ────────────────────────────────────────────────────────────────────────────────────────────────
+
+  9) tests/channels-e2e/composer.spec.ts:303:1 › CMP-09 while the other person types in their composer I see “… is typing”, until they send 
+
+    Error: expect(locator).toBeVisible() failed
+
+    Locator: locator('[data-channel-scroll]').getByText('Ben Member is typing', { exact: true })
+    Expected: visible
+    Timeout: 15000ms
+    Error: element(s) not found
+
+    Call log:
+      - Expect "toBeVisible" with timeout 15000ms
+      - waiting for locator('[data-channel-scroll]').getByText('Ben Member is typing', { exact: true })
+
+
+      318 |   await benView.composerText.click();
+      319 |   await benPage.keyboard.type('yes, writing');
+    > 320 |   await expect(typingLine(page, 'Ben Member')).toBeVisible();
+          |                                                ^
+      321 |
+      322 |   await benPage.keyboard.press('Enter');
+      323 |   await expect(view.message('yes, writing')).toBeVisible();
+        at /home/teo/.herdr/worktrees/macro/synoet-channels-e2e-base/apps/web/tests/channels-e2e/composer.spec.ts:320:48
+
+    attachment #1: screenshot (image/png) ──────────────────────────────────────────────────────────
+    ../../../../../../.cache/channels-e2e/runs/24909-break-live-events-ignored/test-results/composer-CMP-09-while-the--88335--is-typing”-until-they-send/test-failed-1.png
+    ────────────────────────────────────────────────────────────────────────────────────────────────
+
+    attachment #2: screenshot (image/png) ──────────────────────────────────────────────────────────
+    ../../../../../../.cache/channels-e2e/runs/24909-break-live-events-ignored/test-results/composer-CMP-09-while-the--88335--is-typing”-until-they-send/test-failed-2.png
+    ────────────────────────────────────────────────────────────────────────────────────────────────
+
+    Error Context: ../../../../../../.cache/channels-e2e/runs/24909-break-live-events-ignored/test-results/composer-CMP-09-while-the--88335--is-typing”-until-they-send/error-context.md
+
+    attachment #4: trace (application/zip) ─────────────────────────────────────────────────────────
+    ../../../../../../.cache/channels-e2e/runs/24909-break-live-events-ignored/test-results/composer-CMP-09-while-the--88335--is-typing”-until-they-send/trace.zip
+    Usage:
+
+        npx playwright show-trace ../../../../../../.cache/channels-e2e/runs/24909-break-live-events-ignored/test-results/composer-CMP-09-while-the--88335--is-typing”-until-they-send/trace.zip
+
+    ────────────────────────────────────────────────────────────────────────────────────────────────
+
+  10) tests/channels-e2e/composer.spec.ts:329:1 › CMP-10 typing reported from the other person’s other device shows “… is typing”, and goes when they stop 
+
+    Error: expect(locator).toBeVisible() failed
+
+    Locator: locator('[data-channel-scroll]').getByText('Ben Member is typing', { exact: true })
+    Expected: visible
+    Timeout: 15000ms
+    Error: element(s) not found
+
+    Call log:
+      - Expect "toBeVisible" with timeout 15000ms
+      - waiting for locator('[data-channel-scroll]').getByText('Ben Member is typing', { exact: true })
+
+
+      339 |
+      340 |   await ben.typing(channel.id);
+    > 341 |   await expect(typingLine(page, 'Ben Member')).toBeVisible();
+          |                                                ^
+      342 |
+      343 |   await ben.typing(channel.id, false);
+      344 |   await expect(typingLine(page, 'Ben Member')).toBeHidden({ timeout: 5_000 });
+        at /home/teo/.herdr/worktrees/macro/synoet-channels-e2e-base/apps/web/tests/channels-e2e/composer.spec.ts:341:48
+
+    attachment #1: screenshot (image/png) ──────────────────────────────────────────────────────────
+    ../../../../../../.cache/channels-e2e/runs/24909-break-live-events-ignored/test-results/composer-CMP-10-typing-rep-74d5d-ng”-and-goes-when-they-stop/test-failed-1.png
+    ────────────────────────────────────────────────────────────────────────────────────────────────
+
+    Error Context: ../../../../../../.cache/channels-e2e/runs/24909-break-live-events-ignored/test-results/composer-CMP-10-typing-rep-74d5d-ng”-and-goes-when-they-stop/error-context.md
+
+    attachment #3: trace (application/zip) ─────────────────────────────────────────────────────────
+    ../../../../../../.cache/channels-e2e/runs/24909-break-live-events-ignored/test-results/composer-CMP-10-typing-rep-74d5d-ng”-and-goes-when-they-stop/trace.zip
+    Usage:
+
+        npx playwright show-trace ../../../../../../.cache/channels-e2e/runs/24909-break-live-events-ignored/test-results/composer-CMP-10-typing-rep-74d5d-ng”-and-goes-when-they-stop/trace.zip
+
+    ────────────────────────────────────────────────────────────────────────────────────────────────
+
+  11) tests/channels-e2e/composer.spec.ts:349:1 › CMP-11 text pasted into the composer is sent as it was copied 
+
+    Error: the last messages in the list
+
+    the last messages in the list
+
+    expect(received).toEqual(expected) // deep equality
+
+    - Expected  - 3
+    + Received  + 1
+
+    - Array [
+    -   "copied from somewhere else",
+    - ]
+    + Array []
+
+    Call Log:
+    - Timeout 15000ms exceeded while waiting on the predicate
+
+       at harness/channel.ts:186
+
+      184 |         message: 'the last messages in the list',
+      185 |       })
+    > 186 |       .toEqual(expected);
+          |        ^
+      187 |   }
+      188 |
+      189 |   /** How far the list is from showing its very end, in pixels. */
+        at ChannelView.expectEndsWith (/home/teo/.herdr/worktrees/macro/synoet-channels-e2e-base/apps/web/tests/channels-e2e/harness/channel.ts:186:8)
+        at /home/teo/.herdr/worktrees/macro/synoet-channels-e2e-base/apps/web/tests/channels-e2e/composer.spec.ts:368:17
+
+    attachment #1: screenshot (image/png) ──────────────────────────────────────────────────────────
+    ../../../../../../.cache/channels-e2e/runs/24909-break-live-events-ignored/test-results/composer-CMP-11-text-paste-4f4c8-er-is-sent-as-it-was-copied/test-failed-1.png
+    ────────────────────────────────────────────────────────────────────────────────────────────────
+
+    attachment #2: screenshot (image/png) ──────────────────────────────────────────────────────────
+    ../../../../../../.cache/channels-e2e/runs/24909-break-live-events-ignored/test-results/composer-CMP-11-text-paste-4f4c8-er-is-sent-as-it-was-copied/test-failed-2.png
+    ────────────────────────────────────────────────────────────────────────────────────────────────
+
+    Error Context: ../../../../../../.cache/channels-e2e/runs/24909-break-live-events-ignored/test-results/composer-CMP-11-text-paste-4f4c8-er-is-sent-as-it-was-copied/error-context.md
+
+    attachment #4: trace (application/zip) ─────────────────────────────────────────────────────────
+    ../../../../../../.cache/channels-e2e/runs/24909-break-live-events-ignored/test-results/composer-CMP-11-text-paste-4f4c8-er-is-sent-as-it-was-copied/trace.zip
+    Usage:
+
+        npx playwright show-trace ../../../../../../.cache/channels-e2e/runs/24909-break-live-events-ignored/test-results/composer-CMP-11-text-paste-4f4c8-er-is-sent-as-it-was-copied/trace.zip
+
+    ────────────────────────────────────────────────────────────────────────────────────────────────
+
+  12) tests/channels-e2e/composer.spec.ts:372:1 › CMP-12 a message of 2,499 characters is sent whole 
+
+    Error: expect(locator).toHaveText(expected) failed
+
+    Locator: locator('[data-channel-scroll]').locator('[data-message-content]')
+    Expected: "abcdefghi abcdefghi abcdefghi abcdefghi abcdefghi abcdefghi abcdefghi abcdefghi abcdefghi abcdefghi abcdefghi abcdefghi abcdefghi abcdefghi abcdefghi abcdefghi abcdefghi abcdefghi abcdefghi abcdefghi abcdefghi abcdefghi abcdefghi abcdefghi abcdefghi abcdefghi abcdefghi abcdefghi abcdefghi abcdefghi abcdefghi abcdefghi abcdefghi abcdefghi abcdefghi abcdefghi abcdefghi abcdefghi abcdefghi abcdefghi abcdefghi abcdefghi abcdefghi abcdefghi abcdefghi abcdefghi abcdefghi abcdefghi abcdefghi abcdefghi abcdefghi abcdefghi abcdefghi abcdefghi abcdefghi abcdefghi abcdefghi abcdefghi abcdefghi abcdefghi abcdefghi abcdefghi abcdefghi abcdefghi abcdefghi abcdefghi abcdefghi abcdefghi abcdefghi abcdefghi abcdefghi abcdefghi abcdefghi abcdefghi abcdefghi abcdefghi abcdefghi abcdefghi abcdefghi abcdefghi abcdefghi abcdefghi abcdefghi abcdefghi abcdefghi abcdefghi abcdefghi abcdefghi abcdefghi abcdefghi abcdefghi abcdefghi abcdefghi abcdefghi abcdefghi abcdefghi abcdefghi abcdefghi abcdefghi abcdefghi abcdefghi abcdefghi abcdefghi abcdefghi abcdefghi abcdefghi abcdefghi abcdefghi abcdefghi abcdefghi abcdefghi abcdefghi abcdefghi abcdefghi abcdefghi abcdefghi abcdefghi abcdefghi abcdefghi abcdefghi abcdefghi abcdefghi abcdefghi abcdefghi abcdefghi abcdefghi abcdefghi abcdefghi abcdefghi abcdefghi abcdefghi abcdefghi abcdefghi abcdefghi abcdefghi abcdefghi abcdefghi abcdefghi abcdefghi abcdefghi abcdefghi abcdefghi abcdefghi abcdefghi abcdefghi abcdefghi abcdefghi abcdefghi abcdefghi abcdefghi abcdefghi abcdefghi abcdefghi abcdefghi abcdefghi abcdefghi abcdefghi abcdefghi abcdefghi abcdefghi abcdefghi abcdefghi abcdefghi abcdefghi abcdefghi abcdefghi abcdefghi abcdefghi abcdefghi abcdefghi abcdefghi abcdefghi abcdefghi abcdefghi abcdefghi abcdefghi abcdefghi abcdefghi abcdefghi abcdefghi abcdefghi abcdefghi abcdefghi abcdefghi abcdefghi abcdefghi abcdefghi abcdefghi abcdefghi abcdefghi abcdefghi abcdefghi abcdefghi abcdefghi abcdefghi abcdefghi abcdefghi abcdefghi abcdefghi abcdefghi abcdefghi abcdefghi abcdefghi abcdefghi abcdefghi abcdefghi abcdefghi abcdefghi abcdefghi abcdefghi abcdefghi abcdefghi abcdefghi abcdefghi abcdefghi abcdefghi abcdefghi abcdefghi abcdefghi abcdefghi abcdefghi abcdefghi abcdefghi abcdefghi abcdefghi abcdefghi abcdefghi abcdefghi abcdefghi abcdefghi abcdefghi abcdefghi abcdefghi abcdefghi abcdefghi abcdefghi abcdefghi abcdefghi abcdefghi abcdefghi abcdefghi abcdefghi abcdefghi abcdefghi abcdefghi abcdefghi abcdefghi abcdefghi abcdefghi abcdefghi"
+    Timeout: 15000ms
+    Error: element(s) not found
+
+    Call log:
+      - Expect "toHaveText" with timeout 15000ms
+      - waiting for locator('[data-channel-scroll]').locator('[data-message-content]')
+
+
+      390 |   for (const each of [view, benView]) {
+      391 |     const content = each.list.locator('[data-message-content]');
+    > 392 |     await expect(content).toHaveText(long);
+          |                           ^
+      393 |     expect((await content.innerText()).length).toBe(2499);
+      394 |   }
+      395 |   await expect(view.composerText).toHaveText('');
+        at /home/teo/.herdr/worktrees/macro/synoet-channels-e2e-base/apps/web/tests/channels-e2e/composer.spec.ts:392:27
+
+    attachment #1: screenshot (image/png) ──────────────────────────────────────────────────────────
+    ../../../../../../.cache/channels-e2e/runs/24909-break-live-events-ignored/test-results/composer-CMP-12-a-message-of-2-499-characters-is-sent-whole/test-failed-1.png
+    ────────────────────────────────────────────────────────────────────────────────────────────────
+
+    attachment #2: screenshot (image/png) ──────────────────────────────────────────────────────────
+    ../../../../../../.cache/channels-e2e/runs/24909-break-live-events-ignored/test-results/composer-CMP-12-a-message-of-2-499-characters-is-sent-whole/test-failed-2.png
+    ────────────────────────────────────────────────────────────────────────────────────────────────
+
+    Error Context: ../../../../../../.cache/channels-e2e/runs/24909-break-live-events-ignored/test-results/composer-CMP-12-a-message-of-2-499-characters-is-sent-whole/error-context.md
+
+    attachment #4: trace (application/zip) ─────────────────────────────────────────────────────────
+    ../../../../../../.cache/channels-e2e/runs/24909-break-live-events-ignored/test-results/composer-CMP-12-a-message-of-2-499-characters-is-sent-whole/trace.zip
+    Usage:
+
+        npx playwright show-trace ../../../../../../.cache/channels-e2e/runs/24909-break-live-events-ignored/test-results/composer-CMP-12-a-message-of-2-499-characters-is-sent-whole/trace.zip
+
+    ────────────────────────────────────────────────────────────────────────────────────────────────
+
+  13) tests/channels-e2e/direct-messages.spec.ts:22:1 › DM-01 a direct message I start reaches the other person at once under “Direct messages”, and they can answer 
+
+    Error: the last messages in the list
+
+    the last messages in the list
+
+    expect(received).toEqual(expected) // deep equality
+
+    - Expected  - 1
+    + Received  + 1
+
+      Array [
+    +   "hello ada-mwhlhj4xpe1u",
+        "hello ben-mwhms6ivpxo7",
+    -   "hello ada-mwhms6ivyuyf",
+      ]
+
+    Call Log:
+    - Timeout 15000ms exceeded while waiting on the predicate
+
+       at harness/channel.ts:186
+
+      184 |         message: 'the last messages in the list',
+      185 |       })
+    > 186 |       .toEqual(expected);
+          |        ^
+      187 |   }
+      188 |
+      189 |   /** How far the list is from showing its very end, in pixels. */
+        at ChannelView.expectEndsWith (/home/teo/.herdr/worktrees/macro/synoet-channels-e2e-base/apps/web/tests/channels-e2e/harness/channel.ts:186:8)
+        at /home/teo/.herdr/worktrees/macro/synoet-channels-e2e-base/apps/web/tests/channels-e2e/direct-messages.spec.ts:58:14
+
+    attachment #1: screenshot (image/png) ──────────────────────────────────────────────────────────
+    ../../../../../../.cache/channels-e2e/runs/24909-break-live-events-ignored/test-results/direct-messages-DM-01-a-di-4a900-ssages”-and-they-can-answer/test-failed-2.png
+    ────────────────────────────────────────────────────────────────────────────────────────────────
+
+    attachment #2: screenshot (image/png) ──────────────────────────────────────────────────────────
+    ../../../../../../.cache/channels-e2e/runs/24909-break-live-events-ignored/test-results/direct-messages-DM-01-a-di-4a900-ssages”-and-they-can-answer/test-failed-1.png
+    ────────────────────────────────────────────────────────────────────────────────────────────────
+
+    Error Context: ../../../../../../.cache/channels-e2e/runs/24909-break-live-events-ignored/test-results/direct-messages-DM-01-a-di-4a900-ssages”-and-they-can-answer/error-context.md
+
+    attachment #4: trace (application/zip) ─────────────────────────────────────────────────────────
+    ../../../../../../.cache/channels-e2e/runs/24909-break-live-events-ignored/test-results/direct-messages-DM-01-a-di-4a900-ssages”-and-they-can-answer/trace.zip
+    Usage:
+
+        npx playwright show-trace ../../../../../../.cache/channels-e2e/runs/24909-break-live-events-ignored/test-results/direct-messages-DM-01-a-di-4a900-ssages”-and-they-can-answer/trace.zip
+
+    ────────────────────────────────────────────────────────────────────────────────────────────────
+
+  14) tests/channels-e2e/members.spec.ts:18:1 › MEM-01 a person invited from the app gets the channel at once, with what was said before and after 
+
+    Error: the last messages in the list
+
+    the last messages in the list
+
+    expect(received).toEqual(expected) // deep equality
+
+    - Expected  - 1
+    + Received  + 0
+
+      Array [
+        "said before one",
+        "said before two",
+    -   "said after",
+      ]
+
+    Call Log:
+    - Timeout 15000ms exceeded while waiting on the predicate
+
+       at harness/channel.ts:186
+
+      184 |         message: 'the last messages in the list',
+      185 |       })
+    > 186 |       .toEqual(expected);
+          |        ^
+      187 |   }
+      188 |
+      189 |   /** How far the list is from showing its very end, in pixels. */
+        at ChannelView.expectEndsWith (/home/teo/.herdr/worktrees/macro/synoet-channels-e2e-base/apps/web/tests/channels-e2e/harness/channel.ts:186:8)
+        at /home/teo/.herdr/worktrees/macro/synoet-channels-e2e-base/apps/web/tests/channels-e2e/members.spec.ts:60:16
+
+    attachment #1: screenshot (image/png) ──────────────────────────────────────────────────────────
+    ../../../../../../.cache/channels-e2e/runs/24909-break-live-events-ignored/test-results/members-MEM-01-a-person-in-dd3f2-t-was-said-before-and-after/test-failed-1.png
+    ────────────────────────────────────────────────────────────────────────────────────────────────
+
+    attachment #2: screenshot (image/png) ──────────────────────────────────────────────────────────
+    ../../../../../../.cache/channels-e2e/runs/24909-break-live-events-ignored/test-results/members-MEM-01-a-person-in-dd3f2-t-was-said-before-and-after/test-failed-3.png
+    ────────────────────────────────────────────────────────────────────────────────────────────────
+
+    attachment #3: screenshot (image/png) ──────────────────────────────────────────────────────────
+    ../../../../../../.cache/channels-e2e/runs/24909-break-live-events-ignored/test-results/members-MEM-01-a-person-in-dd3f2-t-was-said-before-and-after/test-failed-2.png
+    ────────────────────────────────────────────────────────────────────────────────────────────────
+
+    Error Context: ../../../../../../.cache/channels-e2e/runs/24909-break-live-events-ignored/test-results/members-MEM-01-a-person-in-dd3f2-t-was-said-before-and-after/error-context.md
+
+    attachment #5: trace (application/zip) ─────────────────────────────────────────────────────────
+    ../../../../../../.cache/channels-e2e/runs/24909-break-live-events-ignored/test-results/members-MEM-01-a-person-in-dd3f2-t-was-said-before-and-after/trace.zip
+    Usage:
+
+        npx playwright show-trace ../../../../../../.cache/channels-e2e/runs/24909-break-live-events-ignored/test-results/members-MEM-01-a-person-in-dd3f2-t-was-said-before-and-after/trace.zip
+
+    ────────────────────────────────────────────────────────────────────────────────────────────────
+
+  15) tests/channels-e2e/members.spec.ts:139:1 › MEM-04 a removed person never sees what is said after, and after a reload cannot open the channel 
+
+    Error: the last messages in the list
+
+    the last messages in the list
+
+    expect(received).toEqual(expected) // deep equality
+
+    - Expected  - 1
+    + Received  + 0
+
+      Array [
+        "all three here",
+    -   "not for cy",
+      ]
+
+    Call Log:
+    - Timeout 15000ms exceeded while waiting on the predicate
+
+       at harness/channel.ts:186
+
+      184 |         message: 'the last messages in the list',
+      185 |       })
+    > 186 |       .toEqual(expected);
+          |        ^
+      187 |   }
+      188 |
+      189 |   /** How far the list is from showing its very end, in pixels. */
+        at ChannelView.expectEndsWith (/home/teo/.herdr/worktrees/macro/synoet-channels-e2e-base/apps/web/tests/channels-e2e/harness/channel.ts:186:8)
+        at /home/teo/.herdr/worktrees/macro/synoet-channels-e2e-base/apps/web/tests/channels-e2e/members.spec.ts:163:17
+
+    attachment #1: screenshot (image/png) ──────────────────────────────────────────────────────────
+    ../../../../../../.cache/channels-e2e/runs/24909-break-live-events-ignored/test-results/members-MEM-04-a-removed-p-17533-oad-cannot-open-the-channel/test-failed-1.png
+    ────────────────────────────────────────────────────────────────────────────────────────────────
+
+    attachment #2: screenshot (image/png) ──────────────────────────────────────────────────────────
+    ../../../../../../.cache/channels-e2e/runs/24909-break-live-events-ignored/test-results/members-MEM-04-a-removed-p-17533-oad-cannot-open-the-channel/test-failed-2.png
+    ────────────────────────────────────────────────────────────────────────────────────────────────
+
+    Error Context: ../../../../../../.cache/channels-e2e/runs/24909-break-live-events-ignored/test-results/members-MEM-04-a-removed-p-17533-oad-cannot-open-the-channel/error-context.md
+
+    attachment #4: trace (application/zip) ─────────────────────────────────────────────────────────
+    ../../../../../../.cache/channels-e2e/runs/24909-break-live-events-ignored/test-results/members-MEM-04-a-removed-p-17533-oad-cannot-open-the-channel/trace.zip
+    Usage:
+
+        npx playwright show-trace ../../../../../../.cache/channels-e2e/runs/24909-break-live-events-ignored/test-results/members-MEM-04-a-removed-p-17533-oad-cannot-open-the-channel/trace.zip
+
+    ────────────────────────────────────────────────────────────────────────────────────────────────
+
+  16) tests/channels-e2e/members.spec.ts:178:1 › MEM-05 people added and removed while the channel is open show as lines between the right messages 
+
+    Error: the last messages in the list
+
+    the last messages in the list
+
+    expect(received).toEqual(expected) // deep equality
+
+    - Expected  - 1
+    + Received  + 0
+
+      Array [
+        "before cy",
+    -   "with cy",
+      ]
+
+    Call Log:
+    - Timeout 15000ms exceeded while waiting on the predicate
+
+       at harness/channel.ts:186
+
+      184 |         message: 'the last messages in the list',
+      185 |       })
+    > 186 |       .toEqual(expected);
+          |        ^
+      187 |   }
+      188 |
+      189 |   /** How far the list is from showing its very end, in pixels. */
+        at ChannelView.expectEndsWith (/home/teo/.herdr/worktrees/macro/synoet-channels-e2e-base/apps/web/tests/channels-e2e/harness/channel.ts:186:8)
+        at /home/teo/.herdr/worktrees/macro/synoet-channels-e2e-base/apps/web/tests/channels-e2e/members.spec.ts:196:17
+
+    attachment #1: screenshot (image/png) ──────────────────────────────────────────────────────────
+    ../../../../../../.cache/channels-e2e/runs/24909-break-live-events-ignored/test-results/members-MEM-05-people-adde-c583e--between-the-right-messages/test-failed-1.png
+    ────────────────────────────────────────────────────────────────────────────────────────────────
+
+    Error Context: ../../../../../../.cache/channels-e2e/runs/24909-break-live-events-ignored/test-results/members-MEM-05-people-adde-c583e--between-the-right-messages/error-context.md
+
+    attachment #3: trace (application/zip) ─────────────────────────────────────────────────────────
+    ../../../../../../.cache/channels-e2e/runs/24909-break-live-events-ignored/test-results/members-MEM-05-people-adde-c583e--between-the-right-messages/trace.zip
+    Usage:
+
+        npx playwright show-trace ../../../../../../.cache/channels-e2e/runs/24909-break-live-events-ignored/test-results/members-MEM-05-people-adde-c583e--between-the-right-messages/trace.zip
+
+    ────────────────────────────────────────────────────────────────────────────────────────────────
+
+  17) tests/channels-e2e/messages.spec.ts:7:1 › MSG-01 a message sent with Enter shows once at the end for both people, and stays after reload 
+
+    Error: expect(received).toEqual(expected) // deep equality
+
+    - Expected  - 1
+    + Received  + 0
+
+      Array [
+        "Ben Member: earlier from ben",
+    -   "Ada Owner: sent with enter",
+      ]
+
+    Call Log:
+    - Timeout 15000ms exceeded while waiting on the predicate
+
+      26 |   await expect(mine.message('sent with enter')).toBeInViewport();
+      27 |   await expect(mine.composerText).toHaveText('');
+    > 28 |   await expect.poll(() => bens.topLevelByAuthor()).toEqual(shown);
+         |                                                    ^
+      29 |   await expect(bens.message('sent with enter')).toBeInViewport();
+      30 |
+      31 |   await Promise.all([mine.reload(), bens.reload()]);
+        at /home/teo/.herdr/worktrees/macro/synoet-channels-e2e-base/apps/web/tests/channels-e2e/messages.spec.ts:28:52
+
+    attachment #1: screenshot (image/png) ──────────────────────────────────────────────────────────
+    ../../../../../../.cache/channels-e2e/runs/24909-break-live-events-ignored/test-results/messages-MSG-01-a-message--efd5f-ople-and-stays-after-reload/test-failed-1.png
+    ────────────────────────────────────────────────────────────────────────────────────────────────
+
+    attachment #2: screenshot (image/png) ──────────────────────────────────────────────────────────
+    ../../../../../../.cache/channels-e2e/runs/24909-break-live-events-ignored/test-results/messages-MSG-01-a-message--efd5f-ople-and-stays-after-reload/test-failed-2.png
+    ────────────────────────────────────────────────────────────────────────────────────────────────
+
+    Error Context: ../../../../../../.cache/channels-e2e/runs/24909-break-live-events-ignored/test-results/messages-MSG-01-a-message--efd5f-ople-and-stays-after-reload/error-context.md
+
+    attachment #4: trace (application/zip) ─────────────────────────────────────────────────────────
+    ../../../../../../.cache/channels-e2e/runs/24909-break-live-events-ignored/test-results/messages-MSG-01-a-message--efd5f-ople-and-stays-after-reload/trace.zip
+    Usage:
+
+        npx playwright show-trace ../../../../../../.cache/channels-e2e/runs/24909-break-live-events-ignored/test-results/messages-MSG-01-a-message--efd5f-ople-and-stays-after-reload/trace.zip
+
+    ────────────────────────────────────────────────────────────────────────────────────────────────
+
+  18) tests/channels-e2e/messages.spec.ts:37:1 › MSG-02 a message sent with the send button shows once at the end for both people, and stays after reload 
+
+    Error: expect(received).toEqual(expected) // deep equality
+
+    - Expected  - 1
+    + Received  + 0
+
+      Array [
+        "Ben Member: earlier from ben",
+    -   "Ada Owner: sent with the button",
+      ]
+
+    Call Log:
+    - Timeout 15000ms exceeded while waiting on the predicate
+
+      59 |   await expect(mine.message('sent with the button')).toBeInViewport();
+      60 |   await expect(mine.composerText).toHaveText('');
+    > 61 |   await expect.poll(() => bens.topLevelByAuthor()).toEqual(shown);
+         |                                                    ^
+      62 |   await expect(bens.message('sent with the button')).toBeInViewport();
+      63 |
+      64 |   await Promise.all([mine.reload(), bens.reload()]);
+        at /home/teo/.herdr/worktrees/macro/synoet-channels-e2e-base/apps/web/tests/channels-e2e/messages.spec.ts:61:52
+
+    attachment #1: screenshot (image/png) ──────────────────────────────────────────────────────────
+    ../../../../../../.cache/channels-e2e/runs/24909-break-live-events-ignored/test-results/messages-MSG-02-a-message--c4fab-ople-and-stays-after-reload/test-failed-1.png
+    ────────────────────────────────────────────────────────────────────────────────────────────────
+
+    attachment #2: screenshot (image/png) ──────────────────────────────────────────────────────────
+    ../../../../../../.cache/channels-e2e/runs/24909-break-live-events-ignored/test-results/messages-MSG-02-a-message--c4fab-ople-and-stays-after-reload/test-failed-2.png
+    ────────────────────────────────────────────────────────────────────────────────────────────────
+
+    Error Context: ../../../../../../.cache/channels-e2e/runs/24909-break-live-events-ignored/test-results/messages-MSG-02-a-message--c4fab-ople-and-stays-after-reload/error-context.md
+
+    attachment #4: trace (application/zip) ─────────────────────────────────────────────────────────
+    ../../../../../../.cache/channels-e2e/runs/24909-break-live-events-ignored/test-results/messages-MSG-02-a-message--c4fab-ople-and-stays-after-reload/trace.zip
+    Usage:
+
+        npx playwright show-trace ../../../../../../.cache/channels-e2e/runs/24909-break-live-events-ignored/test-results/messages-MSG-02-a-message--c4fab-ople-and-stays-after-reload/trace.zip
+
+    ────────────────────────────────────────────────────────────────────────────────────────────────
+
+  19) tests/channels-e2e/messages.spec.ts:71:1 › MSG-03 a quick back-and-forth between two people reads in the same order for both, each message once 
+
+    Error: expect(locator).toBeVisible() failed
+
+    Locator: locator('[data-channel-scroll]').locator('[data-message]').filter({ has: locator('[data-message-content]').getByText('ada 1', { exact: true }) })
+    Expected: visible
+    Timeout: 15000ms
+    Error: element(s) not found
+
+    Call log:
+      - Expect "toBeVisible" with timeout 15000ms
+      - waiting for locator('[data-channel-scroll]').locator('[data-message]').filter({ has: locator('[data-message-content]').getByText('ada 1', { exact: true }) })
+
+
+      82 |   // Each answers as soon as the other's message is in front of them.
+      83 |   await mine.send('ada 1');
+    > 84 |   await expect(bens.message('ada 1')).toBeVisible();
+         |                                       ^
+      85 |   await bens.send('ben 1');
+      86 |   await expect(mine.message('ben 1')).toBeVisible();
+      87 |   await mine.send('ada 2');
+        at /home/teo/.herdr/worktrees/macro/synoet-channels-e2e-base/apps/web/tests/channels-e2e/messages.spec.ts:84:39
+
+    attachment #1: screenshot (image/png) ──────────────────────────────────────────────────────────
+    ../../../../../../.cache/channels-e2e/runs/24909-break-live-events-ignored/test-results/messages-MSG-03-a-quick-ba-59a4e--for-both-each-message-once/test-failed-1.png
+    ────────────────────────────────────────────────────────────────────────────────────────────────
+
+    attachment #2: screenshot (image/png) ──────────────────────────────────────────────────────────
+    ../../../../../../.cache/channels-e2e/runs/24909-break-live-events-ignored/test-results/messages-MSG-03-a-quick-ba-59a4e--for-both-each-message-once/test-failed-2.png
+    ────────────────────────────────────────────────────────────────────────────────────────────────
+
+    Error Context: ../../../../../../.cache/channels-e2e/runs/24909-break-live-events-ignored/test-results/messages-MSG-03-a-quick-ba-59a4e--for-both-each-message-once/error-context.md
+
+    attachment #4: trace (application/zip) ─────────────────────────────────────────────────────────
+    ../../../../../../.cache/channels-e2e/runs/24909-break-live-events-ignored/test-results/messages-MSG-03-a-quick-ba-59a4e--for-both-each-message-once/trace.zip
+    Usage:
+
+        npx playwright show-trace ../../../../../../.cache/channels-e2e/runs/24909-break-live-events-ignored/test-results/messages-MSG-03-a-quick-ba-59a4e--for-both-each-message-once/trace.zip
+
+    ────────────────────────────────────────────────────────────────────────────────────────────────
+
+  20) tests/channels-e2e/messages.spec.ts:116:1 › MSG-04 a message written on several lines with Shift+Enter keeps its lines 
+
+    Error: expect(locator).toHaveCount(expected) failed
+
+    Locator:  locator('[data-channel-scroll]').locator('[data-message]')
+    Expected: 1
+    Received: 0
+    Timeout:  15000ms
+
+    Call log:
+      - Expect "toHaveCount" with timeout 15000ms
+      - waiting for locator('[data-channel-scroll]').locator('[data-message]')
+        33 × locator resolved to 0 elements
+           - unexpected value "0"
+
+
+      136 |   for (const view of [mine, bens]) {
+      137 |     const message = view.list.locator('[data-message]');
+    > 138 |     await expect(message).toHaveCount(1);
+          |                           ^
+      139 |     await expect.poll(() => view.lines(message)).toEqual(lines);
+      140 |   }
+      141 |
+        at /home/teo/.herdr/worktrees/macro/synoet-channels-e2e-base/apps/web/tests/channels-e2e/messages.spec.ts:138:27
+
+    attachment #1: screenshot (image/png) ──────────────────────────────────────────────────────────
+    ../../../../../../.cache/channels-e2e/runs/24909-break-live-events-ignored/test-results/messages-MSG-04-a-message--9ce9a-Shift-Enter-keeps-its-lines/test-failed-1.png
+    ────────────────────────────────────────────────────────────────────────────────────────────────
+
+    attachment #2: screenshot (image/png) ──────────────────────────────────────────────────────────
+    ../../../../../../.cache/channels-e2e/runs/24909-break-live-events-ignored/test-results/messages-MSG-04-a-message--9ce9a-Shift-Enter-keeps-its-lines/test-failed-2.png
+    ────────────────────────────────────────────────────────────────────────────────────────────────
+
+    Error Context: ../../../../../../.cache/channels-e2e/runs/24909-break-live-events-ignored/test-results/messages-MSG-04-a-message--9ce9a-Shift-Enter-keeps-its-lines/error-context.md
+
+    attachment #4: trace (application/zip) ─────────────────────────────────────────────────────────
+    ../../../../../../.cache/channels-e2e/runs/24909-break-live-events-ignored/test-results/messages-MSG-04-a-message--9ce9a-Shift-Enter-keeps-its-lines/trace.zip
+    Usage:
+
+        npx playwright show-trace ../../../../../../.cache/channels-e2e/runs/24909-break-live-events-ignored/test-results/messages-MSG-04-a-message--9ce9a-Shift-Enter-keeps-its-lines/trace.zip
+
+    ────────────────────────────────────────────────────────────────────────────────────────────────
+
+  21) tests/channels-e2e/messages.spec.ts:152:1 › MSG-05 formatting, a link, emoji and other scripts read the same for both people and after reload 
+
+    Error: expect(received).toEqual(expected) // deep equality
+
+    - Expected  - 3
+    + Received  + 1
+
+    - Array [
+    -   "bold and code see https://example.com/path?q=1 🎉 日本語 Привет <b>x</b> & * 100%",
+    - ]
+    + Array []
+
+    Call Log:
+    - Timeout 15000ms exceeded while waiting on the predicate
+
+      171 |   ];
+      172 |   for (const view of [mine, bens]) {
+    > 173 |     await expect.poll(() => view.topLevel()).toEqual(read);
+          |                                              ^
+      174 |     await expect(
+      175 |       view.list.getByRole('link', { name: 'https://example.com/path?q=1' })
+      176 |     ).toHaveAttribute('href', 'https://example.com/path?q=1');
+        at /home/teo/.herdr/worktrees/macro/synoet-channels-e2e-base/apps/web/tests/channels-e2e/messages.spec.ts:173:46
+
+    attachment #1: screenshot (image/png) ──────────────────────────────────────────────────────────
+    ../../../../../../.cache/channels-e2e/runs/24909-break-live-events-ignored/test-results/messages-MSG-05-formatting-8e8a1-oth-people-and-after-reload/test-failed-2.png
+    ────────────────────────────────────────────────────────────────────────────────────────────────
+
+    attachment #2: screenshot (image/png) ──────────────────────────────────────────────────────────
+    ../../../../../../.cache/channels-e2e/runs/24909-break-live-events-ignored/test-results/messages-MSG-05-formatting-8e8a1-oth-people-and-after-reload/test-failed-1.png
+    ────────────────────────────────────────────────────────────────────────────────────────────────
+
+    Error Context: ../../../../../../.cache/channels-e2e/runs/24909-break-live-events-ignored/test-results/messages-MSG-05-formatting-8e8a1-oth-people-and-after-reload/error-context.md
+
+    attachment #4: trace (application/zip) ─────────────────────────────────────────────────────────
+    ../../../../../../.cache/channels-e2e/runs/24909-break-live-events-ignored/test-results/messages-MSG-05-formatting-8e8a1-oth-people-and-after-reload/trace.zip
+    Usage:
+
+        npx playwright show-trace ../../../../../../.cache/channels-e2e/runs/24909-break-live-events-ignored/test-results/messages-MSG-05-formatting-8e8a1-oth-people-and-after-reload/trace.zip
+
+    ────────────────────────────────────────────────────────────────────────────────────────────────
+
+  22) tests/channels-e2e/messages.spec.ts:198:1 › MSG-06 messages in a row from one person and from alternating people each show under their author 
+
+    Error: expect(locator).toBeVisible() failed
+
+    Locator: locator('[data-channel-scroll]').locator('[data-message]').filter({ has: locator('[data-message-content]').getByText('ben thrice', { exact: true }) })
+    Expected: visible
+    Timeout: 15000ms
+    Error: element(s) not found
+
+    Call log:
+      - Expect "toBeVisible" with timeout 15000ms
+      - waiting for locator('[data-channel-scroll]').locator('[data-message]').filter({ has: locator('[data-message-content]').getByText('ben thrice', { exact: true }) })
+
+
+      233 |
+      234 |   await bens.send('ben thrice');
+    > 235 |   await expect(mine.message('ben thrice')).toBeVisible();
+          |                                            ^
+      236 |   await mine.send('ada closes');
+      237 |
+      238 |   const all = [
+        at /home/teo/.herdr/worktrees/macro/synoet-channels-e2e-base/apps/web/tests/channels-e2e/messages.spec.ts:235:44
+
+    attachment #1: screenshot (image/png) ──────────────────────────────────────────────────────────
+    ../../../../../../.cache/channels-e2e/runs/24909-break-live-events-ignored/test-results/messages-MSG-06-messages-i-a2d0d-ach-show-under-their-author/test-failed-2.png
+    ────────────────────────────────────────────────────────────────────────────────────────────────
+
+    attachment #2: screenshot (image/png) ──────────────────────────────────────────────────────────
+    ../../../../../../.cache/channels-e2e/runs/24909-break-live-events-ignored/test-results/messages-MSG-06-messages-i-a2d0d-ach-show-under-their-author/test-failed-1.png
+    ────────────────────────────────────────────────────────────────────────────────────────────────
+
+    Error Context: ../../../../../../.cache/channels-e2e/runs/24909-break-live-events-ignored/test-results/messages-MSG-06-messages-i-a2d0d-ach-show-under-their-author/error-context.md
+
+    attachment #4: trace (application/zip) ─────────────────────────────────────────────────────────
+    ../../../../../../.cache/channels-e2e/runs/24909-break-live-events-ignored/test-results/messages-MSG-06-messages-i-a2d0d-ach-show-under-their-author/trace.zip
+    Usage:
+
+        npx playwright show-trace ../../../../../../.cache/channels-e2e/runs/24909-break-live-events-ignored/test-results/messages-MSG-06-messages-i-a2d0d-ach-show-under-their-author/trace.zip
+
+    ────────────────────────────────────────────────────────────────────────────────────────────────
+
+  23) tests/channels-e2e/messages.spec.ts:254:1 › MSG-07 editing my message from its buttons shows the new text and “(edited)” to both people, and after reload 
+
+    Error: expect(received).toEqual(expected) // deep equality
+
+    - Expected  - 1
+    + Received  + 1
+
+      Array [
+        "before",
+    -   "second wording",
+    +   "first wording",
+        "after",
+      ]
+
+    Call Log:
+    - Timeout 15000ms exceeded while waiting on the predicate
+
+      276 |   const shown = ['before', 'second wording', 'after'];
+      277 |   for (const view of [mine, bens]) {
+    > 278 |     await expect.poll(() => view.topLevel()).toEqual(shown);
+          |                                              ^
+      279 |     await expect(
+      280 |       view.messageById(original.id).getByText('(edited)')
+      281 |     ).toBeVisible();
+        at /home/teo/.herdr/worktrees/macro/synoet-channels-e2e-base/apps/web/tests/channels-e2e/messages.spec.ts:278:46
+
+    attachment #1: screenshot (image/png) ──────────────────────────────────────────────────────────
+    ../../../../../../.cache/channels-e2e/runs/24909-break-live-events-ignored/test-results/messages-MSG-07-editing-my-770bf-oth-people-and-after-reload/test-failed-1.png
+    ────────────────────────────────────────────────────────────────────────────────────────────────
+
+    attachment #2: screenshot (image/png) ──────────────────────────────────────────────────────────
+    ../../../../../../.cache/channels-e2e/runs/24909-break-live-events-ignored/test-results/messages-MSG-07-editing-my-770bf-oth-people-and-after-reload/test-failed-2.png
+    ────────────────────────────────────────────────────────────────────────────────────────────────
+
+    Error Context: ../../../../../../.cache/channels-e2e/runs/24909-break-live-events-ignored/test-results/messages-MSG-07-editing-my-770bf-oth-people-and-after-reload/error-context.md
+
+    attachment #4: trace (application/zip) ─────────────────────────────────────────────────────────
+    ../../../../../../.cache/channels-e2e/runs/24909-break-live-events-ignored/test-results/messages-MSG-07-editing-my-770bf-oth-people-and-after-reload/trace.zip
+    Usage:
+
+        npx playwright show-trace ../../../../../../.cache/channels-e2e/runs/24909-break-live-events-ignored/test-results/messages-MSG-07-editing-my-770bf-oth-people-and-after-reload/trace.zip
+
+    ────────────────────────────────────────────────────────────────────────────────────────────────
+
+  24) tests/channels-e2e/messages.spec.ts:298:1 › MSG-08 pressing E on my selected message edits it, and the other person sees the edit 
+
+    Error: expect(received).toEqual(expected) // deep equality
+
+    - Expected  - 1
+    + Received  + 1
+
+      Array [
+        "before",
+    -   "typed with care",
+    +   "typed in a hurry",
+        "after",
+      ]
+
+    Call Log:
+    - Timeout 15000ms exceeded while waiting on the predicate
+
+      321 |   const shown = ['before', 'typed with care', 'after'];
+      322 |   for (const view of [mine, bens]) {
+    > 323 |     await expect.poll(() => view.topLevel()).toEqual(shown);
+          |                                              ^
+      324 |     await expect(
+      325 |       view.messageById(original.id).getByText('(edited)')
+      326 |     ).toBeVisible();
+        at /home/teo/.herdr/worktrees/macro/synoet-channels-e2e-base/apps/web/tests/channels-e2e/messages.spec.ts:323:46
+
+    attachment #1: screenshot (image/png) ──────────────────────────────────────────────────────────
+    ../../../../../../.cache/channels-e2e/runs/24909-break-live-events-ignored/test-results/messages-MSG-08-pressing-E-87288--other-person-sees-the-edit/test-failed-1.png
+    ────────────────────────────────────────────────────────────────────────────────────────────────
+
+    attachment #2: screenshot (image/png) ──────────────────────────────────────────────────────────
+    ../../../../../../.cache/channels-e2e/runs/24909-break-live-events-ignored/test-results/messages-MSG-08-pressing-E-87288--other-person-sees-the-edit/test-failed-2.png
+    ────────────────────────────────────────────────────────────────────────────────────────────────
+
+    Error Context: ../../../../../../.cache/channels-e2e/runs/24909-break-live-events-ignored/test-results/messages-MSG-08-pressing-E-87288--other-person-sees-the-edit/error-context.md
+
+    attachment #4: trace (application/zip) ─────────────────────────────────────────────────────────
+    ../../../../../../.cache/channels-e2e/runs/24909-break-live-events-ignored/test-results/messages-MSG-08-pressing-E-87288--other-person-sees-the-edit/trace.zip
+    Usage:
+
+        npx playwright show-trace ../../../../../../.cache/channels-e2e/runs/24909-break-live-events-ignored/test-results/messages-MSG-08-pressing-E-87288--other-person-sees-the-edit/trace.zip
+
+    ────────────────────────────────────────────────────────────────────────────────────────────────
+
+  25) tests/channels-e2e/messages.spec.ts:331:1 › MSG-09 cancelling an edit, with Escape or “Discard Edit”, leaves the message as it was 
+
+    Error: expect(received).toEqual(expected) // deep equality
+
+    - Expected  - 1
+    + Received  + 0
+
+      Array [
+        "before",
+        "leave me alone",
+    -   "sent after cancelling",
+      ]
+
+    Call Log:
+    - Timeout 15000ms exceeded while waiting on the predicate
+
+      364 |   await mine.send('sent after cancelling');
+      365 |   const shown = ['before', 'leave me alone', 'sent after cancelling'];
+    > 366 |   await expect.poll(() => bens.topLevel()).toEqual(shown);
+          |                                            ^
+      367 |   await expect(bens.list.getByText('(edited)')).toHaveCount(0);
+      368 |
+      369 |   await mine.reload();
+        at /home/teo/.herdr/worktrees/macro/synoet-channels-e2e-base/apps/web/tests/channels-e2e/messages.spec.ts:366:44
+
+    attachment #1: screenshot (image/png) ──────────────────────────────────────────────────────────
+    ../../../../../../.cache/channels-e2e/runs/24909-break-live-events-ignored/test-results/messages-MSG-09-cancelling-79579-eaves-the-message-as-it-was/test-failed-2.png
+    ────────────────────────────────────────────────────────────────────────────────────────────────
+
+    attachment #2: screenshot (image/png) ──────────────────────────────────────────────────────────
+    ../../../../../../.cache/channels-e2e/runs/24909-break-live-events-ignored/test-results/messages-MSG-09-cancelling-79579-eaves-the-message-as-it-was/test-failed-1.png
+    ────────────────────────────────────────────────────────────────────────────────────────────────
+
+    Error Context: ../../../../../../.cache/channels-e2e/runs/24909-break-live-events-ignored/test-results/messages-MSG-09-cancelling-79579-eaves-the-message-as-it-was/error-context.md
+
+    attachment #4: trace (application/zip) ─────────────────────────────────────────────────────────
+    ../../../../../../.cache/channels-e2e/runs/24909-break-live-events-ignored/test-results/messages-MSG-09-cancelling-79579-eaves-the-message-as-it-was/trace.zip
+    Usage:
+
+        npx playwright show-trace ../../../../../../.cache/channels-e2e/runs/24909-break-live-events-ignored/test-results/messages-MSG-09-cancelling-79579-eaves-the-message-as-it-was/trace.zip
+
+    ────────────────────────────────────────────────────────────────────────────────────────────────
+
+  26) tests/channels-e2e/messages.spec.ts:376:1 › MSG-10 deleting my message, once confirmed, removes it for both people and after reload 
+
+    Error: expect(received).toEqual(expected) // deep equality
+
+    - Expected  - 0
+    + Received  + 1
+
+      Array [
+        "before",
+    +   "delete me",
+        "after",
+      ]
+
+    Call Log:
+    - Timeout 15000ms exceeded while waiting on the predicate
+
+      403 |
+      404 |   for (const view of [mine, bens]) {
+    > 405 |     await expect.poll(() => view.topLevel()).toEqual(['before', 'after']);
+          |                                              ^
+      406 |   }
+      407 |   await expect(mine.deleteDialog).toBeHidden();
+      408 |
+        at /home/teo/.herdr/worktrees/macro/synoet-channels-e2e-base/apps/web/tests/channels-e2e/messages.spec.ts:405:46
+
+    attachment #1: screenshot (image/png) ──────────────────────────────────────────────────────────
+    ../../../../../../.cache/channels-e2e/runs/24909-break-live-events-ignored/test-results/messages-MSG-10-deleting-m-544ce-oth-people-and-after-reload/test-failed-2.png
+    ────────────────────────────────────────────────────────────────────────────────────────────────
+
+    attachment #2: screenshot (image/png) ──────────────────────────────────────────────────────────
+    ../../../../../../.cache/channels-e2e/runs/24909-break-live-events-ignored/test-results/messages-MSG-10-deleting-m-544ce-oth-people-and-after-reload/test-failed-1.png
+    ────────────────────────────────────────────────────────────────────────────────────────────────
+
+    Error Context: ../../../../../../.cache/channels-e2e/runs/24909-break-live-events-ignored/test-results/messages-MSG-10-deleting-m-544ce-oth-people-and-after-reload/error-context.md
+
+    attachment #4: trace (application/zip) ─────────────────────────────────────────────────────────
+    ../../../../../../.cache/channels-e2e/runs/24909-break-live-events-ignored/test-results/messages-MSG-10-deleting-m-544ce-oth-people-and-after-reload/trace.zip
+    Usage:
+
+        npx playwright show-trace ../../../../../../.cache/channels-e2e/runs/24909-break-live-events-ignored/test-results/messages-MSG-10-deleting-m-544ce-oth-people-and-after-reload/trace.zip
+
+    ────────────────────────────────────────────────────────────────────────────────────────────────
+
+  27) tests/channels-e2e/messages.spec.ts:418:1 › MSG-11 a deleted message that has replies reads “This message was deleted.” and keeps its replies 
+
+    Error: expect(received).toEqual(expected) // deep equality
+
+    - Expected  - 1
+    + Received  + 1
+
+      Array [
+        "before",
+    -   "This message was deleted.",
+    +   "regretted",
+        "after",
+      ]
+
+    Call Log:
+    - Timeout 15000ms exceeded while waiting on the predicate
+
+      439 |   const replies = ['Ben Member: ben replied', 'Ada Owner: ada replied'];
+      440 |   for (const view of [mine, bens]) {
+    > 441 |     await expect.poll(() => view.topLevel()).toEqual(shown);
+          |                                              ^
+      442 |     await expect.poll(() => view.repliesByAuthor(root.id)).toEqual(replies);
+      443 |     await expect(view.list.getByText('regretted')).toHaveCount(0);
+      444 |   }
+        at /home/teo/.herdr/worktrees/macro/synoet-channels-e2e-base/apps/web/tests/channels-e2e/messages.spec.ts:441:46
+
+    attachment #1: screenshot (image/png) ──────────────────────────────────────────────────────────
+    ../../../../../../.cache/channels-e2e/runs/24909-break-live-events-ignored/test-results/messages-MSG-11-a-deleted--cda30-ted-”-and-keeps-its-replies/test-failed-1.png
+    ────────────────────────────────────────────────────────────────────────────────────────────────
+
+    attachment #2: screenshot (image/png) ──────────────────────────────────────────────────────────
+    ../../../../../../.cache/channels-e2e/runs/24909-break-live-events-ignored/test-results/messages-MSG-11-a-deleted--cda30-ted-”-and-keeps-its-replies/test-failed-2.png
+    ────────────────────────────────────────────────────────────────────────────────────────────────
+
+    Error Context: ../../../../../../.cache/channels-e2e/runs/24909-break-live-events-ignored/test-results/messages-MSG-11-a-deleted--cda30-ted-”-and-keeps-its-replies/error-context.md
+
+    attachment #4: trace (application/zip) ─────────────────────────────────────────────────────────
+    ../../../../../../.cache/channels-e2e/runs/24909-break-live-events-ignored/test-results/messages-MSG-11-a-deleted--cda30-ted-”-and-keeps-its-replies/trace.zip
+    Usage:
+
+        npx playwright show-trace ../../../../../../.cache/channels-e2e/runs/24909-break-live-events-ignored/test-results/messages-MSG-11-a-deleted--cda30-ted-”-and-keeps-its-replies/trace.zip
+
+    ────────────────────────────────────────────────────────────────────────────────────────────────
+
+  28) tests/channels-e2e/messages.spec.ts:491:1 › MSG-13 a quick reaction shows for both people, counts 2 when the other adds the same, and goes when removed 
+
+    Error: expect(received).toEqual(expected) // deep equality
+
+    - Expected  - 3
+    + Received  + 1
+
+    - Array [
+    -   "👍",
+    - ]
+    + Array []
+
+    Call Log:
+    - Timeout 15000ms exceeded while waiting on the predicate
+
+      506 |   await mine.quickReact(myMessage, '👍');
+      507 |   await expect.poll(() => mine.reactions(myMessage)).toEqual(['👍']);
+    > 508 |   await expect.poll(() => bens.reactions(bensMessage)).toEqual(['👍']);
+          |                                                        ^
+      509 |   await expect(mine.reaction(myMessage, '👍')).toBeEnabled();
+      510 |   await expect(mine.reaction(myMessage, '👍')).toHaveAttribute(
+      511 |     'aria-pressed',
+        at /home/teo/.herdr/worktrees/macro/synoet-channels-e2e-base/apps/web/tests/channels-e2e/messages.spec.ts:508:56
+
+    attachment #1: screenshot (image/png) ──────────────────────────────────────────────────────────
+    ../../../../../../.cache/channels-e2e/runs/24909-break-live-events-ignored/test-results/messages-MSG-13-a-quick-re-7a686--same-and-goes-when-removed/test-failed-1.png
+    ────────────────────────────────────────────────────────────────────────────────────────────────
+
+    attachment #2: screenshot (image/png) ──────────────────────────────────────────────────────────
+    ../../../../../../.cache/channels-e2e/runs/24909-break-live-events-ignored/test-results/messages-MSG-13-a-quick-re-7a686--same-and-goes-when-removed/test-failed-2.png
+    ────────────────────────────────────────────────────────────────────────────────────────────────
+
+    Error Context: ../../../../../../.cache/channels-e2e/runs/24909-break-live-events-ignored/test-results/messages-MSG-13-a-quick-re-7a686--same-and-goes-when-removed/error-context.md
+
+    attachment #4: trace (application/zip) ─────────────────────────────────────────────────────────
+    ../../../../../../.cache/channels-e2e/runs/24909-break-live-events-ignored/test-results/messages-MSG-13-a-quick-re-7a686--same-and-goes-when-removed/trace.zip
+    Usage:
+
+        npx playwright show-trace ../../../../../../.cache/channels-e2e/runs/24909-break-live-events-ignored/test-results/messages-MSG-13-a-quick-re-7a686--same-and-goes-when-removed/trace.zip
+
+    ────────────────────────────────────────────────────────────────────────────────────────────────
+
+  29) tests/channels-e2e/messages.spec.ts:548:1 › MSG-14 a reaction chosen in the emoji picker shows for both people and after reload 
+
+    Error: expect(received).toEqual(expected) // deep equality
+
+    - Expected  - 3
+    + Received  + 1
+
+    - Array [
+    -   "🚀",
+    - ]
+    + Array []
+
+    Call Log:
+    - Timeout 15000ms exceeded while waiting on the predicate
+
+      565 |   await mine.pickEmoji('rocket');
+      566 |   await expect.poll(() => mine.reactions(myMessage)).toEqual(['🚀']);
+    > 567 |   await expect.poll(() => bens.reactions(bensMessage)).toEqual(['🚀']);
+          |                                                        ^
+      568 |
+      569 |   // With a reaction on it, the message has its own button for another.
+      570 |   await bensMessage.getByRole('button', { name: 'Add reaction' }).click();
+        at /home/teo/.herdr/worktrees/macro/synoet-channels-e2e-base/apps/web/tests/channels-e2e/messages.spec.ts:567:56
+
+    attachment #1: screenshot (image/png) ──────────────────────────────────────────────────────────
+    ../../../../../../.cache/channels-e2e/runs/24909-break-live-events-ignored/test-results/messages-MSG-14-a-reaction-fb331-oth-people-and-after-reload/test-failed-1.png
+    ────────────────────────────────────────────────────────────────────────────────────────────────
+
+    attachment #2: screenshot (image/png) ──────────────────────────────────────────────────────────
+    ../../../../../../.cache/channels-e2e/runs/24909-break-live-events-ignored/test-results/messages-MSG-14-a-reaction-fb331-oth-people-and-after-reload/test-failed-2.png
+    ────────────────────────────────────────────────────────────────────────────────────────────────
+
+    Error Context: ../../../../../../.cache/channels-e2e/runs/24909-break-live-events-ignored/test-results/messages-MSG-14-a-reaction-fb331-oth-people-and-after-reload/error-context.md
+
+    attachment #4: trace (application/zip) ─────────────────────────────────────────────────────────
+    ../../../../../../.cache/channels-e2e/runs/24909-break-live-events-ignored/test-results/messages-MSG-14-a-reaction-fb331-oth-people-and-after-reload/trace.zip
+    Usage:
+
+        npx playwright show-trace ../../../../../../.cache/channels-e2e/runs/24909-break-live-events-ignored/test-results/messages-MSG-14-a-reaction-fb331-oth-people-and-after-reload/trace.zip
+
+    ────────────────────────────────────────────────────────────────────────────────────────────────
+
+  30) tests/channels-e2e/messages.spec.ts:582:1 › MSG-15 another person’s edit, reactions and deletion show on an open channel without reload 
+
+    Error: expect(received).toEqual(expected) // deep equality
+
+    - Expected  - 1
+    + Received  + 1
+
+      Array [
+        "ada asks",
+    -   "ben answers better",
+    +   "ben answers",
+        "ben misspeaks",
+        "ada thanks",
+      ]
+
+    Call Log:
+    - Timeout 15000ms exceeded while waiting on the predicate
+
+      601 |   await expect
+      602 |     .poll(() => view.topLevel())
+    > 603 |     .toEqual(['ada asks', 'ben answers better', 'ben misspeaks', 'ada thanks']);
+          |      ^
+      604 |   await expect(message.getByText('(edited)')).toBeVisible();
+      605 |
+      606 |   await ben.react(channel.id, answer.id, '🎉');
+        at /home/teo/.herdr/worktrees/macro/synoet-channels-e2e-base/apps/web/tests/channels-e2e/messages.spec.ts:603:6
+
+    attachment #1: screenshot (image/png) ──────────────────────────────────────────────────────────
+    ../../../../../../.cache/channels-e2e/runs/24909-break-live-events-ignored/test-results/messages-MSG-15-another-pe-8b6e2-open-channel-without-reload/test-failed-1.png
+    ────────────────────────────────────────────────────────────────────────────────────────────────
+
+    Error Context: ../../../../../../.cache/channels-e2e/runs/24909-break-live-events-ignored/test-results/messages-MSG-15-another-pe-8b6e2-open-channel-without-reload/error-context.md
+
+    attachment #3: trace (application/zip) ─────────────────────────────────────────────────────────
+    ../../../../../../.cache/channels-e2e/runs/24909-break-live-events-ignored/test-results/messages-MSG-15-another-pe-8b6e2-open-channel-without-reload/trace.zip
+    Usage:
+
+        npx playwright show-trace ../../../../../../.cache/channels-e2e/runs/24909-break-live-events-ignored/test-results/messages-MSG-15-another-pe-8b6e2-open-channel-without-reload/trace.zip
+
+    ────────────────────────────────────────────────────────────────────────────────────────────────
+
+  31) tests/channels-e2e/messages.spec.ts:623:1 › MSG-16 a message sent to another channel does not appear in the open one 
+
+    Error: expect(received).toEqual(expected) // deep equality
+
+    - Expected  - 1
+    + Received  + 0
+
+      Array [
+        "open channel start",
+    -   "meant for the open channel",
+      ]
+
+    Call Log:
+    - Timeout 15000ms exceeded while waiting on the predicate
+
+      641 |   await expect
+      642 |     .poll(() => view.topLevel())
+    > 643 |     .toEqual(['open channel start', 'meant for the open channel']);
+          |      ^
+      644 |
+      645 |   await conversationRow(page, other.name).click();
+      646 |   const otherView = new Conversation(page, other.id);
+        at /home/teo/.herdr/worktrees/macro/synoet-channels-e2e-base/apps/web/tests/channels-e2e/messages.spec.ts:643:6
+
+    attachment #1: screenshot (image/png) ──────────────────────────────────────────────────────────
+    ../../../../../../.cache/channels-e2e/runs/24909-break-live-events-ignored/test-results/messages-MSG-16-a-message--c8cb2--not-appear-in-the-open-one/test-failed-1.png
+    ────────────────────────────────────────────────────────────────────────────────────────────────
+
+    Error Context: ../../../../../../.cache/channels-e2e/runs/24909-break-live-events-ignored/test-results/messages-MSG-16-a-message--c8cb2--not-appear-in-the-open-one/error-context.md
+
+    attachment #3: trace (application/zip) ─────────────────────────────────────────────────────────
+    ../../../../../../.cache/channels-e2e/runs/24909-break-live-events-ignored/test-results/messages-MSG-16-a-message--c8cb2--not-appear-in-the-open-one/trace.zip
+    Usage:
+
+        npx playwright show-trace ../../../../../../.cache/channels-e2e/runs/24909-break-live-events-ignored/test-results/messages-MSG-16-a-message--c8cb2--not-appear-in-the-open-one/trace.zip
+
+    ────────────────────────────────────────────────────────────────────────────────────────────────
+
+  32) tests/channels-e2e/messages.spec.ts:677:1 › MSG-18 messages two people send at the same moment end in one order for both, each once 
+
+    Error: expect(received).toEqual(expected) // deep equality
+
+    - Expected  - 4
+    + Received  + 0
+
+      Array [
+        "ada 1",
+        "ada 2",
+        "ada 3",
+        "ada 4",
+    -   "ben 1",
+    -   "ben 2",
+    -   "ben 3",
+    -   "ben 4",
+      ]
+
+    Call Log:
+    - Timeout 15000ms exceeded while waiting on the predicate
+
+      716 |     await expect
+      717 |       .poll(async () => (await view.topLevel()).sort())
+    > 718 |       .toEqual(everyMessage);
+          |        ^
+      719 |     expect(
+      720 |       (await view.topLevel()).filter((text) => text.startsWith('ada'))
+      721 |     ).toEqual(['ada 1', 'ada 2', 'ada 3', 'ada 4']);
+        at /home/teo/.herdr/worktrees/macro/synoet-channels-e2e-base/apps/web/tests/channels-e2e/messages.spec.ts:718:8
+
+    attachment #1: screenshot (image/png) ──────────────────────────────────────────────────────────
+    ../../../../../../.cache/channels-e2e/runs/24909-break-live-events-ignored/test-results/messages-MSG-18-messages-t-caf49-ne-order-for-both-each-once/test-failed-1.png
+    ────────────────────────────────────────────────────────────────────────────────────────────────
+
+    attachment #2: screenshot (image/png) ──────────────────────────────────────────────────────────
+    ../../../../../../.cache/channels-e2e/runs/24909-break-live-events-ignored/test-results/messages-MSG-18-messages-t-caf49-ne-order-for-both-each-once/test-failed-2.png
+    ────────────────────────────────────────────────────────────────────────────────────────────────
+
+    Error Context: ../../../../../../.cache/channels-e2e/runs/24909-break-live-events-ignored/test-results/messages-MSG-18-messages-t-caf49-ne-order-for-both-each-once/error-context.md
+
+    attachment #4: trace (application/zip) ─────────────────────────────────────────────────────────
+    ../../../../../../.cache/channels-e2e/runs/24909-break-live-events-ignored/test-results/messages-MSG-18-messages-t-caf49-ne-order-for-both-each-once/trace.zip
+    Usage:
+
+        npx playwright show-trace ../../../../../../.cache/channels-e2e/runs/24909-break-live-events-ignored/test-results/messages-MSG-18-messages-t-caf49-ne-order-for-both-each-once/trace.zip
+
+    ────────────────────────────────────────────────────────────────────────────────────────────────
+
+  33) tests/channels-e2e/reconnect.spec.ts:6:1 › REC-01 after the connection comes back, messages sent meanwhile appear in order without a reload 
+
+    Error: expect(locator).toBeVisible() failed
+
+    Locator: locator('[data-channel-scroll]').locator('[data-message]').filter({ has: locator('[data-message-content]').getByText('while away three', { exact: true }) })
+    Expected: visible
+    Timeout: 15000ms
+    Error: element(s) not found
+
+    Call log:
+      - Expect "toBeVisible" with timeout 15000ms
+      - waiting for locator('[data-channel-scroll]').locator('[data-message]').filter({ has: locator('[data-message-content]').getByText('while away three', { exact: true }) })
+
+
+      22 |   await context.setOffline(false);
+      23 |
+    > 24 |   await expect(view.message('while away three')).toBeVisible();
+         |                                                  ^
+      25 |   expect(await view.drawnTexts()).toEqual([
+      26 |     'before one',
+      27 |     'before two',
+        at /home/teo/.herdr/worktrees/macro/synoet-channels-e2e-base/apps/web/tests/channels-e2e/reconnect.spec.ts:24:50
+
+    attachment #1: screenshot (image/png) ──────────────────────────────────────────────────────────
+    ../../../../../../.cache/channels-e2e/runs/24909-break-live-events-ignored/test-results/reconnect-REC-01-after-the-ccf04-r-in-order-without-a-reload/test-failed-1.png
+    ────────────────────────────────────────────────────────────────────────────────────────────────
+
+    Error Context: ../../../../../../.cache/channels-e2e/runs/24909-break-live-events-ignored/test-results/reconnect-REC-01-after-the-ccf04-r-in-order-without-a-reload/error-context.md
+
+    attachment #3: trace (application/zip) ─────────────────────────────────────────────────────────
+    ../../../../../../.cache/channels-e2e/runs/24909-break-live-events-ignored/test-results/reconnect-REC-01-after-the-ccf04-r-in-order-without-a-reload/trace.zip
+    Usage:
+
+        npx playwright show-trace ../../../../../../.cache/channels-e2e/runs/24909-break-live-events-ignored/test-results/reconnect-REC-01-after-the-ccf04-r-in-order-without-a-reload/trace.zip
+
+    ────────────────────────────────────────────────────────────────────────────────────────────────
+
+  34) tests/channels-e2e/reconnect.spec.ts:36:1 › REC-02 a message sent with no connection is neither lost nor sent twice 
+
+    Error: expect(locator).toBeVisible() failed
+
+    Locator: locator('[data-channel-scroll]').locator('[data-message]').filter({ has: locator('[data-message-content]').getByText('after', { exact: true }) })
+    Expected: visible
+    Timeout: 15000ms
+    Error: element(s) not found
+
+    Call log:
+      - Expect "toBeVisible" with timeout 15000ms
+      - waiting for locator('[data-channel-scroll]').locator('[data-message]').filter({ has: locator('[data-message-content]').getByText('after', { exact: true }) })
+
+
+      55 |   await context.setOffline(false);
+      56 |   await ada.post(channel.id, 'after');
+    > 57 |   await expect(view.message('after')).toBeVisible();
+         |                                       ^
+      58 |
+      59 |   // The text is in exactly one place: still in the composer, or in the
+      60 |   // channel once.
+        at /home/teo/.herdr/worktrees/macro/synoet-channels-e2e-base/apps/web/tests/channels-e2e/reconnect.spec.ts:57:39
+
+    attachment #1: screenshot (image/png) ──────────────────────────────────────────────────────────
+    ../../../../../../.cache/channels-e2e/runs/24909-break-live-events-ignored/test-results/reconnect-REC-02-a-message-57eaf-neither-lost-nor-sent-twice/test-failed-1.png
+    ────────────────────────────────────────────────────────────────────────────────────────────────
+
+    Error Context: ../../../../../../.cache/channels-e2e/runs/24909-break-live-events-ignored/test-results/reconnect-REC-02-a-message-57eaf-neither-lost-nor-sent-twice/error-context.md
+
+    attachment #3: trace (application/zip) ─────────────────────────────────────────────────────────
+    ../../../../../../.cache/channels-e2e/runs/24909-break-live-events-ignored/test-results/reconnect-REC-02-a-message-57eaf-neither-lost-nor-sent-twice/trace.zip
+    Usage:
+
+        npx playwright show-trace ../../../../../../.cache/channels-e2e/runs/24909-break-live-events-ignored/test-results/reconnect-REC-02-a-message-57eaf-neither-lost-nor-sent-twice/trace.zip
+
+    ────────────────────────────────────────────────────────────────────────────────────────────────
+
+  35) tests/channels-e2e/reconnect.spec.ts:81:1 › REC-03 a message that arrives while the page is hidden is there when the person comes back 
+
+    Error: the last messages in the list
+
+    the last messages in the list
+
+    expect(received).toEqual(expected) // deep equality
+
+    - Expected  - 2
+    + Received  + 0
+
+      Array [
+        "before",
+    -   "while hidden one",
+    -   "while hidden two",
+      ]
+
+    Call Log:
+    - Timeout 15000ms exceeded while waiting on the predicate
+
+       at harness/channel.ts:186
+
+      184 |         message: 'the last messages in the list',
+      185 |       })
+    > 186 |       .toEqual(expected);
+          |        ^
+      187 |   }
+      188 |
+      189 |   /** How far the list is from showing its very end, in pixels. */
+        at ChannelView.expectEndsWith (/home/teo/.herdr/worktrees/macro/synoet-channels-e2e-base/apps/web/tests/channels-e2e/harness/channel.ts:186:8)
+        at /home/teo/.herdr/worktrees/macro/synoet-channels-e2e-base/apps/web/tests/channels-e2e/reconnect.spec.ts:101:14
+
+    attachment #1: screenshot (image/png) ──────────────────────────────────────────────────────────
+    ../../../../../../.cache/channels-e2e/runs/24909-break-live-events-ignored/test-results/reconnect-REC-03-a-message-7264e--when-the-person-comes-back/test-failed-2.png
+    ────────────────────────────────────────────────────────────────────────────────────────────────
+
+    attachment #2: screenshot (image/png) ──────────────────────────────────────────────────────────
+    ../../../../../../.cache/channels-e2e/runs/24909-break-live-events-ignored/test-results/reconnect-REC-03-a-message-7264e--when-the-person-comes-back/test-failed-1.png
+    ────────────────────────────────────────────────────────────────────────────────────────────────
+
+    Error Context: ../../../../../../.cache/channels-e2e/runs/24909-break-live-events-ignored/test-results/reconnect-REC-03-a-message-7264e--when-the-person-comes-back/error-context.md
+
+    attachment #4: trace (application/zip) ─────────────────────────────────────────────────────────
+    ../../../../../../.cache/channels-e2e/runs/24909-break-live-events-ignored/test-results/reconnect-REC-03-a-message-7264e--when-the-person-comes-back/trace.zip
+    Usage:
+
+        npx playwright show-trace ../../../../../../.cache/channels-e2e/runs/24909-break-live-events-ignored/test-results/reconnect-REC-03-a-message-7264e--when-the-person-comes-back/trace.zip
+
+    ────────────────────────────────────────────────────────────────────────────────────────────────
+
+  36) tests/channels-e2e/scroll.spec.ts:55:1 › SCROLL-03 at the end of the channel, a message from someone else arrives in view 
+
+    Error: expect(locator).toBeInViewport() failed
+
+    Locator: locator('[data-channel-scroll]').locator('[data-message]').filter({ has: locator('[data-message-content]').getByText('arrives at the end', { exact: true }) })
+    Expected: in viewport
+    Timeout: 15000ms
+    Error: element(s) not found
+
+    Call log:
+      - Expect "toBeInViewport" with timeout 15000ms
+      - waiting for locator('[data-channel-scroll]').locator('[data-message]').filter({ has: locator('[data-message-content]').getByText('arrives at the end', { exact: true }) })
+
+
+      70 |   await ben.post(channel.id, 'arrives at the end');
+      71 |
+    > 72 |   await expect(view.message('arrives at the end')).toBeInViewport();
+         |                                                    ^
+      73 |   await view.expectAtBottom();
+      74 | });
+      75 |
+        at /home/teo/.herdr/worktrees/macro/synoet-channels-e2e-base/apps/web/tests/channels-e2e/scroll.spec.ts:72:52
+
+    attachment #1: screenshot (image/png) ──────────────────────────────────────────────────────────
+    ../../../../../../.cache/channels-e2e/runs/24909-break-live-events-ignored/test-results/scroll-SCROLL-03-at-the-en-aa667-omeone-else-arrives-in-view/test-failed-1.png
+    ────────────────────────────────────────────────────────────────────────────────────────────────
+
+    Error Context: ../../../../../../.cache/channels-e2e/runs/24909-break-live-events-ignored/test-results/scroll-SCROLL-03-at-the-en-aa667-omeone-else-arrives-in-view/error-context.md
+
+    attachment #3: trace (application/zip) ─────────────────────────────────────────────────────────
+    ../../../../../../.cache/channels-e2e/runs/24909-break-live-events-ignored/test-results/scroll-SCROLL-03-at-the-en-aa667-omeone-else-arrives-in-view/trace.zip
+    Usage:
+
+        npx playwright show-trace ../../../../../../.cache/channels-e2e/runs/24909-break-live-events-ignored/test-results/scroll-SCROLL-03-at-the-en-aa667-omeone-else-arrives-in-view/trace.zip
+
+    ────────────────────────────────────────────────────────────────────────────────────────────────
+
+  37) tests/channels-e2e/scroll.spec.ts:78:1 › SCROLL-04 scrolled up, a message from someone else does not move what is being read 
+
+    Error: expect(received).toBeGreaterThan(expected)
+
+    Expected: > 3388
+    Received:   3388
+
+    Call Log:
+    - Timeout 15000ms exceeded while waiting on the predicate
+
+      108 |   await expect
+      109 |     .poll(() => view.list.evaluate((list) => list.scrollHeight))
+    > 110 |     .toBeGreaterThan(height);
+          |      ^
+      111 |   await expect(view.message('arrives below the window')).not.toBeInViewport();
+      112 |   expect(await view.topVisible()).toEqual(reading);
+      113 |
+        at /home/teo/.herdr/worktrees/macro/synoet-channels-e2e-base/apps/web/tests/channels-e2e/scroll.spec.ts:110:6
+
+    attachment #1: screenshot (image/png) ──────────────────────────────────────────────────────────
+    ../../../../../../.cache/channels-e2e/runs/24909-break-live-events-ignored/test-results/scroll-SCROLL-04-scrolled--2e997-not-move-what-is-being-read/test-failed-1.png
+    ────────────────────────────────────────────────────────────────────────────────────────────────
+
+    Error Context: ../../../../../../.cache/channels-e2e/runs/24909-break-live-events-ignored/test-results/scroll-SCROLL-04-scrolled--2e997-not-move-what-is-being-read/error-context.md
+
+    attachment #3: trace (application/zip) ─────────────────────────────────────────────────────────
+    ../../../../../../.cache/channels-e2e/runs/24909-break-live-events-ignored/test-results/scroll-SCROLL-04-scrolled--2e997-not-move-what-is-being-read/trace.zip
+    Usage:
+
+        npx playwright show-trace ../../../../../../.cache/channels-e2e/runs/24909-break-live-events-ignored/test-results/scroll-SCROLL-04-scrolled--2e997-not-move-what-is-being-read/trace.zip
+
+    ────────────────────────────────────────────────────────────────────────────────────────────────
+
+  38) tests/channels-e2e/threads.spec.ts:6:1 › THR-01 a reply written from “Reply” shows under its message for both people, and after reload 
+
+    Error: expect(received).toEqual(expected) // deep equality
+
+    - Expected  - 3
+    + Received  + 1
+
+    - Array [
+    -   "Ada Owner: an answer",
+    - ]
+    + Array []
+
+    Call Log:
+    - Timeout 15000ms exceeded while waiting on the predicate
+
+      27 |     await expect
+      28 |       .poll(() => view.repliesByAuthor(root.id))
+    > 29 |       .toEqual(['Ada Owner: an answer']);
+         |        ^
+      30 |     await expect
+      31 |       .poll(() => view.topLevel())
+      32 |       .toEqual(['a question', 'something later']);
+        at /home/teo/.herdr/worktrees/macro/synoet-channels-e2e-base/apps/web/tests/channels-e2e/threads.spec.ts:29:8
+
+    attachment #1: screenshot (image/png) ──────────────────────────────────────────────────────────
+    ../../../../../../.cache/channels-e2e/runs/24909-break-live-events-ignored/test-results/threads-THR-01-a-reply-wri-85772-oth-people-and-after-reload/test-failed-1.png
+    ────────────────────────────────────────────────────────────────────────────────────────────────
+
+    attachment #2: screenshot (image/png) ──────────────────────────────────────────────────────────
+    ../../../../../../.cache/channels-e2e/runs/24909-break-live-events-ignored/test-results/threads-THR-01-a-reply-wri-85772-oth-people-and-after-reload/test-failed-2.png
+    ────────────────────────────────────────────────────────────────────────────────────────────────
+
+    Error Context: ../../../../../../.cache/channels-e2e/runs/24909-break-live-events-ignored/test-results/threads-THR-01-a-reply-wri-85772-oth-people-and-after-reload/error-context.md
+
+    attachment #4: trace (application/zip) ─────────────────────────────────────────────────────────
+    ../../../../../../.cache/channels-e2e/runs/24909-break-live-events-ignored/test-results/threads-THR-01-a-reply-wri-85772-oth-people-and-after-reload/trace.zip
+    Usage:
+
+        npx playwright show-trace ../../../../../../.cache/channels-e2e/runs/24909-break-live-events-ignored/test-results/threads-THR-01-a-reply-wri-85772-oth-people-and-after-reload/trace.zip
+
+    ────────────────────────────────────────────────────────────────────────────────────────────────
+
+  39) tests/channels-e2e/threads.spec.ts:48:1 › THR-02 replies from two people to an old message read in one order for both, and leave the channel’s order alone 
+
+    Error: expect(locator).toBeVisible() failed
+
+    Locator: locator('[data-channel-scroll]').locator('[data-message]').filter({ has: locator('[data-message-content]').getByText('ada replies first', { exact: true }) })
+    Expected: visible
+    Timeout: 15000ms
+    Error: element(s) not found
+
+    Call log:
+      - Expect "toBeVisible" with timeout 15000ms
+      - waiting for locator('[data-channel-scroll]').locator('[data-message]').filter({ has: locator('[data-message-content]').getByText('ada replies first', { exact: true }) })
+
+
+      63 |
+      64 |   await mine.reply(root.id, 'ada replies first');
+    > 65 |   await expect(bens.message('ada replies first')).toBeVisible();
+         |                                                   ^
+      66 |   await bens.reply(root.id, 'ben replies second');
+      67 |   await expect(mine.message('ben replies second')).toBeVisible();
+      68 |   await mine.reply(root.id, 'ada replies third');
+        at /home/teo/.herdr/worktrees/macro/synoet-channels-e2e-base/apps/web/tests/channels-e2e/threads.spec.ts:65:51
+
+    attachment #1: screenshot (image/png) ──────────────────────────────────────────────────────────
+    ../../../../../../.cache/channels-e2e/runs/24909-break-live-events-ignored/test-results/threads-THR-02-replies-fro-f300e-e-the-channel’s-order-alone/test-failed-1.png
+    ────────────────────────────────────────────────────────────────────────────────────────────────
+
+    attachment #2: screenshot (image/png) ──────────────────────────────────────────────────────────
+    ../../../../../../.cache/channels-e2e/runs/24909-break-live-events-ignored/test-results/threads-THR-02-replies-fro-f300e-e-the-channel’s-order-alone/test-failed-2.png
+    ────────────────────────────────────────────────────────────────────────────────────────────────
+
+    Error Context: ../../../../../../.cache/channels-e2e/runs/24909-break-live-events-ignored/test-results/threads-THR-02-replies-fro-f300e-e-the-channel’s-order-alone/error-context.md
+
+    attachment #4: trace (application/zip) ─────────────────────────────────────────────────────────
+    ../../../../../../.cache/channels-e2e/runs/24909-break-live-events-ignored/test-results/threads-THR-02-replies-fro-f300e-e-the-channel’s-order-alone/trace.zip
+    Usage:
+
+        npx playwright show-trace ../../../../../../.cache/channels-e2e/runs/24909-break-live-events-ignored/test-results/threads-THR-02-replies-fro-f300e-e-the-channel’s-order-alone/trace.zip
+
+    ────────────────────────────────────────────────────────────────────────────────────────────────
+
+  40) tests/channels-e2e/threads.spec.ts:171:1 › THR-04 editing my reply shows the new text and “(edited)” to the other person without reload 
+
+    Error: expect(received).toEqual(expected) // deep equality
+
+    - Expected  - 1
+    + Received  + 1
+
+      Array [
+        "Ben Member: ben replies",
+    -   "Ada Owner: ada replies well",
+    +   "Ada Owner: ada replies badly",
+      ]
+
+    Call Log:
+    - Timeout 15000ms exceeded while waiting on the predicate
+
+      195 |   const replies = ['Ben Member: ben replies', 'Ada Owner: ada replies well'];
+      196 |   for (const view of [mine, bens]) {
+    > 197 |     await expect.poll(() => view.repliesByAuthor(root.id)).toEqual(replies);
+          |                                                            ^
+      198 |     await expect(
+      199 |       view.messageById(reply.id).getByText('(edited)')
+      200 |     ).toBeVisible();
+        at /home/teo/.herdr/worktrees/macro/synoet-channels-e2e-base/apps/web/tests/channels-e2e/threads.spec.ts:197:60
+
+    attachment #1: screenshot (image/png) ──────────────────────────────────────────────────────────
+    ../../../../../../.cache/channels-e2e/runs/24909-break-live-events-ignored/test-results/threads-THR-04-editing-my--5cf5f-other-person-without-reload/test-failed-2.png
+    ────────────────────────────────────────────────────────────────────────────────────────────────
+
+    attachment #2: screenshot (image/png) ──────────────────────────────────────────────────────────
+    ../../../../../../.cache/channels-e2e/runs/24909-break-live-events-ignored/test-results/threads-THR-04-editing-my--5cf5f-other-person-without-reload/test-failed-1.png
+    ────────────────────────────────────────────────────────────────────────────────────────────────
+
+    Error Context: ../../../../../../.cache/channels-e2e/runs/24909-break-live-events-ignored/test-results/threads-THR-04-editing-my--5cf5f-other-person-without-reload/error-context.md
+
+    attachment #4: trace (application/zip) ─────────────────────────────────────────────────────────
+    ../../../../../../.cache/channels-e2e/runs/24909-break-live-events-ignored/test-results/threads-THR-04-editing-my--5cf5f-other-person-without-reload/trace.zip
+    Usage:
+
+        npx playwright show-trace ../../../../../../.cache/channels-e2e/runs/24909-break-live-events-ignored/test-results/threads-THR-04-editing-my--5cf5f-other-person-without-reload/trace.zip
+
+    ────────────────────────────────────────────────────────────────────────────────────────────────
+
+  41) tests/channels-e2e/threads.spec.ts:216:1 › THR-05 deleting my reply removes it for the other person without reload, and leaves the others 
+
+    Error: expect(received).toEqual(expected) // deep equality
+
+    - Expected  - 0
+    + Received  + 1
+
+      Array [
+        "ben replies",
+    +   "ada regrets this",
+        "ben replies again",
+      ]
+
+    Call Log:
+    - Timeout 15000ms exceeded while waiting on the predicate
+
+      237 |   const replies = ['ben replies', 'ben replies again'];
+      238 |   for (const view of [mine, bens]) {
+    > 239 |     await expect.poll(() => view.replies(root.id)).toEqual(replies);
+          |                                                    ^
+      240 |     await expect.poll(() => view.topLevel()).toEqual(['thread start']);
+      241 |   }
+      242 |
+        at /home/teo/.herdr/worktrees/macro/synoet-channels-e2e-base/apps/web/tests/channels-e2e/threads.spec.ts:239:52
+
+    attachment #1: screenshot (image/png) ──────────────────────────────────────────────────────────
+    ../../../../../../.cache/channels-e2e/runs/24909-break-live-events-ignored/test-results/threads-THR-05-deleting-my-aa5b5-eload-and-leaves-the-others/test-failed-1.png
+    ────────────────────────────────────────────────────────────────────────────────────────────────
+
+    attachment #2: screenshot (image/png) ──────────────────────────────────────────────────────────
+    ../../../../../../.cache/channels-e2e/runs/24909-break-live-events-ignored/test-results/threads-THR-05-deleting-my-aa5b5-eload-and-leaves-the-others/test-failed-2.png
+    ────────────────────────────────────────────────────────────────────────────────────────────────
+
+    Error Context: ../../../../../../.cache/channels-e2e/runs/24909-break-live-events-ignored/test-results/threads-THR-05-deleting-my-aa5b5-eload-and-leaves-the-others/error-context.md
+
+    attachment #4: trace (application/zip) ─────────────────────────────────────────────────────────
+    ../../../../../../.cache/channels-e2e/runs/24909-break-live-events-ignored/test-results/threads-THR-05-deleting-my-aa5b5-eload-and-leaves-the-others/trace.zip
+    Usage:
+
+        npx playwright show-trace ../../../../../../.cache/channels-e2e/runs/24909-break-live-events-ignored/test-results/threads-THR-05-deleting-my-aa5b5-eload-and-leaves-the-others/trace.zip
+
+    ────────────────────────────────────────────────────────────────────────────────────────────────
+
+  42) tests/channels-e2e/threads.spec.ts:253:1 › THR-06 a reaction to a reply shows on that reply for both people, and counts 2 when both react 
+
+    Error: expect(received).toEqual(expected) // deep equality
+
+    - Expected  - 3
+    + Received  + 1
+
+    - Array [
+    -   "❤️",
+    - ]
+    + Array []
+
+    Call Log:
+    - Timeout 15000ms exceeded while waiting on the predicate
+
+      273 |     await expect
+      274 |       .poll(() => view.reactions(view.messageById(reply.id)))
+    > 275 |       .toEqual(['❤️']);
+          |        ^
+      276 |     // The only reaction in the channel is the one on that reply.
+      277 |     await expect(view.list.locator('[data-message-reaction-chip]')).toHaveCount(
+      278 |       1
+        at /home/teo/.herdr/worktrees/macro/synoet-channels-e2e-base/apps/web/tests/channels-e2e/threads.spec.ts:275:8
+
+    attachment #1: screenshot (image/png) ──────────────────────────────────────────────────────────
+    ../../../../../../.cache/channels-e2e/runs/24909-break-live-events-ignored/test-results/threads-THR-06-a-reaction--1a1ce-nd-counts-2-when-both-react/test-failed-1.png
+    ────────────────────────────────────────────────────────────────────────────────────────────────
+
+    attachment #2: screenshot (image/png) ──────────────────────────────────────────────────────────
+    ../../../../../../.cache/channels-e2e/runs/24909-break-live-events-ignored/test-results/threads-THR-06-a-reaction--1a1ce-nd-counts-2-when-both-react/test-failed-2.png
+    ────────────────────────────────────────────────────────────────────────────────────────────────
+
+    Error Context: ../../../../../../.cache/channels-e2e/runs/24909-break-live-events-ignored/test-results/threads-THR-06-a-reaction--1a1ce-nd-counts-2-when-both-react/error-context.md
+
+    attachment #4: trace (application/zip) ─────────────────────────────────────────────────────────
+    ../../../../../../.cache/channels-e2e/runs/24909-break-live-events-ignored/test-results/threads-THR-06-a-reaction--1a1ce-nd-counts-2-when-both-react/trace.zip
+    Usage:
+
+        npx playwright show-trace ../../../../../../.cache/channels-e2e/runs/24909-break-live-events-ignored/test-results/threads-THR-06-a-reaction--1a1ce-nd-counts-2-when-both-react/trace.zip
+
+    ────────────────────────────────────────────────────────────────────────────────────────────────
+
+  43) tests/channels-e2e/threads.spec.ts:302:1 › THR-07 a reply from someone else arrives at the end of an open thread without reload 
+
+    Error: expect(received).toEqual(expected) // deep equality
+
+    - Expected  - 1
+    + Received  + 0
+
+    @@ -2,7 +2,6 @@
+        "Ben Member: one",
+        "Ben Member: two",
+        "Ben Member: three",
+        "Ben Member: four",
+        "Ben Member: five",
+    -   "Ben Member: six, live",
+      ]
+
+    Call Log:
+    - Timeout 15000ms exceeded while waiting on the predicate
+
+      323 |   await expect
+      324 |     .poll(() => view.repliesByAuthor(root.id))
+    > 325 |     .toEqual([
+          |      ^
+      326 |       'Ben Member: one',
+      327 |       'Ben Member: two',
+      328 |       'Ben Member: three',
+        at /home/teo/.herdr/worktrees/macro/synoet-channels-e2e-base/apps/web/tests/channels-e2e/threads.spec.ts:325:6
+
+    attachment #1: screenshot (image/png) ──────────────────────────────────────────────────────────
+    ../../../../../../.cache/channels-e2e/runs/24909-break-live-events-ignored/test-results/threads-THR-07-a-reply-fro-40eaa--open-thread-without-reload/test-failed-1.png
+    ────────────────────────────────────────────────────────────────────────────────────────────────
+
+    Error Context: ../../../../../../.cache/channels-e2e/runs/24909-break-live-events-ignored/test-results/threads-THR-07-a-reply-fro-40eaa--open-thread-without-reload/error-context.md
+
+    attachment #3: trace (application/zip) ─────────────────────────────────────────────────────────
+    ../../../../../../.cache/channels-e2e/runs/24909-break-live-events-ignored/test-results/threads-THR-07-a-reply-fro-40eaa--open-thread-without-reload/trace.zip
+    Usage:
+
+        npx playwright show-trace ../../../../../../.cache/channels-e2e/runs/24909-break-live-events-ignored/test-results/threads-THR-07-a-reply-fro-40eaa--open-thread-without-reload/trace.zip
+
+    ────────────────────────────────────────────────────────────────────────────────────────────────
+
+  44) tests/channels-e2e/threads.spec.ts:341:1 › THR-08 a reply from someone else to a closed thread raises its count without reload, and is there when opened 
+
+    Error: expect(locator).toContainText(expected) failed
+
+    Locator: locator('[data-channel-scroll]').locator('[data-channel-thread-row]').filter({ has: locator('[data-message-id="01a1de8b-6eaa-78d2-a804-bb8d22d0e06a"]') }).getByTitle('Expand thread')
+    Expected substring: "3 more replies"
+    Received string:    "BM2 more repliesUnreadLast reply Today"
+    Timeout: 15000ms
+
+    Call log:
+      - Expect "toContainText" with timeout 15000ms
+      - waiting for locator('[data-channel-scroll]').locator('[data-channel-thread-row]').filter({ has: locator('[data-message-id="01a1de8b-6eaa-78d2-a804-bb8d22d0e06a"]') }).getByTitle('Expand thread')
+        33 × locator resolved to <button type="button" title="Expand thread" class="flex items-center gap-2 text-xs w-fit h-8 touch:min-h-(--user-icon-width) border hover:bg-hover py-1 pr-2 pl-1.5 mb-2 select-none outline-none focus-visible:bg-active rounded-full border-accent/40">…</button>
+           - unexpected value "BM2 more repliesUnreadLast reply Today"
+
+
+      357 |   await ben.post(channel.id, 'six, live', { threadId: root.id });
+      358 |
+    > 359 |   await expect(view.hiddenReplies(root.id)).toContainText('3 more replies');
+          |                                             ^
+      360 |   await expect
+      361 |     .poll(() => view.replies(root.id))
+      362 |     .toEqual(['one', 'two', 'three']);
+        at /home/teo/.herdr/worktrees/macro/synoet-channels-e2e-base/apps/web/tests/channels-e2e/threads.spec.ts:359:45
+
+    attachment #1: screenshot (image/png) ──────────────────────────────────────────────────────────
+    ../../../../../../.cache/channels-e2e/runs/24909-break-live-events-ignored/test-results/threads-THR-08-a-reply-fro-5fd48-ad-and-is-there-when-opened/test-failed-1.png
+    ────────────────────────────────────────────────────────────────────────────────────────────────
+
+    Error Context: ../../../../../../.cache/channels-e2e/runs/24909-break-live-events-ignored/test-results/threads-THR-08-a-reply-fro-5fd48-ad-and-is-there-when-opened/error-context.md
+
+    attachment #3: trace (application/zip) ─────────────────────────────────────────────────────────
+    ../../../../../../.cache/channels-e2e/runs/24909-break-live-events-ignored/test-results/threads-THR-08-a-reply-fro-5fd48-ad-and-is-there-when-opened/trace.zip
+    Usage:
+
+        npx playwright show-trace ../../../../../../.cache/channels-e2e/runs/24909-break-live-events-ignored/test-results/threads-THR-08-a-reply-fro-5fd48-ad-and-is-there-when-opened/trace.zip
+
+    ────────────────────────────────────────────────────────────────────────────────────────────────
+
+  45) tests/channels-e2e/threads.spec.ts:380:1 › THR-09 with replies being written to two messages, each goes to the thread it was written in 
+
+    Error: expect(received).toEqual(expected) // deep equality
+
+    - Expected  - 1
+    + Received  + 0
+
+      Array [
+        "already said",
+    -   "about the second",
+      ]
+
+    Call Log:
+    - Timeout 15000ms exceeded while waiting on the predicate
+
+      410 |     await expect
+      411 |       .poll(() => view.replies(second.id))
+    > 412 |       .toEqual(['already said', 'about the second']);
+          |        ^
+      413 |     await expect.poll(() => view.replies(first.id)).toEqual([]);
+      414 |   }
+      415 |
+        at /home/teo/.herdr/worktrees/macro/synoet-channels-e2e-base/apps/web/tests/channels-e2e/threads.spec.ts:412:8
+
+    attachment #1: screenshot (image/png) ──────────────────────────────────────────────────────────
+    ../../../../../../.cache/channels-e2e/runs/24909-break-live-events-ignored/test-results/threads-THR-09-with-replie-e9b56-he-thread-it-was-written-in/test-failed-1.png
+    ────────────────────────────────────────────────────────────────────────────────────────────────
+
+    attachment #2: screenshot (image/png) ──────────────────────────────────────────────────────────
+    ../../../../../../.cache/channels-e2e/runs/24909-break-live-events-ignored/test-results/threads-THR-09-with-replie-e9b56-he-thread-it-was-written-in/test-failed-2.png
+    ────────────────────────────────────────────────────────────────────────────────────────────────
+
+    Error Context: ../../../../../../.cache/channels-e2e/runs/24909-break-live-events-ignored/test-results/threads-THR-09-with-replie-e9b56-he-thread-it-was-written-in/error-context.md
+
+    attachment #4: trace (application/zip) ─────────────────────────────────────────────────────────
+    ../../../../../../.cache/channels-e2e/runs/24909-break-live-events-ignored/test-results/threads-THR-09-with-replie-e9b56-he-thread-it-was-written-in/trace.zip
+    Usage:
+
+        npx playwright show-trace ../../../../../../.cache/channels-e2e/runs/24909-break-live-events-ignored/test-results/threads-THR-09-with-replie-e9b56-he-thread-it-was-written-in/trace.zip
+
+    ────────────────────────────────────────────────────────────────────────────────────────────────
+
+  46) tests/channels-e2e/two-tabs.spec.ts:6:1 › TAB-01 a message sent in one window shows once in the same person’s other window 
+
+    Error: the last messages in the list
+
+    the last messages in the list
+
+    expect(received).toEqual(expected) // deep equality
+
+    - Expected  - 1
+    + Received  + 0
+
+      Array [
+        "before",
+    -   "from the first window",
+      ]
+
+    Call Log:
+    - Timeout 15000ms exceeded while waiting on the predicate
+
+       at harness/channel.ts:186
+
+      184 |         message: 'the last messages in the list',
+      185 |       })
+    > 186 |       .toEqual(expected);
+          |        ^
+      187 |   }
+      188 |
+      189 |   /** How far the list is from showing its very end, in pixels. */
+        at ChannelView.expectEndsWith (/home/teo/.herdr/worktrees/macro/synoet-channels-e2e-base/apps/web/tests/channels-e2e/harness/channel.ts:186:8)
+        at /home/teo/.herdr/worktrees/macro/synoet-channels-e2e-base/apps/web/tests/channels-e2e/two-tabs.spec.ts:23:16
+
+    attachment #1: screenshot (image/png) ──────────────────────────────────────────────────────────
+    ../../../../../../.cache/channels-e2e/runs/24909-break-live-events-ignored/test-results/two-tabs-TAB-01-a-message--a022c--same-person’s-other-window/test-failed-1.png
+    ────────────────────────────────────────────────────────────────────────────────────────────────
+
+    attachment #2: screenshot (image/png) ──────────────────────────────────────────────────────────
+    ../../../../../../.cache/channels-e2e/runs/24909-break-live-events-ignored/test-results/two-tabs-TAB-01-a-message--a022c--same-person’s-other-window/test-failed-2.png
+    ────────────────────────────────────────────────────────────────────────────────────────────────
+
+    Error Context: ../../../../../../.cache/channels-e2e/runs/24909-break-live-events-ignored/test-results/two-tabs-TAB-01-a-message--a022c--same-person’s-other-window/error-context.md
+
+    attachment #4: trace (application/zip) ─────────────────────────────────────────────────────────
+    ../../../../../../.cache/channels-e2e/runs/24909-break-live-events-ignored/test-results/two-tabs-TAB-01-a-message--a022c--same-person’s-other-window/trace.zip
+    Usage:
+
+        npx playwright show-trace ../../../../../../.cache/channels-e2e/runs/24909-break-live-events-ignored/test-results/two-tabs-TAB-01-a-message--a022c--same-person’s-other-window/trace.zip
+
+    ────────────────────────────────────────────────────────────────────────────────────────────────
+
+  47) tests/channels-e2e/two-tabs.spec.ts:29:1 › TAB-02 an edit, a reaction and a deletion made in one window show in the other 
+
+    Error: expect(locator).toHaveCount(expected) failed
+
+    Locator:  locator('[data-channel-scroll]').locator('[data-message-id="01a1de8b-b755-7c36-84b8-bcda8f56dad1"]')
+    Expected: 0
+    Received: 1
+    Timeout:  15000ms
+
+    Call log:
+      - Expect "toHaveCount" with timeout 15000ms
+      - waiting for locator('[data-channel-scroll]').locator('[data-message-id="01a1de8b-b755-7c36-84b8-bcda8f56dad1"]')
+        33 × locator resolved to 1 element
+           - unexpected value "1"
+
+
+      62 |     .click();
+      63 |
+    > 64 |   await expect(second.messageById(removed.id)).toHaveCount(0);
+         |                                                ^
+      65 |   await expect(second.messageById(edited.id)).toContainText('now edited');
+      66 |   await expect(
+      67 |     second
+        at /home/teo/.herdr/worktrees/macro/synoet-channels-e2e-base/apps/web/tests/channels-e2e/two-tabs.spec.ts:64:48
+
+    attachment #1: screenshot (image/png) ──────────────────────────────────────────────────────────
+    ../../../../../../.cache/channels-e2e/runs/24909-break-live-events-ignored/test-results/two-tabs-TAB-02-an-edit-a--cd4de-ne-window-show-in-the-other/test-failed-1.png
+    ────────────────────────────────────────────────────────────────────────────────────────────────
+
+    attachment #2: screenshot (image/png) ──────────────────────────────────────────────────────────
+    ../../../../../../.cache/channels-e2e/runs/24909-break-live-events-ignored/test-results/two-tabs-TAB-02-an-edit-a--cd4de-ne-window-show-in-the-other/test-failed-2.png
+    ────────────────────────────────────────────────────────────────────────────────────────────────
+
+    Error Context: ../../../../../../.cache/channels-e2e/runs/24909-break-live-events-ignored/test-results/two-tabs-TAB-02-an-edit-a--cd4de-ne-window-show-in-the-other/error-context.md
+
+    attachment #4: trace (application/zip) ─────────────────────────────────────────────────────────
+    ../../../../../../.cache/channels-e2e/runs/24909-break-live-events-ignored/test-results/two-tabs-TAB-02-an-edit-a--cd4de-ne-window-show-in-the-other/trace.zip
+    Usage:
+
+        npx playwright show-trace ../../../../../../.cache/channels-e2e/runs/24909-break-live-events-ignored/test-results/two-tabs-TAB-02-an-edit-a--cd4de-ne-window-show-in-the-other/trace.zip
+
+    ────────────────────────────────────────────────────────────────────────────────────────────────
+
+  48) tests/channels-e2e/unread.spec.ts:272:1 › UNR-07 a member who never opened a channel sees it unread, and opening it shows every message and clears the mark 
+
+    Error: the last messages in the list
+
+    the last messages in the list
+
+    expect(received).toEqual(expected) // deep equality
+
+    - Expected  - 1
+    + Received  + 1
+
+      Array [
+    +   "second, from ben",
+        "third, from ada",
+    -   "fourth, live",
+      ]
+
+    Call Log:
+    - Timeout 15000ms exceeded while waiting on the predicate
+
+       at harness/channel.ts:186
+
+      184 |         message: 'the last messages in the list',
+      185 |       })
+    > 186 |       .toEqual(expected);
+          |        ^
+      187 |   }
+      188 |
+      189 |   /** How far the list is from showing its very end, in pixels. */
+        at ChannelView.expectEndsWith (/home/teo/.herdr/worktrees/macro/synoet-channels-e2e-base/apps/web/tests/channels-e2e/harness/channel.ts:186:8)
+        at /home/teo/.herdr/worktrees/macro/synoet-channels-e2e-base/apps/web/tests/channels-e2e/unread.spec.ts:305:14
+
+    attachment #1: screenshot (image/png) ──────────────────────────────────────────────────────────
+    ../../../../../../.cache/channels-e2e/runs/24909-break-live-events-ignored/test-results/unread-UNR-07-a-member-who-10306-message-and-clears-the-mark/test-failed-1.png
+    ────────────────────────────────────────────────────────────────────────────────────────────────
+
+    Error Context: ../../../../../../.cache/channels-e2e/runs/24909-break-live-events-ignored/test-results/unread-UNR-07-a-member-who-10306-message-and-clears-the-mark/error-context.md
+
+    attachment #3: trace (application/zip) ─────────────────────────────────────────────────────────
+    ../../../../../../.cache/channels-e2e/runs/24909-break-live-events-ignored/test-results/unread-UNR-07-a-member-who-10306-message-and-clears-the-mark/trace.zip
+    Usage:
+
+        npx playwright show-trace ../../../../../../.cache/channels-e2e/runs/24909-break-live-events-ignored/test-results/unread-UNR-07-a-member-who-10306-message-and-clears-the-mark/trace.zip
+
+    ────────────────────────────────────────────────────────────────────────────────────────────────
+
+  48 failed
+    tests/channels-e2e/access.spec.ts:61:1 › ACC-03 a request to join reaches the owner at once, and approving it lets the person in at once 
+    tests/channels-e2e/channels.spec.ts:53:1 › CHN-02 a team channel made in the app appears for a teammate under the team’s channels and can be read 
+    tests/channels-e2e/composer.spec.ts:67:1 › CMP-03 sending a message clears its draft, and a reload does not bring it back 
+    tests/channels-e2e/composer.spec.ts:93:1 › CMP-13 a message shown as sent is still sent when the page is reloaded at once 
+    tests/channels-e2e/composer.spec.ts:148:1 › CMP-05 a person picked from the @ menu is named in the message for both people, live 
+    tests/channels-e2e/composer.spec.ts:178:1 › CMP-06 @here picked from the @ menu is sent as a mention of everyone here 
+    tests/channels-e2e/composer.spec.ts:208:1 › CMP-07 a text file and a picture attached to a message show before sending, for both people, and under Attachments 
+    tests/channels-e2e/composer.spec.ts:265:1 › CMP-08 a file can be sent on its own, with no text ─
+    tests/channels-e2e/composer.spec.ts:303:1 › CMP-09 while the other person types in their composer I see “… is typing”, until they send 
+    tests/channels-e2e/composer.spec.ts:329:1 › CMP-10 typing reported from the other person’s other device shows “… is typing”, and goes when they stop 
+    tests/channels-e2e/composer.spec.ts:349:1 › CMP-11 text pasted into the composer is sent as it was copied 
+    tests/channels-e2e/composer.spec.ts:372:1 › CMP-12 a message of 2,499 characters is sent whole ─
+    tests/channels-e2e/direct-messages.spec.ts:22:1 › DM-01 a direct message I start reaches the other person at once under “Direct messages”, and they can answer 
+    tests/channels-e2e/members.spec.ts:18:1 › MEM-01 a person invited from the app gets the channel at once, with what was said before and after 
+    tests/channels-e2e/members.spec.ts:139:1 › MEM-04 a removed person never sees what is said after, and after a reload cannot open the channel 
+    tests/channels-e2e/members.spec.ts:178:1 › MEM-05 people added and removed while the channel is open show as lines between the right messages 
+    tests/channels-e2e/messages.spec.ts:7:1 › MSG-01 a message sent with Enter shows once at the end for both people, and stays after reload 
+    tests/channels-e2e/messages.spec.ts:37:1 › MSG-02 a message sent with the send button shows once at the end for both people, and stays after reload 
+    tests/channels-e2e/messages.spec.ts:71:1 › MSG-03 a quick back-and-forth between two people reads in the same order for both, each message once 
+    tests/channels-e2e/messages.spec.ts:116:1 › MSG-04 a message written on several lines with Shift+Enter keeps its lines 
+    tests/channels-e2e/messages.spec.ts:152:1 › MSG-05 formatting, a link, emoji and other scripts read the same for both people and after reload 
+    tests/channels-e2e/messages.spec.ts:198:1 › MSG-06 messages in a row from one person and from alternating people each show under their author 
+    tests/channels-e2e/messages.spec.ts:254:1 › MSG-07 editing my message from its buttons shows the new text and “(edited)” to both people, and after reload 
+    tests/channels-e2e/messages.spec.ts:298:1 › MSG-08 pressing E on my selected message edits it, and the other person sees the edit 
+    tests/channels-e2e/messages.spec.ts:331:1 › MSG-09 cancelling an edit, with Escape or “Discard Edit”, leaves the message as it was 
+    tests/channels-e2e/messages.spec.ts:376:1 › MSG-10 deleting my message, once confirmed, removes it for both people and after reload 
+    tests/channels-e2e/messages.spec.ts:418:1 › MSG-11 a deleted message that has replies reads “This message was deleted.” and keeps its replies 
+    tests/channels-e2e/messages.spec.ts:491:1 › MSG-13 a quick reaction shows for both people, counts 2 when the other adds the same, and goes when removed 
+    tests/channels-e2e/messages.spec.ts:548:1 › MSG-14 a reaction chosen in the emoji picker shows for both people and after reload 
+    tests/channels-e2e/messages.spec.ts:582:1 › MSG-15 another person’s edit, reactions and deletion show on an open channel without reload 
+    tests/channels-e2e/messages.spec.ts:623:1 › MSG-16 a message sent to another channel does not appear in the open one 
+    tests/channels-e2e/messages.spec.ts:677:1 › MSG-18 messages two people send at the same moment end in one order for both, each once 
+    tests/channels-e2e/reconnect.spec.ts:6:1 › REC-01 after the connection comes back, messages sent meanwhile appear in order without a reload 
+    tests/channels-e2e/reconnect.spec.ts:36:1 › REC-02 a message sent with no connection is neither lost nor sent twice 
+    tests/channels-e2e/reconnect.spec.ts:81:1 › REC-03 a message that arrives while the page is hidden is there when the person comes back 
+    tests/channels-e2e/scroll.spec.ts:55:1 › SCROLL-03 at the end of the channel, a message from someone else arrives in view 
+    tests/channels-e2e/scroll.spec.ts:78:1 › SCROLL-04 scrolled up, a message from someone else does not move what is being read 
+    tests/channels-e2e/threads.spec.ts:6:1 › THR-01 a reply written from “Reply” shows under its message for both people, and after reload 
+    tests/channels-e2e/threads.spec.ts:48:1 › THR-02 replies from two people to an old message read in one order for both, and leave the channel’s order alone 
+    tests/channels-e2e/threads.spec.ts:171:1 › THR-04 editing my reply shows the new text and “(edited)” to the other person without reload 
+    tests/channels-e2e/threads.spec.ts:216:1 › THR-05 deleting my reply removes it for the other person without reload, and leaves the others 
+    tests/channels-e2e/threads.spec.ts:253:1 › THR-06 a reaction to a reply shows on that reply for both people, and counts 2 when both react 
+    tests/channels-e2e/threads.spec.ts:302:1 › THR-07 a reply from someone else arrives at the end of an open thread without reload 
+    tests/channels-e2e/threads.spec.ts:341:1 › THR-08 a reply from someone else to a closed thread raises its count without reload, and is there when opened 
+    tests/channels-e2e/threads.spec.ts:380:1 › THR-09 with replies being written to two messages, each goes to the thread it was written in 
+    tests/channels-e2e/two-tabs.spec.ts:6:1 › TAB-01 a message sent in one window shows once in the same person’s other window 
+    tests/channels-e2e/two-tabs.spec.ts:29:1 › TAB-02 an edit, a reaction and a deletion made in one window show in the other 
+    tests/channels-e2e/unread.spec.ts:272:1 › UNR-07 a member who never opened a channel sees it unread, and opening it shows every message and clears the mark 
+  71 passed (6.0m)
+2026/11/15 09:31:29 socat[211711] W exiting on signal 15
+2026/11/15 09:31:29 socat[211215] W exiting on signal 15

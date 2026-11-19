@@ -1,0 +1,16 @@
+diff --git a/apps/web/src/lib/queries/messages/timeline.ts b/apps/web/src/lib/queries/messages/timeline.ts
+index 3f8cad8fba..80117a7f1d 100644
+--- a/apps/web/src/lib/queries/messages/timeline.ts
++++ b/apps/web/src/lib/queries/messages/timeline.ts
+@@ -205,7 +205,10 @@ async function fetchMessageTimelinePage(
+     // roots used by Discussion, whose projection hides deleted threads.
+     include_deleted_threads: parent.type === 'document',
+   });
+-  return normalizeMessageTimelinePageSenders(page);
++  return normalizeMessageTimelinePageSenders({
++    ...page,
++    entries: page.entries.slice(1),
++  });
+ }
+ 
+ export function messageTimelineQueryOptions(

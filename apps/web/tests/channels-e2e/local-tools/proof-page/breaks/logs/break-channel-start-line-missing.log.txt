@@ -1,0 +1,226 @@
+path "/home/teo/.herdr/worktrees/macro/synoet-channels-e2e-base/apps/web" does not contain a 'flake.nix', searching up
+warning: Git tree '/home/teo/.herdr/worktrees/macro/synoet-channels-e2e-base' is dirty
+
+Running 44 tests using 4 workers
+
+2026/11/15 08:15:44 socat[1625336] E write(6, 0x5ead284b8000, 24): Broken pipe
+2026/11/15 08:15:44 socat[1625853] E write(6, 0x5ead284b8000, 24): Broken pipe
+  ✓   1 tests/channels-e2e/access.spec.ts:39:1 › ACC-02 a person outside the team who opens a private channel’s address sees no messages (1.8s)
+2026/11/15 08:15:45 socat[1626337] E write(6, 0x5ead284b8000, 24): Broken pipe
+  ✓   3 tests/channels-e2e/access.spec.ts:13:1 › ACC-01 a teammate who is not in a private channel sees no messages and is offered to ask to join (2.1s)
+2026/11/15 08:15:55 socat[1632285] E write(6, 0x5ead284b8000, 24): Broken pipe
+2026/11/15 08:15:55 socat[1629360] E write(6, 0x5ead284b8000, 24): Broken pipe
+  ✓   5 tests/channels-e2e/access.spec.ts:139:1 › ACC-05 a withdrawn request can no longer be approved (10.6s)
+2026/11/15 08:15:55 socat[1628750] E write(6, 0x5ead284b8000, 24): Broken pipe
+2026/11/15 08:15:55 socat[1627368] E write(6, 0x5ead284b8000, 24): Broken pipe
+2026/11/15 08:15:55 socat[1628762] E write(6, 0x5ead284b8000, 24): Broken pipe
+2026/11/15 08:15:57 socat[1626338] E write(6, 0x5ead284b8000, 24): Broken pipe
+  ✓   4 tests/channels-e2e/access.spec.ts:104:1 › ACC-04 a denied request tells the person so and shows them nothing of the channel (14.3s)
+2026/11/15 08:15:58 socat[1629298] E write(6, 0x5ead284b8000, 24): Broken pipe
+2026/11/15 08:15:58 socat[1626335] E write(6, 0x5ead284b8000, 24): Broken pipe
+  ✓   2 tests/channels-e2e/access.spec.ts:61:1 › ACC-03 a request to join reaches the owner at once, and approving it lets the person in at once (15.1s)
+2026/11/15 08:15:58 socat[1646570] E write(6, 0x5ead284b8000, 24): Broken pipe
+  ✓   7 tests/channels-e2e/access.spec.ts:207:1 › ACC-07 a person outside the team cannot read a team channel or find it to join (2.9s)
+2026/11/15 08:15:59 socat[1629042] E write(6, 0x5ead284b8000, 24): Broken pipe
+  ✓   6 tests/channels-e2e/access.spec.ts:168:1 › ACC-06 a teammate finds a team channel they are not in by its name and joins it (14.6s)
+  ✓   9 tests/channels-e2e/access.spec.ts:259:1 › ACC-09 a signed-out person who opens a channel’s address is asked to log in and sees nothing of it (1.9s)
+2026/11/15 08:16:01 socat[1651450] E write(6, 0x5ead284b8000, 24): Broken pipe
+  ✓   8 tests/channels-e2e/access.spec.ts:243:1 › ACC-08 the address of a channel that does not exist says the conversation is unavailable (4.3s)
+2026/11/15 08:16:02 socat[1651618] E write(6, 0x5ead284b8000, 24): Broken pipe
+2026/11/15 08:16:04 socat[1659280] E write(6, 0x5ead284b8000, 24): Broken pipe
+2026/11/15 08:16:06 socat[1649584] E write(6, 0x5ead284b8000, 24): Broken pipe
+2026/11/15 08:16:06 socat[1662360] E write(6, 0x5ead284b8000, 24): Broken pipe
+2026/11/15 08:16:06 socat[1662681] E write(6, 0x5ead284b8000, 24): Broken pipe
+  ✓  10 tests/channels-e2e/channels.spec.ts:23:1 › CHN-01 a private channel made in the app opens empty, shows in the list and takes its first message (8.0s)
+2026/11/15 08:16:06 socat[1659648] E write(6, 0x5ead284b8000, 24): Broken pipe
+2026/11/15 08:16:06 socat[1655278] E write(6, 0x5ead284b8000, 24): Broken pipe
+2026/11/15 08:16:06 socat[1588769] W waitpid(-1, {}, WNOHANG): no (more) child has exited
+2026/11/15 08:16:06 socat[1655354] E write(6, 0x5ead284b8000, 24): Broken pipe
+  ✓  12 tests/channels-e2e/channels.spec.ts:105:1 › CHN-03 renaming a channel updates its header and list row, and tells both members in the channel (6.3s)
+2026/11/15 08:16:09 socat[1654608] E write(6, 0x5ead284b8000, 24): Broken pipe
+2026/11/15 08:16:09 socat[1654709] E write(6, 0x5ead284b8000, 24): Broken pipe
+2026/11/15 08:16:09 socat[1659976] E write(6, 0x5ead284b8000, 24): Broken pipe
+  ✓  11 tests/channels-e2e/channels.spec.ts:53:1 › CHN-02 a team channel made in the app appears for a teammate under the team’s channels and can be read (9.3s)
+2026/11/15 08:16:09 socat[1665857] E write(6, 0x5ead284b8000, 24): Broken pipe
+2026/11/15 08:16:13 socat[1669224] E read(6, 0x5ead284b8000, 8192): Connection reset by peer
+2026/11/15 08:16:13 socat[1669225] E write(6, 0x55555561e000, 24): Broken pipe
+2026/11/15 08:16:13 socat[1666109] E write(6, 0x5ead284b8000, 24): Broken pipe
+  ✓  15 tests/channels-e2e/channels.spec.ts:206:1 › CHN-06 Copy Link gives an address that opens the channel for another member (6.9s)
+2026/11/15 08:16:15 socat[1676993] E write(6, 0x5ead284b8000, 24): Broken pipe
+  ✓  14 tests/channels-e2e/channels.spec.ts:176:1 › CHN-05 a channel can be made a favorite and taken out again, and both survive a reload (8.7s)
+2026/11/15 08:16:16 socat[1676910] E write(6, 0x5ead284b8000, 24): Broken pipe
+2026/11/15 08:16:17 socat[1680857] E write(6, 0x5ead284b8000, 24): Broken pipe
+  ✓  18 tests/channels-e2e/channels.spec.ts:299:1 › CHN-09 a member who does not own the channel is not offered Delete (3.0s)
+2026/11/15 08:16:19 socat[1672180] E write(6, 0x5ead284b8000, 24): Broken pipe
+2026/11/15 08:16:19 socat[1672220] E write(6, 0x5ead284b8000, 24): Broken pipe
+  ✓  19 tests/channels-e2e/channels.spec.ts:317:1 › CHN-10 the Participants tab lists the channel’s members by name, with the owner marked (2.4s)
+2026/11/15 08:16:20 socat[1685436] E write(6, 0x5ead284b8000, 24): Broken pipe
+2026/11/15 08:16:21 socat[1681156] E write(6, 0x5ead284b8000, 24): Broken pipe
+2026/11/15 08:16:21 socat[1681257] E write(6, 0x5ead284b8000, 24): Broken pipe
+2026/11/15 08:16:22 socat[1685702] E write(6, 0x5ead284b8000, 24): Broken pipe
+  ✓  16 tests/channels-e2e/channels.spec.ts:230:1 › CHN-07 deleting a channel removes it for its owner at once, and its address no longer opens for anyone (13.1s)
+2026/11/15 08:16:22 socat[1658376] E write(6, 0x5ead284b8000, 24): Broken pipe
+2026/11/15 08:16:22 socat[1664078] E write(6, 0x5ead284b8000, 24): Broken pipe
+  ✘  13 tests/channels-e2e/channels.spec.ts:143:1 › CHN-04 a rename shows in the header of a member who has the channel open (20.9s)
+2026/11/15 08:16:22 socat[1688481] E write(6, 0x5ead284b8000, 24): Broken pipe
+  ✓  20 tests/channels-e2e/channels.spec.ts:340:1 › CHN-11 the Attachments tab of a channel with no files says there are none (2.3s)
+2026/11/15 08:16:27 socat[1694736] E write(6, 0x5ead284b8000, 24): Broken pipe
+2026/11/15 08:16:27 socat[1694984] E write(6, 0x5ead284b8000, 24): Broken pipe
+  ✓  21 tests/channels-e2e/channels.spec.ts:362:1 › CHN-12 going to another tab and back keeps the message list where it was (4.9s)
+2026/11/15 08:16:32 socat[1678011] E write(6, 0x5ead284b8000, 24): Broken pipe
+  ✘  17 tests/channels-e2e/channels.spec.ts:273:1 › CHN-08 a deleted channel leaves its owner’s Favorites too (18.8s)
+2026/11/15 08:16:35 socat[1714692] E write(6, 0x5ead284b8000, 24): Broken pipe
+  ✓  25 tests/channels-e2e/find-and-keys.spec.ts:26:1 › KEY-01 find counts the messages that match and steps through them, newest first (3.8s)
+2026/11/15 08:16:39 socat[1721918] E write(6, 0x5ead284b8000, 24): Broken pipe
+2026/11/15 08:16:39 socat[1722183] E write(6, 0x5ead284b8000, 24): Broken pipe
+  ✓  26 tests/channels-e2e/find-and-keys.spec.ts:75:1 › KEY-02 find brings an old message far up a long history into view (3.6s)
+2026/11/15 08:16:39 socat[1696016] E write(6, 0x5ead284b8000, 24): Broken pipe
+2026/11/15 08:16:39 socat[1696436] E write(6, 0x5ead284b8000, 24): Broken pipe
+  ✘  23 tests/channels-e2e/channels.spec.ts:410:1 › CHN-14 a brand-new channel with no messages shows its “Channel <name> created” line (17.2s)
+2026/11/15 08:16:40 socat[1697041] E write(6, 0x5ead284b8000, 24): Broken pipe
+2026/11/15 08:16:40 socat[1697930] E write(6, 0x5ead284b8000, 24): Broken pipe
+  ✘  22 tests/channels-e2e/channels.spec.ts:390:1 › CHN-13 a channel’s history starts with “Channel <name> created” (17.7s)
+  ✓  27 tests/channels-e2e/find-and-keys.spec.ts:95:1 › KEY-03 find for words nobody wrote says there are no matches (2.6s)
+2026/11/15 08:16:42 socat[1727734] E write(6, 0x5ead284b8000, 24): Broken pipe
+2026/11/15 08:16:42 socat[1728695] E write(6, 0x5ead284b8000, 24): Broken pipe
+  ✓  28 tests/channels-e2e/find-and-keys.spec.ts:119:1 › KEY-04 the find bar closes with its button and with Escape, and the channel still takes a message (3.0s)
+2026/11/15 08:16:44 socat[1588769] W waitpid(-1, {}, WNOHANG): no (more) child has exited
+2026/11/15 08:16:44 socat[1590194] W waitpid(-1, {}, WNOHANG): no (more) child has exited
+2026/11/15 08:16:44 socat[1731363] E write(6, 0x5ead284b8000, 24): Broken pipe
+  ✘  24 tests/channels-e2e/channels.spec.ts:429:1 › CHN-15 a channel deleted elsewhere closes on its owner’s open page (17.2s)
+2026/11/15 08:16:44 socat[1731477] E write(6, 0x5ead284b8000, 24): Broken pipe
+  ✓  29 tests/channels-e2e/find-and-keys.spec.ts:143:1 › KEY-05 the arrow keys walk from the composer up the messages and back down into the composer (3.2s)
+2026/11/15 08:16:47 socat[1588769] W waitpid(-1, {}, WNOHANG): no (more) child has exited
+2026/11/15 08:16:47 socat[1736953] E write(6, 0x5ead284b9000, 24): Broken pipe
+  ✓  32 tests/channels-e2e/find-and-keys.spec.ts:273:1 › KEY-12 Backspace on a person’s own selected message deletes it once confirmed (2.7s)
+2026/11/15 08:16:47 socat[1737033] E write(6, 0x5ead284b9000, 24): Broken pipe
+  ✓  33 tests/channels-e2e/find-and-keys.spec.ts:247:1 › KEY-08 Backspace on a person’s own selected message asks first, and Escape keeps the message (3.0s)
+2026/11/15 08:16:50 socat[1742814] E write(6, 0x5ead284b9000, 24): Broken pipe
+  ✓  34 tests/channels-e2e/find-and-keys.spec.ts:298:1 › KEY-09 Shift+G in the message list goes to the latest message (3.2s)
+2026/11/15 08:16:50 socat[1743101] E write(6, 0x5ead284b9000, 24): Broken pipe
+  ✓  35 tests/channels-e2e/find-and-keys.spec.ts:326:1 › KEY-10 choosing a channel in the list puts the cursor in its composer (3.2s)
+2026/11/15 08:16:52 socat[1590194] W waitpid(-1, {}, WNOHANG): no (more) child has exited
+2026/11/15 08:16:52 socat[1747829] E write(6, 0x5ead284b9000, 24): Broken pipe
+  ✓  36 tests/channels-e2e/find-and-keys.spec.ts:350:1 › KEY-11 Escape steps out of the composer to the messages, then to the list of conversations (2.7s)
+2026/11/15 08:16:57 socat[1757177] E write(6, 0x5ead284b9000, 24): Broken pipe
+2026/11/15 08:16:57 socat[1757415] E write(6, 0x5ead284b9000, 24): Broken pipe
+2026/11/15 08:16:57 socat[1752666] E write(6, 0x5ead284b9000, 24): Broken pipe
+  ✓  38 tests/channels-e2e/members.spec.ts:71:1 › MEM-02 the owner removes a person in the Participants tab and everyone who stays is told (5.0s)
+2026/11/15 08:16:59 socat[1733713] E write(6, 0x5ead284b8000, 24): Broken pipe
+2026/11/15 08:16:59 socat[1734256] E write(6, 0x5ead284b8000, 24): Broken pipe
+  ✘  30 tests/channels-e2e/find-and-keys.spec.ts:177:1 › KEY-06 Enter on a selected message opens a reply to that message (17.6s)
+2026/11/15 08:17:00 socat[1590194] W waitpid(-1, {}, WNOHANG): no (more) child has exited
+2026/11/15 08:17:00 socat[1734991] E write(6, 0x5ead284b8000, 24): Broken pipe
+  ✘  31 tests/channels-e2e/find-and-keys.spec.ts:215:1 › KEY-07 “e” on a person’s own selected message edits it (17.7s)
+2026/11/15 08:17:01 socat[1752653] E write(6, 0x5ead284b9000, 24): Broken pipe
+2026/11/15 08:17:01 socat[1757609] E write(6, 0x5ead284b9000, 24): Broken pipe
+2026/11/15 08:17:01 socat[1757634] E write(6, 0x5ead284b9000, 24): Broken pipe
+2026/11/15 08:17:01 socat[1748551] E write(6, 0x5ead284b9000, 24): Broken pipe
+  ✓  37 tests/channels-e2e/members.spec.ts:18:1 › MEM-01 a person invited from the app gets the channel at once, with what was said before and after (10.6s)
+2026/11/15 08:17:01 socat[1590194] W waitpid(-1, {}, WNOHANG): no (more) child has exited
+2026/11/15 08:17:03 socat[1766517] E write(6, 0x5ead284b9000, 24): Broken pipe
+2026/11/15 08:17:03 socat[1590194] W waitpid(-1, {}, WNOHANG): no (more) child has exited
+2026/11/15 08:17:03 socat[1588769] W waitpid(-1, {}, WNOHANG): no (more) child has exited
+  ✓  42 tests/channels-e2e/members.spec.ts:214:1 › MEM-06 a channel opened afresh shows who was added and removed between the right messages (2.3s)
+2026/11/15 08:17:03 socat[1766740] E write(6, 0x5ead284b9000, 24): Broken pipe
+2026/11/15 08:17:04 socat[1762645] E write(6, 0x5ead284b9000, 24): Broken pipe
+2026/11/15 08:17:04 socat[1762741] E write(6, 0x5ead284b9000, 24): Broken pipe
+2026/11/15 08:17:05 socat[1766732] E write(6, 0x5ead284b9000, 24): Broken pipe
+  ✓  41 tests/channels-e2e/members.spec.ts:178:1 › MEM-05 people added and removed while the channel is open show as lines between the right messages (3.8s)
+2026/11/15 08:17:05 socat[1769144] E write(6, 0x5ead284b9000, 24): Broken pipe
+2026/11/15 08:17:05 socat[1760616] E write(6, 0x5ead284b9000, 24): Broken pipe
+2026/11/15 08:17:05 socat[1769175] E write(6, 0x5ead284b9000, 24): Broken pipe
+2026/11/15 08:17:05 socat[1766407] E write(6, 0x5ead284b9000, 24): Broken pipe
+2026/11/15 08:17:05 socat[1766550] E write(6, 0x5ead284b9000, 24): Broken pipe
+  ✓  40 tests/channels-e2e/members.spec.ts:139:1 › MEM-04 a removed person never sees what is said after, and after a reload cannot open the channel (5.7s)
+2026/11/15 08:17:06 socat[1768977] E write(6, 0x5ead284b9000, 24): Broken pipe
+2026/11/15 08:17:06 socat[1769030] E write(6, 0x5ead284b9000, 24): Broken pipe
+  ✓  43 tests/channels-e2e/members.spec.ts:239:1 › MEM-07 a member who does not own the channel cannot remove its owner (3.0s)
+2026/11/15 08:17:07 socat[1769220] E write(6, 0x5ead284b9000, 24): Broken pipe
+2026/11/15 08:17:07 socat[1771286] E write(6, 0x5ead284b9000, 24): Broken pipe
+  ✓  44 tests/channels-e2e/members.spec.ts:269:1 › MEM-08 a person added while their app was closed finds the channel in the list when they open it (2.0s)
+2026/11/15 08:17:14 socat[1760170] E write(6, 0x5ead284b9000, 24): Broken pipe
+  ✘  39 tests/channels-e2e/members.spec.ts:111:1 › MEM-03 a person removed while the channel is open loses it at once (16.7s)
+
+
+  1) tests/channels-e2e/channels.spec.ts:390:1 › CHN-13 a channel’s history starts with “Channel <name> created” 
+
+    Error: expect(locator).toBeVisible() failed
+
+    Locator: locator('[data-channel-scroll]').getByText('Channel e2e-mwhk90fz8pom created')
+    Expected: visible
+    Timeout: 15000ms
+    Error: element(s) not found
+
+    Call log:
+      - Expect "toBeVisible" with timeout 15000ms
+      - waiting for locator('[data-channel-scroll]').getByText('Channel e2e-mwhk90fz8pom created')
+
+
+      400 |
+      401 |   const start = view.list.getByText(`Channel ${channel.name} created`);
+    > 402 |   await expect(start).toBeVisible();
+          |                       ^
+      403 |   const startBox = await start.boundingBox();
+      404 |   const firstBox = await view.message('the first').boundingBox();
+      405 |   expect(startBox?.y).toBeLessThan(firstBox?.y ?? 0);
+        at /home/teo/.herdr/worktrees/macro/synoet-channels-e2e-base/apps/web/tests/channels-e2e/channels.spec.ts:402:23
+
+    attachment #1: screenshot (image/png) ──────────────────────────────────────────────────────────
+    ../../../../../../.cache/channels-e2e/runs/24909-break-channel-start-line-missing/test-results/channels-CHN-13-a-channel’-5f737-with-“Channel-name-created”/test-failed-1.png
+    ────────────────────────────────────────────────────────────────────────────────────────────────
+
+    Error Context: ../../../../../../.cache/channels-e2e/runs/24909-break-channel-start-line-missing/test-results/channels-CHN-13-a-channel’-5f737-with-“Channel-name-created”/error-context.md
+
+    attachment #3: trace (application/zip) ─────────────────────────────────────────────────────────
+    ../../../../../../.cache/channels-e2e/runs/24909-break-channel-start-line-missing/test-results/channels-CHN-13-a-channel’-5f737-with-“Channel-name-created”/trace.zip
+    Usage:
+
+        npx playwright show-trace ../../../../../../.cache/channels-e2e/runs/24909-break-channel-start-line-missing/test-results/channels-CHN-13-a-channel’-5f737-with-“Channel-name-created”/trace.zip
+
+    ────────────────────────────────────────────────────────────────────────────────────────────────
+
+  2) tests/channels-e2e/find-and-keys.spec.ts:215:1 › KEY-07 “e” on a person’s own selected message edits it 
+
+    Error: expect(locator).toBeFocused() failed
+
+    Locator: locator('[data-input-id="edit-message-input-01a1de47-b177-7667-a36c-f43d7fd22964"] [contenteditable]')
+    Expected: focused
+    Timeout: 15000ms
+    Error: element(s) not found
+
+    Call log:
+      - Expect "toBeFocused" with timeout 15000ms
+      - waiting for locator('[data-input-id="edit-message-input-01a1de47-b177-7667-a36c-f43d7fd22964"] [contenteditable]')
+
+
+      233 |     `[data-input-id="edit-message-input-${mine.id}"] [contenteditable]`
+      234 |   );
+    > 235 |   await expect(editor).toBeFocused();
+          |                        ^
+      236 |   await expect(editor).toHaveText('to be edited');
+      237 |   await page.keyboard.press('ControlOrMeta+a');
+      238 |   await page.keyboard.type('edited by keyboard');
+        at /home/teo/.herdr/worktrees/macro/synoet-channels-e2e-base/apps/web/tests/channels-e2e/find-and-keys.spec.ts:235:24
+
+    attachment #1: screenshot (image/png) ──────────────────────────────────────────────────────────
+    ../../../../../../.cache/channels-e2e/runs/24909-break-channel-start-line-missing/test-results/find-and-keys-KEY-07-“e”-o-f54f1-n-selected-message-edits-it/test-failed-1.png
+    ────────────────────────────────────────────────────────────────────────────────────────────────
+
+    Error Context: ../../../../../../.cache/channels-e2e/runs/24909-break-channel-start-line-missing/test-results/find-and-keys-KEY-07-“e”-o-f54f1-n-selected-message-edits-it/error-context.md
+
+    attachment #3: trace (application/zip) ─────────────────────────────────────────────────────────
+    ../../../../../../.cache/channels-e2e/runs/24909-break-channel-start-line-missing/test-results/find-and-keys-KEY-07-“e”-o-f54f1-n-selected-message-edits-it/trace.zip
+    Usage:
+
+        npx playwright show-trace ../../../../../../.cache/channels-e2e/runs/24909-break-channel-start-line-missing/test-results/find-and-keys-KEY-07-“e”-o-f54f1-n-selected-message-edits-it/trace.zip
+
+    ────────────────────────────────────────────────────────────────────────────────────────────────
+
+  2 failed
+    tests/channels-e2e/channels.spec.ts:390:1 › CHN-13 a channel’s history starts with “Channel <name> created” 
+    tests/channels-e2e/find-and-keys.spec.ts:215:1 › KEY-07 “e” on a person’s own selected message edits it 
+  42 passed (1.8m)
+2026/11/15 08:17:14 socat[1590194] W exiting on signal 15
+2026/11/15 08:17:14 socat[1588769] W waitpid(-1, {}, WNOHANG): no (more) child has exited
+2026/11/15 08:17:14 socat[1588769] W exiting on signal 15

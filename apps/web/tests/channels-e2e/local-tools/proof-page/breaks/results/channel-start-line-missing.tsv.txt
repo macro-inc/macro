@@ -1,0 +1,44 @@
+channel-start-line-missing	ACC-01	PASSED	
+channel-start-line-missing	ACC-02	PASSED	
+channel-start-line-missing	ACC-03	PASSED	
+channel-start-line-missing	ACC-04	PASSED	
+channel-start-line-missing	ACC-05	PASSED	
+channel-start-line-missing	ACC-06	PASSED	
+channel-start-line-missing	ACC-07	PASSED	
+channel-start-line-missing	ACC-08	PASSED	
+channel-start-line-missing	ACC-09	PASSED	
+channel-start-line-missing	CHN-01	PASSED	
+channel-start-line-missing	CHN-02	PASSED	
+channel-start-line-missing	CHN-03	PASSED	
+channel-start-line-missing	CHN-04	PASSED	Error: expect(locator).toContainText(expected) failed | Locator: getByRole('main').locator('[data-view-shell-top-bar]')
+channel-start-line-missing	CHN-05	PASSED	
+channel-start-line-missing	CHN-06	PASSED	
+channel-start-line-missing	CHN-07	PASSED	
+channel-start-line-missing	CHN-08	PASSED	Error: expect(locator).toHaveCount(expected) failed | Locator:  getByRole('tree', { name: 'Conversations' }).locator('[data-key="favorite:channel:01a1de47-3e22-
+channel-start-line-missing	CHN-09	PASSED	
+channel-start-line-missing	CHN-10	PASSED	
+channel-start-line-missing	CHN-11	PASSED	
+channel-start-line-missing	CHN-12	PASSED	
+channel-start-line-missing	CHN-13	FAILED	Error: expect(locator).toBeVisible() failed | Locator: locator('[data-channel-scroll]').getByText('Channel e2e-mwhk90fz8pom created')
+channel-start-line-missing	CHN-14	PASSED	Error: expect(locator).toBeVisible() failed | Locator: getByRole('main').getByText('Channel e2e-mwhk90hnz4ry created')
+channel-start-line-missing	CHN-15	PASSED	Error: expect(locator).toHaveCount(expected) failed | Locator:  locator('[data-input-id="channel-input-01a1de47-744e-742d-8b26-64d6c709a60d"]')
+channel-start-line-missing	KEY-01	PASSED	
+channel-start-line-missing	KEY-02	PASSED	
+channel-start-line-missing	KEY-03	PASSED	
+channel-start-line-missing	KEY-04	PASSED	
+channel-start-line-missing	KEY-05	PASSED	
+channel-start-line-missing	KEY-06	PASSED	Error: expect(locator).toBeFocused() failed | Locator:  locator('[data-input-id="thread-reply-input-01a1de47-aeeb-7c3e-bd2f-b90e1d3d4416"] [contenteditable]')
+channel-start-line-missing	KEY-07	FAILED	Error: expect(locator).toBeFocused() failed | Locator: locator('[data-input-id="edit-message-input-01a1de47-b177-7667-a36c-f43d7fd22964"] [contenteditable]')
+channel-start-line-missing	KEY-08	PASSED	
+channel-start-line-missing	KEY-12	PASSED	
+channel-start-line-missing	KEY-09	PASSED	
+channel-start-line-missing	KEY-10	PASSED	
+channel-start-line-missing	KEY-11	PASSED	
+channel-start-line-missing	MEM-01	PASSED	
+channel-start-line-missing	MEM-02	PASSED	
+channel-start-line-missing	MEM-03	PASSED	Error: expect(locator).toHaveCount(expected) failed | Locator:  locator('[data-input-id="channel-input-01a1de47-ec6b-7060-94a7-d7acd9691fa0"]')
+channel-start-line-missing	MEM-04	PASSED	
+channel-start-line-missing	MEM-05	PASSED	
+channel-start-line-missing	MEM-06	PASSED	
+channel-start-line-missing	MEM-07	PASSED	
+channel-start-line-missing	MEM-08	PASSED	

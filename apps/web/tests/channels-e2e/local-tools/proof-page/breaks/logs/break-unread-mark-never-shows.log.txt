@@ -1,0 +1,345 @@
+path "/home/teo/.herdr/worktrees/macro/synoet-channels-e2e-base/apps/web" does not contain a 'flake.nix', searching up
+warning: Git tree '/home/teo/.herdr/worktrees/macro/synoet-channels-e2e-base' is dirty
+
+Running 29 tests using 4 workers
+
+2026/11/15 08:54:42 socat[1504093] E write(6, 0x580f9b5cd000, 24): Broken pipe
+2026/11/15 08:54:42 socat[1504105] E write(6, 0x580f9b5cd000, 24): Broken pipe
+2026/11/15 08:54:43 socat[1498735] E write(6, 0x580f9b5cd000, 24): Broken pipe
+2026/11/15 08:54:43 socat[1504090] E write(6, 0x580f9b5cd000, 24): Broken pipe
+2026/11/15 08:54:43 socat[1498725] E write(6, 0x580f9b5cd000, 24): Broken pipe
+2026/11/15 08:54:43 socat[1498753] E write(6, 0x580f9b5cd000, 24): Broken pipe
+2026/11/15 08:54:44 socat[1516324] E write(6, 0x580f9b5cd000, 24): Broken pipe
+  ✓   3 tests/channels-e2e/composer.spec.ts:93:1 › CMP-13 a message shown as sent is still sent when the page is reloaded at once (13.1s)
+2026/11/15 08:54:44 socat[1518083] E write(6, 0x580f9b5cd000, 24): Broken pipe
+  ✓   2 tests/channels-e2e/composer.spec.ts:47:1 › CMP-02 a draft is still in the composer after a reload (13.6s)
+2026/11/15 08:54:44 socat[1498748] E write(6, 0x580f9b5cd000, 24): Broken pipe
+2026/11/15 08:54:44 socat[1519857] E write(6, 0x580f9b5cd000, 24): Broken pipe
+  ✓   4 tests/channels-e2e/composer.spec.ts:67:1 › CMP-03 sending a message clears its draft, and a reload does not bring it back (13.9s)
+2026/11/15 08:54:45 socat[1498729] E write(6, 0x580f9b5cd000, 24): Broken pipe
+2026/11/15 08:54:45 socat[1498751] E write(6, 0x580f9b5cd000, 24): Broken pipe
+  ✓   1 tests/channels-e2e/composer.spec.ts:21:1 › CMP-01 a draft stays in its channel while I look at another one, and is not shown there (14.9s)
+2026/11/15 08:54:47 socat[1521250] E write(6, 0x580f9b5cd000, 24): Broken pipe
+2026/11/15 08:54:47 socat[1458514] W waitpid(-1, {}, WNOHANG): no (more) child has exited
+2026/11/15 08:54:47 socat[1521292] E write(6, 0x580f9b5cd000, 24): Broken pipe
+  ✓   5 tests/channels-e2e/composer.spec.ts:121:1 › CMP-04 the send button is off while the composer is empty, and after sending I can go on typing (3.0s)
+2026/11/15 08:54:50 socat[1521575] E write(6, 0x580f9b5cd000, 24): Broken pipe
+2026/11/15 08:54:50 socat[1458514] W waitpid(-1, {}, WNOHANG): no (more) child has exited
+2026/11/15 08:54:50 socat[1521794] E write(6, 0x580f9b5cd000, 24): Broken pipe
+2026/11/15 08:54:50 socat[1522097] E read(6, 0x580f9b5cd000, 8192): Connection reset by peer
+  ✓   6 tests/channels-e2e/composer.spec.ts:148:1 › CMP-05 a person picked from the @ menu is named in the message for both people, live (5.7s)
+2026/11/15 08:54:50 socat[1522100] E write(6, 0x555555624000, 24): Broken pipe
+2026/11/15 08:54:50 socat[1523556] E write(6, 0x580f9b5cd000, 24): Broken pipe
+2026/11/15 08:54:50 socat[1521951] E write(6, 0x580f9b5cd000, 24): Broken pipe
+2026/11/15 08:54:50 socat[1521994] E write(6, 0x580f9b5cd000, 24): Broken pipe
+2026/11/15 08:54:50 socat[1524277] E write(6, 0x580f9b5cd000, 24): Broken pipe
+  ✓   7 tests/channels-e2e/composer.spec.ts:178:1 › CMP-06 @here picked from the @ menu is sent as a mention of everyone here (5.6s)
+2026/11/15 08:54:52 socat[1530268] E write(6, 0x580f9b5cd000, 24): Broken pipe
+  ✓  11 tests/channels-e2e/composer.spec.ts:329:1 › CMP-10 typing reported from the other person’s other device shows “… is typing”, and goes when they stop (2.3s)
+2026/11/15 08:54:52 socat[1524338] E write(6, 0x580f9b5cd000, 24): Broken pipe
+2026/11/15 08:54:52 socat[1524784] E write(6, 0x580f9b5cd000, 24): Broken pipe
+  ✓   9 tests/channels-e2e/composer.spec.ts:265:1 › CMP-08 a file can be sent on its own, with no text (5.8s)
+2026/11/15 08:54:53 socat[1529619] E write(6, 0x580f9b5cd000, 24): Broken pipe
+2026/11/15 08:54:54 socat[1523373] E write(6, 0x580f9b5cd000, 24): Broken pipe
+2026/11/15 08:54:54 socat[1523411] E write(6, 0x580f9b5cd000, 24): Broken pipe
+2026/11/15 08:54:54 socat[1526339] E write(6, 0x580f9b5cd000, 24): Broken pipe
+  ✓   8 tests/channels-e2e/composer.spec.ts:208:1 › CMP-07 a text file and a picture attached to a message show before sending, for both people, and under Attachments (8.5s)
+2026/11/15 08:54:55 socat[1532356] E write(6, 0x580f9b5cd000, 24): Broken pipe
+2026/11/15 08:54:55 socat[1530237] E write(6, 0x580f9b5cd000, 24): Broken pipe
+  ✓  10 tests/channels-e2e/composer.spec.ts:303:1 › CMP-09 while the other person types in their composer I see “… is typing”, until they send (5.3s)
+2026/11/15 08:54:58 socat[1533000] E write(6, 0x580f9b5cd000, 24): Broken pipe
+2026/11/15 08:54:58 socat[1532620] E write(6, 0x580f9b5cd000, 24): Broken pipe
+2026/11/15 08:54:58 socat[1537516] E write(6, 0x580f9b5cd000, 24): Broken pipe
+  ✓  12 tests/channels-e2e/composer.spec.ts:349:1 › CMP-11 text pasted into the composer is sent as it was copied (5.4s)
+2026/11/15 08:54:58 socat[1537806] E write(6, 0x580f9b5cd000, 24): Broken pipe
+  ✓  13 tests/channels-e2e/composer.spec.ts:372:1 › CMP-12 a message of 2,499 characters is sent whole (5.3s)
+2026/11/15 08:55:04 socat[1540630] E write(6, 0x580f9b5cd000, 24): Broken pipe
+2026/11/15 08:55:04 socat[1540653] E write(6, 0x580f9b5cd000, 24): Broken pipe
+2026/11/15 08:55:05 socat[1545789] E write(6, 0x580f9b5cd000, 24): Broken pipe
+2026/11/15 08:55:05 socat[1546276] E write(6, 0x580f9b5cd000, 24): Broken pipe
+2026/11/15 08:55:05 socat[1539101] E write(6, 0x580f9b5cd000, 24): Broken pipe
+2026/11/15 08:55:05 socat[1539149] E write(6, 0x580f9b5cd000, 24): Broken pipe
+2026/11/15 08:55:05 socat[1549459] E write(6, 0x580f9b5cd000, 24): Broken pipe
+2026/11/15 08:55:05 socat[1549468] E write(6, 0x580f9b5cd000, 24): Broken pipe
+  ✓  15 tests/channels-e2e/direct-messages.spec.ts:66:1 › DM-02 writing to the same person again from “New direct message” continues the one conversation (10.3s)
+2026/11/15 08:55:06 socat[1539701] E write(6, 0x580f9b5cd000, 24): Broken pipe
+2026/11/15 08:55:07 socat[1541307] E write(6, 0x580f9b5cd000, 24): Broken pipe
+2026/11/15 08:55:07 socat[1549999] E write(6, 0x580f9b5cd000, 24): Broken pipe
+  ✓  16 tests/channels-e2e/direct-messages.spec.ts:122:1 › DM-03 “Message …” on a channel’s participant opens my conversation with them, the same one every time (9.1s)
+2026/11/15 08:55:07 socat[1536529] E write(6, 0x580f9b5cd000, 24): Broken pipe
+2026/11/15 08:55:07 socat[1458514] W waitpid(-1, {}, WNOHANG): no (more) child has exited
+2026/11/15 08:55:07 socat[1461319] W waitpid(-1, {}, WNOHANG): no (more) child has exited
+2026/11/15 08:55:07 socat[1536708] E write(6, 0x580f9b5cd000, 24): Broken pipe
+2026/11/15 08:55:07 socat[1551595] E write(6, 0x580f9b5cd000, 24): Broken pipe
+2026/11/15 08:55:07 socat[1551679] E write(6, 0x580f9b5cd000, 24): Broken pipe
+  ✓  18 tests/channels-e2e/direct-messages.spec.ts:228:1 › DM-05 a conversation with someone I never wrote to opens empty, saying “Say hello”, and nothing can be sent until I type (1.9s)
+2026/11/15 08:55:07 socat[1551554] E write(6, 0x580f9b5cd000, 24): Broken pipe
+  ✓  14 tests/channels-e2e/direct-messages.spec.ts:22:1 › DM-01 a direct message I start reaches the other person at once under “Direct messages”, and they can answer (13.3s)
+2026/11/15 08:55:08 socat[1541331] E write(6, 0x580f9b5cd000, 24): Broken pipe
+2026/11/15 08:55:08 socat[1541675] E write(6, 0x580f9b5cd000, 24): Broken pipe
+2026/11/15 08:55:08 socat[1546328] E write(6, 0x580f9b5cd000, 24): Broken pipe
+2026/11/15 08:55:08 socat[1546442] E write(6, 0x580f9b5cd000, 24): Broken pipe
+  ✓  17 tests/channels-e2e/direct-messages.spec.ts:173:1 › DM-04 a named group started from “New direct message” reaches everyone I put in it (10.6s)
+2026/11/15 08:55:08 socat[1548946] E write(6, 0x580f9b5cd000, 24): Broken pipe
+  ✘  19 tests/channels-e2e/direct-messages.spec.ts:270:1 › DM-06 typing a teammate’s name in “New direct message” offers that person (17.8s)
+2026/11/15 08:55:25 socat[1555385] E write(6, 0x580f9b5ce000, 24): Broken pipe
+2026/11/15 08:55:25 socat[1556003] E write(6, 0x580f9b5ce000, 24): Broken pipe
+2026/11/15 08:55:25 socat[1557505] E write(6, 0x580f9b5ce000, 24): Broken pipe
+2026/11/15 08:55:25 socat[1557973] E write(6, 0x580f9b5ce000, 24): Broken pipe
+2026/11/15 08:55:25 socat[1557981] E write(6, 0x580f9b5ce000, 24): Broken pipe
+2026/11/15 08:55:25 socat[1558016] E write(6, 0x580f9b5ce000, 24): Broken pipe
+  ✘  20 tests/channels-e2e/unread.spec.ts:38:1 › UNR-01 a message in a channel I do not have open marks its row unread at once; opening it clears the mark, also after reload (17.7s)
+  ✘  21 tests/channels-e2e/unread.spec.ts:87:1 › UNR-02 a channel with unread messages opens with “New” above the first of them, and “Mark as read” removes it (17.9s)
+2026/11/15 08:55:27 socat[1559714] E write(6, 0x580f9b5ce000, 24): Broken pipe
+  ✘  22 tests/channels-e2e/unread.spec.ts:122:1 › UNR-03 my own messages never mark a channel unread for me (18.2s)
+2026/11/15 08:55:30 socat[1589162] E write(6, 0x580f9b5ce000, 24): Broken pipe
+2026/11/15 08:55:30 socat[1589435] E write(6, 0x580f9b5ce000, 24): Broken pipe
+  ✓  23 tests/channels-e2e/unread.spec.ts:155:1 › UNR-04 scrolled up in an open channel, a new message shows “1 unread … below”, which leads to it (5.4s)
+2026/11/15 08:55:34 socat[1595054] E write(6, 0x580f9b5ce000, 24): Broken pipe
+  ✓  27 tests/channels-e2e/unread.spec.ts:311:1 › UNR-08 a channel I am added to appears in my list at once, and opens (3.8s)
+2026/11/15 08:55:45 socat[1591733] E write(6, 0x580f9b5ce000, 24): Broken pipe
+  ✘  26 tests/channels-e2e/unread.spec.ts:272:1 › UNR-07 a member who never opened a channel sees it unread, and opening it shows every message and clears the mark (17.4s)
+2026/11/15 08:55:46 socat[1591999] E write(6, 0x580f9b5ce000, 24): Broken pipe
+2026/11/15 08:55:46 socat[1458514] W waitpid(-1, {}, WNOHANG): no (more) child has exited
+2026/11/15 08:55:46 socat[1588378] E write(6, 0x580f9b5ce000, 24): Broken pipe
+  ✘  24 tests/channels-e2e/unread.spec.ts:187:1 › UNR-05 a mention of me in a channel I do not have open shows a count of mentions on its row (19.9s)
+2026/11/15 08:55:49 socat[1589311] E write(6, 0x580f9b5ce000, 24): Broken pipe
+2026/11/15 08:55:49 socat[1589577] E write(6, 0x580f9b5ce000, 24): Broken pipe
+  ✘  25 tests/channels-e2e/unread.spec.ts:218:1 › UNR-06 a muted channel shows a crossed bell and is not marked unread by new messages; unmuted, it is again (23.0s)
+2026/11/15 08:55:52 socat[1601924] E write(6, 0x580f9b5ce000, 24): Broken pipe
+  ✘  28 tests/channels-e2e/unread.spec.ts:339:1 › UNR-09 the first message in a new channel marks it unread for the other member (17.5s)
+2026/11/15 08:56:04 socat[1622746] E write(6, 0x580f9b5ce000, 24): Broken pipe
+  ✘  29 tests/channels-e2e/unread.spec.ts:367:1 › UNR-10 a row found with “Search conversations” is marked unread at once when a message arrives (17.9s)
+
+
+  1) tests/channels-e2e/unread.spec.ts:38:1 › UNR-01 a message in a channel I do not have open marks its row unread at once; opening it clears the mark, also after reload 
+
+    Error: expect(locator).toBeVisible() failed
+
+    Locator: getByRole('tree', { name: 'Conversations' }).getByRole('treeitem').filter({ hasText: 'unr-mwhlmul6p2ep-other' }).getByLabel('Unread', { exact: true })
+    Expected: visible
+    Timeout: 15000ms
+    Error: element(s) not found
+
+    Call log:
+      - Expect "toBeVisible" with timeout 15000ms
+      - waiting for getByRole('tree', { name: 'Conversations' }).getByRole('treeitem').filter({ hasText: 'unr-mwhlmul6p2ep-other' }).getByLabel('Unread', { exact: true })
+
+
+      63 |   await expect(
+      64 |     unreadDot(conversationRow(page, `${made.tag}-other`))
+    > 65 |   ).toBeVisible();
+         |     ^
+      66 |   await expect(
+      67 |     unreadDot(conversationRow(page, `${made.tag}-untouched`))
+      68 |   ).toBeVisible();
+        at /home/teo/.herdr/worktrees/macro/synoet-channels-e2e-base/apps/web/tests/channels-e2e/unread.spec.ts:65:5
+
+    attachment #1: screenshot (image/png) ──────────────────────────────────────────────────────────
+    ../../../../../../.cache/channels-e2e/runs/24909-break-unread-mark-never-shows/test-results/unread-UNR-01-a-message-in-3c804--the-mark-also-after-reload/test-failed-1.png
+    ────────────────────────────────────────────────────────────────────────────────────────────────
+
+    Error Context: ../../../../../../.cache/channels-e2e/runs/24909-break-unread-mark-never-shows/test-results/unread-UNR-01-a-message-in-3c804--the-mark-also-after-reload/error-context.md
+
+    attachment #3: trace (application/zip) ─────────────────────────────────────────────────────────
+    ../../../../../../.cache/channels-e2e/runs/24909-break-unread-mark-never-shows/test-results/unread-UNR-01-a-message-in-3c804--the-mark-also-after-reload/trace.zip
+    Usage:
+
+        npx playwright show-trace ../../../../../../.cache/channels-e2e/runs/24909-break-unread-mark-never-shows/test-results/unread-UNR-01-a-message-in-3c804--the-mark-also-after-reload/trace.zip
+
+    ────────────────────────────────────────────────────────────────────────────────────────────────
+
+  2) tests/channels-e2e/unread.spec.ts:87:1 › UNR-02 a channel with unread messages opens with “New” above the first of them, and “Mark as read” removes it 
+
+    Error: expect(locator).toBeVisible() failed
+
+    Locator: getByRole('tree', { name: 'Conversations' }).getByRole('treeitem').filter({ hasText: 'unr-mwhlmun3aw2g-channel' }).getByLabel('Unread', { exact: true })
+    Expected: visible
+    Timeout: 15000ms
+    Error: element(s) not found
+
+    Call log:
+      - Expect "toBeVisible" with timeout 15000ms
+      - waiting for getByRole('tree', { name: 'Conversations' }).getByRole('treeitem').filter({ hasText: 'unr-mwhlmun3aw2g-channel' }).getByLabel('Unread', { exact: true })
+
+
+       99 |   await findConversations(page, made.tag);
+      100 |   const row = conversationRow(page, `${made.tag}-channel`);
+    > 101 |   await expect(unreadDot(row)).toBeVisible();
+          |                                ^
+      102 |
+      103 |   await row.click();
+      104 |   const view = new ChannelView(page, made.channel);
+        at /home/teo/.herdr/worktrees/macro/synoet-channels-e2e-base/apps/web/tests/channels-e2e/unread.spec.ts:101:32
+
+    attachment #1: screenshot (image/png) ──────────────────────────────────────────────────────────
+    ../../../../../../.cache/channels-e2e/runs/24909-break-unread-mark-never-shows/test-results/unread-UNR-02-a-channel-wi-214ac-d-“Mark-as-read”-removes-it/test-failed-1.png
+    ────────────────────────────────────────────────────────────────────────────────────────────────
+
+    Error Context: ../../../../../../.cache/channels-e2e/runs/24909-break-unread-mark-never-shows/test-results/unread-UNR-02-a-channel-wi-214ac-d-“Mark-as-read”-removes-it/error-context.md
+
+    attachment #3: trace (application/zip) ─────────────────────────────────────────────────────────
+    ../../../../../../.cache/channels-e2e/runs/24909-break-unread-mark-never-shows/test-results/unread-UNR-02-a-channel-wi-214ac-d-“Mark-as-read”-removes-it/trace.zip
+    Usage:
+
+        npx playwright show-trace ../../../../../../.cache/channels-e2e/runs/24909-break-unread-mark-never-shows/test-results/unread-UNR-02-a-channel-wi-214ac-d-“Mark-as-read”-removes-it/trace.zip
+
+    ────────────────────────────────────────────────────────────────────────────────────────────────
+
+  3) tests/channels-e2e/unread.spec.ts:122:1 › UNR-03 my own messages never mark a channel unread for me 
+
+    Error: expect(locator).toBeVisible() failed
+
+    Locator: getByRole('tree', { name: 'Conversations' }).getByRole('treeitem').filter({ hasText: 'unr-mwhlmvfn59il-bens' }).getByLabel('Unread', { exact: true })
+    Expected: visible
+    Timeout: 15000ms
+    Error: element(s) not found
+
+    Call log:
+      - Expect "toBeVisible" with timeout 15000ms
+      - waiting for getByRole('tree', { name: 'Conversations' }).getByRole('treeitem').filter({ hasText: 'unr-mwhlmvfn59il-bens' }).getByLabel('Unread', { exact: true })
+
+
+      139 |   await expect(
+      140 |     unreadDot(conversationRow(page, `${made.tag}-bens`))
+    > 141 |   ).toBeVisible();
+          |     ^
+      142 |   await expect(
+      143 |     unreadDot(conversationRow(page, `${made.tag}-bens`))
+      144 |   ).toBeVisible();
+        at /home/teo/.herdr/worktrees/macro/synoet-channels-e2e-base/apps/web/tests/channels-e2e/unread.spec.ts:141:5
+
+    attachment #1: screenshot (image/png) ──────────────────────────────────────────────────────────
+    ../../../../../../.cache/channels-e2e/runs/24909-break-unread-mark-never-shows/test-results/unread-UNR-03-my-own-messa-a4130-ark-a-channel-unread-for-me/test-failed-1.png
+    ────────────────────────────────────────────────────────────────────────────────────────────────
+
+    Error Context: ../../../../../../.cache/channels-e2e/runs/24909-break-unread-mark-never-shows/test-results/unread-UNR-03-my-own-messa-a4130-ark-a-channel-unread-for-me/error-context.md
+
+    attachment #3: trace (application/zip) ─────────────────────────────────────────────────────────
+    ../../../../../../.cache/channels-e2e/runs/24909-break-unread-mark-never-shows/test-results/unread-UNR-03-my-own-messa-a4130-ark-a-channel-unread-for-me/trace.zip
+    Usage:
+
+        npx playwright show-trace ../../../../../../.cache/channels-e2e/runs/24909-break-unread-mark-never-shows/test-results/unread-UNR-03-my-own-messa-a4130-ark-a-channel-unread-for-me/trace.zip
+
+    ────────────────────────────────────────────────────────────────────────────────────────────────
+
+  4) tests/channels-e2e/unread.spec.ts:218:1 › UNR-06 a muted channel shows a crossed bell and is not marked unread by new messages; unmuted, it is again 
+
+    Error: expect(locator).toBeVisible() failed
+
+    Locator: getByRole('tree', { name: 'Conversations' }).getByRole('treeitem').filter({ hasText: 'unr-mwhln943m1md-loud' }).getByLabel('Unread', { exact: true })
+    Expected: visible
+    Timeout: 15000ms
+    Error: element(s) not found
+
+    Call log:
+      - Expect "toBeVisible" with timeout 15000ms
+      - waiting for getByRole('tree', { name: 'Conversations' }).getByRole('treeitem').filter({ hasText: 'unr-mwhln943m1md-loud' }).getByLabel('Unread', { exact: true })
+
+
+      243 |   await expect(
+      244 |     unreadDot(conversationRow(page, `${made.tag}-loud`))
+    > 245 |   ).toBeVisible();
+          |     ^
+      246 |   await expect(
+      247 |     unreadDot(conversationRow(page, `${made.tag}-loud`))
+      248 |   ).toBeVisible();
+        at /home/teo/.herdr/worktrees/macro/synoet-channels-e2e-base/apps/web/tests/channels-e2e/unread.spec.ts:245:5
+
+    attachment #1: screenshot (image/png) ──────────────────────────────────────────────────────────
+    ../../../../../../.cache/channels-e2e/runs/24909-break-unread-mark-never-shows/test-results/unread-UNR-06-a-muted-chan-7a658-essages-unmuted-it-is-again/test-failed-1.png
+    ────────────────────────────────────────────────────────────────────────────────────────────────
+
+    Error Context: ../../../../../../.cache/channels-e2e/runs/24909-break-unread-mark-never-shows/test-results/unread-UNR-06-a-muted-chan-7a658-essages-unmuted-it-is-again/error-context.md
+
+    attachment #3: trace (application/zip) ─────────────────────────────────────────────────────────
+    ../../../../../../.cache/channels-e2e/runs/24909-break-unread-mark-never-shows/test-results/unread-UNR-06-a-muted-chan-7a658-essages-unmuted-it-is-again/trace.zip
+    Usage:
+
+        npx playwright show-trace ../../../../../../.cache/channels-e2e/runs/24909-break-unread-mark-never-shows/test-results/unread-UNR-06-a-muted-chan-7a658-essages-unmuted-it-is-again/trace.zip
+
+    ────────────────────────────────────────────────────────────────────────────────────────────────
+
+  5) tests/channels-e2e/unread.spec.ts:272:1 › UNR-07 a member who never opened a channel sees it unread, and opening it shows every message and clears the mark 
+
+    Error: expect(locator).toBeVisible() failed
+
+    Locator: getByRole('tree', { name: 'Conversations' }).getByRole('treeitem').filter({ hasText: 'unr-mwhlna4hjl8p-channel' }).getByLabel('Unread', { exact: true })
+    Expected: visible
+    Timeout: 15000ms
+    Error: element(s) not found
+
+    Call log:
+      - Expect "toBeVisible" with timeout 15000ms
+      - waiting for getByRole('tree', { name: 'Conversations' }).getByRole('treeitem').filter({ hasText: 'unr-mwhlna4hjl8p-channel' }).getByLabel('Unread', { exact: true })
+
+
+      290 |   await findConversations(cyPage, made.tag);
+      291 |   const row = conversationRow(cyPage, `${made.tag}-channel`);
+    > 292 |   await expect(unreadDot(row)).toBeVisible();
+          |                                ^
+      293 |
+      294 |   await row.click();
+      295 |   const view = new ChannelView(cyPage, made.channel);
+        at /home/teo/.herdr/worktrees/macro/synoet-channels-e2e-base/apps/web/tests/channels-e2e/unread.spec.ts:292:32
+
+    attachment #1: screenshot (image/png) ──────────────────────────────────────────────────────────
+    ../../../../../../.cache/channels-e2e/runs/24909-break-unread-mark-never-shows/test-results/unread-UNR-07-a-member-who-10306-message-and-clears-the-mark/test-failed-1.png
+    ────────────────────────────────────────────────────────────────────────────────────────────────
+
+    Error Context: ../../../../../../.cache/channels-e2e/runs/24909-break-unread-mark-never-shows/test-results/unread-UNR-07-a-member-who-10306-message-and-clears-the-mark/error-context.md
+
+    attachment #3: trace (application/zip) ─────────────────────────────────────────────────────────
+    ../../../../../../.cache/channels-e2e/runs/24909-break-unread-mark-never-shows/test-results/unread-UNR-07-a-member-who-10306-message-and-clears-the-mark/trace.zip
+    Usage:
+
+        npx playwright show-trace ../../../../../../.cache/channels-e2e/runs/24909-break-unread-mark-never-shows/test-results/unread-UNR-07-a-member-who-10306-message-and-clears-the-mark/trace.zip
+
+    ────────────────────────────────────────────────────────────────────────────────────────────────
+
+  6) tests/channels-e2e/unread.spec.ts:367:1 › UNR-10 a row found with “Search conversations” is marked unread at once when a message arrives 
+
+    Error: expect(locator).toBeVisible() failed
+
+    Locator: getByRole('tree', { name: 'Conversations' }).getByRole('treeitem').filter({ hasText: 'unr-mwhlno5kq7x0-found' }).getByLabel('Unread', { exact: true })
+    Expected: visible
+    Timeout: 15000ms
+    Error: element(s) not found
+
+    Call log:
+      - Expect "toBeVisible" with timeout 15000ms
+      - waiting for getByRole('tree', { name: 'Conversations' }).getByRole('treeitem').filter({ hasText: 'unr-mwhlno5kq7x0-found' }).getByLabel('Unread', { exact: true })
+
+
+      381 |   await ben.post(made.found, 'while you were searching');
+      382 |
+    > 383 |   await expect(unreadDot(found)).toBeVisible();
+          |                                  ^
+      384 | });
+      385 |
+        at /home/teo/.herdr/worktrees/macro/synoet-channels-e2e-base/apps/web/tests/channels-e2e/unread.spec.ts:383:34
+
+    attachment #1: screenshot (image/png) ──────────────────────────────────────────────────────────
+    ../../../../../../.cache/channels-e2e/runs/24909-break-unread-mark-never-shows/test-results/unread-UNR-10-a-row-found--9d88c-once-when-a-message-arrives/test-failed-1.png
+    ────────────────────────────────────────────────────────────────────────────────────────────────
+
+    Error Context: ../../../../../../.cache/channels-e2e/runs/24909-break-unread-mark-never-shows/test-results/unread-UNR-10-a-row-found--9d88c-once-when-a-message-arrives/error-context.md
+
+    attachment #3: trace (application/zip) ─────────────────────────────────────────────────────────
+    ../../../../../../.cache/channels-e2e/runs/24909-break-unread-mark-never-shows/test-results/unread-UNR-10-a-row-found--9d88c-once-when-a-message-arrives/trace.zip
+    Usage:
+
+        npx playwright show-trace ../../../../../../.cache/channels-e2e/runs/24909-break-unread-mark-never-shows/test-results/unread-UNR-10-a-row-found--9d88c-once-when-a-message-arrives/trace.zip
+
+    ────────────────────────────────────────────────────────────────────────────────────────────────
+
+  6 failed
+    tests/channels-e2e/unread.spec.ts:38:1 › UNR-01 a message in a channel I do not have open marks its row unread at once; opening it clears the mark, also after reload 
+    tests/channels-e2e/unread.spec.ts:87:1 › UNR-02 a channel with unread messages opens with “New” above the first of them, and “Mark as read” removes it 
+    tests/channels-e2e/unread.spec.ts:122:1 › UNR-03 my own messages never mark a channel unread for me 
+    tests/channels-e2e/unread.spec.ts:218:1 › UNR-06 a muted channel shows a crossed bell and is not marked unread by new messages; unmuted, it is again 
+    tests/channels-e2e/unread.spec.ts:272:1 › UNR-07 a member who never opened a channel sees it unread, and opening it shows every message and clears the mark 
+    tests/channels-e2e/unread.spec.ts:367:1 › UNR-10 a row found with “Search conversations” is marked unread at once when a message arrives 
+  23 passed (1.8m)
+2026/11/15 08:56:04 socat[1461319] W exiting on signal 15
+2026/11/15 08:56:04 socat[1458514] W exiting on signal 15

@@ -1,0 +1,29 @@
+mark-as-read-does-nothing	CMP-01	PASSED	
+mark-as-read-does-nothing	CMP-02	PASSED	
+mark-as-read-does-nothing	CMP-03	PASSED	
+mark-as-read-does-nothing	CMP-13	PASSED	
+mark-as-read-does-nothing	CMP-04	PASSED	
+mark-as-read-does-nothing	CMP-05	PASSED	
+mark-as-read-does-nothing	CMP-06	PASSED	
+mark-as-read-does-nothing	CMP-07	PASSED	
+mark-as-read-does-nothing	CMP-08	PASSED	
+mark-as-read-does-nothing	CMP-09	PASSED	
+mark-as-read-does-nothing	CMP-10	PASSED	
+mark-as-read-does-nothing	CMP-11	PASSED	
+mark-as-read-does-nothing	CMP-12	PASSED	
+mark-as-read-does-nothing	DM-01	PASSED	
+mark-as-read-does-nothing	DM-02	PASSED	
+mark-as-read-does-nothing	DM-03	PASSED	
+mark-as-read-does-nothing	DM-04	PASSED	
+mark-as-read-does-nothing	DM-05	PASSED	
+mark-as-read-does-nothing	DM-06	PASSED	Error: expect(locator).toBeVisible() failed | Locator: getByRole('option', { name: /Ben Member/ })
+mark-as-read-does-nothing	UNR-01	PASSED	
+mark-as-read-does-nothing	UNR-02	FAILED	Error: expect(locator).toHaveCount(expected) failed | Locator:  locator('[data-channel-scroll]').getByRole('button', { name: 'New', exact: true })
+mark-as-read-does-nothing	UNR-03	PASSED	
+mark-as-read-does-nothing	UNR-04	PASSED	
+mark-as-read-does-nothing	UNR-05	PASSED	Error: expect(locator).toHaveText(expected) failed | Locator: getByRole('tree', { name: 'Conversations' }).getByRole('treeitem').filter({ hasText: 'unr-mwhlstke
+mark-as-read-does-nothing	UNR-06	PASSED	
+mark-as-read-does-nothing	UNR-07	PASSED	
+mark-as-read-does-nothing	UNR-08	PASSED	
+mark-as-read-does-nothing	UNR-09	PASSED	Error: expect(locator).toBeVisible() failed | Locator: getByRole('tree', { name: 'Conversations' }).getByRole('treeitem').filter({ hasText: 'unr-mwhlt3k8vg0o-fr
+mark-as-read-does-nothing	UNR-10	PASSED	

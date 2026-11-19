@@ -1,0 +1,223 @@
+path "/home/teo/.herdr/worktrees/macro/synoet-channels-e2e-base/apps/web" does not contain a 'flake.nix', searching up
+warning: Git tree '/home/teo/.herdr/worktrees/macro/synoet-channels-e2e-base' is dirty
+
+Running 21 tests using 4 workers
+
+2026/11/15 09:13:55 socat[3368419] E write(6, 0x6354eb6db000, 24): Broken pipe
+  ✓   4 tests/channels-e2e/location.spec.ts:7:1 › NAV-01 a link to a recent message opens the channel on that message and marks it (2.6s)
+  ✓   3 tests/channels-e2e/find-and-keys.spec.ts:313:1 › KEY-09 Shift+G in the message list goes to the latest message (4.0s)
+2026/11/15 09:14:04 socat[3377454] E write(6, 0x6354eb6db000, 24): Broken pipe
+2026/11/15 09:14:04 socat[3371996] E write(6, 0x6354eb6db000, 24): Broken pipe
+  ✓   1 tests/channels-e2e/channels.spec.ts:362:1 › CHN-12 going to another tab and back keeps the message list where it was (10.8s)
+2026/11/15 09:14:10 socat[3377731] E write(6, 0x6354eb6db000, 24): Broken pipe
+2026/11/15 09:14:10 socat[3372000] E write(6, 0x6354eb6db000, 24): Broken pipe
+  ✘   2 tests/channels-e2e/location.spec.ts:24:1 › NAV-02 a link to an old message, pages back, shows it between its neighbours (17.6s)
+2026/11/15 09:14:13 socat[3371857] E write(6, 0x6354eb6db000, 24): Broken pipe
+  ✘   5 tests/channels-e2e/location.spec.ts:47:1 › NAV-03 a link to a reply deep in an old thread opens the thread on that reply (17.1s)
+2026/11/15 09:14:13 socat[3340737] W waitpid(-1, {}, WNOHANG): no (more) child has exited
+2026/11/15 09:14:13 socat[3373891] E write(6, 0x6354eb6db000, 24): Broken pipe
+  ✘   6 tests/channels-e2e/location.spec.ts:75:1 › NAV-04 a link to a message that does not exist says so and shows the latest messages (16.5s)
+2026/11/15 09:14:16 socat[3396466] E write(6, 0x6354eb6dc000, 24): Broken pipe
+2026/11/15 09:14:18 socat[3395930] E write(6, 0x6354eb6dc000, 24): Broken pipe
+2026/11/15 09:14:18 socat[3400853] E write(6, 0x6354eb6dc000, 24): Broken pipe
+  ✓  10 tests/channels-e2e/messages.spec.ts:623:1 › MSG-16 a message sent to another channel does not appear in the open one (4.1s)
+2026/11/15 09:14:19 socat[3404220] E write(6, 0x6354eb6dc000, 24): Broken pipe
+2026/11/15 09:14:19 socat[3404346] E write(6, 0x6354eb6dc000, 24): Broken pipe
+  ✓   9 tests/channels-e2e/location.spec.ts:137:1 › NAV-07 “Copy link” on a message gives a link that opens the channel on it (5.6s)
+2026/11/15 09:14:21 socat[3383949] E write(6, 0x6354eb6db000, 24): Broken pipe
+2026/11/15 09:14:21 socat[3383994] E write(6, 0x6354eb6db000, 24): Broken pipe
+  ✘   7 tests/channels-e2e/location.spec.ts:97:1 › NAV-05 reading forward from an old message reaches the latest with nothing missing or repeated (17.1s)
+2026/11/15 09:14:21 socat[3407158] E write(6, 0x6354eb6dc000, 24): Broken pipe
+2026/11/15 09:14:21 socat[3407182] E write(6, 0x6354eb6dc000, 24): Broken pipe
+  ✓  11 tests/channels-e2e/open.spec.ts:13:1 › OPEN-01 a channel opened by its address shows its latest messages in order, at the end (2.6s)
+2026/11/15 09:14:22 socat[3407779] E write(6, 0x6354eb6dc000, 24): Broken pipe
+  ✓  12 tests/channels-e2e/open.spec.ts:35:1 › OPEN-02 switching between channels in the list shows each channel’s own messages (3.3s)
+2026/11/15 09:14:23 socat[3340737] W waitpid(-1, {}, WNOHANG): no (more) child has exited
+2026/11/15 09:14:23 socat[3410416] E write(6, 0x6354eb6dc000, 24): Broken pipe
+  ✓  13 tests/channels-e2e/reconnect.spec.ts:6:1 › REC-01 after the connection comes back, messages sent meanwhile appear in order without a reload (2.8s)
+  ✓  15 tests/channels-e2e/reconnect.spec.ts:81:1 › REC-03 a message that arrives while the page is hidden is there when the person comes back (2.9s)
+2026/11/15 09:14:25 socat[3412854] E write(6, 0x6354eb6dc000, 24): Broken pipe
+2026/11/15 09:14:25 socat[3414676] E write(6, 0x6354eb6dc000, 24): Broken pipe
+2026/11/15 09:14:25 socat[3414727] E write(6, 0x6354eb6dc000, 24): Broken pipe
+2026/11/15 09:14:26 socat[3410412] E write(6, 0x6354eb6dc000, 24): Broken pipe
+2026/11/15 09:14:26 socat[3409456] E write(6, 0x6354eb6dc000, 24): Broken pipe
+2026/11/15 09:14:26 socat[3410421] E write(6, 0x6354eb6dc000, 24): Broken pipe
+  ✓  14 tests/channels-e2e/reconnect.spec.ts:36:1 › REC-02 a message sent with no connection is neither lost nor sent twice (4.9s)
+2026/11/15 09:14:28 socat[3394395] E write(6, 0x6354eb6db000, 24): Broken pipe
+  ✘   8 tests/channels-e2e/location.spec.ts:120:1 › NAV-06 scrolling down from an old message offers “Scroll to bottom”, which returns to the latest messages (17.3s)
+2026/11/15 09:14:30 socat[3338818] W waitpid(-1, {}, WNOHANG): no (more) child has exited
+2026/11/15 09:14:30 socat[3419420] E write(6, 0x6354eb6dc000, 24): Broken pipe
+  ✓  18 tests/channels-e2e/scroll.spec.ts:55:1 › SCROLL-03 at the end of the channel, a message from someone else arrives in view (4.6s)
+2026/11/15 09:14:32 socat[3421288] E write(6, 0x6354eb6dc000, 24): Broken pipe
+  ✓  17 tests/channels-e2e/scroll.spec.ts:26:1 › SCROLL-02 scrolling back down from far up offers “Scroll to bottom”, which returns to the latest message (6.7s)
+2026/11/15 09:14:35 socat[3425438] E write(6, 0x6354eb6dc000, 24): Broken pipe
+  ✓  20 tests/channels-e2e/two-tabs.spec.ts:6:1 › TAB-01 a message sent in one window shows once in the same person’s other window (4.3s)
+2026/11/15 09:14:35 socat[3424363] E write(6, 0x6354eb6dc000, 24): Broken pipe
+2026/11/15 09:14:35 socat[3426270] E write(6, 0x6354eb6dc000, 24): Broken pipe
+2026/11/15 09:14:35 socat[3340737] W waitpid(-1, {}, WNOHANG): no (more) child has exited
+2026/11/15 09:14:37 socat[3425248] E write(6, 0x6354eb6dc000, 24): Broken pipe
+  ✓  19 tests/channels-e2e/scroll.spec.ts:78:1 › SCROLL-04 scrolled up, a message from someone else does not move what is being read (7.4s)
+2026/11/15 09:14:37 socat[3429437] E write(6, 0x6354eb6dc000, 24): Broken pipe
+2026/11/15 09:14:37 socat[3425707] E write(6, 0x6354eb6dc000, 24): Broken pipe
+2026/11/15 09:14:37 socat[3430325] E write(6, 0x6354eb6dc000, 24): Broken pipe
+  ✓  21 tests/channels-e2e/two-tabs.spec.ts:29:1 › TAB-02 an edit, a reaction and a deletion made in one window show in the other (4.9s)
+2026/11/15 09:14:39 socat[3414907] E write(6, 0x6354eb6dc000, 24): Broken pipe
+  ✓  16 tests/channels-e2e/scroll.spec.ts:7:1 › SCROLL-01 scrolling back to the start of a long channel shows every message once, in order (15.8s)
+
+
+  1) tests/channels-e2e/location.spec.ts:24:1 › NAV-02 a link to an old message, pages back, shows it between its neighbours 
+
+    Error: expect(locator).toBeInViewport() failed
+
+    Locator: locator('[data-channel-scroll]').locator('[data-message-id="01a1de7b-d990-7aa7-a0a0-eb317a6de7c8"]')
+    Expected: in viewport
+    Timeout: 15000ms
+    Error: element(s) not found
+
+    Call log:
+      - Expect "toBeInViewport" with timeout 15000ms
+      - waiting for locator('[data-channel-scroll]').locator('[data-message-id="01a1de7b-d990-7aa7-a0a0-eb317a6de7c8"]')
+
+
+      32 |
+      33 |   const row = view.messageById(target.id);
+    > 34 |   await expect(row).toBeInViewport();
+         |                     ^
+      35 |   await view.expectMarked(target.id);
+      36 |
+      37 |   const texts = await view.texts();
+        at /home/teo/.herdr/worktrees/macro/synoet-channels-e2e-base/apps/web/tests/channels-e2e/location.spec.ts:34:21
+
+    attachment #1: screenshot (image/png) ──────────────────────────────────────────────────────────
+    ../../../../../../.cache/channels-e2e/runs/24909-break-link-target-ignored/test-results/location-NAV-02-a-link-to--d4b87-s-it-between-its-neighbours/test-failed-1.png
+    ────────────────────────────────────────────────────────────────────────────────────────────────
+
+    Error Context: ../../../../../../.cache/channels-e2e/runs/24909-break-link-target-ignored/test-results/location-NAV-02-a-link-to--d4b87-s-it-between-its-neighbours/error-context.md
+
+    attachment #3: trace (application/zip) ─────────────────────────────────────────────────────────
+    ../../../../../../.cache/channels-e2e/runs/24909-break-link-target-ignored/test-results/location-NAV-02-a-link-to--d4b87-s-it-between-its-neighbours/trace.zip
+    Usage:
+
+        npx playwright show-trace ../../../../../../.cache/channels-e2e/runs/24909-break-link-target-ignored/test-results/location-NAV-02-a-link-to--d4b87-s-it-between-its-neighbours/trace.zip
+
+    ────────────────────────────────────────────────────────────────────────────────────────────────
+
+  2) tests/channels-e2e/location.spec.ts:47:1 › NAV-03 a link to a reply deep in an old thread opens the thread on that reply 
+
+    Error: expect(locator).toBeInViewport() failed
+
+    Locator: locator('[data-channel-scroll]').locator('[data-message-id="01a1de7c-0376-798a-9949-199aed20542c"]')
+    Expected: in viewport
+    Timeout: 15000ms
+    Error: element(s) not found
+
+    Call log:
+      - Expect "toBeInViewport" with timeout 15000ms
+      - waiting for locator('[data-channel-scroll]').locator('[data-message-id="01a1de7c-0376-798a-9949-199aed20542c"]')
+
+
+      58 |
+      59 |   const row = view.messageById(reply.id);
+    > 60 |   await expect(row).toBeInViewport();
+         |                     ^
+      61 |   await expect(row).toContainText('old reply 12');
+      62 |   await view.expectMarked(reply.id);
+      63 |
+        at /home/teo/.herdr/worktrees/macro/synoet-channels-e2e-base/apps/web/tests/channels-e2e/location.spec.ts:60:21
+
+    attachment #1: screenshot (image/png) ──────────────────────────────────────────────────────────
+    ../../../../../../.cache/channels-e2e/runs/24909-break-link-target-ignored/test-results/location-NAV-03-a-link-to--9b69f-ns-the-thread-on-that-reply/test-failed-1.png
+    ────────────────────────────────────────────────────────────────────────────────────────────────
+
+    Error Context: ../../../../../../.cache/channels-e2e/runs/24909-break-link-target-ignored/test-results/location-NAV-03-a-link-to--9b69f-ns-the-thread-on-that-reply/error-context.md
+
+    attachment #3: trace (application/zip) ─────────────────────────────────────────────────────────
+    ../../../../../../.cache/channels-e2e/runs/24909-break-link-target-ignored/test-results/location-NAV-03-a-link-to--9b69f-ns-the-thread-on-that-reply/trace.zip
+    Usage:
+
+        npx playwright show-trace ../../../../../../.cache/channels-e2e/runs/24909-break-link-target-ignored/test-results/location-NAV-03-a-link-to--9b69f-ns-the-thread-on-that-reply/trace.zip
+
+    ────────────────────────────────────────────────────────────────────────────────────────────────
+
+  3) tests/channels-e2e/location.spec.ts:75:1 › NAV-04 a link to a message that does not exist says so and shows the latest messages 
+
+    Error: expect(locator).toBeVisible() failed
+
+    Locator: getByText('Message no longer available')
+    Expected: visible
+    Timeout: 15000ms
+    Error: element(s) not found
+
+    Call log:
+      - Expect "toBeVisible" with timeout 15000ms
+      - waiting for getByText('Message no longer available')
+
+
+      87 |   });
+      88 |
+    > 89 |   await expect(page.getByText('Message no longer available')).toBeVisible();
+         |                                                               ^
+      90 |   await view.shown();
+      91 |   await view.expectEndsWith(['kept one', 'kept two']);
+      92 |   await expect(view.messageById(last.id)).toBeInViewport();
+        at /home/teo/.herdr/worktrees/macro/synoet-channels-e2e-base/apps/web/tests/channels-e2e/location.spec.ts:89:63
+
+    attachment #1: screenshot (image/png) ──────────────────────────────────────────────────────────
+    ../../../../../../.cache/channels-e2e/runs/24909-break-link-target-ignored/test-results/location-NAV-04-a-link-to--52799-d-shows-the-latest-messages/test-failed-1.png
+    ────────────────────────────────────────────────────────────────────────────────────────────────
+
+    Error Context: ../../../../../../.cache/channels-e2e/runs/24909-break-link-target-ignored/test-results/location-NAV-04-a-link-to--52799-d-shows-the-latest-messages/error-context.md
+
+    attachment #3: trace (application/zip) ─────────────────────────────────────────────────────────
+    ../../../../../../.cache/channels-e2e/runs/24909-break-link-target-ignored/test-results/location-NAV-04-a-link-to--52799-d-shows-the-latest-messages/trace.zip
+    Usage:
+
+        npx playwright show-trace ../../../../../../.cache/channels-e2e/runs/24909-break-link-target-ignored/test-results/location-NAV-04-a-link-to--52799-d-shows-the-latest-messages/trace.zip
+
+    ────────────────────────────────────────────────────────────────────────────────────────────────
+
+  4) tests/channels-e2e/location.spec.ts:120:1 › NAV-06 scrolling down from an old message offers “Scroll to bottom”, which returns to the latest messages 
+
+    Error: expect(locator).toBeInViewport() failed
+
+    Locator: locator('[data-channel-scroll]').locator('[data-message-id="01a1de7b-d990-7aa7-a0a0-eb317a6de7c8"]')
+    Expected: in viewport
+    Timeout: 15000ms
+    Error: element(s) not found
+
+    Call log:
+      - Expect "toBeInViewport" with timeout 15000ms
+      - waiting for locator('[data-channel-scroll]').locator('[data-message-id="01a1de7b-d990-7aa7-a0a0-eb317a6de7c8"]')
+
+
+      124 |   const view = new ChannelView(page, history.id);
+      125 |   await view.open({ messageId: history.messages[14].id });
+    > 126 |   await expect(view.messageById(history.messages[14].id)).toBeInViewport();
+          |                                                           ^
+      127 |
+      128 |   await (await view.scrollDownUntilOffered()).click();
+      129 |
+        at /home/teo/.herdr/worktrees/macro/synoet-channels-e2e-base/apps/web/tests/channels-e2e/location.spec.ts:126:59
+
+    attachment #1: screenshot (image/png) ──────────────────────────────────────────────────────────
+    ../../../../../../.cache/channels-e2e/runs/24909-break-link-target-ignored/test-results/location-NAV-06-scrolling--ee522-urns-to-the-latest-messages/test-failed-1.png
+    ────────────────────────────────────────────────────────────────────────────────────────────────
+
+    Error Context: ../../../../../../.cache/channels-e2e/runs/24909-break-link-target-ignored/test-results/location-NAV-06-scrolling--ee522-urns-to-the-latest-messages/error-context.md
+
+    attachment #3: trace (application/zip) ─────────────────────────────────────────────────────────
+    ../../../../../../.cache/channels-e2e/runs/24909-break-link-target-ignored/test-results/location-NAV-06-scrolling--ee522-urns-to-the-latest-messages/trace.zip
+    Usage:
+
+        npx playwright show-trace ../../../../../../.cache/channels-e2e/runs/24909-break-link-target-ignored/test-results/location-NAV-06-scrolling--ee522-urns-to-the-latest-messages/trace.zip
+
+    ────────────────────────────────────────────────────────────────────────────────────────────────
+
+  4 failed
+    tests/channels-e2e/location.spec.ts:24:1 › NAV-02 a link to an old message, pages back, shows it between its neighbours 
+    tests/channels-e2e/location.spec.ts:47:1 › NAV-03 a link to a reply deep in an old thread opens the thread on that reply 
+    tests/channels-e2e/location.spec.ts:75:1 › NAV-04 a link to a message that does not exist says so and shows the latest messages 
+    tests/channels-e2e/location.spec.ts:120:1 › NAV-06 scrolling down from an old message offers “Scroll to bottom”, which returns to the latest messages 
+  17 passed (1.0m)
+2026/11/15 09:14:39 socat[3340737] W exiting on signal 15
+2026/11/15 09:14:39 socat[3338818] W exiting on signal 15

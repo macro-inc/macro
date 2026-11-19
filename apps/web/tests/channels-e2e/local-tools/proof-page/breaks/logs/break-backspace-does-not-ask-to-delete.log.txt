@@ -1,0 +1,124 @@
+path "/home/teo/.herdr/worktrees/macro/synoet-channels-e2e-base/apps/web" does not contain a 'flake.nix', searching up
+warning: Git tree '/home/teo/.herdr/worktrees/macro/synoet-channels-e2e-base' is dirty
+
+Running 12 tests using 4 workers
+
+2026/11/15 09:53:06 socat[2879784] E read(6, 0x5f78682ef000, 8192): Connection reset by peer
+2026/11/15 09:53:06 socat[2885638] E write(6, 0x5f78682ef000, 24): Broken pipe
+2026/11/15 09:53:06 socat[2879785] E write(6, 0x555555624000, 24): Broken pipe
+  ✓   2 tests/channels-e2e/find-and-keys.spec.ts:95:1 › KEY-03 find for words nobody wrote says there are no matches (11.2s)
+2026/11/15 09:53:06 socat[2885691] E write(6, 0x5f78682ef000, 24): Broken pipe
+2026/11/15 09:53:06 socat[2885533] E write(6, 0x5f78682ef000, 24): Broken pipe
+2026/11/15 09:53:06 socat[2885602] E write(6, 0x5f78682ef000, 24): Broken pipe
+  ✓   4 tests/channels-e2e/find-and-keys.spec.ts:119:1 › KEY-04 the find bar closes with its button and with Escape, and the channel still takes a message (11.3s)
+2026/11/15 09:53:07 socat[2879336] E write(6, 0x5f78682ef000, 24): Broken pipe
+2026/11/15 09:53:07 socat[2885488] E write(6, 0x5f78682ef000, 24): Broken pipe
+  ✓   3 tests/channels-e2e/find-and-keys.spec.ts:75:1 › KEY-02 find brings an old message far up a long history into view (12.4s)
+2026/11/15 09:53:08 socat[2885686] E write(6, 0x5f78682ef000, 24): Broken pipe
+2026/11/15 09:53:08 socat[2885696] E write(6, 0x5f78682ef000, 24): Broken pipe
+  ✓   1 tests/channels-e2e/find-and-keys.spec.ts:26:1 › KEY-01 find counts the messages that match and steps through them, newest first (13.2s)
+2026/11/15 09:53:09 socat[2897805] E write(6, 0x5f78682ef000, 24): Broken pipe
+2026/11/15 09:53:09 socat[2897815] E write(6, 0x5f78682ef000, 24): Broken pipe
+  ✓   5 tests/channels-e2e/find-and-keys.spec.ts:163:1 › KEY-05 the arrow keys walk from the composer up the messages and back down into the composer (2.9s)
+2026/11/15 09:53:10 socat[2904323] E write(6, 0x5f78682ef000, 24): Broken pipe
+  ✓   7 tests/channels-e2e/find-and-keys.spec.ts:235:1 › KEY-07 “e” on a person’s own selected message edits it (2.8s)
+2026/11/15 09:53:13 socat[2906274] E write(6, 0x5f78682ef000, 24): Broken pipe
+2026/11/15 09:53:13 socat[2906285] E write(6, 0x5f78682ef000, 24): Broken pipe
+  ✓  10 tests/channels-e2e/find-and-keys.spec.ts:307:1 › KEY-09 Shift+G in the message list goes to the latest message (3.0s)
+2026/11/15 09:53:15 socat[2908778] E write(6, 0x5f78682ef000, 24): Broken pipe
+2026/11/15 09:53:15 socat[2909104] E write(6, 0x5f78682ef000, 24): Broken pipe
+  ✓  11 tests/channels-e2e/find-and-keys.spec.ts:332:1 › KEY-10 choosing a channel in the list puts the cursor in its composer (2.7s)
+2026/11/15 09:53:17 socat[2853786] W waitpid(-1, {}, WNOHANG): no (more) child has exited
+2026/11/15 09:53:17 socat[2916064] E write(6, 0x5f78682ef000, 24): Broken pipe
+  ✓  12 tests/channels-e2e/find-and-keys.spec.ts:356:1 › KEY-11 Escape steps out of the composer to the messages, then to the list of conversations (2.0s)
+2026/11/15 09:53:23 socat[2853786] W waitpid(-1, {}, WNOHANG): no (more) child has exited
+2026/11/15 09:53:23 socat[2897842] E write(6, 0x5f78682ef000, 24): Broken pipe
+  ✘   6 tests/channels-e2e/find-and-keys.spec.ts:197:1 › KEY-06 Enter on a selected message opens a reply to that message (17.4s)
+2026/11/15 09:53:25 socat[2853786] W waitpid(-1, {}, WNOHANG): no (more) child has exited
+2026/11/15 09:53:25 socat[2905138] E write(6, 0x5f78682ef000, 24): Broken pipe
+  ✘   8 tests/channels-e2e/find-and-keys.spec.ts:263:1 › KEY-08 Backspace on a person’s own selected message asks first, and Escape keeps the message (17.5s)
+2026/11/15 09:53:26 socat[2905712] E write(6, 0x5f78682ef000, 24): Broken pipe
+  ✘   9 tests/channels-e2e/find-and-keys.spec.ts:285:1 › KEY-12 Backspace on a person’s own selected message deletes it once confirmed (17.2s)
+
+
+  1) tests/channels-e2e/find-and-keys.spec.ts:263:1 › KEY-08 Backspace on a person’s own selected message asks first, and Escape keeps the message 
+
+    Error: expect(locator).toBeVisible() failed
+
+    Locator: getByRole('dialog', { name: 'Delete message' })
+    Expected: visible
+    Timeout: 15000ms
+    Error: element(s) not found
+
+    Call log:
+      - Expect "toBeVisible" with timeout 15000ms
+      - waiting for getByRole('dialog', { name: 'Delete message' })
+
+
+      274 |   await selectLast(view, 'to be deleted');
+      275 |   await page.keyboard.press('Backspace');
+    > 276 |   await expect(dialog).toBeVisible();
+          |                        ^
+      277 |
+      278 |   // Escape answers no.
+      279 |   await page.keyboard.press('Escape');
+        at /home/teo/.herdr/worktrees/macro/synoet-channels-e2e-base/apps/web/tests/channels-e2e/find-and-keys.spec.ts:276:24
+
+    attachment #1: screenshot (image/png) ──────────────────────────────────────────────────────────
+    ../../../../../../.cache/channels-e2e/runs/24909-break-backspace-does-not-ask-to-delete/test-results/find-and-keys-KEY-08-Backs-48187-nd-Escape-keeps-the-message/test-failed-1.png
+    ────────────────────────────────────────────────────────────────────────────────────────────────
+
+    Error Context: ../../../../../../.cache/channels-e2e/runs/24909-break-backspace-does-not-ask-to-delete/test-results/find-and-keys-KEY-08-Backs-48187-nd-Escape-keeps-the-message/error-context.md
+
+    attachment #3: trace (application/zip) ─────────────────────────────────────────────────────────
+    ../../../../../../.cache/channels-e2e/runs/24909-break-backspace-does-not-ask-to-delete/test-results/find-and-keys-KEY-08-Backs-48187-nd-Escape-keeps-the-message/trace.zip
+    Usage:
+
+        npx playwright show-trace ../../../../../../.cache/channels-e2e/runs/24909-break-backspace-does-not-ask-to-delete/test-results/find-and-keys-KEY-08-Backs-48187-nd-Escape-keeps-the-message/trace.zip
+
+    ────────────────────────────────────────────────────────────────────────────────────────────────
+
+  2) tests/channels-e2e/find-and-keys.spec.ts:285:1 › KEY-12 Backspace on a person’s own selected message deletes it once confirmed 
+
+    Error: expect(locator).toBeVisible() failed
+
+    Locator: getByRole('dialog', { name: 'Delete message' })
+    Expected: visible
+    Timeout: 15000ms
+    Error: element(s) not found
+
+    Call log:
+      - Expect "toBeVisible" with timeout 15000ms
+      - waiting for getByRole('dialog', { name: 'Delete message' })
+
+
+      296 |   await selectLast(view, 'to be deleted');
+      297 |   await page.keyboard.press('Backspace');
+    > 298 |   await expect(dialog).toBeVisible();
+          |                        ^
+      299 |   await dialog.getByRole('button', { name: 'Delete' }).click();
+      300 |
+      301 |   await expect(view.message('to be deleted')).toHaveCount(0);
+        at /home/teo/.herdr/worktrees/macro/synoet-channels-e2e-base/apps/web/tests/channels-e2e/find-and-keys.spec.ts:298:24
+
+    attachment #1: screenshot (image/png) ──────────────────────────────────────────────────────────
+    ../../../../../../.cache/channels-e2e/runs/24909-break-backspace-does-not-ask-to-delete/test-results/find-and-keys-KEY-12-Backs-988dd-e-deletes-it-once-confirmed/test-failed-1.png
+    ────────────────────────────────────────────────────────────────────────────────────────────────
+
+    Error Context: ../../../../../../.cache/channels-e2e/runs/24909-break-backspace-does-not-ask-to-delete/test-results/find-and-keys-KEY-12-Backs-988dd-e-deletes-it-once-confirmed/error-context.md
+
+    attachment #3: trace (application/zip) ─────────────────────────────────────────────────────────
+    ../../../../../../.cache/channels-e2e/runs/24909-break-backspace-does-not-ask-to-delete/test-results/find-and-keys-KEY-12-Backs-988dd-e-deletes-it-once-confirmed/trace.zip
+    Usage:
+
+        npx playwright show-trace ../../../../../../.cache/channels-e2e/runs/24909-break-backspace-does-not-ask-to-delete/test-results/find-and-keys-KEY-12-Backs-988dd-e-deletes-it-once-confirmed/trace.zip
+
+    ────────────────────────────────────────────────────────────────────────────────────────────────
+
+  2 failed
+    tests/channels-e2e/find-and-keys.spec.ts:263:1 › KEY-08 Backspace on a person’s own selected message asks first, and Escape keeps the message 
+    tests/channels-e2e/find-and-keys.spec.ts:285:1 › KEY-12 Backspace on a person’s own selected message deletes it once confirmed 
+  10 passed (47.4s)
+2026/11/15 09:53:26 socat[2854298] W waitpid(-1, {}, WNOHANG): no (more) child has exited
+2026/11/15 09:53:26 socat[2854298] W exiting on signal 15
+2026/11/15 09:53:26 socat[2853786] W exiting on signal 15

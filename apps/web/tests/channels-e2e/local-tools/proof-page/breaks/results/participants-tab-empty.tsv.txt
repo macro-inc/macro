@@ -1,0 +1,44 @@
+participants-tab-empty	ACC-01	PASSED	
+participants-tab-empty	ACC-02	PASSED	
+participants-tab-empty	ACC-03	PASSED	
+participants-tab-empty	ACC-04	PASSED	
+participants-tab-empty	ACC-05	PASSED	
+participants-tab-empty	ACC-06	PASSED	
+participants-tab-empty	ACC-07	PASSED	
+participants-tab-empty	ACC-08	PASSED	
+participants-tab-empty	ACC-09	PASSED	
+participants-tab-empty	CHN-01	PASSED	
+participants-tab-empty	CHN-02	PASSED	
+participants-tab-empty	CHN-03	PASSED	
+participants-tab-empty	CHN-04	PASSED	Error: expect(locator).toContainText(expected) failed | Locator: getByRole('main').locator('[data-view-shell-top-bar]')
+participants-tab-empty	CHN-05	PASSED	
+participants-tab-empty	CHN-06	PASSED	
+participants-tab-empty	CHN-07	PASSED	
+participants-tab-empty	CHN-08	PASSED	Error: expect(locator).toHaveCount(expected) failed | Locator:  getByRole('tree', { name: 'Conversations' }).locator('[data-key="favorite:channel:01a1de42-71b5-
+participants-tab-empty	CHN-09	PASSED	
+participants-tab-empty	CHN-10	FAILED	Error: expect(locator).toContainText(expected) failed | Locator: getByRole('main').getByRole('link', { name: 'Message Ada Owner' })
+participants-tab-empty	CHN-11	PASSED	
+participants-tab-empty	CHN-12	FAILED	Error: expect(locator).toBeVisible() failed | Locator: getByRole('main').getByRole('link', { name: 'Message Ben Member' })
+participants-tab-empty	CHN-13	PASSED	
+participants-tab-empty	CHN-14	PASSED	Error: expect(locator).toBeVisible() failed | Locator: getByRole('main').getByText('Channel e2e-mwhk2dnlg2j1 created')
+participants-tab-empty	CHN-15	PASSED	Error: expect(locator).toHaveCount(expected) failed | Locator:  locator('[data-input-id="channel-input-01a1de42-b9b1-75e0-89f9-bbeb0bea2a1a"]')
+participants-tab-empty	KEY-01	PASSED	
+participants-tab-empty	KEY-02	PASSED	
+participants-tab-empty	KEY-03	PASSED	
+participants-tab-empty	KEY-04	PASSED	
+participants-tab-empty	KEY-05	PASSED	
+participants-tab-empty	KEY-06	PASSED	Error: expect(locator).toBeFocused() failed | Locator:  locator('[data-input-id="thread-reply-input-01a1de42-ed65-72a4-b2d6-0e310fd4fa56"] [contenteditable]')
+participants-tab-empty	KEY-07	PASSED	
+participants-tab-empty	KEY-08	PASSED	
+participants-tab-empty	KEY-12	PASSED	
+participants-tab-empty	KEY-09	PASSED	
+participants-tab-empty	KEY-10	PASSED	
+participants-tab-empty	KEY-11	PASSED	
+participants-tab-empty	MEM-01	PASSED	
+participants-tab-empty	MEM-02	FAILED	Error: expect(locator).toBeVisible() failed | Locator: getByRole('main').getByRole('link', { name: 'Message Cy Teammate' })
+participants-tab-empty	MEM-03	PASSED	Error: expect(locator).toHaveCount(expected) failed | Locator:  locator('[data-input-id="channel-input-01a1de43-1280-7dde-9dd8-6daee275d11d"]')
+participants-tab-empty	MEM-04	PASSED	
+participants-tab-empty	MEM-05	PASSED	
+participants-tab-empty	MEM-06	PASSED	
+participants-tab-empty	MEM-07	FAILED	Error: expect(locator).toContainText(expected) failed | Locator: getByRole('main').getByRole('link', { name: 'Message Ada Owner' })
+participants-tab-empty	MEM-08	PASSED	

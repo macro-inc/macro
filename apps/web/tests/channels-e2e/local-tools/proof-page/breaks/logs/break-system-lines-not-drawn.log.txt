@@ -1,0 +1,536 @@
+path "/home/teo/.herdr/worktrees/macro/synoet-channels-e2e-base/apps/web" does not contain a 'flake.nix', searching up
+warning: Git tree '/home/teo/.herdr/worktrees/macro/synoet-channels-e2e-base' is dirty
+
+Running 44 tests using 4 workers
+
+2026/11/15 07:58:39 socat[3995967] E write(6, 0x6196685fb000, 24): Broken pipe
+2026/11/15 07:58:39 socat[3992753] E write(6, 0x6196685fb000, 24): Broken pipe
+2026/11/15 07:58:39 socat[3996228] E write(6, 0x6196685fb000, 24): Broken pipe
+  ✓   1 tests/channels-e2e/access.spec.ts:39:1 › ACC-02 a person outside the team who opens a private channel’s address sees no messages (1.6s)
+2026/11/15 07:58:39 socat[3996371] E write(6, 0x6196685fb000, 24): Broken pipe
+  ✓   2 tests/channels-e2e/access.spec.ts:13:1 › ACC-01 a teammate who is not in a private channel sees no messages and is offered to ask to join (1.8s)
+2026/11/15 07:58:47 socat[3998321] E write(6, 0x6196685fb000, 24): Broken pipe
+2026/11/15 07:58:48 socat[4000156] E write(6, 0x6196685fb000, 24): Broken pipe
+2026/11/15 07:58:48 socat[4000246] E write(6, 0x6196685fb000, 24): Broken pipe
+2026/11/15 07:58:48 socat[3998477] E write(6, 0x6196685fb000, 24): Broken pipe
+2026/11/15 07:58:48 socat[3997389] E write(6, 0x6196685fb000, 24): Broken pipe
+  ✓   5 tests/channels-e2e/access.spec.ts:139:1 › ACC-05 a withdrawn request can no longer be approved (9.0s)
+2026/11/15 07:58:48 socat[3996249] E write(6, 0x6196685fb000, 24): Broken pipe
+2026/11/15 07:58:48 socat[3996378] E write(6, 0x6196685fb000, 24): Broken pipe
+  ✓   3 tests/channels-e2e/access.spec.ts:61:1 › ACC-03 a request to join reaches the owner at once, and approving it lets the person in at once (10.7s)
+2026/11/15 07:58:48 socat[4008644] E write(6, 0x6196685fb000, 24): Broken pipe
+2026/11/15 07:58:48 socat[3996219] E write(6, 0x6196685fb000, 24): Broken pipe
+2026/11/15 07:58:48 socat[3961079] W waitpid(-1, {}, WNOHANG): no (more) child has exited
+2026/11/15 07:58:48 socat[3996367] E write(6, 0x6196685fb000, 24): Broken pipe
+  ✓   4 tests/channels-e2e/access.spec.ts:104:1 › ACC-04 a denied request tells the person so and shows them nothing of the channel (11.0s)
+  ✓   9 tests/channels-e2e/access.spec.ts:259:1 › ACC-09 a signed-out person who opens a channel’s address is asked to log in and sees nothing of it (1.4s)
+2026/11/15 07:58:50 socat[4010245] E write(6, 0x6196685fb000, 24): Broken pipe
+2026/11/15 07:58:50 socat[4011106] E write(6, 0x6196685fb000, 24): Broken pipe
+  ✓   7 tests/channels-e2e/access.spec.ts:207:1 › ACC-07 a person outside the team cannot read a team channel or find it to join (1.9s)
+2026/11/15 07:58:51 socat[3961079] W waitpid(-1, {}, WNOHANG): no (more) child has exited
+2026/11/15 07:58:51 socat[3961971] W waitpid(-1, {}, WNOHANG): no (more) child has exited
+2026/11/15 07:58:51 socat[4011389] E write(6, 0x6196685fb000, 24): Broken pipe
+  ✓   8 tests/channels-e2e/access.spec.ts:243:1 › ACC-08 the address of a channel that does not exist says the conversation is unavailable (2.8s)
+2026/11/15 07:58:53 socat[4015980] E write(6, 0x6196685fc000, 24): Broken pipe
+2026/11/15 07:58:53 socat[4016116] E write(6, 0x6196685fc000, 24): Broken pipe
+2026/11/15 07:58:54 socat[4017667] E write(6, 0x6196685fc000, 24): Broken pipe
+2026/11/15 07:58:54 socat[4017761] E write(6, 0x6196685fc000, 24): Broken pipe
+2026/11/15 07:58:56 socat[3961079] W waitpid(-1, {}, WNOHANG): no (more) child has exited
+2026/11/15 07:58:56 socat[4019535] E write(6, 0x6196685fc000, 24): Broken pipe
+  ✓  10 tests/channels-e2e/channels.spec.ts:23:1 › CHN-01 a private channel made in the app opens empty, shows in the list and takes its first message (6.3s)
+2026/11/15 07:58:56 socat[4016105] E write(6, 0x6196685fc000, 24): Broken pipe
+2026/11/15 07:58:56 socat[4016183] E write(6, 0x6196685fc000, 24): Broken pipe
+2026/11/15 07:58:56 socat[3961079] W waitpid(-1, {}, WNOHANG): no (more) child has exited
+  ✓  11 tests/channels-e2e/channels.spec.ts:53:1 › CHN-02 a team channel made in the app appears for a teammate under the team’s channels and can be read (6.3s)
+2026/11/15 07:58:58 socat[4026823] E write(6, 0x6196685fc000, 24): Broken pipe
+2026/11/15 07:58:58 socat[4026858] E write(6, 0x6196685fc000, 24): Broken pipe
+2026/11/15 07:59:00 socat[4029217] E write(6, 0x6196685fc000, 24): Broken pipe
+2026/11/15 07:59:00 socat[4029236] E write(6, 0x6196685fc000, 24): Broken pipe
+2026/11/15 07:59:02 socat[4029942] E write(6, 0x6196685fc000, 24): Broken pipe
+2026/11/15 07:59:02 socat[4029958] E write(6, 0x6196685fc000, 24): Broken pipe
+  ✓  14 tests/channels-e2e/channels.spec.ts:176:1 › CHN-05 a channel can be made a favorite and taken out again, and both survive a reload (6.0s)
+2026/11/15 07:59:05 socat[3997628] E write(6, 0x6196685fb000, 24): Broken pipe
+2026/11/15 07:59:05 socat[3997648] E write(6, 0x6196685fb000, 24): Broken pipe
+  ✘   6 tests/channels-e2e/access.spec.ts:168:1 › ACC-06 a teammate finds a team channel they are not in by its name and joins it (25.9s)
+2026/11/15 07:59:07 socat[3961079] W waitpid(-1, {}, WNOHANG): no (more) child has exited
+2026/11/15 07:59:07 socat[4038471] E write(6, 0x6196685fc000, 24): Broken pipe
+2026/11/15 07:59:07 socat[4036300] E write(6, 0x6196685fc000, 24): Broken pipe
+  ✓  15 tests/channels-e2e/channels.spec.ts:206:1 › CHN-06 Copy Link gives an address that opens the channel for another member (4.6s)
+2026/11/15 07:59:10 socat[4018427] E write(6, 0x6196685fc000, 24): Broken pipe
+2026/11/15 07:59:10 socat[4016485] E write(6, 0x6196685fc000, 24): Broken pipe
+  ✘  12 tests/channels-e2e/channels.spec.ts:105:1 › CHN-03 renaming a channel updates its header and list row, and tells both members in the channel (19.1s)
+2026/11/15 07:59:11 socat[4047917] E write(6, 0x6196685fc000, 24): Broken pipe
+2026/11/15 07:59:13 socat[4050835] E write(6, 0x6196685fc000, 24): Broken pipe
+2026/11/15 07:59:13 socat[4050858] E write(6, 0x6196685fc000, 24): Broken pipe
+  ✓  18 tests/channels-e2e/channels.spec.ts:299:1 › CHN-09 a member who does not own the channel is not offered Delete (2.4s)
+2026/11/15 07:59:14 socat[4041430] E write(6, 0x6196685fc000, 24): Broken pipe
+2026/11/15 07:59:15 socat[3961079] W waitpid(-1, {}, WNOHANG): no (more) child has exited
+2026/11/15 07:59:15 socat[4026865] E write(6, 0x6196685fc000, 24): Broken pipe
+2026/11/15 07:59:16 socat[4029180] E write(6, 0x6196685fc000, 24): Broken pipe
+2026/11/15 07:59:16 socat[4029210] E write(6, 0x6196685fc000, 24): Broken pipe
+  ✘  13 tests/channels-e2e/channels.spec.ts:143:1 › CHN-04 a rename shows in the header of a member who has the channel open (19.5s)
+2026/11/15 07:59:16 socat[4055454] E write(6, 0x6196685fc000, 24): Broken pipe
+  ✓  19 tests/channels-e2e/channels.spec.ts:317:1 › CHN-10 the Participants tab lists the channel’s members by name, with the owner marked (2.5s)
+2026/11/15 07:59:17 socat[3961079] W waitpid(-1, {}, WNOHANG): no (more) child has exited
+2026/11/15 07:59:17 socat[3961971] W waitpid(-1, {}, WNOHANG): no (more) child has exited
+2026/11/15 07:59:17 socat[4050656] E write(6, 0x6196685fc000, 24): Broken pipe
+2026/11/15 07:59:17 socat[4038610] E read(6, 0x6196685fc000, 8192): Connection reset by peer
+2026/11/15 07:59:17 socat[4038611] E write(6, 0x55555561e000, 24): Broken pipe
+2026/11/15 07:59:17 socat[4055873] E write(6, 0x6196685fc000, 24): Broken pipe
+  ✓  16 tests/channels-e2e/channels.spec.ts:230:1 › CHN-07 deleting a channel removes it for its owner at once, and its address no longer opens for anyone (11.2s)
+2026/11/15 07:59:18 socat[4060546] E write(6, 0x6196685fc000, 24): Broken pipe
+  ✓  20 tests/channels-e2e/channels.spec.ts:340:1 › CHN-11 the Attachments tab of a channel with no files says there are none (2.5s)
+2026/11/15 07:59:19 socat[4060889] E write(6, 0x6196685fc000, 24): Broken pipe
+  ✓  21 tests/channels-e2e/channels.spec.ts:362:1 › CHN-12 going to another tab and back keeps the message list where it was (3.5s)
+2026/11/15 07:59:20 socat[4061413] E write(6, 0x6196685fc000, 24): Broken pipe
+2026/11/15 07:59:20 socat[3961079] W waitpid(-1, {}, WNOHANG): no (more) child has exited
+  ✓  22 tests/channels-e2e/channels.spec.ts:390:1 › CHN-13 a channel’s history starts with “Channel <name> created” (3.0s)
+2026/11/15 07:59:20 socat[4061456] E write(6, 0x6196685fc000, 24): Broken pipe
+2026/11/15 07:59:25 socat[4068470] E write(6, 0x6196685fc000, 24): Broken pipe
+  ✓  25 tests/channels-e2e/find-and-keys.spec.ts:26:1 › KEY-01 find counts the messages that match and steps through them, newest first (4.5s)
+2026/11/15 07:59:25 socat[4043735] E write(6, 0x6196685fc000, 24): Broken pipe
+  ✘  17 tests/channels-e2e/channels.spec.ts:273:1 › CHN-08 a deleted channel leaves its owner’s Favorites too (18.3s)
+2026/11/15 07:59:28 socat[4073706] E write(6, 0x6196685fc000, 24): Broken pipe
+  ✓  27 tests/channels-e2e/find-and-keys.spec.ts:95:1 › KEY-03 find for words nobody wrote says there are no matches (2.6s)
+2026/11/15 07:59:29 socat[3961079] W waitpid(-1, {}, WNOHANG): no (more) child has exited
+2026/11/15 07:59:29 socat[3961971] W waitpid(-1, {}, WNOHANG): no (more) child has exited
+  ✓  26 tests/channels-e2e/find-and-keys.spec.ts:75:1 › KEY-02 find brings an old message far up a long history into view (4.7s)
+2026/11/15 07:59:29 socat[4073305] E write(6, 0x6196685fc000, 24): Broken pipe
+2026/11/15 07:59:31 socat[4081670] E write(6, 0x6196685fc000, 24): Broken pipe
+2026/11/15 07:59:31 socat[4081739] E write(6, 0x6196685fc000, 24): Broken pipe
+  ✓  28 tests/channels-e2e/find-and-keys.spec.ts:119:1 › KEY-04 the find bar closes with its button and with Escape, and the channel still takes a message (2.9s)
+2026/11/15 07:59:33 socat[3961079] W waitpid(-1, {}, WNOHANG): no (more) child has exited
+2026/11/15 07:59:33 socat[4083052] E write(6, 0x6196685fc000, 24): Broken pipe
+  ✓  29 tests/channels-e2e/find-and-keys.spec.ts:143:1 › KEY-05 the arrow keys walk from the composer up the messages and back down into the composer (4.0s)
+2026/11/15 07:59:35 socat[4062517] E write(6, 0x6196685fc000, 24): Broken pipe
+  ✘  23 tests/channels-e2e/channels.spec.ts:410:1 › CHN-14 a brand-new channel with no messages shows its “Channel <name> created” line (17.0s)
+2026/11/15 07:59:37 socat[4091596] E write(6, 0x6196685fc000, 24): Broken pipe
+2026/11/15 07:59:37 socat[4092086] E write(6, 0x6196685fc000, 24): Broken pipe
+  ✓  31 tests/channels-e2e/find-and-keys.spec.ts:215:1 › KEY-07 “e” on a person’s own selected message edits it (3.4s)
+2026/11/15 07:59:37 socat[4065469] E write(6, 0x6196685fc000, 24): Broken pipe
+  ✘  24 tests/channels-e2e/channels.spec.ts:429:1 › CHN-15 a channel deleted elsewhere closes on its owner’s open page (17.5s)
+2026/11/15 07:59:38 socat[4094372] E write(6, 0x6196685fc000, 24): Broken pipe
+  ✓  32 tests/channels-e2e/find-and-keys.spec.ts:247:1 › KEY-08 Backspace on a person’s own selected message asks first, and Escape keeps the message (2.5s)
+2026/11/15 07:59:39 socat[4095860] E write(6, 0x6196685fc000, 24): Broken pipe
+  ✓  33 tests/channels-e2e/find-and-keys.spec.ts:273:1 › KEY-12 Backspace on a person’s own selected message deletes it once confirmed (2.6s)
+2026/11/15 07:59:39 socat[4097261] E write(6, 0x6196685fc000, 24): Broken pipe
+2026/11/15 07:59:40 socat[4097259] E write(6, 0x6196685fc000, 24): Broken pipe
+  ✓  34 tests/channels-e2e/find-and-keys.spec.ts:298:1 › KEY-09 Shift+G in the message list goes to the latest message (2.9s)
+2026/11/15 07:59:40 socat[4098015] E write(6, 0x6196685fc000, 24): Broken pipe
+  ✓  35 tests/channels-e2e/find-and-keys.spec.ts:326:1 › KEY-10 choosing a channel in the list puts the cursor in its composer (2.7s)
+2026/11/15 07:59:42 socat[3961079] W waitpid(-1, {}, WNOHANG): no (more) child has exited
+  ✓  36 tests/channels-e2e/find-and-keys.spec.ts:350:1 › KEY-11 Escape steps out of the composer to the messages, then to the list of conversations (2.6s)
+2026/11/15 07:59:42 socat[4103771] E write(6, 0x6196685fc000, 24): Broken pipe
+2026/11/15 07:59:48 socat[4084214] E write(6, 0x6196685fc000, 24): Broken pipe
+2026/11/15 07:59:48 socat[4084242] E write(6, 0x6196685fc000, 24): Broken pipe
+  ✘  30 tests/channels-e2e/find-and-keys.spec.ts:177:1 › KEY-06 Enter on a selected message opens a reply to that message (17.6s)
+2026/11/15 07:59:59 socat[4106670] E write(6, 0x6196685fc000, 24): Broken pipe
+  ✘  39 tests/channels-e2e/members.spec.ts:111:1 › MEM-03 a person removed while the channel is open loses it at once (17.0s)
+2026/11/15 07:59:59 socat[4106781] E write(6, 0x6196685fc000, 24): Broken pipe
+2026/11/15 07:59:59 socat[4105067] E write(6, 0x6196685fc000, 24): Broken pipe
+2026/11/15 07:59:59 socat[3961079] W waitpid(-1, {}, WNOHANG): no (more) child has exited
+2026/11/15 07:59:59 socat[4105096] E write(6, 0x6196685fc000, 24): Broken pipe
+  ✘  38 tests/channels-e2e/members.spec.ts:71:1 › MEM-02 the owner removes a person in the Participants tab and everyone who stays is told (19.0s)
+2026/11/15 08:00:00 socat[4106665] E write(6, 0x6196685fc000, 24): Broken pipe
+2026/11/15 08:00:00 socat[4108924] E write(6, 0x6196685fc000, 24): Broken pipe
+2026/11/15 08:00:00 socat[4108993] E write(6, 0x6196685fc000, 24): Broken pipe
+2026/11/15 08:00:01 socat[4104994] E write(6, 0x6196685fc000, 24): Broken pipe
+  ✘  37 tests/channels-e2e/members.spec.ts:18:1 › MEM-01 a person invited from the app gets the channel at once, with what was said before and after (21.0s)
+2026/11/15 08:00:04 socat[4136908] E write(6, 0x6196685fc000, 24): Broken pipe
+  ✓  43 tests/channels-e2e/members.spec.ts:239:1 › MEM-07 a member who does not own the channel cannot remove its owner (2.5s)
+2026/11/15 08:00:07 socat[4117049] E write(6, 0x6196685fc000, 24): Broken pipe
+2026/11/15 08:00:07 socat[4117061] E write(6, 0x6196685fc000, 24): Broken pipe
+2026/11/15 08:00:07 socat[4118694] E write(6, 0x6196685fc000, 24): Broken pipe
+  ✘  40 tests/channels-e2e/members.spec.ts:139:1 › MEM-04 a removed person never sees what is said after, and after a reload cannot open the channel (19.0s)
+2026/11/15 08:00:17 socat[4134387] E write(6, 0x6196685fc000, 24): Broken pipe
+2026/11/15 08:00:17 socat[4134482] E write(6, 0x6196685fc000, 24): Broken pipe
+2026/11/15 08:00:17 socat[4135762] E write(6, 0x6196685fc000, 24): Broken pipe
+  ✘  41 tests/channels-e2e/members.spec.ts:178:1 › MEM-05 people added and removed while the channel is open show as lines between the right messages (17.6s)
+  ✘  42 tests/channels-e2e/members.spec.ts:214:1 › MEM-06 a channel opened afresh shows who was added and removed between the right messages (16.6s)
+2026/11/15 08:00:20 socat[4141486] E write(6, 0x6196685fc000, 24): Broken pipe
+2026/11/15 08:00:20 socat[4139005] E write(6, 0x6196685fc000, 24): Broken pipe
+2026/11/15 08:00:20 socat[3961971] W waitpid(-1, {}, WNOHANG): no (more) child has exited
+2026/11/15 08:00:20 socat[4141616] E write(6, 0x6196685fc000, 24): Broken pipe
+  ✘  44 tests/channels-e2e/members.spec.ts:269:1 › MEM-08 a person added while their app was closed finds the channel in the list when they open it (16.3s)
+
+
+  1) tests/channels-e2e/access.spec.ts:168:1 › ACC-06 a teammate finds a team channel they are not in by its name and joins it 
+
+    Error: the last messages and system lines in the list
+
+    the last messages and system lines in the list
+
+    expect(received).toEqual(expected) // deep equality
+
+    - Expected  - 1
+    + Received  + 0
+
+      Array [
+        "for the whole team",
+    -   "Ben Member joined the channel",
+      ]
+
+    Call Log:
+    - Timeout 15000ms exceeded while waiting on the predicate
+
+       at harness/management.ts:79
+
+      77 |       message: 'the last messages and system lines in the list',
+      78 |     })
+    > 79 |     .toEqual(expected);
+         |      ^
+      80 | }
+      81 |
+      82 | /** A channel's row in the list of conversations, outside Favorites. */
+        at expectTimelineEndsWith (/home/teo/.herdr/worktrees/macro/synoet-channels-e2e-base/apps/web/tests/channels-e2e/harness/management.ts:79:6)
+        at /home/teo/.herdr/worktrees/macro/synoet-channels-e2e-base/apps/web/tests/channels-e2e/access.spec.ts:196:11
+
+    attachment #1: screenshot (image/png) ──────────────────────────────────────────────────────────
+    ../../../../../../.cache/channels-e2e/runs/24909-break-system-lines-not-drawn/test-results/access-ACC-06-a-teammate-f-01e5f-in-by-its-name-and-joins-it/test-failed-1.png
+    ────────────────────────────────────────────────────────────────────────────────────────────────
+
+    Error Context: ../../../../../../.cache/channels-e2e/runs/24909-break-system-lines-not-drawn/test-results/access-ACC-06-a-teammate-f-01e5f-in-by-its-name-and-joins-it/error-context.md
+
+    attachment #3: trace (application/zip) ─────────────────────────────────────────────────────────
+    ../../../../../../.cache/channels-e2e/runs/24909-break-system-lines-not-drawn/test-results/access-ACC-06-a-teammate-f-01e5f-in-by-its-name-and-joins-it/trace.zip
+    Usage:
+
+        npx playwright show-trace ../../../../../../.cache/channels-e2e/runs/24909-break-system-lines-not-drawn/test-results/access-ACC-06-a-teammate-f-01e5f-in-by-its-name-and-joins-it/trace.zip
+
+    ────────────────────────────────────────────────────────────────────────────────────────────────
+
+  2) tests/channels-e2e/channels.spec.ts:105:1 › CHN-03 renaming a channel updates its header and list row, and tells both members in the channel 
+
+    Error: the last messages and system lines in the list
+
+    the last messages and system lines in the list
+
+    expect(received).toEqual(expected) // deep equality
+
+    - Expected  - 1
+    + Received  + 0
+
+      Array [
+        "before the rename",
+    -   "Ada Owner renamed the channel to renamed-mwhjmh9golss",
+      ]
+
+    Call Log:
+    - Timeout 15000ms exceeded while waiting on the predicate
+
+       at harness/management.ts:79
+
+      77 |       message: 'the last messages and system lines in the list',
+      78 |     })
+    > 79 |     .toEqual(expected);
+         |      ^
+      80 | }
+      81 |
+      82 | /** A channel's row in the list of conversations, outside Favorites. */
+        at expectTimelineEndsWith (/home/teo/.herdr/worktrees/macro/synoet-channels-e2e-base/apps/web/tests/channels-e2e/harness/management.ts:79:6)
+        at /home/teo/.herdr/worktrees/macro/synoet-channels-e2e-base/apps/web/tests/channels-e2e/channels.spec.ts:127:9
+
+    attachment #1: screenshot (image/png) ──────────────────────────────────────────────────────────
+    ../../../../../../.cache/channels-e2e/runs/24909-break-system-lines-not-drawn/test-results/channels-CHN-03-renaming-a-9b020-both-members-in-the-channel/test-failed-1.png
+    ────────────────────────────────────────────────────────────────────────────────────────────────
+
+    attachment #2: screenshot (image/png) ──────────────────────────────────────────────────────────
+    ../../../../../../.cache/channels-e2e/runs/24909-break-system-lines-not-drawn/test-results/channels-CHN-03-renaming-a-9b020-both-members-in-the-channel/test-failed-2.png
+    ────────────────────────────────────────────────────────────────────────────────────────────────
+
+    Error Context: ../../../../../../.cache/channels-e2e/runs/24909-break-system-lines-not-drawn/test-results/channels-CHN-03-renaming-a-9b020-both-members-in-the-channel/error-context.md
+
+    attachment #4: trace (application/zip) ─────────────────────────────────────────────────────────
+    ../../../../../../.cache/channels-e2e/runs/24909-break-system-lines-not-drawn/test-results/channels-CHN-03-renaming-a-9b020-both-members-in-the-channel/trace.zip
+    Usage:
+
+        npx playwright show-trace ../../../../../../.cache/channels-e2e/runs/24909-break-system-lines-not-drawn/test-results/channels-CHN-03-renaming-a-9b020-both-members-in-the-channel/trace.zip
+
+    ────────────────────────────────────────────────────────────────────────────────────────────────
+
+  3) tests/channels-e2e/members.spec.ts:18:1 › MEM-01 a person invited from the app gets the channel at once, with what was said before and after 
+
+    Error: the last messages and system lines in the list
+
+    the last messages and system lines in the list
+
+    expect(received).toEqual(expected) // deep equality
+
+    - Expected  - 1
+    + Received  + 0
+
+      Array [
+        "said before one",
+        "said before two",
+    -   "Ada Owner added Cy Teammate",
+      ]
+
+    Call Log:
+    - Timeout 15000ms exceeded while waiting on the predicate
+
+       at harness/management.ts:79
+
+      77 |       message: 'the last messages and system lines in the list',
+      78 |     })
+    > 79 |     .toEqual(expected);
+         |      ^
+      80 | }
+      81 |
+      82 | /** A channel's row in the list of conversations, outside Favorites. */
+        at expectTimelineEndsWith (/home/teo/.herdr/worktrees/macro/synoet-channels-e2e-base/apps/web/tests/channels-e2e/harness/management.ts:79:6)
+        at /home/teo/.herdr/worktrees/macro/synoet-channels-e2e-base/apps/web/tests/channels-e2e/members.spec.ts:38:9
+
+    attachment #1: screenshot (image/png) ──────────────────────────────────────────────────────────
+    ../../../../../../.cache/channels-e2e/runs/24909-break-system-lines-not-drawn/test-results/members-MEM-01-a-person-in-dd3f2-t-was-said-before-and-after/test-failed-2.png
+    ────────────────────────────────────────────────────────────────────────────────────────────────
+
+    attachment #2: screenshot (image/png) ──────────────────────────────────────────────────────────
+    ../../../../../../.cache/channels-e2e/runs/24909-break-system-lines-not-drawn/test-results/members-MEM-01-a-person-in-dd3f2-t-was-said-before-and-after/test-failed-3.png
+    ────────────────────────────────────────────────────────────────────────────────────────────────
+
+    attachment #3: screenshot (image/png) ──────────────────────────────────────────────────────────
+    ../../../../../../.cache/channels-e2e/runs/24909-break-system-lines-not-drawn/test-results/members-MEM-01-a-person-in-dd3f2-t-was-said-before-and-after/test-failed-1.png
+    ────────────────────────────────────────────────────────────────────────────────────────────────
+
+    Error Context: ../../../../../../.cache/channels-e2e/runs/24909-break-system-lines-not-drawn/test-results/members-MEM-01-a-person-in-dd3f2-t-was-said-before-and-after/error-context.md
+
+    attachment #5: trace (application/zip) ─────────────────────────────────────────────────────────
+    ../../../../../../.cache/channels-e2e/runs/24909-break-system-lines-not-drawn/test-results/members-MEM-01-a-person-in-dd3f2-t-was-said-before-and-after/trace.zip
+    Usage:
+
+        npx playwright show-trace ../../../../../../.cache/channels-e2e/runs/24909-break-system-lines-not-drawn/test-results/members-MEM-01-a-person-in-dd3f2-t-was-said-before-and-after/trace.zip
+
+    ────────────────────────────────────────────────────────────────────────────────────────────────
+
+  4) tests/channels-e2e/members.spec.ts:71:1 › MEM-02 the owner removes a person in the Participants tab and everyone who stays is told 
+
+    Error: the last messages and system lines in the list
+
+    the last messages and system lines in the list
+
+    expect(received).toEqual(expected) // deep equality
+
+    - Expected  - 1
+    + Received  + 0
+
+      Array [
+        "all three here",
+    -   "Ada Owner removed Cy Teammate",
+      ]
+
+    Call Log:
+    - Timeout 15000ms exceeded while waiting on the predicate
+
+       at harness/management.ts:79
+
+      77 |       message: 'the last messages and system lines in the list',
+      78 |     })
+    > 79 |     .toEqual(expected);
+         |      ^
+      80 | }
+      81 |
+      82 | /** A channel's row in the list of conversations, outside Favorites. */
+        at expectTimelineEndsWith (/home/teo/.herdr/worktrees/macro/synoet-channels-e2e-base/apps/web/tests/channels-e2e/harness/management.ts:79:6)
+        at /home/teo/.herdr/worktrees/macro/synoet-channels-e2e-base/apps/web/tests/channels-e2e/members.spec.ts:99:9
+
+    attachment #1: screenshot (image/png) ──────────────────────────────────────────────────────────
+    ../../../../../../.cache/channels-e2e/runs/24909-break-system-lines-not-drawn/test-results/members-MEM-02-the-owner-r-662c6--everyone-who-stays-is-told/test-failed-2.png
+    ────────────────────────────────────────────────────────────────────────────────────────────────
+
+    attachment #2: screenshot (image/png) ──────────────────────────────────────────────────────────
+    ../../../../../../.cache/channels-e2e/runs/24909-break-system-lines-not-drawn/test-results/members-MEM-02-the-owner-r-662c6--everyone-who-stays-is-told/test-failed-1.png
+    ────────────────────────────────────────────────────────────────────────────────────────────────
+
+    Error Context: ../../../../../../.cache/channels-e2e/runs/24909-break-system-lines-not-drawn/test-results/members-MEM-02-the-owner-r-662c6--everyone-who-stays-is-told/error-context.md
+
+    attachment #4: trace (application/zip) ─────────────────────────────────────────────────────────
+    ../../../../../../.cache/channels-e2e/runs/24909-break-system-lines-not-drawn/test-results/members-MEM-02-the-owner-r-662c6--everyone-who-stays-is-told/trace.zip
+    Usage:
+
+        npx playwright show-trace ../../../../../../.cache/channels-e2e/runs/24909-break-system-lines-not-drawn/test-results/members-MEM-02-the-owner-r-662c6--everyone-who-stays-is-told/trace.zip
+
+    ────────────────────────────────────────────────────────────────────────────────────────────────
+
+  5) tests/channels-e2e/members.spec.ts:139:1 › MEM-04 a removed person never sees what is said after, and after a reload cannot open the channel 
+
+    Error: expect(locator).toBeVisible() failed
+
+    Locator: locator('[data-channel-scroll] [data-system-activity]').filter({ hasText: 'Ada Owner removed Cy Teammate' })
+    Expected: visible
+    Timeout: 15000ms
+    Error: element(s) not found
+
+    Call log:
+      - Expect "toBeVisible" with timeout 15000ms
+      - waiting for locator('[data-channel-scroll] [data-system-activity]').filter({ hasText: 'Ada Owner removed Cy Teammate' })
+
+
+      157 |   await expect(
+      158 |     systemLine(benPage, 'Ada Owner removed Cy Teammate')
+    > 159 |   ).toBeVisible();
+          |     ^
+      160 |   await ada.post(channel.id, 'not for cy');
+      161 |
+      162 |   // Ben, who stayed, has it; Cy's page, open all along, does not.
+        at /home/teo/.herdr/worktrees/macro/synoet-channels-e2e-base/apps/web/tests/channels-e2e/members.spec.ts:159:5
+
+    attachment #1: screenshot (image/png) ──────────────────────────────────────────────────────────
+    ../../../../../../.cache/channels-e2e/runs/24909-break-system-lines-not-drawn/test-results/members-MEM-04-a-removed-p-17533-oad-cannot-open-the-channel/test-failed-1.png
+    ────────────────────────────────────────────────────────────────────────────────────────────────
+
+    attachment #2: screenshot (image/png) ──────────────────────────────────────────────────────────
+    ../../../../../../.cache/channels-e2e/runs/24909-break-system-lines-not-drawn/test-results/members-MEM-04-a-removed-p-17533-oad-cannot-open-the-channel/test-failed-2.png
+    ────────────────────────────────────────────────────────────────────────────────────────────────
+
+    Error Context: ../../../../../../.cache/channels-e2e/runs/24909-break-system-lines-not-drawn/test-results/members-MEM-04-a-removed-p-17533-oad-cannot-open-the-channel/error-context.md
+
+    attachment #4: trace (application/zip) ─────────────────────────────────────────────────────────
+    ../../../../../../.cache/channels-e2e/runs/24909-break-system-lines-not-drawn/test-results/members-MEM-04-a-removed-p-17533-oad-cannot-open-the-channel/trace.zip
+    Usage:
+
+        npx playwright show-trace ../../../../../../.cache/channels-e2e/runs/24909-break-system-lines-not-drawn/test-results/members-MEM-04-a-removed-p-17533-oad-cannot-open-the-channel/trace.zip
+
+    ────────────────────────────────────────────────────────────────────────────────────────────────
+
+  6) tests/channels-e2e/members.spec.ts:178:1 › MEM-05 people added and removed while the channel is open show as lines between the right messages 
+
+    Error: expect(locator).toBeVisible() failed
+
+    Locator: locator('[data-channel-scroll] [data-system-activity]').filter({ hasText: 'Ada Owner added Cy Teammate' })
+    Expected: visible
+    Timeout: 15000ms
+    Error: element(s) not found
+
+    Call log:
+      - Expect "toBeVisible" with timeout 15000ms
+      - waiting for locator('[data-channel-scroll] [data-system-activity]').filter({ hasText: 'Ada Owner added Cy Teammate' })
+
+
+      192 |   await expect(
+      193 |     systemLine(benPage, 'Ada Owner added Cy Teammate')
+    > 194 |   ).toBeVisible();
+          |     ^
+      195 |   await ada.post(channel.id, 'with cy');
+      196 |   await benView.expectEndsWith(['before cy', 'with cy']);
+      197 |   await ada.removeParticipants(channel.id, [people.cy]);
+        at /home/teo/.herdr/worktrees/macro/synoet-channels-e2e-base/apps/web/tests/channels-e2e/members.spec.ts:194:5
+
+    attachment #1: screenshot (image/png) ──────────────────────────────────────────────────────────
+    ../../../../../../.cache/channels-e2e/runs/24909-break-system-lines-not-drawn/test-results/members-MEM-05-people-adde-c583e--between-the-right-messages/test-failed-1.png
+    ────────────────────────────────────────────────────────────────────────────────────────────────
+
+    Error Context: ../../../../../../.cache/channels-e2e/runs/24909-break-system-lines-not-drawn/test-results/members-MEM-05-people-adde-c583e--between-the-right-messages/error-context.md
+
+    attachment #3: trace (application/zip) ─────────────────────────────────────────────────────────
+    ../../../../../../.cache/channels-e2e/runs/24909-break-system-lines-not-drawn/test-results/members-MEM-05-people-adde-c583e--between-the-right-messages/trace.zip
+    Usage:
+
+        npx playwright show-trace ../../../../../../.cache/channels-e2e/runs/24909-break-system-lines-not-drawn/test-results/members-MEM-05-people-adde-c583e--between-the-right-messages/trace.zip
+
+    ────────────────────────────────────────────────────────────────────────────────────────────────
+
+  7) tests/channels-e2e/members.spec.ts:214:1 › MEM-06 a channel opened afresh shows who was added and removed between the right messages 
+
+    Error: the last messages and system lines in the list
+
+    the last messages and system lines in the list
+
+    expect(received).toEqual(expected) // deep equality
+
+    - Expected  - 2
+    + Received  + 0
+
+      Array [
+        "before cy",
+    -   "Ada Owner added Cy Teammate",
+        "with cy",
+    -   "Ada Owner removed Cy Teammate",
+        "after cy",
+      ]
+
+    Call Log:
+    - Timeout 15000ms exceeded while waiting on the predicate
+
+       at harness/management.ts:79
+
+      77 |       message: 'the last messages and system lines in the list',
+      78 |     })
+    > 79 |     .toEqual(expected);
+         |      ^
+      80 | }
+      81 |
+      82 | /** A channel's row in the list of conversations, outside Favorites. */
+        at expectTimelineEndsWith (/home/teo/.herdr/worktrees/macro/synoet-channels-e2e-base/apps/web/tests/channels-e2e/harness/management.ts:79:6)
+        at /home/teo/.herdr/worktrees/macro/synoet-channels-e2e-base/apps/web/tests/channels-e2e/members.spec.ts:229:9
+
+    attachment #1: screenshot (image/png) ──────────────────────────────────────────────────────────
+    ../../../../../../.cache/channels-e2e/runs/24909-break-system-lines-not-drawn/test-results/members-MEM-06-a-channel-o-fd759--between-the-right-messages/test-failed-1.png
+    ────────────────────────────────────────────────────────────────────────────────────────────────
+
+    Error Context: ../../../../../../.cache/channels-e2e/runs/24909-break-system-lines-not-drawn/test-results/members-MEM-06-a-channel-o-fd759--between-the-right-messages/error-context.md
+
+    attachment #3: trace (application/zip) ─────────────────────────────────────────────────────────
+    ../../../../../../.cache/channels-e2e/runs/24909-break-system-lines-not-drawn/test-results/members-MEM-06-a-channel-o-fd759--between-the-right-messages/trace.zip
+    Usage:
+
+        npx playwright show-trace ../../../../../../.cache/channels-e2e/runs/24909-break-system-lines-not-drawn/test-results/members-MEM-06-a-channel-o-fd759--between-the-right-messages/trace.zip
+
+    ────────────────────────────────────────────────────────────────────────────────────────────────
+
+  8) tests/channels-e2e/members.spec.ts:269:1 › MEM-08 a person added while their app was closed finds the channel in the list when they open it 
+
+    Error: the last messages and system lines in the list
+
+    the last messages and system lines in the list
+
+    expect(received).toEqual(expected) // deep equality
+
+    - Expected  - 1
+    + Received  + 0
+
+      Array [
+        "waiting for cy",
+    -   "Ada Owner added Cy Teammate",
+      ]
+
+    Call Log:
+    - Timeout 15000ms exceeded while waiting on the predicate
+
+       at harness/management.ts:79
+
+      77 |       message: 'the last messages and system lines in the list',
+      78 |     })
+    > 79 |     .toEqual(expected);
+         |      ^
+      80 | }
+      81 |
+      82 | /** A channel's row in the list of conversations, outside Favorites. */
+        at expectTimelineEndsWith (/home/teo/.herdr/worktrees/macro/synoet-channels-e2e-base/apps/web/tests/channels-e2e/harness/management.ts:79:6)
+        at /home/teo/.herdr/worktrees/macro/synoet-channels-e2e-base/apps/web/tests/channels-e2e/members.spec.ts:284:9
+
+    attachment #1: screenshot (image/png) ──────────────────────────────────────────────────────────
+    ../../../../../../.cache/channels-e2e/runs/24909-break-system-lines-not-drawn/test-results/members-MEM-08-a-person-ad-905b9--the-list-when-they-open-it/test-failed-1.png
+    ────────────────────────────────────────────────────────────────────────────────────────────────
+
+    Error Context: ../../../../../../.cache/channels-e2e/runs/24909-break-system-lines-not-drawn/test-results/members-MEM-08-a-person-ad-905b9--the-list-when-they-open-it/error-context.md
+
+    attachment #3: trace (application/zip) ─────────────────────────────────────────────────────────
+    ../../../../../../.cache/channels-e2e/runs/24909-break-system-lines-not-drawn/test-results/members-MEM-08-a-person-ad-905b9--the-list-when-they-open-it/trace.zip
+    Usage:
+
+        npx playwright show-trace ../../../../../../.cache/channels-e2e/runs/24909-break-system-lines-not-drawn/test-results/members-MEM-08-a-person-ad-905b9--the-list-when-they-open-it/trace.zip
+
+    ────────────────────────────────────────────────────────────────────────────────────────────────
+
+  8 failed
+    tests/channels-e2e/access.spec.ts:168:1 › ACC-06 a teammate finds a team channel they are not in by its name and joins it 
+    tests/channels-e2e/channels.spec.ts:105:1 › CHN-03 renaming a channel updates its header and list row, and tells both members in the channel 
+    tests/channels-e2e/members.spec.ts:18:1 › MEM-01 a person invited from the app gets the channel at once, with what was said before and after 
+    tests/channels-e2e/members.spec.ts:71:1 › MEM-02 the owner removes a person in the Participants tab and everyone who stays is told 
+    tests/channels-e2e/members.spec.ts:139:1 › MEM-04 a removed person never sees what is said after, and after a reload cannot open the channel 
+    tests/channels-e2e/members.spec.ts:178:1 › MEM-05 people added and removed while the channel is open show as lines between the right messages 
+    tests/channels-e2e/members.spec.ts:214:1 › MEM-06 a channel opened afresh shows who was added and removed between the right messages 
+    tests/channels-e2e/members.spec.ts:269:1 › MEM-08 a person added while their app was closed finds the channel in the list when they open it 
+  36 passed (2.0m)
+2026/11/15 08:00:21 socat[3961971] W exiting on signal 15
+2026/11/15 08:00:21 socat[3961079] W exiting on signal 15

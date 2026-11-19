@@ -1,0 +1,44 @@
+favorite-does-nothing	ACC-01	PASSED	
+favorite-does-nothing	ACC-02	PASSED	
+favorite-does-nothing	ACC-03	PASSED	
+favorite-does-nothing	ACC-04	PASSED	
+favorite-does-nothing	ACC-05	PASSED	
+favorite-does-nothing	ACC-06	PASSED	
+favorite-does-nothing	ACC-07	PASSED	
+favorite-does-nothing	ACC-08	PASSED	
+favorite-does-nothing	ACC-09	PASSED	
+favorite-does-nothing	CHN-01	PASSED	
+favorite-does-nothing	CHN-02	PASSED	
+favorite-does-nothing	CHN-03	PASSED	
+favorite-does-nothing	CHN-04	PASSED	Error: expect(locator).toContainText(expected) failed | Locator: getByRole('main').locator('[data-view-shell-top-bar]')
+favorite-does-nothing	CHN-05	FAILED	Error: expect(locator).toHaveText(expected) failed | Locator: getByRole('tree', { name: 'Conversations' }).locator('[data-key="favorite:channel:01a1de39-ac4a-7f
+favorite-does-nothing	CHN-06	PASSED	
+favorite-does-nothing	CHN-07	PASSED	
+favorite-does-nothing	CHN-08	PASSED	Error: expect(locator).toHaveText(expected) failed | Locator: getByRole('tree', { name: 'Conversations' }).locator('[data-key="favorite:channel:01a1de39-c026-70
+favorite-does-nothing	CHN-09	PASSED	
+favorite-does-nothing	CHN-10	PASSED	
+favorite-does-nothing	CHN-11	PASSED	
+favorite-does-nothing	CHN-12	PASSED	
+favorite-does-nothing	CHN-13	PASSED	
+favorite-does-nothing	CHN-14	PASSED	Error: expect(locator).toBeVisible() failed | Locator: getByRole('main').getByText('Channel e2e-mwhjq5lo3dn8 created')
+favorite-does-nothing	CHN-15	PASSED	Error: expect(locator).toHaveCount(expected) failed | Locator:  locator('[data-input-id="channel-input-01a1de39-ff0a-7289-859d-976c4563ddca"]')
+favorite-does-nothing	KEY-01	PASSED	
+favorite-does-nothing	KEY-02	PASSED	
+favorite-does-nothing	KEY-03	PASSED	
+favorite-does-nothing	KEY-04	PASSED	
+favorite-does-nothing	KEY-05	PASSED	
+favorite-does-nothing	KEY-06	PASSED	Error: expect(locator).toBeFocused() failed | Locator:  locator('[data-input-id="thread-reply-input-01a1de3a-1c1e-7e39-846a-d4f363798397"] [contenteditable]')
+favorite-does-nothing	KEY-07	PASSED	
+favorite-does-nothing	KEY-08	PASSED	
+favorite-does-nothing	KEY-12	PASSED	
+favorite-does-nothing	KEY-09	PASSED	
+favorite-does-nothing	KEY-10	PASSED	
+favorite-does-nothing	KEY-11	PASSED	
+favorite-does-nothing	MEM-01	PASSED	
+favorite-does-nothing	MEM-02	PASSED	
+favorite-does-nothing	MEM-03	PASSED	Error: expect(locator).toHaveCount(expected) failed | Locator:  locator('[data-input-id="channel-input-01a1de3a-4bae-7424-8013-bbd970d2ffb7"]')
+favorite-does-nothing	MEM-04	PASSED	
+favorite-does-nothing	MEM-05	PASSED	
+favorite-does-nothing	MEM-06	PASSED	
+favorite-does-nothing	MEM-07	PASSED	
+favorite-does-nothing	MEM-08	PASSED	

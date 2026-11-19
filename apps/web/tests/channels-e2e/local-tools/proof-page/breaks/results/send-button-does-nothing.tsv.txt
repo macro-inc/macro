@@ -1,0 +1,28 @@
+send-button-does-nothing	MSG-01	PASSED	
+send-button-does-nothing	MSG-02	FAILED	Error: expect(received).toEqual(expected) // deep equality | - Expected  - 1
+send-button-does-nothing	MSG-03	PASSED	
+send-button-does-nothing	MSG-04	PASSED	
+send-button-does-nothing	MSG-05	PASSED	
+send-button-does-nothing	MSG-06	PASSED	
+send-button-does-nothing	MSG-07	PASSED	
+send-button-does-nothing	MSG-08	PASSED	
+send-button-does-nothing	MSG-09	PASSED	
+send-button-does-nothing	MSG-10	PASSED	
+send-button-does-nothing	MSG-11	PASSED	
+send-button-does-nothing	MSG-12	PASSED	
+send-button-does-nothing	MSG-13	PASSED	
+send-button-does-nothing	MSG-14	PASSED	
+send-button-does-nothing	MSG-15	PASSED	
+send-button-does-nothing	MSG-16	PASSED	
+send-button-does-nothing	MSG-17	PASSED	
+send-button-does-nothing	MSG-18	PASSED	Error: expect(received).toEqual(expected) // deep equality | - Expected  - 3
+send-button-does-nothing	THR-01	PASSED	
+send-button-does-nothing	THR-02	PASSED	
+send-button-does-nothing	THR-03	PASSED	
+send-button-does-nothing	THR-04	PASSED	
+send-button-does-nothing	THR-05	PASSED	
+send-button-does-nothing	THR-06	PASSED	
+send-button-does-nothing	THR-07	PASSED	
+send-button-does-nothing	THR-08	PASSED	
+send-button-does-nothing	THR-09	PASSED	
+send-button-does-nothing	THR-10	PASSED	Error: expect(locator).toBeFocused() failed | Locator:  locator('[data-input-id="thread-reply-input-01a1de18-62d6-7019-ba6e-02bf10050dca"]').getByRole('textbox'

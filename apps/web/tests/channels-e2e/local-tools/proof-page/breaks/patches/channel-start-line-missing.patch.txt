@@ -1,0 +1,13 @@
+diff --git a/apps/web/src/features/channel/Message/ChannelCreatedIndicator.tsx b/apps/web/src/features/channel/Message/ChannelCreatedIndicator.tsx
+index 28da624a8e..44f3bbf75e 100644
+--- a/apps/web/src/features/channel/Message/ChannelCreatedIndicator.tsx
++++ b/apps/web/src/features/channel/Message/ChannelCreatedIndicator.tsx
+@@ -20,7 +20,7 @@ export function ChannelCreatedIndicator(props: ChannelCreatedIndicatorProps) {
+ 
+   const shouldRender = () => {
+     const c = channel();
+-    return !!c && !!c.name && c.channel_type !== ChannelTypeEnum.DirectMessage;
++    return !!c && !c.name && c.channel_type !== ChannelTypeEnum.DirectMessage;
+   };
+ 
+   return (

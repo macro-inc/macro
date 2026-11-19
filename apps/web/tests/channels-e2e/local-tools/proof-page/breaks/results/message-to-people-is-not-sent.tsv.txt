@@ -1,0 +1,29 @@
+message-to-people-is-not-sent	CMP-01	PASSED	
+message-to-people-is-not-sent	CMP-02	PASSED	
+message-to-people-is-not-sent	CMP-03	PASSED	
+message-to-people-is-not-sent	CMP-13	PASSED	
+message-to-people-is-not-sent	CMP-04	PASSED	
+message-to-people-is-not-sent	CMP-05	PASSED	
+message-to-people-is-not-sent	CMP-06	PASSED	
+message-to-people-is-not-sent	CMP-07	PASSED	
+message-to-people-is-not-sent	CMP-08	PASSED	
+message-to-people-is-not-sent	CMP-09	PASSED	
+message-to-people-is-not-sent	CMP-10	PASSED	
+message-to-people-is-not-sent	CMP-11	PASSED	
+message-to-people-is-not-sent	CMP-12	PASSED	
+message-to-people-is-not-sent	DM-01	FAILED	Error: expect(page).toHaveURL(expected) failed | Expected pattern: /\/app\/channels?\/[0-9a-f-]{36}/
+message-to-people-is-not-sent	DM-02	FAILED	Error: expect(page).toHaveURL(expected) failed | Expected pattern: /\/app\/channels?\/[0-9a-f-]{36}/
+message-to-people-is-not-sent	DM-03	PASSED	
+message-to-people-is-not-sent	DM-04	FAILED	Error: expect(page).toHaveURL(expected) failed | Expected pattern: /\/app\/channels?\/[0-9a-f-]{36}/
+message-to-people-is-not-sent	DM-05	PASSED	
+message-to-people-is-not-sent	DM-06	PASSED	Error: expect(locator).toBeVisible() failed | Locator: getByRole('option', { name: /Ben Member/ })
+message-to-people-is-not-sent	UNR-01	PASSED	
+message-to-people-is-not-sent	UNR-02	PASSED	
+message-to-people-is-not-sent	UNR-03	PASSED	
+message-to-people-is-not-sent	UNR-04	PASSED	
+message-to-people-is-not-sent	UNR-05	PASSED	Error: expect(locator).toHaveText(expected) failed | Locator: getByRole('tree', { name: 'Conversations' }).getByRole('treeitem').filter({ hasText: 'unr-mwhm2rue
+message-to-people-is-not-sent	UNR-06	PASSED	
+message-to-people-is-not-sent	UNR-07	PASSED	
+message-to-people-is-not-sent	UNR-08	PASSED	
+message-to-people-is-not-sent	UNR-09	PASSED	Error: expect(locator).toBeVisible() failed | Locator: getByRole('tree', { name: 'Conversations' }).getByRole('treeitem').filter({ hasText: 'unr-mwhm2w1efkqr-fr
+message-to-people-is-not-sent	UNR-10	PASSED	

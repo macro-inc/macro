@@ -1,0 +1,21 @@
+link-target-ignored	CHN-12	PASSED	
+link-target-ignored	KEY-09	PASSED	
+link-target-ignored	NAV-01	PASSED	
+link-target-ignored	NAV-02	FAILED	Error: expect(locator).toBeInViewport() failed | Locator: locator('[data-channel-scroll]').locator('[data-message-id="01a1de7b-d990-7aa7-a0a0-eb317a6de7c8"]')
+link-target-ignored	NAV-03	FAILED	Error: expect(locator).toBeInViewport() failed | Locator: locator('[data-channel-scroll]').locator('[data-message-id="01a1de7c-0376-798a-9949-199aed20542c"]')
+link-target-ignored	NAV-04	FAILED	Error: expect(locator).toBeVisible() failed | Locator: getByText('Message no longer available')
+link-target-ignored	NAV-05	PASSED	Error: expect(locator).toBeInViewport() failed | Locator: locator('[data-channel-scroll]').locator('[data-message-id="01a1de7b-d953-7ca9-9909-3c72191aed9d"]')
+link-target-ignored	NAV-06	FAILED	Error: expect(locator).toBeInViewport() failed | Locator: locator('[data-channel-scroll]').locator('[data-message-id="01a1de7b-d990-7aa7-a0a0-eb317a6de7c8"]')
+link-target-ignored	NAV-07	PASSED	
+link-target-ignored	MSG-16	PASSED	
+link-target-ignored	OPEN-01	PASSED	
+link-target-ignored	OPEN-02	PASSED	
+link-target-ignored	REC-01	PASSED	
+link-target-ignored	REC-02	PASSED	
+link-target-ignored	REC-03	PASSED	
+link-target-ignored	SCROLL-01	PASSED	
+link-target-ignored	SCROLL-02	PASSED	
+link-target-ignored	SCROLL-03	PASSED	
+link-target-ignored	SCROLL-04	PASSED	
+link-target-ignored	TAB-01	PASSED	
+link-target-ignored	TAB-02	PASSED	

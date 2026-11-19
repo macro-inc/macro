@@ -1,0 +1,12 @@
+escape-does-not-return-to-the-list	KEY-01	PASSED	
+escape-does-not-return-to-the-list	KEY-02	PASSED	
+escape-does-not-return-to-the-list	KEY-03	PASSED	
+escape-does-not-return-to-the-list	KEY-04	PASSED	
+escape-does-not-return-to-the-list	KEY-05	PASSED	
+escape-does-not-return-to-the-list	KEY-06	PASSED	Error: expect(locator).toBeFocused() failed | Locator:  locator('[data-input-id="thread-reply-input-01a1de98-4a62-7f93-b303-08b9afb9c573"] [contenteditable]')
+escape-does-not-return-to-the-list	KEY-07	PASSED	
+escape-does-not-return-to-the-list	KEY-08	PASSED	
+escape-does-not-return-to-the-list	KEY-12	PASSED	
+escape-does-not-return-to-the-list	KEY-09	PASSED	
+escape-does-not-return-to-the-list	KEY-10	PASSED	
+escape-does-not-return-to-the-list	KEY-11	FAILED	Error: expect(locator).toBeFocused() failed | Locator:  getByRole('tree', { name: 'Conversations' })

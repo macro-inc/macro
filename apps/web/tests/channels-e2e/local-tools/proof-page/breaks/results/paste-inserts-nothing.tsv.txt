@@ -1,0 +1,29 @@
+paste-inserts-nothing	CMP-01	PASSED	
+paste-inserts-nothing	CMP-02	PASSED	
+paste-inserts-nothing	CMP-03	PASSED	
+paste-inserts-nothing	CMP-13	PASSED	
+paste-inserts-nothing	CMP-04	PASSED	
+paste-inserts-nothing	CMP-05	PASSED	
+paste-inserts-nothing	CMP-06	PASSED	
+paste-inserts-nothing	CMP-07	PASSED	
+paste-inserts-nothing	CMP-08	PASSED	
+paste-inserts-nothing	CMP-09	PASSED	
+paste-inserts-nothing	CMP-10	PASSED	
+paste-inserts-nothing	CMP-11	FAILED	Error: expect(locator).toHaveText(expected) failed | Locator:  locator('[data-input-id="channel-input-01a1de68-e561-784a-b454-fc35a727c163"]').locator('[content
+paste-inserts-nothing	CMP-12	PASSED	
+paste-inserts-nothing	DM-01	PASSED	
+paste-inserts-nothing	DM-02	PASSED	
+paste-inserts-nothing	DM-03	PASSED	
+paste-inserts-nothing	DM-04	PASSED	
+paste-inserts-nothing	DM-05	PASSED	
+paste-inserts-nothing	DM-06	PASSED	Error: expect(locator).toBeVisible() failed | Locator: getByRole('option', { name: /Ben Member/ })
+paste-inserts-nothing	UNR-01	PASSED	
+paste-inserts-nothing	UNR-02	PASSED	
+paste-inserts-nothing	UNR-03	PASSED	
+paste-inserts-nothing	UNR-04	PASSED	
+paste-inserts-nothing	UNR-05	PASSED	Error: expect(locator).toHaveText(expected) failed | Locator: getByRole('tree', { name: 'Conversations' }).getByRole('treeitem').filter({ hasText: 'unr-mwhlklpt
+paste-inserts-nothing	UNR-06	PASSED	
+paste-inserts-nothing	UNR-07	PASSED	
+paste-inserts-nothing	UNR-08	PASSED	
+paste-inserts-nothing	UNR-09	PASSED	Error: expect(locator).toBeVisible() failed | Locator: getByRole('tree', { name: 'Conversations' }).getByRole('treeitem').filter({ hasText: 'unr-mwhlkr5sdy1p-fr
+paste-inserts-nothing	UNR-10	PASSED	

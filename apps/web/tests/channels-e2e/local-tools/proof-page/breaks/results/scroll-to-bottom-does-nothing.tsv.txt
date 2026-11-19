@@ -1,0 +1,21 @@
+scroll-to-bottom-does-nothing	CHN-12	PASSED	
+scroll-to-bottom-does-nothing	KEY-09	FAILED	Error: distance of the list from its end | distance of the list from its end
+scroll-to-bottom-does-nothing	NAV-01	PASSED	
+scroll-to-bottom-does-nothing	NAV-02	PASSED	
+scroll-to-bottom-does-nothing	NAV-03	PASSED	
+scroll-to-bottom-does-nothing	NAV-04	PASSED	
+scroll-to-bottom-does-nothing	NAV-05	PASSED	Error: lost my place below "history 148": the list shows ["history 217","history 218","history 219","history 220","history 221","history 222","history 223","his
+scroll-to-bottom-does-nothing	NAV-06	FAILED	Error: expect(locator).toBeInViewport() failed | Locator: locator('[data-channel-scroll]').locator('[data-message]').filter({ has: locator('[data-message-conten
+scroll-to-bottom-does-nothing	NAV-07	PASSED	
+scroll-to-bottom-does-nothing	MSG-16	PASSED	
+scroll-to-bottom-does-nothing	OPEN-01	PASSED	
+scroll-to-bottom-does-nothing	OPEN-02	PASSED	
+scroll-to-bottom-does-nothing	REC-01	PASSED	
+scroll-to-bottom-does-nothing	REC-02	PASSED	
+scroll-to-bottom-does-nothing	REC-03	PASSED	
+scroll-to-bottom-does-nothing	SCROLL-01	PASSED	
+scroll-to-bottom-does-nothing	SCROLL-02	FAILED	Error: expect(locator).toBeInViewport() failed | Locator: locator('[data-channel-scroll]').locator('[data-message]').filter({ has: locator('[data-message-conten
+scroll-to-bottom-does-nothing	SCROLL-03	PASSED	
+scroll-to-bottom-does-nothing	SCROLL-04	FAILED	Error: expect(locator).toBeInViewport() failed | Locator: locator('[data-channel-scroll]').locator('[data-message]').filter({ has: locator('[data-message-conten
+scroll-to-bottom-does-nothing	TAB-01	PASSED	
+scroll-to-bottom-does-nothing	TAB-02	PASSED	

@@ -1,0 +1,44 @@
+attachments-tab-says-nothing-when-empty	ACC-01	PASSED	
+attachments-tab-says-nothing-when-empty	ACC-02	PASSED	
+attachments-tab-says-nothing-when-empty	ACC-03	PASSED	
+attachments-tab-says-nothing-when-empty	ACC-04	PASSED	
+attachments-tab-says-nothing-when-empty	ACC-05	PASSED	
+attachments-tab-says-nothing-when-empty	ACC-06	PASSED	
+attachments-tab-says-nothing-when-empty	ACC-07	PASSED	
+attachments-tab-says-nothing-when-empty	ACC-08	PASSED	
+attachments-tab-says-nothing-when-empty	ACC-09	PASSED	
+attachments-tab-says-nothing-when-empty	CHN-01	PASSED	
+attachments-tab-says-nothing-when-empty	CHN-02	PASSED	
+attachments-tab-says-nothing-when-empty	CHN-03	PASSED	
+attachments-tab-says-nothing-when-empty	CHN-04	PASSED	Error: expect(locator).toContainText(expected) failed | Locator: getByRole('main').locator('[data-view-shell-top-bar]')
+attachments-tab-says-nothing-when-empty	CHN-05	PASSED	
+attachments-tab-says-nothing-when-empty	CHN-06	PASSED	
+attachments-tab-says-nothing-when-empty	CHN-07	PASSED	
+attachments-tab-says-nothing-when-empty	CHN-08	PASSED	Error: expect(locator).toHaveCount(expected) failed | Locator:  getByRole('tree', { name: 'Conversations' }).locator('[data-key="favorite:channel:01a1de44-e95c-
+attachments-tab-says-nothing-when-empty	CHN-09	PASSED	
+attachments-tab-says-nothing-when-empty	CHN-10	PASSED	
+attachments-tab-says-nothing-when-empty	CHN-11	FAILED	Error: expect(locator).toBeVisible() failed | Locator: getByText('No documents in this channel yet.')
+attachments-tab-says-nothing-when-empty	CHN-12	PASSED	
+attachments-tab-says-nothing-when-empty	CHN-13	PASSED	
+attachments-tab-says-nothing-when-empty	CHN-14	PASSED	Error: expect(locator).toBeVisible() failed | Locator: getByRole('main').getByText('Channel e2e-mwhk5t4lo3t9 created')
+attachments-tab-says-nothing-when-empty	CHN-15	PASSED	Error: expect(locator).toHaveCount(expected) failed | Locator:  locator('[data-input-id="channel-input-01a1de45-289b-7009-a524-cfd1c5aa61be"]')
+attachments-tab-says-nothing-when-empty	KEY-01	PASSED	
+attachments-tab-says-nothing-when-empty	KEY-02	PASSED	
+attachments-tab-says-nothing-when-empty	KEY-03	PASSED	
+attachments-tab-says-nothing-when-empty	KEY-04	PASSED	
+attachments-tab-says-nothing-when-empty	KEY-05	PASSED	
+attachments-tab-says-nothing-when-empty	KEY-06	PASSED	Error: expect(locator).toBeFocused() failed | Locator:  locator('[data-input-id="thread-reply-input-01a1de45-6320-7a13-9b51-71924d03a556"] [contenteditable]')
+attachments-tab-says-nothing-when-empty	KEY-07	PASSED	
+attachments-tab-says-nothing-when-empty	KEY-08	PASSED	
+attachments-tab-says-nothing-when-empty	KEY-12	PASSED	
+attachments-tab-says-nothing-when-empty	KEY-09	PASSED	
+attachments-tab-says-nothing-when-empty	KEY-10	PASSED	
+attachments-tab-says-nothing-when-empty	KEY-11	PASSED	
+attachments-tab-says-nothing-when-empty	MEM-01	PASSED	
+attachments-tab-says-nothing-when-empty	MEM-02	PASSED	
+attachments-tab-says-nothing-when-empty	MEM-03	PASSED	Error: expect(locator).toHaveCount(expected) failed | Locator:  locator('[data-input-id="channel-input-01a1de45-86df-7ed4-b923-208db6848f42"]')
+attachments-tab-says-nothing-when-empty	MEM-04	PASSED	
+attachments-tab-says-nothing-when-empty	MEM-05	PASSED	
+attachments-tab-says-nothing-when-empty	MEM-06	PASSED	
+attachments-tab-says-nothing-when-empty	MEM-07	PASSED	
+attachments-tab-says-nothing-when-empty	MEM-08	PASSED	

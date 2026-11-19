@@ -1,0 +1,29 @@
+draft-shown-in-every-channel	CMP-01	FAILED	Error: expect(locator).toHaveText(expected) failed | Locator:  locator('[data-input-id="channel-input-01a1de59-fdfa-7d64-901f-a573aff62e16"]').locator('[content
+draft-shown-in-every-channel	CMP-02	PASSED	
+draft-shown-in-every-channel	CMP-03	PASSED	
+draft-shown-in-every-channel	CMP-13	PASSED	
+draft-shown-in-every-channel	CMP-04	PASSED	
+draft-shown-in-every-channel	CMP-05	PASSED	
+draft-shown-in-every-channel	CMP-06	PASSED	
+draft-shown-in-every-channel	CMP-07	PASSED	
+draft-shown-in-every-channel	CMP-08	PASSED	
+draft-shown-in-every-channel	CMP-09	PASSED	
+draft-shown-in-every-channel	CMP-10	PASSED	
+draft-shown-in-every-channel	CMP-11	PASSED	
+draft-shown-in-every-channel	CMP-12	PASSED	
+draft-shown-in-every-channel	DM-01	PASSED	
+draft-shown-in-every-channel	DM-02	PASSED	
+draft-shown-in-every-channel	DM-03	PASSED	
+draft-shown-in-every-channel	DM-04	PASSED	
+draft-shown-in-every-channel	DM-05	PASSED	
+draft-shown-in-every-channel	DM-06	PASSED	Error: expect(locator).toBeVisible() failed | Locator: getByRole('option', { name: /Ben Member/ })
+draft-shown-in-every-channel	UNR-01	PASSED	
+draft-shown-in-every-channel	UNR-02	PASSED	
+draft-shown-in-every-channel	UNR-03	PASSED	
+draft-shown-in-every-channel	UNR-04	PASSED	
+draft-shown-in-every-channel	UNR-05	PASSED	Error: expect(locator).toHaveText(expected) failed | Locator: getByRole('tree', { name: 'Conversations' }).getByRole('treeitem').filter({ hasText: 'unr-mwhl05rn
+draft-shown-in-every-channel	UNR-06	PASSED	
+draft-shown-in-every-channel	UNR-07	PASSED	
+draft-shown-in-every-channel	UNR-08	PASSED	
+draft-shown-in-every-channel	UNR-09	PASSED	Error: expect(locator).toBeVisible() failed | Locator: getByRole('tree', { name: 'Conversations' }).getByRole('treeitem').filter({ hasText: 'unr-mwhl0cg1r1el-fr
+draft-shown-in-every-channel	UNR-10	PASSED	

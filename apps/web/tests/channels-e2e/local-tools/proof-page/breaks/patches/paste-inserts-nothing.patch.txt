@@ -1,0 +1,15 @@
+diff --git a/apps/web/src/lib/core/component/LexicalMarkdown/plugins/text-paste/textPastePlugin.ts b/apps/web/src/lib/core/component/LexicalMarkdown/plugins/text-paste/textPastePlugin.ts
+index f5ba5a4472..a47aacf29c 100644
+--- a/apps/web/src/lib/core/component/LexicalMarkdown/plugins/text-paste/textPastePlugin.ts
++++ b/apps/web/src/lib/core/component/LexicalMarkdown/plugins/text-paste/textPastePlugin.ts
+@@ -273,6 +273,10 @@ function registerTextPastePlugin(
+     editor.registerCommand(
+       PASTE_COMMAND,
+       (event: InputEvent | ClipboardEvent) => {
++        if (event) {
++          event.preventDefault();
++          return true;
++        }
+         if (event instanceof ClipboardEvent) {
+           const pastedText: string =
+             event.clipboardData?.getData('text/plain') || '';

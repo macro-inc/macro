@@ -1,0 +1,174 @@
+path "/home/teo/.herdr/worktrees/macro/synoet-channels-e2e-base/apps/web" does not contain a 'flake.nix', searching up
+warning: Git tree '/home/teo/.herdr/worktrees/macro/synoet-channels-e2e-base' is dirty
+
+Running 29 tests using 4 workers
+
+2026/11/15 08:52:48 socat[1317088] E write(6, 0x569b0eefe000, 24): Broken pipe
+2026/11/15 08:52:49 socat[1319967] E write(6, 0x569b0eefe000, 24): Broken pipe
+2026/11/15 08:52:50 socat[1320673] E write(6, 0x569b0eefe000, 24): Broken pipe
+2026/11/15 08:52:50 socat[1321069] E write(6, 0x569b0eefe000, 24): Broken pipe
+2026/11/15 08:52:50 socat[1332195] E write(6, 0x569b0eefe000, 24): Broken pipe
+2026/11/15 08:52:50 socat[1332380] E write(6, 0x569b0eefe000, 24): Broken pipe
+  ✓   4 tests/channels-e2e/composer.spec.ts:47:1 › CMP-02 a draft is still in the composer after a reload (11.3s)
+2026/11/15 08:52:51 socat[1316970] E write(6, 0x569b0eefe000, 24): Broken pipe
+2026/11/15 08:52:51 socat[1317104] E write(6, 0x569b0eefe000, 24): Broken pipe
+2026/11/15 08:52:51 socat[1333610] E write(6, 0x569b0eefe000, 24): Broken pipe
+2026/11/15 08:52:51 socat[1333722] E write(6, 0x569b0eefe000, 24): Broken pipe
+  ✓   2 tests/channels-e2e/composer.spec.ts:67:1 › CMP-03 sending a message clears its draft, and a reload does not bring it back (12.4s)
+2026/11/15 08:52:51 socat[1316966] E write(6, 0x569b0eefe000, 24): Broken pipe
+2026/11/15 08:52:51 socat[1317094] E write(6, 0x569b0eefe000, 24): Broken pipe
+2026/11/15 08:52:51 socat[1334248] E write(6, 0x569b0eefe000, 24): Broken pipe
+2026/11/15 08:52:51 socat[1334637] E write(6, 0x569b0eefe000, 24): Broken pipe
+  ✓   3 tests/channels-e2e/composer.spec.ts:93:1 › CMP-13 a message shown as sent is still sent when the page is reloaded at once (12.5s)
+2026/11/15 08:52:52 socat[1315559] E write(6, 0x569b0eefe000, 24): Broken pipe
+  ✓   1 tests/channels-e2e/composer.spec.ts:21:1 › CMP-01 a draft stays in its channel while I look at another one, and is not shown there (12.9s)2026/11/15 08:52:52 socat[1317589] E write(6, 0x569b0eefe000, 24): Broken pipe
+
+2026/11/15 08:52:53 socat[1335899] E write(6, 0x569b0eefe000, 24): Broken pipe
+  ✓   5 tests/channels-e2e/composer.spec.ts:121:1 › CMP-04 the send button is off while the composer is empty, and after sending I can go on typing (3.0s)
+2026/11/15 08:52:56 socat[1337515] E write(6, 0x569b0eefe000, 24): Broken pipe
+2026/11/15 08:52:57 socat[1339621] E write(6, 0x569b0eefe000, 24): Broken pipe
+  ✓   7 tests/channels-e2e/composer.spec.ts:178:1 › CMP-06 @here picked from the @ menu is sent as a mention of everyone here (5.3s)
+2026/11/15 08:52:57 socat[1337491] E write(6, 0x569b0eefe000, 24): Broken pipe
+2026/11/15 08:52:57 socat[1337499] E write(6, 0x569b0eefe000, 24): Broken pipe
+2026/11/15 08:52:57 socat[1339348] E write(6, 0x569b0eefe000, 24): Broken pipe
+  ✓   6 tests/channels-e2e/composer.spec.ts:148:1 › CMP-05 a person picked from the @ menu is named in the message for both people, live (5.5s)
+2026/11/15 08:52:58 socat[1339745] E write(6, 0x569b0eefe000, 24): Broken pipe
+2026/11/15 08:52:58 socat[1342836] E write(6, 0x569b0eefe000, 24): Broken pipe
+2026/11/15 08:52:58 socat[1342967] E write(6, 0x569b0eefe000, 24): Broken pipe
+  ✓   9 tests/channels-e2e/composer.spec.ts:265:1 › CMP-08 a file can be sent on its own, with no text (5.2s)
+2026/11/15 08:52:59 socat[1346156] E write(6, 0x569b0eefe000, 24): Broken pipe
+  ✓  11 tests/channels-e2e/composer.spec.ts:329:1 › CMP-10 typing reported from the other person’s other device shows “… is typing”, and goes when they stop (2.1s)
+2026/11/15 08:53:00 socat[1337570] E write(6, 0x569b0eefe000, 24): Broken pipe
+2026/11/15 08:53:00 socat[1337609] E write(6, 0x569b0eefe000, 24): Broken pipe
+2026/11/15 08:53:00 socat[1339821] E write(6, 0x569b0eefe000, 24): Broken pipe
+  ✓   8 tests/channels-e2e/composer.spec.ts:208:1 › CMP-07 a text file and a picture attached to a message show before sending, for both people, and under Attachments (8.0s)
+2026/11/15 08:53:01 socat[1347184] E write(6, 0x569b0eefe000, 24): Broken pipe
+  ✓  10 tests/channels-e2e/composer.spec.ts:303:1 › CMP-09 while the other person types in their composer I see “… is typing”, until they send (4.9s)
+2026/11/15 08:53:01 socat[1346129] E write(6, 0x569b0eefe000, 24): Broken pipe
+2026/11/15 08:53:03 socat[1291256] W waitpid(-1, {}, WNOHANG): no (more) child has exited
+2026/11/15 08:53:03 socat[1347429] E write(6, 0x569b0eefe000, 24): Broken pipe
+2026/11/15 08:53:04 socat[1351226] E write(6, 0x569b0eefe000, 24): Broken pipe
+  ✓  13 tests/channels-e2e/composer.spec.ts:372:1 › CMP-12 a message of 2,499 characters is sent whole (4.8s)
+2026/11/15 08:53:04 socat[1351277] E write(6, 0x569b0eefe000, 24): Broken pipe
+2026/11/15 08:53:09 socat[1356093] E write(6, 0x569b0eeff000, 24): Broken pipe
+2026/11/15 08:53:10 socat[1358603] E write(6, 0x569b0eeff000, 24): Broken pipe
+2026/11/15 08:53:10 socat[1358683] E write(6, 0x569b0eeff000, 24): Broken pipe
+2026/11/15 08:53:10 socat[1352087] E write(6, 0x569b0eefe000, 24): Broken pipe
+2026/11/15 08:53:10 socat[1352296] E write(6, 0x569b0eefe000, 24): Broken pipe
+2026/11/15 08:53:10 socat[1352353] E write(6, 0x569b0eefe000, 24): Broken pipe
+2026/11/15 08:53:10 socat[1291256] W waitpid(-1, {}, WNOHANG): no (more) child has exited
+2026/11/15 08:53:10 socat[1352680] E write(6, 0x569b0eefe000, 24): Broken pipe
+2026/11/15 08:53:10 socat[1363279] E write(6, 0x569b0eeff000, 24): Broken pipe
+2026/11/15 08:53:10 socat[1363312] E write(6, 0x569b0eeff000, 24): Broken pipe
+  ✓  15 tests/channels-e2e/direct-messages.spec.ts:66:1 › DM-02 writing to the same person again from “New direct message” continues the one conversation (8.8s)
+2026/11/15 08:53:12 socat[1349257] E write(6, 0x569b0eefe000, 24): Broken pipe
+2026/11/15 08:53:12 socat[1349350] E write(6, 0x569b0eefe000, 24): Broken pipe
+2026/11/15 08:53:12 socat[1366130] E write(6, 0x569b0eeff000, 24): Broken pipe
+2026/11/15 08:53:12 socat[1366168] E write(6, 0x569b0eeff000, 24): Broken pipe
+  ✓  14 tests/channels-e2e/direct-messages.spec.ts:22:1 › DM-01 a direct message I start reaches the other person at once under “Direct messages”, and they can answer (12.1s)
+2026/11/15 08:53:12 socat[1291256] W waitpid(-1, {}, WNOHANG): no (more) child has exited
+2026/11/15 08:53:12 socat[1290026] W waitpid(-1, {}, WNOHANG): no (more) child has exited
+2026/11/15 08:53:12 socat[1356251] E write(6, 0x569b0eeff000, 24): Broken pipe
+2026/11/15 08:53:12 socat[1365698] E write(6, 0x569b0eeff000, 24): Broken pipe
+2026/11/15 08:53:12 socat[1365768] E write(6, 0x569b0eeff000, 24): Broken pipe
+  ✓  16 tests/channels-e2e/direct-messages.spec.ts:122:1 › DM-03 “Message …” on a channel’s participant opens my conversation with them, the same one every time (8.3s)
+2026/11/15 08:53:13 socat[1368868] E write(6, 0x569b0eeff000, 24): Broken pipe
+  ✓  18 tests/channels-e2e/direct-messages.spec.ts:228:1 › DM-05 a conversation with someone I never wrote to opens empty, saying “Say hello”, and nothing can be sent until I type (1.8s)
+2026/11/15 08:53:18 socat[1347144] E write(6, 0x569b0eefe000, 24): Broken pipe
+2026/11/15 08:53:18 socat[1347148] E write(6, 0x569b0eefe000, 24): Broken pipe
+2026/11/15 08:53:18 socat[1373236] E write(6, 0x569b0eeff000, 24): Broken pipe
+2026/11/15 08:53:18 socat[1373252] E write(6, 0x569b0eeff000, 24): Broken pipe
+2026/11/15 08:53:18 socat[1290026] W waitpid(-1, {}, WNOHANG): no (more) child has exited
+2026/11/15 08:53:18 socat[1349418] E write(6, 0x569b0eefe000, 24): Broken pipe
+  ✘  12 tests/channels-e2e/composer.spec.ts:349:1 › CMP-11 text pasted into the composer is sent as it was copied (19.5s)
+2026/11/15 08:53:19 socat[1366268] E write(6, 0x569b0eeff000, 24): Broken pipe
+2026/11/15 08:53:19 socat[1366423] E write(6, 0x569b0eeff000, 24): Broken pipe
+2026/11/15 08:53:19 socat[1369636] E write(6, 0x569b0eeff000, 24): Broken pipe
+2026/11/15 08:53:19 socat[1373245] E write(6, 0x569b0eeff000, 24): Broken pipe
+2026/11/15 08:53:19 socat[1373266] E write(6, 0x569b0eeff000, 24): Broken pipe
+  ✓  17 tests/channels-e2e/direct-messages.spec.ts:173:1 › DM-04 a named group started from “New direct message” reaches everyone I put in it (8.5s)
+2026/11/15 08:53:19 socat[1377618] E write(6, 0x569b0eeff000, 24): Broken pipe
+2026/11/15 08:53:19 socat[1377833] E write(6, 0x569b0eeff000, 24): Broken pipe
+  ✓  20 tests/channels-e2e/unread.spec.ts:38:1 › UNR-01 a message in a channel I do not have open marks its row unread at once; opening it clears the mark, also after reload (5.8s)
+2026/11/15 08:53:23 socat[1379666] E write(6, 0x569b0eeff000, 24): Broken pipe
+  ✓  22 tests/channels-e2e/unread.spec.ts:122:1 › UNR-03 my own messages never mark a channel unread for me (3.7s)
+2026/11/15 08:53:23 socat[1378544] E read(6, 0x569b0eeff000, 8192): Connection reset by peer
+2026/11/15 08:53:23 socat[1378546] E write(6, 0x55555561e000, 24): Broken pipe
+2026/11/15 08:53:23 socat[1291256] W waitpid(-1, {}, WNOHANG): no (more) child has exited
+2026/11/15 08:53:23 socat[1379677] E write(6, 0x569b0eeff000, 24): Broken pipe
+  ✓  21 tests/channels-e2e/unread.spec.ts:87:1 › UNR-02 a channel with unread messages opens with “New” above the first of them, and “Mark as read” removes it (3.9s)
+2026/11/15 08:53:25 socat[1383924] E write(6, 0x569b0eeff000, 24): Broken pipe
+  ✓  23 tests/channels-e2e/unread.spec.ts:155:1 › UNR-04 scrolled up in an open channel, a new message shows “1 unread … below”, which leads to it (5.6s)
+2026/11/15 08:53:27 socat[1389383] E write(6, 0x569b0eeff000, 24): Broken pipe
+2026/11/15 08:53:27 socat[1389406] E write(6, 0x569b0eeff000, 24): Broken pipe
+  ✓  26 tests/channels-e2e/unread.spec.ts:272:1 › UNR-07 a member who never opened a channel sees it unread, and opening it shows every message and clears the mark (2.4s)
+2026/11/15 08:53:29 socat[1386243] E write(6, 0x569b0eeff000, 24): Broken pipe
+2026/11/15 08:53:30 socat[1290026] W waitpid(-1, {}, WNOHANG): no (more) child has exited
+2026/11/15 08:53:30 socat[1369599] E write(6, 0x569b0eeff000, 24): Broken pipe
+  ✘  19 tests/channels-e2e/direct-messages.spec.ts:270:1 › DM-06 typing a teammate’s name in “New direct message” offers that person (17.6s)
+2026/11/15 08:53:30 socat[1396128] E write(6, 0x569b0eeff000, 24): Broken pipe
+2026/11/15 08:53:30 socat[1396158] E write(6, 0x569b0eeff000, 24): Broken pipe
+  ✓  25 tests/channels-e2e/unread.spec.ts:218:1 › UNR-06 a muted channel shows a crossed bell and is not marked unread by new messages; unmuted, it is again (7.7s)
+2026/11/15 08:53:32 socat[1393531] E write(6, 0x569b0eeff000, 24): Broken pipe
+2026/11/15 08:53:32 socat[1393791] E write(6, 0x569b0eeff000, 24): Broken pipe
+  ✓  27 tests/channels-e2e/unread.spec.ts:311:1 › UNR-08 a channel I am added to appears in my list at once, and opens (4.3s)
+2026/11/15 08:53:33 socat[1389162] E write(6, 0x569b0eeff000, 24): Broken pipe
+2026/11/15 08:53:33 socat[1386145] E write(6, 0x569b0eeff000, 24): Broken pipe
+2026/11/15 08:53:33 socat[1386158] E write(6, 0x569b0eeff000, 24): Broken pipe
+  ✘  24 tests/channels-e2e/unread.spec.ts:187:1 › UNR-05 a mention of me in a channel I do not have open shows a count of mentions on its row (10.4s)
+2026/11/15 08:53:33 socat[1398454] E write(6, 0x569b0eeff000, 24): Broken pipe
+2026/11/15 08:53:33 socat[1398475] E write(6, 0x569b0eeff000, 24): Broken pipe
+  ✓  29 tests/channels-e2e/unread.spec.ts:367:1 › UNR-10 a row found with “Search conversations” is marked unread at once when a message arrives (3.0s)
+2026/11/15 08:53:37 socat[1397169] E write(6, 0x569b0eeff000, 24): Broken pipe
+  ✘  28 tests/channels-e2e/unread.spec.ts:339:1 › UNR-09 the first message in a new channel marks it unread for the other member (7.9s)
+
+
+  1) tests/channels-e2e/composer.spec.ts:349:1 › CMP-11 text pasted into the composer is sent as it was copied 
+
+    Error: expect(locator).toHaveText(expected) failed
+
+    Locator:  locator('[data-input-id="channel-input-01a1de68-e561-784a-b454-fc35a727c163"]').locator('[contenteditable="true"]').first()
+    Expected: "copied from somewhere else"
+    Received: ""
+    Timeout:  15000ms
+
+    Call log:
+      - Expect "toHaveText" with timeout 15000ms
+      - waiting for locator('[data-input-id="channel-input-01a1de68-e561-784a-b454-fc35a727c163"]').locator('[contenteditable="true"]').first()
+        33 × locator resolved to <div class="md" role="textbox" aria-multiline="true" aria-readonly="false" contenteditable="true" data-markdown-editable="" data-lexical-editor="true" data-hotkey-scope="channel-input-intercept_7" aria-label="Type @ to share with #e2e-mwhlk31admdm">…</div>
+           - unexpected value ""
+
+
+      362 |   await view.composerText.click();
+      363 |   await paste(page, 'copied from somewhere else');
+    > 364 |   await expect(view.composerText).toHaveText('copied from somewhere else');
+          |                                   ^
+      365 |   await page.keyboard.press('Enter');
+      366 |
+      367 |   await view.expectEndsWith(['copied from somewhere else']);
+        at /home/teo/.herdr/worktrees/macro/synoet-channels-e2e-base/apps/web/tests/channels-e2e/composer.spec.ts:364:35
+
+    attachment #1: screenshot (image/png) ──────────────────────────────────────────────────────────
+    ../../../../../../.cache/channels-e2e/runs/24909-break-paste-inserts-nothing/test-results/composer-CMP-11-text-paste-4f4c8-er-is-sent-as-it-was-copied/test-failed-2.png
+    ────────────────────────────────────────────────────────────────────────────────────────────────
+
+    attachment #2: screenshot (image/png) ──────────────────────────────────────────────────────────
+    ../../../../../../.cache/channels-e2e/runs/24909-break-paste-inserts-nothing/test-results/composer-CMP-11-text-paste-4f4c8-er-is-sent-as-it-was-copied/test-failed-1.png
+    ────────────────────────────────────────────────────────────────────────────────────────────────
+
+    Error Context: ../../../../../../.cache/channels-e2e/runs/24909-break-paste-inserts-nothing/test-results/composer-CMP-11-text-paste-4f4c8-er-is-sent-as-it-was-copied/error-context.md
+
+    attachment #4: trace (application/zip) ─────────────────────────────────────────────────────────
+    ../../../../../../.cache/channels-e2e/runs/24909-break-paste-inserts-nothing/test-results/composer-CMP-11-text-paste-4f4c8-er-is-sent-as-it-was-copied/trace.zip
+    Usage:
+
+        npx playwright show-trace ../../../../../../.cache/channels-e2e/runs/24909-break-paste-inserts-nothing/test-results/composer-CMP-11-text-paste-4f4c8-er-is-sent-as-it-was-copied/trace.zip
+
+    ────────────────────────────────────────────────────────────────────────────────────────────────
+
+  1 failed
+    tests/channels-e2e/composer.spec.ts:349:1 › CMP-11 text pasted into the composer is sent as it was copied 
+  28 passed (1.2m)
+2026/11/15 08:53:38 socat[1291256] W waitpid(-1, {}, WNOHANG): no (more) child has exited
+2026/11/15 08:53:38 socat[1291256] W exiting on signal 15
+2026/11/15 08:53:38 socat[1290026] W exiting on signal 15

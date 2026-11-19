@@ -1,0 +1,435 @@
+path "/home/teo/.herdr/worktrees/macro/synoet-channels-e2e-base/apps/web" does not contain a 'flake.nix', searching up
+warning: Git tree '/home/teo/.herdr/worktrees/macro/synoet-channels-e2e-base' is dirty
+
+Running 44 tests using 4 workers
+
+2026/11/15 08:18:31 socat[1902084] E write(6, 0x5ec1133cc000, 24): Broken pipe
+2026/11/15 08:18:31 socat[1902259] E write(6, 0x5ec1133cc000, 24): Broken pipe
+2026/11/15 08:18:31 socat[1901980] E write(6, 0x5ec1133cc000, 24): Broken pipe
+2026/11/15 08:18:31 socat[1902206] E write(6, 0x5ec1133cc000, 24): Broken pipe
+  ✘   3 tests/channels-e2e/access.spec.ts:39:1 › ACC-02 a person outside the team who opens a private channel’s address sees no messages (16.8s)
+  ✘   2 tests/channels-e2e/access.spec.ts:13:1 › ACC-01 a teammate who is not in a private channel sees no messages and is offered to ask to join (16.8s)
+2026/11/15 08:18:37 socat[1932123] E write(6, 0x5ec1133cc000, 24): Broken pipe
+2026/11/15 08:18:37 socat[1932160] E write(6, 0x5ec1133cc000, 24): Broken pipe
+  ✓   6 tests/channels-e2e/access.spec.ts:168:1 › ACC-06 a teammate finds a team channel they are not in by its name and joins it (4.6s)
+2026/11/15 08:18:53 socat[1941589] E write(6, 0x5ec1133cc000, 24): Broken pipe
+  ✘   7 tests/channels-e2e/access.spec.ts:207:1 › ACC-07 a person outside the team cannot read a team channel or find it to join (16.6s)
+2026/11/15 08:18:56 socat[1975125] E write(6, 0x5ec1133cc000, 24): Broken pipe
+  ✓   8 tests/channels-e2e/access.spec.ts:243:1 › ACC-08 the address of a channel that does not exist says the conversation is unavailable (2.2s)
+  ✓   9 tests/channels-e2e/access.spec.ts:259:1 › ACC-09 a signed-out person who opens a channel’s address is asked to log in and sees nothing of it (1.4s)
+2026/11/15 08:19:03 socat[1978748] E write(6, 0x5ec1133cc000, 24): Broken pipe
+2026/11/15 08:19:04 socat[1989493] E write(6, 0x5ec1133cc000, 24): Broken pipe
+2026/11/15 08:19:04 socat[1989536] E write(6, 0x5ec1133cc000, 24): Broken pipe
+2026/11/15 08:19:07 socat[1992193] E write(6, 0x5ec1133cc000, 24): Broken pipe
+  ✓  10 tests/channels-e2e/channels.spec.ts:23:1 › CHN-01 a private channel made in the app opens empty, shows in the list and takes its first message (9.2s)
+2026/11/15 08:19:15 socat[1998179] E write(6, 0x5ec1133cc000, 24): Broken pipe
+2026/11/15 08:19:15 socat[1863653] W waitpid(-1, {}, WNOHANG): no (more) child has exited
+2026/11/15 08:19:15 socat[1861915] W waitpid(-1, {}, WNOHANG): no (more) child has exited
+2026/11/15 08:19:15 socat[2003115] E write(6, 0x5ec1133cc000, 24): Broken pipe
+  ✓  11 tests/channels-e2e/channels.spec.ts:53:1 › CHN-02 a team channel made in the app appears for a teammate under the team’s channels and can be read (7.9s)
+2026/11/15 08:19:23 socat[2013427] E write(6, 0x5ec1133cd000, 24): Broken pipe
+2026/11/15 08:19:23 socat[2014859] E write(6, 0x5ec1133cd000, 24): Broken pipe
+2026/11/15 08:19:23 socat[2012708] E write(6, 0x5ec1133cd000, 24): Broken pipe
+2026/11/15 08:19:23 socat[2012960] E write(6, 0x5ec1133cd000, 24): Broken pipe
+  ✓  12 tests/channels-e2e/channels.spec.ts:105:1 › CHN-03 renaming a channel updates its header and list row, and tells both members in the channel (7.7s)
+2026/11/15 08:19:43 socat[2023600] E write(6, 0x5ec1133cd000, 24): Broken pipe
+2026/11/15 08:19:43 socat[2027168] E write(6, 0x5ec1133cd000, 24): Broken pipe
+2026/11/15 08:19:43 socat[2027225] E write(6, 0x5ec1133cd000, 24): Broken pipe
+  ✘  13 tests/channels-e2e/channels.spec.ts:143:1 › CHN-04 a rename shows in the header of a member who has the channel open (20.8s)
+2026/11/15 08:19:45 socat[1861915] W waitpid(-1, {}, WNOHANG): no (more) child has exited
+2026/11/15 08:19:45 socat[1907808] E write(6, 0x5ec1133cc000, 24): Broken pipe
+2026/11/15 08:19:45 socat[1907683] E write(6, 0x5ec1133cc000, 24): Broken pipe
+2026/11/15 08:19:45 socat[1907786] E write(6, 0x5ec1133cc000, 24): Broken pipe
+2026/11/15 08:19:45 socat[1902213] E write(6, 0x5ec1133cc000, 24): Broken pipe
+2026/11/15 08:19:45 socat[1902209] E write(6, 0x5ec1133cc000, 24): Broken pipe
+2026/11/15 08:19:45 socat[1902356] E write(6, 0x5ec1133cc000, 24): Broken pipe
+  ✘   1 tests/channels-e2e/access.spec.ts:61:1 › ACC-03 a request to join reaches the owner at once, and approving it lets the person in at once (1.5m)
+  ✘   4 tests/channels-e2e/access.spec.ts:104:1 › ACC-04 a denied request tells the person so and shows them nothing of the channel (1.5m)
+2026/11/15 08:19:46 socat[2063626] E write(6, 0x5ec1133cd000, 24): Broken pipe
+2026/11/15 08:19:49 socat[2069070] E write(6, 0x5ec1133cd000, 24): Broken pipe
+  ✓  14 tests/channels-e2e/channels.spec.ts:176:1 › CHN-05 a channel can be made a favorite and taken out again, and both survive a reload (7.2s)
+2026/11/15 08:19:51 socat[2071355] E write(6, 0x5ec1133cd000, 24): Broken pipe
+2026/11/15 08:19:51 socat[2070866] E write(6, 0x5ec1133cd000, 24): Broken pipe
+2026/11/15 08:19:51 socat[2070890] E write(6, 0x5ec1133cd000, 24): Broken pipe
+2026/11/15 08:19:51 socat[2071557] E write(6, 0x5ec1133cd000, 24): Broken pipe
+2026/11/15 08:19:51 socat[2069130] E write(6, 0x5ec1133cd000, 24): Broken pipe
+2026/11/15 08:19:51 socat[2069338] E write(6, 0x5ec1133cd000, 24): Broken pipe
+  ✓  15 tests/channels-e2e/channels.spec.ts:206:1 › CHN-06 Copy Link gives an address that opens the channel for another member (4.8s)
+2026/11/15 08:19:52 socat[2069332] E write(6, 0x5ec1133cd000, 24): Broken pipe
+2026/11/15 08:19:52 socat[2069352] E write(6, 0x5ec1133cd000, 24): Broken pipe
+2026/11/15 08:19:53 socat[2075010] E write(6, 0x5ec1133cd000, 24): Broken pipe
+2026/11/15 08:19:53 socat[2075669] E write(6, 0x5ec1133cd000, 24): Broken pipe
+2026/11/15 08:19:53 socat[2077385] E write(6, 0x5ec1133cd000, 24): Broken pipe
+2026/11/15 08:19:53 socat[2067384] E write(6, 0x5ec1133cd000, 24): Broken pipe
+2026/11/15 08:19:53 socat[1863653] W waitpid(-1, {}, WNOHANG): no (more) child has exited
+2026/11/15 08:19:53 socat[2077422] E write(6, 0x5ec1133cd000, 24): Broken pipe
+  ✓  16 tests/channels-e2e/channels.spec.ts:230:1 › CHN-07 deleting a channel removes it for its owner at once, and its address no longer opens for anyone (7.2s)
+2026/11/15 08:19:53 socat[2075930] E write(6, 0x5ec1133cd000, 24): Broken pipe
+  ✓  18 tests/channels-e2e/channels.spec.ts:299:1 › CHN-09 a member who does not own the channel is not offered Delete (2.5s)
+2026/11/15 08:19:56 socat[2078610] E write(6, 0x5ec1133cd000, 24): Broken pipe
+  ✓  20 tests/channels-e2e/channels.spec.ts:340:1 › CHN-11 the Attachments tab of a channel with no files says there are none (2.1s)
+2026/11/15 08:19:56 socat[2078648] E write(6, 0x5ec1133cd000, 24): Broken pipe
+2026/11/15 08:19:56 socat[2078576] E write(6, 0x5ec1133cd000, 24): Broken pipe
+  ✓  19 tests/channels-e2e/channels.spec.ts:317:1 › CHN-10 the Participants tab lists the channel’s members by name, with the owner marked (2.2s)2026/11/15 08:19:56 socat[2078614] E write(6, 0x5ec1133cd000, 24): Broken pipe
+
+2026/11/15 08:19:58 socat[2082465] E write(6, 0x5ec1133cd000, 24): Broken pipe
+2026/11/15 08:19:58 socat[2081298] E write(6, 0x5ec1133cd000, 24): Broken pipe
+2026/11/15 08:19:58 socat[2082710] E write(6, 0x5ec1133cd000, 24): Broken pipe
+  ✓  22 tests/channels-e2e/channels.spec.ts:390:1 › CHN-13 a channel’s history starts with “Channel <name> created” (2.2s)
+2026/11/15 08:19:59 socat[2082415] E write(6, 0x5ec1133cd000, 24): Broken pipe
+  ✓  21 tests/channels-e2e/channels.spec.ts:362:1 › CHN-12 going to another tab and back keeps the message list where it was (3.2s)
+2026/11/15 08:20:02 socat[1936061] E write(6, 0x5ec1133cc000, 24): Broken pipe
+2026/11/15 08:20:03 socat[1932164] E write(6, 0x5ec1133cc000, 24): Broken pipe
+  ✘   5 tests/channels-e2e/access.spec.ts:139:1 › ACC-05 a withdrawn request can no longer be approved (1.5m)
+2026/11/15 08:20:07 socat[2097108] E write(6, 0x5ec1133cd000, 24): Broken pipe
+2026/11/15 08:20:07 socat[2097243] E write(6, 0x5ec1133cd000, 24): Broken pipe
+  ✓  25 tests/channels-e2e/find-and-keys.spec.ts:26:1 › KEY-01 find counts the messages that match and steps through them, newest first (3.3s)
+2026/11/15 08:20:09 socat[2075777] E write(6, 0x5ec1133cd000, 24): Broken pipe
+  ✘  17 tests/channels-e2e/channels.spec.ts:273:1 › CHN-08 a deleted channel leaves its owner’s Favorites too (18.6s)
+2026/11/15 08:20:10 socat[2102536] E write(6, 0x5ec1133cd000, 24): Broken pipe
+2026/11/15 08:20:10 socat[2102912] E write(6, 0x5ec1133cd000, 24): Broken pipe
+  ✓  26 tests/channels-e2e/find-and-keys.spec.ts:75:1 › KEY-02 find brings an old message far up a long history into view (3.4s)
+2026/11/15 08:20:12 socat[2110330] E write(6, 0x5ec1133cd000, 24): Broken pipe
+2026/11/15 08:20:12 socat[1863653] W waitpid(-1, {}, WNOHANG): no (more) child has exited
+2026/11/15 08:20:12 socat[2110451] E write(6, 0x5ec1133cd000, 24): Broken pipe
+  ✓  27 tests/channels-e2e/find-and-keys.spec.ts:95:1 › KEY-03 find for words nobody wrote says there are no matches (3.2s)
+2026/11/15 08:20:13 socat[2113068] E write(6, 0x5ec1133cd000, 24): Broken pipe
+  ✓  28 tests/channels-e2e/find-and-keys.spec.ts:119:1 › KEY-04 the find bar closes with its button and with Escape, and the channel still takes a message (3.0s)
+2026/11/15 08:20:15 socat[2086092] E write(6, 0x5ec1133cd000, 24): Broken pipe
+2026/11/15 08:20:15 socat[2086690] E write(6, 0x5ec1133cd000, 24): Broken pipe
+  ✘  23 tests/channels-e2e/channels.spec.ts:410:1 › CHN-14 a brand-new channel with no messages shows its “Channel <name> created” line (16.9s)
+2026/11/15 08:20:16 socat[2115897] E write(6, 0x5ec1133cd000, 24): Broken pipe
+2026/11/15 08:20:16 socat[1863653] W waitpid(-1, {}, WNOHANG): no (more) child has exited
+2026/11/15 08:20:16 socat[2116157] E write(6, 0x5ec1133cd000, 24): Broken pipe
+  ✓  29 tests/channels-e2e/find-and-keys.spec.ts:143:1 › KEY-05 the arrow keys walk from the composer up the messages and back down into the composer (3.3s)
+2026/11/15 08:20:16 socat[2087790] E write(6, 0x5ec1133cd000, 24): Broken pipe
+  ✘  24 tests/channels-e2e/channels.spec.ts:429:1 › CHN-15 a channel deleted elsewhere closes on its owner’s open page (17.1s)
+2026/11/15 08:20:18 socat[2119670] E write(6, 0x5ec1133cd000, 24): Broken pipe
+2026/11/15 08:20:18 socat[2119953] E write(6, 0x5ec1133cd000, 24): Broken pipe
+  ✓  31 tests/channels-e2e/find-and-keys.spec.ts:215:1 › KEY-07 “e” on a person’s own selected message edits it (3.1s)
+2026/11/15 08:20:19 socat[2122164] E write(6, 0x5ec1133cd000, 24): Broken pipe
+2026/11/15 08:20:19 socat[2119642] E write(6, 0x5ec1133cd000, 24): Broken pipe
+2026/11/15 08:20:19 socat[2122226] E write(6, 0x5ec1133cd000, 24): Broken pipe
+2026/11/15 08:20:19 socat[2122261] E write(6, 0x5ec1133cd000, 24): Broken pipe
+  ✓  32 tests/channels-e2e/find-and-keys.spec.ts:247:1 › KEY-08 Backspace on a person’s own selected message asks first, and Escape keeps the message (3.2s)
+  ✓  33 tests/channels-e2e/find-and-keys.spec.ts:273:1 › KEY-12 Backspace on a person’s own selected message deletes it once confirmed (3.1s)
+2026/11/15 08:20:21 socat[2125729] E write(6, 0x5ec1133cd000, 24): Broken pipe
+2026/11/15 08:20:21 socat[2126001] E write(6, 0x5ec1133cd000, 24): Broken pipe
+  ✓  34 tests/channels-e2e/find-and-keys.spec.ts:298:1 › KEY-09 Shift+G in the message list goes to the latest message (3.4s)
+2026/11/15 08:20:21 socat[2127546] E write(6, 0x5ec1133cd000, 24): Broken pipe
+2026/11/15 08:20:21 socat[2127722] E write(6, 0x5ec1133cd000, 24): Broken pipe
+  ✓  36 tests/channels-e2e/find-and-keys.spec.ts:350:1 › KEY-11 Escape steps out of the composer to the messages, then to the list of conversations (2.4s)
+2026/11/15 08:20:22 socat[2127823] E write(6, 0x5ec1133cd000, 24): Broken pipe
+  ✓  35 tests/channels-e2e/find-and-keys.spec.ts:326:1 › KEY-10 choosing a channel in the list puts the cursor in its composer (3.4s)
+2026/11/15 08:20:26 socat[2135662] E write(6, 0x5ec1133cd000, 24): Broken pipe
+2026/11/15 08:20:26 socat[1863653] W waitpid(-1, {}, WNOHANG): no (more) child has exited
+2026/11/15 08:20:26 socat[2135978] E write(6, 0x5ec1133cd000, 24): Broken pipe
+2026/11/15 08:20:26 socat[2131591] E write(6, 0x5ec1133cd000, 24): Broken pipe
+  ✓  38 tests/channels-e2e/members.spec.ts:71:1 › MEM-02 the owner removes a person in the Participants tab and everyone who stays is told (4.4s)
+2026/11/15 08:20:29 socat[2135128] E write(6, 0x5ec1133cd000, 24): Broken pipe
+2026/11/15 08:20:29 socat[2135715] E write(6, 0x5ec1133cd000, 24): Broken pipe
+2026/11/15 08:20:29 socat[2137722] E write(6, 0x5ec1133cd000, 24): Broken pipe
+2026/11/15 08:20:29 socat[1863653] W waitpid(-1, {}, WNOHANG): no (more) child has exited
+2026/11/15 08:20:29 socat[2137985] E write(6, 0x5ec1133cd000, 24): Broken pipe
+2026/11/15 08:20:29 socat[2131158] E write(6, 0x5ec1133cd000, 24): Broken pipe
+2026/11/15 08:20:29 socat[2131520] E write(6, 0x5ec1133cd000, 24): Broken pipe
+  ✓  37 tests/channels-e2e/members.spec.ts:18:1 › MEM-01 a person invited from the app gets the channel at once, with what was said before and after (7.7s)
+2026/11/15 08:20:30 socat[2138466] E write(6, 0x5ec1133cd000, 24): Broken pipe
+2026/11/15 08:20:30 socat[2138664] E write(6, 0x5ec1133cd000, 24): Broken pipe
+2026/11/15 08:20:31 socat[2117622] E write(6, 0x5ec1133cd000, 24): Broken pipe
+  ✘  30 tests/channels-e2e/find-and-keys.spec.ts:177:1 › KEY-06 Enter on a selected message opens a reply to that message (17.7s)
+2026/11/15 08:20:33 socat[2141220] E read(6, 0x5ec1133cd000, 8192): Connection reset by peer
+2026/11/15 08:20:33 socat[2143038] E write(6, 0x5ec1133cd000, 24): Broken pipe
+2026/11/15 08:20:33 socat[2141221] E write(6, 0x55555561e000, 24): Broken pipe
+  ✓  41 tests/channels-e2e/members.spec.ts:178:1 › MEM-05 people added and removed while the channel is open show as lines between the right messages (3.9s)
+2026/11/15 08:20:33 socat[1861915] W waitpid(-1, {}, WNOHANG): no (more) child has exited
+2026/11/15 08:20:33 socat[2143215] E write(6, 0x5ec1133cd000, 24): Broken pipe
+2026/11/15 08:20:33 socat[2147094] E write(6, 0x5ec1133cd000, 24): Broken pipe
+2026/11/15 08:20:33 socat[2145536] E write(6, 0x5ec1133cd000, 24): Broken pipe
+2026/11/15 08:20:33 socat[2147142] E write(6, 0x5ec1133cd000, 24): Broken pipe
+  ✓  42 tests/channels-e2e/members.spec.ts:214:1 › MEM-06 a channel opened afresh shows who was added and removed between the right messages (2.0s)
+2026/11/15 08:20:35 socat[2150998] E write(6, 0x5ec1133cd000, 24): Broken pipe
+  ✓  44 tests/channels-e2e/members.spec.ts:269:1 › MEM-08 a person added while their app was closed finds the channel in the list when they open it (2.0s)
+2026/11/15 08:20:35 socat[2150503] E write(6, 0x5ec1133cd000, 24): Broken pipe
+  ✓  43 tests/channels-e2e/members.spec.ts:239:1 › MEM-07 a member who does not own the channel cannot remove its owner (2.7s)
+2026/11/15 08:20:39 socat[2133735] E write(6, 0x5ec1133cd000, 24): Broken pipe
+  ✘  39 tests/channels-e2e/members.spec.ts:111:1 › MEM-03 a person removed while the channel is open loses it at once (17.0s)
+2026/11/15 08:20:46 socat[2145463] E write(6, 0x5ec1133cd000, 24): Broken pipe
+2026/11/15 08:20:47 socat[2140627] E write(6, 0x5ec1133cd000, 24): Broken pipe
+2026/11/15 08:20:47 socat[2140687] E write(6, 0x5ec1133cd000, 24): Broken pipe
+  ✘  40 tests/channels-e2e/members.spec.ts:139:1 › MEM-04 a removed person never sees what is said after, and after a reload cannot open the channel (21.1s)
+
+
+  1) tests/channels-e2e/access.spec.ts:13:1 › ACC-01 a teammate who is not in a private channel sees no messages and is offered to ask to join 
+
+    Error: expect(locator).toBeVisible() failed
+
+    Locator: getByRole('main').getByRole('status').filter({ has: getByRole('heading', { name: 'You don\'t have access to this channel' }) })
+    Expected: visible
+    Timeout: 15000ms
+    Error: element(s) not found
+
+    Call log:
+      - Expect "toBeVisible" with timeout 15000ms
+      - waiting for getByRole('main').getByRole('status').filter({ has: getByRole('heading', { name: 'You don\'t have access to this channel' }) })
+
+
+      22 |   await cyPage.goto(`/app/channel/${channel.id}`);
+      23 |
+    > 24 |   await expect(noAccess(cyPage)).toBeVisible();
+         |                                  ^
+      25 |   await expect(noAccess(cyPage)).toContainText(
+      26 |     `Signed in as ${people.cy.email}`
+      27 |   );
+        at /home/teo/.herdr/worktrees/macro/synoet-channels-e2e-base/apps/web/tests/channels-e2e/access.spec.ts:24:34
+
+    attachment #1: screenshot (image/png) ──────────────────────────────────────────────────────────
+    ../../../../../../.cache/channels-e2e/runs/24909-break-no-access-shown-as-unavailable/test-results/access-ACC-01-a-teammate-w-8f74f-d-is-offered-to-ask-to-join/test-failed-1.png
+    ────────────────────────────────────────────────────────────────────────────────────────────────
+
+    Error Context: ../../../../../../.cache/channels-e2e/runs/24909-break-no-access-shown-as-unavailable/test-results/access-ACC-01-a-teammate-w-8f74f-d-is-offered-to-ask-to-join/error-context.md
+
+    attachment #3: trace (application/zip) ─────────────────────────────────────────────────────────
+    ../../../../../../.cache/channels-e2e/runs/24909-break-no-access-shown-as-unavailable/test-results/access-ACC-01-a-teammate-w-8f74f-d-is-offered-to-ask-to-join/trace.zip
+    Usage:
+
+        npx playwright show-trace ../../../../../../.cache/channels-e2e/runs/24909-break-no-access-shown-as-unavailable/test-results/access-ACC-01-a-teammate-w-8f74f-d-is-offered-to-ask-to-join/trace.zip
+
+    ────────────────────────────────────────────────────────────────────────────────────────────────
+
+  2) tests/channels-e2e/access.spec.ts:39:1 › ACC-02 a person outside the team who opens a private channel’s address sees no messages 
+
+    Error: expect(locator).toBeVisible() failed
+
+    Locator: getByRole('main').getByRole('status').filter({ has: getByRole('heading', { name: 'You don\'t have access to this channel' }) })
+    Expected: visible
+    Timeout: 15000ms
+    Error: element(s) not found
+
+    Call log:
+      - Expect "toBeVisible" with timeout 15000ms
+      - waiting for getByRole('main').getByRole('status').filter({ has: getByRole('heading', { name: 'You don\'t have access to this channel' }) })
+
+
+      48 |   await deePage.goto(`/app/channel/${channel.id}`);
+      49 |
+    > 50 |   await expect(noAccess(deePage)).toBeVisible();
+         |                                   ^
+      51 |   await expect(noAccess(deePage)).toContainText(
+      52 |     `Signed in as ${people.dee.email}`
+      53 |   );
+        at /home/teo/.herdr/worktrees/macro/synoet-channels-e2e-base/apps/web/tests/channels-e2e/access.spec.ts:50:35
+
+    attachment #1: screenshot (image/png) ──────────────────────────────────────────────────────────
+    ../../../../../../.cache/channels-e2e/runs/24909-break-no-access-shown-as-unavailable/test-results/access-ACC-02-a-person-out-b17ea-’s-address-sees-no-messages/test-failed-1.png
+    ────────────────────────────────────────────────────────────────────────────────────────────────
+
+    Error Context: ../../../../../../.cache/channels-e2e/runs/24909-break-no-access-shown-as-unavailable/test-results/access-ACC-02-a-person-out-b17ea-’s-address-sees-no-messages/error-context.md
+
+    attachment #3: trace (application/zip) ─────────────────────────────────────────────────────────
+    ../../../../../../.cache/channels-e2e/runs/24909-break-no-access-shown-as-unavailable/test-results/access-ACC-02-a-person-out-b17ea-’s-address-sees-no-messages/trace.zip
+    Usage:
+
+        npx playwright show-trace ../../../../../../.cache/channels-e2e/runs/24909-break-no-access-shown-as-unavailable/test-results/access-ACC-02-a-person-out-b17ea-’s-address-sees-no-messages/trace.zip
+
+    ────────────────────────────────────────────────────────────────────────────────────────────────
+
+  3) tests/channels-e2e/access.spec.ts:61:1 › ACC-03 a request to join reaches the owner at once, and approving it lets the person in at once 
+
+    Test timeout of 90000ms exceeded.
+
+    Error: locator.click: Target page, context or browser has been closed
+    Call log:
+      - waiting for getByRole('button', { name: 'Ask to join' })
+
+
+      72 |   const cyPage = await pageFor('cy');
+      73 |   await cyPage.goto(`/app/channel/${channel.id}`);
+    > 74 |   await cyPage.getByRole('button', { name: 'Ask to join' }).click();
+         |                                                             ^
+      75 |   await expect(
+      76 |     cyPage.getByRole('button', { name: 'Withdraw request' })
+      77 |   ).toBeVisible();
+        at /home/teo/.herdr/worktrees/macro/synoet-channels-e2e-base/apps/web/tests/channels-e2e/access.spec.ts:74:61
+
+    attachment #1: screenshot (image/png) ──────────────────────────────────────────────────────────
+    ../../../../../../.cache/channels-e2e/runs/24909-break-no-access-shown-as-unavailable/test-results/access-ACC-03-a-request-to-2ca38--lets-the-person-in-at-once/test-failed-1.png
+    ────────────────────────────────────────────────────────────────────────────────────────────────
+
+    attachment #2: screenshot (image/png) ──────────────────────────────────────────────────────────
+    ../../../../../../.cache/channels-e2e/runs/24909-break-no-access-shown-as-unavailable/test-results/access-ACC-03-a-request-to-2ca38--lets-the-person-in-at-once/test-failed-2.png
+    ────────────────────────────────────────────────────────────────────────────────────────────────
+
+    Error Context: ../../../../../../.cache/channels-e2e/runs/24909-break-no-access-shown-as-unavailable/test-results/access-ACC-03-a-request-to-2ca38--lets-the-person-in-at-once/error-context.md
+
+    attachment #4: trace (application/zip) ─────────────────────────────────────────────────────────
+    ../../../../../../.cache/channels-e2e/runs/24909-break-no-access-shown-as-unavailable/test-results/access-ACC-03-a-request-to-2ca38--lets-the-person-in-at-once/trace.zip
+    Usage:
+
+        npx playwright show-trace ../../../../../../.cache/channels-e2e/runs/24909-break-no-access-shown-as-unavailable/test-results/access-ACC-03-a-request-to-2ca38--lets-the-person-in-at-once/trace.zip
+
+    ────────────────────────────────────────────────────────────────────────────────────────────────
+
+  4) tests/channels-e2e/access.spec.ts:104:1 › ACC-04 a denied request tells the person so and shows them nothing of the channel 
+
+    Test timeout of 90000ms exceeded.
+
+    Error: locator.click: Target page, context or browser has been closed
+    Call log:
+      - waiting for getByRole('button', { name: 'Ask to join' })
+
+
+      115 |   const cyPage = await pageFor('cy');
+      116 |   await cyPage.goto(`/app/channel/${channel.id}`);
+    > 117 |   await cyPage.getByRole('button', { name: 'Ask to join' }).click();
+          |                                                             ^
+      118 |   await expect(
+      119 |     view.list.getByText(
+      120 |       `Cy Teammate (${people.cy.email}) asked to join the channel`
+        at /home/teo/.herdr/worktrees/macro/synoet-channels-e2e-base/apps/web/tests/channels-e2e/access.spec.ts:117:61
+
+    attachment #1: screenshot (image/png) ──────────────────────────────────────────────────────────
+    ../../../../../../.cache/channels-e2e/runs/24909-break-no-access-shown-as-unavailable/test-results/access-ACC-04-a-denied-req-62a52-them-nothing-of-the-channel/test-failed-1.png
+    ────────────────────────────────────────────────────────────────────────────────────────────────
+
+    attachment #2: screenshot (image/png) ──────────────────────────────────────────────────────────
+    ../../../../../../.cache/channels-e2e/runs/24909-break-no-access-shown-as-unavailable/test-results/access-ACC-04-a-denied-req-62a52-them-nothing-of-the-channel/test-failed-2.png
+    ────────────────────────────────────────────────────────────────────────────────────────────────
+
+    Error Context: ../../../../../../.cache/channels-e2e/runs/24909-break-no-access-shown-as-unavailable/test-results/access-ACC-04-a-denied-req-62a52-them-nothing-of-the-channel/error-context.md
+
+    attachment #4: trace (application/zip) ─────────────────────────────────────────────────────────
+    ../../../../../../.cache/channels-e2e/runs/24909-break-no-access-shown-as-unavailable/test-results/access-ACC-04-a-denied-req-62a52-them-nothing-of-the-channel/trace.zip
+    Usage:
+
+        npx playwright show-trace ../../../../../../.cache/channels-e2e/runs/24909-break-no-access-shown-as-unavailable/test-results/access-ACC-04-a-denied-req-62a52-them-nothing-of-the-channel/trace.zip
+
+    ────────────────────────────────────────────────────────────────────────────────────────────────
+
+  5) tests/channels-e2e/access.spec.ts:139:1 › ACC-05 a withdrawn request can no longer be approved 
+
+    Test timeout of 90000ms exceeded.
+
+    Error: locator.click: Target page, context or browser has been closed
+    Call log:
+      - waiting for getByRole('button', { name: 'Ask to join' })
+
+
+      150 |   const cyPage = await pageFor('cy');
+      151 |   await cyPage.goto(`/app/channel/${channel.id}`);
+    > 152 |   await cyPage.getByRole('button', { name: 'Ask to join' }).click();
+          |                                                             ^
+      153 |   await expect(page.getByRole('button', { name: 'Approve' })).toBeVisible();
+      154 |
+      155 |   await cyPage.getByRole('button', { name: 'Withdraw request' }).click();
+        at /home/teo/.herdr/worktrees/macro/synoet-channels-e2e-base/apps/web/tests/channels-e2e/access.spec.ts:152:61
+
+    attachment #1: screenshot (image/png) ──────────────────────────────────────────────────────────
+    ../../../../../../.cache/channels-e2e/runs/24909-break-no-access-shown-as-unavailable/test-results/access-ACC-05-a-withdrawn-request-can-no-longer-be-approved/test-failed-1.png
+    ────────────────────────────────────────────────────────────────────────────────────────────────
+
+    attachment #2: screenshot (image/png) ──────────────────────────────────────────────────────────
+    ../../../../../../.cache/channels-e2e/runs/24909-break-no-access-shown-as-unavailable/test-results/access-ACC-05-a-withdrawn-request-can-no-longer-be-approved/test-failed-2.png
+    ────────────────────────────────────────────────────────────────────────────────────────────────
+
+    Error Context: ../../../../../../.cache/channels-e2e/runs/24909-break-no-access-shown-as-unavailable/test-results/access-ACC-05-a-withdrawn-request-can-no-longer-be-approved/error-context.md
+
+    attachment #4: trace (application/zip) ─────────────────────────────────────────────────────────
+    ../../../../../../.cache/channels-e2e/runs/24909-break-no-access-shown-as-unavailable/test-results/access-ACC-05-a-withdrawn-request-can-no-longer-be-approved/trace.zip
+    Usage:
+
+        npx playwright show-trace ../../../../../../.cache/channels-e2e/runs/24909-break-no-access-shown-as-unavailable/test-results/access-ACC-05-a-withdrawn-request-can-no-longer-be-approved/trace.zip
+
+    ────────────────────────────────────────────────────────────────────────────────────────────────
+
+  6) tests/channels-e2e/access.spec.ts:207:1 › ACC-07 a person outside the team cannot read a team channel or find it to join 
+
+    Error: expect(locator).toBeVisible() failed
+
+    Locator: getByRole('main').getByRole('status').filter({ has: getByRole('heading', { name: 'You don\'t have access to this channel' }) })
+    Expected: visible
+    Timeout: 15000ms
+    Error: element(s) not found
+
+    Call log:
+      - Expect "toBeVisible" with timeout 15000ms
+      - waiting for getByRole('main').getByRole('status').filter({ has: getByRole('heading', { name: 'You don\'t have access to this channel' }) })
+
+
+      220 |     const deePage = await pageFor('dee');
+      221 |     await deePage.goto(`/app/channel/${channel.id}`);
+    > 222 |     await expect(noAccess(deePage)).toBeVisible();
+          |                                     ^
+      223 |     await expect(deePage.getByText('for the whole team')).toHaveCount(0);
+      224 |     await expect(new ChannelView(deePage, channel.id).composer).toHaveCount(0);
+      225 |
+        at /home/teo/.herdr/worktrees/macro/synoet-channels-e2e-base/apps/web/tests/channels-e2e/access.spec.ts:222:37
+
+    attachment #1: screenshot (image/png) ──────────────────────────────────────────────────────────
+    ../../../../../../.cache/channels-e2e/runs/24909-break-no-access-shown-as-unavailable/test-results/access-ACC-07-a-person-out-5cc7d--channel-or-find-it-to-join/test-failed-1.png
+    ────────────────────────────────────────────────────────────────────────────────────────────────
+
+    Error Context: ../../../../../../.cache/channels-e2e/runs/24909-break-no-access-shown-as-unavailable/test-results/access-ACC-07-a-person-out-5cc7d--channel-or-find-it-to-join/error-context.md
+
+    attachment #3: trace (application/zip) ─────────────────────────────────────────────────────────
+    ../../../../../../.cache/channels-e2e/runs/24909-break-no-access-shown-as-unavailable/test-results/access-ACC-07-a-person-out-5cc7d--channel-or-find-it-to-join/trace.zip
+    Usage:
+
+        npx playwright show-trace ../../../../../../.cache/channels-e2e/runs/24909-break-no-access-shown-as-unavailable/test-results/access-ACC-07-a-person-out-5cc7d--channel-or-find-it-to-join/trace.zip
+
+    ────────────────────────────────────────────────────────────────────────────────────────────────
+
+  7) tests/channels-e2e/members.spec.ts:139:1 › MEM-04 a removed person never sees what is said after, and after a reload cannot open the channel 
+
+    Error: expect(locator).toBeVisible() failed
+
+    Locator: getByRole('main').getByRole('status').filter({ has: getByRole('heading', { name: 'You don\'t have access to this channel' }) })
+    Expected: visible
+    Timeout: 15000ms
+    Error: element(s) not found
+
+    Call log:
+      - Expect "toBeVisible" with timeout 15000ms
+      - waiting for getByRole('main').getByRole('status').filter({ has: getByRole('heading', { name: 'You don\'t have access to this channel' }) })
+
+
+      165 |
+      166 |   await cyPage.reload();
+    > 167 |   await expect(noAccess(cyPage)).toBeVisible();
+          |                                  ^
+      168 |   await expect(
+      169 |     cyPage.getByRole('button', { name: 'Ask to join' })
+      170 |   ).toBeVisible();
+        at /home/teo/.herdr/worktrees/macro/synoet-channels-e2e-base/apps/web/tests/channels-e2e/members.spec.ts:167:34
+
+    attachment #1: screenshot (image/png) ──────────────────────────────────────────────────────────
+    ../../../../../../.cache/channels-e2e/runs/24909-break-no-access-shown-as-unavailable/test-results/members-MEM-04-a-removed-p-17533-oad-cannot-open-the-channel/test-failed-1.png
+    ────────────────────────────────────────────────────────────────────────────────────────────────
+
+    attachment #2: screenshot (image/png) ──────────────────────────────────────────────────────────
+    ../../../../../../.cache/channels-e2e/runs/24909-break-no-access-shown-as-unavailable/test-results/members-MEM-04-a-removed-p-17533-oad-cannot-open-the-channel/test-failed-2.png
+    ────────────────────────────────────────────────────────────────────────────────────────────────
+
+    Error Context: ../../../../../../.cache/channels-e2e/runs/24909-break-no-access-shown-as-unavailable/test-results/members-MEM-04-a-removed-p-17533-oad-cannot-open-the-channel/error-context.md
+
+    attachment #4: trace (application/zip) ─────────────────────────────────────────────────────────
+    ../../../../../../.cache/channels-e2e/runs/24909-break-no-access-shown-as-unavailable/test-results/members-MEM-04-a-removed-p-17533-oad-cannot-open-the-channel/trace.zip
+    Usage:
+
+        npx playwright show-trace ../../../../../../.cache/channels-e2e/runs/24909-break-no-access-shown-as-unavailable/test-results/members-MEM-04-a-removed-p-17533-oad-cannot-open-the-channel/trace.zip
+
+    ────────────────────────────────────────────────────────────────────────────────────────────────
+
+  7 failed
+    tests/channels-e2e/access.spec.ts:13:1 › ACC-01 a teammate who is not in a private channel sees no messages and is offered to ask to join 
+    tests/channels-e2e/access.spec.ts:39:1 › ACC-02 a person outside the team who opens a private channel’s address sees no messages 
+    tests/channels-e2e/access.spec.ts:61:1 › ACC-03 a request to join reaches the owner at once, and approving it lets the person in at once 
+    tests/channels-e2e/access.spec.ts:104:1 › ACC-04 a denied request tells the person so and shows them nothing of the channel 
+    tests/channels-e2e/access.spec.ts:139:1 › ACC-05 a withdrawn request can no longer be approved ─
+    tests/channels-e2e/access.spec.ts:207:1 › ACC-07 a person outside the team cannot read a team channel or find it to join 
+    tests/channels-e2e/members.spec.ts:139:1 › MEM-04 a removed person never sees what is said after, and after a reload cannot open the channel 
+  37 passed (2.8m)
+2026/11/15 08:20:47 socat[1861915] W waitpid(-1, {}, WNOHANG): no (more) child has exited
+2026/11/15 08:20:47 socat[1863653] W waitpid(-1, {}, WNOHANG): no (more) child has exited
+2026/11/15 08:20:47 socat[1863653] W exiting on signal 15
+2026/11/15 08:20:47 socat[1861915] W exiting on signal 15

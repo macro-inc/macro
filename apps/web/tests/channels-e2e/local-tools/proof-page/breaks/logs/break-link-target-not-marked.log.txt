@@ -1,0 +1,218 @@
+path "/home/teo/.herdr/worktrees/macro/synoet-channels-e2e-base/apps/web" does not contain a 'flake.nix', searching up
+warning: Git tree '/home/teo/.herdr/worktrees/macro/synoet-channels-e2e-base' is dirty
+
+Running 7 tests using 4 workers
+
+2026/11/15 09:42:02 socat[1765528] E write(6, 0x612db31b3000, 24): Broken pipe
+2026/11/15 09:42:02 socat[1765555] E write(6, 0x612db31b3000, 24): Broken pipe
+  ✓  4 tests/channels-e2e/location.spec.ts:75:1 › NAV-04 a link to a message that does not exist says so and shows the latest messages (11.1s)
+2026/11/15 09:42:09 socat[1765342] E write(6, 0x612db31b3000, 24): Broken pipe
+2026/11/15 09:42:09 socat[1765440] E write(6, 0x612db31b3000, 24): Broken pipe
+  ✘  3 tests/channels-e2e/location.spec.ts:24:1 › NAV-02 a link to an old message, pages back, shows it between its neighbours (18.2s)
+2026/11/15 09:42:11 socat[1765387] E write(6, 0x612db31b3000, 24): Broken pipe
+2026/11/15 09:42:11 socat[1765466] E write(6, 0x612db31b3000, 24): Broken pipe
+  ✘  2 tests/channels-e2e/location.spec.ts:47:1 › NAV-03 a link to a reply deep in an old thread opens the thread on that reply (20.3s)
+2026/11/15 09:42:13 socat[1778006] E write(6, 0x612db31b3000, 24): Broken pipe
+  ✘  5 tests/channels-e2e/location.spec.ts:97:1 › NAV-05 reading forward from an old message reaches the latest with nothing missing or repeated (11.2s)
+2026/11/15 09:42:14 socat[1795494] E write(6, 0x612db31b3000, 24): Broken pipe
+2026/11/15 09:42:14 socat[1795523] E write(6, 0x612db31b3000, 24): Broken pipe
+  ✓  6 tests/channels-e2e/location.spec.ts:120:1 › NAV-06 scrolling down from an old message offers “Scroll to bottom”, which returns to the latest messages (4.0s)
+2026/11/15 09:42:15 socat[1796683] E write(6, 0x612db31b3000, 24): Broken pipe
+2026/11/15 09:42:15 socat[1796689] E write(6, 0x612db31b3000, 24): Broken pipe
+2026/11/15 09:42:15 socat[1798324] E write(6, 0x612db31b3000, 24): Broken pipe
+2026/11/15 09:42:16 socat[1765319] E write(6, 0x612db31b3000, 24): Broken pipe
+2026/11/15 09:42:16 socat[1765438] E write(6, 0x612db31b3000, 24): Broken pipe
+  ✘  1 tests/channels-e2e/location.spec.ts:7:1 › NAV-01 a link to a recent message opens the channel on that message and marks it (25.7s)
+2026/11/15 09:42:32 socat[1795933] E write(6, 0x612db31b3000, 24): Broken pipe
+2026/11/15 09:42:32 socat[1798862] E write(6, 0x612db31b3000, 24): Broken pipe
+  ✘  7 tests/channels-e2e/location.spec.ts:137:1 › NAV-07 “Copy link” on a message gives a link that opens the channel on it (20.1s)
+
+
+  1) tests/channels-e2e/location.spec.ts:7:1 › NAV-01 a link to a recent message opens the channel on that message and marks it 
+
+    Error: messages marked as the target of the link
+
+    messages marked as the target of the link
+
+    expect(received).toEqual(expected) // deep equality
+
+    - Expected  - 3
+    + Received  + 1
+
+    - Array [
+    -   "01a1de95-993e-7d39-8ec0-61bc97e24799",
+    - ]
+    + Array []
+
+    Call Log:
+    - Timeout 15000ms exceeded while waiting on the predicate
+
+       at harness/channel.ts:87
+
+      85 |         message: 'messages marked as the target of the link',
+      86 |       })
+    > 87 |       .toEqual([id]);
+         |        ^
+      88 |   }
+      89 |
+      90 |   /**
+        at ChannelView.expectMarked (/home/teo/.herdr/worktrees/macro/synoet-channels-e2e-base/apps/web/tests/channels-e2e/harness/channel.ts:87:8)
+        at /home/teo/.herdr/worktrees/macro/synoet-channels-e2e-base/apps/web/tests/channels-e2e/location.spec.ts:19:14
+
+    attachment #1: screenshot (image/png) ──────────────────────────────────────────────────────────
+    ../../../../../../.cache/channels-e2e/runs/24909-break-link-target-not-marked/test-results/location-NAV-01-a-link-to--77b1d-n-that-message-and-marks-it/test-failed-1.png
+    ────────────────────────────────────────────────────────────────────────────────────────────────
+
+    Error Context: ../../../../../../.cache/channels-e2e/runs/24909-break-link-target-not-marked/test-results/location-NAV-01-a-link-to--77b1d-n-that-message-and-marks-it/error-context.md
+
+    attachment #3: trace (application/zip) ─────────────────────────────────────────────────────────
+    ../../../../../../.cache/channels-e2e/runs/24909-break-link-target-not-marked/test-results/location-NAV-01-a-link-to--77b1d-n-that-message-and-marks-it/trace.zip
+    Usage:
+
+        npx playwright show-trace ../../../../../../.cache/channels-e2e/runs/24909-break-link-target-not-marked/test-results/location-NAV-01-a-link-to--77b1d-n-that-message-and-marks-it/trace.zip
+
+    ────────────────────────────────────────────────────────────────────────────────────────────────
+
+  2) tests/channels-e2e/location.spec.ts:24:1 › NAV-02 a link to an old message, pages back, shows it between its neighbours 
+
+    Error: messages marked as the target of the link
+
+    messages marked as the target of the link
+
+    expect(received).toEqual(expected) // deep equality
+
+    - Expected  - 3
+    + Received  + 1
+
+    - Array [
+    -   "01a1de95-708c-7601-a124-f68a7de6934b",
+    - ]
+    + Array []
+
+    Call Log:
+    - Timeout 15000ms exceeded while waiting on the predicate
+
+       at harness/channel.ts:87
+
+      85 |         message: 'messages marked as the target of the link',
+      86 |       })
+    > 87 |       .toEqual([id]);
+         |        ^
+      88 |   }
+      89 |
+      90 |   /**
+        at ChannelView.expectMarked (/home/teo/.herdr/worktrees/macro/synoet-channels-e2e-base/apps/web/tests/channels-e2e/harness/channel.ts:87:8)
+        at /home/teo/.herdr/worktrees/macro/synoet-channels-e2e-base/apps/web/tests/channels-e2e/location.spec.ts:35:14
+
+    attachment #1: screenshot (image/png) ──────────────────────────────────────────────────────────
+    ../../../../../../.cache/channels-e2e/runs/24909-break-link-target-not-marked/test-results/location-NAV-02-a-link-to--d4b87-s-it-between-its-neighbours/test-failed-1.png
+    ────────────────────────────────────────────────────────────────────────────────────────────────
+
+    Error Context: ../../../../../../.cache/channels-e2e/runs/24909-break-link-target-not-marked/test-results/location-NAV-02-a-link-to--d4b87-s-it-between-its-neighbours/error-context.md
+
+    attachment #3: trace (application/zip) ─────────────────────────────────────────────────────────
+    ../../../../../../.cache/channels-e2e/runs/24909-break-link-target-not-marked/test-results/location-NAV-02-a-link-to--d4b87-s-it-between-its-neighbours/trace.zip
+    Usage:
+
+        npx playwright show-trace ../../../../../../.cache/channels-e2e/runs/24909-break-link-target-not-marked/test-results/location-NAV-02-a-link-to--d4b87-s-it-between-its-neighbours/trace.zip
+
+    ────────────────────────────────────────────────────────────────────────────────────────────────
+
+  3) tests/channels-e2e/location.spec.ts:47:1 › NAV-03 a link to a reply deep in an old thread opens the thread on that reply 
+
+    Error: messages marked as the target of the link
+
+    messages marked as the target of the link
+
+    expect(received).toEqual(expected) // deep equality
+
+    - Expected  - 3
+    + Received  + 1
+
+    - Array [
+    -   "01a1de95-9c4b-799c-8c21-2f1a956d8947",
+    - ]
+    + Array []
+
+    Call Log:
+    - Timeout 15000ms exceeded while waiting on the predicate
+
+       at harness/channel.ts:87
+
+      85 |         message: 'messages marked as the target of the link',
+      86 |       })
+    > 87 |       .toEqual([id]);
+         |        ^
+      88 |   }
+      89 |
+      90 |   /**
+        at ChannelView.expectMarked (/home/teo/.herdr/worktrees/macro/synoet-channels-e2e-base/apps/web/tests/channels-e2e/harness/channel.ts:87:8)
+        at /home/teo/.herdr/worktrees/macro/synoet-channels-e2e-base/apps/web/tests/channels-e2e/location.spec.ts:62:14
+
+    attachment #1: screenshot (image/png) ──────────────────────────────────────────────────────────
+    ../../../../../../.cache/channels-e2e/runs/24909-break-link-target-not-marked/test-results/location-NAV-03-a-link-to--9b69f-ns-the-thread-on-that-reply/test-failed-1.png
+    ────────────────────────────────────────────────────────────────────────────────────────────────
+
+    Error Context: ../../../../../../.cache/channels-e2e/runs/24909-break-link-target-not-marked/test-results/location-NAV-03-a-link-to--9b69f-ns-the-thread-on-that-reply/error-context.md
+
+    attachment #3: trace (application/zip) ─────────────────────────────────────────────────────────
+    ../../../../../../.cache/channels-e2e/runs/24909-break-link-target-not-marked/test-results/location-NAV-03-a-link-to--9b69f-ns-the-thread-on-that-reply/trace.zip
+    Usage:
+
+        npx playwright show-trace ../../../../../../.cache/channels-e2e/runs/24909-break-link-target-not-marked/test-results/location-NAV-03-a-link-to--9b69f-ns-the-thread-on-that-reply/trace.zip
+
+    ────────────────────────────────────────────────────────────────────────────────────────────────
+
+  4) tests/channels-e2e/location.spec.ts:137:1 › NAV-07 “Copy link” on a message gives a link that opens the channel on it 
+
+    Error: messages marked as the target of the link
+
+    messages marked as the target of the link
+
+    expect(received).toEqual(expected) // deep equality
+
+    - Expected  - 3
+    + Received  + 1
+
+    - Array [
+    -   "01a1de95-996c-7b16-b873-a67a01b094a2",
+    - ]
+    + Array []
+
+    Call Log:
+    - Timeout 15000ms exceeded while waiting on the predicate
+
+       at harness/channel.ts:87
+
+      85 |         message: 'messages marked as the target of the link',
+      86 |       })
+    > 87 |       .toEqual([id]);
+         |        ^
+      88 |   }
+      89 |
+      90 |   /**
+        at ChannelView.expectMarked (/home/teo/.herdr/worktrees/macro/synoet-channels-e2e-base/apps/web/tests/channels-e2e/harness/channel.ts:87:8)
+        at /home/teo/.herdr/worktrees/macro/synoet-channels-e2e-base/apps/web/tests/channels-e2e/location.spec.ts:157:14
+
+    attachment #1: screenshot (image/png) ──────────────────────────────────────────────────────────
+    ../../../../../../.cache/channels-e2e/runs/24909-break-link-target-not-marked/test-results/location-NAV-07-“Copy-link-35c8d-hat-opens-the-channel-on-it/test-failed-1.png
+    ────────────────────────────────────────────────────────────────────────────────────────────────
+
+    Error Context: ../../../../../../.cache/channels-e2e/runs/24909-break-link-target-not-marked/test-results/location-NAV-07-“Copy-link-35c8d-hat-opens-the-channel-on-it/error-context.md
+
+    attachment #3: trace (application/zip) ─────────────────────────────────────────────────────────
+    ../../../../../../.cache/channels-e2e/runs/24909-break-link-target-not-marked/test-results/location-NAV-07-“Copy-link-35c8d-hat-opens-the-channel-on-it/trace.zip
+    Usage:
+
+        npx playwright show-trace ../../../../../../.cache/channels-e2e/runs/24909-break-link-target-not-marked/test-results/location-NAV-07-“Copy-link-35c8d-hat-opens-the-channel-on-it/trace.zip
+
+    ────────────────────────────────────────────────────────────────────────────────────────────────
+
+  4 failed
+    tests/channels-e2e/location.spec.ts:7:1 › NAV-01 a link to a recent message opens the channel on that message and marks it 
+    tests/channels-e2e/location.spec.ts:24:1 › NAV-02 a link to an old message, pages back, shows it between its neighbours 
+    tests/channels-e2e/location.spec.ts:47:1 › NAV-03 a link to a reply deep in an old thread opens the thread on that reply 
+    tests/channels-e2e/location.spec.ts:137:1 › NAV-07 “Copy link” on a message gives a link that opens the channel on it 
+  3 passed (56.3s)
+2026/11/15 09:42:32 socat[1736128] W exiting on signal 15
+2026/11/15 09:42:32 socat[1735425] W exiting on signal 15

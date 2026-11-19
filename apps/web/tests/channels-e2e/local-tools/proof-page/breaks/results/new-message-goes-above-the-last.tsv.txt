@@ -1,0 +1,28 @@
+new-message-goes-above-the-last	MSG-01	FAILED	Error: expect(received).toEqual(expected) // deep equality | - Expected  - 1
+new-message-goes-above-the-last	MSG-02	FAILED	Error: expect(received).toEqual(expected) // deep equality | - Expected  - 1
+new-message-goes-above-the-last	MSG-03	FAILED	Error: expect(received).toEqual(expected) // deep equality | - Expected  - 1
+new-message-goes-above-the-last	MSG-04	PASSED	
+new-message-goes-above-the-last	MSG-05	PASSED	
+new-message-goes-above-the-last	MSG-06	FAILED	Error: expect(received).toEqual(expected) // deep equality | - Expected  - 1
+new-message-goes-above-the-last	MSG-07	PASSED	
+new-message-goes-above-the-last	MSG-08	PASSED	
+new-message-goes-above-the-last	MSG-09	FAILED	Error: expect(received).toEqual(expected) // deep equality | - Expected  - 1
+new-message-goes-above-the-last	MSG-10	PASSED	
+new-message-goes-above-the-last	MSG-11	PASSED	
+new-message-goes-above-the-last	MSG-12	PASSED	
+new-message-goes-above-the-last	MSG-13	PASSED	
+new-message-goes-above-the-last	MSG-14	PASSED	
+new-message-goes-above-the-last	MSG-15	PASSED	
+new-message-goes-above-the-last	MSG-16	FAILED	Error: expect(received).toEqual(expected) // deep equality | - Expected  - 1
+new-message-goes-above-the-last	MSG-17	PASSED	
+new-message-goes-above-the-last	MSG-18	PASSED	Error: expect(received).toEqual(expected) // deep equality | - Expected  - 1
+new-message-goes-above-the-last	THR-01	PASSED	
+new-message-goes-above-the-last	THR-02	PASSED	
+new-message-goes-above-the-last	THR-03	PASSED	
+new-message-goes-above-the-last	THR-04	PASSED	
+new-message-goes-above-the-last	THR-05	PASSED	
+new-message-goes-above-the-last	THR-06	PASSED	
+new-message-goes-above-the-last	THR-07	PASSED	
+new-message-goes-above-the-last	THR-08	PASSED	
+new-message-goes-above-the-last	THR-09	PASSED	
+new-message-goes-above-the-last	THR-10	PASSED	Error: expect(locator).toBeFocused() failed | Locator:  locator('[data-input-id="thread-reply-input-01a1de1a-78b6-7a57-932e-900b570f5edd"]').getByRole('textbox'

@@ -1,0 +1,21 @@
+timeline-cache-ignores-the-channel	CHN-12	PASSED	
+timeline-cache-ignores-the-channel	KEY-09	PASSED	
+timeline-cache-ignores-the-channel	NAV-01	PASSED	
+timeline-cache-ignores-the-channel	NAV-02	PASSED	
+timeline-cache-ignores-the-channel	NAV-03	PASSED	
+timeline-cache-ignores-the-channel	NAV-04	PASSED	
+timeline-cache-ignores-the-channel	NAV-05	PASSED	Error: lost my place below "history 148": the list shows ["history 217","history 218","history 219","history 220","history 221","history 222","history 223","his
+timeline-cache-ignores-the-channel	NAV-06	PASSED	
+timeline-cache-ignores-the-channel	NAV-07	PASSED	
+timeline-cache-ignores-the-channel	MSG-16	FAILED	Error: expect(received).toEqual(expected) // deep equality | - Expected  - 1
+timeline-cache-ignores-the-channel	OPEN-01	PASSED	
+timeline-cache-ignores-the-channel	OPEN-02	FAILED	Error: the last messages in the list | the last messages in the list
+timeline-cache-ignores-the-channel	REC-01	FAILED	Error: expect(locator).toBeVisible() failed | Locator: locator('[data-channel-scroll]').locator('[data-message]').filter({ has: locator('[data-message-content]'
+timeline-cache-ignores-the-channel	REC-02	FAILED	Error: expect(locator).toBeVisible() failed | Locator: locator('[data-channel-scroll]').locator('[data-message]').filter({ has: locator('[data-message-content]'
+timeline-cache-ignores-the-channel	REC-03	FAILED	Error: the last messages in the list | the last messages in the list
+timeline-cache-ignores-the-channel	SCROLL-01	PASSED	
+timeline-cache-ignores-the-channel	SCROLL-02	PASSED	
+timeline-cache-ignores-the-channel	SCROLL-03	FAILED	Error: expect(locator).toBeInViewport() failed | Locator: locator('[data-channel-scroll]').locator('[data-message]').filter({ has: locator('[data-message-conten
+timeline-cache-ignores-the-channel	SCROLL-04	FAILED	Error: expect(received).toBeGreaterThan(expected) | Expected: > 3388
+timeline-cache-ignores-the-channel	TAB-01	FAILED	Error: the last messages in the list | the last messages in the list
+timeline-cache-ignores-the-channel	TAB-02	FAILED	Error: expect(locator).toHaveCount(expected) failed | Locator:  locator('[data-channel-scroll]').locator('[data-message-id="01a1de85-c231-7d5a-833d-e0b94e0843bd

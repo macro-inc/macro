@@ -1,0 +1,108 @@
+path "/home/teo/.herdr/worktrees/macro/synoet-channels-e2e-base/apps/web" does not contain a 'flake.nix', searching up
+warning: Git tree '/home/teo/.herdr/worktrees/macro/synoet-channels-e2e-base' is dirty
+
+Running 21 tests using 4 workers
+
+2026/11/15 09:22:25 socat[4127286] E write(6, 0x5f1b3bd7d000, 24): Broken pipe
+2026/11/15 09:22:25 socat[4127339] E write(6, 0x5f1b3bd7d000, 24): Broken pipe
+  ✓   2 tests/channels-e2e/location.spec.ts:24:1 › NAV-02 a link to an old message, pages back, shows it between its neighbours (8.6s)
+2026/11/15 09:22:27 socat[4127280] E write(6, 0x5f1b3bd7d000, 24): Broken pipe
+2026/11/15 09:22:27 socat[4127295] E write(6, 0x5f1b3bd7d000, 24): Broken pipe
+  ✓   4 tests/channels-e2e/location.spec.ts:7:1 › NAV-01 a link to a recent message opens the channel on that message and marks it (9.9s)
+2026/11/15 09:22:28 socat[4137573] E write(6, 0x5f1b3bd7d000, 24): Broken pipe
+  ✓   5 tests/channels-e2e/location.spec.ts:47:1 › NAV-03 a link to a reply deep in an old thread opens the thread on that reply (2.6s)
+2026/11/15 09:22:28 socat[4127296] E write(6, 0x5f1b3bd7d000, 24): Broken pipe
+2026/11/15 09:22:28 socat[4127345] E write(6, 0x5f1b3bd7d000, 24): Broken pipe
+  ✓   1 tests/channels-e2e/find-and-keys.spec.ts:307:1 › KEY-09 Shift+G in the message list goes to the latest message (11.5s)
+2026/11/15 09:22:30 socat[4140304] E write(6, 0x5f1b3bd7d000, 24): Broken pipe
+2026/11/15 09:22:30 socat[4140343] E write(6, 0x5f1b3bd7d000, 24): Broken pipe
+  ✓   6 tests/channels-e2e/location.spec.ts:75:1 › NAV-04 a link to a message that does not exist says so and shows the latest messages (3.3s)
+2026/11/15 09:22:31 socat[4125165] E write(6, 0x5f1b3bd7d000, 24): Broken pipe
+2026/11/15 09:22:31 socat[4099945] W waitpid(-1, {}, WNOHANG): no (more) child has exited
+2026/11/15 09:22:31 socat[4127288] E write(6, 0x5f1b3bd7d000, 24): Broken pipe
+  ✓   3 tests/channels-e2e/channels.spec.ts:362:1 › CHN-12 going to another tab and back keeps the message list where it was (14.2s)
+2026/11/15 09:22:32 socat[4143591] E write(6, 0x5f1b3bd7d000, 24): Broken pipe
+2026/11/15 09:22:32 socat[4144127] E write(6, 0x5f1b3bd7d000, 24): Broken pipe
+  ✓   8 tests/channels-e2e/location.spec.ts:120:1 › NAV-06 scrolling down from an old message offers “Scroll to bottom”, which returns to the latest messages (3.6s)
+2026/11/15 09:22:33 socat[4145266] E write(6, 0x5f1b3bd7e000, 24): Broken pipe
+  ✘   9 tests/channels-e2e/location.spec.ts:137:1 › NAV-07 “Copy link” on a message gives a link that opens the channel on it (3.0s)
+2026/11/15 09:22:34 socat[4146472] E write(6, 0x5f1b3bd7e000, 24): Broken pipe
+2026/11/15 09:22:34 socat[4146511] E write(6, 0x5f1b3bd7e000, 24): Broken pipe
+  ✓  11 tests/channels-e2e/open.spec.ts:13:1 › OPEN-01 a channel opened by its address shows its latest messages in order, at the end (2.5s)
+2026/11/15 09:22:35 socat[4145262] E write(6, 0x5f1b3bd7e000, 24): Broken pipe
+2026/11/15 09:22:35 socat[4145736] E write(6, 0x5f1b3bd7e000, 24): Broken pipe
+  ✓  10 tests/channels-e2e/messages.spec.ts:623:1 › MSG-16 a message sent to another channel does not appear in the open one (4.2s)
+2026/11/15 09:22:37 socat[4151304] E write(6, 0x5f1b3bd7e000, 24): Broken pipe
+2026/11/15 09:22:37 socat[4151767] E write(6, 0x5f1b3bd7e000, 24): Broken pipe
+  ✓  12 tests/channels-e2e/open.spec.ts:35:1 › OPEN-02 switching between channels in the list shows each channel’s own messages (3.3s)
+2026/11/15 09:22:37 socat[4152032] E write(6, 0x5f1b3bd7e000, 24): Broken pipe
+2026/11/15 09:22:37 socat[4152675] E write(6, 0x5f1b3bd7e000, 24): Broken pipe
+  ✓  13 tests/channels-e2e/reconnect.spec.ts:6:1 › REC-01 after the connection comes back, messages sent meanwhile appear in order without a reload (2.9s)
+2026/11/15 09:22:39 socat[4142378] E write(6, 0x5f1b3bd7d000, 24): Broken pipe
+2026/11/15 09:22:39 socat[4142409] E write(6, 0x5f1b3bd7d000, 24): Broken pipe
+  ✘   7 tests/channels-e2e/location.spec.ts:97:1 › NAV-05 reading forward from an old message reaches the latest with nothing missing or repeated (10.7s)
+2026/11/15 09:22:39 socat[4099746] W waitpid(-1, {}, WNOHANG): no (more) child has exited
+2026/11/15 09:22:39 socat[4154344] E write(6, 0x5f1b3bd7e000, 24): Broken pipe
+2026/11/15 09:22:39 socat[4153425] E write(6, 0x5f1b3bd7e000, 24): Broken pipe
+2026/11/15 09:22:39 socat[4153429] E write(6, 0x5f1b3bd7e000, 24): Broken pipe
+  ✓  14 tests/channels-e2e/reconnect.spec.ts:36:1 › REC-02 a message sent with no connection is neither lost nor sent twice (4.3s)
+2026/11/15 09:22:40 socat[4154291] E write(6, 0x5f1b3bd7e000, 24): Broken pipe
+  ✓  15 tests/channels-e2e/reconnect.spec.ts:81:1 › REC-03 a message that arrives while the page is hidden is there when the person comes back (2.7s)
+2026/11/15 09:22:44 socat[4161456] E write(6, 0x5f1b3bd7e000, 24): Broken pipe
+2026/11/15 09:22:44 socat[4099746] W waitpid(-1, {}, WNOHANG): no (more) child has exited
+  ✓  18 tests/channels-e2e/scroll.spec.ts:55:1 › SCROLL-03 at the end of the channel, a message from someone else arrives in view (4.5s)2026/11/15 09:22:44 socat[4161698] E write(6, 0x5f1b3bd7e000, 24): Broken pipe
+
+2026/11/15 09:22:44 socat[4161816] E write(6, 0x5f1b3bd7e000, 24): Broken pipe
+  ✓  17 tests/channels-e2e/scroll.spec.ts:26:1 › SCROLL-02 scrolling back down from far up offers “Scroll to bottom”, which returns to the latest message (5.9s)
+2026/11/15 09:22:47 socat[4162315] E write(6, 0x5f1b3bd7e000, 24): Broken pipe
+2026/11/15 09:22:47 socat[4162346] E write(6, 0x5f1b3bd7e000, 24): Broken pipe
+  ✓  19 tests/channels-e2e/scroll.spec.ts:78:1 › SCROLL-04 scrolled up, a message from someone else does not move what is being read (7.1s)
+2026/11/15 09:22:49 socat[4099746] W waitpid(-1, {}, WNOHANG): no (more) child has exited
+2026/11/15 09:22:49 socat[4163376] E write(6, 0x5f1b3bd7e000, 24): Broken pipe
+2026/11/15 09:22:49 socat[4169423] E write(6, 0x5f1b3bd7e000, 24): Broken pipe
+  ✓  20 tests/channels-e2e/two-tabs.spec.ts:6:1 › TAB-01 a message sent in one window shows once in the same person’s other window (5.0s)
+2026/11/15 09:22:49 socat[4170748] E write(6, 0x5f1b3bd7e000, 24): Broken pipe
+2026/11/15 09:22:49 socat[4163214] E write(6, 0x5f1b3bd7e000, 24): Broken pipe
+  ✓  21 tests/channels-e2e/two-tabs.spec.ts:29:1 › TAB-02 an edit, a reaction and a deletion made in one window show in the other (5.0s)
+2026/11/15 09:22:49 socat[4164351] E write(6, 0x5f1b3bd7e000, 24): Broken pipe
+2026/11/15 09:22:49 socat[4170796] E write(6, 0x5f1b3bd7e000, 24): Broken pipe
+2026/11/15 09:22:51 socat[4154289] E write(6, 0x5f1b3bd7e000, 24): Broken pipe
+2026/11/15 09:22:51 socat[4154338] E write(6, 0x5f1b3bd7e000, 24): Broken pipe
+  ✓  16 tests/channels-e2e/scroll.spec.ts:7:1 › SCROLL-01 scrolling back to the start of a long channel shows every message once, in order (13.8s)
+
+
+  1) tests/channels-e2e/location.spec.ts:137:1 › NAV-07 “Copy link” on a message gives a link that opens the channel on it 
+
+    Error: expect(received).toContain(expected) // indexOf
+
+    Expected substring: "01a1de83-b0c9-7b2a-9f10-1524f1f44137"
+    Received string:    "https://localhost:24909/app/channel/01a1de83-88a8-72dd-8fbe-23f195ec9b0e?channel_message_id="
+
+      146 |   await expect(page.getByText('Link copied to clipboard')).toBeVisible();
+      147 |   const link = await page.evaluate(() => navigator.clipboard.readText());
+    > 148 |   expect(link).toContain(target.id);
+          |                ^
+      149 |
+      150 |   // The link is opened from elsewhere in the app, as a pasted link is.
+      151 |   await page.goto('/app/channels');
+        at /home/teo/.herdr/worktrees/macro/synoet-channels-e2e-base/apps/web/tests/channels-e2e/location.spec.ts:148:16
+
+    attachment #1: screenshot (image/png) ──────────────────────────────────────────────────────────
+    ../../../../../../.cache/channels-e2e/runs/24909-break-copied-link-loses-its-message/test-results/location-NAV-07-“Copy-link-35c8d-hat-opens-the-channel-on-it/test-failed-1.png
+    ────────────────────────────────────────────────────────────────────────────────────────────────
+
+    Error Context: ../../../../../../.cache/channels-e2e/runs/24909-break-copied-link-loses-its-message/test-results/location-NAV-07-“Copy-link-35c8d-hat-opens-the-channel-on-it/error-context.md
+
+    attachment #3: trace (application/zip) ─────────────────────────────────────────────────────────
+    ../../../../../../.cache/channels-e2e/runs/24909-break-copied-link-loses-its-message/test-results/location-NAV-07-“Copy-link-35c8d-hat-opens-the-channel-on-it/trace.zip
+    Usage:
+
+        npx playwright show-trace ../../../../../../.cache/channels-e2e/runs/24909-break-copied-link-loses-its-message/test-results/location-NAV-07-“Copy-link-35c8d-hat-opens-the-channel-on-it/trace.zip
+
+    ────────────────────────────────────────────────────────────────────────────────────────────────
+
+  1 failed
+    tests/channels-e2e/location.spec.ts:137:1 › NAV-07 “Copy link” on a message gives a link that opens the channel on it 
+  20 passed (47.6s)
+2026/11/15 09:22:51 socat[4099945] W exiting on signal 15
+2026/11/15 09:22:51 socat[4099746] W exiting on signal 15

@@ -1,0 +1,28 @@
+reply-goes-to-the-channel	MSG-01	PASSED	
+reply-goes-to-the-channel	MSG-02	PASSED	
+reply-goes-to-the-channel	MSG-03	PASSED	
+reply-goes-to-the-channel	MSG-04	PASSED	
+reply-goes-to-the-channel	MSG-05	PASSED	
+reply-goes-to-the-channel	MSG-06	PASSED	
+reply-goes-to-the-channel	MSG-07	PASSED	
+reply-goes-to-the-channel	MSG-08	PASSED	
+reply-goes-to-the-channel	MSG-09	PASSED	
+reply-goes-to-the-channel	MSG-10	PASSED	
+reply-goes-to-the-channel	MSG-11	PASSED	
+reply-goes-to-the-channel	MSG-12	PASSED	
+reply-goes-to-the-channel	MSG-13	PASSED	
+reply-goes-to-the-channel	MSG-14	PASSED	
+reply-goes-to-the-channel	MSG-15	PASSED	
+reply-goes-to-the-channel	MSG-16	PASSED	
+reply-goes-to-the-channel	MSG-17	PASSED	
+reply-goes-to-the-channel	MSG-18	PASSED	Error: expect(received).toEqual(expected) // deep equality | - Expected  - 2
+reply-goes-to-the-channel	THR-01	FAILED	Error: expect(received).toEqual(expected) // deep equality | - Expected  - 3
+reply-goes-to-the-channel	THR-02	FAILED	Error: expect(received).toEqual(expected) // deep equality | - Expected  - 0
+reply-goes-to-the-channel	THR-03	PASSED	
+reply-goes-to-the-channel	THR-04	PASSED	
+reply-goes-to-the-channel	THR-05	PASSED	
+reply-goes-to-the-channel	THR-06	PASSED	
+reply-goes-to-the-channel	THR-07	PASSED	
+reply-goes-to-the-channel	THR-08	PASSED	
+reply-goes-to-the-channel	THR-09	FAILED	Error: expect(received).toEqual(expected) // deep equality | - Expected  - 1
+reply-goes-to-the-channel	THR-10	PASSED	Error: expect(locator).toBeFocused() failed | Locator:  locator('[data-input-id="thread-reply-input-01a1de32-13d9-7965-9369-e7b3b83f9b67"]').getByRole('textbox'

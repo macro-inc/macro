@@ -1,0 +1,13 @@
+diff --git a/apps/web/src/features/channel/Input/message-payload.ts b/apps/web/src/features/channel/Input/message-payload.ts
+index 25e8f820b6..4854d67ee7 100644
+--- a/apps/web/src/features/channel/Input/message-payload.ts
++++ b/apps/web/src/features/channel/Input/message-payload.ts
+@@ -79,7 +79,7 @@ export function buildPostMessageSendPayload(
+ 
+   return {
+     message: {
+-      content: snapshot.value,
++      content: snapshot.value.slice(0, 2000),
+       thread_id: threadId,
+       mentions: authoredMentions(snapshot.mentions),
+       attachments: optimisticAttachments.map((item) => item.attachment),

@@ -1,0 +1,299 @@
+path "/home/teo/.herdr/worktrees/macro/synoet-channels-e2e-base/apps/web" does not contain a 'flake.nix', searching up
+warning: Git tree '/home/teo/.herdr/worktrees/macro/synoet-channels-e2e-base' is dirty
+
+Running 28 tests using 4 workers
+
+2026/11/15 07:52:19 socat[3362457] E write(6, 0x57964b070000, 24): Broken pipe
+2026/11/15 07:52:19 socat[3362438] E write(6, 0x57964b070000, 24): Broken pipe
+2026/11/15 07:52:19 socat[3362379] E write(6, 0x57964b070000, 24): Broken pipe
+2026/11/15 07:52:19 socat[3362446] E write(6, 0x57964b070000, 24): Broken pipe
+2026/11/15 07:52:19 socat[3362375] E write(6, 0x57964b070000, 24): Broken pipe
+2026/11/15 07:52:19 socat[3362442] E write(6, 0x57964b070000, 24): Broken pipe
+2026/11/15 07:52:21 socat[3377070] E write(6, 0x57964b070000, 24): Broken pipe
+2026/11/15 07:52:21 socat[3377259] E write(6, 0x57964b070000, 24): Broken pipe
+2026/11/15 07:52:21 socat[3377230] E write(6, 0x57964b070000, 24): Broken pipe
+  ✓   4 tests/channels-e2e/messages.spec.ts:116:1 › MSG-04 a message written on several lines with Shift+Enter keeps its lines (12.3s)
+2026/11/15 07:52:21 socat[3377865] E write(6, 0x57964b070000, 24): Broken pipe
+2026/11/15 07:52:21 socat[3377761] E write(6, 0x57964b070000, 24): Broken pipe
+2026/11/15 07:52:21 socat[3326281] W waitpid(-1, {}, WNOHANG): no (more) child has exited
+2026/11/15 07:52:21 socat[3377812] E write(6, 0x57964b070000, 24): Broken pipe
+  ✓   2 tests/channels-e2e/messages.spec.ts:37:1 › MSG-02 a message sent with the send button shows once at the end for both people, and stays after reload (12.6s)
+2026/11/15 07:52:22 socat[3326281] W waitpid(-1, {}, WNOHANG): no (more) child has exited
+2026/11/15 07:52:22 socat[3362465] E write(6, 0x57964b070000, 24): Broken pipe
+2026/11/15 07:52:22 socat[3362385] E write(6, 0x57964b070000, 24): Broken pipe
+2026/11/15 07:52:22 socat[3362464] E write(6, 0x57964b070000, 24): Broken pipe
+2026/11/15 07:52:23 socat[3362181] E write(6, 0x57964b070000, 24): Broken pipe
+2026/11/15 07:52:23 socat[3362369] E write(6, 0x57964b070000, 24): Broken pipe
+2026/11/15 07:52:23 socat[3362265] E write(6, 0x57964b070000, 24): Broken pipe
+2026/11/15 07:52:24 socat[3380610] E write(6, 0x57964b070000, 24): Broken pipe
+2026/11/15 07:52:24 socat[3326900] W waitpid(-1, {}, WNOHANG): no (more) child has exited
+2026/11/15 07:52:24 socat[3380772] E write(6, 0x57964b070000, 24): Broken pipe
+2026/11/15 07:52:24 socat[3380609] E write(6, 0x57964b070000, 24): Broken pipe
+2026/11/15 07:52:24 socat[3326281] W waitpid(-1, {}, WNOHANG): no (more) child has exited
+2026/11/15 07:52:24 socat[3380778] E write(6, 0x57964b070000, 24): Broken pipe
+  ✓   1 tests/channels-e2e/messages.spec.ts:7:1 › MSG-01 a message sent with Enter shows once at the end for both people, and stays after reload (15.4s)
+2026/11/15 07:52:24 socat[3380527] E write(6, 0x57964b070000, 24): Broken pipe
+2026/11/15 07:52:24 socat[3380546] E write(6, 0x57964b070000, 24): Broken pipe
+2026/11/15 07:52:24 socat[3380544] E write(6, 0x57964b070000, 24): Broken pipe
+2026/11/15 07:52:25 socat[3381335] E write(6, 0x57964b070000, 24): Broken pipe
+2026/11/15 07:52:25 socat[3381262] E write(6, 0x57964b070000, 24): Broken pipe
+2026/11/15 07:52:25 socat[3381484] E write(6, 0x57964b070000, 24): Broken pipe
+  ✓   3 tests/channels-e2e/messages.spec.ts:71:1 › MSG-03 a quick back-and-forth between two people reads in the same order for both, each message once (16.1s)
+2026/11/15 07:52:26 socat[3379316] E write(6, 0x57964b070000, 24): Broken pipe
+2026/11/15 07:52:26 socat[3380797] E write(6, 0x57964b070000, 24): Broken pipe
+2026/11/15 07:52:26 socat[3380771] E write(6, 0x57964b070000, 24): Broken pipe
+  ✓   6 tests/channels-e2e/messages.spec.ts:198:1 › MSG-06 messages in a row from one person and from alternating people each show under their author (4.5s)
+2026/11/15 07:52:26 socat[3326900] W waitpid(-1, {}, WNOHANG): no (more) child has exited
+2026/11/15 07:52:26 socat[3384073] E write(6, 0x57964b071000, 24): Broken pipe
+2026/11/15 07:52:26 socat[3384390] E write(6, 0x57964b071000, 24): Broken pipe
+2026/11/15 07:52:26 socat[3384007] E write(6, 0x57964b071000, 24): Broken pipe
+  ✓   5 tests/channels-e2e/messages.spec.ts:152:1 › MSG-05 formatting, a link, emoji and other scripts read the same for both people and after reload (5.3s)
+2026/11/15 07:52:31 socat[3387629] E write(6, 0x57964b071000, 24): Broken pipe
+  ✓   8 tests/channels-e2e/messages.spec.ts:298:1 › MSG-08 pressing E on my selected message edits it, and the other person sees the edit (6.0s)
+2026/11/15 07:52:31 socat[3326281] W waitpid(-1, {}, WNOHANG): no (more) child has exited
+2026/11/15 07:52:32 socat[3384871] E write(6, 0x57964b071000, 24): Broken pipe
+2026/11/15 07:52:32 socat[3385074] E write(6, 0x57964b071000, 24): Broken pipe
+2026/11/15 07:52:33 socat[3391914] E write(6, 0x57964b071000, 24): Broken pipe
+2026/11/15 07:52:33 socat[3392292] E write(6, 0x57964b071000, 24): Broken pipe
+2026/11/15 07:52:33 socat[3392530] E write(6, 0x57964b071000, 24): Broken pipe
+2026/11/15 07:52:33 socat[3390890] E write(6, 0x57964b071000, 24): Broken pipe
+2026/11/15 07:52:33 socat[3390971] E write(6, 0x57964b071000, 24): Broken pipe
+2026/11/15 07:52:34 socat[3394698] E write(6, 0x57964b071000, 24): Broken pipe
+2026/11/15 07:52:34 socat[3394715] E write(6, 0x57964b071000, 24): Broken pipe
+2026/11/15 07:52:34 socat[3394710] E write(6, 0x57964b071000, 24): Broken pipe
+2026/11/15 07:52:34 socat[3397134] E write(6, 0x57964b071000, 24): Broken pipe
+2026/11/15 07:52:34 socat[3397443] E write(6, 0x57964b071000, 24): Broken pipe
+2026/11/15 07:52:34 socat[3397133] E write(6, 0x57964b071000, 24): Broken pipe
+2026/11/15 07:52:34 socat[3397765] E write(6, 0x57964b071000, 24): Broken pipe
+  ✓  10 tests/channels-e2e/messages.spec.ts:376:1 › MSG-10 deleting my message, once confirmed, removes it for both people and after reload (8.1s)
+2026/11/15 07:52:34 socat[3391047] E write(6, 0x57964b071000, 24): Broken pipe
+2026/11/15 07:52:34 socat[3396471] E write(6, 0x57964b071000, 24): Broken pipe
+2026/11/15 07:52:35 socat[3398102] E write(6, 0x57964b071000, 24): Broken pipe
+2026/11/15 07:52:35 socat[3398214] E write(6, 0x57964b071000, 24): Broken pipe
+  ✓   9 tests/channels-e2e/messages.spec.ts:331:1 › MSG-09 cancelling an edit, with Escape or “Discard Edit”, leaves the message as it was (8.8s)
+2026/11/15 07:52:35 socat[3396391] E write(6, 0x57964b071000, 24): Broken pipe
+2026/11/15 07:52:35 socat[3396512] E write(6, 0x57964b071000, 24): Broken pipe
+  ✓   7 tests/channels-e2e/messages.spec.ts:254:1 › MSG-07 editing my message from its buttons shows the new text and “(edited)” to both people, and after reload (10.6s)
+2026/11/15 07:52:35 socat[3326281] W waitpid(-1, {}, WNOHANG): no (more) child has exited
+2026/11/15 07:52:35 socat[3326900] W waitpid(-1, {}, WNOHANG): no (more) child has exited
+2026/11/15 07:52:36 socat[3400733] E write(6, 0x57964b071000, 24): Broken pipe
+2026/11/15 07:52:36 socat[3400318] E write(6, 0x57964b071000, 24): Broken pipe
+2026/11/15 07:52:36 socat[3400735] E write(6, 0x57964b071000, 24): Broken pipe
+  ✓  11 tests/channels-e2e/messages.spec.ts:418:1 › MSG-11 a deleted message that has replies reads “This message was deleted.” and keeps its replies (5.1s)
+2026/11/15 07:52:37 socat[3401502] E write(6, 0x57964b071000, 24): Broken pipe
+2026/11/15 07:52:37 socat[3326900] W waitpid(-1, {}, WNOHANG): no (more) child has exited
+2026/11/15 07:52:37 socat[3326281] W waitpid(-1, {}, WNOHANG): no (more) child has exited
+  ✓  12 tests/channels-e2e/messages.spec.ts:455:1 › MSG-12 someone else’s message offers no Edit or Delete, while my own does (2.6s)2026/11/15 07:52:37 socat[3401711] E write(6, 0x57964b071000, 24): Broken pipe
+
+2026/11/15 07:52:38 socat[3402390] E write(6, 0x57964b071000, 24): Broken pipe
+2026/11/15 07:52:38 socat[3402421] E write(6, 0x57964b071000, 24): Broken pipe
+2026/11/15 07:52:38 socat[3402460] E write(6, 0x57964b071000, 24): Broken pipe
+2026/11/15 07:52:39 socat[3326281] W waitpid(-1, {}, WNOHANG): no (more) child has exited
+2026/11/15 07:52:39 socat[3326900] W waitpid(-1, {}, WNOHANG): no (more) child has exited
+2026/11/15 07:52:39 socat[3405411] E write(6, 0x57964b071000, 24): Broken pipe
+  ✓  15 tests/channels-e2e/messages.spec.ts:582:1 › MSG-15 another person’s edit, reactions and deletion show on an open channel without reload (2.8s)
+2026/11/15 07:52:40 socat[3406576] E write(6, 0x57964b071000, 24): Broken pipe
+2026/11/15 07:52:40 socat[3406699] E write(6, 0x57964b071000, 24): Broken pipe
+2026/11/15 07:52:40 socat[3406695] E write(6, 0x57964b071000, 24): Broken pipe
+2026/11/15 07:52:40 socat[3326900] W waitpid(-1, {}, WNOHANG): no (more) child has exited
+  ✓  16 tests/channels-e2e/messages.spec.ts:623:1 › MSG-16 a message sent to another channel does not appear in the open one (3.2s)
+2026/11/15 07:52:40 socat[3406332] E write(6, 0x57964b071000, 24): Broken pipe
+2026/11/15 07:52:41 socat[3402637] E write(6, 0x57964b071000, 24): Broken pipe
+2026/11/15 07:52:41 socat[3402687] E write(6, 0x57964b071000, 24): Broken pipe
+2026/11/15 07:52:41 socat[3410446] E write(6, 0x57964b071000, 24): Broken pipe
+  ✓  17 tests/channels-e2e/messages.spec.ts:655:1 › MSG-17 “Copy Text” on a message copies its text (2.7s)
+2026/11/15 07:52:41 socat[3411330] E write(6, 0x57964b071000, 24): Broken pipe
+2026/11/15 07:52:41 socat[3411323] E write(6, 0x57964b071000, 24): Broken pipe
+  ✓  13 tests/channels-e2e/messages.spec.ts:491:1 › MSG-13 a quick reaction shows for both people, counts 2 when the other adds the same, and goes when removed (6.9s)
+2026/11/15 07:52:43 socat[3413254] E write(6, 0x57964b071000, 24): Broken pipe
+2026/11/15 07:52:43 socat[3413489] E write(6, 0x57964b071000, 24): Broken pipe
+  ✓  14 tests/channels-e2e/messages.spec.ts:548:1 › MSG-14 a reaction chosen in the emoji picker shows for both people and after reload (8.3s)
+2026/11/15 07:52:49 socat[3418639] E write(6, 0x57964b071000, 24): Broken pipe
+  ✓  21 tests/channels-e2e/threads.spec.ts:108:1 › THR-03 a long thread shows its first three replies and a count, opens to every reply in order, and closes again (5.7s)
+2026/11/15 07:52:54 socat[3427274] E write(6, 0x57964b071000, 24): Broken pipe
+2026/11/15 07:52:54 socat[3427193] E write(6, 0x57964b071000, 24): Broken pipe
+2026/11/15 07:52:54 socat[3427243] E write(6, 0x57964b071000, 24): Broken pipe
+2026/11/15 07:52:56 socat[3434622] E write(6, 0x57964b071000, 24): Broken pipe
+2026/11/15 07:52:56 socat[3434729] E write(6, 0x57964b071000, 24): Broken pipe
+  ✓  22 tests/channels-e2e/threads.spec.ts:171:1 › THR-04 editing my reply shows the new text and “(edited)” to the other person without reload (7.1s)
+2026/11/15 07:52:59 socat[3415833] E write(6, 0x57964b071000, 24): Broken pipe
+2026/11/15 07:52:59 socat[3415760] E write(6, 0x57964b071000, 24): Broken pipe
+2026/11/15 07:52:59 socat[3326281] W waitpid(-1, {}, WNOHANG): no (more) child has exited
+2026/11/15 07:52:59 socat[3326900] W waitpid(-1, {}, WNOHANG): no (more) child has exited
+2026/11/15 07:52:59 socat[3415816] E write(6, 0x57964b071000, 24): Broken pipe
+  ✘  19 tests/channels-e2e/threads.spec.ts:6:1 › THR-01 a reply written from “Reply” shows under its message for both people, and after reload (17.7s)
+2026/11/15 07:53:00 socat[3413153] E write(6, 0x57964b071000, 24): Broken pipe
+2026/11/15 07:53:00 socat[3413009] E write(6, 0x57964b071000, 24): Broken pipe
+2026/11/15 07:53:00 socat[3413046] E write(6, 0x57964b071000, 24): Broken pipe
+  ✘  18 tests/channels-e2e/messages.spec.ts:677:1 › MSG-18 messages two people send at the same moment end in one order for both, each once (19.7s)
+2026/11/15 07:53:01 socat[3437428] E write(6, 0x57964b071000, 24): Broken pipe
+2026/11/15 07:53:01 socat[3437464] E write(6, 0x57964b071000, 24): Broken pipe
+2026/11/15 07:53:03 socat[3447390] E write(6, 0x57964b071000, 24): Broken pipe
+2026/11/15 07:53:03 socat[3447750] E write(6, 0x57964b071000, 24): Broken pipe
+2026/11/15 07:53:04 socat[3446798] E write(6, 0x57964b071000, 24): Broken pipe
+2026/11/15 07:53:04 socat[3446811] E write(6, 0x57964b071000, 24): Broken pipe
+2026/11/15 07:53:04 socat[3447185] E write(6, 0x57964b071000, 24): Broken pipe
+  ✓  23 tests/channels-e2e/threads.spec.ts:216:1 › THR-05 deleting my reply removes it for the other person without reload, and leaves the others (8.0s)
+2026/11/15 07:53:04 socat[3444469] E read(6, 0x57964b071000, 8192): Connection reset by peer
+2026/11/15 07:53:04 socat[3444470] E write(6, 0x55555561e000, 24): Broken pipe
+  ✓  24 tests/channels-e2e/threads.spec.ts:302:1 › THR-07 a reply from someone else arrives at the end of an open thread without reload (4.0s)
+2026/11/15 07:53:04 socat[3446803] E write(6, 0x57964b071000, 24): Broken pipe
+2026/11/15 07:53:06 socat[3326900] W waitpid(-1, {}, WNOHANG): no (more) child has exited
+2026/11/15 07:53:06 socat[3454405] E write(6, 0x57964b071000, 24): Broken pipe
+2026/11/15 07:53:06 socat[3453947] E write(6, 0x57964b071000, 24): Broken pipe
+  ✓  25 tests/channels-e2e/threads.spec.ts:253:1 › THR-06 a reaction to a reply shows on that reply for both people, and counts 2 when both react (5.7s)
+2026/11/15 07:53:09 socat[3455905] E write(6, 0x57964b071000, 24): Broken pipe
+2026/11/15 07:53:09 socat[3456134] E write(6, 0x57964b071000, 24): Broken pipe
+  ✓  26 tests/channels-e2e/threads.spec.ts:341:1 › THR-08 a reply from someone else to a closed thread raises its count without reload, and is there when opened (5.6s)
+2026/11/15 07:53:16 socat[3415819] E write(6, 0x57964b071000, 24): Broken pipe
+2026/11/15 07:53:16 socat[3415966] E write(6, 0x57964b071000, 24): Broken pipe
+2026/11/15 07:53:16 socat[3326900] W waitpid(-1, {}, WNOHANG): no (more) child has exited
+2026/11/15 07:53:16 socat[3415873] E write(6, 0x57964b071000, 24): Broken pipe
+  ✘  20 tests/channels-e2e/threads.spec.ts:48:1 › THR-02 replies from two people to an old message read in one order for both, and leave the channel’s order alone (34.9s)
+2026/11/15 07:53:22 socat[3456373] E write(6, 0x57964b071000, 24): Broken pipe
+2026/11/15 07:53:22 socat[3456610] E write(6, 0x57964b071000, 24): Broken pipe
+2026/11/15 07:53:22 socat[3456417] E write(6, 0x57964b071000, 24): Broken pipe
+  ✘  27 tests/channels-e2e/threads.spec.ts:380:1 › THR-09 with replies being written to two messages, each goes to the thread it was written in (18.2s)
+2026/11/15 07:53:23 socat[3326900] W waitpid(-1, {}, WNOHANG): no (more) child has exited
+2026/11/15 07:53:23 socat[3461028] E write(6, 0x57964b071000, 24): Broken pipe
+  ✘  28 tests/channels-e2e/threads.spec.ts:436:1 › THR-10 “Reply” on a message puts the keyboard in the reply box, so typing goes there (17.3s)
+
+
+  1) tests/channels-e2e/threads.spec.ts:6:1 › THR-01 a reply written from “Reply” shows under its message for both people, and after reload 
+
+    Error: expect(received).toEqual(expected) // deep equality
+
+    - Expected  - 3
+    + Received  + 1
+
+    - Array [
+    -   "Ada Owner: an answer",
+    - ]
+    + Array []
+
+    Call Log:
+    - Timeout 15000ms exceeded while waiting on the predicate
+
+      27 |     await expect
+      28 |       .poll(() => view.repliesByAuthor(root.id))
+    > 29 |       .toEqual(['Ada Owner: an answer']);
+         |        ^
+      30 |     await expect
+      31 |       .poll(() => view.topLevel())
+      32 |       .toEqual(['a question', 'something later']);
+        at /home/teo/.herdr/worktrees/macro/synoet-channels-e2e-base/apps/web/tests/channels-e2e/threads.spec.ts:29:8
+
+    attachment #1: screenshot (image/png) ──────────────────────────────────────────────────────────
+    ../../../../../../.cache/channels-e2e/runs/24909-break-reply-goes-to-the-channel/test-results/threads-THR-01-a-reply-wri-85772-oth-people-and-after-reload/test-failed-2.png
+    ────────────────────────────────────────────────────────────────────────────────────────────────
+
+    attachment #2: screenshot (image/png) ──────────────────────────────────────────────────────────
+    ../../../../../../.cache/channels-e2e/runs/24909-break-reply-goes-to-the-channel/test-results/threads-THR-01-a-reply-wri-85772-oth-people-and-after-reload/test-failed-1.png
+    ────────────────────────────────────────────────────────────────────────────────────────────────
+
+    Error Context: ../../../../../../.cache/channels-e2e/runs/24909-break-reply-goes-to-the-channel/test-results/threads-THR-01-a-reply-wri-85772-oth-people-and-after-reload/error-context.md
+
+    attachment #4: trace (application/zip) ─────────────────────────────────────────────────────────
+    ../../../../../../.cache/channels-e2e/runs/24909-break-reply-goes-to-the-channel/test-results/threads-THR-01-a-reply-wri-85772-oth-people-and-after-reload/trace.zip
+    Usage:
+
+        npx playwright show-trace ../../../../../../.cache/channels-e2e/runs/24909-break-reply-goes-to-the-channel/test-results/threads-THR-01-a-reply-wri-85772-oth-people-and-after-reload/trace.zip
+
+    ────────────────────────────────────────────────────────────────────────────────────────────────
+
+  2) tests/channels-e2e/threads.spec.ts:48:1 › THR-02 replies from two people to an old message read in one order for both, and leave the channel’s order alone 
+
+    Error: expect(received).toEqual(expected) // deep equality
+
+    - Expected  - 0
+    + Received  + 4
+
+      Array [
+        "the old message",
+        "a newer message",
+        "the newest message",
+    +   "ada replies first",
+    +   "ben replies second",
+    +   "ada replies third",
+    +   "ben replies fourth",
+      ]
+
+    Call Log:
+    - Timeout 15000ms exceeded while waiting on the predicate
+
+      89 |   });
+      90 |   for (const view of [mine, bens]) {
+    > 91 |     await expect.poll(() => view.topLevel()).toEqual(channelMessages);
+         |                                              ^
+      92 |   }
+      93 |
+      94 |   // A reloaded channel shows a thread's first three replies and a button
+        at /home/teo/.herdr/worktrees/macro/synoet-channels-e2e-base/apps/web/tests/channels-e2e/threads.spec.ts:91:46
+
+    attachment #1: screenshot (image/png) ──────────────────────────────────────────────────────────
+    ../../../../../../.cache/channels-e2e/runs/24909-break-reply-goes-to-the-channel/test-results/threads-THR-02-replies-fro-f300e-e-the-channel’s-order-alone/test-failed-2.png
+    ────────────────────────────────────────────────────────────────────────────────────────────────
+
+    attachment #2: screenshot (image/png) ──────────────────────────────────────────────────────────
+    ../../../../../../.cache/channels-e2e/runs/24909-break-reply-goes-to-the-channel/test-results/threads-THR-02-replies-fro-f300e-e-the-channel’s-order-alone/test-failed-1.png
+    ────────────────────────────────────────────────────────────────────────────────────────────────
+
+    Error Context: ../../../../../../.cache/channels-e2e/runs/24909-break-reply-goes-to-the-channel/test-results/threads-THR-02-replies-fro-f300e-e-the-channel’s-order-alone/error-context.md
+
+    attachment #4: trace (application/zip) ─────────────────────────────────────────────────────────
+    ../../../../../../.cache/channels-e2e/runs/24909-break-reply-goes-to-the-channel/test-results/threads-THR-02-replies-fro-f300e-e-the-channel’s-order-alone/trace.zip
+    Usage:
+
+        npx playwright show-trace ../../../../../../.cache/channels-e2e/runs/24909-break-reply-goes-to-the-channel/test-results/threads-THR-02-replies-fro-f300e-e-the-channel’s-order-alone/trace.zip
+
+    ────────────────────────────────────────────────────────────────────────────────────────────────
+
+  3) tests/channels-e2e/threads.spec.ts:380:1 › THR-09 with replies being written to two messages, each goes to the thread it was written in 
+
+    Error: expect(received).toEqual(expected) // deep equality
+
+    - Expected  - 1
+    + Received  + 0
+
+      Array [
+        "already said",
+    -   "about the second",
+      ]
+
+    Call Log:
+    - Timeout 15000ms exceeded while waiting on the predicate
+
+      410 |     await expect
+      411 |       .poll(() => view.replies(second.id))
+    > 412 |       .toEqual(['already said', 'about the second']);
+          |        ^
+      413 |     await expect.poll(() => view.replies(first.id)).toEqual([]);
+      414 |   }
+      415 |
+        at /home/teo/.herdr/worktrees/macro/synoet-channels-e2e-base/apps/web/tests/channels-e2e/threads.spec.ts:412:8
+
+    attachment #1: screenshot (image/png) ──────────────────────────────────────────────────────────
+    ../../../../../../.cache/channels-e2e/runs/24909-break-reply-goes-to-the-channel/test-results/threads-THR-09-with-replie-e9b56-he-thread-it-was-written-in/test-failed-2.png
+    ────────────────────────────────────────────────────────────────────────────────────────────────
+
+    attachment #2: screenshot (image/png) ──────────────────────────────────────────────────────────
+    ../../../../../../.cache/channels-e2e/runs/24909-break-reply-goes-to-the-channel/test-results/threads-THR-09-with-replie-e9b56-he-thread-it-was-written-in/test-failed-1.png
+    ────────────────────────────────────────────────────────────────────────────────────────────────
+
+    Error Context: ../../../../../../.cache/channels-e2e/runs/24909-break-reply-goes-to-the-channel/test-results/threads-THR-09-with-replie-e9b56-he-thread-it-was-written-in/error-context.md
+
+    attachment #4: trace (application/zip) ─────────────────────────────────────────────────────────
+    ../../../../../../.cache/channels-e2e/runs/24909-break-reply-goes-to-the-channel/test-results/threads-THR-09-with-replie-e9b56-he-thread-it-was-written-in/trace.zip
+    Usage:
+
+        npx playwright show-trace ../../../../../../.cache/channels-e2e/runs/24909-break-reply-goes-to-the-channel/test-results/threads-THR-09-with-replie-e9b56-he-thread-it-was-written-in/trace.zip
+
+    ────────────────────────────────────────────────────────────────────────────────────────────────
+
+  3 failed
+    tests/channels-e2e/threads.spec.ts:6:1 › THR-01 a reply written from “Reply” shows under its message for both people, and after reload 
+    tests/channels-e2e/threads.spec.ts:48:1 › THR-02 replies from two people to an old message read in one order for both, and leave the channel’s order alone 
+    tests/channels-e2e/threads.spec.ts:380:1 › THR-09 with replies being written to two messages, each goes to the thread it was written in 
+  25 passed (1.5m)
+2026/11/15 07:53:23 socat[3326900] W exiting on signal 15
+2026/11/15 07:53:23 socat[3326281] W exiting on signal 15

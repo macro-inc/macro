@@ -1,0 +1,28 @@
+picked-emoji-not-added	MSG-01	PASSED	
+picked-emoji-not-added	MSG-02	PASSED	
+picked-emoji-not-added	MSG-03	PASSED	
+picked-emoji-not-added	MSG-04	PASSED	
+picked-emoji-not-added	MSG-05	PASSED	
+picked-emoji-not-added	MSG-06	PASSED	
+picked-emoji-not-added	MSG-07	PASSED	
+picked-emoji-not-added	MSG-08	PASSED	
+picked-emoji-not-added	MSG-09	PASSED	
+picked-emoji-not-added	MSG-10	PASSED	
+picked-emoji-not-added	MSG-11	PASSED	
+picked-emoji-not-added	MSG-12	PASSED	
+picked-emoji-not-added	MSG-13	PASSED	
+picked-emoji-not-added	MSG-14	FAILED	Error: expect(received).toEqual(expected) // deep equality | - Expected  - 3
+picked-emoji-not-added	MSG-15	PASSED	
+picked-emoji-not-added	MSG-16	PASSED	
+picked-emoji-not-added	MSG-17	PASSED	
+picked-emoji-not-added	MSG-18	PASSED	Error: expect(received).toEqual(expected) // deep equality | - Expected  - 3
+picked-emoji-not-added	THR-01	PASSED	
+picked-emoji-not-added	THR-02	FAILED	ReferenceError: failsSometimes is not defined |   83 |   // Known defect on main, about one run in five on a busy machine: a reply
+picked-emoji-not-added	THR-03	PASSED	
+picked-emoji-not-added	THR-04	PASSED	
+picked-emoji-not-added	THR-05	PASSED	
+picked-emoji-not-added	THR-06	PASSED	
+picked-emoji-not-added	THR-07	PASSED	
+picked-emoji-not-added	THR-08	PASSED	
+picked-emoji-not-added	THR-09	PASSED	
+picked-emoji-not-added	THR-10	PASSED	Error: expect(locator).toBeFocused() failed | Locator:  locator('[data-input-id="thread-reply-input-01a1de2d-f251-7fdf-911d-eacca5377eb6"]').getByRole('textbox'
