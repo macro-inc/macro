@@ -46,6 +46,7 @@ import { MobileSplitContainer } from '../mobile/MobileSplitContainer';
 const id = (value: string) => value as SplitId;
 
 function mountContainer() {
+  let forward: ((from: SplitId) => void) | undefined;
   // What the stack shows, which follows the router's open panes.
   const [open, setOpen] = createSignal<readonly SplitId[]>([id('mail')]);
   const [routerOpen, setRouterOpen] = createSignal<readonly PaneId[]>([
@@ -58,7 +59,9 @@ function mountContainer() {
     canGoBack: () => open().length > 1,
     completeGoBack: () => {},
     setAnimatedTrigger: () => {},
-    setForwardTrigger: () => {},
+    setForwardTrigger: (trigger) => {
+      forward = trigger;
+    },
     goBack: () => {},
   };
   const result = render(() => (
@@ -92,7 +95,10 @@ function mountContainer() {
     if (stackLags) setOpen([id(next)]);
   };
 
-  return { ...result, switchTo };
+  /** The stack's push animation, sliding a pane in over `from`. */
+  const slideOver = (from: string) => forward?.(id(from));
+
+  return { ...result, switchTo, slideOver };
 }
 
 const wrapperOf = (container: HTMLElement, view: string) =>
@@ -131,6 +137,15 @@ describe('parked panes in the mobile split container', () => {
 
     switchTo('mail', true);
     expect(mounts.get('mail')).toBe(before);
+  });
+
+  it('presents the new view when the one a slide was covering parks', () => {
+    const { container, switchTo, slideOver } = mountContainer();
+    slideOver('mail');
+
+    switchTo('channels');
+    expect(wrapperOf(container, 'channels').inert).toBe(false);
+    expect(wrapperOf(container, 'mail').inert).toBe(true);
   });
 
   it('leaves Android Back to the shown view, not a parked one', () => {

@@ -7,6 +7,7 @@ import {
   createMemo,
   createSignal,
   For,
+  onCleanup,
   Show,
   Suspense,
 } from 'solid-js';
@@ -97,6 +98,7 @@ export function MobileSplitContainer(props: MobileSplitContainerProps) {
       <For each={mounted()}>
         {(id, index) => {
           const pane = paneFor(id);
+          onCleanup(() => props.panelRefs.delete(id));
           const isFront = () => stack.front() === id;
           const isPresented = () => motion.presentedFront() === id;
           const isParked = () => props.parkedPanes().includes(paneOf(id));
