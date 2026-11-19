@@ -75,6 +75,26 @@ describe('createTemplateActivation', () => {
     });
   });
 
+  it('fills an agent task saved with a stray sub_routine like any agent task', () => {
+    createRoot((dispose) => {
+      const task = {
+        ...TEMPLATE.task,
+        sub_routine: 'remind',
+      } as unknown as RoutineTemplate['task'];
+      const activation = createTemplateActivation({
+        template: () => ({ ...TEMPLATE, task }),
+        activator: () => ACTIVATOR,
+        access: () => new Map([['doc-1', false]]),
+      });
+      expect(activation.prompt()).toBe(`Read ${DOC}`);
+      activation.choose('doc-1', 'leave_out');
+      expect(activation.request()?.task).toMatchObject({
+        user_prompt: 'Read Acme account',
+      });
+      dispose();
+    });
+  });
+
   it('fills a routine with steps on its Ask AI step and keeps its code', () => {
     createRoot((dispose) => {
       const label = {

@@ -5,7 +5,12 @@ import type {
 } from '@service-scheduled-action/generated/schemas';
 import { type Accessor, createMemo, createSignal } from 'solid-js';
 import { DEFAULT_RUN_VISIBILITY } from '../core/draft';
-import { firstAgent, programSteps, stepsToWire } from '../core/routine-steps';
+import {
+  firstAgent,
+  isSubRoutineCopy,
+  programSteps,
+  stepsToWire,
+} from '../core/routine-steps';
 import {
   type Activator,
   fillTemplatePrompt,
@@ -32,7 +37,7 @@ export function templatePrompt(
   template: Pick<RoutineTemplate, 'task'>
 ): string {
   // A sub-routine's copy is never shared; its steps are its parent's.
-  if ('sub_routine' in template.task) return '';
+  if (isSubRoutineCopy(template.task)) return '';
   if (!('steps' in template.task)) return template.task.user_prompt;
   const steps = programSteps(template.task);
   return (steps && firstAgent(steps)?.instructions) ?? '';
@@ -46,7 +51,7 @@ function filledTask(
   task: RoutineTemplate['task'],
   fill: (text: string) => string
 ): RoutineTemplate['task'] {
-  if ('sub_routine' in task) return task;
+  if (isSubRoutineCopy(task)) return task;
   if (!('steps' in task))
     return {
       ...task,

@@ -6,6 +6,7 @@ import {
 } from '../core/routine-draft';
 import {
   firstAgent,
+  isSubRoutineCopy,
   programSteps,
   type StepDraft,
   stepsToWire,
@@ -51,7 +52,7 @@ function getAgentTask(schedule: ScheduledAction): AgentTask | undefined {
   if (
     schedule.kind !== 'Agent' ||
     'steps' in schedule.task ||
-    'sub_routine' in schedule.task
+    isSubRoutineCopy(schedule.task)
   )
     return undefined;
   return schedule.task;

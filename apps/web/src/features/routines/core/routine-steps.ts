@@ -1,5 +1,6 @@
 import type {
   RoutineStep,
+  RoutineSubRoutineCopy,
   RoutineTask,
 } from '@service-scheduled-action/generated/schemas';
 import { match } from 'ts-pattern';
@@ -123,6 +124,22 @@ export function stepsFromWire(steps: RoutineStep[]): StepDraft[] | undefined {
     drafts.push(draft);
   }
   return drafts;
+}
+
+/**
+ * Whether a stored task is a sub-routine's copy, as the scheduler reads one:
+ * a definition's name and its inputs, nothing else. An agent task saved
+ * before copies existed can carry a stray `sub_routine` beside its prompt,
+ * and is still that agent.
+ */
+export function isSubRoutineCopy(
+  task: RoutineTask
+): task is RoutineSubRoutineCopy {
+  return (
+    'sub_routine' in task &&
+    typeof task.sub_routine === 'string' &&
+    Object.keys(task).every((key) => key === 'sub_routine' || key === 'inputs')
+  );
 }
 
 /** A stored program's steps; undefined for a single agent task. */

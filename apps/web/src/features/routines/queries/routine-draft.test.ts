@@ -179,6 +179,21 @@ describe('routine execution payloads', () => {
     expect(action.task).toHaveProperty('user_prompt', 'Summarize updates');
   });
 
+  it('reads an agent task saved with a stray sub_routine as that agent, and only a copy as none', () => {
+    const stray = {
+      ...cron,
+      task: { ...cron.task, sub_routine: 'remind' },
+    } as unknown as ScheduledAction;
+    expect(loadedDraft(stray).prompt).toBe('Summarize updates');
+    expect(routineTargetKind(stray)).toBe('model');
+    const copy: ScheduledAction = {
+      ...cron,
+      task: { sub_routine: 'remind', inputs: { taskId: 'task-1' } },
+    };
+    expect(draftFromSchedule(copy)).toBeUndefined();
+    expect(routineTargetKind(copy)).toBeUndefined();
+  });
+
   it('switches model to agent, clears overrides, changes agents, and explicitly switches back', () => {
     const action = {
       ...cron,
