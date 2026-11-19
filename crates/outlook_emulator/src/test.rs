@@ -2,6 +2,7 @@
 
 mod calendar;
 mod control;
+mod delta_query;
 mod drafts;
 mod faults;
 mod mail;

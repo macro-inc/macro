@@ -70,6 +70,20 @@ projects.
   (`email_delete_task`, a raw request because the typed tasks API is behind
   the `opensearch` crate's `experimental-apis` feature). The task's throttle
   applies to that task alone; callers bound how many run at once.
+- A single-message email delete forces no refresh: it deletes the event
+  thread's document by id, then delete-by-queries the message's copies under
+  other threads with that thread left out, since the query sees only
+  refreshed documents and would count the one just deleted as a conflict. A forced
+  refresh per event refreshes every shard of the index, and a run of such
+  events stalls their partition. A delete-by-query that only met conflicts
+  deleted nothing and so forces no refresh either: refresh before failing on
+  them, or the caller's retry meets the same stale documents.
+- OpenSearch answers `_bulk` with 200 while failing items, for a full write
+  queue (429) as for a mapping error. Classify every bulk answer item by item
+  (`upsert::classify_bulk_response`): any failed item fails the call with
+  `BulkItemsFailed`. `OpensearchClientError::refusal()` tells a caller to back
+  off; it also reads the status and `error.type` from the body an `Unknown`
+  error keeps.
 - Agent-session writes never wait for a refresh. A search sees only refreshed
   documents, so delete what you know by id first and leave those ids out of
   the sweep's search, which finds the leftovers to delete by id. The parent's

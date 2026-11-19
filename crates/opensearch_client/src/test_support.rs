@@ -43,8 +43,10 @@ pub(crate) enum Reply {
 }
 
 /// Answer one request per entry of `replies`, in order, returning each
-/// request's line and its `x-opaque-id` header when it had one.
-pub(crate) fn serve_script(replies: Vec<Reply>) -> (String, std::thread::JoinHandle<Vec<String>>) {
+/// request's line, with its `x-opaque-id` header when it had one, and its body.
+pub(crate) fn serve_script(
+    replies: Vec<Reply>,
+) -> (String, std::thread::JoinHandle<Vec<(String, String)>>) {
     use std::io::{BufRead, Read, Write};
 
     let listener = std::net::TcpListener::bind("127.0.0.1:0").unwrap();
@@ -74,7 +76,7 @@ pub(crate) fn serve_script(replies: Vec<Reply>) -> (String, std::thread::JoinHan
             }
             let mut body = vec![0; content_length];
             reader.read_exact(&mut body).unwrap();
-            seen.push(request);
+            seen.push((request, String::from_utf8(body).unwrap()));
             match reply {
                 Reply::Respond(status, body) => {
                     write!(stream, "HTTP/1.1 {status}\r\nContent-Type: application/json\r\nContent-Length: {}\r\nConnection: close\r\n\r\n{body}", body.len()).unwrap();

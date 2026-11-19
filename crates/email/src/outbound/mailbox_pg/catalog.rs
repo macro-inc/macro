@@ -142,11 +142,12 @@ impl PgMailboxSync {
             WHERE m.link_id = $1 AND (f.deleted_at IS NOT NULL OR f.provider_id=ANY($3)) AND m.provider_id IS NOT NULL
             ON CONFLICT (link_id,generation,provider_id) DO UPDATE SET revision = email_message_reconciliation.revision + 1,available_at = now()
         "#,lease.mailbox.link_id,lease.mailbox.sync_generation,&trash_changes).execute(&mut *tx).await.map_err(db_error)?;
-        // Stop polling folders that no longer exist; retained messages are handled
-        // by mailbox-wide reconciliation above, not cascaded from folder deletion.
+        // Stop polling folders that no longer exist, and their live passes;
+        // retained messages are handled by mailbox-wide reconciliation above,
+        // not cascaded from folder deletion.
         sqlx::query!(r#"
             DELETE FROM email_sync_streams s USING email_mailbox_folders f
-            WHERE s.link_id = $1 AND s.generation = $2 AND s.kind = 'mail_folder'
+            WHERE s.link_id = $1 AND s.generation = $2 AND s.kind IN ('mail_folder','mail_folder_live')
                 AND f.link_id = s.link_id AND f.provider_id = s.scope_id AND f.deleted_at IS NOT NULL
         "#,lease.mailbox.link_id,lease.mailbox.sync_generation).execute(&mut *tx).await.map_err(db_error)?;
         let import_completed = Self::settle_import(&mut tx, lease.mailbox).await?;
