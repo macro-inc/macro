@@ -208,7 +208,8 @@ tools — hexagonal, heavily feature-gated.
   committed mid-request apply to the next request. Resolve contribution modes
   in that snapshot too. If none of the requested contributors uses selected
   mode, keep the all-mail probe/page SQL without selected-rule work. General
-  reads keep their existing page transaction.
+  Team fallbacks keep that same snapshot through discovery and their page too;
+  reopening a transaction can read a policy that discovery never checked.
 - Selected Team reads require an injected `EmailRuleDiscoveryService` on
   `EmailPgRepo`. Discover once in the read snapshot and reuse complete contacts
   in probe/page; all-mail reads call no discovery and keep their SQL unchanged.
@@ -216,7 +217,10 @@ tools — hexagonal, heavily feature-gated.
   HTTP 503 with the limit, never an empty or truncated page. The CRM core also
   admits policy writes; do not implement separate limits in the email adapter.
   A bare repository fails closed for selected reads if composition omitted
-  discovery. General mode-partition races remain a separate activation gate.
+  discovery. Keep General's scalar eligibility read in the discovery snapshot.
+  In optimized selected pages, share the complete non-draft participant set
+  between inclusion and domain vetoes; an early positive match must not hide
+  a later private participant. Keep all-mail-only eligibility SQL unchanged.
 - A requested sender may be a verified Gmail send-as alias, not just an inbox
   address: `resolve_sending_inbox` (AI tools) picks the inbox that owns it, and
   `resolve_sender` (drafts, REST `from`) checks it against the chosen inbox.

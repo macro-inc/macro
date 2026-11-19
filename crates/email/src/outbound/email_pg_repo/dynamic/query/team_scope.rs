@@ -59,7 +59,7 @@ mod test;
 /// if the caller disconnects.
 const TEAM_READ_BUDGET: Duration = Duration::from_secs(10);
 
-/// Resolve contributor modes and read the optimized page in one snapshot.
+/// Resolve contributor modes, discover rules and read any Team page in one snapshot.
 /// With no selected contributors, the generated page SQL stays unchanged.
 pub(super) async fn read_team_page(
     pool: &PgPool,
@@ -118,10 +118,9 @@ pub(super) async fn read_team_page(
                     )
                     .await?;
             }
-            // General reads retain their existing ordinary transaction and
-            // recheck eligibility in their single page statement.
-            transaction.commit().await?;
-            transaction = pool.begin().await?;
+            // Keep the page with the mode decision and discovery. A new
+            // snapshot could see selected rules that were never checked, or
+            // a different policy from the one whose discovery completed.
             limit_statement_time(&mut transaction, deadline).await?;
             let mut qb = build_query(view, email_filter, *params);
             qb.build()
@@ -812,10 +811,16 @@ impl<'a> TeamRead<'a> {
     }
 
     fn push_allowed(&self, builder: &mut QueryBuilder<'static, Postgres>) {
-        builder.push(ALLOWED_HEAD);
         if !self.selected_inboxes.is_empty() {
+            // Inclusion and exclusions inspect the same full thread. Share
+            // its participants so long threads are not expanded twice for
+            // each candidate or competing copy. All-mail-only SQL is unchanged.
+            builder.push(include_str!("team_scope/selected_participants.sql"));
             builder.push(include_str!("team_scope/selected_match.sql"));
+            builder.push(include_str!("team_scope/selected_allowed.sql").trim_end());
+        } else {
+            builder.push(ALLOWED_HEAD);
+            builder.push(ALLOWED.trim_end());
         }
-        builder.push(ALLOWED.trim_end());
     }
 }
