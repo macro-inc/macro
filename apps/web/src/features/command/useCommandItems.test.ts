@@ -245,6 +245,7 @@ describe('command menu agents category', () => {
         name: 'Fix the build',
         ownerId: 'owner',
         botId: 'bot',
+        status: 'idle',
       },
     };
     setItems([session]);
