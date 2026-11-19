@@ -51,7 +51,7 @@ its thresholds many times a day.
 ## Prod threshold monitors
 
 `monitors/macrodb.ts`, `redis.ts`, `queues.ts`, `regressions.ts`,
-`outlook-sync.ts`, `routine-suggestions.ts`, `harness-runtimes.ts`, `computer-capacity.ts` and `storage-pool.ts` declare the prod threshold, forecast and anomaly monitors with `prodMonitor()`. The ones
+`outlook-sync.ts`, `routine-suggestions.ts`, `harness-runtimes.ts`, `computer-capacity.ts`, `storage-pool.ts` and `search-freshness.ts` declare the prod threshold, forecast and anomaly monitors with `prodMonitor()`. The ones
 on CloudWatch metrics, except those `queues.ts` marks Datadog only, have
 hand-written copies in Grafana
 (`infra/stacks/observability/nixos/grafana-provisioning/prod-alerts.nix`), and Grafana pages on-call for
@@ -61,7 +61,7 @@ anomaly monitor reads `macro.logs.errors`, a log-based metric declared in
 `regressions.ts`, because log monitors have no anomaly function.
 
 Each of those files also declares a dashboard (MacroDB, Redis, Queue,
-Regression alerts, Outlook sync, Routine suggestions, Computer capacity, and Search and database saturation) with one graph per monitor, titled like the monitor, its
+Regression alerts, Outlook sync, Routine suggestions, Computer capacity, Search and database saturation, and Search freshness) with one graph per monitor, titled like the monitor, its
 critical and warning thresholds drawn as markers; anomaly graphs show the band
 instead. Every prod monitor's message links to its dashboard. Change a query or
 threshold in the graph too; `routing.test.ts` checks that each monitor has a

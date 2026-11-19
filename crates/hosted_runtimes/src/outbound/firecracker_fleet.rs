@@ -380,6 +380,8 @@ fn exec_request(argv: &[&str], user: u32) -> ExecRequest {
             ("PATH".to_owned(), GUEST_USER.path.to_owned()),
         ]),
         cwd: GUEST_USER.home.to_owned(),
+        // The host agent stamps its own; the trace joins by `traceparent`.
+        trace_id: None,
     }
 }
 
@@ -635,6 +637,7 @@ impl Fleet for FirecrackerFleet {
                 computer_id: guest.computer_id,
                 hibernated: guest.state == PowerState::Hibernated,
                 private_memory_bytes: guest.usage.map(|usage| usage.private_memory_bytes),
+                swap_bytes: guest.usage.and_then(|usage| usage.swap_bytes),
                 cpu_usage_microseconds: guest.usage.map(|usage| usage.cpu_usage_microseconds),
             })
             .collect();

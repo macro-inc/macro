@@ -60,6 +60,12 @@ in
         dashboard = dashboard ./database-dashboard.nix;
       }
     ])
+    (provider "macro-computers-fleet" [
+      {
+        name = "computers-fleet.json";
+        dashboard = dashboard ./computers-dashboard.nix;
+      }
+    ])
     (provider "macro-run-local" [
       {
         name = "run-local.json";

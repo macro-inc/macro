@@ -419,7 +419,10 @@ show whatever has arrived so far.
 
 ## Inline image actions
 
-An image attached to a channel message renders inline. Hovering it, or focusing
+An image attached to a channel message renders inline. So does a document
+attachment whose file is an image (PNG, JPG, GIF, WebP, SVG), the way agents
+post the images they make; its file chip stays below it for opening, renaming
+and sharing the document. Hovering an inline image, or focusing
 it with the keyboard, reveals a small toolbar at its top right with
 `Copy image` and `Download image`, the same two actions the lightbox offers;
 it fades out when the pointer leaves and stays up while an action runs. Copy writes the full-resolution image to the
@@ -618,8 +621,11 @@ results must reflect current people and entities, and scrolling or keyboard
 navigation must still load more results. Check both mobile and desktop.
 
 In a task, project, or document Discussion the `@` menu's people come from the
-contact directory. Until they arrive, People shows Macro and loading rows where
-the people and other agents will go, and a phone lists nothing below Macro yet.
+contact directory. Until they arrive, People shows Macro (when it matches) and
+loading rows where the people and other agents will go, and a phone lists
+nothing below Macro yet. On desktop, Booking Links are a section below People,
+so their late answer never pushes People's rows down; phones pin People rows
+above the rest of their single list.
 On a fresh load and on reopening, at desktop and phone width, no agent may show
 in a row a person then takes, and the menu must not change height as they land.
 When the people read fails (a busy cache times it out), the menu reads it again
@@ -1120,9 +1126,11 @@ quickly: an earlier
 response must not switch back or mark that earlier channel read.
 
 A transient notification-fetch failure keeps the conversation and composer mounted
-while notifications are unavailable. Recovery marks top-level message notifications
+while notifications are unavailable. So does a server fault (a GraphQL error
+without an access code), which retries with backoff; without cached metadata it
+shows **Conversation unavailable** with Retry, never the access-denied page. Recovery marks top-level message notifications
 seen without moving the conversation. No notification read marking runs
-from an abbreviated list result, even if that result is empty. Access failures and server-confirmed missing channels
+from an abbreviated list result, even if that result is empty. Access failures (HTTP 401/403 or an access-coded error) and server-confirmed missing channels
 show **Conversation unavailable** and stay hidden during retry until access is
 confirmed. With GraphQL caching enabled, an empty local projection cannot hide a
 server-confirmed conversation; a stale positive row cannot undo a fresh denial or
@@ -1571,7 +1579,9 @@ without the thread, and the count should stay.
 A backend-free cache regression runs on desktop and phone viewports:
 `bunx playwright test --config src/lib/queries/channel/browser-test/playwright.config.ts`.
 It uses the production normalized exchange, query adapter, and detail state with a
-controlled transport. Confirm a channel, type a draft, then deliver repeated empty
+controlled transport. Confirm a channel, type a draft, then fail a refresh with an
+uncoded GraphQL error: the draft stays, and the background retry recovers without
+a manual refresh. Deliver repeated empty
 cache projections: the composer must remain mounted. A fresh server absence must
 hide it, a cached positive row must leave it hidden, and a fresh grant must recover
 it. See the [desktop fixture](assets/channel-access-cache-desktop.png) and

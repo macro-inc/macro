@@ -27,6 +27,7 @@ let
     macro-postgres-queries = "macro-postgres-queries-dashboard";
     macro-prod-alerts = "macro-prod-alerts-dashboard";
     macro-email-focus = "macro-email-focus-dashboard";
+    macro-computers-fleet = "macro-computers-fleet-dashboard";
   };
   dashboardProvider =
     {

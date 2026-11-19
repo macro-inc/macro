@@ -275,6 +275,82 @@ async fn only_restricts_to_known_items(pool: Pool<Postgres>) -> anyhow::Result<(
     Ok(())
 }
 
+/// Copy each notification's entity onto its recipient rows, as notification
+/// ingress does; the fixtures insert recipient rows without it.
+async fn copy_entities_onto_recipient_rows(pool: &Pool<Postgres>) -> anyhow::Result<()> {
+    sqlx::query!(
+        "UPDATE user_notification un \
+         SET event_item_type = n.event_item_type, \
+             event_item_id = n.event_item_id, \
+             notification_event_type = n.notification_event_type \
+         FROM notification n WHERE n.id = un.notification_id",
+    )
+    .execute(pool)
+    .await?;
+    Ok(())
+}
+
+#[sqlx::test(
+    fixtures(path = "../../../../fixtures", scripts("work_feed")),
+    migrator = "MACRO_DB_MIGRATIONS"
+)]
+async fn filed_entity_only_matches_the_whole_feed_for_every_item(
+    pool: Pool<Postgres>,
+) -> anyhow::Result<()> {
+    copy_entities_onto_recipient_rows(&pool).await?;
+    let link_ids = [Uuid::parse_str(LINK_1)?];
+    let sources = sources();
+    for own_work in [ATTENTION, WORK] {
+        let mut whole = req(own_work, &link_ids, &sources);
+        whole.keying = AttentionKeying::FiledEntity;
+        let feed = attention_soup_page(&pool, whole).await?;
+        assert!(
+            feed.iter()
+                .any(|candidate| candidate.attention_at.is_some())
+        );
+
+        // Every item of the feed, and two the feed does not hold: one only
+        // ever opened and one that does not exist.
+        let mut only: Vec<Entity<'static>> = feed
+            .iter()
+            .map(|candidate| candidate.entity.clone())
+            .collect();
+        only.push(EntityType::Document.with_entity_string(DOC_F.to_string()));
+        only.push(EntityType::Channel.with_entity_string(Uuid::nil().to_string()));
+        let mut known = req(own_work, &link_ids, &sources);
+        known.keying = AttentionKeying::FiledEntity;
+        known.only = Some(&only);
+
+        assert_eq!(attention_soup_page(&pool, known).await?, feed);
+    }
+    Ok(())
+}
+
+#[sqlx::test(
+    fixtures(path = "../../../../fixtures", scripts("work_feed")),
+    migrator = "MACRO_DB_MIGRATIONS"
+)]
+async fn filed_entity_only_reads_one_item_of_the_feed(pool: Pool<Postgres>) -> anyhow::Result<()> {
+    copy_entities_onto_recipient_rows(&pool).await?;
+    let link_ids = [Uuid::parse_str(LINK_1)?];
+    let sources = sources();
+    let mut whole = req(ATTENTION, &link_ids, &sources);
+    whole.keying = AttentionKeying::FiledEntity;
+    let feed = attention_soup_page(&pool, whole).await?;
+
+    for candidate in &feed {
+        let only = vec![candidate.entity.clone()];
+        let mut known = req(ATTENTION, &link_ids, &sources);
+        known.keying = AttentionKeying::FiledEntity;
+        known.only = Some(&only);
+        assert_eq!(
+            attention_soup_page(&pool, known).await?,
+            vec![candidate.clone()]
+        );
+    }
+    Ok(())
+}
+
 #[sqlx::test(
     fixtures(path = "../../../../fixtures", scripts("work_feed")),
     migrator = "MACRO_DB_MIGRATIONS"
@@ -472,6 +548,7 @@ async fn thread_scoped_keying_places_channel_notifications_on_their_threads(
 async fn filed_entity_keying_places_a_channel_and_its_threads_together(
     pool: Pool<Postgres>,
 ) -> anyhow::Result<()> {
+    copy_entities_onto_recipient_rows(&pool).await?;
     let link_ids = [Uuid::parse_str(LINK_1)?];
     let sources = sources();
     let mut request = req(ATTENTION, &link_ids, &sources);

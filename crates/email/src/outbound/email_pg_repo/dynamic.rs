@@ -10,7 +10,9 @@ mod resolve;
 mod tests;
 
 // Re-export the public API
+#[cfg(test)]
 pub(crate) use query::dynamic_email_thread_cursor;
+pub(crate) use query::dynamic_email_thread_cursor_with_discovery;
 #[cfg(test)]
 pub(crate) use query::{
     OwnedReadStats, OwnedReadTuning, OwnedStreams, TeamReadTuning, begin_snapshot,

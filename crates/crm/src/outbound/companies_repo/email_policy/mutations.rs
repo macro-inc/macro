@@ -1,6 +1,9 @@
 use super::*;
 use crate::domain::{email_policy_api::*, email_rules::*};
 
+#[cfg(test)]
+mod test;
+
 impl EmailPolicyAuthoringTransaction for PgEmailPolicyTransaction {
     fn initialized_legacy(&self) -> bool {
         self.initialized_legacy
@@ -38,6 +41,24 @@ impl EmailPolicyAuthoringTransaction for PgEmailPolicyTransaction {
             true,
         )
         .await
+    }
+
+    async fn admit_rule_resources(&mut self, rules: &[EmailInclusionRule]) -> Result<(), CrmError> {
+        super::authoring::admit_resources(
+            &mut self.tx,
+            self.team,
+            &self.user,
+            self.state.link_id,
+            rules,
+        )
+        .await?;
+        // Discovery uses a shrinking ten-second budget. Later revision, grant
+        // and audit writes retain the authoring transaction's existing timeout.
+        sqlx::query!("SET LOCAL statement_timeout = '15s'")
+            .execute(&mut *self.tx)
+            .await
+            .map_err(|e| CrmError::StorageLayerError(e.into()))?;
+        Ok(())
     }
 
     #[tracing::instrument(skip_all, fields(team_id = %self.team), err)]

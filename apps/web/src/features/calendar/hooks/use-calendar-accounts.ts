@@ -1,5 +1,8 @@
 import { useUserId } from '@core/context/user';
-import { calendarConsentScopes } from '@core/email-link/consent';
+import {
+  calendarConsentScopes,
+  calendarStoppedSyncing,
+} from '@core/email-link/consent';
 import { useEmailLinksQuery } from '@queries/email/link';
 import type { ConsentScopes } from '@service-auth/client';
 import type { Link as EmailLink } from '@service-email/generated/schemas';
@@ -43,7 +46,9 @@ export function toCalendarAccounts(
       emailAddress: link.email_address,
       consentScopes: calendarConsentScopes(link),
       action: link.needs_calendar_permission
-        ? 'enable'
+        ? calendarStoppedSyncing(link)
+          ? 'reconnect'
+          : 'enable'
         : link.needs_reauth
           ? 'reconnect'
           : 'turnOff',

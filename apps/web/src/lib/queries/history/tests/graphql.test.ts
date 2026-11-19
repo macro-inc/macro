@@ -6,7 +6,12 @@ import type {
 } from '@graphql-cache/index';
 import { INITIAL_CACHE_REVISION } from '@graphql-cache/index';
 import { describe, expect, it, vi } from 'vitest';
-import { readCachedGraphqlHistoryItems } from '../graphql';
+import { buildGraphqlEntitySoupInput } from '../../soup/graphql/entity-input';
+import {
+  loadHistoryViewItem,
+  readCachedGraphqlHistoryItems,
+  stampCachedHistoryView,
+} from '../graphql';
 
 function cacheHost(
   search: (args: SearchCacheArgs) => Promise<SearchCachePage>,
@@ -263,5 +268,253 @@ describe('cached GraphQL history', () => {
     await expect(
       readCachedGraphqlHistoryItems(cacheHost(search, readRecordsByKeys))
     ).resolves.toEqual([]);
+  });
+});
+
+describe('cached history views', () => {
+  const viewedAt = '2026-11-18T21:00:00.000Z';
+  function viewHost(
+    held: () => boolean,
+    stored: { viewedAt: string | null } = { viewedAt: null }
+  ) {
+    const readRecordsByKeys = vi.fn(async ({ keys }: ReadRecordsByKeysArgs) =>
+      held()
+        ? keys.map((recordKey) => ({
+            recordKey,
+            record: {
+              __typename: recordKey.split(':')[0],
+              name: 'Old canvas',
+              ownerId: 'owner',
+              createdAt: '2025-01-01T00:00:00Z',
+              updatedAt: '2025-01-01T00:00:00Z',
+              viewedAt: stored.viewedAt,
+            },
+          }))
+        : []
+    );
+    const writeQuery = vi.fn(
+      async (args: {
+        data: { soupUpdates: Array<{ item: { viewedAt: string } }> };
+      }) => {
+        stored.viewedAt = args.data.soupUpdates[0].item.viewedAt;
+        return { revision: INITIAL_CACHE_REVISION, changed: true };
+      }
+    );
+    const host = {
+      readRecordsByKeys: async (args: ReadRecordsByKeysArgs) => ({
+        revision: INITIAL_CACHE_REVISION,
+        records: await readRecordsByKeys(args),
+      }),
+      writeQuery,
+    } as unknown as Pick<CacheHost, 'readRecordsByKeys' | 'writeQuery'>;
+    return { host, readRecordsByKeys, writeQuery, stored };
+  }
+
+  it('stamps the viewed time on a cached record without loading it', async () => {
+    const { host, readRecordsByKeys, writeQuery } = viewHost(() => true);
+    const load = vi.fn(async () => {});
+
+    await expect(
+      stampCachedHistoryView(
+        host,
+        { itemId: 'canvas', itemType: 'document', viewedAt },
+        load
+      )
+    ).resolves.toBe(true);
+
+    expect(load).not.toHaveBeenCalled();
+    expect(readRecordsByKeys).toHaveBeenCalledWith(
+      expect.objectContaining({ keys: ['GraphqlSoupDocument:canvas'] })
+    );
+    expect(writeQuery).toHaveBeenCalledWith(
+      expect.objectContaining({
+        operationName: 'HistoryViewedAtCacheWrite',
+        data: {
+          soupUpdates: [
+            {
+              __typename: 'SoupUpdated',
+              item: {
+                __typename: 'GraphqlSoupDocument',
+                id: 'canvas',
+                viewedAt,
+              },
+            },
+          ],
+        },
+      })
+    );
+  });
+
+  it('loads a record the cache does not hold, then stamps it', async () => {
+    let held = false;
+    const { host, writeQuery } = viewHost(() => held);
+    const load = vi.fn(async () => {
+      held = true;
+    });
+
+    await expect(
+      stampCachedHistoryView(
+        host,
+        { itemId: 'folder', itemType: 'project', viewedAt },
+        load
+      )
+    ).resolves.toBe(true);
+
+    expect(load).toHaveBeenCalledWith('GraphqlSoupProject');
+    expect(writeQuery).toHaveBeenCalledWith(
+      expect.objectContaining({
+        data: {
+          soupUpdates: [
+            {
+              __typename: 'SoupUpdated',
+              item: {
+                __typename: 'GraphqlSoupProject',
+                id: 'folder',
+                viewedAt,
+              },
+            },
+          ],
+        },
+      })
+    );
+  });
+
+  it('stamps nothing when the record is still missing after loading', async () => {
+    const { host, writeQuery } = viewHost(() => false);
+
+    await expect(
+      stampCachedHistoryView(
+        host,
+        { itemId: 'gone', itemType: 'chat', viewedAt },
+        async () => {}
+      )
+    ).resolves.toBe(false);
+    expect(writeQuery).not.toHaveBeenCalled();
+  });
+
+  it('ignores item types cached history does not list', async () => {
+    const { host, readRecordsByKeys, writeQuery } = viewHost(() => true);
+
+    await expect(
+      stampCachedHistoryView(
+        host,
+        { itemId: 'session', itemType: 'agent_session', viewedAt },
+        async () => {}
+      )
+    ).resolves.toBe(false);
+    expect(readRecordsByKeys).not.toHaveBeenCalled();
+    expect(writeQuery).not.toHaveBeenCalled();
+  });
+
+  it('keeps a later viewed time the cache already holds', async () => {
+    const later = '2026-11-18T21:00:05.000Z';
+    const { host, writeQuery, stored } = viewHost(() => true, {
+      viewedAt: later,
+    });
+
+    await expect(
+      stampCachedHistoryView(
+        host,
+        { itemId: 'canvas', itemType: 'document', viewedAt },
+        async () => {}
+      )
+    ).resolves.toBe(true);
+    expect(writeQuery).not.toHaveBeenCalled();
+    expect(stored.viewedAt).toBe(later);
+  });
+
+  it('applies overlapping stamps in turn, so the later view wins', async () => {
+    const stored = { viewedAt: null as string | null };
+    let reads = 0;
+    let releaseFirstRead: () => void = () => {};
+    const writeQuery = vi.fn(
+      async (args: {
+        data: { soupUpdates: Array<{ item: { viewedAt: string } }> };
+      }) => {
+        stored.viewedAt = args.data.soupUpdates[0].item.viewedAt;
+        return { revision: INITIAL_CACHE_REVISION, changed: true };
+      }
+    );
+    const host = {
+      readRecordsByKeys: async ({ keys }: ReadRecordsByKeysArgs) => {
+        const snapshot = stored.viewedAt;
+        reads += 1;
+        if (reads === 1)
+          await new Promise<void>((resolve) => {
+            releaseFirstRead = resolve;
+          });
+        return {
+          revision: INITIAL_CACHE_REVISION,
+          records: keys.map((recordKey) => ({
+            recordKey,
+            record: {
+              __typename: 'GraphqlSoupDocument',
+              name: 'Old canvas',
+              ownerId: 'owner',
+              createdAt: '2025-01-01T00:00:00Z',
+              updatedAt: '2025-01-01T00:00:00Z',
+              viewedAt: snapshot,
+            },
+          })),
+        };
+      },
+      writeQuery,
+    } as unknown as Pick<CacheHost, 'readRecordsByKeys' | 'writeQuery'>;
+    const later = '2026-11-18T21:00:05.000Z';
+
+    const first = stampCachedHistoryView(
+      host,
+      { itemId: 'race', itemType: 'document', viewedAt },
+      async () => {}
+    );
+    const second = stampCachedHistoryView(
+      host,
+      { itemId: 'race', itemType: 'document', viewedAt: later },
+      async () => {}
+    );
+    await vi.waitFor(() => expect(reads).toBe(1));
+    await new Promise((resolve) => setTimeout(resolve, 0));
+    releaseFirstRead();
+
+    await expect(Promise.all([first, second])).resolves.toEqual([true, true]);
+    expect(stored.viewedAt).toBe(later);
+  });
+
+  it('loads one item by id from the network', async () => {
+    const toPromise = vi.fn(async () => ({ data: {}, error: undefined }));
+    const query = vi.fn(() => ({ toPromise }));
+
+    await loadHistoryViewItem(
+      { query } as unknown as Parameters<typeof loadHistoryViewItem>[0],
+      'GraphqlSoupChat',
+      'chat-1'
+    );
+
+    expect(query).toHaveBeenCalledWith(
+      expect.objectContaining({
+        definitions: expect.arrayContaining([
+          expect.objectContaining({
+            name: expect.objectContaining({ value: 'HistoryViewItem' }),
+          }),
+        ]),
+      }),
+      { input: buildGraphqlEntitySoupInput('CHAT', 'chat-1') },
+      { requestPolicy: 'network-only' }
+    );
+  });
+
+  it('throws when the item cannot be loaded', async () => {
+    const error = new Error('offline');
+    const query = vi.fn(() => ({
+      toPromise: async () => ({ data: undefined, error }),
+    }));
+
+    await expect(
+      loadHistoryViewItem(
+        { query } as unknown as Parameters<typeof loadHistoryViewItem>[0],
+        'GraphqlSoupDocument',
+        'doc-1'
+      )
+    ).rejects.toBe(error);
   });
 });

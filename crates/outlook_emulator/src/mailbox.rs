@@ -115,6 +115,16 @@ pub(crate) struct Attachment {
     pub(crate) modified: DateTime<Utc>,
 }
 
+/// A message that left a folder, kept for the delta rounds that must report
+/// it.
+struct Removed {
+    seq: u64,
+    folder_id: String,
+    message_id: String,
+    /// Its `receivedDateTime` when it left, which a round's `$filter` reads.
+    received: DateTime<Utc>,
+}
+
 #[derive(Clone, Debug)]
 pub(crate) struct Message {
     pub(crate) id: String,
@@ -304,8 +314,8 @@ pub(crate) struct Mailbox {
     next_id: u64,
     pub(crate) folders: Vec<Folder>,
     pub(crate) messages: BTreeMap<String, Message>,
-    /// Messages that left a folder: sequence number, folder, message.
-    removed: Vec<(u64, String, String)>,
+    /// Messages that left a folder.
+    removed: Vec<Removed>,
     /// The conversation of each `Message-ID` the mailbox has seen.
     conversations: HashMap<String, String>,
     pub(crate) categories: Vec<Category>,
@@ -581,9 +591,15 @@ impl Mailbox {
             .get_mut(id)
             .ok_or_else(GraphError::item_not_found)?;
         let source = std::mem::replace(&mut message.folder_id, destination.clone());
+        let received = message.received;
         if source != destination {
             let seq = self.next_seq();
-            self.removed.push((seq, source, id.to_string()));
+            self.removed.push(Removed {
+                seq,
+                folder_id: source,
+                message_id: id.to_string(),
+                received,
+            });
         }
         self.touch(id, now);
         Ok(())
@@ -596,9 +612,40 @@ impl Mailbox {
             .remove(id)
             .ok_or_else(GraphError::item_not_found)?;
         let seq = self.next_seq();
-        self.removed
-            .push((seq, message.folder_id.clone(), message.id.clone()));
+        self.removed.push(Removed {
+            seq,
+            folder_id: message.folder_id.clone(),
+            message_id: message.id.clone(),
+            received: message.received,
+        });
         self.record(ChangeKind::Deleted, &message);
+        Ok(())
+    }
+
+    /// Deletes a folder for good, with its subfolders and their messages, as
+    /// emptying it out of Deleted Items does. Well-known folders can't go.
+    pub(crate) fn remove_folder(&mut self, key: &str) -> Result<(), EmulatorError> {
+        let unknown = || EmulatorError::UnknownFolder(key.to_string());
+        let root = self
+            .folder(key)
+            .filter(|folder| folder.well_known.is_none())
+            .ok_or_else(unknown)?;
+        let mut gone = vec![root.id.clone()];
+        let mut index = 0;
+        while let Some(id) = gone.get(index).cloned() {
+            gone.extend(self.child_folders(&id).iter().map(|child| child.id.clone()));
+            index += 1;
+        }
+        let messages: Vec<String> = self
+            .messages
+            .values()
+            .filter(|message| gone.contains(&message.folder_id))
+            .map(|message| message.id.clone())
+            .collect();
+        for id in messages {
+            self.remove_message(&id).map_err(|_| unknown())?;
+        }
+        self.folders.retain(|folder| !gone.contains(&folder.id));
         Ok(())
     }
 

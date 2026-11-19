@@ -60,7 +60,7 @@ pub(super) async fn thread_metadata_by_ids(
     .await
 }
 
-#[tracing::instrument(err, skip(pool, thread_ids))]
+#[tracing::instrument(err, skip(pool, viewer, thread_ids))]
 pub(super) async fn thread_mail_projections_by_ids(
     pool: &PgPool,
     viewer: macro_user_id::user_id::MacroUserIdStr<'_>,
@@ -245,7 +245,7 @@ pub(super) async fn messages_by_thread_id_paginated(
             headers_jsonb, created_at, updated_at
         FROM email_messages
         WHERE thread_id = $1
-          AND NOT (is_draft AND COALESCE((mailbox_state->>'provider_missing')::boolean, false))
+          AND NOT COALESCE((mailbox_state->>'provider_missing')::boolean, false)
         ORDER BY COALESCE(internal_date_ts, sent_at, created_at) DESC, id DESC
         LIMIT $2 OFFSET $3
         "#,
