@@ -9,11 +9,11 @@ import { render } from 'solid-js/web';
 
 document.documentElement.dataset.touchDevice = String(isTouchDevice());
 
-// A page about as heavy as a long channel: thousands of message rows, each a
-// few nested boxes of themed text, so a style or layout pass over the whole
-// document costs what it does in the app.
+// A page about as heavy as a long channel: message rows of a few nested boxes
+// of themed text (`?messages=`, 400 by default, about 5,000 elements), so a
+// style pass over the whole document costs what it does in the app.
 const MESSAGE_COUNT = Number(
-  new URLSearchParams(location.search).get('messages') ?? 1500
+  new URLSearchParams(location.search).get('messages') ?? 400
 );
 const MESSAGES = Array.from({ length: MESSAGE_COUNT }, (_, index) => index);
 
@@ -64,35 +64,12 @@ function Fixture() {
       <div class="flex gap-3 p-4">
         <Button onClick={() => show('Link copied')}>Show toast</Button>
         <Button
-          onClick={() => {
-            for (const message of [
-              'Link copied',
-              'Document saved',
-              'Files organized',
-            ])
-              show(message);
-          }}
-        >
-          Show stack
-        </Button>
-        <Button
           variant="secondary"
           onClick={() => {
             for (const id of shown.splice(0)) toast.dismiss(id);
           }}
         >
           Dismiss toasts
-        </Button>
-        <Button
-          id="probe"
-          variant="secondary"
-          onClick={() => {
-            document.body.dataset.probeClicks = String(
-              Number(document.body.dataset.probeClicks ?? 0) + 1
-            );
-          }}
-        >
-          Probe
         </Button>
       </div>
       <main class="min-h-0 flex-1 overflow-y-auto">

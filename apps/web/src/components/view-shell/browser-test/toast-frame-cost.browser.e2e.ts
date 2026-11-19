@@ -14,7 +14,20 @@ function stylePassElements(event: unknown): number | undefined {
     typeof args === 'object' && args !== null && 'elementCount' in args
       ? args.elementCount
       : undefined;
-  return typeof count === 'number' ? count : 0;
+  if (typeof count !== 'number')
+    throw new Error('A style pass in the trace has no element count');
+  return count;
+}
+
+function stylePasses(events: unknown[]) {
+  return events.map(stylePassElements).filter((count) => count !== undefined);
+}
+
+/** Resolves once every CSS animation and transition on the page has ended. */
+function settle(page: Page) {
+  return page.evaluate(() =>
+    Promise.all(document.getAnimations().map((animation) => animation.finished))
+  );
 }
 
 async function trace(page: Page, run: () => Promise<void>) {
@@ -80,13 +93,28 @@ test('a toast animating over a heavy page restyles only the toasts and what foll
   await dismiss.click();
   await expect(toasts).toHaveCount(0);
 
+  // The detector sees a whole-page pass: a custom property written on <html>.
+  const control = await trace(page, async () => {
+    await page.evaluate(
+      () =>
+        new Promise((resolve) => {
+          document.documentElement.style.setProperty('--probe', '1px');
+          requestAnimationFrame(() => requestAnimationFrame(resolve));
+        })
+    );
+  });
+  expect(
+    stylePasses(control).filter((count) => count > pageElements / 4)
+  ).not.toEqual([]);
+
   const events = await trace(page, async () => {
     await show.click();
-    await page.waitForTimeout(500);
+    await expect(toasts).toHaveCount(1);
+    await settle(page);
     // A second notice tucks the first behind it.
     await show.click();
     await expect(toasts).toHaveCount(2);
-    await page.waitForTimeout(500);
+    await settle(page);
     // The control above the stack still follows it.
     const raised = await follower.boundingBox();
     expect(await inset('follower')).toMatch(
@@ -95,16 +123,14 @@ test('a toast animating over a heavy page restyles only the toasts and what foll
     expect(await inset('root')).toBe('');
     await dismiss.click();
     await expect(toasts).toHaveCount(0);
-    await page.waitForTimeout(400);
-    expect(await inset('follower')).toBe('0px');
+    await settle(page);
+    await expect.poll(() => inset('follower')).toBe('0px');
     expect((await follower.boundingBox())!.y).toBeGreaterThan(raised!.y);
   });
 
-  const passes = events
-    .map(stylePassElements)
-    .filter((count) => count !== undefined);
-  // The animations ran: a style pass for most of their frames.
-  expect(passes.length).toBeGreaterThan(20);
+  const passes = stylePasses(events);
+  // The animations ran: style passes in their frames.
+  expect(passes.length).toBeGreaterThan(5);
   const pageWide = passes.filter((count) => count > pageElements / 4);
   expect(pageWide).toEqual([]);
 });

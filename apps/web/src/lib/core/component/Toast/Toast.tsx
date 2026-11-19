@@ -359,10 +359,13 @@ function ToastFrame(props: ToastContentProps & { replaced: boolean }) {
   let surface!: HTMLDivElement;
 
   // Keep the natural height while older cards are tucked into the stack.
-  // Read it from the observer's entry: reading layout here would force a
-  // style and layout pass of whatever an earlier callback in this frame
-  // dirtied. The first entry arrives before the toast's first paint.
+  // Read it once at mount, so the entrance keyframes start from the real
+  // height rather than their fallback, then from the observer's entries:
+  // reading layout in the callback would force a style and layout pass of
+  // whatever an earlier callback in that frame dirtied, in every frame the
+  // card resizes.
   onMount(() => {
+    setHeight(surface.offsetHeight);
     const observer = new ResizeObserver(([entry]) => {
       const size = entry?.borderBoxSize[0];
       if (size) setHeight(size.blockSize);
