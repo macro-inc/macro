@@ -87,7 +87,9 @@ describe('AgentPermissionsPage', () => {
       await screen.findByText('Applies to OCaml programs only, for now.')
     ).toBeTruthy();
     expect(
-      screen.getByText(/Its JavaScript programs, other tools and your connected apps work as before\./)
+      screen.getByText(
+        /Its JavaScript programs, other tools and your connected apps work as before\./
+      )
     ).toBeTruthy();
   });
 
