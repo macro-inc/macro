@@ -1334,8 +1334,9 @@ fn drafted(
         }
     };
     // A rollout refusal is one the session can't fix: creating the routine,
-    // or saving any change to a stored routine's task, is refused the same
-    // way while it holds, so the draft isn't handed back as ready.
+    // or saving a change to a stored routine's task that keeps sub-routines
+    // or inputs, is refused the same way while it holds, so the draft isn't
+    // handed back as ready.
     let rollout_off = check
         .problems
         .contains(&ActionPolicyError::SubRoutinesDisabled.to_string());
