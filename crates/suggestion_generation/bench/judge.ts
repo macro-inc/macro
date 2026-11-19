@@ -22,7 +22,7 @@ export const JUDGE_MODEL = 'anthropic/claude-opus-5-5';
  * schema or what a judgement reads, so `compare` never weighs the marks of
  * two judges against each other.
  */
-export const JUDGE = `${JUDGE_MODEL} v3`;
+export const JUDGE = `${JUDGE_MODEL} v4`;
 /**
  * The accounts the judges call as. Each judges one attempt at a time, so a
  * judgement's cost is the account's spend while it ran; several let
