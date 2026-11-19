@@ -98,29 +98,37 @@ async function fetchServerLifecycle(
   input: DraftIdentity
 ): Promise<EmailDraftLifecycleState> {
   const observedAt = Date.now();
-  try {
-    const thread = await fetchFreshEmailThread(input.threadId, input.draftId);
-    return deriveEmailDraftLifecycle({
-      ...input,
-      observedAt,
-      message: thread.messages.find(
-        (message) => message.db_id === input.draftId
-      ),
-    });
-  } catch (error) {
-    if (thrownResultErrorHasCode(error, 'NOT_FOUND')) {
-      return deriveEmailDraftLifecycle({ ...input, observedAt });
-    }
-    // A deleted draft may leave no thread to read. Confirm the session before
-    // marking that draft unavailable so a sign-in failure stays recoverable.
+  const readThread = () =>
+    ResultAsync.fromPromise(
+      fetchFreshEmailThread(input.threadId, input.draftId),
+      (error) => error
+    );
+  let thread = await readThread();
+  if (
+    thread.isErr() &&
+    thrownResultErrorHasCode(thread.error, 'UNAUTHORIZED') &&
+    (await ensureFreshSession()).isOk()
+  ) {
+    // The first refusal can predate refreshed credentials. Use the fresh
+    // response before deciding that the draft itself is unavailable.
+    thread = await readThread();
     if (
-      thrownResultErrorHasCode(error, 'UNAUTHORIZED') &&
-      (await ensureFreshSession()).isOk()
+      thread.isErr() &&
+      thrownResultErrorHasCode(thread.error, 'UNAUTHORIZED')
     ) {
       return deriveEmailDraftLifecycle({ ...input, observedAt });
     }
-    throw error;
   }
+  if (thread.isErr() && !thrownResultErrorHasCode(thread.error, 'NOT_FOUND')) {
+    throw thread.error;
+  }
+  return deriveEmailDraftLifecycle({
+    ...input,
+    observedAt,
+    message: thread.isOk()
+      ? thread.value.messages.find((message) => message.db_id === input.draftId)
+      : undefined,
+  });
 }
 
 function refreshInterval(state: EmailDraftLifecycleState | undefined) {

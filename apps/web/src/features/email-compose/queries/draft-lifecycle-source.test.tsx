@@ -134,12 +134,14 @@ it('still reports a sent draft when the send journal cannot be read', async () =
   expect(lifecycle.state()).not.toHaveProperty('sentCopy');
 });
 
-it('marks the draft unavailable when its read is refused during a valid session', async () => {
+it('marks the draft unavailable when a valid session cannot read it on retry', async () => {
+  const refused = new ThrownResultError([
+    { code: 'UNAUTHORIZED', message: 'Unauthorized' },
+  ]);
   fetchThread
     .mockResolvedValueOnce(thread(false))
-    .mockRejectedValueOnce(
-      new ThrownResultError([{ code: 'UNAUTHORIZED', message: 'Unauthorized' }])
-    );
+    .mockRejectedValueOnce(refused)
+    .mockRejectedValueOnce(refused);
   refreshSession.mockResolvedValue(ok(undefined));
   const { lifecycle } = observe();
   await waitFor(() => expect(lifecycle.state()?.type).toBe('editing'));
@@ -148,7 +150,26 @@ it('marks the draft unavailable when its read is refused during a valid session'
     type: 'missing',
     ...identity,
   });
+  expect(fetchThread).toHaveBeenCalledTimes(3);
   await waitFor(() => expect(lifecycle.state()?.type).toBe('missing'));
+});
+
+it('uses the fresh draft when the read succeeds after session confirmation', async () => {
+  fetchThread
+    .mockResolvedValueOnce(thread(false))
+    .mockRejectedValueOnce(
+      new ThrownResultError([{ code: 'UNAUTHORIZED', message: 'Unauthorized' }])
+    )
+    .mockResolvedValueOnce(thread(true));
+  refreshSession.mockResolvedValue(ok(undefined));
+  const { lifecycle } = observe();
+  await waitFor(() => expect(lifecycle.state()?.type).toBe('editing'));
+
+  await expect(lifecycle.refresh()).resolves.toMatchObject({
+    type: 'scheduled',
+    ...identity,
+  });
+  expect(fetchThread).toHaveBeenCalledTimes(3);
 });
 
 it('keeps the draft retryable when the session cannot be confirmed', async () => {
