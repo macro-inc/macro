@@ -1108,10 +1108,11 @@ async fn a_copy_made_standalone_keeps_its_parents_rewritten_code_off_its_owners_
         [(copy_id, vec![rewritten.to_owned()])]
     );
 
-    // It has no upgrades of its own; what it kept refuses its owner's identity.
+    // It has no upgrades of its own; what detach kept for it refuses its
+    // owner's identity.
     let kept = with(Rewritten {
         of: Some(parent_id),
-        inherited: vec![rewritten.to_owned()],
+        inherited: repo.inherited.lock().unwrap().clone(),
         ..Default::default()
     });
     let mut as_owner = ActionConfiguration {

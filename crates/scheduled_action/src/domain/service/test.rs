@@ -1931,13 +1931,13 @@ async fn an_update_that_changes_nothing_keeps_the_revision() {
 
 /// The upgrades of `of` (of every routine when `None`), newest first: a
 /// later release that found the code still checks, over a model's rewrite of
-/// `task`, saved with nobody reviewing it. Every routine kept `inherited`
-/// from a parent.
+/// `task`, saved with nobody reviewing it. `inherited` is what each routine
+/// kept from a parent, by its id.
 #[derive(Default)]
 struct Rewritten {
     task: serde_json::Value,
     of: Option<Uuid>,
-    inherited: Vec<String>,
+    inherited: Vec<(Uuid, Vec<String>)>,
 }
 
 impl crate::domain::ports::CodeUpgrades for Rewritten {
@@ -2016,8 +2016,13 @@ impl crate::domain::ports::CodeUpgrades for Rewritten {
         ])
     }
 
-    async fn inherited_rewrites(&self, _: Uuid) -> Result<Vec<String>> {
-        Ok(self.inherited.clone())
+    async fn inherited_rewrites(&self, action_id: Uuid) -> Result<Vec<String>> {
+        Ok(self
+            .inherited
+            .iter()
+            .find(|(id, _)| *id == action_id)
+            .map(|(_, sources)| sources.clone())
+            .unwrap_or_default())
     }
 }
 
