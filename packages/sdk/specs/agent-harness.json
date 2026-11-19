@@ -3465,7 +3465,7 @@
             }
           },
           "403": {
-            "description": "Not the owner, for approve or deny; or no edit access",
+            "description": "Not the owner, for approve or deny; or no edit access; or, for a hold on the agent's permissions, not a person's own session",
             "content": {
               "text/plain": {
                 "schema": {
@@ -6805,6 +6805,11 @@
         "description": "Surface of a review decision.",
         "enum": ["card", "chat", "inbox"]
       },
+      "DeclinedStatus": {
+        "type": "string",
+        "description": "How an approval ended without approving.",
+        "enum": ["denied", "cancelled", "expired"]
+      },
       "DiscoverAgentCapabilitiesRequest": {
         "type": "object",
         "description": "HTTP request selecting one provider to probe.",
@@ -7206,6 +7211,91 @@
         "format": "uuid",
         "description": "Caller-selected UUID persisted in tool input before execution begins."
       },
+      "ExecutionPermission": {
+        "oneOf": [
+          {
+            "type": "object",
+            "description": "It may call operations set to never: nothing ran, nobody was asked.",
+            "required": ["operations", "outcome"],
+            "properties": {
+              "operations": {
+                "type": "array",
+                "items": {
+                  "$ref": "#/components/schemas/GatedOperation"
+                },
+                "description": "The operations set to never."
+              },
+              "outcome": {
+                "type": "string",
+                "enum": ["blocked"]
+              }
+            }
+          },
+          {
+            "type": "object",
+            "description": "It may call operations set to ask, and the person did not approve.",
+            "required": ["status", "operations", "outcome"],
+            "properties": {
+              "operations": {
+                "type": "array",
+                "items": {
+                  "$ref": "#/components/schemas/GatedOperation"
+                },
+                "description": "The operations it asked about."
+              },
+              "outcome": {
+                "type": "string",
+                "enum": ["declined"]
+              },
+              "status": {
+                "$ref": "#/components/schemas/DeclinedStatus",
+                "description": "How the approval ended."
+              }
+            }
+          }
+        ],
+        "description": "Why a program did not run, when its permissions stopped it."
+      },
+      "ExecutionReceipt": {
+        "type": "object",
+        "description": "Compact model result with an identity the UI uses to load the durable record.",
+        "required": ["executionId", "status"],
+        "properties": {
+          "activity": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/ExecutionActivity"
+            },
+            "description": "Observed SDK operations for conversation activity snapshots."
+          },
+          "error": {
+            "type": ["string", "null"],
+            "description": "Safe failure text, when execution did not succeed."
+          },
+          "executionId": {
+            "$ref": "#/components/schemas/ExecutionId",
+            "description": "Reference to the session's durable rendering record."
+          },
+          "permission": {
+            "oneOf": [
+              {
+                "type": "null"
+              },
+              {
+                "$ref": "#/components/schemas/ExecutionPermission",
+                "description": "Set when the agent's permissions stopped the program; see\n[`ExecutionRecord::permission`]."
+              }
+            ]
+          },
+          "result": {
+            "description": "Only the value explicitly returned by the program."
+          },
+          "status": {
+            "$ref": "#/components/schemas/ExecutionStatus",
+            "description": "Last recorded outcome; running may be stale after a process interruption."
+          }
+        }
+      },
       "ExecutionRecord": {
         "type": "object",
         "description": "Durable source and final outcome, with historical bridge calls when present.\nThe full journal is not included in the model's tool result.",
@@ -7251,6 +7341,17 @@
           "language": {
             "$ref": "#/components/schemas/ProgramLanguage",
             "description": "The language `source` is written in; historical records are JavaScript.\nJavaScript, the default, is left out, so records of sessions without\nOCaml serialize as they did before languages."
+          },
+          "permission": {
+            "oneOf": [
+              {
+                "type": "null"
+              },
+              {
+                "$ref": "#/components/schemas/ExecutionPermission",
+                "description": "Set when the agent's permissions stopped the program before it ran:\nan operation set to never, or an approval that was not given. The\nstatus is then `failed`, and `error` says why in the model's words."
+              }
+            ]
           },
           "result": {
             "description": "JSON returned by the program, if successful."
@@ -7378,6 +7479,60 @@
         "description": "What happened to a file, on the wire.",
         "enum": ["added", "modified", "deleted", "renamed"]
       },
+      "GatedOperation": {
+        "type": "object",
+        "description": "One SDK operation a program may call, as the gate judged it: what the\napproval dialog lists and a refusal names.",
+        "required": [
+          "service",
+          "operation",
+          "label",
+          "group",
+          "groupName",
+          "state",
+          "origin"
+        ],
+        "properties": {
+          "action": {
+            "oneOf": [
+              {
+                "type": "null"
+              },
+              {
+                "$ref": "#/components/schemas/PermissionAction",
+                "description": "Its action; absent for an operation the registry does not know."
+              }
+            ]
+          },
+          "group": {
+            "type": "string",
+            "description": "Its group id; `unclassified` for an operation the registry does not\nknow."
+          },
+          "groupName": {
+            "type": "string",
+            "description": "Its group's display name."
+          },
+          "label": {
+            "type": "string",
+            "description": "What it does, for a person. `service.operation` for an operation the\nregistry does not know."
+          },
+          "operation": {
+            "type": "string",
+            "description": "The raw operationId, e.g. `send_message`."
+          },
+          "origin": {
+            "$ref": "#/components/schemas/ToolPermissionOrigin",
+            "description": "Where the state comes from."
+          },
+          "service": {
+            "type": "string",
+            "description": "The SDK's spec name, e.g. `email`."
+          },
+          "state": {
+            "$ref": "#/components/schemas/ToolPermissionState",
+            "description": "Its effective state."
+          }
+        }
+      },
       "GitRefDto": {
         "type": "object",
         "description": "One end of the compared range.",
@@ -7391,6 +7546,25 @@
             "description": "The commit, when known."
           }
         }
+      },
+      "GroupSelection": {
+        "type": "object",
+        "description": "One group, and which of its actions.",
+        "required": ["group"],
+        "properties": {
+          "actions": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/PermissionAction"
+            },
+            "description": "The actions to show; empty or absent shows all five."
+          },
+          "group": {
+            "type": "string",
+            "description": "A group id, such as `documents` or `email`."
+          }
+        },
+        "additionalProperties": false
       },
       "InputIntent": {
         "type": "string",
@@ -7990,8 +8164,8 @@
       },
       "ProgramLanguage": {
         "type": "string",
-        "description": "The language of a session program. OCaml is offered only to sessions\nwhose owner has the OCaml rollout ([`OcamlRollout`](super::OcamlRollout)).",
-        "enum": ["javascript", "ocaml"]
+        "description": "The language of a session program. OCaml is offered only to sessions\nwhose owner has the OCaml rollout ([`OwnerRollout`](super::OwnerRollout));\nJavaScript tools programs are not offered yet.",
+        "enum": ["javascript", "ocaml", "js_tools"]
       },
       "PromptAttachment": {
         "type": "object",
@@ -8179,7 +8353,7 @@
       "RecordedCallStatus": {
         "type": "string",
         "description": "A dispatch result; unfinished work is never reported as success.",
-        "enum": ["running", "completed", "failed", "unknown"]
+        "enum": ["running", "completed", "failed", "unknown", "refused"]
       },
       "RecordedToolCall": {
         "type": "object",
@@ -8994,6 +9168,80 @@
           }
         }
       },
+      "ShowPermissionsResult": {
+        "type": "object",
+        "description": "`ShowPermissions`' result: what the chat card shows, and a snapshot for\nthe model. The card reads the live settings itself.",
+        "required": ["agentId", "sessionId", "selection", "current", "message"],
+        "properties": {
+          "agentId": {
+            "type": "string",
+            "description": "The agent whose permissions these are."
+          },
+          "current": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/ShownPermission"
+            },
+            "description": "Each shown setting as it stands now."
+          },
+          "message": {
+            "type": "string",
+            "description": "What the model should do next."
+          },
+          "reason": {
+            "type": ["string", "null"],
+            "description": "The agent's sentence for above the controls."
+          },
+          "selection": {
+            "$ref": "#/components/schemas/ShowPermissionsSelection",
+            "description": "What to show."
+          },
+          "sessionId": {
+            "type": "string",
+            "description": "The session the card is in."
+          }
+        }
+      },
+      "ShowPermissionsSelection": {
+        "type": "object",
+        "description": "What was shown, resolved.",
+        "required": ["groups", "tools"],
+        "properties": {
+          "groups": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/GroupSelection"
+            },
+            "description": "The groups, each with the actions shown (all five when none were named)."
+          },
+          "tools": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/ToolSelection"
+            },
+            "description": "The operations."
+          }
+        }
+      },
+      "ShownPermission": {
+        "type": "object",
+        "description": "One shown setting as it stands now.",
+        "required": ["target", "state", "origin"],
+        "properties": {
+          "origin": {
+            "$ref": "#/components/schemas/ToolPermissionOrigin",
+            "description": "Where the state comes from."
+          },
+          "state": {
+            "$ref": "#/components/schemas/ToolPermissionState",
+            "description": "Its effective state."
+          },
+          "target": {
+            "$ref": "#/components/schemas/ToolPermissionTarget",
+            "description": "The group action or operation."
+          }
+        }
+      },
       "StartFreshAgentConversationRequest": {
         "type": "object",
         "description": "The session the user is choosing to leave behind.",
@@ -9427,6 +9675,22 @@
           }
         ],
         "description": "What a stored setting applies to: every operation of a group's action, or\none operation."
+      },
+      "ToolSelection": {
+        "type": "object",
+        "description": "One SDK operation.",
+        "required": ["service", "operation"],
+        "properties": {
+          "operation": {
+            "type": "string",
+            "description": "The raw operationId, as a refusal names it."
+          },
+          "service": {
+            "type": "string",
+            "description": "The SDK's spec name, such as `email`."
+          }
+        },
+        "additionalProperties": false
       },
       "TriggerOrigin": {
         "oneOf": [
