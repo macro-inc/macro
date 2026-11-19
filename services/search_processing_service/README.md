@@ -306,6 +306,8 @@ replica, and every message the replica lacks is looked up again on the primary
 before it is counted or deleted, so a lagging replica cannot remove a message
 just written. Messages of a chat whose row is also gone are removed the same
 way; the chat's own document stays, and search drops it since its row is gone.
+A message deleted while the job runs may be read as live from a lagging
+replica and passed over; its own delete event removes its document.
 Database access is primary-key lookups; nothing is written there.
 
 The job is a dry run unless the body says `"dry_run": false`: it reads and

@@ -94,10 +94,10 @@ async fn a_bulk_answer_is_counted_item_by_item() {
     let index = OpenSearchChatMessages(
         opensearch_answering(
             200,
-            r#"{"errors":true,"items":[
+            r#"{"errors":false,"items":[
                 {"delete":{"_id":"chat-1:message-a","status":200,"result":"deleted"}},
                 {"delete":{"_id":"chat-1:message-b","status":404,"result":"not_found"}},
-                {"delete":{"_id":"chat-1:message-c","status":409,"error":{"type":"version_conflict_engine_exception"}}}
+                {"delete":{"_id":"chat-1:message-c","status":200,"result":"deleted"}}
             ]}"#,
         )
         .await,
@@ -108,9 +108,46 @@ async fn a_bulk_answer_is_counted_item_by_item() {
     assert_eq!(
         result,
         MessageDelete {
-            deleted: 1,
+            deleted: 2,
             not_found: 1,
-            failed: 1,
         }
+    );
+}
+
+#[tokio::test]
+async fn a_failed_item_stops_the_job_and_a_refused_one_is_a_refusal() {
+    let failed = OpenSearchChatMessages(
+        opensearch_answering(
+            200,
+            r#"{"errors":true,"items":[
+                {"delete":{"_id":"chat-1:message-a","status":200,"result":"deleted"}},
+                {"delete":{"_id":"chat-1:message-b","status":409,"error":{"type":"version_conflict_engine_exception"}}},
+                {"delete":{"_id":"chat-1:message-c","status":200,"result":"deleted"}}
+            ]}"#,
+        )
+        .await,
+    );
+    let refused = OpenSearchChatMessages(
+        opensearch_answering(
+            200,
+            r#"{"errors":true,"items":[
+                {"delete":{"_id":"chat-1:message-a","status":429,"error":{"type":"es_rejected_execution_exception"}}},
+                {"delete":{"_id":"chat-1:message-b","status":200,"result":"deleted"}},
+                {"delete":{"_id":"chat-1:message-c","status":200,"result":"deleted"}}
+            ]}"#,
+        )
+        .await,
+    );
+
+    let failed = failed.delete(&gone()).await;
+    let refused = refused.delete(&gone()).await;
+
+    assert!(
+        matches!(failed, Err(MessageIndexError::ItemsFailed(_))),
+        "{failed:?}"
+    );
+    assert!(
+        matches!(refused, Err(MessageIndexError::Refused(_))),
+        "{refused:?}"
     );
 }

@@ -97,7 +97,7 @@ async fn a_delete_routes_each_message_to_its_chat_and_counts_what_happened() {
         r#"{"errors":true,"items":[
             {"delete":{"_id":"chat-1:message-a","status":200,"result":"deleted"}},
             {"delete":{"_id":"chat-1:message-b","status":404,"result":"not_found"}},
-            {"delete":{"_id":"chat-2:message-c","status":409,"error":{"type":"version_conflict_engine_exception"}}}
+            {"delete":{"_id":"chat-2:message-c","status":200,"result":"deleted"}}
         ]}"#,
     );
     let client = OpensearchClient::new(url, String::new(), String::new()).unwrap();
@@ -134,15 +134,33 @@ async fn a_delete_routes_each_message_to_its_chat_and_counts_what_happened() {
     assert_eq!(
         result,
         ChatMessageDeleteResult {
-            deleted: 1,
+            deleted: 2,
             not_found: 1,
-            failed: vec![FailedChatMessageDelete {
-                document_id: "chat-2:message-c".to_owned(),
-                status: 409,
-                error_type: "version_conflict_engine_exception".to_owned(),
-            }],
         }
     );
+}
+
+#[test]
+fn a_failed_delete_item_fails_the_batch() {
+    let body = r#"{"errors":true,"items":[
+        {"delete":{"_id":"chat-1:message-a","status":200,"result":"deleted"}},
+        {"delete":{"_id":"chat-2:message-c","status":409,"error":{"type":"version_conflict_engine_exception","reason":"conflict"}}}
+    ]}"#;
+
+    let error = classify_delete_response(200, body).unwrap_err();
+
+    let OpensearchClientError::BulkItemsFailed {
+        failed,
+        total,
+        refusal,
+        ref errors,
+        ..
+    } = error
+    else {
+        panic!("expected failed items, got {error:?}");
+    };
+    assert_eq!((failed, total, refusal), (1, 2, None));
+    assert_eq!(errors, &["version_conflict_engine_exception: conflict"]);
 }
 
 #[test]
@@ -152,10 +170,12 @@ fn a_refused_delete_item_refuses_the_batch() {
         {"delete":{"_id":"chat-1:message-b","status":429,"error":{"type":"es_rejected_execution_exception"}}}
     ]}"#;
 
-    assert!(matches!(
-        classify_delete_response(200, body),
-        Err(OpensearchClientError::WritesRefused { .. })
-    ));
+    let error = classify_delete_response(200, body).unwrap_err();
+
+    assert!(
+        matches!(error, OpensearchClientError::BulkItemsFailed { .. }) && error.refusal().is_some(),
+        "{error:?}"
+    );
 }
 
 #[test]
@@ -276,7 +296,6 @@ async fn paging_visits_every_message_once_and_a_delete_keeps_the_chats() {
         ChatMessageDeleteResult {
             deleted: 2,
             not_found: 1,
-            failed: vec![],
         }
     );
     assert_eq!((messages_left, chats_left), (3, 2));

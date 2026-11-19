@@ -89,6 +89,7 @@ struct FakeRows {
     messages: HashSet<String>,
     chats: HashSet<String>,
     message_lookups: Mutex<Vec<Vec<String>>>,
+    chat_lookups_fail: bool,
 }
 
 impl FakeRows {
@@ -97,6 +98,7 @@ impl FakeRows {
             messages: messages.iter().map(|id| id.to_string()).collect(),
             chats: chats.iter().map(|id| id.to_string()).collect(),
             message_lookups: Mutex::new(Vec::new()),
+            chat_lookups_fail: false,
         }
     }
 
@@ -119,6 +121,9 @@ impl ChatRows for FakeRows {
     }
 
     async fn existing_chats(&self, chat_ids: &[String]) -> Result<HashSet<String>, Report> {
+        if self.chat_lookups_fail {
+            return Err(Report::new(std::io::Error::other("connection reset")).into_dynamic());
+        }
         Ok(chat_ids
             .iter()
             .filter(|id| self.chats.contains(*id))
@@ -327,10 +332,9 @@ async fn a_refused_delete_stops_the_job_at_the_page_before() {
 #[tokio::test(start_paused = true)]
 async fn failed_deletes_stop_before_the_cursor_moves_past_them() {
     let index = FakeIndex::holding(&INDEXED).replying(|count| {
-        Ok(MessageDelete {
-            failed: count,
-            ..MessageDelete::default()
-        })
+        Err(MessageIndexError::ItemsFailed(format!(
+            "opensearch failed {count} of {count} bulk items"
+        )))
     });
     let repair = repair(index, rows(), rows());
     let progress = Arc::new(JobProgress::detached());
@@ -369,4 +373,26 @@ async fn reads_are_paced_to_the_requested_rate() {
         .unwrap();
 
     assert_eq!(started.elapsed(), Duration::from_secs(5));
+}
+
+#[tokio::test(start_paused = true)]
+async fn a_failed_chat_lookup_does_not_stop_the_repair() {
+    let replica = FakeRows {
+        chat_lookups_fail: true,
+        ..rows()
+    };
+    let repair = repair(FakeIndex::holding(&INDEXED), replica, rows());
+    let progress = Arc::new(JobProgress::detached());
+
+    repair
+        .repair(
+            request(false, 2),
+            progress.clone(),
+            CancellationToken::new(),
+        )
+        .await
+        .unwrap();
+
+    assert_eq!(repair.index.deletes().len(), 2);
+    assert_eq!(progress.local_progress().updated, 2);
 }

@@ -68,7 +68,6 @@ pub struct MessageDelete {
     pub deleted: usize,
     /// Documents already gone, such as ones a live delete removed first.
     pub not_found: usize,
-    pub failed: usize,
 }
 
 /// Why the index did not apply a batch of deletes.
@@ -78,6 +77,11 @@ pub enum MessageIndexError {
     /// Sending more makes it worse, so the job stops.
     #[error("{0}")]
     Refused(String),
+    /// Some documents of the batch failed to delete. The job stops before its
+    /// cursor moves past them, so a resume repeats the page; deleting again is
+    /// harmless.
+    #[error("{0}")]
+    ItemsFailed(String),
     #[error("{0:?}")]
     Internal(Report),
 }
@@ -185,7 +189,7 @@ impl<I: ChatMessageIndex, R: ChatRows> DeletedChatMessageRepair<I, R> {
                     processed: page.read,
                     updated: page.delete.deleted,
                     missing: page.gone,
-                    failed: page.delete.failed,
+                    failed: 0,
                 })
                 .await;
             read += page.read;
@@ -220,7 +224,6 @@ impl<I: ChatMessageIndex, R: ChatRows> DeletedChatMessageRepair<I, R> {
             gone_with_chat = Empty,
             deleted = Empty,
             not_found = Empty,
-            failed = Empty,
             last_message_id = Empty,
             outcome = Empty,
         ),
@@ -287,18 +290,21 @@ impl<I: ChatMessageIndex, R: ChatRows> DeletedChatMessageRepair<I, R> {
                 .collect::<HashSet<_>>()
                 .into_iter()
                 .collect();
-            // Only a span field reads this, so replica lag is harmless.
-            let chats = self
-                .replica
-                .existing_chats(&chat_ids)
-                .await
-                .map_err(source_failed)?;
-            span.record(
-                "gone_with_chat",
-                gone.iter()
-                    .filter(|message| !chats.contains(&message.chat_id))
-                    .count(),
-            );
+            // Only a span field reads this, so replica lag is harmless and a
+            // failed lookup leaves the field unset instead of stopping the page.
+            match self.replica.existing_chats(&chat_ids).await {
+                Ok(chats) => {
+                    span.record(
+                        "gone_with_chat",
+                        gone.iter()
+                            .filter(|message| !chats.contains(&message.chat_id))
+                            .count(),
+                    );
+                }
+                Err(error) => {
+                    tracing::warn!(error = ?error, "could not look up the chats of gone messages");
+                }
+            }
         }
 
         let delete = if dry_run || gone.is_empty() {
@@ -313,6 +319,13 @@ impl<I: ChatMessageIndex, R: ChatRows> DeletedChatMessageRepair<I, R> {
                         cursor: after_message_id.map(str::to_owned),
                     });
                 }
+                Err(MessageIndexError::ItemsFailed(reason)) => {
+                    span.record("outcome", "items_failed");
+                    return Err(BackfillError::Stopped {
+                        reason,
+                        cursor: after_message_id.map(str::to_owned),
+                    });
+                }
                 Err(MessageIndexError::Internal(e)) => {
                     span.record("outcome", "index_failed");
                     return Err(BackfillError::Index(anyhow::anyhow!("{e:#}")));
@@ -321,16 +334,6 @@ impl<I: ChatMessageIndex, R: ChatRows> DeletedChatMessageRepair<I, R> {
         };
         span.record("deleted", delete.deleted);
         span.record("not_found", delete.not_found);
-        span.record("failed", delete.failed);
-        if delete.failed > 0 {
-            // Stop before the cursor moves past them, so a resume repeats the
-            // page; deleting again is harmless.
-            span.record("outcome", "items_failed");
-            return Err(BackfillError::Stopped {
-                reason: format!("{} message documents failed to delete", delete.failed),
-                cursor: after_message_id.map(str::to_owned),
-            });
-        }
         span.record("outcome", "finished");
 
         Ok(Some(FinishedPage {

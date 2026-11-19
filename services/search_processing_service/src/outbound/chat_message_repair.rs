@@ -54,32 +54,19 @@ impl ChatMessageIndex for OpenSearchChatMessages {
             .0
             .delete_indexed_chat_messages(&messages)
             .await
-            .map_err(|error| match error {
-                OpensearchClientError::WritesRefused { .. } => {
+            .map_err(|error| {
+                if error.refusal().is_some() {
                     MessageIndexError::Refused(error.to_string())
+                } else if let OpensearchClientError::BulkItemsFailed { .. } = error {
+                    MessageIndexError::ItemsFailed(error.to_string())
+                } else {
+                    MessageIndexError::Internal(Report::new(error).into_dynamic())
                 }
-                error => MessageIndexError::Internal(Report::new(error).into_dynamic()),
             })?;
-
-        if !result.failed.is_empty() {
-            let failed: Vec<_> = result
-                .failed
-                .iter()
-                .map(|item| {
-                    (
-                        item.document_id.as_str(),
-                        item.status,
-                        item.error_type.as_str(),
-                    )
-                })
-                .collect();
-            tracing::warn!(?failed, "search index failed to delete chat messages");
-        }
 
         Ok(MessageDelete {
             deleted: result.deleted,
             not_found: result.not_found,
-            failed: result.failed.len(),
         })
     }
 }

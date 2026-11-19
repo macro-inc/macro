@@ -4,7 +4,7 @@
 use crate::{
     Result,
     error::{OpensearchClientError, OpensearchOperation, write_refusal},
-    upsert::chat_message::CHILD_RELATION,
+    upsert::{REPORTED_ITEM_ERRORS, chat_message::CHILD_RELATION},
 };
 
 #[cfg(test)]
@@ -30,17 +30,6 @@ pub struct ChatMessageDeleteResult {
     pub deleted: usize,
     /// Documents already absent, such as ones a live delete removed first.
     pub not_found: usize,
-    /// Items OpenSearch failed for any other reason.
-    pub failed: Vec<FailedChatMessageDelete>,
-}
-
-/// One message document OpenSearch failed to delete.
-#[derive(Debug, PartialEq, Eq)]
-pub struct FailedChatMessageDelete {
-    pub document_id: String,
-    pub status: u16,
-    /// OpenSearch's `error.type`.
-    pub error_type: String,
 }
 
 /// Up to `size` message documents of `index` whose message id sorts after
@@ -133,8 +122,11 @@ fn parse_chat_message_page(body: &str) -> Result<Vec<IndexedChatMessage>> {
 }
 
 /// Delete `messages` from `index` in one `_bulk` request, each routed to its
-/// chat's shard. A refusal of the request or of any item fails the whole call
-/// with [`OpensearchClientError::WritesRefused`].
+/// chat's shard. A refused request fails with
+/// [`OpensearchClientError::WritesRefused`]; any failed item, other than a
+/// document already gone, fails the call with
+/// [`OpensearchClientError::BulkItemsFailed`], whose `refusal()` is set when
+/// OpenSearch refused an item to protect itself.
 pub(crate) async fn delete_chat_messages(
     client: &opensearch::OpenSearch,
     index: &str,
@@ -201,6 +193,9 @@ fn classify_delete_response(status: u16, body: &str) -> Result<ChatMessageDelete
         }
     })?;
     let mut result = ChatMessageDeleteResult::default();
+    let mut failed = 0;
+    let mut refusal = None;
+    let mut errors: Vec<String> = Vec::new();
     for item in items {
         let delete = &item["delete"];
         let item_status = delete["status"]
@@ -216,20 +211,27 @@ fn classify_delete_response(status: u16, body: &str) -> Result<ChatMessageDelete
             continue;
         }
 
+        failed += 1;
         let error = &delete["error"];
-        if let Some(cause) = write_refusal(item_status, error) {
-            return Err(OpensearchClientError::WritesRefused {
-                details: error.to_string(),
-                cause,
-                operation: OPERATION,
-            });
+        refusal = refusal.or(write_refusal(item_status, error));
+        let described = format!(
+            "{}: {}",
+            error["type"].as_str().unwrap_or("unknown"),
+            error["reason"].as_str().unwrap_or_default()
+        );
+        if errors.len() < REPORTED_ITEM_ERRORS && !errors.contains(&described) {
+            errors.push(described);
         }
-        result.failed.push(FailedChatMessageDelete {
-            document_id: delete["_id"].as_str().unwrap_or_default().to_owned(),
-            status: item_status,
-            error_type: error["type"].as_str().unwrap_or_default().to_owned(),
-        });
     }
 
+    if failed > 0 {
+        return Err(OpensearchClientError::BulkItemsFailed {
+            failed,
+            total: items.len(),
+            refusal,
+            errors,
+            operation: OPERATION,
+        });
+    }
     Ok(result)
 }
