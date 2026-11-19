@@ -13,7 +13,7 @@ use serde::Serialize;
 use suggestions::domain::model::{GenerationTrigger, RoutineText};
 
 use super::model::{
-    CheckedSuggestion, GenerationStatus, RetireSuggestion, RoutineGenerationReport,
+    CheckedSuggestion, GenerationStatus, RetireSuggestion, RoutineBrief, RoutineGenerationReport,
     RoutineSuggestions, StoredSuggestion, SuggestOutcome, SuggestRequest, SuggestionReview,
 };
 use super::state::Transition;
@@ -151,15 +151,16 @@ pub trait RoutineSuggestionApi: Send + Sync + 'static {
     ) -> impl Future<Output = Result<RoutineSuggestions>> + Send;
 
     /// What a routines session suggesting for `surfaces`, of a generation
-    /// started by `trigger`, is told: the person's newest mail and apps as
-    /// untrusted data, the catalog, and what they dismissed.
+    /// started by `trigger`, is told: instructions with the task and the
+    /// catalog, the same for every person, and a prompt with the person's
+    /// newest mail and apps as untrusted data and what they dismissed.
     fn brief(
         &self,
         user: &MacroUserIdStr<'static>,
         surfaces: &[Surface],
         trigger: GenerationTrigger,
         timezone: chrono_tz::Tz,
-    ) -> impl Future<Output = Result<String>> + Send;
+    ) -> impl Future<Output = Result<RoutineBrief>> + Send;
 
     /// How the person's suggestions `ids` that drafted a routine read on
     /// their cards in the Suggestions feed, with one-off times in

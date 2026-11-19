@@ -206,9 +206,12 @@ each run.
   themselves belong to generations (`crates/suggestion_generation`: an
   onboarding run once the inbox connects, then nightly, and on request), which brief each
   routines session through `RoutineSuggestionApi::brief` (`suggestions/prompt.rs`:
-  the routines guide, the catalog for its surfaces, what was dismissed, and the
-  newest 100 messages and connected apps inside `<untrusted>` tags, angle
-  brackets in the data swapped so it can't close them; a nightly or manual
+  instructions with the task, the routines guide and the catalog for its
+  surfaces, the same for everyone so the session keeps them in its cached
+  prefix and runs out of sight with code mode alone, like a draft; then a
+  prompt with the time, what was dismissed, and the newest 100 messages and
+  connected apps inside `<untrusted>` tags, angle brackets in the data swapped
+  so it can't close them; a nightly or manual
   brief adds review and retire, and only onboarding's asks for speed; a
   drafted routine is told to start on mail only where saving one can: the
   person has `enable-event-routines` and the deployment evaluates conditions) and

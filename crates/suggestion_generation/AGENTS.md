@@ -24,6 +24,11 @@ scheduling runtime.
   tools while its `suggestion_generation_session` row is open. Its brief comes
   from the kind's crate (`SuggestionApi::brief`, `RoutineSuggestionApi::brief`),
   which words it for the trigger: only onboarding says the person is waiting.
+  A routines session is prepared with its brief's instructions (the same for
+  everyone, so they are read back from the prompt cache), which makes it an
+  unseen session in `agent_inmem`: a short prompt, code mode's tools alone,
+  low reasoning effort where its model takes one. The suggestions session has
+  none and runs as a conversation would.
 - Code here only schedules, waits, cleans up and logs. The sessions do all
   judging through the tools; no reconciliation, ranking or retiring here.
 - The lifecycles are pure tables in `src/domain/`, each tested over every

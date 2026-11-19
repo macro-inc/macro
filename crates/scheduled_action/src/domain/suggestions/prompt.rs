@@ -1,5 +1,6 @@
-//! What a suggestion session is told: the brief, with the person's mail
-//! and apps as untrusted data.
+//! What a suggestion session is told: instructions every session on the same
+//! surfaces shares, then a prompt with the person's mail and apps as
+//! untrusted data.
 
 use chrono::{SecondsFormat, Utc};
 use routine_program::{CATALOG, CODE_STEPS, CatalogRoutine, STEP_CONTEXT, Surface};
@@ -8,6 +9,7 @@ use serde_json::{Value, json};
 use suggestions::domain::model::GenerationTrigger;
 
 use super::decode::line;
+use super::model::RoutineBrief;
 use super::ports::InboxMessage;
 
 #[cfg(test)]
@@ -80,8 +82,8 @@ const WEEKLY_REVIEW: &str = "Where this differs from the rest of the brief, \
     read the routine-writing docs. Suggestions are never rewritten; retire one and \
     suggest a better one instead.";
 
-/// The session's one prompt.
-pub fn brief(data: &BriefData<'_>) -> String {
+/// What the session keeps as its instructions, and its one prompt.
+pub fn brief(data: &BriefData<'_>) -> RoutineBrief {
     let surfaces = data
         .surfaces
         .iter()
@@ -139,10 +141,8 @@ pub fn brief(data: &BriefData<'_>) -> String {
         .filter_map(|app| line(app, MAX_NAME_CHARS))
         .collect();
     let guide = data.guide.trim();
-    format!(
+    let instructions = format!(
         "{task}
-Now is {now}; the user's time zone is {timezone}. Cron schedules take `timezone: '{timezone}'`.
-
 <routines-guide>
 {guide}
 </routines-guide>
@@ -150,7 +150,11 @@ Now is {now}; the user's time zone is {timezone}. Cron schedules take `timezone:
 {steps}
 
 Macro's catalog, for your surfaces (written by Macro):
-{catalog}
+{catalog}",
+        catalog = Value::Array(catalog),
+    );
+    let prompt = format!(
+        "Now is {now}; the user's time zone is {timezone}. Cron schedules take `timezone: '{timezone}'`.
 
 Already suggested or dismissed, never to suggest again (catalog keys and routine names):
 {dismissed}
@@ -164,11 +168,14 @@ The user's newest mail, newest first:
 <untrusted>
 {inbox}
 </untrusted>",
-        catalog = Value::Array(catalog),
         dismissed = json!(data.dismissed),
         apps = json!(apps),
         inbox = Value::Array(inbox),
-    )
+    );
+    RoutineBrief {
+        instructions,
+        prompt,
+    }
 }
 
 fn catalog_entry(routine: &CatalogRoutine) -> Value {

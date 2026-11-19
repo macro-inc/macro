@@ -45,7 +45,7 @@ use suggestions::domain::model::{GenerationSession, GenerationTrigger, RoutineTe
 use suggestions::domain::ports::GenerationSessions;
 
 use self::model::{
-    GenerationStatus, RetireSuggestion, ReviewedSuggestion, RoutineGenerationReport,
+    GenerationStatus, RetireSuggestion, ReviewedSuggestion, RoutineBrief, RoutineGenerationReport,
     RoutineSuggestion, RoutineSuggestions, StoredPick, StoredSuggestion, SuggestOutcome,
     SuggestRequest, SuggestedPick, SuggestionFrom, SuggestionReview,
 };
@@ -420,7 +420,7 @@ where
         surfaces: &[Surface],
         trigger: GenerationTrigger,
         timezone: Tz,
-    ) -> Result<String> {
+    ) -> Result<RoutineBrief> {
         // A drafted routine starts on mail through a condition, and saving
         // one needs both conditions and this flag: told otherwise, a session
         // would draft what a check refuses.

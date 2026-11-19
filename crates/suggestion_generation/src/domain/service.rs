@@ -37,7 +37,7 @@ use macro_user_id::user_id::MacroUserIdStr;
 use macro_uuid::Uuid;
 use routine_program::Surface;
 use scheduled_action::domain::suggestions::ROUTINE_SUGGESTIONS_FLAG;
-use scheduled_action::domain::suggestions::model::RoutineGenerationReport;
+use scheduled_action::domain::suggestions::model::{RoutineBrief, RoutineGenerationReport};
 use scheduled_action::domain::suggestions::ports::RoutineSuggestionApi;
 use suggestions::domain::model::{GenerationTrigger, SessionKind};
 use suggestions::domain::ports::SuggestionApi;
@@ -159,6 +159,24 @@ struct Ended {
     /// The session, when its cleanup waits for its generation's end to be
     /// stored: its process is stopping.
     deferred: Option<RoutineSessionAction>,
+}
+
+/// What a session is told. With `instructions`, the same for every session
+/// of its kind, it keeps them in its cached prompt prefix and works out of
+/// sight, with code mode's tools alone (see `agent_inmem`); `prompt` is its
+/// one prompt, with what is particular to the person.
+struct Brief {
+    instructions: Option<String>,
+    prompt: String,
+}
+
+impl From<RoutineBrief> for Brief {
+    fn from(brief: RoutineBrief) -> Self {
+        Self {
+            instructions: Some(brief.instructions),
+            prompt: brief.prompt,
+        }
+    }
 }
 
 /// One routines session group's end, and whether it took a second try.
@@ -904,7 +922,10 @@ where
 
     /// The generation's one suggestions session.
     async fn suggestions_session(&self, run: &Run, stop: Stop<'_>) -> Ended {
-        let brief = self.suggestions.brief(run.trigger, run.timezone);
+        let brief = Brief {
+            instructions: None,
+            prompt: self.suggestions.brief(run.trigger, run.timezone),
+        };
         self.session(run, SessionKind::Suggestions, &[], brief, 1, stop)
             .await
     }
@@ -950,7 +971,7 @@ where
             .brief(&run.user, surfaces, run.trigger, run.timezone)
             .await
         {
-            Ok(brief) => brief,
+            Ok(brief) => Brief::from(brief),
             Err(error) => {
                 tracing::warn!(error = ?error, "could not brief a routines session");
                 return Ended {
@@ -977,7 +998,7 @@ where
         run: &Run,
         kind: SessionKind,
         surfaces: &[String],
-        brief: String,
+        brief: Brief,
         attempt: u8,
         stop: Stop<'_>,
     ) -> Ended {
@@ -1113,7 +1134,7 @@ where
     async fn turn(
         &self,
         action: &RoutineSessionAction,
-        brief: String,
+        brief: Brief,
         reads: &AtomicU32,
     ) -> Result<(SessionEnding, Option<&'static str>), RoutineSessionError> {
         self.sessions
@@ -1134,13 +1155,13 @@ where
                 },
                 // Its turns are metered but never billed.
                 billing: SessionBilling::NonBillable,
-                instructions: None,
+                instructions: brief.instructions,
             })
             .await?;
         self.sessions
             .prompt(PromptRoutineSession {
                 action: action.clone(),
-                prompt: brief,
+                prompt: brief.prompt,
                 context: None,
             })
             .await?;

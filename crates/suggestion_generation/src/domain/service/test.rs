@@ -11,7 +11,8 @@ use feature_flags::outbound::fake::FakeFeatureFlags;
 use feature_flags::{FlagSnapshot, FlagValue};
 use model_owner::CreationPrincipal;
 use scheduled_action::domain::suggestions::model::{
-    RetireSuggestion, RoutineSuggestions, SuggestOutcome, SuggestRequest, SuggestionReview,
+    RetireSuggestion, RoutineBrief, RoutineSuggestions, SuggestOutcome, SuggestRequest,
+    SuggestionReview,
 };
 use suggestions::domain::model::{
     AttachDraft, NewSuggestion, RetireSuggestionRequest, RewriteSuggestion, SuggestionCaller,
@@ -233,8 +234,11 @@ impl RoutineSuggestionApi for FakeRoutines {
         surfaces: &[Surface],
         trigger: GenerationTrigger,
         _: Tz,
-    ) -> anyhow::Result<String> {
-        Ok(format!("routines {} {surfaces:?}", trigger.as_ref()))
+    ) -> anyhow::Result<RoutineBrief> {
+        Ok(RoutineBrief {
+            instructions: "routines instructions".to_owned(),
+            prompt: format!("routines {} {surfaces:?}", trigger.as_ref()),
+        })
     }
 
     async fn texts(
@@ -1136,6 +1140,16 @@ async fn onboarding_runs_one_suggestions_session_and_a_routines_session_per_grou
         assert_eq!(session.selection.owner, user());
         assert_eq!(session.selection.model.as_deref(), Some("test-model"));
     }
+    // Routines sessions keep their kind's instructions, and so work out of
+    // sight; the suggestions session has none.
+    let mut instructions: Vec<_> = prepared
+        .iter()
+        .map(|session| session.instructions.as_deref())
+        .collect();
+    instructions.sort_unstable();
+    let mut told = vec![None];
+    told.extend(std::iter::repeat_n(Some("routines instructions"), groups));
+    assert_eq!(instructions, told);
     // Every session finished, was deleted without a stop, and its row
     // records both.
     assert_eq!(h.sessions.deleted().len(), groups + 1);

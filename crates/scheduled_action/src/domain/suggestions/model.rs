@@ -289,3 +289,16 @@ pub struct RoutineGenerationReport {
     pub started_at: DateTime<Utc>,
     pub duration_ms: u64,
 }
+
+/// What a routines session is told, in two parts.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct RoutineBrief {
+    /// The task, the routines guide and the catalog: the same for every
+    /// session on the same surfaces, trigger and abilities, so the session
+    /// keeps them in its cached prompt prefix, and a session given them works
+    /// out of sight, with only code mode's tools.
+    pub instructions: String,
+    /// The person's own part: the time, what they dismissed, their apps and
+    /// their newest mail, as untrusted data.
+    pub prompt: String,
+}

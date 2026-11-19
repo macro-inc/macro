@@ -93,8 +93,9 @@ omits system input from its message projection. PresentReview, GetReview and
 DecideReview are eager internal tools.
 
 A background session (`AgentSession::is_background`) whose opener gave it
-instructions (`PrepareRoutineSession::instructions`), such as a routine draft,
-runs on `ReplyDelivery::Unseen` (the harness's `reply_delivery`); an accepted
+instructions (`PrepareRoutineSession::instructions`), such as a routine draft or
+a generation's routines session, runs on `ReplyDelivery::Unseen` (the
+harness's `reply_delivery`); an accepted
 suggestion's run, opened without any, still streams. An unseen turn reads
 `outbound/rig_engine/unseen.md` as its shared prompt, followed by those
 instructions, so every session of its kind reads them back from the prompt

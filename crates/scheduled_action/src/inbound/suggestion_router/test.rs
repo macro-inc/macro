@@ -13,8 +13,8 @@ use serde_json::{Value, json};
 use super::{RoutineSuggestionRouterState, routine_suggestion_router};
 use crate::domain::models::ActionPolicyError;
 use crate::domain::suggestions::model::{
-    GenerationStatus, RetireSuggestion, RoutineSuggestion, RoutineSuggestions, SuggestOutcome,
-    SuggestRequest, SuggestedPick, SuggestionFrom, SuggestionReview,
+    GenerationStatus, RetireSuggestion, RoutineBrief, RoutineSuggestion, RoutineSuggestions,
+    SuggestOutcome, SuggestRequest, SuggestedPick, SuggestionFrom, SuggestionReview,
 };
 use crate::domain::suggestions::ports::RoutineSuggestionApi;
 use crate::inbound::axum_router::test::{FakeAuth, request};
@@ -59,7 +59,7 @@ impl RoutineSuggestionApi for Suggestions {
         _: &[Surface],
         _: suggestions::domain::model::GenerationTrigger,
         _: chrono_tz::Tz,
-    ) -> Result<String> {
+    ) -> Result<RoutineBrief> {
         unreachable!("routes never brief")
     }
 
