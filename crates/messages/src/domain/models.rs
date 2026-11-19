@@ -504,6 +504,14 @@ impl Message {
     pub fn root_id(&self) -> Uuid {
         self.thread_id.unwrap_or(self.id)
     }
+
+    /// Whether `bot` posted this message for `user`. Only then may a tool
+    /// acting as `bot` for `user` change the message as the bot; every other
+    /// change goes through the user's own receipt and authorship rules.
+    pub fn posted_by_bot_for(&self, bot: bot_id::BotId, user: &str) -> bool {
+        self.sender_id.as_bot().map(|sender| sender.bot_id()) == Some(bot)
+            && self.triggered_by.as_deref() == Some(user)
+    }
 }
 
 /// A discussion with its root and ordered replies, including root tombstones.

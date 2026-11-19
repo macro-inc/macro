@@ -5,7 +5,10 @@ use chrono::{DateTime, Utc};
 use hosted_runtimes::domain::{
     ids::ComputerId,
     lifecycle::{PurchaseRefund, SubscriptionItemId},
-    models::{BillingInterval, Quote, SubscriptionItem},
+    models::{
+        BillingInterval, CardBrand, PaymentCard, PurchaseBilling, PurchaseQuote, PurchaseTerms,
+        Quote, SubscriptionItem,
+    },
     ports::{Billing, BillingError, ChargeStatus, ComputerRepo, ItemCharge},
     service::{Clock, ComputerService, SubscriptionObserved},
     size::ComputerSize,
@@ -87,6 +90,85 @@ impl<Teams: TeamSubscriptionItems> Billing for TeamComputerBilling<Teams> {
             amount: price.amount,
             currency: price.currency,
             interval,
+        })
+    }
+
+    #[tracing::instrument(skip(self, billing), fields(sizes = sizes.len()), err)]
+    async fn purchase_terms(
+        &self,
+        team_id: Uuid,
+        sizes: &[ComputerSize],
+        billing: &PurchaseBilling,
+    ) -> Result<PurchaseTerms, BillingError> {
+        if self.prices.is_empty() {
+            return Err(BillingError::NotAvailable);
+        }
+        let payment = self
+            .teams
+            .team_payment_terms(&team_id)
+            .await
+            .map_err(billing_error)?;
+        if let PurchaseBilling::Stripe = billing
+            && payment.terms.trialing
+        {
+            return Err(BillingError::TeamOnTrial);
+        }
+        let mut quotes = Vec::with_capacity(sizes.len());
+        for &size in sizes {
+            let (price_id, interval) = self.computer_price(size, &payment.terms)?;
+            let price = self.teams.price(&price_id).await.map_err(billing_error)?;
+            quotes.push(Quote {
+                size,
+                price_id,
+                amount: price.amount,
+                currency: price.currency,
+                interval,
+            });
+        }
+        let due_today = match billing {
+            PurchaseBilling::Stripe => {
+                let prices: Vec<stripe::PriceId> =
+                    quotes.iter().map(|quote| quote.price_id.clone()).collect();
+                let charges = self
+                    .teams
+                    .preview_item_prorations(&team_id, &prices)
+                    .await
+                    .map_err(billing_error)?;
+                if charges.len() != prices.len()
+                    || charges
+                        .iter()
+                        .zip(&prices)
+                        .any(|(charge, price_id)| &charge.price_id != price_id)
+                {
+                    return Err(BillingError::Provider(rootcause::report!(
+                        "the invoice preview answered other prices than asked"
+                    )));
+                }
+                // Each purchase alone: the credit is applied to its invoice
+                // before the card is charged.
+                charges
+                    .into_iter()
+                    .map(|charge| (charge.amount - payment.credit).max(0))
+                    .collect()
+            }
+            // Nothing is invoiced for a computer the team doesn't pay for.
+            PurchaseBilling::Comped { .. } => vec![0; quotes.len()],
+        };
+        Ok(PurchaseTerms {
+            quotes: quotes
+                .into_iter()
+                .zip(due_today)
+                .map(|(quote, due_today)| PurchaseQuote { quote, due_today })
+                .collect(),
+            renews_at: payment.terms.current_period_end,
+            card: match billing {
+                PurchaseBilling::Stripe => payment.card.map(|card| PaymentCard {
+                    brand: card_brand(card.brand),
+                    last4: card.last4,
+                }),
+                // Nothing is charged, so no card is named.
+                PurchaseBilling::Comped { .. } => None,
+            },
         })
     }
 
@@ -285,6 +367,21 @@ impl<Teams: TeamSubscriptionItems> Billing for TeamComputerBilling<Teams> {
     }
 }
 
+fn card_brand(brand: teams::domain::model::CardBrand) -> CardBrand {
+    use teams::domain::model::CardBrand as Teams;
+    match brand {
+        Teams::Amex => CardBrand::Amex,
+        Teams::Diners => CardBrand::Diners,
+        Teams::Discover => CardBrand::Discover,
+        Teams::EftposAu => CardBrand::EftposAu,
+        Teams::Jcb => CardBrand::Jcb,
+        Teams::Mastercard => CardBrand::Mastercard,
+        Teams::Unionpay => CardBrand::Unionpay,
+        Teams::Visa => CardBrand::Visa,
+        Teams::Unknown => CardBrand::Unknown,
+    }
+}
+
 fn billing_error(error: TeamSubscriptionItemsError) -> BillingError {
     match error {
         TeamSubscriptionItemsError::NoSubscription
@@ -298,6 +395,9 @@ fn billing_error(error: TeamSubscriptionItemsError) -> BillingError {
         TeamSubscriptionItemsError::Customer(
             CustomerError::PaymentFailed | CustomerError::ItemChangeAbandoned,
         ) => BillingError::PaymentFailed,
+        TeamSubscriptionItemsError::Customer(CustomerError::ItemChangeInFlight) => {
+            BillingError::ChangeInFlight
+        }
         error => BillingError::Provider(rootcause::Report::new(error).into_dynamic()),
     }
 }

@@ -35,6 +35,8 @@ use crate::domain::{
 };
 
 const USER: &str = "macro|commenter@example.com";
+/// Another user with comment access to the same item.
+const OTHER_USER: &str = "macro|other-commenter@example.com";
 const INITIATIVE: Uuid = Uuid::from_u128(0x019fd3b9_3c6c_7c05_89c2_a27f0121813b);
 const THREAD: Uuid = Uuid::from_u128(7);
 const REPLY: Uuid = Uuid::from_u128(8);
@@ -107,6 +109,8 @@ struct FakeMessages {
     comment_author: Option<ChannelSender<'static>>,
     /// Whether the stored comment is a reply rather than a thread's first comment.
     comment_is_reply: bool,
+    /// The user a bot-authored stored comment was posted for.
+    comment_triggered_by: Option<&'static str>,
     /// Refuse every comment edit or delete as the message service refuses a non-author.
     forbid_changes: bool,
     /// Threads the timeline lists, newest first. The preview holds one
@@ -129,6 +133,7 @@ impl Default for FakeMessages {
             thread_exists: true,
             comment_author: None,
             comment_is_reply: false,
+            comment_triggered_by: None,
             forbid_changes: false,
             threads: vec![],
             parent_lookups: Arc::default(),
@@ -148,14 +153,55 @@ impl FakeMessages {
         }
     }
 
+    /// A comment the tool actor bot posted for `user`.
+    fn with_assistant_comment_for(user: &'static str) -> Self {
+        Self {
+            comment_triggered_by: Some(user),
+            ..Self::with_comment_by(bot_sender())
+        }
+    }
+
     fn stored_comment(&self, id: Uuid) -> Message {
-        message(
-            id,
-            self.comment_is_reply.then_some(THREAD),
-            self.comment_author
-                .clone()
-                .expect("test configured a stored comment"),
-        )
+        Message {
+            triggered_by: self.comment_triggered_by.map(ToOwned::to_owned),
+            ..message(
+                id,
+                self.comment_is_reply.then_some(THREAD),
+                self.comment_author
+                    .clone()
+                    .expect("test configured a stored comment"),
+            )
+        }
+    }
+
+    /// The message service's authorship rule for a Discussion: the receipt's
+    /// actor must be the stored sender, except that the item's owner may
+    /// delete any comment.
+    fn authorize(
+        &self,
+        access: &EntityAccessReceipt<MessageWrite>,
+        id: Uuid,
+        owner_may: bool,
+    ) -> Result<(), MessageError> {
+        if self.forbid_changes {
+            return Err(MessageError::Forbidden);
+        }
+        let actor = match access.auth() {
+            EntityAccessAuth::Authenticated(user) => user.as_ref().to_owned(),
+            EntityAccessAuth::Bot(bot) => bot.bot_id_str().as_ref().to_owned(),
+            _ => return Err(MessageError::Forbidden),
+        };
+        let owner = matches!(
+            access.entity_permission(),
+            EntityPermission::AccessLevel {
+                access_level: AccessLevel::Owner
+            }
+        );
+        if actor == self.stored_comment(id).sender_id.as_ref() || (owner_may && owner) {
+            Ok(())
+        } else {
+            Err(MessageError::Forbidden)
+        }
     }
 }
 
@@ -263,9 +309,7 @@ impl MessageCommands for FakeMessages {
         id: Uuid,
         input: MessagePatch,
     ) -> Result<Message, MessageError> {
-        if self.forbid_changes {
-            return Err(MessageError::Forbidden);
-        }
+        self.authorize(&access, id, false)?;
         self.comment_patches
             .lock()
             .unwrap()
@@ -278,9 +322,7 @@ impl MessageCommands for FakeMessages {
         id: Uuid,
         _nonce: Option<String>,
     ) -> Result<Message, MessageError> {
-        if self.forbid_changes {
-            return Err(MessageError::Forbidden);
-        }
+        self.authorize(&access, id, true)?;
         self.comment_deletes.lock().unwrap().push((access, id));
         Ok(self.stored_comment(id))
     }
@@ -989,8 +1031,8 @@ async fn edit_comment_rewrites_the_users_own_comment_as_the_user() {
 }
 
 #[tokio::test]
-async fn edit_comment_rewrites_the_assistants_comment_as_the_bot() {
-    let messages = FakeMessages::with_comment_by(bot_sender());
+async fn edit_comment_rewrites_the_assistants_comment_for_the_user_as_the_bot() {
+    let messages = FakeMessages::with_assistant_comment_for(USER);
     let patches = messages.comment_patches.clone();
 
     EditComment {
@@ -1082,6 +1124,116 @@ async fn delete_comment_explains_who_can_delete() {
         "{}",
         error.description
     );
+}
+
+#[tokio::test]
+async fn edit_comment_cannot_rewrite_the_assistants_comment_for_another_user() {
+    let messages = FakeMessages::with_assistant_comment_for(OTHER_USER);
+    let patches = messages.comment_patches.clone();
+
+    let error = EditComment {
+        comment_id: THREAD,
+        content: "rewritten".to_owned(),
+    }
+    .call(context(AccessLevel::Comment, messages), request())
+    .await
+    .expect_err("the assistant's comment for another user is not the caller's to edit");
+
+    assert!(
+        error.description.contains("author"),
+        "{}",
+        error.description
+    );
+    assert!(patches.lock().unwrap().is_empty());
+}
+
+#[tokio::test]
+async fn edit_comment_cannot_rewrite_an_unattributed_assistant_comment() {
+    let messages = FakeMessages::with_comment_by(bot_sender());
+    let patches = messages.comment_patches.clone();
+
+    EditComment {
+        comment_id: THREAD,
+        content: "rewritten".to_owned(),
+    }
+    .call(context(AccessLevel::Comment, messages), request())
+    .await
+    .expect_err("a comment the assistant posted for nobody is nobody's to edit as the assistant");
+
+    assert!(patches.lock().unwrap().is_empty());
+}
+
+#[tokio::test]
+async fn delete_comment_deletes_the_assistants_comment_for_the_user_as_the_bot() {
+    for is_reply in [false, true] {
+        let messages = FakeMessages {
+            comment_is_reply: is_reply,
+            ..FakeMessages::with_assistant_comment_for(USER)
+        };
+        let deletes = messages.comment_deletes.clone();
+
+        let response = DeleteComment {
+            comment_id: if is_reply { REPLY } else { THREAD },
+        }
+        .call(context(AccessLevel::Comment, messages), request())
+        .await
+        .expect("the user can delete what the assistant posted for them");
+
+        assert_eq!(response.deleted_thread, !is_reply);
+        assert_bot_on_initiative(&deletes.lock().unwrap()[0].0);
+    }
+}
+
+#[tokio::test]
+async fn delete_comment_cannot_delete_the_assistants_reply_for_another_user() {
+    let messages = FakeMessages {
+        comment_is_reply: true,
+        ..FakeMessages::with_assistant_comment_for(OTHER_USER)
+    };
+    let deletes = messages.comment_deletes.clone();
+
+    let error = DeleteComment { comment_id: REPLY }
+        .call(context(AccessLevel::Comment, messages), request())
+        .await
+        .expect_err("the assistant's reply for another user is not the caller's to delete");
+
+    assert!(
+        error.description.contains("author"),
+        "{}",
+        error.description
+    );
+    assert!(deletes.lock().unwrap().is_empty());
+}
+
+#[tokio::test]
+async fn delete_comment_cannot_delete_a_thread_the_assistant_started_for_another_user() {
+    let messages = FakeMessages::with_assistant_comment_for(OTHER_USER);
+    let deletes = messages.comment_deletes.clone();
+
+    let error = DeleteComment { comment_id: THREAD }
+        .call(context(AccessLevel::Comment, messages), request())
+        .await
+        .expect_err("the assistant's thread for another user is not the caller's to delete");
+
+    assert!(
+        error.description.contains("author"),
+        "{}",
+        error.description
+    );
+    assert!(deletes.lock().unwrap().is_empty());
+}
+
+#[tokio::test]
+async fn the_items_owner_deletes_the_assistants_comment_for_another_user_as_themselves() {
+    let messages = FakeMessages::with_assistant_comment_for(OTHER_USER);
+    let deletes = messages.comment_deletes.clone();
+
+    DeleteComment { comment_id: THREAD }
+        .call(context(AccessLevel::Owner, messages), request())
+        .await
+        .expect("the owner moderates any comment, as in the app");
+
+    assert_user_on_initiative(&deletes.lock().unwrap()[0].0);
 }
 
 #[test]

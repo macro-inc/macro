@@ -25,6 +25,7 @@ fn check(name: &str) -> RoutineCheck {
             run_visibility: Default::default(),
             description: String::new(),
         },
+        missing_apps: Vec::new(),
     }
 }
 

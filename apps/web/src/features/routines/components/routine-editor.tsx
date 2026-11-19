@@ -1,13 +1,13 @@
 import { ViewBreadcrumbs, ViewShell } from '@app/components/view-shell';
 import { t } from '@app/lib/i18n';
 import { InlineTitleEditor } from '@core/component/InlineTitleEditor';
-import ClockIcon from '@icon/system/regular/clock.svg';
-import ClockCounterIcon from '@icon/system/regular/clock-counter-clockwise.svg';
 import { ComposerSurface, cn, TabSelector } from '@ui';
 import { For, type JSX, type ParentProps, Show } from 'solid-js';
+import type { EntityAppearance } from '../../entity-appearance/core/appearance';
 import type { ScheduleDraft } from '../core/draft';
-
+import { triggerKind } from '../core/routine-triggers';
 import { RoutineDescription } from './routine-description';
+import { RoutineIcon } from './routine-icon';
 
 /**
  * The raised card a page section or step sits on: the composer surface
@@ -148,7 +148,14 @@ export function RoutineEditor(props: {
   runCount?: number;
   /** The routine menu, shown right after its name. */
   actions?: JSX.Element;
-  identityIcon?: JSX.Element;
+  /** The icon and colour chosen for the routine; absent until it has one. */
+  appearance?: EntityAppearance | null;
+  /**
+   * Makes the top bar's icon a control, such as the owner's Change icon
+   * button, beside the breadcrumb. Without it the icon is part of the
+   * breadcrumb, which leads back to the page.
+   */
+  identityIcon?: (icon: JSX.Element) => JSX.Element;
   feedback?: JSX.Element;
   /** The routines this routine's runs created; absent when it created none. */
   created?: JSX.Element;
@@ -164,6 +171,18 @@ export function RoutineEditor(props: {
         ];
   const breadcrumbName = () =>
     props.draft.name.trim() || (props.creating ? 'New routine' : 'Untitled');
+  const firstTrigger = () => {
+    const first = props.draft.triggers?.[0];
+    return first ? triggerKind(first) : undefined;
+  };
+  // The top bar and the page's header draw the same icon.
+  const icon = (size: string) => (
+    <RoutineIcon
+      appearance={props.appearance}
+      trigger={firstTrigger()}
+      class={size}
+    />
+  );
   return (
     <ViewBreadcrumbs.Root
       value="routine"
@@ -186,16 +205,16 @@ export function RoutineEditor(props: {
       <ViewBreadcrumbs.Item value="routine" metadata={{}} order={1}>
         {(item) => (
           <div class="flex min-w-0 items-center">
-            {props.identityIcon}
+            <Show when={props.identityIcon}>
+              {(control) => control()(icon('size-4'))}
+            </Show>
             <ViewBreadcrumbs.Button
               class="gap-1.5"
               isActive={item.isActive()}
               onClick={item.onSelect}
               tooltip={breadcrumbName()}
             >
-              <Show when={!props.identityIcon}>
-                <ClockIcon class="size-3 shrink-0" />
-              </Show>
+              <Show when={!props.identityIcon}>{icon('size-4')}</Show>
               <span class="truncate">{breadcrumbName()}</span>
             </ViewBreadcrumbs.Button>
             <Show when={props.actions}>
@@ -207,7 +226,7 @@ export function RoutineEditor(props: {
       <Show when={props.mobile}>
         {props.mobileHeader?.({
           name: breadcrumbName(),
-          identityIcon: props.identityIcon,
+          identityIcon: props.identityIcon?.(icon('size-4')) ?? icon('size-4'),
           headerActions: props.headerActions,
           actions: props.actions,
           onBack: props.onBack,
@@ -225,13 +244,15 @@ export function RoutineEditor(props: {
             class="gap-x-3 gap-y-2 touch:flex @max-[600px]/routine:h-auto @max-[600px]/routine:flex-wrap"
             aria-label="Routine toolbar"
           >
-            <ViewBreadcrumbs.Outlet
-              aria-label="Routine location"
-              class="min-w-0 @max-[600px]/routine:flex-1"
-            />
+            <ViewShell.TopBarTitle class="max-w-fit @max-[600px]/routine:flex-1">
+              <ViewBreadcrumbs.Outlet
+                aria-label="Routine location"
+                class="min-w-0 @max-[600px]/routine:flex-1"
+              />
+            </ViewShell.TopBarTitle>
             <Show when={!props.creating}>
               <div class="shrink-0 @max-[600px]/routine:order-last @max-[600px]/routine:w-full">
-                <TabSelector class="w-fit">
+                <TabSelector class="w-fit touch:pointer-events-auto">
                   <TabSelector.List aria-label="Routine details">
                     <For each={tabs()}>
                       {(tab) => (
@@ -295,7 +316,7 @@ export function RoutineEditor(props: {
                   aria-hidden="true"
                   class="flex size-11 items-center justify-center rounded-xl bg-accent-bg text-accent"
                 >
-                  <ClockCounterIcon class="size-5.5" />
+                  {icon('size-5.5')}
                 </span>
                 <div class="min-w-0">
                   <Show

@@ -46,13 +46,14 @@ export async function markGraphqlEmailThreadSeen(
 export async function markGraphqlEmailThreadUnread(
   client: Client,
   threadId: string,
-  revalidations: readonly QueryRevalidation[] = []
+  revalidations: readonly QueryRevalidation[] = [],
+  uuid?: string
 ): Promise<EmailReadStateDisposition> {
   const result = await client
     .mutation(
       MarkEmailThreadUnreadDocument,
       { input: { threadId } },
-      { optimisticMutation: { revalidations } }
+      { optimisticMutation: { revalidations, uuid } }
     )
     .toPromise();
   return readStateDisposition(

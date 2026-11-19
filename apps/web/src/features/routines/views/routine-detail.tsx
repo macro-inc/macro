@@ -134,7 +134,8 @@ export function RoutineDetailView(props: {
   onCopyPrompt(prompt: string): Promise<void | boolean>;
   onShare?(): void;
   appearanceMenu?: JSX.Element;
-  identityIcon?: JSX.Element;
+  /** Makes the top bar's routine icon a control, e.g. to change it. */
+  identityIcon?: (icon: JSX.Element) => JSX.Element;
   /** Opens an agent conversation about this routine. */
   onCompose?(): void;
   onOpenTemplate?(templateId: string): void;
@@ -201,6 +202,7 @@ export function RoutineDetailView(props: {
         <RoutineEditor
           mobile={isTouchDevice()}
           mobileHeader={props.mobileHeader}
+          appearance={routine().appearance}
           identityIcon={props.identityIcon}
           {...routineSections({
             draft: state,
@@ -216,6 +218,7 @@ export function RoutineDetailView(props: {
                 ? 'You'
                 : getDisplayName(tryMacroId(routine().ownerId)) || 'Owner',
             runsAsDescription: 'Steps and AI act with the owner’s access.',
+            unusableItems: props.source.unusableItems,
             unsupported: (
               <p class="text-sm text-ink-muted">
                 This routine has an unsupported task configuration.
