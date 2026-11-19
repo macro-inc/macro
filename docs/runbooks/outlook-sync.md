@@ -20,7 +20,7 @@ Graph and token spans, so find them by their fields:
 | Its Graph requests | Spans: `@outlook.throttle_origin:* @mailbox.link_id:<id>`; a refused one names Graph's `@graph.error_code` |
 | Token lookups | Spans: `@outlook.token_cache:*` |
 | Deferral logs | Logs: `"mailbox sync work deferred"`, grouped by `@defer_reason` |
-| Its subscription upkeep | Spans: `resource_name:outlook.subscription.maintain @mailbox.link_id:<id>`, field `@outlook.upkeep_failures` (failed runs in a row); mailboxes left on polling: `"outlook mailbox health" @watch_failures:>0` |
+| Its subscription upkeep | Spans: `resource_name:outlook.subscription.maintain @mailbox.link_id:<id>`, field `@outlook.upkeep_failures` (failed runs in a row); mailboxes whose upkeep Graph keeps refusing or failing: `"outlook mailbox health" @watch_failures:>0` (throttled and token-deferred runs are not counted; find those by `@outlook.defer_reason` on the spans) |
 
 Failed, deferred, throttled and slow (over 5 s) Outlook spans are always
 indexed, with their whole trace; successes are sampled.
