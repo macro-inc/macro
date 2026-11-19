@@ -32,9 +32,13 @@ test('a new list split never shows an empty preview behind a toggle', async ({
   await expect(
     page.getByRole('button', { name: 'Show navigation' })
   ).toHaveCount(0);
-  const split = await page.getByTestId('split').boundingBox();
-  const aside = await page.locator('[data-view-shell-aside]').boundingBox();
-  expect(aside!.width).toBeCloseTo(split!.width, 0);
+  await expect
+    .poll(async () => {
+      const split = await page.getByTestId('split').boundingBox();
+      const aside = await page.locator('[data-view-shell-aside]').boundingBox();
+      return Math.round(split!.width - aside!.width);
+    })
+    .toBe(0);
   await expect
     .poll(() =>
       page.getByText('Nothing selected').evaluate((element) => {

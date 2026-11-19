@@ -42,7 +42,6 @@ import {
   createContext,
   createEffect,
   createMemo,
-  createRenderEffect,
   createSignal,
   on,
   onCleanup,
@@ -249,7 +248,7 @@ function DesktopChannelThreads(props: { sources: ChannelsSources }) {
 type ChannelsAsideList = ViewShellRootProps['asideList'];
 
 function ChannelsViewRoot(props: {
-  onAsideListChange: (list: ChannelsAsideList) => void;
+  registerAsideList: (list: (() => ChannelsAsideList) | undefined) => void;
 }) {
   const panel = useSplitPanelOrThrow();
   const {
@@ -270,17 +269,15 @@ function ChannelsViewRoot(props: {
   };
   // Narrow desktop, the rail and the conversation take turns at full width.
   // The loading spinner has no rail to take turns with.
-  createRenderEffect(() =>
-    props.onAsideListChange(
-      isTouchDevice() || sectionsLoading()
-        ? undefined
-        : {
-            open: selectedChannel() !== undefined || threadsTab(),
-            onBack: returnToList,
-          }
-    )
+  props.registerAsideList(() =>
+    isTouchDevice() || sectionsLoading()
+      ? undefined
+      : {
+          open: selectedChannel() !== undefined || threadsTab(),
+          onBack: returnToList,
+        }
   );
-  onCleanup(() => props.onAsideListChange(undefined));
+  onCleanup(() => props.registerAsideList(undefined));
   const [railSearchOpen, setRailSearchOpen] = createSignal(false);
 
   const sources = useChannelsSources(
@@ -572,7 +569,7 @@ export function ChannelDetailRouteView() {
 export function ChannelsView(props: ChannelsViewProps) {
   const inlinePreviewLayout = useInlinePreviewLayout();
   // The selection lives in the provider, which needs the shell around it.
-  const [asideList, setAsideList] = createSignal<ChannelsAsideList>();
+  const [asideList, setAsideList] = createSignal<() => ChannelsAsideList>();
   return (
     <DebugSuspense name="ChannelsView.root">
       <SplitPanel.Root>
@@ -582,12 +579,14 @@ export function ChannelsView(props: ChannelsViewProps) {
             aside={
               inlinePreviewLayout() ? { preserveDuringResize: false } : false
             }
-            asideList={asideList()}
+            asideList={asideList()?.()}
             main={{ preferredWidth: 640 }}
             resizable
           >
             <ChannelsViewProvider initialState={props.initialState}>
-              <ChannelsViewRoot onAsideListChange={setAsideList} />
+              <ChannelsViewRoot
+                registerAsideList={(list) => setAsideList(() => list)}
+              />
             </ChannelsViewProvider>
           </ViewShell.Root>
         </SplitPanel.Body>
