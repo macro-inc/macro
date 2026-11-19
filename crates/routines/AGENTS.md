@@ -30,7 +30,9 @@ The tools reach the scheduler with the internal key, not a session's
 credential, so a routine `CreateRoutine` makes is always top-level, and
 `ListRoutines` returns top-level routines only. Sub-routines come from
 `macro.routines.create` in a routine run's code step or agent session; see
-`crates/scheduled_action/AGENTS.md`.
+`crates/scheduled_action/AGENTS.md`. The tools leave a routine that defines
+sub-routines or inputs, and a copy of one, to its page (`from_saved`'s
+`NotEditableHere`): they can't state either.
 
 ## Scope
 

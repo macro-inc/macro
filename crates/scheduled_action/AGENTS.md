@@ -288,6 +288,30 @@ each run.
   (`FinishedRoutineRun::parent_name`). Spans: `routine.create` (parent, run,
   keyed, outcome `created`/`updated`/`refused_cap`), `routine.follow_parent`,
   `routine.detach`.
+- Defined sub-routines (`routine_program::SubRoutineDefinition`): a
+  routine's program can define `sub_routines` (name, title, typed inputs,
+  steps, apps) and `inputs`. `POST /scheduled-actions/schedule`
+  (`schedule` in `service/sub_routines.rs`) makes a copy under the running
+  routine, by the same `RunCaller` rules and cap as a create: its task is
+  only `{"sub_routine", "inputs"}` (`SubRoutineCopy`), its kind and run
+  visibility are the parent's, and its name is the definition's title
+  unless given. A copy reads its steps from its parent when it runs
+  (`ExecutionHandle::parent`, loaded in `prepare`, and
+  `ExecutionHandle::program`), so an edit to a definition reaches every copy
+  that hasn't run; a copy whose parent is gone fails in `prepare`, and one
+  whose definition is gone or whose inputs no longer fit fails its run. A
+  copy's task can't change by update (`CopyTaskFixed`, 409) and no other
+  route creates one (`CopyOutsideRun`); detaching a copy first writes the
+  steps it ran, with its input values, into it. Copies of an owner-identity
+  parent stay off when a program switches the parent on (`follow_parent`).
+  Defining sub-routines or inputs waits for the owner's
+  `enable-sub-routines` flag (`EventRoutineRollout::sub_routines_enabled_for`,
+  `SubRoutinesDisabled`), and an update that omits a non-empty
+  `sub_routines` or `inputs` is refused (`ExplicitSubRoutinesRequired`,
+  409), so a client that predates them can't drop them. Code reads its
+  values as `inputs`; an Ask AI step gets them as data after its
+  instructions. Span: `routine.schedule` (parent, run, keyed, input count,
+  outcome).
 - `src/domain/code_upgrade.rs`: before a run uses code checked against an
   older version (SDK or `StepContext`), it is checked again, and rewritten by
   a model only if that fails (once per routine and version,
