@@ -1381,6 +1381,12 @@ export type InviteCalendarEventGuestsRequest = {
      */
     recurrenceId?: string | null;
     scope?: null | CalendarUpdateScopeParam;
+    /**
+     * The user's own reply approving these invitations, quoted verbatim.
+     * Required from an agent's program, because the calendar emails each
+     * new guest; never the request that asked for the change. Not stored.
+     */
+    userConfirmation?: string | null;
 };
 
 /**
@@ -1612,6 +1618,12 @@ export type UpdateCalendarEventRequest = {
      */
     title?: string | null;
     transparency?: null | EventTransparency;
+    /**
+     * The user's own reply approving a change to the guest list, quoted verbatim.
+     * Required from an agent's program, because the calendar emails each
+     * new guest; never the request that asked for the change. Not stored.
+     */
+    userConfirmation?: string | null;
     visibility?: null | EventVisibility;
 };
 
@@ -1897,7 +1909,7 @@ export type UpdateCalendarEventErrors = {
      */
     401: unknown;
     /**
-     * Calendar is read-only or needs reauthorization, or the event is a snapshot of a shared meeting
+     * Calendar is read-only or needs reauthorization, the event is a snapshot of a shared meeting, or an agent's program changed attendees without userConfirmation (code confirmation_required)
      */
     403: CalendarMutationApiError;
     /**
@@ -1997,7 +2009,7 @@ export type InviteCalendarEventGuestsErrors = {
      */
     401: unknown;
     /**
-     * Calendar is read-only, only the organizer can invite guests, the event is a snapshot of a shared meeting, or the calendar needs reauthorization
+     * Calendar is read-only, only the organizer can invite guests, the event is a snapshot of a shared meeting, the calendar needs reauthorization, or an agent's program invited without userConfirmation (code confirmation_required)
      */
     403: CalendarMutationApiError;
     /**

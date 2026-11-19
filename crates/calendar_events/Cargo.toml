@@ -10,6 +10,7 @@ outlook = ["dep:tokio"]
 # The AI toolset adapter exposing calendar CRUD to agents.
 ai_tools = [
   "dep:ai_toolset",
+  "dep:macro_authorization",
   "dep:anyhow",
   "dep:async-trait",
   "dep:email_validator",
@@ -83,6 +84,7 @@ workspace-hack = { version = "0.1", path = "../workspace-hack" }
 
 [dev-dependencies]
 wiremock = { workspace = true }
+bot_id = { path = "../bot_id" }
 http-body-util = { workspace = true }
 macro_db_migrator = { path = "../macro_db_migrator" }
 macro_user_id = { path = "../macro_user_id" }

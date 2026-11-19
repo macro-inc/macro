@@ -9,7 +9,7 @@ use axum::{
     Router,
     body::HttpBody,
     extract::{OriginalUri, State},
-    http::{StatusCode, request::Parts},
+    http::{HeaderMap, StatusCode, request::Parts},
     response::{Html, IntoResponse, Response},
     routing::get,
 };
@@ -20,10 +20,11 @@ use entity_registry::OwnerGrantPolicy;
 use entity_registry_db_utils::OwnedEntityRegistrar;
 use graphql_soup::email_mutation_thread_loader;
 use macro_authorization::{
-    MacroUserAuthentication, OptionalMacroAuthorizationExtractor, UserOrInternalService,
-    UserOrInternalServiceAuthorization,
+    ForwardedProgram, MacroUserAuthentication, OptionalMacroAuthorizationExtractor,
+    UserOrInternalService, UserOrInternalServiceAuthorization,
 };
 use macro_user_id::user_id::MacroUserIdStr;
+use std::sync::Arc;
 use uuid::Uuid;
 
 mod websocket;
@@ -69,11 +70,12 @@ async fn graphql_handler(
             .get(MAIL_CACHE_PROFILE_HEADER)
             .and_then(|value| value.to_str().ok()),
     );
+    let viewer = acting_user.map(|user| GraphqlViewer::of(user, &request_parts.headers));
     let result = telemetry::observe(request.into_inner(), acting_user.is_some(), |request| {
         let request = graphql_query_context_data(
             request,
             &state,
-            acting_user.map(|user| user.macro_user_id.clone()),
+            viewer,
             acting_user.and_then(|user| user.user_context.organization_id.map(i64::from)),
             acting_user.and_then(opaque_viewer_id),
         );
@@ -101,6 +103,7 @@ async fn subscription_handler(
     Cached(auth): Cached<
         OptionalMacroAuthorizationExtractor<AuthorizationService, UserOrInternalService>,
     >,
+    headers: HeaderMap,
     upgrade: GraphqlWebSocketUpgrade,
 ) -> Response {
     let Some(acting_user) = auth
@@ -114,12 +117,12 @@ async fn subscription_handler(
         )
             .into_response();
     };
-    let macro_user_id = acting_user.macro_user_id.clone();
+    let viewer = GraphqlViewer::of(acting_user, &headers);
     let organization_id = acting_user.user_context.organization_id.map(i64::from);
     let viewer_id = opaque_viewer_id(acting_user);
 
     let schema = state.graphql_soup_schema.clone();
-    let data = graphql_subscription_context_data(&state, macro_user_id, organization_id, viewer_id);
+    let data = graphql_subscription_context_data(&state, viewer, organization_id, viewer_id);
     upgrade.serve(schema, data)
 }
 
@@ -129,38 +132,48 @@ fn opaque_viewer_id(user: &MacroUserAuthentication) -> Option<Uuid> {
     Uuid::parse_str(&user.user_context.fusion_user_id).ok()
 }
 
+/// The authenticated viewer, and the program behind their request, which
+/// every write made for them carries on (see [`ForwardedProgram`]).
+struct GraphqlViewer {
+    macro_user_id: MacroUserIdStr<'static>,
+    program: ForwardedProgram,
+}
+
+impl GraphqlViewer {
+    fn of(user: &MacroUserAuthentication, headers: &HeaderMap) -> Self {
+        Self {
+            macro_user_id: user.macro_user_id.clone(),
+            program: ForwardedProgram::of(user, headers),
+        }
+    }
+}
+
 fn graphql_subscription_context_data(
     state: &ApiContext,
-    user: MacroUserIdStr<'static>,
+    viewer: GraphqlViewer,
     organization_id: Option<i64>,
     viewer_id: Option<Uuid>,
 ) -> Data {
     let mut data = Data::default();
-    insert_graphql_context_data(&mut data, state, Some(user), organization_id, viewer_id);
+    insert_graphql_context_data(&mut data, state, Some(viewer), organization_id, viewer_id);
     data
 }
 
 fn graphql_query_context_data(
     mut req: async_graphql::Request,
     state: &ApiContext,
-    macro_user_id: Option<MacroUserIdStr<'static>>,
+    viewer: Option<GraphqlViewer>,
     organization_id: Option<i64>,
     viewer_id: Option<Uuid>,
 ) -> async_graphql::Request {
-    insert_graphql_context_data(
-        &mut req.data,
-        state,
-        macro_user_id,
-        organization_id,
-        viewer_id,
-    );
+    insert_graphql_context_data(&mut req.data, state, viewer, organization_id, viewer_id);
     req
 }
 
 fn insert_graphql_context_data(
     data: &mut Data,
     state: &ApiContext,
-    macro_user_id: Option<MacroUserIdStr<'static>>,
+    viewer: Option<GraphqlViewer>,
     organization_id: Option<i64>,
     viewer_id: Option<Uuid>,
 ) {
@@ -169,7 +182,11 @@ fn insert_graphql_context_data(
         state.saved_views.clone();
     data.insert(saved_views);
 
-    let Some(macro_user_id) = macro_user_id else {
+    let Some(GraphqlViewer {
+        macro_user_id,
+        program,
+    }) = viewer
+    else {
         return;
     };
 
@@ -207,7 +224,17 @@ fn insert_graphql_context_data(
     data.insert(state.graphql_scheduled_action_context.clone());
     data.insert(state.graphql_contacts_context.clone());
     data.insert(state.graphql_calendar_context.clone());
-    data.insert(state.graphql_calendar_mutation_context.clone());
+    // Calendar writes reach calendar_service as the viewer, carrying the
+    // program behind the request so its program guards refuse it there too.
+    data.insert(graphql_calendar::CalendarGraphqlMutationContext::new(
+        Arc::new(
+            state
+                .graphql_calendar_mutations
+                .forwarding(program.headers()),
+        ),
+        state.graphql_calendar_committed_changes.clone(),
+    ));
+    data.insert(program);
     data.insert(state.graphql_work_feed_context.clone());
     data.insert(state.graphql_registered_work_context.clone());
     data.insert(state.graphql_notification_inbox_context.clone());

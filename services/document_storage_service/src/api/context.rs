@@ -1015,7 +1015,17 @@ pub(crate) struct ApiContext {
     pub graphql_scheduled_action_context: graphql_scheduled_action::ScheduledActionGraphqlContext,
     pub graphql_contacts_context: graphql_contacts::ContactsGraphqlContext,
     pub graphql_calendar_context: graphql_calendar::CalendarGraphqlContext,
-    pub graphql_calendar_mutation_context: graphql_calendar::CalendarGraphqlMutationContext,
+    /// Calendar writes go to calendar_service; each GraphQL request gets a
+    /// client that forwards its caller's program (see
+    /// `graphql_soup::insert_graphql_context_data`).
+    pub graphql_calendar_mutations:
+        Arc<calendar_events::outbound::calendar_service_mutations::CalendarServiceMutations>,
+    /// Calendar reads that answer a GraphQL mutation from the primary.
+    pub graphql_calendar_committed_changes: Arc<
+        calendar_events::domain::changes::CalendarChangeService<
+            calendar_events::outbound::pg::PgCalendarRepository,
+        >,
+    >,
     pub graphql_work_feed_context: complete_graph::WorkFeedGraphqlContext,
     pub graphql_registered_work_context: complete_graph::RegisteredWorkGraphqlContext,
     pub graphql_notification_inbox_context: complete_graph::NotificationInboxGraphqlContext,

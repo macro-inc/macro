@@ -164,6 +164,19 @@ pub struct UpdateCalendarEvent {
     #[serde(default)]
     pub inbox: Option<String>,
 
+    /// The user's reply approving a change to the guests, quoted verbatim.
+    #[schemars(
+        description = "Required from an agent when `attendees` adds or changes guests, because the calendar \
+                       emails each new guest: the user's own message approving these \
+                       invitations, quoted verbatim, in reply to the guest list you wrote out \
+                       for them. Never the request that asked for the change, and never \
+                       supply it yourself; if the user hasn't seen the guest list, write it \
+                       out, ask, and call again once they approve. Omit it for any other \
+                       change."
+    )]
+    #[serde(default)]
+    pub user_confirmation: Option<String>,
+
     /// Update scope.
     #[schemars(
         description = "How much of a recurring series to change: \"this_event\" edits one \
@@ -298,7 +311,7 @@ impl ToolAnnotated for UpdateCalendarEvent {
 #[async_trait]
 impl<M, O, L> AsyncTool<CalendarToolContext<M, O, L>> for UpdateCalendarEvent
 where
-    M: CalendarMutationService + CalendarMacroCallService,
+    M: CalendarMutationService + CalendarMacroCallService + super::ProgramForwarding,
     O: CalendarOccurrenceService,
     L: MeetingLinkProvider,
 {
@@ -332,6 +345,18 @@ where
         }
 
         let requester_id = request_context.user_id.to_string();
+        // A quote is the user's approval of the guests the call changes,
+        // forwarded so calendar_service's invite rule lets it through.
+        let request_context = match self.user_confirmation.as_deref() {
+            None => request_context,
+            Some(quote) => request_context.with_quoted_confirmation(quote).ok_or_else(|| {
+                ToolCallError {
+                    description: "userConfirmation must quote the user's own reply approving these invitations. Write out who will be invited, ask whether to invite them, and call again once they approve.".to_owned(),
+                    internal_error: anyhow::anyhow!("UpdateCalendarEvent called with a blank confirmation"),
+                }
+            })?,
+        };
+        let mutations = service_context.mutations_for(&request_context, self.inbox.as_deref());
         let scope = match (self.scope, self.recurrence_id.clone()) {
             (UpdateScopeInput::All, None) => CalendarUpdateScope::All,
             (UpdateScopeInput::ThisEvent, Some(recurrence_id)) => {
@@ -401,8 +426,7 @@ where
         // list from discarding the response that was just recorded.
         let patched = if self.add_macro_call {
             Some(
-                service_context
-                    .mutations
+                mutations
                     .update_event_with_macro_call(
                         &requester_id,
                         self.event_id,
@@ -417,8 +441,7 @@ where
             None
         } else {
             Some(
-                service_context
-                    .mutations
+                mutations
                     .update_event(
                         &requester_id,
                         self.event_id,
@@ -439,8 +462,7 @@ where
                         CalendarRsvpScope::ThisEvent { recurrence_id }
                     }
                 };
-                service_context
-                    .mutations
+                mutations
                     .respond_to_event(
                         &requester_id,
                         self.event_id,

@@ -6,7 +6,7 @@ use ai_toolset::tool_object::UserToolResponse;
 use axum::{
     Json, Router,
     extract::{FromRef, Path, State},
-    http::StatusCode,
+    http::{HeaderMap, StatusCode},
     routing::{delete, get, post, put},
 };
 use entity_access::domain::models::{
@@ -15,7 +15,10 @@ use entity_access::domain::models::{
 use entity_access::domain::ports::EntityAccessService;
 use entity_access::inbound::axum_extractors::ChatAccessLevelExtractor;
 use entity_registry::{CreationPrincipalExtractor, NonUserOwners};
-use macro_authorization::{MacroAuthorizationService, MacroAuthorizationState};
+use macro_authorization::{
+    MacroAuthorizationExtractor, MacroAuthorizationService, MacroAuthorizationState, UserOnly,
+    is_program_run,
+};
 use model::response::StringIDResponse;
 use models_permissions::share_permission::SharePermissionV2;
 use roles_and_permissions::domain::port::UserRolesAndPermissionsService;
@@ -633,6 +636,10 @@ pub async fn update_tool_response_handler<
     Ok(StatusCode::OK)
 }
 
+/// Why a program may not run a pending tool call: running it is the user's
+/// approval of the call.
+const PROGRAM_TOOL_CALL_REFUSAL: &str = "A program cannot run a pending tool call: running it is the user's approval. The user runs it from the chat.";
+
 #[utoipa::path(
     post,
     path = "/chats/{chat_id}/tool/call",
@@ -643,13 +650,14 @@ pub async fn update_tool_response_handler<
     responses(
         (status = 200, body = CallToolResponse, description = "Tool executed successfully"),
         (status = 400, body = String, description = "Validation or execution failed"),
+        (status = 403, body = String, description = "A program asked to run the call; only the user approves it"),
         (status = 404, body = String, description = "Tool call not found"),
         (status = 500, body = String),
     )
 )]
 /// Execute a pending tool call, optionally with updated arguments.
 #[tracing::instrument(
-    skip(state, access, req),
+    skip(state, access, user, headers, req),
     fields(chat_id = %chat_id, message_id = %req.message_id, tool_call_id = %req.tool_call_id),
     err(Debug)
 )]
@@ -660,10 +668,20 @@ pub async fn call_tool_handler<
     P: UserRolesAndPermissionsService,
 >(
     access: ChatAccessLevelExtractor<OwnerAccessLevel, Svc, Auth>,
+    user: MacroAuthorizationExtractor<Auth, UserOnly>,
+    headers: HeaderMap,
     State(state): State<ChatRouterState<S, Svc, Auth, P>>,
     Path(chat_id): Path<String>,
     Json(req): Json<CallToolRequest>,
 ) -> Result<Json<CallToolResponse>> {
+    // Running the call is the user's approval of it, which the tool carries
+    // downstream as a review; a program, such as the agent that proposed the
+    // call, may only reject it.
+    if is_program_run(user.authorization.attribution(), &headers) {
+        return Err(ChatErr::Access(AccessError::UnauthorizedWithMessage(
+            PROGRAM_TOOL_CALL_REFUSAL,
+        )));
+    }
     let result = state
         .inner
         .call_tool(

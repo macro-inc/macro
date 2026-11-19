@@ -319,7 +319,7 @@
             "description": "Authentication required"
           },
           "403": {
-            "description": "Calendar is read-only or needs reauthorization, or the event is a snapshot of a shared meeting",
+            "description": "Calendar is read-only or needs reauthorization, the event is a snapshot of a shared meeting, or an agent's program changed attendees without userConfirmation (code confirmation_required)",
             "content": {
               "application/json": {
                 "schema": {
@@ -507,7 +507,7 @@
             "description": "Authentication required"
           },
           "403": {
-            "description": "Calendar is read-only, only the organizer can invite guests, the event is a snapshot of a shared meeting, or the calendar needs reauthorization",
+            "description": "Calendar is read-only, only the organizer can invite guests, the event is a snapshot of a shared meeting, the calendar needs reauthorization, or an agent's program invited without userConfirmation (code confirmation_required)",
             "content": {
               "application/json": {
                 "schema": {
@@ -3375,6 +3375,10 @@
                 "description": "How much of a recurring series gains the guests. Omit to let\n`recurrenceId` decide: the identified occurrence alone when one is\nsupplied, otherwise the whole event or series. An explicit\n`this_event` scope requires `recurrenceId`."
               }
             ]
+          },
+          "userConfirmation": {
+            "type": ["string", "null"],
+            "description": "The user's own reply approving these invitations, quoted verbatim.\nRequired from an agent's program, because the calendar emails each\nnew guest; never the request that asked for the change. Not stored."
           }
         }
       },
@@ -3731,6 +3735,10 @@
                 "description": "Replacement transparency."
               }
             ]
+          },
+          "userConfirmation": {
+            "type": ["string", "null"],
+            "description": "The user's own reply approving a change to the guest list, quoted verbatim.\nRequired from an agent's program, because the calendar emails each\nnew guest; never the request that asked for the change. Not stored."
           },
           "visibility": {
             "oneOf": [

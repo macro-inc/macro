@@ -121,10 +121,13 @@ selection status. Trace headers already reach SDK calls.
 
 - **Email send and event creation.** Only on the user's quoted approval. The
   email and calendar routes refuse a program's `email.send`, thread reply,
-  unconfirmed draft send or schedule, and `calendar.createEvent`; MCP code
-  mode has no reviews, so a program uses `email.sendConfirmed`,
-  `EmailMessage.forwardConfirmed`, `EmailDraft.send`/`schedule` or
-  `calendar.createConfirmed`, quoting the user's reply approving that action.
+  unconfirmed draft send or schedule, `calendar.createEvent`, and an
+  unconfirmed guest invitation (`CalendarEvent.inviteGuests`, or `update`
+  changing `attendees`); MCP code mode has no reviews, so a program uses
+  `email.sendConfirmed`, `EmailMessage.forwardConfirmed`,
+  `EmailDraft.send`/`schedule`, `calendar.createConfirmed`, or
+  `inviteGuests`/`update` with `userConfirmation`, quoting the user's reply
+  approving that action.
   The MCP client's approval of an `ExecuteCode` call does not show the user
   the email or event itself.
 - **Tool-result budget.** 32 KiB of references per task response. A first

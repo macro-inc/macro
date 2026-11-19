@@ -19,6 +19,7 @@ import type { UpdateCalendarEventRequestScope } from './updateCalendarEventReque
 import type { UpdateCalendarEventRequestTime } from './updateCalendarEventRequestTime';
 import type { UpdateCalendarEventRequestTitle } from './updateCalendarEventRequestTitle';
 import type { UpdateCalendarEventRequestTransparency } from './updateCalendarEventRequestTransparency';
+import type { UpdateCalendarEventRequestUserConfirmation } from './updateCalendarEventRequestUserConfirmation';
 import type { UpdateCalendarEventRequestVisibility } from './updateCalendarEventRequestVisibility';
 
 /**
@@ -57,5 +58,9 @@ combined with `conference`. */
   /** Replacement title; an empty string clears it. */
   title?: UpdateCalendarEventRequestTitle;
   transparency?: UpdateCalendarEventRequestTransparency;
+  /** The user's own reply approving a change to the guest list, quoted verbatim.
+Required from an agent's program, because the calendar emails each
+new guest; never the request that asked for the change. Not stored. */
+  userConfirmation?: UpdateCalendarEventRequestUserConfirmation;
   visibility?: UpdateCalendarEventRequestVisibility;
 }

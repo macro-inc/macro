@@ -80,6 +80,7 @@ macro_env_var = { path = "../macro_env_var" }
 macro_event_broker = { path = "../macro_event_broker" }
 messages = { path = "../messages", features = ["ai_tools", "broker", "delivery"] }
 macro_queues = { path = "../macro_queues" }
+macro_authorization = { path = "../macro_authorization", features = ["axum"] }
 macro_user_id = { path = "../macro_user_id" }
 mcp_client = { path = "../mcp_client" }
 mcp_select = { path = "../mcp_select" }
@@ -132,5 +133,4 @@ workspace-hack = { version = "0.1", path = "../workspace-hack" }
 harnesses = { path = "../harnesses", default-features = false, features = ["test-utils"] }
 macro_db_migrator = { path = "../macro_db_migrator" }
 calendar_scheduling = { path = "../calendar_scheduling", features = ["inbound"] }
-macro_authorization = { path = "../macro_authorization", features = ["axum"] }
 model_user = { path = "../model_user" }

@@ -310,7 +310,8 @@ the existing gateway prefixes.
 - Email sends and other writes against hosted data are real actions; use mocks
   for automated SDK mutation tests.
 - `email.send`, `EmailThread.reply` and `calendar.createEvent` are refused
-  (403) for an agent's program, and so are `EmailDraft.send`/`schedule`
+  (403) for an agent's program, and so are `EmailDraft.send`/`schedule`,
+  `CalendarEvent.inviteGuests` and `CalendarEvent.update` with `attendees`
   without `userConfirmation`. Programs act through
   `execution.reviews.create` or the confirmed methods: `email.sendConfirmed`
   and `EmailMessage.forwardConfirmed` (cognition `send-confirmed`, typed with

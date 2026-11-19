@@ -16085,6 +16085,10 @@ export interface UpdateCalendarEvent {
    * The `inbox` of the copy this call changes, from its ListCalendarEvents entry. Required when the meeting is on more than one of the user's inboxes and the call changes anything but `reminders` or `rsvp`: the tool refuses without it and lists each copy. It must be the inbox holding the copy `eventId` names.
    */
   inbox?: string | null;
+  /**
+   * Required from an agent when `attendees` adds or changes guests, because the calendar emails each new guest: the user's own message approving these invitations, quoted verbatim, in reply to the guest list you wrote out for them. Never the request that asked for the change, and never supply it yourself; if the user hasn't seen the guest list, write it out, ask, and call again once they approve. Omit it for any other change.
+   */
+  userConfirmation?: string | null;
   scope: UpdateScopeInput;
   /**
    * The `recurrenceId` of the targeted occurrence, from its ListCalendarEvents entry. Required for "this_event"; omit for "all".

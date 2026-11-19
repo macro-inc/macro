@@ -42,7 +42,9 @@ reminder dispatch, team availability, and provider/Postgres persistence.
 ## Recipes
 
 - Add a mutation: `src/domain/mutations.rs` → `src/outbound/pg.rs` (or
-  `src/outbound/calendar_service_mutations.rs` for the HTTP client adapter) →
+  `src/outbound/calendar_service_mutations.rs` for the HTTP client adapter;
+  a host calling it for a user's request uses `forwarding(program.headers())`
+  so the service's program guards see the caller's program) →
   `src/inbound/mutation_router.rs` / `src/inbound/toolset.rs`.
 - Add a reminder type: `src/domain/reminder_dispatch.rs` → `src/inbound/dispatch_worker.rs`
   → `src/outbound/notification_notifier.rs`.
@@ -328,7 +330,22 @@ reminder dispatch, team availability, and provider/Postgres persistence.
   program creates through a session review (`CreateCalendarEvent`) or the
   harness's `POST /cognition/calendar/events/create-confirmed`
   (`CreateConfirmedCalendarEvent`, the SDK's `calendar.createConfirmed`),
-  never an event the user has not seen.
+  never an event the user has not seen. The native tools reach the route as
+  the agent's (`CalendarToolContext::with_program`, set by
+  `ToolServiceContext::with_actor`): every write goes through
+  `mutations_for`, which forwards the program and the call's
+  `ai_toolset::UserApproval`. The route admits an agent's create only with a
+  forwarded `ProgramApproval`: `Reviewed` for a user tool finished after
+  review, `Quoted` for `CreateConfirmedCalendarEvent`'s `userConfirmation`.
+- The invite-guests route, and the update route when it changes
+  `attendees`, refuse an agent run (`is_agent_run`, 403
+  `confirmation_required`) unless `userConfirmation` quotes the user's
+  approval, since the calendar emails new guests. The quote is not stored.
+  A forwarded `ProgramApproval` from an internal caller counts too: the
+  native `UpdateCalendarEvent` turns its optional `userConfirmation` into a
+  `Quoted` approval (`with_quoted_confirmation`) and refuses a blank one.
+  A person in the app and an owner routine invite as before, and the copy
+  check still applies.
 - No provider field says whose calendar it is. An inbox syncs every calendar
   its account can see under its own address, and Google gives `accessRole`
   `owner` to anyone with manage rights, on a colleague's primary calendar too;

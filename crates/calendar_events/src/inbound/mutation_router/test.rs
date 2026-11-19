@@ -235,14 +235,14 @@ fn a_program_cannot_create_an_event_the_user_has_not_seen() {
     );
     let browser = axum::http::HeaderMap::new();
 
-    let refusal = refuse_program_create(CredentialAttribution::Person, &program).unwrap_err();
+    let refusal = refuse_program_create(CredentialAttribution::Person, &program, None).unwrap_err();
     assert_eq!(refusal.status, StatusCode::FORBIDDEN);
     assert_eq!(
         refusal.code,
         CalendarMutationErrorCode::ConfirmationRequired
     );
-    assert!(refuse_program_create(CredentialAttribution::Agent, &browser).is_err());
-    assert!(refuse_program_create(CredentialAttribution::Person, &browser).is_ok());
+    assert!(refuse_program_create(CredentialAttribution::Agent, &browser, None).is_err());
+    assert!(refuse_program_create(CredentialAttribution::Person, &browser, None).is_ok());
 }
 
 #[test]
@@ -254,8 +254,125 @@ fn an_owner_routine_code_step_creates_events_but_an_agent_program_does_not() {
     );
     // The runtime marks every code step's request; the signed owner routine
     // claim decides.
-    assert!(refuse_program_create(CredentialAttribution::Routine, &code_step).is_ok());
-    assert!(refuse_program_create(CredentialAttribution::Agent, &code_step).is_err());
+    assert!(refuse_program_create(CredentialAttribution::Routine, &code_step, None).is_ok());
+    assert!(refuse_program_create(CredentialAttribution::Agent, &code_step, None).is_err());
+}
+
+/// An agent's create the user approved, on a review card or by a quoted
+/// reply its internal caller forwarded, goes through; one without is refused.
+#[test]
+fn an_agents_create_goes_through_only_with_the_users_approval() {
+    let headers = axum::http::HeaderMap::new();
+    assert!(refuse_program_create(CredentialAttribution::Agent, &headers, None).is_err());
+    for approval in [ProgramApproval::Reviewed, ProgramApproval::Quoted] {
+        assert!(
+            refuse_program_create(CredentialAttribution::Agent, &headers, Some(approval)).is_ok(),
+            "{approval:?}"
+        );
+    }
+}
+
+fn code_execution() -> axum::http::HeaderMap {
+    let mut headers = axum::http::HeaderMap::new();
+    headers.insert(
+        macro_authorization::CODE_EXECUTION_HEADER,
+        "1".parse().unwrap(),
+    );
+    headers
+}
+
+#[test]
+fn an_agent_program_cannot_invite_guests_without_the_users_approval() {
+    let browser = axum::http::HeaderMap::new();
+    let refusal =
+        refuse_unconfirmed_program_invite(CredentialAttribution::Agent, &browser, None, None)
+            .unwrap_err();
+    assert_eq!(refusal.status, StatusCode::FORBIDDEN);
+    assert_eq!(
+        refusal.code,
+        CalendarMutationErrorCode::ConfirmationRequired
+    );
+    assert_eq!(refusal.message, PROGRAM_INVITE_REFUSAL);
+    assert!(
+        refuse_unconfirmed_program_invite(
+            CredentialAttribution::Person,
+            &code_execution(),
+            None,
+            None
+        )
+        .is_err()
+    );
+    assert!(
+        refuse_unconfirmed_program_invite(CredentialAttribution::Agent, &browser, Some("  "), None)
+            .is_err()
+    );
+}
+
+#[test]
+fn an_agent_program_invites_guests_on_the_users_quoted_approval() {
+    assert!(
+        refuse_unconfirmed_program_invite(
+            CredentialAttribution::Agent,
+            &axum::http::HeaderMap::new(),
+            Some("yes, invite them"),
+            None,
+        )
+        .is_ok()
+    );
+    assert!(
+        refuse_unconfirmed_program_invite(
+            CredentialAttribution::Person,
+            &code_execution(),
+            Some("yes, invite them"),
+            None,
+        )
+        .is_ok()
+    );
+}
+
+#[test]
+fn a_person_in_the_app_and_an_owner_routine_invite_guests_as_before() {
+    let browser = axum::http::HeaderMap::new();
+    assert!(
+        refuse_unconfirmed_program_invite(CredentialAttribution::Person, &browser, None, None)
+            .is_ok()
+    );
+    assert!(
+        refuse_unconfirmed_program_invite(CredentialAttribution::Routine, &browser, None, None)
+            .is_ok()
+    );
+    assert!(
+        refuse_unconfirmed_program_invite(
+            CredentialAttribution::Routine,
+            &code_execution(),
+            None,
+            None
+        )
+        .is_ok()
+    );
+}
+
+/// A native tool's invite carries the user's approval as a forwarded marker
+/// instead of a body quote; either lets an agent's invite through.
+#[test]
+fn an_agents_invite_goes_through_on_a_forwarded_approval() {
+    let headers = axum::http::HeaderMap::new();
+    for approval in [ProgramApproval::Reviewed, ProgramApproval::Quoted] {
+        assert!(
+            refuse_unconfirmed_program_invite(
+                CredentialAttribution::Agent,
+                &headers,
+                None,
+                Some(approval)
+            )
+            .is_ok(),
+            "{approval:?}"
+        );
+    }
+    assert!(
+        refuse_unconfirmed_program_invite(CredentialAttribution::Agent, &headers, None, None)
+            .is_err()
+    );
 }
 
 /// Two inboxes hold the meeting, so a request that names no copy is refused.
