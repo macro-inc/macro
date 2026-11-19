@@ -98,13 +98,12 @@ export class SavedView extends MacroEntity<SavedViewDefinition> {
    * @idempotent
    */
   async setAppearance(appearance: EntityAppearance): Promise<EntityAppearance> {
-    const record = unwrap(
-      await this.client.storage.setSavedViewAppearance({
+    const record = await this.mutate((client) =>
+      client.storage.setSavedViewAppearance({
         path: { saved_view_id: this.id },
         body: appearance,
       }),
     );
-    this.detail.set(record);
     return record.appearance ?? {};
   }
 
@@ -157,8 +156,8 @@ export class SavedView extends MacroEntity<SavedViewDefinition> {
     team?: Team | null;
   }): Promise<void> {
     const { revision } = await this.detail.get();
-    const record = unwrap(
-      await this.client.storage.updateSavedViewDefinition({
+    await this.mutate((client) =>
+      client.storage.updateSavedViewDefinition({
         path: { saved_view_id: this.id },
         body: {
           expectedRevision: revision,
@@ -171,8 +170,7 @@ export class SavedView extends MacroEntity<SavedViewDefinition> {
         },
       }),
     );
-    // The response's revision guards this handle's next write.
-    this.detail.set(record);
+    // The next write reloads the current revision rather than trusting response order.
   }
 
   /**
