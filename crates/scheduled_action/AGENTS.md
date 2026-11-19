@@ -333,8 +333,9 @@ each run.
   `SubRoutinesDisabled`), and an update that omits a non-empty
   `sub_routines` or `inputs` is refused (`ExplicitSubRoutinesRequired`,
   409). A client that sends back a definition with apps must restate its
-  `mcp_servers` (`ExplicitAppsRequired`). The SDK's `RoutineOptions` cannot
-  express the definition or the saved inputs. A single agent
+  `mcp_servers` (`ExplicitAppsRequired`). The SDK's `RoutineOptions` express
+  definitions and their declared inputs, but not a definition's apps or a
+  routine's saved input values. A single agent
   task's `sub_routines`, `inputs` or `sub_routine`, which its parser skips
   and main kept, are dropped from a new or changed task
   (`without_fields_beside_agent`); one stored with them still runs, and is
