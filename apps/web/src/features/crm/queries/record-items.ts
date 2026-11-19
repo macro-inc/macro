@@ -29,8 +29,9 @@ const NO_ITEMS = {
 
 /**
  * The record as a Soup CRM association: items whose Companies or Contacts
- * property names it, or that reference it. A company also matches through
- * every one of its contacts; the server expands and authorizes the record.
+ * property names it, or that reference it, and tasks whose custom entity
+ * property names it. A company also matches through every one of its
+ * contacts; the server expands and authorizes the record.
  */
 export function crmAssociation(scope: CrmRecordScope) {
   return match(scope)
