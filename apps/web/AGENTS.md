@@ -589,6 +589,7 @@ mounted twice (two desktop tabs), that a sent message renders its
 lines with the spacing the draft showed, that the one-line composer centers its
 buttons on the text line, and pending sends on desktop and phone: clear immediately, restore failed sends, and preserve a new draft typed during delivery.
 It also pastes a Macro link and Markdown into a code block, which must keep both as literal text.
+Its long-mention case taps a long document mention in a phone's collapsed pill, which must open the composer, so keep the pill's draft preview inert down to every descendant (mention chips turn pointer events back on and stop the click).
 `caret.browser.e2e.ts` taps (press and release sent together) into a typed and
 a restored draft and checks the caret moves there: a click that reaches
 `MarkdownShell` before Lexical has read the selectionchange must not call
