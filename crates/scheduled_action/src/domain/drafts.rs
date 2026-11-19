@@ -1283,12 +1283,23 @@ fn agent_task_steps(task: &Value) -> Option<Vec<Value>> {
 
 /// Sub-routines as a routine's task holds them once checked: parsed, with
 /// their code steps named, so the same definitions compare equal however
-/// they were sent.
+/// they were sent. Without their apps, which the SDK a session checks with
+/// can't hold and no code reads: the step is applied to the routine as the
+/// editor holds it, apps and all.
 fn checked_sub_routines(sub_routines: &[Value]) -> Value {
     let task = named_steps(&json!({ "steps": [], "sub_routines": sub_routines }));
-    task.get("sub_routines")
+    let mut definitions = task
+        .get("sub_routines")
         .cloned()
-        .unwrap_or_else(|| Value::Array(Vec::new()))
+        .unwrap_or_else(|| Value::Array(Vec::new()));
+    if let Value::Array(definitions) = &mut definitions {
+        for definition in definitions.iter_mut() {
+            if let Value::Object(fields) = definition {
+                fields.remove("mcp_servers");
+            }
+        }
+    }
+    definitions
 }
 
 /// The draft `request` asks for, from the session's last check. A new

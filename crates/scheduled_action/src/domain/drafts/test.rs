@@ -1665,3 +1665,39 @@ async fn a_step_checked_with_other_sub_routines_than_the_routines_is_not_handed_
         assert_eq!(got, message);
     }
 }
+
+/// The SDK a session checks with can't hold a sub-routine's apps, and no
+/// code reads them, so a step checked with the routine's sub-routines less
+/// their apps is the step asked for.
+#[tokio::test]
+async fn a_step_checked_with_the_routines_sub_routines_less_their_apps_is_handed_back() {
+    let definition = json!([code_step("Read the task", "good"), agent_step()]);
+    let mut so_far = schedules_reminders(definition.clone());
+    so_far.task["sub_routines"][0]["mcp_servers"] =
+        json!([{ "app_slug": "linear", "server_name": "Linear" }]);
+    let rows = Arc::new(Rows::default());
+    let sessions = Arc::new(Sessions::new(
+        &rows,
+        Box::new(move |_| {
+            let mut routine = schedules_reminders(definition.clone());
+            routine.task["steps"]
+                .as_array_mut()
+                .unwrap()
+                .push(code_step("Post a summary", "good"));
+            vec![plain(routine)]
+        }),
+    ));
+    let request = DraftRequest::AddStep {
+        description: "then post a summary".into(),
+        routine: RoutineSoFar {
+            trigger: Some(message_posted(&[])),
+            steps: so_far.task["steps"].as_array().unwrap().clone(),
+            sub_routines: so_far.task["sub_routines"].as_array().unwrap().clone(),
+        },
+        kind: Some(StepKind::Code),
+    };
+
+    let drafted = drafted_step(draft(&drafts(&rows, &sessions), request).await);
+
+    assert_eq!(drafted.step["title"], "Post a summary");
+}
