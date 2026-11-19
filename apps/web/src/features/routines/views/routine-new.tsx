@@ -55,16 +55,22 @@ export function RoutineNewView(props: {
   onCreated(id: string): void;
   onCancel(): void;
 }) {
-  const connected = props.slots.createConnectedApps();
-  const { draft, change, attempted, formError, submitError, create, discard } =
-    createRoutineComposer(
-      props.source,
-      props.storage,
-      props.defaultModel,
-      props.onCreated,
-      connected,
-      props.slots.createAppTargetCheck()
-    );
+  const {
+    draft,
+    connected,
+    change,
+    attempted,
+    formError,
+    submitError,
+    create,
+    discard,
+  } = createRoutineComposer(
+    props.source,
+    props.storage,
+    props.defaultModel,
+    props.onCreated,
+    props.slots
+  );
   const pending = () => props.source.pending();
   const taskDisabled = () =>
     props.subRoutineWrites() !== true && draftHasDefinitionsOrInputs(draft());

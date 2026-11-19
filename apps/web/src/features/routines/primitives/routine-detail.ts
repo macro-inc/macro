@@ -1,14 +1,16 @@
 import { type Accessor, createEffect, createSignal, on } from 'solid-js';
+import type { RoutineEditorSlots } from '../context/routine-slots';
 import type { RoutineDetailSource } from '../context/routine-sources';
 import { isClaimActive } from '../core/claim';
 import type { ScheduleDraft } from '../core/draft';
 import {
+  draftNeedsAgentLookup,
+  draftRequiresApps,
   formatDateTime,
   validateRoutineApps,
   validateRoutineDraft,
 } from '../core/routine-draft';
 import { assignedOutputs, withAssignedOutputs } from '../core/routine-steps';
-import type { RoutineTarget } from '../core/routine-target';
 import { hasOnlyScheduledTriggers } from '../core/routine-triggers';
 import { createRoutineAutosave } from './routine-autosave';
 
@@ -23,8 +25,10 @@ export function createRoutineDetail(
   source: RoutineDetailSource,
   options: {
     userId: Accessor<string | undefined>;
-    connectedApps: Accessor<ReadonlySet<string> | undefined>;
-    targetSupportsApps(target: RoutineTarget): boolean;
+    appChecks: Pick<
+      RoutineEditorSlots,
+      'createConnectedApps' | 'createAppTargetCheck'
+    >;
     onRename(name: string): void;
   }
 ) {
@@ -34,6 +38,12 @@ export function createRoutineDetail(
   const isRunning = () => isClaimActive(schedule()?.claimedAt);
   const isActive = () => schedule()?.enabled ?? false;
   const [state, setRawState] = createSignal<ScheduleDraft | undefined>();
+  const connectedApps = options.appChecks.createConnectedApps(() =>
+    draftRequiresApps(state())
+  );
+  const targetSupportsApps = options.appChecks.createAppTargetCheck(() =>
+    draftNeedsAgentLookup(state())
+  );
   const [editorVersion, setEditorVersion] = createSignal(0);
   let baselineRevision = 0;
   let baselineKey = '';
@@ -48,11 +58,7 @@ export function createRoutineDetail(
     if (!draft) return null;
     return (
       validateRoutineDraft(draft) ??
-      validateRoutineApps(
-        draft,
-        options.connectedApps(),
-        options.targetSupportsApps
-      )
+      validateRoutineApps(draft, connectedApps(), targetSupportsApps)
     );
   };
 
@@ -200,6 +206,7 @@ export function createRoutineDetail(
 
   return {
     schedule,
+    connectedApps,
     state,
     setState,
     isOwned,

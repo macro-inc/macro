@@ -22,10 +22,12 @@ export type AgentRosterSource = {
  * connection into one roster. Model defaults for the first-party personas
  * come from model discovery, so their pills can name what they will run on.
  */
-export function createAgentRosterSource(): AgentRosterSource {
-  const agentsQuery = useAgentsQuery();
-  const harnessesQuery = useRunnableHarnessDirectoryQuery();
-  const cursorStatus = useCursorApiKeyStatusQuery();
+export function createAgentRosterSource(
+  enabled: Accessor<boolean> = () => true
+): AgentRosterSource {
+  const agentsQuery = useAgentsQuery(enabled);
+  const harnessesQuery = useRunnableHarnessDirectoryQuery(enabled);
+  const cursorStatus = useCursorApiKeyStatusQuery(enabled);
   const cursorConnected = () =>
     cursorStatus.isSuccess ? cursorStatus.data.registered : false;
   const cursorNeedsConnection = () =>
@@ -35,7 +37,7 @@ export function createAgentRosterSource(): AgentRosterSource {
   const macroDefaults = useAgentModelsQuery(() => ({ harness: 'in-memory' }));
   const cursorDefaults = useAgentModelsQuery(
     () => ({ harness: 'cursor' }),
-    cursorConnected
+    () => enabled() && cursorConnected()
   );
 
   const agents = () => (agentsQuery.isSuccess ? agentsQuery.data : []);
@@ -59,10 +61,10 @@ export function createAgentRosterSource(): AgentRosterSource {
 
   return {
     roster,
-    loading: () => agentsQuery.isPending,
+    loading: () => enabled() && agentsQuery.isPending,
     availabilityLoading: () =>
-      harnessesQuery.isPending || cursorStatus.isPlaceholderData,
-    error: () => agentsQuery.isError,
+      enabled() && (harnessesQuery.isPending || cursorStatus.isPlaceholderData),
+    error: () => enabled() && agentsQuery.isError,
     cursorConnected,
   };
 }

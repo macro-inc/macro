@@ -25,6 +25,7 @@ import {
   copyOf,
   draftHasDefinitionsOrInputs,
   hasProgramDefinitionsOrInputs,
+  retainedDefinitionApps,
   subRoutineFromWire,
   subRoutinesFromWire,
   wireDefinition,
@@ -100,27 +101,31 @@ type DetailCallbacks = {
   onKept(): void;
 };
 
+function compatibleCopyParentTask(
+  schedule: ScheduledActionResponse,
+  parent: ScheduledActionResponse | undefined
+) {
+  const link = schedule.sub_routine;
+  if (!link || !parent || parent.id !== link.parent_id) return;
+  const copy = copyOf(schedule.task);
+  if (!copy) return;
+  const definition = wireDefinition(parent.task, copy.subRoutine);
+  if (definition && copyInputsFit(copy, definition)) return parent.task;
+}
+
 function canKeepSchedule(
   schedule: ScheduledActionResponse,
   parent: ScheduledActionResponse | undefined,
   connectedApps: ReadonlySet<string> | undefined
 ): boolean {
-  const link = schedule.sub_routine;
-  if (!link) return false;
-  const copy = copyOf(schedule.task);
-  if (!copy) return true;
-  if (!connectedApps || !parent || parent.id !== link.parent_id) return false;
-  const task = parent.task;
-  const definition = wireDefinition(task, copy.subRoutine);
-  return Boolean(
-    definition &&
-      copyInputsFit(copy, definition) &&
-      'steps' in task &&
-      task.sub_routines?.every((retained) =>
-        (retained.mcp_servers ?? []).every((app) =>
-          connectedApps.has(app.app_slug)
-        )
-      )
+  if (!schedule.sub_routine) return false;
+  if (!isSubRoutineCopy(schedule.task)) return true;
+  const task = compatibleCopyParentTask(schedule, parent);
+  return (
+    !!task &&
+    retainedDefinitionApps(task).every((app) =>
+      connectedApps?.has(app.app_slug)
+    )
   );
 }
 
@@ -128,8 +133,7 @@ export function createRoutineDetailSource(
   id: Accessor<string>,
   userId: Accessor<string | undefined>,
   callbacks: DetailCallbacks,
-  subRoutineWrites: Accessor<boolean | undefined>,
-  connectedApps: Accessor<ReadonlySet<string> | undefined>
+  subRoutineWrites: Accessor<boolean | undefined>
 ): RoutineDetailSource {
   const flow = useFlowTrace();
   const list = useSchedulesQuery(() => true);
@@ -215,6 +219,15 @@ export function createRoutineDetailSource(
       ? list.data?.find((item) => item.id === parentId())
       : undefined
   );
+  const connectedApps = createRoutineConnectedApps(() => {
+    const current = raw();
+    return Boolean(
+      current &&
+        current.owner === userId() &&
+        retainedDefinitionApps(compatibleCopyParentTask(current, rawParent()))
+          .length
+    );
+  });
   const parent = createMemo<RoutineParentSummary | undefined>(() => {
     const found = rawParent();
     if (!found?.id) return undefined;
@@ -455,24 +468,33 @@ export function createRoutineListSource(
 ): RoutineListSource {
   const query = useSchedulesQuery(() => true);
   const children = useSubRoutinesQuery(() => true);
-  const connectedApps = createRoutineConnectedApps();
+  const linked = createMemo(() =>
+    (children.isSuccess || children.isError ? (children.data ?? []) : [])
+      .filter((child) => child.id)
+      .map((child) => ({
+        child,
+        parent:
+          query.isSuccess || query.isError
+            ? query.data?.find(
+                (item) => item.id === child.sub_routine?.parent_id
+              )
+            : undefined,
+      }))
+  );
+  const connectedApps = createRoutineConnectedApps(() =>
+    linked().some(
+      ({ child, parent }) =>
+        retainedDefinitionApps(compatibleCopyParentTask(child, parent)).length >
+        0
+    )
+  );
   const toggle = useSetScheduleEnabledMutation({ onError });
   return {
     subRoutines: createMemo(() =>
-      (children.isSuccess || children.isError ? (children.data ?? []) : [])
-        .filter((item) => item.id)
-        .map((child) => ({
-          ...toRoutine(child),
-          canKeep: canKeepSchedule(
-            child,
-            query.isSuccess || query.isError
-              ? query.data?.find(
-                  (item) => item.id === child.sub_routine?.parent_id
-                )
-              : undefined,
-            connectedApps()
-          ),
-        }))
+      linked().map(({ child, parent }) => ({
+        ...toRoutine(child),
+        canKeep: canKeepSchedule(child, parent, connectedApps()),
+      }))
     ),
     routines: createMemo(() =>
       (query.isSuccess || query.isError ? (query.data ?? []) : [])
@@ -529,14 +551,23 @@ export function createRoutineRowOperations(
   const flow = useFlowTrace();
   const list = useSchedulesQuery(() => true);
   const children = useSubRoutinesQuery(() => true);
-  const connectedApps = createRoutineConnectedApps();
+  const saved = () => (list.isSuccess || list.isError ? (list.data ?? []) : []);
+  const linked = () =>
+    children.isSuccess || children.isError ? (children.data ?? []) : [];
   const find = (id: string) =>
-    (list.isSuccess || list.isError ? list.data : undefined)?.find(
-      (item) => item.id === id
-    ) ??
-    (children.isSuccess || children.isError ? children.data : undefined)?.find(
-      (item) => item.id === id
-    );
+    saved().find((item) => item.id === id) ??
+    linked().find((item) => item.id === id);
+  const connectedApps = createRoutineConnectedApps(() =>
+    linked().some(
+      (child) =>
+        retainedDefinitionApps(
+          compatibleCopyParentTask(
+            child,
+            child.sub_routine ? find(child.sub_routine.parent_id) : undefined
+          )
+        ).length > 0
+    )
+  );
   const run = useRunScheduleNowMutation({
     onSuccess: () => callbacks.onRunStarted(),
     onError: (error) => callbacks.onError('run', error),

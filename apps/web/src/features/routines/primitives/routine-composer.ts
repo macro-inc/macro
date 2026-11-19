@@ -1,6 +1,7 @@
 import { COMPOSER_STORAGE_CLEARED } from '@core/auth/clear-composer-storage';
 import { debounce } from '@solid-primitives/scheduled';
-import { type Accessor, createSignal, onCleanup } from 'solid-js';
+import { createSignal, onCleanup } from 'solid-js';
+import type { RoutineEditorSlots } from '../context/routine-slots';
 import type {
   RoutineCreatorSource,
   RoutineDraftStorage,
@@ -8,19 +9,22 @@ import type {
 import type { ScheduleDraft } from '../core/draft';
 import {
   createEmptyDraft,
+  draftNeedsAgentLookup,
+  draftRequiresApps,
   getErrorMessage,
   validateRoutineApps,
   validateRoutineDraft,
 } from '../core/routine-draft';
-import type { RoutineTarget } from '../core/routine-target';
 
 export function createRoutineComposer(
   source: RoutineCreatorSource,
   storage: RoutineDraftStorage,
   defaultModel: string,
   onCreated: (id: string) => void,
-  connectedApps: Accessor<ReadonlySet<string> | undefined>,
-  targetSupportsApps: (target: RoutineTarget) => boolean
+  appChecks: Pick<
+    RoutineEditorSlots,
+    'createConnectedApps' | 'createAppTargetCheck'
+  >
 ) {
   const restored = storage.load();
   const [draft, setDraft] = createSignal<ScheduleDraft>(
@@ -38,11 +42,17 @@ export function createRoutineComposer(
           enabled: true,
         }
   );
+  const connected = appChecks.createConnectedApps(() =>
+    draftRequiresApps(draft())
+  );
+  const targetSupportsApps = appChecks.createAppTargetCheck(() =>
+    draftNeedsAgentLookup(draft())
+  );
   const [attempted, setAttempted] = createSignal(false);
   const [submitError, setSubmitError] = createSignal<string>();
   const formError = () =>
     validateRoutineDraft(draft(), true) ??
-    validateRoutineApps(draft(), connectedApps(), targetSupportsApps);
+    validateRoutineApps(draft(), connected(), targetSupportsApps);
   // Logging out clears drafts; this one must not write itself back after.
   let retired = false;
   const persist = (value: ScheduleDraft) => {
@@ -94,6 +104,7 @@ export function createRoutineComposer(
   }
   return {
     draft,
+    connected,
     change,
     attempted,
     formError,

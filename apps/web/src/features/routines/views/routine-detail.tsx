@@ -163,9 +163,9 @@ export function RoutineDetailView(props: {
   /** Opens the item an event run was about. */
   onOpenItem?(item: RunItem, newSplit: boolean): void;
 }) {
-  const connectedApps = props.slots.createConnectedApps();
   const {
     schedule,
+    connectedApps,
     state,
     setState,
     isOwned,
@@ -183,8 +183,7 @@ export function RoutineDetailView(props: {
     runNow,
   } = createRoutineDetail(props.source, {
     userId: props.userId,
-    connectedApps,
-    targetSupportsApps: props.slots.createAppTargetCheck(),
+    appChecks: props.slots,
     onRename: (name) => props.onRename(name),
   });
   const [tab, setTab] = createSignal(props.initialTab ?? 'settings');

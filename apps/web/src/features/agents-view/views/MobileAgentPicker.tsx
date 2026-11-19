@@ -72,6 +72,7 @@ export function MobileAgentPicker(props: AgentPickerProps) {
         : 'Search agents';
   const changeOpen = (next: boolean) => {
     setOpen(next);
+    props.onOpenChange?.(next);
     if (!next) {
       setQuery('');
       setBrowsing(undefined);

@@ -2,7 +2,7 @@ import { requestRuntimeAccess } from '@app/features/runtime-sharing/core/request
 import { useSplitLayout } from '@components/app/split-layout/layout';
 import { useSettingsState } from '@core/constant/SettingsState';
 import { fireAndForget } from '@core/util/fireAndForget';
-import type { JSX } from 'solid-js';
+import { createSignal, type JSX } from 'solid-js';
 import type { RosterAgent } from '../agents-view/core/roster';
 import { openAgentsPage } from '../agents-view/primitives/open-page';
 import { createAgentRosterSource } from '../agents-view/queries/agent-roster-source';
@@ -24,7 +24,10 @@ export function RoutineExecutionPicker(
 }
 
 function ConnectedPicker(props: RoutineExecutionPickerProps): JSX.Element {
-  const roster = createAgentRosterSource();
+  const [open, setOpen] = createSignal(false);
+  const roster = createAgentRosterSource(
+    () => open() || props.target.kind === 'agent'
+  );
   const layout = useSplitLayout();
   const { openSettings } = useSettingsState();
 
@@ -46,6 +49,7 @@ function ConnectedPicker(props: RoutineExecutionPickerProps): JSX.Element {
       rosterLoading={roster.loading()}
       rosterError={roster.error()}
       availabilityLoading={roster.availabilityLoading()}
+      onOpenChange={setOpen}
       createModels={createComposerModels}
       onConnect={connect}
       onCreate={() => openAgentsPage(layout, 'agents')}

@@ -3,7 +3,7 @@ import { Popover } from '@kobalte/core/popover';
 import PlugsIcon from '@phosphor/plugs.svg';
 import { usePipedreamConnectedSlugs } from '@queries/pipedream-connectors';
 import { Button, badgeTriggerClasses } from '@ui';
-import { Show } from 'solid-js';
+import { createSignal, Show } from 'solid-js';
 import { PipedreamAppPicker } from '../settings/PipedreamAppPicker';
 import type { RoutineApp } from './core/draft';
 
@@ -14,7 +14,10 @@ export function RoutineApps(props: {
   /** A chip listing the apps (default), or an "Add connection" button. */
   variant?: 'chip' | 'button';
 }) {
-  const connections = usePipedreamConnectedSlugs();
+  const [open, setOpen] = createSignal(false);
+  const connections = usePipedreamConnectedSlugs({
+    enabled: () => open() || props.apps.length > 0,
+  });
   let triggerRef: HTMLButtonElement | undefined;
   // Mount Connect inside the enclosing dialog so its focus trap allows it.
   const dialog = () =>
@@ -29,6 +32,7 @@ export function RoutineApps(props: {
 
   return (
     <Popover
+      onOpenChange={setOpen}
       placement="bottom-start"
       gutter={6}
       boundary={() => document.documentElement}

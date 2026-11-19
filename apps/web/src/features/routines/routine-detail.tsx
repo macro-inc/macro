@@ -89,7 +89,6 @@ export function RoutineDetail(props: {
       ? props.onOpen(id)
       : openAgentsPage(layout, 'routines', { routineId: id });
   const subRoutineWrites = useSubRoutineWrites();
-  const connectedApps = createRoutineConnectedApps();
   const source = createRoutineDetailSource(
     () => props.scheduleId,
     userId,
@@ -104,8 +103,7 @@ export function RoutineDetail(props: {
       },
       onKept: () => toast.success(t('subRoutines.kept')),
     },
-    subRoutineWrites,
-    connectedApps
+    subRoutineWrites
   );
   const remove = () => {
     const entity = source.entity();
@@ -277,7 +275,7 @@ export function RoutineDetail(props: {
           ExecutionPicker: RoutineExecutionPicker,
           Triggers: RoutineTriggers,
           Apps: RoutineApps,
-          createConnectedApps: () => connectedApps,
+          createConnectedApps: createRoutineConnectedApps,
           createAppTargetCheck: createRoutineAppTargetCheck,
           createStepAuthor: createRoutineStepAuthor,
           createChatMetadata: createChatHistoryMetadata,

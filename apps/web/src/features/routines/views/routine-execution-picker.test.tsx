@@ -24,6 +24,7 @@ const host = vi.hoisted(() => ({
   layout: {},
   openSettings: vi.fn(),
   openAgentsPage: vi.fn(),
+  rosterAdmission: vi.fn<(enabled: () => boolean) => void>(),
 }));
 vi.mock('@components/app/split-layout/layout', () => ({
   useSplitLayout: () => host.layout,
@@ -35,12 +36,15 @@ vi.mock('../../agents-view/primitives/open-page', () => ({
   openAgentsPage: host.openAgentsPage,
 }));
 vi.mock('../../agents-view/queries/agent-roster-source', () => ({
-  createAgentRosterSource: () => ({
-    roster,
-    loading: () => false,
-    error: () => false,
-    availabilityLoading: () => false,
-  }),
+  createAgentRosterSource: (enabled: () => boolean = () => true) => {
+    host.rosterAdmission(enabled);
+    return {
+      roster,
+      loading: () => false,
+      error: () => false,
+      availabilityLoading: () => false,
+    };
+  },
 }));
 
 // Exercise the real AgentPicker, runtime model adapter, and Kobalte menus.
@@ -270,6 +274,19 @@ describe('routine execution picker', () => {
       await expectClosed(trigger);
     }
   );
+
+  it('defers the model picker roster until the picker opens', () => {
+    render(() => (
+      <RoutineExecutionPicker
+        target={{ kind: 'model', model: 'chat-model' }}
+        onChange={vi.fn()}
+      />
+    ));
+    const enabled = host.rosterAdmission.mock.lastCall?.[0];
+    expect(enabled?.()).toBe(false);
+    openPicker();
+    expect(enabled?.()).toBe(true);
+  });
 
   it('wires the production setup actions without a legacy block provider', async () => {
     const onChange = vi.fn();

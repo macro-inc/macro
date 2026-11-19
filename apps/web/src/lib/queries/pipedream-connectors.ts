@@ -103,9 +103,10 @@ function pipedreamOverlaysQueryOptions() {
  * Pipedream. Never suspends: the empty placeholder only means "not loaded
  * yet", so surfaces that decide anything from it also check `ready`.
  */
-export function usePipedreamOverlaysQuery() {
+export function usePipedreamOverlaysQuery(enabled?: () => boolean) {
   return useQuery(() => ({
     ...pipedreamOverlaysQueryOptions(),
+    enabled: enabled?.() ?? true,
     placeholderData: NO_OVERLAYS,
   }));
 }
@@ -153,17 +154,20 @@ export function overlaidSlugsConnected(
  */
 export function usePipedreamConnectedSlugs(options?: {
   refetchInterval?: number;
+  enabled?: () => boolean;
 }): {
   slugs: Accessor<ReadonlySet<string>>;
   ready: Accessor<boolean>;
 } {
   const query = usePipedreamConnectionsQuery({
     neverSuspend: true,
+    enabled: options?.enabled,
     refetchInterval: options?.refetchInterval,
   });
-  const overlays = usePipedreamOverlaysQuery();
+  const overlays = usePipedreamOverlaysQuery(options?.enabled);
   const servers = useMcpServersQuery({
     neverSuspend: true,
+    enabled: options?.enabled,
     refetchInterval: options?.refetchInterval,
   });
   const slugs = createMemo<ReadonlySet<string>>(() => {

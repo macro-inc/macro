@@ -35,8 +35,12 @@ export type RoutineEditorSlots = {
     variant?: 'chip' | 'button';
   }>;
   /** The viewer's connected app slugs; undefined until they load. */
-  createConnectedApps(): Accessor<ReadonlySet<string> | undefined>;
-  createAppTargetCheck(): (target: RoutineTarget) => boolean;
+  createConnectedApps(
+    enabled: Accessor<boolean>
+  ): Accessor<ReadonlySet<string> | undefined>;
+  createAppTargetCheck(
+    enabled: Accessor<boolean>
+  ): (target: RoutineTarget) => boolean;
   /** AI that adds and changes steps; without it, steps are added by hand. */
   createStepAuthor?(routine: Accessor<RoutineSoFar>): StepAuthor;
 };

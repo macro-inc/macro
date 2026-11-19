@@ -282,6 +282,28 @@ export function validateRoutineDraft(
   return null;
 }
 
+export function draftRequiresApps(draft: ScheduleDraft | undefined): boolean {
+  return Boolean(
+    draft &&
+      (draft.apps.length ||
+        draft.subRoutines?.some((definition) => definition.apps.length))
+  );
+}
+
+export function draftNeedsAgentLookup(
+  draft: ScheduleDraft | undefined
+): boolean {
+  if (!draft) return false;
+  const selectsAgent = (steps: StepDraft[]) =>
+    steps.some((step) => step.kind === 'agent' && step.target.kind === 'agent');
+  return Boolean(
+    (draft.apps.length && selectsAgent(draftSteps(draft))) ||
+      draft.subRoutines?.some(
+        (definition) => definition.apps.length && selectsAgent(definition.steps)
+      )
+  );
+}
+
 /** Check each Ask AI target with the apps of the program or definition it runs. */
 export function validateRoutineApps(
   draft: ScheduleDraft,

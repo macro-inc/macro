@@ -41,14 +41,10 @@ function setup(
   };
   const composer = createRoot((cleanup) => {
     dispose = cleanup;
-    return createRoutineComposer(
-      source,
-      storage,
-      'default-model',
-      onCreated,
-      connected,
-      () => true
-    );
+    return createRoutineComposer(source, storage, 'default-model', onCreated, {
+      createConnectedApps: () => connected,
+      createAppTargetCheck: () => () => true,
+    });
   });
   return { composer, storage, onCreated, source };
 }
@@ -146,8 +142,10 @@ describe('routine creation state without app providers', () => {
         storage,
         'default-model',
         vi.fn(),
-        () => new Set(),
-        () => true
+        {
+          createConnectedApps: () => () => new Set(),
+          createAppTargetCheck: () => () => true,
+        }
       );
     });
     expect(composer.draft()).toMatchObject({ triggers: [], steps: [] });

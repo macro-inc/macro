@@ -1,14 +1,15 @@
 import { useAgentsQuery } from '@queries/agents/agents';
 import { queryReadyGate } from '@queries/gate';
+import type { Accessor } from 'solid-js';
 import {
   type RoutineTarget,
   routineHarnessSupportsApps,
 } from '../core/routine-target';
 
-export function createRoutineAppTargetCheck(): (
-  target: RoutineTarget
-) => boolean {
-  const agents = useAgentsQuery();
+export function createRoutineAppTargetCheck(
+  enabled: Accessor<boolean>
+): (target: RoutineTarget) => boolean {
+  const agents = useAgentsQuery(enabled);
   return (target) => {
     if (target.kind === 'model') return true;
     const id = target.agentId.toLowerCase();

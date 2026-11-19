@@ -37,6 +37,7 @@ type Props = RoutineExecutionPickerProps & {
   createModels: (agent: Accessor<RosterAgent | undefined>) => ModelCatalog;
   onConnect: (agent: RosterAgent) => void;
   onCreate: () => void;
+  onOpenChange?: (open: boolean) => void;
 };
 
 function savedSelection(target: RoutineTarget): string {
@@ -160,6 +161,7 @@ export function RoutineExecutionPickerView(props: Props): JSX.Element {
           onSelect={select}
           onConnect={props.onConnect}
           onCreate={props.onCreate}
+          onOpenChange={props.onOpenChange}
         />
         <Show when={!selected()}>
           <p class="break-words text-xs text-ink-muted">

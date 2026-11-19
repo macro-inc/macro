@@ -76,6 +76,14 @@ export function wireDefinition(task: RoutineTask, name: string) {
     : undefined;
 }
 
+export function retainedDefinitionApps(task: RoutineTask | undefined) {
+  return task && 'steps' in task
+    ? (task.sub_routines?.flatMap(
+        (definition) => definition.mcp_servers ?? []
+      ) ?? [])
+    : [];
+}
+
 /** Match the scheduler's detach check against the current input declarations. */
 export function copyInputsFit(
   copy: SubRoutineCopyDraft,

@@ -44,6 +44,7 @@ export type AgentPickerProps = {
   ) => void;
   onConnect: (agent: RosterAgent) => void;
   onCreate: () => void;
+  onOpenChange?: (open: boolean) => void;
   onCloseAutoFocus?: (event: Event) => void;
 };
 
@@ -56,7 +57,11 @@ export function AgentPicker(props: AgentPickerProps) {
 }
 
 function DesktopAgentPicker(props: AgentPickerProps) {
-  const [open, setOpen] = createSignal(false);
+  const [open, setIsOpen] = createSignal(false);
+  const setOpen = (next: boolean) => {
+    setIsOpen(next);
+    props.onOpenChange?.(next);
+  };
   const catalog = createComposerModels(() => props.selected);
   const macro = () =>
     props.agents.find((agent) => agent.id === MACRO_PERSONA_ID);
