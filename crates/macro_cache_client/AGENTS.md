@@ -18,7 +18,8 @@ behind its own Cargo feature.
   single-use mobile login sessions behind sign-in session codes. A code bound
   to a sign-in is one hash under its own prefix (`mbl_login_bound:`), so its
   challenge can't be evicted apart from it and a server that predates binding
-  never finds it.
+  never finds it. A taken code keeps its deadline on Redis's clock, and a
+  restore puts it back until then, not for a fresh lifetime.
 
 ## Scope
 
@@ -44,7 +45,16 @@ behind its own Cargo feature.
 ## Checks
 
 - `cargo test -p macro_cache_client` (`SQLX_OFFLINE` unset). The `auth` tests
-  need Redis: CI's on `127.0.0.1:6379`, or set `REDIS_URL`.
+  need Redis: CI's on `127.0.0.1:6379`, or set `REDIS_URL`. To check a new
+  script against a cluster, point `REDIS_URL` at a one-node cluster:
+  `redis-server --port <p> --cluster-enabled yes`, then
+  `redis-cli -p <p> cluster addslotsrange 0 16383`.
+
+## Gotchas
+
+- Keep each Lua script or `MULTI` to one key. On a Redis cluster a script
+  whose keys hash to different slots fails with `CROSSSLOT`, and CI's Redis
+  is a single node that never shows it.
 
 ## Related
 

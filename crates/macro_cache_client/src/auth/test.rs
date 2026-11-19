@@ -22,6 +22,26 @@ fn fresh_code(label: &str) -> String {
     format!("test-{label}-{nanos}")
 }
 
+/// Redis's clock in milliseconds since the epoch: the clock deadlines use.
+async fn redis_now_ms(cache: &MacroCache) -> i64 {
+    let mut connection = cache
+        .inner
+        .get_multiplexed_async_connection()
+        .await
+        .unwrap();
+    let (seconds, micros): (i64, i64) = redis::cmd("TIME")
+        .query_async(&mut connection)
+        .await
+        .unwrap();
+    seconds * 1000 + micros / 1000
+}
+
+/// A deadline read back adds Redis's clock to a whole-millisecond TTL, so it
+/// can land one millisecond after the one stored.
+fn same_deadline(read: i64, stored: i64) -> bool {
+    (0..=1).contains(&(read - stored))
+}
+
 #[tokio::test]
 async fn a_session_code_redeems_once() {
     let cache = cache();
@@ -90,11 +110,11 @@ async fn a_restored_session_redeems_once_more_within_its_lifetime() {
         .await
         .unwrap()
         .unwrap();
-    let lifetime = std::time::Duration::from_secs(MACRO_MOBILE_LOGIN_SESSION_EXPIRY_SECONDS);
-    assert!(!taken.remaining().is_zero() && taken.remaining() <= lifetime);
+    let now = redis_now_ms(&cache).await;
+    let lifetime_ms = i64::try_from(MACRO_MOBILE_LOGIN_SESSION_EXPIRY_SECONDS * 1000).unwrap();
+    assert!(taken.expires_at_ms > now && taken.expires_at_ms <= now + lifetime_ms + 1);
     // Most of the code's lifetime went by while the refresh failed.
-    let left = std::time::Duration::from_secs(2);
-    taken.expires_at = std::time::Instant::now() + left;
+    taken.expires_at_ms = now + 2_000;
     assert!(
         cache
             .restore_mobile_login_session(&code, &taken)
@@ -109,9 +129,12 @@ async fn a_restored_session_redeems_once_more_within_its_lifetime() {
         .unwrap();
     assert_eq!(again.refresh_token(), "fake-refresh-token");
     // The restore keeps the original deadline instead of starting a new one.
-    // Redis keeps whole milliseconds, so allow one.
-    assert!(!again.remaining().is_zero());
-    assert!(again.remaining() <= left + std::time::Duration::from_millis(1));
+    assert!(
+        same_deadline(again.expires_at_ms, taken.expires_at_ms),
+        "restored until {}, taken with {}",
+        again.expires_at_ms,
+        taken.expires_at_ms
+    );
     assert!(
         cache
             .take_mobile_login_session(&code)
@@ -172,7 +195,7 @@ async fn errors_and_debug_output_never_contain_the_code_or_token() {
     let session = MobileLoginSession {
         refresh_token: "fake-refresh-token".into(),
         code_challenge: Some(FAKE_CHALLENGE.into()),
-        expires_at: std::time::Instant::now(),
+        expires_at_ms: 0,
     };
     let text = format!("{session:?}");
     assert!(!text.contains("fake-refresh-token"), "{text}");
@@ -281,6 +304,12 @@ async fn a_restored_code_keeps_its_challenge() {
         Some(FAKE_CHALLENGE),
         "a retry must not find the code unbound"
     );
+    assert!(
+        same_deadline(again.expires_at_ms, taken.expires_at_ms),
+        "restored until {}, taken with {}",
+        again.expires_at_ms,
+        taken.expires_at_ms
+    );
 }
 
 #[tokio::test]
@@ -297,7 +326,7 @@ async fn a_session_past_its_original_deadline_is_not_restored() {
         .unwrap()
         .unwrap();
     // The refresh outlasted the code's original five minutes.
-    taken.expires_at = std::time::Instant::now() - std::time::Duration::from_millis(1);
+    taken.expires_at_ms = redis_now_ms(&cache).await - 1;
 
     assert!(
         !cache
