@@ -8,6 +8,7 @@
 
 import type { RoutineSoFarTrigger } from './routineSoFarTrigger';
 import type { RoutineStep } from './routineStep';
+import type { RoutineSubRoutine } from './routineSubRoutine';
 
 /**
  * The routine a step is added to or changed in.
@@ -15,6 +16,10 @@ import type { RoutineStep } from './routineStep';
 export interface RoutineSoFar {
   /** Its steps, in the shape a routine's task holds them. */
   steps: RoutineStep[];
+  /** The sub-routines it defines, in the shape a routine's task holds
+them. A draft keeps them as they are, and checks its steps' code
+with them. */
+  sub_routines?: RoutineSubRoutine[];
   /** Its trigger as it would be saved, for AI to read; absent while it has none. */
   trigger?: RoutineSoFarTrigger;
 }

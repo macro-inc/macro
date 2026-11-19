@@ -733,7 +733,7 @@ pub async fn build<Ingress: notification::domain::service::NotificationIngress>(
             dispatcher_tx,
             access.clone(),
         )
-        .with_event_routines(event_routines)
+        .with_event_routines(event_routines.clone())
         .with_conditions_enabled(conditions_enabled)
         .with_target_validation(target_validation)
         .with_draft_hand_backs(Arc::clone(&hand_backs), Arc::clone(&request_sessions))
@@ -765,6 +765,8 @@ pub async fn build<Ingress: notification::domain::service::NotificationIngress>(
             activity::outbound::pg_activity_repo::PgActivityRepo::new(db.clone()),
         )))
         .with_conditions_enabled(conditions_enabled)
+        // Drafts define sub-routines only for owners who may save them.
+        .with_sub_routines(Arc::new(event_routines))
         .with_finding(DraftFinding {
             model: Arc::new(routine_drafting::RouterDraftModels {
                 admission: Arc::clone(&ai_admission),

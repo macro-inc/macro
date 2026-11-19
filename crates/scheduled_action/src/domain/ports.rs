@@ -427,6 +427,15 @@ pub trait SuggestionOrigins: Send + Sync + 'static {
     ) -> Result<Option<SuggestionOrigin>>;
 }
 
+/// Whether an owner's drafts may define sub-routines: the rollout that lets
+/// the owner save a routine that defines them. Object-safe, so the drafter
+/// holds one erased.
+#[async_trait::async_trait]
+pub trait DraftSubRoutines: Send + Sync + 'static {
+    /// A rollout that can't be read counts as off.
+    async fn may_define(&self, owner: &MacroUserIdStr<'static>) -> bool;
+}
+
 /// Where a draft's session hands its routine back: one row per draft,
 /// keyed by the draft session's id, so the drafter reads what the session
 /// checked whichever replicas each ran on. Object-safe: the drafter and the

@@ -89,3 +89,19 @@ impl<R: EventRoutineRollout> EventRoutineRollout for Option<R> {
         }
     }
 }
+
+/// Drafts define sub-routines only for owners who may save them.
+#[async_trait::async_trait]
+impl<R: EventRoutineRollout> super::ports::DraftSubRoutines for R {
+    async fn may_define(&self, owner: &MacroUserIdStr<'static>) -> bool {
+        self.sub_routines_enabled_for(owner)
+            .await
+            .inspect_err(|error| {
+                tracing::warn!(
+                    ?error,
+                    "feature flags unavailable; drafts define no sub-routines"
+                );
+            })
+            .unwrap_or(false)
+    }
+}

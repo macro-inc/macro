@@ -937,6 +937,7 @@ pub(super) fn add(description: &str, steps: Vec<Value>, kind: Option<StepKind>) 
         routine: RoutineSoFar {
             trigger: Some(message_posted(&[])),
             steps,
+            sub_routines: Vec::new(),
         },
         kind,
     }
@@ -1090,6 +1091,7 @@ async fn changes_a_code_step_in_place_keeping_its_output_name() {
             steps: vec![
                 json!({ "type": "code", "id": "make_a_task", "title": "Make a task", "summary": "", "source": "good" }),
             ],
+            sub_routines: Vec::new(),
         },
         index: 0,
     };
@@ -1120,6 +1122,7 @@ async fn refuses_requests_it_cannot_draft() {
                 routine: RoutineSoFar {
                     trigger: None,
                     steps: vec![agent_step()],
+                    sub_routines: Vec::new(),
                 },
                 index: 0,
             },
@@ -1424,4 +1427,123 @@ async fn a_failed_draft_still_says_what_its_session_created() {
             used: false,
         }]
     );
+}
+
+/// A routine that schedules a reminder per task from its one code step,
+/// defining the reminder once with `definition` as its steps.
+fn schedules_reminders(definition: Value) -> ActionConfiguration {
+    let mut routine = configuration(
+        "Due reminders",
+        message_posted(&[]),
+        json!([code_step("Schedule reminders", "good")]),
+    );
+    routine.task["sub_routines"] = json!([{
+        "name": "remind",
+        "title": "Remind me about a task",
+        "inputs": [{ "type": "text", "name": "taskId", "label": "Task" }],
+        "steps": definition,
+    }]);
+    routine
+}
+
+#[tokio::test]
+async fn a_drafted_routine_keeps_the_sub_routines_it_defines_and_where_their_code_fails() {
+    let rows = Arc::new(Rows::default());
+    let sessions = Arc::new(Sessions::new(
+        &rows,
+        Box::new(|_| {
+            vec![plain(schedules_reminders(json!([
+                code_step("Read the task", "bad"),
+                agent_step()
+            ])))]
+        }),
+    ));
+
+    let drafted = drafted_routine(
+        draft(
+            &drafts(&rows, &sessions),
+            routine("remind me the day before each task is due"),
+        )
+        .await,
+    );
+
+    assert_eq!(drafted.steps.len(), 1);
+    assert_eq!(drafted.sub_routines.len(), 1);
+    assert_eq!(drafted.sub_routines[0]["name"], "remind");
+    assert_eq!(
+        drafted.sub_routines[0]["steps"].as_array().unwrap().len(),
+        2
+    );
+    assert_eq!(drafted.problems.len(), 1);
+    assert_eq!(drafted.problems[0].sub_routine.as_deref(), Some("remind"));
+    assert_eq!(drafted.problems[0].index, 0);
+    let wire = serde_json::to_value(&drafted).unwrap();
+    assert_eq!(wire["subRoutines"][0]["name"], "remind");
+    assert_eq!(wire["problems"][0]["subRoutine"], "remind");
+}
+
+#[tokio::test]
+async fn a_routine_without_sub_routines_is_drafted_as_before() {
+    let rows = Arc::new(Rows::default());
+    let sessions = Arc::new(Sessions::new(
+        &rows,
+        Box::new(|_| {
+            vec![plain(configuration(
+                "Bug tasks",
+                message_posted(&[]),
+                json!([code_step("Make a task", "bad")]),
+            ))]
+        }),
+    ));
+
+    let drafted = drafted_routine(draft(&drafts(&rows, &sessions), routine(BUG_REPORTS)).await);
+
+    assert!(drafted.sub_routines.is_empty());
+    let wire = serde_json::to_value(&drafted).unwrap();
+    assert!(wire.get("subRoutines").is_none(), "{wire}");
+    assert_eq!(
+        wire["problems"],
+        json!([{ "index": 0, "problems": drafted.problems[0].problems }])
+    );
+}
+
+#[tokio::test]
+async fn a_step_added_to_a_routine_with_sub_routines_is_checked_with_them() {
+    let definition = json!([
+        code_step("Read the task", "good"),
+        code_step("Write the reminder", "bad")
+    ]);
+    let rows = Arc::new(Rows::default());
+    let sessions = Arc::new(Sessions::new(&rows, {
+        let definition = definition.clone();
+        Box::new(move |prompt| {
+            assert!(
+                prompt.contains("Keep its sub-routines (`subRoutines`) exactly as they are too"),
+                "{prompt}"
+            );
+            assert!(prompt.contains(r#""subRoutines":[{"#), "{prompt}");
+            let mut routine = schedules_reminders(definition.clone());
+            routine.task["steps"]
+                .as_array_mut()
+                .unwrap()
+                .push(code_step("Post a summary", "good"));
+            vec![plain(routine)]
+        })
+    }));
+    let so_far = schedules_reminders(definition);
+    let request = DraftRequest::AddStep {
+        description: "then post a summary".into(),
+        routine: RoutineSoFar {
+            trigger: Some(message_posted(&[])),
+            steps: so_far.task["steps"].as_array().unwrap().clone(),
+            sub_routines: so_far.task["sub_routines"].as_array().unwrap().clone(),
+        },
+        kind: Some(StepKind::Code),
+    };
+
+    let drafted = drafted_step(draft(&drafts(&rows, &sessions), request).await);
+
+    assert_eq!(drafted.step["title"], "Post a summary");
+    // The sub-routine's step 1 fails, not the routine's step 1 just added.
+    assert!(drafted.problems.is_empty(), "{:?}", drafted.problems);
 }

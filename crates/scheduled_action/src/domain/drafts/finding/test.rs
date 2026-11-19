@@ -434,17 +434,17 @@ fn the_instructions_say_what_this_kind_of_draft_may_write() {
     let prompts = FindingPrompts::new(&Areas::default());
     let model = "anthropic/claude-sonnet-5-5";
 
-    let code = prompts.instructions(true, true, model);
+    let code = prompts.instructions(true, true, false, model);
     assert!(code.contains(CODE_STEPS));
     assert!(code.contains("a code step never messages or emails the routine's owner"));
     assert!(code.contains(&format!("model: '{model}'")));
     assert!(code.contains("may carry a `condition`"));
     assert!(
         prompts
-            .instructions(true, false, model)
+            .instructions(true, false, false, model)
             .contains("Never give a trigger a `condition`.")
     );
-    let prose = prompts.instructions(false, false, model);
+    let prose = prompts.instructions(false, false, false, model);
     assert!(prose.contains("Code steps can't be used"));
     assert!(!prose.contains(CODE_STEPS));
     assert!(prose.contains("the reference of routines"));
@@ -453,6 +453,74 @@ fn the_instructions_say_what_this_kind_of_draft_may_write() {
         for placeholder in ["{items}", "{conditions}", "{steps}", "{reference}"] {
             assert!(!text.contains(placeholder), "{placeholder}");
         }
+    }
+}
+
+#[test]
+fn only_a_draft_that_may_define_sub_routines_is_told_how_to_schedule_later_work() {
+    let prompts = FindingPrompts::new(&Areas::default());
+    let model = "anthropic/claude-sonnet-5-5";
+
+    let told = prompts.instructions(true, true, true, model);
+    assert!(told.contains(LATER.trim()));
+    assert!(told.contains("macro.routines.schedule('remind_before_due'"));
+    assert!(
+        !prompts
+            .instructions(true, true, false, model)
+            .contains(LATER.trim())
+    );
+}
+
+/// Lets every owner's drafts define sub-routines, or none's.
+struct SubRoutinesFor(bool);
+
+#[async_trait::async_trait]
+impl crate::domain::ports::DraftSubRoutines for SubRoutinesFor {
+    async fn may_define(&self, _: &MacroUserIdStr<'static>) -> bool {
+        self.0
+    }
+}
+
+#[tokio::test(start_paused = true)]
+async fn a_new_routine_defines_sub_routines_only_where_its_owner_may_save_them() {
+    let remind = "remind me the day before each task is due";
+    let cases = [
+        // (owner may define them, code allowed, a new routine, told)
+        (Some(true), true, true, true),
+        (Some(false), true, true, false),
+        (None, true, true, false),
+        (Some(true), false, true, false),
+        // A step added to a routine is one step, never a definition.
+        (Some(true), true, false, false),
+    ];
+    for (allowed, code, new, told) in cases {
+        let model = Arc::new(Model::finding(named(&[])));
+        let (drafts, sessions, _) = finding(
+            &model,
+            &Arc::new(Names::default()),
+            Box::new(|_| Vec::new()),
+        );
+        let drafts = match allowed {
+            Some(allowed) => drafts.with_sub_routines(Arc::new(SubRoutinesFor(allowed))),
+            None => drafts,
+        };
+        let request = if new {
+            routine(remind)
+        } else {
+            super::super::test::add(remind, vec![code_step("Make a task", "good")], None)
+        };
+
+        drafts
+            .draft(owner(), request, DraftContext { code, ..context() })
+            .await
+            .unwrap();
+
+        let (instructions, _) = briefs(&sessions);
+        assert_eq!(
+            instructions.unwrap().contains(LATER.trim()),
+            told,
+            "allowed {allowed:?}, code {code}, new {new}"
+        );
     }
 }
 

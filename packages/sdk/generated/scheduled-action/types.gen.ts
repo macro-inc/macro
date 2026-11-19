@@ -634,6 +634,11 @@ export type DraftedRoutine = {
      * step named as saving names it.
      */
     steps: Array<RoutineStep>;
+    /**
+     * Work its runs schedule once per item, defined once, in the shape a
+     * routine's task holds them; empty when it defines none.
+     */
+    subRoutines?: Array<RoutineSubRoutine>;
     trigger?: null | ActionTrigger;
 };
 
@@ -1384,6 +1389,12 @@ export type RoutineSoFar = {
      */
     steps: Array<RoutineStep>;
     /**
+     * The sub-routines it defines, in the shape a routine's task holds
+     * them. A draft keeps them as they are, and checks its steps' code
+     * with them.
+     */
+    sub_routines?: Array<RoutineSubRoutine>;
+    /**
      * Its trigger as it would be saved, for AI to read; absent while it has none.
      */
     trigger?: {
@@ -1843,10 +1854,14 @@ export type StepKind = 'code' | 'agent';
  */
 export type StepProblem = {
     /**
-     * Its place among the steps, from zero.
+     * Its place among the routine's steps, or its sub-routine's, from zero.
      */
     index: number;
     problems: Array<string>;
+    /**
+     * The sub-routine whose step it is; absent for the routine's own steps.
+     */
+    subRoutine?: string | null;
 };
 
 /**

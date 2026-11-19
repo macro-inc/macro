@@ -303,6 +303,7 @@ export * from './startSuggestionGenerationParams';
 export * from './stepId';
 export * from './stepKind';
 export * from './stepProblem';
+export * from './stepProblemSubRoutine';
 export * from './stepTitle';
 export * from './subRoutine';
 export * from './subRoutineKey';

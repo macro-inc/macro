@@ -5,15 +5,18 @@
  * API for managing scheduled actions
  * OpenAPI spec version: 0.1.0
  */
+import type { StepProblemSubRoutine } from './stepProblemSubRoutine';
 
 /**
  * A drafted step whose code still fails the type checker.
  */
 export interface StepProblem {
   /**
-   * Its place among the steps, from zero.
+   * Its place among the routine's steps, or its sub-routine's, from zero.
    * @minimum 0
    */
   index: number;
   problems: string[];
+  /** The sub-routine whose step it is; absent for the routine's own steps. */
+  subRoutine?: StepProblemSubRoutine;
 }

@@ -8,6 +8,7 @@
 import type { DraftCreated } from './draftCreated';
 import type { DraftedRoutineTrigger } from './draftedRoutineTrigger';
 import type { RoutineStep } from './routineStep';
+import type { RoutineSubRoutine } from './routineSubRoutine';
 import type { StepProblem } from './stepProblem';
 
 /**
@@ -23,5 +24,8 @@ writes to. These exist whether or not the routine is saved. */
   /** What it does, in the shape a routine's task holds steps, each code
 step named as saving names it. */
   steps: RoutineStep[];
+  /** Work its runs schedule once per item, defined once, in the shape a
+routine's task holds them; empty when it defines none. */
+  subRoutines?: RoutineSubRoutine[];
   trigger?: DraftedRoutineTrigger;
 }

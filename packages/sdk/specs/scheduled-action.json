@@ -4166,6 +4166,13 @@
             },
             "description": "What it does, in the shape a routine's task holds steps, each code\nstep named as saving names it."
           },
+          "subRoutines": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/RoutineSubRoutine"
+            },
+            "description": "Work its runs schedule once per item, defined once, in the shape a\nroutine's task holds them; empty when it defines none."
+          },
           "trigger": {
             "oneOf": [
               {
@@ -5359,6 +5366,13 @@
             },
             "description": "Its steps, in the shape a routine's task holds them."
           },
+          "sub_routines": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/RoutineSubRoutine"
+            },
+            "description": "The sub-routines it defines, in the shape a routine's task holds\nthem. A draft keeps them as they are, and checks its steps' code\nwith them."
+          },
           "trigger": {
             "type": ["object", "null"],
             "description": "Its trigger as it would be saved, for AI to read; absent while it has none."
@@ -6119,7 +6133,7 @@
         "properties": {
           "index": {
             "type": "integer",
-            "description": "Its place among the steps, from zero.",
+            "description": "Its place among the routine's steps, or its sub-routine's, from zero.",
             "minimum": 0
           },
           "problems": {
@@ -6127,6 +6141,10 @@
             "items": {
               "type": "string"
             }
+          },
+          "subRoutine": {
+            "type": ["string", "null"],
+            "description": "The sub-routine whose step it is; absent for the routine's own steps."
           }
         }
       },

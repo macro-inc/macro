@@ -82,8 +82,21 @@ each run.
   code and conditions, so the agent puts them in its cached prompt prefix
   (`PrepareRoutineSession::instructions`). A code step never messages or
   emails the routine's owner (Macro refuses a message to oneself): telling
-  the owner something is an Ask AI step's job. The prompt carries only the
-  request, the owner and time, the found and left items, and the reference
+  the owner something is an Ask AI step's job. Work done once, later, per
+  item a run finds or an event brings (a reminder before each task is due,
+  a follow-up days after), is a sub-routine the draft defines once
+  (`subRoutines`: name, title, inputs, steps ending in an Ask AI step that
+  does the telling) and a code step of the routine's own scheduling one
+  keyed `once` copy per item with its inputs (`macro.routines.schedule`),
+  at a time on the owner's clock (`finding/later.md`). Only a new routine
+  that may have code is told this, and only when its owner may save
+  sub-routines (`DraftSubRoutines`, the `enable-sub-routines` flag read per
+  owner; unreadable is off). Work that repeats until something happens is
+  a routine on that schedule looking for what is still open. A step added
+  or changed keeps the routine's sub-routines as they are and is checked
+  with them; a drafted routine carries them in `subRoutines`, and a
+  problem in one names it (`StepProblem::sub_routine`). The prompt carries
+  only the request, the owner and time, the found and left items, and the reference
   of the areas named, or of the commonest ones when the SDK has none of
   them, then of up to three areas that find the names not looked up (a
   person in `users`, a database in `databases`: `kind_area`), each name's
@@ -132,7 +145,7 @@ each run.
   the answer's size and `routine.draft.lookup` what it found;
   `routine.check` records whether a check passed and kept a draft's
   answer. `DraftContext` still accepts and ignores the `workspace` older
-  web clients send. `bench/` is the drafting eval: 20 requests on a seeded
+  web clients send. `bench/` is the drafting eval: 22 requests on a seeded
   workspace, drafted by Draft it and by a bare agent session on a local
   stack against the live model, timed phase by phase and checked three ways
   (the draft's shape, one run of the routine, a blind judge); `compare`
