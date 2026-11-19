@@ -1,5 +1,8 @@
 import { useUserId } from '@core/context/user';
-import { calendarConsentScopes } from '@core/email-link/consent';
+import {
+  calendarConsentScopes,
+  calendarStoppedSyncing,
+} from '@core/email-link/consent';
 import { useEmailLinksQuery } from '@queries/email/link';
 import type { ConsentScopes } from '@service-auth/client';
 import type { Link as EmailLink } from '@service-email/generated/schemas';
@@ -14,6 +17,8 @@ export interface CalendarAccount {
   provider: EmailLink['provider'];
   emailAddress: string;
   action: CalendarAccountAction;
+  /** A `reconnect` for a calendar that used to sync and lost its access. */
+  stoppedSyncing: boolean;
   consentScopes: ConsentScopes;
 }
 
@@ -22,9 +27,9 @@ export interface CalendarAccount {
  * whose enabled calendar grant has expired offers `reconnect`. Missing calendar
  * access — never granted, declined, or turned off — offers `enable`, including
  * when the mailbox also needs reconnection; one that already
- * has it offers `turnOff`. A legacy inbox that still has data but no longer
- * satisfies the capability check also reads as `enable`: re-granting resumes
- * it, and removing the stale data stays available from connection settings.
+ * has it offers `turnOff`. An inbox whose calendar used to sync and lost its
+ * capability ({@link calendarStoppedSyncing}) offers `reconnect` instead, marked
+ * `stoppedSyncing`: its events are gone until it re-grants.
  *
  * Delegated inboxes are dropped: the viewer reads the owner's calendar but must
  * not enable or delete the owner's calendar from here. The viewer's primary
@@ -37,17 +42,23 @@ export function toCalendarAccounts(
   return links
     .filter((link) => link.macro_id === userId)
     .sort((a, b) => Number(b.is_primary) - Number(a.is_primary))
-    .map((link) => ({
-      linkId: link.id,
-      provider: link.provider,
-      emailAddress: link.email_address,
-      consentScopes: calendarConsentScopes(link),
-      action: link.needs_calendar_permission
-        ? 'enable'
-        : link.needs_reauth
-          ? 'reconnect'
-          : 'turnOff',
-    }));
+    .map((link) => {
+      const stoppedSyncing = calendarStoppedSyncing(link);
+      return {
+        linkId: link.id,
+        provider: link.provider,
+        emailAddress: link.email_address,
+        consentScopes: calendarConsentScopes(link),
+        stoppedSyncing,
+        action: link.needs_calendar_permission
+          ? stoppedSyncing
+            ? 'reconnect'
+            : 'enable'
+          : link.needs_reauth
+            ? 'reconnect'
+            : 'turnOff',
+      };
+    });
 }
 
 /** Reactive {@link toCalendarAccounts} over the current email links. */
