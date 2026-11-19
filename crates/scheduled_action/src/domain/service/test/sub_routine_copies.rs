@@ -327,6 +327,32 @@ async fn sub_routines_and_inputs_wait_for_the_owners_rollout() {
     );
 }
 
+/// The drafter fails a draft whose check names this refusal, so the check
+/// has to report it in exactly this form.
+#[tokio::test]
+async fn a_check_reports_the_rollout_refusing_sub_routines_as_its_problem() {
+    let check = service(false)
+        .check_action(
+            &user_principal(),
+            ActionConfiguration {
+                task: reminders_task("Remind me"),
+                ..configuration(false)
+            },
+            Vec::new(),
+            None,
+        )
+        .await
+        .unwrap();
+    assert!(!check.ok);
+    assert!(
+        check
+            .problems
+            .contains(&ActionPolicyError::SubRoutinesDisabled.to_string()),
+        "{:?}",
+        check.problems
+    );
+}
+
 #[tokio::test]
 async fn an_update_that_would_drop_the_definitions_is_refused() {
     let service = service(true);

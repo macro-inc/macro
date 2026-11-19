@@ -1333,8 +1333,9 @@ fn drafted(
             checked_sub_routines(&checked_with) != checked_sub_routines(&routine.sub_routines)
         }
     };
-    // A rollout refusal is one the session can't fix, and saving the draft
-    // would be refused the same way, so it isn't handed back as ready.
+    // A rollout refusal is one the session can't fix: creating the routine,
+    // or saving any change to a stored routine's task, is refused the same
+    // way while it holds, so the draft isn't handed back as ready.
     let rollout_off = check
         .problems
         .contains(&ActionPolicyError::SubRoutinesDisabled.to_string());
