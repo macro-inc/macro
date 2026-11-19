@@ -19,6 +19,7 @@ import {
   createAuthorityObserver,
 } from '../authority';
 import { CacheAuthoritySchema } from '../authority.generated';
+import { UNKNOWN_CACHE_GENERATION } from '../generation-mirror';
 import type {
   AffectedOperationsResult,
   CacheChangeHints,
@@ -272,7 +273,10 @@ export function createTauriCacheHost(options: TauriHostOptions): CacheHost {
     if ('generation' in args)
       args = {
         ...args,
-        generation: args.generation ?? authorityObserver.snapshot()?.generation,
+        generation:
+          args.generation ??
+          authorityObserver.snapshot()?.generation ??
+          UNKNOWN_CACHE_GENERATION,
       };
     if (command !== 'graphql_cache_read') pendingReads.clear();
     const span = Telemetry.span('graphql_cache.ipc.request', {
@@ -583,7 +587,10 @@ export function createTauriCacheHost(options: TauriHostOptions): CacheHost {
         }
       },
       async reconcile(args, traceparent, generation) {
-        const captured = generation ?? authorityObserver.snapshot()?.generation;
+        const captured =
+          generation ??
+          authorityObserver.snapshot()?.generation ??
+          UNKNOWN_CACHE_GENERATION;
         await ready;
         if (contactSyncUnavailable) return { kind: 'unsupported' };
         try {
@@ -653,7 +660,10 @@ export function createTauriCacheHost(options: TauriHostOptions): CacheHost {
         }
       },
       async update(update, traceparent, generation) {
-        const captured = generation ?? authorityObserver.snapshot()?.generation;
+        const captured =
+          generation ??
+          authorityObserver.snapshot()?.generation ??
+          UNKNOWN_CACHE_GENERATION;
         await ready;
         if (peopleUnavailable) throw new Error(PEOPLE_UNSUPPORTED);
         let result: WriteResult;
@@ -859,7 +869,10 @@ export function createTauriCacheHost(options: TauriHostOptions): CacheHost {
       args: CalendarCommitArgs,
       generation?: string
     ): Promise<CalendarCommitCacheResult> {
-      const captured = generation ?? authorityObserver.snapshot()?.generation;
+      const captured =
+        generation ??
+        authorityObserver.snapshot()?.generation ??
+        UNKNOWN_CACHE_GENERATION;
       await ready;
       if (calendarUnavailable) return { kind: 'unsupported' };
       try {
@@ -883,7 +896,10 @@ export function createTauriCacheHost(options: TauriHostOptions): CacheHost {
       const context = Telemetry.captureContext();
       args = {
         ...args,
-        generation: args.generation ?? authorityObserver.snapshot()?.generation,
+        generation:
+          args.generation ??
+          authorityObserver.snapshot()?.generation ??
+          UNKNOWN_CACHE_GENERATION,
       };
       await ready;
       return await context.run(() =>
@@ -909,7 +925,10 @@ export function createTauriCacheHost(options: TauriHostOptions): CacheHost {
     async hydrateQuery(args: CacheHydrateArgs): Promise<HydrationResult> {
       args = {
         ...args,
-        generation: args.generation ?? authorityObserver.snapshot()?.generation,
+        generation:
+          args.generation ??
+          authorityObserver.snapshot()?.generation ??
+          UNKNOWN_CACHE_GENERATION,
       };
       await ready;
       if (args.hydrationScope) {
@@ -965,7 +984,10 @@ export function createTauriCacheHost(options: TauriHostOptions): CacheHost {
     ): Promise<EnqueueOptimisticMutationResult> {
       args = {
         ...args,
-        generation: args.generation ?? authorityObserver.snapshot()?.generation,
+        generation:
+          args.generation ??
+          authorityObserver.snapshot()?.generation ??
+          UNKNOWN_CACHE_GENERATION,
       };
       await ready;
       return await request<EnqueueOptimisticMutationResult>(
@@ -1064,7 +1086,10 @@ export function createTauriCacheHost(options: TauriHostOptions): CacheHost {
     ): Promise<CommitOptimisticWriteResult> {
       args = {
         ...args,
-        generation: args.generation ?? authorityObserver.snapshot()?.generation,
+        generation:
+          args.generation ??
+          authorityObserver.snapshot()?.generation ??
+          UNKNOWN_CACHE_GENERATION,
       };
       await ready;
       return await request<CommitOptimisticWriteResult>(
@@ -1114,7 +1139,8 @@ export function createTauriCacheHost(options: TauriHostOptions): CacheHost {
       keys: string[],
       authorityGeneration?: string
     ): Promise<AffectedOperationsResult> {
-      authorityGeneration ??= authorityObserver.snapshot()?.generation;
+      authorityGeneration ??=
+        authorityObserver.snapshot()?.generation ?? UNKNOWN_CACHE_GENERATION;
       await ready;
       const result = await request<AffectedOperationsResult>(
         'graphql_cache_delete_records',

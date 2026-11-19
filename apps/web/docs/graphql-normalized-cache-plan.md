@@ -930,14 +930,31 @@ background. Ordinary requests, subscription frames and local cache reads never
 wait for permission proof. There are no GraphQL-field or REST-route admission
 classifiers.
 
-Before mounting request producers, startup reads the local owner's generation
-once, with a 1.5-second budget and the existing cache-failure fallback. This
-never awaits identity or member-access HTTP. Subscriptions start after that
-baseline is installed. A non-denied initial owner observation, the first account
-binding without a stored policy, and unchanged ready boot/focus proofs without
-pending cleanup do not invalidate or refetch queries. An initial denied policy
-still retires visible snapshots, and unchanged proofs retry failed cleanup.
-Actual account replacement retains the full generation fence.
+Startup installs the cache host before request producers but initializes it in
+the background, with a 1.5-second budget and the existing cache-failure fallback.
+Root and first render never await the owner or permission HTTP. A synchronous
+profile-local mirror supplies account, policy and generation as hints; missing
+or unreadable hints stamp an explicit nonmatching UUID. Same-account/same-policy
+observations correct future write stamps without retiring in-memory responses.
+Copied writes keep their original stamp and recover their own query if rejected.
+Subscriptions restart with the baseline stamp without replaying old-source frames.
+
+A missing mirror still fences/refetches active reads once. When its owner has a
+matching bound account and no policy, this preserves persisted queries on upgrade.
+Unknown accounts, established policies and proven denial require conservative
+persisted pruning. Actual account replacement retains the full session fence.
+First allowed/team-less proofs, first account binding without a policy, and
+unchanged ready boot/focus proofs without failed cleanup do not advance the owner
+generation or refetch. Unchanged proofs still retry failed local cleanup.
+
+A ready allowed mirror can open CRM UI before storage. On web with no mirror or
+owner snapshot, a short UI-only proof runs in parallel with initialization and
+may also open CRM. Login/host changes and owner observations fence its completion;
+denial, unfinished cleanup and mismatching accounts override it. Only a separate
+proof dispatched after reading the owner generation can commit durable policy.
+This successful missing-mirror launch makes two permission reads, versus one on
+a normal returning launch with a valid mirror. Native retains the baseline gate
+because independent Soup persistence can restore before owner readiness.
 
 The shared owner persists the new policy and generation before selective
 retirement. The application adapter removes CRM records, derived email and

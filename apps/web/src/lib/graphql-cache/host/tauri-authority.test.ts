@@ -4,6 +4,7 @@ import {
   type CacheAuthority,
   StaleCacheAuthorityError,
 } from '../authority';
+import { UNKNOWN_CACHE_GENERATION } from '../generation-mirror';
 
 const invoke = vi.hoisted(() => vi.fn());
 const listen = vi.hoisted(() => vi.fn());
@@ -76,6 +77,35 @@ afterEach(() => {
   vi.restoreAllMocks();
 });
 
+it.each([undefined, UNKNOWN_CACHE_GENERATION])(
+  'never gives a pre-ready copied write the later owner generation: %s',
+  async (generation) => {
+    host.dispose();
+    const started = Promise.withResolvers<void>();
+    const owner = Promise.withResolvers<CacheAuthority>();
+    readAuthority = () => {
+      started.resolve();
+      return owner.promise;
+    };
+    host = createTauriCacheHost({ scope: state.identity });
+    const writing = host.writeQuery({
+      query: '{ user { id } }',
+      data: { user: { id: 'viewer' } },
+      generation,
+    });
+    await started.promise;
+    expect(
+      invoke.mock.calls.some(([command]) => command === 'graphql_cache_write')
+    ).toBe(false);
+    owner.resolve(state);
+    await writing;
+    expect(invoke).toHaveBeenCalledWith(
+      'graphql_cache_write',
+      expect.objectContaining({ generation: UNKNOWN_CACHE_GENERATION })
+    );
+  }
+);
+
 it('reads cached email while the authority has no policy, with one IPC per warm read', async () => {
   await expect(
     host.readQuery({ query: '{ user { emailThread { id } } }' })
@@ -89,6 +119,42 @@ it('reads cached email while the authority has no policy, with one IPC per warm 
     Array(10).fill('graphql_cache_read')
   );
 });
+
+it.each(['enqueue', 'commit'] as const)(
+  'keeps an unknown %s snapshot contentless across initialization',
+  async (operation) => {
+    host.dispose();
+    const owner = Promise.withResolvers<CacheAuthority>();
+    readAuthority = () => owner.promise;
+    host = createTauriCacheHost({ scope: state.identity });
+    const args = {
+      query: 'mutation Save { save { id } }',
+      data: { save: { id: 'draft' } },
+    };
+    let writing: Promise<unknown>;
+    let command: string;
+    if (operation === 'enqueue') {
+      command = 'graphql_cache_enqueue_optimistic_mutation';
+      writing = host.enqueueOptimisticMutation(
+        { ...args, uuid: crypto.randomUUID() },
+        { owner: 'runner', nowMs: 1, leaseExpiresAtMs: 100 }
+      );
+    } else {
+      command = 'graphql_cache_commit_optimistic_write';
+      writing = host.commitOptimisticWrite(
+        '1',
+        { owner: 'runner', generation: '1' },
+        args
+      );
+    }
+    owner.resolve(state);
+    await writing;
+    expect(invoke).toHaveBeenCalledWith(
+      command,
+      expect.objectContaining({ generation: UNKNOWN_CACHE_GENERATION })
+    );
+  }
+);
 
 it('forwards a captured old generation unchanged for the shared owner to reject', async () => {
   await host.authority!.current();

@@ -5,6 +5,7 @@ import {
 import { crmSnapshotAuthorization } from '@app/lib/urql-solid/authorization';
 import { LOCAL_ONLY } from '@core/constant/featureFlags';
 import { ThrownResultError } from '@core/util/result';
+import { cacheSessionGeneration } from '@graphql-cache/session-generation';
 import { cachedUserId } from '@queries/auth/cached-user-id';
 import { queryReadyGate } from '@queries/gate';
 import { DEFAULT_ITEM_TYPE, type ItemType } from '@service-storage/client';
@@ -118,7 +119,7 @@ export async function getItemPreview(
   if (previewDenied(item)) return noAccessPreview(item);
   const epoch = crmSnapshotAuthorization().epoch;
   const stale = () =>
-    epoch !== crmSnapshotAuthorization().epoch || previewDenied(item);
+    !cacheSessionGeneration.isCurrent(epoch) || previewDenied(item);
   if (isGraphqlPreviewItem(item)) {
     try {
       const preview = await getGraphqlItemPreview(item, options);

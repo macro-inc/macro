@@ -1,3 +1,4 @@
+import { cacheSessionGeneration } from '@graphql-cache/session-generation';
 import {
   type AnyVariables,
   type Client,
@@ -346,8 +347,9 @@ export class QueryObserver<
     if (
       nextResult.data != null &&
       (authorization.paused ||
-        nextResult.operation.context.cacheAuthorizationEpoch !==
-          authorization.epoch)
+        !cacheSessionGeneration.isCurrent(
+          nextResult.operation.context.cacheAuthorizationEpoch
+        ))
     ) {
       // urql can replay a retained result without entering any exchange. Never
       // let a same-key imperative subscriber keep that older snapshot alive here.

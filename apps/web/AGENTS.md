@@ -39,9 +39,29 @@
 Treat CRM access changes as rare session transitions. Detect them from response
 hints, CRM 403s and one `/crm/member-access` read on boot, focus and reconnect;
 ordinary HTTP requests, subscriptions and local cache reads never wait for proof.
-Establish the local owner's generation before mounting request producers, with
-a bounded cache-failure fallback; a non-denied initial baseline and unchanged
-ready proofs without pending cleanup never refetch or change the generation.
+On web startup without a mirror or owner snapshot, an extra short proof can open
+CRM UI before storage is ready; only the post-baseline proof may commit policy.
+Fence this early evidence by login, host and every owner observation, including
+mismatches. Native retains its baseline gate because independently persisted
+Soup pages can restore before owner readiness.
+Install the cache host before request producers mount, but run its bounded
+initialization in the background; Root and first render never await storage or
+the owner handshake. Read account, policy and generation from the profile's
+localStorage mirror only as a startup hint; update it only from validated owner
+observations. Missing or unreadable hints send an explicit nonmatching UUID,
+never an omitted generation, and trigger normal retirement at the first owner
+observation. For a matching bound legacy owner with no policy, fence/refetch
+memory but preserve persisted queries; missing account or established policy
+still requires conservative pruning. Preserve captured stamps through
+initialization waits and queued settlement. An unchanged ready proof without
+failed cleanup never refetches. With the same account and policy,
+a stale generation hint changes only new write stamps: keep in-memory responses
+and recover rejected copied writes with fresh reads of their own queries. A
+changed account or policy retires visible content normally. Mirrors may lag
+across windows and never grant admission or replace the owner's fresh generation
+after reset. A ready allowed hint for the signed-in account may open CRM UI
+before the owner arrives; denied or mismatching hints stay pending. A missing
+hint requires the web's early server proof or the normal owner baseline.
 Keep `crm-access-authority.ts` as the policy state machine and
 `crm-access-cache.ts` as detection and visible/persisted retirement glue.
 
@@ -50,7 +70,14 @@ HTTP or subscription dispatch and retain it through decoding and cache writes;
 never stamp already-fetched data with a newer generation. Compare it under the
 shared native owner lock or browser worker before writing. Discard old query
 results and subscription frames and refetch active queries once per transition.
-Do not classify GraphQL fields or REST routes for admission.
+Do not classify GraphQL fields or REST routes for admission. Preserve socket
+frame generations through payload helpers and keep differently stamped batches
+separate; never replace their stamp when the payload reaches a local consumer.
+
+Recover a superseded in-flight Block load once from its source identity after
+local retirement settles; reacquire metadata and credentials instead of replaying
+a presigned URL or preload token. Do not reload an already-open editor on every
+transition. Disposal, a newer load or a second transition ends that recovery.
 
 Write the durable denied policy before selective CRM retirement and resume an
 interrupted retirement before serving cached content. Preserve email thread

@@ -6,6 +6,7 @@ import {
   readRecordsByKeys,
   selectRecords,
 } from '@graphql-cache/exchange/record-selection';
+import { cacheSessionGeneration } from '@graphql-cache/session-generation';
 import { Telemetry } from '@macro-inc/observability';
 import {
   EmailDraftThreadFieldsFragmentDoc,
@@ -275,7 +276,7 @@ export async function readCachedDraftAndThread(
       if (
         error instanceof StaleCacheAuthorityError ||
         crmSnapshotAuthorization().paused ||
-        crmSnapshotAuthorization().epoch !== authorizationEpoch
+        !cacheSessionGeneration.isCurrent(authorizationEpoch)
       )
         return undefined;
       throw error;
@@ -283,7 +284,7 @@ export async function readCachedDraftAndThread(
     if (
       !records ||
       crmSnapshotAuthorization().paused ||
-      crmSnapshotAuthorization().epoch !== authorizationEpoch
+      !cacheSessionGeneration.isCurrent(authorizationEpoch)
     )
       return empty;
     const [draft, thread] = records;

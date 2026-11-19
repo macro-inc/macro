@@ -1,6 +1,9 @@
 import { TraceFlow, useFlow } from '@app/observability/flow';
 import { initializeUiOperationTelemetry } from '@app/observability/ui-operation';
 import { lazy } from '@core/util/lazy';
+import { guardResponseBody } from '@core/util/response-observers';
+import { StaleCacheAuthorityError } from '@graphql-cache/authority';
+import { cacheSessionGeneration } from '@graphql-cache/session-generation';
 import type { AccessLevel } from '@service-storage/generated/schemas/accessLevel';
 import { cleanup, fireEvent, render } from '@solidjs/testing-library';
 import { err, ok } from 'neverthrow';
@@ -23,7 +26,11 @@ vi.mock('@app/lib/analytics/analytics-context', () => ({
 }));
 const trackBlockOpened = vi.hoisted(() => vi.fn());
 vi.mock('./trackBlockOpened', () => ({ track: trackBlockOpened }));
-vi.mock('@queries/client', () => ({ useQueryClient: () => ({}) }));
+const invalidateBundle = vi.hoisted(() => vi.fn(async () => {}));
+vi.mock('@queries/client', () => ({
+  useQueryClient: () => ({}),
+  queryClient: { invalidateQueries: invalidateBundle },
+}));
 vi.mock('@service-storage/client', () => ({
   blockNameToItemType: () => 'document',
 }));
@@ -66,11 +73,141 @@ beforeEach(() => {
   analytics.track.mockClear();
   analytics.pageView.mockClear();
   trackBlockOpened.mockClear();
+  invalidateBundle.mockClear();
   blockDataSignal.set(undefined);
   blockErrorSignal.set(undefined);
   blockLoadRetrySignal.set(undefined);
   blockUserAccessSignal.set(undefined);
   blockSyncSourceSignal.set(undefined);
+});
+
+it('recovers a cold file load once from its identity after missing-mirror retirement', async () => {
+  const body = Promise.withResolvers<void>();
+  const cleanup = Promise.withResolvers<void>();
+  const loaded = Promise.withResolvers<void>();
+  const origin = { type: 'dss' as const, id: 'document' };
+  const source = { type: 'preload' as const, origin, token: 'discarded-token' };
+  const load = vi.fn(async () => {
+    const generation = cacheSessionGeneration.capture();
+    if (load.mock.calls.length === 1) await body.promise;
+    const response = guardResponseBody(new Response('%PDF-1.7'), () => {
+      if (!cacheSessionGeneration.isCurrent(generation))
+        throw new StaleCacheAuthorityError();
+    });
+    return ok({ bytes: await response.arrayBuffer() });
+  });
+  render(() => {
+    createEffect(
+      on(blockDataSignal.get, (data) => {
+        if (data) loaded.resolve();
+      })
+    );
+    return (
+      <BlockLoader
+        id="document"
+        source={source}
+        definition={{
+          name: 'pdf',
+          description: 'PDF',
+          accepted: {},
+          component: () => null,
+          load,
+        }}
+      />
+    );
+  });
+  const retirement = cacheSessionGeneration.transition(() => cleanup.promise);
+  body.resolve();
+  expect(load).toHaveBeenCalledOnce();
+  cleanup.resolve();
+  await retirement;
+  await loaded.promise;
+  expect(load).toHaveBeenCalledTimes(2);
+  expect(load).toHaveBeenNthCalledWith(1, source, 'initial', expect.anything());
+  expect(load).toHaveBeenNthCalledWith(2, origin, 'initial', expect.anything());
+  expect(invalidateBundle).toHaveBeenCalledExactlyOnceWith({
+    queryKey: ['documentLoad', 'bundle', 'document'],
+    exact: true,
+    refetchType: 'none',
+  });
+  expect(blockErrorSignal.get()).toBeNull();
+});
+
+it('cleans a stale successful load and honors a fresh denial after one recovery', async () => {
+  const body = Promise.withResolvers<void>();
+  const failed = Promise.withResolvers<void>();
+  const cleanupSource = vi.fn();
+  const load = vi
+    .fn()
+    .mockImplementationOnce(async () => {
+      await body.promise;
+      return ok({
+        userAccessLevel: 'owner',
+        syncSource: { cleanup: cleanupSource },
+      });
+    })
+    .mockResolvedValue(err([{ code: 'UNAUTHORIZED', message: 'No access' }]));
+  render(() => {
+    createEffect(
+      on(blockErrorSignal.get, (error) => {
+        if (error === 'UNAUTHORIZED') failed.resolve();
+      })
+    );
+    return (
+      <BlockLoader
+        id="document"
+        source={{ type: 'dss', id: 'document' }}
+        definition={{
+          name: 'md',
+          description: 'Document',
+          accepted: {},
+          component: () => null,
+          load,
+        }}
+      />
+    );
+  });
+  await cacheSessionGeneration.transition(async () => {});
+  body.resolve();
+  await failed.promise;
+  expect(cleanupSource).toHaveBeenCalledOnce();
+  expect(load).toHaveBeenCalledTimes(2);
+  expect(blockDataSignal.get()).toBeUndefined();
+});
+
+it('stops after one superseded recovery and leaves the existing retry error', async () => {
+  const body = Promise.withResolvers<void>();
+  const failed = Promise.withResolvers<void>();
+  const load = vi.fn(async () => {
+    if (load.mock.calls.length === 1) await body.promise;
+    else await cacheSessionGeneration.transition(async () => {});
+    return ok({ id: 'stale' });
+  });
+  render(() => {
+    createEffect(
+      on(blockErrorSignal.get, (error) => {
+        if (error === 'INVALID') failed.resolve();
+      })
+    );
+    return (
+      <BlockLoader
+        id="document"
+        source={{ type: 'dss', id: 'document' }}
+        definition={{
+          name: 'pdf',
+          description: 'PDF',
+          accepted: {},
+          component: () => null,
+          load,
+        }}
+      />
+    );
+  });
+  await cacheSessionGeneration.transition(async () => {});
+  body.resolve();
+  await failed.promise;
+  expect(load).toHaveBeenCalledTimes(2);
+  expect(blockDataSignal.get()).toBeUndefined();
 });
 
 it('preserves an open email disclosure on initial and unchanged access confirmations, but reloads on a later change', async () => {

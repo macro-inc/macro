@@ -4,6 +4,9 @@ import { useAnalytics } from '@app/lib/analytics/analytics-context';
 import { useFlow, usePending } from '@app/observability/flow';
 import { useIsAuthenticated } from '@core/context/user';
 import type { OwnedBlockHandle } from '@core/orchestrator';
+import { cacheSessionGeneration } from '@graphql-cache/session-generation';
+import { queryClient } from '@queries/client';
+import { documentLoadKeys } from '@queries/storage/documentLoad/keys';
 import { blockNameToItemType } from '@service-storage/client';
 import type { AccessLevel as UserAccessLevel } from '@service-storage/generated/schemas/accessLevel';
 import { createAsync } from '@solidjs/router';
@@ -126,48 +129,92 @@ export function BlockLoader<
   setEditPermissionEnabled(props.definition.editPermissionEnabled ?? false);
 
   const retryToken = blockLoadRetrySignal.get;
+  let loadVersion = 0;
+  let disposed = false;
 
   const getResult = createAsync(async () => {
     // Tracked before the first await so a failure view can re-run the load.
     retryToken();
-    const result = await loadBlockDataAfterComponentPreload(
-      () =>
-        flow.task('block.data', async (span) => {
-          span.setAttr('block.type', props.definition.name);
-          span.setAttr('document.id', props.id);
-          const result = await props.definition.load(
-            props.source,
-            'initial',
-            span
-          );
-          if (result.isErr()) span.error('Block data could not load');
-          return result;
-        }),
-      props.definition.component.preload
-    );
-    if (result.isErr()) {
-      return err(result.error);
-    }
-    const data = result.value;
-    if ('type' in data && data.type === 'preload') {
-      console.error(
-        `BlockLoader received a nested preload.
-Check that the load function does not return a preload source when the intent is not preload`
-      );
-      return err([
-        {
-          code: 'INVALID' as const,
-          message: 'BlockLoader received a nested preload',
-        },
+    const version = ++loadVersion;
+    const source = props.source;
+    const definition = props.definition;
+    const id = props.id;
+    const superseded = () =>
+      disposed ||
+      version !== loadVersion ||
+      untrack(currentSharedAccess) === null;
+    const stale = () =>
+      err([
+        { code: 'INVALID' as const, message: 'The loading session changed' },
       ]);
+    for (let attempt = 0; attempt < 2; attempt++) {
+      if (superseded()) return stale();
+      const generation = untrack(cacheSessionGeneration.capture);
+      const result = await untrack(() =>
+        loadBlockDataAfterComponentPreload(
+          () =>
+            flow.task('block.data', async (span) => {
+              span.setAttr('block.type', definition.name);
+              span.setAttr('document.id', id);
+              span.setAttr('block.session_retry', attempt);
+              // A retry starts from the document identity, never an old token or URL.
+              const origin =
+                attempt > 0 && source.type === 'preload'
+                  ? source.origin
+                  : source;
+              const result = await definition.load(origin, 'initial', span);
+              if (result.isErr()) span.error('Block data could not load');
+              return result;
+            }),
+          definition.component.preload
+        )
+      ).catch((error: unknown) => {
+        if (cacheSessionGeneration.isCurrent(generation)) throw error;
+        return stale();
+      });
+      if (superseded() || !cacheSessionGeneration.isCurrent(generation)) {
+        if (result.isOk() && 'syncSource' in result.value)
+          result.value.syncSource.cleanup();
+        if (attempt > 0 || superseded()) return stale();
+        await cacheSessionGeneration.settled();
+        if (superseded() || cacheSessionGeneration.state().paused)
+          return stale();
+        // This imperative bundle is not an active TanStack query. Its fresh
+        // authorization read must not reuse a token cached before retirement.
+        await queryClient.invalidateQueries({
+          queryKey: documentLoadKeys.bundle(id).queryKey,
+          exact: true,
+          refetchType: 'none',
+        });
+        continue;
+      }
+      if (result.isErr()) {
+        return err(result.error);
+      }
+      const data = result.value;
+      if ('type' in data && data.type === 'preload') {
+        console.error(
+          `BlockLoader received a nested preload.
+Check that the load function does not return a preload source when the intent is not preload`
+        );
+        return err([
+          {
+            code: 'INVALID' as const,
+            message: 'BlockLoader received a nested preload',
+          },
+        ]);
+      }
+      return ok({
+        ...data,
+        __block: props.definition.name,
+      });
     }
-    return ok({
-      ...data,
-      __block: props.definition.name,
-    });
+    return stale();
   });
 
   onCleanup(() => {
+    disposed = true;
+    loadVersion += 1;
     if (syncSource()) {
       syncSource()!.cleanup();
     }

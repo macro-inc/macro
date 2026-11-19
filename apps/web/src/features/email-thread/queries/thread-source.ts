@@ -130,8 +130,8 @@ export function createEmailThreadSource(
         requested,
         generation,
         thread:
-          previous?.generation === generation &&
-          previous.requested === requested
+          cacheSessionGeneration.isCurrent(previous?.generation) &&
+          previous?.requested === requested
             ? previous.thread
             : undefined,
       };
@@ -146,8 +146,8 @@ export function createEmailThreadSource(
       thread:
         data.db_id === requested || data.db_id === query.resolvedThreadId
           ? toEmailThread(data)
-          : previous?.generation === generation &&
-              previous.requested === requested
+          : cacheSessionGeneration.isCurrent(previous?.generation) &&
+              previous?.requested === requested
             ? previous.thread
             : undefined,
     };

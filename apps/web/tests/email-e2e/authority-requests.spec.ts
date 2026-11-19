@@ -88,12 +88,21 @@ for (const provider of PROVIDERS) {
       await page.keyboard.type(' A second edit.');
       await expect.poll(() => saves.at(-1)?.html).toContain('A second edit.');
       checkpoints.autosave = permissionReads;
+      const cacheGeneration = await page.evaluate(() => ({
+        baselines: performance
+          .getEntriesByName('macro.cache.generation-baseline')
+          .map((entry) => (entry as PerformanceMark).detail),
+        recoveries: performance
+          .getEntriesByName('macro.cache.generation-recovery')
+          .map((entry) => (entry as PerformanceMark).detail),
+      }));
       await testInfo.attach('permission-request-counts', {
         body: JSON.stringify({
           permissionReads,
           serviceRequests,
           scriptedSoupFrames: frames,
           checkpoints,
+          cacheGeneration,
         }),
         contentType: 'application/json',
       });

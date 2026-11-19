@@ -1,3 +1,4 @@
+import { responseGeneration } from '@graphql-cache/exchange/session-exchange';
 import { cacheSessionGeneration } from '@graphql-cache/session-generation';
 /**
  * The session log over GraphQL, through the normalized cache.
@@ -214,7 +215,7 @@ export function watchAgentSessionLog(
     }
     try {
       const snapshot = toSnapshot(sessionId, log);
-      appender?.fetched(snapshot.rows);
+      appender?.fetched(snapshot.rows, responseGeneration(result));
       resolveFetched(snapshot);
     } catch (error) {
       rejectFetched(
@@ -350,7 +351,7 @@ function followAppended(
           follow.gap();
           return;
         }
-        appender?.appended(rows);
+        appender?.appended(rows, responseGeneration(result));
         follow.rows(rows);
       })
     ));
@@ -366,9 +367,9 @@ function followAppended(
 
 type Appender = {
   /** The fetched log landed in the cache; rows held until now go after it. */
-  fetched: (rows: AgentSessionLogEntryDto[]) => void;
+  fetched: (rows: AgentSessionLogEntryDto[], generation: string) => void;
   /** The subscription delivered a run. */
-  appended: (rows: AgentSessionLogEntryDto[]) => void;
+  appended: (rows: AgentSessionLogEntryDto[], generation: string) => void;
   /** Write now what a pending timer would have. */
   flush: () => void;
 };
@@ -407,11 +408,12 @@ function createAppender(sessionId: string): Appender {
       write();
     }, CACHE_WRITE_DEBOUNCE_MS);
   };
-  const currentBatch = () => {
-    const current = cacheSessionGeneration.capture();
+  const currentBatch = (current: string) => {
     if (current === generation) return;
-    pending = [];
-    known = undefined;
+    // Flush the previous batch with its own stamp; a startup correction must
+    // never relabel buffered frames with the newly learned owner generation.
+    write();
+    if (!cacheSessionGeneration.isCurrent(generation)) known = undefined;
     generation = current;
   };
   const remember = (rows: AgentSessionLogEntryDto[]) => {
@@ -427,15 +429,15 @@ function createAppender(sessionId: string): Appender {
   };
 
   return {
-    fetched(rows) {
-      currentBatch();
+    fetched(rows, generation) {
+      currentBatch(generation);
       known = new Set(rows.map((row) => row.id));
       const held = pending;
       pending = [];
       if (remember(held)) schedule();
     },
-    appended(rows) {
-      currentBatch();
+    appended(rows, generation) {
+      currentBatch(generation);
       if (!known) {
         pending.push(...rows);
         return;

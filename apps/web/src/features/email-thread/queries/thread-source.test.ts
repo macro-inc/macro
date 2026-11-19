@@ -53,6 +53,42 @@ function thread(messages: ApiMessage[]): ApiThread {
 import { createThreadSnapshot } from '../primitives/thread-snapshot';
 import { createEmailThreadSource, toEmailThread } from './thread-source';
 
+it('keeps both pending and identity-resolving threads across a same-access baseline correction', () =>
+  createRoot((dispose) => {
+    try {
+      const [pending, setPending] = createSignal(false);
+      const [resolved, setResolved] = createSignal('thread');
+      const original = thread([message('draft', { is_draft: true })]);
+      const waiting = createEmailThreadSource(() => 'thread', {
+        resolvedThreadId: 'thread',
+        get isSuccess() {
+          return !pending();
+        },
+        isError: false,
+        get data() {
+          return pending() ? undefined : { thread: original, hasMore: false };
+        },
+      } as ThreadQueryResult<ThreadQueryData>);
+      const adopting = createEmailThreadSource(() => 'thread', {
+        resolvedThreadId: 'thread',
+        isSuccess: true,
+        isError: false,
+        get data() {
+          return { thread: { ...original, db_id: resolved() }, hasMore: false };
+        },
+      } as ThreadQueryResult<ThreadQueryData>);
+      expect(waiting.thread()?.messages[0].db_id).toBe('draft');
+      expect(adopting.thread()?.messages[0].db_id).toBe('draft');
+      cacheSessionGeneration.initialize('same-access-owner-generation');
+      setPending(true);
+      setResolved('canonical-thread');
+      expect(waiting.thread()?.messages[0].db_id).toBe('draft');
+      expect(adopting.thread()?.messages[0].db_id).toBe('draft');
+    } finally {
+      dispose();
+    }
+  }));
+
 it('keeps a reopened local draft through server identity adoption and rejects another route', () =>
   createRoot((dispose) => {
     try {

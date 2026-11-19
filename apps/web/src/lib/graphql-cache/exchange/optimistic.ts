@@ -1,4 +1,5 @@
 import { crmSnapshotAuthorization } from '@app/lib/urql-solid/authorization';
+import { cacheSessionGeneration } from '@graphql-cache/session-generation';
 import type { IdentityBindingWire } from '../protocol';
 /**
  * Typed entry point for durable optimistic GraphQL mutations.
@@ -209,7 +210,9 @@ export function withOptimisticMutationDisposition(
   const admitted =
     !optimistic?.snapshotRejected &&
     !authority.paused &&
-    (optimistic?.authorizationEpoch ?? authority.epoch) === authority.epoch;
+    cacheSessionGeneration.isCurrent(
+      optimistic?.authorizationEpoch ?? authority.epoch
+    );
   const queuedData =
     admitted && disposition.kind === 'queued'
       ? optimisticContextOf(result.operation)?.optimisticResponse

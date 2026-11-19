@@ -26,6 +26,13 @@ horizontally and removal remains available without hover. Composer fixture
 screenshots: [desktop](media/share-images/desktop.png) and
 [phone](media/share-images/mobile.png).
 
+If account or CRM access changes while a document or file is still loading,
+its load retries once with fresh permissions and content. Check a cold file open
+with local storage delayed: the file should finish opening after recovery. A
+revoked file stays unavailable, and a second interruption leaves the existing
+retry control. An already-open editor does not reload merely because the cache
+finishes starting.
+
 Opening a document or file in a Drive, Home, CRM or Tasks detail view (tasks,
 snippets and skills included) records the open once in the user's history,
 which orders Recents and Cmd+K. On dev, expect one `POST /history/document/<id>`

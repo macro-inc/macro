@@ -92,6 +92,36 @@ function deferred<T>() {
 }
 
 describe('Quick Access local projection', () => {
+  it('retains visible results while refreshing after a same-access baseline correction', async () => {
+    const refresh = Promise.withResolvers<SearchCachePage>();
+    const started = Promise.withResolvers<void>();
+    const [revision, setRevision] = createSignal(0);
+    const search = vi
+      .fn()
+      .mockResolvedValueOnce(page(['kept']))
+      .mockImplementationOnce(() => {
+        started.resolve();
+        return refresh.promise;
+      });
+    const list = root(() =>
+      createProjectedList({
+        host: { search },
+        buckets: ['note'],
+        revision,
+        materialize,
+      })
+    );
+    await vi.waitFor(() =>
+      expect(list.items()).toEqual([{ id: 'GraphqlSoupDocument:kept' }])
+    );
+    cacheSessionGeneration.initialize('corrected-owner-generation');
+    setRevision(1);
+    await started.promise;
+    expect(list.items()).toEqual([{ id: 'GraphqlSoupDocument:kept' }]);
+    refresh.resolve(page(['kept']));
+    await vi.waitFor(() => expect(list.isLoading()).toBe(false));
+  });
+
   it('drops email-only results and a delayed materialization when access is revoked', async () => {
     const delayed = deferred<{ id: string }[]>();
     const [revision, setRevision] = createSignal(0);

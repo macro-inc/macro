@@ -1,4 +1,5 @@
 import { useFlowTrace } from '@app/observability/flow';
+import { cacheSessionGeneration } from '@graphql-cache/session-generation';
 import { Telemetry } from '@macro-inc/observability';
 import {
   type Accessor,
@@ -136,7 +137,10 @@ export function createBaseQuery<
     }
 
     const current = untrack(observer);
-    if (nextClient !== currentClient || nextGeneration !== generation) {
+    if (
+      nextClient !== currentClient ||
+      !cacheSessionGeneration.isCurrent(generation)
+    ) {
       generation = nextGeneration;
       const replacement = untrack(() =>
         createObserver(nextClient, nextOptions)

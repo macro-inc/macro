@@ -1,3 +1,4 @@
+import { perfMark } from '@app/observability/perf-marks';
 import { SERVER_HOSTS } from '@core/constant/servers';
 import { fireAndForget } from '@core/util/fireAndForget';
 import {
@@ -5,6 +6,10 @@ import {
   registerResponseObserver,
 } from '@core/util/response-observers';
 import { StaleCacheAuthorityError } from '@graphql-cache/authority';
+import {
+  initialCacheRetirement,
+  startupAuthorityHint,
+} from '@graphql-cache/generation-mirror';
 import type { CacheHost } from '@graphql-cache/host/types';
 import { cacheSessionGeneration } from '@graphql-cache/session-generation';
 import { Telemetry } from '@macro-inc/observability';
@@ -75,6 +80,15 @@ function install() {
   installed = true;
   configureCrmAccessAuthority({
     initialize: cacheSessionGeneration.initialize,
+    restore: (authority) => {
+      const scope = initialCacheRetirement(startupAuthorityHint, authority);
+      if (scope)
+        perfMark('cache.generation-baseline', {
+          mirrorMatches: false,
+          retirement: scope,
+        });
+      return scope;
+    },
     fetchProof,
     retire: retireVisibleSnapshots,
     async bindAccount(owner, generation, account) {

@@ -77,6 +77,41 @@ refetch. Writes compare the same generation under the shared native owner lock
 or browser worker. There are no CRM admission classifiers or ownership witnesses
 on these paths. The existing account fence remains independent.
 
+Startup renders without waiting for the local store. A profile-scoped
+localStorage mirror supplies the account, policy string and generation as hints;
+missing or unreadable mirrors send an explicit nonmatching UUID. Windows update
+the mirror from validated owner observations, without treating cross-window
+storage events as authority. A matching account and policy with a different
+generation corrects stamps for new requests without retiring in-memory responses.
+Copied data retains its original stamp, is rejected at the shared store when
+stale, and recovers with a fresh read of its own query. A different account or
+policy, a denied first observation, or a missing/unreadable mirror triggers
+normal visible retirement. A missing mirror on a matching bound legacy owner
+with no policy fences/refetches in-memory reads but preserves persisted queries;
+an unknown account or established policy still prunes protected persisted
+snapshots because they have no independent policy witness. Physical resets issue
+new owner generations, so
+delayed or missing mirror updates cannot admit pre-reset content.
+
+A deny-then-grant cycle during startup can return to the same account, team and
+allowed status. In-memory bodies fetched under that same access remain visible:
+they reveal nothing the member cannot currently access, with only possible
+staleness covered by normal refetching. Copied writes still require an exact
+generation match at the owner. A ready allowed mirror for the signed-in account
+may open CRM UI before storage is ready. On web, a missing mirror and unknown
+owner also start a short, UI-only server proof in parallel with storage. Its
+result is bound to that login and host and cannot override an owner observation.
+It never commits policy: the normal proof starts after reading the owner's
+generation and commits under that generation check. This first launch uses two
+permission reads; returning launches normally use one. Native keeps the owner
+baseline gate because independent Soup persistence can restore before it. None
+of these UI paths changes storage admission or server authorization.
+
+An in-flight document or file load superseded by retirement retries its complete
+load once, from its source identity with fresh credentials. This includes direct
+binary reads outside active TanStack queries. It does not replay an old presigned
+URL, reload an already-open editor, or retry indefinitely through further changes.
+
 Before deleting snapshots, the owner durably records the new policy and marks
 retirement incomplete. Interrupted retirement resumes before returning cached
 content. Initial allowed/team-less proofs preserve legacy offline data and the
@@ -127,8 +162,9 @@ last-write-wins behavior.
 Coordinator protocol 18 and the native permission commands must ship with this
 web bundle. Older native binaries require an app update; there is no unguarded
 cache fallback for the new bundle. New native binaries preserve the legacy cache
-contract for older bundles that omit `generation`; supplied older generations are rejected under the shared
-owner lock. This reverse
+contract for older bundles that omit `generation`; new hosts always send an
+explicit stamp for copied writes, including before initialization. Supplied
+older or unknown generations are rejected under the shared owner lock. This reverse
 compatibility supports native upgrades and web rollbacks, but does not add
 retirement to an older bundle. Queue inspection sanitizes copied optimistic data
 for every caller, so an older bundle with legacy queued `SaveEmailDraft` entries

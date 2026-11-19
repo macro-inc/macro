@@ -3,6 +3,7 @@ import type {
   CacheAuthority,
 } from './authority.generated';
 import { CacheAuthoritySchema } from './authority.generated';
+import { rememberGeneration } from './generation-mirror';
 
 export type {
   AuthorityTransition,
@@ -49,6 +50,7 @@ export function createAuthorityObserver(identity: string) {
       const changed =
         current?.generation !== next.generation || current.ready !== next.ready;
       current = next;
+      rememberGeneration(next);
       if (changed) {
         version += 1;
         for (const listener of listeners) listener(next);

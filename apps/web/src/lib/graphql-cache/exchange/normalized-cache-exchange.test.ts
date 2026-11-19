@@ -36,6 +36,7 @@ import {
 import { soupOptimisticResolvers } from '../../queries/optimistic-resolvers';
 import { resolveCrmExternalWriteTypes } from '../../queries/soup/graphql/external-write-scope';
 import { createUrqlQuery } from '../../urql-solid/create-urql-query';
+import { StaleCacheAuthorityError } from '../authority';
 import { CacheNavigationError } from '../host/navigation-error';
 import { createRetirableCacheHost } from '../host/retirable-host';
 import type {
@@ -736,6 +737,55 @@ describe('normalizedCacheExchange', () => {
   beforeEach(() => {
     host = makeFakeHost();
   });
+
+  it.each([false, true])(
+    'recovers a rejected copied response once while preserving memory rendering (rejected again=%s)',
+    async (rejectAgain) => {
+      const write = vi.spyOn(host, 'writeQuery');
+      write.mockRejectedValueOnce(new StaleCacheAuthorityError());
+      if (rejectAgain)
+        write.mockRejectedValueOnce(new StaleCacheAuthorityError());
+      const first = deferred<OperationResult>();
+      const second = deferred<OperationResult>();
+      let published = 0;
+      const h = controlledQueryHarness(host, {}, (result) => {
+        if (result.data == null) return;
+        published += 1;
+        (published === 1 ? first : second).resolve(result);
+      });
+      const request = makeOp(701, 'network-only');
+      const op = makeOperation('query', request, {
+        ...request.context,
+        cacheSessionGeneration: cacheSessionGeneration.capture(),
+      });
+      h.ops.next(op);
+      h.network.next(
+        queryResult(h.forwarded[0], { soup: { nextCursor: 'first' } })
+      );
+      const visible = await first.promise;
+      expect(visible.data).toEqual({ soup: { nextCursor: 'first' } });
+      const firstMetadata = normalizedCacheResultMetadata(visible);
+      expect(firstMetadata?.source).toBe('live-network');
+      if (firstMetadata?.source === 'live-network')
+        await firstMetadata.persistence;
+      expect(h.client.reexecuteOperation).toHaveBeenCalledOnce();
+      const retry = vi.mocked(h.client.reexecuteOperation).mock.calls[0][0];
+      expect(retry.context.requestPolicy).toBe('network-only');
+      h.network.next(
+        queryResult(h.forwarded.at(-1)!, { soup: { nextCursor: 'fresh' } })
+      );
+      const fresh = await second.promise;
+      const secondMetadata = normalizedCacheResultMetadata(fresh);
+      expect(secondMetadata?.source).toBe('live-network');
+      if (secondMetadata?.source === 'live-network')
+        await secondMetadata.persistence;
+      expect(h.client.reexecuteOperation).toHaveBeenCalledOnce();
+      expect(host.writes.map((args) => args.data)).toEqual(
+        rejectAgain ? [] : [{ soup: { nextCursor: 'fresh' } }]
+      );
+      h.ops.next(teardownOf(retry));
+    }
+  );
 
   it.each(['imperative', 'Solid'])(
     'refetches a mounted %s reader once and never persists its pre-transition response',

@@ -1,3 +1,4 @@
+import { perfMark } from '@app/observability/perf-marks';
 import {
   type Exchange,
   makeOperation,
@@ -8,7 +9,16 @@ import {
 import { type DocumentNode, print } from 'graphql';
 import type { Client as GraphqlWsClient } from 'graphql-ws';
 import { filter, makeSubject, map, merge, pipe } from 'wonka';
+import { UNKNOWN_CACHE_GENERATION } from '../generation-mirror';
 import { cacheSessionGeneration } from '../session-generation';
+
+/** Preserve a socket frame's source stamp when copying its payload elsewhere. */
+export function responseGeneration(result: OperationResult): string {
+  const generation =
+    result.extensions?.cacheSessionGeneration ??
+    result.operation.context.cacheSessionGeneration;
+  return typeof generation === 'string' ? generation : UNKNOWN_CACHE_GENERATION;
+}
 
 /** One blanket response fence; mutation outcomes remain available to their callers. */
 export const cacheSessionExchange: Exchange = ({ forward, client }) => {
@@ -33,13 +43,15 @@ export const cacheSessionExchange: Exchange = ({ forward, client }) => {
       if (
         operation.context.cacheSessionGeneration !== generation ||
         startedDuringCleanup
-      )
+      ) {
+        perfMark('cache.generation-recovery', { reason: 'transition' });
         client.reexecuteOperation(
           makeOperation('query', operation, {
             ...operation.context,
             requestPolicy: 'network-only',
           })
         );
+      }
     }
   });
   return (operations) =>
@@ -93,13 +105,19 @@ export function sessionSubscriptionExchange(
       return {
         subscribe(sink) {
           let stop = () => {};
+          let activeSource: object | undefined;
           const start = () => {
+            const source = {};
+            activeSource = source;
             stop();
             if (cacheSessionGeneration.state().paused) return;
             const generation = cacheSessionGeneration.capture();
+            const current = () =>
+              activeSource === source &&
+              cacheSessionGeneration.isCurrent(generation);
             stop = websocketClient.subscribe(message, {
               next(value) {
-                if (cacheSessionGeneration.isCurrent(generation))
+                if (current())
                   sink.next({
                     ...value,
                     extensions: {
@@ -112,20 +130,21 @@ export function sessionSubscriptionExchange(
                   });
               },
               error: (error) => {
-                if (cacheSessionGeneration.isCurrent(generation))
-                  sink.error(error);
+                if (current()) sink.error(error);
               },
               complete: () => {
-                if (cacheSessionGeneration.isCurrent(generation))
-                  sink.complete();
+                if (current()) sink.complete();
               },
             });
           };
           const dispose = cacheSessionGeneration.onChanged(start);
+          const stopBaseline = cacheSessionGeneration.onBaseline(start);
           start();
           return {
             unsubscribe() {
+              activeSource = undefined;
               dispose();
+              stopBaseline();
               stop();
             },
           };

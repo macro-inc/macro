@@ -1,5 +1,6 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { TEST_AUTHORITY_GENERATION, testAuthority } from '../authority-fixture';
+import { UNKNOWN_CACHE_GENERATION } from '../generation-mirror';
 import type {
   CacheRequest,
   CacheResponseErrorCode,
@@ -527,6 +528,16 @@ describe('createWorkerCacheHost', () => {
     ]);
 
     const requests = requireAdapter().requests;
+    for (const kind of [
+      'write',
+      'enqueue-optimistic-mutation',
+      'commit-optimistic-write',
+      'delete-records',
+    ]) {
+      expect(
+        requests.find((request) => request.kind === kind)?.generation
+      ).toBe(UNKNOWN_CACHE_GENERATION);
+    }
     expect(
       requests.find((request) => request.kind === 'rollback-optimistic-write')
     ).toMatchObject({ errorCode: 'DRAFT_ALREADY_SENT', error: 'denied' });
@@ -570,7 +581,7 @@ describe('createWorkerCacheHost', () => {
       })
     );
     expect(requests[3]).toEqual({
-      generation: TEST_AUTHORITY_GENERATION,
+      generation: UNKNOWN_CACHE_GENERATION,
       id: 5,
       kind: 'search',
       request: {

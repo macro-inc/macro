@@ -3,6 +3,7 @@ import type {
   CacheAuthorityHost,
 } from '@graphql-cache/authority';
 import { StaleCacheAuthorityError } from '@graphql-cache/authority';
+import { createComputed, createRoot } from 'solid-js';
 import { afterEach, expect, it, vi } from 'vitest';
 import { createCrmAccessAuthority } from './crm-access-authority';
 
@@ -56,6 +57,279 @@ function client(
   authority.setSession('viewer');
   return { authority, fetchProof, retire };
 }
+
+it.each([null, `${team}:denied`, `${team}:allowed`])(
+  'uses an early proof only for UI and commits the later proof after the %s baseline',
+  async (policy) => {
+    const owner = sharedOwner(policy);
+    const baseline = owner.snapshot()!;
+    const local = Promise.withResolvers<CacheAuthority>();
+    const postBaseline = Promise.withResolvers<string>();
+    const postStarted = Promise.withResolvers<void>();
+    vi.spyOn(owner, 'snapshot').mockReturnValue(undefined);
+    vi.spyOn(owner, 'current').mockReturnValue(local.promise);
+    const commit = vi.spyOn(owner, 'transition');
+    const fetchProof = vi
+      .fn<(timeout: number) => Promise<string>>()
+      .mockResolvedValueOnce(`${team}:allowed`)
+      .mockImplementationOnce(() => {
+        postStarted.resolve();
+        return postBaseline.promise;
+      });
+    const authority = createCrmAccessAuthority({
+      earlyProof: true,
+      fetchProof,
+      retire: async () => {},
+    });
+    authority.setHost(owner);
+    authority.setSession('viewer');
+    const opened = Promise.withResolvers<void>();
+    const dispose = createRoot((dispose) => {
+      createComputed(() => {
+        if (authority.allowed()) opened.resolve();
+      });
+      return dispose;
+    });
+    try {
+      const refresh = authority.refresh();
+      await opened.promise;
+      expect(fetchProof.mock.calls).toEqual([[3_000]]);
+      expect(commit).not.toHaveBeenCalled();
+      local.resolve(baseline);
+      await postStarted.promise;
+      expect(authority.state()).toBe(
+        policy?.endsWith(':denied') ? 'denied' : 'allowed'
+      );
+      expect(commit).not.toHaveBeenCalled();
+      expect(fetchProof.mock.calls).toEqual([[3_000], [15_000]]);
+      postBaseline.resolve(`${team}:denied`);
+      await refresh;
+      expect(commit).toHaveBeenCalledExactlyOnceWith(
+        baseline.generation,
+        `${team}:denied`
+      );
+      expect(authority.state()).toBe('denied');
+    } finally {
+      dispose();
+    }
+  }
+);
+
+it.each(['login', 'host', 'mismatching-owner'])(
+  'ignores an early allowed proof after a %s change',
+  async (change) => {
+    const owner = sharedOwner(`${team}:denied`);
+    const baseline = owner.snapshot()!;
+    const local = Promise.withResolvers<CacheAuthority>();
+    const early = Promise.withResolvers<string>();
+    const sent = Promise.withResolvers<void>();
+    const postStarted = Promise.withResolvers<void>();
+    const postBaseline = Promise.withResolvers<string>();
+    vi.spyOn(owner, 'snapshot').mockReturnValue(undefined);
+    vi.spyOn(owner, 'current').mockReturnValue(local.promise);
+    const authority = createCrmAccessAuthority({
+      earlyProof: true,
+      retire: async () => {},
+      fetchProof: vi
+        .fn<() => Promise<string>>()
+        .mockImplementationOnce(() => {
+          sent.resolve();
+          return early.promise;
+        })
+        .mockImplementation(() => {
+          postStarted.resolve();
+          return postBaseline.promise;
+        }),
+    });
+    authority.setHost(owner);
+    authority.setSession('viewer');
+    const states: string[] = [];
+    const dispose = createRoot((dispose) => {
+      createComputed(() => {
+        states.push(authority.state());
+      });
+      return dispose;
+    });
+    try {
+      const refresh = authority.refresh();
+      await sent.promise;
+      if (change === 'login') authority.setSession('replacement');
+      if (change === 'host') authority.setHost(sharedOwner(`${team}:denied`));
+      local.resolve(
+        change === 'mismatching-owner'
+          ? { ...baseline, account: 'previous-viewer' }
+          : baseline
+      );
+      if (change !== 'login') await postStarted.promise;
+      early.resolve(`${team}:allowed`);
+      postBaseline.resolve(`${team}:denied`);
+      await refresh;
+      if (change === 'host') await authority.refresh();
+      expect(states).not.toContain('allowed');
+    } finally {
+      dispose();
+    }
+  }
+);
+
+it('keeps native startup pending until the owner is known', async () => {
+  const owner = sharedOwner(`${team}:allowed`);
+  const baseline = owner.snapshot()!;
+  const local = Promise.withResolvers<CacheAuthority>();
+  vi.spyOn(owner, 'snapshot').mockReturnValue(undefined);
+  vi.spyOn(owner, 'current').mockReturnValue(local.promise);
+  const fetchProof = vi.fn(async () => `${team}:allowed`);
+  const authority = createCrmAccessAuthority({
+    earlyProof: false,
+    fetchProof,
+    retire: async () => {},
+  });
+  authority.setHost(owner);
+  authority.setSession('viewer');
+  const refresh = authority.refresh();
+  expect(authority.allowed()).toBe(false);
+  expect(fetchProof).not.toHaveBeenCalled();
+  local.resolve(baseline);
+  await refresh;
+  expect(fetchProof).toHaveBeenCalledExactlyOnceWith(15_000);
+});
+
+it.each(['denied-response', 'unfinished-owner'])(
+  'does not open cached CRM after an early %s',
+  async (mode) => {
+    const owner = sharedOwner(`${team}:allowed`);
+    const baseline = {
+      ...owner.snapshot()!,
+      ready: mode !== 'unfinished-owner',
+    };
+    const local = Promise.withResolvers<CacheAuthority>();
+    const postStarted = Promise.withResolvers<void>();
+    const postBaseline = Promise.withResolvers<string>();
+    vi.spyOn(owner, 'snapshot').mockReturnValue(undefined);
+    vi.spyOn(owner, 'current').mockReturnValue(local.promise);
+    const authority = createCrmAccessAuthority({
+      earlyProof: true,
+      retire: async () => {},
+      fetchProof: vi
+        .fn<() => Promise<string>>()
+        .mockResolvedValueOnce(
+          `${team}:${mode === 'denied-response' ? 'denied' : 'allowed'}`
+        )
+        .mockImplementationOnce(() => {
+          postStarted.resolve();
+          return postBaseline.promise;
+        }),
+    });
+    authority.setHost(owner);
+    authority.setSession('viewer');
+    const early = Promise.withResolvers<void>();
+    const dispose = createRoot((dispose) => {
+      createComputed(() => {
+        if (authority.state() !== 'pending') early.resolve();
+      });
+      return dispose;
+    });
+    try {
+      const refresh = authority.refresh();
+      await early.promise;
+      local.resolve(baseline);
+      await postStarted.promise;
+      expect(authority.allowed()).toBe(false);
+      postBaseline.resolve(`${team}:allowed`);
+      await refresh;
+      expect(authority.allowed()).toBe(true);
+    } finally {
+      dispose();
+    }
+  }
+);
+
+it('opens CRM from a matching allowed startup hint without waiting for the store or proof', async () => {
+  const owner = sharedOwner(`${team}:allowed`);
+  const local = Promise.withResolvers<CacheAuthority>();
+  const previous = owner.snapshot()!;
+  vi.spyOn(owner, 'current').mockReturnValue(local.promise);
+  const retire = vi.fn(async () => {});
+  const fetchProof = vi.fn(async () => `${team}:allowed`);
+  const authority = createCrmAccessAuthority({
+    hint: previous,
+    retire,
+    fetchProof,
+  });
+  authority.setHost(owner);
+  authority.setSession('viewer');
+  expect(authority.state()).toBe('allowed');
+  const initializing = authority.initialize();
+  expect(authority.allowed()).toBe(true);
+  expect(fetchProof).not.toHaveBeenCalled();
+  local.resolve({
+    ...previous,
+    policy: `${team}:denied`,
+    generation: crypto.randomUUID(),
+  });
+  await initializing;
+  expect(authority.state()).toBe('denied');
+  expect(retire).toHaveBeenCalledWith('permission', expect.any(String));
+});
+
+it.each([null, `${team}:allowed`])(
+  'replaces a ready allowed hint with a pending unfinished owner (%s)',
+  async (policy) => {
+    const hint = sharedOwner(`${team}:allowed`).snapshot()!;
+    const owner = sharedOwner();
+    vi.spyOn(owner, 'current').mockResolvedValue({
+      ...hint,
+      policy,
+      ready: false,
+    });
+    const authority = createCrmAccessAuthority({
+      hint,
+      retire: async () => {},
+      fetchProof: async () => `${team}:allowed`,
+    });
+    authority.setHost(owner);
+    authority.setSession('viewer');
+    expect(authority.allowed()).toBe(true);
+    await authority.initialize();
+    expect(authority.state()).toBe('pending');
+  }
+);
+
+it.each(['missing', 'denied', 'different-account', 'unfinished'])(
+  'keeps the %s startup hint pending until an owner or proof confirms access',
+  (mode) => {
+    const hint = sharedOwner(`${team}:allowed`).snapshot()!;
+    const authority = createCrmAccessAuthority({
+      hint:
+        mode === 'missing'
+          ? undefined
+          : {
+              ...hint,
+              account:
+                mode === 'different-account' ? 'previous-viewer' : hint.account,
+              policy: mode === 'denied' ? `${team}:denied` : hint.policy,
+              ready: mode !== 'unfinished',
+            },
+      retire: async () => {},
+      fetchProof: async () => `${team}:allowed`,
+    });
+    authority.setSession('viewer');
+    expect(authority.state()).toBe('pending');
+  }
+);
+
+it('does not restore the allowed hint after login has already observed a denial', async () => {
+  const hint = sharedOwner(`${team}:allowed`).snapshot()!;
+  const authority = createCrmAccessAuthority({
+    hint,
+    retire: async () => {},
+    fetchProof: async () => `${team}:allowed`,
+  });
+  authority.setHost(sharedOwner(`${team}:denied`));
+  await authority.initialize();
+  authority.setSession('viewer');
+  expect(authority.allowed()).toBe(false);
+});
 
 it.each([`${team}:allowed`, 'none'])(
   'preserves the initial generation and offline snapshots for %s',
@@ -125,6 +399,84 @@ it('fences a restored owner belonging to another account on first login', async 
   expect(retire.mock.calls.at(-1)).toBe(fence);
   expect(authority.state()).toBe('pending');
 });
+
+it.each([false, true])(
+  'fences a late first owner before binding the login account (owner emits: %s)',
+  async (emits) => {
+    const previous: CacheAuthority = {
+      identity: 'profile',
+      account: 'previous-viewer',
+      generation: crypto.randomUUID(),
+      policy: `${team}:allowed`,
+      ready: true,
+    };
+    let current = previous;
+    const read = Promise.withResolvers<void>();
+    const started = Promise.withResolvers<void>();
+    const listeners = new Set<(next: CacheAuthority) => void>();
+    const owner: CacheAuthorityHost = {
+      snapshot: () => undefined,
+      async current() {
+        started.resolve();
+        await read.promise;
+        if (emits) for (const listener of listeners) listener(current);
+        return current;
+      },
+      onChanged(listener) {
+        listeners.add(listener);
+        return () => {
+          listeners.delete(listener);
+        };
+      },
+      async transition(expected, policy) {
+        expect(expected).toBe(current.generation);
+        current = { ...current, policy, ready: true };
+        return {
+          authority: current,
+          changed: false,
+          revision: '0',
+          affectedOps: [],
+        };
+      },
+    };
+    const initialize = vi.fn();
+    const retire = vi.fn(async (_scope: unknown, _generation: string) => {});
+    const bindAccount = vi.fn(async () => {
+      expect(retire).toHaveBeenCalledExactlyOnceWith(
+        'session',
+        expect.any(String)
+      );
+      expect(initialize).not.toHaveBeenCalled();
+      current = {
+        ...current,
+        account: 'viewer',
+        generation: crypto.randomUUID(),
+      };
+    });
+    const authority = createCrmAccessAuthority({
+      initialize,
+      retire,
+      bindAccount,
+      fetchProof: async () => `${team}:allowed`,
+    });
+    authority.setHost(owner);
+    authority.setSession('viewer');
+    const refreshing = authority.refresh();
+    await started.promise;
+    expect(retire).not.toHaveBeenCalled();
+    read.resolve();
+    await refreshing;
+    expect(bindAccount).toHaveBeenCalledOnce();
+    expect(initialize).not.toHaveBeenCalled();
+    expect(authority.snapshot()?.account).toBe('viewer');
+    expect(authority.state()).toBe('allowed');
+    expect(
+      retire.mock.calls.every(
+        ([, generation]) => generation !== previous.generation
+      )
+    ).toBe(true);
+  }
+);
 
 it('preserves the memory-only startup generation through first login', async () => {
   const initialize = vi.fn();

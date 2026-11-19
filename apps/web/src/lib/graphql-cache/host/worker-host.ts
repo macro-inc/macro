@@ -14,6 +14,7 @@ import {
   cacheAuthorityError,
   createAuthorityObserver,
 } from '../authority';
+import { UNKNOWN_CACHE_GENERATION } from '../generation-mirror';
 import { deleteLegacyNormalizedCacheIdb } from '../legacy-idb-cleanup';
 import { createPeopleCache } from '../people/host';
 import {
@@ -1418,7 +1419,10 @@ export function createWorkerCacheHost(options: WorkerHostOptions): CacheHost {
   ): Promise<unknown> {
     msg = {
       ...msg,
-      generation: msg.generation ?? authorityObserver.snapshot()?.generation,
+      generation:
+        msg.generation ??
+        authorityObserver.snapshot()?.generation ??
+        UNKNOWN_CACHE_GENERATION,
     };
     const generation = transportGeneration;
     const ready =
@@ -1434,14 +1438,7 @@ export function createWorkerCacheHost(options: WorkerHostOptions): CacheHost {
     // Never admit an interrupted operation to a different transport generation.
     if (generation !== transportGeneration)
       throw transportInterruption ?? new CacheNavigationError();
-    return await request(
-      {
-        ...msg,
-        generation: msg.generation ?? authorityObserver.snapshot()?.generation,
-      },
-      opKey,
-      signal
-    );
+    return await request(msg, opKey, signal);
   }
 
   async function currentAuthority() {

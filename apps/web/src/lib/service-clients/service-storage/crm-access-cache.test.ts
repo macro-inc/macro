@@ -103,10 +103,19 @@ async function boot(policy: string | null = null) {
   return host;
 }
 
-it('keeps boot responses and active queries when the first proof confirms access', async () => {
+it('keeps boot responses after missing-mirror retirement when the first proof confirms access', async () => {
   const host = owner();
   const generation = host.authority.snapshot()!.generation;
+  const initialized = Promise.withResolvers<void>();
+  mocks.refetch.mockImplementationOnce(async () => {
+    initialized.resolve();
+  });
   await initializeCrmCacheOwner();
+  await initialized.promise;
+  expect(mocks.refetch).toHaveBeenCalledOnce();
+  // Main has a bound account but no authority policy or mirror. Its persisted
+  // email/CRM entries survive the upgrade's memory fence and first proof.
+  expect(mocks.retire).not.toHaveBeenCalled();
   mocks.cancel.mockClear();
   mocks.refetch.mockClear();
   mocks.proof.mockResolvedValue(allowed());
@@ -119,6 +128,7 @@ it('keeps boot responses and active queries when the first proof confirms access
   expect(host.authority.snapshot()!.generation).toBe(generation);
   expect(mocks.cancel).not.toHaveBeenCalled();
   expect(mocks.refetch).not.toHaveBeenCalled();
+  expect(mocks.retire).not.toHaveBeenCalled();
   await expect(response.json()).resolves.toEqual({ subject: 'Personal mail' });
 });
 

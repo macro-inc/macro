@@ -3,6 +3,7 @@ import { SERVER_HOSTS } from '@core/constant/servers';
 import { fetchWithToken } from '@core/util/fetchWithToken';
 import { fireAndForget } from '@core/util/fireAndForget';
 import { throwOnErr } from '@core/util/result';
+import { cacheSessionGeneration } from '@graphql-cache/session-generation';
 import { Telemetry } from '@macro-inc/observability';
 import { queryClient } from '@queries/client';
 import {
@@ -101,7 +102,7 @@ export function createAgentActivitySource(
       .subscription(AgentSessionActivityAppendedDocument, { sessionId: id })
       .subscribe((result) => {
         if (
-          crmSnapshotAuthorization().epoch !== authority.epoch ||
+          !cacheSessionGeneration.isCurrent(authority.epoch) ||
           crmSnapshotAuthorization().paused
         )
           return;

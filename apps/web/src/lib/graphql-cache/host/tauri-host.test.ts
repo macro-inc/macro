@@ -1,6 +1,7 @@
 import { Telemetry } from '@macro-inc/observability';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { TEST_AUTHORITY_GENERATION, testAuthority } from '../authority-fixture';
+import { UNKNOWN_CACHE_GENERATION } from '../generation-mirror';
 
 const invokeMock = vi.hoisted(() => vi.fn());
 const authorityMock = vi.hoisted(() => vi.fn());
@@ -784,7 +785,7 @@ describe('createTauriCacheHost', () => {
     });
     expect(result).toEqual(writeResult);
     expect(invokeMock).toHaveBeenCalledWith('graphql_cache_write', {
-      generation: TEST_AUTHORITY_GENERATION,
+      generation: UNKNOWN_CACHE_GENERATION,
       originOpId: `${host.clientId}:3`,
       registration: {
         opId: `${host.clientId}:3`,
@@ -829,7 +830,7 @@ describe('createTauriCacheHost', () => {
       revision: '1',
     });
     expect(invokeMock).toHaveBeenCalledWith('graphql_cache_hydrate', {
-      generation: TEST_AUTHORITY_GENERATION,
+      generation: UNKNOWN_CACHE_GENERATION,
       query: 'query Backfill { items @cacheOnly { id } cursor }',
       operationName: undefined,
       variables: undefined,

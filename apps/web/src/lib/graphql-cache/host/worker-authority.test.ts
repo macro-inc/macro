@@ -1,5 +1,6 @@
 import { afterEach, beforeEach, expect, it, vi } from 'vitest';
 import { type CacheAuthority, StaleCacheAuthorityError } from '../authority';
+import { UNKNOWN_CACHE_GENERATION } from '../generation-mirror';
 import type { CacheRequest, WorkerMessage } from '../protocol';
 import type { CacheCoordinatorPageAdapterOptions } from '../worker/coordinator-page-adapter';
 
@@ -11,6 +12,7 @@ vi.mock('../worker/coordinator-page-adapter', () => ({
 import { createWorkerCacheHost } from './worker-host';
 
 let state: CacheAuthority;
+let requests: CacheRequest[];
 let adapter: {
   onmessage: ((event: MessageEvent<WorkerMessage>) => void) | null;
   start: () => Promise<void>;
@@ -21,6 +23,7 @@ let options: CacheCoordinatorPageAdapterOptions;
 let host: ReturnType<typeof createWorkerCacheHost>;
 
 beforeEach(() => {
+  requests = [];
   state = {
     identity: 'authority-test',
     account: 'viewer',
@@ -43,6 +46,7 @@ beforeEach(() => {
       start: async () => {},
       dispose: async () => {},
       postMessage(request) {
+        requests.push(request);
         let result: unknown = null;
         if (request.kind === 'current-authority') result = state;
         if (request.kind === 'transition-authority') {
@@ -88,6 +92,20 @@ afterEach(() => {
   vi.unstubAllGlobals();
   vi.restoreAllMocks();
 });
+
+it.each([undefined, UNKNOWN_CACHE_GENERATION])(
+  'never restamps a pre-ready copied write after the owner becomes ready: %s',
+  async (generation) => {
+    await host.writeQuery({
+      query: '{ user { id } }',
+      data: { user: { id: 'viewer' } },
+      generation,
+    });
+    const write = requests.find((request) => request.kind === 'write');
+    expect(write?.generation).toBe(UNKNOWN_CACHE_GENERATION);
+    expect(write?.generation).not.toBe(state.generation);
+  }
+);
 
 it('keeps offline reads available before any proof and across a preserved owner replacement', async () => {
   await host.authority!.current();

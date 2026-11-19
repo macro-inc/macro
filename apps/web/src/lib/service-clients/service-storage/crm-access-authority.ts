@@ -1,17 +1,24 @@
 import { fireAndForget } from '@core/util/fireAndForget';
+import { isTauri } from '@core/util/platform';
 import { sleep } from '@core/util/sleep';
 import {
   type CacheAuthority,
   type CacheAuthorityHost,
   StaleCacheAuthorityError,
 } from '@graphql-cache/authority';
+import { startupAuthorityHint } from '@graphql-cache/generation-mirror';
 import { Telemetry } from '@macro-inc/observability';
 import { createSignal } from 'solid-js';
 
 export type CrmAccessState = 'pending' | 'allowed' | 'denied' | 'error';
 export type CrmRetirementScope = 'permission' | 'session';
 type Options = {
+  hint?: CacheAuthority;
+  earlyProof?: boolean;
   initialize?: (generation: string) => void;
+  restore?: (
+    authority: CacheAuthority
+  ) => CrmRetirementScope | 'refresh' | undefined;
   fetchProof: (timeoutMs: number) => Promise<string>;
   retire: (
     scope: CrmRetirementScope | undefined,
@@ -89,25 +96,45 @@ export function createCrmAccessAuthority(options: Options) {
   let requiredRetirement: CrmRetirementScope | undefined;
   let retirementAttempt = Symbol();
   let retirementFailed = false;
+  let fencedAccount: string | undefined;
+  let observationVersion = 0;
+  let earlyProofStarted = false;
+  let earlyAccess: 'allowed' | 'denied' | undefined;
 
   function observe(next: CacheAuthority, retryRetirement = false) {
     const previous = observed;
+    observationVersion += 1;
+    if (
+      (next.account !== null && next.account !== account) ||
+      (previous && previous.generation !== next.generation) ||
+      (next.policy !== null && (!next.ready || earlyAccess === 'allowed'))
+    )
+      earlyAccess = undefined;
     if (next.account != null && next.account !== account) {
       setState('pending');
-      // Login already fenced the old account. A late proof notification or
-      // local read cannot reopen its generation before the owner is rebound.
-      if (account !== undefined && previous === undefined) return;
+      if (account !== undefined && previous === undefined) {
+        // Login may precede the first owner observation. Fence the account
+        // discovered now without ever installing its old generation.
+        if (fencedAccount !== next.account) {
+          fencedAccount = next.account;
+          retire('session', crypto.randomUUID());
+        }
+        return;
+      }
     } else if (isCrmPolicy(next.policy)) {
       if (next.policy.endsWith(':denied') || next.policy === 'none')
         setState('denied');
-      else if (next.ready) setState('allowed');
-    }
+      else setState(next.ready ? (earlyAccess ?? 'allowed') : 'pending');
+    } else setState(earlyAccess ?? 'pending');
     observed = next;
     if (!initialized) {
       initialized = true;
-      options.initialize?.(next.generation);
-      if (next.policy?.endsWith(':denied'))
-        retire('permission', next.generation);
+      const scope =
+        options.restore?.(next) ??
+        (next.policy?.endsWith(':denied') ? 'permission' : undefined);
+      if (scope)
+        retire(scope === 'refresh' ? undefined : scope, next.generation);
+      else options.initialize?.(next.generation);
       return;
     }
     if (previous?.generation === next.generation) {
@@ -169,6 +196,30 @@ export function createCrmAccessAuthority(options: Options) {
     const expectedAccount = account;
     const current = () =>
       captured === session && target === owner && expectedAccount === account;
+    if (
+      options.earlyProof &&
+      !earlyProofStarted &&
+      !options.hint &&
+      !initialized &&
+      !observed &&
+      !target.snapshot()
+    ) {
+      earlyProofStarted = true;
+      const version = observationVersion;
+      // This response opens UI only; it cannot borrow a generation learned
+      // after dispatch. The normal proof below commits under the owner's CAS.
+      fireAndForget(
+        Telemetry.span('crm.access.startup_hint', async () => {
+          const policy = await options.fetchProof(3_000);
+          if (!current() || version !== observationVersion) return;
+          if (!isCrmPolicy(policy))
+            throw new Error('Invalid CRM access policy');
+          earlyAccess = policy.endsWith(':allowed') ? 'allowed' : 'denied';
+          setState(earlyAccess);
+        }),
+        'crm.access.startup_hint'
+      );
+    }
     const work = Telemetry.span('crm.access.refresh', async (span) => {
       for (let attempt = 0; ; attempt++) {
         try {
@@ -176,6 +227,7 @@ export function createCrmAccessAuthority(options: Options) {
             target.current()
           );
           if (!current()) return;
+          span.run(() => observe(before, true));
           const bindAccount = options.bindAccount;
           if (before.account !== expectedAccount && bindAccount) {
             await span.span('crm.access.bind_account', () =>
@@ -184,15 +236,16 @@ export function createCrmAccessAuthority(options: Options) {
             before = await span.span('crm.access.current', () =>
               target.current()
             );
+            if (!current()) return;
+            span.run(() => observe(before, true));
           }
-          if (!current()) return;
-          span.run(() => observe(before, true));
           const policy = await span.span('crm.access.proof', () =>
             options.fetchProof(attempt === 0 ? 15_000 : 3_000)
           );
           if (!current()) return;
           if (!isCrmPolicy(policy))
             throw new Error('Invalid CRM access policy');
+          earlyAccess = undefined;
           // A proven denial hides entry points even if local disk cleanup fails.
           if (policy.endsWith(':denied') || policy === 'none')
             setState('denied');
@@ -247,6 +300,8 @@ export function createCrmAccessAuthority(options: Options) {
     setHost(next: CacheAuthorityHost | undefined) {
       if (next === shared) return;
       shared = next;
+      if (earlyAccess) setState('pending');
+      earlyAccess = undefined;
       owner = next ?? memoryAuthority(account);
       session = Symbol();
       pending = undefined;
@@ -260,16 +315,28 @@ export function createCrmAccessAuthority(options: Options) {
       const firstAccount = account === undefined;
       const previousAccount = account ?? observed?.account;
       if (previousAccount != null && previousAccount !== next) {
+        fencedAccount = previousAccount;
         retire('session', crypto.randomUUID());
         observed = undefined;
       }
       account = next;
+      if (earlyAccess) setState('pending');
+      earlyAccess = undefined;
       loginEpoch = epoch;
       session = Symbol();
       pending = undefined;
       initialization = undefined;
       if (sameAccount) return true;
-      setState('pending');
+      // The matching ready allowed hint opens UI only. Fresh server reads still
+      // enforce access and copied writes remain fenced by the shared owner.
+      const hint = observed ?? (!initialized ? options.hint : undefined);
+      const hintedAllowed =
+        next !== undefined &&
+        hint?.account === next &&
+        hint.ready &&
+        isCrmPolicy(hint.policy) &&
+        hint.policy.endsWith(':allowed');
+      setState(hintedAllowed ? 'allowed' : 'pending');
       if (!shared) {
         owner = memoryAuthority(
           account,
@@ -289,7 +356,12 @@ let configured: Options = {
   retire: async () => {},
 };
 export const crmAccessAuthority = createCrmAccessAuthority({
+  hint: startupAuthorityHint,
+  // Native-mobile Soup persistence can publish independently of owner startup.
+  // Web's normalized reads observe the owner before their ready handshake.
+  earlyProof: !isTauri(),
   initialize: (generation) => configured.initialize?.(generation),
+  restore: (authority) => configured.restore?.(authority),
   fetchProof: (timeoutMs) => configured.fetchProof(timeoutMs),
   retire: (scope, generation) => configured.retire(scope, generation),
   bindAccount: (owner, generation, account) =>

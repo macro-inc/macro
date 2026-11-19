@@ -827,7 +827,7 @@ export function getGraphqlCacheHost(): CacheHost | undefined {
   return cachedCacheHost?.disabled ? undefined : cachedCacheHost;
 }
 
-/** Establish the local response generation before app requests can start. */
+/** Establish the local response generation without gating app startup. */
 export async function initializeGraphqlSoupCache(): Promise<void> {
   await Telemetry.span('graphql.cache_startup', async (span) => {
     getGraphqlSoupClient();

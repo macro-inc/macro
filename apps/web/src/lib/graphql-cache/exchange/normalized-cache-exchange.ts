@@ -1,3 +1,4 @@
+import { perfMark } from '@app/observability/perf-marks';
 import { StaleCacheAuthorityError } from '../authority';
 import { cacheSessionGeneration } from '../session-generation';
 import { externalWriteVersion, predatesExternalWrite } from './external-writes';
@@ -1498,6 +1499,35 @@ export function normalizedCacheExchange(
             return deletion?.revision ?? write.revision;
           } catch (error) {
             reportError(error);
+            if (
+              error instanceof StaleCacheAuthorityError &&
+              op.context.cacheGenerationRecovery !== true &&
+              isActive() &&
+              state.networkResultVersion === resultVersion
+            ) {
+              // A stale startup hint may render from memory, but never lands
+              // in shared storage. Recover that query once with a fresh read;
+              // an owner notification may already have replaced its observer.
+              await host.authority?.current();
+              const active = activeOps.get(op.key);
+              if (
+                active &&
+                active.context.cacheSessionGeneration ===
+                  op.context.cacheSessionGeneration &&
+                state.networkResultVersion === resultVersion
+              ) {
+                perfMark('cache.generation-recovery', {
+                  reason: 'write-rejected',
+                });
+                client.reexecuteOperation(
+                  makeOperation('query', active, {
+                    ...active.context,
+                    requestPolicy: 'network-only',
+                    cacheGenerationRecovery: true,
+                  })
+                );
+              }
+            }
             // An old-owner failure can arrive after this write started. Retain
             // only the latest successful response for replacement registration.
             if (

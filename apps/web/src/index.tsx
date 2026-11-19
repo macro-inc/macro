@@ -8,6 +8,7 @@ import '@fontsource-variable/playfair-display';
 // import 'solid-devtools';
 import { initializeLexical } from '@core/component/LexicalMarkdown/init';
 import { isTouchDevice } from '@core/mobile/isTouchDevice';
+import { fireAndForget } from '@core/util/fireAndForget';
 import { getPlatform } from '@core/util/platform';
 import { installPlatformFetch } from '@core/util/platformFetch';
 import { recoverFromFailedLoad } from '@core/util/reloadForNewerBuild';
@@ -91,16 +92,17 @@ async function languageReady() {
   perfMark('boot.language-ready');
 }
 
-async function cacheReady() {
-  await initializeGraphqlSoupCache();
-  perfMark('boot.cache-ready');
-}
-
 async function main() {
   perfMark('boot.main');
   // A translated interface waits for its messages (already loading, cached
   // after the first visit) so the first screen isn't English for a moment.
-  await Promise.all([observabilityReady(), languageReady(), cacheReady()]);
+  await Promise.all([observabilityReady(), languageReady()]);
+  // Install the shared host before login/request producers mount. Its local
+  // handshake runs in the background; the first screen never waits for storage.
+  fireAndForget(
+    initializeGraphqlSoupCache().then(() => perfMark('boot.cache-ready')),
+    'graphql-cache-startup'
+  );
   try {
     await prepareNotificationLaunch();
   } catch (error) {

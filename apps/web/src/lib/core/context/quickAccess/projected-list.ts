@@ -347,7 +347,8 @@ export function createProjectedList<T extends { id: string }>(options: {
     const previous = current;
     if (
       enabled &&
-      previous?.generation === epoch &&
+      previous !== undefined &&
+      cacheSessionGeneration.isCurrent(previous.generation) &&
       previous.query === query &&
       previous.buckets.length === activeBuckets.length &&
       previous.buckets.every((bucket, index) => bucket === activeBuckets[index])
@@ -370,7 +371,8 @@ export function createProjectedList<T extends { id: string }>(options: {
     setError(undefined);
     setHasMore(false);
     const sameBuckets =
-      previous?.generation === epoch &&
+      previous !== undefined &&
+      cacheSessionGeneration.isCurrent(previous.generation) &&
       previous.buckets.length === activeBuckets.length &&
       previous.buckets.every(
         (bucket, index) => bucket === activeBuckets[index]

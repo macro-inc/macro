@@ -108,8 +108,7 @@ export function createLiveAttentionFeed<
 
   // Batches are written in arrival order, and only between page reads, so a
   // read that started before a batch cannot land over it.
-  let pending: Patch[] = [];
-  let pendingGeneration = cacheSessionGeneration.capture();
+  let pending: { patches: Patch[]; generation: string }[] = [];
   createEffect(
     on(
       () => cacheSessionGeneration.state().epoch,
@@ -122,9 +121,8 @@ export function createLiveAttentionFeed<
   const writePending = async () => {
     if (writing || pending.length === 0 || query.isFetching) return;
     const host = options.cacheHost();
-    const batch = pending;
-    const generation = pendingGeneration;
-    pending = [];
+    const batch = pending.shift();
+    if (!batch) return;
     // Without the cache there are no pages to place changes in.
     if (!host) {
       fireAndForget(refetch(), surface);
@@ -138,8 +136,8 @@ export function createLiveAttentionFeed<
         host,
         options.pages.cachedQuery,
         pages.map((cursor) => options.pages.variables(cursor)),
-        batch,
-        generation
+        batch.patches,
+        batch.generation
       );
       if (!placed) fireAndForget(refetch(), surface);
     } catch (error) {
@@ -159,10 +157,15 @@ export function createLiveAttentionFeed<
     )
   );
 
-  const applyPatches = (patches: readonly Patch[]) => {
-    pendingGeneration = cacheSessionGeneration.capture();
+  const applyPatches = (patches: readonly Patch[], generation: string) => {
+    if (!cacheSessionGeneration.isCurrent(generation)) {
+      fireAndForget(refetch(), surface);
+      return;
+    }
     options.onPatches?.(patches);
-    pending.push(...patches);
+    const previous = pending.at(-1);
+    if (previous?.generation === generation) previous.patches.push(...patches);
+    else pending.push({ patches: [...patches], generation });
     fireAndForget(writePending(), surface);
   };
 
@@ -182,9 +185,9 @@ export function createLiveAttentionFeed<
         options.updates,
         variables,
         {
-          patches: (patches) => {
+          patches: (patches, generation) => {
             delay = ATTENTION_FEED_RESUBSCRIBE_DELAY_MS;
-            applyPatches(patches);
+            applyPatches(patches, generation);
           },
           interrupted: () => {
             if (disposed) return;
