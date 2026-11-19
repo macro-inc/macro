@@ -36,15 +36,38 @@ async fn redis_now_ms(cache: &MacroCache) -> i64 {
     seconds * 1000 + micros / 1000
 }
 
-/// Whether a deadline read back is the one stored: exactly, where Redis has
-/// PEXPIRETIME, and otherwise no more than a millisecond early.
-fn same_deadline(read: i64, stored: i64) -> bool {
-    (-1..=0).contains(&(read - stored))
+/// When `key` expires on Redis's clock, read directly rather than through a
+/// take; `None` on a server without PEXPIRETIME (before Redis 7.0).
+async fn stored_deadline_ms(cache: &MacroCache, key: &str) -> Option<i64> {
+    let mut connection = cache
+        .inner
+        .get_multiplexed_async_connection()
+        .await
+        .unwrap();
+    redis::cmd("PEXPIRETIME")
+        .arg(key)
+        .query_async(&mut connection)
+        .await
+        .ok()
 }
 
-/// Writes a record no code of this module writes: an unbound value, or a
-/// hash of `fields`, with an expiry only when `expires` is set.
-async fn write_raw(cache: &MacroCache, key: &str, fields: &[(&str, &str)], expires: bool) {
+/// Whether a take read back the deadline `stored`: exactly, where Redis has
+/// PEXPIRETIME, and otherwise no more than a millisecond early.
+async fn read_back(cache: &MacroCache, read: i64, stored: i64) -> bool {
+    match stored_deadline_ms(cache, "absent").await {
+        Some(_) => read == stored,
+        None => (-1..=0).contains(&(read - stored)),
+    }
+}
+
+/// Writes a record directly: an unbound value, or a hash of `fields`, that
+/// expires at `expires_at_ms`, or never when it is `None`.
+async fn write_raw(
+    cache: &MacroCache,
+    key: &str,
+    fields: &[(&str, &str)],
+    expires_at_ms: Option<i64>,
+) {
     let mut connection = cache
         .inner
         .get_multiplexed_async_connection()
@@ -56,10 +79,48 @@ async fn write_raw(cache: &MacroCache, key: &str, fields: &[(&str, &str)], expir
     } else {
         pipe.hset_multiple(key, fields);
     }
-    if expires {
-        pipe.expire(key, 60);
+    if let Some(expires_at_ms) = expires_at_ms {
+        pipe.cmd("PEXPIREAT").arg(key).arg(expires_at_ms);
     }
     pipe.query_async::<()>(&mut connection).await.unwrap();
+}
+
+#[tokio::test]
+async fn a_take_reads_the_deadline_the_code_was_stored_with() {
+    let cache = cache();
+    let deadline = redis_now_ms(&cache).await + 60_007;
+    let unbound = fresh_code("deadline");
+    write_raw(
+        &cache,
+        &mobile_login_session_key(&unbound),
+        &[],
+        Some(deadline),
+    )
+    .await;
+    let bound = fresh_code("bound-deadline");
+    write_raw(
+        &cache,
+        &bound_mobile_login_session_key(&bound),
+        &[
+            (REFRESH_TOKEN_FIELD, "fake-refresh-token"),
+            (CHALLENGE_FIELD, FAKE_CHALLENGE),
+        ],
+        Some(deadline),
+    )
+    .await;
+
+    for code in [&unbound, &bound] {
+        let taken = cache
+            .take_mobile_login_session(code)
+            .await
+            .unwrap()
+            .unwrap();
+        assert!(
+            read_back(&cache, taken.expires_at_ms, deadline).await,
+            "read {}, stored {deadline}",
+            taken.expires_at_ms
+        );
+    }
 }
 
 #[tokio::test]
@@ -68,7 +129,7 @@ async fn a_record_without_an_expiry_never_redeems() {
     // must not outlive the code's deadline.
     let cache = cache();
     let unbound = fresh_code("no-expiry");
-    write_raw(&cache, &mobile_login_session_key(&unbound), &[], false).await;
+    write_raw(&cache, &mobile_login_session_key(&unbound), &[], None).await;
     let bound = fresh_code("bound-no-expiry");
     write_raw(
         &cache,
@@ -77,7 +138,7 @@ async fn a_record_without_an_expiry_never_redeems() {
             (REFRESH_TOKEN_FIELD, "fake-refresh-token"),
             (CHALLENGE_FIELD, FAKE_CHALLENGE),
         ],
-        false,
+        None,
     )
     .await;
 
@@ -101,7 +162,7 @@ async fn a_bound_record_missing_its_challenge_is_refused_like_an_unknown_code() 
         &cache,
         &bound_mobile_login_session_key(&code),
         &[(REFRESH_TOKEN_FIELD, "fake-refresh-token")],
-        true,
+        Some(redis_now_ms(&cache).await + 60_000),
     )
     .await;
 
@@ -194,6 +255,10 @@ async fn a_restored_session_redeems_once_more_within_its_lifetime() {
             .await
             .unwrap()
     );
+    // The restore keeps the original deadline instead of starting a new one.
+    if let Some(stored) = stored_deadline_ms(&cache, &mobile_login_session_key(&code)).await {
+        assert_eq!(stored, taken.expires_at_ms);
+    }
 
     let again = cache
         .take_mobile_login_session(&code)
@@ -201,9 +266,8 @@ async fn a_restored_session_redeems_once_more_within_its_lifetime() {
         .unwrap()
         .unwrap();
     assert_eq!(again.refresh_token(), "fake-refresh-token");
-    // The restore keeps the original deadline instead of starting a new one.
     assert!(
-        same_deadline(again.expires_at_ms, taken.expires_at_ms),
+        read_back(&cache, again.expires_at_ms, taken.expires_at_ms).await,
         "restored until {}, taken with {}",
         again.expires_at_ms,
         taken.expires_at_ms
@@ -367,6 +431,9 @@ async fn a_restored_code_keeps_its_challenge() {
             .unwrap()
     );
     assert_eq!(stored_keys(&cache, &code).await, [false, true]);
+    if let Some(stored) = stored_deadline_ms(&cache, &bound_mobile_login_session_key(&code)).await {
+        assert_eq!(stored, taken.expires_at_ms);
+    }
     let again = cache
         .take_mobile_login_session(&code)
         .await
@@ -378,7 +445,7 @@ async fn a_restored_code_keeps_its_challenge() {
         "a retry must not find the code unbound"
     );
     assert!(
-        same_deadline(again.expires_at_ms, taken.expires_at_ms),
+        read_back(&cache, again.expires_at_ms, taken.expires_at_ms).await,
         "restored until {}, taken with {}",
         again.expires_at_ms,
         taken.expires_at_ms
