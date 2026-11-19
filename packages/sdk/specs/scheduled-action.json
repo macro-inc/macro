@@ -6702,7 +6702,7 @@
       "UnusableKnob": {
         "type": "object",
         "description": "An entity knob of a saved routine whose item needs a new pick: it was\ndeleted, its owner lost access, or none is picked.",
-        "required": ["step", "knob", "reason"],
+        "required": ["knob", "reason"],
         "properties": {
           "item": {
             "oneOf": [
@@ -6724,9 +6724,15 @@
             "description": "Why it can't be used, for the routine's owner."
           },
           "step": {
-            "type": "integer",
-            "description": "Its step's position among the routine's steps, from 0.",
-            "minimum": 0
+            "oneOf": [
+              {
+                "type": "null"
+              },
+              {
+                "$ref": "#/components/schemas/StepId",
+                "description": "Its step's id. A step saved before steps had ids has none until it is\nsaved again; a client can't place that one, but its run still fails."
+              }
+            ]
           }
         }
       },

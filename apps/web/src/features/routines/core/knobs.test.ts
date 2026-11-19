@@ -198,41 +198,26 @@ describe('knobs needing a new pick', () => {
   const gone = { type: 'channel' as const, id: 'gone' };
   const reason = (label: string) =>
     `The channel picked for "${label}" was deleted.`;
-  const code = (id: string) => ({
-    type: 'code' as const,
-    id,
-    title: id,
-    source: 'export async function main() {}',
-  });
-  // As saved: an Ask AI step first, so code steps sit at positions 1 and 2.
-  const saved = [
-    { type: 'agent' as const, model: 'm', instructions: 'Sort' },
-    code('post'),
-    code('file'),
-  ];
-  // As the scheduler lists them, by position among the saved steps.
-  const unusable = unusableItemsOf(
-    [
-      {
-        step: 1,
-        knob: 'notify',
-        item: gone,
-        reason: reason('Notification channel'),
-      },
-      {
-        step: 1,
-        knob: 'archive',
-        item: gone,
-        reason: reason('Archive channel'),
-      },
-      { step: 2, knob: 'archive', item: gone, reason: reason('Step two') },
-      { step: 2, knob: 'unpicked', item: null, reason: 'Not picked' },
-      { step: 0, knob: 'archive', item: gone, reason: 'No code step there' },
-    ],
-    saved
-  );
+  // As the scheduler lists them, by the saved step's id.
+  const unusable = unusableItemsOf([
+    {
+      step: 'post',
+      knob: 'notify',
+      item: gone,
+      reason: reason('Notification channel'),
+    },
+    {
+      step: 'post',
+      knob: 'archive',
+      item: gone,
+      reason: reason('Archive channel'),
+    },
+    { step: 'file', knob: 'archive', item: gone, reason: reason('Step two') },
+    { step: 'file', knob: 'unpicked', item: null, reason: 'Not picked' },
+    { step: null, knob: 'archive', item: gone, reason: 'Saved before ids' },
+  ]);
 
-  it('keep each on its saved step, by id, past an Ask AI step', () => {
+  it('keep each on its own step, by id', () => {
     expect(unusable.map((entry) => [entry.step, entry.knob])).toEqual([
       ['post', 'notify'],
       ['post', 'archive'],
@@ -240,6 +225,11 @@ describe('knobs needing a new pick', () => {
     ]);
     // A step not saved yet has none.
     expect(unusableInStep(unusable, undefined)).toEqual([]);
+    // A list from before a save that removed 'post' puts none of its entries
+    // on the step left, though they share a knob name and an item.
+    expect(
+      unusableInStep(unusable, 'file').map((entry) => entry.reason)
+    ).toEqual([reason('Step two')]);
   });
 
   it('give each knob holding the same item the reason naming it', () => {

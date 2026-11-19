@@ -131,14 +131,10 @@ export function createRoutineDetailSource(
       current && current.owner === userId() && picksItems(current.task)
     );
   });
-  // Only picked items: an unpicked knob shows as not set on its own. Each
-  // names its step by id, as the saved routine the scheduler checked has it.
-  const unusableItems = createMemo((): UnusableItem[] => {
-    const task = raw()?.task;
-    return unusable.isPending || !task || !('steps' in task)
-      ? []
-      : unusableItemsOf(unusable.data ?? [], task.steps);
-  });
+  // Only picked items: an unpicked knob shows as not set on its own.
+  const unusableItems = createMemo((): UnusableItem[] =>
+    unusable.isPending ? [] : unusableItemsOf(unusable.data ?? [])
+  );
   const codeReview = createMemo(() => {
     const current = raw();
     return current && upgrades.isSuccess

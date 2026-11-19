@@ -2,7 +2,6 @@ import type { EntityType } from '@service-properties/generated/schemas/entityTyp
 import {
   type RoutineKnob,
   RoutineKnobEntityType,
-  type RoutineStep,
 } from '@service-scheduled-action/generated/schemas';
 import { match } from 'ts-pattern';
 import { z } from 'zod';
@@ -70,25 +69,22 @@ export type UnusableItem = {
 };
 
 /**
- * The scheduler's entries, each naming its step by the saved step's id rather
- * than its position among the saved steps, so a draft that adds, removes or
- * moves steps keeps each entry on its own step. Saving gives every code step
- * an id. Entries with no item picked, or at no saved code step, are left out.
+ * The scheduler's entries with an item picked and a step to show it on. Each
+ * names its step by id, so a draft that adds, removes or moves steps, or a
+ * list fetched before the last save, keeps each entry on its own step. A step
+ * saved before steps had ids has none and is left out.
  */
 export function unusableItemsOf(
   entries: readonly {
-    step: number;
+    step?: string | null;
     knob: string;
     item?: KnobEntity | null;
     reason: string;
-  }[],
-  saved: readonly RoutineStep[]
+  }[]
 ): UnusableItem[] {
-  return entries.flatMap(({ step, knob, item, reason }) => {
-    const savedStep = saved[step];
-    const id = savedStep?.type === 'code' ? savedStep.id : undefined;
-    return item && id ? [{ step: id, knob, item, reason }] : [];
-  });
+  return entries.flatMap(({ step, knob, item, reason }) =>
+    item && step ? [{ step, knob, item, reason }] : []
+  );
 }
 
 /** The entries of `unusable` for the saved step `id`; none for a new step. */

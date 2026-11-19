@@ -6,6 +6,7 @@
  * OpenAPI spec version: 0.1.0
  */
 import type { UnusableKnobItem } from './unusableKnobItem';
+import type { UnusableKnobStep } from './unusableKnobStep';
 
 /**
  * An entity knob of a saved routine whose item needs a new pick: it was
@@ -17,9 +18,5 @@ export interface UnusableKnob {
   knob: string;
   /** Why it can't be used, for the routine's owner. */
   reason: string;
-  /**
-   * Its step's position among the routine's steps, from 0.
-   * @minimum 0
-   */
-  step: number;
+  step?: UnusableKnobStep;
 }

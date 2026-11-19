@@ -206,11 +206,16 @@ async fn every_kind_is_looked_up_and_named_in_its_failure() {
 }
 
 #[tokio::test]
-async fn a_saved_routine_lists_its_knobs_needing_a_new_pick_by_step() {
+async fn a_saved_routine_lists_its_knobs_needing_a_new_pick_by_step_id() {
+    let with_id = |id: &str, mut step: serde_json::Value| {
+        step["id"] = json!(id);
+        step
+    };
     let program = RoutineProgram::from_task(&json!({ "steps": [
-        posting_step("Post bugs", "kept"),
+        with_id("post_bugs", posting_step("Post bugs", "kept")),
         { "type": "agent", "instructions": "Summarize the week.", "model": "anthropic/claude-sonnet-4-5" },
-        posting_step("Post elsewhere", "deleted"),
+        with_id("post_elsewhere", posting_step("Post elsewhere", "deleted")),
+        posting_step("Saved before steps had ids", "deleted"),
     ] }))
     .unwrap();
     let items = Items {
@@ -220,11 +225,19 @@ async fn a_saved_routine_lists_its_knobs_needing_a_new_pick_by_step() {
     let owner = MacroUserIdStr::parse_from_str("macro|owner@macro.com").unwrap();
     assert_eq!(
         unusable_knobs(&items, &owner, &program).await.unwrap(),
-        [UnusableKnob {
-            step: 2,
-            knob: "bugs".into(),
-            item: Some(channel("deleted")),
-            reason: "The channel picked for \"Channel to post in\" was deleted or you no longer have access to it. Pick another in the routine's settings.".into(),
-        }]
+        [
+            UnusableKnob {
+                step: Some(StepId::try_from("post_elsewhere".to_owned()).unwrap()),
+                knob: "bugs".into(),
+                item: Some(channel("deleted")),
+                reason: "The channel picked for \"Channel to post in\" was deleted or you no longer have access to it. Pick another in the routine's settings.".into(),
+            },
+            UnusableKnob {
+                step: None,
+                knob: "bugs".into(),
+                item: Some(channel("deleted")),
+                reason: "The channel picked for \"Channel to post in\" was deleted or you no longer have access to it. Pick another in the routine's settings.".into(),
+            },
+        ]
     );
 }

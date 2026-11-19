@@ -2158,10 +2158,7 @@ export type UnusableKnob = {
      * Why it can't be used, for the routine's owner.
      */
     reason: string;
-    /**
-     * Its step's position among the routine's steps, from 0.
-     */
-    step: number;
+    step?: null | StepId;
 };
 
 /**

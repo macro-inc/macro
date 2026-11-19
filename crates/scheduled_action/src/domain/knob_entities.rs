@@ -8,7 +8,7 @@ use std::collections::HashMap;
 
 use macro_user_id::user_id::MacroUserIdStr;
 use rootcause::Report;
-use routine_program::{CodeStep, EntityKind, EntityValue, RoutineProgram, Step};
+use routine_program::{CodeStep, EntityKind, EntityValue, RoutineProgram, StepId};
 use serde::{Deserialize, Serialize};
 use utoipa::ToSchema;
 
@@ -120,8 +120,9 @@ pub async fn unusable_items(
 /// deleted, its owner lost access, or none is picked.
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize, ToSchema)]
 pub struct UnusableKnob {
-    /// Its step's position among the routine's steps, from 0.
-    pub step: usize,
+    /// Its step's id. A step saved before steps had ids has none until it is
+    /// saved again; a client can't place that one, but its run still fails.
+    pub step: Option<StepId>,
     /// The knob's name.
     pub knob: String,
     /// The item picked, which needs another; none when nothing is picked.
@@ -131,7 +132,7 @@ pub struct UnusableKnob {
 }
 
 /// The entity knobs of `program` whose item `owner` can't use now, each with
-/// its step's position among all of the program's steps.
+/// its step's id, which stays the step's while the routine is edited around it.
 #[tracing::instrument(name = "routine.unusable_knobs", err, skip_all, fields(
     items = tracing::field::Empty,
     unusable = tracing::field::Empty,
@@ -141,15 +142,7 @@ pub async fn unusable_knobs(
     owner: &MacroUserIdStr<'static>,
     program: &RoutineProgram,
 ) -> Result<Vec<UnusableKnob>, Report> {
-    let (positions, steps): (Vec<usize>, Vec<&CodeStep>) = program
-        .steps
-        .iter()
-        .enumerate()
-        .filter_map(|(position, step)| match step {
-            Step::Code(step) => Some((position, step)),
-            Step::Agent(_) => None,
-        })
-        .unzip();
+    let steps = program.code_steps();
     let span = tracing::Span::current();
     span.record(
         "items",
@@ -162,13 +155,11 @@ pub async fn unusable_knobs(
     span.record("unusable", unusable.len());
     Ok(unusable
         .into_iter()
-        .filter_map(|item| {
-            Some(UnusableKnob {
-                step: *positions.get(item.position)?,
-                reason: item.run_failure(),
-                knob: item.knob,
-                item: item.item,
-            })
+        .map(|item| UnusableKnob {
+            step: steps.get(item.position).and_then(|step| step.id.clone()),
+            reason: item.run_failure(),
+            knob: item.knob,
+            item: item.item,
         })
         .collect())
 }
