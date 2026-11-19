@@ -538,3 +538,191 @@ async fn a_dial_initializes_and_reports_the_sessions_its_runtime_lists() {
         [SessionId::from("acp-1"), SessionId::from("acp-2")]
     );
 }
+
+/// Presence that keeps rows the way the Postgres adapter does: a dial inserts
+/// its row, a close deletes it, and a renewal upserts every row it lists.
+/// Each renewal waits at `renewal_gate` after the registry has taken its
+/// snapshot, so a test can close a connection in between.
+#[derive(Default)]
+struct LeasedPresence {
+    rows: Mutex<Vec<RuntimeConnectionId>>,
+    events: Mutex<Vec<PresenceEvent>>,
+    renewal_started: tokio::sync::Notify,
+    renewal_gate: tokio::sync::Notify,
+}
+
+impl LeasedPresence {
+    fn rows(&self) -> Vec<RuntimeConnectionId> {
+        self.rows.lock().unwrap().clone()
+    }
+
+    fn events(&self) -> Vec<PresenceEvent> {
+        self.events.lock().unwrap().clone()
+    }
+}
+
+impl HarnessPresence for LeasedPresence {
+    fn connected(
+        self: Arc<Self>,
+        _harness: HarnessId,
+        connection: RuntimeConnectionId,
+        _accepts: RuntimeAccepts,
+    ) -> std::pin::Pin<Box<dyn Future<Output = ConnectionRecorded> + Send>> {
+        Box::pin(async move {
+            self.rows.lock().unwrap().push(connection);
+            self.events
+                .lock()
+                .unwrap()
+                .push(PresenceEvent::Connected(connection));
+            ConnectionRecorded::AgentsUnchanged
+        })
+    }
+
+    fn disconnected(
+        self: Arc<Self>,
+        _harness: HarnessId,
+        connection: RuntimeConnectionId,
+    ) -> std::pin::Pin<Box<dyn Future<Output = ()> + Send>> {
+        Box::pin(async move {
+            self.rows.lock().unwrap().retain(|row| *row != connection);
+            self.events
+                .lock()
+                .unwrap()
+                .push(PresenceEvent::Disconnected(connection));
+        })
+    }
+
+    fn renew(
+        self: Arc<Self>,
+        live: Vec<(HarnessId, RuntimeConnectionId)>,
+    ) -> std::pin::Pin<Box<dyn Future<Output = ()> + Send>> {
+        Box::pin(async move {
+            self.renewal_started.notify_one();
+            self.renewal_gate.notified().await;
+            let mut rows = self.rows.lock().unwrap();
+            for (_, connection) in live {
+                if !rows.contains(&connection) {
+                    rows.push(connection);
+                }
+            }
+        })
+    }
+}
+
+/// Lists a dial without `attach`, whose own watch would report its close
+/// unprompted, and records it with presence.
+async fn dial_recorded(
+    registry: &Arc<RuntimeRegistry<ContainerSender>>,
+    presence: &Arc<LeasedPresence>,
+    runtime: &ContainerMock,
+) -> ListedConnection<ContainerSender> {
+    let listed = ListedConnection {
+        id: RuntimeConnectionId::generate(),
+        connection: RuntimeConnection::connect(runtime.clone()),
+        accepts: RuntimeAccepts::default(),
+    };
+    registry
+        .connections
+        .insert(HarnessId::TEST_A, listed.clone());
+    Arc::clone(presence)
+        .connected(HarnessId::TEST_A, listed.id, listed.accepts)
+        .await;
+    listed
+}
+
+/// Start a renewal and return once it has taken its snapshot.
+async fn renewal_holding_its_snapshot(
+    registry: &Arc<RuntimeRegistry<ContainerSender>>,
+    presence: &Arc<LeasedPresence>,
+) -> JoinHandle<()> {
+    let renewal = tokio::spawn({
+        let registry = Arc::clone(registry);
+        async move { registry.renew_presence().await }
+    });
+    presence.renewal_started.notified().await;
+    renewal
+}
+
+/// A renewal that listed a connection before it closed must not leave that
+/// connection's row standing after the close deleted it.
+#[tokio::test]
+async fn a_renewal_that_lands_after_a_close_leaves_the_connection_closed() {
+    let presence = Arc::new(LeasedPresence::default());
+    let registry = RuntimeRegistry::with_presence(
+        Arc::clone(&presence) as Arc<dyn HarnessPresence>,
+        mpsc::unbounded_channel().0,
+    );
+    let runtime = ContainerMock::default();
+    let closing = dial_recorded(&registry, &presence, &runtime).await;
+
+    let renewal = renewal_holding_its_snapshot(&registry, &presence).await;
+    runtime.disconnects();
+    Arc::clone(&registry)
+        .drop_when_closed(HarnessId::TEST_A, closing.clone(), None)
+        .await;
+    assert!(presence.rows().is_empty());
+    presence.renewal_gate.notify_one();
+    renewal.await.expect("the renewal finishes");
+
+    assert!(
+        presence.rows().is_empty(),
+        "the late renewal brought the closed connection back: {:?}",
+        presence.rows()
+    );
+    assert_eq!(
+        presence.events().last(),
+        Some(&PresenceEvent::Disconnected(closing.id)),
+        "the close is reported again after the renewal: {:?}",
+        presence.events()
+    );
+}
+
+/// A harness that redials while a renewal is in flight keeps its new
+/// connection: only the closed one is cleaned up.
+#[tokio::test]
+async fn a_redial_during_a_late_renewal_stays_connected() {
+    let presence = Arc::new(LeasedPresence::default());
+    let registry = RuntimeRegistry::with_presence(
+        Arc::clone(&presence) as Arc<dyn HarnessPresence>,
+        mpsc::unbounded_channel().0,
+    );
+    let first = ContainerMock::default();
+    let closing = dial_recorded(&registry, &presence, &first).await;
+
+    let renewal = renewal_holding_its_snapshot(&registry, &presence).await;
+    first.disconnects();
+    Arc::clone(&registry)
+        .drop_when_closed(HarnessId::TEST_A, closing.clone(), None)
+        .await;
+    let redial = dial_recorded(&registry, &presence, &ContainerMock::default()).await;
+    presence.renewal_gate.notify_one();
+    renewal.await.expect("the renewal finishes");
+
+    assert_eq!(presence.rows(), [redial.id]);
+    assert!(registry.is_connected(HarnessId::TEST_A));
+    assert!(
+        !presence
+            .events()
+            .contains(&PresenceEvent::Disconnected(redial.id))
+    );
+}
+
+/// A renewal that restores the row of a connection this process still holds
+/// (its attach write failed, or its lapsed row was reaped) keeps it.
+#[tokio::test]
+async fn a_renewal_restores_a_held_connections_missing_row() {
+    let presence = Arc::new(LeasedPresence::default());
+    let registry = RuntimeRegistry::with_presence(
+        Arc::clone(&presence) as Arc<dyn HarnessPresence>,
+        mpsc::unbounded_channel().0,
+    );
+    let held = dial_recorded(&registry, &presence, &ContainerMock::default()).await;
+    presence.rows.lock().unwrap().clear();
+
+    let renewal = renewal_holding_its_snapshot(&registry, &presence).await;
+    presence.renewal_gate.notify_one();
+    renewal.await.expect("the renewal finishes");
+
+    assert_eq!(presence.rows(), [held.id]);
+    assert_eq!(presence.events(), [PresenceEvent::Connected(held.id)]);
+}
