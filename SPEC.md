@@ -1,156 +1,195 @@
-# SPEC: watch (and take over) an agent teammate's screen
+# SPEC: see (and take over) what an agent teammate is doing
 
-Bead `mac-teammate-e2e.15`. Status: **draft, research only, nothing built.** Fixes QA **B7**
-(the guest runs Xvnc on `127.0.0.1:5901`, but the owner has no way to see it).
+Bead `mac-teammate-e2e.15`. Draft, research only, nothing built. Fixes QA **B7** (the agent's desktop runs on
+Xvnc `127.0.0.1:5901` in the guest, but the owner can't see it). Builds on `/home/wolf/tmp/agent-screen/`
+(`tech/RECOMMENDATION.md`, `design/`) and the Macro
+[transport draft](https://macro.com/app/md/01a1f585-e38b-713f-ba22-79134cb3c573). Facts are checked on `main` at
+`bb14f607cef`, with file references under **Details**.
 
-Builds on, does not redo: `/home/wolf/tmp/agent-screen/tech/RECOMMENDATION.md` (transport, t2p3),
-`/home/wolf/tmp/agent-screen/design/` (3 UX options, t2p2; its tailnet URL `:21490` is down, 502),
-and the Macro draft [transport recommendation](https://macro.com/app/md/01a1f585-e38b-713f-ba22-79134cb3c573)
-(a copy of the same recommendation). Facts below were checked again on `main` at `bb14f607cef`.
+## What we build
 
-## 1. What exists today
+The agent can share one of two surfaces, and picks the one that fits:
 
-**In the guest** (agent image, `nix/macro-box/_agent.nix`):
-- `macro-agent-display`: TigerVNC `Xvnc :1 -rfbport 5901 -interface 127.0.0.1 -localhost -SecurityTypes None
-  -AlwaysShared` (`_agent.nix:426`). No password, loopback only, several clients allowed at once.
-- Openbox, Chromium with CDP on `127.0.0.1:9223`, and the `computer-use-linux` MCP server (X11 backend,
-  `_agent.nix:140-146`). The agent sees and acts on the whole `:1` display, not only the browser.
-- `socat` is in the image. Nothing listens off the VM. Each VM has its own netns, and nftables drops all inbound traffic.
+| Surface | What people see | Where | How |
+| --- | --- | --- | --- |
+| **Tab** (exists today) | One browser tab in a clean, signed-out browser context, with the URL blocklist enforced at the wire | Calls only | CDP screencast → LiveKit screen-share track (kept as is) |
+| **Desktop** (new) | The agent's own virtual desktop `:1`: every window, dialog and app, plus its signed-in browser | The "View screen" panel, and calls (phase 4) | Panel: VNC/RFB through the harness → noVNC. Call: x11grab → the existing LiveKit publish |
 
-**Paths that can reach the guest:**
-- **Host agent exec (works today):** harness → mTLS → `firecracker_host` `GET /v1/computers/{id}/exec` WebSocket →
-  vsock → guest agent runs the program. In the domain this is `Fleet::exec(computer, argv) -> GuestProcess{stdin,stdout}`
-  (`crates/hosted_runtimes/src/domain/ports.rs:683`). The harness already uses it to start harnessd
-  (`services/agent_harness_service/src/computers.rs:744`). `exec(["socat","STDIO","TCP:127.0.0.1:5901"])`
-  therefore gives the harness a raw RFB byte pipe, with no change to the guest or the host.
-- **macrod's outbound WSS:** one ACP/runtime socket to `agent-harness/runtime/ws`. Using it for the screen needs a new
-  channel type, a macrod release and a relay between replicas.
-- **WebRTC/LiveKit:** agents already publish **one browser tab** to calls through CDP screencast
-  (`muppet .../calls/share.ts`). That covers a tab only, not the desktop.
+Never the desktop of the person who owns the agent: only the agent's computer, display `:1`.
 
-**Permissions already modelled:** `HarnessPermission::View` is documented as *"Read the runtime and watch its screen"*
-and `Use` as *"Run agents or control the runtime screen"* (`crates/harnesses/src/domain/models.rs:156-158`).
-`authorize_harness` maps View → any access (Owner/User/Read) and Use → Owner or User
-(`crates/harnesses/src/domain/service.rs:706-711`). No route uses them for a screen yet. `crates/agent_preview` has
-the lease, hashed-ticket and viewer-auth pattern we want to copy.
+**Rules for both surfaces**
+- The viewer always says which surface is shown ("Scout's tab: example.com" or "Scout's desktop"). People who
+  may watch can **stop** the share or **switch** it to the other surface.
+- A visible share indicator: a live dot in the DM header or call tile, plus a line written by code, not by the
+  model ("Scout is sharing its desktop" / "Stopped sharing").
+- **Watching** needs `View` on the agent's computer, which today means every member of its team. **Driving** needs
+  `Manage` (team owner or admin) and a driver lease. Driving is desktop only. See D1.
+- No silent thumbnails: a channel never shows screen contents to anyone who may not watch. A chip shows a
+  thumbnail only to people who may watch, and only while a share is live.
+- Audit rows for every watch, drive and share, always on. No video recording in v1.
 
-**Who has which access on an agent's computer today** (`harness_access_level`,
-`crates/macro_db_client/migrations/20261111230600_macro_computers.sql`; `crates/harnesses/AGENTS.md` Scope):
-a Macro computer's harness belongs to the **computer's team**. The team owner and team admins are Owner. **Every
-other team member is User** (`edit`). Nobody outside the team has access, and direct shares and team-access
-changes are refused (`HarnessError::ComputerHarness`), so nobody is ever Read on a computer. The person who bought
-the computer, or who created the agent, gets nothing extra. So with no change, `View`/`Use` would let **every member
-of the team watch and take over** an agent's screen.
+**How the agent picks a surface** (the rule is in code and written into the agent's tool description):
+1. A person opens **View screen** → **desktop**. The person chose, and the agent is not asked.
+2. A person must act on the agent's computer (sign-in code, CAPTCHA, a fix) → **desktop**, with "Take over"
+   offered.
+3. In a call, showing a web page that needs no sign-in and passes the blocklist → **tab**.
+4. In a call, showing anything else (a non-browser app, a dialog, a file picker, several windows, the agent's
+   signed-in session) → **desktop**, under the extra call rules in D9.
+5. Unsure → **tab** in a call, **desktop** outside one. Outside a call there is no tab surface in v1 (D8).
 
-## 2. User experience (design option A, plus two pieces from B and C)
+**User flow**
 
-- **Entry points:**
-  1. Member card (`lib/core/component/userCardActions.tsx`): a **View screen** action next to Message, shown only
-     for agents with a computer and only to people allowed to watch.
-  2. DM header with the agent: a **Screen** button. While someone is watching, or a human is driving, it shows a
-     live dot (same pattern as `ChannelTopBarLiveIndicators.tsx` and the call header).
-  3. Settings → agents row and Machines row menu (where QA looked for it in B7): a **View screen** item.
-  4. **Share chip:** the agent can post a "Watch my screen" card in a DM or channel (for example "I need a sign-in
-     code"). The card shows a live thumbnail, but only to people who may watch. Everyone else sees a locked chip.
-     When the session ends, the chip turns into a plain summary ("Wolf drove 14:02–14:05").
-- **Viewer:** a split side panel next to the conversation, with a pop-out button for full size or a second
-  monitor. noVNC scales the 1920×1080 screen to fit. Connection states: connecting, live, slow, reconnecting,
-  computer asleep/off (offers "Turn on"), ended.
-- **View-only (default) → Take over:** one click on **Take over**. The agent stops at once, the frame turns amber,
-  and everyone watching sees "Wolf is driving". **Hand back** (button, or hold Esc) takes an optional note, which
-  the agent gets with a fresh screenshot. The driver goes idle or disconnects → after 2 minutes control goes back
-  automatically, and the agent asks in the conversation before it carries on.
-- **Phone:** watch only in v1 (screen on top, chat below). Taking over from a phone comes later (trackpad + key row).
+```
+Profile / DM header ── View screen ──┐
+Agent's chip "Watch my screen" ──────┤
+                                     ▼
+              ┌──────── side panel (pop-out ⤢) ────────┐
+              │ ● Live · Scout's desktop   [Switch][Stop]│
+              │ ┌─────────────────────────────────────┐ │
+              │ │   noVNC, view-only                   │ │
+              │ └─────────────────────────────────────┘ │
+              │ [Take over]        (owner/admin only)    │
+              └──────────────┬─────────────────────────┘
+                     Take over│  agent's tool calls held, frame amber,
+                              │  "Wolf is driving" for everyone
+                              ▼
+                   Hand back (button / hold Esc / 2 min idle)
+                   → agent gets note + fresh screenshot, resumes
 
-## 3. Security
+In a call: agent shares   tab ⇄ desktop   (call tile shows which; Stop)
+```
 
-- **Treat take-over like a shell.** Whoever drives has the agent's logged-in browser sessions, its mail, and
-  anything else on the desktop.
-- **Who:** checked in the harness on every ticket, using the existing `authorize_harness`. Today that means every
-  team member is User. Watch = `View` and drive = `Manage` (team owner and admins), unless Wolf decides otherwise (D1).
-- **Tickets:** `POST /computers/{id}/screen/tickets` returns a ticket for one user, one computer and one mode
-  (view or drive). It is single use, valid for 60 s and stored hashed. The browser opens the WebSocket with it.
-  Sockets close when access is revoked or the computer is released, hibernated or moved.
-- **Input gate, enforced in the harness:** the harness parses only client→server RFB. For anyone who does not hold
-  the driver lease it drops KeyEvent (4), PointerEvent (5) and ClientCutText (6), so view-only cannot be bypassed
-  from the browser. The driver lease is one Postgres row per computer, so it works across harness replicas.
-- **The agent is blocked, not just told:** while a human drives, the agent's `computer-use` and `chrome-devtools`
-  tool calls are refused in code. We also send the agent a runtime notification ("A human is driving" / "handed
-  back, re-observe before acting"). Where the block sits is decision D7.
-- **Credentials on screen:** whatever the agent can see, a watcher can see too. Mitigations: only people who may
-  watch get a thumbnail, the chip does not widen access, and no video is recorded in v1. We do not try to redact.
-- **Hostile guest:** the bytes come from a computer the agent controls, so noVNC runs in a sandboxed iframe on a
-  separate origin.
-- **Audit:** always on. A `computer_screen_sessions` row for each watch and each take-over (user, mode, start,
-  end, bytes), a line in the conversation for each take-over, and `computer.screen.*` spans
-  (ticket → socket → exec → close) with computer, agent and session ids.
-- **Recording:** none in v1. If we add it later, record take-overs only: the harness copies the RFB stream to S3.
+**Phases**
 
-## 4. Approach
-
-**Recommended: VNC over the host agent exec path, noVNC in the web app.**
-
-| Phase | Ships | Changes |
+| # | Ships | Main change |
 | --- | --- | --- |
-| 1 Watch | View screen (card, DM header, Machines row), side panel, view-only, phone watch, audit rows | harness: ticket route + `GET /computers/{id}/screen` WS (socat exec, RFB input gate); DB: `computer_screen_sessions`; web: noVNC panel in sandboxed iframe. No guest/host change. |
-| 2 Take over | Take over / Hand back, amber state, driver lease, idle hand-back, agent blocked + notified | harness: lease + gate on; agent tool hold (D7); runtime notification |
-| 3 Share chip | Agent posts "Watch my screen" card with live thumbnail | agent tool to post the chip; message attachment type; thumbnail = harness-side periodic frame grab, access-checked |
-| Later | Phone take-over, take-over recording, host-agent `stream` route instead of socat exec, WebRTC if phones on cellular are poor | |
+| 1 | View screen (member card, DM header, Machines row), side panel, view-only, watch on phone, audit | harness screen WebSocket over `Fleet::exec` socat, noVNC panel |
+| 2 | Take over / Hand back, driver lease, agent held | harness lease + held tool calls (D7) |
+| 3 | Agent's "Watch my screen" chip, surface label + Switch/Stop | agent tool, chip attachment |
+| 4 | Desktop into calls, tab ⇄ desktop switch in calls | muppet: x11grab feed into the existing publish |
 
-**Alternative 1: tunnel through macrod's outbound WSS.** This would also work on bring-your-own machines.
-Rejected for now: it needs a protocol change and a macrod release, the bytes must reach the replica that holds
-the socket, video bursts would share the ACP socket, and macrod also runs on people's laptops, where screen access
-is a much bigger trust question.
+## Decisions for Wolf
 
-**Alternative 2: WebRTC through LiveKit, which calls already use.** Better on lossy phone networks and with many
-viewers. Rejected for v1: it needs a software H.264/VP8 encoder in a guest with no GPU (0.5-1 vCPU while someone
-watches), a guest image change, and input injection we would build ourselves. It is the upgrade path if
-measurements show VNC is not good enough.
-
-(CDP screencast is out: it shows one tab and misses dialogs, file pickers and other apps.)
-
-## 5. Acceptance checks
-
-1. As the owner, on a local stack with an agent computer: View screen on the member card opens the panel, and the
-   live desktop shows within 3 s. Mouse and keys in view mode change nothing (checked with `xdotool getmouselocation`
-   in the guest).
-2. As a user with no access to the machine: there is no View screen entry, and a hand-made ticket request returns
-   403. A replayed or expired ticket is rejected.
-3. Take over: the agent's next computer-use call is refused, and it receives the notification. Typing in Mousepad
-   from the browser works. Hand back resumes the agent, which sees the note. Closing the tab hands control back
-   after 2 minutes.
-4. Two viewers at once: both see the screen, only the driver's input lands, and both see "Wolf is driving".
-5. Release or hibernate the computer while watching: the socket closes, and the panel shows "asleep/off".
-6. One trace in Tempo from the ticket to the socket close. `computer_screen_sessions` rows match what happened.
-7. Phone width: the panel stacks screen over chat and offers no Take over.
-8. `cargo test -p agent_harness_service` covers the ticket and the RFB gate (input dropped for viewers). Web
-   component tests cover the panel states.
-
-## 6. Decisions for Wolf
-
-- **D1 Who may watch, and who may drive?** On an agent's computer every team member is User today, and admins are
-  Owner (section 1). The tech recommendation said only the agent's owner. The design recommendation said Users watch
-  and the owner drives. The code's own comment says Use may control the screen. **My recommendation:** watch =
-  `View` (every team member, no change). Drive = `Manage` (team owner and admins), not `Use`, because driving is a
-  shell on the agent's logged-in accounts. A per-agent "let members take over" switch can come later. The agent's
-  creator gets nothing beyond their team role. That matches how the computer is authorized now, so we add no new
-  ownership concept.
-- **D2 Viewer placement:** a side panel with a pop-out button (A, my recommendation), a theater modal (B), or its
-  own window (C).
-- **D3 Share chip in v1, or phase 3?** I recommend phase 3: watching and taking over fix B7 without it.
-- **D4 Live thumbnail in the chip** (screen contents end up in the channel for people who may watch): yes, or a
-  static chip?
-- **D5 Recording:** no video in v1, audit rows only. Later, take-overs only?
+- **D1 Who watches, who drives?** I recommend watch = `View` (every team member, as today) and drive = `Manage`
+  (team owner and admins).
+- **D2 Viewer placement:** a side panel plus a pop-out button (my recommendation), a theater modal, or a window
+  of its own.
+- **D3 Share chip:** I recommend phase 3. Phases 1 and 2 fix B7 without it.
+- **D4 Live thumbnail in the chip** for people who may watch, or a static chip only?
+- **D5 Recording:** none in v1. Later, take-overs only?
 - **D6 Phone:** watch only in v1?
-- **D7 Where the "agent blocked while a human drives" gate lives.** `computer-use-linux` and `chrome-devtools` are
-  MCP servers in the guest (`_agent.nix:140-146`), not muppet tools, so "muppet refuses" does not apply as written.
-  - **(a) Harness gate (recommended):** the harness holds or denies those tool calls while the lease is held,
-    reusing the owner-approval held-tool-call path. One place, it can't be bypassed from the guest, and the lease
-    is already in the harness. Trade-off: it only blocks calls that go through ACP. A shell command like
-    `xdotool` run from the agent's Bash tool would get through, unless Bash is also held while a human drives.
-  - **(b) Guest wrapper:** a wrapper around the MCP servers refuses while a root-owned flag is set (not in
-    `/run/macro-agent`, which the agent's desktop can write to). Trade-off: it needs a guest image change, and the
-    agent could still drive X directly.
-  - In both, the hard limit is the same: the agent's own processes can reach `:1`. Only holding every tool call
-    while a human drives closes that. I recommend (a), holding all tool calls during a take-over, which is the
-    simplest rule anyway.
+- **D7 Hold the agent while a human drives:** hold **all** of the agent's tool calls in the harness (my
+  recommendation; one place, can't be bypassed from the guest), or a guest wrapper around the computer-use and
+  CDP servers only (needs an image change, and the agent can still reach X through Bash).
+- **D8 Tab surface outside calls?** I recommend no in v1. Today a tab can only be published into a call. Outside a
+  call the desktop covers it.
+- **D9 Desktop in a call:** the tab's safety rules (clean signed-out browser, blocklist, no typing into password
+  fields) don't exist on the desktop, and a call can include guests who may not watch. I recommend allowing it only
+  when everyone in the call may `View` the computer. Otherwise the share falls back to the tab, and the agent says
+  why.
+
+## Acceptance checks
+
+1. As a team owner on a local stack (Docker agent computer): View screen opens the panel, the desktop is live in
+   under 3 s, and in view mode input changes nothing (`xdotool getmouselocation` in the guest stays the same).
+2. As a non-member: no View screen entry, and a hand-made ticket gets 403. A replayed or expired ticket fails.
+3. Take over: the agent's next tool call is held, typing into Mousepad works, Hand back resumes the agent with the
+   note. Closing the tab hands back after 2 minutes.
+4. Two viewers: both see the desktop, only the driver's input lands, and both see "Wolf is driving".
+5. The panel and call tile always name the surface. Stop ends the share for everyone. Switch tab ⇄ desktop works
+   in a call.
+6. The chip shows no thumbnail to a channel member without `View`. After the share, the chip turns into an
+   "ended" state.
+7. Releasing or hibernating the computer closes the panel's socket with "asleep/off".
+8. One trace from the ticket to the socket close (`computer.screen.*`), and the audit rows match.
+9. `cargo test -p agent_harness_service` covers tickets and the RFB input gate. muppet tests cover the
+   surface-choice rule and the D9 fallback.
+
+## Open questions (to t2j2: calls/runtime owner)
+
+- **Q3** On a hosted agent computer, does the call worker (`@livekit/rtc-node`, muppet `calls/`) run inside the
+  guest as the agent's user, so it can read display `:1` with x11grab?
+- **Q4** Who may join a call the agent is in: only team members, or outside guests too? D9 depends on it.
+
+---
+
+# Details
+
+## What runs in the guest
+
+- `macro-agent-display`: `Xvnc :1 -rfbport 5901 -interface 127.0.0.1 -localhost -SecurityTypes None
+  -AlwaysShared` (`nix/macro-box/_agent.nix:426`). It has no password, listens only inside the VM, and accepts
+  several clients at once. The `macro` user's own display `:0`/5900 is a different display, and we never show it.
+- Openbox, Chromium with CDP on `127.0.0.1:9223`, and the `computer-use-linux` MCP server with the X11 backend
+  (`_agent.nix:140-146`), so the agent acts on the whole `:1` display. `ffmpeg-full` and `socat` are in the image.
+  Nothing listens off the VM: each VM has its own netns, and nftables drops all inbound traffic.
+
+## Desktop to the panel: transport
+
+- **Hosted (recommended):** browser WSS → gateway → `agent_harness_service` → `Fleet::exec(computer,
+  ["socat","STDIO","TCP:127.0.0.1:5901"])` → host agent mTLS `GET /v1/computers/{id}/exec` → vsock → guest. This
+  path already exists: `ports.rs:683`, and the harness uses it to start harnessd (`computers.rs:744`). The
+  harness acts as a websockify, and no guest or host change is needed. Later, a host-agent `stream` route can
+  replace the socat exec with a fixed port allowlist {5901}.
+- **Local / container:** `DockerFleet::exec` is `docker exec` as `macro` with stdin attached
+  (`crates/hosted_runtimes/src/outbound/docker_fleet.rs:503,719`). The Docker agent image (`agentContainer`,
+  `macro-box.nix:50`) runs the same `_agent.nix` units, so the same harness code works on a local stack and
+  nothing needs to be published from the container. Machines people pair themselves (macrod on a laptop) are
+  out of scope: we never show a person's desktop.
+- **Rejected:** macrod's outbound WSS (needs a protocol change and a macrod release, needs a relay between
+  replicas, and shares the ACP socket); WebRTC for the panel (needs a guest encoder and our own input injection,
+  for a panel that VNC already serves).
+
+## Desktop into a call: findings
+
+- **How the tab share works today** (`agent-teammates/muppet/packages/lib/utilities/macro/calls/share.ts`,
+  `frames.ts`, `starter-agent/behavior/capabilities/calls/DESIGN.md` "Showing a browser"):
+  - CDP `Page.startScreencast` sends a JPEG on each damage.
+  - A worker decodes it with ffmpeg into fixed-size I420 frames: 1280×720, 10 fps, quality 65. It re-sends the
+    newest frame to keep the track alive.
+  - The SDK `publishScreenShare` puts them on a `VideoSource` and publishes it as `TrackSource.SOURCE_SCREENSHARE`
+    (`packages/sdk/src/calls/node.ts:67-165`). libwebrtc in `@livekit/rtc-node` encodes it in software, in the
+    agent's process.
+  - Lifecycle: the share starts with `share_screen` and is driven by `drive_screen`. It ends on `stop_share`, a
+    blocked navigation, a stall, the track ending or the call ending.
+- **VNC does not plug into calls.** RFB frames are a protocol for remote viewers. Inside the guest, decoding RFB
+  from Xvnc only to re-encode it is strictly worse than reading the display directly. The desktop source for a
+  call is therefore **ffmpeg `x11grab` on `:1`**, scaled to the same 1280×720 I420 at 10 fps, fed into the
+  **same** `ScreenFrame` stream and `publishScreenShare`. Only the source changes. Encoding, the track, the
+  source type and the lifecycle are all unchanged.
+- **Not faster, not slower:** the encode is the same libwebrtc encode the tab already pays for (estimated at a few
+  tens of percent of one vCPU at 720p10; not measured). x11grab adds a small capture and scale cost. x11grab also
+  sends frames at a steady rate rather than on damage, so it uses more CPU when the screen is idle unless we skip
+  unchanged frames.
+- **Server-side alternative (rejected for now):** the harness decodes RFB and publishes into LiveKit as its own
+  participant. That keeps the encode out of the guest, but it adds a media publisher service and a second
+  participant identity. Revisit only if guest CPU in calls becomes a problem.
+- **Switching surfaces in a call:** stop one publication and start the other on the same `SOURCE_SCREENSHARE`.
+  There is one screen share per agent at a time.
+
+## Security details
+
+- **Tickets:** `POST /computers/{id}/screen/tickets` → `authorize_harness` → a ticket for one user, one
+  computer and one mode (view or drive). It is single use, valid for 60 s and stored hashed, as in
+  `crates/agent_preview`. The socket closes when access is revoked or the computer is released, hibernated or
+  moved.
+- **Input gate:** the harness parses client→server RFB. For anyone who does not hold the driver lease it drops
+  KeyEvent 4, PointerEvent 5 and ClientCutText 6. Server→client bytes pass through unparsed. The driver lease is
+  one Postgres row per computer, so it works across replicas.
+- **Access as it is today:** `harness_access_level` (`crates/macro_db_client/migrations/20261111230600_macro_computers.sql`)
+  makes an agent's computer team-scoped:
+  - The team owner and team admins are Owner. Every other member is User. Nobody is Read.
+  - There are no direct shares (`HarnessError::ComputerHarness`).
+  - The agent's creator gets nothing extra.
+  - `HarnessPermission::View` is documented as "watch its screen" and `Use` as "control the runtime screen"
+    (`crates/harnesses/src/domain/models.rs:156-158`). Mapped as they stand, every member could drive, which is
+    why D1 proposes `Manage` for driving.
+- **Credentials on screen:** whatever the agent's desktop shows, a watcher sees too. We don't try to redact. The
+  safeguards are the access check, the no-silent-thumbnails rule, D9, and no recording.
+- **Hostile guest:** noVNC runs in a sandboxed iframe on a separate origin, because the guest sends the bytes.
+- **Holding the agent (D7):** the agent's own processes can reach `:1`, so blocking only the computer-use and CDP
+  servers leaves a gap (for example `xdotool` through Bash). Holding every tool call through the existing
+  owner-approval held-tool-call path closes it. The agent also gets a runtime notification when a human starts and
+  stops driving.
+- **Audit:** `computer_screen_sessions(computer_id, agent_id, user_id, surface, mode, started_at, ended_at, bytes)`
+  for each watch, drive and share, and `computer.screen.*` spans with the computer, agent and session ids.
