@@ -1,0 +1,3 @@
+name: vpc-network
+runtime: nodejs
+description: Routing and gateway endpoints of the shared coparse-api VPC (prod stack only)

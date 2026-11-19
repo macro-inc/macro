@@ -247,6 +247,10 @@
       "name": "unfurl-service-stack",
       "version": "0.0.0",
     },
+    "stacks/vpc-network": {
+      "name": "vpc-network-stack",
+      "version": "0.0.0",
+    },
     "stacks/web-app": {
       "name": "@macro-inc/infra-web-app",
       "dependencies": {
@@ -950,6 +954,8 @@
     "validate-npm-package-name": ["validate-npm-package-name@7.0.2", "", {}, "sha512-hVDIBwsRruT73PbK7uP5ebUt+ezEtCmzZz3F59BSr2F6OVFnJ/6h8liuvdLrQ88Xmnk6/+xGGuq+pG9WwTuy3A=="],
 
     "vpc": ["vpc@workspace:packages/vpc"],
+
+    "vpc-network-stack": ["vpc-network-stack@workspace:stacks/vpc-network"],
 
     "walk-up-path": ["walk-up-path@4.0.0", "", {}, "sha512-3hu+tD8YzSLGuFYtPRb48vdhKMi0KQV5sn+uWr8+7dMEq/2G/dtLrdDinkLjqq5TIbIBjYJ4Ax/n3YiaW7QM8A=="],
 
