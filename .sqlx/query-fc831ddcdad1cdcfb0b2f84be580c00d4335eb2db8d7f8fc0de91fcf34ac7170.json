@@ -1,0 +1,15 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "UPDATE database_syncs SET due_at = now() WHERE id = $1 AND database_id = $2",
+  "describe": {
+    "columns": [],
+    "parameters": {
+      "Left": [
+        "Uuid",
+        "Uuid"
+      ]
+    },
+    "nullable": []
+  },
+  "hash": "fc831ddcdad1cdcfb0b2f84be580c00d4335eb2db8d7f8fc0de91fcf34ac7170"
+}
