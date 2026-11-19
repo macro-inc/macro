@@ -254,13 +254,14 @@ async function mount(page: Page, mode: CacheMode, initial?: string[]) {
     mode !== 'disabled'
   );
   if (mode !== 'disabled') {
-    expect(
-      await page.evaluate(() => window.optimisticMutations.authority())
-    ).toMatchObject({
-      account: 'functional-viewer',
-      policy: CRM_ACCESS_POLICY,
-      ready: true,
-    });
+    // The lists render from the network before the access proof settles.
+    await expect
+      .poll(() => page.evaluate(() => window.optimisticMutations.authority()))
+      .toMatchObject({
+        account: 'functional-viewer',
+        policy: CRM_ACCESS_POLICY,
+        ready: true,
+      });
   }
   if (mode === 'retired') {
     await page.evaluate(() => window.optimisticMutations.retireCache());

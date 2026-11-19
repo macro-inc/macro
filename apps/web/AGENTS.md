@@ -113,8 +113,9 @@ fresh server-query revalidation descriptors with authored commands so stripped
 parent-link recipes can repair their current data before the next edit. Capture
 a new generation only for a new HTTP attempt, not a confirmed local settlement
 retry. Preserve the original generation of copied optimistic input. Wait only
-for affected publications before returning a committed mutation; unrelated reads
-must not hold its notice open.
+for affected publications before returning a committed mutation, including the
+ones a link repair's own write changed; unrelated reads must not hold its notice
+open.
 
 Keep initial CRM access pending until proof succeeds or bounded retries fail;
 then show the existing retry state and retry on reconnect. Retry only stale

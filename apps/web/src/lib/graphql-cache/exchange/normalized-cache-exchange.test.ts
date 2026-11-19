@@ -612,7 +612,8 @@ function makeRenameMutationOp(key: number, aliased = false): Operation {
 function harness(
   host: CacheHost,
   resultFor?: (op: Operation) => Partial<OperationResult>,
-  options: NormalizedCacheExchangeOptions = {}
+  options: NormalizedCacheExchangeOptions = {},
+  onResult?: (result: OperationResult) => void
 ) {
   const ops = makeSubject<Operation>();
   const client = {
@@ -673,7 +674,10 @@ function harness(
   });
   pipe(
     exchangeIo(ops.source),
-    subscribe((r) => results.push(r))
+    subscribe((r) => {
+      results.push(r);
+      onResult?.(r);
+    })
   );
   return { ops, results, forwarded, client };
 }
@@ -3649,6 +3653,82 @@ describe('normalizedCacheExchange', () => {
         }
       }
     );
+
+    it('keeps a committed mutation open until the readers its link repair changed publish', async () => {
+      const reread = Promise.withResolvers<QueryUpdate>();
+      const repaired = Promise.withResolvers<OperationResult>();
+      host.watchQuery = vi
+        .fn()
+        .mockResolvedValueOnce({
+          kind: 'hit',
+          revision: parseCacheRevision('1'),
+          data: { from: 'initial' },
+        })
+        .mockReturnValueOnce(reread.promise);
+      const commit = host.commitOptimisticWrite.bind(host);
+      // The parent link could not be applied, so the commit changed no reader.
+      host.commitOptimisticWrite = async (...args) => ({
+        ...(await commit(...args)),
+        affectedOps: [],
+        revalidations: [
+          {
+            query: stringifyDocument(QUERY),
+            operationName: 'Soup',
+            variablesJson: '{}',
+            onlyOnLinkFailure: true,
+          },
+        ],
+      });
+      const write = host.writeQuery.bind(host);
+      host.writeQuery = async (args) => {
+        const result = await write(args);
+        if (args.opKey === undefined || args.opKey >= 0) return result;
+        // The engine notifies a write's readers before it answers the write.
+        host.pushAffected([11]);
+        return { ...result, affectedOps: [`${host.clientId}:11`] };
+      };
+      const { ops, results, client } = harness(
+        host,
+        undefined,
+        {},
+        (result) => {
+          const { kind, key } = result.operation;
+          if (kind !== 'query' || key >= 0) return;
+          // urql tears a one-shot request down once its result is delivered.
+          ops.next(teardownOf(result.operation));
+          repaired.resolve(result);
+        }
+      );
+      vi.mocked(client.executeRequestOperation).mockImplementation((repair) => {
+        ops.next(repair);
+        return { toPromise: () => repaired.promise } as never;
+      });
+      try {
+        ops.next(makeOp(11));
+        await tick();
+        expect(host.watchQuery).toHaveBeenCalledOnce();
+
+        ops.next(makeMutationOp(1, optimistic));
+        await tick();
+        expect(host.commits).toHaveLength(1);
+        expect(host.watchQuery).toHaveBeenCalledTimes(2);
+        expect(
+          results.filter((result) => result.operation.kind === 'mutation')
+        ).toHaveLength(0);
+
+        reread.resolve({
+          kind: 'hit',
+          revision: parseCacheRevision('2'),
+          data: { from: 'repaired' },
+        });
+        await tick();
+        expect(
+          results.filter((result) => result.operation.kind === 'mutation')
+        ).toHaveLength(1);
+      } finally {
+        reread.resolve({ kind: 'miss', revision: parseCacheRevision('2') });
+      }
+    });
 
     it('carries submitted client metadata through queue admission and settlement', async () => {
       const enqueue = vi.spyOn(host, 'enqueueOptimisticMutation');

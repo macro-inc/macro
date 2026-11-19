@@ -127,6 +127,9 @@ const QUERY_MUTATION_VERSION_CONTEXT_KEY =
   'normalizedCacheQueryMutationVersion';
 /** Marks dependency-pushed reads as latency-sensitive worker work. */
 const AFFECTED_READ_CONTEXT_KEY = 'normalizedCacheAffectedRead';
+/** Collects the registered operations a link repair's write changed. */
+const LINK_REPAIR_AFFECTED_OPS_CONTEXT_KEY =
+  'normalizedCacheLinkRepairAffectedOps';
 
 // Below every hashed operation key, so a link repair shares none of them.
 let lastLinkRepairKey = -(2 ** 40);
@@ -142,9 +145,9 @@ function revalidationQuery(
   client: Client,
   document: DocumentNode,
   variables: Record<string, unknown>,
-  isLinkRepair: boolean
+  linkRepairAffectedOps: Set<string> | undefined
 ) {
-  if (!isLinkRepair) {
+  if (!linkRepairAffectedOps) {
     return client.query(document, variables, { requestPolicy: 'network-only' });
   }
   lastLinkRepairKey -= 1;
@@ -152,7 +155,10 @@ function revalidationQuery(
     client.createRequestOperation(
       'query',
       { ...createRequest(document, variables), key: lastLinkRepairKey },
-      { requestPolicy: 'network-only' }
+      {
+        requestPolicy: 'network-only',
+        [LINK_REPAIR_AFFECTED_OPS_CONTEXT_KEY]: linkRepairAffectedOps,
+      }
     )
   );
 }
@@ -1022,6 +1028,9 @@ export function normalizedCacheExchange(
           }
         };
         const repairs: Promise<void>[] = [];
+        // A failed link leaves its parent's readers out of the operations the
+        // commit changed. The repair's own write is what names them.
+        const repairedOps = new Set<string>();
         async function refresh(revalidation: QueryRevalidationWire) {
           try {
             const variables: unknown = JSON.parse(revalidation.variablesJson);
@@ -1047,7 +1056,7 @@ export function normalizedCacheExchange(
               client,
               document,
               variables as Record<string, unknown>,
-              revalidation.onlyOnLinkFailure === true
+              revalidation.onlyOnLinkFailure ? repairedOps : undefined
             ).toPromise();
             if (result.error)
               reportError(result.error, mutation ?? result.operation);
@@ -1062,15 +1071,21 @@ export function normalizedCacheExchange(
           // Ordinary membership refreshes continue in the background.
           if (revalidation.onlyOnLinkFailure) repairs.push(pending);
         }
-        // A committed write names the observers it changed. Fresh repair reads
-        // are awaited above; their presence must not make an unrelated held
-        // publication withhold this mutation's outcome or the next queue head.
+        // A committed write names the observers it changed, and each awaited
+        // link repair adds the ones its write changed. An unrelated held
+        // publication must not withhold this mutation's outcome or the next
+        // queue head.
         const affected = affectedOps ? new Set(affectedOps) : undefined;
         const pendingPublications = () =>
           [...pendingAffectedReads]
-            .filter(
-              ([, key]) => !affected || affected.has(`${host.clientId}:${key}`)
-            )
+            .filter(([, key]) => {
+              const operation = `${host.clientId}:${key}`;
+              return (
+                !affected ||
+                affected.has(operation) ||
+                repairedOps.has(operation)
+              );
+            })
             .map(([read]) => read);
         if (repairs.length === 0 && pendingPublications().length === 0) return;
         const deliver = async () => {
@@ -1467,6 +1482,12 @@ export function normalizedCacheExchange(
           }
           try {
             const write = await host.writeQuery(writeArgs);
+            const linkRepairAffectedOps: unknown =
+              op.context[LINK_REPAIR_AFFECTED_OPS_CONTEXT_KEY];
+            if (linkRepairAffectedOps instanceof Set) {
+              for (const operation of write.affectedOps)
+                linkRepairAffectedOps.add(operation);
+            }
             const deletion = await deleteReportedRecords(result);
             state.networkRegistrationSatisfied = writeArgs.registerDependencies;
             if (host.watchQuery && isActive()) {
