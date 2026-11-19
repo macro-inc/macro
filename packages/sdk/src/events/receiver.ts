@@ -47,6 +47,12 @@ export interface ListenOptions {
    * history from `at`, e.g. with a channel's `messagesAfter`.
    */
   onDrop?: (at: Date) => void;
+  /**
+   * Told each time the stream is open again after a drop, so events reach
+   * the handlers again. Resync after this, not at the drop: an event
+   * published between a resync and the reconnect would reach neither.
+   */
+  onReconnect?: (at: Date) => void;
 }
 
 /** Attach the entity handles defined for each webhook event. */
@@ -170,14 +176,30 @@ export class MacroEvents {
       }
     }
 
+    let dropped = false;
     const { stream } = await this.client.storage.streamEvents({
       query: {
         scope: opts.scope ?? 'user',
         filters: JSON.stringify(filters),
       },
       signal: controller.signal,
+      // The generated client reconnects by itself; a successful response
+      // after a drop is the stream open again.
+      fetch: Object.assign(
+        async (...request: Parameters<typeof fetch>) => {
+          const response = await globalThis.fetch(...request);
+          if (response.ok && dropped) {
+            dropped = false;
+            opts.onReconnect?.(new Date());
+          }
+          return response;
+        },
+        { preconnect: globalThis.fetch.preconnect },
+      ),
       onSseError: () => {
-        if (!controller.signal.aborted) opts.onDrop?.(new Date());
+        if (controller.signal.aborted) return;
+        dropped = true;
+        opts.onDrop?.(new Date());
       },
     });
 

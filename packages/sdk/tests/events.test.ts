@@ -195,8 +195,10 @@ describe('MacroEvents', () => {
         if (event.metadata.document_id === 'after') after.resolve();
       });
       const drops: Date[] = [];
+      const reconnects: Date[] = [];
       const stop = await macro.events.listen({
         onDrop: (at) => drops.push(at),
+        onReconnect: (at) => reconnects.push(at),
       });
 
       await Promise.race([
@@ -211,8 +213,13 @@ describe('MacroEvents', () => {
 
       expect(seen).toEqual(['before', 'after']);
       expect(connections).toBe(2);
-      // Told once, so a caller can resync what the gap may have missed.
+      // Told once each, so a caller can resync what the gap may have missed
+      // once events reach it again.
       expect(drops).toHaveLength(1);
+      expect(reconnects).toHaveLength(1);
+      expect(reconnects[0]!.getTime()).toBeGreaterThanOrEqual(
+        drops[0]!.getTime(),
+      );
     } finally {
       await server.stop(true);
     }

@@ -318,9 +318,7 @@ export const sdkChat = ({
           root: metadata.root_id,
           thread: metadata.thread_id ?? null,
           dm: facts.dm,
-          from: await senderName(sender, async () =>
-            event.sender?.name()
-          ),
+          from: await senderName(sender, async () => event.sender?.name()),
           senderId: sender,
           mine: sender === mine,
           at: metadata.created_at,
@@ -335,66 +333,103 @@ export const sdkChat = ({
         });
       });
 
+      type Posted = ReturnType<Channel['message']>;
+      const fromHistory = async (
+        channel: Channel,
+        message: Posted,
+        at: string
+      ): Promise<Message> => {
+        const facts = await channelFacts(channel);
+        const author = await message.author();
+        // History carries the record; its thread and attachments are read
+        // from it, the rest through the handle.
+        const record = message.toJSON().detail;
+        const thread = record?.thread_id ?? null;
+        return {
+          id: message.id,
+          channelId: channel.id,
+          channel: facts.name,
+          root: thread ?? message.id,
+          thread,
+          dm: facts.dm,
+          from: await senderName(author.id, () => author.name()),
+          senderId: author.id,
+          mine: author.id === mine,
+          at,
+          text: await message.content(),
+          mentions: message.mentions.map(({ entity_id }) => entity_id),
+          attachments: (record?.attachments ?? []).map(
+            ({ entity_type, entity_id }) => ({
+              type: entity_type,
+              id: entity_id,
+            })
+          ),
+        };
+      };
+
       // Messages posted while the stream was down (a backend restart or
       // deploy ends it; it reconnects on its own) are never replayed: read
-      // each channel's history after the newest one delivered, retrying
-      // until the backend answers again.
+      // each channel's history after the newest one delivered. A root is
+      // listed when it was posted or replied to since, so its replies are
+      // read too.
       const catchUpFrom = async (after: string): Promise<void> => {
+        const since = Date.parse(after);
         for await (const channel of macro.channels.list()) {
           const missed: Message[] = [];
-          for await (const message of channel.messagesAfter(after)) {
-            if (delivered.has(message.id)) continue;
-            const facts = await channelFacts(channel);
-            const author = await message.author();
-            // History pages carry the record; its thread and attachments are
-            // read from it, the rest through the handle.
-            const record = message.toJSON().detail;
-            const thread = record?.thread_id ?? null;
-            missed.push({
-              id: message.id,
-              channelId: channel.id,
-              channel: facts.name,
-              root: thread ?? message.id,
-              thread,
-              dm: facts.dm,
-              from: await senderName(author.id, () => author.name()),
-              senderId: author.id,
-              mine: author.id === mine,
-              at: await message.createdAt(),
-              text: await message.content(),
-              mentions: message.mentions.map(({ entity_id }) => entity_id),
-              attachments: (record?.attachments ?? []).map(
-                ({ entity_type, entity_id }) => ({
-                  type: entity_type,
-                  id: entity_id,
-                })
-              ),
-            });
-          }
-          // The SDK gives newest first.
-          for (const message of missed.reverse()) deliver(message);
-        }
-      };
-      let catchingUp: Promise<void> | undefined;
-      const catchUp = (droppedAt: Date): void => {
-        const after =
-          newest ??
-          new Date(droppedAt.getTime() - catchUpMarginMs).toISOString();
-        catchingUp ??= (async () => {
-          for (let attempt = 0; ; attempt += 1) {
-            await Bun.sleep(Math.min(1_000 * 2 ** attempt, 30_000));
-            try {
-              await catchUpFrom(after);
-              return;
-            } catch {
-              // The backend is still coming back: try again.
+          for await (const root of channel.messagesAfter(after)) {
+            for (const message of [root, ...(await root.thread().replies())]) {
+              if (delivered.has(message.id)) continue;
+              const at = await message.createdAt();
+              if (Date.parse(at) < since) continue;
+              missed.push(await fromHistory(channel, message, at));
             }
           }
-        })().finally(() => {
-          catchingUp = undefined;
-        });
+          missed.sort((a, b) => Date.parse(a.at) - Date.parse(b.at));
+          for (const message of missed) deliver(message);
+        }
       };
-      await macro.events.listen({ onDrop: catchUp });
+      // Where the next catch-up starts: the earliest drop not caught up yet.
+      // It runs once the stream is open again, since a message posted
+      // between a read and the reconnect would reach neither; a drop during
+      // a catch-up leaves this set, for another pass after it.
+      let pending: string | undefined;
+      let open = true;
+      let catchingUp = false;
+      const catchUp = async (): Promise<void> => {
+        if (catchingUp) return;
+        catchingUp = true;
+        try {
+          while (open && pending !== undefined) {
+            const after = pending;
+            pending = undefined;
+            for (let attempt = 0; ; attempt += 1) {
+              try {
+                await catchUpFrom(after);
+                break;
+              } catch {
+                // The backend is still coming back: try again.
+                await Bun.sleep(Math.min(1_000 * 2 ** attempt, 30_000));
+              }
+            }
+          }
+        } finally {
+          catchingUp = false;
+        }
+      };
+      await macro.events.listen({
+        onDrop: (droppedAt) => {
+          open = false;
+          const from =
+            newest ??
+            new Date(droppedAt.getTime() - catchUpMarginMs).toISOString();
+          if (pending === undefined || Date.parse(from) < Date.parse(pending))
+            pending = from;
+        },
+        onReconnect: () => {
+          open = true;
+          catchUp().catch(() => undefined);
+        },
+      });
     }),
   };
 };
