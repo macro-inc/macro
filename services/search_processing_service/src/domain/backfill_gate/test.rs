@@ -10,36 +10,62 @@ const HELD_BACK: Duration = Duration::from_secs(60);
 #[tokio::test(start_paused = true)]
 async fn the_cap_holds_back_work_until_admitted_work_finishes() {
     let gate = BackfillGate::open(2);
-    let first = gate.admit(1).await;
-    let _second = gate.admit(1).await;
+    let first = gate.admit().await;
+    let _second = gate.admit().await;
 
     assert!(
-        tokio::time::timeout(HELD_BACK, gate.admit(1))
-            .await
-            .is_err(),
+        tokio::time::timeout(HELD_BACK, gate.admit()).await.is_err(),
         "a third unit waits for the cap"
     );
     drop(first);
-    let _third = tokio::time::timeout(HELD_BACK, gate.admit(1))
+    let _third = tokio::time::timeout(HELD_BACK, gate.admit())
         .await
         .expect("a finished unit frees its share");
 }
 
 #[tokio::test(start_paused = true)]
-async fn work_larger_than_the_cap_takes_all_of_it() {
+async fn a_batch_takes_what_is_free_and_gives_back_one_unit_at_a_time() {
     let gate = BackfillGate::open(3);
+    let _held = gate.admit().await;
 
-    let batch = tokio::time::timeout(HELD_BACK, gate.admit(10))
+    let mut batch = tokio::time::timeout(HELD_BACK, gate.admit_up_to(10))
         .await
-        .expect("a batch larger than the cap is still admitted");
+        .expect("a batch waits only for its first unit");
+    assert_eq!(batch.units(), 2);
+    assert!(tokio::time::timeout(HELD_BACK, gate.admit()).await.is_err());
+
+    let one = batch.take_one().expect("a unit to split off");
+    assert_eq!((one.units(), batch.units()), (1, 1));
+    drop(one);
+    let _freed = tokio::time::timeout(HELD_BACK, gate.admit())
+        .await
+        .expect("a unit given back is free again");
+}
+
+#[tokio::test(start_paused = true)]
+async fn a_single_unit_is_not_starved_by_batches_queued_behind_it() {
+    let gate = BackfillGate::open(2);
+    let first = gate.admit().await;
+    let _second = gate.admit().await;
+    let single = tokio::spawn({
+        let gate = gate.clone();
+        async move { gate.admit().await }
+    });
+    tokio::time::sleep(Duration::from_millis(1)).await;
+    let batch = tokio::spawn({
+        let gate = gate.clone();
+        async move { gate.admit_up_to(10).await }
+    });
+    tokio::time::sleep(Duration::from_millis(1)).await;
+
+    drop(first);
+    tokio::time::sleep(Duration::from_millis(1)).await;
 
     assert!(
-        tokio::time::timeout(HELD_BACK, gate.admit(1))
-            .await
-            .is_err()
+        single.is_finished(),
+        "the earlier single unit gets the freed unit"
     );
-    drop(batch);
-    let _next = gate.admit(1).await;
+    assert!(!batch.is_finished());
 }
 
 #[tokio::test(start_paused = true)]
@@ -48,13 +74,9 @@ async fn a_pause_holds_back_new_work_until_resumed() {
     let gate = BackfillGate::new(5, paused);
 
     assert!(gate.is_paused());
-    assert!(
-        tokio::time::timeout(HELD_BACK, gate.admit(1))
-            .await
-            .is_err()
-    );
+    assert!(tokio::time::timeout(HELD_BACK, gate.admit()).await.is_err());
     pause.send_replace(false);
-    let _work = tokio::time::timeout(HELD_BACK, gate.admit(1))
+    let _work = tokio::time::timeout(HELD_BACK, gate.admit())
         .await
         .expect("resumed backfills are admitted");
 }
@@ -63,10 +85,10 @@ async fn a_pause_holds_back_new_work_until_resumed() {
 async fn a_pause_that_arrives_while_work_waits_for_the_cap_holds_it_too() {
     let (pause, paused) = watch::channel(false);
     let gate = BackfillGate::new(1, paused);
-    let running = gate.admit(1).await;
+    let running = gate.admit().await;
     let waiting = tokio::spawn({
         let gate = gate.clone();
-        async move { gate.admit(1).await }
+        async move { gate.admit().await }
     });
     tokio::time::sleep(Duration::from_millis(1)).await;
 
@@ -125,7 +147,7 @@ async fn the_watcher_follows_the_switch_and_keeps_the_last_state_on_a_failed_rea
     paused.changed().await.unwrap();
     assert!(
         *paused.borrow_and_update(),
-        "the first read happens at once"
+        "the switch is read every interval"
     );
     tokio::time::sleep(PAUSE_POLL_INTERVAL + Duration::from_millis(1)).await;
     assert!(*paused.borrow(), "a failed read keeps the switch paused");
@@ -134,4 +156,27 @@ async fn the_watcher_follows_the_switch_and_keeps_the_last_state_on_a_failed_rea
 
     stop.cancel();
     watcher.await.unwrap();
+}
+
+#[tokio::test(start_paused = true)]
+async fn a_switch_closed_while_paused_holds_work_back_without_spinning() {
+    let (pause, paused) = watch::channel(true);
+    let gate = BackfillGate::new(2, paused);
+    drop(pause);
+
+    assert!(tokio::time::timeout(HELD_BACK, gate.admit()).await.is_err());
+    assert!(
+        tokio::time::timeout(HELD_BACK, gate.wait_unpaused())
+            .await
+            .is_err()
+    );
+}
+
+#[tokio::test(start_paused = true)]
+async fn a_task_starts_with_the_switch_or_unpaused_when_it_cannot_read_it() {
+    let paused = ScriptedControl(Mutex::new(VecDeque::from([Ok(true)])));
+    let unreadable = ScriptedControl(Mutex::new(VecDeque::from([Err("table unreachable")])));
+
+    assert!(read_pause(&paused, Duration::from_secs(5)).await);
+    assert!(!read_pause(&unreadable, Duration::from_secs(5)).await);
 }

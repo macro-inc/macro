@@ -7,7 +7,7 @@ use crate::{
     api::context::{ApiContext, AuthorizationService},
     config::DatabaseUrlReadonly,
     domain::{
-        backfill_gate::{BackfillGate, PAUSE_POLL_INTERVAL, watch_pause},
+        backfill_gate::{BackfillGate, PAUSE_POLL_INTERVAL, read_pause, watch_pause},
         jobs::BackfillJobs,
         service::BackfillOrchestrator,
     },
@@ -166,6 +166,9 @@ async fn supervise_event_consumer(
     tracing::info!("search processing event consumer supervisor stopped");
 }
 
+/// How long startup waits to read the backfill pause switch.
+const BACKFILL_PAUSE_START_READ_TIMEOUT: Duration = Duration::from_secs(5);
+
 #[tokio::main]
 async fn main() -> anyhow::Result<()> {
     let telemetry = MacroEntrypoint::default().init();
@@ -267,7 +270,9 @@ async fn main() -> anyhow::Result<()> {
         dynamodb_client.clone(),
         config.backfill_jobs_table.to_string(),
     );
-    let (backfill_pause, backfill_paused) = tokio::sync::watch::channel(false);
+    // A task that starts while backfills are paused must not admit any first.
+    let paused_at_start = read_pause(&backfill_control, BACKFILL_PAUSE_START_READ_TIMEOUT).await;
+    let (backfill_pause, backfill_paused) = tokio::sync::watch::channel(paused_at_start);
     let backfill_gate = BackfillGate::new(config.backfill_max_in_flight, backfill_paused);
 
     let email_attachment_status_backfill = Arc::new(EmailAttachmentStatusBackfill::new(

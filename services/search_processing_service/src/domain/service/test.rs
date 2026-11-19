@@ -137,9 +137,13 @@ async fn drains_source_across_full_pages() {
     let req = CallBackfillRequest::default();
     let (progress, cancel) = detached();
 
-    let receipt = drain_source(&publisher, &progress, &cancel, |offset| {
-        source.fetch_page(&req, offset)
-    })
+    let receipt = drain_source(
+        &publisher,
+        &BackfillGate::open(20),
+        &progress,
+        &cancel,
+        |offset| source.fetch_page(&req, offset),
+    )
     .await
     .unwrap();
 
@@ -165,9 +169,13 @@ async fn short_final_page_short_circuits() {
     let req = CallBackfillRequest::default();
     let (progress, cancel) = detached();
 
-    let receipt = drain_source(&publisher, &progress, &cancel, |offset| {
-        source.fetch_page(&req, offset)
-    })
+    let receipt = drain_source(
+        &publisher,
+        &BackfillGate::open(20),
+        &progress,
+        &cancel,
+        |offset| source.fetch_page(&req, offset),
+    )
     .await
     .unwrap();
 
@@ -200,9 +208,13 @@ async fn batched_source_advances_by_rows_not_messages() {
     let req = CallBackfillRequest::default();
     let (progress, cancel) = detached();
 
-    let receipt = drain_source(&publisher, &progress, &cancel, |offset| {
-        source.fetch_page(&req, offset)
-    })
+    let receipt = drain_source(
+        &publisher,
+        &BackfillGate::open(20),
+        &progress,
+        &cancel,
+        |offset| source.fetch_page(&req, offset),
+    )
     .await
     .unwrap();
 
@@ -221,9 +233,13 @@ async fn empty_source_publishes_nothing() {
     let req = CallBackfillRequest::default();
     let (progress, cancel) = detached();
 
-    let receipt = drain_source(&publisher, &progress, &cancel, |offset| {
-        source.fetch_page(&req, offset)
-    })
+    let receipt = drain_source(
+        &publisher,
+        &BackfillGate::open(20),
+        &progress,
+        &cancel,
+        |offset| source.fetch_page(&req, offset),
+    )
     .await
     .unwrap();
 
@@ -239,9 +255,13 @@ async fn source_error_propagates_without_partial_publish() {
     let req = CallBackfillRequest::default();
     let (progress, cancel) = detached();
 
-    let err = drain_source(&publisher, &progress, &cancel, |offset| {
-        source.fetch_page(&req, offset)
-    })
+    let err = drain_source(
+        &publisher,
+        &BackfillGate::open(20),
+        &progress,
+        &cancel,
+        |offset| source.fetch_page(&req, offset),
+    )
     .await
     .unwrap_err();
 
@@ -256,9 +276,13 @@ async fn publish_error_propagates_after_first_fetch() {
     let req = CallBackfillRequest::default();
     let (progress, cancel) = detached();
 
-    let err = drain_source(&publisher, &progress, &cancel, |offset| {
-        source.fetch_page(&req, offset)
-    })
+    let err = drain_source(
+        &publisher,
+        &BackfillGate::open(20),
+        &progress,
+        &cancel,
+        |offset| source.fetch_page(&req, offset),
+    )
     .await
     .unwrap_err();
 
@@ -275,9 +299,13 @@ async fn cancel_before_first_fetch_returns_empty_receipt() {
     let (progress, cancel) = detached();
     cancel.cancel();
 
-    let receipt = drain_source(&publisher, &progress, &cancel, |offset| {
-        source.fetch_page(&req, offset)
-    })
+    let receipt = drain_source(
+        &publisher,
+        &BackfillGate::open(20),
+        &progress,
+        &cancel,
+        |offset| source.fetch_page(&req, offset),
+    )
     .await
     .unwrap();
 
@@ -342,9 +370,13 @@ async fn cursor_drain_threads_cursor_through_pages() {
     let publisher = RecordingPublisher::default();
     let (progress, cancel) = detached();
 
-    let receipt = drain_source_with_cursor(&publisher, &progress, &cancel, |cursor| {
-        source.fetch_page(cursor)
-    })
+    let receipt = drain_source_with_cursor(
+        &publisher,
+        &BackfillGate::open(20),
+        &progress,
+        &cancel,
+        |cursor| source.fetch_page(cursor),
+    )
     .await
     .unwrap();
 
@@ -376,9 +408,13 @@ async fn cursor_drain_stops_when_non_empty_page_returns_no_cursor() {
     let publisher = RecordingPublisher::default();
     let (progress, cancel) = detached();
 
-    let receipt = drain_source_with_cursor(&publisher, &progress, &cancel, |cursor| {
-        source.fetch_page(cursor)
-    })
+    let receipt = drain_source_with_cursor(
+        &publisher,
+        &BackfillGate::open(20),
+        &progress,
+        &cancel,
+        |cursor| source.fetch_page(cursor),
+    )
     .await
     .unwrap();
 
@@ -406,9 +442,13 @@ async fn cursor_drain_publish_failure_counts_only_completed_pages() {
     ]);
     let publisher = FailSecondPublish(AtomicUsize::new(0));
     let (progress, cancel) = detached();
-    let error = drain_source_with_cursor(&publisher, &progress, &cancel, |cursor| {
-        source.fetch_page(cursor)
-    })
+    let error = drain_source_with_cursor(
+        &publisher,
+        &BackfillGate::open(20),
+        &progress,
+        &cancel,
+        |cursor| source.fetch_page(cursor),
+    )
     .await
     .unwrap_err();
     assert!(matches!(error, BackfillError::Publish(_)));
@@ -422,9 +462,13 @@ async fn cursor_drain_stops_on_empty_page() {
     let publisher = RecordingPublisher::default();
     let (progress, cancel) = detached();
 
-    let receipt = drain_source_with_cursor(&publisher, &progress, &cancel, |cursor| {
-        source.fetch_page(cursor)
-    })
+    let receipt = drain_source_with_cursor(
+        &publisher,
+        &BackfillGate::open(20),
+        &progress,
+        &cancel,
+        |cursor| source.fetch_page(cursor),
+    )
     .await
     .unwrap();
 
@@ -464,9 +508,13 @@ async fn cursor_drain_cancellation_stops_between_pages() {
         seen: Mutex::new(Vec::new()),
     };
 
-    let receipt = drain_source_with_cursor(&publisher, &progress, &cancel, |cursor| {
-        source.fetch_page(cursor)
-    })
+    let receipt = drain_source_with_cursor(
+        &publisher,
+        &BackfillGate::open(20),
+        &progress,
+        &cancel,
+        |cursor| source.fetch_page(cursor),
+    )
     .await
     .unwrap();
 
@@ -503,9 +551,13 @@ async fn cancel_between_pages_stops_drain_after_current_page() {
     };
     let req = CallBackfillRequest::default();
 
-    let receipt = drain_source(&publisher, &progress, &cancel, |offset| {
-        source.fetch_page(&req, offset)
-    })
+    let receipt = drain_source(
+        &publisher,
+        &BackfillGate::open(20),
+        &progress,
+        &cancel,
+        |offset| source.fetch_page(&req, offset),
+    )
     .await
     .unwrap();
 
@@ -866,4 +918,93 @@ async fn property_reindexes_share_the_backfill_cap() {
     .unwrap();
 
     assert_eq!(indexer.most.load(std::sync::atomic::Ordering::SeqCst), 3);
+}
+
+fn paused_gate() -> (tokio::sync::watch::Sender<bool>, BackfillGate) {
+    let (pause, paused) = tokio::sync::watch::channel(true);
+    (pause, BackfillGate::new(20, paused))
+}
+
+#[tokio::test(start_paused = true)]
+async fn a_paused_backfill_enqueues_nothing_until_it_resumes() {
+    let source = FakeSource::new(vec![page(vec![msg("a"), msg("b")])]);
+    let publisher = RecordingPublisher::default();
+    let req = CallBackfillRequest::default();
+    let (progress, cancel) = detached();
+    let (pause, gate) = paused_gate();
+
+    let drain = drain_source(&publisher, &gate, &progress, &cancel, |offset| {
+        source.fetch_page(&req, offset)
+    });
+    tokio::pin!(drain);
+    assert!(
+        tokio::time::timeout(std::time::Duration::from_secs(60), &mut drain)
+            .await
+            .is_err()
+    );
+    assert_eq!(
+        publisher.total_messages(),
+        0,
+        "nothing enqueued while paused"
+    );
+
+    pause.send_replace(false);
+    let receipt = drain.await.unwrap();
+    assert_eq!(receipt.enqueued, 2);
+}
+
+#[tokio::test(start_paused = true)]
+async fn a_paused_backfill_still_stops_when_cancelled() {
+    let source = FakeSource::new(vec![page(vec![msg("a")])]);
+    let publisher = RecordingPublisher::default();
+    let req = CallBackfillRequest::default();
+    let (progress, cancel) = detached();
+    let (_pause, gate) = paused_gate();
+    let canceller = cancel.clone();
+    tokio::spawn(async move {
+        tokio::time::sleep(std::time::Duration::from_secs(30)).await;
+        canceller.cancel();
+    });
+
+    let receipt = drain_source(&publisher, &gate, &progress, &cancel, |offset| {
+        source.fetch_page(&req, offset)
+    })
+    .await
+    .unwrap();
+
+    assert_eq!(receipt.enqueued, 0);
+    assert_eq!(publisher.total_messages(), 0);
+}
+
+#[tokio::test(start_paused = true)]
+async fn a_property_page_cancelled_while_paused_is_not_counted() {
+    let entity_type = EntityType::Document;
+    let source = FakePropertySource::new(
+        entity_type,
+        vec![property_page(entity_type, ["one", "two"], 2)],
+    );
+    let indexer = RecordingPropertyIndexer::default();
+    let (progress, cancel) = detached();
+    let (pause, paused) = tokio::sync::watch::channel(false);
+    let gate = BackfillGate::new(20, paused);
+    // The pause arrives after the page boundary, so the page's writes wait.
+    pause.send_replace(true);
+    let canceller = cancel.clone();
+    tokio::spawn(async move {
+        tokio::time::sleep(std::time::Duration::from_secs(30)).await;
+        canceller.cancel();
+    });
+
+    let receipt = tokio::time::timeout(
+        std::time::Duration::from_secs(60),
+        drain_property_source(&indexer, &gate, &progress, &cancel, |offset| {
+            source.fetch_page(offset)
+        }),
+    )
+    .await
+    .expect("a cancel ends a paused property backfill")
+    .unwrap();
+
+    assert_eq!((receipt.enqueued, indexer.indexed_count()), (0, 0));
+    assert_eq!(progress.local_count(), 0);
 }

@@ -1,6 +1,10 @@
 //! The one gate every backfill passes before it writes to the search index:
 //! a cap on the backfill work in flight in this task, and a pause an operator
 //! sets for every task at once through the backfill control store.
+//!
+//! Every wait is for one unit, so the semaphore's first-come order serves
+//! direct backfills and queue workers alike: a worker that wants a batch
+//! waits for one unit and takes the rest only if they are free.
 
 use std::{sync::Arc, time::Duration};
 
@@ -22,12 +26,33 @@ pub struct BackfillGate {
     paused: watch::Receiver<bool>,
 }
 
-/// Backfill work admitted through the gate; dropping it frees its share of
-/// the cap.
+/// Backfill work admitted through the gate; dropping it frees its units.
 #[derive(Debug)]
 #[must_use = "the work is admitted only while the permit is held"]
 pub struct BackfillPermit {
-    _permit: Option<OwnedSemaphorePermit>,
+    permit: Option<OwnedSemaphorePermit>,
+}
+
+impl BackfillPermit {
+    /// How many units this permit holds.
+    pub fn units(&self) -> u32 {
+        self.permit.as_ref().map_or(0, |permit| {
+            u32::try_from(permit.num_permits()).unwrap_or(u32::MAX)
+        })
+    }
+
+    /// Split off one unit, for one piece of the work this permit admitted.
+    pub fn take_one(&mut self) -> Option<BackfillPermit> {
+        let permit = self.permit.as_mut()?;
+        if permit.num_permits() <= 1 {
+            return self.permit.take().map(|permit| BackfillPermit {
+                permit: Some(permit),
+            });
+        }
+        permit.split(1).map(|permit| BackfillPermit {
+            permit: Some(permit),
+        })
+    }
 }
 
 impl BackfillGate {
@@ -56,33 +81,89 @@ impl BackfillGate {
     /// Wait while backfills are paused.
     pub async fn wait_unpaused(&self) {
         let mut paused = self.paused.clone();
-        // A closed switch means its watcher stopped with the service.
-        let _ = paused.wait_for(|paused| !*paused).await;
+        if paused.wait_for(|paused| !*paused).await.is_err() && *paused.borrow() {
+            // The switch's watcher stopped with the service while paused, so
+            // no resume can arrive.
+            std::future::pending::<()>().await;
+        }
     }
 
-    /// Admit `work` units of backfill: wait while backfills are paused, then
-    /// until that much of the cap is free. Work larger than the cap takes all
-    /// of it.
-    pub async fn admit(&self, work: u32) -> BackfillPermit {
-        let work = work.clamp(1, self.capacity);
+    /// Admit one unit of backfill work: wait while backfills are paused, then
+    /// until a unit of the cap is free.
+    pub async fn admit(&self) -> BackfillPermit {
+        if !self.is_paused()
+            && let Ok(permit) = Arc::clone(&self.permits).try_acquire_owned()
+        {
+            return BackfillPermit {
+                permit: Some(permit),
+            };
+        }
+        let span = tracing::info_span!(
+            "search.backfill_admit",
+            paused = self.is_paused(),
+            waited_ms = field::Empty,
+        );
+        let started = tokio::time::Instant::now();
+        let permit = self.wait_for_unit().instrument(span.clone()).await;
+        span.record(
+            "waited_ms",
+            u64::try_from(started.elapsed().as_millis()).unwrap_or(u64::MAX),
+        );
+        permit
+    }
+
+    /// Admit between one and `most` units: wait for the first as [`Self::admit`]
+    /// does, then take whatever else is free without waiting.
+    pub async fn admit_up_to(&self, most: u32) -> BackfillPermit {
+        let mut admitted = self.admit().await;
+        if let Some(held) = admitted.permit.as_mut() {
+            for _ in 1..most.min(self.capacity) {
+                let Ok(more) = Arc::clone(&self.permits).try_acquire_owned() else {
+                    break;
+                };
+                held.merge(more);
+            }
+        }
+        admitted
+    }
+
+    async fn wait_for_unit(&self) -> BackfillPermit {
         loop {
             self.wait_unpaused().await;
-            let Ok(permit) = Arc::clone(&self.permits).acquire_many_owned(work).await else {
+            let Ok(permit) = Arc::clone(&self.permits).acquire_owned().await else {
                 // The gate never closes its semaphore.
-                return BackfillPermit { _permit: None };
+                return BackfillPermit { permit: None };
             };
             // A pause that arrived while this waited for the cap holds it too.
             if !self.is_paused() {
                 return BackfillPermit {
-                    _permit: Some(permit),
+                    permit: Some(permit),
                 };
             }
         }
     }
 }
 
-/// Keep `paused` in step with the control store until `stop`: read it now,
-/// then every `interval`. A failed read keeps the last state.
+/// The pause switch as the control store holds it, or `false` when it cannot
+/// be read within `timeout`, so a task starts with the switch's state.
+pub async fn read_pause<C: BackfillControl>(control: &C, timeout: Duration) -> bool {
+    match tokio::time::timeout(timeout, control.paused()).await {
+        Ok(Ok(paused)) => paused,
+        Ok(Err(error)) => {
+            tracing::warn!(error = ?error, "failed reading the backfill pause switch at start; starting unpaused");
+            false
+        }
+        Err(_) => {
+            tracing::warn!(
+                "reading the backfill pause switch at start timed out; starting unpaused"
+            );
+            false
+        }
+    }
+}
+
+/// Keep `paused` in step with the control store until `stop`: read it every
+/// `interval`. A failed read keeps the last state.
 pub async fn watch_pause<C: BackfillControl>(
     control: C,
     paused: watch::Sender<bool>,
@@ -90,6 +171,10 @@ pub async fn watch_pause<C: BackfillControl>(
     stop: CancellationToken,
 ) {
     loop {
+        tokio::select! {
+            () = stop.cancelled() => break,
+            () = tokio::time::sleep(interval) => {}
+        }
         let span = tracing::info_span!("search.backfill_pause_read", paused = field::Empty);
         async {
             match control.paused().await {
@@ -106,10 +191,6 @@ pub async fn watch_pause<C: BackfillControl>(
         }
         .instrument(span)
         .await;
-        tokio::select! {
-            () = stop.cancelled() => break,
-            () = tokio::time::sleep(interval) => {}
-        }
     }
 }
 

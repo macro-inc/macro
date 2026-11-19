@@ -182,7 +182,7 @@ impl<S: LinkedDocumentSource, I: EmailAttachmentFlagIndex> EmailAttachmentStatus
 
         while !cancel.is_cancelled() {
             let permit = tokio::select! {
-                permit = self.gate.admit(1) => permit,
+                permit = self.gate.admit() => permit,
                 () = cancel.cancelled() => break,
             };
             let started = Instant::now();

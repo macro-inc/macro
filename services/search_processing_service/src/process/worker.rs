@@ -5,6 +5,17 @@ use futures::StreamExt;
 pub(crate) const MESSAGE_PROCESSING_TIMEOUT: std::time::Duration =
     std::time::Duration::from_secs(300);
 
+/// How long a worker holding backfill units waits for its first message.
+const ADMITTED_RECEIVE_WAIT_SECONDS: i32 = 2;
+
+/// How long a worker that found the queue empty waits, holding no units,
+/// before it asks again: the rest of the queue's long-poll wait, so an idle
+/// worker asks no more often than a long-polling one would.
+fn idle_backoff(ctx: &SearchProcessingContext) -> std::time::Duration {
+    let rest = ctx.worker.wait_time_seconds() - ADMITTED_RECEIVE_WAIT_SECONDS;
+    std::time::Duration::from_secs(u64::try_from(rest).unwrap_or(0))
+}
+
 /// Spawns multiple search processing workers.
 pub fn run_search_processing_workers(ctx: SearchProcessingContext, worker_count: u8) {
     for worker_id in 0..worker_count {
@@ -30,22 +41,37 @@ pub async fn run_search_processing_worker_with_id(ctx: SearchProcessingContext, 
                         last_heartbeat = std::time::Instant::now();
                     }
 
-                    // Taken before the receive, so a paused or capped worker
-                    // leaves messages on the queue instead of holding them.
-                    let _batch = ctx.backfill_gate.admit(ctx.messages_per_receive).await;
-                    match ctx.worker.receive_messages().await {
+                    // Units are taken before the receive, so a paused or
+                    // capped worker leaves messages on the queue instead of
+                    // holding them; the short wait keeps an idle worker from
+                    // holding units another backfill could use.
+                    let mut batch = ctx.backfill_gate.admit_up_to(ctx.messages_per_receive).await;
+                    let wanted = i32::try_from(batch.units()).unwrap_or(1);
+                    match ctx
+                        .worker
+                        .receive_messages_up_to(wanted, ADMITTED_RECEIVE_WAIT_SECONDS)
+                        .await
+                    {
                         Ok(messages) => {
                             if messages.is_empty() {
+                                drop(batch);
+                                tokio::time::sleep(idle_backoff(&ctx)).await;
                                 continue;
                             }
-                            let result = futures::stream::iter(messages.into_iter())
-                                .map(|message| {
+                            let admitted: Vec<_> = messages
+                                .into_iter()
+                                .map(|message| (message, batch.take_one()))
+                                .collect();
+                            drop(batch);
+                            let result = futures::stream::iter(admitted)
+                                .map(|(message, permit)| {
                                     let ctx = ctx.clone();
                                     async move {
                                         let result = tokio::time::timeout(
                                             MESSAGE_PROCESSING_TIMEOUT,
                                             process::process_message(&ctx, &message)
                                         ).await;
+                                        drop(permit);
 
                                         match result {
                                             Ok(Ok(_)) => Ok(()),

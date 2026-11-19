@@ -141,3 +141,34 @@ async fn backfill_deduplicates_ids_and_full_scan_stops_at_end() {
     assert_eq!(receipt.enqueued, 1);
     assert_eq!(state.writes.lock().unwrap().len(), 2);
 }
+
+#[tokio::test(start_paused = true)]
+async fn a_paused_backfill_reconciles_nothing_and_stops_when_cancelled() {
+    let state = Arc::new(State::default());
+    state.exists.store(true, Ordering::SeqCst);
+    let service = AgentSessionIndexService::new(Source(state.clone()), Index(state.clone()));
+    let (_pause, paused) = tokio::sync::watch::channel(true);
+    let gate = crate::domain::backfill_gate::BackfillGate::new(1, paused);
+    let cancel = CancellationToken::new();
+    let canceller = cancel.clone();
+    tokio::spawn(async move {
+        tokio::time::sleep(std::time::Duration::from_secs(30)).await;
+        canceller.cancel();
+    });
+
+    let receipt = service
+        .backfill(
+            AgentSessionBackfillRequest {
+                agent_session_ids: vec![Uuid::from_u128(1)],
+                index_override: None,
+            },
+            &gate,
+            Arc::new(JobProgress::detached()),
+            cancel,
+        )
+        .await
+        .unwrap();
+
+    assert_eq!(receipt.enqueued, 0);
+    assert!(state.writes.lock().unwrap().is_empty());
+}

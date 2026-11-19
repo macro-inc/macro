@@ -292,6 +292,11 @@ async fn status(
     _internal_authorization: MacroAuthorizationExtractor<AuthorizationService, InternalOnly>,
     Path(job_id): Path<String>,
 ) -> Response {
+    // Job ids are UUIDs; the table's other items, such as the pause switch,
+    // are not jobs.
+    if uuid::Uuid::parse_str(&job_id).is_err() {
+        return (StatusCode::NOT_FOUND, "unknown job id").into_response();
+    }
     match jobs.snapshot(&JobId::from(job_id)).await {
         Ok(Some(snap)) => axum::Json(snap).into_response(),
         Ok(None) => (StatusCode::NOT_FOUND, "unknown job id").into_response(),
