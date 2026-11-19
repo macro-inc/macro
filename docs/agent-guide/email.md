@@ -1160,6 +1160,15 @@ a new draft, as is unsaved text when another device sends; each such move logs
 a saved draft in two tabs before either edits: the second tab's first edit must
 fail with "This draft changed while saving" instead of replacing the first
 tab's text.
+
+In separate browser contexts, hold a reply's save with newer text, then discard
+its old draft elsewhere. Release the save before the composer reads the
+deletion. The composer must explain that it kept the newer text, and the thread
+must have one replacement draft after reopening. If the saved file was only
+available on the deleted draft, its chip disappears and the composer asks for
+the file again. If the original composer still has the bytes, the replacement
+uploads them again.
+
 A completed discard must not resurrect on reload. A clean,
 fully synchronized local copy must not hide newer server edits or sent state.
 While online, create a disposable reply, wait for its server identity, discard
