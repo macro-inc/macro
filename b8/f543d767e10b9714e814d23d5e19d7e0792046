@@ -1,0 +1,40 @@
+crates/agent_code_mode/AGENTS.md
+  s_817d73dde153c1::t_872e13ce26bf51 99-107,113-120,164-167
+crates/agent_code_mode/src/inbound/toolset/test/js_tools.rs
+  s_817d73dde153c1::t_1df2e0a5afa042 10-11,218,232-235,257-260,278-281,297-300
+  s_817d73dde153c1::t_a6e2fdb7360f3e 188-190,210-211
+  s_817d73dde153c1::t_a59f9fed4fac1b 1-9,12-187,191-209,212-217,219-231,236-256,261-277,282-296,301-375,378,380-382
+  s_817d73dde153c1::t_62d16e3559777c 376-377,379
+crates/agent_code_mode/src/domain/service.rs
+  s_817d73dde153c1::t_22df0ac3c6d730 36-46,64-73,81,104,117-131,135-136,139,141-145,568,662-671,673-675
+crates/agent_code_mode/src/inbound/toolset.rs
+  s_817d73dde153c1::t_dddd77f5d4576f 62-74,79-81,348-452
+  s_817d73dde153c1::t_0eb5e0a0e22de8 453
+crates/agent_code_mode/src/inbound/toolset/test.rs
+  s_817d73dde153c1::t_1df2e0a5afa042 515-518,591-594
+  s_817d73dde153c1::t_a853ff7df66e2d 3,311,349-351,372,423,469-514,519-590,595-627
+crates/agent_code_mode/src/inbound/toolset/test/ocaml.rs
+  s_817d73dde153c1::t_a59f9fed4fac1b 21,54,93
+crates/agent_code_mode/src/inbound/toolset/session/js_tools.md
+  s_817d73dde153c1::t_35db6a01e1ae51 1-9
+crates/agent_code_mode/src/domain/models.rs
+  s_817d73dde153c1::t_f358c4321da18b 60-62,171-172,180-181
+crates/agent_code_mode/src/inbound/toolset/session/js_tools_permissions.md
+  s_817d73dde153c1::t_5e70b7a521ec41 1
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.7.7",
+  "base_commit_sha": "b8f543d767e10b9714e814d23d5e19d7e0792046",
+  "prompts": {},
+  "sessions": {
+    "s_817d73dde153c1": {
+      "agent_id": {
+        "tool": "claude",
+        "id": "91b00bb8-f987-47cb-90d4-261f97bce448",
+        "model": "claude-opus-5-5"
+      },
+      "human_author": "Eric Hayes <56524199+ehayes2000@users.noreply.github.com>"
+    }
+  }
+}

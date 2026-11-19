@@ -1,0 +1,152 @@
+crates/code_execution/src/domain/models.rs
+  s_e47bee9837a594::t_7b528aa6c1f5e8 44,53
+crates/code_execution/src/outbound/deno.rs
+  s_e47bee9837a594::t_7b528aa6c1f5e8 148
+  s_e47bee9837a594::t_fbddfbd47c5b37 642
+crates/code_execution/src/outbound/ocaml.rs
+  s_e47bee9837a594::t_0d1b4a27bb3c4f 194
+crates/code_execution/src/outbound/analysis/test.rs
+  s_e47bee9837a594::t_6346c791cfc504 1-61
+crates/code_execution/src/outbound/analysis.rs
+  s_e47bee9837a594::t_6346c791cfc504 1-90
+crates/code_execution/src/outbound.rs
+  s_e47bee9837a594::t_0d1b4a27bb3c4f 1-3,5
+crates/agent_code_mode/src/domain/ports.rs
+  s_e47bee9837a594::t_ac4fcbdb89ac35 56-58,60
+  s_e47bee9837a594::t_be3e87f5eb0ece 56-58
+  s_e47bee9837a594::t_7bfaf01085722e 60
+crates/agent_code_mode/src/domain/models.rs
+  s_e47bee9837a594::t_ac4fcbdb89ac35 60-61,72-74,89,97-99
+  s_e47bee9837a594::t_3fcc0ff2976f5b 94-95
+  s_e47bee9837a594::t_010deb4799d821 60-61,72-74,89,99
+services/agent_harness_service/src/code_mode/permissions/test.rs
+  s_e47bee9837a594::t_ac4fcbdb89ac35 158,162-163,206,208-211,382,385,618-819,823-826
+  s_e47bee9837a594::t_16dbf760125e6c 618-819,823-826
+  s_e47bee9837a594::t_45d74b2cdd6eee 158,162-163,206,208-211,382,385
+  s_e47bee9837a594::t_110cb94b3bd572 820-822
+crates/agent_code_mode/src/domain/service.rs
+  s_e47bee9837a594::t_ac4fcbdb89ac35 49,52,102,527-528,530-533
+  s_e47bee9837a594::t_3fcc0ff2976f5b 529
+  s_e47bee9837a594::t_be3e87f5eb0ece 102,527-528,530-532
+  s_e47bee9837a594::t_96c8063b5eaae6 49,52
+services/agent_harness_service/src/main.rs
+  s_e47bee9837a594::t_ac4fcbdb89ac35 704,707,730,985-986,988,990
+  s_e47bee9837a594::t_16dbf760125e6c 704,707,730,985-986,988,990
+  s_e47bee9837a594::t_fbddfbd47c5b37 705-706,755
+  s_e47bee9837a594::t_e3a6591836e38c 987
+  s_e47bee9837a594::t_110cb94b3bd572 1022-1024
+crates/agent_code_mode/AGENTS.md
+  s_e47bee9837a594::t_ac4fcbdb89ac35 88,99-102
+  s_e47bee9837a594::t_16dbf760125e6c 88,99-102
+crates/agent_code_mode/src/inbound/toolset/test/ocaml.rs
+  s_e47bee9837a594::t_ac4fcbdb89ac35 10,87
+  s_e47bee9837a594::t_16dbf760125e6c 10,87
+services/agent_harness_service/src/code_mode/permissions.rs
+  s_e47bee9837a594::t_ac4fcbdb89ac35 1-4,6-8,15,57-94,96-97,102-103,111-112,121-124,131-134,137,140,152-155,184,190-194,215-217,236,318-350,352-357,362,369-371,377,393,395-396
+  s_e47bee9837a594::t_9dfb9789e3912d 395-396
+  s_e47bee9837a594::t_16dbf760125e6c 65,75,81,91-92,318-350,352-357,362,369-371,377,393
+  s_e47bee9837a594::t_4ded299a7db0c7 1-4,6-8,15,57,59-64,66-74,76-80,82-90,93-94,96-97,102-103,111-112,121-124,131-134,137,140,152-155,184,190-194,215-217,236
+  s_e47bee9837a594::t_45dd73946305b7 58
+services/agent_harness_service/src/code_mode.rs
+  s_e47bee9837a594::t_ac4fcbdb89ac35 21-23,277,281,285-287,290-291,294-314,319-333,335,339-340,342,346
+  s_e47bee9837a594::t_16dbf760125e6c 21-23,277,281-284,294-312,325-329,331,334,336-340,342,346
+  s_f3a48b3a685142::t_78b39ed743d8fb 285-287,290-291,313-314,319,323-324,330,332-333,335
+crates/agent_code_mode/src/inbound/toolset/test.rs
+  s_e47bee9837a594::t_ac4fcbdb89ac35 278,285,401-436
+  s_e47bee9837a594::t_b46f5fec79e571 278,285
+  s_e47bee9837a594::t_16dbf760125e6c 401-438
+  s_817d73dde153c1::t_144b402c0867d4 439-448,452-457,460-471,481,483-484,486-499
+  s_817d73dde153c1::t_62026714eb943a 449-451,458-459,472-480,482,485
+services/agent_harness_service/src/code_mode/test.rs
+  s_e47bee9837a594::t_ac4fcbdb89ac35 731-732,734,742,753,758-759,845,914-1007
+  s_e47bee9837a594::t_16dbf760125e6c 914-955,958,960-961,962-971,980-981,990-996,997
+  s_e47bee9837a594::t_10f2f38b1ce6f3 845
+  s_e47bee9837a594::t_be24f56c31f735 731-732,734,742,753,758-759,956-957,959,972-979,982-989,998-1007
+crates/agent_code_mode/src/inbound/toolset.rs
+  s_e47bee9837a594::t_ac4fcbdb89ac35 236,272,279-296,298
+  s_e47bee9837a594::t_16dbf760125e6c 281
+  s_e47bee9837a594::t_b46f5fec79e571 236,272,279-280,282-296,298
+  s_e47bee9837a594::t_5ce588baf31075 297,299
+crates/agent_code_mode/src/domain/service/test.rs
+  s_e47bee9837a594::t_ac4fcbdb89ac35 694
+  s_e47bee9837a594::t_16dbf760125e6c 694,766,768,770-775,779-784,786-787
+  s_e47bee9837a594::t_824a1d2ded9c55 788-789
+services/agent_harness_service/src/internal_mcp/test.rs
+  s_e47bee9837a594::t_ac4fcbdb89ac35 415,422,471,660
+  s_e47bee9837a594::t_16dbf760125e6c 415,422,471,660
+packages/sdk/generated/agent-harness/types.gen.ts
+  s_e47bee9837a594::t_630f9cf73bd747 1714-1718,1971-2018,2051,2144-2181,2196-2209,2617-2618,2620,2782,3191-3253,3603-3616,5386
+packages/sdk/specs/agent-harness.json
+  s_e47bee9837a594::t_630f9cf73bd747 3468,6808-6812,7214-7298,7345-7355,7482-7535,7550-7568,8167-8168,8356,9171-9244,9679-9694
+packages/sdk-ocaml/generated/agent_harness.ml
+  s_e47bee9837a594::t_933b7dc815dc76 4725-4747,5099,5109,5119,5153-5340,5409-5410,5414,5422,5430,5447,5475-5476,5496,5506,5516,6057-6084,7054-7180
+  s_e47bee9837a594::t_dcc22bb4b4e3d8 7181
+packages/sdk-ocaml/generated/agent_harness.mli
+  s_e47bee9837a594::t_933b7dc815dc76 2732-2741,2966,2992-3093,3134-3135,3139,3159,3185,3460-3473,4074-4149
+  s_e47bee9837a594::t_f28afa1c5adabc 4150
+packages/sdk-ocaml/generated/untyped.txt
+  s_e47bee9837a594::t_933b7dc815dc76 11
+packages/sdk/generated/agent-harness/index.ts
+  s_e47bee9837a594::t_630f9cf73bd747 4
+apps/web/src/lib/service-clients/service-agent-harness/generated/schemas/programLanguage.ts
+  s_e47bee9837a594::t_cb113da24fe47a 10-11,20
+apps/web/src/lib/service-clients/service-agent-harness/openapi.json
+  s_e47bee9837a594::t_8028f1d29062c8 8167-8168
+crates/code_execution/src/outbound/deno/analyze.rs
+  s_e47bee9837a594::t_34ae168205ae9b 32,61
+  s_e47bee9837a594::t_21958c7959c837 1-31,33-49,55-60,62-104,112,127-155,165-187
+  s_e47bee9837a594::t_338e4e908eaebd 105-111,113-126
+  s_e47bee9837a594::t_e3a6591836e38c 156-164
+  s_e47bee9837a594::t_110cb94b3bd572 50-54
+services/agent_harness_service/AGENTS.md
+  s_e47bee9837a594::t_16dbf760125e6c 71,73-74,79-83
+  s_e47bee9837a594::t_be24f56c31f735 69-70,77-78
+crates/code_execution/AGENTS.md
+  s_e47bee9837a594::t_7030281ec49ac3 29-33
+crates/code_execution/README.md
+  s_e47bee9837a594::t_7030281ec49ac3 188-193
+  s_e47bee9837a594::t_2f3d9d383a1756 194-196
+  s_e47bee9837a594::t_110cb94b3bd572 187
+crates/code_execution/src/outbound/deno/analyze/test.rs
+  s_e47bee9837a594::t_5dff35be0ea817 1-20,24-60,65-72,129,210,246-249,255-290,293-298,299-300,302-303,306,309-319,321-326,328-329,331,338,341-343
+  s_e47bee9837a594::t_648d40d7ba4f3b 327,330,332-337,339-340
+  s_e47bee9837a594::t_34ae168205ae9b 301,304-305,307-308
+  s_e47bee9837a594::t_110cb94b3bd572 61-64,74-128,130-209,211-245,250-254,320
+  s_e47bee9837a594::t_e3a6591836e38c 291-292
+  s_e47bee9837a594::t_b86dd3d9e8e1c3 21-23,73
+crates/agent_code_mode/src/inbound/toolset/test/without_js_tools.json
+  s_817d73dde153c1::t_62026714eb943a 2-10,12-58,61-79,82,84,87,89,92-104,107-126,128,130-134,137-138,140-186,189-207,210,212,215,217,220-227,230,232,235,237,240-247,250-269,271,273-277,280-281,283-329,332-350,353,355,358,360-371,373,375,378,380,383-390,393-401,403-413,415-420,423
+  s_817d73dde153c1::t_bc04f75d0d8d1f 1,11,59-60,80-81,83,85-86,88,90-91,105-106,127,129,135-136,139,187-188,208-209,211,213-214,216,218-219,228-229,231,233-234,236,238-239,248-249,270,272,278-279,282,330-331,351-352,354,356-357,359,372,374,376-377,379,381-382,391-392,402,414,421-422,424
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.7.7",
+  "base_commit_sha": "845ff5dbf248ab4f82c84d4c249365e7ef202937",
+  "prompts": {},
+  "sessions": {
+    "s_817d73dde153c1": {
+      "agent_id": {
+        "tool": "claude",
+        "id": "91b00bb8-f987-47cb-90d4-261f97bce448",
+        "model": "claude-opus-5-5"
+      },
+      "human_author": "Eric Hayes <56524199+ehayes2000@users.noreply.github.com>"
+    },
+    "s_e47bee9837a594": {
+      "agent_id": {
+        "tool": "claude",
+        "id": "5703ce97-1923-419e-b892-abdf036675c3",
+        "model": "claude-opus-5-5"
+      },
+      "human_author": "Eric Hayes <56524199+ehayes2000@users.noreply.github.com>"
+    },
+    "s_f3a48b3a685142": {
+      "agent_id": {
+        "tool": "claude",
+        "id": "65b2bcf0-02e2-4f2c-88ae-8e6cea990f9a",
+        "model": "claude-opus-5-5"
+      },
+      "human_author": "Eric Hayes <56524199+ehayes2000@users.noreply.github.com>"
+    }
+  }
+}
