@@ -216,16 +216,21 @@ export function ChannelSectionMenuItems(props: { section: ChannelSectionKey }) {
         </ContextMenu.Sub>
       </MenuGroup>
       <MenuSeparator />
-      <MenuGroup>
-        <MenuItem
-          text={t('channelLabels.markAllAsRead')}
-          disabled={rail.sectionNotificationsDisabled(props.section)}
-          onClick={() =>
-            fireAndForget(rail.markSectionRead(props.section), 'channels-view')
-          }
-        />
-        <SectionNotificationControls section={props.section} />
-      </MenuGroup>
+      <SectionNotificationControls
+        section={props.section}
+        markRead={
+          <MenuItem
+            text={t('channelLabels.markAllAsRead')}
+            disabled={rail.sectionNotificationsDisabled(props.section)}
+            onClick={() =>
+              fireAndForget(
+                rail.markSectionRead(props.section),
+                'channels-view'
+              )
+            }
+          />
+        }
+      />
     </>
   );
 }

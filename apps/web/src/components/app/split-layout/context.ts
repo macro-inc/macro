@@ -56,6 +56,8 @@ export type SplitFileMenuActionGroups = {
   sharing: SplitFileMenuAction[];
   /** Macro platform features: Favorite, Mute, Remind me, Add tag. */
   macro: SplitFileMenuAction[];
+  /** Mute and Notification Settings, together when a channel has both. */
+  notifications: SplitFileMenuAction[];
   /** Non-destructive operations on the file itself: Duplicate, Rename, Move, Download. */
   file: SplitFileMenuAction[];
   /** Destructive actions, always last. */
@@ -84,6 +86,7 @@ export function getSplitFileMenuActionSections(
     { key: 'sender', actions: groups.sender },
     { key: 'sharing', actions: groups.sharing },
     { key: 'macro', actions: groups.macro },
+    { key: 'notifications', actions: groups.notifications },
     { key: 'file', actions: groups.file },
     { key: 'delete', actions: groups.delete },
   ];

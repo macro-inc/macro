@@ -508,10 +508,19 @@ export function createSoupEntityActions(
       });
     }
 
+    // With Notification Settings, Mute joins it in a group of its own.
+    const notificationSettingsMenu = notificationSettingsMenuFor(
+      channelSettings,
+      entities
+    );
+    const notificationItems: SoupEntityActionItem[] = [];
+    const muteItems = notificationSettingsMenu
+      ? notificationItems
+      : middleItems;
     if (canExecuteAll(muteAction.canExecute)) {
       const allMuted = entities.every((entity) => muteAction.isMuted(entity));
       const muteMenu = muteAction.menu(entities);
-      middleItems.push({
+      muteItems.push({
         id: 'mute',
         icon: allMuted ? BellIcon : BellSlashIcon,
         label: allMuted ? muteMenu.unmuteLabel : muteMenu.label,
@@ -520,12 +529,8 @@ export function createSoupEntityActions(
       });
     }
 
-    const notificationSettingsMenu = notificationSettingsMenuFor(
-      channelSettings,
-      entities
-    );
     if (notificationSettingsMenu) {
-      middleItems.push({
+      notificationItems.push({
         id: 'notification-settings',
         icon: BellIcon,
         label: t('channelSections.notificationSettings'),
@@ -800,6 +805,7 @@ export function createSoupEntityActions(
     return [
       { id: 'top', items: topItems },
       { id: 'middle', items: middleItems },
+      { id: 'notifications', items: notificationItems },
       { id: 'sender', items: senderItems },
       { id: 'crm', items: crmItems },
       { id: 'delete', items: deleteItems },

@@ -57,6 +57,30 @@ export function MobileSectionOptions(props: {
       props.label.channelIds.every((id) =>
         isMutedItem(muted.data ?? [], { item_type: 'channel', item_id: id })
       ));
+  // With Notification Settings, Mute joins it in a section of its own.
+  const muteItem = () => (
+    <MobileDrawer.Item
+      disabled={props.disabled}
+      onClick={() => {
+        if (!allMuted()) setPage('mute');
+        else if (props.notifications) props.notifications.mute.onMute(false);
+        else fireAndForget(props.onMute(false), 'channels-view');
+      }}
+    >
+      {props.notifications
+        ? allMuted()
+          ? props.notifications.mute.unmuteLabel
+          : props.notifications.mute.label
+        : t(
+            allMuted()
+              ? 'channelSections.unmuteAllChannels'
+              : 'channelSections.muteAllChannels'
+          )}
+      <Show when={!allMuted()}>
+        <CaretRightIcon class="ml-auto size-4" />
+      </Show>
+    </MobileDrawer.Item>
+  );
   const sorts = () => [
     { value: 'name' as const, label: t('channelSections.alphabetical') },
     { value: 'viewed_at' as const, label: t('channelSections.lastViewed') },
@@ -264,30 +288,12 @@ export function MobileSectionOptions(props: {
                   >
                     {t('channelLabels.markAllAsRead')}
                   </MobileDrawer.Item>
-                  <MobileDrawer.Item
-                    disabled={props.disabled}
-                    onClick={() => {
-                      if (!allMuted()) setPage('mute');
-                      else if (props.notifications)
-                        props.notifications.mute.onMute(false);
-                      else fireAndForget(props.onMute(false), 'channels-view');
-                    }}
-                  >
-                    {props.notifications
-                      ? allMuted()
-                        ? props.notifications.mute.unmuteLabel
-                        : props.notifications.mute.label
-                      : t(
-                          allMuted()
-                            ? 'channelSections.unmuteAllChannels'
-                            : 'channelSections.muteAllChannels'
-                        )}
-                    <Show when={!allMuted()}>
-                      <CaretRightIcon class="ml-auto size-4" />
-                    </Show>
-                  </MobileDrawer.Item>
-                  <Show when={props.notifications}>
-                    {(notifications) => (
+                  <Show when={!props.notifications}>{muteItem()}</Show>
+                </MobileDrawer.Section>
+                <Show when={props.notifications}>
+                  {(notifications) => (
+                    <MobileDrawer.Section>
+                      {muteItem()}
                       <MobileDrawer.Item
                         disabled={props.disabled}
                         onClick={() => setPage('settings')}
@@ -298,9 +304,9 @@ export function MobileSectionOptions(props: {
                         />
                         <CaretRightIcon class="size-4 shrink-0" />
                       </MobileDrawer.Item>
-                    )}
-                  </Show>
-                </MobileDrawer.Section>
+                    </MobileDrawer.Section>
+                  )}
+                </Show>
                 <Show when={props.canEdit}>
                   <MobileDrawer.Section>
                     <MobileDrawer.Item

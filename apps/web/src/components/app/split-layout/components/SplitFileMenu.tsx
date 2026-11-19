@@ -710,13 +710,15 @@ export function SplitFileMenu(props: SplitFileMenuProps) {
       label: t('channelSections.notificationSettings'),
       icon: BellSimple,
       notificationSettingsMenu: menu,
-      group: 'macro' as const,
+      group: 'notifications' as const,
     };
   };
 
   const muteOp = (): SplitFileMenuAction | undefined => {
     const entity = menuEntity();
     if (!entity || !muteAction.canExecute(entity)) return undefined;
+    // With Notification Settings, Mute joins it in a section of its own.
+    const hasSettings = notificationSettingsMenuFor(channelSettings, [entity]);
     const muted = muteAction.isMuted(entity);
     const muteMenu = muteAction.menu([entity]);
     return {
@@ -730,7 +732,7 @@ export function SplitFileMenu(props: SplitFileMenuProps) {
       get hotkeyToken() {
         return activeHotkeyToken(TOKENS.entity.action.mute);
       },
-      group: 'macro' as const,
+      group: hasSettings ? ('notifications' as const) : ('macro' as const),
     };
   };
 
@@ -1018,6 +1020,7 @@ export function SplitFileMenu(props: SplitFileMenuProps) {
       sender: [],
       sharing: [],
       macro: [],
+      notifications: [],
       file: [],
       delete: [],
     };

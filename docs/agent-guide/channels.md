@@ -1425,7 +1425,9 @@ replace each other; a snooze that expires returns the channel to all messages.
 ### Notification Settings (`enable-channel-notification-settings`)
 
 With the flag on, a channel's menu (rail row, Home row, the open channel's
-title menu) has two entries in place of the one above:
+title menu) has two entries in place of the one above, in a group of their own
+between separators; section heading menus and the phone sheets group them the
+same way:
 
 - **Mute** holds the time-based choices: **Until I turn it off**, the snooze
   presets and **Custom…**. A muted channel shows **Unmute** with why beside it
