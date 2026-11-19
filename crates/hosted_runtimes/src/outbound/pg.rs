@@ -789,6 +789,17 @@ impl ComputerRepo for PgComputerRepo {
         Ok(())
     }
 
+    async fn defer_effect(&self, id: i64, run_after: DateTime<Utc>) -> Result<(), PgComputerError> {
+        sqlx::query!(
+            "UPDATE hosted_runtime_effect SET run_after = $2 WHERE id = $1",
+            id,
+            run_after,
+        )
+        .execute(&self.pool)
+        .await?;
+        Ok(())
+    }
+
     async fn retry_effect(
         &self,
         id: i64,

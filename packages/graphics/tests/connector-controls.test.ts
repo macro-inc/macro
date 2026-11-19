@@ -146,6 +146,24 @@ it('treats any pointer that takes an end by its wider target as a finger', () =>
   expect(end()).toEqual({ x: 170, y: 60 });
 });
 
+it('keeps the end a pen is moving when the system takes a palm away', () => {
+  const { interaction, pointer, end } = setup();
+
+  pointer('pen', 'pointerdown', 152, 51);
+  pointer('pen', 'pointermove', 200, 90);
+  window.dispatchEvent(
+    new PointerEvent('pointercancel', {
+      bubbles: true,
+      pointerId: 2,
+      pointerType: 'touch',
+    })
+  );
+  expect(interaction.getState()).toBeDefined();
+  pointer('pen', 'pointerup', 200, 90);
+
+  expect(end().x).toBeGreaterThan(190);
+});
+
 it('leaves a mouse press on an end as it was', () => {
   const { pointer, end } = setup();
 

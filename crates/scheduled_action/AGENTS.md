@@ -187,6 +187,20 @@ each run.
   `routine.draft.jobs.sweep`, `routine.draft.interrupt`; no owner id
   (it holds an email). Replicas still on code without job rows sweep them
   as stale blocking drafts after `STALE_DRAFT`.
+- `src/domain/knob_entities.rs`: the items code steps' entity knobs name,
+  checked as the owner through the `KnobEntities` port
+  (`outbound/knob_entities.rs` over entity access, and people through
+  `KnownPeople`, and trashed documents, tasks, folders and chats through
+  `LiveItems`, both of which the harness composes, since an owner keeps their
+  grant on what they trashed): `TargetValidation` refuses an unpicked item or one the
+  owner can't open on create, check and update, and the program runner
+  checks again before each code step that has one, failing it with the
+  reason and without running its code; an item several steps pick is
+  looked up once a run, the later steps reusing what the first found. `GET
+  /scheduled-actions/{id}/unusable-items` lists a saved routine's knobs that
+  need a new pick, by step id (not position, so a page editing the routine
+  keeps each on its step), with the same reason, for its page. A composition without
+  the port refuses entity knobs.
 - `src/domain/suggestions.rs` + `src/inbound/suggestion_router.rs`: routine
   suggestions and the tools routines sessions write them with. The sessions
   themselves belong to generations (`crates/suggestion_generation`: an
@@ -195,7 +209,9 @@ each run.
   the routines guide, the catalog for its surfaces, what was dismissed, and the
   newest 100 messages and connected apps inside `<untrusted>` tags, angle
   brackets in the data swapped so it can't close them; a nightly or manual
-  brief adds review and retire, and only onboarding's asks for speed) and
+  brief adds review and retire, and only onboarding's asks for speed; a
+  drafted routine is told to start on mail only where saving one can: the
+  person has `enable-event-routines` and the deployment evaluates conditions) and
   count what it suggested (`suggested`). A session hands back
   each suggestion through `macro.routines.suggest`
   (`POST /scheduled-actions/suggestions`), reads earlier ones through

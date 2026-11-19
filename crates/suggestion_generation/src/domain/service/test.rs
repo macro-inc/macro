@@ -1157,7 +1157,7 @@ async fn onboarding_runs_one_suggestions_session_and_a_routines_session_per_grou
         h.repo
             .sessions()
             .iter()
-            .any(|session| session.surfaces == ["email", "calendar", "tasks"])
+            .any(|session| session.surfaces.len() == ALL_SURFACES.len())
     );
     assert_eq!(*h.repo.seen.lock().unwrap(), ["Europe/Paris"]);
     // Routine suggestions logged the run for their dashboard.
@@ -1933,11 +1933,14 @@ fn a_layout_has_at_most_three_sessions_and_every_surface_once() {
     let mut twice = ALL_SURFACES.to_vec();
     twice.push(Surface::Email);
     assert!(SessionLayout::new(vec![twice]).is_err());
-    assert_eq!(
-        SessionLayout::default().sessions().len(),
-        MAX_ROUTINE_SESSIONS
-    );
-    assert!(SessionLayout::new(SessionLayout::default().sessions().to_vec()).is_ok());
+    assert_eq!(SessionLayout::default(), SessionLayout::single());
+    let groups = vec![
+        vec![Surface::Email, Surface::Calendar, Surface::Tasks],
+        vec![Surface::Crm, Surface::Calls, Surface::Chat],
+        vec![Surface::Files, Surface::Reviews, Surface::Agents],
+    ];
+    assert_eq!(groups.len(), MAX_ROUTINE_SESSIONS);
+    assert!(SessionLayout::new(groups).is_ok());
     assert_eq!(SessionLayout::single().sessions().len(), 1);
 }
 

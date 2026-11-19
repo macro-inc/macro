@@ -4,6 +4,7 @@ import { mountEmailMutation } from './tests/mutation';
 
 const mocks = vi.hoisted(() => ({
   cacheEnabled: true,
+  getCacheHost: vi.fn(),
   getLabels: vi.fn(),
   graphqlMutation: vi.fn(),
   refresh: vi.fn(),
@@ -34,11 +35,13 @@ vi.mock('@app/lib/analytics/analytics-context', () => ({
 vi.mock('@core/component/Toast/Toast', () => ({ toast: { failure: vi.fn() } }));
 vi.mock('@macro-inc/observability', () => ({ Telemetry: { error: vi.fn() } }));
 vi.mock('@service-storage/graphql-soup', () => ({
+  getGraphqlCacheHost: mocks.getCacheHost,
   getGraphqlSoupClient: () => ({ mutation: mocks.graphqlMutation }),
   graphqlCacheEnabled: () => mocks.cacheEnabled,
 }));
 
 import { predictOptimisticMutation } from '@graphql-cache/exchange/optimistic-resolvers';
+import type { MutationSettlement } from '@graphql-cache/protocol';
 import {
   MarkEmailThreadSeenDocument,
   MarkEmailThreadUnreadDocument,
@@ -48,6 +51,7 @@ import { soupOptimisticResolvers } from '../optimistic-resolvers';
 import { registerGraphqlSoupRevalidations } from '../soup/graphql/active-queries';
 import { soupKeys } from '../soup/keys';
 import { emailKeys } from './keys';
+import { markEmailThreadUnread } from './read-state';
 import {
   trackExternalThreadArchive,
   useMarkThreadAsSeenMutation,
@@ -100,6 +104,49 @@ describe('external archive disposition', () => {
 });
 
 describe('email read state with GraphQL Soup', () => {
+  it('retains a queued refusal that arrives before the admission result', async () => {
+    let reportSettlement!: (settlement: MutationSettlement) => void;
+    const stop = vi.fn();
+    const stopGeneration = vi.fn();
+    mocks.getCacheHost.mockReturnValue({
+      onMutationSettled: (listener: typeof reportSettlement) => {
+        reportSettlement = listener;
+        return stop;
+      },
+      onCacheGenerationChanged: () => stopGeneration,
+    });
+    mocks.graphqlMutation.mockImplementation((_document, _params, context) => ({
+      toPromise: async () => {
+        reportSettlement({
+          transactionId: 'other',
+          mutationUuid: 'another-write',
+          status: 'committed',
+        });
+        reportSettlement({
+          transactionId: 'unread',
+          mutationUuid: context.optimisticMutation.uuid,
+          status: 'permanently-failed',
+          error: 'refused by the mailbox',
+        });
+        return {
+          extensions: {
+            normalizedCacheMutationDisposition: {
+              kind: 'queued',
+              transactionId: 'unread',
+            },
+          },
+        };
+      },
+    }));
+
+    const result = await markEmailThreadUnread({ threadId: 'thread' }, true);
+
+    if (result.kind !== 'queued') throw new Error('expected a queued write');
+    await expect(result.settlement).resolves.toBe('permanently-failed');
+    expect(stop).toHaveBeenCalledOnce();
+    expect(stopGeneration).toHaveBeenCalledOnce();
+  });
+
   it.each([true, false])(
     'propagates isRead=%s before the request settles',
     async (read) => {
@@ -133,7 +180,10 @@ describe('email read state with GraphQL Soup', () => {
         },
       });
       const mutation = mountEmailMutation(
-        read ? useMarkThreadAsSeenMutation : useMarkThreadAsUnreadMutation,
+        () =>
+          read
+            ? useMarkThreadAsSeenMutation()
+            : useMarkThreadAsUnreadMutation(),
         client
       );
       const result = mutation.mutateAsync({ threadId: 'thread' });
@@ -246,7 +296,7 @@ describe('email read state with GraphQL Soup', () => {
           },
         }),
       });
-      const mutation = mountEmailMutation(useMutation, client);
+      const mutation = mountEmailMutation(() => useMutation(), client);
       await mutation.mutateAsync({ threadId: 'thread' });
       expect(mocks.refresh).toHaveBeenCalledOnce();
     }
@@ -276,7 +326,7 @@ describe('email read state with GraphQL Soup', () => {
         }),
       });
       try {
-        const mutation = mountEmailMutation(useMutation, client);
+        const mutation = mountEmailMutation(() => useMutation(), client);
         await mutation.mutateAsync({ threadId: 'thread' });
         // Replay commits the record, which the maintained list reads; only
         // the list the cache cannot keep current is read again.

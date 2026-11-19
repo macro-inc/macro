@@ -1188,6 +1188,16 @@ where
         };
         self.upgrades.list_upgrades(id).await
     }
+
+    async fn get_unusable_knobs(
+        &self,
+        receipt: EntityAccessReceipt<ViewAccessLevel>,
+    ) -> Result<Vec<super::knob_entities::UnusableKnob>> {
+        let action = self.load_granted(&receipt).await?;
+        self.targets
+            .unusable_knobs(&action.task, action.owner_user()?)
+            .await
+    }
 }
 
 /// Whether `task` is a routine whose code writes as its owner.

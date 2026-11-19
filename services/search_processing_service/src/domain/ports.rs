@@ -29,10 +29,20 @@ use super::models::{
 
 /// Publishes batches of search-event messages.
 pub trait SearchEventPublisher: Send + Sync + 'static {
+    /// Publish `messages`, returning how many of them the queue would not
+    /// take after resends.
     fn publish(
         &self,
         messages: Vec<SearchQueueMessage>,
-    ) -> impl Future<Output = Result<(), BackfillError>> + Send;
+    ) -> impl Future<Output = Result<usize, BackfillError>> + Send;
+}
+
+/// The operator's switch that pauses every backfill, shared by every task.
+pub trait BackfillControl: Send + Sync + 'static {
+    /// Whether backfills are paused. A switch never set reads as not paused.
+    fn paused(&self) -> impl Future<Output = Result<bool, BackfillError>> + Send;
+
+    fn set_paused(&self, paused: bool) -> impl Future<Output = Result<(), BackfillError>> + Send;
 }
 
 /// Directly reindexes denormalized properties for one typed entity.
