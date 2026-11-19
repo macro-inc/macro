@@ -159,7 +159,8 @@ each run.
   (the draft's shape, one run of the routine, a blind judge); `compare`
   says win, loss or noise against a baseline (see its README). Run it
   before and after a change to the instructions, the wait or anything else
-  on the drafting path.
+  on the drafting path. Routine *suggestions* have their own bench,
+  `crates/suggestion_generation/bench/`, which reuses `bench/stack.ts`.
 - `src/domain/drafts/jobs.rs` + `src/inbound/draft_job_router.rs`:
   background drafts, the same drafter without the waiting request. `POST
   /scheduled-actions/draft-jobs` validates the request and waits only for
@@ -208,6 +209,20 @@ each run.
   `routine.draft.jobs.sweep`, `routine.draft.interrupt`; no owner id
   (it holds an email). Replicas still on code without job rows sweep them
   as stale blocking drafts after `STALE_DRAFT`.
+- `src/domain/knob_entities.rs`: the items code steps' entity knobs name,
+  checked as the owner through the `KnobEntities` port
+  (`outbound/knob_entities.rs` over entity access, and people through
+  `KnownPeople`, and trashed documents, tasks, folders and chats through
+  `LiveItems`, both of which the harness composes, since an owner keeps their
+  grant on what they trashed): `TargetValidation` refuses an unpicked item or one the
+  owner can't open on create, check and update, and the program runner
+  checks again before each code step that has one, failing it with the
+  reason and without running its code; an item several steps pick is
+  looked up once a run, the later steps reusing what the first found. `GET
+  /scheduled-actions/{id}/unusable-items` lists a saved routine's knobs that
+  need a new pick, by step id (not position, so a page editing the routine
+  keeps each on its step), with the same reason, for its page. A composition without
+  the port refuses entity knobs.
 - `src/domain/suggestions.rs` + `src/inbound/suggestion_router.rs`: routine
   suggestions and the tools routines sessions write them with. The sessions
   themselves belong to generations (`crates/suggestion_generation`: an
@@ -466,6 +481,12 @@ that listener is ready. Cancellation can stop the gate before startup finishes.
   rejects it as `RoutineWrite`, for any routine, so two can't trigger each
   other. Mail received, internal hops and sync-service document edits carry
   no stamp.
+- Received mail is for its inbox's owner and for each account that inbox is
+  delegated to (multi-inbox, `macro_user_links`): admission asks the
+  `InboxDelegates` port (`PgInboxDelegates`) once per event, and only when a
+  candidate's owner isn't the inbox's (`event_runs/admission.rs`, `Audience`).
+  Like the other audience rules (`IncomingEvent::is_for_owner`), it is never
+  an access grant: each owner's entity access is still checked.
 - `EventReference` rejects unknown keys, so a replica still on older code can't
   read a run row with a new key: write a new optional key only when it is set.
 

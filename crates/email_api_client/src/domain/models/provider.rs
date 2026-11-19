@@ -235,6 +235,19 @@ pub struct MailboxChangePage {
     pub reader_revision: i16,
 }
 
+/// Which messages a folder's delta round lists, and in what order. Only a
+/// round's first request takes it: the provider carries it in the round's
+/// continuation and checkpoint links.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum RoundStart {
+    /// Every message in the folder, in the provider's order.
+    Unordered,
+    /// Every message in the folder, most recently received first.
+    NewestFirst,
+    /// Only messages received at or after this time.
+    ReceivedSince(DateTime<Utc>),
+}
+
 /// An opaque continuation/checkpoint which must be validated by its adapter.
 #[derive(Clone, PartialEq, Eq, Serialize, Deserialize)]
 #[serde(transparent)]

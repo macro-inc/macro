@@ -14,6 +14,7 @@ import {
 } from '@components/app/split-layout/layoutUtils';
 import { toast } from '@core/component/Toast/Toast';
 import { useUserId } from '@core/context/user';
+import { createOpenTracker } from '@core/internal/open-tracker';
 import { fireAndForget } from '@core/util/fireAndForget';
 import {
   type KnownFolder,
@@ -131,6 +132,12 @@ function DriveComposition(props: { route: DriveRouteState }) {
     showList: () => {
       navigation.clear();
     },
+  });
+
+  createOpenTracker('project', () => {
+    const location = view.value().location;
+    if (location.kind !== 'folder' || !location.id) return undefined;
+    return knownFolders().has(location.id) ? location.id : undefined;
   });
 
   createEffect(

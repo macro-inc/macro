@@ -213,6 +213,7 @@ pub(crate) fn router() -> Router<OutlookEmulator> {
             "/mailboxes/{email}/messages/{id}",
             patch(update_message).delete(delete_message),
         )
+        .route("/mailboxes/{email}/folders/{id}", delete(delete_folder))
         .route("/mailboxes/{email}/access-tokens", post(access_token))
         .route("/mailboxes/{email}/revoke", post(revoke_grant))
         .route("/mailboxes/{email}/links/{link_id}", post(link_mailbox))
@@ -304,6 +305,13 @@ async fn delete_message(
     Path((email, id)): Path<(String, String)>,
 ) -> Response {
     done(emulator.delete_message(&email, &id))
+}
+
+async fn delete_folder(
+    AxumState(emulator): Emulator,
+    Path((email, id)): Path<(String, String)>,
+) -> Response {
+    done(emulator.delete_folder(&email, &id))
 }
 
 async fn access_token(AxumState(emulator): Emulator, Path(email): Path<String>) -> Response {

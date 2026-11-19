@@ -362,6 +362,8 @@ automatically retried.
 
 Saved views are available on main Tasks, not inside Project or CRM task lists.
 
+With `enableEntityAppearance` enabled, owners can choose **Change icon** in a saved view's sidebar or header action menu. Desktop embeds the shared icon/color picker; touch opens its sheet. Pick an icon, change its color, choose an emoji, then Remove: every choice saves immediately and Remove preserves the color. Confirm sidebar and breadcrumb agree, including with unsaved filters. Disable the flag: saved appearance remains, but editing disappears and open pickers close. Another team member can see a shared view's appearance but cannot edit it.
+
 - Desktop: use the **Saved views** sidebar section. Its icon-only **+** remains available when the section is empty, populated, collapsed, loading, or in an error state. Enter on the focused **+** starts a draft instead of opening the selected task.
 - Touch: the **Saved views** section is in the sidebar sheet opened by **Show sidebar**. Create views from changed filters, layout, grouping, or sort in the filter drawer.
 - The empty sidebar section shows **Your go-to views**, the muted description **Save your setup for next time.**, and a secondary **Create view** button with a leading plus icon in a rounded container with a subtle border, 12px padding, the surrounding background, and no shadow or illustration. It starts the same unsaved draft as desktop **+**; Configure the draft in Filters, then choose **Save view**.
@@ -1239,6 +1241,13 @@ and expanded replies stay in place. Following another comment link highlights
 its target again.
 
 ## Bulk delete
+
+Tasks you own also offer **Delete** in their row's context menu (right-click on
+desktop, long-press on touch; in lists, grouped lists, board, Gantt and Home)
+and in the open task's header menu. It opens the delete confirmation described
+below, which stays open until you confirm or cancel. A row's Delete targets
+that task, except on desktop when the right-clicked row is part of a
+multi-row selection: then it targets every selected task.
 
 Select task rows with their leading checkboxes, choose **Actions → Delete items**,
 then confirm **Delete**. On desktop the dialog opens with Delete focused, so Enter confirms

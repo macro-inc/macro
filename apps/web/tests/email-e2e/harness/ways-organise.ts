@@ -103,11 +103,12 @@ export async function rowMenu(
 export async function openFromList(
   page: Page,
   threadId: string,
-  text: string
+  text: string,
+  within: Page | Locator = page
 ): Promise<void> {
   await row(page, threadId).click();
   await expect.poll(() => openThreadId(page)).toBe(threadId);
-  await expect(page.getByText(text)).toBeVisible();
+  await expect(within.getByText(text)).toBeVisible();
 }
 
 /**

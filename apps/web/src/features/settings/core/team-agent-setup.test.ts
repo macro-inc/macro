@@ -29,8 +29,17 @@ const computer: ComputerStatus = {
 afterEach(() => forgetSetupTiming(computer.id));
 
 describe('teamAgentRunState', () => {
+  it('reads a status this build does not know as not running', () => {
+    const unknown = JSON.parse('{"status":"hibernating"}');
+    expect(teamAgentRunState(unknown, undefined)).toBe('not_running');
+  });
+
   it('follows the computer while it is being set up, failed, off, or gone', () => {
     expect(teamAgentRunState({ status: 'provisioning' }, undefined)).toBe(
+      'setting_up'
+    );
+    // The computer is up but the agent hasn't come online yet.
+    expect(teamAgentRunState({ status: 'starting' }, { connected: true })).toBe(
       'setting_up'
     );
     expect(teamAgentRunState({ status: 'failed' }, undefined)).toBe(

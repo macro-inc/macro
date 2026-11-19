@@ -6,12 +6,13 @@ import LinkIcon from '@icon/system/regular/link.svg';
 import PencilIcon from '@icon/system/regular/pencil-simple.svg';
 import TrashIcon from '@icon/system/regular/trash.svg';
 import { Dropdown } from '@ui';
-import { Show } from 'solid-js';
+import { type JSX, Show } from 'solid-js';
 
 export function SavedViewMenuItems(props: {
   owned: boolean;
   disabled?: boolean;
   onEdit: () => void;
+  appearance?: JSX.Element;
   onDuplicate: () => void;
   /** Offered only by consumers whose links can open the view for someone. */
   onCopyLink?: () => void | boolean | Promise<void | boolean>;
@@ -29,6 +30,7 @@ export function SavedViewMenuItems(props: {
             Edit
           </Dropdown.Item>
         </Show>
+        {props.appearance}
         <Dropdown.Item disabled={props.disabled} onSelect={props.onDuplicate}>
           <CopyIcon class="size-4" />
           Duplicate

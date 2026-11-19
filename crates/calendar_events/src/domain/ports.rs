@@ -1384,6 +1384,14 @@ pub trait GoogleCalendarSyncRepository: Send + Sync + 'static {
         &self,
         stalled_before: DateTime<Utc>,
     ) -> impl Future<Output = Result<usize, Report>> + Send;
+
+    /// Turn calendar off for Google accounts whose current grant lacks
+    /// Macro's calendar capability, as a grant that loses it does: the
+    /// account is disabled and its local copy removed, and a new grant
+    /// re-imports it. Returns how many accounts were turned off.
+    fn disable_google_accounts_without_calendar_capability(
+        &self,
+    ) -> impl Future<Output = Result<usize, Report>> + Send;
 }
 
 /// Durable lifecycle and lease operations for calendar backfill jobs.

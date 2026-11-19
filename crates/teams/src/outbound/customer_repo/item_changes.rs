@@ -64,13 +64,34 @@ impl CustomerRepositoryImpl {
             .as_ref()
             .clone()
             .with_strategy(stripe::RequestStrategy::Idempotent(key.to_owned()));
-        let result = client
-            .post_form::<serde_json::Value, _>(&change.path, &change.request)
-            .await;
+        let result = traced(
+            stripe_span!("stripe.subscription.update", subscription_id = %change.subscription_id),
+            client.post_form::<serde_json::Value, _>(&change.path, &change.request),
+        )
+        .await;
         match result {
             Ok(_) => {
                 self.finish_item_change(key, ItemChangeOutcome::Succeeded)
                     .await
+            }
+            // 400 idempotency_error: Stripe saw this key before with other
+            // parameters (another environment on the same account used it).
+            // Our request was not applied and never will be under this key,
+            // so give it up for good rather than leave it pending, where it
+            // would hold up every later change on the subscription. A 409
+            // idempotency_error is the same key still running: that one
+            // stays pending.
+            Err(stripe::StripeError::Stripe(request))
+                if request.http_status == 400
+                    && request.error_type == stripe::ErrorType::IdempotencyError =>
+            {
+                tracing::warn!(
+                    idempotency_key = key,
+                    "Stripe refused a reused idempotency key; giving the change up"
+                );
+                self.finish_item_change(key, ItemChangeOutcome::Abandoned)
+                    .await?;
+                Err(CustomerError::ItemChangeAbandoned)
             }
             Err(error) => {
                 let error_if_incomplete = change
@@ -99,11 +120,12 @@ impl CustomerRepositoryImpl {
         if change.outcome != ItemChangeOutcome::Pending {
             return self.submit_item_change(key, change).await;
         }
-        let current = self
-            .client
-            .get::<serde_json::Value>(&change.path)
-            .await
-            .map_err(storage)?;
+        let current = traced(
+            stripe_span!("stripe.subscription.retrieve", subscription_id = %change.subscription_id),
+            self.client.get::<serde_json::Value>(&change.path),
+        )
+        .await
+        .map_err(storage)?;
         if current
             .get("metadata")
             .and_then(|metadata| metadata.get(ITEM_CHANGE_KEY))
@@ -195,11 +217,12 @@ impl CustomerRepositoryImpl {
         if change.outcome != ItemChangeOutcome::Pending {
             return Ok(change.outcome);
         }
-        let current = self
-            .client
-            .get::<serde_json::Value>(&change.path)
-            .await
-            .map_err(storage)?;
+        let current = traced(
+            stripe_span!("stripe.subscription.retrieve", subscription_id = %change.subscription_id),
+            self.client.get::<serde_json::Value>(&change.path),
+        )
+        .await
+        .map_err(storage)?;
         let applied = current
             .get("metadata")
             .and_then(|metadata| metadata.get(ITEM_CHANGE_KEY))

@@ -11,6 +11,7 @@
 
 import { loadAppSteadily } from './harness/drafts';
 import { expect, test } from './harness/fixtures';
+import { trashFolder } from './harness/journeys';
 import { openThreadId, rowIds } from './harness/list';
 import { notice } from './harness/send';
 import {
@@ -24,6 +25,7 @@ import {
 import { PHONE } from './harness/ways-list1';
 import {
   deliverAll,
+  held,
   openFromList,
   row,
   titleMenu,
@@ -235,13 +237,9 @@ test.describe('the title menu of a thread on a phone', () => {
     saw('STL-108');
   });
 
-  // When this fails, Delete from a phone's title menu leaves the deleted
-  // thread on screen instead of going back to the list it was opened
-  // from. Today the phone's thread is a block with nothing to close it
-  // (handoff phone-title-menu-delete-leaves-thread-open).
-  test('known bug: phone-title-menu-delete-leaves-thread-open: Delete goes back to the list @known-bug', {
-    tag: '@known-bug',
-  }, async ({ page, mailbox }) => {
+  // Delete from the title menu trashes the thread and returns to the list
+  // that opened the phone's email block.
+  test('Delete goes back to the list', async ({ page, mailbox }) => {
     const ids = await deliverAll(mailbox, ['Agenda', 'Minutes']);
     await mailbox.open();
     await expect
@@ -255,7 +253,10 @@ test.describe('the title menu of a thread on a phone', () => {
     await sheetIn(sheet);
     await sheet.getByRole('button', { name: 'Delete', exact: true }).tap();
     await expect(notice(page, 'Moved to Trash')).toBeVisible();
-    await expect(page).not.toHaveURL(openedOnPhone(ids.Agenda));
+    await expect
+      .poll(async () => (await held(mailbox, 'Agenda'))?.labels)
+      .toContain(trashFolder('OUTLOOK'));
+    await expect(page).toHaveURL(MAIL_LIST);
     await expect(page.getByText('About Agenda.')).toHaveCount(0);
     await expect(row(page, ids.Minutes)).toBeVisible();
     saw('STL-617', 'F-075');

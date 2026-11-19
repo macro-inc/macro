@@ -269,6 +269,23 @@ async fn history_query_and_journal_failures_stop_later_steps() {
 }
 
 #[tokio::test]
+async fn a_history_commit_that_times_out_on_a_lock_is_left_for_redelivery() {
+    let (svc, fake) = make_service(false);
+    {
+        let mut s = fake.0.lock().unwrap();
+        s.import.history = Some("1".into());
+        s.failures.push(("accept", 1));
+    }
+    let InboxSyncDisposition::LeaveForRedelivery { error, .. } =
+        svc.process(Ok(input(gmail_notification()))).await
+    else {
+        panic!("a lock timeout must leave the notification for redelivery");
+    };
+    assert_eq!(error.reason, FailureReason::DatabaseQueryFailed);
+    assert_eq!(names(&fake.calls()).last(), Some(&"accept"));
+}
+
+#[tokio::test]
 async fn catalog_diff_deletes_missing_then_upserts_changed_and_new_labels() {
     let (svc, fake) = make_service(false);
     {

@@ -4,7 +4,13 @@
 
 import { agentSettingsRequest } from '@app/features/settings/agentSettingsState';
 import type { ComputerStatus } from '@service-auth/computers';
-import { cleanup, fireEvent, render, screen } from '@solidjs/testing-library';
+import {
+  cleanup,
+  fireEvent,
+  render,
+  screen,
+  waitFor,
+} from '@solidjs/testing-library';
 import { ActionDialogShell, Dialog } from '@ui';
 import { afterEach, beforeEach, expect, it, vi } from 'vitest';
 import {
@@ -15,7 +21,10 @@ import {
 
 const mocks = vi.hoisted(() => ({
   agents: [] as { bot: { id: string; name: string } }[],
-  openAgentsPage: vi.fn(),
+  openAgentDm: vi.fn(async (_botId: string) => {}),
+  agentDms: true,
+  signOut: vi.fn(async (_harnessId: string) => {}),
+  completeSetup: vi.fn(async (_computerId: string) => {}),
   openSettings: vi.fn(),
   closeSettings: vi.fn(),
   invalidateAgents: vi.fn(async () => {}),
@@ -23,11 +32,14 @@ const mocks = vi.hoisted(() => ({
   mobile: false,
 }));
 
-vi.mock('@app/features/agents-view/primitives/open-page', () => ({
-  openAgentsPage: mocks.openAgentsPage,
+vi.mock('@app/features/agent-dms/open-agent-dm', () => ({
+  useOpenAgentDm: () => ({ open: mocks.openAgentDm, pending: () => false }),
 }));
-vi.mock('@components/app/split-layout/layout', () => ({
-  useSplitLayout: () => ({}),
+vi.mock('@core/constant/featureFlags', async (importOriginal) => ({
+  ...(await importOriginal<object>()),
+  get ENABLE_AGENT_DMS() {
+    return mocks.agentDms;
+  },
 }));
 vi.mock('@core/constant/SettingsState', () => ({
   useSettingsState: () => ({
@@ -44,10 +56,12 @@ vi.mock('@queries/bots/bots', () => ({
   useUpdateBotMutation: () => ({ mutateAsync: vi.fn() }),
 }));
 vi.mock('@queries/computers/claude', () => ({
-  useClaudeSignOutMutation: () => ({ mutateAsync: vi.fn() }),
+  useClaudeSignOutMutation: () => ({ mutateAsync: mocks.signOut }),
 }));
 vi.mock('@queries/computers/computers', () => ({
-  useCompleteComputerSetupMutation: () => ({ mutateAsync: vi.fn() }),
+  useCompleteComputerSetupMutation: () => ({
+    mutateAsync: mocks.completeSetup,
+  }),
   useRetryComputerMutation: () => ({
     mutateAsync: mocks.retry,
     isPending: false,
@@ -80,7 +94,11 @@ const ready: ComputerStatus = {
 };
 
 function readyStep(
-  options: { selectsForAgent?: boolean; computer?: ComputerStatus } = {}
+  options: {
+    selectsForAgent?: boolean;
+    computer?: ComputerStatus;
+    choice?: 'own_account' | 'macro_credits';
+  } = {}
 ) {
   const onClose = vi.fn();
   render(() => (
@@ -92,7 +110,7 @@ function readyStep(
           firstName="Maya"
           step="ready"
           name={undefined}
-          choice="own_account"
+          choice={options.choice ?? 'own_account'}
           onName={vi.fn()}
           onChoice={vi.fn()}
           onStep={vi.fn()}
@@ -108,7 +126,10 @@ function readyStep(
 beforeEach(() => {
   mocks.agents = [{ bot: { id: 'computer-agent', name: "Maya's Agent" } }];
   mocks.mobile = false;
+  mocks.agentDms = true;
   vi.clearAllMocks();
+  mocks.signOut.mockImplementation(async () => {});
+  mocks.completeSetup.mockImplementation(async () => {});
   vi.stubGlobal('scrollTo', vi.fn());
 });
 afterEach(() => {
@@ -173,23 +194,36 @@ it('marks Bring your AI done on Macro credits once its sign-in was opened', () =
   expect(items[2].querySelector('svg')).toBeTruthy();
 });
 
-it('opens the composer in Code with the configured agent selected', () => {
+it('opens a chat with the agent it just set up, as the one action', () => {
   const onClose = readyStep();
 
-  fireEvent.click(screen.getByRole('button', { name: 'Try it' }));
+  expect(screen.getByText("Maya's Agent is ready")).toBeTruthy();
+  fireEvent.click(
+    screen.getByRole('button', { name: "Chat with Maya's Agent" })
+  );
 
   expect(onClose).toHaveBeenCalledOnce();
-  expect(mocks.openAgentsPage).toHaveBeenCalledWith(expect.anything(), 'new', {
-    composerAgentId: 'computer-agent',
-  });
+  expect(mocks.openAgentDm).toHaveBeenCalledWith('computer-agent');
+});
+
+it('ends on Done when agent chats are off, with nothing else to open', () => {
+  mocks.agentDms = false;
+  const onClose = readyStep();
+
+  expect(screen.queryByRole('button', { name: /Chat with/ })).toBeNull();
+  const done = screen.getAllByRole('button', { name: 'Done' });
+  expect(done).toHaveLength(1);
+  fireEvent.click(done[0]);
+  expect(onClose).toHaveBeenCalledOnce();
+  expect(
+    screen.getByRole('button', { name: 'Add another agent' })
+  ).toBeTruthy();
 });
 
 it('opens the create form with this computer chosen as where it runs', () => {
   const onClose = readyStep();
 
-  fireEvent.click(
-    screen.getByRole('button', { name: 'Create an agent on this computer' })
-  );
+  fireEvent.click(screen.getByRole('button', { name: 'Add another agent' }));
 
   expect(onClose).toHaveBeenCalledOnce();
   expect(mocks.openSettings).toHaveBeenCalledWith('Agents');
@@ -215,20 +249,56 @@ it('refetches a cached agent list that predates the computer agent', () => {
   expect(mocks.invalidateAgents).toHaveBeenCalledOnce();
 });
 
-it('keeps both actions disabled, with the reason, until setup finishes', () => {
+it('waits on the button while setup finishes, with no other action', () => {
   readyStep({ computer: { ...ready, setupCompletedAt: undefined } });
 
+  expect(screen.getByText("Setting up Maya's Agent")).toBeTruthy();
+  const waiting = screen.getByRole('button', {
+    name: 'Setting up…',
+  });
+  expect(waiting.hasAttribute('disabled')).toBe(true);
+  expect(screen.queryByRole('button', { name: /Chat with/ })).toBeNull();
   expect(
-    screen.getByRole('button', { name: 'Try it' }).hasAttribute('disabled')
-  ).toBe(true);
-  expect(
-    screen
-      .getByRole('button', { name: 'Create an agent on this computer' })
-      .hasAttribute('disabled')
-  ).toBe(true);
-  expect(
-    screen.getByText('Try it and creating agents unlock once setup finishes.')
-  ).toBeTruthy();
+    screen.queryByRole('button', { name: 'Add another agent' })
+  ).toBeNull();
+  expect(screen.queryByText(/You can close this/)).toBeNull();
+});
+
+it('stops on one error with Retry when a finishing step fails', async () => {
+  mocks.signOut.mockRejectedValueOnce(new Error('exec deadlock'));
+  readyStep({
+    computer: { ...ready, setupCompletedAt: undefined },
+    choice: 'macro_credits',
+  });
+
+  await screen.findByText("Couldn't finish setting up Maya's Agent");
+  expect(mocks.completeSetup).not.toHaveBeenCalled();
+
+  fireEvent.click(screen.getByRole('button', { name: 'Retry' }));
+  await waitFor(
+    () => expect(mocks.completeSetup).toHaveBeenCalledWith('computer-1'),
+    { timeout: 5000 }
+  );
+  expect(mocks.signOut).toHaveBeenCalledTimes(2);
+});
+
+it('stops on the same error when a finishing step never answers', async () => {
+  vi.useFakeTimers();
+  try {
+    mocks.signOut.mockImplementationOnce(() => new Promise(() => {}));
+    readyStep({
+      computer: { ...ready, setupCompletedAt: undefined },
+      choice: 'macro_credits',
+    });
+
+    await vi.advanceTimersByTimeAsync(20_000);
+    expect(
+      screen.getByText("Couldn't finish setting up Maya's Agent")
+    ).toBeTruthy();
+    expect(mocks.completeSetup).not.toHaveBeenCalled();
+  } finally {
+    vi.useRealTimers();
+  }
 });
 
 it('drops the shared sign-in note from Bring your AI once setup has failed', () => {

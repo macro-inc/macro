@@ -202,6 +202,7 @@ export function MediaViewerDialog(props: MediaViewerDialogProps) {
               <Lightbox
                 src={() => item().fullSrc}
                 imageId={() => item().id}
+                getBlob={item().getBlob}
                 onPrevious={hasPrevious() ? navigatePrevious : undefined}
                 onNext={hasNext() ? navigateNext : undefined}
                 navigationHidden={!hasMultipleItems()}
