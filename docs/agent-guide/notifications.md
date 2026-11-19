@@ -29,8 +29,8 @@ Unread numbers are off by default in every environment. Set
 alongside the unified inbox. Each number is what its own view shows as unread
 (`apps/web/src/components/app/view-unread.ts`), never a count of another view's rows:
 Notifications counts the inbox's unread rows; Mail counts the Important tab's
-unread threads across every inbox, by that tab's query, and shows nothing while
-**New email** notifications are off; Channels counts conversations with an unseen
+unread threads across every inbox, by that tab's query, and runs it only once
+**New email** notifications are known to be on; Channels counts conversations with an unseen
 top-level message, as Chat's unread dots and section headings do (a
 conversation with only a thread mention has a mention pill but no dot, and no
 count). Mail's notification rows exist only

@@ -51,14 +51,15 @@ export type ViewUnreadOptions = {
  * or without `exact`, at least one while any is unread.
  *
  * Zero while "New email" notifications are off: the viewer asked not to be
- * told about new mail, so Mail shows no badge at all.
+ * told about new mail, so Mail shows no badge and reads nothing for one.
  */
 export function createMailUnread(options: ViewUnreadOptions): Accessor<number> {
   const preferencesQuery = useNotificationTypePreferencesQuery();
   const newEmailOff = () =>
     queryReadyGate(preferencesQuery) &&
     preferencesQuery.data.disabled_types.includes('new_email');
-  // Known to be on: a page is read for the number only then.
+  // Known to be on: Mail's unread is read only then, so a viewer who turned
+  // the badge off never runs the query, nor anyone before the setting loads.
   const newEmailOn = () =>
     queryReadyGate(preferencesQuery) &&
     !preferencesQuery.data.disabled_types.includes('new_email');
@@ -71,6 +72,7 @@ export function createMailUnread(options: ViewUnreadOptions): Accessor<number> {
         facetContext: EMPTY_TAG_FACET_CONTEXT,
       }),
     () => ({
+      enabled: newEmailOn(),
       meta: { insertFilter: signalInsertFilter },
     })
   );

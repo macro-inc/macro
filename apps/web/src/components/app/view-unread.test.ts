@@ -299,6 +299,21 @@ describe('createMailUnread', () => {
     setDisabledTypes(['task_assigned']);
     expect(count()).toBe(1);
   });
+
+  it('runs the query only once New email notifications are known to be on', () => {
+    const { setDisabledTypes, setPreferencesPending } = mail({
+      emails: [],
+      preferencesPending: true,
+    });
+    const enabled = () => mocks.email.mock.calls[0][1]().enabled;
+    expect(enabled()).toBe(false);
+
+    setPreferencesPending(false);
+    expect(enabled()).toBe(true);
+
+    setDisabledTypes(['new_email']);
+    expect(enabled()).toBe(false);
+  });
 });
 
 describe('createChannelsUnread', () => {
