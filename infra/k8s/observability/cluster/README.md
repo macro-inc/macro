@@ -346,7 +346,9 @@ release() {
    argocd app get argocd/loki --hard-refresh >/dev/null; argocd app get argocd/tempo --hard-refresh >/dev/null
    argocd app sync argocd/loki argocd/tempo --revision "$merge"
    argocd app wait argocd/loki argocd/tempo --operation --health --timeout 1800
-   for app in loki tempo; do argocd app get argocd/$app -o json | jq -r '.metadata.name + " " + .status.sync.revision'; done   # both $merge
+   for app in loki tempo; do argocd app get argocd/$app -o json |
+     jq -r '[.metadata.name, .status.operationState.phase, .status.operationState.syncResult.revision] | join(" ")'; done
+   # both: Succeeded $merge. Anything else, or a bucket below that isn't the host's: stop.
    kubectl --context observability -n observability get configmap loki -o yaml | grep bucketnames
    kubectl --context observability -n observability get configmap tempo-config -o yaml | grep 'bucket:'
    for w in statefulset/loki statefulset/tempo-ingester statefulset/tempo-metrics-generator \
@@ -416,9 +418,14 @@ The cluster's Loki and Tempo leave the host's buckets before the host's run
 again, every time:
 
 1. Revert *Cluster, buckets*, and *Cluster, notify* if merged, in one change.
-   Sync `grafana` first, so this Grafana stops notifying before the host's
-   starts, then `loki` and `tempo` at the revert's commit, and wait and check
-   as in step 4: the buckets are `macro-observability-k8s-loki` and
+   If step 9 turned auto-sync on, first set `macro.cluster.autoSync = false`
+   in that change and let `apps` apply it (a pinned `--revision` sync is
+   refused while auto-sync is on). Sync `grafana` at the revert's commit and
+   wait for it to finish rolling (`argocd app wait argocd/grafana --operation
+   --health`, then `kubectl --context observability -n observability rollout
+   status deployment/grafana`), so no Grafana pod that notifies is left before
+   the host's starts. Then sync `loki` and `tempo` at the same commit and wait
+   and check as in step 4: the buckets are `macro-observability-k8s-loki` and
    `macro-observability-k8s-tempo` again. Then check no pod of the old revision
    is left: `kubectl --context observability -n observability get pods
    -l 'app.kubernetes.io/name in (loki,tempo)'` shows only pods younger than
