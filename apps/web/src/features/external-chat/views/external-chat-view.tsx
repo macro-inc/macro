@@ -24,6 +24,11 @@ import { isTouchDevice } from '@core/mobile/isTouchDevice';
 import { getDisplayName, tryMacroId } from '@core/user';
 import type { IUser } from '@core/user/types';
 import { fireAndForget } from '@core/util/fireAndForget';
+import {
+  captureFirstVisibleScrollAnchor,
+  restoreScrollAnchor,
+  type ScrollAnchor,
+} from '@core/util/scrollAnchor';
 import ShareFatIcon from '@phosphor/share-fat.svg';
 import { Button, ConfirmDialog } from '@ui';
 import {
@@ -148,10 +153,6 @@ export function ExternalChatView(props: {
   let scroller: HTMLDivElement | undefined;
   let alive = true;
   let newest: string | undefined;
-  let oldest: string | undefined;
-  // Distance from the bottom at the last scroll, to hold the view in place
-  // when imported history lands above it.
-  let fromBottom = 0;
   // The reader is at the bottom and stays there as rows and media grow.
   // Only the reader's own scrolling changes it: layout (media loading,
   // shrinking, clamping) fires scroll events that say nothing about intent.
@@ -163,23 +164,32 @@ export function ExternalChatView(props: {
   onCleanup(() => {
     alive = false;
   });
+  // The message a reader scrolled up to, and where it sat, taken as they
+  // scroll. Rows landing or growing above it (an earlier page, imported
+  // history, media loading) would push it down: the scroller turns the
+  // browser's scroll anchoring off so following the bottom works alike in
+  // every engine, and WebKit has none, so the view holds the message itself.
+  let reading: ScrollAnchor | undefined;
+  const captureReading = () => {
+    if (!scroller) return;
+    reading = captureFirstVisibleScrollAnchor(
+      scroller,
+      scroller.querySelectorAll('[data-message-id]')
+    );
+  };
   // Media WhatsApp sent no size for grows after it loads; a reader who was
   // at the bottom stays there whenever the timeline's content changes size,
   // or its viewport does (on touch the scroller pads the floating composer,
-  // which grows with the draft).
-  const grown = new ResizeObserver((entries) => {
+  // which grows with the draft). A reader scrolled up keeps the message they
+  // were reading where it was. Observers run after layout and before paint,
+  // so neither shows a jump.
+  const grown = new ResizeObserver(() => {
     if (!alive || !scroller) return;
     if (following) {
       scroller.scrollTop = scroller.scrollHeight;
       return;
     }
-    // A reader scrolled up stays put, but history landing above later keeps
-    // their distance from the bottom, which a viewport change moves without
-    // a scroll event. Rows growing above are not counted: they are what that
-    // distance holds the view through.
-    if (entries.some((entry) => entry.target === scroller))
-      fromBottom =
-        scroller.scrollHeight - scroller.scrollTop - scroller.clientHeight;
+    if (reading) restoreScrollAnchor(scroller, reading);
   });
   onCleanup(() => grown.disconnect());
   const [scrollerElement, setScrollerElement] = createSignal<HTMLDivElement>();
@@ -297,14 +307,6 @@ export function ExternalChatView(props: {
       markRead();
     });
   });
-  createEffect(() => {
-    const first = rows()[0]?.id;
-    const grewAbove = !!oldest && !!first && first !== oldest;
-    oldest = first;
-    if (!grewAbove || !scroller || following) return;
-    scroller.scrollTop =
-      scroller.scrollHeight - scroller.clientHeight - fromBottom;
-  });
   const importing = () =>
     backfillStatus(
       source.chat.data?.backfill,
@@ -329,14 +331,10 @@ export function ExternalChatView(props: {
     source.hasOlder()
       ? undefined
       : source.chat.data && historyStartNote(source.chat.data);
-  const older = async () => {
+  const older = () => {
     following = false;
-    const height = scroller?.scrollHeight ?? 0;
-    const offset = scroller?.scrollTop ?? 0;
-    const loaded = await source.loadOlder();
-    if (alive && scroller)
-      scroller.scrollTop = offset + scroller.scrollHeight - height;
-    return loaded;
+    captureReading();
+    return source.loadOlder();
   };
   const openQuoted = async (id: string) => {
     const find = () =>
@@ -527,12 +525,13 @@ export function ExternalChatView(props: {
                       onPointerDown={intent}
                       onScroll={() => {
                         if (!scroller) return;
-                        fromBottom =
+                        const fromBottom =
                           scroller.scrollHeight -
                           scroller.scrollTop -
                           scroller.clientHeight;
                         if (Date.now() - intentAt < 1000)
                           following = fromBottom < 80;
+                        if (!following) captureReading();
                         if (fromBottom < 60) markRead();
                       }}
                     >
