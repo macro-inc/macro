@@ -1,5 +1,6 @@
 import { match, P } from 'ts-pattern';
 import type { createCallLifecycle } from './call-lifecycle';
+import { channelIdOfNativeCallKey } from './native-call-key';
 import type { NativeCallState } from './native-call-state';
 
 /** Reconcile native events, including a call restored while an old leave settles. */
@@ -9,7 +10,14 @@ export function bindNativeCallLifecycle(
 ) {
   let nativeSessionObserved = false;
   const sync = () => {
-    match(nativeCall.snapshot())
+    const snapshot = nativeCall.snapshot();
+    // The channel lifecycle owns channel calls only; a meeting's native call
+    // belongs to its meeting session.
+    const channelSnapshot =
+      snapshot && channelIdOfNativeCallKey(snapshot.channelId) !== null
+        ? snapshot
+        : null;
+    match(channelSnapshot)
       .with({ connectionState: 'connected' }, (snapshot) => {
         nativeSessionObserved = true;
         lifecycle.syncSession({
