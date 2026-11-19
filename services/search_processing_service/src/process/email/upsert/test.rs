@@ -1,4 +1,7 @@
-use models_email::service::{label::LabelInfo, message::ParsedSearchMessage};
+use models_email::service::{
+    label::{LabelInfo, system_labels},
+    message::ParsedSearchMessage,
+};
 
 use super::*;
 
@@ -23,14 +26,24 @@ fn message(label: Option<&str>, content: Option<&str>) -> ParsedSearchMessage {
             .unwrap_or_default(),
         body_parsed_linkless: content.map(str::to_string),
         internal_date_ts: None,
+        excluded_from_search: false,
+    }
+}
+
+/// A message its mailbox facts put in Trash or Junk or gone at the provider;
+/// an Outlook one has no label saying so.
+fn excluded(content: Option<&str>) -> ParsedSearchMessage {
+    ParsedSearchMessage {
+        excluded_from_search: true,
+        ..message(None, content)
     }
 }
 
 #[test]
 fn classifies_mixed_thread_messages() {
     let messages = [
-        message(Some(system_labels::SPAM), Some("spam")),
-        message(Some(system_labels::TRASH), None),
+        excluded(Some("trashed at Outlook")),
+        excluded(None),
         message(Some(system_labels::INBOX), None),
         message(Some(system_labels::INBOX), Some("ordinary")),
     ];

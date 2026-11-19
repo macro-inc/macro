@@ -1,6 +1,6 @@
 use anyhow::Context;
 use chrono::Utc;
-use models_email::service::{label::system_labels, message::ParsedSearchMessage};
+use models_email::service::message::ParsedSearchMessage;
 use models_properties::EntityType;
 use opensearch_client::{
     OpensearchClient, date_format::EpochMillis, upsert::email::UpsertEmailArgs,
@@ -25,9 +25,7 @@ enum ThreadMessageDisposition {
 }
 
 fn classify_thread_message(message: &ParsedSearchMessage) -> ThreadMessageDisposition {
-    if message.labels.iter().any(|label| {
-        label.provider_id == system_labels::SPAM || label.provider_id == system_labels::TRASH
-    }) {
+    if message.excluded_from_search {
         return ThreadMessageDisposition::Delete;
     }
 
@@ -90,9 +88,7 @@ async fn index_message(
     owner: &str,
 ) -> anyhow::Result<()> {
     // don't insert spam or trash messages
-    if message_info.labels.iter().any(|label| {
-        label.provider_id == system_labels::SPAM || label.provider_id == system_labels::TRASH
-    }) {
+    if message_info.excluded_from_search {
         return Ok(());
     }
 
