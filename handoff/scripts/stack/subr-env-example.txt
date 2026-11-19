@@ -1,0 +1,7 @@
+# Routine catalog proof stack: PostHog from a stand-in, Gmail from the emulator
+# (placeholder Google client), Cloudflare token blanked (Doppler has no account id).
+POSTHOG_API_KEY=<set locally>
+POSTHOG_HOST=<set locally>
+GOOGLE_CLIENT_ID=<set locally>
+GOOGLE_CLIENT_SECRET_KEY=<set locally>
+CLOUDFLARE_API_TOKEN=

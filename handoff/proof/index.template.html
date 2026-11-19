@@ -1,0 +1,187 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<meta name="claude:viewport-fit-sides" content="cover">
+<title>Sub-routine Copies</title>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=IBM+Plex+Sans:wght@400;500;600&family=IBM+Plex+Mono:wght@400;500&display=swap">
+<style>
+/* One reading column for a phone; wide tables and code scroll inside their own box. */
+:root{
+  --bg:#f7f8f6; --fg:#1d221f; --muted:#5d665f; --line:#d9ddd8; --card:#ffffff;
+  --good:#2f7d5b; --warn:#a8741a; --bad:#b4483c; --accent:#3d6fb0;
+  --sans:"IBM Plex Sans",system-ui,-apple-system,"Segoe UI",sans-serif;
+  --mono:"IBM Plex Mono",ui-monospace,SFMono-Regular,Menlo,monospace;
+}
+@media (prefers-color-scheme: dark){:root:not([data-theme="light"]){
+  --bg:#141816; --fg:#e4e8e5; --muted:#9aa49d; --line:#2e3531; --card:#1b201d;
+  --good:#5cbf91; --warn:#e0ad4c; --bad:#e2766a; --accent:#7fa7e0; color-scheme:dark}}
+:root[data-theme="dark"]{
+  --bg:#141816; --fg:#e4e8e5; --muted:#9aa49d; --line:#2e3531; --card:#1b201d;
+  --good:#5cbf91; --warn:#e0ad4c; --bad:#e2766a; --accent:#7fa7e0; color-scheme:dark}
+*{box-sizing:border-box}
+body{margin:0;background:var(--bg);color:var(--fg);font:16px/1.6 var(--sans);
+  padding-left:max(16px,env(safe-area-inset-left,0px));padding-right:max(16px,env(safe-area-inset-right,0px));padding-block:24px 48px}
+main{max-width:760px;margin:0 auto;display:flex;flex-direction:column;gap:18px}
+h1{font-size:1.6rem;line-height:1.25;margin:0;text-wrap:balance}
+h2{font-size:1.2rem;margin:14px 0 0;text-wrap:balance}
+h3{font-size:1rem;margin:4px 0 0}
+p,ul,ol{margin:0}
+ul,ol{padding-left:1.2em;display:flex;flex-direction:column;gap:4px}
+a{color:var(--accent)}
+.meta{color:var(--muted);font-size:.9rem}
+.lead{font-size:1.05rem}
+.scroll{overflow-x:auto;border:1px solid var(--line);border-radius:6px;background:var(--card)}
+table{border-collapse:collapse;width:100%;font-size:.86rem;font-variant-numeric:tabular-nums}
+th,td{padding:6px 10px;border-bottom:1px solid var(--line);text-align:left;vertical-align:top}
+th{font-weight:600;color:var(--muted);font-size:.76rem;text-transform:uppercase;letter-spacing:.04em;white-space:nowrap}
+td.n{text-align:right;white-space:nowrap;font-family:var(--mono);font-size:.82rem}
+tr:last-child td{border-bottom:0}
+code{font-family:var(--mono);font-size:.85em;overflow-wrap:anywhere}
+pre{margin:0;padding:10px 12px;font:12.5px/1.5 var(--mono);white-space:pre;overflow-x:auto}
+pre.wrap{white-space:pre-wrap;word-break:break-word}
+.good{color:var(--good)} .warn{color:var(--warn)} .bad{color:var(--bad)}
+.tag{display:inline-block;font-size:.72rem;font-weight:600;padding:0 6px;border-radius:3px;white-space:nowrap;letter-spacing:.02em;border:1px solid currentColor}
+.pair{display:grid;grid-template-columns:repeat(auto-fit,minmax(300px,1fr));gap:12px}
+.pair.phone{grid-template-columns:repeat(auto-fit,minmax(200px,1fr))}
+figure{margin:0;min-width:0;display:flex;flex-direction:column;gap:6px}
+figure img,figure video{width:100%;height:auto;border:1px solid var(--line);border-radius:6px;background:#000}
+figcaption{font-size:.86rem;color:var(--muted)}
+.box{border:1px solid var(--line);border-radius:6px;padding:10px 12px;background:var(--card);min-width:0}
+.flow{display:flex;flex-direction:column;gap:6px;min-width:0}
+.flow .step{border:1px solid var(--line);border-radius:6px;padding:8px 12px;background:var(--card)}
+.flow .arrow{color:var(--muted);text-align:center;line-height:1}
+.flow .step b{display:block}
+.flow .step span{font-size:.88rem;color:var(--muted)}
+.flow .step.bad{border-color:var(--bad)} .flow .step.good{border-color:var(--good)}
+.flow .step.bad b,.flow .step.good b{color:var(--fg)}
+.stats{display:grid;grid-template-columns:repeat(auto-fit,minmax(160px,1fr));gap:10px}
+.stats>div{border:1px solid var(--line);border-radius:6px;padding:8px 12px;background:var(--card);min-width:0}
+.stats b{font-family:var(--mono);font-size:1.25rem;display:block}
+.stats span{font-size:.84rem;color:var(--muted)}
+details>summary{cursor:pointer;color:var(--accent)}
+details[open]>summary{margin-bottom:8px}
+</style>
+</head>
+<body>
+<main>
+
+<header style="display:flex;flex-direction:column;gap:6px">
+<h1>Routines: define the follow-up once, schedule copies with their own triggers</h1>
+<p class="meta">Three stacked PRs ⟨PRS⟩ · heads ⟨HEADS⟩ · base main <code>4a9b72f7282</code> · 2026-11-19</p>
+</header>
+
+<p class="lead">The case you asked for: a routine that sets up the same follow-up for every item it handles (a reminder for each notification, a check-in on each task that moves to review), where the follow-ups are identical and only their trigger and their item differ. A routine can now <b>define</b> that follow-up once, as a sub-routine with named inputs. Each run <b>schedules copies</b> of it from code: <code>macro.routines.schedule('review_check_in', { trigger: { type: 'once', at }, inputs: { taskId }, key })</code>. A copy stores only <code>{ sub_routine, inputs }</code> and reads the steps from its parent when it runs, so editing the definition changes every copy that hasn't run. The drafter writes routines this way, and the editor shows and edits the definition and its copies.</p>
+
+<div class="stats">
+⟨STATS⟩
+</div>
+
+<h2>1. The pull requests, in merge order</h2>
+<div class="scroll"><table>
+<thead><tr><th>#</th><th>PR</th><th>Base</th><th>Head</th><th>CI gate</th></tr></thead>
+<tbody>
+⟨PRROWS⟩
+</tbody></table></div>
+<p>PR #11357, the earlier attempt (the drafter's code step wrote a whole routine per task, with its own copy of the steps), was closed as superseded. Its two eval cases and their run check are in the drafter PR above; nothing in this stack builds on its branch, which is untouched.</p>
+
+<h2>2. Before and after, on the local stack</h2>
+<p>The request typed into <b>New routine → Draft it</b>, as in the eval case <code>review-check-later</code>: <i>“Whenever a task in the Website Redesign project moves to In review, check on it three days later and tell me if it is still in review.”</i> The item comes with the event, so the parent finds it today (unlike due-date reminders, section 8). Each clip: draft, review in the editor, save, move the task to In Review on its own page, the run it fires, and what that run scheduled. On the branch the clip then opens the scheduled copy, edits the definition on the parent, shows the edit on the copy (which hasn't run), and runs the copy by hand, whose reply carries the edit.</p>
+⟨VIDEOS⟩
+
+<h2>3. What is stored</h2>
+⟨ROWS⟩
+
+<h2>4. How it works</h2>
+<div class="pair">
+<div class="flow">
+<div class="step bad"><b>Before (main)</b><span>No way to define the follow-up once.</span></div>
+<div class="arrow">↓</div>
+<div class="step"><b>Each run writes a whole routine per item</b><span>Its own copy of the steps, written and type-checked inside the run, or the work handed to an Ask AI step that works it out again every time.</span></div>
+<div class="arrow">↓</div>
+<div class="step"><b>Changing the follow-up</b><span>means changing every pending routine, one by one.</span></div>
+</div>
+<div class="flow">
+<div class="step good"><b>After</b><span>The parent's task holds <code>sub_routines: [{ name, title, inputs, steps }]</code>, checked when the routine is saved.</span></div>
+<div class="arrow">↓</div>
+<div class="step"><b>A run schedules copies</b><span><code>macro.routines.schedule(name, { trigger, inputs, key })</code>, type-checked against the definition's name and inputs. The scheduler checks them again, the rollout flag, the 50-copy cap and the key.</span></div>
+<div class="arrow">↓</div>
+<div class="step"><b>A copy is a routine row</b><span>its own trigger, enabled state and history; task <code>{ sub_routine, inputs }</code>, linked to the parent.</span></div>
+<div class="arrow">↓</div>
+<div class="step"><b>When the copy runs</b><span>the scheduler reads the parent and runs <code>parent.copy_program(copy)</code>: the definition's steps as they are now, with the copy's inputs.</span></div>
+</div>
+</div>
+<pre class="box">// crates/routine_program/src/sub_routine.rs
+pub fn copy_program(&amp;self, copy: &amp;SubRoutineCopy) -&gt; Result&lt;RoutineProgram, CopyError&gt; {
+    let definition = self
+        .sub_routine(&amp;copy.sub_routine)
+        .ok_or_else(|| CopyError::UnknownSubRoutine(copy.sub_routine.clone()))?;
+    Ok(RoutineProgram {
+        steps: definition.steps.clone(),
+        mcp_servers: definition.mcp_servers.clone(),
+        single_agent_task: false,
+        sdk: self.sdk.clone(),
+        dangerously_operate_as_user: false,   // a copy never writes as its owner
+        inputs: definition.given(&amp;copy.inputs)?,
+        sub_routines: self.sub_routines.clone(),
+    })
+}</pre>
+<p><b>Keep as my routine</b> on a copy makes it standalone: one write copies the definition's steps, apps and the copy's input values out of the parent (with the parent's definitions, so its own code still type-checks), and from then on parent edits no longer reach it. A copy's page shows the parent's definition read-only, with a link to edit it there.</p>
+
+<h2>5. What each PR changes</h2>
+<details open><summary><b>Scheduler</b>: definitions, copies, run-time resolution</summary>
+<ul>
+<li><code>routine_program</code>: <code>SubRoutineDefinition</code> (name, title, typed inputs without values, steps, apps), program-level <code>inputs</code>, <code>SubRoutineCopy</code> and <code>copy_program</code>. At most 5 definitions and 12 inputs; the code-step budget of 40 counts definitions' code steps.</li>
+<li>Type checking: in a routine with definitions, <code>macro.routines.schedule</code> takes each definition's name with that definition's inputs (one overload per name), and each definition's code gets a typed <code>inputs</code>. A wrong name or input fails the save, not a run. Outside such a routine the name type is <code>never</code>, so nothing can call it; a routine without definitions gets main's check file byte for byte.</li>
+<li><code>POST /scheduled-actions/schedule</code> (from a running step only): the run's parent, the name and inputs again (TypeScript lets extra fields through a variable), the owner's <code>enable-sub-routines</code> flag, the 50-active cap shared with other sub-routines, a <code>key</code> that updates the item's pending copy instead of adding one. 404 for a parent deleted mid-run, 409 for the cap or a key held by something else, 413 for an oversized body.</li>
+<li>Runs: a copy's run reads its parent and runs its definition; a missing definition or incompatible inputs fail that run with the reason. The new unique partial index <code>scheduled_action_child_ref_idx</code> serves keyed lookups.</li>
+<li>Detach (<b>Keep as my routine</b>), code upgrade of definitions' code, rewritten-code inheritance on detach, and the two-step deploy (section 6).</li>
+</ul>
+</details>
+<details><summary><b>Drafter and SDK</b>: draft later work per item as a definition</summary>
+<ul>
+<li><code>finding/later.md</code>: a new routine that may have code, whose owner has the flag, is told to define per-item later work once in <code>subRoutines</code> and schedule one keyed <code>once</code> copy per item from a code step, with the rules the scheduler and the check hold a copy to. Work that repeats until something happens stays one routine on its schedule.</li>
+<li>The draft hands the definitions back (<code>DraftedRoutine::sub_routines</code>), and a code problem inside one names it. A draft whose definitions differ from what the brief allowed or what was checked fails rather than handing back something the editor can't save.</li>
+<li>SDK: routine options take <code>subRoutines</code>; <code>macro.routines.schedule</code>; README and the composing skill. The eval gains <code>due-soon-reminders</code> and <code>review-check-later</code>, whose run check saves the draft, fires it, reads the copies it made, checks each copy's input, key and time, runs each copy by hand and checks its reply names its task.</li>
+</ul>
+</details>
+<details><summary><b>Web editor</b>: show and edit definitions and copies</summary>
+<ul>
+<li>The editor keeps definitions and input values on every save path (drafts, create, update, autosave), shows drafted definitions under <b>Sub-routines</b> for review, places each code problem on its definition's step, and edits a definition's steps with the routine.</li>
+<li>A copy's page resolves its definition from the parent and shows it read-only, with the copy's input values: <i>“Runs ‘Check in on the task’ from Check in-review tasks. Each run uses the current definition.”</i> A missing definition or incompatible inputs hide <b>Run now</b>.</li>
+<li><b>Keep as my routine</b> and <b>Duplicate</b> with their eligibility checks (named definition, matching inputs, no active run, connected apps), run start and stop notifications kept in the row caches, approval of rewritten definition code, and <b>Delete</b> naming the copies it removes.</li>
+</ul>
+</details>
+
+<h2>6. Deploy in two steps</h2>
+<ol>
+<li><b>Migrations, then both services with the flag off.</b> <code>20261119035624</code> creates an empty table; <code>20261119035625</code> builds <code>scheduled_action_child_ref_idx</code> concurrently and must be valid before the new build serves. Deploy agent_harness_service and document_storage_service. With the flag off nothing writes a definition, inputs or a copy, so rolling back past this is safe for stored tasks. Stored code is rechecked as after any SDK release; code that branches two ways on another routine's task (<code>'steps' in task ? … : task.prompt</code>) stops type-checking, because a copy's task has neither (option 1 of the open question in section 10).</li>
+<li><b>Turn <code>enable-sub-routines</code> on for a cohort, then widen it</b>, after the editor PR has shipped. From the first such write, roll back no further than this change. To back out, turn the flag off: runs stop scheduling copies; existing copies keep running from their parents.</li>
+</ol>
+
+<h2>7. Drafting eval, main against the branch</h2>
+⟨EVAL⟩
+
+<h2>8. The gap: due-date reminders</h2>
+<p>The other new eval case, <i>“every morning, for each of my open tasks due in the next seven days, remind me at 9am the day before”</i>, drafts correctly on the branch (every draft defines the reminder and schedules it from code) but fails when it runs: routine code has no way to list the owner's open tasks by due date. Drafted code tried <code>search.unifiedSearch</code> with an empty query (400), entity type <code>document</code> where the API takes <code>DOCUMENT</code> (422), or found nothing. A <code>macro.tasks.list</code> by due date was built on its own branch and is held: a bounded, index-backed query for it needs a maintained projection table over Soup's task properties (Assignee, Status and Due Date are separate <code>entity_properties</code> rows, and access lives in <code>entity_access</code>), which is a rewrite of the task read path, not an index. That is your decision; the drafter PR says due-date reminders fail at run time until it is made.</p>
+
+<h2>9. Tests</h2>
+⟨TESTS⟩
+
+<h2>10. Choices, and what changing each would take</h2>
+<ul>
+<li><b>Copies reference the definition (your choice).</b> A copy stores the definition's name and its inputs and reads the steps at run time, so one edit reaches every pending copy. The cost: a copy can't run without its parent (deleting the parent deletes its copies, and a missing definition fails the run with the reason), and a copy's page needs the parent's read. Snapshots per copy, the old way, would undo both and lose the edit.</li>
+<li><b>A copy's task in the SDK is <code>{ sub_routine, inputs }</code></b> (open question: <i>copy read shape</i>, option 1, until you decide). Stored code that reads another routine's task and branches two ways stops type-checking after the deploy; the code upgrade rewrites it, or pauses a routine that writes as its owner, with the reason. Option 2, the API returning a copy's task as a program with the parent's steps resolved, keeps such code checking: a change to the scheduler's read shape and the editor, about a day. Option 3, saved code keeping the SDK it was checked with, is the general fix for every SDK widening and its own project.</li>
+<li><b>One-time copies, keyed per item.</b> A one-time copy stops counting toward the cap of 50 once it fires; a keyed reschedule updates the pending copy instead of adding one. Recurring copies would need the cap to count a switched-off or finished one as done.</li>
+<li><b>The flag gates every write of the new shapes</b>, so the deploy can roll back until the flag goes on; the drafter reads it once per draft that may have code.</li>
+<li><b>No definition review at draft time beyond showing it.</b> The editor shows the definitions and their code; a dry run that shows the copies a first run would make would need the harness to record <code>schedule</code> calls without making them.</li>
+<li><b>Narrow drafter change.</b> One guide file and the hand-back checks; sibling work on the drafter (icons, connectors) touches the same prompts.</li>
+</ul>
+
+<h2 id="not-proven">11. Not proven, and risks</h2>
+⟨NOTPROVEN⟩
+
+</main>
+</body>
+</html>

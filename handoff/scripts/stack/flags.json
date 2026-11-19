@@ -1,0 +1,29 @@
+{
+  "flags": {
+    "enable-event-routines": {
+      "key": "enable-event-routines",
+      "enabled": true
+    },
+    "enable-routine-code-steps": {
+      "key": "enable-routine-code-steps",
+      "enabled": true
+    },
+    "enable-routine-background-drafts": {
+      "key": "enable-routine-background-drafts",
+      "enabled": true
+    },
+    "enable-routine-suggestions": {
+      "key": "enable-routine-suggestions",
+      "enabled": true
+    },
+    "enable-routine-starter-templates": {
+      "key": "enable-routine-starter-templates",
+      "enabled": true
+    },
+    "enable-sub-routines": {
+      "key": "enable-sub-routines",
+      "enabled": true
+    }
+  },
+  "errorsWhileComputingFlags": false
+}

@@ -1,0 +1,4 @@
+services:
+  document_storage_service:
+    environment:
+      RUST_MIN_STACK: '8388608'

@@ -1,0 +1,89 @@
+{
+  "says": "a run schedules a one-time copy of the reminder, given the task's id, keyed by it and ending in an Ask AI step, at 9:00:00 the day before each open task of the owner's due in the coming week, and each copy, run at once, names its task in its Ask AI reply",
+  "fired": "execute",
+  "holds": false,
+  "ms": 2058.7230449999915,
+  "timedOut": false,
+  "effects": {
+    "runs": [
+      {
+        "isSuccess": true,
+        "result": {
+          "run": {
+            "at": "2026-11-19T13:50:14.719541457Z",
+            "timezone": "America/New_York",
+            "started_by": {
+              "by": "macro|<seeded eval user>",
+              "kind": "manual"
+            },
+            "code_acts_as": "agent"
+          },
+          "error": null,
+          "steps": [
+            {
+              "kind": "code",
+              "path": "0",
+              "calls": [
+                {
+                  "label": "Browse workspace",
+                  "status": "completed",
+                  "operation": "storage.postItemsSoupAst",
+                  "started_ms": 113,
+                  "duration_ms": 52
+                },
+                {
+                  "label": "Browse workspace",
+                  "status": "completed",
+                  "operation": "storage.postItemsSoupAst",
+                  "started_ms": 168,
+                  "duration_ms": 39
+                },
+                {
+                  "label": "Browse workspace",
+                  "status": "completed",
+                  "operation": "storage.postItemsSoupAst",
+                  "started_ms": 207,
+                  "duration_ms": 41
+                },
+                {
+                  "label": "Browse workspace",
+                  "status": "completed",
+                  "operation": "storage.postItemsSoupAst",
+                  "started_ms": 248,
+                  "duration_ms": 42
+                },
+                {
+                  "label": "Browse workspace",
+                  "status": "completed",
+                  "operation": "storage.postItemsSoupAst",
+                  "started_ms": 291,
+                  "duration_ms": 38
+                },
+                {
+                  "label": "Get Bulk Entity Properties",
+                  "status": "completed",
+                  "operation": "properties.getBulkEntityProperties",
+                  "started_ms": 329,
+                  "duration_ms": 8
+                }
+              ],
+              "output": {
+                "scheduled": 0
+              }
+            }
+          ],
+          "version": 1,
+          "resource": null,
+          "configuration_revision": 1
+        }
+      }
+    ],
+    "messages": [],
+    "tasks": [],
+    "notifications": [
+      "{\"outcome\":\"succeeded\",\"routineId\":\"01a1f412-7ca3-7459-8a60-f0a6bf393ab0\",\"routineName\":\"Remind me the day before tasks are due\"}"
+    ],
+    "copies": [],
+    "firedAt": "2026-11-19T13:50:14.704Z"
+  }
+}

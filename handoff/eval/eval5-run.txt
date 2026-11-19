@@ -1,0 +1,260 @@
+== bins 02c7774a787 13:36:23
+build=0
+total 3053132
+drwxrwxr-x  2 teo teo       4096 Nov 19 13:38 .
+drwxrwxr-x 20 teo teo       4096 Nov 19 13:38 ..
+-rwxr-xr-x  1 teo teo 1413069328 Nov 19 13:38 agent_harness_service
+-rwxr-xr-x  1 teo teo 1713327768 Nov 19 13:38 document_storage_service
+dss=healthy
+== eval 13:38:29
+branch head 02c7774a787, main bin ~/.cache/routines-draft-subroutines/bin/main-be50abb4dc1, branch bin ~/.cache/routines-draft-subroutines/bin/pr2-02c7774a787
+== new 13:38:29
+round 1: main (~/.cache/routines-draft-subroutines/bin/main-be50abb4dc1)
+ Container macro-subr-agent_harness_service-1 Recreate 
+ Container macro-subr-agent_harness_service-1 Recreated 
+ Container macro-subr-agent_harness_service-1 Starting 
+ Container macro-subr-agent_harness_service-1 Started 
+due-soon-reminders draft #1  9.2s  routine  model 8.3s/3  tools 1  checks 3/4  run FAIL  judge 4  fail  load 24
+review-check-later draft #1  11.2s  routine  model 9.9s/3  tools 1  checks 5/6  run FAIL  judge 5  fail  load 35
+round 1: branch (~/.cache/routines-draft-subroutines/bin/pr2-02c7774a787)
+ Container macro-subr-agent_harness_service-1 Recreate 
+ Container macro-subr-agent_harness_service-1 Recreated 
+ Container macro-subr-agent_harness_service-1 Starting 
+ Container macro-subr-agent_harness_service-1 Started 
+due-soon-reminders draft #1  21.4s  routine  model 19.7s/6  tools 4  checks 4/4  run FAIL  judge 3  fail  load 25
+review-check-later draft #1  11.0s  routine  model 9.8s/3  tools 1  checks 6/6  run ok  judge 5  PASS  load 24
+round 2: branch (~/.cache/routines-draft-subroutines/bin/pr2-02c7774a787)
+ Container macro-subr-agent_harness_service-1 Recreate 
+ Container macro-subr-agent_harness_service-1 Recreated 
+ Container macro-subr-agent_harness_service-1 Starting 
+ Container macro-subr-agent_harness_service-1 Started 
+due-soon-reminders draft #2  26.7s  routine  model 24.2s/7  tools 5  checks 4/4  run FAIL  judge 3  fail  load 29
+review-check-later draft #2  9.5s  routine  model 8.4s/3  tools 1  checks 6/6  run ok  judge 4  PASS  load 30
+round 2: main (~/.cache/routines-draft-subroutines/bin/main-be50abb4dc1)
+ Container macro-subr-agent_harness_service-1 Recreate 
+ Container macro-subr-agent_harness_service-1 Recreated 
+ Container macro-subr-agent_harness_service-1 Starting 
+ Container macro-subr-agent_harness_service-1 Started 
+due-soon-reminders draft #2  8.7s  routine  model 8.0s/3  tools 1  checks 3/4  run FAIL  judge 5  fail  load 27
+review-check-later draft #2  10.1s  routine  model 8.7s/3  tools 1  checks 5/6  run FAIL  judge 5  fail  load 28
+round 3: main (~/.cache/routines-draft-subroutines/bin/main-be50abb4dc1)
+ Container macro-subr-agent_harness_service-1 Recreate 
+ Container macro-subr-agent_harness_service-1 Recreated 
+ Container macro-subr-agent_harness_service-1 Starting 
+ Container macro-subr-agent_harness_service-1 Started 
+due-soon-reminders draft #3  6.9s  routine  model 6.3s/3  tools 1  checks 3/4  run FAIL  judge 4  fail  load 25
+review-check-later draft #3  9.8s  routine  model 8.8s/3  tools 1  checks 5/6  run FAIL  judge 3  fail  load 45
+round 3: branch (~/.cache/routines-draft-subroutines/bin/pr2-02c7774a787)
+ Container macro-subr-agent_harness_service-1 Recreate 
+ Container macro-subr-agent_harness_service-1 Recreated 
+ Container macro-subr-agent_harness_service-1 Starting 
+ Container macro-subr-agent_harness_service-1 Started 
+due-soon-reminders draft #3  21.7s  routine  model 20.2s/6  tools 4  checks 4/4  run FAIL  judge 3  fail  load 31
+review-check-later draft #3  9.6s  routine  model 8.4s/3  tools 1  checks 6/6  run FAIL  judge 5  fail  load 28
+round 4: branch (~/.cache/routines-draft-subroutines/bin/pr2-02c7774a787)
+ Container macro-subr-agent_harness_service-1 Recreate 
+ Container macro-subr-agent_harness_service-1 Recreated 
+ Container macro-subr-agent_harness_service-1 Starting 
+ Container macro-subr-agent_harness_service-1 Started 
+due-soon-reminders draft #4  24.4s  routine  model 22.9s/8  tools 6  checks 4/4  run FAIL  judge 3  fail  load 25
+review-check-later draft #4  9.3s  routine  model 8.3s/3  tools 1  checks 6/6  run FAIL  judge 4  fail  load 23
+round 4: main (~/.cache/routines-draft-subroutines/bin/main-be50abb4dc1)
+ Container macro-subr-agent_harness_service-1 Recreate 
+ Container macro-subr-agent_harness_service-1 Recreated 
+ Container macro-subr-agent_harness_service-1 Starting 
+ Container macro-subr-agent_harness_service-1 Started 
+due-soon-reminders draft #4  8.2s  routine  model 7.7s/3  tools 1  checks 3/4  run FAIL  judge 5  fail  load 24
+review-check-later draft #4  10.0s  routine  model 9.0s/3  tools 1  checks 5/6  run FAIL  judge 5  fail  load 20
+ Container macro-subr-agent_harness_service-1 Recreate 
+ Container macro-subr-agent_harness_service-1 Recreated 
+ Container macro-subr-agent_harness_service-1 Starting 
+ Container macro-subr-agent_harness_service-1 Started 
+subr answers with ~/.cache/routines-draft-subroutines/bin/main-b52d52962ac again
+wrote ~/.cache/routines-draft-subroutines/eval5/new/main.draft.json and ~/.cache/routines-draft-subroutines/eval5/new/branch.draft.json
+== core 13:54:25
+round 1: main (~/.cache/routines-draft-subroutines/bin/main-be50abb4dc1)
+ Container macro-subr-agent_harness_service-1 Recreate 
+ Container macro-subr-agent_harness_service-1 Recreated 
+ Container macro-subr-agent_harness_service-1 Starting 
+ Container macro-subr-agent_harness_service-1 Started 
+eric-says-hello draft #1  8.9s  routine  model 7.5s/4  tools 2  checks 5/5  run ok  PASS  load 20
+due-today-digest draft #1  4.8s  routine  model 4.4s/3  tools 1  checks 3/4  run ok  fail  load 18
+channel-message-to-task draft #1  6.8s  routine  model 5.7s/3  tools 1  checks 5/5  run ok  PASS  load 20
+weekly-channel-recap draft #1  8.7s  routine  model 7.7s/3  tools 1  checks 6/6  run ok  PASS  load 20
+done-log-database draft #1  10.3s  routine  model 8.9s/4  tools 2  checks 4/4  run ok  PASS  load 22
+missing-channel-left-out draft #1  9.2s  routine  model 8.1s/3  tools 1  checks 5/5  PASS  load 21
+ask-ai-inbox-triage draft #1  4.3s  routine  model 3.9s/3  tools 1  checks 4/4  run ok  PASS  load 18
+add-step-post-urgent draft #1  8.9s  step  model 7.7s/2  tools 1  checks 4/4  PASS  load 18
+change-step-other-channel draft #1  17.8s  step  model 15.5s/7  tools 6  checks 5/5  PASS  load 19
+once-budget-reminder draft #1  4.1s  routine  model 3.7s/3  tools 1  checks 3/3  run ok  PASS  load 22
+invoice-mail-to-finance draft #1  6.9s  routine  model 5.7s/3  tools 1  checks 6/6  PASS  load 30
+review-status-to-channel draft #1  7.5s  routine  model 6.4s/3  tools 1  checks 7/7  run FAIL  fail  load 31
+two-jordans draft #1  7.6s  routine  model 6.8s/4  tools 2  checks 4/4  PASS  load 41
+vague-standup draft #1  3.8s  routine  model 3.4s/3  tools 1  checks 3/3  run ok  PASS  load 41
+vague-support-watch draft #1  4.9s  routine  model 4.5s/3  tools 1  checks 4/4  run ok  PASS  load 40
+launch-overdue-chase draft #1  7.0s  routine  model 6.6s/3  tools 1  checks 7/7  run ok  PASS  load 31
+weekly-metrics-ask-ai draft #1  4.3s  routine  model 3.9s/3  tools 1  checks 6/6  run ok  PASS  load 30
+hiring-task-to-database draft #1  10.0s  routine  model 8.7s/4  tools 2  checks 6/6  run ok  PASS  load 24
+add-step-ask-ai-review draft #1  8.4s  step  model 7.2s/2  tools 1  checks 4/4  PASS  load 24
+change-step-only-eric draft #1  10.8s  step  model 9.5s/4  tools 2  checks 5/6  fail  load 23
+round 1: branch (~/.cache/routines-draft-subroutines/bin/pr2-02c7774a787)
+ Container macro-subr-agent_harness_service-1 Recreate 
+ Container macro-subr-agent_harness_service-1 Recreated 
+ Container macro-subr-agent_harness_service-1 Starting 
+ Container macro-subr-agent_harness_service-1 Started 
+eric-says-hello draft #1  9.2s  routine  model 7.6s/4  tools 2  checks 5/5  run ok  PASS  load 27
+due-today-digest draft #1  5.4s  routine  model 4.9s/3  tools 1  checks 3/4  run ok  fail  load 28
+channel-message-to-task draft #1  13.0s  routine  model 11.0s/4  tools 2  checks 5/5  run ok  PASS  load 37
+weekly-channel-recap draft #1  9.2s  routine  model 7.9s/3  tools 1  checks 6/6  run ok  PASS  load 57
+done-log-database draft #1  8.6s  routine  model 7.4s/3  tools 1  checks 4/4  run ok  PASS  load 45
+missing-channel-left-out draft #1  7.0s  routine  model 6.6s/3  tools 1  checks 5/5  PASS  load 39
+ask-ai-inbox-triage draft #1  4.4s  routine  model 4.0s/3  tools 1  checks 4/4  run ok  PASS  load 34
+add-step-post-urgent draft #1  8.3s  step  model 7.1s/3  tools 1  checks 4/4  PASS  load 36
+change-step-other-channel draft #1  9.5s  step  model 8.2s/2  tools 1  checks 5/5  PASS  load 31
+once-budget-reminder draft #1  6.1s  routine  model 5.6s/3  tools 1  checks 3/3  run ok  PASS  load 27
+invoice-mail-to-finance draft #1  6.0s  routine  model 4.9s/3  tools 1  checks 6/6  PASS  load 27
+review-status-to-channel draft #1  9.4s  routine  model 8.3s/3  tools 1  checks 7/7  run ok  PASS  load 26
+two-jordans draft #1  8.9s  routine  model 8.2s/4  tools 2  checks 3/4  fail  load 24
+vague-standup draft #1  4.9s  routine  model 4.5s/3  tools 1  checks 3/3  run ok  PASS  load 27
+vague-support-watch draft #1  4.7s  routine  model 4.2s/3  tools 1  checks 4/4  run ok  PASS  load 36
+launch-overdue-chase draft #1  7.1s  routine  model 6.6s/3  tools 1  checks 7/7  run ok  PASS  load 35
+weekly-metrics-ask-ai draft #1  4.4s  routine  model 4.0s/3  tools 1  checks 6/6  run ok  PASS  load 29
+hiring-task-to-database draft #1  9.0s  routine  model 7.6s/4  tools 2  checks 6/6  run FAIL  fail  load 25
+add-step-ask-ai-review draft #1  8.9s  step  model 7.6s/2  tools 1  checks 4/4  PASS  load 39
+change-step-only-eric draft #1  11.9s  step  model 10.4s/3  tools 2  checks 5/6  fail  load 35
+round 2: branch (~/.cache/routines-draft-subroutines/bin/pr2-02c7774a787)
+ Container macro-subr-agent_harness_service-1 Recreate 
+ Container macro-subr-agent_harness_service-1 Recreated 
+ Container macro-subr-agent_harness_service-1 Starting 
+ Container macro-subr-agent_harness_service-1 Started 
+eric-says-hello draft #2  10.3s  routine  model 8.9s/4  tools 2  checks 4/5  run FAIL  fail  load 36
+due-today-digest draft #2  5.4s  routine  model 5.0s/3  tools 1  checks 3/4  run ok  fail  load 31
+channel-message-to-task draft #2  6.6s  routine  model 5.4s/3  tools 1  checks 5/5  run ok  PASS  load 29
+weekly-channel-recap draft #2  8.6s  routine  model 7.1s/3  tools 1  checks 6/6  run ok  PASS  load 34
+done-log-database draft #2  9.0s  routine  model 7.8s/3  tools 1  checks 4/4  run ok  PASS  load 38
+missing-channel-left-out draft #2  7.0s  routine  model 6.5s/3  tools 1  checks 5/5  PASS  load 41
+ask-ai-inbox-triage draft #2  4.7s  routine  model 4.2s/3  tools 1  checks 4/4  run ok  PASS  load 32
+add-step-post-urgent draft #2  9.6s  step  model 8.1s/3  tools 1  checks 4/4  PASS  load 29
+change-step-other-channel draft #2  17.5s  step  model 15.5s/7  tools 5  checks 5/5  PASS  load 45
+once-budget-reminder draft #2  4.7s  routine  model 4.2s/3  tools 1  checks 3/3  run ok  PASS  load 35
+invoice-mail-to-finance draft #2  6.0s  routine  model 5.0s/3  tools 1  checks 6/6  PASS  load 30
+review-status-to-channel draft #2  8.7s  routine  model 7.6s/3  tools 1  checks 7/7  run ok  PASS  load 28
+two-jordans draft #2  9.0s  routine  model 8.3s/4  tools 2  checks 4/4  PASS  load 32
+vague-standup draft #2  3.9s  routine  model 3.4s/3  tools 1  checks 3/3  run ok  PASS  load 33
+vague-support-watch draft #2  5.0s  routine  model 4.5s/3  tools 1  checks 4/4  run ok  PASS  load 32
+launch-overdue-chase draft #2  7.4s  routine  model 7.0s/3  tools 1  checks 7/7  run ok  PASS  load 30
+weekly-metrics-ask-ai draft #2  4.5s  routine  model 4.0s/3  tools 1  checks 6/6  run ok  PASS  load 29
+hiring-task-to-database draft #2  10.1s  routine  model 8.6s/4  tools 2  checks 6/6  run FAIL  fail  load 26
+add-step-ask-ai-review draft #2  8.9s  step  model 7.7s/2  tools 1  checks 4/4  PASS  load 30
+change-step-only-eric draft #2  11.1s  step  model 9.8s/3  tools 2  checks 5/6  fail  load 26
+round 2: main (~/.cache/routines-draft-subroutines/bin/main-be50abb4dc1)
+ Container macro-subr-agent_harness_service-1 Recreate 
+ Container macro-subr-agent_harness_service-1 Recreated 
+ Container macro-subr-agent_harness_service-1 Starting 
+ Container macro-subr-agent_harness_service-1 Started 
+eric-says-hello draft #2  10.5s  routine  model 9.0s/4  tools 2  checks 4/5  run FAIL  fail  load 24
+due-today-digest draft #2  5.7s  routine  model 5.2s/3  tools 1  checks 3/4  run ok  fail  load 22
+channel-message-to-task draft #2  7.0s  routine  model 5.9s/3  tools 1  checks 5/5  run ok  PASS  load 19
+weekly-channel-recap draft #2  9.4s  routine  model 8.1s/3  tools 1  checks 6/6  run ok  PASS  load 17
+done-log-database draft #2  7.8s  routine  model 6.6s/3  tools 1  checks 4/4  run ok  PASS  load 17
+missing-channel-left-out draft #2  10.7s  routine  model 9.4s/2  tools 1  checks 5/5  PASS  load 20
+ask-ai-inbox-triage draft #2  4.7s  routine  model 4.3s/3  tools 1  checks 4/4  run ok  PASS  load 19
+add-step-post-urgent draft #2  11.1s  step  model 9.7s/2  tools 1  checks 4/4  PASS  load 20
+change-step-other-channel draft #2  19.5s  step  model 17.3s/6  tools 5  checks 5/5  PASS  load 18
+once-budget-reminder draft #2  6.3s  routine  model 5.8s/3  tools 1  checks 3/3  run ok  PASS  load 18
+invoice-mail-to-finance draft #2  6.8s  routine  model 5.7s/2  tools 1  checks 6/6  PASS  load 24
+review-status-to-channel draft #2  7.7s  routine  model 6.6s/3  tools 1  checks 6/7  run FAIL  fail  load 25
+two-jordans draft #2  8.3s  routine  model 7.7s/4  tools 2  checks 4/4  PASS  load 23
+vague-standup draft #2  4.7s  routine  model 4.3s/3  tools 1  checks 3/3  run ok  PASS  load 23
+vague-support-watch draft #2  4.2s  routine  model 3.8s/3  tools 1  checks 4/4  run ok  PASS  load 20
+launch-overdue-chase draft #2  8.6s  routine  model 8.2s/3  tools 1  checks 7/7  run ok  PASS  load 20
+weekly-metrics-ask-ai draft #2  4.8s  routine  model 4.3s/3  tools 1  checks 6/6  run ok  PASS  load 24
+hiring-task-to-database draft #2  11.7s  routine  model 10.6s/3  tools 1  checks 6/6  run FAIL  fail  load 21
+add-step-ask-ai-review draft #2  8.4s  step  model 7.4s/3  tools 1  checks 4/4  PASS  load 21
+change-step-only-eric draft #2  13.0s  step  model 11.5s/3  tools 2  checks 5/6  fail  load 20
+ Container macro-subr-agent_harness_service-1 Recreate 
+ Container macro-subr-agent_harness_service-1 Recreated 
+ Container macro-subr-agent_harness_service-1 Starting 
+ Container macro-subr-agent_harness_service-1 Started 
+subr answers with ~/.cache/routines-draft-subroutines/bin/main-b52d52962ac again
+wrote ~/.cache/routines-draft-subroutines/eval5/core/main.draft.json and ~/.cache/routines-draft-subroutines/eval5/core/branch.draft.json
+== compare 14:41:02
+Seconds; quality is the share of drafts passing every mechanical and run check.
+
+| | n | errors | median | p90 | worst | < 15 s | quality | mechanical | run | judge (pass) | no draft | setup | model (calls) | first token | tool wait | hand-back | tokens in / out | load |
+| --- | --- | --- | --- | --- | --- | --- | --- | --- | --- | --- | --- | --- | --- | --- | --- | --- | --- | --- |
+| main draft | 8 | 0 | 9.5 | 10.4 | 11.2 | 100% | 0% | 0% | 0% | 4.5 (88%) | 0 | 0.0 | 8.5 (3) | 1.3 | 0.6 | 0.0 | 32283 / 1005 | 26 |
+| branch draft | 8 | 0 | 16.2 | 25.1 | 26.7 | 50% | 25% | 100% | 25% | 3.8 (50%) | 0 | 0.0 | 14.8 (4.5) | 1.7 | 1.0 | 0.0 | 87989 / 1817 | 27 |
+
+| case | build | n | median | worst | quality | judge |
+| --- | --- | --- | --- | --- | --- | --- |
+| due-soon-reminders | main draft | 4 | 8.5 | 9.2 | 0% | 4.5 |
+| due-soon-reminders | branch draft | 4 | 23.0 | 26.7 | 0% | 3.0 |
+| review-check-later | main draft | 4 | 10.1 | 11.2 | 0% | 4.5 |
+| review-check-later | branch draft | 4 | 9.6 | 11.0 | 50% | 4.5 |
+
+### branch against main
+
+**WIN**: quality rose 25%, time within noise.
+
+- time: B/A median ×1.51 (95% 0.95–3.06) over 8 pairs: noise
+- quality (every check passed): 0% → 25%, +25% (95% 0% to 63%); margin 13%
+
+Seconds; quality is the share of drafts passing every mechanical and run check.
+
+| | n | errors | median | p90 | worst | < 15 s | quality | mechanical | run | judge (pass) | no draft | setup | model (calls) | first token | tool wait | hand-back | tokens in / out | load |
+| --- | --- | --- | --- | --- | --- | --- | --- | --- | --- | --- | --- | --- | --- | --- | --- | --- | --- | --- |
+| main draft | 40 | 0 | 7.7 | 11.2 | 19.5 | 95% | 80% | 85% | 85% | – (–) | 0 | 0.0 | 6.7 (3) | 1.0 | 0.8 | 0.0 | 48278 / 871 | 21 |
+| branch draft | 40 | 0 | 8.4 | 10.4 | 17.5 | 98% | 80% | 85% | 88% | – (–) | 0 | 0.0 | 7.1 (3) | 1.0 | 0.8 | 0.0 | 49777 / 925 | 31 |
+
+| case | build | n | median | worst | quality | judge |
+| --- | --- | --- | --- | --- | --- | --- |
+| eric-says-hello | main draft | 2 | 9.7 | 10.5 | 50% | – |
+| eric-says-hello | branch draft | 2 | 9.7 | 10.3 | 50% | – |
+| due-today-digest | main draft | 2 | 5.2 | 5.7 | 0% | – |
+| due-today-digest | branch draft | 2 | 5.4 | 5.4 | 0% | – |
+| channel-message-to-task | main draft | 2 | 6.9 | 7.0 | 100% | – |
+| channel-message-to-task | branch draft | 2 | 9.8 | 13.0 | 100% | – |
+| weekly-channel-recap | main draft | 2 | 9.0 | 9.4 | 100% | – |
+| weekly-channel-recap | branch draft | 2 | 8.9 | 9.2 | 100% | – |
+| done-log-database | main draft | 2 | 9.1 | 10.3 | 100% | – |
+| done-log-database | branch draft | 2 | 8.8 | 9.0 | 100% | – |
+| missing-channel-left-out | main draft | 2 | 9.9 | 10.7 | 100% | – |
+| missing-channel-left-out | branch draft | 2 | 7.0 | 7.0 | 100% | – |
+| ask-ai-inbox-triage | main draft | 2 | 4.5 | 4.7 | 100% | – |
+| ask-ai-inbox-triage | branch draft | 2 | 4.5 | 4.7 | 100% | – |
+| add-step-post-urgent | main draft | 2 | 10.0 | 11.1 | 100% | – |
+| add-step-post-urgent | branch draft | 2 | 8.9 | 9.6 | 100% | – |
+| change-step-other-channel | main draft | 2 | 18.6 | 19.5 | 100% | – |
+| change-step-other-channel | branch draft | 2 | 13.5 | 17.5 | 100% | – |
+| once-budget-reminder | main draft | 2 | 5.2 | 6.3 | 100% | – |
+| once-budget-reminder | branch draft | 2 | 5.4 | 6.1 | 100% | – |
+| invoice-mail-to-finance | main draft | 2 | 6.9 | 6.9 | 100% | – |
+| invoice-mail-to-finance | branch draft | 2 | 6.0 | 6.0 | 100% | – |
+| review-status-to-channel | main draft | 2 | 7.6 | 7.7 | 0% | – |
+| review-status-to-channel | branch draft | 2 | 9.1 | 9.4 | 100% | – |
+| two-jordans | main draft | 2 | 8.0 | 8.3 | 100% | – |
+| two-jordans | branch draft | 2 | 8.9 | 9.0 | 50% | – |
+| vague-standup | main draft | 2 | 4.3 | 4.7 | 100% | – |
+| vague-standup | branch draft | 2 | 4.4 | 4.9 | 100% | – |
+| vague-support-watch | main draft | 2 | 4.6 | 4.9 | 100% | – |
+| vague-support-watch | branch draft | 2 | 4.8 | 5.0 | 100% | – |
+| launch-overdue-chase | main draft | 2 | 7.8 | 8.6 | 100% | – |
+| launch-overdue-chase | branch draft | 2 | 7.2 | 7.4 | 100% | – |
+| weekly-metrics-ask-ai | main draft | 2 | 4.5 | 4.8 | 100% | – |
+| weekly-metrics-ask-ai | branch draft | 2 | 4.5 | 4.5 | 100% | – |
+| hiring-task-to-database | main draft | 2 | 10.9 | 11.7 | 50% | – |
+| hiring-task-to-database | branch draft | 2 | 9.5 | 10.1 | 0% | – |
+| add-step-ask-ai-review | main draft | 2 | 8.4 | 8.4 | 100% | – |
+| add-step-ask-ai-review | branch draft | 2 | 8.9 | 8.9 | 100% | – |
+| change-step-only-eric | main draft | 2 | 11.9 | 13.0 | 0% | – |
+| change-step-only-eric | branch draft | 2 | 11.5 | 11.9 | 0% | – |
+
+### branch against main
+
+**NOISE**: time and quality within noise.
+
+- time: B/A median ×0.97 (95% 0.91–1.04) over 40 pairs: noise
+- quality (every check passed): 80% → 80%, +0% (95% -10% to 10%); margin 13%
+
+== done 14:41:02

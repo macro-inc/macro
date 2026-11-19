@@ -1,0 +1,14 @@
+{
+	auto_https off
+	admin off
+}
+:8080 {
+	handle /flags* {
+		root * /srv
+		rewrite * /flags.json
+		method GET
+		header Content-Type application/json
+		file_server
+	}
+	respond `{"status":1}` 200
+}
