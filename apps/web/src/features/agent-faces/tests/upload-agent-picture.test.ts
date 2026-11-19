@@ -1,6 +1,9 @@
 import { uploadFile } from '@core/util/upload';
 import { afterEach, describe, expect, it, vi } from 'vitest';
-import { uploadAgentPicture } from '../primitives/upload-agent-picture';
+import {
+  createPictureUploads,
+  uploadAgentPicture,
+} from '../primitives/upload-agent-picture';
 
 vi.mock('@core/util/upload', () => ({ uploadFile: vi.fn() }));
 vi.mock('@macro-inc/observability', () => ({
@@ -54,5 +57,32 @@ describe('uploadAgentPicture', () => {
       url: 'https://example.com/photo.png',
     });
     expect(uploadFile).not.toHaveBeenCalled();
+  });
+});
+
+describe('createPictureUploads', () => {
+  it('uploads a picture once however often it is saved, and again once it changes', async () => {
+    vi.mocked(uploadFile).mockResolvedValue({
+      failed: false,
+      destination: 'static',
+      id: '0192a8f0-1c2d-7e3f-8a9b-0c1d2e3f4a5b',
+    } as Awaited<ReturnType<typeof uploadFile>>);
+    const upload = createPictureUploads();
+    const first = new File(['one'], 'one.png', { type: 'image/png' });
+    const photo = { kind: 'upload' as const, file: first, url: 'blob:one' };
+    const draft = { face: () => face, photo: () => photo };
+
+    const saved = await upload(draft);
+    // Try again after a declined card: the same photo.
+    const again = await upload(draft);
+    expect(uploadFile).toHaveBeenCalledTimes(1);
+    expect(again.isOk() && again.value).toEqual(saved.isOk() && saved.value);
+
+    const second = new File(['two'], 'two.png', { type: 'image/png' });
+    await upload({
+      face: () => face,
+      photo: () => ({ kind: 'upload', file: second, url: 'blob:two' }),
+    });
+    expect(uploadFile).toHaveBeenCalledTimes(2);
   });
 });

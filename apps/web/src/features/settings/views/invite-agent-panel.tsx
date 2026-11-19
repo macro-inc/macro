@@ -10,7 +10,7 @@ import { useComputerOffersQuery } from '@queries/computers/computers';
 import type { CreateTeamAgent } from '@service-auth/team-agents';
 import { FaceSlot } from '../../agent-faces/face-slot';
 import { createFaceDraft } from '../../agent-faces/primitives/create-face-draft';
-import { uploadAgentPicture } from '../../agent-faces/primitives/upload-agent-picture';
+import { createPictureUploads } from '../../agent-faces/primitives/upload-agent-picture';
 import {
   openAgentDirectMessage,
   openBilling,
@@ -33,6 +33,8 @@ export function InviteAgentPanel(props: {
   const offers = useComputerOffersQuery(() => true);
   // A new random face each time the panel opens.
   const face = createFaceDraft();
+  // One upload per face, however often Add is pressed.
+  const uploadPicture = createPictureUploads();
   // A picture that can't be saved doesn't stop the agent being added: it
   // keeps its face (drawn from the recipe) or, for a photo, its initial.
   const preparePicture = async (): Promise<
@@ -40,7 +42,7 @@ export function InviteAgentPanel(props: {
   > => {
     const account = currentQueryAccount();
     const teamId = props.teamId;
-    const picture = await uploadAgentPicture(face);
+    const picture = await uploadPicture(face);
     if (!isCurrentQueryAccount(account) || props.teamId !== teamId) return;
     if (picture.isErr()) {
       toast.failure(t('agentFaces.photoFailed'));

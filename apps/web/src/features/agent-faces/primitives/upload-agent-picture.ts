@@ -1,4 +1,4 @@
-import { staticFileIdEndpoint } from '@core/constant/servers';
+import { staticFileReferenceEndpoint } from '@core/constant/servers';
 import { uploadFile } from '@core/util/upload';
 import { type AgentFace, renderFace } from '@macro-inc/agent-faces';
 import { Telemetry } from '@macro-inc/observability';
@@ -44,6 +44,30 @@ export async function uploadAgentPicture(
   return ok({ face, url: url.isOk() ? url.value : null });
 }
 
+/**
+ * `uploadAgentPicture` that keeps the last upload: saving the same face (or
+ * the same photo) again, as Try again does after a declined card, reuses its
+ * file instead of uploading another copy. A failed PNG is tried again.
+ */
+export function createPictureUploads() {
+  let last: { key: unknown; picture: AgentPicture } | undefined;
+  const keyOf = (draft: Pick<FaceDraft, 'face' | 'photo'>): unknown => {
+    const photo = draft.photo();
+    if (photo) return photo.kind === 'saved' ? photo.url : photo.file;
+    return JSON.stringify(draft.face());
+  };
+  return async (
+    draft: Pick<FaceDraft, 'face' | 'photo'>
+  ): Promise<Result<AgentPicture, PictureUploadError>> => {
+    const key = keyOf(draft);
+    if (last && last.key === key) return ok(last.picture);
+    const picture = await uploadAgentPicture(draft);
+    if (picture.isOk() && picture.value.url !== null)
+      last = { key, picture: picture.value };
+    return picture;
+  };
+}
+
 async function uploadStatic(file: File): Promise<Result<string, unknown>> {
   const result = await ResultAsync.fromPromise(
     uploadFile(file, 'static'),
@@ -55,7 +79,8 @@ async function uploadStatic(file: File): Promise<Result<string, unknown>> {
   }
   if (result.value.failed || result.value.destination !== 'static')
     return err(result.value);
-  return ok(staticFileIdEndpoint(result.value.id));
+  // The server keeps only Macro static-file URLs, never a dev proxy's.
+  return ok(staticFileReferenceEndpoint(result.value.id));
 }
 
 /** Draws `face` onto a canvas and returns it as a PNG file. */
