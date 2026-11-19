@@ -38,6 +38,12 @@ fn catalog() -> Arc<Catalog> {
             entry("storage", "delete_document", "documents", Action::Destroy),
             entry("email", "send_email", "email", Action::Send),
         ],
+        always_allowed: vec![entry(
+            "agent-harness",
+            "tighten_agent_tool_permissions",
+            "agents",
+            Action::Update,
+        )],
     })
 }
 
@@ -713,4 +719,99 @@ async fn the_saved_policy_cannot_loosen_behind_a_session_restriction() {
         .await;
     assert!(matches!(result, Err(PermissionError::WouldLoosen(_))));
     assert_eq!(fixture.store.read(&Key::Agent(BotId::TEST_A)).len(), 1);
+}
+
+fn send_email() -> OperationKey {
+    OperationKey {
+        service: "email".to_owned(),
+        operation: "send_email".to_owned(),
+    }
+}
+
+fn owner_policy() -> SessionPolicy {
+    SessionPolicy {
+        agent: BotId::TEST_A,
+        owner: user(OWNER),
+        session: AgentSessionId::TEST_A,
+    }
+}
+
+/// The agent pins a tool to ask; a person's later never on its group still
+/// applies to it.
+#[tokio::test]
+async fn an_agents_tool_pin_never_exempts_it_from_a_later_never() {
+    let fixture = fixture();
+    let pin = vec![Change {
+        target: Target::Tool {
+            service: "email".to_owned(),
+            operation: "send_email".to_owned(),
+        },
+        state: Some(PermissionState::Ask),
+    }];
+    fixture
+        .service
+        .tighten(
+            &agent_caller(OWNER, BotId::TEST_A, None),
+            BotId::TEST_A,
+            pin,
+        )
+        .await
+        .unwrap();
+    let resolved = fixture
+        .service
+        .resolve_calls(&owner_policy(), &[send_email()])
+        .await
+        .unwrap();
+    assert_eq!(resolved[0].state, PermissionState::Ask);
+
+    fixture
+        .service
+        .set(&person(OWNER), BotId::TEST_A, never_send())
+        .await
+        .unwrap();
+    let resolved = fixture
+        .service
+        .resolve_calls(&owner_policy(), &[send_email()])
+        .await
+        .unwrap();
+    assert_eq!(
+        (resolved[0].state, resolved[0].origin),
+        (PermissionState::Never, Origin::GroupAction)
+    );
+}
+
+/// The agent's own tightening resolves always and no setting can name it,
+/// so restricting itself is never gated.
+#[tokio::test]
+async fn self_restriction_is_always_allowed_and_cannot_be_set() {
+    let fixture = fixture();
+    let tighten = OperationKey {
+        service: "agent-harness".to_owned(),
+        operation: "tighten_agent_tool_permissions".to_owned(),
+    };
+    let resolved = fixture
+        .service
+        .resolve_calls(&owner_policy(), &[tighten])
+        .await
+        .unwrap();
+    assert_eq!(
+        (resolved[0].state, resolved[0].entry.is_some()),
+        (PermissionState::Always, true)
+    );
+
+    let set = fixture
+        .service
+        .set(
+            &person(OWNER),
+            BotId::TEST_A,
+            vec![Change {
+                target: Target::Tool {
+                    service: "agent-harness".to_owned(),
+                    operation: "tighten_agent_tool_permissions".to_owned(),
+                },
+                state: Some(PermissionState::Never),
+            }],
+        )
+        .await;
+    assert!(matches!(set, Err(PermissionError::UnknownTarget(_))));
 }
