@@ -242,11 +242,14 @@ pub(super) fn describe_email_event(event: &EmailTopicEvent) -> EmailEventDescrip
 ///
 /// A thread reindex reads every message of the thread as it is when the
 /// reindex starts, so one queued and not yet started covers any later reindex
-/// of the same thread. Every other email action writes or deletes particular
-/// documents and must not be coalesced.
+/// of the same thread. The key leaves out `owner` because a thread belongs to
+/// one link, so every reindex of it names the same owner. Every other email
+/// action writes or deletes particular documents and must not be coalesced.
 pub(super) fn reread_key(event: &EmailMacroEvent) -> Option<String> {
     match describe_email_event(&event.event().event).action {
-        EmailIndexAction::ReindexThread { thread_id, .. } => Some(format!("email-thread:{thread_id}")),
+        EmailIndexAction::ReindexThread { thread_id, .. } => {
+            Some(format!("email-thread:{thread_id}"))
+        }
         EmailIndexAction::UpsertMessage { .. }
         | EmailIndexAction::UpsertSentMessage { .. }
         | EmailIndexAction::RemoveMessage { .. }

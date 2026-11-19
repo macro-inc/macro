@@ -150,10 +150,8 @@ fn received_thread_backfilled_event(thread_id: Uuid, offset: i64) -> ReceivedEve
 }
 
 fn received_email(event: EmailTopicEvent, offset: i64) -> ReceivedEvent {
-    let event = DeclaredMacroEvent::EmailMacroEvent(EmailMacroEvent::new(
-        EMAIL_LINK_ID.to_string(),
-        event,
-    ));
+    let event =
+        DeclaredMacroEvent::EmailMacroEvent(EmailMacroEvent::new(EMAIL_LINK_ID.to_string(), event));
     attach_event_coordinates(
         Ok::<_, EventBrokerError>(event),
         0,

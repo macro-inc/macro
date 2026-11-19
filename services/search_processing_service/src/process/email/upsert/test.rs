@@ -260,7 +260,8 @@ async fn a_thread_reindex_stops_at_its_first_short_page(pool: sqlx::PgPool) {
     use tracing_subscriber::layer::SubscriberExt as _;
 
     let page_reads = PageReads::default();
-    let subscriber = tracing::Dispatch::new(tracing_subscriber::registry().with(page_reads.clone()));
+    let subscriber =
+        tracing::Dispatch::new(tracing_subscriber::registry().with(page_reads.clone()));
     // Another test thread may have registered the page query's callsite with
     // a "never" interest, so register it with a first pass, then recompute its
     // interest. The recompute runs under this subscriber because, while it is
@@ -327,7 +328,10 @@ async fn a_thread_reindex_stops_at_its_first_short_page(pool: sqlx::PgPool) {
             expected_bulk_sizes,
             "bulk requests for a thread of {messages}"
         );
-        assert_eq!(indexed, stored, "every message of a thread of {messages} is indexed once");
+        assert_eq!(
+            indexed, stored,
+            "every message of a thread of {messages} is indexed once"
+        );
     }
 }
 
