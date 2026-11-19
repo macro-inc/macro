@@ -1,0 +1,19 @@
+packages/code-mode-sdk/src/js-tools/catalog.ts
+  s_f3a48b3a685142::t_3b20d232f71d96 244-290,332,347-348,350-353,357,362-363
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.7.7",
+  "base_commit_sha": "3f820208542141ee5318f6e0829f02e0e44adcaf",
+  "prompts": {},
+  "sessions": {
+    "s_f3a48b3a685142": {
+      "agent_id": {
+        "tool": "claude",
+        "id": "65b2bcf0-02e2-4f2c-88ae-8e6cea990f9a",
+        "model": "claude-opus-5-5"
+      },
+      "human_author": "Eric Hayes <56524199+ehayes2000@users.noreply.github.com>"
+    }
+  }
+}
