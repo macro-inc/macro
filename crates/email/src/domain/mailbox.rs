@@ -130,6 +130,12 @@ impl MailboxError {
             failure => Self::Database(failure),
         }
     }
+
+    /// Whether a database call gave up waiting for a lock (see
+    /// [`DatabaseFailure::is_lock_timeout`]).
+    pub fn is_lock_timeout(&self) -> bool {
+        matches!(self, Self::Database(failure) if failure.is_lock_timeout())
+    }
 }
 
 /// What failed underneath a database call. The database's own message is
@@ -157,6 +163,17 @@ impl std::fmt::Display for DatabaseFailure {
             Self::Decode => f.write_str("decode failed"),
             Self::Other => f.write_str("driver error"),
         }
+    }
+}
+
+/// The SQLSTATE of a statement that gave up waiting for a lock.
+pub const LOCK_NOT_AVAILABLE: &str = "55P03";
+
+impl DatabaseFailure {
+    /// Whether the statement gave up waiting for a lock. The rows were busy,
+    /// not wrong, so the same work succeeds once their holder finishes.
+    pub fn is_lock_timeout(&self) -> bool {
+        matches!(self, Self::Sqlstate(code) if code == LOCK_NOT_AVAILABLE)
     }
 }
 
@@ -841,7 +858,9 @@ const CALENDAR_PARTS_ATTEMPTS: i32 = 3;
 /// A transient provider failure (Graph 5xx or 408, a request Graph never
 /// answered) says nothing about the message either: during an outage every
 /// message gets one. It backs off like any failure but is never abandoned, and
-/// stops counting once the backoff is at its longest. Data the database
+/// stops counting once the backoff is at its longest. A lock the database
+/// could not grant in time is the same: another transaction held the
+/// mailbox's rows, which says nothing about the message. Data the database
 /// refuses is refused the same way again, so it stops as an outright refusal
 /// does; the few tries let a refusal that briefly hit valid data (a deploy
 /// in progress) clear.
@@ -866,7 +885,12 @@ fn message_retry(error: &MailboxError, attempts: i32) -> MessageRetry {
                 }
             }
         }
-        MailboxError::Provider(EmailApiError::Transient { .. }) => {
+        _ if error.is_lock_timeout()
+            || matches!(
+                error,
+                MailboxError::Provider(EmailApiError::Transient { .. })
+            ) =>
+        {
             let seconds = backoff_seconds(attempts);
             MessageRetry::After {
                 seconds,

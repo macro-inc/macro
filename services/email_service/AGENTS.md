@@ -305,7 +305,11 @@ the gateway `/email` prefix.
   `email::domain::mailbox::inbox_sync::build_contact_connections`.
 - The `link_manager` worker receives one message at a time and renews its
   visibility while processing. Don't raise its receive batch: messages queued
-  behind a long mailbox purge would be redelivered and purged twice.
+  behind a long mailbox purge would be redelivered and purged twice. A
+  deletion whose inbox stays locked past the lock timeout
+  (`InboxLifecycleError::Contended`) runs again in the same delivery, up to six
+  times 20 s apart, before it goes back to the queue, so contention cannot
+  spend its five receives.
   `PurgePacing` (`email::domain::mailbox::link_manager::purge`) sets the purge's write rate.
   Refresh and HealthCheck probes are capped at 240 s so a stalled probe is
   redelivered instead of held in flight. A probe returns an error, and so is

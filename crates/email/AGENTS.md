@@ -513,6 +513,20 @@ tools — hexagonal, heavily feature-gated.
   whether a mailbox still has mail with an address leave such rows out
   (`email_db_client`'s `link_has_any_message_with`, and CRM's
   `other_address_mail.sql` and `interactions.sql`).
+- Open every `mailbox_pg` transaction with `PgMailboxSync::begin`, which sets a
+  5 s `lock_timeout`, so a write queued behind a long lock holder (a CRM
+  population share-locks its link) fails instead of holding a pooled
+  connection; a locking read runs in one too. Pre-checks that a write repeats
+  under the lock (settings access) and credential health that has not changed
+  read without the lock, so reads and Graph calls never wait on it. The
+  timeout is SQLSTATE 55P03
+  (`MailboxError::is_lock_timeout`, `InboxLifecycleError::Contended`) and every
+  caller retries it: lease release or expiry, message backoff, redelivery, a
+  409 for user requests. A step that must not be left half done after a
+  provider write (the draft checkpoint) or a delivery the queue would
+  dead-letter (link deletion) retries it in-process, a bounded number of times
+  inside its lease or visibility timeout. The purge's batches run in
+  `email_db_client` without the timeout.
 - Map database errors in `mailbox_pg` with `db_error` (or `wrapped_db_error`
   for `email_db_client` calls) so the SQLSTATE reaches the log; keep
   `MailboxError::Persistence` for stored data that cannot be decoded. Both,
@@ -585,8 +599,8 @@ tools — hexagonal, heavily feature-gated.
   Items.
   Throttling and token refusals give their claim back to `attempts`, and so
   does a transient provider failure (Graph 5xx or 408, a request Graph never
-  answered) once its backoff is at 30 minutes, so a provider outage never
-  abandons a message.
+  answered) or a lock timeout once its backoff is at 30 minutes, so a provider
+  outage or a busy mailbox never abandons a message.
 - A message read Graph answers 404 settles as `absent` (`reconcile` in
   `domain/mailbox.rs`). Live work reads it twice more, 30 and 60 s apart
   (`location_unsettled`), because it follows a change Graph's read can
