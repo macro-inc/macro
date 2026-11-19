@@ -190,16 +190,20 @@ gone by the time the alert arrives.
 - First check the document rounds (`entity_type:document`, other operations)
   on the dashboard. If they miss too, documents are not reaching the index:
   follow [Probe unseen](#probe-unseen).
-- If they pass, content prefix search is dropping matches. A likely cause is a
-  prefix query that expands only the first few hundred words of a shard
-  starting with the prefix, before permission filtering, as
+- If they pass, suspect content prefix search, but check that the missed
+  documents reached the index too: the round's span names the `entity_id`;
+  look for its `process_event` spans in `search-processing-service`. A likely
+  cause is a prefix query that expands only the first few hundred words of a
+  shard starting with the prefix, before permission filtering, as
   `match_phrase_prefix` with `max_expansions` 256 did; the probe's word sorts
   after them. Check how `crates/opensearch_client/src/search/query.rs`
   (`child_content_query`) builds content prefixes, and what deployed last.
 - To reproduce, as any user: create a private document whose body is one word
   `conzz` plus random letters, wait until an exact search finds that word,
-  then search `con` as a partial match. Missing it while the exact search
-  finds it is the bug users see: short prefixes miss results.
+  then search `con` as a partial content match narrowed to that document
+  (`filters.document_filters.document_ids`), as the probe does, so other
+  documents matching `con` cannot push it off the page. Missing it while the
+  exact search finds it is the bug users see: short prefixes miss results.
 
 ## Probe failing
 
