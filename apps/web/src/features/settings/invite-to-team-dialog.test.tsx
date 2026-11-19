@@ -248,8 +248,7 @@ function AgentInviteDialog(props: { admin: boolean; onClose: () => void }) {
   );
 }
 
-const agentForm = () =>
-  screen.queryByRole('textbox', { name: 'Name your agent teammate' });
+const agentForm = () => screen.queryByRole('textbox', { name: 'Name it' });
 
 describe('InviteToTeamDialog agent teammates', () => {
   function openAsAdmin(onClose: () => void = () => {}) {
@@ -295,12 +294,9 @@ describe('InviteToTeamDialog agent teammates', () => {
     new ThrownResultError([{ code, message: code }]);
 
   function startAdding(name = 'Ada') {
-    fireEvent.input(
-      screen.getByRole('textbox', { name: 'Name your agent teammate' }),
-      {
-        target: { value: name },
-      }
-    );
+    fireEvent.input(screen.getByRole('textbox', { name: 'Name it' }), {
+      target: { value: name },
+    });
   }
   const addButton = () =>
     screen.getByRole('button', {
@@ -319,7 +315,7 @@ describe('InviteToTeamDialog agent teammates', () => {
 
     // Add stays pressable: with no name it marks the field and sends nothing.
     const field = screen.getByRole('textbox', {
-      name: 'Name your agent teammate',
+      name: 'Name it',
     });
     fireEvent.click(addButton());
     expect(field.getAttribute('aria-invalid')).toBe('true');
@@ -386,7 +382,7 @@ describe('InviteToTeamDialog agent teammates', () => {
     expect(
       (
         screen.getByRole('textbox', {
-          name: 'Name your agent teammate',
+          name: 'Name it',
         }) as HTMLInputElement
       ).value
     ).toBe('Ada');
@@ -456,14 +452,10 @@ describe('InviteToTeamDialog agent teammates', () => {
     setFlag({ enabled: true, loading: false });
     setComputersFlag({ enabled: true, loading: false });
     openAsAdmin();
-    expect(
-      screen.getByRole('textbox', { name: 'Name your agent teammate' })
-    ).toBeTruthy();
+    expect(screen.getByRole('textbox', { name: 'Name it' })).toBeTruthy();
 
     setFlag({ enabled: false, loading: false });
-    expect(
-      screen.queryByRole('textbox', { name: 'Name your agent teammate' })
-    ).toBeNull();
+    expect(screen.queryByRole('textbox', { name: 'Name it' })).toBeNull();
     expect(screen.getByRole('button', { name: 'Send invite' })).toBeTruthy();
   });
 });

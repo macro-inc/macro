@@ -1,7 +1,7 @@
 export default {
   inviteTitle: 'Invite an agent',
   agent: 'Agent',
-  nameYourAgent: 'Name your agent teammate',
+  nameIt: 'Name it',
   namePlaceholder: 'Ada',
   tooLong: {
     one: 'Use at most {{count}} character',
@@ -25,7 +25,7 @@ export default {
   voiceInvalid: "That voice isn't available. Choose another one.",
   voiceSaveFailed:
     "Couldn't save the voice. Your choice is still selected; try again.",
-  computer: 'Computer',
+  giveItAComputer: 'Give it a computer',
   loadingSizes: 'Loading computer sizes…',
   sizesFailed: "Couldn't load computer sizes.",
   tryAgain: 'Try again',

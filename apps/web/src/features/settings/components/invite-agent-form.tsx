@@ -227,7 +227,7 @@ export function InviteAgentForm(props: {
               </Show>
             </fieldset>
             <div class="flex min-w-0 flex-1 flex-col gap-1.5 pt-1.5">
-              <TextField.Label>{t('teamAgents.nameYourAgent')}</TextField.Label>
+              <TextField.Label>{t('teamAgents.nameIt')}</TextField.Label>
               <TextField.Input
                 ref={nameInput}
                 class="w-full"
@@ -246,7 +246,7 @@ export function InviteAgentForm(props: {
       computer={
         <div class="flex flex-col gap-2">
           <div class="text-sm font-medium text-ink">
-            {t('teamAgents.computer')}
+            {t('teamAgents.giveItAComputer')}
           </div>
           <Show
             when={offers()}

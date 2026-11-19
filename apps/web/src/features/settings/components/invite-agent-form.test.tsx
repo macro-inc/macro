@@ -52,12 +52,9 @@ it('does not invite an agent after its picture finishes uploading to a disposed 
       prepareAvatar={() => upload.promise}
     />
   ));
-  fireEvent.input(
-    screen.getByRole('textbox', { name: 'Name your agent teammate' }),
-    {
-      target: { value: 'Ada' },
-    }
-  );
+  fireEvent.input(screen.getByRole('textbox', { name: 'Name it' }), {
+    target: { value: 'Ada' },
+  });
   fireEvent.click(
     screen.getByRole('button', { name: 'Add Ada · $40.00/month' })
   );
@@ -103,10 +100,9 @@ it('says every size is sold out when Add is pressed with none for sale', () => {
       prepareAvatar={prepareAvatar}
     />
   ));
-  fireEvent.input(
-    screen.getByRole('textbox', { name: 'Name your agent teammate' }),
-    { target: { value: 'Ada' } }
-  );
+  fireEvent.input(screen.getByRole('textbox', { name: 'Name it' }), {
+    target: { value: 'Ada' },
+  });
   expect(
     screen.queryByText(
       'Every computer size is sold out right now. Try again later.'
