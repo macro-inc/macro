@@ -168,7 +168,11 @@ export function routineSections(props: {
                     }
                     triggers={triggers()}
                     defaultTarget={defaultTarget(draft())}
-                    slots={props.slots}
+                    slots={
+                      draft().inputs?.length
+                        ? { ...props.slots, createStepAuthor: undefined }
+                        : props.slots
+                    }
                     subRoutines={draft().subRoutines}
                   />
                 </Show>

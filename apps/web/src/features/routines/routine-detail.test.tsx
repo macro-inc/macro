@@ -1362,4 +1362,31 @@ describe('sub-routines defined once', () => {
       scheduleId: 'routine-id',
     });
   });
+
+  it('offers manual steps only when a detached program has input values', () => {
+    const detached: ScheduledAction = {
+      ...copy,
+      sub_routine: undefined,
+      task: {
+        inputs: [
+          { type: 'text', name: 'taskId', label: 'Task', value: 'example' },
+        ],
+        steps: [
+          {
+            type: 'code',
+            title: 'Remind',
+            source: 'export const task = inputs.taskId;',
+          },
+        ],
+      },
+    };
+    setSchedules([detached]);
+    render(() => <Routine />);
+    expect(screen.queryByRole('textbox', { name: 'Add a step' })).toBeNull();
+    const menu = screen.getByRole('button', { name: 'Step actions' });
+    menu.focus();
+    fireEvent.keyDown(menu, { key: 'Enter' });
+    expect(screen.queryByRole('menuitem', { name: 'Edit' })).toBeNull();
+    expect(screen.getByRole('menuitem', { name: 'Show code' })).toBeTruthy();
+  });
 });
