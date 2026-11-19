@@ -8,7 +8,7 @@ use std::collections::HashMap;
 
 use macro_user_id::user_id::MacroUserIdStr;
 use rootcause::Report;
-use routine_program::{CodeStep, EntityKind, EntityValue, RoutineProgram, StepId};
+use routine_program::{CodeStep, EntityKind, EntityValue, RoutineProgram, Step, StepId};
 use serde::{Deserialize, Serialize};
 use utoipa::ToSchema;
 
@@ -131,6 +131,11 @@ pub async fn unusable_items_known<'a>(
 /// deleted, its owner lost access, or none is picked.
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize, ToSchema)]
 pub struct UnusableKnob {
+    /// The sub-routine whose step it is; absent for the routine's own steps.
+    /// Step ids are unique only among the steps they run with, so a step of
+    /// the routine and one of a sub-routine can share one.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub sub_routine: Option<String>,
     /// Its step's id. A step saved before steps had ids has none until it is
     /// saved again; a client can't place that one, but its run still fails.
     pub step: Option<StepId>,
@@ -142,8 +147,9 @@ pub struct UnusableKnob {
     pub reason: String,
 }
 
-/// The entity knobs of `program` whose item `owner` can't use now, each with
-/// its step's id, which stays the step's while the routine is edited around it.
+/// The entity knobs of `program` whose item `owner` can't use now, its
+/// sub-routines' included, each with its step's id, which stays the step's
+/// while the routine is edited around it, and the sub-routine holding it.
 #[tracing::instrument(name = "routine.unusable_knobs", err, skip_all, fields(
     items = tracing::field::Empty,
     unusable = tracing::field::Empty,
@@ -153,7 +159,21 @@ pub async fn unusable_knobs(
     owner: &MacroUserIdStr<'static>,
     program: &RoutineProgram,
 ) -> Result<Vec<UnusableKnob>, Report> {
-    let steps = program.code_steps();
+    // Each code step, beside the sub-routine holding it.
+    let lists = std::iter::once((None, &program.steps)).chain(
+        program
+            .sub_routines
+            .iter()
+            .map(|definition| (Some(definition.name.as_str()), &definition.steps)),
+    );
+    let (holders, steps): (Vec<Option<&str>>, Vec<&CodeStep>) = lists
+        .flat_map(|(holder, steps)| {
+            steps.iter().filter_map(move |step| match step {
+                Step::Code(step) => Some((holder, step)),
+                Step::Agent(_) => None,
+            })
+        })
+        .unzip();
     let span = tracing::Span::current();
     span.record(
         "items",
@@ -167,6 +187,11 @@ pub async fn unusable_knobs(
     Ok(unusable
         .into_iter()
         .map(|item| UnusableKnob {
+            sub_routine: holders
+                .get(item.position)
+                .copied()
+                .flatten()
+                .map(str::to_owned),
             step: steps.get(item.position).and_then(|step| step.id.clone()),
             reason: item.run_failure(),
             knob: item.knob,

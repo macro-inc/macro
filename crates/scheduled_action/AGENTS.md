@@ -248,8 +248,9 @@ each run.
   reason and without running its code; an item several steps pick is
   looked up once a run, the later steps reusing what the first found. `GET
   /scheduled-actions/{id}/unusable-items` lists a saved routine's knobs that
-  need a new pick, by step id (not position, so a page editing the routine
-  keeps each on its step), with the same reason, for its page. A composition without
+  need a new pick, its sub-routines' included, by step id (not position, so a page editing the routine
+  keeps each on its step) and the sub-routine holding it (`sub_routine`, since a step id
+  is unique only among the steps it runs with), with the same reason, for its page. A composition without
   the port refuses entity knobs.
 - `src/domain/suggestions.rs` + `src/inbound/suggestion_router.rs`: routine
   suggestions and the tools routines sessions write them with. The sessions
@@ -353,7 +354,8 @@ each run.
   index `scheduled_action_active_children_idx` and never touches them; history rows carry `created`, the sub-routines that run created
   (`created_by_runs`). A sub-routine's run notification names its parent
   (`FinishedRoutineRun::parent_name`). Spans: `routine.create` (parent, run,
-  keyed, outcome `created`/`updated`/`refused_cap`), `routine.follow_parent`,
+  keyed, outcome `created`/`updated`/`refused_cap`), `routine.follow_parent`
+  (outcome `followed`, `partial` or `read_failed`, errors for the last two),
   `routine.detach`.
 - Defined sub-routines (`routine_program::SubRoutineDefinition`): a
   routine's program can define `sub_routines` (name, title, typed inputs,
