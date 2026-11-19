@@ -37,10 +37,11 @@ In one or two sentences, say when it runs and what each run does, and link the r
 
 "Whenever someone reports a bug in #customer-feedback, post it in #bug-triage."
 
-```js
-export async function main({ macro }) {
-  const plain = (name) => (name ?? '').replace(/^[#@]/, '').toLowerCase();
-  const named = async (name) => {
+```typescript
+import type { RoutineOptions } from '@macro-inc/sdk';
+export async function main({ macro }: CodeContext) {
+  const plain = (name: string) => (name ?? '').replace(/^[#@]/, '').toLowerCase();
+  const named = async (name: string) => {
     const found = [];
     for await (const channel of macro.channels.search(plain(name))) {
       if (plain(await channel.name()) === plain(name)) found.push(channel);
@@ -53,7 +54,7 @@ export async function main({ macro }) {
     return { data: { ask: names.map((name, i) => ({ name, matches: found[i].length })) } };
   }
   const [[feedback], [triage]] = found;
-  const routine = {
+  const routine: RoutineOptions = {
     name: 'Bugs from #customer-feedback in #bug-triage',
     appearance: { icon: { kind: 'macro', name: 'bug' }, color: 'red' },
     trigger: {

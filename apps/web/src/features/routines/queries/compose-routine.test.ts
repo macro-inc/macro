@@ -263,6 +263,28 @@ describe('a drafted routine in the editor', () => {
     });
   });
 
+  it('requires the apps a drafted Ask AI step uses, connected or not, and saves them', () => {
+    const linear = { app_slug: 'linear', server_name: 'Linear' };
+    const notion = { app_slug: 'notion', server_name: 'Notion' };
+    const draft = draftFromRoutine(
+      routine({
+        trigger: { type: 'cron', schedule: '0 0 9 * * *', timezone: 'UTC' },
+        steps: [
+          { type: 'agent', model: 'claude', instructions: 'File the bugs' },
+        ],
+        apps: [linear],
+        missingApps: [notion, linear],
+      }),
+      'claude'
+    );
+    if (typeof draft === 'string') throw new Error(draft);
+    // The review shows Notion unconnected; saving waits until it is.
+    expect(draft.apps).toEqual([linear, notion]);
+    expect(draftToCreateBody(draft).task).toMatchObject({
+      mcp_servers: [linear, notion],
+    });
+  });
+
   it('starts without a trigger when AI found none it could use', () => {
     const draft = draftFromRoutine(routine({ trigger: null }), 'claude');
     if (typeof draft === 'string') throw new Error(draft);
