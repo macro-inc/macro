@@ -94,26 +94,37 @@ function matchesTab(
     entity.type === 'email'
       ? !entity.done
       : notifications().some((notification) => notification.state !== 'done');
-  return match(tab)
-    .with('signal', () => {
-      if (!signalFilter(entity) || !notDone()) return false;
+  return (
+    match(tab)
+      .with('signal', () => {
+        if (!signalFilter(entity) || !notDone()) return false;
 
-      if (
-        entity.type !== 'document' &&
-        entity.type !== 'email' &&
-        entity.type !== 'chat' &&
-        entity.type !== 'project'
-      ) {
-        return true;
-      }
+        if (
+          entity.type !== 'document' &&
+          entity.type !== 'email' &&
+          entity.type !== 'chat' &&
+          entity.type !== 'project'
+        ) {
+          return true;
+        }
 
-      return (
-        new Date(homeSortTimestamp(entity) ?? 0).getTime() >=
-        subWeeks(startOfDay(new Date()), 2).getTime()
-      );
-    })
-    .with('noise', () => noiseFilter(entity) && notDone())
-    .exhaustive(() => false);
+        return (
+          new Date(homeSortTimestamp(entity) ?? 0).getTime() >=
+          subWeeks(startOfDay(new Date()), 2).getTime()
+        );
+      })
+      .with('noise', () => noiseFilter(entity) && notDone())
+      // The viewer's own activity: cache inserts from other users carry no
+      // touch, and only server-classified Signal mail enters, as in Home's
+      // merged recents.
+      .with(
+        'recent',
+        () =>
+          homeTimestamp(entity.touchedAt) !== undefined &&
+          (entity.type !== 'email' || entity.isSignal === true)
+      )
+      .exhaustive(() => false)
+  );
 }
 
 // Cached query meta outlives the view; build the gate at module scope over the
@@ -202,8 +213,15 @@ export function useHomeEntitiesQuery(
     withEntityNotifications(entity, notificationSource, {
       scopeChannelThreads: true,
     });
+  // Recent rows sort, bucket and show the time of the viewer's last touch.
   const transformEntities = (entities: EntityData[]) =>
-    filterEntities(entities).map(attachNotifications);
+    filterEntities(entities).map((entity) =>
+      attachNotifications(
+        viewContext().tab === 'recent'
+          ? { ...entity, sortTs: entity.touchedAt }
+          : entity
+      )
+    );
 
   return {
     query,
@@ -436,7 +454,7 @@ function useSoupHomeDataSource(
     let result: HomeDataSourceItem[];
     if (state.groupBy === 'date' && !search.isSearching()) {
       result = buildGroupedSoupRows(
-        mergeRecents()
+        mergeRecents() || state.tab === 'recent'
           ? groupHomeEntitiesByDate(shownEntities(), new Date(now()))
           : groupHomeEntitiesByTabDate(shownEntities(), viewContext())
       );

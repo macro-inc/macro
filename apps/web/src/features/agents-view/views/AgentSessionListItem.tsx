@@ -5,7 +5,7 @@ import type { AgentSessionEntity } from '@entity';
 import FilledSparkleIcon from '@icon/system/fill/sparkle-fill.svg?component-solid';
 import RoutineIcon from '@icon/system/regular/clock-clockwise.svg';
 import SparkleIcon from '@icon/system/regular/sparkle.svg';
-import { Show } from 'solid-js';
+import { type JSX, Show } from 'solid-js';
 import { AgentSessionCodeDetails } from '../components/AgentSessionCodeDetails';
 import {
   AgentSessionRow,
@@ -28,6 +28,8 @@ type Props = {
   unread?: boolean;
   mode?: AgentsMode;
   onOpen?: (event: MouseEvent) => void;
+  /** Takes the unread dot's place on hover, as a notification's Mark done. */
+  hoverAction?: JSX.Element;
 };
 
 /** Persisted list metadata stays fresh through the session update events. */
@@ -76,6 +78,7 @@ export function AgentSessionListItem(props: Props) {
       unread={props.unread}
       hideLeading={hideLeading()}
       onOpen={props.onOpen}
+      hoverAction={props.hoverAction}
       timestamp={compactAge(conversationTimestamp(props.entity))}
       leading={
         <Show
@@ -106,7 +109,11 @@ export function AgentSessionListItem(props: Props) {
             <span
               aria-label={props.unread ? 'Unread' : 'Last turn failed'}
               class="size-1.5 shrink-0 rounded-full"
-              classList={{ 'bg-failure': failed(), 'bg-accent': !failed() }}
+              classList={{
+                'bg-failure': failed(),
+                'bg-accent': !failed(),
+                'group-hover/agent-session:hidden': Boolean(props.hoverAction),
+              }}
             />
           </Show>
           {workStatusIndicator()}

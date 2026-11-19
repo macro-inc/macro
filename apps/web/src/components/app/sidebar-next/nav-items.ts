@@ -1,5 +1,7 @@
 import { EXTERNAL_VIEW_PATH, LIST_VIEW_PATHS } from '@app/constants/list-views';
 import { calendarPath } from '@app/features/calendar-view/calendar-url';
+import { homeTabSearch } from '@app/features/home/home-tab-search';
+import type { NewHomeMode } from '@app/features/new-home/core/new-home-mode';
 import { t } from '@app/lib/i18n';
 import type { SidebarItem } from '@components/app/app-sidebar/sidebar';
 import { TOKENS } from '@core/hotkey/tokens';
@@ -11,6 +13,7 @@ import EnvelopeFillIcon from '@icon/system/fill/envelope-fill.svg';
 import FolderSimpleFillIcon from '@icon/system/fill/folder-simple-fill.svg';
 import GitPullRequestFillIcon from '@icon/system/fill/git-pull-request-fill.svg';
 import HouseFillIcon from '@icon/system/fill/house-fill.svg';
+import HouseSparkleFillIcon from '@icon/system/fill/house-sparkle-fill.svg';
 import LightbulbFillIcon from '@icon/system/fill/lightbulb-fill.svg';
 import ListChecksFillIcon from '@icon/system/fill/list-checks-fill.svg';
 import LockFillIcon from '@icon/system/fill/lock-fill.svg';
@@ -26,6 +29,7 @@ import EnvelopeIcon from '@icon/system/regular/envelope.svg';
 import FolderSimpleIcon from '@icon/system/regular/folder-simple.svg';
 import GitPullRequestIcon from '@icon/system/regular/git-pull-request.svg';
 import HouseIcon from '@icon/system/regular/house.svg';
+import HouseSparkleIcon from '@icon/system/regular/house-sparkle.svg';
 import LightbulbIcon from '@icon/system/regular/lightbulb.svg';
 import ListChecksIcon from '@icon/system/regular/list-checks.svg';
 import PasswordIcon from '@icon/system/regular/lock.svg';
@@ -97,6 +101,19 @@ export const SIDEBAR_NEXT_NAV_ITEMS = [
     iconActive: BellFillIcon,
     hotkey: 'i',
     hotkeyToken: TOKENS.sidebar.goTo.notifications,
+  },
+  // In Notifications' place while old Home is still on the rail; once old
+  // Home is off, New Home is the Home item.
+  {
+    id: 'new-home',
+    get label() {
+      return t('home.newHome');
+    },
+    href: '/new-home',
+    icon: HouseSparkleIcon,
+    iconActive: HouseSparkleFillIcon,
+    hotkey: 'h',
+    hotkeyToken: TOKENS.sidebar.goTo.home,
   },
   {
     id: 'documents',
@@ -240,6 +257,8 @@ export const SIDEBAR_NEXT_NAV_ITEMS = [
 /** Availability gates for sidebar destinations. */
 export type NavItemGates = {
   showNotifications: boolean;
+  /** Which Homes desktop shows; undefined while its flags load. */
+  homeMode: NewHomeMode | undefined;
   showForYou: boolean;
   showCustomers: boolean;
   showCalls: boolean;
@@ -256,7 +275,10 @@ export const isNavItemAvailable = (
   item: SidebarNextNavItem,
   gates: NavItemGates
 ): boolean => {
-  if (item.id === 'notifications') return gates.showNotifications;
+  if (item.id === 'notifications') {
+    return gates.showNotifications && gates.homeMode === 'off';
+  }
+  if (item.id === 'new-home') return gates.homeMode === 'both';
   if (item.id === 'for-you') return gates.showForYou;
   if (item.id === 'companies') return gates.showCustomers;
   if (item.id === 'calls') return gates.showCalls;
@@ -282,6 +304,31 @@ const withPasswords = (order: readonly string[]): readonly string[] => {
     ...order.slice(calendar + 1),
   ];
 };
+
+/**
+ * New Home takes Notifications' place in an order saved before it existed.
+ */
+const withNewHome = (order: readonly string[]): readonly string[] =>
+  order.includes('new-home')
+    ? order
+    : order.map((id) => (id === 'notifications' ? 'new-home' : id));
+
+/**
+ * Beside New Home, old Home gives up `g h`, which opens New Home, and opens
+ * on its own tab: New Home's Recent is `/home` too.
+ */
+const withOldHome = (
+  item: SidebarNextNavItem,
+  gates: NavItemGates
+): SidebarNextNavItem =>
+  item.id === 'home' && gates.homeMode === 'both'
+    ? {
+        ...item,
+        hotkey: undefined,
+        hotkeyToken: undefined,
+        search: { [homeTabSearch.namespace]: undefined },
+      }
+    : item;
 
 /**
  * Apply the user's custom order. Home stays first. Ids absent from `order`
@@ -334,8 +381,12 @@ export const customizableNavItems = (
   gates: NavItemGates
 ): SidebarNextNavItem[] =>
   orderNavItems(
-    SIDEBAR_NEXT_NAV_ITEMS.filter((item) => isNavItemAvailable(item, gates)),
-    gates.prefs.order
+    SIDEBAR_NEXT_NAV_ITEMS.filter((item) =>
+      isNavItemAvailable(item, gates)
+    ).map((item) => withOldHome(item, gates)),
+    gates.homeMode === 'both'
+      ? withNewHome(gates.prefs.order)
+      : gates.prefs.order
   );
 
 /** Hidden rail items, available for quick open in the More menu. */

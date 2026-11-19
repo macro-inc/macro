@@ -1,3 +1,4 @@
+import { TOKENS } from '@core/hotkey/tokens';
 import { describe, expect, it } from 'vitest';
 import {
   customizableNavItems,
@@ -18,6 +19,7 @@ const defaultPrefs = (overrides: Partial<SidebarPrefs> = {}): SidebarPrefs => ({
 const defaultGates = (overrides: Partial<NavItemGates> = {}): NavItemGates => ({
   showCustomers: true,
   showNotifications: true,
+  homeMode: 'off',
   showForYou: false,
   showCalls: true,
   showReviews: true,
@@ -261,4 +263,38 @@ it('omits CRM from the rail, More, and customization for a denied member', () =>
   expect(
     customizableNavItems(defaultGates()).some((item) => item.id === 'companies')
   ).toBe(true);
+});
+
+describe('New Home on the rail', () => {
+  const ids = (gates: NavItemGates) =>
+    visibleNavItems(gates).map((item) => item.id);
+
+  it('takes Notifications’ place beside old Home, with g h', () => {
+    const gates = defaultGates({ homeMode: 'both' });
+    expect(ids(gates).slice(0, 2)).toEqual(['home', 'new-home']);
+    expect(ids(gates)).not.toContain('notifications');
+    const [home, newHome] = visibleNavItems(gates);
+    expect(home?.hotkeyToken).toBeUndefined();
+    expect(newHome?.hotkeyToken).toBe(TOKENS.sidebar.goTo.home);
+  });
+
+  it('keeps the place a saved order gave Notifications', () => {
+    const gates = defaultGates({
+      homeMode: 'both',
+      prefs: defaultPrefs({ order: ['documents', 'notifications', 'mail'] }),
+    });
+    expect(ids(gates).slice(0, 4)).toEqual([
+      'home',
+      'documents',
+      'new-home',
+      'mail',
+    ]);
+  });
+
+  it('is the Home item once old Home is off', () => {
+    const gates = defaultGates({ homeMode: 'new-only' });
+    expect(ids(gates)[0]).toBe('home');
+    expect(ids(gates)).not.toContain('new-home');
+    expect(ids(gates)).not.toContain('notifications');
+  });
 });

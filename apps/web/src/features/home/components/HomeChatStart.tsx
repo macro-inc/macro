@@ -19,7 +19,12 @@ const HomePriorities = lazyNamed(
 );
 
 /** Desktop Home's idle pane: the agent composer, and the priorities when suggestions are on. */
-export function HomeChatStart() {
+export function HomeChatStart(props: {
+  /** The view's name, in the top bar the collapsed list leaves. */
+  title: string;
+  /** Show the session the composer just started, beside the list. */
+  onStartedSession: (sessionId: string) => void;
+}) {
   const shell = useViewShell();
   const suggestions = useSuggestionsFlag();
   const showHomeTopBar = () =>
@@ -28,7 +33,7 @@ export function HomeChatStart() {
     <ChatInputProvider>
       <Show when={showHomeTopBar()}>
         <ViewShell.TopBar>
-          <ViewSidebar.Title caret={false}>Home</ViewSidebar.Title>
+          <ViewSidebar.Title caret={false}>{props.title}</ViewSidebar.Title>
         </ViewShell.TopBar>
       </Show>
       <DragDropWrapper class="relative min-h-0 min-w-0 flex-1 overflow-y-auto px-6">
@@ -60,7 +65,10 @@ export function HomeChatStart() {
                 name="Home.agent-composer"
                 fallback={<div class="min-h-24" />}
               >
-                <HomeAgentComposer autoFocus={false} />
+                <HomeAgentComposer
+                  autoFocus={false}
+                  onStarted={props.onStartedSession}
+                />
               </DebugSuspense>
             </div>
             <div class="min-h-0 min-w-0 pb-8">

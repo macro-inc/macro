@@ -245,12 +245,16 @@ function OptionContent<T extends string>(props: {
           {props.option.count}
         </span>
       </Show>
-      <Show when={props.option.dot && !props.iconOnly}>
+      <Show when={props.option.dot}>
         <span
           aria-hidden="true"
           class={cn(
             'size-1.5 shrink-0 rounded-full',
-            props.option.dot === 'violet' ? 'bg-violet' : 'bg-accent'
+            props.option.dot === 'violet' ? 'bg-violet' : 'bg-accent',
+            // An icon-only option carries its dot on the glyph's corner.
+            props.iconOnly &&
+              props.option.icon !== undefined &&
+              'absolute top-0.5 right-0.5'
           )}
         />
       </Show>

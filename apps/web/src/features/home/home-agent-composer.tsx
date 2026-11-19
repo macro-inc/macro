@@ -16,12 +16,14 @@ import {
   NewChatPage,
   type StartConversation,
 } from '../agents-view/views/NewChatPage';
-import { useHomeView } from './home-view-context';
 
 /** Home supplies its saved draft and detail pane to the same composer used by Agents. */
-export function HomeAgentComposer(props: { autoFocus?: boolean }) {
+export function HomeAgentComposer(props: {
+  autoFocus?: boolean;
+  /** Show the session the composer just started, beside the list. */
+  onStarted: (sessionId: string) => void;
+}) {
   const panel = useSplitPanelOrThrow();
-  const home = useHomeView();
   const roster = createAgentRosterSource();
   const settings = useSettingsState();
   const userId = useUserId();
@@ -50,7 +52,7 @@ export function HomeAgentComposer(props: { autoFocus?: boolean }) {
       userId: userId(),
       submitSurface: 'home',
     });
-    home.openStartedSession(id);
+    props.onStarted(id);
   };
   return (
     <div class="agents-view-portal min-w-0 [&_.newchat]:p-0">

@@ -21,13 +21,17 @@ import { getCalendarJoinRequestNotification } from '@notifications/row-notificat
 import type { UnifiedNotification } from '@notifications/types';
 import { getBotDisplayName } from '@queries/messages/message-sender';
 import { cn, pressHandlers } from '@ui';
-import { Match, Show, Switch } from 'solid-js';
+import { type JSX, Match, Show, Switch } from 'solid-js';
 import { match } from 'ts-pattern';
 import { HomeEntityIcon } from './HomeEntityIcon';
 
 type HomeListEntityProps = BaseListEntityProps & {
   occurrenceKey: string;
   channelName?: string;
+  /** Unread state the list already knows, such as an inbox row's. */
+  unread?: boolean;
+  /** Takes the unread dot's place on hover, as a notification's Mark done. */
+  hoverAction?: JSX.Element;
 };
 
 /** One compact, single-line Home item; the list owns focus and activation. */
@@ -41,7 +45,7 @@ export function HomeListEntity(props: HomeListEntityProps) {
   // A calendar event someone asked to join says who asked, like a comment.
   const joinRequestNotification = () =>
     getCalendarJoinRequestNotification(props.entity);
-  const unread = () => unreadFilterFn(props.entity);
+  const unread = () => props.unread ?? unreadFilterFn(props.entity);
   const notificationSource = useGlobalNotificationSource();
   const muted = () =>
     entityIsMuted(notificationSource.mutedEntities(), props.entity);
@@ -134,11 +138,29 @@ export function HomeListEntity(props: HomeListEntityProps) {
                   overrideTimeStamp={props.timestamp ?? undefined}
                 />
               </span>
-              <Show when={unread()}>
-                <span
-                  aria-label="Unread"
-                  class="size-1.5 shrink-0 rounded-full bg-accent"
-                />
+              <Show
+                when={props.hoverAction}
+                fallback={
+                  <Show when={unread()}>
+                    <span
+                      aria-label="Unread"
+                      class="size-1.5 shrink-0 rounded-full bg-accent"
+                    />
+                  </Show>
+                }
+              >
+                {/* One slot for both, so nothing moves as the row is hovered. */}
+                <span class="flex size-5 shrink-0 items-center justify-center">
+                  <Show when={unread()}>
+                    <span
+                      aria-label="Unread"
+                      class="size-1.5 rounded-full bg-accent group-hover/home-item:hidden"
+                    />
+                  </Show>
+                  <span class="hidden group-hover/home-item:flex">
+                    {props.hoverAction}
+                  </span>
+                </span>
               </Show>
             </ViewSidebar.Item>
           }
@@ -149,6 +171,7 @@ export function HomeListEntity(props: HomeListEntityProps) {
               surface="home"
               active={props.checked || props.highlighted}
               unread={unread()}
+              hoverAction={props.hoverAction}
               onOpen={(event) => {
                 event.preventDefault();
                 props.onClick?.(event);

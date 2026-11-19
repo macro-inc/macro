@@ -1,6 +1,7 @@
 import { ViewSidebar } from '@app/components/view-shell';
 import { MobileListLayout } from '@app/components/view-shell/MobileListLayout';
 import { SidebarCreateHeader } from '@app/components/view-shell/SidebarCreateButton';
+import { t } from '@app/lib/i18n';
 import { isTouchDevice } from '@core/mobile/isTouchDevice';
 import { tourTarget } from '@ui/components/Tour';
 import { createSignal, type JSX, type ParentProps, Show } from 'solid-js';
@@ -8,7 +9,18 @@ import { useHomeView } from '../home-view-context';
 import { HOME_TOUR } from '../tour';
 import { HomeFilterDropdown } from './HomeFilters';
 
-function DesktopHomeHeader(props: { onNewChat: () => void }) {
+/** New Home's frame around Home's list: its name and its tabs. */
+export type HomeFrame = {
+  /** "New Home" while old Home is still beside it, else "Home". */
+  title: () => string;
+  /** The Recent and Notifications switch, under the header. */
+  tabs: () => JSX.Element;
+};
+
+function DesktopHomeHeader(props: {
+  frame?: HomeFrame;
+  onNewChat: () => void;
+}) {
   const { state, setState, focusList } = useHomeView();
   // A query on the list keeps its field on screen, also when the header
   // remounts, and closing the field clears the query, as in the list headers.
@@ -16,35 +28,41 @@ function DesktopHomeHeader(props: { onNewChat: () => void }) {
     state.search.trim().length > 0
   );
   const searchOpen = () => searchOpened() || state.search.trim().length > 0;
+  // New Home's copy is translated; old Home's stays as it was.
+  const searchLabel = () => (props.frame ? t('home.search') : 'Search Home');
   return (
-    <SidebarCreateHeader
-      title="Home"
-      label="New chat"
-      onCreate={props.onNewChat}
-      actions={<HomeFilterDropdown />}
-      searchLabel="Search Home"
-      searchOpen={searchOpen()}
-      onSearchOpenChange={(open) => {
-        setSearchOpened(open);
-        if (!open) setState('search', '');
-      }}
-      search={() => (
-        <ViewSidebar.Search
-          label="Search Home"
-          value={state.search}
-          onValueChange={(search) => setState('search', search)}
-          focusResults={() => {
-            focusList();
-          }}
-        />
-      )}
-    />
+    <>
+      <SidebarCreateHeader
+        title={props.frame?.title() ?? 'Home'}
+        label={props.frame ? t('home.newChat') : 'New chat'}
+        onCreate={props.onNewChat}
+        actions={<HomeFilterDropdown />}
+        searchLabel={searchLabel()}
+        searchOpen={searchOpen()}
+        onSearchOpenChange={(open) => {
+          setSearchOpened(open);
+          if (!open) setState('search', '');
+        }}
+        search={() => (
+          <ViewSidebar.Search
+            label={searchLabel()}
+            value={state.search}
+            onValueChange={(search) => setState('search', search)}
+            focusResults={() => {
+              focusList();
+            }}
+          />
+        )}
+      />
+      {props.frame?.tabs()}
+    </>
   );
 }
 
 /** Keep mobile chrome above a full-height list so rows fade beneath it. */
 export function HomeListLayout(
   props: ParentProps<{
+    frame?: HomeFrame;
     tabs: JSX.Element;
     onNewChat: () => void;
     /** Below the list on desktop, e.g. the setup prompt. */
@@ -60,7 +78,10 @@ export function HomeListLayout(
         when={isTouchDevice()}
         fallback={
           <>
-            <DesktopHomeHeader onNewChat={props.onNewChat} />
+            <DesktopHomeHeader
+              frame={props.frame}
+              onNewChat={props.onNewChat}
+            />
             {props.children}
             {props.footer}
           </>
