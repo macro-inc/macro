@@ -1,0 +1,31 @@
+apps/web/src/features/meetings/core/meeting-media-path.test.ts
+  s_4f8fe03d10848a::t_2508c5abf5f60a 2
+apps/web/src/features/meetings/views/meeting-page.tsx
+  s_4f8fe03d10848a::t_2508c5abf5f60a 122-123,126-127,133
+docs/agent-guide/calls.md
+  s_4f8fe03d10848a::t_113efb52290aca 384-386,396-397
+apps/web/src/features/meetings/views/meeting-page-auth.test.tsx
+  s_4f8fe03d10848a::t_113efb52290aca 2-3,18-21
+  s_4f8fe03d10848a::t_3b0691615376bd 15,346-411
+apps/web/src/features/meetings/meeting-route.tsx
+  s_4f8fe03d10848a::t_113efb52290aca 151-198,200-210,212,214-241
+  s_4f8fe03d10848a::t_2508c5abf5f60a 32,150,242
+apps/web/src/features/meetings/core/meeting-media-path.ts
+  s_4f8fe03d10848a::t_2508c5abf5f60a 12-13
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.7.7",
+  "base_commit_sha": "377908225e7f82ae3f43e143155527dc9201ab3c",
+  "prompts": {},
+  "sessions": {
+    "s_4f8fe03d10848a": {
+      "agent_id": {
+        "tool": "claude",
+        "id": "9547a29e-d154-4624-a5b1-3a03d877cb23",
+        "model": "claude-opus-5-5"
+      },
+      "human_author": "Eric Hayes <56524199+ehayes2000@users.noreply.github.com>"
+    }
+  }
+}
