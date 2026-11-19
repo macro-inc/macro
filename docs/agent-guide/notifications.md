@@ -9,18 +9,28 @@ first. The flag is on in dev and comes from PostHog elsewhere;
 route redirects to Home once flags load, and `g i` stays on Home; with it on,
 Home keeps `g h`.
 
-With unified notifications on, the outer rail and mobile dock show unread dots
-from the inbox's `notificationInboxUnreadUpdates` subscription. The updates
-follow reads, done, clears and new activity within about a second on each open
-tab. With unified notifications off, the buttons use their earlier presence
+With unified notifications on, the outer rail and mobile dock show unread dots:
+Home and Notifications from the inbox's `notificationInboxUnreadUpdates`
+subscription, Mail and Channels from the sources of their numbers (below). The
+updates follow reads, done, clears and new activity within about a second on
+each open tab. With unified notifications off, the buttons use their earlier presence
 checks.
 
-Unread numbers are off by default in every environment while their accuracy is
-under investigation. Set `VITE_ENABLE_NAVIGATION_UNREAD_COUNTS=true` for a
-frontend build to show numbers alongside the unified inbox. The Notifications
-button counts all unread rows, Channels counts channel rows, and Mail counts
-mail rows. Counts above 99 show as `99+`. Home keeps a dot on the desktop rail.
-On the mobile dock the Home bell opens Notifications and carries the total.
+Unread numbers are off by default in every environment. Set
+`VITE_ENABLE_NAVIGATION_UNREAD_COUNTS=true` for a frontend build to show numbers
+alongside the unified inbox. Each number is what its own view shows as unread
+(`apps/web/src/components/app/view-unread.ts`), never a count of another view's rows:
+Notifications counts the inbox's unread rows; Mail counts the Important tab's
+unread threads across every inbox, by that tab's query, and shows nothing while
+**New email** notifications are off; Channels counts conversations with an unseen
+top-level message, Chat's unread dot (a conversation with only a thread mention
+has a mention pill but no dot, and no count). Mail's notification rows exist only
+for mail that raised a notification, so they are not Mail's count. Counts above
+99 show as `99+`; Mail reads one more page only when reads leave fewer loaded
+than the label shows, and only while numbers are on. Home keeps a dot on the
+desktop rail. On the mobile dock the Home bell opens Notifications and carries
+the total. `apps/web/tests/email-e2e/full-stack-unread-counts.spec.ts` checks
+each number against its view on the full stack.
 
 Each list row is one row of the server's notification inbox
 (`user.notificationInbox`): an email thread, a channel's top-level messages, one

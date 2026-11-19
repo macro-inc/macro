@@ -742,8 +742,9 @@ export const enableUnifiedNotifications = defineFlag({
   default: onInDev,
 });
 
-// Keep navigation numbers off in every environment while unread counts are
-// being investigated. Unified unread dots continue to use the subscription.
+// Navigation unread numbers, off in every environment until turned on. Each
+// number is what its view shows as unread (components/app/view-unread.ts); the
+// email e2e bundle turns them on to check them against the views.
 export const enableNavigationUnreadCounts = defineFlag({
   env: 'ENABLE_NAVIGATION_UNREAD_COUNTS',
   default: false,
