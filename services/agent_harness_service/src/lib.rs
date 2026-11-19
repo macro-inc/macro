@@ -684,9 +684,10 @@ pub async fn run() -> anyhow::Result<()> {
     .context("failed to compose cognition APIs")?;
     let cognition_router = cognition_runtime.router.clone();
     let code_scratch = tempfile::tempdir()?;
-    // Lists the SDK operations an OCaml program may call, for the permission
-    // gate; only with the OCaml bundle.
-    let mut ocaml_analyzer: Option<Arc<dyn code_execution::domain::ProgramAnalyzer>> = None;
+    // List the SDK operations a checked program may call, for the permission
+    // gate: JS tools wherever Deno runs programs, OCaml only with the OCaml
+    // bundle.
+    let mut program_analyzers = code_mode::permissions::Analyzers::default();
     let code_runner = match &config.deno_binary {
         Some(binary) => {
             let runner = code_execution::outbound::deno::DenoRunner::new(
@@ -709,7 +710,7 @@ pub async fn run() -> anyhow::Result<()> {
                 )
                 .await
                 .map_err(|error| anyhow::anyhow!("invalid OCaml analyzer: {error}"))?;
-                ocaml_analyzer = Some(Arc::new(analyzer));
+                program_analyzers.ocaml = Some(Arc::new(analyzer));
             }
             let runner: Arc<dyn code_execution::domain::CodeRunner> = Arc::new(runner);
             // Public MCP runs get their own admission budget so external
@@ -738,6 +739,16 @@ pub async fn run() -> anyhow::Result<()> {
                     ..Default::default()
                 },
             )?;
+            // JS tools programs need only Deno: the bundle is embedded.
+            let analyzer = code_execution::outbound::deno::analyze::JsToolsAnalyzer::new(
+                binary.into(),
+                code_scratch.path().join("analyses-js"),
+                8,
+                code_execution::domain::Limits::default().max_source_bytes,
+            )
+            .await
+            .map_err(|error| anyhow::anyhow!("invalid JS tools analyzer: {error}"))?;
+            program_analyzers.js_tools = Some(Arc::new(analyzer));
             let checker = code_execution::outbound::deno::check::DenoChecker::new(
                 binary.into(),
                 code_scratch.path().join("checks"),
@@ -971,10 +982,17 @@ pub async fn run() -> anyhow::Result<()> {
                 Arc::new(agent_permissions::outbound::registry::registry_catalog()),
             ),
         );
-    // The gate on OCaml programs, where this build can run them.
-    let permission_gate = ocaml_analyzer.map(|analyzer| {
+    // The gate on checked programs, in each language this build can
+    // analyze.
+    let ocaml_gated = program_analyzers.ocaml.is_some();
+    // JS tools programs are offered only where the gate analyzes them.
+    let js_tools_fingerprint = program_analyzers
+        .js_tools
+        .as_ref()
+        .map(|analyzer| analyzer.sdk_fingerprint().to_owned());
+    let permission_gate = program_analyzers.any().then(|| {
         Arc::new(code_mode::permissions::PermissionGate {
-            analyzer,
+            analyzers: program_analyzers,
             permissions: Arc::clone(&agent_permissions_service),
             holds: tool_approvals.clone(),
             rollout: Arc::new(code_mode::PermissionsFlag(feature_flags.clone())),
@@ -1014,12 +1032,23 @@ pub async fn run() -> anyhow::Result<()> {
         Some(fingerprint) => session_code_mode.with_ocaml(agent_code_mode::domain::OcamlPrograms {
             fingerprint,
             rollout: Arc::new(code_mode::OcamlFlag(feature_flags.clone())),
-            permissions: permission_gate.is_some().then(
-                || -> Arc<dyn agent_code_mode::domain::OcamlRollout> {
-                    Arc::new(code_mode::PermissionsFlag(feature_flags.clone()))
-                },
-            ),
+            permissions: ocaml_gated.then(|| -> Arc<dyn agent_code_mode::domain::OwnerRollout> {
+                Arc::new(code_mode::PermissionsFlag(feature_flags.clone()))
+            }),
         }),
+        None => session_code_mode,
+    };
+    // JavaScript tools programs, for owners with agent permissions, which
+    // gate every one of them.
+    let session_code_mode = match js_tools_fingerprint {
+        Some(fingerprint) => {
+            session_code_mode.with_js_tools(agent_code_mode::domain::JsToolsPrograms {
+                fingerprint,
+                rollout: Arc::new(code_mode::JsToolsRollout(code_mode::PermissionsFlag(
+                    feature_flags.clone(),
+                ))),
+            })
+        }
         None => session_code_mode,
     };
     let code_mode: Arc<dyn agent_code_mode::domain::SessionCodeMode> = Arc::new(session_code_mode);

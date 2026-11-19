@@ -946,10 +946,10 @@ async fn the_egress_flag_is_read_once_per_user_for_a_while() {
     assert_eq!(loads.load(Ordering::SeqCst), 4);
 }
 
-/// Agent permissions are on only with the OCaml rollout too, and off when
-/// the flags can't be read.
+/// Agent permissions' page and API follow their flag alone (JavaScript tools
+/// programs need nothing more), and are off when the flags can't be read.
 #[tokio::test]
-async fn agent_permissions_need_both_flags() {
+async fn agent_permissions_follow_their_flag() {
     use agent_permissions::domain::ports::PermissionsRollout;
     use feature_flags::outbound::fake::FakeFeatureFlags;
     use feature_flags::{FlagSnapshot, FlagValue};
@@ -957,6 +957,7 @@ async fn agent_permissions_need_both_flags() {
     let both = MacroUserIdStr::try_from("macro|both@example.com".to_owned()).unwrap();
     let permissions_only =
         MacroUserIdStr::try_from("macro|permissions-only@example.com".to_owned()).unwrap();
+    let ocaml_only = MacroUserIdStr::try_from("macro|ocaml-only@example.com".to_owned()).unwrap();
     let unreadable = MacroUserIdStr::try_from("macro|unreadable@example.com".to_owned()).unwrap();
     let on = |keys: &[&str]| {
         FlagSnapshot::new(
@@ -967,11 +968,13 @@ async fn agent_permissions_need_both_flags() {
     let mut flags = FakeFeatureFlags::default();
     flags.set(both.clone(), Ok(on(&[OCAML_FLAG, PERMISSIONS_FLAG])));
     flags.set(permissions_only.clone(), Ok(on(&[PERMISSIONS_FLAG])));
+    flags.set(ocaml_only.clone(), Ok(on(&[OCAML_FLAG])));
     flags.set(unreadable.clone(), Err("posthog is down".to_owned()));
     let rollout = PermissionsFlag(Some(flags));
 
     assert!(rollout.enabled(&both).await);
-    assert!(!rollout.enabled(&permissions_only).await);
+    assert!(rollout.enabled(&permissions_only).await);
+    assert!(!rollout.enabled(&ocaml_only).await);
     assert!(!rollout.enabled(&unreadable).await);
     assert!(
         !PermissionsFlag::<FakeFeatureFlags>(None)
@@ -1069,6 +1072,21 @@ async fn the_permission_gate_refuses_holds_or_limits_a_run(pool: sqlx::PgPool) {
     }
     let before = correlations().await;
 
+    // A JS tools program the gate did not check (its rollout read off, as
+    // when the flags can't be read) never runs ungated: refused before
+    // anyone is asked, a correlation or a credential.
+    let parts = gate(analysis(), &[], ToolApprovalStatus::Approved, false);
+    let (issued, asked) = issue(parts, ProgramLanguage::JsTools).await;
+    assert!(matches!(
+        issued,
+        Err(CodeModeError::NotRun(agent_code_mode::domain::NotRun {
+            permission: None,
+            ..
+        }))
+    ));
+    assert_eq!(asked, 0);
+    assert_eq!(correlations().await, before);
+
     // Never: refused before the owner hold, a correlation or a credential.
     let parts = gate(
         analysis(),
@@ -1126,4 +1144,103 @@ async fn the_permission_gate_refuses_holds_or_limits_a_run(pool: sqlx::PgPool) {
         ])
     );
     assert_eq!(correlations().await, before + 1);
+
+    // A JavaScript tools program the same way: never refused before anything
+    // is minted, ask approved runs limited to everything it may call.
+    let parts = gate(
+        analysis(),
+        &[("email.send_message", PermissionState::Never)],
+        ToolApprovalStatus::Approved,
+        true,
+    );
+    let (issued, asked) = issue(parts, ProgramLanguage::JsTools).await;
+    assert!(matches!(
+        issued,
+        Err(CodeModeError::NotRun(agent_code_mode::domain::NotRun {
+            permission: Some(agent_code_mode::domain::ExecutionPermission::Blocked { .. }),
+            ..
+        }))
+    ));
+    assert_eq!(asked, 0);
+    assert_eq!(correlations().await, before + 1);
+    let parts = gate(
+        analysis(),
+        &[("email.send_message", PermissionState::Ask)],
+        ToolApprovalStatus::Approved,
+        true,
+    );
+    let holds = parts.holds.clone();
+    let (issued, asked) = issue(parts, ProgramLanguage::JsTools).await;
+    assert_eq!(asked, 1);
+    assert_eq!(
+        holds.held.lock().unwrap()[0].arguments["permission"]["language"],
+        "js_tools"
+    );
+    assert_eq!(
+        issued.unwrap().allowed_operations,
+        Some(vec![
+            call("email", "send_message"),
+            call("storage", "get_document")
+        ])
+    );
+    assert_eq!(correlations().await, before + 2);
+}
+
+/// The gate applies per language: the permissions flag for JavaScript tools
+/// programs, with the OCaml flag for OCaml ones, never for plain JavaScript.
+#[tokio::test]
+async fn the_gate_follows_the_permissions_flag_and_for_ocaml_its_flag() {
+    use super::permissions::LanguageRollout;
+    use agent_code_mode::domain::OwnerRollout;
+    use feature_flags::outbound::fake::FakeFeatureFlags;
+    use feature_flags::{FlagSnapshot, FlagValue};
+
+    let user = |name: &str| MacroUserIdStr::try_from(format!("macro|{name}@example.com")).unwrap();
+    let on = |keys: &[&str]| {
+        FlagSnapshot::new(
+            keys.iter()
+                .map(|key| ((*key).to_owned(), FlagValue::Boolean(true))),
+        )
+    };
+    let permissions = user("permissions");
+    let both = user("both");
+    let ocaml_only = user("ocaml-only");
+    let mut flags = FakeFeatureFlags::default();
+    flags.set(permissions.clone(), Ok(on(&[PERMISSIONS_FLAG])));
+    flags.set(both.clone(), Ok(on(&[OCAML_FLAG, PERMISSIONS_FLAG])));
+    flags.set(ocaml_only.clone(), Ok(on(&[OCAML_FLAG])));
+    let rollout = PermissionsFlag(Some(flags));
+
+    for (owner, language, gated) in [
+        (&permissions, ProgramLanguage::JsTools, true),
+        (&permissions, ProgramLanguage::Ocaml, false),
+        (&permissions, ProgramLanguage::Javascript, false),
+        (&both, ProgramLanguage::JsTools, true),
+        (&both, ProgramLanguage::Ocaml, true),
+        (&both, ProgramLanguage::Javascript, false),
+        (&ocaml_only, ProgramLanguage::JsTools, false),
+        (&ocaml_only, ProgramLanguage::Ocaml, false),
+    ] {
+        assert_eq!(
+            LanguageRollout::enabled(&rollout, owner, language).await,
+            gated,
+            "{owner:?} {language:?}"
+        );
+    }
+    // Code mode's OCaml permissions text stays OCaml's.
+    assert!(!OwnerRollout::enabled(&rollout, &permissions).await);
+    assert!(OwnerRollout::enabled(&rollout, &both).await);
+    // JavaScript tools programs are offered on the permissions flag alone.
+    let js_tools = JsToolsRollout(rollout);
+    assert!(OwnerRollout::enabled(&js_tools, &permissions).await);
+    assert!(OwnerRollout::enabled(&js_tools, &both).await);
+    assert!(!OwnerRollout::enabled(&js_tools, &ocaml_only).await);
+    assert!(
+        !LanguageRollout::enabled(
+            &PermissionsFlag::<FakeFeatureFlags>(None),
+            &both,
+            ProgramLanguage::JsTools
+        )
+        .await
+    );
 }

@@ -7410,11 +7410,11 @@
           },
           "sdkFingerprint": {
             "type": ["string", "null"],
-            "description": "For an OCaml program, the fingerprint of the OCaml SDK bundle it ran\nagainst (SDK version plus a hash of its interfaces)."
+            "description": "For an OCaml program, the fingerprint of the OCaml SDK bundle it ran\nagainst (SDK version plus a hash of its interfaces); for a JavaScript\ntools program, of the interpreter and catalog it ran with."
           },
           "source": {
             "type": "string",
-            "description": "The submitted program: a JavaScript module or an OCaml `main.ml`."
+            "description": "The submitted program: a JavaScript module, an OCaml `main.ml` or a\nJavaScript tools script."
           },
           "status": {
             "$ref": "#/components/schemas/ExecutionStatus",
@@ -8245,8 +8245,8 @@
       },
       "ProgramLanguage": {
         "type": "string",
-        "description": "The language of a session program. OCaml is offered only to sessions\nwhose owner has the OCaml rollout ([`OcamlRollout`](super::OcamlRollout)).",
-        "enum": ["javascript", "ocaml"]
+        "description": "The language of a session program. OCaml is offered only to sessions\nwhose owner has the OCaml rollout ([`OwnerRollout`](super::OwnerRollout)),\nJavaScript tools programs only to sessions whose owner has agent\npermissions, which gate them.",
+        "enum": ["javascript", "ocaml", "js_tools"]
       },
       "PromptAttachment": {
         "type": "object",

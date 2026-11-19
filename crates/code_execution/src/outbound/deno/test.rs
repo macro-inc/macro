@@ -87,6 +87,23 @@ async fn respond(stream: &mut TcpStream, body: &str) {
     stream.write_all(response.as_bytes()).await.unwrap();
 }
 
+fn failure(outcome: &Outcome) -> &ExecutionFailure {
+    match outcome {
+        Outcome::Failed { error } => error,
+        other => panic!("expected a failure, got {other:?}"),
+    }
+}
+
+fn progress(events: &[ExecutionEvent]) -> Vec<&serde_json::Value> {
+    events
+        .iter()
+        .filter_map(|event| match &event.kind {
+            EventKind::Progress { value } => Some(value),
+            _ => None,
+        })
+        .collect()
+}
+
 #[tokio::test]
 #[ignore = "requires pinned Deno runtime"]
 async fn real_sdk_nested_calls_are_authenticated_and_concurrent() {
@@ -1786,4 +1803,5 @@ export async function main({hosts}) {
     service.shutdown().await;
 }
 
+mod js_tools;
 mod ocaml;

@@ -12,6 +12,9 @@
 		"type-check": "tsc --noEmit --project tsconfig.json"
 	},
 	"dependencies": {
+		"@opencode/codemode": "2.3.2",
+		"acorn": "8.15.0",
+		"codemode-effect": "npm:effect@4.1.0",
 		"handlebars": "4.7.9"
 	},
 	"devDependencies": {

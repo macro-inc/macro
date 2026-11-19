@@ -1,17 +1,18 @@
-//! The permission gate in front of an OCaml program: read which SDK
-//! operations it may call, check them against the agent's permissions, then
-//! refuse it, hold it for the person it acts as, or let it run limited to
-//! those operations.
+//! The permission gate in front of a checked program (OCaml, or JavaScript
+//! tools): read which SDK operations it may call, check them against the
+//! agent's permissions, then refuse it, hold it for the person it acts as, or
+//! let it run limited to those operations.
 //!
-//! It applies only to OCaml programs of sessions whose owner has the
-//! permissions rollout; everything else runs exactly as before.
+//! It applies only to programs in a language this build can analyze, of
+//! sessions whose owner has the permissions rollout for that language;
+//! everything else, plain JavaScript included, runs exactly as before.
 
 use std::collections::BTreeSet;
 use std::sync::Arc;
 
 use agent_code_mode::domain::{
     CodeModeError, DeclinedStatus, ExecutionIdentity, ExecutionPermission, GatedOperation, NotRun,
-    OcamlRollout, ProgramLanguage,
+    ProgramLanguage,
 };
 use agent_egress::domain::approval::{PermissionApprovals, PermissionHold, refusal};
 use agent_egress::domain::model::TurnPrompter;
@@ -53,16 +54,53 @@ where
     }
 }
 
-/// The gate's parts. Wired only where the runner has the OCaml bundle.
+/// Whether the gate applies to a session owner's programs in a language:
+/// the permissions rollout, with that language's own where it has one.
+// Object-safe: the gate holds it as `Arc<dyn LanguageRollout>`.
+#[async_trait]
+pub trait LanguageRollout: Send + Sync + 'static {
+    /// On for `owner`'s programs in `language`. A flag that cannot be read
+    /// counts as off.
+    async fn enabled(&self, owner: &MacroUserIdStr<'static>, language: ProgramLanguage) -> bool;
+}
+
+/// What lists the operations a program may call, per language this build
+/// can analyze. A language without one is never gated.
+#[derive(Clone, Default)]
+pub struct Analyzers {
+    /// OCaml programs, where the runner has the OCaml bundle.
+    pub ocaml: Option<Arc<dyn ProgramAnalyzer>>,
+    /// JavaScript tools programs, wherever Deno runs programs.
+    pub js_tools: Option<Arc<dyn ProgramAnalyzer>>,
+}
+
+impl Analyzers {
+    /// Whether any language can be analyzed: the gate is worth wiring.
+    pub fn any(&self) -> bool {
+        self.ocaml.is_some() || self.js_tools.is_some()
+    }
+
+    fn of(&self, language: ProgramLanguage) -> Option<&Arc<dyn ProgramAnalyzer>> {
+        match language {
+            // Plain JavaScript reaches the API any way it likes; it is not
+            // gated.
+            ProgramLanguage::Javascript => None,
+            ProgramLanguage::Ocaml => self.ocaml.as_ref(),
+            ProgramLanguage::JsTools => self.js_tools.as_ref(),
+        }
+    }
+}
+
+/// The gate's parts. Wired where the runner can analyze some language.
 pub struct PermissionGate {
-    /// Lists the operations a program may call.
-    pub analyzer: Arc<dyn ProgramAnalyzer>,
+    /// List the operations a program may call.
+    pub analyzers: Analyzers,
     /// The agent's permissions.
     pub permissions: Arc<dyn AgentPermissions>,
     /// Holds a program for the person it acts as.
     pub holds: Arc<dyn PermissionApprovals>,
-    /// The permissions rollout, per session owner.
-    pub rollout: Arc<dyn OcamlRollout>,
+    /// The permissions rollout, per session owner and language.
+    pub rollout: Arc<dyn LanguageRollout>,
     /// The running turn's prompter.
     pub prompters: Arc<dyn TurnPrompters>,
 }
@@ -70,6 +108,8 @@ pub struct PermissionGate {
 /// A program the gate checked and did not refuse.
 #[derive(Debug, Clone)]
 pub struct Checked {
+    /// The language it is written in.
+    pub language: ProgramLanguage,
     /// Every request it may send: what the bootstrap lets through.
     pub calls: BTreeSet<SdkCall>,
     /// The operations set to ask.
@@ -78,22 +118,26 @@ pub struct Checked {
 
 impl PermissionGate {
     /// Before anyone is asked anything: `None` when the gate does not apply
-    /// (JavaScript, or the owner lacks the rollout), else the program's
-    /// calls, or `NotRun` when it cannot be analyzed, does not compile, or
-    /// may call an operation set to never.
+    /// (plain JavaScript, a language this build can't analyze, or the owner
+    /// lacks that language's rollout), else the program's calls, or `NotRun`
+    /// when it cannot be analyzed, does not compile, or may call an operation
+    /// set to never.
     pub async fn check(
         &self,
         identity: &ExecutionIdentity,
         source: &str,
         language: ProgramLanguage,
     ) -> Result<Option<Checked>, CodeModeError> {
-        if language != ProgramLanguage::Ocaml || !self.rollout.enabled(&identity.owner).await {
+        let Some(analyzer) = self.analyzers.of(language) else {
+            return Ok(None);
+        };
+        if !self.rollout.enabled(&identity.owner, language).await {
             return Ok(None);
         }
-        let calls = match self.analyzer.may_call(source).await {
+        let calls = match analyzer.may_call(source).await {
             Ok(Analysis::Calls(calls)) => calls,
             Ok(Analysis::CannotAnalyze(reasons)) => {
-                return Err(not_run(cannot_analyze(&reasons), None));
+                return Err(not_run(cannot_analyze(language, &reasons), None));
             }
             Ok(Analysis::Diagnostics(diagnostics)) => {
                 let message = diagnostics
@@ -105,9 +149,10 @@ impl PermissionGate {
             }
             Err(CheckError::Busy) => return Err(CodeModeError::Busy),
             Err(CheckError::InvalidSource) => {
-                return Err(CodeModeError::Invalid(
-                    "Provide a nonempty OCaml program of at most 64 KiB.".into(),
-                ));
+                return Err(CodeModeError::Invalid(format!(
+                    "Provide a nonempty {} of at most 64 KiB.",
+                    texts(language).noun
+                )));
             }
             Err(CheckError::Internal) => return Err(CodeModeError::Unavailable),
         };
@@ -136,13 +181,17 @@ impl PermissionGate {
         })?;
         if !blocked.is_empty() {
             return Err(not_run(
-                blocked_text(&blocked),
+                blocked_text(language, &blocked),
                 Some(ExecutionPermission::Blocked {
                     operations: blocked,
                 }),
             ));
         }
-        Ok(Some(Checked { calls, ask }))
+        Ok(Some(Checked {
+            language,
+            calls,
+            ask,
+        }))
     }
 
     /// Once the run's account is known (`actor`): hold the program for it
@@ -163,8 +212,9 @@ impl PermissionGate {
         let Some(prompter) = self.prompter(session).await? else {
             return Err(not_run(
                 format!(
-                    "This OCaml program did not run: it needs a person's approval for: {}, \
-                     and no turn is running to ask in.",
+                    "This {} did not run: it needs a person's approval for: {}, and no turn is \
+                     running to ask in.",
+                    texts(checked.language).noun,
                     labels(&checked.ask)
                 ),
                 Some(declined(DeclinedStatus::Expired, &checked.ask)),
@@ -183,7 +233,7 @@ impl PermissionGate {
                 "source": source,
                 "permission": {
                     "executionId": identity.execution,
-                    "language": ProgramLanguage::Ocaml,
+                    "language": checked.language,
                     "operations": checked.ask,
                 },
             }),
@@ -265,29 +315,66 @@ fn labels(operations: &[GatedOperation]) -> String {
         .join(", ")
 }
 
+/// How the gate's texts name a language's programs.
+struct Texts {
+    /// What the program is called: "OCaml program".
+    noun: &'static str,
+    /// The file its reasons' locations are in.
+    file: &'static str,
+    /// How to call SDK operations so they can be read.
+    rewrite: &'static str,
+}
+
+fn texts(language: ProgramLanguage) -> Texts {
+    match language {
+        ProgramLanguage::Ocaml => Texts {
+            noun: "OCaml program",
+            file: "main.ml",
+            rewrite: "call SDK operations directly (no Obj, external, Marshal or hand-built \
+                      requests)",
+        },
+        ProgramLanguage::JsTools => Texts {
+            noun: "program",
+            file: "main.js",
+            rewrite: "call each operation directly as tools.<service>.<operation>(input) (no \
+                      aliases, destructuring, require or import)",
+        },
+        // Never gated; named here so every language has its texts.
+        ProgramLanguage::Javascript => Texts {
+            noun: "program",
+            file: "main.mjs",
+            rewrite: "call SDK operations directly",
+        },
+    }
+}
+
 /// What the model is told about a program it must rewrite.
-pub(crate) fn cannot_analyze(reasons: &[AnalysisReason]) -> String {
+pub(crate) fn cannot_analyze(language: ProgramLanguage, reasons: &[AnalysisReason]) -> String {
+    let Texts {
+        noun,
+        file,
+        rewrite,
+    } = texts(language);
     let reasons = reasons
         .iter()
         .map(|reason| {
             format!(
-                "main.ml:{}:{}: {}",
+                "{file}:{}:{}: {}",
                 reason.line, reason.column, reason.message
             )
         })
         .collect::<Vec<_>>()
         .join("\n");
     format!(
-        "This OCaml program did not run. Before running a program, code mode reads which Macro \
-         SDK operations it calls, and this one can reach operations that cannot be read:\n\
-         {reasons}\nRewrite it to call SDK operations directly (no Obj, external, Marshal or \
-         hand-built requests) and run it again."
+        "This {noun} did not run. Before running a program, code mode reads which Macro SDK \
+         operations it calls, and this one can reach operations that cannot be read:\n\
+         {reasons}\nRewrite it to {rewrite} and run it again."
     )
 }
 
 /// What the model is told about a program that may call operations set to
 /// never.
-pub(crate) fn blocked_text(blocked: &[GatedOperation]) -> String {
+pub(crate) fn blocked_text(language: ProgramLanguage, blocked: &[GatedOperation]) -> String {
     let operations = blocked
         .iter()
         .map(|operation| {
@@ -303,8 +390,9 @@ pub(crate) fn blocked_text(blocked: &[GatedOperation]) -> String {
         .collect::<Vec<_>>()
         .join("; ");
     format!(
-        "This OCaml program did not run: this agent is not allowed to {operations}. Nothing was \
+        "This {} did not run: this agent is not allowed to {operations}. Nothing was \
          sent. Do not try to do this another way. If the person wants to allow it, call \
-         ShowPermissions with these operations so they can change the setting."
+         ShowPermissions with these operations so they can change the setting.",
+        texts(language).noun
     )
 }

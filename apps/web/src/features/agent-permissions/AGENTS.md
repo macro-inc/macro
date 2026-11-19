@@ -37,9 +37,12 @@ shows a tool's override or its action's state.
   rule always means the tool differs; ↺ sends `null` too.
 - The Macro persona's permissions use `MACRO_NEW_BOT_ID`, not
   `MACRO_AGENT_BOT_ID`.
-- Gate every entry point on `useAgentPermissionsFlag` (both
-  `enable-agent-permissions` and `enable-ocaml-code-mode`) and on the API not
+- Gate every entry point on `useAgentPermissionsFlag`
+  (`enable-agent-permissions`, the one flag: the harness offers JS tools
+  programs, which permissions gate, on it alone) and on the API not
   answering 404.
+- Copy names no program language: OCaml and JS tools (`js_tools`) programs
+  are both checked, and plain JavaScript ones are not ("checked programs").
 - Color is on glyphs only (Ask amber hand, Never failure prohibit); text stays
   ink. Control labels are short; full state names live in tooltips and prose.
 
@@ -47,6 +50,8 @@ shows a tool's override or its action's state.
 
 - `bun run test -- src/features/agent-permissions src/features/settings/Agents.test.tsx`
 - `bunx playwright test --config src/features/block-agent/browser-test/permissions.playwright.config.ts`
+  (chat cards for both languages, `?language=js_tools`, and the page,
+  `?view=page`)
 
 ## Related
 

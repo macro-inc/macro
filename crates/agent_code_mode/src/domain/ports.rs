@@ -77,9 +77,11 @@ pub trait ModelImages: Send + Sync + 'static {
     ) -> anyhow::Result<ModelImage>;
 }
 
-/// Whether a session owner may run OCaml programs: the backend rollout flag.
+/// A per-owner backend rollout flag, such as whether a session owner may run
+/// OCaml programs.
+// Object-safe: code mode holds it as `Arc<dyn OwnerRollout>`.
 #[async_trait]
-pub trait OcamlRollout: Send + Sync + 'static {
+pub trait OwnerRollout: Send + Sync + 'static {
     /// On for `owner`. A flag that cannot be read counts as off.
     async fn enabled(&self, owner: &macro_user_id::user_id::MacroUserIdStr<'static>) -> bool;
 }

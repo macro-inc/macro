@@ -2,7 +2,7 @@
 export default {
   title: 'Permissions',
   description:
-    'What {{agent}} may do when it runs an OCaml program for you. <b>Allow</b> runs without asking, <b>Ask</b> waits for your approval, <b>Never</b> refuses before anything runs.',
+    'What {{agent}} may do when it runs a program for you. <b>Allow</b> runs without asking, <b>Ask</b> waits for your approval, <b>Never</b> refuses before anything runs.',
   settingsDiffer: {
     one: '{{count}} setting differs from Always allow',
     other: '{{count}} settings differ from Always allow',
@@ -10,9 +10,9 @@ export default {
   setByAgentCount: { other: '{{count}} set by {{agent}} itself' },
   reset: 'Reset permissions',
   nothingToReset: 'Everything is already Always allow',
-  scopeLead: 'Applies to OCaml programs only, for now.',
+  scopeLead: 'Applies to checked programs only, for now.',
   scopeBody:
-    'These settings cover the OCaml programs {{agent}} runs. Its JavaScript programs, other tools and your connected apps work as before.',
+    'They cover the programs Macro checks before {{agent}} runs them. {{agent}}’s other programs, other tools and your connected apps work as before.',
   readOnly: 'Only people who can edit {{agent}} can change these.',
   searchLabel: 'Search permissions',
   searchPlaceholder: 'Search groups and tools',

@@ -3,6 +3,11 @@
 // declined program, and a hold waiting above the composer. The harness's
 // permission routes answer from memory. `?viewer=other` shows it to someone
 // who can't edit the agent and isn't the approver; `?theme=light` lights it.
+// `?language=js_tools` writes the programs in opencode's JavaScript dialect
+// and saves their records as JS tools ones; `?view=page` shows the agent's
+// permissions page instead of the session.
+
+import { AgentPermissionsPage } from '@app/features/agent-permissions';
 import { applyTheme } from '@app/features/theme/utils/themeUtils';
 import { isTouchDevice } from '@core/mobile/isTouchDevice';
 import { queryClient } from '@queries/client';
@@ -13,6 +18,8 @@ import type {
 import { agentHarnessServiceClient } from '@service-agent-harness/client';
 import type {
   AgentToolPermissions,
+  ExecutionPermission,
+  ExecutionRecord,
   GatedOperation,
   PermissionAction,
   ToolPermissionCatalog,
@@ -23,7 +30,7 @@ import { toolPermissionsClient } from '@service-agent-harness/tool-permissions';
 import { QueryClientProvider } from '@tanstack/solid-query';
 import { UserMessageBubble } from '@ui';
 import { err, ok } from 'neverthrow';
-import { For } from 'solid-js';
+import { For, Show } from 'solid-js';
 import { render } from 'solid-js/web';
 import { Message } from '../component/AgentMessage';
 import { ToolApprovalRequest } from '../component/ToolApprovalRequest';
@@ -36,6 +43,7 @@ document.documentElement.dataset.touchDevice = String(isTouchDevice());
 applyTheme(params.get('theme') === 'light' ? 'Macro Light' : 'Macro Dark');
 
 const SESSION_ID = session.sessionId();
+const LANGUAGE = params.get('language') === 'js_tools' ? 'js_tools' : 'ocaml';
 const ACTIONS: PermissionAction[] = [
   'create',
   'read',
@@ -175,11 +183,6 @@ Object.assign(toolPermissionsClient, {
     return ok(view());
   },
 });
-// No program records: each card reads its state from the call's receipt.
-Object.assign(agentHarnessServiceClient, {
-  getCodeExecution: async () =>
-    err([Object.assign(new Error('No such execution'), { code: 'NOT_FOUND' })]),
-});
 
 const op = (
   group: 'email' | 'documents',
@@ -205,12 +208,38 @@ const op = (
 const executionId = (n: number) =>
   `019a0000-0000-7000-8000-${n.toString(16).padStart(12, '0')}`;
 
+// JS tools programs' saved records, by execution id. OCaml ones have none:
+// each card reads its state from the call's receipt.
+const records = new Map<string, ExecutionRecord>();
+Object.assign(agentHarnessServiceClient, {
+  getCodeExecution: async (_session: string, id: string) => {
+    const record = records.get(id);
+    if (record) return ok(record);
+    return err([
+      Object.assign(new Error('No such execution'), { code: 'NOT_FOUND' }),
+    ]);
+  },
+});
+
 function program(
   id: string,
   n: number,
-  permission: unknown,
-  source: string
+  permission: ExecutionPermission,
+  sources: { ocaml: string; js_tools: string }
 ): MessagePart {
+  const source = sources[LANGUAGE];
+  if (LANGUAGE === 'js_tools') {
+    records.set(executionId(n), {
+      executionId: executionId(n),
+      source,
+      language: 'js_tools',
+      sdkFingerprint: '@opencode/codemode@2.3.2+0123456789ab',
+      status: 'failed',
+      calls: [],
+      activity: [],
+      permission,
+    });
+  }
   return {
     kind: 'tool_use',
     id,
@@ -219,7 +248,7 @@ function program(
     detail: {
       kind: 'other',
       acpKind: 'other',
-      input: { source, language: 'ocaml' },
+      input: { source, language: LANGUAGE },
       output: null,
       result: {
         executionId: executionId(n),
@@ -237,12 +266,21 @@ const ASKED = [
   op('documents', 'edit_document', 'ask'),
   op('documents', 'rename_document', 'ask'),
 ];
-const SOURCE = `let () =
+const SOURCES = {
+  ocaml: `let () =
   let report = Documents.get_document ~id:"weekly-report" in
   Documents.edit_document ~id:report.id ~content:(Report.render report);
   Documents.rename_document ~id:report.id ~name:"Weekly report";
   Email.send_message ~to_:[ "team@example.com" ] ~subject:"Weekly report"
-    ~body:(Report.summary report)`;
+    ~body:(Report.summary report)`,
+  js_tools: `const report = await tools.documents.get_document({ path: { id: "weekly-report" } })
+await tools.documents.edit_document({ path: { id: report.id }, body: { content: report.markdown } })
+await tools.documents.rename_document({ path: { id: report.id }, body: { name: "Weekly report" } })
+await tools.email.send_message({
+  body: { to: ["team@example.com"], subject: "Weekly report", body: report.summary },
+})
+return { documentId: report.id }`,
+};
 
 function hold(
   approvalId: string,
@@ -256,10 +294,10 @@ function hold(
     serverName: 'Macro',
     toolName: 'ExecuteCode',
     arguments: {
-      source: SOURCE,
+      source: SOURCES[LANGUAGE],
       permission: {
         executionId: executionId(9),
-        language: 'ocaml',
+        language: LANGUAGE,
         operations: ASKED,
       },
     },
@@ -295,7 +333,10 @@ const reply: FoldedMessage = {
           op('email', 'delete_email_filter', 'never'),
         ],
       },
-      'let () = Email.delete_label ~id:"old"'
+      {
+        ocaml: 'let () = Email.delete_label ~id:"old"',
+        js_tools: 'await tools.email.delete_label({ path: { id: "old" } })',
+      }
     ),
     text(
       'I can’t delete email labels: deleting email is set to Never for me. I’ve left them as they are. For the report, sending email needs your OK.'
@@ -309,7 +350,10 @@ const reply: FoldedMessage = {
         status: 'denied',
         operations: [op('email', 'send_message', 'ask')],
       },
-      'let () = Email.send_message ()'
+      {
+        ocaml: 'let () = Email.send_message ()',
+        js_tools: 'await tools.email.send_message({ body: {} })',
+      }
     ),
     text(
       'Want me to stop asking before sending email? You can change it here:'
@@ -361,7 +405,23 @@ showSession(
       ]
 );
 
-function Fixture() {
+/** The agent's permissions page, as Settings → Agents opens it. */
+function PageFixture() {
+  return (
+    <main class="h-dvh overflow-y-auto px-4 py-6">
+      <div class="mx-auto max-w-3xl">
+        <AgentPermissionsPage
+          agentId="agent-1"
+          agentName="Scout"
+          backLabel="Agents"
+          onBack={() => {}}
+        />
+      </div>
+    </main>
+  );
+}
+
+function SessionFixture() {
   return (
     <main class="flex h-dvh flex-col">
       <section
@@ -402,7 +462,9 @@ if (!root) throw new Error('Fixture root missing');
 render(
   () => (
     <QueryClientProvider client={queryClient}>
-      <Fixture />
+      <Show when={params.get('view') === 'page'} fallback={<SessionFixture />}>
+        <PageFixture />
+      </Show>
     </QueryClientProvider>
   ),
   root

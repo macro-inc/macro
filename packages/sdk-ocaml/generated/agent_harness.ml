@@ -5505,10 +5505,13 @@ let make_recorded_tool_call ?error ~(id : string) ~(input : Yojson.Safe.t)
     : recorded_tool_call)
 
 (** The language of a session program. OCaml is offered only to sessions
-whose owner has the OCaml rollout (\[[OcamlRollout]\](super::OcamlRollout)). *)
+whose owner has the OCaml rollout (\[[OwnerRollout]\](super::OwnerRollout)),
+JavaScript tools programs only to sessions whose owner has agent
+permissions, which gate them. *)
 type nonrec program_language =
   | Javascript
   | Ocaml
+  | Js_tools
   | Unknown of string  (** A value this SDK version does not know. *)
 
 let program_language_of_yojson : Yojson.Safe.t -> program_language =
@@ -5516,6 +5519,7 @@ let program_language_of_yojson : Yojson.Safe.t -> program_language =
   match Json.string json with
   | "javascript" -> Javascript
   | "ocaml" -> Ocaml
+  | "js_tools" -> Js_tools
   | other -> Json.unknown "program_language" json (Unknown other)
 
 and yojson_of_program_language : program_language -> Yojson.Safe.t =
@@ -5523,6 +5527,7 @@ and yojson_of_program_language : program_language -> Yojson.Safe.t =
   match value with
   | Javascript -> `String "javascript"
   | Ocaml -> `String "ocaml"
+  | Js_tools -> `String "js_tools"
   | Unknown other -> `String other
 
 type nonrec execution_record = {
@@ -5544,9 +5549,11 @@ OCaml serialize as they did before languages. *)
       (** JSON returned by the program, if successful. *)
   sdk_fingerprint : string option;
       (** For an OCaml program, the fingerprint of the OCaml SDK bundle it ran
-against (SDK version plus a hash of its interfaces). *)
+against (SDK version plus a hash of its interfaces); for a JavaScript
+tools program, of the interpreter and catalog it ran with. *)
   source : string;
-      (** The submitted program: a JavaScript module or an OCaml [main.ml]. *)
+      (** The submitted program: a JavaScript module, an OCaml [main.ml] or a
+JavaScript tools script. *)
   status : execution_status;  (** Overall execution state. *)
   turn_id : string option;
       (** Original turn, preventing another requester from replaying a saved result. *)

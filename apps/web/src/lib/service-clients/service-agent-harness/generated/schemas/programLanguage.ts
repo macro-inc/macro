@@ -7,7 +7,9 @@
 
 /**
  * The language of a session program. OCaml is offered only to sessions
-whose owner has the OCaml rollout ([`OcamlRollout`](super::OcamlRollout)).
+whose owner has the OCaml rollout ([`OwnerRollout`](super::OwnerRollout)),
+JavaScript tools programs only to sessions whose owner has agent
+permissions, which gate them.
  */
 export type ProgramLanguage =
   (typeof ProgramLanguage)[keyof typeof ProgramLanguage];
@@ -16,4 +18,5 @@ export type ProgramLanguage =
 export const ProgramLanguage = {
   javascript: 'javascript',
   ocaml: 'ocaml',
+  js_tools: 'js_tools',
 } as const;

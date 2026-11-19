@@ -7,7 +7,7 @@
 use super::*;
 use crate::domain::{
     CodeModeService, ExecutionCredentials, ExecutionIdentity, ExecutionRecord, ExecutionStatus,
-    ExecutionStore, ExecutionTurns, IssuedRun, ModelImages, OcamlPrograms, OcamlRollout,
+    ExecutionStore, ExecutionTurns, IssuedRun, ModelImages, OcamlPrograms, OwnerRollout,
     ProgramLanguage,
 };
 use agent_session::domain::model::AgentSessionId;
@@ -19,7 +19,7 @@ use tokio::io::{AsyncReadExt, AsyncWriteExt};
 use tokio::net::{TcpListener, TcpStream};
 
 #[derive(Default)]
-struct Store(Mutex<Vec<ExecutionRecord>>);
+pub(super) struct Store(pub(super) Mutex<Vec<ExecutionRecord>>);
 
 #[async_trait]
 impl ExecutionStore for Store {
@@ -52,7 +52,7 @@ impl ExecutionStore for Store {
     }
 }
 
-struct Turn;
+pub(super) struct Turn;
 #[async_trait]
 impl ExecutionTurns for Turn {
     async fn active(&self, _: AgentSessionId) -> Result<Option<macro_uuid::Uuid>, CodeModeError> {
@@ -101,13 +101,13 @@ impl ExecutionCredentials for Credentials {
 
 struct On;
 #[async_trait]
-impl OcamlRollout for On {
+impl OwnerRollout for On {
     async fn enabled(&self, _: &MacroUserIdStr<'static>) -> bool {
         true
     }
 }
 
-async fn read_request(stream: &mut TcpStream) -> String {
+pub(super) async fn read_request(stream: &mut TcpStream) -> String {
     let mut bytes = Vec::new();
     loop {
         let mut buffer = [0; 4096];

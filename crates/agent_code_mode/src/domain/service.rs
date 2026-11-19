@@ -34,8 +34,17 @@ pub trait SessionCodeMode: Send + Sync + 'static {
     /// bundle and the session owner has the rollout. Off when either is missing
     /// or the flag cannot be read.
     async fn ocaml_enabled(&self, session: &AgentSession) -> bool;
-    /// Whether the agent's permissions gate `session`'s OCaml programs: OCaml
-    /// is on and the owner has the permissions rollout too.
+    /// Whether `session` may run JavaScript tools programs: this deployment
+    /// can run and gate them and the session owner has the agent permissions
+    /// rollout, which always gate them. Off when either is missing or the
+    /// flag cannot be read.
+    async fn js_tools_enabled(&self, session: &AgentSession) -> bool {
+        let _ = session;
+        false
+    }
+    /// Whether the agent's permissions gate some of `session`'s programs:
+    /// its JavaScript tools programs, or its OCaml programs where OCaml is on
+    /// and the owner has the permissions rollout too.
     async fn permissions_enabled(&self, session: &AgentSession) -> bool {
         let _ = session;
         false
@@ -47,10 +56,20 @@ pub struct OcamlPrograms {
     /// The bundle's SDK fingerprint, recorded on every OCaml execution.
     pub fingerprint: String,
     /// The per-owner rollout.
-    pub rollout: Arc<dyn OcamlRollout>,
+    pub rollout: Arc<dyn OwnerRollout>,
     /// The per-owner rollout of agent permissions, which gate OCaml programs;
     /// `None` where they are not wired.
-    pub permissions: Option<Arc<dyn OcamlRollout>>,
+    pub permissions: Option<Arc<dyn OwnerRollout>>,
+}
+
+/// JavaScript tools programs, offered where the runner can run them and the
+/// agent permissions gate checks them.
+pub struct JsToolsPrograms {
+    /// The interpreter and catalog's fingerprint, recorded on every JS tools
+    /// execution.
+    pub fingerprint: String,
+    /// The per-owner rollout: agent permissions, the only flag on them.
+    pub rollout: Arc<dyn OwnerRollout>,
 }
 
 struct Inner {
@@ -61,6 +80,7 @@ struct Inner {
     images: Arc<dyn ModelImages>,
     admission: Arc<Semaphore>,
     ocaml: Option<Arc<OcamlPrograms>>,
+    js_tools: Option<Arc<JsToolsPrograms>>,
 }
 
 /// Code-mode policy over interchangeable execution, credential, and storage capabilities.
@@ -85,6 +105,7 @@ impl CodeModeService {
             images,
             admission: Arc::new(Semaphore::new(limits.max_running + limits.max_queued)),
             ocaml: None,
+            js_tools: None,
         }))
     }
 
@@ -132,14 +153,35 @@ impl CodeModeService {
             images: Arc::clone(&self.0.images),
             admission: Arc::clone(&self.0.admission),
             ocaml: Some(Arc::new(ocaml)),
+            js_tools: self.0.js_tools.clone(),
         }))
     }
 
-    /// The OCaml bundle's fingerprint, recorded with an OCaml execution.
+    /// Offer JavaScript tools programs to sessions whose owner has the
+    /// rollout. Wire it only where the permissions gate analyzes them.
+    pub fn with_js_tools(self, js_tools: JsToolsPrograms) -> Self {
+        Self(Arc::new(Inner {
+            executor: self.0.executor.clone(),
+            credentials: Arc::clone(&self.0.credentials),
+            store: Arc::clone(&self.0.store),
+            turns: Arc::clone(&self.0.turns),
+            admission: Arc::clone(&self.0.admission),
+            ocaml: self.0.ocaml.clone(),
+            js_tools: Some(Arc::new(js_tools)),
+        }))
+    }
+
+    /// The fingerprint of what an OCaml or JS tools execution ran against:
+    /// the OCaml bundle, or the JS tools interpreter and catalog.
     fn sdk_fingerprint(&self, language: ProgramLanguage) -> Option<String> {
         match language {
             ProgramLanguage::Javascript => None,
             ProgramLanguage::Ocaml => self.0.ocaml.as_ref().map(|ocaml| ocaml.fingerprint.clone()),
+            ProgramLanguage::JsTools => self
+                .0
+                .js_tools
+                .as_ref()
+                .map(|js_tools| js_tools.fingerprint.clone()),
         }
     }
 
@@ -147,6 +189,7 @@ impl CodeModeService {
         &self,
         mut identity: ExecutionIdentity,
         execution: ExecutionId,
+        language: ProgramLanguage,
         request: ExecuteRequest,
         cancel: CancellationToken,
     ) -> Result<(ExecutionReceipt, Option<MacroUserIdStr<'static>>), CodeModeError> {
@@ -155,8 +198,8 @@ impl CodeModeService {
             acting_as: Some(identity.acting_as),
             turn_id: Some(identity.turn),
             source: request.source.clone(),
-            language: request.language.into(),
-            sdk_fingerprint: self.sdk_fingerprint(request.language.into()),
+            language,
+            sdk_fingerprint: self.sdk_fingerprint(language),
             status: ExecutionStatus::Running,
             result: None,
             error: None,
@@ -571,6 +614,12 @@ impl SessionCodeMode for CodeModeService {
                     .into(),
             ));
         }
+        if request.language == Language::JsTools && !self.js_tools_enabled(session).await {
+            return Err(CodeModeError::Invalid(
+                "js_tools programs are not available in this session; write a JavaScript module."
+                    .into(),
+            ));
+        }
         let language = ProgramLanguage::from(request.language);
         let permit = Arc::clone(&self.0.admission)
             .try_acquire_owned()
@@ -605,7 +654,9 @@ impl SessionCodeMode for CodeModeService {
         tokio::spawn(
             async move {
                 let _permit = permit;
-                let mut result = service.run(identity, execution, request, cancel).await;
+                let mut result = service
+                    .run(identity, execution, language, request, cancel)
+                    .await;
                 // Image reads stay inside the admission budget, and show only
                 // files the account the execution acted as owns.
                 if let Ok((receipt, acting_user)) = &mut result {
@@ -666,7 +717,20 @@ impl SessionCodeMode for CodeModeService {
         }
     }
 
+    async fn js_tools_enabled(&self, session: &AgentSession) -> bool {
+        let (Some(js_tools), Some(_)) = (&self.0.js_tools, &self.0.executor) else {
+            return false;
+        };
+        match session.owner_user() {
+            Ok(owner) => js_tools.rollout.enabled(owner).await,
+            Err(_) => false,
+        }
+    }
+
     async fn permissions_enabled(&self, session: &AgentSession) -> bool {
+        if self.js_tools_enabled(session).await {
+            return true;
+        }
         let Some(permissions) = self
             .0
             .ocaml
@@ -781,6 +845,7 @@ pub(super) fn validate_request(request: &ExecuteRequest) -> Result<(), CodeModeE
         return Err(CodeModeError::Invalid(match request.language {
             Language::Javascript => "Provide a nonempty JavaScript module exporting main() of at most 64 KiB and timeout_ms between 1 and 30000.",
             Language::Ocaml => "Provide a nonempty OCaml program calling Code_mode.run of at most 64 KiB and timeout_ms between 1 and 30000.",
+            Language::JsTools => "Provide a nonempty JS tools program of at most 64 KiB and timeout_ms between 1 and 30000.",
         }.into()));
     }
     Ok(())

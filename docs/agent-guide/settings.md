@@ -1218,16 +1218,18 @@ Computer Claude sign-ins**.
 
 ### Agent permissions
 
-Behind `enable-agent-permissions` and `enable-ocaml-code-mode` (both on in
-dev), an agent's edit form has a **Permissions** section between `Who can use
-it` and `Advanced`: `All allowed` or `<n> restrictions` with the first two
-(`Asks before sending · Email`) and `Manage`, which opens the **Permissions**
-page in place; Back returns to the form with its unsaved edits. The Macro row
+Behind `enable-agent-permissions` (on in dev; the same flag offers agents JS
+tools programs, which these permissions gate), an agent's edit form has a
+**Permissions** section between `Who can use it` and `Advanced`: `All allowed`
+or `<n> restrictions` with the first two (`Asks before sending · Email`) and
+`Manage`, which opens the **Permissions** page in place; Back returns to the
+form with its unsaved edits. The Macro row
 in the agent list has a shield button (`Macro's permissions`) that opens the
 same page for the Macro persona (the new Macro bot id), and
 `requestAgentPermissions(agentId, focus?)` opens it from elsewhere, scrolled
-to a group, action or tool. The section and button are absent while either
-flag is off or the API answers 404, and on the create form.
+to a group, action or tool. The section and button are absent while the
+flag is off or the API answers 404, and on the create form. The page's note says the settings apply to checked
+programs only; it names no language.
 
 The page lists every permission group as a collapsible row whose summary says
 what is restricted (`⊘ Never deletes · ✋ Asks before sending · 2 tools

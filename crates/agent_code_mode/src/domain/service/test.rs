@@ -802,7 +802,7 @@ async fn an_unreadable_returned_image_is_reported_without_pixels() {
 
 struct Rollout(bool);
 #[async_trait]
-impl OcamlRollout for Rollout {
+impl OwnerRollout for Rollout {
     async fn enabled(&self, _: &macro_user_id::user_id::MacroUserIdStr<'static>) -> bool {
         self.0
     }
@@ -873,6 +873,30 @@ async fn ocaml_is_refused_before_credentials_without_the_bundle_or_the_rollout()
         Arc::clone(&service.0.images),
     );
     assert!(!with_ocaml(no_runner, true).ocaml_enabled(&session).await);
+}
+
+#[tokio::test]
+async fn js_tools_programs_are_refused_before_credentials() {
+    let session = test_agent_session(AgentSessionId::new_from_uuid(macro_uuid::generate_uuid_v7()));
+    let (service, credentials, _, _) = service();
+    let service = with_ocaml(service, true);
+    let refused = run(
+        &service,
+        &session,
+        ExecutionId::mint(),
+        ExecuteRequest {
+            source:
+                "return await tools.storage.get_document_markdown({ path: { document_id: \"d\" } })"
+                    .into(),
+            timeout_ms: 1000,
+            language: code_execution::domain::Language::JsTools,
+        },
+    )
+    .await;
+    assert!(
+        matches!(refused, Err(CodeModeError::Invalid(message)) if message == "js_tools programs are not available in this session; write a JavaScript module.")
+    );
+    assert!(credentials.0.lock().unwrap().is_empty());
 }
 
 #[tokio::test]

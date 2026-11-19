@@ -40,9 +40,11 @@ OCaml serialize as they did before languages. */
   /** JSON returned by the program, if successful. */
   result?: unknown;
   /** For an OCaml program, the fingerprint of the OCaml SDK bundle it ran
-against (SDK version plus a hash of its interfaces). */
+against (SDK version plus a hash of its interfaces); for a JavaScript
+tools program, of the interpreter and catalog it ran with. */
   sdkFingerprint?: ExecutionRecordSdkFingerprint;
-  /** The submitted program: a JavaScript module or an OCaml `main.ml`. */
+  /** The submitted program: a JavaScript module, an OCaml `main.ml` or a
+JavaScript tools script. */
   source: string;
   /** Overall execution state. */
   status: ExecutionStatus;
