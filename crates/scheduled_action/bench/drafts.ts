@@ -10,7 +10,7 @@ import { parseArgs } from 'node:util';
 import { SQL } from 'bun';
 
 import { type ArmResult, bareArm, baseRoutine, catalog, deleteSession, draftArm, preflight } from './arms';
-import { type Arm, CASES, type Case, type Context, type DraftResult } from './cases';
+import { type Arm, CASES, type Case, type Context, type DraftResult, type Effects } from './cases';
 import { judge, passes } from './judge';
 import {
   type Attempt,
@@ -551,9 +551,17 @@ async function reread(args: string[]) {
       if (!found) continue;
       const context: Context = { ids, now: new Date(item.startedAt), timezone: TIMEZONE, made: item.made ?? [] };
       item.quality = checks(found, item.arm, item, context);
-      if (item.run?.effects.runs.some((run) => run.reply === undefined && JSON.stringify(run.result).includes('"type":"agent"'))) {
+      // Replies not read yet, or read before mentions were given their names;
+      // the routine's own runs and each copy's.
+      const unread = (run: Effects['runs'][number]) =>
+        run.reply === undefined
+          ? JSON.stringify(run.result).includes('"type":"agent"')
+          : run.reply.includes('<m-document-mention>');
+      const effects = item.run?.effects;
+      if (effects && [effects.runs, ...(effects.copies ?? []).map((copy) => copy.runs ?? [])].some((runs) => runs.some(unread))) {
         db ??= new SQL(stack(values.instance, values.tempo).postgres);
-        item.run.effects.runs = await withReplies(db, item.run.effects.runs);
+        effects.runs = await withReplies(db, effects.runs);
+        for (const copy of effects.copies ?? []) if (copy.runs) copy.runs = await withReplies(db, copy.runs);
       }
       if (item.run?.effects.messages.some((message) => message.text.includes('<m-document-mention>'))) {
         db ??= new SQL(stack(values.instance, values.tempo).postgres);

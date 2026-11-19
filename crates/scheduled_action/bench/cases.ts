@@ -477,10 +477,11 @@ const copyReplies = (copy: CopyMade) =>
  * own, run once, ending in an Ask AI step (a code step can't tell the owner
  * anything), with an input value that is the id of a task `wanted` accepts,
  * keyed by that id (so a run that schedules it again updates it rather than
- * adding another), at a whole minute `when` accepts for that task; no task
- * twice, and `enough` accepts the tasks named. Each copy, run at once,
- * succeeded and its Ask AI step's reply names its task: it does the later
- * work for that item, reading its definition from the routine.
+ * adding another), at a time `when` accepts for that task; no task twice,
+ * and `enough` accepts the tasks named. Each copy, run at once, succeeded
+ * and its Ask AI step's reply names its task (a mention of it counts, as the
+ * person reads it with the task's name): it does the later work for that
+ * item, reading its definition from the routine.
  */
 const scheduled =
   (
@@ -505,7 +506,6 @@ const scheduled =
           wanted(task) &&
           copy.key?.includes(task.id) === true &&
           at !== undefined &&
-          at.second === 0 &&
           when(at, task, context, effects) &&
           unquoted(copyReplies(copy)).includes(unquoted(task.name))
         );
@@ -535,7 +535,8 @@ const ownerOpen = (task: SeededTask) =>
  */
 const remindsDayBefore = scheduled(
   (task) => ownerOpen(task) && task.due !== undefined && task.due >= 1 && task.due <= 7,
-  (at, task, context) => at.hour === 9 && at.minute === 0 && daysFromToday(at, context) + 1 === task.due,
+  (at, task, context) =>
+    at.hour === 9 && at.minute === 0 && at.second === 0 && daysFromToday(at, context) + 1 === task.due,
   (named) =>
     SEEDED_TASKS.filter((task) => ownerOpen(task) && task.due !== undefined && task.due >= 2 && task.due <= 6).every(
       (task) => named.some((each) => each.id === task.id),
@@ -927,7 +928,7 @@ export const CASES: Case[] = [
       nothingUnused,
     ],
     run: {
-      says: "moving the homepage hero task to In review schedules one one-time copy of the check, given the task's id, keyed by it and ending in an Ask AI step, 72 hours later (within an hour, on a whole minute), and that copy, run at once, names the task in its Ask AI reply",
+      says: "moving the homepage hero task to In review schedules one one-time copy of the check, given the task's id, keyed by it and ending in an Ask AI step, 72 hours later (within an hour), and that copy, run at once, names the task in its Ask AI reply",
       fire: () => ({ type: 'task_status', task: 'task:homepage-hero', status: 'in_review', restore: 'in_progress' }),
       holds: scheduled(
         (task) => task.key === 'homepage-hero',

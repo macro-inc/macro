@@ -69,7 +69,8 @@ draft on a busy machine can be told apart.
   equal to its seeded id), its key, trigger, whether it was made switched off,
   and its definition's step kinds. Every copy is then run at once, and the
   messages, tasks and notifications are read after them, so a check sees
-  what each copy's Ask AI step replied (it must name its item) and what the
+  what each copy's Ask AI step replied (it must name its item; a reply's
+  mentions, like a message's, are read with their names) and what the
   copies wrote. These checks match strings and run each copy once, by hand;
   they don't see a copy run at its time or after its item changed, such as
   a task that left review. The routine is saved with the sub-routines it defines, so the stack's

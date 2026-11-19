@@ -232,12 +232,19 @@ async function agentReply(db: SQL, session: string) {
   return rows.map((row) => row.text ?? '').join('');
 }
 
-/** `runs` with their agent steps' replies; also fills results saved before replies were read. */
+/**
+ * `runs` with their agent steps' replies, as the person reads them (a
+ * mentioned document or task with its name); also fills results saved before
+ * replies were read, or before they were read with names.
+ */
 export async function withReplies(db: SQL, runs: Effects['runs']) {
   return Promise.all(
     runs.map(async (run) => {
       const session = agentOf(run);
-      return session && run.reply === undefined ? { ...run, reply: await agentReply(db, session) } : run;
+      const reply = run.reply ?? (session ? await agentReply(db, session) : undefined);
+      if (reply === undefined) return run;
+      const [named] = await withMentionNames(db, [reply]);
+      return { ...run, reply: named };
     }),
   );
 }
