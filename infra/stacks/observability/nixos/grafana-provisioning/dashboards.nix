@@ -1,4 +1,5 @@
-{ lib, pkgs, ... }:
+# The dev telemetry and the AWS database and Lambda health dashboards.
+{ lib }:
 let
   cloudwatch = {
     type = "cloudwatch";
@@ -175,27 +176,8 @@ let
         }
       ];
     };
-  files = pkgs.linkFarm "macro-grafana-dashboards" [
-    {
-      name = "dev.json";
-      path = pkgs.writeText "dev.json" (builtins.toJSON applications);
-    }
-    {
-      name = "database.json";
-      path = pkgs.writeText "database.json" (builtins.toJSON database);
-    }
-  ];
 in
 {
-  services.grafana.provision.dashboards.settings.providers = [
-    {
-      name = "macro";
-      orgId = 1;
-      folder = "Macro";
-      type = "file";
-      disableDeletion = true;
-      allowUiUpdates = false;
-      options.path = files;
-    }
-  ];
+  dev = applications;
+  inherit database;
 }

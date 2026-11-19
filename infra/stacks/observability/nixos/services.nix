@@ -6,6 +6,48 @@
 }:
 let
   backends = import ./backend-config.nix;
+  grafanaProvisioning = import ./grafana-provisioning {
+    inherit lib;
+    # Loopback, so paging does not depend on the ALB.
+    goalertUrl = "http://127.0.0.1:3030";
+    # The query-only gateway in proxy.nix.
+    datasourceUrls = {
+      prometheus = "http://127.0.0.1:8081/prometheus";
+      loki = "http://127.0.0.1:8081/loki";
+      tempo = "http://127.0.0.1:8081/tempo";
+    };
+  };
+  # The store names these folders have always had; renaming one changes the
+  # host's system, and a deploy would replace the host for nothing.
+  dashboardFolderNames = {
+    macro = "macro-grafana-dashboards";
+    macro-ci = "macro-ci-dashboard";
+    macro-run-local = "macro-run-local-dashboard";
+    macro-postgres = "macro-postgres-dashboard";
+    macro-postgres-queries = "macro-postgres-queries-dashboard";
+    macro-prod-alerts = "macro-prod-alerts-dashboard";
+    macro-email-focus = "macro-email-focus-dashboard";
+    macro-computers-fleet = "macro-computers-fleet-dashboard";
+  };
+  dashboardProvider =
+    {
+      name,
+      folder,
+      files,
+    }:
+    {
+      inherit name folder;
+      orgId = 1;
+      type = "file";
+      disableDeletion = true;
+      allowUiUpdates = false;
+      options.path = pkgs.linkFarm dashboardFolderNames.${name} (
+        map (file: {
+          inherit (file) name;
+          path = pkgs.writeText file.name (builtins.toJSON file.dashboard);
+        }) files
+      );
+    };
   credential = name: "${name}:/run/macro-observability/${name}";
   needsSecrets = {
     requires = [ "observability-secrets.service" ];
@@ -14,18 +56,7 @@ let
   };
 in
 {
-  imports = [
-    ./dashboards.nix
-    ./ci-dashboard.nix
-    ./local-dashboard.nix
-    ./computers-dashboard.nix
-    ./database-dashboard.nix
-    ./database-queries-dashboard.nix
-    ./prod-alerts-dashboard.nix
-    ./email-focus-dashboard.nix
-    ./alerting.nix
-    ./goalert.nix
-  ];
+  imports = [ ./goalert.nix ];
   services.grafana = {
     enable = true;
     declarativePlugins = with pkgs.grafanaPlugins; [
@@ -37,7 +68,13 @@ in
     settings = import ./grafana.nix;
     provision = {
       enable = true;
-      datasources.settings = import ./datasources.nix;
+      datasources.settings = grafanaProvisioning.datasources;
+      dashboards.settings.providers = map dashboardProvider grafanaProvisioning.dashboards;
+      alerting = with grafanaProvisioning.alerting; {
+        contactPoints.settings = contactPoints;
+        policies.settings = policies;
+        rules.settings = rules;
+      };
     };
   };
   services.loki = {

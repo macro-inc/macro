@@ -10,6 +10,9 @@ us-east-1. `README.md` is the full operations guide.
 
 - `nixos/host.nix`: boot order, retained volume, stable uids, service hardening.
 - `nixos/services.nix`, `nixos/goalert.nix`: the systemd services and credentials.
+- `nixos/grafana-provisioning/`: every dashboard, alert rule, contact point and
+  datasource as plain Nix data (`default.nix`), imported by the host and, once
+  it exists, the cluster Grafana in `infra/k8s/observability/cluster/`.
 - `index.ts`: VPC, ALB, certificate, DNS, alarms and EC2 user data.
 - `deploy/`: the Deploy Observability workflow's steps (`release.ts`), the image
   source key, AMI publishing, the smoke boot and the plan check. README
@@ -17,21 +20,37 @@ us-east-1. `README.md` is the full operations guide.
 
 ## Recipes
 
-- Change a Grafana prod alert rule: edit its entry in `nixos/prod-alerts.nix`
-  (rules and the `Prod alerts` dashboard panel both read it), and its Datadog
-  copy in `infra/stacks/monitoring/monitors/` by hand. A new entry takes the next
-  free `panelId`; never renumber one, since sent notifications link to it.
-- Change the Macro computers fleet dashboard: `nixos/computers-dashboard.nix`.
-  Its series come from Alloy on each Firecracker host
-  (`nix/hosts/_nixos/firecracker-host.alloy`); rename a label there and here
-  together.
-- Change an Email Focus rollout check: edit `nixos/email-focus.nix`; its rules
-  and the `Email Focus rollout` dashboard both read it. No Datadog copy.
-- Change a CI percentile, queue or CI hours query: edit `nixos/ci-report.json`;
-  the `Macro CI` dashboard's Loki panels and `scripts/ci-report.ts` both read it.
-- Change a run_local query: edit `nixos/local-report.json`, read by the
-  `Macro run_local` dashboard and `scripts/ci-report.ts --spec local`. Both
-  dashboards share their Loki panel builders in `nixos/loki-report-panels.nix`.
+Paths below `grafana-provisioning/` are under `nixos/`.
+
+- Change a Grafana prod alert rule: edit its entry in
+  `grafana-provisioning/prod-alerts.nix` (rules and the `Prod alerts` dashboard
+  panel both read it), and its Datadog copy in
+  `infra/stacks/monitoring/monitors/` by hand. A new entry takes the next free
+  `panelId`; never renumber one, since sent notifications link to it.
+- Change the Macro computers fleet dashboard:
+  `grafana-provisioning/computers-dashboard.nix`. Its series come from Alloy on
+  each Firecracker host (`nix/hosts/_nixos/firecracker-host.alloy`); rename a
+  label there and here together.
+- Change an Email Focus rollout check: edit `grafana-provisioning/email-focus.nix`;
+  its rules and the `Email Focus rollout` dashboard both read it. No Datadog copy.
+- Change a CI percentile, queue or CI hours query: edit
+  `grafana-provisioning/ci-report.json`; the `Macro CI` dashboard's Loki panels
+  and `scripts/ci-report.ts` both read it.
+- Change a run_local query: edit `grafana-provisioning/local-report.json`, read
+  by the `Macro run_local` dashboard and `scripts/ci-report.ts --spec local`.
+  Both dashboards share their Loki panel builders in
+  `grafana-provisioning/loki-report-panels.nix`.
+- Add a dashboard: a file in `grafana-provisioning/` taking `{ lib }` and
+  returning the dashboard JSON, listed in `dashboards` in its `default.nix`.
+  A new provider also needs its store name in `dashboardFolderNames`
+  (`nixos/services.nix`).
+- Anything Grafana provisions that differs between the host and the cluster
+  (an address, a URL) is a parameter of `grafana-provisioning/default.nix`,
+  passed by `nixos/services.nix` and the cluster's Grafana module; never a host
+  value written into the data.
+- Refactor Grafana provisioning without changing the host: compare
+  `nix eval --raw .#nixosConfigurations.observability.config.system.build.toplevel.outPath`
+  before and after. The same path means Deploy Observability only retags the AMI.
 - Add a runtime setting: `settings.ts` → `render.ts` (bump the schema version) →
   `nixos/read-user-data.py` (keys, pattern, version) → the consuming `.nix` file.
 - Add a secret: `assets/refresh-secrets.py` (validation) → `LoadCredential` in
@@ -73,8 +92,12 @@ then Biome on changed `.ts`.
 - GoAlert's application config lives in its database; `goalert/apply-config.py`
   overwrites it on every start from `goalert.nix`. `set-config` accepts invalid
   values silently, so check the journal for `validate config`.
-- Grafana keeps a provisioned contact point removed from `alerting.nix`; list
-  its uid in `deleteContactPoints` to delete it.
+- Grafana keeps a provisioned contact point removed from
+  `grafana-provisioning/alerting.nix`; list its uid in `deleteContactPoints` to
+  delete it.
+- `oncall.macro-internal.com` answers 404 on `/api/v2/grafana/` (`proxy.nix`):
+  the host's Grafana pages GoAlert over loopback, so a Grafana elsewhere
+  passing that `goalertUrl` cannot page until the vhost allows it.
 - Grafana provisioning expands `$VAR` in contact point settings, but not in rule
   queries or annotations, so `$B` and `$values` work there and secrets must come
   in through the Grafana unit's environment.

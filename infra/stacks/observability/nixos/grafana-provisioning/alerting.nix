@@ -1,4 +1,10 @@
-{ lib, ... }:
+# Grafana alerting provisioning: contact points, the notification policy and
+# the rule groups, as the three provisioning documents Grafana reads.
+#
+# `goalertUrl` is where Grafana reaches GoAlert's API, without a trailing slash.
+# The contact points read `$GRAFANA_ALERT_TOPIC_ARN`, `$GOALERT_GRAFANA_KEY`
+# and `$GOALERT_GRAFANA_NOTIFY_KEY` from Grafana's environment.
+{ lib, goalertUrl }:
 let
   lokiQuery = expr: {
     refId = "A";
@@ -279,174 +285,171 @@ let
   ];
 in
 {
-  services.grafana.provision.alerting = {
-    contactPoints.settings = {
-      apiVersion = 1;
-      # Grafana keeps removed provisioned contact points until told to delete
-      # them. GoAlert now posts to the channel instead.
-      deleteContactPoints = [
-        {
-          orgId = 1;
-          uid = "macro-alerts";
-        }
-      ];
-      contactPoints = [
-        {
-          orgId = 1;
-          name = "Macro team email";
-          receivers = [
-            {
-              uid = "macro-team-sns";
-              type = "sns";
-              disableResolveMessage = false;
-              settings = {
-                sigv4.region = "us-east-2";
-                topic_arn = "$GRAFANA_ALERT_TOPIC_ARN";
-              };
-            }
-          ];
-        }
-        {
-          orgId = 1;
-          name = "GoAlert";
-          receivers = [
-            {
-              uid = "goalert";
-              type = "webhook";
-              disableResolveMessage = false;
-              # Loopback, so paging does not depend on the ALB. GoAlert closes the
-              # alert when Grafana sends the resolved notification.
-              settings = {
-                url = "http://127.0.0.1:3030/api/v2/grafana/incoming?token=$GOALERT_GRAFANA_KEY";
-                httpMethod = "POST";
-              };
-            }
-          ];
-        }
-        {
-          orgId = 1;
-          name = "GoAlert notify";
-          receivers = [
-            {
-              uid = "goalert-notify";
-              type = "webhook";
-              disableResolveMessage = false;
-              # GoAlert's `Notify` service, whose policy posts to the channel.
-              settings = {
-                url = "http://127.0.0.1:3030/api/v2/grafana/incoming?token=$GOALERT_GRAFANA_NOTIFY_KEY";
-                httpMethod = "POST";
-              };
-            }
-          ];
-        }
-      ];
-    };
-    # Every prod alert goes to GoAlert, which posts it to the Macro Alerts
-    # channel and re-posts until acknowledged. Paging criticals go to the
-    # paging service, everything else to `Notify`. GoAlert dedups by alert
-    # fingerprint, so repeats only refresh the open alert.
-    policies.settings = {
-      apiVersion = 1;
-      policies = [
-        {
-          orgId = 1;
-          receiver = "GoAlert notify";
-          group_by = [
-            "grafana_folder"
-            "alertname"
-            "severity"
-            "pages"
-          ];
-          group_wait = "30s";
-          group_interval = "5m";
-          repeat_interval = "4h";
-          routes = [
-            {
-              receiver = "Macro team email";
-              object_matchers = [
-                [
-                  "environment"
-                  "="
-                  "dev"
-                ]
-              ];
-            }
-            {
-              receiver = "GoAlert";
-              object_matchers = [
-                [
-                  "pages"
-                  "="
-                  "true"
-                ]
-                [
-                  "severity"
-                  "="
-                  "critical"
-                ]
-              ];
-              repeat_interval = "1h";
-            }
-            {
-              receiver = "GoAlert notify";
-              object_matchers = [
-                [
-                  "severity"
-                  "="
-                  "critical"
-                ]
-              ];
-              repeat_interval = "1h";
-            }
-          ];
-        }
-      ];
-    };
-    rules.settings = {
-      apiVersion = 1;
-      groups = [
-        {
-          orgId = 1;
-          name = "Prod";
-          folder = "Macro";
-          interval = "1m";
-          rules = prodRules;
-        }
-        {
-          orgId = 1;
-          name = "Email Focus";
-          folder = "Macro";
-          interval = "1m";
-          rules = focusRules;
-        }
-        {
-          orgId = 1;
-          name = "Datadog dev migration";
-          folder = "Macro";
-          interval = "1m";
-          rules = [
-            (rule "dd-1291772-critical" "[DEV] Document text extractor failing" "1291772" extractor "critical"
-              "$B > 80"
-            )
-            (rule "dd-1291772-warning" "[DEV] Document text extractor warning" "1291772" extractor "warning"
-              "$B > 50 && $B <= 80"
-            )
-            (rule "dd-1013923-critical" "[DEV] Increased number of errors for DSS" "1013923" dss "critical"
-              "$B > 200"
-            )
-            (rule "dd-1013923-warning" "[DEV] DSS error count warning" "1013923" dss "warning"
-              "$B > 100 && $B <= 200"
-            )
-            (rule "dd-4876245-critical" "[DEV] Potential email spam on channel invites" "4876245" invites
-              "critical"
-              "$B > 10"
-            )
-            (rule "dd-4876245-warning" "[DEV] Channel invite count warning" "4876245" invites "warning"
-              "$B > 5 && $B <= 10"
-            )
-          ];
-        }
-      ];
-    };
+  contactPoints = {
+    apiVersion = 1;
+    # Grafana keeps removed provisioned contact points until told to delete
+    # them. GoAlert now posts to the channel instead.
+    deleteContactPoints = [
+      {
+        orgId = 1;
+        uid = "macro-alerts";
+      }
+    ];
+    contactPoints = [
+      {
+        orgId = 1;
+        name = "Macro team email";
+        receivers = [
+          {
+            uid = "macro-team-sns";
+            type = "sns";
+            disableResolveMessage = false;
+            settings = {
+              sigv4.region = "us-east-2";
+              topic_arn = "$GRAFANA_ALERT_TOPIC_ARN";
+            };
+          }
+        ];
+      }
+      {
+        orgId = 1;
+        name = "GoAlert";
+        receivers = [
+          {
+            uid = "goalert";
+            type = "webhook";
+            disableResolveMessage = false;
+            # GoAlert closes the alert when Grafana sends the resolved notification.
+            settings = {
+              url = "${goalertUrl}/api/v2/grafana/incoming?token=$GOALERT_GRAFANA_KEY";
+              httpMethod = "POST";
+            };
+          }
+        ];
+      }
+      {
+        orgId = 1;
+        name = "GoAlert notify";
+        receivers = [
+          {
+            uid = "goalert-notify";
+            type = "webhook";
+            disableResolveMessage = false;
+            # GoAlert's `Notify` service, whose policy posts to the channel.
+            settings = {
+              url = "${goalertUrl}/api/v2/grafana/incoming?token=$GOALERT_GRAFANA_NOTIFY_KEY";
+              httpMethod = "POST";
+            };
+          }
+        ];
+      }
+    ];
+  };
+  # Every prod alert goes to GoAlert, which posts it to the Macro Alerts
+  # channel and re-posts until acknowledged. Paging criticals go to the
+  # paging service, everything else to `Notify`. GoAlert dedups by alert
+  # fingerprint, so repeats only refresh the open alert.
+  policies = {
+    apiVersion = 1;
+    policies = [
+      {
+        orgId = 1;
+        receiver = "GoAlert notify";
+        group_by = [
+          "grafana_folder"
+          "alertname"
+          "severity"
+          "pages"
+        ];
+        group_wait = "30s";
+        group_interval = "5m";
+        repeat_interval = "4h";
+        routes = [
+          {
+            receiver = "Macro team email";
+            object_matchers = [
+              [
+                "environment"
+                "="
+                "dev"
+              ]
+            ];
+          }
+          {
+            receiver = "GoAlert";
+            object_matchers = [
+              [
+                "pages"
+                "="
+                "true"
+              ]
+              [
+                "severity"
+                "="
+                "critical"
+              ]
+            ];
+            repeat_interval = "1h";
+          }
+          {
+            receiver = "GoAlert notify";
+            object_matchers = [
+              [
+                "severity"
+                "="
+                "critical"
+              ]
+            ];
+            repeat_interval = "1h";
+          }
+        ];
+      }
+    ];
+  };
+  rules = {
+    apiVersion = 1;
+    groups = [
+      {
+        orgId = 1;
+        name = "Prod";
+        folder = "Macro";
+        interval = "1m";
+        rules = prodRules;
+      }
+      {
+        orgId = 1;
+        name = "Email Focus";
+        folder = "Macro";
+        interval = "1m";
+        rules = focusRules;
+      }
+      {
+        orgId = 1;
+        name = "Datadog dev migration";
+        folder = "Macro";
+        interval = "1m";
+        rules = [
+          (rule "dd-1291772-critical" "[DEV] Document text extractor failing" "1291772" extractor "critical"
+            "$B > 80"
+          )
+          (rule "dd-1291772-warning" "[DEV] Document text extractor warning" "1291772" extractor "warning"
+            "$B > 50 && $B <= 80"
+          )
+          (rule "dd-1013923-critical" "[DEV] Increased number of errors for DSS" "1013923" dss "critical"
+            "$B > 200"
+          )
+          (rule "dd-1013923-warning" "[DEV] DSS error count warning" "1013923" dss "warning"
+            "$B > 100 && $B <= 200"
+          )
+          (rule "dd-4876245-critical" "[DEV] Potential email spam on channel invites" "4876245" invites
+            "critical"
+            "$B > 10"
+          )
+          (rule "dd-4876245-warning" "[DEV] Channel invite count warning" "4876245" invites "warning"
+            "$B > 5 && $B <= 10"
+          )
+        ];
+      }
+    ];
   };
 }
