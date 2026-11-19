@@ -139,13 +139,20 @@ fn test_pool(workers: usize, capacity: usize) -> (WorkerPool, Vec<mpsc::Receiver
 }
 
 fn received_thread_backfilled_event(thread_id: Uuid, offset: i64) -> ReceivedEvent {
-    let event = DeclaredMacroEvent::EmailMacroEvent(EmailMacroEvent::new(
-        EMAIL_LINK_ID.to_string(),
+    received_email(
         EmailTopicEvent::ThreadBackfilled(ThreadBackfilledMetadata {
             link_id: EMAIL_LINK_ID,
             owner: user_id(),
             thread_id,
         }),
+        offset,
+    )
+}
+
+fn received_email(event: EmailTopicEvent, offset: i64) -> ReceivedEvent {
+    let event = DeclaredMacroEvent::EmailMacroEvent(EmailMacroEvent::new(
+        EMAIL_LINK_ID.to_string(),
+        event,
     ));
     attach_event_coordinates(
         Ok::<_, EventBrokerError>(event),
@@ -2367,7 +2374,7 @@ async fn closed_worker_channel_leaves_the_current_message_uncommitted() {
 async fn bounded_handoff_blocks_when_full_and_preserves_order() {
     let (pool, mut receivers) = test_pool(1, 1);
     let first = received_thread_backfilled_event(EMAIL_THREAD_ID, 1);
-    let second = received_thread_backfilled_event(EMAIL_THREAD_ID, 2);
+    let second = received_thread_backfilled_event(SECOND_EMAIL_THREAD_ID, 2);
 
     assert!(matches!(
         pool.handoff(Ok::<_, EventBrokerError>(first)).await,
@@ -2589,8 +2596,8 @@ async fn distinct_sessions_and_non_reread_events_each_hand_off() {
     for event in [
         received_agent_session_event(AGENT_SESSION_ID, 1),
         received_agent_session_event(SECOND_AGENT_SESSION_ID, 2),
-        received_thread_backfilled_event(EMAIL_THREAD_ID, 3),
-        received_thread_backfilled_event(EMAIL_THREAD_ID, 4),
+        received_email(received_email_event(false), 3),
+        received_email(received_email_event(false), 4),
     ] {
         assert!(matches!(
             pool.handoff(Ok::<_, EventBrokerError>(event)).await,
@@ -2604,6 +2611,43 @@ async fn distinct_sessions_and_non_reread_events_each_hand_off() {
         offsets.push(event.offset);
     }
     assert_eq!(offsets, [1, 2, 3, 4]);
+}
+
+#[tokio::test]
+async fn a_queued_thread_reindex_absorbs_later_reindexes_of_that_thread_only() {
+    let (pool, mut receivers) = test_pool(1, 8);
+    let thread_read = EmailTopicEvent::ThreadRead(ThreadReadMetadata {
+        link_id: EMAIL_LINK_ID,
+        owner: user_id(),
+        actor: None,
+        thread_id: EMAIL_THREAD_ID,
+        is_read: true,
+        origin: EmailEventOrigin::UserAction,
+    });
+
+    let mut coalesced = Vec::new();
+    for event in [
+        received_thread_backfilled_event(EMAIL_THREAD_ID, 1),
+        received_email(thread_read, 2),
+        received_email(received_email_event(false), 3),
+        received_thread_backfilled_event(EMAIL_THREAD_ID, 4),
+        received_thread_backfilled_event(SECOND_EMAIL_THREAD_ID, 5),
+    ] {
+        let outcome = pool.handoff(Ok::<_, EventBrokerError>(event)).await;
+        coalesced.push(matches!(outcome, HandoffOutcome::Coalesced));
+    }
+    drop(pool);
+
+    let mut offsets = Vec::new();
+    while let Some(event) = receivers[0].recv().await {
+        offsets.push(event.offset);
+    }
+    assert_eq!(coalesced, [false, true, false, true, false]);
+    assert_eq!(
+        offsets,
+        [1, 3, 5],
+        "a message upsert and another thread's reindex are not absorbed"
+    );
 }
 
 #[tokio::test]
@@ -2673,7 +2717,7 @@ async fn closed_worker_releases_the_reread_claim() {
 async fn events_with_the_same_ordering_key_stay_on_one_worker_in_order() {
     let (pool, mut receivers) = test_pool(WORKER_COUNT, WORKER_CHANNEL_CAPACITY);
     for offset in 0..8 {
-        let event = received_thread_backfilled_event(EMAIL_THREAD_ID, offset);
+        let event = received_email(received_email_event(false), offset);
         assert!(matches!(
             pool.handoff(Ok::<_, EventBrokerError>(event)).await,
             HandoffOutcome::HandedOff

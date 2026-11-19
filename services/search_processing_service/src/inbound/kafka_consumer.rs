@@ -154,7 +154,7 @@ const WORKER_COUNT: usize = 10;
 ///
 /// Offsets are committed at handoff, so a crash can drop up to
 /// `WORKER_COUNT * WORKER_CHANNEL_CAPACITY` queued events, plus the
-/// agent-session events each queued reread absorbed. A graceful stop
+/// agent-session and email thread events each queued reread absorbed. A graceful stop
 /// redelivers the queued ones: see [`SHUTDOWN_DRAIN_DEADLINE`].
 const WORKER_CHANNEL_CAPACITY: usize = 16;
 /// How long a gracefully stopping consumer lets the workers finish the events
@@ -353,12 +353,12 @@ fn coalescible_reread_key(event: &DeclaredMacroEvent) -> Option<String> {
         DeclaredMacroEvent::AgentSessionLifecycleMacroEvent(event) => {
             Some(agent_session::reread_key(event))
         }
+        DeclaredMacroEvent::EmailMacroEvent(event) => email::reread_key(event),
         DeclaredMacroEvent::CalendarMacroEvent(_)
         | DeclaredMacroEvent::CallMacroEvent(_)
         | DeclaredMacroEvent::ChannelMacroEvent(_)
         | DeclaredMacroEvent::ChatMacroEvent(_)
         | DeclaredMacroEvent::DocumentMacroEvent(_)
-        | DeclaredMacroEvent::EmailMacroEvent(_)
         | DeclaredMacroEvent::MessageMacroEvent(_)
         | DeclaredMacroEvent::ProjectMacroEvent(_)
         | DeclaredMacroEvent::PropertyMacroEvent(_) => None,
