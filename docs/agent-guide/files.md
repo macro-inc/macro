@@ -109,9 +109,10 @@ the date-sorted folder list beside the tree. By default the sidebar contains `Ne
 listing every database the viewer owns or has been shared, by name (past ten,
 it scrolls within its own height; hidden when there are none or databases are
 disabled), and a searchable folder hierarchy.
-Drag the Favorites, Databases, or Folders heading, or the hover/focus gutter
-grip beside the unnamed My Files/Recent/Shared group, to change their shared
-local order. Reload to verify it persists independently of other workspaces.
+Drag the Favorites, Databases, or Folders heading before or after the unnamed
+My Files/Recent/Shared group to change their shared local order. The unnamed group
+has no grip or keyboard move control. Reload to verify persistence independently
+of other workspaces.
 New file/folder and import controls remain pinned.
 The Drive sidebar's import card (**Import files**, see
 [setup cards](setup-cards.md#import-from-connected-apps)) lists Notion; its

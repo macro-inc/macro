@@ -489,11 +489,10 @@ controls. Use the shared slots described in
 
 ### Reorder workspace sidebar sections
 
-On desktop, drag a section heading or the hover/focus gutter grip beside an
-unnamed navigation group past another section to change their shared order.
-An eight-pixel mouse movement starts the drag; a click still collapses the
-section, and header actions still run normally. Tab to a section's **Reorder**
-control and press Up or Down for keyboard reordering. This works in Email,
+On desktop, drag a section heading past another section to change their shared
+order. An eight-pixel mouse movement starts the drag; a click still collapses the
+section, and header actions still run normally. Tab to a headed section's
+**Reorder** control and press Up or Down for keyboard reordering. This works in Email,
 Drive, Tasks (including Projects), Customers, Calls, Reviews, Agents, Calendar,
 Passwords, and Settings. Chat uses the same interaction with its existing
 section preferences.
@@ -501,9 +500,11 @@ section preferences.
 Reload to verify persistence. Each account and workspace has its own local
 order; moving Email sections does not move Drive sections. New sections retain
 their default slot, and removed sections are ignored. Unnamed navigation groups
-and the mini calendar reorder without gaining a visible heading. Account and
-workspace selectors, search/create controls, promotions, and footer tools stay
-pinned; they have no drag handle or drop target. Old saved keys cannot move them.
+and the mini calendar share that order but have no grip, drag behavior, or keyboard
+move control. Drop a headed section before or after them to change their relative
+positions. Account and workspace selectors, search/create controls, promotions,
+and footer tools stay pinned; they have no drag handle or drop target. Old saved
+keys cannot move them.
 At 390×844 with touch emulation, headings still collapse and actions still work;
 section dragging and the keyboard reorder control are desktop-only.
 

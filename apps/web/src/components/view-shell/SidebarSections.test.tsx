@@ -1,8 +1,6 @@
 import { fireEvent, render } from '@solidjs/testing-library';
 import { DragDropProvider, DragDropSensors } from '@thisbeyond/solid-dnd';
-import { transform } from 'lightningcss';
 import { createSignal, Show } from 'solid-js';
-import { compile } from 'tailwindcss';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { CollapsibleSection } from './CollapsibleSection';
 import { ViewSidebar } from './ViewSidebar';
@@ -214,35 +212,137 @@ describe('sidebar section composition', () => {
     expect(checkbox instanceof HTMLInputElement && checkbox.checked).toBe(true);
   });
 
-  it('reorders unnamed groups with headed sections while ignoring saved pinned keys', () => {
+  it('orders unnamed groups with headed sections while keeping pinned slots fixed', () => {
     localStorage.setItem(
       'sidebar-section-order:pinned:sidebar-viewer',
       JSON.stringify({
         version: 1,
-        order: ['last', 'accounts', 'mail-folders', 'footer'],
+        order: ['last', 'accounts', 'mail-folders', 'tools', 'footer'],
       })
     );
+    const mount = () =>
+      render(() => (
+        <DragDropProvider>
+          <ViewSidebar.Root reorderId="pinned">
+            <ViewSidebar.Content>
+              <ViewSidebar.Section id="accounts" label="Accounts" pinned>
+                <ViewSidebar.SectionHeader>
+                  <h2>Accounts</h2>
+                </ViewSidebar.SectionHeader>
+                <button type="button">Select account</button>
+              </ViewSidebar.Section>
+              <ViewSidebar.Section
+                id="mail-folders"
+                label="Mail folders"
+                headerless
+              >
+                <button type="button">Inbox</button>
+              </ViewSidebar.Section>
+              <ViewSidebar.Section id="tools" label="Tools" headerless>
+                <button type="button">Browse tools</button>
+              </ViewSidebar.Section>
+              <Section id="last" />
+              <ViewSidebar.Section id="footer" label="Footer" pinned>
+                <button type="button">Settings</button>
+              </ViewSidebar.Section>
+            </ViewSidebar.Content>
+          </ViewSidebar.Root>
+        </DragDropProvider>
+      ));
+    const result = mount();
+    const order = () =>
+      [...result.container.querySelectorAll('[data-sidebar-section]')].map(
+        (node) => node.getAttribute('data-sidebar-section')
+      );
+    const folders = result.getByRole('region', { name: 'Mail folders' });
+    expect(folders.textContent).toBe('Inbox');
+    expect(folders.querySelector('h1, h2, h3')).toBeNull();
+    expect(result.queryAllByRole('button', { name: /^Reorder / })).toHaveLength(
+      1
+    );
+    expect(order()).toEqual([
+      'accounts',
+      'last',
+      'mail-folders',
+      'tools',
+      'footer',
+    ]);
+    const inbox = result.getByRole('button', { name: 'Inbox' });
+    inbox.focus();
+    fireEvent.keyDown(inbox, { key: 'ArrowUp' });
+    expect(order()).toEqual([
+      'accounts',
+      'last',
+      'mail-folders',
+      'tools',
+      'footer',
+    ]);
+    const handle = result.getByRole('button', { name: 'Reorder last' });
+    handle.focus();
+    fireEvent.keyDown(handle, { key: 'ArrowDown' });
+    expect(order()).toEqual([
+      'accounts',
+      'mail-folders',
+      'last',
+      'tools',
+      'footer',
+    ]);
+    fireEvent.keyDown(handle, { key: 'ArrowDown' });
+    expect(order()).toEqual([
+      'accounts',
+      'mail-folders',
+      'tools',
+      'last',
+      'footer',
+    ]);
+    fireEvent.keyDown(handle, { key: 'ArrowDown' });
+    expect(order()).toEqual([
+      'accounts',
+      'mail-folders',
+      'tools',
+      'last',
+      'footer',
+    ]);
+    expect(document.activeElement).toBe(handle);
+    expect(
+      JSON.parse(
+        localStorage.getItem('sidebar-section-order:pinned:sidebar-viewer') ??
+          '{}'
+      ).order
+    ).toEqual(['mail-folders', 'tools', 'last']);
+    result.unmount();
+    const restored = mount();
+    expect(
+      [...restored.container.querySelectorAll('[data-sidebar-section]')].map(
+        (node) => node.getAttribute('data-sidebar-section')
+      )
+    ).toEqual(['accounts', 'mail-folders', 'tools', 'last', 'footer']);
+  });
+
+  it('drops headed sections before and after unnamed groups without dragging the groups', () => {
+    const dragStarted = vi.fn();
+    const selected = vi.fn();
     const result = render(() => (
-      <DragDropProvider>
-        <ViewSidebar.Root reorderId="pinned">
+      <DragDropProvider
+        onDragStart={dragStarted}
+        collisionDetector={(_source, targets) =>
+          targets.find((target) => target.data.section === 'mail-folders') ??
+          null
+        }
+      >
+        <DragDropSensors />
+        <ViewSidebar.Root reorderId="unnamed-pointer">
           <ViewSidebar.Content>
-            <ViewSidebar.Section id="accounts" label="Accounts" pinned>
-              <ViewSidebar.SectionHeader>
-                <h2>Accounts</h2>
-              </ViewSidebar.SectionHeader>
-              <button type="button">Select account</button>
-            </ViewSidebar.Section>
             <ViewSidebar.Section
               id="mail-folders"
               label="Mail folders"
               headerless
             >
-              <button type="button">Inbox</button>
+              <button type="button" onClick={selected}>
+                Inbox
+              </button>
             </ViewSidebar.Section>
             <Section id="last" />
-            <ViewSidebar.Section id="footer" label="Footer" pinned>
-              <button type="button">Settings</button>
-            </ViewSidebar.Section>
           </ViewSidebar.Content>
         </ViewSidebar.Root>
       </DragDropProvider>
@@ -252,133 +352,27 @@ describe('sidebar section composition', () => {
         (node) => node.getAttribute('data-sidebar-section')
       );
     const folders = result.getByRole('region', { name: 'Mail folders' });
-    expect(folders.textContent).toBe('Inbox');
-    expect(folders.querySelector('h1, h2, h3')).toBeNull();
-    expect(order()).toEqual(['accounts', 'last', 'mail-folders', 'footer']);
-    expect(
-      result.queryByRole('button', { name: 'Reorder Accounts' })
-    ).toBeNull();
-    expect(result.queryByRole('button', { name: 'Reorder Footer' })).toBeNull();
-    const handle = result.getByRole('button', { name: 'Reorder Mail folders' });
-    handle.focus();
-    fireEvent.keyDown(handle, { key: 'ArrowUp' });
-    expect(order()).toEqual(['accounts', 'mail-folders', 'last', 'footer']);
-    expect(document.activeElement).toBe(handle);
-    fireEvent.keyDown(handle, { key: 'ArrowUp' });
-    expect(order()).toEqual(['accounts', 'mail-folders', 'last', 'footer']);
-    expect(
-      JSON.parse(
-        localStorage.getItem('sidebar-section-order:pinned:sidebar-viewer') ??
-          '{}'
-      ).order
-    ).toEqual(['mail-folders', 'last']);
-  });
-
-  it('keeps the first row at the same left offset without a grip, hidden, or shown', async () => {
-    const result = render(() => (
-      <DragDropProvider>
-        <ViewSidebar.Root reorderId="grip-layout">
-          <ViewSidebar.Content>
-            <ViewSidebar.Section id="reference" label="Reference" pinned>
-              <ViewSidebar.Item>Reference row</ViewSidebar.Item>
-            </ViewSidebar.Section>
-            <ViewSidebar.Section id="folders" label="Folders" headerless>
-              <ViewSidebar.Item>First row</ViewSidebar.Item>
-            </ViewSidebar.Section>
-          </ViewSidebar.Content>
-        </ViewSidebar.Root>
-      </DragDropProvider>
-    ));
-    // Compile the rendered utilities instead of mocking padding or relying on
-    // jsdom's always-zero bounding boxes. Visibility is controlled below because
-    // jsdom does not implement hover/focus-within layout.
-    const compiler = await compile(
-      '@theme inline { --spacing: 4px; } @tailwind utilities;'
-    );
-    const classes = [...result.container.querySelectorAll('[class]')].flatMap(
-      (element) => [...element.classList].filter((name) => !name.includes(':'))
-    );
-    const stylesheet = document.createElement('style');
-    stylesheet.textContent = transform({
-      filename: 'sidebar-grip-layout.css',
-      code: Buffer.from(compiler.build(classes)),
-      minify: true,
-      targets: { chrome: 80 << 16 },
-    }).code.toString();
-    document.head.append(stylesheet);
-    try {
-      const firstRow = result.getByRole('button', { name: 'First row' });
-      const referenceRow = result.getByRole('button', {
-        name: 'Reference row',
-      });
-      const grip = result.getByRole('button', { name: 'Reorder Folders' });
-      const overlay = grip.parentElement;
-      if (!overlay) throw new Error('Missing grip overlay');
-      // Sum computed box insets to the section, including every extra wrapper.
-      const rowLeft = (row: HTMLElement) => {
-        let offset = 0;
-        for (
-          let node: HTMLElement | null = row;
-          node && node.tagName !== 'SECTION';
-          node = node.parentElement
-        ) {
-          const style = getComputedStyle(node);
-          offset += Number.parseFloat(style.marginLeft) || 0;
-          if (node !== row) {
-            offset += Number.parseFloat(style.paddingLeft) || 0;
-            offset += Number.parseFloat(style.borderLeftWidth) || 0;
-          }
-        }
-        return offset;
-      };
-      const referenceLeft = rowLeft(referenceRow);
-      expect(getComputedStyle(overlay).position).toBe('absolute');
-      expect(getComputedStyle(overlay).opacity).toBe('0');
-      expect(rowLeft(firstRow)).toBe(referenceLeft);
-      overlay.style.opacity = '1';
-      grip.focus();
-      expect(getComputedStyle(overlay).opacity).toBe('1');
-      expect(rowLeft(firstRow)).toBe(referenceLeft);
-      grip.blur();
-      overlay.style.opacity = '0';
-      expect(rowLeft(firstRow)).toBe(referenceLeft);
-    } finally {
-      stylesheet.remove();
+    const inbox = result.getByRole('button', { name: 'Inbox' });
+    for (const target of [folders, inbox]) {
+      fireEvent.mouseDown(target, { button: 0, clientY: 0 });
+      fireEvent.mouseMove(document, { clientY: 20 });
+      fireEvent.mouseUp(document);
     }
-  });
-
-  it('starts unnamed-section dragging from its grip, not its navigation buttons', () => {
-    const dragStarted = vi.fn();
-    const result = render(() => (
-      <DragDropProvider onDragStart={dragStarted}>
-        <DragDropSensors />
-        <ViewSidebar.Root reorderId="unnamed-pointer">
-          <ViewSidebar.Content>
-            <ViewSidebar.Section
-              id="mail-folders"
-              label="Mail folders"
-              headerless
-            >
-              <button type="button">Inbox</button>
-            </ViewSidebar.Section>
-            <Section id="last" />
-          </ViewSidebar.Content>
-        </ViewSidebar.Root>
-      </DragDropProvider>
-    ));
-    fireEvent.mouseDown(result.getByRole('button', { name: 'Inbox' }), {
-      button: 0,
-      clientY: 0,
-    });
-    fireEvent.mouseMove(document, { clientY: 20 });
-    fireEvent.mouseUp(document);
     expect(dragStarted).not.toHaveBeenCalled();
-    fireEvent.mouseDown(
-      result.getByRole('button', { name: 'Reorder Mail folders' }),
-      { button: 0, clientY: 0 }
-    );
-    fireEvent.mouseMove(document, { clientY: 20 });
+    fireEvent.click(inbox);
+    expect(selected).toHaveBeenCalledOnce();
+    expect(order()).toEqual(['mail-folders', 'last']);
+
+    const header = result.getByRole('button', { name: 'last' });
+    fireEvent.mouseDown(header, { button: 0, clientY: 20 });
+    fireEvent.mouseMove(document, { clientY: 0 });
     expect(dragStarted).toHaveBeenCalledOnce();
     fireEvent.mouseUp(document);
+    expect(order()).toEqual(['last', 'mail-folders']);
+    fireEvent.mouseDown(header, { button: 0, clientY: 0 });
+    fireEvent.mouseMove(document, { clientY: 20 });
+    expect(dragStarted).toHaveBeenCalledTimes(2);
+    fireEvent.mouseUp(document);
+    expect(order()).toEqual(['mail-folders', 'last']);
   });
 });

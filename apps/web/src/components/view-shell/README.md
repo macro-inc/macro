@@ -39,12 +39,10 @@ Give `ViewSidebar.Root` a stable `reorderId` for its view. Give each top-level
 its trigger and actions inside `CollapsibleSection.Header`. Non-collapsible
 sections use `ViewSidebar.Section` (`id`, `label`) and `ViewSidebar.SectionHeader`.
 For an unnamed navigation group, use `headerless`: `label` supplies only its
-accessible name, while a hover/focus gutter grip provides mouse and Up/Down
-keyboard reordering without adding a heading. Position this grip absolutely over
-the existing gutter or leading edge; reserve no layout space so row icons and
-text retain the same x position with the grip absent, hidden, or shown. Hidden
-grips do not receive pointer events. Touch layout is unchanged. Both kinds
-share one order.
+accessible region name. It has no drag handle, drag source, or keyboard move
+control, but remains a drop target in the same order as headed sections. Move a
+headed section before or after the unnamed group to change their relative order;
+the unnamed group's row layout and navigation remain unchanged.
 Mark fixed account/workspace selectors or other controls inside Content with
 `pinned`; pinned sections have no drag handle or drop target, retain their DOM
 slot, and their keys are ignored in stored orders. Header, Primary, and Footer

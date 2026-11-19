@@ -1,17 +1,15 @@
-import { isTouchDevice } from '@core/mobile/isTouchDevice';
 import { mergeRefs } from '@solid-primitives/refs';
 import { createDroppable } from '@thisbeyond/solid-dnd';
 import { cn } from '@ui';
 import { type JSX, Show, splitProps, useContext } from 'solid-js';
 import type { SectionReorder } from './primitives/create-section-reorder';
 import { SectionDropIndicator } from './SectionDropIndicator';
-import { SidebarSectionDragHandle } from './SidebarSectionDragHandle';
 import {
   SidebarSectionContext,
   SidebarSectionsContext,
 } from './sidebar-section-context';
 
-/** A section identity with an optional gutter grip or a fixed, non-droppable slot. */
+/** A section identity and drop target, or a pinned, non-droppable slot. */
 export function SidebarSection(
   props: JSX.HTMLAttributes<HTMLElement> & {
     id: string;
@@ -46,7 +44,7 @@ export function SidebarSection(
     return (
       <SidebarSectionContext.Provider
         value={
-          reorder
+          reorder && !local.headerless
             ? {
                 get id() {
                   return local.id;
@@ -71,19 +69,7 @@ export function SidebarSection(
             'opacity-40': reorder?.isDragging(local.id),
           }}
         >
-          <Show when={local.headerless && reorder} fallback={content()}>
-            {(controller) => (
-              <SidebarSectionDragHandle
-                section={local.id}
-                label={local.label}
-                reorder={controller()}
-                disabled={isTouchDevice()}
-                gutter
-              >
-                {content()}
-              </SidebarSectionDragHandle>
-            )}
-          </Show>
+          {content()}
           <SectionDropIndicator edge={reorder?.dropEdge(local.id)} />
         </section>
       </SidebarSectionContext.Provider>
