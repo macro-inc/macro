@@ -1,11 +1,17 @@
 //! Github Link Service implemenation
 
+use std::num::NonZeroUsize;
+use std::sync::{Mutex, PoisonError};
+use std::time::{Duration, Instant};
+
 use chrono::Utc;
 use github_pull_requests::domain::ports::GithubPullRequestService;
+use lru::LruCache;
 use macro_user_id::{
     lowercased::Lowercase,
     user_id::{MacroUserId, MacroUserIdStr},
 };
+use sha2::{Digest, Sha256};
 
 use crate::domain::{
     models::{
@@ -43,6 +49,48 @@ pub struct GithubLinkServiceImpl<
     auth: F,
     pull_request_service: E,
     config: super::GithubLinkConfig,
+    validated: ValidatedTokens,
+}
+
+/// How long a token GitHub accepted is handed out without asking GitHub
+/// again. Every connected-app call reads the link token, often twice; asking
+/// GitHub's `/user` each time costs ~170 ms and spends the user's GitHub
+/// rate limit. A token revoked inside the window fails at GitHub instead.
+const TOKEN_VALIDATION_WINDOW: Duration = Duration::from_secs(60);
+
+/// Bounds the remembered tokens; freshness comes from the window.
+const VALIDATED_TOKEN_CAPACITY: NonZeroUsize = NonZeroUsize::new(4096).unwrap();
+
+/// Digests of tokens GitHub accepted, with when it last did. Only accepted
+/// tokens are remembered, so a rejected one is checked on every read.
+struct ValidatedTokens {
+    window: Duration,
+    accepted: Mutex<LruCache<[u8; 32], Instant>>,
+}
+
+impl ValidatedTokens {
+    fn new() -> Self {
+        Self {
+            window: TOKEN_VALIDATION_WINDOW,
+            accepted: Mutex::new(LruCache::new(VALIDATED_TOKEN_CAPACITY)),
+        }
+    }
+
+    fn digest(token: &str) -> [u8; 32] {
+        Sha256::digest(token.as_bytes()).into()
+    }
+
+    fn is_fresh(&self, token: &str) -> bool {
+        let mut accepted = self.accepted.lock().unwrap_or_else(PoisonError::into_inner);
+        accepted
+            .get(&Self::digest(token))
+            .is_some_and(|at| at.elapsed() < self.window)
+    }
+
+    fn accept(&self, token: &str) {
+        let mut accepted = self.accepted.lock().unwrap_or_else(PoisonError::into_inner);
+        accepted.put(Self::digest(token), Instant::now());
+    }
 }
 
 impl<R: GithubRepo, U: GithubOauth, F: Auth, E: GithubPullRequestService>
@@ -62,7 +110,16 @@ impl<R: GithubRepo, U: GithubOauth, F: Auth, E: GithubPullRequestService>
             auth,
             pull_request_service,
             config,
+            validated: ValidatedTokens::new(),
         }
+    }
+
+    /// Check tokens with GitHub again after `window` instead of
+    /// [`TOKEN_VALIDATION_WINDOW`].
+    #[cfg(test)]
+    pub(crate) fn with_token_validation_window(mut self, window: Duration) -> Self {
+        self.validated.window = window;
+        self
     }
 
     async fn find_user_link(
@@ -102,6 +159,10 @@ impl<R: GithubRepo, U: GithubOauth, F: Auth, E: GithubPullRequestService>
             .map_err(Into::into)?
             .ok_or(GithubError::ReauthenticationRequired)?;
 
+        if self.validated.is_fresh(access_token.as_str()) {
+            return Ok(access_token);
+        }
+
         let token_is_expired = self
             .oauth
             .is_access_token_expired(access_token.as_str())
@@ -112,6 +173,7 @@ impl<R: GithubRepo, U: GithubOauth, F: Auth, E: GithubPullRequestService>
             return Err(GithubError::ReauthenticationRequired);
         }
 
+        self.validated.accept(access_token.as_str());
         Ok(access_token)
     }
 
