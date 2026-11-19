@@ -154,7 +154,10 @@ async fn first_import(
     let whole = claim(repo).await.unwrap();
     assert_eq!(
         round(repo, whole.clone(), uids, read).await,
-        OutlookCheckpoint::RoundFinished { first_sync: true }
+        OutlookCheckpoint::RoundFinished {
+            first_sync: true,
+            cleared_sync_error: false
+        }
     );
     whole
 }
