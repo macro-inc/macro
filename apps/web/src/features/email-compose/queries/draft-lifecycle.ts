@@ -1,4 +1,5 @@
 import { fetchToken } from '@core/auth/session-refresh';
+import { ENABLE_BEARER_TOKEN_AUTH } from '@core/constant/featureFlags';
 import { fireAndForget } from '@core/util/fireAndForget';
 import { thrownResultErrorHasCode } from '@core/util/result';
 import { Telemetry } from '@macro-inc/observability';
@@ -104,7 +105,9 @@ async function fetchServerLifecycle(
       (error) => error
     );
   let thread = await readThread();
+  // A cookie refresh cannot confirm that a separate bearer token is valid.
   if (
+    !ENABLE_BEARER_TOKEN_AUTH &&
     thread.isErr() &&
     thrownResultErrorHasCode(thread.error, 'UNAUTHORIZED') &&
     (await fetchToken()).isOk()
