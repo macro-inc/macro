@@ -199,7 +199,7 @@ impl SetBy {
 
     /// Whether the setting is labelled as the agent's.
     pub fn via_agent(self) -> bool {
-        self != SetBy::Person
+        self == SetBy::Agent
     }
 
     /// Whether the setting only restricts (see [`Rule::restriction_only`]).
