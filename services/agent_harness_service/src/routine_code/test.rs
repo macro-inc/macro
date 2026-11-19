@@ -741,7 +741,9 @@ export async function main({ macro, trigger, steps, run }: StepContext) {
     }
 
     /// `macro` stays the SDK's `Macro`, so a helper typed with it takes it,
-    /// and only a routine that defines sub-routines can call `schedule`.
+    /// and stored code that widens it and hands it back as a `StepContext`
+    /// checks as it did; only a routine that defines sub-routines can call
+    /// `schedule`.
     #[tokio::test]
     #[ignore = "requires pinned Deno runtime"]
     async fn macro_stays_the_sdks_and_only_a_routine_with_sub_routines_schedules() {
@@ -780,13 +782,23 @@ export async function main({ macro, trigger, steps, run }: StepContext) {
             code.check_program(&routine("", json!([]))).await.unwrap(),
             Vec::new()
         );
+        let mut widened = RoutineProgram::from_task(&json!({ "steps": [{
+            "type": "code",
+            "title": "Widen",
+            "source": "import type { Macro } from '@macro-inc/sdk';\n\
+                       const inner = (ctx: StepContext) => ctx.run.id;\n\
+                       export async function main(ctx: StepContext) { const macro: Macro = ctx.macro; return inner({ ...ctx, macro }); }",
+        }] }))
+        .unwrap();
+        widened.assign_step_ids();
+        assert_eq!(code.check_program(&widened).await.unwrap(), Vec::new());
         let failing = code
             .check_program(&routine(schedule, json!([])))
             .await
             .unwrap();
         assert_eq!(failing.len(), 1, "{failing:?}");
         assert!(
-            failing[0].problems[0].contains("not callable"),
+            failing[0].problems[0].contains("parameter of type 'never'"),
             "{failing:?}"
         );
     }

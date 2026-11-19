@@ -96,11 +96,14 @@ its parent holds. Pure data and rules; no I/O.
 - A program with `mcp_servers` needs an agent step (`AppsWithoutAgent`).
 - A routine's sub-routines are checked with it: their code steps get check
   files numbered after the routine's own, ids unique per run (a definition's
-  steps never see the routine's outputs). `STEP_CONTEXT` types
-  `macro.routines.schedule` as `never`; every file of a routine with
-  sub-routines types it by their names, one argument list per name with its
-  inputs, through interfaces extending the SDK's types so `macro` stays
-  assignable to its `Macro`. A routine with neither sub-routines nor inputs
+  steps never see the routine's outputs). The SDK's
+  `macro.routines.schedule` takes no name (`SubRoutineName` is `never`);
+  every file of a routine with sub-routines types it by their names, one
+  argument list per name with its inputs, as an overload intersected with the
+  SDK's types so `macro` stays assignable to its `Macro`. `STEP_CONTEXT`
+  is unchanged by sub-routines: changing it checks every stored routine's
+  code again, and narrowing `macro` there would fail code that hands a
+  `Macro` back as a `StepContext`. A routine with neither sub-routines nor inputs
   gets the per-file line it got before either existed, so its check files
   are no longer: the checker limits each with that line appended. The
   sub-routines' code steps, plus the routine's own or its largest

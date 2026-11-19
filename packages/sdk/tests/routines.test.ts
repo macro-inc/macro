@@ -274,7 +274,8 @@ test('scheduling a sub-routine sends its name, trigger, inputs and key', async (
     token: 'run',
     hosts: { 'scheduled-action': 'https://routines.test' },
   });
-  const routine = await macro.routines.schedule('remind', {
+  // A routine's code steps get its sub-routines' names; a test has none.
+  const routine = await macro.routines.schedule('remind' as never, {
     trigger: { type: 'once', at: '2030-01-01T09:00:00Z' },
     inputs: { taskId: 'task-1' },
     key: 'remind-task-1',

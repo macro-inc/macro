@@ -28,12 +28,8 @@ pub const STEP_CONTEXT: &str = r#"import type { Macro } from '@macro-inc/sdk';
 declare global {
   /** What a routine code step's `main` receives. */
   interface RoutineStepContext<Steps, Knobs> {
-    /**
-     * Macro's SDK, acting as the routine's owner. `routines.schedule` is
-     * there only in a routine that defines sub-routines, typed with their
-     * names and inputs.
-     */
-    macro: Macro & { routines: { schedule: never } };
+    /** Macro's SDK, acting as the routine's owner. */
+    macro: Macro;
     /** This run. */
     run: RoutineRunInfo;
     /** The routine this step belongs to. */
@@ -333,11 +329,14 @@ impl Walk {
         }
     }
 
-    /// The step's module-scoped `StepContext`. [`STEP_CONTEXT`] types
-    /// `macro.routines.schedule` as `never`, and a routine's sub-routines
-    /// replace it with one that takes only their names, each with its
-    /// inputs. `macro` stays assignable to the SDK's `Macro`, private
-    /// members included, so helpers typed with it still take it. A routine
+    /// The step's module-scoped `StepContext`. The SDK's
+    /// `macro.routines.schedule` takes no name, and a routine's
+    /// sub-routines replace it with one that takes only their names, each
+    /// with its inputs. `macro` stays assignable to the SDK's `Macro`,
+    /// private members included, so helpers typed with it still take it.
+    /// [`STEP_CONTEXT`] is main's, so stored code is checked again only
+    /// when the SDK changes, and a routine without sub-routines sees the
+    /// SDK's `Macro` as it is, both ways round. A routine
     /// with neither sub-routines nor inputs gets the line it got before
     /// either existed, so its check files are as long as they were: the
     /// checker limits a file's size with this appended.
@@ -351,8 +350,10 @@ impl Walk {
         let Some(schedules) = &self.schedules else {
             return format!("type StepContext = {base}{inputs};\n");
         };
-        // Interfaces that extend the SDK's types keep their private members,
-        // where `Omit` would drop them and break assignability to `Macro`.
+        // Intersections with the SDK's types keep their private members,
+        // where `Omit` would drop them and break assignability to `Macro`,
+        // and add an overload: an interface extending `$Routines` couldn't
+        // override `schedule`, whose name the SDK types as `never`.
         // One argument list per name, so a name that could be either of two
         // takes neither's inputs.
         format!(
@@ -360,8 +361,8 @@ impl Walk {
              type $Macro = import('@macro-inc/sdk').Macro;\n\
              type $Routines = $Macro['routines'];\n\
              type $Schedule = {{ [Name in keyof $SubRoutines]: [name: Name, options: Omit<Parameters<$Routines['schedule']>[1], 'inputs'> & $SubRoutines[Name]] }}[keyof $SubRoutines];\n\
-             interface $ScheduledRoutines extends $Routines {{ schedule(...call: $Schedule): ReturnType<$Routines['schedule']>; }}\n\
-             interface $ScheduledMacro extends $Macro {{ routines: $ScheduledRoutines; }}\n\
+             type $ScheduledRoutines = {{ schedule(...call: $Schedule): ReturnType<$Routines['schedule']> }} & $Routines;\n\
+             type $ScheduledMacro = $Macro & {{ routines: $ScheduledRoutines }};\n\
              type StepContext = Omit<{base}, 'macro'> & {{ macro: $ScheduledMacro }}{inputs};\n"
         )
     }

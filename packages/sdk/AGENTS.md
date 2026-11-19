@@ -59,9 +59,11 @@ enforced by the ordinary backend APIs.
   repeated key updates it. `routines.schedule(subRoutine, { trigger, inputs,
   key, name })` posts to `/scheduled-actions/schedule`: inside a routine's
   run it schedules a copy of a sub-routine the routine defines, which runs
-  the definition as the routine holds it then. A routine's check types it
-  with that routine's sub-routines' names and inputs, and as `never` in a
-  routine without any (`routine_program`'s `check_files`).
+  the definition as the routine holds it then. Its name is `SubRoutineName`,
+  which is `never`: only a routine's check gives it names, those of that
+  routine's sub-routines with their inputs (`routine_program`'s
+  `check_files`), so nothing else can call it, MCP included
+  (`@mcp-exclude`).
   `routines.list()` returns top-level routines;
   `{ includeChildren }` adds active sub-routines and `{ parent }` returns one
   routine's. `Routine.parent()`, `createdByRun()` (a `RoutineRun`), `key()`,

@@ -16,6 +16,13 @@ import {
 } from './routine';
 import { RoutineSuggestion } from './suggestion';
 
+/**
+ * A sub-routine of the running routine, by name. A routine's code steps are
+ * checked with the names of the sub-routines it defines, each with its
+ * inputs; anywhere else there is none to name, so no name fits.
+ */
+export type SubRoutineName = never;
+
 /** Something created for a routine to use: any handle with an entity type, such as a `Database`. */
 export interface CreatedEntity {
   readonly id: string;
@@ -196,9 +203,10 @@ export class RoutineNamespace {
    * });
    *
    * @write
+   * @mcp-exclude Only a routine's run can schedule, by the names of its own sub-routines.
    */
   async schedule(
-    subRoutine: string,
+    subRoutine: SubRoutineName,
     options: {
       /** When the copy runs. */
       trigger: RoutineTriggerOptions;

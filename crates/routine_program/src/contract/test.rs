@@ -177,8 +177,8 @@ fn a_routines_sub_routines_type_its_schedule_and_their_steps_inputs() {
              type $Macro = import('@macro-inc/sdk').Macro;\n\
              type $Routines = $Macro['routines'];\n\
              type $Schedule = {{ [Name in keyof $SubRoutines]: [name: Name, options: Omit<Parameters<$Routines['schedule']>[1], 'inputs'> & $SubRoutines[Name]] }}[keyof $SubRoutines];\n\
-             interface $ScheduledRoutines extends $Routines {{ schedule(...call: $Schedule): ReturnType<$Routines['schedule']>; }}\n\
-             interface $ScheduledMacro extends $Macro {{ routines: $ScheduledRoutines; }}\n\
+             type $ScheduledRoutines = {{ schedule(...call: $Schedule): ReturnType<$Routines['schedule']> }} & $Routines;\n\
+             type $ScheduledMacro = $Macro & {{ routines: $ScheduledRoutines }};\n\
              type StepContext = Omit<{base}, 'macro'> & {{ macro: $ScheduledMacro }}{inputs};"
         )
     };

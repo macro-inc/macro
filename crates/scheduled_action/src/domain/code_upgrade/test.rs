@@ -447,11 +447,11 @@ async fn a_rewrite_of_a_definitions_code_sees_how_schedule_is_typed() {
     let view = &rewrites[0].0;
     assert!(view.starts_with("type $SubRoutines = { file:"), "{view}");
     assert!(
-        view.contains("interface $ScheduledRoutines extends $Routines"),
+        view.contains("type $ScheduledRoutines = { schedule(...call: $Schedule)"),
         "{view}"
     );
     assert!(
-        view.contains("interface $ScheduledMacro extends $Macro"),
+        view.contains("type $ScheduledMacro = $Macro & { routines: $ScheduledRoutines }"),
         "{view}"
     );
     assert!(
