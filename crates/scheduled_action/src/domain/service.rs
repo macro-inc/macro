@@ -343,12 +343,10 @@ impl<Rpo: ScheduledActionRepo, Exe, Grants, Targets, Github, Code, Upgrades, Rol
             .await?
             .ok_or(ActionPolicyError::NotFound)?;
         let program = RoutineProgram::from_task(&parent.task)
-            .map_err(|_| ActionPolicyError::UnknownSubRoutine(copy.sub_routine.to_string()))?
+            .map_err(|_| ActionPolicyError::UnknownSubRoutine)?
             .copy_program(&copy)
             .map_err(|error| match error {
-                CopyError::UnknownSubRoutine(name) => {
-                    ActionPolicyError::UnknownSubRoutine(name.to_string())
-                }
+                CopyError::UnknownSubRoutine(_) => ActionPolicyError::UnknownSubRoutine,
                 CopyError::Inputs(error) => ActionPolicyError::SubRoutineInputs(error.to_string()),
             })?;
         Ok(Some(program))
@@ -1122,10 +1120,12 @@ where
                 Some(ActionPolicyError::SubRoutinesDisabled) => "refused_rollout",
                 Some(
                     ActionPolicyError::InvalidSubRoutineName
-                    | ActionPolicyError::UnknownSubRoutine(_)
+                    | ActionPolicyError::UnknownSubRoutine
                     | ActionPolicyError::SubRoutineInputs(_),
                 ) => "refused_definition",
-                Some(ActionPolicyError::InvalidKey) => "refused_key",
+                Some(ActionPolicyError::InvalidKey | ActionPolicyError::ScheduledNameNul) => {
+                    "refused_key"
+                }
                 _ => "failed",
             },
         };

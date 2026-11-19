@@ -584,9 +584,14 @@ async fn scheduling_needs_a_run_a_defined_name_and_inputs_that_fit() {
     start_run(&service, &parent, PARENT_RUN);
     let mut unknown = remind("Ship", None);
     unknown.sub_routine = "follow_up".into();
-    assert_policy(
-        schedule(&service, unknown, from_code(&parent)).await,
-        ActionPolicyError::UnknownSubRoutine("follow_up".into()),
+    // Even a name that fits is the caller's text, which errors are logged
+    // with: not repeated.
+    assert_eq!(
+        schedule(&service, unknown, from_code(&parent))
+            .await
+            .unwrap_err()
+            .to_string(),
+        "the routine that is running defines no sub-routine by that name"
     );
     // A name no definition could have is the caller's text: not repeated.
     let mut odd = remind("Ship", None);
@@ -606,6 +611,31 @@ async fn scheduling_needs_a_run_a_defined_name_and_inputs_that_fit() {
     assert_policy(
         schedule(&service, wrong, from_code(&parent)).await,
         ActionPolicyError::SubRoutineInputs("input `task` takes a string".into()),
+    );
+    assert_eq!(stored_actions(&service).len(), 1);
+}
+
+/// Postgres can't store a NUL in text, and its refusal would be a server
+/// error quoting the text: a key or name holding one is refused first.
+#[tokio::test]
+async fn a_scheduled_key_or_name_holding_a_nul_is_refused_before_the_write() {
+    let service = service(true);
+    let parent = reminders(&service).await;
+    start_run(&service, &parent, PARENT_RUN);
+
+    let nul_key = remind("Ship", Some("ship\u{0}it"));
+    assert_policy(
+        schedule(&service, nul_key, from_code(&parent)).await,
+        ActionPolicyError::InvalidKey,
+    );
+    let mut nul_name = remind("Ship", None);
+    nul_name.name = Some("Ship\u{0}it".into());
+    assert_eq!(
+        schedule(&service, nul_name, from_code(&parent))
+            .await
+            .unwrap_err()
+            .to_string(),
+        "a scheduled sub-routine's name can't hold a NUL character"
     );
     assert_eq!(stored_actions(&service).len(), 1);
 }

@@ -956,8 +956,9 @@ impl IntoResponse for ScheduledActionApiError {
                 | ActionPolicyError::CopyOutsideRun
                 | ActionPolicyError::NestedSubRoutines
                 | ActionPolicyError::InvalidSubRoutineName
-                | ActionPolicyError::UnknownSubRoutine(_)
-                | ActionPolicyError::SubRoutineInputs(_) => StatusCode::BAD_REQUEST,
+                | ActionPolicyError::UnknownSubRoutine
+                | ActionPolicyError::SubRoutineInputs(_)
+                | ActionPolicyError::ScheduledNameNul => StatusCode::BAD_REQUEST,
             };
             return (status, policy.to_string()).into_response();
         }

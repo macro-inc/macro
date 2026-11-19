@@ -317,7 +317,7 @@ pub enum ActionPolicyError {
     TooManySubRoutines,
     #[error("a key names a routine created by a routine's run; create it without a key here")]
     KeyOutsideRun,
-    #[error("a routine key must be 1 to {MAX_KEY_CHARS} characters")]
+    #[error("a routine key must be 1 to {MAX_KEY_CHARS} characters, none of them NUL")]
     InvalidKey,
     #[error("this routine was not created by another routine")]
     NotSubRoutine,
@@ -355,11 +355,15 @@ pub enum ActionPolicyError {
         "a sub-routine name is a lowercase letter followed by up to 31 lowercase letters, digits or underscores"
     )]
     InvalidSubRoutineName,
-    /// Holds a valid sub-routine name only, never the caller's raw text.
-    #[error("the routine that is running defines no sub-routine named `{0}`")]
-    UnknownSubRoutine(String),
+    /// Not quoted: a name that fits is still the caller's text, which errors
+    /// are logged with.
+    #[error("the routine that is running defines no sub-routine by that name")]
+    UnknownSubRoutine,
     #[error("{0}")]
     SubRoutineInputs(String),
+    /// Postgres can't store a NUL in text.
+    #[error("a scheduled sub-routine's name can't hold a NUL character")]
+    ScheduledNameNul,
 }
 
 /// Most active sub-routines one routine can have; finished one-time ones
@@ -376,10 +380,11 @@ pub const MAX_KEY_CHARS: usize = 200;
 pub struct SubRoutineKey(String);
 
 impl SubRoutineKey {
-    /// A key of 1 to [`MAX_KEY_CHARS`] characters, trimmed.
+    /// A key of 1 to [`MAX_KEY_CHARS`] characters, trimmed, without a NUL,
+    /// which Postgres can't store in text.
     pub fn new(key: &str) -> Result<Self, ActionPolicyError> {
         let key = key.trim();
-        if key.is_empty() || key.chars().count() > MAX_KEY_CHARS {
+        if key.is_empty() || key.chars().count() > MAX_KEY_CHARS || key.contains('\0') {
             return Err(ActionPolicyError::InvalidKey);
         }
         Ok(Self(key.to_owned()))

@@ -155,7 +155,14 @@ where
         let parent_id = run.parent_id.unwrap_or(run.routine_id);
         record_run(&run, parent_id);
         let key = request.key.as_deref().map(SubRoutineKey::new).transpose()?;
-        // Only a valid name is repeated back; the caller's text could be anything.
+        if request
+            .name
+            .as_deref()
+            .is_some_and(|name| name.contains('\0'))
+        {
+            return Err(ActionPolicyError::ScheduledNameNul.into());
+        }
+        // The caller's text is never repeated back: it could be anything.
         let name = SubRoutineName::try_from(request.sub_routine.clone())
             .map_err(|_| ActionPolicyError::InvalidSubRoutineName)?;
         let parent = self
@@ -163,7 +170,7 @@ where
             .get_action(&parent_id)
             .await?
             .ok_or(ActionPolicyError::NotFound)?;
-        let unknown = || ActionPolicyError::UnknownSubRoutine(name.to_string());
+        let unknown = || ActionPolicyError::UnknownSubRoutine;
         let program = RoutineProgram::from_task(&parent.task).map_err(|_| unknown())?;
         let definition = program.sub_routine(&name).ok_or_else(unknown)?;
         definition

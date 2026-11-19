@@ -68,14 +68,16 @@ fn a_copy_needs_every_input_its_definition_declares_and_no_other() {
         refused(json!({ "taskId": "t-1" })),
         "input `daysLeft` needs a value"
     );
-    assert_eq!(
-        refused(json!({ "taskId": "t-1", "daysLeft": 2, "owner": "x" })),
-        "the sub-routine has no input `owner`"
-    );
-    // A key no input could have is the caller's text: it isn't repeated.
-    let odd = refused(json!({ "taskId": "t-1", "daysLeft": 2, "someone@example.com": "x" }));
-    assert!(!odd.contains("someone"), "{odd}");
-    assert!(odd.contains("isn't an input name"), "{odd}");
+    // An undeclared key is the caller's text, even one shaped like a name:
+    // it isn't repeated.
+    for key in ["jane_doe", "someone@example.com"] {
+        let mut inputs = json!({ "taskId": "t-1", "daysLeft": 2 });
+        inputs[key] = json!("x");
+        assert_eq!(
+            refused(inputs),
+            "a value was given for an input the sub-routine doesn't declare"
+        );
+    }
     assert_eq!(
         refused(json!({ "taskId": 7, "daysLeft": 2 })),
         "input `taskId` takes a string"

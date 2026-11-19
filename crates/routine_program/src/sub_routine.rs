@@ -309,15 +309,10 @@ pub enum InputError {
     /// A declared input without a value.
     #[error("input `{0}` needs a value")]
     Missing(String),
-    /// A value for an input the sub-routine doesn't declare.
-    #[error("the sub-routine has no input `{0}`")]
-    Unknown(String),
-    /// A value under a key no input could have. The key isn't quoted: it
-    /// is the caller's text, and could be anything.
-    #[error(
-        "a value was given under a key that isn't an input name: a lowercase letter followed by up to 31 letters or digits"
-    )]
-    NotAnInputName,
+    /// A value for an input the sub-routine doesn't declare. The key isn't
+    /// quoted: it is the caller's text, which errors are logged with.
+    #[error("a value was given for an input the sub-routine doesn't declare")]
+    Unknown,
     /// A value of the wrong type.
     #[error("input `{name}` takes a {expected}")]
     WrongType {
@@ -338,16 +333,13 @@ impl SubRoutineDefinition {
     /// Its inputs with `values`, by name: every input needs one that fits
     /// its type, and no other value is taken.
     pub fn given(&self, values: &Map<String, Value>) -> Result<Vec<Input>, InputError> {
-        if let Some(unknown) = values.keys().find(|key| {
+        if values.keys().any(|key| {
             !self
                 .inputs
                 .iter()
                 .any(|input| input.name().as_str() == *key)
         }) {
-            return Err(match InputName::try_from(unknown.clone()) {
-                Ok(_) => InputError::Unknown(unknown.clone()),
-                Err(_) => InputError::NotAnInputName,
-            });
+            return Err(InputError::Unknown);
         }
         self.inputs
             .iter()
