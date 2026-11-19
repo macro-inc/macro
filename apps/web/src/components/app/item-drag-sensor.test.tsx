@@ -88,6 +88,90 @@ afterEach(() => {
 });
 
 describe('item mouse sensor with solid-dnd', () => {
+  it('consumes the release click after a drag without swallowing ordinary clicks', () => {
+    const drag = mount();
+    const row = screen.getByTestId('source');
+    const open = vi.fn();
+    row.addEventListener('click', open);
+    drag.press();
+    drag.move();
+    drag.release();
+    fireEvent.click(row, { detail: 1 });
+    expect(open).not.toHaveBeenCalled();
+    drag.press();
+    drag.release();
+    fireEvent.click(row, { detail: 1 });
+    expect(open).toHaveBeenCalledOnce();
+    drag.unmount();
+  });
+
+  it('keeps keyboard and unrelated clicks independent of a drag release', () => {
+    const drag = mount();
+    const row = screen.getByTestId('source');
+    const target = screen.getByTestId('target');
+    const open = vi.fn();
+    const activateTarget = vi.fn();
+    row.addEventListener('click', open);
+    target.addEventListener('click', activateTarget);
+    drag.press();
+    drag.move();
+    fireEvent.click(row, { detail: 0 });
+    fireEvent.click(target, { detail: 1 });
+    expect(open).toHaveBeenCalledOnce();
+    expect(activateTarget).toHaveBeenCalledOnce();
+    fireEvent.keyDown(document, { key: 'Escape' });
+    fireEvent.click(row, { detail: 0 });
+    fireEvent.click(target, { detail: 1 });
+    drag.release();
+    fireEvent.click(row, { detail: 1 });
+    expect(open).toHaveBeenCalledTimes(2);
+    expect(activateTarget).toHaveBeenCalledTimes(2);
+    drag.unmount();
+  });
+
+  it('resets a cancelled drag guard on a new mouse press even if the control stops propagation', () => {
+    const drag = mount();
+    const row = screen.getByTestId('source');
+    const checkbox = document.createElement('input');
+    checkbox.type = 'checkbox';
+    checkbox.addEventListener('mousedown', (event) => event.stopPropagation());
+    const click = vi.fn();
+    checkbox.addEventListener('click', click);
+    row.append(checkbox);
+    drag.press();
+    drag.move();
+    fireEvent.keyDown(document, { key: 'Escape' });
+    fireEvent.mouseUp(window, { button: 0, clientX: 500, clientY: 500 });
+    fireEvent.mouseDown(checkbox, { button: 0 });
+    fireEvent.click(checkbox, { detail: 1 });
+    expect(click).toHaveBeenCalledOnce();
+    drag.unmount();
+  });
+
+  it.each(['pointerup', 'pointercancel'])(
+    'finishes pen-compatible drags on %s without opening the row',
+    (reason) => {
+      vi.useFakeTimers();
+      const drag = mount();
+      const row = screen.getByTestId('source');
+      const open = vi.fn();
+      row.addEventListener('click', open);
+      fireEvent(row, mousePointer('pointerdown', { pointerType: 'pen' }));
+      drag.press();
+      drag.move();
+      fireEvent(
+        window,
+        mousePointer(reason, { pointerType: 'pen', clientX: 30, clientY: 40 })
+      );
+      fireEvent(row, mousePointer('click', { pointerType: 'pen', detail: 1 }));
+      vi.runOnlyPendingTimers();
+      expect(open).not.toHaveBeenCalled();
+      expect(screen.getByTestId('active').textContent).toBe('idle');
+      expect(drag.onDrop).toHaveBeenCalledTimes(reason === 'pointerup' ? 1 : 0);
+      drag.unmount();
+    }
+  );
+
   it('keeps the primary-button threshold, supports delayed activation, and drops on release', () => {
     vi.useFakeTimers();
     const drag = mount();

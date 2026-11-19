@@ -17,15 +17,30 @@ export function createItemDragSensor(options: {
   let attached = false;
   let pointerId: number | undefined;
   let captureNode: HTMLElement | undefined;
+  let suppressedClickFrom: HTMLElement | undefined;
   const isActive = () => state.active.sensorId === id;
   const clearSelection = () => window.getSelection()?.removeAllRanges();
 
   const observePointerDown = (event: PointerEvent) => {
-    if (attached || event.pointerType !== 'mouse' || event.button !== 0) return;
+    if (attached || event.pointerType === 'touch' || event.button !== 0) return;
+    suppressedClickFrom = undefined;
     pointerId = event.pointerId;
   };
+  const observeMouseDown = (event: MouseEvent) => {
+    if (!attached && event.button === 0) suppressedClickFrom = undefined;
+  };
+  const consumeDragClick = (event: MouseEvent) => {
+    if (!suppressedClickFrom || event.detail === 0) return;
+    if ('pointerType' in event && event.pointerType === 'touch') return;
+    if (!event.composedPath().includes(suppressedClickFrom)) return;
+    // Pointer capture routes the release click back to the source row. Consume
+    // only that click, not keyboard activation or another pointer's click.
+    suppressedClickFrom = undefined;
+    event.preventDefault();
+    event.stopImmediatePropagation();
+  };
   const cancelPointer = (event: PointerEvent) => {
-    if (event.pointerType !== 'mouse') return;
+    if (event.pointerType === 'touch') return;
     if (pointerId !== undefined && event.pointerId !== pointerId) return;
     cancel();
   };
@@ -66,6 +81,7 @@ export function createItemDragSensor(options: {
   const finish = (deliver: boolean) => {
     if (!attached) return;
     const active = isActive();
+    if (active) suppressedClickFrom = state.active.draggable?.node;
     detach();
     try {
       if (!active) return;
@@ -120,6 +136,7 @@ export function createItemDragSensor(options: {
     try {
       actions.sensorStart(id, origin);
       actions.dragStart(pendingId);
+      suppressedClickFrom = state.active.draggable?.node;
       // Capture only after activation, so normal clicks keep their native target.
       // The release then reaches us even outside the window or over an iframe.
       const node = state.active.draggable?.node;
@@ -179,7 +196,7 @@ export function createItemDragSensor(options: {
     }
   };
   const pointerUp = (event: PointerEvent) => {
-    if (!attached || event.pointerType !== 'mouse' || event.button !== 0)
+    if (!attached || event.pointerType === 'touch' || event.button !== 0)
       return;
     if (pointerId !== undefined && event.pointerId !== pointerId) return;
     // A normal mouseup follows pointerup; keep the drag through intervening
@@ -198,6 +215,7 @@ export function createItemDragSensor(options: {
   };
   const attach = (event: MouseEvent, draggableId: string | number) => {
     if (event.button !== 0 || attached || state.active.sensor) return;
+    suppressedClickFrom = undefined;
     origin = { x: event.clientX, y: event.clientY };
     pendingId = draggableId;
     attached = true;
@@ -219,6 +237,8 @@ export function createItemDragSensor(options: {
 
   onMount(() => {
     window.addEventListener('pointerdown', observePointerDown, true);
+    window.addEventListener('mousedown', observeMouseDown, true);
+    window.addEventListener('click', consumeDragClick, true);
     actions.addSensor({ id, activators: { mousedown: attach } });
   });
   onCleanup(() => {
@@ -226,6 +246,8 @@ export function createItemDragSensor(options: {
       cancel();
     } finally {
       window.removeEventListener('pointerdown', observePointerDown, true);
+      window.removeEventListener('mousedown', observeMouseDown, true);
+      window.removeEventListener('click', consumeDragClick, true);
       actions.removeSensor(id);
     }
   });

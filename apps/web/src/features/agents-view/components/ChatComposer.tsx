@@ -168,12 +168,12 @@ export function ChatComposer(props: {
     editor.withSkills();
   }
 
+  const dictation = createComposerDictation(() => editor.lexical);
   const itemDrop = createComposerItemDrop({
     editor: editor.lexical,
     enabled: () =>
       !disabled() && !props.session?.readOnly && !dictation.active(),
   });
-  const dictation = createComposerDictation(() => editor.lexical);
 
   const { isCompact } = createComposerLayout(editor.buildHandle().lexical, {
     container: layout,
