@@ -85,6 +85,8 @@ Pulumi stacks; they do not host extra agent processes.
   for: `main.rs` wires `CodeModeService::with_js_tools` beside the
   `JsToolsAnalyzer`, with `code_mode::JsToolsRollout`
   (`enable-agent-permissions` alone; there is no separate JS tools flag).
+  `RunCredentials` fails closed: a JS tools program the gate returned
+  nothing for (its flag read off at issue time) is refused unrun.
 - `src/speech_gateway.rs` + `src/speech_gateway/`: `/brain/inference/stt` and
   `/brain/inference/tts` WebSockets on the egress listener, for agent
   teammates' calls (`MACRO_SPEECH_URL` in the enrollment). Same brain key,
