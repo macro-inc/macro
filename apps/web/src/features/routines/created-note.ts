@@ -16,12 +16,11 @@ export function createdNote(
   counted: Promise<CreatedCount | undefined>
 ): Accessor<string | undefined> {
   const [answer, setAnswer] = createSignal<CreatedCount>();
-  fireAndForget(
-    counted.then((count) => {
-      if (count) setAnswer(count);
-    }),
-    'routines'
-  );
+  const settle = async () => {
+    const count = await counted;
+    if (count) setAnswer(count);
+  };
+  fireAndForget(settle(), 'routines');
   return () => {
     const count = answer() ?? { count: listed, atLeast: true };
     if (count.count === 0) {
