@@ -22,9 +22,14 @@ import type {
 import { isClaimActive } from '../core/claim';
 import { pendingCodeReview } from '../core/code-review';
 import type { ScheduleDraft, SubRoutineCopyDraft } from '../core/draft';
+import type { UnusableItem } from '../core/knobs';
 import type { CreatedCount, RoutineSnapshot } from '../core/routine';
 import { withDraftSteps } from '../core/routine-draft';
-import { isSubRoutineCopy, programSteps } from '../core/routine-steps';
+import {
+  isSubRoutineCopy,
+  picksItems,
+  programSteps,
+} from '../core/routine-steps';
 import {
   copyInputsFit,
   copyOf,
@@ -68,8 +73,10 @@ import {
   useSchedulesQuery,
   useSetScheduleEnabledMutation,
   useSubRoutinesQuery,
+  useUnusableItemsQuery,
   useUpdateScheduleMutation,
 } from './schedules';
+import { unusableItemsFromWire } from './unusable-items';
 
 function toRoutine(schedule: ScheduledActionResponse): RoutineSnapshot {
   if (!schedule.id) throw new Error('Routine has no ID');
@@ -252,6 +259,16 @@ export function createRoutineDetailSource(
   );
   const upgrades = useCodeUpgradesQuery(id, () =>
     Boolean(raw() && raw()?.owner === userId())
+  );
+  // Only a routine that picks an item can have one go missing.
+  const unusable = useUnusableItemsQuery(id, () => {
+    const current = raw();
+    return Boolean(
+      current && current.owner === userId() && picksItems(current.task)
+    );
+  });
+  const unusableItems = createMemo((): UnusableItem[] =>
+    unusable.isPending ? [] : unusableItemsFromWire(unusable.data ?? [])
   );
   // A failed refetch keeps the proposal it had on screen.
   const codeReview = createMemo(() => {
@@ -438,6 +455,7 @@ export function createRoutineDetailSource(
     },
     keepAsOwnPending: () => keep.isPending,
     codeReview,
+    unusableItems,
     // Saving checks the proposal against the current SDK again. It holds
     // the sub-routines' rewritten code too.
     async approveCodeUpdate() {

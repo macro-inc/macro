@@ -1043,6 +1043,23 @@ empty (a choice, a number, the question) keeps **Save** disabled, with the
 reason, until one is entered.
 A text knob with no value shows a + and its label (**Not set** under
 **Settings**) with a dashed underline, and opens the same editor.
+An item the step uses (an entity knob: a channel, document, folder, person,
+task, email thread, AI chat, CRM company, CRM contact, project, or database)
+shows by its icon and name and opens the same editor around the app's entity
+picker, showing only the kinds the knob accepts, email search included when
+email threads are one of them (for a database, a searchable list of the
+owner's databases). Picking an item only changes the draft, Enter included, and
+picking the picked item again keeps it; only **Clear** empties it, keeping
+**Save** disabled until one is picked. On touch it
+opens a sheet instead, with **Cancel**, **Clear** and **Done**, and only
+**Done** applies the pick. One not picked yet, as in a starter, shows the same
++ and its label with a dashed underline. Saving refuses an item the owner
+can't open. A run checks each picked item when the first step that uses it
+starts; one deleted, trashed or lost by then fails that step with the reason,
+before its code runs. On the routine's page such a knob shows
+its + and label dashed in red (**Needs a new pick** under **Settings**); its
+editor gives the reason and keeps **Save** (**Done** on touch) off until
+another item is picked.
 Each change saves only that value, never the code. Knobs the sentence
 doesn't show are listed under **Settings**; a step without a sentence shows
 its summary. **Edit** in a code step's ⋯ menu opens **Change this step**
@@ -1448,8 +1465,11 @@ immediately, with no review card, so test them on a team and addresses you
 control. The standard toolset and the standard MCP have no direct tool for
 either.
 
-Ask the agent to discover SDK entities and write a JavaScript module exporting
-`async function main({macro, session, execution})`. These are actual public SDK
+Ask the agent to discover SDK entities and write a TypeScript module exporting
+`async function main({macro, session, execution}: CodeContext)`. The harness
+type-checks it against the SDK first; a program with type errors never runs,
+and its `ExecuteCode` result is the checker's errors (`at main.ts:<line>:<column>`).
+These are actual public SDK
 handles; for example, `macro.documents.search(...)` is an async iterator and
 `await document.content()` fetches a document as Macro's internal Markdown, with
 chips, tables and other rich content as `<m-*>` tags. To write text back, the
@@ -1509,8 +1529,8 @@ together, before writing it. There is no runtime `sdk.help` or
 body with `document.edit(instructions)`, and a canvas through `document.canvas()`.
 
 The harness spawns a fresh Deno process for each execution. Dependencies are
-bundled at build time; no TypeScript compilation or package downloads happen
-in a run. The process receives a short-lived normal user token after any required
+bundled at build time; no package downloads happen in a run, and Deno strips
+the types. The process receives a short-lived normal user token after any required
 approval for the selected account. SDK methods make HTTP requests to configured Macro
 service hosts using normal API authorization. The token also signs the session's
 agent identity: SDK messages show that agent as sender and the selected acting user in the
@@ -1592,7 +1612,8 @@ the harness can run code. Those clients see only
 `ExecuteCode`, `DescribeCodeTools` and `ReadCodeDocs` on `tools/list` — not the
 individual Macro tools — and the server instructions tell the client to call
 `DescribeCodeTools` with a `task`, then `ReadCodeDocs` for the symbols it uses,
-before writing a program. Programs export `async function main({macro})` and
+before writing a program. Programs are type-checked TypeScript exporting
+`async function main({macro}: CodeContext)` and
 return exactly `{data}` (an empty `reviews: []` is dropped). There is no
 session, execution journal, review stack or `execution_id`; the receipt carries
 status, observed SDK activity, result and error. Runs act as the user with no

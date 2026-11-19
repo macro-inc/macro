@@ -1,6 +1,6 @@
 use models_opensearch::SearchIndex;
 
-use crate::upsert::properties::IndexedProperty;
+use crate::upsert::properties::{IndexedProperty, PropertyUpdate};
 use crate::{
     Result,
     date_format::EpochMillis,
@@ -220,13 +220,14 @@ pub(crate) async fn update_chat_metadata(
 
 /// Update only the denormalized `properties` on an existing parent chat doc,
 /// without touching messages. Used when a chat's properties change
-/// independently of its content. A missing doc (404) is treated as a no-op —
-/// the next message upsert will include the properties.
+/// independently of its content. A missing doc (404) changes nothing and is
+/// [`PropertyUpdate::NotIndexed`]: the next message upsert will include the
+/// properties.
 pub(crate) async fn update_chat_properties(
     client: &opensearch::OpenSearch,
     chat_id: &str,
     properties: &[IndexedProperty],
-) -> Result<()> {
+) -> Result<PropertyUpdate> {
     use serde_json::json;
 
     let properties_value =
@@ -252,7 +253,7 @@ pub(crate) async fn update_chat_properties(
     let status_code = response.status_code();
     if status_code.is_success() {
         tracing::trace!(chat_id=%chat_id, "chat properties updated");
-        return Ok(());
+        return Ok(PropertyUpdate::Applied);
     }
     let body = response.text().await.map_err(|err| {
         OpensearchClientError::deserialization_failed(
@@ -273,7 +274,7 @@ pub(crate) async fn update_chat_properties(
                 chat_id=%chat_id,
                 "chat not indexed yet; skipping property update"
             );
-            return Ok(());
+            return Ok(PropertyUpdate::NotIndexed);
         }
     }
 

@@ -4,8 +4,9 @@ use serde_json::{Value, json};
 
 use super::SUB_ROUTINES_OFF;
 use crate::domain::drafts::test::{
-    BUG_REPORTS, Recorded, Rows, Sessions, SubRoutinesFor, agent_step, code_step, configuration,
-    context, draft, drafted_routine, drafted_step, drafts, message_posted, owner, plain, routine,
+    BUG_REPORTS, Connected, Recorded, Rows, Sessions, SubRoutinesFor, agent_step, app, code_step,
+    configuration, context, draft, drafted_routine, drafted_step, drafts, message_posted, owner,
+    plain, routine,
 };
 use crate::domain::drafts::{
     CHANGE_FAILED, Draft, DraftContext, DraftCreated, DraftRequest, ROUTINE_FAILED, RoutineSoFar,
@@ -117,6 +118,35 @@ async fn a_drafted_routine_keeps_the_sub_routines_it_defines_and_where_their_cod
     let wire = serde_json::to_value(&drafted).unwrap();
     assert_eq!(wire["subRoutines"][0]["name"], "remind");
     assert_eq!(wire["problems"][0]["subRoutine"], "remind");
+}
+
+/// Apps reach only the routine's own Ask AI step: a sub-routine's Ask AI
+/// step runs with its definition's apps, which a draft can't set, so a
+/// routine whose only Ask AI step is a sub-routine's requires and names no
+/// app, whatever its check named.
+#[tokio::test]
+async fn a_routine_whose_only_ask_ai_step_is_a_sub_routines_holds_no_apps() {
+    let rows = Arc::new(Rows::default());
+    let mut sessions = Sessions::new(
+        &rows,
+        Box::new(|_| vec![plain(schedules_reminders(json!([agent_step()])))]),
+    );
+    sessions.missing_apps = vec![app("github", "GitHub")];
+    let sessions = Arc::new(sessions);
+    let drafts = drafts(&rows, &sessions)
+        .with_sub_routines(Arc::new(SubRoutinesFor(true)))
+        .with_apps(Arc::new(Connected(Some(vec![app("linear", "Linear")]))));
+
+    let drafted = drafted_routine(
+        draft(
+            &drafts,
+            routine("remind me the day before each task is due"),
+        )
+        .await,
+    );
+
+    assert_eq!(drafted.sub_routines.len(), 1);
+    assert!(drafted.apps.is_empty() && drafted.missing_apps.is_empty());
 }
 
 /// The rollout refusing a draft's sub-routines when it is checked (turned

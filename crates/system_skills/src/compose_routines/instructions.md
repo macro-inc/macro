@@ -20,7 +20,7 @@ Write it as `macro.routines.create` takes it:
 - `trigger`: `{ type: 'cron', schedule, timezone }` in the person's time zone, `{ type: 'once', at }`, `{ type: 'events', filters: [{ events, entities, condition }] }`, or `{ type: 'multiple', triggers }`. A filter names the items it watches in `entities`, as references to the handles the lookup returned: `{ type: 'channel', entity: channel }`, or `'document'` for a task or document. Never an id, and never an `ids` key.
 - `steps`: code steps `{ type: 'code', title, summary, knobs, sentence, source }`, then an Ask AI step `{ type: 'agent', instructions, model: 'anthropic/claude-sonnet-5-5' }` only when the work needs one.
 - Create beforehand only what the routine needs to exist before it runs, when the request asks for something new that the routine then uses (a database it adds rows to, a folder it files into) and no item has its name: create it once, with the name given, pass its handle in `created`, and write the id it got into the step's code. Create nothing else.
-- To change a routine, `routine.update(options)` replaces all of it, so pass everything as stored with only the change asked for: each code step with its `id`, an Ask AI step's `model` and, when it has one, its agent (`macro.agents.byId(step.agent.bot_id)`), `dangerouslyOperateAsUser` from `task.dangerously_operate_as_user`, and each filter with every field kept (such as a `property` or `github` selector) but its `ids` given again as `entities` (`macro.channels.byId(id)`, `macro.tasks.byId(id)`): a filter passed back with its stored `ids` loses them and watches everything. A routine stored as one agent task (`task.prompt`) is passed back the same way, as `prompt`, `userPrompt`, `model` and `agent`, or, when the change adds a step, as `steps` ending in an Ask AI step whose instructions join its `prompt` and `user_prompt`. Its sub-routines (`task.sub_routines`) go back as `subRoutines`, each with its `name`, `title`, `inputs` and steps passed back as the routine's are. A routine with apps (`task.mcp_servers`), one whose kept sub-routines have apps, or one with input values (`task.inputs`) can't be changed here: say so, with its link. Removing a sub-routine that has apps (leaving it out of `subRoutines`, or `[]` for all) is fine. A routine another routine scheduled (`task.sub_routine`) runs its parent's sub-routine of that name, so change that instead.
+- To change a routine, `routine.update(options)` replaces all of it, so pass everything as stored with only the change asked for: each code step with its `id` and each entity knob's picked item given again as a handle, by its stored `type` and that kind's `byId` (`{ type: 'channel', entity: macro.channels.byId(knob.value.id) }`, `{ type: 'task', entity: macro.tasks.byId(knob.value.id) }`), or `null` when none is picked, an Ask AI step's `model` and, when it has one, its agent (`macro.agents.byId(step.agent.bot_id)`), `dangerouslyOperateAsUser` from `task.dangerously_operate_as_user`, and each filter with every field kept (such as a `property` or `github` selector) but its `ids` given again as `entities`, references as in `trigger` (`{ type: 'channel', entity: macro.channels.byId(id) }`, `{ type: 'document', entity: macro.tasks.byId(id) }` for a task): a filter passed back with its stored `ids` loses them and watches everything. A routine stored as one agent task (`task.prompt`) is passed back the same way, as `prompt`, `userPrompt`, `model` and `agent`, or, when the change adds a step, as `steps` ending in an Ask AI step whose instructions join its `prompt` and `user_prompt`. Its sub-routines (`task.sub_routines`) go back as `subRoutines`, each with its `name`, `title`, `inputs` and steps passed back as the routine's are. A routine with apps (`task.mcp_servers`), one whose kept sub-routines have apps, or one with input values (`task.inputs`) can't be changed here: say so, with its link. Removing a sub-routine that has apps (leaving it out of `subRoutines`, or `[]` for all) is fine. A routine another routine scheduled (`task.sub_routine`) runs its parent's sub-routine of that name, so change that instead.
 
 ## Check, then save, in the same program
 
@@ -34,10 +34,11 @@ In one or two sentences, say when it runs and what each run does, and link the r
 
 "Whenever someone reports a bug in #customer-feedback, post it in #bug-triage."
 
-```js
-export async function main({ macro }) {
-  const plain = (name) => (name ?? '').replace(/^[#@]/, '').toLowerCase();
-  const named = async (name) => {
+```typescript
+import type { RoutineOptions } from '@macro-inc/sdk';
+export async function main({ macro }: CodeContext) {
+  const plain = (name: string) => (name ?? '').replace(/^[#@]/, '').toLowerCase();
+  const named = async (name: string) => {
     const found = [];
     for await (const channel of macro.channels.search(plain(name))) {
       if (plain(await channel.name()) === plain(name)) found.push(channel);
@@ -50,7 +51,7 @@ export async function main({ macro }) {
     return { data: { ask: names.map((name, i) => ({ name, matches: found[i].length })) } };
   }
   const [[feedback], [triage]] = found;
-  const routine = {
+  const routine: RoutineOptions = {
     name: 'Bugs from #customer-feedback in #bug-triage',
     trigger: {
       type: 'events',

@@ -339,6 +339,7 @@ async fn a_check_reports_the_rollout_refusing_sub_routines_as_its_problem() {
                 ..configuration(false)
             },
             Vec::new(),
+            Vec::new(),
             None,
         )
         .await

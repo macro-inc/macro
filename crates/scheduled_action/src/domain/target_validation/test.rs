@@ -479,3 +479,46 @@ async fn a_single_agent_loses_the_fields_its_parser_would_skip_unchecked() {
         assert_eq!(without_fields_beside_agent(&task), task);
     }
 }
+
+#[tokio::test]
+async fn saving_refuses_an_entity_knob_naming_an_item_its_owner_cant_use() {
+    use crate::domain::knob_entities::test::{Items, posting_step};
+    let owner = MacroUserIdStr::parse_from_str(OWNER).unwrap();
+    let task = |id: &str| json!({ "steps": [posting_step("Post bugs", id)] });
+    let validator =
+        TargetValidation::new(Arc::new(Sessions::default())).with_knob_entities(Arc::new(Items {
+            usable: vec!["channel:mine"],
+            ..Items::default()
+        }));
+    validator
+        .validate_task(&task("mine"), &owner)
+        .await
+        .unwrap();
+    let error = validator
+        .validate_task(&task("not-mine"), &owner)
+        .await
+        .unwrap_err();
+    assert_eq!(
+        error.downcast_ref::<TargetValidationError>(),
+        Some(&TargetValidationError::UnusableItems(vec![
+            "\"Post bugs\": the channel picked for \"Channel to post in\" doesn't exist or you can't open it; pick another".into()
+        ]))
+    );
+    // A scheduler that can't look items up refuses them rather than saving
+    // one nobody checked.
+    for error in [
+        TargetValidation::new(Arc::new(Sessions::default()))
+            .validate_task(&task("mine"), &owner)
+            .await
+            .unwrap_err(),
+        ModelOnlyTargets
+            .validate_task(&task("mine"), &owner)
+            .await
+            .unwrap_err(),
+    ] {
+        assert!(
+            error.downcast_ref::<TargetValidationError>().is_some(),
+            "{error}"
+        );
+    }
+}

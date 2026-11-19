@@ -24,6 +24,7 @@ import {
   createEffect,
   createSignal,
   getOwner,
+  type JSX,
   on,
   onMount,
   Show,
@@ -233,6 +234,16 @@ export function RoutineDetail(props: {
           published.refetch({ ...options, throwOnError: true })
         )
     );
+  /** The routine's icon as the owner's Change icon button. */
+  const changeIcon = (icon: JSX.Element) => (
+    <Show when={source.entity()}>
+      {(entity) => (
+        <EntityAppearanceTrigger entity={entity()} editable>
+          {icon}
+        </EntityAppearanceTrigger>
+      )}
+    </Show>
+  );
   return (
     <Show
       when={ownedByViewer()}
@@ -245,14 +256,9 @@ export function RoutineDetail(props: {
         userId={userId}
         onActionsOpenChange={setActionsOpen}
         identityIcon={
-          <Show when={source.entity()}>
-            {(entity) => (
-              <EntityAppearanceTrigger
-                entity={entity()}
-                editable={ownedByViewer()}
-              />
-            )}
-          </Show>
+          appearanceFlag().enabled && ownedByViewer() && source.entity()
+            ? changeIcon
+            : undefined
         }
         appearanceMenu={
           <Show

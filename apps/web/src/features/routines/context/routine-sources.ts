@@ -3,6 +3,7 @@ import type { Accessor } from 'solid-js';
 import type { CodeReview } from '../core/code-review';
 import type { ScheduleDraft, SubRoutineDraft } from '../core/draft';
 import type { HistoryRecord } from '../core/history';
+import type { UnusableItem } from '../core/knobs';
 import type { CreatedCount, RoutineSnapshot } from '../core/routine';
 
 /** The routine whose run created a sub-routine, as the sub-routine shows it. */
@@ -38,6 +39,11 @@ export type RoutineDetailSource = {
   /** Save the proposed code update and resume the routine. */
   approveCodeUpdate(): Promise<void>;
   codeUpdatePending: Accessor<boolean>;
+  /**
+   * Picked items its owner can't use now, as the scheduler checked them;
+   * their knobs need a new pick. Empty for anyone but its owner.
+   */
+  unusableItems: Accessor<readonly UnusableItem[]>;
   /** The routines this routine's runs created, finished ones included. */
   subRoutines: Accessor<readonly RoutineSnapshot[]>;
   /** How many routines a delete removes with this one, read now. */

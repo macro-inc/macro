@@ -560,6 +560,7 @@ impl<Code: RoutineCode, Sessions: RoutineSessions> super::RoutineDrafts<Code, Se
             )),
             prompt: prompt(&task, owner, context, &lookup, &areas),
             sub_routines,
+            apps: None,
         }))
     }
 

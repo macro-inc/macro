@@ -14,6 +14,7 @@ import {
 import type { RoutineEditorSlots } from '../context/routine-slots';
 import type { SubRoutineDraft } from '../core/draft';
 import { DEFAULT_RUN_VISIBILITY, type ScheduleDraft } from '../core/draft';
+import type { UnusableItem } from '../core/knobs';
 import { draftSteps } from '../core/routine-draft';
 import { firstAgent, type StepDraft } from '../core/routine-steps';
 import { labelledInputs } from '../core/sub-routines';
@@ -56,6 +57,8 @@ export function routineSections(props: {
   unsupported?: JSX.Element;
   /** On a sub-routine's page: its parent's definition, which it runs. */
   copySource?: Accessor<CopySource | undefined>;
+  /** Picked items its owner can't use now, on a saved routine's page. */
+  unusableItems?: Accessor<readonly UnusableItem[]>;
 }) {
   const triggers = () => props.draft()?.triggers ?? [];
   const hasCodeStep = () => {
@@ -180,6 +183,7 @@ export function routineSections(props: {
                     }
                     subRoutines={draft().subRoutines}
                     requiresApps={draft().apps.length > 0}
+                    unusableItems={props.unusableItems?.()}
                   />
                 </Show>
               </>

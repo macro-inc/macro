@@ -1,6 +1,7 @@
 //! Turn the session's final check into the requested draft.
 
 use anyhow::Result;
+use bots::domain::models::AgentMcpServer;
 use routine_program::{RoutineProgram, Step};
 use serde_json::Value;
 
@@ -19,9 +20,9 @@ const SUB_ROUTINES_OFF: &str = "Scheduling work per item isn’t available to yo
 
 /// The steps of a checked routine's task. A single agent task, which the
 /// SDK still accepts and a draft's session sometimes checks, becomes one
-/// agent step holding its prompt and user prompt, if it declares no apps and
-/// that step passes a program's rules: the editor saves the draft as steps.
-/// `None` for anything else.
+/// agent step holding its prompt and user prompt, if that step passes a
+/// program's rules: the editor saves the draft as steps. Its apps are the
+/// draft's ([`draft_apps`]). `None` for anything else.
 fn task_steps(task: &Value) -> Option<Vec<Value>> {
     if let Some(steps) = task.get("steps").and_then(Value::as_array) {
         return Some(steps.clone());
@@ -31,14 +32,10 @@ fn task_steps(task: &Value) -> Option<Vec<Value>> {
     steps
 }
 
-/// A single agent task as a program's one agent step, if it is one, declares
-/// no apps (a draft holds only steps, so they would be lost) and the step
-/// passes a program's rules.
+/// A single agent task as a program's one agent step, if it is one and the
+/// step passes a program's rules.
 fn agent_task_steps(task: &Value) -> Option<Vec<Value>> {
     let task = RoutineProgram::from_task(task).ok()?;
-    if !task.mcp_servers.is_empty() {
-        return None;
-    }
     let program = RoutineProgram::new(task.steps);
     program.validate().ok()?;
     program
@@ -49,16 +46,67 @@ fn agent_task_steps(task: &Value) -> Option<Vec<Value>> {
         .ok()
 }
 
-/// The draft `request` asks for, from the session's last check. A new
-/// routine defines sub-routines only when `may_define`; a step added to a
-/// routine, or changed in it, was checked with the routine's own
-/// sub-routines, or its code may not run with them.
+/// The apps a drafted routine of `steps` requires, and the ones it needs
+/// that its owner hasn't connected: the apps its `check` requires or names
+/// as missing, each slug once, sorted by whether its owner `connected` them
+/// (as connected, by the name listed). Without that list, the ones it
+/// requires stay required. None without an Ask AI step of its own, the only
+/// step its apps reach: a sub-routine's runs with its definition's apps,
+/// which a draft can't set.
+fn draft_apps(
+    steps: &[Value],
+    check: &RoutineCheck,
+    connected: Option<&[AgentMcpServer]>,
+) -> (Vec<AgentMcpServer>, Vec<AgentMcpServer>) {
+    let mut apps: Vec<AgentMcpServer> = Vec::new();
+    let mut missing: Vec<AgentMcpServer> = Vec::new();
+    if !steps
+        .iter()
+        .any(|step| step.get("type").and_then(Value::as_str) == Some("agent"))
+    {
+        return (apps, missing);
+    }
+    let required = RoutineProgram::from_task(&check.routine.task)
+        .map(|program| program.mcp_servers)
+        .unwrap_or_default();
+    let named = required
+        .into_iter()
+        .map(|app| (app, true))
+        .chain(check.missing_apps.iter().cloned().map(|app| (app, false)));
+    for (app, is_required) in named {
+        if apps
+            .iter()
+            .chain(&missing)
+            .any(|seen| seen.app_slug == app.app_slug)
+        {
+            continue;
+        }
+        match connected.map(|connected| {
+            connected
+                .iter()
+                .find(|listed| listed.app_slug == app.app_slug)
+        }) {
+            Some(Some(listed)) => apps.push(listed.clone()),
+            Some(None) => missing.push(app),
+            None if is_required => apps.push(app),
+            None => missing.push(app),
+        }
+    }
+    (apps, missing)
+}
+
+/// The draft `request` asks for, from the session's last check, given the
+/// apps its owner `connected` when its prompt listed them. A new routine
+/// defines sub-routines only when `may_define`; a step added to a routine,
+/// or changed in it, was checked with the routine's own sub-routines, or its
+/// code may not run with them.
 pub(super) fn drafted(
     request: &DraftRequest,
     program: &[Step],
     check: RoutineCheck,
     created: Vec<DraftCreated>,
     may_define: bool,
+    connected: Option<&[AgentMcpServer]>,
 ) -> Draft {
     let span = tracing::Span::current();
     span.record("routine.draft.code_failing", check.steps.len());
@@ -103,6 +151,8 @@ pub(super) fn drafted(
             let sub_routines = task_sub_routines(&check.routine.task);
             span.record("routine.draft.steps", steps.len());
             span.record("routine.draft.sub_routines", sub_routines.len());
+            let (apps, missing_apps) = draft_apps(&steps, &check, connected);
+            span.record("routine.draft.apps", apps.len());
             Draft::Routine(DraftedRoutine {
                 name: check.routine.name.trim().to_owned(),
                 trigger: Some(check.routine.trigger.clone()),
@@ -118,6 +168,8 @@ pub(super) fn drafted(
                 steps,
                 sub_routines,
                 created,
+                apps,
+                missing_apps,
             })
         }
         DraftRequest::AddStep { kind, .. } => {

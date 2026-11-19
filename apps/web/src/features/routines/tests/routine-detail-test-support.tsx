@@ -24,10 +24,6 @@ import type { RoutineTarget } from '../core/routine-target';
 import { Routine as RoutineUnderTest } from '../routine-detail';
 import type { HistoryRecord } from '../views/routine-history';
 
-vi.mock('@app/lib/analytics/posthog', () => ({
-  useFeatureFlag: () => () => ({ enabled: false, loading: false }),
-}));
-
 vi.mock('@app/lib/split-router', () => ({
   createSearchParamsCodec: () => ({}),
   createSearchParams: () => {
@@ -77,6 +73,8 @@ const mocks = vi.hoisted(() => ({
   changeTarget: (_target: RoutineTarget): void => {},
   rename: (_value: string): void => {},
   duplicate: (): void => {},
+  /** Flags on besides the ones the mocks below name. */
+  flags: (): string[] => [],
   sharing: (): boolean => false,
   subRoutineWrites: (): boolean => true,
   eventWrites: (): boolean => true,
@@ -234,9 +232,14 @@ vi.mock('@components/app/split-layout/layoutUtils', () => ({
   }),
   returnSplitToRecentListView: vi.fn(),
 }));
-vi.mock('@components/app/split-layout/components/HeaderIsland', () => ({
-  HeaderIsland: (props: { children: JSX.Element }) => props.children,
-}));
+// Drawn as on touch: the real floating island, the only part of a touch top
+// bar that takes taps.
+vi.mock('@components/app/split-layout/components/HeaderIsland', async () => {
+  const { MobileHeaderIsland } = await vi.importActual<
+    typeof import('@components/app/mobile-header/island')
+  >('@components/app/mobile-header/island');
+  return { HeaderIsland: MobileHeaderIsland };
+});
 vi.mock('@components/app/split-layout/components/SplitHeader', () => ({
   SplitHeaderLeft: (props: { children: JSX.Element }) => props.children,
 }));
@@ -266,7 +269,8 @@ vi.mock('@app/lib/analytics/posthog', () => ({
         ? mocks.subRoutineWrites()
         : flag.key === 'enable-event-routines'
           ? mocks.eventWrites()
-          : mocks.sharing(),
+          : mocks.sharing() || mocks.flags().includes(flag.key),
+    loading: false,
   }),
 }));
 vi.mock('../routine-ai-composer', () => ({
@@ -444,6 +448,7 @@ vi.mock('../queries/schedules', () => ({
     refetch: mocks.refetchUpgrades,
   }),
   useChildrenQuery: () => ({ isSuccess: true, data: [] }),
+  useUnusableItemsQuery: () => ({ isSuccess: true, data: [] }),
   fetchChildren: (id: string) => mocks.fetchChildren(id),
   useDetachScheduleMutation: () => ({
     mutateAsync: mocks.detach,
@@ -541,6 +546,7 @@ beforeEach(() => {
   mocks.agentMetadata = () => ({ name: 'Agent transcript' });
   mocks.codeUpgrades = () => [];
   mocks.upgradesFailed = () => false;
+  mocks.flags = () => [];
   mocks.sharing = () => false;
   mocks.subRoutineWrites = () => true;
   mocks.eventWrites = () => true;

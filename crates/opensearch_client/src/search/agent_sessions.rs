@@ -7,11 +7,9 @@ use opensearch_query_builder::{BoolQueryBuilder, HasChildQuery, InnerHits, Query
 
 use super::{
     builder::{SearchQueryBuilder, SearchQueryConfig},
-    chats::{
-        build_all_terms_highlight_query, build_child_content_query, inner_hits_content_highlight,
-    },
+    chats::{build_all_terms_highlight_query, inner_hits_content_highlight},
     model::{Hit, SearchGotoAgentSession, SearchGotoContent, SearchHit, parse_highlight_hit},
-    query::Keys,
+    query::{Keys, child_content_query},
     utils::{millis_to_datetime, split_inner_hits_budget},
 };
 use crate::Result;
@@ -84,8 +82,7 @@ pub(super) fn build_query(
         let budget = split_inner_hits_budget(args.terms.len());
 
         for (index, term) in args.terms.iter().enumerate() {
-            let has_child =
-                HasChildQuery::new("message", build_child_content_query(term, match_type));
+            let has_child = HasChildQuery::new("message", child_content_query(term, match_type));
             let Some(size) = budget.size_for_clause(index) else {
                 content.must(has_child.into());
                 continue;
