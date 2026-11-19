@@ -8,7 +8,7 @@
 //! a rename fails. Their rename bodies are spelled out here for the same reason as
 //! in `entities.rs`.
 
-use reqwest::Method;
+use reqwest::{Method, StatusCode};
 use serde::{Deserialize, Serialize};
 use uuid::Uuid;
 
@@ -104,7 +104,8 @@ impl FixtureWrites for AgentSessions {
     }
 
     async fn rename(&mut self, id: EntityId, title: &Token) -> Result<(), ApiError> {
-        self.api
+        let renamed = self
+            .api
             .send_done(
                 Call::new(
                     Method::PUT,
@@ -116,7 +117,20 @@ impl FixtureWrites for AgentSessions {
                 }),
                 &[],
             )
-            .await
+            .await;
+        // A session that is gone, not ours, or archived will not come back:
+        // forget it, so the next lookup creates another rather than
+        // returning it again. Other failures keep it, since search may only
+        // be slow to show it.
+        if let Err(ApiError::Status {
+            status: StatusCode::NOT_FOUND | StatusCode::FORBIDDEN | StatusCode::CONFLICT,
+            ..
+        }) = renamed
+            && self.created == Some(id)
+        {
+            self.created = None;
+        }
+        renamed
     }
 }
 

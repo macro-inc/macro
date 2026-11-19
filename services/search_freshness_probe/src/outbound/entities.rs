@@ -94,11 +94,13 @@ struct RenameDocument {
 }
 
 /// Creates a markdown document titled with `title`, holding `markdown`,
-/// shared with no one. One that cannot be made private is deleted.
+/// shared with no one. One that cannot be made private is deleted, and kept
+/// in `unshared` if that fails too, for [`purge_unshared`] to retry.
 pub(super) async fn create_markdown(
     api: &MacroApi,
     title: &Token,
     markdown: Option<&str>,
+    unshared: &mut Vec<EntityId>,
 ) -> Result<EntityId, ApiError> {
     let created: CreatedMarkdown = api
         .json(
@@ -131,10 +133,25 @@ pub(super) async fn create_markdown(
     if let Err(error) = shared {
         if let Err(purge) = purge_document(api, id).await {
             tracing::warn!(error = ?purge, entity_id = %id, "the probe could not delete a document it could not make private");
+            unshared.push(id);
         }
         return Err(error);
     }
     Ok(id)
+}
+
+/// Deletes the documents in `unshared`, keeping the ones that fail again.
+/// They still carry the team's default link share, so every create and
+/// shutdown tries them first.
+pub(super) async fn purge_unshared(api: &MacroApi, unshared: &mut Vec<EntityId>) {
+    let mut kept = Vec::new();
+    for id in std::mem::take(unshared) {
+        if let Err(error) = purge_document(api, id).await {
+            tracing::warn!(error = ?error, entity_id = %id, "the probe could not delete a document it could not make private");
+            kept.push(id);
+        }
+    }
+    *unshared = kept;
 }
 
 /// Deletes a document for good. A trashed document stays in search.
@@ -156,12 +173,17 @@ pub(super) async fn purge_document(api: &MacroApi, id: EntityId) -> Result<(), A
 /// the new snapshot.
 pub struct Documents {
     api: MacroApi,
+    /// Documents it could neither make private nor delete.
+    unshared: Vec<EntityId>,
 }
 
 impl Documents {
     /// Documents written through `api`.
     pub fn new(api: MacroApi) -> Self {
-        Self { api }
+        Self {
+            api,
+            unshared: Vec::new(),
+        }
     }
 
     async fn replace_body(&self, id: EntityId, token: &Token) -> Result<(), ApiError> {
@@ -194,7 +216,14 @@ impl CreatedWrites for Documents {
     async fn create(&mut self, texts: &[(TitleOrBody, Token)]) -> Result<EntityId, ApiError> {
         let title = token_of(texts, TitleOrBody::Title).unwrap_or_else(Token::random);
         let body = token_of(texts, TitleOrBody::Body);
-        create_markdown(&self.api, &title, body.as_ref().map(Token::as_str)).await
+        purge_unshared(&self.api, &mut self.unshared).await;
+        create_markdown(
+            &self.api,
+            &title,
+            body.as_ref().map(Token::as_str),
+            &mut self.unshared,
+        )
+        .await
     }
 
     async fn set(
@@ -227,7 +256,9 @@ impl CreatedWrites for Documents {
         purge_document(&self.api, id).await
     }
 
-    async fn close(&mut self) {}
+    async fn close(&mut self) {
+        purge_unshared(&self.api, &mut self.unshared).await;
+    }
 }
 
 /// The id of a created channel or message.
@@ -377,12 +408,28 @@ struct CreatedProject {
 /// Projects.
 pub struct Projects {
     api: MacroApi,
+    /// Projects it could neither make private nor delete.
+    unshared: Vec<EntityId>,
 }
 
 impl Projects {
     /// Projects written through `api`.
     pub fn new(api: MacroApi) -> Self {
-        Self { api }
+        Self {
+            api,
+            unshared: Vec::new(),
+        }
+    }
+
+    /// Deletes the projects it could not make private, keeping the ones that
+    /// fail again.
+    async fn delete_unshared(&mut self) {
+        for id in std::mem::take(&mut self.unshared) {
+            if let Err(error) = self.delete(id).await {
+                tracing::warn!(error = ?error, entity_id = %id, "the probe could not delete a project it could not make private");
+                self.unshared.push(id);
+            }
+        }
     }
 }
 
@@ -394,6 +441,7 @@ impl CreatedWrites for Projects {
     const FIELDS: &'static [Title] = &[Title];
 
     async fn create(&mut self, texts: &[(Title, Token)]) -> Result<EntityId, ApiError> {
+        self.delete_unshared().await;
         let name = token_of(texts, Title).unwrap_or_else(Token::random).title();
         let created: CreatedProject = self
             .api
@@ -428,6 +476,7 @@ impl CreatedWrites for Projects {
         if let Err(error) = shared {
             if let Err(delete) = self.delete(id).await {
                 tracing::warn!(error = ?delete, entity_id = %id, "the probe could not delete a project it could not make private");
+                self.unshared.push(id);
             }
             return Err(error);
         }
@@ -479,5 +528,7 @@ impl CreatedWrites for Projects {
             .await
     }
 
-    async fn close(&mut self) {}
+    async fn close(&mut self) {
+        self.delete_unshared().await;
+    }
 }

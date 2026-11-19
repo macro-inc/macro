@@ -273,3 +273,42 @@ async fn a_project_is_created_renamed_and_purged() {
         ]
     );
 }
+
+#[tokio::test]
+async fn a_document_that_could_not_be_made_private_or_deleted_is_deleted_at_shutdown() {
+    let (server, api) = server().await;
+    Mock::given(method("POST"))
+        .and(path("/dss/documents/create_markdown"))
+        .respond_with(ResponseTemplate::new(200).set_body_json(json!({
+            "documentId": id(1),
+            "documentMetadata": {},
+            "token": "t",
+        })))
+        .mount(&server)
+        .await;
+    Mock::given(method("PATCH"))
+        .respond_with(ResponseTemplate::new(500))
+        .mount(&server)
+        .await;
+    // The first delete fails; the retry at shutdown succeeds.
+    Mock::given(method("DELETE"))
+        .and(path(format!("/dss/documents/{}/permanent", id(1))))
+        .respond_with(ResponseTemplate::new(500))
+        .up_to_n_times(1)
+        .mount(&server)
+        .await;
+    Mock::given(method("DELETE"))
+        .and(path(format!("/dss/documents/{}/permanent", id(1))))
+        .respond_with(ResponseTemplate::new(200))
+        .expect(1)
+        .mount(&server)
+        .await;
+    let mut documents = Documents::new(api);
+
+    let created = documents
+        .create(&[(TitleOrBody::Title, Token::random())])
+        .await;
+    documents.close().await;
+
+    assert!(created.is_err());
+}

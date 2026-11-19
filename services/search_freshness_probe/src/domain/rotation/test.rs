@@ -333,6 +333,8 @@ impl PropertyWrites for FakeProperties {
         self.deleted.push(document);
         Ok(())
     }
+
+    async fn close(&mut self) {}
 }
 
 #[tokio::test]

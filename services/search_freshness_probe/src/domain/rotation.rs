@@ -355,5 +355,6 @@ impl<A: PropertyWrites> Rotation for PropertyValue<A> {
             self.stale.push(holder.id);
         }
         self.delete_stale().await;
+        self.api.close().await;
     }
 }

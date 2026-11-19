@@ -9,7 +9,7 @@ use models_properties::service::property_definition::PropertyDefinition;
 use reqwest::Method;
 use serde::Serialize;
 
-use super::entities::{create_markdown, purge_document};
+use super::entities::{create_markdown, purge_document, purge_unshared};
 use super::macro_api::{ApiError, Call, MacroApi, NO_BODY};
 use crate::domain::model::{EntityId, MARKER, Token};
 use crate::domain::ports::PropertyWrites;
@@ -27,12 +27,17 @@ struct SetEntityProperty {
 /// Properties through `api`.
 pub struct Properties {
     api: MacroApi,
+    /// Documents it could neither make private nor delete.
+    unshared: Vec<EntityId>,
 }
 
 impl Properties {
     /// Properties written through `api`.
     pub fn new(api: MacroApi) -> Self {
-        Self { api }
+        Self {
+            api,
+            unshared: Vec::new(),
+        }
     }
 }
 
@@ -77,7 +82,8 @@ impl PropertyWrites for Properties {
     }
 
     async fn create_document(&mut self, name: &Token) -> Result<EntityId, ApiError> {
-        create_markdown(&self.api, name, None).await
+        purge_unshared(&self.api, &mut self.unshared).await;
+        create_markdown(&self.api, name, None, &mut self.unshared).await
     }
 
     async fn set(
@@ -105,5 +111,9 @@ impl PropertyWrites for Properties {
 
     async fn delete_document(&mut self, document: EntityId) -> Result<(), ApiError> {
         purge_document(&self.api, document).await
+    }
+
+    async fn close(&mut self) {
+        purge_unshared(&self.api, &mut self.unshared).await;
     }
 }

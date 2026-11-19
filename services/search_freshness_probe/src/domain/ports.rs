@@ -168,4 +168,7 @@ pub trait PropertyWrites: Send {
         &mut self,
         document: EntityId,
     ) -> impl Future<Output = Result<(), Self::Err>> + Send;
+
+    /// Releases what the writes needed besides the document, at shutdown.
+    fn close(&mut self) -> impl Future<Output = ()> + Send;
 }

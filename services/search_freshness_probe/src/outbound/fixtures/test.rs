@@ -86,3 +86,37 @@ async fn a_call_record_is_renamed_by_its_custom_name() {
         .await
         .expect("renamed");
 }
+
+#[tokio::test]
+async fn a_created_session_that_is_gone_is_replaced() {
+    let (server, api, search) = server().await;
+    let first = Uuid::new_v4();
+    let second = Uuid::new_v4();
+    Mock::given(method("POST"))
+        .and(path("/agent-harness/agent-sessions"))
+        .respond_with(ResponseTemplate::new(201).set_body_json(json!({"session": {"id": first}})))
+        .up_to_n_times(1)
+        .mount(&server)
+        .await;
+    Mock::given(method("POST"))
+        .and(path("/agent-harness/agent-sessions"))
+        .respond_with(ResponseTemplate::new(201).set_body_json(json!({"session": {"id": second}})))
+        .mount(&server)
+        .await;
+    Mock::given(method("PUT"))
+        .and(path(format!("/agent-harness/agent-sessions/{first}/name")))
+        .respond_with(ResponseTemplate::new(404))
+        .mount(&server)
+        .await;
+    let mut sessions = AgentSessions::new(api, search);
+
+    let found = sessions.find().await.expect("created");
+    sessions
+        .rename(EntityId(first), &Token::random())
+        .await
+        .expect_err("the session is gone");
+    let replaced = sessions.find().await.expect("created again");
+
+    assert_eq!(found, Some(EntityId(first)));
+    assert_eq!(replaced, Some(EntityId(second)));
+}
