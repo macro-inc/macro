@@ -1207,6 +1207,14 @@ check newest-first ordering, and dismiss a ring without joining. Repeat with
 the sidebar flag off. At 390×844, keep the existing in-row Join/Decline and live
 indicators: the standalone desktop Live section does not appear on touch.
 
+Reopening Chat or reloading with a saved channel list displays cached conversations
+while the bounded Soup pages revalidate. A settled page replaces the cached seed,
+including when the page is empty. Only a cold list without cached rows shows loading
+placeholders. Favorites do not add skeleton rows while channel metadata loads;
+Unread-only can legitimately leave the section empty. A successfully omitted channel
+favorite disappears from this rail without deleting the saved favorite, while a failed
+lookup offers Retry.
+
 ### Original sidebar (flag off)
 
 The desktop rail keeps **All** and **Recent** tabs in a shared pill track beside
