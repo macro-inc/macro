@@ -15,6 +15,7 @@ import type {
   RoutineParentSummary,
   RoutineRowOperations,
 } from '../context/routine-sources';
+import { isClaimActive } from '../core/claim';
 import { pendingCodeReview } from '../core/code-review';
 import type { ScheduleDraft } from '../core/draft';
 import type { RoutineSnapshot } from '../core/routine';
@@ -106,7 +107,13 @@ function compatibleCopyParentTask(
   parent: ScheduledActionResponse | undefined
 ) {
   const link = schedule.sub_routine;
-  if (!link || !parent || parent.id !== link.parent_id) return;
+  if (
+    !link ||
+    isClaimActive(schedule.claimed) ||
+    !parent ||
+    parent.id !== link.parent_id
+  )
+    return;
   const copy = copyOf(schedule.task);
   if (!copy) return;
   const definition = wireDefinition(parent.task, copy.subRoutine);

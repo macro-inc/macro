@@ -2047,6 +2047,19 @@ describe('sub-routines defined once', () => {
     });
   });
 
+  it('withholds Keep during a claimed copy run', () => {
+    setSchedules([{ ...copy, claimed: new Date().toISOString() }, parent]);
+    render(() => <Routine />);
+    openActions();
+    expect(
+      screen.queryByRole('menuitem', { name: 'Keep as my routine' })
+    ).toBeNull();
+    setSchedules([copy, parent]);
+    expect(
+      screen.getByRole('menuitem', { name: 'Keep as my routine' })
+    ).toBeTruthy();
+  });
+
   it('withholds Keep when the current definition requires different inputs', () => {
     setSchedules([
       copy,
