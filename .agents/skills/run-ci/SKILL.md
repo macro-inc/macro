@@ -38,8 +38,9 @@ gh api repos/macro-inc/macro/issues/<pr>/labels -f "labels[]=run-ci"  # after a 
 `gh pr edit <pr> --add-label run-ci` does the same on a recent gh; older
 releases fail on a Projects (classic) error before adding the label.
 
-- Adding the label again starts a fresh run. A run still going for the same PR
-  is cancelled.
+- If `run-ci` remains on the PR, remove it before adding it again:
+  `gh pr edit <pr> --remove-label run-ci`, then `gh pr edit <pr> --add-label run-ci`.
+  Adding the label starts a fresh run and cancels any run still going for that PR.
 - Draft PRs run too.
 - Only PRs into `main` run. A stacked PR, based on another branch, gets no
   `CI gate` and the label does nothing until its base is `main`. To run
@@ -88,10 +89,19 @@ and says why in `CI gate`.
 
 ## Fix a failure
 
-- A flaky job: re-run the failed jobs of the `PR CI` run
-  (`gh run rerun <run-id> --failed`). `CI gate` re-runs with them and updates
-  the status; no new label is needed.
-- A real failure: fix it, push, and add the label again.
+- After every run, review `gh pr checks <pr>` and verify `CI gate` against the
+  latest pushed commit; repeat this review whenever CI fails later.
+- For every failed job, read `gh run view <run-id> --log-failed` before deciding
+  whether the failure comes from the branch or is unrelated.
+- Fix every real branch failure, run local checks and review, commit, and push
+  without waiting for another request; then re-add `run-ci` as described above.
+- For unrelated failures, including broken `main` or flaky tests outside the
+  change, record the job and error in the PR body and `PROGRESS.md`, then
+  re-add `run-ci` once to check whether the failure reproduces.
+- If an unrelated failure repeats, investigate it rather than declaring it flaky.
+- Continue reviewing, fixing, pushing, and requesting CI until `CI gate` passes
+  on the latest commit; do not hand off a failing, pending, or untested PR.
+- If the current round is pushed and CI has not run on its head, add `run-ci` now.
 - The checks inside the run are named `<workflow> / <job>`, such as
   `Web App / Typecheck` or `Cloud Storage / test`.
 
