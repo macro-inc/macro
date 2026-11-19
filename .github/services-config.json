@@ -195,6 +195,17 @@
         "organization_retention_trigger"
       ]
     },
+    "search-freshness-probe": {
+      "bootstrap_pending": "PROBE_USER_API_KEY is not in the search-freshness-probe Doppler project's dev and prd configs yet",
+      "source_paths": [
+        "services/search_freshness_probe/**",
+        "crates/models_search/**"
+      ],
+      "stack_path": "infra/stacks/search-freshness-probe/**",
+      "deploy_binaries": [
+        "search_freshness_probe"
+      ]
+    },
     "search-processing-service": {
       "source_paths": [
         "services/search_processing_service/**",
