@@ -3,6 +3,7 @@ use crate::domain::{
     email_policy::{EmailPolicyRepository, EmailPolicyTransaction, OpenEmailPolicy},
     email_policy_work::{EmailHistoryAuthority, EmailHistoryPopulationRepository},
     email_privacy::{EmailPrivacyChange, EmailPrivacyRepository},
+    model::CrmError,
 };
 use crate::outbound::companies_repo::CompaniesRepositoryImpl;
 use chrono::Utc;
@@ -10,6 +11,102 @@ use macro_db_migrator::MACRO_DB_MIGRATIONS;
 use sqlx::PgPool;
 use std::{sync::Arc, time::Duration};
 use uuid::Uuid;
+
+#[sqlx::test(migrator = "MACRO_DB_MIGRATIONS")]
+async fn population_defers_when_scanned_message_evidence_is_deleted(
+    pool: PgPool,
+) -> anyhow::Result<()> {
+    for missing in [false, true] {
+        for remove_sent in [false, true] {
+            let team = Uuid::now_v7();
+            let address = format!("owner{missing}{remove_sent}@example.com");
+            let owner = format!("macro|{address}");
+            seed_team(&pool, team, &owner).await?;
+            enable_crm_for_team(&pool, team).await?;
+            let link = insert_email_link(&pool, &owner, &address).await?;
+            consent_to_mailbox(&pool, team, link).await?;
+            let sent_at = Utc::now() - chrono::Duration::days(1);
+            let sent =
+                insert_interaction(&pool, link, "contact@example.com", sent_at, true).await?;
+            let received =
+                insert_interaction(&pool, link, "contact@example.com", Utc::now(), false).await?;
+            let gate = Arc::new(super::ContactWriteGate::default());
+            let mut gated = CompaniesRepositoryImpl::new(pool.clone());
+            gated.after_eligible_scan = Some(gate.clone());
+            let population = tokio::spawn(async move {
+                gated
+                    .populate_company_contact(
+                        &team,
+                        &link,
+                        "example.com",
+                        "contact@example.com",
+                        None,
+                        None,
+                    )
+                    .await
+            });
+            tokio::time::timeout(Duration::from_secs(10), gate.entered.notified()).await?;
+
+            // Model the provider's absence transaction: it owns the mailbox,
+            // removes one boundary message, and commits before the recheck.
+            let mut deletion = pool.begin().await?;
+            sqlx::query!(
+                "SELECT id FROM email_links WHERE id = $1 FOR UPDATE NOWAIT",
+                link
+            )
+            .fetch_one(&mut *deletion)
+            .await?;
+            let thread = if remove_sent { sent } else { received };
+            if missing {
+                sqlx::query!("UPDATE email_messages SET mailbox_state = '{\"provider_missing\":true}'::jsonb WHERE thread_id = $1", thread)
+                    .execute(&mut *deletion).await?;
+            } else {
+                sqlx::query!("DELETE FROM email_messages WHERE thread_id = $1", thread)
+                    .execute(&mut *deletion)
+                    .await?;
+            }
+            deletion.commit().await?;
+            gate.resume.notify_one();
+            let outcome = tokio::time::timeout(Duration::from_secs(10), population).await??;
+            assert!(
+                matches!(outcome, Err(CrmError::Contended)),
+                "stale evidence must defer: {outcome:?}"
+            );
+            assert_eq!(
+                sqlx::query_scalar!(
+                    "SELECT count(*) FROM crm_companies WHERE team_id = $1",
+                    team
+                )
+                .fetch_one(&pool)
+                .await?,
+                Some(0)
+            );
+
+            // The deferred attempt rescans without a mailbox lock. Remaining
+            // received mail cannot create a company; remaining sent mail can.
+            CompaniesRepositoryImpl::new(pool.clone())
+                .populate_company_contact(
+                    &team,
+                    &link,
+                    "example.com",
+                    "contact@example.com",
+                    None,
+                    None,
+                )
+                .await?;
+            assert_eq!(
+                sqlx::query_scalar!(
+                    "SELECT count(*) FROM crm_companies WHERE team_id = $1",
+                    team
+                )
+                .fetch_one(&pool)
+                .await?,
+                Some(i64::from(!remove_sent))
+            );
+        }
+    }
+    Ok(())
+}
 
 #[sqlx::test(migrator = "MACRO_DB_MIGRATIONS")]
 async fn history_scan_rejects_a_regranted_policy_generation(pool: PgPool) -> anyhow::Result<()> {

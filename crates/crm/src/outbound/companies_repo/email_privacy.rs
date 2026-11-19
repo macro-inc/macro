@@ -265,8 +265,29 @@ impl CompaniesRepositoryImpl {
         .instrument(tracing::info_span!("crm.email_interaction_scan"))
         .await
         .map_err(|e| CrmError::StorageLayerError(e.into()))?;
-        let (Some(first_at), Some(last_at), Some(is_sent)) =
-            (row.first_at, row.last_at, row.is_sent)
+        let (
+            Some(first_at),
+            Some(last_at),
+            Some(is_sent),
+            Some(first_message),
+            Some(first_thread),
+            Some(first_contact),
+            Some(last_message),
+            Some(last_thread),
+            Some(last_contact),
+            Some(last_is_sent),
+        ) = (
+            row.first_at,
+            row.last_at,
+            row.is_sent,
+            row.first_message_id,
+            row.first_thread_id,
+            row.first_contact_id,
+            row.last_message_id,
+            row.last_thread_id,
+            row.last_contact_id,
+            row.last_is_sent,
+        )
         else {
             return Ok(None);
         };
@@ -282,6 +303,31 @@ impl CompaniesRepositoryImpl {
         // across both phases, then keep these row locks through the CRM writes.
         if !Self::lock_population_authority(conn, team, link, email, authority).await? {
             return Ok(None);
+        }
+        // A provider deletion may have committed during the unlocked scan.
+        // Validate only its two scalar witnesses by primary key. A changed
+        // witness defers the job, so its next scan also runs without this lock.
+        let witnesses_valid = sqlx::query_file_scalar!(
+            "src/outbound/companies_repo/email_privacy/witnesses.sql",
+            link,
+            email,
+            first_message,
+            first_thread,
+            first_at,
+            is_sent,
+            first_contact,
+            last_message,
+            last_thread,
+            last_at,
+            last_is_sent,
+            last_contact
+        )
+        .fetch_one(&mut *conn)
+        .instrument(tracing::info_span!("crm.email_history_witnesses"))
+        .await
+        .map_err(|e| CrmError::StorageLayerError(e.into()))?;
+        if !witnesses_valid {
+            return Err(CrmError::Contended);
         }
         Ok(Some(EligibleInteractions {
             first_at,
