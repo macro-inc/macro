@@ -3,16 +3,16 @@ import * as aws from '@pulumi/aws';
 import * as awsx from '@pulumi/awsx';
 import * as pulumi from '@pulumi/pulumi';
 import {
-  DATADOG_API_KEY,
   DEFAULT_CONTINUE_BEFORE_STEADY_STATE,
   DEFAULT_TARGET_GROUP_HEALTH_CHECK,
   EcsDeploymentFailureAlarm,
-  withTelemetry,
 } from '../../packages/resources';
+import { EcrImage } from '../../packages/service';
 import { cloudStorageClusterArn } from '../../packages/service/src/cluster';
 import {
   CLOUD_TRAIL_SNS_TOPIC_ARN,
-  grafanaIngestSecretArn,
+  CLOUDWATCH_KINESIS_STREAM_ROLE_ARN,
+  DATADOG_KINESIS_FIREHOSE_STREAM_ARN,
   stack,
 } from '../../packages/shared';
 import { get_coparse_api_vpc } from '../../packages/vpc';
@@ -24,12 +24,7 @@ if (stack !== 'dev') {
 const region = aws.config.requireRegion();
 
 const BASE_NAME = pulumi.getProject();
-// Upstream 2.7.2 (the local stack's version), pinned by digest and pulled
-// from Quay rather than Docker Hub. No custom image: config arrives as
-// BAO_LOCAL_CONFIG.
-const IMAGE =
-  'quay.io/openbao/openbao:2.7.2@sha256:5046911075e137e154ce49ab051502f4ec7cf367d484ae4a4dce665d9b90561f';
-// The `openbao` user in that image.
+// The `openbao` user in the upstream image `image/Dockerfile` builds on.
 const OPENBAO_UID = 100;
 const OPENBAO_GID = 1000;
 const HOSTNAME = 'openbao-dev.macro-internal.com';
@@ -73,23 +68,8 @@ const executionRole = new aws.iam.Role(`${BASE_NAME}-execution-role`, {
   tags,
 });
 
-// The vault needs no app config, so there is no Doppler environment; the dev
-// Grafana sidecar from withTelemetry still reads its ingest token.
-if (grafanaIngestSecretArn) {
-  new aws.iam.RolePolicy(`${BASE_NAME}-execution-secrets`, {
-    role: executionRole.id,
-    policy: {
-      Version: '2012-10-17',
-      Statement: [
-        {
-          Effect: 'Allow',
-          Action: 'secretsmanager:GetSecretValue',
-          Resource: grafanaIngestSecretArn,
-        },
-      ],
-    },
-  });
-}
+// The vault needs no app config and the task has no telemetry sidecars, so
+// the execution role reads no secrets.
 
 const SEAL_ACTIONS = ['kms:Encrypt', 'kms:Decrypt', 'kms:DescribeKey'];
 const accountRootArn = pulumi.interpolate`arn:aws:iam::${aws.getCallerIdentityOutput().accountId}:root`;
@@ -233,13 +213,14 @@ const taskIngress = new aws.vpc.SecurityGroupIngressRule(
     tags,
   }
 );
-// KMS, Quay, the seal plugin's registry (ghcr.io), SSM, and the Datadog
-// intake are all HTTPS.
+// KMS, ECR, CloudWatch Logs and SSM, all AWS APIs over HTTPS. The shared VPC
+// routes them through its NAT and has no interface endpoints, so this stays
+// 0.0.0.0/0 until OpenBao moves to its own VPC (README "Network").
 const taskHttpsEgress = new aws.vpc.SecurityGroupEgressRule(
   `${BASE_NAME}-task-https-out`,
   {
     securityGroupId: taskSecurityGroup.id,
-    description: 'HTTPS to AWS APIs, the image registry, and Datadog',
+    description: 'HTTPS to AWS APIs (KMS, ECR, CloudWatch Logs, SSM)',
     cidrIpv4: '0.0.0.0/0',
     ipProtocol: 'tcp',
     fromPort: HTTPS_PORT,
@@ -448,6 +429,36 @@ new aws.route53.Record(`${BASE_NAME}-dns`, {
   ],
 });
 
+// --- Image and logs -----------------------------------------------------------
+
+// Upstream OpenBao with the KMS seal plugin baked in, so nothing is downloaded
+// at runtime. The build context is just the Dockerfile's directory.
+const image = new EcrImage(`${BASE_NAME}-ecr-image`, {
+  repositoryId: `${BASE_NAME}-ecr-${stack}`,
+  repositoryName: `${BASE_NAME}-${stack}`,
+  imageId: `${BASE_NAME}-image-${stack}`,
+  imagePath: `${__dirname}/image`,
+  dockerfile: 'Dockerfile',
+  platform: { family: 'linux', architecture: 'amd64' },
+  tags,
+});
+
+// Server and audit logs go to CloudWatch, then to Datadog through the shared
+// Firehose stream. Datadog names a non-Lambda log group's source and service
+// after the group, so this stays `service:openbao` (README "Logs").
+const logGroup = new aws.cloudwatch.LogGroup(`${BASE_NAME}-logs`, {
+  name: BASE_NAME,
+  retentionInDays: 30,
+  tags,
+});
+new aws.cloudwatch.LogSubscriptionFilter(`${BASE_NAME}-logs-datadog`, {
+  name: `${BASE_NAME}-datadog`,
+  logGroup: logGroup.name,
+  destinationArn: DATADOG_KINESIS_FIREHOSE_STREAM_ARN,
+  filterPattern: '',
+  roleArn: CLOUDWATCH_KINESIS_STREAM_ROLE_ARN,
+});
+
 // --- Service ------------------------------------------------------------------
 
 const serverConfig = sealKey.arn.apply((sealKeyArn) =>
@@ -479,7 +490,7 @@ const service = new awsx.ecs.FargateService(
       },
     ],
     taskDefinitionArgs: {
-      // Logs go through FireLens; awsx's default log group would stay empty.
+      // The container logs to the group above; awsx's own would stay empty.
       logGroup: { skip: true },
       cpu: '512',
       memory: '1024',
@@ -502,13 +513,14 @@ const service = new awsx.ecs.FargateService(
           },
         },
       ],
-      containers: withTelemetry(BASE_NAME, {
+      // No telemetry sidecars: their images and intakes are on the internet.
+      // OpenBao emits no traces, and logs go to CloudWatch (above).
+      containers: {
         openbao: {
           name: 'openbao',
-          image: IMAGE,
+          image: image.image.imageUri,
           essential: true,
           command: ['server'],
-          dependsOn: [{ containerName: 'log_router', condition: 'START' }],
           environment: [
             { name: 'BAO_LOCAL_CONFIG', value: serverConfig },
             // The access point already owns the volume as `openbao`.
@@ -520,22 +532,15 @@ const service = new awsx.ecs.FargateService(
           ],
           linuxParameters: { initProcessEnabled: true },
           logConfiguration: {
-            logDriver: 'awsfirelens',
+            logDriver: 'awslogs',
             options: {
-              Name: 'datadog',
-              Host: 'http-intake.logs.us5.datadoghq.com',
-              // Egress allows only 443; Fluent Bit defaults to plain 80.
-              TLS: 'on',
-              Port: String(HTTPS_PORT),
-              apikey: DATADOG_API_KEY,
-              dd_service: BASE_NAME,
-              dd_source: 'openbao',
-              dd_tags: `env:${stack}`,
-              provider: 'ecs',
+              'awslogs-group': logGroup.name,
+              'awslogs-region': region,
+              'awslogs-stream-prefix': BASE_NAME,
             },
           },
         },
-      }),
+      },
     },
     tags,
   },

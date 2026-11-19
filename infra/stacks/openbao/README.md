@@ -6,17 +6,54 @@ hosted dev vault that QA uses.
 
 | Piece | Choice |
 | --- | --- |
-| Server | `quay.io/openbao/openbao:2.7.2` (digest-pinned), one Fargate task on the shared cluster |
+| Server | Our ECR image `openbao-dev`: `quay.io/openbao/openbao:2.7.2` plus the seal plugin, both digest-pinned (`image/Dockerfile`); one Fargate task on the shared cluster |
 | Storage | Integrated Raft, node `macro-dev`, on encrypted EFS through an access point (uid 100, mode 0700); IAM + TLS mount only |
-| Seal | `awskms` through the external `kms-aws` plugin (2.7 dropped the built-in), downloaded digest-pinned from ghcr.io into the data volume at startup; key `alias/openbao-dev`, rotation on; only the task role may use it |
+| Seal | `awskms` through the external `kms-aws` plugin (2.7 dropped the built-in), baked into the image and sha256-checked before each launch; key `alias/openbao-dev`, rotation on; only the task role may use it |
 | Backup | AWS Backup vault `openbao-dev`, daily at 05:00 UTC, kept 14 days |
 | TLS | Internal ALB, ACM certificate for `openbao-dev.macro-internal.com`, TLS 1.2+/1.3 policy |
 | Access | ALB ingress 443 only from the document storage service's security group and the OpenBao task's own (the operator tunnel); task port 8200 only from the ALB |
-| Audit | Declared device `passwords`, `file_path = stdout`, `log_raw = false`; FireLens ships it to Datadog as `service:openbao` (and to Grafana in dev) |
+| Audit | Declared device `passwords`, `file_path = stdout`, `log_raw = false`; the `awslogs` driver writes it to the CloudWatch log group `openbao` (30 days), and the shared `datadog-kinesis-stream` Firehose forwards it to Datadog as `service:openbao` |
+| Network | Private subnets of the shared VPC; task egress is NFS to its EFS and HTTPS to AWS APIs only in practice, but the rule is still `0.0.0.0/0` (see "Network") |
 | Alarms | ECS deployment failure; no healthy target for 5 minutes |
 
 The server's `default_max_request_duration` (90 s) matches local; the ALB idle
 timeout (95 s) is longer.
+
+## Image
+
+`image/Dockerfile` builds on the digest-pinned upstream image and copies the
+`kms-aws` binary out of its digest-pinned plugin image, so the server downloads
+nothing at startup. Pulumi builds it (`linux/amd64`) and pushes it to the
+`openbao-dev` ECR repository on deploy. To upgrade OpenBao or the plugin,
+change both digests in the Dockerfile and `KMS_AWS_PLUGIN_SHA256` in
+`server-config.ts`, from the same openbao/openbao-plugins release's
+checksummed `linux_amd64` asset. A wrong checksum leaves the vault sealed, and
+the deployment circuit breaker rolls back. The plugin the server used to download is still
+in `plugins/` beside the Raft `data/` on EFS; nothing reads it, and it can be
+deleted.
+
+## Logs
+
+Server and audit logs (JSON) go to the CloudWatch log group `openbao`, and the
+shared Firehose forwards them to Datadog. Datadog's Firehose docs name a
+non-Lambda log group's source and service after the group, so they arrive as
+`service:openbao`; no other non-Lambda group uses this stream yet, so after the
+first deploy confirm with `@aws.awslogs.logGroup:openbao`. The Firehose adds no
+`env` tag. The task runs no Datadog agent or Grafana Alloy sidecar:
+there is no live container CPU/memory view in Datadog (CloudWatch ECS metrics
+remain, and the alarms below use CloudWatch), no copy of the logs in dev
+Grafana, and no traces (OpenBao never sent any). OpenBao telemetry was never
+configured.
+
+## Network
+
+The task runs in the shared VPC's private subnets, whose route tables send
+`0.0.0.0/0` to a NAT, and that VPC has no AWS interface endpoints. At runtime
+the task reaches only AWS APIs: ECR and S3 for the image pull, CloudWatch Logs,
+KMS for the seal, and `ssmmessages` for ECS Exec. The HTTPS egress rule is still
+`0.0.0.0/0`, because private-DNS interface endpoints in the shared VPC would
+reroute every dev and prod service there. Moving OpenBao into its own VPC with
+no NAT or internet gateway removes that rule.
 
 ## First deploy and init (once)
 
