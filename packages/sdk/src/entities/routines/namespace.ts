@@ -49,7 +49,8 @@ export interface CreatedEntity {
  * - `task.status_changed`: a task's status changes.
  * - `task.priority_changed`: a task's priority changes.
  * - `task.property_changed`: any property on a task changes, such as its assignees, due date, project or effort, including status and priority.
- * - `email.message_received`: new mail arrives in your inbox. Excludes spam, trash, drafts and historical imports.
+ * - `email.message_received`: new mail arrives in any of your inboxes, yours or one
+ *   delegated to you. Excludes spam, trash, drafts and historical imports.
  * - `call.started`: a call you start begins. The routine gets the call and who has joined so far.
  * - `call.ended`: a call you joined ends. The routine gets the call's participants and transcript.
  */

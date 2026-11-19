@@ -363,7 +363,7 @@ AL-613	the title menu's Favorite does not favorite the thread
 AL-615	The tag submenu (EntityTagSubmenu.tsx) refuses to open when the title menu opens it (SplitFileMenu.tsx passes this row's id as its break name), so the title menu's Add tag shows no tag picker. AL-083 goes through the same open handler, switched on by the row menu's id.
 AL-616	The title menu's Copy Link (copyLinkOp in SplitFileMenu.tsx) returns false without calling the copy-link action, so it copies nothing.
 AL-617	The title menu's Copy ID (copyEntityIdOp in SplitFileMenu.tsx) returns false without calling the copy-ID action, so it copies nothing.
-AL-619	The "Remove access" button of a person's roster row in DirectAccessView.tsx no longer calls setGrant(user, null).
+AL-619	The "Remove access" button of a person's roster row in DirectAccessView.tsx no longer calls setGrant(user, null), or the thread sharing permissions read omits the granted conversation so the owner cannot see or remove it.
 AL-621	Enter in the Remind me input in email-reminder-form.tsx no longer selects the highlighted time, so a typed reminder cannot be saved from the keyboard.
 AL-622	The Remind me form's Retry button (email-reminder-form.tsx) no longer calls onRetry, so the reminder is not read again in the quiet between the form's own reads.
 AL-700	Load more views loads nothing
