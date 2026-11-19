@@ -133,6 +133,7 @@ export function createRoutineDetail(
       autosave.dirty() ||
       autosave.saving() ||
       source.runPending() ||
+      source.copyRunBlocked() ||
       source.codeUpdatePending() ||
       isRunning()
     )

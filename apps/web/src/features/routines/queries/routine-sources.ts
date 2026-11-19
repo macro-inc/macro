@@ -21,7 +21,7 @@ import type {
 } from '../context/routine-sources';
 import { isClaimActive } from '../core/claim';
 import { pendingCodeReview } from '../core/code-review';
-import type { ScheduleDraft } from '../core/draft';
+import type { ScheduleDraft, SubRoutineCopyDraft } from '../core/draft';
 import type { RoutineSnapshot } from '../core/routine';
 import { withDraftSteps } from '../core/routine-draft';
 import { isSubRoutineCopy, programSteps } from '../core/routine-steps';
@@ -124,8 +124,12 @@ function compatibleCopyParentTask(
     return;
   const copy = copyOf(schedule.task);
   if (!copy) return;
-  const definition = wireDefinition(parent.task, copy.subRoutine);
-  if (definition && copyInputsFit(copy, definition)) return parent.task;
+  if (copyMatchesDefinition(copy, parent.task)) return parent.task;
+}
+
+function copyMatchesDefinition(copy: SubRoutineCopyDraft, task: RoutineTask) {
+  const definition = wireDefinition(task, copy.subRoutine);
+  return !!definition && copyInputsFit(copy, definition);
 }
 
 function canKeepSchedule(
@@ -246,6 +250,12 @@ export function createRoutineDetailSource(
       ? list.data?.find((item) => item.id === parentId())
       : undefined
   );
+  const copyRunBlocked = () => {
+    const current = raw();
+    const copy = current && copyOf(current.task);
+    const parent = rawParent();
+    return !!copy && !!parent && !copyMatchesDefinition(copy, parent.task);
+  };
   const connectedApps = createRoutineConnectedApps(() => {
     const current = raw();
     return Boolean(
@@ -335,6 +345,7 @@ export function createRoutineDetailSource(
     update: (draft, queuedAt) => save(draft, { queuedAt }),
     run: () => run.mutate({ scheduleId: id() }),
     runPending: () => run.isPending,
+    copyRunBlocked,
     setEnabled: (enabled) => {
       if (!approving()) activate.mutate({ scheduleId: id(), enabled });
     },

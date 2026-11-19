@@ -8,6 +8,7 @@ import { Show } from 'solid-js';
 export function RoutineRunButton(props: {
   enabled: boolean;
   runDisabled: boolean;
+  hideRun?: boolean;
   activationDisabled: boolean;
   copyDisabled: boolean;
   /** Why "Run now" can't run this routine, in its tooltip. */
@@ -25,16 +26,18 @@ export function RoutineRunButton(props: {
         class="border-0"
         aria-label="Run routine"
       >
-        <ButtonGroup.Button
-          variant="ghost"
-          disabled={props.runDisabled}
-          tooltip={props.runHint}
-          onClick={props.onRun}
-        >
-          <PlayIcon class="size-3" />
-          Run now
-        </ButtonGroup.Button>
-        <ButtonGroup.Divider />
+        <Show when={!props.hideRun}>
+          <ButtonGroup.Button
+            variant="ghost"
+            disabled={props.runDisabled}
+            tooltip={props.runHint}
+            onClick={props.onRun}
+          >
+            <PlayIcon class="size-3" />
+            Run now
+          </ButtonGroup.Button>
+          <ButtonGroup.Divider />
+        </Show>
         <Dropdown.Trigger
           as={ButtonGroup.Button}
           variant="ghost"

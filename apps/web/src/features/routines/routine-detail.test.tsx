@@ -2022,6 +2022,8 @@ describe('sub-routines defined once', () => {
       { ...parent, task: { steps: (parent.task as { steps: never }).steps } },
     ]);
     render(() => <Routine />);
+    expect(screen.queryByRole('button', { name: 'Run now' })).toBeNull();
+    expect(screen.getByRole('button', { name: 'Run options' })).toBeTruthy();
     expect(
       screen.getByText(
         'Its routine no longer defines this, so it fails when it runs.'
@@ -2121,6 +2123,13 @@ describe('sub-routines defined once', () => {
       },
     ]);
     render(() => <Routine />);
+    expect(screen.queryByRole('button', { name: 'Run now' })).toBeNull();
+    setSchedules([copy, parent]);
+    expect(runButton().disabled).toBe(false);
+    setSchedules([
+      { ...copy, task: { sub_routine: 'remind', inputs: { taskId: false } } },
+      parent,
+    ]);
     openActions();
     expect(
       screen.queryByRole('menuitem', { name: 'Keep as my routine' })

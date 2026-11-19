@@ -303,6 +303,7 @@ export function RoutineDetailView(props: {
                 <RoutineRunButton
                   enabled={isActive()}
                   runDisabled={runDisabled()}
+                  hideRun={props.source.copyRunBlocked()}
                   activationDisabled={activationDisabled()}
                   copyDisabled={!prompt()}
                   onRun={runNow}

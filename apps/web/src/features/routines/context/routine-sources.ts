@@ -21,6 +21,7 @@ export type RoutineDetailSource = {
   update(draft: ScheduleDraft, queuedAt: number): Promise<RoutineSnapshot>;
   run(): void;
   runPending: Accessor<boolean>;
+  copyRunBlocked: Accessor<boolean>;
   setEnabled(enabled: boolean): void;
   activationPending: Accessor<boolean>;
   canEditTask: Accessor<boolean>;
