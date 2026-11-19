@@ -92,6 +92,24 @@ impl Search for UnifiedSearch {
                     ..request_defaults()
                 },
             ),
+            SearchQuery::Prefix {
+                entity_type,
+                prefix,
+                entity_id,
+            } => {
+                let mut filters = EntityFilters::default();
+                filters.document_filters.document_ids = vec![entity_id.to_string()];
+                (
+                    *entity_type,
+                    UnifiedSearchRequest {
+                        query: prefix.as_str().to_owned(),
+                        match_type: MatchType::Partial,
+                        filters: only(*entity_type, filters),
+                        search_on: SearchOn::Content,
+                        ..request_defaults()
+                    },
+                )
+            }
             SearchQuery::Property {
                 property_id,
                 name,

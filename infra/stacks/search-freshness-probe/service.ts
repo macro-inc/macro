@@ -21,9 +21,10 @@ const REPO_ROOT = '../../..';
 // PROBE_RUNS_IN_PROD in infra/stacks/monitoring/monitors/search-freshness.ts.
 const RUNS_IN_PROD = false;
 
-// Shutdown waits for a write in progress (up to two 10 s requests), then
-// deletes what the probe created (a project takes two), so 30 s can be short.
-const STOP_TIMEOUT_SECONDS = 60;
+// Shutdown waits for a write in progress (a crowded-prefix round deletes,
+// creates and makes private, each up to 10 s, and may purge), then deletes
+// what the probe created (a project takes two requests), so 60 s can be short.
+const STOP_TIMEOUT_SECONDS = 90;
 
 type SearchFreshnessProbeArgs = {
   vpc: {
