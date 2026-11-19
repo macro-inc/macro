@@ -1,6 +1,6 @@
 set -euo pipefail
 
-url=http://127.0.0.1:9200
+url="${SEARCH_OPENSEARCH_URL:?}"
 for _ in $(seq 1 120); do
   curl --fail --silent --output /dev/null "$url" && break
   sleep 1

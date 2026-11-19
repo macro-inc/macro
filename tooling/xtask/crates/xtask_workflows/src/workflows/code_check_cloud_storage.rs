@@ -234,6 +234,7 @@ fn test_content_search() -> Step<Run> {
     Step::new("Test content search against OpenSearch")
         .run(include_str!("scripts/run_tests.sh"))
         .add_env(("NEXTEST_RUN_OPENSEARCH_TESTS", "true"))
+        .add_env(("SEARCH_TEST_OPENSEARCH_URL", steps::SEARCH_OPENSEARCH_URL))
         .if_condition(Expression::new(RUNS_OPENSEARCH_TESTS))
 }
 

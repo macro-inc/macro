@@ -516,7 +516,10 @@ pub fn code_mode_assets() -> Step<Run> {
     Step::new("Build code-mode assets").run(include_str!("scripts/code_mode_assets.sh"))
 }
 
-/// OpenSearch at `http://127.0.0.1:9200`. Not a service container: the image
+/// Where [`start_opensearch`]'s cluster answers.
+pub const SEARCH_OPENSEARCH_URL: &str = "http://127.0.0.1:9200";
+
+/// OpenSearch at [`SEARCH_OPENSEARCH_URL`]. Not a service container: the image
 /// is built from the local stack's Dockerfile, which adds a plugin. Start it
 /// before the build, so it is up when [`create_search_indices`] runs.
 pub fn start_opensearch() -> Step<Run> {
@@ -526,7 +529,9 @@ pub fn start_opensearch() -> Step<Run> {
 /// Wait for [`start_opensearch`]'s cluster and create the search indices and
 /// aliases in it with `create_indices.ts`. Needs the dev shell's bun.
 pub fn create_search_indices() -> Step<Run> {
-    Step::new("create the search indices").run(include_str!("scripts/create_search_indices.sh"))
+    Step::new("create the search indices")
+        .run(include_str!("scripts/create_search_indices.sh"))
+        .add_env(("SEARCH_OPENSEARCH_URL", SEARCH_OPENSEARCH_URL))
 }
 
 /// Start the server before parallel compiler invocations can race to launch it.

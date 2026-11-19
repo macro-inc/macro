@@ -627,7 +627,7 @@ jobs:
       run: |
         set -euo pipefail
 
-        url=http://127.0.0.1:9200
+        url="${SEARCH_OPENSEARCH_URL:?}"
         for _ in $(seq 1 120); do
           curl --fail --silent --output /dev/null "$url" && break
           sleep 1
@@ -643,6 +643,8 @@ jobs:
         ENVIRONMENT=local DRY_RUN=false OPENSEARCH_URL="$url" \
           OPENSEARCH_USERNAME=admin OPENSEARCH_PASSWORD=admin \
           bun run scripts/create_indices.ts
+      env:
+        SEARCH_OPENSEARCH_URL: http://127.0.0.1:9200
     - name: run the email end-to-end scenarios
       run: |
         set -euo pipefail

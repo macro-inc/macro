@@ -268,7 +268,7 @@ fn scenarios() -> Job {
 /// [`REPORTS_KNOWN_BUGS`] holds, the search scenarios kept for known bugs.
 fn search() -> Job {
     job("Email end-to-end (search)")
-        .add_env(("EMAIL_E2E_OPENSEARCH_URL", "http://127.0.0.1:9200"))
+        .add_env(("EMAIL_E2E_OPENSEARCH_URL", steps::SEARCH_OPENSEARCH_URL))
         .add_env(("EMAIL_E2E_SCENARIOS", SEARCH))
         .add_env(("EMAIL_E2E_BUILD_INDEXER", "true"))
         // Started first, so it is up by the time the services are built.

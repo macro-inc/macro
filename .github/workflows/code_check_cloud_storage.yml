@@ -1032,8 +1032,16 @@ jobs:
           common+=(--test-threads "$NEXTEST_TEST_THREADS")
         fi
 
+        # A full run builds every test target with `test = true`. `--tests` drops a
+        # `test = false` target even when `--test` names it, so the content search run
+        # names only its own.
+        workspace_targets=(--tests)
+        if [ "${NEXTEST_RUN_OPENSEARCH_TESTS:-}" = "true" ]; then
+          workspace_targets=()
+        fi
+
         if [ "$RUST_PACKAGES" = "all" ]; then
-          cargo nextest run --workspace --exclude sync_service --tests "${common[@]}"
+          cargo nextest run --workspace --exclude sync_service "${workspace_targets[@]}" "${common[@]}"
           exit 0
         fi
 
@@ -1104,8 +1112,16 @@ jobs:
           common+=(--test-threads "$NEXTEST_TEST_THREADS")
         fi
 
+        # A full run builds every test target with `test = true`. `--tests` drops a
+        # `test = false` target even when `--test` names it, so the content search run
+        # names only its own.
+        workspace_targets=(--tests)
+        if [ "${NEXTEST_RUN_OPENSEARCH_TESTS:-}" = "true" ]; then
+          workspace_targets=()
+        fi
+
         if [ "$RUST_PACKAGES" = "all" ]; then
-          cargo nextest run --workspace --exclude sync_service --tests "${common[@]}"
+          cargo nextest run --workspace --exclude sync_service "${workspace_targets[@]}" "${common[@]}"
           exit 0
         fi
 
@@ -1127,7 +1143,7 @@ jobs:
       run: |
         set -euo pipefail
 
-        url=http://127.0.0.1:9200
+        url="${SEARCH_OPENSEARCH_URL:?}"
         for _ in $(seq 1 120); do
           curl --fail --silent --output /dev/null "$url" && break
           sleep 1
@@ -1143,6 +1159,8 @@ jobs:
         ENVIRONMENT=local DRY_RUN=false OPENSEARCH_URL="$url" \
           OPENSEARCH_USERNAME=admin OPENSEARCH_PASSWORD=admin \
           bun run scripts/create_indices.ts
+      env:
+        SEARCH_OPENSEARCH_URL: http://127.0.0.1:9200
     - name: Test content search against OpenSearch
       if: env.RUST_PACKAGES == 'all' || contains(env.RUST_PACKAGES, 'opensearch_client')
       run: |
@@ -1193,8 +1211,16 @@ jobs:
           common+=(--test-threads "$NEXTEST_TEST_THREADS")
         fi
 
+        # A full run builds every test target with `test = true`. `--tests` drops a
+        # `test = false` target even when `--test` names it, so the content search run
+        # names only its own.
+        workspace_targets=(--tests)
+        if [ "${NEXTEST_RUN_OPENSEARCH_TESTS:-}" = "true" ]; then
+          workspace_targets=()
+        fi
+
         if [ "$RUST_PACKAGES" = "all" ]; then
-          cargo nextest run --workspace --exclude sync_service --tests "${common[@]}"
+          cargo nextest run --workspace --exclude sync_service "${workspace_targets[@]}" "${common[@]}"
           exit 0
         fi
 
@@ -1211,6 +1237,7 @@ jobs:
         cargo nextest run "${common[@]}" "${pkg_args[@]}"
       env:
         NEXTEST_RUN_OPENSEARCH_TESTS: 'true'
+        SEARCH_TEST_OPENSEARCH_URL: http://127.0.0.1:9200
     - name: show sccache stats
       if: always()
       run: sccache --show-stats || true

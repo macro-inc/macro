@@ -46,8 +46,16 @@ else
   common+=(--test-threads "$NEXTEST_TEST_THREADS")
 fi
 
+# A full run builds every test target with `test = true`. `--tests` drops a
+# `test = false` target even when `--test` names it, so the content search run
+# names only its own.
+workspace_targets=(--tests)
+if [ "${NEXTEST_RUN_OPENSEARCH_TESTS:-}" = "true" ]; then
+  workspace_targets=()
+fi
+
 if [ "$RUST_PACKAGES" = "all" ]; then
-  cargo nextest run --workspace --exclude sync_service --tests "${common[@]}"
+  cargo nextest run --workspace --exclude sync_service "${workspace_targets[@]}" "${common[@]}"
   exit 0
 fi
 
