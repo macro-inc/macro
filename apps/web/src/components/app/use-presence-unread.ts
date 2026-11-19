@@ -9,7 +9,7 @@ import { createChannelsUnread, createMailUnread } from './view-unread';
 export function usePresenceUnread() {
   const channels = createChannelsUnread();
   const homeUnread = useHomeUnreadQuery();
-  const mail = createMailUnread({ exact: () => false });
+  const mail = createMailUnread({ exact: false });
 
   return (id: string): boolean => {
     // Notifications reads the same attention as Home's unread witness; a

@@ -78,6 +78,7 @@ function mail(options: {
       options.hasNextPage ?? false
     );
     const [fetchingNextPage, setFetchingNextPage] = createSignal(false);
+    const [nextPageFailed, setNextPageFailed] = createSignal(false);
     const [disabledTypes, setDisabledTypes] = createSignal<string[]>([]);
     const [pending, setPending] = createSignal(false);
     const fetchNextPage = vi.fn(async () => {
@@ -103,14 +104,18 @@ function mail(options: {
       get isFetchingNextPage() {
         return fetchingNextPage();
       },
+      get isFetchNextPageError() {
+        return nextPageFailed();
+      },
       fetchNextPage,
     });
     return {
-      count: createMailUnread({ exact: () => options.exact ?? true }),
+      count: createMailUnread({ exact: options.exact ?? true }),
       fetchNextPage,
       setEmails,
       setHasNextPage,
       setFetchingNextPage,
+      setNextPageFailed,
       setDisabledTypes,
       setPending,
     };
@@ -190,6 +195,27 @@ describe('createMailUnread', () => {
     setFetchingNextPage(false);
     expect(count()).toBe(99);
     expect(fetchNextPage).toHaveBeenCalledTimes(1);
+  });
+
+  it('asks for a failed page no more, and stays a lower bound', () => {
+    const {
+      count,
+      fetchNextPage,
+      setEmails,
+      setFetchingNextPage,
+      setNextPageFailed,
+    } = mail({ emails: threads(100), hasNextPage: true });
+
+    setEmails(threads(100).slice(5));
+    expect(fetchNextPage).toHaveBeenCalledTimes(1);
+    setNextPageFailed(true);
+    setFetchingNextPage(false);
+    expect(fetchNextPage).toHaveBeenCalledTimes(1);
+    expect(count()).toBe(96);
+
+    // Once the query succeeds again, the page is asked for again.
+    setNextPageFailed(false);
+    expect(fetchNextPage).toHaveBeenCalledTimes(2);
   });
 
   it('reads no page past the loaded ones for a dot alone', () => {

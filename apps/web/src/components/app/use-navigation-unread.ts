@@ -1,4 +1,9 @@
-import { unreadRows } from '@app/features/notifications-inbox/core/inbox-unread';
+import type { InboxRowType } from '@app/features/notifications-inbox/core/inbox-row';
+import {
+  CHANNEL_ROW_TYPES,
+  MAIL_ROW_TYPES,
+  unreadRows,
+} from '@app/features/notifications-inbox/core/inbox-unread';
 import { createInboxUnread } from '@app/features/notifications-inbox/queries/inbox-unread';
 import { useFeatureFlag } from '@app/lib/analytics/posthog';
 import {
@@ -41,10 +46,12 @@ export type NavigationUnreadOptions = {
 };
 
 /**
- * Each section's unread items, counted by the rule its view lists them by:
- * Notifications by the unread rows of the notifications inbox, pushed by the
- * server; Mail by its Important tab's unread threads; Channels by its
- * conversations with an unread dot. A dot and its number always agree.
+ * Each section's unread items. Notifications counts the unread rows of the
+ * notifications inbox, pushed by the server. While numbers show, Mail counts
+ * its Important tab's unread threads and Channels its conversations with an
+ * unread dot, by their views' own queries. Those queries run only while
+ * numbers show; without numbers the two sections' dots come from their inbox
+ * rows. A dot and its number always agree.
  */
 function useCountedUnread(options: NavigationUnreadOptions): NavigationUnread {
   const userId = useUserId();
@@ -54,17 +61,26 @@ function useCountedUnread(options: NavigationUnreadOptions): NavigationUnread {
     enabled: () => Boolean(userId()),
     onReconnected: subscribeGraphqlSoupReconnected,
   });
-  const mail = createMailUnread({ exact: showsNumbers });
-  const channels = createChannelsUnread();
+  const views = createMemo(() =>
+    showsNumbers()
+      ? {
+          mail: createMailUnread({ exact: true }),
+          channels: createChannelsUnread(),
+        }
+      : undefined
+  );
 
-  const inboxRows = () =>
+  const inboxRows = (rowTypes?: readonly InboxRowType[]) =>
     unreadRows(inbox() ?? [], {
+      rowTypes,
       passwords: !passwordsFlag().loading && passwordsFlag().enabled,
     });
   const unread = (id: string): number | undefined => {
     if (id === 'home' || id === 'notifications') return inboxRows();
-    if (id === 'mail') return mail();
-    if (id === 'channels') return channels();
+    const counted = views();
+    if (id === 'mail') return counted?.mail() ?? inboxRows(MAIL_ROW_TYPES);
+    if (id === 'channels')
+      return counted?.channels() ?? inboxRows(CHANNEL_ROW_TYPES);
     return undefined;
   };
 

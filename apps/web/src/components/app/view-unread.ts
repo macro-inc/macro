@@ -41,7 +41,7 @@ export type ViewUnreadOptions = {
    * Whether a number is shown, so the count must be exact up to the label.
    * A dot only needs to know that something is unread.
    */
-  exact: Accessor<boolean>;
+  exact: boolean;
 };
 
 /**
@@ -78,17 +78,22 @@ export function createMailUnread(options: ViewUnreadOptions): Accessor<number> {
     return email.data.entities.filter(isUnreadMail).length;
   });
   const unknownPastLoaded = () =>
-    options.exact() &&
+    options.exact &&
     queryReadyGate(email) &&
     email.hasNextPage &&
     loaded() < COUNTED_EXACTLY;
 
-  // Unread mail past the loaded pages only matters to a number, once fewer
-  // than the label shows are loaded, after the viewer read some: one more
-  // page settles it.
+  // Unread mail past the loaded pages only matters to a number, once reads
+  // leave fewer loaded than the label shows: one more page settles it, until
+  // reads bring the loaded count under the label again. A failed page is not
+  // asked for again here; the number stays a lower bound until the query
+  // next succeeds.
   createEffect(
     on(
-      () => unknownPastLoaded() && !email.isFetchingNextPage,
+      () =>
+        unknownPastLoaded() &&
+        !email.isFetchingNextPage &&
+        !email.isFetchNextPageError,
       (fetchMore) => {
         if (fetchMore) fireAndForget(email.fetchNextPage(), 'nav.mail-unread');
       }

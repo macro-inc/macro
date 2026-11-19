@@ -16,7 +16,7 @@ const mocks = vi.hoisted(() => ({
   viewSources: 0,
   presenceSources: 0,
   presence: ((_id: string) => false) as (id: string) => boolean,
-  mailExact: undefined as (() => boolean) | undefined,
+  mailExact: undefined as boolean | undefined,
 }));
 
 vi.mock('@core/constant/featureFlags', () => ({
@@ -42,7 +42,7 @@ vi.mock('@app/features/notifications-inbox/queries/inbox-unread', () => ({
   },
 }));
 vi.mock('./view-unread', () => ({
-  createMailUnread: (options: { exact: () => boolean }) => {
+  createMailUnread: (options: { exact: boolean }) => {
     mocks.viewSources += 1;
     mocks.mailExact = options.exact;
     return () => mocks.mail();
@@ -116,14 +116,12 @@ const row = (
 
 describe('useNavigationUnread with the unified Notifications view', () => {
   it.each([false, true])(
-    'keeps live dots with numbers off (Home is Notifications: %s)',
+    'keeps live dots from the inbox rows with numbers off, running no view query (Home is Notifications: %s)',
     (homeIsNotifications) => {
-      const { unread, setCounts, setMail, setChannels } = setup({
+      const { unread, setCounts } = setup({
         unified: flag(true),
         numbersEnabled: false,
         counts: [row('email', 4), row('channel_mention', 1)],
-        mail: 2,
-        channels: 1,
         homeIsNotifications,
       });
 
@@ -132,17 +130,16 @@ describe('useNavigationUnread with the unified Notifications view', () => {
         expect(unread.count(section)).toBeUndefined();
       }
       expect(mocks.countStreams).toBe(1);
+      expect(mocks.viewSources).toBe(0);
       expect(mocks.presenceSources).toBe(0);
-      // A dot needs no page past the loaded ones.
-      expect(mocks.mailExact?.()).toBe(false);
 
-      setCounts([]);
-      expect(unread.has('home')).toBe(false);
-      expect(unread.has('notifications')).toBe(false);
-      setMail(0);
-      expect(unread.has('mail')).toBe(false);
-      setChannels(0);
+      setCounts([row('email', 1)]);
+      expect(unread.has('mail')).toBe(true);
       expect(unread.has('channels')).toBe(false);
+      setCounts([]);
+      for (const section of ['home', 'notifications', 'channels', 'mail']) {
+        expect(unread.has(section)).toBe(false);
+      }
     }
   );
 
@@ -166,7 +163,7 @@ describe('useNavigationUnread with the unified Notifications view', () => {
     expect(unread.count('notifications')).toBe(16);
     expect(unread.count('mail')).toBe(7);
     expect(unread.count('channels')).toBe(2);
-    expect(mocks.mailExact?.()).toBe(true);
+    expect(mocks.mailExact).toBe(true);
     // Home shares the inbox's dot without repeating its number.
     expect(unread.has('home')).toBe(true);
     expect(unread.count('home')).toBeUndefined();
