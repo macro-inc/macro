@@ -84,7 +84,6 @@ describe('scheduled copies', () => {
     });
     render(() => <Routine />);
     const retry = screen.getByRole('button', { name: 'Retry definition' });
-    expect(retry.classList.contains('touch:min-h-[44px]')).toBe(true);
     fireEvent.click(retry);
     expect(mocks.refetchList).toHaveBeenCalledOnce();
     expect(screen.getByRole('group', { name: 'Remind me' })).toBeTruthy();

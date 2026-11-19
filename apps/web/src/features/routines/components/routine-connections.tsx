@@ -1,3 +1,4 @@
+import { isTouchDevice } from '@core/mobile/isTouchDevice';
 import XIcon from '@icon/system/regular/x.svg';
 import { Button } from '@ui';
 import { type Accessor, For, Show } from 'solid-js';
@@ -38,8 +39,7 @@ export function ConnectionRows(props: {
           >
             <Button
               variant="ghost"
-              size="icon-sm"
-              class="touch:min-h-[44px] touch:min-w-[44px]"
+              size={isTouchDevice() ? 'icon-xl' : 'icon-sm'}
               aria-label={`Remove ${app.server_name}`}
               onClick={() =>
                 props.onChange(

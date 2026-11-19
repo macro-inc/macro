@@ -1,4 +1,5 @@
 import { t } from '@app/lib/i18n';
+import { isTouchDevice } from '@core/mobile/isTouchDevice';
 import ArrowUpRightIcon from '@icon/system/regular/arrow-up-right.svg';
 import type { RoutineInput } from '@service-scheduled-action/generated/schemas';
 import { Button } from '@ui';
@@ -142,6 +143,8 @@ export function SubRoutineCopySteps(props: {
   slots: RoutineStepSlots;
   onOpenParent?(): void;
 }) {
+  const editLabel = () =>
+    t('subRoutines.editInParent', { parent: props.parentName ?? '' });
   return (
     <div class="grid min-w-0 gap-2">
       <RoutineSurface class="grid gap-3 px-6 py-4 text-sm @max-[600px]/routine:px-4">
@@ -179,17 +182,15 @@ export function SubRoutineCopySteps(props: {
         </Show>
         <Show when={props.parentName && props.onOpenParent}>
           <div class="min-w-0">
-            {/* A long parent name truncates rather than overflow a phone. */}
             <Button
               variant="secondary"
-              size="sm"
-              class="max-w-full shrink touch:min-h-[44px]"
+              size={isTouchDevice() ? 'xl' : 'sm'}
+              class="max-w-full"
+              tooltip={editLabel()}
               onClick={() => props.onOpenParent?.()}
             >
-              <span class="min-w-0 truncate">
-                {t('subRoutines.editInParent', {
-                  parent: props.parentName ?? '',
-                })}
+              <span class="min-w-0 text-left not-touch:truncate touch:wrap-anywhere touch:whitespace-normal">
+                {editLabel()}
               </span>
               <ArrowUpRightIcon class="size-3.5 shrink-0" />
             </Button>
@@ -223,8 +224,7 @@ export function SubRoutineCopySteps(props: {
             </p>
             <Button
               variant="secondary"
-              size="sm"
-              class="touch:min-h-[44px]"
+              size={isTouchDevice() ? 'xl' : 'sm'}
               onClick={() => props.onRetryParent?.()}
             >
               {t('subRoutines.retryDefinition')}

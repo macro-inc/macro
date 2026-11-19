@@ -1,5 +1,6 @@
 import { t } from '@app/lib/i18n';
 import { IS_MAC } from '@core/constant/isMac';
+import { isTouchDevice } from '@core/mobile/isTouchDevice';
 import { isEditableInput } from '@core/util/isEditableInput';
 import ArrowDownIcon from '@icon/system/regular/arrow-down.svg';
 import ArrowUpIcon from '@icon/system/regular/arrow-up.svg';
@@ -294,8 +295,7 @@ function StepCard(props: StepCardProps) {
               <Show when={isCode()}>
                 <Button
                   variant="ghost"
-                  size="sm"
-                  class="touch:min-h-[44px]"
+                  size={isTouchDevice() ? 'xl' : 'sm'}
                   aria-expanded={showCode()}
                   onClick={() => setShowCode(!showCode())}
                 >

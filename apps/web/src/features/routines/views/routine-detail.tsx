@@ -1,4 +1,5 @@
 import { t } from '@app/lib/i18n';
+import { isTouchDevice } from '@core/mobile/isTouchDevice';
 import { getDisplayName } from '@core/user/displayName';
 import { tryMacroId } from '@core/user/macroId';
 import { fireAndForget } from '@core/util/fireAndForget';
@@ -454,21 +455,24 @@ export function RoutineDetailView(props: {
                       when={props.source.parent()}
                       fallback={<span>{t('subRoutines.createdByGone')}</span>}
                     >
-                      {(parent) => (
-                        <Button
-                          variant="ghost"
-                          size="xs"
-                          class="min-w-0 max-w-full touch:min-h-[44px]"
-                          onClick={() => props.onOpenRoutine(link().id)}
-                        >
-                          <span class="min-w-0 truncate">
-                            {t('subRoutines.createdBy', {
-                              name: parent().name,
-                            })}
-                          </span>
-                          <ArrowUpRightIcon class="size-3 shrink-0" />
-                        </Button>
-                      )}
+                      {(parent) => {
+                        const label = () =>
+                          t('subRoutines.createdBy', { name: parent().name });
+                        return (
+                          <Button
+                            variant="ghost"
+                            size={isTouchDevice() ? 'xl' : 'xs'}
+                            class="min-w-0 max-w-full"
+                            tooltip={label()}
+                            onClick={() => props.onOpenRoutine(link().id)}
+                          >
+                            <span class="min-w-0 text-left not-touch:truncate touch:wrap-anywhere touch:whitespace-normal">
+                              {label()}
+                            </span>
+                            <ArrowUpRightIcon class="size-3 shrink-0" />
+                          </Button>
+                        );
+                      }}
                     </Show>
                     <Show when={link().pausedByParent && !routine().enabled}>
                       <span class="text-xs text-ink-muted">
