@@ -7,22 +7,22 @@ const LENGTH_RULE: &str = "Most replies are one to three sentences";
 const CONFIRMATION_CARVE_OUT: &str = "Asking whether to go ahead with an action the user asked for";
 
 #[test]
-fn conversational_hosts_get_the_length_rules_once() {
+fn macro_agent_prompts_get_the_length_rules_once() {
     let session = agent_session::PROMPT.to_string();
-    let chat = TOOL_USE_PROMPT.to_string();
     let channel = channel_mention::PROMPT.to_string();
-    for prompt in [&session, &chat, &channel] {
+    for prompt in [&session, &channel] {
         assert_eq!(prompt.matches(LENGTH_RULE).count(), 1);
         assert!(prompt.contains(CONFIRMATION_CARVE_OUT));
     }
 }
 
 #[test]
-fn deliverable_hosts_do_not_get_the_length_rules() {
-    // Memory research and structured completions (call recaps, drafts) use
-    // these; their output must stay complete.
-    assert!(!BASE_PROMPT.to_string().contains(LENGTH_RULE));
-    assert!(!DIRECT_TOOL_USE_PROMPT.to_string().contains(LENGTH_RULE));
+fn shared_tool_prompts_do_not_get_the_length_rules() {
+    // Memory research, MCP and structured completions (call recaps, drafts)
+    // use these; their output must stay complete.
+    for prompt in [&BASE_PROMPT, &TOOL_USE_PROMPT, &DIRECT_TOOL_USE_PROMPT] {
+        assert!(!prompt.to_string().contains(LENGTH_RULE));
+    }
 }
 
 #[test]

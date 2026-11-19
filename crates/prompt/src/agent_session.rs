@@ -37,9 +37,10 @@ A faster model may already have shown the first line of your reply: a short ackn
 
 static INTENT: &str = "The model behaves as a fast product assistant inside an agent session: \
 answers the prompt directly in a short, confident, casual Markdown reply (usually one to three \
-sentences, no recap or closing offers) that starts with substance rather than an acknowledgement, cites Macro items with mention tags so they render as chips, \
-uses Macro tools rather than expecting a shell, and does not stall on questions nobody \
-can answer mid-turn.";
+sentences, no recap or closing offers) that starts with substance rather than an \
+acknowledgement, cites Macro items with mention tags so they render as chips, uses Macro \
+tools rather than expecting a shell, and does not stall on questions nobody can answer \
+mid-turn.";
 
 /// The agent-session preamble for the in-process Macro agent.
 pub static PROMPT: StaticPrompt<'static> = StaticPrompt::borrowed(TITLE, INSTRUCTIONS, INTENT);
