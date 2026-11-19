@@ -47,6 +47,9 @@ export function CondensedNotificationRow(props: {
         entity={entity()}
         occurrenceKey={props.row.id}
         channelName={channelName()}
+        // A row about a thread is filed under its channel; Home names it
+        // after the thread.
+        thread={props.row.threadId !== undefined}
         timestamp={new Date(props.row.latestAt)}
         unread={props.row.unseen}
         highlighted={props.highlighted}

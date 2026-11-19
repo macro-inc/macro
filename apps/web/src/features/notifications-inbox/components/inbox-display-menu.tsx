@@ -1,6 +1,6 @@
 import { t } from '@app/lib/i18n';
 import SlidersHorizontalIcon from '@icon/system/regular/sliders-horizontal.svg';
-import { Dropdown } from '@ui';
+import { Dropdown, InlineCheckbox } from '@ui';
 
 export type InboxDisplayMenuProps = {
   condensed: boolean;
@@ -26,17 +26,25 @@ export function InboxDisplayMenu(props: InboxDisplayMenuProps) {
       </Dropdown.Trigger>
       <Dropdown.Content class="min-w-48 max-w-72">
         <Dropdown.Group>
+          {/* The box always shows, as on the filter menu's Type options. */}
           <Dropdown.CheckboxItem
             checked={props.condensed}
             closeOnSelect={false}
             onChange={props.onCondensedChange}
+            indicator={
+              <span
+                aria-hidden="true"
+                class="-my-1.5 -ml-2 inline-flex self-stretch items-center pl-2 pr-1"
+              >
+                <InlineCheckbox checked={props.condensed} />
+              </span>
+            }
           >
             <span class="min-w-0 flex-1 truncate">
               {t('notificationsInbox.condensed')}
             </span>
           </Dropdown.CheckboxItem>
         </Dropdown.Group>
-        <Dropdown.Separator class="my-1 border-t border-edge-divider" />
         <Dropdown.Group>
           <Dropdown.Item onSelect={() => props.onOpenSettings()}>
             <span class="min-w-0 truncate">

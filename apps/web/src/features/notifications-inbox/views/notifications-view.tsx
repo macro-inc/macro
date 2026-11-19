@@ -942,9 +942,18 @@ export function NotificationsView(props: NotificationsViewProps) {
           <Show when={!isTouchDevice()} fallback={touchLayout()}>
             <div class="size-full min-h-0 bg-panel">
               <ViewShell.Root
-                asidePreferenceKey="notifications"
-                // Rows read as sentences, so the list starts wider than a nav rail.
-                aside={{ width: 360, max: 480, preserveDuringResize: false }}
+                asidePreferenceKey={
+                  props.frame?.list.asidePreferenceKey ?? 'notifications'
+                }
+                // Rows read as sentences, so the list starts wider than a nav
+                // rail; a frame shares one list width across its views.
+                aside={
+                  props.frame?.list.aside ?? {
+                    width: 360,
+                    max: 480,
+                    preserveDuringResize: false,
+                  }
+                }
                 // Narrow, the list and what it opens take turns.
                 asideList={{
                   open:

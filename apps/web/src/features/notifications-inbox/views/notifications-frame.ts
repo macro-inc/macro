@@ -1,3 +1,4 @@
+import type { AsideLayout } from '@app/components/view-shell';
 import type { Accessor, JSX } from 'solid-js';
 import type { InboxStatus } from '../core/inbox-filters';
 
@@ -22,4 +23,6 @@ export type NotificationsFrame = {
   /** What the content area shows with no row chosen. */
   idle: () => JSX.Element;
   condensed: () => boolean;
+  /** The list width the frame's views share, and the bounds it keeps. */
+  list: { asidePreferenceKey: string; aside: Partial<AsideLayout> };
 };

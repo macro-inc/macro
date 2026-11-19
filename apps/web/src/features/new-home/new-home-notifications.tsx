@@ -7,6 +7,7 @@ import { useNavigate } from '@app/lib/split-router';
 import { homePreviewRoute } from '@app/routes/routes';
 import { useSettingsState } from '@core/constant/SettingsState';
 import { fireAndForget } from '@core/util/fireAndForget';
+import { NEW_HOME_LIST, seedNewHomeListWidth } from './new-home-list';
 import { NEW_HOME_RECENT_SEARCH, useNewHomeTitle } from './new-home-navigation';
 import { createCondensedPreference } from './new-home-preferences';
 import { NewHomeTabBar } from './new-home-tab-bar';
@@ -17,6 +18,7 @@ import { NewHomeTabBar } from './new-home-tab-bar';
  * composer while nothing is open.
  */
 export function NewHomeNotificationsView() {
+  seedNewHomeListWidth();
   const title = useNewHomeTitle();
   const { condensed, setCondensed } = createCondensedPreference();
   const { openSettings } = useSettingsState();
@@ -39,6 +41,7 @@ export function NewHomeNotificationsView() {
       frame={{
         title,
         condensed,
+        list: NEW_HOME_LIST,
         header: (controls) => (
           <>
             <SidebarCreateHeader

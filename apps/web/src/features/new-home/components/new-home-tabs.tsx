@@ -26,19 +26,24 @@ export function NewHomeTabs(props: {
   // One object per tab for the view's life: the tabs keep their elements,
   // and with them focus and tooltips, as the dot comes and goes.
   const options = [
+    // Labels alone while they fit; icons alone once they don't.
     {
       value: 'recent' as const,
       get label() {
         return t('home.recent');
       },
-      icon: ClockCounterClockwiseIcon,
+      get icon() {
+        return iconOnly() ? ClockCounterClockwiseIcon : undefined;
+      },
     },
     {
       value: 'notifications' as const,
       get label() {
         return t('home.notifications');
       },
-      icon: BellIcon,
+      get icon() {
+        return iconOnly() ? BellIcon : undefined;
+      },
       get dot() {
         return props.unread;
       },

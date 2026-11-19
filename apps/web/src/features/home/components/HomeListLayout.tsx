@@ -8,6 +8,7 @@ import { createSignal, type JSX, type ParentProps, Show } from 'solid-js';
 import { useHomeView } from '../home-view-context';
 import { HOME_TOUR } from '../tour';
 import { HomeFilterDropdown } from './HomeFilters';
+import type { HomeListWidth } from './HomeViewLayout';
 
 /** New Home's frame around Home's list: its name and its tabs. */
 export type HomeFrame = {
@@ -15,6 +16,8 @@ export type HomeFrame = {
   title: () => string;
   /** The Recent and Notifications switch, under the header. */
   tabs: () => JSX.Element;
+  /** The list width both of New Home's tabs share. */
+  list: HomeListWidth;
 };
 
 function DesktopHomeHeader(props: {

@@ -32,12 +32,20 @@ type HomeListEntityProps = BaseListEntityProps & {
   unread?: boolean;
   /** Takes the unread dot's place on hover, as a notification's Mark done. */
   hoverAction?: JSX.Element;
+  /**
+   * A channel row that stands for one of its threads, as a notification
+   * inbox row about a thread does: it reads as Home's thread row.
+   */
+  thread?: boolean;
 };
 
 /** One compact, single-line Home item; the list owns focus and activation. */
 export function HomeListEntity(props: HomeListEntityProps) {
   const threadEntity = () =>
-    props.entity.type === 'channel_thread' ? props.entity : undefined;
+    props.entity.type === 'channel_thread' ||
+    (props.thread && props.entity.type === 'channel')
+      ? props.entity
+      : undefined;
   // A document announcing a comment reads like a thread row: the
   // comment glyph, who did what, and where. Opening it lands on the comment.
   const commentNotification = () =>
@@ -193,7 +201,6 @@ function HomeThreadTitle(
   const currentUserId = useUserId();
   const sender = () => {
     const entity = props.entity;
-    if (entity.type !== 'channel_thread') return undefined;
     const notification = entity.notifications?.()?.[0];
     if (notification) {
       // The row's scoped notifications also include document mentions and
@@ -208,6 +215,7 @@ function HomeThreadTitle(
         details: undefined,
       };
     }
+    if (entity.type !== 'channel_thread') return undefined;
     return {
       id: entity.senderId,
       displayName: undefined,

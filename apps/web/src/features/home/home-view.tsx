@@ -135,6 +135,7 @@ function HomeViewRoot(props: { frame?: HomeFrame }) {
           <SplitPanel.Body>
             <HomeViewLayout
               inlinePreview={inlinePreviewLayout()}
+              listLayout={props.frame?.list}
               list={
                 <DebugSuspense name="HomeView.list-pane">
                   <HomeListPane
