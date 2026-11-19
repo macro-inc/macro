@@ -104,9 +104,10 @@ impl OpensearchClient {
     }
 
     /// Delete these message documents from the chats index, leaving their
-    /// chats. When OpenSearch refuses writes this returns
-    /// [`crate::error::OpensearchClientError::WritesRefused`]; stop instead of
-    /// retrying.
+    /// chats. A refused request returns
+    /// [`crate::error::OpensearchClientError::WritesRefused`] and a failed item
+    /// [`crate::error::OpensearchClientError::BulkItemsFailed`]; stop on either,
+    /// and back off when `refusal()` is set.
     #[tracing::instrument(skip(self, messages), fields(message_count = messages.len()), err)]
     pub async fn delete_indexed_chat_messages(
         &self,
