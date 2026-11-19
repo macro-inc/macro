@@ -81,6 +81,7 @@ fn rule(target: Target, state: PermissionState) -> Rule {
         target,
         state,
         via_agent: false,
+        restriction_only: false,
         updated_at: DateTime::UNIX_EPOCH,
     }
 }
