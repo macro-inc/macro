@@ -95,7 +95,7 @@ type DropdownItemProps = {
   icon: Component<JSX.SvgSVGAttributes<SVGSVGElement>>;
   show: boolean;
   themeClass?: string;
-  before?: JSX.Element;
+  before?: () => JSX.Element;
 };
 
 export const NodeMenuOptions: Record<ElementName, DropdownItemProps> = {
@@ -135,19 +135,19 @@ export const NodeMenuOptions: Record<ElementName, DropdownItemProps> = {
     label: 'Bullet List',
     icon: ListBullets,
     show: true,
-    before: <div class="bg-ink size-1.5 rounded-full ml-1.5 mr-3" />,
+    before: () => <div class="bg-ink size-1.5 rounded-full ml-1.5 mr-3" />,
   },
   'list-number': {
     label: 'Numbered List',
     icon: ListNumbers,
     show: true,
-    before: <One class="size-4 mr-2" />,
+    before: () => <One class="size-4 mr-2" />,
   },
   'list-check': {
     label: 'Checklist',
     icon: ListChecks,
     show: true,
-    before: <Check class="size-4 mr-2" />,
+    before: () => <Check class="size-4 mr-2" />,
   },
   link: { label: 'Link', icon: LinkIcon, show: false, themeClass: '' },
 } as const;
@@ -316,7 +316,7 @@ const ElementFormatMenuItem = (
     if (props.useStyle) {
       return (
         <span class={themeClass + ' flex items-center gap-0 justify-start'}>
-          {before}
+          {before?.()}
           {name}
         </span>
       );
