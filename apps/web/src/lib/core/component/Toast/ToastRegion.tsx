@@ -16,6 +16,7 @@ import {
 } from 'solid-js';
 import { Portal } from 'solid-js/web';
 import { createMobileToastSwipe } from './create-mobile-toast-swipe';
+import { publishDesktopToastInset } from './desktop-toast-inset';
 
 const ImportJobsTray = lazyNamed(
   () => import('@app/features/import-jobs/import-jobs'),
@@ -57,21 +58,16 @@ export function ToastRegion() {
   const desktopStackSize = createElementSize(desktopStack);
 
   // Publishes how far the desktop stack reaches up from the window's bottom
-  // edge as `--desktop-toast-inset-bottom` on <html>, 0 while it shows
-  // nothing, so a control in a view's bottom-right corner can sit above it.
-  // Empty regions collapse, so the height tracks what is actually visible.
+  // edge, 0 while it shows nothing, to the controls that follow it
+  // (`followDesktopToastInset`). The height changes in every frame of a
+  // toast's animation; empty regions collapse, so it tracks what is visible.
   createEffect(() => {
     const height = desktopStackSize.height ?? 0;
-    document.documentElement.style.setProperty(
-      '--desktop-toast-inset-bottom',
+    publishDesktopToastInset(
       height > 0 ? `calc(${height}px + 1.25rem)` : '0px'
     );
   });
-  onCleanup(() =>
-    document.documentElement.style.removeProperty(
-      '--desktop-toast-inset-bottom'
-    )
-  );
+  onCleanup(() => publishDesktopToastInset(undefined));
 
   return (
     <Portal>

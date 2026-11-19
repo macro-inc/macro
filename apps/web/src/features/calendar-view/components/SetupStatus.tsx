@@ -1,5 +1,6 @@
 import { useCalendarPager } from '@app/features/calendar/components/CalendarPagerContext';
 import { isCalendarRangeSupported } from '@app/features/calendar/utils/calendar-supported-range';
+import { followDesktopToastInset } from '@core/component/Toast/desktop-toast-inset';
 import { useUserId } from '@core/context/user';
 import { useAddInboxFlow } from '@core/email-link';
 import { calendarStoppedSyncing } from '@core/email-link/consent';
@@ -163,6 +164,7 @@ export function SetupStatus() {
     <>
       <Show when={showsWarnings() && warnings().length > 0}>
         <div
+          ref={followDesktopToastInset}
           role="status"
           class={`absolute left-2 right-2 z-20 flex flex-col gap-1 rounded-lg border border-warning/40 bg-warning-bg p-3 text-xs text-warning-ink ${setupState() === 'stopped' ? 'bottom-[calc(3rem+var(--desktop-toast-inset-bottom,0px))]' : 'bottom-2'}`}
         >
@@ -179,7 +181,10 @@ export function SetupStatus() {
         <Show
           when={!hasEvents() && !seesWorkingCalendar()}
           fallback={
-            <div class="absolute right-2 bottom-[calc(0.5rem+var(--desktop-toast-inset-bottom,0px))] z-20 flex items-center gap-2 rounded-full border border-edge-muted bg-surface py-1 pr-1 pl-2.5 text-xs text-ink-muted shadow-menu">
+            <div
+              ref={followDesktopToastInset}
+              class="absolute right-2 bottom-[calc(0.5rem+var(--desktop-toast-inset-bottom,0px))] z-20 flex items-center gap-2 rounded-full border border-edge-muted bg-surface py-1 pr-1 pl-2.5 text-xs text-ink-muted shadow-menu"
+            >
               <span>{setupTitle()}</span>
               <Button variant="primary" size="sm" onClick={startSetup}>
                 {setupMessage().action}

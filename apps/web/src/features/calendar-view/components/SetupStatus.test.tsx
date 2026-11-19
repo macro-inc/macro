@@ -51,6 +51,7 @@ vi.mock('@queries/email/link', () => ({
   }),
 }));
 
+import { publishDesktopToastInset } from '@core/component/Toast/desktop-toast-inset';
 import { SetupStatus } from './SetupStatus';
 
 // Only the overlay over an empty grid explains itself; the pill is title and
@@ -83,6 +84,7 @@ beforeEach(() => {
 
 afterEach(() => {
   cleanup();
+  publishDesktopToastInset(undefined);
   vi.clearAllMocks();
 });
 
@@ -190,6 +192,12 @@ describe('SetupStatus', () => {
     expect(title.parentElement?.className).toContain(
       'var(--desktop-toast-inset-bottom'
     );
+    publishDesktopToastInset('calc(120px + 1.25rem)');
+    expect(
+      title.parentElement?.style.getPropertyValue(
+        '--desktop-toast-inset-bottom'
+      )
+    ).toBe('calc(120px + 1.25rem)');
     expect(
       screen.queryByText('Reconnect to show its events in Macro again.')
     ).toBeNull();

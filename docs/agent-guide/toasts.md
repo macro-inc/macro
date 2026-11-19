@@ -13,9 +13,19 @@ the dock and preserves full descriptions and accessible close buttons. On phones
 open sheets and the pickers and menus on them cover prompts and reminders, which
 sit above the transient notice; the notice itself stays on top of sheets.
 While the desktop stack shows anything, its height above the window's bottom
-edge is `--desktop-toast-inset-bottom` on `<html>` (0 otherwise); a view's
-bottom-right control adds it to its offset to stay above the stack, as the
-calendar view's setup pill does.
+edge is `--desktop-toast-inset-bottom` (0 otherwise). A view's bottom-right
+control takes `ref={followDesktopToastInset}`
+(`@core/component/Toast/desktop-toast-inset`) and adds the property to its
+offset to stay above the stack, as the calendar view's setup pill does. The
+stack writes it only on those elements, never on `<html>`: its height changes
+in every frame of a toast's animation, and a property on the root restyles
+every element of the page each time.
+
+Backend-free regression that a toast animating over a heavy page restyles only
+the toasts and the controls that follow them (it counts style passes in a
+trace, not milliseconds): `bunx playwright test --config
+src/components/view-shell/browser-test/playwright.config.ts
+toast-frame-cost.browser.e2e.ts` from `apps/web`.
 
 All toasts place actions to the right of the message, centered vertically. The
 close button floats halfway over the top-right corner; stacked cards leave room

@@ -359,11 +359,15 @@ function ToastFrame(props: ToastContentProps & { replaced: boolean }) {
   let surface!: HTMLDivElement;
 
   // Keep the natural height while older cards are tucked into the stack.
+  // Read it from the observer's entry: reading layout here would force a
+  // style and layout pass of whatever an earlier callback in this frame
+  // dirtied. The first entry arrives before the toast's first paint.
   onMount(() => {
-    const measure = () => setHeight(surface.offsetHeight);
-    measure();
-    const observer = new ResizeObserver(measure);
-    observer.observe(surface);
+    const observer = new ResizeObserver(([entry]) => {
+      const size = entry?.borderBoxSize[0];
+      if (size) setHeight(size.blockSize);
+    });
+    observer.observe(surface, { box: 'border-box' });
     onCleanup(() => observer.disconnect());
   });
 
