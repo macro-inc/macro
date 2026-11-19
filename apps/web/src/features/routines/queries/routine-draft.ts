@@ -30,12 +30,22 @@ import type {
   RoutineTask,
   ScheduledAction,
 } from '@service-scheduled-action/generated/schemas';
-import { DEFAULT_RUN_VISIBILITY, type ScheduleDraft } from '../core/draft';
+import {
+  DEFAULT_RUN_VISIBILITY,
+  type ScheduleDraft,
+  type SubRoutineDraft,
+} from '../core/draft';
 import {
   type RoutineTarget,
   routineTargetSchema,
   routineTargetsEqual,
 } from '../core/routine-target';
+import {
+  copyOf,
+  programInputs,
+  subRoutinesFromWire,
+  subRoutinesToWire,
+} from '../core/sub-routines';
 import { getCronTrigger } from './triggers';
 
 /** The apps a program requires, stored beside its steps. */
@@ -91,6 +101,11 @@ function programDraft(
 ): ScheduleDraft | undefined {
   // Steps need the trigger editor; legacy cron-only drafts have no steps.
   if (!triggers) return undefined;
+  // Saving writes every sub-routine back, so one the editor can't show
+  // leaves the routine read-only rather than lost.
+  const subRoutines = subRoutinesFromWire(schedule.task);
+  if (!subRoutines) return undefined;
+  const inputs = programInputs(schedule.task);
   const agent = firstAgent(steps);
   const parsed = parseCron('0 0 9 * * *');
   return {
@@ -108,7 +123,22 @@ function programDraft(
     dangerouslyOperateAsUser: programOperatesAsUser(schedule.task),
     triggers,
     steps,
+    ...(subRoutines.length ? { subRoutines } : {}),
+    ...(inputs.length ? { inputs } : {}),
   };
+}
+
+/**
+ * A sub-routine's copy: its steps are its parent's definition, so only its
+ * trigger and settings are edited here, and saving keeps its task.
+ */
+function copyDraft(
+  schedule: ScheduledAction,
+  copy: NonNullable<ScheduleDraft['copy']>,
+  triggers: ScheduleDraft['triggers']
+): ScheduleDraft | undefined {
+  const draft = programDraft(schedule, [], triggers);
+  return draft && { ...draft, copy };
 }
 
 export function draftFromSchedule(
@@ -123,6 +153,8 @@ export function draftFromSchedule(
   const steps =
     schedule.kind === 'Agent' ? programSteps(schedule.task) : undefined;
   if (steps) return programDraft(schedule, steps, triggers);
+  const copy = schedule.kind === 'Agent' ? copyOf(schedule.task) : undefined;
+  if (copy) return copyDraft(schedule, copy, triggers);
   const parsed = trigger
     ? parseCron(trigger.schedule)
     : parseCron('0 0 9 * * *');
@@ -179,8 +211,13 @@ function buildAgentTask(draft: ScheduleDraft): AgentTask {
 function buildTask(draft: ScheduleDraft): RoutineTask {
   const [only, ...rest] = draft.steps ?? [];
   // A routine that is only an agent saves in the simple form, however its
-  // step was added.
-  if (only?.kind === 'agent' && !rest.length)
+  // step was added, unless it holds what only a program can.
+  if (
+    only?.kind === 'agent' &&
+    !rest.length &&
+    !draft.subRoutines?.length &&
+    !draft.inputs?.length
+  )
     return buildAgentTask({
       ...draft,
       prompt: only.instructions,
@@ -190,6 +227,8 @@ function buildTask(draft: ScheduleDraft): RoutineTask {
     ? programTaskFor(draft.steps, {
         apps: draft.apps,
         operatesAsUser: draft.dangerouslyOperateAsUser ?? false,
+        subRoutines: draft.subRoutines ?? [],
+        inputs: draft.inputs ?? [],
       })
     : buildAgentTask(draft);
 }
@@ -198,18 +237,26 @@ function buildTask(draft: ScheduleDraft): RoutineTask {
  * A program task. Apps are sent when there are some, or when `clearsApps`:
  * the scheduler rejects an update that drops stored apps without saying so.
  * Operating as the user is sent when on, or as `false` when it turns off.
+ * Sub-routines and inputs are sent when there are some; the editor never
+ * removes them, and the scheduler refuses an update that leaves them out.
  */
 function programTaskFor(
   steps: StepDraft[],
   options: {
     apps: ScheduleDraft['apps'];
     operatesAsUser: boolean;
+    subRoutines: SubRoutineDraft[];
+    inputs: NonNullable<ScheduleDraft['inputs']>;
     clearsApps?: boolean;
     clearsOperatesAsUser?: boolean;
   }
 ) {
   return {
     steps: stepsToWire(steps),
+    ...(options.subRoutines.length
+      ? { sub_routines: subRoutinesToWire(options.subRoutines) }
+      : {}),
+    ...(options.inputs.length ? { inputs: options.inputs } : {}),
     ...(options.apps.length || options.clearsApps
       ? { mcp_servers: options.apps }
       : {}),
@@ -244,8 +291,11 @@ function descriptionField(draft: ScheduleDraft, previous: ScheduledAction) {
 
 /** Keep the stored task when the edited steps write the same program. */
 function programTask(draft: ScheduleDraft, previous: ScheduledAction) {
+  // A copy's task changes only in its parent's definition.
+  if (draft.copy) return previous.task;
   const previousApps = programApps(previous.task);
   const previousOperatesAsUser = programOperatesAsUser(previous.task);
+  const previousSubRoutines = subRoutinesFromWire(previous.task);
   const clears = {
     clearsApps: previousApps.length > 0,
     clearsOperatesAsUser: previousOperatesAsUser,
@@ -254,16 +304,21 @@ function programTask(draft: ScheduleDraft, previous: ScheduledAction) {
     ? programTaskFor(draft.steps, {
         apps: draft.apps,
         operatesAsUser: draft.dangerouslyOperateAsUser ?? false,
+        subRoutines: draft.subRoutines ?? [],
+        inputs: draft.inputs ?? [],
         ...clears,
       })
     : buildTask(draft);
   const previousSteps = programSteps(previous.task);
   return previousSteps &&
+    previousSubRoutines &&
     JSON.stringify(task) ===
       JSON.stringify(
         programTaskFor(previousSteps, {
           apps: previousApps,
           operatesAsUser: previousOperatesAsUser,
+          subRoutines: previousSubRoutines,
+          inputs: programInputs(previous.task),
           ...clears,
         })
       )

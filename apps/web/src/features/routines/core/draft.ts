@@ -1,3 +1,4 @@
+import type { RoutineInput } from '@service-scheduled-action/generated/schemas';
 import type { StepDraft } from './routine-steps';
 import type { RoutineTarget } from './routine-target';
 import type { RoutineTriggerDraft } from './routine-triggers';
@@ -6,6 +7,30 @@ import type { RoutineTriggerDraft } from './routine-triggers';
 export type RoutineApp = { app_slug: string; server_name: string };
 
 export type ScheduleFrequency = 'week' | 'month' | 'once';
+
+/**
+ * Work a routine's runs schedule once per item, written once with the
+ * routine: its code schedules a copy with
+ * `macro.routines.schedule(name, { trigger, inputs })`, and each copy runs
+ * these steps as they are when it runs.
+ */
+export type SubRoutineDraft = {
+  /** How the routine's code names it; fixed, since that code calls it. */
+  name: string;
+  /** What a copy does, in a few words; copies are named after it. */
+  title: string;
+  /** The values each copy is given, declared without values; kept as stored. */
+  inputs: RoutineInput[];
+  steps: StepDraft[];
+  /** Apps a copy's Ask AI step requires; kept as stored. */
+  apps: RoutineApp[];
+};
+
+/** The definition a sub-routine's copy runs, and the values it was given. */
+export type SubRoutineCopyDraft = {
+  subRoutine: string;
+  inputs: Record<string, unknown>;
+};
 
 /**
  * Whether a routine's runs appear in Home and the Agents list. Unlisted runs
@@ -68,6 +93,18 @@ export type ScheduleDraft = {
    * instructions in `prompt` and its model or agent in `target`.
    */
   steps?: StepDraft[];
+  /** Work the program's runs schedule once per item. Absent means none. */
+  subRoutines?: SubRoutineDraft[];
+  /**
+   * Values the program's code reads as `inputs`, which a sub-routine's copy
+   * kept when it became a routine of its own. Kept as stored.
+   */
+  inputs?: RoutineInput[];
+  /**
+   * Set on a sub-routine's copy: the definition it runs, which its parent
+   * holds, and its values. Only its trigger and settings are its own.
+   */
+  copy?: SubRoutineCopyDraft;
   onceAt?: string;
   timezone?: string;
 };

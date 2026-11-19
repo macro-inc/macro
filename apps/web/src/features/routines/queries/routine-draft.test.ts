@@ -786,3 +786,173 @@ describe('descriptions', () => {
     expect(clampDescription('  Label invoices.  ')).toBe('Label invoices.');
   });
 });
+
+describe('routines with sub-routines', () => {
+  const remind = {
+    name: 'remind',
+    title: 'Remind me',
+    inputs: [{ type: 'text' as const, name: 'taskId', label: 'Task' }],
+    steps: [
+      {
+        type: 'agent' as const,
+        model: 'claude',
+        instructions: 'Remind me about the task.',
+      },
+    ],
+  };
+  const parent: ScheduledAction = {
+    ...events,
+    task: {
+      steps: [
+        {
+          type: 'code',
+          title: 'Find tasks due soon',
+          source: 'export async function main() {}',
+        },
+      ],
+      sub_routines: [remind],
+    },
+  };
+  const copy: ScheduledAction = {
+    ...events,
+    id: 'copy-id',
+    trigger: { type: 'once', at: '2026-12-01T09:00:00Z' },
+    task: { sub_routine: 'remind', inputs: { taskId: 'task-1' } },
+    sub_routine: { parent_id: 'cron-id', created_by_run_id: 'run-1' },
+  };
+
+  it('writes the stored task back while nothing changed', () => {
+    const draft = draftFromSchedule(parent)!;
+    expect(draft.subRoutines?.map((item) => item.title)).toEqual(['Remind me']);
+    expect(validateRoutineDraft(draft)).toBeNull();
+    const body = draftToUpdateBody(draft, parent)!;
+    expect(body.task).toBe(parent.task);
+    expect(isUnchangedUpdate(body, parent)).toBe(true);
+  });
+
+  it('keeps every sub-routine when the routine’s own steps change', () => {
+    const draft = draftFromSchedule(parent)!;
+    const edited = withDraftSteps(draft, [
+      ...draft.steps!,
+      {
+        id: 'added',
+        kind: 'agent',
+        instructions: 'Summarize what was scheduled',
+        target: { kind: 'model', model: 'claude' },
+      },
+    ]);
+    // The scheduler refuses an update that leaves them out.
+    expect(draftToUpdateBody(edited, parent)?.task).toMatchObject({
+      sub_routines: [remind],
+    });
+  });
+
+  it('saves an edit to a sub-routine’s steps with the routine', () => {
+    const draft = draftFromSchedule(parent)!;
+    const [definition] = draft.subRoutines!;
+    const [step] = definition!.steps;
+    const edited: ScheduleDraft = {
+      ...draft,
+      subRoutines: [
+        {
+          ...definition!,
+          steps: [
+            { ...step!, instructions: 'Remind me, and say when it is due.' },
+          ] as typeof definition.steps,
+        },
+      ],
+    };
+    const task = draftToUpdateBody(edited, parent)?.task;
+    expect(task).toEqual({
+      steps: (parent.task as { steps: unknown }).steps,
+      sub_routines: [
+        {
+          ...remind,
+          steps: [
+            {
+              type: 'agent',
+              model: 'claude',
+              instructions: 'Remind me, and say when it is due.',
+            },
+          ],
+        },
+      ],
+    });
+  });
+
+  it('holds back a sub-routine whose steps can’t run, naming it', () => {
+    const draft = draftFromSchedule(parent)!;
+    const emptied = {
+      ...draft,
+      subRoutines: [{ ...draft.subRoutines![0]!, steps: [] }],
+    };
+    expect(validateRoutineDraft(emptied)).toBe(
+      'In “Remind me”: Add a step to tell this routine what to do.'
+    );
+  });
+
+  it('keeps a single agent step as a program while it has sub-routines', () => {
+    const draft = draftFromSchedule(parent)!;
+    const agentOnly = withDraftSteps(draft, [
+      {
+        id: 'only',
+        kind: 'agent',
+        instructions: 'Look for tasks due soon',
+        target: { kind: 'model', model: 'claude' },
+      },
+    ]);
+    expect(draftToCreateBody(agentOnly).task).toMatchObject({
+      steps: [{ type: 'agent', instructions: 'Look for tasks due soon' }],
+      sub_routines: [remind],
+    });
+  });
+
+  it('keeps the values a kept routine’s code reads', () => {
+    const inputs = [
+      { type: 'text' as const, name: 'taskId', label: 'Task', value: 'task-1' },
+    ];
+    const kept: ScheduledAction = {
+      ...events,
+      task: { steps: remind.steps, inputs },
+    };
+    const draft = draftFromSchedule(kept)!;
+    expect(draft.inputs).toEqual(inputs);
+    const edited = withDraftSteps(draft, [
+      { ...draft.steps![0]!, instructions: 'Remind me now' } as never,
+    ]);
+    expect(draftToUpdateBody(edited, kept)?.task).toMatchObject({ inputs });
+  });
+
+  it('edits only a copy’s trigger and settings, keeping its task', () => {
+    const draft = draftFromSchedule(copy)!;
+    expect(draft.copy).toEqual({
+      subRoutine: 'remind',
+      inputs: { taskId: 'task-1' },
+    });
+    // Its steps are its parent's, checked there.
+    expect(validateRoutineDraft(draft)).toBeNull();
+    const body = draftToUpdateBody(
+      { ...draft, runVisibility: 'listed' },
+      copy
+    )!;
+    expect(body.task).toBe(copy.task);
+    expect(body.run_visibility).toBe('listed');
+  });
+
+  it('leaves a routine whose sub-routine it can’t show read-only', () => {
+    const unshown: ScheduledAction = {
+      ...parent,
+      task: {
+        ...(parent.task as object),
+        sub_routines: [
+          {
+            ...remind,
+            // An agent step with neither a model nor an agent.
+            steps: [{ type: 'agent', instructions: 'Remind me' }],
+          },
+        ],
+      } as RoutineTask,
+    };
+    expect(draftFromSchedule(unshown)).toBeUndefined();
+  });
+});

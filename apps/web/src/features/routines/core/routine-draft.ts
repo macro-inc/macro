@@ -201,9 +201,26 @@ function validateProgramDraft(
   creating: boolean
 ): string | null {
   const triggers = draft.triggers ?? [];
+  // A copy's steps are its parent's, checked there.
+  if (draft.copy) return validateTriggers(triggers, creating);
   if (draft.apps.length && !firstAgent(steps))
     return 'Apps are for an Ask AI step. Add one, or remove the apps.';
-  return validateSteps(steps) ?? validateTriggers(triggers, creating);
+  return (
+    validateSteps(steps) ??
+    validateSubRoutines(draft.subRoutines ?? []) ??
+    validateTriggers(triggers, creating)
+  );
+}
+
+/** Each sub-routine's steps, held to a routine's rules, named when one fails. */
+function validateSubRoutines(
+  subRoutines: NonNullable<ScheduleDraft['subRoutines']>
+): string | null {
+  for (const definition of subRoutines) {
+    const error = validateSteps(definition.steps);
+    if (error) return `In “${definition.title}”: ${error}`;
+  }
+  return null;
 }
 
 export function validateRoutineDraft(
