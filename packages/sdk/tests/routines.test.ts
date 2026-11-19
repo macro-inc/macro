@@ -149,6 +149,63 @@ test('routine creation sends code and Ask AI steps that write as the user', asyn
     },
   ]);
 });
+test('a routine checked with sub-routines sends their definitions', async () => {
+  const bodies: unknown[] = [];
+  globalThis.fetch = Object.assign(
+    async (input: RequestInfo | URL) => {
+      const request = input instanceof Request ? input : new Request(input);
+      bodies.push(await request.json());
+      return Response.json({ ok: true, problems: [], steps: [] });
+    },
+    { preconnect: originalFetch.preconnect },
+  );
+  const macro = new Macro({
+    token: 'user',
+    hosts: { 'scheduled-action': 'https://routines.test' },
+  });
+  const schedule = {
+    type: 'code',
+    title: 'Schedule reminders',
+    source: 'export async function main() {}',
+  } as const;
+  await macro.routines.check({
+    name: 'Due reminders',
+    trigger: { type: 'cron', schedule: '0 0 8 * * *', timezone: 'UTC' },
+    steps: [schedule],
+    subRoutines: [
+      {
+        name: 'remind',
+        title: 'Remind about a task',
+        inputs: [{ type: 'text', name: 'taskId', label: 'Task' }],
+        steps: [{ type: 'agent', instructions: 'Tell me about the task.' }],
+      },
+    ],
+  });
+  expect(bodies).toEqual([
+    {
+      routine: {
+        name: 'Due reminders',
+        kind: 'Agent',
+        enabled: true,
+        trigger: { type: 'cron', schedule: '0 0 8 * * *', timezone: 'UTC' },
+        task: {
+          steps: [schedule],
+          sub_routines: [
+            {
+              name: 'remind',
+              title: 'Remind about a task',
+              inputs: [{ type: 'text', name: 'taskId', label: 'Task' }],
+              steps: [
+                { type: 'agent', instructions: 'Tell me about the task.' },
+              ],
+            },
+          ],
+        },
+      },
+      created: [],
+    },
+  ]);
+});
 test('routine writes invalidate detail only after success', async () => {
   let enabled = true;
   let reads = 0;

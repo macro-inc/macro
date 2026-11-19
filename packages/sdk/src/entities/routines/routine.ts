@@ -135,12 +135,63 @@ export interface AgentRoutineOptions extends RoutineCommonOptions {
   agent?: Agent;
   steps?: never;
   dangerouslyOperateAsUser?: never;
+  subRoutines?: never;
+}
+
+/**
+ * A value each copy of a sub-routine is given when a run schedules it. Its
+ * code steps read it as `inputs.<name>`, typed by `type`; its Ask AI step
+ * sees it as data.
+ */
+export type RoutineInputOptions = {
+  type: 'text' | 'number' | 'boolean';
+  /**
+   * How code reads it: `inputs.<name>`. A lowercase letter, then up to 31
+   * letters or digits, e.g. `taskId`.
+   */
+  name: string;
+  /** What it is, for the owner, e.g. "Task". */
+  label: string;
+};
+
+/**
+ * Work a routine's runs schedule for each item they find, written once here
+ * and type-checked with the routine. A run schedules a copy with
+ * {@link RoutineNamespace.schedule}:
+ * `macro.routines.schedule(name, { trigger, inputs, key })`. A copy holds only
+ * its trigger and its inputs' values, and runs these steps as the routine
+ * holds them when the copy runs, so editing the routine changes every copy
+ * that hasn't run.
+ */
+export interface SubRoutineOptions {
+  /**
+   * How code schedules a copy: `macro.routines.schedule('<name>', …)`. A
+   * lowercase letter, then up to 31 lowercase letters, digits or
+   * underscores, e.g. `remind_about_task`.
+   */
+  name: string;
+  /** What a copy does, in a few words; copies are named after it. */
+  title: string;
+  /** The values each copy is given; its code steps read them as `inputs.<name>`. */
+  inputs?: readonly RoutineInputOptions[];
+  /**
+   * What a copy does when it runs, in order. Its code steps' `main` also
+   * takes `inputs`: `export async function main({ macro, inputs }: StepContext)`.
+   */
+  steps: readonly RoutineStepOptions[];
 }
 
 /** A routine that runs code and Ask AI steps in order. */
 export interface StepsRoutineOptions extends RoutineCommonOptions {
   /** Run in order; a failed step stops the run. Saving type-checks the code. */
   steps: readonly RoutineStepOptions[];
+  /**
+   * Work the routine's runs schedule once per item, such as a reminder before
+   * each task is due: each defined once here, then scheduled from a code step
+   * with {@link RoutineNamespace.schedule}. At most 5. An update that omits
+   * them is refused while the routine has any, so it never drops them.
+   */
+  subRoutines?: readonly SubRoutineOptions[];
   /**
    * Make code steps' messages, comments and emails appear written by the
    * owner, with no agent badge. Set it only when the user explicitly asked
@@ -543,6 +594,12 @@ function taskBody(options: RoutineOptions): RoutineTask {
     .with({ steps: P.array() }, (program) => ({
       steps: program.steps.map(stepBody),
       dangerously_operate_as_user: program.dangerouslyOperateAsUser,
+      sub_routines: program.subRoutines?.map((definition) => ({
+        name: definition.name,
+        title: definition.title,
+        inputs: definition.inputs?.map((input) => ({ ...input })),
+        steps: definition.steps.map(stepBody),
+      })),
     }))
     .with(
       { prompt: P.string },
