@@ -1,0 +1,22 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "\n            SELECT\n                l.id AS \"link_id!\"\n            FROM\n                public.email_links l\n            WHERE\n                l.disconnect_requested_at IS NULL\n                AND l.deleting_at IS NULL\n                AND NOT EXISTS (SELECT 1 FROM public.\"User\" u WHERE u.id = l.macro_id)\n            ORDER BY\n                l.id\n            LIMIT $1\n            ",
+  "describe": {
+    "columns": [
+      {
+        "ordinal": 0,
+        "name": "link_id!",
+        "type_info": "Uuid"
+      }
+    ],
+    "parameters": {
+      "Left": [
+        "Int8"
+      ]
+    },
+    "nullable": [
+      false
+    ]
+  },
+  "hash": "ad83af5ac9e9f31185cc1a862ebde13617253ca60a6b443d38ef0269c2e39244"
+}
