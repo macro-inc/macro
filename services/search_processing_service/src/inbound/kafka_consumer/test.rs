@@ -2516,6 +2516,7 @@ async fn hint_arriving_mid_reread_queues_the_next_reread() {
         receiver,
         pending_rereads,
         mpsc::unbounded_channel().0,
+        CancellationToken::new(),
         move |received| {
             let started_sender = started_sender.clone();
             let resume = Arc::clone(&worker_resume);
@@ -3233,6 +3234,39 @@ fn a_handed_off_record_stays_queued_and_a_skipped_one_finishes() {
 }
 
 #[tokio::test]
+async fn after_a_graceful_stop_a_worker_starts_no_queued_record() {
+    let (sender, receiver) = mpsc::channel(4);
+    let (report_sender, mut reports) = mpsc::unbounded_channel();
+    sender
+        .send(received_thread_backfilled_event(EMAIL_THREAD_ID, 9))
+        .await
+        .unwrap();
+    drop(sender);
+    let rewinding = CancellationToken::new();
+    rewinding.cancel();
+    let processed = Arc::new(std::sync::atomic::AtomicBool::new(false));
+    let marked = Arc::clone(&processed);
+
+    drain_worker_events(
+        receiver,
+        Arc::default(),
+        report_sender,
+        rewinding,
+        move |_| {
+            marked.store(true, std::sync::atomic::Ordering::SeqCst);
+            std::future::ready(())
+        },
+    )
+    .await;
+
+    assert!(!processed.load(std::sync::atomic::Ordering::SeqCst));
+    assert!(
+        reports.try_recv().is_err(),
+        "an unstarted record stays queued for the rewind"
+    );
+}
+
+#[tokio::test]
 async fn a_worker_reports_a_record_as_started_then_done() {
     let (sender, receiver) = mpsc::channel(4);
     let (report_sender, mut reports) = mpsc::unbounded_channel();
@@ -3242,6 +3276,7 @@ async fn a_worker_reports_a_record_as_started_then_done() {
         receiver,
         Arc::default(),
         report_sender,
+        CancellationToken::new(),
         move |_received| {
             let released = released.lock().unwrap().take();
             async move {

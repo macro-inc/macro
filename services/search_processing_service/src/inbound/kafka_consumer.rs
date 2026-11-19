@@ -418,13 +418,12 @@ impl WorkerPool {
 
     /// Spawns [`WORKER_COUNT`] workers sharing `context` and returns their
     /// join handles alongside the pool. Each worker reports to `reports` when
-    /// it starts and finishes a record, and stops waiting to retry once
-    /// `stopping` is cancelled. Dropping the pool closes every worker channel,
-    /// letting the workers drain and exit.
+    /// it starts and finishes a record and follows `stop`. Dropping the pool
+    /// closes every worker channel, letting the workers drain and exit.
     fn spawn(
         context: &KafkaProcessingContext,
         reports: &mpsc::UnboundedSender<WorkerReport>,
-        stopping: &CancellationToken,
+        stop: &WorkerStop,
     ) -> (Self, Vec<JoinHandle<()>>) {
         let pending_rereads = Arc::new(PendingRereads::default());
         let (senders, workers) = (0..WORKER_COUNT)
@@ -437,7 +436,7 @@ impl WorkerPool {
                         receiver,
                         Arc::clone(&pending_rereads),
                         reports.clone(),
-                        stopping.clone(),
+                        stop.clone(),
                     )),
                 )
             })
@@ -791,27 +790,37 @@ async fn run_event_worker(
     events: mpsc::Receiver<ReceivedEvent>,
     pending_rereads: Arc<PendingRereads>,
     reports: mpsc::UnboundedSender<WorkerReport>,
-    stopping: CancellationToken,
+    stop: WorkerStop,
 ) {
     let context = &context;
+    let WorkerStop {
+        stopping,
+        rewinding,
+    } = stop;
     let attempts = &Attempts::Retry { stopping };
-    drain_worker_events(events, pending_rereads, reports, |received| async move {
-        process_received(
-            &context.metrics,
-            &received,
-            context.replays.as_ref(),
-            |received| {
-                process_event(
-                    context,
-                    &received.event,
-                    received.partition,
-                    received.offset,
-                    attempts,
-                )
-            },
-        )
-        .await;
-    })
+    drain_worker_events(
+        events,
+        pending_rereads,
+        reports,
+        rewinding,
+        |received| async move {
+            process_received(
+                &context.metrics,
+                &received,
+                context.replays.as_ref(),
+                |received| {
+                    process_event(
+                        context,
+                        &received.event,
+                        received.partition,
+                        received.offset,
+                        attempts,
+                    )
+                },
+            )
+            .await;
+        },
+    )
     .await;
     tracing::trace!("search processing event worker drained");
 }
@@ -825,12 +834,18 @@ async fn drain_worker_events<F, Fut>(
     mut events: mpsc::Receiver<ReceivedEvent>,
     pending_rereads: Arc<PendingRereads>,
     reports: mpsc::UnboundedSender<WorkerReport>,
+    rewinding: CancellationToken,
     mut process: F,
 ) where
     F: FnMut(ReceivedEvent) -> Fut,
     Fut: Future<Output = ()>,
 {
     while let Some(received) = events.recv().await {
+        // Once a graceful stop rewinds the partitions, a record left unstarted
+        // is redelivered; one started now could be cut off and lost.
+        if rewinding.is_cancelled() {
+            break;
+        }
         if let Some(key) = coalescible_reread_key(&received.event) {
             pending_rereads.release(&key);
         }
@@ -1101,6 +1116,15 @@ fn rewind_queued(consumer: &SearchProcessingKafkaConsumer, ledger: &OffsetLedger
     }
 }
 
+/// What a stopping consumer asks of its workers.
+#[derive(Clone, Default)]
+struct WorkerStop {
+    /// Cut short any wait between attempts.
+    stopping: CancellationToken,
+    /// Start no more records: the stop rewinds the partitions past them.
+    rewinding: CancellationToken,
+}
+
 /// How the workers ended.
 struct Drained {
     /// The first worker panic, even one that happened long before the stop.
@@ -1201,8 +1225,8 @@ pub(crate) async fn run_event_consumer(
     );
 
     let (report_sender, mut reports) = mpsc::unbounded_channel();
-    let stopping = CancellationToken::new();
-    let (pool, workers) = WorkerPool::spawn(&context, &report_sender, &stopping);
+    let stop = WorkerStop::default();
+    let (pool, workers) = WorkerPool::spawn(&context, &report_sender, &stop);
     // Only the workers hold senders now, so `reports` closes once they all exit.
     drop(report_sender);
     let mut ledger = OffsetLedger::default();
@@ -1212,8 +1236,13 @@ pub(crate) async fn run_event_consumer(
         result: poll_result,
         uncommitted,
     } = poll_events(&consumer, pool, &mut ledger, &mut reports, shutdown).await;
-    // A worker waiting to retry queues its event for a replay instead.
-    stopping.cancel();
+    // A worker waiting to retry queues its event for a replay instead. After
+    // a graceful stop it also starts no more records, which the rewind
+    // redelivers; after an error nothing is rewound, so it drains them.
+    stop.stopping.cancel();
+    if poll_result.is_ok() {
+        stop.rewinding.cancel();
+    }
 
     let graceful = poll_result.is_ok();
     let span = tracing::info_span!(
