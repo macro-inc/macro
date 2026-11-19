@@ -7,7 +7,8 @@ export, and company actions belong here. The dependency rules are enforced by
 Read `crmAccessAllowed` for navigation and create entry points: pending or failed
 proofs keep them visible, while proven denial hides them. Pass
 `crmAccessAuthority.allowed` through `CrmContext.canAccess` for record data and
-CRM-owned views; the workspace retains its loading, retry, and denied states.
+CRM-owned views; the workspace retains its loading, retry, and denied states, and
+keeps its sidebar tools (import, export, new list) disabled until access is proven.
 Keep individually shared pipeline navigation available after CRM denial, but
 do not open a referenced company or contact. The workspace owns the record
 detail gate and unmounts its content on denial; standalone record views retain
