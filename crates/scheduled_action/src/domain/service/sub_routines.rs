@@ -434,14 +434,15 @@ where
                 };
                 rewritten.sort();
                 rewritten.dedup();
+                // Reserved before the write, as delete does: a stopped
+                // dispatcher fails the request with the copy still a copy,
+                // so a retry detaches it rather than finding it top-level.
+                let permit = self.dispatcher_tx.reserve().await?;
                 let detached = self
                     .repo
                     .detach_copy(action, &parent_id, &rewritten)
                     .await?;
-                self.dispatcher_tx
-                    .send(DispatchEvent::Update(detached.clone()))
-                    .await
-                    .map_err(|e| anyhow::anyhow!("failed to dispatch update event: {e}"))?;
+                permit.send(DispatchEvent::Update(detached.clone()));
                 return Ok(detached);
             }
         }

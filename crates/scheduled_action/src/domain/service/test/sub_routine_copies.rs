@@ -437,6 +437,35 @@ async fn detaching_a_copy_keeps_the_steps_it_ran_with_its_inputs() {
     assert_eq!(stored(&service, copy.id.unwrap()).task, detached.task);
 }
 
+#[tokio::test]
+async fn a_copy_stays_a_copy_when_its_detach_cannot_be_scheduled() {
+    let service = service(true);
+    let parent = reminders(&service).await;
+    start_run(&service, &parent, PARENT_RUN);
+    let id = schedule(&service, remind("Ship", None), from_code(&parent))
+        .await
+        .unwrap()
+        .into_action()
+        .id
+        .unwrap();
+    // The dispatcher has stopped, as while the service shuts down.
+    let (tx, rx) = tokio::sync::mpsc::channel(1);
+    drop(rx);
+    let stopped = ScheduledActionServiceImpl::new(
+        Arc::clone(&service.repo),
+        Arc::new(FakeExecutor::default()),
+        tx,
+        grants(&service.repo),
+    )
+    .with_event_routines(Rollout(Some(true)));
+
+    assert!(stopped.detach_action(edit_receipt(id)).await.is_err());
+    assert!(stored(&service, id).sub_routine.is_some());
+    // So a retry detaches it.
+    let detached = service.detach_action(edit_receipt(id)).await.unwrap();
+    assert_eq!(detached.sub_routine, None);
+}
+
 /// A routine's steps: one agent step, with `extra` fields beside them.
 fn steps_task(extra: serde_json::Value) -> serde_json::Value {
     let mut task = json!({
