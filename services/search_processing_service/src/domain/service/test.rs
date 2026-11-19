@@ -181,9 +181,13 @@ async fn messages_the_queue_would_not_take_are_counted() {
     let req = CallBackfillRequest::default();
     let (progress, cancel) = detached();
 
-    let receipt = drain_source(&publisher, &progress, &cancel, |offset| {
-        source.fetch_page(&req, offset)
-    })
+    let receipt = drain_source(
+        &publisher,
+        &BackfillGate::open(20),
+        &progress,
+        &cancel,
+        |offset| source.fetch_page(&req, offset),
+    )
     .await
     .unwrap();
 
@@ -201,19 +205,25 @@ async fn messages_a_cursor_drain_could_not_queue_are_counted() {
         (vec![], None),
     ]);
 
-    let receipt = drain_source_with_cursor(&publisher, &progress, &cancel, |_cursor| {
-        let (messages, next) = pages.lock().unwrap().remove(0);
-        let rows_consumed = messages.len();
-        async move {
-            Ok((
-                SourcePage {
-                    messages,
-                    rows_consumed,
-                },
-                next,
-            ))
-        }
-    })
+    let receipt = drain_source_with_cursor(
+        &publisher,
+        &BackfillGate::open(20),
+        &progress,
+        &cancel,
+        |_cursor| {
+            let (messages, next) = pages.lock().unwrap().remove(0);
+            let rows_consumed = messages.len();
+            async move {
+                Ok((
+                    SourcePage {
+                        messages,
+                        rows_consumed,
+                    },
+                    next,
+                ))
+            }
+        },
+    )
     .await
     .unwrap();
 
