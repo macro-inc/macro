@@ -1051,11 +1051,14 @@ post updates come from the scheduler as code; where code can't be saved they
 start with an Ask AI step instead. When an SDK release breaks a routine's
 code and AI's update fails its checks, Macro pauses routines that run code
 in their own steps. An Ask AI parent with code only in its sub-routine
-definitions stays enabled. Copies that need the broken code fail until it
-is updated. A paused routine's Overview leads with **Paused: its code needs
-an update** and shows the reason. For a proposal that changes its own code steps,
-**Review the update** shows the changed steps and **Approve and resume**
-saves the update, checks it again and turns the routine on.
+definitions stays enabled, and every copy of it that runs code fails until
+the code is updated. The routine's Overview leads with **Paused: its code
+needs an update** and shows the reason, that enabled parent's too. For a
+proposal that changes its own code steps, **Review the update** shows the
+changed steps and **Approve and resume** saves the update, checks it again
+and turns the routine on; a routine with sub-routine definitions refuses
+that save, and a proposal that changes only a definition's code has no
+approval control on this page.
 
 ## Routine run notifications and failures
 

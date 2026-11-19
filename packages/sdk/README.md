@@ -524,7 +524,10 @@ await macro.routines.create({
 Event triggers use `{ type: 'events', filters: [{ events, entities, condition }] }`;
 `entities` takes typed references such as `{ type: 'document', entity: doc }`.
 Use `{ type: 'multiple', triggers: [...] }` to combine schedules and events.
-`routine.update(options)` replaces task and trigger settings; `delete()` removes it.
+`routine.update(options)` replaces task and trigger settings, except that a task
+leaving out the stored sub-routine definitions or saved inputs is refused, and
+a scheduled copy's task can't change (edit its parent's definition instead);
+`delete()` removes it.
 Routines run with their owner's access. For eligible routines,
 `routine.shareAsTemplate({ description, variables })` publishes a snapshot.
 Publishing rejects scheduled copies and routines with sub-routine definitions

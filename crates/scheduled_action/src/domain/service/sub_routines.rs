@@ -385,9 +385,9 @@ where
         Ok(actions)
     }
 
-    /// Make a sub-routine a top-level routine. A copy first gets the steps
-    /// it ran, its definition's as its parent holds them now, with its
-    /// inputs' values, so it keeps doing what it did.
+    /// Make a sub-routine a top-level routine. A copy first gets its
+    /// definition's steps as its parent holds them now, with its inputs'
+    /// values: what its next run would have done.
     #[tracing::instrument(name = "routine.detach", skip_all, fields(
         routine.id = tracing::field::Empty,
         routine.parent_id = tracing::field::Empty,
