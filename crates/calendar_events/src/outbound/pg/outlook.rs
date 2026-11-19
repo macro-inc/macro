@@ -295,13 +295,23 @@ impl OutlookCalendarRepository for PgCalendarRepository {
         log.commit(tx).await?;
         Ok(checkpoint)
     }
-    async fn claim_outlook_calendar(
-        &self,
-        lease_id: Uuid,
-        range: OccurrenceRange,
-        reader_revision: i16,
-    ) -> Result<Option<OutlookCalendarLease>, Report> {
+    async fn maintain_outlook_calendars(&self, range: OccurrenceRange) -> Result<bool, Report> {
         let mut tx = self.pool.begin().await.map_err(report)?;
+        sqlx::query!("SET LOCAL statement_timeout = '10s'")
+            .execute(&mut *tx)
+            .await
+            .map_err(report)?;
+        // One task at a time: a second would only wait on the first one's
+        // row locks and find nothing left to do.
+        let locked = sqlx::query_scalar!(
+            r#"SELECT pg_try_advisory_xact_lock(hashtextextended('calendar_outlook_maintenance', 0)) AS "locked!""#
+        )
+        .fetch_one(&mut *tx)
+        .await
+        .map_err(report)?;
+        if !locked {
+            return Ok(false);
+        }
         let mut log = ChangeLogBatch::default();
         // Capability discovery is idempotent. Mail and authentication own the
         // grants; calendar consumes only their non-secret current projection.
@@ -326,9 +336,8 @@ impl OutlookCalendarRepository for PgCalendarRepository {
             WHERE a.provider='outlook' AND a.sync_status<>'disabled' AND l.is_sync_active
               AND NOT EXISTS(SELECT 1 FROM calendar_outlook_work x WHERE x.account_id=a.id AND x.calendar_id IS NULL)
             ON CONFLICT(account_id) WHERE calendar_id IS NULL DO NOTHING"#,range.starts_at,range.ends_at).execute(&mut *tx).await.map_err(report)?;
-        // Maintenance runs on every claim, so it must cost index probes while
-        // nothing needs it. A generation differs when it sorts either below or
-        // above the link's, and each side is a range of
+        // A generation differs when it sorts either below or above the
+        // link's, and each side is a range of
         // calendar_outlook_work_account_generation.
         // A replacement grant is the only automatic exit from reauthorization.
         sqlx::query!(r#"UPDATE calendar_accounts a SET sync_status='pending',last_sync_error=NULL
@@ -351,29 +360,52 @@ impl OutlookCalendarRepository for PgCalendarRepository {
                     AND(x.account_id,x.sync_generation,x.grant_generation)>(a.id,l.sync_generation,l.grant_generation)) stale
             WHERE w.id=stale.id AND a.id=w.account_id AND l.is_sync_active AND a.provider='outlook' AND a.sync_status<>'disabled'
             AND(w.sync_generation<>l.sync_generation OR w.grant_generation<>l.grant_generation OR w.ends_at<$2)"#,range.starts_at,range.ends_at).execute(&mut *tx).await.map_err(report)?;
-        // Work of unclaimable accounts stays due, so the claim takes each
-        // claimable account's first due row from calendar_outlook_work_account_due
-        // instead of walking the global due order past them. An account with a
-        // live lease gives no second row, so concurrent loops hold at most one
-        // of each mailbox's Graph slots, as Google's one job per account does.
-        // Two claims racing for an account both pick its first due row, which
-        // SKIP LOCKED and the re-checked lease give to one of them.
+        log.commit(tx).await?;
+        Ok(true)
+    }
+    async fn claim_outlook_calendar(
+        &self,
+        lease_id: Uuid,
+        range: OccurrenceRange,
+        reader_revision: i16,
+    ) -> Result<Option<OutlookCalendarLease>, Report> {
+        let mut tx = self.pool.begin().await.map_err(report)?;
+        sqlx::query!("SET LOCAL statement_timeout = '5s'")
+            .execute(&mut *tx)
+            .await
+            .map_err(report)?;
+        // Work of unclaimable accounts stays due, so the claim reads each
+        // claimable account's own rows instead of walking the global due order
+        // past them. Lease and release writes change no indexed column, so they
+        // stay HOT and each account's rows cost about one index entry apiece
+        // even while dead versions can't be vacuumed.
+        //
+        // Per account, a live lease on any of its rows sorts first and
+        // excludes the account, so concurrent loops hold at most one of each
+        // mailbox's Graph slots, as Google's one job per account does.
+        // Otherwise its first due row of the link's current generations and
+        // window comes out: maintenance resets stale rows on its own tick, and
+        // until then the claim never hands them out. Two claims racing for an
+        // account both pick its first due row, which SKIP LOCKED and the
+        // re-checked lease give to one of them.
         let row=sqlx::query!(r#"WITH candidate AS(SELECT w.id FROM(SELECT due.id,due.next_run_at,due.calendar_id FROM calendar_accounts a JOIN email_links l ON l.id=a.email_link_id
             JOIN email_link_microsoft_scopes s ON s.link_id=l.id AND s.grant_generation=l.grant_generation
-            CROSS JOIN LATERAL(SELECT x.id,x.next_run_at,x.calendar_id FROM calendar_outlook_work x LEFT JOIN calendars c ON c.id=x.calendar_id
-                WHERE x.account_id=a.id AND x.next_run_at<=now() AND(x.lease_until IS NULL OR x.lease_until<now()) AND(x.calendar_id IS NULL OR NOT c.is_deleted)
-                ORDER BY x.next_run_at,x.calendar_id NULLS FIRST LIMIT 1) due
+            CROSS JOIN LATERAL(SELECT x.id,x.next_run_at,x.calendar_id,COALESCE(x.lease_until>=now(),false) AS leased FROM calendar_outlook_work x
+                WHERE x.account_id=a.id AND(x.lease_until>=now() OR(x.next_run_at<=now() AND x.sync_generation=l.sync_generation
+                    AND x.grant_generation=l.grant_generation AND x.ends_at>=$2
+                    AND NOT EXISTS(SELECT 1 FROM calendars c WHERE c.id=x.calendar_id AND c.is_deleted)))
+                ORDER BY 4 DESC,x.next_run_at,x.calendar_id NULLS FIRST LIMIT 1) due
             WHERE l.is_sync_active AND a.provider='outlook' AND a.sync_status NOT IN ('disabled','reauth_required') AND s.calendar_disabled_at IS NULL AND s.granted_scopes @> ARRAY['Calendars.ReadWrite']::text[]
-              AND NOT EXISTS(SELECT 1 FROM calendar_outlook_work y WHERE y.account_id=a.id AND y.lease_until>=now())
+              AND NOT due.leased
             ORDER BY due.next_run_at,due.calendar_id NULLS FIRST) due JOIN calendar_outlook_work w ON w.id=due.id
             WHERE w.next_run_at<=now() AND(w.lease_until IS NULL OR w.lease_until<now())
             ORDER BY due.next_run_at,due.calendar_id NULLS FIRST LIMIT 1 FOR UPDATE OF w SKIP LOCKED)
             UPDATE calendar_outlook_work w SET lease_id=$1,lease_until=now()+interval '3 minutes'
             FROM candidate,calendar_accounts a,email_links l WHERE w.id=candidate.id AND a.id=w.account_id AND l.id=a.email_link_id
             RETURNING w.id,w.account_id,w.calendar_id,w.sync_generation,w.grant_generation,w.cursor,w.starts_at,w.ends_at,w.pending_ids,w.page_loaded,w.page_cursor,
-                w.full_scan AND w.whole_window_scan_id IS DISTINCT FROM w.scan_id AS "near_window_pending!",a.owner_id,l.id AS link_id,l.email_address::text AS "email_address!",l.fusionauth_user_id"#,lease_id).fetch_optional(&mut *tx).await.map_err(report)?;
+                w.full_scan AND w.whole_window_scan_id IS DISTINCT FROM w.scan_id AS "near_window_pending!",a.owner_id,l.id AS link_id,l.email_address::text AS "email_address!",l.fusionauth_user_id"#,lease_id,range.ends_at).fetch_optional(&mut *tx).await.map_err(report)?;
         let Some(row) = row else {
-            log.commit(tx).await?;
+            tx.commit().await.map_err(report)?;
             return Ok(None);
         };
         let binding = CalendarGrantBinding {
@@ -426,7 +458,7 @@ impl OutlookCalendarRepository for PgCalendarRepository {
         // Writes only when the status changes: every claim runs it, and eight
         // loops claim several times a second.
         sqlx::query!("UPDATE calendar_accounts SET sync_status='syncing' WHERE id=$1 AND sync_status<>'syncing' AND(last_synced_at IS NULL OR sync_status='reauth_required')",row.account_id).execute(&mut *tx).await.map_err(report)?;
-        log.commit(tx).await?;
+        tx.commit().await.map_err(report)?;
         Ok(Some(OutlookCalendarLease {
             id: row.id,
             lease_id,

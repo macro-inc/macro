@@ -37,6 +37,9 @@ const EVENT_BROKER_DRAIN_TIMEOUT: Duration = Duration::from_secs(10);
 const OUTLOOK_SYNC_LOOPS: usize = 8;
 /// How often the Outlook sync logs its queue depth.
 const OUTLOOK_QUEUE_DEPTH_INTERVAL: Duration = Duration::from_secs(60);
+/// How often each task reconciles Outlook accounts and work with the grants:
+/// how long a new account, a replacement grant or a new month waits for sync.
+const OUTLOOK_MAINTENANCE_INTERVAL: Duration = Duration::from_secs(10);
 
 mod scheduling_recovery;
 
@@ -246,6 +249,16 @@ async fn main() -> anyhow::Result<()> {
                 }
             });
         }
+        let maintenance = Arc::clone(&sync);
+        let cancellation = worker_cancellation_token.clone();
+        worker_tracker.spawn(async move {
+            let mut tick = tokio::time::interval(OUTLOOK_MAINTENANCE_INTERVAL);
+            loop {
+                tokio::select! { _ = cancellation.cancelled() => break, _ = tick.tick() => {} }
+                // The maintenance logs its own failure on its span.
+                let _ = maintenance.maintain().await;
+            }
+        });
         let cancellation = worker_cancellation_token.clone();
         worker_tracker.spawn(async move {
             let mut tick = tokio::time::interval(OUTLOOK_QUEUE_DEPTH_INTERVAL);

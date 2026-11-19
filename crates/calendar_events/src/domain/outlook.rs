@@ -274,8 +274,18 @@ pub trait OutlookCalendarReader: Send + Sync + 'static {
 
 /// Calendar-owned persistence and exact-generation leases.
 pub trait OutlookCalendarRepository: CalendarRepository {
-    /// Reconcile grant capability and claim one due job atomically for a
-    /// worker reading at `reader_revision`.
+    /// Reconcile accounts and work with the grants: disable accounts that lost
+    /// calendar access, add new ones, take accounts out of reauthorization on
+    /// a replacement grant, and reset work of replaced generations or expired
+    /// windows. Returns false without doing anything while another task is
+    /// at it.
+    fn maintain_outlook_calendars(
+        &self,
+        range: OccurrenceRange,
+    ) -> impl Future<Output = Result<bool, Report>> + Send;
+    /// Claim one due job of the link's current generations and `range`'s
+    /// window for a worker reading at `reader_revision`. Work that
+    /// maintenance has yet to reset is never handed out.
     fn claim_outlook_calendar(
         &self,
         lease_id: Uuid,
@@ -395,6 +405,15 @@ impl<
             "Outlook calendar sync queue depth"
         );
         Ok(depth)
+    }
+    /// Reconcile accounts and work with the grants, unless another task is
+    /// doing it now. Claims rely on this tick for new accounts, reauthorized
+    /// ones and reset work.
+    #[tracing::instrument(name = "calendar.outlook_maintenance", skip_all, err)]
+    pub async fn maintain(&self) -> Result<bool, Report> {
+        self.repository
+            .maintain_outlook_calendars(OccurrenceRange::maintenance_horizon(chrono::Utc::now()))
+            .await
     }
     /// Claim and perform one bounded job. Heartbeats also revalidate custody.
     pub async fn run_once(&self) -> Result<bool, Report> {

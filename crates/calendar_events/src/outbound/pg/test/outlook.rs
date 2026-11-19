@@ -7,6 +7,8 @@ use crate::domain::models::{
 use crate::domain::outlook::*;
 use crate::domain::ports::{CalendarProviderErrorKind, CalendarSyncHealthReader};
 
+mod maintenance;
+
 async fn mailbox(pool: &PgPool) -> (PgCalendarRepository, Uuid, String) {
     let owner = "macro|outlook-owner@example.com".to_owned();
     insert_user(pool, &owner).await;
@@ -29,10 +31,21 @@ async fn scans(pool: &PgPool, account_id: Uuid) -> Vec<(Uuid, Uuid, i64, i64, Op
 /// The reader revision of the tests' worker.
 const READER_REVISION: i16 = 1;
 
+/// One maintenance tick, then a claim.
 async fn claim(repo: &PgCalendarRepository) -> Option<OutlookCalendarLease> {
     claim_at(repo, READER_REVISION).await
 }
 async fn claim_at(repo: &PgCalendarRepository, revision: i16) -> Option<OutlookCalendarLease> {
+    assert!(maintain(repo).await, "no other task holds the maintenance");
+    claim_only(repo, revision).await
+}
+async fn maintain(repo: &PgCalendarRepository) -> bool {
+    repo.maintain_outlook_calendars(OccurrenceRange::maintenance_horizon(Utc::now()))
+        .await
+        .unwrap()
+}
+/// A claim with no maintenance before it.
+async fn claim_only(repo: &PgCalendarRepository, revision: i16) -> Option<OutlookCalendarLease> {
     repo.claim_outlook_calendar(
         Uuid::now_v7(),
         OccurrenceRange::maintenance_horizon(Utc::now()),

@@ -131,7 +131,12 @@ pub(super) async fn linked_mailbox(
         .respond_with(ResponseTemplate::new(200).set_body_json(json!({"value":calendars})))
         .mount(server)
         .await;
-    PgCalendarRepository::new(pool.clone())
+    // The service's maintenance tick, which gives the new link its account.
+    let repo = PgCalendarRepository::new(pool.clone());
+    repo.maintain_outlook_calendars(OccurrenceRange::maintenance_horizon(Utc::now()))
+        .await
+        .unwrap();
+    repo
 }
 
 pub(super) async fn connected_mailbox(
