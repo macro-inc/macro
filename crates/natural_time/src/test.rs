@@ -9,6 +9,8 @@ use super::*;
 const FRIDAY: &str = "2026-11-06 10:00";
 /// The same Friday at 7pm.
 const FRIDAY_EVENING: &str = "2026-11-06 19:00";
+/// The same Friday at 8pm, after 7pm.
+const FRIDAY_NIGHT: &str = "2026-11-06 20:00";
 const MONDAY: &str = "2026-11-02 10:00";
 const SATURDAY: &str = "2026-11-07 10:00";
 const SUNDAY: &str = "2026-11-08 10:00";
@@ -195,6 +197,26 @@ fn weekdays_and_their_abbreviations() {
             ("sun", "2026-11-08"),
         ],
     );
+}
+
+#[test]
+fn a_time_on_a_weekday_in_any_order() {
+    let phrases = [
+        "7pm on Friday",
+        "7pm on fri",
+        "7pm on frid",
+        "friday at 7pm",
+        "on friday 7pm",
+    ];
+    for (now, want) in [
+        (MONDAY, "2026-11-06 19:00"),
+        (FRIDAY, "2026-11-06 19:00"),
+        // Today is Friday and 7pm has passed: next Friday.
+        (FRIDAY_NIGHT, "2026-11-13 19:00"),
+    ] {
+        let cases: Vec<_> = phrases.iter().map(|phrase| (*phrase, want)).collect();
+        check(now, Caller::Reminder, &cases);
+    }
 }
 
 #[test]
