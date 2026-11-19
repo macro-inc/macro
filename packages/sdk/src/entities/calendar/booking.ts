@@ -97,7 +97,8 @@ export class Booking extends MacroEntity<BookingRecord> {
   /**
    * Move the meeting to a start returned by {@link rescheduleSlots}; only on
    * the user's go-ahead, since the guest and hosts are notified. Returns the
-   * saved booking.
+   * saved booking. Throws with status 422 when the host's calendar refuses
+   * the move; the booking then keeps its original time.
    *
    * @destructive
    * @openworld
