@@ -209,7 +209,9 @@ each run.
   the routines guide, the catalog for its surfaces, what was dismissed, and the
   newest 100 messages and connected apps inside `<untrusted>` tags, angle
   brackets in the data swapped so it can't close them; a nightly or manual
-  brief adds review and retire, and only onboarding's asks for speed) and
+  brief adds review and retire, and only onboarding's asks for speed; a
+  drafted routine is told to start on mail only where saving one can: the
+  person has `enable-event-routines` and the deployment evaluates conditions) and
   count what it suggested (`suggested`). A session hands back
   each suggestion through `macro.routines.suggest`
   (`POST /scheduled-actions/suggestions`), reads earlier ones through
