@@ -4,6 +4,8 @@
 //! `start` removes the label, so adding it again runs CI again, and checks that
 //! the merge commit GitHub built holds the PR head. The check workflows run as
 //! reusable workflows; the path-filtered ones only when their files changed.
+//! `start` also reads the head's attestations ([`attestation`]) and hands the
+//! accepted ones to the calls, whose attested jobs are skipped.
 //! `CI gate` then sets the [`GATE_CONTEXT`] commit status on the PR head, which
 //! `main` requires: a new push has no status until CI runs on it.
 //!
@@ -30,9 +32,9 @@ use gh_workflow::{
 use xtask_paths::RepoGlob;
 
 use crate::workflows::{
-    cargo_deny, cargo_workspace_dependency_check, check_generated, check_node_modules_nix,
-    check_tauri_lockfiles, code_check_conventions, code_check_infra, observability_image, runners,
-    sdk_check, steps, test_macrod_update,
+    attestation, cargo_deny, cargo_workspace_dependency_check, check_generated,
+    check_node_modules_nix, check_tauri_lockfiles, code_check_conventions, code_check_infra,
+    observability_image, runners, sdk_check, steps, test_macrod_update,
 };
 
 #[cfg(test)]
@@ -50,21 +52,26 @@ pub const GATE_DOCS_URL: &str =
 
 const REQUESTED: &str = "github.event.label.name == 'run-ci'";
 
+/// The generated file, and the id of the job whose outputs gate the calls;
+/// `cargo x attest` reads both to tell which calls a change runs.
+pub const FILE: &str = "pr-ci.yml";
+pub const START_ID: &str = "start";
+
 /// Job names the fork step reads back from a finished run (`ci_gate.ts`).
 const START_JOB: &str = "Start";
 const GATE_JOB: &str = "CI gate";
 
 /// A check workflow `PR CI` calls.
-struct Call {
-    id: &'static str,
+pub(crate) struct Call {
+    pub(crate) id: &'static str,
     /// Prefixes the called jobs' check names: `Web App / Typecheck`.
-    name: &'static str,
-    file: &'static str,
+    pub(crate) name: &'static str,
+    pub(crate) file: &'static str,
     /// Files that make it run; `None` runs it on every request.
     paths: Option<&'static [RepoGlob<'static>]>,
 }
 
-const CALLS: &[Call] = &[
+pub(crate) const CALLS: &[Call] = &[
     Call {
         id: "cloud-storage",
         name: "Cloud Storage",
@@ -155,7 +162,7 @@ pub fn pr_ci() -> Workflow {
             )))
             .cancel_in_progress(true),
         )
-        .add_job("start", start());
+        .add_job(START_ID, start().expect("the attested checks render"));
 
     CALLS
         .iter()
@@ -171,6 +178,12 @@ pub fn patch(root: &mut serde_yaml::Value) -> Result<()> {
         let job = crate::workflows::job_mut(root, call.id)?;
         job.remove("runs-on");
         job.insert("secrets".into(), "inherit".into());
+        if attestation::calls_attested(call) {
+            job.insert(
+                "with".into(),
+                crate::workflows::yaml_fragment("attested: ${{ needs.start.outputs.attested }}")?,
+            );
+        }
     }
     Ok(())
 }
@@ -205,7 +218,7 @@ fn with_pull_request(step: Step<Run>) -> Step<Run> {
         ))
 }
 
-fn start() -> Job {
+fn start() -> Result<Job> {
     let job = Job::default()
         .name(START_JOB)
         .cond(Expression::new(REQUESTED))
@@ -222,9 +235,18 @@ fn start() -> Job {
             with_pull_request(gate_step("Take the request", "start"))
                 .add_env(("MERGE_SHA", "${{ github.sha }}")),
         )
-        .add_step(paths_filter());
+        .add_step(
+            with_pull_request(gate_step("Read the head's attestations", "attestations"))
+                .id("attestations")
+                .add_env(("ATTESTABLE_CHECKS", attestation::start_checks()?))
+                .add_env(("ATTESTED_PREFIX", attestation::STATUS_PREFIX))
+                .add_env(("AUDIT_ONE_IN", attestation::AUDIT_ONE_IN.to_string())),
+        )
+        .add_step(paths_filter())
+        .add_output("attested", "${{ steps.attestations.outputs.attested }}")
+        .add_output("audited", "${{ steps.attestations.outputs.audited }}");
 
-    CALLS
+    Ok(CALLS
         .iter()
         .filter(|call| call.paths.is_some())
         .fold(job, |job, call| {
@@ -233,7 +255,7 @@ fn start() -> Job {
                 output.clone(),
                 format!("${{{{ steps.filter.outputs.{output} }}}}"),
             )
-        })
+        }))
 }
 
 /// One filter per path-filtered call, from the same list its push trigger uses.
@@ -293,11 +315,21 @@ fn gate() -> Job {
         .runs_on(runners::Runner::TinyNoCache.to_string())
         .timeout_minutes(5u32)
         .permissions(Permissions {
+            // To find the attested checks' jobs in this run.
+            actions: Some(Level::Read),
             statuses: Some(Level::Write),
             ..Default::default()
         })
         .add_step(
             with_pull_request(gate_step("Set the CI gate status", "finish"))
-                .add_env(("NEEDS", "${{ toJSON(needs) }}")),
+                .add_env(("NEEDS", "${{ toJSON(needs) }}"))
+                .add_env(("ATTESTED", "${{ needs.start.outputs.attested }}"))
+                .add_env(("AUDITED", "${{ needs.start.outputs.audited }}"))
+                .add_env((
+                    "GATE_CHECKS",
+                    attestation::gate_checks().expect("the attested checks render"),
+                ))
+                .add_env(("RUN_ID", "${{ github.run_id }}"))
+                .add_env(("RUN_ATTEMPT", "${{ github.run_attempt }}")),
         )
 }

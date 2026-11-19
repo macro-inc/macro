@@ -1,8 +1,14 @@
 # DO NOT EDIT — regenerate with `cargo x workflows` (from the repository root).
 # Source: tooling/xtask/crates/xtask_workflows/src/workflows/observability_image.rs
 name: Observability image
-'on':
-  workflow_call: {}
+on:
+  workflow_call:
+    inputs:
+      attested:
+        description: 'JSON list of the attested checks PR CI accepted: `<check>@<digest of the path-check outputs it ran on>`'
+        type: string
+        required: false
+        default: '[]'
 permissions:
   contents: read
 jobs:
@@ -25,7 +31,7 @@ jobs:
         cache: nix
       continue-on-error: true
     - name: Setup Nix
-      uses: './.github/actions/setup-nix'
+      uses: ./.github/actions/setup-nix
     - name: Build the NixOS image
       run: |
         set -euo pipefail
@@ -41,4 +47,5 @@ jobs:
       working-directory: infra/stacks/observability
     - name: Teardown Nix
       if: always()
-      uses: './.github/actions/teardown-nix'
+      uses: ./.github/actions/teardown-nix
+    if: '!contains(fromJSON(inputs.attested || ''[]''), ''observability-image/build-image@-'')'

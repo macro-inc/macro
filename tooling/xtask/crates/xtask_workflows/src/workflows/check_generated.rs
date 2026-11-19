@@ -1,5 +1,6 @@
 //! `check generated workflows` — fails a PR if the committed `.github/workflows`
-//! YAML or `.github/kafka-cluster-topics.json` has drifted from its Rust source.
+//! YAML, `.github/attestable-checks.json` or `.github/kafka-cluster-topics.json`
+//! has drifted from its Rust source.
 //! Generated into `check-generated-workflows.yml`. This is what makes "workflows
 //! (and the kafka topics file) are defined in Rust" enforceable rather than
 //! aspirational.
@@ -14,6 +15,7 @@ pub const PATHS: &[RepoGlob<'static>] = &[
     xtask_paths::repo_glob!("tooling/xtask/**"),
     xtask_paths::repo_glob!("crates/macro_event_topics/**"),
     xtask_paths::repo_glob!(".github/workflows/**"),
+    xtask_paths::repo_glob!(".github/attestable-checks.json"),
     xtask_paths::repo_glob!(".github/kafka-cluster-topics.json"),
 ];
 

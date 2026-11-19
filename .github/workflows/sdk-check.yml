@@ -1,15 +1,21 @@
 # DO NOT EDIT — regenerate with `cargo x workflows` (from the repository root).
 # Source: tooling/xtask/crates/xtask_workflows/src/workflows/sdk_check.rs
 name: SDK Check
-'on':
+on:
   push:
     branches:
     - main
     paths:
     - packages/sdk/**
     - bun.lock
-    - '.github/workflows/sdk-check.yml'
-  workflow_call: {}
+    - .github/workflows/sdk-check.yml
+  workflow_call:
+    inputs:
+      attested:
+        description: 'JSON list of the attested checks PR CI accepted: `<check>@<digest of the path-check outputs it ran on>`'
+        type: string
+        required: false
+        default: '[]'
 jobs:
   check-package:
     name: SDK Package Check
@@ -27,7 +33,7 @@ jobs:
     - name: Setup Bun
       uses: oven-sh/setup-bun@v2
       with:
-        bun-version: '1.3.5'
+        bun-version: 1.3.5
     - name: Setup Node
       uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020
       with:
@@ -47,6 +53,7 @@ jobs:
     - name: Check packed SDK
       run: bun run build && bun run check:pack
       working-directory: packages/sdk
+    if: '!contains(fromJSON(inputs.attested || ''[]''), ''sdk/check-package@-'')'
 concurrency:
   group: sdk-check-${{ github.event_name == 'pull_request' && github.run_id || github.ref }}
   cancel-in-progress: true

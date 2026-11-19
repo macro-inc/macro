@@ -17,6 +17,7 @@ mod android_release_drift;
 mod android_release_watch;
 mod assign_author;
 mod assign_labels;
+mod attestation;
 mod build_agent_daemon_on_tag;
 mod build_appimage_on_tag;
 mod build_cef_codecs;
@@ -543,6 +544,11 @@ pub fn generate() -> Result<()> {
             .with_context(|| format!("writing {}", path.display()))?;
         println!("generated {}", path.display());
     }
+
+    let manifest = manifest_path()?;
+    fs::write(&manifest, attestation::manifest()?)
+        .with_context(|| format!("writing {}", manifest.display()))?;
+    println!("generated {}", manifest.display());
     Ok(())
 }
 
@@ -558,6 +564,13 @@ pub fn check() -> Result<()> {
             stale.push(workflow.file_name.to_string());
         }
     }
+
+    let manifest = manifest_path()?;
+    let on_disk =
+        fs::read_to_string(&manifest).with_context(|| format!("reading {}", manifest.display()))?;
+    if on_disk != attestation::manifest()? {
+        stale.push(attestation::MANIFEST_FILE.to_string());
+    }
     if !stale.is_empty() {
         bail!(
             "generated workflows are stale: {}\nrun `cargo x workflows` from the repository root and commit the result",
@@ -572,6 +585,7 @@ pub fn check() -> Result<()> {
 fn render(workflow: &WorkflowFile) -> Result<String> {
     let yaml =
         (workflow.render_yaml)().with_context(|| format!("serializing {}", workflow.file_name))?;
+    let yaml = attestation::patch(workflow.file_name, yaml)?;
     path_validation::validate(workflow.file_name, &yaml, &xtask_paths::repo_root())?;
     Ok(format!("{}{yaml}", disclaimer(workflow.slug)))
 }
@@ -582,6 +596,14 @@ fn disclaimer(source: &str) -> String {
         "# DO NOT EDIT — regenerate with `cargo x workflows` (from the repository root).\n\
          # Source: tooling/xtask/crates/xtask_workflows/src/workflows/{source}.rs\n",
     )
+}
+
+/// Where `cargo x attest` reads the checks it can run.
+fn manifest_path() -> Result<PathBuf> {
+    Ok(workflows_dir()?
+        .parent()
+        .context("the workflows directory has a parent")?
+        .join(attestation::MANIFEST_FILE))
 }
 
 /// `<repo-root>/.github/workflows`. Anchored on the repo root (from

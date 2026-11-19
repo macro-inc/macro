@@ -1,0 +1,328 @@
+{
+  "caller": "pr-ci.yml",
+  "caller_start_job": "start",
+  "checks": [
+    {
+      "call": "cloud-storage",
+      "fingerprint": "62c7d5e512ea7faf",
+      "id": "cloud-storage/check",
+      "if": "needs.path-check.outputs.should_run == 'true'",
+      "inputs": [
+        "query_data",
+        "rust_packages",
+        "should_run"
+      ],
+      "job": "check",
+      "selected": true,
+      "steps": [
+        "Build code-mode assets",
+        "fmt",
+        "unused dependencies",
+        "clippy"
+      ],
+      "workflow": "code_check_cloud_storage.yml"
+    },
+    {
+      "call": "cloud-storage",
+      "fingerprint": "d6b368d70b838d68",
+      "id": "cloud-storage/build-service-bins",
+      "if": "needs.path-check.outputs.should_run == 'true' && needs.path-check.outputs.skip_tests != 'true' && (needs.path-check.outputs.rust_packages == 'all' || contains(needs.path-check.outputs.rust_packages, 'document_storage_service') || contains(needs.path-check.outputs.rust_packages, 'email_service') || contains(needs.path-check.outputs.rust_packages, 'authentication_service'))",
+      "inputs": [
+        "query_data",
+        "rust_packages",
+        "should_run",
+        "skip_tests"
+      ],
+      "job": "build-service-bins",
+      "selected": true,
+      "steps": [
+        "Build code-mode assets",
+        "build service binaries"
+      ],
+      "workflow": "code_check_cloud_storage.yml"
+    },
+    {
+      "call": "cloud-storage",
+      "fingerprint": "278c79e5900b660e",
+      "id": "cloud-storage/graphql-schema-compat",
+      "if": "needs.path-check.outputs.should_run == 'true' && needs.path-check.outputs.graphql_schema == 'true'",
+      "inputs": [
+        "graphql_schema",
+        "should_run"
+      ],
+      "job": "graphql-schema-compat",
+      "selected": true,
+      "steps": [
+        "Check GraphQL schema compatibility"
+      ],
+      "workflow": "code_check_cloud_storage.yml"
+    },
+    {
+      "call": "web-app",
+      "fingerprint": "31d70f45dd208042",
+      "id": "web-app/typescript",
+      "if": "needs.path-check.outputs.should_run == 'true'",
+      "inputs": [
+        "should_run"
+      ],
+      "job": "typescript",
+      "selected": true,
+      "steps": [
+        "Install SDK Documentation Dependencies",
+        "Build SDK",
+        "Run checks"
+      ],
+      "workflow": "web-app-check-main.yml"
+    },
+    {
+      "call": "web-app",
+      "fingerprint": "41cc8313cb599742",
+      "id": "web-app/generated-code",
+      "if": "needs.path-check.outputs.codegen_changed == 'true'",
+      "inputs": [
+        "codegen_changed"
+      ],
+      "job": "generated-code",
+      "selected": true,
+      "steps": [
+        "Build code-mode assets",
+        "Build schema binaries",
+        "Generate API Types",
+        "Regenerate SDK code",
+        "Verify SDK generated code is fresh",
+        "Check Specta Types"
+      ],
+      "workflow": "web-app-check-main.yml"
+    },
+    {
+      "call": "web-app",
+      "fingerprint": "0497cd2ef9db3066",
+      "id": "web-app/biome-check",
+      "if": "needs.path-check.outputs.should_run == 'true'",
+      "inputs": [
+        "should_run"
+      ],
+      "job": "biome-check",
+      "selected": true,
+      "steps": [
+        "Run Biome",
+        "Run Collaboration Package Biome",
+        "Check Browser Floor and Native Permissions"
+      ],
+      "workflow": "web-app-check-main.yml"
+    },
+    {
+      "call": "web-app",
+      "fingerprint": "740c7186273ed5cd",
+      "id": "web-app/test",
+      "if": "needs.path-check.outputs.should_run == 'true'",
+      "inputs": [
+        "should_run"
+      ],
+      "job": "test",
+      "selected": true,
+      "steps": [
+        "Build agent-fold WASM for tests",
+        "Build natural-time WASM for tests",
+        "Test"
+      ],
+      "workflow": "web-app-check-main.yml"
+    },
+    {
+      "call": "web-app",
+      "fingerprint": "03e9d70e92bf9827",
+      "id": "web-app/cycles",
+      "if": "needs.path-check.outputs.should_run == 'true'",
+      "inputs": [
+        "should_run"
+      ],
+      "job": "cycles",
+      "selected": true,
+      "steps": [
+        "Cycles Import Check",
+        "Collaboration Package Cycles Import Check"
+      ],
+      "workflow": "web-app-check-main.yml"
+    },
+    {
+      "call": "infra",
+      "fingerprint": "34e2c148759cb623",
+      "id": "infra/biome-check",
+      "if": null,
+      "inputs": [],
+      "job": "biome-check",
+      "selected": false,
+      "steps": [
+        "Run Biome"
+      ],
+      "workflow": "code_check_infra.yml"
+    },
+    {
+      "call": "infra",
+      "fingerprint": "562033a58f014aad",
+      "id": "infra/check",
+      "if": null,
+      "inputs": [],
+      "job": "check",
+      "selected": false,
+      "steps": [
+        "install",
+        "check"
+      ],
+      "workflow": "code_check_infra.yml"
+    },
+    {
+      "call": "conventions",
+      "fingerprint": "5b669fc64fc53477",
+      "id": "conventions/ast-grep",
+      "if": null,
+      "inputs": [],
+      "job": "ast-grep",
+      "selected": false,
+      "steps": [
+        "Run ast-grep"
+      ],
+      "workflow": "code_check_conventions.yml"
+    },
+    {
+      "call": "cargo-deny",
+      "fingerprint": "e9eab328d2bd1a69",
+      "id": "cargo-deny/cargo-deny",
+      "if": null,
+      "inputs": [],
+      "job": "cargo-deny",
+      "selected": false,
+      "steps": [
+        "Install cargo-deny",
+        "cargo deny check bans licenses sources",
+        "cargo deny check advisories, for packages this PR adds"
+      ],
+      "workflow": "cargo_deny.yml"
+    },
+    {
+      "call": "workspace-dependencies",
+      "fingerprint": "0104d4dbfae83eee",
+      "id": "workspace-dependencies/dependency-check",
+      "if": null,
+      "inputs": [],
+      "job": "dependency-check",
+      "selected": false,
+      "steps": [
+        "install tool",
+        "check"
+      ],
+      "workflow": "cargo_workspace_dependency_check.yml"
+    },
+    {
+      "call": "workspace-dependencies",
+      "fingerprint": "1c7d2e8d01111e6e",
+      "id": "workspace-dependencies/hakari-and-dep-closures",
+      "if": null,
+      "inputs": [],
+      "job": "hakari-and-dep-closures",
+      "selected": false,
+      "steps": [
+        "generated dependency artifacts are up to date"
+      ],
+      "workflow": "cargo_workspace_dependency_check.yml"
+    },
+    {
+      "call": "generated-workflows",
+      "fingerprint": "c4a0806cd391570e",
+      "id": "generated-workflows/check-workflows",
+      "if": null,
+      "inputs": [],
+      "job": "check-workflows",
+      "selected": false,
+      "steps": [
+        "verify workflows are up to date",
+        "verify kafka cluster topics are up to date"
+      ],
+      "workflow": "check_generated.yml"
+    },
+    {
+      "call": "node-modules-nix",
+      "fingerprint": "2b5862faacd585ef",
+      "id": "node-modules-nix/check-linux-node-modules-nix",
+      "if": null,
+      "inputs": [],
+      "job": "check-linux-node-modules-nix",
+      "selected": false,
+      "steps": [
+        "verify js node_modules derivation is up to date"
+      ],
+      "workflow": "check_node_modules_nix.yml"
+    },
+    {
+      "call": "sdk",
+      "fingerprint": "4e8720c0910fa094",
+      "id": "sdk/check-package",
+      "if": null,
+      "inputs": [],
+      "job": "check-package",
+      "selected": false,
+      "steps": [
+        "Install dependencies",
+        "Typecheck SDK",
+        "Test SDK",
+        "Check endpoint coverage",
+        "Check packed SDK"
+      ],
+      "workflow": "sdk-check.yml"
+    },
+    {
+      "call": "observability-image",
+      "fingerprint": "55845a34f6912e2d",
+      "id": "observability-image/build-image",
+      "if": null,
+      "inputs": [],
+      "job": "build-image",
+      "selected": false,
+      "steps": [
+        "Build the NixOS image"
+      ],
+      "workflow": "observability_image.yml"
+    },
+    {
+      "call": "macrod-update",
+      "fingerprint": "3b3764213d51cdaf",
+      "id": "macrod-update/linux",
+      "if": null,
+      "inputs": [],
+      "job": "linux",
+      "selected": false,
+      "steps": [
+        "Build two tagged releases",
+        "Self-update end to end",
+        "Installer in bash, zsh and fish"
+      ],
+      "workflow": "test_macrod_update.yml"
+    }
+  ],
+  "comment": "Generated by `cargo x workflows`; do not edit. The PR CI jobs `cargo x attest` can run.",
+  "filter_action": "dorny/paths-filter",
+  "runner_actions": [
+    "actions/checkout",
+    "actions/setup-node",
+    "oven-sh/setup-bun",
+    "namespacelabs/nscloud-cache-action",
+    "runs-on/cache/restore",
+    "runs-on/cache/save",
+    "./.github/actions/setup-nix",
+    "./.github/actions/setup-nix-dev-shell",
+    "./.github/actions/setup-rust",
+    "./.github/actions/setup-sccache",
+    "./.github/actions/teardown-nix"
+  ],
+  "runner_steps": [
+    "Prepare the blobless checkout",
+    "Reuse the kept cargo target",
+    "Seal the kept cargo target",
+    "Configure Namespace remote sccache",
+    "Start sccache server",
+    "show sccache stats",
+    "Accept attested checks"
+  ],
+  "selector_job": "path-check",
+  "status_prefix": "attested/"
+}

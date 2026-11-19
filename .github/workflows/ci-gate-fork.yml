@@ -34,7 +34,8 @@ jobs:
         //           the commit already has a gate status
         //   start   a requested run begins: remove the label, check the merge commit
         //           holds the PR head, set pending
-        //   finish  the run ends: success when every job passed or was path-skipped
+        //   attestations  after start: which attested checks this run skips
+        //   finish  the run ends: success when every job passed or was skipped
         //   label   the label goes on a PR: fail when it can't start PR CI, because the
         //           PR conflicts with main or its merge commit predates PR CI
         //   fork-request  the label goes on a fork PR: what start does with a write
@@ -43,11 +44,19 @@ jobs:
         //
         // Statuses go on the PR head commit, so a later push starts without one.
         //
+        // An attested check is a job its author ran on their own machine with
+        // `cargo x attest`, which posts an `attested/<check>` status on the head. Only
+        // someone who can push to the repository can post a status. Start accepts one
+        // for the job as this run defines it (its fingerprint), and one request in
+        // `AUDIT_ONE_IN` accepts none, so every job runs and `finish` can name an
+        // attested check that fails on a runner.
+        //
         // A fork PR's run uses the workflow files of its merge commit, so a fork that
         // edits them decides its own verdict. Both fork steps fail closed instead: the
         // fork's CI sources must be the trees it branched from (`ciSourceChanges`).
 
-        import { readFileSync } from 'node:fs';
+        import { randomInt } from 'node:crypto';
+        import { appendFileSync, readFileSync } from 'node:fs';
 
         const API = 'https://api.github.com';
         const DESCRIPTION_LIMIT = 140;
@@ -71,6 +80,13 @@ jobs:
         export type Needs = Record<string, { result: string }>;
         export type RunJob = { name: string; conclusion: string | null };
         type Outcome = { state: State; description: string } | null;
+        export type CommitStatus = { context: string; state: string; description: string | null };
+        /// A job that can be attested, as Start accepts it: `selected` when
+        /// `path-check` chooses what it runs on, so its attestation carries a digest.
+        export type AttestableCheck = { id: string; fingerprint: string; selected: boolean };
+        /// A job that can be attested, as the gate finds it in a run. A matrix job's
+        /// name is the part before its matrix value.
+        export type GateCheck = { id: string; name: string; matrix: boolean };
         /// Git tree SHA of each CI source at a commit; null where the path is missing.
         export type CiTrees = Record<string, string | null>;
 
@@ -149,6 +165,93 @@ jobs:
           return { state: 'success', description: `Passed on ${head.slice(0, 7)}` };
         }
 
+        /// The attested checks a run may skip, as `<check>@<digest>` entries. A check
+        /// counts when its newest status (GitHub lists newest first) is a success for
+        /// the job's current fingerprint. The digest is of the `path-check` outputs the
+        /// job reads, which the called workflow compares; `-` for a job that reads none.
+        export function acceptedAttestations(
+          statuses: CommitStatus[],
+          checks: AttestableCheck[],
+          prefix: string,
+        ): string[] {
+          const entries: string[] = [];
+          for (const check of checks) {
+            const status = statuses.find((each) => each.context === `${prefix}${check.id}`);
+            if (status?.state !== 'success') {
+              continue;
+            }
+
+            const stated = /^fp=([0-9a-f]+) in=([0-9a-f]+|-)(?: |$)/.exec(status.description ?? '');
+            if (!stated) {
+              console.log(`${check.id}: its attestation is not one cargo x attest wrote`);
+              continue;
+            }
+
+            const [, fingerprint, digest] = stated;
+            if (fingerprint !== check.fingerprint) {
+              console.log(`${check.id}: attested for another definition of the job; it runs here`);
+              continue;
+            }
+            if ((digest === '-') === check.selected) {
+              console.log(`${check.id}: its attestation ${check.selected ? 'lacks' : 'carries'} a digest`);
+              continue;
+            }
+
+            entries.push(`${check.id}@${digest}`);
+          }
+          return entries;
+        }
+
+        /// The check an entry names.
+        const entryCheck = (entry: string) => entry.slice(0, entry.lastIndexOf('@'));
+
+        function jobsOf(check: GateCheck, jobs: RunJob[]): RunJob[] {
+          return jobs.filter((job) =>
+            check.matrix ? job.name.startsWith(check.name) : job.name === check.name,
+          );
+        }
+
+        /// The accepted checks whose jobs this run skipped.
+        export function skippedAttested(entries: string[], checks: GateCheck[], jobs: RunJob[]): string[] {
+          return checks
+            .filter((check) => entries.some((entry) => entryCheck(entry) === check.id))
+            .filter((check) => {
+              const own = jobsOf(check, jobs);
+              return own.length > 0 && own.every((job) => job.conclusion === 'skipped');
+            })
+            .map((check) => check.id);
+        }
+
+        /// The attested checks an audit ran here and saw fail.
+        export function auditFailures(audited: string[], checks: GateCheck[], jobs: RunJob[]): string[] {
+          return checks
+            .filter((check) => audited.includes(check.id))
+            .filter((check) => jobsOf(check, jobs).some((job) => job.conclusion === 'failure'))
+            .map((check) => check.id);
+        }
+
+        /// The verdict with what attestation did to it: the checks a passing run took
+        /// on trust, or the attested checks an audit caught failing.
+        export function withAttestations(
+          outcome: { state: State; description: string },
+          skipped: string[],
+          failures: string[],
+        ): { state: State; description: string } {
+          if (outcome.state === 'success' && skipped.length > 0) {
+            return {
+              state: outcome.state,
+              description: `${outcome.description}, ${skipped.length} attested: ${skipped.join(', ')}`,
+            };
+          }
+          if (outcome.state !== 'success' && failures.length > 0) {
+            return {
+              state: outcome.state,
+              description: `Attested but failed here: ${failures.join(', ')}. ${outcome.description}`,
+            };
+          }
+          return outcome;
+        }
+
         /// A fork run's verdict from its jobs. Null when the run was not a request
         /// (unrelated label) or did not finish (cancelled).
         export function forkOutcome(jobs: RunJob[], head: string, labelName: string): Outcome {
@@ -217,6 +320,36 @@ jobs:
             target_url: targetUrl,
           });
           console.log(`${context()} on ${sha.slice(0, 10)}: ${state}: ${description}`);
+        }
+
+        /// Every status on a commit, newest first.
+        async function commitStatuses(sha: string): Promise<CommitStatus[]> {
+          const statuses: CommitStatus[] = [];
+          for (let page = 1; ; page++) {
+            const batch: CommitStatus[] = await github(
+              'GET',
+              `/repos/${repo()}/commits/${sha}/statuses?per_page=100&page=${page}`,
+            );
+            statuses.push(...batch);
+            if (batch.length < 100) {
+              return statuses;
+            }
+          }
+        }
+
+        /// Every job of one attempt of a run.
+        async function runJobs(run: string, attempt: string): Promise<RunJob[]> {
+          const jobs: RunJob[] = [];
+          for (let page = 1; ; page++) {
+            const { jobs: batch } = await github(
+              'GET',
+              `/repos/${repo()}/actions/runs/${run}/attempts/${attempt}/jobs?per_page=100&page=${page}`,
+            );
+            jobs.push(...batch);
+            if (batch.length < 100) {
+              return jobs;
+            }
+          }
         }
 
         /// The newest gate status on a commit (GitHub lists statuses newest first).
@@ -356,14 +489,52 @@ jobs:
           }
         }
 
+        /// Which attested checks the run skips. A fork's statuses are not read: its
+        /// run is trusted only through the fork steps.
+        async function attestations() {
+          const head = env('HEAD_SHA');
+          const checks: AttestableCheck[] = JSON.parse(env('ATTESTABLE_CHECKS'));
+
+          const entries =
+            env('SAME_REPO') === 'true'
+              ? acceptedAttestations(await commitStatuses(head), checks, env('ATTESTED_PREFIX'))
+              : [];
+          const audit = entries.length > 0 && randomInt(Number(env('AUDIT_ONE_IN'))) === 0;
+
+          if (audit) {
+            console.log(`Audit: running every job, including the attested ${entries.map(entryCheck).join(', ')}`);
+          } else {
+            console.log(`Attested: ${entries.map(entryCheck).join(', ') || 'none'}`);
+          }
+
+          appendFileSync(
+            env('GITHUB_OUTPUT'),
+            `attested=${JSON.stringify(audit ? [] : entries)}\naudited=${JSON.stringify(audit ? entries.map(entryCheck) : [])}\n`,
+          );
+        }
+
         async function finish() {
           const head = env('HEAD_SHA');
-          const outcome = gateOutcome(JSON.parse(env('NEEDS')), head);
+          const verdict = gateOutcome(JSON.parse(env('NEEDS')), head);
 
-          if (!outcome) {
+          if (!verdict) {
             console.log('Start did not succeed; its status stands.');
             process.exitCode = 1;
             return;
+          }
+
+          // Start's outputs are empty when it ran before attestation existed.
+          const entries: string[] = JSON.parse(process.env.ATTESTED || '[]');
+          const audited: string[] = JSON.parse(process.env.AUDITED || '[]');
+          let outcome = verdict;
+          if (entries.length + audited.length > 0) {
+            const checks: GateCheck[] = JSON.parse(env('GATE_CHECKS'));
+            const jobs = await runJobs(env('RUN_ID'), env('RUN_ATTEMPT'));
+            outcome = withAttestations(
+              verdict,
+              skippedAttested(entries, checks, jobs),
+              auditFailures(audited, checks, jobs),
+            );
           }
 
           if (env('SAME_REPO') === 'true') {
@@ -371,7 +542,7 @@ jobs:
           }
 
           if (outcome.state !== 'success') {
-            console.log(outcome.description);
+            console.log(`::error::${outcome.description}`);
             process.exitCode = 1;
           }
         }
@@ -418,17 +589,7 @@ jobs:
             return;
           }
 
-          const jobs: RunJob[] = [];
-          for (let page = 1; ; page++) {
-            const { jobs: batch } = await github(
-              'GET',
-              `/repos/${repo()}/actions/runs/${run.id}/attempts/${run.run_attempt}/jobs?per_page=100&page=${page}`,
-            );
-            jobs.push(...batch);
-            if (batch.length < 100) {
-              break;
-            }
-          }
+          const jobs = await runJobs(run.id, run.run_attempt);
 
           const outcome = forkOutcome(jobs, head, label());
           if (outcome) {
@@ -441,6 +602,7 @@ jobs:
             remind,
             label: labelCheck,
             start,
+            attestations,
             finish,
             'fork-request': forkRequest,
             fork,
@@ -485,7 +647,8 @@ jobs:
         //           the commit already has a gate status
         //   start   a requested run begins: remove the label, check the merge commit
         //           holds the PR head, set pending
-        //   finish  the run ends: success when every job passed or was path-skipped
+        //   attestations  after start: which attested checks this run skips
+        //   finish  the run ends: success when every job passed or was skipped
         //   label   the label goes on a PR: fail when it can't start PR CI, because the
         //           PR conflicts with main or its merge commit predates PR CI
         //   fork-request  the label goes on a fork PR: what start does with a write
@@ -494,11 +657,19 @@ jobs:
         //
         // Statuses go on the PR head commit, so a later push starts without one.
         //
+        // An attested check is a job its author ran on their own machine with
+        // `cargo x attest`, which posts an `attested/<check>` status on the head. Only
+        // someone who can push to the repository can post a status. Start accepts one
+        // for the job as this run defines it (its fingerprint), and one request in
+        // `AUDIT_ONE_IN` accepts none, so every job runs and `finish` can name an
+        // attested check that fails on a runner.
+        //
         // A fork PR's run uses the workflow files of its merge commit, so a fork that
         // edits them decides its own verdict. Both fork steps fail closed instead: the
         // fork's CI sources must be the trees it branched from (`ciSourceChanges`).
 
-        import { readFileSync } from 'node:fs';
+        import { randomInt } from 'node:crypto';
+        import { appendFileSync, readFileSync } from 'node:fs';
 
         const API = 'https://api.github.com';
         const DESCRIPTION_LIMIT = 140;
@@ -522,6 +693,13 @@ jobs:
         export type Needs = Record<string, { result: string }>;
         export type RunJob = { name: string; conclusion: string | null };
         type Outcome = { state: State; description: string } | null;
+        export type CommitStatus = { context: string; state: string; description: string | null };
+        /// A job that can be attested, as Start accepts it: `selected` when
+        /// `path-check` chooses what it runs on, so its attestation carries a digest.
+        export type AttestableCheck = { id: string; fingerprint: string; selected: boolean };
+        /// A job that can be attested, as the gate finds it in a run. A matrix job's
+        /// name is the part before its matrix value.
+        export type GateCheck = { id: string; name: string; matrix: boolean };
         /// Git tree SHA of each CI source at a commit; null where the path is missing.
         export type CiTrees = Record<string, string | null>;
 
@@ -600,6 +778,93 @@ jobs:
           return { state: 'success', description: `Passed on ${head.slice(0, 7)}` };
         }
 
+        /// The attested checks a run may skip, as `<check>@<digest>` entries. A check
+        /// counts when its newest status (GitHub lists newest first) is a success for
+        /// the job's current fingerprint. The digest is of the `path-check` outputs the
+        /// job reads, which the called workflow compares; `-` for a job that reads none.
+        export function acceptedAttestations(
+          statuses: CommitStatus[],
+          checks: AttestableCheck[],
+          prefix: string,
+        ): string[] {
+          const entries: string[] = [];
+          for (const check of checks) {
+            const status = statuses.find((each) => each.context === `${prefix}${check.id}`);
+            if (status?.state !== 'success') {
+              continue;
+            }
+
+            const stated = /^fp=([0-9a-f]+) in=([0-9a-f]+|-)(?: |$)/.exec(status.description ?? '');
+            if (!stated) {
+              console.log(`${check.id}: its attestation is not one cargo x attest wrote`);
+              continue;
+            }
+
+            const [, fingerprint, digest] = stated;
+            if (fingerprint !== check.fingerprint) {
+              console.log(`${check.id}: attested for another definition of the job; it runs here`);
+              continue;
+            }
+            if ((digest === '-') === check.selected) {
+              console.log(`${check.id}: its attestation ${check.selected ? 'lacks' : 'carries'} a digest`);
+              continue;
+            }
+
+            entries.push(`${check.id}@${digest}`);
+          }
+          return entries;
+        }
+
+        /// The check an entry names.
+        const entryCheck = (entry: string) => entry.slice(0, entry.lastIndexOf('@'));
+
+        function jobsOf(check: GateCheck, jobs: RunJob[]): RunJob[] {
+          return jobs.filter((job) =>
+            check.matrix ? job.name.startsWith(check.name) : job.name === check.name,
+          );
+        }
+
+        /// The accepted checks whose jobs this run skipped.
+        export function skippedAttested(entries: string[], checks: GateCheck[], jobs: RunJob[]): string[] {
+          return checks
+            .filter((check) => entries.some((entry) => entryCheck(entry) === check.id))
+            .filter((check) => {
+              const own = jobsOf(check, jobs);
+              return own.length > 0 && own.every((job) => job.conclusion === 'skipped');
+            })
+            .map((check) => check.id);
+        }
+
+        /// The attested checks an audit ran here and saw fail.
+        export function auditFailures(audited: string[], checks: GateCheck[], jobs: RunJob[]): string[] {
+          return checks
+            .filter((check) => audited.includes(check.id))
+            .filter((check) => jobsOf(check, jobs).some((job) => job.conclusion === 'failure'))
+            .map((check) => check.id);
+        }
+
+        /// The verdict with what attestation did to it: the checks a passing run took
+        /// on trust, or the attested checks an audit caught failing.
+        export function withAttestations(
+          outcome: { state: State; description: string },
+          skipped: string[],
+          failures: string[],
+        ): { state: State; description: string } {
+          if (outcome.state === 'success' && skipped.length > 0) {
+            return {
+              state: outcome.state,
+              description: `${outcome.description}, ${skipped.length} attested: ${skipped.join(', ')}`,
+            };
+          }
+          if (outcome.state !== 'success' && failures.length > 0) {
+            return {
+              state: outcome.state,
+              description: `Attested but failed here: ${failures.join(', ')}. ${outcome.description}`,
+            };
+          }
+          return outcome;
+        }
+
         /// A fork run's verdict from its jobs. Null when the run was not a request
         /// (unrelated label) or did not finish (cancelled).
         export function forkOutcome(jobs: RunJob[], head: string, labelName: string): Outcome {
@@ -668,6 +933,36 @@ jobs:
             target_url: targetUrl,
           });
           console.log(`${context()} on ${sha.slice(0, 10)}: ${state}: ${description}`);
+        }
+
+        /// Every status on a commit, newest first.
+        async function commitStatuses(sha: string): Promise<CommitStatus[]> {
+          const statuses: CommitStatus[] = [];
+          for (let page = 1; ; page++) {
+            const batch: CommitStatus[] = await github(
+              'GET',
+              `/repos/${repo()}/commits/${sha}/statuses?per_page=100&page=${page}`,
+            );
+            statuses.push(...batch);
+            if (batch.length < 100) {
+              return statuses;
+            }
+          }
+        }
+
+        /// Every job of one attempt of a run.
+        async function runJobs(run: string, attempt: string): Promise<RunJob[]> {
+          const jobs: RunJob[] = [];
+          for (let page = 1; ; page++) {
+            const { jobs: batch } = await github(
+              'GET',
+              `/repos/${repo()}/actions/runs/${run}/attempts/${attempt}/jobs?per_page=100&page=${page}`,
+            );
+            jobs.push(...batch);
+            if (batch.length < 100) {
+              return jobs;
+            }
+          }
         }
 
         /// The newest gate status on a commit (GitHub lists statuses newest first).
@@ -807,14 +1102,52 @@ jobs:
           }
         }
 
+        /// Which attested checks the run skips. A fork's statuses are not read: its
+        /// run is trusted only through the fork steps.
+        async function attestations() {
+          const head = env('HEAD_SHA');
+          const checks: AttestableCheck[] = JSON.parse(env('ATTESTABLE_CHECKS'));
+
+          const entries =
+            env('SAME_REPO') === 'true'
+              ? acceptedAttestations(await commitStatuses(head), checks, env('ATTESTED_PREFIX'))
+              : [];
+          const audit = entries.length > 0 && randomInt(Number(env('AUDIT_ONE_IN'))) === 0;
+
+          if (audit) {
+            console.log(`Audit: running every job, including the attested ${entries.map(entryCheck).join(', ')}`);
+          } else {
+            console.log(`Attested: ${entries.map(entryCheck).join(', ') || 'none'}`);
+          }
+
+          appendFileSync(
+            env('GITHUB_OUTPUT'),
+            `attested=${JSON.stringify(audit ? [] : entries)}\naudited=${JSON.stringify(audit ? entries.map(entryCheck) : [])}\n`,
+          );
+        }
+
         async function finish() {
           const head = env('HEAD_SHA');
-          const outcome = gateOutcome(JSON.parse(env('NEEDS')), head);
+          const verdict = gateOutcome(JSON.parse(env('NEEDS')), head);
 
-          if (!outcome) {
+          if (!verdict) {
             console.log('Start did not succeed; its status stands.');
             process.exitCode = 1;
             return;
+          }
+
+          // Start's outputs are empty when it ran before attestation existed.
+          const entries: string[] = JSON.parse(process.env.ATTESTED || '[]');
+          const audited: string[] = JSON.parse(process.env.AUDITED || '[]');
+          let outcome = verdict;
+          if (entries.length + audited.length > 0) {
+            const checks: GateCheck[] = JSON.parse(env('GATE_CHECKS'));
+            const jobs = await runJobs(env('RUN_ID'), env('RUN_ATTEMPT'));
+            outcome = withAttestations(
+              verdict,
+              skippedAttested(entries, checks, jobs),
+              auditFailures(audited, checks, jobs),
+            );
           }
 
           if (env('SAME_REPO') === 'true') {
@@ -822,7 +1155,7 @@ jobs:
           }
 
           if (outcome.state !== 'success') {
-            console.log(outcome.description);
+            console.log(`::error::${outcome.description}`);
             process.exitCode = 1;
           }
         }
@@ -869,17 +1202,7 @@ jobs:
             return;
           }
 
-          const jobs: RunJob[] = [];
-          for (let page = 1; ; page++) {
-            const { jobs: batch } = await github(
-              'GET',
-              `/repos/${repo()}/actions/runs/${run.id}/attempts/${run.run_attempt}/jobs?per_page=100&page=${page}`,
-            );
-            jobs.push(...batch);
-            if (batch.length < 100) {
-              break;
-            }
-          }
+          const jobs = await runJobs(run.id, run.run_attempt);
 
           const outcome = forkOutcome(jobs, head, label());
           if (outcome) {
@@ -892,6 +1215,7 @@ jobs:
             remind,
             label: labelCheck,
             start,
+            attestations,
             finish,
             'fork-request': forkRequest,
             fork,

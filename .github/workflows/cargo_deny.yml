@@ -1,8 +1,14 @@
 # DO NOT EDIT — regenerate with `cargo x workflows` (from the repository root).
 # Source: tooling/xtask/crates/xtask_workflows/src/workflows/cargo_deny.rs
 name: cargo deny check
-'on':
-  workflow_call: {}
+on:
+  workflow_call:
+    inputs:
+      attested:
+        description: 'JSON list of the attested checks PR CI accepted: `<check>@<digest of the path-check outputs it ran on>`'
+        type: string
+        required: false
+        default: '[]'
 jobs:
   cargo-deny:
     runs-on: namespace-profile-linux-small
@@ -16,7 +22,7 @@ jobs:
         GIT_HTTP_LOW_SPEED_LIMIT: '10000'
         GIT_HTTP_LOW_SPEED_TIME: '60'
     - name: Setup Rust
-      uses: './.github/actions/setup-rust'
+      uses: ./.github/actions/setup-rust
       with:
         sccache: 'false'
         rust-cache: 'false'
@@ -155,5 +161,6 @@ jobs:
         NODE_SCRIPT
       shell: bash
       env:
-        DENY_ARGS: '--all-features --manifest-path Cargo.toml'
+        DENY_ARGS: --all-features --manifest-path Cargo.toml
         BASE_REV: HEAD^1
+    if: '!contains(fromJSON(inputs.attested || ''[]''), ''cargo-deny/cargo-deny@-'')'
