@@ -329,7 +329,8 @@ saved width, which starts from old Home's. `1` is Recent, `2` and `3` are
 Notifications at All and Unread, and Tab/Shift+Tab step through the three. Both tabs show Home's chat composer
 while nothing is open; a chat started from Notifications opens on Recent.
 
-- **Recent** is Home's list, rows and tools (Filter, Search, collapse) fed only
+- **Recent** is Home's list, rows and tools (Filter with Type only, Search,
+  collapse) fed only
   by the viewer's `touched_by_me` activity, bucketed by the time of their own
   last touch. Its filters are old Home's.
 - **Notifications** is the Notifications view with All/Unread beneath the

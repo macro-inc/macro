@@ -217,6 +217,13 @@ describe('Home data source', () => {
     expect(activity.fetchNextPage).not.toHaveBeenCalled();
   });
 
+  it('lists Recent without old Home’s saved Status', () => {
+    const recent = makeQuery([email('a', 9)]);
+    const { source, setState } = mount(recent, makeQuery([]));
+    setState({ tab: 'recent', facets: { read: ['read'] } });
+    expect(ids(source)).toEqual(['a']);
+  });
+
   // The open row stays selected when the viewer's own activity moves it.
   it('keeps a Recent row’s key as a new touch moves it to a newer section', () => {
     const recent = makeQuery([email('a', 9), email('b', 8)]);

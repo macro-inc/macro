@@ -12,6 +12,7 @@ import {
   getEntityNotifications,
   withEntityNotifications,
 } from '@app/features/soup/entity-notifications';
+import type { FacetSelection } from '@app/features/soup/filters/facets/types';
 import { useFeatureFlag } from '@app/lib/analytics/posthog';
 import { useGlobalNotificationSource } from '@components/app/GlobalAppState';
 import {
@@ -130,6 +131,11 @@ function matchesTab(
   );
 }
 
+function withoutStatus(facets: FacetSelection): FacetSelection {
+  const { read: _read, ...rest } = facets;
+  return rest;
+}
+
 // Cached query meta outlives the view; build the gate at module scope over the
 // plain tab value so it cannot retain this hook's scope.
 function homeTabInsertFilter(tab: HomeTab): SoupApiItemFilter {
@@ -157,7 +163,9 @@ export function useHomeEntitiesQuery(
   const viewContext = createMemo(
     (): HomeViewContext => ({
       tab: state.tab,
-      facets: state.facets,
+      // Recent has no Status filter; old Home's saved one doesn't apply.
+      facets:
+        state.tab === 'recent' ? withoutStatus(state.facets) : state.facets,
       facetContext: facetContext(),
       capabilities: capabilities(),
       userId: userId(),
