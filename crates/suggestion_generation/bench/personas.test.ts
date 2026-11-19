@@ -33,6 +33,9 @@ describe('asciiSpellings', () => {
     expect(accented).toMatch(/^ines-[0-9a-z]+@acme\.example$/);
     expect(other).toMatch(/^\[ines-[0-9a-z]+@acme\.example\]$/);
     expect(other).not.toBe(`[${accented}]`);
+    const [bare, bracketed] = spell(['inès@acme.example', '[inès@acme.example]', 'ines@acme.example']);
+    expect(bare).toMatch(/^ines-[0-9a-z]+@acme\.example$/);
+    expect(bracketed).toBe(`[${bare}]`);
   });
 
   test('never merges with an address that differs only in case', () => {
