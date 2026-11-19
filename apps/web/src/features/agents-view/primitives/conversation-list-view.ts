@@ -18,7 +18,8 @@ const DEFAULT_VIEW: ConversationListViewState = {
   grouping: 'status',
 };
 
-const GROUPINGS: readonly ConversationGrouping[] = ['none', 'status', 'type'];
+// A saved grouping this build no longer offers (Type) falls back to the default.
+const GROUPINGS: readonly ConversationGrouping[] = ['none', 'status'];
 
 function stringsOf<Value extends string>(
   value: unknown,

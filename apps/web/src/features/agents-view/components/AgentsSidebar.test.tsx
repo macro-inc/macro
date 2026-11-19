@@ -230,9 +230,11 @@ describe('mixed Agents sidebar', () => {
       screen
         .getAllByRole('heading', { level: 3 })
         .map((heading) => heading.textContent)
-    ).toEqual(['Needs you1', 'Recent1']);
-    // Archived starts collapsed; its header expands it.
+    ).toEqual(['Needs you1', 'Recent']);
+    // Archived starts collapsed; its header expands it. It carries no count:
+    // it holds only the archived sessions among the pages loaded so far.
     const archivedToggle = screen.getByRole('button', { name: /Archived/ });
+    expect(archivedToggle.textContent).toBe('Archived');
     expect(archivedToggle.getAttribute('aria-expanded')).toBe('false');
     expect(screen.queryByRole('button', { name: /Old spike/ })).toBeNull();
     fireEvent.click(archivedToggle);

@@ -549,8 +549,11 @@ the shimmer.
   The empty composer has no New conversation heading.
   **Conversations** is a mixed list
   of chats and coding sessions, with one search across both. **Group conversations**
-  switches between Status (the default), Type, and None, preserving newest-first
-  order within each group. **Filter conversations** combines Type, Status, and
+  switches between Status (the default) and None, preserving newest-first order
+  within each group. Status heads Needs you and Working with their counts above
+  an uncounted Recent; a list that is all Recent shows no headings. Type is a
+  filter only. The Archived section carries no count either, since it holds
+  only the archived sessions among the pages loaded so far. **Filter conversations** combines Type, Status, and
   Pull request filters; choices within a category are ORed and categories are
   ANDed. Grouping and filters are remembered per user. Clear filters from the menu
   or an empty filtered list.
