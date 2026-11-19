@@ -8,8 +8,8 @@ import type {
 } from '@service-scheduled-action/generated/schemas';
 import type { Query } from '@tanstack/solid-query';
 import { z } from 'zod';
+import { recordClaim } from './claims';
 import { scheduledActionKeys } from './keys';
-import { recordListClaim } from './list-claims';
 import {
   getExecutionResource,
   getHistoryResource,
@@ -58,7 +58,7 @@ const listKeys = [
 ];
 
 function patchClaimed(actionId: string, claimed: string | null): void {
-  recordListClaim(actionId, claimed);
+  recordClaim(actionId, claimed);
   queryClient.setQueryData(
     scheduledActionKeys.detail({ scheduleId: actionId }).queryKey,
     (current: ScheduledAction | undefined) =>

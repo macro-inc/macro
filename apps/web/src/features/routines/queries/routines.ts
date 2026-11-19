@@ -5,6 +5,7 @@ import { scheduledActionClient } from '@service-scheduled-action/client';
 import type { ScheduledAction } from '@service-scheduled-action/generated/schemas';
 import { queryOptions, useQuery } from '@tanstack/solid-query';
 import type { Accessor } from 'solid-js';
+import { readSchedule } from './claims';
 import { scheduledActionKeys } from './keys';
 import { routineQueryTrace } from './routine-trace';
 
@@ -12,7 +13,10 @@ export function routineQueryOptions(id: string) {
   return queryOptions({
     queryKey: scheduledActionKeys.detail({ scheduleId: id }).queryKey,
     behavior: routineQueryTrace,
-    queryFn: () => throwOnErr(() => scheduledActionClient.getRoutine(id)),
+    queryFn: () =>
+      readSchedule(() =>
+        throwOnErr(() => scheduledActionClient.getRoutine(id))
+      ),
     refetchOnWindowFocus: 'always',
   });
 }
@@ -41,8 +45,10 @@ export function hasNewerRoutineRevision(id: string, revision: number) {
 /** Read for approval. Either cache the editor reads can make it stale. */
 export async function readFreshRoutine(id: string, parent: TraceContext) {
   const fresh = await parent.run(() =>
-    throwOnErr(() =>
-      scheduledActionClient.getRoutine(id, { cache: 'no-store' })
+    readSchedule(() =>
+      throwOnErr(() =>
+        scheduledActionClient.getRoutine(id, { cache: 'no-store' })
+      )
     )
   );
   const queryKey = scheduledActionKeys.detail({ scheduleId: id }).queryKey;

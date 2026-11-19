@@ -9,6 +9,7 @@ import { err, ok } from 'neverthrow';
 import { render } from 'solid-js/web';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { scheduledActionKeys } from './keys';
+import { useRoutineQuery } from './routines';
 import {
   fetchChildren,
   useChildrenQuery,
@@ -34,6 +35,7 @@ const detach = vi.hoisted(() => vi.fn());
 const listSchedules = vi.hoisted(() => vi.fn());
 const listSubRoutines = vi.hoisted(() => vi.fn());
 const listChildren = vi.hoisted(() => vi.fn());
+const getRoutine = vi.hoisted(() => vi.fn());
 const getTemplate = vi.hoisted(() => vi.fn());
 const unshareTemplate = vi.hoisted(() => vi.fn());
 const track = vi.hoisted(() => vi.fn());
@@ -54,6 +56,7 @@ vi.mock('@service-scheduled-action/client', () => ({
     listSchedules,
     listSubRoutines,
     listChildren,
+    getRoutine,
     getTemplate,
     unshareTemplate,
   },
@@ -135,6 +138,7 @@ beforeEach(() => {
   listSchedules.mockReset();
   listSubRoutines.mockReset();
   listChildren.mockReset();
+  getRoutine.mockReset();
   track.mockReset();
   queryClient.setQueryData(scheduledActionKeys.list.queryKey, [
     { ...routine },
@@ -179,6 +183,35 @@ it.each([
     expect(queryClient.getQueryData(key)).toEqual([routine, other]);
   }
 );
+
+it('preserves a start claim through an older detail response', async () => {
+  const key = scheduledActionKeys.detail({ scheduleId: 'routine' }).queryKey;
+  const response = Promise.withResolvers<unknown>();
+  getRoutine.mockReturnValueOnce(response.promise);
+  function Probe() {
+    useRoutineQuery(() => 'routine');
+    return null;
+  }
+  dispose = render(
+    () => (
+      <QueryClientProvider client={queryClient}>
+        <Probe />
+      </QueryClientProvider>
+    ),
+    document.createElement('div')
+  );
+  expect(getRoutine).toHaveBeenCalledOnce();
+  const read = queryClient.getQueryCache().find({ queryKey: key })?.promise;
+  notifyRun('started');
+  // Read before the run started: Keep stays hidden while the copy runs.
+  response.resolve(ok({ ...routine }));
+
+  expect(await read).toEqual({ ...routine, claimed: expect.any(String) });
+  expect(queryClient.getQueryData(key)).toEqual({
+    ...routine,
+    claimed: expect.any(String),
+  });
+});
 
 it('counts for Delete the children a run made after a read already in flight', async () => {
   const key = scheduledActionKeys.children({ scheduleId: 'parent' }).queryKey;
