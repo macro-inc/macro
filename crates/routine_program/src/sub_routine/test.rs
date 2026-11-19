@@ -178,6 +178,29 @@ fn a_definitions_inputs_get_values_only_in_copies() {
             .to_string(),
         "input `urgent`: text can't hold a NUL character"
     );
+
+    // Nor can a label or a title, which are stored beside the values.
+    task["inputs"][0] =
+        json!({ "type": "text", "name": "urgent", "label": "Ur\u{0}gent", "value": "b" });
+    assert_eq!(
+        RoutineProgram::from_task(&task)
+            .unwrap()
+            .validate()
+            .unwrap_err(),
+        ProgramError::InputLabel("urgent".to_owned())
+    );
+    let mut task = parent();
+    task["sub_routines"][0]["title"] = json!("Re\u{0}mind");
+    assert_eq!(
+        RoutineProgram::from_task(&task)
+            .unwrap()
+            .validate()
+            .unwrap_err(),
+        ProgramError::InSubRoutine {
+            name: "remind".to_owned().try_into().unwrap(),
+            error: Box::new(ProgramError::SubRoutineTitle),
+        }
+    );
 }
 
 #[test]

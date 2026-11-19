@@ -129,8 +129,8 @@ pub enum ProgramError {
     /// Two sub-routines with the same name.
     #[error("sub-routine `{0}` is defined twice")]
     DuplicateSubRoutine(SubRoutineName),
-    /// A sub-routine without a title, or with a long one.
-    #[error("a sub-routine needs a title of 1 to {MAX_TITLE_CHARS} characters")]
+    /// A sub-routine without a title, with a long one, or with a NUL in it.
+    #[error("a sub-routine needs a title of 1 to {MAX_TITLE_CHARS} characters, without NUL")]
     SubRoutineTitle,
     /// A rule one of the routine's sub-routines breaks.
     #[error("in sub-routine `{name}`: {error}")]
@@ -146,8 +146,8 @@ pub enum ProgramError {
     /// Two inputs with the same name.
     #[error("input `{0}` is declared twice")]
     DuplicateInput(String),
-    /// An input without a label, or with a long one.
-    #[error("input `{0}` needs a label of 1 to {MAX_INPUT_LABEL_CHARS} characters")]
+    /// An input without a label, with a long one, or with a NUL in it.
+    #[error("input `{0}` needs a label of 1 to {MAX_INPUT_LABEL_CHARS} characters, without NUL")]
     InputLabel(String),
     /// An input whose value is missing, unexpected or doesn't fit.
     #[error("input `{name}`: {reason}")]
@@ -215,8 +215,10 @@ fn steps(
 }
 
 fn sub_routine(definition: &SubRoutineDefinition) -> Result<(), ProgramError> {
+    // A NUL can't be stored, and the database's refusal would quote the
+    // values beside it.
     let title = definition.title.trim().chars().count();
-    if title == 0 || title > MAX_TITLE_CHARS {
+    if title == 0 || title > MAX_TITLE_CHARS || definition.title.contains('\0') {
         return Err(ProgramError::SubRoutineTitle);
     }
     steps(&definition.steps, &definition.mcp_servers, false)?;
@@ -242,7 +244,7 @@ fn inputs(inputs: &[Input], values: Values) -> Result<(), ProgramError> {
             return Err(ProgramError::DuplicateInput(name.to_owned()));
         }
         let label = input.label().trim().chars().count();
-        if label == 0 || label > MAX_INPUT_LABEL_CHARS {
+        if label == 0 || label > MAX_INPUT_LABEL_CHARS || input.label().contains('\0') {
             return Err(ProgramError::InputLabel(name.to_owned()));
         }
         input_value(input, values).map_err(|reason| ProgramError::InputValue {
