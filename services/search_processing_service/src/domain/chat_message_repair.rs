@@ -287,8 +287,9 @@ impl<I: ChatMessageIndex, R: ChatRows> DeletedChatMessageRepair<I, R> {
                 .collect::<HashSet<_>>()
                 .into_iter()
                 .collect();
+            // Only a span field reads this, so replica lag is harmless.
             let chats = self
-                .primary
+                .replica
                 .existing_chats(&chat_ids)
                 .await
                 .map_err(source_failed)?;

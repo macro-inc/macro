@@ -173,10 +173,17 @@ async fn deleted_chat_messages(
         crate::domain::chat_message_repair::DeletedChatMessageRepairRequest,
     >,
 ) -> Response {
+    // The job record names the mode, since a dry run and a run report the
+    // same counters.
+    let entity = if req.dry_run {
+        "deleted-chat-messages-dry-run"
+    } else {
+        "deleted-chat-messages"
+    };
     spawn_backfill(
         service,
         jobs,
-        "deleted-chat-messages",
+        entity,
         move |svc, progress, cancel| async move { svc.repair(req, progress, cancel).await },
     )
     .await

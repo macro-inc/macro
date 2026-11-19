@@ -64,6 +64,24 @@ fn a_page_missing_a_shard_is_an_error() {
 }
 
 #[test]
+fn a_page_that_timed_out_is_an_error() {
+    let body = r#"{"timed_out":true,"_shards":{"total":3,"successful":3,"failed":0},"hits":{"hits":[
+        {"_id":"chat-1:message-a","_routing":"chat-1","sort":["message-a"]}
+    ]}}"#;
+
+    assert!(parse_chat_message_page(body).is_err());
+}
+
+#[test]
+fn a_hit_without_routing_is_an_error() {
+    let body = r#"{"_shards":{"failed":0},"hits":{"hits":[
+        {"_id":"chat-1:message-a","sort":["message-a"]}
+    ]}}"#;
+
+    assert!(parse_chat_message_page(body).is_err());
+}
+
+#[test]
 fn a_hit_whose_id_does_not_match_its_chat_and_message_is_an_error() {
     let body = r#"{"_shards":{"failed":0},"hits":{"hits":[
         {"_id":"chat-1","_routing":"chat-1","sort":["chat-1"]}

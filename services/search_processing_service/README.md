@@ -305,11 +305,13 @@ missing row is a deleted message. Each page is looked up on the backfill
 replica, and every message the replica lacks is looked up again on the primary
 before it is counted or deleted, so a lagging replica cannot remove a message
 just written. Messages of a chat whose row is also gone are removed the same
-way. Database access is two primary-key lookups per page; nothing is written
-there.
+way; the chat's own document stays, and search drops it since its row is gone.
+Database access is primary-key lookups; nothing is written there.
 
 The job is a dry run unless the body says `"dry_run": false`: it reads and
-counts, and deletes nothing. Run the dry run first. The status poll reports
+counts, and deletes nothing. Run the dry run first. The job record's entity is
+`deleted-chat-messages-dry-run` for a dry run and `deleted-chat-messages` for
+a run. The status poll reports
 `enqueued` (indexed messages read), `missing` (messages whose row is gone, the
 documents a run deletes), `updated` (documents deleted, 0 in a dry run),
 `failed`, and `cursor`, the last message id it finished. Each page's
@@ -319,9 +321,10 @@ many of its gone messages belong to a chat whose row is gone too.
 It reads at most `messages_per_second` (default 1000) indexed messages a
 second, in pages of `page_size` (default 500, at most 1000), and deletes with
 routed `_bulk` deletes. A 429 or a cluster block stops it with status
-`stopped`, as does a page with any failed delete; resume with
-`{"after_message_id": "<cursor>"}`, which repeats that page. A failed or
-cancelled job resumes the same way.
+`stopped`, as does a page with any failed delete; resume a run with
+`{"dry_run": false, "after_message_id": "<cursor>"}`, which repeats that page
+(without `dry_run` the resume only counts). A failed or cancelled job resumes
+the same way.
 
 ### Against dev (deployed service)
 

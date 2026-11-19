@@ -42,3 +42,75 @@ async fn an_empty_lookup_finds_nothing(pool: PgPool) {
     assert!(rows.existing_messages(&[]).await.unwrap().is_empty());
     assert!(rows.existing_chats(&[]).await.unwrap().is_empty());
 }
+
+/// Stands in for OpenSearch: answers every request with `status` and `body`.
+async fn opensearch_answering(status: u16, body: &'static str) -> Arc<OpensearchClient> {
+    use axum::{http::StatusCode, response::IntoResponse};
+
+    let status = StatusCode::from_u16(status).unwrap();
+    let app = axum::Router::new().fallback(move || async move {
+        (
+            status,
+            [(axum::http::header::CONTENT_TYPE, "application/json")],
+            body,
+        )
+            .into_response()
+    });
+    let listener = tokio::net::TcpListener::bind("127.0.0.1:0").await.unwrap();
+    let endpoint = format!("http://{}", listener.local_addr().unwrap());
+    tokio::spawn(async move { axum::serve(listener, app).await.unwrap() });
+    Arc::new(OpensearchClient::new(endpoint, String::new(), String::new()).unwrap())
+}
+
+fn gone() -> Vec<IndexedChatMessage> {
+    ["message-a", "message-b", "message-c"]
+        .map(|message_id| IndexedChatMessage {
+            chat_id: "chat-1".to_owned(),
+            message_id: message_id.to_owned(),
+        })
+        .to_vec()
+}
+
+#[tokio::test]
+async fn a_blocked_index_is_a_refusal_that_stops_the_job() {
+    let index = OpenSearchChatMessages(
+        opensearch_answering(
+            429,
+            r#"{"error":{"type":"cluster_block_exception","reason":"index has read-only-allow-delete block"},"status":429}"#,
+        )
+        .await,
+    );
+
+    let result = index.delete(&gone()).await;
+
+    assert!(
+        matches!(result, Err(MessageIndexError::Refused(_))),
+        "{result:?}"
+    );
+}
+
+#[tokio::test]
+async fn a_bulk_answer_is_counted_item_by_item() {
+    let index = OpenSearchChatMessages(
+        opensearch_answering(
+            200,
+            r#"{"errors":true,"items":[
+                {"delete":{"_id":"chat-1:message-a","status":200,"result":"deleted"}},
+                {"delete":{"_id":"chat-1:message-b","status":404,"result":"not_found"}},
+                {"delete":{"_id":"chat-1:message-c","status":409,"error":{"type":"version_conflict_engine_exception"}}}
+            ]}"#,
+        )
+        .await,
+    );
+
+    let result = index.delete(&gone()).await.unwrap();
+
+    assert_eq!(
+        result,
+        MessageDelete {
+            deleted: 1,
+            not_found: 1,
+            failed: 1,
+        }
+    );
+}

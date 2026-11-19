@@ -93,12 +93,16 @@ fn parse_chat_message_page(body: &str) -> Result<Vec<IndexedChatMessage>> {
     };
     let response: serde_json::Value =
         serde_json::from_str(body).map_err(|error| malformed(error.to_string()))?;
-    // A page that read only some shards would skip documents for good, since
-    // the next page starts after its last id.
+    // A page that read only some shards, or timed out with partial hits,
+    // would skip documents for good, since the next page starts after its
+    // last id.
     let failed_shards = response["_shards"]["failed"].as_u64().unwrap_or_default();
-    if failed_shards > 0 {
+    if failed_shards > 0 || response["timed_out"].as_bool() == Some(true) {
         return Err(OpensearchClientError::Unknown {
-            details: format!("{failed_shards} shards failed: {}", response["_shards"]),
+            details: format!(
+                "{failed_shards} shards failed, timed out: {}: {}",
+                response["timed_out"], response["_shards"]
+            ),
             operation: OPERATION,
         });
     }
