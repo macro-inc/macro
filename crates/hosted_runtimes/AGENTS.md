@@ -18,7 +18,7 @@ read it before changing behaviour.
 
 ## Start here
 
-- `src/domain/lifecycle.rs` + `lifecycle/test.rs`: states, events, effects, invariants.
+- `src/domain/lifecycle.rs` + `lifecycle/test.rs`: states, events, effects, invariants; `lifecycle/billing.rs` holds the billing and charging transitions.
 - `src/domain/service.rs`: the team-facing `ComputerService` (purchase, offers, purchase_offers, list, power, retry, cancel, release). `purchase_offers` is the buy dialog's listing: one `Billing::purchase_terms` call for every size (today's prorated charge, renewal date, card), never made on the purchase path.
 - `src/domain/enrollment.rs`: the first-boot contract with `macrod enroll`.
 - `src/domain/image.rs`: versioned images and the root/data disk split.
@@ -122,9 +122,12 @@ read it before changing behaviour.
   queues `Effect::DeliverAgent`, which hands the agent over the runtime bus to
   the replica holding macrod's socket; `TimerKind::AgentStartDue` gives it
   `AGENT_START_DEADLINE` after macrod connects, then fails it with
-  `Failure::AgentNotStarted`). A give-up during the first start counts in
-  `first_start_failures`, except `Failure::HostLost` (a host outage is not the
-  computer's failure); the first leaves the computer for a team retry
+  `Failure::AgentNotStarted`; a macrod that declared no `apply-agent`
+  capability when it dialed applies `Event::MacrodConnectedWithoutAgentHandOff`
+  instead, which fails it at once with `Failure::AgentUnsupported` and pages).
+  A give-up during the first start counts in `first_start_failures`, except
+  `Failure::HostLost` (a host outage is not the computer's failure); the first
+  leaves the computer for a team retry
   (no new charge), the second (`MAX_FIRST_START_FAILURES`) releases it
   (`EndsAt{now}`, Destroy), queues `Effect::RefundPurchase` (billing worker:
   a credit note on the purchase's invoice under `computer-refund:{id}`,
@@ -132,10 +135,13 @@ read it before changing behaviour.
   proration) and `Effect::UndoAgentInvite` (agents worker), and notifies
   `SetupOutcome::Released`.
 - The agents worker (`ComputerService::run_agent_effects`, run by
-  authentication_service with team_agents as `ports::AgentInvites`) retries
+  authentication_service with team_agents as `ports::AgentInvites`, only with
+  `COMPUTERS_AGENT_EFFECTS=true`) retries
   with `BILLING_BACKOFF` and gives up after `MAX_AGENT_ATTEMPTS` with the error
   log `agent invite undo abandoned`; a refund that exhausts its attempts logs
-  `computer purchase refund abandoned`. Alerts key on both
+  `computer purchase refund abandoned`, and one that finds no paid purchase for
+  a billed computer logs `computer purchase refund found no paid purchase`.
+  Alerts key on all three
   (`infra/stacks/monitoring/monitors/computers.ts`).
 - A charged purchase converts before it charges: the request holds the
   computer's billing guard and runs the charge while the fleet creates the
@@ -144,6 +150,10 @@ read it before changing behaviour.
   `Rejected::PaymentPending`, releases queue `Effect::SettleCharge`, and
   `TimerKind::ChargeUnsettled` (`CHARGE_TAKEOVER`) hands a charge the request
   never answered to the billing worker (`Effect::Charge`, never abandoned).
+  A billing effect turned away by `BillingError::ChangeInFlight` (another
+  change to the subscription still settling, e.g. a release's item removal)
+  is deferred `CHANGE_IN_FLIGHT_RETRY` (`ComputerRepo::defer_effect`), not
+  backed off, and spends no attempt.
 - Each host's capacity comes from its own row (NOT NULL settings, measured
   defaults); registration only reports hardware (`HostRegistration`: vCPUs and
   memory), and recomputes the row's units from its settings.

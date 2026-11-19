@@ -12,6 +12,7 @@ import BookmarkIcon from '@phosphor/bookmark-simple.svg';
 import DotsIcon from '@phosphor/dots-three.svg';
 import InfoIcon from '@phosphor/info.svg';
 import WarningIcon from '@phosphor/warning-circle.svg';
+import { Key } from '@solid-primitives/keyed';
 import {
   Button,
   ButtonGroup,
@@ -33,6 +34,7 @@ import {
   useUpdateSavedView,
 } from '../../saved-views/queries/saved-view-actions';
 import { toSavedView } from '../../saved-views/queries/saved-views';
+import { SavedViewAppearanceMenu } from '../../saved-views/saved-view-appearance';
 import {
   DeleteSavedViewDialog,
   SavedViewDialog,
@@ -206,6 +208,7 @@ function useCreateTaskSavedViewDialog(owner = getOwner()) {
         mode: 'create' as const,
         id,
         name: record ? `${record.name.slice(0, 113)} (copy)` : 'New view',
+        appearance: record?.appearance,
         config,
         title: record ? 'Duplicate saved view' : 'Save view',
         submitLabel: record ? 'Duplicate' : 'Save view',
@@ -316,6 +319,9 @@ function TaskSavedViewMenuItems(props: {
   return (
     <SavedViewMenuItems
       owned={props.record.ownerId === viewerId()}
+      appearance={
+        <SavedViewAppearanceMenu view={props.record} defer={props.defer} />
+      }
       onEdit={edit}
       onDelete={remove}
       onDuplicate={() => {
@@ -411,23 +417,23 @@ function TaskSavedViewRows(props: {
             <Show when={creating()}>
               <SavedViewList.Draft onSelect={() => run(closeTask)} />
             </Show>
-            <For each={items()}>
+            <Key each={items()} by="id">
               {(record) => (
                 <SavedViewListRow
-                  view={record}
-                  selected={selectedId() === record.id}
+                  view={record()}
+                  selected={selectedId() === record().id}
                   scopeKey={viewerId()}
-                  onSelect={() => run(() => selectSavedView(record.id))}
+                  onSelect={() => run(() => selectSavedView(record().id))}
                   menu={(defer) => (
                     <TaskSavedViewMenuItems
-                      record={record}
+                      record={record()}
                       owner={owner}
                       defer={(action) => defer(() => run(action))}
                     />
                   )}
                 />
               )}
-            </For>
+            </Key>
           </SavedViewList.Items>
           <Show when={views().loading() && !items()}>
             <p class="px-3 py-2 text-xs text-ink-muted" role="status">

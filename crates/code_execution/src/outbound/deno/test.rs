@@ -1851,3 +1851,65 @@ export async function main({hosts}) {
     );
     service.shutdown().await;
 }
+
+#[tokio::test]
+#[ignore = "requires pinned Deno runtime"]
+async fn an_unattended_entity_knob_arrives_as_the_sdk_handle_for_its_item() {
+    let (_root, service) = setup(Limits::default()).await;
+    // What `routine_program`'s entity knob sends: the item, marked.
+    let knobs = serde_json::json!({
+        "bugs": { "$entity": { "type": "channel", "id": "c1" } },
+        "doc": { "$entity": { "type": "document", "id": "d1" } },
+        "folder": { "$entity": { "type": "project", "id": "p1" } },
+        "table": { "$entity": { "type": "database", "id": "db1" } },
+        "person": { "$entity": { "type": "user", "id": "macro|dana@macro.com" } },
+        "task": { "$entity": { "type": "task", "id": "t1" } },
+        "thread": { "$entity": { "type": "email_thread", "id": "e1" } },
+        "chat": { "$entity": { "type": "chat", "id": "a1" } },
+        "company": { "$entity": { "type": "crm_company", "id": "co1" } },
+        "contact": { "$entity": { "type": "crm_contact", "id": "ct1" } },
+        "initiative": { "$entity": { "type": "initiative", "id": "i1" } },
+        "days": 7,
+    });
+    let source = r#"
+export async function main({ macro, knobs }: any) {
+  return {
+    channel: knobs.bugs.constructor === macro.channels.byId("x").constructor && knobs.bugs.id,
+    document: knobs.doc.constructor === macro.documents.byId("x").constructor && knobs.doc.id,
+    project: knobs.folder.constructor === macro.projects.byId("x").constructor && knobs.folder.id,
+    database: knobs.table.constructor === macro.databases.byId("x").constructor && knobs.table.id,
+    user: knobs.person.constructor === macro.users.byId("x").constructor && knobs.person.id,
+    task: knobs.task.constructor === macro.tasks.byId("x").constructor && knobs.task.id,
+    email_thread: knobs.thread.constructor === macro.email.byId("x").constructor && knobs.thread.id,
+    chat: knobs.chat.constructor === macro.chats.byId("x").constructor && knobs.chat.id,
+    crm_company: knobs.company.constructor === macro.crm.companyById("x").constructor && knobs.company.id,
+    crm_contact: knobs.contact.constructor === macro.crm.contactById("x").constructor && knobs.contact.id,
+    initiative: knobs.initiative.constructor === macro.initiatives.byId("x").constructor && knobs.initiative.id,
+    days: knobs.days,
+  };
+}
+"#;
+    let (_, outcome) = run_unattended(
+        &service,
+        source,
+        unattended(
+            "fixture-run-token",
+            &[],
+            serde_json::json!({ "knobs": knobs }),
+            true,
+        ),
+    )
+    .await;
+    let Outcome::Succeeded { value } = outcome else {
+        panic!("{outcome:?}");
+    };
+    assert_eq!(
+        value,
+        serde_json::json!({
+            "channel": "c1", "document": "d1", "project": "p1", "database": "db1",
+            "user": "macro|dana@macro.com", "task": "t1", "email_thread": "e1", "chat": "a1",
+            "crm_company": "co1", "crm_contact": "ct1", "initiative": "i1", "days": 7,
+        })
+    );
+    service.shutdown().await;
+}

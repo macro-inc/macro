@@ -44,6 +44,7 @@ mod offsets;
 mod project;
 mod property;
 mod replay;
+mod scaling;
 #[cfg(test)]
 mod test;
 
@@ -105,6 +106,7 @@ pub(crate) use self::{
     context::KafkaProcessingContext,
     metrics::IndexMetrics,
     replay::{ReplayDone, replay_broker_event},
+    scaling::publish_lane_backlog,
 };
 
 /// Consumer group used for live search-index event offsets.
@@ -220,8 +222,8 @@ enum EventOutcome {
     RetryQueued,
     /// A replay failed and the queue delivers it again.
     Failed,
-    /// A replay found a row the event needs still missing, so there is
-    /// nothing left to apply.
+    /// The event's source is gone for good, or a replay found a row it needs
+    /// still missing, so there is nothing left to apply.
     SourceMissing,
     /// Lost: a Kafka event whose attempts failed and whose replay could not be
     /// queued, or a replay that failed on its last delivery and moves to the
@@ -229,7 +231,9 @@ enum EventOutcome {
     Dropped,
     /// Committed without processing: a reread for the same entity was queued.
     Coalesced,
-    /// Committed without processing: the event changes nothing indexed.
+    /// The event changes nothing indexed: known at handoff, which commits it
+    /// without processing, or found by its write, such as a property write
+    /// for an entity the index does not hold yet.
     NoIndexChange,
 }
 
@@ -238,6 +242,8 @@ impl From<Handled> for EventOutcome {
         match handled {
             Handled::Indexed => Self::Indexed,
             Handled::Ignored => Self::Ignored,
+            Handled::NoIndexChange => Self::NoIndexChange,
+            Handled::SourceMissing => Self::SourceMissing,
         }
     }
 }

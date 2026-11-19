@@ -7,12 +7,14 @@ Its alert links the **Routine suggestions** dashboard.
 When a person's inbox connects (onboarding), each night in their time zone,
 and when they ask for fresh suggestions (manual), agent-harness-service runs
 a generation (`crates/suggestion_generation`):
-a suggestions session and routines sessions of the in-process Macro agent (three
-at onboarding, each suggesting for some of the nine surfaces, and otherwise
-one for all of them, once a week; nightly runs are for people on a paid plan) through
-`macro.routines.suggest`. A nightly or manual routines session also reviews and retires
-earlier suggestions and adds at most two. At onboarding a routines session that suggests
-nothing is retried once. Surfaces AI leaves empty show Macro's templates.
+a suggestions session and one routines session of the in-process Macro agent for all
+nine surfaces (outside onboarding once a week; nightly runs are for people on a paid
+plan), which suggests through `macro.routines.suggest` only the few routines the
+person's mail calls for, so most surfaces stay without one. A nightly or manual routines
+session also reviews and retires earlier suggestions and adds at most two. At onboarding
+a routines session that suggests nothing is retried once; one that kept a suggestion and
+was then cut off at its time limit is not (its `suggestion.session` span ends
+`timed_out`). Surfaces AI leaves empty show Macro's templates.
 Routine suggestions are behind the `enable-routine-suggestions` flag.
 
 Each generation is one trace, and logs one `routine_suggestions.generated`
@@ -27,10 +29,11 @@ event with its `trigger`:
 | Rejected suggestions | Logs: `@event:routine_suggestions.suggested @ok:false` |
 
 In the log event, `ready` means every routines session kept a suggestion,
-`partial` that some did not, `failed` that none did (after a retry at
-onboarding), and `cancelled` that the process shut down first. A nightly run
-that finds nothing missing is `failed` by this measure, so the generation
-metrics and the alert below count onboarding runs only.
+`partial` that some did not (only when a layout splits the surfaces across
+sessions), `failed` that none did (after a retry at onboarding), and
+`cancelled` that the process shut down first. A nightly run that finds
+nothing missing is `failed` by this measure, so the generation metrics and
+the alert below count onboarding runs only.
 
 ## Generations failing
 
