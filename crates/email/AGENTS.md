@@ -461,6 +461,14 @@ tools — hexagonal, heavily feature-gated.
   it. Subscription upkeep and webhook deliveries open
   `outlook.subscription.maintain` and `outlook.subscription.notify`; each
   lifecycle event logs "outlook subscription lifecycle event".
+- An Outlook message deleted at the provider keeps its row, marked
+  `provider_missing` by `MailboxIngest::absent`, where Gmail's
+  `delete_message` deletes it. `absent` leaves CRM cleanup candidates for its
+  correspondents in the same transaction, only when it first marks the row
+  (`crm_cleanup::candidate_emails` picks them for both), and readers that ask
+  whether a mailbox still has mail with an address leave such rows out
+  (`email_db_client`'s `link_has_any_message_with`, and CRM's
+  `other_address_mail.sql` and `interactions.sql`).
 - Map database errors in `mailbox_pg` with `db_error` (or `wrapped_db_error`
   for `email_db_client` calls) so the SQLSTATE reaches the log; keep
   `MailboxError::Persistence` for stored data that cannot be decoded. Both,

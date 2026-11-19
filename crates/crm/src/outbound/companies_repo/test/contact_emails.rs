@@ -90,6 +90,26 @@ async fn source_count(pool: &PgPool, contact: Uuid, link: Uuid) -> sqlx::Result<
     .await
 }
 
+/// Mark the mailbox's mail with `email` as gone at the provider, as Outlook's
+/// sync does when a message is deleted there: the row stays, marked
+/// `provider_missing`.
+async fn delete_at_provider(pool: &PgPool, link: Uuid, email: &str) -> sqlx::Result<()> {
+    sqlx::query!(
+        r#"UPDATE email_messages m
+           SET mailbox_state = COALESCE(m.mailbox_state, '{}'::jsonb) || '{"provider_missing":true}'::jsonb
+           FROM email_contacts ec
+           WHERE m.link_id = $1 AND ec.link_id = $1 AND ec.email_address = $2
+             AND (m.from_contact_id = ec.id OR EXISTS (
+                 SELECT 1 FROM email_message_recipients r
+                 WHERE r.message_id = m.id AND r.contact_id = ec.id))"#,
+        link,
+        email
+    )
+    .execute(pool)
+    .await?;
+    Ok(())
+}
+
 async fn add(
     repo: &CompaniesRepositoryImpl,
     team: Uuid,
@@ -616,6 +636,57 @@ async fn teardown_keeps_a_source_another_address_still_justifies(
     assert!(outcome.source_deleted);
     assert!(!outcome.contact_deleted && !outcome.company_deleted);
     assert_eq!(source_count(&pool, id, link).await?, 0);
+    Ok(())
+}
+
+#[sqlx::test(migrator = "MACRO_DB_MIGRATIONS")]
+async fn mail_deleted_at_the_provider_neither_keeps_nor_restores_a_source(
+    pool: PgPool,
+) -> anyhow::Result<()> {
+    let (team, link, service) = team_with_mailbox(&pool).await?;
+    let repo = CompaniesRepositoryImpl::new(pool.clone());
+    sync(&pool, &service, team, link, "jane@acme.example.com", true).await?;
+    let company = fetch_company_for_domain(&pool, team, "acme.example.com")
+        .await?
+        .unwrap();
+    let id = fetch_contact_id(&pool, company, "jane@acme.example.com")
+        .await?
+        .unwrap();
+    let alias = personal("jane");
+    add(&repo, team, id, &alias).await?;
+    insert_interaction(&pool, link, &alias, Utc::now(), false).await?;
+
+    // The mail with either address is deleted at the provider, which keeps
+    // the rows as tombstones.
+    delete_at_provider(&pool, link, "jane@acme.example.com").await?;
+    delete_at_provider(&pool, link, &alias).await?;
+    let outcome = service
+        .depopulate_contact(&team, &link, "jane@acme.example.com")
+        .await?;
+    assert!(
+        outcome.source_deleted,
+        "deleted mail with another address keeps the source"
+    );
+    assert_eq!(source_count(&pool, id, link).await?, 0);
+
+    // Population recomputes from the mailbox, where only the tombstones are.
+    service
+        .populate_contact(
+            &team,
+            &link,
+            "user@macro.com",
+            "jane@acme.example.com",
+            Some("Synced Name"),
+            Utc::now() - Duration::days(1),
+            Utc::now(),
+            true,
+        )
+        .await?;
+    assert_eq!(
+        source_count(&pool, id, link).await?,
+        0,
+        "mail deleted at the provider gives the contact its source back"
+    );
     Ok(())
 }
 
