@@ -25,6 +25,15 @@ import {
 } from '../routines/queries/step-sources';
 import { useComposerContext } from '../routines/routine-ai-composer';
 import { startRoutineDraft } from '../routines/routine-draft-start';
+import ArrowRightIcon from '@icon/system/regular/arrow-right.svg';
+import SparkleIcon from '@icon/system/regular/sparkle.svg';
+import { cn } from '@ui';
+import { Dynamic } from 'solid-js/web';
+import { RoutineSurface as RaisedSurface } from '../routines/components/routine-editor';
+import {
+  surfaceLook,
+  TemplateChain,
+} from '../routines/components/routine-template-strip';
 import { RoutineSuggestionsCard } from './components/routine-suggestions-card';
 import { RoutineSuggestionsDialog } from './components/routine-suggestions-dialog';
 import { SuggestionRow } from './components/suggestion-row';
@@ -256,6 +265,61 @@ export function RoutineSuggestionsSection(props: {
   );
 }
 
+
+/** Variant B: the top suggestions as raised cards in the template strip's look; a card opens Review. */
+function SuggestionCards(props: { suggestions: readonly RoutineSuggestion[] }) {
+  const catalog = useRoutineCatalog();
+  const actions = useProductionActions(() => {});
+  return (
+    <div class="grid grid-cols-[repeat(auto-fill,minmax(15rem,1fr))] gap-2.5 @max-[760px]/routines:-mx-3 @max-[760px]/routines:auto-cols-[15rem] @max-[760px]/routines:grid-flow-col @max-[760px]/routines:grid-cols-none @max-[760px]/routines:overflow-x-auto @max-[760px]/routines:px-3 @max-[760px]/routines:pb-1">
+      <For each={rows(props.suggestions, catalog())}>
+        {(row) => {
+          const look = () => surfaceLook(row.suggestion.surface);
+          const entry = () =>
+            row.suggestion.kind === 'starter'
+              ? catalog().find((each) => each.key === (row.suggestion as { key: string }).key)
+              : undefined;
+          return (
+            <RaisedSurface>
+              <button
+                type="button"
+                aria-label={`Review ${row.summary.title}`}
+                disabled={actions.pending() !== undefined}
+                class="flex size-full min-w-0 flex-col items-start gap-1.5 rounded-xl px-4 py-3.5 text-left outline-none not-touch:hover:bg-hover focus-visible:ring-2 focus-visible:ring-edge-focus"
+                onClick={() =>
+                  fireAndForget(actions.review(row.suggestion), 'routine-suggestions.review')
+                }
+              >
+                <Dynamic component={look().icon} class={cn('size-4 shrink-0', look().tint)} aria-hidden="true" />
+                <span class="text-sm font-medium text-ink">
+                  {actions.pending() === row.suggestion.id
+                    ? row.suggestion.kind === 'request' ? 'Drafting…' : 'Opening…'
+                    : row.summary.title}
+                </span>
+                <span class="line-clamp-1 text-xs leading-4 text-ink-muted">{row.summary.does}</span>
+                <span class="mt-1 min-w-0 max-w-full">
+                  <Show
+                    when={entry()}
+                    fallback={
+                      <span class="flex min-w-0 items-center gap-1.5 text-xs text-ink-muted">
+                        <ArrowRightIcon class="size-2.5 shrink-0 text-ink-placeholder" aria-hidden="true" />
+                        <SparkleIcon class="size-3 shrink-0 text-accent" aria-hidden="true" />
+                        <span class="truncate">AI drafts it for you to review</span>
+                      </span>
+                    }
+                  >
+                    {(template) => <TemplateChain template={template()} />}
+                  </Show>
+                </span>
+              </button>
+            </RaisedSurface>
+          );
+        }}
+      </For>
+    </div>
+  );
+}
+
 /** The Routines page shows this many until the person asks for more. */
 const ROUTINES_PAGE_SHOWN = 3;
 
@@ -313,10 +377,15 @@ function SuggestedForYou(props: { fallback: JSX.Element }) {
             />
           </Show>
         </div>
-        <SuggestionList
-          suggestions={visible()}
-          showSurface={surface() === 'all'}
-        />
+        <Show
+          when={expanded()}
+          fallback={<SuggestionCards suggestions={visible()} />}
+        >
+          <SuggestionList
+            suggestions={visible()}
+            showSurface={surface() === 'all'}
+          />
+        </Show>
         <Show when={more() > 0}>
           <Button
             variant="ghost"

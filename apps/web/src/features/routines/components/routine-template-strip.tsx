@@ -31,7 +31,7 @@ export function surfaceLook(surface: RoutineTemplate['surface']) {
 }
 
 /** What starts the template's routine and what it does, in a line. */
-function TemplateChain(props: { template: RoutineTemplate }) {
+export function TemplateChain(props: { template: RoutineTemplate }) {
   const look = () => surfaceLook(props.template.surface);
   const chain = () => templateChain(props.template);
   return (
