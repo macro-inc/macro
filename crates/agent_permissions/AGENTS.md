@@ -24,9 +24,11 @@ resolves them against `agent_permission_registry`, and serves the HTTP API
   owner's applies.
 - Tighten-only compares every operation's effective state before and after
   the change (`domain/resolve.rs` `tighten_only`). A tool's `always` is
-  saved as clearing its own setting; a tool state asked for that is looser
-  than the tool's state now (e.g. `always` under a stricter group) is refused
-  (`would_loosen`, `asks_looser`), not saved as a silent no-op.
+  saved as clearing its own setting. A state asked for that is looser than
+  its target's now is refused (`would_loosen`, `asks_looser`): a tool's
+  `always` under a stricter group (not a silent no-op), and removing or
+  loosening a group's action even when no operation's state moves today,
+  since operations resolving through it later would be looser.
 - Expected refusals (off, not found, forbidden, needs a person, would loosen,
   unknown target) log at WARN; only `Internal` logs at ERROR.
 
