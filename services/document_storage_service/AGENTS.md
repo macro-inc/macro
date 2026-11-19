@@ -108,7 +108,7 @@ threads, pins, recents, notifications, folders, activity.
 
 ## Gotchas
 
-- The REST `/items` routes and `/search` hide Macro's own sign-in emails from a program (`hide_sign_in_emails_from_programs` in `src/api.rs`), so a code-mode run cannot read a sign-in code from workspace previews or search hits. GraphQL (`/items/soup/graphql` and its websocket) refuses programs outright: a query picks its own fields, so no rewrite can find the email. Nothing program-side calls it.
+- The REST `/items` routes and `/search` hide Macro's own sign-in emails from a program (`hide_sign_in_emails_from_programs` in `src/api.rs`), so a code-mode run cannot read a sign-in code from workspace previews or search hits. GraphQL (`/items/soup/graphql` and its websocket) refuses programs outright: a query picks its own fields, so no rewrite can find the email. Nothing program-side calls it. Behind that refusal, every GraphQL request still records its caller's `macro_authorization::ForwardedProgram`: calendar mutations reach calendar_service through a client built per request with `forwarding(program.headers())`, and the in-process email sends refuse an agent's program in their resolvers, so neither depends on the route refusal alone.
 - Inject the shared PostHog client into CRM's thread-exclusion gate; missing or
   failed `enable-crm-thread-exclusions` evaluation must refuse API writes.
 - Inject the same client into CRM's selective contribution gate. The owner-only

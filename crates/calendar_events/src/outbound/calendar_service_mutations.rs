@@ -38,10 +38,14 @@ const INTERNAL_MACRO_USER_ID_HEADER: &str = "x-internal-macro-user-id";
 
 /// Calendar mutation client calling the calendar service with internal
 /// authorization on behalf of the requesting user.
+#[derive(Clone)]
 pub struct CalendarServiceMutations {
     base_url: String,
     internal_api_key: String,
     http: reqwest::Client,
+    /// The caller's program, set on every request so the calendar service's
+    /// program guards see it (see [`Self::forwarding`]).
+    forwarded: reqwest::header::HeaderMap,
 }
 
 impl CalendarServiceMutations {
@@ -54,6 +58,19 @@ impl CalendarServiceMutations {
                 .timeout(std::time::Duration::from_secs(30))
                 .build()
                 .expect("static reqwest client configuration is valid"),
+            forwarded: reqwest::header::HeaderMap::new(),
+        }
+    }
+
+    /// This client for one caller's mutations: `forwarded` (the caller's
+    /// `macro_authorization::ForwardedProgram::headers`) rides every request,
+    /// so the calendar service refuses the caller's program as it would the
+    /// program's own request.
+    #[must_use]
+    pub fn forwarding(&self, forwarded: reqwest::header::HeaderMap) -> Self {
+        Self {
+            forwarded,
+            ..self.clone()
         }
     }
 
@@ -65,6 +82,7 @@ impl CalendarServiceMutations {
     ) -> reqwest::RequestBuilder {
         self.http
             .request(method, format!("{}{path}", self.base_url))
+            .headers(self.forwarded.clone())
             .header(INTERNAL_API_KEY_HEADER, &self.internal_api_key)
             .header(INTERNAL_MACRO_USER_ID_HEADER, requester_id)
     }

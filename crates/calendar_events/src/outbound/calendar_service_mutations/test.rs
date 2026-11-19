@@ -344,3 +344,48 @@ fn macro_call_failures_round_trip_to_the_meeting_link_error() {
         MacroCallEventError::Calendar(CalendarMutationError::Retryable(_))
     ));
 }
+
+/// The calendar service's program guards read the caller's program from
+/// these headers; a client built for an agent's program must send them on
+/// every mutation, and one built for a person sends none.
+#[test]
+fn a_client_for_a_programs_caller_forwards_its_program_on_every_request() {
+    let base = CalendarServiceMutations::new("http://calendar".to_owned(), "key".to_owned());
+    let program =
+        macro_authorization::ForwardedProgram::new(Some(bot_id::MACRO_AI_BOT_ID), None, true);
+    let request = base
+        .forwarding(program.headers())
+        .request(reqwest::Method::POST, "/events", "macro|owner@example.com")
+        .build()
+        .unwrap();
+    assert_eq!(
+        request.headers()[macro_authorization::INTERNAL_AGENT_ID_HEADER],
+        bot_id::MACRO_AI_BOT_ID.to_string()
+    );
+    assert!(
+        request
+            .headers()
+            .contains_key(macro_authorization::CODE_EXECUTION_HEADER)
+    );
+    assert_eq!(
+        request.headers()[INTERNAL_MACRO_USER_ID_HEADER],
+        "macro|owner@example.com"
+    );
+
+    let person = macro_authorization::ForwardedProgram::new(None, None, false);
+    let request = base
+        .forwarding(person.headers())
+        .request(reqwest::Method::POST, "/events", "macro|owner@example.com")
+        .build()
+        .unwrap();
+    assert!(
+        !request
+            .headers()
+            .contains_key(macro_authorization::INTERNAL_AGENT_ID_HEADER)
+    );
+    assert!(
+        !request
+            .headers()
+            .contains_key(macro_authorization::CODE_EXECUTION_HEADER)
+    );
+}

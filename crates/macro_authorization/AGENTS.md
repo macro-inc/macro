@@ -75,6 +75,16 @@ this a person". `authorize_identity` retains
 verified origin and signed agent attribution on user authentication. It
 does not turn a user credential into bot authority or change endpoint policies.
 
+A service that calls another with the internal key for a user's request
+forwards the request's program: `ForwardedProgram::of(user, headers)`, whose
+`headers()` (`x-internal-agent-id`, `x-internal-routine-id`, and
+`x-macro-code-execution`) ride the internal call. Internal authorization alone
+puts the forwarded ids on the acting user, so the callee's `attribution()`
+and program guards see the program; a user's own request carrying them is
+still a person. An unreadable or repeated id, or one with no acting user,
+refuses the call (400). A guard in the forwarding service itself checks
+`is_agent_run(program.attribution(), &program.headers())`.
+
 An account manager's credential arrives as a normal `x-macro-user-api-key` and
 authenticates as the managed account, with `CredentialOrigin::AccountManager`
 naming the grant and the agent holding it. `AccountHolderOrInternal` is

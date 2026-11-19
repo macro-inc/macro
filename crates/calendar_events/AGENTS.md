@@ -42,7 +42,9 @@ reminder dispatch, team availability, and provider/Postgres persistence.
 ## Recipes
 
 - Add a mutation: `src/domain/mutations.rs` → `src/outbound/pg.rs` (or
-  `src/outbound/calendar_service_mutations.rs` for the HTTP client adapter) →
+  `src/outbound/calendar_service_mutations.rs` for the HTTP client adapter;
+  a host calling it for a user's request uses `forwarding(program.headers())`
+  so the service's program guards see the caller's program) →
   `src/inbound/mutation_router.rs` / `src/inbound/toolset.rs`.
 - Add a reminder type: `src/domain/reminder_dispatch.rs` → `src/inbound/dispatch_worker.rs`
   → `src/outbound/notification_notifier.rs`.
