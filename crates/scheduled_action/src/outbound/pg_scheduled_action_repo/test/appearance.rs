@@ -262,7 +262,7 @@ async fn chosen_by_owner(pool: &PgPool, id: Uuid) -> Option<bool> {
 async fn as_before_the_column(pool: &PgPool, id: Uuid) {
     sqlx::query!(
         r#"UPDATE scheduled_action
-        SET appearance_chosen_by_owner = NULL, appearance_picked_by_agent = NULL
+        SET appearance_chosen_by_owner = NULL, appearance_changes_by_agent = NULL
         WHERE id = $1"#,
         id,
     )
@@ -275,7 +275,7 @@ async fn as_before_the_column(pool: &PgPool, id: Uuid) {
 async fn stored_before_the_column(pool: &PgPool, id: Uuid, appearance: Option<serde_json::Value>) {
     sqlx::query!(
         r#"UPDATE scheduled_action
-        SET appearance = $2, appearance_chosen_by_owner = NULL, appearance_picked_by_agent = NULL
+        SET appearance = $2, appearance_chosen_by_owner = NULL, appearance_changes_by_agent = NULL
         WHERE id = $1"#,
         id,
         appearance,
@@ -371,18 +371,35 @@ async fn a_look_the_owner_set_before_the_column_stays_theirs(pool: PgPool) {
     }
 }
 
-/// Stores `look` on `id` as the appearance endpoint of a replica built
-/// before `appearance_chosen_by_owner` does for the owner: the look alone
-/// (and an activity, which this doesn't need).
+/// Stores `look` on `id` the way the appearance endpoint of a replica built
+/// before these columns does for the owner (main's `set_appearance`): the
+/// look and its activity, under the row's lock, leaving the columns alone.
 async fn chosen_on_an_older_replica(pool: &PgPool, id: Uuid, look: &EntityAppearance) {
+    let mut tx = pool.begin().await.unwrap();
+    let previous = sqlx::query_scalar!(
+        "SELECT appearance FROM scheduled_action WHERE id = $1 FOR UPDATE",
+        id,
+    )
+    .fetch_one(&mut *tx)
+    .await
+    .unwrap();
+    let previous = stored_appearance(previous).unwrap();
+    let Some(activity) = change(id, look.clone(), AppearanceChooser::Owner).activity(&previous)
+    else {
+        return;
+    };
     sqlx::query!(
         "UPDATE scheduled_action SET appearance = $2 WHERE id = $1",
         id,
         serde_json::to_value(look).unwrap(),
     )
-    .execute(pool)
+    .execute(&mut *tx)
     .await
     .unwrap();
+    activity::outbound::pg_activity_repo::insert_activities(&mut *tx, &[activity])
+        .await
+        .unwrap();
+    tx.commit().await.unwrap();
 }
 
 #[sqlx::test(migrator = "MACRO_DB_MIGRATIONS")]
@@ -395,35 +412,49 @@ async fn an_owners_choice_on_an_older_replica_stays_theirs(pool: PgPool) {
     for action in [
         sample_action(user_owner(USER_A), "agent's pick, then the owner's"),
         sample_action(user_owner(USER_A), "agent's pick, then none"),
+        sample_action(
+            user_owner(USER_A),
+            "agent's pick, then the owner's and back",
+        ),
         sample_action(user_owner(USER_A), "the owner's first look"),
+        sample_action(user_owner(USER_A), "the owner's look, then none"),
         template,
     ] {
         routines.push(repo.create_action(action).await.unwrap().id.unwrap());
     }
-    let [picked, reset, first, from_template] = routines[..] else {
-        panic!("four routines were created");
+    let [picked, reset, back, first, none_again, from_template] = routines[..] else {
+        panic!("six routines were created");
     };
-    for id in [picked, reset] {
+    let blue = colored(AppearanceColor::Blue);
+    let red = colored(AppearanceColor::Red);
+    for id in [picked, reset, back] {
         assert!(
-            repo.set_appearance(change(
-                id,
-                colored(AppearanceColor::Blue),
-                AppearanceChooser::Agent
-            ))
-            .await
-            .unwrap()
-            .is_some()
+            repo.set_appearance(change(id, blue.clone(), AppearanceChooser::Agent))
+                .await
+                .unwrap()
+                .is_some()
         );
     }
-    chosen_on_an_older_replica(&pool, picked, &colored(AppearanceColor::Red)).await;
+    chosen_on_an_older_replica(&pool, picked, &red).await;
     chosen_on_an_older_replica(&pool, reset, &EntityAppearance::default()).await;
-    chosen_on_an_older_replica(&pool, first, &colored(AppearanceColor::Red)).await;
+    // Back to the agent's pick: the look alone can't tell.
+    chosen_on_an_older_replica(&pool, back, &red).await;
+    chosen_on_an_older_replica(&pool, back, &blue).await;
+    chosen_on_an_older_replica(&pool, first, &red).await;
+    // Back to the look the routine was created with.
+    chosen_on_an_older_replica(&pool, none_again, &blue).await;
+    chosen_on_an_older_replica(&pool, none_again, &EntityAppearance::default()).await;
 
     let pick = colored(AppearanceColor::Green);
     for (id, case) in [
         (picked, "a look after an agent's pick"),
         (reset, "none after an agent's pick"),
+        (back, "the agent's pick, chosen again by the owner"),
         (first, "a look on a new routine"),
+        (
+            none_again,
+            "a new routine's look, chosen again by the owner",
+        ),
     ] {
         let before = repo.get_action(&id).await.unwrap().unwrap().appearance;
         assert!(

@@ -5,10 +5,11 @@
 -- appearance_chosen_by_owner: the owner chose the look through the appearance endpoint. Code
 -- with this column creates routines with false.
 --
--- appearance_picked_by_agent: the look this code last stored as not the owner's (the look a
--- routine was created with, or an agent's pick). A replica still on older code changes the look
--- for the owner without setting appearance_chosen_by_owner, during the deploy or after a
--- rollback, so a look that differs from this one is the owner's.
+-- appearance_changes_by_agent: how many of the routine's appearance_changed activity events an
+-- agent's pick recorded. Every change to a look records one, on this code and on older code, so
+-- a replica still on older code, during the deploy or after a rollback, changes the look for the
+-- owner without setting appearance_chosen_by_owner but leaves an event beyond this count. Code
+-- with this column creates routines with 0.
 --
 -- Both are NULL on every routine that exists now, and on any routine an older replica creates.
 -- When an agent next picks for one, set_appearance works out from the row whether its owner
@@ -18,4 +19,4 @@ SET LOCAL lock_timeout = '5s';
 -- Columns with no default change only the catalog: no rewrite, no rows read.
 ALTER TABLE scheduled_action
     ADD COLUMN appearance_chosen_by_owner BOOLEAN,
-    ADD COLUMN appearance_picked_by_agent JSONB;
+    ADD COLUMN appearance_changes_by_agent INTEGER;

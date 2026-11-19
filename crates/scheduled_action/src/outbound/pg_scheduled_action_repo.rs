@@ -72,24 +72,23 @@ fn stored_appearance(stored: Option<Value>) -> Result<EntityAppearance> {
         .unwrap_or_default())
 }
 
-/// Whether the appearance endpoint ever changed routine `id`'s look: it
-/// records each change in the routine's activity.
-async fn endpoint_changed(tx: &mut sqlx::PgConnection, id: Uuid) -> Result<bool> {
-    let changed = sqlx::query_scalar!(
+/// How many changes to routine `id`'s look its activity records:
+/// `set_appearance` records each one with the look, here and on replicas
+/// built before this code.
+async fn recorded_appearance_changes(tx: &mut sqlx::PgConnection, id: Uuid) -> Result<i64> {
+    let changes = sqlx::query_scalar!(
         r#"
-        SELECT EXISTS (
-            SELECT 1
-            FROM activity_events
-            WHERE entity_type = 'scheduled_action'
-                AND entity_id = $1
-                AND action = 'appearance_changed'
-        ) AS "changed!"
+        SELECT count(*) AS "changes!"
+        FROM activity_events
+        WHERE entity_type = 'scheduled_action'
+            AND entity_id = $1
+            AND action = 'appearance_changed'
         "#,
         id.to_string(),
     )
     .fetch_one(tx)
     .await?;
-    Ok(changed)
+    Ok(changes)
 }
 
 /// One mapping for every action query, including management and dispatch.
@@ -245,8 +244,9 @@ impl<B: BotFacts + 'static> ScheduledActionRepo for PgScheduledActionRepo<B> {
         }
         let link = action.sub_routine.as_ref();
         // A new routine's look, its template's or an agent's pick, is not its
-        // owner's choice yet. Replicas built before these columns leave them
-        // NULL, which `set_appearance` reads from the row.
+        // owner's choice yet, and no agent has changed it. Replicas built
+        // before these columns leave them NULL, which `set_appearance` reads
+        // as a routine from before them.
         let row = sqlx::query_as!(
             ActionRow,
             r#"
@@ -255,9 +255,9 @@ impl<B: BotFacts + 'static> ScheduledActionRepo for PgScheduledActionRepo<B> {
                  trigger_type, event_filters, configuration_revision, event_activated_at, trigger_config,
                  run_visibility, template_id, appearance, suggestion_id, description,
                  parent_id, created_by_run_id, child_key, paused_by_parent,
-                 appearance_chosen_by_owner, appearance_picked_by_agent)
+                 appearance_chosen_by_owner, appearance_changes_by_agent)
             VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15, $16, $17, $18,
-                    $19, $20, $21, $22, $23, false, $17)
+                    $19, $20, $21, $22, $23, false, 0)
             RETURNING id, owner, name, schedule, kind, timezone, task, claimed, created_at,
                       updated_at, next_run_at, enabled, trigger_type, event_filters,
                       configuration_revision, event_activated_at, trigger_config, run_visibility, template_id,
@@ -488,7 +488,7 @@ impl<B: BotFacts + 'static> ScheduledActionRepo for PgScheduledActionRepo<B> {
         let mut tx = self.pool.begin().await?;
         let stored = sqlx::query!(
             r#"
-            SELECT appearance, appearance_chosen_by_owner, appearance_picked_by_agent
+            SELECT appearance, appearance_chosen_by_owner, appearance_changes_by_agent
             FROM scheduled_action
             WHERE id = $1
             FOR UPDATE
@@ -499,18 +499,19 @@ impl<B: BotFacts + 'static> ScheduledActionRepo for PgScheduledActionRepo<B> {
         .await?
         .ok_or(ActionPolicyError::NotFound)?;
         let previous = stored_appearance(stored.appearance)?;
-        // A replica still on older code changes the look for the owner without
-        // marking it, so a look other than the one last stored as not theirs
-        // is theirs. A routine from before these columns, or one an older
-        // replica created, holds NULL: only the appearance endpoint and
-        // templates set a look then, so a reset to none shows only in its
-        // activity. That is read in a statement of its own, after the row's
-        // lock is held, so it sees a reset that committed while this waited
-        // for the lock.
+        // A routine from before these columns, or one a replica built before
+        // them created, holds NULL; only the appearance endpoint and templates
+        // set a look then, so a look it has is kept as its owner's. And a
+        // replica built before them changes the look for the owner without
+        // marking it, but records each change in the routine's activity, as
+        // this code does for both choosers: changes beyond the agent's are the
+        // owner's. The activity is read in a statement of its own once the
+        // row is locked, so it holds a change that committed while this
+        // waited for the lock.
         let chosen_by_owner = stored.appearance_chosen_by_owner == Some(true)
-            || previous != stored_appearance(stored.appearance_picked_by_agent)?
-            || (stored.appearance_chosen_by_owner.is_none()
-                && endpoint_changed(&mut *tx, change.id).await?);
+            || (stored.appearance_chosen_by_owner.is_none() && !previous.is_default())
+            || recorded_appearance_changes(&mut tx, change.id).await?
+                > i64::from(stored.appearance_changes_by_agent.unwrap_or(0));
         // An agent's pick never replaces the owner's choice.
         if chosen_by_owner && !owners {
             return Ok(None);
@@ -521,17 +522,19 @@ impl<B: BotFacts + 'static> ScheduledActionRepo for PgScheduledActionRepo<B> {
             return Ok(None);
         }
         let appearance = serde_json::to_value(&change.appearance)?;
+        let agents_change = i32::from(!owners && activity.is_some());
         sqlx::query!(
             r#"
             UPDATE scheduled_action
             SET appearance = $2,
                 appearance_chosen_by_owner = $3,
-                appearance_picked_by_agent = CASE WHEN $3 THEN appearance_picked_by_agent ELSE $2 END
+                appearance_changes_by_agent = COALESCE(appearance_changes_by_agent, 0) + $4
             WHERE id = $1
             "#,
             change.id,
             appearance,
             chosen_by_owner || owners,
+            agents_change,
         )
         .execute(&mut *tx)
         .await?;
