@@ -1,0 +1,21 @@
+apps/web/src/features/agent-permissions/use-agent-permissions-available.ts
+  s_01c92fad8dad5e::t_ff2d9b74c66e54 16-17
+crates/agent_permissions/AGENTS.md
+  s_01c92fad8dad5e::t_787c332f1006a1 70,81-88
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.7.7",
+  "base_commit_sha": "8c55b65661e52fa5af579a52993141a5dd15a058",
+  "prompts": {},
+  "sessions": {
+    "s_01c92fad8dad5e": {
+      "agent_id": {
+        "tool": "claude",
+        "id": "f1ab4ca1-06fd-4c74-a973-8ad5a950bca6",
+        "model": "claude-opus-5-5"
+      },
+      "human_author": "Eric Hayes <56524199+ehayes2000@users.noreply.github.com>"
+    }
+  }
+}
