@@ -86,6 +86,7 @@ export default {
   failedBecause: 'Setup failed: {{reason}}',
   failedHint: 'Macro is looking into it. Contact support if it stays failed.',
   retry: 'Retry',
+  retrying: 'Retrying…',
   retryFailed: "Couldn't retry. Try again.",
   releasedStatus: 'Released',
   offerSpecs: '{{cpus}} vCPU · {{memory}} GB · {{disk}} GB',
@@ -236,6 +237,7 @@ export default {
   noPaidPlan:
     'Computers need a paid Macro plan. Your team does not have one yet.',
   rolloutDisabled: "Computers aren't available for this account yet.",
+  errorForbidden: "You can't change this computer. Ask a team owner or admin.",
   trialBillingAction: 'Go to Billing',
   errorPurchaseConflict:
     'That size just sold out, or an earlier attempt is still being confirmed.',
