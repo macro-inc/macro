@@ -48,11 +48,15 @@ enforced by the ordinary backend APIs.
   `agents.list()` reads storage agent records, which built-in personas lack;
   `agents.coding()` reads the harness `GET /coding-agents` listing (Cursor
   included) that the `ListCodingAgents` tool serves. `routines.create` takes
-  `steps` (generated `CodeStep`s, agent steps with `Agent` handles) and
-  `dangerouslyOperateAsUser`, which its TSDoc restricts to an explicit user
-  request, or the older single agent task. Its examples use steps only:
-  agents copy them, and a routine draft hands back steps, converting a single
-  agent task when it can (`scheduled_action` drafts). `routineBody` maps both onto the
+  `steps` (generated `CodeStep`s whose `entity` knobs hold an
+  `EntityReference` to a handle, sent as its id, or `null` when unpicked, so
+  a stored step passes back with each picked item given again by `byId`;
+  agent steps with `Agent` handles) and `dangerouslyOperateAsUser`, which
+  its TSDoc restricts to an explicit user request, or the older single agent
+  task. Its examples use steps only: agents copy them, and a routine draft
+  hands back steps, converting a single agent task when it can
+  (`scheduled_action` drafts).
+  `routineBody` maps both onto the
   scheduler's `RoutineTask`. `routines.create(options, { key })` passes
   `?key=`; inside a routine's run the server makes the new routine a
   sub-routine of the running routine, from the credential alone, and a
