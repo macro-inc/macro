@@ -1,0 +1,19 @@
+crates/code_execution/AGENTS.md
+  s_8bb9c07d43f304::t_9bc0c51f56c94a 71-73
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.7.7",
+  "base_commit_sha": "a636f75f30c2223f539b417ca49b675aee58c018",
+  "prompts": {},
+  "sessions": {
+    "s_8bb9c07d43f304": {
+      "agent_id": {
+        "tool": "claude",
+        "id": "3f1f672b-f015-4aa2-889f-624245ca574b",
+        "model": "claude-opus-5-5"
+      },
+      "human_author": "Eric Hayes <56524199+ehayes2000@users.noreply.github.com>"
+    }
+  }
+}
