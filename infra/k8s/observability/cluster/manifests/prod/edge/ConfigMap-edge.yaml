@@ -22,8 +22,8 @@ data:
     client_max_body_size 8m;
     map $host $observability_host {
       default denied;
-        grafana-next.macro-internal.com grafana;
-        otlp-next.macro-internal.com otlp;
+        grafana.macro-internal.com grafana;
+        otlp.macro-internal.com otlp;
       }
     limit_req_zone $server_name zone=ingest:1m rate=100r/s;
     map $http_upgrade $connection_upgrade {

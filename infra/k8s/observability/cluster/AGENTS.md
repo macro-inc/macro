@@ -33,7 +33,7 @@ The [README](README.md) has the application list, bootstrap and contract with
   Application in `observability`, with its own NetworkPolicies (README,
   "Adding a component").
 - Route the node Alloy's telemetry: `macro.alloyNode` in `modules/platform/alloy-node.nix`.
-- Let the cluster Grafana notify (cutover only): `macro.grafana.notify = true`
+- Let the cluster Grafana notify (the switch only, README "The switch"): `macro.grafana.notify = true`
   in `env/prod.nix`. Until then only the watchdog heartbeat sends.
 - Start Grafana: set `macro.grafana.database` in `env/prod.nix` from the
   `../aws/` outputs; it runs 0 replicas until then.

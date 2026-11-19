@@ -6,10 +6,10 @@
 # rules and contact points. Login is the host's Google OAuth with its admin
 # mapping (nixos/grafana.nix).
 #
-# Notifications: until cutover only the host's Grafana notifies. With
+# Notifications: until the switch only the host's Grafana notifies. With
 # `macro.grafana.notify = false` every route but the watchdog's is muted, so
 # rules evaluate and show state here, but nothing reaches GoAlert, SNS or
-# anyone. Cutover sets it to true.
+# anyone. The switch sets it to true.
 #
 # Watchdog: an always-firing rule whose only receiver is a GoAlert heartbeat
 # monitor, pinged every two minutes (a repeat waits for the next 1m group
@@ -236,13 +236,28 @@ let
 
   databaseReady = cfg.database.host != null && cfg.database.secret != null;
 
+  # With `localTesting` Grafana is reached through `kubectl port-forward` at
+  # http://localhost:3000, and Google signs in back to that address. Browsers
+  # accept its secure cookies there, since localhost counts as secure.
+  server =
+    if cfg.localTesting then
+      lib.throwIf cfg.notify
+        "macro.grafana: localTesting is for before the switch; turn it off with notify on, or notifications link to localhost."
+        {
+          domain = "localhost";
+          root_url = "http://localhost:3000/";
+        }
+    else
+      {
+        domain = cfg.hostname;
+        root_url = "https://${cfg.hostname}/";
+      };
+
   # The host's settings (nixos/grafana.nix), with the cluster's paths,
   # hostname, database and HA alerting.
   ini = lib.recursiveUpdate (import "${host}/grafana.nix") {
-    server = {
+    server = server // {
       http_addr = "0.0.0.0";
-      domain = cfg.hostname;
-      root_url = "https://${cfg.hostname}/";
     };
     security.secret_key = secretFile "grafana" "grafana_secret_key";
     "auth.google" = {
@@ -295,12 +310,22 @@ in
       type = types.str;
       description = "GoAlert's base URL, without a trailing slash, for the contact points and the watchdog heartbeat.";
     };
+    localTesting = mkOption {
+      type = types.bool;
+      default = false;
+      description = ''
+        Serve Grafana at http://localhost:3000 for testing through
+        `kubectl port-forward` before the ALB sends `hostname` here. Google
+        sign-in then needs http://localhost:3000/login/google as a redirect
+        URI of the OAuth client. Off at the switch; can't be on with `notify`.
+      '';
+    };
     notify = mkOption {
       type = types.bool;
       default = false;
       description = ''
         Whether contact points send. False mutes every route except the
-        watchdog heartbeat: only one Grafana may notify, and until cutover
+        watchdog heartbeat: only one Grafana may notify, and until the switch
         that is the host's.
       '';
     };
@@ -401,7 +426,7 @@ in
             httpHeaders = [
               {
                 name = "Host";
-                value = cfg.hostname;
+                value = server.domain;
               }
             ];
           };
@@ -411,7 +436,7 @@ in
         livenessProbe.httpGet.httpHeaders = [
           {
             name = "Host";
-            value = cfg.hostname;
+            value = server.domain;
           }
         ];
         # Stay in the Service until every proxy has dropped this pod.

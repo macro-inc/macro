@@ -24,9 +24,13 @@
 
   # From ../aws/settings.nix (hosts, edge, existing.alb*) and its outputs.
   macro.edge = {
-    # Cutover adds grafana.macro-internal.com and otlp.macro-internal.com.
-    grafanaHosts = [ "grafana-next.macro-internal.com" ];
-    otlpHosts = [ "otlp-next.macro-internal.com" ];
+    # The ALB sends these here from the switch on (README "The switch"); until
+    # then reach the edge through `kubectl port-forward` with a Host header.
+    grafanaHosts = [ "grafana.macro-internal.com" ];
+    otlpHosts = [ "otlp.macro-internal.com" ];
+    # Until the switch no listener rule uses the target groups, so the ALB
+    # never reports these pods healthy (modules/edge.nix).
+    albReadinessGate = false;
     targetGroups = {
       grafana = "obs-k8s-grafana";
       otlp = "obs-k8s-otlp";
@@ -42,12 +46,15 @@
   };
 
   macro.grafana = {
-    hostname = "grafana-next.macro-internal.com";
-    # Through the ALB: GoAlert stays on the host. The host's nginx opens
-    # /api/v2/grafana/ there in a later host change; the heartbeat path is
-    # open already.
+    hostname = "grafana.macro-internal.com";
+    # Until the switch Grafana is tested at http://localhost:3000 through
+    # `kubectl port-forward` (README "Testing before the switch").
+    localTesting = true;
+    # Through the ALB: GoAlert stays on the host. Its nginx must let
+    # /api/v2/grafana/ through before the switch (README "Before Grafana
+    # runs"); the heartbeat path is open already.
     goalertUrl = "https://oncall.macro-internal.com";
-    # Only the host's Grafana notifies until cutover.
+    # Only the host's Grafana notifies until the switch.
     notify = false;
     alertTopicArn = "arn:aws:sns:us-east-2:569036502058:observability-prod-alerts";
     # The versions the host's nixpkgs ships with Grafana 13.0.9.

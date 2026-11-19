@@ -25,7 +25,7 @@ spec:
   template:
     metadata:
       annotations:
-        checksum/config: 98664cd7a8f2bb1d9151f391b9cd732032b3c3ff79c6be1385da2f6d5923bbb0
+        checksum/config: 0b79fe6b89bccb61ec3cc8b2a630f25b968940e59be4b13337a2c918bb580e6a
         checksum/provisioning: 3945ecf885608e874e23759de2f0b06f502438c55af40cbdde5ed7b3ab412986
         checksum/sc-dashboard-provider-config: e70bf6a851099d385178a76de9757bb0bef8299da6d8443602590e44f05fdf24
         kubectl.kubernetes.io/default-container: grafana
@@ -89,7 +89,7 @@ spec:
             httpGet:
               httpHeaders:
                 - name: Host
-                  value: grafana-next.macro-internal.com
+                  value: localhost
               path: /api/health
               port: grafana
             initialDelaySeconds: 60
@@ -113,7 +113,7 @@ spec:
             httpGet:
               httpHeaders:
                 - name: Host
-                  value: grafana-next.macro-internal.com
+                  value: localhost
               path: /api/health
               port: grafana
             periodSeconds: 5

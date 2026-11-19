@@ -177,6 +177,16 @@ in
       type = types.listOf types.str;
       description = "Where ALB traffic and health checks come from (`../aws/` output `alb_source_cidrs`).";
     };
+    albReadinessGate = mkOption {
+      type = types.bool;
+      default = true;
+      description = ''
+        Whether an edge pod is ready only once the ALB sees it healthy. The
+        ALB health-checks a target group only while a listener rule uses it,
+        and until then reports its targets `unused`, which never passes the
+        gate: off until the switch.
+      '';
+    };
     port = mkOption {
       type = types.port;
       default = 8080;
@@ -205,12 +215,15 @@ in
   };
 
   config = {
-    # The load balancer controller adds a readiness gate to pods behind a
-    # TargetGroupBinding in this namespace: a new edge pod counts as ready
-    # only once the ALB sees it healthy, so a rollout never empties the
-    # target group.
-    applications.observability-namespace.resources.namespaces.${namespace}.metadata.labels."elbv2.k8s.aws/pod-readiness-gate-inject" =
-      "enabled";
+    # With `albReadinessGate` the load balancer controller adds a readiness
+    # gate to pods behind a TargetGroupBinding in this namespace: a new edge
+    # pod counts as ready only once the ALB sees it healthy, so a rollout
+    # never empties the target group.
+    applications.observability-namespace.resources.namespaces.${namespace}.metadata.labels =
+      lib.mkIf cfg.albReadinessGate
+        {
+          "elbv2.k8s.aws/pod-readiness-gate-inject" = "enabled";
+        };
 
     applications.edge = {
       inherit namespace;
@@ -226,6 +239,9 @@ in
           # ALB to stop sending it new requests.
           preStopSeconds = 25;
           terminationGracePeriodSeconds = 60;
+          # Gates are added when a pod is created: turning them on or off
+          # replaces the pods.
+          podAnnotations."observability.macro.com/alb-readiness-gate" = lib.boolToString cfg.albReadinessGate;
           volumes = [
             {
               name = "auth";
