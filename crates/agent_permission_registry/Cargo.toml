@@ -5,7 +5,13 @@ edition = "2024"
 publish = false
 description = "Every SDK operation's permission group, action and label: the checked-in registry agent permissions resolve against."
 
+[features]
+# `utoipa::ToSchema` on `Action`, for the HTTP API that serves it.
+openapi = ["dep:utoipa"]
+
 [dependencies]
 serde = { workspace = true }
 serde_json = { workspace = true }
+sha2 = { workspace = true }
+utoipa = { workspace = true, optional = true }
 workspace-hack = { version = "0.1", path = "../workspace-hack" }

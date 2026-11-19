@@ -3517,6 +3517,67 @@
         }
       }
     },
+    "/agent-sessions/{session_id}/tool-permissions": {
+      "get": {
+        "tags": ["agent-tool-permissions"],
+        "summary": "The tool permissions that apply in a session: its agent's (for a built-in\npersona, the session owner's) and the agent's restrictions on itself for\nthis session (`sessionRules`).",
+        "operationId": "get_agent_session_tool_permissions",
+        "parameters": [
+          {
+            "name": "session_id",
+            "in": "path",
+            "description": "ID of the agent session",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/AgentToolPermissions"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "",
+            "content": {
+              "text/plain": {
+                "schema": {
+                  "type": "string"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ToolPermissionError"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ToolPermissionError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
     "/agent-sessions/{session_id}/ui-commands": {
       "post": {
         "tags": ["agent-sessions"],
@@ -3715,6 +3776,45 @@
         }
       }
     },
+    "/agent-tool-permissions/catalog": {
+      "get": {
+        "tags": ["agent-tool-permissions"],
+        "summary": "Every group, action and SDK operation an agent permission can name.",
+        "operationId": "get_agent_tool_permission_catalog",
+        "responses": {
+          "200": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ToolPermissionCatalog"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "",
+            "content": {
+              "text/plain": {
+                "schema": {
+                  "type": "string"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "Agent permissions are off",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ToolPermissionError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
     "/agent-work-registrations": {
       "get": {
         "tags": ["agent-sessions"],
@@ -3750,6 +3850,296 @@
               "text/plain": {
                 "schema": {
                   "type": "string"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/agents/{agent_id}/tool-permissions": {
+      "get": {
+        "tags": ["agent-tool-permissions"],
+        "summary": "An agent's tool permissions: its own when the caller may edit it or is the\nagent, the caller's own settings for a built-in persona.",
+        "operationId": "get_agent_tool_permissions",
+        "parameters": [
+          {
+            "name": "agent_id",
+            "in": "path",
+            "description": "The agent or built-in persona",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/AgentToolPermissions"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "",
+            "content": {
+              "text/plain": {
+                "schema": {
+                  "type": "string"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ToolPermissionError"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ToolPermissionError"
+                }
+              }
+            }
+          }
+        }
+      },
+      "put": {
+        "tags": ["agent-tool-permissions"],
+        "summary": "Change an agent's tool permissions in either direction. Only a person\nsigned in to Macro who may edit the agent; for a built-in persona, the\ncaller's own settings.",
+        "operationId": "set_agent_tool_permissions",
+        "parameters": [
+          {
+            "name": "agent_id",
+            "in": "path",
+            "description": "The agent or built-in persona",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/ToolPermissionChanges"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/AgentToolPermissions"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ToolPermissionError"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "",
+            "content": {
+              "text/plain": {
+                "schema": {
+                  "type": "string"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "May not edit the agent, or not a person's own session (needs_person)",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ToolPermissionError"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ToolPermissionError"
+                }
+              }
+            }
+          }
+        }
+      },
+      "delete": {
+        "tags": ["agent-tool-permissions"],
+        "summary": "Reset an agent's tool permissions so everything is always allowed. Only a\nperson signed in to Macro who may edit the agent.",
+        "operationId": "reset_agent_tool_permissions",
+        "parameters": [
+          {
+            "name": "agent_id",
+            "in": "path",
+            "description": "The agent or built-in persona",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/AgentToolPermissions"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "",
+            "content": {
+              "text/plain": {
+                "schema": {
+                  "type": "string"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "May not edit the agent, or not a person's own session (needs_person)",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ToolPermissionError"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ToolPermissionError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/agents/{agent_id}/tool-permissions/tighten": {
+      "post": {
+        "tags": ["agent-tool-permissions"],
+        "summary": "Make an agent's tool permissions stricter. An agent may call this on\nitself; it is saved to the agent when the person it acts for may edit\nit, else to the current session only. Refused when any operation would\nbecome more permissive.",
+        "operationId": "tighten_agent_tool_permissions",
+        "parameters": [
+          {
+            "name": "agent_id",
+            "in": "path",
+            "description": "The agent or built-in persona",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/ToolPermissionChanges"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/TightenToolPermissionsResponse"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ToolPermissionError"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "",
+            "content": {
+              "text/plain": {
+                "schema": {
+                  "type": "string"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ToolPermissionError"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ToolPermissionError"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "The change would make an operation more permissive (would_loosen)",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ToolPermissionError"
                 }
               }
             }
@@ -5249,6 +5639,69 @@
           "model": {
             "type": "string",
             "description": "The model slug the agent should switch to."
+          }
+        }
+      },
+      "AgentToolPermissions": {
+        "type": "object",
+        "description": "An agent's permissions as they apply to the caller.",
+        "required": [
+          "agentId",
+          "kind",
+          "canEdit",
+          "canTighten",
+          "version",
+          "restricted",
+          "rules",
+          "groups"
+        ],
+        "properties": {
+          "agentId": {
+            "$ref": "#/components/schemas/BotId",
+            "description": "The agent (or persona) id."
+          },
+          "canEdit": {
+            "type": "boolean",
+            "description": "The caller may change and reset them."
+          },
+          "canTighten": {
+            "type": "boolean",
+            "description": "The caller may tighten them."
+          },
+          "groups": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/ToolPermissionGroup"
+            },
+            "description": "Every catalog group with its five actions."
+          },
+          "kind": {
+            "$ref": "#/components/schemas/ToolPermissionPolicyKind",
+            "description": "Whose settings these are."
+          },
+          "restricted": {
+            "type": "integer",
+            "format": "int32",
+            "description": "How many operations are not always allowed.",
+            "minimum": 0
+          },
+          "rules": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/ToolPermissionRule"
+            },
+            "description": "The saved settings."
+          },
+          "sessionRules": {
+            "type": ["array", "null"],
+            "items": {
+              "$ref": "#/components/schemas/ToolPermissionRule"
+            },
+            "description": "The agent's restrictions on itself for this session, when the view is\nof a session."
+          },
+          "version": {
+            "type": "string",
+            "description": "The registry version the resolution used."
           }
         }
       },
@@ -7242,6 +7695,33 @@
           }
         }
       },
+      "LoosenedOperation": {
+        "type": "object",
+        "description": "An operation a change would have made more permissive.",
+        "required": ["service", "operation", "label", "from", "to"],
+        "properties": {
+          "from": {
+            "$ref": "#/components/schemas/ToolPermissionState",
+            "description": "Its state before."
+          },
+          "label": {
+            "type": "string",
+            "description": "What it does, for a person."
+          },
+          "operation": {
+            "type": "string",
+            "description": "The raw operationId."
+          },
+          "service": {
+            "type": "string",
+            "description": "The SDK's spec name."
+          },
+          "to": {
+            "$ref": "#/components/schemas/ToolPermissionState",
+            "description": "Its state after."
+          }
+        }
+      },
       "MacroUserIdStr": {
         "type": "string"
       },
@@ -7419,6 +7899,11 @@
           }
         },
         "additionalProperties": false
+      },
+      "PermissionAction": {
+        "type": "string",
+        "description": "What an operation does to its group's data, the unit a person allows,\nasks about or refuses.",
+        "enum": ["create", "read", "update", "destroy", "send"]
       },
       "PermissionAnswer": {
         "oneOf": [
@@ -8587,6 +9072,21 @@
         },
         "additionalProperties": false
       },
+      "TightenToolPermissionsResponse": {
+        "type": "object",
+        "description": "The result of a tightening.",
+        "required": ["appliedTo", "permissions"],
+        "properties": {
+          "appliedTo": {
+            "$ref": "#/components/schemas/ToolPermissionAppliedTo",
+            "description": "Where it was saved."
+          },
+          "permissions": {
+            "$ref": "#/components/schemas/AgentToolPermissions",
+            "description": "The permissions now."
+          }
+        }
+      },
       "ToolActor": {
         "type": "string",
         "description": "Which authenticated participant's access a tool call requests.",
@@ -8601,6 +9101,332 @@
         "type": "string",
         "description": "Where a held tool call stands once answered.",
         "enum": ["pending", "approved", "denied", "cancelled", "expired"]
+      },
+      "ToolPermissionAction": {
+        "type": "object",
+        "description": "One action of a group, resolved.",
+        "required": ["action", "state", "origin", "tools", "overrides"],
+        "properties": {
+          "action": {
+            "$ref": "#/components/schemas/PermissionAction",
+            "description": "The action."
+          },
+          "origin": {
+            "$ref": "#/components/schemas/ToolPermissionOrigin",
+            "description": "`group_action`, `default` or `session`."
+          },
+          "overrides": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/ToolPermissionOverride"
+            },
+            "description": "The operations whose state differs from `state`."
+          },
+          "state": {
+            "$ref": "#/components/schemas/ToolPermissionState",
+            "description": "The state of its operations that have no setting of their own."
+          },
+          "tools": {
+            "type": "integer",
+            "format": "int32",
+            "description": "How many operations the group has with this action.",
+            "minimum": 0
+          }
+        }
+      },
+      "ToolPermissionAppliedTo": {
+        "type": "string",
+        "description": "Where a tightening was saved.",
+        "enum": ["agent", "session"]
+      },
+      "ToolPermissionCatalog": {
+        "type": "object",
+        "description": "Every group, action and operation a permission can name.",
+        "required": ["version", "actions", "groups"],
+        "properties": {
+          "actions": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/ToolPermissionCatalogAction"
+            },
+            "description": "The five actions, in display order."
+          },
+          "groups": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/ToolPermissionCatalogGroup"
+            },
+            "description": "The groups, in display order."
+          },
+          "version": {
+            "type": "string",
+            "description": "The registry version; the same in every permissions view it resolved."
+          }
+        }
+      },
+      "ToolPermissionCatalogAction": {
+        "type": "object",
+        "description": "An action, as the catalog describes it to a person.",
+        "required": ["action", "name", "description"],
+        "properties": {
+          "action": {
+            "$ref": "#/components/schemas/PermissionAction",
+            "description": "The action."
+          },
+          "description": {
+            "type": "string",
+            "description": "What it covers."
+          },
+          "name": {
+            "type": "string",
+            "description": "Its display name, e.g. \"Delete\"."
+          }
+        }
+      },
+      "ToolPermissionCatalogGroup": {
+        "type": "object",
+        "description": "A group and its operations, as the catalog lists them.",
+        "required": ["id", "name", "description", "tools"],
+        "properties": {
+          "description": {
+            "type": "string",
+            "description": "What it covers."
+          },
+          "id": {
+            "type": "string",
+            "description": "Stable id."
+          },
+          "name": {
+            "type": "string",
+            "description": "Display name."
+          },
+          "tools": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/ToolPermissionCatalogTool"
+            },
+            "description": "Its operations, in registry order."
+          }
+        }
+      },
+      "ToolPermissionCatalogTool": {
+        "type": "object",
+        "description": "One classified SDK operation.",
+        "required": ["service", "operation", "action", "label"],
+        "properties": {
+          "action": {
+            "$ref": "#/components/schemas/PermissionAction",
+            "description": "Its action."
+          },
+          "label": {
+            "type": "string",
+            "description": "What it does, for a person."
+          },
+          "operation": {
+            "type": "string",
+            "description": "The raw operationId."
+          },
+          "service": {
+            "type": "string",
+            "description": "The SDK's spec name."
+          }
+        }
+      },
+      "ToolPermissionChange": {
+        "type": "object",
+        "description": "One requested change. `state: None` removes the setting: a tool falls back\nto its group's action, a group's action to always. `always` on a group's\naction removes it too, since that is its default.",
+        "required": ["target"],
+        "properties": {
+          "state": {
+            "oneOf": [
+              {
+                "type": "null"
+              },
+              {
+                "$ref": "#/components/schemas/ToolPermissionState",
+                "description": "The new state, or `null` to remove the setting."
+              }
+            ]
+          },
+          "target": {
+            "$ref": "#/components/schemas/ToolPermissionTarget",
+            "description": "What to change."
+          }
+        },
+        "additionalProperties": false
+      },
+      "ToolPermissionChanges": {
+        "type": "object",
+        "description": "Changes to an agent's permissions.",
+        "required": ["changes"],
+        "properties": {
+          "changes": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/ToolPermissionChange"
+            },
+            "description": "Between 1 and 200 changes, applied together."
+          }
+        },
+        "additionalProperties": false
+      },
+      "ToolPermissionError": {
+        "type": "object",
+        "description": "Why a request was refused.",
+        "required": ["code", "message"],
+        "properties": {
+          "code": {
+            "type": "string",
+            "description": "`invalid`, `unknown_target`, `forbidden`, `needs_person`, `not_found`,\n`would_loosen` or `internal`."
+          },
+          "message": {
+            "type": "string",
+            "description": "What went wrong, for a person."
+          },
+          "operations": {
+            "type": ["array", "null"],
+            "items": {
+              "$ref": "#/components/schemas/LoosenedOperation"
+            },
+            "description": "For `would_loosen`: the operations the change would have loosened."
+          },
+          "targets": {
+            "type": ["array", "null"],
+            "items": {
+              "$ref": "#/components/schemas/ToolPermissionTarget"
+            },
+            "description": "For `unknown_target`: the targets the registry does not have."
+          }
+        }
+      },
+      "ToolPermissionGroup": {
+        "type": "object",
+        "description": "One group, resolved.",
+        "required": ["group", "actions"],
+        "properties": {
+          "actions": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/ToolPermissionAction"
+            },
+            "description": "All five actions, in display order."
+          },
+          "group": {
+            "type": "string",
+            "description": "The group id."
+          }
+        }
+      },
+      "ToolPermissionOrigin": {
+        "type": "string",
+        "description": "Where an effective state comes from.",
+        "enum": ["tool", "group_action", "default", "session"]
+      },
+      "ToolPermissionOverride": {
+        "type": "object",
+        "description": "An operation whose state differs from its group's action.",
+        "required": ["service", "operation", "label", "state", "origin"],
+        "properties": {
+          "label": {
+            "type": "string",
+            "description": "What it does, for a person."
+          },
+          "operation": {
+            "type": "string",
+            "description": "The raw operationId."
+          },
+          "origin": {
+            "$ref": "#/components/schemas/ToolPermissionOrigin",
+            "description": "`tool` or `session`."
+          },
+          "service": {
+            "type": "string",
+            "description": "The SDK's spec name."
+          },
+          "state": {
+            "$ref": "#/components/schemas/ToolPermissionState",
+            "description": "Its effective state."
+          }
+        }
+      },
+      "ToolPermissionPolicyKind": {
+        "type": "string",
+        "description": "Whether the permissions are an owned agent's or the caller's own for a\nbuilt-in persona.",
+        "enum": ["agent", "persona"]
+      },
+      "ToolPermissionRule": {
+        "type": "object",
+        "description": "A stored setting.",
+        "required": ["target", "state", "viaAgent", "updatedAt"],
+        "properties": {
+          "state": {
+            "$ref": "#/components/schemas/ToolPermissionState",
+            "description": "Its state."
+          },
+          "target": {
+            "$ref": "#/components/schemas/ToolPermissionTarget",
+            "description": "What it applies to."
+          },
+          "updatedAt": {
+            "type": "string",
+            "format": "date-time",
+            "description": "When it was last set."
+          },
+          "viaAgent": {
+            "type": "boolean",
+            "description": "The agent set it by restricting itself."
+          }
+        }
+      },
+      "ToolPermissionState": {
+        "type": "string",
+        "description": "How an operation may be called. Ordered from most to least permissive, so\n`max` is the more restrictive of two states.",
+        "enum": ["always", "ask", "never"]
+      },
+      "ToolPermissionTarget": {
+        "oneOf": [
+          {
+            "type": "object",
+            "title": "GroupActionTarget",
+            "description": "Every operation of `group` whose action is `action`.",
+            "required": ["group", "action", "kind"],
+            "properties": {
+              "action": {
+                "$ref": "#/components/schemas/PermissionAction",
+                "description": "The action."
+              },
+              "group": {
+                "type": "string",
+                "description": "A registry group id, e.g. `documents`."
+              },
+              "kind": {
+                "type": "string",
+                "enum": ["group_action"]
+              }
+            }
+          },
+          {
+            "type": "object",
+            "title": "ToolTarget",
+            "description": "One SDK operation.",
+            "required": ["service", "operation", "kind"],
+            "properties": {
+              "kind": {
+                "type": "string",
+                "enum": ["tool"]
+              },
+              "operation": {
+                "type": "string",
+                "description": "The raw operationId, e.g. `delete_document`."
+              },
+              "service": {
+                "type": "string",
+                "description": "The SDK's spec name, e.g. `storage`."
+              }
+            }
+          }
+        ],
+        "description": "What a stored setting applies to: every operation of a group's action, or\none operation."
       },
       "TriggerOrigin": {
         "oneOf": [
@@ -9019,6 +9845,10 @@
     {
       "name": "voices",
       "description": "Voices agent teammates speak with on calls"
+    },
+    {
+      "name": "agent-tool-permissions",
+      "description": "Which SDK operations an agent's code may call: always, after asking, or never"
     }
   ]
 }

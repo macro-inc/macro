@@ -1,0 +1,16 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "\n                DELETE FROM agent_tool_permission\n                WHERE bot_id = $1\n                  AND (kind, target) IN (SELECT * FROM UNNEST($2::text[], $3::text[]))\n                ",
+  "describe": {
+    "columns": [],
+    "parameters": {
+      "Left": [
+        "Uuid",
+        "TextArray",
+        "TextArray"
+      ]
+    },
+    "nullable": []
+  },
+  "hash": "551739bf4326e610a344884239ad020ccf46aeccfbf8fd8ad9bfdcb9f9321f51"
+}

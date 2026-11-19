@@ -275,6 +275,34 @@ impl<Flags: feature_flags::FeatureFlags + 'static> agent_code_mode::domain::Ocam
     }
 }
 
+/// The backend rollout for agent permissions, on top of [`OCAML_FLAG`]:
+/// permissions apply to OCaml programs only. Off everywhere until the flag is
+/// created in PostHog and targeted.
+pub const PERMISSIONS_FLAG: &str = "enable-agent-permissions";
+
+/// [`PERMISSIONS_FLAG`] and [`OCAML_FLAG`] for a user. Without a flag client
+/// (local stacks without PostHog) or when the flags can't be read, it is off.
+pub struct PermissionsFlag<Flags>(pub Option<Flags>);
+
+impl<Flags: feature_flags::FeatureFlags + 'static>
+    agent_permissions::domain::ports::PermissionsRollout for PermissionsFlag<Flags>
+{
+    async fn enabled(&self, user: &MacroUserIdStr<'static>) -> bool {
+        let Some(flags) = &self.0 else {
+            return false;
+        };
+        flags
+            .load(user)
+            .await
+            .inspect_err(|error| {
+                tracing::warn!(error = ?error, "could not read the agent permissions flag");
+            })
+            .is_ok_and(|snapshot| {
+                snapshot.is_enabled(OCAML_FLAG) && snapshot.is_enabled(PERMISSIONS_FLAG)
+            })
+    }
+}
+
 macro_env_var::env_var! { struct DocumentStorageServiceCloudfrontDistributionUrl; }
 
 /// A host code mode's SDK reaches, named as the SDK names it. The test

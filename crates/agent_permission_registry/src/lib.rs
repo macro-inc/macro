@@ -10,7 +10,8 @@
 
 #![deny(missing_docs)]
 
-use serde::Deserialize;
+use serde::{Deserialize, Serialize};
+use sha2::{Digest, Sha256};
 use std::{collections::BTreeMap, sync::LazyLock};
 
 #[cfg(test)]
@@ -18,7 +19,8 @@ mod test;
 
 /// What an operation does to its group's data, the unit a person allows,
 /// asks about or refuses.
-#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash, PartialOrd, Ord, Deserialize)]
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash, PartialOrd, Ord, Deserialize, Serialize)]
+#[cfg_attr(feature = "openapi", derive(utoipa::ToSchema), schema(as = PermissionAction))]
 #[serde(rename_all = "lowercase")]
 pub enum Action {
     /// Makes something new.
@@ -32,6 +34,35 @@ pub enum Action {
     /// Reaches other people: sends a message or email, invites, shares,
     /// changes what guests see.
     Send,
+}
+
+impl Action {
+    /// Every action, in display order.
+    pub const ALL: [Action; 5] = [
+        Action::Create,
+        Action::Read,
+        Action::Update,
+        Action::Destroy,
+        Action::Send,
+    ];
+
+    /// The action's stored name, e.g. `destroy`.
+    pub const fn as_str(self) -> &'static str {
+        match self {
+            Action::Create => "create",
+            Action::Read => "read",
+            Action::Update => "update",
+            Action::Destroy => "destroy",
+            Action::Send => "send",
+        }
+    }
+
+    /// The action named `name` (its stored name), if there is one.
+    pub fn parse(name: &str) -> Option<Action> {
+        Action::ALL
+            .into_iter()
+            .find(|action| action.as_str() == name)
+    }
 }
 
 /// A user-facing area, e.g. Email.
@@ -56,6 +87,11 @@ pub struct Operation {
     pub action: Action,
     /// What it does, e.g. "Send email".
     pub label: String,
+    /// No setting applies to it: it is always allowed and not offered as a
+    /// setting. Only for an operation that can only ever restrict the agent
+    /// itself, which a setting could turn from always safe into gated.
+    #[serde(default)]
+    pub always_allowed: bool,
 }
 
 #[derive(Deserialize)]
@@ -101,4 +137,19 @@ pub fn operations() -> impl Iterator<Item = (&'static str, &'static str, &'stati
                 (service.as_str(), operation_id.as_str(), operation)
             })
         })
+}
+
+static VERSION: LazyLock<String> = LazyLock::new(|| {
+    let digest = Sha256::digest(REGISTRY_JSON.as_bytes());
+    digest
+        .iter()
+        .take(6)
+        .map(|byte| format!("{byte:02x}"))
+        .collect()
+});
+
+/// Which registry this build carries: the first 12 hex characters of the
+/// sha256 of `registry.json`. It changes whenever a classification does.
+pub fn version() -> &'static str {
+    &VERSION
 }

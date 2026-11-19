@@ -649,6 +649,7 @@ dependencies = [
  "agent_git",
  "agent_harness",
  "agent_inmem",
+ "agent_permissions",
  "agent_preview",
  "agent_runtime_protocol",
  "agent_session",
@@ -900,6 +901,38 @@ version = "0.1.0"
 dependencies = [
  "serde",
  "serde_json",
+ "sha2 0.10.9",
+ "utoipa",
+ "workspace-hack",
+]
+
+[[package]]
+name = "agent_permissions"
+version = "0.1.0"
+dependencies = [
+ "agent_correlation",
+ "agent_fold",
+ "agent_permission_registry",
+ "async-trait",
+ "axum",
+ "bot_id",
+ "chrono",
+ "entity_access",
+ "macro_authorization",
+ "macro_db_migrator",
+ "macro_user_id",
+ "macro_uuid",
+ "model_user",
+ "rootcause",
+ "serde",
+ "serde_json",
+ "sqlx",
+ "strum 0.27.2",
+ "thiserror 2.0.18",
+ "tokio",
+ "tower 0.5.3",
+ "tracing",
+ "utoipa",
  "workspace-hack",
 ]
 

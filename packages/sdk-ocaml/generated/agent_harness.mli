@@ -1513,6 +1513,199 @@ val make_agent_session_response :
 
 Clients deserialize this, so both derives are used. *)
 
+(** What an operation does to its group's data, the unit a person allows,
+asks about or refuses. *)
+type nonrec permission_action =
+  | Create
+  | Read
+  | Update
+  | Destroy
+  | Send
+  | Unknown of string  (** A value this SDK version does not know. *)
+
+val permission_action_of_yojson : Yojson.Safe.t -> permission_action
+val yojson_of_permission_action : permission_action -> Yojson.Safe.t
+
+(** Where an effective state comes from. *)
+type nonrec tool_permission_origin =
+  | Tool
+  | Group_action
+  | Default
+  | Session
+  | Unknown of string  (** A value this SDK version does not know. *)
+
+val tool_permission_origin_of_yojson : Yojson.Safe.t -> tool_permission_origin
+val yojson_of_tool_permission_origin : tool_permission_origin -> Yojson.Safe.t
+
+(** How an operation may be called. Ordered from most to least permissive, so
+[max] is the more restrictive of two states. *)
+type nonrec tool_permission_state =
+  | Always
+  | Ask
+  | Never
+  | Unknown of string  (** A value this SDK version does not know. *)
+
+val tool_permission_state_of_yojson : Yojson.Safe.t -> tool_permission_state
+val yojson_of_tool_permission_state : tool_permission_state -> Yojson.Safe.t
+
+type nonrec tool_permission_override = {
+  label : string;  (** What it does, for a person. *)
+  operation : string;  (** The raw operationId. *)
+  origin : tool_permission_origin;  (** [tool] or [session]. *)
+  service : string;  (** The SDK's spec name. *)
+  state : tool_permission_state;  (** Its effective state. *)
+}
+(** An operation whose state differs from its group's action. *)
+
+val tool_permission_override_of_yojson :
+  Yojson.Safe.t -> tool_permission_override
+
+val yojson_of_tool_permission_override :
+  tool_permission_override -> Yojson.Safe.t
+
+val make_tool_permission_override :
+  label:string ->
+  operation:string ->
+  origin:tool_permission_origin ->
+  service:string ->
+  state:tool_permission_state ->
+  unit ->
+  tool_permission_override
+(** An operation whose state differs from its group's action. *)
+
+type nonrec tool_permission_action = {
+  action : permission_action;  (** The action. *)
+  origin : tool_permission_origin;
+      (** [group_action], [default] or [session]. *)
+  overrides : tool_permission_override list;
+      (** The operations whose state differs from [state]. *)
+  state : tool_permission_state;
+      (** The state of its operations that have no setting of their own. *)
+  tools : int;  (** How many operations the group has with this action. *)
+}
+(** One action of a group, resolved. *)
+
+val tool_permission_action_of_yojson : Yojson.Safe.t -> tool_permission_action
+val yojson_of_tool_permission_action : tool_permission_action -> Yojson.Safe.t
+
+val make_tool_permission_action :
+  action:permission_action ->
+  origin:tool_permission_origin ->
+  overrides:tool_permission_override list ->
+  state:tool_permission_state ->
+  tools:int ->
+  unit ->
+  tool_permission_action
+(** One action of a group, resolved. *)
+
+type nonrec tool_permission_group = {
+  actions : tool_permission_action list;
+      (** All five actions, in display order. *)
+  group : string;  (** The group id. *)
+}
+(** One group, resolved. *)
+
+val tool_permission_group_of_yojson : Yojson.Safe.t -> tool_permission_group
+val yojson_of_tool_permission_group : tool_permission_group -> Yojson.Safe.t
+
+val make_tool_permission_group :
+  actions:tool_permission_action list ->
+  group:string ->
+  unit ->
+  tool_permission_group
+(** One group, resolved. *)
+
+(** Whether the permissions are an owned agent's or the caller's own for a
+built-in persona. *)
+type nonrec tool_permission_policy_kind =
+  | Agent
+  | Persona
+  | Unknown of string  (** A value this SDK version does not know. *)
+
+val tool_permission_policy_kind_of_yojson :
+  Yojson.Safe.t -> tool_permission_policy_kind
+
+val yojson_of_tool_permission_policy_kind :
+  tool_permission_policy_kind -> Yojson.Safe.t
+
+(** What a stored setting applies to: every operation of a group's action, or
+one operation. *)
+type nonrec tool_permission_target =
+  | Group_action of {
+      action : permission_action;  (** The action. *)
+      group : string;  (** A registry group id, e.g. [documents]. *)
+    }  (** Every operation of [group] whose action is [action]. *)
+  | Tool of {
+      operation : string;  (** The raw operationId, e.g. [delete_document]. *)
+      service : string;  (** The SDK's spec name, e.g. [storage]. *)
+    }  (** One SDK operation. *)
+  | Unknown of Yojson.Safe.t
+      (** A case this SDK version does not know, as received. *)
+
+val tool_permission_target_of_yojson : Yojson.Safe.t -> tool_permission_target
+val yojson_of_tool_permission_target : tool_permission_target -> Yojson.Safe.t
+
+val make_tool_permission_target_group_action :
+  action:permission_action -> group:string -> unit -> tool_permission_target
+(** Every operation of [group] whose action is [action]. *)
+
+val make_tool_permission_target_tool :
+  operation:string -> service:string -> unit -> tool_permission_target
+(** One SDK operation. *)
+
+type nonrec tool_permission_rule = {
+  state : tool_permission_state;  (** Its state. *)
+  target : tool_permission_target;  (** What it applies to. *)
+  updated_at : string;  (** When it was last set. *)
+  via_agent : bool;  (** The agent set it by restricting itself. *)
+}
+(** A stored setting. *)
+
+val tool_permission_rule_of_yojson : Yojson.Safe.t -> tool_permission_rule
+val yojson_of_tool_permission_rule : tool_permission_rule -> Yojson.Safe.t
+
+val make_tool_permission_rule :
+  state:tool_permission_state ->
+  target:tool_permission_target ->
+  updated_at:string ->
+  via_agent:bool ->
+  unit ->
+  tool_permission_rule
+(** A stored setting. *)
+
+type nonrec agent_tool_permissions = {
+  agent_id : bot_id;  (** The agent (or persona) id. *)
+  can_edit : bool;  (** The caller may change and reset them. *)
+  can_tighten : bool;  (** The caller may tighten them. *)
+  groups : tool_permission_group list;
+      (** Every catalog group with its five actions. *)
+  kind : tool_permission_policy_kind;  (** Whose settings these are. *)
+  restricted : int;  (** How many operations are not always allowed. *)
+  rules : tool_permission_rule list;  (** The saved settings. *)
+  session_rules : tool_permission_rule list option;
+      (** The agent's restrictions on itself for this session, when the view is
+of a session. *)
+  version : string;  (** The registry version the resolution used. *)
+}
+(** An agent's permissions as they apply to the caller. *)
+
+val agent_tool_permissions_of_yojson : Yojson.Safe.t -> agent_tool_permissions
+val yojson_of_agent_tool_permissions : agent_tool_permissions -> Yojson.Safe.t
+
+val make_agent_tool_permissions :
+  agent_id:bot_id ->
+  can_edit:bool ->
+  can_tighten:bool ->
+  groups:tool_permission_group list ->
+  kind:tool_permission_policy_kind ->
+  restricted:int ->
+  rules:tool_permission_rule list ->
+  ?session_rules:tool_permission_rule list ->
+  version:string ->
+  unit ->
+  agent_tool_permissions
+(** An agent's permissions as they apply to the caller. *)
+
 (** A kind of action or inactivity the user should see: [permission] to run a tool, an
 [elicitation] question or form, a [tool_approval] held for the owner, or [stalled] with no
 activity for over 20 minutes. *)
@@ -3282,6 +3475,28 @@ Schema only. Nothing constructs one: the entry serializes through
 drift from the fold's wire format, and the point of the endpoint is that it
 cannot - so this describes that format without being able to produce it. *)
 
+type nonrec loosened_operation = {
+  from : tool_permission_state;  (** Its state before. *)
+  label : string;  (** What it does, for a person. *)
+  operation : string;  (** The raw operationId. *)
+  service : string;  (** The SDK's spec name. *)
+  to_ : tool_permission_state;  (** Its state after. *)
+}
+(** An operation a change would have made more permissive. *)
+
+val loosened_operation_of_yojson : Yojson.Safe.t -> loosened_operation
+val yojson_of_loosened_operation : loosened_operation -> Yojson.Safe.t
+
+val make_loosened_operation :
+  from:tool_permission_state ->
+  label:string ->
+  operation:string ->
+  service:string ->
+  to_:tool_permission_state ->
+  unit ->
+  loosened_operation
+(** An operation a change would have made more permissive. *)
+
 (** Where the opened item goes. Neither replaces what the person is reading. *)
 type nonrec ui_placement =
   | Beside_agent
@@ -3752,6 +3967,183 @@ val yojson_of_start_fresh_agent_conversation_request :
 val make_start_fresh_agent_conversation_request :
   session_id:string -> unit -> start_fresh_agent_conversation_request
 (** The session the user is choosing to leave behind. *)
+
+(** Where a tightening was saved. *)
+type nonrec tool_permission_applied_to =
+  | Agent
+  | Session
+  | Unknown of string  (** A value this SDK version does not know. *)
+
+val tool_permission_applied_to_of_yojson :
+  Yojson.Safe.t -> tool_permission_applied_to
+
+val yojson_of_tool_permission_applied_to :
+  tool_permission_applied_to -> Yojson.Safe.t
+
+type nonrec tighten_tool_permissions_response = {
+  applied_to : tool_permission_applied_to;  (** Where it was saved. *)
+  permissions : agent_tool_permissions;  (** The permissions now. *)
+}
+(** The result of a tightening. *)
+
+val tighten_tool_permissions_response_of_yojson :
+  Yojson.Safe.t -> tighten_tool_permissions_response
+
+val yojson_of_tighten_tool_permissions_response :
+  tighten_tool_permissions_response -> Yojson.Safe.t
+
+val make_tighten_tool_permissions_response :
+  applied_to:tool_permission_applied_to ->
+  permissions:agent_tool_permissions ->
+  unit ->
+  tighten_tool_permissions_response
+(** The result of a tightening. *)
+
+type nonrec tool_permission_catalog_action = {
+  action : permission_action;  (** The action. *)
+  description : string;  (** What it covers. *)
+  name : string;  (** Its display name, e.g. "Delete". *)
+}
+(** An action, as the catalog describes it to a person. *)
+
+val tool_permission_catalog_action_of_yojson :
+  Yojson.Safe.t -> tool_permission_catalog_action
+
+val yojson_of_tool_permission_catalog_action :
+  tool_permission_catalog_action -> Yojson.Safe.t
+
+val make_tool_permission_catalog_action :
+  action:permission_action ->
+  description:string ->
+  name:string ->
+  unit ->
+  tool_permission_catalog_action
+(** An action, as the catalog describes it to a person. *)
+
+type nonrec tool_permission_catalog_tool = {
+  action : permission_action;  (** Its action. *)
+  label : string;  (** What it does, for a person. *)
+  operation : string;  (** The raw operationId. *)
+  service : string;  (** The SDK's spec name. *)
+}
+(** One classified SDK operation. *)
+
+val tool_permission_catalog_tool_of_yojson :
+  Yojson.Safe.t -> tool_permission_catalog_tool
+
+val yojson_of_tool_permission_catalog_tool :
+  tool_permission_catalog_tool -> Yojson.Safe.t
+
+val make_tool_permission_catalog_tool :
+  action:permission_action ->
+  label:string ->
+  operation:string ->
+  service:string ->
+  unit ->
+  tool_permission_catalog_tool
+(** One classified SDK operation. *)
+
+type nonrec tool_permission_catalog_group = {
+  description : string;  (** What it covers. *)
+  id : string;  (** Stable id. *)
+  name : string;  (** Display name. *)
+  tools : tool_permission_catalog_tool list;
+      (** Its operations, in registry order. *)
+}
+(** A group and its operations, as the catalog lists them. *)
+
+val tool_permission_catalog_group_of_yojson :
+  Yojson.Safe.t -> tool_permission_catalog_group
+
+val yojson_of_tool_permission_catalog_group :
+  tool_permission_catalog_group -> Yojson.Safe.t
+
+val make_tool_permission_catalog_group :
+  description:string ->
+  id:string ->
+  name:string ->
+  tools:tool_permission_catalog_tool list ->
+  unit ->
+  tool_permission_catalog_group
+(** A group and its operations, as the catalog lists them. *)
+
+type nonrec tool_permission_catalog = {
+  actions : tool_permission_catalog_action list;
+      (** The five actions, in display order. *)
+  groups : tool_permission_catalog_group list;
+      (** The groups, in display order. *)
+  version : string;
+      (** The registry version; the same in every permissions view it resolved. *)
+}
+(** Every group, action and operation a permission can name. *)
+
+val tool_permission_catalog_of_yojson : Yojson.Safe.t -> tool_permission_catalog
+val yojson_of_tool_permission_catalog : tool_permission_catalog -> Yojson.Safe.t
+
+val make_tool_permission_catalog :
+  actions:tool_permission_catalog_action list ->
+  groups:tool_permission_catalog_group list ->
+  version:string ->
+  unit ->
+  tool_permission_catalog
+(** Every group, action and operation a permission can name. *)
+
+type nonrec tool_permission_change = {
+  state : tool_permission_state option;
+  target : tool_permission_target;  (** What to change. *)
+}
+(** One requested change. [state: None] removes the setting: a tool falls back
+to its group's action, a group's action to always. [always] on a group's
+action removes it too, since that is its default. *)
+
+val tool_permission_change_of_yojson : Yojson.Safe.t -> tool_permission_change
+val yojson_of_tool_permission_change : tool_permission_change -> Yojson.Safe.t
+
+val make_tool_permission_change :
+  ?state:tool_permission_state ->
+  target:tool_permission_target ->
+  unit ->
+  tool_permission_change
+(** One requested change. [state: None] removes the setting: a tool falls back
+to its group's action, a group's action to always. [always] on a group's
+action removes it too, since that is its default. *)
+
+type nonrec tool_permission_changes = {
+  changes : tool_permission_change list;
+      (** Between 1 and 200 changes, applied together. *)
+}
+(** Changes to an agent's permissions. *)
+
+val tool_permission_changes_of_yojson : Yojson.Safe.t -> tool_permission_changes
+val yojson_of_tool_permission_changes : tool_permission_changes -> Yojson.Safe.t
+
+val make_tool_permission_changes :
+  changes:tool_permission_change list -> unit -> tool_permission_changes
+(** Changes to an agent's permissions. *)
+
+type nonrec tool_permission_error = {
+  code : string;
+      (** [invalid], [unknown_target], [forbidden], [needs_person], [not_found],
+[would_loosen] or [internal]. *)
+  message : string;  (** What went wrong, for a person. *)
+  operations : loosened_operation list option;
+      (** For [would_loosen]: the operations the change would have loosened. *)
+  targets : tool_permission_target list option;
+      (** For [unknown_target]: the targets the registry does not have. *)
+}
+(** Why a request was refused. *)
+
+val tool_permission_error_of_yojson : Yojson.Safe.t -> tool_permission_error
+val yojson_of_tool_permission_error : tool_permission_error -> Yojson.Safe.t
+
+val make_tool_permission_error :
+  code:string ->
+  message:string ->
+  ?operations:loosened_operation list ->
+  ?targets:tool_permission_target list ->
+  unit ->
+  tool_permission_error
+(** Why a request was refused. *)
 
 (** Why a command was not sent. *)
 type nonrec ui_decline_reason =
@@ -4541,6 +4933,16 @@ Answer a tool call the agent made in a turn somebody other than the
 session's owner prompted. Approve and deny are the owner's; cancel is
 anyone's with edit access. *)
 
+val get_agent_session_tool_permissions :
+  session_id:string ->
+  unit ->
+  (agent_tool_permissions, tool_permission_error) Macro_sdk_runtime.Request.t
+(** [GET /agent-sessions/{session_id}/tool-permissions]
+
+The tool permissions that apply in a session: its agent's (for a built-in
+persona, the session owner's) and the agent's restrictions on itself for
+this session ([sessionRules]). *)
+
 val open_in_app :
   session_id:string ->
   execution_id:execution_id ->
@@ -4587,6 +4989,13 @@ val unregister_agent_session_work :
 End the caller's own registration of a session. Repeating does nothing. It touches only the
 caller's own row, so it needs no access to the session: losing access must not strand it. *)
 
+val get_agent_tool_permission_catalog :
+  unit ->
+  (tool_permission_catalog, tool_permission_error) Macro_sdk_runtime.Request.t
+(** [GET /agent-tool-permissions/catalog]
+
+Every group, action and SDK operation an agent permission can name. *)
+
 val list_agent_work_registrations :
   unit ->
   ( work_registration_response list,
@@ -4595,6 +5004,49 @@ val list_agent_work_registrations :
 (** [GET /agent-work-registrations]
 
 List the caller's active registrations of sessions they can still view, newest first. *)
+
+val get_agent_tool_permissions :
+  agent_id:string ->
+  unit ->
+  (agent_tool_permissions, tool_permission_error) Macro_sdk_runtime.Request.t
+(** [GET /agents/{agent_id}/tool-permissions]
+
+An agent's tool permissions: its own when the caller may edit it or is the
+agent, the caller's own settings for a built-in persona. *)
+
+val set_agent_tool_permissions :
+  agent_id:string ->
+  changes:tool_permission_change list ->
+  unit ->
+  (agent_tool_permissions, tool_permission_error) Macro_sdk_runtime.Request.t
+(** [PUT /agents/{agent_id}/tool-permissions]
+
+Change an agent's tool permissions in either direction. Only a person
+signed in to Macro who may edit the agent; for a built-in persona, the
+caller's own settings. *)
+
+val reset_agent_tool_permissions :
+  agent_id:string ->
+  unit ->
+  (agent_tool_permissions, tool_permission_error) Macro_sdk_runtime.Request.t
+(** [DELETE /agents/{agent_id}/tool-permissions]
+
+Reset an agent's tool permissions so everything is always allowed. Only a
+person signed in to Macro who may edit the agent. *)
+
+val tighten_agent_tool_permissions :
+  agent_id:string ->
+  changes:tool_permission_change list ->
+  unit ->
+  ( tighten_tool_permissions_response,
+    tool_permission_error )
+  Macro_sdk_runtime.Request.t
+(** [POST /agents/{agent_id}/tool-permissions/tighten]
+
+Make an agent's tool permissions stricter. An agent may call this on
+itself; it is saved to the agent when the person it acts for may edit
+it, else to the current session only. Refused when any operation would
+become more permissive. *)
 
 val list_coding_agents :
   unit ->
