@@ -160,6 +160,19 @@ describe('routine code that needs an update', () => {
     expect(mocks.refetchUpgrades).toHaveBeenCalled();
   });
 
+  it('keeps the proposal on screen when a later read of it fails', () => {
+    setSchedules([paused]);
+    mocks.codeUpgrades = () => [
+      upgrade(code('macro.tasks.add(x)', '0.3.0+new')),
+    ];
+    mocks.upgradesFailed = () => true;
+    render(() => <Routine />);
+    expect(screen.getByText('Paused: its code needs an update')).toBeTruthy();
+    expect(
+      screen.getByRole('button', { name: 'Review the update' })
+    ).toBeTruthy();
+  });
+
   it('rejects approval when a fresh server read differs from the cached task', async () => {
     const fresh: ScheduledAction = {
       ...paused,

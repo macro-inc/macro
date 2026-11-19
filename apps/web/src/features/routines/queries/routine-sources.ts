@@ -253,10 +253,11 @@ export function createRoutineDetailSource(
   const upgrades = useCodeUpgradesQuery(id, () =>
     Boolean(raw() && raw()?.owner === userId())
   );
+  // A failed refetch keeps the proposal it had on screen.
   const codeReview = createMemo(() => {
     const current = raw();
-    return current && upgrades.isSuccess
-      ? pendingCodeReview(upgrades.data ?? [], current.task)
+    return current && (upgrades.isSuccess || upgrades.isError) && upgrades.data
+      ? pendingCodeReview(upgrades.data, current.task)
       : undefined;
   });
   // What this routine's runs created; a sub-routine creates none of its own.

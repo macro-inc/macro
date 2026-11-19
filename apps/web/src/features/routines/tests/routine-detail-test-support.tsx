@@ -51,6 +51,8 @@ const mocks = vi.hoisted(() => ({
   refetchList: vi.fn(async () => {}),
   history: (): HistoryRecord[] => [],
   codeUpgrades: (): CodeUpgrade[] => [],
+  /** Its last read of them failed, keeping the data it had. */
+  upgradesFailed: (): boolean => false,
   refetchUpgrades: vi.fn(async () => {}),
   metadataStatus: (): string => 'success',
   chatMetadata: (): { chat?: { name: string } } | undefined => ({
@@ -429,7 +431,12 @@ vi.mock('../queries/schedules', () => ({
     },
   }),
   useCodeUpgradesQuery: () => ({
-    isSuccess: true,
+    get isSuccess() {
+      return !mocks.upgradesFailed();
+    },
+    get isError() {
+      return mocks.upgradesFailed();
+    },
     isPending: false,
     get data() {
       return mocks.codeUpgrades();
@@ -533,6 +540,7 @@ beforeEach(() => {
   mocks.chatMetadata = () => ({ chat: { name: 'Run transcript' } });
   mocks.agentMetadata = () => ({ name: 'Agent transcript' });
   mocks.codeUpgrades = () => [];
+  mocks.upgradesFailed = () => false;
   mocks.sharing = () => false;
   mocks.subRoutineWrites = () => true;
   mocks.eventWrites = () => true;
