@@ -347,9 +347,18 @@ Address: polite です/ます in sentences; menu labels as verb phrases (〜を�
 | notifications | 通知 |
 | done | 完了 |
 | mark as read | 既読にする |
-| snooze | 通知をスヌーズ… |
+| snooze | 通知をスヌーズ |
 | archive | アーカイブ |
 | settings | 設定 |
+| computer (Macro computer) | 新規Macroコンピューター |
+| machine (runs agents) | 自分のマシン |
+| session (agent) | セッションを開始 |
+| routine | すべてのルーティン |
+| saved view | 新規保存済みビュー |
+| call | 通話に参加 |
+| contact (CRM) | この連絡先から会社を削除しますか？ |
+| company (CRM) | 会社を追加 |
+| thread (email) | 除外したスレッド |
 
 ## Korean (`ko`)
 
