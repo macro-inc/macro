@@ -1,0 +1,19 @@
+apps/web/src/features/block-agent/ui/ToolApprovalCard.tsx
+  s_d68827eef00d3d::t_5c9459c5f9b29d 49
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.7.7",
+  "base_commit_sha": "6daaf73d319fcd11175e5a9d931704c04b6c83e6",
+  "prompts": {},
+  "sessions": {
+    "s_d68827eef00d3d": {
+      "agent_id": {
+        "tool": "claude",
+        "id": "a7845e4f-e917-4189-85b6-0d6704e36200",
+        "model": "claude-opus-5-5"
+      },
+      "human_author": "Eric Hayes <56524199+ehayes2000@users.noreply.github.com>"
+    }
+  }
+}
