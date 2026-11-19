@@ -227,9 +227,18 @@ Address: du.
 | notifications | Notifikationer |
 | done | Færdig |
 | mark as read | Markér som læst |
-| snooze | Udsæt notifikationer… |
+| snooze | Udsæt notifikationer |
 | archive | Arkivér |
 | settings | Indstillinger |
+| computer (Macro computer) | Ny Macro-computer |
+| machine (runs agents) | Dine maskiner |
+| session (agent) | Start en session |
+| routine | Alle rutiner |
+| saved view | Ny gemt visning |
+| call | Deltag i opkald |
+| contact (CRM) | Ingen kunder eller kontakter fundet |
+| company (CRM) | Ingen virksomhed |
+| thread (email) | Udelukkede tråde |
 
 ## Norwegian Bokmål (`nb`)
 
