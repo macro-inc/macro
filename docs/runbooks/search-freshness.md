@@ -118,13 +118,17 @@ Recovery: reindex the affected entities by id with the backfill routes (below).
 
 ## Failed bulk items
 
-For 30 minutes, OpenSearch has failed some index writes of one entity type in
-every 5 minutes. The events behind them are queued for a replay, and if that
-fails too they are dropped (see [Dropped events](#dropped-events)). Until a
-write succeeds, those changes are missing from search. `failure` says why:
+For 30 minutes, OpenSearch has failed items of one entity type's bulk index
+writes in every 5 minutes. The events behind them are queued for a replay,
+and if that fails too they are dropped (see [Dropped events](#dropped-events)).
+Until a write succeeds, those changes are missing from search. Only bulk
+writes report failed items: documents, email messages, call segments and
+chat repair. Single-document writes (channel messages, projects, calendar
+events, properties) and a refusal of a whole request count none; the
+backlog and dropped-events monitors catch those. `failure` says why:
 
-- **`overloaded`**: OpenSearch refused the writes to protect itself: a full
-  write queue (429), a tripped circuit breaker, or a write block. A bulk load,
+- **`overloaded`**: OpenSearch refused items inside the bulk response to
+  protect itself (a 429 per item, usually a full write queue). A bulk load,
   such as a mailbox import drain, can do this. Check the domain's write
   rejections and JVM pressure (`aws.es.threadpool_write_rejected`,
   `aws.es.jvmmemory_pressure`) and whether a backfill is running, and slow or
