@@ -263,7 +263,10 @@ the search in the field and clears it from the list after a selection. In a real
 and keeps its full width when there is room. Inside an `@container/split-header`
 600px or narrower, the toolbar New (`ViewCreateButton`) drops its label, keeping
 its icon, its caret when it opens a menu, its name and its tooltip, as header
-actions do.
+actions do. `list-split.browser.e2e.ts` resizes a list view (`asideList`) opened
+as a second split across 720px: the list docks beside the empty preview above it
+and fills the split below it, never leaving an empty preview behind Show
+navigation.
 
 A project's Tasks header keeps search, filters and Add existing tasks on screen at
 320–430px phone widths, with search closed and open, by collapsing Add existing

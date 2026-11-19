@@ -280,6 +280,7 @@ function ChannelsViewRoot(props: {
           }
     )
   );
+  onCleanup(() => props.onAsideListChange(undefined));
   const [railSearchOpen, setRailSearchOpen] = createSignal(false);
 
   const sources = useChannelsSources(

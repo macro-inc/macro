@@ -458,7 +458,7 @@ describe('Chat rollout source activation', () => {
     expect(mocks.sourceEnabled('channels')).toBe(false);
   });
 });
-describe('narrow desktop list', () => {
+describe('desktop list aside', () => {
   it('shows the rail until a conversation opens, and returns to it', () => {
     setSelectedId(undefined);
     render(() => <ChannelsView />);

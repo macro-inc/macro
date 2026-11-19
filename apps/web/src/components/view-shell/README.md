@@ -89,6 +89,8 @@ until `open`, then Main fills it and `ViewNavigationControls` shows Back,
 calling `onBack`, in place of Show navigation. The list stays mounted, hidden
 and inert, so it keeps its scroll, and takes focus when Back returns to it.
 Collapse controls and `Cmd+.` are off there; wide layouts are unchanged.
+`aside.fillsShell()` is true while the list fills the shell, so a list that
+follows the keyboard into a preview can wait for Enter instead.
 
 Workspace layouts share a 720px container breakpoint. Desktop navigation docks
 above it and overlays below it, in every split: only that breakpoint hides it

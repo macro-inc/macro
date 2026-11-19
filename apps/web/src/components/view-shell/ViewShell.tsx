@@ -466,6 +466,7 @@ function Root(props: ViewShellRootProps) {
         !narrowList(),
       isOverlay: asideOverlay,
       isSheet: navigationSheet,
+      fillsShell: () => narrowList() === 'list',
       collapse: () => setAsideOpen(false),
       expand: () => setAsideOpen(true),
       toggle: () => {

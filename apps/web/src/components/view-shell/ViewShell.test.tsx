@@ -1239,6 +1239,31 @@ describe('list navigation', () => {
     ).toBeTruthy();
   });
 
+  it('tells the list when it fills the shell', () => {
+    const [width, setWidth] = createSignal(600);
+    measurement.width = width;
+    const [open, setOpen] = createSignal(false);
+    let shell: ReturnType<typeof useViewShell> | undefined;
+    function Probe() {
+      shell = useViewShell();
+      return null;
+    }
+    render(() => (
+      <ViewShell.Root
+        asidePreferenceKey="fills"
+        asideList={{ open: open(), onBack: vi.fn() }}
+      >
+        <Probe />
+      </ViewShell.Root>
+    ));
+    expect(shell?.aside.fillsShell()).toBe(true);
+    setOpen(true);
+    expect(shell?.aside.fillsShell()).toBe(false);
+    setOpen(false);
+    setWidth(1000);
+    expect(shell?.aside.fillsShell()).toBe(false);
+  });
+
   it('shows a new split its list on either side of the breakpoint', () => {
     const [width, setWidth] = createSignal(1000);
     measurement.width = width;

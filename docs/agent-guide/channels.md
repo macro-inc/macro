@@ -1164,7 +1164,8 @@ independently of other workspaces. The rail starts at 256px on desktop and 403px
 on wide touch,
 docks above 720px, including in a new split. Narrow desktop panes show the
 rail at full width until a conversation opens, which then fills the pane with
-**Back** returning to the rail; Threads open the same way. At 720px
+**Back** returning to the rail; Threads open the same way. Arrow keys and
+`j`/`k` there only move along the rail; Enter opens the conversation. At 720px
 or narrower, touch shows the full-frame conversation list and
 full-screen navigation, with no sidebar, expand button, or reserved navigation
 row. Only the safe-area top inset precedes the list. Wider touch panes use the

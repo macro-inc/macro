@@ -972,6 +972,9 @@ export function ChannelsRail(props: ChannelsRailProps) {
             if (row?.kind === 'all-threads') setThreadsChannelId(undefined);
             else if (row?.kind === 'conversation')
               setThreadsChannelId(row.channel.id);
+          } else if (shell.aside.fillsShell()) {
+            // A rail filling a narrow split opens a conversation on Enter,
+            // not on every move, which would hide the rail under the cursor.
           } else if (row?.kind === 'conversation') {
             previewAfterNavigation(row.channel);
           } else if (
