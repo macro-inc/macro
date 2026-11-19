@@ -7,6 +7,7 @@ import type { Conversation, Queued } from './entry.ts';
 import { history } from './history.ts';
 import { Screen } from './listen.ts';
 import { sdkChat } from './macro.ts';
+import { observeOutgoing } from './outgoing.ts';
 import { typing } from './typing.ts';
 
 /** The owner of chat's state directories. */
@@ -19,8 +20,16 @@ const screenFile = 'screen.ts';
 const queueDirectory = 'queue';
 
 /** What chat adds to the agent's context: Macro, what it remembers of conversations, and who is waiting on it. */
-export const chatContext = ({ macro, config, state, join, disk }: Base) => {
-  const chat = sdkChat({ macro, myName: config.identity.name });
+export const chatContext = ({
+  macro,
+  config,
+  state,
+  join,
+  disk,
+  log,
+}: Base) => {
+  const sdk = sdkChat({ macro, myName: config.identity.name });
+  const chat = { ...sdk, ...observeOutgoing(sdk, log) };
   const unanswered = channel<Conversation>();
   const screenPath = join(import.meta.dir, screenFile);
   return behavior<Base>().decorate({
