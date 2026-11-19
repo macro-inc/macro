@@ -385,8 +385,10 @@ where
         self.membership.add_agent(receipt.clone(), &user_id).await?;
         undo.joined_team = true;
 
-        self.repos.create(&user_id, team_id, &seed).await?;
+        // Marked first: a create whose answer is lost may still have made
+        // the repo, and deleting a missing one is a no-op.
         undo.repo = true;
+        self.repos.create(&user_id, team_id, &seed).await?;
 
         Ok(Prepared::New(user_id, seed))
     }
