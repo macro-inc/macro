@@ -408,7 +408,7 @@ struct EngineState {
 #[derive(Clone)]
 pub struct EngineHandle {
     inner: Arc<EngineAccess<EngineState>>,
-    authority_listener: Option<Arc<authority::AuthorityListener>>,
+    authority_listener: Option<(String, Arc<authority::AuthorityListener>)>,
     // Per-command capture, never shared mutable state between windows.
     generation: Option<Uuid>,
     // Shared by cloned handles, changed when the native engine is reopened.
@@ -763,6 +763,7 @@ impl EngineHandle {
             result.revision_advanced |= result.revision != revision;
             result.revision = revision;
         }
+        self.publish_bound_generation(engine).await?;
         Ok(wire_write_result(ops, result))
     }
 
@@ -836,6 +837,7 @@ impl EngineHandle {
             .unchanged_observed_windows()
             .await
             .unwrap_or_default();
+        self.publish_bound_generation(engine).await?;
         Ok(HydrationWriteResultWire {
             unchanged_views,
             search_changed_buckets: result.search_changed_buckets,

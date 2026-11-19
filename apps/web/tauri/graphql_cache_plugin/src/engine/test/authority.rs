@@ -74,11 +74,12 @@ fn native_implicit_retirement_notifies_other_windows_before_returning_content() 
     block_on(async {
         let (first, first_events) = std::sync::mpsc::channel();
         let (second, second_events) = std::sync::mpsc::channel();
-        let handle = spawn_handle().with_authority_listener(move |authority| {
+        let handle = spawn_handle();
+        bind(&handle).await;
+        let handle = handle.with_authority_listener("profile".into(), move |authority| {
             first.send(authority.clone()).unwrap();
             second.send(authority.clone()).unwrap();
         });
-        bind(&handle).await;
         let before = handle.current_authority("profile").await.unwrap();
         let old = handle.clone().with_generation(Some(before.generation));
         {
@@ -125,6 +126,37 @@ fn native_implicit_retirement_notifies_other_windows_before_returning_content() 
         handle.current_authority("profile").await.unwrap();
         assert!(first_events.try_recv().is_err());
         assert!(second_events.try_recv().is_err());
+    });
+}
+
+#[test]
+fn native_authority_events_cannot_be_overtaken_by_another_transition() {
+    block_on(async {
+        let handle = spawn_handle();
+        bind(&handle).await;
+        let before = handle.current_authority("profile").await.unwrap();
+        let competing = handle.clone();
+        let (events, received) = std::sync::mpsc::channel();
+        let handle = handle.with_authority_listener("profile".into(), move |authority| {
+            // Another window cannot acquire the owner until this event is sent.
+            let mut next = std::pin::pin!(competing.current_revision());
+            let mut context = std::task::Context::from_waker(std::task::Waker::noop());
+            assert!(std::future::Future::poll(next.as_mut(), &mut context).is_pending());
+            events.send(authority.clone()).unwrap();
+        });
+        let mut previous = before.generation;
+        for policy in ["team:denied", "team:allowed", "team:denied"] {
+            let result = handle
+                .transition_authority("profile", previous, policy.into())
+                .await
+                .unwrap();
+            let event = received.try_recv().unwrap();
+            assert_eq!(event, result.authority);
+            assert_eq!(event.policy.as_deref(), Some(policy));
+            assert_ne!(event.generation, previous);
+            previous = event.generation;
+        }
+        assert!(received.try_recv().is_err());
     });
 }
 

@@ -3217,6 +3217,67 @@ describe('normalizedCacheExchange', () => {
   describe('mutations', () => {
     const optimistic = { setEntityProperty: { id: 'prop-1' } };
 
+    it.each(['committed', 'committed-superseded'] as const)(
+      'settles a stale %s response and advances the queue without an unrelated read',
+      async (kind) => {
+        vi.useFakeTimers();
+        const reread = Promise.withResolvers<QueryUpdate>();
+        try {
+          host.watchQuery = vi
+            .fn()
+            .mockResolvedValueOnce({
+              kind: 'hit',
+              revision: parseCacheRevision('1'),
+              data: { from: 'initial' },
+            })
+            .mockReturnValueOnce(reread.promise);
+          const commit = host.commitOptimisticWrite.bind(host);
+          let commits = 0;
+          host.commitOptimisticWrite = async (...args) => {
+            const result = await commit(...args);
+            if (++commits > 1) return result;
+            await cacheSessionGeneration.transition(async () => {});
+            if (kind === 'committed-superseded')
+              return {
+                ...result,
+                kind,
+                replacementTransactionId: 'replacement',
+              };
+            return { ...result, affectedOps: [] };
+          };
+          const { ops, results, forwarded } = harness(host);
+          ops.next(makeOp(11));
+          await vi.advanceTimersByTimeAsync(10);
+          host.pushAffected([11]);
+          await vi.advanceTimersByTimeAsync(10);
+          expect(host.watchQuery).toHaveBeenCalledTimes(2);
+
+          ops.next(makeMutationOp(1, optimistic));
+          await vi.advanceTimersByTimeAsync(10);
+          const mutations = results.filter(
+            (result) => result.operation.kind === 'mutation'
+          );
+          expect(mutations).toHaveLength(1);
+          expect(optimisticMutationDispositionOf(mutations[0])?.kind).toBe(
+            kind === 'committed' ? 'committed' : 'queued'
+          );
+          ops.next(makeMutationOp(2, optimistic));
+          await vi.advanceTimersByTimeAsync(10);
+          expect(host.commits).toHaveLength(2);
+          expect(forwarded.filter((op) => op.kind === 'mutation')).toHaveLength(
+            2
+          );
+          expect(
+            results.filter((result) => result.operation.kind === 'mutation')
+          ).toHaveLength(2);
+        } finally {
+          reread.resolve({ kind: 'miss', revision: parseCacheRevision('2') });
+          await vi.advanceTimersByTimeAsync(10);
+          vi.useRealTimers();
+        }
+      }
+    );
+
     it.each(['unrelated', 'mail', 'other-client', 'reported-deletion'])(
       "waits only for the folder move's affected publication (%s)",
       async (scope) => {

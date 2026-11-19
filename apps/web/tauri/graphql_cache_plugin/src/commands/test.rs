@@ -6,7 +6,7 @@ fn scoped_first_binding_notifies_every_window() {
     use std::sync::{Arc, Mutex};
     use tauri::{Listener, Manager};
 
-    for people in [false, true] {
+    for publication in ["write", "hydrate", "scoped-hydrate", "people"] {
         let handle = crate::engine::EngineHandle::new(
             cache_turso::TursoStorage::open_in_memory("profile").unwrap(),
             None,
@@ -20,7 +20,7 @@ fn scoped_first_binding_notifies_every_window() {
                 .unwrap(),
             contact_fence: None,
         };
-        if people {
+        if publication == "people" {
             scope.contact_fence = Some(
                 pollster::block_on(handle.contact_snapshot(
                     cache_core::people::sync::ContactSnapshotRequest {
@@ -33,56 +33,102 @@ fn scoped_first_binding_notifies_every_window() {
             );
         }
         let app = tauri::test::mock_builder()
-            .manage(crate::CacheState(Mutex::new(Some(
-                crate::InitializedCache {
-                    scope: "profile".into(),
-                    handle,
-                },
-            ))))
             .build(tauri::test::mock_context(tauri::test::noop_assets()))
             .unwrap();
+        let emitter = app.handle().clone();
+        let competing = handle.clone();
+        let handle = handle.with_authority_listener("profile".into(), move |authority| {
+            crate::emit_cache_event(&emitter, "graphql-cache://authority-changed", authority);
+        });
+        app.manage(crate::CacheState(Mutex::new(Some(
+            crate::InitializedCache {
+                scope: "profile".into(),
+                handle,
+            },
+        ))));
         let events = Arc::new(Mutex::new(Vec::<CacheAuthority>::new()));
         let received = events.clone();
         app.listen("graphql-cache://authority-changed", move |event| {
+            // The event must be sent before another command can acquire the owner.
+            let mut next = std::pin::pin!(competing.current_revision());
+            let mut context = std::task::Context::from_waker(std::task::Waker::noop());
+            assert!(std::future::Future::poll(next.as_mut(), &mut context).is_pending());
             received
                 .lock()
                 .unwrap()
                 .push(serde_json::from_str(event.payload()).unwrap());
         });
         pollster::block_on(async {
-            if people {
-                super::graphql_cache_people_update(
-                    app.handle().clone(),
-                    app.state(),
-                    Some(before.generation),
-                    cache_core::people::ContextUpdate {
-                        scope,
-                        epoch: uuid::Uuid::now_v7(),
-                        action: cache_core::people::ContextAction::Begin {
-                            previous_epoch: None,
+            let query = "{ user { id } }".to_owned();
+            let data = serde_json::json!({"user": {"id": "macro|viewer@example.com"}});
+            let identity = Some("macro|viewer@example.com".into());
+            match publication {
+                "write" => {
+                    super::graphql_cache_write(
+                        app.handle().clone(),
+                        app.state(),
+                        Some(before.generation),
+                        None,
+                        None,
+                        query,
+                        None,
+                        None,
+                        data,
+                        identity,
+                        None,
+                    )
+                    .await
+                    .unwrap();
+                }
+                "hydrate" => {
+                    super::graphql_cache_hydrate(
+                        app.handle().clone(),
+                        app.state(),
+                        Some(before.generation),
+                        query,
+                        None,
+                        None,
+                        data,
+                        identity,
+                        None,
+                    )
+                    .await
+                    .unwrap();
+                }
+                "scoped-hydrate" => {
+                    super::graphql_cache_hydrate_scoped(
+                        app.state(),
+                        Some(before.generation),
+                        super::ScopedHydrationRequest {
+                            query,
+                            operation_name: None,
+                            variables: None,
+                            data,
+                            identity,
+                            hydration_scope: scope,
                         },
-                    },
-                    None,
-                )
-                .await
-                .unwrap();
-            } else {
-                super::graphql_cache_hydrate_scoped(
-                    app.handle().clone(),
-                    app.state(),
-                    Some(before.generation),
-                    super::ScopedHydrationRequest {
-                        query: "{ user { id } }".into(),
-                        operation_name: None,
-                        variables: None,
-                        data: serde_json::json!({"user": {"id": "macro|viewer@example.com"}}),
-                        identity: Some("macro|viewer@example.com".into()),
-                        hydration_scope: scope,
-                    },
-                    None,
-                )
-                .await
-                .unwrap();
+                        None,
+                    )
+                    .await
+                    .unwrap();
+                }
+                "people" => {
+                    super::graphql_cache_people_update(
+                        app.state(),
+                        Some(before.generation),
+                        cache_core::people::ContextUpdate {
+                            scope,
+                            epoch: uuid::Uuid::now_v7(),
+                            action: cache_core::people::ContextAction::Begin {
+                                previous_epoch: None,
+                            },
+                        },
+                        None,
+                    )
+                    .await
+                    .unwrap();
+                }
+                _ => unreachable!(),
             }
         });
         let events = events.lock().unwrap();

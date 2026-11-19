@@ -62,30 +62,6 @@ fn engine_handle(state: &State<'_, CacheState>) -> Result<EngineHandle, String> 
         .ok_or_else(|| "graphql cache not initialized (call graphql_cache_init first)".to_string())
 }
 
-/// The first authenticated write binds the cache identity without a reset.
-/// Publish its new generation before another window can reuse the old one.
-async fn publish_bound_generation<R: Runtime>(
-    app: &AppHandle<R>,
-    state: &State<'_, CacheState>,
-    generation: Option<uuid::Uuid>,
-) -> Result<(), String> {
-    let (scope, handle) = {
-        let guard = state
-            .0
-            .lock()
-            .map_err(|_| "graphql cache state poisoned".to_string())?;
-        let cache = guard
-            .as_ref()
-            .ok_or_else(|| "graphql cache not initialized".to_string())?;
-        (cache.scope.clone(), cache.handle.clone())
-    };
-    let current = handle.current_authority(&scope).await?;
-    if generation != Some(current.generation) {
-        crate::emit_cache_event(app, "graphql-cache://authority-changed", &current);
-    }
-    Ok(())
-}
-
 /// Opens (or creates) the cache for `scope`. Idempotent for the same scope;
 /// errors on a scope mismatch (parity with the browser worker `init`). The
 /// database lives at `{app_data_dir}/graphql-cache/cache.turso`. Incompatible
@@ -151,7 +127,7 @@ pub async fn graphql_cache_init_with_schema<R: Runtime>(
             let storage = database.open_or_reset(&scope).map_err(|e| e.to_string())?;
             let events = app.clone();
             let handle = EngineHandle::with_schema(storage, hot_capacity, schema)
-                .with_authority_listener(move |authority| {
+                .with_authority_listener(scope.clone(), move |authority| {
                     crate::emit_cache_event(
                         &events,
                         "graphql-cache://authority-changed",
@@ -220,7 +196,6 @@ pub async fn graphql_cache_transition_authority<R: Runtime>(
         .transition_authority(&identity, expected, policy)
         .await?;
     if result.changed {
-        crate::emit_cache_event(&app, "graphql-cache://authority-changed", &result.authority);
         emit_ops_affected(
             &app,
             &result.affected_ops,
@@ -335,8 +310,7 @@ pub async fn graphql_cache_people_context(
 /// Persist one scoped local-context batch. JS publishes hydration-only hints.
 #[tauri::command]
 #[tracing::instrument(skip_all, fields(upstream_traceparent = people_trace_correlation(traceparent.as_deref())), err)]
-pub async fn graphql_cache_people_update<R: Runtime>(
-    app: AppHandle<R>,
+pub async fn graphql_cache_people_update(
     state: State<'_, CacheState>,
     generation: Option<uuid::Uuid>,
     update: ContextUpdate,
@@ -346,7 +320,6 @@ pub async fn graphql_cache_people_update<R: Runtime>(
         .with_generation(generation)
         .people_update(update)
         .await?;
-    publish_bound_generation(&app, &state, generation).await?;
     Ok(result)
 }
 
@@ -556,7 +529,6 @@ pub async fn graphql_cache_write<R: Runtime>(
             identity,
         })
         .await?;
-    publish_bound_generation(&app, &state, generation).await?;
     emit_ops_affected(
         &app,
         &result.affected_ops,
@@ -648,7 +620,6 @@ pub async fn graphql_cache_hydrate<R: Runtime>(
             None,
         )
         .await?;
-    publish_bound_generation(&app, &state, generation).await?;
     if result.write_result.reset {
         emit_ops_affected(
             &app,
@@ -689,8 +660,7 @@ pub struct ScopedHydrationRequest {
     err
 )]
 #[tauri::command]
-pub async fn graphql_cache_hydrate_scoped<R: Runtime>(
-    app: AppHandle<R>,
+pub async fn graphql_cache_hydrate_scoped(
     state: State<'_, CacheState>,
     generation: Option<uuid::Uuid>,
     request: ScopedHydrationRequest,
@@ -707,8 +677,6 @@ pub async fn graphql_cache_hydrate_scoped<R: Runtime>(
             Some(request.hydration_scope),
         )
         .await?;
-    // Guarded writes never reset identity; JS publishes ordinary hydration hints.
-    publish_bound_generation(&app, &state, generation).await?;
     Ok(hydration_result(result))
 }
 

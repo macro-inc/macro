@@ -935,6 +935,37 @@ describe('permission snapshot retirement', () => {
   });
 });
 
+it('restores an allowed cache without scanning every persisted payload until a denial', async () => {
+  const store = createMockStore();
+  const queryClient = new QueryClient();
+  const key = ['email', 'threadMessages', 'thread'];
+  const queryHash = JSON.stringify(key);
+  store.entries.set(queryHash, {
+    queryKey: key,
+    queryHash,
+    data: { body: 'offline mail' },
+    dataUpdatedAt: Date.now(),
+    persistedAt: Date.now(),
+    buster: 'test',
+  });
+  let denied = false;
+  const persistence = setupQueryPersistence({
+    queryClient,
+    scopes: [createScope([], store)],
+    exclude: (queryKey) => denied && queryKey[0] === 'email',
+  });
+  expect(store.prune).not.toHaveBeenCalled();
+  await persistence.restoreQuery(key);
+  expect(queryClient.getQueryData(key)).toEqual({ body: 'offline mail' });
+  denied = true;
+  await persistence.retire((queryKey) => queryKey[0] === 'email');
+  expect(store.prune).toHaveBeenCalledOnce();
+  expect(store.entries.has(queryHash)).toBe(false);
+  expect(queryClient.getQueryData(key)).toBeUndefined();
+  persistence.dispose();
+  queryClient.clear();
+});
+
 it('never restores or persists excluded content, even when another instance flushes it after pruning', async () => {
   const store = createMockStore();
   const olderClient = new QueryClient();
@@ -948,6 +979,7 @@ it('never restores or persists excluded content, even when another instance flus
     scopes: [createScope([], store)],
     exclude: (key) => key[0] === 'email',
   });
+  await current.retire((key) => key[0] === 'email');
   const protectedKey = ['email', 'threadMessages', 'thread'];
   olderClient.setQueryData(protectedKey, { body: 'old response' });
   await older.flush();

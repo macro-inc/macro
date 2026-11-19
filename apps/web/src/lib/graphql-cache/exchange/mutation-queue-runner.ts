@@ -1254,12 +1254,12 @@ export function createMutationQueueRunner(
           outcome = 'superseded';
           if (cacheSessionGeneration.isCurrent(snapshotGeneration))
             await deps.deleteReportedRecords(result);
-          else await deps.revalidate([], op, undefined, true);
+          else await deps.revalidate([], op, committed.affectedOps ?? [], true);
         } else {
           disposition = 'committed';
           outcome = 'committed';
           if (!cacheSessionGeneration.isCurrent(snapshotGeneration)) {
-            await deps.revalidate([], op, undefined, true);
+            await deps.revalidate([], op, committed.affectedOps ?? [], true);
           } else {
             const deleted = await deps.deleteReportedRecords(result);
             if (!isCurrent(attempt)) return detachedResult();

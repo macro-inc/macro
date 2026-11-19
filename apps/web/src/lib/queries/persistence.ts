@@ -297,11 +297,6 @@ export function setupQueryPersistence(
   });
 
   for (const scope of scopes) {
-    if (exclude)
-      fireAndForget(
-        scope.store.prune((entry) => !exclude(entry.queryKey)),
-        'query-persistence'
-      );
     if (!scope.outlivesQuery) continue;
     const maxAgeMs = scope.maxAge
       ? parsedDurationToMilliseconds(scope.maxAge)

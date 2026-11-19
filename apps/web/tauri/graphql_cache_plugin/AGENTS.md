@@ -38,4 +38,4 @@ From the repository root:
   in `../src-tauri/src/lib.rs` as well as defining their plugin handler.
 - Keep `apps/web/tauri/Cargo.lock` current when shared client dependencies change.
 - Preserve the deployed command contract when an older bundle omits `generation`; reject older supplied generations under the shared owner lock. New bundles always stamp response writes and require the transition capability. Native build floors protect new bundles on old binaries, not old bundles on new binaries.
-- Resume incomplete retirement before retained live-view reads and publish the recovered generation to every window before returning content; scoped hydration and person-context writes also publish first account binding.
+- Resume incomplete retirement before retained live-view reads. Publish every authority change under the owner lock, including recovery and first account binding, so an older notification cannot reactivate a retired generation.
