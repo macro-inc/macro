@@ -542,10 +542,12 @@ tools — hexagonal, heavily feature-gated.
 - A message read Graph answers 404 settles as `absent` (`reconcile` in
   `domain/mailbox.rs`). Live work reads it twice more, 30 and 60 s apart
   (`location_unsettled`), because it follows a change Graph's read can
-  briefly miss. Import work settles at once: the folder held the message when
-  it was listed, ids are immutable so a moved message still reads, and Deleted
-  Items lists entries Graph never serves as messages, which would otherwise
-  hold every import's end.
+  briefly miss. Import work settles at once: it lists what a folder held or
+  rechecks mail Macro stored, ids are immutable so a moved message still
+  reads, and Deleted Items can list entries Graph never serves as messages,
+  which held each import's end for about 90 s. So every live enqueue clears
+  `is_import` on a row it merges into (`ON CONFLICT ... is_import = false`, or
+  `AND EXCLUDED.is_import` for folder pages); keep that in a new one.
 - Outlook sync claims (catalog, folder streams, messages, contacts) skip a
   link with `needs_reauth`; clearing the flag resumes them.
 - Process deleted-user bindings in the domain by link id, custodian before
@@ -567,7 +569,7 @@ tools — hexagonal, heavily feature-gated.
   latest catalog discovery (every 5 minutes, from the listing discovery already
   makes), and the discover span sums it as `outlook.provider_item_count`. It
   counts what the folder holds at the provider, imported or not, so an import
-  is checked against it. Deleted Items' count also covers the entries Graph
+  is checked against it. Deleted Items' count also covers any entries Graph
   lists but answers 404 for, so its stored messages can stay below it.
 - `email_sync_streams.reader_revision` is the folder reader revision a mail
   folder stream's current delta round started at, and `round_started_at` when

@@ -58,7 +58,7 @@ invitation whose MIME source Graph won't return is retried twice
 A message Graph answers 404 for is settled as gone (`@outlook.outcome:absent`).
 Live work is read twice more first, 30 and 60 s apart
 (`@outlook.defer_reason:location_unsettled`); import work settles at once.
-Deleted Items lists entries Graph never serves as messages, so its stored
+Deleted Items can list entries Graph never serves as messages, so its stored
 messages can stay below its `@outlook.provider_item_count`: every import
 settles those entries this way and never stores them.
 
