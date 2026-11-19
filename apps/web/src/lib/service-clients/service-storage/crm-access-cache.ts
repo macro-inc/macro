@@ -7,6 +7,7 @@ import {
 import { StaleCacheAuthorityError } from '@graphql-cache/authority';
 import type { CacheHost } from '@graphql-cache/host/types';
 import { cacheSessionGeneration } from '@graphql-cache/session-generation';
+import { Telemetry } from '@macro-inc/observability';
 import { queryClient, queryPersistence } from '@queries/client';
 import { crmProtectedQueryKey } from '@queries/crm-cache-scope';
 import { authServiceClient } from '@service-auth/client';
@@ -76,6 +77,7 @@ function install() {
     fetchProof,
     retire: retireVisibleSnapshots,
     async bindAccount(owner, generation, account) {
+      const context = Telemetry.captureContext();
       const target = host;
       if (
         !target ||
@@ -93,12 +95,14 @@ function install() {
         crmAccessAuthority.account() !== account
       )
         throw new StaleCacheAuthorityError();
-      await target.writeQuery({
-        query: '{ user { id } }',
-        data: { user: { id: account } },
-        identity: account,
-        generation,
-      });
+      await context.run(() =>
+        target.writeQuery({
+          query: '{ user { id } }',
+          data: { user: { id: account } },
+          identity: account,
+          generation,
+        })
+      );
     },
   });
   focusManager.subscribe((focused) => {

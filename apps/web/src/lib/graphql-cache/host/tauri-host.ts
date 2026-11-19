@@ -312,11 +312,14 @@ export function createTauriCacheHost(options: TauriHostOptions): CacheHost {
   }
 
   async function currentAuthority() {
+    const context = Telemetry.captureContext();
     const version = authorityObserver.version();
     const value = await request('graphql_cache_current_authority', {
       identity: options.scope,
     });
-    const observed = authorityObserver.observe(value, version);
+    const observed = context.run(() =>
+      authorityObserver.observe(value, version)
+    );
     return observed;
   }
 
@@ -536,8 +539,9 @@ export function createTauriCacheHost(options: TauriHostOptions): CacheHost {
     clientId,
     authority: {
       current: async () => {
+        const context = Telemetry.captureContext();
         await ready;
-        return currentAuthority();
+        return context.run(currentAuthority);
       },
       snapshot: authorityObserver.snapshot,
       onChanged: authorityObserver.onChanged,
@@ -876,27 +880,30 @@ export function createTauriCacheHost(options: TauriHostOptions): CacheHost {
     },
 
     async writeQuery(args: CacheWriteArgs): Promise<WriteResult> {
+      const context = Telemetry.captureContext();
       args = {
         ...args,
         generation: args.generation ?? authorityObserver.snapshot()?.generation,
       };
       await ready;
-      return await request<WriteResult>('graphql_cache_write', {
-        originOpId: args.opKey === undefined ? undefined : opId(args.opKey),
-        registration:
-          args.registerDependencies && args.opKey !== undefined
-            ? {
-                opId: opId(args.opKey),
-                entityResolvers: args.entityResolvers,
-              }
-            : undefined,
-        query: args.query,
-        operationName: args.operationName,
-        variables: args.variables,
-        data: args.data,
-        generation: args.generation,
-        identity: args.identity,
-      });
+      return await context.run(() =>
+        request<WriteResult>('graphql_cache_write', {
+          originOpId: args.opKey === undefined ? undefined : opId(args.opKey),
+          registration:
+            args.registerDependencies && args.opKey !== undefined
+              ? {
+                  opId: opId(args.opKey),
+                  entityResolvers: args.entityResolvers,
+                }
+              : undefined,
+          query: args.query,
+          operationName: args.operationName,
+          variables: args.variables,
+          data: args.data,
+          generation: args.generation,
+          identity: args.identity,
+        })
+      );
     },
 
     async hydrateQuery(args: CacheHydrateArgs): Promise<HydrationResult> {

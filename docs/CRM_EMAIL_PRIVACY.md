@@ -96,6 +96,12 @@ before that discard. A confirmed local settlement retry retains the original
 request generation; a fresh HTTP attempt captures a new one. A mutation waits
 only for its affected publications, so an unrelated read cannot hold its notice.
 
+Malformed persisted mutation entries can prevent retirement from completing.
+The durable marker stays incomplete and owner commands retry cleanup and fail
+until the queue is repaired. Existing queue hydration also rejects these
+entries. Isolating their copied snapshots without losing authored metadata is a
+separate recovery improvement; retirement does not delete authored commands.
+
 CRM routes initially show loading. A failed initial proof ends in the existing
 retry state after at most one network/stale-generation retry; the second network
 attempt has a short timeout. Manual retry and reconnect restart verification.
