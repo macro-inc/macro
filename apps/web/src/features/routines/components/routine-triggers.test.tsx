@@ -132,11 +132,9 @@ describe('routine triggers on the routine page', () => {
     // among the filters an email trigger can take.
     fireEvent.click(screen.getByRole('button', { name: 'Remove condition' }));
     expect(triggers()[0]).toMatchObject({ condition: undefined });
-    fireEvent.click(screen.getByRole('button', { name: 'Add filter' }));
+    press(screen.getByRole('button', { name: 'Add filter' }), 'Enter');
+    press(item(/^AI check/), 'Enter');
     const filter = screen.getByRole('dialog', { name: 'Add filter' });
-    fireEvent.click(
-      within(filter).getByRole('menuitem', { name: /^AI check/ })
-    );
     fireEvent.input(within(filter).getByRole('textbox'), {
       target: { value: 'Is it urgent?' },
     });
@@ -146,13 +144,13 @@ describe('routine triggers on the routine page', () => {
 
   it('narrows an email trigger to some inboxes from + Filter', () => {
     const { triggers } = renderRows([{ ...email, condition: undefined }]);
-    fireEvent.click(screen.getByRole('button', { name: 'Add filter' }));
-    const choices = screen.getByRole('dialog', { name: 'Add filter' });
-    fireEvent.click(within(choices).getByRole('menuitem', { name: /^Inbox/ }));
+    press(screen.getByRole('button', { name: 'Add filter' }), 'Enter');
+    press(item(/^Inbox/), 'Enter');
+    const editor = screen.getByRole('dialog', { name: 'Add filter' });
     fireEvent.click(
-      within(choices).getByRole('checkbox', { name: 'team@example.com' })
+      within(editor).getByRole('checkbox', { name: 'team@example.com' })
     );
-    fireEvent.click(within(choices).getByRole('button', { name: 'Done' }));
+    fireEvent.click(within(editor).getByRole('button', { name: 'Done' }));
     expect(triggers()).toMatchObject([{ inboxes: [TEAM_INBOX] }]);
     expect(screen.getByText('1 picked')).toBeTruthy();
 
