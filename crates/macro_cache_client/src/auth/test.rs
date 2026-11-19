@@ -36,10 +36,10 @@ async fn redis_now_ms(cache: &MacroCache) -> i64 {
     seconds * 1000 + micros / 1000
 }
 
-/// A deadline read back adds Redis's clock to a whole-millisecond TTL, and
-/// the two readings can straddle a millisecond either way.
+/// Whether a deadline read back is the one stored: exactly, where Redis has
+/// PEXPIRETIME, and otherwise no more than a millisecond early.
 fn same_deadline(read: i64, stored: i64) -> bool {
-    (-1..=1).contains(&(read - stored))
+    (-1..=0).contains(&(read - stored))
 }
 
 /// Writes a record no code of this module writes: an unbound value, or a
@@ -185,7 +185,7 @@ async fn a_restored_session_redeems_once_more_within_its_lifetime() {
         .unwrap();
     let now = redis_now_ms(&cache).await;
     let lifetime_ms = i64::try_from(MACRO_MOBILE_LOGIN_SESSION_EXPIRY_SECONDS * 1000).unwrap();
-    assert!(taken.expires_at_ms > now && taken.expires_at_ms <= now + lifetime_ms + 1);
+    assert!(taken.expires_at_ms > now && taken.expires_at_ms <= now + lifetime_ms);
     // Most of the code's lifetime went by while the refresh failed.
     taken.expires_at_ms = now + 2_000;
     assert!(

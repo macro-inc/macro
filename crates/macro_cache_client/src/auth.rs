@@ -24,46 +24,74 @@ pub static MACRO_MOBILE_LOGIN_BOUND_SESSION_PREFIX: &str = "mbl_login_bound:";
 const REFRESH_TOKEN_FIELD: &str = "refresh_token";
 const CHALLENGE_FIELD: &str = "challenge";
 
+/// Lua defining `deadline_ms(key)`: when `key` expires, in milliseconds
+/// since the epoch on Redis's own clock, or a negative number when it has no
+/// expiry. PEXPIRETIME (Redis 7.0) reads the stored deadline exactly. An
+/// older Redis rebuilds it from TIME, read first, and the TTL left, which can
+/// put it a millisecond early but never late.
+macro_rules! deadline_lua {
+    () => {
+        r"
+local function deadline_ms(key)
+  local stored = redis.pcall('PEXPIRETIME', key)
+  if type(stored) == 'number' then
+    return stored
+  end
+  local now = redis.call('TIME')
+  local ttl_ms = redis.call('PTTL', key)
+  if ttl_ms < 0 then
+    return ttl_ms
+  end
+  return now[1] * 1000 + math.floor(now[2] / 1000) + ttl_ms
+end
+"
+    };
+}
+
 /// Reads a bound mobile login session and deletes it in one step, returning
-/// the stored refresh token, its deadline and the challenge. A deadline is
-/// in milliseconds since the epoch on Redis's own clock, so the restore
-/// that compares against it never counts the time spent reaching Redis.
-/// A record missing its challenge or its expiry was not written by this
-/// module: it is spent and never redeems. Each script touches one key, so
-/// it runs on a cluster too. KEYS: the bound key. ARGV: the record's fields.
-const TAKE_BOUND_MOBILE_LOGIN_SESSION: &str = r"
+/// the stored refresh token, its deadline and the challenge. The restore
+/// compares that deadline with Redis's clock, so it never counts the time
+/// spent reaching Redis. A record missing its challenge or its expiry was
+/// not written by this module: it is spent and never redeems. Each script
+/// touches one key, so it runs on a cluster too.
+/// KEYS: the bound key. ARGV: the record's fields.
+const TAKE_BOUND_MOBILE_LOGIN_SESSION: &str = concat!(
+    deadline_lua!(),
+    r"
 local bound = redis.call('HMGET', KEYS[1], ARGV[1], ARGV[2])
 if not bound[1] then
   return false
 end
-local ttl_ms = redis.call('PTTL', KEYS[1])
+local expires_at_ms = deadline_ms(KEYS[1])
 redis.call('DEL', KEYS[1])
-if not bound[2] or ttl_ms < 0 then
+if not bound[2] or expires_at_ms < 0 then
   return false
 end
-local now = redis.call('TIME')
-return {bound[1], now[1] * 1000 + math.floor(now[2] / 1000) + ttl_ms, bound[2]}
-";
+return {bound[1], expires_at_ms, bound[2]}
+"
+);
 
 /// The same for an unbound session: its refresh token and deadline.
 /// KEYS: the unbound key.
-const TAKE_UNBOUND_MOBILE_LOGIN_SESSION: &str = r"
+const TAKE_UNBOUND_MOBILE_LOGIN_SESSION: &str = concat!(
+    deadline_lua!(),
+    r"
 local refresh_token = redis.call('GET', KEYS[1])
 if not refresh_token then
   return false
 end
-local ttl_ms = redis.call('PTTL', KEYS[1])
+local expires_at_ms = deadline_ms(KEYS[1])
 redis.call('DEL', KEYS[1])
-if ttl_ms < 0 then
+if expires_at_ms < 0 then
   return false
 end
-local now = redis.call('TIME')
-return {refresh_token, now[1] * 1000 + math.floor(now[2] / 1000) + ttl_ms}
-";
+return {refresh_token, expires_at_ms}
+"
+);
 
-/// Puts a taken session back under its key until its original deadline,
-/// unless that has passed or the code exists again. Should the expiry fail
-/// after the write, the takes refuse the record that has none.
+/// Puts a taken session back under its key until exactly its original
+/// deadline, unless that has passed or the code exists again. Should the
+/// expiry fail after the write, the takes refuse the record that has none.
 /// KEYS: the session's key. ARGV: the refresh token, the deadline, then for
 /// a bound code the record's fields and challenge.
 const RESTORE_MOBILE_LOGIN_SESSION: &str = r"
@@ -71,16 +99,15 @@ if redis.call('EXISTS', KEYS[1]) == 1 then
   return 0
 end
 local now = redis.call('TIME')
-local ttl_ms = tonumber(ARGV[2]) - (now[1] * 1000 + math.floor(now[2] / 1000))
-if ttl_ms <= 0 then
+if tonumber(ARGV[2]) <= now[1] * 1000 + math.floor(now[2] / 1000) then
   return 0
 end
 if ARGV[3] then
   redis.call('HSET', KEYS[1], ARGV[3], ARGV[1], ARGV[4], ARGV[5])
-  redis.call('PEXPIREAT', KEYS[1], ARGV[2])
 else
-  redis.call('SET', KEYS[1], ARGV[1], 'PX', ttl_ms)
+  redis.call('SET', KEYS[1], ARGV[1])
 end
+redis.call('PEXPIREAT', KEYS[1], ARGV[2])
 return 1
 ";
 
