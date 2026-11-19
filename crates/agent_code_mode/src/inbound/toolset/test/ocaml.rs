@@ -7,7 +7,7 @@
 use super::*;
 use crate::domain::{
     CodeModeService, ExecutionCredentials, ExecutionIdentity, ExecutionRecord, ExecutionStatus,
-    ExecutionStore, ExecutionTurns, OcamlPrograms, OcamlRollout, ProgramLanguage,
+    ExecutionStore, ExecutionTurns, OcamlPrograms, OwnerRollout, ProgramLanguage,
 };
 use agent_session::domain::model::AgentSessionId;
 use ai_toolset::ToolSet as _;
@@ -84,7 +84,7 @@ impl ExecutionCredentials for Credentials {
 
 struct On;
 #[async_trait]
-impl OcamlRollout for On {
+impl OwnerRollout for On {
     async fn enabled(&self, _: &MacroUserIdStr<'static>) -> bool {
         true
     }

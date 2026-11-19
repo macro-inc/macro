@@ -57,7 +57,8 @@ pub struct ExecutionIdentity {
 }
 
 /// The language of a session program. OCaml is offered only to sessions
-/// whose owner has the OCaml rollout ([`OcamlRollout`](super::OcamlRollout)).
+/// whose owner has the OCaml rollout ([`OwnerRollout`](super::OwnerRollout));
+/// JavaScript tools programs are not offered yet.
 #[derive(
     Debug, Clone, Copy, Default, PartialEq, Eq, Serialize, Deserialize, JsonSchema, ToSchema,
 )]
@@ -68,6 +69,9 @@ pub enum ProgramLanguage {
     Javascript,
     /// An OCaml program (`main.ml`) that calls `Code_mode.run` with the OCaml SDK.
     Ocaml,
+    /// A script in opencode's JavaScript dialect (`main.js`) that calls SDK
+    /// operations as `tools.<service>.<operation>(input)`.
+    JsTools,
 }
 
 impl ProgramLanguage {
@@ -82,24 +86,17 @@ impl From<ProgramLanguage> for code_execution::domain::Language {
         match language {
             ProgramLanguage::Javascript => Self::Javascript,
             ProgramLanguage::Ocaml => Self::Ocaml,
+            ProgramLanguage::JsTools => Self::JsTools,
         }
     }
 }
 
-/// The runner language a session can't run yet: JS tools programs, which
-/// sessions are not offered.
-#[derive(Debug, Clone, Copy, PartialEq, Eq, thiserror::Error)]
-#[error("{} programs are not available in this session", .0.as_str())]
-pub struct UnofferedLanguage(pub code_execution::domain::Language);
-
-impl TryFrom<code_execution::domain::Language> for ProgramLanguage {
-    type Error = UnofferedLanguage;
-
-    fn try_from(language: code_execution::domain::Language) -> Result<Self, Self::Error> {
+impl From<code_execution::domain::Language> for ProgramLanguage {
+    fn from(language: code_execution::domain::Language) -> Self {
         match language {
-            code_execution::domain::Language::Javascript => Ok(Self::Javascript),
-            code_execution::domain::Language::Ocaml => Ok(Self::Ocaml),
-            code_execution::domain::Language::JsTools => Err(UnofferedLanguage(language)),
+            code_execution::domain::Language::Javascript => Self::Javascript,
+            code_execution::domain::Language::Ocaml => Self::Ocaml,
+            code_execution::domain::Language::JsTools => Self::JsTools,
         }
     }
 }

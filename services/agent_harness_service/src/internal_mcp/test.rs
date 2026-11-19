@@ -412,14 +412,14 @@ async fn each_harness_gets_only_internal_tools_and_writes_only_its_session() {
 mod code_mode;
 
 /// Code mode whose OCaml rollout is fixed, recording each run's language.
-struct OcamlRollout {
+struct OwnerRollout {
     on: bool,
     permissions: bool,
     languages: std::sync::Mutex<Vec<code_execution::domain::Language>>,
 }
 
 #[async_trait::async_trait]
-impl SessionCodeMode for OcamlRollout {
+impl SessionCodeMode for OwnerRollout {
     async fn execute(
         &self,
         _: &agent_session::domain::model::AgentSession,
@@ -468,7 +468,7 @@ async fn execute_code_offers_and_accepts_ocaml_only_with_the_rollout() {
             .await
             .unwrap();
         let tasks = FixedTasks::default();
-        let code_mode = Arc::new(OcamlRollout {
+        let code_mode = Arc::new(OwnerRollout {
             on,
             permissions: false,
             languages: Default::default(),
@@ -657,7 +657,7 @@ async fn show_permissions_is_offered_only_where_permissions_gate_ocaml() {
                     Arc::new(tasks.clone()),
                 )),
                 tasks: Arc::new(tasks),
-                code_mode: Some(Arc::new(OcamlRollout {
+                code_mode: Some(Arc::new(OwnerRollout {
                     on,
                     permissions,
                     languages: Default::default(),

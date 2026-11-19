@@ -237,6 +237,29 @@ async fn main() -> anyhow::Result<()> {
 
 const DEFAULT_POSTHOG_HOST: &str = "https://us.i.posthog.com";
 
+/// The analyzer the permission gate lists a JS tools program's operations
+/// with, or `None` when it can't start. That is logged, not fatal: without
+/// it JS tools programs are never offered, and everything else still boots.
+async fn js_tools_analyzer(
+    binary: std::path::PathBuf,
+    scratch: std::path::PathBuf,
+) -> Option<Arc<dyn code_execution::domain::ProgramAnalyzer>> {
+    match code_execution::outbound::deno::analyze::JsToolsAnalyzer::new(
+        binary,
+        scratch,
+        8,
+        code_execution::domain::Limits::default().max_source_bytes,
+    )
+    .await
+    {
+        Ok(analyzer) => Some(Arc::new(analyzer)),
+        Err(error) => {
+            tracing::error!(%error, "JS tools analyzer failed to start; JS tools programs are off");
+            None
+        }
+    }
+}
+
 fn macro_mcp_endpoint(base_url: &McpServiceUrl) -> Result<url::Url, url::ParseError> {
     // Append rather than Url::join("/mcp"), which would discard the gateway prefix.
     url::Url::parse(&format!("{}/mcp", base_url.trim_end_matches('/')))
@@ -678,9 +701,10 @@ async fn run() -> anyhow::Result<()> {
     .context("failed to compose cognition APIs")?;
     let cognition_router = cognition_runtime.router.clone();
     let code_scratch = tempfile::tempdir()?;
-    // Lists the SDK operations an OCaml program may call, for the permission
-    // gate; only with the OCaml bundle.
-    let mut ocaml_analyzer: Option<Arc<dyn code_execution::domain::ProgramAnalyzer>> = None;
+    // List the SDK operations a checked program may call, for the permission
+    // gate: JS tools wherever Deno runs programs, OCaml only with the OCaml
+    // bundle.
+    let mut program_analyzers = code_mode::permissions::Analyzers::default();
     let code_runner = match &config.deno_binary {
         Some(binary) => {
             let runner = code_execution::outbound::deno::DenoRunner::new(
@@ -703,7 +727,7 @@ async fn run() -> anyhow::Result<()> {
                 )
                 .await
                 .map_err(|error| anyhow::anyhow!("invalid OCaml analyzer: {error}"))?;
-                ocaml_analyzer = Some(Arc::new(analyzer));
+                program_analyzers.ocaml = Some(Arc::new(analyzer));
             }
             let runner: Arc<dyn code_execution::domain::CodeRunner> = Arc::new(runner);
             // Public MCP runs get their own admission budget so external
@@ -728,6 +752,9 @@ async fn run() -> anyhow::Result<()> {
                     ..Default::default()
                 },
             )?;
+            // JS tools programs need only Deno: the bundle is embedded.
+            program_analyzers.js_tools =
+                js_tools_analyzer(binary.into(), code_scratch.path().join("analyses-js")).await;
             let checker = code_execution::outbound::deno::check::DenoChecker::new(
                 binary.into(),
                 code_scratch.path().join("checks"),
@@ -955,10 +982,12 @@ async fn run() -> anyhow::Result<()> {
                 Arc::new(agent_permissions::outbound::registry::registry_catalog()),
             ),
         );
-    // The gate on OCaml programs, where this build can run them.
-    let permission_gate = ocaml_analyzer.map(|analyzer| {
+    // The gate on checked programs, in each language this build can
+    // analyze.
+    let ocaml_gated = program_analyzers.ocaml.is_some();
+    let permission_gate = program_analyzers.any().then(|| {
         Arc::new(code_mode::permissions::PermissionGate {
-            analyzer,
+            analyzers: program_analyzers,
             permissions: Arc::clone(&agent_permissions_service),
             holds: tool_approvals.clone(),
             rollout: Arc::new(code_mode::PermissionsFlag(feature_flags.clone())),
@@ -990,11 +1019,9 @@ async fn run() -> anyhow::Result<()> {
         Some(fingerprint) => session_code_mode.with_ocaml(agent_code_mode::domain::OcamlPrograms {
             fingerprint,
             rollout: Arc::new(code_mode::OcamlFlag(feature_flags.clone())),
-            permissions: permission_gate.is_some().then(
-                || -> Arc<dyn agent_code_mode::domain::OcamlRollout> {
-                    Arc::new(code_mode::PermissionsFlag(feature_flags.clone()))
-                },
-            ),
+            permissions: ocaml_gated.then(|| -> Arc<dyn agent_code_mode::domain::OwnerRollout> {
+                Arc::new(code_mode::PermissionsFlag(feature_flags.clone()))
+            }),
         }),
         None => session_code_mode,
     };

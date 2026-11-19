@@ -1712,6 +1712,11 @@ export type CreateSessionThread = {
 export type DecisionVia = 'card' | 'chat' | 'inbox';
 
 /**
+ * How an approval ended without approving.
+ */
+export type DeclinedStatus = 'denied' | 'cancelled' | 'expired';
+
+/**
  * HTTP request selecting one provider to probe.
  */
 export type DiscoverAgentCapabilitiesRequest = {
@@ -1964,6 +1969,54 @@ export type ExecutionActivity = {
 export type ExecutionId = string;
 
 /**
+ * Why a program did not run, when its permissions stopped it.
+ */
+export type ExecutionPermission = {
+    /**
+     * The operations set to never.
+     */
+    operations: Array<GatedOperation>;
+    outcome: 'blocked';
+} | {
+    /**
+     * The operations it asked about.
+     */
+    operations: Array<GatedOperation>;
+    outcome: 'declined';
+    /**
+     * How the approval ended.
+     */
+    status: DeclinedStatus;
+};
+
+/**
+ * Compact model result with an identity the UI uses to load the durable record.
+ */
+export type ExecutionReceipt = {
+    /**
+     * Observed SDK operations for conversation activity snapshots.
+     */
+    activity?: Array<ExecutionActivity>;
+    /**
+     * Safe failure text, when execution did not succeed.
+     */
+    error?: string | null;
+    /**
+     * Reference to the session's durable rendering record.
+     */
+    executionId: ExecutionId;
+    permission?: null | ExecutionPermission;
+    /**
+     * Only the value explicitly returned by the program.
+     */
+    result?: unknown;
+    /**
+     * Last recorded outcome; running may be stale after a process interruption.
+     */
+    status: ExecutionStatus;
+};
+
+/**
  * Durable source and final outcome, with historical bridge calls when present.
  * The full journal is not included in the model's tool result.
  */
@@ -1995,6 +2048,7 @@ export type ExecutionRecord = {
      * OCaml serialize as they did before languages.
      */
     language?: ProgramLanguage;
+    permission?: null | ExecutionPermission;
     /**
      * JSON returned by the program, if successful.
      */
@@ -2088,6 +2142,44 @@ export type ExtractInputResponse = InputSuggestions & {
 export type FileChangeKindDto = 'added' | 'modified' | 'deleted' | 'renamed';
 
 /**
+ * One SDK operation a program may call, as the gate judged it: what the
+ * approval dialog lists and a refusal names.
+ */
+export type GatedOperation = {
+    action?: null | PermissionAction;
+    /**
+     * Its group id; `unclassified` for an operation the registry does not
+     * know.
+     */
+    group: string;
+    /**
+     * Its group's display name.
+     */
+    groupName: string;
+    /**
+     * What it does, for a person. `service.operation` for an operation the
+     * registry does not know.
+     */
+    label: string;
+    /**
+     * The raw operationId, e.g. `send_message`.
+     */
+    operation: string;
+    /**
+     * Where the state comes from.
+     */
+    origin: ToolPermissionOrigin;
+    /**
+     * The SDK's spec name, e.g. `email`.
+     */
+    service: string;
+    /**
+     * Its effective state.
+     */
+    state: ToolPermissionState;
+};
+
+/**
  * One end of the compared range.
  */
 export type GitRefDto = {
@@ -2099,6 +2191,20 @@ export type GitRefDto = {
      * The commit, when known.
      */
     sha?: string | null;
+};
+
+/**
+ * One group, and which of its actions.
+ */
+export type GroupSelection = {
+    /**
+     * The actions to show; empty or absent shows all five.
+     */
+    actions?: Array<PermissionAction>;
+    /**
+     * A group id, such as `documents` or `email`.
+     */
+    group: string;
 };
 
 /**
@@ -2508,9 +2614,10 @@ export type PreviewAgentSessionsResponse = {
 
 /**
  * The language of a session program. OCaml is offered only to sessions
- * whose owner has the OCaml rollout ([`OcamlRollout`](super::OcamlRollout)).
+ * whose owner has the OCaml rollout ([`OwnerRollout`](super::OwnerRollout));
+ * JavaScript tools programs are not offered yet.
  */
-export type ProgramLanguage = 'javascript' | 'ocaml';
+export type ProgramLanguage = 'javascript' | 'ocaml' | 'js_tools';
 
 /**
  * A file the prompt refers to, by where the agent can fetch it.
@@ -2672,7 +2779,7 @@ export type QueuedActionDto = {
 /**
  * A dispatch result; unfinished work is never reported as success.
  */
-export type RecordedCallStatus = 'running' | 'completed' | 'failed' | 'unknown';
+export type RecordedCallStatus = 'running' | 'completed' | 'failed' | 'unknown' | 'refused';
 
 /**
  * A real inner call, recorded by trusted dispatch for the existing renderers.
@@ -3082,6 +3189,69 @@ export type SharePermissionV2 = {
 };
 
 /**
+ * `ShowPermissions`' result: what the chat card shows, and a snapshot for
+ * the model. The card reads the live settings itself.
+ */
+export type ShowPermissionsResult = {
+    /**
+     * The agent whose permissions these are.
+     */
+    agentId: string;
+    /**
+     * Each shown setting as it stands now.
+     */
+    current: Array<ShownPermission>;
+    /**
+     * What the model should do next.
+     */
+    message: string;
+    /**
+     * The agent's sentence for above the controls.
+     */
+    reason?: string | null;
+    /**
+     * What to show.
+     */
+    selection: ShowPermissionsSelection;
+    /**
+     * The session the card is in.
+     */
+    sessionId: string;
+};
+
+/**
+ * What was shown, resolved.
+ */
+export type ShowPermissionsSelection = {
+    /**
+     * The groups, each with the actions shown (all five when none were named).
+     */
+    groups: Array<GroupSelection>;
+    /**
+     * The operations.
+     */
+    tools: Array<ToolSelection>;
+};
+
+/**
+ * One shown setting as it stands now.
+ */
+export type ShownPermission = {
+    /**
+     * Where the state comes from.
+     */
+    origin: ToolPermissionOrigin;
+    /**
+     * Its effective state.
+     */
+    state: ToolPermissionState;
+    /**
+     * The group action or operation.
+     */
+    target: ToolPermissionTarget;
+};
+
+/**
  * The session the user is choosing to leave behind.
  */
 export type StartFreshAgentConversationRequest = {
@@ -3426,6 +3596,20 @@ export type ToolPermissionTarget = {
     operation: string;
     /**
      * The SDK's spec name, e.g. `storage`.
+     */
+    service: string;
+};
+
+/**
+ * One SDK operation.
+ */
+export type ToolSelection = {
+    /**
+     * The raw operationId, as a refusal names it.
+     */
+    operation: string;
+    /**
+     * The SDK's spec name, such as `email`.
      */
     service: string;
 };
@@ -5199,7 +5383,7 @@ export type AnswerAgentSessionToolApprovalData = {
 export type AnswerAgentSessionToolApprovalErrors = {
     401: string;
     /**
-     * Not the owner, for approve or deny; or no edit access
+     * Not the owner, for approve or deny; or no edit access; or, for a hold on the agent's permissions, not a person's own session
      */
     403: string;
     404: string;

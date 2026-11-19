@@ -691,7 +691,7 @@ async fn a_delayed_call_cannot_adopt_a_new_turn_or_receive_credentials() {
 
 struct Rollout(bool);
 #[async_trait]
-impl OcamlRollout for Rollout {
+impl OwnerRollout for Rollout {
     async fn enabled(&self, _: &macro_user_id::user_id::MacroUserIdStr<'static>) -> bool {
         self.0
     }

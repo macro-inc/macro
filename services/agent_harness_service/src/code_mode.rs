@@ -18,8 +18,9 @@ pub struct RunCredentials {
     pub gate: Arc<dyn NativeToolGate>,
     pub endpoints: SdkEndpoints,
     pub scopes: Arc<dyn SessionScopes>,
-    /// The agent permissions gate on OCaml programs; `None` where the runner
-    /// has no OCaml bundle, and then every program runs as before.
+    /// The agent permissions gate on checked programs (OCaml, JavaScript
+    /// tools); `None` where the runner can analyze no language, and then
+    /// every program runs as before.
     pub permissions: Option<Arc<permissions::PermissionGate>>,
 }
 
@@ -273,59 +274,76 @@ pub const OCAML_FLAG: &str = "enable-ocaml-code-mode";
 pub struct OcamlFlag<Flags>(pub Option<Flags>);
 
 #[async_trait]
-impl<Flags: feature_flags::FeatureFlags + 'static> agent_code_mode::domain::OcamlRollout
+impl<Flags: feature_flags::FeatureFlags + 'static> agent_code_mode::domain::OwnerRollout
     for OcamlFlag<Flags>
 {
     async fn enabled(&self, owner: &MacroUserIdStr<'static>) -> bool {
-        let Some(flags) = &self.0 else {
-            return false;
-        };
-        flags
-            .load(owner)
-            .await
-            .inspect_err(|error| {
-                tracing::warn!(error = ?error, "could not read the OCaml code mode flag");
-            })
-            .is_ok_and(|snapshot| snapshot.is_enabled(OCAML_FLAG))
+        flags_on(&self.0, owner, &[OCAML_FLAG]).await
     }
 }
 
-/// The backend rollout for agent permissions, on top of [`OCAML_FLAG`]:
-/// permissions apply to OCaml programs only. Off everywhere until the flag is
-/// created in PostHog and targeted.
+/// The backend rollout for agent permissions. It is also the only flag on
+/// JavaScript tools programs; OCaml programs need [`OCAML_FLAG`] too. Off
+/// everywhere until the flag is created in PostHog and targeted.
 pub const PERMISSIONS_FLAG: &str = "enable-agent-permissions";
 
-/// [`PERMISSIONS_FLAG`] and [`OCAML_FLAG`] for a user. Without a flag client
-/// (local stacks without PostHog) or when the flags can't be read, it is off.
+/// [`PERMISSIONS_FLAG`] for a user. Without a flag client (local stacks
+/// without PostHog) or when the flags can't be read, it is off.
 pub struct PermissionsFlag<Flags>(pub Option<Flags>);
 
+/// Whether every one of `keys` is on for `user`; off without a flag client or
+/// when the flags can't be read.
+async fn flags_on<Flags: feature_flags::FeatureFlags>(
+    flags: &Option<Flags>,
+    user: &MacroUserIdStr<'static>,
+    keys: &[&str],
+) -> bool {
+    let Some(flags) = flags else {
+        return false;
+    };
+    flags
+        .load(user)
+        .await
+        .inspect_err(|error| {
+            tracing::warn!(error = ?error, ?keys, "could not read the code mode flags");
+        })
+        .is_ok_and(|snapshot| keys.iter().all(|key| snapshot.is_enabled(key)))
+}
+
+/// The page and API: on wherever the gate applies to some language, which
+/// [`PERMISSIONS_FLAG`] alone gives (JavaScript tools programs).
 impl<Flags: feature_flags::FeatureFlags + 'static>
     agent_permissions::domain::ports::PermissionsRollout for PermissionsFlag<Flags>
 {
     async fn enabled(&self, user: &MacroUserIdStr<'static>) -> bool {
-        let Some(flags) = &self.0 else {
-            return false;
-        };
-        flags
-            .load(user)
-            .await
-            .inspect_err(|error| {
-                tracing::warn!(error = ?error, "could not read the agent permissions flag");
-            })
-            .is_ok_and(|snapshot| {
-                snapshot.is_enabled(OCAML_FLAG) && snapshot.is_enabled(PERMISSIONS_FLAG)
-            })
+        flags_on(&self.0, user, &[PERMISSIONS_FLAG]).await
     }
 }
 
-/// The same rollout, as code mode and the OCaml gate ask it of a session
-/// owner.
+/// The gate, per language: [`PERMISSIONS_FLAG`], and for OCaml
+/// [`OCAML_FLAG`] too. Plain JavaScript is never gated.
 #[async_trait]
-impl<Flags: feature_flags::FeatureFlags + 'static> agent_code_mode::domain::OcamlRollout
+impl<Flags: feature_flags::FeatureFlags + 'static> permissions::LanguageRollout
+    for PermissionsFlag<Flags>
+{
+    async fn enabled(&self, owner: &MacroUserIdStr<'static>, language: ProgramLanguage) -> bool {
+        let keys: &[&str] = match language {
+            ProgramLanguage::Javascript => return false,
+            ProgramLanguage::Ocaml => &[PERMISSIONS_FLAG, OCAML_FLAG],
+            ProgramLanguage::JsTools => &[PERMISSIONS_FLAG],
+        };
+        flags_on(&self.0, owner, keys).await
+    }
+}
+
+/// Whether permissions gate an owner's OCaml programs, as code mode asks it
+/// for the tool's text.
+#[async_trait]
+impl<Flags: feature_flags::FeatureFlags + 'static> agent_code_mode::domain::OwnerRollout
     for PermissionsFlag<Flags>
 {
     async fn enabled(&self, owner: &MacroUserIdStr<'static>) -> bool {
-        agent_permissions::domain::ports::PermissionsRollout::enabled(self, owner).await
+        permissions::LanguageRollout::enabled(self, owner, ProgramLanguage::Ocaml).await
     }
 }
 
