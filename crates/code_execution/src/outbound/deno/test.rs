@@ -22,7 +22,7 @@ async fn setup(limits: Limits) -> (tempfile::TempDir, ExecutionService) {
 
 /// Passes every program, so these tests reach the process boundary with
 /// code a type checker would refuse.
-struct Unchecked;
+pub(super) struct Unchecked;
 
 #[async_trait::async_trait]
 impl ProgramChecker for Unchecked {
