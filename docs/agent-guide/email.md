@@ -806,8 +806,9 @@ task**, and the **Share** icon and label / copy-link icon. On touch (phones and
 tablets) the thread header has only Back, the subject, and the Info button:
 tapping the subject opens the title menu as a sheet, which holds every thread
 action including **Ask Macro**, **Create task**, and **Remind me**, and Info
-opens the details sheet. A thread open in Mail on touch has the same header;
-beside the list on wide touch it has no Back. The arrows
+opens the details sheet. On a phone, Delete from the title menu of a thread
+opened from a list returns to that list. A thread open in Mail on touch has the
+same header. Beside the list on wide touch it has no Back. The arrows
 follow the current filtered list and disable at its ends. When the open thread
 leaves the list while it stays open (a reply in Signal marks it done, or another
 device archives it), they step from its former neighbours. Mark done advances in
