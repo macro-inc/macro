@@ -34856,6 +34856,10 @@ export type GetItemsSoupErrors = {
      */
     403: ErrorResponse;
     500: ErrorResponse;
+    /**
+     * Selected email rules exceeded a resource limit
+     */
+    503: ErrorResponse;
 };
 
 export type GetItemsSoupError = GetItemsSoupErrors[keyof GetItemsSoupErrors];
@@ -34884,6 +34888,10 @@ export type PostItemsSoupErrors = {
      */
     403: ErrorResponse;
     500: ErrorResponse;
+    /**
+     * Selected email rules exceeded a resource limit
+     */
+    503: ErrorResponse;
 };
 
 export type PostItemsSoupError = PostItemsSoupErrors[keyof PostItemsSoupErrors];
@@ -34916,6 +34924,10 @@ export type PostItemsSoupAstErrors = {
      */
     404: ErrorResponse;
     500: ErrorResponse;
+    /**
+     * Selected email rules exceeded a resource limit
+     */
+    503: ErrorResponse;
 };
 
 export type PostItemsSoupAstError = PostItemsSoupAstErrors[keyof PostItemsSoupAstErrors];

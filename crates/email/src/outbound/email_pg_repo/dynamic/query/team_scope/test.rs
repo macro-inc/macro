@@ -138,7 +138,7 @@ fn inbox_stream_walks_each_inbox_in_order() {
     let view = all_mail();
     let filter = any_direction("example.test");
     let read = team_read(&view, &filter, params(SimpleSortMethod::UpdatedAt)).unwrap();
-    let page = sql(read.build_page(Stream::Inboxes));
+    let page = sql(read.build_page(Stream::Inboxes).unwrap());
 
     // One limited walk per inbox, merged, then the window.
     assert_eq!(
@@ -165,7 +165,7 @@ fn thread_terms_and_cursor_are_stream_conditions() {
     params.cursor_timestamp = Some(Utc.with_ymd_and_hms(2026, 1, 2, 3, 4, 5).unwrap());
     params.cursor_id_str = Some(Uuid::from_u128(9).to_string());
     let read = team_read(&view, &filter, params).unwrap();
-    let page = sql(read.build_page(Stream::Superset));
+    let page = sql(read.build_page(Stream::Superset).unwrap());
 
     let stream = page
         .split(") AS stream")
@@ -317,7 +317,7 @@ async fn checks_read_only_the_threads_id_and_inbox(pool: sqlx::PgPool) -> anyhow
             let read = team_read(&view, filter, params(sort))
                 .ok_or_else(|| anyhow::anyhow!("no team read for {sort:?} {filter:?}"))?;
             for stream in [Stream::Superset, Stream::Inboxes] {
-                read.build_page(stream)
+                read.build_page(stream)?
                     .build()
                     .fetch_all(&pool)
                     .await
@@ -349,7 +349,7 @@ async fn verdicts(pool: &sqlx::PgPool, team: Uuid) -> anyhow::Result<(i64, i64, 
     let read = team_read(&view, &filter, params).unwrap();
 
     let mut builder = QueryBuilder::new("");
-    read.push_ctes(&mut builder, Stream::Inboxes);
+    read.push_ctes(&mut builder, Stream::Inboxes)?;
     builder.push(
         r#"
         SELECT count(*) FILTER (WHERE allowed),
@@ -788,7 +788,15 @@ async fn sender_probe_caps_message_rows(pool: sqlx::PgPool) -> anyhow::Result<()
         resolved: resolved.clone(),
         ..params(SimpleSortMethod::UpdatedAt)
     };
-    let expected = super::super::read_team_page(&pool, &view, &filter, make_params(), None).await?;
+    let expected = super::super::read_team_page(
+        &pool,
+        &view,
+        &filter,
+        make_params(),
+        None,
+        Some(&crm::outbound::email_rule_discovery::PgEmailRuleDiscovery),
+    )
+    .await?;
     assert_eq!(expected.len(), 3);
 
     // Thirteen message rows fit at cap 13, exceed cap 12 by one, and exceed
@@ -803,9 +811,15 @@ async fn sender_probe_caps_message_rows(pool: sqlx::PgPool) -> anyhow::Result<()
             .unwrap();
         let branch_rows: i64 = read.probe().build_query_scalar().fetch_one(&pool).await?;
         assert_eq!(branch_rows, 13.min(cap + 1), "probe at cap {cap}");
-        let actual =
-            super::super::read_team_page(&pool, &view, &filter, make_params(), Some(tuning))
-                .await?;
+        let actual = super::super::read_team_page(
+            &pool,
+            &view,
+            &filter,
+            make_params(),
+            Some(tuning),
+            Some(&crm::outbound::email_rule_discovery::PgEmailRuleDiscovery),
+        )
+        .await?;
         assert_eq!(
             format!("{actual:?}"),
             format!("{expected:?}"),
