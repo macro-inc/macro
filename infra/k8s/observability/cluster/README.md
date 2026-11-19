@@ -332,17 +332,23 @@ release() {
    since=$(date '+%F %T')
    curl -fsS -X POST 'http://127.0.0.1:3100/ingester/shutdown?flush=true&terminate=false'
    curl -fsS -X POST http://127.0.0.1:3200/shutdown
-   timeout 900 sh -c "until journalctl -u tempo --since '$since' | grep -q 'shutdown handler complete'; do sleep 5; done" \
+   timeout 900 sh -c "until sudo journalctl -u tempo --since '$since' | grep -q 'shutdown handler complete'; do sleep 5; done" \
      && hold loki tempo
    ```
-   If the wait times out, stop here and read `journalctl -u tempo`. Logs and
+   If the wait times out, stop here and read `sudo journalctl -u tempo`. Logs and
    traces sent from now until step 5 is done are lost: the time steps 4 and 5
    take.
-4. **Merge *Cluster, buckets*** and sync `loki` and `tempo`
-   (`argocd app sync argocd/loki argocd/tempo`), then wait until both are
-   synced at that commit and every pod has rolled:
+4. **Merge *Cluster, buckets*** and sync `loki` and `tempo` at that commit,
+   then wait until every pod has rolled and check they run with the host's
+   buckets:
    ```sh
-   argocd app wait argocd/loki argocd/tempo --sync --health --timeout 1800
+   merge=<the merge commit on main>
+   argocd app get argocd/loki --hard-refresh >/dev/null; argocd app get argocd/tempo --hard-refresh >/dev/null
+   argocd app sync argocd/loki argocd/tempo --revision "$merge"
+   argocd app wait argocd/loki argocd/tempo --operation --health --timeout 1800
+   for app in loki tempo; do argocd app get argocd/$app -o json | jq -r '.metadata.name + " " + .status.sync.revision'; done   # both $merge
+   kubectl --context observability -n observability get configmap loki -o yaml | grep bucketnames
+   kubectl --context observability -n observability get configmap tempo-config -o yaml | grep 'bucket:'
    for w in statefulset/loki statefulset/tempo-ingester statefulset/tempo-metrics-generator \
      deployment/tempo-compactor deployment/tempo-querier deployment/tempo-query-frontend \
      deployment/tempo-distributor; do
@@ -409,8 +415,11 @@ release() {
 The cluster's Loki and Tempo leave the host's buckets before the host's run
 again, every time:
 
-1. Revert *Cluster, buckets* (and *Cluster, notify* if merged), sync `loki`
-   and `tempo`, and wait as in step 4. Then check no pod of the old revision
+1. Revert *Cluster, buckets*, and *Cluster, notify* if merged, in one change.
+   Sync `grafana` first, so this Grafana stops notifying before the host's
+   starts, then `loki` and `tempo` at the revert's commit, and wait and check
+   as in step 4: the buckets are `macro-observability-k8s-loki` and
+   `macro-observability-k8s-tempo` again. Then check no pod of the old revision
    is left: `kubectl --context observability -n observability get pods
    -l 'app.kubernetes.io/name in (loki,tempo)'` shows only pods younger than
    the sync.
