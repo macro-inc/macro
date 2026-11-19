@@ -292,22 +292,29 @@ use the real incoming-call signal rather than treating every active call as ring
 
 ### Incoming call banners
 
-A ringing channel or DM call also appears as a rounded banner centered at the top
+A ringing channel or DM call also appears as a rounded card centered at the top
 of the window on every page of the app's split layout (not a meeting page, where
 Join could not open the channel), so it can be answered without opening Chat. It
 shows the caller's profile picture (initials when there is none, `?` when the
-caller is unknown) and name, where
-they are calling (`Calling you` for a DM, `Calling in #channel` for a channel, the
-people for an unnamed group chat), a 30-second countdown, and `Decline` and
-`Join`. These run the same actions as the Chat sidebar row: `Join` opens the
-channel and joins that call ID, and `Decline` stops the ring on the user's other
-tabs and devices. Meeting invitations share the same stack, below the channel
-calls, which stack newest first. Banners sit below the macOS title bar and the top safe area,
-take no focus, and span the width minus 16px gutters on phones, with the buttons
-below the caller. Ring one locally with `window.macroDebugIncomingCall({ channelId,
-createdBy })` in a dev build (`macroClearDebugIncomingCalls()` clears them),
-and a meeting invitation with `window.macroDebugMeetingInvitation({ createdBy })`.
-A new call is announced to screen readers; many calls scroll within the stack.
+caller is unknown) and name, one line saying where they are calling
+(`Calling you` for a DM, a group chat or a meeting invitation, `Calling you in
+#channel` for a channel), and `Decline` and `Join`. The 30-second countdown is a
+bar along the card's top edge. These run the same actions as the Chat sidebar
+row: `Join` opens the channel and joins that call ID, and `Decline` stops the
+ring on the user's other tabs and devices.
+
+Several ringing calls (channel calls and meeting invitations alike) stack like
+notifications: the newest in front, two older ones peeking out underneath, only
+the front card's buttons usable. Clicking the stack (or the `Show all N
+incoming calls` strip under it, which is the keyboard path) fans every call out
+below with its own buttons, under an `N incoming calls` label and `Show less`;
+the stack folds back by itself once the calls it was opened with are gone.
+Cards sit below the macOS title bar and the top safe area, take no focus, and
+span the width minus 16px gutters on phones, with the buttons below the caller.
+Ring one locally with `window.macroDebugIncomingCall({ channelId, createdBy })`
+in a dev build (`macroClearDebugIncomingCalls()` clears them), and a meeting
+invitation with `window.macroDebugMeetingInvitation({ createdBy })`. A new call
+is announced to screen readers; an open stack taller than the screen scrolls.
 
 Only the current call's desktop Chat sidebar row, channel-header duration pill
 and app-rail item use live waveforms; all other call and phone surfaces use the

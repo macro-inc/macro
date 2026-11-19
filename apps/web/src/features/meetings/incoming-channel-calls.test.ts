@@ -119,7 +119,7 @@ it('describes each ringing call by its caller and place', () => {
     {
       callId: 'call-group',
       callerName: '',
-      place: { kind: 'group', name: 'Ada, Grace and 2 others' },
+      place: { kind: 'direct' },
       expiresAt: '2026-11-18T12:00:32.000Z',
     },
   ]);

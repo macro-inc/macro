@@ -32,7 +32,7 @@ it('names the caller and the channel they are calling in', () => {
   ));
 
   expect(screen.getByRole('heading', { name: 'Ada Lovelace' })).toBeTruthy();
-  expect(screen.getByText('Calling in #design')).toBeTruthy();
+  expect(screen.getByText('Calling you in #design')).toBeTruthy();
 });
 
 it('says a direct message call is calling you', () => {

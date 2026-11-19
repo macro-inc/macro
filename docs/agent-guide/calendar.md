@@ -481,9 +481,9 @@ creating another call. Shared-link join screens do not show the teammate picker.
 Incoming invitations appear in the incoming call banner stack at the top of the
 window (the same stack as ringing channel calls; see
 [Calls](calls.md#incoming-call-banners)) with the caller's profile picture and
-name, the call name, and `Decline` and `Join` buttons. This stays visible across
+name, `Calling you`, and `Decline` and `Join` buttons. This stays visible across
 app pages, including call setup, hidden sidebars, narrow splits, and mobile. A
-progress bar and seconds counter show the time remaining before the 30-second
+bar along the card's top edge shows the time remaining before the 30-second
 dismissal deadline.
 `Join` opens call setup; `Decline` stops ringing across the
 recipient's tabs. Unanswered invitations disappear and stop ringing after 30 seconds.

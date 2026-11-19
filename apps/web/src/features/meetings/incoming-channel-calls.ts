@@ -3,10 +3,7 @@ import {
   type IncomingCall,
   useVisibleIncomingCalls,
 } from '@app/features/block-call/sidebar/incoming-calls';
-import {
-  groupChatName,
-  isNamedForPeople,
-} from '@app/features/channel/group-chat-name';
+import { isNamedForPeople } from '@app/features/channel/group-chat-name';
 import { t } from '@app/lib/i18n';
 import { globalSplitManager } from '@app/signal/splitLayout';
 import { MAX_RING_DURATION_MS } from '@channel/Call/CallStartedNotifier';
@@ -32,9 +29,10 @@ function incomingCallPlace(
     return { kind: 'direct' };
   }
 
-  // A group chat goes by its people, which isn't a "#channel".
+  // A group chat goes by its people, which isn't a "#channel": the call is to
+  // you, like a DM.
   if (channel.channel_type === 'private' && isNamedForPeople(name)) {
-    return { kind: 'group', name: groupChatName(name) };
+    return { kind: 'direct' };
   }
   return { kind: 'channel', name: name.replace(/^#+/, '') };
 }

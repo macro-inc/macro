@@ -1,23 +1,27 @@
 import { t } from '@app/lib/i18n';
-import PhoneIncomingIcon from '@icon/system/fill/phone-incoming-fill.svg';
 import PhoneIcon from '@icon/system/regular/phone.svg';
 import PhoneDisconnectIcon from '@icon/system/regular/phone-disconnect.svg';
-import { Button, Tooltip } from '@ui';
+import { Button, cn, Tooltip } from '@ui';
 import type { JSX } from 'solid-js';
 
 /**
- * One ringing call in the app-wide incoming call stack: who is calling, where,
- * and how long until the ring stops. It never takes focus from the
- * recipient's work.
+ * One ringing call in the app-wide incoming call stack: who is calling and
+ * where, with the time left to answer as a bar along the card's top edge. It
+ * never takes focus from the recipient's work.
  */
 export function IncomingCallNotification(props: {
   /** The caller's picture, about 48px. */
   avatar: JSX.Element;
   callerName: string;
-  /** Where the call is: "Calling you", "Calling in design". */
+  /** Where the call is: "Calling you", "Calling you in #design". */
   detail: string;
   remainingMs: number;
   ringDurationMs: number;
+  /**
+   * Tucked under the newest call in a collapsed stack: the card shows as a
+   * blank sheet peeking out, and its controls are out of reach.
+   */
+  concealed?: boolean;
   onJoin: () => void;
   onDecline: () => void;
 }) {
@@ -26,7 +30,9 @@ export function IncomingCallNotification(props: {
   return (
     <section
       aria-label={t('calls.incomingCallFrom', { name: props.callerName })}
-      class="@container pointer-events-auto relative overflow-hidden rounded-2xl p-3 pt-4 menu-surface motion-safe:animate-incoming-call-in"
+      aria-hidden={props.concealed || undefined}
+      inert={props.concealed}
+      class="@container pointer-events-auto relative overflow-hidden rounded-2xl menu-surface motion-safe:animate-incoming-call-in"
     >
       <div
         role="progressbar"
@@ -37,31 +43,26 @@ export function IncomingCallNotification(props: {
         aria-valuetext={t('calls.ringSecondsRemaining', {
           count: remainingSeconds(),
         })}
-        class="absolute inset-x-4 top-1.5 h-[3px] overflow-hidden rounded-full bg-accent-bg"
+        class="absolute inset-x-0 top-0 h-[3px] bg-accent-bg"
       >
         <div
-          class="h-full origin-left rounded-full bg-accent transition-transform duration-100 ease-linear motion-reduce:transition-none"
+          class="h-full origin-left bg-accent transition-transform duration-100 ease-linear motion-reduce:transition-none"
           style={{
             transform: `scaleX(${props.remainingMs / props.ringDurationMs})`,
           }}
         />
       </div>
-      <div class="flex flex-col gap-3 @sm:flex-row @sm:items-center">
+      <div
+        class={cn(
+          'flex flex-col gap-3 p-4 transition-opacity duration-200 motion-reduce:transition-none @sm:flex-row @sm:items-center',
+          props.concealed && 'opacity-0'
+        )}
+      >
         <div class="flex min-w-0 flex-1 items-center gap-3">
-          <div class="flex size-12 shrink-0 items-center justify-center rounded-full ring-2 ring-accent/40 ring-offset-2 ring-offset-menu">
+          <div class="flex size-12 shrink-0 items-center justify-center rounded-full">
             {props.avatar}
           </div>
           <div class="min-w-0 flex-1">
-            <div class="flex items-center gap-1.5 text-xs font-semibold uppercase tracking-wide text-accent">
-              <PhoneIncomingIcon
-                aria-hidden="true"
-                class="incoming-call-shake size-3.5 shrink-0"
-              />
-              {t('calls.incomingCall')}
-              <span aria-hidden="true" class="tabular-nums text-ink-muted">
-                0:{String(remainingSeconds()).padStart(2, '0')}
-              </span>
-            </div>
             <Tooltip label={props.callerName} class="block">
               <h2 class="truncate text-base font-semibold text-ink">
                 {props.callerName}

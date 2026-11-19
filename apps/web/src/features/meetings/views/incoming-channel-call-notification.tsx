@@ -11,6 +11,7 @@ import { createRingCountdown } from '../primitives/invitation-countdown';
 /** A ringing channel or DM call in the incoming call stack. */
 export function IncomingChannelCallNotification(props: {
   call: IncomingChannelCall;
+  concealed?: boolean;
   onJoin: () => void;
   onDecline: () => void;
 }) {
@@ -20,9 +21,6 @@ export function IncomingChannelCallNotification(props: {
       .with({ kind: 'direct' }, () => t('calls.callingYou'))
       .with({ kind: 'channel' }, ({ name }) =>
         t('calls.callingInChannel', { channel: name })
-      )
-      .with({ kind: 'group' }, ({ name }) =>
-        t('calls.callingInGroup', { name })
       )
       .exhaustive();
   const remainingMs = createRingCountdown(
@@ -56,6 +54,7 @@ export function IncomingChannelCallNotification(props: {
       detail={detail()}
       remainingMs={remainingMs()}
       ringDurationMs={MAX_RING_DURATION_MS}
+      concealed={props.concealed}
       onJoin={props.onJoin}
       onDecline={props.onDecline}
     />
