@@ -227,8 +227,9 @@ impl FindingPrompts {
             String::new()
         };
         let steps = if code {
-            // Filled in reading order, so text put in is never read as a
-            // later placeholder.
+            // Each fill scans the whole text, so none of these fragments may
+            // hold a placeholder filled after it; the examples, arbitrary
+            // JSON, go last.
             STEPS
                 .trim()
                 .replace("{ask_ai}", &ask_ai)
