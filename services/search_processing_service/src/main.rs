@@ -6,8 +6,15 @@ use crate::inbound::kafka_consumer::{IndexMetrics, KafkaProcessingContext, run_e
 use crate::{
     api::context::{ApiContext, AuthorizationService},
     config::DatabaseUrlReadonly,
-    domain::{jobs::BackfillJobs, service::BackfillOrchestrator},
+    domain::{
+        backfill_gate::{
+            BackfillGate, PAUSE_POLL_INTERVAL, PAUSE_READ_TIMEOUT, read_pause, watch_pause,
+        },
+        jobs::BackfillJobs,
+        service::BackfillOrchestrator,
+    },
     outbound::{
+        backfill_control::DynamoBackfillControl,
         property_search_indexer::DirectPropertyBackfillIndexer, publisher::SqsSearchEventPublisher,
         source::PgBackfillSource,
     },
@@ -257,6 +264,16 @@ async fn main() -> anyhow::Result<()> {
         outbound::agent_session_search::OpenSearchAgentSessionIndex(opensearch_client.clone()),
     ));
 
+    let dynamodb_client = aws_sdk_dynamodb::Client::new(&aws_config);
+    let backfill_control = DynamoBackfillControl::new(
+        dynamodb_client.clone(),
+        config.backfill_jobs_table.to_string(),
+    );
+    // A task that starts while backfills are paused must not admit any first.
+    let paused_at_start = read_pause(&backfill_control, PAUSE_READ_TIMEOUT).await;
+    let (backfill_pause, backfill_paused) = tokio::sync::watch::channel(paused_at_start);
+    let backfill_gate = BackfillGate::new(config.backfill_max_in_flight, backfill_paused);
+
     let email_attachment_status_backfill = Arc::new(EmailAttachmentStatusBackfill::new(
         // The primary, not the backfill replica: a lagging replica can still
         // show a link a release already removed, and the backfill would then
@@ -265,15 +282,25 @@ async fn main() -> anyhow::Result<()> {
         outbound::email_attachment_search::OpenSearchEmailAttachmentFlags(
             opensearch_client.clone(),
         ),
+        backfill_gate.clone(),
     ));
 
     let backfill_service = Arc::new(BackfillOrchestrator::new(
         PgBackfillSource::new(backfill_db, db.clone(), config.backfill_page_sizes()?),
         SqsSearchEventPublisher::new(sqs_client.clone()),
         DirectPropertyBackfillIndexer::new(db.clone(), opensearch_client.clone()),
+        backfill_gate.clone(),
     ));
 
     let shutdown_token = CancellationToken::new();
+    let backfill_pause_tracker = TaskTracker::new();
+    backfill_pause_tracker.spawn(watch_pause(
+        backfill_control.clone(),
+        backfill_pause,
+        PAUSE_POLL_INTERVAL,
+        shutdown_token.clone(),
+    ));
+    backfill_pause_tracker.close();
     let event_broker_tracker = TaskTracker::new();
     #[cfg(feature = "processing")]
     let mailbox_delete_tracker = TaskTracker::new();
@@ -329,6 +356,8 @@ async fn main() -> anyhow::Result<()> {
             lexical_client,
             calendar_search_enabled: config.calendar_search_enabled,
             broker_events: kafka_processing_context.clone(),
+            backfill_gate: backfill_gate.clone(),
+            messages_per_receive: u32::try_from(config.queue_max_messages).unwrap_or(1),
         };
         run_search_processing_workers(search_processing_context, config.worker_count);
         tokio::spawn(supervise_event_consumer(
@@ -338,7 +367,6 @@ async fn main() -> anyhow::Result<()> {
         ))
     };
 
-    let dynamodb_client = aws_sdk_dynamodb::Client::new(&aws_config);
     let backfill_jobs = BackfillJobs::new(
         dynamodb_client,
         config.backfill_jobs_table.to_string(),
@@ -362,12 +390,15 @@ async fn main() -> anyhow::Result<()> {
             backfill_jobs,
             email_attachment_status_backfill,
             macro_event_broker,
+            backfill_control,
+            backfill_gate,
         },
         shutdown_token.clone(),
     )
     .await;
 
     shutdown_token.cancel();
+    backfill_pause_tracker.wait().await;
     #[cfg(feature = "processing")]
     let consumer_result = consumer_supervisor
         .await
