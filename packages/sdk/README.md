@@ -533,7 +533,8 @@ that omits a routine's existing `subRoutines` is refused, so pass them back
 a definition's apps or a detached copy's input values, so an update that keeps
 a definition with apps, or any update of a detached copy, is refused (409);
 change those in the editor. `setEnabled` doesn't send the task, so it pauses
-or resumes any routine.
+or resumes a routine whatever its task holds (the scheduler's other checks
+still apply).
 Routines run with their owner's access. For eligible routines,
 `routine.shareAsTemplate({ description, variables })` publishes a snapshot.
 Publishing rejects scheduled copies and routines with sub-routine definitions
