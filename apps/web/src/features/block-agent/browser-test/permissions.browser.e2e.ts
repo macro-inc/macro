@@ -90,6 +90,11 @@ for (const { language, program } of LANGUAGES) {
       await expect(request).toContainText('Rename document');
       await request.getByRole('button', { name: 'View program' }).click();
       await expect(request).toContainText(program);
+      // Long lines wrap, so nothing the person approves is cut off.
+      const source = request.locator('pre');
+      expect(
+        await source.evaluate((pre) => pre.scrollWidth <= pre.clientWidth)
+      ).toBe(true);
       await shot(page, `approval-${language}`, isMobile);
       await request.getByRole('button', { name: 'Hide program' }).click();
       await request
