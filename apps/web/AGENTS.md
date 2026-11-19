@@ -126,9 +126,11 @@ then show the existing retry state and retry on reconnect. Retry only stale
 proof generations or network failures, once, with a short second timeout.
 Preserve the last proven state across transient failure; show denial and tear
 down CRM dialogs only on proven denial. A proven denial the owner cannot record
-still retires this page's snapshots once and holds for the owner generation it
-was proven against; a committed grant or a newer owner generation supersedes it,
-so a regrant another window commits reopens every window. Gate the admin switch
+still retires this page's snapshots once. A denial holds for the owner and
+generation it was proven against or recorded as: a committed grant or a newer
+generation of that owner supersedes it, so a regrant another window commits
+reopens every window, while a replacement owner that still records access does
+not. Gate the admin switch
 with the server's
 remote `enable-crm-member-access-changes` flag, never denial enforcement.
 Use `crmAccessAllowed` for navigation and create entry points, and

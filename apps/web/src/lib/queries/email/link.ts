@@ -78,17 +78,20 @@ export function emailLinksQueryOptions(
     enabled: !!account && enabled,
     staleTime: LINK_STALE_TIME,
     refetchOnWindowFocus: 'always' as const,
-    // Startup recovery and focus refreshes must preserve the open inbox editor.
-    // Reconciling mutates the observed data in place, and an observer keeps
-    // that data across an account switch, so it works on a private copy and
-    // never on another account's cached entry.
-    select: copyLinksForReconcile,
-    reconcile: 'id' as const,
   };
 }
 export function useEmailLinksQuery(enabled: Accessor<boolean> = queryEnabled) {
   const account = useQueryAccount();
-  return useQuery(() => emailLinksQueryOptions(account(), enabled()));
+  return useQuery(() => ({
+    ...emailLinksQueryOptions(account(), enabled()),
+    // Startup recovery and focus refreshes must preserve the open inbox editor.
+    // Reconciling mutates the observed data in place, and an observer keeps
+    // that data across an account switch, so it works on a private copy and
+    // never on another account's cached entry. Other readers of these options
+    // do not reconcile.
+    select: copyLinksForReconcile,
+    reconcile: 'id' as const,
+  }));
 }
 
 /**

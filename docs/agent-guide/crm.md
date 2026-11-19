@@ -827,8 +827,9 @@ link shows a loading skeleton while its first proof is pending, then the existin
 retry state if verification fails. **Try again** or reconnecting retries the proof.
 Only a proven denial shows the access-denied screen or closes CRM dialogs; a
 transient proof failure retains the last proven state. Access restored while a
-window still shows the denial reopens it without a reload, whichever window
-verified the change. Network failures back off
+window still shows a recorded denial reopens it without a reload, whichever
+window verified the change; a denial the cache could not record clears at that
+window's next successful check. Network failures back off
 once before a second attempt with a shorter timeout; stale generations retry
 once, while terminal proof errors do not retry automatically.
 `GET /crm/member-access` reports current access even

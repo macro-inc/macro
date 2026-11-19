@@ -483,7 +483,10 @@ export function CrmWorkspaceView(props: {
               <ConnectorImportSidebar
                 category="crm"
                 class="mt-auto"
-                applies={teamQuery.isSuccess ? !!teamId() : undefined}
+                // Its CSV import opens a dialog that waits for proven access.
+                applies={
+                  canAccess() && teamQuery.isSuccess ? !!teamId() : undefined
+                }
                 alternatives={[
                   {
                     icon: FileCsvIcon,
