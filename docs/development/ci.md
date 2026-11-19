@@ -32,7 +32,7 @@ cargo x attest list --all               # the checks, and why the other jobs can
 cargo x attest run all                  # as you work: every check this branch makes PR CI run
 
 git fetch origin main && git merge origin/main && git push
-cargo x attest run all                  # again on the pushed commit; skips what already passed on it
+cargo x attest run all                  # on the pushed commit; skips what already passed on it
 cargo x attest post                     # with the pull request open, before the run-ci label
 ```
 
@@ -40,9 +40,10 @@ Use `run` as you work, as you would `just check`: it posts nothing, and it
 skips a check that already passed on the same files.
 
 Merge `main` and push in one go when you are ready for CI. GitHub builds the
-merge commit `PR CI` tests when you push, so the branch should hold `main` as
-it is at that moment. A run that takes minutes between the merge and the push
-gives `main` time to move, and then nothing recorded applies.
+merge commit `PR CI` tests at the push, from `main` as it is then, and keeps
+it when `main` moves later. So the branch must hold `main` as of the push,
+and anything that runs between the merge and the push gives `main` time to
+move. `run` and `post` both say when that happened: merge and push again.
 
 What a pass is for:
 

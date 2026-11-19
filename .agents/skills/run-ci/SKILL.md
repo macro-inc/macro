@@ -76,7 +76,8 @@ cargo x attest post           # with the PR open, before the label
 ```
 
 Merge `main` and push in one go, then run: GitHub builds the merge commit
-`PR CI` tests at the push, and `main` moves while checks run.
+`PR CI` tests at the push and keeps it when `main` moves later. `run` says
+at once when `main` moved before the push; merge and push again.
 
 `run` works in your working tree, on committed files, and records each result
 for the tree it ran on. `post` posts the passes recorded for the tree `PR CI`
