@@ -461,6 +461,15 @@ tools — hexagonal, heavily feature-gated.
   it. Subscription upkeep and webhook deliveries open
   `outlook.subscription.maintain` and `outlook.subscription.notify`; each
   lifecycle event logs "outlook subscription lifecycle event".
+- Subscription upkeep (`domain/mailbox/watches.rs`) counts failed runs in a
+  row in `email_mailbox_watch_work.failures` and backs off by it
+  (`upkeep_retry`): a refusal up to the 12 h renewal cadence, a transient
+  failure up to 30 minutes, throttling and token failures uncounted. Every
+  write that bumps the row's `revision` (reconnect, rebind, lifecycle events)
+  also resets `failures`; keep both in a new bump. Each
+  `outlook.subscription.maintain` span records the count it leaves
+  (`outlook.upkeep_failures`), and the health snapshot reports it as
+  `watch_failures`.
 - An Outlook message deleted at the provider keeps its row, marked
   `provider_missing` by `MailboxIngest::absent`, where Gmail's
   `delete_message` deletes it. `absent` leaves CRM cleanup candidates for its

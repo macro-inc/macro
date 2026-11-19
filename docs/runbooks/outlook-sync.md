@@ -7,7 +7,7 @@ opaque `link_id`.
 
 The email-service pubsub workers report each Outlook mailbox about once a
 minute in an `outlook mailbox health` log (backlog, parked and abandoned work,
-oldest wait, recent imports, `sync_active`, `needs_reauth`), and trace each unit of sync
+oldest wait, recent imports, `sync_active`, `needs_reauth`, `watch_failures`), and trace each unit of sync
 work as an `outlook.sync.discover`, `.enumerate`, `.reconcile` or `.project`
 span with `outlook.outcome` and `outlook.defer_reason`. Datadog renames the
 Graph and token spans, so find them by their fields:
@@ -20,12 +20,24 @@ Graph and token spans, so find them by their fields:
 | Its Graph requests | Spans: `@outlook.throttle_origin:* @mailbox.link_id:<id>`; a refused one names Graph's `@graph.error_code` |
 | Token lookups | Spans: `@outlook.token_cache:*` |
 | Deferral logs | Logs: `"mailbox sync work deferred"`, grouped by `@defer_reason` |
+| Its subscription upkeep | Spans: `resource_name:outlook.subscription.maintain @mailbox.link_id:<id>`, field `@outlook.upkeep_failures` (failed runs in a row); mailboxes whose upkeep Graph keeps refusing or failing: `"outlook mailbox health" @watch_failures:>0` (throttled and token-deferred runs are not counted; find those by `@outlook.defer_reason` on the spans) |
 
 Failed, deferred, throttled and slow (over 5 s) Outlook spans are always
 indexed, with their whole trace; successes are sampled.
 
 Re-importing folders whose first import was cut short has its own runbook:
 [Outlook folder re-import](outlook-folder-reimport.md).
+
+Each mailbox's Graph subscription is renewed every 12 hours. An upkeep run
+that fails waits 30 s, doubling with each failed run in a row: up to 30
+minutes after a transient failure (Graph 5xx, no answer) and up to 12 hours
+after a refusal (a 403 or 404 `ExtensionError` on `POST /subscriptions`, any
+other 4xx), which Graph repeats until something changes for the mailbox.
+Throttling and token failures keep their own delays and are not counted. The
+snapshot's `watch_failures` counts the failed runs; while it is above zero the
+mailbox may get no change notifications and syncs by polling alone (each
+folder about every 2 minutes). A run that works, a reconnect or a lifecycle
+event resets it.
 
 Sync work defers itself: a refused or failed unit is parked and retried
 later, so most of these alerts clear without action. Don't edit queue rows in
