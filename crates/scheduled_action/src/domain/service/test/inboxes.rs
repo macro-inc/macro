@@ -17,7 +17,11 @@ impl Inboxes {
 
 #[async_trait::async_trait]
 impl OwnerInboxes for Inboxes {
-    async fn among(&self, owner: &MacroUserIdStr<'_>, inboxes: &[Uuid]) -> Result<Vec<Uuid>> {
+    async fn among(
+        &self,
+        owner: &MacroUserIdStr<'_>,
+        inboxes: &[Uuid],
+    ) -> std::result::Result<Vec<Uuid>, crate::domain::ports::OwnerInboxesError> {
         assert_eq!(owner.as_ref(), user().as_ref());
         let theirs = self.0.lock().unwrap();
         Ok(inboxes

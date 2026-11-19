@@ -421,7 +421,11 @@ const PUBLISHER_INBOX: &str = "01900000-0000-7000-8000-0000000000b1";
 
 #[async_trait::async_trait]
 impl crate::domain::ports::OwnerInboxes for PublisherInbox {
-    async fn among(&self, owner: &MacroUserIdStr<'_>, inboxes: &[Uuid]) -> Result<Vec<Uuid>> {
+    async fn among(
+        &self,
+        owner: &MacroUserIdStr<'_>,
+        inboxes: &[Uuid],
+    ) -> std::result::Result<Vec<Uuid>, crate::domain::ports::OwnerInboxesError> {
         let publisher_inbox: Uuid = PUBLISHER_INBOX.parse().unwrap();
         Ok(inboxes
             .iter()

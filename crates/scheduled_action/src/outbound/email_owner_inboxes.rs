@@ -4,8 +4,9 @@
 use email::domain::ports::EmailRepo;
 use macro_user_id::user_id::MacroUserIdStr;
 use macro_uuid::Uuid;
+use rootcause::Report;
 
-use crate::domain::ports::OwnerInboxes;
+use crate::domain::ports::{OwnerInboxes, OwnerInboxesError};
 
 #[cfg(test)]
 mod test;
@@ -31,8 +32,12 @@ where
         &self,
         owner: &MacroUserIdStr<'_>,
         inboxes: &[Uuid],
-    ) -> anyhow::Result<Vec<Uuid>> {
-        let theirs = self.0.inbox_ids_among(owner.clone(), inboxes).await?;
+    ) -> Result<Vec<Uuid>, OwnerInboxesError> {
+        let theirs = self
+            .0
+            .inbox_ids_among(owner.clone(), inboxes)
+            .await
+            .map_err(|error| OwnerInboxesError::Internal(Report::new(error).into_dynamic()))?;
         tracing::Span::current().record("theirs", theirs.len());
         Ok(theirs)
     }
