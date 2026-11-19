@@ -11,6 +11,7 @@ import { formatSnoozeDeadline } from '@notifications/core/snooze';
 import type { ChannelNotificationSettingsState } from '@notifications/primitives/create-channel-notification-settings';
 import { openSectionConflict } from '@notifications/SectionConflictDialog';
 import { openSectionSnooze } from '@notifications/SnoozeNotificationsDialog';
+import type { Owner } from 'solid-js';
 import type { ChannelSectionKey } from '../../../types';
 
 export type SectionNotificationMenus = {
@@ -26,9 +27,15 @@ export type SectionNotificationMenus = {
  */
 export function sectionNotificationMenus(
   settings: ChannelNotificationSettingsState,
-  /** A channel's display name, for listing the channels a change misses. */
-  channelName: (channelId: string) => string | undefined
+  options?: {
+    /**
+     * The owner of the sheet these menus open from, so their dialogs stack
+     * on it; desktop menus unmount on close and pass none.
+     */
+    dialogOwner?: Owner | null;
+  }
 ) {
+  const dialogOptions = { owner: options?.dialogOwner };
   const run = (write: Promise<unknown>) =>
     fireAndForget(write, 'channels-view');
 
@@ -49,21 +56,26 @@ export function sectionNotificationMenus(
       run(write());
       return;
     }
-    openSectionConflict({
-      sectionName: name,
-      change: change.kind,
-      channels: conflicts.map((id) => ({
-        id,
-        name: channelName(id) || t('channelSections.unnamedChannel'),
-      })),
-      onConfirm: (overrideIds) =>
-        run(
-          Promise.all([
-            write(),
-            ...overrideIds.map((id) => dropOverride(id, change)),
-          ])
-        ),
-    });
+    openSectionConflict(
+      {
+        sectionName: name,
+        change: change.kind,
+        channels: conflicts.map((id) => ({
+          id,
+          name:
+            settings.conflictChannelName(id) ||
+            t('channelSections.unnamedChannel'),
+        })),
+        onConfirm: (overrideIds) =>
+          run(
+            Promise.all([
+              write(),
+              ...overrideIds.map((id) => dropOverride(id, change)),
+            ])
+          ),
+      },
+      dialogOptions
+    );
   };
 
   return (
@@ -119,7 +131,7 @@ export function sectionNotificationMenus(
               return Promise.resolve(true);
             }
             return snooze(deadline)();
-          });
+          }, dialogOptions);
         },
       },
       settings: {

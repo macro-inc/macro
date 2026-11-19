@@ -53,7 +53,7 @@ function setup(
   const onSetKinds = vi.fn((next: ReadonlySet<ChannelNotificationKind>) =>
     setKinds([...next])
   );
-  render(() => (
+  const view = render(() => (
     <MobileDrawer open>
       <MobileDrawer.Portal>
         <MobileDrawer.Content aria-label="Channel actions">
@@ -71,7 +71,7 @@ function setup(
       </MobileDrawer.Portal>
     </MobileDrawer>
   ));
-  return { kinds, onPreset, onSetKinds, onActionComplete };
+  return { kinds, onPreset, onSetKinds, onActionComplete, view };
 }
 
 describe('phone notification settings page', () => {
@@ -168,5 +168,27 @@ describe('phone notification settings page', () => {
         'channel_access_requested',
       ])
     );
+  });
+
+  it('saves a section’s custom kinds when the sheet closes on that page', async () => {
+    const page = setup(PRESET_KINDS.all, { saveCustomOnLeave: true });
+
+    fireEvent.click(screen.getByRole('radio', { name: 'Custom settings…' }));
+    fireEvent.click(screen.getByRole('checkbox', { name: 'Calls' }));
+    page.view.unmount();
+    await Promise.resolve();
+
+    expect(page.onSetKinds).toHaveBeenCalledOnce();
+    expect(page.kinds()).not.toContain('call_started');
+  });
+
+  it('saves nothing on leaving when nothing changed', async () => {
+    const page = setup(PRESET_KINDS.all, { saveCustomOnLeave: true });
+
+    fireEvent.click(screen.getByRole('radio', { name: 'Custom settings…' }));
+    page.view.unmount();
+    await Promise.resolve();
+
+    expect(page.onSetKinds).not.toHaveBeenCalled();
   });
 });

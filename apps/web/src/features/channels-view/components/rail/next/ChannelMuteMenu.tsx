@@ -75,10 +75,7 @@ export function SectionNotificationControls(props: {
 }) {
   const flag = useFeatureFlag(enableChannelNotificationSettings);
   const rail = useChannelsRail();
-  const menusFor = sectionNotificationMenus(
-    rail.channelNotifications,
-    (channelId) => rail.channelById(channelId)?.name
-  );
+  const menusFor = sectionNotificationMenus(rail.channelNotifications);
   const name = () =>
     match(props.section)
       .with('favorites', () => t('channelSections.favorites'))

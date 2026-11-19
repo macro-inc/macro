@@ -5,6 +5,7 @@ import {
   Checkbox,
   Dialog,
   type ManagedDialogProps,
+  type OpenDialogOptions,
   openDialog,
 } from '@ui';
 import { createSignal, For } from 'solid-js';
@@ -126,6 +127,9 @@ function SectionConflictDialog(
  * OK keeps them, Override makes the selected ones follow the section, and
  * Cancel saves nothing.
  */
-export function openSectionConflict(props: SectionConflictProps) {
-  openDialog(SectionConflictDialog, props);
+export function openSectionConflict(
+  props: SectionConflictProps,
+  options?: OpenDialogOptions
+) {
+  openDialog(SectionConflictDialog, props, options);
 }

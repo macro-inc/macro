@@ -13,7 +13,7 @@ import CheckIcon from '@icon/system/regular/check.svg';
 import { ContextMenu } from '@kobalte/core/context-menu';
 import type { ChannelNotificationKind } from '@service-notification/generated/schemas/channelNotificationKind';
 import { InlineCheckbox, SingleSelectCheck } from '@ui';
-import { createSignal, For, onCleanup, Show } from 'solid-js';
+import { createSignal, For, onCleanup, Show, untrack } from 'solid-js';
 import { openCustomNotificationSettings } from '../CustomNotificationSettingsDialog';
 import {
   CHANNEL_NOTIFICATION_KINDS,
@@ -165,28 +165,34 @@ export function NotificationSettingsMenu(props: NotificationSettingsMenuProps) {
 function CustomSettingsPage(
   props: NotificationSettingsMenuProps & { onBack: () => void }
 ) {
-  // With saveCustomOnLeave the rows edit a draft, saved once on leaving.
+  // With saveCustomOnLeave the rows edit a draft, saved once on leaving. The
+  // save is captured at mount: closing the sheet tears down the props' owners,
+  // so the cleanup must not read them.
+  const saveOnLeave = untrack(() => props.saveCustomOnLeave === true);
+  const save = untrack(() => props.onSetKinds);
+  const initial = untrack(() => new Set(props.enabled));
   const [draft, setDraft] = createSignal<ChannelNotificationKind[]>(
-    CHANNEL_NOTIFICATION_KINDS.filter((kind) => props.enabled.has(kind))
+    CHANNEL_NOTIFICATION_KINDS.filter((kind) => initial.has(kind))
   );
-  const shown = () =>
-    props.saveCustomOnLeave ? new Set(draft()) : props.enabled;
+  const shown = () => (saveOnLeave ? new Set(draft()) : props.enabled);
 
   let saved = false;
   const saveDraft = () => {
-    if (!props.saveCustomOnLeave || saved) return;
+    if (!saveOnLeave || saved) return;
     saved = true;
     const kinds = new Set(draft());
-    if (!sameKinds(kinds, props.enabled)) props.onSetKinds(kinds);
+    if (!sameKinds(kinds, initial)) save(kinds);
   };
-  // Closing the sheet from this page leaves it too.
-  onCleanup(saveDraft);
+  // Closing the sheet from this page leaves it too; save once teardown ends.
+  onCleanup(() => {
+    if (saveOnLeave && !saved) queueMicrotask(saveDraft);
+  });
 
   const toggle = (kind: ChannelNotificationKind) => {
     const kinds = new Set(shown());
     if (kinds.has(kind)) kinds.delete(kind);
     else kinds.add(kind);
-    if (props.saveCustomOnLeave) {
+    if (saveOnLeave) {
       setDraft(CHANNEL_NOTIFICATION_KINDS.filter((each) => kinds.has(each)));
     } else {
       props.onSetKinds(kinds);

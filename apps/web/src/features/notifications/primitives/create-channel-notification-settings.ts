@@ -8,6 +8,7 @@ import {
 import { catchToResult } from '@core/util/result';
 import { isMentionsOnlyItem } from '@entity/utils/notification';
 import { Telemetry } from '@macro-inc/observability';
+import { useCachedChannelsByIds } from '@queries/channel/by-ids';
 import { useChannelLabelsQuery } from '@queries/channel-labels/channel-labels';
 import { useFavoritesData } from '@queries/favorites/favorites';
 import { queryReadyGate } from '@queries/gate';
@@ -53,8 +54,11 @@ export type ChannelNotificationLabel = {
 type Sources = {
   labels: Accessor<readonly ChannelNotificationLabel[]>;
   favoriteChannelIds: Accessor<ReadonlySet<string>>;
-  /** A channel's type, for finding which built-in section holds it. */
-  channelType?: (channelId: string) => string | undefined;
+  /**
+   * Load the records of channels with their own settings, which section
+   * conflict checks need for their names and built-in sections.
+   */
+  resolveConflictChannels?: boolean;
 };
 
 export type ChannelNotificationView = EffectiveChannelNotifications & {
@@ -123,6 +127,18 @@ export function createChannelNotificationSettings(sources: Sources) {
     );
   });
 
+  /** Channels with settings of their own, legacy mentions-only included. */
+  const ownSettingsIds = createMemo(() => [
+    ...new Set([...channelSettings().keys(), ...legacyMentionsOnlyIds()]),
+  ]);
+  // The rail's loaded pages may not hold these, so resolve them by id.
+  const conflictChannels = useCachedChannelsByIds(
+    ownSettingsIds,
+    () => enabled() && sources.resolveConflictChannels === true
+  );
+  const conflictChannel = (channelId: string) =>
+    conflictChannels.channels().find((channel) => channel.id === channelId);
+
   const sectionName = (key: NotificationSectionKey) =>
     match(key)
       .with('favorites', () => t('channelSections.favorites'))
@@ -176,11 +192,9 @@ export function createChannelNotificationSettings(sources: Sources) {
     sectionConflicts({
       section: key,
       change,
-      channels: [
-        ...new Set([...channelSettings().keys(), ...legacyMentionsOnlyIds()]),
-      ].map((channelId) => ({
+      channels: ownSettingsIds().map((channelId) => ({
         channelId,
-        channelType: sources.channelType?.(channelId),
+        channelType: conflictChannel(channelId)?.channelType,
         own: ownSettings(channelId),
       })),
       labels: sources.labels(),
@@ -273,6 +287,9 @@ export function createChannelNotificationSettings(sources: Sources) {
     channel,
     section,
     sectionConflicts: conflictsFor,
+    /** A conflicting channel's name, once its record resolves. */
+    conflictChannelName: (channelId: string) =>
+      conflictChannel(channelId)?.name,
     setChannelKinds,
     setChannelPreset: (
       channelId: string,
