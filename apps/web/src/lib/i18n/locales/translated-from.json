@@ -675,7 +675,7 @@
     "commands.setDefaultDarkTheme": "b54346f60e",
     "commands.setDefaultLightTheme": "6a5bde96d1",
     "commands.systemPreference": "3ef24252d5",
-    "commands.toggleSettings": "5d12c4c8e5",
+    "commands.toggleSettings": "b7b98613db",
     "commands.turnOffAutoDetectColorScheme": "ab1d4658e4",
     "commands.undo": "a8283ade31",
     "commands.uploadFiles": "4118deee6e",
@@ -1769,7 +1769,7 @@
     "entityActions.shareCommand": "228ef056c7",
     "entityActions.showHtmlCode": "c9eab29c97",
     "entityActions.showHtmlRendered": "06cb9497ae",
-    "entityActions.snoozeNotifications": "be0780ab20",
+    "entityActions.snoozeNotifications": "c5dec69afe",
     "entityActions.tagItem": "655f9de715",
     "entityActions.tagItems": "baae3ec305",
     "entityActions.toastAddedCountToFavorites": "2a63e70849",
@@ -2946,7 +2946,7 @@
     "settingsNav.tabMobileApp": "f63eb83387",
     "settingsNav.tabNotifications": "788011833a",
     "settingsNav.tabRoutines": "61b7bb44e2",
-    "settingsNav.tabRuntimes": "53cd3be2b0",
+    "settingsNav.tabRuntimes": "c061da196e",
     "settingsNav.tabShortcuts": "e9bef0b0f3",
     "settingsNav.tabTags": "1331275bc5",
     "settingsNav.tabTeamGeneral": "c910d474dc",
@@ -3417,101 +3417,5 @@
     "viewMenus.videos": "c9a9639463",
     "viewMenus.viewActions": "ccf738b323"
   },
-  "exceptions": {
-    "da": {
-      "commands.toggleSettings": "b7b98613db",
-      "entityActions.snoozeNotifications": "c5dec69afe",
-      "settingsNav.tabRuntimes": "c061da196e"
-    },
-    "de": {
-      "commands.toggleSettings": "b7b98613db",
-      "entityActions.snoozeNotifications": "c5dec69afe",
-      "settingsNav.tabRuntimes": "c061da196e"
-    },
-    "es": {
-      "commands.toggleSettings": "b7b98613db",
-      "entityActions.snoozeNotifications": "c5dec69afe",
-      "settingsNav.tabRuntimes": "c061da196e"
-    },
-    "fi": {
-      "commands.toggleSettings": "b7b98613db",
-      "entityActions.snoozeNotifications": "c5dec69afe",
-      "settingsNav.tabRuntimes": "c061da196e"
-    },
-    "fr": {
-      "commands.toggleSettings": "b7b98613db",
-      "entityActions.snoozeNotifications": "c5dec69afe",
-      "settingsNav.tabRuntimes": "c061da196e"
-    },
-    "hi": {
-      "commands.toggleSettings": "b7b98613db",
-      "entityActions.snoozeNotifications": "c5dec69afe",
-      "settingsNav.tabRuntimes": "c061da196e"
-    },
-    "id": {
-      "commands.toggleSettings": "b7b98613db",
-      "entityActions.snoozeNotifications": "c5dec69afe",
-      "settingsNav.tabRuntimes": "c061da196e"
-    },
-    "it": {
-      "commands.toggleSettings": "b7b98613db",
-      "entityActions.snoozeNotifications": "c5dec69afe",
-      "settingsNav.tabRuntimes": "c061da196e"
-    },
-    "ja": {
-      "commands.toggleSettings": "b7b98613db",
-      "entityActions.snoozeNotifications": "c5dec69afe",
-      "settingsNav.tabRuntimes": "c061da196e"
-    },
-    "ko": {
-      "commands.toggleSettings": "b7b98613db",
-      "entityActions.snoozeNotifications": "c5dec69afe",
-      "settingsNav.tabRuntimes": "c061da196e"
-    },
-    "nb": {
-      "commands.toggleSettings": "b7b98613db",
-      "entityActions.snoozeNotifications": "c5dec69afe",
-      "settingsNav.tabRuntimes": "c061da196e"
-    },
-    "nl": {
-      "commands.toggleSettings": "b7b98613db",
-      "entityActions.snoozeNotifications": "c5dec69afe",
-      "settingsNav.tabRuntimes": "c061da196e"
-    },
-    "pl": {
-      "commands.toggleSettings": "b7b98613db",
-      "entityActions.snoozeNotifications": "c5dec69afe",
-      "settingsNav.tabRuntimes": "c061da196e"
-    },
-    "pt-PT": {
-      "commands.toggleSettings": "b7b98613db",
-      "entityActions.snoozeNotifications": "c5dec69afe",
-      "settingsNav.tabRuntimes": "c061da196e"
-    },
-    "ru": {
-      "commands.toggleSettings": "b7b98613db",
-      "entityActions.snoozeNotifications": "c5dec69afe",
-      "settingsNav.tabRuntimes": "c061da196e"
-    },
-    "sv": {
-      "commands.toggleSettings": "b7b98613db",
-      "entityActions.snoozeNotifications": "c5dec69afe",
-      "settingsNav.tabRuntimes": "c061da196e"
-    },
-    "vi": {
-      "commands.toggleSettings": "b7b98613db",
-      "entityActions.snoozeNotifications": "c5dec69afe",
-      "settingsNav.tabRuntimes": "c061da196e"
-    },
-    "zh-Hans": {
-      "commands.toggleSettings": "b7b98613db",
-      "entityActions.snoozeNotifications": "c5dec69afe",
-      "settingsNav.tabRuntimes": "c061da196e"
-    },
-    "zh-Hant": {
-      "commands.toggleSettings": "b7b98613db",
-      "entityActions.snoozeNotifications": "c5dec69afe",
-      "settingsNav.tabRuntimes": "c061da196e"
-    }
-  }
+  "exceptions": {}
 }

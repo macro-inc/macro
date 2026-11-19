@@ -668,7 +668,16 @@ Address: คุณ; no polite particles in labels.
 | notifications | การแจ้งเตือน |
 | done | เสร็จแล้ว |
 | mark as read | ทำเครื่องหมายว่าอ่านแล้ว |
-| snooze | เลื่อนการแจ้งเตือน… |
+| snooze | เลื่อนการแจ้งเตือน |
 | archive | เก็บถาวร |
 | settings | การตั้งค่า |
+| computer (Macro computer) | คอมพิวเตอร์ Macro ใหม่ |
+| machine (runs agents) | เครื่องของคุณ |
+| session (agent) | เริ่มเซสชัน |
+| routine | รูทีนทั้งหมด |
+| saved view | มุมมองที่บันทึกไว้ใหม่ |
+| call | เข้าร่วมการโทร |
+| contact (CRM) | เปลี่ยนบริษัทของรายชื่อติดต่อ |
+| company (CRM) | เพิ่มบริษัท |
+| thread (email) | เธรดที่ยกเว้น |
 
