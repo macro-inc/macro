@@ -47,7 +47,6 @@ import {
   toChannelTargetRequest,
 } from '@channel/Channel/link';
 import {
-  CallTabLabel,
   canUseInlineCallTab,
   normalizeChannelTab,
   useChannelTabItems,
@@ -200,19 +199,12 @@ function NewTop(props: { channelId: string }) {
     };
   };
 
-  // Mobile has no room for inline tabs; the title file-menu drawer leads with
-  // them instead, as a titled radio group mirroring the active tab. Built
-  // from tabs() so the call tab keeps its live-call label.
+  // The drawer owns the icon column, just as desktop tabs own their icon slot.
   const mobileViews = () => ({
     title: 'View',
     options: tabs().map((tab) => ({
       value: tab.value,
-      label:
-        tab.value === 'call' ? (
-          <CallTabLabel channelId={props.channelId} />
-        ) : (
-          tab.label
-        ),
+      label: tab.label,
       icon:
         tab.value === 'call' && tab.icon
           ? tab.icon

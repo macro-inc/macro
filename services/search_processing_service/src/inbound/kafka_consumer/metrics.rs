@@ -34,6 +34,7 @@ use opentelemetry::{
 use super::{
     EventOutcome, OutcomeRecord, ReceivedEvent, attempts::Failure, entity_type::EntityType,
 };
+use crate::domain::backlog::LaneBacklog;
 
 #[cfg(test)]
 pub(super) mod test;
@@ -225,6 +226,30 @@ impl IndexMetrics {
 
     pub(super) fn pending_ages(&self) -> &PendingAges {
         &self.pending
+    }
+
+    /// This task's [`LaneBacklog`] from its pending ages fresh at `now`, or
+    /// `None` when it has none, so a task that stopped sampling reports
+    /// nothing instead of zero.
+    pub(crate) fn lane_backlog(&self, now: Instant) -> Option<LaneBacklog> {
+        let fresh = self.pending.fresh(now);
+        if fresh.is_empty() {
+            return None;
+        }
+        let mut backlog = LaneBacklog {
+            live: None,
+            email: None,
+        };
+        for (topic, _, age_ms) in fresh {
+            let lane = if EntityType::from_topic(topic) == Some(EntityType::Email) {
+                &mut backlog.email
+            } else {
+                &mut backlog.live
+            };
+            let age = Duration::from_millis(age_ms);
+            *lane = Some(lane.map_or(age, |oldest| oldest.max(age)));
+        }
+        Some(backlog)
     }
 }
 

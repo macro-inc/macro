@@ -137,6 +137,8 @@ export type ReplyComposerOptions = {
   replyingTo: Accessor<EmailMessage | undefined>;
   isEditingExisting?: boolean;
   draft?: EmailMessage;
+  /** The initial committed read identifies the reply for replacement recovery. */
+  initialSavedDraftId?: string;
   localDraft?: import('../core/local-draft').LocalDraft;
   localAttachments?: DraftFormAttachment[];
   preloadedHtml?: string;
@@ -1618,17 +1620,40 @@ export function createReplyComposer(
   const handleSendTimeChange = (date: Date | null) =>
     scheduleBlocked() ? false : schedule.select(date);
 
+  const changedElsewhereNotice =
+    'The draft changed elsewhere. Your newer text was kept as a new draft.';
   const detachFromObsoleteDraft = (
     reason: KeptAsNewDraftReason,
     unsavedEdits: number,
-    message: string
+    message: string,
+    replacedDraftId?: string
   ) => {
-    recordKeptAsNewDraft(reason, { draftId: session.draftId(), unsavedEdits });
+    recordKeptAsNewDraft(reason, {
+      draftId: replacedDraftId ?? session.draftId(),
+      unsavedEdits,
+    });
     identityVersion += 1;
     autosave.cancel();
-    session.dispatch({ type: 'reset' });
+    if (!replacedDraftId) session.dispatch({ type: 'reset' });
     setDraftGeneration(0);
     const omittedAttachments = attachmentPersistence.detach();
+    if (replacedDraftId) {
+      // The replacement shares the working copy. Fresh file objects keep
+      // its durable save from reusing upload receipts for the deleted row.
+      form.attachments.replace(
+        form.attachments.list().map((attachment) => {
+          if (attachment.type !== 'local') return attachment;
+          const { file } = attachment;
+          return {
+            type: 'local',
+            file: new File([file], file.name, {
+              type: file.type,
+              lastModified: file.lastModified,
+            }),
+          };
+        })
+      );
+    }
     attachmentLinks.detach();
     schedule.detach();
     setTerminalState(undefined);
@@ -1640,6 +1665,54 @@ export function createReplyComposer(
     }
     void autosave.save().catch(() => {});
   };
+
+  // The initial read or working copy can identify the saved row before the
+  // live session confirms it for delivery and lifecycle reads.
+  const mountedServerDraftId =
+    props.initialSavedDraftId ?? props.localDraft?.serverDraftId;
+  const mountedDraftEpoch = session.epoch();
+  const savedReplyIdentity = (state: ReturnType<typeof session.state>) => {
+    const draft = state.identity;
+    if (draft.kind === 'server') return draft;
+    if (
+      draft.kind === 'handle' &&
+      state.epoch === mountedDraftEpoch &&
+      draft.draftId === mountedServerDraftId
+    )
+      return draft;
+  };
+  createEffect(
+    on(session.state, (current, previous) => {
+      // A pending save can recreate a deleted reply before the lifecycle
+      // read sees it go away. Keep the replacement the server already saved.
+      const draft = current.identity;
+      const replaced = previous && savedReplyIdentity(previous);
+      if (
+        !hasLocalChanges ||
+        draft.kind !== 'server' ||
+        !replaced ||
+        current.epoch !== previous?.epoch ||
+        draft.draftId === replaced.draftId ||
+        !draft.threadId ||
+        draft.threadId !== replaced.threadId ||
+        !draft.inboxId ||
+        draft.inboxId !== replaced.inboxId ||
+        restoring() ||
+        movingInbox() ||
+        draftTransfer?.pending() ||
+        sendLocked() ||
+        sendPhase() === 'sending' ||
+        pendingDeletion()
+      )
+        return;
+      detachFromObsoleteDraft(
+        'changed-elsewhere',
+        persistence.unsavedEdits(editVersion),
+        changedElsewhereNotice,
+        replaced.draftId
+      );
+    })
+  );
 
   let lastScheduledTime = schedule.confirmedTime()?.toISOString();
   let handledTerminalIdentity: string | undefined;
@@ -1741,7 +1814,7 @@ export function createReplyComposer(
         state.type === 'sent' ? 'sent-elsewhere' : 'changed-elsewhere',
         unsavedEdits,
         state.type !== 'sent'
-          ? 'The draft changed elsewhere. Your newer text was kept as a new draft.'
+          ? changedElsewhereNotice
           : wasScheduled
             ? 'The scheduled email was sent while you were editing. Your newer text was kept as a new draft and was not sent.'
             : 'This email was already sent. Your newer text was kept as a new draft and was not sent.'
