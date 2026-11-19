@@ -81,16 +81,17 @@ beforeEach(() => {
 afterEach(() => vi.clearAllMocks());
 
 describe('AgentPermissionsPage', () => {
-  it('says the settings cover OCaml programs only, not JavaScript ones', async () => {
+  it('says the settings cover checked programs only, naming no language', async () => {
     renderPage();
     expect(
-      await screen.findByText('Applies to OCaml programs only, for now.')
+      await screen.findByText('Applies to checked programs only, for now.')
     ).toBeTruthy();
     expect(
       screen.getByText(
-        /Its JavaScript programs, other tools and your connected apps work as before\./
+        /Its other programs, other tools and your connected apps work as before\./
       )
     ).toBeTruthy();
+    expect(document.body.textContent).not.toMatch(/OCaml|JavaScript/);
   });
 
   it('saves a group action', async () => {
