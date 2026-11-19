@@ -665,6 +665,11 @@ fn a_quantity_alone_says_when_unless_the_phrase_already_does() {
             ("2-3pm 2 days", "2026-11-08 14:00 → 2026-11-08 15:00"),
             ("9 to 11am 2 days", "2026-11-08 09:00 → 2026-11-08 11:00"),
             ("3-5pm 2 hours", "error: Conflict"),
+            // Beside a date on either side, a day count can only be a length,
+            // which a range can't also have.
+            ("3-5pm next monday 2 days", "error: Conflict"),
+            ("2 days 3pm to monday 5pm", "error: Conflict"),
+            ("2 days next monday", "2026-11-09 → 2026-11-10"),
             // Weeks beside a weekday would mean that weekday weeks out.
             ("friday 2 weeks", "error: Conflict"),
             ("2 weeks on friday", "error: Conflict"),
@@ -680,6 +685,8 @@ fn a_quantity_alone_says_when_unless_the_phrase_already_does() {
         "2 days before friday",
         "2 days after friday",
         "2 days following friday",
+        "2 days folowing friday",
+        "2 days previ friday",
         "2 days prev friday",
         "2 days previous friday",
         "2 days prior to friday",

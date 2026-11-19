@@ -82,6 +82,23 @@ pub(crate) enum Relation {
     Coming,
     Next,
     Last,
+    /// `following`: next, and before a day counts a quantity from it, as
+    /// in `2 days following friday`.
+    Following,
+    /// `previous`, `past`: last, and before a day counts a quantity back
+    /// from it, as in `2 days past friday`.
+    Previous,
+}
+
+impl Relation {
+    /// The way it points: `following` is `next`, `previous` is `last`.
+    pub(crate) fn plain(self) -> Self {
+        match self {
+            Self::Following => Self::Next,
+            Self::Previous => Self::Last,
+            relation => relation,
+        }
+    }
 }
 
 const RELATIONS: &Names<Relation> = &[
@@ -89,10 +106,10 @@ const RELATIONS: &Names<Relation> = &[
     (Relation::Coming, "coming", 6, &[]),
     (Relation::Coming, "upcoming", 4, &[]),
     (Relation::Next, "next", 3, &["nxt"]),
-    (Relation::Next, "following", 4, &[]),
+    (Relation::Following, "following", 4, &[]),
     (Relation::Last, "last", 4, &[]),
-    (Relation::Last, "past", 4, &[]),
-    (Relation::Last, "previous", 4, &[]),
+    (Relation::Previous, "past", 4, &[]),
+    (Relation::Previous, "previous", 4, &[]),
 ];
 
 // Parts of the day keep long prefixes, so `after`, `mid` and `even` stay

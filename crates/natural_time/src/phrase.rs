@@ -186,15 +186,18 @@ impl Phrase {
     }
 
     /// A quantity alone says when if nothing else does: `2 days` is in two
-    /// days, `2 hours` two hours from now. Beside a date, or an hour count
-    /// beside a time, it says how long: `next monday 2 days`, `3pm 2 hours`.
+    /// days, `2 hours` two hours from now. Beside a date on either side of a
+    /// range, or an hour count beside a time, it says how long: `next monday
+    /// 2 days`, `3pm 2 hours`.
     /// Weeks beside a weekday (`friday 2 weeks`) would mean that weekday
     /// weeks out, which isn't read.
     fn place(&mut self, quantity: Quantity) -> Result<(), Error> {
         let says_when = self.start.date.is_some() || self.start.time.is_some();
         let on_weekday = matches!(self.start.date, Some(DateRef::Day(DayRef::Weekday(..))));
+        let dated =
+            self.start.date.is_some() || self.end.as_ref().is_some_and(|end| end.date.is_some());
         match quantity.when {
-            Some(When::Day(day)) if self.start.date.is_none() => self.start.add(Item::Day(day)),
+            Some(When::Day(day)) if !dated => self.start.add(Item::Day(day)),
             Some(When::Offset(minutes)) if !says_when && self.offset.is_none() => {
                 self.offset = Some(minutes);
                 Ok(())

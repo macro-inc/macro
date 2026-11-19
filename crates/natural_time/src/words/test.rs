@@ -218,7 +218,7 @@ fn truncated_names_read_down_to_their_shortest_prefix() {
     assert_eq!(relative("tomor"), Some(RelativeWord::Tomorrow));
     assert_eq!(relative("yester"), Some(RelativeWord::Yesterday));
     assert_eq!(relation("nex"), Some(Relation::Next));
-    assert_eq!(relation("prev"), Some(Relation::Last));
+    assert_eq!(relation("prev"), Some(Relation::Previous));
     assert_eq!(unit("minute"), Some((Unit::Minute, 1)));
     assert_eq!(unit("hou"), Some((Unit::Hour, 1)));
     assert_eq!(unit("mont"), Some((Unit::Month, 1)));
@@ -243,8 +243,8 @@ fn short_prefixes_that_are_other_words_are_not_read() {
 
 #[test]
 fn relations_and_units_take_typos_like_names() {
-    assert_eq!(relation("folowing"), Some(Relation::Next));
-    assert_eq!(relation("previus"), Some(Relation::Last));
+    assert_eq!(relation("folowing"), Some(Relation::Following));
+    assert_eq!(relation("previus"), Some(Relation::Previous));
     assert_eq!(relation("upcomming"), Some(Relation::Coming));
     assert_eq!(unit("minuts"), Some((Unit::Minute, 1)));
     assert_eq!(unit("monts"), Some((Unit::Month, 1)));

@@ -100,24 +100,11 @@ const END_OF_DAY: [&str; 14] = [
 /// Words after a quantity that count it from something else, as in
 /// `2 days before friday`; the quantity alone is then not read, rather than
 /// misread as a length.
-const COUNTED_FROM: [&str; 17] = [
-    "from",
-    "before",
-    "after",
-    "following",
-    "since",
-    "past",
-    "previous",
-    "prev",
-    "prior",
-    "later",
-    "earlier",
-    "until",
-    "till",
-    "til",
-    "to",
-    "through",
-    "thru",
+/// `following`, `previous` and `past` count from a day too, however
+/// spelled.
+const COUNTED_FROM: [&str; 13] = [
+    "from", "before", "after", "since", "prior", "later", "earlier", "until", "till", "til", "to",
+    "through", "thru",
 ];
 
 /// Words describing a repeat; the phrase is then not read.
@@ -560,7 +547,15 @@ fn duration(i: &str) -> Res<'_, Item> {
 /// friday`, `2 weeks after next`) makes the whole phrase unread, so no
 /// other reading of its words is guessed.
 fn bare_quantity(i: &str) -> Res<'_, Item> {
-    let counted_from = preceded(opt(sp), alt((tag("-"), kws(&COUNTED_FROM))));
+    let counted_from = preceded(
+        opt(sp),
+        alt((
+            tag("-"),
+            kws(&COUNTED_FROM),
+            relation_word(Relation::Following),
+            relation_word(Relation::Previous),
+        )),
+    );
     map_opt(terminated(quantity, cut(not(counted_from))), |quantity| {
         let when = shifted(&quantity, 1, 0);
         let length = length(&quantity);
@@ -637,17 +632,23 @@ fn named_date(i: &str) -> Res<'_, Item> {
     .parse(i)
 }
 
+/// A word for `expected`, however spelled: `following` for `next` too.
 fn relation_word(expected: Relation) -> impl Fn(&str) -> Res<'_, &str> {
-    move |i| verify(word, |w: &str| words::relation(w) == Some(expected)).parse(i)
+    move |i| {
+        verify(word, |w: &str| {
+            words::relation(w).is_some_and(|found| found == expected || found.plain() == expected)
+        })
+        .parse(i)
+    }
 }
 
 /// `this`, `next`, `last`: how many periods from the current one.
 fn relation(i: &str) -> Res<'_, i32> {
-    map_opt(word, |w| match words::relation(w)? {
+    map_opt(word, |w| match words::relation(w)?.plain() {
         Relation::This => Some(0),
         Relation::Next => Some(1),
         Relation::Last => Some(-1),
-        Relation::Coming => None,
+        Relation::Coming | Relation::Following | Relation::Previous => None,
     })
     .parse(i)
 }
@@ -734,8 +735,8 @@ fn week_ref(i: &str) -> Res<'_, WeekRef> {
         map_opt(word, |w| {
             Some(match words::relation(w)? {
                 Relation::This | Relation::Coming => WeekRef::Upcoming,
-                Relation::Next => WeekRef::Next,
-                Relation::Last => WeekRef::Last,
+                Relation::Next | Relation::Following => WeekRef::Next,
+                Relation::Last | Relation::Previous => WeekRef::Last,
             })
         }),
     ))
