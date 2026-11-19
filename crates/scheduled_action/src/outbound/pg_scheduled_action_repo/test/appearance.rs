@@ -245,11 +245,9 @@ async fn choosing_the_current_look_still_keeps_it(pool: PgPool) {
     );
 }
 
-const MARK_OWNER_CHOSEN_SQL: &str = include_str!(
-    "../../../../../../crates/macro_db_client/migrations/20261118201451_mark_owner_chosen_routine_appearances.sql"
-);
-
-async fn chosen_by_owner(pool: &PgPool, id: Uuid) -> bool {
+/// Whether `id`'s row records that its owner chose its look: `None` for a
+/// routine from before `appearance_chosen_by_owner`.
+async fn chosen_by_owner(pool: &PgPool, id: Uuid) -> Option<bool> {
     sqlx::query_scalar!(
         "SELECT appearance_chosen_by_owner FROM scheduled_action WHERE id = $1",
         id,
@@ -259,11 +257,11 @@ async fn chosen_by_owner(pool: &PgPool, id: Uuid) -> bool {
     .unwrap()
 }
 
-/// Forgets that the owner chose `id`'s look, as before
+/// Forgets whether the owner chose `id`'s look, as a routine from before
 /// `appearance_chosen_by_owner`, keeping the look as stored.
 async fn as_before_the_column(pool: &PgPool, id: Uuid) {
     sqlx::query!(
-        "UPDATE scheduled_action SET appearance_chosen_by_owner = false WHERE id = $1",
+        "UPDATE scheduled_action SET appearance_chosen_by_owner = NULL WHERE id = $1",
         id,
     )
     .execute(pool)
@@ -274,7 +272,7 @@ async fn as_before_the_column(pool: &PgPool, id: Uuid) {
 /// Stores `appearance` on `id` as a write before the column did.
 async fn stored_before_the_column(pool: &PgPool, id: Uuid, appearance: Option<serde_json::Value>) {
     sqlx::query!(
-        "UPDATE scheduled_action SET appearance = $2, appearance_chosen_by_owner = false WHERE id = $1",
+        "UPDATE scheduled_action SET appearance = $2, appearance_chosen_by_owner = NULL WHERE id = $1",
         id,
         appearance,
     )
@@ -284,7 +282,7 @@ async fn stored_before_the_column(pool: &PgPool, id: Uuid, appearance: Option<se
 }
 
 #[sqlx::test(migrator = "MACRO_DB_MIGRATIONS")]
-async fn the_backfill_marks_every_look_the_owner_set_before_the_column(pool: PgPool) {
+async fn a_look_the_owner_set_before_the_column_stays_theirs(pool: PgPool) {
     insert_user(&pool, USER_A).await;
     let repo = test_repo(pool.clone());
     let mut routines = Vec::new();
@@ -293,7 +291,9 @@ async fn the_backfill_marks_every_look_the_owner_set_before_the_column(pool: PgP
             .create_action(sample_action(user_owner(USER_A), name))
             .await
             .unwrap();
-        routines.push(created.id.unwrap());
+        let id = created.id.unwrap();
+        assert_eq!(chosen_by_owner(&pool, id).await, Some(false), "a new routine");
+        routines.push(id);
     }
     let [colored_one, reset, never, blank] = routines[..] else {
         panic!("four routines were created");
@@ -315,22 +315,43 @@ async fn the_backfill_marks_every_look_the_owner_set_before_the_column(pool: PgP
     stored_before_the_column(&pool, never, None).await;
     stored_before_the_column(&pool, blank, Some(json!({ "icon": null, "color": null }))).await;
 
-    let marked = sqlx::raw_sql(MARK_OWNER_CHOSEN_SQL)
-        .execute(&pool)
-        .await
-        .unwrap();
-    assert_eq!(marked.rows_affected(), 2);
-    assert!(chosen_by_owner(&pool, colored_one).await, "a look it has");
-    assert!(chosen_by_owner(&pool, reset).await, "a look reset to none");
-    assert!(!chosen_by_owner(&pool, never).await, "never given a look");
-    assert!(
-        !chosen_by_owner(&pool, blank).await,
-        "a look with nothing in it"
-    );
-
-    let again = sqlx::raw_sql(MARK_OWNER_CHOSEN_SQL)
-        .execute(&pool)
-        .await
-        .unwrap();
-    assert_eq!(again.rows_affected(), 0, "a second run changes nothing");
+    let pick = colored(AppearanceColor::Green);
+    for (id, kept) in [
+        (colored_one, "a look it has"),
+        (reset, "a look reset to none"),
+    ] {
+        let before = repo.get_action(&id).await.unwrap().unwrap().appearance;
+        assert!(
+            repo.set_appearance(change(id, pick.clone(), AppearanceChooser::Agent))
+                .await
+                .unwrap()
+                .is_none(),
+            "{kept}: an agent's pick is refused"
+        );
+        assert_eq!(
+            repo.get_action(&id).await.unwrap().unwrap().appearance,
+            before,
+            "{kept}"
+        );
+        assert_eq!(chosen_by_owner(&pool, id).await, None, "{kept}: left as it was");
+    }
+    for (id, open) in [(never, "never given a look"), (blank, "a look with nothing in it")] {
+        assert!(
+            repo.set_appearance(change(id, pick.clone(), AppearanceChooser::Agent))
+                .await
+                .unwrap()
+                .is_some(),
+            "{open}: an agent may pick"
+        );
+        assert_eq!(
+            repo.get_action(&id).await.unwrap().unwrap().appearance,
+            pick,
+            "{open}"
+        );
+        assert_eq!(
+            chosen_by_owner(&pool, id).await,
+            Some(false),
+            "{open}: the pick records that the owner hasn't chosen"
+        );
+    }
 }
