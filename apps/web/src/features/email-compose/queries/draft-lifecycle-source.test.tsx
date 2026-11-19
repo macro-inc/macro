@@ -1,7 +1,9 @@
+import { ThrownResultError } from '@core/util/result';
 import { emailKeys } from '@queries/email/keys';
 import type { ApiThread } from '@service-email/generated/schemas';
 import { cleanup, render, waitFor } from '@solidjs/testing-library';
 import { QueryClient, QueryClientProvider } from '@tanstack/solid-query';
+import { err, ok } from 'neverthrow';
 import { createSignal } from 'solid-js';
 import { afterEach, beforeEach, expect, it, vi } from 'vitest';
 import type {
@@ -12,6 +14,10 @@ import type {
 const fetchThread = vi.hoisted(() => vi.fn());
 vi.mock('@queries/email/thread', () => ({
   fetchFreshEmailThread: fetchThread,
+}));
+const refreshSession = vi.hoisted(() => vi.fn());
+vi.mock('@core/auth/session-refresh', () => ({
+  ensureFreshSession: refreshSession,
 }));
 const readSentWorkingCopy = vi.hoisted(() => vi.fn());
 vi.mock('@queries/email/send-queue', () => ({ readSentWorkingCopy }));
@@ -91,6 +97,7 @@ function observe(client = createClient()) {
 
 beforeEach(() => {
   fetchThread.mockReset();
+  refreshSession.mockReset();
   readSentWorkingCopy.mockReset();
   readSentWorkingCopy.mockResolvedValue(undefined);
 });
@@ -125,6 +132,40 @@ it('still reports a sent draft when the send journal cannot be read', async () =
 
   await waitFor(() => expect(lifecycle.state()?.type).toBe('sent'));
   expect(lifecycle.state()).not.toHaveProperty('sentCopy');
+});
+
+it('marks the draft unavailable when its read is refused during a valid session', async () => {
+  fetchThread
+    .mockResolvedValueOnce(thread(false))
+    .mockRejectedValueOnce(
+      new ThrownResultError([{ code: 'UNAUTHORIZED', message: 'Unauthorized' }])
+    );
+  refreshSession.mockResolvedValue(ok(undefined));
+  const { lifecycle } = observe();
+  await waitFor(() => expect(lifecycle.state()?.type).toBe('editing'));
+
+  await expect(lifecycle.refresh()).resolves.toMatchObject({
+    type: 'missing',
+    ...identity,
+  });
+  await waitFor(() => expect(lifecycle.state()?.type).toBe('missing'));
+});
+
+it('keeps the draft retryable when the session cannot be confirmed', async () => {
+  const rejected = new ThrownResultError([
+    { code: 'UNAUTHORIZED', message: 'Unauthorized' },
+  ]);
+  fetchThread
+    .mockResolvedValueOnce(thread(false))
+    .mockRejectedValueOnce(rejected)
+    .mockResolvedValueOnce(thread(false));
+  refreshSession.mockResolvedValue(err([{ code: 'UNAUTHORIZED' }]));
+  const { lifecycle } = observe();
+  await waitFor(() => expect(lifecycle.state()?.type).toBe('editing'));
+
+  await expect(lifecycle.refresh()).rejects.toBe(rejected);
+  expect(lifecycle.state()).toBeUndefined();
+  await expect(lifecycle.refresh()).resolves.toMatchObject({ type: 'editing' });
 });
 
 it('does not republish cached state when a strict refresh rejects', async () => {

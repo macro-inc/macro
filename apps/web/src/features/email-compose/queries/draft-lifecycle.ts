@@ -1,3 +1,4 @@
+import { ensureFreshSession } from '@core/auth/session-refresh';
 import { fireAndForget } from '@core/util/fireAndForget';
 import { thrownResultErrorHasCode } from '@core/util/result';
 import { Telemetry } from '@macro-inc/observability';
@@ -108,6 +109,14 @@ async function fetchServerLifecycle(
     });
   } catch (error) {
     if (thrownResultErrorHasCode(error, 'NOT_FOUND')) {
+      return deriveEmailDraftLifecycle({ ...input, observedAt });
+    }
+    // A deleted draft may leave no thread to read. Confirm the session before
+    // marking that draft unavailable so a sign-in failure stays recoverable.
+    if (
+      thrownResultErrorHasCode(error, 'UNAUTHORIZED') &&
+      (await ensureFreshSession()).isOk()
+    ) {
       return deriveEmailDraftLifecycle({ ...input, observedAt });
     }
     throw error;
