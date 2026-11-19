@@ -51,12 +51,31 @@ export type ScreenClientMessage =
   | { type: 'switchSurface'; surface: ScreenSurface }
   | { type: 'stop' };
 
+/** Why the server ended the session; `shutdown` means reconnect with a new ticket. */
+export type ScreenEndReason =
+  | 'stopped'
+  | 'computerOff'
+  | 'accessRevoked'
+  | 'shutdown'
+  | 'error';
+
+/** Errors that leave the socket open. */
+export type ScreenErrorCode =
+  | 'driveNotAllowed'
+  | 'driverBusy'
+  | 'notDriver'
+  | 'surfaceUnavailable'
+  | 'badMessage'
+  | 'inputFailed';
+
+export type ScreenError = { code: ScreenErrorCode; message: string };
+
 /** Text frames the server sends. */
 export type ScreenServerMessage =
   | ({ type: 'state' } & ScreenState)
   | ({ type: 'signal' } & ScreenSignal)
-  | { type: 'error'; code: string; message: string }
-  | { type: 'ended'; reason: string };
+  | ({ type: 'error' } & ScreenError)
+  | { type: 'ended'; reason: ScreenEndReason };
 
 /** A minted ticket, resolved to the socket URL that redeems it. */
 export type ScreenTicketGrant = {
@@ -70,9 +89,12 @@ export type ScreenSessionHandlers = {
   onState: (state: ScreenState) => void;
   /** The guest framebuffer size, for coordinate mapping; called on every resize. */
   onFrameSize: (size: ScreenFrameSize) => void;
-  onError: (error: { code: string; message: string }) => void;
-  /** The socket closed: `reason` from an `ended` message, or the close reason. */
-  onEnded: (reason: string) => void;
+  onError: (error: ScreenError) => void;
+  /**
+   * The session is over: the `ended` message's reason, or `connectionLost`
+   * when the socket closed without one (the viewer retries with a new ticket).
+   */
+  onEnded: (reason: ScreenEndReason | 'connectionLost') => void;
 };
 
 export type ScreenFrameSize = { width: number; height: number };
