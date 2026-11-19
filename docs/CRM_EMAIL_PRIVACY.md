@@ -95,7 +95,10 @@ rows, open menus and persisted snapshots. This also applies to the first launch
 after upgrading a bound legacy owner with no
 policy. TanStack keeps existing data and in-flight reads without refetching; urql
 rereads only the queries whose original copied writes the shared owner rejects,
-in the background while their current rows remain visible. Physical resets
+in the background while their current rows remain visible. Recovery dispatches
+inside the exchange so cache rereads cannot replace the required network read;
+its fresh persisted page then receives subsequent mutations and realtime updates.
+Physical resets
 issue new owner generations, so
 delayed or missing mirror updates cannot admit pre-reset content.
 

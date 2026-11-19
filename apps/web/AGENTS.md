@@ -55,7 +55,9 @@ never an omitted generation. A first non-denied owner without a mirror initializ
 stamps while keeping existing query observers, rows, menus and persisted snapshots,
 including on upgrades. Do not cancel or refetch active TanStack reads; urql rereads
 only queries whose copied writes the owner rejects, preserving visible rows during
-that background recovery. A denied or incomplete owner and known account/policy
+that background recovery. Dispatch rejected-write recovery inside the exchange
+so queued cache rereads cannot replace or suppress its network request. A denied
+or incomplete owner and known account/policy
 changes still retire visible and
 persisted content. Preserve captured stamps through
 initialization waits and queued settlement. An unchanged ready proof without

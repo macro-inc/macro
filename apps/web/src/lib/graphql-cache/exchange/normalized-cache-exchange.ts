@@ -1512,14 +1512,17 @@ export function normalizedCacheExchange(
               const active = activeOps.get(op.key);
               if (
                 active &&
-                active.context.cacheSessionGeneration ===
-                  op.context.cacheSessionGeneration &&
+                isActive() &&
+                state.networkRequestsInFlight === 0 &&
                 state.networkResultVersion === resultVersion
               ) {
                 perfMark('cache.generation-recovery', {
                   reason: 'write-rejected',
                 });
-                client.reexecuteOperation(
+                // urql can replace or deduplicate this recovery behind cache
+                // rereads. Dispatch here so this page registers dependencies
+                // and can receive later mutations while its old rows stay up.
+                enqueueQueryForward(
                   makeOperation('query', active, {
                     ...active.context,
                     requestPolicy: 'network-only',

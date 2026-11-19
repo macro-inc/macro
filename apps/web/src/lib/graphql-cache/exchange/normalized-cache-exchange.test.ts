@@ -768,8 +768,8 @@ describe('normalizedCacheExchange', () => {
       expect(firstMetadata?.source).toBe('live-network');
       if (firstMetadata?.source === 'live-network')
         await firstMetadata.persistence;
-      expect(h.client.reexecuteOperation).toHaveBeenCalledOnce();
-      const retry = vi.mocked(h.client.reexecuteOperation).mock.calls[0][0];
+      expect(h.forwarded).toHaveLength(2);
+      const retry = h.forwarded[1];
       expect(retry.context.requestPolicy).toBe('network-only');
       h.network.next(
         queryResult(h.forwarded.at(-1)!, { soup: { nextCursor: 'fresh' } })
@@ -779,11 +779,136 @@ describe('normalizedCacheExchange', () => {
       expect(secondMetadata?.source).toBe('live-network');
       if (secondMetadata?.source === 'live-network')
         await secondMetadata.persistence;
-      expect(h.client.reexecuteOperation).toHaveBeenCalledOnce();
+      expect(h.forwarded).toHaveLength(2);
       expect(host.writes.map((args) => args.data)).toEqual(
         rejectAgain ? [] : [{ soup: { nextCursor: 'fresh' } }]
       );
       h.ops.next(teardownOf(retry));
+    }
+  );
+
+  it.each(['pending rereads', 'affected push', 'new baseline'] as const)(
+    'recovers rejected startup writes through %s',
+    async (mode) => {
+      const rejectedWrite = Promise.withResolvers<WriteResult>();
+      vi.spyOn(host, 'writeQuery').mockReturnValueOnce(rejectedWrite.promise);
+      const cacheReadStarted = Promise.withResolvers<void>();
+      const cacheRead = Promise.withResolvers<ReadResult>();
+      vi.spyOn(host, 'readQuery').mockImplementationOnce(() => {
+        cacheReadStarted.resolve();
+        return cacheRead.promise;
+      });
+      const firstRequest = Promise.withResolvers<Operation>();
+      const published = Promise.withResolvers<OperationResult>();
+      const recovered = Promise.withResolvers<OperationResult>();
+      const rereadCompleted = Promise.withResolvers<void>();
+      const network = makeSubject<OperationResult>();
+      const requests: Operation[] = [];
+      const client = createClient({
+        url: '/graphql',
+        exchanges: [
+          cacheSessionExchange,
+          normalizedCacheExchange(host),
+          () => (operations) => {
+            pipe(
+              operations,
+              subscribe((operation) => {
+                if (operation.kind !== 'query') return;
+                requests.push(operation);
+                firstRequest.resolve(operation);
+              })
+            );
+            return network.source;
+          },
+        ],
+      });
+      let rereads = 0;
+      const secondReread = Promise.withResolvers<void>();
+      const operations = pipe(
+        client.operations$,
+        subscribe((operation) => {
+          if (
+            operation.kind === 'query' &&
+            operation.context.requestPolicy === 'cache-only' &&
+            ++rereads === 2
+          )
+            secondReread.resolve();
+        })
+      );
+      const subscription = client
+        .query(
+          QUERY,
+          { input: { limit: 2 } },
+          { requestPolicy: 'network-only' }
+        )
+        .subscribe((result) => {
+          if (result.operation.context.requestPolicy === 'cache-only')
+            rereadCompleted.resolve();
+          if (!result.data) return;
+          if (result.operation.context.cacheGenerationRecovery === true)
+            recovered.resolve(result);
+          else published.resolve(result);
+        });
+      try {
+        const first = await firstRequest.promise;
+        network.next(queryResult(first, { soup: { nextCursor: 'first' } }));
+        const visible = await published.promise;
+        const metadata = normalizedCacheResultMetadata(visible);
+        expect(metadata?.source).toBe('live-network');
+        if (mode === 'new baseline') {
+          cacheSessionGeneration.initialize(
+            '00000000-0000-4000-8000-000000000002'
+          );
+          client.reexecuteOperation(
+            makeOperation('query', first, {
+              ...first.context,
+              requestPolicy: 'cache-only',
+            })
+          );
+          await cacheReadStarted.promise;
+          cacheRead.resolve({ kind: 'miss' });
+          await rereadCompleted.promise;
+        } else if (mode === 'affected push') {
+          host.pushAffected([first.key]);
+          await cacheReadStarted.promise;
+          cacheRead.resolve({ kind: 'miss' });
+        } else {
+          client.reexecuteOperation(
+            makeOperation('query', first, {
+              ...first.context,
+              requestPolicy: 'cache-only',
+            })
+          );
+          await cacheReadStarted.promise;
+          client.reexecuteOperation(
+            makeOperation('query', first, {
+              ...first.context,
+              requestPolicy: 'cache-only',
+            })
+          );
+          await secondReread.promise;
+        }
+        rejectedWrite.reject(new StaleCacheAuthorityError());
+        if (metadata?.source === 'live-network') await metadata.persistence;
+        expect(visible.data).toEqual({ soup: { nextCursor: 'first' } });
+        expect(requests).toHaveLength(2);
+        expect(requests[1].context.cacheGenerationRecovery).toBe(true);
+        network.next(
+          queryResult(requests[1], { soup: { nextCursor: 'fresh' } })
+        );
+        const fresh = await recovered.promise;
+        const freshMetadata = normalizedCacheResultMetadata(fresh);
+        if (freshMetadata?.source === 'live-network')
+          await freshMetadata.persistence;
+        expect(fresh.data).toEqual({ soup: { nextCursor: 'fresh' } });
+        expect(host.writes).toEqual([
+          expect.objectContaining({ registerDependencies: true }),
+        ]);
+      } finally {
+        cacheRead.resolve({ kind: 'miss' });
+        subscription.unsubscribe();
+        operations.unsubscribe();
+      }
     }
   );
 

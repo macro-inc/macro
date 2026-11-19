@@ -945,6 +945,10 @@ A missing mirror with a first non-denied owner initializes the baseline while
 preserving query observers, rows, open menus and persisted snapshots, including
 legacy upgrades. TanStack keeps its active reads without cancelling or refetching;
 urql rereads only rejected copied writes in the background, keeping visible rows.
+These reads use the exchange's network dispatch directly: a queued cache reread
+cannot replace or suppress recovery. Only the still-mounted latest response can
+recover, and an already pending network request prevents a duplicate. A newer
+operation stamp from a cache-only miss does not establish successful persistence.
 Denied or incomplete owners and known account/policy mismatches still retire copied
 content.
 Actual account replacement retains the full session fence.
