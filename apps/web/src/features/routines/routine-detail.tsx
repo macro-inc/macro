@@ -19,7 +19,14 @@ import { useUserId } from '@core/context/user';
 import { writeClipboardData } from '@core/util/dataTransfer';
 import { fireAndForget } from '@core/util/fireAndForget';
 import { useSystemSkillsQuery } from '@queries/storage/system-skills';
-import { getOwner, onMount, Show } from 'solid-js';
+import {
+  createEffect,
+  createSignal,
+  getOwner,
+  on,
+  onMount,
+  Show,
+} from 'solid-js';
 import { EntityAppearanceTrigger } from '../entity-appearance/entity-appearance';
 import { getErrorMessage } from './core/routine-draft';
 import { createRoutineConnectedApps } from './queries/connected-apps';
@@ -174,16 +181,23 @@ export function RoutineDetail(props: {
     () => props.scheduleId,
     () => false
   );
-  const onActionsOpenChange = (open: boolean) => {
-    if (!open || !needsRevocation()) return;
-    const scheduleId = props.scheduleId;
-    fireAndForget(
-      traceRoutineInteraction('routine.template.status', scheduleId, (span) =>
-        readRoutineTemplateStatus(scheduleId, span)
-      ),
-      'routines'
-    );
-  };
+  const [actionsOpen, setActionsOpen] = createSignal(false);
+  createEffect(
+    on(
+      () => (actionsOpen() && needsRevocation() ? props.scheduleId : undefined),
+      (scheduleId) => {
+        if (!scheduleId) return;
+        fireAndForget(
+          traceRoutineInteraction(
+            'routine.template.status',
+            scheduleId,
+            (span) => readRoutineTemplateStatus(scheduleId, span)
+          ),
+          'routines'
+        );
+      }
+    )
+  );
   const hasPublishedSnapshot = () =>
     needsRevocation() &&
     (published.isSuccess || published.isError) &&
@@ -222,7 +236,7 @@ export function RoutineDetail(props: {
       <RoutineDetailView
         source={source}
         userId={userId}
-        onActionsOpenChange={onActionsOpenChange}
+        onActionsOpenChange={setActionsOpen}
         identityIcon={
           <Show when={source.entity()}>
             {(entity) => (

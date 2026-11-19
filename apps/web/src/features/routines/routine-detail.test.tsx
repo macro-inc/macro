@@ -1644,6 +1644,21 @@ describe('sub-routines defined once', () => {
     );
   });
 
+  it('reads sharing status when a routine becomes ineligible in an open menu', () => {
+    mocks.sharing = () => true;
+    render(() => <Routine />);
+    openActions();
+    expect(screen.getByRole('menuitem', { name: 'Share' })).toBeTruthy();
+    expect(mocks.readSharingStatus).not.toHaveBeenCalled();
+
+    setSchedules([{ ...parent, id: 'routine-id' }]);
+    expect(screen.queryByRole('menuitem', { name: 'Share' })).toBeNull();
+    expect(mocks.readSharingStatus).toHaveBeenCalledExactlyOnceWith(
+      'routine-id',
+      NOOP_SPAN
+    );
+  });
+
   it('revokes a published snapshot after the routine gains definitions', () => {
     setSchedules([{ ...parent, id: 'routine-id' }]);
     mocks.sharing = () => true;
