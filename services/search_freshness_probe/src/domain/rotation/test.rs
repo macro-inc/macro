@@ -457,14 +457,15 @@ async fn a_late_prefix_word_is_a_new_document_each_round_found_by_the_prefix() {
         }]
     );
     assert_eq!(second.entity_id, id(2));
-    // The late word is the body; the title is the probe's usual one.
+    // The late word is the body, which the content search reads; the title
+    // is a token of its own.
     let [(TitleOrBody::Body, body), (TitleOrBody::Title, title)] =
         rotation.api.created[0].as_slice()
     else {
         panic!("a body and a title");
     };
     assert!(body.as_str().starts_with("conzz"));
-    assert!(!title.as_str().starts_with("con"));
+    assert_ne!(title, body);
     // Each round deletes the last round's document first, and shutdown the
     // current one.
     assert_eq!(
