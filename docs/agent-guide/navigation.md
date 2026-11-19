@@ -1387,7 +1387,7 @@ now** (disabled while it runs or a run is starting; a toast says **Run
 started**) and **Turn off** / **Turn on** (the switch's rules); **Duplicate**
 (the routine page's copy: same steps, triggers, description, run visibility and
 on/off state, named "<name> copy"; it stays in the list with a **Duplicated**
-toast whose **Open** opens the copy) and **Keep as my routine** appear under
+toast whose **Open** opens the duplicate) and **Keep as my routine** appear under
 the eligibility rules above.
 **Copy Link**, **Copy ID** and, with `enable-routine-sharing`,
 **Share**; then **Delete**, which confirms first and names the sub-routines

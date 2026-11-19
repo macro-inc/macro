@@ -1064,7 +1064,8 @@ start with an Ask AI step instead. When an SDK release
 breaks a routine's own code and AI's update fails its checks, the routine pauses
 and its Overview leads with **Paused: its code needs an update**. If only its
 definitions' code needs updating and the routine is active, it stays active and
-shows **Its sub-routines’ code needs an update**. **Review the update** shows
+shows **Its sub-routines’ code needs an update**; copies that need the broken
+code fail until it is updated. **Review the update** shows
 each changed step, including steps inside definitions. The notice disappears
 when the editor receives a saved task that differs from the task the proposal
 was made from. **Approve** and **Approve and resume** are disabled until
