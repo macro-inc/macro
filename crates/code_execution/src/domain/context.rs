@@ -1,7 +1,7 @@
 //! What an attended program's `main` receives, as the ambient declarations it
 //! is type-checked with. The SDK's own declarations come from the checker.
 
-use super::RunEnvironment;
+use super::ContextShape;
 
 /// `CodeContext` with what every attended run gets.
 const BASE: &str = r#"import type { CodeExecution, Macro, MacroOpts } from '@macro-inc/sdk';
@@ -40,15 +40,15 @@ const EXECUTION: &str = r#"
   }
 "#;
 
-/// The declarations for a run in `environment`: `session` and `execution`
-/// are declared exactly when the bootstrap passes them to `main`.
-pub(crate) fn program_context(environment: &RunEnvironment) -> String {
+/// The declarations for a run of `shape`: `session` and `execution` are
+/// declared exactly when the bootstrap passes them to `main`.
+pub(crate) fn program_context(shape: ContextShape) -> String {
     let mut declarations = BASE.to_owned();
-    if environment.session_id.is_some() {
+    if shape.session {
         declarations.push_str(SESSION);
-        if environment.execution_id.is_some() {
-            declarations.push_str(EXECUTION);
-        }
+    }
+    if shape.execution {
+        declarations.push_str(EXECUTION);
     }
     declarations.push_str("}\n");
     declarations

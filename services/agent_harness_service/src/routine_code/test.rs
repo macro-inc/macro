@@ -166,6 +166,14 @@ struct Programs(std::sync::Mutex<usize>);
 
 #[async_trait::async_trait]
 impl ProgramExecutor for Programs {
+    async fn check_program(
+        &self,
+        _: &code_execution::domain::ExecuteRequest,
+        _: code_execution::domain::ContextShape,
+        _: tokio_util::sync::CancellationToken,
+    ) -> Result<(), code_execution::domain::Outcome> {
+        Ok(())
+    }
     async fn execute_program(
         &self,
         _: code_execution::domain::ExecuteRequest,
@@ -333,6 +341,14 @@ struct RunTokens(std::sync::Mutex<Vec<String>>);
 
 #[async_trait::async_trait]
 impl ProgramExecutor for RunTokens {
+    async fn check_program(
+        &self,
+        _: &code_execution::domain::ExecuteRequest,
+        _: code_execution::domain::ContextShape,
+        _: tokio_util::sync::CancellationToken,
+    ) -> Result<(), code_execution::domain::Outcome> {
+        Ok(())
+    }
     async fn execute_program(
         &self,
         _: code_execution::domain::ExecuteRequest,

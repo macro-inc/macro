@@ -277,9 +277,12 @@ async fn a_program_with_type_errors_never_runs() {
         panic!("expected a failure, got {outcome:?}");
     };
     assert_eq!(error.code, FailureCode::Compile);
-    assert_eq!(
-        error.message,
-        "The program wasn't run: it doesn't type-check against the Macro SDK. Fix these errors and run it again.\n\nTS2339 [ERROR]: Property 'classify' does not exist on type 'AiNamespace'.\n  await macro.ai.classify({ input: 'x' });\n                 ~~~~~~~~\n    at main.ts:2:18\n"
+    assert!(
+        error.message.starts_with(
+            "The program wasn't run: it doesn't type-check against the Macro SDK. Fix these errors and run it again.\n\nTS2339 [ERROR]: Property 'classify' does not exist on type 'AiNamespace'.\n  await macro.ai.classify({ input: 'x' });\n                 ~~~~~~~~\n    at main.ts:2:18\n  AiNamespace has: "
+        ) && error.message.contains("decide"),
+        "{}",
+        error.message
     );
     assert_eq!(runner.0.load(Ordering::SeqCst), 0);
     let checked = checker.checked.lock().unwrap();
@@ -396,4 +399,97 @@ fn every_operation_gets_at_least_one_call() {
         .validate(),
         Err(AdmissionError::InvalidLimits)
     ));
+}
+
+/// A member the SDK type doesn't have comes back with the members it has, so
+/// the model can fix the call without reading the type first.
+#[test]
+fn a_missing_sdk_member_lists_what_the_type_has() {
+    let failure = type_errors(&[Diagnostic {
+        file: Some("main.ts".into()),
+        message: "TS2339 [ERROR]: Property 'documents' does not exist on type 'SearchNamespace'.\n  const [doc] = await macro.search.documents('Q4 plan');\n                                   ~~~~~~~~~\n    at main.ts:3:36".into(),
+    }]);
+    assert_eq!(failure.code, FailureCode::Compile);
+    assert!(
+        failure
+            .message
+            .contains("    at main.ts:3:36\n  SearchNamespace has: page, all"),
+        "{}",
+        failure.message
+    );
+    // The checker's own suggestion is enough.
+    let suggested = type_errors(&[Diagnostic {
+        file: Some("main.ts".into()),
+        message: "TS2551 [ERROR]: Property 'pag' does not exist on type 'SearchNamespace'. Did you mean 'page'?\n    at main.ts:3:36".into(),
+    }]);
+    assert!(!suggested.message.contains("has:"), "{}", suggested.message);
+}
+
+/// A program checked ahead of its run isn't checked again when it runs, and
+/// one that fails its precheck is never run.
+#[tokio::test]
+async fn a_prechecked_program_runs_without_another_check() {
+    let runner = Arc::new(Echoes(AtomicUsize::new(0)));
+    let checker = Arc::new(Answers {
+        answer: || Ok(Vec::new()),
+        checked: Default::default(),
+    });
+    let service =
+        ExecutionService::new(runner.clone(), checker.clone(), Limits::default()).unwrap();
+    let shape = ContextShape {
+        session: true,
+        execution: true,
+    };
+    let environment = || RunEnvironment {
+        session_id: Some(uuid::Uuid::now_v7()),
+        execution_id: Some(uuid::Uuid::now_v7()),
+        ..RunEnvironment::default()
+    };
+    service
+        .check_program(&request(10_000), shape, CancellationToken::new())
+        .await
+        .unwrap();
+    assert_eq!(checker.checked.lock().unwrap().len(), 1);
+    let outcome = finish(service.execute(request(10_000), environment()).unwrap()).await;
+    assert!(matches!(outcome, Outcome::Succeeded { .. }), "{outcome:?}");
+    assert_eq!(checker.checked.lock().unwrap().len(), 1);
+    // The pass was for one run: the next one is checked again.
+    let outcome = finish(service.execute(request(10_000), environment()).unwrap()).await;
+    assert!(matches!(outcome, Outcome::Succeeded { .. }), "{outcome:?}");
+    assert_eq!(checker.checked.lock().unwrap().len(), 2);
+    // A pass for another shape doesn't count.
+    service
+        .check_program(&request(10_000), ContextShape::default(), CancellationToken::new())
+        .await
+        .unwrap();
+    finish(service.execute(request(10_000), environment()).unwrap()).await;
+    assert_eq!(checker.checked.lock().unwrap().len(), 4);
+    assert_eq!(runner.0.load(Ordering::SeqCst), 3);
+}
+
+#[tokio::test]
+async fn a_failed_precheck_reports_the_type_errors() {
+    let checker = Arc::new(Answers {
+        answer: || {
+            Ok(vec![Diagnostic {
+                file: Some("main.ts".into()),
+                message: "TS2304 [ERROR]: Cannot find name 'nope'.\n    at main.ts:1:1".into(),
+            }])
+        },
+        checked: Default::default(),
+    });
+    let service = ExecutionService::new(
+        Arc::new(Echoes(AtomicUsize::new(0))),
+        checker,
+        Limits::default(),
+    )
+    .unwrap();
+    let Err(Outcome::Failed { error }) = service
+        .check_program(&request(10_000), ContextShape::default(), CancellationToken::new())
+        .await
+    else {
+        panic!("expected type errors");
+    };
+    assert_eq!(error.code, FailureCode::Compile);
+    assert!(error.message.contains("Cannot find name 'nope'."));
 }

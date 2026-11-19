@@ -44,6 +44,27 @@ pub struct RunEnvironment {
     pub egress: Egress,
 }
 
+/// The handles an attended program's `main` receives besides the SDK, which
+/// decide the `CodeContext` it is type-checked with.
+#[derive(Clone, Copy, Debug, Default, PartialEq, Eq)]
+pub struct ContextShape {
+    /// `session`: the run belongs to an agent session.
+    pub session: bool,
+    /// `execution`: the run is one of the session's code executions.
+    pub execution: bool,
+}
+
+impl RunEnvironment {
+    /// What `main` receives: `execution` only with `session`, as the
+    /// bootstrap passes them.
+    pub fn shape(&self) -> ContextShape {
+        ContextShape {
+            session: self.session_id.is_some(),
+            execution: self.session_id.is_some() && self.execution_id.is_some(),
+        }
+    }
+}
+
 /// How a program's requests reach the SDK hosts.
 #[derive(Clone, Copy, Debug, Default, PartialEq, Eq)]
 pub enum Egress {

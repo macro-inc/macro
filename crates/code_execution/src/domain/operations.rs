@@ -84,3 +84,50 @@ pub fn sdk_declaration_files(directory: &str) -> Vec<(&'static str, &'static str
         .map(|(path, _, text)| (path.as_str(), text.as_str()))
         .collect()
 }
+
+/// The public members of the SDK class or interface `name`, in declaration
+/// order, or `None` when the SDK declares no class or interface by that name.
+pub fn sdk_members(name: &str) -> Option<Vec<&'static str>> {
+    let headers = [
+        format!("declare class {name} "),
+        format!("declare class {name}<"),
+        format!("interface {name} "),
+        format!("interface {name}<"),
+    ];
+    SDK.files.values().find_map(|text| {
+        let mut lines = text.lines();
+        lines.find(|line| {
+            let line = line.trim_start_matches("export ");
+            headers.iter().any(|header| line.starts_with(header.as_str()))
+        })?;
+        let mut members: Vec<&'static str> = Vec::new();
+        for line in lines.take_while(|line| !line.starts_with('}')) {
+            let Some(member) = line.strip_prefix("    ") else {
+                continue;
+            };
+            if member.starts_with(' ')
+                || ["private ", "protected ", "constructor("]
+                    .iter()
+                    .any(|hidden| member.starts_with(hidden))
+            {
+                continue;
+            }
+            let member = ["static ", "readonly ", "get ", "set ", "async "]
+                .iter()
+                .fold(member, |member, modifier| {
+                    member.strip_prefix(modifier).unwrap_or(member)
+                });
+            let end = member
+                .find(|c: char| !(c.is_ascii_alphanumeric() || c == '_' || c == '$'))
+                .unwrap_or(member.len());
+            let identifier = &member[..end];
+            if !identifier.is_empty() && !members.contains(&identifier) {
+                members.push(identifier);
+            }
+        }
+        Some(members)
+    })
+}
+
+#[cfg(test)]
+mod test;

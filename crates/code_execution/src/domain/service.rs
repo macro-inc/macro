@@ -16,7 +16,13 @@ pub struct ExecutionService {
     running: Arc<Semaphore>,
     shutdown: CancellationToken,
     tasks: TaskTracker,
+    /// Programs that passed a precheck, oldest first, each good for one run.
+    prechecked: Arc<std::sync::Mutex<std::collections::VecDeque<(ContextShape, String)>>>,
 }
+
+/// Prechecked programs remembered at once; past it the oldest is forgotten
+/// and its run checks it again.
+const MAX_PRECHECKED: usize = 64;
 
 impl ExecutionService {
     /// Validate policy and wire the process and type-checking adapters. An
@@ -37,6 +43,7 @@ impl ExecutionService {
             limits,
             shutdown: CancellationToken::new(),
             tasks: TaskTracker::new(),
+            prechecked: Arc::default(),
         })
     }
 
@@ -113,7 +120,8 @@ impl ExecutionService {
 
     /// Type-check an attended program, then run it once a process slot is
     /// free. A program that doesn't check, or that couldn't be checked,
-    /// never runs.
+    /// never runs. One [`ProgramExecutor::check_program`] passed for this
+    /// run isn't checked again.
     async fn check_then_run(
         &self,
         job: ExecutionJob,
@@ -123,44 +131,21 @@ impl ExecutionService {
         let span = tracing::Span::current();
         if job.environment.unattended.is_some() {
             span.record("check", "skipped");
+        } else if self.take_prechecked(job.environment.shape(), &job.request.source) {
+            span.record("check", "prechecked");
         } else {
-            let files = [SourceFile {
-                name: PROGRAM_FILE.to_owned(),
-                source: job.request.source.clone(),
-            }];
-            let declarations = program_context(&job.environment);
             let checked = tokio::select! {
                 biased;
                 _ = token.cancelled() => return Outcome::Cancelled,
                 _ = sink.closed() => return Outcome::Cancelled,
                 _ = sleep_until(job.deadline) => return Outcome::TimedOut,
-                checked = self.checker.check_files(&files, &declarations, ProgramImports::SdkAndHandlebars) => checked,
+                checked = self.check(&job.request.source, job.environment.shape()) => checked,
             };
-            let rejection = match checked {
-                Ok(diagnostics) if diagnostics.is_empty() => None,
-                Ok(diagnostics) => Some(("rejected", type_errors(&diagnostics))),
-                Err(CheckError::Busy) => Some((
-                    "busy",
-                    ExecutionFailure::new(
-                        FailureCode::Limit,
-                        "The program wasn't run: Macro is busy type-checking other programs. Run it again shortly.",
-                    ),
-                )),
-                Err(CheckError::InvalidSource | CheckError::Internal) => Some((
-                    "failed",
-                    ExecutionFailure::new(
-                        FailureCode::Internal,
-                        "The program wasn't run: type-checking it failed. Run it again shortly.",
-                    ),
-                )),
-            };
-            match rejection {
-                None => span.record("check", "passed"),
-                Some((label, failure)) => {
-                    span.record("check", label);
-                    return failure.into();
-                }
-            };
+            if let Err((label, failure)) = checked {
+                span.record("check", label);
+                return failure.into();
+            }
+            span.record("check", "passed");
         }
         let queued = tracing::info_span!("code_execution.queue");
         tokio::select! {
@@ -189,6 +174,106 @@ impl ExecutionService {
                     }
                 }
             }
+        }
+    }
+
+    /// Type-check `source` as a program whose context has `shape`: `Err`
+    /// carries the span label and the failure to end the run with.
+    async fn check(
+        &self,
+        source: &str,
+        shape: ContextShape,
+    ) -> Result<(), (&'static str, ExecutionFailure)> {
+        let files = [SourceFile {
+            name: PROGRAM_FILE.to_owned(),
+            source: source.to_owned(),
+        }];
+        let declarations = program_context(shape);
+        match self
+            .checker
+            .check_files(&files, &declarations, ProgramImports::SdkAndHandlebars)
+            .await
+        {
+            Ok(diagnostics) if diagnostics.is_empty() => Ok(()),
+            Ok(diagnostics) => Err(("rejected", type_errors(&diagnostics))),
+            Err(CheckError::Busy) => Err((
+                "busy",
+                ExecutionFailure::new(
+                    FailureCode::Limit,
+                    "The program wasn't run: Macro is busy type-checking other programs. Run it again shortly.",
+                ),
+            )),
+            Err(CheckError::InvalidSource | CheckError::Internal) => Err((
+                "failed",
+                ExecutionFailure::new(
+                    FailureCode::Internal,
+                    "The program wasn't run: type-checking it failed. Run it again shortly.",
+                ),
+            )),
+        }
+    }
+
+    /// Check a program ahead of its run, so a type error stops it before
+    /// its host does anything for it. A pass is remembered for one run of
+    /// the same source and shape.
+    pub(super) async fn precheck(
+        &self,
+        request: &ExecuteRequest,
+        shape: ContextShape,
+        cancellation: CancellationToken,
+    ) -> Result<(), Outcome> {
+        let span = tracing::info_span!("code_execution.precheck", check = tracing::field::Empty);
+        if request.source.trim().is_empty() || request.source.len() > self.limits.max_source_bytes {
+            span.record("check", "invalid");
+            return Err(
+                ExecutionFailure::new(FailureCode::Limit, AdmissionError::InvalidSource.to_string())
+                    .into(),
+            );
+        }
+        let duration = std::time::Duration::from_millis(request.timeout_ms)
+            .min(self.limits.max_duration);
+        let checked = tokio::select! {
+            biased;
+            _ = cancellation.cancelled() => return Err(Outcome::Cancelled),
+            _ = tokio::time::sleep(duration) => return Err(Outcome::TimedOut),
+            checked = self.check(&request.source, shape).instrument(span.clone()) => checked,
+        };
+        match checked {
+            Ok(()) => {
+                span.record("check", "passed");
+                let mut prechecked = self
+                    .prechecked
+                    .lock()
+                    .unwrap_or_else(std::sync::PoisonError::into_inner);
+                if prechecked.len() == MAX_PRECHECKED {
+                    prechecked.pop_front();
+                }
+                prechecked.push_back((shape, request.source.clone()));
+                Ok(())
+            }
+            Err((label, failure)) => {
+                span.record("check", label);
+                Err(failure.into())
+            }
+        }
+    }
+
+    /// Whether `source` passed a precheck for `shape` that no run has used
+    /// yet; using it takes it.
+    fn take_prechecked(&self, shape: ContextShape, source: &str) -> bool {
+        let mut prechecked = self
+            .prechecked
+            .lock()
+            .unwrap_or_else(std::sync::PoisonError::into_inner);
+        match prechecked
+            .iter()
+            .position(|(checked, checked_source)| *checked == shape && checked_source == source)
+        {
+            Some(index) => {
+                prechecked.remove(index);
+                true
+            }
+            None => false,
         }
     }
 
@@ -291,6 +376,10 @@ fn type_errors(diagnostics: &[Diagnostic]) -> ExecutionFailure {
         message.push('\n');
         message.push_str(&diagnostic.message);
         message.push('\n');
+        if let Some(members) = missing_member_hint(&diagnostic.message) {
+            message.push_str(&members);
+            message.push('\n');
+        }
     }
     if diagnostics.len() > MAX_REPORTED_DIAGNOSTICS {
         message.push_str(&format!(
@@ -299,6 +388,36 @@ fn type_errors(diagnostics: &[Diagnostic]) -> ExecutionFailure {
         ));
     }
     ExecutionFailure::new(FailureCode::Compile, message)
+}
+
+/// Most SDK members a hint lists.
+const MAX_HINTED_MEMBERS: usize = 40;
+
+/// For a use of a member an SDK type doesn't have (TS2339) that the checker
+/// offers no "Did you mean" for, the members the type does have.
+fn missing_member_hint(message: &str) -> Option<String> {
+    use nom::Parser as _;
+    use nom::bytes::complete::{tag, take_until, take_while1};
+    let (rest, _) = take_until::<_, _, ()>("TS2339 [ERROR]: Property '")
+        .parse(message)
+        .ok()?;
+    let (_, (_, _, _, type_name, _)) = (
+        tag::<_, _, ()>("TS2339 [ERROR]: Property '"),
+        take_until("'"),
+        tag("' does not exist on type '"),
+        take_while1(|c: char| c.is_ascii_alphanumeric() || c == '_'),
+        tag("'."),
+    )
+        .parse(rest)
+        .ok()?;
+    if message.lines().next()?.contains("Did you mean") {
+        return None;
+    }
+    let members = sdk_members(type_name)?;
+    if members.is_empty() || members.len() > MAX_HINTED_MEMBERS {
+        return None;
+    }
+    Some(format!("  {type_name} has: {}.", members.join(", ")))
 }
 
 #[cfg(test)]

@@ -70,7 +70,11 @@ local would point at macro.com.
 slot; one with type errors fails with `FailureCode::Compile` and the checker's
 messages, and a busy or failed checker fails the run rather than running it
 unchecked. Unattended (routine) programs are checked by their host as a whole
-routine when saved, so their runs aren't checked again.
+routine when saved, so their runs aren't checked again. Hosts call
+`ProgramExecutor::check_program` before doing anything for a run (owner
+approval, credentials), so a type error stops it there; that pass covers the
+next run of the same source and `ContextShape`, which skips its own check
+(`check = prechecked`).
 
 The bootstrap bans timers before importing `main.ts`, and the import map points
 node timer modules (and, in attended runs, worker modules) at `timers.mjs`; every
