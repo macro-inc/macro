@@ -19,7 +19,8 @@ behind its own Cargo feature.
   to a sign-in is one hash under its own prefix (`mbl_login_bound:`), so its
   challenge can't be evicted apart from it and a server that predates binding
   never finds it. A taken code keeps its deadline on Redis's clock, and a
-  restore puts it back until then, not for a fresh lifetime.
+  restore puts it back until then, not for a fresh lifetime, or deletes it
+  when it can't set that deadline.
 
 ## Scope
 
@@ -45,7 +46,8 @@ behind its own Cargo feature.
 ## Checks
 
 - `cargo test -p macro_cache_client` (`SQLX_OFFLINE` unset). The `auth` tests
-  need Redis: CI's on `127.0.0.1:6379`, or set `REDIS_URL`. To check a new
+  need Redis: CI's on `127.0.0.1:6379`, or set `REDIS_URL` (no credentials;
+  some tests add and remove an ACL user, so it must allow that). To check a new
   script against a cluster, point `REDIS_URL` at a one-node cluster:
   `redis-server --port <p> --cluster-enabled yes`, then
   `redis-cli -p <p> cluster addslotsrange 0 16383`. The session code takes
