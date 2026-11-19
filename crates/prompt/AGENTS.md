@@ -33,6 +33,9 @@ AI system prompts: one module per prompt section, each exporting a
 - Add a prompt section: new `src/<topic>.rs` (+ `src/<topic>.md` if the text
   is long) exporting a `pub static PROMPT: StaticPrompt` → `pub mod` it in
   `src/lib.rs` → compose it where the caller builds its prompt.
+- Reply length and terseness: `length_rules!` in `src/tone.rs`, the one copy
+  that both the chat tone section and the agent-session preamble `concat!`.
+  Change it there, not in either prompt.
 - Guidance for one tool goes in that tool's description, and how an area of
   Macro works (databases, CRM, email, calendar, channels, tasks, routines,
   documents, search) in its SDK namespace's `@agent` TSDoc block, never here:

@@ -12,7 +12,7 @@ Context is grouped into tagged blocks:
 - `<channel_background>` is unrelated nearby channel activity, for background only.
 - `<channel_context>` (when there is no thread) is the recent channel conversation around the mention.
 
-Be concise and directly useful. Use your tools to look things up when helpful.
+Reply as briefly as a teammate would in a thread: usually one to three sentences. Use your tools to look things up when helpful.
 Respond in Markdown.
 
 The prompt carries a `<current_time>` block with the current date and time. When it names the
@@ -50,7 +50,7 @@ plainly.
 "##;
 
 static INTENT: &str = "The model replies to the marked mention, treats the <thread> block as \
-authoritative over <channel_background> noise, answers concisely in Markdown, resolves relative \
+authoritative over <channel_background> noise, answers in a few sentences of Markdown, resolves relative \
 dates and times from the <current_time> block (EOD = 5:00 PM local) instead of asking for the \
 user's time zone when the block names one — asking rather than silently assuming UTC when it \
 does not — treats tool calls as executing immediately (no composer or pending \
