@@ -650,6 +650,58 @@ export async function main({ macro, trigger, steps, run }: StepContext) {
 
     #[tokio::test]
     #[ignore = "requires pinned Deno runtime"]
+    async fn a_routine_schedules_its_sub_routines_by_name_with_their_typed_inputs() {
+        let (_root, code) = code("http://127.0.0.1:9").await;
+        // The routine's step schedules; the sub-routine's step reads its input.
+        let routine = |schedule: &str, remind: &str| {
+            let mut program = RoutineProgram::from_task(&json!({
+                "steps": [{ "type": "code", "title": "Schedule", "source": format!(
+                    "export async function main({{ macro }}: StepContext) {{ {schedule} }}"
+                ) }],
+                "sub_routines": [{
+                    "name": "remind",
+                    "title": "Remind me",
+                    "inputs": [{ "type": "text", "name": "taskId", "label": "Task" }],
+                    "steps": [{ "type": "code", "title": "Remind", "source": format!(
+                        "export async function main({{ inputs }}: StepContext) {{ {remind} }}"
+                    ) }],
+                }],
+            }))
+            .unwrap();
+            program.assign_step_ids();
+            program
+        };
+        let schedule = "const copy = await macro.routines.schedule('remind', { trigger: { type: 'once', at: '2030-01-01T09:00:00Z' }, inputs: { taskId: 't' }, key: 'k' }); return copy.id;";
+        let read = "const id: string = inputs.taskId; return id;";
+        assert_eq!(
+            code.check_program(&routine(schedule, read)).await.unwrap(),
+            Vec::new()
+        );
+
+        for (wrong, expected) in [
+            (schedule.replace("'remind'", "'nudge'"), "'\"nudge\"'"),
+            (schedule.replace("taskId: 't'", "taskId: 1"), "number"),
+            (schedule.replace("taskId: 't'", ""), "taskId"),
+        ] {
+            let failing = code.check_program(&routine(&wrong, read)).await.unwrap();
+            assert_eq!(failing.len(), 1, "{wrong}: {failing:?}");
+            assert_eq!(failing[0].index, 0);
+            assert!(failing[0].problems[0].contains(expected), "{failing:?}");
+        }
+        let failing = code
+            .check_program(&routine(schedule, "return inputs.dueAt;"))
+            .await
+            .unwrap();
+        assert_eq!(failing.len(), 1, "{failing:?}");
+        assert_eq!(
+            (failing[0].index, failing[0].title.as_str()),
+            (1, "Remind (in sub-routine `remind`)")
+        );
+        assert!(failing[0].problems[0].contains("Property 'dueAt' does not exist"));
+    }
+
+    #[tokio::test]
+    #[ignore = "requires pinned Deno runtime"]
     async fn each_step_reads_the_typed_outputs_of_the_steps_before_it() {
         let (_root, code) = code("http://127.0.0.1:9").await;
         let routine = |read: &str| {

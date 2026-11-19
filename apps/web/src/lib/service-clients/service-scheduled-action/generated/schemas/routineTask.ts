@@ -8,9 +8,11 @@
 
 import type { AgentTask } from './agentTask';
 import type { RoutineProgram } from './routineProgram';
+import type { RoutineSubRoutineCopy } from './routineSubRoutineCopy';
 
 /**
- * A stored task's two forms, as the scheduler's API describes `task`:
-[`RoutineProgram::from_task`] reads them.
+ * A stored task's forms, as the scheduler's API describes `task`:
+[`RoutineProgram::from_task`] reads a program or an agent task, and
+[`SubRoutineCopy::from_task`] a copy, whose steps are its parent's.
  */
-export type RoutineTask = RoutineProgram | AgentTask;
+export type RoutineTask = RoutineProgram | RoutineSubRoutineCopy | AgentTask;

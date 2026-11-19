@@ -666,6 +666,95 @@
         }
       }
     },
+    "/scheduled-actions/schedule": {
+      "post": {
+        "tags": ["scheduled actions"],
+        "summary": "Schedule a copy of a sub-routine the running routine defines, with its\nown trigger and inputs. Only a routine's run can: its code step's\ncredential says which routine, never the body.",
+        "operationId": "schedule_sub_routine",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/ScheduleSubRoutine"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "description": "The copy its key already named, updated",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ScheduledActionResponse"
+                }
+              }
+            }
+          },
+          "201": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ScheduledActionResponse"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "No sub-routine by that name, or inputs that don't fit it",
+            "content": {
+              "text/plain": {
+                "schema": {
+                  "type": "string"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "",
+            "content": {
+              "text/plain": {
+                "schema": {
+                  "type": "string"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "The request doesn't come from a routine's run",
+            "content": {
+              "text/plain": {
+                "schema": {
+                  "type": "string"
+                }
+              }
+            }
+          },
+          "409": {
+            "description": "The routine already has the most active sub-routines it can",
+            "content": {
+              "text/plain": {
+                "schema": {
+                  "type": "string"
+                }
+              }
+            }
+          },
+          "500": {
+            "description": "",
+            "content": {
+              "text/plain": {
+                "schema": {
+                  "type": "string"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
     "/scheduled-actions/suggestions": {
       "get": {
         "tags": ["scheduled actions"],
@@ -3422,7 +3511,7 @@
         "properties": {
           "index": {
             "type": "integer",
-            "description": "Its place among the routine's steps, from zero.",
+            "description": "Its place among the routine's steps, or its sub-routine's, from zero.",
             "minimum": 0
           },
           "problems": {
@@ -3431,6 +3520,10 @@
               "type": "string"
             },
             "description": "What the type checker reports, first problems first."
+          },
+          "subRoutine": {
+            "type": ["string", "null"],
+            "description": "The sub-routine whose step it is; absent for the routine's own steps."
           },
           "title": {
             "type": "string",
@@ -4539,6 +4632,10 @@
           }
         }
       },
+      "InputName": {
+        "type": "string",
+        "description": "How code reads an input: a lowercase letter, then up to 31 letters or\ndigits, e.g. `taskId`."
+      },
       "ItemKind": {
         "type": "string",
         "description": "A kind of item a request can name.",
@@ -4947,6 +5044,81 @@
           }
         }
       },
+      "RoutineInput": {
+        "oneOf": [
+          {
+            "type": "object",
+            "description": "Text, such as an item's id or name.",
+            "required": ["name", "label", "type"],
+            "properties": {
+              "label": {
+                "type": "string",
+                "description": "What it is, for the owner, e.g. \"Task\"."
+              },
+              "name": {
+                "$ref": "#/components/schemas/InputName",
+                "description": "How the code reads it: `inputs.<name>`."
+              },
+              "type": {
+                "type": "string",
+                "enum": ["text"]
+              },
+              "value": {
+                "type": ["string", "null"],
+                "description": "The value a copy was given."
+              }
+            }
+          },
+          {
+            "type": "object",
+            "description": "A number.",
+            "required": ["name", "label", "type"],
+            "properties": {
+              "label": {
+                "type": "string",
+                "description": "What it is, for the owner."
+              },
+              "name": {
+                "$ref": "#/components/schemas/InputName",
+                "description": "How the code reads it: `inputs.<name>`."
+              },
+              "type": {
+                "type": "string",
+                "enum": ["number"]
+              },
+              "value": {
+                "type": ["number", "null"],
+                "format": "double",
+                "description": "The value a copy was given."
+              }
+            }
+          },
+          {
+            "type": "object",
+            "description": "Yes or no.",
+            "required": ["name", "label", "type"],
+            "properties": {
+              "label": {
+                "type": "string",
+                "description": "What it is, for the owner."
+              },
+              "name": {
+                "$ref": "#/components/schemas/InputName",
+                "description": "How the code reads it: `inputs.<name>`."
+              },
+              "type": {
+                "type": "string",
+                "enum": ["boolean"]
+              },
+              "value": {
+                "type": ["boolean", "null"],
+                "description": "The value a copy was given."
+              }
+            }
+          }
+        ],
+        "description": "A value a sub-routine's copy is given when it is scheduled, which its\ncode reads as `inputs.<name>`. A definition declares it without a value;\na routine kept from a copy holds the value the copy was given."
+      },
       "RoutineKnob": {
         "oneOf": [
           {
@@ -5098,6 +5270,13 @@
             "type": "boolean",
             "description": "Code steps write as the owner, with no agent badge: their posts,\ncomments and emails appear written by the owner. Set only when the\nowner explicitly asked for the routine to act or send as them; by\ndefault code steps' writes are attributed to Macro's agent acting for\nthe owner. Agent (\"Ask AI\") steps keep their own agent attribution\neither way: an agent session speaking as a person is a different\nchange. A single agent task has no code steps, so it never applies."
           },
+          "inputs": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/RoutineInput"
+            },
+            "description": "Values its code reads as `inputs.<name>`: those a sub-routine's copy\nwas given when it was scheduled, kept when the copy became a routine\nof its own."
+          },
           "mcp_servers": {
             "type": "array",
             "items": {
@@ -5122,6 +5301,13 @@
               "$ref": "#/components/schemas/RoutineStep"
             },
             "description": "Steps run in order. A failed step stops the run."
+          },
+          "sub_routines": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/RoutineSubRoutine"
+            },
+            "description": "Routines its runs schedule copies of, with\n`macro.routines.schedule(name, { trigger, inputs })`: written once\nhere and checked with it. A copy holds its trigger and its inputs'\nvalues, and runs its definition as it is here when it runs."
           }
         },
         "additionalProperties": false
@@ -5202,6 +5388,59 @@
           }
         ],
         "description": "One step of a routine."
+      },
+      "RoutineSubRoutine": {
+        "type": "object",
+        "description": "A routine a routine's runs schedule copies of. It is written once, with\nthe routine that defines it, and checked with it. A copy holds only its\ntrigger and the values of its inputs, and runs these steps as they are\nwhen it runs, so an edit here reaches the copies that haven't run yet.",
+        "required": ["name", "title", "steps"],
+        "properties": {
+          "inputs": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/RoutineInput"
+            },
+            "description": "The values each copy is given when it is scheduled: its code reads\nthem as `inputs.<name>`, and its Ask AI step sees them as data."
+          },
+          "mcp_servers": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/AgentMcpServer"
+            },
+            "description": "Apps a copy's Ask AI step requires, as a routine's `mcp_servers`."
+          },
+          "name": {
+            "$ref": "#/components/schemas/SubRoutineName",
+            "description": "How the routine's code schedules a copy:\n`macro.routines.schedule('<name>', { trigger, inputs })`."
+          },
+          "steps": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/RoutineStep"
+            },
+            "description": "What a copy does when it runs, in order."
+          },
+          "title": {
+            "type": "string",
+            "description": "What a copy does, in a few words; copies are named after it."
+          }
+        },
+        "additionalProperties": false
+      },
+      "RoutineSubRoutineCopy": {
+        "type": "object",
+        "description": "The task of a routine scheduled from a sub-routine: which of its\nparent's definitions it runs, and the values its inputs were given. It\nholds no steps: it runs the definition as the parent holds it when it\nruns.",
+        "required": ["sub_routine"],
+        "properties": {
+          "inputs": {
+            "type": "object",
+            "description": "Each input's value, by name."
+          },
+          "sub_routine": {
+            "$ref": "#/components/schemas/SubRoutineName",
+            "description": "The definition it runs, by name."
+          }
+        },
+        "additionalProperties": false
       },
       "RoutineSuggestion": {
         "allOf": [
@@ -5295,11 +5534,15 @@
             "description": "Steps, run in order."
           },
           {
+            "$ref": "#/components/schemas/RoutineSubRoutineCopy",
+            "description": "A copy of a sub-routine its parent defines."
+          },
+          {
             "$ref": "#/components/schemas/AgentTask",
             "description": "A routine that is only an agent."
           }
         ],
-        "description": "A stored task's two forms, as the scheduler's API describes `task`:\n[`RoutineProgram::from_task`] reads them."
+        "description": "A stored task's forms, as the scheduler's API describes `task`:\n[`RoutineProgram::from_task`] reads a program or an agent task, and\n[`SubRoutineCopy::from_task`] a copy, whose steps are its parent's."
       },
       "RoutineTemplate": {
         "type": "object",
@@ -5558,6 +5801,34 @@
       },
       "Schedule": {
         "type": "string"
+      },
+      "ScheduleSubRoutine": {
+        "type": "object",
+        "description": "A copy of a sub-routine the running routine defines, to schedule: the\nbody of `POST /scheduled-actions/schedule`. The copy runs the definition\nas its routine holds it when the copy runs.",
+        "required": ["sub_routine", "trigger"],
+        "properties": {
+          "inputs": {
+            "type": "object",
+            "description": "A value for each of the sub-routine's inputs, by name."
+          },
+          "key": {
+            "type": ["string", "null"],
+            "description": "Scheduling under the same key again updates that copy instead of\nadding another."
+          },
+          "name": {
+            "type": ["string", "null"],
+            "description": "The copy's name; the sub-routine's title when absent."
+          },
+          "sub_routine": {
+            "type": "string",
+            "description": "The sub-routine's name in the running routine."
+          },
+          "trigger": {
+            "$ref": "#/components/schemas/ActionTrigger",
+            "description": "When the copy runs."
+          }
+        },
+        "additionalProperties": false
       },
       "ScheduledAction": {
         "type": "object",
@@ -5877,6 +6148,10 @@
             "description": "It is off because its parent was switched off, and resumes with it."
           }
         }
+      },
+      "SubRoutineName": {
+        "type": "string",
+        "description": "Names a sub-routine: a lowercase letter, then up to 31 lowercase\nletters, digits or underscores, e.g. `remind_about_task`."
       },
       "SuggestOutcome": {
         "type": "object",

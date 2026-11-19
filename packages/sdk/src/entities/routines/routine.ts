@@ -65,7 +65,8 @@ function singleTriggerBody(trigger: SingleRoutineTrigger): RoutineTrigger {
     .exhaustive();
 }
 
-function triggerBody(trigger: RoutineTriggerOptions): ActionTrigger {
+/** Translate typed trigger options into the generated wire contract. */
+export function triggerBody(trigger: RoutineTriggerOptions): ActionTrigger {
   return match(trigger)
     .with({ type: 'multiple' }, (value) => ({
       type: 'multiple' as const,

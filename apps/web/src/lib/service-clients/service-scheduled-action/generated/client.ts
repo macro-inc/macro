@@ -40,6 +40,7 @@ import type {
   RoutineSuggestions,
   RoutineTemplate,
   ScheduledActionResponse,
+  ScheduleSubRoutine,
   SetScheduledActionEnabled,
   ShareRoutineTemplate,
   StartDraftJobRequest,
@@ -736,6 +737,91 @@ export const draftRoutine = async (
     status: res.status,
     headers: res.headers,
   } as draftRoutineResponse;
+};
+
+/**
+ * @summary Schedule a copy of a sub-routine the running routine defines, with its
+own trigger and inputs. Only a routine's run can: its code step's
+credential says which routine, never the body.
+ */
+export type scheduleSubRoutineResponse200 = {
+  data: ScheduledActionResponse;
+  status: 200;
+};
+
+export type scheduleSubRoutineResponse201 = {
+  data: ScheduledActionResponse;
+  status: 201;
+};
+
+export type scheduleSubRoutineResponse400 = {
+  data: string;
+  status: 400;
+};
+
+export type scheduleSubRoutineResponse401 = {
+  data: string;
+  status: 401;
+};
+
+export type scheduleSubRoutineResponse403 = {
+  data: string;
+  status: 403;
+};
+
+export type scheduleSubRoutineResponse409 = {
+  data: string;
+  status: 409;
+};
+
+export type scheduleSubRoutineResponse500 = {
+  data: string;
+  status: 500;
+};
+
+export type scheduleSubRoutineResponseSuccess = (
+  | scheduleSubRoutineResponse200
+  | scheduleSubRoutineResponse201
+) & {
+  headers: Headers;
+};
+export type scheduleSubRoutineResponseError = (
+  | scheduleSubRoutineResponse400
+  | scheduleSubRoutineResponse401
+  | scheduleSubRoutineResponse403
+  | scheduleSubRoutineResponse409
+  | scheduleSubRoutineResponse500
+) & {
+  headers: Headers;
+};
+
+export type scheduleSubRoutineResponse =
+  | scheduleSubRoutineResponseSuccess
+  | scheduleSubRoutineResponseError;
+
+export const getScheduleSubRoutineUrl = () => {
+  return `/scheduled-actions/schedule`;
+};
+
+export const scheduleSubRoutine = async (
+  scheduleSubRoutine: ScheduleSubRoutine,
+  options?: RequestInit
+): Promise<scheduleSubRoutineResponse> => {
+  const res = await fetch(getScheduleSubRoutineUrl(), {
+    ...options,
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json', ...options?.headers },
+    body: JSON.stringify(scheduleSubRoutine),
+  });
+
+  const body = [204, 205, 304].includes(res.status) ? null : await res.text();
+
+  const data: scheduleSubRoutineResponse['data'] = body ? JSON.parse(body) : {};
+  return {
+    data,
+    status: res.status,
+    headers: res.headers,
+  } as scheduleSubRoutineResponse;
 };
 
 export type listRoutineSuggestionsResponse200 = {

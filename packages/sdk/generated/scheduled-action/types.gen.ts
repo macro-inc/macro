@@ -328,13 +328,17 @@ export type CheckSummary = {
  */
 export type CheckedStepProblems = {
     /**
-     * Its place among the routine's steps, from zero.
+     * Its place among the routine's steps, or its sub-routine's, from zero.
      */
     index: number;
     /**
      * What the type checker reports, first problems first.
      */
     problems: Array<string>;
+    /**
+     * The sub-routine whose step it is; absent for the routine's own steps.
+     */
+    subRoutine?: string | null;
     /**
      * Its title.
      */
@@ -897,6 +901,12 @@ export type InProgressExecution = {
 };
 
 /**
+ * How code reads an input: a lowercase letter, then up to 31 letters or
+ * digits, e.g. `taskId`.
+ */
+export type InputName = string;
+
+/**
  * A kind of item a request can name.
  */
 export type ItemKind = 'channel' | 'person' | 'project' | 'initiative' | 'document' | 'task' | 'database' | 'agent' | 'label' | 'tag' | 'channel_label';
@@ -1166,6 +1176,55 @@ export type RoutineCheck = {
 };
 
 /**
+ * A value a sub-routine's copy is given when it is scheduled, which its
+ * code reads as `inputs.<name>`. A definition declares it without a value;
+ * a routine kept from a copy holds the value the copy was given.
+ */
+export type RoutineInput = {
+    /**
+     * What it is, for the owner, e.g. "Task".
+     */
+    label: string;
+    /**
+     * How the code reads it: `inputs.<name>`.
+     */
+    name: InputName;
+    type: 'text';
+    /**
+     * The value a copy was given.
+     */
+    value?: string | null;
+} | {
+    /**
+     * What it is, for the owner.
+     */
+    label: string;
+    /**
+     * How the code reads it: `inputs.<name>`.
+     */
+    name: InputName;
+    type: 'number';
+    /**
+     * The value a copy was given.
+     */
+    value?: number | null;
+} | {
+    /**
+     * What it is, for the owner.
+     */
+    label: string;
+    /**
+     * How the code reads it: `inputs.<name>`.
+     */
+    name: InputName;
+    type: 'boolean';
+    /**
+     * The value a copy was given.
+     */
+    value?: boolean | null;
+};
+
+/**
  * A value a code step reads as `knobs.<name>`, which its owner can change
  * without the step being rewritten: the label it adds, a priority, a
  * number of days, a question it asks AI. Its type is part of the step's
@@ -1277,6 +1336,12 @@ export type RoutineProgram = {
      */
     dangerously_operate_as_user?: boolean;
     /**
+     * Values its code reads as `inputs.<name>`: those a sub-routine's copy
+     * was given when it was scheduled, kept when the copy became a routine
+     * of its own.
+     */
+    inputs?: Array<RoutineInput>;
+    /**
      * Apps the routine requires, handed to its agent on top of the agent's
      * own. The owner must have each one connected to save the routine and
      * for it to run.
@@ -1287,6 +1352,13 @@ export type RoutineProgram = {
      * Steps run in order. A failed step stops the run.
      */
     steps: Array<RoutineStep>;
+    /**
+     * Routines its runs schedule copies of, with
+     * `macro.routines.schedule(name, { trigger, inputs })`: written once
+     * here and checked with it. A copy holds its trigger and its inputs'
+     * values, and runs its definition as it is here when it runs.
+     */
+    sub_routines?: Array<RoutineSubRoutine>;
 };
 
 /**
@@ -1327,6 +1399,56 @@ export type RoutineStep = (CodeStep & {
 }) | (AgentStep & {
     type: 'agent';
 });
+
+/**
+ * A routine a routine's runs schedule copies of. It is written once, with
+ * the routine that defines it, and checked with it. A copy holds only its
+ * trigger and the values of its inputs, and runs these steps as they are
+ * when it runs, so an edit here reaches the copies that haven't run yet.
+ */
+export type RoutineSubRoutine = {
+    /**
+     * The values each copy is given when it is scheduled: its code reads
+     * them as `inputs.<name>`, and its Ask AI step sees them as data.
+     */
+    inputs?: Array<RoutineInput>;
+    /**
+     * Apps a copy's Ask AI step requires, as a routine's `mcp_servers`.
+     */
+    mcp_servers?: Array<AgentMcpServer>;
+    /**
+     * How the routine's code schedules a copy:
+     * `macro.routines.schedule('<name>', { trigger, inputs })`.
+     */
+    name: SubRoutineName;
+    /**
+     * What a copy does when it runs, in order.
+     */
+    steps: Array<RoutineStep>;
+    /**
+     * What a copy does, in a few words; copies are named after it.
+     */
+    title: string;
+};
+
+/**
+ * The task of a routine scheduled from a sub-routine: which of its
+ * parent's definitions it runs, and the values its inputs were given. It
+ * holds no steps: it runs the definition as the parent holds it when it
+ * runs.
+ */
+export type RoutineSubRoutineCopy = {
+    /**
+     * Each input's value, by name.
+     */
+    inputs?: {
+        [key: string]: unknown;
+    };
+    /**
+     * The definition it runs, by name.
+     */
+    sub_routine: SubRoutineName;
+};
 
 /**
  * A routine offered to one person: one AI suggested for them, or one of
@@ -1398,10 +1520,11 @@ export type RoutineSuggestions = {
 };
 
 /**
- * A stored task's two forms, as the scheduler's API describes `task`:
- * [`RoutineProgram::from_task`] reads them.
+ * A stored task's forms, as the scheduler's API describes `task`:
+ * [`RoutineProgram::from_task`] reads a program or an agent task, and
+ * [`SubRoutineCopy::from_task`] a copy, whose steps are its parent's.
  */
-export type RoutineTask = RoutineProgram | AgentTask;
+export type RoutineTask = RoutineProgram | RoutineSubRoutineCopy | AgentTask;
 
 /**
  * A shared routine's snapshot, readable by signed-in users with sharing enabled.
@@ -1538,6 +1661,37 @@ export type RunStateName = 'starting' | 'running' | 'waiting' | 'stopping' | 'ca
 export type RunVisibility = 'listed' | 'unlisted';
 
 export type Schedule = string;
+
+/**
+ * A copy of a sub-routine the running routine defines, to schedule: the
+ * body of `POST /scheduled-actions/schedule`. The copy runs the definition
+ * as its routine holds it when the copy runs.
+ */
+export type ScheduleSubRoutine = {
+    /**
+     * A value for each of the sub-routine's inputs, by name.
+     */
+    inputs?: {
+        [key: string]: unknown;
+    };
+    /**
+     * Scheduling under the same key again updates that copy instead of
+     * adding another.
+     */
+    key?: string | null;
+    /**
+     * The copy's name; the sub-routine's title when absent.
+     */
+    name?: string | null;
+    /**
+     * The sub-routine's name in the running routine.
+     */
+    sub_routine: string;
+    /**
+     * When the copy runs.
+     */
+    trigger: ActionTrigger;
+};
 
 export type ScheduledAction = {
     /**
@@ -1730,6 +1884,12 @@ export type SubRoutine = {
      */
     paused_by_parent?: boolean;
 };
+
+/**
+ * Names a sub-routine: a lowercase letter, then up to 31 lowercase
+ * letters, digits or underscores, e.g. `remind_about_task`.
+ */
+export type SubRoutineName = string;
 
 /**
  * What became of a suggestion handed back.
@@ -2413,6 +2573,42 @@ export type DraftRoutineResponses = {
 };
 
 export type DraftRoutineResponse = DraftRoutineResponses[keyof DraftRoutineResponses];
+
+export type ScheduleSubRoutineData = {
+    body: ScheduleSubRoutine;
+    path?: never;
+    query?: never;
+    url: '/scheduled-actions/schedule';
+};
+
+export type ScheduleSubRoutineErrors = {
+    /**
+     * No sub-routine by that name, or inputs that don't fit it
+     */
+    400: string;
+    401: string;
+    /**
+     * The request doesn't come from a routine's run
+     */
+    403: string;
+    /**
+     * The routine already has the most active sub-routines it can
+     */
+    409: string;
+    500: string;
+};
+
+export type ScheduleSubRoutineError = ScheduleSubRoutineErrors[keyof ScheduleSubRoutineErrors];
+
+export type ScheduleSubRoutineResponses = {
+    /**
+     * The copy its key already named, updated
+     */
+    200: ScheduledActionResponse;
+    201: ScheduledActionResponse;
+};
+
+export type ScheduleSubRoutineResponse = ScheduleSubRoutineResponses[keyof ScheduleSubRoutineResponses];
 
 export type ListRoutineSuggestionsData = {
     body?: never;

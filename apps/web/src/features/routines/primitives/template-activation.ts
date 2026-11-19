@@ -31,6 +31,8 @@ export type TemplateReference = {
 export function templatePrompt(
   template: Pick<RoutineTemplate, 'task'>
 ): string {
+  // A sub-routine's copy is never shared; its steps are its parent's.
+  if ('sub_routine' in template.task) return '';
   if (!('steps' in template.task)) return template.task.user_prompt;
   const steps = programSteps(template.task);
   return (steps && firstAgent(steps)?.instructions) ?? '';
@@ -44,6 +46,7 @@ function filledTask(
   task: RoutineTemplate['task'],
   fill: (text: string) => string
 ): RoutineTemplate['task'] {
+  if ('sub_routine' in task) return task;
   if (!('steps' in task))
     return {
       ...task,

@@ -1,4 +1,7 @@
-import type { ScheduledAction } from '@service-scheduled-action/generated/schemas';
+import type {
+  RoutineTask,
+  ScheduledAction,
+} from '@service-scheduled-action/generated/schemas';
 import { describe, expect, it, vi } from 'vitest';
 import type { ScheduleDraft } from '../core/draft';
 import {
@@ -452,6 +455,10 @@ describe('run visibility', () => {
   });
 });
 
+/** The apps a task requires; a sub-routine's copy holds none of its own. */
+const appsOf = (task: RoutineTask) =>
+  'mcp_servers' in task ? task.mcp_servers : undefined;
+
 describe('routine required apps', () => {
   it('reads, creates, and updates the apps a routine requires', () => {
     const withApps: ScheduledAction = {
@@ -467,10 +474,10 @@ describe('routine required apps', () => {
     expect(restored.apps).toEqual([
       { app_slug: 'linear', server_name: 'Linear' },
     ]);
-    expect(draftToCreateBody(restored).task.mcp_servers).toEqual([
+    expect(appsOf(draftToCreateBody(restored).task)).toEqual([
       { app_slug: 'linear', server_name: 'Linear' },
     ]);
-    expect(draftToCreateBody(loadedDraft(cron)).task.mcp_servers).toEqual([]);
+    expect(appsOf(draftToCreateBody(loadedDraft(cron)).task)).toEqual([]);
 
     // Untouched apps keep the stored task as it was.
     expect(draftToUpdateBody(restored, withApps)?.task).toBe(withApps.task);

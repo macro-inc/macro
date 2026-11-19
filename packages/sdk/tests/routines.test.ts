@@ -253,6 +253,45 @@ test('routine options carry run visibility and updates that omit it keep it', as
   expect(bodies[1]).not.toHaveProperty('run_visibility');
 });
 
+test('scheduling a sub-routine sends its name, trigger, inputs and key', async () => {
+  const requests: Request[] = [];
+  const copy: ScheduledActionResponse = {
+    ...record,
+    id: 'copy-1',
+    name: 'Remind me',
+    trigger: { type: 'once', at: '2030-01-01T09:00:00Z' },
+    task: { sub_routine: 'remind', inputs: { taskId: 'task-1' } },
+  };
+  globalThis.fetch = Object.assign(
+    async (input: RequestInfo | URL) => {
+      const request = input instanceof Request ? input : new Request(input);
+      requests.push(request);
+      return Response.json(copy, { status: 201 });
+    },
+    { preconnect: originalFetch.preconnect },
+  );
+  const macro = new Macro({
+    token: 'run',
+    hosts: { 'scheduled-action': 'https://routines.test' },
+  });
+  const routine = await macro.routines.schedule('remind', {
+    trigger: { type: 'once', at: '2030-01-01T09:00:00Z' },
+    inputs: { taskId: 'task-1' },
+    key: 'remind-task-1',
+  });
+  expect(routine.id).toBe('copy-1');
+  expect(await routine.name()).toBe('Remind me');
+  expect(requests).toHaveLength(1);
+  expect(requests[0].method).toBe('POST');
+  expect(new URL(requests[0].url).pathname).toBe('/scheduled-actions/schedule');
+  expect(await requests[0].json()).toEqual({
+    sub_routine: 'remind',
+    trigger: { type: 'once', at: '2030-01-01T09:00:00Z' },
+    inputs: { taskId: 'task-1' },
+    key: 'remind-task-1',
+  });
+});
+
 test('a rejected routine create carries the server validation message', async () => {
   const rejection =
     'invalid routine task; select a model or agent and provide instructions';

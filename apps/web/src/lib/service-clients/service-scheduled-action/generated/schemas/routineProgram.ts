@@ -5,9 +5,12 @@
  * API for managing scheduled actions
  * OpenAPI spec version: 0.1.0
  */
+
 import type { AgentMcpServer } from './agentMcpServer';
+import type { RoutineInput } from './routineInput';
 import type { RoutineProgramSdk } from './routineProgramSdk';
 import type { RoutineStep } from './routineStep';
+import type { RoutineSubRoutine } from './routineSubRoutine';
 
 /**
  * What a routine does each time it runs.
@@ -21,6 +24,10 @@ the owner. Agent ("Ask AI") steps keep their own agent attribution
 either way: an agent session speaking as a person is a different
 change. A single agent task has no code steps, so it never applies. */
   dangerously_operate_as_user?: boolean;
+  /** Values its code reads as `inputs.<name>`: those a sub-routine's copy
+was given when it was scheduled, kept when the copy became a routine
+of its own. */
+  inputs?: RoutineInput[];
   /** Apps the routine requires, handed to its agent on top of the agent's
 own. The owner must have each one connected to save the routine and
 for it to run. */
@@ -28,4 +35,9 @@ for it to run. */
   sdk?: RoutineProgramSdk;
   /** Steps run in order. A failed step stops the run. */
   steps: RoutineStep[];
+  /** Routines its runs schedule copies of, with
+`macro.routines.schedule(name, { trigger, inputs })`: written once
+here and checked with it. A copy holds its trigger and its inputs'
+values, and runs its definition as it is here when it runs. */
+  sub_routines?: RoutineSubRoutine[];
 }

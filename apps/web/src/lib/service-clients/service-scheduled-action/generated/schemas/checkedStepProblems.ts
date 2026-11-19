@@ -5,18 +5,21 @@
  * API for managing scheduled actions
  * OpenAPI spec version: 0.1.0
  */
+import type { CheckedStepProblemsSubRoutine } from './checkedStepProblemsSubRoutine';
 
 /**
  * A code step that doesn't type-check.
  */
 export interface CheckedStepProblems {
   /**
-   * Its place among the routine's steps, from zero.
+   * Its place among the routine's steps, or its sub-routine's, from zero.
    * @minimum 0
    */
   index: number;
   /** What the type checker reports, first problems first. */
   problems: string[];
+  /** The sub-routine whose step it is; absent for the routine's own steps. */
+  subRoutine?: CheckedStepProblemsSubRoutine;
   /** Its title. */
   title: string;
 }

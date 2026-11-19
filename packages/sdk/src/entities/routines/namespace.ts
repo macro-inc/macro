@@ -7,7 +7,13 @@ import type {
 import { unwrap } from '../../utils';
 import type { MacroClient } from '../../utils/client';
 import type { MacroEntityType } from '../entity';
-import { Routine, type RoutineOptions, routineBody } from './routine';
+import {
+  Routine,
+  type RoutineOptions,
+  type RoutineTriggerOptions,
+  routineBody,
+  triggerBody,
+} from './routine';
 import { RoutineSuggestion } from './suggestion';
 
 /** Something created for a routine to use: any handle with an entity type, such as a `Database`. */
@@ -164,6 +170,57 @@ export class RoutineNamespace {
         await this.client.scheduledAction.createScheduledAction({
           body: { ...routineBody(options), enabled: options.enabled ?? true },
           query: { key: extra?.key },
+        }),
+      ),
+    );
+  }
+
+  /**
+   * Schedule a copy of a sub-routine the running routine defines: the same
+   * steps, run on the copy's own `trigger` with its own `inputs`. Only
+   * inside a routine's run. `inputs` gives each of the sub-routine's inputs
+   * a value of its type. The copy runs the sub-routine as the routine holds
+   * it when the copy runs, so editing the sub-routine changes every copy
+   * that hasn't run yet. Pass `key` to name the copy: scheduling with the
+   * same key again updates that copy instead of adding another. A copy
+   * counts toward the routine's 50 active sub-routines, and is named after
+   * the sub-routine's title unless `name` is given.
+   *
+   * @example
+   * // In a routine that defines a `remind` sub-routine with a `taskId` input,
+   * // remind on the day a task is due (`dueAt`, RFC 3339).
+   * await macro.routines.schedule('remind', {
+   *   trigger: { type: 'once', at: dueAt },
+   *   inputs: { taskId: task.id },
+   *   key: `remind-${task.id}`,
+   * });
+   *
+   * @write
+   */
+  async schedule(
+    subRoutine: string,
+    options: {
+      /** When the copy runs. */
+      trigger: RoutineTriggerOptions;
+      /** A value for each of the sub-routine's inputs, by name. */
+      inputs?: Record<string, string | number | boolean>;
+      /** The copy's display name; the sub-routine's title when omitted. */
+      name?: string;
+      /** Names the copy among the routine's sub-routines, up to 200 characters. */
+      key?: string;
+    },
+  ): Promise<Routine> {
+    return Routine.from(
+      this.client,
+      unwrap(
+        await this.client.scheduledAction.scheduleSubRoutine({
+          body: {
+            sub_routine: subRoutine,
+            trigger: triggerBody(options.trigger),
+            inputs: options.inputs ?? {},
+            name: options.name,
+            key: options.key,
+          },
         }),
       ),
     );

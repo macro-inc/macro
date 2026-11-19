@@ -48,7 +48,12 @@ function programOperatesAsUser(task: RoutineTask): boolean {
 }
 
 function getAgentTask(schedule: ScheduledAction): AgentTask | undefined {
-  if (schedule.kind !== 'Agent' || 'steps' in schedule.task) return undefined;
+  if (
+    schedule.kind !== 'Agent' ||
+    'steps' in schedule.task ||
+    'sub_routine' in schedule.task
+  )
+    return undefined;
   return schedule.task;
 }
 
