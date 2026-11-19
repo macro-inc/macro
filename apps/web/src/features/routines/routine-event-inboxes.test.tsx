@@ -2,6 +2,7 @@ import { fireEvent, render, screen } from '@solidjs/testing-library';
 import { createSignal } from 'solid-js';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 import {
+  InboxScopeLabel,
   RoutineInboxesLabel,
   RoutineInboxPicker,
 } from './routine-event-inboxes';
@@ -135,5 +136,31 @@ describe('the picked inboxes’ label', () => {
     links.query = { isPending: true, isError: false };
     render(() => <RoutineInboxesLabel inboxes={[TEAM]} />);
     expect(screen.getByText('1 inbox')).toBeTruthy();
+  });
+});
+
+describe('the email trigger’s scope', () => {
+  it('reads Your inboxes only once the person reads more than one', () => {
+    const scope = (listed: LinksQuery) => {
+      links.query = listed;
+      const { container, unmount } = render(() => <InboxScopeLabel />);
+      const text = container.textContent;
+      unmount();
+      return text;
+    };
+    expect(scope({ isPending: false, isError: false, data: LISTED })).toBe(
+      'Your inboxes'
+    );
+    expect(
+      scope({
+        isPending: false,
+        isError: false,
+        data: { links: LISTED?.links.slice(0, 1) ?? [] },
+      })
+    ).toBe('Your inbox');
+    expect(
+      scope({ isPending: false, isError: false, data: { links: [] } })
+    ).toBe('Your inbox');
+    expect(scope({ isPending: true, isError: false })).toBe('Your inbox');
   });
 });

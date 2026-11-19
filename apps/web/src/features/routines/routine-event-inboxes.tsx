@@ -36,8 +36,9 @@ export function InboxScopeLabel() {
   const choices = useInboxChoices();
   const label = () => {
     const value = choices();
+    // No inboxes, or none listed yet, still reads "Your inbox".
     return t('routineFilters.yourInboxes', {
-      count: value.state === 'ready' ? value.inboxes.length : 1,
+      count: value.state === 'ready' ? Math.max(value.inboxes.length, 1) : 1,
     });
   };
   return <span>{label()}</span>;
