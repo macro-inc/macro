@@ -131,15 +131,15 @@ export function captureFirstVisibleScrollAnchor(
 
 /**
  * Scrolls so the anchor is back at the viewport offset it was captured at.
- * An anchor still in place writes nothing: WebKit ends momentum scrolling on
- * any scrollTop write.
+ * An anchor still in place, to within half a pixel, writes nothing: WebKit
+ * ends momentum scrolling on any scrollTop write.
  */
 export function restoreScrollAnchor(
   scroller: HTMLElement,
   anchor: ScrollAnchor
 ) {
   const top = anchor.measure();
-  if (top === undefined || top === anchor.top) return;
+  if (top === undefined || Math.abs(top - anchor.top) < 0.5) return;
   scroller.scrollTop += top - anchor.top;
 }
 

@@ -2139,7 +2139,9 @@ for (const mobile of [false, true]) {
       await expect.poll(() => state.latestReads).toBeGreaterThan(1);
       release();
       await expect(timeline.getByText('Imported message 9')).toBeAttached();
-      await expect.poll(() => rowTop(page, 'message-Earlier-20')).toBe(top);
+      await expect
+        .poll(() => rowTop(page, 'message-Earlier-20'))
+        .toBeCloseTo(top, 0);
       expect(unexpected).toEqual([]);
     });
 
@@ -2164,7 +2166,9 @@ for (const mobile of [false, true]) {
       await expect(
         timeline.getByText('Previous day discussion')
       ).toBeAttached();
-      await expect.poll(() => rowTop(page, 'message-Earlier-0')).toBe(top);
+      await expect
+        .poll(() => rowTop(page, 'message-Earlier-0'))
+        .toBeCloseTo(top, 0);
       expect(unexpected).toEqual([]);
     });
   });

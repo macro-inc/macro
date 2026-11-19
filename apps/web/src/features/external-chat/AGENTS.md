@@ -78,8 +78,8 @@ belong to `features/external-view`. Architecture:
 - Reads do not poll; DSS pushes `external_chat_changed`, with one fallback
   re-fetch 3 s after opening. Only in-flight sends poll their progress.
 - History imported after adding (`backfill` on the detail) lands older than
-  the rows shown; the view says "Importing history…" / "Waiting for …
-  phone" until DSS reports `done` or `partial`. `waiting_for_message` (no message to import
+  the rows shown; the view says "Importing history…" or
+  "Waiting for … phone" until DSS reports `done` or `partial`. `waiting_for_message` (no message to import
   from yet) shows nothing.
 - Attachments are static files, like Chat's media: `fileUrl` is
   `staticFileIdEndpoint`, and images take Chat's sized variants. Images,

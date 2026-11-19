@@ -151,6 +151,7 @@ export function ExternalChatView(props: {
   const detailsBeside = () => !isTouchDevice() && !!sidePanel?.isOpen();
   const [stopped, setStopped] = createSignal(false);
   let scroller: HTMLDivElement | undefined;
+  let content: HTMLDivElement | undefined;
   let alive = true;
   let newest: string | undefined;
   // The reader is at the bottom and stays there as rows and media grow.
@@ -164,17 +165,21 @@ export function ExternalChatView(props: {
   onCleanup(() => {
     alive = false;
   });
-  // The message a reader scrolled up to, and where it sat, taken as they
+  // The row a reader scrolled up to, and where it sat, taken as they
   // scroll. Rows landing or growing above it (an earlier page, imported
   // history, media loading) would push it down: the scroller turns the
   // browser's scroll anchoring off so following the bottom works alike in
-  // every engine, and WebKit has none, so the view holds the message itself.
+  // every engine, and WebKit has none, so the view holds the row itself.
   let reading: ScrollAnchor | undefined;
+  // The content's height when the observer last saw it. A scroll event can
+  // fire after rows land but before the observer restores the view; taking
+  // the anchor then would record the row where it was pushed to.
+  let settledHeight: number | undefined;
   const captureReading = () => {
-    if (!scroller) return;
+    if (!scroller || content?.offsetHeight !== settledHeight) return;
     reading = captureFirstVisibleScrollAnchor(
       scroller,
-      scroller.querySelectorAll('[data-message-id]')
+      scroller.querySelectorAll('[data-message-id], [data-system-activity]')
     );
   };
   // Media WhatsApp sent no size for grows after it loads; a reader who was
@@ -185,6 +190,7 @@ export function ExternalChatView(props: {
   // so neither shows a jump.
   const grown = new ResizeObserver(() => {
     if (!alive || !scroller) return;
+    settledHeight = content?.offsetHeight;
     if (following) {
       scroller.scrollTop = scroller.scrollHeight;
       return;
@@ -537,7 +543,10 @@ export function ExternalChatView(props: {
                     >
                       <div class="flex w-full justify-center">
                         <div
-                          ref={(content) => grown.observe(content)}
+                          ref={(element) => {
+                            content = element;
+                            grown.observe(element);
+                          }}
                           class="macro-message-width relative"
                         >
                           <Show
