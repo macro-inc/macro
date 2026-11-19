@@ -1277,9 +1277,9 @@ after its settings: the active sub-routines (name, trigger, **Active** /
 **Paused** / **Running**), then **Finished: N** with **Show finished** for the
 one-time ones that have run (the newest 200), each row opening that routine,
 whose **Runs** tab has its run. A sub-routine's page reads **Created by
-<name>** under its title (a link to the creator) and its **Routine actions**
-menu has **Keep as my routine**, which moves it to the main list and stops it
-pausing or being deleted with its creator. Switching a creator off pauses its
+<name>** under its title (a link to the creator). **Keep as my routine**, when
+available, moves it to the main list and stops it pausing or being deleted
+with its creator. Switching a creator off pauses its
 sub-routines and switching it on resumes only those; deleting it deletes them,
 and the delete dialog says **The N routines it created will be deleted too.**
 In a run's details, **Created** lists the sub-routines that run created.
@@ -1306,17 +1306,28 @@ definition's steps read-only. Expand **Ask AI** to read its full instructions
 and select **Show code** to read a code step's source. Recurring copies resolve
 the definition again on each run. If the parent no longer defines it, the page
 says so and the copy fails when it runs. **Retry definition** retries a failed
-parent read when no cached parent is available. **Keep as my routine** is
-available once connections are loaded, all retained definitions' apps are
-connected, and the copy's stored inputs match the current definition.
-It makes a standalone routine with the referenced
-steps and apps, the copy's input values, and the parent's definitions.
+parent read when no cached parent is available. Keeping a copy makes a
+standalone routine with the referenced steps and apps, the copy's input
+values, and the parent's definitions.
 
 The owner's `enable-sub-routines` flag is required to schedule copies or create,
 duplicate, or change tasks with definitions or program input values. With the
-flag off, these task edits and code approval are disabled, and **Duplicate**
-is absent for those tasks. Owners can still detach compatible copies and
-save metadata with the stored task unchanged.
+flag off, owners can still detach compatible copies and save metadata with
+the stored task unchanged. Task edits and code approval are disabled for
+those tasks.
+
+**Keep as my routine** and **Duplicate** follow the same eligibility rules
+in the owner's **Routine actions** and row menus.
+
+- **Keep as my routine** is available for an ordinary sub-routine. For a
+  reference-backed copy, the parent must still define it, its stored inputs
+  must match, and the editor must see no active run claim. If any retained
+  definition requires apps, connection information must be loaded and every
+  required app must be connected.
+- **Duplicate** uses a saved task that holds its own steps or instructions.
+  Every one-time trigger must still be in the future, and required apps across
+  retained definitions must be connected. Tasks with definitions or program
+  input values require the owner's rollout flag.
 
 The list's top bar has **Routines** with **All** / **On** tabs (each with a
 count) on the left and **New** and search on the right; **Cmd/Ctrl+F** focuses
@@ -1364,10 +1375,8 @@ now** (disabled while it runs or a run is starting; a toast says **Run
 started**) and **Turn off** / **Turn on** (the switch's rules); **Duplicate**
 (the routine page's copy: same steps, triggers, description, run visibility and
 on/off state, named "<name> copy"; it stays in the list with a **Duplicated**
-toast whose **Open** opens the copy). Definition-backed copies offer **Keep as
-my routine** while their definition and inputs match. After detaching, the
-standalone routine's retained definitions and inputs still require the
-rollout for **Duplicate**. Other sub-routines also offer **Keep as my routine**.
+toast whose **Open** opens the copy) and **Keep as my routine** appear under
+the eligibility rules above.
 **Copy Link**, **Copy ID** and, with `enable-routine-sharing`,
 **Share**; then **Delete**, which confirms first and names the sub-routines
 deleted with it. A routine someone else owns offers the open entries, **Copy
@@ -1540,7 +1549,7 @@ and up to thirty-two activity filters share one event group; matching any
 trigger runs it.
 
 A routine's top bar uses the task breadcrumb layout: **Routines → routine name**
-with its three-dot menu (**Duplicate**, **Share**, **Delete**)
+with the applicable actions in its three-dot menu
 right after the name, then the **Overview** / **Runs** tabs (Runs with a count),
 and at the right the save state (**Saving…** / **Saved**; **Not saved** in red
 when saving failed, or **Not saved: fix the routine** with the reason on hover
@@ -1642,8 +1651,9 @@ the saved routine. The owner's own mention and the schedules' time zone fill in
 as whoever activates it; other references stay the same for everyone, and
 re-sharing keeps the fills an earlier template set. If a published routine gains
 definitions or input values, its owner's **Routine actions** menu still offers
-**Stop sharing** to revoke the existing snapshot. Opening the menu checks
-whether a snapshot was shared. A failed refresh keeps the
+**Stop sharing** to revoke the existing snapshot. Opening the menu reuses
+sharing status cached within the last five minutes and refreshes expired
+status. A failed refresh keeps the
 action when the published snapshot is cached. **Retry sharing status** appears
 when the status read fails and there is no published snapshot in cache.
 
