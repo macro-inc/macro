@@ -68,7 +68,11 @@ describe('toCalendarAccounts', () => {
   });
 
   it.each([
-    { case: 'never had it', calendar_disabled: false, has_calendar_data: false },
+    {
+      case: 'never had it',
+      calendar_disabled: false,
+      has_calendar_data: false,
+    },
     { case: 'lost it', calendar_disabled: false, has_calendar_data: true },
     { case: 'turned it off', calendar_disabled: true, has_calendar_data: true },
   ])(
