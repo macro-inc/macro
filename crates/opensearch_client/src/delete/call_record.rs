@@ -3,6 +3,7 @@ use models_opensearch::SearchIndex;
 use crate::{
     Result,
     error::{OpensearchClientError, OpensearchOperation},
+    upsert::call_record::{CHILD_RELATION, PARENT_RELATION},
 };
 
 #[tracing::instrument(skip(client))]
@@ -11,10 +12,14 @@ pub async fn delete_call_record_by_id(
     call_id: &str,
     index_override: Option<&str>,
 ) -> Result<()> {
-    delete_by_term(
+    // Segments carry their own id in `entity_id`, so they are matched by
+    // their parent.
+    delete_matching(
         client,
-        "entity_id",
-        call_id,
+        serde_json::json!({ "bool": { "should": [
+            { "term": { "entity_id": call_id } },
+            { "parent_id": { "type": CHILD_RELATION, "id": call_id } }
+        ] } }),
         OpensearchOperation::DeleteCallRecordById,
         index_override,
     )
@@ -27,24 +32,27 @@ pub async fn delete_call_records_by_channel_id(
     channel_id: &str,
     index_override: Option<&str>,
 ) -> Result<()> {
-    delete_by_term(
+    // Segments carry no `channel_id`, so they are matched by their parent's.
+    let in_channel = serde_json::json!({ "term": { "channel_id": channel_id } });
+    delete_matching(
         client,
-        "channel_id",
-        channel_id,
+        serde_json::json!({ "bool": { "should": [
+            in_channel,
+            { "has_parent": { "parent_type": PARENT_RELATION, "query": in_channel } }
+        ] } }),
         OpensearchOperation::DeleteCallRecordsByChannelId,
         index_override,
     )
     .await
 }
 
-async fn delete_by_term(
+async fn delete_matching(
     client: &opensearch::OpenSearch,
-    field: &str,
-    value: &str,
+    query: serde_json::Value,
     operation: OpensearchOperation,
     index_override: Option<&str>,
 ) -> Result<()> {
-    let query = serde_json::json!({ "query": { "term": { field: value } } });
+    let query = serde_json::json!({ "query": query });
 
     let index = index_override.unwrap_or(SearchIndex::CallRecords.as_ref());
     let response = client
@@ -70,3 +78,6 @@ async fn delete_by_term(
 
     Ok(())
 }
+
+#[cfg(test)]
+mod test;

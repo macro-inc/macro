@@ -3,9 +3,12 @@ use models_opensearch::SearchIndex;
 use crate::{
     Result,
     error::{OpensearchClientError, OpensearchOperation},
+    upsert::chat_message::{CHILD_RELATION, PARENT_RELATION},
 };
 
-/// Deletes all chat messages with the specified chat_id
+/// Deletes the chat with the specified chat_id and every message under it.
+/// Messages carry their own id in `entity_id`, so they are matched by their
+/// parent.
 #[tracing::instrument(skip(client))]
 pub async fn delete_chat_by_id(
     client: &opensearch::OpenSearch,
@@ -14,8 +17,11 @@ pub async fn delete_chat_by_id(
 ) -> Result<()> {
     let query = serde_json::json!({
         "query": {
-            "term": {
-                "entity_id": chat_id
+            "bool": {
+                "should": [
+                    { "term": { "entity_id": chat_id } },
+                    { "parent_id": { "type": CHILD_RELATION, "id": chat_id } }
+                ]
             }
         },
     });
@@ -63,20 +69,7 @@ pub async fn delete_chat_message_by_id(
 ) -> Result<()> {
     let query = serde_json::json!({
         "query": {
-            "bool": {
-                "must": [
-                    {
-                        "term": {
-                            "entity_id": chat_id
-                        }
-                    },
-                    {
-                        "term": {
-                            "chat_message_id": chat_message_id
-                        }
-                    }
-                ]
-            }
+            "ids": { "values": [format!("{chat_id}:{chat_message_id}")] }
         }
     });
 
@@ -116,21 +109,33 @@ pub async fn delete_chat_message_by_id(
     Ok(())
 }
 
-/// Deletes all chat messages with a specific user_id
+/// Deletes every chat of a specific user_id and the messages under them.
 #[tracing::instrument(skip(client))]
 pub async fn delete_chat_by_user_id(client: &opensearch::OpenSearch, user_id: &str) -> Result<()> {
+    delete_user_chats(client, user_id, SearchIndex::Chats.as_ref()).await
+}
+
+/// Deletes a user's chats in `index` and the messages under them. Messages
+/// carry no `user_id`, so they are matched by their parent's.
+pub(crate) async fn delete_user_chats(
+    client: &opensearch::OpenSearch,
+    user_id: &str,
+    index: &str,
+) -> Result<()> {
+    let owned_by_user = serde_json::json!({ "term": { "user_id": user_id } });
     let query = serde_json::json!({
         "query": {
-            "term": {
-                "user_id": user_id
+            "bool": {
+                "should": [
+                    owned_by_user,
+                    { "has_parent": { "parent_type": PARENT_RELATION, "query": owned_by_user } }
+                ]
             }
         },
     });
 
     let response = client
-        .delete_by_query(opensearch::DeleteByQueryParts::Index(&[
-            SearchIndex::Chats.as_ref()
-        ]))
+        .delete_by_query(opensearch::DeleteByQueryParts::Index(&[index]))
         .body(query)
         .refresh(true) // Ensure the index reflects changes immediately
         .send()
@@ -163,3 +168,6 @@ pub async fn delete_chat_by_user_id(client: &opensearch::OpenSearch, user_id: &s
 
     Ok(())
 }
+
+#[cfg(test)]
+mod test;
