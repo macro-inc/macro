@@ -69,5 +69,23 @@ describe('applyColorScheme', () => {
         'dark'
       ).darkBackground
     ).toBe(true);
+    expect(
+      applyColorScheme(
+        '@media (prefers-color-scheme:dark){.wrap{background:black}}',
+        'dark'
+      ).darkBackground
+    ).toBe(true);
+  });
+
+  it('does not count image swaps, resets or nested light rules as a dark background', () => {
+    for (const rule of [
+      '.logo{background-image:url(cid:dark-logo)}',
+      '.a{background:none}.b{background-color:transparent!important}',
+      '@media (prefers-color-scheme:light){.a{background:#000}}',
+    ])
+      expect(
+        applyColorScheme(`@media (prefers-color-scheme:dark){${rule}}`, 'dark')
+          .darkBackground
+      ).toBe(false);
   });
 });

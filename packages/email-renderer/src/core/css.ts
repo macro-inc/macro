@@ -1,5 +1,6 @@
 import {
   type CssNode,
+  type Declaration,
   generate,
   ident,
   type List,
@@ -174,12 +175,16 @@ export function applyColorScheme(
           return walk.skip;
         }
         if (appliesDark && node.block)
-          walk(node.block, {
-            visit: 'Declaration',
-            enter(declaration) {
-              if (/^background(?:-color|-image)?$/i.test(declaration.property))
-                darkBackground = true;
-            },
+          walk(node.block, (child) => {
+            // Nested color-scheme rules are resolved on their own visit.
+            if (
+              child.type === 'Atrule' &&
+              child.prelude &&
+              /prefers-color-scheme/i.test(generate(child.prelude))
+            )
+              return walk.skip;
+            if (child.type === 'Declaration' && paintsBackground(child))
+              darkBackground = true;
           });
       },
     });
@@ -188,6 +193,19 @@ export function applyColorScheme(
     // The input is already sanitized; leave it as it was.
     return { css, darkBackground: false };
   }
+}
+
+const BACKGROUND_PROPERTY = /^background(?:-color|-image)?$/i;
+// A color or gradient; an image (a dark-mode logo swap) or a reset doesn't
+// make a dark design.
+const BACKGROUND_PAINT =
+  /#[0-9a-f]{3,8}\b|\b(?:rgba?|hsla?|hwb|lab|lch|oklab|oklch|color|(?:repeating-)?(?:linear|radial|conic)-gradient)\(|^(?!transparent|none|inherit|initial|unset|revert|currentcolor)[a-z]+$/i;
+
+function paintsBackground(declaration: Declaration): boolean {
+  return (
+    BACKGROUND_PROPERTY.test(declaration.property) &&
+    BACKGROUND_PAINT.test(generate(declaration.value))
+  );
 }
 
 /** Resolve one media query's color-scheme features against the scheme:
