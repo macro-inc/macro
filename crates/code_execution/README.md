@@ -163,7 +163,8 @@ Every run, in the bootstrap:
 2. runs it with one tool per catalog operation, of which only those found
    may run: the interpreter's `tool.before` hook refuses the rest;
 3. sends each call through the generated SDK method itself (only the
-   program's `path`, `query` and `body` reach it), naming its operation to
+   program's `path`, `query` and `body` reach it, and each path parameter
+   must be one segment: no object, `.` or `..`), naming its operation to
    `fetch`, which adds the usual headers and the operation's verb, reports
    progress and applies the `allowed_operations` backstop (operation,
    method, host, route and route rivals) as for OCaml.
