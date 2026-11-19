@@ -70,7 +70,10 @@ for (const provider of PROVIDERS) {
       checkpoints.realtime = permissionReads;
 
       const saves = watchDraftSaves(page);
-      await page.getByRole('button', { name: 'New email' }).click();
+      await page
+        .getByRole('complementary', { name: 'Email navigation' })
+        .getByRole('button', { name: 'New email' })
+        .click();
       const to = page.getByRole('combobox').first();
       await to.fill('recipient@example.com');
       await to.press('Enter');
