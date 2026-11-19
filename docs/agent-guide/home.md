@@ -330,9 +330,11 @@ Notifications at All and Unread, and Tab/Shift+Tab step through the three. Both 
 while nothing is open; a chat started from Notifications opens on Recent.
 
 - **Recent** is Home's list, rows and tools (Filter with Type only, Search,
-  collapse) fed only
-  by the viewer's `touched_by_me` activity, bucketed by the time of their own
-  last touch. Its filters are old Home's.
+  collapse) fed only by the viewer's `touched_by_me` activity, bucketed by
+  the time of their own last touch. Its filters are old Home's (Status
+  aside). Saving a property, or starting to edit a document or task (the
+  first edit after 5 idle minutes, as the server records it), moves the
+  item to the top at once.
 - **Notifications** is the Notifications view with All/Unread beneath the
   tabs and Display options (sliders) in place of the settings button:
   **Condensed** (kept per user) and **Notification settings…**. Condensed
