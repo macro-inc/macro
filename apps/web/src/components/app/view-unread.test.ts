@@ -66,7 +66,11 @@ afterEach(() => {
   vi.clearAllMocks();
 });
 
-function mail(options: { emails: EmailEntity[]; hasNextPage?: boolean }) {
+function mail(options: {
+  emails: EmailEntity[];
+  hasNextPage?: boolean;
+  exact?: boolean;
+}) {
   return createRoot((disposer) => {
     dispose = disposer;
     const [emails, setEmails] = createSignal(options.emails);
@@ -102,7 +106,7 @@ function mail(options: { emails: EmailEntity[]; hasNextPage?: boolean }) {
       fetchNextPage,
     });
     return {
-      count: createMailUnread(),
+      count: createMailUnread({ exact: () => options.exact ?? true }),
       fetchNextPage,
       setEmails,
       setHasNextPage,
@@ -186,6 +190,18 @@ describe('createMailUnread', () => {
     setFetchingNextPage(false);
     expect(count()).toBe(99);
     expect(fetchNextPage).toHaveBeenCalledTimes(1);
+  });
+
+  it('reads no page past the loaded ones for a dot alone', () => {
+    const { count, fetchNextPage, setEmails } = mail({
+      emails: threads(3),
+      hasNextPage: true,
+      exact: false,
+    });
+    setEmails([thread('a', { isRead: true })]);
+    expect(fetchNextPage).not.toHaveBeenCalled();
+    // More stay behind the page, so the dot stays lit.
+    expect(count()).toBe(1);
   });
 
   it('shows no badge while New email notifications are off', () => {

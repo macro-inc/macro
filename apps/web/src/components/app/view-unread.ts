@@ -35,15 +35,25 @@ function isUnreadMail(entity: EntityData): boolean {
   return entity.type === 'email' && !entity.isRead && !entity.done;
 }
 
+/** How a section's unread count is used. */
+export type ViewUnreadOptions = {
+  /**
+   * Whether a number is shown, so the count must be exact up to the label.
+   * A dot only needs to know that something is unread.
+   */
+  exact: Accessor<boolean>;
+};
+
 /**
  * How many threads Mail shows as unread: the unread threads of its default
  * Important tab across every inbox the viewer reads, by the same query the
- * tab runs. Exact up to {@link COUNTED_EXACTLY}; past it, more than that.
+ * tab runs. Exact up to {@link COUNTED_EXACTLY} while `exact` holds; past it,
+ * or without `exact`, at least one while any is unread.
  *
  * Zero while "New email" notifications are off: the viewer asked not to be
  * told about new mail, so Mail shows no badge at all.
  */
-export function createMailUnread(): Accessor<number> {
+export function createMailUnread(options: ViewUnreadOptions): Accessor<number> {
   const preferencesQuery = useNotificationTypePreferencesQuery();
   const newEmailOff = () =>
     queryReadyGate(preferencesQuery) &&
@@ -68,10 +78,14 @@ export function createMailUnread(): Accessor<number> {
     return email.data.entities.filter(isUnreadMail).length;
   });
   const unknownPastLoaded = () =>
-    queryReadyGate(email) && email.hasNextPage && loaded() < COUNTED_EXACTLY;
+    options.exact() &&
+    queryReadyGate(email) &&
+    email.hasNextPage &&
+    loaded() < COUNTED_EXACTLY;
 
-  // Unread mail past the loaded pages only matters once fewer than the label
-  // shows are loaded, after the viewer read some: one more page settles it.
+  // Unread mail past the loaded pages only matters to a number, once fewer
+  // than the label shows are loaded, after the viewer read some: one more
+  // page settles it.
   createEffect(
     on(
       () => unknownPastLoaded() && !email.isFetchingNextPage,

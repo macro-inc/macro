@@ -27,6 +27,9 @@ export type NavigationUnread = {
   count: (id: string) => number | undefined;
 };
 
+/** Whether sections show their unread numbers beside their dots. */
+const showsNumbers = () => isFeatureEnabled(enableNavigationUnreadCounts);
+
 /** Where the navigation shows unread state. */
 export type NavigationUnreadOptions = {
   /**
@@ -51,7 +54,7 @@ function useCountedUnread(options: NavigationUnreadOptions): NavigationUnread {
     enabled: () => Boolean(userId()),
     onReconnected: subscribeGraphqlSoupReconnected,
   });
-  const mail = createMailUnread();
+  const mail = createMailUnread({ exact: showsNumbers });
   const channels = createChannelsUnread();
 
   const inboxRows = () =>
@@ -95,9 +98,6 @@ export function useNavigationUnread(
 
   return {
     has: (id) => source()?.has(id) ?? false,
-    count: (id) =>
-      isFeatureEnabled(enableNavigationUnreadCounts)
-        ? source()?.count(id)
-        : undefined,
+    count: (id) => (showsNumbers() ? source()?.count(id) : undefined),
   };
 }
