@@ -49,8 +49,6 @@ Run from `apps/web`:
 - `bun run test src/features/projects src/features/tasks-view src/features/saved-views src/components/app/mobile`
 - `bun run type-check`
 - `bunx playwright test --config src/lib/core/internal/browser-test/playwright.config.ts task-filters.browser.e2e.ts`
-- `bunx playwright test --config src/features/projects/browser-test/playwright.config.ts`
-- `bunx playwright test --config src/features/projects/browser-test/title-playwright.config.ts`
 
 Run `just check` from the repository root.
 
