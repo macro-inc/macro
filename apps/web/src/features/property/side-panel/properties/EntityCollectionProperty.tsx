@@ -97,13 +97,13 @@ export function EntityCollectionProperty(props: {
     []
   );
   let latestSave = 0;
-  const saveProperty = async (
+  const saveProperty = (
     property: Property,
     values: PropertyApiValues,
     displayName?: string
-  ) => {
+  ): Promise<void> => {
     if (!ctx.canEdit || property.isMetadata || props.loading || isSaving())
-      return;
+      return Promise.resolve();
     const currentRefs = getEntityValues(property);
     const nextRefs = values.valueType === 'ENTITY' ? (values.refs ?? []) : [];
     latestSave += 1;
@@ -130,26 +130,51 @@ export function EntityCollectionProperty(props: {
 
     // The server commit can wait minutes behind older queued writes, so the
     // row shows the new values and unlocks as soon as the save is accepted
-    // locally. A later save of this row then owns its state.
-    const settleRow = (references: EntityReference[] | undefined) => {
-      if (save !== latestSave) return;
-      batch(() => {
-        setConfirmedReferences(references);
-        setPendingReferences([]);
-        setPendingRemovals([]);
-        setIsSaving(false);
-      });
-    };
+    // locally, and the returned promise settles then too: an open picker
+    // closes and drops its own copy of the values. The commit finishes in the
+    // background. A later save of this row then owns its state.
+    return new Promise<void>((resolve, reject) => {
+      let accepted = false;
+      const accept = () => {
+        if (accepted) return;
+        accepted = true;
+        if (save === latestSave) {
+          batch(() => {
+            setConfirmedReferences(nextRefs);
+            setPendingReferences([]);
+            setPendingRemovals([]);
+            setIsSaving(false);
+          });
+        }
+        resolve();
+      };
 
-    try {
-      await props.onSave(property, values, () => settleRow(nextRefs));
-    } catch (error) {
-      settleRow(undefined);
-      fireAndForget(props.onRefresh('failed'), 'property-collection-refresh');
-      throw error;
-    }
-    settleRow(nextRefs);
-    await props.onRefresh('saved');
+      const commit = async () => {
+        try {
+          await props.onSave(property, values, accept);
+        } catch (error) {
+          // The save's own error handling has told the user. An accepted row
+          // is already unlocked and may be mid-removal: only its values go
+          // back to what is stored.
+          if (save === latestSave) {
+            batch(() => {
+              setConfirmedReferences(undefined);
+              if (accepted) return;
+              setPendingReferences([]);
+              setPendingRemovals([]);
+              setIsSaving(false);
+            });
+          }
+          reject(error);
+          await props.onRefresh('failed');
+          return;
+        }
+        accept();
+        await props.onRefresh('saved');
+      };
+
+      fireAndForget(commit(), 'property-collection-save');
+    });
   };
 
   return (

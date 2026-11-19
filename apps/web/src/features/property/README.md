@@ -154,7 +154,9 @@ ignore duplicate references and the owning entity's type-and-ID pair, and retain
 existing values. Picker saves, drops, chip removal, and row removal share a pending
 state only until the save is accepted locally (the bulk save's `onAccepted`:
 written to the cache and queued), never until the server commits it: a queued
-write can wait minutes behind older ones. New references appear immediately as
+write can wait minutes behind older ones. The save promise the row hands to
+`Property.Root` settles at acceptance too, so an open picker closes then; the
+commit and its reread finish in the background. New references appear immediately as
 pending chips with an inline spinner until then. Removed references
 disappear immediately; a failed save restores the stored values and rereads them
 from the server. Accepted edits stay visible until the query

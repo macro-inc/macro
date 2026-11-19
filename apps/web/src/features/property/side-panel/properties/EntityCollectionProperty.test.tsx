@@ -154,7 +154,7 @@ it('puts the stored values back and rereads them when an accepted save fails', a
   expect(screen.queryByText('acme')).toBeNull();
 
   reject(new Error('denied'));
-  await expect(mocks.detached[0]).rejects.toThrow('denied');
+  await mocks.detached[0];
 
   expect(screen.getByText('acme')).toBeTruthy();
   expect(addButton().disabled).toBe(false);
