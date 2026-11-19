@@ -57,6 +57,7 @@ files:
   - apps/web/src/features/onboarding/components/**
   - apps/web/src/features/auth/components/**
   - apps/web/src/features/block-form/components/**
+  - apps/web/src/features/prompt-block/components/**
 rule:
   any:
     - kind: string

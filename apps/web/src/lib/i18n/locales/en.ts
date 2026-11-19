@@ -28,6 +28,7 @@ import mobile from './en/mobile';
 import nav from './en/nav';
 import notificationsInbox from './en/notifications-inbox';
 import passwords from './en/passwords';
+import promptBlock from './en/prompt-block';
 import routineDrafts from './en/routine-drafts';
 import routineMenu from './en/routine-menu';
 import routineSuggestions from './en/routine-suggestions';
@@ -81,6 +82,7 @@ export default {
   nav,
   notificationsInbox,
   passwords,
+  promptBlock,
   routineDrafts,
   routineMenu,
   routineSuggestions,
