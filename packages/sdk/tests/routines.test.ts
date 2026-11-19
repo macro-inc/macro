@@ -225,14 +225,19 @@ test('a routine created, updated or checked with sub-routines sends their defini
     expect((body as { task: unknown }).task).toEqual(sent);
   }
 
-  // None is sent as none: a scheduler that predates definitions refuses the
-  // field even when it is empty.
+  // None is sent as none on a create: a scheduler that predates definitions
+  // refuses the field even when it is empty. An update sends the empty list,
+  // which removes the routine's definitions.
   bodies.length = 0;
   await macro.routines.create({ ...options, subRoutines: [] });
   expect(bodies[0]).toMatchObject({ task: { steps: [schedule] } });
   expect((bodies[0] as { task: object }).task).not.toHaveProperty(
     'sub_routines',
   );
+  await routine.update({ ...options, subRoutines: [] });
+  expect(bodies[1]).toMatchObject({
+    task: { steps: [schedule], sub_routines: [] },
+  });
 });
 test('routine writes invalidate detail only after success', async () => {
   let enabled = true;

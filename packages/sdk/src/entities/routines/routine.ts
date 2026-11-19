@@ -429,7 +429,7 @@ export class Routine extends MacroEntity<ScheduledActionResponse> {
     await this.mutate((c) =>
       c.scheduledAction.updateScheduledAction({
         path: { id: this.id },
-        body: routineBody(options),
+        body: routineBody(options, true),
       }),
     );
   }
@@ -588,28 +588,30 @@ function stepBody(step: RoutineStepOptions): RoutineStep {
     .exhaustive();
 }
 
-function taskBody(options: RoutineOptions): RoutineTask {
+function taskBody(options: RoutineOptions, update: boolean): RoutineTask {
   return match(options)
     .returnType<RoutineTask>()
     .with({ steps: P.array() }, (program) => ({
       steps: program.steps.map(stepBody),
       dangerously_operate_as_user: program.dangerouslyOperateAsUser,
-      // None is sent as none: a scheduler that predates definitions refuses
-      // the field even when it is empty.
-      sub_routines: program.subRoutines?.length
-        ? program.subRoutines.map((definition) => ({
-            name: definition.name,
-            title: definition.title,
-            // Only the declared fields: the scheduler refuses a definition's
-            // input that carries a value.
-            inputs: definition.inputs?.map(({ type, name, label }) => ({
-              type,
-              name,
-              label,
-            })),
-            steps: definition.steps.map(stepBody),
-          }))
-        : undefined,
+      // None is sent as none on a create or check: a scheduler that
+      // predates definitions refuses the field even when it is empty. An
+      // update sends an empty list as given, which removes the definitions.
+      sub_routines: (program.subRoutines?.length || update
+        ? program.subRoutines
+        : undefined
+      )?.map((definition) => ({
+        name: definition.name,
+        title: definition.title,
+        // Only the declared fields: the scheduler refuses a definition's
+        // input that carries a value.
+        inputs: definition.inputs?.map(({ type, name, label }) => ({
+          type,
+          name,
+          label,
+        })),
+        steps: definition.steps.map(stepBody),
+      })),
     }))
     .with(
       { prompt: P.string },
@@ -623,14 +625,17 @@ function taskBody(options: RoutineOptions): RoutineTask {
     .exhaustive();
 }
 
-/** Translate typed routine options into the generated wire contract. */
-export function routineBody(options: RoutineOptions) {
+/**
+ * Translate typed routine options into the generated wire contract; an
+ * `update` keeps an empty `subRoutines`, to remove the definitions.
+ */
+export function routineBody(options: RoutineOptions, update = false) {
   return {
     kind: 'Agent' as const,
     name: options.name,
     enabled: options.enabled,
     run_visibility: options.runVisibility,
     trigger: triggerBody(options.trigger),
-    task: taskBody(options),
+    task: taskBody(options, update),
   };
 }
