@@ -24,13 +24,15 @@ function inputType(input: RoutineInput): string {
 /** The values each copy of a definition is given, as chips. */
 function DefinitionInputs(props: { inputs: RoutineInput[] }) {
   return (
-    <div class="flex flex-wrap items-center gap-1.5 text-xs">
+    <div class="flex min-w-0 flex-wrap items-center gap-1.5 text-xs">
       <span class="text-ink-muted">{t('subRoutines.definitionInputs')}</span>
       <For each={props.inputs}>
         {(input) => (
-          <span class="inline-flex items-center gap-1 rounded-md border border-edge-muted px-1.5 py-0.5">
-            <span class="text-ink">{input.label}</span>
-            <span class="text-ink-extra-muted">{inputType(input)}</span>
+          <span class="inline-flex min-w-0 max-w-full items-center gap-1 rounded-md border border-edge-muted px-1.5 py-0.5">
+            <span class="min-w-0 wrap-anywhere text-ink">{input.label}</span>
+            <span class="shrink-0 text-ink-extra-muted">
+              {inputType(input)}
+            </span>
           </span>
         )}
       </For>
@@ -65,8 +67,10 @@ export function SubRoutineDefinitions(props: {
             class="grid min-w-0 gap-2"
           >
             <div class="flex min-w-0 flex-wrap items-baseline gap-x-2 gap-y-1">
-              <h3 class="text-sm font-medium text-ink">{definition().title}</h3>
-              <code class="text-xs text-ink-extra-muted">
+              <h3 class="min-w-0 wrap-anywhere text-sm font-medium text-ink">
+                {definition().title}
+              </h3>
+              <code class="min-w-0 wrap-anywhere text-xs text-ink-extra-muted">
                 {definition().name}
               </code>
             </div>
@@ -137,7 +141,7 @@ export function SubRoutineCopySteps(props: {
   return (
     <div class="grid min-w-0 gap-2">
       <RoutineSurface class="grid gap-3 px-6 py-4 text-sm @max-[600px]/routine:px-4">
-        <p class="text-ink-muted">
+        <p class="min-w-0 wrap-anywhere text-ink-muted">
           <Show
             when={props.parentName}
             fallback={t('subRoutines.copyStepsParentGone', {
@@ -155,13 +159,15 @@ export function SubRoutineCopySteps(props: {
         <Show when={props.values.length > 0}>
           <dl
             aria-label={t('subRoutines.copyValues')}
-            class="grid grid-cols-[auto_minmax(0,1fr)] gap-x-4 gap-y-1"
+            class="grid min-w-0 grid-cols-[fit-content(40%)_minmax(0,1fr)] gap-x-4 gap-y-1"
           >
             <For each={props.values}>
               {(item) => (
                 <>
-                  <dt class="text-ink-muted">{item.label}</dt>
-                  <dd class="min-w-0 break-words text-ink">{item.value}</dd>
+                  <dt class="min-w-0 wrap-anywhere text-ink-muted">
+                    {item.label}
+                  </dt>
+                  <dd class="min-w-0 wrap-anywhere text-ink">{item.value}</dd>
                 </>
               )}
             </For>
@@ -173,7 +179,7 @@ export function SubRoutineCopySteps(props: {
             <Button
               variant="secondary"
               size="sm"
-              class="max-w-full shrink"
+              class="max-w-full shrink touch:min-h-[44px]"
               onClick={() => props.onOpenParent?.()}
             >
               <span class="min-w-0 truncate">

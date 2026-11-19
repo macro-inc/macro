@@ -434,12 +434,15 @@ export function RoutineDetailView(props: {
                         <Button
                           variant="ghost"
                           size="xs"
+                          class="min-w-0 max-w-full touch:min-h-[44px]"
                           onClick={() => props.onOpenRoutine(link().id)}
                         >
-                          {t('subRoutines.createdBy', {
-                            name: parent().name,
-                          })}
-                          <ArrowUpRightIcon class="size-3" />
+                          <span class="min-w-0 truncate">
+                            {t('subRoutines.createdBy', {
+                              name: parent().name,
+                            })}
+                          </span>
+                          <ArrowUpRightIcon class="size-3 shrink-0" />
                         </Button>
                       )}
                     </Show>

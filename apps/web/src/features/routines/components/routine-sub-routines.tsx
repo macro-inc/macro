@@ -34,7 +34,7 @@ function SubRoutineRow(props: {
     <li class="border-t border-edge-divider first:border-t-0">
       <button
         type="button"
-        class="flex min-h-12 w-full min-w-0 items-center gap-3 px-6 py-2.5 text-left outline-none hover:bg-list-hover focus-visible:bg-list-highlighted @max-[600px]/routine:px-4"
+        class="flex min-h-12 w-full min-w-0 items-center gap-3 px-6 py-2.5 text-left outline-none not-touch:hover:bg-list-hover focus-visible:bg-list-highlighted @max-[600px]/routine:px-4 touch:min-h-[44px]"
         onClick={open}
       >
         <span class="flex min-w-0 flex-1 flex-col">

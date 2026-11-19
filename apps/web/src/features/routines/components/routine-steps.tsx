@@ -226,7 +226,9 @@ function StepCard(props: StepCardProps) {
         {props.number}
       </span>
       <StepIcon step={props.step} />
-      <span class="shrink-0 text-sm font-medium">{headline().title}</span>
+      <span class="min-w-0 wrap-anywhere text-sm font-medium">
+        {headline().title}
+      </span>
       <span class="min-w-0 flex-1 truncate text-sm text-ink-muted">
         {shown() ? '' : headline().summary}
       </span>

@@ -1442,6 +1442,40 @@ describe('sub-routines defined once', () => {
     });
   });
 
+  it('lets long copy labels and step titles wrap without taking over a narrow pane', () => {
+    const label = 'A'.repeat(60);
+    const title = 'B'.repeat(60);
+    setSchedules([
+      copy,
+      {
+        ...parent,
+        task: {
+          steps: [{ type: 'agent', model: 'model', instructions: 'Plan' }],
+          sub_routines: [
+            {
+              ...remind,
+              inputs: [{ type: 'text', name: 'taskId', label }],
+              steps: [
+                { type: 'code', title, source: 'export function main() {}' },
+              ],
+            },
+          ],
+        },
+      },
+    ]);
+    render(() => <Routine />);
+    const term = screen.getByRole('term');
+    expect(term.textContent).toBe(label);
+    expect(term.classList.contains('wrap-anywhere')).toBe(true);
+    expect(screen.getByRole('definition').textContent).toBe('Ship the deck');
+    expect(screen.getByText(title).classList.contains('min-w-0')).toBe(true);
+    expect(
+      screen
+        .getByRole('button', { name: 'Edit in Due reminders' })
+        .classList.contains('touch:min-h-[44px]')
+    ).toBe(true);
+  });
+
   it('offers manual steps only when a detached program has input values', () => {
     const detached: ScheduledAction = {
       ...copy,
