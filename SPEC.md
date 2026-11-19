@@ -94,6 +94,12 @@ In a call: agent shares   tab ⇄ desktop   (call tile shows which; Stop)
   browser, blocklist) don't exist on the desktop. I recommend showing the desktop only when everyone in the call
   may `View` the computer. Otherwise the share falls back to the tab, and the agent says why.
 
+- **D10 How phase 4 reaches existing agents:** template changes don't reach existing agents today. The options:
+  (a) ship a one-time merge into existing agents' repositories, which can conflict with the agents' own edits;
+  (b) wait for the pending "image carries the template" design, so the calls code comes with the computer image;
+  (c) new agents only. I recommend (b) for the calls code. D9 is a safety rule, so if (b) is far off, do (a) for
+  the D9 check alone. Phases 1-3 are harness and web changes and reach every agent at once.
+
 ## Acceptance checks
 
 1. As a team owner on a local stack (Docker agent computer): View screen opens the panel, the desktop is live in
@@ -178,8 +184,9 @@ In a call: agent shares   tab ⇄ desktop   (call tile shows which; Stop)
     (`surface: "tab" | "desktop"`).
   - Apply the selection rule and the D9 participant check in code before the capture starts.
   - Switching = stop one publication and start the other on the same `SOURCE_SCREENSHARE`. One share at a time.
-  - Each agent's repository starts as a copy of the template (`docs/design/agent-teammates.md:7`), so how the
-    change reaches existing agents needs checking with t2j2.
+  - **Limitation:** `crates/agent_git` seeds a new agent's repository from the template once
+    (`docs/design/agent-teammates.md:7,16`). After that the repository is the agent's own, and the agent edits it
+    itself. The tab mode, the selection rule and the D9 check therefore reach **new agents only** (D10).
 - **Server-side publish (rejected):** the harness would decode RFB and publish into LiveKit as its own
   participant. That adds a media service and a second identity, with no gain while the guest already publishes.
 
