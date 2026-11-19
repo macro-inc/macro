@@ -1254,6 +1254,60 @@ describe('routine code that needs an update', () => {
     updatedAt: '2026-11-01T09:00:00Z',
   });
 
+  it.each(['missing connection', 'external target'])(
+    'blocks approval for a %s already found by the form',
+    (problem) => {
+      const agent =
+        problem === 'external target'
+          ? {
+              type: 'agent' as const,
+              agent: { bot_id: '12345678-1234-1234-1234-123456789abc' },
+              instructions: 'Check the task',
+            }
+          : {
+              type: 'agent' as const,
+              model: 'model',
+              instructions: 'Check the task',
+            };
+      mocks.connectedApps = () =>
+        new Set(problem === 'missing connection' ? [] : ['example']);
+      const previousTask = {
+        steps: [
+          {
+            type: 'code' as const,
+            title: 'File invoices',
+            source: 'macro.tasks.create(x)',
+          },
+          agent,
+        ],
+        mcp_servers: [{ app_slug: 'example', server_name: 'Example' }],
+        sdk: '0.2.0+old',
+      };
+      const proposed = {
+        ...previousTask,
+        steps: [
+          {
+            type: 'code' as const,
+            title: 'File invoices',
+            source: 'macro.tasks.add(x)',
+          },
+          agent,
+        ],
+        sdk: '0.3.0+new',
+      };
+      setSchedules([{ ...paused, task: previousTask }]);
+      mocks.codeUpgrades = () => [{ ...upgrade(proposed), previousTask }];
+      render(() => <Routine />);
+      expect(screen.getByRole('alert')).toBeTruthy();
+      const approve = screen.getByRole<HTMLButtonElement>('button', {
+        name: 'Approve and resume',
+      });
+      expect(approve.disabled).toBe(true);
+      fireEvent.click(approve);
+      expect(mocks.update).not.toHaveBeenCalled();
+    }
+  );
+
   it('withdraws the old proposal after the saved task loses its last code step', () => {
     setSchedules([paused]);
     mocks.codeUpgrades = () => [

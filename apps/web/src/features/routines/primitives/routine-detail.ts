@@ -195,6 +195,7 @@ export function createRoutineDetail(
     !isOwned() ||
     !source.canEditTask() ||
     !state() ||
+    Boolean(formError()) ||
     isRunning() ||
     source.runPending() ||
     source.activationPending() ||
