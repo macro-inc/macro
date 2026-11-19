@@ -385,9 +385,9 @@ where
         Ok(actions)
     }
 
-    /// Make a sub-routine a top-level routine. A copy first gets the steps
-    /// it ran, its definition's as its parent holds them now, with its
-    /// inputs' values, so it keeps doing what it did.
+    /// Make a sub-routine a top-level routine. A copy first gets its
+    /// definition's steps as its parent holds them now, with its inputs'
+    /// values: what its next run would have done.
     #[tracing::instrument(name = "routine.detach", skip_all, fields(
         routine.id = tracing::field::Empty,
         routine.parent_id = tracing::field::Empty,
@@ -434,14 +434,15 @@ where
                 };
                 rewritten.sort();
                 rewritten.dedup();
+                // Reserved before the write, as delete does: a stopped
+                // dispatcher fails the request with the copy still a copy,
+                // so a retry detaches it rather than finding it top-level.
+                let permit = self.dispatcher_tx.reserve().await?;
                 let detached = self
                     .repo
                     .detach_copy(action, &parent_id, &rewritten)
                     .await?;
-                self.dispatcher_tx
-                    .send(DispatchEvent::Update(detached.clone()))
-                    .await
-                    .map_err(|e| anyhow::anyhow!("failed to dispatch update event: {e}"))?;
+                permit.send(DispatchEvent::Update(detached.clone()));
                 return Ok(detached);
             }
         }

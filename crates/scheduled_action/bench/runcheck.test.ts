@@ -3,11 +3,16 @@ import type { SQL } from 'bun';
 
 import type { Case, RunCheck } from './cases';
 import { type SavedRoutine, runCheck } from './runcheck';
+import { STATUS_OPTIONS } from './setup';
 import type { Stack } from './stack';
 import { sessionSpans } from './trace';
 import { OWNER } from './workspace';
 
-const stack = { harness: 'https://harness.example.com', tempo: 'https://tempo.example.com' } as Stack;
+const stack = {
+  harness: 'https://harness.example.com',
+  storage: 'https://storage.example.com',
+  tempo: 'https://tempo.example.com',
+} as Stack;
 const tokens = { [OWNER]: 'test-token' };
 const traceparent = '00-0123456789abcdef0123456789abcdef-0123456789abcdef-01';
 const trigger = { type: 'once', at: '2027-01-01T00:00:00Z' };
@@ -47,16 +52,34 @@ function fixture(
     failReply = false,
     earlierRun = false,
     stallReply,
-  }: { failReply?: boolean; earlierRun?: boolean; stallReply?: PromiseWithResolvers<void> } = {},
+    lateReply,
+    taskStatus,
+  }: {
+    failReply?: boolean;
+    earlierRun?: boolean;
+    stallReply?: PromiseWithResolvers<void>;
+    /** The `late-copy` reply read: started, then answered by the test. */
+    lateReply?: { started: PromiseWithResolvers<void>; reply: PromiseWithResolvers<{ text: string }[]> };
+    /** The status option every task has. */
+    taskStatus?: string;
+  } = {},
 ) {
   const replies: unknown[] = [];
+  const mentionReads: unknown[] = [];
   const db = (async (parts: TemplateStringsArray, ...args: unknown[]) => {
-    if (parts.join('').includes('from agent_session_log')) {
+    const query = parts.join('');
+    if (query.includes('select id, name from "Document" where id in')) mentionReads.push(args[0]);
+    if (taskStatus && query.includes('from entity_properties')) return [{ values: { value: [taskStatus] } }];
+    if (query.includes('from agent_session_log')) {
       replies.push(args[0]);
       if (failReply && args[0] === 'failed-copy') throw new Error('reply read failed');
       if (stallReply && args[0] === 'stalled-copy') {
         stallReply.resolve();
         return new Promise(() => undefined);
+      }
+      if (lateReply && args[0] === 'late-copy') {
+        lateReply.started.resolve();
+        return lateReply.reply.promise;
       }
       return [{ text: 'Reminder' }];
     }
@@ -82,13 +105,14 @@ function fixture(
       return Response.json([record(id === 'parent' ? undefined : id)]);
     }
     if (init?.method === 'POST') return Response.json({ resource: id === 'parent' ? null : { id } });
-    if (init?.method === 'DELETE') return new Response(null);
+    if (init?.method === 'DELETE' || init?.method === 'PUT') return new Response(null);
     throw new Error(`unexpected request: ${url}`);
   });
   return {
     fetch,
     sleep,
     replies,
+    mentionReads,
     run: (testCase: Case = item) =>
       runCheck(
         stack,
@@ -97,7 +121,7 @@ function fixture(
         testCase,
         { outcome: 'routine' },
         parent,
-        { ids: {}, now: new Date(), timezone: 'UTC', made: [] },
+        { ids: { 'task:launch': 'task-1' }, now: new Date(), timezone: 'UTC', made: [] },
         traceparent,
       ),
   };
@@ -125,6 +149,39 @@ test('a stalled copy reply read ends at the copy deadline', async () => {
   expect((await result)?.effects.copies?.[0]?.runs).toEqual([
     { isSuccess: true, result: { resource: { type: 'agent', id: 'stalled-copy' } } },
   ]);
+});
+
+test('a reply read that returns past the copy deadline starts no mention-name read', async () => {
+  const deadline = new AbortController();
+  spyOn(AbortSignal, 'timeout').mockReturnValue(deadline.signal);
+  const late = {
+    started: Promise.withResolvers<void>(),
+    reply: Promise.withResolvers<{ text: string }[]>(),
+  };
+  const check = fixture([copy('late-copy')], { lateReply: late });
+  const result = check.run(copyCase);
+  await late.started.promise;
+  deadline.abort();
+  expect((await result)?.effects.copies?.[0]?.runs?.[0]?.reply).toBeUndefined();
+  late.reply.resolve([{ text: '<m-document-mention>{"documentId":"doc-1"}</m-document-mention>' }]);
+  await new Promise<void>((resolve) => setImmediate(resolve));
+  expect(check.mentionReads).toEqual([]);
+});
+
+test('moving a task to fire a routine, and back, is on the attempt trace', async () => {
+  const check = fixture([], { taskStatus: STATUS_OPTIONS.not_started });
+  const moved: Case = {
+    ...item,
+    run: {
+      ...parentRun,
+      fire: () => ({ type: 'task_status', task: 'task:launch', status: 'completed', restore: 'not_started' }),
+    },
+  };
+  const result = await check.run(moved);
+  expect(result?.error).toBeUndefined();
+  const puts = check.fetch.mock.calls.filter(([, init]) => init?.method === 'PUT');
+  expect(puts.map(([url]) => new URL(String(url)).pathname.split('/')[4])).toEqual(['task-1', 'task-1']);
+  expect(puts.map(([, init]) => new Headers(init?.headers).get('traceparent'))).toEqual([traceparent, traceparent]);
 });
 
 test('a copy run settling past its deadline ends without reading its reply', async () => {

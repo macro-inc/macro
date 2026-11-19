@@ -77,7 +77,7 @@ async function runCopy(at: Stack, request: RoutineRequest, db: SQL, id: string):
       const runs = await runsSince(at, { ...request, signal }, id, since, resourceId);
       if (runs.length) {
         await beforeDeadline(() => Bun.sleep(SETTLE_MS), signal, undefined);
-        return await beforeDeadline(() => withReplies(db, runs), signal, runs);
+        return await beforeDeadline(() => withReplies(db, runs, signal), signal, runs);
       }
       await Bun.sleep(2000);
     }
@@ -265,14 +265,15 @@ async function agentReply(db: SQL, session: string) {
 /**
  * `runs` with their agent steps' replies, as the person reads them (a
  * mentioned document or task with its name); also fills results saved before
- * replies were read, or before they were read with names.
+ * replies were read, or before they were read with names. Once `signal`
+ * aborts, a reply read that returns starts no read of names.
  */
-export async function withReplies(db: SQL, runs: Effects['runs']) {
+export async function withReplies(db: SQL, runs: Effects['runs'], signal?: AbortSignal) {
   return Promise.all(
     runs.map(async (run) => {
       const session = agentOf(run);
       const reply = run.reply ?? (session ? await agentReply(db, session) : undefined);
-      if (reply === undefined) return run;
+      if (reply === undefined || signal?.aborted) return run;
       const [named] = await withMentionNames(db, [reply]);
       return { ...run, reply: named };
     }),
@@ -343,8 +344,8 @@ export async function runCheck(
       // the person's task fails, saying so, and `reset` puts it back.
       const was = await taskStatus(db, id);
       if (was === fire.restore) {
-        await setTaskStatus(at, owner, id, fire.status);
-        restore = () => setTaskStatus(at, owner, id, fire.restore);
+        await setTaskStatus(at, owner, id, fire.status, request.headers);
+        restore = () => setTaskStatus(at, owner, id, fire.restore, request.headers);
       } else error = `the task was ${was ?? 'unset'}, not ${fire.restore}: the draft moved it`;
     } else {
       const project = fire.project ? sdk(at, owner).projects.byId(context.ids[fire.project]) : undefined;

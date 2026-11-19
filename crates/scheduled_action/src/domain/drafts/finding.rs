@@ -45,6 +45,9 @@ const ITEMS: &str = include_str!("finding/items.md");
 /// How a routine that may define sub-routines schedules later work per
 /// item: the work defined once, a copy scheduled for each item.
 const LATER: &str = include_str!("finding/later.md");
+/// How steps work, for a draft that may write code, with `{ask_ai}`,
+/// `{later}`, `{code_steps}`, `{step_context}` and `{examples}` to fill.
+const STEPS: &str = include_str!("finding/steps.md");
 /// The most names one lookup takes.
 const MAX_NAMES: usize = 10;
 /// The longest name one lookup takes; it refuses the whole lookup for one.
@@ -224,10 +227,15 @@ impl FindingPrompts {
             String::new()
         };
         let steps = if code {
-            format!(
-                "Steps run in order. Prefer a code step whenever code can do the job: acting, deciding with macro.ai.decide, and writing text with macro.ai.structuredCompletion all fit in one. {ask_ai} hands open-ended work to AI with tools; a routine has at most one, last.\n\nA code step runs with its owner's access, and Macro refuses a message from someone to themselves: a code step never messages or emails the routine's owner. When the routine's job is to tell its owner something (a reminder, a digest, news from a channel), write an Ask AI step whose instructions say what to tell them, and Macro's agent messages them.\n\n{later}How to write a code step:\n{CODE_STEPS}\n\nThe type of `main`'s argument:\n```ts\n{STEP_CONTEXT}```\n\n{examples}",
-                examples = super::catalog_examples(conditions)
-            )
+            // Filled in reading order, so text put in is never read as a
+            // later placeholder.
+            STEPS
+                .trim()
+                .replace("{ask_ai}", &ask_ai)
+                .replace("{later}", &later)
+                .replace("{code_steps}", CODE_STEPS)
+                .replace("{step_context}", STEP_CONTEXT)
+                .replace("{examples}", &super::catalog_examples(conditions))
         } else {
             format!("Code steps can't be used: use {ask_ai} for the work.")
         };

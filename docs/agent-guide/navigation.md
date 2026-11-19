@@ -1307,7 +1307,7 @@ and select **Show code** to read a code step's source. Recurring copies resolve
 the definition again on each run. If the parent no longer defines it, the page
 says so and the copy fails when it runs. **Retry definition** retries a failed
 parent read when no cached parent is available. Keeping a copy makes a
-standalone routine with the referenced steps and apps, the copy's input
+standalone routine with its definition's current steps and apps, the copy's input
 values, and the parent's definitions.
 
 The owner's `enable-sub-routines` flag is required to schedule copies or create,

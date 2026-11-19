@@ -252,8 +252,10 @@ network/resource-only Pulumi stacks; they do not host extra agent processes.
   the generated types they import). `scheduling.rs` composes the drafter
   after the service with its
   `scheduled_action_draft` store, the session drafter's check lookup
-  (`CorrelationSessions`) and activity (`ActivityCreations`), and the
-  sweep of drafts a stopped process left.
+  (`CorrelationSessions`) and activity (`ActivityCreations`), the
+  per-owner `enable-sub-routines` rollout that decides whether a draft may
+  define sub-routines (`.with_sub_routines`, the same flag reader as the
+  scheduler's), and the sweep of drafts a stopped process left.
   Background drafts (`/scheduled-actions/draft-jobs`, `DraftJobs`) run on
   the scheduling `workers` tracker under `stop_workers`, so shutdown fails
   the ones still drafting as interrupted within `SHUTDOWN_TIMEOUT`; they

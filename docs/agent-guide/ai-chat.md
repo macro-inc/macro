@@ -1062,11 +1062,12 @@ values, **Add step** adds an **Ask AI** step. A closed step's line reads its sen
 filled in. The starters that sort email, set task priorities and
 post updates come from the scheduler as code; where code can't be saved they
 start with an Ask AI step instead. When an SDK release
-breaks a routine's own code and AI's update fails its checks, the routine pauses
-and its Overview leads with **Paused: its code needs an update**. If only its
-definitions' code needs updating and the routine is active, it stays active and
-shows **Its sub-routines’ code needs an update**; copies that need the broken
-code fail until it is updated. **Review the update** shows
+breaks a routine's code and AI's update fails its checks, Macro pauses
+routines that run code in their own steps, and the Overview leads with
+**Paused: its code needs an update**. A routine with code only in its
+sub-routine definitions stays enabled and shows **Its sub-routines’ code needs
+an update**; every copy of it that runs code fails until the code is updated.
+**Review the update** shows
 each changed step, including steps inside definitions. The notice disappears
 when the editor receives a saved task that differs from the task the proposal
 was made from. **Approve** and **Approve and resume** are disabled until

@@ -131,7 +131,7 @@ async fn a_parent_has_one_sub_routine_per_key(pool: PgPool) {
 #[sqlx::test(migrator = "MACRO_DB_MIGRATIONS")]
 async fn the_keys_lookup_index_refuses_a_second_create_as_a_lost_race(pool: PgPool) {
     insert_user(&pool, USER_A).await;
-    sqlx::query("DROP INDEX scheduled_action_parent_child_key_idx")
+    sqlx::raw_sql("DROP INDEX scheduled_action_parent_child_key_idx")
         .execute(&pool)
         .await
         .unwrap();

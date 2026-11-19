@@ -133,10 +133,18 @@ export const STATUS_OPTIONS: Record<string, string> = {
   canceled: '00000001-0000-0000-0002-000000000005',
 };
 
-export async function setTaskStatus(at: Stack, token: string, taskId: string, status: string) {
+/** Move a task to `status`; `headers` carry the attempt's trace when a check fires it. */
+export async function setTaskStatus(
+  at: Stack,
+  token: string,
+  taskId: string,
+  status: string,
+  headers?: Record<string, string>,
+) {
   await call(`${at.storage}/properties/entities/DOCUMENT/${taskId}/${STATUS}`, {
     method: 'PUT',
     token,
+    headers,
     body: JSON.stringify({ value: { type: 'select_option', option_id: STATUS_OPTIONS[status] } }),
   });
 }
