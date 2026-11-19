@@ -1658,7 +1658,10 @@ MCP and Macro agent tools expose **CreateRoutine**, **ListRoutines**,
 Step types are `code` (TypeScript against Macro's SDK, type-checked when saved,
 run with the owner's access) and `agent` (`model`, or `agent.bot_id`
 from **ListAgents**, plus `instructions`). Routine ownership comes from the authenticated caller, never a
-model-supplied user ID.
+model-supplied user ID. These tools can't state a new-email trigger's
+inboxes: **ReadRoutine** returns such a routine without a `configuration`, with
+`notEditableHere` saying why, and **UpdateRoutine** refuses to replace it; it is
+edited on its page or through the SDK.
 
 ## Command menu (Ctrl+K)
 
