@@ -807,6 +807,29 @@ jobs:
       env:
         GIT_HTTP_LOW_SPEED_LIMIT: '10000'
         GIT_HTTP_LOW_SPEED_TIME: '60'
+    - name: start opensearch
+      if: env.RUST_PACKAGES == 'all' || contains(env.RUST_PACKAGES, 'opensearch_client')
+      run: |
+        set -euo pipefail
+
+        # The local stack's OpenSearch image: the engine version of the deployed
+        # domain, with the analysis plugin the index mappings need. The build pulls
+        # the base image and downloads the plugin; one that times out is tried again.
+        for attempt in 1 2 3; do
+          if docker build --quiet --tag search-opensearch infra/local/opensearch; then
+            break
+          fi
+          if [ "$attempt" -eq 3 ]; then
+            echo "the OpenSearch image did not build in 3 attempts" >&2
+            exit 1
+          fi
+          echo "::warning::the OpenSearch image did not build (attempt $attempt); trying again"
+          sleep $((attempt * 15))
+        done
+        docker run --detach --name search-opensearch --publish 127.0.0.1:9200:9200 \
+          --env discovery.type=single-node \
+          --env OPENSEARCH_JAVA_OPTS="-Xms1g -Xmx1g" \
+          search-opensearch
     - name: Mount Namespace cache volume
       uses: namespacelabs/nscloud-cache-action@15799a6b54e5765f85b2aac25b3f0df43ed571c0
       with:
@@ -1006,12 +1029,29 @@ jobs:
             --run-ignored only --test-threads 2
             -E 'package(code_execution) or (package(agent_code_mode) and test(every_documented_example_type_checks)) or (package(agent_harness_service) and (test(authenticated_mcp_runs_javascript_and_persists_source_and_result) or test(routine_code::) or test(suggestions_brief_programs_type_check)))'
           )
+        # The content search tests need an OpenSearch with the search indices, which the
+        # job starts only when their package is selected, so their target is left out of
+        # a plain build (`test = false`) and named here. Same script for the same reason
+        # as the Deno tests.
+        elif [ "${NEXTEST_RUN_OPENSEARCH_TESTS:-}" = "true" ]; then
+          common+=(
+            --test content_search
+            -E 'package(opensearch_client) & binary(content_search)'
+          )
         else
           common+=(--test-threads "$NEXTEST_TEST_THREADS")
         fi
 
+        # A full run builds every test target with `test = true`. `--tests` drops a
+        # `test = false` target even when `--test` names it, so the content search run
+        # names only its own.
+        workspace_targets=(--tests)
+        if [ "${NEXTEST_RUN_OPENSEARCH_TESTS:-}" = "true" ]; then
+          workspace_targets=()
+        fi
+
         if [ "$RUST_PACKAGES" = "all" ]; then
-          cargo nextest run --workspace --exclude sync_service --tests "${common[@]}"
+          cargo nextest run --workspace --exclude sync_service "${workspace_targets[@]}" "${common[@]}"
           exit 0
         fi
 
@@ -1069,12 +1109,29 @@ jobs:
             --run-ignored only --test-threads 2
             -E 'package(code_execution) or (package(agent_code_mode) and test(every_documented_example_type_checks)) or (package(agent_harness_service) and (test(authenticated_mcp_runs_javascript_and_persists_source_and_result) or test(routine_code::) or test(suggestions_brief_programs_type_check)))'
           )
+        # The content search tests need an OpenSearch with the search indices, which the
+        # job starts only when their package is selected, so their target is left out of
+        # a plain build (`test = false`) and named here. Same script for the same reason
+        # as the Deno tests.
+        elif [ "${NEXTEST_RUN_OPENSEARCH_TESTS:-}" = "true" ]; then
+          common+=(
+            --test content_search
+            -E 'package(opensearch_client) & binary(content_search)'
+          )
         else
           common+=(--test-threads "$NEXTEST_TEST_THREADS")
         fi
 
+        # A full run builds every test target with `test = true`. `--tests` drops a
+        # `test = false` target even when `--test` names it, so the content search run
+        # names only its own.
+        workspace_targets=(--tests)
+        if [ "${NEXTEST_RUN_OPENSEARCH_TESTS:-}" = "true" ]; then
+          workspace_targets=()
+        fi
+
         if [ "$RUST_PACKAGES" = "all" ]; then
-          cargo nextest run --workspace --exclude sync_service --tests "${common[@]}"
+          cargo nextest run --workspace --exclude sync_service "${workspace_targets[@]}" "${common[@]}"
           exit 0
         fi
 
@@ -1091,6 +1148,109 @@ jobs:
         cargo nextest run "${common[@]}" "${pkg_args[@]}"
       env:
         NEXTEST_RUN_DENO_TESTS: 'true'
+    - name: create the search indices
+      if: env.RUST_PACKAGES == 'all' || contains(env.RUST_PACKAGES, 'opensearch_client')
+      run: |
+        set -euo pipefail
+
+        url="${SEARCH_OPENSEARCH_URL:?}"
+        # Each probe is bounded, so a node that accepts the connection but never answers
+        # still reaches the log below within about four minutes.
+        for _ in $(seq 1 120); do
+          curl --fail --silent --max-time 1 --output /dev/null "$url" && break
+          sleep 1
+        done
+        curl --fail --silent --show-error --max-time 5 --output /dev/null "$url" \
+          || { docker logs --tail 50 search-opensearch; exit 1; }
+
+        # The indices and aliases search reads, from the same script the local stack
+        # and the deployed domain are set up with. The cluster has no security
+        # plugin, so the credentials only have to be present.
+        cd infra/stacks/opensearch/helpers
+        bun install --frozen-lockfile
+        ENVIRONMENT=local DRY_RUN=false OPENSEARCH_URL="$url" \
+          OPENSEARCH_USERNAME=admin OPENSEARCH_PASSWORD=admin \
+          bun run scripts/create_indices.ts
+      env:
+        SEARCH_OPENSEARCH_URL: http://127.0.0.1:9200
+    - name: Test content search against OpenSearch
+      if: env.RUST_PACKAGES == 'all' || contains(env.RUST_PACKAGES, 'opensearch_client')
+      run: |
+        set -euo pipefail
+
+        # --no-tests=pass: a package filter can legitimately select a crate with no
+        # tests; treat that as success, not nextest's default error.
+        # sync-service is not part of this suite, and its storage backends are mutually
+        # exclusive under --all-features.
+        #
+        # Package selection uses `cargo nextest run -p`, not `--workspace -E rdeps(...)`.
+        # The filterset only decides which tests *run* after a workspace build; `-p`
+        # is what keeps an unrelated crate's test binary from being compiled.
+        #
+        # `--tests` with `--workspace` builds the test binary of every target with
+        # `test = true`. `--bins` would also build the bins that opt out, and the normal
+        # library beneath them.
+        # Unconstrained `-p` still runs that package's tests.
+
+        : "${RUST_PACKAGES:?RUST_PACKAGES is required}"
+        # Nothing in this build carries debug info: the job sets CARGO_PROFILE_*_DEBUG=0 for
+        # workspace crates, and this flag covers dependencies. Panic messages keep their
+        # file and line; backtrace frames keep function names only.
+        common=(
+          --config 'profile.dev.package."*".debug=false'
+          --all-features --no-tests=pass
+        )
+
+        # The Deno tests (code execution, authenticated SDK runs, routine code checks and
+        # the shipped code-mode programs)
+        # are ignored by default because they need the pinned runtime. They
+        # run from this same script so cargo sees identical flags and selection and reuses
+        # what the first run compiled. Only tests in packages this PR selected can match.
+        if [ "${NEXTEST_RUN_DENO_TESTS:-}" = "true" ]; then
+          common+=(
+            --run-ignored only --test-threads 2
+            -E 'package(code_execution) or (package(agent_code_mode) and test(every_documented_example_type_checks)) or (package(agent_harness_service) and (test(authenticated_mcp_runs_javascript_and_persists_source_and_result) or test(routine_code::) or test(suggestions_brief_programs_type_check)))'
+          )
+        # The content search tests need an OpenSearch with the search indices, which the
+        # job starts only when their package is selected, so their target is left out of
+        # a plain build (`test = false`) and named here. Same script for the same reason
+        # as the Deno tests.
+        elif [ "${NEXTEST_RUN_OPENSEARCH_TESTS:-}" = "true" ]; then
+          common+=(
+            --test content_search
+            -E 'package(opensearch_client) & binary(content_search)'
+          )
+        else
+          common+=(--test-threads "$NEXTEST_TEST_THREADS")
+        fi
+
+        # A full run builds every test target with `test = true`. `--tests` drops a
+        # `test = false` target even when `--test` names it, so the content search run
+        # names only its own.
+        workspace_targets=(--tests)
+        if [ "${NEXTEST_RUN_OPENSEARCH_TESTS:-}" = "true" ]; then
+          workspace_targets=()
+        fi
+
+        if [ "$RUST_PACKAGES" = "all" ]; then
+          cargo nextest run --workspace --exclude sync_service "${workspace_targets[@]}" "${common[@]}"
+          exit 0
+        fi
+
+        pkg_args=()
+        for package in $RUST_PACKAGES; do
+          [ "$package" = "sync_service" ] || pkg_args+=(-p "$package")
+        done
+
+        if [ "${#pkg_args[@]}" -eq 0 ]; then
+          echo "No packages in the test suite were affected"
+          exit 0
+        fi
+
+        cargo nextest run "${common[@]}" "${pkg_args[@]}"
+      env:
+        NEXTEST_RUN_OPENSEARCH_TESTS: 'true'
+        SEARCH_TEST_OPENSEARCH_URL: http://127.0.0.1:9200
     - name: show sccache stats
       if: always()
       run: sccache --show-stats || true

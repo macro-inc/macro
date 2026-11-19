@@ -26,6 +26,8 @@ enum Call {
 #[derive(Default)]
 struct FakeDocuments {
     calls: Vec<Call>,
+    /// The texts of every create, in order.
+    created: Vec<Vec<(TitleOrBody, Token)>>,
     next_id: u128,
     refuse: VecDeque<Call>,
 }
@@ -50,6 +52,7 @@ impl CreatedWrites for FakeDocuments {
     async fn create(&mut self, texts: &[(TitleOrBody, Token)]) -> Result<EntityId, Refused> {
         let call = Call::Create(texts.iter().map(|(field, _)| *field).collect());
         self.calls.push(call.clone());
+        self.created.push(texts.to_vec());
         if self.refuses(&call) {
             return Err(Refused);
         }
@@ -85,9 +88,10 @@ fn tokens(change: &Change, presence: Presence) -> Vec<Token> {
         .checks
         .iter()
         .filter(|check| check.presence == presence)
-        .map(|check| match &check.query {
-            SearchQuery::Text { token, .. } => token.clone(),
-            SearchQuery::Property { value, .. } => value.clone(),
+        .filter_map(|check| match &check.query {
+            SearchQuery::Text { token, .. } => Some(token.clone()),
+            SearchQuery::Property { value, .. } => Some(value.clone()),
+            SearchQuery::Prefix { .. } => None,
         })
         .collect()
 }
@@ -418,4 +422,118 @@ async fn a_replaced_document_that_would_not_delete_is_deleted_later() {
     // The first document is deleted before the next round's, and the second
     // at shutdown.
     assert_eq!(rotation.api.deleted, [id(200), id(201)]);
+}
+
+fn prefix() -> CrowdedPrefix {
+    CrowdedPrefix::new("con").expect("a prefix")
+}
+
+/// One round of `rotation` as the probe runs it: housekeeping, then the
+/// change.
+async fn round<R: Rotation>(rotation: &mut R) -> Result<Change, NoChange> {
+    rotation.prepare().await;
+    rotation.change().await
+}
+
+#[tokio::test]
+async fn a_late_prefix_word_is_a_new_document_each_round_found_by_the_prefix() {
+    let mut rotation = LatePrefixWord::new(FakeDocuments::default(), prefix());
+
+    let first = round(&mut rotation).await.expect("created");
+    let second = round(&mut rotation).await.expect("created");
+    rotation.clean_up().await;
+
+    assert_eq!(first.operation, Operation::CrowdedPrefix);
+    assert_eq!(
+        first.checks,
+        [Check {
+            query: SearchQuery::Prefix {
+                entity_type: EntityType::Document,
+                prefix: prefix(),
+                entity_id: id(1),
+            },
+            entity_id: id(1),
+            presence: Presence::Present,
+        }]
+    );
+    assert_eq!(second.entity_id, id(2));
+    // The late word is the body, which the content search reads; the title
+    // is a token of its own.
+    let [(TitleOrBody::Body, body), (TitleOrBody::Title, title)] =
+        rotation.api.created[0].as_slice()
+    else {
+        panic!("a body and a title");
+    };
+    assert!(body.as_str().starts_with("conzz"));
+    assert_ne!(title, body);
+    // Each round deletes the last round's document first, and shutdown the
+    // current one.
+    assert_eq!(
+        rotation.api.calls,
+        [
+            Call::Create(vec![TitleOrBody::Body, TitleOrBody::Title]),
+            Call::Delete(id(1)),
+            Call::Create(vec![TitleOrBody::Body, TitleOrBody::Title]),
+            Call::Delete(id(2)),
+            Call::Close,
+        ]
+    );
+}
+
+#[tokio::test]
+async fn a_round_that_could_not_delete_the_last_document_fails_instead_of_adding_one() {
+    let mut rotation = LatePrefixWord::new(
+        FakeDocuments {
+            refuse: VecDeque::from([Call::Delete(id(1))]),
+            ..FakeDocuments::default()
+        },
+        prefix(),
+    );
+
+    round(&mut rotation).await.expect("created");
+    let blocked = round(&mut rotation)
+        .await
+        .expect_err("the last document is still there");
+    let next = round(&mut rotation)
+        .await
+        .expect("created once it is deleted");
+
+    assert!(matches!(
+        blocked,
+        NoChange::Failed(WriteFailed {
+            operation: Operation::CrowdedPrefix,
+            ..
+        })
+    ));
+    assert_eq!(next.entity_id, id(2));
+    assert_eq!(
+        rotation.api.calls,
+        [
+            Call::Create(vec![TitleOrBody::Body, TitleOrBody::Title]),
+            Call::Delete(id(1)),
+            Call::Delete(id(1)),
+            Call::Create(vec![TitleOrBody::Body, TitleOrBody::Title]),
+        ]
+    );
+}
+
+#[tokio::test]
+async fn a_failed_late_prefix_create_is_its_own_operation() {
+    let mut rotation = LatePrefixWord::new(
+        FakeDocuments {
+            refuse: VecDeque::from([Call::Create(vec![TitleOrBody::Body, TitleOrBody::Title])]),
+            ..FakeDocuments::default()
+        },
+        prefix(),
+    );
+
+    let failed = round(&mut rotation).await.expect_err("refused");
+
+    assert!(matches!(
+        failed,
+        NoChange::Failed(WriteFailed {
+            operation: Operation::CrowdedPrefix,
+            ..
+        })
+    ));
 }

@@ -48,10 +48,12 @@
 // - `search.freshness.probe_seconds`: seconds from a write the API
 //   acknowledged to the first search that showed it (histogram), recorded by
 //   services/search_freshness_probe in src/outbound/metrics.rs. The probe acts
-//   as its own user through the public gateway once a minute per
-//   `entity_type` (`document`, `message`, `project`, `property`,
+//   as its own user through the public gateway, one round a minute per kind
+//   of round, by `entity_type` (`document`, `message`, `project`, `property`,
 //   `agent_session`, `call`), tagged `operation` (`create`, `edit`,
-//   `rename`, `delete`). Searches come every second for the first minute,
+//   `rename`, `delete`, and `crowded_prefix`: a document found by a crowded
+//   prefix alone, which only a search expanding every match finds). Searches
+//   come every second for the first minute,
 //   then every 5 s; a round gives up at 300 s, or after 30 s of failed
 //   searches. Search hides a deleted entity through its database check, so a
 //   delete round measures that, not the index.
@@ -63,7 +65,8 @@
 //
 // All are exported every 60 s, and percentiles are not enabled on the
 // histograms, so they are graphed by max and count. The probe records one
-// round per type a minute, so its max over a minute is that round.
+// round a minute per entity type and operation, so its max over a minute is
+// that round.
 //
 // The monitors judge the backlog, not the lag of processed events, so a stall
 // fires them. The email topic carries mailbox imports beside live mail, on the
@@ -108,12 +111,21 @@ const OFFSET_RESETS = `sum:kafka.consumer.offset_resets{${PROD}} by {topic}.as_c
 const READINGS = `max:search.index.oldest_pending_ms{${PROD}}.fill(null)`;
 // Late and unseen are counted, not timed: a slow round records its seconds
 // only when it ends, so slow rounds leave the minutes between them empty.
-const PROBE_LATE = `sum:search.freshness.probe_rounds{${PROD_PROBE},outcome:late} by {entity_type}.as_count()`;
-const PROBE_UNSEEN = `sum:search.freshness.probe_rounds{${PROD_PROBE},outcome:unseen} by {entity_type}.as_count()`;
+// They judge each entity type's rotation rounds together, one a minute,
+// since a type's operations take turns and alone would be too few rounds to
+// judge. The crowded-prefix round is a recall check, not a freshness one, so
+// it is judged apart.
+const ROTATION = '!operation:crowded_prefix';
+const CROWDED_PREFIX = 'operation:crowded_prefix';
+const PROBE_LATE = `sum:search.freshness.probe_rounds{${PROD_PROBE},${ROTATION},outcome:late} by {entity_type}.as_count()`;
+const PROBE_UNSEEN = `sum:search.freshness.probe_rounds{${PROD_PROBE},${ROTATION},outcome:unseen} by {entity_type}.as_count()`;
+const PROBE_PREFIX_UNSEEN = `sum:search.freshness.probe_rounds{${PROD_PROBE},${CROWDED_PREFIX},outcome:unseen} by {entity_type}.as_count()`;
+// The failing share is per operation: documents have two kinds of round, and
+// a failure of one would sit at half the share and never pass it.
 // A round skipped because its fixture is not seeded yet (`fixture_missing`)
 // probed nothing, so it counts neither as a failure nor in the share.
-const PROBE_FAILING = `sum:search.freshness.probe_rounds{${PROD_PROBE},!outcome:seen,!outcome:late,!outcome:unseen,!outcome:fixture_missing} by {entity_type}.as_count()`;
-const PROBE_PROBED = `sum:search.freshness.probe_rounds{${PROD_PROBE},!outcome:fixture_missing} by {entity_type}.as_count()`;
+const PROBE_FAILING = `sum:search.freshness.probe_rounds{${PROD_PROBE},!outcome:seen,!outcome:late,!outcome:unseen,!outcome:fixture_missing} by {entity_type,operation}.as_count()`;
+const PROBE_PROBED = `sum:search.freshness.probe_rounds{${PROD_PROBE},!outcome:fixture_missing} by {entity_type,operation}.as_count()`;
 const PROBE_ROUNDS = `sum:search.freshness.probe_rounds{${PROD_PROBE}} by {entity_type}.as_count()`;
 
 // The probe runs in prod only once RUNS_IN_PROD is set in
@@ -132,6 +144,7 @@ const TITLES = {
   silent: 'Search indexer reports no backlog readings',
   probeLate: 'Search shows changes late end to end',
   probeUnseen: 'Search never showed probe changes',
+  probePrefixUnseen: 'Search content prefix search drops matches',
   probeFailing: 'Search freshness probe cannot write or search',
   probeSilent: 'Search freshness probe reports no rounds',
 };
@@ -233,6 +246,11 @@ export const searchFreshnessDashboard = new datadog.Dashboard(
         thresholdGraph({
           title: TITLES.probeUnseen,
           query: `${PROBE_UNSEEN}.rollup(sum, 1800)`,
+          critical: '2',
+        }),
+        thresholdGraph({
+          title: TITLES.probePrefixUnseen,
+          query: `${PROBE_PREFIX_UNSEEN}.rollup(sum, 1800)`,
           critical: '2',
         }),
         thresholdGraph({
@@ -434,6 +452,20 @@ prodMonitor('search-probe-unseen', {
   recoveryDetail: '{{value}} rounds',
 });
 
+prodMonitor('search-probe-prefix-unseen', {
+  title: TITLES.probePrefixUnseen,
+  service: PROBE_SERVICE,
+  query: `sum(last_30m):${PROBE_PREFIX_UNSEEN} >= 2`,
+  monitorThresholds: { critical: '2' },
+  pages: false,
+  description:
+    "In the last 30 minutes, the probe's crowded_prefix round missed its {{entity_type.name}} more than once: a partial search for con alone did not find the probe's new document, one word that sorts late under con. If the other document rounds pass, content prefix search is dropping matches, likely through a prefix expansion capped per shard, and users miss results for short prefixes; if they miss too, documents are not reaching the index. An unseen round lasts five minutes, so there are at most six in the window.",
+  dashboard,
+  runbook: `${RUNBOOK}#probe-prefix-unseen`,
+  alertDetail: '{{value}} rounds',
+  recoveryDetail: '{{value}} rounds',
+});
+
 prodMonitor('search-probe-failing', {
   title: TITLES.probeFailing,
   service: PROBE_SERVICE,
@@ -441,7 +473,7 @@ prodMonitor('search-probe-failing', {
   monitorThresholds: { critical: '0.5' },
   pages: false,
   description:
-    "More than half of the probe's {{entity_type.name}} rounds in 15 minutes failed to write or to search; a round ends as a search failure after 30 s of failed searches, so a search outage fails one a minute. Freshness of {{entity_type.name}} is not measured while it lasts.",
+    "More than half of the probe's {{entity_type.name}} {{operation.name}} rounds in 15 minutes failed to write or to search; a round ends as a search failure after 30 s of failed searches, so a search outage fails one a minute. Freshness of {{entity_type.name}} is not measured while it lasts.",
   dashboard,
   runbook: `${RUNBOOK}#probe-failing`,
   alertDetail: '{{value}} of rounds',

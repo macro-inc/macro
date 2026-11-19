@@ -11,7 +11,10 @@ import {
 
 export { SWIPE_EDGE_THRESHOLD } from './createMobileEdgeSwipe';
 
-export function createMobileSplitMotion(options: { stack: MobilePaneStack }) {
+export function createMobileSplitMotion(options: {
+  stack: MobilePaneStack;
+  inPaneBack?: { canGoBack(): boolean; goBack(): void };
+}) {
   const { stack } = options;
 
   const forwardAnimation = createMobileForwardAnimation({
@@ -19,8 +22,11 @@ export function createMobileSplitMotion(options: { stack: MobilePaneStack }) {
     bgPeekOffset: BG_PEEK_OFFSET,
   });
   const swipeBackGesture = createMobileSwipeBackGesture({
-    canGoBack: () => forwardAnimation.phase() === 'idle' && stack.canGoBack(),
+    canGoBack: () =>
+      forwardAnimation.phase() === 'idle' &&
+      (stack.canGoBack() || (options.inPaneBack?.canGoBack() ?? false)),
     completeGoBack: stack.completeGoBack,
+    inPaneBack: options.inPaneBack,
   });
 
   const [outgoing, setOutgoing] = createSignal<SplitId>();
