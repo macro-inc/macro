@@ -71,7 +71,7 @@ under `services/` throw and validate with zod; elsewhere in `apps/web` and
   state uses `makePersistedState` (`src/lib/persistence`) with a zod schema,
   not raw `localStorage` calls.
 - **FE-46** Reuse the house helpers instead of re-implementing them: `deepEqual`
-  (`@core/util/compareUtils`), `structuredClone` for copies, and
+  (`@app/lib/structural-equality`), `structuredClone` for copies, and
   `@tanstack/pacer` (`AsyncBatcher`, `Queuer`) for request coalescing. `effect`
   stays inside `lib/graphql-cache/worker/**` and `lib/queries/soup/backfill.ts`
   and is never mixed with neverthrow in one module. Don't add lodash, immer,

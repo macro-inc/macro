@@ -1,4 +1,4 @@
-import { deepEqual } from '@core/util/compareUtils';
+import { deepEqual } from '@app/lib/structural-equality';
 import type { RoutineTask } from '@service-scheduled-action/generated/schemas';
 import {
   type CodeStepDraft,
