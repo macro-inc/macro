@@ -61,6 +61,7 @@ export class AgentNamespace {
    * accepts.
    *
    * @readonly
+   * @flag enable-agent-permissions
    */
   async toolPermissionCatalog(): Promise<ToolPermissionCatalog> {
     return unwrap(

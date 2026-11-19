@@ -80,12 +80,14 @@ Not flagged, by design: the migrations (tables), the registry
 the tool-permission routes in the correlation `SENDS` list (they 404 when
 off), the tool-approval answer route's caller check (`by_person`, which
 only a `macro-sdk` hold reads), the OpenAPI schemas and generated clients,
-and everything generated from the public SDK (`packages/sdk`): its methods,
-the SDK MCP tools (`agent-tool_permissions`,
-`agent-tighten_tool_permissions`, `agents-tool_permission_catalog`,
-`agent_session-tool_permissions`, and the operations in `agents_read`,
-`agents_write`, `agent_sessions_read`), and code mode's SDK docs and types.
-Each calls routes that answer 404 while the flag is off.
+and the public SDK's (`packages/sdk`) methods and its bundle in code mode,
+which call routes that answer 404 while the flag is off. The SDK methods
+carry `@flag enable-agent-permissions`, which leaves them out of the SDK MCP
+tools (`packages/sdk-mcp`, pinned by its `flagged` test) and of the SDK
+reference and code mode's docs that `DescribeCodeTools` and `ReadCodeDocs`
+show (`packages/sdk-docs`, pinned in it and in `packages/code-mode-sdk`); the
+JS tools catalog, offered only with the flag, keeps the operations. Remove
+the tags when the flag goes.
 
 ## Boundaries
 
