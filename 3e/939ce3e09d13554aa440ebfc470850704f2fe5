@@ -1,0 +1,19 @@
+crates/code_execution/src/outbound/deno/analyze/test.rs
+  s_e47bee9837a594::t_b86dd3d9e8e1c3 21-23,73
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.7.7",
+  "base_commit_sha": "3e939ce3e09d13554aa440ebfc470850704f2fe5",
+  "prompts": {},
+  "sessions": {
+    "s_e47bee9837a594": {
+      "agent_id": {
+        "tool": "claude",
+        "id": "5703ce97-1923-419e-b892-abdf036675c3",
+        "model": "claude-opus-5-5"
+      },
+      "human_author": "Eric Hayes <56524199+ehayes2000@users.noreply.github.com>"
+    }
+  }
+}
