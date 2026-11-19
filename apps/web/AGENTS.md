@@ -417,6 +417,7 @@ with screenshots; list signed-in call checks separately instead of blocking on
 authentication.
 Keep participant-volume fills inside their stationary track and desktop media-permission badges above the device-settings arrow; place avatar microphone-mute badges at bottom-right and personal-volume mute badges at bottom-left, with each bounded to half the avatar width so both stay visible. Verify these in the full call host.
 Keep participant-volume popovers limited to the slider and volume readout, and render inline mute statuses as bare icons so tile labels retain their height.
+Keep phone audio settings reachable from the microphone caret; supported participant volume uses a touch sheet, while unsupported output/volume controls stay hidden behind capability checks.
 New call files use `Call/core/` for pure geometry and payloads, `Call/primitives/` for reactive media and interaction controllers, `Call/components/` for presentation, `Call/views/` for composition, and `Call/context/` for shared capability providers. Keep pre-existing main files at their paths. Call controls compose root-owned state with microphone, camera, screen, leave, layout, and shortcut parts; do not restore configurable monoliths. Shared camera-preview and background persistence logic live under `src/lib/core/media/`.
 Keep the call chat card opaque on `surface-2`; omit docked borders, add its soft shadow only in light mode, and retain the narrow-pane shadow and phone sheet surface.
 Initialize browser fixtures with the app's `data-touch-device` root attribute and
@@ -658,6 +659,10 @@ mounted twice (two desktop tabs), that a sent message renders its
 lines with the spacing the draft showed, that the one-line composer centers its
 buttons on the text line, and pending sends on desktop and phone: clear immediately, restore failed sends, and preserve a new draft typed during delivery.
 It also pastes a Macro link and Markdown into a code block, which must keep both as literal text.
+`caret.browser.e2e.ts` taps (press and release sent together) into a typed and
+a restored draft and checks the caret moves there: a click that reaches
+`MarkdownShell` before Lexical has read the selectionchange must not call
+`editor.focus()`, which writes the previous caret back.
 It also covers phone attaching: the add drawer opens the file picker within the
 tap, and when the iOS app's native photo library fails, a toast's Choose files
 button opens it, because WKWebView ignores a file input click made after the
@@ -1211,7 +1216,7 @@ resolved session ID; keep the existing `AgentSessionProvider` subscription to
   `bunx playwright test --config src/features/block-pr/browser-test/playwright.config.ts`; the same config's
   `changes-split.browser.e2e.ts` checks that a narrow PR split opens Changes over the PR, never as a split inside it.
 - Passive PR mentions must not retry initial GitHub status failures on remount; preserve confirmed status through refetch errors and keep pending data reads out of their parent Suspense boundary.
-- PR description and comment images are remote URL images: rewrite GitHub blob/`raw` links to `raw.githubusercontent.com` and load them through the image proxy so COEP does not block github.com. Load Macro's own static-file URLs and public Klipy GIFs directly with anonymous CORS, including in the image viewer. The proxy authenticates by session cookie, so a proxied `<img>` uses `crossorigin="use-credentials"` and a fetch of it `credentials: 'include'` (`isImageProxyUrl`); `anonymous` drops the cookie cross-origin and the proxy answers 401.
+- PR description and comment images are remote URL images: rewrite GitHub blob/`raw` links to `raw.githubusercontent.com` and load them through the image proxy so COEP does not block github.com. Load Macro's own static-file URLs and public Klipy GIFs directly with anonymous CORS, including in the image viewer. The proxy authenticates by session cookie, so a proxied `<img>` uses `crossorigin="use-credentials"` and a fetch of it `credentials: 'include'` (`isImageProxyUrl`); `anonymous` drops the cookie cross-origin and the proxy answers 401. The native apps keep that cookie in the native HTTP client's jar, not the webview's, so there `MarkdownImage` fetches proxied images through `platformFetch` and shows a blob URL (`createNativeImageSrc`); email does the same (`fetchImagesViaPlatform`).
 - Download selected GIFs without re-encoding through the shared abortable static-file uploader, and insert an `sfs` image only after success; preserve the caret, discard failed or unaccepted uploads, reject stale completions, and keep failure retry in the picker. Give explicit GIF picker opens precedence over formatting and link menus, and anchor to the editor when the browser selection is missing or has no rendered geometry.
 - Keep native booking exit navigation in the route shell, outside page loading boundaries, and use the router so the native hash route stays intact.
 - Diagnose native full reloads with `native_webview_started`, `native_diagnostic_recovered`, and the shared `frontend_instance_id`; use `reloadApp(reason)` for frontend reloads and keep breadcrumbs content-free. Treat `previous_document_*` checkpoints as last-observed lifecycle evidence, never a crash verdict; clear them on logout. `previous_document_last_*` comes from the native navigation breadcrumb (route and entity type, never ids). See [frontend checkpoints](docs/native-reload-diagnostics.md) and `tauri/src-tauri/README.md`.

@@ -17,6 +17,7 @@ import {
   useTagSets,
   useTagSetsReady,
 } from '@property/tags/tag-sets-context';
+import { Key } from '@solid-primitives/keyed';
 import { DragDropProvider, DragOverlay } from '@thisbeyond/solid-dnd';
 import {
   Button,
@@ -29,7 +30,6 @@ import {
 import {
   type Accessor,
   createSignal,
-  For,
   getOwner,
   type JSX,
   type Owner,
@@ -55,6 +55,7 @@ import {
   useUpdateSavedView,
 } from '../../saved-views/queries/saved-view-actions';
 import { toSavedView } from '../../saved-views/queries/saved-views';
+import { SavedViewAppearanceMenu } from '../../saved-views/saved-view-appearance';
 import {
   DeleteSavedViewDialog,
   SavedViewDialog,
@@ -131,6 +132,7 @@ type BuilderProps = ManagedDialogProps & {
         mode: 'create';
         id: string;
         name: string;
+        appearance?: SavedView['appearance'];
         title?: string;
         submitLabel?: string;
         source: 'builder' | 'save_filters' | 'duplicate';
@@ -183,6 +185,7 @@ function EmailSavedViewDialog(props: BuilderProps) {
       mode="create"
       id={props.id}
       name={props.name}
+      appearance={props.appearance}
       config={config()}
       title={props.title}
       submitLabel={props.submitLabel}
@@ -251,6 +254,7 @@ function useOpenEmailSavedViewBuilder(owner: Owner | null = getOwner()) {
           ? `${copyOf.name.slice(0, 113)} (copy)`
           : t('viewMenus.newView'),
         title: copyOf ? t('emailViews.duplicateTitle') : undefined,
+        appearance: copyOf?.appearance,
         submitLabel: copyOf ? t('emailViews.duplicate') : undefined,
         source: copyOf
           ? ('duplicate' as const)
@@ -336,6 +340,9 @@ function EmailSavedViewMenuItems(props: {
   return (
     <SavedViewMenuItems
       owned={props.record.ownerId === viewerId()}
+      appearance={
+        <SavedViewAppearanceMenu view={props.record} defer={props.defer} />
+      }
       onEdit={() => {
         const record = props.record;
         props.defer(() =>
@@ -500,22 +507,22 @@ function EmailSavedViewRows(props: {
   const empty = () =>
     !savedViewsList?.loading() && savedViewsList?.items()?.length === 0;
   const rows = (draggable: boolean): JSX.Element => (
-    <For each={order.items()}>
+    <Key each={order.items()} by="id">
       {(record) => {
         const row = (reorderItem?: SavedViewRowReorder) => (
           <EmailSavedViewRow
-            record={record}
+            record={record()}
             run={run}
             owner={owner}
             reorder={reorderItem}
-            onMoveUp={draggable ? undefined : order.step(record.id, -1)}
-            onMoveDown={draggable ? undefined : order.step(record.id, 1)}
+            onMoveUp={draggable ? undefined : order.step(record().id, -1)}
+            onMoveDown={draggable ? undefined : order.step(record().id, 1)}
           />
         );
         if (!draggable) return row();
         // Drag items need the provider, which only the desktop list mounts.
         return row(
-          createReorderItem(record.id, {
+          createReorderItem(record().id, {
             canDrag: () => order.items().length > 1 && !order.busy(),
             // Presses on the row's menu trigger never drag.
             ignore: '[aria-haspopup]',
@@ -523,7 +530,7 @@ function EmailSavedViewRows(props: {
           })
         );
       }}
-    </For>
+    </Key>
   );
   return (
     <Show when={savedViewsList}>

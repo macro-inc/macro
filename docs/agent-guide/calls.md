@@ -63,6 +63,33 @@ in a second Calls view. Old copied `/app/call/<callId>` links redirect to the Ca
 detail without losing the transcript target. Existing `/app/drive/call/<callId>`
 links still work. A failed load shows Retry.
 
+The phone floating call pill returns to the media owner's call surface, even
+when its channel is already open. Browser calls select the live `Call` tab
+without joining again; native iOS and Android calls expand their native call
+drawer. The phone pill stays hidden on its own channel, where the composer
+banner offers `Return to call`. Away from that channel, its left action fills
+the pill's inner height with equal top and bottom insets.
+
+### Playback and audio settings
+
+Open **Audio settings** with the caret beside the microphone on desktop or
+phone. The phone opens the shared drawer with microphone selection, noise
+suppression, and Speaker selection only when `HTMLMediaElement.setSinkId` is
+available. iOS Safari/WebKit does not expose that output-routing API: use the
+device's system sound controls instead. Native channel calls use their own
+Speaker/output controls in the call drawer.
+
+For per-person playback volume, use the speaker button on a remote participant's
+tile. Desktop opens the existing vertical slider; supported phone browsers open
+a horizontal slider in a drawer. Moving it changes only local playback, never
+the participant's microphone. iOS Safari ignores media-element volume writes,
+and native calls own their audio, so neither shows this browser slider. Check
+0%, an intermediate value, and 100%, plus closing/reopening and leaving the call.
+
+Call join/leave chimes are separate: **Settings → Notifications → Sounds → Call
+sounds** remains available on phones and desktop. These cues are supported in
+browser calls, not native CallKit sessions, as described below.
+
 ### Join and leave sounds
 
 Browser calls play a clear two-note ascending chime when you or another

@@ -136,7 +136,12 @@ function MediaSplitButton(props: SplitProps) {
   const variant = () =>
     callMediaButtonVariant(!!props.off, !!props.disabled || !!props.blocked);
   const toggleVariant = () => (props.pressed ? 'accent' : variant());
-  const showMenu = () => !isMobile() && !props.hideMenu;
+  const showMenu = () => {
+    if (props.hideMenu) return false;
+    // Audio playback and device settings need a tap entry point on phones.
+    if (props.device === 'microphone') return true;
+    return !isMobile();
+  };
   return (
     <CallSettingsMenu
       title={props.menuLabel}
