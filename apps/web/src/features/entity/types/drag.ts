@@ -35,6 +35,7 @@ const ENTITY_DRAG_TYPES = [
   'document',
   'email',
   'project',
+  'initiative',
   'call',
   'crm_company',
   'crm_contact',

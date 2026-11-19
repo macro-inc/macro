@@ -866,6 +866,13 @@ A composer renders paragraphs with the spacing its sent message renders with,
 so a draft reads as what it will send; drop only the draft's first and last
 margins, which the compact single-row layout measures.
 
+AI composers register their whole surface with
+`lib/core/component/AI/primitives/create-composer-item-drop.ts` for app-item
+drags. Item drops add mention context without moving the source; native file
+uploads remain separate. `components/app/item-drag-sensor.ts` owns item-drag
+termination, including cancellation and errors; do not restore the default
+mouseup-only sensor.
+
 - Reuse `src/components/WorkspaceTexture.tsx` for the onboarding and Create
   detail panel grain; pass the surface accent and a unique SVG filter ID.
 - Keep shared database card rendering in `features/database`; CRM supplies

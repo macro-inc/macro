@@ -1,5 +1,18 @@
 # AI Chat (Agents)
 
+## Add existing items by dragging
+
+Drag an email thread, document, task, channel, Drive item, or project onto the
+Home, Agents, or AI chat composer to add it as mention context, just like the
+library/mention picker. The source item stays in place and the draft is retained.
+Dragging a selected row adds its selected items. Only the composer under the
+pointer receives them; read-only, disabled and dictation surfaces reject drops.
+Native files still use the upload/attachment path.
+
+Release outside a target or cancel with Escape to add nothing. Pointer cancel
+and window blur also cancel; the preview and drop indication clear on every
+termination path.
+
 ## Recently shared in an agent session
 
 With agent session activity enabled, the first side panel section lists items
