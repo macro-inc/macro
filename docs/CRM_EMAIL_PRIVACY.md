@@ -263,8 +263,23 @@ directly, with trusted provenance in the private audit trail. No administrator
 can act for another member; scoped credentials retain their sharing refusal.
 Inspection, history, saved definitions and withdrawal remain available when the
 flag is off. CRM viewing denial does not remove private sharing controls.
-Public SDK wrappers and the settings editor follow separately; the generated
-transport contract records explicit coverage deferrals.
+The SDK exposes these routes under `macro.crm.emailPrivacy`, alongside existing
+consent/domain/thread controls. Rule selectors take entity handles; inspection
+creates handles without fetching CRM targets or mail content. `get()` reads
+policy state, `settings()` reads domain exclusions, and `excludedThreads()`
+iterates private exceptions. Separate reads avoid loading every exclusion for
+an agent that only needs the policy token. Existing `crm.blockDomain` and
+`unblockDomain` remain team-wide; their nested email-privacy counterparts are
+personal. `setConsent(false)` retains legacy withdrawal while the gate is off.
+
+SDK replacements, mode changes and modern withdrawal require the exact observed
+token and a caller-supplied idempotency key. No conflict triggers an automatic
+inspection or retry. Preview handles retain one slot identity; after replacement
+they cannot read or cancel the newer preview. History is lazy and keyset-paged;
+saved-definition handles load only on request. Code-mode documentation explains
+whole-thread/live effects, overriding exclusions, retained CRM records and
+partial counts. The member settings editor remains a separate UI proposal;
+these wrappers change no server gate or rollout configuration.
 
 Audit and policy-command outcomes carry incarnation/version. Preview and
 historical work each occupy one replaceable member slot. Preview starts compare

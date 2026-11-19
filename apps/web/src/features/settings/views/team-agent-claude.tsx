@@ -1,13 +1,12 @@
-import { useFeatureFlag } from '@app/lib/analytics/posthog';
 import { t } from '@app/lib/i18n';
 import { toast } from '@core/component/Toast/Toast';
-import { enableMacroComputers } from '@core/constant/featureFlags';
 import { fireAndForget } from '@core/util/fireAndForget';
 import type { ClaudeSignInEntry } from '@queries/computers/claude';
 import {
   useClaudeModeQuery,
   useClaudeSignOutMutation,
 } from '@queries/computers/claude';
+import { useMacroComputersRollout } from '@queries/computers/computers';
 import { useHarnessesQuery } from '@queries/harnesses/harnesses';
 import type { TeamAgent } from '@service-auth/team-agents';
 import { confirmDialog } from '@ui';
@@ -32,7 +31,7 @@ import { AgentClaudeDialog } from './agent-claude-step';
  * everyone else.
  */
 export function TeamAgentClaude(props: { agent: TeamAgent }) {
-  const computers = useFeatureFlag(enableMacroComputers);
+  const computers = useMacroComputersRollout();
   const harnesses = useHarnessesQuery();
   const harness = () => {
     if (!computers().enabled) return undefined;
@@ -48,10 +47,10 @@ export function TeamAgentClaude(props: { agent: TeamAgent }) {
     harness()?.claude_mode === 'own_account' ? harnessId() : undefined
   );
   const signOut = useClaudeSignOutMutation();
-  // Where Bring your AI was opened from, while it is open.
+  // Where Connect Claude plan was opened from, while it is open.
   const [signingIn, setSigningIn] = createSignal<ClaudeSignInEntry>();
 
-  // The agent's ready notification asks for Bring your AI; it opens once
+  // The agent's ready notification asks for Connect Claude plan; it opens once
   // the computer's runtime is listed as connected and the viewer's own.
   createEffect(() => {
     const request = agentClaudeRequest();
@@ -66,7 +65,7 @@ export function TeamAgentClaude(props: { agent: TeamAgent }) {
     const confirmed = await confirmDialog({
       title: t('teamAgents.useCreditsTitle', { name }),
       body: t('teamAgents.useCreditsBody', { name }),
-      confirmLabel: t('teamAgents.useCredits'),
+      confirmLabel: t('computers.claudeSwitchToCredits'),
     });
     if (!confirmed) return;
     try {

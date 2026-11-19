@@ -63,14 +63,13 @@ export function createQueryPersistenceScopes(
       shouldRestore: hasLoginCookie,
     },
     {
-      store: createPerQueryIDBStore({
-        dbName: scopedKey('email-threads'),
-      }),
+      // Email thread messages are no longer persisted. The scope stays listed
+      // so logout still wipes what earlier versions saved here.
+      store: createPerQueryIDBStore({ dbName: scopedKey('email-threads') }),
       maxAge: { value: 7, unit: 'd' },
       buster,
-      shouldPersist: (queryKey) =>
-        partialMatchKey(queryKey, ['email', 'threadMessages']),
-      shouldRestore: hasLoginCookie,
+      shouldPersist: () => false,
+      shouldRestore: () => false,
     },
     ...(isNativeMobilePlatform()
       ? [

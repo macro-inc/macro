@@ -12,6 +12,9 @@ word docs, Illustrator/Photoshop files).
   Cargo features gate each module.
 - `src/domain/service.rs` + `src/domain/ports.rs`: orchestration and the ports
   adapters implement.
+- `src/domain/service/lifecycle.rs`: `DocumentLifecycleReads` supplies physical
+  existence/trash facts to trusted imports through the owning repository port.
+  Missing rows are false; read failures propagate. No viewer or content access.
 - `src/domain/content.rs`: document content storage model (markdown vs legacy
   Office formats, S3 locations).
 - `src/domain/docx_export.rs`: DOCX export readiness policy; empty parts mean

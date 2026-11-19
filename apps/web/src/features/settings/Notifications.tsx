@@ -1,8 +1,6 @@
 import { NotificationSoundSettingsView } from '@app/features/notification-sounds/views/NotificationSoundSettingsView';
 import { useAnalytics } from '@app/lib/analytics/analytics-context';
-import { useFeatureFlag } from '@app/lib/analytics/posthog';
 import { toast } from '@core/component/Toast/Toast';
-import { enableMacroComputers } from '@core/constant/featureFlags';
 import { isNativeMobilePlatform } from '@core/mobile/isNativeMobilePlatform';
 import { fireAndForget } from '@core/util/fireAndForget';
 import {
@@ -12,6 +10,7 @@ import {
 import { useNotificationSettings } from '@notifications/notification-settings';
 import { notificationsBlockedMessage } from '@notifications/notifications-blocked-message';
 import { openSnoozeNotifications } from '@notifications/SnoozeNotificationsDialog';
+import { useMacroComputersRollout } from '@queries/computers/computers';
 import { queryReadyGate } from '@queries/gate';
 import {
   useNotificationTypePreferencesQuery,
@@ -34,7 +33,7 @@ import {
 export function Notifications() {
   const dialogOwner = getOwner();
   const analytics = useAnalytics();
-  const macroComputers = useFeatureFlag(enableMacroComputers);
+  const macroComputers = useMacroComputersRollout();
   const platformSettings = useNotificationSettings();
   const [pushPending, setPushPending] = createSignal(false);
   const preferencesQuery = useNotificationTypePreferencesQuery();

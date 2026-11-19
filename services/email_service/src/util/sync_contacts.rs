@@ -84,9 +84,10 @@ fn address_book_connections(link: &Link, contacts: &[Contact]) -> Vec<ContactCon
         })
         .filter_map(|email| match MacroUserIdStr::try_from_email(&email) {
             Ok(contact) => Some(ContactConnection::new(link.macro_id.clone(), contact)),
-            Err(error) => {
-                // One malformed address must not drop the rest of the address book.
-                tracing::warn!(error = ?error, "skipping invalid address-book email");
+            // One malformed address must not drop the rest of the address book.
+            // The parse error quotes its input, an address, so it stays out of the log.
+            Err(_) => {
+                tracing::warn!("skipping invalid address-book email");
                 None
             }
         })

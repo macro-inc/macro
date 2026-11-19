@@ -88,8 +88,7 @@ pub async fn bridge(
     let probes = HarnessModelProbes {
         process: probe_process(harness, cwd),
     };
-    let agent_process =
-        AcpProcess::new(&harness.command, harness.args.clone(), cwd).envs(harness.env.clone());
+    let agent_process = agent_process(harness, cwd);
 
     let RuntimeChannel {
         tx: to_service,
@@ -285,6 +284,14 @@ async fn relay(
                         });
                     }
                     Some(ToRuntimeMessage::AgentsChanged) => agents_changed.notify_one(),
+                    Some(ToRuntimeMessage::ApplyAgent { environment }) => {
+                        // Read by the guest's agent units; outside a Macro
+                        // computer nothing installs it, so it does nothing.
+                        match apply_agent(&environment.0) {
+                            Ok(()) => tracing::info!("staged the agent teammate's environment"),
+                            Err(error) => tracing::error!(error = %error, "could not stage the agent teammate's environment"),
+                        }
+                    }
                     Some(other) => tracing::debug!(message = ?other, "ignoring an unknown runtime message"),
                     None => return Ok(Relayed::Closed),
                 }
@@ -364,6 +371,18 @@ async fn hand_off(
 
 /// Relay one agent line, letting `self_knowledge` learn which session a
 /// `session/new` answer created.
+#[cfg(unix)]
+fn apply_agent(environment: &std::collections::BTreeMap<String, String>) -> rootcause::Result<()> {
+    crate::agent_env::stage_agent_env(Path::new(crate::agent_env::AGENT_ENV_INBOX), environment)
+}
+
+#[cfg(not(unix))]
+fn apply_agent(_environment: &std::collections::BTreeMap<String, String>) -> rootcause::Result<()> {
+    Err(rootcause::report!(
+        "agent teammates run only on Macro computers"
+    ))
+}
+
 fn forward_to_service(
     line: &str,
     to_service: &tokio::sync::mpsc::UnboundedSender<ToServerMessage>,
@@ -408,6 +427,11 @@ fn teach(
             .map_err(|error| BridgeError::Harness(format!("{error}")))?;
     }
     serde_json::from_value(value).map_err(|error| BridgeError::Harness(error.to_string()))
+}
+
+/// The harness's ACP agent, launched in `cwd`.
+pub(crate) fn agent_process(harness: &Harness, cwd: &Path) -> AcpProcess {
+    AcpProcess::new(&harness.command, harness.args.clone(), cwd).envs(harness.env.clone())
 }
 
 fn probe_process(harness: &Harness, cwd: &Path) -> ProbeSubprocess {

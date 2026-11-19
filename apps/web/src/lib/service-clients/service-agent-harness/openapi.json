@@ -3894,6 +3894,9 @@
           "409": {
             "description": ""
           },
+          "410": {
+            "description": ""
+          },
           "422": {
             "description": ""
           },
@@ -3953,6 +3956,9 @@
             "description": ""
           },
           "409": {
+            "description": ""
+          },
+          "410": {
             "description": ""
           },
           "422": {

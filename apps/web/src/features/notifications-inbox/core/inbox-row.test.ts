@@ -16,6 +16,7 @@ const row = (
 ): InboxRow<null> => ({
   id,
   type: 'channel_messages',
+  alsoListedAs: [],
   revision,
   latestAt,
   actions: [],
