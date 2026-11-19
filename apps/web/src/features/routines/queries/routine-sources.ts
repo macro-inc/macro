@@ -12,7 +12,7 @@ import type {
 } from '../context/routine-sources';
 import { pendingCodeReview, taskSdk } from '../core/code-review';
 import type { ScheduleDraft } from '../core/draft';
-import type { UnusableItem } from '../core/knobs';
+import { type UnusableItem, unusableItemsOf } from '../core/knobs';
 import type { RoutineSnapshot } from '../core/routine';
 import { withDraftSteps } from '../core/routine-draft';
 import { picksItems, programSteps } from '../core/routine-steps';
@@ -131,14 +131,14 @@ export function createRoutineDetailSource(
       current && current.owner === userId() && picksItems(current.task)
     );
   });
-  // Only picked items: an unpicked knob shows as not set on its own.
-  const unusableItems = createMemo((): UnusableItem[] =>
-    unusable.isPending
+  // Only picked items: an unpicked knob shows as not set on its own. Each
+  // names its step by id, as the saved routine the scheduler checked has it.
+  const unusableItems = createMemo((): UnusableItem[] => {
+    const task = raw()?.task;
+    return unusable.isPending || !task || !('steps' in task)
       ? []
-      : (unusable.data ?? []).flatMap(({ step, knob, item, reason }) =>
-          item ? [{ step, knob, item, reason }] : []
-        )
-  );
+      : unusableItemsOf(unusable.data ?? [], task.steps);
+  });
   const codeReview = createMemo(() => {
     const current = raw();
     return current && upgrades.isSuccess

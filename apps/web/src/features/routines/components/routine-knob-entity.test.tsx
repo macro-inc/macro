@@ -307,7 +307,7 @@ describe('an entity knob whose item its owner can no longer use', () => {
         }
         unusable={[
           {
-            step: 0,
+            step: 'post-open-bugs',
             knob: 'bugs',
             item: { type: 'channel', id: 'c1' },
             reason: GONE,
@@ -354,7 +354,7 @@ describe('an entity knob whose item its owner can no longer use', () => {
         onKnob={() => {}}
         unusable={[
           {
-            step: 0,
+            step: 'post-open-bugs',
             knob: 'bugs',
             item: { type: 'channel', id: 'c1' },
             reason: GONE,

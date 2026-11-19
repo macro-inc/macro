@@ -41,12 +41,10 @@ export function CodeStepBody(props: {
       : undefined;
   };
   const settings = () => knobsOutsideSentence(sentence(), props.step.knobs);
-  // This step's own: a knob of another step can have the same name.
+  // This step's own, by its saved id: a knob of another step can have the
+  // same name, and unsaved edits can move the step.
   const unusable = () =>
-    unusableInStep(
-      steps.unusableItems(),
-      steps.steps().findIndex((step) => step.id === props.step.id)
-    );
+    unusableInStep(steps.unusableItems(), props.step.output);
   const setKnob = (name: string, value: Knob['value']) =>
     props.onChange({
       ...props.step,

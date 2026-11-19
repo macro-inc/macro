@@ -8,6 +8,7 @@ import {
   sentenceParts,
   sentenceText,
   unusableInStep,
+  unusableItemsOf,
   unusableReason,
   withKnobValue,
 } from './knobs';
@@ -197,29 +198,64 @@ describe('knobs needing a new pick', () => {
   const gone = { type: 'channel' as const, id: 'gone' };
   const reason = (label: string) =>
     `The channel picked for "${label}" was deleted.`;
-  const unusable = [
-    {
-      step: 0,
-      knob: 'notify',
-      item: gone,
-      reason: reason('Notification channel'),
-    },
-    { step: 0, knob: 'archive', item: gone, reason: reason('Archive channel') },
-    { step: 1, knob: 'archive', item: gone, reason: reason('Step two') },
+  const code = (id: string) => ({
+    type: 'code' as const,
+    id,
+    title: id,
+    source: 'export async function main() {}',
+  });
+  // As saved: an Ask AI step first, so code steps sit at positions 1 and 2.
+  const saved = [
+    { type: 'agent' as const, model: 'm', instructions: 'Sort' },
+    code('post'),
+    code('file'),
   ];
+  // As the scheduler lists them, by position among the saved steps.
+  const unusable = unusableItemsOf(
+    [
+      {
+        step: 1,
+        knob: 'notify',
+        item: gone,
+        reason: reason('Notification channel'),
+      },
+      {
+        step: 1,
+        knob: 'archive',
+        item: gone,
+        reason: reason('Archive channel'),
+      },
+      { step: 2, knob: 'archive', item: gone, reason: reason('Step two') },
+      { step: 2, knob: 'unpicked', item: null, reason: 'Not picked' },
+      { step: 0, knob: 'archive', item: gone, reason: 'No code step there' },
+    ],
+    saved
+  );
+
+  it('keep each on its saved step, by id, past an Ask AI step', () => {
+    expect(unusable.map((entry) => [entry.step, entry.knob])).toEqual([
+      ['post', 'notify'],
+      ['post', 'archive'],
+      ['file', 'archive'],
+    ]);
+    // A step not saved yet has none.
+    expect(unusableInStep(unusable, undefined)).toEqual([]);
+  });
 
   it('give each knob holding the same item the reason naming it', () => {
-    const own = unusableInStep(unusable, 0);
+    const own = unusableInStep(unusable, 'post');
     expect(unusableReason(archive, own)).toBe(reason('Archive channel'));
     expect(unusableReason(notify, own)).toBe(reason('Notification channel'));
     // A knob of the same name in another step has its own reason.
-    expect(unusableReason(archive, unusableInStep(unusable, 1))).toBe(
+    expect(unusableReason(archive, unusableInStep(unusable, 'file'))).toBe(
       reason('Step two')
     );
   });
 
   it('give none to a knob picked again since', () => {
     const picked: Knob = { ...archive, value: { type: 'channel', id: 'new' } };
-    expect(unusableReason(picked, unusableInStep(unusable, 0))).toBeUndefined();
+    expect(
+      unusableReason(picked, unusableInStep(unusable, 'post'))
+    ).toBeUndefined();
   });
 });
