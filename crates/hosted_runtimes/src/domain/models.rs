@@ -648,6 +648,10 @@ pub enum ComputerStatusKind {
     WaitingForCapacity,
     /// Guest is connected and ready.
     Ready,
+    /// Past setup but not answering: macrod was missing at a fleet check
+    /// while the guest runs, or the guest crashed and is restarting. It
+    /// comes back by itself; only a give-up is [`Self::Failed`].
+    Unhealthy,
     /// Guest is starting.
     Starting,
     /// Guest is shutting down.
@@ -821,9 +825,24 @@ impl Computer {
             | Phase::Stopped
             | Phase::Destroying => None,
         };
+        // Before the first connection the same signs are setup still going.
+        // A missed check, not the disconnect itself, so a reconnect flap
+        // stays ready.
+        let unhealthy = self.enrolled_at.is_some()
+            && match self.state.phase {
+                Phase::Running => !self.state.macrod_connected && self.state.macrod_misses >= 1,
+                Phase::Crashed { retry: Some(_), .. } => true,
+                Phase::Provisioning { .. }
+                | Phase::Booting
+                | Phase::Crashed { retry: None, .. }
+                | Phase::Stopping
+                | Phase::Stopped
+                | Phase::Destroying => false,
+            };
         let status = match self.state.phase {
             _ if waiting_for_capacity => ComputerStatusKind::WaitingForCapacity,
             _ if setup_step.is_some() => ComputerStatusKind::SettingUp,
+            _ if unhealthy => ComputerStatusKind::Unhealthy,
             Phase::Running => ComputerStatusKind::Ready,
             Phase::Booting | Phase::Crashed { retry: Some(_), .. } => ComputerStatusKind::Starting,
             Phase::Stopped if self.state.power_on_requested => ComputerStatusKind::Starting,

@@ -24,6 +24,7 @@ mod purchase_offers;
 mod quarantine;
 pub(crate) mod rollout;
 mod sold_resources;
+mod status;
 
 /// What the fake subscription does with a removal.
 #[derive(Debug, Clone, Copy, Default, PartialEq, Eq)]

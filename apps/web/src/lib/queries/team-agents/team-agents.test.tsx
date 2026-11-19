@@ -91,6 +91,12 @@ describe('teamAgentsPollInterval', () => {
       teamAgentsPollInterval([grace, { ...ada, status: 'starting' }])
     ).toBe(3000);
   });
+
+  it('keeps polling until an unhealthy agent comes back', () => {
+    expect(
+      teamAgentsPollInterval([grace, { ...ada, status: 'unhealthy' }])
+    ).toBe(3000);
+  });
 });
 
 describe('team agent mutations', () => {

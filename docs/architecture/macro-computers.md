@@ -24,7 +24,18 @@ Their isolation and threat model is in
   The host is a column and a `Computer` field, not part of the phase. Billing
   events change only `Billing` and emit the machine effects billing calls for.
   `Crashed` with no `retry` gave up (too many crashes, a failed effect, a lost
-  host): it paged, and `OperatorRetry` restarts it.
+  host): it paged, and `OperatorRetry` restarts it. A give-up stops nothing,
+  so a sign of life ends one whose cause can pass (`Failure::ended_by`):
+  macrod connecting ends `Power` and `KeptCrashing`, the agent reporting
+  online ends those and `AgentNotStarted`; the computer is `Running` again
+  with its failure cleared. `Create`, `SetupExhausted`, `AgentUnsupported`,
+  `HostLost` and `Payment` wait for a retry. A give-up leaves
+  `macrod_connected` as observed.
+- The team sees `ComputerStatusKind::Unhealthy` for a computer past its
+  first connection that is `Running` with macrod missing at one or more
+  `MACROD_GRACE` checks (`macrod_misses >= 1`, so a reconnect flap stays
+  Ready), or `Crashed` with a restart scheduled. Before the first
+  connection the same states read as setting up; only a give-up reads Failed.
 - Effects run in workers keyed by outbox id: `Billing` effects where Stripe lives
   (authentication_service), `Fleet` effects and timers in agent_harness_service.
   A failed fleet effect retries with backoff up to `MAX_EFFECT_ATTEMPTS`, except
@@ -470,7 +481,8 @@ attempt, so a busy database never fails a computer or abandons a removal.
   `apply-agent` in its `x-macro-runtime-accepts` dial header fails it at once
   with `Failure::AgentUnsupported`). A lost host is no strike: a
   host outage must not release every computer setting up on it. The first
-  give-up in it waits for a team retry on the same computer, with no new charge. The second
+  give-up in it waits for a team retry on the same computer, with no new charge,
+  unless the agent then reports online after all, which recovers it. The second
   (`MAX_FIRST_START_FAILURES`) releases the computer (`EndsAt{now}`, Destroy,
   RevokeHarness), queues `RefundPurchase` and `UndoAgentInvite`, and notifies
   `SetupOutcome::Released` (a `computer_setup` `Failed` notice with

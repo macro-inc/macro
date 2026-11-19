@@ -24,12 +24,18 @@ type CreateTeamAgentArgs = {
 };
 type RemoveTeamAgentArgs = { teamId: string; userId: string };
 
-/** Polls only while an agent's computer is still being set up, or the agent is starting. */
+/**
+ * Polls only while an agent's computer is still being set up, the agent is
+ * starting, or its computer is unhealthy and coming back by itself.
+ */
 export function teamAgentsPollInterval(
   agents: readonly TeamAgent[] | undefined
 ): number | false {
   const provisioning = agents?.some(
-    (agent) => agent.status === 'provisioning' || agent.status === 'starting'
+    (agent) =>
+      agent.status === 'provisioning' ||
+      agent.status === 'starting' ||
+      agent.status === 'unhealthy'
   );
   return provisioning ? PROVISIONING_POLL_MS : false;
 }
