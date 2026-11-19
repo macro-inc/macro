@@ -1,0 +1,19 @@
+nix-support/node_modules-hashes.json
+  s_f3a48b3a685142::t_245d6595110b21 4
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.7.7",
+  "base_commit_sha": "233103dd7c04090c743278343f39804f5d86cbae",
+  "prompts": {},
+  "sessions": {
+    "s_f3a48b3a685142": {
+      "agent_id": {
+        "tool": "claude",
+        "id": "65b2bcf0-02e2-4f2c-88ae-8e6cea990f9a",
+        "model": "claude-opus-5-5"
+      },
+      "human_author": "Eric Hayes <56524199+ehayes2000@users.noreply.github.com>"
+    }
+  }
+}
