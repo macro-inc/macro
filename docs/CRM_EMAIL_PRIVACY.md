@@ -451,6 +451,17 @@ fifteen-second statement bound, including admission before enrichment, and
 rechecks eligibility in the population transaction. These bounds do not change
 which mail is eligible.
 
+Population scans address history before locking the mailbox row. A non-locking
+admission probe rejects stale work first; after the scan, a fresh `READ COMMITTED`
+check locks the current primary mailbox and membership, then rechecks consent and
+the queued generation before any CRM write. Disconnect, deletion, reauthentication,
+loss of primary status or membership, and withdrawn/replaced consent invalidate
+the scanned result. The row guards remain through commit. Shared team privacy and
+per-address teardown locks still cover the scan and writes, preserving exclusion
+and depopulation serialization without holding up mailbox sync for the history
+scan. `crm.email_interaction_scan` and `crm.email_authority_recheck` distinguish the
+two phases under `crm.email_eligibility`.
+
 Thread-exclusion controls and API writes are gated by the remote
 `enable-crm-thread-exclusions` flag, off by default in every environment. The
 web registry has no dev default or local override; the CRM domain independently
