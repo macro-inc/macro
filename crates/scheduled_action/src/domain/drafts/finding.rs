@@ -550,6 +550,7 @@ impl<Code: RoutineCode, Sessions: RoutineSessions> super::RoutineDrafts<Code, Se
                 &context.agent_model,
             )),
             prompt: prompt(&task, owner, context, &lookup, &areas),
+            sub_routines,
         }))
     }
 

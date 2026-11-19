@@ -1446,6 +1446,16 @@ fn schedules_reminders(definition: Value) -> ActionConfiguration {
     routine
 }
 
+/// Lets every owner's drafts define sub-routines, or none's.
+pub(super) struct SubRoutinesFor(pub(super) bool);
+
+#[async_trait::async_trait]
+impl crate::domain::ports::DraftSubRoutines for SubRoutinesFor {
+    async fn may_define(&self, _: &MacroUserIdStr<'static>) -> bool {
+        self.0
+    }
+}
+
 #[tokio::test]
 async fn a_drafted_routine_keeps_the_sub_routines_it_defines_and_where_their_code_fails() {
     let rows = Arc::new(Rows::default());
@@ -1461,7 +1471,7 @@ async fn a_drafted_routine_keeps_the_sub_routines_it_defines_and_where_their_cod
 
     let drafted = drafted_routine(
         draft(
-            &drafts(&rows, &sessions),
+            &drafts(&rows, &sessions).with_sub_routines(Arc::new(SubRoutinesFor(true))),
             routine("remind me the day before each task is due"),
         )
         .await,
@@ -1546,4 +1556,112 @@ async fn a_step_added_to_a_routine_with_sub_routines_is_checked_with_them() {
     assert_eq!(drafted.step["title"], "Post a summary");
     // The sub-routine's step 1 fails, not the routine's step 1 just added.
     assert!(drafted.problems.is_empty(), "{:?}", drafted.problems);
+}
+
+/// Saving refuses sub-routines unless the owner may define them, and only a
+/// draft that may write code schedules their copies: a session that defines
+/// them anyway hands back no draft.
+#[tokio::test]
+async fn a_new_routine_never_hands_back_sub_routines_its_owner_may_not_save() {
+    let definition = json!([code_step("Read the task", "good"), agent_step()]);
+    // (owner may define them, code allowed, drafted)
+    let cases = [
+        (Some(true), true, true),
+        (Some(false), true, false),
+        (None, true, false),
+        (Some(true), false, false),
+    ];
+    for (allowed, code, handed_back) in cases {
+        let rows = Arc::new(Rows::default());
+        let sessions = Arc::new(Sessions::new(&rows, {
+            let definition = definition.clone();
+            Box::new(move |_| vec![plain(schedules_reminders(definition.clone()))])
+        }));
+        let drafts = match allowed {
+            Some(allowed) => {
+                drafts(&rows, &sessions).with_sub_routines(Arc::new(SubRoutinesFor(allowed)))
+            }
+            None => drafts(&rows, &sessions),
+        };
+
+        let draft = drafts
+            .draft(
+                owner(),
+                routine("remind me the day before each task is due"),
+                DraftContext { code, ..context() },
+            )
+            .await
+            .unwrap();
+
+        match draft {
+            Draft::Routine(drafted) => {
+                assert!(handed_back, "allowed {allowed:?}, code {code}");
+                assert_eq!(drafted.sub_routines.len(), 1);
+            }
+            Draft::Failed { message, .. } => {
+                assert!(!handed_back, "allowed {allowed:?}, code {code}: {message}");
+                assert_eq!(message, ROUTINE_FAILED);
+            }
+            other => panic!("expected a routine or a failure, got {other:?}"),
+        }
+    }
+}
+
+/// A step added or changed is applied to the routine as the editor holds
+/// it, so one whose session checked it with other sub-routines (an input
+/// renamed, a definition dropped) would not save there.
+#[tokio::test]
+async fn a_step_checked_with_other_sub_routines_than_the_routines_is_not_handed_back() {
+    let definition = json!([code_step("Read the task", "good"), agent_step()]);
+    let so_far = schedules_reminders(definition.clone());
+    let so_far = RoutineSoFar {
+        trigger: Some(message_posted(&[])),
+        steps: so_far.task["steps"].as_array().unwrap().clone(),
+        sub_routines: so_far.task["sub_routines"].as_array().unwrap().clone(),
+    };
+    let renamed = |mut routine: ActionConfiguration| {
+        routine.task["sub_routines"][0]["inputs"][0]["name"] = json!("itemId");
+        routine
+    };
+    let dropped = |mut routine: ActionConfiguration| {
+        routine.task.as_object_mut().unwrap().remove("sub_routines");
+        routine
+    };
+    let add = || DraftRequest::AddStep {
+        description: "then post a summary".into(),
+        routine: so_far.clone(),
+        kind: Some(StepKind::Code),
+    };
+    let change = || DraftRequest::ChangeStep {
+        instruction: "schedule them two days before".into(),
+        routine: so_far.clone(),
+        index: 0,
+    };
+    type Edit = fn(ActionConfiguration) -> ActionConfiguration;
+    for (request, edit, message) in [
+        (add(), renamed as Edit, STEP_FAILED),
+        (add(), dropped as Edit, STEP_FAILED),
+        (change(), renamed as Edit, CHANGE_FAILED),
+        (change(), dropped as Edit, CHANGE_FAILED),
+    ] {
+        let rows = Arc::new(Rows::default());
+        let sessions = Arc::new(Sessions::new(&rows, {
+            let definition = definition.clone();
+            Box::new(move |_| {
+                let mut routine = schedules_reminders(definition.clone());
+                routine.task["steps"]
+                    .as_array_mut()
+                    .unwrap()
+                    .push(code_step("Post a summary", "good"));
+                vec![plain(edit(routine))]
+            })
+        }));
+
+        let draft = draft(&drafts(&rows, &sessions), request).await;
+
+        let Draft::Failed { message: got, .. } = draft else {
+            panic!("expected a failure, got {draft:?}");
+        };
+        assert_eq!(got, message);
+    }
 }

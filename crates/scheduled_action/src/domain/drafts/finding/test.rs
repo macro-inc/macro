@@ -7,8 +7,8 @@ use ai_billing::AiAdmissionError;
 use serde_json::{Value, json};
 
 use super::super::test::{
-    BUG_REPORTS, Rows, Sessions, Turn, agent, code_step, configuration, context, message_posted,
-    owner, plain, routine,
+    BUG_REPORTS, Rows, Sessions, SubRoutinesFor, Turn, agent, code_step, configuration, context,
+    message_posted, owner, plain, routine,
 };
 use super::super::{Draft, DraftedRoutine, RoutineDrafts};
 use super::*;
@@ -469,16 +469,6 @@ fn only_a_draft_that_may_define_sub_routines_is_told_how_to_schedule_later_work(
             .instructions(true, true, false, model)
             .contains(LATER.trim())
     );
-}
-
-/// Lets every owner's drafts define sub-routines, or none's.
-struct SubRoutinesFor(bool);
-
-#[async_trait::async_trait]
-impl crate::domain::ports::DraftSubRoutines for SubRoutinesFor {
-    async fn may_define(&self, _: &MacroUserIdStr<'static>) -> bool {
-        self.0
-    }
 }
 
 #[tokio::test(start_paused = true)]

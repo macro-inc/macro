@@ -39,7 +39,7 @@ use serde::{Deserialize, Serialize};
 use serde_json::{Value, json};
 use utoipa::ToSchema;
 
-use super::code_check::MAX_TASK_CHARS;
+use super::code_check::{MAX_TASK_CHARS, named_steps};
 use super::event_trigger::ActionTrigger;
 use super::models::{CreatedItem, RoutineCheck};
 use super::ports::{
@@ -401,6 +401,7 @@ fn draft_span(request: &DraftRequest) -> tracing::Span {
         routine.draft.agent_task = tracing::field::Empty,
         routine.draft.steps = tracing::field::Empty,
         routine.draft.sub_routines = tracing::field::Empty,
+        routine.draft.sub_routines_refused = tracing::field::Empty,
         routine.draft.step = tracing::field::Empty,
         routine.draft.outcome = tracing::field::Empty,
     )
@@ -510,7 +511,15 @@ impl<Code: RoutineCode, Sessions: RoutineSessions> RoutineDrafts<Code, Sessions>
         }
         tracing::Span::current().record("routine.draft.drafter", "session");
         let code = self.code_available(request, context);
-        Ok(brief(request, program, context, code, owner, self.agent.guide).map(Brief::from))
+        let prompt = match brief(request, program, context, code, owner, self.agent.guide) {
+            Ok(prompt) => prompt,
+            Err(message) => return Ok(Err(message)),
+        };
+        Ok(Ok(Brief {
+            instructions: None,
+            prompt,
+            sub_routines: self.sub_routines_available(owner, request, code).await,
+        }))
     }
 
     /// Whether `request` may be written with code steps here.
@@ -602,6 +611,7 @@ impl<Code: RoutineCode, Sessions: RoutineSessions> RoutineDrafts<Code, Sessions>
         let session = drafting.session;
         span.record("agent.session.id", session.to_string());
         let action = self.action(owner, session);
+        let may_define = brief.sub_routines;
         // A request dropped mid-draft (the person left, or the connection
         // went) still stops and deletes its session.
         let mut cleanup = Cleanup {
@@ -668,7 +678,7 @@ impl<Code: RoutineCode, Sessions: RoutineSessions> RoutineDrafts<Code, Sessions>
             created.iter().filter(|item| !item.used).count(),
         );
         Ok(Some(match (check, ending) {
-            (Some(check), _) => drafted(request, program, check, created),
+            (Some(check), _) => drafted(request, program, check, created, may_define),
             (None, Ending::TimedOut) => failed_with(TIMED_OUT, created),
             (None, Ending::Interrupted) => failed_with(INTERRUPTED, created),
             (None, Ending::Finished | Ending::Checked | Ending::Failed | Ending::Cancelled) => {
@@ -1057,18 +1067,12 @@ fn created_items(
 /// What a draft's hidden session is given: the instructions it keeps, the
 /// same for every draft of its kind so the prompt cache reads them back
 /// across drafts, and its one prompt, with what is particular to the request.
+/// `sub_routines` says whether the draft may hand back sub-routines: saving
+/// would refuse them unless its owner may define them.
 struct Brief {
     instructions: Option<String>,
     prompt: String,
-}
-
-impl From<String> for Brief {
-    fn from(prompt: String) -> Self {
-        Self {
-            instructions: None,
-            prompt,
-        }
-    }
+    sub_routines: bool,
 }
 
 /// The draft's first prompt: what to draft, from what words, and how to hand
@@ -1277,18 +1281,43 @@ fn agent_task_steps(task: &Value) -> Option<Vec<Value>> {
         .ok()
 }
 
-/// The draft `request` asks for, from the session's last check.
+/// Sub-routines as a routine's task holds them once checked: parsed, with
+/// their code steps named, so the same definitions compare equal however
+/// they were sent.
+fn checked_sub_routines(sub_routines: &[Value]) -> Value {
+    let task = named_steps(&json!({ "steps": [], "sub_routines": sub_routines }));
+    task.get("sub_routines")
+        .cloned()
+        .unwrap_or_else(|| Value::Array(Vec::new()))
+}
+
+/// The draft `request` asks for, from the session's last check. A new
+/// routine defines sub-routines only when `may_define`; a step added to a
+/// routine, or changed in it, was checked with the routine's own
+/// sub-routines, or its code may not run with them.
 fn drafted(
     request: &DraftRequest,
     program: &[Step],
     check: RoutineCheck,
     created: Vec<DraftCreated>,
+    may_define: bool,
 ) -> Draft {
     let span = tracing::Span::current();
     span.record("routine.draft.code_failing", check.steps.len());
     let Some(steps) = task_steps(&check.routine.task) else {
         return failed_with(request.failed(), created);
     };
+    let checked_with = task_sub_routines(&check.routine.task);
+    let defines_others = match request {
+        DraftRequest::Routine { .. } => !may_define && !checked_with.is_empty(),
+        DraftRequest::AddStep { routine, .. } | DraftRequest::ChangeStep { routine, .. } => {
+            checked_sub_routines(&checked_with) != checked_sub_routines(&routine.sub_routines)
+        }
+    };
+    if defines_others {
+        span.record("routine.draft.sub_routines_refused", true);
+        return failed_with(request.failed(), created);
+    }
     // A step drafted into a routine is one of its own steps, never one of
     // its sub-routines'.
     let problems_at = |index: usize| -> Vec<String> {
