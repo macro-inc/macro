@@ -1,0 +1,45 @@
+apps/web/src/features/meetings/components/native-media-note.tsx
+  s_4f8fe03d10848a::t_f334bd0888d374 1-21
+docs/agent-guide/calls.md
+  s_4f8fe03d10848a::t_0618a3a5b903e3 383-386,395-397
+apps/web/src/lib/i18n/locales/en/calls.ts
+  s_4f8fe03d10848a::t_f334bd0888d374 67-69
+apps/web/src/features/meetings/primitives/meeting-session-owner.ts
+  s_4f8fe03d10848a::t_c566c6bc1117a4 131-139
+apps/web/src/features/meetings/meeting-route.tsx
+  s_4f8fe03d10848a::t_fbee6e2ad5a773 32,39,144-158,166-216,218-233,235-255,257-260
+apps/web/src/features/meetings/views/meeting-page.tsx
+  s_4f8fe03d10848a::t_f334bd0888d374 85-87,129-130,140-146,342-354
+apps/web/src/features/channel/Call/primitives/use-active-call-companion.ts
+  s_4f8fe03d10848a::t_c566c6bc1117a4 24-27,70,73,77-80
+apps/web/src/features/meetings/core/meeting-media-path.ts
+  s_797d08d287a83e::t_9c9bfa4e84ef32 6,13-14,40-57
+apps/web/src/features/meetings/views/meeting-page-auth.test.tsx
+  s_797d08d287a83e::t_1cc754d0570549 263,280-339
+apps/web/src/features/channel/Call/tests/active-call-companion-orphan.test.ts
+  s_4f8fe03d10848a::t_3f2e276e5603b5 1-82
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.7.7",
+  "base_commit_sha": "a6db7a8e1ecbcb37a8c78fce743d4dcb6996f688",
+  "prompts": {},
+  "sessions": {
+    "s_4f8fe03d10848a": {
+      "agent_id": {
+        "tool": "claude",
+        "id": "9547a29e-d154-4624-a5b1-3a03d877cb23",
+        "model": "claude-opus-5-5"
+      },
+      "human_author": "Eric Hayes <56524199+ehayes2000@users.noreply.github.com>"
+    },
+    "s_797d08d287a83e": {
+      "agent_id": {
+        "tool": "claude",
+        "id": "759cd15a-4206-4e2c-bfd3-e9d0560f99de",
+        "model": "claude-opus-5-5"
+      },
+      "human_author": "Eric Hayes <56524199+ehayes2000@users.noreply.github.com>"
+    }
+  }
+}
