@@ -666,10 +666,10 @@ STC-024	The Undo toast of an online send reads "Delivering…" instead of "Sendi
 STC-025	The toast for a delivered send reads "Message delivered" instead of "Email sent" in queued-send-notice.ts.
 STC-026	The persistent toast of a failed send is titled "Email not delivered" instead of "Email failed to send" in queued-send-notice.ts.
 STC-027	not shown as the row says (toast: Delivery unconfirmed — Check your sent mail. We will not resend automatically.): its rendering is switched off or changed in src/features/email-compose/primitives/queued-send-notice.ts
-STC-028	The toast after a successful Undo send reads "Send stopped" instead of "Send cancelled" in undo-send.ts (both the queued and the legacy undo paths).
+STC-028	A confirmed cancellation reopens its composer and shows Send cancelled even when the browser cannot read the send status. Renaming the success notice also fails the regular Undo tests.
 STC-029	not shown as the row says (toast: Cancellation pending — Waiting for confirmation): its rendering is switched off or changed in src/features/email-compose/undo-send.ts
 STC-030	not shown as the row says (toast: Too late to undo — Delivery has already started): its rendering is switched off or changed in src/features/email-compose/undo-send.ts
-STC-032	the text of "Failed to undo send" of a queued send is changed in src/features/email-compose/undo-send.ts
+STC-032	The browser refuses the journal write for the cancellation request. Undo reports failure and the service still has the accepted send attempt.
 STC-033	not shown as the row says (toast: Failed to send email — Reconnect to send this email.): its rendering is switched off or changed in src/features/email-compose/primitives/email-composer.ts
 STC-034	not shown as the row says (toast: Failed to send email — Wait for images and videos to finish uploading, or remove them.): its rendering is switched off or changed in src/features/email-compose/primitives/email-composer.ts
 STC-035	not shown as the row says (toast: Failed to send email — Draft not saved): its rendering is switched off or changed in src/features/email-compose/primitives/email-composer.ts
