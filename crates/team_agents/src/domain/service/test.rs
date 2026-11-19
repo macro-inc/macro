@@ -14,6 +14,8 @@ use crate::domain::models::{
 };
 
 const ADMIN: &str = "macro|admin@example.com";
+/// The static file service's public base in these tests.
+const PICTURES: &str = "https://static-file-service.example.com";
 const TEAM: &str = "0193a1b2-0000-7000-8000-0000000000aa";
 const COMPUTER: Uuid = Uuid::from_u128(0x0193_a1b2_0000_7000_8000_0000_0000_00c1);
 
@@ -479,6 +481,7 @@ fn service_with_flags(flag: bool, computers: FakeComputers) -> (Service, Journal
         FakeNotices::default(),
         Addresses,
         PictureChanges(journal.clone()),
+        PictureBase::new(PICTURES),
     );
     (service, journal, flags)
 }

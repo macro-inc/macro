@@ -775,6 +775,10 @@ async fn run_server() -> anyhow::Result<()> {
         crate::outbound::agent_picture_changes::BrokerAgentPictureChanges::new(
             macro_event_broker.clone(),
         ),
+        // The base browsers upload agent pictures to and load them from.
+        team_agents::domain::avatar::PictureBase::new(
+            macro_service_urls::StaticFilePublicUrl::new()?.to_string(),
+        ),
     ));
     let domain_notice_service =
         Arc::new(teams::domain::domain_notice::DomainNoticeServiceImpl::new(

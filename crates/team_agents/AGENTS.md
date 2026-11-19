@@ -53,7 +53,9 @@ admins behind the same flag; agent_harness_service implements its
 The invite accepts `avatarFace` and `avatarUrl`. Owners and admins can replace
 them with `PUT /team_agents/{agent_user_id}/avatar` (`{face, url}`, 204), behind
 the same flag. Saving a face writes its recipe and PNG URL together; a missing
-URL clears the old PNG. Saving a photo clears the recipe. Picture changes
+URL clears the old PNG. A URL must be a Macro static file,
+`<StaticFilePublicUrl>/file/<uuid>` (`PictureBase`), on invite and edit, so
+clients never load a host an admin chose. Saving a photo clears the recipe. Picture changes
 publish through the `AgentPictureChanges` port after persistence.
 
 `domain::admission::AgentAdmission::admit(agent, team)` answers whether an

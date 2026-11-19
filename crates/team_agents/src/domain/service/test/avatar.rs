@@ -27,6 +27,29 @@ async fn invalid_avatar_recipes_never_start_an_invite() {
     }
 }
 
+const PHOTO: &str = "0192a8f0-1c2d-7e3f-8a9b-0c1d2e3f4a5b";
+
+#[tokio::test]
+async fn an_invite_with_a_picture_from_another_host_never_starts() {
+    let (refusing, journal) = service(true, FakeComputers::default());
+    let elsewhere = CreateTeamAgent {
+        avatar_url: Some(format!("https://tracker.example/file/{PHOTO}")),
+        ..request()
+    };
+    assert!(matches!(
+        refusing.create(receipt(), elsewhere).await,
+        Err(TeamAgentError::InvalidAvatar)
+    ));
+    assert!(journal.entries().is_empty());
+
+    let (accepting, _) = service(true, FakeComputers::default());
+    let uploaded = CreateTeamAgent {
+        avatar_url: Some(format!("{PICTURES}/file/{PHOTO}")),
+        ..request()
+    };
+    assert!(accepting.create(receipt(), uploaded).await.is_ok());
+}
+
 #[tokio::test]
 async fn an_admin_saves_a_face_before_notifying_clients() {
     let (service, journal) = service(true, FakeComputers::default());
@@ -63,7 +86,7 @@ async fn avatar_edits_refuse_other_teams_disabled_rollout_and_invalid_recipes() 
                 &created.user_id,
                 AgentAvatar {
                     face: None,
-                    url: Some("https://static.example/photo.png".to_owned())
+                    url: Some(format!("{PICTURES}/file/{PHOTO}"))
                 }
             )
             .await,
@@ -92,6 +115,30 @@ async fn avatar_edits_refuse_other_teams_disabled_rollout_and_invalid_recipes() 
             .await,
         Err(TeamAgentError::InvalidAvatar)
     ));
+    // Only Macro's own static files: no other host, and no other path there.
+    for url in [
+        format!("https://tracker.example/file/{PHOTO}"),
+        format!("{PICTURES}/file/not-a-uuid"),
+        format!("{PICTURES}/file/{PHOTO}?track=1"),
+        format!("{PICTURES}.example/file/{PHOTO}"),
+    ] {
+        assert!(
+            matches!(
+                service
+                    .set_avatar(
+                        receipt(),
+                        &created.user_id,
+                        AgentAvatar {
+                            face: None,
+                            url: Some(url.clone())
+                        }
+                    )
+                    .await,
+                Err(TeamAgentError::InvalidAvatar)
+            ),
+            "accepted {url}"
+        );
+    }
     flags.set(false);
     assert!(matches!(
         service

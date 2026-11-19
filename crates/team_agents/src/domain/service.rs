@@ -14,7 +14,7 @@ use macro_user_id::cowlike::CowLike;
 use macro_user_id::user_id::MacroUserIdStr;
 use uuid::Uuid;
 
-use super::avatar::AgentAvatar;
+use super::avatar::{AgentAvatar, PictureBase};
 use super::models::{
     AGENT_EMAIL_DOMAIN, AgentReady, ComputerId, ComputerPurchase, CreateTeamAgent, CreatedAccount,
     MAX_NAME_CHARS, MAX_PROFILE_CHARS, NewAgentAccount, PersonaSeed, TeamAgent, TeamAgentError,
@@ -78,6 +78,8 @@ pub struct TeamAgentServiceImpl<
     notices: Notices,
     environment: Box<dyn EnrollmentEnvironment>,
     picture_changes: Box<dyn AgentPictureChanges>,
+    /// Where an agent's picture must have been uploaded.
+    pictures: PictureBase,
 }
 
 impl<Repository, Membership, ApiKeys, Repos, Computer, Creators, Flags, Notices>
@@ -99,6 +101,7 @@ impl<Repository, Membership, ApiKeys, Repos, Computer, Creators, Flags, Notices>
         notices: Notices,
         environment: impl EnrollmentEnvironment,
         picture_changes: impl AgentPictureChanges,
+        pictures: PictureBase,
     ) -> Self {
         Self {
             repository,
@@ -111,6 +114,7 @@ impl<Repository, Membership, ApiKeys, Repos, Computer, Creators, Flags, Notices>
             notices,
             environment: Box::new(environment),
             picture_changes: Box::new(picture_changes),
+            pictures,
         }
     }
 }
@@ -137,12 +141,15 @@ fn slug(name: &str) -> String {
     }
 }
 
-fn validate(request: CreateTeamAgent) -> Result<CreateTeamAgent, TeamAgentError> {
+fn validate(
+    request: CreateTeamAgent,
+    pictures: &PictureBase,
+) -> Result<CreateTeamAgent, TeamAgentError> {
     AgentAvatar {
         face: request.avatar_face.clone(),
         url: request.avatar_url.clone(),
     }
-    .validate()?;
+    .validate(pictures)?;
     let name = request.name.trim().to_owned();
     if name.is_empty() || name.chars().count() > MAX_NAME_CHARS {
         return Err(TeamAgentError::InvalidName);
@@ -472,7 +479,7 @@ where
     ) -> Result<TeamAgent, TeamAgentError> {
         let created_by = acting_user(&receipt)?;
         self.ensure_enabled(&created_by).await?;
-        let request = validate(request)?;
+        let request = validate(request, &self.pictures)?;
         let team_id = team_id(&receipt)?;
         // A buyer the computers rollout doesn't include is refused before an
         // account, seat or repository exists to take back.
@@ -598,7 +605,7 @@ where
     ) -> Result<(), TeamAgentError> {
         self.ensure_enabled(&acting_user(&receipt)?).await?;
         let record = self.team_record(&receipt, agent).await?;
-        avatar.validate()?;
+        avatar.validate(&self.pictures)?;
         let saved = self
             .repository
             .set_avatar(record.team_id, &record.user_id, &avatar)
