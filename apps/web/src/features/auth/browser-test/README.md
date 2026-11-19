@@ -9,9 +9,10 @@ SSO is a real round trip. Google and Apple reload the page with the `?token=` th
 auth service would append, and the view redeems it. Both fake backends persist in
 sessionStorage across these reloads. When a signed-in user would enter the app,
 the fixture renders a `landed` marker instead. The fake redeems any `?token=` it
-minted and checks no `sign_in_attempt`: the binding of a code to the attempt
-that asked for it is covered by the unit tests of `exchangeSessionCode` and
-`@core/auth/sign-in-attempt`, and on a local stack (`docs/agent-guide/login.md`).
+minted and checks no `sign_in_attempt`. The client refusing a code no pending
+attempt asked for is covered by the unit tests of `exchangeSessionCode` and
+`@core/auth/sign-in-attempt`; the auth service binding a code to its verifier,
+by its own tests; both together, on a local stack (`docs/agent-guide/login.md`).
 
 Run the suite from `apps/web` (the config starts or reuses the fixture server).
 Add `--ui` to watch and step through each test, or `--headed` to see the browser:

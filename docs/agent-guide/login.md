@@ -209,8 +209,11 @@ on this device and its S256 challenge, sent as `session_code_challenge` on
 the `x-session-code-verifier` header, only when the URL's `sign_in_attempt`
 names an attempt this device still holds (15 minutes, the five newest, each
 used once, all forgotten on sign-out); any other `?token=`, including a reload
-of a page still carrying one, leaves the sign-in page as it is. The native
-sheet keeps its attempt in memory. The auth service redeems a bound code only
+of a page still carrying one, leaves the sign-in page as it is. An attempt is
+spent whatever its redemption answers: after a failed one (a network error
+included, once the client's own retries are used up), reopening that callback
+makes no request, and the user starts a new sign-in. The native sheet keeps
+its attempt in memory. The auth service redeems a bound code only
 with its verifier and refuses an unbound code sent with one; either refusal
 answers 400 and spends the code. To check on a local stack: Google sign-in
 still lands signed in, `/app/login?token=<anything>` stays on sign-in with no
