@@ -166,7 +166,7 @@ Any user-visible change should be exercised in a browser before you call it fixe
 
 Keep the view-shell browser fixture's Vite cache separate from the native preview so simultaneous servers cannot invalidate each other's optimized modules.
 
-On Linux, isolate both Vite and Playwright in one temporary network namespace when fixture-only suites fail to load local modules with `net::ERR_NETWORK_CHANGED`; suites using the shared service stack still need host networking.
+On Linux, run Vite and Playwright together through `tests/view-parity/isolated-network.sh` when host interface changes cause `net::ERR_NETWORK_CHANGED`; pass an empty port list for fixture-only suites or forward the explicit host service ports needed by a stack suite.
 
 Give browser fixtures the app's viewport metadata and assert the CSS viewport width when verifying phone layouts; mobile device emulation can otherwise retain a desktop layout viewport.
 
