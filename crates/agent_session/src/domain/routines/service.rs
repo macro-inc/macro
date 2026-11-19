@@ -4,25 +4,24 @@ use agent_runtime_protocol::domain::action::{AgentAction, AgentActionId};
 use model_owner::Owner;
 
 use super::status::action_status;
-use super::{ConnectedApps, RoutineSessions, models::*};
+use super::{ConnectedApps, RoutineSessionValidator, RoutineSessions, models::*};
 use crate::domain::error::AgentSessionError;
 use crate::domain::model::{AgentMcpServer, AgentMcpServers, AgentSession, AgentSessionId};
 use crate::domain::ports::{
     AgentSessionNotificationRecipient, BotDirectory, ControlDisposition, ControlEvent,
-    ExternalSessionRequester, ManagedPersonaError, OpenManagedSession, RequestedExternalSession,
-    SelectedPersona, SessionOpener, persona_for_owner,
+    ExternalSessionRequester, OpenManagedSession, RequestedExternalSession, SelectedPersona,
+    SessionOpener,
 };
 use crate::domain::service::AgentSessionService;
 
 /// Domain orchestration using the same provisioning and controls as interactive sessions.
 #[derive(Clone)]
 pub struct RoutineSessionsService<Bots, Opener, External, Sessions, Controls, Apps> {
-    bots: Bots,
+    validator: RoutineSessionValidator<Bots, Apps>,
     opener: Opener,
     external: External,
     sessions: Sessions,
     controls: Controls,
-    apps: Apps,
 }
 
 impl<Bots, Opener, External, Sessions, Controls, Apps>
@@ -38,12 +37,11 @@ impl<Bots, Opener, External, Sessions, Controls, Apps>
         apps: Apps,
     ) -> Self {
         Self {
-            bots,
+            validator: RoutineSessionValidator::new(bots, apps),
             opener,
             external,
             sessions,
             controls,
-            apps,
         }
     }
 }
@@ -51,73 +49,8 @@ impl<Bots, Opener, External, Sessions, Controls, Apps>
 impl<Bots, Opener, External, Sessions, Controls, Apps>
     RoutineSessionsService<Bots, Opener, External, Sessions, Controls, Apps>
 where
-    Bots: BotDirectory,
     Sessions: AgentSessionService,
-    Apps: ConnectedApps,
 {
-    async fn select(
-        &self,
-        selection: &ValidateRoutineSession,
-    ) -> Result<SelectedPersona, RoutineSessionError> {
-        if selection
-            .model
-            .as_ref()
-            .is_some_and(|model| model.trim().is_empty())
-        {
-            return Err(RoutineSessionError::InvalidCommand);
-        }
-        let persona = persona_for_owner(
-            &self.bots,
-            selection.bot_id,
-            &Owner::User(selection.owner.clone()),
-        )
-        .await
-        .map_err(|error| match error {
-            ManagedPersonaError::Forbidden | ManagedPersonaError::OwnerNotUser(_) => {
-                RoutineSessionError::Forbidden
-            }
-            ManagedPersonaError::TeamAgentComputer => RoutineSessionError::TeamAgentComputer,
-            ManagedPersonaError::Lookup(error) => session_error(error),
-            ManagedPersonaError::Unknown
-            | ManagedPersonaError::NotAgent
-            | ManagedPersonaError::UnmanagedSystemBot => RoutineSessionError::PersonaUnavailable,
-        })?;
-        self.require_apps(selection, &persona).await?;
-        Ok(persona)
-    }
-
-    /// Checked on save and again before every run, so an app disconnected
-    /// since fails the run instead of leaving the agent without it.
-    async fn require_apps(
-        &self,
-        selection: &ValidateRoutineSession,
-        persona: &SelectedPersona,
-    ) -> Result<(), RoutineSessionError> {
-        if selection.mcp_servers.is_empty() {
-            return Ok(());
-        }
-        if matches!(persona, SelectedPersona::External { .. }) {
-            return Err(RoutineSessionError::AppsUnsupported);
-        }
-        let connected = self
-            .apps
-            .connected_app_slugs(&selection.owner)
-            .await
-            .map_err(|error| {
-                tracing::warn!(error = ?error, "could not list a routine owner's connected apps");
-                RoutineSessionError::OperationFailed
-            })?;
-        if selection
-            .mcp_servers
-            .iter()
-            .all(|server| connected.contains(&server.app_slug))
-        {
-            Ok(())
-        } else {
-            Err(RoutineSessionError::AppNotConnected)
-        }
-    }
-
     async fn owned_session(
         &self,
         action: &RoutineSessionAction,
@@ -155,7 +88,7 @@ where
         &self,
         command: ValidateRoutineSession,
     ) -> Result<ValidatedRoutineSession, RoutineSessionError> {
-        let persona = self.select(&command).await?;
+        let persona = self.validator.select(&command, &mut None).await?;
         Ok(ValidatedRoutineSession {
             managed: matches!(persona, SelectedPersona::Managed(_)),
         })
@@ -166,7 +99,7 @@ where
         command: PrepareRoutineSession,
     ) -> Result<PreparedRoutineSession, RoutineSessionError> {
         validate_session_id(command.session_id)?;
-        let persona = self.select(&command.selection).await?;
+        let persona = self.validator.select(&command.selection, &mut None).await?;
         let selection = command.selection;
         let owner = Owner::User(selection.owner.clone());
         let session = match persona {
@@ -407,7 +340,7 @@ fn prompt_error(error: AgentSessionError) -> RoutineSessionError {
     }
 }
 
-fn session_error(error: AgentSessionError) -> RoutineSessionError {
+pub(super) fn session_error(error: AgentSessionError) -> RoutineSessionError {
     match error {
         #[cfg(feature = "admission")]
         AgentSessionError::Admission(error) => RoutineSessionError::Admission(error),

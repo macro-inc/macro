@@ -1,5 +1,6 @@
 use std::{future::Future, sync::Arc, time::Duration};
 
+use agent_session::domain::routines::RoutineSessionValidator;
 use anyhow::{Context, Result};
 use axum::Router;
 use bots::outbound::pg_bots_repo::PgBotsRepo;
@@ -16,6 +17,10 @@ use macro_authorization::{
     MacroAuthorizationState, PgUserApiKeyAuthorizationRepo, PgUserApiKeyAuthorizer,
 };
 use macro_service_urls::{ConnectionGatewayUrl, EmailServiceUrl, LexicalServiceUrl};
+use pipedream_mcp::outbound::pg_connection_repo::PgConnectionRepo;
+
+use crate::bots_directory::PgBotDirectory;
+use crate::routine_sessions::PipedreamConnectedApps;
 pub mod config;
 mod routine_analytics;
 mod routine_drafting;
@@ -714,6 +719,13 @@ pub async fn build<Ingress: notification::domain::service::NotificationIngress>(
     ));
     let request_sessions: Arc<dyn RequestSessions> = correlation_sessions.clone();
     let suggestion_repo = Arc::new(PgRoutineSuggestionRepo::new(db.clone()));
+    let target_validation = TargetValidation::new(Arc::new(RoutineSessionValidator::new(
+        PgBotDirectory::new(
+            PgBotsRepo::new(db.clone()),
+            crate::computers::harness_service(&db),
+        ),
+        PipedreamConnectedApps(PgConnectionRepo::new(db.clone())),
+    )));
     let service = Arc::new(
         ScheduledActionServiceImpl::new(
             Arc::clone(&repo),
@@ -723,7 +735,7 @@ pub async fn build<Ingress: notification::domain::service::NotificationIngress>(
         )
         .with_event_routines(event_routines)
         .with_conditions_enabled(conditions_enabled)
-        .with_target_validation(TargetValidation::new(Arc::clone(&sessions)))
+        .with_target_validation(target_validation)
         .with_draft_hand_backs(Arc::clone(&hand_backs), Arc::clone(&request_sessions))
         .with_suggestion_origins(Arc::new(StoredSuggestionOrigins(Arc::clone(
             &suggestion_repo,
@@ -814,9 +826,7 @@ pub async fn build<Ingress: notification::domain::service::NotificationIngress>(
                 config.internal_api_key.to_string(),
                 EmailServiceUrl::new()?.to_string(),
             )),
-            apps: crate::routine_sessions::PipedreamConnectedApps(
-                pipedream_mcp::outbound::pg_connection_repo::PgConnectionRepo::new(db.clone()),
-            ),
+            apps: PipedreamConnectedApps(PgConnectionRepo::new(db.clone())),
         }),
         suggestion_code,
         request_sessions,

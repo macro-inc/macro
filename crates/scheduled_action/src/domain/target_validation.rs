@@ -2,7 +2,7 @@
 
 use std::sync::Arc;
 
-use agent_session::domain::routines::{RoutineSessions, ValidateRoutineSession};
+use agent_session::domain::routines::{RoutineSessionValidation, ValidateRoutineSession};
 use anyhow::Result;
 use bots::domain::models::AgentMcpServer;
 use macro_user_id::user_id::MacroUserIdStr;
@@ -75,29 +75,31 @@ fn agents(program: &RoutineProgram) -> Vec<(&AgentStep, &[AgentMcpServer])> {
 /// Authorizes every agent step's selection without opening a session or
 /// checking runtime connectivity, so a self-hosted agent can be saved while
 /// its runtime is offline.
-pub struct TargetValidation<Sessions> {
-    sessions: Arc<Sessions>,
+pub struct TargetValidation<Validator> {
+    validator: Arc<Validator>,
 }
 
-impl<Sessions> TargetValidation<Sessions> {
-    pub fn new(sessions: Arc<Sessions>) -> Self {
-        Self { sessions }
+impl<Validator> TargetValidation<Validator> {
+    pub fn new(validator: Arc<Validator>) -> Self {
+        Self { validator }
     }
 }
 
-impl<Sessions: RoutineSessions> TaskTargetValidator for TargetValidation<Sessions> {
+impl<Validator: RoutineSessionValidation> TaskTargetValidator for TargetValidation<Validator> {
     async fn validate_task(&self, task: &Value, owner: &MacroUserIdStr<'static>) -> Result<()> {
         let program = parse_program(task)?;
+        let mut selections = Vec::new();
         for (step, apps) in agents(&program) {
             let (bot_id, model) = ResolvedTaskTarget::of(step)?.session_target();
-            self.sessions
-                .validate(ValidateRoutineSession {
-                    owner: owner.clone(),
-                    bot_id,
-                    model: model.map(str::to_owned),
-                    mcp_servers: apps.to_vec(),
-                })
-                .await?;
+            selections.push(ValidateRoutineSession {
+                owner: owner.clone(),
+                bot_id,
+                model: model.map(str::to_owned),
+                mcp_servers: apps.to_vec(),
+            });
+        }
+        if !selections.is_empty() {
+            self.validator.validate_selections(&selections).await?;
         }
         Ok(())
     }
@@ -183,8 +185,8 @@ pub(super) fn require_explicit_selection(previous: &Value, incoming: &Value) -> 
             return Err(TargetValidationError::ExplicitSubRoutinesRequired.into());
         }
     }
-    // A sub-routine's apps too: a client that can't hold them (the SDK) sends
-    // the definition back without them. One left out is removed on purpose.
+    // A definition sent back on update must restate its required apps.
+    // Omitting the whole definition removes it on purpose.
     // Only a task with steps defines any: a single agent's are ignored.
     let definitions = |task: &Value| {
         defines_steps(task)

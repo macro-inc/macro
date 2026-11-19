@@ -3,9 +3,11 @@
 pub mod models;
 mod service;
 mod status;
+mod validation;
 
 pub use models::*;
 pub use service::RoutineSessionsService;
+pub use validation::{RoutineSessionValidation, RoutineSessionValidator};
 
 /// The only session operations available to routine execution.
 ///

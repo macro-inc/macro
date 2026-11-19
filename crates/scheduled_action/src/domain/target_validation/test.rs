@@ -1,7 +1,8 @@
 use super::*;
 use agent_session::domain::routines::{
     PrepareRoutineSession, PreparedRoutineSession, PromptRoutineSession, RoutineActionStatus,
-    RoutinePromptAccepted, RoutineSessionAction, RoutineSessionError, ValidatedRoutineSession,
+    RoutinePromptAccepted, RoutineSessionAction, RoutineSessionError, RoutineSessions,
+    ValidatedRoutineSession,
 };
 use serde_json::json;
 use std::sync::Mutex;
@@ -14,6 +15,18 @@ pub(crate) struct Sessions {
     pub(crate) validations: Mutex<Vec<ValidateRoutineSession>>,
     pub(crate) preparations: Mutex<Vec<PrepareRoutineSession>>,
     pub(crate) error: Mutex<Option<RoutineSessionError>>,
+}
+
+impl RoutineSessionValidation for Sessions {
+    async fn validate_selections(
+        &self,
+        selections: &[ValidateRoutineSession],
+    ) -> Result<(), RoutineSessionError> {
+        for selection in selections {
+            self.validate(selection.clone()).await?;
+        }
+        Ok(())
+    }
 }
 
 impl RoutineSessions for Sessions {

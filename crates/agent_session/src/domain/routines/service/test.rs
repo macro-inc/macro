@@ -7,6 +7,7 @@ use crate::domain::ports::{
     AcceptedControl, BotFacts, ManagedAgentProfile, NoOpAgentSessionNameGenerator, NoOpRealtime,
     NoOpTurnObserver, NoopLifecyclePublisher, OpenExternalAgentSession, QueuedControl,
 };
+use crate::domain::routines::RoutineSessionValidation;
 use crate::domain::service::AgentSessionServiceImpl;
 use crate::testing::{InMemoryAgentSessionRepo, test_agent_session};
 use agent_fold::domain::service::FoldedMessageService;
@@ -15,6 +16,7 @@ use bots::domain::models::BotId;
 use macro_user_id::user_id::MacroUserIdStr;
 use macro_uuid::Uuid;
 use shared_entity_registry::OwnedPurgeOutcome;
+use std::sync::atomic::{AtomicUsize, Ordering};
 use std::sync::{Arc, Mutex};
 
 #[test]
@@ -183,13 +185,14 @@ impl AgentSessionNotificationRecipient for Controls {
 }
 
 #[derive(Clone, Default)]
-struct Apps(Arc<Mutex<Vec<String>>>);
+struct Apps(Arc<Mutex<Vec<String>>>, Arc<AtomicUsize>);
 
 impl ConnectedApps for Apps {
     async fn connected_app_slugs(
         &self,
         _: &MacroUserIdStr<'static>,
     ) -> anyhow::Result<Vec<String>> {
+        self.1.fetch_add(1, Ordering::Relaxed);
         Ok(self.0.lock().unwrap().clone())
     }
 }
@@ -619,6 +622,40 @@ fn commands_reject_malformed_owner_and_ids_at_deserialization() {
     let mut value = serde_json::to_value(&command).unwrap();
     value["session_id"] = serde_json::json!("not-a-uuid");
     assert!(serde_json::from_value::<RoutineSessionAction>(value).is_err());
+}
+
+#[tokio::test]
+async fn selecting_several_agents_reads_the_owners_connected_apps_once() {
+    let fx = Fixture::new(true);
+    let validator = &fx.service.validator;
+    validator
+        .validate_selections(&[fx.selection()])
+        .await
+        .unwrap();
+    assert_eq!(fx.apps.1.load(Ordering::Relaxed), 0);
+
+    let mut linear = fx.selection();
+    linear.mcp_servers.push(AgentMcpServer {
+        app_slug: "linear".into(),
+        server_name: "Linear".into(),
+    });
+    let mut notion = fx.selection();
+    notion.mcp_servers.push(AgentMcpServer {
+        app_slug: "notion".into(),
+        server_name: "Notion".into(),
+    });
+    *fx.apps.0.lock().unwrap() = vec!["linear".into(), "notion".into()];
+    let selections = [fx.selection(), linear, notion];
+    validator.validate_selections(&selections).await.unwrap();
+    assert_eq!(fx.apps.1.load(Ordering::Relaxed), 1);
+
+    // A new validation sees the disconnection and still checks each selection.
+    *fx.apps.0.lock().unwrap() = vec!["linear".into()];
+    assert_eq!(
+        validator.validate_selections(&selections).await,
+        Err(RoutineSessionError::AppNotConnected)
+    );
+    assert_eq!(fx.apps.1.load(Ordering::Relaxed), 2);
 }
 
 #[tokio::test]

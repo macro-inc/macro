@@ -11,6 +11,9 @@ consumer talks to.
 - `src/domain/service.rs` + `src/domain/ports.rs`: the session service and
   its ports — the widest surface in the crate.
 - `src/domain/lifecycle.rs`: create/resume/stop state machine.
+- `src/domain/routines/validation.rs`: persona and required-app checks shared
+  by configuration validation and routine-session preparation. A configuration
+  checks its selections for one owner and shares one lazy connected-app read.
 - `src/domain/model.rs`: the `AgentSession` entity shape.
 - `src/domain/turn_state.rs` + `src/domain/control.rs`: per-turn state and
   the control-plane commands (used by held tool-call approvals).

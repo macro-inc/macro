@@ -446,7 +446,9 @@ durable live connections before emitting a disconnect, so an old socket cannot
 mark its replacement offline. Keep this lock pool separate from repository pools
 to avoid exhausting the connections needed inside the guarded operation.
 Routine dispatch waits for the shared HTTP listener and calls its loopback
-address, avoiding an ALB/self-startup race. Shutdown stops scheduling intake and
+address for session execution, avoiding an ALB/self-startup race. Routine
+configuration checks call the shared `RoutineSessionValidator` in process
+with the same persona directory and connected apps store. Shutdown stops scheduling intake and
 cognition workers before draining sessions and pending publishes. Preview
 listener failure shuts down the process so ECS can replace the task.
 

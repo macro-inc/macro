@@ -421,8 +421,11 @@ that listener is ready. Cancellation can stop the gate before startup finishes.
 - A task's `mcp_servers` (beside a program's `steps`, or on an old
   single-agent task) are apps the routine requires, handed to its agent step;
   a program with apps needs one. The owner must have each connected:
-  `TargetValidation` checks on save and `RoutineSessions::prepare` checks
-  again on every run, then adds them to an agent limited to selected apps. An update that omits the key is rejected
+  `TargetValidation` checks on save, check, and resume. It validates the
+  program's selections and its definitions' selections together, with one
+  connected-app read if any selection needs one. `RoutineSessions::prepare`
+  checks again on every run, then adds them to an agent limited to selected apps.
+  An update that omits the key is rejected
   when the stored task has apps (`require_explicit_selection`).
 - An agent target is any agent the owner may run: built in, their own, or
   one on a self-hosted runtime. `TargetValidation` authorizes it on save
