@@ -179,8 +179,7 @@ fn request() -> ExecuteRequest {
 #[tokio::test]
 async fn a_program_with_type_errors_stops_before_credentials() {
     let (service, credentials, store, _) = service();
-    let session =
-        test_agent_session(AgentSessionId::new_from_uuid(macro_uuid::generate_uuid_v7()));
+    let session = test_agent_session(AgentSessionId::new_from_uuid(macro_uuid::generate_uuid_v7()));
     let id = ExecutionId::mint();
     let result = service
         .execute(

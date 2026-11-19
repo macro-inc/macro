@@ -924,7 +924,8 @@ async fn suggestions_brief_programs_type_check() {
     let [shape, map, documents, suggest, draft, check] = blocks[..] else {
         panic!("expected the shape and five programs, got {}", blocks.len());
     };
-    let marker = "  // the program's own lines go here and end with: return { data, reviews: [] };\n";
+    let marker =
+        "  // the program's own lines go here and end with: return { data, reviews: [] };\n";
     assert!(shape.contains(marker));
     // What the brief leaves the session to fill in.
     let session_values = "const docId = '', threadId = '', channelId = '', callId = '', messageId = '', dedupKey = '', title = '', summary = '', prompt = '', subject = '', bodyText = '', reason = '', now = '';\nconst importance = 50;\nconst keys: string[] = [];\n";

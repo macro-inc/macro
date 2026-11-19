@@ -123,7 +123,9 @@ fn declared_members(name: &str) -> Option<(Vec<&'static str>, Option<String>)> {
         let mut lines = text.lines();
         let header = lines.find(|line| {
             let line = line.trim_start_matches("export ");
-            headers.iter().any(|header| line.starts_with(header.as_str()))
+            headers
+                .iter()
+                .any(|header| line.starts_with(header.as_str()))
         })?;
         let base = header.split_once(" extends ").and_then(|(_, rest)| {
             let end = rest

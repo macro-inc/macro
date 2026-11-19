@@ -254,19 +254,24 @@ impl ExecutionService {
         let span = tracing::info_span!("code_execution.precheck", check = tracing::field::Empty);
         if request.source.trim().is_empty() || request.source.len() > self.limits.max_source_bytes {
             span.record("check", "invalid");
-            return Err(
-                ExecutionFailure::new(FailureCode::Limit, AdmissionError::InvalidSource.to_string())
-                    .into(),
-            );
+            return Err(ExecutionFailure::new(
+                FailureCode::Limit,
+                AdmissionError::InvalidSource.to_string(),
+            )
+            .into());
         }
         // A precheck counts against this executor's admission like a run,
         // so one executor's callers can't fill the checker it shares.
         let Ok(_admitted) = self.admitted.try_acquire() else {
             span.record("check", "busy");
-            return Err(ExecutionFailure::new(FailureCode::Limit, AdmissionError::Busy.to_string()).into());
+            return Err(ExecutionFailure::new(
+                FailureCode::Limit,
+                AdmissionError::Busy.to_string(),
+            )
+            .into());
         };
-        let duration = std::time::Duration::from_millis(request.timeout_ms)
-            .min(self.limits.max_duration);
+        let duration =
+            std::time::Duration::from_millis(request.timeout_ms).min(self.limits.max_duration);
         let checked = tokio::select! {
             biased;
             _ = cancellation.cancelled() => {

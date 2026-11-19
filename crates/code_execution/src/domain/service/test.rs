@@ -459,7 +459,11 @@ async fn a_prechecked_program_runs_without_another_check() {
     assert_eq!(checker.checked.lock().unwrap().len(), 2);
     // A pass for another shape doesn't count.
     service
-        .check_program(&request(10_000), ContextShape::default(), CancellationToken::new())
+        .check_program(
+            &request(10_000),
+            ContextShape::default(),
+            CancellationToken::new(),
+        )
         .await
         .unwrap();
     finish(service.execute(request(10_000), environment()).unwrap()).await;
@@ -485,7 +489,11 @@ async fn a_failed_precheck_reports_the_type_errors() {
     )
     .unwrap();
     let Err(Outcome::Failed { error }) = service
-        .check_program(&request(10_000), ContextShape::default(), CancellationToken::new())
+        .check_program(
+            &request(10_000),
+            ContextShape::default(),
+            CancellationToken::new(),
+        )
         .await
     else {
         panic!("expected type errors");
@@ -516,7 +524,11 @@ async fn a_precheck_counts_against_admission() {
         .execute(request(10_000), RunEnvironment::default())
         .unwrap();
     let Err(Outcome::Failed { error }) = service
-        .check_program(&request(10_000), ContextShape::default(), CancellationToken::new())
+        .check_program(
+            &request(10_000),
+            ContextShape::default(),
+            CancellationToken::new(),
+        )
         .await
     else {
         panic!("expected busy");
@@ -543,8 +555,7 @@ async fn a_program_that_turns_checking_off_is_refused() {
     let Err(Outcome::Failed { error }) = service
         .check_program(
             &ExecuteRequest {
-                source: "// @ts-nocheck\nexport async function main() { return {data: 1}; }"
-                    .into(),
+                source: "// @ts-nocheck\nexport async function main() { return {data: 1}; }".into(),
                 timeout_ms: 10_000,
             },
             ContextShape::default(),

@@ -126,7 +126,12 @@ async fn task_without_jev_reports_status_and_keeps_the_catalog() {
     assert_eq!(task.status, crate::domain::SelectionStatus::Unconfigured);
     assert!(task.entities.is_empty());
     assert!(response.tools.len() > 15);
-    assert!(response.sdk_guide.unwrap().contains("main({macro}: CodeContext)"));
+    assert!(
+        response
+            .sdk_guide
+            .unwrap()
+            .contains("main({macro}: CodeContext)")
+    );
 }
 
 #[tokio::test]

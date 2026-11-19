@@ -155,11 +155,7 @@ impl CodeModeService {
             self.0.store.save(identity.session, &record).await?;
             return Ok((receipt(&record), None));
         }
-        let executor = self
-            .0
-            .executor
-            .as_ref()
-            .ok_or(CodeModeError::Unavailable)?;
+        let executor = self.0.executor.as_ref().ok_or(CodeModeError::Unavailable)?;
         // A program with type errors stops here, before the owner is asked
         // to approve it or a credential is minted for it.
         if let Err(outcome) = executor
