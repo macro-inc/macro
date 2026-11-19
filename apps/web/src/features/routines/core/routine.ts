@@ -18,6 +18,8 @@ export type RoutineSnapshot = {
   configurationKey: string;
   /** Its steps come from a named definition on its parent. */
   isCopy: boolean;
+  /** A nested row can keep the routine after validating its saved reference. */
+  canKeep?: boolean;
   /** Its saved task can be published as a template. */
   shareable: boolean;
   draft?: ScheduleDraft;

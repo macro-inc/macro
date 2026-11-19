@@ -20,6 +20,7 @@ import type { RoutineSnapshot } from '../core/routine';
 import { withDraftSteps } from '../core/routine-draft';
 import { isSubRoutineCopy, programSteps } from '../core/routine-steps';
 import {
+  copyInputsFit,
   copyOf,
   draftHasDefinitionsOrInputs,
   hasProgramDefinitionsOrInputs,
@@ -94,6 +95,19 @@ type DetailCallbacks = {
   /** The sub-routine became the owner's own routine. */
   onKept(): void;
 };
+
+function canKeepSchedule(
+  schedule: ScheduledActionResponse,
+  parent: ScheduledActionResponse | undefined
+): boolean {
+  const link = schedule.sub_routine;
+  if (!link) return false;
+  const copy = copyOf(schedule.task);
+  if (!copy) return true;
+  if (!parent || parent.id !== link.parent_id) return false;
+  const definition = wireDefinition(parent.task, copy.subRoutine);
+  return Boolean(definition && copyInputsFit(copy, definition));
+}
 
 async function traceRoutineRequest<T>(span: Span, request: () => Promise<T>) {
   try {
@@ -208,11 +222,11 @@ export function createRoutineDetailSource(
   });
   const canKeepAsOwn = () => {
     const current = raw();
-    if (!current?.sub_routine || current.owner !== userId()) return false;
-    const copy = copyOf(current.task);
-    if (!copy) return true;
-    const parent = rawParent();
-    return Boolean(parent && wireDefinition(parent.task, copy.subRoutine));
+    return Boolean(
+      current &&
+        current.owner === userId() &&
+        canKeepSchedule(current, rawParent())
+    );
   };
   const save = async (draft: ScheduleDraft, approval?: Span) => {
     const scheduleId = id();
@@ -370,7 +384,17 @@ export function createRoutineListSource(
     subRoutines: createMemo(() =>
       (children.isSuccess || children.isError ? (children.data ?? []) : [])
         .filter((item) => item.id)
-        .map(toRoutine)
+        .map((child) => ({
+          ...toRoutine(child),
+          canKeep: canKeepSchedule(
+            child,
+            query.isSuccess || query.isError
+              ? query.data?.find(
+                  (item) => item.id === child.sub_routine?.parent_id
+                )
+              : undefined
+          ),
+        }))
     ),
     routines: createMemo(() =>
       (query.isSuccess || query.isError ? (query.data ?? []) : [])
@@ -465,12 +489,11 @@ export function createRoutineRowOperations(
   });
   const keeping = createPerRoutineMutation(async (id) => {
     const schedule = find(id);
-    if (!schedule?.sub_routine) return;
-    const copy = copyOf(schedule.task);
-    if (copy) {
-      const parent = find(schedule.sub_routine.parent_id);
-      if (!parent || !wireDefinition(parent.task, copy.subRoutine)) return;
-    }
+    if (
+      !schedule?.sub_routine ||
+      !canKeepSchedule(schedule, find(schedule.sub_routine.parent_id))
+    )
+      return;
     await keep.mutateAsync({ scheduleId: id });
   });
   return {

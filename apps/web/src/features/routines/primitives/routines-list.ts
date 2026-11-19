@@ -68,13 +68,7 @@ export function createRoutineRows(
       ...describe(routine),
       children: newestFirst(created).map((child) => ({
         ...describe(child),
-        missingDefinition: Boolean(
-          child.isCopy &&
-            routine.draft &&
-            !routine.draft.subRoutines?.some(
-              (definition) => definition.name === child.draft?.copy?.subRoutine
-            )
-        ),
+        canKeep: child.canKeep,
         children: [],
       })),
     };

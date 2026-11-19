@@ -3,6 +3,7 @@ import type {
   RoutineSubRoutine,
   RoutineTask,
 } from '@service-scheduled-action/generated/schemas';
+import { match } from 'ts-pattern';
 import type {
   ScheduleDraft,
   SubRoutineCopyDraft,
@@ -73,6 +74,30 @@ export function wireDefinition(task: RoutineTask, name: string) {
   return 'steps' in task
     ? task.sub_routines?.find((definition) => definition.name === name)
     : undefined;
+}
+
+/** Match the scheduler's detach check against the current input declarations. */
+export function copyInputsFit(
+  copy: SubRoutineCopyDraft,
+  definition: RoutineSubRoutine
+): boolean {
+  const declared = definition.inputs ?? [];
+  if (Object.keys(copy.inputs).length !== declared.length) return false;
+  return declared.every((input) => {
+    if (!Object.hasOwn(copy.inputs, input.name)) return false;
+    const value = copy.inputs[input.name];
+    return match(input.type)
+      .with(
+        'text',
+        () =>
+          typeof value === 'string' &&
+          !value.includes('\0') &&
+          [...value].length <= 2000
+      )
+      .with('number', () => typeof value === 'number' && Number.isFinite(value))
+      .with('boolean', () => typeof value === 'boolean')
+      .exhaustive(() => false);
+  });
 }
 
 /** The program's own input values, as a kept copy holds them. */

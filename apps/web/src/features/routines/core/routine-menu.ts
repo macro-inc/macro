@@ -32,7 +32,7 @@ export type RoutineMenuSurface = {
 export function routineMenuGroups(
   row: Pick<
     RoutineRow,
-    'editable' | 'enabled' | 'isCopy' | 'shareable' | 'missingDefinition'
+    'editable' | 'enabled' | 'isCopy' | 'shareable' | 'canKeep'
   >,
   surface: RoutineMenuSurface
 ): RoutineMenuItem[][] {
@@ -49,7 +49,7 @@ export function routineMenuGroups(
           ...(row.isCopy || surface.duplicate === false
             ? []
             : (['duplicate'] as const)),
-          ...(surface.nested && !row.missingDefinition
+          ...(surface.nested && (!row.isCopy || row.canKeep)
             ? (['keep'] as const)
             : []),
         ]

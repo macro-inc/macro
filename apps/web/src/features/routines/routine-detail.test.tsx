@@ -1649,6 +1649,30 @@ describe('sub-routines defined once', () => {
     });
   });
 
+  it('withholds Keep when the current definition requires different inputs', () => {
+    setSchedules([
+      copy,
+      {
+        ...parent,
+        task: {
+          steps: [{ type: 'agent', model: 'model', instructions: 'Plan' }],
+          sub_routines: [
+            {
+              ...remind,
+              inputs: [{ type: 'text', name: 'itemId', label: 'Item' }],
+            },
+          ],
+        },
+      },
+    ]);
+    render(() => <Routine />);
+    openActions();
+    expect(
+      screen.queryByRole('menuitem', { name: 'Keep as my routine' })
+    ).toBeNull();
+    expect(mocks.detach).not.toHaveBeenCalled();
+  });
+
   it('lets long copy labels and step titles wrap without taking over a narrow pane', () => {
     const label = 'A'.repeat(60);
     const title = 'B'.repeat(60);

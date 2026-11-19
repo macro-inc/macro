@@ -24,8 +24,7 @@ export type RoutineRow = {
   editable: boolean;
   enabled: boolean;
   isCopy: boolean;
-  /** The parent could no longer supply a definition for this copy. */
-  missingDefinition?: boolean;
+  canKeep?: boolean;
   /** Whether the scheduler takes it as a template (`sharesAsTemplate`). */
   shareable: boolean;
   /** The routines its runs created that still have work to do, newest first. */

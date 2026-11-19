@@ -53,6 +53,7 @@ describe('routine menu groups', () => {
       enabled: true,
       shareable: false,
       isCopy: true,
+      canKeep: true,
     };
     expect(routineMenuGroups(row, { ...DESKTOP, nested: true })[2]).toEqual([
       'keep',
