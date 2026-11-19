@@ -444,6 +444,12 @@ impl RoutineProgram {
             .collect()
     }
 
+    /// Whether a run of it runs code: its own steps hold a code step. Code
+    /// only its sub-routines hold runs in their copies.
+    pub fn runs_code(&self) -> bool {
+        self.steps.iter().any(|step| matches!(step, Step::Code(_)))
+    }
+
     /// The agent the run starts with, when its first step is one. Such a run
     /// opens its transcript before anything else happens.
     pub fn leading_agent(&self) -> Option<&AgentStep> {

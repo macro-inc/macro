@@ -272,6 +272,12 @@ fn input_value(input: &Input, values: Values) -> Result<(), &'static str> {
                 value: Some(text), ..
             },
         ) if text.chars().count() > MAX_INPUT_TEXT_CHARS => Err("text is too long"),
+        (
+            Values::Required,
+            Input::Text {
+                value: Some(text), ..
+            },
+        ) if text.contains('\0') => Err("text can't hold a NUL character"),
         (Values::Required, _) if input.value().is_none() => Err("a routine's input needs a value"),
         (Values::Required, _) => Ok(()),
     }

@@ -134,6 +134,10 @@ impl Input {
                 if text.chars().count() > MAX_INPUT_TEXT_CHARS {
                     return Err(InputError::TooLong(name.to_string()));
                 }
+                // Stored as JSONB, which can't hold one.
+                if text.contains('\0') {
+                    return Err(InputError::Nul(name.to_string()));
+                }
                 Ok(Self::Text {
                     name,
                     label,
@@ -319,6 +323,9 @@ pub enum InputError {
     /// A long text value.
     #[error("input `{0}` can be at most {MAX_INPUT_TEXT_CHARS} characters")]
     TooLong(String),
+    /// A text value holding a NUL character.
+    #[error("input `{0}` can't hold a NUL character")]
+    Nul(String),
 }
 
 impl SubRoutineDefinition {
@@ -354,9 +361,10 @@ impl RoutineProgram {
     }
 
     /// What `copy` runs: its definition's steps and apps with the values it
-    /// was given, checked against the SDK this routine was and writing as
-    /// this routine does. It keeps this routine's sub-routines, so its code
-    /// schedules the same ones.
+    /// was given, checked against the SDK this routine was. It never writes
+    /// as the owner, whatever this routine does: a run chose its values, and
+    /// no person reviewed them. It keeps this routine's sub-routines, so its
+    /// code schedules the same ones.
     pub fn copy_program(&self, copy: &SubRoutineCopy) -> Result<RoutineProgram, CopyError> {
         let definition = self
             .sub_routine(&copy.sub_routine)
@@ -366,7 +374,7 @@ impl RoutineProgram {
             mcp_servers: definition.mcp_servers.clone(),
             single_agent_task: false,
             sdk: self.sdk.clone(),
-            dangerously_operate_as_user: self.dangerously_operate_as_user,
+            dangerously_operate_as_user: false,
             inputs: definition.given(&copy.inputs)?,
             sub_routines: self.sub_routines.clone(),
         })

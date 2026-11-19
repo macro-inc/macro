@@ -51,9 +51,10 @@ fn a_copy_runs_its_definition_with_the_values_it_was_given() {
         serde_json::Value::Object(program.input_values()),
         json!({ "taskId": "t-1", "daysLeft": 2.0 })
     );
-    // It writes as its parent does, and can schedule its parent's
-    // sub-routines.
-    assert!(program.dangerously_operate_as_user);
+    // It never writes as the owner, though its parent does: a run chose its
+    // values. It can schedule its parent's sub-routines.
+    assert!(parent.dangerously_operate_as_user);
+    assert!(!program.dangerously_operate_as_user);
     assert_eq!(program.sub_routines, parent.sub_routines);
     program.validate().unwrap();
 }
@@ -78,6 +79,11 @@ fn a_copy_needs_every_input_its_definition_declares_and_no_other() {
     assert_eq!(
         refused(json!({ "taskId": "x".repeat(2_001), "daysLeft": 2 })),
         "input `taskId` can be at most 2000 characters"
+    );
+    // Postgres can't store one in JSONB.
+    assert_eq!(
+        refused(json!({ "taskId": "t\u{0}1", "daysLeft": 2 })),
+        "input `taskId` can't hold a NUL character"
     );
 }
 
@@ -161,6 +167,16 @@ fn a_definitions_inputs_get_values_only_in_copies() {
             .unwrap_err()
             .to_string(),
         "input `urgent`: a routine's input needs a value"
+    );
+    task["inputs"][0] =
+        json!({ "type": "text", "name": "urgent", "label": "Urgent", "value": "a\u{0}b" });
+    assert_eq!(
+        RoutineProgram::from_task(&task)
+            .unwrap()
+            .validate()
+            .unwrap_err()
+            .to_string(),
+        "input `urgent`: text can't hold a NUL character"
     );
 }
 
