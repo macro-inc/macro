@@ -25,6 +25,7 @@ import { Input } from '@channel/Input/Input';
 import type { InputAttachmentData, InputCommands } from '@channel/Input/types';
 import { useMacroMentionLinkResolver } from '@components/app/split-layout/split-router/mention-links';
 import { preloadAgentFold } from '@core/agent-fold/client';
+import { createComposerItemDrop } from '@core/component/AI/primitives/create-composer-item-drop';
 import { buildConfig } from '@core/component/LexicalMarkdown/builder/MarkdownConfigBuilder';
 import { ComposerEditor } from '@core/component/LexicalMarkdown/component/ComposerEditor';
 import {
@@ -243,6 +244,10 @@ export function AgentInput(props: AgentInputProps) {
     })
     .onChange(setMarkdown);
 
+  const itemDrop = createComposerItemDrop({
+    editor: () => editor.lexical,
+    enabled: () => !props.disabled && !props.readOnly && !dictation.active(),
+  });
   // A parent can restore or clear the draft after the editor has mounted.
   createEffect(() => {
     const next = markdown();
@@ -323,6 +328,8 @@ export function AgentInput(props: AgentInputProps) {
         {/* h-auto beats Surface's size-full so the in-flow controls are not
             clipped over the editor (that was Auto sitting on the placeholder). */}
         <ComposerSurface
+          ref={itemDrop.ref}
+          classList={{ 'outline-2 outline-accent': itemDrop.isDraggedOver() }}
           class="relative h-auto transition-[height] duration-150 ease-out motion-reduce:transition-none"
           style={{
             height: height() === undefined ? undefined : `${height()}px`,
@@ -376,6 +383,7 @@ export function AgentInput(props: AgentInputProps) {
                 >
                   <ComposerEditor
                     config={editor}
+                    onConnect={itemDrop.onConnect}
                     initialValue={markdown()}
                     disabled={props.readOnly}
                     placeholder={

@@ -67,8 +67,12 @@ vi.mock(
   () => ({
     buildConfig: () => {
       editor.lexical = createEditor({ nodes: [QuoteNode] });
+      let built = false;
       const builder = {
-        buildHandle: () => ({ lexical: editor.lexical }),
+        buildHandle: () => {
+          built = true;
+          return { lexical: editor.lexical };
+        },
         namespace: () => builder,
         withAppLinkResolver: () => builder,
         withMentions: () => builder,
@@ -103,7 +107,13 @@ vi.mock(
           focus: vi.fn(),
           getMarkdown: () => editor.readMarkdown(),
         },
-        lexical: editor.lexical,
+        get lexical() {
+          if (!built)
+            throw new Error(
+              'editor.lexical accessed before <MarkdownShell> mounted'
+            );
+          return editor.lexical;
+        },
       };
       return builder;
     },

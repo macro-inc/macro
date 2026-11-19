@@ -16,6 +16,7 @@ import {
   SUPPORTED_ATTACHMENT_EXTENSIONS,
 } from '@core/component/AI/constant';
 import { useChatInputContext } from '@core/component/AI/context';
+import { createComposerItemDrop } from '@core/component/AI/primitives/create-composer-item-drop';
 import type { ToolSet } from '@core/component/AI/types';
 import { isImageAttachment } from '@core/component/AI/util/attachment';
 import { insertChatAttachmentMention } from '@core/component/AI/util/chatAttachmentMention';
@@ -253,6 +254,10 @@ export function ChatInput(props: ChatInputComponentProps) {
       props.onChange?.(md);
     });
 
+  const itemDrop = createComposerItemDrop({
+    editor: () => props.editor.lexical,
+    enabled: () => !generating() && !dictation.active(),
+  });
   const composerLayout = createComposerLayout(
     props.editor.buildHandle().lexical,
     {
@@ -378,6 +383,8 @@ export function ChatInput(props: ChatInputComponentProps) {
         }}
       />
       <ComposerSurface
+        ref={itemDrop.ref}
+        classList={{ 'outline-2 outline-accent': itemDrop.isDraggedOver() }}
         class={cn(
           'relative h-auto',
           composerLayout.isCompact() &&
@@ -478,6 +485,7 @@ export function ChatInput(props: ChatInputComponentProps) {
               <ComposerEditor
                 class={isCompactMobile() ? 'min-h-5' : undefined}
                 config={props.editor}
+                onConnect={itemDrop.onConnect}
                 placeholder={
                   props.placeholder ??
                   (isTouchDevice() ? 'Ask AI…' : 'Ask AI, @mention anything')

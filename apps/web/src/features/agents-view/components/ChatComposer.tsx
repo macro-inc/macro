@@ -12,6 +12,7 @@ import type { InputAttachmentData, InputCommands } from '@channel/Input/types';
 import { getAttachmentKindFromFile } from '@channel/Input/utils/file-helpers';
 import { useMacroMentionLinkResolver } from '@components/app/split-layout/split-router/mention-links';
 import { preloadAgentFold } from '@core/agent-fold/client';
+import { createComposerItemDrop } from '@core/component/AI/primitives/create-composer-item-drop';
 import { buildConfig } from '@core/component/LexicalMarkdown/builder/MarkdownConfigBuilder';
 import { MarkdownShell } from '@core/component/LexicalMarkdown/builder/MarkdownShell';
 import {
@@ -168,6 +169,11 @@ export function ChatComposer(props: {
   }
 
   const dictation = createComposerDictation(() => editor.lexical);
+  const itemDrop = createComposerItemDrop({
+    editor: () => editor.lexical,
+    enabled: () =>
+      !disabled() && !props.session?.readOnly && !dictation.active(),
+  });
 
   const { isCompact } = createComposerLayout(editor.buildHandle().lexical, {
     container: layout,
@@ -285,6 +291,7 @@ export function ChatComposer(props: {
         config={editor}
         initialValue={props.draft}
         onConnect={() => {
+          itemDrop.onConnect();
           editorConnected = true;
           if (props.draft) placeCaretAfterDraft();
         }}
@@ -368,6 +375,8 @@ export function ChatComposer(props: {
       >
         <Show when={isTouchDevice()}>{repositoryDrawer()}</Show>
         <ComposerSurface
+          ref={itemDrop.ref}
+          classList={{ 'outline-2 outline-accent': itemDrop.isDraggedOver() }}
           as="div"
           data-agent-composer="chat"
           data-composer-expanded={

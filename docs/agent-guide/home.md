@@ -19,6 +19,10 @@ Notifications title; the leading preview control restores the list. The Home
 composer remains desktop-only. Restored detail URLs stay inline when wide and
 redirect to standalone pages when folded.
 
+Drag existing email threads, documents, tasks, channels, Drive items or projects
+onto the Home composer to add mention context without moving the items. See
+[AI composer item drops](ai-chat.md#add-existing-items-by-dragging).
+
 Check live Home recency with two accounts: leave the recipient on Home without
 opening the conversation, then send a DM from the other account. The row should
 move into **Last few minutes** and show unread without reloading, including when
