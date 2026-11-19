@@ -1,0 +1,19 @@
+services/agent_harness_service/AGENTS.md
+  s_024592623b7afc::t_844a060964ee47 93
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.7.7",
+  "base_commit_sha": "4f8f287a914d4bef2277792f5bc208b114341adb",
+  "prompts": {},
+  "sessions": {
+    "s_024592623b7afc": {
+      "agent_id": {
+        "tool": "claude",
+        "id": "ff44e640-d545-4448-b666-9917880bbb24",
+        "model": "claude-opus-5-5"
+      },
+      "human_author": "Eric Hayes <56524199+ehayes2000@users.noreply.github.com>"
+    }
+  }
+}
