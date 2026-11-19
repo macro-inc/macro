@@ -10,7 +10,7 @@ version = "0.1.0"
 # OpenSearch step.
 [[test]]
 name = "content_search"
-path = "tests/content_search.rs"
+path = "tests/content_search/main.rs"
 test = false
 
 [dev-dependencies]
