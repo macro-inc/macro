@@ -304,9 +304,6 @@ for (const provider of PROVIDERS) {
       page,
       mailbox,
     }) => {
-      // Two messages synced and decided and a watch window, after a mailbox
-      // whose linking can take a minute on a busy stack.
-      test.setTimeout(180_000);
       const badge = page.locator('[data-sidebar-next-item="mail"]');
       await mailbox.deliver({
         from: 'Linus <linus@example.com>',
