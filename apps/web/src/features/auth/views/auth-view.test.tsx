@@ -54,7 +54,9 @@ function setupWithTokenSignal(
   options: {
     world?: Partial<FakeAuthWorld>;
     /** Replaces the fake backend's redemption, e.g. to make it reject. */
-    redeem?: (token: string) => Promise<boolean>;
+    redeem?: (token: string, attempt: string | undefined) => Promise<boolean>;
+    /** The sign-in attempt the return names. */
+    signInAttempt?: string;
   } = {}
 ) {
   const [token, setToken] = createSignal<string | undefined>(undefined);
@@ -65,6 +67,7 @@ function setupWithTokenSignal(
         showApple={false}
         compact={false}
         token={token()}
+        signInAttempt={options.signInAttempt}
         signedIn={(user) => (
           <p data-testid="signed-in">
             {user().email} {user().tutorialComplete ? 'returning' : 'new'}
@@ -334,6 +337,20 @@ describe('single sign-on', () => {
     setToken('tok-deep-link');
 
     await screen.findByText('sso@acme.com new');
+  });
+
+  it('redeems a session code with the sign-in attempt its return names', async () => {
+    const redeem = vi.fn(async () => true);
+    const { setToken } = setupWithTokenSignal({
+      redeem,
+      signInAttempt: 'attempt-1',
+    });
+
+    setToken('tok-deep-link');
+
+    await waitFor(() =>
+      expect(redeem).toHaveBeenCalledWith('tok-deep-link', 'attempt-1')
+    );
   });
 
   it('redeems a late session code only once', async () => {

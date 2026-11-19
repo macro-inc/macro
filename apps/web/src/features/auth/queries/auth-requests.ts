@@ -1,5 +1,7 @@
+import { takeSignInAttempt } from '@core/auth/sign-in-attempt';
 import { SERVER_HOSTS } from '@core/constant/servers';
 import { platformFetch } from '@core/util/platformFetch';
+import { Telemetry } from '@macro-inc/observability';
 import { authServiceClient } from '@service-auth/client';
 import type { SendCodeResult, VerifyCodeResult } from '../context/auth-context';
 
@@ -104,10 +106,38 @@ export async function verifyEmailCode(input: {
   return { t: 'failed' };
 }
 
-/** Exchanges the session code an SSO return carries for session cookies. */
-export async function exchangeSessionCode(token: string): Promise<boolean> {
-  const result = await authServiceClient.sessionLogin({ session_code: token });
-  if (result.isErr())
-    console.error('Failed to redeem session code', result.error);
-  return result.isOk();
+/**
+ * Exchanges the session code an SSO return carries for session cookies, only
+ * when it answers a sign-in this device started: the return must name a
+ * pending attempt, whose verifier the code is bound to. Any other code is
+ * someone else's sign-in, which would put this app into their account, so it
+ * never reaches the auth service. The attempt is spent whatever the answer,
+ * like the code: a failed redemption asks for a new sign-in, so reopening the
+ * callback later, after a sign-out too, redeems nothing. The span records the
+ * outcome, never the code or the attempt.
+ */
+export function exchangeSessionCode(
+  token: string,
+  attempt: string | undefined
+): Promise<boolean> {
+  return Telemetry.span('auth.session_code.exchange', async (span) => {
+    const verifier = takeSignInAttempt(attempt);
+    span.setAttr('auth.session_code.attempt_named', attempt !== undefined);
+    if (!verifier) {
+      span.setAttr('auth.session_code.outcome', 'no_pending_attempt');
+      console.warn('Refused a session code no sign-in here started');
+      return false;
+    }
+    const result = await authServiceClient.sessionLogin({
+      session_code: token,
+      code_verifier: verifier,
+    });
+    span.setAttr(
+      'auth.session_code.outcome',
+      result.isOk() ? 'redeemed' : 'redeem_failed'
+    );
+    if (result.isErr())
+      console.error('Failed to redeem session code', result.error);
+    return result.isOk();
+  });
 }

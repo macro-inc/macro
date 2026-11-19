@@ -72,6 +72,7 @@ vi.mock('@service-auth/client', () => ({
   authServiceClient: { sessionLogin: mocks.sessionLogin },
 }));
 
+import { signInChallenge, takeSignInAttempt } from '@core/auth/sign-in-attempt';
 import { useSsoLogin } from './useSsoLogin';
 
 const loginUrl = 'https://localhost:3003/app/login?referral_code=invite';
@@ -79,6 +80,7 @@ const proxyAuthHost = 'https://localhost:3003/__macro_dev/gateway/auth';
 
 beforeEach(() => {
   vi.resetAllMocks();
+  localStorage.clear();
   vi.stubGlobal('window', {
     location: { href: loginUrl, origin: new URL(loginUrl).origin },
   });
@@ -103,16 +105,43 @@ beforeEach(() => {
 
 afterEach(() => vi.unstubAllGlobals());
 
+/**
+ * The callback `authUrl` returns to, without the attempt it names, after
+ * checking that attempt is pending here and is the one `authUrl` binds the
+ * session code to.
+ */
+async function expectBoundCallback(
+  authUrl: URL,
+  callback = authUrl.searchParams.get('original_url') ?? ''
+): Promise<string> {
+  const named = /[?&]sign_in_attempt=([^&#]*)/.exec(callback);
+  const verifier = takeSignInAttempt(named?.[1]);
+  if (!named || !verifier) throw new Error('names no pending attempt');
+  expect(authUrl.searchParams.get('session_code_challenge')).toBe(
+    await signInChallenge(verifier)
+  );
+  return callback.replace(named[0], '');
+}
+
+/** A handoff's callback as the auth service reads it: decoded once more. */
+function handoffCallback(authUrl: URL): string {
+  return decodeURIComponent(authUrl.searchParams.get('original_url') ?? '');
+}
+
 describe('useSsoLogin', () => {
   // A local stack's callback runs on the auth service's own port, whose
   // cookies its proxy ignores, so it redeems a session code instead.
   it.each([
-    { host: proxyAuthHost, localStack: false, mobile: 'true' },
-    { host: 'https://localhost:28009/auth', localStack: true, mobile: 'true' },
-    { host: 'https://gateway.macro.com/auth', localStack: false, mobile: null },
+    { host: proxyAuthHost, localStack: false, handoff: true },
+    { host: 'https://localhost:28009/auth', localStack: true, handoff: true },
+    {
+      host: 'https://gateway.macro.com/auth',
+      localStack: false,
+      handoff: false,
+    },
   ])(
     'redirects browser SSO through $host',
-    async ({ host, localStack, mobile }) => {
+    async ({ host, localStack, handoff }) => {
       mocks.servers['auth-service'] = host;
       mocks.localStackProxy = localStack;
 
@@ -122,8 +151,18 @@ describe('useSsoLogin', () => {
       expect(`${redirect.origin}${redirect.pathname}`).toBe(
         `${host}/login/sso`
       );
-      expect(redirect.searchParams.get('is_mobile')).toBe(mobile);
-      expect(redirect.searchParams.get('original_url')).toBe(loginUrl);
+      if (handoff) {
+        // The code comes back on the URL, so it must name this attempt.
+        expect(redirect.searchParams.get('is_mobile')).toBe('true');
+        expect(
+          await expectBoundCallback(redirect, handoffCallback(redirect))
+        ).toBe(loginUrl);
+      } else {
+        // The hosted callback sets cookies; no code reaches the URL.
+        expect(redirect.searchParams.get('is_mobile')).toBeNull();
+        expect(redirect.searchParams.get('session_code_challenge')).toBeNull();
+        expect(redirect.searchParams.get('original_url')).toBe(loginUrl);
+      }
       expect(redirect.searchParams.get('referral_code')).toBe('invite');
       expect(redirect.searchParams.get('idp_name')).toBe('google');
       expect(mocks.createNativeAuthSession).not.toHaveBeenCalled();
@@ -153,7 +192,7 @@ describe('useSsoLogin', () => {
     await useSsoLogin({ signupMode: true })('google');
 
     const redirect = new URL(window.location.href);
-    expect(redirect.searchParams.get('original_url')).toBe(
+    expect(await expectBoundCallback(redirect, handoffCallback(redirect))).toBe(
       'https://localhost:3003/app/doc/document-id?referral_code=original-invite#comment'
     );
     expect(redirect.searchParams.get('referral_code')).toBe('original-invite');
@@ -163,6 +202,26 @@ describe('useSsoLogin', () => {
       { method: 'google' },
       ['posthog']
     );
+  });
+
+  // The auth service decodes `original_url` a second time. Sent encoded
+  // for that, an encoded `#` or `&` in the page's query reaches the return
+  // as data, so the attempt stays in the query.
+  it('returns a handoff to the page it started on, encoded data and all', async () => {
+    mocks.servers['auth-service'] = proxyAuthHost;
+    const start =
+      'https://localhost:3003/app/login?redirect=%2Fdocs%23heading&label=a%26b';
+    window.location.href = start;
+
+    await useSsoLogin()('google');
+
+    const redirect = new URL(window.location.href);
+    const callback = handoffCallback(redirect);
+    expect(await expectBoundCallback(redirect, callback)).toBe(start);
+    const read = new URL(callback);
+    expect(read.searchParams.get('redirect')).toBe('/docs#heading');
+    expect(read.searchParams.get('label')).toBe('a&b');
+    expect(read.hash).toBe('');
   });
 
   // The desktop shell must not depend on the native navigation plugin
@@ -188,7 +247,8 @@ describe('useSsoLogin', () => {
 
       const authUrl = new URL(mocks.openDesktopAuthSession.mock.calls[0][0]);
       expect(`${authUrl.origin}${authUrl.pathname}`).toBe(`${host}/login/sso`);
-      expect(authUrl.searchParams.get('original_url')).toBe('macro:///login');
+      // Anything can open a `macro://` link: the callback names the attempt.
+      expect(await expectBoundCallback(authUrl)).toBe('macro:///login');
       expect(authUrl.searchParams.get('is_mobile')).toBe('true');
       expect(authUrl.searchParams.get('idp_name')).toBe('google');
       expect(authUrl.searchParams.get('referral_code')).toBe('invite');
@@ -224,7 +284,20 @@ describe('useSsoLogin', () => {
       '/doc/document-id?referral_code=original-invite#comment'
     );
     const authUrl = new URL(mocks.openDesktopAuthSession.mock.calls[0][0]);
-    expect(authUrl.searchParams.get('original_url')).toBe('macro:///login');
+    expect(await expectBoundCallback(authUrl)).toBe('macro:///login');
+  });
+
+  it('keeps an invite redirect on the desktop callback beside the attempt', async () => {
+    mocks.platform = 'desktop';
+    window.location.href = `${loginUrl}&redirect=%2Fteam-invite%3Flink%3Dx`;
+
+    await useSsoLogin()('google');
+
+    const authUrl = new URL(mocks.openDesktopAuthSession.mock.calls[0][0]);
+    // Encoded twice: the auth service decodes `original_url` once more.
+    expect(await expectBoundCallback(authUrl)).toBe(
+      'macro:///login?redirect=%252Fteam-invite%253Flink%253Dx'
+    );
   });
 
   it('reports a desktop browser that will not open', async () => {
@@ -241,6 +314,28 @@ describe('useSsoLogin', () => {
     );
   });
 
+  // Its callback would find no attempt, so the sign-in could never finish.
+  it.each([{ platform: 'desktop' as const }, { platform: 'web' as const }])(
+    'starts no $platform sign-in whose attempt storage refuses',
+    async ({ platform }) => {
+      mocks.platform = platform;
+      const setItem = vi
+        .spyOn(Storage.prototype, 'setItem')
+        .mockImplementation(() => {
+          throw new DOMException('full', 'QuotaExceededError');
+        });
+
+      await useSsoLogin()('google');
+      setItem.mockRestore();
+
+      expect(mocks.openDesktopAuthSession).not.toHaveBeenCalled();
+      expect(window.location.href).toBe(loginUrl);
+      expect(mocks.syncLoginStorage).not.toHaveBeenCalled();
+      expect(mocks.toastFailure).toHaveBeenCalledWith(
+        'Sign-in failed. Please try again.'
+      );
+    }
+  );
   it.each(shellHosts)(
     'uses native authentication and redeems the session code through $host',
     async ({ host, localStack }) => {
@@ -258,10 +353,16 @@ describe('useSsoLogin', () => {
       expect(authUrl.searchParams.get('original_url')).toBe(
         'macro://android-auth/test-attempt'
       );
+      // The sheet returns the code to this call, which alone holds the
+      // verifier; nothing is left pending for a URL to claim.
       expect(mocks.sessionLogin).toHaveBeenCalledOnce();
-      expect(mocks.sessionLogin).toHaveBeenCalledWith({
-        session_code: 'session-code',
-      });
+      const [{ session_code, code_verifier }] =
+        mocks.sessionLogin.mock.calls[0];
+      expect(session_code).toBe('session-code');
+      expect(authUrl.searchParams.get('session_code_challenge')).toBe(
+        await signInChallenge(code_verifier)
+      );
+      expect(localStorage.getItem('pendingSignInAttempts')).toBeNull();
       expect(mocks.unsetTokenPromise).toHaveBeenCalledOnce();
       expect(mocks.invalidateAllAfterLogin).toHaveBeenCalledOnce();
       expect(mocks.initEmailLink).toHaveBeenCalledOnce();

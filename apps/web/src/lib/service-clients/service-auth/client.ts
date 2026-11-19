@@ -97,6 +97,9 @@ import type { UserTokensResponse } from './generated/schemas/userTokensResponse'
 
 const authHost = SERVER_HOSTS['auth-service'];
 
+/** Carries the sign-in attempt's verifier when a session code is redeemed. */
+const SESSION_CODE_VERIFIER_HEADER = 'x-session-code-verifier';
+
 /**
  * Which permissions a Google consent screen asks for. `calendar` covers an
  * inbox that is already connected, so the screen lists calendar access alone.
@@ -378,14 +381,22 @@ export const authServiceClient = {
       organizationId: data.organization_id ?? undefined,
     }));
   },
-  async sessionLogin(args: { session_code: string }) {
+  async sessionLogin(args: {
+    session_code: string;
+    /** The verifier of the sign-in attempt the code is bound to. */
+    code_verifier: string;
+  }) {
     // A session code redeems once. A server error leaves it redeemable (the
     // server puts it back when its own token refresh fails), so retrying
     // those is safe; a retry after a redemption that succeeded but never
-    // reached us gets 400.
+    // reached us gets 400. The verifier goes in a header, never the URL,
+    // which request logs keep.
     const result = await authApiFetch<UserTokensResponse>(
-      `/session/login/${args.session_code}`,
-      { retry: { maxTries: 3, delay: 'exponential' } }
+      `/session/login/${encodeURIComponent(args.session_code)}`,
+      {
+        headers: { [SESSION_CODE_VERIFIER_HEADER]: args.code_verifier },
+        retry: { maxTries: 3, delay: 'exponential' },
+      }
     );
     if (result.isOk()) {
       setAccessTokenData({

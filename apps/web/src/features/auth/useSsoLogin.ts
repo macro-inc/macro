@@ -5,6 +5,12 @@ import {
   DESKTOP_AUTH_CALLBACK_URL,
   openDesktopAuthSession,
 } from '@core/auth/native-auth';
+import {
+  createSignInAttempt,
+  rememberSignInAttempt,
+  type SignInAttempt,
+  withSignInAttempt,
+} from '@core/auth/sign-in-attempt';
 import { toast } from '@core/component/Toast/Toast';
 import { SERVER_HOSTS, usesLocalStackProxy } from '@core/constant/servers';
 import { useEmailLinks } from '@core/email-link';
@@ -23,6 +29,16 @@ import { DEVELOPMENT_PROXY_PREFIX } from '../../lib/core/constant/developmentPro
 import { desktopAuthCallbackUrl } from './core/post-auth-target';
 
 /**
+ * Binds the session code this sign-in mints to a new attempt: the auth
+ * service redeems it only with the attempt's verifier.
+ */
+async function bindSessionCode(authUrl: URL): Promise<SignInAttempt> {
+  const attempt = await createSignInAttempt();
+  authUrl.searchParams.set('session_code_challenge', attempt.challenge);
+  return attempt;
+}
+
+/**
  * Run the hosted flow in the system browser and return through the `macro://`
  * deep link.
  *
@@ -32,19 +48,32 @@ import { desktopAuthCallbackUrl } from './core/post-auth-target';
  * host it never fires and the callback lands back in the browser. It also
  * derives the callback from whatever page sign-in started on — normally
  * `/welcome`, which does not redeem session codes.
+ *
+ * Anything can open a `macro://` link, so the callback names the attempt
+ * started here, and the login page redeems only a code for a pending attempt.
  */
 async function startDesktopSso(
   authUrl: URL,
   originalLocation: RedirectLocation['originalLocation'] | undefined
 ) {
+  const attempt = await bindSessionCode(authUrl);
+  if (!rememberSignInAttempt(attempt)) {
+    // Its callback would find no attempt and never sign in.
+    console.error('Could not store the sign-in attempt');
+    toast.failure('Sign-in failed. Please try again.');
+    return;
+  }
   // `/login?redirect=` deep links (invites, meetings) ride the callback, so
   // the login page can open them once signed in, before onboarding for an
   // invite.
   authUrl.searchParams.set(
     'original_url',
-    desktopAuthCallbackUrl(
-      DESKTOP_AUTH_CALLBACK_URL,
-      new URL(window.location.href).searchParams.get('redirect')
+    withSignInAttempt(
+      desktopAuthCallbackUrl(
+        DESKTOP_AUTH_CALLBACK_URL,
+        new URL(window.location.href).searchParams.get('redirect')
+      ),
+      attempt
     )
   );
 
@@ -73,6 +102,9 @@ async function nativeSsoLogin(
   initEmailLink: EmailLinks['initEmailLink']
 ): Promise<NativeSignInOutcome> {
   const session = createNativeAuthSession('login');
+  // The sheet hands the code back to this call, so the verifier never needs
+  // to outlive it.
+  const attempt = await bindSessionCode(authUrl);
   authUrl.searchParams.set('original_url', session.callbackUrl);
   const result = await session.authenticate(authUrl.toString());
   const sessionCode = result.token;
@@ -86,7 +118,10 @@ async function nativeSsoLogin(
   }
 
   const res = await span.run(() =>
-    authServiceClient.sessionLogin({ session_code: sessionCode })
+    authServiceClient.sessionLogin({
+      session_code: sessionCode,
+      code_verifier: attempt.verifier,
+    })
   );
 
   if (res.isErr()) {
@@ -130,6 +165,29 @@ function needsSessionCodeHandoff(authUrl: URL): boolean {
   );
 }
 
+/**
+ * The `original_url` a browser sign-in returns to: the page it started on. A
+ * handoff's also names an attempt this browser now remembers, since the code
+ * returns on that URL after a full-page redirect and the page it lands on must
+ * tell it from someone else's. Undefined when the attempt could not be kept.
+ */
+async function webReturnUrl(
+  authUrl: URL,
+  originalLocation: RedirectLocation['originalLocation'] | undefined,
+  handoff: boolean
+): Promise<string | undefined> {
+  const originalUrl = originalLocation
+    ? `${window.location.origin}${originalLocation.pathname}${originalLocation.search}${originalLocation.hash}`
+    : window.location.href;
+  if (!handoff) return originalUrl;
+  const attempt = await bindSessionCode(authUrl);
+  if (!rememberSignInAttempt(attempt)) return undefined;
+  // The auth service decodes `original_url` once more. Encoded for that, a
+  // handoff returns to the URL as built: an encoded `#` or `&` in its query
+  // stays data instead of hiding the attempt or adding a field.
+  return encodeURIComponent(withSignInAttempt(originalUrl, attempt));
+}
+
 export function useSsoLogin(opts?: {
   signupMode?: boolean;
   /** Started on the agent signup page: a new account becomes an agent. */
@@ -159,8 +217,9 @@ export function useSsoLogin(opts?: {
     if (opts?.isAgent) authUrl.searchParams.set('is_agent', 'true');
 
     const desktop = isPlatform('desktop');
+    const handoff = needsSessionCodeHandoff(authUrl);
 
-    if (desktop || needsSessionCodeHandoff(authUrl)) {
+    if (desktop || handoff) {
       authUrl.searchParams.set('is_mobile', 'true');
     }
 
@@ -200,16 +259,17 @@ export function useSsoLogin(opts?: {
       return;
     }
 
-    if (location.state?.originalLocation) {
-      const { pathname, search, hash } = location.state.originalLocation;
-
-      authUrl.searchParams.set(
-        'original_url',
-        `${window.location.origin}${pathname}${search}${hash}`
-      );
-    } else {
-      authUrl.searchParams.set('original_url', window.location.href);
+    const returnUrl = await webReturnUrl(
+      authUrl,
+      location.state?.originalLocation,
+      handoff
+    );
+    if (returnUrl === undefined) {
+      console.error('Could not store the sign-in attempt');
+      toast.failure('Sign-in failed. Please try again.');
+      return;
     }
+    authUrl.searchParams.set('original_url', returnUrl);
 
     analytics.track(analyticsEvent, { method: idp_name }, analyticsProviders);
 

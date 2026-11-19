@@ -83,6 +83,14 @@ describe('meeting URL telemetry', () => {
       '/app/login?redirect=%2Fwelcome%3Ftoken%3D:sessionCode',
     ],
     ['/app/login?access_token=kept', '/app/login?access_token=kept'],
+    [
+      'https://auth.macro.com/session/login/fake-session-code?code_verifier=fake-verifier',
+      'https://auth.macro.com/session/login/:sessionCode?code_verifier=:signInAttempt',
+    ],
+    [
+      'tauri://localhost/#/login?sign_in_attempt=fake-attempt&token=fake-session-code',
+      'tauri://localhost/#/login?sign_in_attempt=:signInAttempt&token=:sessionCode',
+    ],
   ])('redacts a sign-in session code in %s', (input, expected) => {
     expect(redactLinkTokens(input)).toBe(expected);
   });

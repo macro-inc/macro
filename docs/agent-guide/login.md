@@ -193,11 +193,32 @@ sign-in navigates the browser to `/__macro_dev/gateway/auth/login/sso` with
 `is_mobile=true` to request the session-code handoff. The `original_url`
 remains the browser destination (including its query and hash). Returning
 from the provider redeems the session code to establish cookies locally.
-A code redeems once: a second redemption, or a reload of a page still
-carrying `?token=`, answers 400.
+A code redeems once, and only on the device that started its sign-in (below).
 This browser flow must not open a native authentication session. Verify the
 redirect separately from provider completion; arbitrary development hostnames
 are not on the hosted OAuth redirect allowlist.
+
+## Session codes answer the sign-in that asked for them
+
+Desktop Google/SSO sign-in (`macro:///login`), the hosted-dev proxy and
+local-stack handoffs above, and the native mobile sheet all end with a session
+code. The app starting the sign-in makes an attempt
+(`src/lib/core/auth/sign-in-attempt.ts` in `apps/web`): a random verifier kept
+on this device and its S256 challenge, sent as `session_code_challenge` on
+`/login/sso`. A code that comes back in a URL is redeemed, with the verifier in
+the `x-session-code-verifier` header, only when the URL's `sign_in_attempt`
+names an attempt this device still holds (15 minutes, the five newest, each
+used once, all forgotten on sign-out); any other `?token=`, including a reload
+of a page still carrying one, leaves the sign-in page as it is. An attempt is
+spent whatever its redemption answers: after a failed one (a network error
+included, once the client's own retries are used up), reopening that callback
+makes no request, and the user starts a new sign-in. The native sheet keeps
+its attempt in memory. The auth service redeems a bound code only
+with its verifier and refuses an unbound code sent with one; either refusal
+answers 400 and spends the code. To check on a local stack: Google sign-in
+still lands signed in, `/app/login?token=<anything>` stays on sign-in with no
+`/session/login` request, and the `auth.session_code.exchange` span records
+the outcome. OS delivery of the `macro://` URL still needs a real desktop build.
 
 ## Native iOS 27
 

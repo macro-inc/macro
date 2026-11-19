@@ -226,3 +226,26 @@ describe('GitHub outages', () => {
     });
   });
 });
+
+describe('session code redemption', () => {
+  test('sends the verifier in a header, never in the URL', async () => {
+    const fetch = vi.spyOn(window, 'fetch').mockResolvedValueOnce(
+      Response.json({
+        access_token: jwt(Math.floor(Date.now() / 1000) + 3600),
+        refresh_token: 'fake-refresh-token',
+      })
+    );
+    const result = await authServiceClient.sessionLogin({
+      session_code: 'fake-session-code',
+      code_verifier: 'fake-verifier',
+    });
+    expect(result.isOk()).toBe(true);
+    const [url, init] = fetch.mock.calls[0];
+    expect(String(url)).toMatch(/\/session\/login\/fake-session-code$/);
+    expect(String(url)).not.toContain('fake-verifier');
+    expect(new Headers(init?.headers).get('x-session-code-verifier')).toBe(
+      'fake-verifier'
+    );
+    fetch.mockRestore();
+  });
+});

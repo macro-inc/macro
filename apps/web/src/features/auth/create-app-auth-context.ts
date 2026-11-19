@@ -85,8 +85,8 @@ export function createAppAuthContext(): AuthContext {
     },
     sendEmailCode,
     verifyEmailCode,
-    redeemSessionToken: async (token) => {
-      if (!(await exchangeSessionCode(token))) return false;
+    redeemSessionToken: async (token, attempt) => {
+      if (!(await exchangeSessionCode(token, attempt))) return false;
       await completeLogin();
       return true;
     },

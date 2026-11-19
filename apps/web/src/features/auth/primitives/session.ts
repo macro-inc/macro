@@ -1,18 +1,21 @@
-import { type Accessor, createEffect, on } from 'solid-js';
+import { type Accessor, createEffect, on, untrack } from 'solid-js';
 import type { AuthContext } from '../context/auth-context';
 
 /**
- * Redeem the session code an SSO return put on the URL.
+ * Redeem the session code an SSO return put on the URL, with the sign-in
+ * attempt the return names.
  *
  * The code does not always arrive with the first render. The desktop app is
  * already parked on the signed-out route when the hosted flow hands back
- * `macro:///welcome?token=...`, so the deep link is a query-only navigation
+ * `macro:///login?token=...`, so the deep link is a query-only navigation
  * that leaves this view mounted — reading the code once at setup would miss
- * it and leave the app signed out. Each code is redeemed at most once.
+ * it and leave the app signed out. Each code is redeemed at most once. The
+ * attempt arrives in the same navigation as its code.
  */
 export function redeemSessionToken(
   context: Pick<AuthContext, 'redeemSessionToken' | 'notifyFailure'>,
-  token: Accessor<string | undefined>
+  token: Accessor<string | undefined>,
+  attempt: Accessor<string | undefined>
 ) {
   const attempted = new Set<string>();
   createEffect(
@@ -24,7 +27,7 @@ export function redeemSessionToken(
       // and both have to say so.
       let redeemed = false;
       try {
-        redeemed = await context.redeemSessionToken(code);
+        redeemed = await context.redeemSessionToken(code, untrack(attempt));
       } catch (error) {
         console.error('Failed to redeem session code', error);
       }

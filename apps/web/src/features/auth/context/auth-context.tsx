@@ -60,8 +60,14 @@ export type AuthContext = {
     email: string;
     code: string;
   }): Promise<VerifyCodeResult>;
-  /** Exchanges the auth service's return-URL code for session cookies. */
-  redeemSessionToken(token: string): Promise<boolean>;
+  /**
+   * Exchanges the auth service's return-URL code for session cookies, when
+   * `attempt` names a sign-in this device started and has not yet finished.
+   */
+  redeemSessionToken(
+    token: string,
+    attempt: string | undefined
+  ): Promise<boolean>;
   /** Refreshes everything that depends on who is signed in. */
   completeLogin(): Promise<void>;
   sendMobileWelcomeEmail(email: string): Promise<MobileWelcomeResult>;
