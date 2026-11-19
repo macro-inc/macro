@@ -1,0 +1,551 @@
+                                     version                                      
+----------------------------------------------------------------------------------
+ PostgreSQL 18.4 on x86_64-pc-linux-gnu, compiled by clang version 21.1.8, 64-bit
+(1 row)
+
+force_custom_plan imported_older run1
+                                                                                                                                    QUERY PLAN                                                                                                                                    
+----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------
+ Sort  (cost=16.10..16.11 rows=4 width=64) (actual time=0.353..0.356 rows=51.00 loops=1)
+   Sort Key: m_1.import_order DESC, m_1.created_at DESC, m_1.id DESC
+   Sort Method: quicksort  Memory: 63kB
+   Buffers: shared hit=222 read=1
+   CTE root
+     ->  Index Scan using comms_messages_pkey on comms_messages  (cost=0.42..2.64 rows=1 width=16) (actual time=0.033..0.033 rows=1.00 loops=1)
+           Index Cond: (id = '019fd3b9-0000-7000-8000-000000000001'::uuid)
+           Filter: ((thread_id IS NULL) AND (parent_entity_type = 'channel'::text) AND (parent_entity_id = '019fd3b9-0000-7000-8000-000000000002'::text))
+           Index Searches: 1
+           Buffers: shared hit=3 read=1
+   ->  Nested Loop  (cost=3.17..13.42 rows=4 width=64) (actual time=0.149..0.328 rows=51.00 loops=1)
+         Buffers: shared hit=213 read=1
+         ->  Nested Loop  (cost=2.75..2.86 rows=4 width=32) (actual time=0.101..0.111 rows=51.00 loops=1)
+               Buffers: shared hit=9 read=1
+               ->  CTE Scan on root  (cost=0.00..0.02 rows=1 width=16) (actual time=0.035..0.036 rows=1.00 loops=1)
+                     Storage: Memory  Maximum Storage: 17kB
+                     Buffers: shared hit=3 read=1
+               ->  Limit  (cost=2.75..2.76 rows=4 width=32) (actual time=0.064..0.069 rows=51.00 loops=1)
+                     Buffers: shared hit=6
+                     ->  Sort  (cost=2.75..2.76 rows=4 width=32) (actual time=0.063..0.066 rows=51.00 loops=1)
+                           Sort Key: m_1.import_order DESC, m_1.created_at DESC, m_1.id DESC
+                           Sort Method: quicksort  Memory: 28kB
+                           Buffers: shared hit=6
+                           ->  Append  (cost=0.42..2.71 rows=4 width=32) (actual time=0.021..0.055 rows=51.00 loops=1)
+                                 Buffers: shared hit=6
+                                 ->  Limit  (cost=0.42..2.64 rows=1 width=32) (actual time=0.020..0.032 rows=51.00 loops=1)
+                                       Buffers: shared hit=6
+                                       ->  Index Scan Backward using idx_comms_messages_thread_order on comms_messages m_1  (cost=0.42..2.64 rows=1 width=32) (actual time=0.019..0.029 rows=51.00 loops=1)
+                                             Index Cond: ((thread_id = root.id) AND (import_order IS NOT NULL) AND (ROW(import_order, created_at, id) < ROW('100175'::bigint, '2026-01-02 03:49:35+00'::timestamp with time zone, '019fd3b9-0000-7000-8002-000000099975'::uuid)))
+                                             Filter: (deleted_at IS NULL)
+                                             Index Searches: 1
+                                             Buffers: shared hit=6
+                                 ->  Limit  (cost=0.01..0.02 rows=1 width=0) (actual time=0.011..0.011 rows=0.00 loops=1)
+                                       ->  Sort  (cost=0.01..0.02 rows=0 width=0) (actual time=0.011..0.011 rows=0.00 loops=1)
+                                             Sort Key: import_order DESC, created_at DESC, id DESC
+                                             Sort Method: quicksort  Memory: 25kB
+                                             ->  Result  (cost=0.00..0.00 rows=0 width=0) (actual time=0.000..0.000 rows=0.00 loops=1)
+                                                   One-Time Filter: false
+                                 ->  Limit  (cost=0.01..0.02 rows=1 width=32) (actual time=0.003..0.003 rows=0.00 loops=1)
+                                       ->  Sort  (cost=0.01..0.02 rows=0 width=32) (actual time=0.003..0.003 rows=0.00 loops=1)
+                                             Sort Key: created_at DESC, id DESC
+                                             Sort Method: quicksort  Memory: 25kB
+                                             ->  Result  (cost=0.00..0.00 rows=0 width=32) (actual time=0.000..0.000 rows=0.00 loops=1)
+                                                   One-Time Filter: false
+                                 ->  Limit  (cost=0.01..0.02 rows=1 width=32) (actual time=0.004..0.004 rows=0.00 loops=1)
+                                       ->  Sort  (cost=0.01..0.02 rows=0 width=32) (actual time=0.003..0.004 rows=0.00 loops=1)
+                                             Sort Key: created_at DESC, id DESC
+                                             Sort Method: quicksort  Memory: 25kB
+                                             ->  Result  (cost=0.00..0.00 rows=0 width=32) (actual time=0.000..0.000 rows=0.00 loops=1)
+                                                   One-Time Filter: false
+         ->  Index Scan using comms_messages_pkey on comms_messages m  (cost=0.42..2.64 rows=1 width=428) (actual time=0.001..0.001 rows=1.00 loops=51)
+               Index Cond: (id = m_1.id)
+               Index Searches: 51
+               Buffers: shared hit=204
+ Planning:
+   Buffers: shared hit=471
+ Planning Time: 1.014 ms
+ Execution Time: 0.427 ms
+(58 rows)
+
+force_custom_plan imported_older run2
+                                                                                                                                    QUERY PLAN                                                                                                                                    
+----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------
+ Sort  (cost=16.10..16.11 rows=4 width=64) (actual time=0.228..0.230 rows=51.00 loops=1)
+   Sort Key: m_1.import_order DESC, m_1.created_at DESC, m_1.id DESC
+   Sort Method: quicksort  Memory: 63kB
+   Buffers: shared hit=214
+   CTE root
+     ->  Index Scan using comms_messages_pkey on comms_messages  (cost=0.42..2.64 rows=1 width=16) (actual time=0.007..0.007 rows=1.00 loops=1)
+           Index Cond: (id = '019fd3b9-0000-7000-8000-000000000001'::uuid)
+           Filter: ((thread_id IS NULL) AND (parent_entity_type = 'channel'::text) AND (parent_entity_id = '019fd3b9-0000-7000-8000-000000000002'::text))
+           Index Searches: 1
+           Buffers: shared hit=4
+   ->  Nested Loop  (cost=3.17..13.42 rows=4 width=64) (actual time=0.053..0.217 rows=51.00 loops=1)
+         Buffers: shared hit=214
+         ->  Nested Loop  (cost=2.75..2.86 rows=4 width=32) (actual time=0.037..0.046 rows=51.00 loops=1)
+               Buffers: shared hit=10
+               ->  CTE Scan on root  (cost=0.00..0.02 rows=1 width=16) (actual time=0.008..0.009 rows=1.00 loops=1)
+                     Storage: Memory  Maximum Storage: 17kB
+                     Buffers: shared hit=4
+               ->  Limit  (cost=2.75..2.76 rows=4 width=32) (actual time=0.028..0.033 rows=51.00 loops=1)
+                     Buffers: shared hit=6
+                     ->  Sort  (cost=2.75..2.76 rows=4 width=32) (actual time=0.027..0.030 rows=51.00 loops=1)
+                           Sort Key: m_1.import_order DESC, m_1.created_at DESC, m_1.id DESC
+                           Sort Method: quicksort  Memory: 28kB
+                           Buffers: shared hit=6
+                           ->  Append  (cost=0.42..2.71 rows=4 width=32) (actual time=0.006..0.023 rows=51.00 loops=1)
+                                 Buffers: shared hit=6
+                                 ->  Limit  (cost=0.42..2.64 rows=1 width=32) (actual time=0.006..0.017 rows=51.00 loops=1)
+                                       Buffers: shared hit=6
+                                       ->  Index Scan Backward using idx_comms_messages_thread_order on comms_messages m_1  (cost=0.42..2.64 rows=1 width=32) (actual time=0.005..0.013 rows=51.00 loops=1)
+                                             Index Cond: ((thread_id = root.id) AND (import_order IS NOT NULL) AND (ROW(import_order, created_at, id) < ROW('100175'::bigint, '2026-01-02 03:49:35+00'::timestamp with time zone, '019fd3b9-0000-7000-8002-000000099975'::uuid)))
+                                             Filter: (deleted_at IS NULL)
+                                             Index Searches: 1
+                                             Buffers: shared hit=6
+                                 ->  Limit  (cost=0.01..0.02 rows=1 width=0) (actual time=0.001..0.002 rows=0.00 loops=1)
+                                       ->  Sort  (cost=0.01..0.02 rows=0 width=0) (actual time=0.001..0.001 rows=0.00 loops=1)
+                                             Sort Key: import_order DESC, created_at DESC, id DESC
+                                             Sort Method: quicksort  Memory: 25kB
+                                             ->  Result  (cost=0.00..0.00 rows=0 width=0) (actual time=0.000..0.000 rows=0.00 loops=1)
+                                                   One-Time Filter: false
+                                 ->  Limit  (cost=0.01..0.02 rows=1 width=32) (actual time=0.001..0.001 rows=0.00 loops=1)
+                                       ->  Sort  (cost=0.01..0.02 rows=0 width=32) (actual time=0.001..0.001 rows=0.00 loops=1)
+                                             Sort Key: created_at DESC, id DESC
+                                             Sort Method: quicksort  Memory: 25kB
+                                             ->  Result  (cost=0.00..0.00 rows=0 width=32) (actual time=0.000..0.000 rows=0.00 loops=1)
+                                                   One-Time Filter: false
+                                 ->  Limit  (cost=0.01..0.02 rows=1 width=32) (actual time=0.000..0.001 rows=0.00 loops=1)
+                                       ->  Sort  (cost=0.01..0.02 rows=0 width=32) (actual time=0.000..0.000 rows=0.00 loops=1)
+                                             Sort Key: created_at DESC, id DESC
+                                             Sort Method: quicksort  Memory: 25kB
+                                             ->  Result  (cost=0.00..0.00 rows=0 width=32) (actual time=0.000..0.000 rows=0.00 loops=1)
+                                                   One-Time Filter: false
+         ->  Index Scan using comms_messages_pkey on comms_messages m  (cost=0.42..2.64 rows=1 width=428) (actual time=0.001..0.001 rows=1.00 loops=51)
+               Index Cond: (id = m_1.id)
+               Index Searches: 51
+               Buffers: shared hit=204
+ Planning:
+   Buffers: shared hit=18
+ Planning Time: 0.344 ms
+ Execution Time: 0.257 ms
+(58 rows)
+
+force_custom_plan imported_newer run1
+                                                                                                                                    QUERY PLAN                                                                                                                                    
+----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------
+ Sort  (cost=157.12..157.25 rows=51 width=64) (actual time=0.245..0.247 rows=51.00 loops=1)
+   Sort Key: m_1.import_order, m_1.created_at, m_1.id
+   Sort Method: quicksort  Memory: 62kB
+   Buffers: shared hit=215
+   CTE root
+     ->  Index Scan using comms_messages_pkey on comms_messages  (cost=0.42..2.64 rows=1 width=16) (actual time=0.005..0.005 rows=1.00 loops=1)
+           Index Cond: (id = '019fd3b9-0000-7000-8000-000000000001'::uuid)
+           Filter: ((thread_id IS NULL) AND (parent_entity_type = 'channel'::text) AND (parent_entity_id = '019fd3b9-0000-7000-8000-000000000002'::text))
+           Index Searches: 1
+           Buffers: shared hit=4
+   ->  Nested Loop  (cost=18.74..153.03 rows=51 width=64) (actual time=0.063..0.236 rows=51.00 loops=1)
+         Buffers: shared hit=215
+         ->  Nested Loop  (cost=18.32..19.49 rows=51 width=32) (actual time=0.051..0.061 rows=51.00 loops=1)
+               Buffers: shared hit=11
+               ->  CTE Scan on root  (cost=0.00..0.02 rows=1 width=16) (actual time=0.006..0.006 rows=1.00 loops=1)
+                     Storage: Memory  Maximum Storage: 17kB
+                     Buffers: shared hit=4
+               ->  Limit  (cost=18.32..18.45 rows=51 width=32) (actual time=0.044..0.049 rows=51.00 loops=1)
+                     Buffers: shared hit=7
+                     ->  Sort  (cost=18.32..18.46 rows=54 width=32) (actual time=0.044..0.046 rows=51.00 loops=1)
+                           Sort Key: m_1.import_order, m_1.created_at, m_1.id
+                           Sort Method: quicksort  Memory: 30kB
+                           Buffers: shared hit=7
+                           ->  Append  (cost=0.42..16.77 rows=54 width=32) (actual time=0.006..0.037 rows=75.00 loops=1)
+                                 Buffers: shared hit=7
+                                 ->  Limit  (cost=0.42..2.64 rows=1 width=32) (actual time=0.006..0.013 rows=25.00 loops=1)
+                                       Buffers: shared hit=5
+                                       ->  Index Scan using idx_comms_messages_thread_order on comms_messages m_1  (cost=0.42..2.64 rows=1 width=32) (actual time=0.005..0.011 rows=25.00 loops=1)
+                                             Index Cond: ((thread_id = root.id) AND (import_order IS NOT NULL) AND (ROW(import_order, created_at, id) > ROW('100175'::bigint, '2026-01-02 03:49:35+00'::timestamp with time zone, '019fd3b9-0000-7000-8002-000000099975'::uuid)))
+                                             Filter: (deleted_at IS NULL)
+                                             Index Searches: 1
+                                             Buffers: shared hit=5
+                                 ->  Limit  (cost=0.01..0.02 rows=1 width=0) (actual time=0.001..0.001 rows=0.00 loops=1)
+                                       ->  Sort  (cost=0.01..0.02 rows=0 width=0) (actual time=0.001..0.001 rows=0.00 loops=1)
+                                             Sort Key: import_order, created_at, id
+                                             Sort Method: quicksort  Memory: 25kB
+                                             ->  Result  (cost=0.00..0.00 rows=0 width=0) (actual time=0.000..0.000 rows=0.00 loops=1)
+                                                   One-Time Filter: false
+                                 ->  Limit  (cost=0.01..0.02 rows=1 width=32) (actual time=0.000..0.001 rows=0.00 loops=1)
+                                       ->  Sort  (cost=0.01..0.02 rows=0 width=32) (actual time=0.000..0.001 rows=0.00 loops=1)
+                                             Sort Key: created_at, id
+                                             Sort Method: quicksort  Memory: 25kB
+                                             ->  Result  (cost=0.00..0.00 rows=0 width=32) (actual time=0.000..0.000 rows=0.00 loops=1)
+                                                   One-Time Filter: false
+                                 ->  Limit  (cost=0.14..13.83 rows=51 width=32) (actual time=0.012..0.018 rows=50.00 loops=1)
+                                       Buffers: shared hit=2
+                                       ->  Index Only Scan using idx_comms_messages_thread_live_unimported on comms_messages m_2  (cost=0.14..112.35 rows=418 width=32) (actual time=0.012..0.015 rows=50.00 loops=1)
+                                             Index Cond: (thread_id = root.id)
+                                             Heap Fetches: 0
+                                             Index Searches: 1
+                                             Buffers: shared hit=2
+         ->  Index Scan using comms_messages_pkey on comms_messages m  (cost=0.42..2.62 rows=1 width=428) (actual time=0.001..0.001 rows=1.00 loops=51)
+               Index Cond: (id = m_1.id)
+               Index Searches: 51
+               Buffers: shared hit=204
+ Planning:
+   Buffers: shared hit=18
+ Planning Time: 0.278 ms
+ Execution Time: 0.273 ms
+(59 rows)
+
+force_custom_plan imported_newer run2
+                                                                                                                                    QUERY PLAN                                                                                                                                    
+----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------
+ Sort  (cost=157.12..157.25 rows=51 width=64) (actual time=0.231..0.234 rows=51.00 loops=1)
+   Sort Key: m_1.import_order, m_1.created_at, m_1.id
+   Sort Method: quicksort  Memory: 62kB
+   Buffers: shared hit=215
+   CTE root
+     ->  Index Scan using comms_messages_pkey on comms_messages  (cost=0.42..2.64 rows=1 width=16) (actual time=0.004..0.004 rows=1.00 loops=1)
+           Index Cond: (id = '019fd3b9-0000-7000-8000-000000000001'::uuid)
+           Filter: ((thread_id IS NULL) AND (parent_entity_type = 'channel'::text) AND (parent_entity_id = '019fd3b9-0000-7000-8000-000000000002'::text))
+           Index Searches: 1
+           Buffers: shared hit=4
+   ->  Nested Loop  (cost=18.74..153.03 rows=51 width=64) (actual time=0.045..0.225 rows=51.00 loops=1)
+         Buffers: shared hit=215
+         ->  Nested Loop  (cost=18.32..19.49 rows=51 width=32) (actual time=0.035..0.063 rows=51.00 loops=1)
+               Buffers: shared hit=11
+               ->  CTE Scan on root  (cost=0.00..0.02 rows=1 width=16) (actual time=0.005..0.005 rows=1.00 loops=1)
+                     Storage: Memory  Maximum Storage: 17kB
+                     Buffers: shared hit=4
+               ->  Limit  (cost=18.32..18.45 rows=51 width=32) (actual time=0.030..0.035 rows=51.00 loops=1)
+                     Buffers: shared hit=7
+                     ->  Sort  (cost=18.32..18.46 rows=54 width=32) (actual time=0.029..0.032 rows=51.00 loops=1)
+                           Sort Key: m_1.import_order, m_1.created_at, m_1.id
+                           Sort Method: quicksort  Memory: 30kB
+                           Buffers: shared hit=7
+                           ->  Append  (cost=0.42..16.77 rows=54 width=32) (actual time=0.004..0.023 rows=75.00 loops=1)
+                                 Buffers: shared hit=7
+                                 ->  Limit  (cost=0.42..2.64 rows=1 width=32) (actual time=0.004..0.009 rows=25.00 loops=1)
+                                       Buffers: shared hit=5
+                                       ->  Index Scan using idx_comms_messages_thread_order on comms_messages m_1  (cost=0.42..2.64 rows=1 width=32) (actual time=0.004..0.007 rows=25.00 loops=1)
+                                             Index Cond: ((thread_id = root.id) AND (import_order IS NOT NULL) AND (ROW(import_order, created_at, id) > ROW('100175'::bigint, '2026-01-02 03:49:35+00'::timestamp with time zone, '019fd3b9-0000-7000-8002-000000099975'::uuid)))
+                                             Filter: (deleted_at IS NULL)
+                                             Index Searches: 1
+                                             Buffers: shared hit=5
+                                 ->  Limit  (cost=0.01..0.02 rows=1 width=0) (actual time=0.001..0.001 rows=0.00 loops=1)
+                                       ->  Sort  (cost=0.01..0.02 rows=0 width=0) (actual time=0.001..0.001 rows=0.00 loops=1)
+                                             Sort Key: import_order, created_at, id
+                                             Sort Method: quicksort  Memory: 25kB
+                                             ->  Result  (cost=0.00..0.00 rows=0 width=0) (actual time=0.000..0.000 rows=0.00 loops=1)
+                                                   One-Time Filter: false
+                                 ->  Limit  (cost=0.01..0.02 rows=1 width=32) (actual time=0.000..0.001 rows=0.00 loops=1)
+                                       ->  Sort  (cost=0.01..0.02 rows=0 width=32) (actual time=0.000..0.000 rows=0.00 loops=1)
+                                             Sort Key: created_at, id
+                                             Sort Method: quicksort  Memory: 25kB
+                                             ->  Result  (cost=0.00..0.00 rows=0 width=32) (actual time=0.000..0.000 rows=0.00 loops=1)
+                                                   One-Time Filter: false
+                                 ->  Limit  (cost=0.14..13.83 rows=51 width=32) (actual time=0.003..0.008 rows=50.00 loops=1)
+                                       Buffers: shared hit=2
+                                       ->  Index Only Scan using idx_comms_messages_thread_live_unimported on comms_messages m_2  (cost=0.14..112.35 rows=418 width=32) (actual time=0.003..0.005 rows=50.00 loops=1)
+                                             Index Cond: (thread_id = root.id)
+                                             Heap Fetches: 0
+                                             Index Searches: 1
+                                             Buffers: shared hit=2
+         ->  Index Scan using comms_messages_pkey on comms_messages m  (cost=0.42..2.62 rows=1 width=428) (actual time=0.001..0.001 rows=1.00 loops=51)
+               Index Cond: (id = m_1.id)
+               Index Searches: 51
+               Buffers: shared hit=204
+ Planning:
+   Buffers: shared hit=18
+ Planning Time: 0.238 ms
+ Execution Time: 0.254 ms
+(59 rows)
+
+force_generic_plan imported_older run1
+                                                                                                 QUERY PLAN                                                                                                 
+------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------
+ Sort  (cost=37.22..37.23 rows=6 width=64) (actual time=0.242..0.245 rows=51.00 loops=1)
+   Sort Key: m_1.import_order DESC, m_1.created_at DESC, m_1.id DESC
+   Sort Method: quicksort  Memory: 63kB
+   Buffers: shared hit=214
+   CTE root
+     ->  Index Scan using comms_messages_pkey on comms_messages  (cost=0.42..2.64 rows=1 width=16) (actual time=0.005..0.005 rows=1.00 loops=1)
+           Index Cond: (id = $3)
+           Filter: ((thread_id IS NULL) AND (parent_entity_type = $1) AND (parent_entity_id = $2))
+           Index Searches: 1
+           Buffers: shared hit=4
+   ->  Nested Loop  (cost=18.37..34.50 rows=6 width=64) (actual time=0.032..0.231 rows=51.00 loops=1)
+         Buffers: shared hit=214
+         ->  Nested Loop  (cost=17.95..18.66 rows=6 width=32) (actual time=0.016..0.042 rows=51.00 loops=1)
+               Buffers: shared hit=10
+               ->  CTE Scan on root  (cost=0.00..0.02 rows=1 width=16) (actual time=0.006..0.007 rows=1.00 loops=1)
+                     Storage: Memory  Maximum Storage: 17kB
+                     Buffers: shared hit=4
+               ->  Limit  (cost=17.95..18.52 rows=6 width=32) (actual time=0.009..0.031 rows=51.00 loops=1)
+                     Buffers: shared hit=6
+                     ->  Merge Append  (cost=17.95..23.41 rows=58 width=32) (actual time=0.008..0.028 rows=51.00 loops=1)
+                           Sort Key: m_1.import_order DESC, m_1.created_at DESC, m_1.id DESC
+                           Buffers: shared hit=6
+                           ->  Limit  (cost=0.42..2.64 rows=1 width=32) (actual time=0.005..0.021 rows=51.00 loops=1)
+                                 Buffers: shared hit=6
+                                 ->  Result  (cost=0.42..2.64 rows=1 width=32) (actual time=0.005..0.018 rows=51.00 loops=1)
+                                       One-Time Filter: ($4 IS NOT NULL)
+                                       Buffers: shared hit=6
+                                       ->  Index Scan Backward using idx_comms_messages_thread_order on comms_messages m_1  (cost=0.42..2.64 rows=1 width=32) (actual time=0.004..0.013 rows=51.00 loops=1)
+                                             Index Cond: ((thread_id = root.id) AND (import_order IS NOT NULL) AND (ROW(import_order, created_at, id) < ROW($4, $5, $6)))
+                                             Filter: (deleted_at IS NULL)
+                                             Index Searches: 1
+                                             Buffers: shared hit=6
+                           ->  Limit  (cost=0.42..2.64 rows=1 width=32) (actual time=0.000..0.000 rows=0.00 loops=1)
+                                 ->  Result  (cost=0.42..2.64 rows=1 width=32) (actual time=0.000..0.000 rows=0.00 loops=1)
+                                       One-Time Filter: $7
+                                       ->  Index Scan Backward using idx_comms_messages_thread_order on comms_messages m_2  (cost=0.42..2.64 rows=1 width=32) (never executed)
+                                             Index Cond: ((thread_id = root.id) AND (import_order IS NOT NULL))
+                                             Filter: (deleted_at IS NULL)
+                                             Index Searches: 0
+                           ->  Sort  (cost=4.53..4.57 rows=14 width=32) (actual time=0.001..0.002 rows=0.00 loops=1)
+                                 Sort Key: (NULL::bigint) DESC, m_3.created_at DESC, m_3.id DESC
+                                 Sort Method: quicksort  Memory: 25kB
+                                 ->  Limit  (cost=0.14..4.27 rows=14 width=32) (actual time=0.000..0.000 rows=0.00 loops=1)
+                                       ->  Result  (cost=0.14..41.11 rows=139 width=32) (actual time=0.000..0.000 rows=0.00 loops=1)
+                                             One-Time Filter: ($8 IS NOT NULL)
+                                             ->  Index Only Scan Backward using idx_comms_messages_thread_live_unimported on comms_messages m_3  (cost=0.14..41.11 rows=139 width=24) (never executed)
+                                                   Index Cond: ((thread_id = root.id) AND (ROW(created_at, id) < ROW($8, $9)))
+                                                   Heap Fetches: 0
+                                                   Index Searches: 0
+                           ->  Sort  (cost=12.55..12.65 rows=42 width=32) (actual time=0.001..0.001 rows=0.00 loops=1)
+                                 Sort Key: (NULL::bigint) DESC, m_4.created_at DESC, m_4.id DESC
+                                 Sort Method: quicksort  Memory: 25kB
+                                 ->  Limit  (cost=0.14..11.41 rows=42 width=32) (actual time=0.000..0.000 rows=0.00 loops=1)
+                                       ->  Result  (cost=0.14..112.35 rows=418 width=32) (actual time=0.000..0.000 rows=0.00 loops=1)
+                                             One-Time Filter: $10
+                                             ->  Index Only Scan Backward using idx_comms_messages_thread_live_unimported on comms_messages m_4  (cost=0.14..112.35 rows=418 width=24) (never executed)
+                                                   Index Cond: (thread_id = root.id)
+                                                   Heap Fetches: 0
+                                                   Index Searches: 0
+         ->  Index Scan using comms_messages_pkey on comms_messages m  (cost=0.42..2.64 rows=1 width=428) (actual time=0.001..0.001 rows=1.00 loops=51)
+               Index Cond: (id = m_1.id)
+               Index Searches: 51
+               Buffers: shared hit=204
+ Planning:
+   Buffers: shared hit=27
+ Planning Time: 0.376 ms
+ Execution Time: 0.280 ms
+(67 rows)
+
+force_generic_plan imported_older run2
+                                                                                                 QUERY PLAN                                                                                                 
+------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------
+ Sort  (cost=37.22..37.23 rows=6 width=64) (actual time=0.200..0.202 rows=51.00 loops=1)
+   Sort Key: m_1.import_order DESC, m_1.created_at DESC, m_1.id DESC
+   Sort Method: quicksort  Memory: 63kB
+   Buffers: shared hit=214
+   CTE root
+     ->  Index Scan using comms_messages_pkey on comms_messages  (cost=0.42..2.64 rows=1 width=16) (actual time=0.003..0.003 rows=1.00 loops=1)
+           Index Cond: (id = $3)
+           Filter: ((thread_id IS NULL) AND (parent_entity_type = $1) AND (parent_entity_id = $2))
+           Index Searches: 1
+           Buffers: shared hit=4
+   ->  Nested Loop  (cost=18.37..34.50 rows=6 width=64) (actual time=0.017..0.194 rows=51.00 loops=1)
+         Buffers: shared hit=214
+         ->  Nested Loop  (cost=17.95..18.66 rows=6 width=32) (actual time=0.010..0.034 rows=51.00 loops=1)
+               Buffers: shared hit=10
+               ->  CTE Scan on root  (cost=0.00..0.02 rows=1 width=16) (actual time=0.003..0.004 rows=1.00 loops=1)
+                     Storage: Memory  Maximum Storage: 17kB
+                     Buffers: shared hit=4
+               ->  Limit  (cost=17.95..18.52 rows=6 width=32) (actual time=0.006..0.026 rows=51.00 loops=1)
+                     Buffers: shared hit=6
+                     ->  Merge Append  (cost=17.95..23.41 rows=58 width=32) (actual time=0.005..0.023 rows=51.00 loops=1)
+                           Sort Key: m_1.import_order DESC, m_1.created_at DESC, m_1.id DESC
+                           Buffers: shared hit=6
+                           ->  Limit  (cost=0.42..2.64 rows=1 width=32) (actual time=0.003..0.017 rows=51.00 loops=1)
+                                 Buffers: shared hit=6
+                                 ->  Result  (cost=0.42..2.64 rows=1 width=32) (actual time=0.003..0.015 rows=51.00 loops=1)
+                                       One-Time Filter: ($4 IS NOT NULL)
+                                       Buffers: shared hit=6
+                                       ->  Index Scan Backward using idx_comms_messages_thread_order on comms_messages m_1  (cost=0.42..2.64 rows=1 width=32) (actual time=0.003..0.011 rows=51.00 loops=1)
+                                             Index Cond: ((thread_id = root.id) AND (import_order IS NOT NULL) AND (ROW(import_order, created_at, id) < ROW($4, $5, $6)))
+                                             Filter: (deleted_at IS NULL)
+                                             Index Searches: 1
+                                             Buffers: shared hit=6
+                           ->  Limit  (cost=0.42..2.64 rows=1 width=32) (actual time=0.000..0.000 rows=0.00 loops=1)
+                                 ->  Result  (cost=0.42..2.64 rows=1 width=32) (actual time=0.000..0.000 rows=0.00 loops=1)
+                                       One-Time Filter: $7
+                                       ->  Index Scan Backward using idx_comms_messages_thread_order on comms_messages m_2  (cost=0.42..2.64 rows=1 width=32) (never executed)
+                                             Index Cond: ((thread_id = root.id) AND (import_order IS NOT NULL))
+                                             Filter: (deleted_at IS NULL)
+                                             Index Searches: 0
+                           ->  Sort  (cost=4.53..4.57 rows=14 width=32) (actual time=0.001..0.001 rows=0.00 loops=1)
+                                 Sort Key: (NULL::bigint) DESC, m_3.created_at DESC, m_3.id DESC
+                                 Sort Method: quicksort  Memory: 25kB
+                                 ->  Limit  (cost=0.14..4.27 rows=14 width=32) (actual time=0.000..0.000 rows=0.00 loops=1)
+                                       ->  Result  (cost=0.14..41.11 rows=139 width=32) (actual time=0.000..0.000 rows=0.00 loops=1)
+                                             One-Time Filter: ($8 IS NOT NULL)
+                                             ->  Index Only Scan Backward using idx_comms_messages_thread_live_unimported on comms_messages m_3  (cost=0.14..41.11 rows=139 width=24) (never executed)
+                                                   Index Cond: ((thread_id = root.id) AND (ROW(created_at, id) < ROW($8, $9)))
+                                                   Heap Fetches: 0
+                                                   Index Searches: 0
+                           ->  Sort  (cost=12.55..12.65 rows=42 width=32) (actual time=0.001..0.001 rows=0.00 loops=1)
+                                 Sort Key: (NULL::bigint) DESC, m_4.created_at DESC, m_4.id DESC
+                                 Sort Method: quicksort  Memory: 25kB
+                                 ->  Limit  (cost=0.14..11.41 rows=42 width=32) (actual time=0.000..0.000 rows=0.00 loops=1)
+                                       ->  Result  (cost=0.14..112.35 rows=418 width=32) (actual time=0.000..0.000 rows=0.00 loops=1)
+                                             One-Time Filter: $10
+                                             ->  Index Only Scan Backward using idx_comms_messages_thread_live_unimported on comms_messages m_4  (cost=0.14..112.35 rows=418 width=24) (never executed)
+                                                   Index Cond: (thread_id = root.id)
+                                                   Heap Fetches: 0
+                                                   Index Searches: 0
+         ->  Index Scan using comms_messages_pkey on comms_messages m  (cost=0.42..2.64 rows=1 width=428) (actual time=0.001..0.001 rows=1.00 loops=51)
+               Index Cond: (id = m_1.id)
+               Index Searches: 51
+               Buffers: shared hit=204
+ Planning Time: 0.011 ms
+ Execution Time: 0.224 ms
+(65 rows)
+
+force_generic_plan imported_newer run1
+                                                                                                         QUERY PLAN                                                                                                         
+----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------
+ Sort  (cost=37.22..37.23 rows=6 width=64) (actual time=0.293..0.296 rows=51.00 loops=1)
+   Sort Key: m_1.import_order, m_1.created_at, m_1.id
+   Sort Method: quicksort  Memory: 62kB
+   Buffers: shared hit=215
+   CTE root
+     ->  Index Scan using comms_messages_pkey on comms_messages  (cost=0.42..2.64 rows=1 width=16) (actual time=0.005..0.005 rows=1.00 loops=1)
+           Index Cond: (id = $3)
+           Filter: ((thread_id IS NULL) AND (parent_entity_type = $1) AND (parent_entity_id = $2))
+           Index Searches: 1
+           Buffers: shared hit=4
+   ->  Nested Loop  (cost=18.37..34.50 rows=6 width=64) (actual time=0.053..0.274 rows=51.00 loops=1)
+         Buffers: shared hit=215
+         ->  Nested Loop  (cost=17.95..18.66 rows=6 width=32) (actual time=0.040..0.063 rows=51.00 loops=1)
+               Buffers: shared hit=11
+               ->  CTE Scan on root  (cost=0.00..0.02 rows=1 width=16) (actual time=0.005..0.006 rows=1.00 loops=1)
+                     Storage: Memory  Maximum Storage: 17kB
+                     Buffers: shared hit=4
+               ->  Limit  (cost=17.95..18.52 rows=6 width=32) (actual time=0.034..0.052 rows=51.00 loops=1)
+                     Buffers: shared hit=7
+                     ->  Merge Append  (cost=17.95..23.41 rows=58 width=32) (actual time=0.033..0.048 rows=51.00 loops=1)
+                           Sort Key: m_1.import_order, m_1.created_at, m_1.id
+                           Buffers: shared hit=7
+                           ->  Limit  (cost=0.42..2.64 rows=1 width=32) (actual time=0.006..0.015 rows=25.00 loops=1)
+                                 Buffers: shared hit=5
+                                 ->  Result  (cost=0.42..2.64 rows=1 width=32) (actual time=0.005..0.013 rows=25.00 loops=1)
+                                       One-Time Filter: ($4 IS NOT NULL)
+                                       Buffers: shared hit=5
+                                       ->  Index Scan using idx_comms_messages_thread_order on comms_messages m_1  (cost=0.42..2.64 rows=1 width=32) (actual time=0.005..0.010 rows=25.00 loops=1)
+                                             Index Cond: ((thread_id = root.id) AND (import_order IS NOT NULL) AND (ROW(import_order, created_at, id) > ROW($4, $5, $6)))
+                                             Filter: (deleted_at IS NULL)
+                                             Index Searches: 1
+                                             Buffers: shared hit=5
+                           ->  Limit  (cost=0.42..2.64 rows=1 width=32) (actual time=0.000..0.000 rows=0.00 loops=1)
+                                 ->  Result  (cost=0.42..2.64 rows=1 width=32) (actual time=0.000..0.000 rows=0.00 loops=1)
+                                       One-Time Filter: $7
+                                       ->  Index Scan using idx_comms_messages_thread_order on comms_messages m_2  (cost=0.42..2.64 rows=1 width=32) (never executed)
+                                             Index Cond: ((thread_id = root.id) AND (import_order IS NOT NULL))
+                                             Filter: (deleted_at IS NULL)
+                                             Index Searches: 0
+                           ->  Sort  (cost=4.53..4.57 rows=14 width=32) (actual time=0.001..0.002 rows=0.00 loops=1)
+                                 Sort Key: (NULL::bigint), m_3.created_at, m_3.id
+                                 Sort Method: quicksort  Memory: 25kB
+                                 ->  Limit  (cost=0.14..4.27 rows=14 width=32) (actual time=0.000..0.000 rows=0.00 loops=1)
+                                       ->  Result  (cost=0.14..41.11 rows=139 width=32) (actual time=0.000..0.000 rows=0.00 loops=1)
+                                             One-Time Filter: ($8 IS NOT NULL)
+                                             ->  Index Only Scan using idx_comms_messages_thread_live_unimported on comms_messages m_3  (cost=0.14..41.11 rows=139 width=24) (never executed)
+                                                   Index Cond: ((thread_id = root.id) AND (ROW(created_at, id) > ROW($8, $9)))
+                                                   Heap Fetches: 0
+                                                   Index Searches: 0
+                           ->  Sort  (cost=12.55..12.65 rows=42 width=32) (actual time=0.025..0.027 rows=26.00 loops=1)
+                                 Sort Key: (NULL::bigint), m_4.created_at, m_4.id
+                                 Sort Method: quicksort  Memory: 28kB
+                                 Buffers: shared hit=2
+                                 ->  Limit  (cost=0.14..11.41 rows=42 width=32) (actual time=0.005..0.015 rows=50.00 loops=1)
+                                       Buffers: shared hit=2
+                                       ->  Result  (cost=0.14..112.35 rows=418 width=32) (actual time=0.005..0.012 rows=50.00 loops=1)
+                                             One-Time Filter: $10
+                                             Buffers: shared hit=2
+                                             ->  Index Only Scan using idx_comms_messages_thread_live_unimported on comms_messages m_4  (cost=0.14..112.35 rows=418 width=24) (actual time=0.004..0.007 rows=50.00 loops=1)
+                                                   Index Cond: (thread_id = root.id)
+                                                   Heap Fetches: 0
+                                                   Index Searches: 1
+                                                   Buffers: shared hit=2
+         ->  Index Scan using comms_messages_pkey on comms_messages m  (cost=0.42..2.64 rows=1 width=428) (actual time=0.001..0.001 rows=1.00 loops=51)
+               Index Cond: (id = m_1.id)
+               Index Searches: 51
+               Buffers: shared hit=204
+ Planning:
+   Buffers: shared hit=27
+ Planning Time: 0.388 ms
+ Execution Time: 0.329 ms
+(71 rows)
+
+force_generic_plan imported_newer run2
+                                                                                                         QUERY PLAN                                                                                                         
+----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------
+ Sort  (cost=37.22..37.23 rows=6 width=64) (actual time=0.203..0.206 rows=51.00 loops=1)
+   Sort Key: m_1.import_order, m_1.created_at, m_1.id
+   Sort Method: quicksort  Memory: 62kB
+   Buffers: shared hit=215
+   CTE root
+     ->  Index Scan using comms_messages_pkey on comms_messages  (cost=0.42..2.64 rows=1 width=16) (actual time=0.003..0.003 rows=1.00 loops=1)
+           Index Cond: (id = $3)
+           Filter: ((thread_id IS NULL) AND (parent_entity_type = $1) AND (parent_entity_id = $2))
+           Index Searches: 1
+           Buffers: shared hit=4
+   ->  Nested Loop  (cost=18.37..34.50 rows=6 width=64) (actual time=0.030..0.197 rows=51.00 loops=1)
+         Buffers: shared hit=215
+         ->  Nested Loop  (cost=17.95..18.66 rows=6 width=32) (actual time=0.023..0.040 rows=51.00 loops=1)
+               Buffers: shared hit=11
+               ->  CTE Scan on root  (cost=0.00..0.02 rows=1 width=16) (actual time=0.003..0.004 rows=1.00 loops=1)
+                     Storage: Memory  Maximum Storage: 17kB
+                     Buffers: shared hit=4
+               ->  Limit  (cost=17.95..18.52 rows=6 width=32) (actual time=0.019..0.032 rows=51.00 loops=1)
+                     Buffers: shared hit=7
+                     ->  Merge Append  (cost=17.95..23.41 rows=58 width=32) (actual time=0.019..0.030 rows=51.00 loops=1)
+                           Sort Key: m_1.import_order, m_1.created_at, m_1.id
+                           Buffers: shared hit=7
+                           ->  Limit  (cost=0.42..2.64 rows=1 width=32) (actual time=0.003..0.010 rows=25.00 loops=1)
+                                 Buffers: shared hit=5
+                                 ->  Result  (cost=0.42..2.64 rows=1 width=32) (actual time=0.003..0.008 rows=25.00 loops=1)
+                                       One-Time Filter: ($4 IS NOT NULL)
+                                       Buffers: shared hit=5
+                                       ->  Index Scan using idx_comms_messages_thread_order on comms_messages m_1  (cost=0.42..2.64 rows=1 width=32) (actual time=0.003..0.006 rows=25.00 loops=1)
+                                             Index Cond: ((thread_id = root.id) AND (import_order IS NOT NULL) AND (ROW(import_order, created_at, id) > ROW($4, $5, $6)))
+                                             Filter: (deleted_at IS NULL)
+                                             Index Searches: 1
+                                             Buffers: shared hit=5
+                           ->  Limit  (cost=0.42..2.64 rows=1 width=32) (actual time=0.000..0.000 rows=0.00 loops=1)
+                                 ->  Result  (cost=0.42..2.64 rows=1 width=32) (actual time=0.000..0.000 rows=0.00 loops=1)
+                                       One-Time Filter: $7
+                                       ->  Index Scan using idx_comms_messages_thread_order on comms_messages m_2  (cost=0.42..2.64 rows=1 width=32) (never executed)
+                                             Index Cond: ((thread_id = root.id) AND (import_order IS NOT NULL))
+                                             Filter: (deleted_at IS NULL)
+                                             Index Searches: 0
+                           ->  Sort  (cost=4.53..4.57 rows=14 width=32) (actual time=0.001..0.001 rows=0.00 loops=1)
+                                 Sort Key: (NULL::bigint), m_3.created_at, m_3.id
+                                 Sort Method: quicksort  Memory: 25kB
+                                 ->  Limit  (cost=0.14..4.27 rows=14 width=32) (actual time=0.000..0.000 rows=0.00 loops=1)
+                                       ->  Result  (cost=0.14..41.11 rows=139 width=32) (actual time=0.000..0.000 rows=0.00 loops=1)
+                                             One-Time Filter: ($8 IS NOT NULL)
+                                             ->  Index Only Scan using idx_comms_messages_thread_live_unimported on comms_messages m_3  (cost=0.14..41.11 rows=139 width=24) (never executed)
+                                                   Index Cond: ((thread_id = root.id) AND (ROW(created_at, id) > ROW($8, $9)))
+                                                   Heap Fetches: 0
+                                                   Index Searches: 0
+                           ->  Sort  (cost=12.55..12.65 rows=42 width=32) (actual time=0.014..0.015 rows=26.00 loops=1)
+                                 Sort Key: (NULL::bigint), m_4.created_at, m_4.id
+                                 Sort Method: quicksort  Memory: 28kB
+                                 Buffers: shared hit=2
+                                 ->  Limit  (cost=0.14..11.41 rows=42 width=32) (actual time=0.002..0.010 rows=50.00 loops=1)
+                                       Buffers: shared hit=2
+                                       ->  Result  (cost=0.14..112.35 rows=418 width=32) (actual time=0.002..0.007 rows=50.00 loops=1)
+                                             One-Time Filter: $10
+                                             Buffers: shared hit=2
+                                             ->  Index Only Scan using idx_comms_messages_thread_live_unimported on comms_messages m_4  (cost=0.14..112.35 rows=418 width=24) (actual time=0.002..0.004 rows=50.00 loops=1)
+                                                   Index Cond: (thread_id = root.id)
+                                                   Heap Fetches: 0
+                                                   Index Searches: 1
+                                                   Buffers: shared hit=2
+         ->  Index Scan using comms_messages_pkey on comms_messages m  (cost=0.42..2.64 rows=1 width=428) (actual time=0.001..0.001 rows=1.00 loops=51)
+               Index Cond: (id = m_1.id)
+               Index Searches: 51
+               Buffers: shared hit=204
+ Planning Time: 0.011 ms
+ Execution Time: 0.226 ms
+(69 rows)
+

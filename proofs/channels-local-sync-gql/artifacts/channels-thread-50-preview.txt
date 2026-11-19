@@ -1,0 +1,82 @@
+force_custom_plan size50_preview run1
+                                                                                 QUERY PLAN                                                                                  
+-----------------------------------------------------------------------------------------------------------------------------------------------------------------------------
+ Nested Loop  (cost=0.28..1.82 rows=3 width=32) (actual time=0.072..0.081 rows=3.00 loops=1)
+   Buffers: shared read=3 written=2
+   ->  Function Scan on unnest root  (cost=0.00..0.01 rows=1 width=16) (actual time=0.007..0.007 rows=1.00 loops=1)
+   ->  Subquery Scan on preview  (cost=0.28..1.77 rows=3 width=412) (actual time=0.039..0.041 rows=3.00 loops=1)
+         Buffers: shared read=3 written=2
+         ->  Limit  (cost=0.28..1.74 rows=3 width=388) (actual time=0.027..0.028 rows=3.00 loops=1)
+               Buffers: shared read=3 written=2
+               ->  Index Scan using idx_comms_messages_thread_order on comms_messages r  (cost=0.28..201.58 rows=414 width=388) (actual time=0.026..0.026 rows=3.00 loops=1)
+                     Index Cond: (thread_id = root.id)
+                     Filter: (deleted_at IS NULL)
+                     Index Searches: 1
+                     Buffers: shared read=3 written=2
+ Planning:
+   Buffers: shared hit=372 read=65 written=61
+ Planning Time: 1.275 ms
+ Execution Time: 0.144 ms
+(16 rows)
+
+force_custom_plan size50_preview run2
+                                                                                 QUERY PLAN                                                                                  
+-----------------------------------------------------------------------------------------------------------------------------------------------------------------------------
+ Nested Loop  (cost=0.28..1.82 rows=3 width=32) (actual time=0.026..0.032 rows=3.00 loops=1)
+   Buffers: shared hit=3
+   ->  Function Scan on unnest root  (cost=0.00..0.01 rows=1 width=16) (actual time=0.002..0.003 rows=1.00 loops=1)
+   ->  Subquery Scan on preview  (cost=0.28..1.77 rows=3 width=412) (actual time=0.012..0.014 rows=3.00 loops=1)
+         Buffers: shared hit=3
+         ->  Limit  (cost=0.28..1.74 rows=3 width=388) (actual time=0.010..0.010 rows=3.00 loops=1)
+               Buffers: shared hit=3
+               ->  Index Scan using idx_comms_messages_thread_order on comms_messages r  (cost=0.28..201.58 rows=414 width=388) (actual time=0.009..0.010 rows=3.00 loops=1)
+                     Index Cond: (thread_id = root.id)
+                     Filter: (deleted_at IS NULL)
+                     Index Searches: 1
+                     Buffers: shared hit=3
+ Planning:
+   Buffers: shared hit=3
+ Planning Time: 0.142 ms
+ Execution Time: 0.046 ms
+(16 rows)
+
+force_generic_plan size50_preview run1
+                                                                                 QUERY PLAN                                                                                  
+-----------------------------------------------------------------------------------------------------------------------------------------------------------------------------
+ Nested Loop  (cost=0.28..18.14 rows=30 width=32) (actual time=0.012..0.018 rows=3.00 loops=1)
+   Buffers: shared hit=3
+   ->  Function Scan on unnest root  (cost=0.00..0.10 rows=10 width=16) (actual time=0.001..0.001 rows=1.00 loops=1)
+   ->  Subquery Scan on preview  (cost=0.28..1.77 rows=3 width=412) (actual time=0.005..0.006 rows=3.00 loops=1)
+         Buffers: shared hit=3
+         ->  Limit  (cost=0.28..1.74 rows=3 width=388) (actual time=0.003..0.004 rows=3.00 loops=1)
+               Buffers: shared hit=3
+               ->  Index Scan using idx_comms_messages_thread_order on comms_messages r  (cost=0.28..201.58 rows=414 width=388) (actual time=0.003..0.003 rows=3.00 loops=1)
+                     Index Cond: (thread_id = root.id)
+                     Filter: (deleted_at IS NULL)
+                     Index Searches: 1
+                     Buffers: shared hit=3
+ Planning:
+   Buffers: shared hit=3
+ Planning Time: 0.077 ms
+ Execution Time: 0.025 ms
+(16 rows)
+
+force_generic_plan size50_preview run2
+                                                                                 QUERY PLAN                                                                                  
+-----------------------------------------------------------------------------------------------------------------------------------------------------------------------------
+ Nested Loop  (cost=0.28..18.14 rows=30 width=32) (actual time=0.006..0.012 rows=3.00 loops=1)
+   Buffers: shared hit=3
+   ->  Function Scan on unnest root  (cost=0.00..0.10 rows=10 width=16) (actual time=0.001..0.001 rows=1.00 loops=1)
+   ->  Subquery Scan on preview  (cost=0.28..1.77 rows=3 width=412) (actual time=0.003..0.004 rows=3.00 loops=1)
+         Buffers: shared hit=3
+         ->  Limit  (cost=0.28..1.74 rows=3 width=388) (actual time=0.002..0.002 rows=3.00 loops=1)
+               Buffers: shared hit=3
+               ->  Index Scan using idx_comms_messages_thread_order on comms_messages r  (cost=0.28..201.58 rows=414 width=388) (actual time=0.002..0.002 rows=3.00 loops=1)
+                     Index Cond: (thread_id = root.id)
+                     Filter: (deleted_at IS NULL)
+                     Index Searches: 1
+                     Buffers: shared hit=3
+ Planning Time: 0.004 ms
+ Execution Time: 0.016 ms
+(14 rows)
+

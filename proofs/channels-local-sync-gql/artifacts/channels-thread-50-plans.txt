@@ -1,0 +1,993 @@
+                                     version                                      
+----------------------------------------------------------------------------------
+ PostgreSQL 18.4 on x86_64-pc-linux-gnu, compiled by clang version 21.1.8, 64-bit
+(1 row)
+
+force_custom_plan size50_latest run1
+                                                                                         QUERY PLAN                                                                                          
+---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------
+ Nested Loop  (cost=1.03..231.75 rows=30 width=64) (actual time=0.104..0.350 rows=50.00 loops=1)
+   Buffers: shared hit=409
+   ->  Limit  (cost=0.62..152.33 rows=30 width=32) (actual time=0.068..0.141 rows=50.00 loops=1)
+         Buffers: shared hit=209
+         ->  Merge Append  (cost=0.62..152.33 rows=30 width=32) (actual time=0.067..0.138 rows=50.00 loops=1)
+               Sort Key: import_order, created_at, id
+               Buffers: shared hit=209
+               ->  Limit  (cost=0.01..0.02 rows=1 width=0) (actual time=0.007..0.007 rows=0.00 loops=1)
+                     ->  Sort  (cost=0.01..0.02 rows=0 width=0) (actual time=0.006..0.007 rows=0.00 loops=1)
+                           Sort Key: import_order, created_at, id
+                           Sort Method: quicksort  Memory: 25kB
+                           ->  Result  (cost=0.00..0.00 rows=0 width=0) (actual time=0.001..0.001 rows=0.00 loops=1)
+                                 One-Time Filter: false
+               ->  Limit  (cost=0.28..5.15 rows=1 width=32) (actual time=0.038..0.092 rows=40.00 loops=1)
+                     Buffers: shared hit=165
+                     ->  Subquery Scan on key  (cost=0.28..5.15 rows=1 width=32) (actual time=0.038..0.090 rows=40.00 loops=1)
+                           Filter: EXISTS(SubPlan 1)
+                           Buffers: shared hit=165
+                           ->  Index Only Scan using idx_comms_messages_thread_order on comms_messages m_1  (cost=0.28..2.50 rows=1 width=32) (actual time=0.024..0.033 rows=40.00 loops=1)
+                                 Index Cond: ((thread_id = '019fd3b9-0050-7000-8000-000000000001'::uuid) AND (import_order IS NOT NULL))
+                                 Heap Fetches: 40
+                                 Index Searches: 1
+                                 Buffers: shared hit=5
+                           SubPlan 1
+                             ->  Index Scan using idx_comms_messages_active on comms_messages scope  (cost=0.42..2.64 rows=1 width=4) (actual time=0.001..0.001 rows=1.00 loops=40)
+                                   Index Cond: (id = key.id)
+                                   Filter: ((parent_entity_type = 'channel'::text) AND (parent_entity_id = '019fd3b9-0000-7000-8000-000000000002'::text))
+                                   Index Searches: 40
+                                   Buffers: shared hit=160
+               ->  Limit  (cost=0.01..0.02 rows=1 width=0) (actual time=0.008..0.008 rows=0.00 loops=1)
+                     ->  Sort  (cost=0.01..0.02 rows=0 width=0) (actual time=0.008..0.008 rows=0.00 loops=1)
+                           Sort Key: import_order, created_at, id
+                           Sort Method: quicksort  Memory: 25kB
+                           ->  Result  (cost=0.00..0.00 rows=0 width=0) (actual time=0.000..0.000 rows=0.00 loops=1)
+                                 One-Time Filter: false
+               ->  Limit  (cost=0.28..146.66 rows=27 width=32) (actual time=0.014..0.026 rows=10.00 loops=1)
+                     Buffers: shared hit=44
+                     ->  Subquery Scan on key_1  (cost=0.28..146.66 rows=27 width=32) (actual time=0.013..0.026 rows=10.00 loops=1)
+                           Filter: EXISTS(SubPlan 2)
+                           Buffers: shared hit=44
+                           ->  Index Only Scan using idx_comms_messages_thread_order on comms_messages m_2  (cost=0.28..3.56 rows=54 width=32) (actual time=0.008..0.011 rows=10.00 loops=1)
+                                 Index Cond: ((thread_id = '019fd3b9-0050-7000-8000-000000000001'::uuid) AND (import_order IS NULL))
+                                 Heap Fetches: 10
+                                 Index Searches: 1
+                                 Buffers: shared hit=4
+                           SubPlan 2
+                             ->  Index Scan using idx_comms_messages_active on comms_messages scope_1  (cost=0.42..2.64 rows=1 width=4) (actual time=0.001..0.001 rows=1.00 loops=10)
+                                   Index Cond: (id = key_1.id)
+                                   Filter: ((parent_entity_type = 'channel'::text) AND (parent_entity_id = '019fd3b9-0000-7000-8000-000000000002'::text))
+                                   Index Searches: 10
+                                   Buffers: shared hit=40
+   ->  Index Scan using comms_messages_pkey on comms_messages m  (cost=0.42..2.64 rows=1 width=428) (actual time=0.001..0.001 rows=1.00 loops=50)
+         Index Cond: (id = id)
+         Index Searches: 50
+         Buffers: shared hit=200
+ Planning:
+   Buffers: shared hit=451
+ Planning Time: 1.024 ms
+ Execution Time: 0.420 ms
+(59 rows)
+
+force_custom_plan size50_latest run2
+                                                                                         QUERY PLAN                                                                                          
+---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------
+ Nested Loop  (cost=1.03..231.75 rows=30 width=64) (actual time=0.026..0.235 rows=50.00 loops=1)
+   Buffers: shared hit=409
+   ->  Limit  (cost=0.62..152.33 rows=30 width=32) (actual time=0.016..0.078 rows=50.00 loops=1)
+         Buffers: shared hit=209
+         ->  Merge Append  (cost=0.62..152.33 rows=30 width=32) (actual time=0.016..0.075 rows=50.00 loops=1)
+               Sort Key: import_order, created_at, id
+               Buffers: shared hit=209
+               ->  Limit  (cost=0.01..0.02 rows=1 width=0) (actual time=0.001..0.001 rows=0.00 loops=1)
+                     ->  Sort  (cost=0.01..0.02 rows=0 width=0) (actual time=0.001..0.001 rows=0.00 loops=1)
+                           Sort Key: import_order, created_at, id
+                           Sort Method: quicksort  Memory: 25kB
+                           ->  Result  (cost=0.00..0.00 rows=0 width=0) (actual time=0.000..0.000 rows=0.00 loops=1)
+                                 One-Time Filter: false
+               ->  Limit  (cost=0.28..5.15 rows=1 width=32) (actual time=0.008..0.053 rows=40.00 loops=1)
+                     Buffers: shared hit=165
+                     ->  Subquery Scan on key  (cost=0.28..5.15 rows=1 width=32) (actual time=0.008..0.051 rows=40.00 loops=1)
+                           Filter: EXISTS(SubPlan 1)
+                           Buffers: shared hit=165
+                           ->  Index Only Scan using idx_comms_messages_thread_order on comms_messages m_1  (cost=0.28..2.50 rows=1 width=32) (actual time=0.005..0.011 rows=40.00 loops=1)
+                                 Index Cond: ((thread_id = '019fd3b9-0050-7000-8000-000000000001'::uuid) AND (import_order IS NOT NULL))
+                                 Heap Fetches: 40
+                                 Index Searches: 1
+                                 Buffers: shared hit=5
+                           SubPlan 1
+                             ->  Index Scan using idx_comms_messages_active on comms_messages scope  (cost=0.42..2.64 rows=1 width=4) (actual time=0.001..0.001 rows=1.00 loops=40)
+                                   Index Cond: (id = key.id)
+                                   Filter: ((parent_entity_type = 'channel'::text) AND (parent_entity_id = '019fd3b9-0000-7000-8000-000000000002'::text))
+                                   Index Searches: 40
+                                   Buffers: shared hit=160
+               ->  Limit  (cost=0.01..0.02 rows=1 width=0) (actual time=0.001..0.001 rows=0.00 loops=1)
+                     ->  Sort  (cost=0.01..0.02 rows=0 width=0) (actual time=0.000..0.001 rows=0.00 loops=1)
+                           Sort Key: import_order, created_at, id
+                           Sort Method: quicksort  Memory: 25kB
+                           ->  Result  (cost=0.00..0.00 rows=0 width=0) (actual time=0.000..0.000 rows=0.00 loops=1)
+                                 One-Time Filter: false
+               ->  Limit  (cost=0.28..146.66 rows=27 width=32) (actual time=0.006..0.016 rows=10.00 loops=1)
+                     Buffers: shared hit=44
+                     ->  Subquery Scan on key_1  (cost=0.28..146.66 rows=27 width=32) (actual time=0.005..0.015 rows=10.00 loops=1)
+                           Filter: EXISTS(SubPlan 2)
+                           Buffers: shared hit=44
+                           ->  Index Only Scan using idx_comms_messages_thread_order on comms_messages m_2  (cost=0.28..3.56 rows=54 width=32) (actual time=0.002..0.003 rows=10.00 loops=1)
+                                 Index Cond: ((thread_id = '019fd3b9-0050-7000-8000-000000000001'::uuid) AND (import_order IS NULL))
+                                 Heap Fetches: 10
+                                 Index Searches: 1
+                                 Buffers: shared hit=4
+                           SubPlan 2
+                             ->  Index Scan using idx_comms_messages_active on comms_messages scope_1  (cost=0.42..2.64 rows=1 width=4) (actual time=0.001..0.001 rows=1.00 loops=10)
+                                   Index Cond: (id = key_1.id)
+                                   Filter: ((parent_entity_type = 'channel'::text) AND (parent_entity_id = '019fd3b9-0000-7000-8000-000000000002'::text))
+                                   Index Searches: 10
+                                   Buffers: shared hit=40
+   ->  Index Scan using comms_messages_pkey on comms_messages m  (cost=0.42..2.64 rows=1 width=428) (actual time=0.001..0.001 rows=1.00 loops=50)
+         Index Cond: (id = id)
+         Index Searches: 50
+         Buffers: shared hit=200
+ Planning:
+   Buffers: shared hit=15
+ Planning Time: 0.301 ms
+ Execution Time: 0.259 ms
+(59 rows)
+
+force_custom_plan size50_older run1
+                                                                                                                                              QUERY PLAN                                                                                                                                               
+-------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------
+ Nested Loop  (cost=0.77..15.89 rows=4 width=64) (actual time=0.022..0.124 rows=24.00 loops=1)
+   Buffers: shared hit=197
+   ->  Limit  (cost=0.35..5.29 rows=4 width=32) (actual time=0.010..0.040 rows=24.00 loops=1)
+         Buffers: shared hit=101
+         ->  Merge Append  (cost=0.35..5.29 rows=4 width=32) (actual time=0.010..0.038 rows=24.00 loops=1)
+               Sort Key: key.import_order DESC, key.created_at DESC, key.id DESC
+               Buffers: shared hit=101
+               ->  Limit  (cost=0.28..5.15 rows=1 width=32) (actual time=0.007..0.034 rows=24.00 loops=1)
+                     Buffers: shared hit=101
+                     ->  Subquery Scan on key  (cost=0.28..5.15 rows=1 width=32) (actual time=0.007..0.032 rows=24.00 loops=1)
+                           Filter: EXISTS(SubPlan 1)
+                           Buffers: shared hit=101
+                           ->  Index Only Scan Backward using idx_comms_messages_thread_order on comms_messages m_1  (cost=0.28..2.50 rows=1 width=32) (actual time=0.004..0.008 rows=24.00 loops=1)
+                                 Index Cond: ((thread_id = '019fd3b9-0050-7000-8000-000000000001'::uuid) AND (import_order IS NOT NULL) AND (ROW(import_order, created_at, id) < ROW('25'::bigint, '2026-01-01 00:00:25+00'::timestamp with time zone, '019fd3b9-0050-7000-8001-000000000025'::uuid)))
+                                 Heap Fetches: 24
+                                 Index Searches: 1
+                                 Buffers: shared hit=5
+                           SubPlan 1
+                             ->  Index Scan using idx_comms_messages_active on comms_messages scope  (cost=0.42..2.64 rows=1 width=4) (actual time=0.001..0.001 rows=1.00 loops=24)
+                                   Index Cond: (id = key.id)
+                                   Filter: ((parent_entity_type = 'channel'::text) AND (parent_entity_id = '019fd3b9-0000-7000-8000-000000000002'::text))
+                                   Index Searches: 24
+                                   Buffers: shared hit=96
+               ->  Limit  (cost=0.01..0.02 rows=1 width=0) (actual time=0.001..0.001 rows=0.00 loops=1)
+                     ->  Sort  (cost=0.01..0.02 rows=0 width=0) (actual time=0.001..0.001 rows=0.00 loops=1)
+                           Sort Key: import_order DESC, created_at DESC, id DESC
+                           Sort Method: quicksort  Memory: 25kB
+                           ->  Result  (cost=0.00..0.00 rows=0 width=0) (actual time=0.000..0.000 rows=0.00 loops=1)
+                                 One-Time Filter: false
+               ->  Limit  (cost=0.01..0.02 rows=1 width=0) (actual time=0.001..0.001 rows=0.00 loops=1)
+                     ->  Sort  (cost=0.01..0.02 rows=0 width=0) (actual time=0.000..0.001 rows=0.00 loops=1)
+                           Sort Key: import_order DESC, created_at DESC, id DESC
+                           Sort Method: quicksort  Memory: 25kB
+                           ->  Result  (cost=0.00..0.00 rows=0 width=0) (actual time=0.000..0.000 rows=0.00 loops=1)
+                                 One-Time Filter: false
+               ->  Limit  (cost=0.01..0.02 rows=1 width=0) (actual time=0.001..0.001 rows=0.00 loops=1)
+                     ->  Sort  (cost=0.01..0.02 rows=0 width=0) (actual time=0.001..0.001 rows=0.00 loops=1)
+                           Sort Key: import_order DESC, created_at DESC, id DESC
+                           Sort Method: quicksort  Memory: 25kB
+                           ->  Result  (cost=0.00..0.00 rows=0 width=0) (actual time=0.000..0.000 rows=0.00 loops=1)
+                                 One-Time Filter: false
+   ->  Index Scan using comms_messages_pkey on comms_messages m  (cost=0.42..2.64 rows=1 width=428) (actual time=0.001..0.001 rows=1.00 loops=24)
+         Index Cond: (id = key.id)
+         Index Searches: 24
+         Buffers: shared hit=96
+ Planning:
+   Buffers: shared hit=12
+ Planning Time: 0.228 ms
+ Execution Time: 0.148 ms
+(49 rows)
+
+force_custom_plan size50_older run2
+                                                                                                                                              QUERY PLAN                                                                                                                                               
+-------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------
+ Nested Loop  (cost=0.77..15.89 rows=4 width=64) (actual time=0.016..0.116 rows=24.00 loops=1)
+   Buffers: shared hit=197
+   ->  Limit  (cost=0.35..5.29 rows=4 width=32) (actual time=0.009..0.038 rows=24.00 loops=1)
+         Buffers: shared hit=101
+         ->  Merge Append  (cost=0.35..5.29 rows=4 width=32) (actual time=0.009..0.036 rows=24.00 loops=1)
+               Sort Key: key.import_order DESC, key.created_at DESC, key.id DESC
+               Buffers: shared hit=101
+               ->  Limit  (cost=0.28..5.15 rows=1 width=32) (actual time=0.006..0.032 rows=24.00 loops=1)
+                     Buffers: shared hit=101
+                     ->  Subquery Scan on key  (cost=0.28..5.15 rows=1 width=32) (actual time=0.006..0.031 rows=24.00 loops=1)
+                           Filter: EXISTS(SubPlan 1)
+                           Buffers: shared hit=101
+                           ->  Index Only Scan Backward using idx_comms_messages_thread_order on comms_messages m_1  (cost=0.28..2.50 rows=1 width=32) (actual time=0.004..0.007 rows=24.00 loops=1)
+                                 Index Cond: ((thread_id = '019fd3b9-0050-7000-8000-000000000001'::uuid) AND (import_order IS NOT NULL) AND (ROW(import_order, created_at, id) < ROW('25'::bigint, '2026-01-01 00:00:25+00'::timestamp with time zone, '019fd3b9-0050-7000-8001-000000000025'::uuid)))
+                                 Heap Fetches: 24
+                                 Index Searches: 1
+                                 Buffers: shared hit=5
+                           SubPlan 1
+                             ->  Index Scan using idx_comms_messages_active on comms_messages scope  (cost=0.42..2.64 rows=1 width=4) (actual time=0.001..0.001 rows=1.00 loops=24)
+                                   Index Cond: (id = key.id)
+                                   Filter: ((parent_entity_type = 'channel'::text) AND (parent_entity_id = '019fd3b9-0000-7000-8000-000000000002'::text))
+                                   Index Searches: 24
+                                   Buffers: shared hit=96
+               ->  Limit  (cost=0.01..0.02 rows=1 width=0) (actual time=0.001..0.001 rows=0.00 loops=1)
+                     ->  Sort  (cost=0.01..0.02 rows=0 width=0) (actual time=0.001..0.001 rows=0.00 loops=1)
+                           Sort Key: import_order DESC, created_at DESC, id DESC
+                           Sort Method: quicksort  Memory: 25kB
+                           ->  Result  (cost=0.00..0.00 rows=0 width=0) (actual time=0.000..0.000 rows=0.00 loops=1)
+                                 One-Time Filter: false
+               ->  Limit  (cost=0.01..0.02 rows=1 width=0) (actual time=0.001..0.001 rows=0.00 loops=1)
+                     ->  Sort  (cost=0.01..0.02 rows=0 width=0) (actual time=0.000..0.001 rows=0.00 loops=1)
+                           Sort Key: import_order DESC, created_at DESC, id DESC
+                           Sort Method: quicksort  Memory: 25kB
+                           ->  Result  (cost=0.00..0.00 rows=0 width=0) (actual time=0.000..0.000 rows=0.00 loops=1)
+                                 One-Time Filter: false
+               ->  Limit  (cost=0.01..0.02 rows=1 width=0) (actual time=0.001..0.001 rows=0.00 loops=1)
+                     ->  Sort  (cost=0.01..0.02 rows=0 width=0) (actual time=0.001..0.001 rows=0.00 loops=1)
+                           Sort Key: import_order DESC, created_at DESC, id DESC
+                           Sort Method: quicksort  Memory: 25kB
+                           ->  Result  (cost=0.00..0.00 rows=0 width=0) (actual time=0.000..0.000 rows=0.00 loops=1)
+                                 One-Time Filter: false
+   ->  Index Scan using comms_messages_pkey on comms_messages m  (cost=0.42..2.64 rows=1 width=428) (actual time=0.001..0.001 rows=1.00 loops=24)
+         Index Cond: (id = key.id)
+         Index Searches: 24
+         Buffers: shared hit=96
+ Planning:
+   Buffers: shared hit=9
+ Planning Time: 0.186 ms
+ Execution Time: 0.130 ms
+(49 rows)
+
+force_custom_plan size50_newer run1
+                                                                                                                                              QUERY PLAN                                                                                                                                               
+-------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------
+ Nested Loop  (cost=1.03..231.75 rows=30 width=64) (actual time=0.028..0.130 rows=25.00 loops=1)
+   Buffers: shared hit=208
+   ->  Limit  (cost=0.62..152.33 rows=30 width=32) (actual time=0.019..0.049 rows=25.00 loops=1)
+         Buffers: shared hit=108
+         ->  Merge Append  (cost=0.62..152.33 rows=30 width=32) (actual time=0.019..0.047 rows=25.00 loops=1)
+               Sort Key: key.import_order, key.created_at, key.id
+               Buffers: shared hit=108
+               ->  Limit  (cost=0.28..5.15 rows=1 width=32) (actual time=0.007..0.023 rows=15.00 loops=1)
+                     Buffers: shared hit=64
+                     ->  Subquery Scan on key  (cost=0.28..5.15 rows=1 width=32) (actual time=0.007..0.022 rows=15.00 loops=1)
+                           Filter: EXISTS(SubPlan 1)
+                           Buffers: shared hit=64
+                           ->  Index Only Scan using idx_comms_messages_thread_order on comms_messages m_1  (cost=0.28..2.50 rows=1 width=32) (actual time=0.004..0.006 rows=15.00 loops=1)
+                                 Index Cond: ((thread_id = '019fd3b9-0050-7000-8000-000000000001'::uuid) AND (import_order IS NOT NULL) AND (ROW(import_order, created_at, id) > ROW('25'::bigint, '2026-01-01 00:00:25+00'::timestamp with time zone, '019fd3b9-0050-7000-8001-000000000025'::uuid)))
+                                 Heap Fetches: 15
+                                 Index Searches: 1
+                                 Buffers: shared hit=4
+                           SubPlan 1
+                             ->  Index Scan using idx_comms_messages_active on comms_messages scope  (cost=0.42..2.64 rows=1 width=4) (actual time=0.001..0.001 rows=1.00 loops=15)
+                                   Index Cond: (id = key.id)
+                                   Filter: ((parent_entity_type = 'channel'::text) AND (parent_entity_id = '019fd3b9-0000-7000-8000-000000000002'::text))
+                                   Index Searches: 15
+                                   Buffers: shared hit=60
+               ->  Limit  (cost=0.01..0.02 rows=1 width=0) (actual time=0.001..0.001 rows=0.00 loops=1)
+                     ->  Sort  (cost=0.01..0.02 rows=0 width=0) (actual time=0.001..0.001 rows=0.00 loops=1)
+                           Sort Key: import_order, created_at, id
+                           Sort Method: quicksort  Memory: 25kB
+                           ->  Result  (cost=0.00..0.00 rows=0 width=0) (actual time=0.000..0.000 rows=0.00 loops=1)
+                                 One-Time Filter: false
+               ->  Limit  (cost=0.01..0.02 rows=1 width=0) (actual time=0.000..0.001 rows=0.00 loops=1)
+                     ->  Sort  (cost=0.01..0.02 rows=0 width=0) (actual time=0.000..0.000 rows=0.00 loops=1)
+                           Sort Key: import_order, created_at, id
+                           Sort Method: quicksort  Memory: 25kB
+                           ->  Result  (cost=0.00..0.00 rows=0 width=0) (actual time=0.000..0.000 rows=0.00 loops=1)
+                                 One-Time Filter: false
+               ->  Limit  (cost=0.28..146.66 rows=27 width=32) (actual time=0.011..0.021 rows=10.00 loops=1)
+                     Buffers: shared hit=44
+                     ->  Subquery Scan on key_1  (cost=0.28..146.66 rows=27 width=32) (actual time=0.011..0.020 rows=10.00 loops=1)
+                           Filter: EXISTS(SubPlan 2)
+                           Buffers: shared hit=44
+                           ->  Index Only Scan using idx_comms_messages_thread_order on comms_messages m_2  (cost=0.28..3.56 rows=54 width=32) (actual time=0.008..0.010 rows=10.00 loops=1)
+                                 Index Cond: ((thread_id = '019fd3b9-0050-7000-8000-000000000001'::uuid) AND (import_order IS NULL))
+                                 Heap Fetches: 10
+                                 Index Searches: 1
+                                 Buffers: shared hit=4
+                           SubPlan 2
+                             ->  Index Scan using idx_comms_messages_active on comms_messages scope_1  (cost=0.42..2.64 rows=1 width=4) (actual time=0.001..0.001 rows=1.00 loops=10)
+                                   Index Cond: (id = key_1.id)
+                                   Filter: ((parent_entity_type = 'channel'::text) AND (parent_entity_id = '019fd3b9-0000-7000-8000-000000000002'::text))
+                                   Index Searches: 10
+                                   Buffers: shared hit=40
+   ->  Index Scan using comms_messages_pkey on comms_messages m  (cost=0.42..2.64 rows=1 width=428) (actual time=0.001..0.001 rows=1.00 loops=25)
+         Index Cond: (id = key.id)
+         Index Searches: 25
+         Buffers: shared hit=100
+ Planning:
+   Buffers: shared hit=15
+ Planning Time: 0.218 ms
+ Execution Time: 0.149 ms
+(59 rows)
+
+force_custom_plan size50_newer run2
+                                                                                                                                              QUERY PLAN                                                                                                                                               
+-------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------
+ Nested Loop  (cost=1.03..231.75 rows=30 width=64) (actual time=0.018..0.139 rows=25.00 loops=1)
+   Buffers: shared hit=208
+   ->  Limit  (cost=0.62..152.33 rows=30 width=32) (actual time=0.011..0.042 rows=25.00 loops=1)
+         Buffers: shared hit=108
+         ->  Merge Append  (cost=0.62..152.33 rows=30 width=32) (actual time=0.010..0.040 rows=25.00 loops=1)
+               Sort Key: key.import_order, key.created_at, key.id
+               Buffers: shared hit=108
+               ->  Limit  (cost=0.28..5.15 rows=1 width=32) (actual time=0.006..0.022 rows=15.00 loops=1)
+                     Buffers: shared hit=64
+                     ->  Subquery Scan on key  (cost=0.28..5.15 rows=1 width=32) (actual time=0.006..0.021 rows=15.00 loops=1)
+                           Filter: EXISTS(SubPlan 1)
+                           Buffers: shared hit=64
+                           ->  Index Only Scan using idx_comms_messages_thread_order on comms_messages m_1  (cost=0.28..2.50 rows=1 width=32) (actual time=0.003..0.006 rows=15.00 loops=1)
+                                 Index Cond: ((thread_id = '019fd3b9-0050-7000-8000-000000000001'::uuid) AND (import_order IS NOT NULL) AND (ROW(import_order, created_at, id) > ROW('25'::bigint, '2026-01-01 00:00:25+00'::timestamp with time zone, '019fd3b9-0050-7000-8001-000000000025'::uuid)))
+                                 Heap Fetches: 15
+                                 Index Searches: 1
+                                 Buffers: shared hit=4
+                           SubPlan 1
+                             ->  Index Scan using idx_comms_messages_active on comms_messages scope  (cost=0.42..2.64 rows=1 width=4) (actual time=0.001..0.001 rows=1.00 loops=15)
+                                   Index Cond: (id = key.id)
+                                   Filter: ((parent_entity_type = 'channel'::text) AND (parent_entity_id = '019fd3b9-0000-7000-8000-000000000002'::text))
+                                   Index Searches: 15
+                                   Buffers: shared hit=60
+               ->  Limit  (cost=0.01..0.02 rows=1 width=0) (actual time=0.001..0.001 rows=0.00 loops=1)
+                     ->  Sort  (cost=0.01..0.02 rows=0 width=0) (actual time=0.001..0.001 rows=0.00 loops=1)
+                           Sort Key: import_order, created_at, id
+                           Sort Method: quicksort  Memory: 25kB
+                           ->  Result  (cost=0.00..0.00 rows=0 width=0) (actual time=0.000..0.000 rows=0.00 loops=1)
+                                 One-Time Filter: false
+               ->  Limit  (cost=0.01..0.02 rows=1 width=0) (actual time=0.000..0.001 rows=0.00 loops=1)
+                     ->  Sort  (cost=0.01..0.02 rows=0 width=0) (actual time=0.000..0.000 rows=0.00 loops=1)
+                           Sort Key: import_order, created_at, id
+                           Sort Method: quicksort  Memory: 25kB
+                           ->  Result  (cost=0.00..0.00 rows=0 width=0) (actual time=0.000..0.000 rows=0.00 loops=1)
+                                 One-Time Filter: false
+               ->  Limit  (cost=0.28..146.66 rows=27 width=32) (actual time=0.003..0.014 rows=10.00 loops=1)
+                     Buffers: shared hit=44
+                     ->  Subquery Scan on key_1  (cost=0.28..146.66 rows=27 width=32) (actual time=0.003..0.013 rows=10.00 loops=1)
+                           Filter: EXISTS(SubPlan 2)
+                           Buffers: shared hit=44
+                           ->  Index Only Scan using idx_comms_messages_thread_order on comms_messages m_2  (cost=0.28..3.56 rows=54 width=32) (actual time=0.001..0.003 rows=10.00 loops=1)
+                                 Index Cond: ((thread_id = '019fd3b9-0050-7000-8000-000000000001'::uuid) AND (import_order IS NULL))
+                                 Heap Fetches: 10
+                                 Index Searches: 1
+                                 Buffers: shared hit=4
+                           SubPlan 2
+                             ->  Index Scan using idx_comms_messages_active on comms_messages scope_1  (cost=0.42..2.64 rows=1 width=4) (actual time=0.001..0.001 rows=1.00 loops=10)
+                                   Index Cond: (id = key_1.id)
+                                   Filter: ((parent_entity_type = 'channel'::text) AND (parent_entity_id = '019fd3b9-0000-7000-8000-000000000002'::text))
+                                   Index Searches: 10
+                                   Buffers: shared hit=40
+   ->  Index Scan using comms_messages_pkey on comms_messages m  (cost=0.42..2.64 rows=1 width=428) (actual time=0.001..0.001 rows=1.00 loops=25)
+         Index Cond: (id = key.id)
+         Index Searches: 25
+         Buffers: shared hit=100
+ Planning:
+   Buffers: shared hit=15
+ Planning Time: 0.209 ms
+ Execution Time: 0.155 ms
+(59 rows)
+
+force_custom_plan size50_metadata run1
+                                                                                          QUERY PLAN                                                                                          
+----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------
+ Index Scan using comms_message_threads_pkey on comms_message_threads t  (cost=0.42..20.06 rows=1 width=64) (actual time=0.043..0.043 rows=1.00 loops=1)
+   Index Cond: (root_id = ANY ('{019fd3b9-0050-7000-8000-000000000001}'::uuid[]))
+   Index Searches: 1
+   Buffers: shared hit=13
+   SubPlan 1
+     ->  Aggregate  (cost=17.08..17.09 rows=1 width=8) (actual time=0.016..0.016 rows=1.00 loops=1)
+           Buffers: shared hit=5
+           ->  Index Only Scan using idx_comms_messages_thread_active_created on comms_messages r  (cost=0.28..16.05 rows=414 width=0) (actual time=0.006..0.010 rows=50.00 loops=1)
+                 Index Cond: (thread_id = t.root_id)
+                 Heap Fetches: 50
+                 Index Searches: 1
+                 Buffers: shared hit=5
+   SubPlan 3
+     ->  Result  (cost=0.32..0.33 rows=1 width=8) (actual time=0.003..0.003 rows=1.00 loops=1)
+           Buffers: shared hit=4
+           InitPlan 2
+             ->  Limit  (cost=0.28..0.32 rows=1 width=8) (actual time=0.002..0.002 rows=1.00 loops=1)
+                   Buffers: shared hit=4
+                   ->  Index Only Scan using idx_comms_messages_thread_active_created on comms_messages r_1  (cost=0.28..16.05 rows=414 width=8) (actual time=0.002..0.002 rows=1.00 loops=1)
+                         Index Cond: (thread_id = t.root_id)
+                         Heap Fetches: 1
+                         Index Searches: 1
+                         Buffers: shared hit=4
+ Planning:
+   Buffers: shared hit=106
+ Planning Time: 0.229 ms
+ Execution Time: 0.058 ms
+(27 rows)
+
+force_custom_plan size50_metadata run2
+                                                                                          QUERY PLAN                                                                                          
+----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------
+ Index Scan using comms_message_threads_pkey on comms_message_threads t  (cost=0.42..20.06 rows=1 width=64) (actual time=0.017..0.018 rows=1.00 loops=1)
+   Index Cond: (root_id = ANY ('{019fd3b9-0050-7000-8000-000000000001}'::uuid[]))
+   Index Searches: 1
+   Buffers: shared hit=13
+   SubPlan 1
+     ->  Aggregate  (cost=17.08..17.09 rows=1 width=8) (actual time=0.009..0.009 rows=1.00 loops=1)
+           Buffers: shared hit=5
+           ->  Index Only Scan using idx_comms_messages_thread_active_created on comms_messages r  (cost=0.28..16.05 rows=414 width=0) (actual time=0.002..0.006 rows=50.00 loops=1)
+                 Index Cond: (thread_id = t.root_id)
+                 Heap Fetches: 50
+                 Index Searches: 1
+                 Buffers: shared hit=5
+   SubPlan 3
+     ->  Result  (cost=0.32..0.33 rows=1 width=8) (actual time=0.002..0.002 rows=1.00 loops=1)
+           Buffers: shared hit=4
+           InitPlan 2
+             ->  Limit  (cost=0.28..0.32 rows=1 width=8) (actual time=0.002..0.002 rows=1.00 loops=1)
+                   Buffers: shared hit=4
+                   ->  Index Only Scan using idx_comms_messages_thread_active_created on comms_messages r_1  (cost=0.28..16.05 rows=414 width=8) (actual time=0.001..0.001 rows=1.00 loops=1)
+                         Index Cond: (thread_id = t.root_id)
+                         Heap Fetches: 1
+                         Index Searches: 1
+                         Buffers: shared hit=4
+ Planning:
+   Buffers: shared hit=10
+ Planning Time: 0.088 ms
+ Execution Time: 0.026 ms
+(27 rows)
+
+force_generic_plan size50_latest run1
+                                                                                             QUERY PLAN                                                                                              
+-----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------
+ Nested Loop  (cost=1.57..25.38 rows=3 width=64) (actual time=0.043..0.278 rows=50.00 loops=1)
+   Buffers: shared hit=409
+   ->  Limit  (cost=1.15..17.44 rows=3 width=32) (actual time=0.026..0.096 rows=50.00 loops=1)
+         Buffers: shared hit=209
+         ->  Merge Append  (cost=1.15..158.61 rows=29 width=32) (actual time=0.026..0.093 rows=50.00 loops=1)
+               Sort Key: key.import_order, key.created_at, key.id
+               Buffers: shared hit=209
+               ->  Limit  (cost=0.28..5.15 rows=1 width=32) (actual time=0.001..0.001 rows=0.00 loops=1)
+                     ->  Result  (cost=0.28..5.15 rows=1 width=32) (actual time=0.000..0.001 rows=0.00 loops=1)
+                           One-Time Filter: ($4 IS NOT NULL)
+                           ->  Subquery Scan on key  (cost=0.28..5.15 rows=1 width=32) (never executed)
+                                 Filter: EXISTS(SubPlan 1)
+                                 ->  Index Only Scan using idx_comms_messages_thread_order on comms_messages m_1  (cost=0.28..2.50 rows=1 width=32) (never executed)
+                                       Index Cond: ((thread_id = $3) AND (import_order IS NOT NULL) AND (ROW(import_order, created_at, id) > ROW($4, $5, $6)))
+                                       Heap Fetches: 0
+                                       Index Searches: 0
+                                 SubPlan 1
+                                   ->  Index Scan using idx_comms_messages_active on comms_messages scope  (cost=0.42..2.64 rows=1 width=4) (never executed)
+                                         Index Cond: (id = key.id)
+                                         Filter: ((parent_entity_type = $1) AND (parent_entity_id = $2))
+                                         Index Searches: 0
+               ->  Limit  (cost=0.28..6.72 rows=1 width=32) (actual time=0.013..0.064 rows=40.00 loops=1)
+                     Buffers: shared hit=165
+                     ->  Result  (cost=0.28..13.16 rows=2 width=32) (actual time=0.013..0.062 rows=40.00 loops=1)
+                           One-Time Filter: $7
+                           Buffers: shared hit=165
+                           ->  Subquery Scan on key_1  (cost=0.28..13.16 rows=2 width=32) (actual time=0.013..0.059 rows=40.00 loops=1)
+                                 Filter: EXISTS(SubPlan 2)
+                                 Buffers: shared hit=165
+                                 ->  Index Only Scan using idx_comms_messages_thread_order on comms_messages m_2  (cost=0.28..2.56 rows=4 width=32) (actual time=0.007..0.013 rows=40.00 loops=1)
+                                       Index Cond: ((thread_id = $3) AND (import_order IS NOT NULL))
+                                       Heap Fetches: 40
+                                       Index Searches: 1
+                                       Buffers: shared hit=5
+                                 SubPlan 2
+                                   ->  Index Scan using idx_comms_messages_active on comms_messages scope_1  (cost=0.42..2.64 rows=1 width=4) (actual time=0.001..0.001 rows=1.00 loops=40)
+                                         Index Cond: (id = key_1.id)
+                                         Filter: ((parent_entity_type = $1) AND (parent_entity_id = $2))
+                                         Index Searches: 40
+                                         Buffers: shared hit=160
+               ->  Limit  (cost=0.28..38.36 rows=7 width=32) (actual time=0.000..0.000 rows=0.00 loops=1)
+                     ->  Result  (cost=0.28..370.19 rows=68 width=32) (actual time=0.000..0.000 rows=0.00 loops=1)
+                           One-Time Filter: ($8 IS NOT NULL)
+                           ->  Subquery Scan on key_2  (cost=0.28..370.19 rows=68 width=32) (never executed)
+                                 Filter: EXISTS(SubPlan 3)
+                                 ->  Index Only Scan using idx_comms_messages_thread_order on comms_messages m_3  (cost=0.28..7.14 rows=137 width=32) (never executed)
+                                       Index Cond: ((thread_id = $3) AND (import_order IS NULL) AND (ROW(created_at, id) > ROW($8, $9)))
+                                       Heap Fetches: 0
+                                       Index Searches: 0
+                                 SubPlan 3
+                                   ->  Index Scan using idx_comms_messages_active on comms_messages scope_2  (cost=0.42..2.64 rows=1 width=4) (never executed)
+                                         Index Cond: (id = key_2.id)
+                                         Filter: ((parent_entity_type = $1) AND (parent_entity_id = $2))
+                                         Index Searches: 0
+               ->  Limit  (cost=0.28..107.91 rows=20 width=32) (actual time=0.011..0.023 rows=10.00 loops=1)
+                     Buffers: shared hit=44
+                     ->  Result  (cost=0.28..1103.50 rows=205 width=32) (actual time=0.011..0.022 rows=10.00 loops=1)
+                           One-Time Filter: $10
+                           Buffers: shared hit=44
+                           ->  Subquery Scan on key_3  (cost=0.28..1103.50 rows=205 width=32) (actual time=0.011..0.021 rows=10.00 loops=1)
+                                 Filter: EXISTS(SubPlan 4)
+                                 Buffers: shared hit=44
+                                 ->  Index Only Scan using idx_comms_messages_thread_order on comms_messages m_4  (cost=0.28..17.00 rows=410 width=32) (actual time=0.006..0.008 rows=10.00 loops=1)
+                                       Index Cond: ((thread_id = $3) AND (import_order IS NULL))
+                                       Heap Fetches: 10
+                                       Index Searches: 1
+                                       Buffers: shared hit=4
+                                 SubPlan 4
+                                   ->  Index Scan using idx_comms_messages_active on comms_messages scope_3  (cost=0.42..2.64 rows=1 width=4) (actual time=0.001..0.001 rows=1.00 loops=10)
+                                         Index Cond: (id = key_3.id)
+                                         Filter: ((parent_entity_type = $1) AND (parent_entity_id = $2))
+                                         Index Searches: 10
+                                         Buffers: shared hit=40
+   ->  Index Scan using comms_messages_pkey on comms_messages m  (cost=0.42..2.64 rows=1 width=428) (actual time=0.001..0.001 rows=1.00 loops=50)
+         Index Cond: (id = key.id)
+         Index Searches: 50
+         Buffers: shared hit=200
+ Planning:
+   Buffers: shared hit=27
+ Planning Time: 0.330 ms
+ Execution Time: 0.342 ms
+(81 rows)
+
+force_generic_plan size50_latest run2
+                                                                                             QUERY PLAN                                                                                              
+-----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------
+ Nested Loop  (cost=1.57..25.38 rows=3 width=64) (actual time=0.017..0.257 rows=50.00 loops=1)
+   Buffers: shared hit=409
+   ->  Limit  (cost=1.15..17.44 rows=3 width=32) (actual time=0.011..0.076 rows=50.00 loops=1)
+         Buffers: shared hit=209
+         ->  Merge Append  (cost=1.15..158.61 rows=29 width=32) (actual time=0.010..0.073 rows=50.00 loops=1)
+               Sort Key: key.import_order, key.created_at, key.id
+               Buffers: shared hit=209
+               ->  Limit  (cost=0.28..5.15 rows=1 width=32) (actual time=0.000..0.001 rows=0.00 loops=1)
+                     ->  Result  (cost=0.28..5.15 rows=1 width=32) (actual time=0.000..0.000 rows=0.00 loops=1)
+                           One-Time Filter: ($4 IS NOT NULL)
+                           ->  Subquery Scan on key  (cost=0.28..5.15 rows=1 width=32) (never executed)
+                                 Filter: EXISTS(SubPlan 1)
+                                 ->  Index Only Scan using idx_comms_messages_thread_order on comms_messages m_1  (cost=0.28..2.50 rows=1 width=32) (never executed)
+                                       Index Cond: ((thread_id = $3) AND (import_order IS NOT NULL) AND (ROW(import_order, created_at, id) > ROW($4, $5, $6)))
+                                       Heap Fetches: 0
+                                       Index Searches: 0
+                                 SubPlan 1
+                                   ->  Index Scan using idx_comms_messages_active on comms_messages scope  (cost=0.42..2.64 rows=1 width=4) (never executed)
+                                         Index Cond: (id = key.id)
+                                         Filter: ((parent_entity_type = $1) AND (parent_entity_id = $2))
+                                         Index Searches: 0
+               ->  Limit  (cost=0.28..6.72 rows=1 width=32) (actual time=0.006..0.054 rows=40.00 loops=1)
+                     Buffers: shared hit=165
+                     ->  Result  (cost=0.28..13.16 rows=2 width=32) (actual time=0.006..0.052 rows=40.00 loops=1)
+                           One-Time Filter: $7
+                           Buffers: shared hit=165
+                           ->  Subquery Scan on key_1  (cost=0.28..13.16 rows=2 width=32) (actual time=0.006..0.049 rows=40.00 loops=1)
+                                 Filter: EXISTS(SubPlan 2)
+                                 Buffers: shared hit=165
+                                 ->  Index Only Scan using idx_comms_messages_thread_order on comms_messages m_2  (cost=0.28..2.56 rows=4 width=32) (actual time=0.004..0.010 rows=40.00 loops=1)
+                                       Index Cond: ((thread_id = $3) AND (import_order IS NOT NULL))
+                                       Heap Fetches: 40
+                                       Index Searches: 1
+                                       Buffers: shared hit=5
+                                 SubPlan 2
+                                   ->  Index Scan using idx_comms_messages_active on comms_messages scope_1  (cost=0.42..2.64 rows=1 width=4) (actual time=0.001..0.001 rows=1.00 loops=40)
+                                         Index Cond: (id = key_1.id)
+                                         Filter: ((parent_entity_type = $1) AND (parent_entity_id = $2))
+                                         Index Searches: 40
+                                         Buffers: shared hit=160
+               ->  Limit  (cost=0.28..38.36 rows=7 width=32) (actual time=0.000..0.000 rows=0.00 loops=1)
+                     ->  Result  (cost=0.28..370.19 rows=68 width=32) (actual time=0.000..0.000 rows=0.00 loops=1)
+                           One-Time Filter: ($8 IS NOT NULL)
+                           ->  Subquery Scan on key_2  (cost=0.28..370.19 rows=68 width=32) (never executed)
+                                 Filter: EXISTS(SubPlan 3)
+                                 ->  Index Only Scan using idx_comms_messages_thread_order on comms_messages m_3  (cost=0.28..7.14 rows=137 width=32) (never executed)
+                                       Index Cond: ((thread_id = $3) AND (import_order IS NULL) AND (ROW(created_at, id) > ROW($8, $9)))
+                                       Heap Fetches: 0
+                                       Index Searches: 0
+                                 SubPlan 3
+                                   ->  Index Scan using idx_comms_messages_active on comms_messages scope_2  (cost=0.42..2.64 rows=1 width=4) (never executed)
+                                         Index Cond: (id = key_2.id)
+                                         Filter: ((parent_entity_type = $1) AND (parent_entity_id = $2))
+                                         Index Searches: 0
+               ->  Limit  (cost=0.28..107.91 rows=20 width=32) (actual time=0.003..0.014 rows=10.00 loops=1)
+                     Buffers: shared hit=44
+                     ->  Result  (cost=0.28..1103.50 rows=205 width=32) (actual time=0.003..0.013 rows=10.00 loops=1)
+                           One-Time Filter: $10
+                           Buffers: shared hit=44
+                           ->  Subquery Scan on key_3  (cost=0.28..1103.50 rows=205 width=32) (actual time=0.003..0.013 rows=10.00 loops=1)
+                                 Filter: EXISTS(SubPlan 4)
+                                 Buffers: shared hit=44
+                                 ->  Index Only Scan using idx_comms_messages_thread_order on comms_messages m_4  (cost=0.28..17.00 rows=410 width=32) (actual time=0.001..0.003 rows=10.00 loops=1)
+                                       Index Cond: ((thread_id = $3) AND (import_order IS NULL))
+                                       Heap Fetches: 10
+                                       Index Searches: 1
+                                       Buffers: shared hit=4
+                                 SubPlan 4
+                                   ->  Index Scan using idx_comms_messages_active on comms_messages scope_3  (cost=0.42..2.64 rows=1 width=4) (actual time=0.001..0.001 rows=1.00 loops=10)
+                                         Index Cond: (id = key_3.id)
+                                         Filter: ((parent_entity_type = $1) AND (parent_entity_id = $2))
+                                         Index Searches: 10
+                                         Buffers: shared hit=40
+   ->  Index Scan using comms_messages_pkey on comms_messages m  (cost=0.42..2.64 rows=1 width=428) (actual time=0.001..0.001 rows=1.00 loops=50)
+         Index Cond: (id = key.id)
+         Index Searches: 50
+         Buffers: shared hit=200
+ Planning Time: 0.010 ms
+ Execution Time: 0.280 ms
+(79 rows)
+
+force_generic_plan size50_older run1
+                                                                                                QUERY PLAN                                                                                                 
+-----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------
+ Nested Loop  (cost=1.57..25.38 rows=3 width=64) (actual time=0.021..0.124 rows=24.00 loops=1)
+   Buffers: shared hit=197
+   ->  Limit  (cost=1.15..17.44 rows=3 width=32) (actual time=0.010..0.041 rows=24.00 loops=1)
+         Buffers: shared hit=101
+         ->  Merge Append  (cost=1.15..158.61 rows=29 width=32) (actual time=0.010..0.040 rows=24.00 loops=1)
+               Sort Key: key.import_order DESC, key.created_at DESC, key.id DESC
+               Buffers: shared hit=101
+               ->  Limit  (cost=0.28..5.15 rows=1 width=32) (actual time=0.009..0.037 rows=24.00 loops=1)
+                     Buffers: shared hit=101
+                     ->  Result  (cost=0.28..5.15 rows=1 width=32) (actual time=0.008..0.035 rows=24.00 loops=1)
+                           One-Time Filter: ($4 IS NOT NULL)
+                           Buffers: shared hit=101
+                           ->  Subquery Scan on key  (cost=0.28..5.15 rows=1 width=32) (actual time=0.008..0.033 rows=24.00 loops=1)
+                                 Filter: EXISTS(SubPlan 1)
+                                 Buffers: shared hit=101
+                                 ->  Index Only Scan Backward using idx_comms_messages_thread_order on comms_messages m_1  (cost=0.28..2.50 rows=1 width=32) (actual time=0.005..0.009 rows=24.00 loops=1)
+                                       Index Cond: ((thread_id = $3) AND (import_order IS NOT NULL) AND (ROW(import_order, created_at, id) < ROW($4, $5, $6)))
+                                       Heap Fetches: 24
+                                       Index Searches: 1
+                                       Buffers: shared hit=5
+                                 SubPlan 1
+                                   ->  Index Scan using idx_comms_messages_active on comms_messages scope  (cost=0.42..2.64 rows=1 width=4) (actual time=0.001..0.001 rows=1.00 loops=24)
+                                         Index Cond: (id = key.id)
+                                         Filter: ((parent_entity_type = $1) AND (parent_entity_id = $2))
+                                         Index Searches: 24
+                                         Buffers: shared hit=96
+               ->  Limit  (cost=0.28..6.72 rows=1 width=32) (actual time=0.000..0.000 rows=0.00 loops=1)
+                     ->  Result  (cost=0.28..13.16 rows=2 width=32) (actual time=0.000..0.000 rows=0.00 loops=1)
+                           One-Time Filter: $7
+                           ->  Subquery Scan on key_1  (cost=0.28..13.16 rows=2 width=32) (never executed)
+                                 Filter: EXISTS(SubPlan 2)
+                                 ->  Index Only Scan Backward using idx_comms_messages_thread_order on comms_messages m_2  (cost=0.28..2.56 rows=4 width=32) (never executed)
+                                       Index Cond: ((thread_id = $3) AND (import_order IS NOT NULL))
+                                       Heap Fetches: 0
+                                       Index Searches: 0
+                                 SubPlan 2
+                                   ->  Index Scan using idx_comms_messages_active on comms_messages scope_1  (cost=0.42..2.64 rows=1 width=4) (never executed)
+                                         Index Cond: (id = key_1.id)
+                                         Filter: ((parent_entity_type = $1) AND (parent_entity_id = $2))
+                                         Index Searches: 0
+               ->  Limit  (cost=0.28..38.36 rows=7 width=32) (actual time=0.000..0.000 rows=0.00 loops=1)
+                     ->  Result  (cost=0.28..370.19 rows=68 width=32) (actual time=0.000..0.000 rows=0.00 loops=1)
+                           One-Time Filter: ($8 IS NOT NULL)
+                           ->  Subquery Scan on key_2  (cost=0.28..370.19 rows=68 width=32) (never executed)
+                                 Filter: EXISTS(SubPlan 3)
+                                 ->  Index Only Scan Backward using idx_comms_messages_thread_order on comms_messages m_3  (cost=0.28..7.14 rows=137 width=32) (never executed)
+                                       Index Cond: ((thread_id = $3) AND (import_order IS NULL) AND (ROW(created_at, id) < ROW($8, $9)))
+                                       Heap Fetches: 0
+                                       Index Searches: 0
+                                 SubPlan 3
+                                   ->  Index Scan using idx_comms_messages_active on comms_messages scope_2  (cost=0.42..2.64 rows=1 width=4) (never executed)
+                                         Index Cond: (id = key_2.id)
+                                         Filter: ((parent_entity_type = $1) AND (parent_entity_id = $2))
+                                         Index Searches: 0
+               ->  Limit  (cost=0.28..107.91 rows=20 width=32) (actual time=0.000..0.000 rows=0.00 loops=1)
+                     ->  Result  (cost=0.28..1103.50 rows=205 width=32) (actual time=0.000..0.000 rows=0.00 loops=1)
+                           One-Time Filter: $10
+                           ->  Subquery Scan on key_3  (cost=0.28..1103.50 rows=205 width=32) (never executed)
+                                 Filter: EXISTS(SubPlan 4)
+                                 ->  Index Only Scan Backward using idx_comms_messages_thread_order on comms_messages m_4  (cost=0.28..17.00 rows=410 width=32) (never executed)
+                                       Index Cond: ((thread_id = $3) AND (import_order IS NULL))
+                                       Heap Fetches: 0
+                                       Index Searches: 0
+                                 SubPlan 4
+                                   ->  Index Scan using idx_comms_messages_active on comms_messages scope_3  (cost=0.42..2.64 rows=1 width=4) (never executed)
+                                         Index Cond: (id = key_3.id)
+                                         Filter: ((parent_entity_type = $1) AND (parent_entity_id = $2))
+                                         Index Searches: 0
+   ->  Index Scan using comms_messages_pkey on comms_messages m  (cost=0.42..2.64 rows=1 width=428) (actual time=0.001..0.001 rows=1.00 loops=24)
+         Index Cond: (id = key.id)
+         Index Searches: 24
+         Buffers: shared hit=96
+ Planning:
+   Buffers: shared hit=27
+ Planning Time: 0.359 ms
+ Execution Time: 0.151 ms
+(76 rows)
+
+force_generic_plan size50_older run2
+                                                                                                QUERY PLAN                                                                                                 
+-----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------
+ Nested Loop  (cost=1.57..25.38 rows=3 width=64) (actual time=0.013..0.114 rows=24.00 loops=1)
+   Buffers: shared hit=197
+   ->  Limit  (cost=1.15..17.44 rows=3 width=32) (actual time=0.007..0.038 rows=24.00 loops=1)
+         Buffers: shared hit=101
+         ->  Merge Append  (cost=1.15..158.61 rows=29 width=32) (actual time=0.007..0.036 rows=24.00 loops=1)
+               Sort Key: key.import_order DESC, key.created_at DESC, key.id DESC
+               Buffers: shared hit=101
+               ->  Limit  (cost=0.28..5.15 rows=1 width=32) (actual time=0.006..0.033 rows=24.00 loops=1)
+                     Buffers: shared hit=101
+                     ->  Result  (cost=0.28..5.15 rows=1 width=32) (actual time=0.006..0.032 rows=24.00 loops=1)
+                           One-Time Filter: ($4 IS NOT NULL)
+                           Buffers: shared hit=101
+                           ->  Subquery Scan on key  (cost=0.28..5.15 rows=1 width=32) (actual time=0.005..0.030 rows=24.00 loops=1)
+                                 Filter: EXISTS(SubPlan 1)
+                                 Buffers: shared hit=101
+                                 ->  Index Only Scan Backward using idx_comms_messages_thread_order on comms_messages m_1  (cost=0.28..2.50 rows=1 width=32) (actual time=0.003..0.007 rows=24.00 loops=1)
+                                       Index Cond: ((thread_id = $3) AND (import_order IS NOT NULL) AND (ROW(import_order, created_at, id) < ROW($4, $5, $6)))
+                                       Heap Fetches: 24
+                                       Index Searches: 1
+                                       Buffers: shared hit=5
+                                 SubPlan 1
+                                   ->  Index Scan using idx_comms_messages_active on comms_messages scope  (cost=0.42..2.64 rows=1 width=4) (actual time=0.001..0.001 rows=1.00 loops=24)
+                                         Index Cond: (id = key.id)
+                                         Filter: ((parent_entity_type = $1) AND (parent_entity_id = $2))
+                                         Index Searches: 24
+                                         Buffers: shared hit=96
+               ->  Limit  (cost=0.28..6.72 rows=1 width=32) (actual time=0.000..0.000 rows=0.00 loops=1)
+                     ->  Result  (cost=0.28..13.16 rows=2 width=32) (actual time=0.000..0.000 rows=0.00 loops=1)
+                           One-Time Filter: $7
+                           ->  Subquery Scan on key_1  (cost=0.28..13.16 rows=2 width=32) (never executed)
+                                 Filter: EXISTS(SubPlan 2)
+                                 ->  Index Only Scan Backward using idx_comms_messages_thread_order on comms_messages m_2  (cost=0.28..2.56 rows=4 width=32) (never executed)
+                                       Index Cond: ((thread_id = $3) AND (import_order IS NOT NULL))
+                                       Heap Fetches: 0
+                                       Index Searches: 0
+                                 SubPlan 2
+                                   ->  Index Scan using idx_comms_messages_active on comms_messages scope_1  (cost=0.42..2.64 rows=1 width=4) (never executed)
+                                         Index Cond: (id = key_1.id)
+                                         Filter: ((parent_entity_type = $1) AND (parent_entity_id = $2))
+                                         Index Searches: 0
+               ->  Limit  (cost=0.28..38.36 rows=7 width=32) (actual time=0.000..0.000 rows=0.00 loops=1)
+                     ->  Result  (cost=0.28..370.19 rows=68 width=32) (actual time=0.000..0.000 rows=0.00 loops=1)
+                           One-Time Filter: ($8 IS NOT NULL)
+                           ->  Subquery Scan on key_2  (cost=0.28..370.19 rows=68 width=32) (never executed)
+                                 Filter: EXISTS(SubPlan 3)
+                                 ->  Index Only Scan Backward using idx_comms_messages_thread_order on comms_messages m_3  (cost=0.28..7.14 rows=137 width=32) (never executed)
+                                       Index Cond: ((thread_id = $3) AND (import_order IS NULL) AND (ROW(created_at, id) < ROW($8, $9)))
+                                       Heap Fetches: 0
+                                       Index Searches: 0
+                                 SubPlan 3
+                                   ->  Index Scan using idx_comms_messages_active on comms_messages scope_2  (cost=0.42..2.64 rows=1 width=4) (never executed)
+                                         Index Cond: (id = key_2.id)
+                                         Filter: ((parent_entity_type = $1) AND (parent_entity_id = $2))
+                                         Index Searches: 0
+               ->  Limit  (cost=0.28..107.91 rows=20 width=32) (actual time=0.000..0.000 rows=0.00 loops=1)
+                     ->  Result  (cost=0.28..1103.50 rows=205 width=32) (actual time=0.000..0.000 rows=0.00 loops=1)
+                           One-Time Filter: $10
+                           ->  Subquery Scan on key_3  (cost=0.28..1103.50 rows=205 width=32) (never executed)
+                                 Filter: EXISTS(SubPlan 4)
+                                 ->  Index Only Scan Backward using idx_comms_messages_thread_order on comms_messages m_4  (cost=0.28..17.00 rows=410 width=32) (never executed)
+                                       Index Cond: ((thread_id = $3) AND (import_order IS NULL))
+                                       Heap Fetches: 0
+                                       Index Searches: 0
+                                 SubPlan 4
+                                   ->  Index Scan using idx_comms_messages_active on comms_messages scope_3  (cost=0.42..2.64 rows=1 width=4) (never executed)
+                                         Index Cond: (id = key_3.id)
+                                         Filter: ((parent_entity_type = $1) AND (parent_entity_id = $2))
+                                         Index Searches: 0
+   ->  Index Scan using comms_messages_pkey on comms_messages m  (cost=0.42..2.64 rows=1 width=428) (actual time=0.001..0.001 rows=1.00 loops=24)
+         Index Cond: (id = key.id)
+         Index Searches: 24
+         Buffers: shared hit=96
+ Planning Time: 0.010 ms
+ Execution Time: 0.135 ms
+(74 rows)
+
+force_generic_plan size50_newer run1
+                                                                                             QUERY PLAN                                                                                              
+-----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------
+ Nested Loop  (cost=1.57..25.38 rows=3 width=64) (actual time=0.013..0.115 rows=25.00 loops=1)
+   Buffers: shared hit=208
+   ->  Limit  (cost=1.15..17.44 rows=3 width=32) (actual time=0.008..0.039 rows=25.00 loops=1)
+         Buffers: shared hit=108
+         ->  Merge Append  (cost=1.15..158.61 rows=29 width=32) (actual time=0.008..0.038 rows=25.00 loops=1)
+               Sort Key: key.import_order, key.created_at, key.id
+               Buffers: shared hit=108
+               ->  Limit  (cost=0.28..5.15 rows=1 width=32) (actual time=0.004..0.021 rows=15.00 loops=1)
+                     Buffers: shared hit=64
+                     ->  Result  (cost=0.28..5.15 rows=1 width=32) (actual time=0.004..0.020 rows=15.00 loops=1)
+                           One-Time Filter: ($4 IS NOT NULL)
+                           Buffers: shared hit=64
+                           ->  Subquery Scan on key  (cost=0.28..5.15 rows=1 width=32) (actual time=0.004..0.019 rows=15.00 loops=1)
+                                 Filter: EXISTS(SubPlan 1)
+                                 Buffers: shared hit=64
+                                 ->  Index Only Scan using idx_comms_messages_thread_order on comms_messages m_1  (cost=0.28..2.50 rows=1 width=32) (actual time=0.003..0.005 rows=15.00 loops=1)
+                                       Index Cond: ((thread_id = $3) AND (import_order IS NOT NULL) AND (ROW(import_order, created_at, id) > ROW($4, $5, $6)))
+                                       Heap Fetches: 15
+                                       Index Searches: 1
+                                       Buffers: shared hit=4
+                                 SubPlan 1
+                                   ->  Index Scan using idx_comms_messages_active on comms_messages scope  (cost=0.42..2.64 rows=1 width=4) (actual time=0.001..0.001 rows=1.00 loops=15)
+                                         Index Cond: (id = key.id)
+                                         Filter: ((parent_entity_type = $1) AND (parent_entity_id = $2))
+                                         Index Searches: 15
+                                         Buffers: shared hit=60
+               ->  Limit  (cost=0.28..6.72 rows=1 width=32) (actual time=0.000..0.000 rows=0.00 loops=1)
+                     ->  Result  (cost=0.28..13.16 rows=2 width=32) (actual time=0.000..0.000 rows=0.00 loops=1)
+                           One-Time Filter: $7
+                           ->  Subquery Scan on key_1  (cost=0.28..13.16 rows=2 width=32) (never executed)
+                                 Filter: EXISTS(SubPlan 2)
+                                 ->  Index Only Scan using idx_comms_messages_thread_order on comms_messages m_2  (cost=0.28..2.56 rows=4 width=32) (never executed)
+                                       Index Cond: ((thread_id = $3) AND (import_order IS NOT NULL))
+                                       Heap Fetches: 0
+                                       Index Searches: 0
+                                 SubPlan 2
+                                   ->  Index Scan using idx_comms_messages_active on comms_messages scope_1  (cost=0.42..2.64 rows=1 width=4) (never executed)
+                                         Index Cond: (id = key_1.id)
+                                         Filter: ((parent_entity_type = $1) AND (parent_entity_id = $2))
+                                         Index Searches: 0
+               ->  Limit  (cost=0.28..38.36 rows=7 width=32) (actual time=0.000..0.000 rows=0.00 loops=1)
+                     ->  Result  (cost=0.28..370.19 rows=68 width=32) (actual time=0.000..0.000 rows=0.00 loops=1)
+                           One-Time Filter: ($8 IS NOT NULL)
+                           ->  Subquery Scan on key_2  (cost=0.28..370.19 rows=68 width=32) (never executed)
+                                 Filter: EXISTS(SubPlan 3)
+                                 ->  Index Only Scan using idx_comms_messages_thread_order on comms_messages m_3  (cost=0.28..7.14 rows=137 width=32) (never executed)
+                                       Index Cond: ((thread_id = $3) AND (import_order IS NULL) AND (ROW(created_at, id) > ROW($8, $9)))
+                                       Heap Fetches: 0
+                                       Index Searches: 0
+                                 SubPlan 3
+                                   ->  Index Scan using idx_comms_messages_active on comms_messages scope_2  (cost=0.42..2.64 rows=1 width=4) (never executed)
+                                         Index Cond: (id = key_2.id)
+                                         Filter: ((parent_entity_type = $1) AND (parent_entity_id = $2))
+                                         Index Searches: 0
+               ->  Limit  (cost=0.28..107.91 rows=20 width=32) (actual time=0.003..0.014 rows=10.00 loops=1)
+                     Buffers: shared hit=44
+                     ->  Result  (cost=0.28..1103.50 rows=205 width=32) (actual time=0.003..0.014 rows=10.00 loops=1)
+                           One-Time Filter: $10
+                           Buffers: shared hit=44
+                           ->  Subquery Scan on key_3  (cost=0.28..1103.50 rows=205 width=32) (actual time=0.003..0.013 rows=10.00 loops=1)
+                                 Filter: EXISTS(SubPlan 4)
+                                 Buffers: shared hit=44
+                                 ->  Index Only Scan using idx_comms_messages_thread_order on comms_messages m_4  (cost=0.28..17.00 rows=410 width=32) (actual time=0.002..0.003 rows=10.00 loops=1)
+                                       Index Cond: ((thread_id = $3) AND (import_order IS NULL))
+                                       Heap Fetches: 10
+                                       Index Searches: 1
+                                       Buffers: shared hit=4
+                                 SubPlan 4
+                                   ->  Index Scan using idx_comms_messages_active on comms_messages scope_3  (cost=0.42..2.64 rows=1 width=4) (actual time=0.001..0.001 rows=1.00 loops=10)
+                                         Index Cond: (id = key_3.id)
+                                         Filter: ((parent_entity_type = $1) AND (parent_entity_id = $2))
+                                         Index Searches: 10
+                                         Buffers: shared hit=40
+   ->  Index Scan using comms_messages_pkey on comms_messages m  (cost=0.42..2.64 rows=1 width=428) (actual time=0.001..0.001 rows=1.00 loops=25)
+         Index Cond: (id = key.id)
+         Index Searches: 25
+         Buffers: shared hit=100
+ Planning Time: 0.006 ms
+ Execution Time: 0.130 ms
+(79 rows)
+
+force_generic_plan size50_newer run2
+                                                                                             QUERY PLAN                                                                                              
+-----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------
+ Nested Loop  (cost=1.57..25.38 rows=3 width=64) (actual time=0.011..0.113 rows=25.00 loops=1)
+   Buffers: shared hit=208
+   ->  Limit  (cost=1.15..17.44 rows=3 width=32) (actual time=0.007..0.038 rows=25.00 loops=1)
+         Buffers: shared hit=108
+         ->  Merge Append  (cost=1.15..158.61 rows=29 width=32) (actual time=0.006..0.036 rows=25.00 loops=1)
+               Sort Key: key.import_order, key.created_at, key.id
+               Buffers: shared hit=108
+               ->  Limit  (cost=0.28..5.15 rows=1 width=32) (actual time=0.003..0.020 rows=15.00 loops=1)
+                     Buffers: shared hit=64
+                     ->  Result  (cost=0.28..5.15 rows=1 width=32) (actual time=0.003..0.019 rows=15.00 loops=1)
+                           One-Time Filter: ($4 IS NOT NULL)
+                           Buffers: shared hit=64
+                           ->  Subquery Scan on key  (cost=0.28..5.15 rows=1 width=32) (actual time=0.003..0.018 rows=15.00 loops=1)
+                                 Filter: EXISTS(SubPlan 1)
+                                 Buffers: shared hit=64
+                                 ->  Index Only Scan using idx_comms_messages_thread_order on comms_messages m_1  (cost=0.28..2.50 rows=1 width=32) (actual time=0.002..0.004 rows=15.00 loops=1)
+                                       Index Cond: ((thread_id = $3) AND (import_order IS NOT NULL) AND (ROW(import_order, created_at, id) > ROW($4, $5, $6)))
+                                       Heap Fetches: 15
+                                       Index Searches: 1
+                                       Buffers: shared hit=4
+                                 SubPlan 1
+                                   ->  Index Scan using idx_comms_messages_active on comms_messages scope  (cost=0.42..2.64 rows=1 width=4) (actual time=0.001..0.001 rows=1.00 loops=15)
+                                         Index Cond: (id = key.id)
+                                         Filter: ((parent_entity_type = $1) AND (parent_entity_id = $2))
+                                         Index Searches: 15
+                                         Buffers: shared hit=60
+               ->  Limit  (cost=0.28..6.72 rows=1 width=32) (actual time=0.000..0.000 rows=0.00 loops=1)
+                     ->  Result  (cost=0.28..13.16 rows=2 width=32) (actual time=0.000..0.000 rows=0.00 loops=1)
+                           One-Time Filter: $7
+                           ->  Subquery Scan on key_1  (cost=0.28..13.16 rows=2 width=32) (never executed)
+                                 Filter: EXISTS(SubPlan 2)
+                                 ->  Index Only Scan using idx_comms_messages_thread_order on comms_messages m_2  (cost=0.28..2.56 rows=4 width=32) (never executed)
+                                       Index Cond: ((thread_id = $3) AND (import_order IS NOT NULL))
+                                       Heap Fetches: 0
+                                       Index Searches: 0
+                                 SubPlan 2
+                                   ->  Index Scan using idx_comms_messages_active on comms_messages scope_1  (cost=0.42..2.64 rows=1 width=4) (never executed)
+                                         Index Cond: (id = key_1.id)
+                                         Filter: ((parent_entity_type = $1) AND (parent_entity_id = $2))
+                                         Index Searches: 0
+               ->  Limit  (cost=0.28..38.36 rows=7 width=32) (actual time=0.000..0.000 rows=0.00 loops=1)
+                     ->  Result  (cost=0.28..370.19 rows=68 width=32) (actual time=0.000..0.000 rows=0.00 loops=1)
+                           One-Time Filter: ($8 IS NOT NULL)
+                           ->  Subquery Scan on key_2  (cost=0.28..370.19 rows=68 width=32) (never executed)
+                                 Filter: EXISTS(SubPlan 3)
+                                 ->  Index Only Scan using idx_comms_messages_thread_order on comms_messages m_3  (cost=0.28..7.14 rows=137 width=32) (never executed)
+                                       Index Cond: ((thread_id = $3) AND (import_order IS NULL) AND (ROW(created_at, id) > ROW($8, $9)))
+                                       Heap Fetches: 0
+                                       Index Searches: 0
+                                 SubPlan 3
+                                   ->  Index Scan using idx_comms_messages_active on comms_messages scope_2  (cost=0.42..2.64 rows=1 width=4) (never executed)
+                                         Index Cond: (id = key_2.id)
+                                         Filter: ((parent_entity_type = $1) AND (parent_entity_id = $2))
+                                         Index Searches: 0
+               ->  Limit  (cost=0.28..107.91 rows=20 width=32) (actual time=0.002..0.014 rows=10.00 loops=1)
+                     Buffers: shared hit=44
+                     ->  Result  (cost=0.28..1103.50 rows=205 width=32) (actual time=0.002..0.013 rows=10.00 loops=1)
+                           One-Time Filter: $10
+                           Buffers: shared hit=44
+                           ->  Subquery Scan on key_3  (cost=0.28..1103.50 rows=205 width=32) (actual time=0.002..0.012 rows=10.00 loops=1)
+                                 Filter: EXISTS(SubPlan 4)
+                                 Buffers: shared hit=44
+                                 ->  Index Only Scan using idx_comms_messages_thread_order on comms_messages m_4  (cost=0.28..17.00 rows=410 width=32) (actual time=0.001..0.002 rows=10.00 loops=1)
+                                       Index Cond: ((thread_id = $3) AND (import_order IS NULL))
+                                       Heap Fetches: 10
+                                       Index Searches: 1
+                                       Buffers: shared hit=4
+                                 SubPlan 4
+                                   ->  Index Scan using idx_comms_messages_active on comms_messages scope_3  (cost=0.42..2.64 rows=1 width=4) (actual time=0.001..0.001 rows=1.00 loops=10)
+                                         Index Cond: (id = key_3.id)
+                                         Filter: ((parent_entity_type = $1) AND (parent_entity_id = $2))
+                                         Index Searches: 10
+                                         Buffers: shared hit=40
+   ->  Index Scan using comms_messages_pkey on comms_messages m  (cost=0.42..2.64 rows=1 width=428) (actual time=0.001..0.001 rows=1.00 loops=25)
+         Index Cond: (id = key.id)
+         Index Searches: 25
+         Buffers: shared hit=100
+ Planning Time: 0.005 ms
+ Execution Time: 0.127 ms
+(79 rows)
+
+force_generic_plan size50_metadata run1
+                                                                                          QUERY PLAN                                                                                          
+----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------
+ Index Scan using comms_message_threads_pkey on comms_message_threads t  (cost=0.42..190.66 rows=10 width=64) (actual time=0.026..0.027 rows=1.00 loops=1)
+   Index Cond: (root_id = ANY ($1))
+   Index Searches: 1
+   Buffers: shared hit=13
+   SubPlan 1
+     ->  Aggregate  (cost=17.08..17.09 rows=1 width=8) (actual time=0.014..0.014 rows=1.00 loops=1)
+           Buffers: shared hit=5
+           ->  Index Only Scan using idx_comms_messages_thread_active_created on comms_messages r  (cost=0.28..16.05 rows=414 width=0) (actual time=0.006..0.010 rows=50.00 loops=1)
+                 Index Cond: (thread_id = t.root_id)
+                 Heap Fetches: 50
+                 Index Searches: 1
+                 Buffers: shared hit=5
+   SubPlan 3
+     ->  Result  (cost=0.32..0.33 rows=1 width=8) (actual time=0.002..0.003 rows=1.00 loops=1)
+           Buffers: shared hit=4
+           InitPlan 2
+             ->  Limit  (cost=0.28..0.32 rows=1 width=8) (actual time=0.002..0.002 rows=1.00 loops=1)
+                   Buffers: shared hit=4
+                   ->  Index Only Scan using idx_comms_messages_thread_active_created on comms_messages r_1  (cost=0.28..16.05 rows=414 width=8) (actual time=0.001..0.002 rows=1.00 loops=1)
+                         Index Cond: (thread_id = t.root_id)
+                         Heap Fetches: 1
+                         Index Searches: 1
+                         Buffers: shared hit=4
+ Planning:
+   Buffers: shared hit=10
+ Planning Time: 0.108 ms
+ Execution Time: 0.038 ms
+(27 rows)
+
+force_generic_plan size50_metadata run2
+                                                                                          QUERY PLAN                                                                                          
+----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------
+ Index Scan using comms_message_threads_pkey on comms_message_threads t  (cost=0.42..190.66 rows=10 width=64) (actual time=0.015..0.015 rows=1.00 loops=1)
+   Index Cond: (root_id = ANY ($1))
+   Index Searches: 1
+   Buffers: shared hit=13
+   SubPlan 1
+     ->  Aggregate  (cost=17.08..17.09 rows=1 width=8) (actual time=0.008..0.008 rows=1.00 loops=1)
+           Buffers: shared hit=5
+           ->  Index Only Scan using idx_comms_messages_thread_active_created on comms_messages r  (cost=0.28..16.05 rows=414 width=0) (actual time=0.002..0.006 rows=50.00 loops=1)
+                 Index Cond: (thread_id = t.root_id)
+                 Heap Fetches: 50
+                 Index Searches: 1
+                 Buffers: shared hit=5
+   SubPlan 3
+     ->  Result  (cost=0.32..0.33 rows=1 width=8) (actual time=0.002..0.002 rows=1.00 loops=1)
+           Buffers: shared hit=4
+           InitPlan 2
+             ->  Limit  (cost=0.28..0.32 rows=1 width=8) (actual time=0.002..0.002 rows=1.00 loops=1)
+                   Buffers: shared hit=4
+                   ->  Index Only Scan using idx_comms_messages_thread_active_created on comms_messages r_1  (cost=0.28..16.05 rows=414 width=8) (actual time=0.002..0.002 rows=1.00 loops=1)
+                         Index Cond: (thread_id = t.root_id)
+                         Heap Fetches: 1
+                         Index Searches: 1
+                         Buffers: shared hit=4
+ Planning Time: 0.004 ms
+ Execution Time: 0.021 ms
+(25 rows)
+

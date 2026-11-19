@@ -1,0 +1,555 @@
+commit 1bb3c9633ce06074bb8fbe19cc92d1aec2d8ba27
+Author: [redacted]
+Date:   Thu Nov 12 04:03:22 2026 +0000
+
+    feat(messages): expose channel changes after a sequence
+    
+    Why
+    
+    Clients need to catch up on missed channel changes without refetching
+    message pages.
+    
+    What
+    
+    Add the authorized domain read for bounded change pages, current message
+    and activity state, removed identities, and reset boundaries. Include
+    reply roots and current call status while preserving timeline access rules.
+
+diff --git a/crates/messages/AGENTS.md b/crates/messages/AGENTS.md
+index 12775e9c57..69c78a54cd 100644
+--- a/crates/messages/AGENTS.md
++++ b/crates/messages/AGENTS.md
+@@ -12,6 +12,12 @@ they need.
+ - `src/domain/models.rs`: shared message/thread models.
+ - `src/domain/service.rs` + `src/domain/ports.rs`: use-case orchestration and
+   the repository/delivery ports (feature `ports`).
++- `src/domain/changes.rs` + `src/domain/service/changes.rs`: authorized channel
++  catch-up pages and 30-day change-log retention; `channel_changes` includes
++  tombstones and the root of each changed reply, with 200 log rows per page.
++- `crates/channel_change_db_utils`: owns counter/log SQL; message adapters pass
++  transaction boundaries and policy limits to it, then map rows to domain types.
++  DSS composes atomic activity logging; the call repository appends root changes.
+ - `src/domain/api.rs`: `MessageServiceApi`, the boundary HTTP/agents/channel
+   adapters call through.
+ - `src/inbound/axum_router.rs`: the HTTP surface (feature `inbound`).
+@@ -27,6 +33,11 @@ they need.
+   call discussions; the call domain verifies RTC credentials and membership.
+ - `src/outbound/pg_message_repo.rs` + `pg_discussion_context.rs`: Postgres
+   adapters (feature `outbound`).
++- `src/outbound/pg_message_repo/write_hydration.rs`: channel writes hydrate in
++  one indexed statement (plus a bot lookup when needed); other parents keep
++  their existing statements.
++- `src/outbound/pg_message_repo/change_log.rs`: append channel changes as the
++  final statement before commit; other message parents run no extra statements.
+ - `src/outbound/connection_gateway.rs`, `notification_sender.rs`, `broker.rs`:
+   realtime/notification delivery adapters (features `outbound`/`broker`).
+ 
+@@ -41,10 +52,11 @@ they need.
+ 
+ - Depends on (by feature): `entity_access` (ports/inbound), `model` (annotations),
+   `properties`/`models_properties`/`model_notifications`/`notification`
+-  (delivery), `initiative` (outbound), `macro_event_broker`/`macro_event_topics`
+-  (broker).
++  (delivery), `initiative` and `channel_change_db_utils` (outbound), `activity` models,
++  `macro_event_broker`/`macro_event_topics` (broker).
+ - Used by: `agent_harness`, `agent_session`, `agent_trigger`, `ai_tools`, `bots`,
+-  `channel_bots`, `channels`, `coding_agent_worker`, `crm`, `documents`,
++  `calendar_service`, `call`, `channel_bots`, `channels`, `coding_agent_worker`,
++  `crm`, `documents`,
+   `lexical_client`, `lexical_mention_extractor`, `macro_db_client`,
+   `soup_realtime`, `webhook`.
+ 
+@@ -58,6 +70,8 @@ they need.
+ ## Checks
+ 
+ - `cargo test -p messages --all-features` (`SQLX_OFFLINE` unset).
++- `proofs/README.md`: reproducible local query plans for the channel change log,
++  hydration, retention, and writes on production-size synthetic fixtures.
+ 
+ A finalized bot reply (`NotifyAsPostedMessage` edit by the bot itself) carries
+ `completed_reply` on its patch event so agent triggers evaluate it like a new
+@@ -76,8 +90,15 @@ grant users another agent invocation's edit, deletion, or reaction authority.
+ 
+ ## Gotchas
+ 
++- Channel change rows retain 30 days of history; the calendar outbox worker
++  runs their bounded hourly prune even when calendar sync is disabled. Changes
++  pages cover 200 rows; a pruned position, a reset row, or a lag over 1,000
++  requires a fresh snapshot. Realtime pushes carry the committed sequence.
+ - `MessageKind::CallRoot` messages stand for a channel call. Only `ensure_call_root` creates them, and
+   they announce themselves with `MessageChange::CallRootPosted`, which reaches viewers and nothing else.
++- Channel change-log rows and their counters are read in one snapshot; retention
++  removes a prefix, so the first retained sequence minus one is the resume floor.
++  Keep counters after pruning so sequence numbers are never reused.
+ - Most modules are feature-gated (`ai_tools`, `annotations`, `broker`,
+   `delivery`, `inbound`, `outbound`, `ports`, `schema`); a caller enabling the wrong
+   combination gets a missing-module compile error, not a runtime one — check
+diff --git a/crates/messages/src/domain/service/test.rs b/crates/messages/src/domain/service/test.rs
+index 342829525d..93278e5213 100644
+--- a/crates/messages/src/domain/service/test.rs
++++ b/crates/messages/src/domain/service/test.rs
+@@ -6,6 +6,7 @@ use std::sync::{Arc, Mutex};
+ 
+ mod call_retries;
+ mod call_roots;
++mod changes;
+ mod event_posts;
+ mod guest_chat;
+ mod initiative;
+@@ -13,6 +14,9 @@ mod sequences;
+ 
+ #[derive(Clone)]
+ struct Repo {
++    change_log: crate::domain::changes::ChannelChangeLog,
++    changed_messages: Vec<crate::domain::changes::ChannelMessageChange>,
++    change_reads: Arc<Mutex<Vec<Vec<Uuid>>>>,
+     message: Message,
+     replies: Vec<Message>,
+     state: ThreadState,
+@@ -45,6 +49,45 @@ impl Repo {
+ }
+ 
+ impl MessageRepository for Repo {
++    async fn channel_seq(&self, _: Uuid) -> Result<i64, MessageError> {
++        Ok(self.change_log.seq)
++    }
++
++    async fn channel_change_log(
++        &self,
++        _: Uuid,
++        after: i64,
++    ) -> Result<crate::domain::changes::ChannelChangeLog, MessageError> {
++        let mut log = self.change_log.clone();
++        log.changes.retain(|change| change.seq > after);
++        Ok(log)
++    }
++
++    async fn load_channel_message_changes(
++        &self,
++        _: Uuid,
++        ids: &[Uuid],
++    ) -> Result<Vec<crate::domain::changes::ChannelMessageChange>, MessageError> {
++        use crate::domain::changes::ChannelMessageChange;
++        self.change_reads.lock().unwrap().push(ids.to_vec());
++        let roots: Vec<_> = self
++            .changed_messages
++            .iter()
++            .filter_map(|change| match change {
++                ChannelMessageChange::Reply { message } if ids.contains(&message.id) => {
++                    message.thread_id
++                }
++                _ => None,
++            })
++            .collect();
++        Ok(self
++            .changed_messages
++            .iter()
++            .filter(|change| ids.contains(&change.id()) || roots.contains(&change.id()))
++            .cloned()
++            .collect())
++    }
++
+     async fn call_thread_facts(&self, _: Uuid) -> Result<Option<CallThreadFacts>, MessageError> {
+         Ok(self.call_thread.clone())
+     }
+@@ -279,6 +322,9 @@ fn fixture() -> Repo {
+     let id = Uuid::from_u128(1);
+     let user = "macro|author@example.com";
+     Repo {
++        change_log: Default::default(),
++        changed_messages: Vec::new(),
++        change_reads: Arc::default(),
+         message: Message {
+             kind: MessageKind::Message,
+             id,
+@@ -1353,6 +1399,26 @@ struct StrictRepo {
+ }
+ 
+ impl MessageRepository for StrictRepo {
++    async fn channel_seq(&self, id: Uuid) -> Result<i64, MessageError> {
++        self.inner.channel_seq(id).await
++    }
++
++    async fn channel_change_log(
++        &self,
++        id: Uuid,
++        after: i64,
++    ) -> Result<crate::domain::changes::ChannelChangeLog, MessageError> {
++        self.inner.channel_change_log(id, after).await
++    }
++
++    async fn load_channel_message_changes(
++        &self,
++        id: Uuid,
++        ids: &[Uuid],
++    ) -> Result<Vec<crate::domain::changes::ChannelMessageChange>, MessageError> {
++        self.inner.load_channel_message_changes(id, ids).await
++    }
++
+     async fn call_thread_facts(&self, id: Uuid) -> Result<Option<CallThreadFacts>, MessageError> {
+         self.inner.call_thread_facts(id).await
+     }
+@@ -1669,6 +1735,33 @@ async fn display_only_mention_kinds_are_stored_without_authorization() {
+ #[derive(Clone)]
+ struct TimelineFacts(Vec<activity::domain::timeline::TimelineActivity>);
+ impl activity::domain::timeline::ActivityTimeline for TimelineFacts {
++    fn read_ids<'a>(
++        &'a self,
++        query: activity::domain::timeline::ActivityTimelineIdsQuery,
++    ) -> std::pin::Pin<
++        Box<
++            dyn Future<
++                    Output = Result<
++                        Vec<activity::domain::timeline::TimelineActivity>,
++                        activity::domain::timeline::TimelineReadError,
++                    >,
++                > + Send
++                + 'a,
++        >,
++    > {
++        Box::pin(async move {
++            assert_eq!(query.entity_type, activity::EntityType::Channel);
++            assert_eq!(query.entity_id, Uuid::from_u128(20).to_string());
++            assert_eq!(query.selection, CHANNEL_TIMELINE);
++            Ok(self
++                .0
++                .iter()
++                .filter(|row| query.ids.contains(&row.id))
++                .cloned()
++                .collect())
++        })
++    }
++
+     fn read<'a>(
+         &'a self,
+         query: activity::domain::timeline::ActivityTimelineQuery,
+@@ -1716,6 +1809,23 @@ impl activity::domain::timeline::ActivityTimeline for TimelineFacts {
+ #[derive(Clone)]
+ struct CountedFacts(TimelineFacts, Arc<Mutex<Vec<u16>>>);
+ impl activity::domain::timeline::ActivityTimeline for CountedFacts {
++    fn read_ids<'a>(
++        &'a self,
++        query: activity::domain::timeline::ActivityTimelineIdsQuery,
++    ) -> std::pin::Pin<
++        Box<
++            dyn Future<
++                    Output = Result<
++                        Vec<activity::domain::timeline::TimelineActivity>,
++                        activity::domain::timeline::TimelineReadError,
++                    >,
++                > + Send
++                + 'a,
++        >,
++    > {
++        self.0.read_ids(query)
++    }
++
+     fn read<'a>(
+         &'a self,
+         query: activity::domain::timeline::ActivityTimelineQuery,
+
+commit 6b686f1c2acb958faf18928c37396f96444ff0ac
+Author: [redacted]
+Date:   Thu Nov 12 04:02:30 2026 +0000
+
+    feat(messages): sequence committed channel mutations
+    
+    Why
+    
+    Channel caches need a committed position for every message change while
+    other message parents retain their existing write behavior.
+    
+    What
+    
+    Append channel changes as the final write before commit and carry their
+    positions through existing message events. Include thread changes and
+    historical resets, preserve document SQL, and hydrate channel writes with
+    one message-scoped query using the existing projection.
+
+diff --git a/crates/messages/src/domain/service/test.rs b/crates/messages/src/domain/service/test.rs
+index a71de7ae03..342829525d 100644
+--- a/crates/messages/src/domain/service/test.rs
++++ b/crates/messages/src/domain/service/test.rs
+@@ -9,6 +9,7 @@ mod call_roots;
+ mod event_posts;
+ mod guest_chat;
+ mod initiative;
++mod sequences;
+ 
+ #[derive(Clone)]
+ struct Repo {
+@@ -20,6 +21,7 @@ struct Repo {
+     creates: Arc<Mutex<Vec<CreateMessage>>>,
+     edits: Arc<Mutex<Vec<EditMessage>>>,
+     reaction_changed: bool,
++    mutation_seq: Option<i64>,
+     file_type: Option<String>,
+     concurrent_create: bool,
+     client_message_id: Option<Uuid>,
+@@ -28,6 +30,13 @@ struct Repo {
+ }
+ 
+ impl Repo {
++    fn committed_seq(&self, parent: &MessageParent) -> Option<i64> {
++        match parent {
++            MessageParent::Channel(_) => self.mutation_seq,
++            _ => None,
++        }
++    }
++
+     /// A committed teardown tombstones the root and every reply in one
+     /// statement, so reads that follow it see the whole discussion gone.
+     fn torn_down(&self, root: Uuid) -> bool {
+@@ -154,7 +163,7 @@ impl MessageRepository for Repo {
+             previous_cursor: None,
+         })
+     }
+-    async fn create(&self, command: CreateMessage) -> Result<Message, MessageError> {
++    async fn create(&self, command: CreateMessage) -> Result<(Message, Option<i64>), MessageError> {
+         if command.input.id == Some(self.message.id)
+             || (self.client_message_id.is_some() && command.input.id == self.client_message_id)
+         {
+@@ -171,46 +180,58 @@ impl MessageRepository for Repo {
+         message.triggered_by = command.triggered_by.clone();
+         message.thread_id = command.input.thread_id;
+         self.creates.lock().unwrap().push(command);
+-        Ok(message)
++        let seq = self.committed_seq(&message.parent);
++        Ok((message, seq))
+     }
+     async fn edit(
+         &self,
+         _: &MessageParent,
+         _: Uuid,
+         command: EditMessage,
+-    ) -> Result<Message, MessageError> {
++    ) -> Result<(Message, Option<i64>), MessageError> {
+         let mut message = self.message.clone();
+         message.content = command.content.clone();
+         message.mentions = command.mentions.clone();
+         self.edits.lock().unwrap().push(command);
+-        Ok(message)
++        let seq = self.committed_seq(&message.parent);
++        Ok((message, seq))
+     }
+-    async fn delete(&self, parent: &MessageParent, id: Uuid) -> Result<Message, MessageError> {
++    async fn delete(
++        &self,
++        parent: &MessageParent,
++        id: Uuid,
++    ) -> Result<(Message, Option<i64>), MessageError> {
+         self.deletes.lock().unwrap().push(id);
+         let mut message = self.get(parent, id).await?.ok_or(MessageError::NotFound)?;
+         message.deleted_at = Some(Utc::now());
+         message.content.clear();
+-        Ok(message)
++        let seq = self.committed_seq(&message.parent);
++        Ok((message, seq))
+     }
+     async fn react(
+         &self,
+-        _: &MessageParent,
++        parent: &MessageParent,
+         _: Uuid,
+         _: &str,
+         _: &str,
+         _: bool,
+     ) -> Result<ReactionResult, MessageError> {
+         Ok(ReactionResult {
++            seq: if self.reaction_changed {
++                self.committed_seq(parent)
++            } else {
++                None
++            },
+             message: self.message.clone(),
+             changed: self.reaction_changed,
+         })
+     }
+     async fn patch_thread(
+         &self,
+-        _: &MessageParent,
++        parent: &MessageParent,
+         _: Uuid,
+         patch: ThreadPatch,
+-    ) -> Result<ThreadState, MessageError> {
++    ) -> Result<(ThreadState, Option<i64>), MessageError> {
+         let mut state = self.state.clone();
+         if let Some(resolved) = patch.resolved {
+             state.resolved = resolved;
+@@ -218,13 +239,13 @@ impl MessageRepository for Repo {
+         if patch.detach_anchor {
+             state.anchor = None;
+         }
+-        Ok(state)
++        Ok((state, self.committed_seq(parent)))
+     }
+     async fn delete_thread(
+         &self,
+-        _: &MessageParent,
++        parent: &MessageParent,
+         root: Uuid,
+-    ) -> Result<ThreadState, MessageError> {
++    ) -> Result<(ThreadState, Option<i64>), MessageError> {
+         self.thread_deletes.lock().unwrap().push(root);
+         let mut state = self.state.clone();
+         state.deleted_at = Some(Utc::now());
+@@ -233,7 +254,7 @@ impl MessageRepository for Repo {
+         if !matches!(state.anchor, Some(ThreadAnchor::Markdown { .. })) {
+             state.anchor = None;
+         }
+-        Ok(state)
++        Ok((state, self.committed_seq(parent)))
+     }
+     async fn resolve_legacy(
+         &self,
+@@ -298,6 +319,7 @@ fn fixture() -> Repo {
+         creates: Arc::default(),
+         edits: Arc::default(),
+         reaction_changed: true,
++        mutation_seq: None,
+         file_type: Some("md".into()),
+         concurrent_create: false,
+         client_message_id: None,
+@@ -1391,7 +1413,7 @@ impl MessageRepository for StrictRepo {
+     ) -> Result<MessagePage, MessageError> {
+         self.inner.timeline(parent, query).await
+     }
+-    async fn create(&self, command: CreateMessage) -> Result<Message, MessageError> {
++    async fn create(&self, command: CreateMessage) -> Result<(Message, Option<i64>), MessageError> {
+         self.inner.create(command).await
+     }
+     async fn edit(
+@@ -1399,10 +1421,14 @@ impl MessageRepository for StrictRepo {
+         parent: &MessageParent,
+         id: Uuid,
+         command: EditMessage,
+-    ) -> Result<Message, MessageError> {
++    ) -> Result<(Message, Option<i64>), MessageError> {
+         self.inner.edit(parent, id, command).await
+     }
+-    async fn delete(&self, parent: &MessageParent, id: Uuid) -> Result<Message, MessageError> {
++    async fn delete(
++        &self,
++        parent: &MessageParent,
++        id: Uuid,
++    ) -> Result<(Message, Option<i64>), MessageError> {
+         self.inner.delete(parent, id).await
+     }
+     async fn react(
+@@ -1420,14 +1446,14 @@ impl MessageRepository for StrictRepo {
+         parent: &MessageParent,
+         root: Uuid,
+         patch: ThreadPatch,
+-    ) -> Result<ThreadState, MessageError> {
++    ) -> Result<(ThreadState, Option<i64>), MessageError> {
+         self.inner.patch_thread(parent, root, patch).await
+     }
+     async fn delete_thread(
+         &self,
+         parent: &MessageParent,
+         root: Uuid,
+-    ) -> Result<ThreadState, MessageError> {
++    ) -> Result<(ThreadState, Option<i64>), MessageError> {
+         self.inner.delete_thread(parent, root).await
+     }
+     async fn resolve_legacy(
+
+commit 51cb4ad40dd5c3dc5448d597c0393dd92a5d4749
+Author: [redacted]
+Date:   Thu Nov 5 18:47:50 2026 -0500
+
+    feat(calls): put channel call chat in a thread in the channel (#9878)
+    
+    Co-authored-by: Tod <fixture-80f073629924bcf6@example.com>
+
+diff --git a/crates/messages/AGENTS.md b/crates/messages/AGENTS.md
+index 29a9117b5a..12775e9c57 100644
+--- a/crates/messages/AGENTS.md
++++ b/crates/messages/AGENTS.md
+@@ -76,6 +76,8 @@ grant users another agent invocation's edit, deletion, or reaction authority.
+ 
+ ## Gotchas
+ 
++- `MessageKind::CallRoot` messages stand for a channel call. Only `ensure_call_root` creates them, and
++  they announce themselves with `MessageChange::CallRootPosted`, which reaches viewers and nothing else.
+ - Most modules are feature-gated (`ai_tools`, `annotations`, `broker`,
+   `delivery`, `inbound`, `outbound`, `ports`, `schema`); a caller enabling the wrong
+   combination gets a missing-module compile error, not a runtime one — check
+diff --git a/crates/messages/src/domain/service/test.rs b/crates/messages/src/domain/service/test.rs
+index 6fc3ae4cf3..a71de7ae03 100644
+--- a/crates/messages/src/domain/service/test.rs
++++ b/crates/messages/src/domain/service/test.rs
+@@ -1,9 +1,11 @@
+ use super::*;
+ use chrono::Utc;
+ use entity_access::domain::models::{AccessLevel, EntityAccessAuth};
++use std::collections::HashMap;
+ use std::sync::{Arc, Mutex};
+ 
+ mod call_retries;
++mod call_roots;
+ mod event_posts;
+ mod guest_chat;
+ mod initiative;
+@@ -21,6 +23,8 @@ struct Repo {
+     file_type: Option<String>,
+     concurrent_create: bool,
+     client_message_id: Option<Uuid>,
++    call_thread: Option<CallThreadFacts>,
++    call_statuses: HashMap<Uuid, CallEntryStatus>,
+ }
+ 
+ impl Repo {
+@@ -32,6 +36,17 @@ impl Repo {
+ }
+ 
+ impl MessageRepository for Repo {
++    async fn call_thread_facts(&self, _: Uuid) -> Result<Option<CallThreadFacts>, MessageError> {
++        Ok(self.call_thread.clone())
++    }
++
++    async fn call_entry_statuses(
++        &self,
++        _: &[Uuid],
++    ) -> Result<HashMap<Uuid, CallEntryStatus>, MessageError> {
++        Ok(self.call_statuses.clone())
++    }
++
+     async fn document_file_type(&self, _: &str) -> Result<Option<String>, MessageError> {
+         Ok(self.file_type.clone())
+     }
+@@ -244,6 +259,7 @@ fn fixture() -> Repo {
+     let user = "macro|author@example.com";
+     Repo {
+         message: Message {
++            kind: MessageKind::Message,
+             id,
+             parent: MessageParent::parse("document", "doc").unwrap(),
+             thread_id: None,
+@@ -285,6 +301,8 @@ fn fixture() -> Repo {
+         file_type: Some("md".into()),
+         concurrent_create: false,
+         client_message_id: None,
++        call_thread: None,
++        call_statuses: HashMap::new(),
+     }
+ }
+ 
+@@ -1313,6 +1331,17 @@ struct StrictRepo {
+ }
+ 
+ impl MessageRepository for StrictRepo {
++    async fn call_thread_facts(&self, id: Uuid) -> Result<Option<CallThreadFacts>, MessageError> {
++        self.inner.call_thread_facts(id).await
++    }
++
++    async fn call_entry_statuses(
++        &self,
++        ids: &[Uuid],
++    ) -> Result<HashMap<Uuid, CallEntryStatus>, MessageError> {
++        self.inner.call_entry_statuses(ids).await
++    }
++
+     async fn document_file_type(&self, id: &str) -> Result<Option<String>, MessageError> {
+         self.inner.document_file_type(id).await
+     }

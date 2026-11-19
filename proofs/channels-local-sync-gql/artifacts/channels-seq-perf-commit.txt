@@ -1,0 +1,11 @@
+test(graphql-channel): measure sequenced page reads
+
+Why
+
+The immutable channel performance fixture predates sequence storage, so
+the final server comparison needs a migrated local copy of the same data.
+
+What
+
+Allow the isolated local fixture and require its nonzero sequence while
+retaining read-only connections, alternating samples and phase timings.

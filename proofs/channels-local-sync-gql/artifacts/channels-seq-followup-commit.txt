@@ -1,0 +1,11 @@
+test(channels): complete sequence integration coverage
+
+Why
+
+Reply replay must refresh its root even without a root log entry, and
+synthetic message events must include the new optional sequence field.
+
+What
+
+Exercise reply-only changes for live and deleted thread states and
+initialize the sequence in channel-bot event fixtures.

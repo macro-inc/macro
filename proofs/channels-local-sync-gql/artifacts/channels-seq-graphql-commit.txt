@@ -1,0 +1,13 @@
+feat(graphql-channel): replay committed channel changes
+
+Why
+
+Channel snapshots need a committed watermark and bounded catch-up reads so
+the local cache can include writes that race with page loading.
+
+What
+
+Read the real sequence before timeline and thread pages. Map the domain
+change feed's current messages, reply roots, activities, removed identities
+and reset boundaries. Share activity projection across reads and verify
+composed-schema parity, replay paging and watermark ordering.

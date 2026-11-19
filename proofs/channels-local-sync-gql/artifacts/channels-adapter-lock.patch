@@ -1,0 +1,16 @@
+diff --git a/Cargo.lock b/Cargo.lock
+index 55997457d0..458960a29b 100644
+--- a/Cargo.lock
++++ b/Cargo.lock
+@@ -9242,7 +9243,11 @@ dependencies = [
+  "entity_access",
+  "graphql_common",
+  "macro_user_id",
++ "messages",
++ "nom 8.0.0",
++ "serde_json",
+  "tokio",
++ "tracing",
+  "uuid",
+  "workspace-hack",
+ ]

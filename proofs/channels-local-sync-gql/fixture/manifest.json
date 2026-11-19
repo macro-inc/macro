@@ -1,0 +1,39 @@
+{
+  "comms_channels": {
+    "rows": 1,
+    "sha256": "8dbc3cd6e77c294124235b077d95929490ba8df4fc4ebd711872cf0b5d87b0b8",
+    "private_sha256": "8dbc3cd6e77c294124235b077d95929490ba8df4fc4ebd711872cf0b5d87b0b8"
+  },
+  "comms_messages": {
+    "rows": 50000,
+    "sha256": "8d88de85593b2e965ecb039d6776dc106aafe4a261f1b59b2c2fa7750dded260",
+    "private_sha256": "8d88de85593b2e965ecb039d6776dc106aafe4a261f1b59b2c2fa7750dded260"
+  },
+  "comms_message_threads": {
+    "rows": 40000,
+    "sha256": "3f263ca4772484b7a72fb852dbba4d71e0c9221aa16d77d92fb37d26f44b24e6",
+    "private_sha256": "3f263ca4772484b7a72fb852dbba4d71e0c9221aa16d77d92fb37d26f44b24e6"
+  },
+  "comms_attachments": {
+    "rows": 219,
+    "sha256": "b4fd18d3146691c8bf4626b26da96450f34817c557308c40096c79eb8de8cb61",
+    "private_sha256": "b4fd18d3146691c8bf4626b26da96450f34817c557308c40096c79eb8de8cb61"
+  },
+  "comms_reactions": {
+    "rows": 19589,
+    "sha256": "965c0228f9302539d910329ae9332cb71468ad576d4863621a81959ae6f57d45",
+    "private_sha256": "965c0228f9302539d910329ae9332cb71468ad576d4863621a81959ae6f57d45"
+  },
+  "comms_entity_mentions": {
+    "rows": 1480,
+    "sha256": "b88ee0e22b844384ccc432dc755592e16e2c619924a07957d4c4b2d133f339cf",
+    "private_sha256": "b88ee0e22b844384ccc432dc755592e16e2c619924a07957d4c4b2d133f339cf"
+  },
+  "activity_events": {
+    "rows": 0,
+    "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+    "private_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+  },
+  "channel_id": "5eed92f0-1c06-8932-b12c-277f6a59bad3",
+  "sequence": 1
+}

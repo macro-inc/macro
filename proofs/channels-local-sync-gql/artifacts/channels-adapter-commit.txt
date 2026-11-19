@@ -1,0 +1,10 @@
+feat(graphql-channel): add authenticated channel read adapters
+
+Why
+A persistent message cache needs the same channel windows and thread
+ordering already provided by the REST message service.
+
+What
+Add separate message, activity and page types with lossless ordering keys.
+Forward authenticated reads through a request-scoped message service and
+retain one explicit sequence integration seam for the stacked change log.

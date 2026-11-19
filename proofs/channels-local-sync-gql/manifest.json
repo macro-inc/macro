@@ -1,0 +1,716 @@
+[
+  {
+    "original": "/tmp/channels-adapter-commit.txt",
+    "archived": "artifacts/channels-adapter-commit.txt",
+    "bytes": 420,
+    "sha256": "a31e09bdaed8048cd9731e133ba6f64bf27140553cf2ac9d05d6110090fb214d"
+  },
+  {
+    "original": "/tmp/channels-adapter-lock.patch",
+    "archived": "artifacts/channels-adapter-lock.patch",
+    "bytes": 307,
+    "sha256": "696c7b656f587ed0b3f87979e2aaba026e99893773adb3dc95f241dcbb9b94c5"
+  },
+  {
+    "original": "/tmp/channels-agent-harness-compile.log",
+    "archived": "artifacts/channels-agent-harness-compile.log",
+    "bytes": 8052,
+    "sha256": "056b3b0d3c502fa888f826a20919b57d3029f2583f9e047a661dfebfc31ac894"
+  },
+  {
+    "original": "/tmp/channels-agent-harness-nextest.log",
+    "archived": "artifacts/channels-agent-harness-nextest.log",
+    "bytes": 76047,
+    "sha256": "9a41aabf4c58ff08ae260faa20b7449aaf8afbc109ff2fb210959552a8656b44"
+  },
+  {
+    "original": "/tmp/channels-complete-graph-final.log",
+    "archived": "artifacts/channels-complete-graph-final.log",
+    "bytes": 1971,
+    "sha256": "0408cdf7bfec10c97b13288319bb460193b4471c0a0a92a7dbc9e4454fd14b7d"
+  },
+  {
+    "original": "/tmp/channels-complete-graph-seq-final.log",
+    "archived": "artifacts/channels-complete-graph-seq-final.log",
+    "bytes": 11596,
+    "sha256": "9eded25304f9394b6f732ae12ee55156928d0e40bd96fcbc020d34939e6a3143"
+  },
+  {
+    "original": "/tmp/channels-covered-indexed-plans.py",
+    "archived": "artifacts/channels-covered-indexed-plans.py",
+    "bytes": 1686,
+    "sha256": "aadb8bd80f5667e7db6a31997aa58fbd62a3d8199c201156536df8e0f34aaa29"
+  },
+  {
+    "original": "/tmp/channels-covered-indexed-plans.sql",
+    "archived": "artifacts/channels-covered-indexed-plans.sql",
+    "bytes": 8267,
+    "sha256": "81145cd6f94e21baff92c0e83ea301846dbfa67de2db25dda26a9b1f23658fa9"
+  },
+  {
+    "original": "/tmp/channels-covered-indexed-plans.txt",
+    "archived": "artifacts/channels-covered-indexed-plans.txt",
+    "bytes": 60341,
+    "sha256": "19a688c8031d36c23b2f0e8d28cf1814ca4d4e0011538fc6afec79c138757e75"
+  },
+  {
+    "original": "/tmp/channels-covered-indexed-stale-plans.sql",
+    "archived": "artifacts/channels-covered-indexed-stale-plans.sql",
+    "bytes": 7159,
+    "sha256": "d94855938839ee52f73cafb575e558c2c99f4c240e5373afb5039e8a63869077"
+  },
+  {
+    "original": "/tmp/channels-covered-indexed-stale-plans.txt",
+    "archived": "artifacts/channels-covered-indexed-stale-plans.txt",
+    "bytes": 47332,
+    "sha256": "4f5341a6a0e2293dda6615ffc9dadcda0b6f1a4ac8f68540b1a37030cf1551ad"
+  },
+  {
+    "original": "/tmp/channels-deps-check.log",
+    "archived": "artifacts/channels-deps-check.log",
+    "bytes": 3715,
+    "sha256": "848e2f83f86d712d463236489e8b093572cc6d88e6d1e4383bf79114f89358f2"
+  },
+  {
+    "original": "/tmp/channels-deps-final.log",
+    "archived": "artifacts/channels-deps-final.log",
+    "bytes": 500,
+    "sha256": "4f638e325149e89ecefc548dda6f1ea2b908ba3a8618ba9bdc725028e5ff905f"
+  },
+  {
+    "original": "/tmp/channels-deps-regenerate.log",
+    "archived": "artifacts/channels-deps-regenerate.log",
+    "bytes": 293,
+    "sha256": "8ec49935699991a2bf14bf18298e419d398598884fac99aa1f37b60adee81ac0"
+  },
+  {
+    "original": "/tmp/channels-domain-commit.txt",
+    "archived": "artifacts/channels-domain-commit.txt",
+    "bytes": 412,
+    "sha256": "8a6f13438944f0bd001b30081358c12a3b5a731df4a6878306684c297c2993bb"
+  },
+  {
+    "original": "/tmp/channels-domain-query-report.md",
+    "archived": "artifacts/channels-domain-query-report.md",
+    "bytes": 7784,
+    "sha256": "3d2896d6e3abe0cb97cce285f2357f0040224f41980c0c46bbe3766b2699a278"
+  },
+  {
+    "original": "/tmp/channels-downstream-test-final.log",
+    "archived": "artifacts/channels-downstream-test-final.log",
+    "bytes": 87075,
+    "sha256": "8af8d4d2f12a102daa835676aba8b22efcf8a58bc6a35f5c2fd281583a802630"
+  },
+  {
+    "original": "/tmp/channels-downstream-test-fixed.log",
+    "archived": "artifacts/channels-downstream-test-fixed.log",
+    "bytes": 948,
+    "sha256": "de949538408c6d92b070fe898e83e4fa5088a3a2f75d3e71984b9bc33a02e5db"
+  },
+  {
+    "original": "/tmp/channels-downstream-test-no-wrapper.log",
+    "archived": "artifacts/channels-downstream-test-no-wrapper.log",
+    "bytes": 8515,
+    "sha256": "769b0fba20ee9b51a20fb6fbf111617a15bd0120d1765229e3af497b72864b6d"
+  },
+  {
+    "original": "/tmp/channels-downstream-test.log",
+    "archived": "artifacts/channels-downstream-test.log",
+    "bytes": 3588,
+    "sha256": "d9c71edd1fde3600f1e95343baf6ab659174fe578384c9494e28f196935357d6"
+  },
+  {
+    "original": "/tmp/channels-dss-test-final.log",
+    "archived": "artifacts/channels-dss-test-final.log",
+    "bytes": 12613,
+    "sha256": "af83c724ff4750e014d852e61b91e5bca1405212065ea5a461a029c4c8f43b2b"
+  },
+  {
+    "original": "/tmp/channels-dss-test.log",
+    "archived": "artifacts/channels-dss-test.log",
+    "bytes": 18948,
+    "sha256": "4c4916e712cf3a470fc965f54daf5d3c4b9157ca4a57bf25175943937228afdd"
+  },
+  {
+    "original": "/tmp/channels-final-audit.md",
+    "archived": "artifacts/channels-final-audit.md",
+    "bytes": 13411,
+    "sha256": "985567c565fc01310a50eabd3b242ee40f92a9f3b658643e450f25e835ed3641"
+  },
+  {
+    "original": "/tmp/channels-final-query-plans.txt",
+    "archived": "artifacts/channels-final-query-plans.txt",
+    "bytes": 88033,
+    "sha256": "d00f61e7ea287c02d6b07f604e00d0a5eecdd6dc6de4b9940c28e6baefda7e40"
+  },
+  {
+    "original": "/tmp/channels-fixture-crates-test-initial.log",
+    "archived": "artifacts/channels-fixture-crates-test-initial.log",
+    "bytes": 5172,
+    "sha256": "b90a1f1b7f3657b97b97611ffde61766d173e374ca4eb77120f4f3bbfae2724a"
+  },
+  {
+    "original": "/tmp/channels-fixture-crates-test.log",
+    "archived": "artifacts/channels-fixture-crates-test.log",
+    "bytes": 87492,
+    "sha256": "0bbfb039edd5310f98546cd81b055f6481546ecf5742db3577d7f2678624b586"
+  },
+  {
+    "original": "/tmp/channels-gql-check.log",
+    "archived": "artifacts/channels-gql-check.log",
+    "bytes": 2186,
+    "sha256": "e39d2b1af6b2274aaec72658ccac67e2839bd98b450a7fe003100d6e85377336"
+  },
+  {
+    "original": "/tmp/channels-gql-copy-perf-fixture.py",
+    "archived": "artifacts/channels-gql-copy-perf-fixture.py",
+    "bytes": 5907,
+    "sha256": "c6d0dbed483a235fdc399e0aa66efceb5f15c8208ad6f4908f7d93981499c294"
+  },
+  {
+    "original": "/tmp/channels-gql-fleet-done.txt",
+    "archived": "artifacts/channels-gql-fleet-done.txt",
+    "bytes": 2488,
+    "sha256": "dd98f94699c4d92905c4dea2e36163b6f4bcf415a321246f574629a5e389f56c"
+  },
+  {
+    "original": "/tmp/channels-gql-migrations.log",
+    "archived": "artifacts/channels-gql-migrations.log",
+    "bytes": 54075,
+    "sha256": "a4b98c4eeab56f8d527f7de90c4024220acdb5ce5703aae9063f9c412ef53ec1"
+  },
+  {
+    "original": "/tmp/channels-gql-perf-report.md",
+    "archived": "artifacts/channels-gql-perf-report.md",
+    "bytes": 5239,
+    "sha256": "6f334740a5af2e204d33133816a630521988beb482968755d75a9415d545a091"
+  },
+  {
+    "original": "/tmp/channels-gql-pg-init.log",
+    "archived": "artifacts/channels-gql-pg-init.log",
+    "bytes": 948,
+    "sha256": "54a62a89ea101b9abf3f5ccff681bef74ffbf66bd7c64f9425adae2fcf057f0f"
+  },
+  {
+    "original": "/tmp/channels-gql-pg.log",
+    "archived": "artifacts/channels-gql-pg.log",
+    "bytes": 259025,
+    "sha256": "dcb2cfeadb57dabf615403065abf4476d269579d427572d1174098b8001c70e5"
+  },
+  {
+    "original": "/tmp/channels-gql-real-seq-perf-report.md",
+    "archived": "artifacts/channels-gql-real-seq-perf-report.md",
+    "bytes": 5872,
+    "sha256": "6ec773123c7e480785b1e1801f993b24a34711ad5da9568c0d3d711bcfc02a1b"
+  },
+  {
+    "original": "/tmp/channels-gql-rebase-history.txt",
+    "archived": "artifacts/channels-gql-rebase-history.txt",
+    "bytes": 20857,
+    "sha256": "e98c0452d5bfb92c3ada7c154d2b4e04fb11ca65ce2fd76f653d944c5809043a"
+  },
+  {
+    "original": "/tmp/channels-gql-template.log",
+    "archived": "artifacts/channels-gql-template.log",
+    "bytes": 1017,
+    "sha256": "6d4224f406297940af53214976555cd514548b07f375c48147614847f6a2b60d"
+  },
+  {
+    "original": "/tmp/channels-gql-unit-final.log",
+    "archived": "artifacts/channels-gql-unit-final.log",
+    "bytes": 3865,
+    "sha256": "85a1ee2f14bb493f662662bd9e12db2485b5f072ffc30d8b8ad1b1ad474ea727"
+  },
+  {
+    "original": "/tmp/channels-gql-unit.log",
+    "archived": "artifacts/channels-gql-unit.log",
+    "bytes": 18620,
+    "sha256": "ff018fa64efb369b7958581b7bfbfa6f3a7548a07cc7921e7299e52df0b5ea84"
+  },
+  {
+    "original": "/tmp/channels-graphql-channel-seq-final.log",
+    "archived": "artifacts/channels-graphql-channel-seq-final.log",
+    "bytes": 879,
+    "sha256": "d2674ee7a09413acef01efdead00b3e4efae4bf7efacece281159a9678f68413"
+  },
+  {
+    "original": "/tmp/channels-imported-plans-seed.sql",
+    "archived": "artifacts/channels-imported-plans-seed.sql",
+    "bytes": 1481,
+    "sha256": "0ff5936153d7cce07cd8f2004672c917ee33a1d4ef9377c9fdfe0a41ffcebe41"
+  },
+  {
+    "original": "/tmp/channels-imported-plans.py",
+    "archived": "artifacts/channels-imported-plans.py",
+    "bytes": 1711,
+    "sha256": "e79dd6d65ba5a375921614c05c81b36bf32a353d4863dd9e48e9d4990d5269f2"
+  },
+  {
+    "original": "/tmp/channels-imported-plans.sql",
+    "archived": "artifacts/channels-imported-plans.sql",
+    "bytes": 11039,
+    "sha256": "d016cf034527c5a0a1f6628f4aa3a67cfb153556d7097cdbb6b2a44013544483"
+  },
+  {
+    "original": "/tmp/channels-imported-plans.txt",
+    "archived": "artifacts/channels-imported-plans.txt",
+    "bytes": 61223,
+    "sha256": "9081aa671b2326d474b27f23900586aca3d912eafc9fc4e102a04b7832b28803"
+  },
+  {
+    "original": "/tmp/channels-imported-stale-plans.sql",
+    "archived": "artifacts/channels-imported-stale-plans.sql",
+    "bytes": 9931,
+    "sha256": "24e587ade7b3670108b5059733e414a3d3fde5e29f014342d7b094a3bff9ae63"
+  },
+  {
+    "original": "/tmp/channels-imported-stale-plans.txt",
+    "archived": "artifacts/channels-imported-stale-plans.txt",
+    "bytes": 51385,
+    "sha256": "d80f501226adbecbdf03f34d1fa0b9d595667e78624b9f403c023a57b73a1831"
+  },
+  {
+    "original": "/tmp/channels-imported-stale-seed.sql",
+    "archived": "artifacts/channels-imported-stale-seed.sql",
+    "bytes": 591,
+    "sha256": "84dbdcd8ce60262837bd1dc012665bf49f075d5bfac25c9d361409d033cb244f"
+  },
+  {
+    "original": "/tmp/channels-indexed-plans.py",
+    "archived": "artifacts/channels-indexed-plans.py",
+    "bytes": 1679,
+    "sha256": "4e979bb834ea080162ca56898c609d3808ab9833a3e8f32fd71fad6f71cd4d23"
+  },
+  {
+    "original": "/tmp/channels-indexed-plans.sql",
+    "archived": "artifacts/channels-indexed-plans.sql",
+    "bytes": 7685,
+    "sha256": "4e5a7aa8448160956528e086d8863c5d4b61f329a069d1eebdf44d0a005b659e"
+  },
+  {
+    "original": "/tmp/channels-indexed-plans.txt",
+    "archived": "artifacts/channels-indexed-plans.txt",
+    "bytes": 52879,
+    "sha256": "5f25fec7358a3dde902485e9473e29b04a30695a089cb682f6603b1311012c31"
+  },
+  {
+    "original": "/tmp/channels-indexed-stale-plans.sql",
+    "archived": "artifacts/channels-indexed-stale-plans.sql",
+    "bytes": 6577,
+    "sha256": "55bbdba19bf72f1040292ba08afd9b45f2e3e12199e3f56a27605945bae0a593"
+  },
+  {
+    "original": "/tmp/channels-indexed-stale-plans.txt",
+    "archived": "artifacts/channels-indexed-stale-plans.txt",
+    "bytes": 41952,
+    "sha256": "c31503364e75f1387ea979307b7073310a7bda7ce2a8dd7ba1d5b1faa28fd62a"
+  },
+  {
+    "original": "/tmp/channels-just-check-final.log",
+    "archived": "artifacts/channels-just-check-final.log",
+    "bytes": 5162,
+    "sha256": "e9d15bc01dfd5d697180f1edaa0f795b6e8c728bd4ca7d54b03d7149b9d492a0"
+  },
+  {
+    "original": "/tmp/channels-just-check.log",
+    "archived": "artifacts/channels-just-check.log",
+    "bytes": 5203,
+    "sha256": "456110d09b8d6959810d16d8ef902950e6320b35a4d1ec3ff71ce94d83e80282"
+  },
+  {
+    "original": "/tmp/channels-messages-final-test.log",
+    "archived": "artifacts/channels-messages-final-test.log",
+    "bytes": 19866,
+    "sha256": "a61a8e7490958f1fb7ac9bf46ff5e46416ea8ec3071e0b2a45b4cb59bc9df0a1"
+  },
+  {
+    "original": "/tmp/channels-messages-test.log",
+    "archived": "artifacts/channels-messages-test.log",
+    "bytes": 23736,
+    "sha256": "00e18f1b2f4cff3562342d635f8da86c95e8b53328fadec369af9f305c8e7440"
+  },
+  {
+    "original": "/tmp/channels-perf-real-seq-release.log",
+    "archived": "artifacts/channels-perf-real-seq-release.log",
+    "bytes": 10518,
+    "sha256": "be65e068655226345d3376477c8cbde399d7ccf6b7ceed115d551e78a959f62b"
+  },
+  {
+    "original": "/tmp/channels-perf-real-seq-repeat-1.log",
+    "archived": "artifacts/channels-perf-real-seq-repeat-1.log",
+    "bytes": 7493,
+    "sha256": "888252896377d992b5a2cceeeb86fb44ef4745639bf903993495ed6d5378a49a"
+  },
+  {
+    "original": "/tmp/channels-perf-real-seq-repeat-2.log",
+    "archived": "artifacts/channels-perf-real-seq-repeat-2.log",
+    "bytes": 7493,
+    "sha256": "7fe928e705abeeb2bab23cbd14a0778cf5ddf514e5e2cc4ecde5471ab2c822d8"
+  },
+  {
+    "original": "/tmp/channels-perf-release.log",
+    "archived": "artifacts/channels-perf-release.log",
+    "bytes": 42223,
+    "sha256": "40810e39abae701b5b4fd2404eb50f927f3bd374da741b522406bc959c8e8682"
+  },
+  {
+    "original": "/tmp/channels-post-seq-agent-harness-compile.log",
+    "archived": "artifacts/channels-post-seq-agent-harness-compile.log",
+    "bytes": 1745,
+    "sha256": "7addacf76e1567c95a67ba523326de11e12887d992e9ef52d570ff774a167481"
+  },
+  {
+    "original": "/tmp/channels-post-seq-agent-harness-nextest.log",
+    "archived": "artifacts/channels-post-seq-agent-harness-nextest.log",
+    "bytes": 75340,
+    "sha256": "87003eb29b6169c3b46c6a19dae865b343d6e63e8a8faf83aa3cf85039b54380"
+  },
+  {
+    "original": "/tmp/channels-post-seq-fixture-crates-test-initial.log",
+    "archived": "artifacts/channels-post-seq-fixture-crates-test-initial.log",
+    "bytes": 4147,
+    "sha256": "19d62b503af18d25a6f4a46667680ad1bee3567e7470be98a3a7e573f1fcc3e4"
+  },
+  {
+    "original": "/tmp/channels-post-seq-fixture-crates-test.log",
+    "archived": "artifacts/channels-post-seq-fixture-crates-test.log",
+    "bytes": 81503,
+    "sha256": "c5f25f5ebef8d3512f269ce83587d6765a4014c1ee93b7b82ae4e6e69f9dc17d"
+  },
+  {
+    "original": "/tmp/channels-prepare.log",
+    "archived": "artifacts/channels-prepare.log",
+    "bytes": 12803,
+    "sha256": "ff56f95bce85c9ebd3d8489d8e477d6e529466cec8d401dc9e3d94db71401d47"
+  },
+  {
+    "original": "/tmp/channels-privacy-final.log",
+    "archived": "artifacts/channels-privacy-final.log",
+    "bytes": 46,
+    "sha256": "b5b6c859f35dc15c428c8fa389f3449d296245d5564537ebdcf2556a2f5650fe"
+  },
+  {
+    "original": "/tmp/channels-privacy.log",
+    "archived": "artifacts/channels-privacy.log",
+    "bytes": 87,
+    "sha256": "598b472d4ffc16addb723e32af0f828f0e5cd3875b8b5e527cc07b1b00ea63ee"
+  },
+  {
+    "original": "/tmp/channels-query-plans.py",
+    "archived": "artifacts/channels-query-plans.py",
+    "bytes": 2590,
+    "sha256": "80b1a746122cddc735b523ad55121f3e9061ee430200b00fbd29cc461e7da56a"
+  },
+  {
+    "original": "/tmp/channels-query-plans.sql",
+    "archived": "artifacts/channels-query-plans.sql",
+    "bytes": 17221,
+    "sha256": "25b3c6b0acfd462c7d4aaf02ad68c3c1333eacbcadb35821c3563b49f3cb33b2"
+  },
+  {
+    "original": "/tmp/channels-query-plans.txt",
+    "archived": "artifacts/channels-query-plans.txt",
+    "bytes": 77875,
+    "sha256": "7a28243a085b0fedbbd28606ef381041c06d740cfb2f2923db492e5e74905d2a"
+  },
+  {
+    "original": "/tmp/channels-rust-check-clean.log",
+    "archived": "artifacts/channels-rust-check-clean.log",
+    "bytes": 40587,
+    "sha256": "a81b0ca3036acd5ec33ec9070657133e4f044480c59d9969d9ea39538f62ab5a"
+  },
+  {
+    "original": "/tmp/channels-rust-check.log",
+    "archived": "artifacts/channels-rust-check.log",
+    "bytes": 40587,
+    "sha256": "a81b0ca3036acd5ec33ec9070657133e4f044480c59d9969d9ea39538f62ab5a"
+  },
+  {
+    "original": "/tmp/channels-sdl-online.log",
+    "archived": "artifacts/channels-sdl-online.log",
+    "bytes": 5380,
+    "sha256": "40a63f42f5d1495c24d6e2d0c268e410270f9b9703804bb64a0c2189d7f6c403"
+  },
+  {
+    "original": "/tmp/channels-sdl-seq-final.log",
+    "archived": "artifacts/channels-sdl-seq-final.log",
+    "bytes": 3062,
+    "sha256": "14c78fb583fc80d8409e787aaa3db136d168b7858f779fd024637d256d926cf6"
+  },
+  {
+    "original": "/tmp/channels-sdl.log",
+    "archived": "artifacts/channels-sdl.log",
+    "bytes": 13537,
+    "sha256": "3a7cea6e04b1fd45f5872fdb79e88966db35d66fc36757861e0c6874b0acac6f"
+  },
+  {
+    "original": "/tmp/channels-seq-audit.md",
+    "archived": "artifacts/channels-seq-audit.md",
+    "bytes": 8746,
+    "sha256": "5721db4f6d26d52fa451f9a50c8703d3b003cd7867b0f5fff7f17e90bf55a5c1"
+  },
+  {
+    "original": "/tmp/channels-seq-check-complete.log",
+    "archived": "artifacts/channels-seq-check-complete.log",
+    "bytes": 5203,
+    "sha256": "c41ab992e0ee14bde36a809093d0d4860082e84faae57e8d400dd0181524e6e7"
+  },
+  {
+    "original": "/tmp/channels-seq-deps-check.log",
+    "archived": "artifacts/channels-seq-deps-check.log",
+    "bytes": 560,
+    "sha256": "52530a492f585c662c981becd5c2c81ad964223ee9333304a63daf8272b2aca6"
+  },
+  {
+    "original": "/tmp/channels-seq-deps-generate.log",
+    "archived": "artifacts/channels-seq-deps-generate.log",
+    "bytes": 351,
+    "sha256": "af6f8b705280d47aaab54ebcc1094e76fe9640c84824bd228ac5df25c098ae7f"
+  },
+  {
+    "original": "/tmp/channels-seq-downstream-test.log",
+    "archived": "artifacts/channels-seq-downstream-test.log",
+    "bytes": 106930,
+    "sha256": "81501091be1f552b2ed387a6bb951e5fffea00848a758c3ff4fceff2cc57d5f8"
+  },
+  {
+    "original": "/tmp/channels-seq-followup-commit.txt",
+    "archived": "artifacts/channels-seq-followup-commit.txt",
+    "bytes": 331,
+    "sha256": "e25b13a564258d411a63eb8c87d6afe61b71d510fcc82ef37d15eeb551426b1b"
+  },
+  {
+    "original": "/tmp/channels-seq-format.log",
+    "archived": "artifacts/channels-seq-format.log",
+    "bytes": 41,
+    "sha256": "4cc191a8ffe10bc9aa2bec289829fad6a58e3af31972ff5646e9708b5b73a17f"
+  },
+  {
+    "original": "/tmp/channels-seq-graphql-commit.txt",
+    "archived": "artifacts/channels-seq-graphql-commit.txt",
+    "bytes": 490,
+    "sha256": "cff393f9a449bd7334405ab6c91f62cbb3093145ed2ad58969f463601a2ac41a"
+  },
+  {
+    "original": "/tmp/channels-seq-just-check-final.log",
+    "archived": "artifacts/channels-seq-just-check-final.log",
+    "bytes": 5307,
+    "sha256": "e23315a79f9517b10a349484f671d729f7caa3454e221493b5147d98c9f16e35"
+  },
+  {
+    "original": "/tmp/channels-seq-just-check.log",
+    "archived": "artifacts/channels-seq-just-check.log",
+    "bytes": 5203,
+    "sha256": "e5d11b906cca89874f96fcf90af88dbb4e611f6beb4637d49aec032a8ab6c314"
+  },
+  {
+    "original": "/tmp/channels-seq-messages-test-final.log",
+    "archived": "artifacts/channels-seq-messages-test-final.log",
+    "bytes": 19990,
+    "sha256": "b25fa7b5c97836f820e653960b619fa4dd0ebbfb1d5ba7f244f39fd294a6944a"
+  },
+  {
+    "original": "/tmp/channels-seq-messages-test.log",
+    "archived": "artifacts/channels-seq-messages-test.log",
+    "bytes": 10063,
+    "sha256": "d4faabd4d6da6dd69a01bd64e03b847cbf9f228b4754b23e2f46e6bcd949f916"
+  },
+  {
+    "original": "/tmp/channels-seq-perf-commit.txt",
+    "archived": "artifacts/channels-seq-perf-commit.txt",
+    "bytes": 355,
+    "sha256": "f67b594b52a21091926f917ac9b5af71e5c2dd6b55ef8ab8e0bfc724d2dc6d11"
+  },
+  {
+    "original": "/tmp/channels-seq-privacy-final.log",
+    "archived": "artifacts/channels-seq-privacy-final.log",
+    "bytes": 46,
+    "sha256": "b5b6c859f35dc15c428c8fa389f3449d296245d5564537ebdcf2556a2f5650fe"
+  },
+  {
+    "original": "/tmp/channels-seq-privacy.log",
+    "archived": "artifacts/channels-seq-privacy.log",
+    "bytes": 87,
+    "sha256": "598b472d4ffc16addb723e32af0f828f0e5cd3875b8b5e527cc07b1b00ea63ee"
+  },
+  {
+    "original": "/tmp/channels-seq-rebase-fix-commit.txt",
+    "archived": "artifacts/channels-seq-rebase-fix-commit.txt",
+    "bytes": 324,
+    "sha256": "0d3cf6a66d8fcff86be336ccbc441df7d4c39ce7bbb8605a18c325d4790a7417"
+  },
+  {
+    "original": "/tmp/channels-seq-rust-check-clean.log",
+    "archived": "artifacts/channels-seq-rust-check-clean.log",
+    "bytes": 11148,
+    "sha256": "a825727431e1afadefd179c81bc9d967b450a2a54aa87e30ffa627b5eaf0b725"
+  },
+  {
+    "original": "/tmp/channels-seq-rust-check.log",
+    "archived": "artifacts/channels-seq-rust-check.log",
+    "bytes": 11148,
+    "sha256": "a825727431e1afadefd179c81bc9d967b450a2a54aa87e30ffa627b5eaf0b725"
+  },
+  {
+    "original": "/tmp/channels-sql-parity.py",
+    "archived": "artifacts/channels-sql-parity.py",
+    "bytes": 1607,
+    "sha256": "7a9e849140ea94c4ba1973061aa6c76515e108e9b5ac829e823cd1b5b9ba5943"
+  },
+  {
+    "original": "/tmp/channels-sql-parity.sql",
+    "archived": "artifacts/channels-sql-parity.sql",
+    "bytes": 35630,
+    "sha256": "b2a5c555017ca6756c4261d164e4e74a44f0ec7f7d22e693b1e7e2e4c2eef950"
+  },
+  {
+    "original": "/tmp/channels-sql-parity.txt",
+    "archived": "artifacts/channels-sql-parity.txt",
+    "bytes": 1320,
+    "sha256": "7f42c18119bf22f6ea8c053175733adb545a4529166e8369e9f3a9996aad2745"
+  },
+  {
+    "original": "/tmp/channels-thread-1000-plans.sql",
+    "archived": "artifacts/channels-thread-1000-plans.sql",
+    "bytes": 11080,
+    "sha256": "cd326c2624293fec2e51940ee53b839684552d5c944f08e2b39ae0be3e301090"
+  },
+  {
+    "original": "/tmp/channels-thread-1000-plans.txt",
+    "archived": "artifacts/channels-thread-1000-plans.txt",
+    "bytes": 80111,
+    "sha256": "20d4c968a1e6c56839807f09b5b794772e10ae789bbf6fd722091793e9d1f2e6"
+  },
+  {
+    "original": "/tmp/channels-thread-1000-preview.sql",
+    "archived": "artifacts/channels-thread-1000-preview.sql",
+    "bytes": 1156,
+    "sha256": "f450c020071c8d8f5df8b0b30ae02da008ece9f187535273563ad8d7ae0cefee"
+  },
+  {
+    "original": "/tmp/channels-thread-1000-preview.txt",
+    "archived": "artifacts/channels-thread-1000-preview.txt",
+    "bytes": 5486,
+    "sha256": "1783224079695259d8583990873ca585399af4fed5070d43c45227964d0fadc8"
+  },
+  {
+    "original": "/tmp/channels-thread-100250-plans.sql",
+    "archived": "artifacts/channels-thread-100250-plans.sql",
+    "bytes": 11136,
+    "sha256": "7f4a6ef7a3a0332f82f9b7d7fd8af92c5294debe0471209cdf6182ccd502ce39"
+  },
+  {
+    "original": "/tmp/channels-thread-100250-plans.txt",
+    "archived": "artifacts/channels-thread-100250-plans.txt",
+    "bytes": 85480,
+    "sha256": "57f6ff059ad17a6333103e783f0da0c8b7a9078266d4d187cd2bb5968e75db71"
+  },
+  {
+    "original": "/tmp/channels-thread-100250-preview.sql",
+    "archived": "artifacts/channels-thread-100250-preview.sql",
+    "bytes": 1164,
+    "sha256": "4e936224776b784ef594a54ce597da15d9ed5c4e03dc37c29ad955680b7801af"
+  },
+  {
+    "original": "/tmp/channels-thread-100250-preview.txt",
+    "archived": "artifacts/channels-thread-100250-preview.txt",
+    "bytes": 5489,
+    "sha256": "a92d7ea93574bcc95fcc4b8b76aefd0f76f8c5553572dfcb673bba9d9e0e198c"
+  },
+  {
+    "original": "/tmp/channels-thread-50-plans.sql",
+    "archived": "artifacts/channels-thread-50-plans.sql",
+    "bytes": 11040,
+    "sha256": "318c597f2963283097abda078f9a1153b991fc4f327a8e36bc9766a9a9d15055"
+  },
+  {
+    "original": "/tmp/channels-thread-50-plans.txt",
+    "archived": "artifacts/channels-thread-50-plans.txt",
+    "bytes": 80027,
+    "sha256": "8e54938f1578ee73d47141abae56d47f1751396613cfdbfa686b5793aec707fc"
+  },
+  {
+    "original": "/tmp/channels-thread-50-preview.sql",
+    "archived": "artifacts/channels-thread-50-preview.sql",
+    "bytes": 1148,
+    "sha256": "4994df798f6a20ff4c3f308c6886c178868c135ef50b5f8691115115ba95b501"
+  },
+  {
+    "original": "/tmp/channels-thread-50-preview.txt",
+    "archived": "artifacts/channels-thread-50-preview.txt",
+    "bytes": 5473,
+    "sha256": "ef217a08229a731958ee11b306a1b306cb966fb8a5f6823aeeeee992a272a141"
+  },
+  {
+    "original": "/tmp/channels-thread-report-rows.txt",
+    "archived": "artifacts/channels-thread-report-rows.txt",
+    "bytes": 797,
+    "sha256": "50888cccf2638aa07405deb5c7473aeee61df41ef7180b83c7c64c7d5874b38d"
+  },
+  {
+    "original": "/tmp/channels-thread-scale-plans.py",
+    "archived": "artifacts/channels-thread-scale-plans.py",
+    "bytes": 1928,
+    "sha256": "7c0519d30ecbf23e90fadef59ecc6ff815d145a645fb14147db0cecda83c82e6"
+  },
+  {
+    "original": "/tmp/channels-thread-scale-seed.sql",
+    "archived": "artifacts/channels-thread-scale-seed.sql",
+    "bytes": 1325,
+    "sha256": "d6389f440cf790e1cebe9e6494437ca3e49c6c32d10ad0aad9be8fe345ac8277"
+  },
+  {
+    "original": "/tmp/channels-gql-private-fixture/activity_events.csv",
+    "archived": "fixture/activity_events.csv.gz",
+    "uncompressed_bytes": 0,
+    "sha256_uncompressed": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+  },
+  {
+    "original": "/tmp/channels-gql-private-fixture/comms_attachments.csv",
+    "archived": "fixture/comms_attachments.csv.gz",
+    "uncompressed_bytes": 35455,
+    "sha256_uncompressed": "b4fd18d3146691c8bf4626b26da96450f34817c557308c40096c79eb8de8cb61"
+  },
+  {
+    "original": "/tmp/channels-gql-private-fixture/comms_channels.csv",
+    "archived": "fixture/comms_channels.csv.gz",
+    "uncompressed_bytes": 166,
+    "sha256_uncompressed": "5b2b08e0627bd98d6ad8becd88b6003989616319bbfc9a4daad63237eae4743a"
+  },
+  {
+    "original": "/tmp/channels-gql-private-fixture/comms_entity_mentions.csv",
+    "archived": "fixture/comms_entity_mentions.csv.gz",
+    "uncompressed_bytes": 300266,
+    "sha256_uncompressed": "a9f83949a7a45f0594188f1ec727b6c1efdaadbedfb51485467426f287349159"
+  },
+  {
+    "original": "/tmp/channels-gql-private-fixture/comms_message_threads.csv",
+    "archived": "fixture/comms_message_threads.csv.gz",
+    "uncompressed_bytes": 7590804,
+    "sha256_uncompressed": "ad9fd0e0ea8b7509ff5a31d94831ef8ce7145d60c3ff7d8b2f0f5a5c0e1b3032"
+  },
+  {
+    "original": "/tmp/channels-gql-private-fixture/comms_messages.csv",
+    "archived": "fixture/comms_messages.csv.gz",
+    "uncompressed_bytes": 16717797,
+    "sha256_uncompressed": "e6552070aacc526a3f79028c413187c1fdbc8a3354e550bc768ec152fcf9afe4"
+  },
+  {
+    "original": "/tmp/channels-gql-private-fixture/comms_reactions.csv",
+    "archived": "fixture/comms_reactions.csv.gz",
+    "uncompressed_bytes": 2252783,
+    "sha256_uncompressed": "2cf24d91623af003beeb85e71147887131b083549a8d9db82dbc2439aed35e2f"
+  },
+  {
+    "original": "/tmp/channels-gql-private-fixture/load.sql",
+    "archived": "fixture/load.sql",
+    "uncompressed_bytes": 6431,
+    "sha256_uncompressed": "2b2dc54357b014be093db29e0b69393f589f8ceccc6cd1730501aa6cd647d478"
+  },
+  {
+    "original": "/tmp/channels-gql-private-fixture/manifest.json",
+    "archived": "fixture/manifest.json",
+    "uncompressed_bytes": 1603,
+    "sha256_uncompressed": "161ed9eb97b13c5009a936a6dfd3bcd0c165489c6226a2dd709f988d6f2b3e9f"
+  }
+]

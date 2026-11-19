@@ -1,0 +1,10 @@
+feat(messages): add bounded thread reads and seek timeline cursors
+
+Why
+Deep timeline cursors scan rows that an index can skip, and reading an
+expanded thread currently loads every reply.
+
+What
+Seek timeline cursors with tuple bounds and preserve indexed live-reply
+checks. Add import-aware thread windows and contextual root reads through
+the existing message service, preserving REST shapes and access policy.

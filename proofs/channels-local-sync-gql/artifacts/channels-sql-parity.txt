@@ -1,0 +1,60 @@
+   selection    | different_rows 
+----------------+----------------
+ older_latest_1 |              0
+(1 row)
+
+    selection    | different_rows 
+-----------------+----------------
+ older_latest_50 |              0
+(1 row)
+
+    selection     | different_rows 
+------------------+----------------
+ older_latest_100 |              0
+(1 row)
+
+  selection   | different_rows 
+--------------+----------------
+ older_deep_1 |              0
+(1 row)
+
+   selection   | different_rows 
+---------------+----------------
+ older_deep_50 |              0
+(1 row)
+
+   selection    | different_rows 
+----------------+----------------
+ older_deep_100 |              0
+(1 row)
+
+   selection    | different_rows 
+----------------+----------------
+ newer_latest_1 |              0
+(1 row)
+
+    selection    | different_rows 
+-----------------+----------------
+ newer_latest_50 |              0
+(1 row)
+
+    selection     | different_rows 
+------------------+----------------
+ newer_latest_100 |              0
+(1 row)
+
+  selection   | different_rows 
+--------------+----------------
+ newer_deep_1 |              0
+(1 row)
+
+   selection   | different_rows 
+---------------+----------------
+ newer_deep_50 |              0
+(1 row)
+
+   selection    | different_rows 
+----------------+----------------
+ newer_deep_100 |              0
+(1 row)
+

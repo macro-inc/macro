@@ -1,0 +1,11 @@
+fix(messages): preserve ordering after sequence integration
+
+Why
+
+The sequence service shares message hydration across writes, snapshots and
+change replay. Reply ordering must survive that projection.
+
+What
+
+Carry import_order through the shared hydrator and adapt paging fixtures to
+the sequenced repository write results.
