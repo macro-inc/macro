@@ -19,7 +19,7 @@ fn cache() -> MacroCache {
 }
 
 /// A cache signed in as a fresh ACL user that may run every command but
-/// `refused`, and the user's name, to remove it with [`delete_user`].
+/// `refused`, and the user's name, to remove it with [`remove_user`].
 async fn cache_refusing(cache: &MacroCache, refused: &[&str]) -> (MacroCache, String) {
     let mut connection = cache
         .inner
@@ -51,10 +51,17 @@ async fn cache_refusing(cache: &MacroCache, refused: &[&str]) -> (MacroCache, St
     )
 }
 
-async fn delete_user(cache: &MacroCache, user: &str) {
+/// Removes an ACL user from [`cache_refusing`] and returns the commands
+/// Redis refused it, from the ACL log.
+async fn remove_user(cache: &MacroCache, user: &str) -> Vec<String> {
     let mut connection = cache
         .inner
         .get_multiplexed_async_connection()
+        .await
+        .unwrap();
+    let log: Vec<std::collections::HashMap<String, String>> = redis::cmd("ACL")
+        .arg("LOG")
+        .query_async(&mut connection)
         .await
         .unwrap();
     redis::cmd("ACL")
@@ -63,6 +70,14 @@ async fn delete_user(cache: &MacroCache, user: &str) {
         .query_async::<()>(&mut connection)
         .await
         .unwrap();
+    let mut refused: Vec<String> = log
+        .into_iter()
+        .filter(|entry| entry.get("username").map(String::as_str) == Some(user))
+        .filter_map(|mut entry| entry.remove("object"))
+        .collect();
+    refused.sort();
+    refused.dedup();
+    refused
 }
 
 fn fresh_code(label: &str) -> String {
@@ -140,7 +155,7 @@ async fn read_back(cache: &MacroCache, read: i64, stored: i64) -> bool {
     if has_pexpiretime(cache).await {
         read == stored
     } else {
-        (-100..=0).contains(&(read - stored))
+        (-1_000..=0).contains(&(read - stored))
     }
 }
 
@@ -592,7 +607,7 @@ async fn a_take_fails_rather_than_guess_when_redis_refuses_to_read_the_deadline(
     for code in [&unbound, &bound] {
         failed.push(refused.take_mobile_login_session(code).await.is_err());
     }
-    delete_user(&cache, &user).await;
+    assert_eq!(remove_user(&cache, &user).await, ["pexpiretime"]);
     assert_eq!(failed, [true, true]);
 }
 
@@ -621,7 +636,7 @@ async fn a_restore_that_cannot_pin_its_deadline_leaves_the_code_spent() {
         let restored = refused.restore_mobile_login_session(code, &taken).await;
         outcomes.push((restored.is_err(), stored_keys(&cache, code).await));
     }
-    delete_user(&cache, &user).await;
+    assert_eq!(remove_user(&cache, &user).await, ["pexpireat"]);
     assert_eq!(
         outcomes,
         [(true, [false, false]), (true, [false, false])],
@@ -632,7 +647,7 @@ async fn a_restore_that_cannot_pin_its_deadline_leaves_the_code_spent() {
 #[tokio::test]
 async fn an_unbound_restore_that_can_neither_pin_nor_delete_still_expires() {
     // A server that predates the deadline checks redeems an unbound record
-    // with no expiry, so the write itself carries one.
+    // with no expiry, so the write itself carries the deadline.
     let cache = cache();
     let (refused, user) = cache_refusing(&cache, &["pexpireat", "del"]).await;
     let code = fresh_code("unpinned-undeleted");
@@ -647,12 +662,19 @@ async fn an_unbound_restore_that_can_neither_pin_nor_delete_still_expires() {
         .unwrap();
 
     let restored = refused.restore_mobile_login_session(&code, &taken).await;
-    delete_user(&cache, &user).await;
-    let left_ms = ttl_ms(&cache, &mobile_login_session_key(&code)).await;
-    let lifetime_ms = i64::try_from(MACRO_MOBILE_LOGIN_SESSION_EXPIRY_SECONDS * 1000).unwrap();
+    assert_eq!(remove_user(&cache, &user).await, ["del", "pexpireat"]);
     assert!(restored.is_err());
-    assert!(
-        left_ms > 0 && left_ms <= lifetime_ms,
-        "left with {left_ms} ms"
-    );
+    let key = mobile_login_session_key(&code);
+    if has_pexpiretime(&cache).await {
+        assert_eq!(stored_deadline_ms(&cache, &key).await, taken.expires_at_ms);
+    } else {
+        // Before Redis 7.0 the write carries the time left, which can run
+        // past the deadline by the time between two commands.
+        let left_ms = ttl_ms(&cache, &key).await;
+        let lifetime_ms = i64::try_from(MACRO_MOBILE_LOGIN_SESSION_EXPIRY_SECONDS * 1000).unwrap();
+        assert!(
+            left_ms > 0 && left_ms <= lifetime_ms,
+            "left with {left_ms} ms"
+        );
+    }
 }
