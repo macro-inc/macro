@@ -274,6 +274,10 @@ tools/HTTP/GraphQL surfaces over them.
   `companies_repo/test/previews.rs` compares them for every role and caller,
   including revocation and regrant on the same session and contact-page route.
 
+- Keep team/visibility filters outside the per-history-ID `LIMIT` in
+  `list_companies_for_soup.sql`, so stale team estimates cannot replace the
+  `crm_companies_id_text_idx` lookup with a team scan for every viewed record.
+
 - Company names/logos live in the global `crm_domain_directory`. Only the
   email pubsub workers carry a real `CompanyMetadataResolver`, using public
   homepage metadata through `unfurl`; every other

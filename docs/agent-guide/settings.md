@@ -976,6 +976,16 @@ is retained (`billing: ended`). The list polls every 3 seconds while any
 computer is purchasing, setting up, waiting for capacity, starting or
 stopping.
 
+A powered-on computer that has run shows a second muted line: `CPU 12%` and
+`Memory 1.8 of 8 GB`, each with a tiny line of the last 24 hours
+(`GET /team/computers/usage`, refetched every minute; every team member sees
+it). CPU is the share of the computer's CPUs in use; memory is what the
+computer uses on its own (shown from a computer's first reading, a minute
+before its CPU, which reads `–` until then), and a tooltip says memory shared with its system
+image isn't counted. A computer with no reading in the last three minutes
+keeps its lines and reads `idle` in place of each value. On phones the two
+metrics stack, each with its line at the right edge. A computer that is off, setting up or failed has no such line.
+
 The row's one action is **Retry setup** on a `failed` computer (team owner
 and admins; it sets it up again, billing untouched), else **Finish setup**
 while guided setup is incomplete (only for the team's owner and admins; an

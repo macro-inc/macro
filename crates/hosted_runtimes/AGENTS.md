@@ -44,6 +44,16 @@ read it before changing behaviour.
   `src/outbound/pg/admission.rs` and `pg/hosts.rs`; ports:
   `src/domain/ports/overcommit.rs`. Settings and live tuning:
   [overcommit runbook](../../docs/runbooks/computer-overcommit.md).
+- `src/domain/usage.rs`: the CPU and memory graphs in Settings. The
+  overcommit pass keeps one reading per running computer per minute
+  (`operator/relief.rs` `record_usage`, from the same host answer; it never
+  fails the pass) in `hosted_runtime_usage_sample` (`outbound/pg/usage.rs`,
+  port `ports/usage.rs`), pruned after 25 hours; `history` turns readings
+  into the 96 15-minute points `GET /team/computers/usage` answers. Readings
+  hold the cgroup's CPU counter, so CPU is its growth between two readings
+  of one run (absent on a run's first reading; memory is on every reading).
+  Memory is what only the computer holds (`anon` + swap), not what it shares
+  with its image; a host agent that reports no swap gives no reading.
 - `src/domain/moves.rs` + `src/domain/operator/moves.rs`: moving a computer to
   another host (seed rounds while it runs, cutover, flip, verify, rollback),
   advanced by the move pass. The agents copy the ZFS dataset between

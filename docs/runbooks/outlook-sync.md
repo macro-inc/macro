@@ -55,6 +55,13 @@ queued messages keep retrying every 30 minutes and are never abandoned. An
 invitation whose MIME source Graph won't return is retried twice
 (`calendar_parts`), then imported without its calendar parts.
 
+A message Graph answers 404 for is settled as gone (`@outlook.outcome:absent`).
+Live work is read twice more first, 30 and 60 s apart
+(`@outlook.defer_reason:location_unsettled`); import work settles at once.
+Deleted Items can list entries Graph never serves as messages, so its stored
+messages can stay below its `@outlook.provider_item_count`: every import
+settles those entries this way and never stores them.
+
 ## New mail during an import
 
 A folder's import round is one Graph delta snapshot: mail that arrives while

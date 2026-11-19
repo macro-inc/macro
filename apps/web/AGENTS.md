@@ -916,7 +916,9 @@ resolved session ID; keep the existing `AgentSessionProvider` subscription to
   wait in the dialog up to five seconds for the computer (or agent) to come
   up (`computers/primitives/wait-for-progress.ts`), offer no power,
   billing or release while `purchasing`, confirm Restore before billing again,
-  and release only after the computer's name is typed. See the
+  and release only after the computer's name is typed. A row's usage line
+  (`computers/components/computer-usage.tsx`, `useComputerUsageQuery`) never
+  holds the row back: a pending or failed read shows none. See the
   [Macro computers walkthrough](../../docs/agent-guide/settings.md#macro-computers).
 - Keep bot setup focused on the token-and-SDK workflow; Agent and Ownership
   controls live under collapsed Advanced settings. See the

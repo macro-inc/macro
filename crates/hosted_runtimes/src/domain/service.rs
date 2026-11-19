@@ -28,6 +28,7 @@ pub use billing::{ObservedItem, SubscriptionObserved, SubscriptionStatus};
 mod purchase;
 pub use purchase::{CONFIRM_DELAY, RESERVATION_TTL};
 mod team_release;
+mod usage;
 pub use team_release::TeamComputerRelease;
 
 #[cfg(test)]
