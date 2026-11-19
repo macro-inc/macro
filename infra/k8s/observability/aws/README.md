@@ -33,15 +33,15 @@ approval, with the steps under [First apply](#first-apply).
 the private route table, the HTTPS listener, the `macro-internal.com` zone, the
 `observability-prod-alerts` topic and the `observability/prod` secret
 (metadata only), the host's Loki and Tempo buckets (by name prefix among the
-stack's tagged buckets) and, at the switch, the host's instance role.
+stack's tagged buckets) and, for the Mimir backfill, the host's instance role.
 OpenTofu only adds resources next to them: route table associations, one
 egress rule on the ALB's security group, which, like the stack's own
 `observability-alb-to-host` rule, Pulumi does not manage inline, and at the
-switch two listener rules (priorities 10 and 11; Pulumi has 1 and 2) and a
-statement in Mimir's bucket policy for the host's role. Before the switch
-nothing in this layer changes how the host is served. The Loki and Tempo roles
-may read and write the host's buckets from the first apply, but nothing uses
-that until the switch.
+switch two listener rules (priorities 10 and 11; Pulumi has 1 and 2), plus,
+while `mimirBackfill.enable` is on, a statement in Mimir's bucket policy for
+the host's role. Before the switch nothing in this layer changes how the
+host is served. The Loki and Tempo roles may read and write the host's
+buckets from the first apply, but nothing uses that until the switch.
 The cluster security group's ingress rule references the ALB's security
 group, so a Pulumi change that replaces that group fails until this rule is
 removed first.
@@ -176,10 +176,11 @@ tested through `kubectl port-forward`. The full runbook, with the host and
 cluster steps, is in `infra/k8s/observability/cluster/README.md`. This layer's part:
 
 1. Set `switched = true` in `settings.nix` and apply (steps 3 to 5). The plan
-   adds two listener rules (priorities 10 and 11) and four alarms, and changes
-   one thing in place: Mimir's bucket policy lets the host's role list and
-   write `blocks/anonymous/`, for copying its Prometheus history in. Nothing
-   else. No traffic moves: the Pulumi stack's priority-1 rule still matches
+   adds two listener rules (priorities 10 and 11) and four alarms, nothing
+   else. Set `mimirBackfill.enable = true` in the same change if the host is
+   to copy its Prometheus history in: the plan then also changes Mimir's
+   bucket policy in place, to let the host's role list and write
+   `blocks/anonymous/`. No traffic moves: the Pulumi stack's priority-1 rule still matches
    both hostnames.
 2. Wait until both target groups show healthy targets. The ALB health-checks a
    target group only once a listener rule uses it, so before this apply they

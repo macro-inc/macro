@@ -170,10 +170,17 @@ rec {
   # until it drops these hostnames, so applying this alone moves no traffic.
   switched = false;
 
-  # Where the host's Prometheus blocks go in Mimir's bucket: Mimir's
-  # `blocks_storage.storage_prefix`, then the tenant (`anonymous` with
-  # multitenancy off). Change it with ../cluster's modules/backends/mimir.nix.
-  mimirBackfill.prefix = "blocks/anonymous/";
+  # The host copies its Prometheus blocks straight into Mimir's bucket: once
+  # with one old block while the cluster is tested, then everything at the
+  # switch (../cluster/README.md). `enable` lets the host's role list and
+  # write `prefix` there, nothing else; turn it off once the copy is done.
+  mimirBackfill = {
+    enable = false;
+    # Mimir's `blocks_storage.storage_prefix`, then the tenant (`anonymous`
+    # with multitenancy off). Change it with ../cluster's
+    # modules/backends/mimir.nix.
+    prefix = "blocks/anonymous/";
+  };
 
   alarms.target5xxPer5Min = 25;
 }

@@ -69,9 +69,9 @@ in
       }) existing.bucketPrefixes;
     };
   }
-  // lib.optionalAttrs settings.switched {
+  // lib.optionalAttrs settings.mimirBackfill.enable {
     # The host's instance role, which writes its Prometheus blocks into Mimir's
-    # bucket at the switch (modules/buckets.nix).
+    # bucket while `mimirBackfill.enable` is on (modules/buckets.nix).
     aws_iam_roles.host = {
       name_regex = existing.hostRoleNameRegex;
       lifecycle.postcondition = [
@@ -84,7 +84,7 @@ in
   };
 
   locals =
-    lib.optionalAttrs settings.switched {
+    lib.optionalAttrs settings.mimirBackfill.enable {
       host_role_arn = ref "one(data.aws_iam_roles.host.arns)";
     }
     // {

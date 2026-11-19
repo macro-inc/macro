@@ -7,11 +7,11 @@ let
   bucketRef = name: attr: ref "aws_s3_bucket.${name}.${attr}";
   forBuckets = f: lib.mapAttrs f settings.buckets;
 
-  # At the switch the host copies its Prometheus blocks straight into Mimir's
-  # bucket (cluster README "The switch"): its role may list and write Mimir's
-  # tenant prefix, nothing else.
+  # While `mimirBackfill.enable` is on the host copies its Prometheus blocks
+  # straight into Mimir's bucket (settings.nix): its role may list and write
+  # Mimir's tenant prefix, nothing else.
   backfill = settings.mimirBackfill;
-  backfillStatements = lib.optionals settings.switched [
+  backfillStatements = lib.optionals backfill.enable [
     {
       Sid = "HostBackfillList";
       Effect = "Allow";
