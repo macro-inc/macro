@@ -170,9 +170,18 @@ Address: neutral formal (o seu, si); European spelling and vocabulary, never Bra
 | notifications | Notificações |
 | done | Concluído |
 | mark as read | Marcar como lido |
-| snooze | Adiar notificações… |
+| snooze | Adiar notificações |
 | archive | Arquivar |
 | settings | Definições |
+| computer (Macro computer) | Novo computador Macro |
+| machine (runs agents) | As suas máquinas |
+| session (agent) | Iniciar uma sessão |
+| routine | Todas as rotinas |
+| saved view | Nova vista guardada |
+| call | Entrar na chamada |
+| contact (CRM) | Remover a empresa deste contacto? |
+| company (CRM) | Sem empresa |
+| thread (email) | Fios excluídos |
 
 ## Swedish (`sv`)
 
