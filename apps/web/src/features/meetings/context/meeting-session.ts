@@ -68,7 +68,8 @@ export type MeetingSessionCapabilities = {
     credentials: MeetingCredentials,
     preferences: MeetingMediaPreferences
   ) => Promise<void>;
-  disconnect: () => Promise<void>;
+  /** `endNativeCall: false` when the native call screen already ended it. */
+  disconnect: (options?: { endNativeCall?: boolean }) => Promise<void>;
   /** Where `connect` runs the call's media; see `core/meeting-media-path.ts`. */
   mediaPath: Accessor<CallMediaPath>;
   /**

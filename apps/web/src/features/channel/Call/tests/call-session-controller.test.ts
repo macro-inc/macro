@@ -12,7 +12,15 @@ import {
 
 const native = vi.hoisted(() => ({
   enabled: false,
-  start: vi.fn(async () => undefined),
+  // Like the real call, records the call's key until native reports it.
+  start: vi.fn(
+    async (
+      args: { channelId: string },
+      nativeCall: { setBootstrapChannelId: (key: string) => void }
+    ) => {
+      nativeCall.setBootstrapChannelId(args.channelId);
+    }
+  ),
   end: vi.fn(async () => undefined),
 }));
 vi.mock('../callkit-drawer-theme', () => ({
@@ -138,22 +146,6 @@ describe('meetings on native media', () => {
     expect(jsConnect).not.toHaveBeenCalled();
   });
 
-  it('keys a channel-linked meeting by the meeting, not its channel', async () => {
-    native.enabled = true;
-    const { controller, nativeCall } = setup();
-    native.start.mockImplementationOnce(async () => {
-      reportNativeCall(nativeCall, meetingKey, meetingToken.callId);
-    });
-    await controller.connectWithToken(
-      { ...meetingToken, channelId: 'channel-1' },
-      { nativeCallKey: meetingKey }
-    );
-    expect(native.start).toHaveBeenCalledWith(
-      expect.objectContaining({ channelId: meetingKey }),
-      nativeCall
-    );
-  });
-
   it('ends the CallKit call and fails the join when native never reports it', async () => {
     vi.useFakeTimers();
     native.enabled = true;
@@ -165,6 +157,38 @@ describe('meetings on native media', () => {
       'Native call did not start'
     );
     await vi.advanceTimersByTimeAsync(NATIVE_MEETING_START_TIMEOUT_MS);
+    await result;
+    expect(native.end).toHaveBeenCalledOnce();
+  });
+
+  it('does not end a newer call when the meeting never started', async () => {
+    vi.useFakeTimers();
+    native.enabled = true;
+    const { controller, nativeCall } = setup();
+    const connecting = controller.connectWithToken(meetingToken, {
+      nativeCallKey: meetingKey,
+    });
+    const result = expect(connecting).rejects.toThrow(
+      'Native call did not start'
+    );
+    await vi.advanceTimersByTimeAsync(0);
+    reportNativeCall(nativeCall, 'channel-2', 'call-2');
+    await vi.advanceTimersByTimeAsync(NATIVE_MEETING_START_TIMEOUT_MS);
+    await result;
+    expect(native.end).not.toHaveBeenCalled();
+  });
+
+  it('stops waiting for the call when the meeting is left', async () => {
+    native.enabled = true;
+    const { controller } = setup();
+    const connecting = controller.connectWithToken(meetingToken, {
+      nativeCallKey: meetingKey,
+    });
+    const result = expect(connecting).rejects.toThrow(
+      'Native call start cancelled'
+    );
+    await Promise.resolve();
+    await controller.disconnect();
     await result;
     expect(native.end).toHaveBeenCalledOnce();
   });

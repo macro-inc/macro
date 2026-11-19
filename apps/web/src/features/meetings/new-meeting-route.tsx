@@ -3,7 +3,10 @@ import { CallOverlay } from '@channel/Call/CallOverlay';
 import { getMeetingUrl } from '@channel/Call/call-link';
 import { CallDiscussionContent } from '@channel/Call/discussion/CallDiscussionContent';
 import { callDiscussionOf } from '@channel/Call/discussion/call-discussion';
-import { watchNativeCallEnded } from '@channel/Call/use-callkit';
+import {
+  isNativeIosCallKitEnabled,
+  watchNativeCallEnded,
+} from '@channel/Call/use-callkit';
 import { UserIcon } from '@core/component/UserIcon';
 import { useAuthor, useIsAuthenticated, useUserId } from '@core/context/user';
 import { readBackgroundImage } from '@core/media/read-background-image';
@@ -79,7 +82,12 @@ function NewMeetingSetup(props: {
     record.data.callId === call.activeCallId() &&
     record.data.createdBy === props.userId;
   const url = () => (shareToken() ? getMeetingUrl(shareToken()) : undefined);
-  const mediaPath = () => meetingMediaPath(true);
+  const mediaPath = () =>
+    meetingMediaPath({
+      member: true,
+      channelId: null,
+      nativeIosCalls: isNativeIosCallKitEnabled(),
+    });
   const source = (): MeetingPageState => ({
     kind: 'ready',
     title: meeting.isSuccess ? meeting.data.title : 'Quick Call',
@@ -87,6 +95,25 @@ function NewMeetingSetup(props: {
     scheduledEnd: null,
     channelId: null,
   });
+
+  const inviteError = () => (
+    <Show when={draft.inviteError()}>
+      <div
+        role="alert"
+        class="mb-3 flex items-center justify-between gap-3 rounded-lg bg-hover p-3 text-sm"
+      >
+        <span>{draft.inviteError()}</span>
+        <Button
+          type="button"
+          variant="ghost"
+          disabled={draft.inviting()}
+          onClick={() => fireAndForget(draft.ring(), 'meetings')}
+        >
+          {draft.inviting() ? 'Sending…' : 'Retry invites'}
+        </Button>
+      </div>
+    </Show>
+  );
 
   async function rename(title: string) {
     const created = draft.meeting();
@@ -183,26 +210,13 @@ function NewMeetingSetup(props: {
                   onViewChannel={() => undefined}
                 />
               )}
-            />
+            >
+              {inviteError()}
+            </NativeMeetingCall>
           }
         >
           <div class="flex h-full min-h-0 flex-col">
-            <Show when={draft.inviteError()}>
-              <div
-                role="alert"
-                class="mb-3 flex items-center justify-between gap-3 rounded-lg bg-hover p-3 text-sm"
-              >
-                <span>{draft.inviteError()}</span>
-                <Button
-                  type="button"
-                  variant="ghost"
-                  disabled={draft.inviting()}
-                  onClick={() => fireAndForget(draft.ring(), 'meetings')}
-                >
-                  {draft.inviting() ? 'Sending…' : 'Retry invites'}
-                </Button>
-              </div>
-            </Show>
+            {inviteError()}
             <div class="min-h-0 flex-1">
               <CallOverlay
                 onLeave={onLeave}

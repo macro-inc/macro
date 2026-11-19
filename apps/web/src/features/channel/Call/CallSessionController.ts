@@ -132,6 +132,7 @@ function createNativeCallKitSessionController(options: {
   jsDisconnect: () => Promise<void>;
   clearOptimisticJoin: () => void;
 }): CallSessionController {
+  let pendingMeetingStart: AbortController | undefined;
   return {
     shouldRequestToken: (channelId) => {
       const native = options.nativeCall.snapshot();
@@ -180,19 +181,33 @@ function createNativeCallKitSessionController(options: {
       // reports it only in its first snapshot. Channel calls are tracked by
       // the call lifecycle instead.
       if (metadata?.nativeCallKey) {
+        pendingMeetingStart?.abort();
+        const start = new AbortController();
+        pendingMeetingStart = start;
         try {
           await nativeCallReported(
             options.nativeCall,
             tokenResponse.callId,
-            NATIVE_MEETING_START_TIMEOUT_MS
+            NATIVE_MEETING_START_TIMEOUT_MS,
+            start.signal
           );
         } catch (error) {
-          await endCallKitCall();
+          // A leave that cancelled the wait ends the call itself. A timeout
+          // ends it only while it is still this meeting's call.
+          if (
+            !start.signal.aborted &&
+            options.nativeCall.activeChannelId() === key
+          ) {
+            await endCallKitCall();
+          }
           throw error;
+        } finally {
+          if (pendingMeetingStart === start) pendingMeetingStart = undefined;
         }
       }
     },
     disconnect: async (disconnectOptions) => {
+      pendingMeetingStart?.abort();
       // Captured before any teardown: the post-leave sync may clear exactly
       // this state — a newer call's state appearing mid-leave must survive.
       const stateBeforeLeave = {
@@ -231,19 +246,23 @@ function createNativeCallKitSessionController(options: {
 function nativeCallReported(
   nativeCall: Pick<NativeCallState, 'onSnapshot'>,
   callId: string,
-  timeoutMs: number
+  timeoutMs: number,
+  signal: AbortSignal
 ): Promise<void> {
   return new Promise((resolve, reject) => {
     let settled = false;
     let unsubscribe: (() => void) | undefined;
+    const cancel = () => finish(new Error('Native call start cancelled'));
     const finish = (error?: Error) => {
       if (settled) return;
       settled = true;
       clearTimeout(timer);
+      signal.removeEventListener('abort', cancel);
       unsubscribe?.();
       if (error) reject(error);
       else resolve();
     };
+    signal.addEventListener('abort', cancel);
     const timer = setTimeout(
       () => finish(new Error('Native call did not start')),
       timeoutMs

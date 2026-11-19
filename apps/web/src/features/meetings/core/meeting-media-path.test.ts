@@ -1,69 +1,21 @@
-import { describe, expect, it, vi } from 'vitest';
+import { describe, expect, it } from 'vitest';
 import { meetingConnectMetadata, meetingMediaPath } from './meeting-media-path';
-
-const platform = vi.hoisted(() => ({
-  os: 'ios',
-  native: true,
-}));
-vi.mock('@core/constant/featureFlags', () => ({ ENABLE_CALLKIT: true }));
-vi.mock('@core/util/platform', () => ({
-  isTauri: () => platform.native,
-  isPlatform: (os: string) => os === platform.os,
-}));
-vi.mock('@tauri-apps/plugin-os', () => ({ version: () => '16' }));
 
 describe('meeting media path', () => {
   it.each([
+    { nativeIosCalls: true, member: true, channelId: null, path: 'native' },
+    { nativeIosCalls: true, member: false, channelId: null, path: 'browser' },
     {
-      where: 'the iOS app',
-      os: 'ios',
-      native: true,
+      nativeIosCalls: true,
       member: true,
-      path: 'native',
-    },
-    {
-      where: 'the iOS app',
-      os: 'ios',
-      native: true,
-      member: false,
+      channelId: 'channel-1',
       path: 'browser',
     },
-    {
-      where: 'the Android app',
-      os: 'android',
-      native: true,
-      member: true,
-      path: 'browser',
-    },
-    {
-      where: 'the desktop app',
-      os: 'macos',
-      native: true,
-      member: true,
-      path: 'browser',
-    },
-    {
-      where: 'Safari on iOS',
-      os: 'ios',
-      native: false,
-      member: true,
-      path: 'browser',
-    },
-    {
-      where: 'the web',
-      os: 'linux',
-      native: false,
-      member: true,
-      path: 'browser',
-    },
-  ])(
-    'uses $path media in $where (member=$member)',
-    ({ os, native, member, path }) => {
-      platform.os = os;
-      platform.native = native;
-      window.__MACRO_ANDROID_CALL_KIT__ = true;
-      expect(meetingMediaPath(member)).toBe(path);
-      delete window.__MACRO_ANDROID_CALL_KIT__;
+    { nativeIosCalls: false, member: true, channelId: null, path: 'browser' },
+  ] as const)(
+    'uses $path media (iOS app=$nativeIosCalls, member=$member, channel=$channelId)',
+    ({ path, ...meeting }) => {
+      expect(meetingMediaPath(meeting)).toBe(path);
     }
   );
 

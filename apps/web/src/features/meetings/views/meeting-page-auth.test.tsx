@@ -207,6 +207,9 @@ it('treats a hang-up on the native call screen as Leave', async () => {
   const [activeCallId, setActiveCallId] = createSignal<string | null>(null);
   const endedWatchers = new Set<(callId: string) => void>();
   const release = vi.fn(async () => ({ callEnded: false }));
+  const disconnect = vi.fn(async () => {
+    setActiveCallId(null);
+  });
   const onLeave = vi.fn();
   render(() => (
     <MeetingSessionProvider>
@@ -246,9 +249,7 @@ it('treats a hang-up on the native call screen as Leave', async () => {
           connect: async () => {
             setActiveCallId('call-1');
           },
-          disconnect: async () => {
-            setActiveCallId(null);
-          },
+          disconnect,
           mediaPath: () => 'native',
           watchNativeCallEnded: (onEnded) => {
             endedWatchers.add(onEnded);
@@ -275,5 +276,7 @@ it('treats a hang-up on the native call screen as Leave', async () => {
     expect(onLeave).toHaveBeenCalledExactlyOnceWith('/calls')
   );
   expect(release).toHaveBeenCalledExactlyOnceWith('token', 'token');
+  // Native already ended it; ending again could end a call that replaced it.
+  expect(disconnect).toHaveBeenCalledExactlyOnceWith({ endNativeCall: false });
   expect(endedWatchers.size).toBe(0);
 });

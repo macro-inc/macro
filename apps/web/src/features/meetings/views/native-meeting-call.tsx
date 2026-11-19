@@ -15,6 +15,8 @@ import { type JSX, onMount } from 'solid-js';
 export function NativeMeetingCall(props: {
   onLeave: () => void;
   discussion: (panel: CallPanelState) => JSX.Element;
+  /** Notices about the call, above its actions. */
+  children?: JSX.Element;
 }) {
   const openCall = () =>
     fireAndForget(setNativeCallKitVideoOverlayMode('expanded'), 'meetings');
@@ -22,6 +24,7 @@ export function NativeMeetingCall(props: {
 
   return (
     <div class="flex h-full min-h-0 flex-col gap-3 touch:pt-(--mobile-content-inset-top)">
+      {props.children}
       <div class="flex gap-2 px-(--mobile-chrome-gutter)">
         <Button
           variant="ghost"

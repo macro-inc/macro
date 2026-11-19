@@ -995,7 +995,6 @@ export async function startNativeCallKitOutgoingCall(
   console.info('[callkit] starting native outgoing call', {
     channelId: args.channelId,
     callId: args.callId,
-    channelTitle: args.channelTitle,
   });
   await invoke('plugin:call-kit|start_outgoing_call', {
     ...args,

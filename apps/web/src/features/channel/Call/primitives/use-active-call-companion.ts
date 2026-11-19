@@ -5,6 +5,8 @@ import { Telemetry } from '@macro-inc/observability';
 import { useLocation, useNavigate } from '@solidjs/router';
 import { useCallContextOptional } from '../CallContext';
 import { getActiveMeetingPath, getMeetingShareToken } from '../call-link';
+import { meetingCallIdOfNativeCallKey } from '../native-call-key';
+import { useMaybeNativeCallState } from '../native-call-state';
 import { openChannelCallTab } from '../open-channel-call-tab';
 
 /** Navigation and leave always use the owner of the current media session. */
@@ -14,6 +16,13 @@ export function useActiveCallCompanion() {
   const navigate = useNavigate();
   const location = useLocation();
   const meeting = () => meetings?.forCall(call?.activeCallId() ?? null);
+  // A native meeting call outlives its page when the web view reloads; with
+  // no session to own it, Leave still ends it.
+  const nativeCall = useMaybeNativeCallState();
+  const orphanedNativeMeeting = () => {
+    const key = nativeCall?.activeChannelId();
+    return !!key && !!meetingCallIdOfNativeCallKey(key) && !meeting();
+  };
   const channelActive = () => {
     if (!call) return false;
     const state = call.callLifecycle.getState();
@@ -51,9 +60,14 @@ export function useActiveCallCompanion() {
       interaction.end();
     }
   };
-  const canLeave = () => !!meeting() || channelActive();
+  const canLeave = () =>
+    !!meeting() || channelActive() || orphanedNativeMeeting();
   const leave = async () => {
     if (!call) return;
+    if (orphanedNativeMeeting()) {
+      await call.meetingSession.disconnect();
+      return;
+    }
     const active = meeting();
     const channelId = call.activeChannelId();
     if (!active && (!channelId || !channelActive())) return;

@@ -148,7 +148,7 @@ export function MeetingPage(props: {
       media.diagnostics()
     );
   };
-  async function leave() {
+  async function leave(options?: { nativeCallEnded?: boolean }) {
     if (leaving()) return;
     const callId = session.joinedCallId();
     const channelId = ready()?.channelId;
@@ -157,7 +157,7 @@ export function MeetingPage(props: {
     setLeaving(true);
     await Telemetry.span('meeting.leave', async (span) => {
       if (callId) span.setAttr('call.id', callId);
-      const result = await session.leave();
+      const result = await session.leave(options);
       if (disposed) return;
       const path = getCallExitPath({
         authenticated,
@@ -181,7 +181,8 @@ export function MeetingPage(props: {
     if (!callId || !watch) return;
     onCleanup(
       watch((endedCallId) => {
-        if (endedCallId === callId) fireAndForget(leave(), 'meetings');
+        if (endedCallId === callId)
+          fireAndForget(leave({ nativeCallEnded: true }), 'meetings');
       })
     );
   });

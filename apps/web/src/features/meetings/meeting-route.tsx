@@ -10,7 +10,10 @@ import {
   type CallDiscussion,
   callDiscussionOf,
 } from '@channel/Call/discussion/call-discussion';
-import { watchNativeCallEnded } from '@channel/Call/use-callkit';
+import {
+  isNativeIosCallKitEnabled,
+  watchNativeCallEnded,
+} from '@channel/Call/use-callkit';
 import { UserIcon } from '@core/component/UserIcon';
 import { useAuthor, useIsAuthenticated, useUserId } from '@core/context/user';
 import { readBackgroundImage } from '@core/media/read-background-image';
@@ -130,7 +133,12 @@ export function MeetingRouteContent(props: {
       host={(panel) => <MeetingDiscussionHost>{panel()}</MeetingDiscussionHost>}
     />
   );
-  const mediaPath = () => meetingMediaPath(authenticated() === true);
+  const mediaPath = () =>
+    meetingMediaPath({
+      member: authenticated() === true,
+      channelId: meeting.isSuccess ? meeting.data.channelId : null,
+      nativeIosCalls: isNativeIosCallKitEnabled(),
+    });
 
   const source = (): MeetingPageState => {
     if (meeting.isError) return { kind: 'unavailable' };
