@@ -52,7 +52,13 @@ export function SavedViewDialog(
     submitLabel?: string;
     onSaved: (record: SavedView) => void;
   } & (
-      | { mode: 'create'; id: string; name: string; config: unknown }
+      | {
+          mode: 'create';
+          id: string;
+          name: string;
+          config: unknown;
+          appearance?: SavedView['appearance'];
+        }
       // Edit renames and shares; a consumer that edits filters too passes
       // the replacement configuration, read when the form submits.
       | { mode: 'edit'; record: SavedView; config?: unknown }
@@ -85,6 +91,7 @@ export function SavedViewDialog(
         name,
         config: props.config,
         sharedTeamId,
+        appearance: props.appearance,
       });
       if (!result.error && result.data?.createSavedView)
         record = toSavedView(result.data.createSavedView);

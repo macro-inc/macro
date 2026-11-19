@@ -28,6 +28,13 @@ export const calendarKeys = createQueryKeys('calendar', {
     queryKey: [userId],
     contextQueries: { graphql: null },
   }),
+  firstSync: (
+    userId: string | undefined,
+    session: number | undefined,
+    linkIds: readonly string[]
+  ) => ({
+    queryKey: [userId, session, linkIds],
+  }),
   invitations: (threadId: string) => ({
     queryKey: [threadId],
   }),

@@ -43,8 +43,11 @@ def e2e_phases(record: dict) -> dict[str, float]:
     base = record["t_buy"]
     out: dict[str, float] = {}
     for key, value in record.items():
-        if key.startswith("t_") and key not in ("t_buy", "t_released") and is_number(value):
+        # *_created are the server's clock, so only their differences mean anything.
+        if key.startswith("t_") and not key.endswith("_created") and key not in ("t_buy", "t_released") and is_number(value):
             out[key[2:]] = value - base
+    if is_number(record.get("t_reply_created")) and is_number(record.get("t_prompt_created")):
+        out["prompt->reply (server)"] = record["t_reply_created"] - record["t_prompt_created"]
     for start, end in (("prompt", "reply"), ("connected", "session"), ("session", "reply")):
         if is_number(record.get(f"t_{end}")) and is_number(record.get(f"t_{start}")):
             out[f"{start}->{end}"] = record[f"t_{end}"] - record[f"t_{start}"]

@@ -165,7 +165,7 @@ pub trait EmailRepo: Send + Sync + 'static {
         &self,
         query: PreviewCursorQuery,
         user_id: MacroUserIdStr<'static>,
-    ) -> impl Future<Output = Result<Vec<EmailThreadPreview>, Self::Err>> + Send;
+    ) -> impl Future<Output = Result<Vec<EmailThreadPreview>, EmailErr>> + Send;
 
     fn attachments_by_thread_ids(
         &self,

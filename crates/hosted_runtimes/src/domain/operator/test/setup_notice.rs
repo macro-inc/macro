@@ -12,10 +12,10 @@ async fn the_first_connection_tells_the_buyer_once() {
     let id = paid_computer(&operator).await;
     operator.run_fleet_effects().await.unwrap();
 
-    operator.macrod_connected(HARNESS).await.unwrap();
+    operator.macrod_connected(HARNESS, true).await.unwrap();
     assert_eq!(operator.run_fleet_effects().await.unwrap(), 1);
     operator.macrod_disconnected(HARNESS).await.unwrap();
-    operator.macrod_connected(HARNESS).await.unwrap();
+    operator.macrod_connected(HARNESS, true).await.unwrap();
     assert_eq!(operator.run_fleet_effects().await.unwrap(), 0);
 
     assert_eq!(
@@ -45,7 +45,7 @@ async fn an_agent_computers_notice_names_its_agent() {
         .insert(id, agent.clone());
     operator.run_fleet_effects().await.unwrap();
 
-    operator.macrod_connected(HARNESS).await.unwrap();
+    operator.macrod_connected(HARNESS, true).await.unwrap();
     assert_eq!(operator.run_fleet_effects().await.unwrap(), 1);
 
     assert_eq!(
@@ -97,7 +97,7 @@ async fn a_notice_that_cannot_be_sent_is_retried_and_never_fails_the_computer() 
     let operator = operator(FakeFleet::default()).await;
     let id = paid_computer(&operator).await;
     operator.run_fleet_effects().await.unwrap();
-    operator.macrod_connected(HARNESS).await.unwrap();
+    operator.macrod_connected(HARNESS, true).await.unwrap();
     operator.notices.fail.store(true, Ordering::SeqCst);
 
     for _ in 0..MAX_EFFECT_ATTEMPTS {

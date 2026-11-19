@@ -664,7 +664,10 @@ use the standard 400 ms hover delay and 300 ms grace period between items. Home,
 Email, and Chat show a small accent dot when the loaded data contains an unread
 item. Home uses Signal; Email uses Important across all linked inboxes.
 Noise does not light either dot. These are presence indicators, not counts; they
-do not fetch additional pages to find every unread item.
+do not fetch additional pages to find every unread item. These dots and the
+unread checks described below are the rail's with `enable-unified-notifications`
+off; with it on, the buttons follow the Notifications inbox's unread rows
+instead (see [Notifications](notifications.md)).
 Home uses `HomeUnreadPresence` over its existing 100-item Signal/unread candidate
 page, with one state-only notification witness per entity (plus one reminder
 witness for email). It must not fetch full notification history just to draw the
@@ -1109,12 +1112,13 @@ with a filled glyph also swap to it. More carries that selected state while the
 open view is one of the destinations it hides, so the island always shows where
 you are. Search, on its own island, stays an action at full ink.
 
-Notifications, Email, and Channels use the same reactive unread-presence checks
-as the desktop sidebar, via `useNavigationUnread`. Their accent dots clear when
-the represented items are read or completed, not merely when opening a view.
-Overflow destinations keep their dots in More; More itself has a dot when any
-hidden destination is unread. Resizing or reordering moves the indicator with
-its destination. These remain presence indicators, with no extra pagination.
+Notifications, Email, and Channels get unread indicators from the same
+`useNavigationUnread` hook as the desktop sidebar. Their accent dots clear when
+the represented items are read or completed. Overflow destinations keep their
+dots in More, and More itself has a dot when any hidden destination is unread.
+Resizing or reordering moves the indicator with its destination. See
+[Notifications](notifications.md#notifications-view--appnotifications) for the
+source of the dots and the opt-in for unread numbers.
 
 Open **More views → Customize dock** to change the order. Drag a row's handle immediately,
 without holding first, and move it across the **In dock** / **In More** boundary. The counts use the
@@ -1792,12 +1796,27 @@ CRM record or the CRM feature. Search by name or email. Selecting a person opens
 their direct message; an existing one-to-one DM replaces the person row without
 losing name/email matches, including DMs found by typed search beyond the recent
 channel list. Group DMs stay separate, and the viewer is excluded
-from person results. Empty queries keep the existing recency lists. Verify a
-teammate with no DM or CRM record in both categories, including with CRM disabled,
+from person results. Empty queries keep the existing recency lists, with people
+outside the team after the recent rows, before the command catalog that starts
+at the first never-used command.
+Verify a teammate with no DM or CRM record in both categories, including with
+CRM disabled,
 then verify that loading their DM produces one row and that Files/Channels do not
 show that person. Also verify a typed match whose DM is absent from the recent
 list: desktop and mobile should show one DM row, including after a same-email CRM
 contact arrives, with its alias still searchable.
+
+People outside the viewer's team (email and CRM contacts, Macro users on other
+teams, and one-to-one DMs with them) list after every row from the team in
+Cmd+K and mobile name search, typed or not: after teammates, channels,
+documents and group DMs, even rows that only contain the query (before typing,
+ahead of the command catalog that ends the list). Among themselves they keep the
+usual order, people the viewer messages first. Typing such a person's exact
+email address, or a full name of two or more words, ranks them among the team's
+results where someone never messaged would rank, even when the viewer messages
+them. Verify with a team member and
+outside contacts sharing a first name, a one-letter query, the empty **All**
+list, a full name a teammate and an outside contact share, and an outside email.
 
 Duplicate-row verification: [desktop](media/command/deduplicated-person-desktop.png)
 and [phone](media/command/deduplicated-person-mobile.png) use the real command and
@@ -1832,8 +1851,9 @@ email-only correspondents included, rank after your own projects, channels,
 documents, agents and commands and after the people you know, among names with
 a word starting with what you typed, however exactly their name matches: typing
 `lee` lists Jordan Lee, whom you message, above a stranger named Leela. Rows
-that only contain the query mid-word come last, strangers last among them. The
-People tab ranks the same way over people only.
+that only contain the query mid-word follow, strangers last among them; people
+outside your team come after all of these (see above). The People tab ranks the
+same way over people only.
 To verify on dev as gab@, type `macro` and `rand` in All: your `macro`-named
 channels, companies, tasks and files, and the tasks and files with a word
 starting with `rand`, list before the email-only accounts whose names start

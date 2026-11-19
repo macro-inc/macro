@@ -8,7 +8,7 @@ use opensearch_client::OpensearchClient;
 use sqlx::PgPool;
 use uuid::Uuid;
 
-use super::{EventOutcome, MAX_PROCESSING_ATTEMPTS, PROCESSING_RETRY_BASE_DELAY, retry_processing};
+use super::{Attempted, Attempts, Handled};
 use crate::process::email::{mailbox_delete::MailboxDeletes, remove, upsert};
 
 #[derive(Debug, Clone, PartialEq, Eq)]
@@ -25,6 +25,7 @@ pub(super) enum EmailIndexAction {
     },
     RemoveMessage {
         message_id: Uuid,
+        thread_id: Uuid,
     },
     ReindexThread {
         thread_id: Uuid,
@@ -103,6 +104,7 @@ pub(super) fn describe_email_event(event: &EmailTopicEvent) -> EmailEventDescrip
             action: if metadata.is_spam_or_trash {
                 EmailIndexAction::RemoveMessage {
                     message_id: metadata.message_id,
+                    thread_id: metadata.thread_id,
                 }
             } else {
                 EmailIndexAction::UpsertMessage {
@@ -117,6 +119,7 @@ pub(super) fn describe_email_event(event: &EmailTopicEvent) -> EmailEventDescrip
             action: if metadata.is_spam_or_trash {
                 EmailIndexAction::RemoveMessage {
                     message_id: metadata.message_id,
+                    thread_id: metadata.thread_id,
                 }
             } else {
                 EmailIndexAction::UpsertMessage {
@@ -147,6 +150,7 @@ pub(super) fn describe_email_event(event: &EmailTopicEvent) -> EmailEventDescrip
         EmailTopicEvent::MessageDeleted(metadata) => EmailEventDescription {
             action: EmailIndexAction::RemoveMessage {
                 message_id: metadata.message_id,
+                thread_id: metadata.thread_id,
             },
             link_id: metadata.link_id,
             event_type: "email.message_deleted",
@@ -246,9 +250,10 @@ async fn process_email_index_action(
         EmailIndexAction::UpsertSentMessage { message_id, owner } => {
             upsert::process_upsert_sent_message(opensearch_client, db, message_id, &owner).await
         }
-        EmailIndexAction::RemoveMessage { message_id } => {
-            remove::process_remove_message(opensearch_client, message_id, None).await
-        }
+        EmailIndexAction::RemoveMessage {
+            message_id,
+            thread_id,
+        } => remove::process_remove_message(opensearch_client, message_id, thread_id, None).await,
         EmailIndexAction::ReindexThread { thread_id, owner } => {
             upsert::process_upsert_thread_message(opensearch_client, db, thread_id, &owner, None)
                 .await
@@ -275,7 +280,8 @@ pub(super) async fn process_email_event(
     event: &EmailMacroEvent,
     partition: i32,
     offset: i64,
-) -> EventOutcome {
+    attempts: &Attempts,
+) -> Attempted {
     let description = describe_email_event(&event.event().event);
     if description.action == EmailIndexAction::Ignore {
         tracing::trace!(
@@ -285,55 +291,23 @@ pub(super) async fn process_email_event(
             offset,
             "ignoring email event without a search-index action"
         );
-        return EventOutcome::Ignored;
+        return Ok((Handled::Ignored, 0));
     }
 
-    let result = retry_processing(|attempt| {
-        let action = description.action.clone();
-        async move {
-            tracing::trace!(
-                link_id = %description.link_id,
-                event_type = description.event_type,
-                partition,
-                offset,
-                attempt,
-                "processing email search-index event"
-            );
-            process_email_index_action(db, opensearch_client, mailbox_deletes, action)
-                .await
-                .inspect_err(|error| {
-                    if attempt < MAX_PROCESSING_ATTEMPTS {
-                        let retry_delay =
-                            PROCESSING_RETRY_BASE_DELAY * 2u32.pow(attempt.saturating_sub(1));
-                        tracing::warn!(
-                            error = ?error,
-                            link_id = %description.link_id,
-                            event_type = description.event_type,
-                            partition,
-                            offset,
-                            attempt,
-                            delay_secs = retry_delay.as_secs(),
-                            "email search-index processing failed, retrying"
-                        );
-                    }
-                })
-        }
-    })
-    .await;
-
-    match result {
-        Ok(()) => EventOutcome::Indexed,
-        Err(error) => {
-            tracing::error!(
-                error = ?error,
-                link_id = %description.link_id,
-                event_type = description.event_type,
-                partition,
-                offset,
-                attempts = MAX_PROCESSING_ATTEMPTS,
-                "dropping email event after processing retries were exhausted"
-            );
-            EventOutcome::Dropped
-        }
-    }
+    attempts
+        .run(|attempt| {
+            let action = description.action.clone();
+            async move {
+                tracing::trace!(
+                    link_id = %description.link_id,
+                    event_type = description.event_type,
+                    partition,
+                    offset,
+                    attempt,
+                    "processing email search-index event"
+                );
+                process_email_index_action(db, opensearch_client, mailbox_deletes, action).await
+            }
+        })
+        .await
 }

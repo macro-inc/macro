@@ -216,7 +216,25 @@ is off vs Enable calendar wording counts only own inboxes, and Grant access, Tur
 on and Reconnect only start consent for one of them. It covers the grid only in a
 week without events and with no working calendar the viewer can see; a working
 calendar shared with them keeps it to the bottom-right pill, so a delegate whose
-only working calendar is shared sees the pill in every week.
+only working calendar is shared sees the pill in every week. On desktop the
+pill rides above the toast stack while it shows anything, so the app-wide
+prompt for the same inbox doesn't cover it.
+An own inbox whose calendar used to sync but lost calendar access without the
+user turning it off (a Google grant from before Macro narrowed its calendar
+scopes, which the server turns off and clears hourly) shows **Calendar for
+<address> stopped syncing** with **Reconnect** even while another inbox works;
+Reconnect asks for calendar access alone, and the re-grant re-imports its events.
+For the same inbox the app-wide toast reads **Calendar stopped syncing** with
+**Reconnect** (shown again even if an earlier Enable calendar was dismissed), the
+sidebar card reads **Calendar stopped syncing** with **Reconnect calendar** (also
+past an earlier dismissal of the card), and the calendar settings menu says
+**Reconnect**. A calendar that was never connected keeps Enable calendar, Grant
+access and Turn on calendar, unless its mailbox needs a full reconnect: then the
+calendar view, the card and the menu all offer Reconnect, asking for the mailbox
+and calendar together. The signal is the inbox's calendar data
+(`has_calendar_data`) beside missing calendar permission: Macro creates the
+calendar account only from a grant with the capability and keeps it when the
+capability goes.
 Account checkboxes show/hide all child calendars; partial selection is shown as
 mixed. Individual calendars can also be shown/hidden. The account color is the
 default for its calendars; a child color overrides it. Click a color dot to open
@@ -471,7 +489,8 @@ excluded from Upcoming events, including both all-day and hourly locations.
 Events require connecting a Google account (`Connect calendar`). The
 `Calendar settings` (gear) menu has an `Accounts`
 section listing each connected account with a per-account `Enable` (grant calendar),
-`Reconnect` (expired Google authorization), or `Turn off` action, plus
+`Reconnect` (expired Google authorization, with or without calendar access, as
+the calendar view says), or `Turn off` action, plus
 `Connect another account` to connect a new Google account
 (email + calendar; the item and the `Connect email` dialog both say the email
 and calendar connect together). A Google consent that leaves the email
@@ -1488,6 +1507,13 @@ shows Yes / Maybe / No, a last response, or a waiting-for-sync line. When the vi
 holds the meeting it says `On your calendar.` with `Open in calendar` and `View your day`;
 when the meeting is on more than one of the viewer's accounts it says
 `This event matches multiple accounts. Open your calendar to choose.`, as an invitation does.
+During the first sync of a connected inbox with no discovered calendar, a viewer with
+no writable calendar sees `Syncing your calendar…` where the add action will appear.
+The event composer hides its empty picker and shows the same notice in place of Create event.
+The viewer can edit the draft while the sync runs. Once a writable calendar arrives,
+the picker and Create event return in the same composer with the draft intact.
+The calendar delta refreshes the list after discovery with its own GraphQL
+operation, so an in-flight cache read cannot intercept the network refresh.
 When the calendar check confirms the viewer does not hold it, the card says
 `Not on your calendar.` and, behind the `enable-calendar-add-shared-event` flag, offers
 `Add to calendar`, which imports the same snapshot as the channel-share card
