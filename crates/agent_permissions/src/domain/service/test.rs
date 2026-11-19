@@ -68,7 +68,7 @@ struct FakeStore {
 }
 
 impl FakeStore {
-    fn save(&self, key: Key, changes: &[Change], via_agent: bool) {
+    fn save(&self, key: Key, changes: &[Change], set_by: SetBy) {
         let mut rules = self.rules.lock().unwrap();
         let current = rules.entry(key).or_default();
         for change in changes {
@@ -77,7 +77,8 @@ impl FakeStore {
                 current.push(Rule {
                     target: change.target.clone(),
                     state,
-                    via_agent,
+                    via_agent: set_by.via_agent(),
+                    restriction_only: set_by.restriction_only(),
                     updated_at: DateTime::UNIX_EPOCH,
                 });
             }
@@ -123,8 +124,8 @@ impl PermissionStore for Arc<FakeStore> {
             Err(refused) => return Ok(Err(refused)),
         };
         match write.to {
-            WriteTo::Saved => self.save(key(write.owner), &changes, write.via_agent),
-            WriteTo::Session(session) => self.save(Key::Session(session), &changes, true),
+            WriteTo::Saved => self.save(key(write.owner), &changes, write.set_by),
+            WriteTo::Session(session) => self.save(Key::Session(session), &changes, SetBy::Agent),
         }
         Ok(Ok(()))
     }
@@ -757,6 +758,59 @@ async fn an_agents_tool_pin_never_exempts_it_from_a_later_never() {
         )
         .await
         .unwrap();
+    let resolved = fixture
+        .service
+        .resolve_calls(&owner_policy(), &[send_email()])
+        .await
+        .unwrap();
+    assert_eq!(resolved[0].state, PermissionState::Ask);
+
+    fixture
+        .service
+        .set(&person(OWNER), BotId::TEST_A, never_send())
+        .await
+        .unwrap();
+    let resolved = fixture
+        .service
+        .resolve_calls(&owner_policy(), &[send_email()])
+        .await
+        .unwrap();
+    assert_eq!(
+        (resolved[0].state, resolved[0].origin),
+        (PermissionState::Never, Origin::GroupAction)
+    );
+}
+
+/// An API key's tool pin only restricts too: a person's later never on its
+/// group still applies, and it is not labelled as the agent's.
+#[tokio::test]
+async fn an_api_keys_tool_pin_never_exempts_it_from_a_later_never() {
+    let fixture = fixture();
+    let api_key = Caller {
+        user: user(OWNER),
+        credential: Credential::Other,
+    };
+    let pin = vec![Change {
+        target: Target::Tool {
+            service: "email".to_owned(),
+            operation: "send_email".to_owned(),
+        },
+        state: Some(PermissionState::Ask),
+    }];
+    let tightened = fixture
+        .service
+        .tighten(&api_key, BotId::TEST_A, pin)
+        .await
+        .unwrap();
+    assert_eq!(tightened.applied_to, AppliedTo::Agent);
+    let saved = fixture.store.read(&Key::Agent(BotId::TEST_A));
+    assert_eq!(
+        saved
+            .iter()
+            .map(|rule| (rule.via_agent, rule.restriction_only))
+            .collect::<Vec<_>>(),
+        vec![(false, true)]
+    );
     let resolved = fixture
         .service
         .resolve_calls(&owner_policy(), &[send_email()])
