@@ -1,4 +1,3 @@
-import { crmKeys } from '@app/features/crm/queries/keys';
 import type * as PlatformModule from '@core/util/platform';
 import {
   keepPreviousData,
@@ -945,15 +944,15 @@ it('keeps owner privacy controls through denial but clears them on account retir
     scopes: [createScope([], store)],
   });
   const controls = [
-    crmKeys.emailPolicy('owner').queryKey,
-    crmKeys.emailPolicyPreview('owner').queryKey,
-    crmKeys.emailPolicyHistory('owner').queryKey,
-    crmKeys.emailPolicyRevision('owner', 1).queryKey,
-    crmKeys.emailPrivacy('team', 'owner').queryKey,
-    crmKeys.emailConsent('team', 'owner', 1).queryKey,
-    crmKeys.excludedEmailThreads('team', 'owner', 1, undefined).queryKey,
+    ['crm', 'emailPolicy', 'owner'],
+    ['crm', 'emailPolicyPreview', 'owner'],
+    ['crm', 'emailPolicyHistory', 'owner', undefined],
+    ['crm', 'emailPolicyRevision', 'owner', 1],
+    ['crm', 'emailPrivacy', 'team', 'owner'],
+    ['crm', 'emailConsent', 'team', 'owner', 1],
+    ['crm', 'excludedEmailThreads', 'team', 'owner', 1, undefined, undefined],
   ];
-  const company = crmKeys.company('company').queryKey;
+  const company = ['crm', 'company', 'company'];
   for (const key of [...controls, company])
     queryClient.setQueryData(key, { value: 'saved' });
   const updates: string[] = [];

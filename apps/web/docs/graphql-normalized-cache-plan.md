@@ -933,16 +933,19 @@ classifiers.
 Before mounting request producers, startup reads the local owner's generation
 once, with a 1.5-second budget and the existing cache-failure fallback. This
 never awaits identity or member-access HTTP. Subscriptions start after that
-baseline is installed. Initial owner observation, the first account binding
-without a stored policy, and unchanged boot/focus proofs do not invalidate or
-refetch queries. Actual account replacement retains the full generation fence.
+baseline is installed. A non-denied initial owner observation, the first account
+binding without a stored policy, and unchanged ready boot/focus proofs without
+pending cleanup do not invalidate or refetch queries. An initial denied policy
+still retires visible snapshots, and unchanged proofs retry failed cleanup.
+Actual account replacement retains the full generation fence.
 
 The shared owner persists the new policy and generation before selective
 retirement. The application adapter removes CRM records, derived email and
 property content, mixed viewer lists and projection-only orphans. An interrupted
 retirement resumes before cached content is returned. Initial allowed/team-less
 proofs preserve both legacy offline data and the existing generation. Denial or
-a team change retires old content; an unchanged ready policy does nothing.
+a team change retires old content; an unchanged ready policy needs no owner
+transition. Client snapshots may still need cleanup after an earlier failure.
 
 Every request and subscription source captures one owner-issued generation.
 The TS exchange and response observer discard older query results and frames;

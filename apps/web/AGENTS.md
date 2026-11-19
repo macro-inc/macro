@@ -40,8 +40,8 @@ Treat CRM access changes as rare session transitions. Detect them from response
 hints, CRM 403s and one `/crm/member-access` read on boot, focus and reconnect;
 ordinary HTTP requests, subscriptions and local cache reads never wait for proof.
 Establish the local owner's generation before mounting request producers, with
-a bounded cache-failure fallback; first observation and unchanged proofs never
-refetch queries or change the generation.
+a bounded cache-failure fallback; a non-denied initial baseline and unchanged
+ready proofs without pending cleanup never refetch or change the generation.
 Keep `crm-access-authority.ts` as the policy state machine and
 `crm-access-cache.ts` as detection and visible/persisted retirement glue.
 

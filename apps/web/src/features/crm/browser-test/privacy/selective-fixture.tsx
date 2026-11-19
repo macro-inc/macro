@@ -38,6 +38,19 @@ export function SelectiveSettingsFixture() {
   const params = new URLSearchParams(location.search);
   const content = () => (
     <Suspense fallback={<ListSkeleton.Bar class="m-6 h-4 w-32" />}>
+      <Show when={params.has('retirement')}>
+        <Button
+          onClick={async () => {
+            await cacheSessionGeneration.transition(async () => {
+              await queryClient.cancelQueries();
+              await queryPersistence.retire(crmProtectedQueryKey);
+            });
+            await queryClient.refetchQueries({ type: 'active' });
+          }}
+        >
+          Retire CRM cache
+        </Button>
+      </Show>
       <CrmEmailPrivacySettings
         renderOverview={(body) => (
           <SettingsPage
@@ -58,19 +71,6 @@ export function SelectiveSettingsFixture() {
   );
   return (
     <div class="h-dvh bg-page text-ink font-sans">
-      <Show when={params.has('retirement')}>
-        <Button
-          onClick={async () => {
-            await cacheSessionGeneration.transition(async () => {
-              await queryClient.cancelQueries();
-              await queryPersistence.retire(crmProtectedQueryKey);
-            });
-            await queryClient.refetchQueries({ type: 'active' });
-          }}
-        >
-          Retire CRM cache
-        </Button>
-      </Show>
       <output hidden data-testid="policy-calls">
         {JSON.stringify(policyCalls())}
       </output>
