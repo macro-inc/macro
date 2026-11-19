@@ -45,6 +45,7 @@ import {
   type OffersFailure,
   offersFailure,
 } from '../core/computer-display';
+import { hasReadings } from '../core/computer-usage';
 import {
   computerSetupRequest,
   consumeComputerSetupRequest,
@@ -393,7 +394,11 @@ function ManagedComputerRow(props: {
       claude={claude()}
       primary={primary()}
       menu={menu()}
-      usage={props.computer.poweredOn ? props.usage : undefined}
+      usage={
+        props.computer.poweredOn && props.usage && hasReadings(props.usage)
+          ? props.usage
+          : undefined
+      }
       harness={props.harness?.access === 'owner' ? props.harness : undefined}
     />
   );
