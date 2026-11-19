@@ -446,8 +446,8 @@ deletes; anything else, stop here.
    before. Merge *Cluster, notify* and sync `grafana`. Between step 5 and here
    no Grafana notifies; CloudWatch alarms still do. Until step 8 its GoAlert
    contact points still fail (the old host's nginx answers 404 on their path),
-   so a prod Grafana alert pages nobody: only CloudWatch alarms and the
-   watchdog reach GoAlert (the SNS route is for dev alerts). From step 5 until
+   so a prod Grafana alert pages nobody: only CloudWatch alarms (through SNS)
+   and the watchdog still alert (Grafana's SNS route is for dev alerts). From step 5 until
    step 8's contact point check passes, someone watches the cluster Grafana's
    firing alerts (Alerting, Alert rules) and pages by hand; run steps 7 and 8
    back to back.
@@ -517,13 +517,14 @@ again, every time:
    the full host's role and a tagged AMI, such as the commit the running host
    was built from, so the held services have their permissions when released.
    Then go on as "Otherwise" below.
-   **If step 8 replaced the host**, put the full host back on main (the *host
+   **If step 8 deleted the old host** (whether or not its replacement came up),
+   put the full host back on main (the *host
    image* and *host role* parts of `infra/stacks/observability` as they were before the
    switch) and deploy it as "Going back to the full host" in
    `infra/stacks/observability/README.md` says: widen the role with the
    targeted `pulumi up`, then Deploy Observability, dry run first. The new
    host starts all its services.
-   **Otherwise**, on the host: `release loki tempo grafana prometheus` (the
+   **Otherwise** (the original host still runs), on it: `release loki tempo grafana prometheus` (the
    ones held so far).
 3. **If step 5 ran**, put the *listener rule*, target group, attachment and
    alarm back in `infra/stacks/observability/index.ts` on main, then preview
