@@ -126,12 +126,10 @@ export function usePendingNotificationNavigationEffect(
           ...(intent.target ? { target: intent.target } : {}),
         }
       );
-    // The tap may land on the page already shown (its channel is open), which
-    // closes no sheet by itself. Close them before navigating, so a sheet the
-    // destination opens on arrival stays open.
-    closeSheetsForNavigation();
     const span = notificationOpenSpan(notificationId);
-    fireAndForget(
+    // The tap may land on the page already shown (its channel is open), which
+    // closes no sheet by itself, so close them as it starts.
+    const navigate = () =>
       (span ? span.run(open) : open()).match(
         () => {
           if (!isCurrentAttempt() || attempt.applied) return;
@@ -160,7 +158,9 @@ export function usePendingNotificationNavigationEffect(
           finishNotificationNavigation(intent, 'failed');
           toast.failure('Failed to open notification.');
         }
-      ),
+      );
+    fireAndForget(
+      closeSheetsForNavigation(navigate),
       'notification-navigation'
     );
   });

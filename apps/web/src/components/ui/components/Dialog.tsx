@@ -111,12 +111,10 @@ function DesktopDialog(props: DialogProps) {
 
   // Touch closes dialogs on navigation as it does sheets (phones' fullscreen
   // dialogs, tablets' cards); desktop keeps its dialogs.
-  if (isTouchDevice()) {
-    createCloseOnNavigation({
-      open: () => !props.keepOpenOnNavigation && props.open,
-      close: () => props.onOpenChange?.(false),
-    });
-  }
+  createCloseOnNavigation({
+    open: () => isTouchDevice() && !props.keepOpenOnNavigation && props.open,
+    close: () => props.onOpenChange?.(false),
+  });
 
   createEffect(() => {
     if (props.open) {

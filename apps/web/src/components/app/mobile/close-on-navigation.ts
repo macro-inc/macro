@@ -8,8 +8,15 @@ import {
   untrack,
 } from 'solid-js';
 
-/** The close requests of the sheets open right now. */
-const OPEN_SHEETS = new Set<() => void>();
+type OpenSheet = {
+  /** The close request a scrim tap makes. */
+  request: () => void;
+  /** Asked already by the navigation under way, so its page change doesn't ask again. */
+  askedByNavigation: boolean;
+};
+
+/** The sheets open right now. */
+const OPEN_SHEETS = new Set<OpenSheet>();
 
 /**
  * The page the app shows: the view mounted in the active pane. Navigating to
@@ -26,12 +33,25 @@ export function shownPage(): unknown {
 }
 
 /**
- * Asks every open sheet to close, as tapping its scrim does. For a navigation
- * that may land on the page already shown, such as a notification tap, call it
- * before navigating, so a sheet the destination opens on arrival stays open.
+ * Asks every open sheet to close, as tapping its scrim does, then runs
+ * `navigate`. For a navigation that may land on the page already shown, such
+ * as a notification tap: asking first lets a sheet the destination opens on
+ * arrival stay open. Until `navigate` settles, its own page change doesn't ask
+ * again, so an owner that refuses (to confirm a discard) is asked once.
  */
-export function closeSheetsForNavigation() {
-  for (const close of [...OPEN_SHEETS]) close();
+export async function closeSheetsForNavigation<T>(
+  navigate: () => Promise<T>
+): Promise<T> {
+  const asked = [...OPEN_SHEETS];
+  for (const sheet of asked) {
+    sheet.askedByNavigation = true;
+    sheet.request();
+  }
+  try {
+    return await navigate();
+  } finally {
+    for (const sheet of asked) sheet.askedByNavigation = false;
+  }
 }
 
 /**
@@ -53,9 +73,12 @@ export function createCloseOnNavigation(options: {
   createEffect(() => {
     if (!options.open()) return;
 
-    const request = () => untrack(options.close);
-    OPEN_SHEETS.add(request);
-    onCleanup(() => OPEN_SHEETS.delete(request));
+    const sheet: OpenSheet = {
+      request: () => untrack(options.close),
+      askedByNavigation: false,
+    };
+    OPEN_SHEETS.add(sheet);
+    onCleanup(() => OPEN_SHEETS.delete(sheet));
 
     let openedOver = untrack(shownPage);
     if (openedOver === undefined) return;
@@ -67,7 +90,7 @@ export function createCloseOnNavigation(options: {
         (shown) => {
           if (shown === openedOver) return;
           openedOver = shown;
-          request();
+          if (!sheet.askedByNavigation) sheet.request();
         },
         { defer: true }
       )

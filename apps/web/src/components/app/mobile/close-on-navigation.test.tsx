@@ -192,11 +192,12 @@ it('leaves the sheet open when its owner refuses, until the next navigation', ()
   expect(onOpenChange).toHaveBeenLastCalledWith(false);
 });
 
-it('keeps a sheet that opts out', () => {
+it('keeps a sheet that opts out', async () => {
   const { onOpenChange } = renderControlled({ keepOpenOnNavigation: true });
 
-  setPage({ split: 'channel-pane', view: 'general' });
-  closeSheetsForNavigation();
+  await closeSheetsForNavigation(async () => {
+    setPage({ split: 'channel-pane', view: 'general' });
+  });
 
   expect(onOpenChange).not.toHaveBeenCalledWith(false);
   expect(screen.getByRole('dialog', { name: 'Sheet' })).toBeTruthy();
@@ -205,7 +206,7 @@ it('keeps a sheet that opts out', () => {
 it('closes for a navigation to the page already shown', async () => {
   const { onOpenChange } = renderControlled();
 
-  closeSheetsForNavigation();
+  await closeSheetsForNavigation(async () => {});
 
   expect(onOpenChange).toHaveBeenLastCalledWith(false);
   await expectClosed();
@@ -224,6 +225,20 @@ it('leaves a sheet opened during startup to its owner until a navigation closes 
   setPage({ split: 'home', view: 'home' });
   expect(onOpenChange).not.toHaveBeenCalled();
 
-  closeSheetsForNavigation();
+  await closeSheetsForNavigation(async () => {});
   await expectClosed();
+});
+
+it('asks an owner that refuses once per notification navigation', async () => {
+  const { onOpenChange } = renderControlled({ refuseClose: true });
+
+  // The tap asks first, then its navigation shows another page.
+  await closeSheetsForNavigation(async () => {
+    setPage({ split: 'channel-pane', view: 'general' });
+  });
+  expect(onOpenChange).toHaveBeenCalledTimes(2);
+  expect(screen.getByRole('dialog', { name: 'Sheet' })).toBeTruthy();
+
+  setPage({ split: 'front', view: 'notes' });
+  expect(onOpenChange).toHaveBeenCalledTimes(3);
 });
