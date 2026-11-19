@@ -173,8 +173,8 @@ ALB ─▶ edge ─┬─ grafana.* ──▶ grafana ──▶ query-gateway �
              └─ /api/v1/write, /loki/api/v1/push (basic auth) ──▶ Mimir, Loki
 ```
 
-The edge, the query gateway and Alloy ingest are the host's
-`infra/stacks/observability/nixos/proxy.nix` and `ingest.alloy` with the
+The edge and the query gateway are the full host's nginx rules, ported by
+hand; Alloy ingest runs the host stack's `nixos/ingest.alloy` with the
 cluster's addresses; Grafana runs the host's `grafana.nix` settings and
 `grafana-provisioning`. A change to those host files changes this render too
 (CI watches them).

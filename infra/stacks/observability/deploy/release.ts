@@ -6,7 +6,7 @@
 //   smoke    boot the AMI on a throwaway host and check it; tag it if it passes
 //   deploy   check the plan and permissions, then (unless DRY_RUN=true)
 //            `pulumi up` and wait for health. Replacing the host takes
-//            Grafana, Loki, Tempo and GoAlert down for several minutes.
+//            GoAlert down for several minutes; the cluster keeps Grafana.
 //   cleanup  remove every smoke resource, if a cancelled run left any
 //
 // Run from infra/stacks/observability with the deploy AWS credentials, e.g.

@@ -42,8 +42,7 @@ The [README](README.md) has the application list, bootstrap and contract with
   in `env/prod.nix`. Until then only the watchdog heartbeat sends.
 - Start Grafana: set `macro.grafana.database` in `env/prod.nix` from the
   `../aws/` outputs; it runs 0 replicas until then.
-- Change an edge or query-gateway rule: `modules/edge.nix`, and the same rule
-  in the host's `nixos/proxy.nix` while the host runs.
+- Change an edge or query-gateway rule: `modules/edge.nix`.
 
 ## Checks
 

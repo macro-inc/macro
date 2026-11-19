@@ -1,5 +1,5 @@
-# The two nginx front doors, ported from the host's
-# infra/stacks/observability/nixos/proxy.nix:
+# The two nginx front doors, ported from the full host's nginx
+# (infra/stacks/observability/nixos/proxy.nix before it served only GoAlert):
 #
 # - `edge`: the only target of the existing ALB (TargetGroupBinding, IP
 #   targets). Grafana by hostname, POST-only OTLP to Alloy ingest, and
