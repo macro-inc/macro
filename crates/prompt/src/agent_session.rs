@@ -1,6 +1,6 @@
 //! Behavior for the in-process Macro agent answering an agent session.
 
-use crate::tone::length_rules;
+use crate::reply_length::length_rules;
 use crate::types::StaticPrompt;
 
 static TITLE: &str = "Agent Sessions";

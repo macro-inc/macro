@@ -21,6 +21,7 @@ pub mod mcp_item_links;
 pub mod mentions;
 pub mod privacy;
 pub mod pull_requests;
+pub mod reply_length;
 pub mod skills;
 pub mod tone;
 mod types;
@@ -53,10 +54,12 @@ static SESSION_BASE_PROMPT: ComposedPrompt = math::PROMPT
 /// `CreateCalendarEvent` directly and have no `SendEmail` at all.
 pub static DIRECT_TOOL_USE_PROMPT: ComposedPrompt = BASE_PROMPT.compose(&skills::PROMPT);
 
-/// The chat tool-enabled prompt: [`DIRECT_TOOL_USE_PROMPT`] plus the rules
-/// for composer-confirmed user tools (`SendEmail`, deferred execution), which
-/// only apply on surfaces that can render the composer card.
+/// The chat tool-enabled prompt: [`BASE_PROMPT`] with the [`reply_length`]
+/// rules, the skill rules, and the rules for composer-confirmed user tools
+/// (`SendEmail`, deferred execution), which only apply on surfaces that can
+/// render the composer card.
 pub static TOOL_USE_PROMPT: ComposedPrompt = BASE_PROMPT
+    .compose(&reply_length::PROMPT)
     .compose(&user_tools::PROMPT)
     .compose(&skills::PROMPT);
 
