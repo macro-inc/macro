@@ -926,6 +926,9 @@ message it answers (which stays expanded); tapping it reopens the draft.
 Opening a thread whose last message has a reply draft opens the composer once;
 after Back → Save Draft it stays closed while the save finishes, until the
 **Draft** row is tapped or the thread is opened again.
+For a thread shared at Edit, write a reply from the reader’s inbox, wait
+for it to appear in that inbox’s Drafts, then reload the shared thread.
+The reply composer reopens with the saved text.
 On desktop, a saved reply that reappears with its thread (opening it, stepping
 to it with j/k, the reading pane following the list) stays unfocused, so the
 next j moves on instead of typing into it; `r` or a click continues it.
