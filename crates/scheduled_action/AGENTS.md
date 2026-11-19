@@ -326,7 +326,8 @@ each run.
   index `scheduled_action_active_children_idx` and never touches them; history rows carry `created`, the sub-routines that run created
   (`created_by_runs`). A sub-routine's run notification names its parent
   (`FinishedRoutineRun::parent_name`). Spans: `routine.create` (parent, run,
-  keyed, outcome `created`/`updated`/`refused_cap`), `routine.follow_parent`,
+  keyed, outcome `created`/`updated`/`refused_cap`), `routine.follow_parent`
+  (outcome `followed`, `partial` or `read_failed`, errors for the last two),
   `routine.detach`.
 - Defined sub-routines (`routine_program::SubRoutineDefinition`): a
   routine's program can define `sub_routines` (name, title, typed inputs,
