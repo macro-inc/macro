@@ -165,6 +165,29 @@ function needsSessionCodeHandoff(authUrl: URL): boolean {
   );
 }
 
+/**
+ * The `original_url` a browser sign-in returns to: the page it started on. A
+ * handoff's also names an attempt this browser now remembers, since the code
+ * returns on that URL after a full-page redirect and the page it lands on must
+ * tell it from someone else's. Undefined when the attempt could not be kept.
+ */
+async function webReturnUrl(
+  authUrl: URL,
+  originalLocation: RedirectLocation['originalLocation'] | undefined,
+  handoff: boolean
+): Promise<string | undefined> {
+  const originalUrl = originalLocation
+    ? `${window.location.origin}${originalLocation.pathname}${originalLocation.search}${originalLocation.hash}`
+    : window.location.href;
+  if (!handoff) return originalUrl;
+  const attempt = await bindSessionCode(authUrl);
+  if (!rememberSignInAttempt(attempt)) return undefined;
+  // The auth service decodes `original_url` once more. Encoded for that, a
+  // handoff returns to the URL as built: an encoded `#` or `&` in its query
+  // stays data instead of hiding the attempt or adding a field.
+  return encodeURIComponent(withSignInAttempt(originalUrl, attempt));
+}
+
 export function useSsoLogin(opts?: {
   signupMode?: boolean;
   /** Started on the agent signup page: a new account becomes an agent. */
@@ -236,28 +259,17 @@ export function useSsoLogin(opts?: {
       return;
     }
 
-    const originalLocation = location.state?.originalLocation;
-    let originalUrl = originalLocation
-      ? `${window.location.origin}${originalLocation.pathname}${originalLocation.search}${originalLocation.hash}`
-      : window.location.href;
-    if (handoff) {
-      // The code returns on the URL, after a full-page redirect: remember
-      // the attempt so the page it lands on can tell it from someone else's.
-      const attempt = await bindSessionCode(authUrl);
-      if (!rememberSignInAttempt(attempt)) {
-        console.error('Could not store the sign-in attempt');
-        toast.failure('Sign-in failed. Please try again.');
-        return;
-      }
-      originalUrl = withSignInAttempt(originalUrl, attempt);
-    }
-    authUrl.searchParams.set(
-      'original_url',
-      // The auth service decodes `original_url` once more. Encoded for that,
-      // a handoff returns to the URL as built: an encoded `#` or `&` in its
-      // query stays data instead of hiding the attempt or adding a field.
-      handoff ? encodeURIComponent(originalUrl) : originalUrl
+    const returnUrl = await webReturnUrl(
+      authUrl,
+      location.state?.originalLocation,
+      handoff
     );
+    if (returnUrl === undefined) {
+      console.error('Could not store the sign-in attempt');
+      toast.failure('Sign-in failed. Please try again.');
+      return;
+    }
+    authUrl.searchParams.set('original_url', returnUrl);
 
     analytics.track(analyticsEvent, { method: idp_name }, analyticsProviders);
 
