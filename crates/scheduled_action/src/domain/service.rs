@@ -632,8 +632,25 @@ impl<Rpo: ScheduledActionRepo, Exe, Grants, Targets, Github, Code, Upgrades, Rol
         if next.code_identity() != CodeIdentity::Owner {
             return Ok(());
         }
-        // The sources each rewrite wrote: its steps whose code differs from
-        // the task it rewrote.
+        // A copy made standalone keeps what Macro wrote in its parent.
+        let mut written = self.rewritten_sources(id).await?;
+        written.extend(self.upgrades.inherited_rewrites(id).await?);
+        if next
+            .code_steps()
+            .into_iter()
+            .any(|step| written.contains(&step.source))
+        {
+            return Err(ActionPolicyError::UnreviewedRewrite.into());
+        }
+        Ok(())
+    }
+
+    /// The sources Macro's rewrites of `id` wrote: the steps each rewrite
+    /// holds whose code differs from the task it rewrote.
+    async fn rewritten_sources(&self, id: Uuid) -> Result<std::collections::HashSet<String>>
+    where
+        Upgrades: CodeUpgrades,
+    {
         let mut written = std::collections::HashSet::new();
         for upgrade in self.upgrades.list_upgrades(id).await? {
             let (UpgradeOutcome::Rewritten, Some(rewrite)) = (upgrade.outcome, upgrade.task) else {
@@ -646,14 +663,7 @@ impl<Rpo: ScheduledActionRepo, Exe, Grants, Targets, Github, Code, Upgrades, Rol
                     .filter(|source| !before.contains(source)),
             );
         }
-        if next
-            .code_steps()
-            .into_iter()
-            .any(|step| written.contains(&step.source))
-        {
-            return Err(ActionPolicyError::UnreviewedRewrite.into());
-        }
-        Ok(())
+        Ok(written)
     }
 
     /// Replace one routine's configuration. `with_parent` marks a
@@ -727,8 +737,12 @@ impl<Rpo: ScheduledActionRepo, Exe, Grants, Targets, Github, Code, Upgrades, Rol
         }
         if !disable_only {
             // Every way a task changes needs the rollout for definitions and
-            // inputs: an edit, a run's keyed create, a detach.
-            if !same_task(&action.task, &input.task) {
+            // inputs: an edit, a run's keyed create. Making a copy that
+            // exists standalone doesn't, so switching the rollout off
+            // strands none.
+            let detaching = SubRoutineCopy::from_task(&action.task).is_some()
+                && SubRoutineCopy::from_task(&input.task).is_none();
+            if !same_task(&action.task, &input.task) && !detaching {
                 self.check_sub_routines(&input.task, action.owner_user()?)
                     .await?;
             }

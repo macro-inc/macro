@@ -193,6 +193,10 @@ impl CodeUpgrades for Upgrades {
     async fn list_upgrades(&self, _: Uuid) -> Result<Vec<CodeUpgrade>> {
         Ok(Vec::new())
     }
+
+    async fn inherited_rewrites(&self, _: Uuid) -> Result<Vec<String>> {
+        Ok(Vec::new())
+    }
 }
 
 fn routine(source: &str, sdk: Option<&str>) -> ScheduledAction {

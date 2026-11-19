@@ -180,13 +180,16 @@ pub trait SubRoutines: Send + Sync + 'static {
     fn detach(&self, id: &Uuid) -> impl Future<Output = Result<Option<ScheduledAction>>> + Send;
 
     /// Write `action`, a copy of one of `parent`'s sub-routines given steps
-    /// of its own, and detach it, at once: it takes `parent`'s record of the
-    /// code Macro rewrote as its own. Fails with `UpdateConflict` and writes
-    /// nothing when it changed meanwhile or no longer follows `parent`.
+    /// of its own, and detach it, at once, keeping `rewritten`: the sources
+    /// among its steps that Macro wrote in `parent`'s upgrades
+    /// ([`CodeUpgrades::inherited_rewrites`]). Fails with `UpdateConflict`
+    /// and writes nothing when it changed meanwhile or no longer follows
+    /// `parent`.
     fn detach_copy(
         &self,
         action: ScheduledAction,
         parent: &Uuid,
+        rewritten: &[String],
     ) -> impl Future<Output = Result<ScheduledAction>> + Send;
 
     /// The sub-routines of `parent` that `runs` created, each with its run.
@@ -1172,6 +1175,14 @@ pub trait CodeUpgrades: Send + Sync + 'static {
         &self,
         action_id: Uuid,
     ) -> impl Future<Output = Result<Vec<super::code_upgrade::CodeUpgrade>>> + Send;
+
+    /// The sources Macro wrote in upgrades of the routine a copy was before
+    /// it was made standalone, which its steps still held then. Kept apart
+    /// from its own upgrades, whose SDK versions they would otherwise take.
+    fn inherited_rewrites(
+        &self,
+        action_id: Uuid,
+    ) -> impl Future<Output = Result<Vec<String>>> + Send;
 }
 
 pub trait ScheduledActionLiveUpdate: Send + Sync + 'static {

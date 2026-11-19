@@ -1,0 +1,15 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "\n                INSERT INTO scheduled_action_inherited_rewrite (action_id, sources)\n                VALUES ($1, $2)\n                ON CONFLICT (action_id) DO NOTHING\n                ",
+  "describe": {
+    "columns": [],
+    "parameters": {
+      "Left": [
+        "Uuid",
+        "TextArray"
+      ]
+    },
+    "nullable": []
+  },
+  "hash": "fcde4d3772204b2842103e3dfe982fecad6a12c6600e3d4f4a69381c97341810"
+}

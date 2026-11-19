@@ -46,7 +46,12 @@ impl SubRoutines for FakeRepo {
     async fn detach(&self, _: &Uuid) -> Result<Option<ScheduledAction>> {
         unreachable!()
     }
-    async fn detach_copy(&self, _: ScheduledAction, _: &Uuid) -> Result<ScheduledAction> {
+    async fn detach_copy(
+        &self,
+        _: ScheduledAction,
+        _: &Uuid,
+        _: &[String],
+    ) -> Result<ScheduledAction> {
         unreachable!()
     }
     async fn created_by_runs(

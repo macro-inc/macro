@@ -751,6 +751,48 @@ async fn an_update_that_would_drop_the_definitions_is_refused() {
 }
 
 #[tokio::test]
+async fn with_the_rollout_off_runs_schedule_nothing_and_a_copy_can_still_stand_alone() {
+    let service = service(false);
+    // A parent and a keyed copy saved while the rollout was on.
+    let parent_id = top_level(&service, "Due reminders").await.id.unwrap();
+    let copy_id = top_level(&service, "Ship").await.id.unwrap();
+    for action in service.repo.actions.lock().unwrap().iter_mut() {
+        if action.id == Some(parent_id) {
+            action.task = reminders_task("Remind me");
+        } else if action.id == Some(copy_id) {
+            action.task = json!({ "sub_routine": "remind", "inputs": { "task": "Ship" } });
+            action.sub_routine = Some(SubRoutine {
+                parent_id,
+                created_by_run_id: id(PARENT_RUN),
+                key: Some(SubRoutineKey::new("task-1").unwrap()),
+                paused_by_parent: false,
+            });
+        }
+    }
+    let parent = stored(&service, parent_id);
+    start_run(&service, &parent, PARENT_RUN);
+    let before = stored(&service, copy_id);
+
+    // Moving the copy under its key, even with the same inputs.
+    let mut again = remind("Ship", Some("task-1"));
+    again.trigger =
+        serde_json::from_value(json!({ "type": "once", "at": "2031-01-01T09:00:00Z" })).unwrap();
+    assert_policy(
+        schedule(&service, again, from_code(&parent)).await,
+        ActionPolicyError::SubRoutinesDisabled,
+    );
+    assert_eq!(stored(&service, copy_id).next_run_at, before.next_run_at);
+
+    // Its owner can still make it a routine of its own.
+    let detached = service.detach_action(edit_receipt(copy_id)).await.unwrap();
+    assert_eq!(detached.sub_routine, None);
+    assert_eq!(
+        agent_instructions(&RoutineProgram::from_task(&detached.task).unwrap()),
+        "Remind me"
+    );
+}
+
+#[tokio::test]
 async fn detaching_a_copy_keeps_the_steps_it_ran_with_its_inputs() {
     let service = service(true);
     let parent = reminders(&service).await;
@@ -978,4 +1020,104 @@ async fn a_copy_never_writes_as_its_owner_though_its_parent_does() {
             .unwrap()
             .dangerously_operate_as_user
     );
+}
+
+/// Code Macro rewrote in a definition, unreviewed, stays off the owner's
+/// identity in a copy made standalone: detaching keeps the sources the copy
+/// holds, apart from its own upgrades, and switching it to write as its
+/// owner is refused until that code changes.
+#[tokio::test]
+async fn a_copy_made_standalone_keeps_its_parents_rewritten_code_off_its_owners_identity() {
+    let repo = Arc::clone(&service(true).repo);
+    let with = |upgrades: Rewritten| {
+        let (tx, mut rx) = tokio::sync::mpsc::channel(32);
+        tokio::spawn(async move { while rx.recv().await.is_some() {} });
+        ScheduledActionServiceImpl::new(
+            Arc::clone(&repo),
+            Arc::new(FakeExecutor::default()),
+            tx,
+            grants(&repo),
+        )
+        .with_event_routines(Rollout(Some(true)))
+        .with_code(
+            Arc::new(crate::domain::code_check::test::Checker::default()),
+            Arc::new(upgrades),
+        )
+    };
+    let rewritten = "export async function main() { /* rewritten */ }";
+    let mut task = reminders_task("Remind me");
+    task["sub_routines"][0]["steps"] =
+        json!([{ "type": "code", "title": "Remind", "source": rewritten }]);
+    let parent = with(Rewritten::default())
+        .create_action(
+            &user_principal(),
+            ActionConfiguration {
+                name: "Due reminders".into(),
+                task,
+                ..configuration(false)
+            },
+        )
+        .await
+        .unwrap();
+    let parent_id = parent.id.unwrap();
+    repo.running.lock().unwrap().push(RunningRun {
+        routine_id: parent_id,
+        parent_id: None,
+        owner: parent.owner.clone(),
+        run_id: id(PARENT_RUN),
+    });
+
+    // Macro rewrote the parent's definition.
+    let rewrote = with(Rewritten {
+        task: parent.task.clone(),
+        of: Some(parent_id),
+        ..Default::default()
+    });
+    let copy_id = rewrote
+        .schedule_sub_routine(&user_principal(), remind("Ship", None), from_code(&parent))
+        .await
+        .unwrap()
+        .into_action()
+        .id
+        .unwrap();
+    let detached = rewrote.detach_action(edit_receipt(copy_id)).await.unwrap();
+    assert_eq!(
+        *repo.inherited.lock().unwrap(),
+        [(copy_id, vec![rewritten.to_owned()])]
+    );
+
+    // It has no upgrades of its own; what it kept refuses its owner's identity.
+    let kept = with(Rewritten {
+        of: Some(parent_id),
+        inherited: vec![rewritten.to_owned()],
+        ..Default::default()
+    });
+    let mut as_owner = ActionConfiguration {
+        name: detached.name.clone(),
+        trigger: detached.trigger.clone(),
+        kind: detached.kind.clone(),
+        task: detached.task.clone(),
+        enabled: detached.enabled,
+        run_visibility: detached.run_visibility,
+        description: detached.description.clone(),
+    };
+    as_owner.task["dangerously_operate_as_user"] = json!(true);
+    assert_policy(
+        kept.update_action(
+            edit_receipt(copy_id),
+            update(as_owner.clone()),
+            Requester::Person,
+        )
+        .await,
+        ActionPolicyError::UnreviewedRewrite,
+    );
+    // Changed in its steps and in the definition it kept from its parent.
+    let reviewed = json!("export async function main() { /* reviewed */ }");
+    as_owner.task["steps"][0]["source"] = reviewed.clone();
+    as_owner.task["sub_routines"][0]["steps"][0]["source"] = reviewed;
+    let saved = kept
+        .update_action(edit_receipt(copy_id), update(as_owner), Requester::Person)
+        .await
+        .unwrap();
+    assert_eq!(saved.task["dangerously_operate_as_user"], true);
 }

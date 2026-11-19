@@ -1,6 +1,6 @@
 {
   "db_name": "PostgreSQL",
-  "query": "\n            SELECT id, owner, name, schedule, kind, timezone, task, claimed, created_at,\n                   updated_at, next_run_at, enabled, trigger_type, event_filters,\n                   configuration_revision, event_activated_at, trigger_config, run_visibility, template_id, appearance AS \"appearance: _\", suggestion_id,\n                   description, parent_id, created_by_run_id, child_key, paused_by_parent\n            FROM scheduled_action\n            WHERE parent_id = $1 AND child_key = $2\n            ",
+  "query": "\n            UPDATE scheduled_action\n            SET parent_id = NULL, created_by_run_id = NULL, child_key = NULL,\n                paused_by_parent = FALSE, updated_at = now()\n            WHERE id = $1\n            RETURNING id, owner, name, schedule, kind, timezone, task, claimed, created_at,\n                      updated_at, next_run_at, enabled, trigger_type, event_filters,\n                      configuration_revision, event_activated_at, trigger_config, run_visibility, template_id, appearance AS \"appearance: _\", suggestion_id,\n                      description, parent_id, created_by_run_id, child_key, paused_by_parent\n            ",
   "describe": {
     "columns": [
       {
@@ -136,8 +136,7 @@
     ],
     "parameters": {
       "Left": [
-        "Uuid",
-        "Text"
+        "Uuid"
       ]
     },
     "nullable": [
@@ -169,5 +168,5 @@
       false
     ]
   },
-  "hash": "c6c03ee568f162fe195a817d874a1a0ac7a8289117ee7ae9b9442efa52da20dc"
+  "hash": "9df7fdc5e01c71e77c6960ba64b95d7350cb340176307b906f44cff74ea54bf1"
 }

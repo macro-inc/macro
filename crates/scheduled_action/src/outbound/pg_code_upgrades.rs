@@ -257,6 +257,18 @@ impl CodeUpgrades for PgCodeUpgrades {
         })
     }
 
+    async fn inherited_rewrites(&self, action_id: Uuid) -> Result<Vec<String>> {
+        Ok(sqlx::query_scalar!(
+            r#"
+            SELECT sources FROM scheduled_action_inherited_rewrite WHERE action_id = $1
+            "#,
+            action_id,
+        )
+        .fetch_optional(&self.pool)
+        .await?
+        .unwrap_or_default())
+    }
+
     async fn list_upgrades(&self, action_id: Uuid) -> Result<Vec<CodeUpgrade>> {
         let rows = sqlx::query!(
             r#"

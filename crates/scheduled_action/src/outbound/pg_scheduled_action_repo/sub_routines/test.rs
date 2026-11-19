@@ -126,6 +126,35 @@ async fn a_parent_has_one_sub_routine_per_key(pool: PgPool) {
     assert_eq!(found.sub_routine, first.sub_routine);
 }
 
+/// The key's own index refuses a second create too, read as the same lost
+/// race, whichever of the two Postgres checks first.
+#[sqlx::test(migrator = "MACRO_DB_MIGRATIONS")]
+async fn the_keys_lookup_index_refuses_a_second_create_as_a_lost_race(pool: PgPool) {
+    insert_user(&pool, USER_A).await;
+    sqlx::query("DROP INDEX scheduled_action_parent_child_key_idx")
+        .execute(&pool)
+        .await
+        .unwrap();
+    let repo = test_repo(pool.clone());
+    let parent = repo
+        .create_action(sample_action(user_owner(USER_A), "parent"))
+        .await
+        .unwrap();
+    repo.create_action(child_of(&parent, "first", Some("task-1")))
+        .await
+        .unwrap();
+
+    let taken = repo
+        .create_action(child_of(&parent, "second", Some("task-1")))
+        .await
+        .unwrap_err();
+
+    assert!(matches!(
+        policy(&taken),
+        Some(ActionPolicyError::UpdateConflict)
+    ));
+}
+
 #[sqlx::test(migrator = "MACRO_DB_MIGRATIONS")]
 async fn deleting_a_parent_removes_its_sub_routines_and_their_registrations(pool: PgPool) {
     insert_user(&pool, USER_A).await;
@@ -311,8 +340,9 @@ async fn a_sub_routine_created_off_with_its_parent_keeps_that_mark(pool: PgPool)
 }
 
 #[sqlx::test(migrator = "MACRO_DB_MIGRATIONS")]
-async fn a_copy_kept_as_its_own_takes_its_parents_rewrites_in_the_same_write(pool: PgPool) {
-    use crate::domain::code_upgrade::UpgradeOutcome;
+async fn a_copy_kept_as_its_own_keeps_its_parents_rewritten_code_apart_from_its_upgrades(
+    pool: PgPool,
+) {
     use crate::domain::ports::CodeUpgrades;
     use crate::outbound::pg_code_upgrades::PgCodeUpgrades;
 
@@ -355,6 +385,8 @@ async fn a_copy_kept_as_its_own_takes_its_parents_rewrites_in_the_same_write(poo
         ..copy.clone()
     };
 
+    let written = vec!["new".to_owned()];
+
     // A write that lost a race, or under another parent, writes nothing.
     for (action, parent) in [
         (
@@ -366,40 +398,83 @@ async fn a_copy_kept_as_its_own_takes_its_parents_rewrites_in_the_same_write(poo
         ),
         (kept.clone(), generate_uuid_v7()),
     ] {
-        let refused = repo.detach_copy(action, &parent).await.unwrap_err();
+        let refused = repo
+            .detach_copy(action, &parent, &written)
+            .await
+            .unwrap_err();
         assert!(matches!(
             policy(&refused),
             Some(ActionPolicyError::UpdateConflict)
         ));
         let unchanged = repo.get_action(&copy.id.unwrap()).await.unwrap().unwrap();
         assert_eq!(
-            (unchanged.task, unchanged.sub_routine),
-            (copy.task.clone(), copy.sub_routine.clone())
+            (
+                unchanged.task,
+                unchanged.sub_routine,
+                unchanged.configuration_revision
+            ),
+            (
+                copy.task.clone(),
+                copy.sub_routine.clone(),
+                copy.configuration_revision
+            )
         );
         assert!(
             upgrades
-                .list_upgrades(copy.id.unwrap())
+                .inherited_rewrites(copy.id.unwrap())
                 .await
                 .unwrap()
                 .is_empty()
         );
     }
 
-    let detached = repo.detach_copy(kept.clone(), &parent_id).await.unwrap();
+    let detached = repo
+        .detach_copy(kept.clone(), &parent_id, &written)
+        .await
+        .unwrap();
     assert_eq!(detached.sub_routine, None);
     assert_eq!(detached.task, kept.task);
-    let history = upgrades.list_upgrades(copy.id.unwrap()).await.unwrap();
     assert_eq!(
-        history
-            .iter()
-            .map(|upgrade| (
-                upgrade.to_sdk.as_str(),
-                upgrade.outcome,
-                upgrade.task.as_ref()
-            ))
-            .collect::<Vec<_>>(),
-        [("0.3.0+new", UpgradeOutcome::Rewritten, Some(&rewritten))]
+        upgrades.inherited_rewrites(copy.id.unwrap()).await.unwrap(),
+        written
     );
+    // Its own upgrades start empty: it can claim the SDK its parent was
+    // rewritten for.
+    assert!(
+        upgrades
+            .list_upgrades(copy.id.unwrap())
+            .await
+            .unwrap()
+            .is_empty()
+    );
+    assert!(upgrades.claim_rewrite(&detached, &newer).await.unwrap());
     // Its parent keeps its own record.
     assert_eq!(upgrades.list_upgrades(parent_id).await.unwrap().len(), 1);
+
+    // A copy holding none of that code keeps nothing.
+    let plain = repo
+        .create_action(ScheduledAction {
+            task: json!({ "sub_routine": "remind" }),
+            ..child_of(&parent, "plain", Some("task-2"))
+        })
+        .await
+        .unwrap();
+    repo.detach_copy(
+        ScheduledAction {
+            task: json!({ "steps": code("mine") }),
+            configuration_revision: plain.configuration_revision.next().unwrap(),
+            ..plain.clone()
+        },
+        &parent_id,
+        &[],
+    )
+    .await
+    .unwrap();
+    assert!(
+        upgrades
+            .inherited_rewrites(plain.id.unwrap())
+            .await
+            .unwrap()
+            .is_empty()
+    );
 }

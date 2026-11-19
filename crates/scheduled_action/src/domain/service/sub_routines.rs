@@ -179,6 +179,10 @@ where
             sub_routine: definition.name.clone(),
             inputs: request.inputs,
         };
+        // Whether it makes a copy or moves the one under its key, even to
+        // the same inputs: with the rollout off, runs schedule nothing.
+        let owner = parent.owner_user()?;
+        self.check_sub_routines(&copy.task(), owner).await?;
         let input = ActionConfiguration {
             name: request
                 .name
@@ -324,11 +328,22 @@ where
                 description: action.description.clone(),
             };
             // Checked like any edit, then written and detached at once, so a
-            // failure leaves it a copy. It keeps the record of the code
-            // Macro rewrote in its parent, so that code can't write as its
-            // owner before they edit it.
+            // failure leaves it a copy. It keeps the code Macro wrote in its
+            // parent, so that code can't write as its owner before they
+            // change it.
             if let Replacement::Changed(action) = self.replacement(action, input, false).await? {
-                let detached = self.repo.detach_copy(action, &parent_id).await?;
+                let mut written = self.rewritten_sources(parent_id).await?;
+                written.extend(self.upgrades.inherited_rewrites(parent_id).await?);
+                let mut rewritten: Vec<String> = code_sources(&action.task)
+                    .into_iter()
+                    .filter(|source| written.contains(source))
+                    .collect();
+                rewritten.sort();
+                rewritten.dedup();
+                let detached = self
+                    .repo
+                    .detach_copy(action, &parent_id, &rewritten)
+                    .await?;
                 self.dispatcher_tx
                     .send(DispatchEvent::Update(detached.clone()))
                     .await

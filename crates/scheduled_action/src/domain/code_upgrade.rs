@@ -341,6 +341,10 @@ impl CodeUpgrades for NoCodeUpgrades {
     async fn list_upgrades(&self, _: Uuid) -> Result<Vec<CodeUpgrade>> {
         Ok(Vec::new())
     }
+
+    async fn inherited_rewrites(&self, _: Uuid) -> Result<Vec<String>> {
+        Ok(Vec::new())
+    }
 }
 
 /// What a sweep's dry run of a rewrite tells the code: no trigger, now, as

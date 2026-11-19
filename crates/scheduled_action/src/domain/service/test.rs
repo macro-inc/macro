@@ -47,6 +47,8 @@ pub(crate) struct FakeRepo {
     records: Mutex<Vec<ActionExecutionRecord>>,
     /// Runs in progress, as claims would show them.
     running: Mutex<Vec<RunningRun>>,
+    /// The parent's rewritten sources each copy kept when made standalone.
+    inherited: Mutex<Vec<(Uuid, Vec<String>)>>,
 }
 
 impl SubRoutines for FakeRepo {
@@ -124,6 +126,7 @@ impl SubRoutines for FakeRepo {
         &self,
         mut action: ScheduledAction,
         parent: &Uuid,
+        rewritten: &[String],
     ) -> Result<ScheduledAction> {
         let mut actions = self.actions.lock().unwrap();
         let stored = actions.iter_mut().find(|a| a.id == action.id).unwrap();
@@ -134,6 +137,12 @@ impl SubRoutines for FakeRepo {
         }
         action.sub_routine = None;
         *stored = action.clone();
+        if !rewritten.is_empty() {
+            self.inherited
+                .lock()
+                .unwrap()
+                .push((action.id.unwrap(), rewritten.to_vec()));
+        }
         Ok(action)
     }
 
@@ -1920,10 +1929,16 @@ async fn an_update_that_changes_nothing_keeps_the_revision() {
     );
 }
 
-/// Every routine's upgrades, newest first: a later release that found the
-/// code still checks, over a model's rewrite of the task it holds, saved
-/// with nobody reviewing it.
-struct Rewritten(serde_json::Value);
+/// The upgrades of `of` (of every routine when `None`), newest first: a
+/// later release that found the code still checks, over a model's rewrite of
+/// `task`, saved with nobody reviewing it. Every routine kept `inherited`
+/// from a parent.
+#[derive(Default)]
+struct Rewritten {
+    task: serde_json::Value,
+    of: Option<Uuid>,
+    inherited: Vec<String>,
+}
 
 impl crate::domain::ports::CodeUpgrades for Rewritten {
     async fn record_checked(
@@ -1971,7 +1986,10 @@ impl crate::domain::ports::CodeUpgrades for Rewritten {
         Ok(Default::default())
     }
 
-    async fn list_upgrades(&self, _: Uuid) -> Result<Vec<CodeUpgrade>> {
+    async fn list_upgrades(&self, id: Uuid) -> Result<Vec<CodeUpgrade>> {
+        if self.of.is_some_and(|of| of != id) {
+            return Ok(Vec::new());
+        }
         Ok(vec![
             CodeUpgrade {
                 id: Uuid::from_u128(2),
@@ -1979,7 +1997,7 @@ impl crate::domain::ports::CodeUpgrades for Rewritten {
                 to_sdk: "0.4.0+next".into(),
                 outcome: crate::domain::code_upgrade::UpgradeOutcome::Checked,
                 reason: None,
-                previous_task: self.0.clone(),
+                previous_task: self.task.clone(),
                 task: None,
                 created_at: chrono::Utc::now(),
                 updated_at: chrono::Utc::now(),
@@ -1991,11 +2009,15 @@ impl crate::domain::ports::CodeUpgrades for Rewritten {
                 outcome: crate::domain::code_upgrade::UpgradeOutcome::Rewritten,
                 reason: None,
                 previous_task: json!({}),
-                task: Some(self.0.clone()),
+                task: Some(self.task.clone()),
                 created_at: chrono::Utc::now(),
                 updated_at: chrono::Utc::now(),
             },
         ])
+    }
+
+    async fn inherited_rewrites(&self, _: Uuid) -> Result<Vec<String>> {
+        Ok(self.inherited.clone())
     }
 }
 
@@ -2035,7 +2057,10 @@ async fn an_unreviewed_rewrite_cannot_start_writing_as_the_owner() {
     .with_event_routines(Rollout(Some(true)))
     .with_code(
         Arc::new(crate::domain::code_check::test::Checker::default()),
-        Arc::new(Rewritten(created.task.clone())),
+        Arc::new(Rewritten {
+            task: created.task.clone(),
+            ..Default::default()
+        }),
     );
     let id = created.id.unwrap();
 
