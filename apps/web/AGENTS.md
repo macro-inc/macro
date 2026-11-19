@@ -662,7 +662,12 @@ It also pastes a Macro link and Markdown into a code block, which must keep both
 `caret.browser.e2e.ts` taps (press and release sent together) into a typed and
 a restored draft and checks the caret moves there: a click that reaches
 `MarkdownShell` before Lexical has read the selectionchange must not call
-`editor.focus()`, which writes the previous caret back.
+`editor.focus()`, which writes the previous caret back. Editor shells focus on
+click only through `focusEditorFromClick` (`LexicalMarkdown/utils.ts`), which
+skips the call while focus is already in the editor; the Markdown core suite's
+`caret.browser.e2e.ts` (composer, desktop/tablet/phone, with a padding tap) and
+the Universal Input suite's (the `MarkdownTextarea` email body, desktop/tablet)
+cover the same tap. `quick-tap.ts` in the core suite sends that tap.
 It also covers phone attaching: the add drawer opens the file picker within the
 tap, and when the iOS app's native photo library fails, a toast's Choose files
 button opens it, because WKWebView ignores a file input click made after the
