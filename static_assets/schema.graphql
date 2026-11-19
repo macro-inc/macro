@@ -752,6 +752,10 @@ input CreateSavedViewInput {
 	Current team to share with, or null for a private definition.
 	"""
 	sharedTeamId: ID
+	"""
+	Initial icon and color metadata, validated on first creation.
+	"""
+	appearance: JSON
 }
 
 """
@@ -7761,6 +7765,10 @@ type GraphqlSavedView {
 	Versioned filter configuration interpreted by the consuming feature.
 	"""
 	config: JSON!
+	"""
+	Icon and color metadata, separate from the filter configuration.
+	"""
+	appearance: JSON
 	"""
 	Team with effective access, or null when the definition is private.
 	"""

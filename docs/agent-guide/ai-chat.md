@@ -1031,6 +1031,23 @@ empty (a choice, a number, the question) keeps **Save** disabled, with the
 reason, until one is entered.
 A text knob with no value shows a + and its label (**Not set** under
 **Settings**) with a dashed underline, and opens the same editor.
+An item the step uses (an entity knob: a channel, document, folder, person,
+task, email thread, AI chat, CRM company, CRM contact, project, or database)
+shows by its icon and name and opens the same editor around the app's entity
+picker, showing only the kinds the knob accepts, email search included when
+email threads are one of them (for a database, a searchable list of the
+owner's databases). Picking an item only changes the draft, Enter included, and
+picking the picked item again keeps it; only **Clear** empties it, keeping
+**Save** disabled until one is picked. On touch it
+opens a sheet instead, with **Cancel**, **Clear** and **Done**, and only
+**Done** applies the pick. One not picked yet, as in a starter, shows the same
++ and its label with a dashed underline. Saving refuses an item the owner
+can't open. A run checks each picked item when the first step that uses it
+starts; one deleted, trashed or lost by then fails that step with the reason,
+before its code runs. On the routine's page such a knob shows
+its + and label dashed in red (**Needs a new pick** under **Settings**); its
+editor gives the reason and keeps **Save** (**Done** on touch) off until
+another item is picked.
 Each change saves only that value, never the code. Knobs the sentence
 doesn't show are listed under **Settings**; a step without a sentence shows
 its summary. **Edit** in a code step's ⋯ menu opens **Change this step**
@@ -1498,7 +1515,9 @@ Inline channel and discussion steps show the observed SDK operation names while
 code runs, using the same execution journal as the full session view. The final
 tool receipt carries those operations into the shared fold, so posted step
 snapshots retain the names and outcomes without exposing source or returned JSON.
-A code run without observed SDK requests reads as **Worked in your workspace**.
+A code run without observed SDK requests reads only as how far it got:
+**Working on it**, **Finished a step**, **A step failed**, or
+**Step interrupted**.
 People never see that the agent works in code: no surface names `ExecuteCode`,
 shows a program or its JSON, or words a step as code, scripts, the SDK or
 requests. `DescribeCodeTools`, `ReadCodeDocs`, `SearchTools` and `LoadTools`

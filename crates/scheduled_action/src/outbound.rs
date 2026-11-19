@@ -3,6 +3,7 @@ pub mod conn_gateway_live_updates;
 pub mod event_access;
 pub mod event_content;
 pub mod inprocess_executor;
+pub mod knob_entities;
 pub mod pg_code_upgrades;
 pub mod pg_draft_hand_backs;
 pub mod pg_event_run_repo;
