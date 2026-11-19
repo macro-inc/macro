@@ -81,3 +81,14 @@ fn the_version_is_twelve_hex_characters() {
     assert_eq!(version.len(), 12);
     assert!(version.chars().all(|c| c.is_ascii_hexdigit()));
 }
+
+/// Always allowed is the exception, for what can only restrict the agent:
+/// widening it is a decision, so the list is pinned here.
+#[test]
+fn only_self_restriction_is_always_allowed() {
+    let always: Vec<String> = operations()
+        .filter(|(_, _, operation)| operation.always_allowed)
+        .map(|(service, operation_id, _)| format!("{service}.{operation_id}"))
+        .collect();
+    assert_eq!(always, ["agent-harness.tighten_agent_tool_permissions"]);
+}

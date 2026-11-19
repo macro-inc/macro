@@ -27,6 +27,10 @@ through `apps/web/src/features/agent-permissions/core/registry.ts`.
   saves a file, may write (a query that can run any statement) or reaches
   an outside app is. Changing who can see or edit something is `send` in
   `sharing`. Labels are unique within a group.
+- Mark an operation `"always_allowed": true` only when it can do nothing
+  but restrict the agent itself (today: `tighten_agent_tool_permissions`):
+  no setting then applies to it, so a person's Ask or Never on its group
+  can't stop the agent restricting itself. The test pins the list.
 - Remove an operation the SDK dropped: delete its line.
 - New group: add it to `groups` (stable `id`, never renamed: settings are
   stored under it) and move operations into it.

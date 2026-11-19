@@ -11,16 +11,24 @@ resolves them against `agent_permission_registry`, and serves the HTTP API
 
 - Settings are sparse rows: a group's action (`documents:destroy`) or one
   operation (`storage.delete_document`). An operation's state is its own
-  setting, else its group's action, else always. A session overlay (an
-  agent's restrictions on itself for one session) can only make it stricter.
+  setting, else its group's action, else always. A person's operation
+  setting replaces its group's; one the agent made (`via_agent`) only adds
+  to it, taking the stricter of the two, so a person's later, stricter group
+  setting still applies. A session overlay (an agent's restrictions on itself
+  for one session) can only make it stricter.
+- Operations marked `always_allowed` in the registry (the agent's own
+  tightening) are outside the catalog: always allowed, and no setting can
+  name them.
 - Owned agents have one policy (`agent_tool_permission`); a built-in persona
   has one per person (`persona_tool_permission`), and in a session the
   owner's applies.
 - Tighten-only compares every operation's effective state before and after
-  the change (`domain/resolve.rs` `tighten_only`), both as asked and as
-  saved: a tool's `always` is saved as clearing its own setting, but asked
-  for under a stricter group it is refused (`would_loosen`), not a silent
-  no-op.
+  the change (`domain/resolve.rs` `tighten_only`). A tool's `always` is
+  saved as clearing its own setting; a tool state asked for that is looser
+  than the tool's state now (e.g. `always` under a stricter group) is refused
+  (`would_loosen`, `asks_looser`), not saved as a silent no-op.
+- Expected refusals (off, not found, forbidden, needs a person, would loosen,
+  unknown target) log at WARN; only `Internal` logs at ERROR.
 
 ## Start here
 
