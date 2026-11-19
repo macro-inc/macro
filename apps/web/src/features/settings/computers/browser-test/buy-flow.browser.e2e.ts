@@ -118,6 +118,10 @@ const dialog = (page: Page) => page.getByRole('dialog');
 // test does not answer itself is refused, so nothing reaches a real backend.
 test.beforeEach(async ({ page }) => {
   await page.route(/\.macro\.com\//, (route) => route.abort());
+  // Computers are on for this caller: the backend's rollout answer.
+  await page.route('**/auth/team/computers/rollout', (route) =>
+    route.fulfill({ status: 200, json: { enabled: true } })
+  );
   page.on('pageerror', (error) => console.log('pageerror', error.stack));
 });
 
@@ -143,17 +147,17 @@ async function openBuyFlow(
     await dialogOpened;
     return answer(route);
   });
-  await page.goto('/');
+  await page.goto('/?after=guided');
   await page.getByRole('button', { name: 'Get a computer' }).click();
   await expect(dialog(page)).toBeVisible();
   opened();
 }
 
-for (const ending of ['Try it', 'Create an agent on this computer'] as const)
+for (const ending of ["Chat with Maya's Agent", 'Add another agent'] as const)
   test(`shows a skeleton while sizes load, then the sizes, and buys through to ${ending}`, async ({
     page,
   }) => {
-    // The composer and Agents settings are large graphs on a cold server.
+    // Agents settings are a large graph on a cold server.
     test.setTimeout(120_000);
     let releaseOffers = () => {};
     const offersReady = new Promise<void>((resolve) => {
@@ -192,7 +196,7 @@ for (const ending of ['Try it', 'Create an agent on this computer'] as const)
       return json(route, 200, computers[0]);
     });
 
-    await page.goto('/');
+    await page.goto('/?after=guided');
     // Get a Macro computer leads Machines, with its facts and price.
     const entry = page.locator('[data-settings-target="get-macro-computer"]');
     await expect(
@@ -232,9 +236,10 @@ for (const ending of ['Try it', 'Create an agent on this computer'] as const)
     await dialog(page)
       .getByRole('button', { name: 'Buy · $80.00/month' })
       .click();
+    // Buy waits up to five seconds for the computer before setup goes on.
     await expect(
       dialog(page).getByRole('heading', { name: "Let's set up an agent on it" })
-    ).toBeVisible();
+    ).toBeVisible({ timeout: 10_000 });
     await expect(steps.getByRole('listitem').nth(1)).toHaveAttribute(
       'aria-current',
       'step'
@@ -246,11 +251,14 @@ for (const ending of ['Try it', 'Create an agent on this computer'] as const)
     const progressLine = dialog(page).getByRole('button', {
       name: /^(Updating billing…|Creating the computer) · \d+:\d\d$/,
     });
-    await expect(progressLine).toHaveText(/^Updating billing… · \d+:\d\d$/);
+    // The charge is confirmed within Buy's wait, so setup has moved on.
+    await expect(progressLine).toHaveText(/^Creating the computer · \d+:\d\d$/);
     await expect(progressLine).toHaveAttribute('aria-expanded', 'false');
     await expect(
       page.locator('[data-runtime-row="Maya\'s Agent Box"]')
-    ).toContainText(/Setting up · Updating billing… · \d+:\d\d/);
+    ).toContainText(
+      /Setting up · Creating the computer (\(1 of 3\) )?· \d+:\d\d/
+    );
     await shoot(page, 'buy-billing');
     // The whole step fits a desktop dialog without scrolling.
     if (!phone) {
@@ -293,7 +301,9 @@ for (const ending of ['Try it', 'Create an agent on this computer'] as const)
     ).not.toBeChecked();
     await expect(
       page.locator('[data-runtime-row="Maya\'s Agent Box"]')
-    ).toContainText(/Setting up · Creating the computer \(1 of 3\) · \d+:\d\d/);
+    ).toContainText(
+      /Setting up · Creating the computer (\(1 of 3\) )?· \d+:\d\d/
+    );
 
     await claudeChoice
       .getByText('Your Claude account', { exact: true })
@@ -381,37 +391,27 @@ for (const ending of ['Try it', 'Create an agent on this computer'] as const)
       'aria-current',
       'step'
     );
+    // One action: the chat with the agent it just set up; adding another
+    // agent is a quiet link.
+    await expect(
+      dialog(page).getByRole('button', { name: "Chat with Maya's Agent" })
+    ).toBeEnabled();
+    await expect(
+      dialog(page).getByRole('button', { name: 'Add another agent' })
+    ).toBeVisible();
     await expect(
       dialog(page).getByRole('button', { name: 'Try it' })
-    ).toBeEnabled();
-    await expect(
-      dialog(page).getByRole('button', {
-        name: 'Create an agent on this computer',
-      })
-    ).toBeEnabled();
+    ).toHaveCount(0);
     await shoot(page, 'buy-ready');
 
     await dialog(page).getByRole('button', { name: ending }).click();
     await expect(dialog(page)).toHaveCount(0);
-    if (ending === 'Try it') {
-      // A phone composer shows its agent once it is tapped.
-      if (phone)
-        await page.locator('[contenteditable="true"]').first().click({
-          timeout: 60_000,
-        });
-      // The composer starts in Code with the agent the flow configured.
-      await expect(page.getByRole('button', { name: 'Agent' })).toHaveAttribute(
-        'title',
-        /Maya's Agent/,
-        { timeout: 60_000 }
-      );
-      await expect(page.getByRole('radio', { name: 'Code' })).toBeChecked();
-      // A phone shows the agent as an icon; its sheet names the selection.
-      if (phone) {
-        await page.getByRole('button', { name: 'Agent' }).click();
-        await expect(page.getByText("Maya's Agent").first()).toBeVisible();
-      }
-      await shoot(page, 'try-it-composer');
+    if (ending !== 'Add another agent') {
+      // The agent's own chat, not a new Code conversation.
+      await expect(
+        page.getByRole('region', { name: 'Direct message' })
+      ).toHaveText('DM with bot-1');
+      await shoot(page, 'chat-with-agent');
       return;
     }
     // The create form, with this computer chosen under Where it runs.
@@ -493,14 +493,15 @@ test('keeps both Claude options reachable above the footer at short heights, wit
     json(route, 200, offers)
   );
 
-  await page.goto('/');
+  await page.goto('/?after=guided');
   await page.getByRole('button', { name: 'Get a computer' }).click();
   await dialog(page)
     .getByRole('button', { name: 'Buy · $40.00/month' })
     .click();
+  // Buy waits up to five seconds for the computer before setup goes on.
   await expect(
     dialog(page).getByRole('heading', { name: "Let's set up an agent on it" })
-  ).toBeVisible();
+  ).toBeVisible({ timeout: 10_000 });
 
   // Progress starts as the one collapsed line.
   const progressLine = dialog(page).getByRole('button', {
@@ -565,7 +566,7 @@ test('a failed setup says why, offers Retry, and carries on after it', async ({
     return json(route, 200, computer);
   });
 
-  await page.goto('/');
+  await page.goto('/?after=guided');
   await page.getByRole('button', { name: 'Get a computer' }).click();
   await dialog(page)
     .getByRole('button', { name: 'Buy · $40.00/month' })
@@ -574,7 +575,8 @@ test('a failed setup says why, offers Retry, and carries on after it', async ({
   // One banner at the top says what failed and why, in place of the line.
   const banner = dialog(page).getByRole('alert');
   await expect(banner).toHaveText(
-    "Couldn't create the computer: the host ran out of disk"
+    "Couldn't create the computer: the host ran out of disk",
+    { timeout: 10_000 }
   );
   await expect(
     dialog(page).getByRole('list', { name: 'Setup progress' })
@@ -743,4 +745,261 @@ test('with no size on offer, the step shows only why', async ({ page }) => {
     0
   );
   await shoot(page, 'no-sizes');
+});
+
+test('Buy is one dialog with no steps: it gets the computer, sets up its agent, and ends on Chat', async ({
+  page,
+}) => {
+  const up: ComputerStatus = {
+    ...computer,
+    status: 'ready',
+    setup: undefined,
+    poweredOn: true,
+    agentCount: 1,
+    harnessId: 'harness-1',
+    defaultAgentId: 'bot-1',
+  };
+  let computers: ComputerStatus[] = [];
+  let reads = 0;
+  await page.route('**/auth/team/computers', (route) => {
+    if (route.request().method() === 'GET') {
+      reads += 1;
+      // Up on the third read after the purchase, about a second later.
+      if (computers[0]?.status === 'setting_up' && reads > 3) computers = [up];
+      return json(route, 200, computers);
+    }
+    reads = 0;
+    computers = [{ ...computer, status: 'setting_up' }];
+    return json(route, 200, { computerId: 'computer-1', state: 'ready' });
+  });
+  await page.route('**/auth/team/computers/offers', (route) =>
+    json(route, 200, offers)
+  );
+  await page.route('**/auth/team/computers/*/setup-complete', (route) => {
+    computers = computers.map((current) => ({
+      ...current,
+      setupCompletedAt: '2026-01-02T00:00:00Z',
+    }));
+    return json(route, 200, computers[0]);
+  });
+
+  await page.goto('/');
+  await page.getByRole('button', { name: 'Get a computer' }).click();
+  const steps = dialog(page).getByRole('list', { name: 'Setup steps' });
+  await expect(dialog(page)).toContainText("It's ready in a couple of seconds");
+  await expect(steps).toHaveCount(0);
+  await dialog(page)
+    .getByRole('button', { name: 'Buy · $40.00/month' })
+    .click();
+  await expect(
+    dialog(page).getByRole('button', { name: 'Getting your computer…' })
+  ).toBeVisible();
+  // One status, on the button: no second line under it.
+  await expect(dialog(page).getByText('Starting it…')).toHaveCount(0);
+  await shoot(page, 'buy-getting');
+
+  // The computer's runtime connects and its agent is created server-side.
+  await page.evaluate(
+    ([registered]) => {
+      window.computerFixture.setHarnesses([registered]);
+      window.computerFixture.setAgents([
+        { bot: { id: 'bot-1', name: "Maya's Agent" }, harness_id: 'harness-1' },
+      ]);
+    },
+    [harness] as const
+  );
+  // The same dialog finishes setup on Macro credits, with no steps.
+  await expect(
+    dialog(page).getByRole('heading', { name: "Maya's Agent is ready" })
+  ).toBeVisible({ timeout: 10_000 });
+  await expect(steps).toHaveCount(0);
+  await expect(
+    dialog(page).getByRole('button', { name: 'Add another agent' })
+  ).toBeVisible();
+  await shoot(page, 'sync-ready');
+
+  await dialog(page)
+    .getByRole('button', { name: "Chat with Maya's Agent" })
+    .click();
+  await expect(dialog(page)).toHaveCount(0);
+  await expect(page.getByRole('region', { name: 'Direct message' })).toHaveText(
+    'DM with bot-1'
+  );
+});
+
+test('a runtime outside the rollout says so, and Retry visibly tries again', async ({
+  page,
+}) => {
+  const up: ComputerStatus = {
+    ...computer,
+    status: 'ready',
+    setup: undefined,
+    poweredOn: true,
+    agentCount: 1,
+    harnessId: 'harness-1',
+    defaultAgentId: 'bot-1',
+  };
+  let computers: ComputerStatus[] = [];
+  await page.route('**/auth/team/computers', (route) => {
+    if (route.request().method() === 'GET') return json(route, 200, computers);
+    computers = [up];
+    return json(route, 200, { computerId: 'computer-1', state: 'ready' });
+  });
+  await page.route('**/auth/team/computers/offers', (route) =>
+    json(route, 200, offers)
+  );
+  await page.route('**/auth/team/computers/*/setup-complete', (route) => {
+    computers = computers.map((current) => ({
+      ...current,
+      setupCompletedAt: '2026-01-02T00:00:00Z',
+    }));
+    return json(route, 200, computers[0]);
+  });
+
+  await page.goto('/');
+  // The harness answers 403 rollout_disabled until the account is let in.
+  await page.evaluate(() => {
+    window.computerFixture.claude.signOut = 'rollout_disabled';
+  });
+  await page.getByRole('button', { name: 'Get a computer' }).click();
+  await dialog(page)
+    .getByRole('button', { name: 'Buy · $40.00/month' })
+    .click();
+  await page.evaluate(
+    ([registered]) => {
+      window.computerFixture.setHarnesses([registered]);
+      window.computerFixture.setAgents([
+        { bot: { id: 'bot-1', name: "Maya's Agent" }, harness_id: 'harness-1' },
+      ]);
+    },
+    [harness] as const
+  );
+
+  const why = dialog(page).getByText(
+    "Computers aren't available for this account yet."
+  );
+  await expect(why).toBeVisible({ timeout: 10_000 });
+  await shoot(page, 'finish-rollout-disabled');
+  const retry = dialog(page).getByRole('button', { name: 'Retry' });
+  const callsBefore = await page.evaluate(
+    () => window.computerFixture.claude.signOutCalls
+  );
+  await retry.click();
+  // The attempt shows while it runs, then the same reason again.
+  await expect(
+    dialog(page).getByRole('button', { name: 'Retrying…' })
+  ).toBeVisible();
+  await expect(why).toBeVisible();
+  await expect(retry).toBeEnabled();
+  expect(
+    await page.evaluate(() => window.computerFixture.claude.signOutCalls)
+  ).toBe(callsBefore + 1);
+
+  // Let in: Retry finishes setup.
+  await page.evaluate(() => {
+    window.computerFixture.claude.signOut = 'ok';
+  });
+  await retry.click();
+  await expect(
+    dialog(page).getByRole('heading', { name: "Maya's Agent is ready" })
+  ).toBeVisible({ timeout: 10_000 });
+});
+
+test('a caller without rights to the computer is told so, with no Retry', async ({
+  page,
+}) => {
+  const up: ComputerStatus = {
+    ...computer,
+    status: 'ready',
+    setup: undefined,
+    poweredOn: true,
+    agentCount: 1,
+    harnessId: 'harness-1',
+    defaultAgentId: 'bot-1',
+  };
+  let computers: ComputerStatus[] = [];
+  await page.route('**/auth/team/computers', (route) => {
+    if (route.request().method() === 'GET') return json(route, 200, computers);
+    computers = [up];
+    return json(route, 200, { computerId: 'computer-1', state: 'ready' });
+  });
+  await page.route('**/auth/team/computers/offers', (route) =>
+    json(route, 200, offers)
+  );
+  await page.route('**/auth/team/computers/*/setup-complete', (route) => {
+    computers = computers.map((current) => ({
+      ...current,
+      setupCompletedAt: '2026-01-02T00:00:00Z',
+    }));
+    return json(route, 200, computers[0]);
+  });
+
+  await page.goto('/');
+  // The harness answers a bare 403: the buyer may not manage the computer.
+  await page.evaluate(() => {
+    window.computerFixture.claude.signOut = 'forbidden';
+  });
+  await page.getByRole('button', { name: 'Get a computer' }).click();
+  await dialog(page)
+    .getByRole('button', { name: 'Buy · $40.00/month' })
+    .click();
+  await page.evaluate(
+    ([registered]) => {
+      window.computerFixture.setHarnesses([registered]);
+      window.computerFixture.setAgents([
+        { bot: { id: 'bot-1', name: "Maya's Agent" }, harness_id: 'harness-1' },
+      ]);
+    },
+    [harness] as const
+  );
+
+  const why = dialog(page).getByText(
+    "You can't change this computer. Ask a team owner or admin."
+  );
+  await expect(why).toBeVisible({ timeout: 10_000 });
+  await shoot(page, 'finish-forbidden');
+  // Retrying can't give the caller the right.
+  await expect(dialog(page).getByRole('button', { name: 'Retry' })).toHaveCount(
+    0
+  );
+});
+
+test('a declined card keeps Buy open with Update card, and no room marks the size', async ({
+  page,
+}) => {
+  const refusals = [
+    { status: 402, body: { message: 'Declined', code: 'payment_declined' } },
+    {
+      status: 409,
+      body: { message: 'No room', code: 'no_room', size: 'standard' },
+    },
+  ];
+  await page.route('**/auth/team/computers', (route) => {
+    if (route.request().method() === 'GET') return json(route, 200, []);
+    const refusal = refusals.shift();
+    return refusal
+      ? json(route, refusal.status, refusal.body)
+      : json(route, 500, { message: 'unexpected' });
+  });
+  await page.route('**/auth/team/computers/offers', (route) =>
+    json(route, 200, offers)
+  );
+
+  await page.goto('/');
+  await page.getByRole('button', { name: 'Get a computer' }).click();
+  await dialog(page)
+    .getByRole('button', { name: 'Buy · $40.00/month' })
+    .click();
+  await expect(dialog(page)).toContainText('Your card was declined');
+  await expect(
+    dialog(page).getByRole('button', { name: 'Update card' })
+  ).toBeVisible();
+
+  await dialog(page)
+    .getByRole('button', { name: 'Try again · $40.00/month' })
+    .click();
+  await expect(dialog(page)).toContainText('No room for a Standard computer');
+  await expect(
+    dialog(page).getByRole('radio', { name: 'Standard' })
+  ).toBeDisabled();
 });

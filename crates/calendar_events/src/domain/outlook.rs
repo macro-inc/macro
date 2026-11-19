@@ -45,6 +45,10 @@ pub struct OutlookCalendarLease {
     /// [`OutlookCalendarReader::READER_REVISION`] of the worker holding the
     /// lease, which every event it reads is stamped with.
     pub reader_revision: i16,
+    /// Whether the calendar is a system calendar
+    /// ([`OutlookCalendar::is_system`]), whose next round is due a day after
+    /// one finishes rather than two minutes.
+    pub system_calendar: bool,
 }
 
 /// Complete discovery result for a provider calendar.
@@ -53,16 +57,50 @@ pub struct OutlookCalendar {
     pub calendar: ProviderCalendar,
     /// Meeting providers actually allowed by this calendar.
     pub online_meeting_providers: Vec<String>,
+    /// Who created or added the calendar, or shared it with the mailbox.
+    pub owner_address: Option<String>,
+    /// Whether someone shared the calendar with the mailbox.
+    pub shared_with_me: bool,
 }
 
-/// What committing a discovery changed, for the account's viewers.
+impl OutlookCalendar {
+    /// Whether this is one of the mailbox's own read-only system calendars,
+    /// such as its holidays or Birthdays calendar, which sync once a day
+    /// ([`SYSTEM_CALENDAR_SYNC_INTERVAL`]) as Google's system calendars do.
+    /// A read-only calendar someone shared with the mailbox is someone's
+    /// schedule and keeps the normal cadence.
+    pub fn is_system(&self, mailbox_address: &str) -> bool {
+        self.calendar.access_role.as_deref() == Some("reader")
+            && !self.calendar.is_primary
+            && !self.shared_with_me
+            && self
+                .owner_address
+                .as_deref()
+                .is_some_and(|owner| owner.eq_ignore_ascii_case(mailbox_address))
+    }
+}
+
+/// What a claim changed about the account's calendars, for their viewers: a
+/// discovery's calendars, or a calendar's sync error badge.
 #[derive(Clone, Copy, Debug, Default, PartialEq, Eq)]
 pub struct OutlookCalendarsChange {
     /// A calendar was added, removed or changed, so viewers refetch.
     pub changed: bool,
-    /// A calendar changed in a way that may move teammates' out-of-office
-    /// rows, by the rule Google's calendar list follows.
+    /// The change may move teammates' out-of-office rows: a discovery's
+    /// calendar changes, by the rule Google's calendar list follows, or a
+    /// sync error badge.
     pub team_ooo_changed: bool,
+}
+
+impl OutlookCalendarsChange {
+    /// A calendar's sync error badge showed, changed or cleared. Its sync
+    /// failures are a coverage failure for teammates' out-of-office rows,
+    /// which leave out an account or calendar with a stored error from its
+    /// first failure, so the hint cannot certify their rows unchanged.
+    const SYNC_ERROR_BADGE: Self = Self {
+        changed: true,
+        team_ooo_changed: true,
+    };
 }
 
 /// Every calendar one Outlook account can see.
@@ -165,6 +203,8 @@ pub enum OutlookCheckpoint {
     RoundFinished {
         /// Whether this was the calendar's first sync.
         first_sync: bool,
+        /// Whether the round cleared a sync error badge the calendar showed.
+        cleared_sync_error: bool,
     },
 }
 
@@ -269,12 +309,13 @@ pub trait OutlookCalendarRepository: CalendarRepository {
         lease: &OutlookCalendarLease,
         progress: OutlookCalendarProgress,
     ) -> impl Future<Output = Result<OutlookCheckpoint, Report>> + Send;
-    /// Persist a sanitized failure and release a matching lease for retry.
+    /// Persist a sanitized failure and release a matching lease for retry,
+    /// reporting whether the calendar's sync error badge showed or changed.
     fn fail_outlook_calendar(
         &self,
         lease: &OutlookCalendarLease,
         kind: CalendarProviderErrorKind,
-    ) -> impl Future<Output = Result<(), Report>> + Send;
+    ) -> impl Future<Output = Result<bool, Report>> + Send;
     /// Release a matching lease to retry after `delay`, recording no failure:
     /// Macro's own request admission refused a call, so nothing reached
     /// Microsoft.
@@ -368,8 +409,7 @@ impl<
         else {
             return Ok(false);
         };
-        let result = self.run_claim(&lease).await;
-        match &result {
+        let change = match self.run_claim(&lease).await {
             Err(error) if error.kind() == CalendarProviderErrorKind::Deferred => {
                 let delay = error
                     .retry_after()
@@ -381,18 +421,31 @@ impl<
                 return Ok(true);
             }
             Err(error) => {
-                self.repository
+                // The owner's viewers see a failure only once it shows or
+                // rewords the badge, so only those failures refresh them; a
+                // retry of the same failure stays quiet, so an outage does
+                // not refresh every client on every attempt.
+                if self
+                    .repository
                     .fail_outlook_calendar(&lease, error.kind())
-                    .await?;
+                    .await?
+                {
+                    self.refresh_viewers(&lease, OutlookCalendarsChange::SYNC_ERROR_BADGE)
+                        .await;
+                }
+                return Err(rootcause::report!(error).into());
             }
-            Ok(_) => {}
-        }
-        let discovered = result.map_err(|error| rootcause::report!(error))?;
+            Ok(change) => change,
+        };
         // As on Google, a discovery that found the calendars as stored sends
         // nothing. Each event it retired announces itself through the relay.
-        if let Some(change) = discovered
-            && change.changed
-        {
+        if let Some(change) = change {
+            self.refresh_viewers(&lease, change).await;
+        }
+        Ok(true)
+    }
+    async fn refresh_viewers(&self, lease: &OutlookCalendarLease, change: OutlookCalendarsChange) {
+        if change.changed {
             self.notifier
                 .calendar_changed(
                     &lease.owner_id,
@@ -401,7 +454,6 @@ impl<
                 )
                 .await;
         }
-        Ok(true)
     }
     #[tracing::instrument(
         name = "calendar.outlook_sync",
@@ -420,6 +472,7 @@ impl<
             skipped_occurrences = tracing::field::Empty,
             unmapped_time_zone = tracing::field::Empty,
             calendars_changed = tracing::field::Empty,
+            sync_error_cleared = tracing::field::Empty,
             error_kind = tracing::field::Empty,
         ),
         err(level = tracing::Level::DEBUG)
@@ -552,7 +605,17 @@ impl<
                     .await
                     .map_err(storage_error)?;
                 record_milestone(&span, lease, target, checkpoint);
-                Ok(None)
+                let cleared = matches!(
+                    checkpoint,
+                    OutlookCheckpoint::RoundFinished {
+                        cleared_sync_error: true,
+                        ..
+                    }
+                );
+                if cleared {
+                    span.record("sync_error_cleared", true);
+                }
+                Ok(cleared.then_some(OutlookCalendarsChange::SYNC_ERROR_BADGE))
             } else {
                 span.record("step", "discover");
                 let discovery = self.provider.calendars(&token, lease.binding).await?;
@@ -604,8 +667,13 @@ fn record_milestone(
 ) {
     let milestone = match checkpoint {
         OutlookCheckpoint::NearWindowImported => "near_window_imported",
-        OutlookCheckpoint::RoundFinished { first_sync: true } => "first_sync_finished",
-        OutlookCheckpoint::Step | OutlookCheckpoint::RoundFinished { first_sync: false } => {
+        OutlookCheckpoint::RoundFinished {
+            first_sync: true, ..
+        } => "first_sync_finished",
+        OutlookCheckpoint::Step
+        | OutlookCheckpoint::RoundFinished {
+            first_sync: false, ..
+        } => {
             return;
         }
     };
@@ -704,28 +772,31 @@ impl<
     /// revision that fails to publish keeps its lease and is claimed again
     /// once the lease expires, as a crash leaves it; the rest still complete.
     /// Returns whether the batch was full, so more may be due.
-    #[tracing::instrument(
-        name = "calendar.projection_relay",
-        skip_all,
-        fields(
-            claimed = tracing::field::Empty,
-            failed = tracing::field::Empty,
-            refreshes = tracing::field::Empty,
-        ),
-        err(level = tracing::Level::DEBUG)
-    )]
     pub async fn run_once(&self) -> Result<bool, Report> {
         let leases = self
             .repository
             .claim_projections(Uuid::now_v7(), PROJECTION_BATCH)
             .await?;
-        let span = tracing::Span::current();
-        let claimed = leases.len();
-        span.record("claimed", claimed as i64);
+        // An idle poll claims nothing and gets no span, so the relay's root
+        // spans are only the rounds that published something.
         if leases.is_empty() {
             return Ok(false);
         }
-
+        self.publish_batch(leases).await
+    }
+    #[tracing::instrument(
+        name = "calendar.projection_relay",
+        skip_all,
+        fields(
+            claimed = leases.len() as i64,
+            failed = tracing::field::Empty,
+            refreshes = tracing::field::Empty,
+        ),
+        err(level = tracing::Level::DEBUG)
+    )]
+    async fn publish_batch(&self, leases: Vec<CalendarProjectionLease>) -> Result<bool, Report> {
+        let span = tracing::Span::current();
+        let claimed = leases.len();
         let outcomes =
             futures::future::join_all(leases.iter().map(|lease| self.publish(lease))).await;
         if let Some(error) = outcomes.iter().find_map(|outcome| outcome.as_ref().err()) {

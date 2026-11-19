@@ -66,6 +66,14 @@ to the browser via `inbound/wasm`.
 - Debug a fold against a recorded session: `cargo run -p agent_fold --bin
   fold_jsonl -- <path>.jsonl`.
 
+`FoldedMessage::readable_text` flattens everything a reader can open, for
+session reads (`ReadAgentSession`); `searchable_text` keeps only what the
+collapsed transcript shows, for the search index: no thoughts, no work inside
+tool calls, no question forms or answers, no error text behind a disclosure,
+and no `<m-agent-context>` block a prompt hides (`stripAgentContext`). A new
+part, tool kind or widget decides both in `domain/model/search.rs`, by what
+its component shows before it is expanded.
+
 `FoldedMessage::last_text` supplies the same terminal prose to live lifecycle
 signals and harness recovery from a persisted log. Keep these interpretations
 aligned; recovery must never guess the answer from another turn.

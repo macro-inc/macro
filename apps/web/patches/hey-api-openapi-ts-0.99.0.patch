@@ -1,0 +1,15 @@
+diff --git a/dist/clients/core/serverSentEvents.ts b/dist/clients/core/serverSentEvents.ts
+index 16c6fbb780a3a399ac7d882e405bd24c82e57c7d..317d53cd0b05f5a00a124b90c50acdbf40d72e48 100644
+--- a/dist/clients/core/serverSentEvents.ts
++++ b/dist/clients/core/serverSentEvents.ts
+@@ -140,7 +140,9 @@ export function createSseClient<TData = unknown>({
+ 
+         const abortHandler = () => {
+           try {
+-            reader.cancel();
++            // An aborted fetch has already errored the body, so cancel()
++            // rejects with the abort: expected, never an unhandled rejection.
++            reader.cancel().catch(() => {});
+           } catch {
+             // noop
+           }

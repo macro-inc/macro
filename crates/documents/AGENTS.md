@@ -12,6 +12,9 @@ word docs, Illustrator/Photoshop files).
   Cargo features gate each module.
 - `src/domain/service.rs` + `src/domain/ports.rs`: orchestration and the ports
   adapters implement.
+- `src/domain/service/lifecycle.rs`: `DocumentLifecycleReads` supplies physical
+  existence/trash facts to trusted imports through the owning repository port.
+  Missing rows are false; read failures propagate. No viewer or content access.
 - `src/domain/content.rs`: document content storage model (markdown vs legacy
   Office formats, S3 locations).
 - `src/domain/docx_export.rs`: DOCX export readiness policy; empty parts mean
@@ -162,13 +165,18 @@ realtime appearance events do not re-ingest history.
   500, at most 20 batches per round. Its repository
   (`outbound/pg_released_attachments.rs`) restates
   `PgDocumentRepo::soft_delete_document`'s writes set-based; change the two
-  together, and keep its adoption checks (folder, grant or sharing change,
-  second version, PDF annotation, comment thread) in step with any new way to
-  file, share or edit a document. A document with no link left is trashed,
-  or kept as it is when adopted or already in the Trash. Each batch publishes
-  one `document.email_attachments_released` event naming its trashed and kept
-  documents; Soup realtime removes the trashed ones from open lists, as for
-  the documents of a trashed folder, and nothing else reacts per document.
+  together, and keep its adoption checks (folder, grant or sharing change, an
+  `edited` activity from `edit_document`, a second version without PDF
+  modification data, a placeable added, changed or removed in the PDF
+  viewer, PDF annotation, comment thread) in step with any new way to file,
+  share or edit a document. Opening is not adopting: the PDF viewer saves a
+  version holding only its modification data on the first open by anyone who
+  can edit, so a version alone proves nothing. A document with no link left
+  is trashed, or kept as it is when adopted or already in the Trash. Each
+  batch publishes one `document.email_attachments_released` event naming its
+  trashed and kept documents; Soup realtime removes the trashed ones from open
+  lists, as for the documents of a trashed folder, and nothing else reacts
+  per document.
   Link an existing document to an attachment with
   `create::link_live_document_email`: its key-share lock orders the link with
   the drain's `FOR UPDATE`, so a document the drain trashed after a reuse

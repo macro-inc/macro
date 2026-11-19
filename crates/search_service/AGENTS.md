@@ -115,6 +115,12 @@ per-entity-type search plus a unified search across them — mounted into
   change to any of these with the default model on rows that are really in the
   index, and a user whose memory does not describe the behavior under test.
 
+- Email search scopes by the owners of the inboxes the caller can reach
+  (`fetch_search_inboxes_for_macro_id`), so a link's mail matches until its
+  documents are deleted. An inbox whose disconnect has started (`deleting_at`)
+  is excluded by `link_id` at once, because search-processing deletes its
+  documents only after the email service purges its rows. Threads someone
+  else shared from such an inbox are not excluded.
 - Email filters mean what the Email list query means by them, applied before
   pagination (`domain/email_search.rs`). Shared threads are resolved from
   `entity_access` grants to the caller's sources, leaving out their own

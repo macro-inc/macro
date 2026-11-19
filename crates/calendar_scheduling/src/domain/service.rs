@@ -526,6 +526,7 @@ impl<R: Repository, C: Calendars, D: Directory> Service<R, C, D> {
                 attendance: BookingAttendance::Unknown,
                 reschedule_count: 0,
                 rescheduled_at: None,
+                abandoned_at: None,
                 location: event.location.clone(),
                 answers: request.answers,
                 question_labels: event
@@ -854,7 +855,22 @@ impl<R: Repository, C: Calendars, D: Directory> Service<R, C, D> {
         {
             return Err(Error::Conflict);
         }
+        // A create refused on its first attempt never reached the calendar,
+        // so there is no event to remove and the cancellation needs no
+        // calendar change.
+        if expected == BookingStatus::Failed
+            && record.operation.as_ref().is_some_and(|operation| {
+                operation.unsent && matches!(operation.kind, CalendarOperationKind::Create)
+            })
+        {
+            record.booking.status = BookingStatus::Cancelled;
+            record.booking.abandoned_at = None;
+            let cancelled = self.repository.update_booking(record, expected).await?;
+            tracing::info!(booking_id = %cancelled.booking.id, "scheduling booking cancelled; its calendar never received it");
+            return Ok(cancelled.booking);
+        }
         record.booking.status = BookingStatus::Processing;
+        record.booking.abandoned_at = None;
         record.operation = Some(CalendarOperation::new(CalendarOperationKind::Cancel));
         record = self.repository.update_booking(record, expected).await?;
         Ok(self.finish_operation(record).await?.booking)

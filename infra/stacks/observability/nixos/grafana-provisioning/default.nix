@@ -36,6 +36,12 @@ in
   # (its system's store path depends on it). `files` is a list of
   # { name = "<file>.json"; dashboard = <dashboard JSON>; }.
   dashboards = [
+    (provider "macro-email-focus" [
+      {
+        name = "email-focus-rollout.json";
+        dashboard = dashboard ./email-focus-dashboard.nix;
+      }
+    ])
     (provider "macro-prod-alerts" [
       {
         name = "prod-alerts.json";
@@ -52,6 +58,12 @@ in
       {
         name = "postgres.json";
         dashboard = dashboard ./database-dashboard.nix;
+      }
+    ])
+    (provider "macro-computers-fleet" [
+      {
+        name = "computers-fleet.json";
+        dashboard = dashboard ./computers-dashboard.nix;
       }
     ])
     (provider "macro-run-local" [

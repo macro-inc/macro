@@ -44,18 +44,51 @@ pub async fn process_upsert_message(
     message_id: Uuid,
     owner: &str,
 ) -> anyhow::Result<()> {
-    let message_info =
-        email_db_client::messages::get_parsed_search::get_parsed_search_message_by_id(
-            db,
-            &message_id,
-        )
-        .await
-        .context("failed to get message info")?;
-
-    let Some(mut message_info) = message_info else {
+    let Some(message_info) = load_search_message(db, message_id).await? else {
         return Ok(());
     };
+    index_message(opensearch_client, db, message_info, owner).await
+}
 
+/// Indexes a message sent from Macro under its current thread, then deletes
+/// the copies it left under other threads. A draft can change threads before
+/// it is sent (saved into another thread, sent from another inbox, or joined
+/// to the provider's existing conversation when the send completes), and
+/// nothing else removes its document under the old thread. The new copy is
+/// written before the old ones go; the old ones go even when the message is
+/// not indexed, such as a sent message without content.
+pub async fn process_upsert_sent_message(
+    opensearch_client: &OpensearchClient,
+    db: &PgPool,
+    message_id: Uuid,
+    owner: &str,
+) -> anyhow::Result<()> {
+    let Some(message_info) = load_search_message(db, message_id).await? else {
+        return Ok(());
+    };
+    let thread_id = message_info.thread_db_id;
+    index_message(opensearch_client, db, message_info, owner).await?;
+    opensearch_client
+        .delete_email_message_outside_thread(&message_id.to_string(), &thread_id.to_string())
+        .await?;
+    Ok(())
+}
+
+async fn load_search_message(
+    db: &PgPool,
+    message_id: Uuid,
+) -> anyhow::Result<Option<ParsedSearchMessage>> {
+    email_db_client::messages::get_parsed_search::get_parsed_search_message_by_id(db, &message_id)
+        .await
+        .context("failed to get message info")
+}
+
+async fn index_message(
+    opensearch_client: &OpensearchClient,
+    db: &PgPool,
+    mut message_info: ParsedSearchMessage,
+    owner: &str,
+) -> anyhow::Result<()> {
     // don't insert spam or trash messages
     if message_info.labels.iter().any(|label| {
         label.provider_id == system_labels::SPAM || label.provider_id == system_labels::TRASH
@@ -177,6 +210,7 @@ pub async fn process_upsert_thread_message(
             .context("failed to fetch thread properties for search index")?,
     );
 
+    let mut rejected_items = None;
     loop {
         let messages =
             email_db_client::messages::get_parsed_search::get_paginated_parsed_search_messages_by_thread_id(
@@ -199,7 +233,7 @@ pub async fn process_upsert_thread_message(
         for mut message in messages {
             match classify_thread_message(&message) {
                 ThreadMessageDisposition::Delete => {
-                    delete_message_ids.push(message.db_id);
+                    delete_message_ids.push(message.db_id.to_string());
                     continue;
                 }
                 ThreadMessageDisposition::SkipMissingContent => {
@@ -222,31 +256,31 @@ pub async fn process_upsert_thread_message(
             ));
         }
 
-        for message_id in delete_message_ids {
+        if !delete_message_ids.is_empty() {
             opensearch_client
-                .delete_email_message_by_id(&message_id.to_string(), index_override)
+                .delete_email_messages(&delete_message_ids, index_override)
                 .await?;
         }
 
-        if !upsert_email_message_args.is_empty() {
-            let result = opensearch_client
+        if !upsert_email_message_args.is_empty()
+            && let Err(error) = opensearch_client
                 .bulk_upsert_email_messages(&upsert_email_message_args, index_override)
-                .await?;
-
-            if result.failed > 0 {
-                tracing::warn!(
-                    failed = result.failed,
-                    errors = ?result.errors,
-                    "some email messages failed to upsert"
-                );
+                .await
+        {
+            // Items OpenSearch rejected on one page must not keep the later
+            // pages out of the index. A refusal stops the thread instead: the
+            // later pages would meet the same load.
+            if error.refusal().is_some() || error.failed_items() == 0 {
+                return Err(error.into());
             }
+            rejected_items.get_or_insert(error);
         }
 
         // Update offset
         message_offset += message_limit;
     }
 
-    Ok(())
+    rejected_items.map_or(Ok(()), |error| Err(error.into()))
 }
 
 pub async fn process_upsert_thread_batch_message(
@@ -282,7 +316,7 @@ pub async fn process_upsert_thread_batch_message(
     for mut message in messages {
         match classify_thread_message(&message) {
             ThreadMessageDisposition::Delete => {
-                delete_message_ids.push(message.db_id);
+                delete_message_ids.push(message.db_id.to_string());
                 continue;
             }
             ThreadMessageDisposition::SkipMissingContent => {
@@ -304,24 +338,16 @@ pub async fn process_upsert_thread_batch_message(
             .push(upsert_args(message, content, owner, properties, now_millis));
     }
 
-    for message_id in delete_message_ids {
+    if !delete_message_ids.is_empty() {
         opensearch_client
-            .delete_email_message_by_id(&message_id.to_string(), index_override)
+            .delete_email_messages(&delete_message_ids, index_override)
             .await?;
     }
 
     if !upsert_email_message_args.is_empty() {
-        let result = opensearch_client
+        opensearch_client
             .bulk_upsert_email_messages(&upsert_email_message_args, index_override)
             .await?;
-
-        if result.failed > 0 {
-            tracing::warn!(
-                failed = result.failed,
-                errors = ?result.errors,
-                "some email messages failed to upsert"
-            );
-        }
     }
 
     Ok(())

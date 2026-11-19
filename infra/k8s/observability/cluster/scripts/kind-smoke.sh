@@ -30,6 +30,12 @@ nix run "$(git rev-parse --show-toplevel)/infra/k8s/observability/cluster#bootst
 # On a kept cluster the applications may still show an older commit.
 kubectl --context "$context" -n argocd annotate applications --all \
   argocd.argoproj.io/refresh=hard --overwrite
+# Prod may render with auto-sync off (`macro.cluster.autoSync`); a test cluster
+# syncs everything without waiting for anyone.
+for app in $(kubectl --context "$context" -n argocd get applications -o name); do
+  kubectl --context "$context" -n argocd patch "$app" --type merge \
+    -p '{"spec":{"syncPolicy":{"automated":{"prune":true,"selfHeal":true}}}}'
+done
 
 # Every application must sync this commit. Without AWS some can't become
 # healthy: the load balancer controller can't look up its VPC, the

@@ -11,14 +11,13 @@ import { anInbox, PROVIDERS } from './harness/providers';
 import {
   calendarPeriods,
   holdDraftSaves,
-  lapseGrant,
   openPhoneSearch,
   phoneSearchField,
   phoneSearchResults,
   turnCalendarOff,
 } from './harness/states-elsewhere';
 import { phoneBody } from './harness/ways-compose1';
-import { disconnectInbox } from './harness/ways-elsewhere';
+import { disconnectInbox, lapseGrant } from './harness/ways-elsewhere';
 import { saw } from './ledger/record';
 
 const { defaultBrowserType: _browser, ...phone } = devices['iPhone 13'];

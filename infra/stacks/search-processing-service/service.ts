@@ -24,9 +24,10 @@ const gatewayLoadBalancer = getGatewayAlb();
 const BASE_NAME = 'search-processing';
 const REPO_ROOT = '../../..';
 // Autoscaling follows CPU, not Kafka lag, and a deploy sets the desired count:
-// keep production at three tasks while the email topic backlog drains, so a
-// deploy or a scale-in does not leave the consumer behind the topic's retention.
-const MIN_TASKS = stack === 'prod' ? 3 : 1;
+// keep production at six tasks, one per partition of the email topic, while
+// its backlog drains, so a deploy or a scale-in does not leave the consumer
+// behind the topic's retention and no task carries two partitions' backlog.
+const MIN_TASKS = stack === 'prod' ? 6 : 1;
 
 type Args = {
   clusterName: pulumi.Output<string> | string;

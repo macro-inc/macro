@@ -21,9 +21,13 @@ import { TASKS_TOUR } from '../tour';
 import { TasksFilterDrawer } from './TasksFilterDrawer';
 import { TaskDueDateRangeDialog } from './task-due-date-range-dialog';
 
-export function TasksControls() {
+/** `inline`: on touch, the filter trigger sits in an in-flow header row. */
+export function TasksControls(props: { inline?: boolean }) {
   return (
-    <Show when={!isTouchDevice()} fallback={<TasksFilterDrawer />}>
+    <Show
+      when={!isTouchDevice()}
+      fallback={<TasksFilterDrawer inline={props.inline} />}
+    >
       <DesktopTasksControls />
     </Show>
   );

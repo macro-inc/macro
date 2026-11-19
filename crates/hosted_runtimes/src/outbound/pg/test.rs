@@ -1,3 +1,4 @@
+use crate::domain::ports::HostScope;
 use std::str::FromStr;
 mod quarantine;
 mod redeploy;
@@ -5,6 +6,11 @@ mod redeploy;
 mod agents;
 mod billing_races;
 mod boot;
+mod effect_signals;
+mod host_scope;
+mod overcommit;
+mod overcommit_scenario;
+mod usage;
 
 use chrono::{Duration, TimeZone};
 use macro_db_migrator::MACRO_DB_MIGRATIONS;
@@ -126,6 +132,10 @@ async fn sold_out(repo: &PgComputerRepo) -> Vec<ComputerSize> {
         .collect()
 }
 
+/// A 16-vCPU host of `memory_gb` whose capacity is counted in units alone:
+/// `(memory_gb - reserve_gb) / 8` awake, `oversell_factor` sold per awake
+/// one, CPU never the scarcer, and a memory report that stays fresh and never
+/// fills, so live memory never refuses. Overcommit's own tests set the rest.
 async fn host(
     repo: &PgComputerRepo,
     name: &str,
@@ -133,14 +143,32 @@ async fn host(
     reserve_gb: u32,
     oversell_factor: u32,
 ) -> Host {
-    repo.register_host(HostRegistration {
-        name: name.to_owned(),
+    let registration = || HostRegistration {
+        name: crate::domain::models::HostName::try_new(name).unwrap(),
+        vcpus: 16,
         memory_gb,
-        reserve_gb,
-        oversell_factor,
-    })
+    };
+    let host = repo.register_host(registration()).await.unwrap();
+    sqlx::query!(
+        r#"
+        UPDATE hosted_runtime_host
+        SET cpu_allocation_percent = 100000, ram_allocation_percent = 100, reserved_vcpus = 0,
+            reserved_memory_gib = $2, oversell_factor = $3, memory_low_watermark_percent = 98,
+            memory_high_watermark_percent = 99, memory_hard_ceiling_percent = 100,
+            start_resident_memory_mib = 0, memory_report_freshness_seconds = 2000000000,
+            resident_memory_mib = 0, memory_reported_at = $4
+        WHERE id = $1
+        "#,
+        host.id.into_inner(),
+        i32::try_from(reserve_gb).unwrap(),
+        i32::try_from(oversell_factor).unwrap(),
+        now(),
+    )
+    .execute(&repo.pool)
     .await
-    .unwrap()
+    .unwrap();
+    // Registration recomputes the units from the row.
+    repo.register_host(registration()).await.unwrap()
 }
 
 #[sqlx::test(migrator = "MACRO_DB_MIGRATIONS")]
@@ -265,7 +293,13 @@ async fn converting_a_reservation_inserts_the_computer_and_its_creation_once(poo
         .unwrap();
     assert_eq!(stored, computer);
     let effects = repo
-        .lease_effects(EffectWorker::Fleet, 10, now(), now() + Duration::minutes(1))
+        .lease_effects(
+            EffectWorker::Fleet,
+            HostScope::Every,
+            10,
+            now(),
+            now() + Duration::minutes(1),
+        )
         .await
         .unwrap();
     assert_eq!(
@@ -324,7 +358,13 @@ async fn apply_stores_state_effects_and_timers_and_wakes_only_with_room(pool: Pg
     assert_eq!(first.state.phase, Phase::Provisioning { start: true });
     assert_eq!(second.state.phase, Phase::Provisioning { start: false });
     let mut leased = repo
-        .lease_effects(EffectWorker::Fleet, 10, now(), now() + Duration::minutes(1))
+        .lease_effects(
+            EffectWorker::Fleet,
+            HostScope::Every,
+            10,
+            now(),
+            now() + Duration::minutes(1),
+        )
         .await
         .unwrap();
     leased.sort_by_key(|pending| pending.computer_id.as_uuid());
@@ -354,9 +394,15 @@ async fn apply_stores_state_effects_and_timers_and_wakes_only_with_room(pool: Pg
     );
     // Leased effects stay hidden until their lease runs out.
     assert_eq!(
-        repo.lease_effects(EffectWorker::Fleet, 10, now(), now() + Duration::minutes(1))
-            .await
-            .unwrap(),
+        repo.lease_effects(
+            EffectWorker::Fleet,
+            HostScope::Every,
+            10,
+            now(),
+            now() + Duration::minutes(1)
+        )
+        .await
+        .unwrap(),
         vec![]
     );
 }
@@ -373,7 +419,13 @@ async fn a_computers_effects_run_one_at_a_time_in_order(pool: PgPool) {
     changed(&repo, id, Event::PowerOn, now()).await;
 
     let first = repo
-        .lease_effects(EffectWorker::Fleet, 10, now(), now() + Duration::minutes(1))
+        .lease_effects(
+            EffectWorker::Fleet,
+            HostScope::Every,
+            10,
+            now(),
+            now() + Duration::minutes(1),
+        )
         .await
         .unwrap();
     assert_eq!(first.len(), 1);
@@ -381,7 +433,13 @@ async fn a_computers_effects_run_one_at_a_time_in_order(pool: PgPool) {
     repo.complete_effect(first[0].id).await.unwrap();
 
     let second = repo
-        .lease_effects(EffectWorker::Fleet, 10, now(), now() + Duration::minutes(1))
+        .lease_effects(
+            EffectWorker::Fleet,
+            HostScope::Every,
+            10,
+            now(),
+            now() + Duration::minutes(1),
+        )
         .await
         .unwrap();
     assert_eq!(second.len(), 1);
@@ -395,7 +453,13 @@ async fn a_computers_effects_run_one_at_a_time_in_order(pool: PgPool) {
     repo.complete_effect(second[0].id).await.unwrap();
 
     let third = repo
-        .lease_effects(EffectWorker::Fleet, 10, now(), now() + Duration::minutes(1))
+        .lease_effects(
+            EffectWorker::Fleet,
+            HostScope::Every,
+            10,
+            now(),
+            now() + Duration::minutes(1),
+        )
         .await
         .unwrap();
     assert_eq!(third.len(), 1);
@@ -410,7 +474,7 @@ async fn a_replaced_timer_does_not_fire(pool: PgPool) {
     let id = bought(&repo, 1).await.id;
     changed(&repo, id, Event::InstanceStarted, now()).await;
     let due = repo
-        .due_timers(now() + Duration::hours(1), 10)
+        .due_timers(HostScope::Every, now() + Duration::hours(1), 10)
         .await
         .unwrap();
     assert_eq!(due.len(), 1);
@@ -452,6 +516,7 @@ async fn a_released_computer_frees_its_units_and_leaves_the_team_list(pool: PgPo
     let billing = repo
         .lease_effects(
             EffectWorker::Billing,
+            HostScope::Every,
             10,
             now(),
             now() + Duration::minutes(1),
@@ -580,6 +645,7 @@ async fn a_comped_reservation_converts_with_its_reason(pool: PgPool) {
     assert!(
         repo.lease_effects(
             EffectWorker::Billing,
+            HostScope::Every,
             10,
             now() + Duration::days(1),
             now() + Duration::days(2),
@@ -695,6 +761,7 @@ async fn deleting_the_buyer_keeps_computers_and_reservations(pool: PgPool) {
 mod enrollment;
 
 mod capacity;
+mod moves;
 mod waiting;
 
 #[sqlx::test(migrator = "MACRO_DB_MIGRATIONS")]
@@ -706,15 +773,7 @@ async fn fleet_attachment_tracks_host_heartbeat_freshness(pool: PgPool) {
         repo.attachment(now()).await.unwrap(),
         FleetAttachment::Detached
     );
-    let host = repo
-        .register_host(HostRegistration {
-            name: "heartbeat-test".to_owned(),
-            memory_gb: 32,
-            reserve_gb: 8,
-            oversell_factor: 2,
-        })
-        .await
-        .unwrap();
+    let host = host(&repo, "heartbeat-test", 32, 8, 2).await;
     assert_eq!(
         repo.attachment(Utc::now()).await.unwrap(),
         FleetAttachment::Attached

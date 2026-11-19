@@ -10,15 +10,18 @@ import {
   DocumentFileSidePanelSections,
   SidePanel,
 } from '@components/app/side-panel';
+import type { BlockName } from '@core/block';
 import { toEntityLoadError } from '@core/component/EntityLoadGate';
 import {
   getPermissions,
   hasPermissions,
   Permissions,
 } from '@core/component/SharePermissions';
+import { useIsAuthenticated } from '@core/context/user';
+import { trackOpen } from '@core/internal/track-open';
 import { fireAndForget } from '@core/util/fireAndForget';
 import SpinnerIcon from '@icon/system/regular/spinner.svg';
-import type { Span } from '@macro-inc/observability';
+import { type Span, Telemetry } from '@macro-inc/observability';
 import type { AccessLevel } from '@service-storage/generated/schemas/accessLevel';
 import type { DocumentMetadata } from '@service-storage/generated/schemas/documentMetadata';
 import { Button } from '@ui';
@@ -89,9 +92,6 @@ function FileDetailBodyState(props: {
             role="alert"
           >
             <span>This {props.label} couldn’t be displayed.</span>
-            <pre class="max-h-48 max-w-full overflow-auto whitespace-pre-wrap text-left text-failure text-xs">
-              {String(props.error)}
-            </pre>
             <Button variant="secondary" size="sm" onClick={props.onAction}>
               {props.actionLabel ?? 'Reset'}
             </Button>
@@ -107,7 +107,7 @@ export function FileDetailLoadGate<
 >(props: {
   documentId: string;
   /** The block the document opens as, reported on `open_entity`. */
-  entityType: string;
+  entityType: BlockName;
   label: string;
   load: (documentId: string, parentSpan?: Span) => Promise<T>;
   /**
@@ -120,6 +120,7 @@ export function FileDetailLoadGate<
   children: (data: T) => JSX.Element;
 }) {
   const analytics = useAnalytics();
+  const authenticated = useIsAuthenticated();
   const flow = useFlow();
   // Shown results are released when their content is disposed (after the
   // editor it rendered); the rest here. Each result is released once.
@@ -165,14 +166,16 @@ export function FileDetailLoadGate<
     load
   );
   usePending('document.resource', () => document.loading);
-  // Counts the open once per document, as BlockLoader does for blocks; access
-  // changes and retries reload the same document without reopening it.
+  // Counts and records the open once per loaded document; access changes and
+  // retries reload the same document without reopening it. A load cut short by
+  // revoked access is ready without a document and is not an open.
   let trackedDocumentId: string | undefined;
   createEffect(() => {
-    if (document.state !== 'ready') return;
+    if (document.state !== 'ready' || document.latest === undefined) return;
     const documentId = props.documentId;
     if (trackedDocumentId === documentId) return;
     trackedDocumentId = documentId;
+    trackOpen(documentId, props.entityType, authenticated);
     analytics.pageView(props.entityType);
     analytics.track('open_entity', {
       entityType: props.entityType,
@@ -228,14 +231,22 @@ export function FileDetailLoadGate<
             onCleanup(() => release(data));
             return (
               <ErrorBoundary
-                fallback={(error, reset) => (
-                  <FileDetailBodyState
-                    label={props.label}
-                    error={error}
-                    actionLabel="Reset"
-                    onAction={reset}
-                  />
-                )}
+                fallback={(error, reset) => {
+                  // A failed load is already on its `document.load` span.
+                  Telemetry.error(error, {
+                    surface: 'file-detail',
+                    'doc.type': props.entityType,
+                    'document.id': props.documentId,
+                  });
+                  return (
+                    <FileDetailBodyState
+                      label={props.label}
+                      error={error}
+                      actionLabel="Try again"
+                      onAction={reset}
+                    />
+                  );
+                }}
               >
                 {props.children(data)}
               </ErrorBoundary>

@@ -52,6 +52,15 @@ let
 in
 {
   options.macro.cluster = with lib; {
+    autoSync = mkOption {
+      type = types.bool;
+      default = true;
+      description = ''
+        Whether Argo CD applies each application as soon as `main` changes.
+        Off, every application waits for a sync from the Argo CD UI or CLI,
+        which shows its diff first.
+      '';
+    };
     name = mkOption {
       type = types.str;
       description = "EKS cluster name, as the AWS layer (`infra/k8s/observability/aws`) creates it.";
@@ -110,7 +119,7 @@ in
     chartsDir = ../charts;
     defaults = {
       syncPolicy.autoSync = {
-        enable = true;
+        enable = cfg.autoSync;
         prune = true;
         selfHeal = true;
       };

@@ -62,6 +62,7 @@ vi.mock('@queries/email/link', () => ({
 vi.mock('@service-email/client', () => ({
   emailClient: { init: mocks.provision },
   ALREADY_INITIALIZED_CODE: 'ALREADY_INITIALIZED',
+  INBOX_BEING_REMOVED_CODE: 'INBOX_BEING_REMOVED',
   NO_GMAIL_GRANT_CODE: 'NO_GMAIL_GRANT',
   SHARED_INBOX_CONFLICT_CODE: 'SHARED_INBOX_CONFLICT',
 }));

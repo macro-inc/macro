@@ -29,6 +29,10 @@ pub enum Event {
     RestartDue,
     /// The assigned host is unavailable.
     HostLost,
+    /// The computer's disks moved to another host, which is now its host
+    /// (`domain::moves`): a guest that ran boots there; any other stays as it is,
+    /// and its next start runs there.
+    Moved,
     /// Request power on.
     PowerOn,
     /// Request power off.
@@ -100,6 +104,33 @@ pub enum Event {
     PastDueGrace,
     /// Timer: the retained disk may now be deleted.
     RetentionExpired,
+    /// The agent teammate the computer was bought for reported itself
+    /// online.
+    AgentOnline,
+    /// Timer: [`AGENT_START_DEADLINE`] after macrod connected; an agent that
+    /// still hasn't reported online failed its start.
+    AgentStartDue,
+    /// The purchase of a computer released after failing its first start
+    /// was refunded.
+    PurchaseRefunded {
+        /// The credit note and refund that undid the charge.
+        refund: PurchaseRefund,
+    },
+    /// The purchase's charge reached the subscription as `subscription_item`.
+    ChargeSucceeded {
+        /// The computer's new item.
+        subscription_item: SubscriptionItemId,
+    },
+    /// The purchase's charge was refused, or settled with nothing charged:
+    /// the computer is released.
+    ChargeFailed {
+        /// Whether the buyer already heard of the refusal.
+        seen: DeclineSeen,
+    },
+    /// The purchase request could not answer its charge (the outcome was
+    /// unknown), or timer: it never did within [`CHARGE_TAKEOVER`]. The
+    /// billing worker takes the charge over.
+    ChargeUnsettled,
 }
 
 /// Why a requested change does not apply in the computer's state. Only
@@ -131,6 +162,12 @@ pub enum Rejected {
     /// The subscription is past due beyond its grace.
     #[error("the team subscription is past due; update the payment method first")]
     PastDue,
+    /// The purchase's charge has not settled yet.
+    #[error("this computer's payment is still being confirmed")]
+    PaymentPending,
+    /// Only a computer whose guest exists can move to another host.
+    #[error("this computer cannot move to another host now")]
+    NotMovable,
 }
 
 /// Timers a computer can have pending; at most one of each kind.
@@ -168,6 +205,10 @@ pub enum TimerKind {
     PastDueGrace,
     /// The retained disk may now be deleted.
     RetentionExpired,
+    /// The agent teammate's time to report online is up.
+    AgentStartDue,
+    /// The purchase request's time to answer its charge is up.
+    ChargeUnsettled,
 }
 
 impl TimerKind {
@@ -181,6 +222,8 @@ impl TimerKind {
             Self::BillingEnds => Event::BillingEnds,
             Self::PastDueGrace => Event::PastDueGrace,
             Self::RetentionExpired => Event::RetentionExpired,
+            Self::AgentStartDue => Event::AgentStartDue,
+            Self::ChargeUnsettled => Event::ChargeUnsettled,
         }
     }
 }
@@ -250,6 +293,31 @@ pub enum Effect {
         /// Ready, or why it failed.
         outcome: SetupOutcome,
     },
+    /// Hand the agent teammate the computer was bought for to its connected
+    /// macrod, which starts it. Sent on each connection while the agent
+    /// hasn't reported online.
+    DeliverAgent,
+    /// Refund the purchase of a computer released after failing its first
+    /// start, then remove its item without proration.
+    RefundPurchase {
+        /// The computer's item, still on the subscription.
+        subscription_item: SubscriptionItemId,
+    },
+    /// Take back the agent teammate a released computer was bought for, if
+    /// it was bought for one: its seat, membership, keys and repository.
+    UndoAgentInvite,
+    /// Charge a just-bought computer whose purchase request could not: its
+    /// item at the saved price plus the [`Billing::Charging`] extra items,
+    /// under the purchase's one key, so a replay never charges twice. The
+    /// last attempt settles the add for good. Answers with
+    /// [`Event::ChargeSucceeded`] or [`Event::ChargeFailed`].
+    Charge,
+    /// Fence the charge of a computer released while it was charging, so no
+    /// replay can send it, and deal with an item that landed anyway.
+    SettleCharge {
+        /// What to do with a landed item.
+        landed: LandedCharge,
+    },
 }
 
 /// How a computer's first setup ended, as its buyer hears it.
@@ -266,13 +334,34 @@ pub enum SetupOutcome {
         /// When setup gave up; tells one attempt's failure from the next.
         failed_at: DateTime<Utc>,
     },
+    /// Setup gave up a second time, so the computer was released, its
+    /// purchase refunded and an agent teammate it was bought for taken back.
+    Released {
+        /// Why the last attempt failed, as the team sees it.
+        failure: Failure,
+        /// When it gave up.
+        failed_at: DateTime<Utc>,
+    },
 }
 
 impl Effect {
+    /// Whether carrying it out brings a guest's memory onto its host: a
+    /// started creation, a start or a crash restart. Overcommit counts these
+    /// against the host until its next memory report.
+    pub fn starts_guest(&self) -> bool {
+        matches!(
+            self,
+            Self::Create { start: true, .. } | Self::Start { .. } | Self::Restart { .. }
+        )
+    }
+
     /// Which worker carries the effect out. Billing runs where Stripe lives.
     pub fn worker(&self) -> EffectWorker {
         match self {
-            Self::RemoveBillingItem { .. } => EffectWorker::Billing,
+            Self::RemoveBillingItem { .. }
+            | Self::RefundPurchase { .. }
+            | Self::Charge
+            | Self::SettleCharge { .. } => EffectWorker::Billing,
             Self::ScheduleTimer { .. } => EffectWorker::Timers,
             Self::Create { .. }
             | Self::Start { .. }
@@ -282,7 +371,9 @@ impl Effect {
             | Self::Destroy { .. }
             | Self::RevokeHarness
             | Self::PageOperator { .. }
-            | Self::NotifySetup { .. } => EffectWorker::Fleet,
+            | Self::NotifySetup { .. }
+            | Self::DeliverAgent => EffectWorker::Fleet,
+            Self::UndoAgentInvite => EffectWorker::Agents,
         }
     }
 }
@@ -299,6 +390,8 @@ pub enum EffectWorker {
     Fleet,
     /// Executes subscription operations.
     Billing,
+    /// Takes back agent teammates; runs where the agent teammates domain is.
+    Agents,
     /// Persists scheduled lifecycle events.
     Timers,
 }

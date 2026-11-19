@@ -61,10 +61,12 @@ import {
 import { createDraftAutosave } from './draft-autosave';
 import { observeDraftIdentity } from './draft-identity';
 import {
+  createAlreadySentSettlement,
   createDraftPersistence,
   deleteDraftForDiscard,
   type KeptAsNewDraftReason,
   recordKeptAsNewDraft,
+  type SentDraft,
 } from './draft-persistence';
 import { observeDraftRestoration } from './draft-restoration';
 import { createDraftSaveNotice } from './draft-save-notice';
@@ -430,18 +432,26 @@ export function createReplyComposer(
   // Register a callback so stale undoSend closures from a previous mount can
   // restore state into this (the live) component instance.
   let hasLocalChanges = false;
-  const restoreMountedReply = (snapshot: UndoReplySnapshot) => {
+  const restoreMountedReply = (
+    snapshot: UndoReplySnapshot,
+    mode?: 'notify'
+  ) => {
     const currentDraftId = savedDraftId();
-    if (
-      hasLocalChanges ||
-      (currentDraftId !== undefined && currentDraftId !== snapshot.draftId)
-    ) {
+    const differentDraft = currentDraftId !== snapshot.draftId;
+    // Durable Undo can already have restored this reply under its server ID.
+    // The ID alone cannot establish that the user wrote another reply.
+    const keptNewerReply =
+      mode === 'notify'
+        ? hasLocalChanges && differentDraft && editor() && collectDraft(true)
+        : hasLocalChanges || (currentDraftId !== undefined && differentDraft);
+    if (keptNewerReply) {
       props.notices.feedback.alert(
         'Your newer reply was kept. The earlier message was not reopened.'
       );
       props.setShowReply?.(true);
       return;
     }
+    if (mode === 'notify') return;
     const draftId = snapshot.draftId;
     hasLocalChanges = false;
     props.onEngaged?.();
@@ -518,9 +528,11 @@ export function createReplyComposer(
       // Keep the recovery snapshot available if restoring the server draft
       // fails. Consume it only after the authoritative restore succeeds.
       replyUndo.take(draftId);
-      // Resolve the live registration after cache updates and unmounts settle.
-      if (!draftRestored)
+      if (draftRestored) replyUndo.notifyMounted(undoKey, snapshot);
+      else {
+        // Resolve the legacy restore after cache updates and unmounts settle.
         setTimeout(() => replyUndo.restore(undoKey, snapshot), 0);
+      }
       props.setShowReply?.(true);
     }
   };
@@ -715,28 +727,12 @@ export function createReplyComposer(
     props.notices.feedback.failure(failureMessage);
   }
 
-  // Reset notifications must not autosave the draft that was just discarded.
-  const withDeletionGuard = async (run: () => Promise<void> | void) => {
-    setPendingDeletion(true);
-    autosave.cancel();
-    try {
-      await run();
-    } finally {
-      setTimeout(() => {
-        autosave.cancel();
-        setPendingDeletion(false);
-      }, 0);
-    }
-  };
   function handleAlreadySent() {
+    // Abort an awaiting Send directly, as a failed save that reads the draft
+    // as sent does.
     identityVersion += 1;
-    fireAndForget(
-      withDeletionGuard(() => {
-        resetState();
-        clearDraftState();
-      }),
-      'email-compose'
-    );
+    autosave.cancel();
+    fireAndForget(settleAlreadySent(), 'email-compose');
   }
 
   const persistence = createDraftPersistence({
@@ -825,7 +821,9 @@ export function createReplyComposer(
       schedule?.pending() ||
       schedule?.state().type === 'scheduled' ||
       terminalState() !== undefined ||
-      sendLocked(),
+      sendLocked() ||
+      // Until the composer settles a draft the server says was sent.
+      session.alreadySent(),
   });
   observeDraftRestoration({
     storage: props.drafts,
@@ -922,7 +920,8 @@ export function createReplyComposer(
       schedule.pending() ||
       schedule.state().type === 'scheduled' ||
       terminalState() ||
-      sendLocked()
+      sendLocked() ||
+      session.alreadySent()
     )
       return;
     hasLocalChanges = true;
@@ -1085,6 +1084,8 @@ export function createReplyComposer(
     if (deliveryBlocked()) return;
     if (scheduling() || movingInbox() || terminalState()) return;
     if (submitting() || pendingDeletion()) return;
+    // The composer is settling a draft the server says was sent.
+    if (session.alreadySent()) return;
     // Thread identity can be available before its account/alias catalog. Wait
     // rather than sending a new reply from the temporary primary fallback.
     if (props.accounts.loading() && !form.draft) {
@@ -1197,6 +1198,8 @@ export function createReplyComposer(
       if (result === 'scheduled' && schedule.state().type === 'scheduled') {
         const scheduledDraftId = savedDraftId();
         rememberCurrentReply();
+        // The confirmed schedule already contains these edits.
+        hasLocalChanges = false;
         // The scheduled draft stays in the thread with its "Scheduled for"
         // bar, as a reload shows it; clearing it hid it until a refresh.
         void Promise.resolve(
@@ -1407,7 +1410,8 @@ export function createReplyComposer(
           onUndone: async (undo) => {
             returnedToInbox = true;
             await restoreAfterUndoSend(
-              draftId,
+              // The outbox may resolve the client ID after we snapshot it.
+              undo?.draftRestored ? (currentDraftId ?? draftId) : draftId,
               result.threadId,
               inboxId,
               undo?.draftRestored
@@ -1521,10 +1525,15 @@ export function createReplyComposer(
             inboxId: activeInboxId(),
           });
         } catch (error) {
-          await reportPersistenceFailure(error, 'delete');
-          setPendingDeletion(false);
-          void lifecycle.refresh().catch(props.notices.reportError);
-          throw error;
+          // The draft went out meanwhile, so nothing is left to discard: the
+          // discard drops the text as asked instead of failing.
+          if (!session.alreadySent()) {
+            await reportPersistenceFailure(error, 'delete');
+            setPendingDeletion(false);
+            void lifecycle.refresh().catch(props.notices.reportError);
+            throw error;
+          }
+          props.notices.reportError(error);
         }
       }
       identityVersion += 1;
@@ -1708,40 +1717,58 @@ export function createReplyComposer(
         if (handledTerminalIdentity === `${state.draftId}:${state.type}`)
           return;
         handledTerminalIdentity = `${state.draftId}:${state.type}`;
-        // Only a confirmed schedule makes a delivery "the scheduled email"; any
-        // other draft was sent from another tab or device.
-        const wasScheduled = schedule.state().type === 'scheduled';
-        const unsavedEdits = persistence.unsavedEdits(
-          editVersion,
-          state.type === 'sent' ? state.sentCopy : undefined
-        );
-        if (unsavedEdits > 0) {
-          detachFromObsoleteDraft(
-            state.type === 'sent' ? 'sent-elsewhere' : 'changed-elsewhere',
-            unsavedEdits,
-            state.type !== 'sent'
-              ? 'The draft changed elsewhere. Your newer text was kept as a new draft.'
-              : wasScheduled
-                ? 'The scheduled email was sent while you were editing. Your newer text was kept as a new draft and was not sent.'
-                : 'This email was already sent. Your newer text was kept as a new draft and was not sent.'
-          );
-          return;
-        }
-
-        identityVersion += 1;
-        autosave.cancel();
-        resetState();
-        setTerminalState(state.type);
-        clearDraftState();
-        if (state.type === 'sent') {
-          if (wasScheduled)
-            props.notices.feedback.success('Scheduled email sent');
-        } else {
-          props.notices.feedback.alert('This draft is no longer available.');
-        }
+        settleTerminal(state);
       }
     )
   );
+
+  /**
+   * The draft was sent or deleted elsewhere. Edits it lacks are kept as a
+   * new draft (true); without any, the reply closes.
+   */
+  function settleTerminal(state: SentDraft | { type: 'missing' }): boolean {
+    // Only a confirmed schedule makes a delivery "the scheduled email"; any
+    // other draft was sent from another tab or device.
+    const wasScheduled = schedule.state().type === 'scheduled';
+    const unsavedEdits = persistence.unsavedEdits(
+      editVersion,
+      state.type === 'sent' ? state.sentCopy : undefined
+    );
+    // Edits that emptied the draft leave nothing to keep. Without its editor
+    // the composer cannot tell, and keeps them.
+    if (unsavedEdits > 0 && (!editor() || collectDraft())) {
+      detachFromObsoleteDraft(
+        state.type === 'sent' ? 'sent-elsewhere' : 'changed-elsewhere',
+        unsavedEdits,
+        state.type !== 'sent'
+          ? 'The draft changed elsewhere. Your newer text was kept as a new draft.'
+          : wasScheduled
+            ? 'The scheduled email was sent while you were editing. Your newer text was kept as a new draft and was not sent.'
+            : 'This email was already sent. Your newer text was kept as a new draft and was not sent.'
+      );
+      return true;
+    }
+
+    identityVersion += 1;
+    autosave.cancel();
+    resetState();
+    setTerminalState(state.type);
+    clearDraftState();
+    if (state.type === 'sent') {
+      if (wasScheduled) props.notices.feedback.success('Scheduled email sent');
+    } else {
+      props.notices.feedback.alert('This draft is no longer available.');
+    }
+    return false;
+  }
+
+  const settleAlreadySent = createAlreadySentSettlement({
+    session,
+    read: lifecycle.refreshIdentity,
+    notices: props.notices,
+    superseded: () => !mounted || pendingDeletion(),
+    settle: settleTerminal,
+  });
 
   const hasBodyText = () => bodyMacro().trim().length > 0;
   const editingDisabled = () =>
@@ -1781,7 +1808,8 @@ export function createReplyComposer(
     sendLocked() ||
     attachmentPersistence.uploading() ||
     attachmentLinks.uploading() ||
-    schedule.action() === 'unavailable';
+    schedule.action() === 'unavailable' ||
+    session.alreadySent();
   const toggleQuotedText = () => {
     if (editingDisabled()) return;
     const replyingTo = replyTarget;

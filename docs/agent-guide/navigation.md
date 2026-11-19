@@ -630,7 +630,9 @@ other splits remain intact.
 Ordinary rail, More-menu, and Go To shortcut navigation resumes opted-in apps'
 last locations during the current session, including nested details, tabs,
 filters, and local state registered with the split entry (such as scroll or
-selection). Views opt in with `useViewRestoration()`; views without the hook keep
+selection). A Go To shortcut that names a tab opens that tab
+instead: `g e` lands on Email's Signal and `g s` on Sent, as do their command
+menu entries. Views opt in with `useViewRestoration()`; views without the hook keep
 ordinary navigation behavior. The mobile dock uses the same memory; Search taps
 still start a fresh search. Memory is account-scoped and clears on reload,
 sign-out, or account changes. A leave guard stages each snapshot, but only a
@@ -760,14 +762,22 @@ lists, Routines' Discover tab), or the search found no rows, `ArrowDown` and
 search loads counts as having no rows until they arrive. `Enter` on one of Email's recent
 searches still moves to the list, which lands on the first row once that
 search's rows arrive.
-Home's and Chat's sidebar search fields follow the same rules, landing on the
-first matching row of the sidebar list; emptying the field from the list
+Home's, Chat's and Agents' sidebar search fields follow the same rules, landing
+on the first matching row of the sidebar list; emptying the field from the list
 collapses it back to the Search icon. An `Escape` pressed in the preview or
-conversation beside the sidebar leaves the search alone. Home's field stays
-open while its query filters the list, including after the sidebar remounts
-(a window narrowed and widened again), and its Search icon then closes the
-field and clears the query, as the field's X does in a list header. Agents' sidebar field does not yet: its
-conversation list has no keyboard navigation.
+conversation beside the sidebar leaves the search alone. Home's and Agents'
+fields stay open while their query filters the list, including after the
+sidebar remounts (a window narrowed and widened again), and the Search icon
+then closes the field and clears the query, as the field's X does in a list
+header.
+The Agents conversation list moves with `j`/`k` and the arrows through the rows
+of its open sections (Open PRs, the conversation groups, Archived), with `Home`
+and `End` for the ends; the row under the keyboard takes the hover fill.
+`Enter` opens it as a click does and `Shift+Enter` opens it in a new split.
+These keys belong to the sidebar only while focus is in it: pressed in the
+conversation beside it, they stay with the conversation. As in every list view,
+`Shift+Up`/`Shift+Down` belong to the list in that split, so moving to a split
+above or below takes `Shift+K`/`Shift+J` there.
 Mobile creation controls, search controls, and placement are unchanged.
 When multiple desktop splits are open, a **Close** (X) button appears in the
 sidebar title bar and closes that split, including
@@ -867,7 +877,12 @@ only update the open menu’s transient draft; they do not create email-service 
 unfinished emails with no subject, body, or recipients. Any supplied recipient
 must resolve to an email address, and a connected inbox is required. A successful
 save closes the menu and opens the saved draft when available; a
-failed save preserves the input. **Cmd/Ctrl+Enter** continues to send the email.
+failed save preserves the input. **Send email** (or **Cmd/Ctrl+Enter**) saves the
+email as a draft and sends that draft; a successful send closes the menu and
+opens the sent thread. While the menu stays open on a failed save or send, a
+retry uses the same draft rather than a second one; a retried send sends the
+saved draft without saving it again. Choosing another inbox after a failed
+send deletes that draft and saves a new one in the chosen inbox.
 Search mode embeds Global Search's editor, Type/In/From filter chips, and
 result rows with highlighted message snippets. Extraction first selects the search
 type, then uses its schema: Channels has In/From; Tasks has status, priority,
@@ -1094,12 +1109,13 @@ with a filled glyph also swap to it. More carries that selected state while the
 open view is one of the destinations it hides, so the island always shows where
 you are. Search, on its own island, stays an action at full ink.
 
-Notifications, Email, and Channels use the same reactive unread-presence checks
-as the desktop sidebar, via `useNavigationUnread`. Their accent dots clear when
-the represented items are read or completed, not merely when opening a view.
-Overflow destinations keep their dots in More; More itself has a dot when any
-hidden destination is unread. Resizing or reordering moves the indicator with
-its destination. These remain presence indicators, with no extra pagination.
+Notifications, Email, and Channels get unread indicators from the same
+`useNavigationUnread` hook as the desktop sidebar. Their accent dots clear when
+the represented items are read or completed. Overflow destinations keep their
+dots in More, and More itself has a dot when any hidden destination is unread.
+Resizing or reordering moves the indicator with its destination. See
+[Notifications](notifications.md#notifications-view--appnotifications) for the
+source of the dots and the opt-in for unread numbers.
 
 Open **More views → Customize dock** to change the order. Drag a row's handle immediately,
 without holding first, and move it across the **In dock** / **In More** boundary. The counts use the
@@ -1430,14 +1446,14 @@ Macro activity triggers by surface:
 - **Channels:** **Channel created**, **Message sent in channel**, and **@ mentioned in channel**.
 - **Documents:** **Document created** and **Document deleted**. Tasks are separate.
 - **Tasks:** **Task created**, **Status changed**, **Priority changed**, **Assignees changed**, **Due date changed**, **Project changed**, **Effort changed**, and **Any property changed**. Under **Changes to**, choose the values that start the routine, such as **Completed**, or leave **Any status**. A value counts only when the change adds it. Tags aren't properties and have no trigger.
-- **Email:** **New email received** in the routine owner's inbox, excluding spam, trash, drafts, and historical imports.
+- **Email:** **New email received** in any of the routine owner's inboxes (their own and each one delegated to them), excluding spam, trash, drafts, and historical imports.
 - **Calls:** **Call started**, for calls the routine owner starts (receives the call and who has joined so far); and **Call ended**, for channel calls and meetings the owner joined (receives participants and transcript, cut short for long calls).
 - **GitHub:** presets for **Workflow failed**, **Workflow finished**, **Pull request opened**, **Pull request merged**, **Review requested**, **Review submitted**, **Issue opened**, **Comment added**, **Code pushed**, **Release published**, and **Any GitHub event**, from repositories Macro's GitHub app reaches for the routine owner. Until the owner connects GitHub, the group shows **Connect GitHub** instead.
 
 For messages, mentions, deletion, and task changes, use **Applies to** in the
 same panel to choose any accessible item or specific channels/documents/tasks.
 Specific-item pickers append later loaded pages as they scroll (or on PageDown).
-Creation triggers cover newly created accessible items; email covers the owner's inbox;
+Creation triggers cover newly created accessible items; email covers the owner's inboxes;
 **Call started** shows **Calls you start** and **Call ended** shows **Calls you
 join** — neither has an item picker. Calls the owner did not start never trigger
 **Call started**; calls they did not join never trigger **Call ended**. Mentions match only @ mentions of the routine owner. **Any property changed**
@@ -1762,12 +1778,27 @@ CRM record or the CRM feature. Search by name or email. Selecting a person opens
 their direct message; an existing one-to-one DM replaces the person row without
 losing name/email matches, including DMs found by typed search beyond the recent
 channel list. Group DMs stay separate, and the viewer is excluded
-from person results. Empty queries keep the existing recency lists. Verify a
-teammate with no DM or CRM record in both categories, including with CRM disabled,
+from person results. Empty queries keep the existing recency lists, with people
+outside the team after the recent rows, before the command catalog that starts
+at the first never-used command.
+Verify a teammate with no DM or CRM record in both categories, including with
+CRM disabled,
 then verify that loading their DM produces one row and that Files/Channels do not
 show that person. Also verify a typed match whose DM is absent from the recent
 list: desktop and mobile should show one DM row, including after a same-email CRM
 contact arrives, with its alias still searchable.
+
+People outside the viewer's team (email and CRM contacts, Macro users on other
+teams, and one-to-one DMs with them) list after every row from the team in
+Cmd+K and mobile name search, typed or not: after teammates, channels,
+documents and group DMs, even rows that only contain the query (before typing,
+ahead of the command catalog that ends the list). Among themselves they keep the
+usual order, people the viewer messages first. Typing such a person's exact
+email address, or a full name of two or more words, ranks them among the team's
+results where someone never messaged would rank, even when the viewer messages
+them. Verify with a team member and
+outside contacts sharing a first name, a one-letter query, the empty **All**
+list, a full name a teammate and an outside contact share, and an outside email.
 
 Duplicate-row verification: [desktop](media/command/deduplicated-person-desktop.png)
 and [phone](media/command/deduplicated-person-mobile.png) use the real command and
@@ -1790,11 +1821,26 @@ after typing stops and pages 100 contacts at a time, so contacts beyond the firs
 usual recency lists without contacts. A contact whose email belongs to a Macro user
 appears as that person instead, even when only the CRM name matched: their existing
 direct message when you have one, otherwise the person, and selecting them opens a
-direct message. Matching direct messages and Macro users rank ahead of CRM contacts,
-even when the conversation is old or has no recorded activity. Relevance and recency
-still order results within each group; other result types keep their positions.
+direct message. Matching direct messages rank ahead of CRM contacts that match as
+well, even when the conversation is old, and Macro users lead CRM contacts listed
+next to them that match as well. Relevance and recency still order results within
+each group.
 Verify this in both People and All with a recent CRM contact and a matching DM last
 viewed more than 30 days ago, including when server contacts arrive after the DM.
+
+People you never messaged (not a teammate, no direct message), CRM contacts and
+email-only correspondents included, rank after your own projects, channels,
+documents, agents and commands and after the people you know, among names with
+a word starting with what you typed, however exactly their name matches: typing
+`lee` lists Jordan Lee, whom you message, above a stranger named Leela. Rows
+that only contain the query mid-word follow, strangers last among them; people
+outside your team come after all of these (see above). The People tab ranks the
+same way over people only.
+To verify on dev as gab@, type `macro` and `rand` in All: your `macro`-named
+channels, companies, tasks and files, and the tasks and files with a word
+starting with `rand`, list before the email-only accounts whose names start
+with those letters; then type the first name of a teammate you DM and check
+they lead the never-messaged accounts with the same first name.
 Other contacts show their email and open the contact page; Enter and
 click open in place, Shift+Enter in a new split. A server match that arrives after
 typing takes the default selection from the Search for… row. Global Search does not
@@ -1877,9 +1923,14 @@ restart rules still apply.
 - `#` — move email to Trash, with an Undo toast. Works on the selected or focused
   rows in a mail list and on the thread open in an email detail or block. Email
   only; other entity types keep Delete/Backspace and do not answer `#`.
-- `g` then `h` — Home; `g` then `i` remains an alias. While Email is focused,
-  `g i`/`o`/`s`/`t`/`d`/`e`/`a` open its tabs instead (`g i` Signal, `g t` Sent;
-  see `email.md`); `g h` still goes Home.
+- `g` then a letter goes to a view, the same from every view (no view takes
+  over an app-wide letter) and never while an editor or input has focus:
+  `h` Home (`i` too unless Notifications is on the rail), `a` Agents, `e` Email
+  on Signal, `s` Email on Sent, `f` Files, `d` Documents, `t` Tasks, `r`
+  Calendar, `c` Channels, `o` Customers, and with their flags `i`
+  Notifications, `n` Recent, `y` Activity, `l` Calls, `v` Reviews, `x`
+  External. A view may add letters the app doesn't use (`g g` jumps to the top
+  of a list).
 - In Email and Tasks search, `Escape` returns focus to the list and keeps the query.
   Use the search field's clear button to clear it.
 - Splits: `` ` `` split, `Shift+Esc` maximize. `Shift+H`/`J`/`K`/`L` and

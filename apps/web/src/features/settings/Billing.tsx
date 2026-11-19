@@ -1,10 +1,9 @@
 import { useAnalytics } from '@app/lib/analytics/analytics-context';
-import { useFeatureFlag } from '@app/lib/analytics/posthog';
 import { t } from '@app/lib/i18n';
 import { TraceFlow } from '@app/observability/flow';
 import { useHasPaidAccess } from '@core/auth';
 import { toast } from '@core/component/Toast/Toast';
-import { enableMacroComputers, LOCAL_ONLY } from '@core/constant/featureFlags';
+import { LOCAL_ONLY } from '@core/constant/featureFlags';
 import { PERMISSION_IDS } from '@core/constant/permissions';
 import {
   useLicenseStatus,
@@ -21,6 +20,7 @@ import {
   useSubscriptionStatusQuery,
   useTrialEligibilityQuery,
 } from '@queries/auth';
+import { useMacroComputersRollout } from '@queries/computers/computers';
 import { queryReadyGate } from '@queries/gate';
 import { useCurrentTeamQuery } from '@queries/team/teams';
 import type { PaidPlan } from '@service-auth/ai-billing-types';
@@ -63,7 +63,7 @@ function LiveBilling(props: { controls?: JSX.Element }) {
   const userId = useUserId();
   const team = useCurrentTeamQuery();
   const summary = useAiBillingSummaryQuery();
-  const macroComputers = useFeatureFlag(enableMacroComputers);
+  const macroComputers = useMacroComputersRollout();
   const changePlan = useChangePlanMutation();
   const checkout = useCreateCheckoutSessionMutation();
   const portal = useCreateBillingPortalMutation();

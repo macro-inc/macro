@@ -12,7 +12,6 @@ import { EmailParticipants } from './views/email-participants';
 
 const mocks = vi.hoisted(() => ({
   query: vi.fn(),
-  clearDraft: vi.fn(),
   source: vi.fn(),
   rendering: vi.fn<(rendering: EmailThreadViewContext['rendering']) => void>(),
   started: [] as Promise<void>[],
@@ -23,9 +22,6 @@ vi.mock('@app/features/email-message/components/email-user-tooltip', () => ({
 }));
 vi.mock('@property/tags', () => ({ InlineFetchedEntityTagsPill: () => null }));
 vi.mock('@queries/email/thread', () => ({ useThreadQuery: mocks.query }));
-vi.mock('@queries/email/draft-cache', () => ({
-  clearSavedDraftThreadCache: mocks.clearDraft,
-}));
 vi.mock('@components/app/GlobalAppState', () => ({
   useGlobalNotificationSource: () => ({}),
 }));
@@ -144,7 +140,6 @@ describe('email thread query ownership', () => {
     expect(fetchOlder).toHaveBeenCalledOnce();
     expect(refresh).toHaveBeenCalledOnce();
     view.unmount();
-    expect(mocks.clearDraft).toHaveBeenCalledWith('thread');
     await Promise.all(mocks.started);
   });
 

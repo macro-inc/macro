@@ -54,6 +54,7 @@ import type { VirtualizerHandle } from 'virtua/solid';
 import { DeleteProjectsDialog } from '../components/delete-projects-dialog';
 import {
   PROJECT_GRID_COLUMNS,
+  PROJECT_TOUCH_GRID_COLUMNS,
   ProjectListHeader,
   ProjectRow,
 } from '../components/project-row';
@@ -109,6 +110,8 @@ export function ProjectsCollection(props: {
   let searchInput: HTMLInputElement | undefined;
   let focusSearch: (() => void) | undefined;
   const [openMenu, setOpenMenu] = createSignal<'filters' | 'sort'>();
+  const columns = () =>
+    isTouchDevice() ? PROJECT_TOUCH_GRID_COLUMNS : PROJECT_GRID_COLUMNS;
   const isGantt = () =>
     props.ganttEnabled && !isTouchDevice() && collection.layout() === 'gantt';
   const definition = (id: string) =>
@@ -663,7 +666,9 @@ export function ProjectsCollection(props: {
               tabIndex={0}
               class="soup-list @container/u-list relative flex size-full min-h-0 min-w-0 flex-col overflow-hidden outline-none"
             >
-              <ProjectListHeader />
+              <Show when={!isTouchDevice()}>
+                <ProjectListHeader />
+              </Show>
               <Show when={backgroundError()}>
                 <p role="status" class="px-3 text-xs text-ink-muted">
                   Could not refresh projects. Showing the last loaded list.
@@ -729,7 +734,7 @@ export function ProjectsCollection(props: {
                           {(group) => (
                             <TaskGroupHeader
                               row={group()}
-                              columnCount={PROJECT_GRID_COLUMNS.length}
+                              columnCount={columns().length}
                               groupBy={collection.groupBy()}
                               expanded={collection.disclosure.isExpanded(
                                 group().groupId
@@ -757,6 +762,7 @@ export function ProjectsCollection(props: {
                               <ProjectRow
                                 rowId={item().id}
                                 row={item().entity}
+                                columns={columns()}
                                 highlighted={list.focus.isFocused(item().id)}
                                 checked={list.selection.isSelected(item().id)}
                                 onFocus={() =>
@@ -803,7 +809,7 @@ export function ProjectsCollection(props: {
                             <div role="row" id={more().id}>
                               <div
                                 role="gridcell"
-                                aria-colspan={PROJECT_GRID_COLUMNS.length}
+                                aria-colspan={columns().length}
                                 class="flex justify-center py-2"
                               >
                                 <Button
