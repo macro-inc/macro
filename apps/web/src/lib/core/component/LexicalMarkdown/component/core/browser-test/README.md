@@ -106,5 +106,6 @@ and taps into a typed two-line draft with the press and release sent together
 types and checks where the text landed. A click that reached the shell before
 Lexical had read the browser's selectionchange used to re-focus the editor and
 write the previous caret back. A tap on the padding must still focus the
-composer on desktop and tablet; phones leave it alone. Other suites import
+composer on desktop and tablet. Phones never re-focus the composer on a tap,
+so the phone run only checks that the tap lands. Other suites import
 `quick-tap.ts` for the same check (Universal Input's email body).

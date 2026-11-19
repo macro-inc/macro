@@ -16,7 +16,8 @@ async function openEmailBody(page: Page) {
     name: 'Outgoing message',
     exact: true,
   });
-  await expect(body).toBeVisible();
+  // Wait for the extracted body, so it cannot replace the typed one.
+  await expect(body).toHaveText('I’ll be late');
   await body.click();
   await page.keyboard.press('ControlOrMeta+A');
   await page.keyboard.type(LINES[0]);

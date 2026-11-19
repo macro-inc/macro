@@ -665,9 +665,10 @@ a restored draft and checks the caret moves there: a click that reaches
 `editor.focus()`, which writes the previous caret back. Editor shells focus on
 click only through `focusEditorFromClick` (`LexicalMarkdown/utils.ts`), which
 skips the call while focus is already in the editor; the Markdown core suite's
-`caret.browser.e2e.ts` (composer, desktop/tablet/phone, with a padding tap) and
-the Universal Input suite's (the `MarkdownTextarea` email body, desktop/tablet)
-cover the same tap. `quick-tap.ts` in the core suite sends that tap.
+`caret.browser.e2e.ts` (composer on desktop and tablet, with a padding tap; phones
+never re-focus there) and the Universal Input suite's (the `MarkdownTextarea`
+email body, desktop/tablet) cover the same tap, sent by the core suite's
+`quick-tap.ts`.
 It also covers phone attaching: the add drawer opens the file picker within the
 tap, and when the iOS app's native photo library fails, a toast's Choose files
 button opens it, because WKWebView ignores a file input click made after the
