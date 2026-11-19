@@ -1,4 +1,5 @@
 import { cleanup, fireEvent, render, screen } from '@solidjs/testing-library';
+import type { JSX } from 'solid-js';
 import { afterEach, beforeEach, expect, it, vi } from 'vitest';
 import type { CrmTeamRole } from '../core/team-config';
 import { Crm } from './crm-settings';
@@ -22,7 +23,9 @@ const state = vi.hoisted(() => ({
 }));
 
 vi.mock('./email-privacy', () => ({
-  CrmEmailPrivacySettings: () => <div>Email contribution settings</div>,
+  CrmEmailPrivacySettings: (props: {
+    renderOverview: (content: JSX.Element) => JSX.Element;
+  }) => props.renderOverview(<div>Email contribution settings</div>),
 }));
 vi.mock('../components/stage-icon', () => ({ CrmStageIcon: () => null }));
 vi.mock('../context/crm-context', () => ({

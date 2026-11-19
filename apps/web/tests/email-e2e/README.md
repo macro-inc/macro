@@ -150,8 +150,11 @@ nix develop -c just apps/web/test-email-e2e-full-stack email-e2e reply   # only 
   in a contact's record, a reminder coming due, and the calendar
   (invitations, an event made from an email).
 - `test.use({ access: 'mail-and-calendar' })` links the mailbox with its
-  calendar too. The calendar is ready some moments after linking: wait for
-  it (`calendarReady` in `full-stack-calendar.spec.ts`) before using it.
+  calendar too. Tests that need a ready calendar use `calendarReady` in
+  `full-stack-calendar.spec.ts`. The first-sync scenario starts with an empty
+  Google grant (`seedGoogleGrant: false`), so the mail-only connection has no
+  calendar. It delays discovery on the mailbox linked with calendar access and
+  uses both actions before discovery finishes.
 - `tickReminders` (`harness/organise.ts`) runs the reminder sweep there by
   queueing it on the stack's own queue. It sweeps for every user, so a
   test asserts only on its own threads.

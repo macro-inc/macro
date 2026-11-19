@@ -12,6 +12,7 @@ AC-010	The drop handler of a dragged recipient chip in compose-recipients.tsx re
 AC-011	The desktop Cc button's onClick in compose-layout.tsx (the new-email composer's recipient actions) returns without revealing the Cc field, so clicking Cc opens no Cc row.
 AC-012	The desktop Bcc button's onClick in compose-layout.tsx (the new-email composer's recipient actions) returns without revealing the Bcc field, so clicking Bcc opens no Bcc row.
 AC-013	on a phone, tapping a new email's Cc/Bcc, From row does not unfold the Cc, Bcc and From fields
+AC-014	Main activates the recipient row when the folded summary gets focus, removing the button before its click can focus the input. The phone test fails at the To focus assertion and, with the fix, adds a second address and checks both recipients in the sent copy.
 AC-015	pressing Shift+Cmd+O does not move the cursor back to To
 AC-016	pressing Shift+Cmd+S does not move the cursor to the Subject
 AC-017	pressing Shift+Cmd+M does not move the cursor into the message
@@ -158,7 +159,7 @@ AL-018	The desktop Filter email menu in EmailControls.tsx drops its request to o
 AL-019	pressing f does not open the filter menu
 AL-020	The desktop Filter email menu in EmailControls.tsx ignores a choice in its Read status group instead of calling filters.setSelected; other groups still apply.
 AL-021	a Done choice in the filter menu does not narrow the list (the same wiring serves AL-023, AL-024, AL-410)
-AL-022	picking Starred under Has in the filter menu does not narrow the list to starred threads
+AL-022	Picking Starred under Has fails to narrow the list to starred threads, or Calendar invite drops invitations that arrive as calendar parts without file attachments in Inbox or Focus.
 AL-023	The Attachments choice in the filter menu does not narrow the list: the facet writer in use-email-filters.tsx, the one AL-021 goes through, drops the choice when the facet is attachments.
 AL-024	The same break as AL-021: the Tags choice is written by the facet writer in use-email-filters.tsx, which drops it, so the list is not narrowed.
 AL-025	picking a person in the filter menu does not narrow the list to that person's threads
@@ -363,7 +364,7 @@ AL-613	the title menu's Favorite does not favorite the thread
 AL-615	The tag submenu (EntityTagSubmenu.tsx) refuses to open when the title menu opens it (SplitFileMenu.tsx passes this row's id as its break name), so the title menu's Add tag shows no tag picker. AL-083 goes through the same open handler, switched on by the row menu's id.
 AL-616	The title menu's Copy Link (copyLinkOp in SplitFileMenu.tsx) returns false without calling the copy-link action, so it copies nothing.
 AL-617	The title menu's Copy ID (copyEntityIdOp in SplitFileMenu.tsx) returns false without calling the copy-ID action, so it copies nothing.
-AL-619	The "Remove access" button of a person's roster row in DirectAccessView.tsx no longer calls setGrant(user, null).
+AL-619	The "Remove access" button of a person's roster row in DirectAccessView.tsx no longer calls setGrant(user, null), or the thread sharing permissions read omits the granted conversation so the owner cannot see or remove it.
 AL-621	Enter in the Remind me input in email-reminder-form.tsx no longer selects the highlighted time, so a typed reminder cannot be saved from the keyboard.
 AL-622	The Remind me form's Retry button (email-reminder-form.tsx) no longer calls onRetry, so the reminder is not read again in the quiet between the form's own reads.
 AL-700	Load more views loads nothing
@@ -617,7 +618,7 @@ F-161	a new-mail notification shows nothing of the mail
 F-162	the New email switch saves nothing
 F-163	a notification row opens nothing
 F-164	Mark done on Home does nothing
-F-165	New email on a contact's record does nothing
+F-165	New email on a contact's record does nothing, or sending from a manual contact's record creates a second team contact for the same address or changes the original contact's ID or Company
 F-166	The universal input builds its email (emailMessage in actions.ts) with an empty body, so the saved draft and the sent message lose their text: the send test fails at the provider's copy, the draft test at the opened draft's text.
 F-167	Create task on a thread opens no task composer, and Ask Macro opens a conversation without the thread attached
 F-168	the card of an email the assistant drafted sends the assistant's subject, not the one the user typed
@@ -697,7 +698,7 @@ STC-061	not shown as the row says (toast: That send time has passed. Choose a fu
 STC-062	not shown as the row says (toast: Failed to schedule email): its rendering is switched off or changed in src/features/email-compose/primitives/email-send-schedule.ts
 STC-063	not shown as the row says (toast: Failed to schedule email (or Failed to update schedule) — Draft is not ready to schedule. Resolve any save or connection errors and try again): its rendering is switched off or changed in src/features/email-compose/primitives/email-send-schedule.ts
 STC-064	not shown as the row says (toast: Email scheduled, but unable to mark thread done): its rendering is switched off or changed in src/features/email-compose/primitives/email-send-schedule.ts
-STC-065	not shown as the row says (toast: Schedule cancelled.): its rendering is switched off or changed in src/features/email-compose/primitives/email-send-schedule.ts
+STC-065	Undo of an initial schedule shows Schedule cancelled. The reply test also checks that attempted typing while locked leaves the original text, and Undo makes that text editable without a kept-reply notice.
 STC-066	not shown as the row says (toast: Schedule cancelled, but the draft could not be reopened. Check Drafts.): its rendering is switched off or changed in src/features/email-compose/primitives/email-send-schedule.ts
 STC-067	not shown as the row says (toast: This email was already sent and can no longer be unscheduled.): its rendering is switched off or changed in src/features/email-compose/primitives/email-send-schedule.ts
 STC-068	not shown as the row says (toast: Failed to undo scheduled send): its rendering is switched off or changed in src/features/email-compose/primitives/email-send-schedule.ts
@@ -1124,3 +1125,5 @@ STX-974	The Home list's rows in HomeList.tsx keep every email row that has left 
 STX-975	The activity row of a program step in CodeExecutionToolCall.tsx shows an empty title instead of the operation's label.
 STX-976	The review composer's disabled accessor in DraftComposer.tsx always returns false, so the fields of a sent review card stay editable.
 STX-977	The open of an email result in actions.ts returns without navigating, so once the save or send finishes the universal input closes and opens neither the draft nor the sent thread.
+STL-523	The shared-event card has no syncing notice at the add control while the first calendar list is still empty, in calendar-invitation.tsx.
+STL-524	The create-event composer shows an empty calendar picker and can submit without a destination while the first calendar list is still empty, in event-form-parts.tsx and event-form-state.ts.

@@ -168,11 +168,19 @@ export const ALREADY_INITIALIZED_CODE = 'ALREADY_INITIALIZED' as const;
  */
 export const NO_GMAIL_GRANT_CODE = 'NO_GMAIL_GRANT' as const;
 
+/**
+ * Error code `init` returns (HTTP 400) when the inbox is still being removed
+ * from Macro, after its account was deleted or it was disconnected. Adding it
+ * again works once that removal finishes.
+ */
+export const INBOX_BEING_REMOVED_CODE = 'INBOX_BEING_REMOVED' as const;
+
 type InitErrorCode =
   | 'PAYMENT_REQUIRED'
   | typeof SHARED_INBOX_CONFLICT_CODE
   | typeof ALREADY_INITIALIZED_CODE
-  | typeof NO_GMAIL_GRANT_CODE;
+  | typeof NO_GMAIL_GRANT_CODE
+  | typeof INBOX_BEING_REMOVED_CODE;
 
 /**
  * Error code `patchSettings` returns (HTTP 422) when a signature has images that
@@ -270,7 +278,8 @@ export const emailClient = {
           } | null;
           if (
             body?.code === ALREADY_INITIALIZED_CODE ||
-            body?.code === NO_GMAIL_GRANT_CODE
+            body?.code === NO_GMAIL_GRANT_CODE ||
+            body?.code === INBOX_BEING_REMOVED_CODE
           ) {
             return { code: body.code, message: body.message ?? '' };
           }

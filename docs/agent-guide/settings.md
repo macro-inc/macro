@@ -313,7 +313,13 @@ once used), then the code field with **Complete sign-in**, which is primary
 only once a code is typed and says "Checking with Claude. This can take a minute." while it runs.
 A failure shows one inline alert with its way out: **Get a new link** (link
 expired, code rejected, timed out), **Try again** (couldn't get a link), or
-paste again (malformed code, computer busy). The footer's one action is
+paste again (malformed code, computer busy or unreachable). The harness
+tells its two 403s apart: `rollout_disabled` reads "Computers aren't
+available for this account yet." with **Try again** before a link exists;
+after a code was sent the sign-in still waits, so the field stays open to
+paste the same code again. A bare 403 (no manage rights) reads "You can't
+change this computer. Ask a team owner or admin." with no action, and the
+link and code field are disabled. The footer's one action is
 **Keep using Macro credits** (closes), or **Switch to Macro credits** (a
 confirmation, then sign-out) when the agent is on its plan; closing while a
 code is checked lets it finish, with a toast either way. Owners and admins
@@ -741,7 +747,8 @@ trialing team, which ends the trial and bills Max for a new cycle today.
 Pro downgrades start at renewal.
 **Keep Max** appears only for a confirmed pending downgrade and cancels it;
 failed scheduled-plan reads offer **Try again**, while teams without applicable
-scheduled plans show no retry notice). CRM (individual email contribution and team/personal domain exclusions;
+scheduled plans show no retry notice). CRM (individual email contribution, gated selective sharing rules with JSON,
+count preview and history subpages, and team/personal domain exclusions;
 a `Stages` section independent of email contribution for the company Stage options that new pipelines
 also start with, with `Customize`, inline rename, reorder by drag handle or arrow
 keys (up/down buttons on touch), delete, `Add stage`, and `Reset to defaults`,
@@ -973,7 +980,8 @@ stopping.
 
 The row's one action is **Retry setup** on a `failed` computer (team owner
 and admins; it sets it up again, billing untouched), else **Finish setup**
-while guided setup is incomplete (only for the team's owner and admins), else
+while guided setup is incomplete (only for the team's owner and admins; an
+agent teammate's computer counts as set up once its agent first comes online), else
 **Sign in with Claude** when the computer is on its own Claude account but
 signed out, else none. A failed row's line reads `Setup failed: <reason>`
 with the API's `failureReason`, else `Failed`. A row with no action keeps its
@@ -1129,7 +1137,11 @@ sign-out (Macro credits only), setup-complete and a status refresh in order,
 each with a 20-second deadline and its own span under
 `computers.setup.finish` (`setup.finish.step`, `setup.finish.outcome`). A step
 that fails or runs out stops there: "Couldn't finish setting up <agent>" with
-**Retry**, which runs the steps again. Ready has one action:
+the reason when it has one (outside the rollout: "Computers aren't available
+for this account yet.") and **Retry**, which runs the steps again and reads
+**Retrying…** while it does. A caller without manage rights reads "You can't
+change this computer. Ask a team owner or admin." with no **Retry**, only
+**Close**. Ready has one action:
 
 - **Chat with <agent>** opens the DM with the computer's agent
   (`useOpenAgentDm`, `bot|<botId>`), like an agent's **Message**. With
@@ -1159,6 +1171,9 @@ the same, also on a cold start; the link is
 (`computers/primitives/setup-request.ts`). The dialog's own "ready" notice,
 shown when it was closed while waiting for the sign-in link, is the same
 notice, so the two never stack.
+The in-app "ready" notice is only for setup left unfinished: it is not shown
+while that computer's buy dialog is open (one already up is taken down), nor
+once the team's computer list says its setup is complete.
 
 **Sign in with Claude** is a dialog with the same two steps, failure states
 and footer as an agent's **Connect Claude plan** (see Agent teammates above),

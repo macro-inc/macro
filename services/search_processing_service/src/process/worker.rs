@@ -1,6 +1,10 @@
 use crate::process::{self, context::SearchProcessingContext};
 use futures::StreamExt;
 
+/// How long a worker processes one message before giving up on it.
+pub(crate) const MESSAGE_PROCESSING_TIMEOUT: std::time::Duration =
+    std::time::Duration::from_secs(300);
+
 /// Spawns multiple search processing workers.
 pub fn run_search_processing_workers(ctx: SearchProcessingContext, worker_count: u8) {
     for worker_id in 0..worker_count {
@@ -36,7 +40,7 @@ pub async fn run_search_processing_worker_with_id(ctx: SearchProcessingContext, 
                                     let ctx = ctx.clone();
                                     async move {
                                         let result = tokio::time::timeout(
-                                            std::time::Duration::from_secs(300), // 5 minutes
+                                            MESSAGE_PROCESSING_TIMEOUT,
                                             process::process_message(&ctx, &message)
                                         ).await;
 

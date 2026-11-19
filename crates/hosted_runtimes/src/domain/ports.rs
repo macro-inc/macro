@@ -21,7 +21,8 @@ use crate::domain::lifecycle::{
 };
 use crate::domain::models::{
     BillingInterval, Computer, ComputerRecord, ControlPlaneId, Host, HostAllocation, HostName,
-    HostRecord, HostRegistration, NewReservation, Quote, Reservation, Reserved, SubscriptionItem,
+    HostRecord, HostRegistration, NewReservation, PurchaseBilling, PurchaseTerms, Quote,
+    Reservation, Reserved, SubscriptionItem,
 };
 use crate::domain::size::ComputerSize;
 
@@ -483,6 +484,20 @@ pub trait Billing: Send + Sync + 'static {
         team_id: Uuid,
         size: ComputerSize,
     ) -> impl Future<Output = Result<Quote, BillingError>> + Send;
+
+    /// What buying one computer of each of `sizes` would cost the team, for
+    /// the buy dialog: each recurring price and what it would invoice now,
+    /// the renewal date and the card, from ONE subscription read and ONE
+    /// invoice preview (none when `billing` is comped: nothing is invoiced,
+    /// so `due_today` is 0 and no card is named). `due_today` is net of the
+    /// team's credit balance, which Stripe applies to the invoice first. A Stripe-billed trialing team is refused with
+    /// [`BillingError::TeamOnTrial`]. Never on the purchase path.
+    fn purchase_terms(
+        &self,
+        team_id: Uuid,
+        sizes: &[ComputerSize],
+        billing: &PurchaseBilling,
+    ) -> impl Future<Output = Result<PurchaseTerms, BillingError>> + Send;
 
     /// The price to buy one computer of `size` at, from ONE read of the
     /// team's subscription: refuses a trialing team with

@@ -13,6 +13,7 @@ import {
 } from 'lexical';
 import { type DecoratorComponent, getDecorator } from '../decoratorRegistry';
 import { $applyIdFromSerialized } from '../plugins/nodeIdPlugin';
+import { isAllowedLinkUrl } from '../utils/link-url';
 
 const VERSION = 1;
 
@@ -90,7 +91,9 @@ export class PullRequestMentionNode extends DecoratorNode<
     this.__id = idIsUrl ? '' : id;
     this.__label = label;
     this.__mentionUuid = mentionUuid;
-    this.__url = url || (idIsUrl ? id : undefined);
+    // Saved state can hold any URL; one a link may not open is dropped.
+    const linkUrl = url && isAllowedLinkUrl(url) ? url : undefined;
+    this.__url = linkUrl || (idIsUrl ? id : undefined);
   }
 
   static importJSON(serializedNode: SerializedPullRequestMentionNode) {
