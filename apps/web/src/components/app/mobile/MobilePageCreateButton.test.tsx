@@ -1,48 +1,24 @@
 import type { CreatableBlock } from '@app/features/command/types';
 import { NEW_TASK_TITLE_SELECTOR } from '@app/features/task-composer/new-task-title-focus';
-import {
-  createMemoryHistory,
-  createMemoryPaneStore,
-  createSplitRouter,
-  type Entry,
-} from '@app/lib/split-router';
-import { paneRoute } from '@app/routes/app-route';
-import {
-  projectDetailRoute,
-  tasksProjectsRoute,
-  tasksSplitRoute,
-} from '@app/routes/routes';
 import { TOKENS } from '@core/hotkey/tokens';
 import { cleanup, fireEvent, render, screen } from '@solidjs/testing-library';
-import { createSignal, onCleanup } from 'solid-js';
+import { createSignal } from 'solid-js';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
-import type { SplitContent, SplitId } from '../split-layout/layoutManager';
-import { createMobileBackNavigation } from '../split-layout/mobile/createMobileBackNavigation';
 import { MobilePageCreateButton } from './MobilePageCreateButton';
 import type { MobileNavViewId } from './mobile-nav-views';
 
 const sources = vi.hoisted(() => ({
   view: vi.fn(),
-  project: vi.fn(),
   blocks: vi.fn(),
   openEvent: vi.fn(),
   openCalendarEvent: vi.fn(),
   raiseKeyboard: vi.fn(),
   openCompany: vi.fn(),
   openMenu: vi.fn(),
-  phone: vi.fn(() => false),
-  content: vi.fn<() => SplitContent | undefined>(() => undefined),
 }));
 
 vi.mock('./use-mobile-nav', () => ({
   useForegroundMobileView: () => sources.view,
-  useForegroundProject: () => sources.project,
-}));
-vi.mock('@core/mobile/isMobile', () => ({ isMobile: sources.phone }));
-vi.mock('@app/signal/splitLayout', () => ({
-  globalSplitManager: () => ({
-    activeSplit: () => ({ content: sources.content }),
-  }),
 }));
 vi.mock('@app/features/command/Launcher', () => ({
   useCreateMenuBlocks: () => sources.blocks,
@@ -80,20 +56,14 @@ beforeEach(() => {
   });
 });
 afterEach(() => {
-  sources.phone.mockReturnValue(false);
-  sources.content.mockReturnValue(undefined);
   cleanup();
   vi.resetAllMocks();
   vi.unstubAllGlobals();
 });
 
-function setup(
-  view: MobileNavViewId = 'home',
-  project: () => boolean = () => false
-) {
+function setup(view: MobileNavViewId = 'home') {
   const [blocks, setBlocks] = createSignal<CreatableBlock[]>([]);
   sources.view.mockReturnValue(view);
-  sources.project.mockImplementation(project);
   sources.blocks.mockImplementation(blocks);
   render(() => <MobilePageCreateButton />);
   return { setBlocks };
@@ -154,152 +124,6 @@ describe('mobile create availability', () => {
     await vi.waitFor(() => expect(createTask).toHaveBeenCalledOnce());
   });
 
-  it('leaves phone project creation to the page and restores the Projects action', () => {
-    const projectId = '00000000-0000-4000-8000-000000000001';
-    const project = (section: 'overview' | 'tasks'): SplitContent => ({
-      type: 'component',
-      id: 'tasks',
-      entryMetadata: {
-        route: {
-          matches: [
-            { id: 'view-tasks', params: {} },
-            { id: 'tasks-project', params: { projectId, section } },
-          ],
-        },
-      },
-    });
-    const [content, setContent] = createSignal<SplitContent>(
-      project('overview')
-    );
-    sources.phone.mockReturnValue(true);
-    sources.content.mockImplementation(content);
-    sources.view.mockReturnValue('projects');
-    sources.blocks.mockReturnValue([]);
-    render(() => <MobilePageCreateButton />);
-
-    expect(screen.queryByRole('button', { name: 'New' })).toBeNull();
-    setContent(project('tasks'));
-    expect(screen.queryByRole('button', { name: 'New' })).toBeNull();
-    setContent(project('overview'));
-    expect(screen.queryByRole('button', { name: 'New' })).toBeNull();
-    setContent({
-      type: 'component',
-      id: 'tasks',
-      entryMetadata: {
-        route: {
-          matches: [
-            { id: 'view-tasks', params: {} },
-            { id: 'tasks-projects', params: { projectsTab: 'projects' } },
-          ],
-        },
-      },
-    });
-    expect(screen.getByRole('button', { name: 'New' })).toBeTruthy();
-  });
-
-  it('updates creation availability through real route history and native Back', async () => {
-    const projectId = '00000000-0000-4000-8000-000000000001';
-    let router!: ReturnType<typeof createSplitRouter>;
-    sources.phone.mockReturnValue(true);
-    sources.view.mockReturnValue('projects');
-    sources.blocks.mockReturnValue([]);
-    render(() => {
-      router = createSplitRouter({
-        routes: {
-          definitions: [
-            {
-              ...tasksSplitRoute,
-              children: [tasksProjectsRoute, projectDetailRoute],
-            },
-          ],
-          defaultRoute: () => paneRoute({ id: 'view-tasks', params: {} }),
-        },
-        history: createMemoryHistory('/tasks/projects'),
-        paneStore: createMemoryPaneStore<Entry>(),
-        policy: {
-          placeNewPane: vi.fn(),
-          closeAction: vi.fn(),
-          activate: vi.fn(),
-        },
-      });
-      onCleanup(router.dispose);
-      sources.content.mockImplementation(() => ({
-        type: 'component',
-        id: 'tasks',
-        entryMetadata: router.entry(router.panes()[0]!)?.location,
-      }));
-      return <MobilePageCreateButton />;
-    });
-    await router.settled();
-    const pane = router.panes()[0]!;
-    const splitId = 'project-pane' as SplitId;
-    const closePane = vi.fn();
-    const replace = vi.fn();
-    const back = createMobileBackNavigation({
-      phone: () => true,
-      getSplit: () => ({
-        content: () => sources.content()!,
-        canGoBack: () => router.canGo(pane, -1),
-        goBack: () => router.navigatePane(pane, -1),
-        goBackTo: (predicate) => {
-          const result = router.goBackTo(pane, (entry) =>
-            predicate({
-              type: 'component',
-              id: 'tasks',
-              entryMetadata: entry.location,
-            })
-          );
-          return result instanceof Promise ? true : result;
-        },
-        replace,
-      }),
-      stack: {
-        front: () => splitId,
-        behind: () => undefined,
-        canGoBack: () => false,
-        goBack: closePane,
-        completeGoBack: closePane,
-        setAnimatedTrigger: vi.fn(),
-        setForwardTrigger: vi.fn(),
-      },
-    });
-
-    expect(screen.getByRole('button', { name: 'New' })).toBeTruthy();
-    await router.navigatePane(pane, `/tasks/projects/${projectId}/overview`);
-    expect(screen.queryByRole('button', { name: 'New' })).toBeNull();
-    await router.navigatePane(pane, `/tasks/projects/${projectId}/tasks`);
-    expect(screen.queryByRole('button', { name: 'New' })).toBeNull();
-
-    back.goBack();
-    await router.settled();
-    expect(screen.getByRole('button', { name: 'New' })).toBeTruthy();
-    expect(closePane).not.toHaveBeenCalled();
-    expect(replace).not.toHaveBeenCalled();
-  });
-
-  it('retains the create button on a tablet project Overview', () => {
-    sources.phone.mockReturnValue(false);
-    sources.content.mockReturnValue({
-      type: 'component',
-      id: 'tasks',
-      entryMetadata: {
-        route: {
-          matches: [
-            { id: 'view-tasks', params: {} },
-            {
-              id: 'tasks-project',
-              params: {
-                projectId: '00000000-0000-4000-8000-000000000001',
-                section: 'overview',
-              },
-            },
-          ],
-        },
-      },
-    });
-    setup('projects');
-    expect(screen.getByRole('button', { name: 'New' })).toBeTruthy();
-  });
   it('creates an initiative rather than a Drive folder from Projects', () => {
     const { setBlocks } = setup('projects');
     const createProject = vi.fn(() => true);
@@ -340,23 +164,6 @@ describe('mobile create availability', () => {
     fireEvent.click(screen.getByRole('button', { name: 'New' }));
     expect(sources.openMenu).toHaveBeenCalledWith(true);
     expect(createFolder).not.toHaveBeenCalled();
-  });
-  it("leaves a project's tabs to the project's own Task pill", () => {
-    sources.phone.mockReturnValue(true);
-    const [project, setProject] = createSignal(false);
-    const { setBlocks } = setup('tasks', project);
-    setBlocks([
-      {
-        label: 'Task',
-        description: 'Create task',
-        blockName: 'task',
-        hotkeyToken: TOKENS.create.task,
-        keyDownHandler: vi.fn(() => true),
-      },
-    ]);
-    expect(screen.getByRole('button', { name: 'New task' })).toBeTruthy();
-    setProject(true);
-    expect(screen.queryByRole('button', { name: 'New task' })).toBeNull();
   });
 
   it('uses a Calendar New menu', async () => {

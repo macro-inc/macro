@@ -60,7 +60,6 @@ vi.mock('@core/mobile/haptics', () => ({ hapticImpact: vi.fn() }));
 vi.mock('@components/app/mobile/use-mobile-nav', () => ({
   useForegroundMobileView: () => () =>
     mocks.viewAccessor ? mocks.viewAccessor() : mocks.view,
-  useForegroundProject: () => () => false,
   useMobileNavNavigate: () => vi.fn(),
 }));
 vi.mock('@components/app/mobile/mobile-dock-views', () => ({
@@ -222,6 +221,41 @@ describe('Mobile page action row', () => {
     expect(screen.queryByRole('button', { name: 'New email' })).toBeNull();
     page.unmount();
     expect(mocks.unmountComposer).toHaveBeenCalledOnce();
+  });
+
+  it('lets a page own the action slot while loading or read-only and releases it on leave', () => {
+    const [pageActive, setPageActive] = createSignal(false);
+    const [canCreate, setCanCreate] = createSignal(false);
+    render(() => (
+      <>
+        <FloatRegion region="accessory" priority={-0.5} active={pageActive}>
+          <div aria-hidden="true" data-testid="page-action-clearance" />
+        </FloatRegion>
+        <FloatRegion
+          region="accessory"
+          active={() => pageActive() && canCreate()}
+        >
+          <button>Page action</button>
+        </FloatRegion>
+        <MobilePageActionRow />
+      </>
+    ));
+
+    expect(screen.getByRole('button', { name: 'New email' })).toBeTruthy();
+    setPageActive(true);
+    expect(screen.queryByRole('button', { name: 'New email' })).toBeNull();
+    expect(screen.getByTestId('page-action-clearance')).toBeTruthy();
+
+    setCanCreate(true);
+    expect(screen.getByRole('button', { name: 'Page action' })).toBeTruthy();
+    expect(screen.queryByTestId('page-action-clearance')).toBeNull();
+    setCanCreate(false);
+    expect(screen.queryByRole('button', { name: 'Page action' })).toBeNull();
+    expect(screen.queryByRole('button', { name: 'New email' })).toBeNull();
+
+    setPageActive(false);
+    expect(screen.getByRole('button', { name: 'New email' })).toBeTruthy();
+    expect(screen.queryByTestId('page-action-clearance')).toBeNull();
   });
   it('lets search take precedence over a document composer, then restores the available accessory', () => {
     const [canComment, setCanComment] = createSignal(true);

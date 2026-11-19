@@ -38,3 +38,17 @@ preview remains available at the existing preview address.
   checks and `just check`. Browser/device checks remain assigned to the user.
 - Request and review CI after pushing; completion requires a passing gate on
   the latest commit.
+
+## Page-owned mobile creation
+
+- Removed project-route parsing and the project foreground hook from the
+  generic mobile creation controls.
+- Project detail owns its fallback accessory through `FloatRegion`; the page's
+  task menu takes precedence when available. Loading and read-only pages retain
+  clearance without exposing unrelated creation actions.
+- Retained the existing floating-region priority and pane-lifetime behavior;
+  no new shared registry or feature-specific option was added.
+- Local validation: 165 test files and 1,343 tests passed, web checks and
+  `just check` passed, and review found no concrete regression.
+- Browser/device verification remains assigned to the user. The hosted preview
+  stays running, and CI is requested for the final pushed commit.

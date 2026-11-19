@@ -7,9 +7,7 @@ import {
 import { openCreateCompanyModal } from '@app/features/crm/creation-adapter';
 import { NEW_TASK_TITLE_SELECTOR } from '@app/features/task-composer/new-task-title-focus';
 import { type TranslationKey, t } from '@app/lib/i18n';
-import { globalSplitManager } from '@app/signal/splitLayout';
 import { triggerFocusNewElement } from '@core/directive/focusInput';
-import { isMobile } from '@core/mobile/isMobile';
 import { virtualKeyboardVisible } from '@core/mobile/virtualKeyboard';
 import { fireAndForget } from '@core/util/fireAndForget';
 import CalendarIcon from '@icon/system/regular/calendar-blank.svg';
@@ -20,7 +18,6 @@ import DocumentIcon from '@icon/system/regular/file-text.svg';
 import TaskIcon from '@icon/system/regular/list-checks.svg';
 import PhoneIcon from '@icon/system/regular/phone.svg';
 import { Match, Show, Switch } from 'solid-js';
-import { projectLocation } from '../split-layout/project-back-navigation';
 import { MobileCreateButton } from './MobileCreateButton';
 import {
   MobileCreateMenu,
@@ -28,10 +25,7 @@ import {
 } from './MobileCreateMenu';
 import type { MobileNavViewId } from './mobile-nav-views';
 import { mobilePageCreateBlock } from './mobile-page-create-action';
-import {
-  useForegroundMobileView,
-  useForegroundProject,
-} from './use-mobile-nav';
+import { useForegroundMobileView } from './use-mobile-nav';
 
 const QUICK_CREATE_VIEWS = [
   { view: 'mail', icon: EmailIcon },
@@ -63,7 +57,6 @@ type PageCreateAction = Pick<
 /** The current non-AI view's New action above the navigation dock. */
 export function MobilePageCreateButton() {
   const foregroundView = useForegroundMobileView();
-  const foregroundProject = useForegroundProject();
   const createBlocks = useCreateMenuBlocks();
   const openEventComposer = useOpenEventComposer();
   const openCreateMenu = () => setCreateMenuOpen(true);
@@ -140,38 +133,22 @@ export function MobilePageCreateButton() {
     return viewAction() && key ? t(key) : t('mobile.new');
   };
 
-  const isProjectDetail = () => {
-    if (!isMobile()) return false;
-    // The project page owns its always-visible Task action.
-    const content = globalSplitManager()?.activeSplit()?.content() ?? null;
-    const location = projectLocation(content);
-    return location?.kind === 'detail';
-  };
-
   return (
     <Show when={foregroundView() !== 'agents' && !virtualKeyboardVisible()}>
       <Switch
         fallback={
-          <Show
-            when={foregroundView() === 'calendar'}
-            fallback={
-              <MobileCreateButton
-                ariaLabel={actionAriaLabel()}
-                label={action().label}
-                onClick={() => action().onSelect()}
-              />
-            }
-          >
-            <MobileCreateMenu items={calendarActions()} />
-          </Show>
+          <MobileCreateButton
+            ariaLabel={actionAriaLabel()}
+            label={action().label}
+            onClick={() => action().onSelect()}
+          />
         }
       >
-        <Match when={isProjectDetail() || (isMobile() && foregroundProject())}>
-          {/* Reserve the same chrome clearance as the page-owned Task action. */}
-          <div aria-hidden="true" class="h-(--mobile-chrome-button-size)" />
-        </Match>
         <Match when={foregroundView() === 'home'}>
           <MobileCreateMenu items={quickActions()} />
+        </Match>
+        <Match when={foregroundView() === 'calendar'}>
+          <MobileCreateMenu items={calendarActions()} />
         </Match>
       </Switch>
     </Show>
