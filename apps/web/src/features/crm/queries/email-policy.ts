@@ -7,6 +7,8 @@ import {
   type QueryAccount,
 } from '@queries/auth/account-scope';
 import { useItemRawName } from '@queries/preview';
+import { createGraphqlItemPreviewQuery } from '@queries/preview/graphql';
+import { isAccessiblePreviewItem } from '@queries/preview/types';
 import { refreshActiveGraphqlSoupQueries } from '@queries/soup/graphql/active-queries';
 import { soupKeys } from '@queries/soup/keys';
 import type { crmEmailPolicyClient } from '@service-storage/crm-email-policy';
@@ -22,6 +24,22 @@ import { crmKeys } from './keys';
 type Dependencies = Pick<CrmQueryDependencies, 'client' | 'feedback'> & {
   policy: typeof crmEmailPolicyClient;
 };
+
+export function createThreadRuleName(
+  threadId: string
+): Accessor<string | undefined> {
+  // A missing label must not fall back to fetching a full email thread.
+  const query = createGraphqlItemPreviewQuery(
+    () => ({ id: threadId, type: 'email' }),
+    false
+  );
+  return () => {
+    const preview = query.data();
+    return preview && isAccessiblePreviewItem(preview)
+      ? preview.rawName
+      : undefined;
+  };
+}
 
 function scopeKey(
   account: QueryAccount | undefined,
@@ -211,7 +229,10 @@ export function createEmailPolicySource(
               ? { id: rule.thread_id, type: 'email' as const }
               : undefined;
       if (!item) return () => undefined;
-      const name = useItemRawName(() => item);
+      const name =
+        item.type === 'email'
+          ? createThreadRuleName(item.id)
+          : useItemRawName(() => item);
       return () =>
         ownerScope === scope() && !abort.signal.aborted ? name() : undefined;
     },

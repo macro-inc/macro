@@ -58,7 +58,9 @@ explicit current-policy comparison before admitting a fresh decision. Preview
 work starts only on a member action and polls only while its page is open;
 unknown or stale counts never appear as current totals. Saved history supplies
 verified actor attribution. Rule labels use existing permission-aware identity
-previews and retain saved IDs when names cannot be read. The same pages render
+previews and retain saved IDs when names cannot be read. Thread labels use only
+the batched GraphQL preview; a missing label never loads full email threads.
+The same pages render
 inside the desktop settings shell and phone sheet. Browser regression coverage
 is in `browser-test/privacy/selective.browser.e2e.ts`.
 
