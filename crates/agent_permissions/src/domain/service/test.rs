@@ -424,6 +424,46 @@ async fn loosening_through_tighten_names_the_operations() {
 }
 
 #[tokio::test]
+async fn a_tool_allowed_under_a_stricter_group_is_refused_not_ignored() {
+    let other = fixture();
+    let fixture = fixture();
+    fixture
+        .service
+        .set(&person(OWNER), BotId::TEST_A, never_send())
+        .await
+        .unwrap();
+    let allow_tool = vec![Change {
+        target: Target::Tool {
+            service: "email".to_owned(),
+            operation: "send_email".to_owned(),
+        },
+        state: Some(PermissionState::Always),
+    }];
+
+    let caller = agent_caller(OWNER, BotId::TEST_A, None);
+    let Err(PermissionError::WouldLoosen(operations)) = fixture
+        .service
+        .tighten(&caller, BotId::TEST_A, allow_tool.clone())
+        .await
+    else {
+        panic!("an always under a never group was not refused");
+    };
+    assert_eq!(operations.len(), 1);
+    assert_eq!(operations[0].operation, "send_email");
+    assert_eq!(operations[0].to, PermissionState::Always);
+
+    // Where the tool is already always allowed, asking for always loosens
+    // nothing and passes.
+    assert!(
+        other
+            .service
+            .tighten(&caller, BotId::TEST_A, allow_tool)
+            .await
+            .is_ok()
+    );
+}
+
+#[tokio::test]
 async fn reset_clears_the_saved_settings_and_leaves_session_overlays() {
     let fixture = fixture();
     fixture

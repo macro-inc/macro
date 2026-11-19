@@ -17,7 +17,10 @@ resolves them against `agent_permission_registry`, and serves the HTTP API
   has one per person (`persona_tool_permission`), and in a session the
   owner's applies.
 - Tighten-only compares every operation's effective state before and after
-  the change (`domain/resolve.rs` `tighten_only`).
+  the change (`domain/resolve.rs` `tighten_only`), both as asked and as
+  saved: a tool's `always` is saved as clearing its own setting, but asked
+  for under a stricter group it is refused (`would_loosen`), not a silent
+  no-op.
 
 ## Start here
 

@@ -78,9 +78,11 @@ vi.mock('./components/auto-archive-setting', () => ({
 }));
 
 // The permissions page has its own suite; here only its entry points.
-const permissionMocks = vi.hoisted(() => ({ enabled: false }));
+const permissionMocks = vi.hoisted(() => ({ enabled: false, served: true }));
 vi.mock('@app/features/agent-permissions', () => ({
   useAgentPermissionsFlag: () => () => permissionMocks.enabled,
+  useAgentPermissionsAvailable: () => () =>
+    permissionMocks.enabled && permissionMocks.served,
   AgentPermissionsSection: (props: {
     agentId: string;
     onManage: () => void;
@@ -361,6 +363,7 @@ beforeAll(() => {
 
 beforeEach(() => {
   permissionMocks.enabled = false;
+  permissionMocks.served = true;
   avatarMocks.upload.mockReset();
   apiKeyMocks.query.data = undefined;
   apiKeyMocks.save.mockReset();
@@ -1053,6 +1056,15 @@ describe('Agents', () => {
           name: 'Permissions page of Macro (00000000-0000-0000-0000-00000000a2a2)',
         })
       ).toBeTruthy();
+    });
+
+    it("hides Macro's shield when the API has no permissions for it", () => {
+      permissionMocks.enabled = true;
+      permissionMocks.served = false;
+      render(() => <Agents {...agentsPageProps} />);
+      expect(
+        screen.queryByRole('button', { name: "Macro's permissions" })
+      ).toBeNull();
     });
 
     it("opens an agent's permissions when asked to by a link", () => {
