@@ -481,14 +481,24 @@ async fn a_repeated_key_keeps_its_sub_routines_look_and_refuses_an_unknown_icon(
     start_run(&service, &parent, PARENT_RUN);
     let first = look(macro_icon_names()[0]);
     let created = service
-        .create_action_from(&user_principal(), keyed(first.clone()), from_code(&parent), key())
+        .create_action_from(
+            &user_principal(),
+            keyed(first.clone()),
+            from_code(&parent),
+            key(),
+        )
         .await
         .unwrap()
         .into_action();
     assert_eq!(created.appearance, first);
 
     let refused = service
-        .create_action_from(&user_principal(), keyed(look("not-an-icon")), from_code(&parent), key())
+        .create_action_from(
+            &user_principal(),
+            keyed(look("not-an-icon")),
+            from_code(&parent),
+            key(),
+        )
         .await
         .unwrap_err()
         .to_string();
