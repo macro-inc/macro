@@ -1087,11 +1087,12 @@ and full account email wrap at phone widths so reviewers can identify the
 requester before answering. If the display name already is the email, it appears
 only once. Every participant
 also gets a **Requests to join** notification (turn it off under notification
-settings) that opens the channel and marks it unread. The first answer wins: the
-row then shows **Approved by** or **Denied by** for everyone, a withdrawn request
-shows **Request withdrawn**, and the other participants' notifications are marked
-done. Approval adds the requester, who gets the usual "added you" invite
-notification, and the timeline shows the usual added row. A requester waiting on
+settings) that opens the channel and marks it unread. The first answer wins: an
+approved row drops its buttons and shows no answer, since approval adds the
+requester and the timeline shows the usual added row; a denied row shows
+**Denied by** for everyone, a withdrawn request shows **Request withdrawn**, and
+the other participants' notifications are marked done. The requester gets the
+usual "added you" invite notification. A requester waiting on
 the denied view is taken into the channel when the approval arrives.
 
 Verify with two accounts: ask from a non-member, approve or deny from a member
