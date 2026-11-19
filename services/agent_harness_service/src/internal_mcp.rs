@@ -169,8 +169,9 @@ impl ServerHandler for InternalTools {
             })
             .collect();
         if let Some(code_mode) = &self.code_mode {
-            // A session whose owner has the OCaml rollout sees ExecuteCode
-            // with a language; every other session sees it unchanged.
+            // A session that may run OCaml or JS tools programs sees
+            // ExecuteCode with a language; every other session sees it
+            // unchanged.
             let tools = match context
                 .extensions
                 .get::<axum::http::request::Parts>()
@@ -356,8 +357,8 @@ impl ServerHandler for InternalTools {
             return Ok(result.into());
         }
         if let Some(code_mode) = &self.code_mode {
-            // Only a call that names a language needs the OCaml rollout; one
-            // without it is the same JavaScript call either way.
+            // Only a call that names a language needs the OCaml or JS tools
+            // rollout; one without it is the same JavaScript call either way.
             let tools = if request
                 .arguments
                 .as_ref()
