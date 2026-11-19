@@ -500,6 +500,29 @@ export function NotificationsView(props: NotificationsViewProps) {
     },
   });
 
+  // On touch a done first folds its cards away (the swipe row's collapse), so
+  // the rows below slide up instead of jumping into the gap. Desktop mounts no
+  // swipe rows and removes them at once.
+  const [collapseCard, setCollapseCard] =
+    createSignal<(id: string) => Promise<void>>();
+  /** The cards a done takes: each row's and its unfolded notifications'. */
+  const cardIds = (rows: readonly NotificationInboxRow[]) => {
+    const rowIds = new Set(rows.map((row) => row.id));
+    return listItems().flatMap((item) => {
+      const rowId = isInboxStackItem(item) ? item.rowId : item.id;
+      return isInboxNotification(item) && rowIds.has(rowId) ? [item.id] : [];
+    });
+  };
+  /** Run `remove` once the cards are folded away. */
+  const afterFolding = async <T,>(
+    ids: readonly string[],
+    remove: () => Promise<T>
+  ): Promise<T> => {
+    const collapse = collapseCard();
+    if (collapse) await Promise.all(ids.map((id) => collapse(id)));
+    return remove();
+  };
+
   const rowActions = createRowActions({
     requests: context.requests,
     open: (row) => list.activate.key(row.id, { reason: 'pointer' }),
@@ -507,13 +530,14 @@ export function NotificationsView(props: NotificationsViewProps) {
       context.openUrl(url);
       markSeen(row);
     },
-    complete: (row) => {
-      stacks.collapse(row.id);
-      const next = selection.afterLeaving([row.id]);
-      if (next === 'none') closePreview({ replace: true });
-      else if (next !== 'stay') preview(next, undefined, { replace: true });
-      return feed.markDone([row]);
-    },
+    complete: (row) =>
+      afterFolding(cardIds([row]), () => {
+        stacks.collapse(row.id);
+        const next = selection.afterLeaving([row.id]);
+        if (next === 'none') closePreview({ replace: true });
+        else if (next !== 'stay') preview(next, undefined, { replace: true });
+        return feed.markDone([row]);
+      }),
     notices: {
       succeeded: (decision) => toast.success(decisionOutcome(decision)),
       failed: (decision) => toast.failure(decisionFailure(decision)),
@@ -542,8 +566,23 @@ export function NotificationsView(props: NotificationsViewProps) {
       if (next) preview(row, next);
       else preview(row);
     }
+    // A stack left with one notification is listed as its row alone, so the
+    // other unfolded card leaves with this one.
+    const unfolded = listItems().filter(
+      (item) => isInboxStackItem(item) && item.rowId === row.id
+    );
+    const leaving =
+      row.count <= 2
+        ? unfolded
+        : unfolded.filter(
+            (item) =>
+              isInboxStackItem(item) && item.notificationId === notification.id
+          );
     fireAndForget(
-      inbox.markNotificationDone(row, notification),
+      afterFolding(
+        leaving.map((item) => item.id),
+        () => inbox.markNotificationDone(row, notification)
+      ),
       'notifications-inbox'
     );
   };
@@ -560,11 +599,14 @@ export function NotificationsView(props: NotificationsViewProps) {
   };
 
   const markDone = (done: readonly NotificationInboxRow[]) => {
-    for (const row of done) stacks.collapse(row.id);
-    const next = selection.afterLeaving(done.map((row) => row.id));
-    if (next === 'none') closePreview({ replace: true });
-    else if (next !== 'stay') preview(next, undefined, { replace: true });
-    fireAndForget(inbox.markDone(done), 'notifications-inbox');
+    const remove = () => {
+      for (const row of done) stacks.collapse(row.id);
+      const next = selection.afterLeaving(done.map((row) => row.id));
+      if (next === 'none') closePreview({ replace: true });
+      else if (next !== 'stay') preview(next, undefined, { replace: true });
+      return inbox.markDone(done);
+    };
+    fireAndForget(afterFolding(cardIds(done), remove), 'notifications-inbox');
   };
 
   const [viewport, setViewport] = createSignal<HTMLDivElement>();
@@ -990,6 +1032,7 @@ export function NotificationsView(props: NotificationsViewProps) {
           />
           <SwipableRowProvider
             container={viewport}
+            setCollapseEntity={setCollapseCard}
             canSwipeLeft={(id) =>
               rowsById().has(id) || stackItemOf(id) !== undefined
             }

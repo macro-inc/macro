@@ -157,7 +157,9 @@ and inline row buttons; at phone width they have a larger avatar and slightly la
 text; a read row there fades its avatar and mutes its text, so unread rows stand
 out. A tablet keeps the desktop's sizes. Tapping a row or an unfolded notification opens it
 full-screen in place, tapping a stack's caret unfolds it, a left swipe marks it
-done (with the same Undo), and pulling down refreshes. Hover controls and the preview pane are desktop-only. The
+done (with the same Undo), and pulling down refreshes. A done on touch (a swipe, or a
+row button that completes the row) folds the row's height away before the row leaves,
+so the rows below slide up; with reduced motion it leaves at once. Hover controls and the preview pane are desktop-only. The
 dock keeps the bell active while the view shows.
 
 The list updates live, without a reload, and a live change never remounts a row:
