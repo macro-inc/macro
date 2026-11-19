@@ -422,6 +422,35 @@ it('uses the approval trace context again on an actual query retry', async () =>
   expect(contexts).toEqual([true, true]);
 });
 
+it('keeps the code updates it read when a refresh fails, and says it failed', async () => {
+  queryClient.setDefaultOptions({ queries: { retry: false } });
+  const upgrades = [{ outcome: 'needs_update' }];
+  listCodeUpgrades
+    .mockResolvedValueOnce(ok(upgrades))
+    .mockResolvedValueOnce(err([{ message: 'Temporarily unavailable' }]));
+  let query!: ReturnType<typeof useCodeUpgradesQuery>;
+  function Probe() {
+    query = useCodeUpgradesQuery(
+      () => 'routine',
+      () => true
+    );
+    return null;
+  }
+  dispose = render(
+    () => (
+      <QueryClientProvider client={queryClient}>
+        <Probe />
+      </QueryClientProvider>
+    ),
+    document.createElement('div')
+  );
+  await vi.waitFor(() => expect(query.isSuccess).toBe(true));
+  expect(query.isError).toBe(false);
+  await query.refetch();
+  expect(query.isError).toBe(true);
+  expect(query.data).toEqual(upgrades);
+});
+
 it('carries a Duplicate admission context through create and list retries', async () => {
   queryClient.setDefaultOptions({ queries: { retry: 1, retryDelay: 0 } });
   const contexts: boolean[] = [];
