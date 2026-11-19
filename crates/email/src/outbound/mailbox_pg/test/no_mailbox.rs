@@ -297,19 +297,29 @@ async fn the_discovery_that_finds_the_mailbox_clears_the_mark_and_wakes_its_work
     sqlx::query!("UPDATE email_mailbox_watch_work SET next_run_at = now() + interval '12 hours', failures = 5 WHERE link_id = $1", link).execute(&db).await.unwrap();
     sqlx::query!("UPDATE email_mailbox_settings_work SET next_run_at = now() + interval '1 hour' WHERE link_id = $1", link).execute(&db).await.unwrap();
 
-    // The account gets its mailbox; the next probe finds it.
-    assert!(emulator.remove_fault(fault));
-    make_catalog_due(&db, link).await;
-    assert!(service.discover_once().await.unwrap());
-    assert!(!marked(&db, link).await);
-    let failures = sqlx::query_scalar!(
-        "SELECT failures FROM email_mailbox_watch_work WHERE link_id = $1",
+    let revision = sqlx::query_scalar!(
+        "SELECT revision FROM email_mailbox_watch_work WHERE link_id = $1",
         link
     )
     .fetch_one(&db)
     .await
     .unwrap();
-    assert_eq!(failures, 0);
+
+    // The account gets its mailbox; the next probe finds it.
+    assert!(emulator.remove_fault(fault));
+    make_catalog_due(&db, link).await;
+    assert!(service.discover_once().await.unwrap());
+    assert!(!marked(&db, link).await);
+    let upkeep = sqlx::query!(
+        "SELECT failures, revision FROM email_mailbox_watch_work WHERE link_id = $1",
+        link
+    )
+    .fetch_one(&db)
+    .await
+    .unwrap();
+    // A new revision, so an upkeep run that held its lease meanwhile can't
+    // put its old wait back when it releases.
+    assert_eq!((upkeep.failures, upkeep.revision), (0, revision + 1));
     let catalog_due = sqlx::query_scalar!(
         r#"SELECT next_run_at <= now() AS "due!" FROM email_sync_streams WHERE link_id = $1 AND kind = 'folder_catalog'"#,
         link
@@ -357,4 +367,29 @@ async fn a_server_error_at_the_inbox_leaves_the_link_unmarked(db: PgPool) {
     assert!(!marked(&db, link).await);
     assert_eq!(claimable(&repo).await, EVERY_KIND);
     emulator.shutdown().await;
+}
+
+#[sqlx::test(migrator = "MACRO_DB_MIGRATIONS")]
+async fn a_discovery_that_lost_its_lease_does_not_mark_the_link(db: PgPool) {
+    let link = connected(&db).await;
+    let repo = PgMailboxSync::new(db.clone());
+    let lease = repo
+        .claim_catalog(macro_uuid::generate_uuid_v7())
+        .await
+        .unwrap()
+        .unwrap();
+    // Its lease lapsed and another discovery took the catalog over.
+    sqlx::query!(
+        "UPDATE email_sync_streams SET lease_id = $2, fence = fence + 1 WHERE link_id = $1 AND kind = 'folder_catalog'",
+        link,
+        macro_uuid::generate_uuid_v7()
+    )
+    .execute(&db)
+    .await
+    .unwrap();
+    assert!(matches!(
+        repo.mark_no_mailbox(&lease).await,
+        Err(MailboxError::Stale)
+    ));
+    assert!(!marked(&db, link).await);
 }

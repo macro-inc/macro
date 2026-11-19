@@ -176,7 +176,7 @@ impl PgMailboxSync {
             .await
             .map_err(db_error)?;
             sqlx::query!(
-                "UPDATE email_mailbox_watch_work SET next_run_at = now(),failures = 0 WHERE link_id = $1",
+                "UPDATE email_mailbox_watch_work SET next_run_at = now(),revision = revision + 1,failures = 0 WHERE link_id = $1",
                 lease.mailbox.link_id
             )
             .execute(&mut *tx)
@@ -201,14 +201,20 @@ impl PgMailboxSync {
     ) -> Result<u32, MailboxError> {
         let marked_seconds = sqlx::query_scalar!(
             r#"
-            UPDATE email_links SET mailbox_unavailable_at = COALESCE(mailbox_unavailable_at, now()),
-                updated_at = CASE WHEN mailbox_unavailable_at IS NULL THEN now() ELSE updated_at END
-            WHERE id = $1 AND sync_generation = $2 AND grant_generation = $3 AND is_sync_active
-            RETURNING floor(EXTRACT(EPOCH FROM now() - mailbox_unavailable_at))::bigint AS "marked_seconds!"
+            UPDATE email_links l SET mailbox_unavailable_at = COALESCE(l.mailbox_unavailable_at, now()),
+                updated_at = CASE WHEN l.mailbox_unavailable_at IS NULL THEN now() ELSE l.updated_at END
+            FROM email_sync_streams s
+            WHERE s.id = $4 AND s.lease_id = $5 AND s.fence = $6 AND s.lease_until > now()
+                AND l.id = s.link_id AND s.generation = l.sync_generation
+                AND l.id = $1 AND l.sync_generation = $2 AND l.grant_generation = $3 AND l.is_sync_active
+            RETURNING floor(EXTRACT(EPOCH FROM now() - l.mailbox_unavailable_at))::bigint AS "marked_seconds!"
         "#,
             lease.mailbox.link_id,
             lease.mailbox.sync_generation,
-            lease.mailbox.grant_generation
+            lease.mailbox.grant_generation,
+            lease.id,
+            lease.lease_id,
+            lease.fence
         )
         .fetch_optional(&self.db)
         .await

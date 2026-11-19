@@ -566,13 +566,17 @@ tools — hexagonal, heavily feature-gated.
 - A folder discovery that Graph answers 404 at the Inbox
   (`MailFolderCatalog::NoMailbox`: the account has no mailbox Graph serves)
   marks the link `mailbox_unavailable_at` (`defer_reason=no_mailbox`, the
-  span's `graph.error_code`). Every Outlook claim but the catalog's skips a
+  span's `graph.error_code`), fenced to its catalog lease like the commit,
+  so a discovery that lost its lease can't mark a link a newer one cleared.
+  Every Outlook claim but the catalog's skips a
   marked link (`l.mailbox_unavailable_at IS NULL`); give a new claim of work
   that calls Graph the same filter. Discovery stays claimed as the probe and
   waits as long as the link has been marked (30 s to 12 h). The catalog
   commit that finds the mailbox clears the mark and makes the link's
-  streams, subscription upkeep (failures reset) and settings work due at
-  once; a reconnect (`email_service` `mailbox_init.rs`) clears it too. Any
+  streams, subscription upkeep (a new revision, failures reset) and settings
+  work due at once. A reconnect (`email_service` `mailbox_init.rs`) clears
+  it too, and with the same grant, which starts no new generation, makes
+  the same work and discovery due itself; keep the two wakes alike. Any
   other discovery failure, a 5xx included, stays a provider error. The
   inbox's sync status reads `MailboxUnavailable`.
 - Process deleted-user bindings in the domain by link id, custodian before

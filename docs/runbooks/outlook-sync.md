@@ -211,7 +211,7 @@ and the Integrations row asks for attention.
 The first discovery that finds the Inbox clears the mark and makes the
 link's folder, contacts, settings and subscription work due at once, with
 the subscription's failures reset; message rows keep their own retry times.
-A reconnect clears it too.
+A reconnect clears it too and makes that work, and discovery, due at once.
 
 - List them: `env:prod "outlook mailbox health" @mailbox_unavailable:true`,
   grouped by `@link_id`.
