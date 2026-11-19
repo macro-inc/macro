@@ -337,9 +337,10 @@ each run.
   and check (`ActionConfiguration`, `ActionConfigurationUpdate`; validated by
   `appearance::check_pick`, which names Macro's icons when it refuses one). An
   update applies a pick after saving the configuration, and only when the
-  caller acts for the owner. `PUT /appearance` is the owner's choice and sets
-  `scheduled_action.appearance_chosen_by_owner`, even for no icon; an agent's
-  pick (`AppearanceChooser::Agent`) never replaces it.
+  caller acts for the owner; a repeated sub-routine key checks a pick but
+  keeps the look the key created. `PUT /appearance` is the owner's choice and
+  sets `scheduled_action.appearance_chosen_by_owner`, even for no icon; an
+  agent's pick (`AppearanceChooser::Agent`) never replaces it.
 - Templates: the owner shares a snapshot of a routine (keyed by the routine's
   ID) with its references marked as variables; publishing, reading, and activation
   require the caller's `enable-routine-sharing` PostHog flag. Missing flags,
