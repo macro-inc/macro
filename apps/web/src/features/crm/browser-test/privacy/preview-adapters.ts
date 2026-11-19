@@ -16,9 +16,12 @@ import { policyClient } from './policy-adapter';
 export * from '@app/lib/analytics/posthog.tsx';
 export * from '@core/context/user.ts';
 export * from '@queries/team/teams.ts';
+export * from '@service-storage/crm-access-authority.ts';
 
 const params = new URLSearchParams(location.search);
 const crmAccess = () => !params.has('no-access');
+export const crmAccessAllowed = crmAccess;
+export const crmAccessState = () => (crmAccess() ? 'allowed' : 'denied');
 export const [excludedListReads, setExcludedListReads] = createSignal(0);
 const pendingPrivacyRead = Promise.withResolvers<void>();
 export const finishPrivacyRead = () => pendingPrivacyRead.resolve();

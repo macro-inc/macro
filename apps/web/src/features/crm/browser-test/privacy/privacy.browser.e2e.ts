@@ -12,6 +12,9 @@ test.beforeEach(async ({ page }) => {
       });
     return route.continue();
   });
+  // Keep external analytics scripts from adding unrelated requests to the
+  // assertion that this fixture never fetches CRM records.
+  await page.route('https://**', (route) => route.abort());
   await page.routeWebSocket('**/*', (socket) => socket.close());
 });
 

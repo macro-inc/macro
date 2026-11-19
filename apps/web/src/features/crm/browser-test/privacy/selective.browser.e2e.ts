@@ -11,6 +11,7 @@ test.beforeEach(async ({ page }) => {
         })
       : route.continue()
   );
+  await page.route('https://**', (route) => route.abort());
   await page.routeWebSocket('**/*', (socket) => socket.close());
 });
 
