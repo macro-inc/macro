@@ -2,6 +2,7 @@
  * @file This component rendered the accessory for the code nodes - a copy button and a syntax highlighting
  * language selector.
  */
+import { t } from '@app/lib/i18n';
 import { isInBlock, useIsNestedBlock } from '@core/block';
 import { ENABLE_SVG_PREVIEW } from '@core/constant/featureFlags';
 import { onElementConnect } from '@core/util/onElementConnect';
@@ -18,12 +19,14 @@ import FilePy from '@icon/system/regular/file-py.svg';
 import FileRs from '@icon/system/regular/file-rs.svg';
 import FileSql from '@icon/system/regular/file-sql.svg';
 import FileTs from '@icon/system/regular/file-ts.svg';
+import TerminalIcon from '@icon/system/regular/terminal.svg';
 import TrashCan from '@icon/system/regular/trash-simple.svg';
 import { $isCodeNode, CodeNode } from '@lexical/code';
 import {
   $isCustomCodeNode,
   LanguageDefinitions,
   normalizedLanguage,
+  PROMPT_LANGUAGE,
   type SupportedLanguage,
 } from '@macro-inc/lexical-core';
 import { Button, CopyButton, cn, Dropdown, ToggleSwitch } from '@ui';
@@ -46,7 +49,9 @@ import {
 import { Dynamic } from 'solid-js/web';
 import { glueToElement } from '../../directive/glueToElement';
 import { deleteCodeNode } from '../../plugins/code/deleteCodeNode';
+import { hasPromptBlocks } from '../../plugins/code/prompt-blocks';
 import { autoRegister } from '../../plugins/shared/utils';
+import { PromptBlockLabel, PromptBlockRun } from './PromptBlockHeader';
 
 const LanguageIcons: Record<
   SupportedLanguage,
@@ -69,6 +74,7 @@ const LanguageIcons: Record<
   sql: FileSql,
   bash: FileCode,
   svg: FileCode,
+  prompt: TerminalIcon,
 };
 
 function StaticLabel(props: { language: SupportedLanguage }) {
@@ -86,6 +92,8 @@ function CodeLanguageSelector(props: {
   language: Accessor<string | null>;
   setLanguage: (language: string) => void;
   editor?: LexicalEditor;
+  /** Whether the editor offers prompt blocks, which show as a Prompt card. */
+  promptBlocks: boolean;
 }) {
   const [open, setOpen] = createSignal(false);
   const editable = () => {
@@ -98,11 +106,24 @@ function CodeLanguageSelector(props: {
     }
     return 'plaintext';
   };
+  const isPrompt = () =>
+    props.promptBlocks && validCurrentLanguage() === PROMPT_LANGUAGE;
+  const label = () =>
+    isPrompt()
+      ? t('promptBlock.label')
+      : LanguageDefinitions[validCurrentLanguage()].label;
 
   return (
     <Show
       when={editable()}
-      fallback={<StaticLabel language={validCurrentLanguage()} />}
+      fallback={
+        <Show
+          when={isPrompt()}
+          fallback={<StaticLabel language={validCurrentLanguage()} />}
+        >
+          <PromptBlockLabel />
+        </Show>
+      }
     >
       <Dropdown open={open()} onOpenChange={setOpen}>
         <Dropdown.Trigger
@@ -115,7 +136,7 @@ function CodeLanguageSelector(props: {
             component={LanguageIcons[validCurrentLanguage()]}
             class="size-4"
           />
-          <span>{LanguageDefinitions[validCurrentLanguage()].label}</span>
+          <span>{label()}</span>
         </Dropdown.Trigger>
         <Dropdown.Content>
           <Dropdown.Group>
@@ -142,6 +163,18 @@ function CodeLanguageSelector(props: {
               )}
             </For>
           </Dropdown.Group>
+          <Show when={props.promptBlocks}>
+            <Dropdown.Group>
+              <Dropdown.Item
+                onSelect={() => props.setLanguage(PROMPT_LANGUAGE)}
+              >
+                <TerminalIcon class="size-4 shrink-0" />
+                <span class="flex-1 truncate">
+                  {LanguageDefinitions.prompt.label}
+                </span>
+              </Dropdown.Item>
+            </Dropdown.Group>
+          </Show>
         </Dropdown.Content>
       </Dropdown>
     </Show>
@@ -157,37 +190,39 @@ export function CodeBoxAccessory(props: {
   const [isPreviewMode, setIsPreviewMode] = createSignal(false);
 
   const isNested = isInBlock() && useIsNestedBlock();
+  const promptBlocks = hasPromptBlocks(props.editor);
+  const isPrompt = () =>
+    promptBlocks && language().toLowerCase() === PROMPT_LANGUAGE;
 
-  if (ENABLE_SVG_PREVIEW) {
-    autoRegister(
-      props.editor.registerMutationListener(
-        CodeNode,
-        (mutations) => {
-          const match = mutations.get(props.nodeKey);
-          if (match === 'created' || match === 'updated') {
-            queueMicrotask(() =>
-              props.editor.read(() => {
-                const node = $getNodeByKey(props.nodeKey);
-                if (!$isCodeNode(node)) return;
-                setLanguage(node.getLanguage() ?? 'plain');
-                if ($isCustomCodeNode(node)) {
-                  setIsPreviewMode(node.getPreviewEnabled());
-                }
-              })
-            );
-          }
-        },
-        { skipInitialization: false }
-      )
+  autoRegister(
+    props.editor.registerMutationListener(
+      CodeNode,
+      (mutations) => {
+        const match = mutations.get(props.nodeKey);
+        if (match === 'created' || match === 'updated') {
+          queueMicrotask(() =>
+            props.editor.read(() => {
+              const node = $getNodeByKey(props.nodeKey);
+              if (!$isCodeNode(node)) return;
+              setLanguage(node.getLanguage() ?? 'plain');
+              if ($isCustomCodeNode(node)) {
+                setIsPreviewMode(node.getPreviewEnabled());
+              }
+            })
+          );
+        }
+      },
+      { skipInitialization: false }
+    )
+  );
+
+  const readCode = () =>
+    props.editor.read(
+      () => $getNodeByKey(props.nodeKey)?.getTextContent() ?? ''
     );
-  }
 
   const copyCode = async () => {
-    const code = props.editor.read(() => {
-      const node = $getNodeByKey(props.nodeKey);
-      if (!node) return '';
-      return node.getTextContent();
-    });
+    const code = readCode();
     if (!code) return false;
     try {
       await navigator.clipboard.writeText(code);
@@ -226,6 +261,7 @@ export function CodeBoxAccessory(props: {
   createEffect(() => {
     if (isNested) return;
     props.floatRef.classList.add('__accessory-code-box');
+    props.floatRef.classList.toggle('md-prompt-box', isPrompt());
   });
 
   return (
@@ -239,58 +275,67 @@ export function CodeBoxAccessory(props: {
           }));
         }}
       >
-        <div class="w-full flex justify-between content-center items-start p-1 pointer-events-auto text-ink-extra-muted/50">
+        <div
+          class="w-full flex justify-between content-center p-1 pointer-events-auto text-ink-extra-muted/50"
+          classList={{ 'items-start': !isPrompt(), 'items-center': isPrompt() }}
+        >
           <CodeLanguageSelector
             language={language}
             setLanguage={setLanguageOnNode}
             editor={props.editor}
+            promptBlocks={promptBlocks}
           />
-          <div class="flex items-center h-full">
-            <Show when={showPreviewToggle()}>
-              <div class="flex items-center gap-2 mr-2">
-                <div class="text-xs text-ink-extra-muted/50">Preview</div>
-                <ToggleSwitch
-                  size="sm"
-                  label="Preview"
-                  labelClass="sr-only"
-                  checked={isPreviewMode()}
-                  onChange={(enabled) => {
-                    setIsPreviewMode(enabled);
-                    setPreviewModeOnNode(enabled);
+          <Show when={isPrompt()}>
+            <PromptBlockRun prompt={readCode} />
+          </Show>
+          <Show when={!isPrompt()}>
+            <div class="flex items-center h-full">
+              <Show when={showPreviewToggle()}>
+                <div class="flex items-center gap-2 mr-2">
+                  <div class="text-xs text-ink-extra-muted/50">Preview</div>
+                  <ToggleSwitch
+                    size="sm"
+                    label="Preview"
+                    labelClass="sr-only"
+                    checked={isPreviewMode()}
+                    onChange={(enabled) => {
+                      setIsPreviewMode(enabled);
+                      setPreviewModeOnNode(enabled);
+                    }}
+                  />
+                </div>
+              </Show>
+              <Show when={props.editor.isEditable()}>
+                <Button
+                  variant="ghost"
+                  size="icon-sm"
+                  class="text-ink-extra-muted/50 hover:text-failure h-full"
+                  tooltip="Delete Code"
+                  on:click={(e) => {
+                    e.stopPropagation();
+                    e.preventDefault();
+                    deleteCode();
                   }}
-                />
-              </div>
-            </Show>
-            <Show when={props.editor.isEditable()}>
-              <Button
+                >
+                  <TrashCan class="size-3.5 touch:size-6 shrink-0 pointer-events-none" />
+                </Button>
+              </Show>
+              <CopyButton
                 variant="ghost"
                 size="icon-sm"
-                class="text-ink-extra-muted/50 hover:text-failure h-full"
-                tooltip="Delete Code"
-                on:click={(e) => {
+                class="text-ink-extra-muted/50 h-full"
+                tooltip="Copy Code"
+                onClick={(e) => {
                   e.stopPropagation();
                   e.preventDefault();
-                  deleteCode();
+                  return copyCode();
                 }}
-              >
-                <TrashCan class="size-3.5 touch:size-6 shrink-0 pointer-events-none" />
-              </Button>
-            </Show>
-            <CopyButton
-              variant="ghost"
-              size="icon-sm"
-              class="text-ink-extra-muted/50 h-full"
-              tooltip="Copy Code"
-              onClick={(e) => {
-                e.stopPropagation();
-                e.preventDefault();
-                return copyCode();
-              }}
-              icon={
-                <Copy class="size-3.5 touch:size-6 shrink-0 pointer-events-none" />
-              }
-            ></CopyButton>
-          </div>
+                icon={
+                  <Copy class="size-3.5 touch:size-6 shrink-0 pointer-events-none" />
+                }
+              ></CopyButton>
+            </div>
+          </Show>
         </div>
         <Show when={isPreviewMode() && showPreviewToggle()}>
           <SvgPreview

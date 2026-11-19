@@ -5,6 +5,7 @@ export function availableActions(
   actions: readonly Action[],
   options: {
     databasesEnabled: boolean;
+    promptBlocksEnabled: boolean;
     ignoreActionIds?: readonly string[];
     hasNodes: (dependencies: NonNullable<Action['dependencies']>) => boolean;
   }
@@ -15,6 +16,7 @@ export function availableActions(
       !options.databasesEnabled
     )
       return false;
+    if (action.id === 'prompt' && !options.promptBlocksEnabled) return false;
     if (options.ignoreActionIds?.includes(action.id)) return false;
     const { dependencies } = action;
     if (dependencies === undefined || dependencies.length === 0) return true;

@@ -9,6 +9,7 @@ import { buildHandleFromConfig } from './buildHandleFromConfig';
 import type {
   ActionsOptions,
   AgentCommandsOptions,
+  CodeOptions,
   EditorBuilder,
   EditorCallbacks,
   EditorConfig,
@@ -96,8 +97,8 @@ export class EditorConfigBuilder implements EditorBuilder {
     return this;
   }
 
-  withCode(): this {
-    this.state.code = true;
+  withCode(config: CodeOptions = {}): this {
+    this.state.code = config;
     return this;
   }
 

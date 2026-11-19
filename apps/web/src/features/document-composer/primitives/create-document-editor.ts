@@ -32,7 +32,7 @@ export function createDocumentEditor(options: {
   return editor
     .withEmojis()
     .withActions()
-    .withCode()
+    .withCode({ promptBlocks: true })
     .withMedia({ fileDrop: true })
     .withSelectionData()
     .withFloatingFormatMenu()

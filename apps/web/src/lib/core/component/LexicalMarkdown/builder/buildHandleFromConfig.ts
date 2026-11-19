@@ -309,6 +309,7 @@ export function buildHandleFromConfig(config: EditorConfig): EditorHandle {
       codePlugin({
         accessories: accessoryStore,
         setAccessories: setAccessoryStore,
+        promptBlocks: config.code.promptBlocks,
       })
     );
   }

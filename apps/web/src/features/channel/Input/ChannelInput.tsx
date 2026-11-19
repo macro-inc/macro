@@ -415,6 +415,7 @@ export function ChannelInput(props: ChannelInputProps) {
       ...(initialFeatures.richBlocks ? [] : RICH_BLOCK_ACTION_IDS),
       ...(initialFeatures.gifs ? [] : ['gif']),
     ],
+    promptBlocks: initialFeatures.richBlocks,
     users: mentionUsers,
     transformUsers,
     scrollContainer,

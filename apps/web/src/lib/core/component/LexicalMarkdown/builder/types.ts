@@ -97,6 +97,11 @@ export interface MediaOptions {
   fileDrop?: boolean | MediaDropOptions;
 }
 
+export interface CodeOptions {
+  /** Offer prompt blocks (`/prompt` and the code block type); never in email. */
+  promptBlocks?: boolean;
+}
+
 export interface FocusLeaveCallbacks {
   /** Called when keyboard focus leaves the start of the editor (e.g. Shift+Tab, ArrowUp) */
   onStart: (e: KeyboardEvent) => void;
@@ -178,7 +183,7 @@ export interface EditorConfig {
   singleLine: boolean;
   handlers: EditorCallbacks;
   media: MediaOptions | false;
-  code: boolean;
+  code: CodeOptions | false;
   checkboxToTask: boolean;
   filePaste?: FilePasteOptions;
   /** Where programmatic focus puts the caret when the editor has no selection. */

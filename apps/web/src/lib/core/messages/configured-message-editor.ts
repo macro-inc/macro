@@ -44,6 +44,8 @@ export type MessageEditorOptions = {
   ) => void;
   /** Shared slash actions a surface can't carry, e.g. tables in a WhatsApp group. */
   ignoreActionIds?: string[];
+  /** Offer prompt blocks; hosts that carry only plain text leave them out. */
+  promptBlocks?: boolean;
   /** Slash actions a surface adds beyond the shared set, e.g. a channel's `/poll`. */
   additionalActions?: Action[];
   /** Invoked when the user picks the "Image" slash action. Opens a file picker and hands files back. */
@@ -86,7 +88,7 @@ export function createConfiguredMessageEditor(options: MessageEditorOptions) {
     })
     .withLinks({ floatingMenu: true, autoLinkMatchMode: 'common-tlds' })
     .withHistory({ timeGap: 400 })
-    .withCode()
+    .withCode({ promptBlocks: options.promptBlocks })
     .withRestoreFocus()
     .withSelectionData();
   if (options.inlineMedia) editor.withMedia({ fileDrop: true });
