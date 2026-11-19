@@ -10,6 +10,7 @@ import { render } from 'solid-js/web';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { scheduledActionKeys } from './keys';
 import {
+  fetchChildren,
   useChildrenQuery,
   useCodeUpgradesQuery,
   useCreateScheduleMutation,
@@ -23,6 +24,7 @@ import {
   useRoutineTemplateQuery,
   useUnshareTemplateMutation,
 } from './templates';
+import './sync';
 
 const setEnabled = vi.hoisted(() => vi.fn());
 const createSchedule = vi.hoisted(() => vi.fn());
@@ -35,6 +37,13 @@ const listChildren = vi.hoisted(() => vi.fn());
 const getTemplate = vi.hoisted(() => vi.fn());
 const unshareTemplate = vi.hoisted(() => vi.fn());
 const track = vi.hoisted(() => vi.fn());
+const subscribe = vi.hoisted(() =>
+  vi.fn<(receive: (message: { type: string; data: unknown }) => void) => void>()
+);
+vi.mock('@service-connection/websocket', async (importOriginal) => ({
+  ...(await importOriginal<typeof import('@service-connection/websocket')>()),
+  createConnectionWebsocketEffect: subscribe,
+}));
 vi.mock('@service-scheduled-action/client', () => ({
   scheduledActionClient: {
     setEnabled,
@@ -54,6 +63,8 @@ vi.mock('@queries/client', async () => {
   const { QueryClient } = await import('@tanstack/solid-query');
   return { queryClient: new QueryClient() };
 });
+
+const runUpdateListeners = subscribe.mock.calls.map(([receive]) => receive);
 
 const routine: ScheduledAction = {
   id: 'routine',
@@ -104,6 +115,15 @@ function schedules(): ScheduledAction[] | undefined {
   return queryClient.getQueryData(scheduledActionKeys.list.queryKey);
 }
 
+function notifyRun(type: 'started' | 'stopped') {
+  for (const receive of runUpdateListeners) {
+    receive({
+      type: 'scheduled_action_update',
+      data: { type, action_id: routine.id },
+    });
+  }
+}
+
 beforeEach(() => {
   getTemplate.mockReset();
   unshareTemplate.mockReset();
@@ -116,7 +136,86 @@ beforeEach(() => {
   listSubRoutines.mockReset();
   listChildren.mockReset();
   track.mockReset();
-  queryClient.setQueryData(scheduledActionKeys.list.queryKey, [routine, other]);
+  queryClient.setQueryData(scheduledActionKeys.list.queryKey, [
+    { ...routine },
+    { ...other },
+  ]);
+});
+
+it.each([
+  [scheduledActionKeys.list.queryKey, listSchedules, useSchedulesQuery],
+  [
+    scheduledActionKeys.subRoutines.queryKey,
+    listSubRoutines,
+    useSubRoutinesQuery,
+  ],
+] as const)(
+  'preserves a start claim through an older list response for %j',
+  async (key, list, useList) => {
+    const response = Promise.withResolvers<unknown>();
+    list.mockReturnValueOnce(response.promise);
+    function Probe() {
+      useList(() => true);
+      return null;
+    }
+    dispose = render(
+      () => (
+        <QueryClientProvider client={queryClient}>
+          <Probe />
+        </QueryClientProvider>
+      ),
+      document.createElement('div')
+    );
+    expect(list).toHaveBeenCalledOnce();
+    const read = queryClient.getQueryCache().find({ queryKey: key })?.promise;
+    notifyRun('started');
+    response.resolve(ok([{ ...routine }, { ...other }]));
+    const rows = await read;
+    expect(rows).toEqual([{ ...routine, claimed: expect.any(String) }, other]);
+    expect(queryClient.getQueryData(key)).toEqual(rows);
+
+    list.mockResolvedValueOnce(ok([{ ...routine }, { ...other }]));
+    await queryClient.refetchQueries({ queryKey: key, exact: true });
+    expect(queryClient.getQueryData(key)).toEqual([routine, other]);
+  }
+);
+
+it('preserves a stop claim and returns the fresh children count to Delete', async () => {
+  const key = scheduledActionKeys.children({ scheduleId: 'parent' }).queryKey;
+  const old = { ...routine, claimed: '2026-09-28T12:00:00Z' };
+  queryClient.setQueryData(key, [{ ...old }]);
+  const response = Promise.withResolvers<unknown>();
+  const refreshed = Promise.withResolvers<void>();
+  listChildren.mockReturnValueOnce(response.promise);
+  listChildren.mockImplementationOnce(async () => {
+    refreshed.resolve();
+    return ok([{ ...routine }, { ...other }]);
+  });
+  function Probe() {
+    useChildrenQuery(
+      () => 'parent',
+      () => true
+    );
+    return null;
+  }
+  dispose = render(
+    () => (
+      <QueryClientProvider client={queryClient}>
+        <Probe />
+      </QueryClientProvider>
+    ),
+    document.createElement('div')
+  );
+  expect(listChildren).toHaveBeenCalledOnce();
+  const read = fetchChildren('parent');
+  notifyRun('started');
+  notifyRun('stopped');
+  response.resolve(ok([{ ...old }, { ...other }]));
+
+  const result = await read;
+  expect(result).toEqual(ok([routine, other]));
+  await refreshed.promise;
+  expect(listChildren).toHaveBeenCalledTimes(2);
 });
 
 it('keeps sharing revoked when an older status response arrives after DELETE', async () => {

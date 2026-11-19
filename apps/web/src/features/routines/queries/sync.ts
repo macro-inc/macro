@@ -1,3 +1,4 @@
+import { fireAndForget } from '@core/util/fireAndForget';
 import { queryClient } from '@queries/client';
 import { createConnectionWebsocketEffect } from '@service-connection/websocket';
 import type {
@@ -5,8 +6,10 @@ import type {
   ExecutionResource,
   ScheduledAction,
 } from '@service-scheduled-action/generated/schemas';
+import type { Query } from '@tanstack/solid-query';
 import { z } from 'zod';
 import { scheduledActionKeys } from './keys';
+import { recordListClaim } from './list-claims';
 import {
   getExecutionResource,
   getHistoryResource,
@@ -48,18 +51,21 @@ function parsePayload(data: unknown): UpdatePayload | undefined {
   };
 }
 
+const listKeys = [
+  scheduledActionKeys.list.queryKey,
+  scheduledActionKeys.subRoutines.queryKey,
+  scheduledActionKeys.children._def,
+];
+
 function patchClaimed(actionId: string, claimed: string | null): void {
+  recordListClaim(actionId, claimed);
   queryClient.setQueryData(
     scheduledActionKeys.detail({ scheduleId: actionId }).queryKey,
     (current: ScheduledAction | undefined) =>
       current ? { ...current, claimed } : undefined
   );
 
-  for (const queryKey of [
-    scheduledActionKeys.list.queryKey,
-    scheduledActionKeys.subRoutines.queryKey,
-    scheduledActionKeys.children._def,
-  ]) {
+  for (const queryKey of listKeys) {
     queryClient.setQueriesData<ScheduledAction[]>({ queryKey }, (current) => {
       if (!current) return current;
       const idx = current.findIndex((a) => a.id === actionId);
@@ -68,6 +74,33 @@ function patchClaimed(actionId: string, claimed: string | null): void {
       next[idx] = { ...next[idx], claimed: claimed ?? undefined };
       return next;
     });
+  }
+}
+
+async function refetchAfterRead(query: Query, read: Promise<unknown>) {
+  await Promise.allSettled([read]);
+  if (queryClient.getQueryCache().get(query.queryHash) !== query) return;
+  await queryClient.invalidateQueries(
+    { queryKey: query.queryKey, exact: true },
+    { cancelRefetch: false }
+  );
+}
+
+function invalidateScheduleLists() {
+  for (const queryKey of listKeys) {
+    const active = queryClient
+      .getQueryCache()
+      .findAll({ queryKey, type: 'active' });
+    for (const query of active) {
+      if (query.state.fetchStatus === 'idle' || !query.promise) continue;
+      // A run can create or finish children. An older response keeps its rows
+      // for callers like Delete, then the active list gets a new snapshot.
+      fireAndForget(refetchAfterRead(query, query.promise), 'routine.claim');
+    }
+    fireAndForget(
+      queryClient.invalidateQueries({ queryKey }, { cancelRefetch: false }),
+      'routine.claim'
+    );
   }
 }
 
@@ -135,24 +168,15 @@ createConnectionWebsocketEffect((data) => {
     return;
   }
 
+  patchClaimed(payload.action_id, null);
   queryClient.invalidateQueries({
     queryKey: scheduledActionKeys.detail({ scheduleId: payload.action_id })
       .queryKey,
   });
-  queryClient.invalidateQueries({
-    queryKey: scheduledActionKeys.list.queryKey,
-  });
-  // The run may have created sub-routines, or been one finishing.
-  queryClient.invalidateQueries({
-    queryKey: scheduledActionKeys.subRoutines.queryKey,
-  });
-  queryClient.invalidateQueries({
-    queryKey: scheduledActionKeys.children._def,
-  });
+  invalidateScheduleLists();
   // stopped: drop the synthetic pending row immediately so the UI stops
   // showing it as running, then invalidate to refetch the server-persisted
   // record (with end_time, is_success, and a real id).
-  patchClaimed(payload.action_id, null);
   if (payload.resource) {
     removePendingHistoryRow(payload.resource, payload.action_id);
   }

@@ -144,9 +144,10 @@ describe('scheduled-action websocket synchronization', () => {
     expect(
       queryClient.getQueryData<ScheduledAction>(detailKey)?.claimed
     ).toBeNull();
-    expect(invalidate).toHaveBeenCalledWith({
-      queryKey: scheduledActionKeys.list.queryKey,
-    });
+    expect(invalidate).toHaveBeenCalledWith(
+      { queryKey: scheduledActionKeys.list.queryKey },
+      { cancelRefetch: false }
+    );
     expect(invalidate).toHaveBeenCalledWith({
       queryKey: scheduledActionKeys.detail({ scheduleId: 'routine' }).queryKey,
     });

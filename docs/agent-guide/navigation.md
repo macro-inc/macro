@@ -1326,8 +1326,9 @@ task and can be detached with the event flag off.
   reference-backed copy, the parent must still define it, its stored inputs
   must match, and the editor must see no active run claim. If any retained
   definition requires apps, connection information must be loaded and every
-  required app must be connected. A run-start notification updates the
-  active claim in the row caches.
+  required app must be connected. Run notifications update the claim in the
+  row caches, including when a response arrives from a list or children
+  request that started before the notification.
 - **Duplicate** sends the saved task and triggers, including when the task
   uses steps this editor cannot open. An unfired overdue one-time trigger is
   due immediately on create. Required apps across retained definitions must

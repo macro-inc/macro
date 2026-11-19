@@ -21,6 +21,7 @@ import {
 import { ResultAsync } from 'neverthrow';
 import type { Accessor } from 'solid-js';
 import { scheduledActionKeys } from './keys';
+import { readScheduleList } from './list-claims';
 import { routineTargetKind } from './routine-draft';
 import {
   routineQueryTrace,
@@ -98,7 +99,9 @@ function patchScheduleEnabled(scheduleId: string, enabled: boolean) {
 }
 
 function fetchSchedules() {
-  return throwOnErr(async () => await scheduledActionClient.listSchedules());
+  return readScheduleList(() =>
+    throwOnErr(() => scheduledActionClient.listSchedules())
+  );
 }
 
 export function useSchedulesQuery(enabled: Accessor<boolean>) {
@@ -208,7 +211,9 @@ export function useCodeUpgradesQuery(
 }
 
 function fetchSubRoutines() {
-  return throwOnErr(async () => await scheduledActionClient.listSubRoutines());
+  return readScheduleList(() =>
+    throwOnErr(() => scheduledActionClient.listSubRoutines())
+  );
 }
 
 // Cached past unmount; closes over the resolved routine id only.
@@ -217,9 +222,9 @@ function childrenQueryOptions(scheduleId: string, enabled: boolean) {
     queryKey: scheduledActionKeys.children({ scheduleId }).queryKey,
     enabled,
     behavior: routineQueryTrace,
-    queryFn: async () =>
-      throwOnErr(
-        async () => await scheduledActionClient.listChildren({ scheduleId })
+    queryFn: () =>
+      readScheduleList(() =>
+        throwOnErr(() => scheduledActionClient.listChildren({ scheduleId }))
       ),
     ...QUERY_REFETCH_BEHAVIOR,
   });
