@@ -5,7 +5,10 @@
 
 import { Telemetry } from '@macro-inc/observability';
 import { match } from 'ts-pattern';
-import { isReadOnlyCacheRequest } from '../host/read-availability';
+import {
+  cacheRequestStamp,
+  isReadOnlyCacheRequest,
+} from '../host/read-availability';
 import { executePeopleRequest } from '../people/worker';
 import type {
   AffectedOperationsResult,
@@ -633,21 +636,17 @@ export class CacheWorkerCore {
           this.push({ kind: 'authority-changed', authority });
         this.executingAuthority = before;
       }
-      const writesSnapshot = [
-        'write',
-        'hydrate',
-        'calendar-commit',
-        'people-update',
-        'contact-reconcile',
-        'invalidate',
-        'delete-records',
-      ].includes(request.kind);
+      const storesContent = cacheRequestStamp(request.kind) === 'captured';
+      const removes =
+        request.kind === 'invalidate' || request.kind === 'delete-records';
+      // A queued command settles under its own stamp even once that is stale.
       const settlesCommand =
         request.kind === 'enqueue-optimistic-mutation' ||
         request.kind === 'commit-optimistic-write';
+      const mustBeCurrent = (storesContent && !settlesCommand) || removes;
       if (
-        (writesSnapshot && request.generation !== before) ||
-        ((writesSnapshot || settlesCommand) && request.generation === undefined)
+        (mustBeCurrent && request.generation !== before) ||
+        (storesContent && request.generation === undefined)
       )
         throw new Error(
           'cache response belongs to an older session generation'

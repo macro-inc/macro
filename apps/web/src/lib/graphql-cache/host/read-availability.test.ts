@@ -1,6 +1,7 @@
 import { expect, it } from 'vitest';
 import {
   CacheReadAvailability,
+  cacheRequestStamp,
   isReadOnlyCacheRequest,
 } from './read-availability';
 
@@ -44,4 +45,31 @@ it('preserves read/write startup continuation order', async () => {
   initialized.resolve();
   await Promise.all(pending);
   expect(order).toEqual([true, false, true, false]);
+});
+
+it.each([
+  ['read', 'observed'],
+  ['search', 'observed'],
+  ['people-search', 'observed'],
+  ['invalidate', 'observed'],
+  ['delete-records', 'observed'],
+  ['init', 'none'],
+  ['transition-authority', 'none'],
+  ['claim-next-mutation', 'none'],
+  ['rollback-optimistic-write', 'none'],
+  ['teardown', 'none'],
+  ['clear', 'none'],
+  ['write', 'captured'],
+  ['hydrate', 'captured'],
+  ['enqueue-optimistic-mutation', 'captured'],
+  ['commit-optimistic-write', 'captured'],
+  ['calendar-commit', 'captured'],
+  ['people-update', 'captured'],
+  ['contact-reconcile', 'captured'],
+] as const)('%s carries the %s generation', (kind, stamp) => {
+  expect(cacheRequestStamp(kind)).toBe(stamp);
+});
+
+it('requires a captured stamp from a request kind it does not know', () => {
+  expect(cacheRequestStamp('a-later-write' as never)).toBe('captured');
 });

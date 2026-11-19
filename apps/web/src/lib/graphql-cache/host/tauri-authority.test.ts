@@ -200,6 +200,50 @@ it('keeps a committed hydration broadcast stamped with its original authority', 
   );
 });
 
+const SCOPE = {
+  identity: 'macro|viewer@example.com',
+  storageGeneration: '00000000-0000-4000-8000-000000000001',
+};
+const EPOCH = '00000000-0000-4000-8000-000000000002';
+// A caller that omits the stamp despite the types, as older call sites did.
+const unstamped = undefined as unknown as string;
+it.each([
+  [
+    'graphql_cache_calendar_commit',
+    () => host.calendarCommit({ reset: true }, unstamped),
+  ],
+  [
+    'graphql_cache_people_update',
+    () =>
+      host.people!.update(
+        { scope: SCOPE, epoch: EPOCH, action: { kind: 'commit' } },
+        unstamped
+      ),
+  ],
+  [
+    'graphql_cache_contact_reconcile',
+    () =>
+      host.people!.reconcile(
+        {
+          scope: SCOPE,
+          fence: EPOCH,
+          viewer: SCOPE.identity,
+          requested: ['macro|person@example.com'],
+          present: [],
+        },
+        unstamped
+      ),
+  ],
+] as const)(
+  'sends an unstamped %s as the unknown generation, never the observed one',
+  async (command, send) => {
+    await host.authority!.current();
+    await send().catch(() => {});
+    const sent = invoke.mock.calls.find(([name]) => name === command);
+    expect(sent?.[1]).toMatchObject({ generation: UNKNOWN_CACHE_GENERATION });
+  }
+);
+
 it('never gives a pre-ready copied write the later owner generation', async () => {
   host.dispose();
   const started = Promise.withResolvers<void>();

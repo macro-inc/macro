@@ -88,6 +88,7 @@ import { CacheNavigationError } from './navigation-error';
 import { createNoopCacheHost } from './noop-host';
 import {
   CacheReadAvailability,
+  cacheRequestStamp,
   isReadOnlyCacheRequest,
 } from './read-availability';
 import type {
@@ -1434,20 +1435,11 @@ export function createWorkerCacheHost(options: WorkerHostOptions): CacheHost {
   ): Promise<unknown> {
     msg = {
       ...msg,
-      // Content keeps the stamp it was fetched under and is never relabelled.
-      // Reads, and removals, which carry no fetched content, take the observed
-      // generation.
+      // Content keeps the stamp it was fetched under and is never relabelled:
+      // only reads and removals take the observed generation.
       generation:
         msg.generation ??
-        (![
-          'write',
-          'hydrate',
-          'enqueue-optimistic-mutation',
-          'commit-optimistic-write',
-          'calendar-commit',
-          'people-update',
-          'contact-reconcile',
-        ].includes(msg.kind)
+        (cacheRequestStamp(msg.kind) === 'observed'
           ? authorityObserver.snapshot()?.generation
           : undefined) ??
         UNKNOWN_CACHE_GENERATION,

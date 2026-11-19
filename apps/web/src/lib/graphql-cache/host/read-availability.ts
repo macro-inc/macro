@@ -21,6 +21,39 @@ export function isReadOnlyCacheRequest(kind: CacheRequest['kind']): boolean {
   );
 }
 
+/** Requests that neither return nor store cached content. */
+function isControlCacheRequest(kind: CacheRequest['kind']): boolean {
+  return (
+    kind === 'init' ||
+    kind === 'current-authority' ||
+    kind === 'transition-authority' ||
+    kind === 'claim-next-mutation' ||
+    kind === 'defer-optimistic-write' ||
+    kind === 'rollback-optimistic-write' ||
+    kind === 'teardown' ||
+    kind === 'clear'
+  );
+}
+
+/**
+ * Whose generation a request carries. Reads and removals hold no fetched
+ * content, so a host stamps them with the generation it observes, and control
+ * requests carry none. Every other request, including any kind added later,
+ * stores content and must carry the generation that content was captured under.
+ */
+export function cacheRequestStamp(
+  kind: CacheRequest['kind']
+): 'observed' | 'captured' | 'none' {
+  if (
+    isReadOnlyCacheRequest(kind) ||
+    kind === 'invalidate' ||
+    kind === 'delete-records'
+  )
+    return 'observed';
+  if (isControlCacheRequest(kind)) return 'none';
+  return 'captured';
+}
+
 /** Interrupts read-only startup waits without canceling initialization or writes. */
 export class CacheReadAvailability {
   private unavailable: Error | undefined;

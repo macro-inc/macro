@@ -239,6 +239,48 @@ it('ignores malformed and foreign authority pushes without throwing from the tra
   expect(host.authority!.snapshot()).toEqual(state);
 });
 
+const SCOPE = {
+  identity: 'macro|viewer@example.com',
+  storageGeneration: '00000000-0000-4000-8000-000000000001',
+};
+const EPOCH = '00000000-0000-4000-8000-000000000002';
+// A caller that omits the stamp despite the types, as older call sites did.
+const unstamped = undefined as unknown as string;
+it.each([
+  ['calendar-commit', () => host.calendarCommit({ reset: true }, unstamped)],
+  [
+    'people-update',
+    () =>
+      host.people!.update(
+        { scope: SCOPE, epoch: EPOCH, action: { kind: 'commit' } },
+        unstamped
+      ),
+  ],
+  [
+    'contact-reconcile',
+    () =>
+      host.people!.reconcile(
+        {
+          scope: SCOPE,
+          fence: EPOCH,
+          viewer: SCOPE.identity,
+          requested: ['macro|person@example.com'],
+          present: [],
+        },
+        unstamped
+      ),
+  ],
+] as const)(
+  'sends an unstamped %s as the unknown generation, never the observed one',
+  async (kind, send) => {
+    await host.authority!.current();
+    await send().catch(() => {});
+    const request = requests.find((sent) => sent.kind === kind);
+    expect(request?.generation).toBe(UNKNOWN_CACHE_GENERATION);
+    expect(request?.generation).not.toBe(state.generation);
+  }
+);
+
 it('never restamps a pre-ready copied write after the owner becomes ready', async () => {
   await host.writeQuery({
     query: '{ user { id } }',
