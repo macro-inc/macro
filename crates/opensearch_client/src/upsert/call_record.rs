@@ -14,10 +14,10 @@ use crate::{
 mod test;
 
 /// Relation name for parent docs in the call_records join field.
-const PARENT_RELATION: &str = "call";
+pub(crate) const PARENT_RELATION: &str = "call";
 
 /// Relation name for child (segment) docs in the call_records join field.
-const CHILD_RELATION: &str = "segment";
+pub(crate) const CHILD_RELATION: &str = "segment";
 
 #[derive(Debug, serde::Serialize)]
 pub struct UpsertCallRecordSegmentArgs {

@@ -109,7 +109,7 @@ enforced by the ordinary backend APIs.
   `crm::inbound::pipeline_workflows`; field values are tagged by kind.
 - `src/entities/saved-views/`: `macro.savedViews` over the revision-guarded
   `/saved_views/definitions` routes; `edit` and `remove` send the revision the
-  handle last saw, and keep the response's record so chained writes stay guarded.
+  handle last saw. Successful writes clear cached detail so chained writes reload the current revision even when appearance and definition responses arrive out of order. `appearance()` reads shared icon/color overrides; `setAppearance()` updates them without advancing the filter revision, and creation accepts optional initial appearance.
 - `src/entities/external-chat/`: added provider chats (`macro.externalChats`, entity type
   `external_chat`) and their message/send/upload/participant handles.
 - `src/entities/connected-apps/`: `macro.connectedApps.list(execution)` returns the
