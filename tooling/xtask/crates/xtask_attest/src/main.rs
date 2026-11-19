@@ -382,13 +382,13 @@ fn post(base: &str) -> Result<(), Report> {
 
     // PR CI reads the head's statuses. A failure on another commit with the
     // same files, one this head reworded, amended or followed with an empty
-    // commit, was about these files, so those are read too. A commit GitHub
-    // never saw has no statuses to read.
+    // commit, was about these files, so those are read too. GitHub answers
+    // with no statuses for a commit it never saw, so an error here is one.
     let on_head = github::statuses(&github_repository, &head)?;
     let mut elsewhere = Vec::new();
     if !behind {
         for other in tree::same_tree_elsewhere(&repository.root, &head, SAME_TREE_COMMITS)? {
-            elsewhere.extend(github::statuses(&github_repository, &other).unwrap_or_default());
+            elsewhere.extend(github::statuses(&github_repository, &other)?);
         }
     }
 

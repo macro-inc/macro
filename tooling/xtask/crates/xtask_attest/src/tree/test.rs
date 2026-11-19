@@ -64,9 +64,11 @@ fn a_commit_that_changes_no_file_keeps_the_tree() {
         same_tree_elsewhere(dir.path(), &again, 5).expect("commits"),
         vec![reworded.clone(), first.clone()]
     );
+    // One parent, and one commit HEAD was on before: each kind has its own
+    // budget, so parents can't crowd out a commit an amend replaced.
     assert_eq!(
         same_tree_elsewhere(dir.path(), &again, 1).expect("commits"),
-        vec![reworded]
+        vec![reworded, first]
     );
     assert!(
         same_tree_elsewhere(dir.path(), &changed, 5)

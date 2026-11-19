@@ -85,13 +85,19 @@ pub fn same_tree_elsewhere(dir: &Path, commit: &str, limit: usize) -> Result<Vec
         ],
     )
     .unwrap_or_default();
+    // Up to `limit` of each kind: the parents must not crowd out the
+    // commit an amend replaced.
+    let mut replaced = Vec::new();
     for other in visited.lines() {
-        let known = other == commit || same.iter().any(|seen| seen == other);
-        if !known && tree_of(dir, other).is_ok_and(|other_tree| other_tree == tree) {
-            same.push(other.to_owned());
+        let known = other == commit || same.iter().chain(&replaced).any(|seen| seen == other);
+        if replaced.len() < limit
+            && !known
+            && tree_of(dir, other).is_ok_and(|other_tree| other_tree == tree)
+        {
+            replaced.push(other.to_owned());
         }
     }
 
-    same.truncate(limit);
+    same.extend(replaced);
     Ok(same)
 }
