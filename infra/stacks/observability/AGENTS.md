@@ -90,6 +90,9 @@ then Biome on changed `.ts`.
 - A plan that changes anything besides the instance, its attachments and its
   alarms, such as the host role's policy, is refused by the workflow and needs a
   reviewed, targeted manual `pulumi up` (README, "Deploying").
+- Never deploy an image from before the GoAlert-only change while the cluster's
+  Loki and Tempo write the host's buckets: it starts its own on them. README,
+  "Going back to the full host".
 - `pulumi preview` fails until an AMI is tagged for this checkout's image source;
   a dry run of the workflow builds and tags one.
 - The host reads secrets from the stack's own Secrets Manager secret in

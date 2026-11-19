@@ -314,8 +314,8 @@ block GoAlert login or secret retrieval in Ohio.
 A stack other than `prod` gets the same names with `-dev`. There is no dev
 observability cluster, so on a dev stack `grafana-dev.` and `otlp-dev.` reach
 the listener's default 404, and the dev host's Alloy, which sends to
-`otlp-dev.`, is refused: its metrics WAL keeps an hour and then drops samples,
-and its log pushes retry and then drop. `oncall-dev.` works as in prod. This
+`otlp-dev.`, is refused: Alloy does not retry a 404, so it drops each batch
+of metrics and logs as it sends it. `oncall-dev.` works as in prod. This
 repository has no dev stack configuration (`Pulumi.dev.yaml`), and nothing
 sends to the dev names: dev ECS services, the analytics proxy, CI and local
 telemetry all send to `otlp.macro-internal.com`. Test a host change with the
@@ -339,8 +339,9 @@ their targets, which overrides the scrapes' `job_name`. Logs arrive as
 their `unit` label.
 
 It uses these rather than OTLP, through the same name and token, because
-remote write keeps a local WAL, so samples survive up to an hour without the
-cluster, and Loki push keeps the journal's stream labels as they are. Log
+remote write keeps a local WAL, so samples survive up to an hour while the
+cluster is unreachable or failing (a 4xx other than 429 drops the batch at
+once), and Loki push keeps the journal's stream labels as they are. Log
 delivery uses bounded retries and does not guarantee lossless delivery through
 a long outage. nginx access logs use a
 restricted format without query strings and reach Loki through journald, as do
@@ -598,6 +599,22 @@ The workflow cannot replace the host while such a change is pending, so it
 always lands before the new image: a permission it removes must be one the
 running image no longer needs.
 
+**The GoAlert-only rollout** (step 8 of the cluster's switch,
+`infra/k8s/observability/cluster/README.md`) narrows the role this way. It
+takes the bucket access from the old host's Loki and Tempo and the CloudWatch
+reads and SNS publish from its Grafana, so apply it only once the cluster owns
+all three:
+
+1. Switch steps 1 to 7 are done: on the old host `loki`, `tempo`, `grafana`
+   and `prometheus` are held and inactive
+   (`systemctl show -p Id -p ActiveState loki tempo grafana prometheus`), and
+   the cluster's Loki and Tempo run on these buckets.
+2. The cluster's Grafana notifies (*Cluster, notify* is merged and synced) and
+   reaches GoAlert: its watchdog's heartbeat monitor on the observability
+   service is healthy in GoAlert, and the cluster's Grafana shows its GoAlert
+   contact points without failures.
+3. Then the dry run, the targeted `pulumi up` above, and the real run.
+
 One rollout runs at a time (concurrency group `deploy-observability-prod`,
 never cancelled). When a pull request changes the image, `PR CI` (the `run-ci`
 label) builds it through `.github/workflows/observability_image.yml`, with no
@@ -612,6 +629,16 @@ data volume. The run fails loudly; follow [Runtime](#runtime) to debug over SSM.
 To roll back, revert the commit on `main` and run the workflow again: the
 previous source's AMI still carries its tag, so nothing is rebuilt. A revert
 that also changes what the plan check refuses goes in by hand first, as above.
+
+**Going back to the full host** (an image from before the GoAlert-only
+change) is the cluster README's "Going back", not a plain revert. That image
+starts Grafana, Loki and Tempo at boot, on the buckets the cluster's Loki and
+Tempo write, and its Grafana notifies. So first take the cluster's Loki and
+Tempo off these buckets and stop its Grafana (that README's "Going back" step
+1, with its checks that no old pod is left). Only then revert on `main`, widen
+the role with the targeted `pulumi up` above, and run the workflow, a dry run
+first.
+
 Rolling an AMI back does not roll back GoAlert schema migrations; use a tested
 snapshot recovery when the old version cannot read current data.
 
