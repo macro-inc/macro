@@ -410,9 +410,18 @@ Address: 你; Taiwan vocabulary (資料夾, 專案).
 | notifications | 通知 |
 | done | 已完成 |
 | mark as read | 標示為已讀 |
-| snooze | 延後通知… |
+| snooze | 延後通知 |
 | archive | 封存 |
 | settings | 設定 |
+| computer (Macro computer) | 取得 Macro 電腦 |
+| machine (runs agents) | 團隊成員的機器 |
+| session (agent) | 開始工作階段 |
+| routine | 所有例行任務 |
+| saved view | 新增已儲存的檢視 |
+| call | 加入通話 |
+| contact (CRM) | 聯絡人與公司 |
+| company (CRM) | 新增公司 |
+| thread (email) | 已排除的郵件串 |
 
 ## Hindi (`hi`)
 

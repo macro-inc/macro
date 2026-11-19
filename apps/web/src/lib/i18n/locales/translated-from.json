@@ -3422,6 +3422,11 @@
       "commands.toggleSettings": "b7b98613db",
       "entityActions.snoozeNotifications": "c5dec69afe",
       "settingsNav.tabRuntimes": "c061da196e"
+    },
+    "zh-Hant": {
+      "commands.toggleSettings": "b7b98613db",
+      "entityActions.snoozeNotifications": "c5dec69afe",
+      "settingsNav.tabRuntimes": "c061da196e"
     }
   }
 }
