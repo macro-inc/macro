@@ -94,6 +94,8 @@ return {refresh_token, expires_at_ms}
 /// deadline, unless that has passed or the code exists again. PEXPIREAT
 /// pins the deadline; should it fail, the record is deleted and the error
 /// returned, so the code stays spent rather than outliving its deadline.
+/// PEXPIREAT deletes the record itself when the deadline passed after the
+/// check above, so the script reports whether the record is still there.
 /// An unbound write also carries the deadline in case that delete fails
 /// too, since a server that predates the deadline checks redeems an unbound
 /// record without one; the takes here refuse it. Before Redis 7.0 it carries
@@ -123,7 +125,7 @@ if type(pinned) == 'table' and pinned.err then
   redis.call('DEL', KEYS[1])
   return pinned
 end
-return 1
+return redis.call('EXISTS', KEYS[1])
 ";
 
 fn mobile_login_session_key(session_code: &str) -> String {
