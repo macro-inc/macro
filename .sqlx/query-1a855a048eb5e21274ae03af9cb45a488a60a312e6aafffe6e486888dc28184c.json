@@ -1,0 +1,22 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "\n        SELECT EXISTS (\n            SELECT 1\n            FROM activity_events\n            WHERE entity_type = 'scheduled_action'\n                AND entity_id = $1\n                AND action = 'appearance_changed'\n        ) AS \"changed!\"\n        ",
+  "describe": {
+    "columns": [
+      {
+        "ordinal": 0,
+        "name": "changed!",
+        "type_info": "Bool"
+      }
+    ],
+    "parameters": {
+      "Left": [
+        "Text"
+      ]
+    },
+    "nullable": [
+      null
+    ]
+  },
+  "hash": "1a855a048eb5e21274ae03af9cb45a488a60a312e6aafffe6e486888dc28184c"
+}

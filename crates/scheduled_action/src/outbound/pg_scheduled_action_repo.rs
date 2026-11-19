@@ -64,6 +64,34 @@ fn kind_to_str(kind: &ActionKind) -> &'static str {
     }
 }
 
+/// A stored look; none is the default look.
+fn stored_appearance(stored: Option<Value>) -> Result<EntityAppearance> {
+    Ok(stored
+        .map(serde_json::from_value)
+        .transpose()?
+        .unwrap_or_default())
+}
+
+/// Whether the appearance endpoint ever changed routine `id`'s look: it
+/// records each change in the routine's activity.
+async fn endpoint_changed(tx: &mut sqlx::PgConnection, id: Uuid) -> Result<bool> {
+    let changed = sqlx::query_scalar!(
+        r#"
+        SELECT EXISTS (
+            SELECT 1
+            FROM activity_events
+            WHERE entity_type = 'scheduled_action'
+                AND entity_id = $1
+                AND action = 'appearance_changed'
+        ) AS "changed!"
+        "#,
+        id.to_string(),
+    )
+    .fetch_one(tx)
+    .await?;
+    Ok(changed)
+}
+
 /// One mapping for every action query, including management and dispatch.
 struct ActionRow {
     id: Uuid,
@@ -216,9 +244,9 @@ impl<B: BotFacts + 'static> ScheduledActionRepo for PgScheduledActionRepo<B> {
             sub_routines::admit_child(&mut tx, link.parent_id).await?;
         }
         let link = action.sub_routine.as_ref();
-        // A new routine's look is not its owner's choice yet. Replicas built
-        // before `appearance_chosen_by_owner` leave it NULL, which `set_appearance`
-        // reads from the row.
+        // A new routine's look, its template's or an agent's pick, is not its
+        // owner's choice yet. Replicas built before these columns leave them
+        // NULL, which `set_appearance` reads from the row.
         let row = sqlx::query_as!(
             ActionRow,
             r#"
@@ -227,9 +255,9 @@ impl<B: BotFacts + 'static> ScheduledActionRepo for PgScheduledActionRepo<B> {
                  trigger_type, event_filters, configuration_revision, event_activated_at, trigger_config,
                  run_visibility, template_id, appearance, suggestion_id, description,
                  parent_id, created_by_run_id, child_key, paused_by_parent,
-                 appearance_chosen_by_owner)
+                 appearance_chosen_by_owner, appearance_picked_by_agent)
             VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15, $16, $17, $18,
-                    $19, $20, $21, $22, $23, false)
+                    $19, $20, $21, $22, $23, false, $17)
             RETURNING id, owner, name, schedule, kind, timezone, task, claimed, created_at,
                       updated_at, next_run_at, enabled, trigger_type, event_filters,
                       configuration_revision, event_activated_at, trigger_config, run_visibility, template_id,
@@ -458,26 +486,9 @@ impl<B: BotFacts + 'static> ScheduledActionRepo for PgScheduledActionRepo<B> {
     ) -> Result<Option<EntityAppearance>> {
         let owners = change.chooser == AppearanceChooser::Owner;
         let mut tx = self.pool.begin().await?;
-        // A routine from before `appearance_chosen_by_owner` records no
-        // choice (NULL). Only the appearance endpoint and templates set a look
-        // then, so its owner chose if it has one, or if its activity shows the
-        // endpoint changing it (a reset to none leaves no look). The same holds
-        // for a choice made on a replica still on older code.
         let stored = sqlx::query!(
             r#"
-            SELECT
-                appearance,
-                COALESCE(
-                    appearance_chosen_by_owner,
-                    (appearance IS NOT NULL AND jsonb_strip_nulls(appearance) <> '{}'::jsonb)
-                    OR EXISTS (
-                        SELECT 1
-                        FROM activity_events
-                        WHERE activity_events.entity_type = 'scheduled_action'
-                            AND activity_events.entity_id = scheduled_action.id::text
-                            AND activity_events.action = 'appearance_changed'
-                    )
-                ) AS "chosen_by_owner!"
+            SELECT appearance, appearance_chosen_by_owner, appearance_picked_by_agent
             FROM scheduled_action
             WHERE id = $1
             FOR UPDATE
@@ -487,30 +498,40 @@ impl<B: BotFacts + 'static> ScheduledActionRepo for PgScheduledActionRepo<B> {
         .fetch_optional(&mut *tx)
         .await?
         .ok_or(ActionPolicyError::NotFound)?;
+        let previous = stored_appearance(stored.appearance)?;
+        // A replica still on older code changes the look for the owner without
+        // marking it, so a look other than the one last stored as not theirs
+        // is theirs. A routine from before these columns, or one an older
+        // replica created, holds NULL: only the appearance endpoint and
+        // templates set a look then, so a reset to none shows only in its
+        // activity. That is read in a statement of its own, after the row's
+        // lock is held, so it sees a reset that committed while this waited
+        // for the lock.
+        let chosen_by_owner = stored.appearance_chosen_by_owner == Some(true)
+            || previous != stored_appearance(stored.appearance_picked_by_agent)?
+            || (stored.appearance_chosen_by_owner.is_none()
+                && endpoint_changed(&mut *tx, change.id).await?);
         // An agent's pick never replaces the owner's choice.
-        if stored.chosen_by_owner && !owners {
+        if chosen_by_owner && !owners {
             return Ok(None);
         }
-        let previous: EntityAppearance = stored
-            .appearance
-            .map(serde_json::from_value)
-            .transpose()?
-            .unwrap_or_default();
         let activity = change.activity(&previous);
         // The owner choosing the look it already has still makes it theirs.
-        if activity.is_none() && (stored.chosen_by_owner || !owners) {
+        if activity.is_none() && (chosen_by_owner || !owners) {
             return Ok(None);
         }
+        let appearance = serde_json::to_value(&change.appearance)?;
         sqlx::query!(
             r#"
             UPDATE scheduled_action
             SET appearance = $2,
-                appearance_chosen_by_owner = $3
+                appearance_chosen_by_owner = $3,
+                appearance_picked_by_agent = CASE WHEN $3 THEN appearance_picked_by_agent ELSE $2 END
             WHERE id = $1
             "#,
             change.id,
-            serde_json::to_value(&change.appearance)?,
-            stored.chosen_by_owner || owners,
+            appearance,
+            chosen_by_owner || owners,
         )
         .execute(&mut *tx)
         .await?;

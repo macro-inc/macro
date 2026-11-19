@@ -1,0 +1,34 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "\n            SELECT appearance, appearance_chosen_by_owner, appearance_picked_by_agent\n            FROM scheduled_action\n            WHERE id = $1\n            FOR UPDATE\n            ",
+  "describe": {
+    "columns": [
+      {
+        "ordinal": 0,
+        "name": "appearance",
+        "type_info": "Jsonb"
+      },
+      {
+        "ordinal": 1,
+        "name": "appearance_chosen_by_owner",
+        "type_info": "Bool"
+      },
+      {
+        "ordinal": 2,
+        "name": "appearance_picked_by_agent",
+        "type_info": "Jsonb"
+      }
+    ],
+    "parameters": {
+      "Left": [
+        "Uuid"
+      ]
+    },
+    "nullable": [
+      true,
+      true,
+      true
+    ]
+  },
+  "hash": "3d2ff17182bc036823289068b69200562531e77e5389126ab795215e154530b6"
+}

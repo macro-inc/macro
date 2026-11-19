@@ -1,0 +1,16 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "\n            UPDATE scheduled_action\n            SET appearance = $2,\n                appearance_chosen_by_owner = $3,\n                appearance_picked_by_agent = CASE WHEN $3 THEN appearance_picked_by_agent ELSE $2 END\n            WHERE id = $1\n            ",
+  "describe": {
+    "columns": [],
+    "parameters": {
+      "Left": [
+        "Uuid",
+        "Jsonb",
+        "Bool"
+      ]
+    },
+    "nullable": []
+  },
+  "hash": "9252fb38d753d2a808c1ba00fde013e34a565f70c82facc9839723e5dfeaf03c"
+}

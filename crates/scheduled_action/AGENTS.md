@@ -341,11 +341,14 @@ each run.
   caller acts for the owner; a repeated sub-routine key checks a pick but
   keeps the look the key created. `PUT /appearance` is the owner's choice and
   sets `scheduled_action.appearance_chosen_by_owner`, even for no icon; an
-  agent's pick (`AppearanceChooser::Agent`) never replaces it. A routine from
-  before that column, or created by a replica built before it, holds NULL
-  there (`create_action` writes false), and `set_appearance` reads its
-  owner's choice from the row instead: a look it has, or an
-  `appearance_changed` in its activity.
+  agent's pick (`AppearanceChooser::Agent`) never replaces it.
+  `appearance_picked_by_agent` holds the look last stored as not the owner's
+  (the look a routine was created with, or an agent's pick): a replica built
+  before these columns changes the look for the owner without marking it, so
+  a look that differs from it is the owner's. A routine from before them, or
+  one such a replica created, holds NULL in both, and `set_appearance` reads
+  its owner's choice from the row: a look it has, or an `appearance_changed`
+  in its activity, read once the row is locked.
 - Templates: the owner shares a snapshot of a routine (keyed by the routine's
   ID) with its references marked as variables; publishing, reading, and activation
   require the caller's `enable-routine-sharing` PostHog flag. Missing flags,

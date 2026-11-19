@@ -257,11 +257,13 @@ async fn chosen_by_owner(pool: &PgPool, id: Uuid) -> Option<bool> {
     .unwrap()
 }
 
-/// Forgets whether the owner chose `id`'s look, as a routine from before
+/// Forgets whose choice `id`'s look is, as a routine from before
 /// `appearance_chosen_by_owner`, keeping the look as stored.
 async fn as_before_the_column(pool: &PgPool, id: Uuid) {
     sqlx::query!(
-        "UPDATE scheduled_action SET appearance_chosen_by_owner = NULL WHERE id = $1",
+        r#"UPDATE scheduled_action
+        SET appearance_chosen_by_owner = NULL, appearance_picked_by_agent = NULL
+        WHERE id = $1"#,
         id,
     )
     .execute(pool)
@@ -272,7 +274,9 @@ async fn as_before_the_column(pool: &PgPool, id: Uuid) {
 /// Stores `appearance` on `id` as a write before the column did.
 async fn stored_before_the_column(pool: &PgPool, id: Uuid, appearance: Option<serde_json::Value>) {
     sqlx::query!(
-        "UPDATE scheduled_action SET appearance = $2, appearance_chosen_by_owner = NULL WHERE id = $1",
+        r#"UPDATE scheduled_action
+        SET appearance = $2, appearance_chosen_by_owner = NULL, appearance_picked_by_agent = NULL
+        WHERE id = $1"#,
         id,
         appearance,
     )
@@ -292,7 +296,11 @@ async fn a_look_the_owner_set_before_the_column_stays_theirs(pool: PgPool) {
             .await
             .unwrap();
         let id = created.id.unwrap();
-        assert_eq!(chosen_by_owner(&pool, id).await, Some(false), "a new routine");
+        assert_eq!(
+            chosen_by_owner(&pool, id).await,
+            Some(false),
+            "a new routine"
+        );
         routines.push(id);
     }
     let [colored_one, reset, never, blank] = routines[..] else {
@@ -333,9 +341,16 @@ async fn a_look_the_owner_set_before_the_column_stays_theirs(pool: PgPool) {
             before,
             "{kept}"
         );
-        assert_eq!(chosen_by_owner(&pool, id).await, None, "{kept}: left as it was");
+        assert_eq!(
+            chosen_by_owner(&pool, id).await,
+            None,
+            "{kept}: left as it was"
+        );
     }
-    for (id, open) in [(never, "never given a look"), (blank, "a look with nothing in it")] {
+    for (id, open) in [
+        (never, "never given a look"),
+        (blank, "a look with nothing in it"),
+    ] {
         assert!(
             repo.set_appearance(change(id, pick.clone(), AppearanceChooser::Agent))
                 .await
@@ -354,4 +369,93 @@ async fn a_look_the_owner_set_before_the_column_stays_theirs(pool: PgPool) {
             "{open}: the pick records that the owner hasn't chosen"
         );
     }
+}
+
+/// Stores `look` on `id` as the appearance endpoint of a replica built
+/// before `appearance_chosen_by_owner` does for the owner: the look alone
+/// (and an activity, which this doesn't need).
+async fn chosen_on_an_older_replica(pool: &PgPool, id: Uuid, look: &EntityAppearance) {
+    sqlx::query!(
+        "UPDATE scheduled_action SET appearance = $2 WHERE id = $1",
+        id,
+        serde_json::to_value(look).unwrap(),
+    )
+    .execute(pool)
+    .await
+    .unwrap();
+}
+
+#[sqlx::test(migrator = "MACRO_DB_MIGRATIONS")]
+async fn an_owners_choice_on_an_older_replica_stays_theirs(pool: PgPool) {
+    insert_user(&pool, USER_A).await;
+    let repo = test_repo(pool.clone());
+    let mut template = sample_action(user_owner(USER_A), "from a template");
+    template.appearance = colored(AppearanceColor::Purple);
+    let mut routines = Vec::new();
+    for action in [
+        sample_action(user_owner(USER_A), "agent's pick, then the owner's"),
+        sample_action(user_owner(USER_A), "agent's pick, then none"),
+        sample_action(user_owner(USER_A), "the owner's first look"),
+        template,
+    ] {
+        routines.push(repo.create_action(action).await.unwrap().id.unwrap());
+    }
+    let [picked, reset, first, from_template] = routines[..] else {
+        panic!("four routines were created");
+    };
+    for id in [picked, reset] {
+        assert!(
+            repo.set_appearance(change(
+                id,
+                colored(AppearanceColor::Blue),
+                AppearanceChooser::Agent
+            ))
+            .await
+            .unwrap()
+            .is_some()
+        );
+    }
+    chosen_on_an_older_replica(&pool, picked, &colored(AppearanceColor::Red)).await;
+    chosen_on_an_older_replica(&pool, reset, &EntityAppearance::default()).await;
+    chosen_on_an_older_replica(&pool, first, &colored(AppearanceColor::Red)).await;
+
+    let pick = colored(AppearanceColor::Green);
+    for (id, case) in [
+        (picked, "a look after an agent's pick"),
+        (reset, "none after an agent's pick"),
+        (first, "a look on a new routine"),
+    ] {
+        let before = repo.get_action(&id).await.unwrap().unwrap().appearance;
+        assert!(
+            repo.set_appearance(change(id, pick.clone(), AppearanceChooser::Agent))
+                .await
+                .unwrap()
+                .is_none(),
+            "{case}: an agent's pick is refused"
+        );
+        assert_eq!(
+            repo.get_action(&id).await.unwrap().unwrap().appearance,
+            before,
+            "{case}"
+        );
+    }
+    assert!(
+        repo.set_appearance(change(
+            from_template,
+            pick.clone(),
+            AppearanceChooser::Agent
+        ))
+        .await
+        .unwrap()
+        .is_some(),
+        "a template's look is not the owner's choice"
+    );
+    assert_eq!(
+        repo.get_action(&from_template)
+            .await
+            .unwrap()
+            .unwrap()
+            .appearance,
+        pick
+    );
 }
