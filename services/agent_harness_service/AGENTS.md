@@ -90,7 +90,7 @@ network/resource-only Pulumi stacks; they do not host extra agent processes.
   plain JavaScript: nothing changes. `ShowPermissions` is offered by the
   internal MCP only then. `ExecuteCode` offers JavaScript tools programs
   (`language: "js_tools"`) to exactly the owners the gate applies to them
-  for: `main.rs` wires `CodeModeService::with_js_tools` beside the
+  for: `lib.rs` wires `CodeModeService::with_js_tools` beside the
   `JsToolsAnalyzer`, with `code_mode::JsToolsRollout`
   (`enable-agent-permissions` alone; there is no separate JS tools flag).
   `RunCredentials` fails closed: a JS tools program the gate returned
