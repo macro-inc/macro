@@ -37,6 +37,7 @@ impl RunEgress {
         client: reqwest::Client,
         hosts: &BTreeMap<String, String>,
         trace_headers: &BTreeMap<String, String>,
+        policy: RunPolicy,
     ) -> std::io::Result<Self> {
         let listener = TcpListener::bind(("127.0.0.1", 0)).await?;
         let port = listener.local_addr()?.port();
@@ -54,6 +55,7 @@ impl RunEgress {
             client,
             upstreams,
             run,
+            policy,
         });
         let app = axum::Router::new().fallback(forward).with_state(routes);
         // Owned by the run, not a tracker: it is aborted when the run ends
@@ -103,6 +105,32 @@ struct Routes {
     upstreams: HashMap<String, String>,
     /// The run's trace context, each request's parent.
     run: opentelemetry::Context,
+    /// What the run's requests are held to.
+    policy: RunPolicy,
+}
+
+/// The SDK's operations, read once for every run's decisions.
+static CATALOG: std::sync::LazyLock<decision::Catalog> =
+    std::sync::LazyLock::new(decision::Catalog::of_the_sdk);
+
+/// Whether a request carries a Macro credential, wherever one goes: its
+/// `authorization` or `x-macro-user-api-key` header, its
+/// `macro-access-token` cookie, or its `macro-api-token` query parameter.
+fn credentialed(headers: &HeaderMap, url: &url::Url) -> bool {
+    headers.contains_key(axum::http::header::AUTHORIZATION)
+        || headers.contains_key("x-macro-user-api-key")
+        || headers
+            .get_all(axum::http::header::COOKIE)
+            .iter()
+            .filter_map(|value| value.to_str().ok())
+            .flat_map(|cookies| cookies.split(';'))
+            .any(|cookie| {
+                cookie
+                    .trim()
+                    .split_once('=')
+                    .is_some_and(|(name, _)| name == "macro-access-token")
+            })
+        || url.query_pairs().any(|(name, _)| name == "macro-api-token")
 }
 
 /// The headers of `headers` that cross the forwarder: not the ones that
@@ -160,6 +188,9 @@ async fn forward(State(routes): State<Arc<Routes>>, request: Request) -> Respons
         method = %request.method(),
         status = tracing::field::Empty,
         outcome = tracing::field::Empty,
+        operation = tracing::field::Empty,
+        uncatalogued = tracing::field::Empty,
+        would_refuse = tracing::field::Empty,
         upstream_ms = tracing::field::Empty,
     );
     if routes.run.span().span_context().is_valid() {
@@ -170,10 +201,61 @@ async fn forward(State(routes): State<Arc<Routes>>, request: Request) -> Respons
         span.record("status", StatusCode::NOT_FOUND.as_u16());
         return (StatusCode::NOT_FOUND, "no such SDK host").into_response();
     };
-    let mut url = format!("{base}/{rest}");
+    let mut target = format!("{base}/{rest}");
     if let Some(query) = request.uri().query() {
-        url.push('?');
-        url.push_str(query);
+        target.push('?');
+        target.push_str(query);
+    }
+    // Services under one base take each other's requests.
+    let sharing: Vec<&str> = routes
+        .upstreams
+        .iter()
+        .filter(|(_, other)| *other == base)
+        .map(|(name, _)| name.as_str())
+        .collect();
+    // Parsing normalizes the path (`..`, `%2e`), as the host will read it. A
+    // URL that won't parse is recorded and sent as it is, failing as it would
+    // without the decision.
+    let decided = match (url::Url::parse(&target), url::Url::parse(base)) {
+        (Ok(url), Ok(base_url)) => decision::decide_across(
+            &CATALOG,
+            &sharing,
+            base_url.path(),
+            request.method().as_str(),
+            url.path(),
+            routes.policy,
+            credentialed(request.headers(), &url),
+        ),
+        _ => decision::Decision {
+            operation: None,
+            refusal: Some(decision::Refusal::UnparseableUrl),
+            uncatalogued: false,
+        },
+    };
+    if let Some(operation) = decided.operation {
+        span.record("operation", operation);
+        // Services under one base share a forwarder segment: the operation
+        // says which one this is.
+        if let Some((owner, _)) = operation.split_once('.') {
+            span.record("service", owner);
+        }
+    }
+    if decided.uncatalogued {
+        span.record("uncatalogued", true);
+    }
+    if let Some(refusal) = decided.refusal {
+        span.record("would_refuse", refusal.as_str());
+        // Recorded only, until the run is set to enforce.
+        if routes.policy.enforce {
+            span.record("outcome", "refused");
+            span.record("status", StatusCode::FORBIDDEN.as_u16());
+            // The path the host would have seen, not the forwarder's.
+            let path = url::Url::parse(&target)
+                .map(|url| url.path().to_owned())
+                .unwrap_or_else(|_| request.uri().path().to_owned());
+            let message = refusal.message(request.method().as_str(), &path);
+            return (StatusCode::FORBIDDEN, message).into_response();
+        }
     }
     let method = request.method().clone();
     let mut headers = end_to_end(request.headers());
@@ -184,7 +266,7 @@ async fn forward(State(routes): State<Arc<Routes>>, request: Request) -> Respons
         let started = Instant::now();
         let answer = routes
             .client
-            .request(method, url)
+            .request(method, target)
             .headers(headers)
             .body(body)
             .send()
@@ -217,6 +299,10 @@ async fn forward(State(routes): State<Arc<Routes>>, request: Request) -> Respons
     .instrument(span)
     .await
 }
+
+mod decision;
+
+pub(crate) use decision::RunPolicy;
 
 #[cfg(test)]
 mod test;

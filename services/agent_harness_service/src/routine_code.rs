@@ -330,6 +330,8 @@ impl<Credentials: RoutineCredentials> RoutineCode for SdkRoutineCode<Credentials
                 dry_run: run.dry_run,
             }),
             egress: self.egress.egress(owner).await,
+            // A dry run's forwarder holds it by `unattended.dry_run`.
+            scoped: false,
         };
         let (progress, mut updates) = tokio::sync::mpsc::channel(512);
         let started = Instant::now();
