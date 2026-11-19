@@ -321,6 +321,7 @@ export function ListEntity(props: ListEntityProps) {
         props.onClick?.(e);
       }}
       ref={mergeRefs(props.ref, draggable)}
+      data-press-surface
       class={cn(
         // The row family class carries the --soup-row-* geometry (ListEntity.css)
         // that the layouts below and the soup group headers both read, so it has

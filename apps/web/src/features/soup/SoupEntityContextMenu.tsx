@@ -145,6 +145,9 @@ export const SoupEntityContextMenu: FlowComponent<
         <ContextMenu onOpenChange={changeOpen}>
           <ContextMenuTrigger
             as={props.as}
+            // Takes a tablet row's touch press, as the wrapper above does on
+            // phones (rowPress.ts).
+            data-soup-entity
             ref={(element: HTMLElement) => {
               tagDropTarget?.ref(element);
               folderDropTarget?.ref(element);

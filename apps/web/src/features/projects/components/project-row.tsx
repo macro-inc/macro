@@ -174,6 +174,7 @@ export function ProjectRow(props: {
         tabIndex={-1}
         onClick={props.onOpen}
         onMouseMove={props.onFocus}
+        data-press-surface
         class={cn(
           'soup-list-entity @container/entity mx-1 relative flex min-h-10 w-[calc(100%-0.5rem)] flex-col rounded-xl py-0.5',
           {

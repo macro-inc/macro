@@ -1,0 +1,121 @@
+import { fireEvent } from '@solidjs/testing-library';
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
+import { holdRowPress, installRowPress } from './rowPress';
+
+vi.mock('@core/mobile/isTouchDevice', () => ({ isTouchDevice: () => true }));
+
+let uninstall: () => void;
+let row: HTMLElement;
+let label: HTMLElement;
+
+beforeEach(() => {
+  vi.useFakeTimers();
+  document.body.innerHTML =
+    '<div data-press-surface id="row"><span id="label">Row</span></div>';
+  row = document.getElementById('row')!;
+  label = document.getElementById('label')!;
+  uninstall = installRowPress();
+});
+
+afterEach(() => {
+  uninstall();
+  vi.useRealTimers();
+  document.body.innerHTML = '';
+});
+
+const pressed = () => row.classList.contains('touch-highlight');
+const touchAt = (clientY: number) => ({
+  touches: [{ clientX: 20, clientY }],
+});
+
+describe('row press', () => {
+  it('shows after a still finger rests 100ms and stays 350ms after it lifts', () => {
+    fireEvent.touchStart(label, touchAt(20));
+    vi.advanceTimersByTime(99);
+    expect(pressed()).toBe(false);
+    vi.advanceTimersByTime(1);
+    expect(pressed()).toBe(true);
+
+    fireEvent.touchEnd(label, { changedTouches: [{ clientX: 20 }] });
+    vi.advanceTimersByTime(349);
+    expect(pressed()).toBe(true);
+    vi.advanceTimersByTime(1);
+    expect(pressed()).toBe(false);
+  });
+
+  it('shows a quick tap once its click arrives, and nothing for a tap without a click', () => {
+    fireEvent.touchStart(label, touchAt(20));
+    vi.advanceTimersByTime(40);
+    fireEvent.touchEnd(label, { changedTouches: [{ clientX: 20 }] });
+    vi.advanceTimersByTime(200);
+    // A tap that stopped a scroll gets no click.
+    expect(pressed()).toBe(false);
+
+    fireEvent.touchStart(label, touchAt(20));
+    vi.advanceTimersByTime(40);
+    fireEvent.touchEnd(label, { changedTouches: [{ clientX: 20 }] });
+    fireEvent.click(label);
+    expect(pressed()).toBe(true);
+    vi.advanceTimersByTime(350);
+    expect(pressed()).toBe(false);
+  });
+
+  it('never shows for a press that turns into a scroll, and clears one that does after showing', () => {
+    fireEvent.touchStart(label, touchAt(20));
+    vi.advanceTimersByTime(60);
+    fireEvent.touchMove(label, touchAt(26));
+    vi.advanceTimersByTime(500);
+    expect(pressed()).toBe(false);
+    fireEvent.touchEnd(label, { changedTouches: [{ clientX: 20 }] });
+    fireEvent.click(label);
+    expect(pressed()).toBe(false);
+
+    fireEvent.touchStart(label, touchAt(20));
+    vi.advanceTimersByTime(100);
+    expect(pressed()).toBe(true);
+    fireEvent.touchMove(label, touchAt(24));
+    expect(pressed()).toBe(true);
+    fireEvent.touchMove(label, touchAt(26));
+    expect(pressed()).toBe(false);
+  });
+
+  it('clears on a cancelled touch or a second finger', () => {
+    fireEvent.touchStart(label, touchAt(20));
+    vi.advanceTimersByTime(100);
+    fireEvent.touchCancel(label);
+    expect(pressed()).toBe(false);
+
+    fireEvent.touchStart(label, touchAt(20));
+    vi.advanceTimersByTime(100);
+    fireEvent.touchStart(label, {
+      touches: [
+        { clientX: 20, clientY: 20 },
+        { clientX: 80, clientY: 20 },
+      ],
+    });
+    expect(pressed()).toBe(false);
+  });
+
+  it('presses the soup row container rather than the surface inside it', () => {
+    document.body.innerHTML =
+      '<div data-soup-entity id="container"><div data-press-surface><span id="inner">Row</span></div></div>';
+    const container = document.getElementById('container')!;
+    fireEvent.touchStart(document.getElementById('inner')!, touchAt(20));
+    vi.advanceTimersByTime(100);
+    expect(container.classList.contains('touch-highlight')).toBe(true);
+  });
+
+  it('holds a tapped row through its navigation, for at least 500ms', () => {
+    const event = new MouseEvent('click', { bubbles: true });
+    label.dispatchEvent(event);
+    const release = holdRowPress(event);
+    expect(pressed()).toBe(true);
+    vi.advanceTimersByTime(2000);
+    expect(pressed()).toBe(true);
+
+    release?.();
+    expect(pressed()).toBe(true);
+    vi.advanceTimersByTime(500);
+    expect(pressed()).toBe(false);
+  });
+});

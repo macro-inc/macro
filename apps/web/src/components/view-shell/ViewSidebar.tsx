@@ -346,6 +346,8 @@ function Item(
       {...rest}
       type={local.type ?? 'button'}
       aria-current={ariaCurrent()}
+      // The current page's row keeps its selected fill when pressed.
+      data-press-surface={local.active ? undefined : ''}
       onClick={(
         event: MouseEvent & {
           currentTarget: HTMLButtonElement;

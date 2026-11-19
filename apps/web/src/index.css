@@ -2009,12 +2009,22 @@ html:not([data-touch-device="true"]) [data-message][data-targeted]:hover{
   animation: long-press-message-highlight 100ms ease-in both;
 }
 
-/* Immediate touch feedback for mobile soup entity rows */
-[data-soup-entity].touch-highlight [data-swipe-content],
-[data-soup-entity].touch-highlight [data-channel-conversation],
-[data-soup-entity].touch-highlight .soup-list-entity {
+/* A pressed touch list row (components/app/mobile/rowPress.ts), painted on
+   one element so every row shows the same grey: its swipe layer when it has
+   one (opaque, it covers the row's surface), otherwise its press surface.
+   The grey is the hover tint twice over, as Home's rows have always shown it
+   (their row and swipe layer each took one). It replaces WebKit's tap flash
+   on these rows. */
+.touch-highlight [data-swipe-content],
+.touch-highlight:not(:has([data-swipe-content]))[data-press-surface],
+.touch-highlight:not(:has([data-swipe-content])) [data-press-surface] {
   background-color: var(--color-hover);
+  background-image: linear-gradient(var(--color-hover), var(--color-hover));
   transition: none;
+}
+
+[data-press-surface] {
+  -webkit-tap-highlight-color: transparent;
 }
 
 @layer base {
