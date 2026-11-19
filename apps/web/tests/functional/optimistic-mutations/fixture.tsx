@@ -7,7 +7,7 @@ import { disableBrowserTursoCache } from '@core/constant/featureFlags';
 import { UserContextProvider } from '@core/context/user';
 import { fireAndForget } from '@core/util/fireAndForget';
 import { normalizedCacheResultMetadata } from '@graphql-cache/exchange/normalized-cache-exchange';
-import { sourceAuthorityGeneration } from '@graphql-cache/source-authority';
+import { cacheSessionGeneration } from '@graphql-cache/session-generation';
 import { TagSetsProvider } from '@property/tags/tag-sets-context';
 import { useDocTags, useSoupDocTags } from '@property/tags/useDocTags';
 import { queryClient } from '@queries/client';
@@ -26,6 +26,7 @@ import {
 import {
   getGraphqlCacheHost,
   getGraphqlSoupClient,
+  initializeGraphqlSoupCache,
 } from '@service-storage/graphql-soup';
 import { QueryClientProvider } from '@tanstack/solid-query';
 import { gql, type OperationResult, stringifyDocument } from '@urql/core';
@@ -307,6 +308,8 @@ function Readers() {
 
 const root = document.getElementById('root');
 if (!root) throw new Error('missing functional test root');
+await initializeGraphqlSoupCache();
+
 const dispose = render(
   () => (
     <AnalyticsContextProvider>
@@ -351,6 +354,7 @@ const api = {
   async addIncompletePropertyLink() {
     const host = getGraphqlCacheHost();
     if (!host) throw new Error('expected an active cache');
+    const generation = cacheSessionGeneration.capture();
     const source = await host.readQuery({
       query: stringifyDocument(EntityPropertiesDocument),
       variables: {
@@ -359,7 +363,7 @@ const api = {
     });
     if (source.kind !== 'hit') throw new Error('expected cached properties');
     await host.writeQuery({
-      authorityGeneration: sourceAuthorityGeneration(source),
+      generation,
       query: `query PartialProperties($input: SoupInput!) {
         user { id soup(input: $input) { items {
           __typename id ... on GraphqlSoupDocument { properties { id } }

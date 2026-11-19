@@ -15,6 +15,7 @@ import {
   OTHER_DOCUMENT_ID,
   soupDocument,
   tagAssignment,
+  tagSets,
 } from './optimistic-mutations/data';
 import type {} from './optimistic-mutations/fixture';
 
@@ -88,6 +89,10 @@ async function mount(page: Page, mode: CacheMode, initial?: string[]) {
         headers: AUTHORITY_HEADERS,
         json: { team_id: TEAM_ID, allowed: true },
       });
+      return;
+    }
+    if (url.pathname === '/dss/properties/tags') {
+      await route.fulfill({ headers: AUTHORITY_HEADERS, json: tagSets });
       return;
     }
     if (
