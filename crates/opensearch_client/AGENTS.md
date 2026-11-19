@@ -14,6 +14,9 @@ projects.
   entity type — the shape each indexer must produce.
 - `src/search/builder.rs` + `src/search/unified.rs`: the cross-entity search
   request builder and the unified result model.
+- `src/chat_message_repair.rs`: paging the chats index's message documents
+  by message id and deleting them by id, for the deleted chat message repair
+  in `services/search_processing_service`.
 - `examples/`: runnable usage beyond the README.
 
 ## Scope
@@ -116,6 +119,11 @@ projects.
   (`INNER_HITS_PER_RESULT`, divided by `split_inner_hits_budget`), so a
   result carries at most that many matches, not every match; do not give
   each term its own.
+- Build a `has_child` clause's per-term query with `query::child_content_query`.
+  A single word matches as `match_bool_prefix`, not `match_phrase_prefix`:
+  OpenSearch expands a phrase prefix again for every inner hit of every
+  returned parent, and keeps only the first `max_expansions` terms of the
+  shard, so words past them never match.
 - Document content has two matching shapes (`DocumentTermMatching`). `All`
   is one `has_child` per term: every term somewhere in the document, each a
   prefix. `Dynamic` is one `has_child` for queries of three or more terms:

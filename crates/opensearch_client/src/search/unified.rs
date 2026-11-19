@@ -973,7 +973,14 @@ fn paginate_unified_hits(
     (results, cursor)
 }
 
-#[tracing::instrument(skip(client, args))]
+#[tracing::instrument(
+    skip(client, args),
+    fields(
+        opensearch_took_ms = tracing::field::Empty,
+        opensearch_query_ms = tracing::field::Empty,
+        opensearch_fetch_ms = tracing::field::Empty,
+    )
+)]
 pub(crate) async fn search_unified(
     client: &opensearch::OpenSearch,
     args: UnifiedSearchArgs,
@@ -986,17 +993,23 @@ pub(crate) async fn search_unified(
 
     let search_indices: Vec<&str> = args.search_indices.iter().map(|i| i.index_name()).collect();
 
+    // An index that does not exist yet — a newly added entity type before
+    // its create-index run, or an alias mid-reindex — otherwise fails the
+    // whole request with `index_not_found_exception`, taking down search
+    // for every entity rather than just that one. `ignore_unavailable`
+    // degrades to the indices that are present; `warn_on_shard_failures`
+    // still reports partial results from indices that do exist.
+    // `phase_took` splits `took` into query and fetch time for the span. The
+    // typed search builder has no parameter for it, so this is a raw request.
     let response = client
-        .search(opensearch::SearchParts::Index(&search_indices))
-        // An index that does not exist yet — a newly added entity type before
-        // its create-index run, or an alias mid-reindex — otherwise fails the
-        // whole request with `index_not_found_exception`, taking down search
-        // for every entity rather than just that one. Degrade to the indices
-        // that are present; `warn_on_shard_failures` still reports partial
-        // results from indices that do exist.
-        .ignore_unavailable(true)
-        .body(search_request)
-        .send()
+        .send(
+            opensearch::http::Method::Post,
+            &format!("/{}/_search", search_indices.join(",")),
+            opensearch::http::headers::HeaderMap::new(),
+            Some(&[("ignore_unavailable", "true"), ("phase_took", "true")]),
+            Some(opensearch::http::request::JsonBody::new(search_request)),
+            None,
+        )
         .await
         .map_client_error(OpensearchOperation::SearchUnified)
         .await?;
@@ -1017,6 +1030,13 @@ pub(crate) async fn search_unified(
         })?;
 
     result.warn_on_shard_failures(OpensearchOperation::SearchUnified);
+
+    let span = tracing::Span::current();
+    span.record("opensearch_took_ms", result.took);
+    if let Some(phase_took) = &result.phase_took {
+        span.record("opensearch_query_ms", phase_took.query);
+        span.record("opensearch_fetch_ms", phase_took.fetch);
+    }
 
     tracing::info!(
         response_body_bytes = bytes.len(),

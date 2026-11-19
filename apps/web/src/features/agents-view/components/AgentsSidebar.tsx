@@ -347,7 +347,11 @@ export function AgentsSidebar(props: AgentsSidebarProps) {
 
   return (
     <MaybeSoupEntityActionDrawerManager>
-      <ViewSidebar.Root ref={sidebar} aria-label="Agents navigation">
+      <ViewSidebar.Root
+        reorderId="agents"
+        ref={sidebar}
+        aria-label="Agents navigation"
+      >
         <ViewSidebar.Header
           searchLabel="Search conversations"
           searchOpen={searchOpen() || props.search.trim().length > 0}
@@ -389,39 +393,47 @@ export function AgentsSidebar(props: AgentsSidebarProps) {
         >
           <SidebarRoutineSuggestions surface="agents" />
           <Show when={!isTouchDevice()}>
-            <ViewSidebar.Nav aria-label="Agent tools">
-              <ViewSidebar.Item
-                active={props.activePage === 'agents'}
-                onClick={() => props.onOpenPage('agents')}
-                ref={tourTarget(AGENTS_TOUR.rosterNav)}
-              >
-                <ViewSidebar.Icon>
-                  <AgentIcon />
-                </ViewSidebar.Icon>
-                <span>Agents</span>
-              </ViewSidebar.Item>
-              <ViewSidebar.Item
-                active={props.activePage === 'routines'}
-                onClick={() => props.onOpenPage('routines')}
-              >
-                <ViewSidebar.Icon>
-                  <RoutineIcon />
-                </ViewSidebar.Icon>
-                <span>Routines</span>
-              </ViewSidebar.Item>
-              <ViewSidebar.Item
-                active={props.activePage === 'connections'}
-                onClick={() => props.onOpenPage('connections')}
-              >
-                <ViewSidebar.Icon>
-                  <PlugIcon />
-                </ViewSidebar.Icon>
-                <span>Connections</span>
-              </ViewSidebar.Item>
-            </ViewSidebar.Nav>
+            <ViewSidebar.Section
+              id="tools"
+              label={t('viewMenus.agentViews')}
+              headerless
+            >
+              <ViewSidebar.Nav aria-label="Agent tools">
+                <ViewSidebar.Item
+                  active={props.activePage === 'agents'}
+                  onClick={() => props.onOpenPage('agents')}
+                  ref={tourTarget(AGENTS_TOUR.rosterNav)}
+                >
+                  <ViewSidebar.Icon>
+                    <AgentIcon />
+                  </ViewSidebar.Icon>
+                  <span>Agents</span>
+                </ViewSidebar.Item>
+                <ViewSidebar.Item
+                  active={props.activePage === 'routines'}
+                  onClick={() => props.onOpenPage('routines')}
+                >
+                  <ViewSidebar.Icon>
+                    <RoutineIcon />
+                  </ViewSidebar.Icon>
+                  <span>Routines</span>
+                </ViewSidebar.Item>
+                <ViewSidebar.Item
+                  active={props.activePage === 'connections'}
+                  onClick={() => props.onOpenPage('connections')}
+                >
+                  <ViewSidebar.Icon>
+                    <PlugIcon />
+                  </ViewSidebar.Icon>
+                  <span>Connections</span>
+                </ViewSidebar.Item>
+              </ViewSidebar.Nav>
+            </ViewSidebar.Section>
           </Show>
           <Show when={agentUpdates().enabled && openPullRequests().length > 0}>
             <CollapsibleSection.Root
+              sectionId="open-pull-requests"
+              sectionLabel="Open PRs"
               open={openPullRequestsOpen()}
               onOpenChange={setOpenPullRequestsOpen}
               class={cn(
@@ -449,6 +461,8 @@ export function AgentsSidebar(props: AgentsSidebarProps) {
             </CollapsibleSection.Root>
           </Show>
           <CollapsibleSection.Root
+            sectionId="conversations"
+            sectionLabel="Conversations"
             open={conversationsOpen()}
             onOpenChange={setConversationsOpen}
             class={cn(
@@ -550,6 +564,8 @@ export function AgentsSidebar(props: AgentsSidebarProps) {
           </CollapsibleSection.Root>
           <Show when={archived().length}>
             <CollapsibleSection.Root
+              sectionId="archived"
+              sectionLabel="Archived"
               open={archivedOpen()}
               onOpenChange={setArchivedOpen}
               as="section"

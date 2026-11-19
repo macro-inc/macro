@@ -78,6 +78,8 @@ export function SidebarTagsSection(props: SidebarTagsSectionProps) {
 
   return (
     <CollapsibleSection.Root
+      sectionId="tags"
+      sectionLabel="Tags"
       open={props.open}
       onOpenChange={props.onOpenChange}
     >

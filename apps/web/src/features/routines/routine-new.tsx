@@ -9,7 +9,11 @@ import {
   saveRoutineComposerDraft,
 } from './draft-storage';
 import { createRoutineCreatorSource } from './queries/routine-sources';
-import { createRoutineConnectedApps, RoutineApps } from './routine-apps';
+import {
+  createRoutineConnectedApps,
+  RoutineApps,
+  RoutineConnectApp,
+} from './routine-apps';
 import { RoutineCreatedItem } from './routine-created-item';
 import { onRoutineDraftStarted } from './routine-draft-start';
 import { RoutineExecutionPicker } from './routine-execution-picker';
@@ -56,6 +60,7 @@ export function RoutineNew(props: {
               ExecutionPicker: RoutineExecutionPicker,
               Triggers: RoutineTriggers,
               Apps: RoutineApps,
+              ConnectApp: RoutineConnectApp,
               createConnectedApps: createRoutineConnectedApps,
               createStepAuthor: createRoutineStepAuthor,
             }}

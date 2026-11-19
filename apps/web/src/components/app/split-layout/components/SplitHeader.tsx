@@ -40,10 +40,13 @@ import {
 } from '../../../priority-collapse/PriorityCollapseOverflowSensor';
 import { SplitLayoutContext, SplitPanelContext } from '../context';
 import type { SplitContent } from '../layoutManager';
+import { projectLocation } from '../project-back-navigation';
 import { canSpotlight } from '../utils/canSpotlight';
 import { HeaderIsland } from './HeaderIsland';
-import { hasAgentsBackFallback, SplitBackButton } from './SplitBackButton';
+import { SplitBackButton, splitBackFallback } from './SplitBackButton';
 import { SplitHeaderContextMenu } from './SplitHeaderContextMenu';
+
+export { SplitBackButton } from './SplitBackButton';
 
 function getEntitySplitContent(data: EntityDragEvent['draggable']['data']):
   | {
@@ -324,6 +327,8 @@ export function SplitHeader(props: {
 
   const hideMobileBack = () => {
     const content = panel.handle.content();
+    const project = projectLocation(content);
+    if (isTouchDevice() && project && project.kind !== 'list') return false;
     return (
       isListViewID(content.id) ||
       (content.type === 'component' &&
@@ -423,7 +428,7 @@ export function SplitHeader(props: {
               class={cn(
                 'relative gap-0 px-1',
                 ((!panel.handle.canGoBack() &&
-                  !hasAgentsBackFallback(panel.handle.content())) ||
+                  !splitBackFallback(panel.handle.content())) ||
                   hideMobileBack()) &&
                   'hidden'
               )}

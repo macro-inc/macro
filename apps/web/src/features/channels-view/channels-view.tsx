@@ -35,6 +35,7 @@ import SpinnerIcon from '@icon/system/regular/spinner.svg';
 import { hydrateChannelNotificationSelection } from '@queries/channel/notification-selection';
 import { useFavoritesData } from '@queries/favorites/favorites';
 import {
+  type Accessor,
   createContext,
   createEffect,
   createMemo,
@@ -79,7 +80,10 @@ export type ChannelsViewProps = {
 };
 
 // Mounted inside the mobile list's Suspense boundary.
-function MobileChannelsList(props: { sources: ChannelsSources }) {
+function MobileChannelsList(props: {
+  sources: ChannelsSources;
+  localChannels: Accessor<ChannelEntity[]>;
+}) {
   const {
     mobileLayout,
     selectedChannel,
@@ -135,7 +139,7 @@ function MobileChannelsList(props: { sources: ChannelsSources }) {
     }
     return true;
   };
-  const listChannels = useChannelListSearchPool();
+  const listChannels = props.localChannels;
   const mobileSearchText = () => '';
   const mobileSearchSource = createChannelSearchSource({
     additionalLocalChannels: listChannels,
@@ -172,6 +176,7 @@ function MobileChannelsList(props: { sources: ChannelsSources }) {
       >
         <MobileSectionsView
           sources={props.sources}
+          localChannels={listChannels}
           pinned={pinned()}
           openPreview={mobileLayout() ? undefined : openPreview}
         />
@@ -182,10 +187,11 @@ function MobileChannelsList(props: { sources: ChannelsSources }) {
 
 function DesktopChannelsRail(props: {
   sources: ChannelsSources;
+  localChannels: Accessor<ChannelEntity[]>;
   searchOpen: boolean;
   onSearchOpenChange: (open: boolean) => void;
 }) {
-  const listChannels = useChannelListSearchPool();
+  const listChannels = props.localChannels;
   const { sectionsEnabled } = useChannelsView();
   const [searchQuery, setSearchQuery] = createSignal('');
   const searchSource = createChannelSearchSource({
@@ -253,6 +259,7 @@ function ChannelsViewRoot() {
   } = useChannelsView();
   const threadsTab = () => !isTouchDevice() && tab() === 'threads';
   const [railSearchOpen, setRailSearchOpen] = createSignal(false);
+  const localChannels = useChannelListSearchPool();
 
   const sources = useChannelsSources(
     (scope) => {
@@ -271,7 +278,8 @@ function ChannelsViewRoot() {
       if (scope === 'threads') return tab() === 'threads';
       return tab() === 'browse';
     },
-    (group) => state.sortBy[group]
+    (group) => state.sortBy[group],
+    localChannels
   );
   onMount(() => {
     panel.handle.setDisplayName('Channels');
@@ -310,6 +318,7 @@ function ChannelsViewRoot() {
                   fallback={
                     <DesktopChannelsRail
                       sources={sources}
+                      localChannels={localChannels}
                       searchOpen={railSearchOpen()}
                       onSearchOpenChange={setRailSearchOpen}
                     />
@@ -317,7 +326,10 @@ function ChannelsViewRoot() {
                 >
                   <ChannelsTouchSidebar>
                     <MaybeSoupEntityActionDrawerManager>
-                      <MobileChannelsList sources={sources} />
+                      <MobileChannelsList
+                        sources={sources}
+                        localChannels={localChannels}
+                      />
                     </MaybeSoupEntityActionDrawerManager>
                   </ChannelsTouchSidebar>
                 </Show>
@@ -338,7 +350,10 @@ function ChannelsViewRoot() {
                     name="ChannelsView.mobile"
                     fallback={<SpinnerIcon class="size-5 animate-spin" />}
                   >
-                    <MobileChannelsList sources={sources} />
+                    <MobileChannelsList
+                      sources={sources}
+                      localChannels={localChannels}
+                    />
                   </DebugSuspense>
                 </MaybeSoupEntityActionDrawerManager>
               }

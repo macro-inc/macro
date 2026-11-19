@@ -104,7 +104,6 @@ export default {
     close: 'Stäng',
     delete: 'Ta bort',
     rename: 'Byt namn',
-    more: 'Mer',
     search: 'Sök',
     settings: 'Inställningar',
   },

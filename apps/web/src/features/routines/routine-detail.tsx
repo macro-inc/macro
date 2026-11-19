@@ -28,7 +28,11 @@ import {
   createChatHistoryMetadata,
 } from './queries/history-metadata';
 import { createRoutineDetailSource } from './queries/routine-sources';
-import { createRoutineConnectedApps, RoutineApps } from './routine-apps';
+import {
+  createRoutineConnectedApps,
+  RoutineApps,
+  RoutineConnectApp,
+} from './routine-apps';
 import { RoutineExecutionPicker } from './routine-execution-picker';
 import { RoutinePromptEditor } from './routine-prompt-editor';
 import { createRoutineStepAuthor } from './routine-step-author';
@@ -220,6 +224,7 @@ export function RoutineDetail(props: {
           ExecutionPicker: RoutineExecutionPicker,
           Triggers: RoutineTriggers,
           Apps: RoutineApps,
+          ConnectApp: RoutineConnectApp,
           createConnectedApps: createRoutineConnectedApps,
           createStepAuthor: createRoutineStepAuthor,
           createChatMetadata: createChatHistoryMetadata,

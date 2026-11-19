@@ -98,6 +98,7 @@ export function RoutineNewView(props: {
         })}
         creating
         draft={draft()}
+        appearance={draft().appearance}
         onChange={change}
         disabled={pending()}
         tab="settings"

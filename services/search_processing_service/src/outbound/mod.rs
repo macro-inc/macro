@@ -1,5 +1,6 @@
 pub mod agent_session_search;
 pub mod backfill_control;
+pub mod chat_message_repair;
 #[cfg(feature = "processing")]
 pub mod cloudwatch_backlog;
 pub mod document_email;

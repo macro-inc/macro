@@ -12,7 +12,7 @@ use crate::error::{OpensearchClientError, OpensearchOperation, write_refusal};
 
 /// How many distinct item errors a [`OpensearchClientError::BulkItemsFailed`]
 /// keeps, so a bulk whose every item fails one way logs it once.
-const REPORTED_ITEM_ERRORS: usize = 5;
+pub(crate) const REPORTED_ITEM_ERRORS: usize = 5;
 
 /// Result of a bulk upsert whose every item OpenSearch wrote.
 #[derive(Debug, Default)]

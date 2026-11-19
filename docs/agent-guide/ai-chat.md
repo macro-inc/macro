@@ -987,7 +987,12 @@ the draft: the review lists what was created, from what the session named and
 from its recorded activity, under "Created for this routine" or "Created, not
 used by this routine" (both stay if the routine isn't saved), a code step that still fails stays in it with its errors listed, and
 the routine can't be created until it is drafted again or the step is
-removed. Saving checks every id again. A request the gateway
+removed. Saving checks every id again. The draft also picks the routine's
+icon and colour from Macro's icons, which the new routine's page draws in its
+header and top bar (else the first trigger's icon) and creating it saves; a
+pick naming an icon Macro doesn't have is dropped. An agent that later
+changes what the routine does may pick again, but never replaces a look the
+owner chose with **Change icon**. A request the gateway
 refuses as too large, a timeout and the AI usage limit each show their own
 message in the dialog instead of "Couldn’t draft that routine".
 
@@ -1433,8 +1438,11 @@ immediately, with no review card, so test them on a team and addresses you
 control. The standard toolset and the standard MCP have no direct tool for
 either.
 
-Ask the agent to discover SDK entities and write a JavaScript module exporting
-`async function main({macro, session, execution})`. These are actual public SDK
+Ask the agent to discover SDK entities and write a TypeScript module exporting
+`async function main({macro, session, execution}: CodeContext)`. The harness
+type-checks it against the SDK first; a program with type errors never runs,
+and its `ExecuteCode` result is the checker's errors (`at main.ts:<line>:<column>`).
+These are actual public SDK
 handles; for example, `macro.documents.search(...)` is an async iterator and
 `await document.content()` fetches a document as Macro's internal Markdown, with
 chips, tables and other rich content as `<m-*>` tags. To write text back, the
@@ -1494,8 +1502,8 @@ together, before writing it. There is no runtime `sdk.help` or
 body with `document.edit(instructions)`, and a canvas through `document.canvas()`.
 
 The harness spawns a fresh Deno process for each execution. Dependencies are
-bundled at build time; no TypeScript compilation or package downloads happen
-in a run. The process receives a short-lived normal user token after any required
+bundled at build time; no package downloads happen in a run, and Deno strips
+the types. The process receives a short-lived normal user token after any required
 approval for the selected account. SDK methods make HTTP requests to configured Macro
 service hosts using normal API authorization. The token also signs the session's
 agent identity: SDK messages show that agent as sender and the selected acting user in the
@@ -1577,7 +1585,8 @@ the harness can run code. Those clients see only
 `ExecuteCode`, `DescribeCodeTools` and `ReadCodeDocs` on `tools/list` — not the
 individual Macro tools — and the server instructions tell the client to call
 `DescribeCodeTools` with a `task`, then `ReadCodeDocs` for the symbols it uses,
-before writing a program. Programs export `async function main({macro})` and
+before writing a program. Programs are type-checked TypeScript exporting
+`async function main({macro}: CodeContext)` and
 return exactly `{data}` (an empty `reviews: []` is dropped). There is no
 session, execution journal, review stack or `execution_id`; the receipt carries
 status, observed SDK activity, result and error. Runs act as the user with no
