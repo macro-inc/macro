@@ -554,11 +554,11 @@ afterEach(() => {
   vi.unstubAllGlobals();
 });
 
-const agentTarget: RoutineTarget = {
+const agentTarget = {
   kind: 'agent',
   agentId: '0195dbd2-6539-7000-8000-000000000001',
   modelOverride: 'runtime-model',
-};
+} satisfies RoutineTarget;
 
 function openActions() {
   const trigger = screen.getByRole('button', { name: 'Routine actions' });
