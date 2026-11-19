@@ -7,7 +7,7 @@ fn receipts() -> (tempfile::TempDir, Receipts) {
 }
 
 #[test]
-fn finds_a_pass_only_for_the_inputs_and_definition_it_ran_on() {
+fn finds_a_pass_only_for_the_tree_and_definition_it_ran_on() {
     let (_dir, receipts) = receipts();
     receipts
         .record("web-app/cycles", "aaaa", "1111", true, "c0ffee")
@@ -29,7 +29,7 @@ fn finds_a_pass_only_for_the_inputs_and_definition_it_ran_on() {
 }
 
 #[test]
-fn a_later_run_on_the_same_inputs_replaces_the_earlier_one() {
+fn a_later_run_on_the_same_tree_replaces_the_earlier_one() {
     let (_dir, receipts) = receipts();
     receipts
         .record("infra/check", "aaaa", "1111", true, "c0ffee")
@@ -60,14 +60,14 @@ fn lists_one_checks_receipts_and_not_a_check_whose_name_starts_alike() {
         .record("infra/check-more", "aaaa", "1111", true, "c0ffee")
         .expect("records");
 
-    let sources: Vec<String> = receipts
+    let trees: Vec<String> = receipts
         .of("infra/check")
         .into_iter()
-        .map(|receipt| receipt.source)
+        .map(|receipt| receipt.tree)
         .collect();
 
-    assert_eq!(sources.len(), 2);
-    assert!(sources.contains(&"1111".to_owned()) && sources.contains(&"2222".to_owned()));
+    assert_eq!(trees.len(), 2);
+    assert!(trees.contains(&"1111".to_owned()) && trees.contains(&"2222".to_owned()));
 }
 
 #[test]
@@ -76,7 +76,7 @@ fn forgets_a_receipt_too_old_to_matter() {
     let old = Receipt {
         check: "infra/check".to_owned(),
         fingerprint: "aaaa".to_owned(),
-        source: "0000".to_owned(),
+        tree: "0000".to_owned(),
         passed: true,
         commit: "c0ffee".to_owned(),
         at: 1,

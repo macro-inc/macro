@@ -29,44 +29,41 @@ skips those jobs and runs the rest as before.
 
 ```sh
 cargo x attest list --all               # the checks, and why the other jobs can't be attested
-cargo x attest run all                  # every check this branch's changes reach, less what already passed
-cargo x attest run cloud-storage/check  # or name them
-cargo x attest post                     # after the push, with the pull request open
+git merge origin/main                   # PR CI tests your branch merged with main
+cargo x attest run all                  # every check this branch makes PR CI run
+git push
+cargo x attest post                     # with the pull request open, before the run-ci label
 ```
 
-Run the checks while you work, as you would `just check`. `run` posts nothing,
-and a recorded pass stays good until one of the check's inputs changes.
+Use `run` as you work, as you would `just check`: it posts nothing, and it
+skips a check that already passed on the same files.
 
 What a pass is for:
 
-- The files the check read. A check's inputs are the paths that already decide
-  whether `PR CI` runs its job, each widened to its directory. A pass is
-  recorded for a hash of those paths in the commit you ran on.
-- Committed files. With uncommitted changes under its inputs a check still
-  runs and tells you the result, and records nothing.
+- A tree: every file of the commit you ran on. `PR CI` tests GitHub's merge of
+  your head into `main`, and a pass counts when that merge has the same tree,
+  which it has when your branch already holds what `main` has. `post` tells
+  you when `main` has moved on: merge it, run again, push.
+- Committed files. With uncommitted changes a check still runs and tells you
+  the result, and records nothing. Don't edit files while a check runs.
 - The whole check. Where a runner lints or builds the Rust packages a pull
   request touches, your machine takes them all, so a pass covers whatever a
   run selects.
 
-What `post` posts and `PR CI` accepts:
+It is the whole tree and not the paths a job is triggered by, because those
+paths say when a pull request needs the job, not everything the job reads.
 
-- `PR CI` tests GitHub's merge of your head into `main`. `post` hashes each
-  check's inputs in that merge commit and posts the passes recorded for the
-  same hash as `attested/<check>` commit statuses. `Start` computes the hash
-  again and skips the job whose status names it.
-- A commit that leaves a check's inputs alone keeps the pass: after pushing a
-  docs fix, `post` again and nothing reruns.
-- A change to an input ends the pass, whoever made it. When `main` has changed
-  one since your branch last merged it, `post` names the path. Merge `main`,
-  run the check again and post.
-- The status also names the check's fingerprint. A job whose definition
+What `PR CI` accepts:
+
+- An `attested/<check>` commit status on the head that names the tree of the
+  merge commit under test and the check's fingerprint. A job whose definition
   changed since, in the pull request or on `main`, runs on a runner.
 - Only people who can push to the repository can post a status, and only
   same-repository pull requests have theirs read.
 - Every accepted check has one chance in ten of running on a runner anyway.
   One that fails there fails the run, `CI gate` reads `Attested but failed
-  here: <checks>`, and the check is withdrawn for those files: nothing posted
-  for them counts again. Nothing else runs these jobs for a pull request, so
+  here: <checks>`, and the check is withdrawn for that tree: nothing posted
+  for it counts again. Nothing else runs these jobs for a pull request, so
   treat that as a defect and find why the machine and the runner disagree.
 - `CI gate` reads the statuses again when the run ends, because re-running
   failed jobs keeps what `Start` decided. A run that relied on an attestation
@@ -74,7 +71,7 @@ What `post` posts and `PR CI` accepts:
   again.
 
 A check that fails on your machine is recorded too, and `post` withdraws a
-pass the commit carries for the same files.
+pass the commit carries for the same tree.
 
 How a check runs:
 
@@ -87,11 +84,13 @@ How a check runs:
 
 `cargo x attest list --all` says why each other job can't be attested. A job
 needs a runner when it needs service containers, secrets, system packages,
-another operating system or the pull request's labels; when its setup rewrites
-tracked files, as the web typecheck, test and generated-code jobs do; when it
-reads the merge commit's parents; or when something outside the tree decides
-its verdict, as the advisory database does for `cargo deny`. Both lists, and
-how to move a job between them, are in `xtask_workflows`' `attestation.rs`.
+another operating system or the pull request's labels; when its setup or its
+script rewrites tracked files, as the web typecheck, test and generated-code
+jobs and the dependency check do; when it reads something outside the tree,
+as the Biome jobs do with the files changed since `main`, the GraphQL schema
+check with the merge commit's parents, and `cargo deny` with the advisory
+database. Both lists, and how to move a job between them, are in
+`xtask_workflows`' `attestation.rs`.
 
 ## Email end-to-end suites
 

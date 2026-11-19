@@ -24,8 +24,9 @@ const MERGE_ATTEMPTS: u8 = 8;
 const MERGE_WAIT: Duration = Duration::from_secs(5);
 /// How many statuses GitHub lists per page.
 const STATUS_PAGE: usize = 100;
-/// The length of a fingerprint and of an inputs hash, in hex digits.
-const HASH_DIGITS: usize = 16;
+/// The length of a fingerprint and of a git tree id, in hex digits.
+const FINGERPRINT_DIGITS: usize = 16;
+const TREE_DIGITS: usize = 40;
 
 /// The merge commit GitHub built for a pull request.
 pub struct PullMerge {
@@ -72,31 +73,36 @@ pub struct Status {
     pub description: Option<String>,
 }
 
-/// What a status vouches for: the check as it was defined, and the hash of
-/// the inputs it ran on.
+/// What a status vouches for: the check as it was defined, and the tree it
+/// ran on.
 #[derive(Debug, PartialEq)]
 pub struct Claim {
     pub fingerprint: String,
-    pub source: String,
+    pub tree: String,
 }
 
-fn hash(input: &str) -> IResult<&str, &str> {
-    take_while_m_n(HASH_DIGITS, HASH_DIGITS, |c: char| {
+/// Exactly `digits` lowercase hex digits.
+fn hex_digits<'a>(
+    digits: usize,
+) -> impl Parser<&'a str, Output = &'a str, Error = nom::error::Error<&'a str>> {
+    take_while_m_n(digits, digits, |c: char| {
         c.is_ascii_hexdigit() && !c.is_ascii_uppercase()
     })
-    .parse(input)
 }
 
-/// `fp=<hash> src=<hash>`, then nothing or a space and free text.
+/// `fp=<fingerprint> tree=<tree>`, then nothing or a space and free text.
 fn claim(input: &str) -> IResult<&str, Claim> {
-    let (input, (fingerprint, source)) =
-        (preceded(tag("fp="), hash), preceded(tag(" src="), hash)).parse(input)?;
+    let (input, (fingerprint, tree)) = (
+        preceded(tag("fp="), hex_digits(FINGERPRINT_DIGITS)),
+        preceded(tag(" tree="), hex_digits(TREE_DIGITS)),
+    )
+        .parse(input)?;
     let (input, _) = all_consuming(opt(preceded(char(' '), rest))).parse(input)?;
     Ok((
         input,
         Claim {
             fingerprint: fingerprint.to_owned(),
-            source: source.to_owned(),
+            tree: tree.to_owned(),
         },
     ))
 }
@@ -110,11 +116,11 @@ impl Status {
     }
 }
 
-/// The description of a status for a check and the inputs it ran on.
-pub fn description(fingerprint: &str, source: &str, note: Option<&str>) -> String {
+/// The description of a status for a check and the tree it ran on.
+pub fn description(fingerprint: &str, tree: &str, note: Option<&str>) -> String {
     let description = match note {
-        Some(note) => format!("fp={fingerprint} src={source} {note}"),
-        None => format!("fp={fingerprint} src={source}"),
+        Some(note) => format!("fp={fingerprint} tree={tree} {note}"),
+        None => format!("fp={fingerprint} tree={tree}"),
     };
     description.chars().take(DESCRIPTION_LIMIT).collect()
 }

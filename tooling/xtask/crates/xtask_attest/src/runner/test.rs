@@ -47,7 +47,7 @@ fn check(steps: Vec<Step>) -> Check {
         id: "a/check".to_owned(),
         name: "A / check".to_owned(),
         fingerprint: "aaaa".to_owned(),
-        inputs: vec![".".to_owned()],
+        triggers: vec![".".to_owned()],
         dev_shell: "default".to_owned(),
         env: BTreeMap::from([("FROM_THE_JOB".to_owned(), "job".to_owned())]),
         steps,

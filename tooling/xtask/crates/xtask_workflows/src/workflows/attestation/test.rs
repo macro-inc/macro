@@ -215,7 +215,7 @@ fn a_pattern_widens_to_the_directory_it_stays_inside() {
 }
 
 #[test]
-fn inputs_drop_what_a_listed_directory_already_holds() {
+fn triggers_drop_what_a_listed_directory_already_holds() {
     let paths = [
         "crates/a",
         "crates",
@@ -234,10 +234,10 @@ fn inputs_drop_what_a_listed_directory_already_holds() {
     );
 }
 
-/// The inputs must hold every path that makes `PR CI` run the job: a path
-/// outside them could change the verdict and leave the hash as it was.
+/// `cargo x attest run all` leaves out a check whose triggers a branch did
+/// not touch. A trigger missing here would leave out a check `PR CI` runs.
 #[test]
-fn a_checks_inputs_hold_every_path_that_makes_its_job_run() {
+fn a_checks_triggers_hold_every_path_that_makes_its_job_run() {
     for check in described().expect("checks render") {
         let call = call_of(check.call).expect("the check's call exists");
         let root = rendered(call.file, false).expect("workflow renders");
@@ -250,28 +250,22 @@ fn a_checks_inputs_hold_every_path_that_makes_its_job_run() {
         for pattern in patterns {
             let inside = widen(&pattern);
             assert!(
-                check.inputs.iter().any(|input| {
-                    input == "." || *input == inside || inside.starts_with(&format!("{input}/"))
+                check.triggers.iter().any(|trigger| {
+                    trigger == "."
+                        || *trigger == inside
+                        || inside.starts_with(&format!("{trigger}/"))
                 }),
-                "{}: `{pattern}` is not among its inputs",
+                "{}: `{pattern}` is not among its triggers",
                 check.id
-            );
-        }
-        for always in ALWAYS_READ {
-            assert!(
-                check
-                    .inputs
-                    .iter()
-                    .any(|input| input == always || input == ".")
             );
         }
     }
 }
 
 /// A job a selector decides must read that decision in its own condition:
-/// the inputs are taken from there.
+/// the triggers are taken from there.
 #[test]
-fn a_selected_check_reads_the_filter_its_inputs_come_from() {
+fn a_selected_check_reads_the_filter_its_triggers_come_from() {
     for check in CHECKS {
         let call = call_of(check.call).expect("the check's call exists");
         if call.paths.is_some() {

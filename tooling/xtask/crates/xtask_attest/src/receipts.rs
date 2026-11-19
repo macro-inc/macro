@@ -1,11 +1,11 @@
 //! What this machine saw a check do: one file per check, definition and
-//! input hash, under the user's cache directory.
+//! tree, under the user's cache directory.
 //!
 //! A receipt is written when a check is run, not when anything is posted, so
 //! the checks a developer runs while working are the record. `post` later
 //! finds the receipts that apply to the commit `PR CI` will test. Every
-//! worktree of a clone shares the receipts: they are keyed by what was read,
-//! not by where.
+//! worktree of a clone shares the receipts: they are keyed by the files, not by
+//! where they were.
 
 use std::{
     path::{Path, PathBuf},
@@ -27,10 +27,10 @@ pub struct Receipt {
     pub check: String,
     /// The check as it was defined when it ran.
     pub fingerprint: String,
-    /// The hash of the inputs it ran on.
-    pub source: String,
+    /// The tree it ran on.
+    pub tree: String,
     pub passed: bool,
-    /// The commit it ran on, to say later which inputs changed since.
+    /// The commit it ran on.
     pub commit: String,
     /// Seconds since the Unix epoch.
     pub at: u64,
@@ -63,41 +63,41 @@ impl Receipts {
         Ok(Self { dir })
     }
 
-    fn path(&self, check: &str, fingerprint: &str, source: &str) -> PathBuf {
+    fn path(&self, check: &str, fingerprint: &str, tree: &str) -> PathBuf {
         self.dir.join(format!(
-            "{}.{fingerprint}.{source}.json",
+            "{}.{fingerprint}.{tree}.json",
             check.replace('/', "--")
         ))
     }
 
-    /// Record what a check did on these inputs, replacing what it did on them
+    /// Record what a check did on this tree, replacing what it did on it
     /// before.
     pub fn record(
         &self,
         check: &str,
         fingerprint: &str,
-        source: &str,
+        tree: &str,
         passed: bool,
         commit: &str,
     ) -> Result<(), Report> {
         let receipt = Receipt {
             check: check.to_owned(),
             fingerprint: fingerprint.to_owned(),
-            source: source.to_owned(),
+            tree: tree.to_owned(),
             passed,
             commit: commit.to_owned(),
             at: now(),
         };
         let text = serde_json::to_string_pretty(&receipt).context("a receipt serializes")?;
-        std::fs::write(self.path(check, fingerprint, source), text)
+        std::fs::write(self.path(check, fingerprint, tree), text)
             .context("could not write a receipt")?;
         self.forget_old();
         Ok(())
     }
 
-    /// What the check did on exactly these inputs, if this machine ran it.
-    pub fn find(&self, check: &str, fingerprint: &str, source: &str) -> Option<Receipt> {
-        let text = std::fs::read_to_string(self.path(check, fingerprint, source)).ok()?;
+    /// What the check did on exactly this tree, if this machine ran it.
+    pub fn find(&self, check: &str, fingerprint: &str, tree: &str) -> Option<Receipt> {
+        let text = std::fs::read_to_string(self.path(check, fingerprint, tree)).ok()?;
         serde_json::from_str(&text).ok()
     }
 

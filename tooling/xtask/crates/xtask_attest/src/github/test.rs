@@ -2,6 +2,7 @@ use super::*;
 
 const HEAD: &str = "1111111111111111111111111111111111111111";
 const BASE: &str = "2222222222222222222222222222222222222222";
+const TREE: &str = "3333333333333333333333333333333333333333";
 
 fn pull(state: &str, head: &str, base_branch: &str) -> Pull {
     Pull {
@@ -72,47 +73,45 @@ fn takes_only_a_merge_commit_built_for_this_head() {
 
 #[test]
 fn reads_what_a_status_vouches_for() {
-    let stated = status(Some("fp=0123456789abcdef src=fedcba9876543210"));
-    let with_note = status(Some(
-        "fp=0123456789abcdef src=fedcba9876543210 failed on a runner",
-    ));
+    let stated = status(Some(&format!("fp=0123456789abcdef tree={TREE}")));
+    let with_note = status(Some(&format!(
+        "fp=0123456789abcdef tree={TREE} failed on a runner"
+    )));
     let expected = Claim {
         fingerprint: "0123456789abcdef".to_owned(),
-        source: "fedcba9876543210".to_owned(),
+        tree: TREE.to_owned(),
     };
 
     assert_eq!(stated.claim(), Some(expected));
     assert_eq!(
-        with_note.claim().map(|claim| claim.source),
-        Some("fedcba9876543210".to_owned())
+        with_note.claim().map(|claim| claim.tree),
+        Some(TREE.to_owned())
     );
 }
 
 #[test]
 fn a_status_someone_wrote_by_hand_vouches_for_nothing() {
-    for description in [
-        None,
-        Some("looks good to me"),
-        Some("fp=0123456789abcdef"),
-        Some("fp=0123456789abcdef src=fedcba98"),
-        Some("fp=0123456789ABCDEF src=fedcba9876543210"),
-        Some("fp=0123456789abcdef src=fedcba9876543210x"),
-        Some("fp=0123456789abcdef  src=fedcba9876543210"),
-    ] {
-        assert_eq!(status(description).claim(), None, "{description:?}");
+    let odd = [
+        "looks good to me".to_owned(),
+        "fp=0123456789abcdef".to_owned(),
+        "fp=0123456789abcdef tree=3333".to_owned(),
+        format!("fp=0123456789ABCDEF tree={TREE}"),
+        format!("fp=0123456789abcdef tree={TREE}3"),
+        format!("fp=0123456789abcdef  tree={TREE}"),
+    ];
+
+    assert_eq!(status(None).claim(), None);
+    for description in odd {
+        assert_eq!(status(Some(&description)).claim(), None, "{description}");
     }
 }
 
 #[test]
 fn writes_a_description_it_can_read_back() {
-    let plain = description("0123456789abcdef", "fedcba9876543210", None);
-    let noted = description(
-        "0123456789abcdef",
-        "fedcba9876543210",
-        Some(&"long ".repeat(60)),
-    );
+    let plain = description("0123456789abcdef", TREE, None);
+    let noted = description("0123456789abcdef", TREE, Some(&"long ".repeat(60)));
 
-    assert_eq!(plain, "fp=0123456789abcdef src=fedcba9876543210");
+    assert_eq!(plain, format!("fp=0123456789abcdef tree={TREE}"));
     assert_eq!(noted.chars().count(), DESCRIPTION_LIMIT);
     assert!(status(Some(&plain)).claim().is_some());
     assert!(status(Some(&noted)).claim().is_some());

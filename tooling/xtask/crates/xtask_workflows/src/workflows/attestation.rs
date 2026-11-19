@@ -9,17 +9,21 @@
 //!   (`xtask_attest`) execute the same text. A step that needs more than a
 //!   shell (a condition, an expression, an action) fails generation instead of
 //!   being imitated;
-//! - the check's inputs ([`inputs`]): the paths that already decide whether
-//!   `PR CI` runs the job, widened to whole directories;
-//! - the skip clause on the job, and what `Start` and the gate need.
+//! - the skip clause on the job, and what `Start` and the gate need;
+//! - the paths whose change makes `PR CI` run the job ([`triggers`]), which
+//!   tell a machine which checks a branch needs.
 //!
-//! A pass is recorded for what the check read. `cargo x attest` hashes the
-//! inputs as they are in the working tree, and posts a commit status named
-//! [`STATUS_PREFIX`] plus the check's id that carries that hash (`src`) and
-//! the check's [`fingerprint`] (`fp`). `Start` hashes the same paths in the
-//! merge commit it tests and accepts a status that names both. So a pass
-//! survives any commit, and any move of `main`, that leaves the inputs as they
-//! were, and stops counting the moment one of them changes.
+//! A pass is recorded for a tree. `cargo x attest` runs a check in the
+//! working tree and posts a commit status named [`STATUS_PREFIX`] plus the
+//! check's id that carries the tree it ran on (`tree`) and the check's
+//! [`fingerprint`] (`fp`). `Start` accepts a status that names the tree of
+//! the merge commit it tests. So a pass counts exactly when `PR CI` would
+//! test the files the machine tested, and never for a tree that `main` or a
+//! later commit has changed.
+//!
+//! The whole tree, not the paths a job is triggered by: those paths say when a
+//! pull request needs the job, not everything the job reads. A check's pass
+//! on its own paths would outlive a change to a dependency outside them.
 //!
 //! A machine always runs the whole check: where a runner would lint the
 //! packages a pull request touches, a machine lints them all
@@ -28,7 +32,7 @@
 //! Each accepted check has one chance in [`AUDIT_ONE_IN`] of running on a
 //! runner anyway. Nothing else runs these jobs for a pull request, so that is
 //! the only independent check of what a machine attested. A check that fails
-//! there is withdrawn for the inputs it failed on.
+//! there is withdrawn for the tree it failed on.
 
 use std::collections::BTreeMap;
 
@@ -56,9 +60,6 @@ const SELECTOR_JOB: &str = "path-check";
 
 /// The action a selector job decides its outputs with.
 const FILTER_ACTION: &str = "dorny/paths-filter";
-
-/// Every check runs in the dev shell these define, whatever else it reads.
-const ALWAYS_READ: &[&str] = &["flake.lock", "flake.nix"];
 
 /// The action that enters a dev shell; its `shell` input names which. A job
 /// without it runs on a machine in the default one, which holds the tools the
@@ -149,31 +150,6 @@ pub const CHECKS: &[Check] = &[
         local_env: EVERY_RUST_PACKAGE,
     },
     Check {
-        call: "web-app",
-        job: "biome-check",
-        steps: &[
-            "Run Biome",
-            "Run Collaboration Package Biome",
-            "Check Browser Floor and Native Permissions",
-        ],
-        local_env: &[],
-    },
-    Check {
-        call: "web-app",
-        job: "cycles",
-        steps: &[
-            "Cycles Import Check",
-            "Collaboration Package Cycles Import Check",
-        ],
-        local_env: &[],
-    },
-    Check {
-        call: "infra",
-        job: "biome-check",
-        steps: &["Run Biome"],
-        local_env: &[],
-    },
-    Check {
         call: "infra",
         job: "check",
         steps: &["install", "check"],
@@ -240,6 +216,8 @@ const SELECTS: &str = "decides what the other jobs run, and they wait for it";
 const WEB_SETUP: &str =
     "its setup rewrites `bunfig.toml` and replaces `node_modules`, which a working tree can't take";
 const OTHER_SYSTEM: &str = "runs on another operating system";
+const CHANGED_FILES_ONLY: &str =
+    "lints the files changed since `main`, so a ref outside the tree decides what it checks";
 const PULL_REQUEST_STATE: &str = "reads the pull request's labels and the app stores' state";
 
 /// Every other job `PR CI` runs. The tests hold the two lists to the jobs
@@ -287,6 +265,16 @@ pub const NOT_ATTESTABLE: &[NotAttestable] = &[
     },
     NotAttestable {
         call: "web-app",
+        job: "biome-check",
+        why: CHANGED_FILES_ONLY,
+    },
+    NotAttestable {
+        call: "web-app",
+        job: "cycles",
+        why: CHANGED_FILES_ONLY,
+    },
+    NotAttestable {
+        call: "web-app",
         job: "build",
         why: "reads secrets and deploys a preview",
     },
@@ -309,6 +297,11 @@ pub const NOT_ATTESTABLE: &[NotAttestable] = &[
         call: "web-app",
         job: "ios-native-check",
         why: PULL_REQUEST_STATE,
+    },
+    NotAttestable {
+        call: "infra",
+        job: "biome-check",
+        why: CHANGED_FILES_ONLY,
     },
     NotAttestable {
         call: "cargo-deny",
@@ -367,8 +360,9 @@ pub struct Described {
     pub job: &'static str,
     /// The job's name in a `PR CI` run: `Web App / Biome Check`.
     pub name: String,
-    /// The paths the check reads, sorted; `.` is the whole tree.
-    pub inputs: Vec<String>,
+    /// The paths whose change makes `PR CI` run the job, sorted; `.` is
+    /// any path.
+    pub triggers: Vec<String>,
     /// The Nix dev shell the steps run in.
     pub dev_shell: String,
     /// The workflow's and the job's environment.
@@ -457,16 +451,14 @@ fn selector_filters(root: &serde_yaml::Value) -> Result<BTreeMap<String, Vec<Str
     serde_yaml::from_str(filters).context("a path filter is not a list of patterns per name")
 }
 
-/// The paths a check reads: the ones that already decide whether `PR CI` runs
-/// its job, each widened to the directory it stays inside, plus the dev
-/// shell's. For a path-filtered call they are the call's paths; otherwise the
-/// selector's filters that the job's condition reads. A job nothing filters
-/// reads the whole tree.
+/// The paths whose change makes `PR CI` run a job, each widened to the
+/// directory it stays inside. For a path-filtered call they are the call's
+/// paths; otherwise the selector's filters that the job's condition reads. A
+/// job nothing filters runs for any change.
 ///
-/// Today a pull request that leaves these paths alone skips the job, on the
-/// strength of `main` having passed it. An attestation rests on the same
-/// claim: the job's verdict is decided by these paths.
-pub fn inputs(root: &serde_yaml::Value, call: &pr_ci::Call, job_id: &str) -> Result<Vec<String>> {
+/// A machine uses them to tell which checks a branch needs. They are not what
+/// a pass is recorded for: a job reads more than what triggers it.
+pub fn triggers(root: &serde_yaml::Value, call: &pr_ci::Call, job_id: &str) -> Result<Vec<String>> {
     let patterns: Vec<String> = match call.paths {
         Some(paths) => paths.iter().map(|path| path.as_str().to_owned()).collect(),
         None => {
@@ -489,11 +481,7 @@ pub fn inputs(root: &serde_yaml::Value, call: &pr_ci::Call, job_id: &str) -> Res
     };
 
     Ok(without_nested(
-        patterns
-            .iter()
-            .map(|pattern| widen(pattern))
-            .chain(ALWAYS_READ.iter().map(|path| (*path).to_owned()))
-            .collect(),
+        patterns.iter().map(|pattern| widen(pattern)).collect(),
     ))
 }
 
@@ -643,15 +631,14 @@ fn rendered(file_name: &str, patched: bool) -> Result<serde_yaml::Value> {
 }
 
 /// What identifies the check a pass was for: the job as its module builds it,
-/// the workflow's environment, the steps that are the check, what a machine
-/// sets in a runner's place, and the paths it reads.
-fn fingerprint(root: &serde_yaml::Value, check: &Check, inputs: &[String]) -> Result<String> {
+/// the workflow's environment, the steps that are the check, and what a
+/// machine sets in a runner's place.
+fn fingerprint(root: &serde_yaml::Value, check: &Check) -> Result<String> {
     let identity = json!({
         "job": serde_json::to_value(&root["jobs"][check.job])?,
         "env": serde_json::to_value(&root["env"])?,
         "steps": check.steps,
         "local_env": check.local_env,
-        "inputs": inputs,
     });
     let digest = Sha256::digest(serde_json::to_string(&identity)?);
     Ok(hex::encode(&digest[..8]))
@@ -722,15 +709,14 @@ fn describe(check: &Check) -> Result<Described> {
         }
     }
 
-    let inputs = inputs(&root, call, check.job)?;
     Ok(Described {
-        fingerprint: fingerprint(&root, check, &inputs)?,
+        fingerprint: fingerprint(&root, check)?,
+        triggers: triggers(&root, call, check.job)?,
         id,
         call: check.call,
         workflow: call.file,
         job: check.job,
         name: format!("{} / {own_name}", call.name),
-        inputs,
         dev_shell,
         env,
         steps,
@@ -767,7 +753,7 @@ pub fn manifest() -> Result<String> {
                 "job": check.job,
                 "name": check.name,
                 "fingerprint": check.fingerprint,
-                "inputs": check.inputs,
+                "triggers": check.triggers,
                 "dev_shell": check.dev_shell,
                 "env": check.env,
                 "steps": steps,
@@ -788,18 +774,11 @@ pub fn manifest() -> Result<String> {
     Ok(format!("{}\n", serde_json::to_string_pretty(&manifest)?))
 }
 
-/// What `Start` needs to accept a status: the check, its fingerprint, and the
-/// paths to hash in the merge commit.
+/// What `Start` needs to accept a status: the check and its fingerprint.
 pub fn start_checks() -> Result<String> {
     let checks: Vec<serde_json::Value> = described()?
         .iter()
-        .map(|check| {
-            json!({
-                "id": check.id,
-                "fingerprint": check.fingerprint,
-                "inputs": check.inputs,
-            })
-        })
+        .map(|check| json!({ "id": check.id, "fingerprint": check.fingerprint }))
         .collect();
     Ok(serde_json::to_string(&checks)?)
 }

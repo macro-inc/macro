@@ -42,7 +42,6 @@ jobs:
     - name: Teardown Nix
       if: always()
       uses: ./.github/actions/teardown-nix
-    if: '!contains(fromJSON(inputs.attested || ''[]''), ''infra/biome-check'')'
   check:
     runs-on: namespace-profile-linux-small;overrides.cache-tag=web-ci
     timeout-minutes: 15

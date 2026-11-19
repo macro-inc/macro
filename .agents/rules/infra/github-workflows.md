@@ -25,7 +25,8 @@ steps; hand-edited YAML drifts and fails CI's `cargo x workflows --check`.
   a machine can run it from a working tree: its check steps are plain scripts
   (no `if`, no expression in the script, no action) that leave tracked files
   alone, it needs no secrets, service containers or other operating system, no
-  other job needs it, and the tree alone decides its verdict. A step you add
+  other job needs it, and the commit's files alone decide its verdict: not a
+  ref such as `main`, the merge commit's parents, or anything fetched. A step you add
   to a listed job goes in its `steps`, or in `RUNNER_STEPS` when it only
   keeps a runner's caches.
 - A few older workflows are still hand-written YAML. When you change one

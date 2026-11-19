@@ -26,8 +26,8 @@ pub struct Check {
     pub name: String,
     /// What a pass was for; a status for another fingerprint is not accepted.
     pub fingerprint: String,
-    /// The paths the check reads; `.` is the whole tree.
-    pub inputs: Vec<String>,
+    /// The paths whose change makes `PR CI` run the job; `.` is any path.
+    pub triggers: Vec<String>,
     /// The Nix dev shell its steps run in.
     pub dev_shell: String,
     pub env: BTreeMap<String, String>,

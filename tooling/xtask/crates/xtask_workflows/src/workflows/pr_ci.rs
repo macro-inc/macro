@@ -244,7 +244,7 @@ fn start() -> Result<Job> {
         .add_step(paths_filter())
         .add_output("attested", "${{ steps.attestations.outputs.attested }}")
         .add_output("audited", "${{ steps.attestations.outputs.audited }}")
-        .add_output("sources", "${{ steps.attestations.outputs.sources }}");
+        .add_output("tree", "${{ steps.attestations.outputs.tree }}");
 
     Ok(CALLS
         .iter()
@@ -326,7 +326,7 @@ fn gate() -> Job {
                 .add_env(("NEEDS", "${{ toJSON(needs) }}"))
                 .add_env(("ATTESTED", "${{ needs.start.outputs.attested }}"))
                 .add_env(("AUDITED", "${{ needs.start.outputs.audited }}"))
-                .add_env(("SOURCES", "${{ needs.start.outputs.sources }}"))
+                .add_env(("TREE", "${{ needs.start.outputs.tree }}"))
                 .add_env((
                     "ATTESTABLE_CHECKS",
                     attestation::start_checks().expect("the attested checks render"),

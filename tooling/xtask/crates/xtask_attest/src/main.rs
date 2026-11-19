@@ -2,27 +2,27 @@
 //! count.
 //!
 //! `run` executes a check's scripts in the working tree and records what
-//! happened, keyed by the check's definition and a hash of the files it read
-//! ([`inputs`]). It posts nothing: running a check while working is what makes
-//! the record. `post` then finds the recorded passes that apply to the commit
-//! `PR CI` will test, the merge of the pushed head with its base branch, and
-//! posts each as a commit status. `PR CI` skips a job whose status names the
-//! files it is about to test (`xtask_workflows`' `attestation` module has the
+//! happened, keyed by the check's definition and the git tree it ran on
+//! ([`tree`]). It posts nothing: running a check while working is what makes
+//! the record. `post` then finds the passes recorded for the tree `PR CI`
+//! will test, the merge of the pushed head with its base branch, and posts
+//! each as a commit status. `PR CI` skips a job whose status names the tree
+//! it is about to test (`xtask_workflows`' `attestation` module has the
 //! rules).
 //!
-//! A pass is for the bytes it ran on. A commit that leaves a check's inputs
-//! alone keeps its pass; a commit, or a move of the base branch, that changes
-//! one of them does not, and `post` says which input changed.
+//! A pass is for the files it ran on, all of them. When the base branch has
+//! changes the branch lacks, `PR CI` tests another tree than the one in the
+//! working tree, and `post` says so: merge the base, run again, push.
 
 mod file_commands;
 mod git;
 mod github;
-mod inputs;
 mod manifest;
 mod receipts;
 mod runner;
+mod tree;
 
-use std::{path::PathBuf, process::ExitCode};
+use std::{fs::File, path::PathBuf, process::ExitCode};
 
 use clap::{Parser, Subcommand};
 use rootcause::prelude::*;
@@ -40,6 +40,9 @@ mod test;
 
 /// How many paths a message names before it counts the rest.
 const PATHS_SHOWN: usize = 3;
+/// How many reworded or empty commits before the head `post` reads statuses
+/// of.
+const SAME_TREE_COMMITS: usize = 5;
 
 #[derive(Parser)]
 #[command(
@@ -61,11 +64,11 @@ enum Action {
     },
     /// Run checks on the commit in this working tree and record the results.
     Run {
-        /// Check ids from `list`, or `all` for every check whose inputs this
-        /// branch changes.
+        /// Check ids from `list`, or `all` for every check this branch's
+        /// changes make PR CI run.
         #[arg(required = true)]
         checks: Vec<String>,
-        /// Run a check even when it already passed on these files.
+        /// Run a check even when it already passed on this tree.
         #[arg(long)]
         again: bool,
         /// The branch the pull request merges into.
@@ -83,20 +86,20 @@ enum Action {
 /// What `post` does about one check.
 #[derive(Debug, PartialEq)]
 enum Posting {
-    /// A pass on these files is recorded here and not yet on the commit.
+    /// A pass on this tree is recorded here and not yet on the commit.
     Pass,
-    /// The check failed here on files the commit says it passed on.
+    /// The check failed here on the tree the commit says it passed on.
     Withdraw,
     /// The commit already carries the pass.
     Standing,
-    /// Something failed it on these files: a runner's audit, or a later run.
+    /// Something failed it on this tree: a runner's audit, or a later run.
     Contradicted,
-    /// This machine has no pass for these files.
+    /// This machine has no pass for this tree.
     Nothing,
 }
 
-/// `recorded` is what this machine saw on exactly these files; the flags are
-/// what the commit's statuses say about them.
+/// `recorded` is what this machine saw on exactly this tree; the flags are
+/// what the statuses say about it.
 fn posting(recorded: Option<bool>, says_passed: bool, says_failed: bool) -> Posting {
     match recorded {
         Some(true) if says_failed => Posting::Contradicted,
@@ -145,10 +148,25 @@ impl Repository {
         Receipts::open(self.cache.join("receipts"))
     }
 
-    /// One scratch directory per working tree, so two can run at once.
+    /// One scratch directory per working tree, so two trees can run at once.
     fn scratch(&self) -> PathBuf {
         let key = hex::encode(&Sha256::digest(self.root.to_string_lossy().as_bytes())[..6]);
         self.cache.join(format!("scratch-{key}"))
+    }
+
+    /// Hold the working tree's scratch directory for one run. Two runs in
+    /// one tree would write each other's scripts.
+    fn lock(&self) -> Result<File, Report> {
+        std::fs::create_dir_all(&self.cache)
+            .context(format!("could not create {}", self.cache.display()))?;
+        let mut path = self.scratch().into_os_string();
+        path.push(".lock");
+        let lock = File::create(path).context("could not create the lock file")?;
+        if lock.try_lock().is_err() {
+            eprintln!("waiting for another cargo x attest in this working tree to finish");
+            lock.lock().context("could not take the lock")?;
+        }
+        Ok(lock)
     }
 
     /// The checks as a commit defines them.
@@ -159,12 +177,6 @@ impl Repository {
         )
         .context(format!("{commit} has no {}", manifest::PATH))?;
         Manifest::parse(&text)
-    }
-
-    /// The hash of a check's inputs in a commit.
-    fn source(&self, commit: &str, check: &Check) -> Result<String, Report> {
-        let objects = inputs::objects_at(&self.root, commit, &check.inputs)?;
-        Ok(inputs::inputs_hash(&check.inputs, &objects))
     }
 }
 
@@ -183,8 +195,8 @@ fn list(all: bool) -> Result<(), Report> {
     Ok(())
 }
 
-/// The checks asked for, in manifest order. `all` is every check whose inputs
-/// differ from where the branch left `base`: `PR CI` runs no others.
+/// The checks asked for, in manifest order. `all` is every check whose
+/// triggers differ from where the branch left `base`: `PR CI` runs no others.
 fn requested<'a>(
     repository: &Repository,
     manifest: &'a Manifest,
@@ -211,20 +223,25 @@ fn requested<'a>(
         eprintln!("note: origin/{base} is not known here, so every check runs");
         return Ok(manifest.checks.iter().collect());
     };
-    let mut changed = Vec::new();
+    let mut triggered = Vec::new();
     for check in &manifest.checks {
-        if repository.source(&fork, check)? == repository.source("HEAD", check)? {
-            println!("-     {}: this branch does not change its inputs", check.id);
+        if tree::differs_under(&repository.root, &fork, "HEAD", &check.triggers)? {
+            triggered.push(check);
         } else {
-            changed.push(check);
+            println!(
+                "-     {}: this branch changes nothing that makes PR CI run it",
+                check.id
+            );
         }
     }
-    Ok(changed)
+    Ok(triggered)
 }
 
 fn run(asked: &[String], again: bool, base: &str) -> Result<bool, Report> {
     let repository = Repository::here()?;
+    let _lock = repository.lock()?;
     let head = git(&repository.root, &["rev-parse", "HEAD"])?;
+    let tree = tree::tree_of(&repository.root, &head)?;
     let manifest = repository.manifest_at("HEAD")?;
     let checks = requested(&repository, &manifest, asked, base)?;
     let receipts = repository.receipts()?;
@@ -233,58 +250,58 @@ fn run(asked: &[String], again: bool, base: &str) -> Result<bool, Report> {
         scratch: repository.scratch(),
     };
 
-    // A result is recorded for a commit's files. With uncommitted changes
-    // under its inputs a check still runs, and nothing is recorded.
+    // A result is recorded for a commit's files. With uncommitted changes a
+    // check still runs, and nothing is recorded.
     let mut all_passed = true;
     let mut summary = Vec::new();
     for check in checks {
-        let before = inputs::uncommitted(&repository.root, &check.inputs)?;
-        let source = repository.source(&head, check)?;
+        let before = tree::uncommitted(&repository.root)?;
 
         // The point of a receipt: the same check on the same files has
         // nothing new to say.
         let passed_before = before.is_empty()
             && receipts
-                .find(&check.id, &check.fingerprint, &source)
+                .find(&check.id, &check.fingerprint, &tree)
                 .is_some_and(|receipt| receipt.passed);
         if passed_before && !again {
-            let line = format!(
-                "kept  {}: already passed on these files ({source})",
-                check.id
-            );
+            let line = format!("kept  {}: already passed on this tree", check.id);
             eprintln!("{line}");
             summary.push(line);
             continue;
         }
 
         eprintln!("── {}", check.id);
-        let line = match machine.run(check)? {
-            Outcome::Failed { step } => {
-                all_passed = false;
-                if before.is_empty() {
-                    receipts.record(&check.id, &check.fingerprint, &source, false, &head)?;
-                }
-                format!("FAIL  {}: `{step}` failed", check.id)
+        let outcome = machine.run(check)?;
+
+        // What ran is the commit's files only if nothing was uncommitted
+        // before or after, and the commit is still the one checked out.
+        let after = tree::uncommitted(&repository.root)?;
+        let moved = git(&repository.root, &["rev-parse", "HEAD"])? != head;
+        let unrecorded = if !before.is_empty() {
+            Some(format!("uncommitted: {}", some_of(&before)))
+        } else if !after.is_empty() {
+            Some(format!("the check changed: {}", some_of(&after)))
+        } else if moved {
+            Some("HEAD moved while it ran".to_owned())
+        } else {
+            None
+        };
+
+        let passed = matches!(outcome, Outcome::Passed);
+        all_passed &= passed;
+        if unrecorded.is_none() {
+            receipts.record(&check.id, &check.fingerprint, &tree, passed, &head)?;
+        }
+        let line = match (outcome, unrecorded) {
+            (Outcome::Passed, None) => {
+                format!("pass  {}: recorded for tree {}", check.id, &tree[..10])
             }
-            Outcome::Passed if !before.is_empty() => format!(
-                "pass  {}: not recorded, uncommitted: {}",
-                check.id,
-                some_of(&before)
-            ),
-            Outcome::Passed => {
-                let after = inputs::uncommitted(&repository.root, &check.inputs)?;
-                if !after.is_empty() {
-                    format!(
-                        "pass  {}: not recorded, the check changed: {}",
-                        check.id,
-                        some_of(&after)
-                    )
-                } else if git(&repository.root, &["rev-parse", "HEAD"])? != head {
-                    format!("pass  {}: not recorded, HEAD moved while it ran", check.id)
-                } else {
-                    receipts.record(&check.id, &check.fingerprint, &source, true, &head)?;
-                    format!("pass  {}: recorded for {source}", check.id)
-                }
+            (Outcome::Passed, Some(why)) => {
+                format!("pass  {}: not recorded, {why}", check.id)
+            }
+            (Outcome::Failed { step }, None) => format!("FAIL  {}: `{step}` failed", check.id),
+            (Outcome::Failed { step }, Some(why)) => {
+                format!("FAIL  {}: `{step}` failed; not recorded, {why}", check.id)
             }
         };
         eprintln!("{line}");
@@ -298,29 +315,22 @@ fn run(asked: &[String], again: bool, base: &str) -> Result<bool, Report> {
     Ok(all_passed)
 }
 
-/// Why this machine has no pass for the files `PR CI` will test.
-fn unrecorded(repository: &Repository, receipts: &Receipts, check: &Check, merge: &str) -> String {
+/// Why this machine has no pass for the tree `PR CI` will test.
+fn unrecorded(receipts: &Receipts, check: &Check, behind: bool, base: &str) -> String {
     let Some(latest) = receipts.of(&check.id).into_iter().next() else {
         return "not run on this machine".to_owned();
     };
     if latest.fingerprint != check.fingerprint {
         return "the job is defined differently in what PR CI tests".to_owned();
     }
-
-    let changed = inputs::objects_at(&repository.root, &latest.commit, &check.inputs)
-        .and_then(|ran| {
-            let tested = inputs::objects_at(&repository.root, merge, &check.inputs)?;
-            Ok(inputs::differing(&check.inputs, &ran, &tested))
-        })
-        .unwrap_or_default();
-    if changed.is_empty() {
-        return "it ran here on other files than PR CI tests".to_owned();
+    let ran_on = latest.commit.get(..10).unwrap_or(&latest.commit);
+    if behind {
+        format!(
+            "it ran here on {ran_on}, and PR CI tests that merged with changes on {base}; merge {base}, run it again and push"
+        )
+    } else {
+        format!("it ran here on {ran_on}, whose files are not this commit's; run it again")
     }
-    format!(
-        "{} differ between {} and what PR CI tests; bring the branch up to date and run it again",
-        some_of(&changed),
-        latest.commit.get(..10).unwrap_or(&latest.commit)
-    )
 }
 
 fn post(base: &str) -> Result<(), Report> {
@@ -331,41 +341,56 @@ fn post(base: &str) -> Result<(), Report> {
     let receipts = repository.receipts()?;
 
     // What PR CI tests: GitHub's merge of the pushed head into its base. The
-    // checks and their inputs are read from there, not from this tree.
+    // checks and the tree are read from there, not from this working tree.
     let merge = github::pull_request_merge(&github_repository, &head, base)?;
     git(
         &repository.root,
         &["fetch", "--quiet", "origin", &merge.sha],
     )?;
+    let tested = tree::tree_of(&repository.root, &merge.sha)?;
+    let behind = tested != tree::tree_of(&repository.root, &head)?;
     let manifest = repository.manifest_at(&merge.sha)?;
-    let statuses = github::statuses(&github_repository, &head)?;
     eprintln!(
-        "#{}: PR CI tests {}, the merge of {} into {base}",
+        "#{}: PR CI tests tree {}, the merge of {} into {base}",
         merge.number,
-        &merge.sha[..10],
+        &tested[..10],
         &head[..10]
     );
+    if behind {
+        eprintln!(
+            "{base} has changes this branch lacks, so that is not the tree of {}",
+            &head[..10]
+        );
+    }
+
+    // PR CI reads the head's statuses. A failure on a reworded or empty
+    // commit before it was about these same files, so it is read too.
+    let on_head = github::statuses(&github_repository, &head)?;
+    let mut on_same_tree = on_head.clone();
+    if !behind {
+        for earlier in tree::same_tree_before(&repository.root, &head, SAME_TREE_COMMITS)? {
+            on_same_tree.extend(github::statuses(&github_repository, &earlier)?);
+        }
+    }
 
     for check in &manifest.checks {
         let context = format!("{}{}", manifest.status_prefix, check.id);
-        let source = repository.source(&merge.sha, check)?;
-        let about_these_files: Vec<&github::Status> = statuses
-            .iter()
-            .filter(|status| status.context.eq_ignore_ascii_case(&context))
-            .filter(|status| {
-                status.claim().is_some_and(|claim| {
-                    claim.fingerprint == check.fingerprint && claim.source == source
+        let about_this_tree = |status: &&github::Status| {
+            status.context.eq_ignore_ascii_case(&context)
+                && status.claim().is_some_and(|claim| {
+                    claim.fingerprint == check.fingerprint && claim.tree == tested
                 })
-            })
-            .collect();
-        let says_passed = about_these_files
+        };
+        let says_passed = on_head
             .iter()
+            .filter(about_this_tree)
             .any(|status| status.state == "success");
-        let says_failed = about_these_files
+        let says_failed = on_same_tree
             .iter()
+            .filter(about_this_tree)
             .any(|status| status.state != "success");
         let recorded = receipts
-            .find(&check.id, &check.fingerprint, &source)
+            .find(&check.id, &check.fingerprint, &tested)
             .map(|receipt| receipt.passed);
 
         let line = match posting(recorded, says_passed, says_failed) {
@@ -375,7 +400,7 @@ fn post(base: &str) -> Result<(), Report> {
                     &head,
                     "success",
                     &context,
-                    &github::description(&check.fingerprint, &source, None),
+                    &github::description(&check.fingerprint, &tested, None),
                 )?;
                 format!("post  {}: attested on {}", check.id, &head[..10])
             }
@@ -387,7 +412,7 @@ fn post(base: &str) -> Result<(), Report> {
                     &context,
                     &github::description(
                         &check.fingerprint,
-                        &source,
+                        &tested,
                         Some("failed on the machine that attested it"),
                     ),
                 )?;
@@ -400,7 +425,7 @@ fn post(base: &str) -> Result<(), Report> {
                 format!("kept  {}: already attested on {}", check.id, &head[..10])
             }
             Posting::Contradicted => format!(
-                "-     {}: something failed it on these files, so it runs in PR CI",
+                "-     {}: something failed it on this tree, so it runs in PR CI",
                 check.id
             ),
             Posting::Nothing if recorded == Some(false) => {
@@ -409,7 +434,7 @@ fn post(base: &str) -> Result<(), Report> {
             Posting::Nothing => format!(
                 "-     {}: {}",
                 check.id,
-                unrecorded(&repository, &receipts, check, &merge.sha)
+                unrecorded(&receipts, check, behind, base)
             ),
         };
         println!("{line}");

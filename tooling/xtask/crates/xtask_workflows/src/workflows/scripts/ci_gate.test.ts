@@ -16,7 +16,6 @@ import {
   forkRunDistrust,
   GATE_JOB,
   gateOutcome,
-  inputsHash,
   isOpenRequest,
   PR_CI_PATH,
   skippedAttested,
@@ -218,38 +217,16 @@ describe('labelBlocker', () => {
 });
 
 const ATTESTABLE = [
-  { id: 'cloud-storage/check', fingerprint: 'aaaaaaaaaaaaaaaa', inputs: ['Cargo.lock', 'crates'] },
-  { id: 'conventions/ast-grep', fingerprint: 'bbbbbbbbbbbbbbbb', inputs: ['rules'] },
+  { id: 'cloud-storage/check', fingerprint: 'aaaaaaaaaaaaaaaa' },
+  { id: 'conventions/ast-grep', fingerprint: 'bbbbbbbbbbbbbbbb' },
 ];
-// The hash of each check's inputs in the merge commit the run tests.
-const SOURCES = {
-  'cloud-storage/check': '1111111111111111',
-  'conventions/ast-grep': '2222222222222222',
-};
+// The tree of the merge commit the run tests, and another one.
+const TREE = '1a2b3c4d'.repeat(5);
+const OTHER_TREE = '9'.repeat(40);
 const GATE_CHECKS = [
   { id: 'cloud-storage/check', name: 'Cloud Storage / check' },
   { id: 'web-app/cycles', name: 'Web App / Cycles Import Check' },
 ];
-
-describe('inputsHash', () => {
-  // The value `xtask_attest`'s test pins for the same paths and objects.
-  test('hashes each path with the object it holds, in path order', () => {
-    const objects = { 'Cargo.lock': 'a'.repeat(40), crates: 'b'.repeat(40) };
-
-    assert.equal(inputsHash(['flake.nix', 'crates', 'Cargo.lock'], objects), '33252c129f983e54');
-    assert.equal(inputsHash(['Cargo.lock', 'crates', 'flake.nix'], objects), '33252c129f983e54');
-  });
-
-  test('changes when a file under an input does, or when one appears', () => {
-    const before = inputsHash(['crates', 'flake.nix'], { crates: 'b'.repeat(40) });
-
-    assert.notEqual(inputsHash(['crates', 'flake.nix'], { crates: 'c'.repeat(40) }), before);
-    assert.notEqual(
-      inputsHash(['crates', 'flake.nix'], { crates: 'b'.repeat(40), 'flake.nix': 'd'.repeat(40) }),
-      before,
-    );
-  });
-});
 
 describe('acceptedAttestations', () => {
   const status = (check: string, description: string, state = 'success') => ({
@@ -258,34 +235,34 @@ describe('acceptedAttestations', () => {
     description,
   });
   const accepted = (statuses: { context: string; state: string; description: string | null }[]) =>
-    acceptedAttestations(statuses, ATTESTABLE, 'attested/', SOURCES);
+    acceptedAttestations(statuses, ATTESTABLE, 'attested/', TREE);
 
-  test('accepts a pass of the check as this run defines it, on the files this run tests', () => {
+  test('accepts a pass of the check as this run defines it, on the tree this run tests', () => {
     const entries = accepted([
-      status('cloud-storage/check', 'fp=aaaaaaaaaaaaaaaa src=1111111111111111'),
-      status('conventions/ast-grep', 'fp=bbbbbbbbbbbbbbbb src=2222222222222222'),
+      status('cloud-storage/check', `fp=aaaaaaaaaaaaaaaa tree=${TREE}`),
+      status('conventions/ast-grep', `fp=bbbbbbbbbbbbbbbb tree=${TREE}`),
     ]);
 
     assert.deepEqual(entries, ['cloud-storage/check', 'conventions/ast-grep']);
   });
 
-  test('drops a pass on other files: a commit or main changed an input since', () => {
-    const entries = accepted([status('conventions/ast-grep', 'fp=bbbbbbbbbbbbbbbb src=9999999999999999')]);
+  test('drops a pass on another tree: a commit or main changed a file since', () => {
+    const entries = accepted([status('conventions/ast-grep', `fp=bbbbbbbbbbbbbbbb tree=${OTHER_TREE}`)]);
 
     assert.deepEqual(entries, []);
   });
 
   test('drops a pass of a check that was defined differently', () => {
-    const entries = accepted([status('conventions/ast-grep', 'fp=cccccccccccccccc src=2222222222222222')]);
+    const entries = accepted([status('conventions/ast-grep', `fp=cccccccccccccccc tree=${TREE}`)]);
 
     assert.deepEqual(entries, []);
   });
 
-  test('a failure on the same files is final, whatever was posted before or after', () => {
-    const pass = status('conventions/ast-grep', 'fp=bbbbbbbbbbbbbbbb src=2222222222222222');
+  test('a failure on the same tree is final, whatever was posted before or after', () => {
+    const pass = status('conventions/ast-grep', `fp=bbbbbbbbbbbbbbbb tree=${TREE}`);
     const fail = status(
       'conventions/ast-grep',
-      'fp=bbbbbbbbbbbbbbbb src=2222222222222222 failed on a runner',
+      `fp=bbbbbbbbbbbbbbbb tree=${TREE} failed on a runner`,
       'failure',
     );
 
@@ -293,10 +270,10 @@ describe('acceptedAttestations', () => {
     assert.deepEqual(accepted([pass, fail, pass]), []);
   });
 
-  test('a failure on other files withdraws nothing here', () => {
+  test('a failure on another tree withdraws nothing here', () => {
     const entries = accepted([
-      status('conventions/ast-grep', 'fp=bbbbbbbbbbbbbbbb src=9999999999999999 failed on a runner', 'failure'),
-      status('conventions/ast-grep', 'fp=bbbbbbbbbbbbbbbb src=2222222222222222'),
+      status('conventions/ast-grep', `fp=bbbbbbbbbbbbbbbb tree=${OTHER_TREE} failed on a runner`, 'failure'),
+      status('conventions/ast-grep', `fp=bbbbbbbbbbbbbbbb tree=${TREE}`),
     ]);
 
     assert.deepEqual(entries, ['conventions/ast-grep']);
@@ -307,9 +284,9 @@ describe('acceptedAttestations', () => {
       {
         context: 'Attested/Conventions/ast-grep',
         state: 'failure',
-        description: 'fp=bbbbbbbbbbbbbbbb src=2222222222222222',
+        description: `fp=bbbbbbbbbbbbbbbb tree=${TREE}`,
       },
-      status('conventions/ast-grep', 'fp=bbbbbbbbbbbbbbbb src=2222222222222222'),
+      status('conventions/ast-grep', `fp=bbbbbbbbbbbbbbbb tree=${TREE}`),
     ]);
 
     assert.deepEqual(entries, []);
@@ -317,21 +294,22 @@ describe('acceptedAttestations', () => {
 
   test('ignores statuses that are not attestations of a known check', () => {
     const entries = accepted([
-      { context: 'CI gate', state: 'success', description: 'fp=aaaaaaaaaaaaaaaa src=1111111111111111' },
-      status('cloud-storage/test', 'fp=aaaaaaaaaaaaaaaa src=1111111111111111'),
+      { context: 'CI gate', state: 'success', description: `fp=aaaaaaaaaaaaaaaa tree=${TREE}` },
+      status('cloud-storage/test', `fp=aaaaaaaaaaaaaaaa tree=${TREE}`),
       status('conventions/ast-grep', 'looks good to me'),
-      status('cloud-storage/check', 'fp=aaaaaaaaaaaaaaaa src=11111111'),
+      status('cloud-storage/check', 'fp=aaaaaaaaaaaaaaaa tree=1a2b3c4d'),
+      status('cloud-storage/check', `fp=aaaaaaaaaaaaaaaa tree=${TREE}0`),
     ]);
 
     assert.deepEqual(entries, []);
   });
 
-  test('accepts nothing for a check whose inputs could not be hashed', () => {
+  test('accepts nothing when the tree this run tests is unknown', () => {
     const entries = acceptedAttestations(
-      [status('conventions/ast-grep', 'fp=bbbbbbbbbbbbbbbb src=2222222222222222')],
+      [status('conventions/ast-grep', `fp=bbbbbbbbbbbbbbbb tree=${TREE}`)],
       ATTESTABLE,
       'attested/',
-      {},
+      '',
     );
 
     assert.deepEqual(entries, []);

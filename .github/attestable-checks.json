@@ -14,37 +14,8 @@
         "RUST_BACKTRACE": "1",
         "SQLX_OFFLINE": "true"
       },
-      "fingerprint": "df5a31057cfa2f1f",
+      "fingerprint": "047fcd2ea7f63392",
       "id": "cloud-storage/check",
-      "inputs": [
-        ".cargo",
-        ".config",
-        ".github/actions/setup-nix",
-        ".github/actions/setup-nix-dev-shell",
-        ".github/actions/setup-sccache",
-        ".github/actions/teardown-nix",
-        ".github/services-config.json",
-        ".github/workflows/code_check_cloud_storage.yml",
-        ".sqlx",
-        "Cargo.lock",
-        "Cargo.toml",
-        "Cross.toml",
-        "bun.lock",
-        "clippy.toml",
-        "crates",
-        "deny.toml",
-        "flake.lock",
-        "flake.nix",
-        "nix",
-        "nix-support",
-        "packages/code-mode-sdk",
-        "packages/sdk",
-        "packages/sdk-docs",
-        "rust-toolchain.toml",
-        "services",
-        "static_assets",
-        "tooling/xtask"
-      ],
       "job": "check",
       "name": "Cloud Storage / check",
       "steps": [
@@ -79,25 +50,7 @@
           "working_directory": null
         }
       ],
-      "workflow": "code_check_cloud_storage.yml"
-    },
-    {
-      "call": "cloud-storage",
-      "dev_shell": "default",
-      "env": {
-        "CARGO_INCREMENTAL": "0",
-        "CARGO_PROFILE_DEV_DEBUG": "0",
-        "CARGO_PROFILE_TEST_DEBUG": "0",
-        "CARGO_TARGET_REBUILD_ALL": "",
-        "CARGO_TERM_COLOR": "always",
-        "RUSTFLAGS": "-Dwarnings -C link-arg=-fuse-ld=mold",
-        "RUST_BACKTRACE": "1",
-        "RUST_PACKAGES": "all",
-        "SQLX_OFFLINE": "true"
-      },
-      "fingerprint": "612602551e625f30",
-      "id": "cloud-storage/build-service-bins",
-      "inputs": [
+      "triggers": [
         ".cargo",
         ".config",
         ".github/actions/setup-nix",
@@ -126,6 +79,24 @@
         "static_assets",
         "tooling/xtask"
       ],
+      "workflow": "code_check_cloud_storage.yml"
+    },
+    {
+      "call": "cloud-storage",
+      "dev_shell": "default",
+      "env": {
+        "CARGO_INCREMENTAL": "0",
+        "CARGO_PROFILE_DEV_DEBUG": "0",
+        "CARGO_PROFILE_TEST_DEBUG": "0",
+        "CARGO_TARGET_REBUILD_ALL": "",
+        "CARGO_TERM_COLOR": "always",
+        "RUSTFLAGS": "-Dwarnings -C link-arg=-fuse-ld=mold",
+        "RUST_BACKTRACE": "1",
+        "RUST_PACKAGES": "all",
+        "SQLX_OFFLINE": "true"
+      },
+      "fingerprint": "94fc7bf183af28d4",
+      "id": "cloud-storage/build-service-bins",
       "job": "build-service-bins",
       "name": "Cloud Storage / build-service-bins",
       "steps": [
@@ -144,170 +115,43 @@
           "working_directory": null
         }
       ],
+      "triggers": [
+        ".cargo",
+        ".config",
+        ".github/actions/setup-nix",
+        ".github/actions/setup-nix-dev-shell",
+        ".github/actions/setup-sccache",
+        ".github/actions/teardown-nix",
+        ".github/services-config.json",
+        ".github/workflows/code_check_cloud_storage.yml",
+        ".sqlx",
+        "Cargo.lock",
+        "Cargo.toml",
+        "Cross.toml",
+        "bun.lock",
+        "clippy.toml",
+        "crates",
+        "deny.toml",
+        "flake.lock",
+        "flake.nix",
+        "nix",
+        "nix-support",
+        "packages/code-mode-sdk",
+        "packages/sdk",
+        "packages/sdk-docs",
+        "rust-toolchain.toml",
+        "services",
+        "static_assets",
+        "tooling/xtask"
+      ],
       "workflow": "code_check_cloud_storage.yml"
     },
     {
-      "call": "web-app",
-      "dev_shell": "default",
-      "env": {},
-      "fingerprint": "7c6bdd05dc42b726",
-      "id": "web-app/biome-check",
-      "inputs": [
-        ".github/actions/setup-reqs-web",
-        "Cargo.lock",
-        "Cargo.toml",
-        "apps/web",
-        "bun.lock",
-        "crates/agent_code_mode/SKILL.md",
-        "crates/agent_runtime_protocol",
-        "crates/client/cache-core",
-        "crates/client/cache-turso",
-        "crates/client/cache-wasm",
-        "crates/client/turso-opfs",
-        "crates/database_sql",
-        "crates/filter_ast",
-        "crates/folds/agent_fold",
-        "crates/item_filters",
-        "crates/natural_time",
-        "crates/password_import",
-        "crates/password_import_wasm",
-        "flake.lock",
-        "flake.nix",
-        "package.json",
-        "packages",
-        "rust-toolchain.toml",
-        "services/ai-editing-worker",
-        "services/lexical-service",
-        "services/mcp-chatgpt-worker",
-        "static_assets/schema.graphql",
-        "tooling/icons",
-        "tooling/scripts/starter-agent-lock.sh"
-      ],
-      "job": "biome-check",
-      "name": "Web App / Biome Check",
-      "steps": [
-        {
-          "env": {},
-          "name": "Run Biome",
-          "pipefail": false,
-          "run": "biome ci --changed --no-errors-on-unmatched --error-on-warnings",
-          "working_directory": "apps/web"
-        },
-        {
-          "env": {},
-          "name": "Run Collaboration Package Biome",
-          "pipefail": false,
-          "run": "biome ci --changed --no-errors-on-unmatched --error-on-warnings",
-          "working_directory": "packages/collaboration"
-        },
-        {
-          "env": {},
-          "name": "Check Browser Floor and Native Permissions",
-          "pipefail": false,
-          "run": "bunx --yes @ast-grep/cli@0.44.1 scan --filter '^(tsx?-browser-floor-apis|plist-media-.+)$'",
-          "working_directory": null
-        }
-      ],
-      "workflow": "web-app-check-main.yml"
-    },
-    {
-      "call": "web-app",
-      "dev_shell": "default",
-      "env": {},
-      "fingerprint": "4b2780af28e859ab",
-      "id": "web-app/cycles",
-      "inputs": [
-        ".github/actions/setup-reqs-web",
-        "Cargo.lock",
-        "Cargo.toml",
-        "apps/web",
-        "bun.lock",
-        "crates/agent_code_mode/SKILL.md",
-        "crates/agent_runtime_protocol",
-        "crates/client/cache-core",
-        "crates/client/cache-turso",
-        "crates/client/cache-wasm",
-        "crates/client/turso-opfs",
-        "crates/database_sql",
-        "crates/filter_ast",
-        "crates/folds/agent_fold",
-        "crates/item_filters",
-        "crates/natural_time",
-        "crates/password_import",
-        "crates/password_import_wasm",
-        "flake.lock",
-        "flake.nix",
-        "package.json",
-        "packages",
-        "rust-toolchain.toml",
-        "services/ai-editing-worker",
-        "services/lexical-service",
-        "services/mcp-chatgpt-worker",
-        "static_assets/schema.graphql",
-        "tooling/icons",
-        "tooling/scripts/starter-agent-lock.sh"
-      ],
-      "job": "cycles",
-      "name": "Web App / Cycles Import Check",
-      "steps": [
-        {
-          "env": {},
-          "name": "Cycles Import Check",
-          "pipefail": false,
-          "run": "biome lint --changed --no-errors-on-unmatched --only=suspicious/noImportCycles",
-          "working_directory": "apps/web"
-        },
-        {
-          "env": {},
-          "name": "Collaboration Package Cycles Import Check",
-          "pipefail": false,
-          "run": "biome lint --changed --no-errors-on-unmatched --only=suspicious/noImportCycles",
-          "working_directory": "packages/collaboration"
-        }
-      ],
-      "workflow": "web-app-check-main.yml"
-    },
-    {
       "call": "infra",
       "dev_shell": "default",
       "env": {},
-      "fingerprint": "0eb840e46467c4a0",
-      "id": "infra/biome-check",
-      "inputs": [
-        ".github/actions/setup-nix-dev-shell",
-        ".github/actions/teardown-nix",
-        ".github/workflows/code_check_infra.yml",
-        "flake.lock",
-        "flake.nix",
-        "infra"
-      ],
-      "job": "biome-check",
-      "name": "Infra / Biome Check",
-      "steps": [
-        {
-          "env": {},
-          "name": "Run Biome",
-          "pipefail": false,
-          "run": "biome ci --changed --no-errors-on-unmatched --error-on-warnings",
-          "working_directory": "infra"
-        }
-      ],
-      "workflow": "code_check_infra.yml"
-    },
-    {
-      "call": "infra",
-      "dev_shell": "default",
-      "env": {},
-      "fingerprint": "46960cebf4f00350",
+      "fingerprint": "de82a51325e8e479",
       "id": "infra/check",
-      "inputs": [
-        ".github/actions/setup-nix-dev-shell",
-        ".github/actions/teardown-nix",
-        ".github/workflows/code_check_infra.yml",
-        "flake.lock",
-        "flake.nix",
-        "infra"
-      ],
       "job": "check",
       "name": "Infra / check",
       "steps": [
@@ -326,27 +170,22 @@
           "working_directory": "infra"
         }
       ],
+      "triggers": [
+        ".github/actions/setup-nix-dev-shell",
+        ".github/actions/teardown-nix",
+        ".github/workflows/code_check_infra.yml",
+        "flake.lock",
+        "flake.nix",
+        "infra"
+      ],
       "workflow": "code_check_infra.yml"
     },
     {
       "call": "conventions",
       "dev_shell": "default",
       "env": {},
-      "fingerprint": "187ed5eb239cd4e4",
+      "fingerprint": "f187c7b1aa382ccd",
       "id": "conventions/ast-grep",
-      "inputs": [
-        ".github/actions/teardown-nix",
-        ".github/workflows/code_check_conventions.yml",
-        "apps/web",
-        "crates",
-        "flake.lock",
-        "flake.nix",
-        "packages",
-        "rules",
-        "services",
-        "sgconfig.yml",
-        "tooling/xtask"
-      ],
       "job": "ast-grep",
       "name": "Conventions / ast-grep Conventions",
       "steps": [
@@ -358,25 +197,25 @@
           "working_directory": null
         }
       ],
+      "triggers": [
+        ".github/actions/teardown-nix",
+        ".github/workflows/code_check_conventions.yml",
+        "apps/web",
+        "crates",
+        "packages",
+        "rules",
+        "services",
+        "sgconfig.yml",
+        "tooling/xtask"
+      ],
       "workflow": "code_check_conventions.yml"
     },
     {
       "call": "workspace-dependencies",
       "dev_shell": "default",
       "env": {},
-      "fingerprint": "79aa4e26dd8f4019",
+      "fingerprint": "783cf704fc89389a",
       "id": "workspace-dependencies/hakari-and-dep-closures",
-      "inputs": [
-        ".config/hakari.toml",
-        ".github/workspace-dep-closures.json",
-        "Cargo.lock",
-        "Cargo.toml",
-        "crates",
-        "flake.lock",
-        "flake.nix",
-        "services",
-        "tooling/xtask"
-      ],
       "job": "hakari-and-dep-closures",
       "name": "Workspace dependencies / hakari-and-dep-closures",
       "steps": [
@@ -388,23 +227,23 @@
           "working_directory": null
         }
       ],
+      "triggers": [
+        ".config/hakari.toml",
+        ".github/workspace-dep-closures.json",
+        "Cargo.lock",
+        "Cargo.toml",
+        "crates",
+        "services",
+        "tooling/xtask"
+      ],
       "workflow": "cargo_workspace_dependency_check.yml"
     },
     {
       "call": "generated-workflows",
       "dev_shell": "default",
       "env": {},
-      "fingerprint": "09b8670d12369215",
+      "fingerprint": "8a0de8039682ba70",
       "id": "generated-workflows/check-workflows",
-      "inputs": [
-        ".github/attestable-checks.json",
-        ".github/kafka-cluster-topics.json",
-        ".github/workflows",
-        "crates/macro_event_topics",
-        "flake.lock",
-        "flake.nix",
-        "tooling/xtask"
-      ],
       "job": "check-workflows",
       "name": "Generated workflows / check-workflows",
       "steps": [
@@ -423,15 +262,33 @@
           "working_directory": null
         }
       ],
+      "triggers": [
+        ".github/attestable-checks.json",
+        ".github/kafka-cluster-topics.json",
+        ".github/workflows",
+        "crates/macro_event_topics",
+        "tooling/xtask"
+      ],
       "workflow": "check_generated.yml"
     },
     {
       "call": "node-modules-nix",
       "dev_shell": "default",
       "env": {},
-      "fingerprint": "8b09f135adb988de",
+      "fingerprint": "fb8457ade5f388aa",
       "id": "node-modules-nix/check-linux-node-modules-nix",
-      "inputs": [
+      "job": "check-linux-node-modules-nix",
+      "name": "node_modules nix / check Linux node_modules nix",
+      "steps": [
+        {
+          "env": {},
+          "name": "verify js node_modules derivation is up to date",
+          "pipefail": false,
+          "run": "# A fixed-output derivation already in the store is accepted without\n# running it, whatever bun.lock now says, so only then does the check\n# need a rebuild. On a store without it, the first build is the check.\nout=$(nix eval --raw .#js-node-modules.outPath)\nif nix-store --check-validity \"$out\" 2>/dev/null; then\n  nix build .#js-node-modules --no-link --rebuild\nelse\n  nix build .#js-node-modules --no-link\nfi\n",
+          "working_directory": null
+        }
+      ],
+      "triggers": [
         ".github/workflows/check_node_modules_nix.yml",
         "apps",
         "bun.lock",
@@ -445,32 +302,14 @@
         "services",
         "tooling/scripts/update-node-modules-hash.sh"
       ],
-      "job": "check-linux-node-modules-nix",
-      "name": "node_modules nix / check Linux node_modules nix",
-      "steps": [
-        {
-          "env": {},
-          "name": "verify js node_modules derivation is up to date",
-          "pipefail": false,
-          "run": "# A fixed-output derivation already in the store is accepted without\n# running it, whatever bun.lock now says, so only then does the check\n# need a rebuild. On a store without it, the first build is the check.\nout=$(nix eval --raw .#js-node-modules.outPath)\nif nix-store --check-validity \"$out\" 2>/dev/null; then\n  nix build .#js-node-modules --no-link --rebuild\nelse\n  nix build .#js-node-modules --no-link\nfi\n",
-          "working_directory": null
-        }
-      ],
       "workflow": "check_node_modules_nix.yml"
     },
     {
       "call": "sdk",
       "dev_shell": "default",
       "env": {},
-      "fingerprint": "53e0dd6df6487b9c",
+      "fingerprint": "711ddae6bf7be9c2",
       "id": "sdk/check-package",
-      "inputs": [
-        ".github/workflows/sdk-check.yml",
-        "bun.lock",
-        "flake.lock",
-        "flake.nix",
-        "packages/sdk"
-      ],
       "job": "check-package",
       "name": "SDK / SDK Package Check",
       "steps": [
@@ -510,23 +349,19 @@
           "working_directory": "packages/sdk"
         }
       ],
+      "triggers": [
+        ".github/workflows/sdk-check.yml",
+        "bun.lock",
+        "packages/sdk"
+      ],
       "workflow": "sdk-check.yml"
     },
     {
       "call": "observability-image",
       "dev_shell": "default",
       "env": {},
-      "fingerprint": "80c6dd2e5bfa7974",
+      "fingerprint": "f8f0219f40580531",
       "id": "observability-image/build-image",
-      "inputs": [
-        ".github/workflows/observability_image.yml",
-        "flake.lock",
-        "flake.nix",
-        "infra/stacks/observability/assets",
-        "infra/stacks/observability/flake.lock",
-        "infra/stacks/observability/flake.nix",
-        "infra/stacks/observability/nixos"
-      ],
       "job": "build-image",
       "name": "Observability image / Build observability image",
       "steps": [
@@ -538,20 +373,21 @@
           "working_directory": "infra/stacks/observability"
         }
       ],
+      "triggers": [
+        ".github/workflows/observability_image.yml",
+        "infra/stacks/observability/assets",
+        "infra/stacks/observability/flake.lock",
+        "infra/stacks/observability/flake.nix",
+        "infra/stacks/observability/nixos"
+      ],
       "workflow": "observability_image.yml"
     },
     {
       "call": "macrod-update",
       "dev_shell": "agent-daemon",
       "env": {},
-      "fingerprint": "bff918e9c5ea39ca",
+      "fingerprint": "2363efbf0f3b7df5",
       "id": "macrod-update/linux",
-      "inputs": [
-        ".github/workflows/test_macrod_update.yml",
-        "crates/coding_agent_worker",
-        "flake.lock",
-        "flake.nix"
-      ],
       "job": "linux",
       "name": "macrod update / macrod update (linux)",
       "steps": [
@@ -581,6 +417,10 @@
           "run": "nix shell nixpkgs#zsh nixpkgs#fish --command crates/coding_agent_worker/e2e/installer_test.sh \"$RUNNER_TEMP/releases\" v2000.1.1.1",
           "working_directory": null
         }
+      ],
+      "triggers": [
+        ".github/workflows/test_macrod_update.yml",
+        "crates/coding_agent_worker"
       ],
       "workflow": "test_macrod_update.yml"
     }
@@ -620,6 +460,14 @@
       "why": "its setup rewrites `bunfig.toml` and replaces `node_modules`, which a working tree can't take"
     },
     {
+      "id": "web-app/biome-check",
+      "why": "lints the files changed since `main`, so a ref outside the tree decides what it checks"
+    },
+    {
+      "id": "web-app/cycles",
+      "why": "lints the files changed since `main`, so a ref outside the tree decides what it checks"
+    },
+    {
       "id": "web-app/build",
       "why": "reads secrets and deploys a preview"
     },
@@ -638,6 +486,10 @@
     {
       "id": "web-app/ios-native-check",
       "why": "reads the pull request's labels and the app stores' state"
+    },
+    {
+      "id": "infra/biome-check",
+      "why": "lints the files changed since `main`, so a ref outside the tree decides what it checks"
     },
     {
       "id": "cargo-deny/cargo-deny",
