@@ -233,9 +233,18 @@ Address: du.
 | notifications | Varsler |
 | done | Ferdig |
 | mark as read | Merk som lest |
-| snooze | Utsett varsler… |
+| snooze | Utsett varsler |
 | archive | Arkiver |
 | settings | Innstillinger |
+| computer (Macro computer) | Ny Macro-datamaskin |
+| machine (runs agents) | Maskinene dine |
+| session (agent) | Start en økt |
+| routine | Alle rutiner |
+| saved view | Ny lagret visning |
+| call | Start en samtale |
+| contact (CRM) | Ingen kontaktpipeliner ennå |
+| company (CRM) | Legg til selskap |
+| thread (email) | Unntatte tråder |
 
 ## Finnish (`fi`)
 
