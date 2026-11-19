@@ -1,9 +1,20 @@
 import type { RoutineEntity } from '@entity/types/entity';
 import type { Accessor } from 'solid-js';
 import type { CodeReview } from '../core/code-review';
-import type { ScheduleDraft } from '../core/draft';
+import type { ScheduleDraft, SubRoutineDraft } from '../core/draft';
 import type { HistoryRecord } from '../core/history';
 import type { RoutineSnapshot } from '../core/routine';
+
+/** The routine whose run created a sub-routine, as the sub-routine shows it. */
+export type RoutineParentSummary = {
+  id: string;
+  name: string;
+  /**
+   * Its sub-routines, which a copy runs by name; undefined when it holds
+   * steps the editor can't show.
+   */
+  subRoutines?: readonly SubRoutineDraft[];
+};
 
 export type RoutineDetailSource = {
   routine: Accessor<RoutineSnapshot | undefined>;
@@ -29,7 +40,7 @@ export type RoutineDetailSource = {
   /** The routines this routine's runs created, finished ones included. */
   subRoutines: Accessor<readonly RoutineSnapshot[]>;
   /** The routine whose run created this one, when it is still there. */
-  parent: Accessor<{ id: string; name: string } | undefined>;
+  parent: Accessor<RoutineParentSummary | undefined>;
   /** Make this sub-routine the owner's own: it stops following its parent. */
   keepAsOwn(): void;
   keepAsOwnPending: Accessor<boolean>;

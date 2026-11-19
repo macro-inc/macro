@@ -11,6 +11,8 @@ export type SubRoutineItem = {
   name: string;
   /** What starts it, in a line. */
   when: string;
+  /** The values a sub-routine's copy was given, in a line. */
+  values?: string;
   state: 'active' | 'paused' | 'running' | 'finished';
 };
 
@@ -49,6 +51,13 @@ function SubRoutineRow(props: {
           <span class="truncate text-[13px] text-ink-muted">
             {props.item.when}
           </span>
+          <Show when={props.item.values}>
+            {(values) => (
+              <span class="truncate text-[13px] text-ink-muted">
+                {values()}
+              </span>
+            )}
+          </Show>
         </span>
         <span class="shrink-0 text-xs text-ink-extra-muted">
           {stateLabel(props.item.state)}

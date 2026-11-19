@@ -1128,3 +1128,129 @@ describe('routine code that needs an update', () => {
     expect(screen.queryByText('Paused: its code needs an update')).toBeNull();
   });
 });
+
+describe('sub-routines defined once', () => {
+  const remind = {
+    name: 'remind',
+    title: 'Remind me',
+    inputs: [{ type: 'text' as const, name: 'taskId', label: 'Task' }],
+    steps: [
+      {
+        type: 'agent' as const,
+        model: 'claude-sonnet-4-6',
+        instructions: 'Remind me about the task.',
+      },
+    ],
+  };
+  const parent: ScheduledAction = {
+    ...events,
+    id: 'parent-id',
+    name: 'Due reminders',
+    task: {
+      steps: [
+        {
+          type: 'code',
+          title: 'Find tasks due soon',
+          source: 'export async function main() {}',
+        },
+      ],
+      sub_routines: [remind],
+    },
+  };
+  const copy: ScheduledAction = {
+    ...events,
+    id: 'routine-id',
+    name: 'Remind me',
+    trigger: { type: 'once', at: '2026-12-01T09:00:00Z' },
+    task: { sub_routine: 'remind', inputs: { taskId: 'Ship the deck' } },
+    sub_routine: { parent_id: 'parent-id', created_by_run_id: 'run-1' },
+  };
+
+  it('shows each sub-routine with what it is given, and saves an edit to it with the routine', async () => {
+    setSchedules([parent]);
+    render(() => <Routine />);
+    const section = screen.getByRole('region', { name: 'Sub-routines' });
+    const definition = within(section).getByRole('group', {
+      name: 'Remind me',
+    });
+    expect(within(definition).getByText('Task')).toBeTruthy();
+    fireEvent.input(
+      within(definition).getByRole('textbox', { name: 'Instructions' }),
+      { target: { value: 'Remind me, and say when it is due.' } }
+    );
+    await vi.advanceTimersByTimeAsync(300);
+    expect(mocks.update).toHaveBeenCalledExactlyOnceWith({
+      scheduleId: 'routine-id',
+      body: expect.objectContaining({
+        task: {
+          steps: (parent.task as { steps: unknown }).steps,
+          sub_routines: [
+            {
+              ...remind,
+              steps: [
+                {
+                  ...remind.steps[0],
+                  instructions: 'Remind me, and say when it is due.',
+                },
+              ],
+            },
+          ],
+        },
+      }),
+    });
+  });
+
+  it('shows a copy its parent’s steps and its values, editing only its own settings', async () => {
+    // The copy's page reads its parent from the routines list.
+    setSchedules([copy, parent]);
+    render(() => <Routine />);
+    expect(
+      screen.getByText(
+        'Runs “Remind me” from Due reminders. Its steps are edited there, and an edit reaches this routine until it runs.'
+      )
+    ).toBeTruthy();
+    const values = screen.getByRole('definition');
+    expect(values.textContent).toBe('Ship the deck');
+    const steps = screen.getByRole('group', { name: 'Remind me' });
+    expect(steps.hasAttribute('disabled')).toBe(true);
+    expect(
+      (
+        within(steps).getByRole('textbox', {
+          name: 'Instructions',
+        }) as HTMLTextAreaElement
+      ).value
+    ).toBe('Remind me about the task.');
+    expect(screen.queryByRole('button', { name: /Add step/ })).toBeNull();
+    // Its own settings save with its task as it is.
+    fireEvent.click(
+      screen.getByRole('switch', { name: 'Show runs in Home and Agents' })
+    );
+    await vi.advanceTimersByTimeAsync(300);
+    expect(mocks.update).toHaveBeenCalledExactlyOnceWith({
+      scheduleId: 'routine-id',
+      body: expect.objectContaining({
+        task: copy.task,
+        run_visibility: 'listed',
+      }),
+    });
+    fireEvent.click(
+      screen.getByRole('button', { name: 'Edit in Due reminders' })
+    );
+    expect(JSON.stringify(mocks.openWithSplit.mock.calls.at(-1))).toContain(
+      'parent-id'
+    );
+  });
+
+  it('says when a copy’s parent no longer defines what it runs', () => {
+    setSchedules([
+      copy,
+      { ...parent, task: { steps: (parent.task as { steps: never }).steps } },
+    ]);
+    render(() => <Routine />);
+    expect(
+      screen.getByText(
+        'Its routine no longer defines this, so it fails when it runs.'
+      )
+    ).toBeTruthy();
+  });
+});

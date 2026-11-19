@@ -27,4 +27,18 @@ export default {
     other: 'The {{count}} routines it created will be deleted too.',
   },
   runCreated: 'Created',
+  definitionsTitle: 'Sub-routines',
+  definitionsAside: 'Scheduled once per item by this routine’s runs',
+  definitionInputs: 'Each one is given',
+  inputText: 'text',
+  inputNumber: 'number',
+  inputBoolean: 'yes or no',
+  copySteps:
+    'Runs “{{title}}” from {{parent}}. Its steps are edited there, and an edit reaches this routine until it runs.',
+  copyStepsParentGone: 'Runs “{{title}}” from the routine that created it.',
+  copyDefinitionGone:
+    'Its routine no longer defines this, so it fails when it runs.',
+  copyDefinitionHidden: 'Its steps use a configuration this page can’t show.',
+  copyValues: 'Given',
+  editInParent: 'Edit in {{parent}}',
 };

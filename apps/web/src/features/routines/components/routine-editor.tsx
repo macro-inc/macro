@@ -112,6 +112,8 @@ export function RoutineEditor(props: {
   steps: JSX.Element;
   /** The Then heading's controls, on its line. */
   stepsAside?: JSX.Element;
+  /** The routine's sub-routines, each with its steps; absent with none. */
+  subRoutines?: JSX.Element;
   /** The Trigger surface's content: triggers and their filters. */
   triggerContent?: JSX.Element;
   /** Under the Trigger surface, in its tray: the action that adds one. */
@@ -344,6 +346,23 @@ export function RoutineEditor(props: {
                   {props.steps}
                 </fieldset>
               </RoutineSection>
+              <Show when={props.subRoutines}>
+                {(subRoutines) => (
+                  <RoutineSection
+                    label={t('subRoutines.definitionsTitle')}
+                    aside={t('subRoutines.definitionsAside')}
+                  >
+                    <fieldset
+                      disabled={props.disabled}
+                      inert={props.disabled}
+                      class="min-w-0"
+                      aria-label={t('subRoutines.definitionsTitle')}
+                    >
+                      {subRoutines()}
+                    </fieldset>
+                  </RoutineSection>
+                )}
+              </Show>
               <Show when={props.connections}>
                 {(connections) => (
                   <RoutineSection

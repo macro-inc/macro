@@ -43,7 +43,11 @@ export function RoutineStepsSummary(props: {
 export function RoutineSteps(props: RoutineStepsProps) {
   return (
     <StepsProvider {...props}>
-      <StepList steps={props.steps} onChange={props.onChange} />
+      <StepList
+        steps={props.steps}
+        onChange={props.onChange}
+        readOnly={props.readOnly}
+      />
     </StepsProvider>
   );
 }

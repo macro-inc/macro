@@ -24,6 +24,7 @@ import {
 import { Dynamic } from 'solid-js/web';
 import { match } from 'ts-pattern';
 import type { StepAuthor } from '../context/routine-slots';
+import type { SubRoutineDraft } from '../core/draft';
 import type {
   AgentStepDraft,
   RoutineSoFar,
@@ -76,6 +77,10 @@ export type RoutineStepsProps = {
   triggers: RoutineTriggerDraft[];
   defaultTarget: RoutineTarget;
   slots: RoutineStepSlots;
+  /** What the routine's code can schedule, for AI writing its steps. */
+  subRoutines?: SubRoutineDraft[];
+  /** Shown, not edited: no step can be added. */
+  readOnly?: boolean;
 };
 
 /** What every step editor reads: slots and the AI that writes steps. */
@@ -85,6 +90,7 @@ export function StepsProvider(
   const author = props.slots.createStepAuthor?.(() => ({
     triggers: props.triggers,
     steps: props.steps,
+    subRoutines: props.subRoutines,
   }));
   return (
     <StepsContext.Provider
@@ -105,6 +111,7 @@ export function StepsProvider(
 export function StepList(props: {
   steps: StepDraft[];
   onChange(steps: StepDraft[]): void;
+  readOnly?: boolean;
 }) {
   const replace = (id: string, next: StepDraft) =>
     props.onChange(props.steps.map((step) => (step.id === id ? next : step)));
@@ -148,13 +155,15 @@ export function StepList(props: {
         }}
       </For>
       {/* Steps are added from a tray under the last card. */}
-      <RoutineTray
-        attached={props.steps.length > 0}
-        // Into the list's gap, and behind the last card's corners.
-        class={props.steps.length > 0 ? '-mt-5' : undefined}
-      >
-        <AddStep steps={props.steps} onChange={props.onChange} />
-      </RoutineTray>
+      <Show when={!props.readOnly}>
+        <RoutineTray
+          attached={props.steps.length > 0}
+          // Into the list's gap, and behind the last card's corners.
+          class={props.steps.length > 0 ? '-mt-5' : undefined}
+        >
+          <AddStep steps={props.steps} onChange={props.onChange} />
+        </RoutineTray>
+      </Show>
     </div>
   );
 }

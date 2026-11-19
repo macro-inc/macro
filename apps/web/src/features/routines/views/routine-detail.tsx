@@ -29,6 +29,7 @@ import {
 import type { RoutineDetailSlots } from '../context/routine-slots';
 import type { RoutineDetailSource } from '../context/routine-sources';
 import { isClaimActive } from '../core/claim';
+import type { SubRoutineDraft } from '../core/draft';
 import type { HistoryRecord, HistoryResource } from '../core/history';
 import { isFinished, type RoutineSnapshot } from '../core/routine';
 import {
@@ -40,12 +41,13 @@ import {
 import { describeTrigger } from '../core/routine-triggers';
 import { type RunItem, runStartLine } from '../core/run-start';
 import { describeHistoryStep, stepsForRun } from '../core/step-history';
+import { copyDefinition, labelledInputs } from '../core/sub-routines';
 import {
   createRoutineDetail,
   RoutineConflictError,
 } from '../primitives/routine-detail';
 import { RoutineHistory } from './routine-history';
-import { routineSections } from './routine-sections';
+import { type CopySource, routineSections } from './routine-sections';
 
 /** When the latest run started: its time today, else its day. */
 function lastRunTime(records: readonly HistoryRecord[]): string | undefined {
@@ -96,10 +98,25 @@ function SaveState(props: {
   );
 }
 
+/** What a copy was given, in a line, as its definition labels the values. */
+function copyValues(
+  child: RoutineSnapshot,
+  definitions: readonly SubRoutineDraft[]
+): string | undefined {
+  const copy = child.draft?.copy;
+  if (!copy) return undefined;
+  const definition = definitions.find((item) => item.name === copy.subRoutine);
+  const values = labelledInputs(copy, definition);
+  return values.length
+    ? values.map((item) => `${item.label}: ${item.value}`).join(' · ')
+    : undefined;
+}
+
 /** What a routine's runs created, as its page lists them, newest first. */
 function subRoutineItems(
   children: readonly RoutineSnapshot[],
-  finished: boolean
+  finished: boolean,
+  definitions: readonly SubRoutineDraft[]
 ): SubRoutineItem[] {
   const state = (child: RoutineSnapshot): SubRoutineItem['state'] => {
     if (finished) return 'finished';
@@ -113,6 +130,7 @@ function subRoutineItems(
       id: child.id,
       name: child.name,
       when: (child.draft?.triggers ?? []).map(describeTrigger).join(' · '),
+      values: copyValues(child, definitions),
       state: state(child),
     }));
 }
@@ -172,6 +190,19 @@ export function RoutineDetailView(props: {
     if (!prompt()) return false;
     return props.onCopyPrompt(prompt());
   };
+  /** On a sub-routine's page: its parent's definition, which it runs. */
+  const copySource = (): CopySource | undefined => {
+    const copy = state()?.copy;
+    const link = schedule()?.parent;
+    if (!copy || !link) return undefined;
+    const parent = props.source.parent();
+    return {
+      parentName: parent?.name,
+      ...copyDefinition(copy, parent?.subRoutines, Boolean(parent)),
+      onOpenParent: () => props.onOpenRoutine(link.id),
+    };
+  };
+  const definitions = () => state()?.subRoutines ?? [];
   /** Why the Enabled switch can't change right now. */
   const activationHint = () => {
     if (!activationDisabled() || !isOwned()) return undefined;
@@ -216,6 +247,7 @@ export function RoutineDetailView(props: {
                 This routine has an unsupported task configuration.
               </p>
             ),
+            copySource,
           })}
           draft={
             state() ?? {
@@ -421,8 +453,16 @@ export function RoutineDetailView(props: {
             isOwned() &&
             props.source.subRoutines().length > 0 && (
               <RoutineSubRoutines
-                active={subRoutineItems(props.source.subRoutines(), false)}
-                finished={subRoutineItems(props.source.subRoutines(), true)}
+                active={subRoutineItems(
+                  props.source.subRoutines(),
+                  false,
+                  definitions()
+                )}
+                finished={subRoutineItems(
+                  props.source.subRoutines(),
+                  true,
+                  definitions()
+                )}
                 onOpen={props.onOpenRoutine}
               />
             )

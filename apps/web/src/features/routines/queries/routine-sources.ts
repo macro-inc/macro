@@ -143,7 +143,13 @@ export function createRoutineDetailSource(
       list.isSuccess || list.isError
         ? list.data?.find((item) => item.id === parentId())
         : undefined;
-    return found?.id ? { id: found.id, name: found.name } : undefined;
+    if (!found?.id) return undefined;
+    const draft = draftFromSchedule(found);
+    return {
+      id: found.id,
+      name: found.name,
+      subRoutines: draft && (draft.subRoutines ?? []),
+    };
   });
   const keep = useDetachScheduleMutation({
     onSuccess: () => callbacks.onKept(),

@@ -7,10 +7,25 @@ import {
   RoutineSteps,
   RoutineStepsSummary,
 } from '../components/routine-step-editor';
+import {
+  SubRoutineCopySteps,
+  SubRoutineDefinitions,
+} from '../components/routine-sub-routine-definitions';
 import type { RoutineEditorSlots } from '../context/routine-slots';
+import type { SubRoutineDraft } from '../core/draft';
 import { DEFAULT_RUN_VISIBILITY, type ScheduleDraft } from '../core/draft';
 import { draftSteps } from '../core/routine-draft';
 import { firstAgent, type StepDraft } from '../core/routine-steps';
+import { labelledInputs } from '../core/sub-routines';
+
+/** Where a sub-routine's steps come from: its parent, as loaded. */
+export type CopySource = {
+  parentName?: string;
+  /** Undefined while the parent loads, or when `missing` says why. */
+  definition?: SubRoutineDraft;
+  missing?: 'gone' | 'hidden';
+  onOpenParent(): void;
+};
 
 /**
  * The sections a routine's page and a new routine's page share: its
@@ -34,6 +49,8 @@ export function routineSections(props: {
   runsAsDescription: string;
   /** Shown in the trigger card when there is no draft to edit. */
   unsupported?: JSX.Element;
+  /** On a sub-routine's page: its parent's definition, which it runs. */
+  copySource?: Accessor<CopySource | undefined>;
 }) {
   const triggers = () => props.draft()?.triggers ?? [];
   const hasCodeStep = () => {
@@ -42,6 +59,47 @@ export function routineSections(props: {
       ? draftSteps(draft).some((step) => step.kind === 'code')
       : false;
   };
+  const defaultTarget = (draft: ScheduleDraft) =>
+    firstAgent(draftSteps(draft))?.target ?? {
+      kind: 'model' as const,
+      model: props.defaultModel,
+    };
+  // A sub-routine runs its parent's definition, so its steps are those.
+  const shownSteps = (draft: ScheduleDraft) =>
+    draft.copy
+      ? (props.copySource?.()?.definition?.steps ?? [])
+      : draftSteps(draft);
+  const subRoutines = (
+    <Show when={props.draft()}>
+      {(draft) => (
+        <Show when={{ version: props.version() }} keyed>
+          <SubRoutineDefinitions
+            subRoutines={draft().subRoutines ?? []}
+            onChange={(subRoutines) =>
+              props.onChange((current) => ({ ...current, subRoutines }))
+            }
+            defaultTarget={defaultTarget(draft())}
+            slots={props.slots}
+          />
+        </Show>
+      )}
+    </Show>
+  );
+  const connections = (
+    <Show when={props.draft()}>
+      {(draft) => (
+        <ConnectionRows
+          apps={draft().apps}
+          agent={Boolean(firstAgent(draftSteps(draft())))}
+          connected={props.connected}
+          onChange={(apps) =>
+            props.onChange((current) => ({ ...current, apps }))
+          }
+          Picker={props.slots.Apps}
+        />
+      )}
+    </Show>
+  );
   const setTriggers = (next: ScheduleDraft['triggers']) =>
     props.onChange((current) => ({ ...current, triggers: next }));
   return {
@@ -70,7 +128,7 @@ export function routineSections(props: {
       <Show when={props.draft()}>
         {(draft) => (
           <RoutineStepsSummary
-            steps={draftSteps(draft())}
+            steps={shownSteps(draft())}
             triggers={triggers()}
           />
         )}
@@ -79,58 +137,74 @@ export function routineSections(props: {
     steps: (
       <Show when={props.draft()}>
         {(draft) => (
-          <>
-            {/* An API-written single agent keeps instructions ahead of the
+          <Show
+            when={draft().copy}
+            fallback={
+              <>
+                {/* An API-written single agent keeps instructions ahead of the
                 ones shown in its step; say so, so what runs is visible. */}
-            <Show
-              when={draft().steps === undefined && draft().basePrompt?.trim()}
-            >
-              {(base) => (
-                <div class="mb-2 grid gap-1 rounded-xl border border-edge-muted px-4 py-3 text-sm">
-                  <span class="text-xs font-medium text-ink-muted">
-                    Saved instructions that run first
-                  </span>
-                  <p class="whitespace-pre-wrap text-ink-muted">{base()}</p>
-                </div>
-              )}
-            </Show>
-            <Show when={{ version: props.version() }} keyed>
-              <RoutineSteps
-                steps={draftSteps(draft())}
-                onChange={(steps) =>
-                  props.onChange((current) => props.withSteps(current, steps))
-                }
-                triggers={triggers()}
-                defaultTarget={
-                  firstAgent(draftSteps(draft()))?.target ?? {
-                    kind: 'model',
-                    model: props.defaultModel,
+                <Show
+                  when={
+                    draft().steps === undefined && draft().basePrompt?.trim()
                   }
-                }
-                slots={props.slots}
-              />
-            </Show>
-          </>
-        )}
-      </Show>
-    ),
-    // One instance for the page's life: edits elsewhere don't remount it, so
-    // the app picker stays open across picks.
-    connections: (
-      <Show when={props.draft()}>
-        {(draft) => (
-          <ConnectionRows
-            apps={draft().apps}
-            agent={Boolean(firstAgent(draftSteps(draft())))}
-            connected={props.connected}
-            onChange={(apps) =>
-              props.onChange((current) => ({ ...current, apps }))
+                >
+                  {(base) => (
+                    <div class="mb-2 grid gap-1 rounded-xl border border-edge-muted px-4 py-3 text-sm">
+                      <span class="text-xs font-medium text-ink-muted">
+                        Saved instructions that run first
+                      </span>
+                      <p class="whitespace-pre-wrap text-ink-muted">{base()}</p>
+                    </div>
+                  )}
+                </Show>
+                <Show when={{ version: props.version() }} keyed>
+                  <RoutineSteps
+                    steps={draftSteps(draft())}
+                    onChange={(steps) =>
+                      props.onChange((current) =>
+                        props.withSteps(current, steps)
+                      )
+                    }
+                    triggers={triggers()}
+                    defaultTarget={defaultTarget(draft())}
+                    slots={props.slots}
+                    subRoutines={draft().subRoutines}
+                  />
+                </Show>
+              </>
             }
-            Picker={props.slots.Apps}
-          />
+          >
+            {(copy) => (
+              <SubRoutineCopySteps
+                title={
+                  props.copySource?.()?.definition?.title ?? copy().subRoutine
+                }
+                parentName={props.copySource?.()?.parentName}
+                definition={props.copySource?.()?.definition}
+                missing={props.copySource?.()?.missing}
+                values={labelledInputs(
+                  copy(),
+                  props.copySource?.()?.definition
+                )}
+                defaultTarget={defaultTarget(draft())}
+                slots={props.slots}
+                onOpenParent={() => props.copySource?.()?.onOpenParent()}
+              />
+            )}
+          </Show>
         )}
       </Show>
     ),
+    /** Work the routine's runs schedule once per item; absent with none. */
+    get subRoutines() {
+      return props.draft()?.subRoutines?.length ? subRoutines : undefined;
+    },
+    // One instance for the page's life: edits elsewhere don't remount it, so
+    // the app picker stays open across picks. A sub-routine has no apps of
+    // its own: its parent's definition names them.
+    get connections() {
+      return props.draft()?.copy ? undefined : connections;
+    },
     settings: (
       <>
         <RoutineSettingRow
