@@ -3,7 +3,7 @@
  */
 
 import type { Harness as RegisteredHarness } from '@service-storage/client';
-import { fireEvent, render, screen } from '@solidjs/testing-library';
+import { fireEvent, render, screen, within } from '@solidjs/testing-library';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 import { TeammateRuntimesSection } from './teammate-runtimes-section';
 
@@ -170,6 +170,33 @@ describe('TeammateRuntimesSection', () => {
     expect(onRemove).toHaveBeenCalledWith(
       expect.objectContaining({ id: '00000000-0000-4000-8000-000000000002' })
     );
+  });
+
+  it('shows Options only on rows whose settings the viewer can change', () => {
+    mocks.directory = [
+      runtime(
+        '00000000-0000-4000-8000-000000000002',
+        'MacBook Pro',
+        'macro|priya@example.com',
+        { access: 'user' }
+      ),
+      runtime(
+        '00000000-0000-4000-8000-000000000004',
+        'Build server',
+        'macro|theo@example.com',
+        { access: 'owner' }
+      ),
+    ];
+    render(() => (
+      <TeammateRuntimesSection canRemoveShared={false} onRemove={vi.fn()} />
+    ));
+
+    expect(
+      within(row('MacBook Pro')).queryByRole('button', { name: 'Options' })
+    ).toBeNull();
+    expect(
+      within(row('Build server')).getByRole('button', { name: 'Options' })
+    ).toBeTruthy();
   });
 
   it('shows nothing without teammates’ runtimes', () => {

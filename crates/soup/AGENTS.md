@@ -55,7 +55,13 @@ rows, initiatives, ...) and get back a single unified, paginated result.
   `src/domain/service/tests/attention.rs` → `src/outbound/pg_soup_repo/attention.rs`
   (`attention/query.sql`). Channel-thread keying applies only to
   `AttentionKeying::ThreadScoped`; keep it in step with `attention_feed`'s
-  `keying.rs`.
+  `keying.rs`. A read of known items (`only`) under `FiledEntity` keying
+  takes its pending notifications from `attention/pending_only.sql`, by key;
+  every other read takes them from `attention/pending.sql`. Change both.
+- Find where a viewer's unread rows may be without paging a feed:
+  `src/outbound/pg_soup_repo/attention_unread.rs`. It is neither gated nor
+  filtered and runs for every signed-in viewer; its two reads are bounded by
+  their `limit` and must stay so.
 - Give a kind with no list of its own (runtimes, teams) inbox rows: an
   attention-only kind like `pg_soup_repo/harness.rs` or `team.rs`, a gate in
   `attention/query.sql`'s attention stream only, a by-ids leg, and the type in

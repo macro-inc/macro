@@ -600,7 +600,17 @@ groups, Macro users and DMs lead CRM contacts whatever their match; no person
 moves past another result or into a better group to do it. Personal contact
 rows keep the native window order among people in the same group, matching
 equally well and equally close to the viewer, so a recent weaker match never
-takes a better match's slot.
+takes a better match's slot. People outside the viewer's team (a person, CRM
+contact or one-to-one DM whose person is not on the team's roster) follow every
+row from the team, typed or not (before typing, `listOutsidePeopleLast` puts
+them after the recent rows and the used commands among them, ahead of the
+command catalog that starts at the first never-used command after the team's
+other rows), in the same groups among themselves; group DMs stay with the team's
+rows. Each side keeps its own window order, so a window person the ranking
+left out stays on their side. A query that is exactly such a person's email
+address or full name of two or more words ranks them among the team's rows as a
+stranger, even one the viewer messages. While the roster loads, nobody is
+outside.
 A row whose letters merely appear in order ranks below every row containing the
 typed words.
 Soup's local search pool (`createSearchState`) stays lazy: it builds only when
@@ -777,6 +787,11 @@ on desktop and mobile. Tool results render through
 `lib/core/component/AI/component/tool/Canvas.tsx`; edits arrive through live sync.
 The shared plain-text Lexical codec is `packages/lexical-core/canvas-text.ts`.
 
+## Notifications inbox filters
+
+Read `src/features/notifications-inbox/AGENTS.md` for the selected-category filter
+contract, legacy storage conversion, and focused checks.
+
 ## Group chats in the notifications inbox
 
 A group chat's message row shows the chat (its picture or the channel kind)
@@ -903,6 +918,7 @@ resolved session ID; keep the existing `AgentSessionProvider` subscription to
 `agent_session` rather than enabling legacy block tracking of placeholder IDs.
 
 - Share URL recognition with `packages/lexical-core/utils/auto-link.ts`; preserve explicit unlink markers when saving and rendering messages. See `packages/lexical-core/README.md` at the repository root.
+- `openExternalUrl` opens only a link scheme (`isAllowedLinkUrl` in `packages/lexical-core/utils/link-url.ts`), a relative URL, or a scheme in its `OPENABLE_PROTOCOLS` (`core/util/url.ts`); add a scheme there when a caller needs one. Renderers that draw an anchor from saved content check the URL the same way.
 - Keep ordinary hyperlinks on the theme's link colors (blue by default), including Markdown renderers/editors and calendar descriptions; preserve mention decorators' separate styling.
 - Keep contact address edits (add, remove, make primary) and company edits (personal-provider
   link/switch, Remove company unless an address is on the company's domain) in shared CRM field views, using Tasks
@@ -1300,7 +1316,7 @@ resolved session ID; keep the existing `AgentSessionProvider` subscription to
   conversation, including an empty unread result after a read on another
   device. Include off-page favorites in unread presence without adding them to
   section counts; mention counts include thread replies, the unread dot does not.
-- Decide channel detail access from completed server results; bound confirmations of contradictory cache membership, preserve known unavailable state during retries, and keep unavailable routes registered for notification/reconnect refresh.
+- Decide channel detail access from completed server results: only a refusal (HTTP 401/403 or an access-coded error, `isAccessRequestError`) means denied, and a GraphQL server fault (`isGraphqlServerFault`) keeps the open channel and retries with backoff; bound confirmations of contradictory cache membership, preserve known unavailable state during retries, and keep unavailable routes registered for notification/reconnect refresh.
 - Read folders for picking or moving through `createFolderList`
   (`queries/storage/folder-list`): it matches the Drive sidebar's source, so a
   folder open in Drive, including a team folder, is always in the list. Keep
@@ -1385,6 +1401,11 @@ resolved session ID; keep the existing `AgentSessionProvider` subscription to
   flags alongside fallback previews; retained rows and legacy hosts still need
   mutation revalidation. Merge continuation pages through the indexed cursor.
   Never restore explicitly invalidated membership from an older view's snapshot.
+- Sender filter writes and Undo return no per-thread classification. Refresh
+  active GraphQL Soup readers with an email Importance predicate so their
+  server pages reconcile Signal and Noise membership.
+- Project calendar invitations from GraphQL Mail aggregate facts into the
+  shared row flag so the Calendar invite facet also matches inline invitations.
 - Render user-visible text in new UI, and every menu and navigation label,
   with `t()` from `@app/lib/i18n`, adding only the English to
   `src/lib/i18n/locales/en/`. The periodic `update-translations` skill fills
