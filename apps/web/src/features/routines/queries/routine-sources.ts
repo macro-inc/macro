@@ -394,19 +394,17 @@ export function createRoutineDetailSource(
     parent,
     parentLoading,
     parentError: () => Boolean(parentId() && list.isError && !rawParent()),
-    refreshParent: () => {
-      const span = Telemetry.span('routine.parent_definition.retry', {
-        attributes: {
-          'routine.id': id(),
-          'routine.parent_id': parentId() ?? '',
-        },
-      });
-      return traceRoutineRequest(span, () =>
-        withRoutineQueryTrace(span, (options) =>
-          list.refetch({ ...options, throwOnError: true })
-        )
-      );
-    },
+    refreshParent: () =>
+      traceRoutineInteraction(
+        'routine.parent_definition.retry',
+        id(),
+        (span) => {
+          span.setAttr('routine.parent_id', parentId() ?? '');
+          return withRoutineQueryTrace(span, (options) =>
+            list.refetch({ ...options, throwOnError: true })
+          );
+        }
+      ),
     canKeepAsOwn,
     keepAsOwn: () => {
       if (!canKeepAsOwn() || keep.isPending) return;
@@ -444,8 +442,9 @@ export function createRoutineDetailSource(
         await traceRoutineInteraction(
           'routine.code_approval',
           scheduleId,
-          async (approval) => {
+          async (approval, markFailed) => {
             const failed = (title: string, error?: unknown) => {
+              markFailed();
               approval.error(title);
               callbacks.onError(title, error);
             };

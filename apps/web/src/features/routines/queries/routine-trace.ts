@@ -16,21 +16,37 @@ export async function traceRoutineRequest<T>(
   }
 }
 
-export function traceRoutineInteraction<T>(
+export async function traceRoutineInteraction<T>(
   name: string,
   scheduleId: string,
-  request: (span: Span) => Promise<T>
+  request: (span: Span, markFailed: () => void) => Promise<T>
 ): Promise<T> {
   const interaction = beginInteraction(`${name}.action`, {
     attributes: { 'routine.id': scheduleId },
   });
+  const release = interaction.hold();
+  let failed = false;
+  const start = () => {
+    try {
+      const span = interaction.span.span(name);
+      span.setAttr('routine.id', scheduleId);
+      return traceRoutineRequest(span, () =>
+        request(span, () => {
+          failed = true;
+        })
+      );
+    } finally {
+      // Close the join window so the next click starts its own flow.
+      interaction.end();
+    }
+  };
   try {
-    const span = interaction.span.span(name);
-    span.setAttr('routine.id', scheduleId);
-    return traceRoutineRequest(span, () => request(span));
+    return await start();
+  } catch (error) {
+    failed = true;
+    throw error;
   } finally {
-    // The work keeps its child span while later clicks can start their own flow.
-    interaction.end();
+    release(failed ? 'error' : 'success');
   }
 }
 

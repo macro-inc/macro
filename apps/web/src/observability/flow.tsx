@@ -25,7 +25,8 @@ import {
 } from './ui-operation';
 
 type Attributes = Record<string, string | number | boolean>;
-type Outcome = 'success' | 'cancelled';
+type Outcome = 'success' | 'cancelled' | 'error';
+type Release = (outcome?: 'success' | 'error') => void;
 
 /**
  * What every node of one perf trace shares: the root's name, stamped on each
@@ -52,7 +53,7 @@ interface FlowNode {
   readonly route: string | undefined;
   readonly settled: boolean;
   /** Keep the node open until the returned release runs. Idempotent. */
-  hold(): () => void;
+  hold(): Release;
   /** Settle now as cancelled, for a view that unmounted while loading. */
   abandon(): void;
 }
@@ -66,6 +67,7 @@ function createNode(
 ): FlowNode {
   let count = 0;
   let settled = false;
+  let failed = false;
   return {
     span,
     root,
@@ -77,13 +79,14 @@ function createNode(
       if (settled) return () => {};
       count++;
       let released = false;
-      return () => {
+      return (outcome) => {
         if (released) return;
         released = true;
+        if (outcome === 'error') failed = true;
         count--;
         if (count === 0 && !settled) {
           settled = true;
-          finish('success');
+          finish(failed ? 'error' : 'success');
         }
       };
     },
@@ -125,7 +128,11 @@ function rootNode(
       operation.span.setAttr('flow.phase_count', root.phaseCount);
       operation.span.setAttr('flow.ready_phase_count', root.readyPhases);
       if (outcome === 'success') operation.afterPaint();
-      else operation.cancel();
+      else if (outcome === 'cancelled') operation.cancel();
+      else {
+        operation.span.error('Interaction failed');
+        operation.finish('error');
+      }
     },
     // A timed-out or hidden operation takes no more phases.
     () => operation.ended
@@ -156,12 +163,13 @@ function childNode(
   root.phaseCount++;
   return createNode(span, root, route, (outcome) => {
     span.setAttr('flow.outcome', outcome);
+    if (outcome === 'error') span.error('Interaction failed');
     span.end();
     onSettle?.(outcome);
     // Solid disposes children before parents: when the parent is unmounting
     // too, it must abandon before this release can settle it as a success.
     if (outcome === 'cancelled') queueMicrotask(release);
-    else release();
+    else release(outcome);
   });
 }
 
@@ -196,6 +204,8 @@ function activeInteraction(): OpenInteraction | undefined {
 
 export interface Interaction {
   readonly span: Span;
+  /** Keep the interaction open for work that outlives the join window. */
+  hold(): Release;
   /** Close the window in which new views join this interaction. */
   end(): void;
 }
@@ -211,8 +221,8 @@ export type InteractionOptions = Omit<UiOperationOptions, 'kind'> & {
  * Start a user interaction, such as a click or a navigation. Every
  * `<TraceFlow>` created before `end()` that has no open parent joins it, so
  * one trace runs from the input event until the views it opened have loaded
- * and painted. Without such a view it ends one paint after `end()`. An
- * interaction begun while another is open is a phase of that one.
+ * and painted. Holds keep it open after `end()`, until the last one releases.
+ * An interaction begun while another is open is a phase of that one.
  */
 export function beginInteraction(
   name: string,
@@ -247,7 +257,7 @@ export function beginInteraction(
     },
   };
   openInteraction = interaction;
-  return { span: node.span, end: interaction.close };
+  return { span: node.span, hold: node.hold, end: interaction.close };
 }
 
 function joinInteraction(

@@ -1,6 +1,7 @@
 import { render } from '@solidjs/testing-library';
 import { createSignal, Show } from 'solid-js';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
+import { traceRoutineInteraction } from '../features/routines/queries/routine-trace';
 import { beginInteraction, TraceFlow, useFlow, usePending } from './flow';
 
 type Recorded = {
@@ -194,6 +195,26 @@ describe('TraceFlow', () => {
   it('ends an interaction that opened no view one paint after it ends', async () => {
     beginInteraction('panel.toggle').end();
     expect(operations).toEqual([{ name: 'panel.toggle', outcome: 'painted' }]);
+  });
+
+  it('keeps a routine interaction open until a late failure without joining the next click', async () => {
+    const response = Promise.withResolvers<void>();
+    const request = traceRoutineInteraction(
+      'routine.keep',
+      'copy',
+      () => response.promise
+    );
+    const rejected = expect(request).rejects.toThrow('Refresh failed');
+    await flush();
+    beginInteraction('next.click').end();
+    const pending = operations.map(({ name, outcome }) => ({ name, outcome }));
+    response.reject(new Error('Refresh failed'));
+    await rejected;
+    expect(pending).toEqual([
+      { name: 'routine.keep.action', outcome: undefined },
+      { name: 'next.click', outcome: 'painted' },
+    ]);
+    expect(operations[0].outcome).toBe('error');
   });
 
   it('starts a new trace instead of joining a flow that timed out', async () => {

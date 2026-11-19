@@ -104,7 +104,11 @@ const mocks = vi.hoisted(() => ({
 vi.mock('@app/observability/flow', async (importOriginal) => ({
   ...(await importOriginal<typeof import('@app/observability/flow')>()),
   usePending: vi.fn(),
-  beginInteraction: vi.fn(() => ({ span: NOOP_SPAN, end: vi.fn() })),
+  beginInteraction: vi.fn(() => ({
+    span: NOOP_SPAN,
+    hold: () => vi.fn(),
+    end: vi.fn(),
+  })),
 }));
 vi.mock('@core/context/user', () => ({
   useUserId: () => () => 'macro|owner@example.com',
@@ -1535,8 +1539,10 @@ describe('routine code that needs an update', () => {
     });
     const admission = { ...root, span: NOOP_SPAN.span };
     const start = vi.spyOn(admission, 'span').mockReturnValue(root);
+    const release = vi.fn();
     vi.mocked(beginInteraction).mockReturnValueOnce({
       span: admission,
+      hold: () => release,
       end: vi.fn(),
     });
     try {
@@ -1567,6 +1573,7 @@ describe('routine code that needs an update', () => {
       ).toHaveBeenCalledOnce();
       expect(root.error).toHaveBeenCalledOnce();
       expect(root.end).toHaveBeenCalledOnce();
+      expect(release).toHaveBeenCalledExactlyOnceWith('error');
       expect(mocks.refetchUpgrades).toHaveBeenCalledOnce();
     } finally {
       start.mockRestore();
