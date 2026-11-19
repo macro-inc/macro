@@ -345,7 +345,7 @@ function AddFilter(props: FilterProps & { kinds: FilterKind[] }) {
               >
                 <AddFilterLabel />
               </Dropdown.Trigger>
-              <Dropdown.Content class="w-72 max-w-[calc(100vw-1rem)]">
+              <Dropdown.Content class="min-w-72 max-w-[min(24rem,calc(100vw-1rem))]">
                 <For each={props.kinds}>
                   {(choice) => (
                     <Dropdown.Item
