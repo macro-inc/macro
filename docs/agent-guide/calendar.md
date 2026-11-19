@@ -227,7 +227,9 @@ For the same inbox the app-wide toast reads **Calendar stopped syncing** with
 sidebar card reads **Calendar stopped syncing** with **Reconnect calendar** (also
 past an earlier dismissal of the card), and the calendar settings menu says
 **Reconnect**. A calendar that was never connected keeps Enable calendar, Grant
-access and Turn on calendar. The signal is the inbox's calendar data
+access and Turn on calendar, unless its mailbox needs a full reconnect: then the
+calendar view, the card and the menu all offer Reconnect, asking for the mailbox
+and calendar together. The signal is the inbox's calendar data
 (`has_calendar_data`) beside missing calendar permission: Macro creates the
 calendar account only from a grant with the capability and keeps it when the
 capability goes.
@@ -485,7 +487,8 @@ excluded from Upcoming events, including both all-day and hourly locations.
 Events require connecting a Google account (`Connect calendar`). The
 `Calendar settings` (gear) menu has an `Accounts`
 section listing each connected account with a per-account `Enable` (grant calendar),
-`Reconnect` (expired Google authorization), or `Turn off` action, plus
+`Reconnect` (expired Google authorization, with or without calendar access, as
+the calendar view says), or `Turn off` action, plus
 `Connect another account` to connect a new Google account
 (email + calendar; the item and the `Connect email` dialog both say the email
 and calendar connect together). A Google consent that leaves the email

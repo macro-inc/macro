@@ -1737,5 +1737,14 @@ export const send = {
       source: ['src/features/email-message/core/message-operation.ts'],
       providers: ['outlook'],
     },
+    {
+      id: 'STC-983',
+      surface: 'SC-18',
+      fn: ['F-137'],
+      state:
+        'result: after the reload the sent reply appears once and its text is not offered again as a draft',
+      trigger: 'after a reply whose send response was lost is confirmed sent',
+      source: ['src/features/email-thread/queries/thread-source.ts'],
+    },
   ],
 } as const satisfies Group;

@@ -37,6 +37,10 @@ the recipient for human DMs, the persona for agent DMs, and the channel picture
 or glyph for named channels. Message and thread breadcrumbs resolve identity
 from their parent channel rather than the message or thread ID.
 
+Phone list rows retain the channel's own image or icon during a live call.
+The trailing live-call waveform marks the call, as in the desktop rail; ringing
+calls keep their Join and Decline actions.
+
 ## Composer focus and Esc
 
 Every way of opening a conversation follows one rule
@@ -1778,8 +1782,18 @@ recordings for that channel
 (same rows as the Calls soup view, filtered to this channel). The live `Call` tab
 appears while a call is in progress. `Ask Macro` opens a new chat pane with the channel
 already @mentioned as context (see ai-chat.md). On touch, at every width, the title menu is a
-drawer (`SoupEntityActionsSheet`) with the view choices above the actions. Clicking the radio input can time out — click the adjacent label text
-instead.
+drawer (`SoupEntityActionsSheet`) with the view choices above the actions. Each
+choice has one leading icon; the live `Call` choice uses the same waveform as
+its desktop tab, with no second waveform inside its label. Clicking the radio
+input can time out — click the adjacent label text instead.
+
+On phones, the active call's own channel hides the bottom floating call pill.
+Its Messages tab shows the call-in-progress banner above the composer, with
+`Return to call` for a joined call and `Join` otherwise. The banner shares the
+composer's horizontal gutters and keeps its 8px gap above the composer. Its
+success tint sits on an opaque `surface` base in light and dark themes; scroll
+messages behind it to check that message content does not show through.
+Other channels and views retain the floating pill.
 
 In the Chat workspace — and wherever a channel opens inline inside another
 view's detail stack (a channel mention followed from the email view, say) — the
