@@ -377,6 +377,7 @@ const mocks = vi.hoisted(() => {
     plainClient,
     realtimeClient,
     replaceSubscriptions,
+    initializeCrmCacheOwner: vi.fn(async () => {}),
     platformFetch,
     toastFailure,
     telemetryError: vi.fn(),
@@ -449,7 +450,10 @@ vi.mock('@core/util/platformFetch', () => ({
   platformFetch: mocks.platformFetch,
 }));
 // Permission-owner binding and HTTP proofs use their real adapters in crm-access-cache.test.ts.
-vi.mock('./crm-access-cache', () => ({ installCrmCacheHost: vi.fn() }));
+vi.mock('./crm-access-cache', () => ({
+  installCrmCacheHost: vi.fn(),
+  initializeCrmCacheOwner: mocks.initializeCrmCacheOwner,
+}));
 vi.mock('@graphql-cache/rollout', () => ({
   getBrowserTursoCacheRolloutDecision: (): BrowserTursoCacheRolloutDecision => {
     const enabled = mocks.tauri || mocks.enabled;
@@ -839,15 +843,17 @@ describe('GraphQL Soup browser cache session gate', () => {
     mocks.resetQueue();
     mocks.platformFetch.mockReset();
     mocks.telemetryError.mockReset();
+    mocks.initializeCrmCacheOwner.mockReset().mockResolvedValue(undefined);
   });
 
   afterEach(async () => {
     const soup = await import('./graphql-soup');
     soup.setGraphqlSoupSessionActive(false);
     vi.unstubAllGlobals();
+    vi.useRealTimers();
   });
 
-  it('publishes the client and host before authority reset can reenter client lookup', async () => {
+  it('publishes the client and host before owner initialization can reenter client lookup', async () => {
     const soup = await import('./graphql-soup');
     const { installCrmCacheHost } = await import('./crm-access-cache');
     let reenteredClient: unknown;
@@ -863,6 +869,62 @@ describe('GraphQL Soup browser cache session gate', () => {
     expect(reenteredHost).toBe(soup.getGraphqlSoupCacheHost());
     expect(mocks.createWorkerCacheHost).toHaveBeenCalledOnce();
     expect(mocks.normalizedCacheExchange).toHaveBeenCalledOnce();
+  });
+
+  it('starts subscriptions only after the local owner baseline is established', async () => {
+    const owner = Promise.withResolvers<void>();
+    mocks.initializeCrmCacheOwner.mockReturnValue(owner.promise);
+    const soup = await import('./graphql-soup');
+    const initialized = soup.initializeGraphqlSoupCache();
+    expect(mocks.replaceSubscriptions).not.toHaveBeenCalled();
+    expect(mocks.platformFetch).not.toHaveBeenCalled();
+    owner.resolve();
+    await initialized;
+    expect(mocks.replaceSubscriptions).toHaveBeenCalledExactlyOnceWith(
+      soup.getGraphqlSoupClient(),
+      soup.getGraphqlCacheHost()
+    );
+    expect(mocks.platformFetch).not.toHaveBeenCalled();
+  });
+
+  it('falls back within the local startup budget and never revives a slow owner', async () => {
+    vi.useFakeTimers();
+    const owner = Promise.withResolvers<void>();
+    mocks.initializeCrmCacheOwner
+      .mockReturnValueOnce(owner.promise)
+      .mockReturnValueOnce(owner.promise);
+    const soup = await import('./graphql-soup');
+    const initialized = soup.initializeGraphqlSoupCache();
+    const slowHost = soup.getGraphqlCacheHost();
+    await vi.advanceTimersByTimeAsync(1499);
+    expect(soup.getGraphqlCacheHost()).toBe(slowHost);
+    expect(mocks.replaceSubscriptions).not.toHaveBeenCalled();
+    await vi.advanceTimersByTimeAsync(1);
+    await initialized;
+    expect(soup.getGraphqlCacheHost()).toBeUndefined();
+    expect(slowHost?.disabled).toBe(true);
+    expect(soup.graphqlDraftQueueBlocked()).toBe(true);
+    expect(mocks.platformFetch).not.toHaveBeenCalled();
+    expect(mocks.replaceSubscriptions).toHaveBeenCalledExactlyOnceWith(
+      mocks.realtimeClient
+    );
+    owner.resolve();
+    await owner.promise;
+    expect(mocks.replaceSubscriptions).toHaveBeenCalledOnce();
+  });
+
+  it('uses the existing fallback when local owner initialization rejects', async () => {
+    const owner = Promise.withResolvers<void>();
+    mocks.initializeCrmCacheOwner
+      .mockReturnValueOnce(owner.promise)
+      .mockReturnValueOnce(owner.promise);
+    const soup = await import('./graphql-soup');
+    const initialized = soup.initializeGraphqlSoupCache();
+    owner.reject(new Error('local store unavailable'));
+    await initialized;
+    expect(soup.getGraphqlSoupClient()).toBe(mocks.realtimeClient);
+    expect(soup.graphqlDraftQueueBlocked()).toBe(true);
+    expect(mocks.platformFetch).not.toHaveBeenCalled();
   });
 
   it.each([false, true])(
@@ -1281,6 +1343,7 @@ describe('GraphQL Soup browser cache session gate', () => {
 
     expect(soup.graphqlCacheEnabled()).toBe(false);
     expect(soup.getGraphqlSoupClient()).toBe(mocks.realtimeClient);
+    await soup.initializeGraphqlSoupCache();
     expect(mocks.replaceSubscriptions).toHaveBeenCalledWith(
       mocks.realtimeClient
     );
@@ -1301,6 +1364,7 @@ describe('GraphQL Soup browser cache session gate', () => {
 
       soup.setGraphqlSoupSessionActive(true);
       expect(soup.getGraphqlSoupClient()).not.toBe(mocks.plainClient);
+      await soup.initializeGraphqlSoupCache();
       expect(mocks.replaceSubscriptions).toHaveBeenCalledOnce();
     }
   );

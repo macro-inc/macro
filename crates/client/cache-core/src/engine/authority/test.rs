@@ -527,6 +527,73 @@ fn legacy_identity_hydrates_the_account_without_creating_a_permission_proof() {
 }
 
 #[test]
+fn first_account_binding_preserves_unproven_generation_and_authored_queue() {
+    block_on(async {
+        let mut storage = InMemoryStorage::new();
+        let thread = EntityKey("GraphqlSoupEmailThread:offline-thread".into());
+        let content = Record {
+            fields: [("name".into(), CacheValue::String("offline subject".into()))].into(),
+        };
+        storage
+            .put_batch(vec![(thread.clone(), content.clone())])
+            .await
+            .unwrap();
+        let mut engine = Engine::new(storage);
+        let initial = engine.current_authority("profile").await.unwrap();
+        let storage_generation = engine.current_storage_generation().await.unwrap();
+        engine.begin_optimistic_write(None, BeginOptimisticWrite {
+            uuid: "00000000-0000-4000-8000-000000000001",
+            query: "mutation Save($input: SaveEmailDraftInput!) { saveEmailDraft(input: $input) { thread { id } } }",
+            operation_name: Some("Save"),
+            variables: json!({"input":{"bodyText":"authored reply","threadId":"local-thread"}}).as_object().unwrap(),
+            data: &json!({}),
+            link_patches: &[],
+            revalidations: &[],
+            identity_bindings: &[],
+            client_metadata: Some(&json!({"journal":"keep"})),
+            created_at_ms: 1,
+        }).await.unwrap();
+        let queued = engine.storage().load_mutation_queue().await.unwrap();
+        engine
+            .write_query(
+                None,
+                "{ user { id } }",
+                None,
+                &Default::default(),
+                &json!({"user":{"id":"viewer"}}),
+                Some("viewer"),
+            )
+            .await
+            .unwrap();
+        let bound = engine.current_authority("profile").await.unwrap();
+        assert_eq!(bound.generation, initial.generation);
+        assert_eq!(bound.account.as_deref(), Some("viewer"));
+        assert!(bound.policy.is_none());
+        assert!(!bound.ready);
+        let mut reopened = Engine::new(engine.into_storage());
+        assert_eq!(reopened.current_authority("profile").await.unwrap(), bound);
+        assert_eq!(
+            reopened.current_storage_generation().await.unwrap(),
+            storage_generation
+        );
+        assert_eq!(
+            reopened.storage().get_batch(&[thread]).await.unwrap(),
+            vec![Some(content)]
+        );
+        assert_eq!(
+            reopened.storage().load_mutation_queue().await.unwrap(),
+            queued
+        );
+        assert!(
+            reopened
+                .snapshot_is_current(Some(initial.generation))
+                .await
+                .unwrap()
+        );
+    });
+}
+
+#[test]
 fn an_account_witness_cannot_be_confused_with_the_physical_cache_profile() {
     block_on(async {
         let mut engine = Engine::new(InMemoryStorage::new());

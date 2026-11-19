@@ -1,7 +1,7 @@
 use super::HydrationResultWire;
 
 #[test]
-fn scoped_first_binding_notifies_every_window() {
+fn scoped_first_binding_preserves_the_generation_without_notifying_windows() {
     use cache_core::engine::authority::CacheAuthority;
     use std::sync::{Arc, Mutex};
     use tauri::{Listener, Manager};
@@ -12,6 +12,7 @@ fn scoped_first_binding_notifies_every_window() {
             None,
         );
         let before = pollster::block_on(handle.current_authority("profile")).unwrap();
+        let inspect = handle.clone();
         let mut scope = cache_core::engine::HydrationScope {
             identity: "macro|viewer@example.com".into(),
             storage_generation: pollster::block_on(handle.current_storage_generation())
@@ -132,12 +133,10 @@ fn scoped_first_binding_notifies_every_window() {
             }
         });
         let events = events.lock().unwrap();
-        assert_eq!(events.len(), 1);
-        assert_ne!(events[0].generation, before.generation);
-        assert_eq!(
-            events[0].account.as_deref(),
-            Some("macro|viewer@example.com")
-        );
+        assert!(events.is_empty());
+        let after = pollster::block_on(inspect.current_authority("profile")).unwrap();
+        assert_eq!(after.generation, before.generation);
+        assert_eq!(after.account.as_deref(), Some("macro|viewer@example.com"));
     }
 }
 

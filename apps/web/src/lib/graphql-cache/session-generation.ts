@@ -7,12 +7,23 @@ export function createSessionGeneration() {
     paused: false,
   });
   let transitions = Promise.resolve();
+  let initialized = false;
   const listeners = new Set<() => void>();
   const isCurrent = (captured: string) =>
     !state().paused && captured === state().epoch;
 
   return {
     state,
+    /** Establish the local owner baseline before mounting request producers. */
+    initialize(generation: string) {
+      if (initialized) {
+        if (state().epoch !== generation)
+          throw new Error('Cache session generation was already initialized');
+        return;
+      }
+      initialized = true;
+      setState({ epoch: generation, paused: false });
+    },
     onChanged(listener: () => void) {
       listeners.add(listener);
       return () => {
@@ -25,6 +36,7 @@ export function createSessionGeneration() {
       retire: () => Promise<void>,
       generation: string = crypto.randomUUID()
     ): Promise<void> {
+      initialized = true;
       const captured = generation;
       setState({ epoch: generation, paused: true });
       for (const listener of listeners) listener();

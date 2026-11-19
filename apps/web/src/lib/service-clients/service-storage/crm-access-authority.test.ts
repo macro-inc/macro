@@ -68,10 +68,128 @@ it.each([`${team}:allowed`, 'none'])(
     );
     await authority.refresh();
     expect(authority.snapshot()?.generation).toBe(before.generation);
-    expect(retire.mock.calls).toEqual([[undefined, before.generation]]);
+    expect(retire).not.toHaveBeenCalled();
     expect(authority.state()).toBe(policy === 'none' ? 'denied' : 'allowed');
   }
 );
+
+it('keeps an unchanged durable boot and focus proof out of retirement', async () => {
+  const owner = sharedOwner(`${team}:allowed`);
+  const before = await owner.current();
+  const { authority, retire, fetchProof } = client(owner);
+  await authority.refresh();
+  await authority.refresh();
+  expect(fetchProof).toHaveBeenCalledTimes(2);
+  expect(authority.snapshot()?.generation).toBe(before.generation);
+  expect(retire).not.toHaveBeenCalled();
+});
+
+it('initializes only the local owner before login without requesting proof', async () => {
+  const owner = sharedOwner(`${team}:allowed`);
+  const initialize = vi.fn();
+  const fetchProof = vi.fn(async () => `${team}:allowed`);
+  const retire = vi.fn(async () => {});
+  const authority = createCrmAccessAuthority({
+    initialize,
+    fetchProof,
+    retire,
+  });
+  authority.setHost(owner);
+  await authority.initialize();
+  expect(initialize).toHaveBeenCalledExactlyOnceWith(
+    owner.snapshot()!.generation
+  );
+  expect(fetchProof).not.toHaveBeenCalled();
+  authority.setSession('viewer');
+  await authority.refresh();
+  expect(retire).not.toHaveBeenCalled();
+  expect(initialize).toHaveBeenCalledOnce();
+  authority.setSession('viewer', 1);
+  await authority.refresh();
+  expect(retire).not.toHaveBeenCalled();
+  expect(authority.state()).toBe('allowed');
+});
+
+it('fences a restored owner belonging to another account on first login', async () => {
+  const owner = sharedOwner(`${team}:allowed`);
+  const fetchProof = vi.fn(async () => `${team}:allowed`);
+  const retire = vi.fn(async () => {});
+  const authority = createCrmAccessAuthority({ fetchProof, retire });
+  authority.setHost(owner);
+  await authority.initialize();
+  authority.setSession('replacement');
+  expect(retire).toHaveBeenCalledWith('session', expect.any(String));
+  const fence = retire.mock.calls.at(-1);
+  await authority.initialize();
+  expect(retire).toHaveBeenCalledOnce();
+  expect(retire.mock.calls.at(-1)).toBe(fence);
+  expect(authority.state()).toBe('pending');
+});
+
+it('preserves the memory-only startup generation through first login', async () => {
+  const initialize = vi.fn();
+  const fetchProof = vi.fn(async () => `${team}:allowed`);
+  const retire = vi.fn(async () => {});
+  const authority = createCrmAccessAuthority({
+    initialize,
+    fetchProof,
+    retire,
+  });
+  await authority.initialize();
+  const before = authority.snapshot()!.generation;
+  authority.setSession('viewer');
+  await authority.refresh();
+  expect(authority.snapshot()!.generation).toBe(before);
+  expect(retire).not.toHaveBeenCalled();
+  expect(initialize).toHaveBeenCalledExactlyOnceWith(before);
+  authority.setSession('replacement');
+  await authority.refresh();
+  expect(authority.snapshot()!.generation).not.toBe(before);
+  expect(retire).toHaveBeenCalledWith('session', expect.any(String));
+});
+
+it('does not restore an old account generation after delayed local initialization', async () => {
+  const owner = sharedOwner(`${team}:allowed`);
+  const { authority, retire } = client(owner);
+  await authority.refresh();
+  const old = owner.snapshot()!;
+  const current = Promise.withResolvers<CacheAuthority>();
+  vi.spyOn(owner, 'current').mockReturnValueOnce(current.promise);
+  const initializing = authority.initialize();
+  authority.setSession('replacement');
+  retire.mockClear();
+  current.resolve(old);
+  await initializing;
+  expect(retire).not.toHaveBeenCalled();
+  expect(authority.state()).toBe('pending');
+  const replacement = authority.initialize();
+  expect(replacement).not.toBe(initializing);
+  await replacement;
+  expect(retire).not.toHaveBeenCalled();
+});
+
+it('keeps the account fence when the previous first proof completes late', async () => {
+  const owner = sharedOwner();
+  const transition = owner.transition;
+  const sent = Promise.withResolvers<void>();
+  const finish = Promise.withResolvers<void>();
+  vi.spyOn(owner, 'transition').mockImplementationOnce(
+    async (expected, policy) => {
+      sent.resolve();
+      await finish.promise;
+      return transition(expected, policy);
+    }
+  );
+  const { authority, retire } = client(owner);
+  const refreshing = authority.refresh();
+  await sent.promise;
+  authority.setSession('replacement');
+  retire.mockClear();
+  finish.resolve();
+  await refreshing;
+  expect(authority.state()).toBe('pending');
+  expect(retire).not.toHaveBeenCalled();
+});
 
 it('coalesces boot refreshes without making ordinary reads depend on a proof', async () => {
   const proof = Promise.withResolvers<string>();
@@ -255,7 +373,9 @@ it('retains failed session cleanup across the next owner observation', async () 
   await authority.refresh();
   retire.mockClear();
   retire.mockRejectedValueOnce(new Error('session prune failed'));
-  authority.setSession('viewer', 1);
+  authority.setSession(undefined, 1);
+  authority.setHost(sharedOwner(`${team}:allowed`));
+  authority.setSession('viewer', 2);
   await authority.refresh();
   expect(retire).toHaveBeenCalledTimes(2);
   expect(retire).toHaveBeenNthCalledWith(1, 'session', expect.any(String));

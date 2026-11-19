@@ -146,11 +146,19 @@ impl<S: Storage> Engine<S> {
         }
         let account = self.current_identity().await?;
         let mut unfinished_policy = None;
-        if let Some(authority) = self.stored_authority().await? {
+        if let Some(mut authority) = self.stored_authority().await? {
             if authority.identity != identity {
                 return Err(EngineError::StaleAuthority);
             }
             if authority.account == account {
+                return Ok(authority);
+            }
+            // Before any policy exists, the first authenticated identity only
+            // fills in the account witness. No earlier account or access scope
+            // was replaced, so in-flight content keeps the same generation.
+            if authority.account.is_none() && account.is_some() && authority.policy.is_none() {
+                authority.account = account;
+                self.store_authority(&authority).await?;
                 return Ok(authority);
             }
             if !authority.ready {

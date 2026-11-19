@@ -34,7 +34,11 @@ vi.mock('@core/constant/servers', () => ({
 }));
 
 import { crmAccessAuthority } from './crm-access-authority';
-import { installCrmCacheHost, setCrmAccessSession } from './crm-access-cache';
+import {
+  initializeCrmCacheOwner,
+  installCrmCacheHost,
+  setCrmAccessSession,
+} from './crm-access-cache';
 
 const TEAM = '00000000-0000-4000-8000-000000000001';
 function owner(policy: string | null = null) {
@@ -98,6 +102,25 @@ async function boot(policy: string | null = null) {
   await crmAccessAuthority.refresh();
   return host;
 }
+
+it('keeps boot responses and active queries when the first proof confirms access', async () => {
+  const host = owner();
+  const generation = host.authority.snapshot()!.generation;
+  await initializeCrmCacheOwner();
+  mocks.cancel.mockClear();
+  mocks.refetch.mockClear();
+  mocks.proof.mockResolvedValue(allowed());
+  setCrmAccessSession('viewer');
+  const read = prepareResponseObservers('http://localhost/email/threads', {
+    method: 'GET',
+  });
+  const response = read(Response.json({ subject: 'Personal mail' }));
+  await crmAccessAuthority.refresh();
+  expect(host.authority.snapshot()!.generation).toBe(generation);
+  expect(mocks.cancel).not.toHaveBeenCalled();
+  expect(mocks.refetch).not.toHaveBeenCalled();
+  await expect(response.json()).resolves.toEqual({ subject: 'Personal mail' });
+});
 
 it('uses one proof for a scripted inbox, thread, draft and realtime session', async () => {
   await boot();

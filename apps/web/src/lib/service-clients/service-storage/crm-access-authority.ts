@@ -11,6 +11,7 @@ import { createSignal } from 'solid-js';
 export type CrmAccessState = 'pending' | 'allowed' | 'denied' | 'error';
 export type CrmRetirementScope = 'permission' | 'session';
 type Options = {
+  initialize?: (generation: string) => void;
   fetchProof: (timeoutMs: number) => Promise<string>;
   retire: (
     scope: CrmRetirementScope | undefined,
@@ -33,11 +34,14 @@ export function isCrmPolicy(value: unknown): value is string {
 }
 
 /** Network-only sessions still retire their visible and persisted query results. */
-function memoryAuthority(account?: string): CacheAuthorityHost {
+function memoryAuthority(
+  account?: string,
+  generation: string = crypto.randomUUID()
+): CacheAuthorityHost {
   let state: CacheAuthority = {
     identity: 'network-only',
     account: account ?? null,
-    generation: crypto.randomUUID(),
+    generation,
     policy: null,
     ready: false,
   };
@@ -77,8 +81,10 @@ export function createCrmAccessAuthority(options: Options) {
   let shared: CacheAuthorityHost | undefined;
   let owner = memoryAuthority();
   let observed: CacheAuthority | undefined;
+  let initialized = false;
   let stopObserving: (() => void) | undefined;
   let pending: Promise<void> | undefined;
+  let initialization: Promise<void> | undefined;
   let retiring = Promise.resolve();
   let requiredRetirement: CrmRetirementScope | undefined;
   let retirementAttempt = Symbol();
@@ -86,13 +92,23 @@ export function createCrmAccessAuthority(options: Options) {
 
   function observe(next: CacheAuthority, retryRetirement = false) {
     const previous = observed;
-    observed = next;
     if (next.account != null && next.account !== account) {
       setState('pending');
+      // Login already fenced the old account. A late proof notification or
+      // local read cannot reopen its generation before the owner is rebound.
+      if (account !== undefined && previous === undefined) return;
     } else if (isCrmPolicy(next.policy)) {
       if (next.policy.endsWith(':denied') || next.policy === 'none')
         setState('denied');
       else if (next.ready) setState('allowed');
+    }
+    observed = next;
+    if (!initialized) {
+      initialized = true;
+      options.initialize?.(next.generation);
+      if (next.policy?.endsWith(':denied'))
+        retire('permission', next.generation);
+      return;
     }
     if (previous?.generation === next.generation) {
       if (retryRetirement && retirementFailed)
@@ -113,6 +129,7 @@ export function createCrmAccessAuthority(options: Options) {
     retire(scope, next.generation);
   }
   function retire(scope: CrmRetirementScope | undefined, generation: string) {
+    initialized = true;
     if (scope === 'session' || !requiredRetirement) requiredRetirement = scope;
     const attempt = Symbol();
     retirementAttempt = attempt;
@@ -217,6 +234,15 @@ export function createCrmAccessAuthority(options: Options) {
     allowed: () => state() === 'allowed',
     account: () => account,
     snapshot: () => observed ?? owner.snapshot(),
+    initialize() {
+      initialization ??= (async () => {
+        const target = owner;
+        const captured = session;
+        const initial = await target.current();
+        if (target === owner && captured === session) observe(initial);
+      })();
+      return initialization;
+    },
     refresh,
     setHost(next: CacheAuthorityHost | undefined) {
       if (next === shared) return;
@@ -224,21 +250,31 @@ export function createCrmAccessAuthority(options: Options) {
       owner = next ?? memoryAuthority(account);
       session = Symbol();
       pending = undefined;
-      observed = undefined;
+      initialization = undefined;
       subscribe();
       if (account) fireAndForget(refresh(), 'crm.access.host');
     },
     setSession(next: string | undefined, epoch = 0) {
       if (next === account && epoch === loginEpoch) return false;
-      if (account !== undefined) retire('session', crypto.randomUUID());
+      const sameAccount = next === account;
+      const firstAccount = account === undefined;
+      const previousAccount = account ?? observed?.account;
+      if (previousAccount != null && previousAccount !== next) {
+        retire('session', crypto.randomUUID());
+        observed = undefined;
+      }
       account = next;
       loginEpoch = epoch;
       session = Symbol();
       pending = undefined;
-      observed = undefined;
+      initialization = undefined;
+      if (sameAccount) return true;
       setState('pending');
       if (!shared) {
-        owner = memoryAuthority(account);
+        owner = memoryAuthority(
+          account,
+          firstAccount ? owner.snapshot()?.generation : undefined
+        );
         subscribe();
       }
       return true;
@@ -253,6 +289,7 @@ let configured: Options = {
   retire: async () => {},
 };
 export const crmAccessAuthority = createCrmAccessAuthority({
+  initialize: (generation) => configured.initialize?.(generation),
   fetchProof: (timeoutMs) => configured.fetchProof(timeoutMs),
   retire: (scope, generation) => configured.retire(scope, generation),
   bindAccount: (owner, generation, account) =>

@@ -107,6 +107,7 @@ async fn first_non_denied_proof_preserves_offline_mail() {
     for policy in ["team:allowed", "none"] {
         destroy_cache(SCOPE.into()).await.unwrap();
         let engine = open_cache(SCOPE.into(), None).await.unwrap();
+        let initial = result(engine.current_authority(SCOPE.into())).await;
         let query = "{ user { id emailThread(id: \"thread\") { __typename id name } } }";
         let data = json!({"user":{"id":"viewer","emailThread":{"__typename":"GraphqlSoupEmailThread","id":"thread","name":"offline subject"}}});
         result(engine.write_query(
@@ -119,6 +120,7 @@ async fn first_non_denied_proof_preserves_offline_mail() {
         ))
         .await;
         let before = result(engine.current_authority(SCOPE.into())).await;
+        assert_eq!(before["generation"], initial["generation"]);
         let allowed = transition(&engine, SCOPE, policy).await;
         assert_eq!(allowed["generation"], before["generation"]);
         let cached =
@@ -126,6 +128,11 @@ async fn first_non_denied_proof_preserves_offline_mail() {
         assert_eq!(cached["kind"], "hit");
         assert_eq!(cached["data"], data);
         result(engine.close()).await;
+        let reopened = open_cache(SCOPE.into(), None).await.unwrap();
+        let restored = result(reopened.current_authority(SCOPE.into())).await;
+        assert_eq!(restored["generation"], initial["generation"]);
+        assert_eq!(restored["account"], "viewer");
+        result(reopened.close()).await;
     }
     destroy_cache(SCOPE.into()).await.unwrap();
 }

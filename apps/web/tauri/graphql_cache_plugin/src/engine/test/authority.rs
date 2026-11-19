@@ -130,6 +130,56 @@ fn native_implicit_retirement_notifies_other_windows_before_returning_content() 
 }
 
 #[test]
+fn native_account_replacement_still_notifies_under_the_lock_and_rejects_old_writes() {
+    block_on(async {
+        let handle = spawn_handle();
+        bind(&handle).await;
+        let before = handle.current_authority("profile").await.unwrap();
+        let competing = handle.clone();
+        let (events, received) = std::sync::mpsc::channel();
+        let handle = handle
+            .with_generation(Some(before.generation))
+            .with_authority_listener("profile".into(), move |authority| {
+                let mut next = std::pin::pin!(competing.current_revision());
+                let mut context = std::task::Context::from_waker(std::task::Waker::noop());
+                assert!(std::future::Future::poll(next.as_mut(), &mut context).is_pending());
+                events.send(authority.clone()).unwrap();
+            });
+        handle
+            .write(WriteRequest {
+                origin_op_id: None,
+                registration: None,
+                query: "{ user { id } }".into(),
+                operation_name: None,
+                variables: Variables::new(),
+                data: json!({"user":{"id":"replacement"}}),
+                identity: Some("replacement".into()),
+            })
+            .await
+            .unwrap();
+        let event = received.try_recv().unwrap();
+        assert_ne!(event.generation, before.generation);
+        assert_eq!(event.account.as_deref(), Some("replacement"));
+        assert!(received.try_recv().is_err());
+        assert!(
+            handle
+                .write(WriteRequest {
+                    origin_op_id: None,
+                    registration: None,
+                    query: "{ user { id } }".into(),
+                    operation_name: None,
+                    variables: Variables::new(),
+                    data: json!({"user":{"id":"viewer"}}),
+                    identity: Some("viewer".into()),
+                })
+                .await
+                .is_err()
+        );
+        assert_eq!(handle.current_authority("profile").await.unwrap(), event);
+    });
+}
+
+#[test]
 fn native_authority_events_cannot_be_overtaken_by_another_transition() {
     block_on(async {
         let handle = spawn_handle();

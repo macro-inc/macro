@@ -97,7 +97,10 @@ import {
   canRetryCacheFailure,
   createCacheRecovery,
 } from './cache-recovery';
-import { installCrmCacheHost } from './crm-access-cache';
+import {
+  initializeCrmCacheOwner,
+  installCrmCacheHost,
+} from './crm-access-cache';
 import { emailCacheDeletionKeys } from './email-cache-deletions';
 import { emailThreadSortTs } from './email-thread-sort';
 import type { SoupApiItem } from './generated/schemas/soupApiItem';
@@ -141,6 +144,7 @@ export { emailThreadSortTs } from './email-thread-sort';
 
 const dssHost = SERVER_HOSTS['document-storage-service'];
 const QUEUE_CLEAR_INSPECTION_TIMEOUT_MS = 1000;
+const CACHE_BOOTSTRAP_TIMEOUT_MS = 1500;
 
 function mergeHeaders(...headers: Array<HeadersInit | undefined>): Headers {
   const result = new Headers();
@@ -592,8 +596,14 @@ function getUncachedRealtimeClient(): Client {
     ],
     fetch: dssGraphqlFetch,
   });
-  subscriptionsLifecycle.replace(client);
   uncachedRealtimeClient = client;
+  fireAndForget(
+    initializeCrmCacheOwner().then(() => {
+      if (uncachedRealtimeClient === client)
+        subscriptionsLifecycle.replace(client);
+    }),
+    'graphql-cache-subscriptions'
+  );
   uncachedRealtimeCleanup = () => {
     subscriptionsLifecycle.dispose();
     fireAndForget(websocketClient.dispose(), 'graphql-soup-client');
@@ -817,6 +827,32 @@ export function getGraphqlCacheHost(): CacheHost | undefined {
   return cachedCacheHost?.disabled ? undefined : cachedCacheHost;
 }
 
+/** Establish the local response generation before app requests can start. */
+export async function initializeGraphqlSoupCache(): Promise<void> {
+  await Telemetry.span('graphql.cache_startup', async (span) => {
+    getGraphqlSoupClient();
+    const host = cachedCacheHost;
+    // This is local owner initialization, never an identity or permission read.
+    // A slow or unavailable store uses the existing cache-failure path.
+    const result = await raceTimeout(
+      initializeCrmCacheOwner().then(
+        () => ({ ready: true as const }),
+        (error: unknown) => ({ ready: false as const, error })
+      ),
+      CACHE_BOOTSTRAP_TIMEOUT_MS
+    );
+    if (result?.ready) return;
+    const error = result?.error ?? new Error('Local cache startup timed out');
+    span.setAttr('cache.fallback', true);
+    span.error(error);
+    if (host && cachedCacheHost === host) {
+      fallbackAfterInitializationFailure(error);
+    }
+    // Fallback detaches the failed owner; memory initialization cannot do I/O.
+    await initializeCrmCacheOwner();
+  });
+}
+
 /** Cache writes reach readers of the normalized cache only while it runs. */
 export const hasGraphqlCacheHost = (): boolean =>
   graphqlCacheEnabled() && getGraphqlCacheHost() !== undefined;
@@ -1027,8 +1063,7 @@ export function getGraphqlSoupClient(): Client {
         ],
         fetch: (input, init) => dssGraphqlFetch(input, init, host),
       });
-      // Installing authority synchronously resets mounted query observers.
-      // Publish both resources first so reentrant readers use this client.
+      // Publish both resources before observing the owner's baseline.
       cachedClient = client;
       cachedCacheHost = host;
       // A replacement stays blocked until its persisted queue is readable.
@@ -1037,10 +1072,16 @@ export function getGraphqlSoupClient(): Client {
       unregisterHost = registerCacheHost(host, (error) =>
         canRetryCacheFailure(error) ? createHost(false) : undefined
       );
-      subscriptionsLifecycle.replace(client, host);
       cachedCacheCleanup = cleanup;
       browserCacheClientActivated = !native;
       installCrmCacheHost(host);
+      fireAndForget(
+        initializeCrmCacheOwner().then(() => {
+          if (host && cachedCacheHost === host && !host.disabled)
+            subscriptionsLifecycle.replace(client, host);
+        }),
+        'graphql-cache-subscriptions'
+      );
       return client;
     } catch (error) {
       reportCacheError(error, 'initialization');

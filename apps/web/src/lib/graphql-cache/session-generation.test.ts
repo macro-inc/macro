@@ -1,5 +1,23 @@
-import { expect, it } from 'vitest';
+import { expect, it, vi } from 'vitest';
 import { createSessionGeneration } from './session-generation';
+
+it('establishes the owner baseline without invalidating queries', async () => {
+  const session = createSessionGeneration();
+  const changed = vi.fn();
+  session.onChanged(changed);
+  session.initialize('owner-generation');
+  const request = session.capture();
+  session.initialize('owner-generation');
+  expect(session.isCurrent(request)).toBe(true);
+  expect(changed).not.toHaveBeenCalled();
+  expect(() => session.initialize('replacement')).toThrow(
+    'already initialized'
+  );
+  expect(session.isCurrent(request)).toBe(true);
+  await session.transition(async () => {}, 'replacement');
+  expect(session.isCurrent(request)).toBe(false);
+  expect(changed).toHaveBeenCalledTimes(2);
+});
 
 it('closes old response publication immediately while retirement is pending', async () => {
   const session = createSessionGeneration();

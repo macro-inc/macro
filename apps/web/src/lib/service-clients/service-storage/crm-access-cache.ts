@@ -74,6 +74,7 @@ function install() {
   if (installed) return;
   installed = true;
   configureCrmAccessAuthority({
+    initialize: cacheSessionGeneration.initialize,
     fetchProof,
     retire: retireVisibleSnapshots,
     async bindAccount(owner, generation, account) {
@@ -166,6 +167,12 @@ export function installCrmCacheHost(next: CacheHost | undefined) {
   install();
   host = next;
   crmAccessAuthority.setHost(next?.disabled ? undefined : next?.authority);
+}
+
+/** Local owner initialization only; permission verification starts after login. */
+export function initializeCrmCacheOwner() {
+  install();
+  return crmAccessAuthority.initialize();
 }
 
 export function setCrmAccessSession(account: string | undefined, epoch = 0) {

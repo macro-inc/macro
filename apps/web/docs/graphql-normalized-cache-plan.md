@@ -930,6 +930,13 @@ background. Ordinary requests, subscription frames and local cache reads never
 wait for permission proof. There are no GraphQL-field or REST-route admission
 classifiers.
 
+Before mounting request producers, startup reads the local owner's generation
+once, with a 1.5-second budget and the existing cache-failure fallback. This
+never awaits identity or member-access HTTP. Subscriptions start after that
+baseline is installed. Initial owner observation, the first account binding
+without a stored policy, and unchanged boot/focus proofs do not invalidate or
+refetch queries. Actual account replacement retains the full generation fence.
+
 The shared owner persists the new policy and generation before selective
 retirement. The application adapter removes CRM records, derived email and
 property content, mixed viewer lists and projection-only orphans. An interrupted

@@ -78,6 +78,8 @@ eviction and reset make it miss. A miss requires full registration and never reu
 
 ## Gotchas
 
+- Preserve the authority generation when binding the first account without a stored policy; actual account replacement and policy-bearing or unfinished retirement keep their existing reset and cleanup semantics.
+
 - Keep ordinary title/channel query tokens split on whitespace and commas, with each token matching independently in any order; storage filtering must remain a superset of core ranking.
 
 - Email send persistence and cancellation belong to the frontend email journal, not the normalized cache or its mutation queue.

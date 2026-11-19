@@ -12,6 +12,7 @@ import { getPlatform } from '@core/util/platform';
 import { installPlatformFetch } from '@core/util/platformFetch';
 import { recoverFromFailedLoad } from '@core/util/reloadForNewerBuild';
 import { Telemetry } from '@macro-inc/observability';
+import { initializeGraphqlSoupCache } from '@service-storage/graphql-soup';
 import { initMonochromeIcons } from '@ui/utils/monochromeIcons';
 import { ErrorBoundary, render } from 'solid-js/web';
 import { FatalError } from './components/app/FatalError';
@@ -90,11 +91,16 @@ async function languageReady() {
   perfMark('boot.language-ready');
 }
 
+async function cacheReady() {
+  await initializeGraphqlSoupCache();
+  perfMark('boot.cache-ready');
+}
+
 async function main() {
   perfMark('boot.main');
   // A translated interface waits for its messages (already loading, cached
   // after the first visit) so the first screen isn't English for a moment.
-  await Promise.all([observabilityReady(), languageReady()]);
+  await Promise.all([observabilityReady(), languageReady(), cacheReady()]);
   try {
     await prepareNotificationLaunch();
   } catch (error) {
