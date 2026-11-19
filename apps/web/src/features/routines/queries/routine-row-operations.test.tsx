@@ -247,6 +247,67 @@ describe('routine row operations', () => {
     );
   });
 
+  it('withholds Duplicate for elapsed one-time triggers at the menu and dispatch', async () => {
+    const elapsed: ScheduledAction = {
+      ...briefing,
+      enabled: false,
+      trigger: { type: 'once', at: '2000-01-01T09:00:00Z' },
+    };
+    const future: ScheduledAction = {
+      ...digest,
+      trigger: { type: 'once', at: '2099-01-01T09:00:00Z' },
+    };
+    client.listSchedules.mockResolvedValue(ok([elapsed, future]));
+    queryClient.setQueryData(scheduledActionKeys.list.queryKey, [
+      elapsed,
+      future,
+    ]);
+    const operations = mount();
+    expect(operations.canDuplicate('briefing')).toBe(false);
+    expect(operations.canDuplicate('digest')).toBe(true);
+    operations.duplicate('briefing');
+    await Promise.resolve();
+    expect(client.createSchedule).not.toHaveBeenCalled();
+  });
+
+  it('requires connections for retained definitions before duplicating', async () => {
+    const saved: ScheduledAction = {
+      ...briefing,
+      task: {
+        steps: [],
+        sub_routines: [
+          {
+            name: 'remind',
+            title: 'Remind',
+            steps: [{ type: 'agent', model: 'model', instructions: 'Remind.' }],
+            mcp_servers: [{ app_slug: 'example', server_name: 'Example' }],
+          },
+        ],
+      },
+    };
+    const [slugs, setSlugs] = createSignal<ReadonlySet<string>>();
+    appConnections.read = slugs;
+    client.listSchedules.mockResolvedValue(ok([saved]));
+    queryClient.setQueryData(scheduledActionKeys.list.queryKey, [saved]);
+    client.createSchedule.mockResolvedValue(ok({ ...saved, id: 'duplicate' }));
+    const operations = mount();
+    expect(operations.canDuplicate('briefing')).toBe(false);
+    setSlugs(new Set<string>());
+    expect(appConnections.requested).toHaveBeenCalled();
+    expect(operations.canDuplicate('briefing')).toBe(false);
+    operations.duplicate('briefing');
+    await Promise.resolve();
+    expect(client.createSchedule).not.toHaveBeenCalled();
+
+    setSlugs(new Set(['example']));
+    expect(operations.canDuplicate('briefing')).toBe(true);
+    operations.duplicate('briefing');
+    await vi.waitFor(() =>
+      expect(callbacks.onDuplicated).toHaveBeenCalledWith('duplicate')
+    );
+    expect(client.createSchedule.mock.calls[0]?.[0].task).toEqual(saved.task);
+  });
+
   it('duplicates a second routine while the first copy is saving', async () => {
     const answerFirst = answerLater(client.createSchedule);
     client.createSchedule.mockResolvedValueOnce(

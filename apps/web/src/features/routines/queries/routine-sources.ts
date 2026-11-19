@@ -3,7 +3,11 @@ import { useFlowTrace, usePending } from '@app/observability/flow';
 import { deepEqual } from '@core/util/compareUtils';
 import { fireAndForget } from '@core/util/fireAndForget';
 import { type Span, Telemetry } from '@macro-inc/observability';
-import type { ScheduledActionResponse } from '@service-scheduled-action/generated/schemas';
+import type {
+  ActionConfiguration,
+  RoutineTask,
+  ScheduledActionResponse,
+} from '@service-scheduled-action/generated/schemas';
 import { ResultAsync } from 'neverthrow';
 import type { Accessor } from 'solid-js';
 import { createMemo, createSignal, onMount } from 'solid-js';
@@ -128,12 +132,23 @@ function canKeepSchedule(
   if (!schedule.sub_routine) return false;
   if (!isSubRoutineCopy(schedule.task)) return true;
   const task = compatibleCopyParentTask(schedule, parent);
-  return (
-    !!task &&
-    retainedDefinitionApps(task).every((app) =>
-      connectedApps?.has(app.app_slug)
-    )
+  return !!task && retainedAppsConnected(task, connectedApps);
+}
+
+function retainedAppsConnected(
+  task: RoutineTask,
+  connectedApps: ReadonlySet<string> | undefined
+) {
+  return retainedDefinitionApps(task).every((app) =>
+    connectedApps?.has(app.app_slug)
   );
+}
+
+function duplicateWithConnections(
+  body: ActionConfiguration | undefined,
+  connectedApps: ReadonlySet<string> | undefined
+) {
+  if (body && retainedAppsConnected(body.task, connectedApps)) return body;
 }
 
 export function createRoutineDetailSource(
@@ -164,12 +179,14 @@ export function createRoutineDetailSource(
       !hasProgramDefinitionsOrInputs(current.task)
     );
   };
-  const duplicateBody = () => {
+  const duplicateCandidate = () => {
     const current = raw();
     return (
       current && scheduleToDuplicateBody(current, subRoutineWrites() === true)
     );
   };
+  const duplicateBody = () =>
+    duplicateWithConnections(duplicateCandidate(), connectedApps());
   const update = useUpdateScheduleMutation();
   const run = useRunScheduleNowMutation({
     onError: (error) => callbacks.onError('Failed to start run', error),
@@ -231,8 +248,9 @@ export function createRoutineDetailSource(
     return Boolean(
       current &&
         current.owner === userId() &&
-        retainedDefinitionApps(compatibleCopyParentTask(current, rawParent()))
-          .length
+        (retainedDefinitionApps(compatibleCopyParentTask(current, rawParent()))
+          .length ||
+          retainedDefinitionApps(duplicateCandidate()?.task).length)
     );
   });
   const parent = createMemo<RoutineParentSummary | undefined>(() => {
@@ -564,16 +582,23 @@ export function createRoutineRowOperations(
   const find = (id: string) =>
     saved().find((item) => item.id === id) ??
     linked().find((item) => item.id === id);
-  const connectedApps = createRoutineConnectedApps(() =>
-    linked().some(
-      (child) =>
-        retainedDefinitionApps(
-          compatibleCopyParentTask(
-            child,
-            child.sub_routine ? find(child.sub_routine.parent_id) : undefined
-          )
-        ).length > 0
-    )
+  const connectedApps = createRoutineConnectedApps(
+    () =>
+      [...saved(), ...linked()].some(
+        (schedule) =>
+          retainedDefinitionApps(schedule.task).length > 0 &&
+          scheduleToDuplicateBody(schedule, subRoutineWrites() === true) !==
+            undefined
+      ) ||
+      linked().some(
+        (child) =>
+          retainedDefinitionApps(
+            compatibleCopyParentTask(
+              child,
+              child.sub_routine ? find(child.sub_routine.parent_id) : undefined
+            )
+          ).length > 0
+      )
   );
   const run = useRunScheduleNowMutation({
     onSuccess: () => callbacks.onRunStarted(),
@@ -598,7 +623,11 @@ export function createRoutineRowOperations(
   const duplicateBody = (id: string) => {
     const schedule = find(id);
     return (
-      schedule && scheduleToDuplicateBody(schedule, subRoutineWrites() === true)
+      schedule &&
+      duplicateWithConnections(
+        scheduleToDuplicateBody(schedule, subRoutineWrites() === true),
+        connectedApps()
+      )
     );
   };
   const duplicating = createPerRoutineMutation(async (id) => {
@@ -619,7 +648,9 @@ export function createRoutineRowOperations(
     },
     run: running.start,
     runPending: running.pending,
-    duplicate: duplicating.start,
+    duplicate(id) {
+      if (duplicateBody(id)) duplicating.start(id);
+    },
     canDuplicate: (id) => Boolean(duplicateBody(id)),
     keepAsOwn(id) {
       const schedule = find(id);
