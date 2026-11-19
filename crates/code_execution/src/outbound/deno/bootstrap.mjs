@@ -184,14 +184,37 @@ try {
   const {maxResultBytes, operations, unattended, language, ocamlAssets, allowedOperations, ...context} = await new Response(Deno.stdin.readable).json();
   // The requests an OCaml program was checked to send (the permission gate);
   // absent, every request goes as before. Each is matched by its operation
-  // and by where it goes: method, the service's host and the route.
+  // and by where it goes: method, the service's host and the route. A
+  // parameter could carry a sibling route's literal segment
+  // (`/documents/{}` with `system_skills`), which the server routes to that
+  // sibling: a request a more specific rival route also matches is refused.
+  const escape = text => text.replace(/[.*+?^$()|[\]\\{}]/g, "\\$&");
+  const target = (service, route) => {
+    const host = new URL(context.hosts[service] ?? "http://invalid.invalid");
+    const template = `${host.pathname.replace(/\/$/, "")}${route}`;
+    return {
+      origin: host.origin,
+      segments: template.split("/"),
+      pattern: new RegExp(`^${String(template).split("{}").map(escape).join("[^/]+")}$`),
+    };
+  };
+  // Whether a route with `rival`'s segments wins over `own`'s for a path both
+  // match: at the first segment where one has a literal and the other a
+  // parameter, the literal wins, as the services' routers rank them.
+  const outranks = (rival, own) => {
+    for (let i = 0; i < own.length; i++) {
+      if (rival[i] === own[i]) continue;
+      if (own[i] === "{}") return true;
+      if (rival[i] === "{}") return false;
+    }
+    return false;
+  };
   const allowed = language === "ocaml" && Array.isArray(allowedOperations)
-    ? allowedOperations.map(call => {
-      const host = new URL(context.hosts[call.service] ?? "http://invalid.invalid");
-      const base = host.pathname.replace(/\/$/, "");
-      const route = String(call.route).split("{}").map(part => part.replace(/[.*+?^$()|[\]\\{}]/g, "\\$&")).join("[^/]+");
-      return {...call, origin: host.origin, pattern: new RegExp(`^${base.replace(/[.*+?^$()|[\]\\{}]/g, "\\$&")}${route}$`)};
-    })
+    ? allowedOperations.map(call => ({
+      ...call,
+      ...target(call.service, String(call.route)),
+      rivals: (call.rivals ?? []).map(rival => target(rival.service, String(rival.route))),
+    }))
     : null;
   // Checks the request exactly as it will be sent.
   const admitted = (operation, request) => {
@@ -200,7 +223,10 @@ try {
     const method = request.method.toUpperCase();
     return allowed.some(call =>
       call.service === operation.service && call.operationId === operation.operationId &&
-      call.method === method && call.origin === url.origin && call.pattern.test(url.pathname));
+      call.method === method && call.origin === url.origin && call.pattern.test(url.pathname) &&
+      !call.rivals.some(rival =>
+        rival.origin === url.origin && rival.pattern.test(url.pathname) &&
+        outranks(rival.segments, call.segments)));
   };
   // A dry run answers each write with an empty result, so it shows what the
   // program would do. Operations missing from the catalog count as writes.

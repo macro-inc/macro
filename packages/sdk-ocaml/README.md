@@ -371,7 +371,10 @@ How it finds operations:
   service and operationId each one sends (the OCaml name can differ from the
   operationId), and its method and route (its path with `{}` for each
   parameter segment): two values can share an operationId on different
-  routes, so code mode's fetch backstop matches the route too.
+  routes, so code mode's fetch backstop matches the route too. Each found
+  operation also lists its `rivals`: other routes with its method that a
+  request on its route could match (a parameter equal to a sibling's literal
+  segment), which the backstop refuses when the rival is more specific.
 - Every value the program names is identified by the uid of its
   declaration, so `open`, `let open`, `M.(...)`, module aliases and a
   toplevel `include` all resolve to the SDK value. Partial application,

@@ -637,6 +637,8 @@ pub(crate) fn analysis(stdout: &[u8]) -> Option<Analysis> {
         operation: String,
         method: String,
         route: String,
+        #[serde(default)]
+        rivals: Vec<SdkRoute>,
     }
     #[derive(serde::Deserialize)]
     struct Reason {
@@ -659,6 +661,7 @@ pub(crate) fn analysis(stdout: &[u8]) -> Option<Analysis> {
                     },
                     method: found.method,
                     route: found.route,
+                    rivals: found.rivals,
                 })
                 .collect(),
         ),

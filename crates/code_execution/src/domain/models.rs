@@ -369,6 +369,21 @@ pub struct SdkCall {
     /// The path below the service's host, `{}` for each parameter segment,
     /// such as `/documents/{}/markdown`.
     pub route: String,
+    /// Other operations' routes with this method that a request on `route`
+    /// could also match (`/documents/system_skills` for `/documents/{}`).
+    /// The backstop refuses a request that a more specific one of them
+    /// matches, since the server would route it there.
+    #[serde(default)]
+    pub rivals: Vec<SdkRoute>,
+}
+
+/// A route of a service, `{}` for each parameter segment.
+#[derive(Debug, Clone, PartialEq, Eq, PartialOrd, Ord, Hash, Serialize, Deserialize)]
+pub struct SdkRoute {
+    /// The service's spec name.
+    pub service: String,
+    /// The path below the service's host.
+    pub route: String,
 }
 
 /// Where a program reaches SDK operations the analysis cannot see.
