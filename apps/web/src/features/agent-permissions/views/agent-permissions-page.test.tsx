@@ -81,6 +81,16 @@ beforeEach(() => {
 afterEach(() => vi.clearAllMocks());
 
 describe('AgentPermissionsPage', () => {
+  it('says the settings cover OCaml programs only, not JavaScript ones', async () => {
+    renderPage();
+    expect(
+      await screen.findByText('Applies to OCaml programs only, for now.')
+    ).toBeTruthy();
+    expect(
+      screen.getByText(/Its JavaScript programs, other tools and your connected apps work as before\./)
+    ).toBeTruthy();
+  });
+
   it('saves a group action', async () => {
     renderPage();
     await openGroup('Email');
