@@ -268,9 +268,10 @@ test-functional *ARGS:
 # The bundle the email browser suite serves (tests/email-e2e): every service on
 # the page's own origin, where the suite's front proxies to the email stack.
 # Suggestions are off: they are on in a development build only, and replace
-# the suggested actions of Home that the suite covers.
+# the suggested actions of Home that the suite covers. Navigation unread numbers
+# are on, so full-stack-unread-counts.spec.ts can check them against the views.
 build-email-e2e: build-wasm
-    MODE=development NODE_ENV=production VITE_LOCAL_SERVERS=ALL VITE_LOCAL_BACKEND_ORIGIN=same-origin VITE_LOCAL_ONLY=true VITE_ENABLE_GRAPHQL_SOUP=true VITE_ENABLE_INBOX_RESYNC=true VITE_ENABLE_SUGGESTIONS=false VITE_ENABLE_BROWSER_OTEL=false NODE_OPTIONS="{{node_heap}}" bun run --bun build
+    MODE=development NODE_ENV=production VITE_LOCAL_SERVERS=ALL VITE_LOCAL_BACKEND_ORIGIN=same-origin VITE_LOCAL_ONLY=true VITE_ENABLE_GRAPHQL_SOUP=true VITE_ENABLE_INBOX_RESYNC=true VITE_ENABLE_NAVIGATION_UNREAD_COUNTS=true VITE_ENABLE_SUGGESTIONS=false VITE_ENABLE_BROWSER_OTEL=false NODE_OPTIONS="{{node_heap}}" bun run --bun build
 
 # The built app in Chromium against the email stack; the root
 # `just email-e2e-browser` builds what this needs. Same LD_LIBRARY_PATH caveat

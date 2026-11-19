@@ -356,6 +356,15 @@ tools — hexagonal, heavily feature-gated.
   then scan an inbox's history for every per-thread history lookup. Keep the
   `OFFSET 0` fences: without them the planner joins and sorts the whole inbox
   or walks the whole history.
+- The Important tab's Unread facet (the inbox with `Importance(true)` and
+  `Read(false)`: Mail's Unread filter and the navigation's Mail number) walks
+  each inbox in `idx_email_threads_inbox_signal_unread`, which holds only the
+  unread Important threads the Inbox lists, in the candidate order. Keep the
+  candidate stage's Inbox filter, `is_signal` and `is_read` tests and its sort
+  expression matching that index's predicate and key, or each page reads the
+  whole inbox or tests every entry
+  (`unread_important_page_reads_only_unread_important_threads` and
+  `unread_important_continuation_starts_at_its_cursor` read the plans).
 - Spam and Trash seed candidates from indexed provider labels/folder state plus pending positive moves, then recheck canonical mailbox facts before pagination. Order by the latest matching message date; metadata touches and unrelated replies must not move folder rows. Only Trash relaxes the default trash exclusion.
 - A thread read by id (`emailThread`, `soupUpdates` hydration, mutation replies)
   renders as All Mail shows it, else as its Spam or Trash row

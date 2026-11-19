@@ -19,17 +19,21 @@ import {
 } from '@service-storage/graphql-soup';
 import { createMemo } from 'solid-js';
 import { usePresenceUnread } from './use-presence-unread';
+import { createChannelsUnread, createMailUnread } from './view-unread';
 
 /** What a navigation section shows about unread notifications. */
 export type NavigationUnread = {
   /** Whether the section holds anything unread: its dot. */
   has: (id: string) => boolean;
   /**
-   * How many unread notifications the section holds: the number beside its
-   * dot. Undefined for a section that shows no number.
+   * How many unread items the section's own view shows: the number beside
+   * its dot. Undefined for a section that shows no number.
    */
   count: (id: string) => number | undefined;
 };
+
+/** Whether sections show their unread numbers beside their dots. */
+const showsNumbers = () => isFeatureEnabled(enableNavigationUnreadCounts);
 
 /** Where the navigation shows unread state. */
 export type NavigationUnreadOptions = {
@@ -42,49 +46,53 @@ export type NavigationUnreadOptions = {
 };
 
 /**
- * The notifications inbox rows each section counts; `undefined` is every
- * kind.
- */
-const COUNTED_SECTIONS: Record<string, { rowTypes?: readonly InboxRowType[] }> =
-  {
-    home: {},
-    notifications: {},
-    channels: { rowTypes: CHANNEL_ROW_TYPES },
-    mail: { rowTypes: MAIL_ROW_TYPES },
-  };
-
-/**
- * Unread rows of the notifications inbox by section, pushed by the server.
- * A dot and its number always agree, and both match what the Notifications
- * view lists as unread.
+ * Each section's unread items. Notifications counts the unread rows of the
+ * notifications inbox, pushed by the server. While numbers show, Mail counts
+ * its Important tab's unread threads and Channels its conversations with an
+ * unread dot, by their views' own queries. Those queries run only while
+ * numbers show; without numbers the two sections' dots come from their inbox
+ * rows. A dot and its number always agree.
  */
 function useCountedUnread(options: NavigationUnreadOptions): NavigationUnread {
   const userId = useUserId();
   const passwordsFlag = useFeatureFlag(enablePasswords);
-  const counts = createInboxUnread({
+  const inbox = createInboxUnread({
     client: getGraphqlSoupClient,
     enabled: () => Boolean(userId()),
     onReconnected: subscribeGraphqlSoupReconnected,
   });
+  const views = createMemo(() =>
+    showsNumbers()
+      ? {
+          mail: createMailUnread({ exact: true }),
+          channels: createChannelsUnread(),
+        }
+      : undefined
+  );
 
-  const rows = (id: string): number | undefined => {
-    const section = COUNTED_SECTIONS[id];
-    if (!section) return undefined;
-    return unreadRows(counts() ?? [], {
-      rowTypes: section.rowTypes,
+  const inboxRows = (rowTypes?: readonly InboxRowType[]) =>
+    unreadRows(inbox() ?? [], {
+      rowTypes,
       passwords: !passwordsFlag().loading && passwordsFlag().enabled,
     });
+  const unread = (id: string): number | undefined => {
+    if (id === 'home' || id === 'notifications') return inboxRows();
+    const counted = views();
+    if (id === 'mail') return counted?.mail() ?? inboxRows(MAIL_ROW_TYPES);
+    if (id === 'channels')
+      return counted?.channels() ?? inboxRows(CHANNEL_ROW_TYPES);
+    return undefined;
   };
 
   return {
-    has: (id) => (rows(id) ?? 0) > 0,
+    has: (id) => (unread(id) ?? 0) > 0,
     count: (id) =>
-      id === 'home' && !options.homeIsNotifications ? undefined : rows(id),
+      id === 'home' && !options.homeIsNotifications ? undefined : unread(id),
   };
 }
 
 /**
- * Unified notifications use unread rows for dots and opt-in numbers.
+ * Unified notifications use counted sections for dots and opt-in numbers.
  * Legacy navigation uses presence dots.
  */
 export function useNavigationUnread(
@@ -96,7 +104,7 @@ export function useNavigationUnread(
     return unified().enabled ? 'counted' : 'presence';
   });
   // Each source lives only while its mode holds, so a viewer never runs
-  // both the count stream and the presence queries.
+  // both the inbox count stream and Home's presence query.
   const source = createMemo((): NavigationUnread | undefined => {
     if (mode() === 'undecided') return undefined;
     if (mode() === 'counted') return useCountedUnread(options);
@@ -106,9 +114,6 @@ export function useNavigationUnread(
 
   return {
     has: (id) => source()?.has(id) ?? false,
-    count: (id) =>
-      isFeatureEnabled(enableNavigationUnreadCounts)
-        ? source()?.count(id)
-        : undefined,
+    count: (id) => (showsNumbers() ? source()?.count(id) : undefined),
   };
 }

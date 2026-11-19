@@ -688,7 +688,8 @@ Noise does not light either dot. These are presence indicators, not counts; they
 do not fetch additional pages to find every unread item. These dots and the
 unread checks described below are the rail's with `enable-unified-notifications`
 off; with it on, the buttons follow the Notifications inbox's unread rows
-instead (see [Notifications](notifications.md)).
+instead, or Mail's and Chat's own views while unread numbers show (see
+[Notifications](notifications.md)).
 Home uses `HomeUnreadPresence` over its existing 100-item Signal/unread candidate
 page, with one state-only notification witness per entity (plus one reminder
 witness for email). It must not fetch full notification history just to draw the
@@ -707,7 +708,8 @@ after a failed refresh. Verify both unreachable services while the OS reports
 online and a paused offline transport, then reconnect without remounting chrome.
 Opening a view alone does not clear its dot — reading or completing the represented
 items does. The button's
-accessible description is `Unread items` while its dot is active.
+accessible description is `Unread items` while its dot is active without a
+number, and the count while a number shows.
 The Home dot stops checking rows at the first eligible unread item, using the
 same Signal membership, channel/thread scoping, and local read/done overrides as
 the list. Check that reading that item keeps the dot lit if another loaded row
