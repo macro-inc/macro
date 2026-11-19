@@ -1,10 +1,14 @@
-//! [`Disks`] as sparse files, cloned copy-on-write: the rootfs from the
-//! golden's, `/home` from an empty per-size template. On ZFS (the default)
-//! each computer and golden is its own dataset and clones are block clones
-//! across datasets (~45 ms); on XFS they are reflinks (~3 ms).
+//! [`Disks`] as sparse files. On ZFS (the default) each computer and golden
+//! is its own dataset: a computer is a `zfs clone` of its golden's snapshot,
+//! which holds the rootfs and an empty `/home` of every sold size, so a
+//! create copies no blocks (no block cloning). On XFS the rootfs is a
+//! reflink of the golden's and `/home` a reflink of an empty per-size
+//! template (~3 ms).
 
+use std::collections::HashSet;
 use std::io::ErrorKind;
 use std::path::{Path, PathBuf};
+use std::sync::{Arc, PoisonError};
 
 use firecracker_host_api::{ComputerId, ComputerResources, DiskBackend, GoldenKey};
 
@@ -66,9 +70,15 @@ pub struct FileDisks {
     containers: Containers,
     golden_root_disk_gib: u32,
     /// Serializes refilling the spares.
-    spares: std::sync::Arc<tokio::sync::Mutex<()>>,
-    /// Serializes making `/home` templates.
-    templates: std::sync::Arc<tokio::sync::Mutex<()>>,
+    spares: Arc<tokio::sync::Mutex<()>>,
+    /// Serializes making the empty `/home`s (templates, goldens' files and
+    /// their snapshots).
+    templates: Arc<tokio::sync::Mutex<()>>,
+    /// The sold `/home` sizes, from the last [`Disks::prepare_home_templates`]:
+    /// a golden sealed later gets them too.
+    home_sizes_gib: Arc<std::sync::Mutex<Vec<u32>>>,
+    /// Goldens whose latest snapshot holds an empty `/home` of the size (ZFS).
+    golden_homes: Arc<std::sync::Mutex<HashSet<(GoldenKey, u32)>>>,
 }
 
 impl FileDisks {
@@ -79,16 +89,18 @@ impl FileDisks {
             layout,
             containers,
             golden_root_disk_gib,
-            spares: std::sync::Arc::new(tokio::sync::Mutex::new(())),
-            templates: std::sync::Arc::new(tokio::sync::Mutex::new(())),
+            spares: Arc::default(),
+            templates: Arc::default(),
+            home_sizes_gib: Arc::default(),
+            golden_homes: Arc::default(),
         }
     }
 
-    /// An empty ext4 (label `home`) of `gib`, made once per size: a new
-    /// computer's `/home` is a reflink of it, so the guest mounts it as is
-    /// (no mkfs or resize in the guest at restore).
+    /// An empty ext4 (label `home`) of `gib`, made once per size (XFS): a
+    /// new computer's `/home` is a reflink of it, so the guest mounts it as
+    /// is (no mkfs or resize in the guest at restore).
     fn home_template_path(&self, gib: u32) -> PathBuf {
-        self.layout.templates().join(format!("home-{gib}g.ext4"))
+        self.layout.templates().join(home_file_name(gib))
     }
 
     async fn home_template(&self, gib: u32) -> Result<PathBuf, DiskError> {
@@ -99,31 +111,77 @@ impl FileDisks {
             return Ok(template);
         }
         std::fs::create_dir_all(&directory).map_err(io("create", &directory))?;
-        let staged = template.with_extension("ext4.new");
-        let _ = std::fs::remove_file(&staged);
-        grow(&staged, gib)?;
-        let output = tokio::process::Command::new("mkfs.ext4")
-            .args([
-                "-q",
-                "-F",
-                "-L",
-                "home",
-                "-E",
-                "lazy_itable_init=1,lazy_journal_init=1",
-            ])
-            .arg(&staged)
-            .output()
-            .await
-            .map_err(io("mkfs.ext4", &staged))?;
-        if !output.status.success() {
-            return Err(DiskError::Io {
-                action: "mkfs.ext4",
-                path: staged,
-                source: std::io::Error::other(String::from_utf8_lossy(&output.stderr).into_owned()),
-            });
-        }
-        std::fs::rename(&staged, &template).map_err(io("replace", &template))?;
+        format_home(&template, gib).await?;
         Ok(template)
+    }
+
+    /// Give the golden's disk set an empty `/home` of each of `sizes_gib`
+    /// it lacks; true when it got one. The caller holds `templates`.
+    async fn add_golden_homes(
+        &self,
+        key: &GoldenKey,
+        sizes_gib: &[u32],
+    ) -> Result<bool, DiskError> {
+        let directory = self.layout.golden(key);
+        let mut added = false;
+        for &gib in sizes_gib {
+            let home = directory.join(home_file_name(gib));
+            if !home.is_file() {
+                format_home(&home, gib).await?;
+                added = true;
+            }
+        }
+        Ok(added)
+    }
+
+    /// Note that `snapshot` of `key` holds these sizes.
+    fn record_golden_homes(&self, key: &GoldenKey, sizes_gib: &[u32]) {
+        let mut homes = self
+            .golden_homes
+            .lock()
+            .unwrap_or_else(PoisonError::into_inner);
+        for &gib in sizes_gib {
+            homes.insert((key.clone(), gib));
+        }
+    }
+
+    /// Make the latest snapshot of `key`'s golden hold an empty `/home` of
+    /// every size: add the missing files, then snapshot again. Computers
+    /// cloned from an earlier snapshot keep it.
+    async fn snapshot_golden_homes(
+        &self,
+        datasets: &Datasets,
+        key: &GoldenKey,
+        sizes_gib: &[u32],
+    ) -> Result<(), DiskError> {
+        // A rebuild drops the marker first (under `templates`, like this):
+        // never snapshot a golden whose files are being replaced.
+        if !self.layout.golden(key).join(GOLDEN_READY_MARKER).is_file() {
+            return Ok(());
+        }
+        let relative = golden_relative(key);
+        let Some(snapshot) = datasets.latest_snapshot(&relative).await? else {
+            // Not sealed yet: its seal adds them.
+            return Ok(());
+        };
+        let short = snapshot.rsplit('@').next().unwrap_or(&snapshot);
+        let in_snapshot = self.layout.golden(key).join(".zfs/snapshot").join(short);
+        let missing: Vec<u32> = sizes_gib
+            .iter()
+            .copied()
+            .filter(|&gib| !in_snapshot.join(home_file_name(gib)).is_file())
+            .collect();
+        // Snapshotted even when the files were already there: a crash
+        // between writing them and the snapshot.
+        if !missing.is_empty() {
+            self.add_golden_homes(key, &missing).await?;
+            datasets
+                .snapshot(&relative, &snapshot_name("homes"))
+                .await?;
+            tracing::info!(golden = %key.image, vcpus = key.vcpus, memory_mib = key.memory_mib, sizes_gib = ?missing, "golden snapshot now holds these /home sizes");
+        }
+        self.record_golden_homes(key, sizes_gib);
+        Ok(())
     }
 
     /// The golden's snapshot files are not a computer's.
@@ -175,12 +233,9 @@ impl FileDisks {
             .await?;
         let directory = self.layout.spares().join(&id);
         self.remove_golden_files(&directory);
-        let template = self.home_template(gib).await?;
-        let staged = directory.join("home.ext4.new");
-        clone_file(&template, &staged).map_err(io("clone", &template))?;
-        new_filesystem_uuid(&staged).await?;
-        let home = directory.join("home.ext4");
-        std::fs::rename(&staged, &home).map_err(io("replace", &home))?;
+        if !keep_golden_home(&directory, gib).await? {
+            format_home(&directory.join("home.ext4"), gib).await?;
+        }
         datasets
             .tag_spare(&relative, &spare_tag(snapshot, gib))
             .await?;
@@ -215,9 +270,9 @@ impl FileDisks {
                 // A clone of the golden's snapshot: the rootfs is the
                 // golden's file in place, and a send from that snapshot
                 // carries only the computer's own blocks.
-                let golden =
-                    Path::new("goldens").join(Layout::golden_relative(&record.golden_key()));
-                let snapshot = datasets.latest_snapshot(&golden.to_string_lossy()).await?;
+                let snapshot = datasets
+                    .latest_snapshot(&golden_relative(&record.golden_key()))
+                    .await?;
                 match snapshot {
                     Some(snapshot) => {
                         let cloned = !self.layout.computer(record.computer_id).exists();
@@ -237,7 +292,10 @@ impl FileDisks {
                             .clone_from(&snapshot, &relative, COMPUTER_RECORDSIZE, quota_bytes)
                             .await?;
                         if cloned {
-                            self.remove_golden_files(&self.layout.computer(record.computer_id));
+                            let directory = self.layout.computer(record.computer_id);
+                            self.remove_golden_files(&directory);
+                            // Without one of its size, `prepare` formats one.
+                            keep_golden_home(&directory, record.resources.home_disk_gib).await?;
                         }
                         Ok(())
                     }
@@ -249,9 +307,9 @@ impl FileDisks {
         }
     }
 
-    fn clone_rootfs(&self, record: &ComputerRecord) -> Result<(), DiskError> {
+    async fn clone_rootfs(&self, record: &ComputerRecord) -> Result<(), DiskError> {
         let source = self.layout.golden(&record.golden_key()).join("rootfs.ext4");
-        reflink_file(&source, &self.rootfs(record.computer_id))
+        reflink_file(&source, &self.rootfs(record.computer_id)).await
     }
 }
 
@@ -279,6 +337,111 @@ fn spare_tag(snapshot: &str, gib: u32) -> String {
     format!("{snapshot}|home-{gib}g")
 }
 
+/// Written into a golden's directory once it is published (`ready.json`).
+const GOLDEN_READY_MARKER: &str = "ready.json";
+
+/// The file of an empty `/home` of `gib`, in a template directory or a
+/// golden's disk set.
+fn home_file_name(gib: u32) -> String {
+    format!("home-{gib}g.ext4")
+}
+
+/// The size of a [`home_file_name`].
+fn home_file_size(name: &str) -> Option<u32> {
+    name.strip_prefix("home-")?
+        .strip_suffix("g.ext4")?
+        .parse()
+        .ok()
+}
+
+/// A golden's dataset, relative to the parent.
+fn golden_relative(key: &GoldenKey) -> String {
+    Path::new("goldens")
+        .join(Layout::golden_relative(key))
+        .to_string_lossy()
+        .into_owned()
+}
+
+/// `<prefix>-<UTC time to the millisecond>`: a seal and a `/home` top-up in
+/// one second still get two names.
+fn snapshot_name(prefix: &str) -> String {
+    format!("{prefix}-{}", chrono::Utc::now().format("%Y%m%dT%H%M%S%3f"))
+}
+
+/// Make an empty ext4 (label `home`) of `gib` at `target`, through a staged
+/// file. Lazy init: it is sparse, a few MiB whatever its size.
+async fn format_home(target: &Path, gib: u32) -> Result<(), DiskError> {
+    let staged = target.with_extension("ext4.new");
+    let _ = std::fs::remove_file(&staged);
+    grow(&staged, gib)?;
+    let output = tokio::process::Command::new("mkfs.ext4")
+        .args([
+            "-q",
+            "-F",
+            "-L",
+            "home",
+            "-E",
+            "lazy_itable_init=1,lazy_journal_init=1",
+        ])
+        .arg(&staged)
+        .output()
+        .await
+        .map_err(io("mkfs.ext4", &staged))?;
+    if !output.status.success() {
+        return Err(DiskError::Io {
+            action: "mkfs.ext4",
+            path: staged,
+            source: std::io::Error::other(String::from_utf8_lossy(&output.stderr).into_owned()),
+        });
+    }
+    std::fs::rename(&staged, target).map_err(io("replace", target))
+}
+
+/// In a fresh clone of a golden at `directory`, keep the empty `/home` of
+/// `gib` as `home.ext4`, with a filesystem UUID of its own, and delete the
+/// other sizes'; false when the golden has none of `gib`.
+async fn keep_golden_home(directory: &Path, gib: u32) -> Result<bool, DiskError> {
+    let mut names = Vec::new();
+    for entry in std::fs::read_dir(directory).map_err(io("list", directory))? {
+        let entry = entry.map_err(io("list", directory))?;
+        if let Ok(name) = entry.file_name().into_string() {
+            names.push(name);
+        }
+    }
+    let (kept, dropped) = split_golden_homes(&names, gib);
+    for name in dropped {
+        let path = directory.join(name);
+        std::fs::remove_file(&path).map_err(io("remove", &path))?;
+    }
+    let kept = kept.map(|name| directory.join(name));
+    let Some(source) = kept else {
+        return Ok(false);
+    };
+    // Two homes with one UUID collide wherever both meet a kernel or tool;
+    // published as `home.ext4` only once it has its own.
+    let staged = directory.join("home.ext4.new");
+    std::fs::rename(&source, &staged).map_err(io("rename", &source))?;
+    new_filesystem_uuid(&staged).await?;
+    let home = directory.join("home.ext4");
+    std::fs::rename(&staged, &home).map_err(io("replace", &home))?;
+    Ok(true)
+}
+
+/// Of the files in a golden's clone, the empty `/home` of `gib` to keep and
+/// the other sizes' to delete; anything else is no `/home`.
+fn split_golden_homes(names: &[String], gib: u32) -> (Option<&str>, Vec<&str>) {
+    let mut kept = None;
+    let mut dropped = Vec::new();
+    for name in names {
+        match home_file_size(name) {
+            Some(size) if size == gib => kept = Some(name.as_str()),
+            Some(_) => dropped.push(name.as_str()),
+            None => {}
+        }
+    }
+    (kept, dropped)
+}
+
 /// Give the ext4 in `path` a new random UUID.
 async fn new_filesystem_uuid(path: &Path) -> Result<(), DiskError> {
     let output = tokio::process::Command::new("tune2fs")
@@ -298,9 +461,11 @@ async fn new_filesystem_uuid(path: &Path) -> Result<(), DiskError> {
 }
 
 /// Clone `source` to a staged file, then put it at `target`.
-fn reflink_file(source: &Path, target: &Path) -> Result<(), DiskError> {
+async fn reflink_file(source: &Path, target: &Path) -> Result<(), DiskError> {
     let staged = target.with_extension("ext4.new");
-    clone_file(source, &staged).map_err(io("clone", source))?;
+    clone_file(source, &staged)
+        .await
+        .map_err(io("clone", source))?;
     std::fs::rename(&staged, target).map_err(io("replace", target))
 }
 
@@ -327,7 +492,7 @@ impl Disks for FileDisks {
     async fn prepare(&self, record: &ComputerRecord) -> Result<ComputerDisks, DiskError> {
         self.ensure_computer(record).await?;
         if !self.rootfs(record.computer_id).exists() {
-            self.clone_rootfs(record)?;
+            self.clone_rootfs(record).await?;
         }
         grow(
             &self.rootfs(record.computer_id),
@@ -335,13 +500,29 @@ impl Disks for FileDisks {
         )?;
         let home = self.home(record.computer_id);
         if !home.exists() {
-            let template = self.home_template(record.resources.home_disk_gib).await?;
-            let staged = home.with_extension("ext4.new");
-            clone_file(&template, &staged).map_err(io("clone", &template))?;
-            // A clone carries the template's filesystem UUID; two homes with
-            // one UUID collide wherever both meet a kernel or tool.
-            new_filesystem_uuid(&staged).await?;
-            std::fs::rename(&staged, &home).map_err(io("replace", &home))?;
+            match &self.containers {
+                Containers::Xfs => {
+                    let template = self.home_template(record.resources.home_disk_gib).await?;
+                    let staged = home.with_extension("ext4.new");
+                    clone_file(&template, &staged)
+                        .await
+                        .map_err(io("clone", &template))?;
+                    // A clone carries the template's filesystem UUID; two
+                    // homes with one UUID collide wherever both meet a
+                    // kernel or tool.
+                    new_filesystem_uuid(&staged).await?;
+                    std::fs::rename(&staged, &home).map_err(io("replace", &home))?;
+                }
+                // The clone's own home files, if a crash cut its first
+                // prepare short; else the golden had none of this size (not
+                // sold when its snapshot was taken): a fresh one.
+                Containers::Zfs(_) => {
+                    let directory = self.layout.computer(record.computer_id);
+                    if !keep_golden_home(&directory, record.resources.home_disk_gib).await? {
+                        format_home(&home, record.resources.home_disk_gib).await?;
+                    }
+                }
+            }
         }
         grow(&home, record.resources.home_disk_gib)?;
         Ok(ComputerDisks {
@@ -358,19 +539,25 @@ impl Disks for FileDisks {
                 std::fs::create_dir_all(&directory).map_err(io("create", &directory))?;
             }
             Containers::Zfs(datasets) => {
-                let relative = Path::new("goldens").join(Layout::golden_relative(key));
                 datasets
-                    .ensure(&relative.to_string_lossy(), Some(GOLDEN_RECORDSIZE), None)
+                    .ensure(&golden_relative(key), Some(GOLDEN_RECORDSIZE), None)
                     .await?;
             }
         }
         let source = self.layout.image(&key.image).join("rootfs.ext4");
         let target = directory.join("rootfs.ext4");
-        // Replaces a sealed (read-only) one from an earlier build.
-        match std::fs::remove_file(&target) {
-            Ok(()) => {}
-            Err(error) if error.kind() == ErrorKind::NotFound => {}
-            Err(error) => return Err(io("remove", &target)(error)),
+        {
+            // Unmarked first, under `templates`: a `/home` top-up then
+            // either finished its snapshot of the old build or skips this one.
+            let _turn = self.templates.lock().await;
+            for path in [directory.join(GOLDEN_READY_MARKER), target.clone()] {
+                // The rootfs: replaces a sealed (read-only) one from an earlier build.
+                match std::fs::remove_file(&path) {
+                    Ok(()) => {}
+                    Err(error) if error.kind() == ErrorKind::NotFound => {}
+                    Err(error) => return Err(io("remove", &path)(error)),
+                }
+            }
         }
         tokio::fs::copy(&source, &target)
             .await
@@ -387,13 +574,21 @@ impl Disks for FileDisks {
         std::fs::set_permissions(&rootfs, std::fs::Permissions::from_mode(0o444))
             .map_err(io("chmod", &rootfs))?;
         if let Containers::Zfs(datasets) = &self.containers {
+            // Sizes read under the lock: a top-up that changes them runs
+            // wholly before or after.
+            let _turn = self.templates.lock().await;
+            let sizes_gib = self
+                .home_sizes_gib
+                .lock()
+                .unwrap_or_else(PoisonError::into_inner)
+                .clone();
+            self.add_golden_homes(key, &sizes_gib).await?;
             // Named per build: a rebuild never touches the snapshot that
             // existing computers are clones of.
-            let relative = Path::new("goldens").join(Layout::golden_relative(key));
-            let name = format!("built-{}", chrono::Utc::now().format("%Y%m%dT%H%M%S"));
             datasets
-                .snapshot(&relative.to_string_lossy(), &name)
+                .snapshot(&golden_relative(key), &snapshot_name("built"))
                 .await?;
+            self.record_golden_homes(key, &sizes_gib);
         }
         Ok(())
     }
@@ -406,9 +601,38 @@ impl Disks for FileDisks {
     }
 
     #[tracing::instrument(name = "firecracker_host.home_templates", skip(self), err)]
-    async fn prepare_home_templates(&self, sizes_gib: &[u32]) -> Result<(), DiskError> {
-        for &gib in sizes_gib {
-            self.home_template(gib).await?;
+    async fn prepare_home_templates(
+        &self,
+        goldens: &[GoldenKey],
+        sizes_gib: &[u32],
+    ) -> Result<(), DiskError> {
+        match &self.containers {
+            Containers::Xfs => {
+                for &gib in sizes_gib {
+                    self.home_template(gib).await?;
+                }
+            }
+            Containers::Zfs(datasets) => {
+                // Stored under `templates`, like the seal's read: a seal
+                // runs wholly before (and this pass then tops it up) or after.
+                let _turn = self.templates.lock().await;
+                sizes_gib.clone_into(
+                    &mut self
+                        .home_sizes_gib
+                        .lock()
+                        .unwrap_or_else(PoisonError::into_inner),
+                );
+                for key in goldens {
+                    self.snapshot_golden_homes(datasets, key, sizes_gib).await?;
+                }
+                // Templates of an earlier agent: creates no longer clone them.
+                let templates = self.layout.templates();
+                match tokio::fs::remove_dir_all(&templates).await {
+                    Ok(()) => {}
+                    Err(error) if error.kind() == ErrorKind::NotFound => {}
+                    Err(error) => return Err(io("remove", &templates)(error)),
+                }
+            }
         }
         Ok(())
     }
@@ -425,8 +649,7 @@ impl Disks for FileDisks {
         let _turn = self.spares.lock().await;
         let mut wanted = Vec::new();
         for key in goldens {
-            let golden = Path::new("goldens").join(Layout::golden_relative(key));
-            if let Some(snapshot) = datasets.latest_snapshot(&golden.to_string_lossy()).await? {
+            if let Some(snapshot) = datasets.latest_snapshot(&golden_relative(key)).await? {
                 for &gib in home_sizes_gib {
                     wanted.push((snapshot.clone(), gib));
                 }
@@ -460,10 +683,23 @@ impl Disks for FileDisks {
         Ok(())
     }
 
-    fn home_templates_ready(&self, sizes_gib: &[u32]) -> bool {
-        sizes_gib
-            .iter()
-            .all(|&gib| self.home_template_path(gib).is_file())
+    fn home_templates_ready(&self, goldens: &[GoldenKey], sizes_gib: &[u32]) -> bool {
+        match &self.containers {
+            Containers::Xfs => sizes_gib
+                .iter()
+                .all(|&gib| self.home_template_path(gib).is_file()),
+            Containers::Zfs(_) => {
+                let homes = self
+                    .golden_homes
+                    .lock()
+                    .unwrap_or_else(PoisonError::into_inner);
+                goldens.iter().all(|key| {
+                    sizes_gib
+                        .iter()
+                        .all(|&gib| homes.contains(&(key.clone(), gib)))
+                })
+            }
+        }
     }
 
     fn golden_rootfs_present(&self, key: &GoldenKey) -> bool {

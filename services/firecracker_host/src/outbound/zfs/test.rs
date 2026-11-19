@@ -1,4 +1,4 @@
-use super::{clone_arguments, create_arguments};
+use super::{clone_arguments, create_arguments, version_at_least};
 
 #[test]
 fn a_create_sets_only_the_properties_given() {
@@ -39,4 +39,17 @@ fn a_clone_takes_the_snapshot_then_the_name() {
             "tank/fc/computers/c",
         ]
     );
+}
+
+#[test]
+fn the_module_version_floor_compares_releases_numerically() {
+    assert!(version_at_least("2.4.1-1\n", "2.4.1"));
+    assert!(version_at_least("2.4.1-1ubuntu1", "2.4.1"));
+    assert!(version_at_least("2.10.0", "2.4.1"));
+    assert!(version_at_least("3.0.0", "2.4.1"));
+    assert!(!version_at_least("2.4.0", "2.4.1"));
+    assert!(!version_at_least("2.2.2-0ubuntu9", "2.4.1"));
+    assert!(!version_at_least("2.4", "2.4.1"));
+    assert!(!version_at_least("", "2.4.1"));
+    assert!(!version_at_least("zfs-kmod", "2.4.1"));
 }

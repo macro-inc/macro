@@ -10,16 +10,24 @@ each time ([Rules](../../CLAUDE.md)).
 ## What every host needs
 
 - **KVM**: bare metal, or a VM shape with nested virtualization.
+- **zram as the only swap**: the module turns on `zramSwap` (zstd, `zramPercent`
+  of RAM, 25 % by default) for the memory squeeze and asserts `swapDevices` is
+  empty; any other swap (or zram with a writeback device) fails the agent's
+  swap check and makes it forbid VMs swap altogether, so the host image must
+  not bring its own swap file or partition.
 - **One durable disk** holding the ZFS pool `tank`. Everything lives under
   `tank/firecracker` (lz4, ARC capped at 8 GiB): each golden is a dataset
-  (`rootfs.ext4`, the `/home` template) with a `memory` child (`mem`,
-  `vmstate`), snapshotted once built; each computer is a `zfs clone` of those
-  snapshots, so a move or backup sends only its own blocks (`zfs send -i`).
+  (`rootfs.ext4`, `mem`, `vmstate` and an empty `/home` of every sold size),
+  snapshotted once built and again when a size is added; each computer is a
+  `zfs clone` of the latest snapshot, so a move or backup sends only its own
+  blocks (`zfs send -i`).
   The module creates `tank/firecracker`, requires OpenZFS 2.4.1 or later with
   matching userland and kernel module, and refuses to start the agent unless
   `feature@block_cloning` is on and `zfs_bclone_enabled` and
-  `zfs_bclone_wait_dirty` are 1 (the agent still copies files inside the pool
-  with block cloning). The pool itself is the host's disko layout.
+  `zfs_bclone_wait_dirty` are 1; the agent checks the same and the module
+  version itself (hibernation and golden builds still move files with block
+  cloning; creates are dataset clones). The pool itself is the host's disko
+  layout.
 - **A path from the control plane to the agent port (8444)**, with mTLS pinned
   both ways. Production: a WireGuard tunnel, the module's `tunnel` option, so
   the agent listens only on the tunnel address. Dev only: the NIC address with
