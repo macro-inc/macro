@@ -74,9 +74,11 @@ What `PR CI` accepts:
   the runner disagree before attesting the check again. An audit leaves an
   `attestation audit` status on the commit, and every later run on that commit
   is an audit too: asking again does not get a failed audit past the runner.
-- `CI gate` reads the statuses again when the run ends. A job skipped on an
-  attestation that was withdrawn meanwhile fails the gate with `No longer
-  attested: <checks>`, so re-running failed jobs can't keep it skipped.
+- `CI gate` reads the statuses again when the run ends, because re-running
+  failed jobs keeps what `Start` decided. A run that relied on an attestation
+  withdrawn meanwhile fails with `No longer attested: <checks>`, and one that
+  another run has audited since fails with `An audit of this commit began
+  since`. Add the label again in both cases.
 
 To withdraw an attestation, post a `failure` status with the same context:
 `gh api repos/macro-inc/macro/statuses/<sha> -f state=failure -f context=attested/<check>`.

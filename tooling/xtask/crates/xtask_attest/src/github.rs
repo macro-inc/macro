@@ -15,6 +15,8 @@ const DESCRIPTION_LIMIT: usize = 140;
 /// push; how often to ask for it, and how long to wait in between.
 const MERGE_ATTEMPTS: u8 = 8;
 const MERGE_WAIT: Duration = Duration::from_secs(5);
+/// How many contexts GitHub lists per page of a commit's combined status.
+const STATUS_PAGE: usize = 100;
 
 /// The merge commit GitHub built for a pull request.
 pub struct PullMerge {
@@ -145,14 +147,23 @@ pub fn pull_request_merge(
 /// The state of the newest status of each context on a commit. Contexts are
 /// in lower case: GitHub treats two that differ only in case as one.
 pub fn newest_statuses(repository: &str, head: &str) -> Result<BTreeMap<String, String>, Report> {
-    let combined: CombinedStatus = api(&[&format!(
-        "repos/{repository}/commits/{head}/status?per_page=100"
-    )])?;
-    Ok(combined
-        .statuses
-        .into_iter()
-        .map(|status| (status.context.to_lowercase(), status.state))
-        .collect())
+    let mut newest = BTreeMap::new();
+    for page in 1.. {
+        let combined: CombinedStatus = api(&[&format!(
+            "repos/{repository}/commits/{head}/status?per_page={STATUS_PAGE}&page={page}"
+        )])?;
+        let last = combined.statuses.len() < STATUS_PAGE;
+        newest.extend(
+            combined
+                .statuses
+                .into_iter()
+                .map(|status| (status.context.to_lowercase(), status.state)),
+        );
+        if last {
+            break;
+        }
+    }
+    Ok(newest)
 }
 
 /// Post a commit status on `head`.

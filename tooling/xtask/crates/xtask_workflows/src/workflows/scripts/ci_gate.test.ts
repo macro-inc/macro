@@ -9,6 +9,7 @@ import {
   ciSourceChanges,
   CONFLICTS,
   labelBlocker,
+  newestJobs,
   STALE_MERGE,
   FORK_CHANGES_CI,
   forkOutcome,
@@ -415,22 +416,40 @@ describe('alreadyAudited', () => {
 describe('withdrawnAttestations', () => {
   const entries = ['cloud-storage/check@0123456789abcdef', 'conventions/ast-grep@-'];
 
-  test('names a skipped check whose attestation is gone or replaced', () => {
-    const withdrawn = withdrawnAttestations(
-      entries,
-      ['cloud-storage/check', 'conventions/ast-grep'],
-      ['cloud-storage/check@fedcba9876543210'],
-    );
+  test('names a check whose attestation is gone or replaced', () => {
+    const withdrawn = withdrawnAttestations(entries, ['cloud-storage/check@fedcba9876543210']);
 
     assert.deepEqual(withdrawn, ['cloud-storage/check', 'conventions/ast-grep']);
   });
 
-  test('leaves out a check that still holds, and one that ran here anyway', () => {
-    const withdrawn = withdrawnAttestations(entries, ['cloud-storage/check'], [
-      'cloud-storage/check@0123456789abcdef',
+  test('names nothing while every attestation Start accepted still holds', () => {
+    assert.deepEqual(withdrawnAttestations(entries, [...entries, 'web-app/test@-']), []);
+  });
+});
+
+describe('newestJobs', () => {
+  test('keeps each job as the newest attempt that ran it left it', () => {
+    const jobs = newestJobs([
+      { name: 'Web App / Test (1/6)', conclusion: 'failure', run_attempt: 1 },
+      { name: 'Cloud Storage / check', conclusion: 'skipped', run_attempt: 1 },
+      { name: 'CI gate', conclusion: 'failure', run_attempt: 1 },
+      { name: 'CI gate', conclusion: null, run_attempt: 2 },
     ]);
 
-    assert.deepEqual(withdrawn, []);
+    assert.deepEqual(jobs, [
+      { name: 'Web App / Test (1/6)', conclusion: 'failure', run_attempt: 1 },
+      { name: 'Cloud Storage / check', conclusion: 'skipped', run_attempt: 1 },
+      { name: 'CI gate', conclusion: null, run_attempt: 2 },
+    ]);
+  });
+
+  test('an audit still names its failure when only the gate runs again', () => {
+    const jobs = newestJobs([
+      { name: 'Web App / Test (2/6)', conclusion: 'failure', run_attempt: 1 },
+      { name: 'CI gate', conclusion: null, run_attempt: 2 },
+    ]);
+
+    assert.deepEqual(auditFailures(['web-app/test'], GATE_CHECKS, jobs), ['web-app/test']);
   });
 });
 

@@ -96,7 +96,7 @@ To read the state once, look at the `CI gate` row of `gh pr checks <pr>`:
 | pass, `Passed on <sha>` | Every check passed or was path-skipped | Done |
 | pass, `Passed on <sha>, <n> attested: <checks>` | The same, with those checks taken from attestations | Done |
 | fail, `Attested but failed here: <checks>. Failed: <jobs>` | An audit ran the attested checks on runners, and one failed | Fix the failure; find why your machine passed it before attesting that check again. Every later run on this commit is an audit too |
-| fail, `No longer attested: <checks>` | A job was skipped on an attestation that was withdrawn or replaced during the run | Add the label again |
+| fail, `No longer attested: <checks>` or `An audit of this commit began since` | The run skipped jobs on attestations that were withdrawn, replaced or put under audit before it ended | Add the label again |
 | fail, `Failed: <jobs>` | Those called workflows failed | Open the linked run, fix, push, run again |
 | fail, `The PR moved on ...` or `The merge commit did not include ...` | Labelled too soon after a push | Add the label again |
 | fail, `PR CI can't start: ...` | The PR conflicts with `main`, or was last pushed before `PR CI` existed | Merge `main` in, push, add the label again |

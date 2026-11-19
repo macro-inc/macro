@@ -335,11 +335,11 @@ fn gate() -> Job {
                     attestation::start_checks().expect("the attested checks render"),
                 ))
                 .add_env(("ATTESTED_PREFIX", attestation::STATUS_PREFIX))
+                .add_env(("AUDIT_CONTEXT", attestation::AUDIT_CONTEXT))
                 .add_env((
                     "GATE_CHECKS",
                     attestation::gate_checks().expect("the attested checks render"),
                 ))
-                .add_env(("RUN_ID", "${{ github.run_id }}"))
-                .add_env(("RUN_ATTEMPT", "${{ github.run_attempt }}")),
+                .add_env(("RUN_ID", "${{ github.run_id }}")),
         )
 }

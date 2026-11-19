@@ -32,8 +32,9 @@ use crate::github;
 mod test;
 
 /// Variables that point git at a repository other than the one in its
-/// working directory. A git hook exports them; left set, the checkout's
-/// forced restore would land in the developer's own clone.
+/// working directory, or at another account of its history. A git hook
+/// exports the first ones; left set, the checkout's forced restore would land
+/// in the developer's own clone.
 const GIT_LOCATION: &[&str] = &[
     "GIT_DIR",
     "GIT_WORK_TREE",
@@ -43,6 +44,10 @@ const GIT_LOCATION: &[&str] = &[
     "GIT_ALTERNATE_OBJECT_DIRECTORIES",
     "GIT_NAMESPACE",
     "GIT_PREFIX",
+    "GIT_SHALLOW_FILE",
+    "GIT_GRAFT_FILE",
+    "GIT_REPLACE_REF_BASE",
+    "GIT_NO_REPLACE_OBJECTS",
 ];
 
 /// Which commit of the base branch the merge is built on.

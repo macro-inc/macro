@@ -93,7 +93,7 @@ jobs:
 
         type State = 'pending' | 'success' | 'failure' | 'error';
         export type Needs = Record<string, { result: string }>;
-        export type RunJob = { name: string; conclusion: string | null };
+        export type RunJob = { name: string; conclusion: string | null; run_attempt?: number };
         type Outcome = { state: State; description: string } | null;
         export type CommitStatus = { context: string; state: string; description: string | null };
         /// A job that can be attested, as Start accepts it: `selected` when
@@ -283,16 +283,25 @@ jobs:
           return statuses.some((each) => sameContext(each.context, auditContext));
         }
 
-        /// The checks a run skipped on an attestation that no longer holds: withdrawn
-        /// or replaced since Start read it. `current` is what Start would accept now.
-        export function withdrawnAttestations(
-          entries: string[],
-          skipped: string[],
-          current: string[],
-        ): string[] {
-          return entries
-            .filter((entry) => skipped.includes(entryCheck(entry)) && !current.includes(entry))
-            .map(entryCheck);
+        /// The checks Start accepted on an attestation that no longer holds: withdrawn
+        /// or replaced since. `current` is what Start would accept now. Whether the
+        /// job was skipped is not asked: a later attempt does not list every job of
+        /// an earlier one.
+        export function withdrawnAttestations(entries: string[], current: string[]): string[] {
+          return entries.filter((entry) => !current.includes(entry)).map(entryCheck);
+        }
+
+        /// Each job of a run as its newest attempt left it. A re-run of some jobs
+        /// keeps the others' results from the attempt that ran them.
+        export function newestJobs(jobs: RunJob[]): RunJob[] {
+          const newest = new Map<string, RunJob>();
+          for (const job of jobs) {
+            const known = newest.get(job.name);
+            if (!known || (job.run_attempt ?? 0) >= (known.run_attempt ?? 0)) {
+              newest.set(job.name, job);
+            }
+          }
+          return [...newest.values()];
         }
 
         /// The first few of a list by name, and how many more there are: a status
@@ -418,13 +427,12 @@ jobs:
           }
         }
 
-        /// Every job of one attempt of a run.
-        async function runJobs(run: string, attempt: string): Promise<RunJob[]> {
+        async function pagedJobs(path: string): Promise<RunJob[]> {
           const jobs: RunJob[] = [];
           for (let page = 1; ; page++) {
             const { jobs: batch } = await github(
               'GET',
-              `/repos/${repo()}/actions/runs/${run}/attempts/${attempt}/jobs?per_page=100&page=${page}`,
+              `/repos/${repo()}/actions/runs/${path}per_page=100&page=${page}`,
             );
             jobs.push(...batch);
             if (batch.length < 100) {
@@ -432,6 +440,12 @@ jobs:
             }
           }
         }
+
+        /// Every job of one attempt of a run.
+        const runJobs = (run: string, attempt: string) => pagedJobs(`${run}/attempts/${attempt}/jobs?`);
+
+        /// Every job of a run, as the newest attempt that ran it left it.
+        const latestRunJobs = async (run: string) => newestJobs(await pagedJobs(`${run}/jobs?filter=all&`));
 
         /// The newest gate status on a commit (GitHub lists statuses newest first).
         async function gateStatus(sha: string): Promise<{ state: string; description: string } | undefined> {
@@ -598,7 +612,14 @@ jobs:
           if (audit) {
             console.log(`Audit: running the attested ${entries.map(entryCheck).join(', ')} here too`);
             if (!marked) {
-              await postStatus(head, auditContext, 'success', 'Runs on this commit check its attestations on runners', env('RUN_URL'));
+              // Without the mark this run is still an audit; only later ones draw again.
+              await postStatus(
+                head,
+                auditContext,
+                'success',
+                'Runs on this commit check its attestations on runners',
+                env('RUN_URL'),
+              ).catch((error) => console.log(`::warning::Could not mark the commit as audited: ${error}`));
             }
           } else {
             console.log(`Attested: ${entries.map(entryCheck).join(', ') || 'none'}`);
@@ -610,20 +631,36 @@ jobs:
           );
         }
 
-        /// What Start would accept now. Nothing when GitHub can't say: a skipped job
-        /// is then not vouched for.
-        async function currentAttestations(head: string): Promise<string[]> {
+        /// Why a run that skipped jobs on attestations can no longer pass, or null.
+        /// Start decided what to skip, and a re-run of failed jobs keeps that decision
+        /// while the commit's statuses move on: an attestation is withdrawn, or
+        /// another run audits the commit. When GitHub can't say, nothing is vouched
+        /// for.
+        async function attestationsLapsed(head: string, entries: string[]): Promise<string | null> {
+          let statuses: CommitStatus[];
           try {
-            return acceptedAttestations(
-              await commitStatuses(head),
-              JSON.parse(env('ATTESTABLE_CHECKS')),
-              env('ATTESTED_PREFIX'),
-              env('BASE_SHA'),
-            );
+            statuses = await commitStatuses(head);
           } catch (error) {
             console.log(`::warning::Could not read this commit's attestations again: ${error}`);
-            return [];
+            return `Could not read the attestations again. Add the ${label()} label again.`;
           }
+
+          if (alreadyAudited(statuses, env('AUDIT_CONTEXT'))) {
+            return `An audit of this commit began since. Add the ${label()} label again.`;
+          }
+
+          const current = acceptedAttestations(
+            statuses,
+            JSON.parse(env('ATTESTABLE_CHECKS')),
+            env('ATTESTED_PREFIX'),
+            env('BASE_SHA'),
+          );
+          const withdrawn = withdrawnAttestations(entries, current);
+          if (withdrawn.length > 0) {
+            console.log(`No longer attested: ${withdrawn.join(', ')}`);
+            return `No longer attested: ${named(withdrawn)}. Add the ${label()} label again.`;
+          }
+          return null;
         }
 
         async function finish() {
@@ -642,25 +679,16 @@ jobs:
           let outcome = verdict;
           if (entries.length + audited.length > 0) {
             const checks: GateCheck[] = JSON.parse(env('GATE_CHECKS'));
-            const jobs = await runJobs(env('RUN_ID'), env('RUN_ATTEMPT'));
-            const skipped = skippedAttested(entries, checks, jobs);
+            const jobs = await latestRunJobs(env('RUN_ID'));
             const failures = auditFailures(audited, checks, jobs);
             if (failures.length > 0) {
               console.log(`Attested but failed here: ${failures.join(', ')}`);
             }
-            outcome = withAttestations(verdict, skipped, failures);
+            outcome = withAttestations(verdict, skippedAttested(entries, checks, jobs), failures);
 
-            // A re-run of failed jobs keeps the jobs Start let this run skip.
-            const withdrawn =
-              skipped.length > 0
-                ? withdrawnAttestations(entries, skipped, await currentAttestations(head))
-                : [];
-            if (withdrawn.length > 0) {
-              console.log(`No longer attested: ${withdrawn.join(', ')}`);
-              outcome = {
-                state: 'failure',
-                description: `No longer attested: ${named(withdrawn)}. Add the ${label()} label again.`,
-              };
+            const lapsed = entries.length > 0 ? await attestationsLapsed(head, entries) : null;
+            if (lapsed) {
+              outcome = { state: 'failure', description: lapsed };
             }
           }
 
@@ -815,7 +843,7 @@ jobs:
 
         type State = 'pending' | 'success' | 'failure' | 'error';
         export type Needs = Record<string, { result: string }>;
-        export type RunJob = { name: string; conclusion: string | null };
+        export type RunJob = { name: string; conclusion: string | null; run_attempt?: number };
         type Outcome = { state: State; description: string } | null;
         export type CommitStatus = { context: string; state: string; description: string | null };
         /// A job that can be attested, as Start accepts it: `selected` when
@@ -1005,16 +1033,25 @@ jobs:
           return statuses.some((each) => sameContext(each.context, auditContext));
         }
 
-        /// The checks a run skipped on an attestation that no longer holds: withdrawn
-        /// or replaced since Start read it. `current` is what Start would accept now.
-        export function withdrawnAttestations(
-          entries: string[],
-          skipped: string[],
-          current: string[],
-        ): string[] {
-          return entries
-            .filter((entry) => skipped.includes(entryCheck(entry)) && !current.includes(entry))
-            .map(entryCheck);
+        /// The checks Start accepted on an attestation that no longer holds: withdrawn
+        /// or replaced since. `current` is what Start would accept now. Whether the
+        /// job was skipped is not asked: a later attempt does not list every job of
+        /// an earlier one.
+        export function withdrawnAttestations(entries: string[], current: string[]): string[] {
+          return entries.filter((entry) => !current.includes(entry)).map(entryCheck);
+        }
+
+        /// Each job of a run as its newest attempt left it. A re-run of some jobs
+        /// keeps the others' results from the attempt that ran them.
+        export function newestJobs(jobs: RunJob[]): RunJob[] {
+          const newest = new Map<string, RunJob>();
+          for (const job of jobs) {
+            const known = newest.get(job.name);
+            if (!known || (job.run_attempt ?? 0) >= (known.run_attempt ?? 0)) {
+              newest.set(job.name, job);
+            }
+          }
+          return [...newest.values()];
         }
 
         /// The first few of a list by name, and how many more there are: a status
@@ -1140,13 +1177,12 @@ jobs:
           }
         }
 
-        /// Every job of one attempt of a run.
-        async function runJobs(run: string, attempt: string): Promise<RunJob[]> {
+        async function pagedJobs(path: string): Promise<RunJob[]> {
           const jobs: RunJob[] = [];
           for (let page = 1; ; page++) {
             const { jobs: batch } = await github(
               'GET',
-              `/repos/${repo()}/actions/runs/${run}/attempts/${attempt}/jobs?per_page=100&page=${page}`,
+              `/repos/${repo()}/actions/runs/${path}per_page=100&page=${page}`,
             );
             jobs.push(...batch);
             if (batch.length < 100) {
@@ -1154,6 +1190,12 @@ jobs:
             }
           }
         }
+
+        /// Every job of one attempt of a run.
+        const runJobs = (run: string, attempt: string) => pagedJobs(`${run}/attempts/${attempt}/jobs?`);
+
+        /// Every job of a run, as the newest attempt that ran it left it.
+        const latestRunJobs = async (run: string) => newestJobs(await pagedJobs(`${run}/jobs?filter=all&`));
 
         /// The newest gate status on a commit (GitHub lists statuses newest first).
         async function gateStatus(sha: string): Promise<{ state: string; description: string } | undefined> {
@@ -1320,7 +1362,14 @@ jobs:
           if (audit) {
             console.log(`Audit: running the attested ${entries.map(entryCheck).join(', ')} here too`);
             if (!marked) {
-              await postStatus(head, auditContext, 'success', 'Runs on this commit check its attestations on runners', env('RUN_URL'));
+              // Without the mark this run is still an audit; only later ones draw again.
+              await postStatus(
+                head,
+                auditContext,
+                'success',
+                'Runs on this commit check its attestations on runners',
+                env('RUN_URL'),
+              ).catch((error) => console.log(`::warning::Could not mark the commit as audited: ${error}`));
             }
           } else {
             console.log(`Attested: ${entries.map(entryCheck).join(', ') || 'none'}`);
@@ -1332,20 +1381,36 @@ jobs:
           );
         }
 
-        /// What Start would accept now. Nothing when GitHub can't say: a skipped job
-        /// is then not vouched for.
-        async function currentAttestations(head: string): Promise<string[]> {
+        /// Why a run that skipped jobs on attestations can no longer pass, or null.
+        /// Start decided what to skip, and a re-run of failed jobs keeps that decision
+        /// while the commit's statuses move on: an attestation is withdrawn, or
+        /// another run audits the commit. When GitHub can't say, nothing is vouched
+        /// for.
+        async function attestationsLapsed(head: string, entries: string[]): Promise<string | null> {
+          let statuses: CommitStatus[];
           try {
-            return acceptedAttestations(
-              await commitStatuses(head),
-              JSON.parse(env('ATTESTABLE_CHECKS')),
-              env('ATTESTED_PREFIX'),
-              env('BASE_SHA'),
-            );
+            statuses = await commitStatuses(head);
           } catch (error) {
             console.log(`::warning::Could not read this commit's attestations again: ${error}`);
-            return [];
+            return `Could not read the attestations again. Add the ${label()} label again.`;
           }
+
+          if (alreadyAudited(statuses, env('AUDIT_CONTEXT'))) {
+            return `An audit of this commit began since. Add the ${label()} label again.`;
+          }
+
+          const current = acceptedAttestations(
+            statuses,
+            JSON.parse(env('ATTESTABLE_CHECKS')),
+            env('ATTESTED_PREFIX'),
+            env('BASE_SHA'),
+          );
+          const withdrawn = withdrawnAttestations(entries, current);
+          if (withdrawn.length > 0) {
+            console.log(`No longer attested: ${withdrawn.join(', ')}`);
+            return `No longer attested: ${named(withdrawn)}. Add the ${label()} label again.`;
+          }
+          return null;
         }
 
         async function finish() {
@@ -1364,25 +1429,16 @@ jobs:
           let outcome = verdict;
           if (entries.length + audited.length > 0) {
             const checks: GateCheck[] = JSON.parse(env('GATE_CHECKS'));
-            const jobs = await runJobs(env('RUN_ID'), env('RUN_ATTEMPT'));
-            const skipped = skippedAttested(entries, checks, jobs);
+            const jobs = await latestRunJobs(env('RUN_ID'));
             const failures = auditFailures(audited, checks, jobs);
             if (failures.length > 0) {
               console.log(`Attested but failed here: ${failures.join(', ')}`);
             }
-            outcome = withAttestations(verdict, skipped, failures);
+            outcome = withAttestations(verdict, skippedAttested(entries, checks, jobs), failures);
 
-            // A re-run of failed jobs keeps the jobs Start let this run skip.
-            const withdrawn =
-              skipped.length > 0
-                ? withdrawnAttestations(entries, skipped, await currentAttestations(head))
-                : [];
-            if (withdrawn.length > 0) {
-              console.log(`No longer attested: ${withdrawn.join(', ')}`);
-              outcome = {
-                state: 'failure',
-                description: `No longer attested: ${named(withdrawn)}. Add the ${label()} label again.`,
-              };
+            const lapsed = entries.length > 0 ? await attestationsLapsed(head, entries) : null;
+            if (lapsed) {
+              outcome = { state: 'failure', description: lapsed };
             }
           }
 
@@ -1750,7 +1806,7 @@ jobs:
 
         type State = 'pending' | 'success' | 'failure' | 'error';
         export type Needs = Record<string, { result: string }>;
-        export type RunJob = { name: string; conclusion: string | null };
+        export type RunJob = { name: string; conclusion: string | null; run_attempt?: number };
         type Outcome = { state: State; description: string } | null;
         export type CommitStatus = { context: string; state: string; description: string | null };
         /// A job that can be attested, as Start accepts it: `selected` when
@@ -1940,16 +1996,25 @@ jobs:
           return statuses.some((each) => sameContext(each.context, auditContext));
         }
 
-        /// The checks a run skipped on an attestation that no longer holds: withdrawn
-        /// or replaced since Start read it. `current` is what Start would accept now.
-        export function withdrawnAttestations(
-          entries: string[],
-          skipped: string[],
-          current: string[],
-        ): string[] {
-          return entries
-            .filter((entry) => skipped.includes(entryCheck(entry)) && !current.includes(entry))
-            .map(entryCheck);
+        /// The checks Start accepted on an attestation that no longer holds: withdrawn
+        /// or replaced since. `current` is what Start would accept now. Whether the
+        /// job was skipped is not asked: a later attempt does not list every job of
+        /// an earlier one.
+        export function withdrawnAttestations(entries: string[], current: string[]): string[] {
+          return entries.filter((entry) => !current.includes(entry)).map(entryCheck);
+        }
+
+        /// Each job of a run as its newest attempt left it. A re-run of some jobs
+        /// keeps the others' results from the attempt that ran them.
+        export function newestJobs(jobs: RunJob[]): RunJob[] {
+          const newest = new Map<string, RunJob>();
+          for (const job of jobs) {
+            const known = newest.get(job.name);
+            if (!known || (job.run_attempt ?? 0) >= (known.run_attempt ?? 0)) {
+              newest.set(job.name, job);
+            }
+          }
+          return [...newest.values()];
         }
 
         /// The first few of a list by name, and how many more there are: a status
@@ -2075,13 +2140,12 @@ jobs:
           }
         }
 
-        /// Every job of one attempt of a run.
-        async function runJobs(run: string, attempt: string): Promise<RunJob[]> {
+        async function pagedJobs(path: string): Promise<RunJob[]> {
           const jobs: RunJob[] = [];
           for (let page = 1; ; page++) {
             const { jobs: batch } = await github(
               'GET',
-              `/repos/${repo()}/actions/runs/${run}/attempts/${attempt}/jobs?per_page=100&page=${page}`,
+              `/repos/${repo()}/actions/runs/${path}per_page=100&page=${page}`,
             );
             jobs.push(...batch);
             if (batch.length < 100) {
@@ -2089,6 +2153,12 @@ jobs:
             }
           }
         }
+
+        /// Every job of one attempt of a run.
+        const runJobs = (run: string, attempt: string) => pagedJobs(`${run}/attempts/${attempt}/jobs?`);
+
+        /// Every job of a run, as the newest attempt that ran it left it.
+        const latestRunJobs = async (run: string) => newestJobs(await pagedJobs(`${run}/jobs?filter=all&`));
 
         /// The newest gate status on a commit (GitHub lists statuses newest first).
         async function gateStatus(sha: string): Promise<{ state: string; description: string } | undefined> {
@@ -2255,7 +2325,14 @@ jobs:
           if (audit) {
             console.log(`Audit: running the attested ${entries.map(entryCheck).join(', ')} here too`);
             if (!marked) {
-              await postStatus(head, auditContext, 'success', 'Runs on this commit check its attestations on runners', env('RUN_URL'));
+              // Without the mark this run is still an audit; only later ones draw again.
+              await postStatus(
+                head,
+                auditContext,
+                'success',
+                'Runs on this commit check its attestations on runners',
+                env('RUN_URL'),
+              ).catch((error) => console.log(`::warning::Could not mark the commit as audited: ${error}`));
             }
           } else {
             console.log(`Attested: ${entries.map(entryCheck).join(', ') || 'none'}`);
@@ -2267,20 +2344,36 @@ jobs:
           );
         }
 
-        /// What Start would accept now. Nothing when GitHub can't say: a skipped job
-        /// is then not vouched for.
-        async function currentAttestations(head: string): Promise<string[]> {
+        /// Why a run that skipped jobs on attestations can no longer pass, or null.
+        /// Start decided what to skip, and a re-run of failed jobs keeps that decision
+        /// while the commit's statuses move on: an attestation is withdrawn, or
+        /// another run audits the commit. When GitHub can't say, nothing is vouched
+        /// for.
+        async function attestationsLapsed(head: string, entries: string[]): Promise<string | null> {
+          let statuses: CommitStatus[];
           try {
-            return acceptedAttestations(
-              await commitStatuses(head),
-              JSON.parse(env('ATTESTABLE_CHECKS')),
-              env('ATTESTED_PREFIX'),
-              env('BASE_SHA'),
-            );
+            statuses = await commitStatuses(head);
           } catch (error) {
             console.log(`::warning::Could not read this commit's attestations again: ${error}`);
-            return [];
+            return `Could not read the attestations again. Add the ${label()} label again.`;
           }
+
+          if (alreadyAudited(statuses, env('AUDIT_CONTEXT'))) {
+            return `An audit of this commit began since. Add the ${label()} label again.`;
+          }
+
+          const current = acceptedAttestations(
+            statuses,
+            JSON.parse(env('ATTESTABLE_CHECKS')),
+            env('ATTESTED_PREFIX'),
+            env('BASE_SHA'),
+          );
+          const withdrawn = withdrawnAttestations(entries, current);
+          if (withdrawn.length > 0) {
+            console.log(`No longer attested: ${withdrawn.join(', ')}`);
+            return `No longer attested: ${named(withdrawn)}. Add the ${label()} label again.`;
+          }
+          return null;
         }
 
         async function finish() {
@@ -2299,25 +2392,16 @@ jobs:
           let outcome = verdict;
           if (entries.length + audited.length > 0) {
             const checks: GateCheck[] = JSON.parse(env('GATE_CHECKS'));
-            const jobs = await runJobs(env('RUN_ID'), env('RUN_ATTEMPT'));
-            const skipped = skippedAttested(entries, checks, jobs);
+            const jobs = await latestRunJobs(env('RUN_ID'));
             const failures = auditFailures(audited, checks, jobs);
             if (failures.length > 0) {
               console.log(`Attested but failed here: ${failures.join(', ')}`);
             }
-            outcome = withAttestations(verdict, skipped, failures);
+            outcome = withAttestations(verdict, skippedAttested(entries, checks, jobs), failures);
 
-            // A re-run of failed jobs keeps the jobs Start let this run skip.
-            const withdrawn =
-              skipped.length > 0
-                ? withdrawnAttestations(entries, skipped, await currentAttestations(head))
-                : [];
-            if (withdrawn.length > 0) {
-              console.log(`No longer attested: ${withdrawn.join(', ')}`);
-              outcome = {
-                state: 'failure',
-                description: `No longer attested: ${named(withdrawn)}. Add the ${label()} label again.`,
-              };
+            const lapsed = entries.length > 0 ? await attestationsLapsed(head, entries) : null;
+            if (lapsed) {
+              outcome = { state: 'failure', description: lapsed };
             }
           }
 
@@ -2416,9 +2500,9 @@ jobs:
         BASE_SHA: ${{ needs.start.outputs.base }}
         ATTESTABLE_CHECKS: '[{"fingerprint":"b38d7c37ad118118","id":"cloud-storage/check","selected":true},{"fingerprint":"55edf8296919c3e7","id":"cloud-storage/build-service-bins","selected":true},{"fingerprint":"8f1e4eb74c38a703","id":"cloud-storage/graphql-schema-compat","selected":true},{"fingerprint":"31d70f45dd208042","id":"web-app/typescript","selected":true},{"fingerprint":"41cc8313cb599742","id":"web-app/generated-code","selected":true},{"fingerprint":"0497cd2ef9db3066","id":"web-app/biome-check","selected":true},{"fingerprint":"740c7186273ed5cd","id":"web-app/test","selected":true},{"fingerprint":"03e9d70e92bf9827","id":"web-app/cycles","selected":true},{"fingerprint":"34e2c148759cb623","id":"infra/biome-check","selected":false},{"fingerprint":"562033a58f014aad","id":"infra/check","selected":false},{"fingerprint":"5b669fc64fc53477","id":"conventions/ast-grep","selected":false},{"fingerprint":"e9eab328d2bd1a69","id":"cargo-deny/cargo-deny","selected":false},{"fingerprint":"0104d4dbfae83eee","id":"workspace-dependencies/dependency-check","selected":false},{"fingerprint":"1c7d2e8d01111e6e","id":"workspace-dependencies/hakari-and-dep-closures","selected":false},{"fingerprint":"c4a0806cd391570e","id":"generated-workflows/check-workflows","selected":false},{"fingerprint":"2b5862faacd585ef","id":"node-modules-nix/check-linux-node-modules-nix","selected":false},{"fingerprint":"4e8720c0910fa094","id":"sdk/check-package","selected":false},{"fingerprint":"55845a34f6912e2d","id":"observability-image/build-image","selected":false},{"fingerprint":"3b3764213d51cdaf","id":"macrod-update/linux","selected":false}]'
         ATTESTED_PREFIX: attested/
+        AUDIT_CONTEXT: attestation audit
         GATE_CHECKS: '[{"id":"cloud-storage/check","matrix":false,"name":"Cloud Storage / check"},{"id":"cloud-storage/build-service-bins","matrix":false,"name":"Cloud Storage / build-service-bins"},{"id":"cloud-storage/graphql-schema-compat","matrix":false,"name":"Cloud Storage / graphql-schema-compat"},{"id":"web-app/typescript","matrix":false,"name":"Web App / Typecheck"},{"id":"web-app/generated-code","matrix":false,"name":"Web App / Generated Code Check"},{"id":"web-app/biome-check","matrix":false,"name":"Web App / Biome Check"},{"id":"web-app/test","matrix":true,"name":"Web App / Test ("},{"id":"web-app/cycles","matrix":false,"name":"Web App / Cycles Import Check"},{"id":"infra/biome-check","matrix":false,"name":"Infra / Biome Check"},{"id":"infra/check","matrix":false,"name":"Infra / check"},{"id":"conventions/ast-grep","matrix":false,"name":"Conventions / ast-grep Conventions"},{"id":"cargo-deny/cargo-deny","matrix":false,"name":"cargo deny / cargo-deny"},{"id":"workspace-dependencies/dependency-check","matrix":false,"name":"Workspace dependencies / dependency-check"},{"id":"workspace-dependencies/hakari-and-dep-closures","matrix":false,"name":"Workspace dependencies / hakari-and-dep-closures"},{"id":"generated-workflows/check-workflows","matrix":false,"name":"Generated workflows / check-workflows"},{"id":"node-modules-nix/check-linux-node-modules-nix","matrix":false,"name":"node_modules nix / check Linux node_modules nix"},{"id":"sdk/check-package","matrix":false,"name":"SDK / SDK Package Check"},{"id":"observability-image/build-image","matrix":false,"name":"Observability image / Build observability image"},{"id":"macrod-update/linux","matrix":false,"name":"macrod update / macrod update (linux)"}]'
         RUN_ID: ${{ github.run_id }}
-        RUN_ATTEMPT: ${{ github.run_attempt }}
 concurrency:
   group: pr-ci-${{ github.event.pull_request.number }}-${{ github.event.label.name == 'run-ci' && 'requested' || github.run_id }}
   cancel-in-progress: true
