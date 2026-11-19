@@ -179,10 +179,37 @@ dropped, or indexed wrongly, or search no longer finds the entity.
   stays visible means the entity still exists in its source: search hides
   deleted entities by checking the database, not the index.
 
+## Probe prefix unseen
+
+The probe's `crowded_prefix` round missed twice in 30 minutes. Each round
+writes a new private document holding one word that sorts late under `con`
+(`con`, `zz`, then random letters) and searches `con` alone as a partial
+content match, narrowed to that document. The next round deletes it, so it is
+gone by the time the alert arrives.
+
+- First check the document rounds (`entity_type:document`, other operations)
+  on the dashboard. If they miss too, documents are not reaching the index:
+  follow [Probe unseen](#probe-unseen).
+- If they pass, suspect content prefix search, but check that the missed
+  documents reached the index too: the round's span names the `entity_id`;
+  look for its `process_event` spans in `search-processing-service`. A likely
+  cause is a prefix query that expands only the first few hundred words of a
+  shard starting with the prefix, before permission filtering, as
+  `match_phrase_prefix` with `max_expansions` 256 did; the probe's word sorts
+  after them. Check how `crates/opensearch_client/src/search/query.rs`
+  (`child_content_query`) builds content prefixes, and what deployed last.
+- To reproduce, as any user: create a private document whose body is one word
+  `conzz` plus random letters, wait until an exact search finds that word,
+  then search `con` as a partial content match narrowed to that document
+  (`filters.document_filters.document_ids`), as the probe does, so other
+  documents matching `con` cannot push it off the page. Missing it while the
+  exact search finds it is the bug users see: short prefixes miss results.
+
 ## Probe failing
 
-More than half of one type's rounds in 15 minutes failed to write or to
-search. Freshness of that type is not measured meanwhile.
+More than half of one kind of round (entity type and operation) in 15 minutes
+failed to write or to search. Freshness of that kind is not measured
+meanwhile.
 
 - Other write failures: the `search.freshness_probe.request` span names the
   route and status. A 401 means the probe user's key was revoked.

@@ -44,7 +44,10 @@ instants (`wall-clock.ts`).
 
 ## Recipes
 
-- Add a word or abbreviation: `src/words.rs`, plus a case in `src/test.rs`.
+- Add a word or abbreviation: its table in `src/words.rs` (a name, the
+  shortest prefix that still reads as it, and aliases that aren't prefixes),
+  plus a case in `src/test.rs`. The `words` tests fail if a spelling reads as
+  two values or belongs to two tables.
 - Add a phrase shape: an item parser in `src/grammar.rs` (order matters: put
   longer readings first in `element`), then a table case.
 - Change a rule: update the list in `src/lib.rs` and the affected table cases.

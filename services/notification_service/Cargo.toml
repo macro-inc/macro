@@ -30,6 +30,7 @@ aws-sdk-sesv2 = { workspace = true }
 aws-sdk-sns = { workspace = true }
 aws-sdk-sqs = { workspace = true }
 axum = { workspace = true }
+channel_labels = { path = "../../crates/channel_labels", features = ["notification_sections"] }
 chrono = { workspace = true }
 database_env_vars = { path = "../../crates/database_env_vars" }
 email_formatting = { path = "../../crates/email_formatting" }

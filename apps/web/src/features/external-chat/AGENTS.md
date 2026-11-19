@@ -78,9 +78,8 @@ belong to `features/external-view`. Architecture:
 - Reads do not poll; DSS pushes `external_chat_changed`, with one fallback
   re-fetch 3 s after opening. Only in-flight sends poll their progress.
 - History imported after adding (`backfill` on the detail) lands older than
-  the rows shown; the view keeps its distance from the bottom when rows appear
-  above, and says "Importing history…" / "Waiting for … phone" until DSS
-  reports `done` or `partial`. `waiting_for_message` (no message to import
+  the rows shown; the view says "Importing history…" or
+  "Waiting for … phone" until DSS reports `done` or `partial`. `waiting_for_message` (no message to import
   from yet) shows nothing.
 - Attachments are static files, like Chat's media: `fileUrl` is
   `staticFileIdEndpoint`, and images take Chat's sized variants. Images,
@@ -100,8 +99,12 @@ belong to `features/external-view`. Architecture:
   it too). The view follows the bottom (a `ResizeObserver` on the content
   and the scroller, whose padding grows with the draft) until the reader
   scrolls by intent (wheel, touch, keys, scrollbar); layout-driven scroll
-  events never change that. Media keep their memoized items so refetches
-  don't remount or reload them.
+  events never change that. Once scrolled up, the view holds the first
+  message in view in place as rows land or grow above it (earlier pages,
+  imported history, media): the scroller has `overflow-anchor: none` and
+  WebKit has no scroll anchoring, so it restores
+  `captureFirstVisibleScrollAnchor` from that observer. Media keep their
+  memoized items so refetches don't remount or reload them.
 - Files this page sent keep their local preview and size on the stored
   message (`conversation.sentFiles`), so the swap from pending neither
   flashes nor jumps.

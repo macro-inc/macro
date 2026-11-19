@@ -142,6 +142,7 @@ export function draftFromRoutine(
   const base = {
     ...createEmptyDraft(defaultModel),
     created: routine.created,
+    ...(routine.appearance ? { appearance: routine.appearance } : {}),
     // Apps it needs that aren't connected are required too: the review shows
     // each one unconnected, to connect before saving or to remove.
     apps: draftedApps(routine),

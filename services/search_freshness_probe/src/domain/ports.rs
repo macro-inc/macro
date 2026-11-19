@@ -49,6 +49,12 @@ pub trait Rotation: Send {
     /// The type it changes.
     fn entity_type(&self) -> EntityType;
 
+    /// Housekeeping before the round's timed write, such as deleting an
+    /// earlier round's entity.
+    fn prepare(&mut self) -> impl Future<Output = ()> + Send {
+        async {}
+    }
+
     /// Makes the next change in the cycle, and says what search must show
     /// once it is indexed.
     fn change(&mut self) -> impl Future<Output = Result<Change, NoChange>> + Send;

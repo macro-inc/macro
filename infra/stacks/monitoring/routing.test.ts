@@ -227,6 +227,7 @@ test('every prod monitor is graphed on its dashboard with its thresholds', () =>
     'search-offset-reset',
     'search-probe-failing',
     'search-probe-late',
+    'search-probe-prefix-unseen',
     'search-probe-unseen',
     'sqs-dlq-inflow',
     'sqs-email-backfill-age',
@@ -417,5 +418,21 @@ test('Firecracker memory follows admission policy and unresolved drift persists 
   );
   expect(drift?.inputs.query).toBe(
     'min(last_5m):max:firecracker_host.reconcile.drift{env:prod,service:firecracker-host} by {host} > 0'
+  );
+});
+
+test('the probe judges rotation rounds per type, the crowded prefix apart and failures per operation', () => {
+  const query = (name: string) =>
+    monitors().find((r) => r.name === name)?.inputs.query as string;
+
+  for (const name of ['search-probe-late', 'search-probe-unseen']) {
+    expect(query(name)).toContain('!operation:crowded_prefix');
+    expect(query(name)).toContain('by {entity_type}.as_count()');
+  }
+  expect(query('search-probe-prefix-unseen')).toBe(
+    'sum(last_30m):sum:search.freshness.probe_rounds{env:prod,service:search-freshness-probe,operation:crowded_prefix,outcome:unseen} by {entity_type}.as_count() >= 2'
+  );
+  expect(query('search-probe-failing')).toContain(
+    'by {entity_type,operation}.as_count()'
   );
 });

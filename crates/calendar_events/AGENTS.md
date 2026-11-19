@@ -411,6 +411,17 @@ reminder dispatch, team availability, and provider/Postgres persistence.
   Outlook discovery refreshes viewers only when a calendar was added, removed
   or changed, and raises the hint for the calendar changes Google's calendar
   list raises it for (`upsert_calendar_tx`).
+- Postgres text and `jsonb` cannot hold U+0000, and the Outlook sync retries
+  the same event first, so a write that fails on every retry holds back its
+  whole calendar. `upsert_event`, which every Google, Outlook and mutation
+  write of an event goes through, therefore first removes NUL characters from
+  the event's text (title, description, location, names, addresses,
+  recurrence lines, attendees, overrides, decline messages) and from every
+  string and key of its raw payload (`src/outbound/pg/nul_characters.rs`, as
+  the mail store's `email_db_client::parse::nul_characters` does). One warning,
+  `removing NUL characters from a calendar event`, names the `fields`, never
+  their values, with `calendar_id` and `provider_event_id`. Identifiers are
+  left alone.
 - The Outlook sync (`src/domain/outlook.rs`) refreshes a page's events one
   at a time, first pending id first, and retries that id after any error, so
   one error blocks the calendar. An event the adapter cannot normalize is not
@@ -540,6 +551,24 @@ reminder dispatch, team availability, and provider/Postgres persistence.
   the sync logs `Outlook calendar sync queue depth` with `due_items` and
   `oldest_due_seconds`, which are the claimable rows waiting and the longest
   wait.
+- Google's per-inbox request gate (the calendar service's sliding window,
+  shared with calendar mutations) refuses with `Deferred` too, naming its
+  window, since a refused call is not counted. A Google account round
+  (`GoogleCalendarBackfillService::backfill`) stops at the first refusal
+  instead of isolating each calendar left, records no failure, skips the
+  calendar-list reconcile, and releases its lease through
+  `defer_google_backfill`, which keeps the job's `started_at`; the calendar
+  service hides the delivery for `retry_after`, at most five minutes, inside
+  the reaper's 15-minute stall threshold. The next delivery's claim hands
+  back that `round_started_at`, and the walk skips every calendar whose
+  `synced_at` is at or after it, so an inbox with more calendars than one
+  window admits reaches all of them over a few deliveries. A rate limit
+  Google itself returns stays a transient failure of that calendar, as
+  Microsoft's do. The `backfill` span records `calendars`,
+  `calendars_reached`, `resumed_from` (calendars earlier deliveries of the
+  round synced), `outcome` (`complete`, `deferred`), `retry_after_s` and
+  `deferred_until`, and each deferral logs `deferring a Google Calendar
+  account round at the inbox's request limit` with the same fields.
 
 ## Related
 

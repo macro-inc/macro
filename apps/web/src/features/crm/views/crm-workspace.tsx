@@ -408,34 +408,29 @@ export function CrmWorkspaceView(props: {
   );
   const mobileHeader = () => (
     <div class="flex min-w-0 flex-col gap-2">
-      <CrmMobileTabs
-        canAccess={accessState() !== 'denied'}
-        active={activeRecord()}
-        pipelines={pipelines.pipelines()}
-        lists={listsEnabled() ? lists.lists() : []}
-        onNavigate={(id) => {
-          const pipeline = pipelineIdOfTab(id);
-          if (pipeline) selectPipeline(pipeline);
-          else navigate(id);
-        }}
-        leading={
-          <>
-            <ViewSidebar.Toggle action="expand" presentation="pill" />
-            <Show
-              when={
-                canAccess() &&
-                !peopleActive() &&
-                !pipelineId() &&
-                !activityTab()
-              }
-            >
-              <Suspense>
-                <MobileFilterDrawer />
-              </Suspense>
-            </Show>
-          </>
-        }
-      />
+      <div class="flex min-w-0 items-center gap-2">
+        <CrmMobileTabs
+          canAccess={accessState() !== 'denied'}
+          active={activeRecord()}
+          pipelines={pipelines.pipelines()}
+          lists={listsEnabled() ? lists.lists() : []}
+          onNavigate={(id) => {
+            const pipeline = pipelineIdOfTab(id);
+            if (pipeline) selectPipeline(pipeline);
+            else navigate(id);
+          }}
+          leading={<ViewSidebar.Toggle action="expand" presentation="pill" />}
+        />
+        <Show
+          when={
+            canAccess() && !peopleActive() && !pipelineId() && !activityTab()
+          }
+        >
+          <Suspense>
+            <MobileFilterDrawer />
+          </Suspense>
+        </Show>
+      </div>
 
       <Show
         when={canAccess() && !peopleActive() && !pipelineId() && !activityTab()}

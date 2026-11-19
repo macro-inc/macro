@@ -323,11 +323,13 @@ passing stores nothing and pushes nothing, so a follow-up coming due, a
 calendar change whose event ends or importance moving shows at the tab's next
 read. Mark
 Done hides the row at once and archives the thread; Undo brings it back. The
-worker classifies an inbox only while its owner has `enable-email-focus` on; a
-delegated inbox follows its owner's flag, not the reader's. An owner who joins
-the rollout gets a filled tab without new mail: within about 6 minutes the
-worker finds them (it looks at every connected inbox each minute, evaluating
-the flag from definitions it polls from PostHog every 5 minutes) and backfills their inbox,
+worker classifies an inbox only while someone whose tab shows it has
+`enable-email-focus` on: its owner, or a user it is linked to, so a mailbox you
+link is classified while you have the flag even when its own account does not.
+A user who joins the rollout gets a filled tab without new mail: within about
+6 minutes the worker finds them (it looks at every connected inbox each minute,
+evaluating the flag from definitions it polls from PostHog every 5 minutes) and
+backfills their inboxes, linked ones included,
 the last 3 days first, then the rest of the 30 without due dates (an older
 thread gets one with its next mail). With nothing classified the tab
 shows the empty state `You're caught up`, whose **See the rest of your inbox** opens Signal.
@@ -1854,6 +1856,12 @@ live mail with the viewer's access. See `docs/design/saved-views.md`.
   as in Tasks, and **Revert** beside it returns to the tab's own filters and
   every inbox; Sent, Drafts, Scheduled, Reminders, Shared and Focus can't be
   saved. Search text is never saved.
+- **New drafts.** Each creation or duplication immediately selects a fresh draft
+  at the end of Saved views. Saving keeps its position; discarding removes it.
+  Closing the builder retains the draft and its name, sharing, and filters.
+  Leaving a dirty new view, opening a thread, switching views, or closing its pane
+  asks **Discard** or **Keep editing**. Clean drafts and existing saved views do not ask.
+  Browser close and reload use the browser's native unsaved-changes warning.
 - **Open.** The view opens on All with every condition in the Filters
   controls; the header shows its name and a
   `…` menu, and built-in tabs stop looking selected. Changing a filter shows

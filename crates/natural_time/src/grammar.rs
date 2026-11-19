@@ -7,14 +7,14 @@ use nom::{
     branch::alt,
     bytes::complete::{tag, take_while1},
     character::complete::{char, digit1, one_of, space0},
-    combinator::{eof, map, map_opt, opt, peek, recognize, rest, value, verify},
+    combinator::{cut, eof, fail, map, map_opt, not, opt, peek, recognize, rest, value, verify},
     multi::many0,
     sequence::{preceded, terminated},
 };
 
 use crate::Error;
 use crate::phrase::{Clock, DayRef, Daypart, Edge, Length, Meridiem, Period, Span, WeekRef};
-use crate::words::{self, RelativeWord, Unit};
+use crate::words::{self, Relation, RelativeWord, Unit};
 
 /// One thing a phrase says.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
@@ -27,10 +27,41 @@ pub(crate) enum Item {
     Duration(Length),
     /// Elapsed minutes from now: `in 2 hours`.
     Offset(i64),
+    /// A quantity that says neither `in` nor `for`: `2 days`.
+    Quantity(Quantity),
     /// A range separator: `-`, `to`, `until`, `through`.
     To,
     /// A repeating phrase, such as `every friday`, which isn't read yet.
     Repeat,
+}
+
+/// A quantity written alone, as in `2 days`: when, if nothing else in the
+/// phrase says when, and otherwise how long.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub(crate) struct Quantity {
+    /// Read as `in 2 days`.
+    pub(crate) when: Option<When>,
+    /// Read as `for 2 days`.
+    pub(crate) length: Option<Length>,
+    /// Counted in weeks, which beside a weekday (`friday 2 weeks`, `a week
+    /// friday`) means that weekday weeks out rather than a length.
+    pub(crate) weeks: bool,
+}
+
+/// When `in` a quantity is: calendar days, or elapsed minutes for hours.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub(crate) enum When {
+    Day(DayRef),
+    Offset(i64),
+}
+
+impl From<When> for Item {
+    fn from(when: When) -> Self {
+        match when {
+            When::Day(day) => Self::Day(day),
+            When::Offset(minutes) => Self::Offset(minutes),
+        }
+    }
 }
 
 type Res<'a, T> = IResult<&'a str, T>;
@@ -64,6 +95,16 @@ const END_OF_DAY: [&str; 14] = [
     "eod",
     "eob",
     "cob",
+];
+
+/// Words after a quantity that count it from something else, as in
+/// `2 days before friday`; the quantity alone is then not read, rather than
+/// misread as a length.
+/// `following`, `previous` and `past` count from a day too, however
+/// spelled.
+const COUNTED_FROM: [&str; 13] = [
+    "from", "before", "after", "since", "prior", "later", "earlier", "until", "till", "til", "to",
+    "through", "thru",
 ];
 
 /// Words describing a repeat; the phrase is then not read.
@@ -154,6 +195,7 @@ fn element(i: &str) -> Res<'_, Vec<Item>> {
         relative_day,
         offset,
         one(duration),
+        one(bare_quantity),
         one(numeric_date),
         one(named_date),
         one(period),
@@ -162,6 +204,7 @@ fn element(i: &str) -> Res<'_, Vec<Item>> {
         one(daypart),
         one(clock),
         one(separator),
+        at_quantity,
         filler,
     ))
     .parse(i)
@@ -425,7 +468,7 @@ fn minutes_in(quantity: &[(f64, Unit)]) -> Option<f64> {
 
 /// `in 2 hours` is elapsed time; `in 3 days` and `in a month` are calendar
 /// days and months. `sign` is -1 for `ago`.
-fn shifted(quantity: &[(f64, Unit)], sign: i64, from_days: i64) -> Option<Item> {
+fn shifted(quantity: &[(f64, Unit)], sign: i64, from_days: i64) -> Option<When> {
     if quantity
         .iter()
         .all(|(_, unit)| matches!(unit, Unit::Minute | Unit::Hour))
@@ -433,13 +476,13 @@ fn shifted(quantity: &[(f64, Unit)], sign: i64, from_days: i64) -> Option<Item> 
         if from_days != 0 {
             return None;
         }
-        return whole(minutes_in(quantity)?).map(|minutes| Item::Offset(sign * minutes));
+        return whole(minutes_in(quantity)?).map(|minutes| When::Offset(sign * minutes));
     }
     let [(amount, unit)] = quantity else {
         return None;
     };
     let amount = sign * whole(*amount)?;
-    Some(Item::Day(match unit {
+    Some(When::Day(match unit {
         Unit::Day => DayRef::Relative(from_days + amount),
         Unit::Week => DayRef::Relative(from_days + amount * 7),
         Unit::Month if from_days == 0 => DayRef::Months(i32::try_from(amount).ok()?),
@@ -458,14 +501,14 @@ fn offset(i: &str) -> Res<'_, Vec<Item>> {
     map(
         alt((
             map_opt(preceded(spaced(kws(&["in", "within"])), quantity), |q| {
-                shifted(&q, 1, 0)
+                shifted(&q, 1, 0).map(Item::from)
             }),
             map_opt(
                 (quantity, sp, kw("from"), sp, start),
-                |(q, _, _, _, from)| shifted(&q, 1, from),
+                |(q, _, _, _, from)| shifted(&q, 1, from).map(Item::from),
             ),
             map_opt(terminated(quantity, (sp, kw("ago"))), |q| {
-                shifted(&q, -1, 0)
+                shifted(&q, -1, 0).map(Item::from)
             }),
             value(Item::Offset(0), kws(&["now", "rn"])),
         )),
@@ -474,23 +517,62 @@ fn offset(i: &str) -> Res<'_, Vec<Item>> {
     .parse(i)
 }
 
+/// How long a quantity lasts: whole days when it counts only days and
+/// weeks, and otherwise minutes.
+fn length(quantity: &[(f64, Unit)]) -> Option<Length> {
+    let days_only = quantity
+        .iter()
+        .all(|(_, unit)| matches!(unit, Unit::Day | Unit::Week));
+    let length = if days_only {
+        Length::Days(whole(minutes_in(quantity)? / 1440.0)?)
+    } else {
+        Length::Minutes(whole(minutes_in(quantity)?)?)
+    };
+    match length {
+        Length::Days(0) | Length::Minutes(0) => None,
+        length => Some(length),
+    }
+}
+
 /// `for 45 minutes`, `for an hour and a half`, `for 3 days`.
 fn duration(i: &str) -> Res<'_, Item> {
     map_opt(preceded(spaced(kw("for")), quantity), |quantity| {
-        let days_only = quantity
-            .iter()
-            .all(|(_, unit)| matches!(unit, Unit::Day | Unit::Week));
-        let length = if days_only {
-            Length::Days(whole(minutes_in(&quantity)? / 1440.0)?)
-        } else {
-            Length::Minutes(whole(minutes_in(&quantity)?)?)
-        };
-        match length {
-            Length::Days(0) | Length::Minutes(0) => None,
-            length => Some(Item::Duration(length)),
-        }
+        length(&quantity).map(Item::Duration)
     })
     .parse(i)
+}
+
+/// `2 days`, `an hour`, `1h30m`: a quantity that doesn't say whether it is
+/// when or how long. One counted from something else (`2 days before
+/// friday`, `2 weeks after next`) makes the whole phrase unread, so no
+/// other reading of its words is guessed.
+fn bare_quantity(i: &str) -> Res<'_, Item> {
+    let counted_from = preceded(
+        opt(sp),
+        alt((
+            tag("-"),
+            kws(&COUNTED_FROM),
+            relation_word(Relation::Following),
+            relation_word(Relation::Previous),
+        )),
+    );
+    map_opt(terminated(quantity, cut(not(counted_from))), |quantity| {
+        let when = shifted(&quantity, 1, 0);
+        let length = length(&quantity);
+        let weeks = quantity.iter().any(|(_, unit)| *unit == Unit::Week);
+        (when.is_some() || length.is_some()).then_some(Item::Quantity(Quantity {
+            when,
+            length,
+            weeks,
+        }))
+    })
+    .parse(i)
+}
+
+/// `at 9 h`: `at` names a time of day, so a quantity after it isn't read
+/// as one from now, and the phrase isn't read.
+fn at_quantity(i: &str) -> Res<'_, Vec<Item>> {
+    preceded((kw("at"), sp, peek(quantity)), cut(fail())).parse(i)
 }
 
 /// `2026-11-12`, `11/12`, `11/12/26`.
@@ -550,27 +632,40 @@ fn named_date(i: &str) -> Res<'_, Item> {
     .parse(i)
 }
 
+/// A word for `expected`, however spelled: `following` for `next` too.
+fn relation_word(expected: Relation) -> impl Fn(&str) -> Res<'_, &str> {
+    move |i| {
+        verify(word, |w: &str| {
+            words::relation(w).is_some_and(|found| found == expected || found.plain() == expected)
+        })
+        .parse(i)
+    }
+}
+
 /// `this`, `next`, `last`: how many periods from the current one.
 fn relation(i: &str) -> Res<'_, i32> {
-    alt((
-        value(0, kw("this")),
-        value(1, kws(&["next", "nxt", "following"])),
-        value(-1, kws(&["last", "previous", "prev", "past"])),
-    ))
+    map_opt(word, |w| match words::relation(w)?.plain() {
+        Relation::This => Some(0),
+        Relation::Next => Some(1),
+        Relation::Last => Some(-1),
+        Relation::Coming | Relation::Following | Relation::Previous => None,
+    })
     .parse(i)
 }
 
+/// A week, month or year, named as its unit is.
 fn period_word(i: &str) -> Res<'_, Period> {
-    alt((
-        value(Period::Week, kws(&["week", "wk"])),
-        value(Period::Month, kws(&["month", "mo", "mth"])),
-        value(Period::Year, kws(&["year", "yr"])),
-    ))
+    map_opt(word, |w| match words::unit(w)? {
+        (Unit::Week, 1) => Some(Period::Week),
+        (Unit::Month, 1) => Some(Period::Month),
+        (Unit::Year, 1) => Some(Period::Year),
+        _ => None,
+    })
     .parse(i)
 }
 
 fn after_next(i: &str) -> Res<'_, ()> {
-    value((), (sp, kw("after"), sp, kw("next"))).parse(i)
+    value((), (sp, kw("after"), sp, relation_word(Relation::Next))).parse(i)
 }
 
 /// `next week`, `this weekend`, `the week after next`, `end of next month`, `eow`.
@@ -618,13 +713,32 @@ fn period(i: &str) -> Res<'_, Item> {
     .parse(i)
 }
 
+/// `this past`, `this coming`, or a relation alone.
 fn week_ref(i: &str) -> Res<'_, WeekRef> {
     alt((
-        value(WeekRef::Last, (kw("this"), sp, kw("past"))),
-        value(WeekRef::Upcoming, (kw("this"), sp, kw("coming"))),
-        value(WeekRef::Upcoming, kws(&["this", "coming", "upcoming"])),
-        value(WeekRef::Next, kws(&["next", "nxt", "following"])),
-        value(WeekRef::Last, kws(&["last", "past", "previous", "prev"])),
+        value(
+            WeekRef::Last,
+            (
+                relation_word(Relation::This),
+                sp,
+                relation_word(Relation::Last),
+            ),
+        ),
+        value(
+            WeekRef::Upcoming,
+            (
+                relation_word(Relation::This),
+                sp,
+                relation_word(Relation::Coming),
+            ),
+        ),
+        map_opt(word, |w| {
+            Some(match words::relation(w)? {
+                Relation::This | Relation::Coming => WeekRef::Upcoming,
+                Relation::Next | Relation::Following => WeekRef::Next,
+                Relation::Last | Relation::Previous => WeekRef::Last,
+            })
+        }),
     ))
     .parse(i)
 }
@@ -651,7 +765,11 @@ fn weekday(i: &str) -> Res<'_, Item> {
 /// `this morning`, `this evening`: today's, even once it has passed.
 fn today_daypart(i: &str) -> Res<'_, Vec<Item>> {
     map(
-        (kw("this"), sp, map_opt(word, words::daypart)),
+        (
+            relation_word(Relation::This),
+            sp,
+            map_opt(word, words::daypart),
+        ),
         |(.., part)| vec![Item::Day(DayRef::Relative(0)), Item::Daypart(part)],
     )
     .parse(i)
