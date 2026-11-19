@@ -21,7 +21,10 @@ export function useActiveCallCompanion() {
   const nativeCall = useMaybeNativeCallState();
   const orphanedNativeMeeting = () => {
     const key = nativeCall?.activeChannelId();
-    return !!key && !!meetingCallIdOfNativeCallKey(key) && !meeting();
+    const callId = key ? meetingCallIdOfNativeCallKey(key) : undefined;
+    if (!callId || meeting()) return false;
+    // A meeting still joining owns the call before it reports it.
+    return !meetings?.isJoining(callId);
   };
   const channelActive = () => {
     if (!call) return false;
@@ -64,18 +67,17 @@ export function useActiveCallCompanion() {
     !!meeting() || channelActive() || orphanedNativeMeeting();
   const leave = async () => {
     if (!call) return;
-    if (orphanedNativeMeeting()) {
-      await call.meetingSession.disconnect();
-      return;
-    }
+    const orphaned = orphanedNativeMeeting();
     const active = meeting();
     const channelId = call.activeChannelId();
-    if (!active && (!channelId || !channelActive())) return;
+    if (!orphaned && !active && (!channelId || !channelActive())) return;
     await Telemetry.span('call.leave', async (span) => {
       const callId = call.activeCallId();
       if (callId) span.setAttr('call.id', callId);
-      let result: { callEnded: boolean } | void;
-      if (active) result = await active.leave();
+      span.setAttr('call.leave.orphaned', orphaned);
+      let result: { callEnded: boolean } | void = undefined;
+      if (orphaned) await call.meetingSession.disconnect();
+      else if (active) result = await active.leave();
       else if (channelId) result = await call.callLifecycle.leave(channelId);
       else return;
       span.setAttr('call.leave.ended', result?.callEnded ?? false);

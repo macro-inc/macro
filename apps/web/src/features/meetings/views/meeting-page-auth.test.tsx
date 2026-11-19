@@ -260,10 +260,7 @@ it('treats a hang-up on the native call screen as Leave', async () => {
       />
     </MeetingSessionProvider>
   ));
-  const joinButton = screen.getByRole('button', { name: 'Join call' });
-  await screen.findByText('Camera unavailable');
-  await waitFor(() => expect(joinButton.hasAttribute('disabled')).toBe(false));
-  fireEvent.click(joinButton);
+  fireEvent.click(screen.getByRole('button', { name: 'Join call' }));
   await screen.findByText('In the native call');
 
   // Native drops the call before telling JS it was ended there.
@@ -279,4 +276,64 @@ it('treats a hang-up on the native call screen as Leave', async () => {
   // Native already ended it; ending again could end a call that replaced it.
   expect(disconnect).toHaveBeenCalledExactlyOnceWith({ endNativeCall: false });
   expect(endedWatchers.size).toBe(0);
+});
+
+it('offers no waiting-room media choices the native call would ignore', async () => {
+  const request = vi.fn(async () => {
+    throw new DOMException('Denied', 'NotAllowedError');
+  });
+  const connect = vi.fn(async () => {});
+  render(() => (
+    <MeetingSessionProvider>
+      <MeetingPage
+        source={() => ({
+          kind: 'ready',
+          title: 'Quick Call',
+          channelId: null,
+          scheduledStart: null,
+          scheduledEnd: null,
+        })}
+        authenticated={() => true}
+        author={() => 'Member'}
+        onCopy={async () => {}}
+        mediaAccess={{ request }}
+        session={{
+          lifecycle: createMeetingSessionLifecycle(),
+          shareToken: () => 'token',
+          isInCall: () => false,
+          activeCallId: () => null,
+          join: async () => ({
+            callId: 'call-1',
+            channelId: null,
+            roomName: 'room',
+            serverUrl: 'wss://example.com',
+            token: 'token',
+            participantId: 'member',
+            started: false,
+            shareToken: 'share',
+          }),
+          release: async () => {},
+          connect,
+          disconnect: async () => {},
+          mediaPath: () => 'native',
+        }}
+        renderCall={() => <p>In the native call</p>}
+      />
+    </MeetingSessionProvider>
+  ));
+  await screen.findByText(/You join with your microphone on and camera off/);
+  expect(
+    screen.queryByRole('button', { name: 'Turn off microphone' })
+  ).toBeNull();
+  expect(
+    screen.queryByRole('button', { name: 'Turn on microphone' })
+  ).toBeNull();
+  expect(screen.queryByRole('button', { name: /camera/i })).toBeNull();
+  expect(request).not.toHaveBeenCalled();
+  fireEvent.click(screen.getByRole('button', { name: 'Join call' }));
+  await waitFor(() => expect(connect).toHaveBeenCalledOnce());
+  expect(connect).toHaveBeenCalledWith(expect.anything(), {
+    microphoneEnabled: true,
+    cameraEnabled: false,
+  });
 });
