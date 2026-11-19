@@ -107,9 +107,18 @@ Address: informal tú.
 | notifications | Notificaciones |
 | done | Hechos |
 | mark as read | Marcar como leído |
-| snooze | Posponer notificaciones… |
+| snooze | Posponer notificaciones |
 | archive | Archivar |
 | settings | Configuración |
+| computer (Macro computer) | Nuevo ordenador de Macro |
+| machine (runs agents) | Tus máquinas |
+| session (agent) | Esta sesión está archivada |
+| routine | Todas las rutinas |
+| saved view | Nueva vista guardada |
+| call | Volver a la llamada |
+| contact (CRM) | Cambiar empresa del contacto |
+| company (CRM) | Añadir empresa |
+| thread (email) | Excluir hilo del CRM |
 
 ## Italian (`it`)
 
