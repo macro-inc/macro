@@ -27,6 +27,38 @@ describe("document copy endpoint tests", () => {
     copiedUser.connection.getWebSocket().close();
   }, 3000);
 
+  test("copy at a version keeps concurrent peer edits from that time", async () => {
+    let doc = await createDocument(mf);
+    let [userA, userB] = await doc.createMultipleUsers(2);
+
+    userA.makeChange("A");
+    userB.makeChange("B");
+    await wait(200);
+    await userA.importNextUpdate();
+    await userB.importNextUpdate();
+    const merged = userA.getState();
+    expect(merged).toContain("A");
+    expect(merged).toContain("B");
+    expect(userB.getState()).toBe(merged);
+
+    const changes = [...userA.doc.getAllChanges().values()].flat();
+    const latest = changes.reduce((left, right) =>
+      left.timestamp > right.timestamp
+      || (left.timestamp === right.timestamp && left.counter >= right.counter)
+        ? left
+        : right
+    );
+    await wait(500);
+    const copied = await doc.copy("copy-concurrent-heads", {
+      peer: String(latest.peer),
+      counter: latest.counter + latest.length - 1,
+    });
+    const copyUser = await copied.createUser();
+    expect(copyUser.getState()).toBe(merged);
+
+    [userA, userB, copyUser].forEach(u => u.connection.getWebSocket().close());
+  }, 15000);
+
   test("should copy document to specific version", async () => {
     let doc = await createDocument(mf);
     let user = await doc.createUser();

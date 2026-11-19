@@ -81,6 +81,12 @@ to the requested surface. These are scoped sync JWTs, not app-session tokens.
   proportional to the update; `LoroDoc::diff`, `fork`, and checkouts cost time
   that grows with document history. A backlog past `DEFAULT_TIMEOUT_MS` (4.5 s)
   makes the front worker fail connects, which clients see as close 1006.
+- A snapshot or copy with `version_id` (one peer+counter) expands to that id
+  plus concurrent heads whose timestamp is not later, not `Frontiers::ID` of
+  that id alone. Concurrent spreadsheet (and other multi-peer) edits from the
+  same moment would otherwise be dropped. Descendants that already merged a
+  later op on the requested peer stay excluded, and the scan starts at each
+  peer's shallow boundary. Invalid ids stay 400 without mutating the live room.
 - Document history names each Loro peer from D1 `peer_user_map`, so every
   path that writes operations maps the peers it writes with: WebSocket and
   HTTP `/update` writes to their user and signed agent actor, `/initialize`
