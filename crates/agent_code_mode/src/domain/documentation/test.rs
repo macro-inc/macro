@@ -73,7 +73,11 @@ async fn one_bounded_request_expands_only_selected_entities() {
     assert!(result.contains("\n## documents\n"));
     assert!(!result.contains("\n## email\n"));
     assert!(result.contains("email:"));
-    assert!(result.len() <= 48 * 1024);
+    assert!(
+        result.len() <= ROUTED_DOCUMENTATION_BYTES,
+        "the routed prompt is {} bytes, over its {ROUTED_DOCUMENTATION_BYTES}-byte budget",
+        result.len()
+    );
     let requests = classifier.requests.lock().unwrap();
     for request in requests.iter() {
         assert_eq!(request.input["userRequest"].as_str().unwrap().len(), 8000);
@@ -314,7 +318,11 @@ async fn routed_turns_bring_each_selected_entitys_guidance_with_its_index() {
     assert!(result.contains("\n## databases\n"));
     assert!(result.contains(entity_guide("databases").unwrap()));
     assert!(!result.contains(entity_guide("crm").unwrap()));
-    assert!(result.len() <= 48 * 1024);
+    assert!(
+        result.len() <= ROUTED_DOCUMENTATION_BYTES,
+        "the routed prompt is {} bytes, over its {ROUTED_DOCUMENTATION_BYTES}-byte budget",
+        result.len()
+    );
 }
 
 #[test]
@@ -496,7 +504,12 @@ async fn the_attached_skill_leaves_byte_budgets_to_the_entities() {
         &CancellationToken::new(),
     )
     .await;
-    assert!(routed.contains(&skill));
+    assert!(
+        routed.contains(&skill),
+        "routines did not fit the {ROUTED_DOCUMENTATION_BYTES}-byte routed budget beside the \
+         other entities ({} bytes routed); raise ROUTED_DOCUMENTATION_BYTES or trim the SDK docs",
+        routed.len()
+    );
     let loaded = sdk_documentation()
         .iter()
         .filter(|doc| relevant.contains(&doc.name.as_str()))
@@ -508,7 +521,12 @@ async fn the_attached_skill_leaves_byte_budgets_to_the_entities() {
         .count();
     assert!(loaded >= 3, "only {loaded} entities fit beside the skill");
     let without_skill = routed.replacen(&format!("\n{skill}\n"), "", 1);
-    assert!(without_skill.len() <= 48 * 1024 + "</macro_sdk>\n".len());
+    assert!(
+        without_skill.len() <= ROUTED_DOCUMENTATION_BYTES + "</macro_sdk>\n".len(),
+        "the routed prompt without its skill is {} bytes, over its \
+         {ROUTED_DOCUMENTATION_BYTES}-byte budget",
+        without_skill.len()
+    );
     let classifier: Arc<dyn Cognition> = Arc::new(Classifier {
         requests: Mutex::new(vec![]),
         delay: Duration::ZERO,

@@ -25,7 +25,7 @@ plugin directory refuses generic executors.
   owner approval goes through the session's `NativeToolGate`.
 - Docs selection (`select_documentation`): once per turn, one Jev `decide` call
   over the last user message, one question per SDK entity (30). Keeps p ≥ 0.5,
-  top 4, 48 KiB budget, falls back to an entity's overview when its full
+  top 4, 56 KiB budget, falls back to an entity's overview when its full
   reference does not fit, 1 s deadline. The result goes into the system prompt.
 - Public MCP (`services/agent_harness_service/src/public_mcp`): stateless,
   OAuth user id only, `ai_tools::tools_for(AiHost::Mcp)`.
@@ -45,7 +45,7 @@ Split `select_documentation` into:
 
 - `select_entities(user, text, cognition, cancel) -> Vec<SdkDocumentation>`:
   the Jev call and threshold, no rendering.
-- The existing prompt renderer (top 4, 48 KiB, 1 s) for agent sessions.
+- The existing prompt renderer (top 4, 56 KiB, 1 s) for agent sessions.
 - A tool renderer: all entities over the threshold, a larger deadline (the
   agent is waiting on this call), and a byte budget sized for MCP tool-result
   limits, falling back to overviews past it. On Jev failure, return the compact

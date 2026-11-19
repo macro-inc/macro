@@ -26,7 +26,7 @@ mod test;
 /// on that turn only, and the next miss waits until the budget fills again.
 /// A turn picks about 20 KiB at the median and 37 KiB at p90, so that is
 /// every few turns, not once a session. The newest request always keeps its
-/// own whole, however large: the selector bounds it (48 KiB of indexes, plus
+/// own whole, however large: the selector bounds it (56 KiB of indexes, plus
 /// the catalog and any attached skill), and that turn needs it.
 pub const DOCS_PER_SESSION_BYTES: usize = 64 * 1024;
 
