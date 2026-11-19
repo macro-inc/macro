@@ -1,3 +1,4 @@
+import { t } from '@app/lib/i18n';
 import WarningIcon from '@icon/system/regular/warning-circle.svg';
 import { Button } from '@ui';
 import { createSignal, For, Show } from 'solid-js';
@@ -12,8 +13,9 @@ import type { CodeReview } from '../core/code-review';
 export function CodeReviewNotice(props: {
   review: CodeReview;
   paused: boolean;
-  pending: boolean;
+  disabled: boolean;
   onApprove(): void;
+  onDiscardEdits?(): void;
 }) {
   const [open, setOpen] = createSignal(false);
   return (
@@ -64,11 +66,20 @@ export function CodeReviewNotice(props: {
             <div class="flex flex-wrap gap-2">
               <Button
                 size="sm"
-                disabled={props.pending}
+                disabled={props.disabled}
                 onClick={() => props.onApprove()}
               >
                 {props.paused ? 'Approve and resume' : 'Approve'}
               </Button>
+              <Show when={props.onDiscardEdits}>
+                <Button
+                  variant="secondary"
+                  size="sm"
+                  onClick={props.onDiscardEdits}
+                >
+                  {t('subRoutines.discardEdits')}
+                </Button>
+              </Show>
               <Button
                 variant="secondary"
                 size="sm"

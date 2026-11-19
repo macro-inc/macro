@@ -333,6 +333,7 @@ vi.mock('./queries/schedules', () => ({
   useRunScheduleNowMutation: () => ({ mutate: mocks.run, isPending: false }),
   useSetScheduleEnabledMutation: () => ({
     mutate: mocks.setEnabled,
+    mutateAsync: mocks.setEnabled,
     get isPending() {
       return mocks.activationPending();
     },
@@ -1141,6 +1142,33 @@ describe('routine code that needs an update', () => {
     expect(mocks.refetchUpgrades).toHaveBeenCalled();
   });
 
+  it('holds approval while an autosave is queued or in flight', async () => {
+    const saving = Promise.withResolvers<ScheduledAction>();
+    setSchedules([paused]);
+    mocks.update.mockReturnValue(saving.promise);
+    mocks.codeUpgrades = () => [
+      upgrade(code('macro.tasks.add(x)', '0.3.0+new')),
+    ];
+    render(() => <Routine />);
+    const approve = screen.getByRole<HTMLButtonElement>('button', {
+      name: 'Approve and resume',
+    });
+    fireEvent.click(
+      screen.getByRole('switch', { name: 'Show runs in Home and Agents' })
+    );
+
+    expect(approve.disabled).toBe(true);
+    fireEvent.click(approve);
+    expect(mocks.update).not.toHaveBeenCalled();
+
+    await vi.advanceTimersByTimeAsync(300);
+    expect(mocks.update).toHaveBeenCalledOnce();
+    expect(approve.disabled).toBe(true);
+    saving.resolve({ ...paused, run_visibility: 'listed' });
+    await vi.advanceTimersByTimeAsync(0);
+    expect(approve.disabled).toBe(false);
+  });
+
   it('shows nothing once its code checks against that SDK', () => {
     setSchedules([{ ...paused, task: code('x', '0.3.0+new') }]);
     mocks.codeUpgrades = () => [upgrade()];
@@ -1167,10 +1195,8 @@ describe('routine code that needs an update', () => {
       task: withDefinition('macro.tasks.create(x)', '0.2.0+old'),
     };
     setSchedules([enabled]);
-    mocks.update.mockResolvedValue({
-      ...enabled,
-      task: withDefinition('macro.tasks.add(x)', '0.3.0+new'),
-    });
+    const saving = Promise.withResolvers<ScheduledAction>();
+    mocks.update.mockReturnValue(saving.promise);
     mocks.codeUpgrades = () => [
       {
         ...upgrade(withDefinition('macro.tasks.add(x)', '0.3.0+new')),
@@ -1185,6 +1211,16 @@ describe('routine code that needs an update', () => {
     fireEvent.click(screen.getByRole('button', { name: 'Review the update' }));
     expect(screen.getByText('Remind (in Remind me)')).toBeTruthy();
     fireEvent.click(screen.getByRole('button', { name: 'Approve' }));
+    const toggle = screen.getByRole<HTMLButtonElement>('switch', {
+      name: 'Enabled',
+    });
+    expect(toggle.disabled).toBe(true);
+    fireEvent.click(toggle);
+    mocks.changePrompt('An edit during approval');
+    saving.resolve({
+      ...enabled,
+      task: withDefinition('macro.tasks.add(x)', '0.3.0+new'),
+    });
     await vi.advanceTimersByTimeAsync(0);
     expect(mocks.update).toHaveBeenCalledWith({
       scheduleId: cron.id,
@@ -1201,6 +1237,9 @@ describe('routine code that needs an update', () => {
         }),
       }),
     });
+    await vi.advanceTimersByTimeAsync(300);
+    expect(mocks.update).toHaveBeenCalledOnce();
+    expect(mocks.setEnabled).not.toHaveBeenCalled();
   });
 });
 

@@ -80,7 +80,14 @@ export function createRoutineDetail(
 
   function setState(update: (prev: ScheduleDraft) => ScheduleDraft): void {
     const current = state();
-    if (!isOwned() || !current || !editableTrigger() || isRunning()) return;
+    if (
+      !isOwned() ||
+      !current ||
+      !editableTrigger() ||
+      isRunning() ||
+      source.codeUpdatePending()
+    )
+      return;
     const next = update(current);
     if (next === current) return;
     setRawState(next);
@@ -112,6 +119,7 @@ export function createRoutineDetail(
       autosave.dirty() ||
       autosave.saving() ||
       source.runPending() ||
+      source.codeUpdatePending() ||
       isRunning()
     )
       return;
@@ -157,6 +165,7 @@ export function createRoutineDetail(
   const runDisabled = () =>
     !isOwned() ||
     source.runPending() ||
+    source.codeUpdatePending() ||
     isRunning() ||
     autosave.dirty() ||
     autosave.saving() ||
@@ -165,7 +174,20 @@ export function createRoutineDetail(
   const activationDisabled = () =>
     !isOwned() ||
     source.activationPending() ||
+    source.codeUpdatePending() ||
     (!isActive() && (isCompleted() || runDisabled()));
+  const approvalDisabled = () =>
+    !isOwned() ||
+    !state() ||
+    isRunning() ||
+    source.runPending() ||
+    source.activationPending() ||
+    source.codeUpdatePending() ||
+    autosave.dirty() ||
+    autosave.saving();
+  async function approveCodeUpdate() {
+    if (!approvalDisabled()) await source.approveCodeUpdate();
+  }
 
   return {
     schedule,
@@ -181,6 +203,8 @@ export function createRoutineDetail(
     nextRun,
     runDisabled,
     activationDisabled,
+    approvalDisabled,
+    approveCodeUpdate,
     runNow,
   };
 }

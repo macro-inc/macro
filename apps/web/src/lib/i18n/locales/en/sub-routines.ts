@@ -25,6 +25,7 @@ export default {
   stopSharing: 'Stop sharing',
   stoppedSharing: 'Stopped sharing',
   stopSharingFailed: 'Could not stop sharing',
+  discardEdits: 'Discard unsaved edits',
   deleteNote: {
     one: 'The {{count}} routine it created will be deleted too.',
     other: 'The {{count}} routines it created will be deleted too.',

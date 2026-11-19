@@ -111,8 +111,11 @@ export function createRoutineDetailSource(
   const run = useRunScheduleNowMutation({
     onError: (error) => callbacks.onError('Failed to start run', error),
   });
+  const [approving, setApproving] = createSignal(false);
   const activate = useSetScheduleEnabledMutation({
-    onError: (error) => callbacks.onError('Failed to update routine', error),
+    onError: (error) => {
+      if (!approving()) callbacks.onError('Failed to update routine', error);
+    },
   });
   const duplicate = useCreateScheduleMutation(
     {
@@ -173,7 +176,6 @@ export function createRoutineDetailSource(
     const parent = rawParent();
     return Boolean(parent && wireDefinition(parent.task, copy.subRoutine));
   };
-  const [approving, setApproving] = createSignal(false);
   const save = async (draft: ScheduleDraft) => {
     const previous = raw();
     const body = previous && draftToUpdateBody(draft, previous);
@@ -197,7 +199,9 @@ export function createRoutineDetailSource(
     update: save,
     run: () => run.mutate({ scheduleId: id() }),
     runPending: () => run.isPending,
-    setEnabled: (enabled) => activate.mutate({ scheduleId: id(), enabled }),
+    setEnabled: (enabled) => {
+      if (!approving()) activate.mutate({ scheduleId: id(), enabled });
+    },
     activationPending: () => activate.isPending,
     duplicate() {
       const current = raw();
@@ -222,20 +226,27 @@ export function createRoutineDetailSource(
     // Saving checks the proposal against the current SDK again. It holds
     // the sub-routines' rewritten code too.
     async approveCodeUpdate() {
+      const scheduleId = id();
       const proposal = codeReview()?.proposal;
       const current = raw();
       const steps = proposal && programSteps(proposal.task);
       const subRoutines = proposal && subRoutinesFromWire(proposal.task);
       const draft = current && toRoutine(current).draft;
-      if (!steps || !subRoutines || !draft || approving()) return;
+      if (!steps || !subRoutines || !draft || approving() || activate.isPending)
+        return;
       setApproving(true);
       try {
         await save({
           ...withDraftSteps(draft, steps),
           ...(subRoutines.length ? { subRoutines } : {}),
         });
-        activate.mutate({ scheduleId: id(), enabled: true });
-        await upgrades.refetch();
+        try {
+          if (!current.enabled) {
+            await activate.mutateAsync({ scheduleId, enabled: true });
+          }
+        } finally {
+          if (id() === scheduleId) await upgrades.refetch();
+        }
       } catch (error) {
         callbacks.onError('Failed to update the routine’s code', error);
       } finally {

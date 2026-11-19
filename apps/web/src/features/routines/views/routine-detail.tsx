@@ -176,6 +176,8 @@ export function RoutineDetailView(props: {
     nextRun,
     runDisabled,
     activationDisabled,
+    approvalDisabled,
+    approveCodeUpdate,
     runNow,
   } = createRoutineDetail(props.source, {
     userId: props.userId,
@@ -258,7 +260,12 @@ export function RoutineDetailView(props: {
             }
           }
           onChange={setState}
-          disabled={!isOwned() || isRunning() || !state()}
+          disabled={
+            !isOwned() ||
+            isRunning() ||
+            !state() ||
+            props.source.codeUpdatePending()
+          }
           tab={isOwned() ? tab() : 'settings'}
           showHistory={isOwned()}
           onTab={setTab}
@@ -342,6 +349,7 @@ export function RoutineDetailView(props: {
                   <Dropdown.Group>
                     <Dropdown.Item
                       class="text-failure-ink"
+                      disabled={props.source.codeUpdatePending()}
                       onSelect={props.onDelete}
                     >
                       <TrashIcon class="size-4" />
@@ -485,9 +493,17 @@ export function RoutineDetailView(props: {
                 <CodeReviewNotice
                   review={review()}
                   paused={!isActive()}
-                  pending={props.source.codeUpdatePending()}
+                  disabled={approvalDisabled()}
+                  onDiscardEdits={
+                    autosave.dirty() && !autosave.saving()
+                      ? () => {
+                          autosave.cancel();
+                          initializeDraft();
+                        }
+                      : undefined
+                  }
                   onApprove={() =>
-                    fireAndForget(props.source.approveCodeUpdate(), 'routines')
+                    fireAndForget(approveCodeUpdate(), 'routines')
                   }
                 />
               )}
