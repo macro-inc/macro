@@ -48,6 +48,7 @@ const rows: RoutineRow[] = [
     editable: true,
     children: [],
     pausedByParent: false,
+    isCopy: false,
     shareable: true,
   },
   {
@@ -69,6 +70,7 @@ const rows: RoutineRow[] = [
     editable: true,
     children: [],
     pausedByParent: false,
+    isCopy: false,
     shareable: true,
   },
 ];

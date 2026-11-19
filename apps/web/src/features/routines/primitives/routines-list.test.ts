@@ -18,6 +18,7 @@ function routine(
     enabled: true,
     revision: 1,
     configurationKey: id,
+    isCopy: false,
     parent,
   };
 }

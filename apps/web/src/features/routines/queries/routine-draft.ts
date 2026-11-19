@@ -458,6 +458,7 @@ export function draftToUpdateBody(
 export function scheduleToDuplicateBody(
   schedule: ScheduledAction
 ): ActionConfiguration | undefined {
+  if ('sub_routine' in schedule.task) return undefined;
   const trigger = schedule.trigger ?? getCronTrigger(schedule);
   if (!trigger) return undefined;
   return {

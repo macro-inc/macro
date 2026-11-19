@@ -303,13 +303,15 @@ export function RoutineDetailView(props: {
                 <Dropdown.Content portalScope="local">
                   <Dropdown.Group>
                     {props.appearanceMenu}
-                    <Dropdown.Item
-                      disabled={!state() || props.source.duplicationPending()}
-                      onSelect={() => props.source.duplicate()}
-                    >
-                      <CopyIcon class="size-4" />
-                      Duplicate
-                    </Dropdown.Item>
+                    <Show when={!routine().isCopy}>
+                      <Dropdown.Item
+                        disabled={!state() || props.source.duplicationPending()}
+                        onSelect={() => props.source.duplicate()}
+                      >
+                        <CopyIcon class="size-4" />
+                        Duplicate
+                      </Dropdown.Item>
+                    </Show>
                     <Show when={props.onShare}>
                       <Dropdown.Item onSelect={props.onShare}>
                         <ShareIcon class="size-4" />

@@ -980,6 +980,10 @@ describe('routines with sub-routines', () => {
     expect(body.run_visibility).toBe('listed');
   });
 
+  it('does not turn a scheduled copy into an ordinary create request', () => {
+    expect(scheduleToDuplicateBody(copy)).toBeUndefined();
+  });
+
   it('leaves a routine whose sub-routine it can’t show read-only', () => {
     const unshown: ScheduledAction = {
       ...parent,

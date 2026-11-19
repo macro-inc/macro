@@ -87,6 +87,7 @@ function routine(
     editable: true,
     children: [],
     pausedByParent: false,
+    isCopy: false,
     shareable: true,
     ...extra,
   };

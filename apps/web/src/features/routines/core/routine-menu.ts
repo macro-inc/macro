@@ -29,7 +29,7 @@ export type RoutineMenuSurface = {
  * gets only opening and links.
  */
 export function routineMenuGroups(
-  row: Pick<RoutineRow, 'editable' | 'enabled' | 'shareable'>,
+  row: Pick<RoutineRow, 'editable' | 'enabled' | 'isCopy' | 'shareable'>,
   surface: RoutineMenuSurface
 ): RoutineMenuItem[][] {
   const owned = row.editable;
@@ -40,7 +40,12 @@ export function routineMenuGroups(
       ...(surface.tabs ? (['open-in-tab'] as const) : []),
     ],
     owned ? ['run-now', row.enabled ? 'turn-off' : 'turn-on'] : [],
-    owned ? ['duplicate', ...(surface.nested ? (['keep'] as const) : [])] : [],
+    owned
+      ? [
+          ...(row.isCopy ? [] : (['duplicate'] as const)),
+          ...(surface.nested ? (['keep'] as const) : []),
+        ]
+      : [],
     ['copy-link', 'copy-id', ...(share ? (['share'] as const) : [])],
     owned ? ['delete'] : [],
   ];

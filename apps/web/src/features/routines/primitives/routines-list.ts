@@ -101,6 +101,7 @@ export function createRoutineRows(
             ? 'Active'
             : 'Paused',
       enabled: routine.enabled,
+      isCopy: routine.isCopy,
       editable: routine.ownerId === userId(),
       // A routine the editor can't show is left for the scheduler to decide.
       shareable: !draft || sharesAsTemplate(draft),

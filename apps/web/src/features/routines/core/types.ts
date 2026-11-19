@@ -23,6 +23,7 @@ export type RoutineRow = {
   status: 'Active' | 'Paused' | 'Running' | 'Completed';
   editable: boolean;
   enabled: boolean;
+  isCopy: boolean;
   /** Whether the scheduler takes it as a template (`sharesAsTemplate`). */
   shareable: boolean;
   /** The routines its runs created that still have work to do, newest first. */

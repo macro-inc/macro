@@ -62,6 +62,7 @@ const triage: RoutineRow = {
   editable: true,
   children: [],
   pausedByParent: false,
+  isCopy: false,
   shareable: true,
 };
 
@@ -74,6 +75,7 @@ const listed: RoutineSnapshot = {
   enabled: true,
   revision: 1,
   configurationKey: 'follow-up',
+  isCopy: false,
   parent: { id: 'triage', createdByRunId: 'run', pausedByParent: false },
 };
 

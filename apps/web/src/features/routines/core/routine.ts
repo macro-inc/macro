@@ -16,6 +16,8 @@ export type RoutineSnapshot = {
   claimedAt?: string | null;
   revision: number;
   configurationKey: string;
+  /** Its steps come from a named definition on its parent. */
+  isCopy: boolean;
   draft?: ScheduleDraft;
   /** The shared template this routine was activated from. */
   templateId?: string;

@@ -62,6 +62,7 @@ function toRoutine(schedule: ScheduledActionResponse): RoutineSnapshot {
       schedule.run_visibility,
       schedule.description,
     ]),
+    isCopy: 'sub_routine' in schedule.task,
     draft: draftFromSchedule(schedule),
     templateId: schedule.template_id ?? undefined,
     lastRun: schedule.last_run ? toHistoryRecord(schedule.last_run) : undefined,

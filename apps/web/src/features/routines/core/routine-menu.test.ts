@@ -17,7 +17,7 @@ describe('routine menu groups', () => {
   it('offers its owner opening, running, copying, links and delete', () => {
     expect(
       routineMenuGroups(
-        { editable: true, enabled: true, shareable: true },
+        { editable: true, enabled: true, isCopy: false, shareable: true },
         DESKTOP
       )
     ).toEqual([
@@ -32,7 +32,7 @@ describe('routine menu groups', () => {
   it('turns a paused routine on', () => {
     expect(
       routineMenuGroups(
-        { editable: true, enabled: false, shareable: true },
+        { editable: true, enabled: false, isCopy: false, shareable: true },
         DESKTOP
       )[1]
     ).toEqual(['run-now', 'turn-on']);
@@ -41,16 +41,28 @@ describe('routine menu groups', () => {
   it('keeps a sub-routine as the owner’s own', () => {
     expect(
       routineMenuGroups(
-        { editable: true, enabled: true, shareable: true },
+        { editable: true, enabled: true, isCopy: false, shareable: true },
         { ...DESKTOP, nested: true }
       )[2]
     ).toEqual(['duplicate', 'keep']);
   });
 
+  it('keeps a definition-backed copy without offering Duplicate', () => {
+    const row = {
+      editable: true,
+      enabled: true,
+      shareable: false,
+      isCopy: true,
+    };
+    expect(routineMenuGroups(row, { ...DESKTOP, nested: true })[2]).toEqual([
+      'keep',
+    ]);
+  });
+
   it('leaves out what the host cannot offer', () => {
     expect(
       routineMenuGroups(
-        { editable: true, enabled: true, shareable: true },
+        { editable: true, enabled: true, isCopy: false, shareable: true },
         { nested: false, splits: false, tabs: false, share: false }
       )
     ).toEqual([
@@ -64,7 +76,7 @@ describe('routine menu groups', () => {
   it('gives everyone else opening and links only', () => {
     expect(
       routineMenuGroups(
-        { editable: false, enabled: true, shareable: true },
+        { editable: false, enabled: true, isCopy: false, shareable: true },
         { ...DESKTOP, nested: true }
       )
     ).toEqual([
@@ -76,7 +88,7 @@ describe('routine menu groups', () => {
   it('leaves out sharing a routine the scheduler takes no template of', () => {
     expect(
       routineMenuGroups(
-        { editable: true, enabled: true, shareable: false },
+        { editable: true, enabled: true, isCopy: false, shareable: false },
         DESKTOP
       )[3]
     ).toEqual(['copy-link', 'copy-id']);
