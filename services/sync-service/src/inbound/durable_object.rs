@@ -738,16 +738,8 @@ impl SyncSession {
 
         if snapshot_storage.has_snapshot().await? {
             self.maybe_set_document_id(document_id).await?;
-            // set up session storage
-            let dkv_storage = DurableKVStorage::new(self.state.storage());
-            let session_storage = Rc::new(SessionStorage::new(
-                snapshot_storage,
-                dkv_storage,
-                session_kind_from_storage_key(document_id),
-            ));
-            *self
-                .session_storage
-                .lock("SyncSession::session_storage set within exists") = Some(session_storage);
+            // Keep the existing storage's applied operation keys until the next
+            // snapshot clears them. session_storage() initializes it on demand.
             return Ok(true);
         }
         Ok(false)
