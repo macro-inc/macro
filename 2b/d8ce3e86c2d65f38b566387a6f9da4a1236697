@@ -1,0 +1,29 @@
+apps/web/src/features/block-agent/component/parts/ToolCallPart.test.tsx
+  s_0492cd67e9a157::t_bf56d4f52848ff 81-95,1631-1700
+  s_0492cd67e9a157::t_0eaed2e8ed153f 1701
+apps/web/src/features/block-agent/component/PermissionApprovalRequest.test.tsx
+  s_0492cd67e9a157::t_56ac9efdc58f7a 38-43,58-62,102,147-153
+  s_0492cd67e9a157::t_65e2cffcd4439a 154-155
+apps/web/src/features/block-agent/state/permission-approval.test.ts
+  s_0492cd67e9a157::t_bf56d4f52848ff 60-73
+apps/web/src/lib/service-clients/service-agent-harness/generated/schemas/programLanguage.ts
+  s_0492cd67e9a157::t_14fec77253b632 21
+apps/web/src/lib/service-clients/service-agent-harness/openapi.json
+  s_0492cd67e9a157::t_6c4ce408d1de10 8168
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.7.7",
+  "base_commit_sha": "2bd8ce3e86c2d65f38b566387a6f9da4a1236697",
+  "prompts": {},
+  "sessions": {
+    "s_0492cd67e9a157": {
+      "agent_id": {
+        "tool": "claude",
+        "id": "757457a6-0f73-4066-bc1d-f7508c73a141",
+        "model": "claude-opus-5-5"
+      },
+      "human_author": "Eric Hayes <56524199+ehayes2000@users.noreply.github.com>"
+    }
+  }
+}
