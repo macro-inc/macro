@@ -406,16 +406,23 @@ async fn discover_inner<R: EmailRuleDiscoveryReader>(
         // so 1,000 members do not multiply a 50,000-address live source.
         let mut address_sources = HashMap::<&str, Vec<RuleSource>>::new();
         let mut domain_sources = HashMap::<&str, Vec<RuleSource>>::new();
-        for (source, (_, values)) in &live {
+        let mut domain_members: Members = domains.values().flatten().copied().collect();
+        for (source, (members, values)) in &live {
             let map = match source {
                 RuleSource::Contact(_) => &mut address_sources,
-                RuleSource::Company(_) => &mut domain_sources,
+                RuleSource::Company(_) => {
+                    if !values.is_empty() {
+                        domain_members.extend(members);
+                    }
+                    &mut domain_sources
+                }
             };
             for value in values.iter().map(String::as_str).collect::<HashSet<_>>() {
                 map.entry(value).or_default().push(*source);
             }
         }
         for link in active {
+            let has_domains = domain_members.contains(&link);
             let mut after = None;
             loop {
                 budget.check_deadline()?;
@@ -435,19 +442,16 @@ async fn discover_inner<R: EmailRuleDiscoveryReader>(
                     let address = row.address.ok_or_else(|| over(L::ContactBytes))?;
                     let domain = row.domain.ok_or_else(|| over(L::ContactBytes))?;
                     after = row.key;
-                    // Both strategies charge the same conservative suffix
-                    // count, even when an address or an early suffix matches.
-                    if !domain.is_empty() && (!domains.is_empty() || !domain_sources.is_empty()) {
+                    // Only this mailbox's domain selectors require suffix work.
+                    // Both strategies charge it even when an address matches.
+                    if !domain.is_empty() && has_domains {
                         budget.charge(L::SuffixChecks, domain.split('.').count() as u64)?;
                     }
                     let mut hit = addresses
                         .get(&address)
                         .is_some_and(|members| members.contains(&link))
                         || permits(&address_sources, &live, &address, link, budget)?;
-                    if !hit
-                        && !domain.is_empty()
-                        && (!domains.is_empty() || !domain_sources.is_empty())
-                    {
+                    if !hit && !domain.is_empty() && has_domains {
                         let mut suffix = domain.as_str();
                         loop {
                             if domains

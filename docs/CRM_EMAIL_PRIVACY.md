@@ -388,16 +388,20 @@ Discovery caps contributors (1,000), raw references/live contact addresses/live
 company domains (50,000 each), one live value (4 KiB), source text (8 MiB), raw
 mailbox contacts (250,000), contact text (32 MiB), suffix checks (750,000),
 membership checks (250,000), and its shared deadline (ten seconds). Counts apply
-before filtering/deduplication. A complete result or an explicit error is
-required; truncating discovery cannot authorize a partial feed. The small SQL
-aggregate may materialize the bounded raw page before the text-byte check.
+before filtering/deduplication. Suffix checks apply only to mailboxes with their
+own applicable domain selectors, including live company domains. A complete
+result or an explicit error is required; truncating discovery cannot authorize
+a partial feed. The small SQL aggregate may materialize the bounded raw page
+before the text-byte check.
 
 Both policy validation and replacement use this same checker against the
 proposed owner policy and the other active selected contributors. Validation is
 read-only; replacement repeats admission inside its locked transaction before
-granting. Failure returns HTTP 400 with the limit name/maximum and leaves consent,
-identity, historical work, audit and idempotency unchanged. Subsequent live-source
-growth may exceed a bound: Team reads then return HTTP 503 with that limit,
+granting. Successful admission restores the mutation's existing 15-second
+statement timeout for subsequent writes. Failure returns HTTP 400 with the limit
+name/maximum and leaves consent, identity, historical work, audit and idempotency
+unchanged. Subsequent live-source growth may exceed a bound: Team reads then
+return HTTP 503 with that limit,
 record the limit and work counters on `crm.email_rules.discovery`, and return no
 partial result or advanced cursor. Public errors omit observed team usage and
 private target values. Withdrawal and all-mail behavior remain independent.

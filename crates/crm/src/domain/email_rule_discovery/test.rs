@@ -349,6 +349,90 @@ async fn domain_suffixes_and_empty_domains_agree_on_both_input_paths() -> anyhow
 }
 
 #[tokio::test]
+async fn another_mailbox_domain_rule_cannot_exhaust_an_address_only_mailbox() -> anyhow::Result<()>
+{
+    for company_rule in [false, true] {
+        for contributors in [8, 9] {
+            let mut facts = Facts::default();
+            facts.contributors = (1..=contributors)
+                .map(|id| contributor(id, false))
+                .collect();
+            facts.rules.push(ContributorRule {
+                link_id: Uuid::from_u128(1),
+                rule: EmailInclusionRule::Address {
+                    address: "159999@a.b.c.example.com".into(),
+                },
+            });
+            let source = RuleSource::Company(Uuid::from_u128(200));
+            facts.rules.push(ContributorRule {
+                link_id: Uuid::from_u128(2),
+                rule: if company_rule {
+                    EmailInclusionRule::Company {
+                        company_id: Uuid::from_u128(200),
+                    }
+                } else {
+                    EmailInclusionRule::Domain {
+                        domain: "client.example".into(),
+                    }
+                },
+            });
+            facts.sources.push(RuleSourceFacts {
+                source,
+                in_team: true,
+                hidden: false,
+            });
+            facts.values.insert(
+                source,
+                vec![RuleSourceValue {
+                    key: Some("client.example".into()),
+                    value: Some("client.example".into()),
+                    bytes: 14,
+                    in_team: true,
+                }],
+            );
+            facts.contacts.insert(
+                Uuid::from_u128(1),
+                (0..160_000)
+                    .map(|id| contact(id + 1_000, &format!("{id:06}@a.b.c.example.com")))
+                    .collect(),
+            );
+            facts.contacts.insert(
+                Uuid::from_u128(2),
+                vec![contact(1_000_000, "peer@sub.client.example")],
+            );
+            let result = run(&mut facts).await?;
+            assert_eq!(result.small_input, contributors == 8);
+            assert_eq!(
+                result.contacts,
+                vec![
+                    (Uuid::from_u128(1), Uuid::from_u128(160_999)),
+                    (Uuid::from_u128(2), Uuid::from_u128(1_000_000)),
+                ]
+            );
+            assert_eq!(result.work.mailbox_contacts, 160_001);
+            assert_eq!(result.work.suffix_checks, 3);
+
+            // The same mailbox must still spend the suffix budget once its
+            // own policy has a domain selector.
+            facts.rules.push(ContributorRule {
+                link_id: Uuid::from_u128(1),
+                rule: EmailInclusionRule::Domain {
+                    domain: "example.com".into(),
+                },
+            });
+            assert!(matches!(
+                run(&mut facts).await,
+                Err(CrmError::EmailRuleLimitExceeded(EmailRuleLimitExceeded {
+                    limit: EmailRuleWorkLimit::SuffixChecks,
+                    ..
+                }))
+            ));
+        }
+    }
+    Ok(())
+}
+
+#[tokio::test]
 async fn an_oversized_exact_cross_product_changes_strategy_without_rejecting_or_truncating()
 -> anyhow::Result<()> {
     let source = RuleSource::Contact(Uuid::from_u128(200));
