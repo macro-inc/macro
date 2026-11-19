@@ -317,11 +317,13 @@ passing stores nothing and pushes nothing, so a follow-up coming due, a
 calendar change whose event ends or importance moving shows at the tab's next
 read. Mark
 Done hides the row at once and archives the thread; Undo brings it back. The
-worker classifies an inbox only while its owner has `enable-email-focus` on; a
-delegated inbox follows its owner's flag, not the reader's. An owner who joins
-the rollout gets a filled tab without new mail: within about 6 minutes the
-worker finds them (it looks at every connected inbox each minute, evaluating
-the flag from definitions it polls from PostHog every 5 minutes) and backfills their inbox,
+worker classifies an inbox only while someone whose tab shows it has
+`enable-email-focus` on: its owner, or a user it is linked to, so a mailbox you
+link is classified while you have the flag even when its own account does not.
+A user who joins the rollout gets a filled tab without new mail: within about
+6 minutes the worker finds them (it looks at every connected inbox each minute,
+evaluating the flag from definitions it polls from PostHog every 5 minutes) and
+backfills their inboxes, linked ones included,
 the last 3 days first, then the rest of the 30 without due dates (an older
 thread gets one with its next mail). With nothing classified the tab
 shows the empty state `You're caught up`, whose **See the rest of your inbox** opens Signal.

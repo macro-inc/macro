@@ -433,7 +433,8 @@ shared with the web app's suite) and backend entry points second.
   gives the group an offset before its first worker starts, so mail that
   arrives while a worker joins is still read. The worker's later sweeps
   are an hour apart and no scenario sees one, but it looks at every linked
-  inbox once a minute and backfills those whose owner has the flag, so a
+  inbox once a minute and backfills those whose owner, or a user they are
+  linked to, has the flag, so a
   scenario longer than a minute may see a thread classified by that too.
   Events of other scenarios name threads that are not in this scenario's
   database and are passed over.
