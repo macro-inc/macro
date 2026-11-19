@@ -20,6 +20,7 @@ import {
   lastToast,
   setStatusUnavailable,
 } from './preview-adapters';
+import { SelectiveSettingsFixture } from './selective-fixture';
 import { ThreadMenuFixture } from './thread-menu-fixture';
 
 document.documentElement.dataset.touchDevice = String(isTouchDevice());
@@ -84,7 +85,13 @@ if (root)
             path="*"
             component={() => (
               <PrivacyNavigationFixture>
-                <Fixture />
+                {new URLSearchParams(location.search).has(
+                  'selective-settings'
+                ) ? (
+                  <SelectiveSettingsFixture />
+                ) : (
+                  <Fixture />
+                )}
               </PrivacyNavigationFixture>
             )}
           />

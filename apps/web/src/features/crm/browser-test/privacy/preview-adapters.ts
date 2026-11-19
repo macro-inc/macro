@@ -8,7 +8,9 @@ import type {
   EmailPrivacyChange,
 } from '../../core/email-privacy';
 import { EmailThreadMention } from '../../email-thread-mention';
+import { createEmailPolicySource } from '../../queries/email-policy';
 import { createEmailPrivacySource } from '../../queries/email-privacy';
+import { policyClient } from './policy-adapter';
 
 // Rich mentions import the same optional capabilities as other app references.
 export * from '@app/lib/analytics/posthog.tsx';
@@ -96,6 +98,12 @@ export const useCrmContext = () => ({
       () => '00000000-0000-4000-8000-000000000048',
       useUserId()
     ),
+  createEmailPolicy: () =>
+    createEmailPolicySource(
+      { client: useQueryClient(), policy: policyClient, feedback: toast },
+      () => '00000000-0000-4000-8000-000000000048',
+      useUserId()
+    ),
   createNavigation: useSplitLayout,
 });
 
@@ -121,7 +129,10 @@ export const [lastToast, setLastToast] = createSignal('');
 export const toast = { success: setLastToast, failure: setLastToast };
 export const useFeatureFlag = (flag: { key: string }) => () => ({
   enabled:
-    flag.key === 'enable-crm-thread-exclusions' && !params.has('flag-off'),
+    (flag.key === 'enable-crm-thread-exclusions' && !params.has('flag-off')) ||
+    (flag.key === 'enable-crm-selective-email-contribution' &&
+      params.has('selective-settings') &&
+      !params.has('policy-gate-off')),
   loading: false,
 });
 function response() {

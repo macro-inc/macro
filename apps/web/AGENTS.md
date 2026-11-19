@@ -934,6 +934,7 @@ resolved session ID; keep the existing `AgentSessionProvider` subscription to
   which has no dev/local override while backend ingestion rolls out;
   another contributor's copy remains eligible. Desktop/phone coverage lives in
   `src/features/crm/browser-test/privacy`.
+- Keep selective CRM settings reads side-effect free, validate on **Save and share**, preserve drafts across conflicts until explicit policy review, and retain inspection/history/withdrawal when the gate is off; see `src/features/crm/README.md`.
 - Show CRM mailbox-domain block refusals beside the submitted input and existing
   matching-entry explanations in the shared settings row description; retain
   removal and distinguish company domains from personal providers.

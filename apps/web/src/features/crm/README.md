@@ -50,6 +50,18 @@ even if the viewer switches boards while saving. The adapter supplies the select
 view ID so switching boards also retires unfinished visual moves and sort prompts.
 `browser-test/board.tsx` exercises shared cards, lane composition, and saved ordering with synthetic data.
 
+Selective email settings use generated storage-service schemas through the
+storage client. The owner/session/team query scope retires drafts on account
+changes; each edit pins its observed policy token. Save validates first and
+activates only canonical valid rules. Conflicts keep the draft and require an
+explicit current-policy comparison before admitting a fresh decision. Preview
+work starts only on a member action and polls only while its page is open;
+unknown or stale counts never appear as current totals. Saved history supplies
+verified actor attribution. Rule labels use existing permission-aware identity
+previews and retain saved IDs when names cannot be read. The same pages render
+inside the desktop settings shell and phone sheet. Browser regression coverage
+is in `browser-test/privacy/selective.browser.e2e.ts`.
+
 Successful domain block and unblock mutations refresh CRM and Soup email
 readers without archiving or restoring records. Failed mutations leave cached
 records intact. Privacy settings show the server's mailbox-domain refusal
