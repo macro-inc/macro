@@ -580,6 +580,36 @@ fifteen-second statement bound, including admission before enrichment, and
 rechecks eligibility in the population transaction. These bounds do not change
 which mail is eligible.
 
+Population scans address history before locking the mailbox row. A non-locking
+admission probe rejects stale work first; after the scan, a fresh `READ COMMITTED`
+check locks the current primary mailbox and membership, then rechecks consent and
+the queued generation before any CRM write. Disconnect, deletion, reauthentication,
+loss of primary status or membership, and withdrawn/replaced consent invalidate
+the scanned result. The row guards remain through commit. Shared team privacy and
+per-address teardown locks still cover the scan and writes, preserving exclusion
+and depopulation serialization without holding up mailbox sync for the history
+scan. `crm.email_interaction_scan` and `crm.email_authority_recheck` distinguish the
+two phases under `crm.email_eligibility`.
+
+The scan also returns the two messages and matched contacts that supply its
+dates and direction. After taking the authority guards, population validates
+those facts with primary-key probes: mailbox/thread, dates, direction, draft and
+provider-missing state, and sender/recipient address. Changed or deleted evidence
+returns `Contended`, which the worker defers as `BackfillWritesBusy`; the retry
+rescans without a mailbox lock. `crm.email_history_witnesses` measures this bounded
+check. It does not rescan a thread or freeze all mailbox history: messages added
+or changed outside these witnesses retain the existing asynchronous population
+and cleanup behavior.
+
+A deferred job goes back to the queue as a new message, after a jittered delay
+that doubles from one second up to a minute, and keeps its delivery budget. A
+policy history page (up to 100 contacts) is deferred whole: its cursor has not
+moved, so the retry scans every contact of the page again, and its writes are
+idempotent. Lock-wait contention already takes this path. Changed evidence adds
+to it only when one of a contact's two witness messages changes between that
+contact's scan and its guards, so a page is not expected to repeat for the same
+contact.
+
 Thread-exclusion controls and API writes are gated by the remote
 `enable-crm-thread-exclusions` flag, off by default in every environment. The
 web registry has no dev default or local override; the CRM domain independently
