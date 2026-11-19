@@ -525,6 +525,11 @@ Event triggers use `{ type: 'events', filters: [{ events, entities, condition }]
 `entities` takes typed references such as `{ type: 'document', entity: doc }`.
 Use `{ type: 'multiple', triggers: [...] }` to combine schedules and events.
 `routine.update(options)` replaces task and trigger settings; `delete()` removes it.
+A routine with steps can define `subRoutines`: work its runs schedule once per
+item with `macro.routines.schedule(name, { trigger, inputs, key })`, each copy
+running the definition as the routine holds it when the copy runs. An update
+that omits a routine's existing `subRoutines` is refused, so pass them back
+(changed or not) with every update.
 Routines run with their owner's access. For eligible routines,
 `routine.shareAsTemplate({ description, variables })` publishes a snapshot.
 Publishing rejects scheduled copies and routines with sub-routine definitions

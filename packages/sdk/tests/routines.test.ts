@@ -149,13 +149,15 @@ test('routine creation sends code and Ask AI steps that write as the user', asyn
     },
   ]);
 });
-test('a routine checked with sub-routines sends their definitions', async () => {
+test('a routine created, updated or checked with sub-routines sends their definitions', async () => {
   const bodies: unknown[] = [];
   globalThis.fetch = Object.assign(
     async (input: RequestInfo | URL) => {
       const request = input instanceof Request ? input : new Request(input);
-      bodies.push(await request.json());
-      return Response.json({ ok: true, problems: [], steps: [] });
+      if (request.method !== 'GET') bodies.push(await request.json());
+      return request.url.endsWith('/check')
+        ? Response.json({ ok: true, problems: [], steps: [] })
+        : Response.json(record);
     },
     { preconnect: originalFetch.preconnect },
   );
@@ -168,7 +170,20 @@ test('a routine checked with sub-routines sends their definitions', async () => 
     title: 'Schedule reminders',
     source: 'export async function main() {}',
   } as const;
-  await macro.routines.check({
+  const tell = {
+    type: 'agent',
+    model: 'anthropic/claude-sonnet-5-5',
+    instructions: 'Tell me about the task.',
+  } as const;
+  // Structural typing lets an input carry more than it declares, such as
+  // a value; only the declared fields are sent.
+  const task = {
+    type: 'text',
+    name: 'taskId',
+    label: 'Task',
+    value: 'stray',
+  } as const;
+  const options = {
     name: 'Due reminders',
     trigger: { type: 'cron', schedule: '0 0 8 * * *', timezone: 'UTC' },
     steps: [schedule],
@@ -176,35 +191,39 @@ test('a routine checked with sub-routines sends their definitions', async () => 
       {
         name: 'remind',
         title: 'Remind about a task',
-        inputs: [{ type: 'text', name: 'taskId', label: 'Task' }],
-        steps: [{ type: 'agent', instructions: 'Tell me about the task.' }],
+        inputs: [task],
+        steps: [tell],
       },
     ],
-  });
-  expect(bodies).toEqual([
-    {
-      routine: {
-        name: 'Due reminders',
-        kind: 'Agent',
-        enabled: true,
-        trigger: { type: 'cron', schedule: '0 0 8 * * *', timezone: 'UTC' },
-        task: {
-          steps: [schedule],
-          sub_routines: [
-            {
-              name: 'remind',
-              title: 'Remind about a task',
-              inputs: [{ type: 'text', name: 'taskId', label: 'Task' }],
-              steps: [
-                { type: 'agent', instructions: 'Tell me about the task.' },
-              ],
-            },
-          ],
-        },
+  } as const;
+  await macro.routines.check(options);
+  const routine = await macro.routines.create(options);
+  await routine.update(options);
+  const sent = {
+    steps: [schedule],
+    sub_routines: [
+      {
+        name: 'remind',
+        title: 'Remind about a task',
+        inputs: [{ type: 'text', name: 'taskId', label: 'Task' }],
+        steps: [tell],
       },
-      created: [],
+    ],
+  };
+  expect(bodies).toHaveLength(3);
+  expect(bodies[0]).toEqual({
+    routine: {
+      name: 'Due reminders',
+      kind: 'Agent',
+      enabled: true,
+      trigger: { type: 'cron', schedule: '0 0 8 * * *', timezone: 'UTC' },
+      task: sent,
     },
-  ]);
+    created: [],
+  });
+  for (const body of bodies.slice(1)) {
+    expect((body as { task: unknown }).task).toEqual(sent);
+  }
 });
 test('routine writes invalidate detail only after success', async () => {
   let enabled = true;

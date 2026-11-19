@@ -597,7 +597,13 @@ function taskBody(options: RoutineOptions): RoutineTask {
       sub_routines: program.subRoutines?.map((definition) => ({
         name: definition.name,
         title: definition.title,
-        inputs: definition.inputs?.map((input) => ({ ...input })),
+        // Only the declared fields: the scheduler refuses a definition's
+        // input that carries a value.
+        inputs: definition.inputs?.map(({ type, name, label }) => ({
+          type,
+          name,
+          label,
+        })),
         steps: definition.steps.map(stepBody),
       })),
     }))
