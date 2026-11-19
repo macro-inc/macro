@@ -66,6 +66,25 @@ describe('the inbox picker', () => {
     expect(picked()).toEqual([]);
   });
 
+  it('keeps a row mounted and focused when a refetch returns new objects', () => {
+    const [data, setData] = createSignal(LISTED);
+    links.query = {
+      isPending: false,
+      isError: false,
+      get data() {
+        return data();
+      },
+    };
+    renderPicker([]);
+    const team = screen.getByRole('checkbox', { name: /^team@example\.com/ });
+    team.focus();
+    setData({ links: (LISTED?.links ?? []).map((link) => ({ ...link })) });
+    expect(screen.getByRole('checkbox', { name: /^team@example\.com/ })).toBe(
+      team
+    );
+    expect(document.activeElement).toBe(team);
+  });
+
   it('keeps the inboxes on screen when a refetch fails', () => {
     links.query = { isPending: false, isError: true, data: LISTED };
     renderPicker([]);

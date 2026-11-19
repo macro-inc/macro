@@ -1,6 +1,7 @@
 import { ListSkeleton } from '@app/components/view-shell/ListSkeleton';
+import { Key } from '@solid-primitives/keyed';
 import { Checkbox } from '@ui';
-import { type Accessor, For, Match, Show, Switch } from 'solid-js';
+import { type Accessor, For, type JSX, Match, Show, Switch } from 'solid-js';
 import { MAX_INBOXES } from '../core/routine-triggers';
 
 /** One inbox the routine's owner reads. */
@@ -25,12 +26,31 @@ export function pickedInboxesLabel(picked: string[], choices: InboxChoices) {
   return inbox?.address ?? 'A disconnected inbox';
 }
 
-const ROW =
-  'flex min-h-8 items-center gap-2 rounded-md px-2 py-1 not-touch:hover:bg-hover touch:min-h-11';
+/** One inbox to check or uncheck. */
+function InboxRow(props: {
+  checked: boolean;
+  disabled?: boolean;
+  onChange: (on: boolean) => void;
+  children: JSX.Element;
+}) {
+  return (
+    <Checkbox
+      class="flex min-h-8 items-center gap-2 rounded-md px-2 py-1 not-touch:hover:bg-hover touch:min-h-11"
+      checked={props.checked}
+      disabled={props.disabled}
+      onChange={(on) => props.onChange(on)}
+    >
+      <Checkbox.Control />
+      {props.children}
+    </Checkbox>
+  );
+}
 
 /**
  * The owner's inboxes to check. None checked watches every one; an inbox
  * picked before it was disconnected stays listed so it can be unchecked.
+ * Rows are keyed by inbox id, so a refetch of the inboxes (which returns new
+ * objects) keeps them mounted and focused.
  */
 export function RoutineInboxPicker(props: {
   choices: InboxChoices;
@@ -76,41 +96,34 @@ export function RoutineInboxPicker(props: {
               }
             >
               <div class="grid max-h-64 gap-0.5 overflow-y-auto overscroll-contain rounded-lg border border-edge-muted p-1">
-                <For each={inboxes()}>
+                <Key each={inboxes()} by="id">
                   {(inbox) => (
-                    <Checkbox
-                      class={ROW}
-                      checked={checked(inbox.id)}
+                    <InboxRow
+                      checked={checked(inbox().id)}
                       disabled={
-                        !checked(inbox.id) &&
+                        !checked(inbox().id) &&
                         props.picked().length >= MAX_INBOXES
                       }
-                      onChange={(on) => toggle(inbox.id, on)}
+                      onChange={(on) => toggle(inbox().id, on)}
                     >
-                      <Checkbox.Control />
                       <Checkbox.Label class="flex min-w-0 flex-col text-sm font-normal">
-                        <span class="truncate">{inbox.address}</span>
-                        <Show when={inbox.shared}>
+                        <span class="truncate">{inbox().address}</span>
+                        <Show when={inbox().shared}>
                           <span class="text-xs text-ink-muted">
                             Shared with you
                           </span>
                         </Show>
                       </Checkbox.Label>
-                    </Checkbox>
+                    </InboxRow>
                   )}
-                </For>
+                </Key>
                 <For each={missing(inboxes())}>
                   {(id) => (
-                    <Checkbox
-                      class={ROW}
-                      checked
-                      onChange={() => toggle(id, false)}
-                    >
-                      <Checkbox.Control />
+                    <InboxRow checked onChange={() => toggle(id, false)}>
                       <Checkbox.Label class="text-sm font-normal text-ink-muted">
                         A disconnected inbox
                       </Checkbox.Label>
-                    </Checkbox>
+                    </InboxRow>
                   )}
                 </For>
               </div>
