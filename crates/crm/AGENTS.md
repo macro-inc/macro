@@ -92,6 +92,21 @@ tools/HTTP/GraphQL surfaces over them.
   Private rule controls use the membership boundary of `/crm/email-privacy`,
   including after CRM viewing denial; resolving CRM details still needs record access.
 
+- `domain/email_rule_discovery` owns bounded live-source discovery and work
+  accounting; `outbound/email_rule_discovery.rs` supplies factual PostgreSQL
+  reads on the caller's transaction. Reuse the same core for policy validation,
+  replacement admission and Team reads. Resolve each shared source once,
+  retain member visibility, and return a complete result or a named limit error.
+  Keep small/folded strategies within the same ceilings; a direct-pair threshold
+  switches strategy rather than rejecting an otherwise bounded policy.
+  Composition roots inject this adapter through `EmailRuleDiscoveryService`;
+  the lightweight `email_discovery` feature exposes it without the full CRM
+  service. Admission must precede grants and preserve withdrawal after overflow.
+  Batch first pages for more than eight distinct live sources; charge every
+  prefetched raw row before continuing a full source. Keep the total batch within
+  the remaining allowance plus one sentinel, including duplicate and foreign-team
+  values.
+
 - Private policy storage lives in `domain/email_policy.rs` and
   `outbound/companies_repo/email_policy/`. Inspection must never initialize consent or move historical work. The first
   policy mutation compares the legacy observation under locks, initializes
@@ -270,6 +285,10 @@ tools/HTTP/GraphQL surfaces over them.
   reads refuse (401, for a missing record too). Change both together;
   `companies_repo/test/previews.rs` compares them for every role and caller,
   including revocation and regrant on the same session and contact-page route.
+
+- Keep team/visibility filters outside the per-history-ID `LIMIT` in
+  `list_companies_for_soup.sql`, so stale team estimates cannot replace the
+  `crm_companies_id_text_idx` lookup with a team scan for every viewed record.
 
 - Company names/logos live in the global `crm_domain_directory`. Only the
   email pubsub workers carry a real `CompanyMetadataResolver`, using public

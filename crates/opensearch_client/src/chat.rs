@@ -1,7 +1,11 @@
 use crate::{
     OpensearchClient, Result, delete,
     retry::resend_on_lost_connection,
-    upsert::{self, chat_message::UpsertChatMessageArgs, properties::IndexedProperty},
+    upsert::{
+        self,
+        chat_message::UpsertChatMessageArgs,
+        properties::{IndexedProperty, PropertyUpdate},
+    },
 };
 
 impl OpensearchClient {
@@ -64,7 +68,7 @@ impl OpensearchClient {
         &self,
         chat_id: &str,
         properties: &[IndexedProperty],
-    ) -> Result<()> {
+    ) -> Result<PropertyUpdate> {
         resend_on_lost_connection(|| {
             upsert::chat_message::update_chat_properties(&self.inner, chat_id, properties)
         })

@@ -80,6 +80,12 @@ mesh: pre-copy while it runs, then a final round after `release`), then
 - A hibernation is published with one rename before the VM ends; a
   hibernation present while the VM ran on is stale and gets discarded.
 
+- A computer's `usage` is its VM's cgroup, read on request; `swapBytes` is
+  what the zram squeeze moved out (optional on the wire: an agent older than
+  the field sends none, and the control plane then keeps no reading rather
+  than a low one). The control plane keeps it per minute for
+  the graphs in Settings, and Alloy on the host reads the same cgroups for
+  Grafana; neither needs anything in the guest.
 - `GET /v1/host` reports `agentVersion` from `FIRECRACKER_HOST_COMMIT` at
   build time (`main.rs` `AGENT_VERSION`); the Nix package
   (`nix/tauri-desktop.nix`, `firecracker-host`) sets it to the flake's rev.

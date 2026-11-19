@@ -48,6 +48,7 @@ key issuance, and account merge/link flows.
 ## Computer billing identifiers
 
 - Treat the six `STRIPE_COMPUTER_*_PRICE_ID` values as an optional all-or-none group: none means computer prices are not configured; any partial group fails startup and Doppler validation independently of physical fleet attachment. Validate configured price syntax in both startup and the Doppler binary.
+- Set `COMPUTERS_AGENT_EFFECTS=true` wherever the computers rollout is on: it runs the computers agents worker, the only consumer of `UndoAgentInvite`. Absent means off, and those effects wait in the outbox until it is on.
 - Store computer and seat prices as `stripe::PriceId` and reject malformed configured IDs during configuration loading with `config::configured_price_id` (async-stripe's parse accepts any string), including when no fleet is attached. `Config::computer_prices` returns a validation result.
 
 ## Checks
@@ -280,6 +281,18 @@ inputs cannot select an agent, and ordinary user credentials remain unattributed
   (`xtask_local`'s `microsoft_emulator.rs`): its placeholder key cannot load
   flags. Each decision is the
   `outlook.flag` span field (`on`, `off`, `error`, `unconfigured`).
+- A Gmail connect for a mailbox with no account of its own links the mailbox's
+  Google identity to the connecting account, and FusionAuth binds an identity to
+  one user. The Google callback records on the attempt whether it created that
+  link (`identity_link_created`); when the attempt ends without an inbox
+  (`/email/init` refuses it, marking `refused_at`, or it lapses after 24 h), the
+  5-minute `domain::google_identity_links` round releases the link, unless the
+  address now has an account of its own or the requester holds the inbox, then
+  drops the attempt. While the requester has another attempt for the address
+  under way (past the callback, neither refused nor lapsed), the round defers:
+  that retry's callback found the link and may be connecting with it. Read the
+  retry before the inbox: a connect commits its inbox before it drops its
+  attempt. A link that existed before the attempt is never released.
 - `/oauth2/{provider}/callback` verifies two signed `state` kinds
   (`src/account_link_state.rs`): account links, which expire, and Microsoft
   admin-consent returns, which do not. A consent screen that ends without a

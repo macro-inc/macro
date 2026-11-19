@@ -455,6 +455,23 @@ export type ComputerStatus = {
  */
 export type ComputerStatusKind = 'setting_up' | 'needs_attention' | 'waiting_for_capacity' | 'ready' | 'starting' | 'stopping' | 'stopped' | 'failed' | 'purchasing' | 'released';
 
+/**
+ * A computer's CPU and memory over the last day.
+ */
+export type ComputerUsage = {
+    /**
+     * The computer.
+     */
+    computerId: string;
+    latest?: null | UsagePoint;
+    /**
+     * The last 24 hours in 15-minute steps, oldest first: average CPU and
+     * highest memory of each step, absent where the computer has no
+     * reading (it did not run).
+     */
+    points: Array<null | UsagePoint>;
+};
+
 export type CreateAccountMergeRequest = {
     /**
      * The email address to generate the merge link for.
@@ -2769,6 +2786,23 @@ export type UpstreamErrorResponse = {
 };
 
 /**
+ * A computer's use at one point of the graph.
+ */
+export type UsagePoint = {
+    /**
+     * Share of its CPUs in use, 0 to 100. Absent until a second reading
+     * of the same run measures it: a computer's first reading after it
+     * starts or wakes has memory only.
+     */
+    cpuPercent?: number | null;
+    /**
+     * Memory only it holds, in bytes; memory shared with its image is not
+     * counted.
+     */
+    memoryBytes: number;
+};
+
+/**
  * The payer's current-period position, as shown in Billing settings and used
  * by the gate.
  */
@@ -4756,6 +4790,26 @@ export type GetTeamComputerRolloutResponses = {
 };
 
 export type GetTeamComputerRolloutResponse = GetTeamComputerRolloutResponses[keyof GetTeamComputerRolloutResponses];
+
+export type ListTeamComputerUsageData = {
+    body?: never;
+    path?: never;
+    query?: never;
+    url: '/team/computers/usage';
+};
+
+export type ListTeamComputerUsageErrors = {
+    401: ErrorResponse;
+    403: ErrorResponse;
+};
+
+export type ListTeamComputerUsageError = ListTeamComputerUsageErrors[keyof ListTeamComputerUsageErrors];
+
+export type ListTeamComputerUsageResponses = {
+    200: Array<ComputerUsage>;
+};
+
+export type ListTeamComputerUsageResponse = ListTeamComputerUsageResponses[keyof ListTeamComputerUsageResponses];
 
 export type UndoCancelTeamComputerData = {
     body?: never;

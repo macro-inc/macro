@@ -298,6 +298,11 @@ impl AgentRepos for FakeRepos {
 struct FakeComputers {
     journal: Journal,
     refuse_purchase: bool,
+    /// Its computer was bought before agents reported online, so its first
+    /// start waits on nothing.
+    bought_before_online_reports: bool,
+    /// The computers rollout doesn't include the buyer.
+    rollout_off: bool,
     /// (purchase key, computer, agent) links made by purchases.
     links: Arc<Mutex<Vec<(String, ComputerId, MacroUserIdStr<'static>)>>>,
 }
@@ -355,8 +360,22 @@ impl Computers for FakeComputers {
             .map(|(_, _, agent)| agent.clone()))
     }
 
+    async fn require_purchase_rollout(
+        &self,
+        _: &MacroUserIdStr<'static>,
+    ) -> Result<(), TeamAgentError> {
+        if self.rollout_off {
+            return Err(TeamAgentError::NotEnabled);
+        }
+        Ok(())
+    }
+
     async fn state(&self, _: Uuid, _: ComputerId) -> Result<ComputerState, TeamAgentError> {
-        Ok(ComputerState::Ready)
+        Ok(if self.bought_before_online_reports {
+            ComputerState::Ready
+        } else {
+            ComputerState::AwaitingAgent
+        })
     }
 
     async fn details(&self, _: Uuid, _: ComputerId) -> Result<ComputerDetails, TeamAgentError> {
@@ -586,6 +605,24 @@ async fn a_refused_purchase_takes_back_the_repo_seat_and_account() {
     assert!(service.repository.agents.lock().unwrap().is_empty());
 }
 
+/// Agent teammates on but computers off for the admin: refused before an
+/// account, seat or repository is made, not created and then undone.
+#[tokio::test]
+async fn a_buyer_outside_the_computers_rollout_is_refused_before_anything_is_created() {
+    let (service, journal) = service(
+        true,
+        FakeComputers {
+            rollout_off: true,
+            ..FakeComputers::default()
+        },
+    );
+
+    let result = service.create(receipt(), request()).await;
+
+    assert!(matches!(result, Err(TeamAgentError::NotEnabled)));
+    assert!(journal.entries().is_empty());
+}
+
 #[tokio::test]
 async fn an_empty_name_is_refused_before_anything_is_created() {
     let (service, journal) = service(true, FakeComputers::default());
@@ -695,6 +732,25 @@ async fn an_up_computer_runs_its_agent_only_once_the_agent_reports_online() {
             agent_name: "Sam Rivera".to_owned(),
         }]
     );
+}
+
+/// An agent created while an older release ran never reports and was not
+/// backfilled; its computer waits on nothing, so it reads as running rather
+/// than starting forever.
+#[tokio::test]
+async fn an_agent_whose_computer_waits_on_nothing_runs_once_the_computer_is_up() {
+    let (service, _) = service(
+        true,
+        FakeComputers {
+            bought_before_online_reports: true,
+            ..FakeComputers::default()
+        },
+    );
+    service.create(receipt(), request()).await.unwrap();
+
+    let listed = service.list(receipt()).await.unwrap();
+
+    assert_eq!(listed.agents[0].status, TeamAgentStatus::Running);
 }
 
 #[tokio::test]

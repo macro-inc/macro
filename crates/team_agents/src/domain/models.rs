@@ -239,6 +239,8 @@ pub enum ComputerState {
     SettingUp,
     /// Up.
     Ready,
+    /// Up, with its first start waiting on the agent reporting online.
+    AwaitingAgent,
     /// Asleep, waking, stopping, stopped, or no fleet is attached.
     Paused,
     /// Gave up.
@@ -249,13 +251,14 @@ pub enum ComputerState {
 
 impl TeamAgentStatus {
     /// The agent's status from its computer's, and whether the agent has
-    /// ever reported itself online: an up computer runs the agent only once
-    /// it has.
+    /// ever reported itself online: a computer waiting on its agent runs it
+    /// only once it has. A computer that waits on nothing (bought before
+    /// agents reported) runs its agent once it is up.
     pub fn of(state: ComputerState, came_online: bool) -> Self {
         match state {
             ComputerState::Purchasing | ComputerState::SettingUp => Self::Provisioning,
-            ComputerState::Ready if !came_online => Self::Starting,
-            ComputerState::Ready => Self::Running,
+            ComputerState::AwaitingAgent if !came_online => Self::Starting,
+            ComputerState::AwaitingAgent | ComputerState::Ready => Self::Running,
             ComputerState::Paused => Self::Paused,
             ComputerState::Failed => Self::Failed,
             ComputerState::Released => Self::Released,

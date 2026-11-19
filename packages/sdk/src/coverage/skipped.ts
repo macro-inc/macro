@@ -164,6 +164,7 @@ export const authBacklog = [
   'setTeamAgentAvatar', // Provisional, pending the skip-or-wrap decision: an agent teammate's face is an admin app setting for now.
   'cancelTeamComputer', // Computer billing and lifecycle controls belong to the app.
   'completeTeamComputerSetup', // The guided computer setup is an app flow.
+  'listTeamComputerUsage', // Computer usage graphs belong to the app.
   'listTeamComputerOffers', // Computer checkout offers belong to the app.
   'listTeamComputerPurchaseOffers', // The buy dialog's offers belong to the app.
   'getTeamComputerRollout', // Whether the app shows computers is an app gate.
@@ -306,6 +307,7 @@ export const scheduledActionExcluded = [
   'getRoutineDraftJob', // The routine editor's background drafting.
   'discardRoutineDraftJob', // The routine editor's background drafting.
   'listScheduledActionCodeUpgrades', // The routine page's review of SDK upgrades.
+  'listScheduledActionUnusableItems', // The routine page's knobs needing a new pick; a run fails the step with the same reason.
   'routineCatalog', // The new-routine flow's templates.
   'listRoutineSuggestions', // The app's suggestion surfaces; agents use CreateRoutine.
   'startSuggestionGeneration', // Onboarding starts the person's generation once the inbox connects.
@@ -460,10 +462,12 @@ export const storageExcluded = [
   'passwordsMoveFolder',
   'passwordsPatch',
   'passwordsRemove',
+  'passwordsRemoveFavorite',
   'passwordsRemoveFolder',
   'passwordsRemoveTotp',
   'passwordsRenameFolder',
   'passwordsReveal',
+  'passwordsSetFavorite',
   'passwordsSetTotp',
   'passwordsShare',
   'passwordsTeams',

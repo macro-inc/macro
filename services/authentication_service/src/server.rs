@@ -816,12 +816,17 @@ async fn run_server() -> anyhow::Result<()> {
         computer_billing_stop.clone(),
     ));
     // Takes back the agent teammate of a computer released after failing its
-    // first start.
-    computer_billing.spawn(run_computer_agent_effects(
-        computer_service.clone(),
-        team_agents_service.clone(),
-        computer_billing_stop.clone(),
-    ));
+    // first start; only where a Firecracker fleet runs.
+    if config.computer_agent_effects()? {
+        tracing::info!("computers agents worker on");
+        computer_billing.spawn(run_computer_agent_effects(
+            computer_service.clone(),
+            team_agents_service.clone(),
+            computer_billing_stop.clone(),
+        ));
+    } else {
+        tracing::info!("computers agents worker off (COMPUTERS_AGENT_EFFECTS unset)");
+    }
     computer_billing.close();
     // The Stripe event inbox: the webhook stores events; every replica's
     // worker applies due cursors (leased, so replicas never collide), and
@@ -912,6 +917,27 @@ async fn run_server() -> anyhow::Result<()> {
         }
     });
 
+    // Releases the Google identity links of refused and lapsed Gmail connect
+    // attempts; independent per round, so any replica may run it.
+    let auth_client = Arc::new(auth_client);
+    let identity_link_release = tokio::spawn({
+        let attempts = crate::outbound::google_identity_links::PgIdentityLinkAttempts(db.clone());
+        let remover =
+            crate::outbound::google_identity_links::FusionAuthIdentityLinks(auth_client.clone());
+        async move {
+            let mut interval = tokio::time::interval(IDENTITY_LINK_RELEASE_INTERVAL);
+            interval.set_missed_tick_behavior(tokio::time::MissedTickBehavior::Skip);
+            loop {
+                interval.tick().await;
+                // The round's span records its counts and any failure.
+                let _ = crate::domain::google_identity_links::release_identity_links(
+                    &attempts, &remover,
+                )
+                .await;
+            }
+        }
+    });
+
     let agent_api_keys = Arc::new(agent_api_keys::domain::AgentKeyService::new(
         agent_api_keys::outbound::PgAgentKeyRepo::new(db.clone()),
         agent_api_keys::outbound::KmsAgentKeyCipher::new(cursor_kms),
@@ -940,7 +966,7 @@ async fn run_server() -> anyhow::Result<()> {
             )),
             db,
             github_link_service: Arc::new(github_link_service_impl),
-            auth_client: Arc::new(auth_client),
+            auth_client,
             microsoft_auth,
             cursor_api_key_cipher,
             agent_api_keys,
@@ -1021,6 +1047,8 @@ async fn run_server() -> anyhow::Result<()> {
 
     grant_cleanup.abort();
     let _ = grant_cleanup.await;
+    identity_link_release.abort();
+    let _ = identity_link_release.await;
     // A sweep interrupted here leaves nothing half done: each settlement
     // step commits on its own and the next sweep, on any replica, resumes.
     if let Some(sweep) = settlement_sweep {
@@ -1091,6 +1119,7 @@ const STRIPE_INBOX_READS_PER_SECOND: u32 = 2;
 /// Stripe reads for the daily audit, which one replica runs.
 const STRIPE_AUDIT_READS_PER_SECOND: u32 = 5;
 const MICROSOFT_GRANT_CLEANUP_INTERVAL: Duration = Duration::from_secs(5 * 60);
+const IDENTITY_LINK_RELEASE_INTERVAL: Duration = Duration::from_secs(5 * 60);
 /// PostHog's US ingestion origin, used when `POSTHOG_HOST` is unset.
 const DEFAULT_POSTHOG_HOST: &str = "https://us.i.posthog.com";
 

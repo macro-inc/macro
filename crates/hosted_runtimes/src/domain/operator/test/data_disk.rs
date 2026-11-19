@@ -27,7 +27,7 @@ async fn a_lost_guest_is_recreated_on_its_data_disk_with_a_new_enrollment() {
     run_effects(&operator).await;
     assert!(
         operator
-            .macrod_connected(HARNESS)
+            .macrod_connected(HARNESS, true)
             .await
             .unwrap()
             .is_computer()

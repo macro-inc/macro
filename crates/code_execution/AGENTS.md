@@ -13,7 +13,8 @@ service. Session authentication, token issuance and execution storage belong to
 - `src/outbound/deno.rs`: process lifecycle, restricted permissions and the
   import map (`NODE_ALLOWED`, `NODE_BUILTINS`; blocked built-ins resolve to
   `deno/unavailable.mjs`).
-- `src/outbound/deno/bootstrap.mjs`: program loading, unattended dry runs,
+- `src/outbound/deno/bootstrap.mjs`: program loading, unattended dry runs
+  (a routine's entity knobs, marked `$entity`, reach `main` as SDK handles),
   removing every way to the network but `fetch`, and final JSON protocol.
 - `src/outbound/deno/check.rs`: type-checking TypeScript against the SDK.
 - `src/domain/operations.rs`: the generated operation catalog (labels, routes,

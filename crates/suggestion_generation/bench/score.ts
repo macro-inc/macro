@@ -58,6 +58,13 @@ export type RunFile = {
   /** Copies of each persona and rounds of them; absent in runs from before seats (1 and 3). */
   seats?: number;
   reps?: number;
+  /** The judge its marks come from (`JUDGE` in judge.ts); absent in runs judged before it was recorded. */
+  judge?: string;
+  /**
+   * Each persona's `personaDigest` as its generations read it, so a rejudge
+   * reads the same; absent in runs from before it was recorded.
+   */
+  personas?: Record<string, string>;
   flags: Record<string, boolean>;
   attempts: Attempt[];
 };

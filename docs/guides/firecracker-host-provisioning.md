@@ -33,8 +33,10 @@ each time ([Rules](../../CLAUDE.md)).
   the agent listens only on the tunnel address. Dev only: the NIC address with
   `apiSources` and a cloud firewall rule.
 - **Secrets outside the Nix store**, root 0600, copied with `--extra-files` at
-  install: `/var/lib/macro/wg.key` (WireGuard) and
-  `/var/lib/macro/datadog-api-key`. The agent's TLS keys are made on the host
+  install: `/var/lib/macro/wg.key` (WireGuard),
+  `/var/lib/macro/datadog-api-key` and, with `alloy.enable`,
+  `/var/lib/macro/metrics-remote-write-password` (Alloy does not start
+  without it). The agent's TLS keys are made on the host
   at first boot and reach the agent as systemd credentials.
 
 ## The host's NixOS configuration
@@ -59,6 +61,8 @@ A host file next to the module sets what is particular to it, and is added to
     };
     clientCertificates = [ ./certs/control-plane-<env>.crt ];
     datadog.apiKeyFile = "/var/lib/macro/datadog-api-key";
+    # Host and per-computer metrics for the Grafana fleet dashboard.
+    alloy = { enable = true; passwordFile = "/var/lib/macro/metrics-remote-write-password"; };
     # ROOT_DISK_GIB in crates/hosted_runtimes/src/domain/size.rs.
     storage.goldenRootDiskGib = 32;
     environment = "production";
@@ -90,6 +94,7 @@ host name; keep it equal to the fleet's host row so host metrics and spans join.
    extra=$(mktemp -d)
    install -Dm0600 <wg private key file> "$extra/var/lib/macro/wg.key"
    install -Dm0600 <datadog key file> "$extra/var/lib/macro/datadog-api-key"
+   install -Dm0600 <metrics password file> "$extra/var/lib/macro/metrics-remote-write-password"
    chmod 0700 "$extra/var/lib/macro"
    nixos-anywhere --flake .#<host> --extra-files "$extra" \
      --ssh-option "ProxyCommand=gcloud compute start-iap-tunnel <host> 22 --listen-on-stdin --zone <zone>" \
@@ -118,7 +123,7 @@ metal, so KVM needs no nesting. What differs from GCP:
   record the server in the resources ledger.
 - **No service account or metadata server.** S-11 does not apply; the host
   holds no cloud credentials at all. Logs and metrics leave only through the
-  Datadog agent.
+  Datadog agent and, when enabled, Alloy's remote write.
 - **No cloud firewall.** The module's nftables input chain is the only wall:
   keep `apiSources` to the tunnel peer, set `sshSources` to the administration
   bastion's addresses (the default is GCP's IAP range), and optionally mirror

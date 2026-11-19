@@ -5,6 +5,7 @@ pub mod agent_picture_changes;
 pub mod computer_billing;
 pub mod crm_member_access;
 pub mod email_code_signup;
+pub mod google_identity_links;
 pub mod invite_rewards;
 pub mod microsoft;
 pub mod stripe_audit;
