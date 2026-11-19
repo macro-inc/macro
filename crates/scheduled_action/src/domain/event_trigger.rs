@@ -142,6 +142,31 @@ impl From<RoutineTriggers> for Vec<RoutineTrigger> {
 }
 
 impl ActionTrigger {
+    /// This trigger for someone other than its owner: inboxes are the
+    /// owner's own, so it watches every inbox of whoever it is for.
+    pub fn without_inboxes(&self) -> Self {
+        match self {
+            Self::Events { filters } => Self::Events {
+                filters: filters.without_inboxes(),
+            },
+            Self::Multiple { triggers } => Self::Multiple {
+                triggers: RoutineTriggers(
+                    triggers
+                        .0
+                        .iter()
+                        .map(|trigger| match trigger {
+                            RoutineTrigger::Events { filters } => RoutineTrigger::Events {
+                                filters: filters.without_inboxes(),
+                            },
+                            other => other.clone(),
+                        })
+                        .collect(),
+                ),
+            },
+            other => other.clone(),
+        }
+    }
+
     pub fn event_filters(&self) -> Option<&EventFilters> {
         match self {
             Self::Events { filters } => Some(filters),
@@ -360,7 +385,7 @@ pub enum FilterValidationError {
     PropertyEvents,
     #[error("an inbox filter is only for email.message_received, alone in its filter")]
     InboxEvents,
-    #[error("expected at most 25 inboxes per filter")]
+    #[error("expected at most {max} inboxes per filter", max = MAX_INBOXES_PER_FILTER)]
     InboxCount,
     #[error(transparent)]
     PropertyValues(#[from] PropertyValuesError),
@@ -643,6 +668,23 @@ impl EventFilters {
 
     pub fn has_conditions(&self) -> bool {
         self.0.iter().any(|filter| filter.condition.is_some())
+    }
+
+    /// The same filters watching every inbox. Two that differed only in their
+    /// inboxes become one.
+    fn without_inboxes(&self) -> Self {
+        let mut filters: Vec<EventFilter> = self
+            .0
+            .iter()
+            .cloned()
+            .map(|mut filter| {
+                filter.inboxes = None;
+                filter
+            })
+            .collect();
+        filters.sort_unstable();
+        filters.dedup();
+        Self(filters)
     }
 
     /// What a run of this routine keeps of `event`: only routines that test

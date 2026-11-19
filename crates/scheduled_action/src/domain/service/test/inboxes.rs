@@ -23,20 +23,6 @@ impl OwnerInboxes for Inboxes {
     }
 }
 
-fn inbox_service(inboxes: Arc<Inboxes>) -> TestService {
-    let repo = Arc::new(FakeRepo::default());
-    let (tx, mut rx) = tokio::sync::mpsc::channel(32);
-    tokio::spawn(async move { while rx.recv().await.is_some() {} });
-    ScheduledActionServiceImpl::new(
-        Arc::clone(&repo),
-        Arc::new(FakeExecutor::default()),
-        tx,
-        grants(&repo),
-    )
-    .with_event_routines(Rollout(Some(true)))
-    .with_owner_inboxes(inboxes)
-}
-
 fn picking(inboxes: &[&str]) -> ActionConfiguration {
     ActionConfiguration {
         trigger: serde_json::from_value(json!({
@@ -52,7 +38,7 @@ fn picking(inboxes: &[&str]) -> ActionConfiguration {
 async fn an_inbox_filter_names_only_inboxes_its_owner_receives_mail_in() {
     let inboxes = Arc::new(Inboxes::default());
     inboxes.set(&[MINE, SHARED_WITH_ME]);
-    let svc = inbox_service(Arc::clone(&inboxes));
+    let svc = inbox_service(Arc::<Inboxes>::clone(&inboxes));
 
     assert_policy(
         svc.create_action(&user_principal(), picking(&[MINE, SOMEONE_ELSES]))
@@ -93,7 +79,7 @@ async fn an_inbox_filter_names_only_inboxes_its_owner_receives_mail_in() {
 async fn an_inbox_disconnected_later_blocks_only_a_change_of_trigger() {
     let inboxes = Arc::new(Inboxes::default());
     inboxes.set(&[MINE, SHARED_WITH_ME]);
-    let svc = inbox_service(Arc::clone(&inboxes));
+    let svc = inbox_service(Arc::<Inboxes>::clone(&inboxes));
     let created = svc
         .create_action(&user_principal(), picking(&[SHARED_WITH_ME]))
         .await
