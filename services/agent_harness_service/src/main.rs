@@ -679,7 +679,8 @@ async fn run() -> anyhow::Result<()> {
     let cognition_router = cognition_runtime.router.clone();
     let code_scratch = tempfile::tempdir()?;
     // List the SDK operations a checked program may call, for the permission
-    // gate: OCaml only with the OCaml bundle.
+    // gate: JS tools wherever Deno runs programs, OCaml only with the OCaml
+    // bundle.
     let mut program_analyzers = code_mode::permissions::Analyzers::default();
     let code_runner = match &config.deno_binary {
         Some(binary) => {
@@ -728,6 +729,16 @@ async fn run() -> anyhow::Result<()> {
                     ..Default::default()
                 },
             )?;
+            // JS tools programs need only Deno: the bundle is embedded.
+            let analyzer = code_execution::outbound::deno::analyze::JsToolsAnalyzer::new(
+                binary.into(),
+                code_scratch.path().join("analyses-js"),
+                8,
+                code_execution::domain::Limits::default().max_source_bytes,
+            )
+            .await
+            .map_err(|error| anyhow::anyhow!("invalid JS tools analyzer: {error}"))?;
+            program_analyzers.js_tools = Some(Arc::new(analyzer));
             let checker = code_execution::outbound::deno::check::DenoChecker::new(
                 binary.into(),
                 code_scratch.path().join("checks"),
@@ -957,6 +968,7 @@ async fn run() -> anyhow::Result<()> {
         );
     // The gate on checked programs, in each language this build can
     // analyze.
+    let ocaml_gated = program_analyzers.ocaml.is_some();
     let permission_gate = program_analyzers.any().then(|| {
         Arc::new(code_mode::permissions::PermissionGate {
             analyzers: program_analyzers,
@@ -991,11 +1003,9 @@ async fn run() -> anyhow::Result<()> {
         Some(fingerprint) => session_code_mode.with_ocaml(agent_code_mode::domain::OcamlPrograms {
             fingerprint,
             rollout: Arc::new(code_mode::OcamlFlag(feature_flags.clone())),
-            permissions: permission_gate.is_some().then(
-                || -> Arc<dyn agent_code_mode::domain::OwnerRollout> {
-                    Arc::new(code_mode::PermissionsFlag(feature_flags.clone()))
-                },
-            ),
+            permissions: ocaml_gated.then(|| -> Arc<dyn agent_code_mode::domain::OwnerRollout> {
+                Arc::new(code_mode::PermissionsFlag(feature_flags.clone()))
+            }),
         }),
         None => session_code_mode,
     };

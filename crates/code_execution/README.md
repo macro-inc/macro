@@ -185,6 +185,16 @@ shape, plus a `diagnostics` status (its header has the interface). Analysis
 takes about 0.1 s in a fresh process; a run adds about 0.1 s to load the
 bundle and catalog.
 
+`JsToolsAnalyzer` (`src/outbound/deno/analyze.rs`) is the `ProgramAnalyzer`
+that runs it: it writes the three files once under its scratch directory,
+runs at most `concurrency` analyses at once with one 10 s deadline for the
+wait and the analysis (`CheckError::Busy` past it), reads at most 256 KiB of
+answer, and treats a nonzero exit or any other answer as
+`CheckError::Internal`. Its span is `code_execution.analyze` with
+`language = "js_tools"`, `outcome` (`calls`, `cannot_analyze`,
+`diagnostics`, `busy` waiting for a slot, `timed_out`, `internal`) and
+`operations`, never the source.
+
 ## Unattended programs
 
 A host can run a program with nobody watching (a routine step) by setting

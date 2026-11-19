@@ -26,8 +26,11 @@ Session authentication, token issuance and execution storage belong to
   read or write) and the SDK fingerprint.
 - JS tools programs: `runJsTools` and `callTool` in `bootstrap.mjs`;
   `src/outbound/deno/js_tools_analyze.mjs`, the analyzer as a process for the
-  permission gate (interface in its header); tests in
-  `src/outbound/deno/test/js_tools.rs`.
+  permission gate (interface in its header), run by `JsToolsAnalyzer`
+  (`src/outbound/deno/analyze.rs`); tests in
+  `src/outbound/deno/test/js_tools.rs` and `src/outbound/deno/analyze/test.rs`.
+- `src/outbound/analysis.rs`: the analyzers' shared JSON answer
+  (`macro_sdk_calls --json`'s shape plus `diagnostics`).
 
 ## Gotchas
 
