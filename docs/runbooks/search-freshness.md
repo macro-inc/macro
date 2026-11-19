@@ -152,10 +152,10 @@ unknown, not zero.
 
 ## Probe late
 
-For 10 minutes, every create, edit and rename round of one entity type took
-longer than 60 s from the API acknowledging the write to a search showing it.
-Deletes are left out: search hides a deleted entity through its database check
-at once, whatever the index still holds. Compare **Seconds until
+Three or more of one entity type's rounds in 15 minutes ended `late`: search
+showed the change, but more than 60 s after the API acknowledged the write.
+Deletes are practically never late: search hides a deleted entity through its
+database check at once, whatever the index still holds. Compare **Seconds until
 search showed a probe change** with the indexer's lag for the same type on the
 dashboard:
 
@@ -169,7 +169,7 @@ dashboard:
 ## Probe unseen
 
 Search still did not show a probe change five minutes after the write, twice
-in 10 minutes. This is a freshness miss, not a slow one: the event was lost,
+in 30 minutes. This is a freshness miss, not a slow one: the event was lost,
 dropped, or indexed wrongly, or search no longer finds the entity.
 
 - Check [Dropped events](#dropped-events) and `event_broker.publishes` for

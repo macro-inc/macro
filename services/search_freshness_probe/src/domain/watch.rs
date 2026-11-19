@@ -13,14 +13,16 @@ mod test;
 
 /// When a round searches: every `fast` for the first `fast_for`, then every
 /// `slow` until `give_up_after`, all from the write's acknowledgement. The
-/// fast phase spans the freshness target, so a seen time under it is accurate
-/// to `fast`; past it only the five-minute bound matters.
+/// fast phase spans the freshness `target`, so a seen time under it is
+/// accurate to `fast`; past it only the five-minute bound matters.
 #[derive(Debug, Clone, Copy)]
 pub struct Schedule {
     /// Gap between searches at first.
     pub fast: Duration,
     /// How long searches come every `fast`.
     pub fast_for: Duration,
+    /// A change shown later than this is late.
+    pub target: Duration,
     /// Gap between searches after that.
     pub slow: Duration,
     /// When an unseen change counts as missed.
@@ -36,6 +38,7 @@ impl Schedule {
     pub const PRODUCTION: Self = Self {
         fast: Duration::from_secs(1),
         fast_for: Duration::from_secs(60),
+        target: Duration::from_secs(60),
         slow: Duration::from_secs(5),
         give_up_after: Duration::from_secs(300),
         failing_for: Duration::from_secs(30),
@@ -53,7 +56,7 @@ impl Schedule {
 /// How the watch ended, and how many searches it took.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub struct Watched {
-    /// `Seen`, `Unseen` or `SearchFailed`.
+    /// `Seen`, `Late`, `Unseen` or `SearchFailed`.
     pub outcome: Outcome,
     /// Polls run, each one search per check.
     pub polls: u32,
@@ -90,8 +93,14 @@ pub async fn watch<S: Search>(
 
         match poll {
             Ok(results) if results.iter().all(|holds| *holds) => {
+                let after = answered - written_at;
+                let outcome = if after <= schedule.target {
+                    Outcome::Seen(after)
+                } else {
+                    Outcome::Late(after)
+                };
                 return Watched {
-                    outcome: Outcome::Seen(answered - written_at),
+                    outcome,
                     polls,
                     failed_polls,
                 };

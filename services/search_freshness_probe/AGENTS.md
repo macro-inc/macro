@@ -19,8 +19,9 @@ API besides `GET /health`.
   round; a round that overruns the minute delays only its own type.
 - `domain/watch.rs`: searches every 1 s for 60 s, then every 5 s to 300 s,
   until every check holds in one poll: the new token matches, the replaced one
-  does not, a deleted entity matches nothing. Searches failing for 30 s in a
-  row, or at the deadline, end the round `search_failed`, not a miss.
+  does not, a deleted entity matches nothing. Shown within 60 s is `seen`,
+  later `late`, never `unseen`. Searches failing for 30 s in a row, or at the
+  deadline, end the round `search_failed`, not a miss.
 - `domain/rotation.rs`: the cycles. Documents edit, rename, purge, create;
   messages post, edit, delete (in a private channel of the probe's own);
   projects rename, trash and purge, create; a text property on a document of

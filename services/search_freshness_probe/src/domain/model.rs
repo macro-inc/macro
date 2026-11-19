@@ -184,8 +184,12 @@ pub struct Change {
 /// How a round ended.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum Outcome {
-    /// Search showed the change this long after the write was acknowledged.
+    /// Search showed the change this long after the write was acknowledged,
+    /// within the 60 s target.
     Seen(Duration),
+    /// Search showed the change this long after the write, past the target
+    /// but before the round gave up.
+    Late(Duration),
     /// Search still did not show it when the round gave up.
     Unseen,
     /// The write failed: the probe's own failure, not a freshness miss.
@@ -199,6 +203,7 @@ impl Outcome {
     pub fn as_str(self) -> &'static str {
         match self {
             Self::Seen(_) => "seen",
+            Self::Late(_) => "late",
             Self::Unseen => "unseen",
             Self::WriteFailed => "write_failed",
             Self::SearchFailed => "search_failed",

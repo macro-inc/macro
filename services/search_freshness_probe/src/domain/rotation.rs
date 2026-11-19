@@ -256,6 +256,8 @@ pub struct PropertyValue<A: PropertyWrites> {
     definition: Option<EntityId>,
     holder: Option<Holder>,
     value: Option<Token>,
+    /// Documents this process replaced but could not delete yet.
+    stale: Vec<EntityId>,
 }
 
 impl<A: PropertyWrites> PropertyValue<A> {
@@ -267,7 +269,20 @@ impl<A: PropertyWrites> PropertyValue<A> {
             definition: None,
             holder: None,
             value: None,
+            stale: Vec::new(),
         }
+    }
+
+    /// Deletes the replaced documents, keeping the ones that fail for later.
+    async fn delete_stale(&mut self) {
+        let mut kept = Vec::new();
+        for document in std::mem::take(&mut self.stale) {
+            if let Err(error) = self.api.delete_document(document).await {
+                tracing::warn!(error = ?error, entity_id = %document, "the probe could not delete a property document it replaced");
+                kept.push(document);
+            }
+        }
+        self.stale = kept;
     }
 
     fn check(definition: EntityId, holder: &Holder, value: &Token, presence: Presence) -> Check {
@@ -289,6 +304,7 @@ impl<A: PropertyWrites> Rotation for PropertyValue<A> {
     }
 
     async fn change(&mut self) -> Result<Change, WriteFailed> {
+        self.delete_stale().await;
         let definition = match self.definition {
             Some(definition) => definition,
             None => self
@@ -322,10 +338,9 @@ impl<A: PropertyWrites> Rotation for PropertyValue<A> {
         }
         if let Err(error) = written {
             // The document or the definition may be gone: replace both next
-            // round, deleting this document now so it does not linger.
-            if let Err(error) = self.api.delete_document(holder.id).await {
-                tracing::warn!(error = ?error, entity_id = %holder.id, "the probe could not delete its property document");
-            }
+            // round, and delete this document so it does not linger.
+            self.stale.push(holder.id);
+            self.delete_stale().await;
             self.definition = None;
             self.value = None;
             return Err(failed(Operation::Edit)(error));
@@ -341,14 +356,9 @@ impl<A: PropertyWrites> Rotation for PropertyValue<A> {
     }
 
     async fn clean_up(&mut self) {
-        if let Some(holder) = self.holder.take()
-            && let Err(error) = self.api.delete_document(holder.id).await
-        {
-            tracing::warn!(
-                error = ?error,
-                entity_id = %holder.id,
-                "the probe could not delete its property document at shutdown"
-            );
+        if let Some(holder) = self.holder.take() {
+            self.stale.push(holder.id);
         }
+        self.delete_stale().await;
     }
 }

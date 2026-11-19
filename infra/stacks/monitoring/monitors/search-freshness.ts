@@ -56,8 +56,9 @@
 //   searches. Search hides a deleted entity through its database check, so a
 //   delete round measures that, not the index.
 // - `search.freshness.probe_rounds`: finished probe rounds (counter), tagged
-//   `entity_type`, `operation` and `outcome` (`seen`, `unseen`, and the
-//   probe's own failures `write_failed` and `search_failed`).
+//   `entity_type`, `operation` and `outcome` (`seen` within 60 s, `late`
+//   after it, `unseen` at 300 s, and the probe's own failures `write_failed`
+//   and `search_failed`).
 //
 // All are exported every 60 s, and percentiles are not enabled on the
 // histograms, so they are graphed by max and count. The probe records one
@@ -104,12 +105,11 @@ const LIVE_RETENTION = pending(`!${EMAIL}`, 'topic', MS_PER_DAY);
 const DROPPED = `sum:search.index.dropped_events{${PROD}} by {entity_type}.as_count()`;
 const OFFSET_RESETS = `sum:kafka.consumer.offset_resets{${PROD}} by {topic}.as_count()`;
 const READINGS = `max:search.index.oldest_pending_ms{${PROD}}.fill(null)`;
-// Deletes leave this out: search drops a deleted entity through its database
-// check at once, whatever the index holds, so a delete round is always fast
-// and would hide slow creates, edits and renames in the window's minimum.
-const PROBE_SECONDS = `max:search.freshness.probe_seconds{${PROD_PROBE},!operation:delete} by {entity_type}.fill(null)`;
+// Late and unseen are counted, not timed: a slow round records its seconds
+// only when it ends, so slow rounds leave the minutes between them empty.
+const PROBE_LATE = `sum:search.freshness.probe_rounds{${PROD_PROBE},outcome:late} by {entity_type}.as_count()`;
 const PROBE_UNSEEN = `sum:search.freshness.probe_rounds{${PROD_PROBE},outcome:unseen} by {entity_type}.as_count()`;
-const PROBE_FAILING = `sum:search.freshness.probe_rounds{${PROD_PROBE},!outcome:seen,!outcome:unseen} by {entity_type}.as_count()`;
+const PROBE_FAILING = `sum:search.freshness.probe_rounds{${PROD_PROBE},!outcome:seen,!outcome:late,!outcome:unseen} by {entity_type}.as_count()`;
 const PROBE_ROUNDS = `sum:search.freshness.probe_rounds{${PROD_PROBE}} by {entity_type}.as_count()`;
 
 // The probe runs in prod once its prod user's key is in Doppler
@@ -223,8 +223,8 @@ export const searchFreshnessDashboard = new datadog.Dashboard(
       graphGroup('Probe monitors (prod)', [
         thresholdGraph({
           title: TITLES.probeLate,
-          query: PROBE_SECONDS,
-          critical: '60',
+          query: `${PROBE_LATE}.rollup(sum, 900)`,
+          critical: '3',
         }),
         thresholdGraph({
           title: TITLES.probeUnseen,
@@ -233,8 +233,8 @@ export const searchFreshnessDashboard = new datadog.Dashboard(
         }),
         thresholdGraph({
           title: TITLES.probeFailing,
-          query: `${PROBE_FAILING}.rollup(sum, 900)`,
-          critical: '7',
+          query: `${PROBE_FAILING}.rollup(sum, 900) / ${PROBE_ROUNDS}.rollup(sum, 900)`,
+          critical: '0.5',
         }),
         thresholdGraph({
           title: TITLES.probeSilent,
@@ -405,12 +405,13 @@ prodMonitor('search-indexer-silent', {
 prodMonitor('search-probe-late', {
   title: TITLES.probeLate,
   service: PROBE_SERVICE,
-  query: `min(last_10m):${PROBE_SECONDS} > 60`,
-  monitorThresholds: { critical: '60' },
+  query: `sum(last_15m):${PROBE_LATE} >= 3`,
+  monitorThresholds: { critical: '3' },
   pages: false,
-  requireFullWindow: true,
   description:
-    'For 10 minutes, every {{entity_type.name}} create, edit and rename the probe made took longer than the threshold, in seconds, to show in search, measured from the API acknowledging the write. Users see their {{entity_type.name}} changes in search that late.',
+    "In the last 15 minutes, search showed at least the threshold's number of the probe's {{entity_type.name}} changes only after 60 s, measured from the API acknowledging the write. Users see their {{entity_type.name}} changes in search that late.",
+  alertDetail: '{{value}} rounds',
+  recoveryDetail: '{{value}} rounds',
   dashboard,
   runbook: `${RUNBOOK}#probe-late`,
 });
@@ -432,15 +433,15 @@ prodMonitor('search-probe-unseen', {
 prodMonitor('search-probe-failing', {
   title: TITLES.probeFailing,
   service: PROBE_SERVICE,
-  query: `sum(last_15m):${PROBE_FAILING} > 7`,
-  monitorThresholds: { critical: '7' },
+  query: `sum(last_15m):${PROBE_FAILING} / ${PROBE_ROUNDS} > 0.5`,
+  monitorThresholds: { critical: '0.5' },
   pages: false,
   description:
     "More than half of the probe's {{entity_type.name}} rounds in 15 minutes failed to write or to search; a round ends as a search failure after 30 s of failed searches, so a search outage fails one a minute. Freshness of {{entity_type.name}} is not measured while it lasts.",
   dashboard,
   runbook: `${RUNBOOK}#probe-failing`,
-  alertDetail: '{{value}} rounds',
-  recoveryDetail: '{{value}} rounds',
+  alertDetail: '{{value}} of rounds',
+  recoveryDetail: '{{value}} of rounds',
 });
 
 if (PROBE_RUNS_IN_PROD) {

@@ -61,7 +61,7 @@ impl RoundSink for ProbeMetrics {
             KeyValue::new(ENTITY_TYPE, round.entity_type.as_str()),
             KeyValue::new(OPERATION, round.operation.as_str()),
         ];
-        if let Outcome::Seen(after) = round.outcome {
+        if let Outcome::Seen(after) | Outcome::Late(after) = round.outcome {
             self.seconds.record(after.as_secs_f64(), &tags);
         }
         tags.push(KeyValue::new(OUTCOME, round.outcome.as_str()));

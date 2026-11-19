@@ -109,11 +109,11 @@ async fn after_a_minute_polls_come_every_five_seconds() {
     })
     .await;
 
-    // 0 s to 60 s every second, then 65 s.
+    // 0 s to 60 s every second, then 65 s: past the target, so late.
     assert_eq!(
         watched,
         Watched {
-            outcome: Outcome::Seen(Duration::from_secs(65)),
+            outcome: Outcome::Late(Duration::from_secs(65)),
             polls: 62,
             failed_polls: 0,
         }
@@ -264,4 +264,20 @@ async fn a_short_search_outage_does_not_end_the_round() {
             failed_polls: 20,
         }
     );
+}
+
+#[tokio::test(start_paused = true)]
+async fn a_change_shown_at_the_target_is_seen_not_late() {
+    let token = Token::random();
+
+    let watched = watch_with(&[check(&token, Presence::Present)], |_, elapsed| {
+        Ok(if elapsed >= Duration::from_secs(60) {
+            vec![ENTITY]
+        } else {
+            vec![]
+        })
+    })
+    .await;
+
+    assert_eq!(watched.outcome, Outcome::Seen(Duration::from_secs(60)));
 }

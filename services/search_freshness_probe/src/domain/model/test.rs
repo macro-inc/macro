@@ -54,6 +54,7 @@ fn tags_match_the_indexers_entity_types_and_the_monitors_outcomes() {
     assert_eq!(EntityType::Message.as_str(), "message");
     assert_eq!(Operation::Delete.as_str(), "delete");
     assert_eq!(Outcome::Seen(std::time::Duration::ZERO).as_str(), "seen");
+    assert_eq!(Outcome::Late(std::time::Duration::ZERO).as_str(), "late");
     assert_eq!(Outcome::WriteFailed.as_str(), "write_failed");
     assert_eq!(Outcome::SearchFailed.as_str(), "search_failed");
 }

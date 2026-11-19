@@ -283,6 +283,7 @@ async fn a_failed_rename_looks_the_fixture_up_again() {
 struct FakeProperties {
     refuse_create: bool,
     refuse_set: bool,
+    refuse_delete: bool,
     definitions: u32,
     documents: Vec<EntityId>,
     sets: Vec<(EntityId, EntityId)>,
@@ -320,6 +321,9 @@ impl PropertyWrites for FakeProperties {
     }
 
     async fn delete_document(&mut self, document: EntityId) -> Result<(), Refused> {
+        if std::mem::take(&mut self.refuse_delete) {
+            return Err(Refused);
+        }
         self.deleted.push(document);
         Ok(())
     }
@@ -382,4 +386,22 @@ async fn a_failed_value_replaces_the_document_and_definition_next_round() {
     assert_eq!(rotation.api.definitions, 2);
     assert_eq!(next.entity_id, id(201));
     assert!(tokens(&next, Presence::Absent).is_empty());
+}
+
+#[tokio::test]
+async fn a_replaced_document_that_would_not_delete_is_deleted_later() {
+    let mut rotation = PropertyValue::new(FakeProperties {
+        refuse_set: true,
+        refuse_delete: true,
+        ..FakeProperties::default()
+    });
+
+    rotation.change().await.expect_err("the value is refused");
+    assert!(rotation.api.deleted.is_empty());
+    rotation.change().await.expect("set on a new document");
+    rotation.clean_up().await;
+
+    // The first document is deleted before the next round's, and the second
+    // at shutdown.
+    assert_eq!(rotation.api.deleted, [id(200), id(201)]);
 }

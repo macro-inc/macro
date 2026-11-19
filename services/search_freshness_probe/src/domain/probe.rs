@@ -98,7 +98,7 @@ async fn round<R: Rotation, S: Search>(
     span.record("operation", operation.as_str());
     span.record("outcome", outcome.as_str());
     let seen_ms = match outcome {
-        Outcome::Seen(after) => {
+        Outcome::Seen(after) | Outcome::Late(after) => {
             span.record("seen_ms", millis(after));
             Some(millis(after))
         }

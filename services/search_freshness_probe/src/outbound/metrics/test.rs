@@ -86,6 +86,11 @@ fn a_seen_round_records_its_seconds_and_every_round_counts_by_outcome() {
             outcome: Outcome::Unseen,
         },
         Round {
+            entity_type: EntityType::Document,
+            operation: Operation::Rename,
+            outcome: Outcome::Late(std::time::Duration::from_secs(90)),
+        },
+        Round {
             entity_type: EntityType::Call,
             operation: Operation::Rename,
             outcome: Outcome::WriteFailed,
@@ -107,6 +112,14 @@ fn a_seen_round_records_its_seconds_and_every_round_counts_by_outcome() {
                 tags(&[
                     ("entity_type", "document"),
                     ("operation", "rename"),
+                    ("outcome", "late")
+                ]),
+                1
+            ),
+            (
+                tags(&[
+                    ("entity_type", "document"),
+                    ("operation", "rename"),
                     ("outcome", "seen")
                 ]),
                 1
@@ -121,13 +134,14 @@ fn a_seen_round_records_its_seconds_and_every_round_counts_by_outcome() {
             ),
         ]
     );
-    // Only the seen round has a time, and it carries no outcome tag.
+    // Only the seen and late rounds have a time, and it carries no outcome
+    // tag.
     assert_eq!(
         seconds,
         [(
             tags(&[("entity_type", "document"), ("operation", "rename")]),
-            1,
-            2.5
+            2,
+            90.0
         )]
     );
 }
