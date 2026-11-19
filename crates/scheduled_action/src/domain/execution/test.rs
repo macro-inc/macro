@@ -1252,10 +1252,15 @@ async fn a_copy_stopped_while_reading_its_parent_records_the_read_interrupted() 
     drain(&executor).await;
 
     // The stalled read ran inside the read's span (the run reads the
-    // routine again afterwards, under its own span).
+    // routine again afterwards, under its own span), and that span is the
+    // run's.
     assert_eq!(
         spans.parents("test.parent_read")[0],
         Some("routine.copy.read_definition")
+    );
+    assert_eq!(
+        spans.parents("routine.copy.read_definition"),
+        [Some("routine.execute")]
     );
     assert_eq!(
         spans.outcomes("routine.copy.read_definition"),

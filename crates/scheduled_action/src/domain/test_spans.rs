@@ -72,15 +72,18 @@ impl Subscriber for Interested {
     fn exit(&self, _: &Id) {}
 }
 
-/// Installs `Interested` once. Callsites reached before that, by a thread
-/// still working its interest out as this registers, can keep the answer
-/// it found without a subscriber; tracing gives no way to wait for that
-/// thread, so only the binary's first capture can miss such a callsite.
+/// Installs `Interested` once, as the test binary's global subscriber, so
+/// tests in this crate must not set a global subscriber of their own (if
+/// one wins, it answers for threads with no capture instead).
+///
+/// One race remains: a thread that began working out a callsite's interest
+/// without a subscriber before this was published can store "never" after
+/// the rebuilds that publishing and later captures run. tracing gives no
+/// way to wait for that thread. The next capture's rebuild repairs it, so
+/// it can only fail a capture that overlaps that store.
 fn install() {
     static INSTALLED: OnceLock<()> = OnceLock::new();
     INSTALLED.get_or_init(|| {
-        // The binary sets no other global subscriber; if one is set, it
-        // answers for threads with no capture instead.
         let _ = tracing::subscriber::set_global_default(Interested);
     });
 }
