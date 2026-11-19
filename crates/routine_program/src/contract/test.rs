@@ -184,8 +184,10 @@ fn a_routines_sub_routines_type_its_schedule_and_their_steps_inputs() {
             " & { inputs: { taskId: string; urgent: boolean } }"
         )
     );
+    // One without inputs reads none, as a routine without inputs doesn't:
+    // made standalone, its code checks as it did.
     assert_eq!(
         context(&files[3]),
-        schedule("RoutineStepContext<{  }, {  }>", " & { inputs: {} }")
+        schedule("RoutineStepContext<{  }, {  }>", "")
     );
 }

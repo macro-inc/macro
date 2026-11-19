@@ -85,10 +85,16 @@ where
     Upgrades: CodeUpgrades,
 {
     /// A run that starts with an agent opens its transcript now, so the owner
-    /// can follow it from the moment it starts.
+    /// can follow it from the moment it starts. So does a copy with an agent
+    /// anywhere: its agent and apps were checked when its parent was saved,
+    /// not when it was scheduled, so they are admitted before its code acts.
     async fn prepare(&self, action: &ScheduledAction, handle: &mut ExecutionHandle) -> Result<()> {
         let program = handle.program(action)?;
-        if let Some(agent) = program.leading_agent() {
+        let agent = match SubRoutineCopy::from_task(&action.task) {
+            Some(_) => program.agent_steps().into_iter().next(),
+            None => program.leading_agent(),
+        };
+        if let Some(agent) = agent {
             self.agents
                 .prepare(action, agent, &program.mcp_servers, handle)
                 .await?;
@@ -126,9 +132,10 @@ where
         info.code_acts_as = has_code.then_some(acts_as);
         handle.run = Some(info);
         let program = match (SubRoutineCopy::from_task(&action.task), &handle.parent) {
-            // A copy that runs no code needs none of its parent's brought
-            // to the current SDK.
-            (Some(_), Some(_)) if !has_code => program,
+            // A run that runs no code needs none brought to the current SDK:
+            // not a copy's parent's, nor what only the routine's
+            // sub-routines hold, whose copies bring it when they run.
+            _ if !has_code => program,
             // A copy's code is its parent's: brought to the current SDK, and
             // rewritten if it must be, as the parent's, with no trigger.
             (Some(copy), Some(parent)) => current_code(
@@ -343,10 +350,9 @@ where
             "routine": { "id": action.id, "name": action.name },
             "trigger": trigger,
         });
-        // Only a routine with inputs, or a copy (whose code is checked with
-        // `inputs`, empty when its sub-routine takes none), reads them, so
-        // the context of every other routine stays as it was.
-        if (!program.inputs.is_empty() || SubRoutineCopy::from_task(&action.task).is_some())
+        // Only a routine or copy with inputs reads them, as its code is
+        // checked, so the context of every other routine stays as it was.
+        if !program.inputs.is_empty()
             && let Value::Object(fields) = &mut context
         {
             fields.insert("inputs".into(), Value::Object(program.input_values()));

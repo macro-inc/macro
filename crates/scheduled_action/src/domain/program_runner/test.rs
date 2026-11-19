@@ -880,7 +880,7 @@ async fn a_copy_runs_its_parents_definition_with_the_inputs_it_was_given() {
 }
 
 #[tokio::test]
-async fn a_copy_of_a_sub_routine_without_inputs_gets_empty_inputs() {
+async fn a_copy_of_a_sub_routine_without_inputs_gets_none() {
     let code = Arc::new(Code::default());
     let runner = Fixture::new(Agents::default())
         .runner
@@ -899,8 +899,52 @@ async fn a_copy_of_a_sub_routine_without_inputs_gets_empty_inputs() {
 
     runner.run(&copy, &mut handle, manual()).await.unwrap();
 
-    // Its code was checked with `inputs`, so it gets one.
-    assert_eq!(code.runs.lock().unwrap()[0].context["inputs"], json!({}));
+    // Its code was checked without `inputs`, as a routine's is, so it gets
+    // none.
+    assert_eq!(code.runs.lock().unwrap()[0].context.get("inputs"), None);
+}
+
+#[tokio::test]
+async fn a_copy_admits_its_agent_before_its_code_acts() {
+    let code = Arc::new(Code::default());
+    let fixture = Fixture::new(Agents::default());
+    let runner = fixture
+        .runner
+        .with_code(Arc::clone(&code), Arc::new(NoCodeUpgrades));
+    let parent = action(json!({
+        "steps": [{ "type": "agent", "model": "m", "instructions": "List what is due" }],
+        "sub_routines": [{
+            "name": "follow_up",
+            "title": "Follow up",
+            "steps": [
+                code_step("post", "Post a reminder"),
+                { "type": "agent", "model": "m", "instructions": "Reply in the thread" },
+            ],
+        }],
+    }));
+    let copy = action(json!({ "sub_routine": "follow_up" }));
+    let mut handle = ExecutionHandle::default();
+    handle.parent = Some(parent);
+
+    // Its apps weren't checked when it was scheduled, so its agent is
+    // admitted when the run starts, before the post.
+    runner.prepare(&copy, &mut handle).await.unwrap();
+    let prepared = fixture.agents.prepared.lock().unwrap().clone();
+    assert_eq!(prepared.len(), 1);
+    assert_eq!(prepared[0].0.instructions, "Reply in the thread");
+    assert!(code.runs.lock().unwrap().is_empty());
+    runner.run(&copy, &mut handle, manual()).await.unwrap();
+    assert_eq!(fixture.agents.prepared.lock().unwrap().len(), 1);
+
+    // A routine of its own still opens a later agent's transcript when the
+    // agent's turn comes.
+    let own = action(json!({ "steps": [
+        code_step("post", "Post a reminder"),
+        { "type": "agent", "model": "m", "instructions": "Reply in the thread" },
+    ] }));
+    let mut handle = ExecutionHandle::default();
+    runner.prepare(&own, &mut handle).await.unwrap();
+    assert_eq!(fixture.agents.prepared.lock().unwrap().len(), 1);
 }
 
 #[tokio::test]
@@ -925,6 +969,9 @@ async fn code_only_a_sub_routine_holds_runs_in_its_copies_not_in_the_routine() {
     runner.run(&parent, &mut handle, manual()).await.unwrap();
     assert_eq!(handle.run.unwrap().code_acts_as, None);
     assert!(code.runs.lock().unwrap().is_empty());
+    // Nor is that code checked, or upgraded, by the routine's own runs: one
+    // that couldn't be would stop work that runs none of it.
+    assert_eq!(checks(), 0);
 
     // A copy whose sub-routine runs no code leaves its parent's code, held
     // for an older SDK, as it is.

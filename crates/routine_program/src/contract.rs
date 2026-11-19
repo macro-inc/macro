@@ -152,7 +152,9 @@ impl RoutineProgram {
     /// [`Self::code_steps`]. Each declares `steps` with the outputs of the
     /// steps before it in the same run. A routine that defines sub-routines
     /// types `macro.routines.schedule` with their names and inputs, and a
-    /// routine or sub-routine with inputs types `inputs`.
+    /// routine or sub-routine with inputs types `inputs`. One without inputs
+    /// has none, whether it is a routine or a sub-routine, so a copy made
+    /// standalone checks as it did.
     pub fn check_files(&self) -> Vec<CheckFile> {
         let schedules = schedules(&self.sub_routines);
         let mut walk = Walk {
@@ -165,7 +167,7 @@ impl RoutineProgram {
             walk = Walk {
                 files: walk.files,
                 schedules: schedules.clone(),
-                inputs: Some(input_types(&definition.inputs).unwrap_or_else(|| "{}".to_owned())),
+                inputs: input_types(&definition.inputs),
                 visible: Vec::new(),
             };
             walk.steps(&definition.steps, Some(&definition.name));
