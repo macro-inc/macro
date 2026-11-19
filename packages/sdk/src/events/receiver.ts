@@ -48,11 +48,22 @@ export interface ListenOptions {
    */
   onDrop?: (at: Date) => void;
   /**
-   * Told each time the stream is open again after a drop, so events reach
-   * the handlers again. Resync after this, not at the drop: an event
-   * published between a resync and the reconnect would reach neither.
+   * Told each time the stream opens: the first time, and again after each
+   * drop, once events reach the handlers again. Resync after a reopen, not
+   * at the drop: an event published between a resync and the reopen would
+   * reach neither.
    */
-  onReconnect?: (at: Date) => void;
+  onOpen?: (at: Date) => void;
+  /**
+   * Ask the server to replay the events after the last one seen, on the
+   * first connection (`lastEventId`, e.g. stored by a process before it
+   * restarted) and on each reconnect. The server keeps only a short window
+   * of recent events, in one process, and doesn't say when a gap was longer:
+   * resync from history as well, and expect repeats (drop them by id).
+   */
+  resume?: { readonly lastEventId?: string };
+  /** Told each event's id once its handlers are done, to resume from later. */
+  onEventId?: (id: string) => void;
 }
 
 /** Attach the entity handles defined for each webhook event. */
@@ -176,29 +187,48 @@ export class MacroEvents {
       }
     }
 
-    let dropped = false;
+    let lastId: string | undefined;
+    // The generated client sends back the last id it saw on a reconnect; the
+    // server replays from it only when asked to resume.
+    const resuming = (request: Request): Request => {
+      if (opts.resume === undefined) return request;
+      const url = new URL(request.url);
+      url.searchParams.set('resume', 'true');
+      const headers = new Headers(request.headers);
+      const from = opts.resume.lastEventId;
+      if (!headers.has('Last-Event-ID') && from !== undefined)
+        headers.set('Last-Event-ID', from);
+      return new Request(url, {
+        headers,
+        method: request.method,
+        signal: request.signal,
+      });
+    };
     const { stream } = await this.client.storage.streamEvents({
       query: {
         scope: opts.scope ?? 'user',
         filters: JSON.stringify(filters),
       },
       signal: controller.signal,
-      // The generated client reconnects by itself; a successful response
-      // after a drop is the stream open again.
+      // The generated client reconnects by itself; each successful response
+      // is the stream open.
       fetch: Object.assign(
         async (...request: Parameters<typeof fetch>) => {
-          const response = await globalThis.fetch(...request);
-          if (response.ok && dropped) {
-            dropped = false;
-            opts.onReconnect?.(new Date());
+          const response = await globalThis.fetch(
+            resuming(new Request(...request)),
+          );
+          if (response.ok) {
+            opts.onOpen?.(new Date());
           }
           return response;
         },
         { preconnect: globalThis.fetch.preconnect },
       ),
+      onSseEvent: (event) => {
+        lastId = event.id;
+      },
       onSseError: () => {
         if (controller.signal.aborted) return;
-        dropped = true;
         opts.onDrop?.(new Date());
       },
     });
@@ -206,7 +236,10 @@ export class MacroEvents {
     const consume = (async () => {
       try {
         for await (const data of stream) {
+          // The client reads an event's id just before yielding it.
+          const id = lastId;
           await this.dispatchEvent(data);
+          if (id !== undefined) opts.onEventId?.(id);
         }
       } catch {
         if (controller.signal.aborted) return;

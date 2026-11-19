@@ -72,10 +72,10 @@ const fakeMacro = (channelIds: readonly string[] = ['dm1']) => {
       },
       listen: async (options?: {
         onDrop?: (at: Date) => void;
-        onReconnect?: (at: Date) => void;
+        onOpen?: (at: Date) => void;
       }) => {
         dropped = options?.onDrop;
-        reconnected = options?.onReconnect;
+        reconnected = options?.onOpen;
         return () => undefined;
       },
     },

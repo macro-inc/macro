@@ -425,7 +425,7 @@ export const sdkChat = ({
           if (pending === undefined || Date.parse(from) < Date.parse(pending))
             pending = from;
         },
-        onReconnect: () => {
+        onOpen: () => {
           open = true;
           catchUp().catch(() => undefined);
         },

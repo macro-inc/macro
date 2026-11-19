@@ -195,10 +195,10 @@ describe('MacroEvents', () => {
         if (event.metadata.document_id === 'after') after.resolve();
       });
       const drops: Date[] = [];
-      const reconnects: Date[] = [];
+      const opens: Date[] = [];
       const stop = await macro.events.listen({
         onDrop: (at) => drops.push(at),
-        onReconnect: (at) => reconnects.push(at),
+        onOpen: (at) => opens.push(at),
       });
 
       await Promise.race([
@@ -213,17 +213,80 @@ describe('MacroEvents', () => {
 
       expect(seen).toEqual(['before', 'after']);
       expect(connections).toBe(2);
-      // Told once each, so a caller can resync what the gap may have missed
-      // once events reach it again.
+      // Told of the drop once, and of each open (the first and the reopen),
+      // so a caller can resync what the gap may have missed once events reach
+      // it again.
       expect(drops).toHaveLength(1);
-      expect(reconnects).toHaveLength(1);
-      expect(reconnects[0]!.getTime()).toBeGreaterThanOrEqual(
-        drops[0]!.getTime(),
-      );
+      expect(opens).toHaveLength(2);
+      expect(opens[1]!.getTime()).toBeGreaterThanOrEqual(drops[0]!.getTime());
     } finally {
       await server.stop(true);
     }
   }, 15_000);
+
+  test('a resumed stream asks for the events after its last id, and says which it handled', async () => {
+    const requests: { url: string; lastEventId: string | null }[] = [];
+    const server = Bun.serve({
+      port: 0,
+      fetch: (request) => {
+        requests.push({
+          url: request.url,
+          lastEventId: request.headers.get('last-event-id'),
+        });
+        const event = {
+          event_type: 'document.created' as const,
+          metadata: {
+            document_id: 'd1',
+            document_name: 'd1',
+            owner: 'macro|o@example.com',
+          },
+        };
+        return new Response(
+          new ReadableStream({
+            start(controller) {
+              controller.enqueue(
+                new TextEncoder().encode(`id: e1\n${sseBody(event)}`),
+              );
+            },
+          }),
+          { headers: { 'content-type': 'text/event-stream' } },
+        );
+      },
+    });
+    try {
+      const macro = new Macro({
+        token: 'user-token',
+        hosts: { storage: `http://localhost:${server.port}` },
+      });
+      const handled: string[] = [];
+      const seen = Promise.withResolvers<string>();
+      macro.events.on('document.created', (event) => {
+        handled.push(`handler ${event.metadata.document_id}`);
+      });
+      const stop = await macro.events.listen({
+        resume: { lastEventId: 'e0' },
+        onEventId: (id) => {
+          handled.push(`id ${id}`);
+          seen.resolve(id);
+        },
+      });
+
+      expect(
+        await Promise.race([
+          seen.promise,
+          Bun.sleep(5_000).then(() => 'no event id'),
+        ]),
+      ).toBe('e1');
+      stop();
+
+      expect(new URL(requests[0]!.url).searchParams.get('resume')).toBe('true');
+      expect(requests[0]!.lastEventId).toBe('e0');
+      // The id is reported once its event was handled.
+      expect(handled).toEqual(['handler d1', 'id e1']);
+    } finally {
+      await server.stop(true);
+    }
+  });
 
   test('listen() throws when there are no filters or handlers', async () => {
     const macro = new Macro({
