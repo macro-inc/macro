@@ -523,6 +523,8 @@ where
                 ));
             }
         }
+        // Read before the delete: the memberships go with the channel.
+        let participant_user_ids = participant_ids(&participants);
         self.repo
             .delete_channel(channel_id)
             .await
@@ -530,6 +532,7 @@ where
         self.events.dispatch(ChannelEvent::ChannelDeleted {
             channel_id,
             actor: Sender::new_from_user(actor),
+            participant_user_ids,
         });
         Ok(())
     }

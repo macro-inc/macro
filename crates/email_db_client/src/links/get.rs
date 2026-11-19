@@ -165,6 +165,47 @@ pub async fn fetch_inboxes_for_macro_id(
     Ok(service_links?)
 }
 
+/// An inbox email search can reach, and whether its disconnect has started.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct SearchInbox {
+    pub id: Uuid,
+    pub macro_id: String,
+    /// `deleting_at` is set: the mailbox is being disconnected and its rows
+    /// purged, and its documents stay in the search index until that ends.
+    pub deleting: bool,
+}
+
+/// The inboxes [`fetch_inboxes_for_macro_id`] returns, with only what email
+/// search scopes by and whether each is being disconnected.
+pub async fn fetch_search_inboxes_for_macro_id(
+    pool: &PgPool,
+    macro_id: &str,
+) -> anyhow::Result<Vec<SearchInbox>> {
+    if macro_id.is_empty() {
+        anyhow::bail!("macro_id cannot be empty");
+    }
+
+    let inboxes = sqlx::query_as!(
+        SearchInbox,
+        r#"
+        SELECT el.id AS "id!", el.macro_id AS "macro_id!",
+               el.deleting_at IS NOT NULL AS "deleting!"
+        FROM email_links el
+        WHERE el.macro_id = $1
+        UNION
+        SELECT el.id, el.macro_id, el.deleting_at IS NOT NULL
+        FROM email_links el
+        JOIN macro_user_links mul ON el.id = mul.link_id
+        WHERE mul.primary_macro_id = $1
+        "#,
+        macro_id
+    )
+    .fetch_all(pool)
+    .await?;
+
+    Ok(inboxes)
+}
+
 /// An accessible inbox plus the per-inbox details the links list endpoint
 /// renders: settings, latest backfill job status, and the self-contact photo.
 #[derive(Debug, Clone)]

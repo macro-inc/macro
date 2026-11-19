@@ -218,7 +218,7 @@ AL-082	the row menu's Remind me opens no reminder form
 AL-083	The tag submenu (EntityTagSubmenu.tsx) refuses to open when the row menu opens it (createSoupEntityActions.ts passes this row's id as its break name), so the row menu's Add tag shows no tag picker. AL-615 goes through the same open handler, switched on by the title menu's id.
 AL-084	The row menu's "Copy Link" item in createSoupEntityActions.ts no longer calls the copy-link action and reports nothing copied, so choosing it copies nothing and shows no check.
 AL-085	the row menu's Share opens no Share dialog
-AL-086	The row menu's "Sender → Signal" item in createSoupEntityActions.ts no longer calls the mark-sender-signal action, so choosing it does nothing.
+AL-086	The row menu's "Sender → Signal" item in createSoupEntityActions.ts no longer calls the mark-sender-signal action, or the sender filter write in thread.ts does not refresh GraphQL Soup membership and the thread stays in the open Noise list.
 AL-087	The row menu's "Sender → Noise" item in createSoupEntityActions.ts no longer calls the mark-sender-noise action, so choosing it does nothing.
 AL-088	The row menu's "Block Sender" item in createSoupEntityActions.ts no longer calls the block-sender action, so choosing it does nothing.
 AL-089	the row menu's Delete does not move the thread to Trash
@@ -246,6 +246,7 @@ AL-111	The email saved-view menu's "Edit" entry (EmailSavedViewMenuItems in emai
 AL-112	The email saved-view menu's "Duplicate" entry (EmailSavedViewMenuItems in email-saved-views.tsx) returns without opening the builder named "<name> (copy)".
 AL-113	The delete confirmation's "Delete view" button (DeleteSavedViewDialog in saved-view-dialogs.tsx) no longer calls the delete mutation; the menu entry that opens the confirmation is untouched.
 AL-114	The desktop saved-views list in email-saved-views.tsx ignores a dropped drag, so dragging a row past another no longer reorders; nothing else in the list changes.
+AL-115	Main before this fix enables drag on the navigation sheet's saved-view rows, removing Move up and Move down. The phone and tablet tests fail at Move up and, with the fix, check both moves against the stored order and the order after reload.
 AL-116	Save changes on an edited saved view saves nothing
 AL-117	Reset on an edited saved view keeps the edits
 AL-118	Reload saved view after a refused save reloads nothing
@@ -362,7 +363,7 @@ AL-613	the title menu's Favorite does not favorite the thread
 AL-615	The tag submenu (EntityTagSubmenu.tsx) refuses to open when the title menu opens it (SplitFileMenu.tsx passes this row's id as its break name), so the title menu's Add tag shows no tag picker. AL-083 goes through the same open handler, switched on by the row menu's id.
 AL-616	The title menu's Copy Link (copyLinkOp in SplitFileMenu.tsx) returns false without calling the copy-link action, so it copies nothing.
 AL-617	The title menu's Copy ID (copyEntityIdOp in SplitFileMenu.tsx) returns false without calling the copy-ID action, so it copies nothing.
-AL-619	The "Remove access" button of a person's roster row in DirectAccessView.tsx no longer calls setGrant(user, null).
+AL-619	The "Remove access" button of a person's roster row in DirectAccessView.tsx no longer calls setGrant(user, null), or the thread sharing permissions read omits the granted conversation so the owner cannot see or remove it.
 AL-621	Enter in the Remind me input in email-reminder-form.tsx no longer selects the highlighted time, so a typed reminder cannot be saved from the keyboard.
 AL-622	The Remind me form's Retry button (email-reminder-form.tsx) no longer calls onRetry, so the reminder is not read again in the quiet between the form's own reads.
 AL-700	Load more views loads nothing
@@ -480,6 +481,7 @@ F-016	the service counts mail held before connecting as imported without storing
 F-017	the service fetches a new message and does not store it
 F-018	new mail does not reach the open list until a reload
 F-019	the service does not apply a change made in the provider's client
+F-020	the email service's thread reads (messages_by_thread_id_paginated in crates/email, get_paginated_parsed_messages_by_thread_id in email_db_client) leave out a message missing at the provider only when it is a draft, as main had them, so an Outlook message deleted at the provider stays in its thread after the service marks it provider_missing
 F-021	the Drafts tab lists no drafts
 F-022	the service does not store mail sent from the provider's client
 F-023	Force sync starts nothing
@@ -707,6 +709,7 @@ STC-073	not shown as the row says (toast: Cancel the schedule before deleting th
 STC-074	not shown as the row says (toast: This email was scheduled in another tab. Your newer text was kept as a new draft.): its rendering is switched off or changed in src/features/email-compose/primitives/email-composer.ts
 STC-075	not shown as the row says (toast: Scheduled email sent): its rendering is switched off or changed in src/features/email-compose/primitives/email-composer.ts
 STC-076	not shown as the row says (toast: This scheduled email was sent. Your composer has been updated.): its rendering is switched off or changed in src/features/email-compose/primitives/draft-persistence.ts
+STC-077	On main, durable Undo skips the mounted reply's notice when the send journal has restored the first draft. The test holds the newer reply's first save until cancellation, then asserts the notice, both saved drafts, and the newer reply after reload.
 STC-078	not shown as the row says (toast: <reason> with action Retry inbox change (Could not change inbox. Retry the same inbox to recover. when there is no reason)): its rendering is switched off or changed in src/lib/queries/email/draft.ts
 STC-079	not shown as the row says (toast: Retry the previous inbox change before choosing another inbox.): its rendering is switched off or changed in src/features/email-compose/primitives/draft-transfer.ts
 STC-080	not shown as the row says (toast: Previously saved attachments could not be copied to the new draft. Please attach those files again.): its rendering is switched off or changed in src/features/email-compose/primitives/reply-composer.ts
@@ -885,6 +888,7 @@ STL-073	not shown as the row says (done toggle label "Mark as not done" / "Mark 
 STL-074	not shown as the row says (toast "Marked as done" / "Marked as not done" with Undo; "Failed to undo"): its rendering is switched off or changed in src/features/email-thread/thread-completion-adapter.tsx
 STL-075	not shown as the row says (toast "Failed to mark as done" / "Failed to mark as not done"): its rendering is switched off or changed in src/features/email-thread/thread-completion-adapter.tsx
 STL-076	not shown as the row says (toast "Marked as unread" / "Failed to mark as unread"): its rendering is switched off or changed in src/features/email-thread/thread-read-adapter.ts
+STL-077	suppressing either mark-as-read notice in thread-read-adapter.ts leaves the reading pane silent after successfully marking read or after the write is refused
 STL-078	not shown as the row says (toast "Moved to Trash" + Undo; Undo shows "Restored from Trash" or "Failed to restore from Trash"): its rendering is switched off or changed in src/features/block-email/component/useEmailThreadTools.tsx
 STL-080	The pending-operation notice above an Outlook thread loses "Waiting for mailbox confirmation.": that text in MailboxOperationsNotice in email-thread-operations.tsx is emptied.
 STL-081	not shown as the row says ("<action>: Could not apply this change. Try the action again."): its rendering is switched off or changed in src/features/email-thread/email-thread-operations.tsx
@@ -943,6 +947,7 @@ STL-516	not shown as the row says (scheduling notice "<name> accepted / declined
 STL-517	The "Responding as" prefix before the responding address on the invitation card is dropped, in calendar-invite-card.tsx.
 STL-520	not shown as the row says (confirmation prompt with checkbox "I understand this may send a duplicate email." / "I have reviewed the original copy…"): its rendering is switched off or changed in src/features/email-message/views/message-operation-recovery.tsx
 STL-521	not shown as the row says (header with Back, the subject and Info only): its rendering is switched off or changed in src/features/block-email/views/mobile/email-thread.tsx
+STL-522	The shared event card with only Outlook calendars shows a disabled Add to calendar button instead of explaining the writable Google calendar requirement, in AddToCalendarButton.tsx.
 STL-600	not shown as the row says (toast "Failed to block sender" / "Failed to unblock sender"): its rendering is switched off or changed in src/lib/queries/email/thread.ts
 STL-601	not shown as the row says (toast "Failed to mark sender as <label>" / "Failed to undo"): its rendering is switched off or changed in src/lib/queries/email/thread.ts
 STL-602	The row menu's sender moves in createSoupEntityActions.ts ignore the row's Signal/Noise bucket, so both "Sender → Signal" and "Sender → Noise" are offered whatever tab the row is in.
@@ -977,7 +982,7 @@ STL-707	not shown as the row says (alert with the save error inside the dialog):
 STL-708	not shown as the row says (Advanced settings start open when the view sets one; Inboxes shown with two or more inboxes; Tags shown when tags exist): its rendering is switched off or changed in src/features/email-view/components/EmailSavedViewFields.tsx
 STL-709	not shown as the row says (alert with the delete error inside the confirmation): its rendering is switched off or changed in src/features/saved-views/components/saved-view-dialog.tsx
 STL-710	Deleting the open saved view in email-saved-views.tsx no longer calls leaveSavedView, so the list does not return to the tab it was opened from.
-STL-711	email-saved-views.tsx passes Move up / Move down to the draggable desktop rows too, so a desktop row menu shows Move items. The touch half of the row is the known bug touch-saved-views-reorder: the sheet's menus have none to break.
+STL-711	Passing Move up and Move down to the draggable desktop rows breaks the desktop assertion. Main before the touch fix also makes the sheet rows draggable, breaking the phone assertion for Move down. With the fix, phone row menus show just the move toward the other row.
 STL-712	The email list header in EmailHeader.tsx no longer shows the open saved view's "Saved view actions" menu beside its name.
 STL-713	not shown as the row says ("Save changes" disabled while saving or when the view has skipped settings): its rendering is switched off or changed in src/features/email-view/views/email-saved-views.tsx
 STL-900	The open list's live updates are cut off: graphql-soup-websocket.ts no longer subscribes to SoupUpdates and use-notification-updates.ts no longer refetches the thread of a new_email notification.

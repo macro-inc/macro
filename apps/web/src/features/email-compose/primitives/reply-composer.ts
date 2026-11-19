@@ -432,18 +432,26 @@ export function createReplyComposer(
   // Register a callback so stale undoSend closures from a previous mount can
   // restore state into this (the live) component instance.
   let hasLocalChanges = false;
-  const restoreMountedReply = (snapshot: UndoReplySnapshot) => {
+  const restoreMountedReply = (
+    snapshot: UndoReplySnapshot,
+    mode?: 'notify'
+  ) => {
     const currentDraftId = savedDraftId();
-    if (
-      hasLocalChanges ||
-      (currentDraftId !== undefined && currentDraftId !== snapshot.draftId)
-    ) {
+    const differentDraft = currentDraftId !== snapshot.draftId;
+    // Durable Undo can already have restored this reply under its server ID.
+    // The ID alone cannot establish that the user wrote another reply.
+    const keptNewerReply =
+      mode === 'notify'
+        ? hasLocalChanges && differentDraft && editor() && collectDraft(true)
+        : hasLocalChanges || (currentDraftId !== undefined && differentDraft);
+    if (keptNewerReply) {
       props.notices.feedback.alert(
         'Your newer reply was kept. The earlier message was not reopened.'
       );
       props.setShowReply?.(true);
       return;
     }
+    if (mode === 'notify') return;
     const draftId = snapshot.draftId;
     hasLocalChanges = false;
     props.onEngaged?.();
@@ -520,9 +528,11 @@ export function createReplyComposer(
       // Keep the recovery snapshot available if restoring the server draft
       // fails. Consume it only after the authoritative restore succeeds.
       replyUndo.take(draftId);
-      // Resolve the live registration after cache updates and unmounts settle.
-      if (!draftRestored)
+      if (draftRestored) replyUndo.notifyMounted(undoKey, snapshot);
+      else {
+        // Resolve the legacy restore after cache updates and unmounts settle.
         setTimeout(() => replyUndo.restore(undoKey, snapshot), 0);
+      }
       props.setShowReply?.(true);
     }
   };
@@ -1398,7 +1408,8 @@ export function createReplyComposer(
           onUndone: async (undo) => {
             returnedToInbox = true;
             await restoreAfterUndoSend(
-              draftId,
+              // The outbox may resolve the client ID after we snapshot it.
+              undo?.draftRestored ? (currentDraftId ?? draftId) : draftId,
               result.threadId,
               inboxId,
               undo?.draftRestored
