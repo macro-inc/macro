@@ -33,10 +33,10 @@ function FilterActions(props: { onCancel: () => void; onDone: () => void }) {
   return (
     <div class="flex items-center justify-end gap-1.5 border-t border-edge-muted px-3.5 py-2.5">
       <Button variant="ghost" size="sm" onClick={() => props.onCancel()}>
-        Cancel
+        {t('common.cancel')}
       </Button>
       <Button variant="primary" size="sm" onClick={() => props.onDone()}>
-        Done
+        {t('routineFilters.done')}
       </Button>
     </div>
   );
@@ -212,21 +212,23 @@ function ConditionFilter(props: FilterProps & { question: string }) {
     <FilterPopover
       open={open()}
       onOpenChange={setOpen}
-      title="Edit condition"
+      title={t('routineFilters.editCondition')}
       row={(anchor) => (
         <div ref={anchor} class="flex min-w-0 max-w-full">
           <FilterChip
             icon={<SparkleIcon class="size-3.5 shrink-0 text-accent" />}
-            label="Only if"
+            label={t('routineFilters.onlyIf')}
             value={props.question}
             tooltip={props.question}
-            editLabel={`Edit condition: ${props.question}`}
+            editLabel={t('routineFilters.editConditionOf', {
+              question: props.question,
+            })}
             open={open()}
             onOpen={() => setOpen(true)}
             onRemove={() =>
               props.onSave({ ...props.trigger, condition: undefined })
             }
-            removeLabel="Remove condition"
+            removeLabel={t('routineFilters.removeCondition')}
           />
         </div>
       )}
@@ -243,20 +245,20 @@ function InboxFilter(props: FilterProps & { inboxes: string[] }) {
     <FilterPopover
       open={open()}
       onOpenChange={setOpen}
-      title="Edit inboxes"
+      title={t('routineFilters.editInboxes')}
       row={(anchor) => (
         <div ref={anchor} class="flex min-w-0 max-w-full">
           <FilterChip
             icon={<TrayIcon class="size-3.5 shrink-0 text-ink-muted" />}
-            label="Only"
+            label={t('routineFilters.only')}
             value={props.renderInboxesLabel?.(props.inboxes)}
-            editLabel="Edit inboxes"
+            editLabel={t('routineFilters.editInboxes')}
             open={open()}
             onOpen={() => setOpen(true)}
             onRemove={() =>
               props.onSave({ ...props.trigger, inboxes: undefined })
             }
-            removeLabel="Watch every inbox"
+            removeLabel={t('routineFilters.watchEveryInbox')}
           />
         </div>
       )}
@@ -293,7 +295,7 @@ function AddFilterLabel() {
   return (
     <>
       <PlusIcon class="size-3.5 shrink-0" />
-      Filter
+      {t('routineFilters.filter')}
     </>
   );
 }
@@ -315,7 +317,7 @@ function AddFilter(props: FilterProps & { kinds: FilterKind[] }) {
     <FilterPopover
       open={open()}
       onOpenChange={(value) => (value ? setOpen(true) : close())}
-      title="Add filter"
+      title={t('routineFilters.addFilter')}
       row={(anchor) => (
         <div ref={anchor} class="flex min-w-0 max-w-full">
           <Show
@@ -325,7 +327,7 @@ function AddFilter(props: FilterProps & { kinds: FilterKind[] }) {
                 as={Button}
                 variant="ghost"
                 size="sm"
-                aria-label="Add filter"
+                aria-label={t('routineFilters.addFilter')}
               >
                 <AddFilterLabel />
               </Popover.Trigger>
@@ -341,7 +343,7 @@ function AddFilter(props: FilterProps & { kinds: FilterKind[] }) {
               <Dropdown.Trigger
                 variant="ghost"
                 size="sm"
-                aria-label="Add filter"
+                aria-label={t('routineFilters.addFilter')}
               >
                 <AddFilterLabel />
               </Dropdown.Trigger>

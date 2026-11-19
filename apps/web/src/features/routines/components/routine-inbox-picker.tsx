@@ -1,4 +1,5 @@
 import { ListSkeleton } from '@app/components/view-shell/ListSkeleton';
+import { t } from '@app/lib/i18n';
 import { Key } from '@solid-primitives/keyed';
 import { Checkbox } from '@ui';
 import { type Accessor, For, type JSX, Match, Show, Switch } from 'solid-js';
@@ -20,10 +21,10 @@ export type InboxChoices =
 
 /** "team@example.com" or "2 inboxes": what an inbox filter picked. */
 export function pickedInboxesLabel(picked: string[], choices: InboxChoices) {
-  if (picked.length > 1) return `${picked.length} inboxes`;
-  if (choices.state !== 'ready') return '1 inbox';
+  if (picked.length > 1 || choices.state !== 'ready')
+    return t('routineFilters.inboxCount', { count: picked.length });
   const inbox = choices.inboxes.find((item) => item.id === picked[0]);
-  return inbox?.address ?? 'A disconnected inbox';
+  return inbox?.address ?? t('routineFilters.disconnectedInbox');
 }
 
 /** One inbox to check or uncheck. */
@@ -70,20 +71,22 @@ export function RoutineInboxPicker(props: {
     );
   return (
     <div class="grid gap-1.5">
-      <span class="text-xs font-medium">Inboxes</span>
+      <span class="text-xs font-medium">{t('routineFilters.inboxes')}</span>
       <Switch>
         <Match when={props.choices.state === 'pending'}>
           <div
             class="grid gap-2.5 rounded-lg border border-edge-muted p-2.5"
             role="status"
-            aria-label="Loading inboxes"
+            aria-label={t('routineFilters.loadingInboxes')}
           >
             <ListSkeleton.Bar class="h-3 w-3/5" />
             <ListSkeleton.Bar class="h-3 w-2/5" />
           </div>
         </Match>
         <Match when={props.choices.state === 'failed'}>
-          <p class="text-xs text-failure">Your inboxes couldn’t be listed.</p>
+          <p class="text-xs text-failure">
+            {t('routineFilters.inboxesUnavailable')}
+          </p>
         </Match>
         <Match when={ready()}>
           {(inboxes) => (
@@ -91,7 +94,7 @@ export function RoutineInboxPicker(props: {
               when={inboxes().length > 0 || props.picked().length > 0}
               fallback={
                 <p class="text-xs text-ink-muted">
-                  You have no inboxes connected.
+                  {t('routineFilters.noInboxes')}
                 </p>
               }
             >
@@ -110,7 +113,7 @@ export function RoutineInboxPicker(props: {
                         <span class="truncate">{inbox().address}</span>
                         <Show when={inbox().shared}>
                           <span class="text-xs text-ink-muted">
-                            Shared with you
+                            {t('routineFilters.sharedWithYou')}
                           </span>
                         </Show>
                       </Checkbox.Label>
@@ -121,7 +124,7 @@ export function RoutineInboxPicker(props: {
                   {(id) => (
                     <InboxRow checked onChange={() => toggle(id, false)}>
                       <Checkbox.Label class="text-sm font-normal text-ink-muted">
-                        A disconnected inbox
+                        {t('routineFilters.disconnectedInbox')}
                       </Checkbox.Label>
                     </InboxRow>
                   )}
@@ -129,8 +132,8 @@ export function RoutineInboxPicker(props: {
               </div>
               <p class="text-xs text-ink-muted">
                 {props.picked().length
-                  ? 'Runs only for mail into the inboxes checked.'
-                  : 'None checked: runs for mail into every inbox, yours and those shared with you.'}
+                  ? t('routineFilters.someInboxesChecked')
+                  : t('routineFilters.noInboxesChecked')}
               </p>
             </Show>
           )}

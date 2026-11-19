@@ -1,3 +1,4 @@
+import { t } from '@app/lib/i18n';
 import { TextField } from '@ui';
 import {
   conditionPlaceholder,
@@ -17,7 +18,7 @@ export function RoutineEventCondition(props: {
       onChange={(value) => props.onChange(value.trim() ? value : undefined)}
     >
       <TextField.Label class="text-xs font-medium text-ink-muted">
-        Only run if AI says yes
+        {t('routineFilters.conditionLabel')}
       </TextField.Label>
       <TextField.TextArea
         autoResize
@@ -26,7 +27,7 @@ export function RoutineEventCondition(props: {
         placeholder={conditionPlaceholder(props.trigger)}
       />
       <TextField.Description class="text-xs leading-4 text-ink-muted">
-        AI checks each event with this question. A no skips the run.
+        {t('routineFilters.conditionHelp')}
       </TextField.Description>
     </TextField>
   );
