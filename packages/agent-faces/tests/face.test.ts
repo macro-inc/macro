@@ -239,3 +239,10 @@ test('parseAgentFace counts a seed in characters, as the server does', () => {
     parseAgentFace({ v: 1, seed: '🙂'.repeat(65), pins: {} })
   ).toBeUndefined();
 });
+
+test('a seed with characters XML forbids still draws well-formed SVG', () => {
+  const svg = renderFace({ v: 1, seed: 'a\u0001b￾', pins: {} });
+  expect(svg).toContain('aria-label="Face ab"');
+  // The seed still picks the parts: the same face as before stripping.
+  expect(svg).not.toBe(renderFace({ v: 1, seed: 'ab', pins: {} }));
+});

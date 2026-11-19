@@ -24,8 +24,23 @@ function curveFrom(
   return [between(d, e), e, c, curve[3]];
 }
 
+/** Whether XML 1.0 allows code point `code` in text. */
+const xmlAllows = (code: number) =>
+  code === 0x9 ||
+  code === 0xa ||
+  code === 0xd ||
+  (code >= 0x20 && code <= 0xd7ff) ||
+  (code >= 0xe000 && code <= 0xfffd) ||
+  code >= 0x10000;
+
+// A seed may hold characters XML forbids; the label drops them.
+const xmlText = (text: string) =>
+  Array.from(text)
+    .filter((char) => xmlAllows(char.codePointAt(0) ?? 0))
+    .join('');
+
 const escapeXml = (text: string) =>
-  text
+  xmlText(text)
     .replace(/&/g, '&amp;')
     .replace(/</g, '&lt;')
     .replace(/>/g, '&gt;')
