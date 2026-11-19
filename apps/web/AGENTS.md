@@ -1402,6 +1402,8 @@ resolved session ID; keep the existing `AgentSessionProvider` subscription to
 - Sender filter writes and Undo return no per-thread classification. Refresh
   active GraphQL Soup readers with an email Importance predicate so their
   server pages reconcile Signal and Noise membership.
+- Project calendar invitations from GraphQL Mail aggregate facts into the
+  shared row flag so the Calendar invite facet also matches inline invitations.
 - Render user-visible text in new UI, and every menu and navigation label,
   with `t()` from `@app/lib/i18n`, adding only the English to
   `src/lib/i18n/locales/en/`. The periodic `update-translations` skill fills

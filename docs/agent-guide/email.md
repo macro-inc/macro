@@ -452,6 +452,8 @@ Email Read status and Done are single choices that close the menu; Has
 several and stay open while you tick them. Ticked Has items all apply;
 attachment kinds match any one. Tags supports search, pins selected tags first
 on opening, and is omitted when no tags exist. **f** opens the filter menu.
+**Calendar invite** matches meetings carried as attachments or as calendar
+parts of a message, including Outlook invitations.
 
 On Signal, Noise, All, Archived, Favorites and Calendar, Filters holds every
 condition a saved view can except Subject contains, which only the Save view
