@@ -1,0 +1,58 @@
+apps/web/src/features/channel/Channel/Channel.tsx
+  s_c540c7e02a57f1::t_021c80a2d04154 491-494,1280,1335,1365
+apps/web/src/features/channel/Channel/create-channel-drag-state.ts
+  s_c540c7e02a57f1::t_021c80a2d04154 22-40,44,67-71
+apps/web/src/features/channel/Call/discussion/browser-test/call-thread.tsx
+  s_c540c7e02a57f1::t_734e5103dd787a 65,79
+  s_c540c7e02a57f1::t_4e1c9f14889f69 23-24,66-78
+apps/web/src/features/channel/Channel/UnifiedReplyInput.tsx
+  s_c540c7e02a57f1::t_021c80a2d04154 2,35-36,88
+apps/web/AGENTS.md
+  s_c540c7e02a57f1::t_8b99b67e7a420c 411-416
+apps/web/src/features/channel/Channel/UnifiedEditInput.tsx
+  s_c540c7e02a57f1::t_021c80a2d04154 2,15-16,38
+apps/web/src/features/channel/Call/discussion/browser-test/call-thread.browser.e2e.ts
+  s_c540c7e02a57f1::t_734e5103dd787a 221-224,247,276
+  s_c540c7e02a57f1::t_e262fb64cdb845 248,277
+  s_c540c7e02a57f1::t_c96e6288250903 220
+  s_c540c7e02a57f1::t_29c0d79f200e84 225-227
+  s_c540c7e02a57f1::t_03f2e80078d33d 246
+  s_c540c7e02a57f1::t_c396f553f43970 249-251
+  s_c540c7e02a57f1::t_2cb6352d3b3f53 273-275
+  s_c540c7e02a57f1::t_8c0ad42f8027d5 278-280
+  s_32cf564cb23845::t_4ac22d6a28b6cb 2,6,177-182,228,242,256-272,281-286
+apps/web/src/features/channel/Channel/tests/channel-drop-zone.test.tsx
+  s_a3e2b83b312da2::t_90322fc6c2cf87 5,116-183,233-264
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.7.7",
+  "base_commit_sha": "e50c4acd3f869e504c51d9be1d7c2f2509e43f56",
+  "prompts": {},
+  "sessions": {
+    "s_32cf564cb23845": {
+      "agent_id": {
+        "tool": "claude",
+        "id": "5b9e86da-1f97-4032-b2cc-611e6ee15a78",
+        "model": "unknown"
+      },
+      "human_author": "Eric Hayes <56524199+ehayes2000@users.noreply.github.com>"
+    },
+    "s_a3e2b83b312da2": {
+      "agent_id": {
+        "tool": "claude",
+        "id": "dd223b38-8c62-42d7-a632-69d10f2011c4",
+        "model": "claude-opus-5-5"
+      },
+      "human_author": "Eric Hayes <56524199+ehayes2000@users.noreply.github.com>"
+    },
+    "s_c540c7e02a57f1": {
+      "agent_id": {
+        "tool": "claude",
+        "id": "5486a23e-9155-493f-a124-bfed29b3c43f",
+        "model": "claude-opus-5-5"
+      },
+      "human_author": "Eric Hayes <56524199+ehayes2000@users.noreply.github.com>"
+    }
+  }
+}
