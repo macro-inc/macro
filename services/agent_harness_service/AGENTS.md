@@ -275,6 +275,10 @@ network/resource-only Pulumi stacks; they do not host extra agent processes.
   rewritten step, at run time or in the startup sweep) also signs the
   `dry_run` scope (`routine_claims`), so every SDK host refuses its writes
   even when code gets past the dry run inside its process.
+  Entity knobs' items are checked as the owner on save, and in a run when
+  the first code step that uses each starts (`KnobEntityAccess`, people through notifications' user check, and
+  trash and a task's subtype through `RoutineLiveItems` in
+  `src/scheduling.rs`).
   Routine suggestions (`src/scheduling/routine_suggestions.rs`) read the
   newest 100 messages (labels, 500-character snippets) through
   email_service's internal recent-messages route and the person's connected

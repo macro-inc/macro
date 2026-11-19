@@ -13,6 +13,7 @@ use std::str::FromStr;
 use utoipa::ToSchema;
 
 use agent_session::domain::model::SessionVisibility;
+use bots::domain::models::AgentMcpServer;
 use routine_program::{AgentStep, StepRecord};
 
 use super::event_runs::ConfigurationRevision;
@@ -219,6 +220,11 @@ pub struct RoutineCheck {
     /// The routine as saving would store it: code steps named and the SDK
     /// their code checks against stamped.
     pub routine: ActionConfiguration,
+    /// Apps the routine needs that its owner hasn't connected, as a routine
+    /// draft's session named them (`missingApps`): the person connects each
+    /// one before saving. Never ones the routine already requires.
+    #[serde(default, skip_serializing_if = "Vec::is_empty")]
+    pub missing_apps: Vec<AgentMcpServer>,
 }
 
 /// Something a routine draft's session created for the routine to use, such

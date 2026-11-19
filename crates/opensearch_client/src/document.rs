@@ -4,7 +4,7 @@ use crate::{
     upsert::{
         self,
         document::{EmailAttachmentUpdateResult, UpsertDocumentArgs},
-        properties::IndexedProperty,
+        properties::{IndexedProperty, PropertyUpdate},
     },
 };
 
@@ -98,7 +98,7 @@ impl OpensearchClient {
         &self,
         document_id: &str,
         properties: &[IndexedProperty],
-    ) -> Result<()> {
+    ) -> Result<PropertyUpdate> {
         resend_on_lost_connection(|| {
             upsert::document::update_document_properties(&self.inner, document_id, properties, None)
         })

@@ -1,6 +1,7 @@
 use std::sync::Arc;
 
 use anyhow::{Result, bail};
+use bots::domain::models::AgentMcpServer;
 use chrono::{DateTime, Utc};
 use entity_access::domain::{
     models::{
@@ -445,6 +446,7 @@ impl<Rpo: ScheduledActionRepo, Exe, Grants, Targets, Github, Code, Upgrades, Rol
             problems,
             steps,
             routine: input,
+            missing_apps: Vec::new(),
         })
     }
 
@@ -565,6 +567,58 @@ pub(crate) async fn granted_action<R: ScheduledActionRepo, T: RequiredPermission
         }
         _ => Err(ActionPolicyError::NotFound.into()),
     }
+}
+
+/// The most apps a check keeps as missing.
+const MAX_MISSING_APPS: usize = 10;
+/// The longest app slug or name a check keeps.
+const MAX_APP_TEXT: usize = 100;
+
+/// The apps a routine draft's session `named` as missing, as a check keeps
+/// them ([`missing_apps`]), never one `task` already requires. The session
+/// found them in the catalog; whether they are connected is the person's to
+/// see.
+pub(crate) fn named_missing_apps(
+    named: Vec<AgentMcpServer>,
+    task: &serde_json::Value,
+) -> Vec<AgentMcpServer> {
+    let required = RoutineProgram::from_task(task)
+        .map(|program| program.mcp_servers)
+        .unwrap_or_default();
+    missing_apps(named, &required)
+}
+
+/// `apps` as a routine may name them missing: trimmed, each slug once, never
+/// one in `required`, and only ones shaped like an app (a slug of letters,
+/// digits, `_` and `-`, and a name), at most [`MAX_MISSING_APPS`].
+pub(crate) fn missing_apps(
+    apps: Vec<AgentMcpServer>,
+    required: &[AgentMcpServer],
+) -> Vec<AgentMcpServer> {
+    let mut kept: Vec<AgentMcpServer> = Vec::new();
+    for app in apps {
+        let slug = app.app_slug.trim();
+        let name = app.server_name.trim();
+        let shaped = !slug.is_empty()
+            && slug.len() <= MAX_APP_TEXT
+            && slug
+                .chars()
+                .all(|c| c.is_ascii_alphanumeric() || c == '_' || c == '-')
+            && !name.is_empty()
+            && name.chars().count() <= MAX_APP_TEXT;
+        let seen = |other: &AgentMcpServer| other.app_slug == slug;
+        if !shaped || required.iter().any(seen) || kept.iter().any(seen) {
+            continue;
+        }
+        kept.push(AgentMcpServer {
+            app_slug: slug.to_owned(),
+            server_name: name.to_owned(),
+        });
+        if kept.len() == MAX_MISSING_APPS {
+            break;
+        }
+    }
+    kept
 }
 
 /// An error the routine's author can fix, as a problem to show them; any
@@ -876,6 +930,7 @@ where
         routine.check.ok = tracing::field::Empty,
         routine.check.problems = tracing::field::Empty,
         routine.check.failing_steps = tracing::field::Empty,
+        routine.check.missing_apps = tracing::field::Empty,
         routine.check.draft = tracing::field::Empty,
     ), err)]
     async fn check_action(
@@ -883,17 +938,20 @@ where
         principal: &CreationPrincipal,
         input: ActionConfiguration,
         created: Vec<CreatedItem>,
+        missing_apps: Vec<AgentMcpServer>,
         correlation: Option<Uuid>,
     ) -> Result<RoutineCheck> {
         let owner = principal.owner();
         let owner_user = owner.as_user().ok_or(OwnerNotUserError {
             owner_type: owner.owner_type(),
         })?;
-        let check = self.check(owner_user, input).await?;
+        let mut check = self.check(owner_user, input).await?;
+        check.missing_apps = named_missing_apps(missing_apps, &check.routine.task);
         let span = tracing::Span::current();
         span.record("routine.check.ok", check.ok);
         span.record("routine.check.problems", check.problems.len());
         span.record("routine.check.failing_steps", check.steps.len());
+        span.record("routine.check.missing_apps", check.missing_apps.len());
         self.hand_back(owner_user, correlation, &check, &created)
             .await;
         Ok(check)
@@ -1104,6 +1162,16 @@ where
             bail!("cannot read code upgrades without id");
         };
         self.upgrades.list_upgrades(id).await
+    }
+
+    async fn get_unusable_knobs(
+        &self,
+        receipt: EntityAccessReceipt<ViewAccessLevel>,
+    ) -> Result<Vec<super::knob_entities::UnusableKnob>> {
+        let action = self.load_granted(&receipt).await?;
+        self.targets
+            .unusable_knobs(&action.task, action.owner_user()?)
+            .await
     }
 }
 

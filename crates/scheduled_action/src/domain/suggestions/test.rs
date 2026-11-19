@@ -245,13 +245,22 @@ struct Harness {
 }
 
 fn harness(flag: bool) -> Harness {
+    harness_with(flag, false, true)
+}
+
+/// A harness where the person may (`events`) have routines start on mail,
+/// on a deployment that may (`conditions`) evaluate trigger conditions.
+fn harness_with(flag: bool, events: bool, conditions: bool) -> Harness {
     let mut flags = FakeFeatureFlags::default();
     flags.set(
         user(),
-        Ok(FlagSnapshot::new([(
-            ROUTINE_SUGGESTIONS_FLAG.to_owned(),
-            FlagValue::Boolean(flag),
-        )])),
+        Ok(FlagSnapshot::new([
+            (
+                ROUTINE_SUGGESTIONS_FLAG.to_owned(),
+                FlagValue::Boolean(flag),
+            ),
+            (EVENT_ROUTINES_FLAG.to_owned(), FlagValue::Boolean(events)),
+        ])),
     );
     let repo = Arc::new(FakeRepo::default());
     let generations = Arc::new(FakeGenerations::default());
@@ -267,6 +276,7 @@ fn harness(flag: bool) -> Harness {
         RoutineBriefing {
             guide: "The routines guide.",
             agent_model: "test-model".to_owned(),
+            conditions,
         },
     );
     Harness {
@@ -1096,4 +1106,33 @@ async fn a_drafted_routine_brings_its_card_and_a_catalog_pick_none() {
     .await;
     assert!(!named.ok);
     assert_eq!(h.repo.cards.lock().unwrap().len(), 1);
+}
+
+/// Saving a routine started on mail needs the person's event flag and a
+/// deployment that evaluates conditions; without either, the brief asks for
+/// a scheduled one.
+#[tokio::test]
+async fn a_drafted_routine_starts_on_mail_only_where_saving_one_can() {
+    for (events, conditions) in [(true, true), (true, false), (false, true)] {
+        let brief = harness_with(true, events, conditions)
+            .service
+            .brief(
+                &user(),
+                &[Surface::Email],
+                GenerationTrigger::Onboarding,
+                chrono_tz::UTC,
+            )
+            .await
+            .unwrap();
+        assert_eq!(
+            brief.contains("email.message_received"),
+            events && conditions,
+            "events {events}, conditions {conditions}"
+        );
+        assert_eq!(
+            brief.contains("can't start when mail arrives"),
+            !(events && conditions),
+            "events {events}, conditions {conditions}"
+        );
+    }
 }
