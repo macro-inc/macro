@@ -97,9 +97,11 @@ its parent holds. Pure data and rules; no I/O.
 - A routine's sub-routines are checked with it: their code steps get check
   files numbered after the routine's own, ids unique per run (a definition's
   steps never see the routine's outputs), and every file of a routine with
-  sub-routines types `macro.routines.schedule` by their names and inputs. A
-  routine with neither sub-routines nor inputs gets byte-identical check
-  files, so adding them never re-checks stored routines.
+  sub-routines types `macro.routines.schedule` by their names and inputs,
+  with interfaces extending the SDK's types so `macro` stays assignable to
+  its `Macro`. A routine without sub-routines types `schedule` as `never`.
+  Whether a routine needs checking again compares check files of one build,
+  so changing the context's text re-checks no stored routine.
 - A copy holds no steps. Editing a definition changes every copy that runs
   after it; a copy whose definition is gone, or whose inputs no longer fit
   it, fails its run (`CopyError`). Keeping a copy as a routine of its own

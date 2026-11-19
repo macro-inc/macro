@@ -357,7 +357,9 @@ each run.
   they answer 401; with a grant but not the owner, 404.
 - Appearance writes atomically record history through the activity adapter without changing configuration revisions, scheduling state, or content timestamps; routine deletion removes that history in the same transaction.
 - Templates: the owner shares a snapshot of a routine (keyed by the routine's
-  ID) with its references marked as variables; publishing, reading, and activation
+  ID) with its references marked as variables; a sub-routine's copy, and a
+  routine with sub-routines or input values, can't be shared, since the
+  references are read from the routine's own steps only. Publishing, reading, and activation
   require the caller's `enable-routine-sharing` PostHog flag. Missing flags,
   missing configuration, and failed evaluations return 404. Owner unsharing
   stays available. Activating creates the caller's own routine with `template_id`
