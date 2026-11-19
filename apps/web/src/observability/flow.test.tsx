@@ -125,6 +125,34 @@ describe('TraceFlow', () => {
     expect(operations[0].outcome).toBe('painted');
   });
 
+  it('settles the view as failed when a pending parent-definition phase errors', async () => {
+    const [status, setStatus] = createSignal<boolean | 'error'>();
+    function Definition() {
+      usePending('routine.parent_definition', status);
+      return null;
+    }
+    render(() => (
+      <TraceFlow name="view.routine">
+        <Definition />
+      </TraceFlow>
+    ));
+    setStatus(true);
+    await flush();
+    expect(operations[0].outcome).toBeUndefined();
+
+    setStatus('error');
+    await flush();
+    expect(operations[0].outcome).toBe('error');
+    expect(
+      spans.find((span) => span.name === 'routine.parent_definition')
+    ).toMatchObject({
+      parent: 'view.routine',
+      ended: true,
+      attrs: { 'flow.outcome': 'error' },
+    });
+    expect(spans[0].events).not.toContain('routine.parent_definition.ready');
+  });
+
   it('records a phase that was already loaded as an event, not a span', async () => {
     function Cached() {
       usePending('home.items', () => false);

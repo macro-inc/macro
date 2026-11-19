@@ -130,7 +130,7 @@ function rootNode(
       if (outcome === 'success') operation.afterPaint();
       else if (outcome === 'cancelled') operation.cancel();
       else {
-        operation.span.error('Interaction failed');
+        operation.span.error('Flow failed');
         operation.finish('error');
       }
     },
@@ -163,7 +163,7 @@ function childNode(
   root.phaseCount++;
   return createNode(span, root, route, (outcome) => {
     span.setAttr('flow.outcome', outcome);
-    if (outcome === 'error') span.error('Interaction failed');
+    if (outcome === 'error') span.error('Flow phase failed');
     span.end();
     onSettle?.(outcome);
     // Solid disposes children before parents: when the parent is unmounting
@@ -371,54 +371,67 @@ export function TraceFlow(props: {
 /**
  * Times a loading phase of the enclosing flow: a child span runs while
  * `pending()` is true and holds the flow open, each time it starts loading
- * while the flow is open, and moves to a keyed flow that restarts mid-load. If it is already loaded when the flow reaches it (a
- * cache hit) the flow records a `<name>.ready` event instead.
+ * while the flow is open, and moves to a keyed flow that restarts mid-load.
+ * False records readiness, including a `<name>.ready` event for a cache hit.
+ * Use `'error'` to fail the phase or `undefined` when it does not apply yet.
  */
 export function usePending(
   name: string,
-  pending: Accessor<boolean>,
+  pending: Accessor<boolean | 'error' | undefined>,
   attributes?: Attributes
 ): void {
   const scope = useContext(FlowContext);
   if (!scope) return;
   let phase: FlowNode | undefined;
-  let release: (() => void) | undefined;
+  let release: Release | undefined;
   let attached = scope.node;
-  const begin = () => {
+  let lastStatus = untrack(pending);
+  const begin = (waited: boolean) => {
     if (phase || scope.node.settled) return;
-    scope.node.span.setAttr(`${name}.waited`, true);
+    scope.node.span.setAttr(`${name}.waited`, waited);
     phase = childNode(scope.node, name, attributes);
     release = phase.hold();
   };
-  const finish = () => {
-    release?.();
+  const clear = () => {
     phase = undefined;
     release = undefined;
   };
-  if (untrack(pending)) begin();
-  else if (!scope.node.settled) {
-    // Already loaded when the flow reached it: usually a cache or a load an
-    // earlier view started. `waited` is queryable where the event is not.
-    scope.node.span.event(`${name}.ready`, attributes);
-    scope.node.span.setAttr(`${name}.waited`, false);
-    scope.node.root.readyPhases++;
-  }
+  const observe = (
+    status: ReturnType<typeof pending>,
+    previous?: ReturnType<typeof pending>
+  ) => {
+    if (status === true) {
+      begin(true);
+      return;
+    }
+    if (status === undefined) {
+      phase?.abandon();
+    } else if (status === 'error') {
+      // The request may have failed before this phase became relevant.
+      begin(false);
+      release?.('error');
+    } else if (release) {
+      release();
+    } else if (previous === undefined && !scope.node.settled) {
+      scope.node.span.event(`${name}.ready`, attributes);
+      scope.node.span.setAttr(`${name}.waited`, false);
+      scope.node.root.readyPhases++;
+    }
+    clear();
+  };
+  observe(lastStatus);
   createEffect(
-    on(
-      [pending, scope.current],
-      ([isPending, node]) => {
-        // A keyed flow restarted while loading: the phase moves to it.
-        if (node !== attached) {
-          attached = node;
-          phase?.abandon();
-          phase = undefined;
-          release = undefined;
-        }
-        if (isPending) begin();
-        else finish();
-      },
-      { defer: true }
-    )
+    on([pending, scope.current], ([status, node]) => {
+      if (node === attached && status === lastStatus) return;
+      // A keyed flow restarted while loading: the phase moves to it.
+      if (node !== attached) {
+        attached = node;
+        phase?.abandon();
+        clear();
+      }
+      observe(status, lastStatus);
+      lastStatus = status;
+    })
   );
   onCleanup(() => phase?.abandon());
 }

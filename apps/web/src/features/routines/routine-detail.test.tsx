@@ -1873,6 +1873,21 @@ describe('sub-routines defined once', () => {
     expect(phase?.[1]()).toBe(false);
   });
 
+  it('marks a cold parent-definition phase failed when the list read fails', () => {
+    setSchedules([copy]);
+    setListStatus('pending');
+    render(() => <Routine />);
+    const phase = vi
+      .mocked(usePending)
+      .mock.calls.find(([name]) => name === 'routine.parent_definition');
+    expect(phase?.[1]()).toBe(true);
+    setListStatus('error');
+    expect(phase?.[1]()).toBe('error');
+    expect(
+      screen.getByRole('button', { name: 'Retry definition' })
+    ).toBeTruthy();
+  });
+
   it('shows the named definition when an unrelated definition is unsupported', () => {
     const task: RoutineTask = JSON.parse(
       JSON.stringify({

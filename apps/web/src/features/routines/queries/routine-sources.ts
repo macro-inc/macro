@@ -266,19 +266,29 @@ export function createRoutineDetailSource(
   );
   const parentId = () => raw()?.sub_routine?.parent_id;
   const parentLoading = () => Boolean(parentId() && list.isLoading);
-  // Start the parent hold before releasing the detail hold when a copy arrives.
-  usePending('routine.parent_definition', parentLoading, {
-    'routine.id': id(),
-    get 'routine.parent_id'() {
-      return parentId() ?? '';
-    },
-  });
-  usePending('routine.detail', () => detail.isLoading, { 'routine.id': id() });
   const rawParent = createMemo(() =>
     list.isSuccess || list.isError
       ? list.data?.find((item) => item.id === parentId())
       : undefined
   );
+  const parentError = () => Boolean(parentId() && list.isError && !rawParent());
+  // Start the parent hold before releasing the detail hold when a copy arrives.
+  usePending(
+    'routine.parent_definition',
+    () => {
+      if (!parentId()) return;
+      if (parentLoading()) return true;
+      if (parentError()) return 'error';
+      if (list.isSuccess || list.isError) return false;
+    },
+    {
+      'routine.id': id(),
+      get 'routine.parent_id'() {
+        return parentId() ?? '';
+      },
+    }
+  );
+  usePending('routine.detail', () => detail.isLoading, { 'routine.id': id() });
   const connectedApps = createRoutineConnectedApps(() => {
     const current = raw();
     return Boolean(
@@ -397,7 +407,7 @@ export function createRoutineDetailSource(
     subRoutines: children,
     parent,
     parentLoading,
-    parentError: () => Boolean(parentId() && list.isError && !rawParent()),
+    parentError,
     refreshParent: () =>
       traceRoutineInteraction(
         'routine.parent_definition.retry',
