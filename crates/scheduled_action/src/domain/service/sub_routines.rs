@@ -151,20 +151,21 @@ where
             .creating_run(principal, caller)
             .await?
             .ok_or(ActionPolicyError::ScheduleOutsideRun)?;
-        let key = request.key.as_deref().map(SubRoutineKey::new).transpose()?;
+        // Before anything can refuse it, so every refusal names the run.
         let parent_id = run.parent_id.unwrap_or(run.routine_id);
         record_run(&run, parent_id);
+        let key = request.key.as_deref().map(SubRoutineKey::new).transpose()?;
+        // Only a valid name is repeated back; the caller's text could be anything.
+        let name = SubRoutineName::try_from(request.sub_routine.clone())
+            .map_err(|_| ActionPolicyError::InvalidSubRoutineName)?;
         let parent = self
             .repo
             .get_action(&parent_id)
             .await?
             .ok_or(ActionPolicyError::NotFound)?;
-        let unknown = || ActionPolicyError::UnknownSubRoutine(request.sub_routine.clone());
+        let unknown = || ActionPolicyError::UnknownSubRoutine(name.to_string());
         let program = RoutineProgram::from_task(&parent.task).map_err(|_| unknown())?;
-        let definition = SubRoutineName::try_from(request.sub_routine.clone())
-            .ok()
-            .and_then(|name| program.sub_routine(&name))
-            .ok_or_else(unknown)?;
+        let definition = program.sub_routine(&name).ok_or_else(unknown)?;
         definition
             .given(&request.inputs)
             .map_err(|error| ActionPolicyError::SubRoutineInputs(error.to_string()))?;

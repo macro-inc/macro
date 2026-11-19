@@ -350,6 +350,12 @@ pub enum ActionPolicyError {
          so it defines none of its own"
     )]
     NestedSubRoutines,
+    /// Not quoted: the caller's text could be anything.
+    #[error(
+        "a sub-routine name is a lowercase letter followed by up to 31 lowercase letters, digits or underscores"
+    )]
+    InvalidSubRoutineName,
+    /// Holds a valid sub-routine name only, never the caller's raw text.
     #[error("the routine that is running defines no sub-routine named `{0}`")]
     UnknownSubRoutine(String),
     #[error("{0}")]

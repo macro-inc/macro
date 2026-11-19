@@ -312,6 +312,12 @@ pub enum InputError {
     /// A value for an input the sub-routine doesn't declare.
     #[error("the sub-routine has no input `{0}`")]
     Unknown(String),
+    /// A value under a key no input could have. The key isn't quoted: it
+    /// is the caller's text, and could be anything.
+    #[error(
+        "a value was given under a key that isn't an input name: a lowercase letter followed by up to 31 letters or digits"
+    )]
+    NotAnInputName,
     /// A value of the wrong type.
     #[error("input `{name}` takes a {expected}")]
     WrongType {
@@ -338,7 +344,10 @@ impl SubRoutineDefinition {
                 .iter()
                 .any(|input| input.name().as_str() == *key)
         }) {
-            return Err(InputError::Unknown(unknown.clone()));
+            return Err(match InputName::try_from(unknown.clone()) {
+                Ok(_) => InputError::Unknown(unknown.clone()),
+                Err(_) => InputError::NotAnInputName,
+            });
         }
         self.inputs
             .iter()

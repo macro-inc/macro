@@ -1114,9 +1114,11 @@ where
                 Some(ActionPolicyError::ScheduleOutsideRun) => "refused_outside_run",
                 Some(ActionPolicyError::SubRoutinesDisabled) => "refused_rollout",
                 Some(
-                    ActionPolicyError::UnknownSubRoutine(_)
+                    ActionPolicyError::InvalidSubRoutineName
+                    | ActionPolicyError::UnknownSubRoutine(_)
                     | ActionPolicyError::SubRoutineInputs(_),
                 ) => "refused_definition",
+                Some(ActionPolicyError::InvalidKey) => "refused_key",
                 _ => "failed",
             },
         };

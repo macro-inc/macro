@@ -588,6 +588,13 @@ async fn scheduling_needs_a_run_a_defined_name_and_inputs_that_fit() {
         schedule(&service, unknown, from_code(&parent)).await,
         ActionPolicyError::UnknownSubRoutine("follow_up".into()),
     );
+    // A name no definition could have is the caller's text: not repeated.
+    let mut odd = remind("Ship", None);
+    odd.sub_routine = "someone@example.com".into();
+    assert_policy(
+        schedule(&service, odd, from_code(&parent)).await,
+        ActionPolicyError::InvalidSubRoutineName,
+    );
     let mut missing = remind("Ship", None);
     missing.inputs.clear();
     assert_policy(

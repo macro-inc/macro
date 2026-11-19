@@ -72,6 +72,10 @@ fn a_copy_needs_every_input_its_definition_declares_and_no_other() {
         refused(json!({ "taskId": "t-1", "daysLeft": 2, "owner": "x" })),
         "the sub-routine has no input `owner`"
     );
+    // A key no input could have is the caller's text: it isn't repeated.
+    let odd = refused(json!({ "taskId": "t-1", "daysLeft": 2, "someone@example.com": "x" }));
+    assert!(!odd.contains("someone"), "{odd}");
+    assert!(odd.contains("isn't an input name"), "{odd}");
     assert_eq!(
         refused(json!({ "taskId": 7, "daysLeft": 2 })),
         "input `taskId` takes a string"
