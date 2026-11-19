@@ -245,15 +245,33 @@ impl<
                 EventRunOutcome::Interrupted => "interrupted",
             },
         );
-        let finalized = self
-            .repository
-            .finalize(FinalizeEventRun {
+        // The run's span ends with the run; recording it is its own span, so
+        // a slow or failed write shows apart from the run.
+        drop(span);
+        let span = tracing::info_span!(
+            "routine.event_run.finalize",
+            action_id = run.action.id.map(tracing::field::display),
+            outcome = tracing::field::Empty,
+        );
+        let finalized = tracing::Instrument::instrument(
+            self.repository.finalize(FinalizeEventRun {
                 key: run.run.pending.key(),
                 token: run.token,
                 finished_at: Utc::now(),
                 execution,
-            })
-            .await?;
-        Ok(DispatchResult::Finished(finalized))
+            }),
+            span.clone(),
+        )
+        .await;
+        span.record(
+            "outcome",
+            match &finalized {
+                Ok(FinalizationResult::Finalized) => "finalized",
+                Ok(FinalizationResult::AlreadyFinalized) => "already_finalized",
+                Ok(FinalizationResult::StaleClaim) => "stale_claim",
+                Err(_) => "failed",
+            },
+        );
+        Ok(DispatchResult::Finished(finalized?))
     }
 }
