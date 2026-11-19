@@ -17,9 +17,14 @@ impl Inboxes {
 
 #[async_trait::async_trait]
 impl OwnerInboxes for Inboxes {
-    async fn inboxes(&self, owner: &MacroUserIdStr<'_>) -> Result<Vec<Uuid>> {
+    async fn among(&self, owner: &MacroUserIdStr<'_>, inboxes: &[Uuid]) -> Result<Vec<Uuid>> {
         assert_eq!(owner.as_ref(), user().as_ref());
-        Ok(self.0.lock().unwrap().clone())
+        let theirs = self.0.lock().unwrap();
+        Ok(inboxes
+            .iter()
+            .copied()
+            .filter(|inbox| theirs.contains(inbox))
+            .collect())
     }
 }
 

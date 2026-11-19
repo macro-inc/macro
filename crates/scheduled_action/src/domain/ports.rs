@@ -392,7 +392,9 @@ pub struct SuggestionOrigin {
 /// know the email store's type.
 #[async_trait::async_trait]
 pub trait OwnerInboxes: Send + Sync + 'static {
-    async fn inboxes(&self, owner: &MacroUserIdStr<'_>) -> Result<Vec<Uuid>>;
+    /// Which of `inboxes` `owner` receives mail in. Only those are read, so
+    /// the cost follows a routine's picks, not how many inboxes the owner has.
+    async fn among(&self, owner: &MacroUserIdStr<'_>, inboxes: &[Uuid]) -> Result<Vec<Uuid>>;
 }
 
 /// Finds what a suggestion was. Object-safe, so the scheduled action service

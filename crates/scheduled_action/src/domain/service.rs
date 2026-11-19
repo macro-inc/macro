@@ -530,28 +530,54 @@ impl<Rpo: ScheduledActionRepo, Exe, Grants, Targets, Github, Code, Upgrades, Rol
         self.check_picked_inboxes(&picked, owner).await
     }
 
-    // The owner is an email address: never a span field.
+    // The owner is an email address: never a span field. The request's own
+    // span names the routine an update changes.
     #[tracing::instrument(
         name = "routine.check_inboxes",
         skip_all,
-        fields(picked = picked.len(), unknown = tracing::field::Empty)
+        fields(
+            picked = picked.len(),
+            unknown = tracing::field::Empty,
+            outcome = tracing::field::Empty,
+        )
     )]
     async fn check_picked_inboxes(
         &self,
         picked: &BTreeSet<Uuid>,
         owner: &MacroUserIdStr<'_>,
     ) -> Result<()> {
-        let Some(inboxes) = &self.inboxes else {
-            return Err(ActionPolicyError::UnknownInboxes.into());
-        };
-        let theirs: BTreeSet<Uuid> = inboxes.inboxes(owner).await?.into_iter().collect();
-        let unknown = picked.difference(&theirs).count();
-        tracing::Span::current().record("unknown", unknown);
+        let span = tracing::Span::current();
+        let unknown = self.unknown_inboxes(picked, owner).await;
+        span.record(
+            "outcome",
+            match &unknown {
+                Ok(0) => "accepted",
+                Ok(_) => "unknown_inboxes",
+                Err(_) => "lookup_failed",
+            },
+        );
+        let unknown = unknown?;
+        span.record("unknown", unknown);
         if unknown == 0 {
             Ok(())
         } else {
             Err(ActionPolicyError::UnknownInboxes.into())
         }
+    }
+
+    /// How many of `picked` aren't inboxes `owner` receives mail in. With no
+    /// way to list inboxes, none can be checked, so every pick counts.
+    async fn unknown_inboxes(
+        &self,
+        picked: &BTreeSet<Uuid>,
+        owner: &MacroUserIdStr<'_>,
+    ) -> Result<usize> {
+        let Some(inboxes) = &self.inboxes else {
+            return Ok(picked.len());
+        };
+        let asked: Vec<Uuid> = picked.iter().copied().collect();
+        let theirs: BTreeSet<Uuid> = inboxes.among(owner, &asked).await?.into_iter().collect();
+        Ok(picked.difference(&theirs).count())
     }
 
     /// Replace a routine's configuration, then make its sub-routines follow

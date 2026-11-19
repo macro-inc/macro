@@ -10,8 +10,8 @@ use crate::domain::ports::OwnerInboxes;
 #[cfg(test)]
 mod test;
 
-/// [`OwnerInboxes`] through the email domain's [`EmailRepo`]: the same list
-/// the app shows a person as their inboxes, so they can pick only from it.
+/// [`OwnerInboxes`] through the email domain's [`EmailRepo`]: the same set
+/// the app lists as a person's inboxes, so they can pick only from it.
 pub struct EmailOwnerInboxes<R>(pub R);
 
 #[async_trait::async_trait]
@@ -24,18 +24,16 @@ where
     #[tracing::instrument(
         name = "routine.owner_inboxes",
         skip_all,
-        fields(inboxes = tracing::field::Empty),
+        fields(asked = inboxes.len(), theirs = tracing::field::Empty),
         err
     )]
-    async fn inboxes(&self, owner: &MacroUserIdStr<'_>) -> anyhow::Result<Vec<Uuid>> {
-        let inboxes: Vec<Uuid> = self
-            .0
-            .inboxes_for_macro_id(owner.clone())
-            .await?
-            .into_iter()
-            .map(|link| link.id)
-            .collect();
-        tracing::Span::current().record("inboxes", inboxes.len());
-        Ok(inboxes)
+    async fn among(
+        &self,
+        owner: &MacroUserIdStr<'_>,
+        inboxes: &[Uuid],
+    ) -> anyhow::Result<Vec<Uuid>> {
+        let theirs = self.0.inbox_ids_among(owner.clone(), inboxes).await?;
+        tracing::Span::current().record("theirs", theirs.len());
+        Ok(theirs)
     }
 }

@@ -57,16 +57,18 @@ async fn an_owner_receives_mail_in_their_inboxes_and_those_delegated_to_them(poo
     .await
     .unwrap();
     let inboxes = EmailOwnerInboxes(EmailPgRepo::new(pool));
+    let all = [own, shared, unshared, macro_uuid::generate_uuid_v7()];
 
-    let mut theirs = inboxes.inboxes(&owner).await.unwrap();
+    let mut theirs = inboxes.among(&owner, &all).await.unwrap();
     theirs.sort_unstable();
     let mut expected = vec![own, shared];
     expected.sort_unstable();
     assert_eq!(theirs, expected);
     // Delegation runs one way: the team account doesn't receive the owner's mail.
-    let mut team_inboxes = inboxes.inboxes(&team).await.unwrap();
+    let mut team_inboxes = inboxes.among(&team, &all).await.unwrap();
     team_inboxes.sort_unstable();
     let mut expected = vec![shared, unshared];
     expected.sort_unstable();
     assert_eq!(team_inboxes, expected);
+    assert!(inboxes.among(&owner, &[unshared]).await.unwrap().is_empty());
 }
