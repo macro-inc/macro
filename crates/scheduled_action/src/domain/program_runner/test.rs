@@ -573,6 +573,8 @@ pub(crate) struct CodeCall {
 pub(crate) struct Code {
     pub runs: Mutex<Vec<CodeCall>>,
     pub outcomes: Mutex<VecDeque<CodeOutcome>>,
+    /// Programs checked against the SDK, as bringing code current does.
+    pub checks: std::sync::atomic::AtomicUsize,
 }
 
 impl Code {
@@ -596,6 +598,8 @@ impl RoutineCode for Code {
         Vec<crate::domain::ports::StepProblems>,
         crate::domain::ports::CodeUnavailable,
     > {
+        self.checks
+            .fetch_add(1, std::sync::atomic::Ordering::SeqCst);
         Ok(Vec::new())
     }
 
@@ -873,6 +877,72 @@ async fn a_copy_runs_its_parents_definition_with_the_inputs_it_was_given() {
     // Without its parent it can't run, rather than run nothing.
     let mut alone = ExecutionHandle::default();
     assert!(runner.run(&copy, &mut alone, manual()).await.is_err());
+}
+
+#[tokio::test]
+async fn a_copy_of_a_sub_routine_without_inputs_gets_empty_inputs() {
+    let code = Arc::new(Code::default());
+    let runner = Fixture::new(Agents::default())
+        .runner
+        .with_code(Arc::clone(&code), Arc::new(NoCodeUpgrades));
+    let parent = action(json!({
+        "steps": [{ "type": "agent", "model": "m", "instructions": "List what is due" }],
+        "sub_routines": [{
+            "name": "check_in",
+            "title": "Check in",
+            "steps": [code_step("post", "Post a check-in")],
+        }],
+    }));
+    let copy = action(json!({ "sub_routine": "check_in" }));
+    let mut handle = ExecutionHandle::default();
+    handle.parent = Some(parent);
+
+    runner.run(&copy, &mut handle, manual()).await.unwrap();
+
+    // Its code was checked with `inputs`, so it gets one.
+    assert_eq!(code.runs.lock().unwrap()[0].context["inputs"], json!({}));
+}
+
+#[tokio::test]
+async fn code_only_a_sub_routine_holds_runs_in_its_copies_not_in_the_routine() {
+    let code = Arc::new(Code::default());
+    let fixture = Fixture::new(Agents::default());
+    let runner = fixture
+        .runner
+        .with_code(Arc::clone(&code), Arc::new(NoCodeUpgrades));
+    let checks = || code.checks.load(std::sync::atomic::Ordering::SeqCst);
+
+    // The routine's own steps run no code, so it gets no code identity.
+    let parent = action(json!({
+        "steps": [{ "type": "agent", "model": "m", "instructions": "List what is due" }],
+        "sub_routines": [{
+            "name": "remind",
+            "title": "Remind me",
+            "steps": [code_step("read", "Read the task")],
+        }],
+    }));
+    let mut handle = ExecutionHandle::default();
+    runner.run(&parent, &mut handle, manual()).await.unwrap();
+    assert_eq!(handle.run.unwrap().code_acts_as, None);
+    assert!(code.runs.lock().unwrap().is_empty());
+
+    // A copy whose sub-routine runs no code leaves its parent's code, held
+    // for an older SDK, as it is.
+    let parent = action(json!({
+        "steps": [code_step("due", "List what is due")],
+        "sub_routines": [{
+            "name": "remind",
+            "title": "Remind me",
+            "steps": [{ "type": "agent", "model": "m", "instructions": "Remind me" }],
+        }],
+    }));
+    let before = checks();
+    let copy = action(json!({ "sub_routine": "remind" }));
+    let mut handle = ExecutionHandle::default();
+    handle.parent = Some(parent);
+    runner.run(&copy, &mut handle, manual()).await.unwrap();
+    assert_eq!(checks(), before);
+    assert_eq!(handle.run.unwrap().code_acts_as, None);
 }
 
 #[tokio::test]

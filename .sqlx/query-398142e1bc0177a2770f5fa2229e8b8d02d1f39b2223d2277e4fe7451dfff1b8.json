@@ -1,0 +1,24 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "\n            SELECT id FROM scheduled_action\n            WHERE enabled\n              AND task->>'sdk' IS DISTINCT FROM $1\n              AND (\n                  jsonb_path_exists(task, '$.steps.** ? (@.type == \"code\")')\n                  OR jsonb_path_exists(task, '$.sub_routines.steps.** ? (@.type == \"code\")')\n              )\n              AND ($2::uuid IS NULL OR id > $2)\n            ORDER BY id\n            LIMIT $3\n            ",
+  "describe": {
+    "columns": [
+      {
+        "ordinal": 0,
+        "name": "id",
+        "type_info": "Uuid"
+      }
+    ],
+    "parameters": {
+      "Left": [
+        "Text",
+        "Uuid",
+        "Int8"
+      ]
+    },
+    "nullable": [
+      false
+    ]
+  },
+  "hash": "398142e1bc0177a2770f5fa2229e8b8d02d1f39b2223d2277e4fe7451dfff1b8"
+}

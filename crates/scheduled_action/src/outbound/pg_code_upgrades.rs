@@ -224,7 +224,10 @@ impl CodeUpgrades for PgCodeUpgrades {
             SELECT id FROM scheduled_action
             WHERE enabled
               AND task->>'sdk' IS DISTINCT FROM $1
-              AND jsonb_path_exists(task, '$.steps.** ? (@.type == "code")')
+              AND (
+                  jsonb_path_exists(task, '$.steps.** ? (@.type == "code")')
+                  OR jsonb_path_exists(task, '$.sub_routines.steps.** ? (@.type == "code")')
+              )
               AND ($2::uuid IS NULL OR id > $2)
             ORDER BY id
             LIMIT $3

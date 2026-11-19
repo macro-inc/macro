@@ -429,3 +429,19 @@ async fn a_paused_owner_routine_says_why_on_its_next_run() {
         [Recorded::Claimed(CURRENT.into())]
     );
 }
+
+/// A sweep's dry run tells code what its runs would: the inputs a routine
+/// kept from a copy, and none to a routine without them.
+#[test]
+fn a_sweeps_dry_run_gets_the_inputs_the_routine_holds() {
+    let owner = MacroUserIdStr::parse_from_str(OWNER).unwrap();
+    let mut action = routine("await macro.tasks.add(x)", None);
+    assert!(sweep_context(&action, &owner).get("inputs").is_none());
+
+    action.task["inputs"] =
+        json!([{ "type": "text", "name": "taskId", "label": "Task", "value": "t-1" }]);
+    assert_eq!(
+        sweep_context(&action, &owner)["inputs"],
+        json!({ "taskId": "t-1" })
+    );
+}

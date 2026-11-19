@@ -262,6 +262,22 @@ async fn a_sweep_brings_enabled_routines_with_code_to_the_current_sdk(pool: PgPo
         ))
         .await
         .unwrap();
+    // Code only a sub-routine holds runs in its copies, from here.
+    let defined = repo
+        .create_action(create(
+            json!({
+                "steps": [{ "type": "agent", "model": "m", "instructions": "List" }],
+                "sub_routines": [{
+                    "name": "remind",
+                    "title": "Remind",
+                    "steps": [{ "type": "code", "title": "Remind", "source": "old" }],
+                }],
+                "sdk": "0.2.0+old",
+            }),
+            true,
+        ))
+        .await
+        .unwrap();
 
     let mut stale = upgrades
         .stale_routines(&sdk("0.3.0+new"), None, 1)
@@ -273,7 +289,11 @@ async fn a_sweep_brings_enabled_routines_with_code_to_the_current_sdk(pool: PgPo
             .await
             .unwrap(),
     );
-    let mut expected = vec![nested.id.unwrap(), never_checked.id.unwrap()];
+    let mut expected = vec![
+        nested.id.unwrap(),
+        never_checked.id.unwrap(),
+        defined.id.unwrap(),
+    ];
     expected.sort();
     assert_eq!(stale, expected);
 
@@ -285,8 +305,8 @@ async fn a_sweep_brings_enabled_routines_with_code_to_the_current_sdk(pool: PgPo
     )
     .await
     .unwrap();
-    assert_eq!(swept.upgraded, 2);
-    for action in [&nested, &never_checked, &current] {
+    assert_eq!(swept.upgraded, 3);
+    for action in [&nested, &never_checked, &current, &defined] {
         assert_eq!(stored(&pool, action).await.task["sdk"], "0.3.0+new");
     }
     assert_eq!(stored(&pool, &paused).await.task["sdk"], "0.2.0+old");

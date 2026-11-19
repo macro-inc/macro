@@ -331,10 +331,10 @@ impl CodeUpgrades for NoCodeUpgrades {
 }
 
 /// What a sweep's dry run of a rewrite tells the code: no trigger, now, as
-/// if its owner ran it by hand. A sub-routine's copy upgrades its parent's
-/// code with it too.
+/// if its owner ran it by hand, with the inputs it holds. A sub-routine's
+/// copy upgrades its parent's code with it too.
 pub(crate) fn sweep_context(action: &ScheduledAction, owner: &MacroUserIdStr<'static>) -> Value {
-    json!({
+    let mut context = json!({
         "run": {
             "id": macro_uuid::generate_uuid_v7(),
             "at": Utc::now(),
@@ -345,7 +345,15 @@ pub(crate) fn sweep_context(action: &ScheduledAction, owner: &MacroUserIdStr<'st
         },
         "routine": { "id": action.id, "name": action.name },
         "trigger": { "kind": "manual", "by": owner.as_ref() },
-    })
+    });
+    // A routine that kept a copy's inputs reads them, as its runs do.
+    if let (Ok(program), Value::Object(fields)) =
+        (RoutineProgram::from_task(&action.task), &mut context)
+        && !program.inputs.is_empty()
+    {
+        fields.insert("inputs".into(), Value::Object(program.input_values()));
+    }
+    context
 }
 
 /// Routines one sweep page reads.

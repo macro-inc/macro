@@ -112,7 +112,8 @@ where
         let program = handle.program(action)?;
         program.validate()?;
         let routine_id = action.id.context("persisted routine required")?;
-        let has_code = !program.code_steps().is_empty();
+        // Code only its sub-routines hold runs in their copies, not here.
+        let has_code = program.runs_code();
         let acts_as = program.code_identity();
         // Code gets the triggering item whenever there is one.
         let trigger = match firing {
@@ -125,6 +126,9 @@ where
         info.code_acts_as = has_code.then_some(acts_as);
         handle.run = Some(info);
         let program = match (SubRoutineCopy::from_task(&action.task), &handle.parent) {
+            // A copy that runs no code needs none of its parent's brought
+            // to the current SDK.
+            (Some(_), Some(_)) if !has_code => program,
             // A copy's code is its parent's: brought to the current SDK, and
             // rewritten if it must be, as the parent's, with no trigger.
             (Some(copy), Some(parent)) => current_code(
@@ -339,9 +343,10 @@ where
             "routine": { "id": action.id, "name": action.name },
             "trigger": trigger,
         });
-        // Only a routine with inputs reads them, so the context of every
-        // other routine stays as it was.
-        if !program.inputs.is_empty()
+        // Only a routine with inputs, or a copy (whose code is checked with
+        // `inputs`, empty when its sub-routine takes none), reads them, so
+        // the context of every other routine stays as it was.
+        if (!program.inputs.is_empty() || SubRoutineCopy::from_task(&action.task).is_some())
             && let Value::Object(fields) = &mut context
         {
             fields.insert("inputs".into(), Value::Object(program.input_values()));
