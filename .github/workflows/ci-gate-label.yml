@@ -302,12 +302,17 @@ jobs:
         }
 
         /// Each job of a run as its newest attempt left it. A re-run of some jobs
-        /// keeps the others' results from the attempt that ran them.
+        /// keeps the others' results from the attempt that ran them. Two records of
+        /// a job that no attempt number tells apart keep the one that did not pass:
+        /// the order GitHub lists them in is not promised.
         export function newestJobs(jobs: RunJob[]): RunJob[] {
+          const passed = (job: RunJob) => job.conclusion === 'success' || job.conclusion === 'skipped';
           const newest = new Map<string, RunJob>();
           for (const job of jobs) {
             const known = newest.get(job.name);
-            if (!known || (job.run_attempt ?? 0) >= (known.run_attempt ?? 0)) {
+            const attempt = job.run_attempt ?? 0;
+            const knownAttempt = known?.run_attempt ?? 0;
+            if (!known || attempt > knownAttempt || (attempt === knownAttempt && passed(known))) {
               newest.set(job.name, job);
             }
           }
@@ -691,35 +696,62 @@ jobs:
         /// case Start could not. The gate is failing already, so a write GitHub
         /// refuses only warns.
         async function recordFailedAudit(head: string, failures: string[]) {
-          try {
-            const statuses = await commitStatuses(head);
-            const current = acceptedAttestations(
-              statuses,
-              JSON.parse(env('ATTESTABLE_CHECKS')),
-              env('ATTESTED_PREFIX'),
-              env('BASE_SHA'),
-            );
-            for (const check of contradicted(failures, current)) {
-              await postStatus(
-                head,
-                `${env('ATTESTED_PREFIX')}${check}`,
-                'failure',
-                'Failed on a runner in an audit',
-                env('RUN_URL'),
-              );
-            }
-            if (!alreadyAudited(statuses, env('AUDIT_CONTEXT'))) {
-              await postStatus(
-                head,
-                env('AUDIT_CONTEXT'),
-                'success',
-                'Runs on this commit check its attestations on runners',
-                env('RUN_URL'),
-              );
-            }
-          } catch (error) {
-            console.log(`::warning::Could not record the failed audit: ${error}`);
+          const warn = (what: string) => (error: unknown) =>
+            console.log(`::warning::Could not ${what}: ${error}`);
+          // Each write stands alone: one GitHub refuses must not cost the others.
+          const statuses = await commitStatuses(head).catch(warn('read the statuses again'));
+
+          if (!statuses || !alreadyAudited(statuses, env('AUDIT_CONTEXT'))) {
+            await postStatus(
+              head,
+              env('AUDIT_CONTEXT'),
+              'success',
+              'Runs on this commit check its attestations on runners',
+              env('RUN_URL'),
+            ).catch(warn('mark the commit as audited'));
           }
+
+          const current = statuses
+            ? acceptedAttestations(
+                statuses,
+                JSON.parse(env('ATTESTABLE_CHECKS')),
+                env('ATTESTED_PREFIX'),
+                env('BASE_SHA'),
+              )
+            : [];
+          for (const check of contradicted(failures, current)) {
+            await postStatus(
+              head,
+              `${env('ATTESTED_PREFIX')}${check}`,
+              'failure',
+              'Failed on a runner in an audit',
+              env('RUN_URL'),
+            ).catch(warn(`withdraw ${check}`));
+          }
+        }
+
+        /// What attestation did to a finished run's verdict. Throws when GitHub can't
+        /// list the run's jobs.
+        async function attestedOutcome(
+          head: string,
+          verdict: { state: State; description: string },
+          entries: string[],
+          audited: string[],
+        ): Promise<{ state: State; description: string }> {
+          const checks: GateCheck[] = JSON.parse(env('GATE_CHECKS'));
+          const jobs = await latestRunJobs(env('RUN_ID'));
+          const failures = auditFailures(audited, checks, jobs);
+          if (failures.length > 0) {
+            console.log(`Attested but failed here: ${failures.join(', ')}`);
+            await recordFailedAudit(head, failures);
+          }
+
+          const trusted = trustedEntries(entries, checks, jobs);
+          const lapsed = trusted.length > 0 ? await attestationsLapsed(head, trusted) : null;
+          if (lapsed) {
+            return { state: 'failure', description: lapsed };
+          }
+          return withAttestations(verdict, skippedAttested(entries, checks, jobs), failures);
         }
 
         async function finish() {
@@ -737,22 +769,17 @@ jobs:
           const audited: string[] = JSON.parse(process.env.AUDITED || '[]');
           let outcome = verdict;
           if (entries.length + audited.length > 0) {
-            const checks: GateCheck[] = JSON.parse(env('GATE_CHECKS'));
-            const jobs = await latestRunJobs(env('RUN_ID'));
-            const failures = auditFailures(audited, checks, jobs);
-            if (failures.length > 0) {
-              console.log(`Attested but failed here: ${failures.join(', ')}`);
-            }
-            if (failures.length > 0) {
-              await recordFailedAudit(head, failures);
-            }
-            outcome = withAttestations(verdict, skippedAttested(entries, checks, jobs), failures);
-
-            const trusted = trustedEntries(entries, checks, jobs);
-            const lapsed = trusted.length > 0 ? await attestationsLapsed(head, trusted) : null;
-            if (lapsed) {
-              outcome = { state: 'failure', description: lapsed };
-            }
+            // The gate must end on a verdict. A failing one stands as it is; a
+            // passing one that took checks on trust can't be confirmed.
+            outcome = await attestedOutcome(head, verdict, entries, audited).catch((error) => {
+              console.log(`::warning::Could not read this run's jobs: ${error}`);
+              return verdict.state === 'success' && entries.length > 0
+                ? {
+                    state: 'failure' as const,
+                    description: `Could not confirm what this run skipped. Add the ${label()} label again.`,
+                  }
+                : verdict;
+            });
           }
 
           if (env('SAME_REPO') === 'true') {

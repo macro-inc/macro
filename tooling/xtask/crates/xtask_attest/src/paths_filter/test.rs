@@ -62,7 +62,18 @@ fn a_star_stays_inside_one_segment_and_matches_dot_files() {
 
 #[test]
 fn nothing_changed_matches_nothing() {
-    assert!(decided(FILTERS, &[]).values().all(|value| value == "false"));
+    let expected: BTreeMap<String, String> = ["doppler_candidates", "query_data", "should_run"]
+        .into_iter()
+        .map(|name| (name.to_owned(), "false".to_owned()))
+        .collect();
+
+    assert_eq!(decided(FILTERS, &[]), expected);
+}
+
+#[test]
+fn refuses_glob_syntax_it_would_read_as_plain_text() {
+    assert!(outputs("infra:\n  - 'infra/*.{nix,toml}'\n", &[]).is_err());
+    assert!(outputs("infra:\n  - 'infra/@(a|b).nix'\n", &[]).is_err());
 }
 
 #[test]

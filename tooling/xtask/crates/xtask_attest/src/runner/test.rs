@@ -90,6 +90,21 @@ jobs:
     steps:
     - name: test
       run: "true"
+  defaulted:
+    defaults:
+      run:
+        shell: bash
+    steps:
+    - name: test
+      run: "true"
+  switched-off:
+    steps:
+    - name: off
+      if: false
+      run: exit 1
+    - name: "on"
+      if: true
+      run: echo ran > "$GITHUB_WORKSPACE/switched-on"
 "#;
 
 const ACTION: &str = r#"
@@ -164,6 +179,7 @@ impl Fixture {
             github: BTreeMap::from([("workspace", self.workspace.display().to_string())]),
             changed_files: changed.iter().map(|path| (*path).to_owned()).collect(),
             shallow: false,
+            fresh_checkout: &|| Ok(()),
         }
     }
 
@@ -301,6 +317,56 @@ fn a_matrix_job_runs_every_row() {
     assert_eq!(fixture.read("shards"), "1/3\n2/3\n3/3\n");
 }
 
+/// On a runner every row is a job with a checkout of its own.
+#[test]
+fn every_matrix_row_starts_from_a_fresh_checkout() {
+    let fixture = Fixture::new();
+    let rows = std::cell::Cell::new(0);
+    let workspace = fixture.workspace.clone();
+    let fresh_checkout = || {
+        rows.set(rows.get() + 1);
+        let _ = std::fs::remove_file(workspace.join("shards"));
+        Ok(())
+    };
+    let machine = Machine {
+        fresh_checkout: &fresh_checkout,
+        ..fixture.machine(&[])
+    };
+
+    passed(
+        machine
+            .run_job(
+                &workflow(),
+                "shards",
+                &Plan::Steps(&steps(&["shard"])),
+                &BTreeMap::new(),
+            )
+            .expect("runs"),
+    );
+
+    assert_eq!(rows.get(), 3);
+    assert_eq!(fixture.read("shards"), "3/3\n");
+}
+
+#[test]
+fn a_step_switched_off_with_a_plain_boolean_does_not_run() {
+    let fixture = Fixture::new();
+    let machine = fixture.machine(&[]);
+
+    passed(
+        machine
+            .run_job(
+                &workflow(),
+                "switched-off",
+                &Plan::EveryStep,
+                &BTreeMap::new(),
+            )
+            .expect("runs"),
+    );
+
+    assert_eq!(fixture.read("switched-on"), "ran\n");
+}
+
 #[test]
 fn a_composite_action_of_the_repository_runs_with_its_inputs() {
     let fixture = Fixture::new();
@@ -369,6 +435,11 @@ fn refuses_what_a_machine_cannot_stand_in_for() {
     assert!(
         machine
             .run_job(&workflow(), "services", &Plan::EveryStep, &none)
+            .is_err()
+    );
+    assert!(
+        machine
+            .run_job(&workflow(), "defaulted", &Plan::EveryStep, &none)
             .is_err()
     );
 }

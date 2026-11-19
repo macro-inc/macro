@@ -482,6 +482,14 @@ describe('newestJobs', () => {
     ]);
   });
 
+  test('keeps the record that did not pass when no attempt number tells two apart', () => {
+    const failed = { name: 'Web App / Test (1/6)', conclusion: 'failure' };
+    const passed = { name: 'Web App / Test (1/6)', conclusion: 'success' };
+
+    assert.deepEqual(newestJobs([failed, passed]), [failed]);
+    assert.deepEqual(newestJobs([passed, failed]), [failed]);
+  });
+
   test('an audit still names its failure when only the gate runs again', () => {
     const jobs = newestJobs([
       { name: 'Web App / Test (2/6)', conclusion: 'failure', run_attempt: 1 },

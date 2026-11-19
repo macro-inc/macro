@@ -43,3 +43,17 @@ fn an_empty_file_holds_nothing() {
 fn refuses_a_line_that_sets_nothing() {
     assert!(parse("just some words\n").is_err());
 }
+
+#[test]
+fn refuses_a_block_that_is_never_closed() {
+    assert!(parse("result<<EOF\nok\n").is_err());
+    assert!(parse("result<<\nok\n").is_err());
+}
+
+#[test]
+fn reads_an_empty_block() {
+    assert_eq!(
+        parse("result<<EOF\nEOF\n").expect("parses"),
+        vec![("result".to_owned(), String::new())]
+    );
+}

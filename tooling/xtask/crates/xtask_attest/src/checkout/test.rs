@@ -69,3 +69,44 @@ fn reads_the_repository_from_either_remote_form() {
     );
     assert!(repository_of("widgets").is_err());
 }
+
+#[test]
+fn reads_changed_paths_as_git_wrote_them() {
+    let listing = "crates/example/café.rs\0docs/a b.md\0".as_bytes();
+
+    assert_eq!(
+        paths_of(listing).expect("UTF-8 paths"),
+        vec!["crates/example/café.rs", "docs/a b.md"]
+    );
+    assert_eq!(paths_of(b"").expect("no paths"), Vec::<String>::new());
+}
+
+#[test]
+fn refuses_a_changed_path_it_cannot_read() {
+    assert!(paths_of(b"docs/\xff.md\0").is_err());
+}
+
+#[test]
+fn finishes_an_initialization_that_stopped_halfway() {
+    let source = tempfile::tempdir().expect("a directory");
+    let checkout = tempfile::tempdir().expect("a directory");
+    git(source.path(), &["init", "--quiet"]).expect("git init");
+    let common_dir = source.path().join(".git");
+    // A run that stopped after `git init`: no alternates, no remote.
+    git(checkout.path(), &["init", "--quiet"]).expect("git init");
+
+    for _ in 0..2 {
+        initialize(checkout.path(), &common_dir, "host:acme/widgets.git").expect("initializes");
+    }
+
+    let alternates = std::fs::read_to_string(checkout.path().join(".git/objects/info/alternates"))
+        .expect("alternates are written");
+    assert_eq!(
+        alternates.trim(),
+        common_dir.join("objects").display().to_string()
+    );
+    assert_eq!(
+        git(checkout.path(), &["remote", "get-url", "origin"]).expect("a remote"),
+        "host:acme/widgets.git"
+    );
+}

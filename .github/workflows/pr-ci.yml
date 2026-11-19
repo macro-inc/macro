@@ -316,12 +316,17 @@ jobs:
         }
 
         /// Each job of a run as its newest attempt left it. A re-run of some jobs
-        /// keeps the others' results from the attempt that ran them.
+        /// keeps the others' results from the attempt that ran them. Two records of
+        /// a job that no attempt number tells apart keep the one that did not pass:
+        /// the order GitHub lists them in is not promised.
         export function newestJobs(jobs: RunJob[]): RunJob[] {
+          const passed = (job: RunJob) => job.conclusion === 'success' || job.conclusion === 'skipped';
           const newest = new Map<string, RunJob>();
           for (const job of jobs) {
             const known = newest.get(job.name);
-            if (!known || (job.run_attempt ?? 0) >= (known.run_attempt ?? 0)) {
+            const attempt = job.run_attempt ?? 0;
+            const knownAttempt = known?.run_attempt ?? 0;
+            if (!known || attempt > knownAttempt || (attempt === knownAttempt && passed(known))) {
               newest.set(job.name, job);
             }
           }
@@ -705,35 +710,62 @@ jobs:
         /// case Start could not. The gate is failing already, so a write GitHub
         /// refuses only warns.
         async function recordFailedAudit(head: string, failures: string[]) {
-          try {
-            const statuses = await commitStatuses(head);
-            const current = acceptedAttestations(
-              statuses,
-              JSON.parse(env('ATTESTABLE_CHECKS')),
-              env('ATTESTED_PREFIX'),
-              env('BASE_SHA'),
-            );
-            for (const check of contradicted(failures, current)) {
-              await postStatus(
-                head,
-                `${env('ATTESTED_PREFIX')}${check}`,
-                'failure',
-                'Failed on a runner in an audit',
-                env('RUN_URL'),
-              );
-            }
-            if (!alreadyAudited(statuses, env('AUDIT_CONTEXT'))) {
-              await postStatus(
-                head,
-                env('AUDIT_CONTEXT'),
-                'success',
-                'Runs on this commit check its attestations on runners',
-                env('RUN_URL'),
-              );
-            }
-          } catch (error) {
-            console.log(`::warning::Could not record the failed audit: ${error}`);
+          const warn = (what: string) => (error: unknown) =>
+            console.log(`::warning::Could not ${what}: ${error}`);
+          // Each write stands alone: one GitHub refuses must not cost the others.
+          const statuses = await commitStatuses(head).catch(warn('read the statuses again'));
+
+          if (!statuses || !alreadyAudited(statuses, env('AUDIT_CONTEXT'))) {
+            await postStatus(
+              head,
+              env('AUDIT_CONTEXT'),
+              'success',
+              'Runs on this commit check its attestations on runners',
+              env('RUN_URL'),
+            ).catch(warn('mark the commit as audited'));
           }
+
+          const current = statuses
+            ? acceptedAttestations(
+                statuses,
+                JSON.parse(env('ATTESTABLE_CHECKS')),
+                env('ATTESTED_PREFIX'),
+                env('BASE_SHA'),
+              )
+            : [];
+          for (const check of contradicted(failures, current)) {
+            await postStatus(
+              head,
+              `${env('ATTESTED_PREFIX')}${check}`,
+              'failure',
+              'Failed on a runner in an audit',
+              env('RUN_URL'),
+            ).catch(warn(`withdraw ${check}`));
+          }
+        }
+
+        /// What attestation did to a finished run's verdict. Throws when GitHub can't
+        /// list the run's jobs.
+        async function attestedOutcome(
+          head: string,
+          verdict: { state: State; description: string },
+          entries: string[],
+          audited: string[],
+        ): Promise<{ state: State; description: string }> {
+          const checks: GateCheck[] = JSON.parse(env('GATE_CHECKS'));
+          const jobs = await latestRunJobs(env('RUN_ID'));
+          const failures = auditFailures(audited, checks, jobs);
+          if (failures.length > 0) {
+            console.log(`Attested but failed here: ${failures.join(', ')}`);
+            await recordFailedAudit(head, failures);
+          }
+
+          const trusted = trustedEntries(entries, checks, jobs);
+          const lapsed = trusted.length > 0 ? await attestationsLapsed(head, trusted) : null;
+          if (lapsed) {
+            return { state: 'failure', description: lapsed };
+          }
+          return withAttestations(verdict, skippedAttested(entries, checks, jobs), failures);
         }
 
         async function finish() {
@@ -751,22 +783,17 @@ jobs:
           const audited: string[] = JSON.parse(process.env.AUDITED || '[]');
           let outcome = verdict;
           if (entries.length + audited.length > 0) {
-            const checks: GateCheck[] = JSON.parse(env('GATE_CHECKS'));
-            const jobs = await latestRunJobs(env('RUN_ID'));
-            const failures = auditFailures(audited, checks, jobs);
-            if (failures.length > 0) {
-              console.log(`Attested but failed here: ${failures.join(', ')}`);
-            }
-            if (failures.length > 0) {
-              await recordFailedAudit(head, failures);
-            }
-            outcome = withAttestations(verdict, skippedAttested(entries, checks, jobs), failures);
-
-            const trusted = trustedEntries(entries, checks, jobs);
-            const lapsed = trusted.length > 0 ? await attestationsLapsed(head, trusted) : null;
-            if (lapsed) {
-              outcome = { state: 'failure', description: lapsed };
-            }
+            // The gate must end on a verdict. A failing one stands as it is; a
+            // passing one that took checks on trust can't be confirmed.
+            outcome = await attestedOutcome(head, verdict, entries, audited).catch((error) => {
+              console.log(`::warning::Could not read this run's jobs: ${error}`);
+              return verdict.state === 'success' && entries.length > 0
+                ? {
+                    state: 'failure' as const,
+                    description: `Could not confirm what this run skipped. Add the ${label()} label again.`,
+                  }
+                : verdict;
+            });
           }
 
           if (env('SAME_REPO') === 'true') {
@@ -1143,12 +1170,17 @@ jobs:
         }
 
         /// Each job of a run as its newest attempt left it. A re-run of some jobs
-        /// keeps the others' results from the attempt that ran them.
+        /// keeps the others' results from the attempt that ran them. Two records of
+        /// a job that no attempt number tells apart keep the one that did not pass:
+        /// the order GitHub lists them in is not promised.
         export function newestJobs(jobs: RunJob[]): RunJob[] {
+          const passed = (job: RunJob) => job.conclusion === 'success' || job.conclusion === 'skipped';
           const newest = new Map<string, RunJob>();
           for (const job of jobs) {
             const known = newest.get(job.name);
-            if (!known || (job.run_attempt ?? 0) >= (known.run_attempt ?? 0)) {
+            const attempt = job.run_attempt ?? 0;
+            const knownAttempt = known?.run_attempt ?? 0;
+            if (!known || attempt > knownAttempt || (attempt === knownAttempt && passed(known))) {
               newest.set(job.name, job);
             }
           }
@@ -1532,35 +1564,62 @@ jobs:
         /// case Start could not. The gate is failing already, so a write GitHub
         /// refuses only warns.
         async function recordFailedAudit(head: string, failures: string[]) {
-          try {
-            const statuses = await commitStatuses(head);
-            const current = acceptedAttestations(
-              statuses,
-              JSON.parse(env('ATTESTABLE_CHECKS')),
-              env('ATTESTED_PREFIX'),
-              env('BASE_SHA'),
-            );
-            for (const check of contradicted(failures, current)) {
-              await postStatus(
-                head,
-                `${env('ATTESTED_PREFIX')}${check}`,
-                'failure',
-                'Failed on a runner in an audit',
-                env('RUN_URL'),
-              );
-            }
-            if (!alreadyAudited(statuses, env('AUDIT_CONTEXT'))) {
-              await postStatus(
-                head,
-                env('AUDIT_CONTEXT'),
-                'success',
-                'Runs on this commit check its attestations on runners',
-                env('RUN_URL'),
-              );
-            }
-          } catch (error) {
-            console.log(`::warning::Could not record the failed audit: ${error}`);
+          const warn = (what: string) => (error: unknown) =>
+            console.log(`::warning::Could not ${what}: ${error}`);
+          // Each write stands alone: one GitHub refuses must not cost the others.
+          const statuses = await commitStatuses(head).catch(warn('read the statuses again'));
+
+          if (!statuses || !alreadyAudited(statuses, env('AUDIT_CONTEXT'))) {
+            await postStatus(
+              head,
+              env('AUDIT_CONTEXT'),
+              'success',
+              'Runs on this commit check its attestations on runners',
+              env('RUN_URL'),
+            ).catch(warn('mark the commit as audited'));
           }
+
+          const current = statuses
+            ? acceptedAttestations(
+                statuses,
+                JSON.parse(env('ATTESTABLE_CHECKS')),
+                env('ATTESTED_PREFIX'),
+                env('BASE_SHA'),
+              )
+            : [];
+          for (const check of contradicted(failures, current)) {
+            await postStatus(
+              head,
+              `${env('ATTESTED_PREFIX')}${check}`,
+              'failure',
+              'Failed on a runner in an audit',
+              env('RUN_URL'),
+            ).catch(warn(`withdraw ${check}`));
+          }
+        }
+
+        /// What attestation did to a finished run's verdict. Throws when GitHub can't
+        /// list the run's jobs.
+        async function attestedOutcome(
+          head: string,
+          verdict: { state: State; description: string },
+          entries: string[],
+          audited: string[],
+        ): Promise<{ state: State; description: string }> {
+          const checks: GateCheck[] = JSON.parse(env('GATE_CHECKS'));
+          const jobs = await latestRunJobs(env('RUN_ID'));
+          const failures = auditFailures(audited, checks, jobs);
+          if (failures.length > 0) {
+            console.log(`Attested but failed here: ${failures.join(', ')}`);
+            await recordFailedAudit(head, failures);
+          }
+
+          const trusted = trustedEntries(entries, checks, jobs);
+          const lapsed = trusted.length > 0 ? await attestationsLapsed(head, trusted) : null;
+          if (lapsed) {
+            return { state: 'failure', description: lapsed };
+          }
+          return withAttestations(verdict, skippedAttested(entries, checks, jobs), failures);
         }
 
         async function finish() {
@@ -1578,22 +1637,17 @@ jobs:
           const audited: string[] = JSON.parse(process.env.AUDITED || '[]');
           let outcome = verdict;
           if (entries.length + audited.length > 0) {
-            const checks: GateCheck[] = JSON.parse(env('GATE_CHECKS'));
-            const jobs = await latestRunJobs(env('RUN_ID'));
-            const failures = auditFailures(audited, checks, jobs);
-            if (failures.length > 0) {
-              console.log(`Attested but failed here: ${failures.join(', ')}`);
-            }
-            if (failures.length > 0) {
-              await recordFailedAudit(head, failures);
-            }
-            outcome = withAttestations(verdict, skippedAttested(entries, checks, jobs), failures);
-
-            const trusted = trustedEntries(entries, checks, jobs);
-            const lapsed = trusted.length > 0 ? await attestationsLapsed(head, trusted) : null;
-            if (lapsed) {
-              outcome = { state: 'failure', description: lapsed };
-            }
+            // The gate must end on a verdict. A failing one stands as it is; a
+            // passing one that took checks on trust can't be confirmed.
+            outcome = await attestedOutcome(head, verdict, entries, audited).catch((error) => {
+              console.log(`::warning::Could not read this run's jobs: ${error}`);
+              return verdict.state === 'success' && entries.length > 0
+                ? {
+                    state: 'failure' as const,
+                    description: `Could not confirm what this run skipped. Add the ${label()} label again.`,
+                  }
+                : verdict;
+            });
           }
 
           if (env('SAME_REPO') === 'true') {
@@ -1686,7 +1740,7 @@ jobs:
         SAME_REPO: ${{ github.event.pull_request.head.repo.full_name == github.repository }}
         RUN_URL: ${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}
         MERGE_SHA: ${{ github.sha }}
-        ATTESTABLE_CHECKS: '[{"fingerprint":"b38d7c37ad118118","id":"cloud-storage/check","selected":true},{"fingerprint":"55edf8296919c3e7","id":"cloud-storage/build-service-bins","selected":true},{"fingerprint":"8f1e4eb74c38a703","id":"cloud-storage/graphql-schema-compat","selected":true},{"fingerprint":"31d70f45dd208042","id":"web-app/typescript","selected":true},{"fingerprint":"41cc8313cb599742","id":"web-app/generated-code","selected":true},{"fingerprint":"0497cd2ef9db3066","id":"web-app/biome-check","selected":true},{"fingerprint":"740c7186273ed5cd","id":"web-app/test","selected":true},{"fingerprint":"03e9d70e92bf9827","id":"web-app/cycles","selected":true},{"fingerprint":"34e2c148759cb623","id":"infra/biome-check","selected":false},{"fingerprint":"562033a58f014aad","id":"infra/check","selected":false},{"fingerprint":"5b669fc64fc53477","id":"conventions/ast-grep","selected":false},{"fingerprint":"e9eab328d2bd1a69","id":"cargo-deny/cargo-deny","selected":false},{"fingerprint":"0104d4dbfae83eee","id":"workspace-dependencies/dependency-check","selected":false},{"fingerprint":"1c7d2e8d01111e6e","id":"workspace-dependencies/hakari-and-dep-closures","selected":false},{"fingerprint":"c4a0806cd391570e","id":"generated-workflows/check-workflows","selected":false},{"fingerprint":"2b5862faacd585ef","id":"node-modules-nix/check-linux-node-modules-nix","selected":false},{"fingerprint":"4e8720c0910fa094","id":"sdk/check-package","selected":false},{"fingerprint":"55845a34f6912e2d","id":"observability-image/build-image","selected":false},{"fingerprint":"3b3764213d51cdaf","id":"macrod-update/linux","selected":false}]'
+        ATTESTABLE_CHECKS: '[{"fingerprint":"b38d7c37ad118118","id":"cloud-storage/check","selected":true},{"fingerprint":"55edf8296919c3e7","id":"cloud-storage/build-service-bins","selected":true},{"fingerprint":"8f1e4eb74c38a703","id":"cloud-storage/graphql-schema-compat","selected":true},{"fingerprint":"31d70f45dd208042","id":"web-app/typescript","selected":true},{"fingerprint":"41cc8313cb599742","id":"web-app/generated-code","selected":true},{"fingerprint":"0497cd2ef9db3066","id":"web-app/biome-check","selected":true},{"fingerprint":"740c7186273ed5cd","id":"web-app/test","selected":true},{"fingerprint":"03e9d70e92bf9827","id":"web-app/cycles","selected":true},{"fingerprint":"34e2c148759cb623","id":"infra/biome-check","selected":false},{"fingerprint":"562033a58f014aad","id":"infra/check","selected":false},{"fingerprint":"5b669fc64fc53477","id":"conventions/ast-grep","selected":false},{"fingerprint":"0104d4dbfae83eee","id":"workspace-dependencies/dependency-check","selected":false},{"fingerprint":"1c7d2e8d01111e6e","id":"workspace-dependencies/hakari-and-dep-closures","selected":false},{"fingerprint":"c4a0806cd391570e","id":"generated-workflows/check-workflows","selected":false},{"fingerprint":"2b5862faacd585ef","id":"node-modules-nix/check-linux-node-modules-nix","selected":false},{"fingerprint":"4e8720c0910fa094","id":"sdk/check-package","selected":false},{"fingerprint":"55845a34f6912e2d","id":"observability-image/build-image","selected":false},{"fingerprint":"3b3764213d51cdaf","id":"macrod-update/linux","selected":false}]'
         ATTESTED_PREFIX: attested/
         AUDIT_CONTEXT: attestation audit
         AUDIT_ONE_IN: '10'
@@ -1814,8 +1868,6 @@ jobs:
     name: cargo deny
     uses: ./.github/workflows/cargo_deny.yml
     secrets: inherit
-    with:
-      attested: ${{ needs.start.outputs.attested }}
   workspace-dependencies:
     needs:
     - start
@@ -2183,12 +2235,17 @@ jobs:
         }
 
         /// Each job of a run as its newest attempt left it. A re-run of some jobs
-        /// keeps the others' results from the attempt that ran them.
+        /// keeps the others' results from the attempt that ran them. Two records of
+        /// a job that no attempt number tells apart keep the one that did not pass:
+        /// the order GitHub lists them in is not promised.
         export function newestJobs(jobs: RunJob[]): RunJob[] {
+          const passed = (job: RunJob) => job.conclusion === 'success' || job.conclusion === 'skipped';
           const newest = new Map<string, RunJob>();
           for (const job of jobs) {
             const known = newest.get(job.name);
-            if (!known || (job.run_attempt ?? 0) >= (known.run_attempt ?? 0)) {
+            const attempt = job.run_attempt ?? 0;
+            const knownAttempt = known?.run_attempt ?? 0;
+            if (!known || attempt > knownAttempt || (attempt === knownAttempt && passed(known))) {
               newest.set(job.name, job);
             }
           }
@@ -2572,35 +2629,62 @@ jobs:
         /// case Start could not. The gate is failing already, so a write GitHub
         /// refuses only warns.
         async function recordFailedAudit(head: string, failures: string[]) {
-          try {
-            const statuses = await commitStatuses(head);
-            const current = acceptedAttestations(
-              statuses,
-              JSON.parse(env('ATTESTABLE_CHECKS')),
-              env('ATTESTED_PREFIX'),
-              env('BASE_SHA'),
-            );
-            for (const check of contradicted(failures, current)) {
-              await postStatus(
-                head,
-                `${env('ATTESTED_PREFIX')}${check}`,
-                'failure',
-                'Failed on a runner in an audit',
-                env('RUN_URL'),
-              );
-            }
-            if (!alreadyAudited(statuses, env('AUDIT_CONTEXT'))) {
-              await postStatus(
-                head,
-                env('AUDIT_CONTEXT'),
-                'success',
-                'Runs on this commit check its attestations on runners',
-                env('RUN_URL'),
-              );
-            }
-          } catch (error) {
-            console.log(`::warning::Could not record the failed audit: ${error}`);
+          const warn = (what: string) => (error: unknown) =>
+            console.log(`::warning::Could not ${what}: ${error}`);
+          // Each write stands alone: one GitHub refuses must not cost the others.
+          const statuses = await commitStatuses(head).catch(warn('read the statuses again'));
+
+          if (!statuses || !alreadyAudited(statuses, env('AUDIT_CONTEXT'))) {
+            await postStatus(
+              head,
+              env('AUDIT_CONTEXT'),
+              'success',
+              'Runs on this commit check its attestations on runners',
+              env('RUN_URL'),
+            ).catch(warn('mark the commit as audited'));
           }
+
+          const current = statuses
+            ? acceptedAttestations(
+                statuses,
+                JSON.parse(env('ATTESTABLE_CHECKS')),
+                env('ATTESTED_PREFIX'),
+                env('BASE_SHA'),
+              )
+            : [];
+          for (const check of contradicted(failures, current)) {
+            await postStatus(
+              head,
+              `${env('ATTESTED_PREFIX')}${check}`,
+              'failure',
+              'Failed on a runner in an audit',
+              env('RUN_URL'),
+            ).catch(warn(`withdraw ${check}`));
+          }
+        }
+
+        /// What attestation did to a finished run's verdict. Throws when GitHub can't
+        /// list the run's jobs.
+        async function attestedOutcome(
+          head: string,
+          verdict: { state: State; description: string },
+          entries: string[],
+          audited: string[],
+        ): Promise<{ state: State; description: string }> {
+          const checks: GateCheck[] = JSON.parse(env('GATE_CHECKS'));
+          const jobs = await latestRunJobs(env('RUN_ID'));
+          const failures = auditFailures(audited, checks, jobs);
+          if (failures.length > 0) {
+            console.log(`Attested but failed here: ${failures.join(', ')}`);
+            await recordFailedAudit(head, failures);
+          }
+
+          const trusted = trustedEntries(entries, checks, jobs);
+          const lapsed = trusted.length > 0 ? await attestationsLapsed(head, trusted) : null;
+          if (lapsed) {
+            return { state: 'failure', description: lapsed };
+          }
+          return withAttestations(verdict, skippedAttested(entries, checks, jobs), failures);
         }
 
         async function finish() {
@@ -2618,22 +2702,17 @@ jobs:
           const audited: string[] = JSON.parse(process.env.AUDITED || '[]');
           let outcome = verdict;
           if (entries.length + audited.length > 0) {
-            const checks: GateCheck[] = JSON.parse(env('GATE_CHECKS'));
-            const jobs = await latestRunJobs(env('RUN_ID'));
-            const failures = auditFailures(audited, checks, jobs);
-            if (failures.length > 0) {
-              console.log(`Attested but failed here: ${failures.join(', ')}`);
-            }
-            if (failures.length > 0) {
-              await recordFailedAudit(head, failures);
-            }
-            outcome = withAttestations(verdict, skippedAttested(entries, checks, jobs), failures);
-
-            const trusted = trustedEntries(entries, checks, jobs);
-            const lapsed = trusted.length > 0 ? await attestationsLapsed(head, trusted) : null;
-            if (lapsed) {
-              outcome = { state: 'failure', description: lapsed };
-            }
+            // The gate must end on a verdict. A failing one stands as it is; a
+            // passing one that took checks on trust can't be confirmed.
+            outcome = await attestedOutcome(head, verdict, entries, audited).catch((error) => {
+              console.log(`::warning::Could not read this run's jobs: ${error}`);
+              return verdict.state === 'success' && entries.length > 0
+                ? {
+                    state: 'failure' as const,
+                    description: `Could not confirm what this run skipped. Add the ${label()} label again.`,
+                  }
+                : verdict;
+            });
           }
 
           if (env('SAME_REPO') === 'true') {
@@ -2729,10 +2808,10 @@ jobs:
         ATTESTED: ${{ needs.start.outputs.attested }}
         AUDITED: ${{ needs.start.outputs.audited }}
         BASE_SHA: ${{ needs.start.outputs.base }}
-        ATTESTABLE_CHECKS: '[{"fingerprint":"b38d7c37ad118118","id":"cloud-storage/check","selected":true},{"fingerprint":"55edf8296919c3e7","id":"cloud-storage/build-service-bins","selected":true},{"fingerprint":"8f1e4eb74c38a703","id":"cloud-storage/graphql-schema-compat","selected":true},{"fingerprint":"31d70f45dd208042","id":"web-app/typescript","selected":true},{"fingerprint":"41cc8313cb599742","id":"web-app/generated-code","selected":true},{"fingerprint":"0497cd2ef9db3066","id":"web-app/biome-check","selected":true},{"fingerprint":"740c7186273ed5cd","id":"web-app/test","selected":true},{"fingerprint":"03e9d70e92bf9827","id":"web-app/cycles","selected":true},{"fingerprint":"34e2c148759cb623","id":"infra/biome-check","selected":false},{"fingerprint":"562033a58f014aad","id":"infra/check","selected":false},{"fingerprint":"5b669fc64fc53477","id":"conventions/ast-grep","selected":false},{"fingerprint":"e9eab328d2bd1a69","id":"cargo-deny/cargo-deny","selected":false},{"fingerprint":"0104d4dbfae83eee","id":"workspace-dependencies/dependency-check","selected":false},{"fingerprint":"1c7d2e8d01111e6e","id":"workspace-dependencies/hakari-and-dep-closures","selected":false},{"fingerprint":"c4a0806cd391570e","id":"generated-workflows/check-workflows","selected":false},{"fingerprint":"2b5862faacd585ef","id":"node-modules-nix/check-linux-node-modules-nix","selected":false},{"fingerprint":"4e8720c0910fa094","id":"sdk/check-package","selected":false},{"fingerprint":"55845a34f6912e2d","id":"observability-image/build-image","selected":false},{"fingerprint":"3b3764213d51cdaf","id":"macrod-update/linux","selected":false}]'
+        ATTESTABLE_CHECKS: '[{"fingerprint":"b38d7c37ad118118","id":"cloud-storage/check","selected":true},{"fingerprint":"55edf8296919c3e7","id":"cloud-storage/build-service-bins","selected":true},{"fingerprint":"8f1e4eb74c38a703","id":"cloud-storage/graphql-schema-compat","selected":true},{"fingerprint":"31d70f45dd208042","id":"web-app/typescript","selected":true},{"fingerprint":"41cc8313cb599742","id":"web-app/generated-code","selected":true},{"fingerprint":"0497cd2ef9db3066","id":"web-app/biome-check","selected":true},{"fingerprint":"740c7186273ed5cd","id":"web-app/test","selected":true},{"fingerprint":"03e9d70e92bf9827","id":"web-app/cycles","selected":true},{"fingerprint":"34e2c148759cb623","id":"infra/biome-check","selected":false},{"fingerprint":"562033a58f014aad","id":"infra/check","selected":false},{"fingerprint":"5b669fc64fc53477","id":"conventions/ast-grep","selected":false},{"fingerprint":"0104d4dbfae83eee","id":"workspace-dependencies/dependency-check","selected":false},{"fingerprint":"1c7d2e8d01111e6e","id":"workspace-dependencies/hakari-and-dep-closures","selected":false},{"fingerprint":"c4a0806cd391570e","id":"generated-workflows/check-workflows","selected":false},{"fingerprint":"2b5862faacd585ef","id":"node-modules-nix/check-linux-node-modules-nix","selected":false},{"fingerprint":"4e8720c0910fa094","id":"sdk/check-package","selected":false},{"fingerprint":"55845a34f6912e2d","id":"observability-image/build-image","selected":false},{"fingerprint":"3b3764213d51cdaf","id":"macrod-update/linux","selected":false}]'
         ATTESTED_PREFIX: attested/
         AUDIT_CONTEXT: attestation audit
-        GATE_CHECKS: '[{"id":"cloud-storage/check","matrix":false,"name":"Cloud Storage / check"},{"id":"cloud-storage/build-service-bins","matrix":false,"name":"Cloud Storage / build-service-bins"},{"id":"cloud-storage/graphql-schema-compat","matrix":false,"name":"Cloud Storage / graphql-schema-compat"},{"id":"web-app/typescript","matrix":false,"name":"Web App / Typecheck"},{"id":"web-app/generated-code","matrix":false,"name":"Web App / Generated Code Check"},{"id":"web-app/biome-check","matrix":false,"name":"Web App / Biome Check"},{"id":"web-app/test","matrix":true,"name":"Web App / Test ("},{"id":"web-app/cycles","matrix":false,"name":"Web App / Cycles Import Check"},{"id":"infra/biome-check","matrix":false,"name":"Infra / Biome Check"},{"id":"infra/check","matrix":false,"name":"Infra / check"},{"id":"conventions/ast-grep","matrix":false,"name":"Conventions / ast-grep Conventions"},{"id":"cargo-deny/cargo-deny","matrix":false,"name":"cargo deny / cargo-deny"},{"id":"workspace-dependencies/dependency-check","matrix":false,"name":"Workspace dependencies / dependency-check"},{"id":"workspace-dependencies/hakari-and-dep-closures","matrix":false,"name":"Workspace dependencies / hakari-and-dep-closures"},{"id":"generated-workflows/check-workflows","matrix":false,"name":"Generated workflows / check-workflows"},{"id":"node-modules-nix/check-linux-node-modules-nix","matrix":false,"name":"node_modules nix / check Linux node_modules nix"},{"id":"sdk/check-package","matrix":false,"name":"SDK / SDK Package Check"},{"id":"observability-image/build-image","matrix":false,"name":"Observability image / Build observability image"},{"id":"macrod-update/linux","matrix":false,"name":"macrod update / macrod update (linux)"}]'
+        GATE_CHECKS: '[{"id":"cloud-storage/check","matrix":false,"name":"Cloud Storage / check"},{"id":"cloud-storage/build-service-bins","matrix":false,"name":"Cloud Storage / build-service-bins"},{"id":"cloud-storage/graphql-schema-compat","matrix":false,"name":"Cloud Storage / graphql-schema-compat"},{"id":"web-app/typescript","matrix":false,"name":"Web App / Typecheck"},{"id":"web-app/generated-code","matrix":false,"name":"Web App / Generated Code Check"},{"id":"web-app/biome-check","matrix":false,"name":"Web App / Biome Check"},{"id":"web-app/test","matrix":true,"name":"Web App / Test ("},{"id":"web-app/cycles","matrix":false,"name":"Web App / Cycles Import Check"},{"id":"infra/biome-check","matrix":false,"name":"Infra / Biome Check"},{"id":"infra/check","matrix":false,"name":"Infra / check"},{"id":"conventions/ast-grep","matrix":false,"name":"Conventions / ast-grep Conventions"},{"id":"workspace-dependencies/dependency-check","matrix":false,"name":"Workspace dependencies / dependency-check"},{"id":"workspace-dependencies/hakari-and-dep-closures","matrix":false,"name":"Workspace dependencies / hakari-and-dep-closures"},{"id":"generated-workflows/check-workflows","matrix":false,"name":"Generated workflows / check-workflows"},{"id":"node-modules-nix/check-linux-node-modules-nix","matrix":false,"name":"node_modules nix / check Linux node_modules nix"},{"id":"sdk/check-package","matrix":false,"name":"SDK / SDK Package Check"},{"id":"observability-image/build-image","matrix":false,"name":"Observability image / Build observability image"},{"id":"macrod-update/linux","matrix":false,"name":"macrod update / macrod update (linux)"}]'
         RUN_ID: ${{ github.run_id }}
 concurrency:
   group: pr-ci-${{ github.event.pull_request.number }}-${{ github.event.label.name == 'run-ci' && 'requested' || github.run_id }}

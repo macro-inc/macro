@@ -120,7 +120,6 @@ fn requested<'a>(manifest: &'a Manifest, asked: &[String]) -> Result<Vec<&'a Che
 /// Runs the checks of one checkout, remembering what `PR CI` decides once
 /// per run: which calls its path filters start, and each workflow's selection.
 struct Session<'a> {
-    checkout: &'a Checkout,
     machine: Machine<'a>,
     caller: serde_yaml::Value,
     /// `needs` as the caller's call jobs see it: the start job's outputs.
@@ -163,8 +162,8 @@ impl Session<'_> {
     fn run(&mut self, check: &Check) -> Result<Verdict, Report> {
         // The caller's path filter comes first: a call that does not start
         // runs none of its jobs.
-        let call_condition = self.caller["jobs"][check.call.as_str()]["if"].as_str();
-        if !self.condition(call_condition, &self.caller_needs)? {
+        let call_condition = runner::scalar(&self.caller["jobs"][check.call.as_str()]["if"]);
+        if !self.condition(call_condition.as_deref(), &self.caller_needs)? {
             return Ok(Verdict::NotNeeded);
         }
 
@@ -175,7 +174,6 @@ impl Session<'_> {
         if check.selected {
             if !self.selections.contains_key(&check.workflow) {
                 eprintln!("── {} / {selector}", check.workflow);
-                self.checkout.restore()?;
                 let selection = match self.machine.run_job(
                     &workflow,
                     &selector,
@@ -200,7 +198,6 @@ impl Session<'_> {
         }
 
         eprintln!("── {}", check.id);
-        self.checkout.restore()?;
         match self
             .machine
             .run_job(&workflow, &check.job, &Plan::Steps(&check.steps), &needs)?
@@ -218,6 +215,66 @@ impl Session<'_> {
             }
         }
     }
+}
+
+/// Do what one verdict calls for on the commit, and say it in a line.
+/// `posted` holds the commit's newest statuses when the run posts.
+fn settle(
+    checkout: &Checkout,
+    manifest: &Manifest,
+    posted: Option<&BTreeMap<String, String>>,
+    check: &Check,
+    verdict: &Verdict,
+) -> Result<String, Report> {
+    let context = format!("{}{}", manifest.status_prefix, check.id);
+    let post = |state: &str, description: &str| {
+        github::post_status(
+            &checkout.repository,
+            &checkout.head,
+            state,
+            &context,
+            description,
+        )
+    };
+
+    Ok(match verdict {
+        Verdict::NotNeeded => format!("-     {}: PR CI does not run it for this change", check.id),
+        Verdict::Unavailable(why) => {
+            format!("skip  {}: {why}; its job will run in PR CI", check.id)
+        }
+        Verdict::Failed { step } => {
+            let attested = posted
+                .and_then(|posted| posted.get(&context.to_lowercase()))
+                .is_some_and(|state| state == "success");
+            if attested {
+                post(
+                    "failure",
+                    &format!("`{step}` failed on the attesting machine"),
+                )?;
+            }
+            format!(
+                "FAIL  {}: `{step}` failed; its job will run in PR CI{}",
+                check.id,
+                if attested {
+                    " (withdrew the earlier attestation)"
+                } else {
+                    ""
+                }
+            )
+        }
+        Verdict::Passed { description } if posted.is_some() => {
+            post("success", description)?;
+            format!(
+                "pass  {}: posted {context} on {}",
+                check.id,
+                &checkout.head[..10]
+            )
+        }
+        Verdict::Passed { description } => format!(
+            "pass  {}: would post {context} \"{description}\" (--post)",
+            check.id
+        ),
+    })
 }
 
 fn run(asked: &[String], post_statuses: bool, base_branch: &str) -> Result<bool, Report> {
@@ -250,6 +307,7 @@ fn run(asked: &[String], post_statuses: bool, base_branch: &str) -> Result<bool,
             .context(format!("could not create {}", directory.display()))?;
     }
 
+    let fresh_checkout = || checkout.restore();
     let machine = Machine {
         manifest: &manifest,
         workspace: checkout.dir.clone(),
@@ -264,6 +322,7 @@ fn run(asked: &[String], post_statuses: bool, base_branch: &str) -> Result<bool,
         ]),
         changed_files: checkout.changed_files.clone(),
         shallow: checkout.shallow,
+        fresh_checkout: &fresh_checkout,
     };
 
     let caller = load(&checkout.dir, &manifest.caller)?;
@@ -278,7 +337,6 @@ fn run(asked: &[String], post_statuses: bool, base_branch: &str) -> Result<bool,
         JobResult::Unavailable(why) => bail!("the caller's path filters can't be decided: {why}"),
     };
     let mut session = Session {
-        checkout: &checkout,
         machine,
         caller,
         caller_needs: BTreeMap::from([(manifest.caller_start_job.clone(), start)]),
@@ -286,76 +344,32 @@ fn run(asked: &[String], post_statuses: bool, base_branch: &str) -> Result<bool,
         base: checkout.base.clone(),
     };
 
-    let mut verdicts = Vec::new();
-    for check in checks {
-        verdicts.push((check, session.run(check)?));
-    }
-
     // A pass posted for this commit earlier no longer holds for a check that
     // fails now.
     let posted = if post_statuses {
-        github::newest_statuses(&checkout.repository, &checkout.head)?
+        Some(github::newest_statuses(
+            &checkout.repository,
+            &checkout.head,
+        )?)
     } else {
-        BTreeMap::new()
+        None
     };
 
-    println!();
+    // Each check is settled as it ends: a later check that stops the run must
+    // not leave a failed check's earlier pass in force.
     let mut all_passed = true;
-    for (check, verdict) in &verdicts {
-        match verdict {
-            Verdict::NotNeeded => {
-                println!("-     {}: PR CI does not run it for this change", check.id)
-            }
-            Verdict::Failed { step } => {
-                all_passed = false;
-                let context = format!("{}{}", manifest.status_prefix, check.id);
-                let withdrawn =
-                    posted.get(&context.to_lowercase()).map(String::as_str) == Some("success");
-                if withdrawn {
-                    github::post_status(
-                        &checkout.repository,
-                        &checkout.head,
-                        "failure",
-                        &context,
-                        &format!("`{step}` failed on the attesting machine"),
-                    )?;
-                }
-                println!(
-                    "FAIL  {}: `{step}` failed; its job will run in PR CI{}",
-                    check.id,
-                    if withdrawn {
-                        " (withdrew the earlier attestation)"
-                    } else {
-                        ""
-                    }
-                );
-            }
-            Verdict::Unavailable(why) => {
-                println!("skip  {}: {why}; its job will run in PR CI", check.id);
-            }
-            Verdict::Passed { description } => {
-                let context = format!("{}{}", manifest.status_prefix, check.id);
-                if post_statuses {
-                    github::post_status(
-                        &checkout.repository,
-                        &checkout.head,
-                        "success",
-                        &context,
-                        description,
-                    )?;
-                    println!(
-                        "pass  {}: posted {context} on {}",
-                        check.id,
-                        &checkout.head[..10]
-                    );
-                } else {
-                    println!(
-                        "pass  {}: would post {context} \"{description}\" (--post)",
-                        check.id
-                    );
-                }
-            }
-        }
+    let mut summary = Vec::new();
+    for check in checks {
+        let verdict = session.run(check)?;
+        all_passed &= !matches!(verdict, Verdict::Failed { .. });
+        let line = settle(&checkout, &manifest, posted.as_ref(), check, &verdict)?;
+        eprintln!("{line}");
+        summary.push(line);
+    }
+
+    println!();
+    for line in summary {
+        println!("{line}");
     }
     Ok(all_passed)
 }

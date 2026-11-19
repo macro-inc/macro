@@ -87,7 +87,9 @@ To withdraw an attestation, post a `failure` status with the same context:
 The Rust `test` job, `doppler-config`, the web `build`, the functional and
 browser tests, the native checks and every macOS or Windows job can't be
 attested: they need service containers, secrets, system packages, another
-operating system, or the pull request's labels. The list of checks, and how to
+operating system, or the pull request's labels. Neither can `cargo deny`: it
+reads the advisory database of the day it runs, so a pass says nothing about
+the day `PR CI` runs. The list of checks, and how to
 add one, is in `xtask_workflows`' `attestation.rs`.
 
 ## Email end-to-end suites

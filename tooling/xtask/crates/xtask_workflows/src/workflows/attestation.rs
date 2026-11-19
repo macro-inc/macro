@@ -112,7 +112,9 @@ impl Check {
 /// (the Rust `test`), system packages (`functional`, `browser`), another
 /// operating system, or the pull request's labels and store state (the native
 /// checks). So is a job another job needs: skipping it would skip that job
-/// too.
+/// too. And so is a job whose verdict is not decided by the tree alone:
+/// `cargo-deny` reads the advisory database of the day it runs, and a status
+/// outlives that day.
 pub const CHECKS: &[Check] = &[
     Check {
         call: "cloud-storage",
@@ -195,15 +197,6 @@ pub const CHECKS: &[Check] = &[
         call: "conventions",
         job: "ast-grep",
         steps: &["Run ast-grep"],
-    },
-    Check {
-        call: "cargo-deny",
-        job: "cargo-deny",
-        steps: &[
-            "Install cargo-deny",
-            "cargo deny check bans licenses sources",
-            "cargo deny check advisories, for packages this PR adds",
-        ],
     },
     Check {
         call: "workspace-dependencies",

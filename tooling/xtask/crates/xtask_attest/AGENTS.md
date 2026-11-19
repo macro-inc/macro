@@ -46,7 +46,8 @@ for that base only.
 - Steps run `git fetch --depth` and write tracked files. The checkout is
   restored before every job, and takes its shallow boundary from the source.
 - The checkout reads the source repository's objects through alternates:
-  don't write refs or objects into the source from here.
+  don't write refs or objects into the source from here, apart from fetching
+  the base branch there as `git fetch` would.
 - Run git through `checkout::in_repository`. A git hook exports `GIT_DIR`, and
   the checkout's forced restore would otherwise land in the developer's clone.
 

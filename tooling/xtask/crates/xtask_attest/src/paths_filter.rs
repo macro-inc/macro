@@ -21,6 +21,9 @@ const OPTIONS: MatchOptions = MatchOptions {
     require_literal_leading_dot: false,
 };
 
+/// Characters of picomatch's braces and extglobs.
+const UNSUPPORTED: [char; 5] = ['{', '}', '(', ')', '|'];
+
 /// The action's outputs for its `filters` input: `'true'` or `'false'` per filter.
 pub fn outputs(filters: &str, changed: &[String]) -> Result<BTreeMap<String, String>, Report> {
     let filters: BTreeMap<String, Vec<String>> = serde_yaml::from_str(filters)
@@ -34,6 +37,13 @@ pub fn outputs(filters: &str, changed: &[String]) -> Result<BTreeMap<String, Str
                 if pattern.starts_with('!') {
                     bail!(
                         "filter `{name}` negates `{pattern}`, which cargo x attest does not emulate"
+                    );
+                }
+                // Braces and extglobs mean something to picomatch and are
+                // literal text to the matcher here.
+                if pattern.contains(UNSUPPORTED) {
+                    bail!(
+                        "filter `{name}`: `{pattern}` uses glob syntax cargo x attest does not emulate"
                     );
                 }
                 let pattern = Pattern::new(pattern)

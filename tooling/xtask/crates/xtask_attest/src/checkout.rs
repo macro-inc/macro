@@ -132,21 +132,47 @@ fn cache_dir(common_dir: &Path) -> Result<PathBuf, Report> {
 }
 
 /// Make `dir` a repository that reads the source's objects and fetches from
-/// its remote.
+/// its remote. Every step is done again on every run, so a run that stopped
+/// halfway leaves nothing the next one can't finish.
 fn initialize(dir: &Path, common_dir: &Path, remote_url: &str) -> Result<(), Report> {
-    if dir.join(".git").is_dir() {
-        return Ok(());
-    }
-
     std::fs::create_dir_all(dir).context(format!("could not create {}", dir.display()))?;
-    git(dir, &["init", "--quiet"])?;
+    if !dir.join(".git/HEAD").is_file() {
+        git(dir, &["init", "--quiet"])?;
+    }
+    std::fs::create_dir_all(dir.join(".git/objects/info"))
+        .context("could not create the checkout's object directory")?;
     std::fs::write(
         dir.join(".git/objects/info/alternates"),
         format!("{}\n", common_dir.join("objects").display()),
     )
     .context("could not point the checkout at the source repository's objects")?;
-    git(dir, &["remote", "add", "origin", remote_url])?;
+    git(dir, &["config", "remote.origin.url", remote_url])?;
+    git(
+        dir,
+        &[
+            "config",
+            "remote.origin.fetch",
+            "+refs/heads/*:refs/remotes/origin/*",
+        ],
+    )?;
     Ok(())
+}
+
+/// The paths `git diff --name-only -z` printed. Without `-z` git quotes a
+/// path that is not plain ASCII, and no filter would match it.
+fn paths_of(listing: &[u8]) -> Result<Vec<String>, Report> {
+    listing
+        .split(|byte| *byte == 0)
+        .filter(|path| !path.is_empty())
+        .map(|path| {
+            String::from_utf8(path.to_vec()).map_err(|_| {
+                report!(
+                    "the changed path `{}` is not UTF-8",
+                    String::from_utf8_lossy(path)
+                )
+            })
+        })
+        .collect()
 }
 
 /// A shallow source knows where its history stops, and the checkout reads
@@ -215,14 +241,18 @@ pub fn prepare(source: &Path, base_branch: &str, base: Base) -> Result<Checkout,
     }
 
     let repository = repository_of(&remote_url)?;
+    // Fetched in the source, as `git fetch` there would: the checkout reads
+    // its objects from it. `FETCH_HEAD`, because a clone that tracks one
+    // branch has no `origin/<base>` to update.
     git(source, &["fetch", "--quiet", "origin", base_branch])?;
+    let tip = git(source, &["rev-parse", "FETCH_HEAD"])?;
     let github_merge = match base {
         Base::Tip => None,
         Base::PullRequest => Some(github::pull_request_merge(&repository, &head, base_branch)?),
     };
     let base = match &github_merge {
         Some(merge) => merge.base.clone(),
-        None => git(source, &["rev-parse", &format!("origin/{base_branch}")])?,
+        None => tip,
     };
     git(source, &["cat-file", "-e", &format!("{base}^{{commit}}")]).context(format!(
         "this clone does not have {base_branch}'s commit {}, which the pull request's merge commit is built on",
@@ -286,13 +316,19 @@ pub fn prepare(source: &Path, base_branch: &str, base: Base) -> Result<Checkout,
         ],
     )?;
     let merge_base = git(&dir, &["merge-base", &base, &head])?;
-    let changed_files = git(
-        &dir,
-        &["diff", "--name-only", "--no-renames", &merge_base, &head],
-    )?
-    .lines()
-    .map(str::to_owned)
-    .collect();
+    let listing = in_repository("git", &dir)
+        .args(["diff", "--name-only", "--no-renames", "-z"])
+        .args([&merge_base, &head])
+        .output()
+        .context("could not run git diff")?;
+    if !listing.status.success() {
+        bail!(
+            "could not list the files {} changes: {}",
+            &head[..10],
+            String::from_utf8_lossy(&listing.stderr).trim()
+        );
+    }
+    let changed_files = paths_of(&listing.stdout)?;
 
     let shallow = git(&dir, &["rev-parse", "--is-shallow-repository"])? == "true";
     let checkout = Checkout {

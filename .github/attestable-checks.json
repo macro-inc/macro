@@ -185,21 +185,6 @@
       "workflow": "code_check_conventions.yml"
     },
     {
-      "call": "cargo-deny",
-      "fingerprint": "e9eab328d2bd1a69",
-      "id": "cargo-deny/cargo-deny",
-      "if": null,
-      "inputs": [],
-      "job": "cargo-deny",
-      "selected": false,
-      "steps": [
-        "Install cargo-deny",
-        "cargo deny check bans licenses sources",
-        "cargo deny check advisories, for packages this PR adds"
-      ],
-      "workflow": "cargo_deny.yml"
-    },
-    {
       "call": "workspace-dependencies",
       "fingerprint": "0104d4dbfae83eee",
       "id": "workspace-dependencies/dependency-check",

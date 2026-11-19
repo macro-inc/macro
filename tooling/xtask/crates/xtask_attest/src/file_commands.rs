@@ -37,10 +37,18 @@ pub fn parse(text: &str) -> Result<Vec<(String, String)>, Report> {
         }
 
         if let Ok(("", (name, delimiter))) = block_start(line) {
-            let body: Vec<&str> = lines
-                .by_ref()
-                .take_while(|line| *line != delimiter)
-                .collect();
+            // A runner fails the step for a block it can't close.
+            if delimiter.is_empty() {
+                bail!("`{line}` opens a block with no delimiter");
+            }
+            let mut body = Vec::new();
+            loop {
+                match lines.next() {
+                    Some(line) if line == delimiter => break,
+                    Some(line) => body.push(line),
+                    None => bail!("the block `{name}<<{delimiter}` is never closed"),
+                }
+            }
             values.push((name.to_owned(), body.join("\n")));
         } else if let Ok(("", (name, value))) = assignment(line) {
             values.push((name.to_owned(), value.to_owned()));

@@ -97,6 +97,9 @@ pub struct Machine<'a> {
     pub changed_files: Vec<String>,
     /// Whether the checkout's history is cut short.
     pub shallow: bool,
+    /// Puts the workspace back to the commit. Every job on a runner, and
+    /// every row of a matrix job, starts from a checkout of its own.
+    pub fresh_checkout: &'a dyn Fn() -> Result<(), Report>,
 }
 
 /// What steps share across a job, composite actions included.
@@ -181,7 +184,7 @@ fn name_of(step: &Yaml) -> &str {
         .unwrap_or("unnamed step")
 }
 
-fn scalar(value: &Yaml) -> Option<String> {
+pub fn scalar(value: &Yaml) -> Option<String> {
     match value {
         Yaml::String(text) => Some(text.clone()),
         Yaml::Bool(flag) => Some(flag.to_string()),
@@ -279,6 +282,13 @@ impl Machine<'_> {
         if job.get("services").is_some() && !matches!(plan, Plan::FiltersOnly) {
             bail!("job `{job_id}` needs service containers, which cargo x attest does not start");
         }
+        // `defaults.run` changes the shell and directory of every step that
+        // names neither.
+        if (workflow.get("defaults").is_some() || job.get("defaults").is_some())
+            && !matches!(plan, Plan::FiltersOnly)
+        {
+            bail!("job `{job_id}` runs under `defaults`, which cargo x attest does not apply");
+        }
 
         // `fetch-depth: 0` is a job saying it reads history a shallow clone lacks.
         let reads_all_history = steps.iter().any(|step| {
@@ -308,6 +318,9 @@ impl Machine<'_> {
 
         let mut outputs = Outputs::new();
         for matrix in matrix_rows(job)? {
+            if !matches!(plan, Plan::FiltersOnly) {
+                (self.fresh_checkout)()?;
+            }
             let mut shared = Shared {
                 env: Outputs::new(),
                 path: Vec::new(),
@@ -370,8 +383,9 @@ impl Machine<'_> {
                 step_env: &no_env,
             };
             let wanted = |lookup: &Lookup<'_>| -> Result<bool, Report> {
-                match step["if"].as_str() {
-                    Some(condition) => Ok(expression::evaluate(condition, lookup)?.truthy()),
+                // `if: false` is a YAML boolean, not a string.
+                match scalar(&step["if"]) {
+                    Some(condition) => Ok(expression::evaluate(&condition, lookup)?.truthy()),
                     None => Ok(true),
                 }
             };

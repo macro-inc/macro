@@ -24,7 +24,8 @@ steps; hand-edited YAML drifts and fails CI's `cargo x workflows --check`.
   A step you add to a listed job goes in its `steps`, or in `RUNNER_STEPS` when
   it only keeps a runner's caches. List a new job when a machine can run it as
   the runner does: no secrets, service containers or other operating system,
-  and no other job that needs it.
+  no other job that needs it, and a verdict the tree alone decides (not
+  `cargo-deny`, which reads the advisory database of the day).
 - A few older workflows are still hand-written YAML. When you change one
   substantially, port it to the generator instead of editing the YAML.
 
