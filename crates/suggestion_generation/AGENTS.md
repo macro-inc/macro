@@ -130,6 +130,8 @@ scheduling runtime.
   per kind (`routines` at onboarding, `feed` on request); `compare` says
   win, loss or noise (see its README). Run the section a change touches
   before and after changing a brief, a prompt or a session's tools.
+- `bun test crates/suggestion_generation/bench` after changing the bench's
+  persona loading.
 
 ## Gotchas
 

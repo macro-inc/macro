@@ -199,6 +199,13 @@ and earlier) can't be read by the `routines` section: write a new one. Don't ope
 set's ledger; after a baseline and one candidate a set is spent and the bench
 says so: make a new one.
 
+The seed CLI refuses an address whose local part isn't ASCII, so as a
+persona is loaded, each such address in its mail, workspace and answer keys
+alike is spelled in ASCII (accents dropped, any other non-ASCII character
+removed), or tagged where that would match another of the persona's
+addresses in any case or leave the local part empty (`asciiSpellings` in
+`personas.ts`). `bun test $B` checks those spellings.
+
 ## Baseline
 
 Main (`5419b2521f`, the 45-routine catalog) with the bench on top, two runs
