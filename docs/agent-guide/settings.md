@@ -209,7 +209,7 @@ that trial, so members who join get Pro, like on an active subscription.
 On a local stack started with `--no-doppler`, verify free-team creation from a
 fresh passwordless signup. It must work without Stripe credentials.
 
-The invite dialog (**Invite** on **Team → Members**, or **Invite your team**)
+The invite dialog (**Invite Human** on **Team → Members**, or **Invite your team**)
 starts with the team's **Invite link**: **Create link** makes one and copies it,
 **Copy link** copies it after that. Anyone signed in who opens
 `/app/team-invite?link=<token>` sees **Join <team>** and joins as a member with
@@ -246,10 +246,13 @@ limit; re-inviting the address from **Invite** follows the same rule.
 
 #### Agent teammates
 
-Behind `enable-agent-teammates` (on in dev), owners and admins see a
-**People | Agent** switch at the top of the invite dialog; members, and
-everyone while the flag is off or still loading, see the people form unchanged.
-**Agent** (titled for adding an agent teammate) asks only for a name and the
+**Team → Members** has **+ Invite Human** (the people invite dialog) and,
+behind `enable-agent-teammates` (on in dev) and the Macro computers rollout,
+**+ Invite Agent** for owners and admins, beside **Copy invite link**; on a
+narrow page the two invite buttons wrap, together, onto their own line. The
+desktop settings sidebar lists **Invite agents** under **Invite your team** for
+the same viewers. Members, and everyone while a flag is off or still loading,
+see only the people invite. **Invite Agent** opens **Invite an agent**, which asks only for a name and the
 agent's computer size; picture, voice and role come later, and the agent asks
 what to take on once it is online. While the name is empty, **Try** offers
 **Ada**, **Bo**, **Kim** and **Nova**, and the avatar shows the name's first
@@ -400,7 +403,9 @@ visible, and `/app/home/~/settings/<tab>` places it beside Home. Its inner
 sidebar matches Email and Tasks: a **Settings** title bar, a rounded
 **Search settings** field, a team action at the top of the list (hidden while
 searching): **Invite your team** with its icon and label in a soft pink-to-indigo gradient (opens the invite dialog;
-hidden for members when the team limits invites to admins) or, with no team,
+hidden for members when the team limits invites to admins), then, for owners
+and admins with agent teammates and Macro computers on, **Invite agents** in
+the same style (opens **Invite an agent**), or, with no team,
 **Create a team** (opens the create-team dialog), then the grouped section
 pills. Above 720px, **Hide navigation** beside the title collapses the sidebar;
 **Show navigation** restores it. Wide touch panes always dock the sidebar left

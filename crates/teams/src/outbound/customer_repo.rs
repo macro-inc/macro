@@ -11,6 +11,7 @@ mod subscription_items;
 use subscription_items::{cadence, item_quantity_updates, update_error};
 mod computer_items;
 mod computer_refunds;
+mod payment_terms;
 pub use computer_items::{
     COMPUTER_ID_KEY, item_computer_id, item_computer_uuid, list_subscription_items,
 };
@@ -28,8 +29,9 @@ use crate::domain::{
     customer_repo::CustomerRepository,
     model::{
         BillingCadence, ComputerPurchaseCredit, CustomerError, ItemChangeSettlement,
-        ItemChangeStatus, ItemProration, ItemQuantityChange, ItemRemoval, PriceInfo,
-        ScheduledSeatPlan, SeatPlan, SeatPrices, SubscriptionItemView, SubscriptionTerms,
+        ItemChangeStatus, ItemProration, ItemQuantityChange, ItemRemoval, PaymentTerms, PriceInfo,
+        ProratedCharge, ScheduledSeatPlan, SeatPlan, SeatPrices, SubscriptionItemView,
+        SubscriptionTerms,
     },
 };
 
@@ -463,22 +465,24 @@ impl CustomerRepository for CustomerRepositoryImpl {
         )
         .await
         .map_err(storage)?;
-        let interval = subscription
-            .items
-            .data
-            .iter()
-            .find_map(|item| item.price.as_ref()?.recurring.as_ref())
-            .map(|recurring| cadence(recurring.interval))
-            .ok_or(SubscriptionDataError::MissingRecurringItem)?;
-        let current_period_end =
-            chrono::DateTime::from_timestamp(subscription.current_period_end, 0)
-                .ok_or(SubscriptionDataError::InvalidPeriodEnd)?;
-        Ok(SubscriptionTerms {
-            current_period_end,
-            interval,
-            currency: subscription.currency.to_string(),
-            trialing: subscription.status == stripe::SubscriptionStatus::Trialing,
-        })
+        payment_terms::terms_of(&subscription)
+    }
+
+    #[tracing::instrument(skip(self), fields(card = tracing::field::Empty), err)]
+    async fn payment_terms(
+        &self,
+        subscription_id: &stripe::SubscriptionId,
+    ) -> Result<PaymentTerms, CustomerError> {
+        self.read_payment_terms(subscription_id).await
+    }
+
+    #[tracing::instrument(skip(self, prices), fields(prices = prices.len()), err)]
+    async fn preview_prorations(
+        &self,
+        subscription_id: &stripe::SubscriptionId,
+        prices: &[stripe::PriceId],
+    ) -> Result<Vec<ProratedCharge>, CustomerError> {
+        self.read_prorations(subscription_id, prices).await
     }
 
     #[tracing::instrument(skip(self), err)]

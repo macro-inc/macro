@@ -28,6 +28,34 @@ pub enum ZfsError {
     /// Clones would silently be full copies.
     #[error("ZFS block cloning is off ({0}); every computer would copy its golden in full")]
     NoBlockCloning(BlockCloningOff),
+    /// A ZFS module file the startup checks read is unreadable.
+    #[error("read {path}: {source}")]
+    ModuleState {
+        /// The file under `/sys/module/zfs`.
+        path: &'static str,
+        /// Why.
+        source: std::io::Error,
+    },
+    /// Block cloning runs where it can corrupt or race dirty data.
+    #[error("ZFS block cloning is unsafe here ({0}); hibernations and golden builds clone blocks")]
+    UnsafeBlockCloning(UnsafeBlockCloning),
+}
+
+/// Why block cloning is unsafe on this host.
+#[derive(Debug, thiserror::Error)]
+pub enum UnsafeBlockCloning {
+    /// The module is older than the first release we trust to clone.
+    #[error("OpenZFS module {version:?} is older than {MINIMUM_ZFS_VERSION}")]
+    OldModule {
+        /// `/sys/module/zfs/version`.
+        version: String,
+    },
+    /// A clone of dirty data would not wait for it to be written.
+    #[error("{BCLONE_WAIT_DIRTY_PARAMETER} is {value:?}")]
+    NoDirtyWait {
+        /// Its value.
+        value: String,
+    },
 }
 
 /// Where block cloning is off.
@@ -51,6 +79,17 @@ pub enum BlockCloningOff {
 
 /// The ZFS module's switch for block cloning.
 const BCLONE_PARAMETER: &str = "/sys/module/zfs/parameters/zfs_bclone_enabled";
+
+/// Whether a block clone of dirty data waits for it to be written (1)
+/// instead of failing or racing it.
+const BCLONE_WAIT_DIRTY_PARAMETER: &str = "/sys/module/zfs/parameters/zfs_bclone_wait_dirty";
+
+/// The loaded module's version, e.g. `2.4.1-1`.
+const MODULE_VERSION: &str = "/sys/module/zfs/version";
+
+/// The oldest OpenZFS trusted to clone blocks: 2.2.x shipped cloning with
+/// data-corruption bugs; the NixOS module pins the same floor.
+const MINIMUM_ZFS_VERSION: &str = "2.4.1";
 
 /// How long a destroy waits for a busy dataset before deferring it.
 const DESTROY_BUSY_WAIT: std::time::Duration = std::time::Duration::from_secs(10);
@@ -97,11 +136,27 @@ impl Datasets {
                 state: feature.trim().to_owned(),
             }));
         }
-        let enabled = std::fs::read_to_string(BCLONE_PARAMETER).unwrap_or_default();
+        let enabled = module_state(BCLONE_PARAMETER)?;
         if enabled.trim() != "1" {
             return Err(ZfsError::NoBlockCloning(BlockCloningOff::ModuleParameter {
                 value: enabled.trim().to_owned(),
             }));
+        }
+        let version = module_state(MODULE_VERSION)?;
+        if !version_at_least(&version, MINIMUM_ZFS_VERSION) {
+            return Err(ZfsError::UnsafeBlockCloning(
+                UnsafeBlockCloning::OldModule {
+                    version: version.trim().to_owned(),
+                },
+            ));
+        }
+        let wait_dirty = module_state(BCLONE_WAIT_DIRTY_PARAMETER)?;
+        if wait_dirty.trim() != "1" {
+            return Err(ZfsError::UnsafeBlockCloning(
+                UnsafeBlockCloning::NoDirtyWait {
+                    value: wait_dirty.trim().to_owned(),
+                },
+            ));
         }
         let datasets = Self {
             parent: parent.to_owned(),
@@ -185,7 +240,17 @@ impl Datasets {
         let listing = zfs_output(
             "zfs",
             &[
-                "list", "-H", "-t", "snapshot", "-o", "name", "-s", "creation", &name,
+                // createtxg, not creation (whole seconds): two snapshots in
+                // one second still sort in the order they were taken.
+                "list",
+                "-H",
+                "-t",
+                "snapshot",
+                "-o",
+                "name",
+                "-s",
+                "createtxg",
+                &name,
             ],
         )
         .await?;
@@ -415,6 +480,26 @@ fn clone_arguments(
         snapshot.to_owned(),
         name.to_owned(),
     ]
+}
+
+/// A file of the loaded ZFS module.
+fn module_state(path: &'static str) -> Result<String, ZfsError> {
+    std::fs::read_to_string(path).map_err(|source| ZfsError::ModuleState { path, source })
+}
+
+/// Whether `version` (`2.4.1-1`, `2.4.1-1ubuntu1`, `2.5.0`) is at least
+/// `minimum` (`2.4.1`); anything unparsable is not. Not `semver`: it reads
+/// the packaging suffix of `2.4.1-1ubuntu1` as a pre-release, which sorts
+/// below `2.4.1`.
+fn version_at_least(version: &str, minimum: &str) -> bool {
+    let release = |text: &str| -> Option<Vec<u32>> {
+        let release = text.trim().split(['-', '_', '+']).next()?;
+        release.split('.').map(|part| part.parse().ok()).collect()
+    };
+    match (release(version), release(minimum)) {
+        (Some(version), Some(minimum)) => version >= minimum,
+        _ => false,
+    }
 }
 
 async fn zfs_output(program: &str, arguments: &[&str]) -> Result<String, ZfsError> {

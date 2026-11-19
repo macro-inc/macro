@@ -234,6 +234,11 @@ async fn registered_routes_reject_detached_fleet_without_side_effects() {
                 String::new(),
             ),
             (
+                Method::GET,
+                "/team/computers/purchase-offers".to_owned(),
+                String::new(),
+            ),
+            (
                 Method::POST,
                 format!("/team/computers/{id}/power"),
                 r#"{"on":true}"#.to_owned(),
@@ -305,6 +310,7 @@ async fn registered_routes_preserve_rollout_denials() {
             r#"{"size":"standard","purchaseKey":"buy-dialog-1"}"#,
         ),
         (Method::GET, "/team/computers/offers", ""),
+        (Method::GET, "/team/computers/purchase-offers", ""),
     ] {
         let response = router
             .clone()
@@ -403,6 +409,52 @@ async fn listing_answers_with_the_teams_rows_while_the_fleet_is_detached() {
             .map(|computer| computer["id"].as_str().unwrap().to_owned())
             .collect();
         assert_eq!(ids, expected);
+    }
+}
+
+/// The buy dialog's offers name the team's card, so only those who may buy
+/// see them: a member is refused before any billing read.
+#[tokio::test]
+async fn purchase_offers_are_for_admins_only() {
+    for (role, expected) in [
+        (TeamRole::Admin, StatusCode::OK),
+        (TeamRole::Member, StatusCode::UNAUTHORIZED),
+    ] {
+        let service = Arc::new(
+            ComputerService::new(
+                crate::domain::fakes::FakeRepo {
+                    sold_units: 9,
+                    ..crate::domain::fakes::FakeRepo::default()
+                },
+                crate::domain::service::test::FakeBilling::default(),
+                crate::domain::fakes::FixedClock,
+                crate::domain::ports::StaticFleetAttachment(
+                    crate::domain::models::FleetAttachment::Attached,
+                ),
+            )
+            .with_comp_policy(crate::domain::service::test::availability::RouterCompPolicy(false))
+            .with_rollout(crate::domain::service::test::rollout::enabled_rollout()),
+        );
+        let router: Router = team_router(ComputerRouterState {
+            service: service.clone(),
+            entity_access_service: Arc::new(TeamAccess(role)),
+            authorization_state: MacroAuthorizationState::new(Arc::new(Authorization)),
+        });
+        let response = router
+            .oneshot(
+                Request::builder()
+                    .method(Method::GET)
+                    .uri("/team/computers/purchase-offers")
+                    .header("authorization", "Bearer test-user")
+                    .body(Body::empty())
+                    .unwrap(),
+            )
+            .await
+            .unwrap();
+        assert_eq!(response.status(), expected, "{role:?}");
+        let billed =
+            !crate::domain::service::test::availability::billing_calls(&service).is_empty();
+        assert_eq!(billed, expected == StatusCode::OK, "{role:?}");
     }
 }
 

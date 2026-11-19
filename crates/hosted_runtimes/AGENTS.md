@@ -19,7 +19,7 @@ read it before changing behaviour.
 ## Start here
 
 - `src/domain/lifecycle.rs` + `lifecycle/test.rs`: states, events, effects, invariants.
-- `src/domain/service.rs`: the team-facing `ComputerService` (purchase, offers, list, power, retry, cancel, release).
+- `src/domain/service.rs`: the team-facing `ComputerService` (purchase, offers, purchase_offers, list, power, retry, cancel, release). `purchase_offers` is the buy dialog's listing: one `Billing::purchase_terms` call for every size (today's prorated charge, renewal date, card), never made on the purchase path.
 - `src/domain/enrollment.rs`: the first-boot contract with `macrod enroll`.
 - `src/domain/image.rs`: versioned images and the root/data disk split.
 - `src/domain/operator.rs`: the control plane (fleet effects, timers, reconcile,

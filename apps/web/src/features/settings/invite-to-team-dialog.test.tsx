@@ -139,7 +139,7 @@ vi.mock('./TeamInviteLinkSection', () => ({
 }));
 
 import { ThrownResultError } from '@core/util/result';
-import { InviteToTeamDialog } from './Team';
+import { InviteToTeamDialog, useCanInviteAgents } from './Team';
 
 const [flag, setFlag] = createSignal({ enabled: false, loading: false });
 const [computersFlag, setComputersFlag] = createSignal({
@@ -233,50 +233,54 @@ describe('InviteToTeamDialog', () => {
   });
 });
 
+/** Invite Agent's dialog, gated the way Members gates it. */
+function AgentInviteDialog(props: { admin: boolean; onClose: () => void }) {
+  const canInviteAgents = useCanInviteAgents(() => props.admin);
+  return (
+    <InviteToTeamDialog
+      teamId="team-1"
+      canManageLink={props.admin}
+      kind="agent"
+      canInviteAgents={canInviteAgents()}
+      open
+      onClose={props.onClose}
+    />
+  );
+}
+
+const agentForm = () => screen.queryByRole('textbox', { name: 'Name' });
+
 describe('InviteToTeamDialog agent teammates', () => {
   function openAsAdmin(onClose: () => void = () => {}) {
-    render(() => (
-      <InviteToTeamDialog
-        teamId="team-1"
-        canManageLink
-        canInviteAgents
-        open
-        onClose={onClose}
-      />
-    ));
+    render(() => <AgentInviteDialog admin onClose={onClose} />);
   }
 
   it('offers only people while computers are off, even with agent teammates on', () => {
     setFlag({ enabled: true, loading: false });
     setComputersFlag({ enabled: false, loading: false });
     openAsAdmin();
-    expect(screen.queryByRole('radio', { name: 'Agent' })).toBeNull();
+    expect(agentForm()).toBeNull();
+    expect(screen.getByRole('button', { name: 'Send invite' })).toBeTruthy();
 
     setComputersFlag({ enabled: true, loading: false });
-    expect(screen.getByRole('radio', { name: 'Agent' })).toBeTruthy();
+    expect(agentForm()).toBeTruthy();
   });
 
   it('offers only people while the flag is off or loading', () => {
     setFlag({ enabled: false, loading: true });
     openAsAdmin();
-    expect(screen.queryByRole('radio', { name: 'Agent' })).toBeNull();
+    expect(agentForm()).toBeNull();
 
     setFlag({ enabled: false, loading: false });
-    expect(screen.queryByRole('radio', { name: 'Agent' })).toBeNull();
+    expect(agentForm()).toBeNull();
     expect(screen.getByRole('button', { name: 'Send invite' })).toBeTruthy();
   });
 
   it('offers only people to members who cannot manage the team', () => {
     setFlag({ enabled: true, loading: false });
-    render(() => (
-      <InviteToTeamDialog
-        teamId="team-1"
-        canManageLink={false}
-        open
-        onClose={() => {}}
-      />
-    ));
-    expect(screen.queryByRole('radio', { name: 'Agent' })).toBeNull();
+    setComputersFlag({ enabled: true, loading: false });
+    render(() => <AgentInviteDialog admin={false} onClose={() => {}} />);
+    expect(agentForm()).toBeNull();
   });
 
   const ada = {
@@ -290,7 +294,6 @@ describe('InviteToTeamDialog agent teammates', () => {
     new ThrownResultError([{ code, message: code }]);
 
   function startAdding(name = 'Ada') {
-    fireEvent.click(screen.getByRole('radio', { name: 'Agent' }));
     fireEvent.input(screen.getByRole('textbox', { name: 'Name' }), {
       target: { value: name },
     });
@@ -310,7 +313,6 @@ describe('InviteToTeamDialog agent teammates', () => {
       .mockResolvedValue({ agents: [{ ...ada, status: 'running' }] });
     openAsAdmin(onClose);
 
-    fireEvent.click(screen.getByRole('radio', { name: 'Agent' }));
     expect(addButton().disabled).toBe(true);
     expect(
       screen.getByText('Give your agent a name to continue.')
@@ -442,7 +444,6 @@ describe('InviteToTeamDialog agent teammates', () => {
     setFlag({ enabled: true, loading: false });
     setComputersFlag({ enabled: true, loading: false });
     openAsAdmin();
-    fireEvent.click(screen.getByRole('radio', { name: 'Agent' }));
     expect(screen.getByRole('textbox', { name: 'Name' })).toBeTruthy();
 
     setFlag({ enabled: false, loading: false });
