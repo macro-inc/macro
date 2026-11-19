@@ -146,8 +146,11 @@ projects.
   inner hit of every returned parent, and keeps only the first
   `max_expansions` terms of the shard, so words past them never match. Pass
   the word, not the term: `match_bool_prefix` reads a last token followed by
-  punctuation (`con.`) as finished. Several words (`e-mail`) and, outside
-  content, words under three characters keep the capped
+  punctuation (`con.`) as finished. A word counts as one only with nothing
+  but ASCII punctuation around it and at most 255 characters (the
+  tokenizer's longest token). Several words (`e-mail`, a Thai run the
+  tokenizer keeps whole but UAX #29 splits), a word next to an emoji, and,
+  outside content, words under three characters keep the capped
   `match_phrase_prefix`; OpenSearch has no phrase prefix that keeps every
   match.
 - Document content has two matching shapes (`DocumentTermMatching`). `All`

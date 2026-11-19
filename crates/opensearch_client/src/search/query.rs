@@ -65,19 +65,37 @@ pub(crate) fn create_query<'a>(params: CreateQueryParams<'a>) -> QueryType<'a> {
     }
 }
 
-/// Fewest characters a content term needs before it matches as a prefix.
-/// Shorter prefixes expand to too many tokens.
+/// Fewest characters a word needs before it matches as an uncapped prefix,
+/// and a content term before it matches as a prefix at all. Shorter prefixes
+/// expand to too many tokens.
 const MIN_PREFIX_LEN: usize = 3;
 
+/// The standard tokenizer's longest token, in UTF-16 units; it splits a
+/// longer word into several tokens.
+const MAX_TOKEN_LEN: usize = 255;
+
 /// The one word of a term the analyzer reads as a single token. The standard
-/// tokenizer, which every field these queries search uses, splits text at the
-/// Unicode (UAX #29) word boundaries `unicode_words` finds: `con.`, `naïve`,
+/// tokenizer, which every field these queries search uses, splits words at
+/// the Unicode (UAX #29) boundaries `unicode_words` finds: `con.`, `naïve`,
 /// `o'brien` and `node.js` are one word, `c++` is the word `c`, and `e-mail`,
-/// `東京` and `gab@macro.com` are several.
+/// `東京` and `gab@macro.com` are several. They disagree on what surrounds a
+/// word (the tokenizer keeps an emoji as a token, `unicode_words` drops it) and
+/// on scripts written without spaces (a Thai run is one token and many
+/// words), so a word counts only with nothing but ASCII punctuation around
+/// it, and only when it fits in one token.
 fn single_word(term: &str) -> Option<&str> {
-    let mut words = term.unicode_words();
-    let word = words.next()?;
-    words.next().is_none().then_some(word)
+    let mut words = term.unicode_word_indices();
+    let (start, word) = words.next()?;
+    if words.next().is_some() {
+        return None;
+    }
+
+    let mut around = term[..start]
+        .chars()
+        .chain(term[start + word.len()..].chars());
+    let only_punctuation = around.all(|c| c.is_ascii_punctuation());
+    let one_token = word.encode_utf16().count() <= MAX_TOKEN_LEN;
+    (only_punctuation && one_token).then_some(word)
 }
 
 /// A prefix query over every token of `field` that starts with `term`'s one
