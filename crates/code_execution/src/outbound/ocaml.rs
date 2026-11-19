@@ -191,7 +191,7 @@ impl OcamlBundle {
             )
             .await?;
         match output.status.code() {
-            Some(0 | 1) => analysis(&output.stdout).ok_or_else(|| {
+            Some(0 | 1) => super::analysis::analysis(&output.stdout, PROGRAM).ok_or_else(|| {
                 tracing::error!("the SDK call analysis printed an unexpected answer");
                 CompileError::Internal
             }),
@@ -619,64 +619,6 @@ pub(crate) fn policy_diagnostics(output: &[u8]) -> CompileError {
         return CompileError::Internal;
     }
     CompileError::Diagnostics(diagnostics)
-}
-
-/// `macro_sdk_calls --json`'s answer: `{"status":"ok","operations":[{"service",
-/// "operation",..}]}` or `{"status":"cannot_analyze","reasons":[{"message",
-/// "location":{"line","column"}}]}` (0-based columns). `None` for anything else.
-pub(crate) fn analysis(stdout: &[u8]) -> Option<Analysis> {
-    #[derive(serde::Deserialize)]
-    #[serde(tag = "status", rename_all = "snake_case")]
-    enum Answer {
-        Ok { operations: Vec<Found> },
-        CannotAnalyze { reasons: Vec<Reason> },
-    }
-    #[derive(serde::Deserialize)]
-    struct Found {
-        service: String,
-        operation: String,
-        method: String,
-        route: String,
-        #[serde(default)]
-        rivals: Vec<SdkRoute>,
-    }
-    #[derive(serde::Deserialize)]
-    struct Reason {
-        message: String,
-        location: At,
-    }
-    #[derive(serde::Deserialize)]
-    struct At {
-        line: u32,
-        column: u32,
-    }
-    Some(match serde_json::from_slice(stdout).ok()? {
-        Answer::Ok { operations } => Analysis::Calls(
-            operations
-                .into_iter()
-                .map(|found| SdkCall {
-                    operation: SdkOperation {
-                        service: found.service,
-                        operation_id: found.operation,
-                    },
-                    method: found.method,
-                    route: found.route,
-                    rivals: found.rivals,
-                })
-                .collect(),
-        ),
-        Answer::CannotAnalyze { reasons } if !reasons.is_empty() => Analysis::CannotAnalyze(
-            reasons
-                .into_iter()
-                .map(|reason| AnalysisReason {
-                    message: reason.message,
-                    line: reason.location.line,
-                    column: reason.location.column + 1,
-                })
-                .collect(),
-        ),
-        Answer::CannotAnalyze { .. } => return None,
-    })
 }
 
 fn internal(_error: impl std::fmt::Display) -> CompileError {
