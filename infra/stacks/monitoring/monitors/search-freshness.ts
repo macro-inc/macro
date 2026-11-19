@@ -113,10 +113,12 @@ const LIVE_RETENTION = pending(`!${EMAIL}`, 'topic', MS_PER_DAY);
 const DROPPED = `sum:search.index.dropped_events{${PROD}} by {entity_type}.as_count()`;
 // Failed items per 5 minutes, a missing bucket read as none. The monitor wants
 // every bucket of half an hour to have some: a burst, such as a drain's 429s
-// that the replays absorb, comes and goes inside that. It evaluates 7 minutes
-// late, so the newest bucket is complete: an unfinished one reads as none and
-// would recover the alert every 5 minutes.
-const FAILED_ITEMS = `default_zero(sum:search.index.failed_bulk_items{${PROD}} by {entity_type,failure}.as_count().rollup(sum, 300))`;
+// that the replays absorb, comes and goes inside that. It reads the rate, a
+// bucket's average times its 300 s: a monitor over `.as_count()` takes only
+// `sum`, which would fire on one burst. It evaluates 7 minutes late, so the
+// newest bucket is complete: an unfinished one reads as none and would
+// recover the alert every 5 minutes.
+const FAILED_ITEMS = `default_zero(sum:search.index.failed_bulk_items{${PROD}} by {entity_type,failure}.as_rate().rollup(avg, 300)) * 300`;
 const OFFSET_RESETS = `sum:kafka.consumer.offset_resets{${PROD}} by {topic}.as_count()`;
 const READINGS = `max:search.index.oldest_pending_ms{${PROD}}.fill(null)`;
 // Late and unseen are counted, not timed: a slow round records its seconds
