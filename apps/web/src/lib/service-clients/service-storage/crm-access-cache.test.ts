@@ -103,7 +103,7 @@ async function boot(policy: string | null = null) {
   return host;
 }
 
-it('keeps boot responses after missing-mirror retirement when the first proof confirms access', async () => {
+it('recovers a missing-mirror upgrade in the background without cancelling or resetting reads', async () => {
   const host = owner();
   const generation = host.authority.snapshot()!.generation;
   const initialized = Promise.withResolvers<void>();
@@ -112,9 +112,13 @@ it('keeps boot responses after missing-mirror retirement when the first proof co
   });
   await initializeCrmCacheOwner();
   await initialized.promise;
-  expect(mocks.refetch).toHaveBeenCalledOnce();
+  expect(mocks.refetch).toHaveBeenCalledExactlyOnceWith(
+    { type: 'active' },
+    { cancelRefetch: false }
+  );
+  expect(mocks.cancel).not.toHaveBeenCalled();
   // Main has a bound account but no authority policy or mirror. Its persisted
-  // email/CRM entries survive the upgrade's memory fence and first proof.
+  // email/CRM entries and mounted readers survive recovery and the first proof.
   expect(mocks.retire).not.toHaveBeenCalled();
   mocks.cancel.mockClear();
   mocks.refetch.mockClear();

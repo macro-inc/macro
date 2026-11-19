@@ -32,8 +32,11 @@ function startup(mirror: CacheAuthority | undefined, current: CacheAuthority) {
     onChanged: () => () => {},
     transition: vi.fn(),
   };
+  const initialize = vi.fn((next: string, _refresh?: boolean) =>
+    generation.initialize(next)
+  );
   const authority = createCrmAccessAuthority({
-    initialize: generation.initialize,
+    initialize,
     restore: (next) => initialCacheRetirement(mirror, next),
     retire,
     fetchProof,
@@ -51,6 +54,7 @@ function startup(mirror: CacheAuthority | undefined, current: CacheAuthority) {
     cleanup,
     retire,
     fetchProof,
+    initialize,
     captured,
     guard,
   };
@@ -121,21 +125,9 @@ it.each([
     scope: 'session',
   },
   {
-    name: 'missing mirror with an established policy',
+    name: 'unfinished cleanup without a mirror',
     mirror: undefined,
-    current: hint,
-    scope: 'permission',
-  },
-  {
-    name: 'missing mirror on a bound legacy owner',
-    mirror: undefined,
-    current: { ...hint, policy: null, ready: false },
-    scope: undefined,
-  },
-  {
-    name: 'missing mirror on an unbound owner',
-    mirror: undefined,
-    current: { ...hint, account: null, policy: null, ready: false },
+    current: { ...hint, ready: false },
     scope: 'permission',
   },
 ])(
@@ -157,5 +149,42 @@ it.each([
       StaleCacheAuthorityError
     );
     expect(state.fetchProof).not.toHaveBeenCalled();
+  }
+);
+
+it.each([
+  { name: 'ready allowed owner', owner: hint },
+  {
+    name: 'bound legacy owner',
+    owner: { ...hint, policy: null, ready: false },
+  },
+  {
+    name: 'new unbound owner',
+    owner: { ...hint, account: null, policy: null, ready: false },
+  },
+])(
+  'keeps visible responses during missing-mirror recovery for $name',
+  async ({ owner }) => {
+    const state = startup(undefined, owner);
+    const changed = vi.fn();
+    state.generation.onChanged(changed);
+    const response = state.guard(Response.json({ subject: 'Personal mail' }));
+
+    await state.authority.initialize();
+
+    await expect(response.json()).resolves.toEqual({
+      subject: 'Personal mail',
+    });
+    expect(state.retire).not.toHaveBeenCalled();
+    expect(changed).not.toHaveBeenCalled();
+    expect(state.fetchProof).not.toHaveBeenCalled();
+    expect(state.initialize).toHaveBeenCalledExactlyOnceWith(
+      owner.generation,
+      true
+    );
+    expect(state.generation.capture()).toBe(owner.generation);
+    // The response can stay visible, but its original unknown write stamp cannot
+    // be admitted by an owner that now exposes its real generation.
+    expect(state.captured).not.toBe(owner.generation);
   }
 );

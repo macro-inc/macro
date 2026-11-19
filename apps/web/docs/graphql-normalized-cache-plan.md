@@ -939,10 +939,12 @@ observations correct future write stamps without retiring in-memory responses.
 Copied writes keep their original stamp and recover their own query if rejected.
 Subscriptions restart with the baseline stamp without replaying old-source frames.
 
-A missing mirror still fences/refetches active reads once. When its owner has a
-matching bound account and no policy, this preserves persisted queries on upgrade.
-Unknown accounts, established policies and proven denial require conservative
-persisted pruning. Actual account replacement retains the full session fence.
+A missing mirror with a first non-denied owner initializes the baseline and
+recovers in the background, preserving query observers, rows, open menus and
+persisted snapshots, including legacy upgrades. TanStack refreshes active reads
+without cancelling requests; urql rereads only rejected copied writes. Denied or
+incomplete owners and known account/policy mismatches still retire copied content.
+Actual account replacement retains the full session fence.
 First allowed/team-less proofs, first account binding without a policy, and
 unchanged ready boot/focus proofs without failed cleanup do not advance the owner
 generation or refetch. Unchanged proofs still retry failed local cleanup.

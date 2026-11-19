@@ -85,12 +85,14 @@ storage events as authority. A matching account and policy with a different
 generation corrects stamps for new requests without retiring in-memory responses.
 Copied data retains its original stamp, is rejected at the shared store when
 stale, and recovers with a fresh read of its own query. A different account or
-policy, a denied first observation, or a missing/unreadable mirror triggers
-normal visible retirement. A missing mirror on a matching bound legacy owner
-with no policy fences/refetches in-memory reads but preserves persisted queries;
-an unknown account or established policy still prunes protected persisted
-snapshots because they have no independent policy witness. Physical resets issue
-new owner generations, so
+known policy, or a denied/incomplete first observation triggers normal visible
+retirement. A missing or unreadable mirror alone is not an access change. A first
+non-denied owner initializes the current stamp and refreshes in the background,
+preserving mounted observers, rows, open menus and persisted snapshots. This
+also applies to the first launch after upgrading a bound legacy owner with no
+policy. TanStack keeps existing data and in-flight reads; urql rereads only the
+queries whose original copied writes the shared owner rejects. Physical resets
+issue new owner generations, so
 delayed or missing mirror updates cannot admit pre-reset content.
 
 A deny-then-grant cycle during startup can return to the same account, team and

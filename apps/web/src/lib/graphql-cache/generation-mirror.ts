@@ -54,13 +54,11 @@ export function initialCacheRetirement(
   )
     return 'permission';
   if (!hint) {
-    // A bound legacy owner has never applied an access policy. An upgrade can
-    // fence/refetch memory without deleting its persisted snapshots. Established
-    // policies cannot prove that separately persisted queries share this team.
+    // Discovering a non-denied owner is not an access change. Keep mounted
+    // readers (and their open menus) while refreshing in the background. The
+    // owner still rejects every copied write carrying the unknown startup UUID.
     // A mismatching signed-in account is fenced separately by the policy owner.
-    return owner.account !== null && owner.policy === null
-      ? 'refresh'
-      : 'permission';
+    return 'refresh';
   }
   if (hint.policy !== owner.policy) return 'permission';
   // The same account/team/access status may have gone denied then allowed

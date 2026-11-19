@@ -49,10 +49,12 @@ initialization in the background; Root and first render never await storage or
 the owner handshake. Read account, policy and generation from the profile's
 localStorage mirror only as a startup hint; update it only from validated owner
 observations. Missing or unreadable hints send an explicit nonmatching UUID,
-never an omitted generation, and trigger normal retirement at the first owner
-observation. For a matching bound legacy owner with no policy, fence/refetch
-memory but preserve persisted queries; missing account or established policy
-still requires conservative pruning. Preserve captured stamps through
+never an omitted generation. A first non-denied owner without a mirror initializes
+stamps and refreshes in the background: keep existing query observers, rows, menus
+and persisted snapshots, including on upgrades. Do not cancel in-flight TanStack
+reads; urql rereads only queries whose copied writes the owner rejects. A denied
+or incomplete owner and known account/policy changes still retire visible and
+persisted content. Preserve captured stamps through
 initialization waits and queued settlement. An unchanged ready proof without
 failed cleanup never refetches. With the same account and policy,
 a stale generation hint changes only new write stamps: keep in-memory responses
@@ -64,6 +66,8 @@ UI before the owner arrives; denied or mismatching hints stay pending. A missing
 hint requires the web's early server proof or the normal owner baseline.
 Keep `crm-access-authority.ts` as the policy state machine and
 `crm-access-cache.ts` as detection and visible/persisted retirement glue.
+The urql browser suite covers open row menus across fresh, upgrade and allowed
+startup baselines, plus clearing for denied and different-account owners.
 
 Fence all response content with one owner-issued generation. Capture it before
 HTTP or subscription dispatch and retain it through decoding and cache writes;

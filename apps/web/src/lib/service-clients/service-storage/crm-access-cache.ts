@@ -79,7 +79,19 @@ function install() {
   if (installed) return;
   installed = true;
   configureCrmAccessAuthority({
-    initialize: cacheSessionGeneration.initialize,
+    initialize(generation, refetch) {
+      cacheSessionGeneration.initialize(generation);
+      if (refetch)
+        fireAndForget(
+          queryClient.refetchQueries(
+            { type: 'active' },
+            { cancelRefetch: false }
+          ),
+          'crm.access.startup_refetch'
+        );
+      // urql keeps its observers and rereads only queries whose original
+      // startup write stamp was rejected by the shared owner.
+    },
     restore: (authority) => {
       const scope = initialCacheRetirement(startupAuthorityHint, authority);
       if (scope)

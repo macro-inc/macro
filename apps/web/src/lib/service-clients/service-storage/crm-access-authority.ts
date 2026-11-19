@@ -15,7 +15,7 @@ export type CrmRetirementScope = 'permission' | 'session';
 type Options = {
   hint?: CacheAuthority;
   earlyProof?: boolean;
-  initialize?: (generation: string) => void;
+  initialize?: (generation: string, refetch?: boolean) => void;
   restore?: (
     authority: CacheAuthority
   ) => CrmRetirementScope | 'refresh' | undefined;
@@ -132,8 +132,8 @@ export function createCrmAccessAuthority(options: Options) {
       const scope =
         options.restore?.(next) ??
         (next.policy?.endsWith(':denied') ? 'permission' : undefined);
-      if (scope)
-        retire(scope === 'refresh' ? undefined : scope, next.generation);
+      if (scope === 'refresh') options.initialize?.(next.generation, true);
+      else if (scope) retire(scope, next.generation);
       else options.initialize?.(next.generation);
       return;
     }
@@ -361,7 +361,8 @@ const allowEarlyAccess = !isTauri();
 export const crmAccessAuthority = createCrmAccessAuthority({
   hint: allowEarlyAccess ? startupAuthorityHint : undefined,
   earlyProof: allowEarlyAccess,
-  initialize: (generation) => configured.initialize?.(generation),
+  initialize: (generation, refetch) =>
+    configured.initialize?.(generation, refetch),
   restore: (authority) => configured.restore?.(authority),
   fetchProof: (timeoutMs) => configured.fetchProof(timeoutMs),
   retire: (scope, generation) => configured.retire(scope, generation),
