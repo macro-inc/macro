@@ -1,3 +1,9 @@
+/**
+ * An agent's tool permissions.
+ *
+ * @flag enable-agent-permissions
+ * @module
+ */
 import type {
   AgentToolPermissions,
   ToolPermissionAppliedTo,
@@ -21,8 +27,8 @@ export type {
  * (Documents, Email, ...) and has an action (create, read, update, destroy,
  * send); its state is its own setting, else its group's action setting, else
  * `always`. An operation setting the agent made only adds to its group's: it
- * takes the stricter of the two. Permissions apply to OCaml `ExecuteCode`
- * programs.
+ * takes the stricter of the two. Permissions apply to JS tools and OCaml
+ * `ExecuteCode` programs.
  */
 export type ToolPermissions = Omit<AgentToolPermissions, 'agentId'> & {
   /** The agent (or built-in persona) the permissions belong to. */

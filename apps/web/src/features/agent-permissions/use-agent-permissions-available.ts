@@ -13,5 +13,6 @@ export function useAgentPermissionsAvailable(
 ): Accessor<boolean> {
   const flag = useAgentPermissionsFlag();
   const view = useAgentToolPermissionsQuery(agentId, flag);
-  return () => flag() && view.data != null;
+  // Gated on success: reading `data` while pending would suspend the list.
+  return () => flag() && view.isSuccess && view.data != null;
 }
