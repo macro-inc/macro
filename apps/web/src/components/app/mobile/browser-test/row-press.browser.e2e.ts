@@ -1,65 +1,93 @@
-import { type CDPSession, expect, type Page, test } from '@playwright/test';
+import {
+  type CDPSession,
+  expect,
+  type Locator,
+  type Page,
+  test,
+} from '@playwright/test';
 
 /**
  * The touch list rows of Chat (a conversation and a pinned favorite), Home,
- * the Notifications inbox, Agents and Search show the pressed grey while
- * pressed, through the app's one row press (rowPress.ts), and drop it after
- * the finger lifts or once the press turns into a scroll.
+ * Soup lists, the Notifications inbox, Agents and Search show the same
+ * pressed grey while pressed, through the app's one row press (rowPress.ts),
+ * and drop it after the finger lifts or once the press turns into a scroll.
  */
 
-const ROWS = ['chat', 'pin', 'home', 'notification', 'agent', 'search'];
+const ROWS = ['chat', 'pin', 'home', 'list', 'notification', 'agent', 'search'];
 const SCREENSHOTS = process.env.ROW_PRESS_SCREENSHOT_DIR;
 
 type Point = { x: number; y: number };
 
-/** A spot inside the row that only its own background paints. */
-async function spotIn(page: Page, row: string): Promise<Point> {
+/** Spots inside the row that only its backgrounds paint, edges included. */
+async function spotsIn(page: Page, row: string): Promise<Point[]> {
   const box = await page.getByTestId(row).boundingBox();
   if (!box) throw new Error(`${row} is not rendered`);
   if (row === 'pin') {
-    // The tile's bottom padding, under the pin's name.
-    return { x: box.x + box.width / 2, y: box.y + box.height - 2 };
+    // The tile's padding above and below the pin.
+    return [
+      { x: box.x + box.width / 2, y: box.y + box.height - 2 },
+      { x: box.x + box.width / 2, y: box.y + 1 },
+    ];
   }
-  return { x: box.x + box.width - 14, y: box.y + box.height / 2 };
+  // Agents and Soup list rows hold their time at the end, so look between
+  // title and time.
+  const timed = row === 'agent' || row === 'list';
+  const x = timed ? box.x + box.width / 2 : box.x + box.width - 14;
+  return [
+    { x, y: box.y + box.height / 2 },
+    { x, y: box.y + 1 },
+  ];
 }
 
 /**
- * The background the eye sees at a point: the nearest painted layer's color
- * and image, and how many layers under the point paint at all before the
- * panel (a second one would darken the grey).
+ * How light the screen is at a point, as the eye sees it: the mean channel
+ * value of the pixels there. Gradients dither, so pixels can differ by one.
  */
-const paintAt = (page: Page, point: Point) =>
-  page.evaluate(({ x, y }) => {
-    const panel = getComputedStyle(
-      document.querySelector('main')!
-    ).backgroundColor;
-    const painted = [];
-    let element = document.elementFromPoint(x, y);
-    while (element) {
-      const style = getComputedStyle(element);
-      const color = style.backgroundColor;
-      if (color === panel) break;
-      if (color !== 'rgba(0, 0, 0, 0)' || style.backgroundImage !== 'none') {
-        painted.push(`${color} ${style.backgroundImage}`);
-      }
-      element = element.parentElement;
-    }
-    return painted.join(' | ') || 'panel';
-  }, point);
-
-/** The shared press grey: the hover tint twice over, on one element. */
-const pressedPaint = (page: Page) =>
-  page.evaluate(() => {
-    const probe = document.createElement('div');
-    probe.style.backgroundColor = 'var(--color-hover)';
-    probe.style.backgroundImage =
-      'linear-gradient(var(--color-hover), var(--color-hover))';
-    document.body.append(probe);
-    const style = getComputedStyle(probe);
-    const paint = `${style.backgroundColor} ${style.backgroundImage}`;
-    probe.remove();
-    return paint;
+async function shadeAt(page: Page, point: Point) {
+  const png = await page.screenshot({
+    clip: { x: point.x - 1, y: point.y - 1, width: 2, height: 2 },
+    animations: 'disabled',
+    caret: 'hide',
   });
+  return page.evaluate(async (data) => {
+    const image = new Image();
+    image.src = `data:image/png;base64,${data}`;
+    await image.decode();
+    const canvas = document.createElement('canvas');
+    canvas.width = image.width;
+    canvas.height = image.height;
+    const context = canvas.getContext('2d');
+    if (!context) throw new Error('No 2D canvas');
+    context.drawImage(image, 0, 0);
+    const pixels = context.getImageData(0, 0, image.width, image.height).data;
+    let sum = 0;
+    for (let index = 0; index < pixels.length; index += 4) {
+      sum += pixels[index] + pixels[index + 1] + pixels[index + 2];
+    }
+    return sum / ((pixels.length / 4) * 3);
+  }, png.toString('base64'));
+}
+
+/** How far a point's shade is from the press grey. */
+const offGrey = async (page: Page, point: Point, grey: number) =>
+  Math.abs((await shadeAt(page, point)) - grey);
+
+/** The press grey over the panel: the hover tint twice over. */
+async function pressedSwatch(page: Page) {
+  await page.evaluate(() => {
+    const swatch = document.createElement('div');
+    swatch.id = 'swatch';
+    swatch.style.cssText =
+      'position:fixed;left:0;top:0;width:8px;height:8px;z-index:2147483647;' +
+      'background-color:var(--color-panel);background-image:' +
+      'linear-gradient(var(--color-hover),var(--color-hover)),' +
+      'linear-gradient(var(--color-hover),var(--color-hover))';
+    document.body.append(swatch);
+  });
+  const swatch = await shadeAt(page, { x: 4, y: 4 });
+  await page.evaluate(() => document.getElementById('swatch')?.remove());
+  return swatch;
+}
 
 const touch = (
   cdp: CDPSession,
@@ -70,6 +98,8 @@ const touch = (
     type,
     touchPoints: point ? [point] : [],
   });
+
+const opened = (page: Page): Locator => page.locator('main');
 
 test.beforeEach(async ({ page }) => {
   // The rows' context providers read channels from services; none answer.
@@ -96,13 +126,17 @@ for (const row of ROWS) {
     page,
   }) => {
     const cdp = await page.context().newCDPSession(page);
-    const grey = await pressedPaint(page);
-    const spot = await spotIn(page, row);
-    const resting = await paintAt(page, spot);
-    expect(resting).not.toBe(grey);
+    const grey = await pressedSwatch(page);
+    const spots = await spotsIn(page, row);
+    for (const spot of spots) {
+      expect(await offGrey(page, spot, grey)).toBeGreaterThan(5);
+    }
 
-    await touch(cdp, 'touchStart', spot);
-    await expect.poll(() => paintAt(page, spot)).toBe(grey);
+    await touch(cdp, 'touchStart', spots[0]);
+    // The whole row, edges included, shows the one grey.
+    for (const spot of spots) {
+      await expect.poll(() => offGrey(page, spot, grey)).toBeLessThan(1);
+    }
     if (SCREENSHOTS) {
       await page.screenshot({
         path: `${SCREENSHOTS}/${test.info().project.name}-${row}-pressed.png`,
@@ -110,61 +144,43 @@ for (const row of ROWS) {
     }
 
     await touch(cdp, 'touchEnd');
-    await expect(page.locator('main')).toHaveAttribute('data-opened', row);
-    await expect.poll(() => paintAt(page, spot)).toBe(resting);
+    await expect(opened(page)).toHaveAttribute('data-opened', row);
+    await expect.poll(() => offGrey(page, spots[0], grey)).toBeGreaterThan(5);
   });
 }
 
-test('a quick tap shows the grey once it opens the row, then lets it go', async ({
-  page,
-}) => {
-  const grey = await pressedPaint(page);
-  const spot = await spotIn(page, 'chat');
-  const resting = await paintAt(page, spot);
+for (const row of ['chat', 'notification']) {
+  test(`${row}: a quick tap shows the grey once it opens the row, then lets it go`, async ({
+    page,
+  }) => {
+    const grey = await pressedSwatch(page);
+    const [spot] = await spotsIn(page, row);
 
-  // Record the paint the moment the row's click runs, as the tap opens it.
-  await page.evaluate(({ x, y }) => {
-    document.addEventListener('click', () => {
-      requestAnimationFrame(() => {
-        let element = document.elementFromPoint(x, y);
-        while (element) {
-          const style = getComputedStyle(element);
-          if (style.backgroundImage !== 'none') {
-            document.body.dataset.paintOnTap = `${style.backgroundColor} ${style.backgroundImage}`;
-            return;
-          }
-          element = element.parentElement;
-        }
-      });
-    });
-  }, spot);
-  await page.touchscreen.tap(spot.x, spot.y);
-  await expect(page.locator('main')).toHaveAttribute('data-opened', 'chat');
-  await expect(page.locator('body')).toHaveAttribute('data-paint-on-tap', grey);
-  await expect.poll(() => paintAt(page, spot)).toBe(resting);
-});
+    await page.touchscreen.tap(spot.x, spot.y);
+    await expect(opened(page)).toHaveAttribute('data-opened', row);
+    // The grey holds for 350ms after the tap's click.
+    expect(await offGrey(page, spot, grey)).toBeLessThan(1);
+    await expect.poll(() => offGrey(page, spot, grey)).toBeGreaterThan(5);
+  });
+}
 
 test('a press that turns into a scroll never shows the grey', async ({
   page,
 }) => {
   const cdp = await page.context().newCDPSession(page);
-  const grey = await pressedPaint(page);
-  const spot = await spotIn(page, 'chat');
-  const row = page.getByTestId('chat').locator('[data-press-surface]');
+  const [spot] = await spotsIn(page, 'chat');
 
-  // Watch every frame of the gesture for the pressed class.
+  // Watch every change of the row for the pressed class.
   await page.evaluate(() => {
     const surface = document.querySelector(
       '[data-testid="chat"] [data-press-surface]'
     );
-    const record = () => {
-      if (surface?.classList.contains('touch-highlight')) {
+    if (!surface) throw new Error('The chat row has no press surface');
+    new MutationObserver(() => {
+      if (surface.classList.contains('touch-highlight')) {
         document.body.dataset.flashed = 'true';
       }
-    };
-    new MutationObserver(record).observe(surface as Element, {
-      attributes: true,
-    });
+    }).observe(surface, { attributes: true });
   });
 
   await touch(cdp, 'touchStart', spot);
@@ -177,28 +193,25 @@ test('a press that turns into a scroll never shows the grey', async ({
   await touch(cdp, 'touchEnd');
 
   await expect
-    .poll(() => page.locator('main').evaluate((main) => main.scrollTop))
+    .poll(() => opened(page).evaluate((main) => main.scrollTop))
     .toBeGreaterThan(0);
   await page.waitForTimeout(400);
   await expect(page.locator('body')).not.toHaveAttribute('data-flashed');
-  await expect(row).not.toHaveClass(/touch-highlight/);
-  await expect(page.locator('main')).toHaveAttribute('data-opened', '');
-  expect(await paintAt(page, await spotIn(page, 'chat'))).not.toBe(grey);
+  await expect(opened(page)).toHaveAttribute('data-opened', '');
 });
 
 test('a held press that starts scrolling drops the grey', async ({ page }) => {
   const cdp = await page.context().newCDPSession(page);
-  const grey = await pressedPaint(page);
-  const spot = await spotIn(page, 'home');
+  const grey = await pressedSwatch(page);
+  const [spot] = await spotsIn(page, 'home');
 
   await touch(cdp, 'touchStart', spot);
-  await expect.poll(() => paintAt(page, spot)).toBe(grey);
+  await expect.poll(() => offGrey(page, spot, grey)).toBeLessThan(1);
   for (let step = 1; step <= 6; step += 1) {
     await touch(cdp, 'touchMove', { x: spot.x, y: spot.y - step * 10 });
   }
-  await expect
-    .poll(async () => paintAt(page, await spotIn(page, 'home')))
-    .not.toBe(grey);
+  const [moved] = await spotsIn(page, 'home');
+  await expect.poll(() => offGrey(page, moved, grey)).toBeGreaterThan(5);
   await touch(cdp, 'touchEnd');
-  await expect(page.locator('main')).toHaveAttribute('data-opened', '');
+  await expect(opened(page)).toHaveAttribute('data-opened', '');
 });

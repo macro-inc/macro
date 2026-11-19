@@ -1,5 +1,6 @@
-// The real touch list rows of Chat, Home, Notifications, Agents and Search
-// over synthetic entities, with the app's row press installed; no network.
+// The real touch list rows of Chat, Home, Soup lists, Notifications, Agents
+// and Search over synthetic entities, with the app's row press installed;
+// no network.
 import '@fontsource-variable/inter';
 import '../../../../index.css';
 // The inbox card layouts sit on an import cycle that the app enters through
@@ -17,9 +18,10 @@ import { AnalyticsContextProvider } from '@app/lib/analytics/analytics-context';
 import { PosthogProvider } from '@app/lib/analytics/posthog';
 import { StaticMarkdownContext } from '@core/component/LexicalMarkdown/component/core/StaticMarkdown';
 import { ChannelsContextProvider } from '@core/context/channels';
+import { EmailLinksContextProvider } from '@core/context/emailLinks';
 import { UserContextProvider } from '@core/context/user';
 import { isTouchDevice } from '@core/mobile/isTouchDevice';
-import { type ChannelEntity, EntityProvider } from '@entity';
+import { type ChannelEntity, EntityProvider, ListEntity } from '@entity';
 import { authKeys } from '@queries/auth/keys';
 import { channelKeys } from '@queries/channel/keys';
 import { queryClient } from '@queries/client';
@@ -98,6 +100,14 @@ function Fixture() {
             onClick={open('home')}
           />
         </section>
+        {/* Mounted as a Soup list (Drive, Tasks, soup views) mounts its
+            rows on a phone, inside the context menu's row container. */}
+        <section data-testid="list" data-soup-entity>
+          <ListEntity
+            entity={channel('list', 'roadmap')}
+            onClick={open('list')}
+          />
+        </section>
         <section data-testid="notification">
           <SwipableRow id="notification" swipeLeftColor="bg-success">
             <NotificationRow
@@ -149,11 +159,13 @@ render(
           <EntityProvider>
             <UserContextProvider>
               <ChannelsContextProvider>
-                <StaticMarkdownContext>
-                  <MemoryRouter>
-                    <Route path="*" component={Fixture} />
-                  </MemoryRouter>
-                </StaticMarkdownContext>
+                <EmailLinksContextProvider>
+                  <StaticMarkdownContext>
+                    <MemoryRouter>
+                      <Route path="*" component={Fixture} />
+                    </MemoryRouter>
+                  </StaticMarkdownContext>
+                </EmailLinksContextProvider>
               </ChannelsContextProvider>
             </UserContextProvider>
           </EntityProvider>

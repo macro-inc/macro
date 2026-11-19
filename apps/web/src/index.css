@@ -2009,17 +2009,19 @@ html:not([data-touch-device="true"]) [data-message][data-targeted]:hover{
   animation: long-press-message-highlight 100ms ease-in both;
 }
 
-/* A pressed touch list row (components/app/mobile/rowPress.ts), painted on
-   one element so every row shows the same grey: its swipe layer when it has
-   one (opaque, it covers the row's surface), otherwise its press surface.
-   The grey is the hover tint twice over, as Home's rows have always shown it
-   (their row and swipe layer each took one). It replaces WebKit's tap flash
-   on these rows. */
-.touch-highlight [data-swipe-content],
-.touch-highlight:not(:has([data-swipe-content]))[data-press-surface],
-.touch-highlight:not(:has([data-swipe-content])) [data-press-surface] {
-  background-color: var(--color-hover);
-  background-image: linear-gradient(var(--color-hover), var(--color-hover));
+/* A pressed touch list row (components/app/mobile/rowPress.ts) lays the
+   hover tint twice over its surface and its swipe layer, the grey Home's
+   rows have always shown. As images, the tint keeps the row's own fill
+   (selected, unread) under it, and an opaque swipe layer hides the surface's
+   copy, so every part of a row shows the same grey. A row that paints its
+   own pressed surface marks it `data-press-surface="self"`. The grey
+   replaces WebKit's tap flash on these rows. */
+.touch-highlight:is([data-press-surface]:not([data-press-surface='self'])),
+.touch-highlight
+  :is([data-press-surface]:not([data-press-surface='self']), [data-swipe-content]) {
+  background-image:
+    linear-gradient(var(--color-hover), var(--color-hover)),
+    linear-gradient(var(--color-hover), var(--color-hover));
   transition: none;
 }
 

@@ -96,6 +96,18 @@ describe('row press', () => {
     expect(pressed()).toBe(false);
   });
 
+  it('ends a press whose touched element left the page under the finger', () => {
+    fireEvent.touchStart(label, touchAt(20));
+    label.remove();
+    vi.advanceTimersByTime(100);
+    expect(pressed()).toBe(true);
+
+    // The lift goes to the removed element, never reaching the document.
+    fireEvent.touchEnd(label, { changedTouches: [{ clientX: 20 }] });
+    vi.advanceTimersByTime(350);
+    expect(pressed()).toBe(false);
+  });
+
   it('presses the soup row container rather than the surface inside it', () => {
     document.body.innerHTML =
       '<div data-soup-entity id="container"><div data-press-surface><span id="inner">Row</span></div></div>';

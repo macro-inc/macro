@@ -4,7 +4,7 @@ import { isTouchDevice } from '@core/mobile/isTouchDevice';
  * The grey a touch list row shows while it is pressed, for every row in the
  * app. A row opts in by marking its surface `data-press-surface`; a soup row
  * container (`data-soup-entity`) takes the press for the surfaces inside it,
- * and index.css paints the pressed row's surfaces with the hover color.
+ * and index.css paints the pressed row's surfaces and swipe layer.
  *
  * Timing follows UIKit table rows: a finger that rests 100ms on a row shows
  * the grey, a tap that lifts sooner shows it once its click arrives, and
@@ -69,15 +69,15 @@ function hidePressedAfter(row: HTMLElement, delay: number) {
 }
 
 /**
- * Listen for row presses across the document. Touch devices only; returns
- * the cleanup.
+ * Listen for row presses across the document; only touch devices show them.
+ * Returns the cleanup.
  */
 export function installRowPress(): () => void {
-  if (!isTouchDevice()) return () => {};
-
   let press: Press | undefined;
   // A tap lifted before the delay; its click, if one comes, shows the grey.
   let tappedRow: HTMLElement | undefined;
+
+  const targetOptions = { once: true, passive: true };
 
   const cancel = () => {
     if (!press) return;
@@ -87,14 +87,18 @@ export function installRowPress(): () => void {
   };
 
   const touchStart = (event: TouchEvent) => {
-    // A press whose touchend never reached the document (its target left
-    // the page) ends here at the latest.
     cancel();
     tappedRow = undefined;
-    if (event.touches.length !== 1) return;
+    if (!isTouchDevice() || event.touches.length !== 1) return;
 
     const row = pressedRow(event.target);
-    if (!row) return;
+    if (!row || !(event.target instanceof Element)) return;
+
+    // A touch's later events go to the element it started on, and reach the
+    // document only while that element is in it. Listen on the element too,
+    // so a press whose element is re-rendered under the finger still ends.
+    event.target.addEventListener('touchend', touchEnd, targetOptions);
+    event.target.addEventListener('touchcancel', cancel, targetOptions);
 
     const touch = event.touches[0];
     press = {
