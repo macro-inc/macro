@@ -227,6 +227,8 @@ struct Repo {
     fail_persistence: bool,
     stall_persistence: bool,
     fail_reschedule: bool,
+    /// The routine a sub-routine's copy reads its definition from.
+    parent: Mutex<Option<ScheduledAction>>,
 }
 
 impl ScheduledActionRepo for Repo {
@@ -283,8 +285,9 @@ impl ScheduledActionRepo for Repo {
     async fn get_actions_by_ids(&self, _: &[Uuid]) -> Result<Vec<ScheduledAction>> {
         unimplemented!()
     }
-    async fn get_action(&self, _: &Uuid) -> Result<Option<ScheduledAction>> {
-        unimplemented!()
+    async fn get_action(&self, id: &Uuid) -> Result<Option<ScheduledAction>> {
+        let parent = self.parent.lock().unwrap();
+        Ok(parent.clone().filter(|parent| parent.id == Some(*id)))
     }
     async fn get_next_unclaimed_actions(&self, _: i64) -> Result<Vec<ScheduledAction>> {
         unimplemented!()
@@ -326,6 +329,8 @@ struct Runner {
     no_resource: bool,
     cancellations: Mutex<Vec<(Uuid, Uuid)>>,
     prepared_handles: Mutex<Vec<(Uuid, Uuid)>>,
+    /// Each run's steps, as the routine it ran held them.
+    programs: Mutex<Vec<serde_json::Value>>,
 }
 impl ScheduledAgentRunner for Runner {
     async fn prepare(&self, _: &ScheduledAction, handle: &mut ExecutionHandle) -> Result<()> {
@@ -376,13 +381,19 @@ impl ScheduledAgentRunner for Runner {
     }
     async fn run(
         &self,
-        _: &ScheduledAction,
+        action: &ScheduledAction,
         handle: &mut ExecutionHandle,
         firing: RoutineRun<'_>,
     ) -> Result<()> {
         let _guard = self.dropped.clone().drop_guard();
         self.calls.fetch_add(1, Ordering::SeqCst);
         self.contexts.lock().unwrap().push(firing.event().cloned());
+        if let Ok(program) = handle.program(action) {
+            self.programs
+                .lock()
+                .unwrap()
+                .push(serde_json::to_value(&program.steps).unwrap());
+        }
         handle.steps.push(routine_program::StepRecord {
             path: serde_json::from_value(json!("0")).unwrap(),
             result: routine_program::StepResult::Code {
@@ -482,6 +493,74 @@ async fn drain(executor: &InProcessExecutor<Repo, Live, Runner>) {
     tokio::time::timeout(Duration::from_secs(1), executor.tracker.wait())
         .await
         .unwrap();
+}
+
+#[tokio::test]
+async fn a_copy_runs_its_definition_as_its_parent_holds_it_when_the_copy_runs() {
+    let mut parent = action();
+    parent.task = json!({
+        "steps": [{ "type": "agent", "model": "test", "instructions": "List what is due" }],
+        "sub_routines": [{
+            "name": "remind",
+            "title": "Remind me",
+            "steps": [{ "type": "agent", "model": "test", "instructions": "Remind me" }],
+        }],
+    });
+    let mut copy = action();
+    copy.task = json!({ "sub_routine": "remind" });
+    copy.sub_routine = Some(crate::domain::models::SubRoutine {
+        parent_id: parent.id.unwrap(),
+        created_by_run_id: generate_uuid_v7(),
+        key: None,
+        paused_by_parent: false,
+    });
+    let repo = Repo::default();
+    *repo.parent.lock().unwrap() = Some(parent.clone());
+    let executor = executor(repo, Runner::default());
+    executor.runner.finish.cancel();
+
+    executor.execute_action(copy.clone()).await.unwrap();
+    while executor.repo.releases.load(Ordering::SeqCst) < 1 {
+        tokio::task::yield_now().await;
+    }
+    // The parent's definition is edited; the copy, unchanged, runs again.
+    parent.task["sub_routines"][0]["steps"][0]["instructions"] = json!("Remind me, with the date");
+    *executor.repo.parent.lock().unwrap() = Some(parent);
+    executor.execute_action(copy).await.unwrap();
+    drain(&executor).await;
+
+    let instructions: Vec<_> = executor
+        .runner
+        .programs
+        .lock()
+        .unwrap()
+        .iter()
+        .map(|steps| steps[0]["instructions"].clone())
+        .collect();
+    assert_eq!(
+        instructions,
+        [json!("Remind me"), json!("Remind me, with the date")]
+    );
+    let records = executor.repo.records.lock().unwrap();
+    assert!(records.iter().all(|record| record.is_success));
+}
+
+#[tokio::test]
+async fn a_copy_whose_parent_is_gone_fails_without_running() {
+    let mut copy = action();
+    copy.task = json!({ "sub_routine": "remind" });
+    copy.sub_routine = Some(crate::domain::models::SubRoutine {
+        parent_id: generate_uuid_v7(),
+        created_by_run_id: generate_uuid_v7(),
+        key: None,
+        paused_by_parent: false,
+    });
+    let executor = executor(Repo::default(), Runner::default());
+
+    assert!(executor.execute_action(copy).await.is_err());
+    drain(&executor).await;
+    assert_eq!(executor.runner.calls.load(Ordering::SeqCst), 0);
+    assert_eq!(executor.repo.releases.load(Ordering::SeqCst), 1);
 }
 
 #[tokio::test]

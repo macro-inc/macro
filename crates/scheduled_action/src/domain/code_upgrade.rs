@@ -155,17 +155,21 @@ async fn rewrite(
     context: &Value,
     version: &SdkFingerprint,
 ) -> std::result::Result<(RoutineProgram, Value), (String, Option<Value>)> {
-    // Each step's own view of the outputs before it, for the model.
+    // Each step's own view of the outputs before it, for the model: the
+    // types its check file appends, before the line that checks `main`.
     let outputs: Vec<String> = program
         .check_files()
         .into_iter()
         .map(|file| {
-            file.source
+            let mut types: Vec<&str> = file
+                .source
                 .lines()
                 .rev()
-                .find(|line| line.starts_with("type StepContext = "))
-                .unwrap_or_default()
-                .to_owned()
+                .skip(1)
+                .take_while(|line| line.starts_with("type "))
+                .collect();
+            types.reverse();
+            types.join("\n")
         })
         .collect();
     // Which code steps, in program order, were rewritten.
@@ -227,9 +231,14 @@ async fn rewrite(
         run.insert("dryRun".into(), Value::Bool(true));
     }
     // Only the first code step can run now: later ones read earlier steps'
-    // outputs, which aren't known before the run, so the check stands for them.
+    // outputs, which aren't known before the run, and a sub-routine's read
+    // inputs only a copy has, so the check stands for them.
     for (step, rewritten) in program.code_steps().into_iter().zip(rewritten).take(1) {
-        if !rewritten {
+        if !rewritten
+            || program
+                .code_step_place(0)
+                .is_none_or(|(sub, _)| sub.is_some())
+        {
             continue;
         }
         // The dry run shows the step works on this trigger and changes nothing.
@@ -256,13 +265,20 @@ async fn rewrite(
     Ok((program, task))
 }
 
-/// `task` with `program`'s steps and recorded SDK, keeping everything else.
+/// `task` with `program`'s steps, its sub-routines' and its recorded SDK,
+/// keeping everything else.
 fn task_with(task: &Value, program: &RoutineProgram) -> Result<Value> {
     let mut task = task.clone();
     let Value::Object(fields) = &mut task else {
         bail!("a routine with code steps has an object task");
     };
     fields.insert("steps".into(), serde_json::to_value(&program.steps)?);
+    if !program.sub_routines.is_empty() {
+        fields.insert(
+            "sub_routines".into(),
+            serde_json::to_value(&program.sub_routines)?,
+        );
+    }
     fields.insert("sdk".into(), serde_json::to_value(&program.sdk)?);
     Ok(task)
 }
@@ -315,8 +331,9 @@ impl CodeUpgrades for NoCodeUpgrades {
 }
 
 /// What a sweep's dry run of a rewrite tells the code: no trigger, now, as
-/// if its owner ran it by hand.
-fn sweep_context(action: &ScheduledAction, owner: &MacroUserIdStr<'static>) -> Value {
+/// if its owner ran it by hand. A sub-routine's copy upgrades its parent's
+/// code with it too.
+pub(crate) fn sweep_context(action: &ScheduledAction, owner: &MacroUserIdStr<'static>) -> Value {
     json!({
         "run": {
             "id": macro_uuid::generate_uuid_v7(),

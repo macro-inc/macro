@@ -64,6 +64,12 @@ pub fn named_steps(task: &Value) -> Value {
         if let Ok(steps) = serde_json::to_value(&program.steps) {
             fields.insert("steps".into(), steps);
         }
+        // A sub-routine's code steps are named within it.
+        if !program.sub_routines.is_empty()
+            && let Ok(sub_routines) = serde_json::to_value(&program.sub_routines)
+        {
+            fields.insert("sub_routines".into(), sub_routines);
+        }
     }
     named
 }

@@ -9,7 +9,7 @@ use anyhow::{Context, Result};
 use bot_id::BotId;
 use chrono::{DateTime, Utc};
 use macro_uuid::{Uuid, generate_uuid_v7};
-use routine_program::{RoutineProgram, StepRecord};
+use routine_program::{RoutineProgram, StepRecord, SubRoutineCopy};
 use tokio_util::{sync::CancellationToken, task::TaskTracker};
 use tracing::Instrument;
 
@@ -52,6 +52,9 @@ pub struct ExecutionHandle {
     pub run: Option<RunInfo>,
     /// What fired the routine, for the session this run opens.
     pub firing: Option<trigger_context::origin::RoutineCause>,
+    /// The routine a sub-routine's copy runs a definition of, as it was when
+    /// the run started ([`Self::program`]).
+    pub parent: Option<ScheduledAction>,
     // Cancellation during admission must not contact a runner that never started.
     preparation_started: bool,
     // Started was published, so Stopped must follow even without a transcript.
@@ -69,6 +72,7 @@ impl Default for ExecutionHandle {
             history: RunHistory::default(),
             run: None,
             firing: None,
+            parent: None,
             preparation_started: false,
             announced: false,
         }
@@ -82,6 +86,23 @@ impl ExecutionHandle {
             session_id: token.as_uuid(),
             ..Self::default()
         }
+    }
+
+    /// The program `action` runs: its own, or, for a sub-routine's copy, its
+    /// definition as [`Self::parent`] holds it, with the copy's inputs.
+    pub fn program(&self, action: &ScheduledAction) -> Result<RoutineProgram> {
+        let Some(copy) = SubRoutineCopy::from_task(&action.task) else {
+            return RoutineProgram::from_task(&action.task)
+                .context("invalid routine task definition");
+        };
+        let parent = self
+            .parent
+            .as_ref()
+            .context("a sub-routine's copy runs with the routine that scheduled it")?;
+        let program = RoutineProgram::from_task(&parent.task)
+            .context("invalid routine task definition")?
+            .copy_program(&copy)?;
+        Ok(program)
     }
 }
 
@@ -160,8 +181,13 @@ where
     ) -> Result<Option<ExecutionResource>> {
         let owner = action.owner_user()?.clone();
         let action_id = action.id.context("persisted action required")?;
-        let program =
-            RoutineProgram::from_task(&action.task).context("invalid routine task definition")?;
+        // A copy runs its definition as its parent holds it now.
+        if let (Some(_), Some(parent_id)) =
+            (SubRoutineCopy::from_task(&action.task), action.parent_id())
+        {
+            handle.parent = self.repo.get_action(&parent_id).await?;
+        }
+        let program = handle.program(action)?;
         let runs_model = program.agent_steps().into_iter().any(|step| {
             matches!(
                 ResolvedTaskTarget::of(step),
@@ -218,7 +244,14 @@ where
 
     /// The name of the routine a sub-routine follows, for its run's
     /// notification. A failed read only leaves the name out.
-    async fn parent_name(&self, action: &ScheduledAction) -> Option<String> {
+    async fn parent_name(
+        &self,
+        action: &ScheduledAction,
+        handle: &ExecutionHandle,
+    ) -> Option<String> {
+        if let Some(parent) = &handle.parent {
+            return Some(parent.name.clone());
+        }
         let parent = action.parent_id()?;
         let read = tokio::time::timeout(BOOKKEEPING_TIMEOUT, self.repo.get_action(&parent)).await;
         match read {
@@ -278,12 +311,13 @@ async fn bounded<T>(
 
 fn finished_run(
     action: &ScheduledAction,
+    handle: &ExecutionHandle,
     parent_name: Option<String>,
     trigger: RunTrigger,
     started_at: DateTime<Utc>,
     result: &Result<()>,
 ) -> Option<FinishedRoutineRun> {
-    let target = match RoutineProgram::from_task(&action.task) {
+    let target = match handle.program(action) {
         Ok(program) => match program.agent_steps().first() {
             Some(step) => match ResolvedTaskTarget::of(step) {
                 Ok(ResolvedTaskTarget::Model { .. }) => RunTarget::Model,
@@ -436,8 +470,10 @@ where
                 RoutineRun::Scheduled { .. } => RunTrigger::Scheduled,
                 _ => RunTrigger::Manual,
             };
-            let parent_name = executor.parent_name(&action).await;
-            if let Some(run) = finished_run(&action, parent_name, trigger, start_time, &result) {
+            let parent_name = executor.parent_name(&action, &handle).await;
+            if let Some(run) =
+                finished_run(&action, &handle, parent_name, trigger, start_time, &result)
+            {
                 executor.observer.run_finished(run);
             }
             let record = execution_record(&action, &handle, start_time, &result);
@@ -531,10 +567,15 @@ where
             self.cancel(&run.action, &handle, error).await;
         }
         let trigger = RunTrigger::Event(run.run.pending.event.event_name());
-        let parent_name = self.parent_name(&run.action).await;
-        if let Some(finished) =
-            finished_run(&run.action, parent_name, trigger, run.started_at, &result)
-        {
+        let parent_name = self.parent_name(&run.action, &handle).await;
+        if let Some(finished) = finished_run(
+            &run.action,
+            &handle,
+            parent_name,
+            trigger,
+            run.started_at,
+            &result,
+        ) {
             self.observer.run_finished(finished);
         }
         let record = execution_record(&run.action, &handle, run.started_at, &result);
