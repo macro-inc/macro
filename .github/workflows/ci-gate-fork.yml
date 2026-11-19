@@ -684,6 +684,49 @@ jobs:
           return null;
         }
 
+        /// The audited checks to withdraw: those that failed here and whose
+        /// attestation still stands for this run's merge. One posted since for
+        /// another merge was not what this audit ran.
+        export function contradicted(failures: string[], current: string[]): string[] {
+          return failures.filter((check) => current.some((entry) => entryCheck(entry) === check));
+        }
+
+        /// What a runner contradicted stops counting, whatever run asks next: the
+        /// failed attestations are withdrawn, and the commit is marked as audited in
+        /// case Start could not. The gate is failing already, so a write GitHub
+        /// refuses only warns.
+        async function recordFailedAudit(head: string, failures: string[]) {
+          try {
+            const statuses = await commitStatuses(head);
+            const current = acceptedAttestations(
+              statuses,
+              JSON.parse(env('ATTESTABLE_CHECKS')),
+              env('ATTESTED_PREFIX'),
+              env('BASE_SHA'),
+            );
+            for (const check of contradicted(failures, current)) {
+              await postStatus(
+                head,
+                `${env('ATTESTED_PREFIX')}${check}`,
+                'failure',
+                'Failed on a runner in an audit',
+                env('RUN_URL'),
+              );
+            }
+            if (!alreadyAudited(statuses, env('AUDIT_CONTEXT'))) {
+              await postStatus(
+                head,
+                env('AUDIT_CONTEXT'),
+                'success',
+                'Runs on this commit check its attestations on runners',
+                env('RUN_URL'),
+              );
+            }
+          } catch (error) {
+            console.log(`::warning::Could not record the failed audit: ${error}`);
+          }
+        }
+
         async function finish() {
           const head = env('HEAD_SHA');
           const verdict = gateOutcome(JSON.parse(env('NEEDS')), head);
@@ -705,15 +748,8 @@ jobs:
             if (failures.length > 0) {
               console.log(`Attested but failed here: ${failures.join(', ')}`);
             }
-            // What a runner contradicted stops counting, whatever run asks next.
-            for (const check of failures) {
-              await postStatus(
-                head,
-                `${env('ATTESTED_PREFIX')}${check}`,
-                'failure',
-                'Failed on a runner in an audit',
-                env('RUN_URL'),
-              ).catch((error) => console.log(`::warning::Could not withdraw ${check}: ${error}`));
+            if (failures.length > 0) {
+              await recordFailedAudit(head, failures);
             }
             outcome = withAttestations(verdict, skippedAttested(entries, checks, jobs), failures);
 
@@ -1484,6 +1520,49 @@ jobs:
           return null;
         }
 
+        /// The audited checks to withdraw: those that failed here and whose
+        /// attestation still stands for this run's merge. One posted since for
+        /// another merge was not what this audit ran.
+        export function contradicted(failures: string[], current: string[]): string[] {
+          return failures.filter((check) => current.some((entry) => entryCheck(entry) === check));
+        }
+
+        /// What a runner contradicted stops counting, whatever run asks next: the
+        /// failed attestations are withdrawn, and the commit is marked as audited in
+        /// case Start could not. The gate is failing already, so a write GitHub
+        /// refuses only warns.
+        async function recordFailedAudit(head: string, failures: string[]) {
+          try {
+            const statuses = await commitStatuses(head);
+            const current = acceptedAttestations(
+              statuses,
+              JSON.parse(env('ATTESTABLE_CHECKS')),
+              env('ATTESTED_PREFIX'),
+              env('BASE_SHA'),
+            );
+            for (const check of contradicted(failures, current)) {
+              await postStatus(
+                head,
+                `${env('ATTESTED_PREFIX')}${check}`,
+                'failure',
+                'Failed on a runner in an audit',
+                env('RUN_URL'),
+              );
+            }
+            if (!alreadyAudited(statuses, env('AUDIT_CONTEXT'))) {
+              await postStatus(
+                head,
+                env('AUDIT_CONTEXT'),
+                'success',
+                'Runs on this commit check its attestations on runners',
+                env('RUN_URL'),
+              );
+            }
+          } catch (error) {
+            console.log(`::warning::Could not record the failed audit: ${error}`);
+          }
+        }
+
         async function finish() {
           const head = env('HEAD_SHA');
           const verdict = gateOutcome(JSON.parse(env('NEEDS')), head);
@@ -1505,15 +1584,8 @@ jobs:
             if (failures.length > 0) {
               console.log(`Attested but failed here: ${failures.join(', ')}`);
             }
-            // What a runner contradicted stops counting, whatever run asks next.
-            for (const check of failures) {
-              await postStatus(
-                head,
-                `${env('ATTESTED_PREFIX')}${check}`,
-                'failure',
-                'Failed on a runner in an audit',
-                env('RUN_URL'),
-              ).catch((error) => console.log(`::warning::Could not withdraw ${check}: ${error}`));
+            if (failures.length > 0) {
+              await recordFailedAudit(head, failures);
             }
             outcome = withAttestations(verdict, skippedAttested(entries, checks, jobs), failures);
 

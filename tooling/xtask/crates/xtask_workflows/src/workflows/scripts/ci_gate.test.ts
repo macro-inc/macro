@@ -8,6 +8,7 @@ import {
   auditFailures,
   ciSourceChanges,
   CONFLICTS,
+  contradicted,
   labelBlocker,
   newestJobs,
   STALE_MERGE,
@@ -425,6 +426,21 @@ describe('withdrawnAttestations', () => {
 
   test('names nothing while every attestation Start accepted still holds', () => {
     assert.deepEqual(withdrawnAttestations(entries, [...entries, 'web-app/test@-']), []);
+  });
+});
+
+describe('contradicted', () => {
+  test('withdraws a failed check whose attestation still stands for this merge', () => {
+    const withdrawn = contradicted(
+      ['web-app/test', 'cloud-storage/check'],
+      ['web-app/test@0123456789abcdef', 'conventions/ast-grep@-'],
+    );
+
+    assert.deepEqual(withdrawn, ['web-app/test']);
+  });
+
+  test('leaves an attestation posted since for another merge', () => {
+    assert.deepEqual(contradicted(['web-app/test'], []), []);
   });
 });
 
