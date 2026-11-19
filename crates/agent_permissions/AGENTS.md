@@ -12,10 +12,12 @@ resolves them against `agent_permission_registry`, and serves the HTTP API
 - Settings are sparse rows: a group's action (`documents:destroy`) or one
   operation (`storage.delete_document`). An operation's state is its own
   setting, else its group's action, else always. A person's operation
-  setting replaces its group's; one the agent made (`via_agent`) only adds
-  to it, taking the stricter of the two, so a person's later, stricter group
-  setting still applies. A session overlay (an agent's restrictions on itself
-  for one session) can only make it stricter.
+  setting replaces its group's; one any other credential made (the agent,
+  an API key: `restriction_only`) only adds to it, taking the stricter of the
+  two, so a person's later, stricter group setting still applies.
+  `via_agent` is only the "set by the agent" label (`SetBy`). A session
+  overlay (an agent's restrictions on itself for one session) can only make
+  it stricter.
 - Operations marked `always_allowed` in the registry (the agent's own
   tightening) are outside the catalog: always allowed, and no setting can
   name them.

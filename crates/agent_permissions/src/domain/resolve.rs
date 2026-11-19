@@ -2,9 +2,9 @@
 //! and a session's overlay, the view built from it, and the tighten-only rule.
 //!
 //! An operation's state is its own setting if a person made it, else its
-//! group's action setting, else always. An operation setting the agent made
-//! by restricting itself only adds to its group's action: it takes the
-//! stricter of the two, so a person's later, stricter group setting still
+//! group's action setting, else always. An operation setting not made by a
+//! signed-in person (the agent restricting itself, an API key) only adds to
+//! its group's action: it takes the stricter of the two, so a person's later, stricter group setting still
 //! applies to it. The session overlay is the agent's too and can only add
 //! restrictions: the effective state is the stricter of the saved state and
 //! the overlay's. Nothing is inferred: a new operation takes its group's
@@ -21,7 +21,7 @@ use chrono::Utc;
 
 use super::model::{
     Catalog, CatalogEntry, Change, LoosenedOperation, Origin, PermissionState, PermissionsView,
-    PolicyKind, Rule, Target, ToolPermissionAction, ToolPermissionCatalog,
+    PolicyKind, Rule, SetBy, Target, ToolPermissionAction, ToolPermissionCatalog,
     ToolPermissionCatalogAction, ToolPermissionCatalogGroup, ToolPermissionGroup,
     ToolPermissionOverride,
 };
@@ -33,11 +33,11 @@ pub struct Layer<'a> {
     tools: HashMap<(&'a str, &'a str), ToolSetting>,
 }
 
-/// An operation's own setting, and whether the agent made it.
+/// An operation's own setting, and whether it only restricts.
 #[derive(Debug, Clone, Copy)]
 struct ToolSetting {
     state: PermissionState,
-    via_agent: bool,
+    restriction_only: bool,
 }
 
 impl<'a> Layer<'a> {
@@ -56,7 +56,7 @@ impl<'a> Layer<'a> {
                         (service.as_str(), operation.as_str()),
                         ToolSetting {
                             state: rule.state,
-                            via_agent: rule.via_agent,
+                            restriction_only: rule.restriction_only,
                         },
                     );
                 }
@@ -113,12 +113,13 @@ pub fn effective(
         // A person's setting on the operation replaces its group's.
         Some(ToolSetting {
             state,
-            via_agent: false,
+            restriction_only: false,
         }) => (state, Origin::Tool),
-        // The agent's only adds to it: a stricter group setting still wins.
+        // Anyone else's (the agent's, an API key's) only adds to it: a
+        // stricter group setting still wins.
         Some(ToolSetting {
             state,
-            via_agent: true,
+            restriction_only: true,
         }) if state > group.0 => (state, Origin::Tool),
         Some(_) | None => group,
     };
@@ -307,9 +308,9 @@ pub fn normalize(changes: Vec<Change>, restriction: bool) -> Vec<Change> {
 }
 
 /// `rules` with normalized `changes` applied, as the store will hold them,
-/// for resolving before anything is saved: `via_agent` as the write will
-/// mark them. New rules are stamped now, which resolution ignores.
-pub fn apply(rules: &[Rule], changes: &[Change], via_agent: bool) -> Vec<Rule> {
+/// for resolving before anything is saved, marked as `set_by` will mark
+/// them. New rules are stamped now, which resolution ignores.
+pub fn apply(rules: &[Rule], changes: &[Change], set_by: SetBy) -> Vec<Rule> {
     let now = Utc::now();
     let mut applied: Vec<Rule> = rules.to_vec();
     for change in changes {
@@ -318,7 +319,8 @@ pub fn apply(rules: &[Rule], changes: &[Change], via_agent: bool) -> Vec<Rule> {
             applied.push(Rule {
                 target: change.target.clone(),
                 state,
-                via_agent,
+                via_agent: set_by.via_agent(),
+                restriction_only: set_by.restriction_only(),
                 updated_at: now,
             });
         }

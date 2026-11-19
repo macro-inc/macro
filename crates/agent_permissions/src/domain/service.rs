@@ -23,7 +23,7 @@ use macro_user_id::user_id::MacroUserIdStr;
 use super::model::{
     AgentAccess, AppliedTo, Caller, Catalog, Change, Credential, OperationKey, Origin,
     PermissionError, PermissionState, PermissionsView, PolicyKind, PolicyOwner, ResolvedCall, Rule,
-    SessionFacts, SessionPolicy, Tightened, ToolPermissionCatalog,
+    SessionFacts, SessionPolicy, SetBy, Tightened, ToolPermissionCatalog,
 };
 use super::ports::{
     AgentDirectory, PermissionStore, PermissionsRollout, SessionDirectory, Write, WriteTo,
@@ -468,7 +468,7 @@ where
             session: None,
             to: WriteTo::Saved,
             by: &caller.user,
-            via_agent: false,
+            set_by: SetBy::Person,
         };
         self.store
             .write(write, |_, _| Ok(resolve::normalize(changes, false)))
@@ -508,22 +508,22 @@ where
             .ok_or(PermissionError::Forbidden)?;
 
         // A tightening never stores `always`, so a tool's `always` is saved
-        // as clearing its own setting, and the agent's tool settings only add
-        // to their group's. A tool state the agent asks for that is looser
+        // as clearing its own setting, and tool settings not made by a
+        // signed-in person only add to their group's. A tool state the agent asks for that is looser
         // than the tool's state now (an `always` under a stricter group) is
         // refused rather than quietly saved as a no-op. The checks run on the
         // rules as they stand under the store's lock, so a concurrent change
         // can't slip between the check and the write.
         let requested = changes.clone();
         let changes = resolve::normalize(changes, true);
-        let via_agent = matches!(caller.credential, Credential::Agent { .. });
+        let set_by = SetBy::of(&caller.credential);
         let catalog = &self.catalog;
         let write = Write {
             owner: &owner,
             session: context.as_ref().map(|(session, _)| *session),
             to,
             by: &caller.user,
-            via_agent,
+            set_by,
         };
         self.store
             .write(write, |saved, overlay| {
@@ -532,11 +532,11 @@ where
                 let (before, after) = match to {
                     WriteTo::Saved => (
                         (saved, &[][..]),
-                        (resolve::apply(saved, &changes, via_agent), Vec::new()),
+                        (resolve::apply(saved, &changes, set_by), Vec::new()),
                     ),
                     WriteTo::Session(_) => (
                         (saved, overlay),
-                        (saved.to_vec(), resolve::apply(overlay, &changes, via_agent)),
+                        (saved.to_vec(), resolve::apply(overlay, &changes, set_by)),
                     ),
                 };
                 resolve::asks_looser(catalog, before, &requested)
