@@ -301,6 +301,18 @@ let
     load-module module-null-sink sink_name=agent sink_properties=device.description=Agent
     set-default-sink agent
   '';
+  # The screen as fragmented MP4 on 127.0.0.1:5902, for a person watching
+  # the agent in Macro; only the Docker agent image has it so far.
+  screenEncoder = import ./_agent-screen-encoder.nix {
+    inherit
+      pkgs
+      lib
+      sandbox
+      desktopEnvironment
+      home
+      ;
+    ffmpeg = ffmpegX11grab;
+  };
   waitForDisplay = pkgs.writeShellScript "wait-for-agent-display" ''
     until [ -S /tmp/.X11-unix/X${toString displayNumber} ]; do sleep 0.2; done
   '';
@@ -318,6 +330,12 @@ in
         default = import ./_computer-use-linux.nix { inherit pkgs; };
         description = "computer-use-linux, built from source at a pinned release.";
       };
+    };
+    screenEncoder = lib.mkOption {
+      type = lib.types.package;
+      readOnly = true;
+      default = screenEncoder.encoder;
+      description = "The agent screen encoder's per-connection script, for its check.";
     };
     mcpServers = lib.mkOption {
       type = lib.types.attrsOf json.type;
@@ -419,6 +437,11 @@ in
         ExecStart = "${lib.getExe' config.systemd.package "systemctl"} restart --no-block macro-agent.service";
       };
     };
+
+    # Docker agent image only for now (screenEncoder above).
+    systemd.sockets.macro-agent-screen-encoder = lib.mkIf config.boot.isContainer screenEncoder.socket;
+    systemd.services."macro-agent-screen-encoder@" =
+      lib.mkIf config.boot.isContainer screenEncoder.service;
 
     # The agent's own desktop for computer use, beside macro's :0. Only :1's
     # filesystem socket is in its /tmp; no abstract one.
