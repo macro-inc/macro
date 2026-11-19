@@ -82,14 +82,18 @@ Do not add plaintext values to any metadata record, errors or tracing fields.
 - Team namespace is `team-{uuid}`, KV mount `passwords`, TOTP mount `totp`;
   JWT role `macro/passwords-service` binds issuer, audience, subject and team ID.
 - Value calls reuse a team's service token (`outbound/openbao/token_cache.rs`): one
-  login per team per lease (clamped to 60 s), single-flight (waiters share a failed
-  login), refreshed 20 s before the lease ends. Idle slots are LRU-evicted past
+  login per team per lease (clamped to 60 s), single-flight (waiters get the
+  failed login's error), refreshed 20 s before the lease ends. Idle slots are LRU-evicted past
   1024 teams; a slot with a caller is never evicted. A 401/403 on a cached token
   replaces it once and re-runs the whole operation, so every `with_session`
   closure must be safe to re-run. A denied fresh token is policy: no retry, no
   eviction. `passwords.openbao.authenticate` spans mark real logins only;
   operation spans carry `cache_hit` and `token_retry`. Lifecycle (namespace
   purge) logins are never cached.
+- Nothing here creates namespaces. A missing one at team login (and only there) is
+  `Error::NotProvisioned`: HTTP 409 `vault_not_provisioned` (agent routes too), import item code
+  `vault_not_provisioned`, authenticate span `outcome=not_provisioned`. Locally,
+  `just passwords_provision` creates them (see `infra/local/openbao/README.md`).
 
 Run the ignored Rust provider and import tests against a disposable local OpenBao with
 `PASSWORDS_TEST_OPENBAO_ADDRESS`, `PASSWORDS_TEST_OPENBAO_SIGNING_KEY` (private

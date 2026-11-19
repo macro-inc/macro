@@ -58,12 +58,32 @@ projects.
   fails them all at once. Wrap each public `OpensearchClient` method's request
   in `retry::resend_on_lost_connection`, which resends twice on a connection
   closed or refused before a complete response, never on a timeout or an
-  error status. Every request must stay safe to resend: write by explicit id
-  or by query.
+  error status. Every resent request must be safe to resend: a read, or a
+  write by explicit id or by query. Starting a background task is not, so
+  `start_email_link_delete` sends it once and, when the connection drops,
+  looks for the task by its `X-Opaque-Id` instead.
 - Put `instrument(err)` on the public method, not the inner function it
   retries, so a recovered attempt does not record an error span.
-- Requests time out after five minutes (`REQUEST_TIMEOUT`); delete-by-query
-  across a large mailbox runs for minutes.
+- Requests time out after five minutes (`REQUEST_TIMEOUT`). A delete that can
+  run that long, such as a whole mailbox, starts a background task
+  (`start_email_link_delete`) and reads its progress from `_tasks`
+  (`email_delete_task`, a raw request because the typed tasks API is behind
+  the `opensearch` crate's `experimental-apis` feature). The task's throttle
+  applies to that task alone; callers bound how many run at once.
+- A single-message email delete forces no refresh: it deletes the event
+  thread's document by id, then delete-by-queries the message's copies under
+  other threads with that thread left out, since the query sees only
+  refreshed documents and would count the one just deleted as a conflict. A forced
+  refresh per event refreshes every shard of the index, and a run of such
+  events stalls their partition. A delete-by-query that only met conflicts
+  deleted nothing and so forces no refresh either: refresh before failing on
+  them, or the caller's retry meets the same stale documents.
+- OpenSearch answers `_bulk` with 200 while failing items, for a full write
+  queue (429) as for a mapping error. Classify every bulk answer item by item
+  (`upsert::classify_bulk_response`): any failed item fails the call with
+  `BulkItemsFailed`. `OpensearchClientError::refusal()` tells a caller to back
+  off; it also reads the status and `error.type` from the body an `Unknown`
+  error keeps.
 - Agent-session writes never wait for a refresh. A search sees only refreshed
   documents, so delete what you know by id first and leave those ids out of
   the sweep's search, which finds the leftovers to delete by id. The parent's

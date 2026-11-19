@@ -19,8 +19,7 @@ const exact = (specifier: string) =>
  */
 const stubbedFiles: Record<string, string> = {
   [`${webDirectory}src/lib/core/context/user.ts`]: stub('user-context'),
-  // The composer's mention menu fetches booking links; mentions are not
-  // under test.
+  // Mention menus fetch booking links; mentions are not under test.
   [`${webDirectory}src/lib/core/component/LexicalMarkdown/component/menu/MentionsMenu/hooks/useBookingLinkMention.ts`]:
     stub('booking-link-mention'),
 };
@@ -83,8 +82,8 @@ export default defineConfig({
         replacement: stub('split-layout'),
       },
       {
-        find: exact('@app/features/agents-view/primitives/open-page'),
-        replacement: stub('open-page'),
+        find: exact('@app/features/agent-dms/open-agent-dm'),
+        replacement: stub('open-agent-dm'),
       },
       {
         find: exact('@app/features/access-requests/access-requests'),
@@ -96,12 +95,11 @@ export default defineConfig({
   define: { 'import.meta.env.VITE_LOCAL_BACKEND_ORIGIN': '"same-origin"' },
   optimizeDeps: {
     esbuildOptions: { target: 'esnext' },
-    // The composer and Agents settings load lazily, after Try it or Create
-    // agent; scan them up front so their dependencies never re-optimize (and
-    // reload the page) mid-test.
+    // Agents settings load lazily, after Add another agent; scan them up
+    // front so their dependencies never re-optimize (and reload the page)
+    // mid-test.
     entries: [
       'index.html',
-      'composer.tsx',
       'agent-settings.tsx',
       '../../../notifications/use-notification-updates.ts',
     ],

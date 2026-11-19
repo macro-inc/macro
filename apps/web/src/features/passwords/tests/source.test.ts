@@ -548,6 +548,13 @@ it('tells an unreachable vault from a server error and a rejected batch', async 
       }),
       { retryable: false, reason: 'refused' },
     ],
+    [
+      new Response(
+        JSON.stringify({ code: PasswordErrorCode.vault_not_provisioned }),
+        { status: 409 }
+      ),
+      { retryable: false, reason: 'not_provisioned' },
+    ],
   ] as const;
   for (const [response, failure] of answers) {
     mocks.fetch.mockResolvedValueOnce(response);
@@ -709,4 +716,17 @@ it('tells a list the service could not serve from one behind an unreachable gate
     .catch((error: unknown) => error);
   expect(isUnreachable(bare)).toBe(false);
   expect(isServiceUnavailable(bare)).toBe(true);
+});
+
+it("tells a team whose vault isn't set up from a failed action", async () => {
+  mocks.fetch.mockResolvedValueOnce(
+    new Response(
+      JSON.stringify({ code: PasswordErrorCode.vault_not_provisioned }),
+      { status: 409 }
+    )
+  );
+  const source = createPasswordSource('fixture-team', CURRENT);
+  const result = await source.reveal('fixture-item');
+  expect(result.isErr() && result.error).toBe('notProvisioned');
+  expect(mocks.fetch).toHaveBeenCalledTimes(1);
 });

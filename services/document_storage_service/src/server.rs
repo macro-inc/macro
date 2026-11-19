@@ -525,6 +525,24 @@ async fn run_server() -> anyhow::Result<()> {
             },
             realtime: notification::domain::ports::NoopNotificationRealtimePublisher,
         });
+    // State changes made through GraphQL are published, so every session of
+    // the viewer's hears them.
+    let graphql_notification_writer: Arc<crate::api::context::GraphqlNotificationWriter> =
+        Arc::new(NotificationReaderService {
+            repository: notification::outbound::repository::DbNotificationRepository::new(
+                db.clone(),
+            ),
+            queue: ai_tools::ToolNotificationQueue::Sqs(ingress_queue.clone()),
+            sns_endpoint: ai_tools::NoOpSnsEndpointManager,
+            platform_config: PlatformArnConfig {
+                apns_platform_arn: String::new(),
+                fcm_platform_arn: String::new(),
+                apns_voip_platform_arn: String::new(),
+            },
+            realtime: notification::outbound::kafka_notification_realtime::KafkaNotificationRealtimePublisher::new(
+                macro_event_broker.clone(),
+            ),
+        });
     tracing::trace!("initialized notification ingress service");
 
     let permission_checker = PermissionServiceImpl::new(db.clone(), entity_access_service.clone());
@@ -1955,7 +1973,8 @@ async fn run_server() -> anyhow::Result<()> {
     // mutation metadata include viewer history.
     let primary_entity_soup = Arc::new(
         SoupImpl::new(
-            PgSoupRepo::new(readonly_pool::ReadOnlyPool(db.clone())),
+            PgSoupRepo::new(readonly_pool::ReadOnlyPool(db.clone()))
+                .with_source_items_enabled(config.soup_source_items_enabled),
             frecency_service.clone(),
             service::email_previews::ConsistentEmailPreviewReader::new(
                 ReadonlyEmailPreviewAdapter(email_service.clone()),
@@ -2008,7 +2027,8 @@ async fn run_server() -> anyhow::Result<()> {
     // leg reads the primary. Ordinary inbox lists keep using the replica.
     let soup_service = Arc::new(
         SoupImpl::new(
-            PgSoupRepo::new(readonly_pool::ReadOnlyPool(readonly_db.clone())),
+            PgSoupRepo::new(readonly_pool::ReadOnlyPool(readonly_db.clone()))
+                .with_source_items_enabled(config.soup_source_items_enabled),
             frecency_service,
             service::email_previews::ConsistentEmailPreviewReader::new(
                 ReadonlyEmailPreviewAdapter(email_service.clone()),
@@ -2741,6 +2761,7 @@ async fn run_server() -> anyhow::Result<()> {
             db.clone(),
         ),
         graphql_notification_reader,
+        graphql_notification_writer,
         graphql_active_notification_ids_context:
             complete_graph::ActiveNotificationIdsGraphqlContext::new(
                 notification::domain::active_notification_ids::ActiveNotificationIdService::new(

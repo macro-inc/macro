@@ -94,6 +94,17 @@ async fn already_initialized_is_a_coded_400() {
     assert_eq!(body["code"], ALREADY_INITIALIZED_CODE);
 }
 
+#[tokio::test]
+async fn an_inbox_being_removed_is_a_coded_400() {
+    let response = InitError::from(ConnectionError::MailboxInitialization(
+        InitializationError::InboxBeingRemoved,
+    ))
+    .into_response();
+    assert_eq!(response.status(), StatusCode::BAD_REQUEST);
+    let body = body_json(response).await;
+    assert_eq!(body["code"], INBOX_BEING_REMOVED_CODE);
+}
+
 #[test]
 fn unusable_provider_grants_classify_as_no_gmail_grant() {
     for error in [EmailApiError::AuthRequired, EmailApiError::Forbidden] {

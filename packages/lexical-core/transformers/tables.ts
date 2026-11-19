@@ -3,7 +3,6 @@ import {
   $convertToMarkdownString,
   CHECK_LIST,
   type ElementTransformer,
-  TRANSFORMERS,
   type Transformer,
 } from '@lexical/markdown';
 import {
@@ -25,7 +24,10 @@ import {
   type LexicalNode,
 } from 'lexical';
 import { match } from 'ts-pattern';
-import { CUSTOM_TRANSFORMERS } from './customTransformers';
+import {
+  CUSTOM_TRANSFORMERS,
+  STANDARD_TRANSFORMERS,
+} from './customTransformers';
 import { HTML_TEXT_FORMAT_TRANSFORMERS } from './htmlTextFormats';
 import { I_IMAGE_CONSTRAINED, IMAGE } from './image';
 import {
@@ -167,7 +169,7 @@ const internalTransformersWithinTables: Transformer[] = [
   IMAGE,
   I_VIDEO,
   ...HTML_TEXT_FORMAT_TRANSFORMERS,
-  ...TRANSFORMERS,
+  ...STANDARD_TRANSFORMERS,
   UNKNOWN_MENTION, // Last: the fallback for tags nothing above recognizes
 ];
 
@@ -333,7 +335,7 @@ const externalTransformersWithinTables: Transformer[] = [
   I_VIDEO,
   ...HTML_ENTITY_TRANSFORMERS,
   ...HTML_TEXT_FORMAT_TRANSFORMERS,
-  ...TRANSFORMERS,
+  ...STANDARD_TRANSFORMERS,
   UNKNOWN_MENTION, // Last: the fallback for tags nothing above recognizes
 ];
 

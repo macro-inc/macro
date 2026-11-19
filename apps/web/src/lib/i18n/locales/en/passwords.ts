@@ -42,6 +42,7 @@ export default {
   unreachable: "Can't reach Macro. Check your connection.",
   serviceUnavailable:
     'Passwords is temporarily unavailable. Try again in a minute.',
+  vaultNotProvisioned: "This team's vault isn't set up yet.",
   retry: 'Retry',
   name: 'Name',
   kind: 'Type',
@@ -308,6 +309,7 @@ export default {
   importFailureBusy: 'The vault was busy ({{count}})',
   importFailureFolderMissing:
     'Their folder was deleted during the import ({{count}})',
+  importFailureNotProvisioned: "This team's vault isn't set up yet ({{count}})",
   importFailureInvalid: "The vault didn't accept them ({{count}})",
   importFailureRefused: 'Not allowed in this vault ({{count}})',
   importFailureNoAnswer: 'No answer from the server ({{count}})',
