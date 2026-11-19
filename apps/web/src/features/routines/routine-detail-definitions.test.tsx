@@ -13,6 +13,16 @@ import {
   setSchedules,
 } from './tests/routine-detail-test-support';
 
+// An item knob shows its item's name, which needs providers the page
+// doesn't mount here.
+vi.mock('@property/hooks', async (importOriginal) => ({
+  ...(await importOriginal<typeof import('@property/hooks')>()),
+  usePropertyEntityDisplay: () => ({
+    name: () => 'bug-reports',
+    icon: () => null,
+  }),
+}));
+
 describe('routine definitions', () => {
   it('starts an interaction before reading sharing status from the menu', () => {
     setSchedules([{ ...parent, id: 'routine-id' }]);
@@ -160,6 +170,52 @@ describe('routine definitions', () => {
         },
       }),
     });
+  });
+
+  it('marks a knob needing a new pick in the sub-routine holding it, not on the routine step sharing its id', () => {
+    const post = (channel: string) => ({
+      type: 'code' as const,
+      id: 'post',
+      title: 'Post',
+      source: 'export async function main() {}',
+      sentence: 'Post open bugs in {bugs}.',
+      knobs: [
+        {
+          type: 'entity' as const,
+          name: 'bugs',
+          label: 'Channel to post in',
+          entity_types: ['channel' as const],
+          value: { type: 'channel' as const, id: channel },
+        },
+      ],
+    });
+    setSchedules([
+      {
+        ...parent,
+        task: {
+          steps: [post('kept')],
+          sub_routines: [{ ...remind, steps: [post('gone')] }],
+        },
+      },
+    ]);
+    mocks.unusable = () => [
+      {
+        sub_routine: 'remind',
+        step: 'post',
+        knob: 'bugs',
+        item: { type: 'channel', id: 'gone' },
+        reason: 'Deleted',
+      },
+    ];
+    render(() => <Routine />);
+    const needsPick = {
+      name: 'Channel to post in: needs a new pick. Set it',
+    };
+    const definition = within(
+      screen.getByRole('region', { name: 'Sub-routines' })
+    ).getByRole('group', { name: 'Remind me' });
+    expect(within(definition).getByRole('button', needsPick)).toBeTruthy();
+    expect(screen.getAllByRole('button', needsPick)).toHaveLength(1);
   });
 
   it('sends an explicit empty app selection when the last definition app is removed', async () => {

@@ -6,12 +6,23 @@ import type { UnusableItem } from '../core/knobs';
  * names its step by id, so a draft that adds, removes or moves steps, or a
  * list fetched before the last save, keeps each entry on its own step. A step
  * saved before steps had ids has none and is left out; an unpicked knob shows
- * as not set on its own.
+ * as not set on its own. One in a sub-routine's step names it, since step ids
+ * are unique only among the steps they run with.
  */
 export function unusableItemsFromWire(
   entries: readonly UnusableKnob[]
 ): UnusableItem[] {
-  return entries.flatMap(({ step, knob, item, reason }) =>
-    item && step ? [{ step, knob, item, reason }] : []
+  return entries.flatMap(({ sub_routine, step, knob, item, reason }) =>
+    item && step
+      ? [
+          {
+            ...(sub_routine ? { subRoutine: sub_routine } : {}),
+            step,
+            knob,
+            item,
+            reason,
+          },
+        ]
+      : []
   );
 }

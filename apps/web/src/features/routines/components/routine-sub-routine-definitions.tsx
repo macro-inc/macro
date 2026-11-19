@@ -6,6 +6,7 @@ import { Button } from '@ui';
 import { type Accessor, For, Index, Match, Show, Switch } from 'solid-js';
 import { match } from 'ts-pattern';
 import type { RoutineApp, SubRoutineDraft } from '../core/draft';
+import { type UnusableItem, unusableIn } from '../core/knobs';
 import { firstAgent } from '../core/routine-steps';
 import type { RoutineTarget } from '../core/routine-target';
 import { type LabelledInput, withSubRoutineSteps } from '../core/sub-routines';
@@ -78,6 +79,8 @@ export function SubRoutineDefinitions(props: {
   defaultTarget: RoutineTarget;
   slots: RoutineStepSlots;
   connected: Accessor<ReadonlySet<string> | undefined>;
+  /** Picked items its owner can't use now, the routine's whole list. */
+  unusableItems?: readonly UnusableItem[];
 }) {
   // AI writes a step for the routine's own steps; a definition's code reads
   // inputs it doesn't know about, so its steps are changed by hand.
@@ -118,6 +121,10 @@ export function SubRoutineDefinitions(props: {
               defaultTarget={props.defaultTarget}
               slots={slots()}
               requiresApps={definition().apps.length > 0}
+              unusableItems={unusableIn(
+                props.unusableItems ?? [],
+                definition().name
+              )}
             />
             <Show when={definition().apps.length}>
               <RoutineSurface>

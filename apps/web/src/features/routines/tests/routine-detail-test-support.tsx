@@ -8,6 +8,7 @@ import { NOOP_SPAN, type TraceContext } from '@macro-inc/observability';
 import type {
   CodeUpgrade,
   ScheduledAction,
+  UnusableKnob,
 } from '@service-scheduled-action/generated/schemas';
 import { cleanup, fireEvent, screen } from '@solidjs/testing-library';
 import { okAsync, type ResultAsync } from 'neverthrow';
@@ -93,6 +94,8 @@ const mocks = vi.hoisted(() => ({
   agentsFailed: (): boolean => false,
   agentsRetained: (): boolean => false,
   agentHarness: (): string => 'macrod',
+  /** The scheduler's knobs needing a new pick. */
+  unusable: (): UnusableKnob[] => [],
 }));
 vi.mock('@app/observability/flow', async (importOriginal) => ({
   ...(await importOriginal<typeof import('@app/observability/flow')>()),
@@ -448,7 +451,13 @@ vi.mock('../queries/schedules', () => ({
     refetch: mocks.refetchUpgrades,
   }),
   useChildrenQuery: () => ({ isSuccess: true, data: [] }),
-  useUnusableItemsQuery: () => ({ isSuccess: true, data: [] }),
+  useUnusableItemsQuery: () => ({
+    isSuccess: true,
+    isPending: false,
+    get data() {
+      return mocks.unusable();
+    },
+  }),
   fetchChildren: (id: string) => mocks.fetchChildren(id),
   useDetachScheduleMutation: () => ({
     mutateAsync: mocks.detach,
@@ -558,6 +567,7 @@ beforeEach(() => {
   mocks.agentsFailed = () => false;
   mocks.agentsRetained = () => false;
   mocks.agentHarness = () => 'macrod';
+  mocks.unusable = () => [];
   mocks.history = () => [
     {
       id: 'run-id',

@@ -16,4 +16,26 @@ describe('knobs needing a new pick, from the scheduler', () => {
       { step: 'post', knob: 'archive', item: gone, reason: 'Deleted' },
     ]);
   });
+
+  it('keep the sub-routine a step is in', () => {
+    expect(
+      unusableItemsFromWire([
+        {
+          sub_routine: 'remind',
+          step: 'post',
+          knob: 'archive',
+          item: gone,
+          reason: 'Deleted',
+        },
+      ])
+    ).toStrictEqual([
+      {
+        subRoutine: 'remind',
+        step: 'post',
+        knob: 'archive',
+        item: gone,
+        reason: 'Deleted',
+      },
+    ]);
+  });
 });

@@ -59,6 +59,8 @@ export type KnobEntity = { type: KnobEntityType; id: string };
  * a new pick, and its step fails until it gets one.
  */
 export type UnusableItem = {
+  /** The sub-routine whose step it is; absent for the routine's own. */
+  subRoutine?: string;
   /** The id of the knob's step in the saved routine. */
   step: string;
   /** The knob's name. */
@@ -67,6 +69,17 @@ export type UnusableItem = {
   /** Why, naming the knob by its label. */
   reason: string;
 };
+
+/**
+ * The entries of `unusable` in the routine's own steps, or in sub-routine
+ * `name`'s: a step id is unique only among the steps it runs with.
+ */
+export function unusableIn(
+  unusable: readonly UnusableItem[],
+  name?: string
+): UnusableItem[] {
+  return unusable.filter((entry) => entry.subRoutine === name);
+}
 
 /** The entries of `unusable` for the saved step `id`; none for a new step. */
 export function unusableInStep(

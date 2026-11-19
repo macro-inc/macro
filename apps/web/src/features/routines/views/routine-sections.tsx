@@ -14,7 +14,7 @@ import {
 import type { RoutineEditorSlots } from '../context/routine-slots';
 import type { SubRoutineDraft } from '../core/draft';
 import { DEFAULT_RUN_VISIBILITY, type ScheduleDraft } from '../core/draft';
-import type { UnusableItem } from '../core/knobs';
+import { type UnusableItem, unusableIn } from '../core/knobs';
 import { draftSteps } from '../core/routine-draft';
 import { firstAgent, type StepDraft } from '../core/routine-steps';
 import { labelledInputs } from '../core/sub-routines';
@@ -89,6 +89,7 @@ export function routineSections(props: {
             defaultTarget={defaultTarget(draft())}
             slots={props.slots}
             connected={props.connected}
+            unusableItems={props.unusableItems?.()}
           />
         </Show>
       )}
@@ -183,7 +184,7 @@ export function routineSections(props: {
                     }
                     subRoutines={draft().subRoutines}
                     requiresApps={draft().apps.length > 0}
-                    unusableItems={props.unusableItems?.()}
+                    unusableItems={unusableIn(props.unusableItems?.() ?? [])}
                   />
                 </Show>
               </>

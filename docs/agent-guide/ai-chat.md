@@ -1056,8 +1056,8 @@ opens a sheet instead, with **Cancel**, **Clear** and **Done**, and only
 + and its label with a dashed underline. Saving refuses an item the owner
 can't open. A run checks each picked item when the first step that uses it
 starts; one deleted, trashed or lost by then fails that step with the reason,
-before its code runs. On the routine's page such a knob shows
-its + and label dashed in red (**Needs a new pick** under **Settings**); its
+before its code runs. On the routine's page such a knob, in its own steps or
+a sub-routine's, shows its + and label dashed in red (**Needs a new pick** under **Settings**); its
 editor gives the reason and keeps **Save** (**Done** on touch) off until
 another item is picked.
 Each change saves only that value, never the code. Knobs the sentence
