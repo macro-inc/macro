@@ -341,6 +341,9 @@ describe('channels resolved by id', () => {
         get isFetching() {
           return pending();
         },
+        get hasPageData() {
+          return !pending();
+        },
         get fetchError() {
           return error();
         },
@@ -514,6 +517,9 @@ describe('channel sidebar cache hydration', () => {
         get isFetching() {
           return pending();
         },
+        get hasPageData() {
+          return !pending();
+        },
         get data() {
           if (pending()) throw new Error('A pending query resource was read');
           return { entities: [] };
@@ -576,6 +582,106 @@ describe('channel sidebar cache hydration', () => {
       useSoupAstItemsQuery.mockReset();
     }
   });
+  it('retains shared cached rows when an offline partial index has no page', () => {
+    useSoupAstItemsQuery.mockImplementation(() => ({
+      isEnabled: true,
+      isPending: false,
+      isLoading: false,
+      isFetching: false,
+      hasPageData: false,
+      data: { entities: [] },
+    }));
+    const dispose = createRoot((dispose) => {
+      const sources = useChannelsSources(
+        (scope) => scope === 'team_channels',
+        () => 'updated_at',
+        () => [channelEntity('cached')]
+      );
+      expect(sources.team_channels.items().map(({ id }) => id)).toEqual([
+        'cached',
+      ]);
+      expect(sources.team_channels.isLoading()).toBe(false);
+      return dispose;
+    });
+    dispose();
+    useSoupAstItemsQuery.mockReset();
+  });
+
+  it('merges partial local rows without shrinking the seed before a page answers', () => {
+    const { sources, dispose, setLocal, setHasPage } = createRoot((dispose) => {
+      const [local, setLocal] = createSignal([channelEntity('local')]);
+      const [hasPage, setHasPage] = createSignal(false);
+      useSoupAstItemsQuery.mockImplementation(() => ({
+        isEnabled: true,
+        isPending: false,
+        isLoading: false,
+        get hasPageData() {
+          return hasPage();
+        },
+        get data() {
+          return { entities: local() };
+        },
+      }));
+      return {
+        sources: useChannelsSources(
+          (scope) => scope === 'team_channels',
+          () => 'updated_at',
+          () => [channelEntity('local'), channelEntity('cached')]
+        ),
+        dispose,
+        setLocal,
+        setHasPage,
+      };
+    });
+    try {
+      expect(sources.team_channels.items().map(({ id }) => id)).toEqual([
+        'local',
+        'cached',
+      ]);
+      setLocal([]);
+      expect(sources.team_channels.items().map(({ id }) => id)).toEqual([
+        'local',
+        'cached',
+      ]);
+      setHasPage(true);
+      expect(sources.team_channels.items()).toEqual([]);
+    } finally {
+      dispose();
+      useSoupAstItemsQuery.mockReset();
+    }
+  });
+
+  it('does not mark references unavailable until a page confirms their absence', () => {
+    const { references, dispose, setHasPage } = createRoot((dispose) => {
+      const [hasPage, setHasPage] = createSignal(false);
+      useSoupAstItemsQuery.mockImplementation(() => ({
+        isEnabled: true,
+        isPending: false,
+        isLoading: false,
+        isFetching: false,
+        get hasPageData() {
+          return hasPage();
+        },
+        data: { entities: [] },
+      }));
+      return {
+        references: useCachedChannelsByIds(
+          () => ['missing'],
+          () => true
+        ),
+        dispose,
+        setHasPage,
+      };
+    });
+    try {
+      expect([...references.unavailableIds()]).toEqual([]);
+      setHasPage(true);
+      expect([...references.unavailableIds()]).toEqual(['missing']);
+    } finally {
+      dispose();
+      useSoupAstItemsQuery.mockReset();
+    }
+  });
 });
 describe('channel list failures', () => {
   const failedQuery = (entities: ChannelEntity[]) =>
@@ -631,6 +737,7 @@ describe('channel list failures', () => {
         isEnabled: true,
         isPending: false,
         isLoading: false,
+        hasPageData: true,
         get fetchError() {
           return error();
         },

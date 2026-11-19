@@ -1148,6 +1148,10 @@ export function createSoupLiveQuery(
     fetchError: () => query.error ?? undefined,
     isSupported,
     isEnabled,
+    hasPageData: () =>
+      baselineInputKey() === inputKey() &&
+      baselineGeneration() === cacheGeneration &&
+      query.data !== undefined,
     isLoading,
     isFetching: () => query.isFetching,
     isFetchingNextPage: () =>

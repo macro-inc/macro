@@ -18,6 +18,7 @@ Chat's desktop sidebar, mobile conversation lists, section membership, and route
 - Hydrate only referenced channels missing from the loaded sources.
 - Render favorite metadata without extra skeleton rows; an unread filter can legitimately leave no rows after enrichment.
 - Keep failed referenced lookups retryable and omit successfully unavailable channel favorites from the rail without deleting saved favorites.
+- Require a cached or fetched Soup page before treating missing reference IDs as unavailable; an empty offline index proves nothing.
 - Keep `channels.sidebar.*.render`, `channels.sidebar.references`, and Soup cache/network phases under the routed flow.
 
 ## Checks

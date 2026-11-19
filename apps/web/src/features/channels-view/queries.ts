@@ -335,8 +335,7 @@ function useChannelsDataSource(
   );
   const cachedItems = createMemo(() => {
     if (!enabled()) return [];
-    if (!query.isPending && query.data !== undefined && !query.fetchError)
-      return [];
+    if (query.hasPageData) return [];
     const channels = cachedChannels().filter(
       (channel) => channel.isParticipant !== false
     );
@@ -356,39 +355,37 @@ function useChannelsDataSource(
       if (!viewer || !query.isEnabled)
         return { viewer, items: [], source: 'none' };
       const data = query.isPending ? undefined : query.data;
-      const hasSettledPage =
-        previous.viewer === viewer && previous.source === 'soup';
-      const failedInitialPage =
-        !hasSettledPage && query.fetchError && data?.entities.length === 0;
-      // A successful Soup page, even empty, replaces the shared-list seed. A
-      // failed first page establishes no membership and leaves a retryable seed.
-      if (data === undefined || failedInitialPage) {
-        const cached = cachedItems();
-        let source: ChannelListSnapshot['source'] = 'none';
-        if (cached.length) source = 'shared-list';
-        else if (previousItems.length) source = previous.source;
+      const seeded = !query.hasPageData;
+      const cached = seeded ? cachedItems() : [];
+      if (data === undefined && cached.length === 0) {
         return {
           viewer,
-          items: cached.length ? cached : previousItems,
-          source,
+          items: previousItems,
+          source: previousItems.length ? previous.source : 'none',
         };
       }
-
+      // A partial local index can enrich the seed but cannot remove its rows.
+      // Only a cached or fetched page for this input establishes membership.
+      const local = (data?.entities ?? []).filter(isChannelEntity);
       const channels = filterChannelsForScope(
         scope,
-        data.entities.filter(isChannelEntity)
+        seeded ? deduplicateChannels([local, cached]) : local
       );
+      const sorted =
+        scope === 'recents' && !seeded
+          ? channels
+          : sortChannels(
+              channels,
+              sortMethod() ??
+                CHANNELS_QUERY_DEFINITIONS[scope].params.sort_method
+            );
+      let source: ChannelListSnapshot['source'] = 'soup';
+      if (cached.length) source = 'shared-list';
+      else if (seeded && channels.length === 0) source = 'none';
       return {
         viewer,
-        source: 'soup',
-        items:
-          scope === 'recents'
-            ? channels
-            : sortChannels(
-                channels,
-                sortMethod() ??
-                  CHANNELS_QUERY_DEFINITIONS[scope].params.sort_method
-              ),
+        source,
+        items: seeded ? sorted.slice(0, CHANNELS_QUERY_PARAMS.limit) : sorted,
       };
     },
     { viewer: undefined, items: [], source: 'none' }
@@ -406,7 +403,10 @@ function useChannelsDataSource(
         }
         if (recordedDisplay || display.source === 'none') return;
         recordedDisplay = true;
-        const cacheHit = display.source === 'shared-list' || query.isFetching;
+        const cacheHit =
+          display.source === 'shared-list' ||
+          !query.hasPageData ||
+          query.isFetching;
         let source = 'network';
         if (display.source === 'shared-list') source = 'shared-list';
         else if (cacheHit) source = 'normalized';

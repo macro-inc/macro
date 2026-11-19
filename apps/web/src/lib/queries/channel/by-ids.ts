@@ -151,7 +151,9 @@ export function useCachedChannelsByIds(
     unavailableIds: () =>
       new Set(
         source().flatMap((batch) =>
-          !batch.loading() && !batch.error() ? batch.unresolved() : []
+          batch.query.hasPageData && !batch.loading() && !batch.error()
+            ? batch.unresolved()
+            : []
         )
       ),
     isLoading: () =>
