@@ -222,17 +222,25 @@ export function RoutineEditor(props: {
         }}
         class="@container/routine flex size-full min-h-0 min-w-0 flex-col text-ink"
       >
+        {/* On touch the bar floats over the page and ignores taps outside
+            islands: the breadcrumbs sit in one, and the tab pills and the
+            split Run button (its own island) take taps themselves. Nothing
+            wider does, so the bar's empty space still lets taps through. */}
         <ViewShell.TopBar
           class="gap-x-3 gap-y-2 touch:flex @max-[600px]/routine:h-auto @max-[600px]/routine:flex-wrap"
           aria-label="Routine toolbar"
         >
-          <ViewBreadcrumbs.Outlet
-            aria-label="Routine location"
-            class="min-w-0 @max-[600px]/routine:flex-1"
-          />
+          {/* Fills the row beside Run on a phone, but never past its own
+              content, so no blank part of the island takes taps. */}
+          <ViewShell.TopBarTitle class="max-w-fit @max-[600px]/routine:flex-1">
+            <ViewBreadcrumbs.Outlet
+              aria-label="Routine location"
+              class="min-w-0 @max-[600px]/routine:flex-1"
+            />
+          </ViewShell.TopBarTitle>
           <Show when={!props.creating}>
             <div class="shrink-0 @max-[600px]/routine:order-last @max-[600px]/routine:w-full">
-              <TabSelector class="w-fit">
+              <TabSelector class="w-fit touch:pointer-events-auto">
                 <TabSelector.List aria-label="Routine details">
                   <For each={tabs()}>
                     {(tab) => (
