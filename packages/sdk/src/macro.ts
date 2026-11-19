@@ -586,6 +586,7 @@ export { AgentVault, PasswordNamespace } from './entities/passwords/namespace';
 export type { EntityReference } from './entities/reference';
 export type { ReferralLink } from './entities/referrals/namespace';
 export type {
+  RoutineApp,
   RoutineEventFilter,
   RoutineEventFilterDetail,
   RoutineTriggerDetail,

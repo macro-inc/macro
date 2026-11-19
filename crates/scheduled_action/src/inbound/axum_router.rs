@@ -23,6 +23,7 @@ use axum::http::StatusCode;
 use axum::response::IntoResponse;
 use axum::routing::{delete, get, post, put};
 use axum::{Json, Router};
+use bots::domain::models::AgentMcpServer;
 use chrono_tz::Tz;
 use entity_access::domain::models::{EditAccessLevel, OwnerAccessLevel, ViewAccessLevel};
 use entity_access::domain::ports::EntityAccessService;
@@ -99,6 +100,11 @@ pub struct CheckRoutineRequest {
     /// the database it writes to; kept with its draft for the person to see.
     #[serde(default)]
     pub created: Vec<CreatedItem>,
+    /// Apps a routine draft's session found the routine needs that its owner
+    /// hasn't connected, for the person to connect before saving. The routine
+    /// itself requires only connected ones.
+    #[serde(default)]
+    pub missing_apps: Vec<AgentMcpServer>,
 }
 
 #[derive(Debug, Deserialize, ToSchema)]
@@ -343,15 +349,18 @@ where
     Svc: EntityAccessService,
     Auth: MacroAuthorizationService,
 {
-    let Json(CheckRoutineRequest { routine, created }) =
-        body.map_err(ScheduledActionApiError::InvalidRequest)?;
+    let Json(CheckRoutineRequest {
+        routine,
+        created,
+        missing_apps,
+    }) = body.map_err(ScheduledActionApiError::InvalidRequest)?;
     // The code-mode invocation the credential names, already validated
     // against its session at the router's boundary.
     let correlation = agent_correlation::context::current();
     Ok(Json(
         state
             .service
-            .check_action(&principal, routine, created, correlation)
+            .check_action(&principal, routine, created, missing_apps, correlation)
             .await?,
     ))
 }
