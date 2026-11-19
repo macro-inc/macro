@@ -501,14 +501,27 @@ async fn each_page_with_gone_messages_logs_their_sample() {
             .iter()
             .map(|(level, fields)| (
                 *level,
+                fields["gone"].as_str(),
                 fields["gone_sample"].as_str(),
                 fields["gone_with_chat"].as_str(),
                 fields["dry_run"].as_str(),
             ))
             .collect::<Vec<_>>(),
         [
-            (tracing::Level::INFO, "chat-live:message-b", "0", "true"),
-            (tracing::Level::INFO, "chat-gone:message-d", "1", "true"),
+            (
+                tracing::Level::INFO,
+                "1",
+                "chat-live:message-b",
+                "0",
+                "true"
+            ),
+            (
+                tracing::Level::INFO,
+                "1",
+                "chat-gone:message-d",
+                "1",
+                "true"
+            ),
         ],
         "one event per page with gone messages, none for the page without"
     );

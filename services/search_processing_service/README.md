@@ -326,8 +326,9 @@ many of its gone messages belong to a chat whose row is gone too, and
 `gone_sample`, up to 10 of them as `chat_id:message_id`. Traces keep few of
 these pages, so each page with gone messages also logs one `info` event, "chat
 message repair page found messages whose row is gone", with `job_id`,
-`dry_run`, `gone`, `gone_with_chat` and `gone_sample`. Check a dry run's finds
-against `ChatMessage` from those events before the real run.
+`dry_run`, `gone`, `gone_with_chat` (absent when the chat lookup failed, which
+logs a warning) and `gone_sample`. Check a dry run's finds against
+`ChatMessage` from those events before the real run.
 
 It reads at most `messages_per_second` (default 1000) indexed messages a
 second, in pages of `page_size` (default 500, at most 1000), and deletes with
