@@ -126,7 +126,7 @@ async fn task_without_jev_reports_status_and_keeps_the_catalog() {
     assert_eq!(task.status, crate::domain::SelectionStatus::Unconfigured);
     assert!(task.entities.is_empty());
     assert!(response.tools.len() > 15);
-    assert!(response.sdk_guide.unwrap().contains("main({macro})"));
+    assert!(response.sdk_guide.unwrap().contains("main({macro}: CodeContext)"));
 }
 
 #[tokio::test]
@@ -280,20 +280,34 @@ async fn every_documented_example_type_checks() {
         Limits::default(),
     )
     .unwrap();
-    // The guide topics and the SDK's own entity guides, as models read them.
-    let guides = [
-        include_str!("../../../SKILL.md"),
-        include_str!("guides/ai.md"),
-        include_str!("guides/templates.md"),
+    // The guide topics, the compose-routines skill and the SDK's own entity
+    // guides, as models read them.
+    let guides: Vec<String> = [
+        include_str!("../../../SKILL.md").to_owned(),
+        include_str!("guides/ai.md").to_owned(),
+        include_str!("guides/templates.md").to_owned(),
+        system_skills::compose_routines::CODE.to_string(),
     ]
     .into_iter()
     .chain(
         crate::domain::sdk_documentation()
             .iter()
-            .filter_map(|entity| entity.guide.as_deref()),
-    );
+            .filter_map(|entity| entity.guide.clone()),
+    )
+    .collect();
     let mut examples = 0;
-    for guide in guides {
+    for guide in &guides {
+        // A whole program in any other fence would go unchecked.
+        for fence in ["```js\n", "```javascript\n", "```ts\n"] {
+            for block in guide.split(fence).skip(1) {
+                let source = block.split("```").next().unwrap();
+                assert!(
+                    !source.contains("export async function main({macro")
+                        && !source.contains("export async function main({ macro"),
+                    "a program fenced {fence:?} isn't checked:\n{source}"
+                );
+            }
+        }
         for block in guide.split("```typescript\n").skip(1) {
             let source = block.split("```").next().unwrap();
             if !source.contains("export async function main") {
@@ -326,6 +340,6 @@ async fn every_documented_example_type_checks() {
             );
         }
     }
-    assert_eq!(examples, 7);
+    assert_eq!(examples, 9);
     service.shutdown().await;
 }
