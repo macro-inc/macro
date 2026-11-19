@@ -1501,6 +1501,13 @@ shows Yes / Maybe / No, a last response, or a waiting-for-sync line. When the vi
 holds the meeting it says `On your calendar.` with `Open in calendar` and `View your day`;
 when the meeting is on more than one of the viewer's accounts it says
 `This event matches multiple accounts. Open your calendar to choose.`, as an invitation does.
+During the first sync of a connected inbox with no discovered calendar, a viewer with
+no writable calendar sees `Syncing your calendar…` where the add action will appear.
+The event composer hides its empty picker and shows the same notice in place of Create event.
+The viewer can edit the draft while the sync runs. Once a writable calendar arrives,
+the picker and Create event return in the same composer with the draft intact.
+The calendar delta refreshes the list after discovery with its own GraphQL
+operation, so an in-flight cache read cannot intercept the network refresh.
 When the calendar check confirms the viewer does not hold it, the card says
 `Not on your calendar.` and, behind the `enable-calendar-add-shared-event` flag, offers
 `Add to calendar`, which imports the same snapshot as the channel-share card
