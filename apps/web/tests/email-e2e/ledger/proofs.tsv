@@ -684,6 +684,7 @@ STC-041	the text of "Could not load email accounts" is changed in src/features/e
 STC-042	the text of "No email account connected" is changed in src/features/email-compose/primitives/reply-composer.ts
 STC-044	not shown as the row says (toast: Failed to restore thread to inbox): its rendering is switched off or changed in src/features/email-compose/primitives/email-send-schedule.ts, src/features/email-compose/primitives/reply-composer.ts
 STC-045	not shown as the row says (send button disabled, tooltip: Queued to send. Cancel the send before editing.): its rendering is switched off or changed in src/features/email-compose/primitives/email-composer.ts
+STC-047	The other browser keeps a deleted draft editable or sendable, or fails to show why the draft is unavailable.
 STC-048	not shown as the row says (send button tooltip while busy: Scheduling email… / Updating schedule… / Cancelling schedule… / Sending… / Uploading files to share…): its rendering is switched off or changed in src/features/email-compose/primitives/email-composer.ts
 STC-049	not shown as the row says (primary button label: Send email / Schedule send / Update schedule): its rendering is switched off or changed in src/features/email-compose/primitives/email-send-schedule.ts
 STC-050	not shown as the row says (clock button: tooltip Schedule send time, aria-label Choose send time): its rendering is switched off or changed in src/features/email-compose/components/email-date-selector.tsx

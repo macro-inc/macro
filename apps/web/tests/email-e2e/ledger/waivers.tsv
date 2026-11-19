@@ -29,7 +29,6 @@ STL-605	-	needs	needs the notification service, and no test on the full-stack ti
 AC-319	-	bug	Escape in the phone reply Subject: field does not leave it: the composer puts the focus straight back (phone-reply-subject-escape-keeps-focus); its test is kept as a known bug
 STC-314	-	no-user-path	the recipient picker leaves the user's own address out of its suggestions, and typed or pasted it becomes a plain chip
 STC-046	-	no-user-path	a composer that learns its draft was sent elsewhere closes in the same step that sets this state: the reply composer hides itself, and the standalone one is replaced by the thread
-STC-047	-	bug	a draft deleted in one browser stays editable in another that has it open (deleted-draft-open-elsewhere-stays-editable); its test is kept as a known bug
 AC-067	-	needs	exists only with enable-graphql-soup off, and the bundle of the suite is built with it on, as the app runs: there the sync banner recovers a rejected draft instead
 AC-915	-	bug	a rejected scheduled send that is cancelled in an Outlook inbox stays locked (outlook-cancelled-failed-schedule-stays-locked); its test is kept as a known bug
 STC-031	-	no-user-path	Every composer send goes through the send journal and carries an attempt id, so the legacy unschedule path that raises this never runs.

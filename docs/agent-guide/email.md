@@ -1169,6 +1169,11 @@ not recreate the discarded working copy. Repeat after Undo revives the draft:
 the old tab must not overwrite the restored copy even when revisions match.
 A newly composed reply still saves.
 
+Open a synchronized standalone draft by link in a second browser and delete
+it from the first. The second composer reports that the draft is unavailable.
+If the compose link has no history to return to, Send stays disabled and its
+tooltip explains why.
+
 For offline replies, use a received email so recipients come from its contacts.
 Type a reply, leave the thread, and reopen it while still offline; repeat both
 immediately after typing and after waiting for autosave. The reply body and
