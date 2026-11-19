@@ -1,8 +1,8 @@
 // New mail as the notification service tells it, on the local stack: the
 // open list shows a message that arrives without a reload, the Notifications
 // inbox lists it and opens its thread, the "New email" switch in Settings
-// is kept by the service, and the Mail badge counts only mail that arrived
-// while that switch was on.
+// is kept by the service, and the Mail badge lights only for mail that
+// arrived while that switch was on.
 
 import type { Page } from '@playwright/test';
 import { loadAppSteadily } from './harness/drafts';
@@ -262,9 +262,9 @@ for (const provider of PROVIDERS) {
     // Class notify-badge-ignores-preference: when this fails, mail that
     // arrives while "New email" notifications are off still lights the Mail
     // badge, so someone who asked not to be told about new mail is told.
-    // The badge counts the Notifications inbox's unread mail rows, and the
-    // service makes no row for a type the user turned off.
-    test('the Mail badge counts only mail that arrives while new-email notifications are on', async ({
+    // The badge is lit while the Notifications inbox has an unread mail row,
+    // and the service makes no row for a type the user turned off.
+    test('the Mail badge lights only for mail that arrives while new-email notifications are on', async ({
       page,
       mailbox,
     }) => {
@@ -284,7 +284,6 @@ for (const provider of PROVIDERS) {
         .toContain(`new_email ${announced.id}`);
       await mailbox.open('/app/mail/~/settings/notifications');
       await expect(badge).toHaveAttribute('data-unread');
-      await expect(badge).toHaveAttribute('data-unread-count', '1');
       saw('STX-032');
 
       // The switch stays off from here on: the notification service reads it
@@ -312,16 +311,26 @@ for (const provider of PROVIDERS) {
           { timeout: 60_000, intervals: [250] }
         )
         .toBe(2);
+
+      // Reading the thread that was announced puts the badge out, though
+      // "Lunch?" is still unread: it lit the badge only if it made a row.
+      // The badge is lit first, so its going out is the read, not a page
+      // that has yet to hear from the service.
+      await mailbox.open('/app/notifications');
+      await expect(badge).toHaveAttribute('data-unread');
+      await page
+        .getByRole('grid', { name: 'Notifications' })
+        .getByRole('row')
+        .filter({ hasText: 'Dinner instead' })
+        .click();
+      await expect(
+        page.getByRole('heading', { name: 'Dinner instead' }).first()
+      ).toBeVisible();
+      await expect(badge).not.toHaveAttribute('data-unread');
+      saw('STX-032');
       expect(
         (await notifications(mailbox)).map((each) => each.entity_id)
       ).not.toContain(unannounced.id);
-
-      // Both threads are unread; only the one that arrived with the type on
-      // is counted. A load reads the count afresh: the count stream starts
-      // from the service's own count.
-      await mailbox.open('/app/mail');
-      await expect(badge).toHaveAttribute('data-unread-count', '1');
-      saw('STX-032');
     });
 
     // When this fails, muting a thread from the list does not reach the

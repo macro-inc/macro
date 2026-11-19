@@ -527,9 +527,9 @@ export const elsewhere = {
       surface: 'SX-17',
       fn: ['F-042'],
       state:
-        'Unread count on the Mail navigation entry: the unread mail rows of the Notifications inbox, which mail received while "New email" notifications are off does not make',
+        'Unread mark on the Mail navigation entry: lit while the Notifications inbox has an unread mail row, which mail received while "New email" notifications are off does not make',
       trigger:
-        'an unread thread with a new-email row in the Notifications inbox (the server counts them)',
+        'an unread new-email row in the Notifications inbox (the server counts them), until it is read',
       source: [
         'src/components/app/use-navigation-unread.ts',
         'src/features/notifications-inbox/queries/inbox-unread.ts',
