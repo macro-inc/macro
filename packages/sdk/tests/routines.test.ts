@@ -1,5 +1,8 @@
 import { afterEach, expect, test } from 'bun:test';
-import type { ScheduledActionResponse } from '../generated/scheduled-action/types.gen';
+import type {
+  CodeStep,
+  ScheduledActionResponse,
+} from '../generated/scheduled-action/types.gen';
 import { Macro } from '../src/macro';
 import { MacroApiError } from '../src/utils';
 
@@ -370,4 +373,67 @@ test('MacroApiError messages carry the message or error of a JSON body', () => {
   expect(new MacroApiError(502, 'x'.repeat(600)).message).toBe(
     `Macro API error 502: ${'x'.repeat(500)}…`,
   );
+});
+
+test('a code step passed back as stored keeps its entity knobs, picked or not', async () => {
+  const bodies: unknown[] = [];
+  globalThis.fetch = Object.assign(
+    async (input: RequestInfo | URL) => {
+      const request = input instanceof Request ? input : new Request(input);
+      bodies.push(await request.json());
+      return Response.json(record);
+    },
+    { preconnect: originalFetch.preconnect },
+  );
+  const macro = new Macro({
+    token: 'user',
+    hosts: { 'scheduled-action': 'https://routines.test' },
+  });
+  // As `routine.detail()` returns it: entity knobs hold `{ type, id }`.
+  const stored: CodeStep = {
+    id: 'step-1',
+    title: 'Post open bugs',
+    source:
+      "export async function main({ knobs }: StepContext) { await knobs.bugs.send('Open bugs'); }",
+    knobs: [
+      {
+        type: 'entity',
+        name: 'bugs',
+        label: 'Channel to post in',
+        entity_types: ['channel'],
+        value: { type: 'channel', id: 'channel-1' },
+      },
+      {
+        type: 'entity',
+        name: 'next',
+        label: 'Task to follow',
+        entity_types: ['task'],
+        value: null,
+      },
+      {
+        type: 'entity',
+        name: 'later',
+        label: 'Project to file in',
+        entity_types: ['project'],
+      },
+    ],
+  };
+  await macro.routines.byId('routine-1').update({
+    name: 'Post open bugs',
+    trigger: { type: 'cron', schedule: '0 0 9 * * MON', timezone: 'UTC' },
+    steps: [{ type: 'code', ...stored }],
+  });
+  expect(bodies[0]).toMatchObject({
+    task: {
+      steps: [
+        {
+          knobs: [
+            { name: 'bugs', value: { type: 'channel', id: 'channel-1' } },
+            { name: 'next', value: null },
+            { name: 'later', value: null },
+          ],
+        },
+      ],
+    },
+  });
 });

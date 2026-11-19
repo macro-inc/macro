@@ -49,7 +49,8 @@ enforced by the ordinary backend APIs.
   `agents.coding()` reads the harness `GET /coding-agents` listing (Cursor
   included) that the `ListCodingAgents` tool serves. `routines.create` takes
   `steps` (generated `CodeStep`s whose `entity` knobs hold an
-  `EntityReference` to a handle, sent as its id; agent steps with `Agent`
+  `EntityReference` to a handle, sent as its id, or the `{ type, id }` the
+  routine stored, so stored steps pass back unchanged; agent steps with `Agent`
   handles) and `dangerouslyOperateAsUser`, which its TSDoc restricts to an
   explicit user request, or the older single agent task. Its examples use
   steps only: agents copy them, and a routine draft hands back steps,

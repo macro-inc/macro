@@ -5,6 +5,7 @@ import type {
   CodeStep,
   EventFilter,
   RoutineKnob,
+  RoutineKnobEntity,
   RoutineKnobEntityType,
   RoutineModelId,
   RoutineStep,
@@ -94,12 +95,14 @@ export type RoutineKnobItem =
  * as the channel the step posts in, as a reference to the handle the SDK
  * returned: `{ type: 'channel', entity: channel }`, never an id. The step's
  * code reads it as that handle (`knobs.bugs.send(...)`), and the user can
- * pick another item without new code.
+ * pick another item without new code. A knob passed back as the routine
+ * stores it keeps its item as stored (`{ type, id }`), or none when nothing
+ * is picked yet.
  */
 export type RoutineKnobOptions =
   | Exclude<RoutineKnob, { type: 'entity' }>
   | (Omit<Extract<RoutineKnob, { type: 'entity' }>, 'value'> & {
-      value: RoutineKnobItem;
+      value?: RoutineKnobItem | RoutineKnobEntity | null;
     });
 
 /** A code step, its entity knobs holding handles. */
@@ -558,7 +561,14 @@ export class RoutineExecution {
 function knobBody(knob: RoutineKnobOptions): RoutineKnob {
   if (knob.type !== 'entity') return knob;
   const { value, ...rest } = knob;
-  return { ...rest, value: { type: value.type, id: value.entity.id } };
+  return { ...rest, value: value ? knobItem(value) : null };
+}
+
+/** The item a knob holds as the service stores it: a handle's, or as stored already. */
+function knobItem(
+  value: RoutineKnobItem | RoutineKnobEntity,
+): RoutineKnobEntity {
+  return 'entity' in value ? { type: value.type, id: value.entity.id } : value;
 }
 
 function stepBody(step: RoutineStepOptions): RoutineStep {
