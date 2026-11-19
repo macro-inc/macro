@@ -116,8 +116,10 @@ describe('routine execution target autosave', () => {
     });
     expect(mocks.fetchChildren).toHaveBeenCalledExactlyOnceWith('routine-id');
     const options = vi.mocked(openDeleteModal).mock.calls.at(-1)?.[0];
-    // The page's list holds none; the read finds the ones a run just made.
-    expect(options?.note).toBeUndefined();
+    // The page's list holds none, so until the read answers the note says
+    // any it created go too: confirming now still warns.
+    expect(options?.note).toBe('Any routines it created will be deleted too.');
+    // The read finds the ones a run just made.
     read.resolve([
       { ...cron, id: 'a' },
       { ...cron, id: 'b' },
@@ -127,6 +129,23 @@ describe('routine execution target autosave', () => {
         'The 2 routines it created will be deleted too.'
       )
     );
+  });
+
+  it('reads nothing for Delete of a sub-routine, which creates none of its own', () => {
+    setSchedules([
+      {
+        ...cron,
+        sub_routine: { parent_id: 'parent-id', created_by_run_id: 'run-1' },
+      },
+    ]);
+    render(() => <Routine />);
+    openActions();
+    fireEvent.keyDown(screen.getByRole('menuitem', { name: 'Delete' }), {
+      key: 'Enter',
+    });
+    expect(mocks.fetchChildren).not.toHaveBeenCalled();
+    const options = vi.mocked(openDeleteModal).mock.calls.at(-1)?.[0];
+    expect(options?.note).toBeUndefined();
   });
 
   it('duplicates the saved task when its steps cannot open in the editor', () => {

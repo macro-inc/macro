@@ -5,14 +5,16 @@ import type {
   RoutineListSource,
   RoutineRowOperations,
 } from './context/routine-sources';
-import type { RoutineSnapshot } from './core/routine';
+import type { CreatedCount, RoutineSnapshot } from './core/routine';
 import type { RoutineRow } from './core/types';
 import { useRoutineRowMenuActions } from './routine-row-menu-actions';
 
 const mocks = vi.hoisted(() => ({
   openDelete: vi.fn(),
+  /** The routines whose own read of what their runs created started. */
+  countReads: vi.fn(),
   /** Answers the routine's own read of what its runs created. */
-  answerCount: (_count: number | undefined): void => {},
+  answerCount: (_count: CreatedCount | undefined): void => {},
 }));
 
 vi.mock('@app/features/entity/bulk-edit/BulkEditEntityModal', () => ({
@@ -57,10 +59,12 @@ vi.mock('./queries/routine-sources', () => ({
       ),
     canKeepAsOwn: () => true,
     setMenuOpen: vi.fn(),
-    createdCount: () =>
-      new Promise((resolve) => {
+    createdCount: (id) => {
+      mocks.countReads(id);
+      return new Promise((resolve) => {
         mocks.answerCount = resolve;
-      }),
+      });
+    },
   }),
 }));
 
@@ -107,11 +111,14 @@ const source: RoutineListSource = {
 
 type DeleteSession = { note?: string };
 
-function deleteFromList() {
+/** A routine the list holds nothing for. */
+const digest: RoutineRow = { ...triage, id: 'digest', name: 'Weekly digest' };
+
+function deleteFromList(row: RoutineRow = triage) {
   let owner: Owner | null = null;
   const dispose = createRoot((dispose) => {
     owner = getOwner();
-    useRoutineRowMenuActions(source, { open: vi.fn() }).onDelete(triage);
+    useRoutineRowMenuActions(source, { open: vi.fn() }).onDelete(row);
     return dispose;
   });
   return { owner, dispose };
@@ -134,7 +141,10 @@ const opened = () => {
   return { session, owner };
 };
 
-afterEach(() => mocks.openDelete.mockReset());
+afterEach(() => {
+  mocks.openDelete.mockReset();
+  mocks.countReads.mockReset();
+});
 
 it('shows the scheduler reason when Keep or Duplicate fails', () => {
   createRoot((dispose) => {
@@ -162,7 +172,7 @@ describe('routine row Delete', () => {
     expect(shown.note()).toBe('The 1 routine it created will be deleted too.');
     // Finished one-time routines count too, though the list doesn't hold them.
     // The dialog is already open, so its note follows.
-    mocks.answerCount(3);
+    mocks.answerCount({ count: 3, atLeast: false });
     await vi.waitFor(() =>
       expect(shown.note()).toBe(
         'The 3 routines it created will be deleted too.'
@@ -178,6 +188,44 @@ describe('routine row Delete', () => {
     mocks.answerCount(undefined);
     await new Promise((resolve) => setTimeout(resolve, 0));
     expect(session.note).toBe('The 1 routine it created will be deleted too.');
+    list.dispose();
+  });
+
+  it('warns before its count arrives when the list holds none it created', async () => {
+    const list = deleteFromList(digest);
+    const { session } = opened();
+    const shown = shownNote(session);
+    // Confirming now still says what goes with it.
+    expect(shown.note()).toBe('Any routines it created will be deleted too.');
+    mocks.answerCount({ count: 0, atLeast: false });
+    await vi.waitFor(() => expect(shown.note()).toBeUndefined());
+    shown.dispose();
+    list.dispose();
+  });
+
+  it('says “at least” when the scheduler may have left older ones out', async () => {
+    const list = deleteFromList();
+    const { session } = opened();
+    const shown = shownNote(session);
+    mocks.answerCount({ count: 201, atLeast: true });
+    await vi.waitFor(() =>
+      expect(shown.note()).toBe(
+        'At least 201 routines it created will be deleted too.'
+      )
+    );
+    shown.dispose();
+    list.dispose();
+  });
+
+  it('reads no count for a sub-routine, which creates none of its own', () => {
+    const list = deleteFromList({
+      ...triage,
+      id: listed.id,
+      name: listed.name,
+    });
+    const { session } = opened();
+    expect(mocks.countReads).not.toHaveBeenCalled();
+    expect(session.note).toBeUndefined();
     list.dispose();
   });
 });

@@ -13,12 +13,13 @@ import {
 } from '@core/constant/featureFlags';
 import { fireAndForget } from '@core/util/fireAndForget';
 import ArrowSquareOutIcon from '@icon/system/regular/arrow-square-out.svg';
-import { createSignal, getOwner } from 'solid-js';
+import { getOwner } from 'solid-js';
 import { match } from 'ts-pattern';
 import type { RoutineRowMenuActions } from './components/routine-row-menu';
 import type { RoutineListSource } from './context/routine-sources';
 import { getErrorMessage } from './core/routine-draft';
 import type { RoutineRow } from './core/types';
+import { createdNote } from './created-note';
 import { createRoutineRowOperations } from './queries/routine-sources';
 import { openShareRoutineDialog } from './routine-template';
 import { useSubRoutineWrites } from './use-sub-routine-writes';
@@ -84,33 +85,28 @@ export function useRoutineRowMenuActions(
     if (!entity) return;
     // Everything its runs created is deleted with it: say how many. The list
     // holds the active ones; the routine's own read adds finished one-time
-    // ones, and its count replaces the listed one when it arrives.
-    const [created, setCreated] = createSignal(
-      source.subRoutines().filter((routine) => routine.parent?.id === row.id)
-        .length
-    );
-    fireAndForget(readCreatedCount(row.id, setCreated), 'routines');
+    // ones, and its count replaces the listed one when it arrives. A
+    // sub-routine creates none of its own.
+    const subRoutines = source.subRoutines();
+    const note = subRoutines.some((routine) => routine.id === row.id)
+      ? undefined
+      : createdNote(
+          subRoutines.filter((routine) => routine.parent?.id === row.id).length,
+          operations.createdCount(row.id)
+        );
     // Under the list's owner: in Settings the list is in a sheet.
     openOwnedBulkEditModal(
       {
         view: 'delete',
         entities: [entity],
         get note() {
-          const count = created();
-          return count > 0 ? t('subRoutines.deleteNote', { count }) : undefined;
+          return note?.();
         },
         onFinish: () => toast.success(t('entityActions.toastDeleted')),
         onError: () => toast.failure(t('entityActions.toastDeleteFailed')),
       },
       owner
     );
-  };
-  const readCreatedCount = async (
-    id: string,
-    setCount: (count: number) => void
-  ) => {
-    const count = await operations.createdCount(id);
-    if (count !== undefined) setCount(count);
   };
   const openInNewSplit = host.openInNewSplit;
   const openInNewTab = host.openInNewTab;

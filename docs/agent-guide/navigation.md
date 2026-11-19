@@ -1285,6 +1285,9 @@ available, moves it to the main list and stops it pausing or being deleted
 with its creator. Switching a creator off pauses its
 sub-routines and switching it on resumes only those; deleting it deletes them,
 and the delete dialog says **The N routines it created will be deleted too.**
+(**At least N** when 200 finished ones are listed, so older ones may not be;
+**Any routines it created will be deleted too.** while it counts a creator
+whose list shows none). A sub-routine's delete dialog has no such line.
 In a run's details, **Created** lists the sub-routines that run created.
 
 A routine can instead define a sub-routine once, for work its runs schedule

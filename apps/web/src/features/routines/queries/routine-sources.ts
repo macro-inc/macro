@@ -22,7 +22,7 @@ import type {
 import { isClaimActive } from '../core/claim';
 import { pendingCodeReview } from '../core/code-review';
 import type { ScheduleDraft, SubRoutineCopyDraft } from '../core/draft';
-import type { RoutineSnapshot } from '../core/routine';
+import { countCreated, type RoutineSnapshot } from '../core/routine';
 import { withDraftSteps } from '../core/routine-draft';
 import { isSubRoutineCopy, programSteps } from '../core/routine-steps';
 import {
@@ -409,10 +409,7 @@ export function createRoutineDetailSource(
     historyError: () => history.isError,
     refreshHistory: () => history.refetch(),
     subRoutines: children,
-    async createdCount() {
-      const created = await fetchChildren(id());
-      return created.isOk() ? created.value.length : undefined;
-    },
+    createdCount: () => readCreatedCount(id()),
     parent,
     parentLoading,
     parentError,
@@ -740,9 +737,14 @@ export function createRoutineRowOperations(
         return open ? [...ids, id] : ids.filter((other) => other !== id);
       });
     },
-    async createdCount(id) {
-      const created = await fetchChildren(id);
-      return created.isOk() ? created.value.length : undefined;
-    },
+    createdCount: readCreatedCount,
   };
+}
+
+/** What a delete removes with routine `id`, from a fresh read of its children. */
+async function readCreatedCount(id: string) {
+  const created = await fetchChildren(id);
+  return created.isOk()
+    ? countCreated(created.value.filter((item) => item.id).map(toRoutine))
+    : undefined;
 }

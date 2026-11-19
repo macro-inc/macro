@@ -48,6 +48,9 @@ export default {
     one: 'The {{count}} routine it created will be deleted too.',
     other: 'The {{count}} routines it created will be deleted too.',
   },
+  deleteNoteAtLeast:
+    'At least {{count}} routines it created will be deleted too.',
+  deleteNoteUncounted: 'Any routines it created will be deleted too.',
   runCreated: 'Created',
   definitionsTitle: 'Sub-routines',
   definitionsAside: 'Scheduled once per item by this routine’s runs',

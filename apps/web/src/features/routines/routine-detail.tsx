@@ -30,6 +30,7 @@ import {
 } from 'solid-js';
 import { EntityAppearanceTrigger } from '../entity-appearance/entity-appearance';
 import { getErrorMessage } from './core/routine-draft';
+import { createdNote } from './created-note';
 import { createRoutineConnectedApps } from './queries/connected-apps';
 import {
   createAgentHistoryMetadata,
@@ -118,15 +119,15 @@ export function RoutineDetail(props: {
     if (!entity || entity.ownerId !== userId()) return;
     // Its sub-routines are deleted with it: say how many. The page's list
     // gives the count at once; a fresh read replaces it when it arrives, as
-    // in the list's row menu.
-    const [created, setCreated] = createSignal(source.subRoutines().length);
-    fireAndForget(readCreatedCount(setCreated), 'routines');
+    // in the list's row menu. A sub-routine creates none of its own.
+    const note = source.routine()?.parent
+      ? undefined
+      : createdNote(source.subRoutines().length, source.createdCount());
     openBulkEditModal({
       view: 'delete',
       entities: [entity],
       get note() {
-        const count = created();
-        return count > 0 ? t('subRoutines.deleteNote', { count }) : undefined;
+        return note?.();
       },
       onFinish: () => {
         toast.success('Deleted');
@@ -134,10 +135,6 @@ export function RoutineDetail(props: {
       },
       onError: () => toast.failure('Failed to delete'),
     });
-  };
-  const readCreatedCount = async (setCount: (count: number) => void) => {
-    const count = await source.createdCount();
-    if (count !== undefined) setCount(count);
   };
   const owner = getOwner();
   const share = () => {

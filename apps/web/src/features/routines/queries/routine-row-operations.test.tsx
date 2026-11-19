@@ -414,12 +414,42 @@ describe('routine row operations', () => {
     );
     const operations = mount();
 
-    await expect(operations.createdCount('briefing')).resolves.toBe(2);
+    await expect(operations.createdCount('briefing')).resolves.toEqual({
+      count: 2,
+      atLeast: false,
+    });
     expect(client.listChildren).toHaveBeenCalledWith({
       scheduleId: 'briefing',
     });
 
     client.listChildren.mockResolvedValueOnce(err([{ message: 'Down' }]));
     await expect(operations.createdCount('digest')).resolves.toBeUndefined();
+  });
+
+  it('counts at least the finished routines the scheduler lists, when it lists as many as it can', async () => {
+    const finished = (id: string): ScheduledAction => ({
+      ...routine(id, id),
+      trigger: { type: 'once', at: '2000-01-01T09:00:00Z' },
+      next_run_at: null,
+    });
+    const listed = Array.from({ length: 200 }, (_, i) => finished(`f${i}`));
+    client.listChildren.mockResolvedValueOnce(
+      ok([routine('active', 'Active'), ...listed])
+    );
+    const operations = mount();
+    // The scheduler lists the newest 200 finished ones; a delete removes
+    // older ones too.
+    await expect(operations.createdCount('briefing')).resolves.toEqual({
+      count: 201,
+      atLeast: true,
+    });
+
+    client.listChildren.mockResolvedValueOnce(
+      ok([routine('active', 'Active'), ...listed.slice(1)])
+    );
+    await expect(operations.createdCount('briefing')).resolves.toEqual({
+      count: 200,
+      atLeast: false,
+    });
   });
 });

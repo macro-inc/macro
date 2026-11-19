@@ -51,3 +51,23 @@ export function isFinished(routine: RoutineSnapshot): boolean {
     !isClaimActive(routine.claimedAt)
   );
 }
+
+/** How many finished one-time routines the scheduler lists for a parent: the newest. */
+export const FINISHED_CHILDREN_LISTED = 200;
+
+/**
+ * How many routines a delete removes with their parent. `atLeast` when the
+ * list holds as many finished ones as the scheduler lists, so it may have
+ * left older ones out; the delete removes those too.
+ */
+export type CreatedCount = { count: number; atLeast: boolean };
+
+/** What a delete removes with a routine, from the children read for it. */
+export function countCreated(
+  children: readonly RoutineSnapshot[]
+): CreatedCount {
+  return {
+    count: children.length,
+    atLeast: children.filter(isFinished).length >= FINISHED_CHILDREN_LISTED,
+  };
+}

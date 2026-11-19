@@ -3,7 +3,7 @@ import type { Accessor } from 'solid-js';
 import type { CodeReview } from '../core/code-review';
 import type { ScheduleDraft, SubRoutineDraft } from '../core/draft';
 import type { HistoryRecord } from '../core/history';
-import type { RoutineSnapshot } from '../core/routine';
+import type { CreatedCount, RoutineSnapshot } from '../core/routine';
 
 /** The routine whose run created a sub-routine, as the sub-routine shows it. */
 export type RoutineParentSummary = {
@@ -41,7 +41,7 @@ export type RoutineDetailSource = {
   /** The routines this routine's runs created, finished ones included. */
   subRoutines: Accessor<readonly RoutineSnapshot[]>;
   /** How many routines a delete removes with this one, read now. */
-  createdCount(): Promise<number | undefined>;
+  createdCount(): Promise<CreatedCount | undefined>;
   /** The routine whose run created this one, when it is still there. */
   parent: Accessor<RoutineParentSummary | undefined>;
   parentLoading: Accessor<boolean>;
@@ -90,5 +90,5 @@ export type RoutineRowOperations = {
    * one-time ones too, up to the server's cap): deleting it deletes them.
    * Undefined when they couldn't be read.
    */
-  createdCount(id: string): Promise<number | undefined>;
+  createdCount(id: string): Promise<CreatedCount | undefined>;
 };
