@@ -8,7 +8,7 @@ import {
   type ManagedDialogProps,
   openDialog,
 } from '@ui';
-import { createSignal, For } from 'solid-js';
+import { createSignal, For, Show } from 'solid-js';
 import { notificationKindLabel } from './components/notification-settings-labels';
 import { CHANNEL_NOTIFICATION_KINDS } from './core/channel-notification-settings';
 
@@ -16,6 +16,8 @@ type CustomNotificationSettingsProps = {
   /** The channel or section the settings are for. */
   targetName: string;
   enabled: ReadonlySet<ChannelNotificationKind>;
+  /** Where a channel's settings come from: "This channel" or "Inherited from …". */
+  source?: string;
   onSave: (kinds: ReadonlySet<ChannelNotificationKind>) => void;
 };
 
@@ -63,6 +65,16 @@ function CustomNotificationSettingsDialog(
                 })}
               </ActionDialogShell.Description>
             </ActionDialogShell.Header>
+            <Show when={props.source}>
+              {(source) => (
+                <div
+                  class="px-2 text-xs text-ink-muted"
+                  data-notification-settings-source
+                >
+                  {source()}
+                </div>
+              )}
+            </Show>
             <div class="flex flex-col">
               <For each={CHANNEL_NOTIFICATION_KINDS}>
                 {(kind) => (
@@ -98,7 +110,7 @@ function CustomNotificationSettingsDialog(
   );
 }
 
-/** The six notification kinds as checkboxes, saved together. */
+/** The six notification kinds as checkboxes, saved together as a full set. */
 export function openCustomNotificationSettings(
   props: CustomNotificationSettingsProps
 ) {

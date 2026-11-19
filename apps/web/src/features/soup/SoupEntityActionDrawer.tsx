@@ -8,6 +8,7 @@ import {
 import {
   type NotificationSettingsMenuProps,
   NotificationSettingsPage,
+  NotificationSettingsSummary,
 } from '@notifications/components/NotificationSettingsMenu';
 import { CopyButton, cn } from '@ui';
 import { type Component, createSignal, For, type JSX, Show } from 'solid-js';
@@ -160,6 +161,13 @@ export function SoupEntityActionDrawer(props: SoupEntityActionDrawerProps) {
                                     )}
                                   </Show>
                                   {action.label}
+                                  <Show when={action.notificationSettingsMenu}>
+                                    {(menu) => (
+                                      <NotificationSettingsSummary
+                                        preset={menu().preset}
+                                      />
+                                    )}
+                                  </Show>
                                 </MobileDrawer.Item>
                               </Show>
                             )}

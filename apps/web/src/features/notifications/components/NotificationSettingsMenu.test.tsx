@@ -8,7 +8,10 @@ import {
   PRESET_KINDS,
   presetFor,
 } from '../core/channel-notification-settings';
-import { NotificationSettingsPage } from './NotificationSettingsMenu';
+import {
+  type NotificationSettingsMenuProps,
+  NotificationSettingsPage,
+} from './NotificationSettingsMenu';
 
 // This project builds without the SVG plugin, so icons render as nothing.
 vi.mock('@icon/system/regular/arrow-left.svg', () => ({ default: () => null }));
@@ -36,7 +39,10 @@ afterEach(() => {
   vi.unstubAllGlobals();
 });
 
-function setup(initial: readonly ChannelNotificationKind[]) {
+function setup(
+  initial: readonly ChannelNotificationKind[],
+  extra: Partial<NotificationSettingsMenuProps> = {}
+) {
   const [kinds, setKinds] = createSignal<ChannelNotificationKind[]>([
     ...initial,
   ]);
@@ -44,6 +50,9 @@ function setup(initial: readonly ChannelNotificationKind[]) {
     setKinds([...PRESET_KINDS[preset]])
   );
   const onActionComplete = vi.fn();
+  const onSetKinds = vi.fn((next: ReadonlySet<ChannelNotificationKind>) =>
+    setKinds([...next])
+  );
   render(() => (
     <MobileDrawer open>
       <MobileDrawer.Portal>
@@ -53,15 +62,16 @@ function setup(initial: readonly ChannelNotificationKind[]) {
             enabled={new Set(kinds())}
             targetName="general"
             onPreset={onPreset}
-            onSetKinds={(next) => setKinds([...next])}
+            onSetKinds={onSetKinds}
             onBack={vi.fn()}
             onActionComplete={onActionComplete}
+            {...extra}
           />
         </MobileDrawer.Content>
       </MobileDrawer.Portal>
     </MobileDrawer>
   ));
-  return { kinds, onPreset, onActionComplete };
+  return { kinds, onPreset, onSetKinds, onActionComplete };
 }
 
 describe('phone notification settings page', () => {
@@ -102,5 +112,61 @@ describe('phone notification settings page', () => {
         .getAttribute('aria-checked')
     ).toBe('true');
     expect(page.onActionComplete).not.toHaveBeenCalled();
+  });
+
+  it('offers the section default first, saying what it gives', () => {
+    const onSelect = vi.fn();
+    const page = setup(PRESET_KINDS.all, {
+      sectionDefault: {
+        description: 'Nothing · Engineering',
+        onSelect,
+      },
+    });
+
+    const row = screen.getByRole('button', { name: /Use section default/ });
+    expect(row.textContent).toContain('Nothing · Engineering');
+    fireEvent.click(row);
+
+    expect(onSelect).toHaveBeenCalledOnce();
+    expect(page.onActionComplete).toHaveBeenCalledOnce();
+  });
+
+  it('shows where an inheriting channel’s settings come from', () => {
+    setup(PRESET_KINDS.all, {
+      hint: 'Inherited from Engineering',
+      source: 'Inherited from Engineering',
+    });
+
+    expect(screen.getByText('Inherited from Engineering')).toBeTruthy();
+    expect(screen.queryByText('Use section default')).toBeNull();
+
+    fireEvent.click(screen.getByRole('radio', { name: 'Custom settings…' }));
+    expect(screen.getByText('Inherited from Engineering')).toBeTruthy();
+  });
+
+  it('saves a section’s custom kinds once, on leaving the page', () => {
+    const page = setup(PRESET_KINDS.all, { saveCustomOnLeave: true });
+
+    fireEvent.click(screen.getByRole('radio', { name: 'Custom settings…' }));
+    fireEvent.click(screen.getByRole('checkbox', { name: 'Emoji reactions' }));
+    fireEvent.click(screen.getByRole('checkbox', { name: 'Calls' }));
+    expect(
+      screen
+        .getByRole('checkbox', { name: 'Calls' })
+        .getAttribute('aria-checked')
+    ).toBe('false');
+    expect(page.onSetKinds).not.toHaveBeenCalled();
+
+    fireEvent.click(screen.getByRole('button', { name: 'Back' }));
+
+    expect(page.onSetKinds).toHaveBeenCalledOnce();
+    expect(new Set(page.kinds())).toEqual(
+      new Set([
+        'channel_message_send',
+        'channel_message_reply',
+        'channel_mention',
+        'channel_access_requested',
+      ])
+    );
   });
 });

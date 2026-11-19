@@ -139,8 +139,19 @@ export function MobileSectionsView(props: {
     labels().find((label) => label.id === optionsFor());
   const team = useCurrentTeamQuery();
   const favorites = useFavoritesData({ entityType: ['channel'] });
+  const channelsById = createMemo(
+    () =>
+      new Map(
+        deduplicateChannels([
+          members.channels(),
+          props.sources.recents.items(),
+          localChannels(),
+        ]).map((channel) => [channel.id, channel])
+      )
+  );
   const channelNotifications = createChannelNotificationSettings({
     labels,
+    channelType: (channelId) => channelsById().get(channelId)?.channelType,
     favoriteChannelIds: () =>
       new Set(
         (favorites()?.favorites ?? [])
@@ -148,7 +159,10 @@ export function MobileSectionsView(props: {
           .map((favorite) => favorite.entityId)
       ),
   });
-  const sectionNotifications = sectionNotificationMenus(channelNotifications);
+  const sectionNotifications = sectionNotificationMenus(
+    channelNotifications,
+    (channelId) => channelsById().get(channelId)?.name
+  );
   const actions = useMobileSectionActions({
     enabled: () => sectionsEnabled() && channelTags().enabled,
     labels,
@@ -156,14 +170,7 @@ export function MobileSectionsView(props: {
     canShare: () => queryReadyGate(shared) && Boolean(shared.data?.teamId),
     teamId: () =>
       queryReadyGate(shared) ? (shared.data?.teamId ?? undefined) : undefined,
-    channelsById: () =>
-      new Map(
-        deduplicateChannels([
-          members.channels(),
-          props.sources.recents.items(),
-          localChannels(),
-        ]).map((channel) => [channel.id, channel])
-      ),
+    channelsById,
     favorites: () => favorites()?.favorites ?? [],
     onSectionCreated: (id) => {
       const key = `label:${id}` as const;

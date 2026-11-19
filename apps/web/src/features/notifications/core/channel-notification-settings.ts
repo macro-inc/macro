@@ -51,7 +51,15 @@ export function presetFor(
   return 'custom';
 }
 
-/** A change that sets every kind, as choosing a preset or saving the dialog does. */
+/** Whether two sets hold the same kinds. */
+export function sameKinds(
+  left: ReadonlySet<ChannelNotificationKind>,
+  right: ReadonlySet<ChannelNotificationKind>
+): boolean {
+  return left.size === right.size && [...left].every((kind) => right.has(kind));
+}
+
+/** A section change that sets every kind, as choosing a preset or saving the dialog does. */
 export function changeForKinds(enabled: ReadonlySet<ChannelNotificationKind>): {
   enable: ChannelNotificationKind[];
   disable: ChannelNotificationKind[];
@@ -84,9 +92,13 @@ export function channelSectionOf(key: NotificationSectionKey): ChannelSection {
   return { type: 'label', labelId: key.slice('label:'.length) };
 }
 
+/**
+ * A channel either follows its sections for every kind or has its own
+ * setting for all of them, never a mix.
+ */
 export type ChannelOwnSettings = {
-  disabled: ReadonlySet<ChannelNotificationKind>;
-  enabled: ReadonlySet<ChannelNotificationKind>;
+  /** The kinds the channel's own settings turn on; undefined follows its sections. */
+  enabled: ReadonlySet<ChannelNotificationKind> | undefined;
   overridesSectionMute: boolean;
 };
 
@@ -96,8 +108,7 @@ export type SectionSettings = {
 };
 
 export const UNSET_CHANNEL_SETTINGS: ChannelOwnSettings = {
-  disabled: new Set(),
-  enabled: new Set(),
+  enabled: undefined,
   overridesSectionMute: false,
 };
 
@@ -138,18 +149,18 @@ export function sectionsHoldingChannel(args: {
 export type EffectiveChannelNotifications = {
   /** The kinds the channel notifies for. */
   enabled: ReadonlySet<ChannelNotificationKind>;
+  /** What the channel's sections give it: every kind any of them allows. */
+  inherited: ReadonlySet<ChannelNotificationKind>;
   /** Every section holding the channel is muted and the channel doesn't override it. */
   mutedBySections: boolean;
-  /** The holding sections that have settings, which decide the kinds the channel leaves alone. */
-  deciding: readonly NotificationSectionKey[];
-  /** The channel has a choice of its own for at least one kind. */
-  hasOwnChoices: boolean;
+  /** The channel has its own settings instead of its sections'. */
+  hasOwnSettings: boolean;
 };
 
 /**
  * What a channel delivers under its own and its sections' settings. A section
- * with no settings allows every kind and is unmuted; the channel's own choice
- * for a kind wins over its sections.
+ * with no settings allows every kind and is unmuted; a channel with its own
+ * settings uses them for every kind.
  */
 export function effectiveChannelNotifications(args: {
   channel: ChannelOwnSettings;
@@ -167,27 +178,59 @@ export function effectiveChannelNotifications(args: {
       sectionMuteActive(settingsOf(section).mute, args.now)
     );
 
-  const sectionsAllow = (kind: ChannelNotificationKind) =>
-    args.sections.length === 0 ||
-    args.sections.some((section) => !settingsOf(section).disabled.has(kind));
-
-  const enabled = new Set(
-    CHANNEL_NOTIFICATION_KINDS.filter((kind) => {
-      if (args.channel.disabled.has(kind)) return false;
-      if (args.channel.enabled.has(kind)) return true;
-      return sectionsAllow(kind);
-    })
+  const inherited = new Set(
+    CHANNEL_NOTIFICATION_KINDS.filter(
+      (kind) =>
+        args.sections.length === 0 ||
+        args.sections.some((section) => !settingsOf(section).disabled.has(kind))
+    )
   );
 
   return {
-    enabled,
+    enabled: args.channel.enabled ?? inherited,
+    inherited,
     mutedBySections,
-    deciding: args.sections.filter((section) =>
-      args.sectionSettings.has(section)
-    ),
-    hasOwnChoices:
-      args.channel.disabled.size > 0 || args.channel.enabled.size > 0,
+    hasOwnSettings: args.channel.enabled !== undefined,
   };
+}
+
+/** A section change the channels in it might not follow. */
+export type SectionChange =
+  | { kind: 'kinds'; kinds: ReadonlySet<ChannelNotificationKind> }
+  | { kind: 'mute' };
+
+/**
+ * The section's channels that a change to it would not reach: those with
+ * their own different kinds, or, for a mute, those set to keep notifying in
+ * muted sections.
+ */
+export function sectionConflicts(args: {
+  section: NotificationSectionKey;
+  change: SectionChange;
+  channels: readonly {
+    channelId: string;
+    channelType: string | undefined;
+    own: ChannelOwnSettings;
+  }[];
+  labels: readonly { id: string; channelIds: readonly string[] }[];
+  favoriteChannelIds: ReadonlySet<string>;
+}): string[] {
+  const { change } = args;
+  return args.channels
+    .filter(({ own }) =>
+      change.kind === 'mute'
+        ? own.overridesSectionMute
+        : own.enabled !== undefined && !sameKinds(own.enabled, change.kinds)
+    )
+    .filter((channel) =>
+      sectionsHoldingChannel({
+        channelId: channel.channelId,
+        channelType: channel.channelType,
+        labels: args.labels,
+        favoriteChannelIds: args.favoriteChannelIds,
+      }).includes(args.section)
+    )
+    .map((channel) => channel.channelId);
 }
 
 /** The kinds a section allows. */

@@ -7,6 +7,7 @@ import type { ChannelSection } from '@service-notification/generated/schemas/cha
 import type { SectionNotificationSettingsResponse } from '@service-notification/generated/schemas/sectionNotificationSettingsResponse';
 import type { UpdateChannelNotificationSettingsRequest } from '@service-notification/generated/schemas/updateChannelNotificationSettingsRequest';
 import type { UpdateSectionNotificationSettingsRequest } from '@service-notification/generated/schemas/updateSectionNotificationSettingsRequest';
+import type { UserUnsubscribe } from '@service-notification/generated/schemas/userUnsubscribe';
 import { queryOptions, useMutation, useQuery } from '@tanstack/solid-query';
 import type { Accessor } from 'solid-js';
 import { queryClient } from '../client';
@@ -100,26 +101,43 @@ function applyChannelChange(
   previous: ChannelNotificationSettingsResponse | undefined,
   change: UpdateChannelNotificationSettingsRequest
 ): ChannelNotificationSettingsResponse {
+  const enabled = change.inherit
+    ? null
+    : (change.enabled ?? previous?.enabled ?? null);
   return {
     channelId,
-    disabled: withoutKinds(union(previous?.disabled, change.disable), [
-      change.enable,
-      change.inherit,
-    ]),
-    enabled: withoutKinds(union(previous?.enabled, change.enable), [
-      change.disable,
-      change.inherit,
-    ]),
+    enabled,
     overridesSectionMute:
       change.overridesSectionMute ?? previous?.overridesSectionMute ?? false,
   };
 }
 
 function isEmptyChannelSettings(settings: ChannelNotificationSettingsResponse) {
-  return (
-    settings.disabled.length === 0 &&
-    settings.enabled.length === 0 &&
-    !settings.overridesSectionMute
+  return !settings.enabled && !settings.overridesSectionMute;
+}
+
+/**
+ * A reset or a change to the kinds also drops the channel's legacy
+ * mentions-only preference on the server, which these settings replace.
+ */
+function changesKinds(
+  change: UpdateChannelNotificationSettingsRequest | undefined
+) {
+  return !change || change.inherit === true || !!change.enabled;
+}
+
+function dropLegacyMentionsOnly(channelId: string) {
+  queryClient.setQueryData<UserUnsubscribe[]>(
+    notificationKeys.unsubscribes.queryKey,
+    (previous) =>
+      previous?.filter(
+        (item) =>
+          !(
+            item.item_type === 'channel' &&
+            item.item_id === channelId &&
+            item.mentions_only
+          )
+      )
   );
 }
 
@@ -197,6 +215,7 @@ export function useChannelNotificationSettingsMutation() {
         channelId,
         change ? applyChannelChange(channelId, previous, change) : undefined
       );
+      if (changesKinds(change)) dropLegacyMentionsOnly(channelId);
       return { previous };
     },
     onError: (_error, { channelId }, context) => {
@@ -205,11 +224,18 @@ export function useChannelNotificationSettingsMutation() {
     onSuccess: (settings, { channelId }) => {
       writeChannelSettings(channelId, settings);
     },
-    onSettled: () =>
+    onSettled: (_settings, _error, { change }) => {
       invalidateWhenIdle(
         CHANNEL_SETTINGS_MUTATION_KEY,
         notificationKeys.channelSettings.queryKey
-      ),
+      );
+      if (changesKinds(change)) {
+        invalidateWhenIdle(
+          CHANNEL_SETTINGS_MUTATION_KEY,
+          notificationKeys.unsubscribes.queryKey
+        );
+      }
+    },
   }));
 }
 

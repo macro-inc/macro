@@ -63,6 +63,7 @@ import {
 import {
   NotificationSettingsMenu,
   NotificationSettingsPage,
+  NotificationSettingsSummary,
 } from '@notifications/components/NotificationSettingsMenu';
 import { useChannelNotificationSettings } from '@notifications/primitives/create-channel-notification-settings';
 
@@ -345,7 +346,10 @@ function MobileRender(
         >
           <BellSimple class="size-4 shrink-0" />
           {action().label}
-          <CaretRight class="size-3.5" />
+          <Show when={action().notificationSettingsMenu}>
+            {(menu) => <NotificationSettingsSummary preset={menu().preset} />}
+          </Show>
+          <CaretRight class="size-3.5 shrink-0" />
         </MobileDrawer.Item>
       );
     }

@@ -1,5 +1,5 @@
 import { useFeatureFlag } from '@app/lib/analytics/posthog';
-import { t } from '@app/lib/i18n';
+import { formatLocale, t } from '@app/lib/i18n';
 import { toast } from '@core/component/Toast/Toast';
 import {
   enableChannelNotificationSettings,
@@ -17,15 +17,13 @@ import {
   useSectionNotificationSettingsMutation,
   useSectionNotificationSettingsQuery,
 } from '@queries/notification/notification-settings';
-import {
-  useMutedEntitiesQuery,
-  useUnmuteItemMutation,
-} from '@queries/notification/unsubscribes';
+import { useMutedEntitiesQuery } from '@queries/notification/unsubscribes';
 import type { ChannelNotificationKind } from '@service-notification/generated/schemas/channelNotificationKind';
 import type { SectionMute } from '@service-notification/generated/schemas/sectionMute';
 import { type Accessor, createMemo } from 'solid-js';
 import { match } from 'ts-pattern';
 import {
+  CHANNEL_NOTIFICATION_KINDS,
   type ChannelOwnSettings,
   changeForKinds,
   channelSectionOf,
@@ -35,7 +33,9 @@ import {
   type NotificationSectionKey,
   PRESET_KINDS,
   presetFor,
+  type SectionChange,
   type SectionSettings,
+  sectionConflicts,
   sectionEnabledKinds,
   sectionKeyOf,
   sectionMuteActive,
@@ -53,13 +53,15 @@ export type ChannelNotificationLabel = {
 type Sources = {
   labels: Accessor<readonly ChannelNotificationLabel[]>;
   favoriteChannelIds: Accessor<ReadonlySet<string>>;
+  /** A channel's type, for finding which built-in section holds it. */
+  channelType?: (channelId: string) => string | undefined;
 };
 
 export type ChannelNotificationView = EffectiveChannelNotifications & {
   preset: NotificationPreset;
-  /** "Following …", when the channel takes every kind from its sections. */
-  following: string | undefined;
-  /** The holding sections' names, for "Muted by …". */
+  /** The preset the channel's sections give it. */
+  inheritedPreset: NotificationPreset;
+  /** The holding sections' names as a list, empty outside every section. */
   sectionNames: string;
 };
 
@@ -82,15 +84,13 @@ export function createChannelNotificationSettings(sources: Sources) {
   const mutedQuery = useMutedEntitiesQuery(undefined, enabled);
   const channelMutation = useChannelNotificationSettingsMutation();
   const sectionMutation = useSectionNotificationSettingsMutation();
-  const unmuteMutation = useUnmuteItemMutation();
 
   const channelSettings = createMemo(() => {
     const settings = new Map<string, ChannelOwnSettings>();
     if (!queryReadyGate(channelQuery)) return settings;
     for (const entry of channelQuery.data ?? []) {
       settings.set(entry.channelId, {
-        disabled: new Set(entry.disabled),
-        enabled: new Set(entry.enabled),
+        enabled: entry.enabled ? new Set(entry.enabled) : undefined,
         overridesSectionMute: entry.overridesSectionMute,
       });
     }
@@ -109,12 +109,19 @@ export function createChannelNotificationSettings(sources: Sources) {
     return settings;
   });
 
-  const legacyMentionsOnly = (channelId: string) =>
-    queryReadyGate(mutedQuery) &&
-    isMentionsOnlyItem(mutedQuery.data ?? [], {
-      item_type: 'channel',
-      item_id: channelId,
-    });
+  /** Channels still on the legacy mentions-only level, which reads as their own settings. */
+  const legacyMentionsOnlyIds = createMemo(() => {
+    if (!queryReadyGate(mutedQuery)) return new Set<string>();
+    return new Set(
+      (mutedQuery.data ?? [])
+        .filter(
+          (item) =>
+            item.item_type === 'channel' &&
+            isMentionsOnlyItem(mutedQuery.data ?? [], item)
+        )
+        .map((item) => item.item_id)
+    );
+  });
 
   const sectionName = (key: NotificationSectionKey) =>
     match(key)
@@ -127,20 +134,18 @@ export function createChannelNotificationSettings(sources: Sources) {
             ?.name ?? t('channelSections.channels')
       );
 
-  /** A legacy mentions-only channel reads as notifying for @mentions alone. */
+  /**
+   * A legacy mentions-only channel reads as its own settings with @mentions
+   * alone; the server drops it once the channel's kinds change.
+   */
   const ownSettings = (channelId: string): ChannelOwnSettings => {
     const own = channelSettings().get(channelId) ?? UNSET_CHANNEL_SETTINGS;
-    const choosesKinds = own.enabled.size > 0 || own.disabled.size > 0;
-    if (choosesKinds || !legacyMentionsOnly(channelId)) return own;
-
-    // The server applies the legacy row until a kind change replaces it.
-    const { enable, disable } = changeForKinds(new Set(['channel_mention']));
-    return {
-      enabled: new Set(enable),
-      disabled: new Set(disable),
-      overridesSectionMute: own.overridesSectionMute,
-    };
+    if (own.enabled || !legacyMentionsOnlyIds().has(channelId)) return own;
+    return { ...own, enabled: new Set(['channel_mention']) };
   };
+
+  const listFormat = () =>
+    new Intl.ListFormat(formatLocale(), { type: 'conjunction' });
 
   const channel = (
     channelId: string,
@@ -158,23 +163,29 @@ export function createChannelNotificationSettings(sources: Sources) {
       sectionSettings: sectionSettings(),
       now: new Date(),
     });
-    const [only] = effective.deciding;
-    const following = match(effective.deciding.length)
-      .when(
-        (count) => effective.hasOwnChoices || count === 0,
-        () => undefined
-      )
-      .with(1, () =>
-        t('channelSections.followingSection', { name: sectionName(only) })
-      )
-      .otherwise(() => t('channelSections.followingSections'));
     return {
       ...effective,
       preset: presetFor(effective.enabled),
-      following,
-      sectionNames: sections.map(sectionName).join(', '),
+      inheritedPreset: presetFor(effective.inherited),
+      sectionNames: listFormat().format(sections.map(sectionName)),
     };
   };
+
+  /** The section's channels a change to it would not reach. */
+  const conflictsFor = (key: NotificationSectionKey, change: SectionChange) =>
+    sectionConflicts({
+      section: key,
+      change,
+      channels: [
+        ...new Set([...channelSettings().keys(), ...legacyMentionsOnlyIds()]),
+      ].map((channelId) => ({
+        channelId,
+        channelType: sources.channelType?.(channelId),
+        own: ownSettings(channelId),
+      })),
+      labels: sources.labels(),
+      favoriteChannelIds: sources.favoriteChannelIds(),
+    });
 
   const section = (key: NotificationSectionKey): SectionNotificationView => {
     const settings = sectionSettings().get(key) ?? UNSET_SECTION_SETTINGS;
@@ -187,22 +198,10 @@ export function createChannelNotificationSettings(sources: Sources) {
     };
   };
 
-  const pending = () =>
-    channelMutation.isPending ||
-    sectionMutation.isPending ||
-    unmuteMutation.isPending;
+  const pending = () => channelMutation.isPending || sectionMutation.isPending;
 
   const failed = () =>
     toast.failure(t('channelSections.notificationSettingsFailed'));
-
-  /** A legacy mentions-only row would keep silencing the channel; drop it. */
-  const dropLegacyMentionsOnly = async (channelId: string) => {
-    if (!legacyMentionsOnly(channelId)) return;
-    await unmuteMutation.mutateAsync({
-      item_type: 'channel',
-      item_id: channelId,
-    });
-  };
 
   /**
    * Run a settings write in its own span, keyed by what it changes, and
@@ -224,24 +223,25 @@ export function createChannelNotificationSettings(sources: Sources) {
       return result.isOk();
     });
 
-  /** Set every kind on the channel itself, as a preset or the dialog does. */
+  /** Give the channel its own full set of kinds, as a preset or the dialog does. */
   const setChannelKinds = (
     channelId: string,
     kinds: ReadonlySet<ChannelNotificationKind>
   ) =>
-    save('set_channel_kinds', { channelId }, async () => {
-      await channelMutation.mutateAsync({
+    save('set_channel_kinds', { channelId }, () =>
+      channelMutation.mutateAsync({
         channelId,
-        change: changeForKinds(kinds),
-      });
-      await dropLegacyMentionsOnly(channelId);
-    });
+        change: {
+          enabled: CHANNEL_NOTIFICATION_KINDS.filter((kind) => kinds.has(kind)),
+        },
+      })
+    );
 
+  /** Drop the channel's own kinds so it follows its sections again. */
   const followSectionSettings = (channelId: string) =>
-    save('follow_sections', { channelId }, async () => {
-      await channelMutation.mutateAsync({ channelId, change: undefined });
-      await dropLegacyMentionsOnly(channelId);
-    });
+    save('follow_sections', { channelId }, () =>
+      channelMutation.mutateAsync({ channelId, change: { inherit: true } })
+    );
 
   const setOverridesSectionMute = (channelId: string, value: boolean) =>
     save('override_section_mute', { channelId }, () =>
@@ -272,6 +272,7 @@ export function createChannelNotificationSettings(sources: Sources) {
     pending,
     channel,
     section,
+    sectionConflicts: conflictsFor,
     setChannelKinds,
     setChannelPreset: (
       channelId: string,

@@ -190,9 +190,25 @@ export default {
   notifyInvolving: 'Messages involving me',
   notifyCustom: 'Custom settings…',
   notifyNothing: 'Nothing',
-  followingSection: 'Following {{name}}',
-  followingSections: 'Following your sections',
-  useSectionSettings: 'Use section settings',
+  notifyCustomShort: 'Custom',
+  inheritedFrom: 'Inherited from {{names}}',
+  settingsFromChannel: 'This channel',
+  useSectionDefault: 'Use section default',
+  sectionDefaultDescription: '{{preset}} · {{names}}',
+  sectionConflictTitle: 'Some channels have their own settings',
+  sectionConflictDescription: {
+    one: '{{count}} channel in {{name}} has its own notification settings, so this change won’t apply to it. Select it and choose Override to make it follow {{name}}.',
+    other:
+      '{{count}} channels in {{name}} have their own notification settings, so this change won’t apply to them. Select the ones to override and choose Override to make them follow {{name}}.',
+  },
+  sectionMuteConflictDescription: {
+    one: '{{count}} channel in {{name}} is set to keep notifying while {{name}} is muted. Select it and choose Override to mute it with {{name}}.',
+    other:
+      '{{count}} channels in {{name}} are set to keep notifying while {{name}} is muted. Select the ones to override and choose Override to mute them with {{name}}.',
+  },
+  sectionConflictSelectAll: 'Select all',
+  sectionConflictOverride: 'Override',
+  sectionConflictOk: 'OK',
   customNotificationsTitle: 'Custom notification settings',
   customNotificationsDescription: 'Choose what notifies you in {{name}}.',
   customNotificationsSave: 'Save',

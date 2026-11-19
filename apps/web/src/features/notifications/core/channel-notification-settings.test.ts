@@ -7,6 +7,7 @@ import {
   PRESET_KINDS,
   presetFor,
   type SectionSettings,
+  sectionConflicts,
   sectionsHoldingChannel,
   UNSET_CHANNEL_SETTINGS,
 } from './channel-notification-settings';
@@ -56,7 +57,7 @@ describe('effectiveChannelNotifications', () => {
       'channel_mention',
       'channel_message_reply',
     ]);
-    expect(result.deciding).toEqual(['label:a', 'label:b']);
+    expect(result.inherited).toEqual(result.enabled);
   });
 
   it('treats an untouched section as allowing everything', () => {
@@ -68,19 +69,19 @@ describe('effectiveChannelNotifications', () => {
     expect(presetFor(result.enabled)).toBe('all');
   });
 
-  it("lets the channel's own choice win kind by kind", () => {
+  it('uses a channel’s own settings for every kind, ignoring its sections', () => {
     const result = effective(
       ['label:a'],
       [['label:a', allowingOnly(['channel_mention'])]],
       {
-        disabled: new Set(['channel_mention']),
         enabled: new Set(['channel_message_send']),
         overridesSectionMute: false,
       }
     );
 
     expect([...result.enabled]).toEqual(['channel_message_send']);
-    expect(result.hasOwnChoices).toBe(true);
+    expect([...result.inherited]).toEqual(['channel_mention']);
+    expect(result.hasOwnSettings).toBe(true);
   });
 
   it('mutes only when every holding section is muted, unless overridden', () => {
@@ -154,5 +155,52 @@ describe('sectionsHoldingChannel', () => {
         favoriteChannelIds: favorites,
       })
     ).toEqual([]);
+  });
+});
+
+describe('sectionConflicts', () => {
+  const labels = [{ id: 'a', channelIds: ['own', 'same', 'override'] }];
+  const channels = [
+    {
+      channelId: 'own',
+      channelType: 'public',
+      own: { enabled: new Set(PRESET_KINDS.all), overridesSectionMute: false },
+    },
+    {
+      channelId: 'same',
+      channelType: 'public',
+      own: {
+        enabled: new Set<ChannelNotificationKind>(),
+        overridesSectionMute: false,
+      },
+    },
+    {
+      channelId: 'override',
+      channelType: 'public',
+      own: { enabled: undefined, overridesSectionMute: true },
+    },
+    {
+      channelId: 'elsewhere',
+      channelType: 'team',
+      own: { enabled: new Set(PRESET_KINDS.all), overridesSectionMute: true },
+    },
+  ];
+  const conflicts = (
+    change: Parameters<typeof sectionConflicts>[0]['change']
+  ) =>
+    sectionConflicts({
+      section: 'label:a',
+      change,
+      channels,
+      labels,
+      favoriteChannelIds: new Set(),
+    });
+
+  it('lists the section’s channels with their own different kinds', () => {
+    expect(conflicts({ kind: 'kinds', kinds: new Set() })).toEqual(['own']);
+  });
+
+  it('lists the section’s channels that keep notifying in muted sections', () => {
+    expect(conflicts({ kind: 'mute' })).toEqual(['override']);
   });
 });

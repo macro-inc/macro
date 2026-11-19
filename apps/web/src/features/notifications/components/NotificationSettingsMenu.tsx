@@ -4,7 +4,6 @@ import {
   ContextMenuContent,
   MENU_ITEM_CLASS,
   MenuGroup,
-  MenuItem,
   MenuSeparator,
   SubTrigger,
 } from '@core/component/ContextMenu';
@@ -14,36 +13,68 @@ import CheckIcon from '@icon/system/regular/check.svg';
 import { ContextMenu } from '@kobalte/core/context-menu';
 import type { ChannelNotificationKind } from '@service-notification/generated/schemas/channelNotificationKind';
 import { InlineCheckbox, SingleSelectCheck } from '@ui';
-import { createSignal, For, Show } from 'solid-js';
+import { createSignal, For, onCleanup, Show } from 'solid-js';
 import { openCustomNotificationSettings } from '../CustomNotificationSettingsDialog';
 import {
   CHANNEL_NOTIFICATION_KINDS,
   type NotificationPreset,
+  sameKinds,
 } from '../core/channel-notification-settings';
 import {
   notificationKindLabel,
   presetLabel,
+  presetSummary,
 } from './notification-settings-labels';
 
 export type NotificationSettingsMenuProps = {
   preset: NotificationPreset;
   /** The kinds the target notifies for now. */
   enabled: ReadonlySet<ChannelNotificationKind>;
-  /** Where the settings come from, such as "Following Engineering". */
+  /** Where an inheriting channel's settings come from: "Inherited from Engineering". */
   hint?: string;
+  /** Where the settings Custom shows come from; a section's are its own, so it has none. */
+  source?: string;
   /** The channel or section, named in the custom settings dialog. */
   targetName: string;
   disabled?: boolean;
   onPreset: (preset: Exclude<NotificationPreset, 'custom'>) => void;
   onSetKinds: (kinds: ReadonlySet<ChannelNotificationKind>) => void;
-  /** Present when the channel has its own settings and its sections have some. */
-  onFollowSections?: () => void;
+  /**
+   * Use section default, which drops the channel's own settings; present
+   * when it has some and sits in a section. `description` says what it gives.
+   */
+  sectionDefault?: { description: string; onSelect: () => void };
+  /** Phone: save the Custom page's kinds once on leaving it, not per toggle. */
+  saveCustomOnLeave?: boolean;
   onActionComplete?: () => void;
 };
 
 const PRESETS = ['all', 'involving', 'custom', 'nothing'] as const;
 
-/** Desktop submenu: one choice of All, Involving me, Custom or Nothing. */
+/** The current preset, shown after "Notification settings" on a phone row. */
+export function NotificationSettingsSummary(props: {
+  preset: NotificationPreset;
+}) {
+  return (
+    <span class="ml-auto truncate text-sm text-ink-muted">
+      {presetSummary(props.preset)}
+    </span>
+  );
+}
+
+function LabelWithDescription(props: { label: string; description: string }) {
+  return (
+    <span class="flex min-w-0 flex-1 flex-col">
+      <span class="truncate">{props.label}</span>
+      <span class="truncate text-xs text-ink-muted">{props.description}</span>
+    </span>
+  );
+}
+
+/**
+ * Desktop submenu: Use section default when the channel has its own
+ * settings, then one choice of All, Involving me, Custom or Nothing.
+ */
 export function NotificationSettingsMenu(props: NotificationSettingsMenuProps) {
   const choose = (preset: NotificationPreset) => {
     // Close the host menu before Custom opens its dialog: dismissing a menu
@@ -53,6 +84,7 @@ export function NotificationSettingsMenu(props: NotificationSettingsMenuProps) {
       openCustomNotificationSettings({
         targetName: props.targetName,
         enabled: props.enabled,
+        source: props.source,
         onSave: props.onSetKinds,
       });
     } else {
@@ -63,11 +95,39 @@ export function NotificationSettingsMenu(props: NotificationSettingsMenuProps) {
   return (
     <ContextMenu.Sub>
       <SubTrigger
-        text={t('channelSections.notificationSettings')}
+        text={
+          <LabelWithDescription
+            label={t('channelSections.notificationSettings')}
+            description={presetSummary(props.preset)}
+          />
+        }
         icon={BellIcon}
         disabled={props.disabled}
       />
       <ContextMenuContent submenu class="min-w-60 max-w-80">
+        <Show when={props.sectionDefault}>
+          {(sectionDefault) => (
+            <>
+              <MenuGroup>
+                <ContextMenu.Item
+                  class={MENU_ITEM_CLASS}
+                  disabled={props.disabled}
+                  data-notification-section-default
+                  onSelect={() => {
+                    sectionDefault().onSelect();
+                    props.onActionComplete?.();
+                  }}
+                >
+                  <LabelWithDescription
+                    label={t('channelSections.useSectionDefault')}
+                    description={sectionDefault().description}
+                  />
+                </ContextMenu.Item>
+              </MenuGroup>
+              <MenuSeparator />
+            </>
+          )}
+        </Show>
         <Show when={props.hint}>
           {(hint) => (
             <div class="truncate px-2 py-1 text-xs text-ink-extra-muted">
@@ -96,29 +156,82 @@ export function NotificationSettingsMenu(props: NotificationSettingsMenuProps) {
             </For>
           </ContextMenu.RadioGroup>
         </MenuGroup>
-        <Show when={props.onFollowSections}>
-          {(follow) => (
-            <>
-              <MenuSeparator />
-              <MenuItem
-                text={t('channelSections.useSectionSettings')}
-                disabled={props.disabled}
-                onClick={() => {
-                  follow()();
-                  props.onActionComplete?.();
-                }}
-              />
-            </>
-          )}
-        </Show>
       </ContextMenuContent>
     </ContextMenu.Sub>
   );
 }
 
+/** The six kinds as toggling rows, under where the settings come from. */
+function CustomSettingsPage(
+  props: NotificationSettingsMenuProps & { onBack: () => void }
+) {
+  // With saveCustomOnLeave the rows edit a draft, saved once on leaving.
+  const [draft, setDraft] = createSignal<ChannelNotificationKind[]>(
+    CHANNEL_NOTIFICATION_KINDS.filter((kind) => props.enabled.has(kind))
+  );
+  const shown = () =>
+    props.saveCustomOnLeave ? new Set(draft()) : props.enabled;
+
+  let saved = false;
+  const saveDraft = () => {
+    if (!props.saveCustomOnLeave || saved) return;
+    saved = true;
+    const kinds = new Set(draft());
+    if (!sameKinds(kinds, props.enabled)) props.onSetKinds(kinds);
+  };
+  // Closing the sheet from this page leaves it too.
+  onCleanup(saveDraft);
+
+  const toggle = (kind: ChannelNotificationKind) => {
+    const kinds = new Set(shown());
+    if (kinds.has(kind)) kinds.delete(kind);
+    else kinds.add(kind);
+    if (props.saveCustomOnLeave) {
+      setDraft(CHANNEL_NOTIFICATION_KINDS.filter((each) => kinds.has(each)));
+    } else {
+      props.onSetKinds(kinds);
+    }
+  };
+
+  return (
+    <>
+      <MobileDrawer.Item
+        type="button"
+        onClick={() => {
+          saveDraft();
+          props.onBack();
+        }}
+      >
+        <ArrowLeftIcon class="size-4" />
+        {t('common.back')}
+      </MobileDrawer.Item>
+      <Show when={props.source}>
+        {(source) => (
+          <div class="px-4 py-2 text-sm text-ink-muted">{source()}</div>
+        )}
+      </Show>
+      <For each={CHANNEL_NOTIFICATION_KINDS}>
+        {(kind) => (
+          <MobileDrawer.Item
+            type="button"
+            role="checkbox"
+            aria-checked={shown().has(kind)}
+            disabled={props.disabled}
+            data-notification-kind={kind}
+            onClick={() => toggle(kind)}
+          >
+            <span class="min-w-0 flex-1">{notificationKindLabel(kind)}</span>
+            <InlineCheckbox checked={shown().has(kind)} />
+          </MobileDrawer.Item>
+        )}
+      </For>
+    </>
+  );
+}
+
 /**
- * Phone drill-in pages inside a host drawer: the four choices, and the six
- * kinds as checkboxes for Custom settings.
+ * Phone drill-in pages inside a host drawer: Use section default and the
+ * four choices, and the six kinds as checkboxes for Custom settings.
  */
 export function NotificationSettingsPage(
   props: NotificationSettingsMenuProps & { onBack: () => void }
@@ -130,13 +243,6 @@ export function NotificationSettingsPage(
     props.onActionComplete?.();
   };
 
-  const toggle = (kind: ChannelNotificationKind) => {
-    const kinds = new Set(props.enabled);
-    if (kinds.has(kind)) kinds.delete(kind);
-    else kinds.add(kind);
-    props.onSetKinds(kinds);
-  };
-
   return (
     <Show
       when={custom()}
@@ -146,6 +252,21 @@ export function NotificationSettingsPage(
             <ArrowLeftIcon class="size-4" />
             {t('common.back')}
           </MobileDrawer.Item>
+          <Show when={props.sectionDefault}>
+            {(sectionDefault) => (
+              <MobileDrawer.Item
+                type="button"
+                disabled={props.disabled}
+                data-notification-section-default
+                onClick={() => finish(() => sectionDefault().onSelect())}
+              >
+                <LabelWithDescription
+                  label={t('channelSections.useSectionDefault')}
+                  description={sectionDefault().description}
+                />
+              </MobileDrawer.Item>
+            )}
+          </Show>
           <Show when={props.hint}>
             {(hint) => (
               <div class="px-4 py-2 text-sm text-ink-muted">{hint()}</div>
@@ -172,39 +293,10 @@ export function NotificationSettingsPage(
               </MobileDrawer.Item>
             )}
           </For>
-          <Show when={props.onFollowSections}>
-            {(follow) => (
-              <MobileDrawer.Item
-                type="button"
-                disabled={props.disabled}
-                onClick={() => finish(() => follow()())}
-              >
-                {t('channelSections.useSectionSettings')}
-              </MobileDrawer.Item>
-            )}
-          </Show>
         </>
       }
     >
-      <MobileDrawer.Item type="button" onClick={() => setCustom(false)}>
-        <ArrowLeftIcon class="size-4" />
-        {t('common.back')}
-      </MobileDrawer.Item>
-      <For each={CHANNEL_NOTIFICATION_KINDS}>
-        {(kind) => (
-          <MobileDrawer.Item
-            type="button"
-            role="checkbox"
-            aria-checked={props.enabled.has(kind)}
-            disabled={props.disabled}
-            data-notification-kind={kind}
-            onClick={() => toggle(kind)}
-          >
-            <span class="min-w-0 flex-1">{notificationKindLabel(kind)}</span>
-            <InlineCheckbox checked={props.enabled.has(kind)} />
-          </MobileDrawer.Item>
-        )}
-      </For>
+      <CustomSettingsPage {...props} onBack={() => setCustom(false)} />
     </Show>
   );
 }

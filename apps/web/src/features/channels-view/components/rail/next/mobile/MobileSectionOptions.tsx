@@ -13,7 +13,10 @@ import TrashIcon from '@icon/system/regular/trash.svg';
 import UsersIcon from '@icon/system/regular/users.svg';
 import { Accordion } from '@kobalte/core/accordion';
 import { NotificationMuteOptions } from '@notifications/components/NotificationMuteMenu';
-import { NotificationSettingsPage } from '@notifications/components/NotificationSettingsMenu';
+import {
+  NotificationSettingsPage,
+  NotificationSettingsSummary,
+} from '@notifications/components/NotificationSettingsMenu';
 import { queryReadyGate } from '@queries/gate';
 import { useMutedEntitiesQuery } from '@queries/notification/unsubscribes';
 import type { ChannelLabel } from '@service-storage/generated/schemas/channelLabel';
@@ -284,13 +287,18 @@ export function MobileSectionOptions(props: {
                     </Show>
                   </MobileDrawer.Item>
                   <Show when={props.notifications}>
-                    <MobileDrawer.Item
-                      disabled={props.disabled}
-                      onClick={() => setPage('settings')}
-                    >
-                      {t('channelSections.notificationSettings')}
-                      <CaretRightIcon class="ml-auto size-4" />
-                    </MobileDrawer.Item>
+                    {(notifications) => (
+                      <MobileDrawer.Item
+                        disabled={props.disabled}
+                        onClick={() => setPage('settings')}
+                      >
+                        {t('channelSections.notificationSettings')}
+                        <NotificationSettingsSummary
+                          preset={notifications().settings.preset}
+                        />
+                        <CaretRightIcon class="size-4 shrink-0" />
+                      </MobileDrawer.Item>
+                    )}
                   </Show>
                 </MobileDrawer.Section>
                 <Show when={props.canEdit}>

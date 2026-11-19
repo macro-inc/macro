@@ -12,6 +12,13 @@ export function presetLabel(preset: NotificationPreset) {
     .exhaustive();
 }
 
+/** The preset's name where it summarizes the current setting. */
+export function presetSummary(preset: NotificationPreset) {
+  return preset === 'custom'
+    ? t('channelSections.notifyCustomShort')
+    : presetLabel(preset);
+}
+
 export function notificationKindLabel(kind: ChannelNotificationKind) {
   return match(kind)
     .with('channel_message_send', () =>
