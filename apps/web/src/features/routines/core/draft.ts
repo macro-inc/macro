@@ -1,4 +1,4 @@
-import type { EntityAppearance } from '@service-scheduled-action/generated/schemas';
+import type { EntityAppearance } from '../../entity-appearance/core/appearance';
 import type { StepDraft } from './routine-steps';
 import type { RoutineTarget } from './routine-target';
 import type { RoutineTriggerDraft } from './routine-triggers';
