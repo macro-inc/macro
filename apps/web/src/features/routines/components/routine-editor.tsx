@@ -111,6 +111,7 @@ export function RoutineEditor(props: {
   /** What the routine does: its agent's instructions or its steps. */
   steps: JSX.Element;
   stepsReadOnly?: boolean;
+  taskDisabled?: boolean;
   /** The Then heading's controls, on its line. */
   stepsAside?: JSX.Element;
   /** The routine's sub-routines, each with its steps; absent with none. */
@@ -339,8 +340,14 @@ export function RoutineEditor(props: {
               <RoutineSection label="Steps" aside={props.stepsAside}>
                 {/* Each step is its own card. */}
                 <fieldset
-                  disabled={props.disabled && !props.stepsReadOnly}
-                  inert={props.disabled && !props.stepsReadOnly}
+                  disabled={
+                    (props.disabled || props.taskDisabled) &&
+                    !props.stepsReadOnly
+                  }
+                  inert={
+                    (props.disabled || props.taskDisabled) &&
+                    !props.stepsReadOnly
+                  }
                   class="min-w-0"
                   aria-label="Routine steps"
                 >
@@ -354,8 +361,8 @@ export function RoutineEditor(props: {
                     aside={t('subRoutines.definitionsAside')}
                   >
                     <fieldset
-                      disabled={props.disabled}
-                      inert={props.disabled}
+                      disabled={props.disabled || props.taskDisabled}
+                      inert={props.disabled || props.taskDisabled}
                       class="min-w-0"
                       aria-label={t('subRoutines.definitionsTitle')}
                     >
@@ -372,8 +379,8 @@ export function RoutineEditor(props: {
                   >
                     <RoutineSurface>
                       <fieldset
-                        disabled={props.disabled}
-                        inert={props.disabled}
+                        disabled={props.disabled || props.taskDisabled}
+                        inert={props.disabled || props.taskDisabled}
                         class="min-w-0"
                         aria-label="Routine connections"
                       >

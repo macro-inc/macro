@@ -847,6 +847,12 @@ export const enableEventRoutines = defineFlag({
   env: 'ENABLE_EVENT_ROUTINES',
 });
 
+// The scheduler checks the same owner flag, including in development.
+export const enableSubRoutines = defineFlag({
+  key: 'enable-sub-routines',
+  env: 'ENABLE_SUB_ROUTINES',
+});
+
 // The Recent view: the touched-by-me feed (everything the viewer mutated,
 // newest own-touch first). Gates the view (the route redirects to the inbox
 // when off) and its sidebar entry. PostHog-gated with a dev-mode default;

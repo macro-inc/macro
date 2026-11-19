@@ -178,6 +178,7 @@ export function createRoutineDetail(
     (!isActive() && (isCompleted() || runDisabled()));
   const approvalDisabled = () =>
     !isOwned() ||
+    !source.canEditTask() ||
     !state() ||
     isRunning() ||
     source.runPending() ||

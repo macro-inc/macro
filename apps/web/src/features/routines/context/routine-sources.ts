@@ -26,6 +26,8 @@ export type RoutineDetailSource = {
   runPending: Accessor<boolean>;
   setEnabled(enabled: boolean): void;
   activationPending: Accessor<boolean>;
+  canEditTask: Accessor<boolean>;
+  canDuplicate: Accessor<boolean>;
   duplicate(): void;
   duplicationPending: Accessor<boolean>;
   history: Accessor<HistoryRecord[]>;
@@ -74,6 +76,7 @@ export type RoutineRowOperations = {
   /** Its "Run now" was chosen and the server hasn't answered yet. */
   runPending(id: string): boolean;
   duplicate(id: string): void;
+  canDuplicate(id: string): boolean;
   /** Make a sub-routine the owner's own: it stops following its parent. */
   keepAsOwn(id: string): void;
   /**

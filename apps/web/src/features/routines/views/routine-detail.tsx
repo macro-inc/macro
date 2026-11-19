@@ -242,6 +242,7 @@ export function RoutineDetailView(props: {
             defaultModel: props.defaultModel,
             decisionsEnabled: props.decisionsEnabled,
             connected: connectedApps,
+            taskDisabled: () => !props.source.canEditTask(),
             runsAs: () =>
               routine().ownerId === props.userId()
                 ? 'You'
@@ -262,6 +263,7 @@ export function RoutineDetailView(props: {
           }
           onChange={setState}
           stepsReadOnly={routine().isCopy}
+          taskDisabled={!props.source.canEditTask()}
           disabled={
             !isOwned() ||
             isRunning() ||
@@ -314,7 +316,7 @@ export function RoutineDetailView(props: {
                 <Dropdown.Content portalScope="local">
                   <Dropdown.Group>
                     {props.appearanceMenu}
-                    <Show when={!routine().isCopy}>
+                    <Show when={props.source.canDuplicate()}>
                       <Dropdown.Item
                         disabled={!state() || props.source.duplicationPending()}
                         onSelect={() => props.source.duplicate()}

@@ -9,6 +9,7 @@ import type {
 import { match } from 'ts-pattern';
 import type { ScheduleDraft } from './draft';
 import { isSubRoutineCopy, type StepDraft } from './routine-steps';
+import { hasProgramDefinitionsOrInputs } from './sub-routines';
 
 const MENTION_PATTERN =
   /<m-(user|document)-mention>([\s\S]*?)<\/m-\1-mention>/g;
@@ -161,11 +162,7 @@ function routineTimezone(draft: ScheduleDraft | undefined) {
  * input values, since a template offers only the references in its own steps.
  */
 export function sharesAsTemplate(task: RoutineTask): boolean {
-  if (isSubRoutineCopy(task)) return false;
-  return !(
-    'steps' in task &&
-    (task.sub_routines?.length || task.inputs?.length)
-  );
+  return !isSubRoutineCopy(task) && !hasProgramDefinitionsOrInputs(task);
 }
 
 /**

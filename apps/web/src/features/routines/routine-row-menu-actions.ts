@@ -18,6 +18,7 @@ import { getErrorMessage } from './core/routine-draft';
 import type { RoutineRow } from './core/types';
 import { createRoutineRowOperations } from './queries/routine-sources';
 import { openShareRoutineDialog } from './routine-template';
+import { useSubRoutineWrites } from './use-sub-routine-writes';
 
 /** Where the list is shown, and how it opens a routine. */
 type RoutineListHost = {
@@ -39,34 +40,38 @@ export function useRoutineRowMenuActions(
 ): RoutineRowMenuActions {
   const owner = getOwner();
   const sharing = useFeatureFlag(enableRoutineSharing);
+  const subRoutineWrites = useSubRoutineWrites();
   const copyLink = makeCopyLinkAction();
   const copyId = makeCopyEntityIdAction();
-  const operations = createRoutineRowOperations({
-    onError: (operation, error) =>
-      toast.alert(
-        match(operation)
-          .with('run', () => t('routineMenu.runFailed'))
-          .with('duplicate', () => t('routineMenu.duplicateFailed'))
-          .with('keep', () => t('routineMenu.keepFailed'))
-          .exhaustive(),
-        { subtext: getErrorMessage(error) }
-      ),
-    onRunStarted: () => toast.success(t('routineMenu.runStarted')),
-    // The copy stays in the list; the toast opens it.
-    onDuplicated: (id) =>
-      toast.success(t('routineMenu.duplicated'), {
-        dismissStyle: 'icon',
-        actions: [
-          {
-            label: t('entityActions.open'),
-            icon: ArrowSquareOutIcon,
-            trailingIcon: true,
-            onClick: () => host.open(id),
-          },
-        ],
-      }),
-    onKept: () => toast.success(t('subRoutines.kept')),
-  });
+  const operations = createRoutineRowOperations(
+    {
+      onError: (operation, error) =>
+        toast.alert(
+          match(operation)
+            .with('run', () => t('routineMenu.runFailed'))
+            .with('duplicate', () => t('routineMenu.duplicateFailed'))
+            .with('keep', () => t('routineMenu.keepFailed'))
+            .exhaustive(),
+          { subtext: getErrorMessage(error) }
+        ),
+      onRunStarted: () => toast.success(t('routineMenu.runStarted')),
+      // The copy stays in the list; the toast opens it.
+      onDuplicated: (id) =>
+        toast.success(t('routineMenu.duplicated'), {
+          dismissStyle: 'icon',
+          actions: [
+            {
+              label: t('entityActions.open'),
+              icon: ArrowSquareOutIcon,
+              trailingIcon: true,
+              onClick: () => host.open(id),
+            },
+          ],
+        }),
+      onKept: () => toast.success(t('subRoutines.kept')),
+    },
+    subRoutineWrites
+  );
   const share = (row: RoutineRow) =>
     openShareRoutineDialog({ routineId: row.id, name: row.name }, owner);
   const remove = (row: RoutineRow) => {
@@ -111,6 +116,7 @@ export function useRoutineRowMenuActions(
     onRun: (row) => operations.run(row.id),
     runPending: (row) => operations.runPending(row.id),
     onDuplicate: (row) => operations.duplicate(row.id),
+    canDuplicate: (row) => operations.canDuplicate(row.id),
     onKeep: (row) => operations.keepAsOwn(row.id),
     onCopyLink: (row) =>
       fireAndForget(copyLink.executeByBlock(row.id, 'routine'), 'routines'),

@@ -42,6 +42,7 @@ import {
 } from '../core/routine-target';
 import {
   copyOf,
+  hasProgramDefinitionsOrInputs,
   programInputs,
   subRoutinesFromWire,
   subRoutinesToWire,
@@ -460,9 +461,12 @@ export function draftToUpdateBody(
 }
 
 export function scheduleToDuplicateBody(
-  schedule: ScheduledAction
+  schedule: ScheduledAction,
+  subRoutineWrites = true
 ): ActionConfiguration | undefined {
   if (isSubRoutineCopy(schedule.task)) return undefined;
+  if (!subRoutineWrites && hasProgramDefinitionsOrInputs(schedule.task))
+    return undefined;
   const trigger = schedule.trigger ?? getCronTrigger(schedule);
   if (!trigger) return undefined;
   return {

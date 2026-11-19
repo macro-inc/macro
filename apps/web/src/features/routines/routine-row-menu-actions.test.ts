@@ -41,6 +41,7 @@ vi.mock('./queries/routine-sources', () => ({
     run: vi.fn(),
     runPending: () => false,
     duplicate: vi.fn(),
+    canDuplicate: () => true,
     keepAsOwn: vi.fn(),
     createdCount: () =>
       new Promise((resolve) => {

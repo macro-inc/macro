@@ -1,4 +1,6 @@
+import { t } from '@app/lib/i18n';
 import { usePending } from '@app/observability/flow';
+import { deepEqual } from '@core/util/compareUtils';
 import { fireAndForget } from '@core/util/fireAndForget';
 import { type Span, Telemetry } from '@macro-inc/observability';
 import type { ScheduledActionResponse } from '@service-scheduled-action/generated/schemas';
@@ -19,6 +21,8 @@ import { withDraftSteps } from '../core/routine-draft';
 import { isSubRoutineCopy, programSteps } from '../core/routine-steps';
 import {
   copyOf,
+  draftHasDefinitionsOrInputs,
+  hasProgramDefinitionsOrInputs,
   subRoutinesFromWire,
   wireDefinition,
 } from '../core/sub-routines';
@@ -105,7 +109,8 @@ async function traceRoutineRequest<T>(span: Span, request: () => Promise<T>) {
 export function createRoutineDetailSource(
   id: Accessor<string>,
   userId: Accessor<string | undefined>,
-  callbacks: DetailCallbacks
+  callbacks: DetailCallbacks,
+  subRoutineWrites: Accessor<boolean | undefined>
 ): RoutineDetailSource {
   const list = useSchedulesQuery(() => true);
   const detail = useRoutineQuery(id);
@@ -120,6 +125,20 @@ export function createRoutineDetailSource(
     const current = raw();
     return current?.id ? toRoutine(current) : undefined;
   });
+  const canEditTask = () => {
+    const current = raw();
+    return (
+      !current ||
+      subRoutineWrites() === true ||
+      !hasProgramDefinitionsOrInputs(current.task)
+    );
+  };
+  const duplicateBody = () => {
+    const current = raw();
+    return (
+      current && scheduleToDuplicateBody(current, subRoutineWrites() === true)
+    );
+  };
   const update = useUpdateScheduleMutation();
   const run = useRunScheduleNowMutation({
     onError: (error) => callbacks.onError('Failed to start run', error),
@@ -200,6 +219,12 @@ export function createRoutineDetailSource(
     const previous = raw();
     const body = previous && draftToUpdateBody(draft, previous);
     if (!body) throw new Error('Choose a valid execution target.');
+    if (
+      subRoutineWrites() !== true &&
+      hasProgramDefinitionsOrInputs(body.task) &&
+      !deepEqual(body.task, previous.task)
+    )
+      throw new Error(t('subRoutines.writesDisabled'));
     // An edit that changes nothing (a blur, a value picked again) writes
     // nothing, so queued runs keep their configuration.
     if (isUnchangedUpdate(body, previous)) return toRoutine(previous);
@@ -232,9 +257,10 @@ export function createRoutineDetailSource(
       if (!approving()) activate.mutate({ scheduleId: id(), enabled });
     },
     activationPending: () => activate.isPending,
+    canEditTask,
+    canDuplicate: () => Boolean(duplicateBody()),
     duplicate() {
-      const current = raw();
-      const body = current && scheduleToDuplicateBody(current);
+      const body = duplicateBody();
       if (body && !duplicate.isPending) duplicate.mutate({ body });
     },
     duplicationPending: () => duplicate.isPending,
@@ -262,6 +288,7 @@ export function createRoutineDetailSource(
       if (
         !current ||
         current.owner !== userId() ||
+        !canEditTask() ||
         approving() ||
         activate.isPending
       )
@@ -313,11 +340,16 @@ export function createRoutineDetailSource(
   };
 }
 
-export function createRoutineCreatorSource(): RoutineCreatorSource {
+export function createRoutineCreatorSource(
+  subRoutineWrites: Accessor<boolean | undefined>
+): RoutineCreatorSource {
   const mutation = useCreateScheduleMutation();
   return {
     pending: () => mutation.isPending,
     async create(draft) {
+      if (subRoutineWrites() !== true && draftHasDefinitionsOrInputs(draft)) {
+        throw new Error(t('subRoutines.writesDisabled'));
+      }
       const created = await mutation.mutateAsync({
         body: draftToCreateBody(draft),
         suggestionId: draft.suggestionId,
@@ -389,7 +421,8 @@ function createPerRoutineMutation(mutate: (id: string) => Promise<unknown>) {
  * sub-routines both, since either can be a row.
  */
 export function createRoutineRowOperations(
-  callbacks: RowOperationCallbacks
+  callbacks: RowOperationCallbacks,
+  subRoutineWrites: Accessor<boolean | undefined> = () => true
 ): RoutineRowOperations {
   const list = useSchedulesQuery(() => true);
   const children = useSubRoutinesQuery(() => true);
@@ -420,9 +453,14 @@ export function createRoutineRowOperations(
   const running = createPerRoutineMutation((id) =>
     run.mutateAsync({ scheduleId: id })
   );
-  const duplicating = createPerRoutineMutation(async (id) => {
+  const duplicateBody = (id: string) => {
     const schedule = find(id);
-    const body = schedule && scheduleToDuplicateBody(schedule);
+    return (
+      schedule && scheduleToDuplicateBody(schedule, subRoutineWrites() === true)
+    );
+  };
+  const duplicating = createPerRoutineMutation(async (id) => {
+    const body = duplicateBody(id);
     if (body) await duplicate.mutateAsync({ body });
   });
   const keeping = createPerRoutineMutation(async (id) => {
@@ -443,6 +481,7 @@ export function createRoutineRowOperations(
     run: running.start,
     runPending: running.pending,
     duplicate: duplicating.start,
+    canDuplicate: (id) => Boolean(duplicateBody(id)),
     keepAsOwn: keeping.start,
     async createdCount(id) {
       const created = await fetchChildren(id);

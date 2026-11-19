@@ -1,6 +1,13 @@
+import { t } from '@app/lib/i18n';
 import { fireAndForget } from '@core/util/fireAndForget';
 import { Button, ConfirmDialog, ToggleSwitch } from '@ui';
-import { type Component, createSignal, For, Show } from 'solid-js';
+import {
+  type Accessor,
+  type Component,
+  createSignal,
+  For,
+  Show,
+} from 'solid-js';
 import { RoutineEditor } from '../components/routine-editor';
 import type { RoutineEditorSlots } from '../context/routine-slots';
 import type {
@@ -9,6 +16,7 @@ import type {
 } from '../context/routine-sources';
 import type { CreatedRoutineItem } from '../core/draft';
 import { withNewDraftSteps } from '../core/routine-draft';
+import { draftHasDefinitionsOrInputs } from '../core/sub-routines';
 import { createRoutineComposer } from '../primitives/routine-composer';
 import { routineSections } from './routine-sections';
 
@@ -36,6 +44,7 @@ function CreatedItems(props: {
  */
 export function RoutineNewView(props: {
   source: RoutineCreatorSource;
+  subRoutineWrites: Accessor<boolean | undefined>;
   storage: RoutineDraftStorage;
   slots: RoutineEditorSlots;
   defaultModel: string;
@@ -56,6 +65,8 @@ export function RoutineNewView(props: {
       connected
     );
   const pending = () => props.source.pending();
+  const taskDisabled = () =>
+    props.subRoutineWrites() !== true && draftHasDefinitionsOrInputs(draft());
   const leave = () => {
     discard();
     props.onCancel();
@@ -88,6 +99,7 @@ export function RoutineNewView(props: {
           defaultModel: props.defaultModel,
           decisionsEnabled: props.decisionsEnabled,
           connected,
+          taskDisabled,
           runsAs: () => 'You',
           runsAsDescription: 'Steps and AI act with your access.',
         })}
@@ -95,6 +107,7 @@ export function RoutineNewView(props: {
         draft={draft()}
         onChange={change}
         disabled={pending()}
+        taskDisabled={taskDisabled()}
         tab="settings"
         onTab={() => {}}
         onBack={cancel}
@@ -136,6 +149,11 @@ export function RoutineNewView(props: {
                 </p>
               )}
             </Show>
+            <Show when={props.subRoutineWrites() === false && taskDisabled()}>
+              <p role="status" class="text-sm text-ink-muted">
+                {t('subRoutines.writesDisabled')}
+              </p>
+            </Show>
           </>
         }
         footer={
@@ -145,7 +163,7 @@ export function RoutineNewView(props: {
             </Button>
             <Button
               variant="primary"
-              disabled={pending()}
+              disabled={pending() || taskDisabled()}
               onClick={() => fireAndForget(create(), 'routines')}
             >
               {pending() ? 'Creating…' : 'Create routine'}

@@ -40,6 +40,7 @@ import {
   RoutineTemplatePage,
 } from './routine-template';
 import { RoutineTriggers } from './routine-triggers';
+import { useSubRoutineWrites } from './use-sub-routine-writes';
 import { RoutineDetailView } from './views/routine-detail';
 
 /** The built-in skill for composing routines (crates/system_skills). */
@@ -78,15 +79,21 @@ export function RoutineDetail(props: {
     props.onOpen
       ? props.onOpen(id)
       : openAgentsPage(layout, 'routines', { routineId: id });
-  const source = createRoutineDetailSource(() => props.scheduleId, userId, {
-    onError: (title, error) =>
-      toast.alert(title, { subtext: getErrorMessage(error) }),
-    onDuplicated: (id) => {
-      toast.success('Duplicated');
-      open(id);
+  const subRoutineWrites = useSubRoutineWrites();
+  const source = createRoutineDetailSource(
+    () => props.scheduleId,
+    userId,
+    {
+      onError: (title, error) =>
+        toast.alert(title, { subtext: getErrorMessage(error) }),
+      onDuplicated: (id) => {
+        toast.success('Duplicated');
+        open(id);
+      },
+      onKept: () => toast.success(t('subRoutines.kept')),
     },
-    onKept: () => toast.success(t('subRoutines.kept')),
-  });
+    subRoutineWrites
+  );
   const remove = () => {
     const entity = source.entity();
     if (!entity || entity.ownerId !== userId()) return;

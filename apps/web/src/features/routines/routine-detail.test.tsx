@@ -75,6 +75,7 @@ const mocks = vi.hoisted(() => ({
   rename: (_value: string): void => {},
   duplicate: (): void => {},
   sharing: (): boolean => false,
+  subRoutineWrites: (): boolean => true,
   shared: (): boolean => false,
   stopSharing: vi.fn(),
   detach: vi.fn(),
@@ -201,7 +202,12 @@ vi.mock('@components/app/split-layout/components/SplitFileMenu', () => ({
   },
 }));
 vi.mock('@app/lib/analytics/posthog', () => ({
-  useFeatureFlag: () => () => ({ enabled: mocks.sharing() }),
+  useFeatureFlag: (flag: { key: string }) => () => ({
+    enabled:
+      flag.key === 'enable-sub-routines'
+        ? mocks.subRoutineWrites()
+        : mocks.sharing(),
+  }),
 }));
 vi.mock('./routine-ai-composer', () => ({
   RoutineAiComposer: () => null,
@@ -433,6 +439,7 @@ beforeEach(() => {
   mocks.agentMetadata = () => ({ name: 'Agent transcript' });
   mocks.codeUpgrades = () => [];
   mocks.sharing = () => false;
+  mocks.subRoutineWrites = () => true;
   mocks.shared = () => false;
   mocks.history = () => [
     {
@@ -1429,6 +1436,27 @@ describe('sub-routines defined once', () => {
     expect(mocks.stopSharing).toHaveBeenCalledExactlyOnceWith({
       scheduleId: 'routine-id',
     });
+  });
+
+  it('keeps metadata writable while rollout blocks task edits and Duplicate', async () => {
+    mocks.subRoutineWrites = () => false;
+    setSchedules([{ ...parent, id: 'routine-id' }]);
+    render(() => <Routine />);
+    const definition = screen.getByRole('group', { name: 'Remind me' });
+    expect(definition.closest('fieldset')?.disabled).toBe(true);
+    fireEvent.click(
+      screen.getByRole('switch', { name: 'Show runs in Home and Agents' })
+    );
+    await vi.advanceTimersByTimeAsync(300);
+    expect(mocks.update).toHaveBeenCalledExactlyOnceWith({
+      scheduleId: 'routine-id',
+      body: expect.objectContaining({
+        task: parent.task,
+        run_visibility: 'listed',
+      }),
+    });
+    openActions();
+    expect(screen.queryByRole('menuitem', { name: 'Duplicate' })).toBeNull();
   });
 
   it('holds the parent-definition flow phase until the parent list arrives', () => {

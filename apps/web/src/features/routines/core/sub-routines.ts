@@ -3,7 +3,11 @@ import type {
   RoutineSubRoutine,
   RoutineTask,
 } from '@service-scheduled-action/generated/schemas';
-import type { SubRoutineCopyDraft, SubRoutineDraft } from './draft';
+import type {
+  ScheduleDraft,
+  SubRoutineCopyDraft,
+  SubRoutineDraft,
+} from './draft';
 import {
   isSubRoutineCopy,
   type StepDraft,
@@ -74,6 +78,16 @@ export function wireDefinition(task: RoutineTask, name: string) {
 /** The program's own input values, as a kept copy holds them. */
 export function programInputs(task: RoutineTask): RoutineInput[] {
   return 'steps' in task ? (task.inputs ?? []) : [];
+}
+
+export function hasProgramDefinitionsOrInputs(task: RoutineTask): boolean {
+  return (
+    'steps' in task && Boolean(task.sub_routines?.length || task.inputs?.length)
+  );
+}
+
+export function draftHasDefinitionsOrInputs(draft: ScheduleDraft): boolean {
+  return Boolean(draft.subRoutines?.length || draft.inputs?.length);
 }
 
 /** One sub-routine's steps changed, the others as they were. */

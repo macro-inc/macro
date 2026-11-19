@@ -44,6 +44,8 @@ export default {
     'Its routine no longer defines this, so it fails when it runs.',
   copyDefinitionHidden: 'Its steps use a configuration this page can’t show.',
   loadingDefinition: 'Loading definition…',
+  writesDisabled:
+    'Saving tasks with sub-routines or stored inputs is unavailable.',
   copyValues: 'Given',
   showCode: 'Show code',
   hideCode: 'Hide code',

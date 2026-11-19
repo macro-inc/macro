@@ -16,6 +16,7 @@ import { RoutineExecutionPicker } from './routine-execution-picker';
 import { RoutinePromptEditor } from './routine-prompt-editor';
 import { createRoutineStepAuthor } from './routine-step-author';
 import { RoutineTriggers } from './routine-triggers';
+import { useSubRoutineWrites } from './use-sub-routine-writes';
 import { RoutineNewView } from './views/routine-new';
 
 /** Production composition for a new routine's page, in the routines pane. */
@@ -23,7 +24,8 @@ export function RoutineNew(props: {
   onCreated(id: string): void;
   onCancel(): void;
 }) {
-  const source = createRoutineCreatorSource();
+  const subRoutineWrites = useSubRoutineWrites();
+  const source = createRoutineCreatorSource(subRoutineWrites);
   const hasPaidAccess = useHasPaidAccess();
   // Each start remounts the page, so its editors take the new draft.
   const [start, setStart] = createSignal<{ draft?: ScheduleDraft }>({});
@@ -45,6 +47,7 @@ export function RoutineNew(props: {
         return (
           <RoutineNewView
             source={source}
+            subRoutineWrites={subRoutineWrites}
             defaultModel={defaultModelForPlan(hasPaidAccess())}
             decisionsEnabled
             CreatedItem={RoutineCreatedItem}
