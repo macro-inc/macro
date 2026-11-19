@@ -2,6 +2,7 @@ import type { ItemDragOverlayData } from '@app/components/app/ItemDragAndDrop';
 import { ListSkeleton } from '@app/components/view-shell/ListSkeleton';
 import { t } from '@app/lib/i18n';
 import { isTouchDevice } from '@core/mobile/isTouchDevice';
+import { fireAndForget } from '@core/util/fireAndForget';
 import CaretDownIcon from '@icon/system/regular/caret-down.svg';
 import CaretUpIcon from '@icon/system/regular/caret-up.svg';
 import CheckIcon from '@icon/system/regular/check.svg';
@@ -22,9 +23,9 @@ import { For, type JSX, Match, Show, Suspense, Switch } from 'solid-js';
 import {
   SettingsCard,
   SettingsPage,
+  SettingsRow,
   SettingsSection,
 } from '../../settings/primitives';
-import { CrmListError } from '../components/list-state';
 import { CrmStageIcon } from '../components/stage-icon';
 import { useCrmContext } from '../context/crm-context';
 import { createStageEditor } from '../primitives/stage-editor';
@@ -517,10 +518,21 @@ function CrmContent(props: { onOpenThread?: () => void }) {
             <Show when={accessState() === 'error'}>
               <SettingsSection>
                 <SettingsCard>
-                  <CrmListError
-                    title={t('crm.accessCheckFailed')}
-                    onRetry={retryAccess}
-                  />
+                  <SettingsRow
+                    label={
+                      <span role="alert" class="text-failure">
+                        {t('crm.accessCheckFailed')}
+                      </span>
+                    }
+                  >
+                    <Button
+                      variant="secondary"
+                      size="sm"
+                      onClick={() => fireAndForget(retryAccess(), 'crm')}
+                    >
+                      {t('crm.tryAgain')}
+                    </Button>
+                  </SettingsRow>
                 </SettingsCard>
               </SettingsSection>
             </Show>

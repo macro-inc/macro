@@ -164,14 +164,33 @@ it.each(['pending', 'error'] as const)(
   }
 );
 
-it('offers the access retry when the check failed', () => {
+it('reports a failed access check in a settings row with its retry', () => {
   state.canAccess = () => false;
   state.accessState = () => 'error';
   render(() => <Crm />);
 
+  expect(screen.getByRole('alert').textContent).toBe(
+    "Couldn't check your CRM access."
+  );
+  // The list views' full-pane empty state would push the settings off screen.
+  expect(
+    screen.queryByText('Please try again to reload this view.')
+  ).toBeNull();
   fireEvent.click(screen.getByRole('button', { name: 'Try again' }));
   expect(state.retryAccess).toHaveBeenCalledOnce();
 });
+
+it.each(['pending', 'allowed', 'denied'] as const)(
+  'shows no access failure while the check is %s',
+  (access) => {
+    state.canAccess = () => access === 'allowed';
+    state.accessState = () => access;
+    render(() => <Crm />);
+
+    expect(screen.queryByRole('alert')).toBeNull();
+    expect(screen.queryByRole('button', { name: 'Try again' })).toBeNull();
+  }
+);
 
 it('disposes protected settings sources on revocation and keeps contribution mounted', () => {
   state.role = 'member';
