@@ -64,6 +64,7 @@ where
                 tracing::info!(
                     inboxes = report.inboxes,
                     inboxes_unknown = report.inboxes_unknown,
+                    inboxes_left = report.inboxes_left,
                     candidates = report.candidates,
                     classified = report.classified,
                     redecided = report.redecided,

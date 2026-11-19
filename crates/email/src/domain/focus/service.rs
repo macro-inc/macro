@@ -75,6 +75,10 @@ pub struct SweepReport {
     /// Inboxes left out because their place in the rollout could not be
     /// read; the next sweep tries them again.
     pub inboxes_unknown: usize,
+    /// Inboxes a thread found out of the rollout partway through, because who
+    /// reads them changed since they were found in it; their other threads
+    /// wait for a sweep or a backfill that finds them in again.
+    pub inboxes_left: usize,
     /// Threads the sweep found stale.
     pub candidates: usize,
     /// Threads classified.
@@ -164,8 +168,9 @@ pub struct FocusService<S, P, C, N, D, E> {
     enrolled: Mutex<HashMap<Uuid, FocusInboxOwner>>,
     /// Threads a sweep checked at their latest mail without storing a result
     /// (rejected, nothing to classify, or a result already stored), so later
-    /// sweeps skip them until new mail arrives. In memory: a restart retries
-    /// each once.
+    /// sweeps skip them until new mail arrives. Never a thread found out of
+    /// the rollout: that depends on who reads its inbox, not on its mail. In
+    /// memory: a restart retries each once.
     settled: Mutex<HashMap<Uuid, DateTime<Utc>>>,
     /// Inboxes being backfilled, which the sweep leaves to the backfill so no
     /// thread goes to the classifier twice at once.
@@ -694,13 +699,16 @@ where
             }
 
             // Once one result says stop, the threads not yet started stay for
-            // a later sweep; those already at the classifier finish.
+            // a later sweep; those already at the classifier finish. Once a
+            // thread finds the inbox out of the rollout, so do the rest of it.
             let stop = AtomicBool::new(false);
+            let left = AtomicBool::new(false);
             let mut outcomes = stream::iter(to_check)
                 .map(|(thread_id, latest_at)| {
                     let stop = &stop;
+                    let left = &left;
                     async move {
-                        if stop.load(Ordering::Relaxed) {
+                        if stop.load(Ordering::Relaxed) || left.load(Ordering::Relaxed) {
                             return (thread_id, latest_at, None);
                         }
                         (
@@ -751,6 +759,15 @@ where
                             report.stopped_early = true;
                         }
                     }
+                    // Not settled: the answer depends on who reads the inbox,
+                    // not on its mail, so the thread is checked again once the
+                    // inbox is back in the rollout.
+                    Ok(ClassifyOutcome::NotEnabled) => {
+                        report.skipped += 1;
+                        if !left.swap(true, Ordering::Relaxed) {
+                            report.inboxes_left += 1;
+                        }
+                    }
                     Ok(_) => {
                         report.skipped += 1;
                         self.settled().insert(thread_id, latest_at);
@@ -764,7 +781,7 @@ where
             if progress.report.stopped_early || out_of_budget {
                 return Ok(false);
             }
-            if last_page {
+            if last_page || left.load(Ordering::Relaxed) {
                 return Ok(true);
             }
         }

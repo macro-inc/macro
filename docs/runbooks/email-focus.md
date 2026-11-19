@@ -55,7 +55,9 @@ so it keeps classifying a removed user's new mail, in their own inboxes and
 those linked to them, for about 5 minutes,
 as long as its polls succeed: a failed poll keeps the last definitions, for up
 to an hour (below). A `feature_flags.definitions_poll` span after the change
-shows the worker has it. Stored classifications stay.
+shows the worker has it. An inbox someone still in the rollout also reads (its
+owner, or another user it is linked to) goes on being classified after that.
+Stored classifications stay.
 
 If the worker can't fetch the definitions for an hour, or the flag gains a
 condition it can't evaluate locally (a cohort, variants, an unknown field),

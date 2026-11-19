@@ -629,6 +629,7 @@ async fn sweep_classifies_every_stale_thread() {
         SweepReport {
             inboxes: 1,
             inboxes_unknown: 0,
+            inboxes_left: 0,
             candidates: 3,
             classified: 2,
             redecided: 0,
@@ -1722,6 +1723,64 @@ async fn a_linked_inbox_drops_out_once_it_is_unlinked() {
     let report = service.sweep(Duration::days(30), 100).await.unwrap();
     assert_eq!(report.inboxes, 0);
     assert!(service.enrolled().is_empty());
+}
+
+#[tokio::test]
+async fn a_thread_found_out_of_the_rollout_is_checked_again_once_its_inbox_is_back_in() {
+    let store = FakeStore::default();
+    link_to_primary(&store);
+    let classifier = FakeClassifier::answering(Ok(relevant()));
+    let enrollment = FakeEnrollment::enrolling(&[PRIMARY]);
+    let service = service(&store, &classifier, &enrollment);
+    // Mail arrives: the inbox joins the sweep through its primary user,
+    // holding no Focus yet.
+    service
+        .classify_thread(insert(&store, thread(OWNER)))
+        .await
+        .unwrap();
+    for _ in 0..2 {
+        let thread_id = insert(&store, thread(OWNER));
+        store.stale.lock().unwrap().push((
+            INBOX,
+            StaleThread {
+                thread_id,
+                latest_at: noon(),
+            },
+        ));
+    }
+    assert!(store.focus_inboxes.lock().unwrap().is_empty());
+
+    // Unlinked after the sweep remembered whom: the first thread finds the
+    // inbox out, and the rest of it is left unread.
+    store.delegates.lock().unwrap().clear();
+    let report = service.sweep(Duration::days(30), 100).await.unwrap();
+    assert_eq!(
+        (
+            report.inboxes,
+            report.inboxes_left,
+            report.candidates,
+            report.skipped
+        ),
+        (1, 1, 2, 1)
+    );
+    assert!(service.settled().is_empty());
+    assert_eq!(*store.mail_reads.lock().unwrap(), 1);
+
+    // Linked again: both threads are classified, none skipped as checked.
+    link_to_primary(&store);
+    let inbox = FocusInboxOwner {
+        link_id: INBOX,
+        owner: owner(OWNER),
+        delegates: vec![owner(PRIMARY)],
+    };
+    let report = service
+        .backfill(&inbox, Duration::days(30), 3, DueDates::Read)
+        .await
+        .unwrap();
+    assert_eq!(
+        (report.inboxes, report.classified, report.skipped),
+        (1, 2, 0)
+    );
 }
 
 #[tokio::test]

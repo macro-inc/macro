@@ -113,15 +113,25 @@ struct Backfills {
 }
 
 impl Backfills {
-    /// Queue the enrolled inboxes not yet filled; forget those that left.
+    /// Queue the enrolled inboxes not yet filled; forget those that left. An
+    /// inbox still waiting keeps its place and takes who it is linked to now.
     fn found(&mut self, enrolled: Vec<FocusInboxOwner>, now: Instant) {
-        let ids: HashSet<_> = enrolled.iter().map(|inbox| inbox.link_id).collect();
-        self.filled.retain(|link_id| ids.contains(link_id));
-        self.dropped.retain(|link_id, _| ids.contains(link_id));
-        self.first
-            .retain(|waiting| ids.contains(&waiting.inbox.link_id));
-        self.rest
-            .retain(|waiting| ids.contains(&waiting.inbox.link_id));
+        let current: HashMap<Uuid, &FocusInboxOwner> = enrolled
+            .iter()
+            .map(|inbox| (inbox.link_id, inbox))
+            .collect();
+        self.filled.retain(|link_id| current.contains_key(link_id));
+        self.dropped
+            .retain(|link_id, _| current.contains_key(link_id));
+        for queue in [&mut self.first, &mut self.rest] {
+            queue.retain_mut(|waiting| match current.get(&waiting.inbox.link_id) {
+                Some(inbox) => {
+                    waiting.inbox = (*inbox).clone();
+                    true
+                }
+                None => false,
+            });
+        }
         for inbox in enrolled {
             let known = self.filled.contains(&inbox.link_id)
                 || self.running.contains(&inbox.link_id)
@@ -156,8 +166,9 @@ impl Backfills {
     }
 
     /// Record how a pass ended. A first pass done queues the rest; a pass the
-    /// classifier stopped or that failed is dropped, so the next look queues
-    /// the inbox again.
+    /// classifier stopped, that failed or that found the inbox out of the
+    /// rollout is dropped, so the next look queues the inbox again if it is
+    /// in then, with who it is linked to then.
     fn done(&mut self, waiting: Waiting, pass: Pass, completed: bool, stop: bool) {
         self.running.remove(&waiting.inbox.link_id);
         match (pass, completed) {
@@ -294,6 +305,7 @@ fn finish(backfills: &mut Backfills, finished: Finished, metrics: &FocusMetrics)
                 %link_id,
                 pass = pass.name(),
                 enrolled = report.inboxes == 1,
+                left_rollout = report.inboxes_left > 0,
                 candidates = report.candidates,
                 classified = report.classified,
                 redecided = report.redecided,
@@ -305,17 +317,20 @@ fn finish(backfills: &mut Backfills, finished: Finished, metrics: &FocusMetrics)
                 since_found_secs = since_found,
                 "focus backfill pass finished"
             );
-            // Timed only once the whole inbox went through: an inbox that
-            // reads as not enrolled, or a pass with failed threads, is not
-            // filled.
-            if waiting.new && report.inboxes == 1 && report.failed == 0 && !report.stopped_early {
+            // An inbox that read as out of the rollout, at the start or
+            // partway through, was not filled: the pass may have asked people
+            // it is no longer linked to.
+            let in_rollout = report.inboxes == 1 && report.inboxes_left == 0;
+            // Timed only once the whole inbox went through: a pass with
+            // failed threads did not fill it either.
+            if waiting.new && in_rollout && report.failed == 0 && !report.stopped_early {
                 let filled = match pass {
                     Pass::First => Metric::BackfillTopFilledSeconds,
                     Pass::Rest => Metric::BackfillFilledSeconds,
                 };
                 metrics.observe(filled, since_found);
             }
-            (!report.stopped_early, report.stopped_early)
+            (in_rollout && !report.stopped_early, report.stopped_early)
         }
         Err(error) => {
             metrics.add(Metric::BackfillPassFailures, 1.0);
