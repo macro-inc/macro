@@ -233,7 +233,7 @@ pub struct ExecuteCodeWithOcaml {
     #[schemars(
         description = "The language of source: javascript (the default) or ocaml. Omit it for JavaScript."
     )]
-    pub language: ProgramLanguage,
+    pub language: OcamlToolLanguage,
     /// A JavaScript ES module, or an OCaml program.
     #[schemars(
         description = "The program, at most 64 KiB. JavaScript (the default): import { Macro } from '@macro-inc/sdk' and Handlebars from 'handlebars'. Export async function main({token, hosts, webAppUrl}) { const macro = new Macro({token, hosts, webAppUrl}); return {data: ...}; }. The optional reviews array defaults to empty. Dependencies are preinstalled; no TypeScript syntax or package downloads. The token, hosts and webAppUrl are supplied by the runner; never return or log the token. OCaml (language ocaml): main.ml calling Code_mode.run once and returning `Assoc [(\"data\", ...)], as the description's OCaml section shows."
@@ -269,10 +269,31 @@ impl AsyncTool<CodeModeToolContext> for ExecuteCodeWithOcaml {
             ExecuteRequest {
                 source: self.source.clone(),
                 timeout_ms: self.timeout_ms,
-                language: self.language.into(),
+                language: ProgramLanguage::from(self.language).into(),
             },
         )
         .await
+    }
+}
+
+/// The languages [`ExecuteCodeWithOcaml`] takes: the [`ProgramLanguage`]s
+/// offered to the model so far.
+#[derive(Debug, Clone, Copy, Default, PartialEq, Eq, Serialize, Deserialize, JsonSchema)]
+#[serde(rename_all = "snake_case")]
+pub enum OcamlToolLanguage {
+    /// A JavaScript ES module exporting `main`.
+    #[default]
+    Javascript,
+    /// An OCaml program (`main.ml`) that calls `Code_mode.run` with the OCaml SDK.
+    Ocaml,
+}
+
+impl From<OcamlToolLanguage> for ProgramLanguage {
+    fn from(language: OcamlToolLanguage) -> Self {
+        match language {
+            OcamlToolLanguage::Javascript => Self::Javascript,
+            OcamlToolLanguage::Ocaml => Self::Ocaml,
+        }
     }
 }
 

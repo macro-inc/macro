@@ -46,10 +46,10 @@ pub struct OcamlPrograms {
     /// The bundle's SDK fingerprint, recorded on every OCaml execution.
     pub fingerprint: String,
     /// The per-owner rollout.
-    pub rollout: Arc<dyn OcamlRollout>,
+    pub rollout: Arc<dyn OwnerRollout>,
     /// The per-owner rollout of agent permissions, which gate OCaml programs;
     /// `None` where they are not wired.
-    pub permissions: Option<Arc<dyn OcamlRollout>>,
+    pub permissions: Option<Arc<dyn OwnerRollout>>,
 }
 
 struct Inner {
@@ -99,7 +99,7 @@ impl CodeModeService {
     /// The OCaml bundle's fingerprint, recorded with an OCaml execution.
     fn sdk_fingerprint(&self, language: ProgramLanguage) -> Option<String> {
         match language {
-            ProgramLanguage::Javascript => None,
+            ProgramLanguage::Javascript | ProgramLanguage::JsTools => None,
             ProgramLanguage::Ocaml => self.0.ocaml.as_ref().map(|ocaml| ocaml.fingerprint.clone()),
         }
     }
@@ -524,9 +524,13 @@ impl SessionCodeMode for CodeModeService {
             ));
         }
         // JS tools programs are not offered to sessions yet.
-        let language = ProgramLanguage::try_from(request.language).map_err(|unoffered| {
-            CodeModeError::Invalid(format!("{unoffered}; write a JavaScript module."))
-        })?;
+        if request.language == Language::JsTools {
+            return Err(CodeModeError::Invalid(
+                "js_tools programs are not available in this session; write a JavaScript module."
+                    .into(),
+            ));
+        }
+        let language = ProgramLanguage::from(request.language);
         let permit = Arc::clone(&self.0.admission)
             .try_acquire_owned()
             .map_err(|_| CodeModeError::Busy)?;

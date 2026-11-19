@@ -155,11 +155,12 @@ impl PermissionApprovals for FakeHolds {
     }
 }
 
+/// On or off for every language.
 pub(crate) struct Rollout(pub bool);
 
 #[async_trait]
-impl OcamlRollout for Rollout {
-    async fn enabled(&self, _: &MacroUserIdStr<'static>) -> bool {
+impl LanguageRollout for Rollout {
+    async fn enabled(&self, _: &MacroUserIdStr<'static>, _: ProgramLanguage) -> bool {
         self.0
     }
 }
@@ -202,8 +203,12 @@ pub(crate) fn gate(
 ) -> Parts {
     let analyzer = Arc::new(FakeAnalyzer::new(analysis));
     let holds = Arc::new(FakeHolds::new(hold));
+    // One analyzer answers for every checked language.
     let gate = PermissionGate {
-        analyzer: analyzer.clone(),
+        analyzers: Analyzers {
+            ocaml: Some(analyzer.clone()),
+            js_tools: Some(analyzer.clone()),
+        },
         permissions: Arc::new(FakePermissions(
             states
                 .iter()
@@ -374,10 +379,10 @@ async fn a_program_that_cannot_be_analyzed_or_compiled_is_returned_to_rewrite() 
 
     // The analyzer failing is the service's: nothing runs.
     let mut parts = gate(two_calls(), &[], ToolApprovalStatus::Approved, true);
-    parts.gate.analyzer = Arc::new(FakeAnalyzer {
+    parts.gate.analyzers.ocaml = Some(Arc::new(FakeAnalyzer {
         analysis: Err(()),
         calls: Mutex::new(0),
-    });
+    }));
     assert!(matches!(
         parts
             .gate
@@ -609,4 +614,213 @@ async fn a_stopped_turn_or_no_turn_records_the_program_as_not_approved() {
         })
     ));
     assert!(parts.holds.held.lock().unwrap().is_empty());
+}
+
+/// On only for the languages listed.
+struct Languages(Vec<ProgramLanguage>);
+
+#[async_trait]
+impl LanguageRollout for Languages {
+    async fn enabled(&self, _: &MacroUserIdStr<'static>, language: ProgramLanguage) -> bool {
+        self.0.contains(&language)
+    }
+}
+
+#[tokio::test]
+async fn each_language_is_checked_only_with_its_own_rollout_and_analyzer() {
+    let mut parts = gate(two_calls(), &[], ToolApprovalStatus::Approved, true);
+    parts.gate.rollout = Arc::new(Languages(vec![ProgramLanguage::Ocaml]));
+    let identity = identity();
+    assert!(
+        parts
+            .gate
+            .check(&identity, "src", ProgramLanguage::JsTools)
+            .await
+            .unwrap()
+            .is_none()
+    );
+    assert_eq!(*parts.analyzer.calls.lock().unwrap(), 0);
+    assert!(
+        parts
+            .gate
+            .check(&identity, "src", ProgramLanguage::Ocaml)
+            .await
+            .unwrap()
+            .is_some()
+    );
+
+    // A build that can't analyze JavaScript tools programs doesn't gate them.
+    let mut parts = gate(two_calls(), &[], ToolApprovalStatus::Approved, true);
+    parts.gate.analyzers.js_tools = None;
+    assert!(
+        parts
+            .gate
+            .check(&identity, "src", ProgramLanguage::JsTools)
+            .await
+            .unwrap()
+            .is_none()
+    );
+    assert_eq!(*parts.analyzer.calls.lock().unwrap(), 0);
+}
+
+#[tokio::test]
+async fn a_js_tools_program_with_a_never_operation_is_refused_naming_it() {
+    let parts = gate(
+        two_calls(),
+        &[("email.send_message", PermissionState::Never)],
+        ToolApprovalStatus::Approved,
+        true,
+    );
+    let refused = not_run(
+        parts
+            .gate
+            .check(&identity(), "src", ProgramLanguage::JsTools)
+            .await,
+    );
+    assert!(
+        refused.message.starts_with(
+            "This program did not run: this agent is not allowed to Do send_message (Email, send, email.send_message)"
+        ),
+        "{}",
+        refused.message
+    );
+    assert!(matches!(
+        refused.permission,
+        Some(ExecutionPermission::Blocked { ref operations }) if operations.len() == 1
+    ));
+    assert!(parts.holds.held.lock().unwrap().is_empty());
+}
+
+#[tokio::test]
+async fn a_js_tools_program_that_cannot_be_analyzed_points_at_main_js() {
+    let parts = gate(
+        Analysis::CannotAnalyze(vec![AnalysisReason {
+            message: "`require` can't be used in a checked program.".into(),
+            line: 1,
+            column: 11,
+        }]),
+        &[],
+        ToolApprovalStatus::Approved,
+        true,
+    );
+    let refused = not_run(
+        parts
+            .gate
+            .check(&identity(), "src", ProgramLanguage::JsTools)
+            .await,
+    );
+    assert_eq!(refused.permission, None);
+    assert!(refused.message.starts_with("This program did not run."));
+    assert!(
+        refused
+            .message
+            .contains("main.js:1:11: `require` can't be used in a checked program.")
+    );
+    assert!(
+        refused
+            .message
+            .contains("tools.<service>.<operation>(input)")
+    );
+    assert!(!refused.message.contains("OCaml"));
+}
+
+#[tokio::test]
+async fn a_js_tools_ask_operation_holds_naming_the_language_and_runs_on_approval() {
+    let parts = gate(
+        two_calls(),
+        &[("email.send_message", PermissionState::Ask)],
+        ToolApprovalStatus::Approved,
+        true,
+    );
+    let identity = identity();
+    let checked = parts
+        .gate
+        .check(&identity, "the source", ProgramLanguage::JsTools)
+        .await
+        .unwrap()
+        .unwrap();
+    assert_eq!(checked.language, ProgramLanguage::JsTools);
+    assert_eq!(
+        checked.calls,
+        [
+            call("email", "send_message"),
+            call("storage", "get_document")
+        ]
+        .into()
+    );
+    parts
+        .gate
+        .hold(
+            &checked,
+            &identity,
+            &identity.owner,
+            "the source",
+            &CancellationToken::new(),
+        )
+        .await
+        .unwrap();
+    let held = parts.holds.held.lock().unwrap();
+    assert_eq!(held[0].operations, ["email.send_message"]);
+    assert_eq!(held[0].arguments["permission"]["language"], "js_tools");
+
+    // Declined: the program does not run.
+    let parts = gate(
+        two_calls(),
+        &[("email.send_message", PermissionState::Ask)],
+        ToolApprovalStatus::Denied,
+        true,
+    );
+    let checked = parts
+        .gate
+        .check(&identity, "src", ProgramLanguage::JsTools)
+        .await
+        .unwrap()
+        .unwrap();
+    let refused = not_run(
+        parts
+            .gate
+            .hold(
+                &checked,
+                &identity,
+                &identity.owner,
+                "src",
+                &CancellationToken::new(),
+            )
+            .await,
+    );
+    assert!(matches!(
+        refused.permission,
+        Some(ExecutionPermission::Declined {
+            status: DeclinedStatus::Denied,
+            ..
+        })
+    ));
+
+    // No turn to ask in.
+    let mut parts = gate(
+        two_calls(),
+        &[("email.send_message", PermissionState::Ask)],
+        ToolApprovalStatus::Approved,
+        true,
+    );
+    parts.gate.prompters = Arc::new(Prompters(Mutex::new(Vec::new())));
+    let refused = not_run(
+        parts
+            .gate
+            .hold(
+                &checked,
+                &identity,
+                &identity.owner,
+                "src",
+                &CancellationToken::new(),
+            )
+            .await,
+    );
+    assert!(
+        refused.message.starts_with(
+            "This program did not run: it needs a person's approval for: Do send_message"
+        ),
+        "{}",
+        refused.message
+    );
 }

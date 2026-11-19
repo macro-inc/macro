@@ -275,14 +275,14 @@ fn ocaml_execute_code_extends_the_javascript_tool_without_changing_it() {
     });
     assert!(serde_json::from_value::<ExecuteCode>(call.clone()).is_err());
     let parsed: ExecuteCodeWithOcaml = serde_json::from_value(call).unwrap();
-    assert_eq!(parsed.language, ProgramLanguage::Ocaml);
+    assert_eq!(parsed.language, OcamlToolLanguage::Ocaml);
     let parsed: ExecuteCodeWithOcaml = serde_json::from_value(serde_json::json!({
         "acting_as": "requester",
         "turn_id": "00000000-0000-0000-0000-000000000001",
         "source": "export async function main() { return {data: 1}; }",
     }))
     .unwrap();
-    assert_eq!(parsed.language, ProgramLanguage::Javascript);
+    assert_eq!(parsed.language, OcamlToolLanguage::Javascript);
 }
 
 #[test]
@@ -396,5 +396,43 @@ async fn sessions_see_and_call_ocaml_only_with_the_rollout() {
             assert!(result.is_err());
             assert!(service.seen.lock().unwrap().is_empty());
         }
+    }
+}
+
+#[tokio::test]
+async fn no_session_tool_takes_javascript_tools_programs_yet() {
+    use ai_toolset::ToolSet as _;
+    let session = agent_session::testing::test_agent_session(
+        agent_session::domain::model::AgentSessionId::new(),
+    );
+    let call = serde_json::json!({
+        "acting_as": "requester",
+        "turn_id": "00000000-0000-0000-0000-000000000001",
+        "source": "return await tools.storage.get_document_markdown({})",
+        "language": "js_tools",
+    });
+    for (ocaml, permissions) in [(false, false), (true, false), (true, true)] {
+        let service = Arc::new(Languages {
+            ocaml,
+            permissions,
+            seen: Default::default(),
+        });
+        let tools = session_toolset(service.as_ref(), &session).await;
+        let schema = serde_json::to_value(&tools.tools["ExecuteCode"].input_schema).unwrap();
+        assert!(!schema.to_string().contains("js_tools"));
+        let result = tools
+            .try_tool_call(
+                CodeModeToolContext {
+                    service: service.clone(),
+                    session: session.clone(),
+                    cognition: None,
+                },
+                RequestContext::new(user()),
+                "ExecuteCode",
+                &call,
+            )
+            .await;
+        assert!(result.is_err());
+        assert!(service.seen.lock().unwrap().is_empty());
     }
 }
