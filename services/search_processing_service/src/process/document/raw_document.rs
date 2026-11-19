@@ -34,6 +34,10 @@ use super::SearchExtractorMessage;
 /// The node id of the one chunk a Photoshop or Illustrator document indexes
 /// as, fixed so that a new version replaces it.
 const DESIGN_TEXT_NODE_ID: &str = "0";
+/// The node id of the one chunk a text or code file indexes as, fixed so that
+/// a new version replaces it and two reindexes running at once keep each
+/// other's chunk.
+const TEXT_FILE_NODE_ID: &str = "0";
 
 async fn upsert_document(
     opensearch_client: &OpensearchClient,
@@ -41,24 +45,6 @@ async fn upsert_document(
     upserts: Vec<UpsertDocumentArgs>,
 ) -> anyhow::Result<()> {
     let index_override = search_extractor_message.index_override.as_deref();
-    // Delete existing documents for the document id
-    // This ensures we replace any old nodes with new ones for editable files
-    // (a design's removed pages, for example)
-    match search_extractor_message.file_type {
-        FileType::Md
-        | FileType::Canvas
-        | FileType::Fig
-        | FileType::Psd
-        | FileType::Psb
-        | FileType::Ai => {
-            tracing::debug!("deleting existing search results");
-            opensearch_client
-                .delete_document(&search_extractor_message.document_id, index_override)
-                .await
-                .context("unable to delete existing search results")?;
-        }
-        _ => {}
-    }
 
     if let Err(error) = opensearch_client
         .bulk_upsert_documents(&upserts, index_override)
@@ -77,6 +63,22 @@ async fn upsert_document(
 
         return Err(error).context("failed to upsert documents");
     }
+
+    // Delete the existing nodes the new ones did not replace, for every file
+    // type: a design's removed pages, a shortened PDF's later pages, and the
+    // previous chunks of a text file, whose chunk ids change on every reindex.
+    let node_ids: Vec<&str> = upserts
+        .iter()
+        .map(|upsert| upsert.node_id.as_str())
+        .collect();
+    opensearch_client
+        .delete_stale_document_chunks(
+            &search_extractor_message.document_id,
+            &node_ids,
+            index_override,
+        )
+        .await
+        .context("unable to delete stale search results")?;
 
     tracing::trace!("upserted document");
 
@@ -395,7 +397,6 @@ pub async fn update_search_with_raw_document(
     tracing::trace!("got raw file content");
 
     let updated_at_millis = EpochMillis::new(Utc::now().timestamp_millis())?;
-    let uuid = macro_uuid::generate_uuid_v7().to_string();
 
     let mut upserts: Vec<UpsertDocumentArgs> = match file_type {
         FileType::Pdf | FileType::Docx => {
@@ -534,7 +535,7 @@ pub async fn update_search_with_raw_document(
             } else {
                 vec![UpsertDocumentArgs {
                     document_id: search_extractor_message.document_id.clone(),
-                    node_id: uuid,
+                    node_id: TEXT_FILE_NODE_ID.to_string(),
                     raw_content: None,
                     document_name,
                     content: content.clone(),

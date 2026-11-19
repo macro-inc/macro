@@ -18572,7 +18572,6 @@ dependencies = [
  "macro_queues",
  "macro_service_urls",
  "macro_user_id",
- "macro_uuid",
  "mention_utils",
  "messages",
  "model",
