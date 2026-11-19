@@ -43,6 +43,22 @@ projects.
 
 - `cargo test -p opensearch_client` (`SQLX_OFFLINE` unset; needs a running
   OpenSearch — see `crates/opensearch_query_builder/docker-compose.yml`).
+- A change to the content search builders (`src/search`, or the
+  `opensearch_query_builder` queries they use) merges only with
+  `tests/content_search.rs` passing. It seeds documents, chats and calls
+  through the upsert paths, runs `search_unified`, and compares each search
+  with the matches its rules select over `_analyze` tokens. A new matching
+  rule changes its oracle in the same change. It needs an OpenSearch whose
+  search indices are empty, so plain `cargo test` skips it (`test = false`);
+  CI runs it whenever this crate is selected. Locally, on a free port:
+  `docker build -t search-opensearch infra/local/opensearch`, `docker run -d
+  -p 127.0.0.1:<port>:9200 -e discovery.type=single-node search-opensearch`,
+  then `create_indices.ts` (`infra/stacks/opensearch/helpers`, with
+  `ENVIRONMENT=local DRY_RUN=false OPENSEARCH_URL=http://127.0.0.1:<port>`
+  and any username and password) and
+  `SEARCH_TEST_OPENSEARCH_URL=http://127.0.0.1:<port> cargo test -p
+  opensearch_client --test content_search`. A search the test keeps for a
+  known bug is `#[ignore = "known bug: ..."]`; the fix removes the ignore.
 
 ## Gotchas
 
