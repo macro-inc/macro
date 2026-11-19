@@ -972,7 +972,8 @@ stopping.
 
 The row's one action is **Retry setup** on a `failed` computer (team owner
 and admins; it sets it up again, billing untouched), else **Finish setup**
-while guided setup is incomplete (only for the team's owner and admins), else
+while guided setup is incomplete (only for the team's owner and admins; an
+agent teammate's computer counts as set up once its agent first comes online), else
 **Sign in with Claude** when the computer is on its own Claude account but
 signed out, else none. A failed row's line reads `Setup failed: <reason>`
 with the API's `failureReason`, else `Failed`. A row with no action keeps its
@@ -1158,6 +1159,9 @@ the same, also on a cold start; the link is
 (`computers/primitives/setup-request.ts`). The dialog's own "ready" notice,
 shown when it was closed while waiting for the sign-in link, is the same
 notice, so the two never stack.
+The in-app "ready" notice is only for setup left unfinished: it is not shown
+while that computer's buy dialog is open (one already up is taken down), nor
+once the team's computer list says its setup is complete.
 
 **Sign in with Claude** is a dialog with the same two steps, failure states
 and footer as an agent's **Connect Claude plan** (see Agent teammates above),
