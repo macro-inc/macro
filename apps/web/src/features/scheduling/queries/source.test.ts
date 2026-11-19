@@ -21,13 +21,16 @@ vi.mock('@tanstack/solid-query', async (importOriginal) => ({
   ...(await importOriginal<typeof import('@tanstack/solid-query')>()),
   useQuery: (read: () => Options) => {
     captured.read = read;
-    return {};
+    return { refetch: async () => {} };
   },
   useMutation: () => ({}),
 }));
 vi.mock('@service-email/scheduling', () => ({
   schedulingClient: {
     bookings: vi.fn(async () => ok({ bookings: [] })),
+    cancel: vi.fn(async () =>
+      ok({ booking: { status: 'failed', abandonedAt: '2026-10-01T00:00:00Z' } })
+    ),
     settings: vi.fn(async () =>
       ok({
         profile: {
@@ -134,4 +137,25 @@ it('keeps cached bookings tied to their original owner and date range', async ()
     from: '2026-10-08',
     to: '2026-10-15',
   });
+});
+
+it('reports a cancellation the host’s calendar refused', async () => {
+  const [source, dispose] = createRoot((dispose) => [
+    createSchedulingSource(
+      () => ({
+        id: 'first',
+        name: 'First',
+        teamId: 'team-first',
+        canEdit: true,
+        canManageBookings: true,
+      }),
+      () => ({ from: '2026-10-01', to: '2026-10-08' })
+    ),
+    dispose,
+  ]);
+  await expect(source.cancel('meeting')).rejects.toThrow(
+    'The cancellation didn’t reach your calendar. Check its connection and try again.'
+  );
+  expect(schedulingClient.cancel).toHaveBeenCalledWith('meeting');
+  dispose();
 });

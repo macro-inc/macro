@@ -1,3 +1,7 @@
+import {
+  isAllowedLinkUrl,
+  LINK_PROTOCOLS,
+} from '@macro-inc/lexical-core/utils/link-url';
 import { invoke } from '@tauri-apps/api/core';
 import shortuuid from 'short-uuid';
 import { fireAndForget } from './fireAndForget';
@@ -25,6 +29,16 @@ type ExternalUrlInterceptor = (url: string) => boolean;
 const externalUrlInterceptors = new Set<ExternalUrlInterceptor>();
 
 /**
+ * The schemes {@link openExternalUrl} opens: a link's, plus the macOS settings
+ * pane `CallMediaPermissionHelp` opens for camera and microphone access.
+ * Relative URLs open too.
+ */
+const OPENABLE_PROTOCOLS: ReadonlySet<string> = new Set([
+  ...LINK_PROTOCOLS,
+  'x-apple.systempreferences:',
+]);
+
+/**
  * Registers a handler consulted by {@link openExternalUrl} before its default handling.
  * Interceptors are tried in registration order and the first to return true takes ownership of the URL.
  *
@@ -46,6 +60,13 @@ export function registerExternalUrlInterceptor(
  * over opens a new tab on web / the system browser.
  */
 export function openExternalUrl(url: string) {
+  // Callers pass URLs from content and other users; a script or local scheme
+  // must never reach a window or the native shell.
+  if (!isAllowedLinkUrl(url, OPENABLE_PROTOCOLS)) {
+    console.warn('openExternalUrl: refused a URL with an unsupported scheme');
+    return;
+  }
+
   for (const interceptor of externalUrlInterceptors) {
     if (interceptor(url)) return;
   }

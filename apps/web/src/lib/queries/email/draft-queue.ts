@@ -25,7 +25,6 @@ import {
   invalidateSoupEntity,
   refetchSoupEntity,
 } from '../soup/cache';
-import { markThreadDraftSaved } from './draft-cache';
 import {
   draftFailureCode,
   executeGraphqlDeleteEmailDraft,
@@ -218,7 +217,6 @@ function rejection(
     throw new Error(`${message}: network`);
   }
   if (code === 'DRAFT_ALREADY_SENT') {
-    markThreadDraftSaved(threadId);
     invalidateSoupEntity(threadId);
     void refetchSoupEntity(threadId, 'emailThread').catch(reportError);
     fireAndForget(fetchAndCacheThread(threadId), 'email-draft-queue');
@@ -411,9 +409,7 @@ export async function saveEmailDraftQueued(
 /** A committed save's cache effects; a failure here never fails the save. */
 function refreshAfterCommittedSave(input: QueuedSaveInput, threadId: string) {
   try {
-    markThreadDraftSaved(threadId);
     if (input.previousThreadId && input.previousThreadId !== threadId) {
-      markThreadDraftSaved(input.previousThreadId);
       invalidateSoupEntity(input.previousThreadId);
       void refetchSoupEntity(input.previousThreadId, 'emailThread').catch(
         reportError
@@ -452,6 +448,7 @@ export async function deleteEmailDraftQueued(input: {
     const client = getGraphqlSoupClient();
     assertEmailDraftQueueAvailable();
     outcome = await executeGraphqlDeleteEmailDraft(client, {
+      existingDraft: cached.existingDraft,
       existingThread: cached.existingThread,
       mutationUuid: cached.mutationUuid ?? input.draftId,
       draftId: local?.draftId ?? String(cached.draftId),
@@ -485,7 +482,6 @@ export async function deleteEmailDraftQueued(input: {
     return { kind: 'queued' };
   }
   try {
-    markThreadDraftSaved(input.threadId);
     queryClient.invalidateQueries({ queryKey: emailKeys.previews._def });
     if (!input.completingThread) {
       void refetchSoupEntity(input.threadId, 'emailThread').catch(reportError);

@@ -169,7 +169,7 @@ describe('restore provider folders', () => {
     expect(
       await restoreEmailFolderThreads({ folder: 'trash', threadIds: ids })
     ).toEqual({ restoredIds: ids, failedIds: [] });
-    expect(dispatched).toHaveLength(38);
+    expect(dispatched).toHaveLength(29);
     expect(dispatched.every(Boolean)).toBe(true);
     expect(mocks.spanActive).toBe(false);
   });

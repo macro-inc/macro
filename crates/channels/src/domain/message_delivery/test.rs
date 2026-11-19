@@ -159,6 +159,7 @@ fn repo() -> MockChannelRepo {
             Ok(ChannelMetadata {
                 channel_type: ChannelType::Private,
                 channel_name: "Test".into(),
+                named: true,
             })
         })
     });

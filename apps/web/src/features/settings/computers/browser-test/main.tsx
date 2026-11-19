@@ -17,7 +17,7 @@ import { SettingsPage } from '../../primitives';
 import { GetComputerEntry } from '../views/get-computer-entry';
 import { MacroComputers } from '../views/MacroComputers';
 import {
-  agentsPageOpened,
+  agentDmOpened,
   harnesses,
   settingsOpened,
 } from './stubs/fixture-state';
@@ -25,11 +25,9 @@ import {
 // The fixture uses the same touch variant switch as the app entry point.
 document.documentElement.dataset.touchDevice = String(isTouchDevice());
 
-// Loaded once Try it or Create agent leaves the dialog, as the app does.
-const Composer = lazy(() => import('./composer'));
+// Loaded once Add another agent leaves the dialog, as the app does.
 const AgentSettings = lazy(() => import('./agent-settings'));
-// Both are large module graphs; start loading them while the flow runs.
-fireAndForget(Composer.preload(), 'computers-fixture');
+// A large module graph; start loading it while the flow runs.
 fireAndForget(AgentSettings.preload(), 'computers-fixture');
 
 // A computer setup notification arriving, as the realtime feed delivers it.
@@ -66,6 +64,12 @@ function Fixture() {
             >
               <GetComputerEntry onGet={() => setBuying(true)} />
               <MacroComputers
+                // The guided variant stays reachable for its own tests.
+                afterPurchase={
+                  new URLSearchParams(location.search).get('after') === 'guided'
+                    ? 'guided'
+                    : 'ready'
+                }
                 harnesses={harnesses()}
                 buying={buying()}
                 onBuyingChange={setBuying}
@@ -73,12 +77,10 @@ function Fixture() {
             </SettingsPage>
           }
         >
-          <Match when={agentsPageOpened()}>
-            {/* A failure shows its message, so a test reports it. No Suspense:
-                the screens show as soon as they load. */}
-            <ErrorBoundary fallback={(error) => <pre>{String(error)}</pre>}>
-              <Composer />
-            </ErrorBoundary>
+          <Match when={agentDmOpened()}>
+            {(botId) => (
+              <section aria-label="Direct message">DM with {botId()}</section>
+            )}
           </Match>
           <Match when={settingsOpened() === 'Agents'}>
             {/* A failure shows its message, so a test reports it. No Suspense:

@@ -12,13 +12,85 @@ use rootcause::prelude::*;
 
 /// How long the broker may take to create the topics.
 const OPERATION_TIMEOUT: Duration = Duration::from_secs(30);
+/// How long one read of the broker's topics may take.
+const METADATA_TIMEOUT: Duration = Duration::from_secs(10);
+
+/// Creates every declared event topic that the broker does not have yet, and
+/// waits until the broker serves each of them.
+///
+/// `document_storage_service` exits at startup when a topic it reads is
+/// missing, and a consumer does not create one by subscribing, so a stack
+/// calls this before it starts any service. The topics are the broker's,
+/// shared by every scenario.
+///
+/// The controller answers that it created a topic once it has recorded it;
+/// the broker serves the topic only once it has applied that record, and it
+/// applies records in order. On a fresh broker the first consumer group
+/// makes it create `__consumer_offsets`, and while it created that topic's
+/// partitions the broker answered that topics created after it did not
+/// exist.
+pub(crate) async fn ensure_topics(brokers: &str) -> Result<(), Report> {
+    create_topics(brokers).await?;
+
+    let reader = std::sync::Arc::new(reader(brokers)?);
+    // What the broker last answered when it was not ready.
+    let mut not_yet = None;
+    crate::wait::eventually(
+        "the Kafka broker to serve every event topic",
+        crate::wait::DEFAULT_TIMEOUT,
+        async || {
+            let reader = reader.clone();
+            let checked = tokio::task::spawn_blocking(move || unserved_topics(&reader))
+                .await
+                .context("the Kafka metadata task did not finish")?;
+            match checked {
+                Ok(unserved) if unserved.is_empty() => return Ok(Some(())),
+                Ok(unserved) => {
+                    not_yet = Some(format!(
+                        "the topics it did not serve: {}",
+                        unserved.join(", ")
+                    ));
+                }
+                // A broker too busy to answer now may answer before the wait
+                // ends.
+                Err(error) => not_yet = Some(format!("its last answer: {error}")),
+            }
+            Ok(None)
+        },
+    )
+    .await
+    .map_err(|report| match not_yet {
+        Some(not_yet) => report.attach(not_yet),
+        None => report,
+    })
+}
+
+/// The declared event topics the broker does not serve yet: it does not
+/// know them, or a partition of theirs has no leader.
+fn unserved_topics(reader: &BaseConsumer) -> Result<Vec<&'static str>, Report> {
+    let metadata = reader
+        .fetch_metadata(None, METADATA_TIMEOUT)
+        .context("could not read the Kafka broker's topics")?;
+    let served = |name: &str| {
+        metadata.topics().iter().any(|topic| {
+            topic.name() == name
+                && topic.error().is_none()
+                && !topic.partitions().is_empty()
+                && topic
+                    .partitions()
+                    .iter()
+                    .all(|partition| partition.error().is_none() && partition.leader() >= 0)
+        })
+    };
+    Ok(macro_event_topics::all_topic_names()
+        .iter()
+        .copied()
+        .filter(|name| !served(name))
+        .collect())
+}
 
 /// Creates every declared event topic that the broker does not have yet.
-///
-/// `document_storage_service` does not start without the topics it reads,
-/// and a consumer does not create one by subscribing. The topics are the
-/// broker's, shared by every scenario.
-pub(crate) async fn ensure_topics(brokers: &str) -> Result<(), Report> {
+async fn create_topics(brokers: &str) -> Result<(), Report> {
     let admin: AdminClient<DefaultClientContext> = ClientConfig::new()
         .set("bootstrap.servers", brokers)
         .create()

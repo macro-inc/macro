@@ -25,7 +25,8 @@ use uuid::Uuid;
 
 use crate::domain::ids::ComputerId;
 use crate::domain::models::{
-    ComputerStatus, Purchase, PurchaseBilling, PurchaseKey, PurchaseRequest, SizeOffer,
+    ComputerStatus, Purchase, PurchaseBilling, PurchaseKey, PurchaseRefusalCode, PurchaseRequest,
+    SizeOffer,
 };
 use crate::domain::ports::{
     Billing, BillingError, CompPolicy, ComputerRepo, FleetAttachmentSource, NoComps,
@@ -100,6 +101,10 @@ where
         .route(
             "/team/computers/offers",
             get(offers::<Repo, Bill, Time, EntityAccess, Auth, Attachment, Policy>),
+        )
+        .route(
+            "/team/computers/rollout",
+            get(rollout::<Repo, Bill, Time, EntityAccess, Auth, Attachment, Policy>),
         )
         .route(
             "/team/computers/{computer_id}/power",
@@ -206,6 +211,43 @@ pub async fn offers<
             .offers(team_id(receipt)?, user_id(receipt)?)
             .await?,
     ))
+}
+
+/// Whether computers are rolled out to the caller.
+#[derive(Debug, Serialize, utoipa::ToSchema)]
+#[serde(rename_all = "camelCase")]
+pub struct ComputerRollout {
+    /// The computer UI and purchases are on for this user.
+    pub enabled: bool,
+}
+
+/// Whether the caller sees computers: the same rollout check purchases and
+/// offers make, so the web never shows computers the backend would refuse.
+#[utoipa::path(
+    get,
+    path = "/team/computers/rollout",
+    operation_id = "get_team_computer_rollout",
+    responses((status = 200, body = ComputerRollout)),
+)]
+#[tracing::instrument(skip_all, err)]
+pub async fn rollout<
+    Repo: ComputerRepo,
+    Bill: Billing,
+    Time: Clock,
+    EntityAccess: EntityAccessService,
+    Auth: MacroAuthorizationService,
+    Attachment: FleetAttachmentSource,
+    Policy: CompPolicy,
+>(
+    access: MacroUserTeamExtractorV2<MemberTeamRole, EntityAccess, Auth>,
+    State(state): State<
+        ComputerRouterState<Repo, Bill, Time, EntityAccess, Auth, Attachment, Policy>,
+    >,
+) -> Result<Json<ComputerRollout>, ComputersHttpError> {
+    let user = user_id(&access.entity_access_receipt)?;
+    Ok(Json(ComputerRollout {
+        enabled: state.service.rollout_enabled(&user).await,
+    }))
 }
 
 /// Body of a team purchase.
@@ -610,8 +652,16 @@ impl IntoResponse for ComputersHttpError {
         };
         let code = match &self.0 {
             ComputerError::Billing(BillingError::TeamOnTrial) => {
-                Some(ComputersErrorCode::TeamOnTrial)
+                Some(PurchaseRefusalCode::TeamOnTrial)
             }
+            ComputerError::Billing(BillingError::PaymentFailed) => {
+                Some(PurchaseRefusalCode::PaymentDeclined)
+            }
+            ComputerError::SoldOut(_) => Some(PurchaseRefusalCode::NoRoom),
+            _ => None,
+        };
+        let size = match &self.0 {
+            ComputerError::SoldOut(size) => Some(*size),
             _ => None,
         };
         (
@@ -619,6 +669,7 @@ impl IntoResponse for ComputersHttpError {
             Json(ComputersErrorBody {
                 message: message.into(),
                 code,
+                size,
             }),
         )
             .into_response()
@@ -631,15 +682,10 @@ impl IntoResponse for ComputersHttpError {
 struct ComputersErrorBody {
     message: std::borrow::Cow<'static, str>,
     #[serde(skip_serializing_if = "Option::is_none")]
-    code: Option<ComputersErrorCode>,
-}
-
-/// Machine-readable computer error codes.
-#[derive(serde::Serialize)]
-#[serde(rename_all = "snake_case")]
-enum ComputersErrorCode {
-    /// The team's subscription is trialing; computers are for paying teams.
-    TeamOnTrial,
+    code: Option<PurchaseRefusalCode>,
+    /// The size there was no room for, with [`PurchaseRefusalCode::NoRoom`].
+    #[serde(skip_serializing_if = "Option::is_none")]
+    size: Option<ComputerSize>,
 }
 
 #[cfg(test)]

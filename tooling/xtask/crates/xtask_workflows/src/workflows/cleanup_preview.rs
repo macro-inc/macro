@@ -35,11 +35,11 @@ fn cleanup() -> Job {
 }
 
 fn checkout() -> Step<Use> {
-    Step::new("Checkout Repo").uses(
+    crate::workflows::steps::abort_stalled_fetch(Step::new("Checkout Repo").uses(
         "actions",
         "checkout",
         "df4cb1c069e1874edd31b4311f1884172cec0e10",
-    ) // v6
+    )) // v6
 }
 
 fn setup_bun() -> Step<Use> {

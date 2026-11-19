@@ -4,6 +4,7 @@
 mod test;
 
 use std::{
+    borrow::Cow,
     collections::{HashMap, HashSet},
     num::NonZeroUsize,
     time::Duration,
@@ -190,11 +191,21 @@ impl<A: UserAccessExpander, P: SoupRealtimePublisher> Worker<A, P> {
 
         let mut publish_count = 0;
         for patch in patches {
-            let users = recipient_list_by_source
+            let current_users = recipient_list_by_source
                 .get(&patch.access_source)
                 .and_then(|&index| recipient_lists.get(index))
                 .map(Vec::as_slice)
                 .unwrap_or_default();
+            let users = if patch.named_recipients.is_empty() {
+                Cow::Borrowed(current_users)
+            } else {
+                let mut users = current_users.to_vec();
+                users.extend(patch.named_recipients.iter().cloned());
+                users.sort_by(|left, right| left.as_ref().cmp(right.as_ref()));
+                users.dedup();
+                recipient_sets.insert(users.clone());
+                Cow::Owned(users)
+            };
             let messages = users
                 .iter()
                 .map(|user_id| SoupRealtimeMessage::new(user_id.clone(), patch.patch.clone()))

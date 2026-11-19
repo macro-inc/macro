@@ -3386,6 +3386,8 @@ export * from './threadAnchorOneOfOneoneType';
 export * from './threadAnchorOneOfSeven';
 export * from './threadAnchorOneOfSevenType';
 export * from './threadAnchorOneOfType';
+export * from './threadChannelShare';
+export * from './threadChannelShareChannelName';
 export * from './threadOrigin';
 export * from './threadOriginChannelId';
 export * from './threadPatch';

@@ -1197,6 +1197,7 @@ export const send = {
         'a draft save fails because the scheduled email already went out',
       source: [
         'src/features/email-compose/primitives/email-composer.ts',
+        'src/features/email-compose/primitives/draft-persistence.ts',
         'src/features/email-compose/primitives/reply-composer.ts',
       ],
       flag: SCHEDULE_FLAG,
