@@ -145,7 +145,13 @@ async fn a_failing_step_in_a_sub_routine_is_placed_within_it() {
     let [failing] = check.steps.as_slice() else {
         panic!("{:?}", check.steps);
     };
-    assert_eq!(failing.sub_routine.as_deref(), Some("remind"));
+    assert_eq!(
+        failing
+            .sub_routine
+            .as_ref()
+            .map(routine_program::SubRoutineName::as_str),
+        Some("remind")
+    );
     assert_eq!(failing.index, 1);
     assert_eq!(failing.title, "Post it");
     // Saving names the sub-routine's code steps too.

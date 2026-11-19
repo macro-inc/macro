@@ -34,7 +34,7 @@ use anyhow::Result;
 use bot_id::BotId;
 use chrono::{SecondsFormat, Utc};
 use macro_user_id::user_id::MacroUserIdStr;
-use routine_program::{CATALOG, CODE_STEPS, RoutineProgram, STEP_CONTEXT, Step};
+use routine_program::{CATALOG, CODE_STEPS, RoutineProgram, STEP_CONTEXT, Step, SubRoutineName};
 use serde::{Deserialize, Serialize};
 use serde_json::{Value, json};
 use utoipa::ToSchema;
@@ -241,7 +241,8 @@ pub struct DraftedStep {
 pub struct StepProblem {
     /// The sub-routine whose step it is; absent for the routine's own steps.
     #[serde(default, skip_serializing_if = "Option::is_none")]
-    pub sub_routine: Option<String>,
+    #[schema(value_type = Option<String>)]
+    pub sub_routine: Option<SubRoutineName>,
     /// Its place among the routine's steps, or its sub-routine's, from zero.
     pub index: usize,
     pub problems: Vec<String>,

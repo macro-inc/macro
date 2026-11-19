@@ -611,9 +611,7 @@ pub(crate) fn step_positions(
                 .as_ref()
                 .and_then(|program| program.code_step_place(step.index));
             CheckedStepProblems {
-                sub_routine: place
-                    .and_then(|(sub_routine, _)| sub_routine)
-                    .map(ToString::to_string),
+                sub_routine: place.and_then(|(sub_routine, _)| sub_routine).cloned(),
                 index: place.map_or(step.index, |(_, index)| index),
                 title: step.title,
                 problems: step.problems,

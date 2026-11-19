@@ -9,10 +9,29 @@ use crate::domain::drafts::test::{
 };
 use crate::domain::drafts::{
     CHANGE_FAILED, Draft, DraftContext, DraftCreated, DraftRequest, ROUTINE_FAILED, RoutineSoFar,
-    STEP_FAILED, StepKind,
+    STEP_FAILED, StepKind, StepProblem,
 };
-use crate::domain::models::{ActionConfiguration, ActionPolicyError, CreatedItem};
+use crate::domain::models::{
+    ActionConfiguration, ActionPolicyError, CheckedStepProblems, CreatedItem,
+};
 use crate::domain::ports::RoutineDraftService;
+
+#[test]
+fn step_problem_sub_routine_names_keep_the_validated_string_on_the_wire() {
+    let draft = json!({ "subRoutine": "remind", "index": 0, "problems": ["error"] });
+    let mut check = draft.clone();
+    check["title"] = json!("Remind");
+    let drafted: StepProblem = serde_json::from_value(draft.clone()).unwrap();
+    let checked: CheckedStepProblems = serde_json::from_value(check.clone()).unwrap();
+    assert_eq!(serde_json::to_value(drafted).unwrap(), draft);
+    assert_eq!(serde_json::to_value(checked).unwrap(), check);
+
+    let mut draft = draft;
+    draft["subRoutine"] = json!("invalid-name");
+    check["subRoutine"] = draft["subRoutine"].clone();
+    assert!(serde_json::from_value::<StepProblem>(draft).is_err());
+    assert!(serde_json::from_value::<CheckedStepProblems>(check).is_err());
+}
 
 /// What the session made before a draft failed is still reported.
 #[tokio::test(start_paused = true)]
@@ -87,7 +106,13 @@ async fn a_drafted_routine_keeps_the_sub_routines_it_defines_and_where_their_cod
         2
     );
     assert_eq!(drafted.problems.len(), 1);
-    assert_eq!(drafted.problems[0].sub_routine.as_deref(), Some("remind"));
+    assert_eq!(
+        drafted.problems[0]
+            .sub_routine
+            .as_ref()
+            .map(routine_program::SubRoutineName::as_str),
+        Some("remind")
+    );
     assert_eq!(drafted.problems[0].index, 0);
     let wire = serde_json::to_value(&drafted).unwrap();
     assert_eq!(wire["subRoutines"][0]["name"], "remind");

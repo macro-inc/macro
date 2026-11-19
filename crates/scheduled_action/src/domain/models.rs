@@ -13,7 +13,7 @@ use std::str::FromStr;
 use utoipa::ToSchema;
 
 use agent_session::domain::model::SessionVisibility;
-use routine_program::{AgentStep, StepRecord};
+use routine_program::{AgentStep, StepRecord, SubRoutineName};
 
 use super::event_runs::ConfigurationRevision;
 use super::event_trigger::ActionTrigger;
@@ -240,7 +240,8 @@ pub struct CreatedItem {
 pub struct CheckedStepProblems {
     /// The sub-routine whose step it is; absent for the routine's own steps.
     #[serde(default, skip_serializing_if = "Option::is_none")]
-    pub sub_routine: Option<String>,
+    #[schema(value_type = Option<String>)]
+    pub sub_routine: Option<SubRoutineName>,
     /// Its place among the routine's steps, or its sub-routine's, from zero.
     pub index: usize,
     /// Its title.
