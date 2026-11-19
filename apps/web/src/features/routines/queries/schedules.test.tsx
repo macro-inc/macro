@@ -4,7 +4,7 @@ import type {
   RoutineTemplate,
   ScheduledAction,
 } from '@service-scheduled-action/generated/schemas';
-import { QueryClientProvider } from '@tanstack/solid-query';
+import { isCancelledError, QueryClientProvider } from '@tanstack/solid-query';
 import { err, ok } from 'neverthrow';
 import { render } from 'solid-js/web';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
@@ -257,12 +257,19 @@ it('keeps sharing revoked when an older status response arrives after DELETE', a
 
   await vi.waitFor(() => expect(getTemplate).toHaveBeenCalledOnce());
   const read = queryClient.getQueryCache().find({ queryKey: key })?.promise;
-  const settled = read?.catch(() => undefined);
+  async function readError() {
+    try {
+      await read;
+    } catch (error) {
+      return error;
+    }
+  }
+  const settled = readError();
   await mutation.mutateAsync({ scheduleId: 'routine' });
   expect(queryClient.getQueryData(key)).toBeNull();
 
   finishRead();
-  await settled;
+  expect(isCancelledError(await settled)).toBe(true);
   expect(queryClient.getQueryData(key)).toBeNull();
 });
 
