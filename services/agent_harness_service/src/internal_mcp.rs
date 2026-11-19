@@ -96,14 +96,15 @@ pub(super) struct InternalTools {
     pub(super) gate: Arc<dyn agent_inmem::domain::tool_gate::NativeToolGate>,
     /// Macro app origin, for links back to the calling session.
     pub(super) app_url: Arc<str>,
-    /// Agent permissions, for `ShowPermissions` in sessions whose OCaml
-    /// programs they gate.
+    /// Agent permissions, for `ShowPermissions` in sessions whose OCaml or
+    /// JavaScript tools programs they gate.
     pub(super) permissions: Option<Arc<dyn agent_permissions::domain::service::AgentPermissions>>,
 }
 
 impl InternalTools {
-    /// `ShowPermissions`' context when `session`'s programs are gated: code
-    /// mode runs OCaml there and its owner has the permissions rollout.
+    /// `ShowPermissions`' context when `session`'s programs are gated: its
+    /// owner has the permissions rollout, and code mode runs JavaScript tools
+    /// programs or OCaml there.
     async fn permission_tools(
         &self,
         session: &agent_session::domain::model::AgentSession,

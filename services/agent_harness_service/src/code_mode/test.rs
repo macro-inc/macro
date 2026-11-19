@@ -997,6 +997,11 @@ async fn the_gate_follows_the_permissions_flag_and_for_ocaml_its_flag() {
     // Code mode's OCaml permissions text stays OCaml's.
     assert!(!OwnerRollout::enabled(&rollout, &permissions).await);
     assert!(OwnerRollout::enabled(&rollout, &both).await);
+    // JavaScript tools programs are offered on the permissions flag alone.
+    let js_tools = JsToolsRollout(rollout);
+    assert!(OwnerRollout::enabled(&js_tools, &permissions).await);
+    assert!(OwnerRollout::enabled(&js_tools, &both).await);
+    assert!(!OwnerRollout::enabled(&js_tools, &ocaml_only).await);
     assert!(
         !LanguageRollout::enabled(
             &PermissionsFlag::<FakeFeatureFlags>(None),

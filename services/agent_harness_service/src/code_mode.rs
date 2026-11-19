@@ -347,6 +347,19 @@ impl<Flags: feature_flags::FeatureFlags + 'static> agent_code_mode::domain::Owne
     }
 }
 
+/// Whether an owner may run JavaScript tools programs: [`PERMISSIONS_FLAG`]
+/// alone, the gate's rollout for them, since permissions gate every one.
+pub struct JsToolsRollout<Flags>(pub PermissionsFlag<Flags>);
+
+#[async_trait]
+impl<Flags: feature_flags::FeatureFlags + 'static> agent_code_mode::domain::OwnerRollout
+    for JsToolsRollout<Flags>
+{
+    async fn enabled(&self, owner: &MacroUserIdStr<'static>) -> bool {
+        permissions::LanguageRollout::enabled(&self.0, owner, ProgramLanguage::JsTools).await
+    }
+}
+
 macro_env_var::env_var! { struct DocumentStorageServiceCloudfrontDistributionUrl; }
 
 /// A host code mode's SDK reaches, named as the SDK names it. The test

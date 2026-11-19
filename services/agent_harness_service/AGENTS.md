@@ -80,7 +80,11 @@ Pulumi stacks; they do not host extra agent processes.
   any `ask` (`macro-sdk` approval), then runs it limited to every analyzed
   call (`allowed_operations`). Flags off, a language without an analyzer, or
   plain JavaScript: nothing changes. `ShowPermissions` is offered by the
-  internal MCP only then.
+  internal MCP only then. `ExecuteCode` offers JavaScript tools programs
+  (`language: "js_tools"`) to exactly the owners the gate applies to them
+  for: `main.rs` wires `CodeModeService::with_js_tools` beside the
+  `JsToolsAnalyzer`, with `code_mode::JsToolsRollout`
+  (`enable-agent-permissions` alone; there is no separate JS tools flag).
 - `src/speech_gateway.rs` + `src/speech_gateway/`: `/brain/inference/stt` and
   `/brain/inference/tts` WebSockets on the egress listener, for agent
   teammates' calls (`MACRO_SPEECH_URL` in the enrollment). Same brain key,
