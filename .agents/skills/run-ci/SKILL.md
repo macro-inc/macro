@@ -38,6 +38,14 @@ gh api repos/macro-inc/macro/issues/<pr>/labels -f "labels[]=run-ci"  # after a 
 `gh pr edit <pr> --add-label run-ci` does the same on a recent gh; older
 releases fail on a Projects (classic) error before adding the label.
 
+If `run-ci` is still present, remove it before adding it again so GitHub receives
+another label event:
+
+```sh
+gh api -X DELETE repos/macro-inc/macro/issues/<pr>/labels/run-ci
+gh api repos/macro-inc/macro/issues/<pr>/labels -f "labels[]=run-ci"
+```
+
 - Adding the label again starts a fresh run. A run still going for the same PR
   is cancelled.
 - Draft PRs run too.
@@ -86,14 +94,32 @@ on a push but not when `main` moves, and runs nothing on a conflicting PR. So on
 such a PR the label alone starts nothing; `CI Gate Label Check` then removes it
 and says why in `CI gate`.
 
-## Fix a failure
+## Review every result and fix failures
 
-- A flaky job: re-run the failed jobs of the `PR CI` run
-  (`gh run rerun <run-id> --failed`). `CI gate` re-runs with them and updates
-  the status; no new label is needed.
-- A real failure: fix it, push, and add the label again.
-- The checks inside the run are named `<workflow> / <job>`, such as
-  `Web App / Typecheck` or `Cloud Storage / test`.
+After every CI run, inspect the results yourself:
+
+```sh
+gh pr checks <pr>
+gh run view <run-id> --log-failed
+```
+
+1. Read the logs for every failed job, not only the `CI gate` summary.
+2. If the branch caused a failure, fix it, run the affected local checks, commit,
+   and push the fix.
+3. If evidence shows an unrelated failure, record the job, error, and evidence in
+   the PR body and `PROGRESS.md`. Check for broken `main` or a flaky test outside
+   the changed code. Request one unchanged retry through step 4 to test recurrence.
+4. Verify the remote PR head, then request another run with `run-ci`.
+   If the label is still present, remove it before adding it again, as shown above.
+5. If the unchanged retry fails again, document the persistent blocker and investigate;
+   do not repeatedly rerun unchanged code.
+6. Repeat the fix-and-rerun cycle until `CI gate` passes on the latest commit.
+   If later CI fails, repeat this procedure without waiting for the user.
+
+A passing retry without relevant changes supports a flaky-failure diagnosis;
+a repeated unrelated failure remains a blocker, not a passing check.
+The checks inside the run are named `<workflow> / <job>`, such as
+`Web App / Typecheck` or `Cloud Storage / test`.
 
 ## Fork PRs
 
