@@ -62,9 +62,7 @@ async fn delete_document_nodes(
     let response = client
         .delete_by_query(opensearch::DeleteByQueryParts::Index(&[index]))
         .body(serde_json::json!({ "query": query }))
-        // Ensure the index reflects changes immediately. A stale-chunk delete
-        // relies on it too: it makes this reindex's chunks visible to the
-        // next reindex's delete, which sees only refreshed documents.
+        // Ensure the index reflects changes immediately
         .refresh(true)
         .send()
         .await

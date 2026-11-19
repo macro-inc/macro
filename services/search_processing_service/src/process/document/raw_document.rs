@@ -434,7 +434,9 @@ pub async fn update_search_with_raw_document(
             {
                 let _ = content;
                 tracing::debug!("pdf/docx indexing skipped: pdf feature disabled");
-                vec![]
+                // Writing nothing here would make the stale-chunk cleanup
+                // delete the chunks a build that parses PDFs wrote.
+                return Ok(());
             }
         }
         FileType::Fig => {
