@@ -181,21 +181,43 @@ where
     ) -> Result<Option<ExecutionResource>> {
         let owner = action.owner_user()?.clone();
         let action_id = action.id.context("persisted action required")?;
-        // A copy runs its definition as its parent holds it now.
-        if let (Some(copy), Some(parent_id)) =
-            (SubRoutineCopy::from_task(&action.task), action.parent_id())
-        {
-            handle.parent = self
-                .repo
-                .get_action(&parent_id)
-                .instrument(tracing::info_span!(
+        // A copy runs its definition as its parent holds it now: the parent
+        // read and the definition resolved with the copy's inputs, under one
+        // span with how it ended.
+        let program = match SubRoutineCopy::from_task(&action.task).zip(action.parent_id()) {
+            Some((copy, parent_id)) => {
+                let span = tracing::info_span!(
                     "routine.copy.read_definition",
                     routine.parent_id = %parent_id,
                     routine.sub_routine = %copy.sub_routine,
-                ))
-                .await?;
-        }
-        let program = handle.program(action)?;
+                    outcome = tracing::field::Empty,
+                );
+                let read = self
+                    .repo
+                    .get_action(&parent_id)
+                    .instrument(span.clone())
+                    .await;
+                span.in_scope(|| {
+                    let (outcome, program) = match read {
+                        Err(error) => ("read_failed", Err(error)),
+                        Ok(parent) => {
+                            let found = parent.is_some();
+                            handle.parent = parent;
+                            let program = handle.program(action);
+                            let outcome = match (&program, found) {
+                                (Ok(_), _) => "resolved",
+                                (Err(_), false) => "parent_missing",
+                                (Err(_), true) => "definition_failed",
+                            };
+                            (outcome, program)
+                        }
+                    };
+                    span.record("outcome", outcome);
+                    program
+                })?
+            }
+            None => handle.program(action)?,
+        };
         let runs_model = program.agent_steps().into_iter().any(|step| {
             matches!(
                 ResolvedTaskTarget::of(step),

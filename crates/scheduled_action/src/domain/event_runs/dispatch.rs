@@ -219,7 +219,19 @@ impl<
         };
         // The committed claim is the linearization point. Do not reload config
         // or undo execution for a disable/update after this point.
-        let execution = self.executor.execute(&run, cancellation).await;
+        // A sub-routine's run names the routine and run that made it, as a
+        // clock-driven one does.
+        let link = run.action.sub_routine.as_ref();
+        let span = tracing::info_span!(
+            "routine.execute",
+            action_id = run.action.id.map(tracing::field::display),
+            trigger = "event",
+            routine.parent_id = link.map(|link| tracing::field::display(link.parent_id)),
+            routine.created_by_run_id =
+                link.map(|link| tracing::field::display(link.created_by_run_id)),
+        );
+        let execution =
+            tracing::Instrument::instrument(self.executor.execute(&run, cancellation), span).await;
         let finalized = self
             .repository
             .finalize(FinalizeEventRun {
