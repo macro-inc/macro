@@ -29,14 +29,13 @@ import {
   useUpdateMeetingMutation,
 } from '@queries/call/meetings';
 import { useLocation, useNavigate, useSearchParams } from '@solidjs/router';
-import { createEffect, createSignal, on, Show } from 'solid-js';
+import { createSignal, Show } from 'solid-js';
 import { browserMeetingMedia } from './browser/meeting-media';
 import { preloadMeetingRuntime } from './browser/meeting-runtime';
 import type { MeetingParticipantsState } from './components/meeting-participants';
 import type { MeetingPageState } from './context/meeting-session';
 import { useMeetingSessionLifecycle } from './context/meeting-session-lifecycle';
 import {
-  channelCallHandoffPath,
   meetingConnectMetadata,
   meetingMediaPath,
 } from './core/meeting-media-path';
@@ -141,21 +140,6 @@ export function MeetingRouteContent(props: {
       nativeIosCalls: isNativeIosCallKitEnabled(),
     });
 
-  const channelHandoff = () =>
-    meeting.isSuccess
-      ? channelCallHandoffPath({
-          member: authenticated() === true,
-          nativeIosCalls: isNativeIosCallKitEnabled(),
-          channelId: meeting.data.channelId,
-          callId: meeting.data.callId,
-        })
-      : undefined;
-  createEffect(
-    on(channelHandoff, (path) => {
-      if (path) navigate(path, { replace: true });
-    })
-  );
-
   const source = (): MeetingPageState => {
     if (meeting.isError) return { kind: 'unavailable' };
     if (!meeting.isSuccess) return { kind: 'loading' };
@@ -163,100 +147,98 @@ export function MeetingRouteContent(props: {
   };
 
   return (
-    <Show when={!channelHandoff()}>
-      <MeetingPage
-        source={source}
-        startedAt={() => (record.isSuccess ? record.data.startedAt : undefined)}
-        participants={participantState()}
-        onCallStateChange={props.onCallStateChange}
-        onLeave={props.onLeave}
-        onBack={() => navigate('/app')}
-        mediaAccess={browserMeetingMedia}
-        initialBackground={call.backgroundEffect()}
-        readBackgroundImage={readBackgroundImage}
-        authenticated={authenticated}
-        author={author}
-        avatar={
-          <Show when={authenticated() && userId()} keyed>
-            {(id) => (
-              <UserIcon id={id} size="fill" suppressClick showTooltip={false} />
-            )}
-          </Show>
-        }
-        startCall={
-          authenticated() === true &&
-          search.start === 'true' &&
-          meeting.isSuccess &&
-          !meeting.data.callId
-        }
-        url={getMeetingUrl(props.shareToken)}
-        onCopy={() =>
-          navigator.clipboard.writeText(getMeetingUrl(props.shareToken))
-        }
-        onRename={canRename() ? rename : undefined}
-        onSignIn={() => {
-          const meetingRoute = `${location.pathname}${location.search}`;
-          navigate(`/login?redirect=${encodeURIComponent(meetingRoute)}`);
-        }}
-        session={{
-          lifecycle,
-          warmup: preloadMeetingRuntime,
-          shareToken: () => props.shareToken,
-          isInCall: call.isInCall,
-          activeCallId: call.activeCallId,
-          join: (displayName) =>
-            join.mutateAsync({ shareToken: props.shareToken, displayName }),
-          release: leaveMeeting,
-          connect: (credentials, preferences) =>
-            call.meetingSession.connectWithToken(credentials, {
-              ...preferences,
-              ...meetingConnectMetadata(mediaPath(), {
-                callId: credentials.callId,
-                title: meeting.isSuccess ? meeting.data.title : '',
-              }),
+    <MeetingPage
+      source={source}
+      startedAt={() => (record.isSuccess ? record.data.startedAt : undefined)}
+      participants={participantState()}
+      onCallStateChange={props.onCallStateChange}
+      onLeave={props.onLeave}
+      onBack={() => navigate('/app')}
+      mediaAccess={browserMeetingMedia}
+      initialBackground={call.backgroundEffect()}
+      readBackgroundImage={readBackgroundImage}
+      authenticated={authenticated}
+      author={author}
+      avatar={
+        <Show when={authenticated() && userId()} keyed>
+          {(id) => (
+            <UserIcon id={id} size="fill" suppressClick showTooltip={false} />
+          )}
+        </Show>
+      }
+      startCall={
+        authenticated() === true &&
+        search.start === 'true' &&
+        meeting.isSuccess &&
+        !meeting.data.callId
+      }
+      url={getMeetingUrl(props.shareToken)}
+      onCopy={() =>
+        navigator.clipboard.writeText(getMeetingUrl(props.shareToken))
+      }
+      onRename={canRename() ? rename : undefined}
+      onSignIn={() => {
+        const meetingRoute = `${location.pathname}${location.search}`;
+        navigate(`/login?redirect=${encodeURIComponent(meetingRoute)}`);
+      }}
+      session={{
+        lifecycle,
+        warmup: preloadMeetingRuntime,
+        shareToken: () => props.shareToken,
+        isInCall: call.isInCall,
+        activeCallId: call.activeCallId,
+        join: (displayName) =>
+          join.mutateAsync({ shareToken: props.shareToken, displayName }),
+        release: leaveMeeting,
+        connect: (credentials, preferences) =>
+          call.meetingSession.connectWithToken(credentials, {
+            ...preferences,
+            ...meetingConnectMetadata(mediaPath(), {
+              callId: credentials.callId,
+              title: meeting.isSuccess ? meeting.data.title : '',
             }),
-          disconnect: call.meetingSession.disconnect,
-          mediaPath,
-          watchNativeCallEnded: (onEnded) =>
-            mediaPath() === 'native' ? watchNativeCallEnded(onEnded) : () => {},
-        }}
-        renderCall={(onLeave, name, credentials, copyButton) => (
-          <Show
-            when={mediaPath() === 'browser'}
-            fallback={
-              <NativeMeetingCall
-                onLeave={onLeave}
-                discussion={(panel) => renderDiscussion(panel, credentials())}
-              />
-            }
-          >
-            <CallOverlay
+          }),
+        disconnect: call.meetingSession.disconnect,
+        mediaPath,
+        watchNativeCallEnded: (onEnded) =>
+          mediaPath() === 'native' ? watchNativeCallEnded(onEnded) : () => {},
+      }}
+      renderCall={(onLeave, name, credentials, copyButton) => (
+        <Show
+          when={mediaPath() === 'browser'}
+          fallback={
+            <NativeMeetingCall
               onLeave={onLeave}
-              localName={name()}
-              accessMode={authenticated() === true ? 'member' : 'guest'}
-              footerLeading={copyButton}
-              showChat={
-                authenticated() === true ||
-                (authenticated() === false && !!credentials())
-              }
-              showTeamSharing={canShareWithTeam()}
-              sharedWithTeam={
-                record.isSuccess ? record.data.shareWithTeam : undefined
-              }
-              discussion={{
-                label: () =>
-                  discussion()?.kind === 'channel_thread' && record.isSuccess
-                    ? (record.data.channelName ?? undefined)
-                    : undefined,
-                opensByDefault: () =>
-                  !isMobile() && discussion()?.kind === 'channel_thread',
-                hasUpdates: () => outsideCount() > 0,
-                render: (panel) => renderDiscussion(panel, credentials()),
-              }}
+              discussion={(panel) => renderDiscussion(panel, credentials())}
             />
-          </Show>
-        )}
-      />
-    </Show>
+          }
+        >
+          <CallOverlay
+            onLeave={onLeave}
+            localName={name()}
+            accessMode={authenticated() === true ? 'member' : 'guest'}
+            footerLeading={copyButton}
+            showChat={
+              authenticated() === true ||
+              (authenticated() === false && !!credentials())
+            }
+            showTeamSharing={canShareWithTeam()}
+            sharedWithTeam={
+              record.isSuccess ? record.data.shareWithTeam : undefined
+            }
+            discussion={{
+              label: () =>
+                discussion()?.kind === 'channel_thread' && record.isSuccess
+                  ? (record.data.channelName ?? undefined)
+                  : undefined,
+              opensByDefault: () =>
+                !isMobile() && discussion()?.kind === 'channel_thread',
+              hasUpdates: () => outsideCount() > 0,
+              render: (panel) => renderDiscussion(panel, credentials()),
+            }}
+          />
+        </Show>
+      )}
+    />
   );
 }

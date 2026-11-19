@@ -1,4 +1,6 @@
 // @vitest-environment jsdom
+
+import type { CallMediaPath } from '@channel/Call/CallSessionController';
 import {
   cleanup,
   fireEvent,
@@ -10,9 +12,13 @@ import { createSignal } from 'solid-js';
 import { afterEach, expect, it, vi } from 'vitest';
 import { MeetingSessionProvider } from '../meeting-session-provider';
 import { createMeetingSessionLifecycle } from '../primitives/meeting-session-lifecycle';
+import { fakeMediaAccess, stubMediaStream } from '../tests/fake-media';
 import { MeetingPage } from './meeting-page';
 
-afterEach(cleanup);
+afterEach(() => {
+  cleanup();
+  vi.unstubAllGlobals();
+});
 
 it.each([
   {
@@ -337,3 +343,69 @@ it('offers no waiting-room media choices the native call would ignore', async ()
     cameraEnabled: false,
   });
 });
+
+it.each([
+  { case: 'known auth', authenticated: true as boolean | undefined },
+  { case: 'auth that resolves late', authenticated: undefined },
+])(
+  'releases waiting-room capture when the media path turns native ($case)',
+  async (test) => {
+    stubMediaStream();
+    const { request, tracks } = fakeMediaAccess();
+    const [authenticated, setAuthenticated] = createSignal(test.authenticated);
+    const [mediaPath, setMediaPath] = createSignal<CallMediaPath>('browser');
+    render(() => (
+      <MeetingSessionProvider>
+        <MeetingPage
+          source={() => ({
+            kind: 'ready',
+            title: 'Quick Call',
+            channelId: null,
+            scheduledStart: null,
+            scheduledEnd: null,
+          })}
+          authenticated={authenticated}
+          author={() => 'Member'}
+          onCopy={async () => {}}
+          mediaAccess={{ request }}
+          session={{
+            lifecycle: createMeetingSessionLifecycle(),
+            shareToken: () => 'token',
+            isInCall: () => false,
+            activeCallId: () => null,
+            join: async () => {
+              throw new Error('Must not join');
+            },
+            release: async () => {},
+            connect: async () => {},
+            disconnect: async () => {},
+            mediaPath,
+          }}
+          renderCall={() => <p>In the call</p>}
+        />
+      </MeetingSessionProvider>
+    ));
+    if (test.authenticated === undefined) {
+      // Unknown auth may still turn out native: ask for nothing yet.
+      await Promise.resolve();
+      expect(request).not.toHaveBeenCalled();
+      setMediaPath('native');
+      setAuthenticated(true);
+      await screen.findByText(/You join with your microphone on/);
+      expect(request).not.toHaveBeenCalled();
+      return;
+    }
+    await waitFor(() => expect(request).toHaveBeenCalled());
+    await waitFor(() => expect(tracks.length).toBeGreaterThan(0));
+    setMediaPath('native');
+    await screen.findByText(/You join with your microphone on/);
+    await waitFor(() =>
+      expect(tracks.every((track) => track.stop.mock.calls.length > 0)).toBe(
+        true
+      )
+    );
+    expect(
+      screen.queryByRole('button', { name: 'Turn off microphone' })
+    ).toBeNull();
+  }
+);

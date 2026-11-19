@@ -1,9 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import {
-  channelCallHandoffPath,
-  meetingConnectMetadata,
-  meetingMediaPath,
-} from './meeting-media-path';
+import { meetingConnectMetadata, meetingMediaPath } from './meeting-media-path';
 
 describe('meeting media path', () => {
   it.each([
@@ -36,25 +32,5 @@ describe('meeting media path', () => {
     expect(
       meetingConnectMetadata('browser', { callId: 'call-1', title: 'Sync' })
     ).toEqual({ useBrowserSession: true });
-  });
-
-  it('joins a live channel-linked meeting in its channel from the iOS app', () => {
-    const live = {
-      member: true,
-      nativeIosCalls: true,
-      channelId: 'channel-1',
-      callId: '01a1f517-3048-7a99-afa9-5de4b147bf2f',
-    };
-    expect(channelCallHandoffPath(live)).toBe(
-      '/channel/channel-1?join_call=01a1f517-3048-7a99-afa9-5de4b147bf2f'
-    );
-    expect(channelCallHandoffPath({ ...live, callId: null })).toBeUndefined();
-    expect(
-      channelCallHandoffPath({ ...live, channelId: null })
-    ).toBeUndefined();
-    expect(channelCallHandoffPath({ ...live, member: false })).toBeUndefined();
-    expect(
-      channelCallHandoffPath({ ...live, nativeIosCalls: false })
-    ).toBeUndefined();
   });
 });

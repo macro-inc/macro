@@ -119,15 +119,18 @@ export function MeetingPage(props: {
 
   createEffect(
     on(
+      // Native media captures its own devices, so the page asks for none,
+      // and releases any it took before the media path was known.
       () =>
         Boolean(ready()) &&
+        props.authenticated() !== undefined &&
+        !nativeMedia() &&
         !membersOnly() &&
         !inCall() &&
         !session.joining() &&
         !leaving(),
       (setup) => {
-        // Native media captures its own devices; the page asks for none.
-        if (setup && !nativeMedia()) {
+        if (setup) {
           fireAndForget(media.prepare(), 'meetings');
           fireAndForget(warmup(), 'meetings');
         } else media.release();
