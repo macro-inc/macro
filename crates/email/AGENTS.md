@@ -461,9 +461,21 @@ tools — hexagonal, heavily feature-gated.
   it. Subscription upkeep and webhook deliveries open
   `outlook.subscription.maintain` and `outlook.subscription.notify`; each
   lifecycle event logs "outlook subscription lifecycle event".
+- An Outlook message deleted at the provider keeps its row, marked
+  `provider_missing` by `MailboxIngest::absent`, where Gmail's
+  `delete_message` deletes it. `absent` leaves CRM cleanup candidates for its
+  correspondents in the same transaction, only when it first marks the row
+  (`crm_cleanup::candidate_emails` picks them for both), and readers that ask
+  whether a mailbox still has mail with an address leave such rows out
+  (`email_db_client`'s `link_has_any_message_with`, and CRM's
+  `other_address_mail.sql` and `interactions.sql`).
 - Map database errors in `mailbox_pg` with `db_error` (or `wrapped_db_error`
   for `email_db_client` calls) so the SQLSTATE reaches the log; keep
-  `MailboxError::Persistence` for stored data that cannot be decoded.
+  `MailboxError::Persistence` for stored data that cannot be decoded. Both,
+  and email-service's `database_failed`, build a database failure with
+  `MailboxError::database`, which reports a value the database will never
+  accept (`is_unstorable_sqlstate`) as `Unstorable` (`defer_reason=unstorable`)
+  rather than `Database` (`persistence`).
   `MailboxError::Effect` (`defer_reason=effect`) is for a projection effect
   that fails outside the database; email-service's `MailboxEffects` maps its
   database steps with `database_failed` and everything else with `failed`.
@@ -472,7 +484,8 @@ tools — hexagonal, heavily feature-gated.
   a cause.
 - `MailboxSyncService` reads through two gateways: `import_provider` for a
   folder page claimed before the folder's first round completes and for
-  import reconciliation rows, `provider` for everything else. email-service
+  import reconciliation rows, `provider` for everything else, live passes
+  included. email-service
   gives them the Microsoft gate's `Import` and `Live` budgets, so an import
   cannot take the slot live mail and calendar need.
 - An import round's folder stream reads its next page only while its mailbox
@@ -489,6 +502,25 @@ tools — hexagonal, heavily feature-gated.
   same reason. Live folder streams are never paced.
   A message released after a failed read is due at once when a newer
   revision arrived during the lease.
+- A folder's import round is a delta snapshot, so mail that arrives during it
+  would wait for the whole round. While `LiveImportPass`
+  (`domain/mailbox/live_pass.rs`, set by the host from PostHog) is on, an
+  import round's first request reads newest first, and its first page that
+  is not the round's last opens a `mail_folder_live` stream for the folder
+  (`open_live_pass`, under the link lock): `initial_complete = true`, so its
+  rows queue live and notify, it reads through `provider` and is never paced;
+  its first request lists only mail received since five minutes before
+  `import_started_at`, the round's `round_started_at` (the claim of its
+  first page; a round recorded before that column falls back on the claim of
+  the page that opened the pass), as Graph dates mail by Exchange's clock and
+  mail can land after its date. `enumerate_once` claims a due live
+  pass before any folder (`claim_stream` takes the kind). The round's
+  checkpoint and `reset_stream` delete the pass in their transaction; resync,
+  re-import and a removed folder delete it too, and a webhook wakes it. An
+  expired live pass cursor starts over from now (`restart_live_pass`) and
+  never requeues the folder. Off, live passes are not claimed and rounds read
+  as before. Health, progress, import completion and the folder counts read
+  `kind = 'mail_folder'` only: keep live passes out of them.
 - "outlook import completed" fires from `settle_import` (`mailbox_pg.rs`)
   under the link lock, once per import run: the folder-catalog stream's
   `import_completed_at` is stamped when every folder is enumerated and no
@@ -496,7 +528,9 @@ tools — hexagonal, heavily feature-gated.
   `import_completed_at` and log "outlook import started", as
   `outbound/mailbox_pg/lifecycle.rs` does.
 - A message reconciliation that keeps failing is abandoned
-  (`message_retry` in `domain/mailbox.rs`): its row waits at
+  (`message_retry` in `domain/mailbox.rs`), one the database refuses
+  (`Unstorable`) after 3 tries, 10 minutes apart, as a Graph permanent
+  refusal: its row waits at
   `available_at = 'infinity'` with attempts reset, so claims stop at their
   index bound and every enqueue's `available_at = now()` revives it. Any query
   that reads queued or import-running state must leave those rows out, as
@@ -521,8 +555,9 @@ tools — hexagonal, heavily feature-gated.
   counts what the folder holds at the provider, imported or not, so an import
   is checked against it.
 - `email_sync_streams.reader_revision` is the folder reader revision a mail
-  folder stream's current delta round started at, written by `commit_page` on
-  the round's first page and copied by `rebind_work`. `domain/mailbox/reimport.rs`
+  folder stream's current delta round started at, and `round_started_at` when
+  it started (the claim of its first page); `commit_page` writes both on the
+  round's first page and `rebind_work` copies them. `domain/mailbox/reimport.rs`
   restarts streams whose round started at an older revision (or none), Inbox
   and Sent first, through the Outlook resync's reset limited to those folders;
   a new query that copies or resets streams keeps the column consistent.

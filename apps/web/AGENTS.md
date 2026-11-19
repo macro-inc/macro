@@ -598,7 +598,17 @@ groups, Macro users and DMs lead CRM contacts whatever their match; no person
 moves past another result or into a better group to do it. Personal contact
 rows keep the native window order among people in the same group, matching
 equally well and equally close to the viewer, so a recent weaker match never
-takes a better match's slot.
+takes a better match's slot. People outside the viewer's team (a person, CRM
+contact or one-to-one DM whose person is not on the team's roster) follow every
+row from the team, typed or not (before typing, `listOutsidePeopleLast` puts
+them after the recent rows and the used commands among them, ahead of the
+command catalog that starts at the first never-used command after the team's
+other rows), in the same groups among themselves; group DMs stay with the team's
+rows. Each side keeps its own window order, so a window person the ranking
+left out stays on their side. A query that is exactly such a person's email
+address or full name of two or more words ranks them among the team's rows as a
+stranger, even one the viewer messages. While the roster loads, nobody is
+outside.
 A row whose letters merely appear in order ranks below every row containing the
 typed words.
 Soup's local search pool (`createSearchState`) stays lazy: it builds only when
@@ -1392,6 +1402,8 @@ resolved session ID; keep the existing `AgentSessionProvider` subscription to
 - Sender filter writes and Undo return no per-thread classification. Refresh
   active GraphQL Soup readers with an email Importance predicate so their
   server pages reconcile Signal and Noise membership.
+- Project calendar invitations from GraphQL Mail aggregate facts into the
+  shared row flag so the Calendar invite facet also matches inline invitations.
 - Render user-visible text in new UI, and every menu and navigation label,
   with `t()` from `@app/lib/i18n`, adding only the English to
   `src/lib/i18n/locales/en/`. The periodic `update-translations` skill fills

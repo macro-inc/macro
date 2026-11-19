@@ -296,6 +296,9 @@ impl InboxLifecycleRepository for PgMailboxSync {
                     sqlx::query!(r#"UPDATE email_sync_streams SET position = NULL,initial_complete = false, attachments_rechecked = false,scan_id = gen_random_uuid(),next_run_at = now(),fence = fence + 1,lease_id = NULL,lease_until = NULL,
                             import_started_at = now(),import_completed_at = NULL
                         WHERE link_id = $1 AND generation = $2 AND kind IN ('folder_catalog','mail_folder','contacts_catalog','contacts_profile','contacts')"#,link,current.sync_generation).execute(&mut *tx).await.map_err(failed)?;
+                    // Each folder's new import round opens a live pass of its own.
+                    sqlx::query!("DELETE FROM email_sync_streams WHERE link_id = $1 AND generation = $2 AND kind = 'mail_folder_live'",link,current.sync_generation)
+                        .execute(&mut *tx).await.map_err(failed)?;
                     sqlx::query!(r#"INSERT INTO email_message_reconciliation(link_id,generation,provider_id,is_import)
                         SELECT link_id,$2,provider_id,true FROM email_messages WHERE link_id = $1 AND provider_id IS NOT NULL
                         ON CONFLICT(link_id,generation,provider_id) DO UPDATE SET revision = email_message_reconciliation.revision + 1,available_at = now()"#,link,current.sync_generation).execute(&mut *tx).await.map_err(failed)?;
@@ -401,8 +404,8 @@ async fn rebind_work(
     sqlx::query!("UPDATE email_mailbox_watch_work SET next_run_at=now(),revision=revision+1 WHERE link_id=$1",link)
         .execute(&mut **tx).await.map_err(failed)?;
     // The import run continues in the new generation, so it keeps its stamps.
-    sqlx::query!(r#"INSERT INTO email_sync_streams(id,link_id,generation,kind,scope_id,position,initial_complete,scan_id,import_started_at,import_completed_at,reader_revision)
-        SELECT gen_random_uuid(),link_id,$3,kind,scope_id,position,initial_complete,scan_id,import_started_at,import_completed_at,reader_revision FROM email_sync_streams WHERE link_id = $1 AND generation = $2
+    sqlx::query!(r#"INSERT INTO email_sync_streams(id,link_id,generation,kind,scope_id,position,initial_complete,scan_id,import_started_at,import_completed_at,reader_revision,round_started_at)
+        SELECT gen_random_uuid(),link_id,$3,kind,scope_id,position,initial_complete,scan_id,import_started_at,import_completed_at,reader_revision,round_started_at FROM email_sync_streams WHERE link_id = $1 AND generation = $2
         ON CONFLICT DO NOTHING"#,link,old,new).execute(&mut **tx).await.map_err(failed)?;
     sqlx::query!(r#"INSERT INTO email_message_reconciliation(link_id,generation,provider_id,is_import)
         SELECT link_id,$3,provider_id,is_import FROM email_message_reconciliation WHERE link_id = $1 AND generation = $2 ON CONFLICT DO NOTHING"#,link,old,new).execute(&mut **tx).await.map_err(failed)?;
