@@ -13,8 +13,11 @@ means this is a Macro-managed team vault.
 - `src/domain/ports.rs`: provider, metadata, lock and per-user rollout ports.
 - `src/outbound/openbao.rs`: team JWT login, KV v2 CAS/history, TOTP.
 - `src/outbound/postgres.rs`: metadata index, durable intents and transaction-scoped locks.
-- `src/outbound/postgres/update_record.sql`: materialized primary-key target for
-  guarded updates; keep version/revision checks after the bounded lookup.
+- `src/outbound/postgres/update_record.sql`: guarded update that locks the row by
+  primary key and updates it by ctid (a Tid Scan; no team-wide index scan under
+  stale statistics). `test/update_plan.rs` pins the plan. A concurrent change after
+  the statement snapshot is not re-checked, so every writer of a live item must
+  bump `revision`.
 - `src/inbound/router.rs`: authenticated human routes, CSRF header, private no-store responses.
 - `src/domain/agent.rs`, `src/domain/agent/service.rs`: bounded agent vault API
   (closed Login/API selectors, Agent grants, standing approval, requests, TOTP lifetime).
