@@ -436,3 +436,64 @@ async fn no_session_tool_takes_javascript_tools_programs_yet() {
         assert!(service.seen.lock().unwrap().is_empty());
     }
 }
+
+/// What each session sees of its code-mode tools while JavaScript tools
+/// programs are off: today's tools, byte for byte, for every combination of
+/// the OCaml and permissions rollouts. `UPDATE_TOOLSET_SNAPSHOT=1` rewrites
+/// it; a change to it must be one meant for sessions without them.
+#[tokio::test]
+async fn sessions_without_javascript_tools_see_todays_tools() {
+    let session = agent_session::testing::test_agent_session(
+        agent_session::domain::model::AgentSessionId::new(),
+    );
+    // Each distinct set of tools once, and which one each combination sees.
+    let mut toolsets: Vec<serde_json::Value> = Vec::new();
+    let mut sessions = serde_json::Map::new();
+    for (ocaml, permissions) in [(false, false), (false, true), (true, false), (true, true)] {
+        let service = Languages {
+            ocaml,
+            permissions,
+            seen: Default::default(),
+        };
+        let tools: serde_json::Map<_, _> = session_toolset(&service, &session)
+            .await
+            .tools
+            .iter()
+            .map(|(name, tool)| {
+                (
+                    name.clone(),
+                    serde_json::json!({
+                        "description": tool.description,
+                        "input_schema": tool.input_schema,
+                    }),
+                )
+            })
+            .collect();
+        let tools = serde_json::Value::from(tools);
+        let index = match toolsets.iter().position(|seen| *seen == tools) {
+            Some(index) => index,
+            None => {
+                toolsets.push(tools);
+                toolsets.len() - 1
+            }
+        };
+        sessions.insert(
+            format!("ocaml={ocaml},permissions={permissions}"),
+            index.into(),
+        );
+    }
+    let snapshot = serde_json::json!({ "sessions": sessions, "toolsets": toolsets });
+    let actual = serde_json::to_string_pretty(&snapshot).unwrap() + "\n";
+    let path = concat!(
+        env!("CARGO_MANIFEST_DIR"),
+        "/src/inbound/toolset/test/without_js_tools.json"
+    );
+    if std::env::var_os("UPDATE_TOOLSET_SNAPSHOT").is_some() {
+        std::fs::write(path, &actual).unwrap();
+    }
+    assert!(
+        actual == include_str!("test/without_js_tools.json"),
+        "session code-mode tools changed for sessions without JavaScript tools programs; \
+         rerun with UPDATE_TOOLSET_SNAPSHOT=1 only if that is meant"
+    );
+}
