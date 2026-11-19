@@ -110,7 +110,12 @@ impl MailboxIngest for PgMailboxSync {
         if let Some(existing) = &existing {
             sqlx::query!("DELETE FROM email_draft_organization_versions WHERE message_id=$1 AND ($2=versions[cardinality(versions)] OR NOT ($2=ANY(versions)))",existing.id,version)
                 .execute(&mut *tx).await.map_err(db_error)?;
-            let remote = serde_json::to_value(&message).map_err(|_| MailboxError::Persistence)?;
+            let mut remote =
+                serde_json::to_value(&message).map_err(|_| MailboxError::Persistence)?;
+            email_db_client::parse::nul_characters::remove_from_json(
+                &mut remote,
+                "email_mailbox_drafts.remote_snapshot",
+            );
             sqlx::query!(
                 "UPDATE email_mailbox_drafts SET remote_snapshot = $2 WHERE message_id = $1",
                 existing.id,
@@ -256,7 +261,7 @@ impl MailboxIngest for PgMailboxSync {
         )
         .await
         .map_err(wrapped_db_error)?;
-        let payload = serde_json::json!({
+        let mut payload = serde_json::json!({
             "kind":"message", "message_id":message_id,"thread_id":thread_id,
             "provider_id":lease.provider_id.as_str(),"is_import":lease.is_import,
             "is_new":existing.is_none(),"is_new_thread":thread_id == candidate_thread_id,"was_draft":confirmed_send.is_some() || (shadow.is_none() && existing.as_ref().is_some_and(|m|m.is_draft)),
@@ -264,6 +269,11 @@ impl MailboxIngest for PgMailboxSync {
             "version":version,"actor":sent_actor,
             "calendar_parts":content.calendar_parts,
         });
+        // Calendar part file names come from the sender.
+        email_db_client::parse::nul_characters::remove_from_json(
+            &mut payload,
+            "email_projection_outbox.payload",
+        );
         let dedupe = if confirmed_send.is_some() {
             Some(format!("send/{}/{}", lease.mailbox.link_id, message_id))
         } else {

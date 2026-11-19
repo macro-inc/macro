@@ -1,5 +1,6 @@
 import { parseAgentsRoute } from '@app/features/agents-view/core/route';
 import { NextMeetingBadgePill } from '@app/features/meetings/components/next-meeting-badge-pill';
+import { unreadLabel } from '@app/features/notifications-inbox/core/inbox-unread';
 import { useAnalytics } from '@app/lib/analytics/analytics-context';
 import { t } from '@app/lib/i18n';
 import { useSplitRouter } from '@app/lib/split-router';
@@ -17,6 +18,7 @@ import { fireAndForget } from '@core/util/fireAndForget';
 import PhoneCallIcon from '@icon/system/fill/phone-call-fill.svg';
 import { Button, cn, Hotkey } from '@ui';
 import { Show } from 'solid-js';
+import { unreadDescription } from '../unread-description';
 import { NavGlyph } from './nav-glyph';
 import type { SidebarNextNavItem } from './nav-items';
 import { SidebarUnreadDot } from './unread-dot';
@@ -25,6 +27,8 @@ import { useSidebarPrefs } from './use-sidebar-prefs';
 export type ListNavProps = {
   item: SidebarNextNavItem;
   unread?: boolean;
+  /** How many unread notifications the section holds, shown in place of the dot. */
+  unreadCount?: number;
   activeCall?: boolean;
   /** A short status pill under the glyph, e.g. `Now` or `12m`. */
   badge?: string;
@@ -140,7 +144,8 @@ export const ListNav = (props: ListNavProps) => {
         )}
         aria-description={
           [
-            props.unread && t('nav.unreadItems'),
+            props.unread &&
+              (unreadDescription(props.unreadCount) ?? t('nav.unreadItems')),
             props.activeCall && t('nav.activeCall'),
             props.badge && t('nav.nextMeeting', { time: props.badge }),
           ]
@@ -161,6 +166,7 @@ export const ListNav = (props: ListNavProps) => {
         data-active={isActive() ? '' : undefined}
         data-sidebar-next-item={props.item.id}
         data-unread={props.unread ? '' : undefined}
+        data-unread-count={unreadLabel(props.unreadCount)}
         data-active-call={props.activeCall ? '' : undefined}
         data-badge={props.badge}
         onMouseEnter={preload}
@@ -176,7 +182,12 @@ export const ListNav = (props: ListNavProps) => {
         />
         <Show
           when={props.activeCall}
-          fallback={<SidebarUnreadDot active={props.unread} />}
+          fallback={
+            <SidebarUnreadDot
+              active={props.unread}
+              count={unreadLabel(props.unreadCount)}
+            />
+          }
         >
           {/* Sits outside the button box: the glyph is inset from the
               corner, so a badge flush to it lands on the icon. The rail's

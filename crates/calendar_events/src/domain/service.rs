@@ -516,6 +516,15 @@ where
             .reap_wedged_google_syncs(now - WEDGED_SYNC_STALL_THRESHOLD)
             .await
     }
+
+    /// Turn calendar off for Google accounts whose grant lacks the calendar
+    /// capability, so their stale copy stops reading as current.
+    #[tracing::instrument(skip(self), err)]
+    pub async fn disable_without_capability_once(&self) -> Result<usize, Report> {
+        self.repository
+            .disable_google_accounts_without_calendar_capability()
+            .await
+    }
 }
 
 /// Applies terminal Google Calendar failures that happen before lease claim.

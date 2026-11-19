@@ -23120,6 +23120,28 @@ export type ThreadAnchor = {
 };
 
 /**
+ * A channel grant the thread owner can see in the sharing roster.
+ */
+export type ThreadChannelShare = {
+    /**
+     * The access level granted to the channel.
+     */
+    access_level: AccessLevel;
+    /**
+     * The channel with access to the thread.
+     */
+    channel_id: string;
+    /**
+     * The channel's configured name, if it has one.
+     */
+    channel_name?: string | null;
+    /**
+     * Whether the share is with a conversation or a group.
+     */
+    channel_type: ChannelType;
+};
+
+/**
  * The thread a session was opened from, when it was.
  */
 export type ThreadOrigin = {
@@ -37411,6 +37433,43 @@ export type EditThreadV2Responses = {
 };
 
 export type EditThreadV2Response = EditThreadV2Responses[keyof EditThreadV2Responses];
+
+export type GetThreadChannelSharesData = {
+    body?: never;
+    path: {
+        /**
+         * Thread ID
+         */
+        thread_id: string;
+    };
+    query?: never;
+    url: '/threads/{thread_id}/channel-shares';
+};
+
+export type GetThreadChannelSharesErrors = {
+    /**
+     * Invalid thread ID
+     */
+    400: unknown;
+    /**
+     * Owner access required
+     */
+    401: unknown;
+    /**
+     * User session required
+     */
+    403: unknown;
+    /**
+     * Unable to read thread shares
+     */
+    500: unknown;
+};
+
+export type GetThreadChannelSharesResponses = {
+    200: Array<ThreadChannelShare>;
+};
+
+export type GetThreadChannelSharesResponse = GetThreadChannelSharesResponses[keyof GetThreadChannelSharesResponses];
 
 export type ListUserApiKeysData = {
     body?: never;

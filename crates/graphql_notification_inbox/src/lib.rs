@@ -17,7 +17,8 @@ mod mutations;
 mod objects;
 /// The `notificationInbox` page and `notificationInboxClears` resolvers.
 mod query;
-/// The `notificationInboxUpdates` subscription.
+/// The `notificationInboxUpdates` and `notificationInboxUnreadUpdates`
+/// subscriptions.
 mod subscriptions;
 
 pub use context::{NotificationInboxGraphqlContext, NotificationInboxGraphqlService};
@@ -39,7 +40,7 @@ pub use objects::{
     GraphqlNotificationInboxClear, GraphqlNotificationInboxClearStatus,
     GraphqlNotificationInboxEntry, GraphqlNotificationInboxPage, GraphqlNotificationInboxPatch,
     GraphqlNotificationInboxRow, GraphqlNotificationInboxRowAction,
-    GraphqlNotificationInboxRowActionKind,
+    GraphqlNotificationInboxRowActionKind, GraphqlNotificationInboxUnreadCount,
 };
 pub use query::{resolve_notification_inbox, resolve_notification_inbox_clears};
 pub use subscriptions::NotificationInboxSubscriptionRoot;
