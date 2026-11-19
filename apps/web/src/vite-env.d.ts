@@ -32,6 +32,8 @@ interface ImportMetaEnv {
   readonly VITE_ENABLE_SUGGESTIONS?: string;
   readonly VITE_ENABLE_CHAT_SIDEBAR_SECTIONS?: string;
   readonly VITE_ENABLE_CHAT_SIDEBAR_SECTION_RESIZE?: string;
+  readonly VITE_ENABLE_CHANNEL_STACK_DONE_CHECKS?: string;
+  readonly VITE_ENABLE_CHANNEL_NOTIFICATION_LIST?: string;
   readonly VITE_DISABLE_BROWSER_TURSO_CACHE?: string;
   readonly VITE_DISABLE_CRM_CONTACT_SEARCH?: string;
   readonly VITE_ENABLE_WHATSAPP_LINKED?: string;

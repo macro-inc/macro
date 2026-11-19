@@ -106,6 +106,8 @@ export function createChannelUnreadNavigation(options: {
   });
 
   return {
+    /** The channel's unread notifications, with local marks applied. */
+    notifications,
     chip: unreadChip,
     unreadByThread,
     unreadByMessage,
