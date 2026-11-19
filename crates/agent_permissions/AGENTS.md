@@ -67,7 +67,7 @@ reads the viewer's. A new surface goes in this table with its flag-off test.
 | The gate: analysis, never, ask holds, `allowed_operations` | `PermissionGate::check` (`LanguageRollout`) | `None`: the run is unchanged; a JS tools program it did not check is refused unrun | `javascript_and_owners_without_the_rollout_are_not_checked`, `each_language_is_checked_only_with_its_own_rollout_and_analyzer`, `the_gate_follows_the_permissions_flag_and_for_ocaml_its_flag` |
 | `macro-sdk` holds (`PermissionApprovals`, standing approvals, `by_person`), fold `approver`, record `permission`, `refused` activity | made only by the gate | never made; absent fields serialize as before | the gate's tests above |
 | `ShowPermissions` (internal MCP list and call) | `InternalTools::permission_tools` (`permissions_enabled`) | not listed; a call is refused | `execute_code_offers_and_accepts_js_tools_only_with_permissions` |
-| Web flag | `enableAgentPermissions` (`featureFlags.ts`) | on only under local HMR or a `just stack` bundle; dev and prod follow PostHog alone | `use-agent-permissions-flag.test.ts` |
+| Web flag | `enableAgentPermissions` (`featureFlags.ts`, `default: LOCAL_ONLY \|\| undefined`) | on only under local HMR or a `just stack` bundle; dev and prod follow PostHog alone, and unreachable PostHog is off | `use-agent-permissions-flag.test.ts` (the hook; vitest runs with `import.meta.hot`, so the default itself can't be tested there) |
 | Web: editor section, Macro's shield, permissions page, `requestAgentPermissions` links | `Agents.tsx` (`useAgentPermissionsFlag`, `useAgentPermissionsAvailable`) | hidden; an open page closes; a link waits | `Agents.test.tsx` (`permissions`) |
 | Web: ShowPermissions card | `ShowPermissionsPart` | a plain row, nothing read | `ShowPermissionsPart.test.tsx` |
 | Web: blocked card | `BlockedPermissionsNotice` | the card without Review permissions, nothing read | `blocked-permissions-notice.test.tsx` |
@@ -78,8 +78,14 @@ Not flagged, by design: the migrations (tables), the registry
 (`agent_permission_registry`, data), the reserved `macro-sdk` app slug
 (`McpServerSlug`: no connected app may take it, so a hold can't be spoofed),
 the tool-permission routes in the correlation `SENDS` list (they 404 when
-off), the OpenAPI schemas and generated clients, and the public SDK's
-methods (`packages/sdk`), which call routes that 404 when off.
+off), the tool-approval answer route's caller check (`by_person`, which
+only a `macro-sdk` hold reads), the OpenAPI schemas and generated clients,
+and everything generated from the public SDK (`packages/sdk`): its methods,
+the SDK MCP tools (`agent-tool_permissions`,
+`agent-tighten_tool_permissions`, `agents-tool_permission_catalog`,
+`agent_session-tool_permissions`, and the operations in `agents_read`,
+`agents_write`, `agent_sessions_read`), and code mode's SDK docs and types.
+Each calls routes that answer 404 while the flag is off.
 
 ## Boundaries
 
