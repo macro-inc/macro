@@ -173,9 +173,18 @@ Address: informal je/jij.
 | notifications | Meldingen |
 | done | Voltooid |
 | mark as read | Markeren als gelezen |
-| snooze | Meldingen uitstellen… |
+| snooze | Meldingen uitstellen |
 | archive | Archiveren |
 | settings | Instellingen |
+| computer (Macro computer) | Nieuwe Macro-computer |
+| machine (runs agents) | Machines van teamgenoten |
+| session (agent) | Sessie starten |
+| routine | Alle routines |
+| saved view | Nieuwe opgeslagen weergave |
+| call | Gesprek starten |
+| contact (CRM) | Bedrijf van contact wijzigen |
+| company (CRM) | Bedrijf toevoegen |
+| thread (email) | Uitgesloten threads |
 
 ## Portuguese (Portugal) (`pt-PT`)
 
