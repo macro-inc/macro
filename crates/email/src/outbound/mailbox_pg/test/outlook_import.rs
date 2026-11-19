@@ -24,10 +24,10 @@ use outlook_emulator::{
 use sqlx::PgPool;
 use uuid::Uuid;
 
-const ADA: &str = "ada@example.com";
+pub(super) const ADA: &str = "ada@example.com";
 
 /// The emulator's token for the mailbox, whatever the binding.
-struct EmulatorToken(String);
+pub(super) struct EmulatorToken(String);
 
 impl MailboxTokenSource for EmulatorToken {
     async fn access_token(
@@ -39,12 +39,13 @@ impl MailboxTokenSource for EmulatorToken {
     }
 }
 
-type Graph = MailboxApiService<OutlookApiClientRepository, EmulatorToken, AlwaysAllowRateLimiter>;
+pub(super) type Graph =
+    MailboxApiService<OutlookApiClientRepository, EmulatorToken, AlwaysAllowRateLimiter>;
 
 /// What email-service's provider gateway does: the Graph service for a key.
-struct Gateway(Graph);
+pub(super) struct Gateway(pub(super) Graph);
 
-fn access(mailbox: MailboxKey) -> MailboxAccess {
+pub(super) fn access(mailbox: MailboxKey) -> MailboxAccess {
     MailboxAccess {
         link_id: mailbox.link_id,
         sync_generation: mailbox.sync_generation,
@@ -80,7 +81,7 @@ impl MailboxGateway for Gateway {
     }
 }
 
-fn gateway(emulator: &OutlookEmulator) -> Gateway {
+pub(super) fn gateway(emulator: &OutlookEmulator) -> Gateway {
     let url = MicrosoftGraphUrl::from(emulator.graph_url());
     Gateway(MailboxApiService::new(
         OutlookApiClientRepository::for_graph_url(&url).unwrap(),
@@ -102,7 +103,7 @@ fn seed() -> Seed {
 }
 
 /// An Outlook link whose catalog is due, as a first connect leaves it.
-async fn connected(db: &PgPool) -> Uuid {
+pub(super) async fn connected(db: &PgPool) -> Uuid {
     let link = macro_uuid::generate_uuid_v7();
     sqlx::query!(r#"
         INSERT INTO email_links (id,macro_id,fusionauth_user_id,email_address,provider,grant_generation)
