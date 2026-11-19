@@ -42,7 +42,7 @@ export const startupAuthorityHint = readGenerationMirror();
 export function initialCacheRetirement(
   hint: CacheAuthority | undefined,
   owner: CacheAuthority
-): 'session' | 'permission' | 'refresh' | undefined {
+): 'session' | 'permission' | undefined {
   if (
     hint &&
     (hint.identity !== owner.identity || hint.account !== owner.account)
@@ -55,10 +55,10 @@ export function initialCacheRetirement(
     return 'permission';
   if (!hint) {
     // Discovering a non-denied owner is not an access change. Keep mounted
-    // readers (and their open menus) while refreshing in the background. The
-    // owner still rejects every copied write carrying the unknown startup UUID.
+    // readers (and their open menus). Only copied writes rejected by the owner
+    // need a background reread; ordinary active queries remain current.
     // A mismatching signed-in account is fenced separately by the policy owner.
-    return 'refresh';
+    return undefined;
   }
   if (hint.policy !== owner.policy) return 'permission';
   // The same account/team/access status may have gone denied then allowed

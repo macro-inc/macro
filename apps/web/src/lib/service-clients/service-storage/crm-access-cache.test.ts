@@ -103,19 +103,11 @@ async function boot(policy: string | null = null) {
   return host;
 }
 
-it('recovers a missing-mirror upgrade in the background without cancelling or resetting reads', async () => {
+it('does not refetch or reset active reads for a safe first owner without a mirror', async () => {
   const host = owner();
   const generation = host.authority.snapshot()!.generation;
-  const initialized = Promise.withResolvers<void>();
-  mocks.refetch.mockImplementationOnce(async () => {
-    initialized.resolve();
-  });
   await initializeCrmCacheOwner();
-  await initialized.promise;
-  expect(mocks.refetch).toHaveBeenCalledExactlyOnceWith(
-    { type: 'active' },
-    { cancelRefetch: false }
-  );
+  expect(mocks.refetch).not.toHaveBeenCalled();
   expect(mocks.cancel).not.toHaveBeenCalled();
   // Main has a bound account but no authority policy or mirror. Its persisted
   // email/CRM entries and mounted readers survive recovery and the first proof.

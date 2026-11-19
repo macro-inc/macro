@@ -50,10 +50,11 @@ the owner handshake. Read account, policy and generation from the profile's
 localStorage mirror only as a startup hint; update it only from validated owner
 observations. Missing or unreadable hints send an explicit nonmatching UUID,
 never an omitted generation. A first non-denied owner without a mirror initializes
-stamps and refreshes in the background: keep existing query observers, rows, menus
-and persisted snapshots, including on upgrades. Do not cancel in-flight TanStack
-reads; urql rereads only queries whose copied writes the owner rejects. A denied
-or incomplete owner and known account/policy changes still retire visible and
+stamps while keeping existing query observers, rows, menus and persisted snapshots,
+including on upgrades. Do not cancel or refetch active TanStack reads; urql rereads
+only queries whose copied writes the owner rejects, preserving visible rows during
+that background recovery. A denied or incomplete owner and known account/policy
+changes still retire visible and
 persisted content. Preserve captured stamps through
 initialization waits and queued settlement. An unchanged ready proof without
 failed cleanup never refetches. With the same account and policy,

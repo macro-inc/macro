@@ -32,9 +32,7 @@ function startup(mirror: CacheAuthority | undefined, current: CacheAuthority) {
     onChanged: () => () => {},
     transition: vi.fn(),
   };
-  const initialize = vi.fn((next: string, _refresh?: boolean) =>
-    generation.initialize(next)
-  );
+  const initialize = vi.fn((next: string) => generation.initialize(next));
   const authority = createCrmAccessAuthority({
     initialize,
     restore: (next) => initialCacheRetirement(mirror, next),
@@ -178,10 +176,7 @@ it.each([
     expect(state.retire).not.toHaveBeenCalled();
     expect(changed).not.toHaveBeenCalled();
     expect(state.fetchProof).not.toHaveBeenCalled();
-    expect(state.initialize).toHaveBeenCalledExactlyOnceWith(
-      owner.generation,
-      true
-    );
+    expect(state.initialize).toHaveBeenCalledExactlyOnceWith(owner.generation);
     expect(state.generation.capture()).toBe(owner.generation);
     // The response can stay visible, but its original unknown write stamp cannot
     // be admitted by an owner that now exposes its real generation.

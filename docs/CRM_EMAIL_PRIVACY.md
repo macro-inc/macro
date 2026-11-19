@@ -87,11 +87,12 @@ Copied data retains its original stamp, is rejected at the shared store when
 stale, and recovers with a fresh read of its own query. A different account or
 known policy, or a denied/incomplete first observation triggers normal visible
 retirement. A missing or unreadable mirror alone is not an access change. A first
-non-denied owner initializes the current stamp and refreshes in the background,
-preserving mounted observers, rows, open menus and persisted snapshots. This
-also applies to the first launch after upgrading a bound legacy owner with no
-policy. TanStack keeps existing data and in-flight reads; urql rereads only the
-queries whose original copied writes the shared owner rejects. Physical resets
+non-denied owner initializes the current stamp while preserving mounted observers,
+rows, open menus and persisted snapshots. This also applies to the first launch
+after upgrading a bound legacy owner with no
+policy. TanStack keeps existing data and in-flight reads without refetching; urql
+rereads only the queries whose original copied writes the shared owner rejects,
+in the background while their current rows remain visible. Physical resets
 issue new owner generations, so
 delayed or missing mirror updates cannot admit pre-reset content.
 
