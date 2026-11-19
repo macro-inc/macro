@@ -730,5 +730,16 @@ async fn parsed_search_messages_are_excluded_by_their_mailbox_facts(
         !restored.excluded_from_search,
         "a pending move out of Trash counts before Outlook confirms it"
     );
+
+    let deleted = Uuid::parse_str("00000000-0000-0000-0000-0000000e0635")?;
+    assert_eq!(
+        crate::messages::get_parsed_search::fetch_excluded_from_search(
+            &pool,
+            &[outlook_restore_pending, deleted]
+        )
+        .await?,
+        std::collections::HashSet::from([deleted]),
+        "a message deleted after the loader read it is left out"
+    );
     Ok(())
 }

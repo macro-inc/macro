@@ -1,6 +1,6 @@
 {
   "db_name": "PostgreSQL",
-  "query": "\n        SELECT f.id AS \"id!\"\n        FROM email_message_mailbox_facts f\n        WHERE f.id = ANY($1) AND (f.in_trash OR f.in_junk OR NOT f.is_present)\n        ",
+  "query": "\n        SELECT f.id AS \"id!\"\n        FROM email_message_mailbox_facts f\n        WHERE f.id = ANY($1) AND NOT (f.in_trash OR f.in_junk OR NOT f.is_present)\n        ",
   "describe": {
     "columns": [
       {
@@ -18,5 +18,5 @@
       true
     ]
   },
-  "hash": "1d6e29758950651e624c1ccb3f5a2904fc7c61a8ce1932ea964da4629fa8cc0e"
+  "hash": "8bdb426a2c3c87270135a64a0a627551ba7fc212b887112f939cce7db3ada0ad"
 }

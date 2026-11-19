@@ -269,8 +269,9 @@ pub async fn get_paginated_parsed_search_messages_by_thread_id(
 /// Message ids search leaves out, by their mailbox facts: in Trash or Junk, or
 /// gone at the provider. The facts read Gmail labels, Outlook folder state and
 /// pending organization commands alike, so an Outlook move made in Macro
-/// counts as soon as it is accepted.
-async fn fetch_excluded_from_search<'e, E>(
+/// counts as soon as it is accepted. Every stored message has a facts row, so
+/// an id without one was deleted after the loader read it and is left out too.
+pub(super) async fn fetch_excluded_from_search<'e, E>(
     executor: E,
     message_ids: &[Uuid],
 ) -> anyhow::Result<HashSet<Uuid>>
@@ -280,17 +281,23 @@ where
     if message_ids.is_empty() {
         return Ok(HashSet::new());
     }
-    let excluded = sqlx::query_scalar!(
+    let searchable: HashSet<Uuid> = sqlx::query_scalar!(
         r#"
         SELECT f.id AS "id!"
         FROM email_message_mailbox_facts f
-        WHERE f.id = ANY($1) AND (f.in_trash OR f.in_junk OR NOT f.is_present)
+        WHERE f.id = ANY($1) AND NOT (f.in_trash OR f.in_junk OR NOT f.is_present)
         "#,
         message_ids
     )
     .fetch_all(executor)
-    .await?;
-    Ok(excluded.into_iter().collect())
+    .await?
+    .into_iter()
+    .collect();
+    Ok(message_ids
+        .iter()
+        .copied()
+        .filter(|id| !searchable.contains(id))
+        .collect())
 }
 
 fn with_search_exclusion(
