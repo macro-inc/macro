@@ -106,6 +106,25 @@ describe('CacheWorkerCore', () => {
     );
   });
 
+  it('rejects an unstamped request of a kind it does not know as a stale write', async () => {
+    loadCacheWasmMock.mockResolvedValue({ openCache: async () => ({}) });
+    const port = { postMessage: vi.fn() };
+    const core = new CacheWorkerCore();
+    core.addPort(port);
+    await core.handleRequest(port, { id: 1, kind: 'init', scope: 'profile' });
+    await core.handleRequest(port, {
+      id: 2,
+      kind: 'a-later-write',
+    } as unknown as CacheRequest);
+    expect(port.postMessage).toHaveBeenLastCalledWith(
+      expect.objectContaining({
+        id: 2,
+        ok: false,
+        error: 'cache response belongs to an older session generation',
+      })
+    );
+  });
+
   it('broadcasts implicit retirement recovery to every tab before an ordinary read completes', async () => {
     const next = '00000000-0000-4000-8000-000000000099';
     let generation = TEST_AUTHORITY_GENERATION;
