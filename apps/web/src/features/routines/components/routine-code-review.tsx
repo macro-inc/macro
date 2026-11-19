@@ -20,16 +20,18 @@ export function CodeReviewNotice(props: {
   const [open, setOpen] = createSignal(false);
   return (
     <section
-      aria-label="Code update needed"
+      aria-label={t('subRoutines.codeUpdateNeeded')}
       class="grid min-w-0 gap-3 rounded-xl border border-failure/30 bg-failure-bg px-4 py-3"
     >
       <div class="flex min-w-0 gap-2.5">
         <WarningIcon class="mt-0.5 size-4 shrink-0 text-failure" />
         <div class="grid min-w-0 gap-1">
           <span class="text-sm font-medium text-ink">
-            {props.paused
-              ? 'Paused: its code needs an update'
-              : 'Its sub-routines’ code needs an update'}
+            {t(
+              props.paused
+                ? 'subRoutines.pausedForCodeUpdate'
+                : 'subRoutines.definitionsNeedCodeUpdate'
+            )}
           </span>
           <span class="whitespace-pre-wrap text-sm text-ink-muted">
             {props.review.reason}
@@ -40,9 +42,11 @@ export function CodeReviewNotice(props: {
         when={props.review.proposal}
         fallback={
           <span class="text-xs text-ink-muted">
-            {props.paused
-              ? 'Ask AI on this routine to update its code, then turn it back on.'
-              : 'Ask AI on this routine to update its code.'}
+            {t(
+              props.paused
+                ? 'subRoutines.askAiForCodeUpdateAndResume'
+                : 'subRoutines.askAiForCodeUpdate'
+            )}
           </span>
         }
       >
@@ -53,11 +57,22 @@ export function CodeReviewNotice(props: {
                 {(change) => (
                   <div class="grid min-w-0 gap-1.5">
                     <span class="text-xs font-medium text-ink-muted">
-                      {change.title}
+                      {change.definitionTitle === undefined
+                        ? change.title
+                        : t('subRoutines.codeChangeInDefinition', {
+                            step: change.title,
+                            definition: change.definitionTitle,
+                          })}
                     </span>
                     <div class="grid min-w-0 gap-2 @[40rem]/routine:grid-cols-2">
-                      <CodeBlock label="Before" source={change.before} />
-                      <CodeBlock label="Proposed" source={change.after} />
+                      <CodeBlock
+                        label={t('subRoutines.codeBefore')}
+                        source={change.before}
+                      />
+                      <CodeBlock
+                        label={t('subRoutines.codeProposed')}
+                        source={change.after}
+                      />
                     </div>
                   </div>
                 )}
@@ -70,7 +85,11 @@ export function CodeReviewNotice(props: {
                   disabled={props.disabled}
                   onClick={props.onApprove}
                 >
-                  {props.paused ? 'Approve and resume' : 'Approve'}
+                  {t(
+                    props.paused
+                      ? 'subRoutines.approveAndResume'
+                      : 'subRoutines.approve'
+                  )}
                 </Button>
               </Show>
               <Show when={props.onDiscardEdits}>
@@ -88,7 +107,11 @@ export function CodeReviewNotice(props: {
                 aria-expanded={open()}
                 onClick={() => setOpen(!open())}
               >
-                {open() ? 'Hide the update' : 'Review the update'}
+                {t(
+                  open()
+                    ? 'subRoutines.hideCodeUpdate'
+                    : 'subRoutines.reviewCodeUpdate'
+                )}
               </Button>
             </div>
           </>

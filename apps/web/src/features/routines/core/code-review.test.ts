@@ -95,7 +95,8 @@ describe('code review', () => {
       task: proposed,
       changes: [
         {
-          title: 'Read (in Nudge me)',
+          title: 'Read',
+          definitionTitle: 'Nudge me',
           before: 'macro.tasks.create(x)',
           after: 'macro.tasks.add(x)',
         },

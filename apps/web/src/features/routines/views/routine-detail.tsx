@@ -28,6 +28,7 @@ import {
   RoutineSubRoutines,
   type SubRoutineItem,
 } from '../components/routine-sub-routines';
+import { routineValidationMessage } from '../components/routine-validation-message';
 import type { RoutineDetailSlots } from '../context/routine-slots';
 import type { RoutineDetailSource } from '../context/routine-sources';
 import { isClaimActive } from '../core/claim';
@@ -295,7 +296,7 @@ export function RoutineDetailView(props: {
                     failed={Boolean(autosave.error())}
                     invalid={
                       autosave.dirty() && !autosave.saving()
-                        ? (formError() ?? undefined)
+                        ? (routineValidationMessage(formError()) ?? undefined)
                         : undefined
                     }
                   />
@@ -562,7 +563,7 @@ export function RoutineDetailView(props: {
               <Show when={formError()}>
                 {(message) => (
                   <p role="alert" class="text-sm text-failure">
-                    {message()}
+                    {routineValidationMessage(message())}
                   </p>
                 )}
               </Show>

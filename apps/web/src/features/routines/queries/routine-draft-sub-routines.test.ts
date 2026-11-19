@@ -133,9 +133,11 @@ describe('routines with sub-routines', () => {
       ...draft,
       subRoutines: [{ ...draft.subRoutines![0]!, steps: [] }],
     };
-    expect(validateRoutineDraft(emptied)).toBe(
-      'In “Remind me”: Add a step to tell this routine what to do.'
-    );
+    expect(validateRoutineDraft(emptied)).toEqual({
+      kind: 'definition',
+      title: 'Remind me',
+      message: 'Add a step to tell this routine what to do.',
+    });
   });
 
   it('holds back a definition with apps after its last Ask AI step is removed', () => {
@@ -159,9 +161,11 @@ describe('routines with sub-routines', () => {
       },
     };
     const draft = loadedDraft(configured);
-    expect(validateRoutineDraft(draft)).toBe(
-      'In “Remind me”: Apps are for an Ask AI step. Add one, or remove the apps.'
-    );
+    expect(validateRoutineDraft(draft)).toEqual({
+      kind: 'definition',
+      title: 'Remind me',
+      message: 'Apps are for an Ask AI step. Add one, or remove the apps.',
+    });
   });
 
   it('enforces the combined code-step budget including a detached copy', () => {
@@ -197,7 +201,10 @@ describe('routines with sub-routines', () => {
         ],
       },
     };
-    expect(validateRoutineDraft(loadedDraft(tooMany))).toMatch(/40 code steps/);
+    expect(validateRoutineDraft(loadedDraft(tooMany))).toEqual({
+      kind: 'codeStepLimit',
+      count: 40,
+    });
   });
 
   it('keeps a single agent step as a program while it has sub-routines', () => {

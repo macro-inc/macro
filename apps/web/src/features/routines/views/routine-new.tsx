@@ -9,6 +9,7 @@ import {
   Show,
 } from 'solid-js';
 import { RoutineEditor } from '../components/routine-editor';
+import { routineValidationMessage } from '../components/routine-validation-message';
 import type { RoutineEditorSlots } from '../context/routine-slots';
 import type {
   RoutineCreatorSource,
@@ -145,7 +146,7 @@ export function RoutineNewView(props: {
             <Show when={attempted() && formError()}>
               {(message) => (
                 <p role="alert" class="text-sm text-failure">
-                  {message()}
+                  {routineValidationMessage(message())}
                 </p>
               )}
             </Show>

@@ -205,11 +205,17 @@ export function formatDateTime(value: string | null | undefined) {
   }).format(date);
 }
 
+export type RoutineValidationError =
+  | string
+  | { kind: 'definition'; title: string; message: string }
+  | { kind: 'codeStepLimit'; count: number }
+  | { kind: 'unsupportedApps'; definitionTitle?: string };
+
 function validateProgramDraft(
   steps: StepDraft[],
   draft: ScheduleDraft,
   creating: boolean
-): string | null {
+): RoutineValidationError | null {
   const triggers = draft.triggers ?? [];
   // A copy's steps are its parent's, checked there.
   if (draft.copy) return validateTriggers(triggers, creating);
@@ -223,7 +229,7 @@ function validateProgramDraft(
   const totalDefined = definedCounts.reduce((sum, count) => sum + count, 0);
   const largestProgram = Math.max(codeSteps(steps).length, ...definedCounts);
   if (totalDefined + largestProgram > MAX_CODE_STEPS) {
-    return `The definitions plus the largest step list can have at most ${MAX_CODE_STEPS} code steps.`;
+    return { kind: 'codeStepLimit', count: MAX_CODE_STEPS };
   }
   return validateTriggers(triggers, creating);
 }
@@ -237,10 +243,11 @@ function validateProgramSteps(steps: StepDraft[], apps: ScheduleDraft['apps']) {
 /** Each sub-routine's steps, held to a routine's rules, named when one fails. */
 function validateSubRoutines(
   subRoutines: NonNullable<ScheduleDraft['subRoutines']>
-): string | null {
+): RoutineValidationError | null {
   for (const definition of subRoutines) {
     const error = validateProgramSteps(definition.steps, definition.apps);
-    if (error) return `In “${definition.title}”: ${error}`;
+    if (error)
+      return { kind: 'definition', title: definition.title, message: error };
   }
   return null;
 }
@@ -248,7 +255,7 @@ function validateSubRoutines(
 export function validateRoutineDraft(
   draft: ScheduleDraft,
   creating = false
-): string | null {
+): RoutineValidationError | null {
   if ([...(draft.description?.trim() ?? '')].length > MAX_DESCRIPTION_CHARS)
     return `Keep the description under ${MAX_DESCRIPTION_CHARS.toLocaleString('en-US')} characters.`;
   if (draft.steps) return validateProgramDraft(draft.steps, draft, creating);
@@ -309,17 +316,16 @@ export function validateRoutineApps(
   draft: ScheduleDraft,
   connectedSlugs: ReadonlySet<string> | undefined,
   targetSupportsApps: (target: RoutineTarget) => boolean
-): string | null {
+): RoutineValidationError | null {
   const cannotUseApps = (steps: StepDraft[]) =>
     steps.some(
       (step) => step.kind === 'agent' && !targetSupportsApps(step.target)
     );
-  const guidance = 'choose a model or managed agent, or remove the apps.';
   if (draft.apps.length && cannotUseApps(draftSteps(draft)))
-    return `To use apps in this routine, ${guidance}`;
+    return { kind: 'unsupportedApps' };
   for (const definition of draft.subRoutines ?? []) {
     if (definition.apps.length && cannotUseApps(definition.steps))
-      return `To use apps in “${definition.title}”, ${guidance}`;
+      return { kind: 'unsupportedApps', definitionTitle: definition.title };
   }
   if (!connectedSlugs) return null;
   const apps = [

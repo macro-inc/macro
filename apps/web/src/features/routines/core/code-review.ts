@@ -17,7 +17,12 @@ export type CodeUpgradeRecord = {
 };
 
 /** A code step the proposed update changes: its code before and after. */
-export type CodeChange = { title: string; before: string; after: string };
+export type CodeChange = {
+  title: string;
+  definitionTitle?: string;
+  before: string;
+  after: string;
+};
 
 /** A routine whose code needs its owner after an SDK change. */
 export type CodeReview = {
@@ -39,24 +44,24 @@ export function taskSdk(task: RoutineTask): string | undefined {
 
 /**
  * Each code step of a task, its sub-routines' after its own, keyed by where
- * it is, and titled with the sub-routine it belongs to. Undefined when the
+ * it is, with the title of its sub-routine when present. Undefined when the
  * task holds steps the editor can't show.
  */
 function codeSteps(
   task: RoutineTask
-): Map<string, CodeStepDraft & { label: string }> | undefined {
+): Map<string, CodeStepDraft & { definitionTitle?: string }> | undefined {
   const own = programSteps(task);
   const definitions = subRoutinesFromWire(task);
   if (!own || !definitions) return;
-  const steps = new Map<string, CodeStepDraft & { label: string }>();
+  const steps = new Map<string, CodeStepDraft & { definitionTitle?: string }>();
   codeStepsOf(own).forEach((step, index) => {
-    steps.set(`${index}`, { ...step, label: step.title });
+    steps.set(`${index}`, step);
   });
   for (const definition of definitions) {
     codeStepsOf(definition.steps).forEach((step, index) => {
       steps.set(`${definition.name}/${index}`, {
         ...step,
-        label: `${step.title} (in ${definition.title})`,
+        definitionTitle: definition.title,
       });
     });
   }
@@ -87,7 +92,14 @@ export function pendingCodeReview(
   const changes = [...(proposed ?? [])].flatMap(([place, step]) => {
     const previous = before?.get(place);
     return previous && previous.source !== step.source
-      ? [{ title: step.label, before: previous.source, after: step.source }]
+      ? [
+          {
+            title: step.title,
+            definitionTitle: step.definitionTitle,
+            before: previous.source,
+            after: step.source,
+          },
+        ]
       : [];
   });
   return {

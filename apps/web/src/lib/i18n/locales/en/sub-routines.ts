@@ -27,6 +27,19 @@ export default {
   stopSharingFailed: 'Could not stop sharing',
   retrySharing: 'Retry sharing status',
   discardEdits: 'Discard unsaved edits',
+  codeUpdateNeeded: 'Code update needed',
+  pausedForCodeUpdate: 'Paused: its code needs an update',
+  definitionsNeedCodeUpdate: 'Its sub-routines’ code needs an update',
+  askAiForCodeUpdate: 'Ask AI on this routine to update its code.',
+  askAiForCodeUpdateAndResume:
+    'Ask AI on this routine to update its code, then turn it back on.',
+  codeChangeInDefinition: '{{step}} (in {{definition}})',
+  codeBefore: 'Before',
+  codeProposed: 'Proposed',
+  approve: 'Approve',
+  approveAndResume: 'Approve and resume',
+  reviewCodeUpdate: 'Review the update',
+  hideCodeUpdate: 'Hide the update',
   approvalCheckFailed: 'Could not check the current routine before approving',
   approvalTaskChanged: 'The routine changed since the code update was proposed',
   approvalResumeFailed: 'Code saved, but the routine could not resume',
@@ -39,6 +52,15 @@ export default {
   definitionsTitle: 'Sub-routines',
   definitionsAside: 'Scheduled once per item by this routine’s runs',
   definitionInputs: 'Each one is given',
+  definitionInvalid: 'In “{{title}}”: {{message}}',
+  codeStepLimit: {
+    other:
+      'The definitions plus the largest step list can have at most {{count}} code steps.',
+  },
+  routineAppsUnsupported:
+    'To use apps in this routine, choose a model or managed agent, or remove the apps.',
+  definitionAppsUnsupported:
+    'To use apps in “{{title}}”, choose a model or managed agent, or remove the apps.',
   inputText: 'text',
   inputNumber: 'number',
   inputBoolean: 'yes or no',
