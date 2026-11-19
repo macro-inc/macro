@@ -12324,6 +12324,10 @@ let make_channel_created_metadata ~(actor : channel_sender)
 type nonrec channel_deleted_metadata = {
   actor : channel_sender;  (** Actor that deleted the channel. *)
   channel_id : string;  (** The id of the deleted channel. *)
+  participant_user_ids : macro_user_id_str list option;
+      (** Active participants just before the delete. The channel and its
+memberships are gone by the time this is consumed, so consumers that
+tell members about the delete cannot look them up. *)
 }
 (** Metadata for \[[ChannelTopicEvent::Deleted]\]. *)
 
@@ -12334,6 +12338,9 @@ let channel_deleted_metadata_of_yojson :
   {
     actor = Json.required fields "actor" channel_sender_of_yojson;
     channel_id = Json.required fields "channel_id" Json.string;
+    participant_user_ids =
+      Json.optional fields "participant_user_ids"
+        (Json.list macro_user_id_str_of_yojson);
   }
 
 and yojson_of_channel_deleted_metadata :
@@ -12343,11 +12350,15 @@ and yojson_of_channel_deleted_metadata :
     [
       ("actor", Some (yojson_of_channel_sender value.actor));
       ("channel_id", Some (Json.of_string value.channel_id));
+      ( "participant_user_ids",
+        Option.map
+          (Json.of_list yojson_of_macro_user_id_str)
+          value.participant_user_ids );
     ]
 
 let make_channel_deleted_metadata ~(actor : channel_sender)
-    ~(channel_id : string) () =
-  ({ actor; channel_id } : channel_deleted_metadata)
+    ~(channel_id : string) ?participant_user_ids () =
+  ({ actor; channel_id; participant_user_ids } : channel_deleted_metadata)
 
 (** The mutually exclusive lifecycle states of a user's notification. *)
 type nonrec notification_state =
@@ -52403,6 +52414,41 @@ let make_team_out_of_office_response ~(has_more : bool)
     ~(items : team_out_of_office_item list) () =
   ({ has_more; items } : team_out_of_office_response)
 
+type nonrec thread_channel_share = {
+  access_level : access_level;  (** The access level granted to the channel. *)
+  channel_id : string;  (** The channel with access to the thread. *)
+  channel_name : string option;
+      (** The channel's configured name, if it has one. *)
+  channel_type : channel_type;
+      (** Whether the share is with a conversation or a group. *)
+}
+(** A channel grant the thread owner can see in the sharing roster. *)
+
+let thread_channel_share_of_yojson : Yojson.Safe.t -> thread_channel_share =
+ fun json ->
+  let fields = Json.obj json in
+  {
+    access_level = Json.required fields "access_level" access_level_of_yojson;
+    channel_id = Json.required fields "channel_id" Json.string;
+    channel_name = Json.optional fields "channel_name" Json.string;
+    channel_type = Json.required fields "channel_type" channel_type_of_yojson;
+  }
+
+and yojson_of_thread_channel_share : thread_channel_share -> Yojson.Safe.t =
+ fun value ->
+  Json.record
+    [
+      ("access_level", Some (yojson_of_access_level value.access_level));
+      ("channel_id", Some (Json.of_string value.channel_id));
+      ("channel_name", Option.map Json.of_string value.channel_name);
+      ("channel_type", Some (yojson_of_channel_type value.channel_type));
+    ]
+
+let make_thread_channel_share ~(access_level : access_level)
+    ~(channel_id : string) ?channel_name ~(channel_type : channel_type) () =
+  ({ access_level; channel_id; channel_name; channel_type }
+    : thread_channel_share)
+
 type nonrec thread_patch = {
   detach_anchor : bool option;
       (** Move a Markdown discussion to the document when its marked text is removed. *)
@@ -69710,6 +69756,34 @@ let edit_thread_v2 ~(thread_id : string) ?project_id ?share_permission () =
        Request.error_json [ 401; 500 ] generic_error_response_of_yojson;
    }
     : (success_response, generic_error_response) Macro_sdk_runtime.Request.t)
+
+(** [GET /threads/{thread_id}/channel-shares]
+
+List a thread owner's grants to channels they participate in. *)
+let get_thread_channel_shares ~(thread_id : string) () =
+  ({
+     Request.service = "storage";
+     operation = "get_thread_channel_shares";
+     meth = `GET;
+     path =
+       String.concat ""
+         [
+           "/threads/";
+           Request.segment ((fun value -> value) thread_id);
+           "/channel-shares";
+         ];
+     query = List.filter (fun (_, values) -> values <> []) [];
+     headers =
+       List.concat_map
+         (fun (name, values) -> List.map (fun v -> (name, v)) values)
+         [];
+     body = None;
+     decode_reply = Request.json (Json.list thread_channel_share_of_yojson);
+     decode_error = Request.no_error;
+   }
+    : ( thread_channel_share list,
+        Macro_sdk_runtime.Request.no_error )
+      Macro_sdk_runtime.Request.t)
 
 (** [GET /user-api-keys]
 

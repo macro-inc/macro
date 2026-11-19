@@ -6539,6 +6539,10 @@ val make_channel_created_metadata :
 type nonrec channel_deleted_metadata = {
   actor : channel_sender;  (** Actor that deleted the channel. *)
   channel_id : string;  (** The id of the deleted channel. *)
+  participant_user_ids : macro_user_id_str list option;
+      (** Active participants just before the delete. The channel and its
+memberships are gone by the time this is consumed, so consumers that
+tell members about the delete cannot look them up. *)
 }
 (** Metadata for \[[ChannelTopicEvent::Deleted]\]. *)
 
@@ -6549,7 +6553,11 @@ val yojson_of_channel_deleted_metadata :
   channel_deleted_metadata -> Yojson.Safe.t
 
 val make_channel_deleted_metadata :
-  actor:channel_sender -> channel_id:string -> unit -> channel_deleted_metadata
+  actor:channel_sender ->
+  channel_id:string ->
+  ?participant_user_ids:macro_user_id_str list ->
+  unit ->
+  channel_deleted_metadata
 (** Metadata for \[[ChannelTopicEvent::Deleted]\]. *)
 
 (** The mutually exclusive lifecycle states of a user's notification. *)
@@ -28498,6 +28506,28 @@ val make_team_out_of_office_response :
   team_out_of_office_response
 (** Team out-of-office viewport response. *)
 
+type nonrec thread_channel_share = {
+  access_level : access_level;  (** The access level granted to the channel. *)
+  channel_id : string;  (** The channel with access to the thread. *)
+  channel_name : string option;
+      (** The channel's configured name, if it has one. *)
+  channel_type : channel_type;
+      (** Whether the share is with a conversation or a group. *)
+}
+(** A channel grant the thread owner can see in the sharing roster. *)
+
+val thread_channel_share_of_yojson : Yojson.Safe.t -> thread_channel_share
+val yojson_of_thread_channel_share : thread_channel_share -> Yojson.Safe.t
+
+val make_thread_channel_share :
+  access_level:access_level ->
+  channel_id:string ->
+  ?channel_name:string ->
+  channel_type:channel_type ->
+  unit ->
+  thread_channel_share
+(** A channel grant the thread owner can see in the sharing roster. *)
+
 type nonrec thread_patch = {
   detach_anchor : bool option;
       (** Move a Markdown discussion to the document when its marked text is removed. *)
@@ -35073,6 +35103,16 @@ val edit_thread_v2 :
 (** [PATCH /threads/{thread_id}]
 
 Edits the share permissions of a thread. *)
+
+val get_thread_channel_shares :
+  thread_id:string ->
+  unit ->
+  ( thread_channel_share list,
+    Macro_sdk_runtime.Request.no_error )
+  Macro_sdk_runtime.Request.t
+(** [GET /threads/{thread_id}/channel-shares]
+
+List a thread owner's grants to channels they participate in. *)
 
 val list_user_api_keys :
   unit -> (user_api_keys_list, error_response) Macro_sdk_runtime.Request.t

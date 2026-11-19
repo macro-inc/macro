@@ -743,6 +743,7 @@
       "get_slack_import": {"group": "connections", "action": "read", "label": "Read Slack import"},
       "get_system_skills_handler": {"group": "ai", "action": "read", "label": "List built-in skills"},
       "get_team_availability": {"group": "calendar", "action": "read", "label": "Read team availability"},
+      "get_thread_channel_shares": {"group": "sharing", "action": "read", "label": "Read email thread channel shares"},
       "get_upload_extract_status_handler": {"group": "documents", "action": "read", "label": "Read upload status"},
       "get_user_document_view_location": {"group": "documents", "action": "read", "label": "Read reading position"},
       "get_user_documents_handler": {"group": "documents", "action": "read", "label": "List documents"},
