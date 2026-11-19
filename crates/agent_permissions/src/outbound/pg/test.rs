@@ -5,7 +5,7 @@ use macro_uuid::Uuid;
 use sqlx::PgPool;
 
 use super::*;
-use crate::domain::model::PermissionState;
+use crate::domain::model::{PermissionState, SetBy};
 use crate::domain::ports::{Write, WriteTo};
 
 const OWNER: &str = "macro|perm-owner@example.com";
@@ -21,14 +21,14 @@ impl PgPermissionStore {
         owner: &PolicyOwner,
         changes: &[Change],
         by: &MacroUserIdStr<'static>,
-        via_agent: bool,
+        set_by: SetBy,
     ) -> Result<(), PgPermissionStoreError> {
         let write = Write {
             owner,
             session: None,
             to: WriteTo::Saved,
             by,
-            via_agent,
+            set_by,
         };
         let planned = self.write(write, |_, _| Ok(changes.to_vec())).await?;
         assert!(planned.is_ok());
@@ -46,7 +46,7 @@ impl PgPermissionStore {
             session: Some(session),
             to: WriteTo::Session(session),
             by,
-            via_agent: true,
+            set_by: SetBy::Agent,
         };
         let planned = self.write(write, |_, _| Ok(changes.to_vec())).await?;
         assert!(planned.is_ok());
@@ -78,10 +78,17 @@ fn tool(state: Option<PermissionState>) -> Change {
     }
 }
 
-fn states(rules: &[Rule]) -> Vec<(String, PermissionState, bool)> {
+fn states(rules: &[Rule]) -> Vec<(String, PermissionState, bool, bool)> {
     let mut states: Vec<_> = rules
         .iter()
-        .map(|rule| (rule.target.key(), rule.state, rule.via_agent))
+        .map(|rule| {
+            (
+                rule.target.key(),
+                rule.state,
+                rule.via_agent,
+                rule.restriction_only,
+            )
+        })
         .collect();
     states.sort();
     states
@@ -103,7 +110,7 @@ async fn an_agents_rules_upsert_delete_and_reset(pool: PgPool) {
                 tool(Some(PermissionState::Always)),
             ],
             &user(OWNER),
-            false,
+            SetBy::Person,
         )
         .await
         .unwrap();
@@ -112,24 +119,25 @@ async fn an_agents_rules_upsert_delete_and_reset(pool: PgPool) {
             &owner,
             &[group_action(Some(PermissionState::Ask))],
             &user(OWNER),
-            true,
+            SetBy::Agent,
         )
         .await
         .unwrap();
     assert_eq!(
         states(&store.rules(&owner).await.unwrap()),
         vec![
-            ("email:send".to_owned(), PermissionState::Ask, true),
+            ("email:send".to_owned(), PermissionState::Ask, true, true),
             (
                 "static-files.delete_file".to_owned(),
                 PermissionState::Always,
+                false,
                 false
             ),
         ]
     );
 
     store
-        .apply(&owner, &[tool(None)], &user(OWNER), false)
+        .apply(&owner, &[tool(None)], &user(OWNER), SetBy::Person)
         .await
         .unwrap();
     assert_eq!(store.rules(&owner).await.unwrap().len(), 1);
@@ -158,7 +166,7 @@ async fn a_personas_rules_are_each_persons_own(pool: PgPool) {
             &mine,
             &[tool(Some(PermissionState::Never))],
             &user(OWNER),
-            false,
+            SetBy::Person,
         )
         .await
         .unwrap();
@@ -190,6 +198,7 @@ async fn a_sessions_overlay_upserts_and_deletes(pool: PgPool) {
         vec![(
             "static-files.delete_file".to_owned(),
             PermissionState::Never,
+            true,
             true
         )]
     );
@@ -241,6 +250,15 @@ async fn the_tables_refuse_a_stored_default_and_a_bad_target(pool: PgPool) {
     .execute(&pool)
     .await;
     assert!(always_overlay.is_err());
+    // The agent's label always comes with the restriction-only rule.
+    let labelled_unrestricted = sqlx::query!(
+        "INSERT INTO agent_tool_permission (bot_id, kind, target, state, via_agent, restriction_only)
+         VALUES ($1, 'tool', 'email.send_email', 'ask', true, false)",
+        AGENT.as_uuid(),
+    )
+    .execute(&pool)
+    .await;
+    assert!(labelled_unrestricted.is_err());
 }
 
 #[sqlx::test(
@@ -257,11 +275,11 @@ async fn rows_go_with_their_agent_person_and_session(pool: PgPool) {
     let session = AgentSessionId::new_from_uuid(SESSION);
     let never = [tool(Some(PermissionState::Never))];
     store
-        .apply(&agent, &never, &user(OTHER), false)
+        .apply(&agent, &never, &user(OTHER), SetBy::Person)
         .await
         .unwrap();
     store
-        .apply(&persona, &never, &user(OTHER), false)
+        .apply(&persona, &never, &user(OTHER), SetBy::Person)
         .await
         .unwrap();
     store
@@ -304,7 +322,7 @@ async fn a_write_reads_both_layers_and_a_refused_plan_writes_nothing(pool: PgPoo
             &owner,
             &[group_action(Some(PermissionState::Ask))],
             &user(OWNER),
-            false,
+            SetBy::Person,
         )
         .await
         .unwrap();
@@ -318,7 +336,7 @@ async fn a_write_reads_both_layers_and_a_refused_plan_writes_nothing(pool: PgPoo
         session: Some(session),
         to: WriteTo::Saved,
         by: &user(OWNER),
-        via_agent: true,
+        set_by: SetBy::Agent,
     };
     let refused = store
         .write(write, |saved, overlay| {

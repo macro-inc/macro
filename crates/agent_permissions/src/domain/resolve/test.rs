@@ -44,6 +44,7 @@ fn group_rule(group: &str, action: Action, state: PermissionState) -> Rule {
         },
         state,
         via_agent: false,
+        restriction_only: false,
         updated_at: DateTime::UNIX_EPOCH,
     }
 }
@@ -56,6 +57,7 @@ fn tool_rule(service: &str, operation: &str, state: PermissionState) -> Rule {
         },
         state,
         via_agent: false,
+        restriction_only: false,
         updated_at: DateTime::UNIX_EPOCH,
     }
 }
@@ -63,6 +65,7 @@ fn tool_rule(service: &str, operation: &str, state: PermissionState) -> Rule {
 fn agent_tool_rule(service: &str, operation: &str, state: PermissionState) -> Rule {
     Rule {
         via_agent: true,
+        restriction_only: true,
         ..tool_rule(service, operation, state)
     }
 }
@@ -233,7 +236,7 @@ fn a_new_operation_takes_its_groups_action_and_a_new_group_is_always() {
 
 fn tighten(saved: &[Rule], changes: Vec<Change>) -> Result<(), Vec<LoosenedOperation>> {
     let changes = normalize(changes, false);
-    let after = apply(saved, &changes, false);
+    let after = apply(saved, &changes, SetBy::Person);
     tighten_only(&catalog(), (saved, &[]), (&after, &[]))
 }
 
@@ -319,7 +322,7 @@ fn an_agents_tool_pin_is_tightening_and_survives_as_the_stricter_setting() {
     let catalog = catalog();
     let saved = [group_rule("email", Action::Send, Always)];
     let pin = normalize(vec![change(tool("email", "send_email"), Some(Ask))], true);
-    let after = apply(&saved, &pin, true);
+    let after = apply(&saved, &pin, SetBy::Agent);
     assert_eq!(tighten_only(&catalog, (&saved, &[]), (&after, &[])), Ok(()));
     assert!(after.iter().any(|rule| rule.via_agent));
 }
@@ -343,7 +346,7 @@ fn a_session_overlay_can_tighten_but_never_loosen() {
     let overlay = [tool_rule("email", "send_email", Never)];
 
     let removal = normalize(vec![change(tool("email", "send_email"), None)], true);
-    let after = apply(&overlay, &removal, true);
+    let after = apply(&overlay, &removal, SetBy::Agent);
     assert!(tighten_only(&catalog, (&[], &overlay), (&[], &after)).is_err());
 
     // An overlay holds no `always`: it becomes a removal.
