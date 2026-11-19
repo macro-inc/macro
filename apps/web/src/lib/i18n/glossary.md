@@ -626,9 +626,18 @@ Address: bạn.
 | notifications | Thông báo |
 | done | Đã xong |
 | mark as read | Đánh dấu là đã đọc |
-| snooze | Tạm ẩn thông báo… |
+| snooze | Tạm ẩn thông báo |
 | archive | Lưu trữ |
 | settings | Cài đặt |
+| computer (Macro computer) | Máy tính Macro mới |
+| machine (runs agents) | Máy của đồng đội |
+| session (agent) | Bắt đầu phiên |
+| routine | Tất cả quy trình |
+| saved view | Chế độ xem đã lưu mới |
+| call | Rời cuộc gọi |
+| contact (CRM) | Đổi công ty của liên hệ |
+| company (CRM) | Không có công ty |
+| thread (email) | Chuỗi thư bị loại trừ |
 
 ## Thai (`th`)
 
