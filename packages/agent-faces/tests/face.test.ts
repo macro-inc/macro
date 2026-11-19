@@ -226,3 +226,16 @@ test('a pin outside the options resolves to what the seed chose', () => {
     fromSeed
   );
 });
+
+test('parseAgentFace counts a seed in characters, as the server does', () => {
+  // 64 emoji are 128 UTF-16 units but 64 characters.
+  const seed = '🙂'.repeat(64);
+  expect(parseAgentFace({ v: 1, seed, pins: {} })).toEqual({
+    v: 1,
+    seed,
+    pins: {},
+  });
+  expect(
+    parseAgentFace({ v: 1, seed: '🙂'.repeat(65), pins: {} })
+  ).toBeUndefined();
+});

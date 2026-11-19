@@ -105,7 +105,9 @@ export function parseAgentFace(json: unknown): AgentFace | undefined {
 
   if (!('seed' in json) || typeof json.seed !== 'string') return undefined;
   const seed = json.seed;
-  if (seed.length === 0 || seed.length > MAX_SEED_LENGTH) return undefined;
+  // The server counts characters, not UTF-16 units.
+  const characters = [...seed].length;
+  if (characters === 0 || characters > MAX_SEED_LENGTH) return undefined;
 
   if (!('pins' in json) || typeof json.pins !== 'object') return undefined;
   if (json.pins === null || Array.isArray(json.pins)) return undefined;
