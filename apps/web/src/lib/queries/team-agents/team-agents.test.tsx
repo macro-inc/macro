@@ -80,9 +80,16 @@ afterEach(() => {
 });
 
 describe('teamAgentsPollInterval', () => {
-  it('polls while an agent is provisioning and stops once none are', () => {
+  it('polls while an agent is provisioning, then slowly while any can change', () => {
     expect(teamAgentsPollInterval([grace, ada])).toBe(3000);
-    expect(teamAgentsPollInterval([grace])).toBe(false);
+    // A running agent's computer can stop answering; a failed one can recover.
+    expect(teamAgentsPollInterval([grace])).toBe(30_000);
+    expect(teamAgentsPollInterval([{ ...grace, status: 'failed' }])).toBe(
+      30_000
+    );
+    expect(teamAgentsPollInterval([{ ...grace, status: 'released' }])).toBe(
+      false
+    );
     expect(teamAgentsPollInterval(undefined)).toBe(false);
   });
 
