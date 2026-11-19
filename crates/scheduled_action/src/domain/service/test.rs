@@ -2,6 +2,7 @@ mod admission;
 mod appearance;
 mod check;
 mod owned_purge;
+mod sub_routine_copies;
 mod sub_routines;
 mod user_cleanup;
 
