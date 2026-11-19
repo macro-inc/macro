@@ -818,6 +818,11 @@ filters preserved. Pressing `u` with focus in the desktop reading pane keeps
 the thread open. Its envelope then offers **Mark as read**, including after
 the unread write reaches the mailbox. Mark as not done and Mark as read stay
 on the current thread.
+
+On desktop, Mail returns to the list immediately and shows the unread
+write's success or failure once the mailbox answers. An unread write
+queued behind the opening read also reports its eventual result.
+
 Opening a saved draft from **Drafts** shows the title menu beside Back, since
 the composer has no subject line above it, and keeps the applicable header
 controls. Verify these remain
