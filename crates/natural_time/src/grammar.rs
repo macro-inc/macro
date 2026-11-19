@@ -7,7 +7,7 @@ use nom::{
     branch::alt,
     bytes::complete::{tag, take_while1},
     character::complete::{char, digit1, one_of, space0},
-    combinator::{eof, map, map_opt, not, opt, peek, recognize, rest, value, verify},
+    combinator::{cut, eof, fail, map, map_opt, not, opt, peek, recognize, rest, value, verify},
     multi::many0,
     sequence::{preceded, terminated},
 };
@@ -43,6 +43,9 @@ pub(crate) struct Quantity {
     pub(crate) when: Option<When>,
     /// Read as `for 2 days`.
     pub(crate) length: Option<Length>,
+    /// Counted in weeks, which beside a weekday (`friday 2 weeks`, `a week
+    /// friday`) means that weekday weeks out rather than a length.
+    pub(crate) weeks: bool,
 }
 
 /// When `in` a quantity is: calendar days, or elapsed minutes for hours.
@@ -97,9 +100,24 @@ const END_OF_DAY: [&str; 14] = [
 /// Words after a quantity that count it from something else, as in
 /// `2 days before friday`; the quantity alone is then not read, rather than
 /// misread as a length.
-const COUNTED_FROM: [&str; 14] = [
-    "from", "before", "after", "since", "past", "prior", "later", "earlier", "until", "till",
-    "til", "to", "through", "thru",
+const COUNTED_FROM: [&str; 17] = [
+    "from",
+    "before",
+    "after",
+    "following",
+    "since",
+    "past",
+    "previous",
+    "prev",
+    "prior",
+    "later",
+    "earlier",
+    "until",
+    "till",
+    "til",
+    "to",
+    "through",
+    "thru",
 ];
 
 /// Words describing a repeat; the phrase is then not read.
@@ -199,6 +217,7 @@ fn element(i: &str) -> Res<'_, Vec<Item>> {
         one(daypart),
         one(clock),
         one(separator),
+        at_quantity,
         filler,
     ))
     .parse(i)
@@ -538,15 +557,27 @@ fn duration(i: &str) -> Res<'_, Item> {
 
 /// `2 days`, `an hour`, `1h30m`: a quantity that doesn't say whether it is
 /// when or how long. One counted from something else (`2 days before
-/// friday`) isn't read.
+/// friday`, `2 weeks after next`) makes the whole phrase unread, so no
+/// other reading of its words is guessed.
 fn bare_quantity(i: &str) -> Res<'_, Item> {
     let counted_from = preceded(opt(sp), alt((tag("-"), kws(&COUNTED_FROM))));
-    map_opt(terminated(quantity, not(counted_from)), |quantity| {
+    map_opt(terminated(quantity, cut(not(counted_from))), |quantity| {
         let when = shifted(&quantity, 1, 0);
         let length = length(&quantity);
-        (when.is_some() || length.is_some()).then_some(Item::Quantity(Quantity { when, length }))
+        let weeks = quantity.iter().any(|(_, unit)| *unit == Unit::Week);
+        (when.is_some() || length.is_some()).then_some(Item::Quantity(Quantity {
+            when,
+            length,
+            weeks,
+        }))
     })
     .parse(i)
+}
+
+/// `at 9 h`: `at` names a time of day, so a quantity after it isn't read
+/// as one from now, and the phrase isn't read.
+fn at_quantity(i: &str) -> Res<'_, Vec<Item>> {
+    preceded((kw("at"), sp, peek(quantity)), cut(fail())).parse(i)
 }
 
 /// `2026-11-12`, `11/12`, `11/12/26`.

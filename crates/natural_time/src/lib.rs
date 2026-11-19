@@ -38,7 +38,9 @@
 //!   the phrase does: `2 days` is in two days, `2 hours` two hours from now.
 //!   Beside a date, or an hour count beside a time, it says how long:
 //!   `next monday 2 days`, `3pm 2 hours`. One counted from something else
-//!   (`2 days before friday`, `2 days from monday`) isn't read.
+//!   (`2 days before friday`, `2 days from monday`, `2 weeks after next`),
+//!   weeks beside a weekday (`friday 2 weeks`), and hours after `at`
+//!   (`at 9 h`) aren't read.
 //! - Names of days, months, units and relations (`next`, `last`) may be cut
 //!   short down to a few letters (`mond`, `tomor`, `nex`, `hou`), and take
 //!   common abbreviations (`thrs`, `tmrw`, `nxt`, `wk`) and typos: one in a

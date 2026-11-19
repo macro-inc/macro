@@ -161,15 +161,19 @@ impl Phrase {
                 item => phrase.start.add(item)?,
             }
         }
-        if let Some(quantity) = quantity {
-            phrase.place(quantity)?;
-        }
         if let Some(items) = second {
             let mut end = Side::default();
             for item in items {
-                end.add(*item)?;
+                match *item {
+                    // "3-5pm 2 days": the quantity belongs to the whole range.
+                    Item::Quantity(found) if quantity.is_none() => quantity = Some(found),
+                    item => end.add(item)?,
+                }
             }
             phrase.end = Some(end);
+        }
+        if let Some(quantity) = quantity {
+            phrase.place(quantity)?;
         }
         phrase.settle_range()?;
 
@@ -184,14 +188,18 @@ impl Phrase {
     /// A quantity alone says when if nothing else does: `2 days` is in two
     /// days, `2 hours` two hours from now. Beside a date, or an hour count
     /// beside a time, it says how long: `next monday 2 days`, `3pm 2 hours`.
+    /// Weeks beside a weekday (`friday 2 weeks`) would mean that weekday
+    /// weeks out, which isn't read.
     fn place(&mut self, quantity: Quantity) -> Result<(), Error> {
         let says_when = self.start.date.is_some() || self.start.time.is_some();
+        let on_weekday = matches!(self.start.date, Some(DateRef::Day(DayRef::Weekday(..))));
         match quantity.when {
             Some(When::Day(day)) if self.start.date.is_none() => self.start.add(Item::Day(day)),
             Some(When::Offset(minutes)) if !says_when && self.offset.is_none() => {
                 self.offset = Some(minutes);
                 Ok(())
             }
+            _ if quantity.weeks && on_weekday => Err(Error::Conflict),
             _ => match (quantity.length, self.length) {
                 (Some(length), None) => {
                     self.length = Some(length);

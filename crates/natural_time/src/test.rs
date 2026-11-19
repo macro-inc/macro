@@ -661,6 +661,16 @@ fn a_quantity_alone_says_when_unless_the_phrase_already_does() {
             ("for 2 days", "error: Unrecognized"),
             ("3pm 2 hours for 30 min", "error: Conflict"),
             ("2 days 2-3pm", "2026-11-08 14:00 → 2026-11-08 15:00"),
+            // A quantity after a range belongs to the whole range.
+            ("2-3pm 2 days", "2026-11-08 14:00 → 2026-11-08 15:00"),
+            ("9 to 11am 2 days", "2026-11-08 09:00 → 2026-11-08 11:00"),
+            ("3-5pm 2 hours", "error: Conflict"),
+            // Weeks beside a weekday would mean that weekday weeks out.
+            ("friday 2 weeks", "error: Conflict"),
+            ("2 weeks on friday", "error: Conflict"),
+            ("a week friday", "error: Conflict"),
+            ("a week next friday", "error: Conflict"),
+            ("next week 2 days", "2026-11-09 → 2026-11-10"),
         ],
     );
     // A quantity counted from something else isn't read rather than misread
@@ -669,13 +679,31 @@ fn a_quantity_alone_says_when_unless_the_phrase_already_does() {
         "2 days from next monday",
         "2 days before friday",
         "2 days after friday",
+        "2 days following friday",
+        "2 days prev friday",
+        "2 days previous friday",
+        "2 days prior to friday",
+        "2 days since monday",
         "2 days past friday",
         "2 hours before 3pm",
         "2 days until friday",
+        "2 days till friday",
+        "2 days til friday",
         "2 days to friday",
+        "2 days through friday",
+        "2 days thru friday",
         "2 days - friday",
         "2 days later",
         "2 days earlier",
+        // Refused outright, not read again some other way ("2" as 2pm and
+        // "weeks after next" as a week).
+        "2 weeks after next",
+        "1 week after next",
+        "3 months after next",
+        "3 weeks after next friday",
+        // `at` names a time of day, not hours from now.
+        "at 9 h",
+        "at 12 m",
     ];
     for caller in [Caller::Reminder, Caller::Event] {
         let cases: Vec<_> = counted_from
