@@ -172,7 +172,6 @@ const SENDS: &[(&str, &str)] = &[
     ("POST", "/scheduled-actions/{id}/execute"),
     // A webhook URL starts runs whoever posts to it, and a delivery starts one.
     ("POST", "/scheduled-actions/{id}/webhook"),
-    ("POST", "/hooks/{id}/{id}"),
     ("POST", "/hooks/{id}"),
     ("PUT", "/scheduled-actions/{id}/template"),
     ("POST", "/scheduled-actions/{id}/template/activate"),

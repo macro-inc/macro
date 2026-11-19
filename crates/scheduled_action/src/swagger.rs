@@ -34,8 +34,7 @@ use crate::inbound::template_router::{
     reason = "utoipa path macros require these generated symbols in scope"
 )]
 use crate::inbound::webhook_router::{
-    __path_deliver_in_path, __path_deliver_with_bearer, __path_get_webhook, __path_mint_webhook,
-    __path_remove_webhook,
+    __path_deliver_routine_webhook, __path_get_webhook, __path_mint_webhook, __path_remove_webhook,
 };
 
 use crate::domain::event_trigger::{
@@ -91,8 +90,7 @@ use model_entity::{AppearanceColor, AppearanceIcon, EntityAppearance};
         crate::inbound::webhook_router::get_webhook,
         crate::inbound::webhook_router::mint_webhook,
         crate::inbound::webhook_router::remove_webhook,
-        crate::inbound::webhook_router::deliver_in_path,
-        crate::inbound::webhook_router::deliver_with_bearer,
+        crate::inbound::webhook_router::deliver_routine_webhook,
     ),
     components(
         schemas(

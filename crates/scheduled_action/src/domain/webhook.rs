@@ -310,7 +310,7 @@ pub enum WebhookManagementError {
 pub struct DeliveryRequest<'a> {
     /// The path's hook id, unparsed.
     pub hook_id: &'a str,
-    /// The secret from the path or a bearer token, unparsed.
+    /// The bearer token, unparsed; empty when there is none.
     pub secret: &'a str,
     /// The caller's address, when the request has one.
     pub address: Option<IpAddr>,

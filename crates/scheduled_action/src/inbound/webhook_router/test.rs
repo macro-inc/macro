@@ -101,13 +101,41 @@ fn post(uri: &str) -> axum::http::request::Builder {
     Request::post(uri).header(CONTENT_TYPE, "application/json")
 }
 
+/// What a sender reads: the app's raw HTTP/1.1 answer to a POST of `{}`
+/// to `uri` with `headers`, served on a real socket, without its date.
+async fn over_the_wire(app: Router, uri: &str, headers: &str) -> String {
+    use tokio::io::{AsyncReadExt, AsyncWriteExt};
+    let listener = tokio::net::TcpListener::bind("127.0.0.1:0").await.unwrap();
+    let address = listener.local_addr().unwrap();
+    let server = tokio::spawn(async move { axum::serve(listener, app).await.unwrap() });
+    let mut socket = tokio::net::TcpStream::connect(address).await.unwrap();
+    let request = format!(
+        "POST {uri} HTTP/1.1\r\nHost: hooks.test\r\n{headers}Content-Type: application/json\r\nContent-Length: 2\r\nConnection: close\r\n\r\n{{}}"
+    );
+    socket.write_all(request.as_bytes()).await.unwrap();
+    let mut answer = String::new();
+    socket.read_to_string(&mut answer).await.unwrap();
+    server.abort();
+    answer
+        .lines()
+        .filter(|line| !line.to_ascii_lowercase().starts_with("date:"))
+        .collect::<Vec<_>>()
+        .join("\n")
+}
+
+/// A POST to the URL with its secret as a bearer token.
+fn deliver_to(hook: &str, secret: &str) -> axum::http::request::Builder {
+    post(&format!("/scheduled-action/hooks/{hook}"))
+        .header(AUTHORIZATION, format!("Bearer {secret}"))
+}
+
 #[tokio::test]
-async fn the_secret_in_the_path_starts_a_run() {
+async fn a_bearer_secret_starts_a_run() {
     let run_id = generate_uuid_v7();
     let fake = Fake::answering(Ok(Delivered::Started { run_id }));
     let (status, headers, body) = send(
         app(Arc::clone(&fake)),
-        post(&format!("/scheduled-action/hooks/{HOOK}/{SECRET}"))
+        deliver_to(HOOK, SECRET)
             .header("idempotency-key", "order-42")
             .body(Body::from(r#"{"order":42}"#))
             .unwrap(),
@@ -136,7 +164,7 @@ async fn a_body_failing_the_payload_tests_is_answered_without_a_run() {
     let fake = Fake::answering(Ok(Delivered::Unmatched));
     let (status, _, body) = send(
         app(fake),
-        post(&format!("/scheduled-action/hooks/{HOOK}/{SECRET}"))
+        deliver_to(HOOK, SECRET)
             .body(Body::from("status: passed"))
             .unwrap(),
     )
@@ -149,15 +177,12 @@ async fn a_body_failing_the_payload_tests_is_answered_without_a_run() {
 }
 
 #[tokio::test]
-async fn a_bearer_secret_starts_a_run() {
+async fn a_repeated_delivery_answers_with_its_first_run() {
     let run_id = generate_uuid_v7();
     let fake = Fake::answering(Ok(Delivered::Repeated { run_id }));
     let (status, _, body) = send(
         app(Arc::clone(&fake)),
-        post(&format!("/scheduled-action/hooks/{HOOK}"))
-            .header(AUTHORIZATION, format!("Bearer {SECRET}"))
-            .body(Body::empty())
-            .unwrap(),
+        deliver_to(HOOK, SECRET).body(Body::empty()).unwrap(),
     )
     .await;
     assert_eq!(status, StatusCode::ACCEPTED);
@@ -182,7 +207,7 @@ async fn a_bearer_post_without_a_token_is_checked_with_an_empty_secret() {
     )
     .await;
     assert_eq!(status, StatusCode::NOT_FOUND);
-    assert_eq!(body, b"Not found");
+    assert!(body.is_empty());
     assert_eq!(fake.received()[0].secret, "");
 }
 
@@ -222,9 +247,7 @@ async fn refusals_map_to_their_statuses() {
         let label = format!("{error:?}");
         let (status, headers, body) = send(
             app(Fake::answering(Err(error))),
-            post(&format!("/scheduled-action/hooks/{HOOK}/{SECRET}"))
-                .body(Body::from("{}"))
-                .unwrap(),
+            deliver_to(HOOK, SECRET).body(Body::from("{}")).unwrap(),
         )
         .await;
         assert_eq!(status, expected, "{label}");
@@ -246,7 +269,7 @@ async fn an_oversized_body_is_refused_before_the_service() {
     }));
     let (status, _, _) = send(
         app(Arc::clone(&fake)),
-        post(&format!("/scheduled-action/hooks/{HOOK}/{SECRET}"))
+        deliver_to(HOOK, SECRET)
             .body(Body::from(vec![b' '; MAX_BODY_BYTES + 1]))
             .unwrap(),
     )
@@ -262,7 +285,7 @@ async fn a_non_text_idempotency_key_is_refused_before_the_service() {
     }));
     let (status, _, _) = send(
         app(Arc::clone(&fake)),
-        post(&format!("/scheduled-action/hooks/{HOOK}/{SECRET}"))
+        deliver_to(HOOK, SECRET)
             .header(
                 "idempotency-key",
                 HeaderValue::from_bytes(b"caf\xe9").unwrap(),
@@ -275,6 +298,39 @@ async fn a_non_text_idempotency_key_is_refused_before_the_service() {
     assert!(fake.received().is_empty());
 }
 
+/// Not found answers, byte for byte, as a route that doesn't exist does, and so does a URL with the secret in its path,
+/// whatever it holds.
+#[tokio::test]
+async fn a_secret_in_the_path_is_an_unknown_url() {
+    let unknown = |uri: String| async move {
+        let fake = Fake::answering(Ok(Delivered::Started {
+            run_id: generate_uuid_v7(),
+        }));
+        let answer = over_the_wire(app(Arc::clone(&fake)), &uri, "").await;
+        assert!(fake.received().is_empty(), "{uri}");
+        answer
+    };
+    let no_route = unknown("/scheduled-action/no-such-route".to_owned()).await;
+    assert!(no_route.starts_with("HTTP/1.1 404 Not Found"), "{no_route}");
+    for uri in [
+        format!("/scheduled-action/hooks/{HOOK}/{SECRET}"),
+        format!("/scheduled-action/hooks/{HOOK}/{SECRET}/"),
+        format!("/scheduled-action/hooks/{HOOK}/"),
+    ] {
+        assert_eq!(unknown(uri.clone()).await, no_route, "{uri}");
+    }
+    for refusal in [DeliveryError::NotFound] {
+        let label = format!("{refusal:?}");
+        let answer = over_the_wire(
+            app(Fake::answering(Err(refusal))),
+            &format!("/scheduled-action/hooks/{HOOK}"),
+            &format!("Authorization: Bearer {SECRET}\r\n"),
+        )
+        .await;
+        assert_eq!(answer, no_route, "{label}");
+    }
+}
+
 #[tokio::test]
 async fn other_paths_and_methods_reach_no_hook() {
     for (method, uri) in [
@@ -284,7 +340,7 @@ async fn other_paths_and_methods_reach_no_hook() {
             format!("/scheduled-action/hooks/{HOOK}/{SECRET}/x/y"),
         ),
         ("POST", "/scheduled-action/hooks".to_owned()),
-        ("GET", format!("/scheduled-action/hooks/{HOOK}/{SECRET}")),
+        ("GET", format!("/scheduled-action/hooks/{HOOK}")),
         ("PUT", format!("/scheduled-action/hooks/{HOOK}")),
     ] {
         let fake = Fake::answering(Ok(Delivered::Started {
@@ -420,17 +476,26 @@ async fn the_secret_is_never_traced(pool: sqlx::PgPool) {
         captured.clone(),
         std::sync::atomic::AtomicU64::new(0),
     ));
-    tracing::callsite::rebuild_interest_cache();
     let wrong = format!("{secret}x");
+    // A callsite another test's thread registers first caches "never" for
+    // every thread, so this test's spans would go unseen: reach each one
+    // here once (accepted and refused), then recompute interest on this
+    // thread before the requests under test.
+    for warm_up in [&secret, &wrong] {
+        send(
+            app.clone(),
+            deliver_to(&hook, warm_up).body(Body::from("{}")).unwrap(),
+        )
+        .await;
+    }
+    tracing::callsite::rebuild_interest_cache();
     let requests = [
-        post(&format!("/scheduled-action/hooks/{hook}/{secret}"))
+        deliver_to(&hook, &secret)
             .body(Body::from(r#"{"a":1}"#))
             .unwrap(),
-        post(&format!("/scheduled-action/hooks/{hook}"))
-            .header(AUTHORIZATION, format!("Bearer {secret}"))
-            .body(Body::from("{}"))
-            .unwrap(),
-        post(&format!("/scheduled-action/hooks/{hook}/{wrong}"))
+        deliver_to(&hook, &wrong).body(Body::from("{}")).unwrap(),
+        // The old form, with the secret in the path: unknown, and untraced.
+        post(&format!("/scheduled-action/hooks/{hook}/{secret}"))
             .body(Body::from("{}"))
             .unwrap(),
         post(&format!("/scheduled-action/hooks/{hook}/{secret}/"))
@@ -439,7 +504,7 @@ async fn the_secret_is_never_traced(pool: sqlx::PgPool) {
         post(&format!("/scheduled-action/hooks/{hook}/{secret}/extra"))
             .body(Body::from("{}"))
             .unwrap(),
-        post(&format!("/scheduled-action/hooks/{hook}/{secret}"))
+        deliver_to(&hook, &secret)
             .body(Body::from(vec![0xff, 0xfe]))
             .unwrap(),
     ];
@@ -451,7 +516,7 @@ async fn the_secret_is_never_traced(pool: sqlx::PgPool) {
         statuses,
         [
             StatusCode::ACCEPTED,
-            StatusCode::ACCEPTED,
+            StatusCode::NOT_FOUND,
             StatusCode::NOT_FOUND,
             StatusCode::NOT_FOUND,
             StatusCode::NOT_FOUND,

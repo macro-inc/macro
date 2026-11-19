@@ -3,8 +3,8 @@
 //!
 //! The public route takes no Macro credential and gets no CORS: browsers
 //! can't call it from other sites, and nothing about it reads cookies. Its
-//! secret travels as the path's `{token}`, which the tracing layer replaces
-//! with its template, or as a bearer token, which no layer records.
+//! secret travels only as a bearer token, which no layer records; a path
+//! longer than the hook id is unknown, traced by its route, not its path.
 
 use std::sync::Arc;
 
@@ -45,7 +45,7 @@ pub struct WebhookRouterState<W, Svc, Auth> {
     pub authorization_state: MacroAuthorizationState<Auth>,
     /// Where senders off Macro's network reach the public route, such as
     /// `https://gateway.macro.com/scheduled-action`; a URL is this, then
-    /// `/hooks/{hook_id}/{secret}`.
+    /// `/hooks/{hook_id}`.
     pub public_base: Arc<str>,
 }
 
@@ -106,15 +106,14 @@ where
     St: Send + Sync,
 {
     Router::new()
-        // `{code}` and `{token}` are credential path parameters: request
-        // spans record the route's placeholder in their place. The hook id
-        // is traced by the domain once the secret matches.
-        .route("/hooks/{code}/{token}", post(deliver_in_path::<W>))
-        .route("/hooks/{code}", post(deliver_with_bearer::<W>))
-        // A URL mistyped past its secret is unknown too, and still traced
-        // by its route rather than its path.
-        .route("/hooks/{code}/{token}/", post(not_found))
-        .route("/hooks/{code}/{token}/{*rest}", post(not_found))
+        // `{code}` is a credential path parameter: request spans record the
+        // route's placeholder in its place. The hook id is traced by the
+        // domain once the secret matches.
+        .route("/hooks/{code}", post(deliver_routine_webhook::<W>))
+        // Anything longer is unknown, as a URL with the secret in its path
+        // is, and is traced by its route, so no such secret reaches a span.
+        .route("/hooks/{code}/", post(not_found))
+        .route("/hooks/{code}/{*rest}", post(not_found))
         .layer(DefaultBodyLimit::max(MAX_BODY_BYTES))
         .with_state(service)
 }
@@ -144,17 +143,15 @@ pub struct WebhookStatusResponse {
     pub webhook: Option<WebhookInfo>,
 }
 
-/// A new webhook URL. Shown this once: Macro keeps only its secret's hash.
+/// A new webhook URL and its secret. The secret is shown this once: Macro
+/// keeps only its hash.
 #[derive(Debug, Serialize, ToSchema)]
 #[serde(rename_all = "camelCase")]
 pub struct MintedWebhookResponse {
     #[schema(value_type = String, format = Uuid)]
     pub hook_id: Uuid,
-    /// POST here to start a run; the secret is in the path.
+    /// POST here with `Authorization: Bearer <secret>` to start a run.
     pub url: String,
-    /// Or POST here with `Authorization: Bearer <secret>`, which keeps the
-    /// secret out of URLs and access logs.
-    pub bearer_url: String,
     pub secret: String,
     pub created_at: DateTime<Utc>,
 }
@@ -204,7 +201,7 @@ where
     path = "/scheduled-actions/{id}/webhook",
     tag = "scheduled actions",
     operation_id = "mint_scheduled_action_webhook",
-    description = "Mint the routine's webhook URL, replacing any it had: the old URL stops at once. The response is the only time the secret is shown. Only the routine's owner, signed in as themselves, may call it; agent sessions' code and routine runs are refused.",
+    description = "Mint the routine's webhook URL and secret, replacing any it had: the old ones stop at once. The response is the only time the secret is shown. Only the routine's owner, signed in as themselves, may call it; agent sessions' code and routine runs are refused.",
     params(("id" = String, Path, description = "ID of the routine")),
     responses(
         (status = 201, body = MintedWebhookResponse),
@@ -229,11 +226,9 @@ where
         .service
         .mint(&entity_access_receipt, managing_caller(&authorization))
         .await?;
-    let bearer_url = format!("{}/hooks/{}", state.public_base, minted.hook_id);
     let body = MintedWebhookResponse {
         hook_id: minted.hook_id.as_uuid(),
-        url: format!("{bearer_url}/{}", minted.secret.expose()),
-        bearer_url,
+        url: format!("{}/hooks/{}", state.public_base, minted.hook_id),
         secret: minted.secret.expose().to_owned(),
         created_at: minted.created_at,
     };
@@ -295,13 +290,12 @@ impl IntoResponse for WebhookManagementError {
 
 #[utoipa::path(
     post,
-    path = "/hooks/{hook_id}/{token}",
+    path = "/hooks/{hook_id}",
     tag = "routine webhooks",
     operation_id = "deliver_routine_webhook",
-    description = "Start a run of the routine this webhook URL belongs to, with the body (UTF-8 text, at most 64 KiB; a JSON body is checked against the trigger's payload tests) as its trigger data. Answers 202 at once with the run's id, or 200 without one when the body fails the payload tests. A repeated Idempotency-Key within a day answers with the first run. An unknown, wrong, rotated or removed URL is 404.",
+    description = "Start a run of the routine this webhook URL belongs to, with the body (UTF-8 text, at most 64 KiB; a JSON body is checked against the trigger's payload tests) as its trigger data. Send the webhook's secret as `Authorization: Bearer <secret>`. Answers 202 at once with the run's id, or 200 without one when the body fails the payload tests. A repeated Idempotency-Key within a day answers with the first run. An unknown, rotated or removed URL, or a missing or wrong secret, is 404.",
     params(
         ("hook_id" = String, Path, description = "The webhook's public id"),
-        ("token" = String, Path, description = "The webhook's secret"),
         ("Idempotency-Key" = Option<String>, Header, description = "Up to 255 visible ASCII characters"),
     ),
     request_body(
@@ -316,39 +310,10 @@ impl IntoResponse for WebhookManagementError {
         (status = 409, description = "The routine is paused"),
         (status = 413),
         (status = 429, description = "Too many requests, or too many runs waiting"),
+        (status = 503, description = "Webhooks can't be checked right now; retry later"),
     ),
 )]
-pub async fn deliver_in_path<W: RoutineWebhookService>(
-    State(service): State<Arc<W>>,
-    Path((hook_id, token)): Path<(String, String)>,
-    address: Result<ClientIp, ClientIpError>,
-    headers: HeaderMap,
-    body: Bytes,
-) -> Response {
-    deliver(&*service, &hook_id, &token, address, &headers, &body).await
-}
-
-#[utoipa::path(
-    post,
-    path = "/hooks/{hook_id}",
-    tag = "routine webhooks",
-    operation_id = "deliver_routine_webhook_with_bearer",
-    description = "As the URL with its secret in the path, with the secret sent as `Authorization: Bearer <secret>` instead.",
-    params(
-        ("hook_id" = String, Path, description = "The webhook's public id"),
-        ("Idempotency-Key" = Option<String>, Header, description = "Up to 255 visible ASCII characters"),
-    ),
-    request_body(
-        description = "Any UTF-8 text up to 64 KiB, of any content type; JSON is parsed for the payload tests and code",
-        content((serde_json::Value = "application/json"), (String = "text/plain")),
-    ),
-    responses(
-        (status = 200, body = WebhookDeliveryResponse),
-        (status = 202, body = WebhookDeliveryResponse),
-        (status = 400), (status = 404), (status = 409), (status = 413), (status = 429),
-    ),
-)]
-pub async fn deliver_with_bearer<W: RoutineWebhookService>(
+pub async fn deliver_routine_webhook<W: RoutineWebhookService>(
     State(service): State<Arc<W>>,
     Path(hook_id): Path<String>,
     address: Result<ClientIp, ClientIpError>,
@@ -422,7 +387,9 @@ impl IntoResponse for DeliveryError {
             response
         };
         match self {
-            Self::NotFound => (StatusCode::NOT_FOUND, "Not found").into_response(),
+            // Exactly what a route that does not exist answers, so a URL
+            // that leads nowhere looks like no URL at all.
+            Self::NotFound => StatusCode::NOT_FOUND.into_response(),
             Self::TooManyRequests { retry_after } | Self::Busy { retry_after } => {
                 let message = self.to_string();
                 retry(StatusCode::TOO_MANY_REQUESTS, retry_after, message)
