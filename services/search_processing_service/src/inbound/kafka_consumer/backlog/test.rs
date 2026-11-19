@@ -316,3 +316,27 @@ fn a_reading_ignores_unset_positions_and_unfetched_watermarks() {
         reading(2, None, None)
     );
 }
+
+#[test]
+fn an_open_record_past_the_position_does_not_hide_an_older_unreceived_one() {
+    let mut sampler = BacklogSampler::new(PendingAges::default());
+    let mut ledger = OffsetLedger::default();
+    // A worker still holds 100 from before the partition was revoked; it came
+    // back committed at 51, and 51 has not been received again.
+    ledger.received(at(0, 100), Some(T0 - 5 * SECOND));
+    ledger.started(at(0, 100));
+    ledger.received(at(0, 50), Some(T0 - 60 * SECOND));
+    ledger.started(at(0, 50));
+    ledger.finished(at(0, 50));
+
+    assert_eq!(
+        sample(
+            &mut sampler,
+            T0,
+            &[reading(0, Some(51), Some(120))],
+            &ledger
+        ),
+        [(0, 60_000)],
+        "51 counts from the newest received record, not from 100"
+    );
+}

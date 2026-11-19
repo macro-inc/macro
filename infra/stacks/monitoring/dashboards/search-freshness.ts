@@ -17,7 +17,8 @@
 //   since the oldest record not yet processed was recorded, 0 when caught up
 //   (gauge, refreshed every 10 s). It keeps rising during a stall. Each task
 //   reports only its own partitions, and a partition that moves stops
-//   reporting within 30 s, so it is read with `max`.
+//   reporting within 30 s, so it is read with `max`, and with `.fill(null)` so
+//   Datadog does not interpolate a stopped sampler's last reading.
 // - `search.index.dropped_events`: events committed without reaching the
 //   index (counter), tagged `entity_type`, plus `event_type` when dropped after
 //   their processing retries, or `failure` (`undecodable`, `cut_off_at_stop`,
@@ -26,7 +27,7 @@
 // - `event_broker.publishes`: events handed to the broker (counter), tagged
 //   `topic`, `event_type` (the payload's tag, e.g. `email.message_received`;
 //   absent for the calendar topic, whose events carry no tag) and `outcome`
-//   (`published`, `failed`, `timed_out`, `unserializable`).
+//   (`published`, `failed`, `timed_out`, `unserializable`, `cancelled`).
 //
 // All are exported every 60 s, and percentiles are not enabled on the lag
 // histogram, so it is graphed by max and count.
@@ -87,12 +88,12 @@ export const searchFreshnessDashboard = new datadog.Dashboard(
       graphGroup('Behind', [
         lines(
           'Oldest unprocessed record by entity type (s)',
-          `max:search.index.oldest_pending_ms{${INDEXER}} by {entity_type}${MS_TO_S}`,
+          `max:search.index.oldest_pending_ms{${INDEXER}} by {entity_type}.fill(null)${MS_TO_S}`,
           TARGETS
         ),
         toplist(
           'Partitions furthest behind now (s)',
-          `top(max:search.index.oldest_pending_ms{${INDEXER}} by {topic,partition}${MS_TO_S}, 10, 'last', 'desc')`
+          `top(max:search.index.oldest_pending_ms{${INDEXER}} by {topic,partition}.fill(null)${MS_TO_S}, 10, 'last', 'desc')`
         ),
         lines(
           'Longest lag of an indexed event by entity type (s)',

@@ -24,6 +24,9 @@ const PUBLISH_TIMEOUT: Duration = Duration::from_secs(6);
 const METER_NAME: &str = "macro_event_broker";
 /// Counter of publish attempts, tagged `topic`, `event_type` and `outcome`.
 const PUBLISHES: &str = "event_broker.publishes";
+const TOPIC_TAG: &str = "topic";
+const EVENT_TYPE_TAG: &str = "event_type";
+const OUTCOME_TAG: &str = "outcome";
 
 /// How one [`MacroEventBroker::send_event`] ended, the `outcome` tag of
 /// [`PUBLISHES`].
@@ -38,6 +41,30 @@ enum PublishOutcome {
     TimedOut,
     /// The event did not serialize, so nothing was sent.
     Unserializable,
+    /// The publish task was dropped before it finished, e.g. aborted.
+    Cancelled,
+}
+
+/// Counts one publish in [`PUBLISHES`] when dropped, with the outcome it was
+/// given, or [`PublishOutcome::Cancelled`] if its task never set one.
+struct PublishCount {
+    publishes: Counter<u64>,
+    topic: &'static str,
+    event_type: Option<String>,
+    outcome: PublishOutcome,
+}
+
+impl Drop for PublishCount {
+    fn drop(&mut self) {
+        let mut tags = vec![
+            KeyValue::new(TOPIC_TAG, self.topic),
+            KeyValue::new(OUTCOME_TAG, <&str>::from(self.outcome)),
+        ];
+        if let Some(event_type) = self.event_type.take() {
+            tags.push(KeyValue::new(EVENT_TYPE_TAG, event_type));
+        }
+        self.publishes.add(1, &tags);
+    }
 }
 
 /// The wire `event_type` of a serialized [`Event`](crate::Event): the tag
@@ -155,14 +182,19 @@ impl<P: EventPublisher, S: Spawner> MacroEventBroker for MacroEventBrokerService
             self.publishes.add(
                 1,
                 &[
-                    KeyValue::new("topic", topic),
-                    KeyValue::new("outcome", <&str>::from(PublishOutcome::Unserializable)),
+                    KeyValue::new(TOPIC_TAG, topic),
+                    KeyValue::new(OUTCOME_TAG, <&str>::from(PublishOutcome::Unserializable)),
                 ],
             );
         })?;
-        let event_type = wire_event_type(&payload);
         let publisher = Arc::clone(&self.publisher);
-        let publishes = self.publishes.clone();
+        // Moved into the task, so a task dropped before it finishes still counts.
+        let mut count = PublishCount {
+            publishes: self.publishes.clone(),
+            topic,
+            event_type: wire_event_type(&payload),
+            outcome: PublishOutcome::Cancelled,
+        };
         let span = tracing::Span::current();
 
         let handle = self.spawner.spawn(
@@ -171,7 +203,7 @@ impl<P: EventPublisher, S: Spawner> MacroEventBroker for MacroEventBrokerService
                     PUBLISH_TIMEOUT,
                     publisher.publish::<<<E as MacroEvent>::EventPayload as TopicEvent>::Topic>(
                         &key,
-                        event_type.as_deref(),
+                        count.event_type.as_deref(),
                         &payload,
                     ),
                 )
@@ -180,19 +212,12 @@ impl<P: EventPublisher, S: Spawner> MacroEventBroker for MacroEventBrokerService
                     timeout: PUBLISH_TIMEOUT,
                 })
                 .and_then(std::convert::identity);
-                let outcome = match &result {
+                count.outcome = match &result {
                     Ok(()) => PublishOutcome::Published,
                     Err(EventBrokerError::PublishTimeout { .. }) => PublishOutcome::TimedOut,
                     Err(_) => PublishOutcome::Failed,
                 };
-                let mut tags = vec![
-                    KeyValue::new("topic", topic),
-                    KeyValue::new("outcome", <&str>::from(outcome)),
-                ];
-                if let Some(event_type) = event_type {
-                    tags.push(KeyValue::new("event_type", event_type));
-                }
-                publishes.add(1, &tags);
+                drop(count);
                 result.inspect_err(|error| {
                     tracing::error!(
                         error = ?error,

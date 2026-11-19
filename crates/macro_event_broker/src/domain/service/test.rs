@@ -681,3 +681,56 @@ fn wire_event_type_reads_the_envelope_tag() {
     assert_eq!(wire_event_type(b"{\"metadata\":{}}"), None);
     assert_eq!(wire_event_type(b"not json"), None);
 }
+
+#[tokio::test]
+async fn an_aborted_publish_is_counted_cancelled() {
+    let (provider, exporter) = recording_meter();
+    let started = Arc::new(AtomicBool::new(false));
+    let service = MacroEventBrokerService::with_meter(
+        PendingPublisher {
+            started: Arc::clone(&started),
+        },
+        GlobalSpawner,
+        &provider.meter("test"),
+    );
+
+    let handle = service.send_event(&example_event()).expect("dispatch");
+    tokio::task::yield_now().await;
+    assert!(started.load(Ordering::SeqCst), "the publish is under way");
+    handle.abort();
+    assert!(handle.await.expect_err("aborted").is_cancelled());
+
+    assert_eq!(
+        publish_counts(&provider, &exporter),
+        vec![(
+            MacroExampleTopic::TOPIC_STR.to_owned(),
+            Some("example.created".to_owned()),
+            "cancelled".to_owned(),
+            1
+        )]
+    );
+}
+
+#[tokio::test]
+async fn a_publish_aborted_before_it_starts_is_counted_cancelled() {
+    let (provider, exporter) = recording_meter();
+    let service = MacroEventBrokerService::with_meter(
+        PendingPublisher {
+            started: Arc::new(AtomicBool::new(false)),
+        },
+        GlobalSpawner,
+        &provider.meter("test"),
+    );
+
+    let handle = service.send_event(&example_event()).expect("dispatch");
+    handle.abort();
+    let _ = handle.await;
+
+    assert_eq!(
+        publish_counts(&provider, &exporter)
+            .into_iter()
+            .map(|(_, _, outcome, count)| (outcome, count))
+            .collect::<Vec<_>>(),
+        [("cancelled".to_owned(), 1)]
+    );
+}

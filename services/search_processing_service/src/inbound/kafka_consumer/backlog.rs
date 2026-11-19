@@ -16,7 +16,9 @@
 //!
 //! The position and cached watermarks are the client's own state, kept by its
 //! fetcher, so samples taken while the poll loop waits on a full worker
-//! channel still show records piling up.
+//! channel still show records piling up. A partition the client cannot fetch
+//! at all keeps its last watermark, and records the broker holds past it stay
+//! invisible here; the group's broker-side offset lag covers that case.
 
 use std::{
     collections::{HashMap, HashSet, VecDeque},
@@ -217,7 +219,14 @@ impl WatermarkHistory {
         }
         let age_since = |since_ms: i64| u64::try_from(now_ms - since_ms).unwrap_or(0);
 
-        if let Some(open) = oldest_open {
+        // An open record at or past the position is left from before a
+        // reassignment that moved the position back; the unreceived record at
+        // the position is older.
+        if let Some(open) = oldest_open.filter(|open| {
+            reading
+                .position
+                .is_none_or(|position| open.offset < position)
+        }) {
             self.forget_through(open.offset);
             return open
                 .produced_at_ms
