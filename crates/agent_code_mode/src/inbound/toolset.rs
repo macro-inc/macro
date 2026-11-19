@@ -243,7 +243,7 @@ async fn execute_in_session(
 #[schemars(
     title = "ExecuteCode",
     description = format!(
-        "{SESSION_EXECUTE_CODE}\n{} {SESSION_CHECK_BACK}\n{PROGRAM}\n{RUNTIME}\nPresentView schema; execution.views.present(view) takes its view property:\n{}\n\n{}",
+        "{SESSION_EXECUTE_CODE}\n{NEVER_GUESS}\n{} {SESSION_CHECK_BACK}\n{PROGRAM}\n{RUNTIME}\nPresentView schema; execution.views.present(view) takes its view property:\n{}\n\n{}",
         SESSION_PRESENT.trim_end(),
         dynamic_ui::present_view_schema(),
         include_str!("toolset/session/ocaml.md"),
@@ -337,7 +337,7 @@ impl From<OcamlToolLanguage> for ProgramLanguage {
 #[schemars(
     title = "ExecuteCode",
     description = format!(
-        "{SESSION_EXECUTE_CODE}\n{} {SESSION_CHECK_BACK}\n{PROGRAM}\n{RUNTIME}\nPresentView schema; execution.views.present(view) takes its view property:\n{}\n\n{}\n{}",
+        "{SESSION_EXECUTE_CODE}\n{NEVER_GUESS}\n{} {SESSION_CHECK_BACK}\n{PROGRAM}\n{RUNTIME}\nPresentView schema; execution.views.present(view) takes its view property:\n{}\n\n{}\n{}",
         SESSION_PRESENT.trim_end(),
         dynamic_ui::present_view_schema(),
         include_str!("toolset/session/ocaml.md"),
@@ -373,7 +373,7 @@ impl AsyncTool<CodeModeToolContext> for ExecuteCodeWithOcamlPermissions {
 #[schemars(
     title = "ExecuteCode",
     description = format!(
-        "{SESSION_EXECUTE_CODE}\n{} {SESSION_CHECK_BACK}\n{PROGRAM}\n{RUNTIME}\nPresentView schema; execution.views.present(view) takes its view property:\n{}\n\n{}\n{}",
+        "{SESSION_EXECUTE_CODE}\n{NEVER_GUESS}\n{} {SESSION_CHECK_BACK}\n{PROGRAM}\n{RUNTIME}\nPresentView schema; execution.views.present(view) takes its view property:\n{}\n\n{}\n{}",
         SESSION_PRESENT.trim_end(),
         dynamic_ui::present_view_schema(),
         include_str!("toolset/session/js_tools.md"),
