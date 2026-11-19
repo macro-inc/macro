@@ -253,8 +253,8 @@ impl<
                 EventRunOutcome::Interrupted => "interrupted",
             },
         );
-        // The run's span ends with the run; recording it is its own span, so
-        // a slow or failed write shows apart from the run.
+        // Dispatch lets go of the run's span with the run; recording it is its
+        // own span, so a slow or failed write shows apart from the run.
         drop(span);
         let span = tracing::info_span!(
             parent: &firing,
