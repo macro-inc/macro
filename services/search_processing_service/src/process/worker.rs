@@ -29,6 +29,10 @@ const ADMITTED_RECEIVE_WAIT_SECONDS: i32 = 2;
 /// to the dead-letter queue.
 const ADMITTED_RECEIVE_DEADLINE: std::time::Duration =
     std::time::Duration::from_secs(ADMITTED_RECEIVE_WAIT_SECONDS as u64 + 10);
+/// How long a receive still unanswered at a stop may run on. A healthy one
+/// answers within its 2 s long-poll wait, and this leaves time inside the
+/// stop timeout to hand back what it brings.
+const STOPPED_RECEIVE_GRACE: Duration = Duration::from_secs(4);
 
 /// How long a worker that found the queue empty waits, holding no units,
 /// before it asks again: the rest of the queue's long-poll wait, so an idle
@@ -153,18 +157,24 @@ async fn receive_and_process(ctx: &SearchProcessingContext, stop: &CancellationT
     let receive = ctx
         .worker
         .receive_messages_up_to(wanted, ADMITTED_RECEIVE_WAIT_SECONDS);
-    let messages = match tokio::time::timeout(ADMITTED_RECEIVE_DEADLINE, receive).await {
-        Ok(Ok(messages)) => messages,
-        Ok(Err(e)) => {
+    let messages = match await_receive(receive, stop).await {
+        Receive::Answered(Ok(messages)) => messages,
+        Receive::Answered(Err(e)) => {
             tracing::error!(error=?e, "error receiving messages");
             return Round::ReceiveFailed;
         }
-        Err(_) => {
+        Receive::TimedOut => {
             tracing::error!(
                 deadline_seconds = ADMITTED_RECEIVE_DEADLINE.as_secs(),
                 "receiving messages timed out"
             );
             return Round::ReceiveFailed;
+        }
+        Receive::Stopped => {
+            tracing::warn!(
+                "gave up on a receive still unanswered after the stop; messages it brings return after the visibility timeout"
+            );
+            return Round::Stopped;
         }
     };
     tracing::Span::current().record("messages", messages.len());
@@ -173,9 +183,11 @@ async fn receive_and_process(ctx: &SearchProcessingContext, stop: &CancellationT
     }
     if stop.is_cancelled() {
         // Received as the service stops: hand them straight back.
-        for message in &messages {
-            release(&ReceivedMessage { ctx, message }).await;
-        }
+        let received: Vec<_> = messages
+            .iter()
+            .map(|message| ReceivedMessage { ctx, message })
+            .collect();
+        release_all(&received).await;
         tracing::Span::current().record("released", messages.len());
         return Round::Stopped;
     }
@@ -244,6 +256,36 @@ async fn receive_and_process(ctx: &SearchProcessingContext, stop: &CancellationT
     }
 }
 
+/// How a receive ended.
+#[derive(Debug, PartialEq, Eq)]
+enum Receive<T> {
+    Answered(T),
+    /// Unanswered after [`ADMITTED_RECEIVE_DEADLINE`].
+    TimedOut,
+    /// Unanswered [`STOPPED_RECEIVE_GRACE`] after a stop.
+    Stopped,
+}
+
+/// Wait for `receive`, up to its deadline, and past a stop only for
+/// [`STOPPED_RECEIVE_GRACE`].
+async fn await_receive<T>(
+    receive: impl Future<Output = T>,
+    stop: &CancellationToken,
+) -> Receive<T> {
+    let stopped = async {
+        stop.cancelled().await;
+        tokio::time::sleep(STOPPED_RECEIVE_GRACE).await;
+    };
+    tokio::select! {
+        biased;
+        answer = tokio::time::timeout(ADMITTED_RECEIVE_DEADLINE, receive) => match answer {
+            Ok(answer) => Receive::Answered(answer),
+            Err(_) => Receive::TimedOut,
+        },
+        () = stopped => Receive::Stopped,
+    }
+}
+
 /// How one message of a round ended, when it did not fail.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 enum Outcome {
@@ -269,6 +311,28 @@ async fn hide(message: &impl MessageVisibility, seconds: i32) -> anyhow::Result<
 async fn release(message: &impl MessageVisibility) {
     if let Err(error) = hide(message, 0).await {
         tracing::warn!(error = ?error, "failed to hand a message back to the queue; it returns after its visibility timeout");
+    }
+}
+
+/// Hand every message back to the queue at once, each change within
+/// [`VISIBILITY_CALL_TIMEOUT`].
+async fn release_all(messages: &[impl MessageVisibility]) {
+    futures::future::join_all(messages.iter().map(release)).await;
+}
+
+/// Extend `message`'s visibility every [`VISIBILITY_HEARTBEAT`]; it never
+/// ends, and is dropped with the work it keeps hidden.
+async fn keep_hidden(message: &impl MessageVisibility) -> std::convert::Infallible {
+    let mut heartbeat = tokio::time::interval_at(
+        tokio::time::Instant::now() + VISIBILITY_HEARTBEAT,
+        VISIBILITY_HEARTBEAT,
+    );
+    heartbeat.set_missed_tick_behavior(tokio::time::MissedTickBehavior::Delay);
+    loop {
+        heartbeat.tick().await;
+        if let Err(error) = hide(message, VISIBILITY_EXTENSION_SECONDS).await {
+            tracing::warn!(error = ?error, "failed to extend a message's visibility");
+        }
     }
 }
 
@@ -303,34 +367,21 @@ pub(crate) async fn supervise<T>(
     message: &impl MessageVisibility,
     stop: &CancellationToken,
 ) -> Supervised<T> {
-    tokio::pin!(work);
-    let timeout = tokio::time::sleep(MESSAGE_PROCESSING_TIMEOUT);
-    tokio::pin!(timeout);
     let drained = async {
         stop.cancelled().await;
         tokio::time::sleep(DRAIN_GRACE).await;
     };
-    tokio::pin!(drained);
-    let mut heartbeat = tokio::time::interval_at(
-        tokio::time::Instant::now() + VISIBILITY_HEARTBEAT,
-        VISIBILITY_HEARTBEAT,
-    );
-    heartbeat.set_missed_tick_behavior(tokio::time::MissedTickBehavior::Delay);
-    loop {
-        tokio::select! {
-            biased;
-            output = &mut work => return Supervised::Finished(output),
-            () = &mut drained => {
-                release(message).await;
-                return Supervised::Released;
-            }
-            () = &mut timeout => return Supervised::TimedOut,
-            _ = heartbeat.tick() => {
-                if let Err(error) = hide(message, VISIBILITY_EXTENSION_SECONDS).await {
-                    tracing::warn!(error = ?error, "failed to extend a message's visibility");
-                }
-            }
+    // The heartbeat runs beside the work, so a visibility change that stalls
+    // holds up neither the work's end nor the drain timer.
+    tokio::select! {
+        biased;
+        output = work => Supervised::Finished(output),
+        () = drained => {
+            release(message).await;
+            Supervised::Released
         }
+        () = tokio::time::sleep(MESSAGE_PROCESSING_TIMEOUT) => Supervised::TimedOut,
+        never = keep_hidden(message) => match never {},
     }
 }
 
