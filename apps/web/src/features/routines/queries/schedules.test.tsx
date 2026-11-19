@@ -180,7 +180,7 @@ it.each([
   }
 );
 
-it('preserves a stop claim and returns the fresh children count to Delete', async () => {
+it('counts for Delete the children a run made after a read already in flight', async () => {
   const key = scheduledActionKeys.children({ scheduleId: 'parent' }).queryKey;
   const old = { ...routine, claimed: '2026-09-28T12:00:00Z' };
   queryClient.setQueryData(key, [{ ...old }]);
@@ -210,11 +210,42 @@ it('preserves a stop claim and returns the fresh children count to Delete', asyn
   const read = fetchChildren('parent');
   notifyRun('started');
   notifyRun('stopped');
-  response.resolve(ok([{ ...old }, { ...other }]));
+  // This read started before the run made its second child.
+  response.resolve(ok([{ ...old }]));
 
   const result = await read;
   expect(result).toEqual(ok([routine, other]));
   await refreshed.promise;
+  expect(listChildren).toHaveBeenCalledTimes(2);
+});
+
+it('reads children again for Delete after a read already in flight', async () => {
+  const key = scheduledActionKeys.children({ scheduleId: 'parent' }).queryKey;
+  queryClient.setQueryData(key, [{ ...routine }]);
+  const response = Promise.withResolvers<unknown>();
+  listChildren.mockReturnValueOnce(response.promise);
+  listChildren.mockResolvedValueOnce(ok([{ ...routine }, { ...other }]));
+  function Probe() {
+    useChildrenQuery(
+      () => 'parent',
+      () => true
+    );
+    return null;
+  }
+  dispose = render(
+    () => (
+      <QueryClientProvider client={queryClient}>
+        <Probe />
+      </QueryClientProvider>
+    ),
+    document.createElement('div')
+  );
+  expect(listChildren).toHaveBeenCalledOnce();
+
+  const read = fetchChildren('parent');
+  response.resolve(ok([{ ...routine }]));
+
+  expect(await read).toEqual(ok([routine, other]));
   expect(listChildren).toHaveBeenCalledTimes(2);
 });
 

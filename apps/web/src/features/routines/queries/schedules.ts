@@ -241,16 +241,26 @@ export function useChildrenQuery(
 /**
  * Read a routine's children now, as a delete would remove them: fresh, and
  * failing at once, offline too, rather than retrying while the confirmation
- * is open.
+ * is open. A read already in flight may predate a child a run just made, so
+ * it is waited out and the children read after it (or with the read a run's
+ * stop queued after it).
  */
 export function fetchChildren(scheduleId: string) {
+  const options = {
+    ...childrenQueryOptions(scheduleId, true),
+    staleTime: 0,
+    retry: false,
+    networkMode: 'always' as const,
+  };
+  const pending = queryClient
+    .getQueryCache()
+    .find({ queryKey: options.queryKey, exact: true });
+  const earlier =
+    pending?.state.fetchStatus === 'fetching' && pending.promise
+      ? Promise.allSettled([pending.promise])
+      : Promise.resolve();
   return ResultAsync.fromPromise(
-    queryClient.fetchQuery({
-      ...childrenQueryOptions(scheduleId, true),
-      staleTime: 0,
-      retry: false,
-      networkMode: 'always',
-    }),
+    earlier.then(() => queryClient.fetchQuery(options)),
     (error) => error
   );
 }
