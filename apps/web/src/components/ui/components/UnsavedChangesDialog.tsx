@@ -63,7 +63,9 @@ export function UnsavedChangesDialog(props: {
             disabled={props.pending || !props.canSave}
             onClick={props.onSave}
           >
-            {props.pending ? t('common.saving') : t('common.save')}
+            <Show when={props.pending} fallback={t('common.save')}>
+              {t('common.saving')}
+            </Show>
           </Button>
         </ActionDialogShell.Footer>
       </ActionDialogShell>

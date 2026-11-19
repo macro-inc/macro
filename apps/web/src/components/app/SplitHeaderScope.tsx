@@ -139,11 +139,13 @@ function TopBar(props: { leading?: JSX.Element; class?: string }) {
   return (
     <ViewShell.TopBar
       navigation={
-        leading() ? (
-          <ViewShell.TopBarTitle class="shrink-0">
-            <div class="flex shrink-0 items-center">{leading()}</div>
-          </ViewShell.TopBarTitle>
-        ) : undefined
+        <Show when={leading()}>
+          {(content) => (
+            <ViewShell.TopBarTitle class="shrink-0">
+              <div class="flex shrink-0 items-center">{content()}</div>
+            </ViewShell.TopBarTitle>
+          )}
+        </Show>
       }
       ref={scope.headerCollapse.setRow}
       class={cn(

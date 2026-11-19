@@ -3,44 +3,48 @@ import { isRecord } from '@app/lib/split-router';
 import { paneRoute } from '@app/routes/app-route';
 import type { SplitContent, SplitHandle } from './layoutManager';
 
+function projectDetails(match: unknown) {
+  if (!isRecord(match) || match.id !== 'tasks-project') return;
+  if (!isRecord(match.params)) return;
+  const { projectId, section } = match.params;
+  if (typeof projectId !== 'string' || !projectId) return;
+  if (section !== 'overview' && section !== 'tasks') return;
+  return { kind: 'detail' as const, projectId, section };
+}
+
 /** Project routes share the Tasks split identity; inspect the route, not its id. */
 export function projectLocation(content: SplitContent | null) {
   if (content?.type === 'component') {
-    const legacy = parseProjectRoute(content.id);
-    if (legacy)
+    const encoded = parseProjectRoute(content.id);
+    if (encoded) {
       return {
         kind: 'detail' as const,
-        projectId: legacy.id,
-        section: legacy.section,
+        projectId: encoded.id,
+        section: encoded.section,
       };
+    }
   }
+
   const metadata = content?.entryMetadata;
   if (!isRecord(metadata) || !isRecord(metadata.route)) return;
   const matches = metadata.route.matches;
   if (!Array.isArray(matches)) return;
   const leaf: unknown = matches.at(-1);
   if (!isRecord(leaf)) return;
-  if (leaf.id === 'tasks-projects') return { kind: 'list' as const };
-  const task = leaf.id === 'tasks-project-task';
-  if (
-    task &&
-    (!isRecord(leaf.params) ||
-      typeof leaf.params.taskId !== 'string' ||
-      !leaf.params.taskId)
-  )
-    return;
-  const project = task ? matches.at(-2) : leaf;
-  if (
-    !isRecord(project) ||
-    project.id !== 'tasks-project' ||
-    !isRecord(project.params)
-  )
-    return;
-  const { projectId, section } = project.params;
-  if (typeof projectId !== 'string' || !projectId) return;
-  if (section !== 'overview' && section !== 'tasks') return;
-  if (task) return { kind: 'task' as const, projectId, section };
-  return { kind: 'detail' as const, projectId, section };
+
+  switch (leaf.id) {
+    case 'tasks-projects':
+      return { kind: 'list' as const };
+    case 'tasks-project':
+      return projectDetails(leaf);
+    case 'tasks-project-task': {
+      if (!isRecord(leaf.params)) return;
+      if (typeof leaf.params.taskId !== 'string' || !leaf.params.taskId) return;
+      const parent = projectDetails(matches.at(-2));
+      if (parent) return { ...parent, kind: 'task' as const };
+      return;
+    }
+  }
 }
 
 /** Nested tasks return to their project; direct project links return to the list. */

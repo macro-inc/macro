@@ -7,7 +7,7 @@ import LinkIcon from '@icon/system/regular/link.svg';
 import PencilIcon from '@icon/system/regular/pencil-simple.svg';
 import TrashIcon from '@icon/system/regular/trash.svg';
 import { CopyButton, Dropdown } from '@ui';
-import { type JSX, Show } from 'solid-js';
+import { children, type JSX, Show } from 'solid-js';
 
 export function SavedViewMenuItems(props: {
   owned: boolean;
@@ -30,18 +30,31 @@ export function SavedViewMenuItems(props: {
     disabled?: boolean;
     class?: string;
     onSelect: () => void;
-  }) =>
-    props.mobile ? (
-      <MobileDrawer.Item
-        disabled={item.disabled}
-        class={item.class}
-        onClick={item.onSelect}
+  }) => {
+    const content = children(() => item.children);
+    return (
+      <Show
+        when={props.mobile}
+        fallback={
+          <Dropdown.Item
+            disabled={item.disabled}
+            class={item.class}
+            onSelect={item.onSelect}
+          >
+            {content()}
+          </Dropdown.Item>
+        }
       >
-        {item.children}
-      </MobileDrawer.Item>
-    ) : (
-      <Dropdown.Item {...item} />
+        <MobileDrawer.Item
+          disabled={item.disabled}
+          class={item.class}
+          onClick={item.onSelect}
+        >
+          {content()}
+        </MobileDrawer.Item>
+      </Show>
     );
+  };
   return (
     <div class="flex w-full flex-col divide-y divide-edge-divider">
       <Group>

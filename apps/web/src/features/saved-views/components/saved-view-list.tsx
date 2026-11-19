@@ -14,6 +14,7 @@ import PlusIcon from '@phosphor/plus.svg';
 import UsersIcon from '@phosphor/users.svg';
 import { Dropdown } from '@ui';
 import {
+  children,
   createRenderEffect,
   createSignal,
   For,
@@ -81,14 +82,24 @@ function Items(props: {
   children: JSX.Element;
   mobile?: boolean;
 }) {
-  return props.mobile ? (
-    <MobileDrawer.Section aria-label={props.label} class="mx-0">
-      {props.children}
-    </MobileDrawer.Section>
-  ) : (
-    <ViewSidebar.Nav ref={props.ref} aria-label={props.label} class="relative">
-      {props.children}
-    </ViewSidebar.Nav>
+  const content = children(() => props.children);
+  return (
+    <Show
+      when={props.mobile}
+      fallback={
+        <ViewSidebar.Nav
+          ref={props.ref}
+          aria-label={props.label}
+          class="relative"
+        >
+          {content()}
+        </ViewSidebar.Nav>
+      }
+    >
+      <MobileDrawer.Section aria-label={props.label} class="mx-0">
+        {content()}
+      </MobileDrawer.Section>
+    </Show>
   );
 }
 

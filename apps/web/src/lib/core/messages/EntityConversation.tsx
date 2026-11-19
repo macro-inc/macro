@@ -174,9 +174,12 @@ export function EntityConversation(props: EntityConversationProps) {
                 }
           }
         >
-          {missingParent()
-            ? t('common.discussionUnavailable')
-            : t('common.discussionLoadError')}
+          <Show
+            when={missingParent()}
+            fallback={t('common.discussionLoadError')}
+          >
+            {t('common.discussionUnavailable')}
+          </Show>
         </MessageLoadError>
       </Show>
       <Show when={!unavailable() && query.hasNextPage}>
