@@ -148,9 +148,14 @@ vi.mock('@components/app/split-layout/layoutUtils', () => ({
   }),
   returnSplitToRecentListView: vi.fn(),
 }));
-vi.mock('@components/app/split-layout/components/HeaderIsland', () => ({
-  HeaderIsland: (props: { children: JSX.Element }) => props.children,
-}));
+// Drawn as on touch: the real floating island, the only part of a touch top
+// bar that takes taps.
+vi.mock('@components/app/split-layout/components/HeaderIsland', async () => {
+  const { MobileHeaderIsland } = await vi.importActual<
+    typeof import('@components/app/mobile-header/island')
+  >('@components/app/mobile-header/island');
+  return { HeaderIsland: MobileHeaderIsland };
+});
 vi.mock('@components/app/split-layout/components/SplitHeader', () => ({
   SplitHeaderLeft: (props: { children: JSX.Element }) => props.children,
 }));
@@ -1184,5 +1189,64 @@ describe('routine icon', () => {
       screen.getByRole('button', { name: 'Change icon' }).contains(top)
     ).toBe(true);
     expect(top.outerHTML).toBe(page.outerHTML);
+  });
+});
+
+describe('routine toolbar on touch', () => {
+  it('lets taps reach every control in the top bar', () => {
+    mocks.flags = () => ['enable-entity-appearance'];
+    setSchedules([cron]);
+    render(() => <Routine />);
+    const toolbar = screen.getByLabelText('Routine toolbar');
+    // A touch top bar floats over the page and ignores taps, except on the
+    // parts that take them back.
+    const tappable = (control: Element) => {
+      for (
+        let node: Element | null = control;
+        node && node !== toolbar;
+        node = node.parentElement
+      ) {
+        if (
+          node.classList.contains('touch:pointer-events-auto') ||
+          node.classList.contains('pointer-events-auto')
+        )
+          return true;
+      }
+      return false;
+    };
+    const controls = [
+      ...within(toolbar).getAllByRole('button'),
+      ...within(toolbar).getAllByRole('tab'),
+    ];
+    for (const name of [
+      'Back to routines',
+      'Change icon',
+      'Routine actions',
+      'Run now',
+      'Run options',
+    ]) {
+      expect(within(toolbar).getByRole('button', { name })).toBeTruthy();
+    }
+    for (const name of [/^Overview/, /^Runs/]) {
+      expect(within(toolbar).getByRole('tab', { name })).toBeTruthy();
+    }
+    // Nothing around the controls takes taps meant for the page under the bar:
+    // not the save status, and no row of the bar but the title island.
+    for (const status of within(toolbar).getAllByRole('status')) {
+      expect(tappable(status)).toBe(false);
+    }
+    for (const row of toolbar.children) {
+      if (!row.matches('[data-header-island]')) {
+        expect(row.className).not.toMatch(/pointer-events-auto/);
+      }
+    }
+    expect(
+      controls
+        .filter((control) => !tappable(control))
+        .map(
+          (control) =>
+            control.getAttribute('aria-label') ?? control.textContent?.trim()
+        )
+    ).toEqual([]);
   });
 });
