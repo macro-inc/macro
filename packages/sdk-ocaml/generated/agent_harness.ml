@@ -4722,6 +4722,29 @@ and yojson_of_decision_via : decision_via -> Yojson.Safe.t =
   | Inbox -> `String "inbox"
   | Unknown other -> `String other
 
+(** How an approval ended without approving. *)
+type nonrec declined_status =
+  | Denied
+  | Cancelled
+  | Expired
+  | Unknown of string  (** A value this SDK version does not know. *)
+
+let declined_status_of_yojson : Yojson.Safe.t -> declined_status =
+ fun json ->
+  match Json.string json with
+  | "denied" -> Denied
+  | "cancelled" -> Cancelled
+  | "expired" -> Expired
+  | other -> Json.unknown "declined_status" json (Unknown other)
+
+and yojson_of_declined_status : declined_status -> Yojson.Safe.t =
+ fun value ->
+  match value with
+  | Denied -> `String "denied"
+  | Cancelled -> `String "cancelled"
+  | Expired -> `String "expired"
+  | Unknown other -> `String other
+
 type nonrec discover_agent_capabilities_request = {
   harness : capability_harness_dto;  (** Provider to probe. *)
   harness_id : string option;
@@ -5073,6 +5096,7 @@ type nonrec recorded_call_status =
   | Completed
   | Failed
   | Unknown_
+  | Refused
   | Unknown of string  (** A value this SDK version does not know. *)
 
 let recorded_call_status_of_yojson : Yojson.Safe.t -> recorded_call_status =
@@ -5082,6 +5106,7 @@ let recorded_call_status_of_yojson : Yojson.Safe.t -> recorded_call_status =
   | "completed" -> Completed
   | "failed" -> Failed
   | "unknown" -> Unknown_
+  | "refused" -> Refused
   | other -> Json.unknown "recorded_call_status" json (Unknown other)
 
 and yojson_of_recorded_call_status : recorded_call_status -> Yojson.Safe.t =
@@ -5091,6 +5116,7 @@ and yojson_of_recorded_call_status : recorded_call_status -> Yojson.Safe.t =
   | Completed -> `String "completed"
   | Failed -> `String "failed"
   | Unknown_ -> `String "unknown"
+  | Refused -> `String "refused"
   | Unknown other -> `String other
 
 type nonrec execution_activity = {
@@ -5123,6 +5149,194 @@ and yojson_of_execution_activity : execution_activity -> Yojson.Safe.t =
 let make_execution_activity ~(id : int64) ~(label : string)
     ~(status : recorded_call_status) () =
   ({ id; label; status } : execution_activity)
+
+type nonrec gated_operation = {
+  action : permission_action option;
+  group : string;
+      (** Its group id; [unclassified] for an operation the registry does not
+know. *)
+  group_name : string;  (** Its group's display name. *)
+  label : string;
+      (** What it does, for a person. [service.operation] for an operation the
+registry does not know. *)
+  operation : string;  (** The raw operationId, e.g. [send_message]. *)
+  origin : tool_permission_origin;  (** Where the state comes from. *)
+  service : string;  (** The SDK's spec name, e.g. [email]. *)
+  state : tool_permission_state;  (** Its effective state. *)
+}
+(** One SDK operation a program may call, as the gate judged it: what the
+approval dialog lists and a refusal names. *)
+
+let gated_operation_of_yojson : Yojson.Safe.t -> gated_operation =
+ fun json ->
+  let fields = Json.obj json in
+  {
+    action = Json.optional fields "action" permission_action_of_yojson;
+    group = Json.required fields "group" Json.string;
+    group_name = Json.required fields "groupName" Json.string;
+    label = Json.required fields "label" Json.string;
+    operation = Json.required fields "operation" Json.string;
+    origin = Json.required fields "origin" tool_permission_origin_of_yojson;
+    service = Json.required fields "service" Json.string;
+    state = Json.required fields "state" tool_permission_state_of_yojson;
+  }
+
+and yojson_of_gated_operation : gated_operation -> Yojson.Safe.t =
+ fun value ->
+  Json.record
+    [
+      ("action", Option.map yojson_of_permission_action value.action);
+      ("group", Some (Json.of_string value.group));
+      ("groupName", Some (Json.of_string value.group_name));
+      ("label", Some (Json.of_string value.label));
+      ("operation", Some (Json.of_string value.operation));
+      ("origin", Some (yojson_of_tool_permission_origin value.origin));
+      ("service", Some (Json.of_string value.service));
+      ("state", Some (yojson_of_tool_permission_state value.state));
+    ]
+
+let make_gated_operation ?action ~(group : string) ~(group_name : string)
+    ~(label : string) ~(operation : string) ~(origin : tool_permission_origin)
+    ~(service : string) ~(state : tool_permission_state) () =
+  ({ action; group; group_name; label; operation; origin; service; state }
+    : gated_operation)
+
+(** Why a program did not run, when its permissions stopped it. *)
+type nonrec execution_permission =
+  | Blocked of {
+      operations : gated_operation list;  (** The operations set to never. *)
+    }
+      (** It may call operations set to never: nothing ran, nobody was asked. *)
+  | Declined of {
+      operations : gated_operation list;  (** The operations it asked about. *)
+      status : declined_status;  (** How the approval ended. *)
+    }  (** It may call operations set to ask, and the person did not approve. *)
+  | Unknown of Yojson.Safe.t
+      (** A case this SDK version does not know, as received. *)
+
+let execution_permission_of_yojson : Yojson.Safe.t -> execution_permission =
+ fun json ->
+  let fields = Json.obj json in
+  match Json.tag fields "outcome" with
+  | "blocked" ->
+      Blocked
+        {
+          operations =
+            Json.required fields "operations"
+              (Json.list gated_operation_of_yojson);
+        }
+  | "declined" ->
+      Declined
+        {
+          operations =
+            Json.required fields "operations"
+              (Json.list gated_operation_of_yojson);
+          status = Json.required fields "status" declined_status_of_yojson;
+        }
+  | _ -> Json.unknown "execution_permission" json (Unknown json)
+
+and yojson_of_execution_permission : execution_permission -> Yojson.Safe.t =
+ fun value ->
+  match value with
+  | Blocked case ->
+      Json.record
+        [
+          ("outcome", Some (`String "blocked"));
+          ( "operations",
+            Some ((Json.of_list yojson_of_gated_operation) case.operations) );
+        ]
+  | Declined case ->
+      Json.record
+        [
+          ("outcome", Some (`String "declined"));
+          ( "operations",
+            Some ((Json.of_list yojson_of_gated_operation) case.operations) );
+          ("status", Some (yojson_of_declined_status case.status));
+        ]
+  | Unknown json -> json
+
+let make_execution_permission_blocked ~(operations : gated_operation list) () =
+  (Blocked { operations } : execution_permission)
+
+let make_execution_permission_declined ~(operations : gated_operation list)
+    ~(status : declined_status) () =
+  (Declined { operations; status } : execution_permission)
+
+(** The recorded outcome of a program. *)
+type nonrec execution_status =
+  | Running
+  | Succeeded
+  | Failed
+  | Cancelled
+  | Timed_out
+  | Unknown of string  (** A value this SDK version does not know. *)
+
+let execution_status_of_yojson : Yojson.Safe.t -> execution_status =
+ fun json ->
+  match Json.string json with
+  | "running" -> Running
+  | "succeeded" -> Succeeded
+  | "failed" -> Failed
+  | "cancelled" -> Cancelled
+  | "timed_out" -> Timed_out
+  | other -> Json.unknown "execution_status" json (Unknown other)
+
+and yojson_of_execution_status : execution_status -> Yojson.Safe.t =
+ fun value ->
+  match value with
+  | Running -> `String "running"
+  | Succeeded -> `String "succeeded"
+  | Failed -> `String "failed"
+  | Cancelled -> `String "cancelled"
+  | Timed_out -> `String "timed_out"
+  | Unknown other -> `String other
+
+type nonrec execution_receipt = {
+  activity : execution_activity list option;
+      (** Observed SDK operations for conversation activity snapshots. *)
+  error : string option;
+      (** Safe failure text, when execution did not succeed. *)
+  execution_id : execution_id;
+      (** Reference to the session's durable rendering record. *)
+  permission : execution_permission option;
+  result : Yojson.Safe.t option;
+      (** Only the value explicitly returned by the program. *)
+  status : execution_status;
+      (** Last recorded outcome; running may be stale after a process interruption. *)
+}
+(** Compact model result with an identity the UI uses to load the durable record. *)
+
+let execution_receipt_of_yojson : Yojson.Safe.t -> execution_receipt =
+ fun json ->
+  let fields = Json.obj json in
+  {
+    activity =
+      Json.optional fields "activity" (Json.list execution_activity_of_yojson);
+    error = Json.optional fields "error" Json.string;
+    execution_id = Json.required fields "executionId" execution_id_of_yojson;
+    permission =
+      Json.optional fields "permission" execution_permission_of_yojson;
+    result = Json.optional fields "result" Json.json;
+    status = Json.required fields "status" execution_status_of_yojson;
+  }
+
+and yojson_of_execution_receipt : execution_receipt -> Yojson.Safe.t =
+ fun value ->
+  Json.record
+    [
+      ( "activity",
+        Option.map (Json.of_list yojson_of_execution_activity) value.activity );
+      ("error", Option.map Json.of_string value.error);
+      ("executionId", Some (yojson_of_execution_id value.execution_id));
+      ("permission", Option.map yojson_of_execution_permission value.permission);
+      ("result", Option.map Json.of_json value.result);
+      ("status", Some (yojson_of_execution_status value.status));
+    ]
+
+let make_execution_receipt ?activity ?error ~(execution_id : execution_id)
+    ?permission ?result ~(status : execution_status) () =
+  ({ activity; error; execution_id; permission; result; status }
+    : execution_receipt)
 
 (** Which authenticated participant's access a tool call requests. *)
 type nonrec tool_actor =
@@ -5192,10 +5406,12 @@ let make_recorded_tool_call ?error ~(id : string) ~(input : Yojson.Safe.t)
     : recorded_tool_call)
 
 (** The language of a session program. OCaml is offered only to sessions
-whose owner has the OCaml rollout (\[[OcamlRollout]\](super::OcamlRollout)). *)
+whose owner has the OCaml rollout (\[[OwnerRollout]\](super::OwnerRollout));
+JavaScript tools programs are not offered yet. *)
 type nonrec program_language =
   | Javascript
   | Ocaml
+  | Js_tools
   | Unknown of string  (** A value this SDK version does not know. *)
 
 let program_language_of_yojson : Yojson.Safe.t -> program_language =
@@ -5203,6 +5419,7 @@ let program_language_of_yojson : Yojson.Safe.t -> program_language =
   match Json.string json with
   | "javascript" -> Javascript
   | "ocaml" -> Ocaml
+  | "js_tools" -> Js_tools
   | other -> Json.unknown "program_language" json (Unknown other)
 
 and yojson_of_program_language : program_language -> Yojson.Safe.t =
@@ -5210,35 +5427,7 @@ and yojson_of_program_language : program_language -> Yojson.Safe.t =
   match value with
   | Javascript -> `String "javascript"
   | Ocaml -> `String "ocaml"
-  | Unknown other -> `String other
-
-(** The recorded outcome of a program. *)
-type nonrec execution_status =
-  | Running
-  | Succeeded
-  | Failed
-  | Cancelled
-  | Timed_out
-  | Unknown of string  (** A value this SDK version does not know. *)
-
-let execution_status_of_yojson : Yojson.Safe.t -> execution_status =
- fun json ->
-  match Json.string json with
-  | "running" -> Running
-  | "succeeded" -> Succeeded
-  | "failed" -> Failed
-  | "cancelled" -> Cancelled
-  | "timed_out" -> Timed_out
-  | other -> Json.unknown "execution_status" json (Unknown other)
-
-and yojson_of_execution_status : execution_status -> Yojson.Safe.t =
- fun value ->
-  match value with
-  | Running -> `String "running"
-  | Succeeded -> `String "succeeded"
-  | Failed -> `String "failed"
-  | Cancelled -> `String "cancelled"
-  | Timed_out -> `String "timed_out"
+  | Js_tools -> `String "js_tools"
   | Unknown other -> `String other
 
 type nonrec execution_record = {
@@ -5255,6 +5444,7 @@ type nonrec execution_record = {
       (** The language [source] is written in; historical records are JavaScript.
 JavaScript, the default, is left out, so records of sessions without
 OCaml serialize as they did before languages. *)
+  permission : execution_permission option;
   result : Yojson.Safe.t option;
       (** JSON returned by the program, if successful. *)
   sdk_fingerprint : string option;
@@ -5282,6 +5472,8 @@ let execution_record_of_yojson : Yojson.Safe.t -> execution_record =
     error = Json.optional fields "error" Json.string;
     execution_id = Json.required fields "executionId" execution_id_of_yojson;
     language = Json.optional fields "language" program_language_of_yojson;
+    permission =
+      Json.optional fields "permission" execution_permission_of_yojson;
     result = Json.optional fields "result" Json.json;
     sdk_fingerprint = Json.optional fields "sdkFingerprint" Json.string;
     source = Json.required fields "source" Json.string;
@@ -5301,6 +5493,7 @@ and yojson_of_execution_record : execution_record -> Yojson.Safe.t =
       ("error", Option.map Json.of_string value.error);
       ("executionId", Some (yojson_of_execution_id value.execution_id));
       ("language", Option.map yojson_of_program_language value.language);
+      ("permission", Option.map yojson_of_execution_permission value.permission);
       ("result", Option.map Json.of_json value.result);
       ("sdkFingerprint", Option.map Json.of_string value.sdk_fingerprint);
       ("source", Some (Json.of_string value.source));
@@ -5310,7 +5503,7 @@ and yojson_of_execution_record : execution_record -> Yojson.Safe.t =
 
 let make_execution_record ?acting_as ?activity ?activity_truncated
     ~(calls : recorded_tool_call list) ?error ~(execution_id : execution_id)
-    ?language ?result ?sdk_fingerprint ~(source : string)
+    ?language ?permission ?result ?sdk_fingerprint ~(source : string)
     ~(status : execution_status) ?turn_id () =
   ({
      acting_as;
@@ -5320,6 +5513,7 @@ let make_execution_record ?acting_as ?activity ?activity_truncated
      error;
      execution_id;
      language;
+     permission;
      result;
      sdk_fingerprint;
      source;
@@ -5859,6 +6053,34 @@ and yojson_of_extract_input_response : extract_input_response -> Yojson.Safe.t =
 let make_extract_input_response ~(input_suggestions : input_suggestions)
     ~(revision : int) () =
   ({ input_suggestions; revision } : extract_input_response)
+
+type nonrec group_selection = {
+  actions : permission_action list option;
+      (** The actions to show; empty or absent shows all five. *)
+  group : string;  (** A group id, such as [documents] or [email]. *)
+}
+(** One group, and which of its actions. *)
+
+let group_selection_of_yojson : Yojson.Safe.t -> group_selection =
+ fun json ->
+  let fields = Json.obj json in
+  {
+    actions =
+      Json.optional fields "actions" (Json.list permission_action_of_yojson);
+    group = Json.required fields "group" Json.string;
+  }
+
+and yojson_of_group_selection : group_selection -> Yojson.Safe.t =
+ fun value ->
+  Json.record
+    [
+      ( "actions",
+        Option.map (Json.of_list yojson_of_permission_action) value.actions );
+      ("group", Some (Json.of_string value.group));
+    ]
+
+let make_group_selection ?actions ~(group : string) () =
+  ({ actions; group } : group_selection)
 
 (** Defines who can access an item through its share link. *)
 type nonrec link_share =
@@ -6828,6 +7050,134 @@ let make_share_permission_v2 ?channel_share_permissions ~(id : string)
      team_share_access_level;
    }
     : share_permission_v2)
+
+type nonrec shown_permission = {
+  origin : tool_permission_origin;  (** Where the state comes from. *)
+  state : tool_permission_state;  (** Its effective state. *)
+  target : tool_permission_target;  (** The group action or operation. *)
+}
+(** One shown setting as it stands now. *)
+
+let shown_permission_of_yojson : Yojson.Safe.t -> shown_permission =
+ fun json ->
+  let fields = Json.obj json in
+  {
+    origin = Json.required fields "origin" tool_permission_origin_of_yojson;
+    state = Json.required fields "state" tool_permission_state_of_yojson;
+    target = Json.required fields "target" tool_permission_target_of_yojson;
+  }
+
+and yojson_of_shown_permission : shown_permission -> Yojson.Safe.t =
+ fun value ->
+  Json.record
+    [
+      ("origin", Some (yojson_of_tool_permission_origin value.origin));
+      ("state", Some (yojson_of_tool_permission_state value.state));
+      ("target", Some (yojson_of_tool_permission_target value.target));
+    ]
+
+let make_shown_permission ~(origin : tool_permission_origin)
+    ~(state : tool_permission_state) ~(target : tool_permission_target) () =
+  ({ origin; state; target } : shown_permission)
+
+type nonrec tool_selection = {
+  operation : string;  (** The raw operationId, as a refusal names it. *)
+  service : string;  (** The SDK's spec name, such as [email]. *)
+}
+(** One SDK operation. *)
+
+let tool_selection_of_yojson : Yojson.Safe.t -> tool_selection =
+ fun json ->
+  let fields = Json.obj json in
+  {
+    operation = Json.required fields "operation" Json.string;
+    service = Json.required fields "service" Json.string;
+  }
+
+and yojson_of_tool_selection : tool_selection -> Yojson.Safe.t =
+ fun value ->
+  Json.record
+    [
+      ("operation", Some (Json.of_string value.operation));
+      ("service", Some (Json.of_string value.service));
+    ]
+
+let make_tool_selection ~(operation : string) ~(service : string) () =
+  ({ operation; service } : tool_selection)
+
+type nonrec show_permissions_selection = {
+  groups : group_selection list;
+      (** The groups, each with the actions shown (all five when none were named). *)
+  tools : tool_selection list;  (** The operations. *)
+}
+(** What was shown, resolved. *)
+
+let show_permissions_selection_of_yojson :
+    Yojson.Safe.t -> show_permissions_selection =
+ fun json ->
+  let fields = Json.obj json in
+  {
+    groups = Json.required fields "groups" (Json.list group_selection_of_yojson);
+    tools = Json.required fields "tools" (Json.list tool_selection_of_yojson);
+  }
+
+and yojson_of_show_permissions_selection :
+    show_permissions_selection -> Yojson.Safe.t =
+ fun value ->
+  Json.record
+    [
+      ("groups", Some ((Json.of_list yojson_of_group_selection) value.groups));
+      ("tools", Some ((Json.of_list yojson_of_tool_selection) value.tools));
+    ]
+
+let make_show_permissions_selection ~(groups : group_selection list)
+    ~(tools : tool_selection list) () =
+  ({ groups; tools } : show_permissions_selection)
+
+type nonrec show_permissions_result = {
+  agent_id : string;  (** The agent whose permissions these are. *)
+  current : shown_permission list;  (** Each shown setting as it stands now. *)
+  message : string;  (** What the model should do next. *)
+  reason : string option;  (** The agent's sentence for above the controls. *)
+  selection : show_permissions_selection;  (** What to show. *)
+  session_id : string;  (** The session the card is in. *)
+}
+(** [ShowPermissions]' result: what the chat card shows, and a snapshot for
+the model. The card reads the live settings itself. *)
+
+let show_permissions_result_of_yojson : Yojson.Safe.t -> show_permissions_result
+    =
+ fun json ->
+  let fields = Json.obj json in
+  {
+    agent_id = Json.required fields "agentId" Json.string;
+    current =
+      Json.required fields "current" (Json.list shown_permission_of_yojson);
+    message = Json.required fields "message" Json.string;
+    reason = Json.optional fields "reason" Json.string;
+    selection =
+      Json.required fields "selection" show_permissions_selection_of_yojson;
+    session_id = Json.required fields "sessionId" Json.string;
+  }
+
+and yojson_of_show_permissions_result : show_permissions_result -> Yojson.Safe.t
+    =
+ fun value ->
+  Json.record
+    [
+      ("agentId", Some (Json.of_string value.agent_id));
+      ("current", Some ((Json.of_list yojson_of_shown_permission) value.current));
+      ("message", Some (Json.of_string value.message));
+      ("reason", Option.map Json.of_string value.reason);
+      ("selection", Some (yojson_of_show_permissions_selection value.selection));
+      ("sessionId", Some (Json.of_string value.session_id));
+    ]
+
+let make_show_permissions_result ~(agent_id : string)
+    ~(current : shown_permission list) ~(message : string) ?reason
+    ~(selection : show_permissions_selection) ~(session_id : string) () =
+  ({ agent_id; current; message; reason; selection; session_id }
+    : show_permissions_result)
 
 type nonrec start_fresh_agent_conversation_request = {
   session_id : string;

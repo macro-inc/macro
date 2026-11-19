@@ -8164,8 +8164,8 @@
       },
       "ProgramLanguage": {
         "type": "string",
-        "description": "The language of a session program. OCaml is offered only to sessions\nwhose owner has the OCaml rollout ([`OcamlRollout`](super::OcamlRollout)).",
-        "enum": ["javascript", "ocaml"]
+        "description": "The language of a session program. OCaml is offered only to sessions\nwhose owner has the OCaml rollout ([`OwnerRollout`](super::OwnerRollout));\nJavaScript tools programs are not offered yet.",
+        "enum": ["javascript", "ocaml", "js_tools"]
       },
       "PromptAttachment": {
         "type": "object",
