@@ -80,7 +80,8 @@ type SwipeTouchState = {
 
 type SwipableRowContextValue = {
   stateFor: (id: string) => SwipableRowState;
-  clearState: (id: string) => void;
+  /** Note a mounted row; the returned function unmounts it and drops its state. */
+  mountRow: (id: string) => () => void;
   collapseRow: (id: string) => Promise<void>;
   registerRowHandler: (
     id: string,
@@ -114,6 +115,11 @@ export function SwipableRowProvider(
      * the row, so the rows below slide up instead of jumping.
      */
     setCollapseEntity?: Setter<((id: string) => Promise<void>) | undefined>;
+    /**
+     * Receives `expandRow(id)`, which brings back a row that was collapsed
+     * but stayed in the list, with its content at rest.
+     */
+    setExpandEntity?: Setter<((id: string) => void) | undefined>;
   }>
 ) {
   const [stateById, setStateById] = createSignal<
@@ -132,6 +138,22 @@ export function SwipableRowProvider(
       delete newState[id];
       return newState;
     });
+  };
+  // How many rows each id has mounted. State is only written for mounted
+  // rows: only an unmounting row clears it, so state for an id with no row
+  // would outlive it and greet the next row mounted under that id.
+  const mountedRows = new Map<string, number>();
+  const mountRow = (id: string) => {
+    mountedRows.set(id, (mountedRows.get(id) ?? 0) + 1);
+    return () => {
+      const count = (mountedRows.get(id) ?? 1) - 1;
+      if (count > 0) {
+        mountedRows.set(id, count);
+        return;
+      }
+      mountedRows.delete(id);
+      clearState(id);
+    };
   };
   const customRowSwipeHandlers = new Map<
     string,
@@ -199,9 +221,11 @@ export function SwipableRowProvider(
   }
 
   // Folds the row's height to nothing (the row's grid goes from 1fr to 0fr)
-  // so the rows below slide up before the caller removes it. With reduced
-  // motion the row has no transition, so it resolves at once.
+  // so the rows below slide up before the caller removes it. A row that
+  // isn't mounted has nothing to fold. With reduced motion the row has no
+  // transition, so it resolves at once.
   const collapseRow = (entityId: string): Promise<void> => {
+    if (!mountedRows.has(entityId)) return Promise.resolve();
     if (window.matchMedia('(prefers-reduced-motion: reduce)').matches) {
       setState(entityId, { phase: 'complete' });
       return Promise.resolve();
@@ -209,16 +233,40 @@ export function SwipableRowProvider(
     return new Promise((resolve) => {
       setState(entityId, { phase: 'collapsing' });
       setTimeout(() => {
-        setState(entityId, { phase: 'complete' });
+        if (mountedRows.has(entityId)) {
+          setState(entityId, { phase: 'complete' });
+        }
         resolve();
       }, COLLAPSE_SPEED);
     });
   };
 
+  // Unfolds a collapsed row the list kept, and slides its content back.
+  const expandRow = (entityId: string) => {
+    if (!mountedRows.has(entityId)) return;
+    const contentEl = props
+      .container()
+      ?.querySelector(
+        `[data-swipe-row][data-swipe-id="${CSS.escape(entityId)}"] [data-swipe-content]`
+      );
+    if (contentEl instanceof HTMLElement) {
+      contentEl.style.transition = `transform ${SPRING_BACK_SPEED}ms ease-out`;
+      contentEl.style.transform = 'translateX(0px)';
+      setTimeout(() => {
+        contentEl.style.transition = '';
+      }, SPRING_BACK_SPEED);
+    }
+    clearState(entityId);
+  };
+
   // Register/unregister the row-collapse hook with our parent (e.g. UnifiedListView).
   onMount(() => {
     props.setCollapseEntity?.(() => collapseRow);
-    onCleanup(() => props.setCollapseEntity?.(() => undefined));
+    props.setExpandEntity?.(() => expandRow);
+    onCleanup(() => {
+      props.setCollapseEntity?.(() => undefined);
+      props.setExpandEntity?.(() => undefined);
+    });
   });
 
   const handleSwipe = (id: string) => {
@@ -496,7 +544,7 @@ export function SwipableRowProvider(
 
   const ctx: SwipableRowContextValue = {
     stateFor: (id) => stateById()[id] ?? { phase: 'idle', direction: null },
-    clearState: (id) => clearState(id),
+    mountRow,
     collapseRow: collapseRow,
     registerRowHandler: (id, handlers) => {
       customRowSwipeHandlers.set(id, handlers);
@@ -554,10 +602,10 @@ export function SwipableRow(
   // `props.id` can resolve through a parent getter chain (e.g. a message row
   // inside a `<Show>` accessor) that is already stale by the time this row is
   // disposed, so it must not be read inside onCleanup; capture it while
-  // mounted and clear with the captured value.
+  // mounted and unmount with the captured value.
   createEffect(() => {
-    const id = props.id;
-    onCleanup(() => ctx.clearState(id));
+    const unmount = ctx.mountRow(props.id);
+    onCleanup(unmount);
   });
 
   const swipePhase = () => rowState().phase;
