@@ -545,6 +545,13 @@ tools — hexagonal, heavily feature-gated.
   owner, then actor id, retaining one binding per link and actor; the repository
   returns each binding's kind so custody cleanup runs before an owner disconnect
   can suppress it without processing a self-custodian twice.
+- Outlook connect (`domain/mailbox/initialization.rs`) offers to share a
+  connected mailbox only when its address has no account and its owner's
+  account still exists; otherwise it re-homes the one link (`Rehome`) to the
+  address's account, or the actor, and a previous owner who still has an
+  account keeps an access edge. A link whose disconnect or purge has started,
+  or another mailbox's link at the address whose owner's account is gone,
+  answers `InboxBeingRemoved` (`INBOX_BEING_REMOVED`, 400) until it is gone.
 - `email_links.fusionauth_user_id` is the holder of the credentials a link
   syncs with, not the inbox's owner (`macro_id`): another participant's
   connection or a custody transfer changes it. Never read it as ownership. A
