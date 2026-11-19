@@ -1162,8 +1162,9 @@ Reopen it with **Show navigation** before the conversation title on desktop,
 or as the leading header pill on touch. Chat remembers the wide-layout choice
 independently of other workspaces. The rail starts at 256px on desktop and 403px
 on wide touch,
-docks above 720px. Narrow desktop panes use a navigation overlay. It remains
-collapsible with no conversation selected and while showing Threads. At 720px
+docks above 720px, including in a new split. Narrow desktop panes show the
+rail at full width until a conversation opens, which then fills the pane with
+**Back** returning to the rail; Threads open the same way. At 720px
 or narrower, touch shows the full-frame conversation list and
 full-screen navigation, with no sidebar, expand button, or reserved navigation
 row. Only the safe-area top inset precedes the list. Wider touch panes use the
