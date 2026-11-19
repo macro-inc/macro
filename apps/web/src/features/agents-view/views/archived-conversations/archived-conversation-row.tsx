@@ -88,16 +88,18 @@ export function ArchivedConversationRow(props: {
           </Switch>
           <span class="truncate text-sm font-normal text-ink">{title()}</span>
         </span>
-        <span class="relative flex w-[220px] shrink-0 items-center gap-1.5">
+        <span class="pointer-events-none relative flex w-[220px] shrink-0 items-center gap-1.5">
           <Show when={details()}>
             {(code) => (
               <>
                 <Show when={code().pullRequest || code().branch}>
-                  <ConversationCodeLink
-                    details={code()}
-                    actions={props.actions}
-                    onOpenRow={props.onOpen}
-                  />
+                  <span class="pointer-events-auto">
+                    <ConversationCodeLink
+                      details={code()}
+                      actions={props.actions}
+                      onOpenRow={props.onOpen}
+                    />
+                  </span>
                 </Show>
                 <span
                   class={
@@ -114,7 +116,7 @@ export function ArchivedConversationRow(props: {
             )}
           </Show>
         </span>
-        <span class="relative flex w-40 shrink-0 items-center justify-end">
+        <span class="pointer-events-none relative flex w-40 shrink-0 items-center justify-end">
           <span class="archive-date pointer-events-none text-sm text-ink-muted">
             {date()}
           </span>
@@ -122,6 +124,7 @@ export function ArchivedConversationRow(props: {
             <Button
               variant="secondary"
               size="sm"
+              class="pointer-events-auto"
               disabled={restoring()}
               onClick={unarchive}
             >
@@ -135,6 +138,7 @@ export function ArchivedConversationRow(props: {
               placement="bottom-end"
               triggerProps={{
                 size: 'icon-sm',
+                class: 'pointer-events-auto',
                 'aria-label': t('agentWork.moreActions'),
                 onClick: () => props.list.focus.set(props.conversation.id),
               }}

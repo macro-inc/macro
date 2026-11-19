@@ -36,7 +36,8 @@ The Agents workspace owns conversation navigation, the agent roster, and new-cha
 - Keep the `connections` page routable even though the redesigned navigation omits it.
 - Preserve `agents-conversation-list-view-v1` filters when changing sort; legacy grouping does not determine the redesigned list.
 - Partition desktop rows once: Waiting on you first, flagged Open PRs second, Conversations last; share filters and sort, and fill paging from unpinned Conversations.
-- Render desktop row ages as pointer-transparent hover/focus overlays using the row's hover or active surface; never let the age change title truncation or appear on phone rows.
+- Keep archive code/date cells pointer-transparent except their actual controls; show an empty archive only after pagination is exhausted, with loading feedback while pages can still supply matches.
+- Render desktop row ages in the interface locale as pointer-transparent hover/focus overlays using the row's hover or active surface; never let the age change title truncation or appear on phone rows.
 - Use the shared soup touch highlight and full-width square phone rows; clear it on drawer open/close and cancellation, and keep button press fills off the title-only hit target.
 - Compose menus from shared Dropdown content, groups, items, labels, and indicators without row spacing overrides; separate model-menu groups with labels and spacing, never divider lines, and keep phone choices on MobileDrawer parts.
 - Keep All models as a desktop submenu and a pushed phone page; derive both catalogs from non-Suggested IDs, including search, and omit empty provider groups. Reuse catalog search focus ownership on desktop; let ArrowDown/ArrowUp enter filtered models and ArrowLeft return to the parent menu.

@@ -556,6 +556,7 @@ the shimmer.
   Rows follow persisted turn updates without a reload.
   On hover or keyboard focus, the selected-sort age overlays the row's right end
   over a matching surface gradient, including its code icon, without changing title truncation.
+  Relative units and older dates follow the interface language.
   At rest the age is hidden. The code icon retains its preview and activation target.
   PR previews reuse the existing synced card or its unsynced fallback; a synced
   PR icon opens the PR in Macro (Shift opens a split), while an unresolved PR opens
@@ -573,10 +574,11 @@ the shimmer.
   actions. On desktop, **Archived** in the footer opens a searchable main-pane
   list with the loaded count, code identity, and archive date. Hover or focus a
   row for **Unarchive** and **More actions**; right-click offers the same actions.
-  Unarchive restores the row to the sidebar. The archived page reads more pages
-  while fewer than 20 matching rows are loaded, then pages near the scroll end.
-  Counts describe loaded rows, not a server total. The phone still uses its
-  existing collapsed Archived section until the phone list migration.
+  Unarchive restores the row to the sidebar. Non-action code/date cells open the
+  conversation while icons and action buttons retain their own behavior. The
+  archived page reads more pages while fewer than 20 matching rows are loaded,
+  then pages near the scroll end. Empty results appear only after paging finishes;
+  counts describe loaded rows, not a server total. Phone has its own Archived view.
   Runs of routines with **Show runs in Home and Agents** off (the default) are
   left out until **Show hidden routine runs** is checked in the **Filter
   conversations** menu, which counts it on the filter badge and unchecks it with

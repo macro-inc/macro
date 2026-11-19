@@ -48,6 +48,10 @@ export function ArchivedConversations(props: {
       props.sort
     )
   );
+  const pending = () => {
+    if (props.loading || props.loadingNextPage) return true;
+    return props.hasNextPage && !props.error && rows().length === 0;
+  };
   usePending('agents.archived.conversations', () => props.loading);
   const listState = createConversationList({
     conversations: () => [],
@@ -117,14 +121,14 @@ export function ArchivedConversations(props: {
               />
             )}
           </Key>
-          <Show when={!props.loading && !props.error && rows().length === 0}>
+          <Show when={!pending() && !props.error && rows().length === 0}>
             <p class="py-8 text-center text-sm text-ink-muted">
               {search().trim()
                 ? t('agentWork.noSearchMatches', { query: search().trim() })
                 : t('agentWork.noArchivedConversations')}
             </p>
           </Show>
-          <Show when={props.loading || props.loadingNextPage}>
+          <Show when={pending()}>
             <ConversationSkeleton rows={3} />
           </Show>
           <Show when={props.error}>

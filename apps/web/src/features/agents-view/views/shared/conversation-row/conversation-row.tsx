@@ -1,4 +1,4 @@
-import { t } from '@app/lib/i18n';
+import { formatLocale, t } from '@app/lib/i18n';
 import { unreadFilterFn } from '@entity/utils/filter';
 import RoutineIcon from '@icon/system/regular/clock-clockwise.svg';
 import { Show } from 'solid-js';
@@ -75,7 +75,9 @@ export function ConversationRow(props: {
       </Show>
       <ConversationRowTrailing
         age={compactAge(
-          sortConversationTimestamp(props.conversation, props.sort)
+          sortConversationTimestamp(props.conversation, props.sort),
+          Date.now(),
+          formatLocale()
         )}
       >
         <Show when={details()}>
