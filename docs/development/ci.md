@@ -34,7 +34,12 @@ cargo x attest run all --post                        # run every check PR CI wou
 
 Push the commit before `--post`, then add `run-ci` as usual. A check that fails
 posts nothing, so its job runs in `PR CI`. `all` leaves out the checks `PR CI`
-would not run for the change.
+would not run for the change. A check your machine can't run as a runner does
+is skipped with the reason: a job that reads the full history needs a clone
+that is not shallow, and the observability image needs KVM.
+
+A machine busier or slower than a runner can fail a test that passes there, on
+a timeout. That costs nothing but the attestation: the job runs in `PR CI`.
 
 How a check runs:
 
