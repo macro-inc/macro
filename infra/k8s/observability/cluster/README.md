@@ -429,7 +429,8 @@ again, every time:
    hash=$($k get deployment grafana -o jsonpath='{.metadata.annotations.deployment\.kubernetes\.io/revision}')
    rs=$($k get rs -l app.kubernetes.io/name=grafana -o json |
      jq -r --arg rev "$hash" '.items[] | select(.metadata.annotations["deployment.kubernetes.io/revision"] == $rev) | .metadata.labels["pod-template-hash"]')
-   until [ -z "$($k get pods -l "app.kubernetes.io/name=grafana,pod-template-hash!=$rs" -o name)" ]; do sleep 5; done
+   [ -n "$rs" ] && [ "$(printf '%s\n' "$rs" | wc -l)" -eq 1 ] || echo "STOP: not one current ReplicaSet: $rs"
+   until pods=$($k get pods -l "app.kubernetes.io/name=grafana,pod-template-hash!=$rs" -o name) && [ -z "$pods" ]; do sleep 5; done
    ```
    Then sync `loki` and `tempo` at the same commit and wait and check as in
    step 4: the buckets are `macro-observability-k8s-loki` and
