@@ -1246,6 +1246,52 @@ describe('routine code that needs an update', () => {
     expect(approve.disabled).toBe(false);
   });
 
+  it('reports a failed resume after saving and locks settings during approval', async () => {
+    const saving = Promise.withResolvers<ScheduledAction>();
+    const proposed = code('macro.tasks.add(x)', '0.3.0+new');
+    setSchedules([paused]);
+    mocks.codeUpgrades = () => [upgrade(proposed)];
+    mocks.update.mockReturnValue(saving.promise);
+    mocks.setEnabled.mockRejectedValueOnce(
+      new Error('Installation unavailable')
+    );
+    render(() => <Routine />);
+    fireEvent.click(screen.getByRole('button', { name: 'Approve and resume' }));
+    for (const name of ['Show runs in Home and Agents', 'Act as me']) {
+      expect(
+        screen.getByRole<HTMLButtonElement>('switch', { name }).disabled
+      ).toBe(true);
+    }
+    saving.resolve({ ...paused, task: proposed });
+    await vi.advanceTimersByTimeAsync(0);
+    expect(mocks.update).toHaveBeenCalledOnce();
+    expect(toast.alert).toHaveBeenCalledWith(
+      'Code saved, but the routine could not resume',
+      {
+        subtext: 'Installation unavailable',
+      }
+    );
+  });
+
+  it('reports a failed review refresh after saving separately from a failed save', async () => {
+    const proposed = code('macro.tasks.add(x)', '0.3.0+new');
+    setSchedules([paused]);
+    mocks.codeUpgrades = () => [upgrade(proposed)];
+    mocks.update.mockResolvedValue({ ...paused, task: proposed });
+    mocks.refetchUpgrades.mockRejectedValueOnce(
+      new Error('Status unavailable')
+    );
+    render(() => <Routine />);
+    fireEvent.click(screen.getByRole('button', { name: 'Approve and resume' }));
+    await vi.advanceTimersByTimeAsync(0);
+    expect(toast.alert).toHaveBeenCalledWith(
+      'Code saved, but the review status could not refresh',
+      {
+        subtext: 'Status unavailable',
+      }
+    );
+  });
+
   it('traces save, failed activation and refetch under one approval', async () => {
     setSchedules([paused]);
     const proposal = code('macro.tasks.add(x)', '0.3.0+new');

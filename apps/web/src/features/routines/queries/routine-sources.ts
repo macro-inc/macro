@@ -323,16 +323,25 @@ export function createRoutineDetailSource(
       const approval = Telemetry.span('routine.code_approval', {
         attributes: { 'routine.id': scheduleId },
       });
+      const failed = (title: string, error: unknown) => {
+        approval.error(title);
+        callbacks.onError(title, error);
+      };
       try {
-        await save(
-          {
-            ...withDraftSteps(draft, steps),
-            ...(subRoutines.length ? { subRoutines } : {}),
-          },
-          approval
-        );
         try {
-          if (!current.enabled) {
+          await save(
+            {
+              ...withDraftSteps(draft, steps),
+              ...(subRoutines.length ? { subRoutines } : {}),
+            },
+            approval
+          );
+        } catch (error) {
+          failed('Failed to update the routine’s code', error);
+          return;
+        }
+        if (!current.enabled) {
+          try {
             const phase = approval.span('routine.code_approval.activate');
             await traceRoutineRequest(phase, () =>
               activate.mutateAsync({
@@ -341,18 +350,20 @@ export function createRoutineDetailSource(
                 parentSpan: phase,
               })
             );
+          } catch (error) {
+            failed(t('subRoutines.approvalResumeFailed'), error);
           }
-        } finally {
-          if (id() === scheduleId) {
+        }
+        if (id() === scheduleId) {
+          try {
             await traceRoutineRequest(
               approval.span('routine.code_approval.refetch'),
               () => upgrades.refetch({ throwOnError: true })
             );
+          } catch (error) {
+            failed(t('subRoutines.approvalRefreshFailed'), error);
           }
         }
-      } catch (error) {
-        approval.error('Routine code approval failed');
-        callbacks.onError('Failed to update the routine’s code', error);
       } finally {
         approval.end();
         setApproving(false);

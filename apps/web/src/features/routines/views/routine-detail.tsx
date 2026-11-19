@@ -247,6 +247,7 @@ export function RoutineDetailView(props: {
             decisionsEnabled: props.decisionsEnabled,
             connected: connectedApps,
             taskDisabled: () => !props.source.canEditTask(),
+            settingsDisabled: props.source.codeUpdatePending,
             runsAs: () =>
               routine().ownerId === props.userId()
                 ? 'You'

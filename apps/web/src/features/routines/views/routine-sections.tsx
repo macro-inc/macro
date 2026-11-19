@@ -48,6 +48,7 @@ export function routineSections(props: {
   decisionsEnabled: boolean;
   connected: Accessor<ReadonlySet<string> | undefined>;
   taskDisabled?: Accessor<boolean>;
+  settingsDisabled?: Accessor<boolean>;
   /** Who the routine runs as, and the line under it. */
   runsAs: Accessor<string>;
   runsAsDescription: string;
@@ -232,7 +233,7 @@ export function routineSections(props: {
               (props.draft()?.runVisibility ?? DEFAULT_RUN_VISIBILITY) ===
               'listed'
             }
-            disabled={!props.draft()}
+            disabled={!props.draft() || props.settingsDisabled?.()}
             onChange={(listed) =>
               props.onChange((draft) => ({
                 ...draft,
@@ -261,7 +262,7 @@ export function routineSections(props: {
               label="Act as me"
               labelClass="sr-only"
               checked={props.draft()?.dangerouslyOperateAsUser ?? false}
-              disabled={props.taskDisabled?.()}
+              disabled={props.taskDisabled?.() || props.settingsDisabled?.()}
               onChange={(dangerouslyOperateAsUser) =>
                 props.onChange((draft) => ({
                   ...draft,

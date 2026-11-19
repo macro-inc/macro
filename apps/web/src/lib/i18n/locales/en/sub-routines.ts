@@ -26,6 +26,8 @@ export default {
   stoppedSharing: 'Stopped sharing',
   stopSharingFailed: 'Could not stop sharing',
   discardEdits: 'Discard unsaved edits',
+  approvalResumeFailed: 'Code saved, but the routine could not resume',
+  approvalRefreshFailed: 'Code saved, but the review status could not refresh',
   deleteNote: {
     one: 'The {{count}} routine it created will be deleted too.',
     other: 'The {{count}} routines it created will be deleted too.',
