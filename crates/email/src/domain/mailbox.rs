@@ -1,5 +1,6 @@
 //! Durable mailbox enumeration independent from provider-specific notifications.
 
+use crate::domain::backfill_jobs::worker::is_unstorable_sqlstate;
 use email_api_client::domain::models::{
     EmailApiError, MailFolder, MailboxChangePage, MailboxMessage, ProviderId, StreamPosition,
     StreamToken,
@@ -50,6 +51,10 @@ pub enum MailboxError {
     /// A database call failed; the cause carries no row data.
     #[error("mailbox persistence is unavailable: {0}")]
     Database(DatabaseFailure),
+    /// The database refused a value the work carries with this SQLSTATE
+    /// ([`is_unstorable_sqlstate`]), so it fails the same way every time.
+    #[error("mailbox data cannot be stored: sqlstate {0}")]
+    Unstorable(String),
     /// A projection's downstream effect (event publishing, a queue, another
     /// service) failed or is not ready.
     #[error("a mailbox projection effect is unavailable: {0}")]
@@ -108,6 +113,19 @@ impl std::fmt::Display for EffectFailure {
             Self::AttachmentUploadPending {
                 claim_age_seconds, ..
             } => write!(f, "attachment upload claimed {claim_age_seconds} s ago"),
+        }
+    }
+}
+
+impl MailboxError {
+    /// A failed database call. A value the database will never accept is the
+    /// data's fault, not an outage, so it is `Unstorable` rather than `Database`.
+    pub fn database(failure: DatabaseFailure) -> Self {
+        match failure {
+            DatabaseFailure::Sqlstate(code) if is_unstorable_sqlstate(&code) => {
+                Self::Unstorable(code)
+            }
+            failure => Self::Database(failure),
         }
     }
 }
@@ -715,7 +733,8 @@ const IMPORT_QUEUED_AHEAD: u32 = 200;
 const IMPORT_PACE_SECONDS: u32 = 10;
 
 /// Claims after which a message the provider keeps refusing outright
-/// (malformed, forbidden) is abandoned: 3 tries, 10 minutes apart.
+/// (malformed, forbidden), or whose data the database refuses, is abandoned:
+/// 3 tries, 10 minutes apart.
 const PERMANENT_FAILURE_ATTEMPTS: i32 = 3;
 
 /// Claims after which a message that keeps failing for any other reason of
@@ -736,7 +755,10 @@ const CALENDAR_PARTS_ATTEMPTS: i32 = 3;
 /// A transient provider failure (Graph 5xx or 408, a request Graph never
 /// answered) says nothing about the message either: during an outage every
 /// message gets one. It backs off like any failure but is never abandoned, and
-/// stops counting once the backoff is at its longest.
+/// stops counting once the backoff is at its longest. Data the database
+/// refuses is refused the same way again, so it stops as an outright refusal
+/// does; the few tries let a refusal that briefly hit valid data (a deploy
+/// in progress) clear.
 fn message_retry(error: &MailboxError, attempts: i32) -> MessageRetry {
     match error {
         MailboxError::Provider(
@@ -747,7 +769,8 @@ fn message_retry(error: &MailboxError, attempts: i32) -> MessageRetry {
             seconds: retry_seconds(error),
             counted: false,
         },
-        MailboxError::Provider(EmailApiError::Permanent { .. } | EmailApiError::Forbidden) => {
+        MailboxError::Provider(EmailApiError::Permanent { .. } | EmailApiError::Forbidden)
+        | MailboxError::Unstorable(_) => {
             if attempts >= PERMANENT_FAILURE_ATTEMPTS {
                 MessageRetry::Abandon
             } else {

@@ -5,6 +5,7 @@ use macro_db_migrator::MACRO_DB_MIGRATIONS;
 mod import_pacing;
 mod import_reads;
 mod retries;
+mod unstorable_values;
 
 pub(super) async fn fixture(db: &PgPool) -> (PgMailboxSync, Uuid) {
     let link = macro_uuid::generate_uuid_v7();

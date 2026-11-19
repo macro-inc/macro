@@ -289,8 +289,13 @@ async fn enumeration_reports_the_page_it_committed(db: PgPool) {
 
 #[sqlx::test(migrator = "MACRO_DB_MIGRATIONS")]
 async fn persistence_errors_name_their_sqlstate(db: PgPool) {
-    let failure = sqlx::query_scalar!(r#"SELECT 1 / $1::int AS "quotient""#, 0)
-        .fetch_one(&db)
+    let mut connection = db.acquire().await.unwrap();
+    sqlx::query_scalar!("SELECT set_config('statement_timeout', '1', false)")
+        .fetch_one(&mut *connection)
+        .await
+        .unwrap();
+    let failure = sqlx::query_scalar!(r#"SELECT 1 AS "one!" FROM pg_sleep(1)"#)
+        .fetch_one(&mut *connection)
         .await
         .unwrap_err();
 
@@ -298,11 +303,25 @@ async fn persistence_errors_name_their_sqlstate(db: PgPool) {
 
     assert_eq!(
         error.to_string(),
-        "mailbox persistence is unavailable: sqlstate 22012"
+        "mailbox persistence is unavailable: sqlstate 57014"
     );
     assert_eq!(
         crate::domain::mailbox::telemetry::defer_reason(&error),
         "persistence"
+    );
+    // A value the database refuses is the data's fault, not an outage.
+    let refused = sqlx::query_scalar!(r#"SELECT $1::text AS "text!""#, "a\0b")
+        .fetch_one(&db)
+        .await
+        .unwrap_err();
+    let error = super::super::db_error(refused);
+    assert_eq!(
+        error.to_string(),
+        "mailbox data cannot be stored: sqlstate 22021"
+    );
+    assert_eq!(
+        crate::domain::mailbox::telemetry::defer_reason(&error),
+        "unstorable"
     );
     // Projection effects that fail outside the database are reported apart.
     assert_eq!(
