@@ -91,6 +91,7 @@ export function SubRoutineDefinitions(props: {
               triggers={[]}
               defaultTarget={props.defaultTarget}
               slots={slots()}
+              requiresApps={definition().apps.length > 0}
             />
             <Show when={definition().apps.length}>
               <RoutineSurface>

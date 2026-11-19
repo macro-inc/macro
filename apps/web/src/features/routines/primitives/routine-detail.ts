@@ -46,7 +46,7 @@ export function createRoutineDetail(
     if (!draft) return null;
     return (
       validateRoutineDraft(draft) ??
-      validateRoutineApps(draft.apps, options.connectedApps())
+      validateRoutineApps(draft, options.connectedApps())
     );
   };
 

@@ -40,7 +40,7 @@ export function createRoutineComposer(
   const [submitError, setSubmitError] = createSignal<string>();
   const formError = () =>
     validateRoutineDraft(draft(), true) ??
-    validateRoutineApps(draft().apps, connectedApps());
+    validateRoutineApps(draft(), connectedApps());
   // Logging out clears drafts; this one must not write itself back after.
   let retired = false;
   const persist = (value: ScheduleDraft) => {

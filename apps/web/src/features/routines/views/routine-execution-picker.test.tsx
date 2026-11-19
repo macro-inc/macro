@@ -187,6 +187,14 @@ afterEach(() => {
 });
 
 describe('routine execution picker', () => {
+  it('omits externally served agents when the step needs apps', () => {
+    mount({ kind: 'model', model: 'chat-model' }, { requiresApps: true });
+    openPicker();
+    expect(
+      screen.queryByRole('menuitem', { name: /^Local worker/ })
+    ).toBeNull();
+    expect(screen.getByRole('menuitem', { name: /^Researcher/ })).toBeTruthy();
+  });
   it('selects Macro models with the keyboard and restores trigger focus', async () => {
     const { selection } = mount({
       kind: 'agent',

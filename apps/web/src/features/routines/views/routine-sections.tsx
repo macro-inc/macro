@@ -178,6 +178,7 @@ export function routineSections(props: {
                         : props.slots
                     }
                     subRoutines={draft().subRoutines}
+                    requiresApps={draft().apps.length > 0}
                   />
                 </Show>
               </>

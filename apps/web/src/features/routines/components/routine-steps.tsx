@@ -45,6 +45,7 @@ type StepsContextValue = {
   /** The whole routine. */
   steps: Accessor<StepDraft[]>;
   defaultTarget: Accessor<RoutineTarget>;
+  requiresApps: Accessor<boolean>;
   slots: RoutineStepSlots;
   /** Steps added while editing, which open for their first edit. */
   fresh: Set<string>;
@@ -70,6 +71,7 @@ export type RoutineStepsProps = {
   subRoutines?: SubRoutineDraft[];
   /** Step contents can be inspected, and editing controls are absent. */
   readOnly?: boolean;
+  requiresApps?: boolean;
 };
 
 /** What every step editor reads: slots and the AI that writes steps. */
@@ -88,6 +90,7 @@ export function StepsProvider(
       value={{
         steps: () => props.steps,
         defaultTarget: () => props.defaultTarget,
+        requiresApps: () => Boolean(props.requiresApps),
         slots: props.slots,
         fresh: new Set(),
         author,
@@ -512,6 +515,7 @@ function AgentBody(props: {
           <steps.slots.ExecutionPicker
             target={props.step.target}
             readOnly={props.readOnly}
+            requiresApps={steps.requiresApps()}
             onChange={(target) => props.onChange({ ...props.step, target })}
           />
         </div>

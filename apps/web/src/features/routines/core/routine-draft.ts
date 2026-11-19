@@ -272,10 +272,14 @@ export function validateRoutineDraft(
 
 /** Null until the owner's connections load; the server checks again on save. */
 export function validateRoutineApps(
-  apps: readonly { app_slug: string }[],
+  draft: ScheduleDraft,
   connectedSlugs: ReadonlySet<string> | undefined
 ): string | null {
   if (!connectedSlugs) return null;
+  const apps = [
+    ...draft.apps,
+    ...(draft.subRoutines?.flatMap((definition) => definition.apps) ?? []),
+  ];
   return apps.every((app) => connectedSlugs.has(app.app_slug))
     ? null
     : 'Connect every app this routine requires.';

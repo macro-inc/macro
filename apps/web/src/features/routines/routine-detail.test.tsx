@@ -1567,6 +1567,33 @@ describe('sub-routines defined once', () => {
     });
   });
 
+  it('holds an edit when only a definition needs a disconnected app', async () => {
+    setSchedules([
+      {
+        ...parent,
+        id: 'routine-id',
+        task: {
+          steps: [{ type: 'agent', model: 'model', instructions: 'Plan' }],
+          sub_routines: [
+            {
+              ...remind,
+              mcp_servers: [{ app_slug: 'example', server_name: 'Example' }],
+            },
+          ],
+        },
+      },
+    ]);
+    render(() => <Routine />);
+    fireEvent.click(
+      screen.getByRole('switch', { name: 'Show runs in Home and Agents' })
+    );
+    await vi.advanceTimersByTimeAsync(300);
+    expect(mocks.update).not.toHaveBeenCalled();
+    expect(screen.getByRole('alert').textContent).toContain(
+      'Connect every app'
+    );
+  });
+
   it('shows a copy its parent’s steps and its values, editing only its own settings', async () => {
     // The copy's page reads its parent from the routines list.
     setSchedules([copy, parent]);
