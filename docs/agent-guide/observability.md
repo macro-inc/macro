@@ -559,7 +559,8 @@ Phases you will see:
   Fields: `ui.long_animation_frame_max_ms`, `_max_render_ms` (rendering phase of
   the longest frame) and `_max_style_layout_ms` (its style and layout),
   `_forced_style_layout_ms` (forced layout by scripts, all frames),
-  `_script_count`, and for the up to three longest scripts
+  `_script_count` (scripts reported, at most three), and for the up to three
+  longest scripts
   `ui.long_animation_frame_script_<1..3>.{invoker, invoker_type, source_url,
   source_function, source_char_position, duration_ms, forced_style_layout_ms}`.
   `source_url` is origin and path only; page code (inline handlers, Tauri IPC

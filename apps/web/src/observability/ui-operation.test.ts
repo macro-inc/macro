@@ -14,6 +14,7 @@ const { spans } = vi.hoisted(() => ({
     name: string;
     attrs: Record<string, unknown>;
     ends: number;
+    endTime?: number;
     events: string[];
   }[],
 }));
@@ -34,8 +35,9 @@ vi.mock('@macro-inc/observability', () => ({
         },
         event: (name: string) => record.events.push(name),
         run: <T>(work: () => T) => work(),
-        end: () => {
+        end: (time?: number) => {
           record.ends++;
+          (record as { endTime?: number }).endTime = time;
         },
       };
     },
@@ -225,6 +227,8 @@ describe('UI operation timing', () => {
     expect(spans[0].ends).toBe(0);
     vi.advanceTimersByTime(1);
     expect(spans[0].ends).toBe(1);
+    // The finish time, on the clock OpenTelemetry started the span with.
+    expect(spans[0].endTime).toBe(210);
     expect(spans[0].attrs).toMatchObject({
       'ui.outcome': 'success',
       'ui.elapsed_ms': 110,
@@ -289,6 +293,12 @@ describe('UI operation timing', () => {
     expect(scriptInvoker('https://macro.com/app/assets/init.js?secret=1')).toBe(
       'https://macro.com/app/assets/init.js'
     );
+    expect(scriptInvoker('DIV#row-a.b.c.onclick')).toBe('DIV.onclick');
+    expect(scriptInvoker('IMG[src=https://x/?a[]=tok].onload')).toBe(
+      'IMG.onload'
+    );
+    expect(scriptInvoker('javascript:void(secret)')).toBe('javascript:');
+    expect(scriptInvoker('file:///Users/someone/app.js')).toBe('file:');
     expect(scriptInvoker('TimerHandler:setTimeout')).toBe(
       'TimerHandler:setTimeout'
     );
@@ -343,6 +353,11 @@ describe('UI operation timing', () => {
     ).toBe(true);
     startUiOperation('database.query.refresh').finish();
     expect(spans).toHaveLength(33);
+  });
+
+  it('ends an operation with an explicit start on the same epoch clock', () => {
+    startUiOperation('app.boot', { kind: 'boot', startTime: 5 }).cancel();
+    expect(spans[0].endTime).toBe(performance.timeOrigin + 100);
   });
 
   it('normalizes epoch timestamps and rejects invalid timestamps', () => {

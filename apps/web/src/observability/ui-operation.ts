@@ -76,11 +76,11 @@ type Timing = {
   styleAndLayoutStart?: number;
   /** Long animation frames: forced style and layout across all scripts. */
   forcedStyleAndLayoutMs?: number;
-  /** Long animation frames: the longest scripts, raw until reported. */
+  /** Long animation frames: the longest scripts, sanitized. */
   scripts?: ScriptTiming[];
 };
 
-/** The fields of a `PerformanceScriptTiming` read here; not in the DOM lib. */
+/** The fields of a `PerformanceScriptTiming` kept, already sanitized. */
 type ScriptTiming = {
   start: number;
   duration: number;
@@ -134,25 +134,34 @@ let observers: PerformanceObserver[] = [];
 let supported: string[] = [];
 let disposeObservers: (() => void) | undefined;
 
-/** The longest scripts of a long frame, and its total forced layout. */
+/**
+ * The longest scripts of a long frame, already reduced to what a span may
+ * carry so the buffer holds no query strings, ids or `data:` payloads, and
+ * the frame's total forced layout.
+ */
 function frameScripts(entry: LongAnimationFrameEntry) {
   let forced = 0;
-  const kept: ScriptTiming[] = [];
-  for (const script of entry.scripts ?? []) {
+  for (const script of entry.scripts ?? [])
     forced += script.forcedStyleAndLayoutDuration ?? 0;
-    kept.push({
-      start: script.startTime,
-      duration: script.duration,
-      invoker: script.invoker ?? '',
-      invokerType: script.invokerType ?? '',
-      sourceURL: script.sourceURL ?? '',
-      sourceFunctionName: script.sourceFunctionName ?? '',
-      sourceCharPosition: script.sourceCharPosition ?? -1,
-      forcedStyleAndLayoutDuration: script.forcedStyleAndLayoutDuration ?? 0,
-    });
-  }
-  kept.sort((a, b) => b.duration - a.duration);
-  return { scripts: kept.slice(0, MAX_SCRIPTS), forced };
+  const scripts = [...(entry.scripts ?? [])]
+    .sort((a, b) => b.duration - a.duration)
+    .slice(0, MAX_SCRIPTS)
+    .map(
+      (script): ScriptTiming => ({
+        start: script.startTime,
+        duration: script.duration,
+        invoker: scriptInvoker(script.invoker ?? ''),
+        invokerType: (script.invokerType ?? '').slice(0, 40),
+        sourceURL: scriptSource(script.sourceURL ?? ''),
+        sourceFunctionName: (script.sourceFunctionName ?? '').slice(
+          0,
+          MAX_ATTRIBUTION_LENGTH
+        ),
+        sourceCharPosition: script.sourceCharPosition ?? -1,
+        forcedStyleAndLayoutDuration: script.forcedStyleAndLayoutDuration ?? 0,
+      })
+    );
+  return { scripts, forced };
 }
 
 function collect(entries: PerformanceEntry[]) {
@@ -232,7 +241,9 @@ function measureBlockingWork(
 }
 
 const SCRIPT_PATH = /\.[cm]?[jt]sx?$/;
-const URL_SCHEME = /^[a-z][a-z0-9+.-]*:/i;
+const URL_SCHEME = /^([a-z][a-z0-9+.-]*):/i;
+/** Schemes whose URLs never have `//` but are still not invoker names. */
+const URL_SCHEMES = new Set(['blob', 'data', 'javascript', 'file', 'about']);
 
 /**
  * A script URL without query or fragment. Code that runs from the page
@@ -264,12 +275,17 @@ export function scriptSource(url: string): string {
  * Element ids and `[src=...]` are dropped; a script URL is a source.
  */
 export function scriptInvoker(invoker: string): string {
-  if (URL_SCHEME.test(invoker) && invoker.includes('/'))
+  const scheme = URL_SCHEME.exec(invoker)?.[1]?.toLowerCase();
+  if (scheme && (URL_SCHEMES.has(scheme) || invoker.includes('//')))
     return scriptSource(invoker);
-  return invoker
-    .replace(/\[[^\]]*\]/g, '')
-    .replace(/([A-Za-z0-9-])#[^.]*/g, '$1')
-    .slice(0, MAX_ATTRIBUTION_LENGTH);
+  // `TAG#id.onclick` or `TAG[src=url].onload`: keep the tag and the event,
+  // whatever the id or attribute holds (dots, brackets).
+  if (/[#[]/.test(invoker.slice(1))) {
+    const tag = /^#?[A-Za-z0-9-]*/.exec(invoker)?.[0] ?? '';
+    const event = /\.on[a-z]+$/.exec(invoker)?.[0] ?? '';
+    return `${tag}${event}`;
+  }
+  return invoker.slice(0, MAX_ATTRIBUTION_LENGTH);
 }
 
 /**
@@ -310,13 +326,10 @@ function frameAttribution(
   attributes['ui.long_animation_frame_script_count'] = top.length;
   top.forEach((script, index) => {
     const prefix = `ui.long_animation_frame_script_${index + 1}`;
-    attributes[`${prefix}.invoker`] = scriptInvoker(script.invoker);
-    attributes[`${prefix}.invoker_type`] = script.invokerType.slice(0, 40);
-    attributes[`${prefix}.source_url`] = scriptSource(script.sourceURL);
-    attributes[`${prefix}.source_function`] = script.sourceFunctionName.slice(
-      0,
-      MAX_ATTRIBUTION_LENGTH
-    );
+    attributes[`${prefix}.invoker`] = script.invoker;
+    attributes[`${prefix}.invoker_type`] = script.invokerType;
+    attributes[`${prefix}.source_url`] = script.sourceURL;
+    attributes[`${prefix}.source_function`] = script.sourceFunctionName;
     attributes[`${prefix}.source_char_position`] = script.sourceCharPosition;
     attributes[`${prefix}.duration_ms`] = script.duration;
     attributes[`${prefix}.forced_style_layout_ms`] =
@@ -568,7 +581,12 @@ export function startUiOperation(
       );
       span.setAttr('ui.event_duration_ms', event.duration);
     }
-    span.end(performance.timeOrigin + end);
+    // Same clock as the start: OpenTelemetry offsets a `performance.now()`
+    // end onto the wall-clock start it took itself, while an explicit start
+    // is already epoch time from the time origin.
+    span.end(
+      options.startTime === undefined ? end : performance.timeOrigin + end
+    );
   }
 
   function finish(outcome: Outcome = 'success') {
