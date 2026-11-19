@@ -1,0 +1,23 @@
+packages/sdk-ocaml/analyzer/lib/analyze.ml
+  s_8bb9c07d43f304::t_2a4489ed0fbeb6 47-73,768-777
+packages/sdk-ocaml/analyzer/lib/analyze.mli
+  s_8bb9c07d43f304::t_e5998f8c42b5cb 23-28
+packages/sdk-ocaml/analyzer/test/test_coverage.ml
+  s_8bb9c07d43f304::t_d979699b4017c3 162-186,189
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.7.7",
+  "base_commit_sha": "6f24be84fe29a8821aecfedb4559c06b37daec92",
+  "prompts": {},
+  "sessions": {
+    "s_8bb9c07d43f304": {
+      "agent_id": {
+        "tool": "claude",
+        "id": "3f1f672b-f015-4aa2-889f-624245ca574b",
+        "model": "claude-opus-5-5"
+      },
+      "human_author": "Eric Hayes <56524199+ehayes2000@users.noreply.github.com>"
+    }
+  }
+}
