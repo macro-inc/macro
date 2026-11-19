@@ -41,7 +41,7 @@ import {
 import { describeTrigger } from '../core/routine-triggers';
 import { type RunItem, runStartLine } from '../core/run-start';
 import { describeHistoryStep, stepsForRun } from '../core/step-history';
-import { copyDefinition, labelledInputs } from '../core/sub-routines';
+import { labelledInputs } from '../core/sub-routines';
 import {
   createRoutineDetail,
   RoutineConflictError,
@@ -203,7 +203,11 @@ export function RoutineDetailView(props: {
     return {
       parentName: parent?.name,
       parentLoading: props.source.parentLoading(),
-      ...copyDefinition(copy, parent?.subRoutines, Boolean(parent)),
+      parentError: props.source.parentError(),
+      definition: parent?.definition,
+      missing: parent?.missing,
+      onRetryParent: () =>
+        fireAndForget(props.source.refreshParent(), 'routines'),
       onOpenParent: () => props.onOpenRoutine(link.id),
     };
   };

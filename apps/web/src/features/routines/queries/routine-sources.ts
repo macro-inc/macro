@@ -12,6 +12,7 @@ import type {
   RoutineCreatorSource,
   RoutineDetailSource,
   RoutineListSource,
+  RoutineParentSummary,
   RoutineRowOperations,
 } from '../context/routine-sources';
 import { pendingCodeReview } from '../core/code-review';
@@ -24,6 +25,7 @@ import {
   copyOf,
   draftHasDefinitionsOrInputs,
   hasProgramDefinitionsOrInputs,
+  subRoutineFromWire,
   subRoutinesFromWire,
   wireDefinition,
 } from '../core/sub-routines';
@@ -206,15 +208,19 @@ export function createRoutineDetailSource(
       ? list.data?.find((item) => item.id === parentId())
       : undefined
   );
-  const parent = createMemo(() => {
+  const parent = createMemo<RoutineParentSummary | undefined>(() => {
     const found = rawParent();
     if (!found?.id) return undefined;
-    const draft = draftFromSchedule(found);
-    return {
-      id: found.id,
-      name: found.name,
-      subRoutines: draft && (draft.subRoutines ?? []),
-    };
+    const summary = { id: found.id, name: found.name };
+    const current = raw();
+    const copy = current && copyOf(current.task);
+    if (!copy) return summary;
+    const wire = wireDefinition(found.task, copy.subRoutine);
+    if (!wire) return { ...summary, missing: 'gone' };
+    const definition = subRoutineFromWire(wire);
+    return definition
+      ? { ...summary, definition }
+      : { ...summary, missing: 'hidden' };
   });
   const keep = useDetachScheduleMutation({
     onSuccess: () => callbacks.onKept(),
@@ -287,6 +293,8 @@ export function createRoutineDetailSource(
     subRoutines: children,
     parent,
     parentLoading,
+    parentError: () => Boolean(parentId() && list.isError && !rawParent()),
+    refreshParent: () => list.refetch(),
     canKeepAsOwn,
     keepAsOwn: () => {
       if (canKeepAsOwn() && !keep.isPending) keep.mutate({ scheduleId: id() });

@@ -48,6 +48,7 @@ const mocks = vi.hoisted(() => ({
   openChat: vi.fn(async (_input: string) => {}),
   status: (): string => 'success',
   listStatus: (): string => 'success',
+  refetchList: vi.fn(async () => {}),
   history: (): HistoryRecord[] => [],
   codeUpgrades: (): CodeUpgrade[] => [],
   refetchUpgrades: vi.fn(async () => {}),
@@ -315,6 +316,7 @@ vi.mock('@queries/agent-session/session', () => ({
 }));
 vi.mock('./queries/schedules', () => ({
   useSchedulesQuery: () => ({
+    refetch: mocks.refetchList,
     get data() {
       return mocks.readSchedules();
     },
@@ -1470,6 +1472,34 @@ describe('sub-routines defined once', () => {
     setSchedules([copy, parent]);
     setListStatus('success');
     expect(phase?.[1]()).toBe(false);
+  });
+
+  it('shows the named definition when an unrelated definition is unsupported', () => {
+    const task: RoutineTask = JSON.parse(
+      JSON.stringify({
+        ...parent.task,
+        sub_routines: [
+          remind,
+          { name: 'later', title: 'Later', steps: [{ type: 'future' }] },
+        ],
+      })
+    );
+    setSchedules([copy, { ...parent, task }]);
+    render(() => <Routine />);
+    expect(screen.getByRole('group', { name: 'Remind me' })).toBeTruthy();
+  });
+
+  it('lets a copy retry a cold parent list failure', () => {
+    setSchedules([copy]);
+    setListStatus('error');
+    mocks.refetchList.mockImplementationOnce(async () => {
+      setSchedules([copy, parent]);
+      setListStatus('success');
+    });
+    render(() => <Routine />);
+    fireEvent.click(screen.getByRole('button', { name: 'Retry definition' }));
+    expect(mocks.refetchList).toHaveBeenCalledOnce();
+    expect(screen.getByRole('group', { name: 'Remind me' })).toBeTruthy();
   });
 
   it('shows each sub-routine with what it is given, and saves an edit to it with the routine', async () => {

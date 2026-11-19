@@ -127,6 +127,8 @@ export function SubRoutineCopySteps(props: {
   /** Its parent's name, while the parent is there to open. */
   parentName?: string;
   parentLoading?: boolean;
+  parentError?: boolean;
+  onRetryParent?(): void;
   /** Undefined while the parent loads, or when `missing` says why. */
   definition?: SubRoutineDraft;
   /**
@@ -212,6 +214,20 @@ export function SubRoutineCopySteps(props: {
               />
             </div>
           )}
+        </Match>
+        <Match when={props.parentError}>
+          <RoutineSurface class="flex flex-wrap items-center justify-between gap-2 px-4 py-3 text-sm">
+            <p role="status" class="text-ink-muted">
+              {t('subRoutines.definitionLoadFailed')}
+            </p>
+            <Button
+              variant="secondary"
+              size="sm"
+              onClick={() => props.onRetryParent?.()}
+            >
+              {t('subRoutines.retryDefinition')}
+            </Button>
+          </RoutineSurface>
         </Match>
         <Match when={props.missing}>
           {(missing) => (

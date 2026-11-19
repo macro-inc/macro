@@ -9,11 +9,8 @@ import type { RoutineSnapshot } from '../core/routine';
 export type RoutineParentSummary = {
   id: string;
   name: string;
-  /**
-   * Its sub-routines, which a copy runs by name; undefined when it holds
-   * steps the editor can't show.
-   */
-  subRoutines?: readonly SubRoutineDraft[];
+  definition?: SubRoutineDraft;
+  missing?: 'gone' | 'hidden';
 };
 
 export type RoutineDetailSource = {
@@ -44,6 +41,8 @@ export type RoutineDetailSource = {
   /** The routine whose run created this one, when it is still there. */
   parent: Accessor<RoutineParentSummary | undefined>;
   parentLoading: Accessor<boolean>;
+  parentError: Accessor<boolean>;
+  refreshParent(): Promise<unknown>;
   /** Make this sub-routine the owner's own: it stops following its parent. */
   canKeepAsOwn: Accessor<boolean>;
   keepAsOwn(): void;

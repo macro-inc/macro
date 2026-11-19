@@ -126,22 +126,6 @@ export function withSubRoutineSteps(
   );
 }
 
-/**
- * The definition a copy runs, from its parent's sub-routines once the
- * parent is loaded; otherwise why there is none: the parent defines none by
- * that name any more, or holds steps the editor can't show.
- */
-export function copyDefinition(
-  copy: SubRoutineCopyDraft,
-  definitions: readonly SubRoutineDraft[] | undefined,
-  parentLoaded: boolean
-): { definition?: SubRoutineDraft; missing?: 'gone' | 'hidden' } {
-  if (!parentLoaded) return {};
-  if (!definitions) return { missing: 'hidden' };
-  const definition = definitions.find((item) => item.name === copy.subRoutine);
-  return definition ? { definition } : { missing: 'gone' };
-}
-
 /** How a value a copy was given reads on its page and its parent's. */
 export function describeInputValue(value: unknown): string {
   if (typeof value === 'string') return value;

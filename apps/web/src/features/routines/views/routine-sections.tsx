@@ -22,6 +22,8 @@ import { labelledInputs } from '../core/sub-routines';
 export type CopySource = {
   parentName?: string;
   parentLoading: boolean;
+  parentError: boolean;
+  onRetryParent(): void;
   /** Undefined while the parent loads, or when `missing` says why. */
   definition?: SubRoutineDraft;
   missing?: 'gone' | 'hidden';
@@ -188,6 +190,8 @@ export function routineSections(props: {
                 }
                 parentName={props.copySource?.()?.parentName}
                 parentLoading={props.copySource?.()?.parentLoading}
+                parentError={props.copySource?.()?.parentError}
+                onRetryParent={() => props.copySource?.()?.onRetryParent()}
                 definition={props.copySource?.()?.definition}
                 missing={props.copySource?.()?.missing}
                 values={labelledInputs(
