@@ -813,12 +813,17 @@ async fn run_server() -> anyhow::Result<()> {
         computer_billing_stop.clone(),
     ));
     // Takes back the agent teammate of a computer released after failing its
-    // first start.
-    computer_billing.spawn(run_computer_agent_effects(
-        computer_service.clone(),
-        team_agents_service.clone(),
-        computer_billing_stop.clone(),
-    ));
+    // first start; only where a Firecracker fleet runs.
+    if config.computer_agent_effects()? {
+        tracing::info!("computers agents worker on");
+        computer_billing.spawn(run_computer_agent_effects(
+            computer_service.clone(),
+            team_agents_service.clone(),
+            computer_billing_stop.clone(),
+        ));
+    } else {
+        tracing::info!("computers agents worker off (COMPUTERS_AGENT_EFFECTS unset)");
+    }
     computer_billing.close();
     // The Stripe event inbox: the webhook stores events; every replica's
     // worker applies due cursors (leased, so replicas never collide), and

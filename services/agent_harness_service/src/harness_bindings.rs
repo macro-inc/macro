@@ -15,7 +15,7 @@ use std::time::Duration;
 use agent_client_protocol::schema::v1::SessionId;
 use agent_harness::domain::model::{DORMANT_AFTER, ListedSessions, RuntimeAccessFacts};
 use agent_harness::domain::ports::{
-    ConnectionRecorded, HarnessBindings, HarnessPresence, RuntimeConnectionId,
+    ConnectionRecorded, HarnessBindings, HarnessPresence, RuntimeAccepts, RuntimeConnectionId,
 };
 use agent_session::domain::model::ReplicaId;
 use bot_id::BotId;
@@ -162,6 +162,7 @@ impl HarnessPresence for PgHarnessPresence {
         self: Arc<Self>,
         harness: HarnessId,
         connection: RuntimeConnectionId,
+        _accepts: RuntimeAccepts,
     ) -> Pin<Box<dyn Future<Output = ConnectionRecorded> + Send>> {
         let span = tracing::info_span!(
             "harness.presence.connected",

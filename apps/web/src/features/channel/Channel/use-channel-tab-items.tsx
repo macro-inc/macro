@@ -32,16 +32,6 @@ function LiveCallDot(props: { class?: string; channelId?: string }) {
   );
 }
 
-/** The live Call tab's label in menus that draw their own icon. */
-export function CallTabLabel(props: { channelId: string }) {
-  return (
-    <span class="flex items-center gap-1.5">
-      <LiveCallDot channelId={props.channelId} />
-      Call
-    </span>
-  );
-}
-
 /**
  * The tabs a channel host should offer right now: DMs hide participants,
  * calls-disabled builds hide call history, and the live Call tab appears only

@@ -393,7 +393,7 @@ Attributes every perf trace carries, set by the owners (`ui-operation.ts`,
 | Flow roots | `flow.phase_count` (child spans opened), `flow.ready_phase_count` (`usePending` phases already loaded when reached) |
 | Phases | `flow.root` (the root's name), `route.id` (the nearest view's), `flow.outcome` (`success` or `cancelled`) |
 | A phase's parent | `<phase>.waited`: `false` when it was already loaded (cache or an earlier load), `true` when the flow waited for it |
-| Resource (Datadog tags and facets) | `service.name=web-app`, `service.version` (Datadog `version`), `deployment.environment` (Datadog `env`), `app.runtime` (`browser`, `tauri`), `app.platform` (`web`, `desktop`, `ios`, `android`), `os.type` (`darwin`, `windows`, `linux`, `ios`, `android`, `chromeos`, `unknown`), `frontend_instance_id` |
+| Resource (Datadog tags and facets) | `service.name=web-app`, `service.version` (Datadog `version`), `deployment.environment` (Datadog `env`), `app.runtime` (`browser`, `tauri`), `app.platform` (`web`, `desktop`, `ios`, `android`), `os.type` (`darwin`, `windows`, `linux`, `ios`, `android`, `chromeos`, `unknown`), `frontend_instance_id`; native apps add `macro.native.version` (the marketing version, `2.5.0` on every Android build) and `macro.native.build`, the installed binary's build number (Android versionCode, iOS CFBundleVersion, desktop release build), absent when the binary can't report it. `service.version` names the web bundle, which reaches old binaries over the air: split native builds by `macro.native.build` |
 
 Entity context is opaque ids and categories only, on the phase that loads the
 entity (`block.type` and `document.id` on `block.data`, `channel.id`,

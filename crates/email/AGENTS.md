@@ -314,7 +314,7 @@ tools — hexagonal, heavily feature-gated.
   once per page, retaining bounded IDs for per-thread indexed probes. Its
   positive-target probe runs before the record probe and
   resolves live company domains once against each selected mailbox's
-  contacts. All-mail-only reads retain their existing candidate path.
+  contacts. All-mail-only reads skip selected-rule discovery.
   Keep selected-policy contact resolution within the requested mailboxes;
   record probes and sparse pages reuse the shared indexed sender/recipient
   branches. Positive-target discovery probes participants by their IDs. Do not
@@ -331,6 +331,18 @@ tools — hexagonal, heavily feature-gated.
   own inbox's contacts (`parse_and_upsert_message_contacts`); a writer that
   broke that would drop threads from the Team view, and their conversations'
   other copies with them (`docs/CRM_EMAIL_PRIVACY.md`).
+- `TeamRead` also covers `ViewedUpdated` when the filter itself does not use
+  view history. A saved view overrides message recency, even if the view is
+  older; keep `COALESCE`, not `GREATEST`. Sparse matches use the history primary
+  key. Dense pages merge viewed and never-viewed sources, complete timestamp
+  ties before the ID tiebreaker, and refill below the last raw window in the
+  same snapshot. Apply source filters before each cap so a short source proves
+  exhaustion. Competing copies use their own view time and never the page or
+  refill cursor. Discard accumulated rows on any later error. Emitted windows
+  do not bound rejected rows or history ties; retain the request deadline.
+  `crm.team_email_read` records the sort and `general`/`optimized` path across
+  both branches, including errors; its optimized child records refill rounds.
+  ViewedAt filters and sorts still use General.
 - The unfiltered inbox's viewed sorts (`preview_views/new_inbox.sql`) never sort
   the inbox: each inbox takes a page of opened threads and a page of
   never-opened threads (`idx_email_threads_inbox_reminder_sort` for
@@ -354,6 +366,9 @@ tools — hexagonal, heavily feature-gated.
   inbox's whole folder.
 - Restore Outlook junk drafts to Drafts without Inbox membership; continue rejecting
   attempts to mark clean drafts as junk.
+- Include a reader’s cross-inbox reply draft on a shared thread at Edit only
+  when it belongs to an inbox in the reader’s Drafts scope. Apply the same
+  rule to full and parsed thread reads.
 
 - Reconcile deferred message deletion before claiming scheduled work; unresolved sends retain their message, attachments, and delivery job.
 - `domain/scheduled_delivery/{state,identity,deletion}.rs` owns claim

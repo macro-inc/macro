@@ -49,8 +49,9 @@ topic from its start, such as a new `Earliest` group, can have far less.
   `GROUP_NAME` of its consumer (`rg 'GROUP_NAME: &.*= "<group>"'`); one group
   can run in more than one service.
 - Check its running task count (`aws.ecs.service.running`) against its
-  autoscaling floor and ceiling in its stack. Autoscaling follows CPU, not lag,
-  and a deploy can reset the desired count to the floor. A group spreads a topic
+  autoscaling floor and ceiling in its stack. Most consumers' autoscaling follows
+  CPU, not lag (the search indexer's also follows its backlog age), and a deploy can
+  reset the desired count to the floor. A group spreads a topic
   over at most six tasks, one per partition; more do no extra work.
 - Check for a hot key: the dashboard's most-behind-partition graph
   (`aws.kafka.max_offset_lag`) close to the topic's whole lag means one

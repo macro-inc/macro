@@ -94,8 +94,11 @@ belong to `features/external-view`. Architecture:
   "Attachment unavailable" instead of loading forever (Chat's media tiles
   report it through `MediaPreview`'s `onError`).
 - The timeline and composer use Chat's layout (`macro-message-width` column,
-  `CustomScrollbar`, `ChannelInputContainer` → centered column). The view
-  follows the bottom (a `ResizeObserver` on the content) until the reader
+  `CustomScrollbar`, `ChannelInputContainer` → centered column). On touch
+  the composer floats in the `accessory` region, so the scroller pads
+  `--mobile-content-inset-bottom` (`touch:`, not `mobile:`: tablets float
+  it too). The view follows the bottom (a `ResizeObserver` on the content
+  and the scroller, whose padding grows with the draft) until the reader
   scrolls by intent (wheel, touch, keys, scrollbar); layout-driven scroll
   events never change that. Media keep their memoized items so refetches
   don't remount or reload them.
