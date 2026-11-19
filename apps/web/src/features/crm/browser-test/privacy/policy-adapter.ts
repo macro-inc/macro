@@ -1,3 +1,4 @@
+import { deepEqual } from '@core/util/compareUtils';
 import type { crmEmailPolicyClient } from '@service-storage/crm-email-policy';
 import { err, ok } from 'neverthrow';
 import { createSignal } from 'solid-js';
@@ -100,6 +101,8 @@ export const policyClient = {
     if (params.has('conflict') && !conflicted) {
       conflicted = true;
       view = { ...view, token: { kind: 'legacy', fingerprint: 'changed' } };
+    }
+    if (!deepEqual(command.if_policy, view.token)) {
       return err([
         {
           code: 'CONFLICT' as const,

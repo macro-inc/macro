@@ -199,6 +199,10 @@ test('a conflict retains the draft until the member inspects and accepts current
   await expect(page.getByRole('alert')).toHaveCount(0);
   await expect(draft).toHaveValue(json);
   await expect(save).toBeDisabled();
+  const sequence: string[] = JSON.parse(
+    (await page.getByTestId('policy-calls').textContent()) ?? '[]'
+  );
+  expect(sequence.filter((call) => call === 'replace')).toHaveLength(1);
   await page
     .getByRole('button', { name: 'View current rules', exact: true })
     .click();
@@ -208,6 +212,11 @@ test('a conflict retains the draft until the member inspects and accepts current
   await page.getByRole('button', { name: /I reviewed these rules/ }).click();
   await expect(draft).toHaveValue(json);
   await expect(save).toBeEnabled();
+  await save.click();
+  await expect(
+    page.getByRole('status').filter({ hasText: /saved/ })
+  ).toBeVisible();
+  await expect(draft).toHaveValue(JSON.stringify(JSON.parse(json), null, 2));
 });
 
 test('limit refusals stay inline and do not save', async ({ page }) => {
