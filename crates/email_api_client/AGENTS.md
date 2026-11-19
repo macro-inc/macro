@@ -169,6 +169,11 @@ Outlook (Microsoft Graph) outbound adapters.
   `OutlookApiClientRepository::for_graph_url`. Continuation links and upload
   URLs are only followed on the root's origin (or Microsoft's upload hosts),
   so an emulator must serve them itself.
+- The Outlook `folders` read asks for the well-known Inbox first. Graph
+  answers 404 there only for an account it serves no mailbox for, and then
+  to every mailbox call, so that 404 is `MailFolderCatalog::NoMailbox` with
+  Graph's error code, not an error; every other failure stays an
+  `EmailApiError`.
 - Decode Graph JSON bodies with `transport::read_json`. `invalid_response`
   takes the field or shape that failed (`read_json` gives the JSON path and a
   missing field's name) and must never quote the response, which can carry
