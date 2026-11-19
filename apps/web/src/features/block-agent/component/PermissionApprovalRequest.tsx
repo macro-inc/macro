@@ -1,6 +1,7 @@
 import {
   GatedOperationList,
   gatedFocus,
+  useAgentPermissionsFlag,
   useOpenAgentPermissions,
   useSessionToolPermissionsQuery,
 } from '@app/features/agent-permissions';
@@ -24,9 +25,12 @@ export function PermissionApprovalRequest(props: {
 }) {
   const session = useOptionalAgentSession();
   const approvals = () => session?.toolApprovals;
+  // The hold stays answerable whatever the flag says (a run waits on it), but
+  // the link to the agent's permissions reads them only with the flag on.
+  const permissionsFlag = useAgentPermissionsFlag();
   const permissionsQuery = useSessionToolPermissionsQuery(
     () => session?.sessionId() ?? '',
-    () => Boolean(session?.sessionId())
+    () => permissionsFlag() && Boolean(session?.sessionId())
   );
   const openPermissions = useOpenAgentPermissions();
   const [showProgram, setShowProgram] = createSignal(false);
