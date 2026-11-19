@@ -14,7 +14,7 @@ export function CodeReviewNotice(props: {
   review: CodeReview;
   paused: boolean;
   disabled: boolean;
-  onApprove(): void;
+  onApprove?(): void;
   onDiscardEdits?(): void;
 }) {
   const [open, setOpen] = createSignal(false);
@@ -64,13 +64,15 @@ export function CodeReviewNotice(props: {
               </For>
             </Show>
             <div class="flex flex-wrap gap-2">
-              <Button
-                size="sm"
-                disabled={props.disabled}
-                onClick={() => props.onApprove()}
-              >
-                {props.paused ? 'Approve and resume' : 'Approve'}
-              </Button>
+              <Show when={props.onApprove}>
+                <Button
+                  size="sm"
+                  disabled={props.disabled}
+                  onClick={props.onApprove}
+                >
+                  {props.paused ? 'Approve and resume' : 'Approve'}
+                </Button>
+              </Show>
               <Show when={props.onDiscardEdits}>
                 <Button
                   variant="secondary"

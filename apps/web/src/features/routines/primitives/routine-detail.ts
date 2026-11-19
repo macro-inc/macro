@@ -194,6 +194,7 @@ export function createRoutineDetail(
   const approvalDisabled = () =>
     !isOwned() ||
     !source.canEditTask() ||
+    !source.canApproveTrigger() ||
     !state() ||
     Boolean(formError()) ||
     isRunning() ||

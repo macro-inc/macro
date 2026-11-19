@@ -13,6 +13,7 @@ import { chatAttachmentMentionToMarkdown } from '@core/component/AI/util/chatAtt
 import { toast } from '@core/component/Toast/Toast';
 import {
   enableEntityAppearance,
+  enableEventRoutines,
   enableRoutineSharing,
 } from '@core/constant/featureFlags';
 import { useUserId } from '@core/context/user';
@@ -86,6 +87,7 @@ export function RoutineDetail(props: {
   const userId = useUserId();
   const hasPaidAccess = useHasPaidAccess();
   const sharing = useFeatureFlag(enableRoutineSharing);
+  const eventRoutines = useFeatureFlag(enableEventRoutines);
   const appearanceFlag = useFeatureFlag(enableEntityAppearance);
   const back = () =>
     props.onBack ? props.onBack() : openAgentsPage(layout, 'routines');
@@ -108,7 +110,8 @@ export function RoutineDetail(props: {
       },
       onKept: () => toast.success(t('subRoutines.kept')),
     },
-    subRoutineWrites
+    subRoutineWrites,
+    () => eventRoutines().enabled
   );
   const remove = () => {
     const entity = source.entity();

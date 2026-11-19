@@ -132,6 +132,19 @@ function copyMatchesDefinition(copy: SubRoutineCopyDraft, task: RoutineTask) {
   return !!definition && copyInputsFit(copy, definition);
 }
 
+function canManageTrigger(
+  schedule: ScheduledActionResponse,
+  eventWrites: boolean
+) {
+  const trigger = schedule.trigger;
+  return (
+    eventWrites ||
+    (trigger?.type !== 'events' &&
+      (trigger?.type !== 'multiple' ||
+        !trigger.triggers.some((entry) => entry.type === 'events')))
+  );
+}
+
 function canKeepSchedule(
   schedule: ScheduledActionResponse,
   parent: ScheduledActionResponse | undefined,
@@ -163,7 +176,8 @@ export function createRoutineDetailSource(
   id: Accessor<string>,
   userId: Accessor<string | undefined>,
   callbacks: DetailCallbacks,
-  subRoutineWrites: Accessor<boolean | undefined>
+  subRoutineWrites: Accessor<boolean | undefined>,
+  eventWrites: Accessor<boolean>
 ): RoutineDetailSource {
   const list = useSchedulesQuery(() => true);
   const detail = useRoutineQuery(id);
@@ -186,11 +200,15 @@ export function createRoutineDetailSource(
       !hasProgramDefinitionsOrInputs(current.task)
     );
   };
+  const canApproveTrigger = () => {
+    const current = raw();
+    return !!current && canManageTrigger(current, eventWrites());
+  };
   const duplicateCandidate = () => {
     const current = raw();
-    return (
-      current && scheduleToDuplicateBody(current, subRoutineWrites() === true)
-    );
+    return current && canManageTrigger(current, eventWrites())
+      ? scheduleToDuplicateBody(current, subRoutineWrites() === true)
+      : undefined;
   };
   const duplicateBody = () =>
     duplicateWithConnections(duplicateCandidate(), connectedApps());
@@ -261,6 +279,7 @@ export function createRoutineDetailSource(
     return Boolean(
       current &&
         current.owner === userId() &&
+        canManageTrigger(current, eventWrites()) &&
         (retainedDefinitionApps(compatibleCopyParentTask(current, rawParent()))
           .length ||
           retainedDefinitionApps(duplicateCandidate()?.task).length)
@@ -289,6 +308,7 @@ export function createRoutineDetailSource(
     return Boolean(
       current &&
         current.owner === userId() &&
+        canManageTrigger(current, eventWrites()) &&
         canKeepSchedule(current, rawParent(), connectedApps())
     );
   };
@@ -351,6 +371,7 @@ export function createRoutineDetailSource(
     },
     activationPending: () => activate.isPending,
     canEditTask,
+    canApproveTrigger,
     canDuplicate: () => Boolean(duplicateBody()),
     duplicate() {
       const body = duplicateBody();
@@ -410,6 +431,7 @@ export function createRoutineDetailSource(
         !cached ||
         cached.owner !== userId() ||
         !canEditTask() ||
+        !canApproveTrigger() ||
         approving() ||
         activate.isPending
       )
@@ -437,7 +459,12 @@ export function createRoutineDetailSource(
               failed(t('subRoutines.approvalCheckFailed'), error);
               return;
             }
-            if (id() !== scheduleId || current.owner !== userId()) return;
+            if (
+              id() !== scheduleId ||
+              current.owner !== userId() ||
+              !canManageTrigger(current, eventWrites())
+            )
+              return;
             if (!deepEqual(proposal.previousTask, current.task)) {
               failed(t('subRoutines.approvalTaskChanged'));
               return;
@@ -575,7 +602,8 @@ function createPerRoutineMutation(mutate: (id: string) => Promise<unknown>) {
  */
 export function createRoutineRowOperations(
   callbacks: RowOperationCallbacks,
-  subRoutineWrites: Accessor<boolean | undefined> = () => true
+  subRoutineWrites: Accessor<boolean | undefined> = () => true,
+  eventWrites: Accessor<boolean> = () => true
 ): RoutineRowOperations {
   const list = useSchedulesQuery(() => true);
   const children = useSubRoutinesQuery(() => true);
@@ -588,12 +616,14 @@ export function createRoutineRowOperations(
   const parentFor = (schedule: ScheduledActionResponse) =>
     schedule.sub_routine ? find(schedule.sub_routine.parent_id) : undefined;
   const duplicateCandidate = (schedule: ScheduledActionResponse) =>
-    scheduleToDuplicateBody(schedule, subRoutineWrites() === true);
+    canManageTrigger(schedule, eventWrites())
+      ? scheduleToDuplicateBody(schedule, subRoutineWrites() === true)
+      : undefined;
   const [openMenus, setOpenMenus] = createSignal<readonly string[]>([]);
   const connectedApps = createRoutineConnectedApps(() =>
     openMenus().some((id) => {
       const schedule = find(id);
-      if (!schedule) return false;
+      if (!schedule || !canManageTrigger(schedule, eventWrites())) return false;
       const task = isSubRoutineCopy(schedule.task)
         ? compatibleCopyParentTask(schedule, parentFor(schedule))
         : duplicateCandidate(schedule)?.task;
@@ -604,6 +634,7 @@ export function createRoutineRowOperations(
     const schedule = find(id);
     return (
       !!schedule &&
+      canManageTrigger(schedule, eventWrites()) &&
       canKeepSchedule(schedule, parentFor(schedule), connectedApps())
     );
   };

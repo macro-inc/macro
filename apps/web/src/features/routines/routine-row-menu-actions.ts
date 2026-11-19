@@ -7,7 +7,10 @@ import { useFeatureFlag } from '@app/lib/analytics/posthog';
 import { t } from '@app/lib/i18n';
 import { globalSplitManager } from '@app/signal/splitLayout';
 import { toast } from '@core/component/Toast/Toast';
-import { enableRoutineSharing } from '@core/constant/featureFlags';
+import {
+  enableEventRoutines,
+  enableRoutineSharing,
+} from '@core/constant/featureFlags';
 import { fireAndForget } from '@core/util/fireAndForget';
 import ArrowSquareOutIcon from '@icon/system/regular/arrow-square-out.svg';
 import { createSignal, getOwner } from 'solid-js';
@@ -40,6 +43,7 @@ export function useRoutineRowMenuActions(
 ): RoutineRowMenuActions {
   const owner = getOwner();
   const sharing = useFeatureFlag(enableRoutineSharing);
+  const eventRoutines = useFeatureFlag(enableEventRoutines);
   const subRoutineWrites = useSubRoutineWrites();
   const copyLink = makeCopyLinkAction();
   const copyId = makeCopyEntityIdAction();
@@ -70,7 +74,8 @@ export function useRoutineRowMenuActions(
         }),
       onKept: () => toast.success(t('subRoutines.kept')),
     },
-    subRoutineWrites
+    subRoutineWrites,
+    () => eventRoutines().enabled
   );
   const share = (row: RoutineRow) =>
     openShareRoutineDialog({ routineId: row.id, name: row.name }, owner);

@@ -529,8 +529,10 @@ export function RoutineDetailView(props: {
                         }
                       : undefined
                   }
-                  onApprove={() =>
-                    fireAndForget(approveCodeUpdate(), 'routines')
+                  onApprove={
+                    props.source.canApproveTrigger()
+                      ? () => fireAndForget(approveCodeUpdate(), 'routines')
+                      : undefined
                   }
                 />
               )}

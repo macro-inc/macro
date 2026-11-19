@@ -25,6 +25,7 @@ export type RoutineDetailSource = {
   setEnabled(enabled: boolean): void;
   activationPending: Accessor<boolean>;
   canEditTask: Accessor<boolean>;
+  canApproveTrigger: Accessor<boolean>;
   canDuplicate: Accessor<boolean>;
   duplicate(): void;
   duplicationPending: Accessor<boolean>;

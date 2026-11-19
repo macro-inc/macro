@@ -87,6 +87,7 @@ const mocks = vi.hoisted(() => ({
   duplicate: (): void => {},
   sharing: (): boolean => false,
   subRoutineWrites: (): boolean => true,
+  eventWrites: (): boolean => true,
   shared: (): boolean => false,
   templateError: (): boolean => false,
   readSharingStatus: vi.fn(),
@@ -264,7 +265,9 @@ vi.mock('@app/lib/analytics/posthog', () => ({
     enabled:
       flag.key === 'enable-sub-routines'
         ? mocks.subRoutineWrites()
-        : mocks.sharing(),
+        : flag.key === 'enable-event-routines'
+          ? mocks.eventWrites()
+          : mocks.sharing(),
   }),
 }));
 vi.mock('./routine-ai-composer', () => ({
@@ -533,6 +536,7 @@ beforeEach(() => {
   mocks.codeUpgrades = () => [];
   mocks.sharing = () => false;
   mocks.subRoutineWrites = () => true;
+  mocks.eventWrites = () => true;
   mocks.shared = () => false;
   mocks.templateError = () => false;
   mocks.connectedApps = () => new Set();
@@ -2174,6 +2178,21 @@ describe('sub-routines defined once', () => {
       screen.queryByRole('menuitem', { name: 'Keep as my routine' })
     ).toBeNull();
     setSchedules([copy, parent]);
+    expect(
+      screen.getByRole('menuitem', { name: 'Keep as my routine' })
+    ).toBeTruthy();
+  });
+
+  it('withholds Keep for an event-triggered copy until event management is enabled', () => {
+    const [eventWrites, setEventWrites] = createSignal(false);
+    mocks.eventWrites = eventWrites;
+    setSchedules([{ ...copy, trigger: events.trigger }, parent]);
+    render(() => <Routine />);
+    openActions();
+    expect(
+      screen.queryByRole('menuitem', { name: 'Keep as my routine' })
+    ).toBeNull();
+    setEventWrites(true);
     expect(
       screen.getByRole('menuitem', { name: 'Keep as my routine' })
     ).toBeTruthy();
