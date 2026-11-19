@@ -1,0 +1,10 @@
+--- a/apps/web/src/lib/core/component/RecipientSelector.tsx
++++ b/apps/web/src/lib/core/component/RecipientSelector.tsx
+@@ -599,6 +599,7 @@
+       currentUserInput && emails.has(currentUserInput.toLowerCase());
+ 
+     const searchTerm = currentUserInput.trim();
++    if (searchTerm && !searchTerm.includes('@')) return [];
+     const searched = searchTerm
+       ? recipientSearch(raw, searchTerm).map((item) => item.item)
+       : sorted;

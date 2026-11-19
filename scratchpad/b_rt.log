@@ -1,0 +1,52 @@
+   Compiling entity_access v0.1.0 (/home/teo/.herdr/worktrees/macro/synoet-channels-local-sync/crates/entity_access)
+   Compiling invite_email v0.1.0 (/home/teo/.herdr/worktrees/macro/synoet-channels-local-sync/crates/invite_email)
+error: error returned from database: relation "crm_contact_emails" does not exist
+   --> crates/entity_access/src/outbound/pg_access_repo/queries/thread_access.rs:194:19
+    |
+194 |       let crm_fut = sqlx::query_scalar!(
+    |  ___________________^
+195 | |         r#"
+196 | |         WITH thread_owner AS (
+197 | |             SELECT el.macro_id
+...   |
+259 | |         user_id_str
+260 | |     )
+    | |_____^
+    |
+    = note: this error originates in the macro `$crate::sqlx_macros::expand_query` which comes from the expansion of the macro `sqlx::query_scalar` (in Nightly builds, run with -Z macro-backtrace for more info)
+
+   Compiling model_notifications v0.1.0 (/home/teo/.herdr/worktrees/macro/synoet-channels-local-sync/crates/model_notifications)
+error[E0282]: type annotations needed
+   --> crates/entity_access/src/outbound/pg_access_repo/queries/thread_access.rs:263:37
+    |
+263 |     let (share_rows, crm_granted) = tokio::join!(share_fut, crm_fut);
+    |                                     ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^ cannot infer type
+    |
+    = note: this error originates in the macro `$crate::join` which comes from the expansion of the macro `tokio::join` (in Nightly builds, run with -Z macro-backtrace for more info)
+
+error[E0282]: type annotations needed
+   --> crates/entity_access/src/outbound/pg_access_repo/queries/thread_access.rs:265:25
+    |
+265 |     let highest_level = share_rows?
+    |                         ^^^^^^^^^^^ cannot infer type
+
+error[E0282]: type annotations needed
+   --> crates/entity_access/src/outbound/pg_access_repo/queries/thread_access.rs:267:22
+    |
+267 |         .filter_map(|opt| opt.as_ref().and_then(|s| AccessLevel::from_str(s).ok()))
+    |                      ^^^  --- type must be known at this point
+    |
+help: consider giving this closure parameter an explicit type
+    |
+267 |         .filter_map(|opt: /* Type */| opt.as_ref().and_then(|s| AccessLevel::from_str(s).ok()))
+    |                         ++++++++++++
+
+error[E0282]: type annotations needed
+   --> crates/entity_access/src/outbound/pg_access_repo/queries/thread_access.rs:270:21
+    |
+270 |     let crm_level = crm_granted?.then_some(AccessLevel::Comment);
+    |                     ^^^^^^^^^^^^ cannot infer type
+
+For more information about this error, try `rustc --explain E0282`.
+error: could not compile `entity_access` (lib) due to 6 previous errors
+warning: build failed, waiting for other jobs to finish...

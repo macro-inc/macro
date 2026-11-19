@@ -1,0 +1,42 @@
+22:38:19 bob signed in
+22:38:19 priming: sign in, open #lobby, stay 45 s
+22:38:19 alice signed in
+22:38:20 lobby open
+22:39:09 primed
+22:39:09 clip 1 cold-open
+22:39:13   [1] open #perf-large in a new tab: first messages of #perf-large on screen 1092 ms; newest message on screen 1092 ms
+22:39:16 clip 2 first-switch
+22:39:20   [2] open #lobby: lobby on screen 1045 ms
+22:39:35   [2] click #perf-medium (first time): first messages of #perf-medium on screen 143 ms; newest message on screen 143 ms
+22:39:38 clip 3 three-channels
+22:39:42   [3] open #lobby: lobby on screen 1072 ms
+22:39:57   [3] click #perf-small (first time): first messages of #perf-small on screen 117 ms; newest message on screen 117 ms
+22:39:59   [3] click #perf-medium (first time): first messages of #perf-medium on screen 105 ms; newest message on screen 105 ms
+22:40:01   [3] click #perf-large (first time): first messages of #perf-large on screen 97 ms; newest message on screen 97 ms
+22:40:02   [3] click #perf-small (again): first messages of #perf-small on screen 76 ms; newest message on screen 77 ms
+22:40:04   [3] click #perf-medium (again): first messages of #perf-medium on screen 70 ms; newest message on screen 70 ms
+22:40:06   [3] click #perf-large (again): first messages of #perf-large on screen 62 ms; newest message on screen 62 ms
+22:40:11 clip 4 reload
+22:40:14   [4] open #perf-medium: first messages of #perf-medium on screen 1182 ms; newest message on screen 1182 ms
+22:40:30   [4] reload: first messages of #perf-medium on screen 749 ms; newest message on screen 749 ms
+22:40:33 clip 5 link-old-message
+22:40:37   [5] open a link to an old message in #perf-large: the linked message on screen 1239 ms; the linked message highlighted 1239 ms
+22:40:40 clip 6 link-thread-reply
+22:40:45   [6] open a link to a thread reply in #perf-large: the linked reply on screen 1940 ms; the linked reply highlighted 1940 ms
+22:40:48 clip 7 live-changes
+22:40:51   [7] open #freshness: freshness on screen 1050 ms
+22:41:07   [7] bob posts a message: the message on screen 123 ms
+22:41:09   [7] bob edits it: the edited text on screen 47 ms
+22:41:11   [7] bob reacts to it: the reaction on screen 48 ms
+22:41:13   [7] bob deletes it: the message gone 40 ms
+22:41:16 clip 8 closed-then-open
+22:41:20   [8] open #freshness: freshness on screen 1143 ms
+22:41:24   [8] click #lobby: lobby on screen 90 ms
+22:41:44   [8] click #freshness: message 1 on screen 63 ms; message 2 on screen 63 ms; message 3 on screen 63 ms
+22:41:47 clip 9 offline
+22:41:51   [9] open #freshness: freshness on screen 1134 ms
+22:41:56   [9] load the app again on #lobby: lobby on screen 705 ms
+22:42:13   [9] click #freshness (offline): its messages on screen 101 ms
+22:42:18   [9] network back: bob's new message on screen 208 ms; bob's edit on screen 208 ms
+22:42:52 done /home/teo/.cache/channels-perf/demos/b/manifest.json
+rc=0

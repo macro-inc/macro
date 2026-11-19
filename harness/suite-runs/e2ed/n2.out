@@ -1,0 +1,272 @@
+path "/home/teo/.herdr/worktrees/macro/synoet-channels-local-sync-suiteb/apps/web" does not contain a 'flake.nix', searching up
+
+Running 90 tests using 4 workers
+
+DJ OFF-04 w2 r0 ben 167661 ["[observability]","graphql.mutation_queue.skipped",{"auth.state":"signed-in","network.online":false,"graphql.websocket.state":"connected","mutation_queue.pending_items":1,"mutation_queue.oldest_observed_wait_ms":2795,"mutation_queue.age_unknown_items":0,"mutation_queue.oldest_item_age_ms":2795,"mutation_queue.skip_reason":"recovery-timeout"}]
+  ✓   3 tests/channels-e2e-dbg/channels.spec.ts:247:1 › CHN-07 deleting a channel removes it for its owner at once, and its address no longer opens for anyone (14.9s)
+  ✓   2 tests/channels-e2e-dbg/channels.spec.ts:247:1 › CHN-07 deleting a channel removes it for its owner at once, and its address no longer opens for anyone (15.2s)
+  ✓   5 tests/channels-e2e-dbg/members.spec.ts:111:1 › MEM-03 a person removed while the channel is open loses it at once (2.4s)
+  ✘   1 tests/channels-e2e-dbg/members.spec.ts:111:1 › MEM-03 a person removed while the channel is open loses it at once (17.4s)
+  ✓   8 tests/channels-e2e-dbg/members.spec.ts:111:1 › MEM-03 a person removed while the channel is open loses it at once (2.9s)
+  ✓   7 tests/channels-e2e-dbg/channels.spec.ts:247:1 › CHN-07 deleting a channel removes it for its owner at once, and its address no longer opens for anyone (11.7s)
+  ✓  10 tests/channels-e2e-dbg/channels.spec.ts:247:1 › CHN-07 deleting a channel removes it for its owner at once, and its address no longer opens for anyone (11.7s)
+  ✓  11 tests/channels-e2e-dbg/members.spec.ts:111:1 › MEM-03 a person removed while the channel is open loses it at once (2.4s)
+  ✓   4 tests/channels-e2e-dbg/offline.spec.ts:128:1 › OFF-04 messages read far back in a long channel can be scrolled through again with no connection (44.6s)
+  ✓   6 tests/channels-e2e-dbg/offline.spec.ts:128:1 › OFF-04 messages read far back in a long channel can be scrolled through again with no connection (36.5s)
+  ✓  14 tests/channels-e2e-dbg/members.spec.ts:111:1 › MEM-03 a person removed while the channel is open loses it at once (3.0s)
+  ✓  13 tests/channels-e2e-dbg/channels.spec.ts:247:1 › CHN-07 deleting a channel removes it for its owner at once, and its address no longer opens for anyone (10.9s)
+  ✓   9 tests/channels-e2e-dbg/offline.spec.ts:128:1 › OFF-04 messages read far back in a long channel can be scrolled through again with no connection (35.7s)
+  ✓  17 tests/channels-e2e-dbg/members.spec.ts:111:1 › MEM-03 a person removed while the channel is open loses it at once (2.9s)
+  ✓  16 tests/channels-e2e-dbg/channels.spec.ts:247:1 › CHN-07 deleting a channel removes it for its owner at once, and its address no longer opens for anyone (11.0s)
+  ✓  12 tests/channels-e2e-dbg/offline.spec.ts:128:1 › OFF-04 messages read far back in a long channel can be scrolled through again with no connection (34.8s)
+  ✓  19 tests/channels-e2e-dbg/channels.spec.ts:247:1 › CHN-07 deleting a channel removes it for its owner at once, and its address no longer opens for anyone (11.2s)
+  ✓  21 tests/channels-e2e-dbg/members.spec.ts:111:1 › MEM-03 a person removed while the channel is open loses it at once (2.9s)
+  ✓  15 tests/channels-e2e-dbg/offline.spec.ts:128:1 › OFF-04 messages read far back in a long channel can be scrolled through again with no connection (35.3s)
+  ✓  22 tests/channels-e2e-dbg/channels.spec.ts:247:1 › CHN-07 deleting a channel removes it for its owner at once, and its address no longer opens for anyone (11.2s)
+  ✓  23 tests/channels-e2e-dbg/members.spec.ts:111:1 › MEM-03 a person removed while the channel is open loses it at once (2.9s)
+  ✓  18 tests/channels-e2e-dbg/offline.spec.ts:128:1 › OFF-04 messages read far back in a long channel can be scrolled through again with no connection (35.1s)
+DJ OFF-04 w3 r7 ben 261578 ["[observability]","graphql.mutation_queue.skipped",{"auth.state":"signed-in","network.online":false,"graphql.websocket.state":"connected","mutation_queue.pending_items":0,"mutation_queue.oldest_observed_wait_ms":0,"mutation_queue.age_unknown_items":0,"mutation_queue.skip_reason":"recovery-timeout"}]
+DJ OFF-04 w2 r6 ben 262795 ["[observability]","graphql.mutation_queue.skipped",{"auth.state":"signed-in","network.online":false,"graphql.websocket.state":"connected","mutation_queue.pending_items":0,"mutation_queue.oldest_observed_wait_ms":0,"mutation_queue.age_unknown_items":0,"mutation_queue.skip_reason":"recovery-timeout"}]
+DJ CHN-07 w0 r8 ben 267238 ["[observability]","graphql.mutation_queue.loaded",{"auth.state":"signed-in","network.online":false,"graphql.websocket.state":"connected","mutation_queue.depth":1,"mutation_queue.age_unknown_items":0,"mutation_queue.oldest_item_age_ms":3881}]
+DJ CHN-07 w0 r8 ben 269443 ["[observability]","graphql.mutation_queue.skipped",{"auth.state":"signed-in","network.online":false,"graphql.websocket.state":"connected","mutation_queue.pending_items":0,"mutation_queue.oldest_observed_wait_ms":0,"mutation_queue.age_unknown_items":0,"mutation_queue.skip_reason":"lease-owner-gone"}]
+  ✓  25 tests/channels-e2e-dbg/channels.spec.ts:247:1 › CHN-07 deleting a channel removes it for its owner at once, and its address no longer opens for anyone (13.8s)
+  ✘  26 tests/channels-e2e-dbg/members.spec.ts:111:1 › MEM-03 a person removed while the channel is open loses it at once (18.8s)
+  ✓  20 tests/channels-e2e-dbg/offline.spec.ts:128:1 › OFF-04 messages read far back in a long channel can be scrolled through again with no connection (37.1s)
+DJ OFF-04 w3 r7 ben 280788 ["[observability]","graphql.mutation_queue.skipped",{"auth.state":"signed-in","network.online":false,"graphql.websocket.state":"connected","mutation_queue.pending_items":0,"mutation_queue.oldest_observed_wait_ms":0,"mutation_queue.age_unknown_items":0,"mutation_queue.skip_reason":"recovery-timeout"}]
+  ✓  29 tests/channels-e2e-dbg/members.spec.ts:111:1 › MEM-03 a person removed while the channel is open loses it at once (4.1s)
+DJ CHN-07 w1 r9 ben 287880 ["[observability]","graphql.mutation_queue.loaded",{"auth.state":"signed-in","network.online":false,"graphql.websocket.state":"connected","mutation_queue.depth":1,"mutation_queue.age_unknown_items":0,"mutation_queue.oldest_item_age_ms":3188}]
+DJ CHN-07 w1 r9 ben 289340 ["[observability]","graphql.mutation_queue.skipped",{"auth.state":"signed-in","network.online":false,"graphql.websocket.state":"connected","mutation_queue.pending_items":0,"mutation_queue.oldest_observed_wait_ms":0,"mutation_queue.age_unknown_items":0,"mutation_queue.skip_reason":"lease-owner-gone"}]
+  ✓  28 tests/channels-e2e-dbg/channels.spec.ts:247:1 › CHN-07 deleting a channel removes it for its owner at once, and its address no longer opens for anyone (13.0s)
+  ✓  24 tests/channels-e2e-dbg/offline.spec.ts:128:1 › OFF-04 messages read far back in a long channel can be scrolled through again with no connection (40.7s)
+  ✓  32 tests/channels-e2e-dbg/members.spec.ts:111:1 › MEM-03 a person removed while the channel is open loses it at once (3.0s)
+  ✓  31 tests/channels-e2e-dbg/channels.spec.ts:247:1 › CHN-07 deleting a channel removes it for its owner at once, and its address no longer opens for anyone (12.0s)
+  ✓  27 tests/channels-e2e-dbg/offline.spec.ts:128:1 › OFF-04 messages read far back in a long channel can be scrolled through again with no connection (39.8s)
+  ✓  35 tests/channels-e2e-dbg/members.spec.ts:111:1 › MEM-03 a person removed while the channel is open loses it at once (2.9s)
+  ✓  34 tests/channels-e2e-dbg/channels.spec.ts:247:1 › CHN-07 deleting a channel removes it for its owner at once, and its address no longer opens for anyone (11.1s)
+  ✓  30 tests/channels-e2e-dbg/offline.spec.ts:128:1 › OFF-04 messages read far back in a long channel can be scrolled through again with no connection (35.7s)
+  ✓  37 tests/channels-e2e-dbg/channels.spec.ts:247:1 › CHN-07 deleting a channel removes it for its owner at once, and its address no longer opens for anyone (11.8s)
+  ✓  33 tests/channels-e2e-dbg/offline.spec.ts:128:1 › OFF-04 messages read far back in a long channel can be scrolled through again with no connection (35.3s)
+  ✘  38 tests/channels-e2e-dbg/members.spec.ts:111:1 › MEM-03 a person removed while the channel is open loses it at once (18.5s)
+  ✓  41 tests/channels-e2e-dbg/members.spec.ts:111:1 › MEM-03 a person removed while the channel is open loses it at once (2.4s)
+  ✓  40 tests/channels-e2e-dbg/channels.spec.ts:247:1 › CHN-07 deleting a channel removes it for its owner at once, and its address no longer opens for anyone (12.3s)
+  ✓  36 tests/channels-e2e-dbg/offline.spec.ts:128:1 › OFF-04 messages read far back in a long channel can be scrolled through again with no connection (37.2s)
+  ✓  44 tests/channels-e2e-dbg/members.spec.ts:111:1 › MEM-03 a person removed while the channel is open loses it at once (2.9s)
+  ✓  43 tests/channels-e2e-dbg/channels.spec.ts:247:1 › CHN-07 deleting a channel removes it for its owner at once, and its address no longer opens for anyone (14.2s)
+  ✓  39 tests/channels-e2e-dbg/offline.spec.ts:128:1 › OFF-04 messages read far back in a long channel can be scrolled through again with no connection (40.4s)
+  ✓  47 tests/channels-e2e-dbg/members.spec.ts:111:1 › MEM-03 a person removed while the channel is open loses it at once (3.0s)
+  ✓  46 tests/channels-e2e-dbg/channels.spec.ts:247:1 › CHN-07 deleting a channel removes it for its owner at once, and its address no longer opens for anyone (11.7s)
+  ✓  42 tests/channels-e2e-dbg/offline.spec.ts:128:1 › OFF-04 messages read far back in a long channel can be scrolled through again with no connection (38.8s)
+  ✓  50 tests/channels-e2e-dbg/members.spec.ts:111:1 › MEM-03 a person removed while the channel is open loses it at once (2.4s)
+  ✓  49 tests/channels-e2e-dbg/channels.spec.ts:247:1 › CHN-07 deleting a channel removes it for its owner at once, and its address no longer opens for anyone (11.4s)
+  ✓  45 tests/channels-e2e-dbg/offline.spec.ts:128:1 › OFF-04 messages read far back in a long channel can be scrolled through again with no connection (38.5s)
+  ✓  52 tests/channels-e2e-dbg/channels.spec.ts:247:1 › CHN-07 deleting a channel removes it for its owner at once, and its address no longer opens for anyone (10.8s)
+  ✓  48 tests/channels-e2e-dbg/offline.spec.ts:128:1 › OFF-04 messages read far back in a long channel can be scrolled through again with no connection (34.1s)
+  ✘  53 tests/channels-e2e-dbg/members.spec.ts:111:1 › MEM-03 a person removed while the channel is open loses it at once (17.4s)
+  ✓  56 tests/channels-e2e-dbg/members.spec.ts:111:1 › MEM-03 a person removed while the channel is open loses it at once (3.0s)
+  ✓  55 tests/channels-e2e-dbg/channels.spec.ts:247:1 › CHN-07 deleting a channel removes it for its owner at once, and its address no longer opens for anyone (10.8s)
+  ✓  51 tests/channels-e2e-dbg/offline.spec.ts:128:1 › OFF-04 messages read far back in a long channel can be scrolled through again with no connection (36.0s)
+  ✓  59 tests/channels-e2e-dbg/members.spec.ts:111:1 › MEM-03 a person removed while the channel is open loses it at once (2.9s)
+  ✓  58 tests/channels-e2e-dbg/channels.spec.ts:247:1 › CHN-07 deleting a channel removes it for its owner at once, and its address no longer opens for anyone (10.9s)
+  ✓  54 tests/channels-e2e-dbg/offline.spec.ts:128:1 › OFF-04 messages read far back in a long channel can be scrolled through again with no connection (35.5s)
+  ✓  62 tests/channels-e2e-dbg/members.spec.ts:111:1 › MEM-03 a person removed while the channel is open loses it at once (2.6s)
+  ✓  61 tests/channels-e2e-dbg/channels.spec.ts:247:1 › CHN-07 deleting a channel removes it for its owner at once, and its address no longer opens for anyone (11.6s)
+  ✓  57 tests/channels-e2e-dbg/offline.spec.ts:128:1 › OFF-04 messages read far back in a long channel can be scrolled through again with no connection (36.1s)
+  ✓  64 tests/channels-e2e-dbg/channels.spec.ts:247:1 › CHN-07 deleting a channel removes it for its owner at once, and its address no longer opens for anyone (11.1s)
+  ✓  65 tests/channels-e2e-dbg/members.spec.ts:111:1 › MEM-03 a person removed while the channel is open loses it at once (3.0s)
+  ✓  60 tests/channels-e2e-dbg/offline.spec.ts:128:1 › OFF-04 messages read far back in a long channel can be scrolled through again with no connection (34.8s)
+  ✓  68 tests/channels-e2e-dbg/members.spec.ts:111:1 › MEM-03 a person removed while the channel is open loses it at once (2.5s)
+  ✓  67 tests/channels-e2e-dbg/channels.spec.ts:247:1 › CHN-07 deleting a channel removes it for its owner at once, and its address no longer opens for anyone (11.6s)
+  ✓  63 tests/channels-e2e-dbg/offline.spec.ts:128:1 › OFF-04 messages read far back in a long channel can be scrolled through again with no connection (34.8s)
+  ✓  71 tests/channels-e2e-dbg/members.spec.ts:111:1 › MEM-03 a person removed while the channel is open loses it at once (3.0s)
+  ✓  70 tests/channels-e2e-dbg/channels.spec.ts:247:1 › CHN-07 deleting a channel removes it for its owner at once, and its address no longer opens for anyone (11.0s)
+  ✓  66 tests/channels-e2e-dbg/offline.spec.ts:128:1 › OFF-04 messages read far back in a long channel can be scrolled through again with no connection (34.2s)
+  ✓  73 tests/channels-e2e-dbg/channels.spec.ts:247:1 › CHN-07 deleting a channel removes it for its owner at once, and its address no longer opens for anyone (11.1s)
+  ✓  74 tests/channels-e2e-dbg/members.spec.ts:111:1 › MEM-03 a person removed while the channel is open loses it at once (2.2s)
+DJ CHN-07 w1 r25 ben 497408 ["[observability]","graphql.mutation_queue.loaded",{"auth.state":"signed-in","network.online":false,"graphql.websocket.state":"connected","mutation_queue.depth":1,"mutation_queue.age_unknown_items":0,"mutation_queue.oldest_item_age_ms":3278}]
+  ✓  69 tests/channels-e2e-dbg/offline.spec.ts:128:1 › OFF-04 messages read far back in a long channel can be scrolled through again with no connection (35.3s)
+DJ CHN-07 w1 r25 ben 498376 ["[observability]","graphql.mutation_queue.skipped",{"auth.state":"signed-in","network.online":false,"graphql.websocket.state":"connected","mutation_queue.pending_items":0,"mutation_queue.oldest_observed_wait_ms":0,"mutation_queue.age_unknown_items":0,"mutation_queue.skip_reason":"lease-owner-gone"}]
+  ✓  77 tests/channels-e2e-dbg/members.spec.ts:111:1 › MEM-03 a person removed while the channel is open loses it at once (2.5s)
+  ✓  76 tests/channels-e2e-dbg/channels.spec.ts:247:1 › CHN-07 deleting a channel removes it for its owner at once, and its address no longer opens for anyone (11.1s)
+  ✓  72 tests/channels-e2e-dbg/offline.spec.ts:128:1 › OFF-04 messages read far back in a long channel can be scrolled through again with no connection (33.4s)
+  ✓  80 tests/channels-e2e-dbg/members.spec.ts:111:1 › MEM-03 a person removed while the channel is open loses it at once (2.7s)
+  ✓  79 tests/channels-e2e-dbg/channels.spec.ts:247:1 › CHN-07 deleting a channel removes it for its owner at once, and its address no longer opens for anyone (11.5s)
+DJ CHN-07 w1 r27 ben 521066 ["[observability]","graphql.mutation_queue.loaded",{"auth.state":"signed-in","network.online":false,"graphql.websocket.state":"connected","mutation_queue.depth":1,"mutation_queue.age_unknown_items":0,"mutation_queue.oldest_item_age_ms":3320}]
+DJ CHN-07 w1 r27 ben 522823 ["[observability]","graphql.mutation_queue.skipped",{"auth.state":"signed-in","network.online":false,"graphql.websocket.state":"connected","mutation_queue.pending_items":0,"mutation_queue.oldest_observed_wait_ms":0,"mutation_queue.age_unknown_items":0,"mutation_queue.skip_reason":"lease-owner-gone"}]
+  ✓  82 tests/channels-e2e-dbg/channels.spec.ts:247:1 › CHN-07 deleting a channel removes it for its owner at once, and its address no longer opens for anyone (11.2s)
+  ✓  75 tests/channels-e2e-dbg/offline.spec.ts:128:1 › OFF-04 messages read far back in a long channel can be scrolled through again with no connection (35.2s)
+  ✓  83 tests/channels-e2e-dbg/members.spec.ts:111:1 › MEM-03 a person removed while the channel is open loses it at once (2.6s)
+  ✓  78 tests/channels-e2e-dbg/offline.spec.ts:128:1 › OFF-04 messages read far back in a long channel can be scrolled through again with no connection (35.0s)
+  ✓  86 tests/channels-e2e-dbg/members.spec.ts:111:1 › MEM-03 a person removed while the channel is open loses it at once (2.8s)
+  ✓  85 tests/channels-e2e-dbg/channels.spec.ts:247:1 › CHN-07 deleting a channel removes it for its owner at once, and its address no longer opens for anyone (10.7s)
+DJ CHN-07 w1 r29 ben 545858 ["[observability]","graphql.mutation_queue.loaded",{"auth.state":"signed-in","network.online":false,"graphql.websocket.state":"connected","mutation_queue.depth":1,"mutation_queue.age_unknown_items":0,"mutation_queue.oldest_item_age_ms":3012}]
+DJ CHN-07 w1 r29 ben 546737 ["[observability]","graphql.mutation_queue.skipped",{"auth.state":"signed-in","network.online":false,"graphql.websocket.state":"connected","mutation_queue.pending_items":0,"mutation_queue.oldest_observed_wait_ms":0,"mutation_queue.age_unknown_items":0,"mutation_queue.skip_reason":"lease-owner-gone"}]
+  ✓  81 tests/channels-e2e-dbg/offline.spec.ts:128:1 › OFF-04 messages read far back in a long channel can be scrolled through again with no connection (34.3s)
+  ✓  88 tests/channels-e2e-dbg/channels.spec.ts:247:1 › CHN-07 deleting a channel removes it for its owner at once, and its address no longer opens for anyone (10.6s)
+  ✓  89 tests/channels-e2e-dbg/members.spec.ts:111:1 › MEM-03 a person removed while the channel is open loses it at once (2.8s)
+  ✓  84 tests/channels-e2e-dbg/offline.spec.ts:128:1 › OFF-04 messages read far back in a long channel can be scrolled through again with no connection (34.9s)
+  ✓  87 tests/channels-e2e-dbg/offline.spec.ts:128:1 › OFF-04 messages read far back in a long channel can be scrolled through again with no connection (34.4s)
+  ✓  90 tests/channels-e2e-dbg/offline.spec.ts:128:1 › OFF-04 messages read far back in a long channel can be scrolled through again with no connection (32.3s)
+
+
+  1) tests/channels-e2e-dbg/members.spec.ts:111:1 › MEM-03 a person removed while the channel is open loses it at once 
+
+    Error: expect(locator).toHaveCount(expected) failed
+
+    Locator:  locator('[data-input-id="channel-input-01a1e5e2-1a11-7a0d-baf5-d9dabd5f2184"]')
+    Expected: 0
+    Received: 1
+    Timeout:  15000ms
+
+    Call log:
+      - Expect "toHaveCount" with timeout 15000ms
+      - waiting for locator('[data-input-id="channel-input-01a1e5e2-1a11-7a0d-baf5-d9dabd5f2184"]')
+        33 × locator resolved to 1 element
+           - unexpected value "1"
+
+
+      131 |   await ada.removeParticipants(channel.id, [people.cy]);
+      132 |
+    > 133 |   await expect(cyView.composer).toHaveCount(0);
+          |                                 ^
+      134 |   await expect(noAccess(cyPage)).toBeVisible();
+      135 |   await expect(cyPage.getByText('all three here')).toHaveCount(0);
+      136 | });
+        at /home/teo/.herdr/worktrees/macro/synoet-channels-local-sync-suiteb/apps/web/tests/channels-e2e-dbg/members.spec.ts:133:33
+
+    attachment #1: screenshot (image/png) ──────────────────────────────────────────────────────────
+    ../../../../../../.cache/channels-perf-b/e2ed/n2/test-results/members-MEM-03-a-person-re-3c0d9-el-is-open-loses-it-at-once/test-failed-1.png
+    ────────────────────────────────────────────────────────────────────────────────────────────────
+
+    Error Context: ../../../../../../.cache/channels-perf-b/e2ed/n2/test-results/members-MEM-03-a-person-re-3c0d9-el-is-open-loses-it-at-once/error-context.md
+
+    attachment #3: trace (application/zip) ─────────────────────────────────────────────────────────
+    ../../../../../../.cache/channels-perf-b/e2ed/n2/test-results/members-MEM-03-a-person-re-3c0d9-el-is-open-loses-it-at-once/trace.zip
+    Usage:
+
+        npx playwright show-trace ../../../../../../.cache/channels-perf-b/e2ed/n2/test-results/members-MEM-03-a-person-re-3c0d9-el-is-open-loses-it-at-once/trace.zip
+
+    ────────────────────────────────────────────────────────────────────────────────────────────────
+
+  2) tests/channels-e2e-dbg/members.spec.ts:111:1 › MEM-03 a person removed while the channel is open loses it at once 
+
+    Error: expect(locator).toHaveCount(expected) failed
+
+    Locator:  locator('[data-input-id="channel-input-01a1e5e3-90ca-7d53-a8cf-69680720f00f"]')
+    Expected: 0
+    Received: 1
+    Timeout:  15000ms
+
+    Call log:
+      - Expect "toHaveCount" with timeout 15000ms
+      - waiting for locator('[data-input-id="channel-input-01a1e5e3-90ca-7d53-a8cf-69680720f00f"]')
+        33 × locator resolved to 1 element
+           - unexpected value "1"
+
+
+      131 |   await ada.removeParticipants(channel.id, [people.cy]);
+      132 |
+    > 133 |   await expect(cyView.composer).toHaveCount(0);
+          |                                 ^
+      134 |   await expect(noAccess(cyPage)).toBeVisible();
+      135 |   await expect(cyPage.getByText('all three here')).toHaveCount(0);
+      136 | });
+        at /home/teo/.herdr/worktrees/macro/synoet-channels-local-sync-suiteb/apps/web/tests/channels-e2e-dbg/members.spec.ts:133:33
+
+    attachment #1: screenshot (image/png) ──────────────────────────────────────────────────────────
+    ../../../../../../.cache/channels-perf-b/e2ed/n2/test-results/members-MEM-03-a-person-re-3c0d9-el-is-open-loses-it-at-once-repeat8/test-failed-1.png
+    ────────────────────────────────────────────────────────────────────────────────────────────────
+
+    Error Context: ../../../../../../.cache/channels-perf-b/e2ed/n2/test-results/members-MEM-03-a-person-re-3c0d9-el-is-open-loses-it-at-once-repeat8/error-context.md
+
+    attachment #3: trace (application/zip) ─────────────────────────────────────────────────────────
+    ../../../../../../.cache/channels-perf-b/e2ed/n2/test-results/members-MEM-03-a-person-re-3c0d9-el-is-open-loses-it-at-once-repeat8/trace.zip
+    Usage:
+
+        npx playwright show-trace ../../../../../../.cache/channels-perf-b/e2ed/n2/test-results/members-MEM-03-a-person-re-3c0d9-el-is-open-loses-it-at-once-repeat8/trace.zip
+
+    ────────────────────────────────────────────────────────────────────────────────────────────────
+
+  3) tests/channels-e2e-dbg/members.spec.ts:111:1 › MEM-03 a person removed while the channel is open loses it at once 
+
+    Error: expect(locator).toHaveCount(expected) failed
+
+    Locator:  locator('[data-input-id="channel-input-01a1e5e4-8261-73cf-bff9-bf34814f6ad0"]')
+    Expected: 0
+    Received: 1
+    Timeout:  15000ms
+
+    Call log:
+      - Expect "toHaveCount" with timeout 15000ms
+      - waiting for locator('[data-input-id="channel-input-01a1e5e4-8261-73cf-bff9-bf34814f6ad0"]')
+        33 × locator resolved to 1 element
+           - unexpected value "1"
+
+
+      131 |   await ada.removeParticipants(channel.id, [people.cy]);
+      132 |
+    > 133 |   await expect(cyView.composer).toHaveCount(0);
+          |                                 ^
+      134 |   await expect(noAccess(cyPage)).toBeVisible();
+      135 |   await expect(cyPage.getByText('all three here')).toHaveCount(0);
+      136 | });
+        at /home/teo/.herdr/worktrees/macro/synoet-channels-local-sync-suiteb/apps/web/tests/channels-e2e-dbg/members.spec.ts:133:33
+
+    attachment #1: screenshot (image/png) ──────────────────────────────────────────────────────────
+    ../../../../../../.cache/channels-perf-b/e2ed/n2/test-results/members-MEM-03-a-person-re-3c0d9-el-is-open-loses-it-at-once-repeat12/test-failed-1.png
+    ────────────────────────────────────────────────────────────────────────────────────────────────
+
+    Error Context: ../../../../../../.cache/channels-perf-b/e2ed/n2/test-results/members-MEM-03-a-person-re-3c0d9-el-is-open-loses-it-at-once-repeat12/error-context.md
+
+    attachment #3: trace (application/zip) ─────────────────────────────────────────────────────────
+    ../../../../../../.cache/channels-perf-b/e2ed/n2/test-results/members-MEM-03-a-person-re-3c0d9-el-is-open-loses-it-at-once-repeat12/trace.zip
+    Usage:
+
+        npx playwright show-trace ../../../../../../.cache/channels-perf-b/e2ed/n2/test-results/members-MEM-03-a-person-re-3c0d9-el-is-open-loses-it-at-once-repeat12/trace.zip
+
+    ────────────────────────────────────────────────────────────────────────────────────────────────
+
+  4) tests/channels-e2e-dbg/members.spec.ts:111:1 › MEM-03 a person removed while the channel is open loses it at once 
+
+    Error: expect(locator).toHaveCount(expected) failed
+
+    Locator:  locator('[data-input-id="channel-input-01a1e5e5-a2be-728f-a5d3-cda3bd8b844f"]')
+    Expected: 0
+    Received: 1
+    Timeout:  15000ms
+
+    Call log:
+      - Expect "toHaveCount" with timeout 15000ms
+      - waiting for locator('[data-input-id="channel-input-01a1e5e5-a2be-728f-a5d3-cda3bd8b844f"]')
+        34 × locator resolved to 1 element
+           - unexpected value "1"
+
+
+      131 |   await ada.removeParticipants(channel.id, [people.cy]);
+      132 |
+    > 133 |   await expect(cyView.composer).toHaveCount(0);
+          |                                 ^
+      134 |   await expect(noAccess(cyPage)).toBeVisible();
+      135 |   await expect(cyPage.getByText('all three here')).toHaveCount(0);
+      136 | });
+        at /home/teo/.herdr/worktrees/macro/synoet-channels-local-sync-suiteb/apps/web/tests/channels-e2e-dbg/members.spec.ts:133:33
+
+    attachment #1: screenshot (image/png) ──────────────────────────────────────────────────────────
+    ../../../../../../.cache/channels-perf-b/e2ed/n2/test-results/members-MEM-03-a-person-re-3c0d9-el-is-open-loses-it-at-once-repeat17/test-failed-1.png
+    ────────────────────────────────────────────────────────────────────────────────────────────────
+
+    Error Context: ../../../../../../.cache/channels-perf-b/e2ed/n2/test-results/members-MEM-03-a-person-re-3c0d9-el-is-open-loses-it-at-once-repeat17/error-context.md
+
+    attachment #3: trace (application/zip) ─────────────────────────────────────────────────────────
+    ../../../../../../.cache/channels-perf-b/e2ed/n2/test-results/members-MEM-03-a-person-re-3c0d9-el-is-open-loses-it-at-once-repeat17/trace.zip
+    Usage:
+
+        npx playwright show-trace ../../../../../../.cache/channels-perf-b/e2ed/n2/test-results/members-MEM-03-a-person-re-3c0d9-el-is-open-loses-it-at-once-repeat17/trace.zip
+
+    ────────────────────────────────────────────────────────────────────────────────────────────────
+
+  4 failed
+    tests/channels-e2e-dbg/members.spec.ts:111:1 › MEM-03 a person removed while the channel is open loses it at once 
+    tests/channels-e2e-dbg/members.spec.ts:111:1 › MEM-03 a person removed while the channel is open loses it at once 
+    tests/channels-e2e-dbg/members.spec.ts:111:1 › MEM-03 a person removed while the channel is open loses it at once 
+    tests/channels-e2e-dbg/members.spec.ts:111:1 › MEM-03 a person removed while the channel is open loses it at once 
+  86 passed (7.2m)

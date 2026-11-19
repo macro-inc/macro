@@ -1,0 +1,75 @@
+{
+ "scenario": "probe",
+ "throttled": false,
+ "throttle": null,
+ "n": 1,
+ "sizes": [
+  "medium"
+ ],
+ "base": "https://localhost:31009",
+ "generatedAt": "2026-11-13T16:04:23.420Z",
+ "records": [
+  {
+   "size": "medium",
+   "i": 0,
+   "phase": "probe",
+   "settle": 6000,
+   "sinceLoadMs": 6017,
+   "lobbyShownMs": 931,
+   "firstDomMs": 93.5,
+   "firstPaintMs": 159.7,
+   "lastSeenMs": 93.5,
+   "settledMs": null,
+   "targetVisibleMs": null,
+   "targetHighlightedMs": null,
+   "timedOut": false,
+   "domMessages": 12,
+   "visibleMessages": 7,
+   "domNodes": 1533,
+   "scroll": {
+    "top": 4258,
+    "h": 779,
+    "sh": 5037,
+    "atBottom": true
+   },
+   "cpuToSettle": {
+    "taskMs": 186.2,
+    "scriptMs": 76.9,
+    "layoutMs": 6.8,
+    "recalcStyleMs": 18.5,
+    "layouts": 28,
+    "heapMB": 138.4,
+    "nodes": 8550
+   },
+   "cpuToSettlePlus2s": {
+    "taskMs": 319.1,
+    "scriptMs": 136.3,
+    "layoutMs": 6.8,
+    "recalcStyleMs": 19.6,
+    "layouts": 28,
+    "heapMB": 145.3,
+    "nodes": 8550
+   },
+   "longTasks": {
+    "count": 1,
+    "totalMs": 75,
+    "maxMs": 75
+   },
+   "requests": {
+    "total": 11,
+    "startedBeforeFirstPaint": 7,
+    "finishedBeforeFirstPaint": 6,
+    "bytesBeforeFirstPaint": 818,
+    "channelScoped": 8
+   },
+   "static": {
+    "count": 0,
+    "bytes": 0,
+    "fromDiskCache": 0,
+    "lastEndMs": null
+   },
+   "channelId": "5eed92f0-3a83-8200-a790-dd4a69089719",
+   "blocked": 2
+  }
+ ]
+}

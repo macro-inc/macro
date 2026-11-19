@@ -1,0 +1,98 @@
+{
+ "scenario": "held",
+ "throttled": false,
+ "throttle": null,
+ "n": 4,
+ "sizes": [
+  "medium"
+ ],
+ "base": "https://localhost:31009",
+ "generatedAt": "2026-11-13T21:52:41.118Z",
+ "records": [
+  {
+   "size": "medium",
+   "i": 0,
+   "phase": "held",
+   "error": "page.goto: Page crashed\nCall log:\n\u001b[2m  - navigating to \"https://localhost:31009/app/channels/5eed92f0-ce3c-8a78-8d37-54d69b9d9ee1\", waiting until \"load\"\u001b[22m\n\n    at run (/home/teo/.cache/channels-perf-b/ab.cjs:142:22)"
+  },
+  {
+   "size": "medium",
+   "i": 1,
+   "phase": "held",
+   "error": "page.goto: Page crashed\nCall log:\n\u001b[2m  - navigating to \"https://localhost:31009/app/channels/5eed92f0-ce3c-8a78-8d37-54d69b9d9ee1\", waiting until \"load\"\u001b[22m\n\n    at run (/home/teo/.cache/channels-perf-b/ab.cjs:142:22)"
+  },
+  {
+   "size": "medium",
+   "i": 2,
+   "phase": "warm_switch",
+   "settle": 6000,
+   "sinceLoadMs": 6029,
+   "lobbyShownMs": 1077,
+   "firstDomMs": 115.1,
+   "firstPaintMs": 176.3,
+   "lastSeenMs": 115.1,
+   "settledMs": 154.8,
+   "targetVisibleMs": null,
+   "targetHighlightedMs": null,
+   "timedOut": false,
+   "domMessages": 12,
+   "visibleMessages": 7,
+   "domNodes": 1531,
+   "scroll": {
+    "top": 4258,
+    "h": 779,
+    "sh": 5037,
+    "atBottom": true
+   },
+   "cpuToSettle": {
+    "taskMs": 280.5,
+    "scriptMs": 107.8,
+    "layoutMs": 8.5,
+    "recalcStyleMs": 28.7,
+    "layouts": 16,
+    "heapMB": 147.6,
+    "nodes": 8711
+   },
+   "cpuToSettlePlus2s": {
+    "taskMs": 449.6,
+    "scriptMs": 178.5,
+    "layoutMs": 8.5,
+    "recalcStyleMs": 29.8,
+    "layouts": 16,
+    "heapMB": 150.6,
+    "nodes": 8711
+   },
+   "longTasks": {
+    "count": 1,
+    "totalMs": 72,
+    "maxMs": 72
+   },
+   "requests": {
+    "total": 14,
+    "startedBeforeFirstPaint": 7,
+    "finishedBeforeFirstPaint": 7,
+    "bytesBeforeFirstPaint": 8900,
+    "channelScoped": 7
+   },
+   "static": {
+    "count": 0,
+    "bytes": 0,
+    "fromDiskCache": 0,
+    "lastEndMs": null
+   },
+   "channelId": "5eed92f0-3a83-8200-a790-dd4a69089719"
+  },
+  {
+   "size": "medium",
+   "i": 2,
+   "phase": "held",
+   "error": "locator.scrollIntoViewIfNeeded: Target page, context or browser has been closed\n    at clickTo (/home/teo/.cache/channels-perf-b/ab.cjs:152:23)\n    at run (/home/teo/.cache/channels-perf-b/ab.cjs:171:29)"
+  },
+  {
+   "size": "medium",
+   "i": 3,
+   "phase": "held",
+   "error": "browser.newContext: Target page, context or browser has been closed\n    at async run (/home/teo/.cache/channels-perf-b/ab.cjs:136:23)"
+  }
+ ]
+}

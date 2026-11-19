@@ -1,0 +1,6 @@
+warning: Git tree '/home/teo/.herdr/worktrees/macro/synoet-channels-local-sync' is dirty
+✓ built in 35.51s
+$ echo $npm_package_version+$(git rev-parse --short HEAD) > ./dist/semver.txt
+$ bun ./scripts/write-bundle-manifest.mjs
+reads rc=0 17:26:45 index=/home/teo/.cache/channels-perf-b/tmp/mb-reads/apps/web/dist/index.html head=544aff2493
+BUILD_DONE

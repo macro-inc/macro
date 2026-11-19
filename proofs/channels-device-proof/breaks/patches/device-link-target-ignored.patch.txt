@@ -1,0 +1,15 @@
+diff --git a/apps/web/src/lib/queries/messages/local/source.ts b/apps/web/src/lib/queries/messages/local/source.ts
+index bdc597cb26..d2de18cf1e 100644
+--- a/apps/web/src/lib/queries/messages/local/source.ts
++++ b/apps/web/src/lib/queries/messages/local/source.ts
+@@ -56,7 +56,9 @@ function pageRequest(
+     ...(after !== undefined && before === undefined && { after }),
+     ...(before === undefined &&
+       after === undefined &&
+-      read.aroundMessageId && { aroundMessageId: read.aroundMessageId }),
++      read.aroundMessageId === '' && {
++        aroundMessageId: read.aroundMessageId,
++      }),
+   };
+ }
+ 

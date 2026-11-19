@@ -1,0 +1,60 @@
+path "/home/teo/.herdr/worktrees/macro/synoet-channels-local-sync-suiteb/apps/web" does not contain a 'flake.nix', searching up
+
+Running 1 test using 1 worker
+
+ZZ w0 DBGc run-start 11175
+ZZ w0 DBGc storedSeq 11557 3
+ZZ w0 DBGc fetch-start 11557 3
+ZZ w0 DBGc fetched 12420 3 0 false
+ZZ w0 DBGc done 12420 current left 0
+ZZ w0 DBGc push 76877 4 storing false timer false
+ZZ w0 DBGc run-start 76890
+ZZ w0 DBGc storedSeq 76895 3
+ZZ w0 DBGc fetch-start 76895 3
+ZZ w0 DBGc fetched 76955 4 1 false
+ZZ w0 DBGc committed 77070 committed
+ZZ w0 DBGc done 77071 applied left 0
+ZZ w0 push-to-stored 0 178ms
+ZZ w0 DBGc push 79050 5 storing false timer false
+ZZ w0 DBGc run-start 79063
+ZZ w0 DBGc storedSeq 80465 4
+ZZ w0 DBGc fetch-start 80465 4
+ZZ w0 DBGc fetched 81047 5 1 false
+ZZ w0 DBGc committed 82322 committed
+ZZ w0 DBGc done 82322 applied left 0
+ZZ w0 push-to-stored 1 3261ms
+ZZ w0 DBGc push 83902 6 storing false timer false
+ZZ w0 DBGc run-start 83910
+ZZ w0 DBGc storedSeq 83914 5
+ZZ w0 DBGc fetch-start 83914 5
+ZZ w0 DBGc fetched 83988 6 1 false
+ZZ w0 DBGc committed 84045 committed
+ZZ w0 DBGc done 84045 applied left 0
+ZZ w0 push-to-stored 2 132ms
+ZZ w0 DBGc push 85875 7 storing false timer false
+ZZ w0 DBGc run-start 85884
+ZZ w0 DBGc storedSeq 87066 6
+ZZ w0 DBGc fetch-start 87066 6
+ZZ w0 DBGc fetched 87127 7 1 false
+ZZ w0 DBGc committed 87237 committed
+ZZ w0 DBGc done 87237 applied left 0
+ZZ w0 push-to-stored 3 1350ms
+ZZ w0 DBGc push 89280 8 storing false timer false
+ZZ w0 DBGc run-start 89290
+ZZ w0 DBGc storedSeq 89294 7
+ZZ w0 DBGc fetch-start 89294 7
+ZZ w0 DBGc fetched 89354 8 1 false
+ZZ w0 DBGc committed 89399 committed
+ZZ w0 DBGc done 89400 applied left 0
+ZZ w0 push-to-stored 4 106ms
+ZZ w0 DBGc push 91203 9 storing false timer false
+ZZ w0 DBGc run-start 91213
+ZZ w0 DBGc storedSeq 92404 8
+ZZ w0 DBGc fetch-start 92404 8
+ZZ w0 DBGc fetched 92452 9 1 false
+ZZ w0 DBGc committed 92532 committed
+ZZ w0 DBGc done 92532 applied left 0
+ZZ w0 push-to-stored 5 1316ms
+  ✓  1 tests/channels-e2e-dbg/zz.spec.ts:109:1 › ZZ-30 push to stored (1.6m)
+
+  1 passed (1.8m)

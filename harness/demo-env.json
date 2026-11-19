@@ -1,0 +1,13 @@
+{
+  "base": "https://localhost:31009",
+  "pg": "postgres://user:password@localhost:22900/macrodb",
+  "domain": "seed.macro.local",
+  "channels": {
+    "small": "5eed92f0-944c-80f4-be59-1c15bb155d6a",
+    "medium": "5eed92f0-3a83-8200-a790-dd4a69089719",
+    "large": "5eed92f0-1c06-8932-b12c-277f6a59bad3",
+    "lobby": "5eed92f0-ce3c-8a78-8d37-54d69b9d9ee1",
+    "freshness": "5eed92f0-15d3-83f5-a505-41d4adcf67c2"
+  },
+  "lobbyLastId": "01a1cf99-0ca5-75d3-b2ae-bbb156525f87"
+}

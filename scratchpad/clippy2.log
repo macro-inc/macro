@@ -1,0 +1,121 @@
+    Checking bot_id v0.1.0 (/home/teo/.herdr/worktrees/macro/synoet-channels-local-sync/crates/bot_id)
+    Checking agent_fold v0.1.0 (/home/teo/.herdr/worktrees/macro/synoet-channels-local-sync/crates/folds/agent_fold)
+    Checking harness_id v0.1.0 (/home/teo/.herdr/worktrees/macro/synoet-channels-local-sync/crates/harness_id)
+    Checking rate_limit v0.1.0 (/home/teo/.herdr/worktrees/macro/synoet-channels-local-sync/crates/rate_limit)
+    Checking macro_auth v0.1.0 (/home/teo/.herdr/worktrees/macro/synoet-channels-local-sync/crates/macro_auth)
+    Checking gmail_client v0.1.0 (/home/teo/.herdr/worktrees/macro/synoet-channels-local-sync/crates/gmail_client)
+    Checking email_db_client v0.1.0 (/home/teo/.herdr/worktrees/macro/synoet-channels-local-sync/crates/email_db_client)
+    Checking model_owner v0.1.0 (/home/teo/.herdr/worktrees/macro/synoet-channels-local-sync/crates/model_owner)
+    Checking ai_toolset v0.1.0 (/home/teo/.herdr/worktrees/macro/synoet-channels-local-sync/crates/ai_toolset)
+    Checking channel_sender v0.1.0 (/home/teo/.herdr/worktrees/macro/synoet-channels-local-sync/crates/channel_sender)
+    Checking trigger_context v0.1.0 (/home/teo/.herdr/worktrees/macro/synoet-channels-local-sync/crates/trigger_context)
+    Checking mention_utils v0.1.0 (/home/teo/.herdr/worktrees/macro/synoet-channels-local-sync/crates/mention_utils)
+    Checking models_permissions v0.1.0 (/home/teo/.herdr/worktrees/macro/synoet-channels-local-sync/crates/models_permissions)
+    Checking item_filters v0.1.0 (/home/teo/.herdr/worktrees/macro/synoet-channels-local-sync/crates/item_filters)
+    Checking shared_entity_registry v0.1.0 (/home/teo/.herdr/worktrees/macro/synoet-channels-local-sync/crates/entity_registry/shared_entity_registry)
+    Checking s3_key v0.1.0 (/home/teo/.herdr/worktrees/macro/synoet-channels-local-sync/crates/s3_key)
+    Checking macro_authorization v0.1.0 (/home/teo/.herdr/worktrees/macro/synoet-channels-local-sync/crates/macro_authorization)
+    Checking agent_correlation v0.1.0 (/home/teo/.herdr/worktrees/macro/synoet-channels-local-sync/crates/agent_correlation)
+    Checking dynamodb_client v0.1.0 (/home/teo/.herdr/worktrees/macro/synoet-channels-local-sync/crates/dynamodb_client)
+    Checking entity_access_db_utils v0.1.0 (/home/teo/.herdr/worktrees/macro/synoet-channels-local-sync/crates/entity_access_db_utils)
+    Checking mcp_toolset v0.1.0 (/home/teo/.herdr/worktrees/macro/synoet-channels-local-sync/crates/mcp_toolset)
+    Checking macro_event_broker v0.1.0 (/home/teo/.herdr/worktrees/macro/synoet-channels-local-sync/crates/macro_event_broker)
+    Checking notification v0.1.0 (/home/teo/.herdr/worktrees/macro/synoet-channels-local-sync/crates/notification)
+    Checking user_events v0.1.0 (/home/teo/.herdr/worktrees/macro/synoet-channels-local-sync/crates/user_events)
+    Checking ai_usage v0.1.0 (/home/teo/.herdr/worktrees/macro/synoet-channels-local-sync/crates/ai_usage)
+    Checking activity v0.1.0 (/home/teo/.herdr/worktrees/macro/synoet-channels-local-sync/crates/activity)
+    Checking entity_registry v0.1.0 (/home/teo/.herdr/worktrees/macro/synoet-channels-local-sync/crates/entity_registry/entity_registry)
+    Checking sync_service_hex v0.1.0 (/home/teo/.herdr/worktrees/macro/synoet-channels-local-sync/crates/sync_service)
+    Checking pipedream_mcp v0.1.0 (/home/teo/.herdr/worktrees/macro/synoet-channels-local-sync/crates/pipedream_mcp)
+    Checking user_api_key v0.1.0 (/home/teo/.herdr/worktrees/macro/synoet-channels-local-sync/crates/user_api_key)
+    Checking share_permission_db_utils v0.1.0 (/home/teo/.herdr/worktrees/macro/synoet-channels-local-sync/crates/share_permission_db_utils)
+    Checking entity_access_management v0.1.0 (/home/teo/.herdr/worktrees/macro/synoet-channels-local-sync/crates/entity_access_management)
+    Checking harnesses v0.1.0 (/home/teo/.herdr/worktrees/macro/synoet-channels-local-sync/crates/harnesses)
+    Checking entity_registry_db_utils v0.1.0 (/home/teo/.herdr/worktrees/macro/synoet-channels-local-sync/crates/entity_registry/entity_registry_db_utils)
+    Checking frecency v0.1.0 (/home/teo/.herdr/worktrees/macro/synoet-channels-local-sync/crates/frecency)
+    Checking database_sql v0.1.0 (/home/teo/.herdr/worktrees/macro/synoet-channels-local-sync/crates/database_sql)
+    Checking graphql_common v0.1.0 (/home/teo/.herdr/worktrees/macro/synoet-channels-local-sync/crates/graphql_common)
+    Checking item-filter-index v0.1.0 (/home/teo/.herdr/worktrees/macro/synoet-channels-local-sync/crates/item_filter_index)
+    Checking graphql_soup_filter_input v0.1.0 (/home/teo/.herdr/worktrees/macro/synoet-channels-local-sync/crates/graphql_soup_filter_input)
+    Checking agent v0.1.0 (/home/teo/.herdr/worktrees/macro/synoet-channels-local-sync/crates/agent)
+    Checking jev v0.1.0 (/home/teo/.herdr/worktrees/macro/synoet-channels-local-sync/crates/jev)
+    Checking dictation v0.1.0 (/home/teo/.herdr/worktrees/macro/synoet-channels-local-sync/crates/dictation)
+    Checking cognition v0.1.0 (/home/teo/.herdr/worktrees/macro/synoet-channels-local-sync/crates/cognition)
+    Checking import_tracker v0.1.0 (/home/teo/.herdr/worktrees/macro/synoet-channels-local-sync/crates/import_tracker)
+    Checking import_notion v0.1.0 (/home/teo/.herdr/worktrees/macro/synoet-channels-local-sync/crates/import_notion)
+    Checking import_jira v0.1.0 (/home/teo/.herdr/worktrees/macro/synoet-channels-local-sync/crates/import_jira)
+    Checking import_linear v0.1.0 (/home/teo/.herdr/worktrees/macro/synoet-channels-local-sync/crates/import_linear)
+    Checking model v0.1.0 (/home/teo/.herdr/worktrees/macro/synoet-channels-local-sync/crates/model)
+    Checking cache-core v0.1.0 (/home/teo/.herdr/worktrees/macro/synoet-channels-local-sync/crates/client/cache-core)
+    Checking invite_email v0.1.0 (/home/teo/.herdr/worktrees/macro/synoet-channels-local-sync/crates/invite_email)
+    Checking model_notifications v0.1.0 (/home/teo/.herdr/worktrees/macro/synoet-channels-local-sync/crates/model_notifications)
+    Checking entity_access v0.1.0 (/home/teo/.herdr/worktrees/macro/synoet-channels-local-sync/crates/entity_access)
+    Checking sqs_client v0.1.0 (/home/teo/.herdr/worktrees/macro/synoet-channels-local-sync/crates/sqs_client)
+    Checking authentication_service_client v0.1.0 (/home/teo/.herdr/worktrees/macro/synoet-channels-local-sync/crates/authentication_service_client)
+    Checking sync_service_client v0.1.0 (/home/teo/.herdr/worktrees/macro/synoet-channels-local-sync/crates/sync_service_client)
+    Checking macro_sha_count_client v0.1.0 (/home/teo/.herdr/worktrees/macro/synoet-channels-local-sync/crates/macro_sha_count_client)
+    Checking graphql_notification v0.1.0 (/home/teo/.herdr/worktrees/macro/synoet-channels-local-sync/crates/graphql_notification)
+    Checking google_token v0.1.0 (/home/teo/.herdr/worktrees/macro/synoet-channels-local-sync/crates/google_token)
+    Checking mcp_client v0.1.0 (/home/teo/.herdr/worktrees/macro/synoet-channels-local-sync/crates/mcp_client)
+    Checking cache-turso v0.1.0 (/home/teo/.herdr/worktrees/macro/synoet-channels-local-sync/crates/client/cache-turso)
+    Checking cache-wasm v0.6.54 (/home/teo/.herdr/worktrees/macro/synoet-channels-local-sync/crates/client/cache-wasm)
+    Checking mcp_select v0.1.0 (/home/teo/.herdr/worktrees/macro/synoet-channels-local-sync/crates/mcp_select)
+    Checking properties v0.1.0 (/home/teo/.herdr/worktrees/macro/synoet-channels-local-sync/crates/properties)
+    Checking entity_mutation v0.1.0 (/home/teo/.herdr/worktrees/macro/synoet-channels-local-sync/crates/entity_mutation)
+    Checking connection v0.1.0 (/home/teo/.herdr/worktrees/macro/synoet-channels-local-sync/crates/connection)
+    Checking foreign_entity v0.1.0 (/home/teo/.herdr/worktrees/macro/synoet-channels-local-sync/crates/foreign_entity)
+    Checking favorites v0.1.0 (/home/teo/.herdr/worktrees/macro/synoet-channels-local-sync/crates/favorites)
+    Checking graphql_permission v0.1.0 (/home/teo/.herdr/worktrees/macro/synoet-channels-local-sync/crates/graphql_permission)
+    Checking graphql_activity v0.1.0 (/home/teo/.herdr/worktrees/macro/synoet-channels-local-sync/crates/graphql_activity)
+    Checking external_chat v0.1.0 (/home/teo/.herdr/worktrees/macro/synoet-channels-local-sync/crates/external_chat)
+    Checking channel_labels v0.1.0 (/home/teo/.herdr/worktrees/macro/synoet-channels-local-sync/crates/channel_labels)
+    Checking access_requests v0.1.0 (/home/teo/.herdr/worktrees/macro/synoet-channels-local-sync/crates/access_requests)
+    Checking chat v0.1.0 (/home/teo/.herdr/worktrees/macro/synoet-channels-local-sync/crates/chat)
+    Checking github_pull_requests v0.1.0 (/home/teo/.herdr/worktrees/macro/synoet-channels-local-sync/crates/github_pull_requests)
+    Checking whatsapp_linked v0.1.0 (/home/teo/.herdr/worktrees/macro/synoet-channels-local-sync/crates/whatsapp_linked)
+    Checking initiative v0.1.0 (/home/teo/.herdr/worktrees/macro/synoet-channels-local-sync/crates/initiative)
+    Checking databases v0.1.0 (/home/teo/.herdr/worktrees/macro/synoet-channels-local-sync/crates/databases)
+    Checking graphql_properties v0.1.0 (/home/teo/.herdr/worktrees/macro/synoet-channels-local-sync/crates/graphql_properties)
+    Checking messages v0.1.0 (/home/teo/.herdr/worktrees/macro/synoet-channels-local-sync/crates/messages)
+    Checking database_webhooks v0.1.0 (/home/teo/.herdr/worktrees/macro/synoet-channels-local-sync/crates/database_webhooks)
+    Checking macro_db_client v0.1.0 (/home/teo/.herdr/worktrees/macro/synoet-channels-local-sync/crates/macro_db_client)
+    Checking lexical_client v0.1.0 (/home/teo/.herdr/worktrees/macro/synoet-channels-local-sync/crates/lexical_client)
+    Checking task_dedup v0.1.0 (/home/teo/.herdr/worktrees/macro/synoet-channels-local-sync/crates/task_dedup)
+    Checking lexical_mention_extractor v0.1.0 (/home/teo/.herdr/worktrees/macro/synoet-channels-local-sync/crates/lexical_mention_extractor)
+    Checking contacts v0.1.0 (/home/teo/.herdr/worktrees/macro/synoet-channels-local-sync/crates/contacts)
+    Checking collab_surface v0.1.0 (/home/teo/.herdr/worktrees/macro/synoet-channels-local-sync/crates/collab_surface)
+    Checking macro_middleware v0.1.0 (/home/teo/.herdr/worktrees/macro/synoet-channels-local-sync/crates/macro_middleware)
+    Checking initiative_description v0.1.0 (/home/teo/.herdr/worktrees/macro/synoet-channels-local-sync/crates/initiative_description)
+    Checking channels v0.1.0 (/home/teo/.herdr/worktrees/macro/synoet-channels-local-sync/crates/channels)
+    Checking graphql_contacts v0.1.0 (/home/teo/.herdr/worktrees/macro/synoet-channels-local-sync/crates/graphql_contacts)
+    Checking teams v0.1.0 (/home/teo/.herdr/worktrees/macro/synoet-channels-local-sync/crates/teams)
+    Checking call v0.1.0 (/home/teo/.herdr/worktrees/macro/synoet-channels-local-sync/crates/call)
+    Checking bots v0.1.0 (/home/teo/.herdr/worktrees/macro/synoet-channels-local-sync/crates/bots)
+    Checking comms_db_client v0.1.0 (/home/teo/.herdr/worktrees/macro/synoet-channels-local-sync/crates/comms_db_client)
+    Checking graphql_channel v0.1.0 (/home/teo/.herdr/worktrees/macro/synoet-channels-local-sync/crates/graphql_channel)
+    Checking name_search v0.1.0 (/home/teo/.herdr/worktrees/macro/synoet-channels-local-sync/crates/name_search)
+    Checking account_manager v0.1.0 (/home/teo/.herdr/worktrees/macro/synoet-channels-local-sync/crates/account_manager)
+error: large size difference between variants
+   --> crates/graphql_channel/src/objects.rs:317:1
+    |
+317 | / pub enum GraphqlChannelTimelineEntry {
+318 | |     /// A root message, including a call root.
+319 | |     Message(Box<GraphqlChannelMessage>),
+    | |     ----------------------------------- the second-largest variant contains at least 8 bytes
+320 | |     /// A recorded channel activity.
+321 | |     Activity(GraphqlChannelTimelineActivity),
+    | |     ---------------------------------------- the largest variant contains at least 216 bytes
+322 | | }
+    | |_^ the entire enum is at least 216 bytes
+    |
+    = help: for further information visit https://rust-lang.github.io/rust-clippy/rust-1.94.0/index.html#large_enum_variant
+    = note: `-D clippy::large-enum-variant` implied by `-D warnings`
+    = help: to override `-D warnings` add `#[allow(clippy::large_enum_variant)]`
+help: consider boxing the large fields or introducing indirection in some other way to reduce the total size of the enum
+    |
+321 -     Activity(GraphqlChannelTimelineActivity),
+321 +     Activity(Box<GraphqlChannelTimelineActivity>),
+    |
+
+error: could not compile `graphql_channel` (lib) due to 1 previous error
+warning: build failed, waiting for other jobs to finish...

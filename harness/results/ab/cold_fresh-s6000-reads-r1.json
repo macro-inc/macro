@@ -1,0 +1,12 @@
+{
+ "scenario": "cold_fresh",
+ "throttled": false,
+ "throttle": null,
+ "n": 4,
+ "sizes": [
+  "medium"
+ ],
+ "base": "https://localhost:31009",
+ "generatedAt": "2026-11-13T23:59:10.611Z",
+ "records": []
+}

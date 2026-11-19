@@ -1,0 +1,283 @@
+<title>Channels device proof</title>
+<meta name="claude:viewport-fit-sides" content="cover">
+<style>
+:root{--bg:#f7f6f2;--fg:#1d1c1a;--mut:#66625a;--line:#dcd8cf;--card:#fff;--ok:#1f7a4d;--some:#a86400;--bad:#b3261e;--okb:#e6f3ec;--someb:#fbf0dc;--badb:#fbe6e4}
+@media (prefers-color-scheme:dark){:root:not([data-theme="light"]){--bg:#161614;--fg:#ecebe6;--mut:#a09b91;--line:#34322d;--card:#1f1e1b;--ok:#6fcf9b;--some:#f0b65a;--bad:#f2857d;--okb:#17301f;--someb:#3a2c12;--badb:#3d1b18;color-scheme:dark}}
+:root[data-theme="dark"]{--bg:#161614;--fg:#ecebe6;--mut:#a09b91;--line:#34322d;--card:#1f1e1b;--ok:#6fcf9b;--some:#f0b65a;--bad:#f2857d;--okb:#17301f;--someb:#3a2c12;--badb:#3d1b18;color-scheme:dark}
+body{background:var(--bg);color:var(--fg);font:15px/1.55 Inter,system-ui,sans-serif;padding-block:28px 60px;padding-left:max(16px,env(safe-area-inset-left,0px));padding-right:max(16px,env(safe-area-inset-right,0px))}
+main{max-width:920px;margin:0 auto}
+h1{font-size:28px;line-height:1.2;margin:0 0 6px;text-wrap:balance}
+h2{font-size:19px;margin:38px 0 10px;text-wrap:balance}
+p,li{max-width:70ch}.mut,.m{color:var(--mut)}.m{font-size:12px}
+a{color:inherit}
+.verdict{border:1px solid var(--line);border-left:4px solid var(--bad);background:var(--card);padding:14px 16px;border-radius:6px;margin:18px 0}
+.tiles{display:grid;grid-template-columns:repeat(auto-fit,minmax(150px,1fr));gap:10px;margin:16px 0}
+.tile{background:var(--card);border:1px solid var(--line);border-radius:6px;padding:10px 12px}
+.tile b{display:block;font-size:22px}
+.scroll{overflow-x:auto;border:1px solid var(--line);border-radius:6px;background:var(--card)}
+table{border-collapse:collapse;width:100%;font-size:13.5px}
+th,td{text-align:left;vertical-align:top;padding:7px 10px;border-bottom:1px solid var(--line)}
+th{font-size:11px;letter-spacing:.06em;text-transform:uppercase;color:var(--mut)}
+td.id{white-space:nowrap;font-weight:600}td.n{white-space:nowrap;font-variant-numeric:tabular-nums;font-weight:600}
+tr.ok td.n{color:var(--ok)}tr.some td.n{color:var(--some)}tr.bad td.n{color:var(--bad)}
+tr.some{background:var(--someb)}tr.bad{background:var(--badb)}
+code{font:12px ui-monospace,Menlo,monospace;overflow-wrap:anywhere}
+.tag{display:inline-block;font-size:11px;font-weight:600;padding:1px 7px;border-radius:9px;margin-right:6px}
+.t-bad{background:var(--badb);color:var(--bad)}.t-some{background:var(--someb);color:var(--some)}.t-ok{background:var(--okb);color:var(--ok)}
+ul.f{padding-left:0;list-style:none}ul.f li{padding:9px 0;border-bottom:1px solid var(--line);max-width:none}
+td.warn{font-weight:600}
+</style>
+<main>
+<h1>Channels kept on the device: what end-to-end tests prove</h1>
+<p class="mut">Approach B, branch <code>synoet/channels-local-sync-pr5-writes</code> at <code>92835f2c2a</code> now, <code>b7023c79d8</code> earlier today, <code>ce183ced7f</code> for the round before (earlier rounds at <code>9d6f721ec2</code>, <code>da4308dd82</code> and before), tests at <code>85a6768461</code> · 18 November 2026 · stack <code>che2e-by</code>, port 29409 · pull request <a href="https://github.com/macro-inc/macro/pull/10868">#10868</a> (ready for review, not merged)</p>
+
+<div class="verdict"><b>Latest, on the merged head: two whole runs on each build had nothing unexpected (164 passed with local sync on; 129 passed, 35 skipped off), and UNR-06's cause is found.</b> The Mute notifications submenu sometimes builds its entries again while open; the one holding the keyboard is removed and Enter goes to the page. It shows on both builds (7 of 250 on, 2 of 150 off), so it is a defect of main, now recorded as intermittent. One thing is open: on casts worn by today's repeats a new message sometimes left no unread dot.</div>
+
+<div class="verdict"><b>Earlier today, after the breaks left the suite and main was merged: local sync off had nothing unexpected; local sync on had one failure, UNR-06, once.</b> It repeated 1 time in 50 with local sync on and 0 in 30 with it off, and its cause is not established. The round before stands as below.</div>
+
+<div class="verdict"><b>On <code>ce183ced7f</code>, all five whole runs with local sync on had nothing unexpected, and the three offline failures I reported are gone.</b> OFF-06, OFF-09 and OFF-13 held 90 of 90 repeats, and a new test that forces a page to be lost before the device kept what it read held 30 of 30. With local sync off, two of three whole runs were clean; the third had one failure, MSG-18, once in 33 tries and without a cause. The counts from earlier heads are kept below as they were.</div>
+
+<div class="tiles">
+<div class="tile"><b>5 of 5</b>whole runs clean, local sync on</div>
+<div class="tile"><b>2 of 3</b>whole runs clean, local sync off</div>
+<div class="tile"><b>90 of 90</b>repeats of OFF-06, OFF-09, OFF-13</div>
+<div class="tile"><b>30 of 30</b>the forced cut-off (OFF-14)</div>
+<div class="tile"><b>1</b>unexpected failure, unexplained</div>
+</div>
+
+<h2>Latest: UNR-06's cause, and the merged head</h2>
+<p class="mut">Whole runs at <code>596c31be38</code> (base <code>92835f2c2a</code> and main merged, no conflicts); then the base moved again and was merged with main as <code>f5e3a35c63</code>, which ran once more on each build. A third merge (one conflict, in the list of workflow modules CI names; both sides kept) gave <code>283a6a569f</code>, which also ran once on each build. A fourth merge, with no conflicts, gave <code>20786d1750</code>, which ran once on each build as well. A fifth merge, also with no conflicts, gives the pushed head <code>85a6768461</code>, run once on each build. Services updated in place, data kept. Load: one-minute average 34 to 93.</p>
+<div class="scroll"><table><thead><tr><th>Run</th><th>Result</th><th>Unexpected</th><th>Marked defects that showed</th></tr></thead><tbody>
+<tr><td>Local sync on, <code>596c31be38</code></td><td>164 passed</td><td>none</td><td>ACC-06, CHN-08, UNR-04</td></tr>
+<tr><td>Local sync off, <code>596c31be38</code></td><td>129 passed, 35 skipped</td><td>none</td><td>ACC-06, CHN-02, MEM-03, MSG-18</td></tr>
+<tr><td>Local sync on, <code>85a6768461</code> (pushed head)</td><td>164 passed</td><td>none</td><td>ACC-06, MEM-03, THR-02</td></tr>
+<tr><td>Local sync off, <code>85a6768461</code> (pushed head)</td><td>129 passed, 35 skipped</td><td>none</td><td>ACC-06, CHN-02, DM-01, MSG-18</td></tr>
+<tr><td>Local sync on, <code>20786d1750</code></td><td>164 passed</td><td>none</td><td>ACC-06, CHN-02</td></tr>
+<tr><td>Local sync off, <code>20786d1750</code></td><td>129 passed, 35 skipped</td><td>none</td><td>ACC-06, CHN-02, MSG-18</td></tr>
+<tr><td>Local sync on, <code>283a6a569f</code></td><td>164 passed</td><td>none</td><td>ACC-06, KEY-05</td></tr>
+<tr><td>Local sync off, <code>283a6a569f</code></td><td>129 passed, 35 skipped</td><td>none</td><td>ACC-06, CHN-02, MSG-18, THR-02</td></tr>
+<tr><td>Local sync on, <code>f5e3a35c63</code></td><td>164 passed</td><td>none</td><td>ACC-06, CHN-02, CHN-08, MEM-03</td></tr>
+<tr><td>Local sync off, <code>f5e3a35c63</code></td><td>129 passed, 35 skipped</td><td>none</td><td>ACC-06, CHN-02, MSG-18, UNR-08</td></tr>
+</tbody></table></div>
+<ul class="f">
+<li><span class="tag t-ok">cause</span><b>UNR-06: the submenu's entries are built again while it is open.</b> Since the "Only @mentions" entry, the list of entries reads one of the menu's properties while it is built, so it is rebuilt whenever those properties are recomputed. Each entry becomes a new element; the one holding the keyboard is removed, focus falls to the page, and Enter chooses nothing. A probe logging focus, keys and removed elements saw this in every failure: entries removed and added between the focus and the key, and the key delivered to the page body.</li>
+<li><span class="tag t-some">both builds</span><b>7 of 250 with local sync on, 2 of 150 off.</b> The entries were remade while the submenu was open in about one run in nine on either build; it fails only when that falls between focus and key. It is neither the new entry taking focus nor the menu's key handling, and it does not tell the builds apart. What recomputes the properties at that moment was not traced.</li>
+<li><span class="tag t-ok">recorded</span><b>UNR-06 notes the first attempt as an intermittent defect, chooses again, and still asserts the bell.</b> No app code changed. The lists now hold 10 known and 17 intermittent defects.</li>
+<li><span class="tag t-some">open</span><b>A new message sometimes left no unread dot in the sidebar, on worn casts.</b> In repeats on the four casts that ran hundreds of tests today: UNR-06 4 of 120, UNR-02 2 of 37, UNR-07 1 of 37 with local sync on; UNR-02 1 of 25 off. On the two casts that have run little, the same tests held 120 of 120 with local sync on, but with half the workers, so the worn casts are suspected and not proven. Not marked.</li>
+</ul>
+
+<h2>Earlier today: the breaks leave the suite</h2>
+<p class="mut">Tests at <code>a386ce3c92</code>; runs at <code>6c0266e155</code>, one merge of main earlier. B's base at <code>b7023c79d8</code> (no new changes of its own since <code>ce183ced7f</code>, only main). Stack rebuilt and seeded anew. Load: one-minute average 32 to 67.</p>
+<div class="scroll"><table><thead><tr><th>Run</th><th>Result</th><th>Unexpected</th></tr></thead><tbody>
+<tr><td>Local sync on</td><td>163 passed, 1 failed</td><td>UNR-06</td></tr>
+<tr><td>Local sync off</td><td>129 passed, 35 skipped</td><td>none</td></tr>
+</tbody></table></div>
+<ul class="f">
+<li><span class="tag t-some">once</span><b>UNR-06, local sync on.</b> "Until I turn it off" in the Mute notifications submenu took Enter and the menu stayed open, so the channel was never muted. Repeated afterwards: 1 of 50 with local sync on, 0 of 30 with it off. Main added an entry to that submenu since the last round. Cause: see the section above. Trace: <code>runs/f16b-on-1/test-results/unread-UNR-06-…/trace.zip</code>.</li>
+<li><span class="tag t-ok">removed</span><b>The 74 break patches and <code>proofs.tsv</code> are out of the pull request</b>, with the checker's rule that every test names one. They are kept here with their results: <a href="https://solaris.tail913c08.ts.net:28749/proofs/channels-device-proof/breaks/">the deliberate breaks</a>.</li>
+<li><span class="tag t-ok">kept</span><b>The inventory and both defect lists stay</b>, and the checker still holds the tests and a run against them. Known defects still name a build, because this suite runs with and without <code>VITE_ENABLE_CHANNEL_LOCAL_SYNC</code>.</li>
+<li><span class="tag t-ok">from the base suite</span><b>DM-01, DM-02, DM-03 and MEM-03 go on after a reload</b> when their recorded defect shows; a run with video records every person's page; UNR-04's click is bounded.</li>
+<li><span class="tag t-some">marked</span><b>Marked defects that showed:</b> ACC-06 and CHN-02 on both builds, MEM-03 on, DM-01, DM-03 and MSG-18 off.</li>
+<li><span class="tag t-some">my mistake</span><b>A first pair of runs failed 34 tests each and is void.</b> Rebuilding the stack's services emptied its database, and I ran before seeding it again, so people had no names or team. Seeded, the same tests passed.</li>
+</ul>
+
+<h2>The round before: the owner's fixes</h2>
+<p class="mut">B at <code>ce183ced7f</code>. Only web code changed since the last round, so the stack's services were left as they were; the cache engine passes the stale-engine check and both bundles were rebuilt. 164 tests. Load: one-minute average 21 to 60; seven bundle builds of mine ran during the first whole run.</p>
+<div class="scroll"><table><thead><tr><th>Run</th><th>Load, start → end</th><th>Result</th><th>Unexpected</th></tr></thead><tbody>
+<tr><td>On 1</td><td class="n">32 → 34</td><td>164 passed</td><td>none</td></tr>
+<tr><td>On 2</td><td class="n">34 → 50</td><td>164 passed</td><td>none</td></tr>
+<tr><td>On 3</td><td class="n">50 → 28</td><td>164 passed</td><td>none</td></tr>
+<tr><td>On 4</td><td class="n">28 → 21</td><td>164 passed</td><td>none</td></tr>
+<tr><td>On 5</td><td class="n">21 → 40</td><td>164 passed</td><td>none</td></tr>
+<tr><td>Off 1</td><td class="n">38 → 55</td><td>128 passed, 35 skipped, 1 failed</td><td>MSG-18</td></tr>
+<tr><td>Off 2</td><td class="n">55 → 61</td><td>129 passed, 35 skipped</td><td>none</td></tr>
+<tr><td>Off 3</td><td class="n">61 → 58</td><td>129 passed, 35 skipped</td><td>none</td></tr>
+</tbody></table></div>
+<ul class="f">
+<li><span class="tag t-some">once</span><b>MSG-18, local sync off.</b> Two people each sent four messages at the same moment; on one page a person's own messages showed as 1, 3, 2, 4. Not seen in any earlier run. Thirty repeats on each build afterwards: it did not show again. No cause found. Trace: <code>runs/f15-off-1/test-results/messages-MSG-18-…/trace.zip</code>.</li>
+<li><span class="tag t-ok">fixed</span><b>OFF-06, OFF-09, OFF-13: 30 of 30 each</b> with local sync on. OFF-13 is no longer a known defect; OFF-06 is no longer marked as failing sometimes.</li>
+<li><span class="tag t-ok">new test</span><b>OFF-14 forces the cut-off.</b> The device's engine is held back, so a page reads a thread from the services and cannot keep it. The app is then loaded again on another channel, the engine is let through, and the thread is opened with no connection. 30 of 30. Under a break that makes the next page ignore what an earlier page left noted, it fails while OFF-06 and OFF-09 pass.</li>
+<li><span class="tag t-some">limit of the test</span><b>Nothing on screen says when the next page has kept the thread.</b> OFF-14 relies on the pause before the connection is lost, so it could fail on a slower machine without a defect.</li>
+<li><span class="tag t-ok">proofs</span><b>The four missing break proofs exist.</b> DM-06: a typed name offers nobody. CHN-15 and MEM-03: a channel the services say is gone stays open; the marked check failed 14 of 14 and 4 of 4 under the break, against 7 of 13 and 0 of 3 without. CHN-08: its break stops the test at the Favorites step, before the deletion, so the deletion itself is still unproven.</li>
+<li><span class="tag t-some">stale breaks</span><b>Four break patches no longer applied to this base.</b> They are rewritten and their 22 tests fail under them again. The other breaks apply but were not rebuilt on this head.</li>
+<li><span class="tag t-some">not covered</span><b>With local sync off, a channel the cache knows now opens with no connection</b> and shows failing message reads. The offline tests are skipped on that build, so no test saw it.</li>
+<li><span class="tag t-some">marked</span><b>Marked defects that showed in the eight runs:</b> ACC-06 in all eight, CHN-02 in five, CHN-15 in three, MSG-18 and THR-02 in two each, MEM-03, CHN-08, KEY-05 and UNR-04 in one each.</li>
+</ul>
+
+<h2>The round before the fixes, on <code>da4308dd82</code></h2>
+<p class="mut">B at <code>da4308dd82</code>, engine rebuilt, stale-engine check on. Stack <code>che2e-by</code> (proxy port 29409) was started empty and seeded for this round; the old stack was left as it was. Nothing else ran on the new stack, but the machine was shared: one-minute load 19 to 41 during runs 1 to 9. A tenth run is void, because pages crashed in twelve tests while another job took the load to 143; a replacement run passed all 162 at load 45 to 54.</p>
+<div class="scroll"><table><thead><tr><th>Test</th><th>Whole runs, flag on (10)</th><th>Thirty repeats, B</th><th>Thirty repeats, main's code with the flag</th><th>Flag off</th></tr></thead><tbody>
+<tr><td>MEM-03, a removed person keeps the channel</td><td class="warn">failed 5</td><td>failed 1</td><td>failed 2</td><td>known defect, every run</td></tr>
+<tr><td>DM-02, a first-ever direct message missing from the other's list</td><td class="warn">failed 4, once for each set of people</td><td>not repeated</td><td>failed 1 of 1 first time</td><td>held 1 of 1 first time</td></tr>
+<tr><td>OFF-06, a long thread offline</td><td class="warn">failed 4</td><td>not repeated</td><td>main keeps nothing offline</td><td>skipped</td></tr>
+<tr><td>OFF-12, back to an old message offline</td><td>held 10</td><td class="warn">held the first 17, failed 12 of the last 13</td><td>failed 30</td><td>skipped</td></tr>
+<tr><td>OFF-04, long history offline (marked)</td><td>held 10</td><td class="warn">showed 8, from the same minute as OFF-12</td><td>failed 30</td><td>skipped</td></tr>
+<tr><td>CHN-07, a deleted channel closes</td><td>held 10</td><td>held 30</td><td>held 30</td><td>held 3</td></tr>
+</tbody></table></div>
+<p class="mut">"main's code with the flag" is a bundle of main at the merge-base <code>09f9124b55</code>, built with the flag and served from the same new stack.</p>
+<ul class="f">
+<li><span class="tag t-bad">B, has a cause</span><b>"Conversation unavailable" reproduces, and it is a limit of about a hundred channels.</b> With no connection after a reload, a channel the device holds opens while fewer than about a hundred of the person's other channels are newer, and says "Conversation unavailable" beyond that: it opened with 95 newer and not with 120, and leaving the device alone for 30 seconds first changed nothing. Thirty repeats make over a hundred channels for each person, which is why OFF-12 and OFF-04 held at first and then failed together. In whole runs OFF-12 held every time. main's code opens no channel offline at all, so this is a limit of the new behaviour and not something main does better. New test OFF-13, marked a known defect.</li>
+<li><span class="tag t-bad">B, new on this head</span><b>OFF-06: a long thread read while connected showed only its first three replies offline,</b> in 4 of 10 runs and once more later. It held in all twenty runs on the head before. I did not trace it further. Trace: <code>runs/f11-on-3/test-results/offline-OFF-06-…/trace.zip</code>.</li>
+<li><span class="tag t-some">main too</span><b>MEM-03: a removed person kept the channel and its composer</b> in 5 of 10 whole runs, far more than the once in thirty of the repeats. main's code with the flag does it too (2 of 30), and without the flag it happens every time, which the suite already records. So the flag makes an existing defect rarer; B does not cause it. Traces: <code>runs/f11-on-1/test-results/members-MEM-03-…/trace.zip</code>, <code>runs/r11-main/test-results/members-MEM-03-…-repeat2/trace.zip</code>.</li>
+<li><span class="tag t-some">main too</span><b>DM-02: two people's first conversation does not reach the other person's open list.</b> It failed exactly once for each of the four sets of people, on their first run, and never after: the conversation then exists for the life of the stack, so no earlier round on the old stack could see it. main's code with the flag failed the same way for people who had never run it; without the flag the row showed at once. Trace: <code>runs/f11-on-1/test-results/direct-messages-DM-02-…/trace.zip</code>.</li>
+<li><span class="tag t-ok">held</span><b>CHN-07 did not fail</b> in 30 repeats on B or on main's code, nor in any whole run.</li>
+<li><span class="tag t-ok">after the marks</span><b>One whole run on each build:</b> 163 passed flag on; 129 passed, 34 skipped flag off.</li>
+</ul>
+
+<h2>The base before, <code>9d6f721ec2</code>: one flag</h2>
+<p class="mut">B at <code>9d6f721ec2</code>, which removes the GraphQL sources flag and puts channels on the device behind <code>VITE_ENABLE_CHANNEL_LOCAL_SYNC</code> alone. Same new stack, its services rebuilt from this head, engine rebuilt. The suite now reads that one flag; "off" is what ships until the rollout flag is turned on, with messages over REST.</p>
+<div class="scroll"><table><thead><tr><th>Build</th><th>Load, start → end</th><th>Result</th><th>Unexpected</th></tr></thead><tbody>
+<tr><td>Local sync on</td><td class="n">22 → 24</td><td>162 of 163 passed</td><td>CHN-08</td></tr>
+<tr><td>Local sync off (REST)</td><td class="n">22 → 30</td><td>128 passed, 34 skipped, 1 failed</td><td>CHN-08</td></tr>
+</tbody></table></div>
+<ul class="f">
+<li><span class="tag t-ok">my test</span><b>CHN-08 failed on both builds because of its menu step.</b> After "Favorite" the channel menu can still be open; the step clicked the menu's button, which closed it, and then waited for "Delete". With the step fixed, every CHN test four times on each build: 64 of 64 both times. Traces: <code>runs/f14-on-1/test-results/channels-CHN-08-…/trace.zip</code>, <code>runs/f14-off-1/…</code>.</li>
+<li><span class="tag t-some">once</span><b>OFF-09, local sync on:</b> in the run before the marks were moved, a channel left as soon as its messages showed was empty with no connection. It held in the next run and in all eleven of the final round. Trace: <code>runs/f13-on-1/test-results/offline-OFF-09-…/trace.zip</code>.</li>
+<li><span class="tag t-ok">REST path</span><b>Nothing failed without the flag that does not also show with it.</b> ACC-06, CHN-02, CHN-15 and MSG-18 showed their marked defects.</li>
+<li><span class="tag t-some">marks moved</span><b>Defects of the GraphQL sources now count for both builds,</b> since every build has them: UNR-10 as known; CHN-08, CHN-15, MEM-03, ACC-06, UNR-04, UNR-08 and DM-02 as failing in some runs. DM-06 is no longer a defect. Main no longer raises a toast for a copy, so three tests wait for the clipboard instead.</li>
+<li><span class="tag t-some">void</span><b>A run on the base before this one</b> (<code>8e1a07f44b</code>) does not count: the services failed to rebuild, so the new web app ran against old services and 147 tests failed.</li>
+</ul>
+
+<h2>The causes of MEM-01 and CHN-03 (round before)</h2>
+<ul class="f">
+<li><span class="tag t-ok">my test</span><b>MEM-01: the dialog does not close. Its one row is replaced.</b> The row reads "Invite &lt;address&gt;" until the device's own list of people answers; if it knows the address the row becomes that person's, sometimes as it is being clicked. The test looked for the row by its first name and lost it. Either row invites the person, so nothing is wrong for someone using it. Main with the flag on does the same: 6 of 20 there, 9 of 20 on this build, both on people who had run little, and 0 of 20 on the much-used people. With the row found by the address: 20 of 20, then 30 of 30 and 12 of 12 among other tests. I said last time the dialog closed by itself; that was wrong.</li>
+<li><span class="tag t-bad">both builds</span><b>CHN-03: a rename saved while the page is still reading its list of channels never reaches the header.</b> A page reads its whole list, a hundred channels to a request, after every load. A part of the list answered before the rename puts the old name back, and the list is not read again until a reload. With a handful of channels the read is over before anyone can rename; the people of my stack had over 4,000 each after some fifty runs (43 requests, three to six seconds), so the test's rename always fell inside it. None of my test edits or the merge caused it: the unchanged test held 6 of 6 on people with few channels on the same build, and failed 7 of 9 on the much-used ones.</li>
+<li><span class="tag t-ok">new test</span><b>CHN-16 shows the defect without thousands of channels,</b> by holding the list's answer back while the rename is saved: the header kept the old name for a minute and showed the new one after a reload, on this build flag on, flag off, and main with the flag on. It is marked a known defect on both builds. CHN-03 now waits for the list first: 30 of 30 and 12 of 12 flag on, 10 of 10 flag off.</li>
+<li><span class="tag t-ok">after the fixes</span><b>One whole run on each build with nothing unexpected:</b> 162 passed flag on (load 20 to 16); 129 passed, 33 skipped flag off (load 32 to 31). Every CHN and MEM test thirty times flag on and ten flag off, together with OFF-04.</li>
+<li><span class="tag t-some">1 of 30 each, flag on</span><b>CHN-07 and MEM-03 failed once each in those repeats:</b> a channel its owner deleted kept its composer, and a removed person kept the channel. Neither in 12 more repeats or flag off. Not traced to a cause; both are a list catching up late, and the same much-used people. Traces: <code>runs/r10-on/test-results/channels-CHN-07-…-repeat9/trace.zip</code>, <code>members-MEM-03-…-repeat13/trace.zip</code>.</li>
+<li><span class="tag t-bad">B, no new trace</span><b>OFF-04 showed 4 times in 30 in that mix,</b> where its mark keeps no trace, and then not once in 36 repeats with every trace kept (16 on little-used people, 8 and 12 on the much-used). The one trace is still <code>runs/f7-on-8</code>; its console shows only the lost connection.</li>
+</ul>
+
+<h2>Earlier: twenty runs with the flag on, five with it off (old stack)</h2>
+<p class="mut">All at <code>94876dc650</code> with the engine rebuilt and the stale-engine check on. Five runs of 155 tests from the last round and fifteen of 161 (with the six new tests). No other suite ran on this stack, but the machine was not idle: other sessions kept its one-minute load between 10 and 36.</p>
+<div class="scroll"><table><thead><tr><th>Runs</th><th>Build</th><th>Load, start → end</th><th>Result</th></tr></thead><tbody>
+<tr><td>1 to 5 (155 tests)</td><td>flag on</td><td class="n">24 → 31</td><td>155 passed each time</td></tr>
+<tr><td>6, 9, 10, 12, 17, 20 (161 tests)</td><td>flag on</td><td class="n">21 → 34</td><td>161 passed</td></tr>
+<tr><td>8</td><td>flag on</td><td class="n">26 → 24</td><td class="warn">OFF-04 failed: B, now marked</td></tr>
+<tr><td>14, 15, 18</td><td>flag on</td><td class="n">23 → 31</td><td class="warn">MEM-01 failed: open</td></tr>
+<tr><td>7, 13, 16</td><td>flag on</td><td class="n">23 → 33</td><td>PRE-05 failed: my test, fixed</td></tr>
+<tr><td>11, 19</td><td>flag on</td><td class="n">25 → 32</td><td>WRT-05 failed: my test step, fixed</td></tr>
+<tr><td>1 to 5 (128 run, 27 or 33 skipped)</td><td>flag off</td><td class="n">25 → 37</td><td>none failed</td></tr>
+</tbody></table></div>
+<ul class="f">
+<li><span class="tag t-bad">B, 1 of 20</span><b>OFF-04: a long channel read back to its start while connected could not be loaded offline after a reload.</b> The page said "Unable to load this channel". It had held 21 of 21 before, so I had unmarked it; it is recorded as failing in some runs again. Trace: <code>runs/f7-on-8/test-results/offline-OFF-04-…/trace.zip</code>.</li>
+<li><span class="tag t-some">open, 3 of 15</span><b>MEM-01: the invite row was lost (cause above; my test).</b> The one row "Invite &lt;address&gt;" was replaced as it was being clicked, and the test lost it; nobody was invited. Not seen in six flag-off runs, which is too few to say it needs the flag. It is the people picker, not message storage. The cause is at the top of this page. Traces: <code>runs/f7-on-14</code>, <code>-15</code>, <code>-18</code>, <code>members-MEM-01-…/trace.zip</code>.</li>
+<li><span class="tag t-ok">my test</span><b>PRE-05, 3 of 15.</b> The old channel was still among the twenty its reader looked at last when the clock first moved; a device that fetches such a channel again records it as opened that day, so it was 29 days idle, not 31. The test now keeps it out of the twenty. Traces: <code>runs/f7-on-7</code>, <code>-13</code>, <code>-16</code>, <code>prewarm-PRE-05-…/trace.zip</code>.</li>
+<li><span class="tag t-ok">my test</span><b>WRT-05, 2 of 15.</b> The step that loses an answer tried to drop a request that was already gone ("Route is already handled"). Traces: <code>runs/f7-on-11</code>, <code>-19</code>, <code>writes-WRT-05-…/trace.zip</code>.</li>
+</ul>
+<h3>Eight more runs after those fixes</h3>
+<ul class="f">
+<li><span class="tag t-ok">held</span><b>Three of seven flag-on runs had no unexpected failure;</b> the six new tests held in all six runs after PRE-05's last fix (it failed once more before it, <code>runs/f8-on-6</code>).</li>
+<li><span class="tag t-bad">both builds, new</span><b>CHN-03: a renamed channel's header kept the old name</b> in three of the last four flag-on runs and in the flag-off run, after holding in every run before. The rename was answered 200. The cause is at the top of this page: the stack’s growth, which was my guess, is what exposed it. Traces: <code>runs/f9-on-3</code>, <code>-5</code>, <code>-6</code>, <code>f9-off-2</code>, <code>channels-CHN-03-…/trace.zip</code>.</li>
+<li><span class="tag t-some">1 of 7</span><b>MEM-03 with the flag:</b> a person removed from a channel kept it on their open page. It is a known defect without the flag; the suite says the flag cures it, and once it did not. Trace: <code>runs/f8-on-7/test-results/members-MEM-03-…/trace.zip</code>.</li>
+<li><span class="tag t-some">1 of 7</span><b>MEM-01 again</b> (<code>runs/f9-on-3</code>): four of twenty-two flag-on runs in all.</li>
+</ul>
+
+<h2>The six new tests</h2>
+<div class="scroll"><table><thead><tr><th>Test</th><th>Behaviour</th><th>Held, whole-suite runs</th><th>Break that makes it fail</th></tr></thead><tbody>
+<tr><td class="id">OFF-12</td><td>going back to a link to an old message read while connected shows it between its neighbours with no connection</td><td class="n">23/23</td><td><code>device-not-used</code>, <code>device-link-target-ignored</code></td></tr>
+<tr><td class="id">PRE-02</td><td>of forty-one unread channels never opened, the fortieth opens with no connection and the forty-first does not</td><td class="n">23/23</td><td><code>prewarm-limits-changed</code></td></tr>
+<tr><td class="id">PRE-03</td><td>of twenty-one channels looked at, the twentieth opens with no connection and the twenty-first does not</td><td class="n">23/23</td><td><code>prewarm-limits-changed</code></td></tr>
+<tr><td class="id">PRE-04</td><td>a fetched channel holds its latest fifty messages; older ones come when the connection is back</td><td class="n">23/23</td><td><code>prewarm-limits-changed</code></td></tr>
+<tr><td class="id">PRE-05</td><td>a channel not opened for thirty days is no longer on the device, and one opened two days later still is</td><td class="n">6/6 since its fix</td><td><code>idle-channels-never-evicted</code></td></tr>
+<tr><td class="id">WRT-15</td><td>a message waiting to be sent when the device's kept data is lost is not shown again and not sent later</td><td class="n">23/23</td><td><code>stored-send-never-forgotten</code></td></tr>
+</tbody></table></div>
+<ul class="f">
+<li><span class="tag t-bad">for a decision</span><b>A waiting message is lost silently when the device's cache files go.</b> WRT-15 asserts the behaviour the design states (the message is gone and never sent), and it holds. Nothing on screen tells the person their message was dropped.</li>
+<li><span class="tag t-some">observation</span><b>Offline, at the top of the fifty messages a fetched channel holds, nothing says older ones exist.</b></li>
+<li><span class="tag t-some">observation</span><b>OFF-12 first failed once</b> when the channel had been opened by its link only once: it could not be loaded offline, the defect OFF-09 already records. The test now reads the place twice, as the other tests do.</li>
+<li><span class="tag t-some">limit</span><b>A link inside a message opens a new tab, which cannot load offline</b>, so the offline jump is tested by going Back to a link read while connected. PRE-05 moves the device's clock; the services keep the real time.</li>
+</ul>
+
+<h2>The 55 older breaks, rebuilt</h2>
+<ul class="f">
+<li><span class="tag t-ok">held</span><b>Every break was applied and built on this head with the fresh engine, flag on, and its tests run.</b> All tests failed under their break except the ones below.</li>
+<li><span class="tag t-bad">blind with the flag</span><b>Eleven tests passed under their break with the flag on:</b> NAV-02, 03, 06; CMP-03, CMP-13, MSG-18; MSG-01, 03, 16; OPEN-01, SCROLL-01. Their four breaks change the message path a flag-on build does not use. Built flag off, all eleven fail. I added three breaks of the path the flag uses and reused one; all eleven now fail with the flag on too, and both proofs are recorded.</li>
+<li><span class="tag t-some">stale proof</span><b>KEY-07 no longer failed under its break on either build</b> (the test reaches the list another way now). It fails under <code>e-key-does-not-edit</code>, which replaces it.</li>
+<li><span class="tag t-bad">no proof</span><b>UNR-08 does not fail under its recorded break</b> on either build, nor under a corrected one: the rows it checks come from a different source than the break changes. I found no working break. Its row says so.</li>
+</ul>
+
+<h2>The stale engine, and what it voids</h2>
+<ul class="f">
+<li><span class="tag t-bad">my fault</span><b>Every bundle I staged from 15 November 12:50 on carried a cache engine built at that time.</b> B's commit <code>22c528f5f7</code> (13:30 that day) added the lease owner, generation and expiry to what the engine reports about queued writes, and the web code reads them to free a write left by a page that is gone. <code>bun run build</code> does not rebuild the engine, and <code>just ensure-cache-wasm</code> rebuilds it only when the crate's version changes. So new web code ran on an old engine: the release returned early and a reloaded page's writes waited the queue's five minutes.</li>
+<li><span class="tag t-ok">checked</span><b>I confirmed the owner's diagnosis before acting on it.</b> My engine file was dated 15 November 12:50 and did not contain the lease fields; the rebuilt one (version 0.6.55) does.</li>
+<li><span class="tag t-bad">void</span><b>The columns for <code>c060e4667f</code> and <code>63e04cd9b1</code> are void</b>, with the whole-suite runs and break proofs made on them, and so is what I wrote against the owner about WRT-04, MSG-13 and CMP-13. The column for <code>8408dabf70</code> stands: that engine was built from that head's sources.</li>
+<li><span class="tag t-some">before</span><b>On the stale engine at <code>04adb57188</code></b>, with six copies of each test in five whole-suite runs: WRT-04 was late in 24 of 30, CMP-13 in 8 of 30, MSG-13 in 6 of 30, every one arriving about 300 s after.</li>
+<li><span class="tag t-ok">after</span><b>On the fresh engine at <code>94876dc650</code></b>, same runs: 30 of 30 each. No message took longer than its usual wait (40 s for WRT-04, 15 s for the others). The queue logged the release of a lease left by a page that was gone on 51 pages.</li>
+<li><span class="tag t-some">unproven</span><b>The owner's newer fix for a lease the same page holds without sending (<code>lease-unrouted</code>) never fired</b> in 850 flag-on test runs with the console captured. Nothing here shows it is needed or that it works.</li>
+<li><span class="tag t-ok">guard</span><b>My build and run scripts now refuse a bundle whose engine is older than the last commit to the engine's crates</b>, and the suite's guide says to rebuild the engine before building a bundle.</li>
+</ul>
+
+<h2>What changed in the tests</h2>
+<ul class="f">
+<li><span class="tag t-ok">unmarked</span><b>WRT-04 is a plain check again; OFF-04 was, and is marked again after failing once.</b> WRT-04 held 46 of 46 on the fresh engine (30 extra, 5 whole-suite, 5 with the old offline step, 6 after unmarking); OFF-04 held 21 of 21. Unmarked, each still fails under its break.</li>
+<li><span class="tag t-some">kept</span><b>A device is cut off only after its page has stopped fetching code</b>, as in the last round. The moment before that has its own test, REC-04.</li>
+<li><span class="tag t-bad">defect, both builds</span><b>REC-04: a page cut off just after it opened says a new version is available.</b> Failed 5 of 5 with the flag on and in the flag-off run. It is on main too.</li>
+<li><span class="tag t-some">limit</span><b>The wait has a cost.</b> A connected device left alone also brings its recent channels up to date, so OFF-09, OFF-10 and SYN-05 cannot tell "held" from "fetched in that pause". With the old step OFF-10 and SYN-05 held 5 of 5 and OFF-09 4 of 5.</li>
+</ul>
+
+<h2>Every device test</h2>
+<p class="mut">How often the check held. First column: ten runs of the new tests at <code>8408dabf70</code>, load about 50. Second: five whole-suite runs at <code>94876dc650</code>, load 24 to 34. Third: five runs of the device tests on the same head as they were before the offline step changed (connection lost at once), load 37 to 22.</p>
+<div class="scroll"><table><thead><tr><th>Test</th><th>Behaviour</th><th>8408dabf70</th><th>94876dc650</th><th>94876, old step</th><th>Break that makes it fail</th></tr></thead><tbody>
+<tr class="ok"><td class="id">SYN-01</td><td>a channel left for another one shows everything that changed meanwhile when the person comes back</td><td class="n">10/10</td><td class="n">5/5</td><td class="n">5/5</td><td><code>changes-reach-neither-screen-nor-device</code></td></tr>
+<tr class="ok"><td class="id">SYN-02</td><td>an open channel whose connection dropped shows every change made meanwhile once it is back, without a reload</td><td class="n">10/10</td><td class="n">5/5</td><td class="n">5/5</td><td><code>changes-reach-neither-screen-nor-device</code></td></tr>
+<tr class="ok"><td class="id">SYN-03</td><td>a channel changed while the person was offline and in another channel is right when they come back to it</td><td class="n">10/10</td><td class="n">5/5</td><td class="n">5/5</td><td><code>changes-reach-neither-screen-nor-device</code></td></tr>
+<tr class="ok"><td class="id">SYN-04</td><td>a channel changed while the app was closed is right when the app is opened again</td><td class="n">10/10</td><td class="n">5/5</td><td class="n">5/5</td><td><code>held-channel-shown-as-it-was-left</code></td></tr>
+<tr class="ok"><td class="id">SYN-05</td><td>what a device caught up on is what it shows the next time it opens the channel with no connection</td><td class="n">6/10</td><td class="n">5/5</td><td class="n">5/5</td><td><code>channel-changes-not-applied</code></td></tr>
+<tr class="ok"><td class="id">SYN-06</td><td>a channel more than a thousand changes behind is right when it is opened again</td><td class="n">10/10</td><td class="n">5/5</td><td class="n">5/5</td><td><code>held-channel-shown-as-it-was-left</code></td></tr>
+<tr class="ok"><td class="id">SYN-08</td><td>a person removed from a channel while away is not shown the messages their device kept</td><td class="n">10/10</td><td class="n">5/5</td><td class="n">5/5</td><td><code>no-access-shown-as-unavailable</code></td></tr>
+<tr class="ok"><td class="id">SYN-09</td><td>changes made while the page is reloading are all there when it has loaded</td><td class="n">10/10</td><td class="n">5/5</td><td class="n">5/5</td><td><code>held-channel-shown-as-it-was-left</code></td></tr>
+<tr class="ok"><td class="id">SYN-10</td><td>a channel stays right through rounds of leaving it, losing the connection and reloading</td><td class="n">10/10</td><td class="n">5/5</td><td class="n">5/5</td><td><code>held-channel-shown-as-it-was-left</code></td></tr>
+<tr class="ok"><td class="id">OFF-01</td><td>a channel the person has read opens whole with no connection</td><td class="n">8/10</td><td class="n">5/5</td><td class="n">5/5</td><td><code>device-not-used</code></td></tr>
+<tr class="ok"><td class="id">OFF-02</td><td>a channel the device has never held says it cannot load offline, and loads when the connection is back</td><td class="n">10/10</td><td class="n">5/5</td><td class="n">5/5</td><td><code>channel-load-error-not-shown</code></td></tr>
+<tr class="ok"><td class="id">OFF-03</td><td>on a very slow connection a held channel shows at once, and what changed meanwhile shows when the answer arrives</td><td class="n">10/10</td><td class="n">5/5</td><td class="n">5/5</td><td><code>channel-changes-not-applied</code></td></tr>
+<tr class="ok"><td class="id">OFF-04</td><td>messages read far back in a long channel can be scrolled through again with no connection</td><td class="n">5/10</td><td class="n">5/5</td><td class="n">5/5</td><td><code>device-not-used</code></td></tr>
+<tr class="ok"><td class="id">OFF-05</td><td>scrolling past the oldest held message with no connection keeps what is held on screen</td><td class="n">10/10</td><td class="n">5/5</td><td class="n">5/5</td><td><code>device-not-used</code></td></tr>
+<tr class="ok"><td class="id">OFF-06</td><td>a thread read while connected shows its replies with no connection, a long one included</td><td class="n">0/10</td><td class="n">5/5</td><td class="n">5/5</td><td><code>device-not-used</code></td></tr>
+<tr class="ok"><td class="id">OFF-07</td><td>a long thread never opened, opened with no connection, shows every reply or says that there are more</td><td class="n">1/10</td><td class="n">5/5</td><td class="n">5/5</td><td><code>device-not-used</code></td></tr>
+<tr class="ok"><td class="id">OFF-08</td><td>a team owner opening a held channel with no connection sees the channel</td><td class="n">10/10</td><td class="n">5/5</td><td class="n">5/5</td><td><code>device-not-used</code></td></tr>
+<tr class="ok"><td class="id">OFF-09</td><td>a channel left as soon as its messages showed opens with no connection</td><td class="n">5/10</td><td class="n">5/5</td><td class="n warn">4/5</td><td><code>device-not-used</code></td></tr>
+<tr class="ok"><td class="id">OFF-10</td><td>a message that arrived while the channel was open is there when the channel opens with no connection</td><td class="n">3/10</td><td class="n">5/5</td><td class="n">5/5</td><td><code>device-not-used</code></td></tr>
+<tr class="ok"><td class="id">OFF-11</td><td>opening a held channel with no connection does not say that a new version is out</td><td class="n">7/10</td><td class="n">5/5</td><td class="n">5/5</td><td><code>device-not-used</code></td></tr>
+<tr class="ok"><td class="id">PRE-01</td><td>an unread channel never opened on this device opens with no connection once the app has been left alone</td><td class="n">10/10</td><td class="n">5/5</td><td class="n">5/5</td><td><code>device-not-used</code></td></tr>
+<tr class="ok"><td class="id">WRT-01</td><td>a message sent with no connection shows at once and reaches the other person once when the connection is back</td><td class="n">9/10</td><td class="n">5/5</td><td class="n">5/5</td><td><code>queued-writes-never-sent</code></td></tr>
+<tr class="ok"><td class="id">WRT-02</td><td>an edit, a deletion and a reaction made with no connection show at once and all reach the services</td><td class="n">10/10</td><td class="n">5/5</td><td class="n">5/5</td><td><code>device-not-used</code></td></tr>
+<tr class="ok"><td class="id">WRT-03</td><td>several messages sent with no connection arrive once each, in the order they were written</td><td class="n">8/10</td><td class="n">5/5</td><td class="n">5/5</td><td><code>queued-writes-never-sent</code></td></tr>
+<tr class="ok"><td class="id">WRT-04</td><td>messages that could not be sent are still there after a reload and are sent once when the services can be reached</td><td class="n">0/10</td><td class="n">5/5</td><td class="n">5/5</td><td><code>queued-writes-never-sent</code></td></tr>
+<tr class="ok"><td class="id">WRT-05</td><td>a message the services took but whose answer never came back is in the channel once</td><td class="n">10/10</td><td class="n">5/5</td><td class="n">5/5</td><td><code>device-not-used</code></td></tr>
+<tr class="ok"><td class="id">WRT-06</td><td>a message edited and reacted to before it could be sent arrives as it was last left</td><td class="n">10/10</td><td class="n">5/5</td><td class="n warn">4/5</td><td><code>device-not-used</code></td></tr>
+<tr class="ok"><td class="id">WRT-07</td><td>a message deleted before it could be sent is not shown to anyone once the connection is back</td><td class="n">9/10</td><td class="n">5/5</td><td class="n">5/5</td><td><code>device-not-used</code></td></tr>
+<tr class="ok"><td class="id">WRT-08</td><td>a reply written with no connection shows in its thread at once and reaches the services</td><td class="n">10/10</td><td class="n">5/5</td><td class="n">5/5</td><td><code>queued-writes-never-sent</code></td></tr>
+<tr class="ok"><td class="id">WRT-09</td><td>a message the services refuse is taken back off the screen and the person is told it failed</td><td class="n">10/10</td><td class="n">5/5</td><td class="n">5/5</td><td><code>refused-write-kept</code></td></tr>
+<tr class="ok"><td class="id">WRT-10</td><td>a message still waiting to be sent says that it is not sent yet</td><td class="n">10/10</td><td class="n">5/5</td><td class="n">5/5</td><td><code>waiting-message-not-marked</code></td></tr>
+<tr class="ok"><td class="id">WRT-11</td><td>a waiting message written right after another of the same person says that it is not sent yet</td><td class="n">0/10</td><td class="n">5/5</td><td class="n">5/5</td><td><code>waiting-message-not-marked</code></td></tr>
+<tr class="ok"><td class="id">WRT-12</td><td>a message written offline with the channel open in two windows is sent once and shows in both</td><td class="n">6/10</td><td class="n">5/5</td><td class="n warn">2/5</td><td><code>queued-writes-never-sent</code></td></tr>
+<tr class="ok"><td class="id">WRT-13</td><td>two devices of one person, one of them offline, end up showing the same channel as the services hold</td><td class="n">4/10</td><td class="n">5/5</td><td class="n warn">3/5</td><td><code>queued-writes-never-sent</code></td></tr>
+<tr class="ok"><td class="id">WRT-14</td><td>a message written offline in one window shows in the other window of the same device</td><td class="n">0/10</td><td class="n">5/5</td><td class="n">5/5</td><td><code>waiting-write-not-shown-in-other-window</code></td></tr>
+</tbody></table></div>
+<p class="mut">The four tests below 5 of 5 in the old-step column (OFF-09, WRT-06, WRT-12, WRT-13) lose the connection one to three seconds after a page opens, the moment REC-04 tests; with the current step each held 5 of 5. Every break in the last column was rebuilt on <code>94876dc650</code> with the fresh engine, and each test failed under the break listed for it. The 53 older breaks of the suite were not rebuilt.</p>
+
+<h2>Where I stand against B's owner</h2>
+<ul>
+<li><b>WRT-04, MSG-13, CMP-13: the owner was right and I was wrong.</b> The failures were my stale engine.</li>
+<li><b>OFF-04:</b> held in all ten whole runs on the new head. What showed in repeats is the hundred-channel limit, not the gap the owner fixed.</li>
+<li><b>MEM-03 and CHN-07 on main:</b> I agree for MEM-03 (2 of 30 on main's code). CHN-07 I could not make fail on either build.</li>
+<li><b>"Conversation unavailable":</b> I agree main fails it, but main opens nothing offline, so that comparison says little. On B it is the hundred-channel limit above; in whole runs here OFF-12 held 11 of 11, so I did not reproduce the owner's whole-run failure.</li>
+<li><b>The lease-unrouted fix</b> is unproven either way: it never fired here.</li>
+<li><b>The early-offline hazard</b> stands as before: real on both builds, kept as REC-04.</li>
+</ul>
+
+<h2>What is not proven</h2>
+<ul>
+<li><b>The machine was never idle</b>: other sessions kept its load between 19 and 86, and one run is void for it.</li>
+<li><b>The newest head has five whole runs on and three off</b>, not ten, and none after the last suite commit (a title and ledger rows) or main's last commit.</li>
+<li><b>MSG-18's one failure has no cause.</b></li>
+<li><b>CHN-08's proof breaks its setup</b>, not the deletion it tests.</li>
+<li><b>OFF-04's one whole-run failure on the old stack is still unexplained.</b></li>
+<li><b>DM-02 can be seen once for each set of people on a stack</b>, so its count is small: 4 of 4 on B, 1 of 1 on main's code, 0 of 1 flag off.</li>
+<li><b>PRE-05's last fix has six runs behind it</b>, against a failure that showed about one run in five.</li>
+<li><b>UNR-08 has no break that makes it fail.</b></li>
+<li><b>Not tested end to end:</b> how long the first send after opening takes, that prewarm fetches one channel at a time, a sequence that goes down, document discussions, phones and the desktop app. The test files are not type-checked.</li>
+</ul>
+<p class="mut">Newest round: <code>runs/f15-on-1</code> to <code>-5</code>, <code>f15-off-1</code> to <code>-3</code>, <code>r15</code>, <code>r15b</code>, <code>m15off</code>, <code>m15on</code>, <code>bg2</code> to <code>bg5</code>, <code>breaks/results15.tsv</code>; loads in <code>logs/final15.log</code>. Round before: <code>runs/f11-on-1</code> to <code>-11</code>, <code>f11-off-1</code> to <code>-3</code>, <code>r11-on</code>, <code>r11-main</code>, <code>pold</code>, <code>dm2-off</code>, <code>dm2-main</code>, <code>f13-on-1</code>, <code>f13-off-1</code>, <code>f14-on-1</code>, <code>f14-off-1</code>, <code>v14</code>, <code>v14o</code>; loads in <code>logs/final11.log</code>. Evidence is under <code>~/.cache/channels-e2e-b/</code> on the machine that ran this: <code>runs/f5-on-1</code> to <code>-5</code>, <code>runs/f7-on-6</code> to <code>-20</code>, <code>f5-off-1</code>, <code>f7-off-2</code> to <code>-5</code> (the twenty and five); <code>runs/f8-on-6</code>, <code>-7</code>, <code>f9-on-1</code> to <code>-6</code>, <code>f9-off-2</code> (after the fixes); <code>logs/final5.log</code>, <code>final7.log</code>, <code>final9.log</code> for the load; <code>breaks/results.tsv</code> for the breaks.</p>
+</main>

@@ -1,0 +1,5 @@
+undef $/; $_=<STDIN>;
+s/placeTopLevelMessageInMessageTimeline\(data, message\.id\)/placeTopLevelMessageInMessageTimeline(\n        data,\n        message.id,\n        waitingSendIds(message.id)\n      )/g == 2 or die 1;
+s/(\/\*\*\n \* A refetch can have read before this committed event)/\/**\n * The sends this session is still waiting on, other than `deliveredId`: the\n * server has not placed them, so they stay after every placed message.\n *\/\nfunction waitingSendIds(deliveredId: string): Set<string> {\n  const ids = new Set<string>();\n  const sending = queryClient.getMutationCache().findAll({\n    mutationKey: SEND_MESSAGE_MUTATION_KEY,\n    status: 'pending',\n  });\n  for (const mutation of sending) {\n    const id = optimisticIdOf(mutation.state.variables);\n    if (id !== undefined \&\& id !== deliveredId) ids.add(id);\n  }\n  return ids;\n}\n\n$1/ or die 2;
+s/(import \{ handleCommsTyping \} from '\.\/typing';\n)/$1import { optimisticIdOf, SEND_MESSAGE_MUTATION_KEY } from '.\/unsent';\n/ or die 3;
+print;

@@ -1,0 +1,48 @@
+path "/home/teo/.herdr/worktrees/macro/synoet-channels-local-sync-suiteb/apps/web" does not contain a 'flake.nix', searching up
+
+Running 6 tests using 4 workers
+
+ZZ latency 0 1091ms
+ZZ latency 0 1684ms
+ZZ latency 1 295ms
+ZZ latency 0 1981ms
+ZZ latency 0 2309ms
+ZZ latency 1 598ms
+ZZ latency 1 966ms
+ZZ latency 1 1441ms
+ZZ latency 2 1306ms
+ZZ latency 2 968ms
+ZZ latency 2 613ms
+ZZ latency 2 1037ms
+ZZ latency 3 342ms
+ZZ latency 3 404ms
+ZZ latency 4 134ms
+ZZ latency 3 140ms
+ZZ latency 3 104ms
+ZZ latency 4 163ms
+ZZ latency 5 200ms
+  ✓  4 tests/channels-e2e-dbg/zz.spec.ts:75:1 › ZZ-20 online send latency (13.6s)
+ZZ latency 4 170ms
+ZZ latency 4 324ms
+ZZ latency 5 149ms
+  ✓  1 tests/channels-e2e-dbg/zz.spec.ts:75:1 › ZZ-20 online send latency (14.1s)
+ZZ latency 5 542ms
+  ✓  2 tests/channels-e2e-dbg/zz.spec.ts:75:1 › ZZ-20 online send latency (14.2s)
+ZZ latency 5 126ms
+  ✓  3 tests/channels-e2e-dbg/zz.spec.ts:75:1 › ZZ-20 online send latency (14.5s)
+ZZ latency 0 1619ms
+ZZ latency 0 1218ms
+ZZ latency 1 208ms
+ZZ latency 1 493ms
+ZZ latency 2 217ms
+ZZ latency 2 476ms
+ZZ latency 3 195ms
+ZZ latency 4 88ms
+ZZ latency 3 104ms
+ZZ latency 4 82ms
+ZZ latency 5 206ms
+  ✓  6 tests/channels-e2e-dbg/zz.spec.ts:75:1 › ZZ-20 online send latency (9.6s)
+ZZ latency 5 189ms
+  ✓  5 tests/channels-e2e-dbg/zz.spec.ts:75:1 › ZZ-20 online send latency (10.4s)
+
+  6 passed (39.5s)

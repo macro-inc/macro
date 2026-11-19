@@ -1,0 +1,216 @@
+path "/home/teo/.herdr/worktrees/macro/synoet-channels-local-sync-suiteb/apps/web" does not contain a 'flake.nix', searching up
+
+Running 90 tests using 4 workers
+
+  ✓   1 tests/channels-e2e-dbg/members.spec.ts:111:1 › MEM-03 a person removed while the channel is open loses it at once (2.9s)
+  ✓   5 tests/channels-e2e-dbg/members.spec.ts:111:1 › MEM-03 a person removed while the channel is open loses it at once (2.4s)
+  ✓   3 tests/channels-e2e-dbg/channels.spec.ts:247:1 › CHN-07 deleting a channel removes it for its owner at once, and its address no longer opens for anyone (11.1s)
+  ✓   4 tests/channels-e2e-dbg/channels.spec.ts:247:1 › CHN-07 deleting a channel removes it for its owner at once, and its address no longer opens for anyone (11.8s)
+  ✓   8 tests/channels-e2e-dbg/members.spec.ts:111:1 › MEM-03 a person removed while the channel is open loses it at once (2.5s)
+  ✓   7 tests/channels-e2e-dbg/channels.spec.ts:247:1 › CHN-07 deleting a channel removes it for its owner at once, and its address no longer opens for anyone (10.9s)
+  ✓  10 tests/channels-e2e-dbg/channels.spec.ts:247:1 › CHN-07 deleting a channel removes it for its owner at once, and its address no longer opens for anyone (10.7s)
+  ✓  11 tests/channels-e2e-dbg/members.spec.ts:111:1 › MEM-03 a person removed while the channel is open loses it at once (2.6s)
+DD OFF-04 w2 ANNOT 463571 Error: expect(locator).toBeVisible() failed |  | Locator: locator('[data-input-id="channel-input-01a1e123-1af9-773d-b2ee-b3706e26addf"]') | Expected: visible | Timeout: 60000ms | Error: element(s) not found |  | Call log: |   - Expect "toBeVisible" with timeout 60000ms |   - waiting for locator('[data-input-id="channel-input-01a1e123-1af9-773d-b2ee-b3706e26addf"]') | 
+  ✓   2 tests/channels-e2e-dbg/offline.spec.ts:128:1 › OFF-04 messages read far back in a long channel can be scrolled through again with no connection (1.4m)
+DD OFF-04 w1 ANNOT 468418 Error: expect(locator).toBeVisible() failed |  | Locator: locator('[data-input-id="channel-input-01a1e123-1afa-7eaa-a541-87a22b9b4258"]') | Expected: visible | Timeout: 60000ms | Error: element(s) not found |  | Call log: |   - Expect "toBeVisible" with timeout 60000ms |   - waiting for locator('[data-input-id="channel-input-01a1e123-1afa-7eaa-a541-87a22b9b4258"]') | 
+  ✓   6 tests/channels-e2e-dbg/offline.spec.ts:128:1 › OFF-04 messages read far back in a long channel can be scrolled through again with no connection (1.4m)
+  ✓  14 tests/channels-e2e-dbg/members.spec.ts:111:1 › MEM-03 a person removed while the channel is open loses it at once (2.9s)
+  ✓  13 tests/channels-e2e-dbg/channels.spec.ts:247:1 › CHN-07 deleting a channel removes it for its owner at once, and its address no longer opens for anyone (10.8s)
+DD OFF-04 w3 ANNOT 478050 Error: expect(locator).toBeVisible() failed |  | Locator: locator('[data-input-id="channel-input-01a1e123-1af9-7698-889c-6cbf9ef73912"]') | Expected: visible | Timeout: 60000ms | Error: element(s) not found |  | Call log: |   - Expect "toBeVisible" with timeout 60000ms |   - waiting for locator('[data-input-id="channel-input-01a1e123-1af9-7698-889c-6cbf9ef73912"]') | 
+  ✓   9 tests/channels-e2e-dbg/offline.spec.ts:128:1 › OFF-04 messages read far back in a long channel can be scrolled through again with no connection (1.4m)
+  ✓  17 tests/channels-e2e-dbg/members.spec.ts:111:1 › MEM-03 a person removed while the channel is open loses it at once (2.7s)
+  ✓  16 tests/channels-e2e-dbg/channels.spec.ts:247:1 › CHN-07 deleting a channel removes it for its owner at once, and its address no longer opens for anyone (10.3s)
+  ✓  19 tests/channels-e2e-dbg/channels.spec.ts:247:1 › CHN-07 deleting a channel removes it for its owner at once, and its address no longer opens for anyone (10.5s)
+DD OFF-04 w0 ANNOT 498342 Error: expect(locator).toBeVisible() failed |  | Locator: locator('[data-input-id="channel-input-01a1e123-1af5-75b1-87f0-5b586e2b221c"]') | Expected: visible | Timeout: 60000ms | Error: element(s) not found |  | Call log: |   - Expect "toBeVisible" with timeout 60000ms |   - waiting for locator('[data-input-id="channel-input-01a1e123-1af5-75b1-87f0-5b586e2b221c"]') | 
+  ✓  12 tests/channels-e2e-dbg/offline.spec.ts:128:1 › OFF-04 messages read far back in a long channel can be scrolled through again with no connection (1.4m)
+  ✓  20 tests/channels-e2e-dbg/members.spec.ts:111:1 › MEM-03 a person removed while the channel is open loses it at once (2.6s)
+  ✓  22 tests/channels-e2e-dbg/channels.spec.ts:247:1 › CHN-07 deleting a channel removes it for its owner at once, and its address no longer opens for anyone (11.4s)
+  ✓  23 tests/channels-e2e-dbg/members.spec.ts:111:1 › MEM-03 a person removed while the channel is open loses it at once (2.8s)
+DD OFF-04 w1 ANNOT 553862 Error: expect(locator).toBeVisible() failed |  | Locator: locator('[data-input-id="channel-input-01a1e123-1afa-7eaa-a541-87a22b9b4258"]') | Expected: visible | Timeout: 60000ms | Error: element(s) not found |  | Call log: |   - Expect "toBeVisible" with timeout 60000ms |   - waiting for locator('[data-input-id="channel-input-01a1e123-1afa-7eaa-a541-87a22b9b4258"]') | 
+  ✓  15 tests/channels-e2e-dbg/offline.spec.ts:128:1 › OFF-04 messages read far back in a long channel can be scrolled through again with no connection (1.4m)
+DD OFF-04 w3 ANNOT 564865 Error: expect(locator).toBeVisible() failed |  | Locator: locator('[data-input-id="channel-input-01a1e123-1af9-7698-889c-6cbf9ef73912"]') | Expected: visible | Timeout: 60000ms | Error: element(s) not found |  | Call log: |   - Expect "toBeVisible" with timeout 60000ms |   - waiting for locator('[data-input-id="channel-input-01a1e123-1af9-7698-889c-6cbf9ef73912"]') | 
+  ✓  18 tests/channels-e2e-dbg/offline.spec.ts:128:1 › OFF-04 messages read far back in a long channel can be scrolled through again with no connection (1.4m)
+  ✓  25 tests/channels-e2e-dbg/channels.spec.ts:247:1 › CHN-07 deleting a channel removes it for its owner at once, and its address no longer opens for anyone (10.8s)
+  ✓  27 tests/channels-e2e-dbg/members.spec.ts:111:1 › MEM-03 a person removed while the channel is open loses it at once (2.7s)
+  ✓  28 tests/channels-e2e-dbg/channels.spec.ts:247:1 › CHN-07 deleting a channel removes it for its owner at once, and its address no longer opens for anyone (11.3s)
+  ✓  29 tests/channels-e2e-dbg/members.spec.ts:111:1 › MEM-03 a person removed while the channel is open loses it at once (2.5s)
+DD OFF-04 w0 ANNOT 582299 Error: expect(locator).toBeVisible() failed |  | Locator: locator('[data-input-id="channel-input-01a1e123-1af5-75b1-87f0-5b586e2b221c"]') | Expected: visible | Timeout: 60000ms | Error: element(s) not found |  | Call log: |   - Expect "toBeVisible" with timeout 60000ms |   - waiting for locator('[data-input-id="channel-input-01a1e123-1af5-75b1-87f0-5b586e2b221c"]') | 
+  ✓  21 tests/channels-e2e-dbg/offline.spec.ts:128:1 › OFF-04 messages read far back in a long channel can be scrolled through again with no connection (1.4m)
+  ✓  31 tests/channels-e2e-dbg/channels.spec.ts:247:1 › CHN-07 deleting a channel removes it for its owner at once, and its address no longer opens for anyone (10.6s)
+DD OFF-04 w2 ANNOT 595500 Error: expect(locator).toBeVisible() failed |  | Locator: locator('[data-input-id="channel-input-01a1e123-1af9-773d-b2ee-b3706e26addf"]') | Expected: visible | Timeout: 60000ms | Error: element(s) not found |  | Call log: |   - Expect "toBeVisible" with timeout 60000ms |   - waiting for locator('[data-input-id="channel-input-01a1e123-1af9-773d-b2ee-b3706e26addf"]') | 
+  ✓  24 tests/channels-e2e-dbg/offline.spec.ts:128:1 › OFF-04 messages read far back in a long channel can be scrolled through again with no connection (1.4m)
+  ✓  32 tests/channels-e2e-dbg/members.spec.ts:111:1 › MEM-03 a person removed while the channel is open loses it at once (2.4s)
+  ✘  34 tests/channels-e2e-dbg/channels.spec.ts:247:1 › CHN-07 deleting a channel removes it for its owner at once, and its address no longer opens for anyone (21.0s)
+  ✓  35 tests/channels-e2e-dbg/members.spec.ts:111:1 › MEM-03 a person removed while the channel is open loses it at once (2.9s)
+DD OFF-04 w1 ANNOT 647585 Error: expect(locator).toBeVisible() failed |  | Locator: locator('[data-input-id="channel-input-01a1e123-1afa-7eaa-a541-87a22b9b4258"]') | Expected: visible | Timeout: 60000ms | Error: element(s) not found |  | Call log: |   - Expect "toBeVisible" with timeout 60000ms |   - waiting for locator('[data-input-id="channel-input-01a1e123-1afa-7eaa-a541-87a22b9b4258"]') | 
+  ✓  26 tests/channels-e2e-dbg/offline.spec.ts:128:1 › OFF-04 messages read far back in a long channel can be scrolled through again with no connection (1.4m)
+DJ CHN-07 w1 r12 ben 654445 ["[observability]","graphql.mutation_queue.loaded",{"auth.state":"signed-in","network.online":false,"graphql.websocket.state":"connected","mutation_queue.depth":1,"mutation_queue.age_unknown_items":0,"mutation_queue.oldest_item_age_ms":3080}]
+DJ CHN-07 w1 r12 ben 655414 ["[observability]","graphql.mutation_queue.skipped",{"auth.state":"signed-in","network.online":false,"graphql.websocket.state":"connected","mutation_queue.pending_items":0,"mutation_queue.oldest_observed_wait_ms":0,"mutation_queue.age_unknown_items":0,"mutation_queue.skip_reason":"lease-owner-gone"}]
+  ✓  37 tests/channels-e2e-dbg/channels.spec.ts:247:1 › CHN-07 deleting a channel removes it for its owner at once, and its address no longer opens for anyone (10.7s)
+  ✓  38 tests/channels-e2e-dbg/members.spec.ts:111:1 › MEM-03 a person removed while the channel is open loses it at once (2.1s)
+DD OFF-04 w3 ANNOT 665718 Error: expect(locator).toBeVisible() failed |  | Locator: locator('[data-input-id="channel-input-01a1e123-1af9-7698-889c-6cbf9ef73912"]') | Expected: visible | Timeout: 60000ms | Error: element(s) not found |  | Call log: |   - Expect "toBeVisible" with timeout 60000ms |   - waiting for locator('[data-input-id="channel-input-01a1e123-1af9-7698-889c-6cbf9ef73912"]') | 
+  ✓  30 tests/channels-e2e-dbg/offline.spec.ts:128:1 › OFF-04 messages read far back in a long channel can be scrolled through again with no connection (1.4m)
+  ✓  40 tests/channels-e2e-dbg/channels.spec.ts:247:1 › CHN-07 deleting a channel removes it for its owner at once, and its address no longer opens for anyone (10.6s)
+DD OFF-04 w2 ANNOT 677955 Error: expect(locator).toBeVisible() failed |  | Locator: locator('[data-input-id="channel-input-01a1e123-1af9-773d-b2ee-b3706e26addf"]') | Expected: visible | Timeout: 60000ms | Error: element(s) not found |  | Call log: |   - Expect "toBeVisible" with timeout 60000ms |   - waiting for locator('[data-input-id="channel-input-01a1e123-1af9-773d-b2ee-b3706e26addf"]') | 
+  ✓  33 tests/channels-e2e-dbg/offline.spec.ts:128:1 › OFF-04 messages read far back in a long channel can be scrolled through again with no connection (1.4m)
+  ✓  41 tests/channels-e2e-dbg/members.spec.ts:111:1 › MEM-03 a person removed while the channel is open loses it at once (2.3s)
+  ✓  43 tests/channels-e2e-dbg/channels.spec.ts:247:1 › CHN-07 deleting a channel removes it for its owner at once, and its address no longer opens for anyone (11.2s)
+  ✓  44 tests/channels-e2e-dbg/members.spec.ts:111:1 › MEM-03 a person removed while the channel is open loses it at once (2.2s)
+DD OFF-04 w0 ANNOT 703776 Error: expect(locator).toBeVisible() failed |  | Locator: locator('[data-input-id="channel-input-01a1e123-1af5-75b1-87f0-5b586e2b221c"]') | Expected: visible | Timeout: 60000ms | Error: element(s) not found |  | Call log: |   - Expect "toBeVisible" with timeout 60000ms |   - waiting for locator('[data-input-id="channel-input-01a1e123-1af5-75b1-87f0-5b586e2b221c"]') | 
+  ✓  36 tests/channels-e2e-dbg/offline.spec.ts:128:1 › OFF-04 messages read far back in a long channel can be scrolled through again with no connection (1.4m)
+  ✓  46 tests/channels-e2e-dbg/channels.spec.ts:247:1 › CHN-07 deleting a channel removes it for its owner at once, and its address no longer opens for anyone (10.4s)
+  ✓  47 tests/channels-e2e-dbg/members.spec.ts:111:1 › MEM-03 a person removed while the channel is open loses it at once (2.6s)
+DD OFF-04 w1 ANNOT 743063 Error: expect(locator).toBeVisible() failed |  | Locator: locator('[data-input-id="channel-input-01a1e123-1afa-7eaa-a541-87a22b9b4258"]') | Expected: visible | Timeout: 60000ms | Error: element(s) not found |  | Call log: |   - Expect "toBeVisible" with timeout 60000ms |   - waiting for locator('[data-input-id="channel-input-01a1e123-1afa-7eaa-a541-87a22b9b4258"]') | 
+  ✓  39 tests/channels-e2e-dbg/offline.spec.ts:128:1 › OFF-04 messages read far back in a long channel can be scrolled through again with no connection (1.4m)
+  ✓  49 tests/channels-e2e-dbg/channels.spec.ts:247:1 › CHN-07 deleting a channel removes it for its owner at once, and its address no longer opens for anyone (11.0s)
+  ✓  50 tests/channels-e2e-dbg/members.spec.ts:111:1 › MEM-03 a person removed while the channel is open loses it at once (2.6s)
+DD OFF-04 w2 ANNOT 760588 Error: expect(locator).toBeVisible() failed |  | Locator: locator('[data-input-id="channel-input-01a1e123-1af9-773d-b2ee-b3706e26addf"]') | Expected: visible | Timeout: 60000ms | Error: element(s) not found |  | Call log: |   - Expect "toBeVisible" with timeout 60000ms |   - waiting for locator('[data-input-id="channel-input-01a1e123-1af9-773d-b2ee-b3706e26addf"]') | 
+  ✓  42 tests/channels-e2e-dbg/offline.spec.ts:128:1 › OFF-04 messages read far back in a long channel can be scrolled through again with no connection (1.4m)
+  ✓  52 tests/channels-e2e-dbg/channels.spec.ts:247:1 › CHN-07 deleting a channel removes it for its owner at once, and its address no longer opens for anyone (11.3s)
+DD OFF-04 w3 ANNOT 775040 Error: expect(locator).toBeVisible() failed |  | Locator: locator('[data-input-id="channel-input-01a1e123-1af9-7698-889c-6cbf9ef73912"]') | Expected: visible | Timeout: 60000ms | Error: element(s) not found |  | Call log: |   - Expect "toBeVisible" with timeout 60000ms |   - waiting for locator('[data-input-id="channel-input-01a1e123-1af9-7698-889c-6cbf9ef73912"]') | 
+  ✓  45 tests/channels-e2e-dbg/offline.spec.ts:128:1 › OFF-04 messages read far back in a long channel can be scrolled through again with no connection (1.4m)
+  ✘  53 tests/channels-e2e-dbg/members.spec.ts:111:1 › MEM-03 a person removed while the channel is open loses it at once (17.1s)
+DD OFF-04 w0 ANNOT 799825 Error: expect(locator).toBeVisible() failed |  | Locator: locator('[data-input-id="channel-input-01a1e123-1af5-75b1-87f0-5b586e2b221c"]') | Expected: visible | Timeout: 60000ms | Error: element(s) not found |  | Call log: |   - Expect "toBeVisible" with timeout 60000ms |   - waiting for locator('[data-input-id="channel-input-01a1e123-1af5-75b1-87f0-5b586e2b221c"]') | 
+  ✓  48 tests/channels-e2e-dbg/offline.spec.ts:128:1 › OFF-04 messages read far back in a long channel can be scrolled through again with no connection (1.4m)
+  ✓  55 tests/channels-e2e-dbg/channels.spec.ts:247:1 › CHN-07 deleting a channel removes it for its owner at once, and its address no longer opens for anyone (11.5s)
+  ✓  56 tests/channels-e2e-dbg/members.spec.ts:111:1 › MEM-03 a person removed while the channel is open loses it at once (2.8s)
+  ✓  58 tests/channels-e2e-dbg/channels.spec.ts:247:1 › CHN-07 deleting a channel removes it for its owner at once, and its address no longer opens for anyone (10.3s)
+  ✓  59 tests/channels-e2e-dbg/members.spec.ts:111:1 › MEM-03 a person removed while the channel is open loses it at once (2.3s)
+DD OFF-04 w1 ANNOT 838926 Error: expect(locator).toBeVisible() failed |  | Locator: locator('[data-input-id="channel-input-01a1e123-1afa-7eaa-a541-87a22b9b4258"]') | Expected: visible | Timeout: 60000ms | Error: element(s) not found |  | Call log: |   - Expect "toBeVisible" with timeout 60000ms |   - waiting for locator('[data-input-id="channel-input-01a1e123-1afa-7eaa-a541-87a22b9b4258"]') | 
+  ✓  51 tests/channels-e2e-dbg/offline.spec.ts:128:1 › OFF-04 messages read far back in a long channel can be scrolled through again with no connection (1.4m)
+DJ CHN-07 w1 r20 ben 845780 ["[observability]","graphql.mutation_queue.loaded",{"auth.state":"signed-in","network.online":false,"graphql.websocket.state":"connected","mutation_queue.depth":1,"mutation_queue.age_unknown_items":0,"mutation_queue.oldest_item_age_ms":3289}]
+DJ CHN-07 w1 r20 ben 846669 ["[observability]","graphql.mutation_queue.skipped",{"auth.state":"signed-in","network.online":false,"graphql.websocket.state":"connected","mutation_queue.pending_items":0,"mutation_queue.oldest_observed_wait_ms":0,"mutation_queue.age_unknown_items":0,"mutation_queue.skip_reason":"lease-owner-gone"}]
+  ✓  61 tests/channels-e2e-dbg/channels.spec.ts:247:1 › CHN-07 deleting a channel removes it for its owner at once, and its address no longer opens for anyone (10.5s)
+  ✓  62 tests/channels-e2e-dbg/members.spec.ts:111:1 › MEM-03 a person removed while the channel is open loses it at once (2.5s)
+DD OFF-04 w3 ANNOT 857852 Error: expect(locator).toBeVisible() failed |  | Locator: locator('[data-input-id="channel-input-01a1e123-1af9-7698-889c-6cbf9ef73912"]') | Expected: visible | Timeout: 60000ms | Error: element(s) not found |  | Call log: |   - Expect "toBeVisible" with timeout 60000ms |   - waiting for locator('[data-input-id="channel-input-01a1e123-1af9-7698-889c-6cbf9ef73912"]') | 
+  ✓  54 tests/channels-e2e-dbg/offline.spec.ts:128:1 › OFF-04 messages read far back in a long channel can be scrolled through again with no connection (1.4m)
+  ✓  64 tests/channels-e2e-dbg/channels.spec.ts:247:1 › CHN-07 deleting a channel removes it for its owner at once, and its address no longer opens for anyone (10.5s)
+  ✓  65 tests/channels-e2e-dbg/members.spec.ts:111:1 › MEM-03 a person removed while the channel is open loses it at once (2.5s)
+DD OFF-04 w2 ANNOT 884358 Error: expect(locator).toBeVisible() failed |  | Locator: locator('[data-input-id="channel-input-01a1e123-1af9-773d-b2ee-b3706e26addf"]') | Expected: visible | Timeout: 60000ms | Error: element(s) not found |  | Call log: |   - Expect "toBeVisible" with timeout 60000ms |   - waiting for locator('[data-input-id="channel-input-01a1e123-1af9-773d-b2ee-b3706e26addf"]') | 
+  ✓  57 tests/channels-e2e-dbg/offline.spec.ts:128:1 › OFF-04 messages read far back in a long channel can be scrolled through again with no connection (1.4m)
+  ✓  63 tests/channels-e2e-dbg/offline.spec.ts:128:1 › OFF-04 messages read far back in a long channel can be scrolled through again with no connection (32.3s)
+  ✓  68 tests/channels-e2e-dbg/members.spec.ts:111:1 › MEM-03 a person removed while the channel is open loses it at once (2.9s)
+  ✓  67 tests/channels-e2e-dbg/channels.spec.ts:247:1 › CHN-07 deleting a channel removes it for its owner at once, and its address no longer opens for anyone (11.0s)
+DD OFF-04 w0 ANNOT 898832 Error: expect(locator).toBeVisible() failed |  | Locator: locator('[data-input-id="channel-input-01a1e123-1af5-75b1-87f0-5b586e2b221c"]') | Expected: visible | Timeout: 60000ms | Error: element(s) not found |  | Call log: |   - Expect "toBeVisible" with timeout 60000ms |   - waiting for locator('[data-input-id="channel-input-01a1e123-1af5-75b1-87f0-5b586e2b221c"]') | 
+  ✓  60 tests/channels-e2e-dbg/offline.spec.ts:128:1 › OFF-04 messages read far back in a long channel can be scrolled through again with no connection (1.4m)
+  ✓  71 tests/channels-e2e-dbg/members.spec.ts:111:1 › MEM-03 a person removed while the channel is open loses it at once (2.4s)
+  ✓  70 tests/channels-e2e-dbg/channels.spec.ts:247:1 › CHN-07 deleting a channel removes it for its owner at once, and its address no longer opens for anyone (10.5s)
+  ✓  73 tests/channels-e2e-dbg/channels.spec.ts:247:1 › CHN-07 deleting a channel removes it for its owner at once, and its address no longer opens for anyone (11.0s)
+  ✓  74 tests/channels-e2e-dbg/members.spec.ts:111:1 › MEM-03 a person removed while the channel is open loses it at once (2.2s)
+DD OFF-04 w3 ANNOT 953599 Error: expect(locator).toBeVisible() failed |  | Locator: locator('[data-input-id="channel-input-01a1e123-1af9-7698-889c-6cbf9ef73912"]') | Expected: visible | Timeout: 60000ms | Error: element(s) not found |  | Call log: |   - Expect "toBeVisible" with timeout 60000ms |   - waiting for locator('[data-input-id="channel-input-01a1e123-1af9-7698-889c-6cbf9ef73912"]') | 
+  ✓  66 tests/channels-e2e-dbg/offline.spec.ts:128:1 › OFF-04 messages read far back in a long channel can be scrolled through again with no connection (1.4m)
+  ✓  76 tests/channels-e2e-dbg/channels.spec.ts:247:1 › CHN-07 deleting a channel removes it for its owner at once, and its address no longer opens for anyone (10.4s)
+  ✓  77 tests/channels-e2e-dbg/members.spec.ts:111:1 › MEM-03 a person removed while the channel is open loses it at once (2.1s)
+DD OFF-04 w1 ANNOT 970691 Error: expect(locator).toBeVisible() failed |  | Locator: locator('[data-input-id="channel-input-01a1e123-1afa-7eaa-a541-87a22b9b4258"]') | Expected: visible | Timeout: 60000ms | Error: element(s) not found |  | Call log: |   - Expect "toBeVisible" with timeout 60000ms |   - waiting for locator('[data-input-id="channel-input-01a1e123-1afa-7eaa-a541-87a22b9b4258"]') | 
+  ✓  69 tests/channels-e2e-dbg/offline.spec.ts:128:1 › OFF-04 messages read far back in a long channel can be scrolled through again with no connection (1.4m)
+DJ CHN-07 w1 r26 ben 977604 ["[observability]","graphql.mutation_queue.loaded",{"auth.state":"signed-in","network.online":false,"graphql.websocket.state":"connected","mutation_queue.depth":1,"mutation_queue.age_unknown_items":0,"mutation_queue.oldest_item_age_ms":3374}]
+DJ CHN-07 w1 r26 ben 979371 ["[observability]","graphql.mutation_queue.skipped",{"auth.state":"signed-in","network.online":false,"graphql.websocket.state":"connected","mutation_queue.pending_items":0,"mutation_queue.oldest_observed_wait_ms":0,"mutation_queue.age_unknown_items":0,"mutation_queue.skip_reason":"lease-owner-gone"}]
+  ✓  79 tests/channels-e2e-dbg/channels.spec.ts:247:1 › CHN-07 deleting a channel removes it for its owner at once, and its address no longer opens for anyone (10.6s)
+  ✓  80 tests/channels-e2e-dbg/members.spec.ts:111:1 › MEM-03 a person removed while the channel is open loses it at once (2.7s)
+DD OFF-04 w0 ANNOT 984880 Error: expect(locator).toBeVisible() failed |  | Locator: locator('[data-input-id="channel-input-01a1e123-1af5-75b1-87f0-5b586e2b221c"]') | Expected: visible | Timeout: 60000ms | Error: element(s) not found |  | Call log: |   - Expect "toBeVisible" with timeout 60000ms |   - waiting for locator('[data-input-id="channel-input-01a1e123-1af5-75b1-87f0-5b586e2b221c"]') | 
+  ✓  72 tests/channels-e2e-dbg/offline.spec.ts:128:1 › OFF-04 messages read far back in a long channel can be scrolled through again with no connection (1.4m)
+  ✓  82 tests/channels-e2e-dbg/channels.spec.ts:247:1 › CHN-07 deleting a channel removes it for its owner at once, and its address no longer opens for anyone (10.7s)
+  ✓  83 tests/channels-e2e-dbg/members.spec.ts:111:1 › MEM-03 a person removed while the channel is open loses it at once (2.3s)
+DD OFF-04 w2 ANNOT 2166 Error: expect(locator).toBeVisible() failed |  | Locator: locator('[data-input-id="channel-input-01a1e123-1af9-773d-b2ee-b3706e26addf"]') | Expected: visible | Timeout: 60000ms | Error: element(s) not found |  | Call log: |   - Expect "toBeVisible" with timeout 60000ms |   - waiting for locator('[data-input-id="channel-input-01a1e123-1af9-773d-b2ee-b3706e26addf"]') | 
+  ✓  75 tests/channels-e2e-dbg/offline.spec.ts:128:1 › OFF-04 messages read far back in a long channel can be scrolled through again with no connection (1.4m)
+  ✓  85 tests/channels-e2e-dbg/channels.spec.ts:247:1 › CHN-07 deleting a channel removes it for its owner at once, and its address no longer opens for anyone (11.0s)
+  ✓  86 tests/channels-e2e-dbg/members.spec.ts:111:1 › MEM-03 a person removed while the channel is open loses it at once (2.7s)
+  ✓  81 tests/channels-e2e-dbg/offline.spec.ts:128:1 › OFF-04 messages read far back in a long channel can be scrolled through again with no connection (33.9s)
+  ✓  88 tests/channels-e2e-dbg/channels.spec.ts:247:1 › CHN-07 deleting a channel removes it for its owner at once, and its address no longer opens for anyone (10.9s)
+  ✓  89 tests/channels-e2e-dbg/members.spec.ts:111:1 › MEM-03 a person removed while the channel is open loses it at once (2.3s)
+DD OFF-04 w3 ANNOT 48954 Error: expect(locator).toBeVisible() failed |  | Locator: locator('[data-input-id="channel-input-01a1e123-1af9-7698-889c-6cbf9ef73912"]') | Expected: visible | Timeout: 60000ms | Error: element(s) not found |  | Call log: |   - Expect "toBeVisible" with timeout 60000ms |   - waiting for locator('[data-input-id="channel-input-01a1e123-1af9-7698-889c-6cbf9ef73912"]') | 
+  ✓  78 tests/channels-e2e-dbg/offline.spec.ts:128:1 › OFF-04 messages read far back in a long channel can be scrolled through again with no connection (1.4m)
+DD OFF-04 w0 ANNOT 80715 Error: expect(locator).toBeVisible() failed |  | Locator: locator('[data-input-id="channel-input-01a1e123-1af5-75b1-87f0-5b586e2b221c"]') | Expected: visible | Timeout: 60000ms | Error: element(s) not found |  | Call log: |   - Expect "toBeVisible" with timeout 60000ms |   - waiting for locator('[data-input-id="channel-input-01a1e123-1af5-75b1-87f0-5b586e2b221c"]') | 
+  ✓  84 tests/channels-e2e-dbg/offline.spec.ts:128:1 › OFF-04 messages read far back in a long channel can be scrolled through again with no connection (1.4m)
+DD OFF-04 w2 ANNOT 98625 Error: expect(locator).toBeVisible() failed |  | Locator: locator('[data-input-id="channel-input-01a1e123-1af9-773d-b2ee-b3706e26addf"]') | Expected: visible | Timeout: 60000ms | Error: element(s) not found |  | Call log: |   - Expect "toBeVisible" with timeout 60000ms |   - waiting for locator('[data-input-id="channel-input-01a1e123-1af9-773d-b2ee-b3706e26addf"]') | 
+  ✓  87 tests/channels-e2e-dbg/offline.spec.ts:128:1 › OFF-04 messages read far back in a long channel can be scrolled through again with no connection (1.4m)
+DD OFF-04 w1 ANNOT 113661 Error: expect(locator).toBeVisible() failed |  | Locator: locator('[data-input-id="channel-input-01a1e123-1afa-7eaa-a541-87a22b9b4258"]') | Expected: visible | Timeout: 60000ms | Error: element(s) not found |  | Call log: |   - Expect "toBeVisible" with timeout 60000ms |   - waiting for locator('[data-input-id="channel-input-01a1e123-1afa-7eaa-a541-87a22b9b4258"]') | 
+  ✓  90 tests/channels-e2e-dbg/offline.spec.ts:128:1 › OFF-04 messages read far back in a long channel can be scrolled through again with no connection (1.4m)
+
+
+  1) tests/channels-e2e-dbg/channels.spec.ts:247:1 › CHN-07 deleting a channel removes it for its owner at once, and its address no longer opens for anyone 
+
+    Error: expect(locator).toHaveCount(expected) failed
+
+    Locator:  locator('[data-input-id="channel-input-01a1e5ba-f0ec-7109-887c-12b07d8115fc"]')
+    Expected: 0
+    Received: 1
+    Timeout:  15000ms
+
+    Call log:
+      - Expect "toHaveCount" with timeout 15000ms
+      - waiting for locator('[data-input-id="channel-input-01a1e5ba-f0ec-7109-887c-12b07d8115fc"]')
+        34 × locator resolved to 1 element
+           - unexpected value "1"
+
+
+      270 |   // The owner: the channel is gone from the list and from the screen.
+      271 |   await expect(sidebarRow(page, channel.id)).toHaveCount(0);
+    > 272 |   await expect(view.composer).toHaveCount(0);
+          |                               ^
+      273 |   await expect(page.getByText('soon gone two')).toHaveCount(0);
+      274 |
+      275 |   // Its address no longer opens it, for either; the member's list drops it.
+        at /home/teo/.herdr/worktrees/macro/synoet-channels-local-sync-suiteb/apps/web/tests/channels-e2e-dbg/channels.spec.ts:272:31
+
+    attachment #1: screenshot (image/png) ──────────────────────────────────────────────────────────
+    ../../../../../../.cache/channels-perf-b/e2ed/n1/test-results/channels-CHN-07-deleting-a-97616--no-longer-opens-for-anyone-repeat11/test-failed-2.png
+    ────────────────────────────────────────────────────────────────────────────────────────────────
+
+    attachment #2: screenshot (image/png) ──────────────────────────────────────────────────────────
+    ../../../../../../.cache/channels-perf-b/e2ed/n1/test-results/channels-CHN-07-deleting-a-97616--no-longer-opens-for-anyone-repeat11/test-failed-1.png
+    ────────────────────────────────────────────────────────────────────────────────────────────────
+
+    Error Context: ../../../../../../.cache/channels-perf-b/e2ed/n1/test-results/channels-CHN-07-deleting-a-97616--no-longer-opens-for-anyone-repeat11/error-context.md
+
+    attachment #4: trace (application/zip) ─────────────────────────────────────────────────────────
+    ../../../../../../.cache/channels-perf-b/e2ed/n1/test-results/channels-CHN-07-deleting-a-97616--no-longer-opens-for-anyone-repeat11/trace.zip
+    Usage:
+
+        npx playwright show-trace ../../../../../../.cache/channels-perf-b/e2ed/n1/test-results/channels-CHN-07-deleting-a-97616--no-longer-opens-for-anyone-repeat11/trace.zip
+
+    ────────────────────────────────────────────────────────────────────────────────────────────────
+
+  2) tests/channels-e2e-dbg/members.spec.ts:111:1 › MEM-03 a person removed while the channel is open loses it at once 
+
+    Error: expect(locator).toHaveCount(expected) failed
+
+    Locator:  locator('[data-input-id="channel-input-01a1e5bd-a0b3-72ac-92a3-b3edef5e6208"]')
+    Expected: 0
+    Received: 1
+    Timeout:  15000ms
+
+    Call log:
+      - Expect "toHaveCount" with timeout 15000ms
+      - waiting for locator('[data-input-id="channel-input-01a1e5bd-a0b3-72ac-92a3-b3edef5e6208"]')
+        34 × locator resolved to 1 element
+           - unexpected value "1"
+
+
+      131 |   await ada.removeParticipants(channel.id, [people.cy]);
+      132 |
+    > 133 |   await expect(cyView.composer).toHaveCount(0);
+          |                                 ^
+      134 |   await expect(noAccess(cyPage)).toBeVisible();
+      135 |   await expect(cyPage.getByText('all three here')).toHaveCount(0);
+      136 | });
+        at /home/teo/.herdr/worktrees/macro/synoet-channels-local-sync-suiteb/apps/web/tests/channels-e2e-dbg/members.spec.ts:133:33
+
+    attachment #1: screenshot (image/png) ──────────────────────────────────────────────────────────
+    ../../../../../../.cache/channels-perf-b/e2ed/n1/test-results/members-MEM-03-a-person-re-3c0d9-el-is-open-loses-it-at-once-repeat17/test-failed-1.png
+    ────────────────────────────────────────────────────────────────────────────────────────────────
+
+    Error Context: ../../../../../../.cache/channels-perf-b/e2ed/n1/test-results/members-MEM-03-a-person-re-3c0d9-el-is-open-loses-it-at-once-repeat17/error-context.md
+
+    attachment #3: trace (application/zip) ─────────────────────────────────────────────────────────
+    ../../../../../../.cache/channels-perf-b/e2ed/n1/test-results/members-MEM-03-a-person-re-3c0d9-el-is-open-loses-it-at-once-repeat17/trace.zip
+    Usage:
+
+        npx playwright show-trace ../../../../../../.cache/channels-perf-b/e2ed/n1/test-results/members-MEM-03-a-person-re-3c0d9-el-is-open-loses-it-at-once-repeat17/trace.zip
+
+    ────────────────────────────────────────────────────────────────────────────────────────────────
+
+  2 failed
+    tests/channels-e2e-dbg/channels.spec.ts:247:1 › CHN-07 deleting a channel removes it for its owner at once, and its address no longer opens for anyone 
+    tests/channels-e2e-dbg/members.spec.ts:111:1 › MEM-03 a person removed while the channel is open loses it at once 
+  88 passed (12.3m)

@@ -1,0 +1,9 @@
+
+$ echo $npm_package_version+$(git rev-parse --short HEAD) > ./dist/semver.txt
+$ bun ./scripts/write-bundle-manifest.mjs
+main rc=0 17:09:13 index=/home/teo/.cache/channels-perf-b/tmp/mb-main/apps/web/dist/index.html head=0e83b8822d
+
+$ echo $npm_package_version+$(git rev-parse --short HEAD) > ./dist/semver.txt
+$ bun ./scripts/write-bundle-manifest.mjs
+reads rc=0 17:10:48 index=/home/teo/.cache/channels-perf-b/tmp/mb-reads/apps/web/dist/index.html head=c339fd1f79
+BUILD_DONE

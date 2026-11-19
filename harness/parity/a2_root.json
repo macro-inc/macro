@@ -1,0 +1,19 @@
+{
+ "url": "https://localhost:31009/app/channels/5eed92f0-1c06-8932-b12c-277f6a59bad3?channel_thread_id=0199a7ca-1eeb-7464-a5bb-8258d0458c89",
+ "target": "0199a7ca-1eeb-7464-a5bb-8258d0458c89",
+ "firstTargetMs": 46510,
+ "samples": [
+  "411/T/21/2270",
+  "411/T/21/2270",
+  "411/T/21/2270",
+  "411/T/21/2270",
+  "411/-/21/2270",
+  "411/-/21/2270",
+  "411/-/21/2270",
+  "411/-/21/2270",
+  "411/-/21/2270",
+  "411/-/21/2270"
+ ],
+ "urlAfter": "/app/channels/5eed92f0-1c06-8932-b12c-277f6a59bad3?channel_thread_id=0199a7ca-1eeb-7464-a5bb-8258d0458c89&s0.channels.messageId=0199a7ca-1eeb-7464-a5bb-8258d0458c89&s0.channels.threadId=0199a7ca-1eeb-7464-a5bb-8258d0458c89",
+ "settled": "411/-/21/2270"
+}

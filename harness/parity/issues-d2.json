@@ -1,0 +1,36 @@
+{
+ "console": [
+  [
+   "Failed to load resource: the server responded with a status of 404 ()",
+   2
+  ],
+  [
+   "Failed to load resource: net::ERR_NETWORK_CHANGED",
+   2
+  ]
+ ],
+ "failed": [
+  [
+   "POST https://localhost:31009/email/email/links/health-check net::ERR_ABORTED",
+   1
+  ],
+  [
+   "GET https://localhost:31009/dss/call/:id/active net::ERR_ABORTED",
+   1
+  ],
+  [
+   "POST https://localhost:31009/dss/items/soup/graphql net::ERR_NETWORK_CHANGED",
+   2
+  ]
+ ],
+ "bad": [
+  [
+   "404 GET https://localhost:31009/auth/link/github/status ",
+   1
+  ],
+  [
+   "404 GET https://localhost:31009/scheduled-action/scheduled-actions/suggestions ",
+   1
+  ]
+ ]
+}

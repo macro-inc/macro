@@ -1,0 +1,1302 @@
+path "/home/teo/.herdr/worktrees/macro/synoet-channels-local-sync-suiteb/apps/web" does not contain a 'flake.nix', searching up
+
+Running 155 tests using 4 workers
+
+  ✓    1 tests/channels-e2e-dbg/access.spec.ts:39:1 › ACC-02 a person outside the team who opens a private channel’s address sees no messages (1.8s)
+  ✓    2 tests/channels-e2e-dbg/access.spec.ts:13:1 › ACC-01 a teammate who is not in a private channel sees no messages and is offered to ask to join (1.9s)
+DD ACC-04 w3 page 354406 DBGq claim 2566 7dc2d2 none deferredUntil -
+DD ACC-03 w2 page 354408 DBGq claim 2487 db1df4 none deferredUntil -
+DD ACC-04 w3 page 354428 DBGq blocked 2587 null
+DD ACC-03 w2 page 354429 DBGq blocked 2508 null
+DD ACC-06 w0 ben 356024 DBGq claim 2427 bda65c none deferredUntil -
+DD ACC-06 w0 ben 356078 DBGq blocked 2481 null
+DD ACC-05 w1 page 356238 DBGq claim 2686 2f7132 none deferredUntil -
+DD ACC-05 w1 page 356295 DBGq blocked 2743 null
+DD ACC-03 w2 cy 356986 DBGq claim 3163 9ea714 none deferredUntil -
+DD ACC-03 w2 cy 357038 DBGq blocked 3357 null
+DD ACC-03 w2 cy 357342 DBGq finish 3660 SendChannelMessage committed {} retryIn -
+DD ACC-03 w2 cy 357342 DBGq tfinish 3661 committed {}
+DD ACC-03 w2 cy 357395 DBGq claim 3714 9ea714 none deferredUntil -
+DD ACC-03 w2 cy 357396 DBGq blocked 3715 null
+  ✓    3 tests/channels-e2e-dbg/access.spec.ts:104:1 › ACC-04 a denied request tells the person so and shows them nothing of the channel (5.8s)
+  ✓    4 tests/channels-e2e-dbg/access.spec.ts:61:1 › ACC-03 a request to join reaches the owner at once, and approving it lets the person in at once (5.8s)
+DD ACC-05 w1 cy 358296 DBGq claim 2764 ec9841 none deferredUntil -
+DD ACC-05 w1 cy 358322 DBGq blocked 2790 null
+  ✓    5 tests/channels-e2e-dbg/access.spec.ts:139:1 › ACC-05 a withdrawn request can no longer be approved (5.7s)
+  ✓    7 tests/channels-e2e-dbg/access.spec.ts:212:1 › ACC-07 a person outside the team cannot read a team channel or find it to join (2.1s)
+DD ACC-08 w2 page 360082 DBGq claim 2507 97057f none deferredUntil -
+DD ACC-08 w2 page 360101 DBGq blocked 2526 null
+  ✓    9 tests/channels-e2e-dbg/access.spec.ts:264:1 › ACC-09 a signed-out person who opens a channel’s address is asked to log in and sees nothing of it (1.3s)
+  ✓    8 tests/channels-e2e-dbg/access.spec.ts:248:1 › ACC-08 the address of a channel that does not exist says the conversation is unavailable (3.8s)
+DD CHN-01 w3 page 361913 DBGq claim 2290 6afbb1 none deferredUntil -
+DD CHN-01 w3 page 361989 DBGq blocked 2363 null
+DD CHN-01 w3 page 362657 DBGq finish 3034 SendChannelMessage committed {} retryIn -
+DD CHN-01 w3 page 362657 DBGq tfinish 3034 committed {}
+DD CHN-01 w3 page 362698 DBGq claim 3076 6afbb1 none deferredUntil -
+DD CHN-01 w3 page 362707 DBGq blocked 3083 null
+DD CHN-02 w1 ben 363024 DBGq claim 2480 9c548f none deferredUntil -
+DD CHN-02 w1 ben 363027 DBGq blocked 2483 null
+DD CHN-03 w2 page 363715 DBGq claim 2299 0d2d1d none deferredUntil -
+DD CHN-03 w2 page 363727 DBGq blocked 2311 null
+DD CHN-02 w1 page 364663 DBGq claim 2323 463b5f none deferredUntil -
+DD CHN-02 w1 page 364664 DBGq blocked 2325 null
+DD CHN-03 w2 ben 365806 DBGq claim 2583 85923c none deferredUntil -
+DD CHN-03 w2 ben 365825 DBGq blocked 2606 null
+DD CHN-01 w3 page 365892 DBGq claim 1804 980193 none deferredUntil -
+DD CHN-01 w3 page 365905 DBGq blocked 1817 null
+  ✓   10 tests/channels-e2e-dbg/channels.spec.ts:29:1 › CHN-01 a private channel made in the app opens empty, shows in the list and takes its first message (6.3s)
+DD CHN-02 w1 page 366790 DBGq finish 4450 SendChannelMessage committed {} retryIn -
+DD CHN-02 w1 page 366790 DBGq tfinish 4451 committed {}
+DD CHN-02 w1 page 366992 DBGq claim 4652 463b5f none deferredUntil -
+DD CHN-02 w1 page 366993 DBGq blocked 4654 null
+DD CHN-03 w2 page 367313 DBGq finish 5896 RenameEntities committed {} retryIn -
+DD CHN-03 w2 page 367313 DBGq tfinish 5897 committed {}
+DD CHN-03 w2 page 367387 DBGq claim 5972 0d2d1d none deferredUntil -
+DD CHN-03 w2 page 367525 DBGq blocked 6095 null
+DD CHN-04 w3 ben 368339 DBGq claim 2325 594406 none deferredUntil -
+DD CHN-04 w3 ben 368375 DBGq blocked 2362 null
+DD CHN-04 w3 ada 370176 DBGq claim 2399 14fe5d none deferredUntil -
+DD CHN-04 w3 ada 370192 DBGq blocked 2409 {"id":"1","op":"RenameEntities","lo":"14fe5d","exp":299806,"alive":true,"keys":["transactionId","uuid","superseded","query","operationName","variables","clientMetadata","optimisticData","enqueuedAtMs","leaseOwner","leaseGeneration","leaseExpiresAtMs"]}
+DD ACC-06 ANNOT 370409 Error: expect(locator).toHaveCount(expected) failed
+  ✓   12 tests/channels-e2e-dbg/channels.spec.ts:118:1 › CHN-03 renaming a channel updates its header and list row, and tells both members in the channel (9.3s)
+DD CHN-04 w3 ada 370830 DBGq finish 3052 RenameEntities committed {} retryIn -
+DD CHN-04 w3 ada 370830 DBGq tfinish 3053 committed {}
+DD CHN-04 w3 ada 370897 DBGq claim 3120 14fe5d none deferredUntil -
+DD CHN-04 w3 ada 370919 DBGq blocked 3142 null
+  ✓    6 tests/channels-e2e-dbg/access.spec.ts:168:1 › ACC-06 a teammate finds a team channel they are not in by its name and joins it (18.5s)
+DD CHN-05 w2 page 373772 DBGq claim 3056 f5837b none deferredUntil -
+DD CHN-06 w0 page 374496 DBGq claim 2304 57929c none deferredUntil -
+DD CHN-06 w0 page 374507 DBGq blocked 2316 null
+DD CHN-05 w2 page 375452 DBGq claim 1684 3c8388 none deferredUntil -
+DD CHN-05 w2 page 375490 DBGq blocked 1722 null
+DD CHN-05 w2 page 375810 DBGq finish 2042 SetFavorite committed {} retryIn -
+DD CHN-05 w2 page 375810 DBGq tfinish 2042 committed {}
+DD CHN-05 w2 page 375828 DBGq claim 2060 3c8388 none deferredUntil -
+DD CHN-05 w2 page 375830 DBGq blocked 2063 null
+  ✓   15 tests/channels-e2e-dbg/channels.spec.ts:219:1 › CHN-06 Copy Link gives an address that opens the channel for another member (4.4s)
+  ✓   14 tests/channels-e2e-dbg/channels.spec.ts:189:1 › CHN-05 a channel can be made a favorite and taken out again, and both survive a reload (6.7s)
+DD CHN-07 w0 page 378987 DBGq claim 2404 033a61 none deferredUntil -
+DD CHN-07 w0 page 379000 DBGq blocked 2417 null
+DD CHN-08 w2 page 380115 DBGq claim 2707 285b5d none deferredUntil -
+DD CHN-08 w2 page 380151 DBGq finish 2742 SetFavorite committed {} retryIn -
+DD CHN-08 w2 page 380151 DBGq tfinish 2743 committed {}
+DD CHN-08 w2 page 380155 DBGq blocked 2747 null
+DD CHN-08 w2 page 380629 DBGq claim 3079 285b5d none deferredUntil -
+DD CHN-08 w2 page 380631 DBGq blocked 3204 null
+DD CHN-07 w0 ben 380752 DBGq claim 2411 97639b none deferredUntil -
+DD CHN-07 w0 ben 380783 DBGq blocked 2439 {"id":"1","op":"UpdateNotifications","lo":"97639b","exp":299063,"alive":true,"keys":["transactionId","uuid","superseded","query","operationName","variables","clientMetadata","optimisticData","enqueuedAtMs","leaseOwner","leaseGeneration","leaseExpiresAtMs"]}
+DD CHN-07 w0 ben 380858 DBGq finish 2517 UpdateNotifications committed {} retryIn -
+DD CHN-07 w0 ben 380858 DBGq tfinish 2518 committed {}
+  ✓   17 tests/channels-e2e-dbg/channels.spec.ts:286:1 › CHN-08 a deleted channel leaves its owner’s Favorites too (3.8s)
+DD CHN-07 w0 ben 381341 DBGq claim 2812 97639b none deferredUntil -
+DD CHN-07 w0 ben 381343 DBGq blocked 2819 null
+DD CHN-02 ANNOT 382569 Error: expect(locator).toContainText(expected) failed
+  ✓   18 tests/channels-e2e-dbg/channels.spec.ts:316:1 › CHN-09 a member who does not own the channel is not offered Delete (2.1s)
+  ✓   11 tests/channels-e2e-dbg/channels.spec.ts:59:1 › CHN-02 a team channel made in the app appears for a teammate under the team’s channels and can be read (24.0s)
+  ✓   19 tests/channels-e2e-dbg/channels.spec.ts:334:1 › CHN-10 the Participants tab lists the channel’s members by name, with the owner marked (2.0s)
+  ✘   13 tests/channels-e2e-dbg/channels.spec.ts:156:1 › CHN-04 a rename shows in the header of a member who has the channel open (19.9s)
+DD CHN-07 w0 ben 386393 DBGq claim 3515 7e97a8 none deferredUntil -
+  ✓   20 tests/channels-e2e-dbg/channels.spec.ts:357:1 › CHN-11 the Attachments tab of a channel with no files says there are none (2.0s)
+DD CHN-07 w0 ben 386550 DBGq blocked 3676 null
+DD CHN-13 w3 page 388314 DBGq claim 2327 966aa7 none deferredUntil -
+DD CHN-13 w3 page 388326 DBGq blocked 2338 null
+DD CHN-12 w2 page 388520 DBGq claim 3072 a3ce11 none deferredUntil -
+DD CHN-12 w2 page 388550 DBGq blocked 3208 {"id":"1","op":"UpdateNotifications","lo":"a3ce11","exp":298394,"alive":true,"keys":["transactionId","uuid","superseded","query","operationName","variables","clientMetadata","optimisticData","enqueuedAtMs","leaseOwner","leaseGeneration","leaseExpiresAtMs"]}
+DD CHN-12 w2 page 388635 DBGq finish 3296 UpdateNotifications committed {} retryIn -
+DD CHN-12 w2 page 388635 DBGq tfinish 3296 committed {}
+  ✓   21 tests/channels-e2e-dbg/channels.spec.ts:379:1 › CHN-12 going to another tab and back keeps the message list where it was (3.3s)
+DD CHN-14 w1 page 388864 DBGq claim 2324 0ce32b none deferredUntil -
+DD CHN-14 w1 page 388876 DBGq blocked 2338 null
+  ✓   16 tests/channels-e2e-dbg/channels.spec.ts:243:1 › CHN-07 deleting a channel removes it for its owner at once, and its address no longer opens for anyone (12.7s)
+  ✓   22 tests/channels-e2e-dbg/channels.spec.ts:407:1 › CHN-13 a channel’s history starts with “Channel <name> created” (4.6s)
+DD CHN-15 w2 page 391821 DBGq claim 3081 9ebe64 none deferredUntil -
+DD CHN-15 w2 page 391858 DBGq blocked 3134 null
+  ✓   24 tests/channels-e2e-dbg/channels.spec.ts:446:1 › CHN-15 a channel deleted elsewhere closes on its owner’s open page (3.3s)
+DD CMP-01 w0 page 392412 DBGq claim 2946 7b6e79 none deferredUntil -
+DD CMP-01 w0 page 392415 DBGq blocked 3103 null
+  ✓   25 tests/channels-e2e-dbg/composer.spec.ts:21:1 › CMP-01 a draft stays in its channel while I look at another one, and is not shown there (3.3s)
+  ✓   26 tests/channels-e2e-dbg/composer.spec.ts:47:1 › CMP-02 a draft is still in the composer after a reload (3.4s)
+DD CMP-03 w2 ben 394420 DBGq claim 2378 70c0ab none deferredUntil -
+DD CMP-03 w2 ben 394469 DBGq blocked 2426 null
+DD CMP-13 w0 ben 394863 DBGq claim 2314 f60d0d none deferredUntil -
+DD CMP-13 w0 ben 394914 DBGq blocked 2365 null
+  ✓   29 tests/channels-e2e-dbg/composer.spec.ts:121:1 › CMP-04 the send button is off while the composer is empty, and after sending I can go on typing (2.2s)
+DD CMP-03 w2 page 396791 DBGq claim 2985 4d7fe2 none deferredUntil -
+DD CMP-03 w2 page 396791 DBGq blocked 2992 {"id":"1","op":"SendChannelMessage","lo":"4d7fe2","exp":298906,"alive":true,"keys":["transactionId","uuid","superseded","query","operationName","variables","clientMetadata","optimisticData","enqueuedAtMs","leaseOwner","leaseGeneration","leaseExpiresAtMs"]}
+DD CMP-13 w0 page 398008 DBGq claim 1768 4f7eb7 none deferredUntil -
+DD CMP-13 w0 page 398032 DBGq blocked 1782 {"id":"1","op":"SendChannelMessage","lo":"4f7eb7","exp":299752,"alive":true,"keys":["transactionId","uuid","superseded","query","operationName","variables","clientMetadata","optimisticData","enqueuedAtMs","leaseOwner","leaseGeneration","leaseExpiresAtMs"]}
+DD CMP-13 w0 page 398090 DBGq finish 1850 SendChannelMessage committed {} retryIn -
+DD CMP-13 w0 page 398090 DBGq tfinish 1851 committed {}
+DD CMP-13 w0 page 398159 DBGq claim 1918 4f7eb7 none deferredUntil -
+DD CMP-03 w2 page 398169 [observability] graphql.mutation_queue.loaded {auth.state: signed-in, network.online: false, graphql.websocket.state: connected, mutation_queue.depth: 1, mutation_queue.age_unknown_items: 0}
+DD CMP-13 w0 page 398172 DBGq blocked 1932 null
+  ✓   28 tests/channels-e2e-dbg/composer.spec.ts:93:1 › CMP-13 a message shown as sent is still sent when the page is reloaded at once (5.9s)
+  ✓   27 tests/channels-e2e-dbg/composer.spec.ts:67:1 › CMP-03 sending a message clears its draft, and a reload does not bring it back (6.5s)
+DD CMP-05 w3 ben 398641 DBGq claim 2381 466871 none deferredUntil -
+DD CMP-05 w3 ben 398702 DBGq blocked 2442 null
+DD CMP-05 w3 page 400486 DBGq claim 2412 06c970 none deferredUntil -
+DD CMP-05 w3 page 400534 DBGq blocked 2445 {"id":"1","op":"SendChannelMessage","lo":"06c970","exp":299708,"alive":true,"keys":["transactionId","uuid","superseded","query","operationName","variables","clientMetadata","optimisticData","enqueuedAtMs","leaseOwner","leaseGeneration","leaseExpiresAtMs"]}
+DD CMP-05 w3 page 400555 DBGq finish 2480 SendChannelMessage committed {} retryIn -
+DD CMP-05 w3 page 400555 DBGq tfinish 2481 committed {}
+DD CMP-06 w0 ben 400772 DBGq claim 2340 94419e none deferredUntil -
+DD CMP-06 w0 ben 400828 DBGq blocked 2396 null
+DD CMP-05 w3 page 401033 DBGq claim 2957 06c970 none deferredUntil -
+DD CMP-07 w2 ben 401075 DBGq claim 2484 e7a018 none deferredUntil -
+DD CMP-07 w2 ben 401092 DBGq blocked 2499 null
+DD CMP-05 w3 page 401245 DBGq blocked 3148 null
+  ✓   30 tests/channels-e2e-dbg/composer.spec.ts:148:1 › CMP-05 a person picked from the @ menu is named in the message for both people, live (5.3s)
+DD CMP-06 w0 page 402460 DBGq claim 2423 4425a3 none deferredUntil -
+DD CMP-06 w0 page 402479 DBGq blocked 2435 {"id":"1","op":"SendChannelMessage","lo":"4425a3","exp":299626,"alive":true,"keys":["transactionId","uuid","superseded","query","operationName","variables","clientMetadata","optimisticData","enqueuedAtMs","leaseOwner","leaseGeneration","leaseExpiresAtMs"]}
+DD CMP-06 w0 page 402564 DBGq finish 2526 SendChannelMessage committed {} retryIn -
+DD CMP-06 w0 page 402564 DBGq tfinish 2527 committed {}
+DD CMP-07 w2 page 403084 DBGq claim 2756 f701b5 none deferredUntil -
+DD CMP-06 w0 page 403212 DBGq claim 3030 4425a3 none deferredUntil -
+DD CMP-06 w0 page 403214 DBGq blocked 3043 null
+  ✘   23 tests/channels-e2e-dbg/channels.spec.ts:427:1 › CHN-14 a brand-new channel with no messages shows its “Channel <name> created” line (16.8s)
+  ✓   31 tests/channels-e2e-dbg/composer.spec.ts:178:1 › CMP-06 @here picked from the @ menu is sent as a mention of everyone here (4.9s)
+DD CMP-07 w2 page 403677 DBGq blocked 3192 {"id":"1","op":"SendChannelMessage","lo":"f701b5","exp":299460,"alive":true,"keys":["transactionId","uuid","superseded","query","operationName","variables","clientMetadata","optimisticData","enqueuedAtMs","leaseOwner","leaseGeneration","leaseExpiresAtMs"]}
+DD CMP-07 w2 page 403715 DBGq finish 3394 SendChannelMessage committed {} retryIn -
+DD CMP-07 w2 page 403715 DBGq tfinish 3395 committed {}
+DD CMP-07 w2 page 403828 DBGq claim 3505 f701b5 none deferredUntil -
+DD CMP-07 w2 page 403856 DBGq blocked 3538 null
+DD CMP-08 w3 ben 404194 DBGq claim 2615 70e99b none deferredUntil -
+DD CMP-08 w3 ben 404282 DBGq blocked 2702 null
+  ✓   32 tests/channels-e2e-dbg/composer.spec.ts:208:1 › CMP-07 a text file and a picture attached to a message show before sending, for both people, and under Attachments (6.5s)
+  ✓   35 tests/channels-e2e-dbg/composer.spec.ts:329:1 › CMP-10 typing reported from the other person’s other device shows “… is typing”, and goes when they stop (2.0s)
+DD CMP-09 w1 page 405738 DBGq claim 2371 0159db none deferredUntil -
+DD CMP-09 w1 page 405755 DBGq blocked 2388 null
+DD CMP-08 w3 page 406162 DBGq claim 2677 ff412b none deferredUntil -
+DD CMP-08 w3 page 406198 DBGq blocked 2700 {"id":"1","op":"SendChannelMessage","lo":"ff412b","exp":299520,"alive":true,"keys":["transactionId","uuid","superseded","query","operationName","variables","clientMetadata","optimisticData","enqueuedAtMs","leaseOwner","leaseGeneration","leaseExpiresAtMs"]}
+DD CMP-08 w3 page 406278 DBGq finish 2793 SendChannelMessage committed {} retryIn -
+DD CMP-08 w3 page 406278 DBGq tfinish 2793 committed {}
+DD CMP-08 w3 page 406777 DBGq claim 3155 ff412b none deferredUntil -
+DD CMP-08 w3 page 406781 DBGq blocked 3293 null
+  ✓   33 tests/channels-e2e-dbg/composer.spec.ts:265:1 › CMP-08 a file can be sent on its own, with no text (5.6s)
+DD CMP-11 w2 ben 407680 DBGq claim 2538 f99619 none deferredUntil -
+DD CMP-11 w2 ben 407705 DBGq blocked 2562 null
+DD CMP-12 w0 ben 407763 DBGq claim 2415 fb31a6 none deferredUntil -
+DD CMP-12 w0 ben 407815 DBGq blocked 2468 null
+DD CMP-09 w1 ben 408516 DBGq claim 3278 a421cb none deferredUntil -
+DD CMP-09 w1 ben 408604 DBGq blocked 3519 {"id":"1","op":"SendChannelMessage","lo":"a421cb","exp":299322,"alive":true,"keys":["transactionId","uuid","superseded","query","operationName","variables","clientMetadata","optimisticData","enqueuedAtMs","leaseOwner","leaseGeneration","leaseExpiresAtMs"]}
+  ✓   34 tests/channels-e2e-dbg/composer.spec.ts:303:1 › CMP-09 while the other person types in their composer I see “… is typing”, until they send (5.4s)
+DD CMP-12 w0 page 409893 DBGq claim 2771 f4cd5f none deferredUntil -
+DD CMP-12 w0 page 409912 DBGq blocked 2784 {"id":"1","op":"SendChannelMessage","lo":"f4cd5f","exp":299515,"alive":true,"keys":["transactionId","uuid","superseded","query","operationName","variables","clientMetadata","optimisticData","enqueuedAtMs","leaseOwner","leaseGeneration","leaseExpiresAtMs"]}
+DD CMP-11 w2 page 409991 DBGq claim 3012 c7b0f0 none deferredUntil -
+DD CMP-12 w0 page 409996 DBGq finish 2874 SendChannelMessage committed {} retryIn -
+DD CMP-12 w0 page 409996 DBGq tfinish 2874 committed {}
+DD SYN-01 w3 ben 410323 DBGq claim 2850 439983 none deferredUntil -
+DD SYN-01 w3 ben 410378 DBGq blocked 2904 {"id":"1","op":"UpdateNotifications","lo":"439983","exp":298740,"alive":true,"keys":["transactionId","uuid","superseded","query","operationName","variables","clientMetadata","optimisticData","enqueuedAtMs","leaseOwner","leaseGeneration","leaseExpiresAtMs"]}
+DD CMP-11 w2 page 410485 DBGq blocked 3362 null
+DD CMP-11 w2 page 410498 DBGq finish 3513 SendChannelMessage committed {} retryIn -
+DD CMP-11 w2 page 410498 DBGq tfinish 3514 committed {}
+DD CMP-12 w0 page 410502 DBGq claim 3230 f4cd5f none deferredUntil -
+DD SYN-01 w3 ben 410510 DBGq finish 3049 UpdateNotifications committed {} retryIn -
+DD SYN-01 w3 ben 410510 DBGq tfinish 3049 committed {}
+DD CMP-12 w0 page 410512 DBGq blocked 3381 null
+DD CMP-11 w2 page 410629 DBGq claim 3660 c7b0f0 none deferredUntil -
+  ✓   36 tests/channels-e2e-dbg/composer.spec.ts:349:1 › CMP-11 text pasted into the composer is sent as it was copied (5.6s)
+DD SYN-01 w3 ben 410673 DBGq claim 3188 439983 none deferredUntil -
+  ✓   37 tests/channels-e2e-dbg/composer.spec.ts:372:1 › CMP-12 a message of 2,499 characters is sent whole (5.4s)
+DD SYN-01 w3 ben 410749 DBGq blocked 3287 null
+DD SYN-02 w1 ben 411885 DBGq claim 2574 9baf73 none deferredUntil -
+DD SYN-01 w3 ben 411894 DBGq finish 4433 UpdateNotifications committed {} retryIn -
+DD SYN-01 w3 ben 411895 DBGq tfinish 4433 committed {}
+DD SYN-02 w1 ben 411900 DBGq blocked 2575 {"id":"1","op":"UpdateNotifications","lo":"9baf73","exp":298997,"alive":true,"keys":["transactionId","uuid","superseded","query","operationName","variables","clientMetadata","optimisticData","enqueuedAtMs","leaseOwner","leaseGeneration","leaseExpiresAtMs"]}
+DD SYN-01 w3 ben 411929 DBGq claim 4466 439983 3 UpdateNotifications deferredUntil -
+  ✓   38 tests/channels-e2e-dbg/current.spec.ts:109:1 › SYN-01 a channel left for another one shows everything that changed meanwhile when the person comes back (4.9s)
+DD SYN-02 w1 ben 412656 DBGq finish 3344 UpdateNotifications committed {} retryIn -
+DD SYN-02 w1 ben 412656 DBGq tfinish 3345 committed {}
+DD SYN-02 w1 ben 412771 DBGq claim 3461 9baf73 none deferredUntil -
+DD SYN-02 w1 ben 412787 DBGq blocked 3477 null
+DD SYN-04 w0 ben 413928 DBGq claim 2722 5dd434 none deferredUntil -
+DD SYN-04 w0 ben 413965 DBGq claim-failed 2759 CacheNavigationError: cache worker host was disposed for page navigation
+DD SYN-04 w0 ben 413965 DBGq skipped 2759 claim-failed
+DD SYN-04 w0 ben 413965 [observability] graphql.mutation_queue.skipped {auth.state: signed-in, network.online: false, graphql.websocket.state: connected, mutation_queue.pending_items: 1, mutation_queue.oldest_observed_wait_ms: 1333}
+DD SYN-04 w0 ben 413980 DBGq finish 2773 UpdateNotifications committed {} retryIn -
+DD SYN-04 w0 ben 413980 DBGq tfinish 2774 committed {}
+DD SYN-03 w2 ben 414116 DBGq claim 2952 40c65f none deferredUntil -
+DD SYN-03 w2 ben 414138 DBGq finish 3099 UpdateNotifications committed {} retryIn -
+DD SYN-03 w2 ben 414138 DBGq tfinish 3099 committed {}
+DD SYN-03 w2 ben 414141 DBGq blocked 3102 null
+DD SYN-03 w2 ben 414247 DBGq claim 3208 40c65f none deferredUntil -
+DD SYN-03 w2 ben 414249 DBGq blocked 3210 null
+DD SYN-05 w3 ben 415072 DBGq claim 2772 2f8919 none deferredUntil -
+DD SYN-05 w3 ben 415179 DBGq finish 2879 UpdateNotifications committed {} retryIn -
+DD SYN-05 w3 ben 415179 DBGq tfinish 2879 committed {}
+DD SYN-05 w3 ben 415187 DBGq blocked 2888 null
+DD SYN-05 w3 ben 415277 DBGq claim 2977 2f8919 none deferredUntil -
+DD SYN-05 w3 ben 415550 DBGq blocked 3250 null
+  ✓   41 tests/channels-e2e-dbg/current.spec.ts:178:1 › SYN-04 a channel changed while the app was closed is right when the app is opened again (6.0s)
+DD SYN-05 w3 ben 416806 DBGq finish 4506 UpdateNotifications committed {} retryIn -
+DD SYN-05 w3 ben 416806 DBGq tfinish 4506 committed {}
+DD SYN-05 w3 ben 416822 DBGq claim 4522 2f8919 3 UpdateNotifications deferredUntil -
+DD SYN-05 w3 ben 416915 DBGq finish 4615 UpdateNotifications committed {} retryIn -
+DD SYN-05 w3 ben 416915 DBGq tfinish 4615 committed {}
+DD SYN-05 w3 ben 416922 DBGq claim 4622 2f8919 4 UpdateNotifications deferredUntil -
+DD SYN-05 w3 ben 417032 DBGq finish 4732 UpdateNotifications committed {} retryIn -
+DD SYN-05 w3 ben 417032 DBGq tfinish 4732 committed {}
+  ✓   39 tests/channels-e2e-dbg/current.spec.ts:132:1 › SYN-02 an open channel whose connection dropped shows every change made meanwhile once it is back, without a reload (9.7s)
+DD SYN-05 w3 ben 418857 DBGq claim 1815 06cd65 none deferredUntil -
+DD SYN-05 w3 ben 418864 DBGq blocked 1823 null
+DD SYN-06 w0 ben 419677 DBGq claim 2657 2fed72 none deferredUntil -
+DD SYN-06 w0 ben 419715 DBGq blocked 2695 null
+DD SYN-06 w0 ben 419725 DBGq finish 2704 UpdateNotifications committed {} retryIn -
+DD SYN-06 w0 ben 419725 DBGq tfinish 2704 committed {}
+  ✓   40 tests/channels-e2e-dbg/current.spec.ts:153:1 › SYN-03 a channel changed while the person was offline and in another channel is right when they come back to it (9.3s)
+DD SYN-06 w0 ben 420171 DBGq claim 3011 2fed72 none deferredUntil -
+DD SYN-06 w0 ben 420171 DBGq blocked 3020 null
+DD SYN-08 w1 ben 421618 DBGq claim-failed 2807 CacheNavigationError: cache worker host was disposed for page navigation
+DD SYN-08 w1 ben 421619 DBGq skipped 2807 claim-failed
+DD SYN-08 w1 ben 421619 [observability] graphql.mutation_queue.skipped {auth.state: signed-in, network.online: false, graphql.websocket.state: connected, mutation_queue.pending_items: 1, mutation_queue.oldest_observed_wait_ms: 1405}
+DD SYN-08 w1 ben 421619 DBGq settle-threw 2807 CacheNavigationError: cache worker host was disposed for page navigation CacheNavigationError: cache worker host was disposed for page navigation
+    at Je (https://localhost:20609/app/startup-app-canvasRender-2-Dbx70MM_.js:23:179114)
+    at Qe (https://localhost:20609/app/startup-app-canvasRender-2-Dbx70MM_.js:23:179984)
+DD SYN-08 w1 ben 421619 DBGq finish 2808 UpdateNotifications ack-lost {"retryDelayMs":300000} retryIn 300000
+DD SYN-08 w1 ben 421619 DBGq tfinish 2808 ack-lost {"retryDelayMs":300000}
+DD SYN-08 w1 ben 421619 [observability] graphql.mutation_queue.ack_lost {mutation_queue.item_id: efb2cdce-c69a-443e-83ae-9a8a78a6b8f4, mutation_queue.transaction_id: 1, graphql.operation.name: UpdateNotifications, mutation_queue.attempt_count: 1, mutation_queue.server_failure_count: 0}
+  ✓   44 tests/channels-e2e-dbg/current.spec.ts:272:1 › SYN-08 a person removed from a channel while away is not shown the messages their device kept (5.0s)
+  ✓   45 tests/channels-e2e-dbg/current.spec.ts:295:1 › SYN-09 changes made while the page is reloading are all there when it has loaded (3.9s)
+  ✓   42 tests/channels-e2e-dbg/current.spec.ts:202:1 › SYN-05 what a device caught up on is what it shows the next time it opens the channel with no connection (12.8s)
+DD SYN-10 w1 ben 426070 DBGq claim 2376 d4aae9 none deferredUntil -
+DD SYN-10 w1 ben 426080 DBGq blocked 2385 {"id":"1","op":"UpdateNotifications","lo":"d4aae9","exp":299091,"alive":true,"keys":["transactionId","uuid","superseded","query","operationName","variables","clientMetadata","optimisticData","enqueuedAtMs","leaseOwner","leaseGeneration","leaseExpiresAtMs"]}
+DD SYN-10 w1 ben 426121 DBGq finish 2427 UpdateNotifications committed {} retryIn -
+DD SYN-10 w1 ben 426121 DBGq tfinish 2427 committed {}
+DD SYN-10 w1 ben 426246 DBGq claim 2523 d4aae9 none deferredUntil -
+DD SYN-10 w1 ben 426246 DBGq blocked 2530 null
+DD DM-01  w2 ben 426276 DBGq claim 2302 eadbac none deferredUntil -
+DD DM-01  w2 ben 426284 DBGq blocked 2311 null
+DD DM-02  w3 cy 427232 DBGq claim 2394 9e18e8 none deferredUntil -
+DD DM-02  w3 cy 427249 DBGq blocked 2412 null
+DD DM-01  w2 page 428068 DBGq claim 2449 15927d none deferredUntil -
+DD DM-01  w2 page 428074 DBGq blocked 2455 null
+DD DM-02  w3 page 428910 DBGq claim 2404 35be20 none deferredUntil -
+DD DM-02  w3 page 428913 DBGq blocked 2408 null
+DD DM-01  w2 page 429154 DBGq finish 3535 SendChannelMessage committed {} retryIn -
+DD DM-01  w2 page 429155 DBGq tfinish 3535 committed {}
+DD DM-01  w2 page 429480 DBGq claim 3861 15927d none deferredUntil -
+DD DM-01  w2 page 429515 DBGq blocked 3896 null
+DD DM-02  w3 page 429655 DBGq finish 3137 SendChannelMessage committed {} retryIn -
+DD DM-02  w3 page 429655 DBGq tfinish 3137 committed {}
+DD DM-02  w3 page 429914 DBGq claim 3405 35be20 none deferredUntil -
+DD DM-02  w3 page 429923 DBGq blocked 3417 null
+DD DM-01  w2 page 430277 DBGq finish 4658 UpdateNotifications committed {} retryIn -
+DD DM-01  w2 page 430277 DBGq tfinish 4658 committed {}
+DD DM-01  w2 page 430429 DBGq claim 4749 15927d none deferredUntil -
+DD DM-01  w2 page 430430 DBGq blocked 4807 null
+DD DM-01  w2 ben 431993 DBGq finish 8020 UpdateNotifications committed {} retryIn -
+DD DM-01  w2 ben 431993 DBGq tfinish 8020 committed {}
+DD DM-01  w2 ben 432037 DBGq claim 8064 eadbac 2 SendChannelMessage deferredUntil -
+DD DM-01  w2 ben 432132 DBGq finish 8159 SendChannelMessage committed {} retryIn -
+DD DM-01  w2 ben 432132 DBGq tfinish 8159 committed {}
+DD DM-01  w2 ben 432194 DBGq claim 8221 eadbac none deferredUntil -
+DD DM-01  w2 ben 432552 DBGq blocked 8462 null
+DD DM-02  w3 page 432862 DBGq finish 6187 SendChannelMessage committed {} retryIn -
+DD DM-02  w3 page 432862 DBGq tfinish 6187 committed {}
+DD DM-02  w3 page 433071 DBGq claim 6565 35be20 none deferredUntil -
+DD DM-02  w3 page 433127 DBGq blocked 6621 null
+DD DM-02  w3 cy 434086 DBGq finish 9191 UpdateNotifications committed {} retryIn -
+DD DM-02  w3 cy 434086 DBGq tfinish 9192 committed {}
+DD DM-02  w3 cy 434086 DBGq claim 9221 9e18e8 none deferredUntil -
+DD DM-02  w3 cy 434086 DBGq blocked 9222 null
+  ✓   47 tests/channels-e2e-dbg/direct-messages.spec.ts:22:1 › DM-01 a direct message I start reaches the other person at once under “Direct messages”, and they can answer (10.3s)
+  ✓   48 tests/channels-e2e-dbg/direct-messages.spec.ts:66:1 › DM-02 writing to the same person again from “New direct message” continues the one conversation (10.9s)
+DD DM-03  w2 cy 436794 DBGq claim 2510 5baae0 none deferredUntil -
+DD DM-03  w2 cy 436828 DBGq blocked 2544 null
+DD SYN-10 w1 ben 437346 DBGq claim 3955 bb88cd none deferredUntil -
+DD SYN-10 w1 ben 437525 DBGq blocked 4133 null
+DD DM-04  w3 ben 438063 DBGq claim 2301 438fb1 none deferredUntil -
+DD DM-04  w3 ben 438102 DBGq blocked 2340 null
+DD DM-03  w2 ben 438281 DBGq claim 2224 23511a none deferredUntil -
+DD DM-03  w2 ben 438308 DBGq blocked 2251 null
+DD DM-04  w3 cy 439857 DBGq claim 2375 acb55f none deferredUntil -
+DD DM-04  w3 cy 439912 DBGq blocked 2429 null
+DD DM-03  w2 cy 441646 DBGq finish 7362 UpdateNotifications committed {} retryIn -
+DD DM-03  w2 cy 441647 DBGq tfinish 7363 committed {}
+DD DM-04  w3 page 441666 DBGq claim 2484 90ba14 none deferredUntil -
+DD DM-04  w3 page 441676 DBGq blocked 2494 null
+DD DM-03  w2 cy 441699 DBGq claim 7414 5baae0 none deferredUntil -
+DD DM-03  w2 cy 441699 DBGq blocked 7415 null
+DD DM-03  w2 ben 441857 DBGq finish 5800 SendChannelMessage committed {} retryIn -
+DD DM-03  w2 ben 441857 DBGq tfinish 5800 committed {}
+DD DM-03  w2 ben 441987 DBGq claim 5930 23511a none deferredUntil -
+DD DM-03  w2 ben 442019 DBGq blocked 5962 null
+DD SYN-10 w1 ben 442624 [observability] graphql.mutation_queue.loaded {auth.state: signed-in, network.online: false, graphql.websocket.state: connected, mutation_queue.depth: 2, mutation_queue.age_unknown_items: 0}
+DD DM-04  w3 page 442631 DBGq finish 3449 SendChannelMessage committed {} retryIn -
+DD DM-04  w3 page 442631 DBGq tfinish 3449 committed {}
+  ✓   46 tests/channels-e2e-dbg/current.spec.ts:317:1 › SYN-10 a channel stays right through rounds of leaving it, losing the connection and reloading (19.4s)
+DD DM-04  w3 page 442906 DBGq claim 3724 90ba14 none deferredUntil -
+DD DM-04  w3 page 442931 DBGq blocked 3749 null
+  ✓   49 tests/channels-e2e-dbg/direct-messages.spec.ts:122:1 › DM-03 “Message …” on a channel’s participant opens my conversation with them, the same one every time (10.0s)
+DD DM-05  w1 dee 444863 DBGq claim 2080 136b3b none deferredUntil -
+DD DM-05  w1 dee 444867 DBGq blocked 2084 null
+  ✓   51 tests/channels-e2e-dbg/direct-messages.spec.ts:228:1 › DM-05 a conversation with someone I never wrote to opens empty, saying “Say hello”, and nothing can be sent until I type (2.2s)
+  ✓   50 tests/channels-e2e-dbg/direct-messages.spec.ts:173:1 › DM-04 a named group started from “New direct message” reaches everyone I put in it (10.7s)
+DD DM-06  w2 page 446569 DBGq claim 2256 dc72ef none deferredUntil -
+DD DM-06  w2 page 446574 DBGq blocked 2261 null
+DD KEY-01 w1 page 447755 DBGq claim 2533 4d1ea9 none deferredUntil -
+DD KEY-01 w1 page 447763 DBGq blocked 2544 null
+  ✓   53 tests/channels-e2e-dbg/find-and-keys.spec.ts:26:1 › KEY-01 find counts the messages that match and steps through them, newest first (3.5s)
+  ✓   54 tests/channels-e2e-dbg/find-and-keys.spec.ts:75:1 › KEY-02 find brings an old message far up a long history into view (2.7s)
+  ✓   52 tests/channels-e2e-dbg/direct-messages.spec.ts:270:1 › DM-06 typing a teammate’s name in “New direct message” offers that person (5.5s)
+  ✓   55 tests/channels-e2e-dbg/find-and-keys.spec.ts:95:1 › KEY-03 find for words nobody wrote says there are no matches (2.0s)
+DD KEY-04 w3 page 451440 DBGq claim 2245 b43280 none deferredUntil -
+DD KEY-04 w3 page 451450 DBGq blocked 2256 {"id":"1","op":"SendChannelMessage","lo":"b43280","exp":299883,"alive":true,"keys":["transactionId","uuid","superseded","query","operationName","variables","clientMetadata","optimisticData","enqueuedAtMs","leaseOwner","leaseGeneration","leaseExpiresAtMs"]}
+  ✓   56 tests/channels-e2e-dbg/find-and-keys.spec.ts:119:1 › KEY-04 the find bar closes with its button and with Escape, and the channel still takes a message (2.4s)
+  ✓   57 tests/channels-e2e-dbg/find-and-keys.spec.ts:163:1 › KEY-05 the arrow keys walk from the composer up the messages and back down into the composer (2.3s)
+DD KEY-06 w1 page 452793 DBGq claim 2284 a0288a none deferredUntil -
+DD KEY-06 w1 page 452802 DBGq blocked 2296 null
+  ✓   59 tests/channels-e2e-dbg/find-and-keys.spec.ts:247:1 › KEY-07 “e” on a person’s own selected message edits it (2.4s)
+  ✓   60 tests/channels-e2e-dbg/find-and-keys.spec.ts:275:1 › KEY-08 Backspace on a person’s own selected message asks first, and Escape keeps the message (2.2s)
+  ✓   61 tests/channels-e2e-dbg/find-and-keys.spec.ts:297:1 › KEY-12 Backspace on a person’s own selected message deletes it once confirmed (2.0s)
+DD KEY-09 w2 page 456741 DBGq claim 2379 eff8bc none deferredUntil -
+DD KEY-09 w2 page 456821 DBGq blocked 2422 {"id":"1","op":"UpdateNotifications","lo":"eff8bc","exp":299399,"alive":true,"keys":["transactionId","uuid","superseded","query","operationName","variables","clientMetadata","optimisticData","enqueuedAtMs","leaseOwner","leaseGeneration","leaseExpiresAtMs"]}
+DD KEY-09 w2 page 457266 DBGq finish 2891 UpdateNotifications committed {} retryIn -
+DD KEY-09 w2 page 457266 DBGq tfinish 2891 committed {}
+DD KEY-09 w2 page 457305 DBGq claim 2944 eff8bc 2 UpdateNotifications deferredUntil -
+  ✓   62 tests/channels-e2e-dbg/find-and-keys.spec.ts:319:1 › KEY-09 Shift+G in the message list goes to the latest message (3.0s)
+  ✓   63 tests/channels-e2e-dbg/find-and-keys.spec.ts:344:1 › KEY-10 choosing a channel in the list puts the cursor in its composer (2.2s)
+  ✓   64 tests/channels-e2e-dbg/find-and-keys.spec.ts:368:1 › KEY-11 Escape steps out of the composer to the messages, then to the list of conversations (2.0s)
+  ✓   43 tests/channels-e2e-dbg/current.spec.ts:228:1 › SYN-06 a channel more than a thousand changes behind is right when it is opened again (43.7s)
+  ✓   65 tests/channels-e2e-dbg/location.spec.ts:7:1 › NAV-01 a link to a recent message opens the channel on that message and marks it (2.3s)
+  ✓   66 tests/channels-e2e-dbg/location.spec.ts:24:1 › NAV-02 a link to an old message, pages back, shows it between its neighbours (2.1s)
+  ✓   67 tests/channels-e2e-dbg/location.spec.ts:47:1 › NAV-03 a link to a reply deep in an old thread opens the thread on that reply (2.1s)
+DD NAV-04 w3 page 462720 DBGq claim 2113 942b57 none deferredUntil -
+DD NAV-04 w3 page 462726 DBGq blocked 2119 null
+DD NAV-05 w2 page 463931 DBGq claim 2409 09bbc9 none deferredUntil -
+DD NAV-05 w2 page 464010 DBGq blocked 2442 {"id":"1","op":"UpdateNotifications","lo":"09bbc9","exp":299734,"alive":true,"keys":["transactionId","uuid","superseded","query","operationName","variables","clientMetadata","optimisticData","enqueuedAtMs","leaseOwner","leaseGeneration","leaseExpiresAtMs"]}
+  ✓   68 tests/channels-e2e-dbg/location.spec.ts:75:1 › NAV-04 a link to a message that does not exist says so and shows the latest messages (3.6s)
+DD NAV-05 w2 page 464507 DBGq finish 2856 UpdateNotifications committed {} retryIn -
+DD NAV-05 w2 page 464507 DBGq tfinish 2857 committed {}
+DD NAV-05 w2 page 464516 DBGq claim 2994 09bbc9 none deferredUntil -
+DD NAV-05 w2 page 464553 DBGq blocked 3034 null
+  ✓   70 tests/channels-e2e-dbg/location.spec.ts:120:1 › NAV-06 scrolling down from an old message offers “Scroll to bottom”, which returns to the latest messages (2.4s)
+DD MEM-01 w0 page 467316 DBGq claim 2339 96ffff none deferredUntil -
+DD MEM-01 w0 page 467327 DBGq blocked 2351 null
+  ✘   58 tests/channels-e2e-dbg/find-and-keys.spec.ts:209:1 › KEY-06 Enter on a selected message opens a reply to that message (17.0s)
+  ✓   71 tests/channels-e2e-dbg/location.spec.ts:137:1 › NAV-07 “Copy link” on a message gives a link that opens the channel on it (4.8s)
+DD MEM-01 w0 ben 469208 DBGq claim 2476 59acf0 none deferredUntil -
+DD MEM-01 w0 ben 469422 DBGq blocked 2541 {"id":"1","op":"UpdateNotifications","lo":"59acf0","exp":298986,"alive":true,"keys":["transactionId","uuid","superseded","query","operationName","variables","clientMetadata","optimisticData","enqueuedAtMs","leaseOwner","leaseGeneration","leaseExpiresAtMs"]}
+DD MEM-01 w0 ben 469541 DBGq finish 2809 UpdateNotifications committed {} retryIn -
+DD MEM-01 w0 ben 469541 DBGq tfinish 2809 committed {}
+DD MEM-01 w0 ben 469710 DBGq claim 2978 59acf0 none deferredUntil -
+DD MEM-02 w1 page 470002 DBGq claim 2453 90b2de none deferredUntil -
+DD MEM-02 w1 page 470024 DBGq blocked 2471 null
+DD MEM-01 w0 ben 470145 DBGq blocked 3261 null
+DD MEM-01 w0 cy 471072 DBGq claim 2660 078ed7 none deferredUntil -
+DD MEM-01 w0 cy 471284 DBGq blocked 2872 null
+DD MEM-03 w3 cy 471398 DBGq claim 2463 0ed26f none deferredUntil -
+DD MEM-03 w3 cy 471418 DBGq blocked 2483 null
+DD MEM-01 w0 cy 471461 DBGq finish 3049 SendChannelMessage committed {} retryIn -
+DD MEM-01 w0 cy 471462 DBGq tfinish 3050 committed {}
+DD MEM-01 w0 cy 471500 DBGq claim 3088 078ed7 none deferredUntil -
+DD MEM-01 w0 cy 471505 DBGq blocked 3093 null
+  ✓   74 tests/channels-e2e-dbg/members.spec.ts:111:1 › MEM-03 a person removed while the channel is open loses it at once (2.7s)
+  ✓   72 tests/channels-e2e-dbg/members.spec.ts:18:1 › MEM-01 a person invited from the app gets the channel at once, with what was said before and after (7.2s)
+DD MEM-02 w1 ben 472459 DBGq claim 3148 b45a00 none deferredUntil -
+DD MEM-02 w1 ben 472813 DBGq blocked 3502 null
+  ✘   69 tests/channels-e2e-dbg/location.spec.ts:97:1 › NAV-05 reading forward from an old message reaches the latest with nothing missing or repeated (11.5s)
+  ✓   73 tests/channels-e2e-dbg/members.spec.ts:71:1 › MEM-02 the owner removes a person in the Participants tab and everyone who stays is told (6.6s)
+DD MEM-04 w3 cy 474241 DBGq claim 2568 a8845c none deferredUntil -
+DD MEM-04 w3 cy 474270 DBGq blocked 2598 null
+DD MEM-05 w0 ben 474724 DBGq claim 2559 c8425c none deferredUntil -
+  ✓   76 tests/channels-e2e-dbg/members.spec.ts:179:1 › MEM-05 people added and removed while the channel is open show as lines between the right messages (2.7s)
+  ✓   77 tests/channels-e2e-dbg/members.spec.ts:215:1 › MEM-06 a channel opened afresh shows who was added and removed between the right messages (2.0s)
+DD MEM-04 w3 ben 476165 DBGq claim 2631 34e550 none deferredUntil -
+DD MEM-04 w3 ben 476189 DBGq blocked 2656 {"id":"1","op":"UpdateNotifications","lo":"34e550","exp":299732,"alive":true,"keys":["transactionId","uuid","superseded","query","operationName","variables","clientMetadata","optimisticData","enqueuedAtMs","leaseOwner","leaseGeneration","leaseExpiresAtMs"]}
+DD MEM-04 w3 ben 476562 DBGq finish 3034 UpdateNotifications committed {} retryIn -
+DD MEM-04 w3 ben 476562 DBGq tfinish 3034 committed {}
+DD MEM-07 w1 ben 476770 DBGq claim 2611 89840f none deferredUntil -
+  ✓   79 tests/channels-e2e-dbg/members.spec.ts:270:1 › MEM-08 a person added while their app was closed finds the channel in the list when they open it (2.2s)
+DD MEM-04 w3 ben 477022 DBGq claim 3408 34e550 none deferredUntil -
+DD MEM-04 w3 ben 477023 DBGq blocked 3412 null
+DD MEM-07 w1 ben 477137 DBGq blocked 2876 null
+  ✓   75 tests/channels-e2e-dbg/members.spec.ts:140:1 › MEM-04 a removed person never sees what is said after, and after a reload cannot open the channel (5.7s)
+DD MSG-01 w2 ben 477604 DBGq claim 2559 8c6bfb none deferredUntil -
+DD MSG-01 w2 page 477611 DBGq claim 2566 3fdb57 none deferredUntil -
+DD MSG-01 w2 ben 477650 DBGq blocked 2606 null
+DD MSG-01 w2 page 477752 DBGq blocked 2637 {"id":"1","op":"SendChannelMessage","lo":"3fdb57","exp":299620,"alive":true,"keys":["transactionId","uuid","superseded","query","operationName","variables","clientMetadata","optimisticData","enqueuedAtMs","leaseOwner","leaseGeneration","leaseExpiresAtMs"]}
+DD MSG-01 w2 page 478304 DBGq finish 3184 SendChannelMessage committed {} retryIn -
+DD MSG-01 w2 page 478304 DBGq tfinish 3185 committed {}
+DD MSG-01 w2 page 478308 DBGq claim 3264 3fdb57 none deferredUntil -
+DD MSG-01 w2 page 478310 DBGq blocked 3266 null
+  ✓   78 tests/channels-e2e-dbg/members.spec.ts:240:1 › MEM-07 a member who does not own the channel cannot remove its owner (5.1s)
+DD MSG-02 w0 ben 479882 DBGq claim 2820 be5563 none deferredUntil -
+DD MSG-02 w0 ben 479922 DBGq blocked 2861 null
+DD MSG-02 w0 page 479974 DBGq claim 2912 36e35d none deferredUntil -
+DD MSG-01 w2 ben 480131 DBGq claim 2273 deb65d none deferredUntil -
+DD MSG-03 w3 ben 480166 DBGq claim 2793 73518c none deferredUntil -
+DD MSG-01 w2 ben 480177 DBGq blocked 2306 {"id":"1","op":"UpdateNotifications","lo":"deb65d","exp":299119,"alive":true,"keys":["transactionId","uuid","superseded","query","operationName","variables","clientMetadata","optimisticData","enqueuedAtMs","leaseOwner","leaseGeneration","leaseExpiresAtMs"]}
+DD MSG-03 w3 ben 480212 DBGq blocked 2839 null
+DD MSG-03 w3 page 480217 DBGq claim 2843 774c21 none deferredUntil -
+DD MSG-03 w3 page 480263 DBGq blocked 2886 {"id":"1","op":"SendChannelMessage","lo":"774c21","exp":299308,"alive":true,"keys":["transactionId","uuid","superseded","query","operationName","variables","clientMetadata","optimisticData","enqueuedAtMs","leaseOwner","leaseGeneration","leaseExpiresAtMs"]}
+DD MSG-01 w2 page 480360 DBGq claim 2055 1ddad2 none deferredUntil -
+  ✓   80 tests/channels-e2e-dbg/messages.spec.ts:7:1 › MSG-01 a message sent with Enter shows once at the end for both people, and stays after reload (5.4s)
+DD MSG-02 w0 page 480534 DBGq finish 3336 SendChannelMessage committed {} retryIn -
+DD MSG-02 w0 page 480534 DBGq tfinish 3337 committed {}
+DD MSG-02 w0 page 480534 DBGq blocked 3357 null
+DD MSG-03 w3 page 480820 DBGq finish 3326 SendChannelMessage committed {} retryIn -
+DD MSG-03 w3 page 480820 DBGq tfinish 3326 committed {}
+DD MSG-03 w3 ben 480872 DBGq finish 3497 SendChannelMessage committed {} retryIn -
+DD MSG-03 w3 ben 480872 DBGq tfinish 3498 committed {}
+DD MSG-03 w3 ben 481041 DBGq claim 3668 73518c none deferredUntil -
+DD MSG-03 w3 ben 481067 DBGq blocked 3694 null
+DD MSG-03 w3 page 481073 DBGq claim 3699 774c21 none deferredUntil -
+DD MSG-03 w3 page 481125 DBGq blocked 3723 {"id":"2","op":"SendChannelMessage","lo":"774c21","exp":300137,"alive":true,"keys":["transactionId","uuid","superseded","query","operationName","variables","clientMetadata","optimisticData","enqueuedAtMs","leaseOwner","leaseGeneration","leaseExpiresAtMs"]}
+DD MSG-03 w3 page 481366 DBGq finish 3992 SendChannelMessage committed {} retryIn -
+DD MSG-03 w3 page 481366 DBGq tfinish 3992 committed {}
+DD MSG-03 w3 page 481499 DBGq finish 4125 SendChannelMessage committed {} retryIn -
+DD MSG-03 w3 page 481499 DBGq tfinish 4125 committed {}
+DD MSG-03 w3 page 481555 DBGq claim 4149 774c21 none deferredUntil -
+DD MSG-03 w3 page 481586 DBGq blocked 4201 null
+DD MSG-04 w1 page 482020 DBGq claim 2797 10db2b none deferredUntil -
+DD MSG-04 w1 page 482044 DBGq blocked 2813 {"id":"1","op":"SendChannelMessage","lo":"10db2b","exp":299628,"alive":true,"keys":["transactionId","uuid","superseded","query","operationName","variables","clientMetadata","optimisticData","enqueuedAtMs","leaseOwner","leaseGeneration","leaseExpiresAtMs"]}
+DD MSG-04 w1 page 482168 DBGq finish 2945 SendChannelMessage committed {} retryIn -
+DD MSG-04 w1 page 482168 DBGq tfinish 2945 committed {}
+  ✓   81 tests/channels-e2e-dbg/messages.spec.ts:37:1 › MSG-02 a message sent with the send button shows once at the end for both people, and stays after reload (5.3s)
+DD MSG-04 w1 ben 482464 DBGq claim 3088 86b145 none deferredUntil -
+DD MSG-04 w1 ben 482465 DBGq blocked 3226 null
+DD MSG-04 w1 page 482696 DBGq claim 3283 10db2b none deferredUntil -
+DD MSG-04 w1 page 482697 DBGq blocked 3294 null
+DD MSG-03 w3 ben 482973 DBGq finish 5599 SendChannelMessage committed {} retryIn -
+DD MSG-03 w3 ben 482973 DBGq tfinish 5599 committed {}
+DD MSG-05 w2 ben 483009 DBGq claim 2525 e384ac none deferredUntil -
+DD MSG-05 w2 ben 483075 DBGq blocked 2591 null
+DD MSG-03 w3 ben 483520 DBGq claim 6027 73518c none deferredUntil -
+DD MSG-03 w3 ben 483520 DBGq blocked 6036 null
+DD MSG-03 w3 ben 484137 DBGq finish 6764 SendChannelMessage committed {} retryIn -
+DD MSG-03 w3 ben 484137 DBGq tfinish 6764 committed {}
+DD MSG-05 w2 page 484162 DBGq claim 3677 e4dceb none deferredUntil -
+  ✓   83 tests/channels-e2e-dbg/messages.spec.ts:116:1 › MSG-04 a message written on several lines with Shift+Enter keeps its lines (5.3s)
+DD MSG-03 w3 ben 484689 DBGq claim 7170 73518c none deferredUntil -
+DD MSG-03 w3 ben 484717 DBGq blocked 7341 null
+DD MSG-06 w0 page 485163 DBGq claim 2572 eee2d4 none deferredUntil -
+DD MSG-06 w0 page 485213 DBGq finish 2621 UpdateNotifications committed {} retryIn -
+DD MSG-06 w0 page 485213 DBGq tfinish 2622 committed {}
+DD MSG-06 w0 page 485248 DBGq blocked 2657 null
+DD MSG-06 w0 page 485280 DBGq claim 2689 eee2d4 none deferredUntil -
+DD MSG-06 w0 page 485324 DBGq blocked 2734 null
+DD MSG-06 w0 ben 485355 DBGq claim 2764 5f13b7 none deferredUntil -
+DD MSG-06 w0 ben 485394 DBGq blocked 2788 {"id":"1","op":"UpdateNotifications","lo":"5f13b7","exp":298796,"alive":true,"keys":["transactionId","uuid","superseded","query","operationName","variables","clientMetadata","optimisticData","enqueuedAtMs","leaseOwner","leaseGeneration","leaseExpiresAtMs"]}
+DD MSG-06 w0 ben 485930 DBGq finish 3338 UpdateNotifications committed {} retryIn -
+DD MSG-06 w0 ben 485930 DBGq tfinish 3339 committed {}
+  ✓   84 tests/channels-e2e-dbg/messages.spec.ts:152:1 › MSG-05 formatting, a link, emoji and other scripts read the same for both people and after reload (5.7s)
+DD MSG-06 w0 ben 486528 DBGq claim 3919 5f13b7 2 SendChannelMessage deferredUntil -
+DD MSG-06 w0 ben 486596 DBGq finish 4005 SendChannelMessage committed {} retryIn -
+DD MSG-06 w0 ben 486596 DBGq tfinish 4005 committed {}
+DD MSG-06 w0 ben 486709 DBGq claim 4118 5f13b7 none deferredUntil -
+DD MSG-06 w0 ben 486752 DBGq blocked 4161 null
+DD MSG-03 w3 page 487086 DBGq finish 9712 SendChannelMessage committed {} retryIn -
+DD MSG-03 w3 page 487087 DBGq tfinish 9712 committed {}
+DD MSG-07 w1 page 487332 DBGq claim 2695 085adb none deferredUntil -
+DD MSG-07 w1 page 487357 DBGq blocked 2715 {"id":"1","op":"UpdateNotifications","lo":"085adb","exp":298970,"alive":true,"keys":["transactionId","uuid","superseded","query","operationName","variables","clientMetadata","optimisticData","enqueuedAtMs","leaseOwner","leaseGeneration","leaseExpiresAtMs"]}
+DD MSG-07 w1 ben 487357 DBGq claim 2721 f5ef14 none deferredUntil -
+DD MSG-07 w1 page 487399 DBGq finish 2762 UpdateNotifications committed {} retryIn -
+DD MSG-07 w1 page 487399 DBGq tfinish 2763 committed {}
+DD MSG-07 w1 ben 487447 DBGq blocked 2771 {"id":"1","op":"UpdateNotifications","lo":"f5ef14","exp":298992,"alive":true,"keys":["transactionId","uuid","superseded","query","operationName","variables","clientMetadata","optimisticData","enqueuedAtMs","leaseOwner","leaseGeneration","leaseExpiresAtMs"]}
+DD MSG-07 w1 page 487478 DBGq claim 2827 085adb 2 EditChannelMessage deferredUntil -
+DD MSG-07 w1 page 487542 DBGq finish 2905 EditChannelMessage committed {} retryIn -
+DD MSG-07 w1 page 487542 DBGq tfinish 2905 committed {}
+DD MSG-07 w1 ben 487837 DBGq finish 3091 UpdateNotifications committed {} retryIn -
+DD MSG-07 w1 ben 487837 DBGq tfinish 3091 committed {}
+DD MSG-07 w1 page 488082 DBGq claim 3256 085adb none deferredUntil -
+DD MSG-07 w1 page 488097 DBGq blocked 3444 null
+DD MSG-07 w1 ben 488183 DBGq claim 3514 f5ef14 none deferredUntil -
+DD MSG-06 w0 page 488233 DBGq finish 5642 SendChannelMessage committed {} retryIn -
+DD MSG-06 w0 page 488233 DBGq tfinish 5642 committed {}
+DD MSG-06 w0 page 488512 DBGq claim 5917 eee2d4 none deferredUntil -
+DD MSG-08 w2 ben 488857 DBGq claim 2579 fb8586 none deferredUntil -
+DD MSG-06 w0 page 488950 DBGq blocked 6191 null
+DD MSG-08 w2 page 488965 DBGq claim 2688 783962 none deferredUntil -
+DD MSG-08 w2 ben 489006 DBGq blocked 2668 {"id":"1","op":"UpdateNotifications","lo":"fb8586","exp":298950,"alive":true,"keys":["transactionId","uuid","superseded","query","operationName","variables","clientMetadata","optimisticData","enqueuedAtMs","leaseOwner","leaseGeneration","leaseExpiresAtMs"]}
+  ✓   85 tests/channels-e2e-dbg/messages.spec.ts:198:1 › MSG-06 messages in a row from one person and from alternating people each show under their author (6.7s)
+DD MSG-08 w2 page 489152 DBGq blocked 2774 {"id":"1","op":"UpdateNotifications","lo":"783962","exp":298878,"alive":true,"keys":["transactionId","uuid","superseded","query","operationName","variables","clientMetadata","optimisticData","enqueuedAtMs","leaseOwner","leaseGeneration","leaseExpiresAtMs"]}
+DD MSG-08 w2 ben 489195 DBGq finish 2917 UpdateNotifications committed {} retryIn -
+DD MSG-08 w2 ben 489195 DBGq tfinish 2918 committed {}
+DD MSG-03 w3 ben 489508 [observability] graphql.mutation_queue.loaded {auth.state: signed-in, network.online: false, graphql.websocket.state: connected, mutation_queue.depth: 1, mutation_queue.age_unknown_items: 0}
+DD MSG-08 w2 ben 489715 DBGq claim 3161 fb8586 none deferredUntil -
+DD MSG-08 w2 ben 489719 DBGq blocked 3186 null
+DD MSG-08 w2 page 489734 DBGq finish 3445 UpdateNotifications committed {} retryIn -
+DD MSG-08 w2 page 489735 DBGq tfinish 3446 committed {}
+DD MSG-08 w2 page 489877 DBGq claim 3577 783962 2 EditChannelMessage deferredUntil -
+  ✓   86 tests/channels-e2e-dbg/messages.spec.ts:254:1 › MSG-07 editing my message from its buttons shows the new text and “(edited)” to both people, and after reload (5.5s)
+  ✓   82 tests/channels-e2e-dbg/messages.spec.ts:71:1 › MSG-03 a quick back-and-forth between two people reads in the same order for both, each message once (12.7s)
+DD MSG-08 w2 page 490022 DBGq finish 3744 EditChannelMessage committed {} retryIn -
+DD MSG-08 w2 page 490022 DBGq tfinish 3744 committed {}
+DD MSG-08 w2 page 490106 DBGq claim 3828 783962 none deferredUntil -
+DD MSG-08 w2 page 490108 DBGq blocked 3830 null
+  ✓   87 tests/channels-e2e-dbg/messages.spec.ts:298:1 › MSG-08 pressing E on my selected message edits it, and the other person sees the edit (5.0s)
+DD MSG-09 w0 page 491924 DBGq claim 2699 bf864c none deferredUntil -
+DD MSG-09 w0 page 491949 DBGq blocked 2724 null
+DD MSG-09 w0 ben 492070 DBGq claim 2847 4651fb none deferredUntil -
+DD MSG-09 w0 ben 492135 DBGq blocked 2887 {"id":"1","op":"UpdateNotifications","lo":"4651fb","exp":298687,"alive":true,"keys":["transactionId","uuid","superseded","query","operationName","variables","clientMetadata","optimisticData","enqueuedAtMs","leaseOwner","leaseGeneration","leaseExpiresAtMs"]}
+DD MSG-09 w0 ben 492228 DBGq finish 3005 UpdateNotifications committed {} retryIn -
+DD MSG-09 w0 ben 492228 DBGq tfinish 3005 committed {}
+DD MSG-09 w0 ben 492275 DBGq claim 3052 4651fb none deferredUntil -
+DD MSG-09 w0 ben 492276 DBGq blocked 3054 null
+DD MSG-10 w1 ben 493004 DBGq claim 2857 47a4e6 none deferredUntil -
+DD MSG-10 w1 page 493032 DBGq claim 2886 470110 none deferredUntil -
+DD MSG-10 w1 ben 493063 DBGq blocked 2897 {"id":"1","op":"UpdateNotifications","lo":"47a4e6","exp":298851,"alive":true,"keys":["transactionId","uuid","superseded","query","operationName","variables","clientMetadata","optimisticData","enqueuedAtMs","leaseOwner","leaseGeneration","leaseExpiresAtMs"]}
+DD MSG-11 w3 page 493126 DBGq claim 2758 310c57 none deferredUntil -
+DD MSG-11 w3 page 493151 DBGq blocked 2778 {"id":"1","op":"UpdateNotifications","lo":"310c57","exp":298944,"alive":true,"keys":["transactionId","uuid","superseded","query","operationName","variables","clientMetadata","optimisticData","enqueuedAtMs","leaseOwner","leaseGeneration","leaseExpiresAtMs"]}
+DD MSG-11 w3 page 493204 DBGq finish 2836 UpdateNotifications committed {} retryIn -
+DD MSG-11 w3 page 493205 DBGq tfinish 2837 committed {}
+DD MSG-10 w1 ben 493227 DBGq finish 3080 UpdateNotifications committed {} retryIn -
+DD MSG-10 w1 ben 493227 DBGq tfinish 3081 committed {}
+DD MSG-11 w3 ben 493272 DBGq claim 2904 5f0683 none deferredUntil -
+DD MSG-11 w3 page 493280 DBGq claim 2911 310c57 2 UpdateNotifications deferredUntil -
+DD MSG-11 w3 ben 493358 DBGq blocked 2969 {"id":"1","op":"UpdateNotifications","lo":"5f0683","exp":298778,"alive":true,"keys":["transactionId","uuid","superseded","query","operationName","variables","clientMetadata","optimisticData","enqueuedAtMs","leaseOwner","leaseGeneration","leaseExpiresAtMs"]}
+DD MSG-10 w1 page 493647 DBGq blocked 3183 {"id":"1","op":"UpdateNotifications","lo":"470110","exp":298792,"alive":true,"keys":["transactionId","uuid","superseded","query","operationName","variables","clientMetadata","optimisticData","enqueuedAtMs","leaseOwner","leaseGeneration","leaseExpiresAtMs"]}
+DD MSG-10 w1 ben 493648 DBGq claim 3341 47a4e6 none deferredUntil -
+DD MSG-10 w1 ben 493649 DBGq blocked 3347 null
+DD MSG-10 w1 page 493655 DBGq finish 3499 UpdateNotifications committed {} retryIn -
+DD MSG-10 w1 page 493655 DBGq tfinish 3500 committed {}
+DD MSG-11 w3 page 493760 DBGq finish 3245 UpdateNotifications committed {} retryIn -
+DD MSG-11 w3 page 493760 DBGq tfinish 3245 committed {}
+  ✓   91 tests/channels-e2e-dbg/messages.spec.ts:455:1 › MSG-12 someone else’s message offers no Edit or Delete, while my own does (2.7s)
+DD MSG-10 w1 page 493834 DBGq claim 3687 470110 2 DeleteChannelMessage deferredUntil -
+DD MSG-10 w1 page 493927 DBGq finish 3779 DeleteChannelMessage committed {} retryIn -
+DD MSG-10 w1 page 493927 DBGq tfinish 3779 committed {}
+DD MSG-11 w3 page 493932 DBGq claim 3553 310c57 3 DeleteChannelMessage deferredUntil -
+DD MSG-10 w1 page 493957 DBGq claim 3809 470110 none deferredUntil -
+DD MSG-10 w1 page 493980 DBGq blocked 3832 null
+DD MSG-11 w3 page 494085 DBGq finish 3717 DeleteChannelMessage committed {} retryIn -
+DD MSG-11 w3 page 494086 DBGq tfinish 3717 committed {}
+DD MSG-11 w3 ben 494102 DBGq finish 3733 UpdateNotifications committed {} retryIn -
+DD MSG-11 w3 ben 494103 DBGq tfinish 3733 committed {}
+DD MSG-11 w3 page 494115 DBGq claim 3743 310c57 none deferredUntil -
+DD MSG-11 w3 page 494123 DBGq blocked 3755 null
+DD MSG-11 w3 ben 494228 DBGq claim 3860 5f0683 2 UpdateNotifications deferredUntil -
+DD MSG-11 w3 ben 494403 DBGq finish 4034 UpdateNotifications committed {} retryIn -
+DD MSG-11 w3 ben 494403 DBGq tfinish 4034 committed {}
+DD MSG-11 w3 ben 494436 DBGq claim 4067 5f0683 none deferredUntil -
+DD MSG-11 w3 ben 494454 DBGq blocked 4085 null
+  ✓   89 tests/channels-e2e-dbg/messages.spec.ts:376:1 › MSG-10 deleting my message, once confirmed, removes it for both people and after reload (5.8s)
+DD MSG-13 w2 ben 496416 DBGq claim 2529 3fb3d4 none deferredUntil -
+DD MSG-13 w2 ben 496492 DBGq blocked 2605 null
+DD MSG-11 w3 ben 496584 DBGq claim 1875 cd6bfc none deferredUntil -
+DD MSG-13 w2 page 496607 DBGq claim 2708 7e7da4 none deferredUntil -
+DD MSG-11 w3 ben 496637 DBGq blocked 1928 null
+DD MSG-11 w3 page 496917 DBGq claim 1931 e10c1d none deferredUntil -
+DD MSG-11 w3 page 496924 DBGq blocked 1939 null
+  ✓   90 tests/channels-e2e-dbg/messages.spec.ts:418:1 › MSG-11 a deleted message that has replies reads “This message was deleted.” and keeps its replies (7.0s)
+DD MSG-13 w2 page 497045 DBGq blocked 3044 {"id":"1","op":"ReactToChannelMessage","lo":"7e7da4","exp":299403,"alive":true,"keys":["transactionId","uuid","superseded","query","operationName","variables","clientMetadata","optimisticData","enqueuedAtMs","leaseOwner","leaseGeneration","leaseExpiresAtMs"]}
+DD MSG-13 w2 page 497081 DBGq finish 3193 ReactToChannelMessage committed {} retryIn -
+DD MSG-13 w2 page 497081 DBGq tfinish 3193 committed {}
+DD MSG-13 w2 page 497172 DBGq claim 3284 7e7da4 none deferredUntil -
+DD MSG-13 w2 page 497202 DBGq blocked 3309 null
+  ✓   88 tests/channels-e2e-dbg/messages.spec.ts:331:1 › MSG-09 cancelling an edit, with Escape or “Discard Edit”, leaves the message as it was (8.2s)
+DD MSG-13 w2 ben 498090 DBGq finish 4030 ReactToChannelMessage committed {} retryIn -
+DD MSG-13 w2 ben 498090 DBGq tfinish 4031 committed {}
+DD MSG-13 w2 ben 498090 DBGq claim 4107 3fb3d4 none deferredUntil -
+DD MSG-13 w2 ben 498090 DBGq blocked 4110 null
+DD MSG-14 w1 page 498523 DBGq claim 2665 3d27a6 none deferredUntil -
+DD MSG-14 w1 page 498545 DBGq blocked 2682 {"id":"1","op":"ReactToChannelMessage","lo":"3d27a6","exp":299667,"alive":true,"keys":["transactionId","uuid","superseded","query","operationName","variables","clientMetadata","optimisticData","enqueuedAtMs","leaseOwner","leaseGeneration","leaseExpiresAtMs"]}
+DD MSG-14 w1 page 498614 DBGq finish 2756 ReactToChannelMessage committed {} retryIn -
+DD MSG-14 w1 page 498615 DBGq tfinish 2757 committed {}
+DD MSG-14 w1 page 498632 DBGq claim 2774 3d27a6 none deferredUntil -
+DD MSG-14 w1 page 498637 DBGq blocked 2779 null
+DD MSG-14 w1 ben 499187 DBGq claim 3097 bab0a4 none deferredUntil -
+DD MSG-14 w1 ben 499294 DBGq blocked 3436 null
+  ✓   94 tests/channels-e2e-dbg/messages.spec.ts:582:1 › MSG-15 another person’s edit, reactions and deletion show on an open channel without reload (2.5s)
+DD MSG-13 w2 page 499859 DBGq claim 2190 415e54 none deferredUntil -
+DD MSG-13 w2 page 499910 DBGq blocked 2241 null
+  ✓   95 tests/channels-e2e-dbg/messages.spec.ts:623:1 › MSG-16 a message sent to another channel does not appear in the open one (2.6s)
+DD MSG-13 w2 ben 500094 DBGq claim 2003 7732a2 none deferredUntil -
+DD MSG-13 w2 ben 500197 DBGq blocked 2090 {"id":"2","op":"UpdateNotifications","lo":"7732a2","exp":299242,"alive":true,"keys":["transactionId","uuid","superseded","query","operationName","variables","clientMetadata","optimisticData","enqueuedAtMs","leaseOwner","leaseGeneration","leaseExpiresAtMs"]}
+DD MSG-13 w2 ben 500275 DBGq finish 2183 UpdateNotifications committed {} retryIn -
+DD MSG-13 w2 ben 500275 DBGq tfinish 2183 committed {}
+DD MSG-13 w2 ben 500324 DBGq claim 2231 7732a2 3 ReactToChannelMessage deferredUntil -
+DD MSG-13 w2 ben 500465 DBGq finish 2374 ReactToChannelMessage committed {} retryIn -
+DD MSG-13 w2 ben 500466 DBGq tfinish 2374 committed {}
+DD MSG-13 w2 ben 500480 DBGq claim 2389 7732a2 none deferredUntil -
+DD MSG-13 w2 ben 500481 DBGq blocked 2390 null
+DD MSG-13 w2 page 501189 DBGq finish 3520 ReactToChannelMessage committed {} retryIn -
+DD MSG-13 w2 page 501189 DBGq tfinish 3520 committed {}
+DD MSG-13 w2 page 501233 DBGq claim 3562 415e54 none deferredUntil -
+  ✓   96 tests/channels-e2e-dbg/messages.spec.ts:655:1 › MSG-17 “Copy Text” on a message copies its text (2.3s)
+DD MSG-18 w0 page 502665 DBGq claim 2649 a0c5bb none deferredUntil -
+DD MSG-14 w1 ben 502709 [observability] graphql.mutation_queue.loaded {auth.state: signed-in, network.online: false, graphql.websocket.state: connected, mutation_queue.depth: 1, mutation_queue.age_unknown_items: 0}
+DD MSG-18 w0 page 502711 DBGq blocked 2666 {"id":"1","op":"SendChannelMessage","lo":"a0c5bb","exp":299443,"alive":true,"keys":["transactionId","uuid","superseded","query","operationName","variables","clientMetadata","optimisticData","enqueuedAtMs","leaseOwner","leaseGeneration","leaseExpiresAtMs"]}
+  ✓   93 tests/channels-e2e-dbg/messages.spec.ts:548:1 › MSG-14 a reaction chosen in the emoji picker shows for both people and after reload (7.1s)
+DD MSG-18 w0 ben 502914 DBGq claim 2876 a13267 none deferredUntil -
+  ✓   92 tests/channels-e2e-dbg/messages.spec.ts:491:1 › MSG-13 a quick reaction shows for both people, counts 2 when the other adds the same, and goes when removed (9.1s)
+DD MSG-18 w0 ben 502949 DBGq blocked 2921 {"id":"1","op":"SendChannelMessage","lo":"a13267","exp":299341,"alive":true,"keys":["transactionId","uuid","superseded","query","operationName","variables","clientMetadata","optimisticData","enqueuedAtMs","leaseOwner","leaseGeneration","leaseExpiresAtMs"]}
+DD MSG-18 w0 ben 503446 DBGq finish 3431 SendChannelMessage committed {} retryIn -
+DD MSG-18 w0 ben 503446 DBGq tfinish 3431 committed {}
+DD MSG-18 w0 page 503473 DBGq finish 3456 SendChannelMessage committed {} retryIn -
+DD MSG-18 w0 page 503473 DBGq tfinish 3457 committed {}
+DD MSG-18 w0 ben 503570 DBGq finish 3555 SendChannelMessage committed {} retryIn -
+DD MSG-18 w0 ben 503570 DBGq tfinish 3555 committed {}
+DD MSG-18 w0 page 503641 DBGq claim 3626 a0c5bb 2 SendChannelMessage deferredUntil -
+DD MSG-18 w0 ben 503684 DBGq claim 3669 a13267 3 SendChannelMessage deferredUntil -
+DD MSG-18 w0 page 503693 DBGq finish 3677 SendChannelMessage committed {} retryIn -
+DD MSG-18 w0 page 503693 DBGq tfinish 3677 committed {}
+DD MSG-18 w0 page 503740 DBGq claim 3721 a0c5bb 3 SendChannelMessage deferredUntil -
+DD MSG-18 w0 ben 503915 DBGq finish 3900 SendChannelMessage committed {} retryIn -
+DD MSG-18 w0 ben 503915 DBGq tfinish 3900 committed {}
+DD MSG-18 w0 page 503980 DBGq finish 3964 SendChannelMessage committed {} retryIn -
+DD MSG-18 w0 page 503980 DBGq tfinish 3965 committed {}
+DD MSG-18 w0 page 504101 DBGq claim 4085 a0c5bb 4 SendChannelMessage deferredUntil -
+DD MSG-18 w0 ben 504702 DBGq claim 4681 a13267 4 SendChannelMessage deferredUntil -
+DD MSG-18 w0 page 504831 DBGq finish 4815 SendChannelMessage committed {} retryIn -
+DD MSG-18 w0 page 504831 DBGq tfinish 4815 committed {}
+DD MSG-18 w0 page 504941 DBGq claim 4919 a0c5bb none deferredUntil -
+DD MSG-18 w0 page 505027 DBGq blocked 5011 null
+DD MSG-18 w0 ben 505333 DBGq finish 5319 SendChannelMessage committed {} retryIn -
+DD MSG-18 w0 ben 505333 DBGq tfinish 5319 committed {}
+DD OFF-01 w3 ben 505761 DBGq claim 3274 bee1ac none deferredUntil -
+DD OFF-01 w3 ben 505843 DBGq finish 3493 UpdateNotifications committed {} retryIn -
+DD OFF-01 w3 ben 505843 DBGq tfinish 3493 committed {}
+DD OFF-01 w3 ben 505845 DBGq blocked 3495 {"id":"2","op":"UpdateNotifications","exp":null,"alive":null,"keys":["transactionId","uuid","superseded","query","operationName","variables","clientMetadata","optimisticData","enqueuedAtMs"]}
+DD OFF-01 w3 ben 505904 DBGq claim 3554 bee1ac 2 UpdateNotifications deferredUntil -
+DD OFF-02 w1 ben 505974 DBGq claim 2562 cb97a3 none deferredUntil -
+DD OFF-02 w1 ben 506014 DBGq blocked 2602 null
+DD MSG-18 w0 ben 506058 DBGq claim 6043 a13267 none deferredUntil -
+DD OFF-01 w3 ben 506084 DBGq finish 3734 UpdateNotifications committed {} retryIn -
+DD OFF-01 w3 ben 506084 DBGq tfinish 3734 committed {}
+DD OFF-01 w3 ben 506093 DBGq claim 3743 bee1ac none deferredUntil -
+DD OFF-01 w3 ben 506098 DBGq blocked 3748 null
+DD OFF-03 w2 ben 506589 DBGq claim 3178 b183ea none deferredUntil -
+DD OFF-03 w2 ben 506672 DBGq blocked 3244 {"id":"1","op":"UpdateNotifications","lo":"b183ea","exp":298464,"alive":true,"keys":["transactionId","uuid","superseded","query","operationName","variables","clientMetadata","optimisticData","enqueuedAtMs","leaseOwner","leaseGeneration","leaseExpiresAtMs"]}
+DD OFF-03 w2 ben 506863 DBGq finish 3457 UpdateNotifications committed {} retryIn -
+DD OFF-03 w2 ben 506863 DBGq tfinish 3458 committed {}
+DD OFF-03 w2 ben 506875 DBGq claim 3469 b183ea 2 UpdateNotifications deferredUntil -
+DD OFF-03 w2 ben 506979 DBGq finish 3574 UpdateNotifications committed {} retryIn -
+DD OFF-03 w2 ben 506980 DBGq tfinish 3574 committed {}
+  ✓   97 tests/channels-e2e-dbg/messages.spec.ts:677:1 › MSG-18 messages two people send at the same moment end in one order for both, each once (7.8s)
+DD OFF-01 w3 ben 507933 DBGq claim 1699 655f19 none deferredUntil -
+DD OFF-01 w3 ben 507967 DBGq blocked 1734 null
+DD OFF-03 w2 ben 508776 DBGq claim 1775 d58675 none deferredUntil -
+DD OFF-03 w2 ben 508810 DBGq blocked 1811 null
+DD OFF-03 w2 ben 508918 DBGq claim 1906 d58675 none deferredUntil -
+DD OFF-03 w2 ben 508953 DBGq blocked 1954 null
+DD OFF-04 w0 ben 510843 DBGq claim 2693 1d1ee9 none deferredUntil -
+DD OFF-04 w0 ben 510885 DBGq blocked 2737 {"id":"1","op":"UpdateNotifications","lo":"1d1ee9","exp":298813,"alive":true,"keys":["transactionId","uuid","superseded","query","operationName","variables","clientMetadata","optimisticData","enqueuedAtMs","leaseOwner","leaseGeneration","leaseExpiresAtMs"]}
+DD OFF-04 w0 ben 511589 DBGq finish 3460 UpdateNotifications committed {} retryIn -
+DD OFF-04 w0 ben 511589 DBGq tfinish 3460 committed {}
+DD OFF-04 w0 ben 511690 DBGq claim 3564 1d1ee9 2 UpdateNotifications deferredUntil -
+DD OFF-04 w0 ben 511841 DBGq finish 3715 UpdateNotifications committed {} retryIn -
+DD OFF-04 w0 ben 511841 DBGq tfinish 3715 committed {}
+DD OFF-04 w0 ben 511925 DBGq claim 3800 1d1ee9 none deferredUntil -
+DD OFF-04 w0 ben 511929 DBGq blocked 3803 null
+  ✓  100 tests/channels-e2e-dbg/offline.spec.ts:101:1 › OFF-03 on a very slow connection a held channel shows at once, and what changed meanwhile shows when the answer arrives (9.3s)
+  ✓   98 tests/channels-e2e-dbg/offline.spec.ts:55:1 › OFF-01 a channel the person has read opens whole with no connection (12.7s)
+  ✓   99 tests/channels-e2e-dbg/offline.spec.ts:74:1 › OFF-02 a channel the device has never held says it cannot load offline, and loads when the connection is back (12.0s)
+DD OFF-06 w3 ben 518691 DBGq claim 2909 27cffc none deferredUntil -
+DD OFF-06 w3 ben 518713 DBGq finish 3083 UpdateNotifications committed {} retryIn -
+DD OFF-06 w3 ben 518713 DBGq tfinish 3084 committed {}
+DD OFF-06 w3 ben 518713 DBGq blocked 3087 null
+DD OFF-06 w3 ben 518868 DBGq claim 3242 27cffc none deferredUntil -
+DD OFF-06 w3 ben 518875 DBGq blocked 3248 null
+DD OFF-07 w1 ben 519040 DBGq claim 2874 300e82 none deferredUntil -
+DD OFF-07 w1 ben 519060 DBGq blocked 3040 null
+DD OFF-05 w2 ben 520474 DBGq claim 2975 00b6f6 none deferredUntil -
+DD OFF-05 w2 ben 520545 DBGq finish 3045 UpdateNotifications committed {} retryIn -
+DD OFF-05 w2 ben 520545 DBGq tfinish 3046 committed {}
+DD OFF-05 w2 ben 520548 DBGq blocked 3050 null
+DD OFF-05 w2 ben 520695 DBGq claim 3197 00b6f6 none deferredUntil -
+DD OFF-05 w2 ben 520719 DBGq blocked 3218 null
+DD OFF-07 w1 ben 521239 DBGq claim 1709 20c9e6 none deferredUntil -
+DD OFF-07 w1 ben 521282 DBGq blocked 1752 null
+DD OFF-06 w3 ben 521839 DBGq claim 1761 514188 none deferredUntil -
+DD OFF-06 w3 ben 521844 DBGq blocked 1767 null
+DD OFF-05 w2 ben 523384 DBGq claim 1900 d7bc8b none deferredUntil -
+DD OFF-05 w2 ben 523386 DBGq blocked 1902 null
+DD OFF-04 w0 ben 523840 DBGq finish 15714 UpdateNotifications committed {} retryIn -
+DD OFF-04 w0 ben 523840 DBGq tfinish 15714 committed {}
+DD OFF-04 w0 ben 523867 DBGq claim 15741 1d1ee9 none deferredUntil -
+DD OFF-04 w0 ben 523867 DBGq blocked 15741 null
+  ✓  104 tests/channels-e2e-dbg/offline.spec.ts:217:1 › OFF-07 a long thread never opened, opened with no connection, shows every reply or says that there are more (11.9s)
+DD OFF-04 w0 ben 528210 DBGq claim 3728 c5fa4d none deferredUntil -
+DD OFF-04 w0 ben 528393 DBGq blocked 3912 null
+  ✓  103 tests/channels-e2e-dbg/offline.spec.ts:186:1 › OFF-06 a thread read while connected shows its replies with no connection, a long one included (14.5s)
+  ✓  102 tests/channels-e2e-dbg/offline.spec.ts:153:1 › OFF-05 scrolling past the oldest held message with no connection keeps what is held on screen (17.7s)
+DD OFF-08 w1 page 530150 DBGq claim 3025 2ac1a4 none deferredUntil -
+DD OFF-08 w1 page 530182 DBGq blocked 3061 null
+DD OFF-08 w1 page 530190 DBGq finish 3069 UpdateNotifications committed {} retryIn -
+DD OFF-08 w1 page 530191 DBGq tfinish 3070 committed {}
+DD OFF-08 w1 page 530229 DBGq claim 3108 2ac1a4 none deferredUntil -
+DD OFF-08 w1 page 530235 DBGq blocked 3113 null
+DD OFF-08 w1 page 532019 DBGq claim 1600 e4fd6d none deferredUntil -
+DD OFF-08 w1 page 532060 DBGq blocked 1642 null
+DD OFF-10 w2 ben 532785 DBGq claim 2305 a4c69f none deferredUntil -
+DD OFF-10 w2 ben 532896 DBGq finish 2393 UpdateNotifications committed {} retryIn -
+DD OFF-10 w2 ben 532896 DBGq tfinish 2393 committed {}
+DD OFF-10 w2 ben 532949 DBGq blocked 2468 {"id":"2","op":"UpdateNotifications","exp":null,"alive":null,"keys":["transactionId","uuid","superseded","query","operationName","variables","clientMetadata","optimisticData","enqueuedAtMs"]}
+DD OFF-10 w2 ben 533004 DBGq claim 2524 a4c69f 2 UpdateNotifications deferredUntil -
+DD OFF-09 w3 ben 533008 [observability] graphql.mutation_queue.loaded {auth.state: signed-in, network.online: false, graphql.websocket.state: connected, mutation_queue.depth: 2, mutation_queue.age_unknown_items: 0}
+DD OFF-10 w2 ben 533088 DBGq finish 2608 UpdateNotifications committed {} retryIn -
+DD OFF-10 w2 ben 533088 DBGq tfinish 2608 committed {}
+DD OFF-09 w3 ben 533438 DBGq claim 1688 8f5edf none deferredUntil -
+DD OFF-09 w3 ben 533486 DBGq blocked 1732 {"id":"1","op":"UpdateNotifications","lo":"a61b82","exp":297493,"alive":false,"keys":["transactionId","uuid","superseded","query","operationName","variables","clientMetadata","optimisticData","enqueuedAtMs","leaseOwner","leaseGeneration","leaseExpiresAtMs"]}
+DD OFF-10 w2 ben 533512 DBGq claim 2916 a4c69f none deferredUntil -
+DD OFF-10 w2 ben 533512 DBGq blocked 3021 null
+DD OFF-09 w3 ben 533569 DBGq skipped 1802 lease-owner-gone
+DD OFF-09 w3 ben 533569 [observability] graphql.mutation_queue.skipped {auth.state: signed-in, network.online: false, graphql.websocket.state: connected, mutation_queue.pending_items: 0, mutation_queue.oldest_observed_wait_ms: 0}
+DD OFF-09 w3 ben 533809 DBGq claim 2059 8f5edf 1 UpdateNotifications deferredUntil -
+DD OFF-09 w3 ben 533919 DBGq finish 2167 UpdateNotifications committed {} retryIn -
+DD OFF-09 w3 ben 533919 DBGq tfinish 2168 committed {}
+DD OFF-09 w3 ben 533930 DBGq claim 2180 8f5edf 2 UpdateNotifications deferredUntil -
+DD OFF-09 w3 ben 533969 DBGq finish 2219 UpdateNotifications committed {} retryIn -
+DD OFF-09 w3 ben 533969 DBGq tfinish 2219 committed {}
+DD OFF-10 w2 ben 534168 DBGq finish 3688 UpdateNotifications committed {} retryIn -
+DD OFF-10 w2 ben 534169 DBGq tfinish 3688 committed {}
+DD OFF-10 w2 ben 534194 DBGq claim 3714 a4c69f none deferredUntil -
+DD OFF-10 w2 ben 534196 DBGq blocked 3716 null
+DD OFF-09 w3 ben 534425 DBGq claim 2520 8f5edf none deferredUntil -
+DD OFF-09 w3 ben 534427 DBGq blocked 2524 null
+DD OFF-10 w2 ben 535910 DBGq claim 1706 01256d none deferredUntil -
+DD OFF-10 w2 ben 535919 DBGq blocked 1715 null
+  ✓  105 tests/channels-e2e-dbg/offline.spec.ts:256:1 › OFF-08 a team owner opening a held channel with no connection sees the channel (11.2s)
+  ✓  106 tests/channels-e2e-dbg/offline.spec.ts:274:1 › OFF-09 a channel left as soon as its messages showed opens with no connection (10.8s)
+DD OFF-11 w1 ben 541191 DBGq claim 2741 2f898f none deferredUntil -
+DD OFF-11 w1 ben 541220 DBGq finish 2777 UpdateNotifications committed {} retryIn -
+DD OFF-11 w1 ben 541220 DBGq tfinish 2778 committed {}
+DD OFF-11 w1 ben 541220 DBGq blocked 2778 {"id":"2","op":"UpdateNotifications","exp":null,"alive":null,"keys":["transactionId","uuid","superseded","query","operationName","variables","clientMetadata","optimisticData","enqueuedAtMs"]}
+DD OFF-11 w1 ben 541234 DBGq claim 2792 2f898f 2 UpdateNotifications deferredUntil -
+DD OFF-11 w1 ben 541303 DBGq finish 2861 UpdateNotifications committed {} retryIn -
+DD OFF-11 w1 ben 541303 DBGq tfinish 2861 committed {}
+DD OFF-11 w1 ben 541393 DBGq claim 2943 2f898f none deferredUntil -
+DD OFF-11 w1 ben 541410 DBGq blocked 2967 null
+  ✓  107 tests/channels-e2e-dbg/offline.spec.ts:296:1 › OFF-10 a message that arrived while the channel was open is there when the channel opens with no connection (11.8s)
+  ✓  109 tests/channels-e2e-dbg/open.spec.ts:13:1 › OPEN-01 a channel opened by its address shows its latest messages in order, at the end (2.6s)
+  ✓  101 tests/channels-e2e-dbg/offline.spec.ts:126:1 › OFF-04 messages read far back in a long channel can be scrolled through again with no connection (36.0s)
+DD OFF-11 w1 ben 544126 DBGq claim 1764 3d44ea none deferredUntil -
+DD OFF-11 w1 ben 544133 DBGq blocked 1771 null
+DD PRE-01 w3 ben 544913 DBGq claim 2298 6c0593 none deferredUntil -
+DD PRE-01 w3 ben 544967 DBGq blocked 2352 null
+  ✓  110 tests/channels-e2e-dbg/open.spec.ts:35:1 › OPEN-02 switching between channels in the list shows each channel’s own messages (3.6s)
+  ✓  112 tests/channels-e2e-dbg/reconnect.spec.ts:8:1 › REC-01 after the connection comes back, messages sent meanwhile appear in order without a reload (2.0s)
+  ✓  114 tests/channels-e2e-dbg/reconnect.spec.ts:83:1 › REC-03 a message that arrives while the page is hidden is there when the person comes back (2.0s)
+DD REC-02 w2 page 548550 DBGq claim 2982 604811 none deferredUntil -
+DD REC-02 w2 page 548584 DBGq blocked 3163 {"id":"1","op":"SendChannelMessage","lo":"604811","exp":298909,"alive":true,"keys":["transactionId","uuid","superseded","query","operationName","variables","clientMetadata","optimisticData","enqueuedAtMs","leaseOwner","leaseGeneration","leaseExpiresAtMs"]}
+DD REC-02 w2 page 548669 DBGq finish 3252 SendChannelMessage committed {} retryIn -
+DD REC-02 w2 page 548669 DBGq tfinish 3253 committed {}
+DD REC-02 w2 page 548751 DBGq claim 3334 604811 none deferredUntil -
+DD REC-02 w2 page 548764 DBGq blocked 3344 null
+  ✓  113 tests/channels-e2e-dbg/reconnect.spec.ts:38:1 › REC-02 a message sent with no connection is neither lost nor sent twice (4.3s)
+DD REC-04 w0 page 550079 DBGq claim 2276 4896ae none deferredUntil -
+DD REC-04 w0 page 550081 DBGq blocked 2278 null
+DD OFF-11 w1 ben 550533 DBGq finish 8171 SendChannelMessage retry-scheduled {"failure":"network","retryDelayMs":1000} retryIn 998
+DD OFF-11 w1 ben 550533 DBGq tfinish 8171 retry-scheduled {"failure":"network","retryDelayMs":1000}
+DD OFF-11 w1 ben 550533 [observability] graphql.mutation_queue.retry_scheduled {mutation_queue.item_id: 01a1e235-f95c-7554-82b8-f927f7bdb39c, mutation_queue.transaction_id: 3, graphql.operation.name: SendChannelMessage, mutation_queue.attempt_count: 1, mutation_queue.server_failure_count: 0}
+  ✓  108 tests/channels-e2e-dbg/offline.spec.ts:315:1 › OFF-11 opening a held channel with no connection does not say that a new version is out (12.6s)
+DD SCROLL w2 page 551953 DBGq claim 2283 d0d33b none deferredUntil -
+DD SCROLL w2 page 551991 DBGq blocked 2319 null
+DD PRE-01 w3 ben 555299 DBGq claim 12685 6c0593 none deferredUntil -
+DD PRE-01 w3 ben 555300 DBGq blocked 12686 null
+DD SCROLL w1 page 555593 DBGq claim 2345 8933a7 none deferredUntil -
+DD SCROLL w1 page 555596 DBGq blocked 2348 null
+  ✓  117 tests/channels-e2e-dbg/scroll.spec.ts:26:1 › SCROLL-02 scrolling back down from far up offers “Scroll to bottom”, which returns to the latest message (5.2s)
+  ✓  118 tests/channels-e2e-dbg/scroll.spec.ts:55:1 › SCROLL-03 at the end of the channel, a message from someone else arrives in view (3.3s)
+DD SCROLL w1 page 564110 DBGq claim 2262 c6916f none deferredUntil -
+DD SCROLL w1 page 564123 DBGq blocked 2275 null
+  ✓  116 tests/channels-e2e-dbg/scroll.spec.ts:7:1 › SCROLL-01 scrolling back to the start of a long channel shows every message once, in order (14.6s)
+DD THR-01 w2 ben 566698 DBGq claim 2369 0cee15 none deferredUntil -
+DD THR-01 w2 ben 566735 DBGq blocked 2404 null
+  ✓  119 tests/channels-e2e-dbg/scroll.spec.ts:78:1 › SCROLL-04 scrolled up, a message from someone else does not move what is being read (7.7s)
+DD THR-01 w2 page 566871 DBGq claim 2543 1fb062 none deferredUntil -
+DD THR-01 w2 page 567427 DBGq blocked 2875 {"id":"1","op":"UpdateNotifications","lo":"1fb062","exp":298894,"alive":true,"keys":["transactionId","uuid","superseded","query","operationName","variables","clientMetadata","optimisticData","enqueuedAtMs","leaseOwner","leaseGeneration","leaseExpiresAtMs"]}
+DD THR-01 w2 page 567457 DBGq finish 3129 UpdateNotifications committed {} retryIn -
+DD THR-01 w2 page 567463 DBGq tfinish 3129 committed {}
+DD THR-01 w2 page 567541 DBGq claim 3211 1fb062 2 SendChannelMessage deferredUntil -
+DD THR-01 w2 page 567600 DBGq finish 3272 SendChannelMessage committed {} retryIn -
+DD THR-01 w2 page 567600 DBGq tfinish 3272 committed {}
+DD THR-01 w2 page 567651 DBGq claim 3323 1fb062 none deferredUntil -
+DD THR-01 w2 page 567696 DBGq blocked 3368 null
+DD THR-02 w1 page 569409 DBGq claim 2368 23e330 none deferredUntil -
+DD THR-02 w1 page 569472 DBGq blocked 2427 {"id":"2","op":"SendChannelMessage","exp":null,"alive":null,"keys":["transactionId","uuid","superseded","query","operationName","variables","clientMetadata","optimisticData","enqueuedAtMs"]}
+DD THR-02 w1 page 569515 DBGq finish 2474 UpdateNotifications committed {} retryIn -
+DD THR-02 w1 page 569515 DBGq tfinish 2475 committed {}
+DD THR-02 w1 page 569605 DBGq claim 2565 23e330 2 SendChannelMessage deferredUntil -
+DD THR-02 w1 ben 569612 DBGq claim 2573 4c3471 none deferredUntil -
+DD THR-01 w2 ben 570087 DBGq claim 2062 bd4a63 none deferredUntil -
+DD THR-01 w2 ben 570119 DBGq blocked 2078 {"id":"1","op":"UpdateNotifications","lo":"bd4a63","exp":299344,"alive":true,"keys":["transactionId","uuid","superseded","query","operationName","variables","clientMetadata","optimisticData","enqueuedAtMs","leaseOwner","leaseGeneration","leaseExpiresAtMs"]}
+DD THR-02 w1 ben 570187 DBGq blocked 2861 {"id":"1","op":"UpdateNotifications","lo":"4c3471","exp":298906,"alive":true,"keys":["transactionId","uuid","superseded","query","operationName","variables","clientMetadata","optimisticData","enqueuedAtMs","leaseOwner","leaseGeneration","leaseExpiresAtMs"]}
+DD THR-01 w2 ben 570245 DBGq finish 2219 UpdateNotifications committed {} retryIn -
+DD THR-01 w2 ben 570245 DBGq tfinish 2219 committed {}
+DD THR-02 w1 page 570255 DBGq finish 3215 SendChannelMessage committed {} retryIn -
+DD THR-02 w1 page 570255 DBGq tfinish 3215 committed {}
+  ✓  120 tests/channels-e2e-dbg/threads.spec.ts:6:1 › THR-01 a reply written from “Reply” shows under its message for both people, and after reload (6.1s)
+DD THR-02 w1 page 570403 DBGq claim 3362 23e330 none deferredUntil -
+DD THR-02 w1 page 570410 DBGq blocked 3370 null
+DD THR-02 w1 ben 570479 DBGq finish 3440 UpdateNotifications committed {} retryIn -
+DD THR-02 w1 ben 570479 DBGq tfinish 3440 committed {}
+DD THR-02 w1 ben 570643 DBGq claim 3604 4c3471 none deferredUntil -
+DD THR-02 w1 ben 571183 DBGq blocked 3860 null
+DD THR-02 w1 ben 572068 DBGq finish 4916 SendChannelMessage committed {} retryIn -
+DD THR-02 w1 ben 572068 DBGq tfinish 4916 committed {}
+DD THR-02 w1 ben 572070 DBGq claim 5013 4c3471 none deferredUntil -
+DD THR-02 w1 ben 572071 DBGq blocked 5014 null
+DD THR-02 w1 page 572230 DBGq finish 5189 SendChannelMessage committed {} retryIn -
+DD THR-02 w1 page 572230 DBGq tfinish 5190 committed {}
+DD THR-02 w1 page 572242 DBGq claim 5202 23e330 none deferredUntil -
+DD THR-02 w1 page 572243 DBGq blocked 5203 null
+DD THR-03 w2 page 573934 DBGq claim 2774 c073c2 none deferredUntil -
+  ✓  111 tests/channels-e2e-dbg/prewarm.spec.ts:17:1 › PRE-01 an unread channel never opened on this device opens with no connection once the app has been left alone (31.9s)
+DD THR-03 w2 page 574399 DBGq blocked 3083 {"id":"2","op":"UpdateNotifications","exp":null,"alive":null,"keys":["transactionId","uuid","superseded","query","operationName","variables","clientMetadata","optimisticData","enqueuedAtMs"]}
+DD THR-03 w2 page 574404 DBGq finish 3231 UpdateNotifications committed {} retryIn -
+DD THR-03 w2 page 574404 DBGq tfinish 3232 committed {}
+DD THR-03 w2 page 574497 DBGq claim 3337 c073c2 2 UpdateNotifications deferredUntil -
+DD THR-03 w2 page 574598 DBGq finish 3433 UpdateNotifications committed {} retryIn -
+DD THR-03 w2 page 574598 DBGq tfinish 3433 committed {}
+  ✓  122 tests/channels-e2e-dbg/threads.spec.ts:108:1 › THR-03 a long thread shows its first three replies and a count, opens to every reply in order, and closes again (4.3s)
+  ✘  115 tests/channels-e2e-dbg/reconnect.spec.ts:109:1 › REC-04 losing the connection just after the app opened does not say that a new version is out (26.9s)
+DD THR-02 w1 ben 576318 DBGq finish 9277 SendChannelMessage committed {} retryIn -
+DD THR-02 w1 ben 576318 DBGq tfinish 9277 committed {}
+DD THR-04 w3 page 577058 DBGq claim 2657 3d6fa8 none deferredUntil -
+DD THR-02 w1 ben 577062 DBGq claim 10023 4c3471 none deferredUntil -
+DD THR-04 w3 page 577086 DBGq blocked 2685 null
+DD THR-04 w3 page 577104 DBGq finish 2702 EditChannelMessage committed {} retryIn -
+DD THR-04 w3 page 577104 DBGq tfinish 2703 committed {}
+DD THR-04 w3 ben 577120 DBGq claim 2718 ac0bde none deferredUntil -
+DD THR-02 w1 ben 577174 DBGq blocked 10135 null
+DD THR-04 w3 page 577189 DBGq claim 2782 3d6fa8 none deferredUntil -
+DD THR-04 w3 page 577217 DBGq blocked 2816 null
+DD THR-06 w0 page 577348 DBGq claim 2521 11ea22 none deferredUntil -
+DD THR-06 w0 page 577365 DBGq blocked 2531 {"id":"1","op":"UpdateNotifications","lo":"11ea22","exp":299324,"alive":true,"keys":["transactionId","uuid","superseded","query","operationName","variables","clientMetadata","optimisticData","enqueuedAtMs","leaseOwner","leaseGeneration","leaseExpiresAtMs"]}
+DD THR-06 w0 ben 577368 DBGq claim 2541 92a2b4 none deferredUntil -
+DD THR-06 w0 ben 577392 DBGq blocked 2566 null
+DD THR-05 w2 ben 577447 DBGq claim 2595 77a804 none deferredUntil -
+DD THR-06 w0 page 577471 DBGq finish 2644 UpdateNotifications committed {} retryIn -
+DD THR-06 w0 page 577472 DBGq tfinish 2644 committed {}
+DD THR-05 w2 ben 577494 DBGq blocked 2620 {"id":"1","op":"UpdateNotifications","lo":"77a804","exp":299317,"alive":true,"keys":["transactionId","uuid","superseded","query","operationName","variables","clientMetadata","optimisticData","enqueuedAtMs","leaseOwner","leaseGeneration","leaseExpiresAtMs"]}
+DD THR-05 w2 ben 577559 DBGq finish 2705 UpdateNotifications committed {} retryIn -
+DD THR-05 w2 ben 577559 DBGq tfinish 2705 committed {}
+DD THR-05 w2 ben 577576 DBGq claim 2724 77a804 none deferredUntil -
+DD THR-05 w2 ben 577581 DBGq blocked 2728 null
+DD THR-05 w2 page 577608 DBGq claim 2755 cf9aac none deferredUntil -
+DD THR-04 w3 ben 577632 DBGq blocked 2795 {"id":"1","op":"UpdateNotifications","lo":"ac0bde","exp":299062,"alive":true,"keys":["transactionId","uuid","superseded","query","operationName","variables","clientMetadata","optimisticData","enqueuedAtMs","leaseOwner","leaseGeneration","leaseExpiresAtMs"]}
+DD THR-05 w2 page 577645 DBGq blocked 2777 {"id":"1","op":"UpdateNotifications","lo":"cf9aac","exp":299167,"alive":true,"keys":["transactionId","uuid","superseded","query","operationName","variables","clientMetadata","optimisticData","enqueuedAtMs","leaseOwner","leaseGeneration","leaseExpiresAtMs"]}
+DD THR-06 w0 page 577953 DBGq claim 2945 11ea22 2 UpdateNotifications deferredUntil -
+DD THR-04 w3 ben 577961 DBGq finish 3558 UpdateNotifications committed {} retryIn -
+DD THR-04 w3 ben 577962 DBGq tfinish 3558 committed {}
+DD THR-06 w0 page 578128 DBGq finish 3297 UpdateNotifications committed {} retryIn -
+DD THR-06 w0 page 578128 DBGq tfinish 3297 committed {}
+DD THR-04 w3 ben 578130 DBGq claim 3727 ac0bde none deferredUntil -
+DD THR-04 w3 ben 578149 DBGq blocked 3747 null
+DD THR-06 w0 page 578165 DBGq claim 3333 11ea22 3 ReactToChannelMessage deferredUntil -
+DD THR-05 w2 page 578240 DBGq finish 3353 UpdateNotifications committed {} retryIn -
+DD THR-05 w2 page 578240 DBGq tfinish 3354 committed {}
+DD THR-05 w2 page 578316 DBGq claim 3456 cf9aac 2 DeleteChannelMessage deferredUntil -
+DD THR-06 w0 page 578403 DBGq finish 3549 ReactToChannelMessage committed {} retryIn -
+DD THR-06 w0 page 578403 DBGq tfinish 3549 committed {}
+DD THR-06 w0 page 578407 DBGq claim 3572 11ea22 none deferredUntil -
+DD THR-06 w0 page 578420 DBGq blocked 3591 null
+DD THR-05 w2 page 578524 DBGq finish 3671 DeleteChannelMessage committed {} retryIn -
+DD THR-05 w2 page 578524 DBGq tfinish 3671 committed {}
+DD THR-05 w2 page 578578 DBGq claim 3720 cf9aac none deferredUntil -
+DD THR-05 w2 page 578595 DBGq blocked 3742 null
+DD THR-06 w0 ben 578889 DBGq finish 4040 ReactToChannelMessage committed {} retryIn -
+DD THR-06 w0 ben 578890 DBGq tfinish 4040 committed {}
+DD THR-06 w0 ben 579057 DBGq claim 4070 92a2b4 none deferredUntil -
+DD THR-06 w0 ben 579060 DBGq blocked 4072 null
+  ✓  123 tests/channels-e2e-dbg/threads.spec.ts:171:1 › THR-04 editing my reply shows the new text and “(edited)” to the other person without reload (5.7s)
+DD THR-05 w2 ben 580887 DBGq claim 1892 52c6e4 none deferredUntil -
+DD THR-05 w2 ben 580917 DBGq blocked 1920 null
+  ✓  125 tests/channels-e2e-dbg/threads.spec.ts:253:1 › THR-06 a reaction to a reply shows on that reply for both people, and counts 2 when both react (6.3s)
+  ✓  124 tests/channels-e2e-dbg/threads.spec.ts:216:1 › THR-05 deleting my reply removes it for the other person without reload, and leaves the others (6.5s)
+  ✓  126 tests/channels-e2e-dbg/threads.spec.ts:302:1 › THR-07 a reply from someone else arrives at the end of an open thread without reload (2.8s)
+  ✓  127 tests/channels-e2e-dbg/threads.spec.ts:341:1 › THR-08 a reply from someone else to a closed thread raises its count without reload, and is there when opened (2.5s)
+DD THR-09 w2 ben 583787 DBGq claim 2469 e2ef62 none deferredUntil -
+DD THR-09 w2 ben 583867 DBGq blocked 2536 {"id":"1","op":"UpdateNotifications","lo":"e2ef62","exp":299086,"alive":true,"keys":["transactionId","uuid","superseded","query","operationName","variables","clientMetadata","optimisticData","enqueuedAtMs","leaseOwner","leaseGeneration","leaseExpiresAtMs"]}
+DD THR-09 w2 page 583941 DBGq claim 2621 298029 none deferredUntil -
+DD THR-09 w2 ben 583956 DBGq finish 2638 UpdateNotifications committed {} retryIn -
+DD THR-09 w2 ben 583956 DBGq tfinish 2639 committed {}
+DD THR-09 w2 page 584043 DBGq blocked 2679 {"id":"1","op":"UpdateNotifications","lo":"298029","exp":299190,"alive":true,"keys":["transactionId","uuid","superseded","query","operationName","variables","clientMetadata","optimisticData","enqueuedAtMs","leaseOwner","leaseGeneration","leaseExpiresAtMs"]}
+DD THR-09 w2 ben 584353 DBGq claim 2909 e2ef62 none deferredUntil -
+DD THR-09 w2 ben 584353 DBGq blocked 2945 null
+DD THR-09 w2 page 584517 DBGq finish 3192 UpdateNotifications committed {} retryIn -
+DD THR-09 w2 page 584517 DBGq tfinish 3193 committed {}
+DD THR-09 w2 page 584608 DBGq claim 3279 298029 2 SendChannelMessage deferredUntil -
+DD THR-09 w2 page 584800 DBGq finish 3484 SendChannelMessage committed {} retryIn -
+DD THR-09 w2 page 584800 DBGq tfinish 3484 committed {}
+DD THR-09 w2 page 584898 DBGq claim 3575 298029 none deferredUntil -
+DD THR-09 w2 page 584898 DBGq blocked 3577 null
+DD THR-10 w3 page 585102 DBGq claim 2249 1dc74e none deferredUntil -
+DD THR-10 w3 page 585115 DBGq blocked 2266 null
+DD THR-09 w2 page 585795 DBGq finish 4478 SendChannelMessage committed {} retryIn -
+DD THR-09 w2 page 585795 DBGq tfinish 4478 committed {}
+DD TAB-01 w0 page 585815 DBGq claim 2310 812e2a none deferredUntil -
+DD TAB-01 w0 page 585836 DBGq blocked 2328 null
+DD THR-09 w2 page 585843 DBGq claim 4520 298029 none deferredUntil -
+DD THR-09 w2 page 585872 DBGq blocked 4555 null
+  ✓  128 tests/channels-e2e-dbg/threads.spec.ts:384:1 › THR-09 with replies being written to two messages, each goes to the thread it was written in (5.8s)
+DD TAB-01 w0 page 587233 DBGq claim 2101 c4dfeb none deferredUntil -
+DD TAB-01 w0 page 587243 DBGq blocked 2110 {"id":"1","op":"SendChannelMessage","lo":"812e2a","exp":299934,"alive":true,"keys":["transactionId","uuid","superseded","query","operationName","variables","clientMetadata","optimisticData","enqueuedAtMs","leaseOwner","leaseGeneration","leaseExpiresAtMs"]}
+DD TAB-01 w0 page 587294 DBGq finish 3789 SendChannelMessage committed {} retryIn -
+DD TAB-01 w0 page 587294 DBGq tfinish 3789 committed {}
+DD TAB-01 w0 page 587781 DBGq claim 4109 812e2a none deferredUntil -
+DD TAB-01 w0 page 587781 DBGq blocked 4151 null
+  ✓  130 tests/channels-e2e-dbg/two-tabs.spec.ts:6:1 › TAB-01 a message sent in one window shows once in the same person’s other window (4.8s)
+DD THR-02 ANNOT 588473 Error: expect(received).toEqual(expected) // deep equality
+DD TAB-02 w2 page 589393 DBGq claim 2253 5fb665 none deferredUntil -
+DD TAB-02 w2 page 589428 DBGq blocked 2289 null
+  ✓  121 tests/channels-e2e-dbg/threads.spec.ts:48:1 › THR-02 replies from two people to an old message read in one order for both, and leave the channel’s order alone (23.9s)
+DD UNR-01 w0 page 590843 DBGq claim 2449 87f1b0 none deferredUntil -
+DD UNR-01 w0 page 590861 DBGq blocked 2467 null
+DD TAB-02 w2 page 592104 DBGq skipped 3392 recovery-timeout
+DD TAB-02 w2 page 592105 [observability] graphql.mutation_queue.skipped {auth.state: signed-in, network.online: false, graphql.websocket.state: connected, mutation_queue.pending_items: 0, mutation_queue.oldest_observed_wait_ms: 0}
+DD TAB-02 w2 page 592216 DBGq claim 3505 e24b9c none deferredUntil -
+DD TAB-02 w2 page 592627 DBGq finish 5488 EditChannelMessage committed {} retryIn -
+DD TAB-02 w2 page 592628 DBGq tfinish 5488 committed {}
+DD TAB-02 w2 page 593151 DBGq blocked 4313 {"id":"2","op":"ReactToChannelMessage","lo":"5fb665","exp":300429,"alive":true,"keys":["transactionId","uuid","superseded","query","operationName","variables","clientMetadata","optimisticData","enqueuedAtMs","leaseOwner","leaseGeneration","leaseExpiresAtMs"]}
+  ✓  133 tests/channels-e2e-dbg/unread.spec.ts:92:1 › UNR-02 a channel with unread messages opens with “New” above the first of them, and “Mark as read” removes it (2.9s)
+  ✓  132 tests/channels-e2e-dbg/unread.spec.ts:43:1 › UNR-01 a message in a channel I do not have open marks its row unread at once; opening it clears the mark, also after reload (5.4s)
+DD TAB-02 w2 page 593903 DBGq finish 6763 ReactToChannelMessage committed {} retryIn -
+DD TAB-02 w2 page 593903 DBGq tfinish 6764 committed {}
+DD TAB-02 w2 page 594254 DBGq claim 7115 5fb665 3 DeleteChannelMessage deferredUntil -
+DD TAB-02 w2 page 594342 DBGq finish 7203 DeleteChannelMessage committed {} retryIn -
+DD TAB-02 w2 page 594342 DBGq tfinish 7203 committed {}
+DD TAB-02 w2 page 594376 DBGq claim 7236 5fb665 none deferredUntil -
+DD TAB-02 w2 page 594379 DBGq blocked 7240 null
+  ✓  131 tests/channels-e2e-dbg/two-tabs.spec.ts:29:1 › TAB-02 an edit, a reaction and a deletion made in one window show in the other (7.6s)
+DD UNR-03 w1 page 596120 DBGq claim 2362 4cb783 none deferredUntil -
+DD UNR-03 w1 page 596174 DBGq blocked 2407 {"id":"1","op":"SendChannelMessage","lo":"4cb783","exp":299516,"alive":true,"keys":["transactionId","uuid","superseded","query","operationName","variables","clientMetadata","optimisticData","enqueuedAtMs","leaseOwner","leaseGeneration","leaseExpiresAtMs"]}
+DD UNR-03 w1 page 596268 DBGq finish 2510 SendChannelMessage committed {} retryIn -
+DD UNR-03 w1 page 596268 DBGq tfinish 2511 committed {}
+DD UNR-03 w1 page 596335 DBGq claim 2578 4cb783 none deferredUntil -
+DD UNR-03 w1 page 596370 DBGq blocked 2612 null
+  ✓  134 tests/channels-e2e-dbg/unread.spec.ts:127:1 › UNR-03 my own messages never mark a channel unread for me (2.7s)
+DD UNR-05 w2 page 597159 DBGq claim 2470 bd649b none deferredUntil -
+DD UNR-05 w2 page 597589 DBGq blocked 2730 null
+DD UNR-04 w0 page 597631 DBGq claim 2502 f391e6 none deferredUntil -
+  ✓  135 tests/channels-e2e-dbg/unread.spec.ts:160:1 › UNR-04 scrolled up in an open channel, a new message shows “1 unread … below”, which leads to it (3.9s)
+DD UNR-06 w1 page 599335 DBGq claim 2738 6afe26 none deferredUntil -
+DD UNR-06 w1 page 599419 DBGq blocked 2820 null
+  ✘  129 tests/channels-e2e-dbg/threads.spec.ts:440:1 › THR-10 “Reply” on a message puts the keyboard in the reply box, so typing goes there (17.1s)
+  ✓  138 tests/channels-e2e-dbg/unread.spec.ts:281:1 › UNR-07 a member who never opened a channel sees it unread, and opening it shows every message and clears the mark (2.7s)
+DD UNR-05 w2 ben 600965 DBGq claim 4429 4e98ce none deferredUntil -
+DD UNR-05 w2 ben 601266 DBGq blocked 4729 null
+DD UNR-05 w2 ben 601459 DBGq finish 4923 SendChannelMessage committed {} retryIn -
+DD UNR-05 w2 ben 601459 DBGq tfinish 4923 committed {}
+DD UNR-05 w2 ben 601578 DBGq claim 5041 4e98ce none deferredUntil -
+DD UNR-05 w2 ben 601624 DBGq blocked 5087 null
+DD UNR-08 w3 ben 602191 DBGq claim 2290 951805 none deferredUntil -
+DD UNR-08 w3 ben 602311 DBGq blocked 2411 null
+  ✓  137 tests/channels-e2e-dbg/unread.spec.ts:227:1 › UNR-06 a muted channel shows a crossed bell and is not marked unread by new messages; unmuted, it is again (6.1s)
+  ✓  139 tests/channels-e2e-dbg/unread.spec.ts:320:1 › UNR-08 a channel I am added to appears in my list at once, and opens (2.9s)
+DD UNR-09 w0 page 602833 DBGq claim 2426 50f042 none deferredUntil -
+DD UNR-09 w0 page 602929 DBGq blocked 2523 null
+DD UNR-10 w1 page 605266 DBGq claim 2625 6060af none deferredUntil -
+DD UNR-10 w1 page 605341 DBGq blocked 2701 null
+DD WRT-01 w3 page 605424 DBGq claim 2477 86aaa9 none deferredUntil -
+DD WRT-01 w3 page 605442 DBGq blocked 2491 {"id":"1","op":"UpdateNotifications","lo":"86aaa9","exp":298916,"alive":true,"keys":["transactionId","uuid","superseded","query","operationName","variables","clientMetadata","optimisticData","enqueuedAtMs","leaseOwner","leaseGeneration","leaseExpiresAtMs"]}
+DD WRT-01 w3 page 605477 DBGq finish 2530 UpdateNotifications committed {} retryIn -
+DD WRT-01 w3 page 605478 DBGq tfinish 2531 committed {}
+DD WRT-01 w3 page 605947 DBGq claim 2832 86aaa9 none deferredUntil -
+DD WRT-01 w3 page 605947 DBGq blocked 2838 null
+DD WRT-01 w3 ben 607061 DBGq claim 2314 a2dfb6 none deferredUntil -
+DD WRT-01 w3 ben 607263 DBGq blocked 2382 {"id":"1","op":"UpdateNotifications","lo":"a2dfb6","exp":299104,"alive":true,"keys":["transactionId","uuid","superseded","query","operationName","variables","clientMetadata","optimisticData","enqueuedAtMs","leaseOwner","leaseGeneration","leaseExpiresAtMs"]}
+DD WRT-01 w3 ben 607367 DBGq finish 2619 UpdateNotifications committed {} retryIn -
+DD WRT-01 w3 ben 607367 DBGq tfinish 2619 committed {}
+DD WRT-01 w3 ben 607770 DBGq claim 2925 a2dfb6 none deferredUntil -
+DD WRT-01 w3 ben 607770 DBGq blocked 2926 null
+DD WRT-01 w3 ben 613536 DBGq finish 8789 SendChannelMessage committed {} retryIn -
+DD WRT-01 w3 ben 613536 DBGq tfinish 8789 committed {}
+DD WRT-01 w3 ben 613596 DBGq claim 8849 a2dfb6 none deferredUntil -
+  ✓  142 tests/channels-e2e-dbg/writes.spec.ts:47:1 › WRT-01 a message sent with no connection shows at once and reaches the other person once when the connection is back (10.9s)
+  ✘  136 tests/channels-e2e-dbg/unread.spec.ts:196:1 › UNR-05 a mention of me in a channel I do not have open shows a count of mentions on its row (19.7s)
+DD WRT-02 w3 ben 616171 DBGq claim 2269 835e68 none deferredUntil -
+DD WRT-02 w3 ben 616240 DBGq blocked 2333 {"id":"1","op":"UpdateNotifications","lo":"835e68","exp":299101,"alive":true,"keys":["transactionId","uuid","superseded","query","operationName","variables","clientMetadata","optimisticData","enqueuedAtMs","leaseOwner","leaseGeneration","leaseExpiresAtMs"]}
+DD WRT-03 w2 ben 616729 DBGq claim 2251 e13a67 none deferredUntil -
+DD WRT-03 w2 ben 616771 DBGq blocked 2285 {"id":"1","op":"UpdateNotifications","lo":"e13a67","exp":299132,"alive":true,"keys":["transactionId","uuid","superseded","query","operationName","variables","clientMetadata","optimisticData","enqueuedAtMs","leaseOwner","leaseGeneration","leaseExpiresAtMs"]}
+DD WRT-03 w2 ben 616799 DBGq finish 2321 UpdateNotifications committed {} retryIn -
+DD WRT-03 w2 ben 616799 DBGq tfinish 2322 committed {}
+DD WRT-02 w3 ben 616841 DBGq finish 2937 UpdateNotifications committed {} retryIn -
+DD WRT-02 w3 ben 616841 DBGq tfinish 2938 committed {}
+DD WRT-02 w3 ben 616926 DBGq claim 3023 835e68 none deferredUntil -
+DD WRT-02 w3 ben 616927 DBGq blocked 3024 null
+DD WRT-03 w2 ben 617217 DBGq claim 2619 e13a67 none deferredUntil -
+DD WRT-03 w2 ben 617287 DBGq blocked 2790 null
+  ✘  140 tests/channels-e2e-dbg/unread.spec.ts:357:1 › UNR-09 the first message in a new channel marks it unread for the other member (17.3s)
+  ✘  141 tests/channels-e2e-dbg/unread.spec.ts:385:1 › UNR-10 a row found with “Search conversations” is marked unread at once when a message arrives (17.4s)
+DD WRT-04 w0 ben 621249 [observability] graphql.mutation_queue.loaded {auth.state: signed-in, network.online: false, graphql.websocket.state: connected, mutation_queue.depth: 3, mutation_queue.age_unknown_items: 0}
+DD WRT-04 w0 ben 621662 DBGq claim 1882 8fa1a5 none deferredUntil -
+DD WRT-04 w0 ben 621726 DBGq blocked 1940 {"id":"1","op":"UpdateNotifications","lo":"56a2af","exp":297492,"alive":false,"keys":["transactionId","uuid","superseded","query","operationName","variables","clientMetadata","optimisticData","enqueuedAtMs","leaseOwner","leaseGeneration","leaseExpiresAtMs"]}
+DD WRT-04 w0 ben 621731 DBGq skipped 1951 lease-owner-gone
+DD WRT-04 w0 ben 621731 [observability] graphql.mutation_queue.skipped {auth.state: signed-in, network.online: false, graphql.websocket.state: connected, mutation_queue.pending_items: 1, mutation_queue.oldest_observed_wait_ms: 773}
+DD WRT-04 w0 ben 621820 DBGq claim 2030 8fa1a5 1 UpdateNotifications deferredUntil -
+DD WRT-04 w0 ben 622122 DBGq finish 2341 UpdateNotifications committed {} retryIn -
+DD WRT-04 w0 ben 622122 DBGq tfinish 2342 committed {}
+DD WRT-04 w0 ben 622197 DBGq claim 2416 8fa1a5 2 SendChannelMessage deferredUntil -
+DD WRT-04 w0 ben 622228 DBGq finish 2447 SendChannelMessage retry-scheduled {"failure":"network","retryDelayMs":1000} retryIn 994
+DD WRT-04 w0 ben 622228 DBGq tfinish 2447 retry-scheduled {"failure":"network","retryDelayMs":1000}
+DD WRT-04 w0 ben 622228 [observability] graphql.mutation_queue.retry_scheduled {mutation_queue.item_id: 01a1e237-0735-7992-8893-595d49a115b5, mutation_queue.transaction_id: 2, graphql.operation.name: SendChannelMessage, mutation_queue.attempt_count: 1, mutation_queue.server_failure_count: 0}
+DD WRT-05 w1 ben 622497 DBGq claim 2422 dd4311 none deferredUntil -
+DD WRT-05 w1 ben 622515 DBGq blocked 2449 {"id":"1","op":"UpdateNotifications","lo":"dd4311","exp":299019,"alive":true,"keys":["transactionId","uuid","superseded","query","operationName","variables","clientMetadata","optimisticData","enqueuedAtMs","leaseOwner","leaseGeneration","leaseExpiresAtMs"]}
+DD WRT-02 w3 ben 622622 DBGq finish 8719 EditChannelMessage retry-scheduled {"failure":"network","retryDelayMs":1000} retryIn 984
+DD WRT-02 w3 ben 622622 DBGq tfinish 8719 retry-scheduled {"failure":"network","retryDelayMs":1000}
+DD WRT-02 w3 ben 622622 [observability] graphql.mutation_queue.retry_scheduled {mutation_queue.item_id: 2b44d180-4e96-4091-a0c4-e1bd0718e4b0, mutation_queue.transaction_id: 2, graphql.operation.name: EditChannelMessage, mutation_queue.attempt_count: 1, mutation_queue.server_failure_count: 0}
+DD WRT-03 w2 ben 622714 DBGq finish 8236 SendChannelMessage retry-scheduled {"failure":"network","retryDelayMs":1000} retryIn 975
+DD WRT-03 w2 ben 622714 DBGq tfinish 8236 retry-scheduled {"failure":"network","retryDelayMs":1000}
+DD WRT-03 w2 ben 622714 [observability] graphql.mutation_queue.retry_scheduled {mutation_queue.item_id: 01a1e237-1316-7ddd-b45d-2dc99160e15f, mutation_queue.transaction_id: 2, graphql.operation.name: SendChannelMessage, mutation_queue.attempt_count: 1, mutation_queue.server_failure_count: 0}
+DD WRT-03 w2 ben 622839 DBGq claim 8362 e13a67 none deferredUntil 851
+DD WRT-03 w2 ben 622841 DBGq blocked 8364 {"id":"2","op":"SendChannelMessage","exp":null,"alive":null,"keys":["transactionId","uuid","superseded","query","operationName","variables","clientMetadata","optimisticData","enqueuedAtMs"]}
+DD WRT-02 w3 ben 622905 DBGq claim 9002 835e68 none deferredUntil 705
+DD WRT-02 w3 ben 622905 DBGq blocked 9003 {"id":"2","op":"EditChannelMessage","exp":null,"alive":null,"keys":["transactionId","uuid","superseded","query","operationName","variables","clientMetadata","optimisticData","enqueuedAtMs"]}
+DD WRT-05 w1 ben 622907 DBGq finish 2851 UpdateNotifications committed {} retryIn -
+DD WRT-05 w1 ben 622907 DBGq tfinish 2852 committed {}
+DD WRT-03 w2 ben 623004 DBGq claim 8527 e13a67 none deferredUntil 686
+DD WRT-03 w2 ben 623005 DBGq blocked 8527 {"id":"2","op":"SendChannelMessage","exp":null,"alive":null,"keys":["transactionId","uuid","superseded","query","operationName","variables","clientMetadata","optimisticData","enqueuedAtMs"]}
+DD WRT-05 w1 ben 623005 DBGq claim 2950 dd4311 2 SendChannelMessage deferredUntil -
+DD WRT-05 w1 ben 623052 DBGq finish 2996 SendChannelMessage retry-scheduled {"failure":"network","retryDelayMs":1000} retryIn 997
+DD WRT-05 w1 ben 623052 DBGq tfinish 2996 retry-scheduled {"failure":"network","retryDelayMs":1000}
+DD WRT-05 w1 ben 623053 [observability] graphql.mutation_queue.retry_scheduled {mutation_queue.item_id: 01a1e237-109a-7555-b822-6af8d65eca59, mutation_queue.transaction_id: 2, graphql.operation.name: SendChannelMessage, mutation_queue.attempt_count: 1, mutation_queue.server_failure_count: 0}
+DD WRT-02 w3 ben 623078 DBGq claim 9175 835e68 none deferredUntil 533
+DD WRT-02 w3 ben 623080 DBGq blocked 9177 {"id":"2","op":"EditChannelMessage","exp":null,"alive":null,"keys":["transactionId","uuid","superseded","query","operationName","variables","clientMetadata","optimisticData","enqueuedAtMs"]}
+DD WRT-03 w2 ben 623149 DBGq claim 8672 e13a67 none deferredUntil 540
+DD WRT-03 w2 ben 623150 DBGq blocked 8673 {"id":"2","op":"SendChannelMessage","exp":null,"alive":null,"keys":["transactionId","uuid","superseded","query","operationName","variables","clientMetadata","optimisticData","enqueuedAtMs"]}
+DD WRT-04 w0 ben 623227 DBGq claim 3447 8fa1a5 2 SendChannelMessage deferredUntil -
+DD WRT-03 w2 ben 623288 DBGq claim 8811 e13a67 none deferredUntil 404
+DD WRT-03 w2 ben 623289 DBGq blocked 8812 {"id":"2","op":"SendChannelMessage","exp":null,"alive":null,"keys":["transactionId","uuid","superseded","query","operationName","variables","clientMetadata","optimisticData","enqueuedAtMs"]}
+DD WRT-04 w0 ben 623300 DBGq finish 3520 SendChannelMessage committed {} retryIn -
+DD WRT-04 w0 ben 623300 DBGq tfinish 3520 committed {}
+DD WRT-04 w0 ben 623300 [observability] graphql.mutation_queue.committed_after_failure {mutation_queue.item_id: 01a1e237-0735-7992-8893-595d49a115b5, mutation_queue.transaction_id: 2, graphql.operation.name: SendChannelMessage, mutation_queue.attempt_count: 2, mutation_queue.server_failure_count: 0}
+DD WRT-04 w0 ben 623361 DBGq claim 3581 8fa1a5 3 SendChannelMessage deferredUntil -
+DD WRT-03 w2 ben 623436 DBGq claim 8958 e13a67 none deferredUntil 254
+DD WRT-03 w2 ben 623443 DBGq blocked 8963 {"id":"2","op":"SendChannelMessage","exp":null,"alive":null,"keys":["transactionId","uuid","superseded","query","operationName","variables","clientMetadata","optimisticData","enqueuedAtMs"]}
+DD WRT-02 w3 ben 623610 DBGq claim 9707 835e68 2 EditChannelMessage deferredUntil -
+DD WRT-02 w3 ben 623676 DBGq finish 9773 EditChannelMessage committed {} retryIn -
+DD WRT-02 w3 ben 623676 DBGq tfinish 9773 committed {}
+DD WRT-02 w3 ben 623676 [observability] graphql.mutation_queue.committed_after_failure {mutation_queue.item_id: 2b44d180-4e96-4091-a0c4-e1bd0718e4b0, mutation_queue.transaction_id: 2, graphql.operation.name: EditChannelMessage, mutation_queue.attempt_count: 2, mutation_queue.server_failure_count: 0}
+DD WRT-03 w2 ben 623694 DBGq claim 9217 e13a67 2 SendChannelMessage deferredUntil -
+DD WRT-02 w3 ben 623704 DBGq claim 9801 835e68 3 DeleteChannelMessage deferredUntil -
+DD WRT-03 w2 ben 623774 DBGq finish 9296 SendChannelMessage committed {} retryIn -
+DD WRT-03 w2 ben 623774 DBGq tfinish 9296 committed {}
+DD WRT-03 w2 ben 623774 [observability] graphql.mutation_queue.committed_after_failure {mutation_queue.item_id: 01a1e237-1316-7ddd-b45d-2dc99160e15f, mutation_queue.transaction_id: 2, graphql.operation.name: SendChannelMessage, mutation_queue.attempt_count: 2, mutation_queue.server_failure_count: 0}
+DD WRT-04 w0 ben 623987 DBGq finish 4207 SendChannelMessage committed {} retryIn -
+DD WRT-04 w0 ben 623987 DBGq tfinish 4207 committed {}
+DD WRT-03 w2 ben 623995 DBGq claim 9517 e13a67 3 SendChannelMessage deferredUntil -
+DD WRT-05 w1 ben 624086 DBGq claim 4031 dd4311 2 SendChannelMessage deferredUntil -
+DD WRT-02 w3 ben 624103 DBGq finish 10200 DeleteChannelMessage committed {} retryIn -
+DD WRT-02 w3 ben 624103 DBGq tfinish 10200 committed {}
+DD WRT-04 w0 ben 624141 DBGq claim 4355 8fa1a5 4 UpdateNotifications deferredUntil -
+DD WRT-02 w3 ben 624171 DBGq claim 10269 835e68 4 ReactToChannelMessage deferredUntil -
+DD WRT-03 w2 ben 624232 DBGq finish 9754 SendChannelMessage committed {} retryIn -
+DD WRT-03 w2 ben 624232 DBGq tfinish 9754 committed {}
+DD WRT-05 w1 ben 624242 DBGq finish 4187 SendChannelMessage committed {} retryIn -
+DD WRT-05 w1 ben 624242 DBGq tfinish 4187 committed {}
+DD WRT-05 w1 ben 624242 [observability] graphql.mutation_queue.committed_after_failure {mutation_queue.item_id: 01a1e237-109a-7555-b822-6af8d65eca59, mutation_queue.transaction_id: 2, graphql.operation.name: SendChannelMessage, mutation_queue.attempt_count: 2, mutation_queue.server_failure_count: 0}
+DD WRT-04 w0 ben 624301 DBGq finish 4521 UpdateNotifications committed {} retryIn -
+DD WRT-04 w0 ben 624301 DBGq tfinish 4522 committed {}
+DD WRT-05 w1 ben 624306 DBGq claim 4251 dd4311 3 SendChannelMessage deferredUntil -
+DD WRT-03 w2 ben 624329 DBGq claim 9851 e13a67 4 SendChannelMessage deferredUntil -
+DD WRT-04 w0 ben 624330 DBGq claim 4551 8fa1a5 none deferredUntil -
+DD WRT-04 w0 ben 624358 DBGq blocked 4567 null
+  ✓  145 tests/channels-e2e-dbg/writes.spec.ts:127:1 › WRT-04 messages that could not be sent are still there after a reload and are sent once when the services can be reached (6.7s)
+DD WRT-02 w3 ben 624426 DBGq finish 10523 ReactToChannelMessage committed {} retryIn -
+DD WRT-02 w3 ben 624426 DBGq tfinish 10523 committed {}
+DD WRT-02 w3 ben 624448 DBGq claim 10545 835e68 none deferredUntil -
+DD WRT-02 w3 ben 624448 DBGq blocked 10545 null
+DD WRT-05 w1 ben 624483 DBGq finish 4427 SendChannelMessage committed {} retryIn -
+DD WRT-05 w1 ben 624483 DBGq tfinish 4427 committed {}
+DD WRT-03 w2 ben 624708 DBGq finish 10230 SendChannelMessage committed {} retryIn -
+DD WRT-03 w2 ben 624708 DBGq tfinish 10230 committed {}
+DD WRT-03 w2 ben 624787 DBGq claim 10310 e13a67 5 SendChannelMessage deferredUntil -
+DD WRT-03 w2 ben 624852 DBGq finish 10374 SendChannelMessage committed {} retryIn -
+DD WRT-03 w2 ben 624852 DBGq tfinish 10374 committed {}
+DD WRT-05 w1 ben 624919 DBGq claim 4745 dd4311 none deferredUntil -
+DD WRT-05 w1 ben 624919 DBGq blocked 4749 null
+DD WRT-03 w2 ben 625058 DBGq claim 10545 e13a67 6 SendChannelMessage deferredUntil -
+  ✓  143 tests/channels-e2e-dbg/writes.spec.ts:74:1 › WRT-02 an edit, a deletion and a reaction made with no connection show at once and all reach the services (11.5s)
+DD WRT-03 w2 ben 625309 DBGq finish 10831 SendChannelMessage committed {} retryIn -
+DD WRT-03 w2 ben 625309 DBGq tfinish 10832 committed {}
+DD WRT-03 w2 ben 625506 DBGq claim 11028 e13a67 7 SendChannelMessage deferredUntil -
+DD WRT-03 w2 ben 625705 DBGq finish 11227 SendChannelMessage committed {} retryIn -
+DD WRT-03 w2 ben 625705 DBGq tfinish 11227 committed {}
+DD WRT-03 w2 ben 625816 DBGq claim 11338 e13a67 none deferredUntil -
+DD WRT-03 w2 ben 625870 DBGq blocked 11393 null
+  ✓  146 tests/channels-e2e-dbg/writes.spec.ts:157:1 › WRT-05 a message the services took but whose answer never came back is in the channel once (6.6s)
+DD WRT-06 w0 ben 626744 DBGq claim 2203 ca4b18 none deferredUntil -
+DD WRT-06 w0 ben 626780 DBGq blocked 2231 {"id":"1","op":"UpdateNotifications","lo":"ca4b18","exp":299207,"alive":true,"keys":["transactionId","uuid","superseded","query","operationName","variables","clientMetadata","optimisticData","enqueuedAtMs","leaseOwner","leaseGeneration","leaseExpiresAtMs"]}
+DD WRT-06 w0 ben 626799 DBGq finish 2258 UpdateNotifications committed {} retryIn -
+DD WRT-06 w0 ben 626799 DBGq tfinish 2258 committed {}
+DD WRT-06 w0 ben 626808 DBGq claim 2267 ca4b18 none deferredUntil -
+DD WRT-06 w0 ben 626809 DBGq blocked 2268 null
+DD WRT-07 w3 page 627731 DBGq claim 2377 213019 none deferredUntil -
+DD WRT-07 w3 page 627781 DBGq blocked 2415 {"id":"1","op":"UpdateNotifications","lo":"213019","exp":299048,"alive":true,"keys":["transactionId","uuid","superseded","query","operationName","variables","clientMetadata","optimisticData","enqueuedAtMs","leaseOwner","leaseGeneration","leaseExpiresAtMs"]}
+DD WRT-07 w3 page 627820 DBGq finish 2466 UpdateNotifications committed {} retryIn -
+DD WRT-07 w3 page 627820 DBGq tfinish 2467 committed {}
+  ✓  144 tests/channels-e2e-dbg/writes.spec.ts:102:1 › WRT-03 several messages sent with no connection arrive once each, in the order they were written (13.8s)
+DD WRT-07 w3 page 628347 DBGq claim 2821 213019 none deferredUntil -
+DD WRT-07 w3 page 628347 DBGq blocked 2826 null
+DD WRT-08 w1 ben 629004 DBGq claim 2381 3c84b7 none deferredUntil -
+DD WRT-08 w1 ben 629057 DBGq blocked 2413 {"id":"1","op":"UpdateNotifications","lo":"3c84b7","exp":299019,"alive":true,"keys":["transactionId","uuid","superseded","query","operationName","variables","clientMetadata","optimisticData","enqueuedAtMs","leaseOwner","leaseGeneration","leaseExpiresAtMs"]}
+DD WRT-07 w3 ben 629522 DBGq claim 2411 47eebc none deferredUntil -
+DD WRT-08 w1 ben 629602 DBGq finish 2973 UpdateNotifications committed {} retryIn -
+DD WRT-08 w1 ben 629603 DBGq tfinish 2974 committed {}
+DD WRT-08 w1 ben 629704 DBGq claim 3080 3c84b7 none deferredUntil -
+DD WRT-08 w1 ben 629725 DBGq blocked 3102 null
+DD WRT-07 w3 ben 629796 DBGq blocked 2432 {"id":"1","op":"UpdateNotifications","lo":"47eebc","exp":299038,"alive":true,"keys":["transactionId","uuid","superseded","query","operationName","variables","clientMetadata","optimisticData","enqueuedAtMs","leaseOwner","leaseGeneration","leaseExpiresAtMs"]}
+DD WRT-07 w3 ben 630253 DBGq finish 3138 UpdateNotifications committed {} retryIn -
+DD WRT-07 w3 ben 630254 DBGq tfinish 3139 committed {}
+DD WRT-07 w3 ben 630356 DBGq claim 3245 47eebc none deferredUntil -
+DD WRT-07 w3 ben 630385 DBGq blocked 3274 null
+DD WRT-09 w2 ben 630753 DBGq claim 2507 5a4701 none deferredUntil -
+DD WRT-09 w2 ben 630754 DBGq blocked 2511 {"id":"1","op":"UpdateNotifications","lo":"5a4701","exp":298986,"alive":true,"keys":["transactionId","uuid","superseded","query","operationName","variables","clientMetadata","optimisticData","enqueuedAtMs","leaseOwner","leaseGeneration","leaseExpiresAtMs"]}
+DD WRT-09 w2 ben 631026 DBGq finish 2798 UpdateNotifications committed {} retryIn -
+DD WRT-09 w2 ben 631026 DBGq tfinish 2798 committed {}
+DD WRT-09 w2 ben 631415 DBGq claim 3106 5a4701 none deferredUntil -
+DD WRT-09 w2 ben 631415 DBGq blocked 3110 null
+DD WRT-06 w0 ben 633217 DBGq finish 8676 SendChannelMessage retry-scheduled {"failure":"network","retryDelayMs":1000} retryIn 888
+DD WRT-06 w0 ben 633218 DBGq tfinish 8676 retry-scheduled {"failure":"network","retryDelayMs":1000}
+DD WRT-06 w0 ben 633218 [observability] graphql.mutation_queue.retry_scheduled {mutation_queue.item_id: 01a1e237-3a35-7ff9-b543-b67fbbfe821a, mutation_queue.transaction_id: 2, graphql.operation.name: SendChannelMessage, mutation_queue.attempt_count: 1, mutation_queue.server_failure_count: 0}
+DD WRT-06 w0 ben 633413 DBGq claim 8872 ca4b18 none deferredUntil 693
+DD WRT-06 w0 ben 633414 DBGq blocked 8873 {"id":"2","op":"SendChannelMessage","exp":null,"alive":null,"keys":["transactionId","uuid","superseded","query","operationName","variables","clientMetadata","optimisticData","enqueuedAtMs"]}
+DD WRT-06 w0 ben 633552 DBGq claim 9010 ca4b18 none deferredUntil 558
+DD WRT-06 w0 ben 633552 DBGq blocked 9011 {"id":"2","op":"SendChannelMessage","exp":null,"alive":null,"keys":["transactionId","uuid","superseded","query","operationName","variables","clientMetadata","optimisticData","enqueuedAtMs"]}
+DD WRT-06 w0 ben 634108 DBGq claim 9567 ca4b18 2 SendChannelMessage deferredUntil -
+DD WRT-06 w0 ben 634163 DBGq finish 9622 SendChannelMessage committed {} retryIn -
+DD WRT-06 w0 ben 634163 DBGq tfinish 9622 committed {}
+DD WRT-06 w0 ben 634165 [observability] graphql.mutation_queue.committed_after_failure {mutation_queue.item_id: 01a1e237-3a35-7ff9-b543-b67fbbfe821a, mutation_queue.transaction_id: 2, graphql.operation.name: SendChannelMessage, mutation_queue.attempt_count: 2, mutation_queue.server_failure_count: 0}
+DD WRT-06 w0 ben 634200 DBGq claim 9659 ca4b18 3 EditChannelMessage deferredUntil -
+DD WRT-06 w0 ben 634383 DBGq finish 9842 EditChannelMessage committed {} retryIn -
+DD WRT-06 w0 ben 634383 DBGq tfinish 9842 committed {}
+DD WRT-06 w0 ben 634625 DBGq claim 10084 ca4b18 4 ReactToChannelMessage deferredUntil -
+DD WRT-06 w0 ben 634677 DBGq finish 10136 ReactToChannelMessage committed {} retryIn -
+DD WRT-06 w0 ben 634677 DBGq tfinish 10136 committed {}
+DD WRT-06 w0 ben 634693 DBGq claim 10152 ca4b18 none deferredUntil -
+DD WRT-06 w0 ben 634706 DBGq blocked 10165 null
+DD WRT-08 w1 ben 635316 DBGq finish 8693 SendChannelMessage retry-scheduled {"failure":"network","retryDelayMs":1000} retryIn 997
+DD WRT-08 w1 ben 635316 DBGq tfinish 8693 retry-scheduled {"failure":"network","retryDelayMs":1000}
+DD WRT-08 w1 ben 635316 [observability] graphql.mutation_queue.retry_scheduled {mutation_queue.item_id: 01a1e237-445f-788e-975c-b3acffae3836, mutation_queue.transaction_id: 2, graphql.operation.name: SendChannelMessage, mutation_queue.attempt_count: 1, mutation_queue.server_failure_count: 0}
+  ✓  147 tests/channels-e2e-dbg/writes.spec.ts:183:1 › WRT-06 a message edited and reacted to before it could be sent arrives as it was last left (11.2s)
+DD WRT-07 w3 ben 635875 DBGq finish 8763 SendChannelMessage retry-scheduled {"failure":"network","retryDelayMs":1000} retryIn 973
+DD WRT-07 w3 ben 635875 DBGq tfinish 8763 retry-scheduled {"failure":"network","retryDelayMs":1000}
+DD WRT-07 w3 ben 635875 [observability] graphql.mutation_queue.retry_scheduled {mutation_queue.item_id: 01a1e237-4689-7992-82d4-c03de378d65c, mutation_queue.transaction_id: 2, graphql.operation.name: SendChannelMessage, mutation_queue.attempt_count: 1, mutation_queue.server_failure_count: 0}
+DD WRT-08 w1 ben 636316 DBGq claim 9693 3c84b7 2 SendChannelMessage deferredUntil -
+DD WRT-08 w1 ben 636383 DBGq finish 9760 SendChannelMessage committed {} retryIn -
+DD WRT-08 w1 ben 636383 DBGq tfinish 9760 committed {}
+DD WRT-08 w1 ben 636383 [observability] graphql.mutation_queue.committed_after_failure {mutation_queue.item_id: 01a1e237-445f-788e-975c-b3acffae3836, mutation_queue.transaction_id: 2, graphql.operation.name: SendChannelMessage, mutation_queue.attempt_count: 2, mutation_queue.server_failure_count: 0}
+DD WRT-08 w1 ben 636417 DBGq claim 9794 3c84b7 none deferredUntil -
+DD WRT-08 w1 ben 636432 DBGq blocked 9809 null
+DD WRT-07 w3 ben 636435 DBGq claim 9324 47eebc none deferredUntil 417
+DD WRT-07 w3 ben 636436 DBGq blocked 9325 {"id":"2","op":"SendChannelMessage","exp":null,"alive":null,"keys":["transactionId","uuid","superseded","query","operationName","variables","clientMetadata","optimisticData","enqueuedAtMs"]}
+DD WRT-07 w3 ben 636570 DBGq claim 9458 47eebc none deferredUntil 279
+DD WRT-07 w3 ben 636575 DBGq blocked 9462 {"id":"2","op":"SendChannelMessage","exp":null,"alive":null,"keys":["transactionId","uuid","superseded","query","operationName","variables","clientMetadata","optimisticData","enqueuedAtMs"]}
+DD WRT-09 w2 ben 636878 DBGq finish 8645 SendChannelMessage retry-scheduled {"failure":"network","retryDelayMs":1000} retryIn 962
+DD WRT-09 w2 ben 636878 DBGq tfinish 8645 retry-scheduled {"failure":"network","retryDelayMs":1000}
+DD WRT-09 w2 ben 636878 [observability] graphql.mutation_queue.retry_scheduled {mutation_queue.item_id: 01a1e237-49de-7dd9-9b84-9516bcda2b18, mutation_queue.transaction_id: 2, graphql.operation.name: SendChannelMessage, mutation_queue.attempt_count: 1, mutation_queue.server_failure_count: 0}
+DD WRT-07 w3 ben 636899 DBGq claim 9779 47eebc 2 SendChannelMessage deferredUntil -
+DD WRT-07 w3 ben 636952 DBGq finish 9841 SendChannelMessage committed {} retryIn -
+DD WRT-07 w3 ben 636952 DBGq tfinish 9841 committed {}
+DD WRT-07 w3 ben 636953 [observability] graphql.mutation_queue.committed_after_failure {mutation_queue.item_id: 01a1e237-4689-7992-82d4-c03de378d65c, mutation_queue.transaction_id: 2, graphql.operation.name: SendChannelMessage, mutation_queue.attempt_count: 2, mutation_queue.server_failure_count: 0}
+DD WRT-07 w3 ben 636985 DBGq claim 9873 47eebc 3 DeleteChannelMessage deferredUntil -
+DD WRT-07 w3 ben 637187 DBGq finish 10075 DeleteChannelMessage committed {} retryIn -
+DD WRT-07 w3 ben 637187 DBGq tfinish 10075 committed {}
+  ✓  149 tests/channels-e2e-dbg/writes.spec.ts:236:1 › WRT-08 a reply written with no connection shows in its thread at once and reaches the services (10.8s)
+DD WRT-07 w3 ben 637436 DBGq claim 10325 47eebc 4 SendChannelMessage deferredUntil -
+DD WRT-07 w3 ben 637505 DBGq finish 10394 SendChannelMessage committed {} retryIn -
+DD WRT-07 w3 ben 637505 DBGq tfinish 10394 committed {}
+DD WRT-07 w3 ben 637686 DBGq claim 10532 47eebc none deferredUntil -
+DD WRT-07 w3 ben 637763 DBGq blocked 10651 null
+  ✓  148 tests/channels-e2e-dbg/writes.spec.ts:209:1 › WRT-07 a message deleted before it could be sent is not shown to anyone once the connection is back (12.6s)
+DD WRT-09 w2 ben 638116 DBGq claim 9888 5a4701 2 SendChannelMessage deferredUntil -
+DD WRT-09 w2 ben 638161 DBGq finish 9933 SendChannelMessage rolled-back {"failure":"auth","errorCode":"FORBIDDEN","httpStatus":200} retryIn -
+DD WRT-09 w2 ben 638161 DBGq tfinish 9933 rolled-back {"failure":"auth","errorCode":"FORBIDDEN","httpStatus":200}
+DD WRT-09 w2 ben 638161 [observability] graphql.mutation_queue.rolled_back {mutation_queue.item_id: 01a1e237-49de-7dd9-9b84-9516bcda2b18, mutation_queue.transaction_id: 2, graphql.operation.name: SendChannelMessage, mutation_queue.attempt_count: 2, mutation_queue.server_failure_count: 0}
+DD WRT-10 w0 ben 638172 DBGq claim 2435 ce997d none deferredUntil -
+DD WRT-10 w0 ben 638184 DBGq blocked 2442 {"id":"1","op":"UpdateNotifications","lo":"ce997d","exp":299082,"alive":true,"keys":["transactionId","uuid","superseded","query","operationName","variables","clientMetadata","optimisticData","enqueuedAtMs","leaseOwner","leaseGeneration","leaseExpiresAtMs"]}
+DD WRT-09 w2 ben 638203 DBGq claim 9975 5a4701 none deferredUntil -
+DD WRT-09 w2 ben 638219 DBGq blocked 9991 null
+DD WRT-10 w0 ben 638250 DBGq finish 2510 UpdateNotifications committed {} retryIn -
+DD WRT-10 w0 ben 638250 DBGq tfinish 2511 committed {}
+DD WRT-10 w0 ben 638277 DBGq claim 2540 ce997d none deferredUntil -
+DD WRT-10 w0 ben 638279 DBGq blocked 2542 null
+  ✓  150 tests/channels-e2e-dbg/writes.spec.ts:258:1 › WRT-09 a message the services refuse is taken back off the screen and the person is told it failed (10.2s)
+DD WRT-11 w1 ben 639920 DBGq claim 2389 1ed21e none deferredUntil -
+DD WRT-11 w1 ben 639996 DBGq blocked 2416 {"id":"1","op":"UpdateNotifications","lo":"1ed21e","exp":299111,"alive":true,"keys":["transactionId","uuid","superseded","query","operationName","variables","clientMetadata","optimisticData","enqueuedAtMs","leaseOwner","leaseGeneration","leaseExpiresAtMs"]}
+DD WRT-12 w3 ben 640330 DBGq claim 2350 d9caa0 none deferredUntil -
+DD WRT-12 w3 ben 640347 DBGq blocked 2364 {"id":"1","op":"UpdateNotifications","lo":"d9caa0","exp":299099,"alive":true,"keys":["transactionId","uuid","superseded","query","operationName","variables","clientMetadata","optimisticData","enqueuedAtMs","leaseOwner","leaseGeneration","leaseExpiresAtMs"]}
+DD WRT-11 w1 ben 640370 DBGq finish 2726 UpdateNotifications committed {} retryIn -
+DD WRT-11 w1 ben 640370 DBGq tfinish 2726 committed {}
+DD WRT-11 w1 ben 640372 DBGq claim 2746 1ed21e none deferredUntil -
+DD WRT-11 w1 ben 640372 DBGq blocked 2746 null
+DD WRT-12 w3 ben 640400 DBGq finish 2420 UpdateNotifications committed {} retryIn -
+DD WRT-12 w3 ben 640400 DBGq tfinish 2421 committed {}
+DD WRT-12 w3 ben 640496 DBGq claim 2493 d9caa0 none deferredUntil -
+DD WRT-12 w3 ben 640496 DBGq blocked 2509 null
+DD WRT-13 w2 ben 640913 DBGq claim 2372 78abb7 none deferredUntil -
+DD WRT-13 w2 ben 640988 DBGq blocked 2431 {"id":"1","op":"UpdateNotifications","lo":"78abb7","exp":299003,"alive":true,"keys":["transactionId","uuid","superseded","query","operationName","variables","clientMetadata","optimisticData","enqueuedAtMs","leaseOwner","leaseGeneration","leaseExpiresAtMs"]}
+DD WRT-13 w2 ben 641094 DBGq finish 2535 UpdateNotifications committed {} retryIn -
+DD WRT-13 w2 ben 641094 DBGq tfinish 2536 committed {}
+DD WRT-13 w2 ben 641143 DBGq claim 2602 78abb7 none deferredUntil -
+DD WRT-13 w2 ben 641147 DBGq blocked 2606 null
+DD WRT-12 w3 ben 641604 DBGq claim 1919 9a0c88 none deferredUntil -
+DD WRT-12 w3 ben 641613 DBGq blocked 1928 null
+DD WRT-13 w2 ben 643211 DBGq claim 3067 a27598 none deferredUntil -
+DD WRT-13 w2 ben 643425 DBGq blocked 3296 null
+DD WRT-10 w0 ben 643747 DBGq finish 8009 SendChannelMessage retry-scheduled {"failure":"network","retryDelayMs":1000} retryIn 979
+DD WRT-10 w0 ben 643747 DBGq tfinish 8009 retry-scheduled {"failure":"network","retryDelayMs":1000}
+DD WRT-10 w0 ben 643747 [observability] graphql.mutation_queue.retry_scheduled {mutation_queue.item_id: 01a1e237-654d-7117-9789-39d2ba2cedd4, mutation_queue.transaction_id: 2, graphql.operation.name: SendChannelMessage, mutation_queue.attempt_count: 1, mutation_queue.server_failure_count: 0}
+DD WRT-10 w0 ben 644728 DBGq claim 8991 ce997d 2 SendChannelMessage deferredUntil -
+DD WRT-10 w0 ben 644731 DBGq finish 8994 SendChannelMessage retry-scheduled {"failure":"network","retryDelayMs":2000} retryIn 1999
+DD WRT-10 w0 ben 644731 DBGq tfinish 8994 retry-scheduled {"failure":"network","retryDelayMs":2000}
+DD WRT-11 w1 ben 646040 DBGq finish 8509 SendChannelMessage retry-scheduled {"failure":"network","retryDelayMs":1000} retryIn 976
+DD WRT-11 w1 ben 646040 DBGq tfinish 8509 retry-scheduled {"failure":"network","retryDelayMs":1000}
+DD WRT-11 w1 ben 646040 [observability] graphql.mutation_queue.retry_scheduled {mutation_queue.item_id: 01a1e237-6dfb-7cc8-b876-707ae64231f2, mutation_queue.transaction_id: 2, graphql.operation.name: SendChannelMessage, mutation_queue.attempt_count: 1, mutation_queue.server_failure_count: 0}
+DD WRT-10 w0 ben 646733 DBGq claim 10996 ce997d 2 SendChannelMessage deferredUntil -
+DD WRT-10 w0 ben 646735 DBGq finish 10999 SendChannelMessage retry-scheduled {"failure":"network","retryDelayMs":4000} retryIn 3999
+DD WRT-10 w0 ben 646736 DBGq tfinish 10999 retry-scheduled {"failure":"network","retryDelayMs":4000}
+DD WRT-11 w1 ben 647019 DBGq claim 9488 1ed21e 2 SendChannelMessage deferredUntil -
+DD WRT-11 w1 ben 647022 DBGq finish 9491 SendChannelMessage retry-scheduled {"failure":"network","retryDelayMs":2000} retryIn 1998
+DD WRT-11 w1 ben 647022 DBGq tfinish 9492 retry-scheduled {"failure":"network","retryDelayMs":2000}
+DD WRT-12 w3 ben 647749 DBGq claim 8064 9a0c88 none deferredUntil -
+DD WRT-12 w3 ben 647751 DBGq blocked 8066 {"id":"2","op":"SendChannelMessage","lo":"d9caa0","exp":299595,"alive":true,"keys":["transactionId","uuid","superseded","query","operationName","variables","clientMetadata","optimisticData","enqueuedAtMs","leaseOwner","leaseGeneration","leaseExpiresAtMs"]}
+DD WRT-12 w3 ben 647830 DBGq finish 9850 SendChannelMessage committed {} retryIn -
+DD WRT-12 w3 ben 647830 DBGq tfinish 9851 committed {}
+DD WRT-12 w3 ben 648042 DBGq claim 10063 d9caa0 3 SendChannelMessage deferredUntil -
+DD WRT-12 w3 ben 648221 DBGq finish 10241 SendChannelMessage committed {} retryIn -
+DD WRT-12 w3 ben 648221 DBGq tfinish 10241 committed {}
+DD WRT-13 w2 ben 648535 DBGq finish 8404 SendChannelMessage retry-scheduled {"failure":"network","retryDelayMs":1000} retryIn 979
+DD WRT-13 w2 ben 648535 DBGq tfinish 8405 retry-scheduled {"failure":"network","retryDelayMs":1000}
+DD WRT-13 w2 ben 648535 [observability] graphql.mutation_queue.retry_scheduled {mutation_queue.item_id: 01a1e237-77ec-788b-89c9-a9e357822c37, mutation_queue.transaction_id: 1, graphql.operation.name: SendChannelMessage, mutation_queue.attempt_count: 1, mutation_queue.server_failure_count: 0}
+DD WRT-12 w3 ben 648668 DBGq claim 10689 d9caa0 none deferredUntil -
+DD WRT-13 w2 ben 648731 DBGq claim 8601 a27598 none deferredUntil 784
+DD WRT-13 w2 ben 648732 DBGq blocked 8602 {"id":"1","op":"SendChannelMessage","exp":null,"alive":null,"keys":["transactionId","uuid","superseded","query","operationName","variables","clientMetadata","optimisticData","enqueuedAtMs"]}
+DD WRT-12 w3 ben 648756 DBGq blocked 10771 null
+  ✓  153 tests/channels-e2e-dbg/writes.spec.ts:326:1 › WRT-12 a message written offline with the channel open in two windows is sent once and shows in both (11.0s)
+DD WRT-11 w1 ben 649023 DBGq claim 11492 1ed21e 2 SendChannelMessage deferredUntil -
+DD WRT-11 w1 ben 649026 DBGq finish 11495 SendChannelMessage retry-scheduled {"failure":"network","retryDelayMs":4000} retryIn 3998
+DD WRT-11 w1 ben 649026 DBGq tfinish 11495 retry-scheduled {"failure":"network","retryDelayMs":4000}
+  ✓  151 tests/channels-e2e-dbg/writes.spec.ts:283:1 › WRT-10 a message still waiting to be sent says that it is not sent yet (13.7s)
+DD WRT-13 w2 ben 649269 DBGq finish 10727 SendChannelMessage committed {} retryIn -
+DD WRT-13 w2 ben 649269 DBGq tfinish 10728 committed {}
+DD WRT-13 w2 ben 649366 DBGq claim 10825 78abb7 none deferredUntil -
+DD WRT-13 w2 ben 649394 DBGq blocked 10853 null
+DD WRT-13 w2 ben 649515 DBGq claim 9386 a27598 1 SendChannelMessage deferredUntil -
+DD WRT-13 w2 ben 649518 DBGq finish 9389 SendChannelMessage retry-scheduled {"failure":"network","retryDelayMs":2000} retryIn 1999
+DD WRT-13 w2 ben 649519 DBGq tfinish 9389 retry-scheduled {"failure":"network","retryDelayMs":2000}
+DD WRT-13 w2 ben 650511 DBGq finish 11969 EditChannelMessage committed {} retryIn -
+DD WRT-13 w2 ben 650511 DBGq tfinish 11969 committed {}
+DD WRT-13 w2 ben 650585 DBGq claim 12042 78abb7 none deferredUntil -
+DD WRT-13 w2 ben 650596 DBGq blocked 12055 null
+DD WRT-14 w3 ben 651238 DBGq claim 2281 22fd48 none deferredUntil -
+DD WRT-14 w3 ben 651253 DBGq blocked 2282 {"id":"1","op":"UpdateNotifications","lo":"22fd48","exp":299083,"alive":true,"keys":["transactionId","uuid","superseded","query","operationName","variables","clientMetadata","optimisticData","enqueuedAtMs","leaseOwner","leaseGeneration","leaseExpiresAtMs"]}
+  ✓  152 tests/channels-e2e-dbg/writes.spec.ts:305:1 › WRT-11 a waiting message written right after another of the same person says that it is not sent yet (14.1s)
+DD WRT-14 w3 ben 651827 DBGq finish 2868 UpdateNotifications committed {} retryIn -
+DD WRT-14 w3 ben 651828 DBGq tfinish 2869 committed {}
+DD WRT-13 w2 ben 651971 DBGq claim 11842 a27598 1 SendChannelMessage deferredUntil -
+DD WRT-14 w3 ben 652030 DBGq claim 3072 22fd48 none deferredUntil -
+DD WRT-14 w3 ben 652093 DBGq blocked 3136 null
+DD WRT-13 w2 ben 652113 DBGq finish 11983 SendChannelMessage committed {} retryIn -
+DD WRT-13 w2 ben 652113 DBGq tfinish 11983 committed {}
+DD WRT-13 w2 ben 652113 [observability] graphql.mutation_queue.committed_after_failure {mutation_queue.item_id: 01a1e237-77ec-788b-89c9-a9e357822c37, mutation_queue.transaction_id: 1, graphql.operation.name: SendChannelMessage, mutation_queue.attempt_count: 3, mutation_queue.server_failure_count: 0}
+DD WRT-13 w2 ben 652339 DBGq claim 12210 a27598 2 ReactToChannelMessage deferredUntil -
+DD WRT-13 w2 ben 652415 DBGq finish 12285 ReactToChannelMessage committed {} retryIn -
+DD WRT-13 w2 ben 652415 DBGq tfinish 12285 committed {}
+DD WRT-13 w2 ben 652446 DBGq claim 12316 a27598 none deferredUntil -
+DD WRT-13 w2 ben 652448 DBGq blocked 12319 null
+  ✓  154 tests/channels-e2e-dbg/writes.spec.ts:361:1 › WRT-13 two devices of one person, one of them offline, end up showing the same channel as the services hold (14.6s)
+DD WRT-14 w3 ben 652915 DBGq claim 2292 2d2bbb none deferredUntil -
+DD WRT-14 w3 ben 652931 DBGq blocked 2309 null
+DD WRT-14 w3 ben 659068 DBGq finish 8445 SendChannelMessage retry-scheduled {"failure":"network","retryDelayMs":1000} retryIn 999
+DD WRT-14 w3 ben 659068 DBGq tfinish 8445 retry-scheduled {"failure":"network","retryDelayMs":1000}
+DD WRT-14 w3 ben 659068 [observability] graphql.mutation_queue.retry_scheduled {mutation_queue.item_id: 01a1e237-a10b-7661-b5f5-e9e8cea32706, mutation_queue.transaction_id: 2, graphql.operation.name: SendChannelMessage, mutation_queue.attempt_count: 1, mutation_queue.server_failure_count: 0}
+DD WRT-14 w3 ben 660069 DBGq claim 9446 2d2bbb 2 SendChannelMessage deferredUntil -
+DD WRT-14 w3 ben 660073 DBGq finish 9450 SendChannelMessage retry-scheduled {"failure":"network","retryDelayMs":2000} retryIn 1998
+DD WRT-14 w3 ben 660073 DBGq tfinish 9450 retry-scheduled {"failure":"network","retryDelayMs":2000}
+  ✓  155 tests/channels-e2e-dbg/writes.spec.ts:413:1 › WRT-14 a message written offline in one window shows in the other window of the same device (12.2s)
+
+  155 passed (5.4m)

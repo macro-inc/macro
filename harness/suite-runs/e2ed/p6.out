@@ -1,0 +1,13 @@
+path "/home/teo/.herdr/worktrees/macro/synoet-channels-local-sync-suiteb/apps/web" does not contain a 'flake.nix', searching up
+
+Running 1 test using 1 worker
+
+ZZ w0 push-to-stored 0 406ms
+ZZ w0 push-to-stored 1 3377ms
+ZZ w0 push-to-stored 2 396ms
+ZZ w0 push-to-stored 3 1558ms
+ZZ w0 push-to-stored 4 370ms
+ZZ w0 push-to-stored 5 1474ms
+  ✓  1 tests/channels-e2e-dbg/zz.spec.ts:109:1 › ZZ-30 push to stored (1.6m)
+
+  1 passed (1.8m)

@@ -1,0 +1,37 @@
+/**
+ * Whether a device read is to be made again, not shown: the open views were
+ * pushed a change the read is older than. The device takes a push a moment
+ * after the views do, from the server's log, so this waits until it has, and
+ * answers false when it has not within the wait, since reading again would
+ * bring the same. `heldSeq` is the sequence the read was made at, when it is
+ * known; a read at or past every pushed change is already current.
+ */
+export async function pushesStored(
+  channelId: string,
+  heldSeq?: string | null
+): Promise<boolean> {
+  const state = channels.get(channelId);
+  if (!state) return false;
+  const held = heldSeq == null ? undefined : BigInt(heldSeq);
+  // The device took a push while this read was being made.
+  if (held !== undefined && state.stored !== undefined && held < state.stored) {
+    return true;
+  }
+  const storing = state.storing;
+  if (!storing) return false;
+  if (held !== undefined) {
+    const ahead = [...state.pushed].some((seq) => BigInt(seq) > held);
+    if (!ahead) return false;
+  }
+  return Promise.race([settled(storing.promise), gaveUp()]);
+}
+
+async function settled(storing: Promise<void>): Promise<boolean> {
+  await storing;
+  return true;
+}
+
+async function gaveUp(): Promise<boolean> {
+  await sleep(PUSH_STORE_WAIT_MS);
+  return false;
+}

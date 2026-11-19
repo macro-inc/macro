@@ -1,0 +1,83 @@
+    Checking graphql_channel v0.1.0 (/home/teo/.herdr/worktrees/macro/synoet-channels-local-sync/crates/graphql_channel)
+    Checking ai_billing v0.1.0 (/home/teo/.herdr/worktrees/macro/synoet-channels-local-sync/crates/ai_billing)
+    Checking calendar_events v0.1.0 (/home/teo/.herdr/worktrees/macro/synoet-channels-local-sync/crates/calendar_events)
+    Checking crm v0.1.0 (/home/teo/.herdr/worktrees/macro/synoet-channels-local-sync/crates/crm)
+    Checking routine_program v0.1.0 (/home/teo/.herdr/worktrees/macro/synoet-channels-local-sync/crates/routine_program)
+    Checking routines v0.1.0 (/home/teo/.herdr/worktrees/macro/synoet-channels-local-sync/crates/routines)
+error: large size difference between variants
+   --> crates/graphql_channel/src/objects.rs:317:1
+    |
+317 | / pub enum GraphqlChannelTimelineEntry {
+318 | |     /// A root message, including a call root.
+319 | |     Message(Box<GraphqlChannelMessage>),
+    | |     ----------------------------------- the second-largest variant contains at least 8 bytes
+320 | |     /// A recorded channel activity.
+321 | |     Activity(GraphqlChannelTimelineActivity),
+    | |     ---------------------------------------- the largest variant contains at least 216 bytes
+322 | | }
+    | |_^ the entire enum is at least 216 bytes
+    |
+    = help: for further information visit https://rust-lang.github.io/rust-clippy/rust-1.94.0/index.html#large_enum_variant
+    = note: `-D clippy::large-enum-variant` implied by `-D warnings`
+    = help: to override `-D warnings` add `#[allow(clippy::large_enum_variant)]`
+help: consider boxing the large fields or introducing indirection in some other way to reduce the total size of the enum
+    |
+321 -     Activity(GraphqlChannelTimelineActivity),
+321 +     Activity(Box<GraphqlChannelTimelineActivity>),
+    |
+
+error: could not compile `graphql_channel` (lib) due to 1 previous error
+warning: build failed, waiting for other jobs to finish...
+    Checking agent_session v0.1.0 (/home/teo/.herdr/worktrees/macro/synoet-channels-local-sync/crates/agent_session)
+    Checking documents v0.1.0 (/home/teo/.herdr/worktrees/macro/synoet-channels-local-sync/crates/documents)
+    Checking anthropic v0.2.0 (/home/teo/.herdr/worktrees/macro/synoet-channels-local-sync/crates/anthropic)
+    Checking web_search v0.1.0 (/home/teo/.herdr/worktrees/macro/synoet-channels-local-sync/crates/web_search)
+    Checking image_generation v0.1.0 (/home/teo/.herdr/worktrees/macro/synoet-channels-local-sync/crates/image_generation)
+    Checking agent_api_keys v0.1.0 (/home/teo/.herdr/worktrees/macro/synoet-channels-local-sync/crates/agent_api_keys)
+    Checking graphql_crm v0.1.0 (/home/teo/.herdr/worktrees/macro/synoet-channels-local-sync/crates/graphql_crm)
+    Checking email v0.1.0 (/home/teo/.herdr/worktrees/macro/synoet-channels-local-sync/crates/email)
+    Checking calendar_scheduling v0.1.0 (/home/teo/.herdr/worktrees/macro/synoet-channels-local-sync/crates/calendar_scheduling)
+    Checking graphql_calendar v0.1.0 (/home/teo/.herdr/worktrees/macro/synoet-channels-local-sync/crates/graphql_calendar)
+    Checking forms v0.1.0 (/home/teo/.herdr/worktrees/macro/synoet-channels-local-sync/crates/forms)
+    Checking agent_changes v0.1.0 (/home/teo/.herdr/worktrees/macro/synoet-channels-local-sync/crates/agent_changes)
+    Checking import v0.1.0 (/home/teo/.herdr/worktrees/macro/synoet-channels-local-sync/crates/import)
+    Checking agent_trigger v0.1.0 (/home/teo/.herdr/worktrees/macro/synoet-channels-local-sync/crates/agent_trigger)
+    Checking agent_session_realtime v0.1.0 (/home/teo/.herdr/worktrees/macro/synoet-channels-local-sync/crates/agent_session_realtime)
+    Checking codex_cloud_agents v0.1.0 (/home/teo/.herdr/worktrees/macro/synoet-channels-local-sync/crates/codex_cloud_agents)
+    Checking cursor_cloud_agents v0.1.0 (/home/teo/.herdr/worktrees/macro/synoet-channels-local-sync/crates/cursor_cloud_agents)
+    Checking codex_connection v0.1.0 (/home/teo/.herdr/worktrees/macro/synoet-channels-local-sync/crates/codex_connection)
+    Checking projects v0.1.0 (/home/teo/.herdr/worktrees/macro/synoet-channels-local-sync/crates/projects)
+    Checking github v0.1.0 (/home/teo/.herdr/worktrees/macro/synoet-channels-local-sync/crates/github)
+    Checking webhook v0.1.0 (/home/teo/.herdr/worktrees/macro/synoet-channels-local-sync/crates/webhook)
+    Checking slack_integration v0.1.0 (/home/teo/.herdr/worktrees/macro/synoet-channels-local-sync/crates/slack_integration)
+    Checking models_soup v0.1.0 (/home/teo/.herdr/worktrees/macro/synoet-channels-local-sync/crates/models_soup)
+    Checking graphql_email v0.1.0 (/home/teo/.herdr/worktrees/macro/synoet-channels-local-sync/crates/graphql_email)
+    Checking email_service_client v0.1.0 (/home/teo/.herdr/worktrees/macro/synoet-channels-local-sync/crates/email_service_client)
+    Checking agent_code_mode v0.1.0 (/home/teo/.herdr/worktrees/macro/synoet-channels-local-sync/crates/agent_code_mode)
+    Checking reminders v0.1.0 (/home/teo/.herdr/worktrees/macro/synoet-channels-local-sync/crates/reminders)
+    Checking soup v0.1.0 (/home/teo/.herdr/worktrees/macro/synoet-channels-local-sync/crates/soup)
+    Checking models_search v0.1.0 (/home/teo/.herdr/worktrees/macro/synoet-channels-local-sync/crates/models_search)
+    Checking soup_realtime v0.1.0 (/home/teo/.herdr/worktrees/macro/synoet-channels-local-sync/crates/soup_realtime)
+    Checking scheduled_action v0.1.0 (/home/teo/.herdr/worktrees/macro/synoet-channels-local-sync/crates/scheduled_action)
+    Checking agent_egress v0.1.0 (/home/teo/.herdr/worktrees/macro/synoet-channels-local-sync/crates/agent_egress)
+    Checking agent_harness v0.1.0 (/home/teo/.herdr/worktrees/macro/synoet-channels-local-sync/crates/agent_harness)
+    Checking search_service_client v0.1.0 (/home/teo/.herdr/worktrees/macro/synoet-channels-local-sync/crates/search_service_client)
+    Checking search_service v0.1.0 (/home/teo/.herdr/worktrees/macro/synoet-channels-local-sync/crates/search_service)
+    Checking soup-filter-projection v0.1.0 (/home/teo/.herdr/worktrees/macro/synoet-channels-local-sync/crates/soup_filter_projection)
+    Checking attention_feed v0.1.0 (/home/teo/.herdr/worktrees/macro/synoet-channels-local-sync/crates/attention_feed)
+    Checking databases_sql v0.1.0 (/home/teo/.herdr/worktrees/macro/synoet-channels-local-sync/crates/databases_sql)
+    Checking skills v0.1.0 (/home/teo/.herdr/worktrees/macro/synoet-channels-local-sync/crates/skills)
+    Checking graphql_soup v0.1.0 (/home/teo/.herdr/worktrees/macro/synoet-channels-local-sync/crates/graphql_soup)
+    Checking work_feed v0.1.0 (/home/teo/.herdr/worktrees/macro/synoet-channels-local-sync/crates/work_feed)
+    Checking notification_inbox v0.1.0 (/home/teo/.herdr/worktrees/macro/synoet-channels-local-sync/crates/notification_inbox)
+    Checking graphql_scheduled_action v0.1.0 (/home/teo/.herdr/worktrees/macro/synoet-channels-local-sync/crates/graphql_scheduled_action)
+    Checking memory v0.1.0 (/home/teo/.herdr/worktrees/macro/synoet-channels-local-sync/crates/memory)
+    Checking ai_tools v0.1.0 (/home/teo/.herdr/worktrees/macro/synoet-channels-local-sync/crates/ai_tools)
+    Checking graphql_entity_mutation v0.1.0 (/home/teo/.herdr/worktrees/macro/synoet-channels-local-sync/crates/graphql_entity_mutation)
+    Checking graphql_registered_work v0.1.0 (/home/teo/.herdr/worktrees/macro/synoet-channels-local-sync/crates/graphql_registered_work)
+    Checking graphql_initiative v0.1.0 (/home/teo/.herdr/worktrees/macro/synoet-channels-local-sync/crates/graphql_initiative)
+    Checking graphql_work_feed v0.1.0 (/home/teo/.herdr/worktrees/macro/synoet-channels-local-sync/crates/graphql_work_feed)
+    Checking graphql_notification_inbox v0.1.0 (/home/teo/.herdr/worktrees/macro/synoet-channels-local-sync/crates/graphql_notification_inbox)
+    Checking graphql_databases v0.1.0 (/home/teo/.herdr/worktrees/macro/synoet-channels-local-sync/crates/graphql_databases)
+    Checking graphql_favorite v0.1.0 (/home/teo/.herdr/worktrees/macro/synoet-channels-local-sync/crates/graphql_favorite)
+    Checking channel_bots v0.1.0 (/home/teo/.herdr/worktrees/macro/synoet-channels-local-sync/crates/channel_bots)

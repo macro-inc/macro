@@ -1,0 +1,38 @@
+{
+ "dotBeforeAny": {
+  "text": "lobby",
+  "dots": 1
+ },
+ "dotAfterClear": {
+  "text": "lobby",
+  "dots": 0
+ },
+ "dotUnread": {
+  "text": "lobby",
+  "dots": 1
+ },
+ "order": [
+  "Favorites",
+  "Macro Support x alice",
+  "Direct messages",
+  "GL",
+  "FN",
+  "EW",
+  "DO",
+  "CD",
+  "BM",
+  "Perf Co channels",
+  "perfco-hq",
+  "All channels"
+ ],
+ "dotAfterOpen": {
+  "text": "lobby|11:47 AM",
+  "dots": 0
+ },
+ "chip": null,
+ "newDivider": false,
+ "dotAfterLeave": {
+  "text": "lobby",
+  "dots": 0
+ }
+}

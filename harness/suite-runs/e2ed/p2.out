@@ -1,0 +1,34 @@
+path "/home/teo/.herdr/worktrees/macro/synoet-channels-local-sync-suiteb/apps/web" does not contain a 'flake.nix', searching up
+
+Running 4 tests using 4 workers
+
+ZZ w2 push-to-stored 0 2316ms
+ZZ w3 push-to-stored 0 4189ms
+ZZ w1 push-to-stored 0 4652ms
+ZZ w2 push-to-stored 1 1496ms
+ZZ w0 push-to-stored 0 6008ms
+ZZ w2 push-to-stored 2 1559ms
+ZZ w3 push-to-stored 1 3527ms
+ZZ w1 push-to-stored 1 3860ms
+ZZ w2 push-to-stored 3 2284ms
+ZZ w3 push-to-stored 2 1157ms
+ZZ w1 push-to-stored 2 1646ms
+ZZ w0 push-to-stored 1 5954ms
+ZZ w2 push-to-stored 4 1362ms
+ZZ w3 push-to-stored 3 1331ms
+ZZ w1 push-to-stored 3 1774ms
+ZZ w0 push-to-stored 2 2650ms
+ZZ w2 push-to-stored 5 2223ms
+ZZ w3 push-to-stored 4 1561ms
+  ✓  3 tests/channels-e2e-dbg/zz.spec.ts:109:1 › ZZ-30 push to stored (27.2s)
+ZZ w1 push-to-stored 4 1782ms
+ZZ w0 push-to-stored 3 2236ms
+ZZ w3 push-to-stored 5 1578ms
+ZZ w1 push-to-stored 5 1483ms
+  ✓  4 tests/channels-e2e-dbg/zz.spec.ts:109:1 › ZZ-30 push to stored (30.9s)
+ZZ w0 push-to-stored 4 1468ms
+  ✓  1 tests/channels-e2e-dbg/zz.spec.ts:109:1 › ZZ-30 push to stored (32.2s)
+ZZ w0 push-to-stored 5 2215ms
+  ✓  2 tests/channels-e2e-dbg/zz.spec.ts:109:1 › ZZ-30 push to stored (37.5s)
+
+  4 passed (52.9s)

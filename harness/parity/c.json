@@ -1,0 +1,40 @@
+{
+ "send_appearMs": 28,
+ "send_rowCounts": [
+  1,
+  1,
+  1,
+  1,
+  1,
+  1,
+  1,
+  1
+ ],
+ "idA": "01a1cf8d-2b26-7ff4-b1e9-e05ac989e2e1",
+ "edit": {
+  "rows": 1,
+  "text": "par-A-edited-1794483491237|11:38 AM|❤️|👍|😂",
+  "editedMarker": true,
+  "oldTextRows": 0
+ },
+ "react_after_add": [
+  "❤️"
+ ],
+ "react_after_remove": [],
+ "react_final": [
+  "❤️"
+ ],
+ "reply_row_count": 0,
+ "root_after_reply": "par-A-edited-1794483491237|❤️",
+ "idB": "01a1cf8d-68fb-7ff4-b1e9-eb2ace7c7014",
+ "deleted_rows_with_text": 0,
+ "deleted_row_exists": null,
+ "reload": {
+  "A2rows": 1,
+  "A2text": "par-A-edited-1794483491237|❤️",
+  "Aold": 0,
+  "Brows": 0,
+  "Bnode": null,
+  "Rrows": 0
+ }
+}

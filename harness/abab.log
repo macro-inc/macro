@@ -1,0 +1,78 @@
+--- bundle main 22:43:33 served=e679090f want=e679090f
+=== main-r1 s=25000 held 22:43:33 load=16.11
+=== main-r1 s=25000 held --throttle 22:52:45 load=15.56
+=== main-r1 s=6000 held 23:01:59 load=13.32
+=== main-r1 s=6000 held --throttle 23:09:55 load=9.14
+=== main-r1 s=6000 cold_fresh 23:17:53 load=9.78
+=== main-r1 s=6000 cold_fresh --throttle 23:18:09 load=12.05
+=== main-r1 s=25000 offline 23:19:19 load=12.09
+23:20:12 offline  medium 0 offline_open first=null settled=null target=null dom=0 reqBeforeFP=0 task=1006.4 TIMEOUT
+23:21:03 offline  medium 1 offline_open first=null settled=null target=null dom=0 reqBeforeFP=0 task=980.4 TIMEOUT
+23:21:54 offline  medium 2 offline_open first=null settled=null target=null dom=0 reqBeforeFP=0 task=1050.5 TIMEOUT
+23:22:46 offline  medium 3 offline_open first=null settled=null target=null dom=0 reqBeforeFP=0 task=1018.6 TIMEOUT
+--- bundle reads 23:22:50 served=f4c08f92 want=f4c08f92
+=== reads-r1 s=25000 held 23:22:50 load=12.20
+=== reads-r1 s=25000 held --throttle 23:32:02 load=10.31
+=== reads-r1 s=6000 held 23:41:17 load=38.52
+=== reads-r1 s=6000 held --throttle 23:49:12 load=7.47
+=== reads-r1 s=6000 cold_fresh 23:57:10 load=14.46
+=== reads-r1 s=6000 cold_fresh --throttle 23:59:10 load=14.07
+=== reads-r1 s=25000 offline 00:00:26 load=83.87
+=== reads-r1 s=6000 probe 00:02:54 load=14.78
+=== reads-r1 s=9000 probe 00:04:05 load=11.37
+=== reads-r1 s=12000 probe 00:05:28 load=9.66
+=== reads-r1 s=25000 probe 00:07:03 load=7.52
+--- bundle main 00:09:35 served=e679090f want=e679090f
+=== main-r2 s=25000 held 00:09:35 load=11.67
+=== main-r2 s=25000 held --throttle 00:18:46 load=12.94
+=== main-r2 s=6000 held 00:28:00 load=7.64
+=== main-r2 s=6000 held --throttle 00:35:55 load=7.86
+=== main-r2 s=6000 cold_fresh 00:43:53 load=16.43
+=== main-r2 s=6000 cold_fresh --throttle 00:44:09 load=15.21
+00:45:42 cold_fresh thr medium 0 cold_fresh first=null settled=null target=null dom=0 reqBeforeFP=0 task=997.6 TIMEOUT
+00:47:49 cold_fresh thr medium 3 cold_fresh first=null settled=null target=null dom=0 reqBeforeFP=0 task=987.7 TIMEOUT
+=== main-r2 s=25000 offline 00:47:49 load=11.59
+00:48:42 offline  medium 0 offline_open first=null settled=null target=null dom=0 reqBeforeFP=0 task=966.3 TIMEOUT
+00:49:33 offline  medium 1 offline_open first=null settled=null target=null dom=0 reqBeforeFP=0 task=995.8 TIMEOUT
+00:50:24 offline  medium 2 offline_open first=null settled=null target=null dom=0 reqBeforeFP=0 task=950.3 TIMEOUT
+00:51:16 offline  medium 3 offline_open first=null settled=null target=null dom=0 reqBeforeFP=0 task=1014.5 TIMEOUT
+--- bundle reads 00:51:20 served=f4c08f92 want=f4c08f92
+=== reads-r2 s=25000 held 00:51:21 load=8.64
+=== reads-r2 s=25000 held --throttle 01:00:32 load=9.12
+=== reads-r2 s=6000 held 01:09:46 load=8.19
+=== reads-r2 s=6000 held --throttle 01:17:41 load=5.78
+=== reads-r2 s=6000 cold_fresh 01:25:39 load=10.73
+=== reads-r2 s=6000 cold_fresh --throttle 01:26:00 load=43.20
+=== reads-r2 s=25000 offline 01:27:11 load=19.74
+=== reads-r2 s=6000 probe 01:29:38 load=12.05
+=== reads-r2 s=9000 probe 01:30:49 load=13.37
+=== reads-r2 s=12000 probe 01:32:12 load=11.57
+=== reads-r2 s=25000 probe 01:33:47 load=9.41
+--- bundle main 01:36:18 served=e679090f want=e679090f
+=== main-r3 s=25000 held 01:36:18 load=7.54
+=== main-r3 s=25000 held --throttle 01:45:30 load=8.11
+=== main-r3 s=6000 held 01:54:43 load=7.27
+=== main-r3 s=6000 held --throttle 02:02:39 load=6.60
+=== main-r3 s=6000 cold_fresh 02:10:36 load=12.34
+=== main-r3 s=6000 cold_fresh --throttle 02:10:52 load=14.73
+=== main-r3 s=25000 offline 02:12:02 load=11.36
+02:12:55 offline  medium 0 offline_open first=null settled=null target=null dom=0 reqBeforeFP=0 task=1001.5 TIMEOUT
+02:13:46 offline  medium 1 offline_open first=null settled=null target=null dom=0 reqBeforeFP=0 task=1012.7 TIMEOUT
+02:14:38 offline  medium 2 offline_open first=null settled=null target=null dom=0 reqBeforeFP=0 task=929.3 TIMEOUT
+02:15:29 offline  medium 3 offline_open first=null settled=null target=null dom=0 reqBeforeFP=0 task=900.7 TIMEOUT
+--- bundle reads 02:15:34 served=f4c08f92 want=f4c08f92
+=== reads-r3 s=25000 held 02:15:34 load=5.44
+=== reads-r3 s=25000 held --throttle 02:24:46 load=7.69
+=== reads-r3 s=6000 held 02:33:59 load=9.49
+=== reads-r3 s=6000 held --throttle 02:41:54 load=6.79
+=== reads-r3 s=6000 cold_fresh 02:49:52 load=6.43
+=== reads-r3 s=6000 cold_fresh --throttle 02:50:07 load=6.77
+02:51:41 cold_fresh thr medium 0 cold_fresh first=null settled=null target=null dom=0 reqBeforeFP=0 task=822.3 TIMEOUT
+02:53:48 cold_fresh thr medium 3 cold_fresh first=null settled=null target=null dom=0 reqBeforeFP=0 task=900.7 TIMEOUT
+=== reads-r3 s=25000 offline 02:53:48 load=7.24
+=== reads-r3 s=6000 probe 02:56:15 load=8.11
+=== reads-r3 s=9000 probe 02:57:26 load=6.71
+=== reads-r3 s=12000 probe 02:58:49 load=6.58
+=== reads-r3 s=25000 probe 03:00:24 load=7.54
+--- bundle reads 03:02:55 served=f4c08f92 want=f4c08f92
+ALL_DONE 03:02:55

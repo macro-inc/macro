@@ -1,0 +1,13 @@
+diff --git a/apps/web/src/features/channel/Channel/create-channel-hotkeys.ts b/apps/web/src/features/channel/Channel/create-channel-hotkeys.ts
+index f9bba3814d..678bed8c35 100644
+--- a/apps/web/src/features/channel/Channel/create-channel-hotkeys.ts
++++ b/apps/web/src/features/channel/Channel/create-channel-hotkeys.ts
+@@ -218,7 +218,7 @@ export function createChannelHotkeys(options: CreateChannelHotkeysOptions) {
+     description: () => t('commands.returnToList'),
+     registrationType: 'add',
+     condition: () => !hasSelection(),
+-    keyDownHandler: options.onEscapeToList,
++    keyDownHandler: () => false,
+   });
+ 
+   registerHotkey({

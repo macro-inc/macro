@@ -1,0 +1,12 @@
+22:34:21 bob signed in
+22:34:21 priming: sign in, open #lobby, stay 5 s
+page.waitForURL: Timeout 120000ms exceeded.
+=========================== logs ===========================
+waiting for navigation until "load"
+============================================================
+    at login (/home/teo/.cache/channels-perf/demos/record.cjs:308:14)
+    at async /home/teo/.cache/channels-perf/demos/record.cjs:332:38 {
+  log: [],
+  name: 'TimeoutError'
+}
+rc=1

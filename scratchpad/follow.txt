@@ -1,0 +1,5 @@
+- Only sends are noted ahead of the queue; an edit, delete or reaction
+  made in the last moment before a reload can still be lost.
+- The answer to a queued edit keeps the reactions on screen but not other
+  fields a newer push may have changed (a delete pushed before the edit's
+  answer arrives).

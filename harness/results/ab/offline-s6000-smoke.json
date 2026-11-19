@@ -1,0 +1,70 @@
+{
+ "scenario": "offline",
+ "throttled": false,
+ "throttle": null,
+ "n": 1,
+ "sizes": [
+  "medium"
+ ],
+ "base": "https://localhost:31009",
+ "generatedAt": "2026-11-13T16:04:04.065Z",
+ "records": [
+  {
+   "size": "medium",
+   "i": 0,
+   "phase": "offline_open",
+   "settle": 6000,
+   "sinceLoadMs": 6017,
+   "lobbyShownMs": 926,
+   "firstDomMs": null,
+   "firstPaintMs": null,
+   "lastSeenMs": null,
+   "settledMs": null,
+   "targetVisibleMs": null,
+   "targetHighlightedMs": null,
+   "timedOut": true,
+   "domMessages": 0,
+   "visibleMessages": 0,
+   "domNodes": 1046,
+   "scroll": null,
+   "cpuToSettle": {
+    "taskMs": 1829,
+    "scriptMs": 216.5,
+    "layoutMs": 56.1,
+    "recalcStyleMs": 155.9,
+    "layouts": 905,
+    "heapMB": 70.2,
+    "nodes": 3262
+   },
+   "cpuToSettlePlus2s": {
+    "taskMs": 1996,
+    "scriptMs": 236.2,
+    "layoutMs": 62.6,
+    "recalcStyleMs": 175.6,
+    "layouts": 1025,
+    "heapMB": 70.3,
+    "nodes": 3262
+   },
+   "longTasks": {
+    "count": 0,
+    "totalMs": 0,
+    "maxMs": 0
+   },
+   "requests": {
+    "total": 16,
+    "startedBeforeFirstPaint": 0,
+    "finishedBeforeFirstPaint": 0,
+    "bytesBeforeFirstPaint": 0,
+    "channelScoped": 14
+   },
+   "static": {
+    "count": 0,
+    "bytes": 0,
+    "fromDiskCache": 0,
+    "lastEndMs": null
+   },
+   "channelId": "5eed92f0-3a83-8200-a790-dd4a69089719",
+   "shown": false
+  }
+ ]
+}

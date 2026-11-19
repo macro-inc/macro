@@ -1,0 +1,18 @@
+path "/home/teo/.herdr/worktrees/macro/synoet-channels-local-sync-suite/apps/web" does not contain a 'flake.nix', searching up
+
+Running 12 tests using 4 workers
+
+  ✓   4 tests/channels-e2e/composer.spec.ts:93:1 › CMP-13 a message shown as sent is still sent when the page is reloaded at once (11.1s)
+  ✓   3 tests/channels-e2e/composer.spec.ts:93:1 › CMP-13 a message shown as sent is still sent when the page is reloaded at once (11.2s)
+  ✓   2 tests/channels-e2e/composer.spec.ts:93:1 › CMP-13 a message shown as sent is still sent when the page is reloaded at once (12.2s)
+  ✓   5 tests/channels-e2e/composer.spec.ts:93:1 › CMP-13 a message shown as sent is still sent when the page is reloaded at once (7.4s)
+  ✓   1 tests/channels-e2e/composer.spec.ts:93:1 › CMP-13 a message shown as sent is still sent when the page is reloaded at once (26.1s)
+  ✓   6 tests/channels-e2e/composer.spec.ts:93:1 › CMP-13 a message shown as sent is still sent when the page is reloaded at once (22.9s)
+  ✓   7 tests/channels-e2e/composer.spec.ts:93:1 › CMP-13 a message shown as sent is still sent when the page is reloaded at once (22.5s)
+  ✓   8 tests/channels-e2e/composer.spec.ts:93:1 › CMP-13 a message shown as sent is still sent when the page is reloaded at once (23.1s)
+  ✓   9 tests/channels-e2e/composer.spec.ts:93:1 › CMP-13 a message shown as sent is still sent when the page is reloaded at once (22.4s)
+  ✓  10 tests/channels-e2e/composer.spec.ts:93:1 › CMP-13 a message shown as sent is still sent when the page is reloaded at once (22.8s)
+  ✓  11 tests/channels-e2e/composer.spec.ts:93:1 › CMP-13 a message shown as sent is still sent when the page is reloaded at once (22.6s)
+  ✓  12 tests/channels-e2e/composer.spec.ts:93:1 › CMP-13 a message shown as sent is still sent when the page is reloaded at once (21.8s)
+
+  12 passed (1.4m)

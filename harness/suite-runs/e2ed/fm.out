@@ -1,0 +1,168 @@
+path "/home/teo/.herdr/worktrees/macro/synoet-channels-local-sync-suiteb/apps/web" does not contain a 'flake.nix', searching up
+
+Running 96 tests using 4 workers
+
+DD CMP-13 w2 page 52657 [observability] graphql.mutation_queue.loaded {auth.state: signed-in, network.online: false, graphql.websocket.state: connected, mutation_queue.depth: 1, mutation_queue.age_unknown_items: 0}
+DD CMP-13 w0 page 52723 [observability] graphql.mutation_queue.loaded {auth.state: signed-in, network.online: false, graphql.websocket.state: connected, mutation_queue.depth: 1, mutation_queue.age_unknown_items: 0}
+DD CMP-13 w2 page 53542 [observability] graphql.mutation_queue.skipped {auth.state: signed-in, network.online: false, graphql.websocket.state: connected, mutation_queue.pending_items: 0, mutation_queue.oldest_observed_wait_ms: 0}
+DD CMP-13 w0 page 53563 [observability] graphql.mutation_queue.skipped {auth.state: signed-in, network.online: false, graphql.websocket.state: connected, mutation_queue.pending_items: 0, mutation_queue.oldest_observed_wait_ms: 0}
+  ✓   3 tests/channels-e2e-dbg/composer.spec.ts:93:1 › CMP-13 a message shown as sent is still sent when the page is reloaded at once (8.0s)
+DD MSG-13 w1 ben 56039 [observability] graphql.mutation_queue.loaded {auth.state: signed-in, network.online: false, graphql.websocket.state: connected, mutation_queue.depth: 1, mutation_queue.age_unknown_items: 0}
+DD MSG-13 w3 ben 56068 [observability] graphql.mutation_queue.loaded {auth.state: signed-in, network.online: false, graphql.websocket.state: connected, mutation_queue.depth: 1, mutation_queue.age_unknown_items: 0}
+  ✓   1 tests/channels-e2e-dbg/composer.spec.ts:93:1 › CMP-13 a message shown as sent is still sent when the page is reloaded at once (10.4s)
+DD MSG-13 w1 ben 57169 [observability] graphql.mutation_queue.skipped {auth.state: signed-in, network.online: false, graphql.websocket.state: connected, mutation_queue.pending_items: 2, mutation_queue.oldest_observed_wait_ms: 891}
+DD MSG-13 w3 ben 58132 [observability] graphql.mutation_queue.skipped {auth.state: signed-in, network.online: false, graphql.websocket.state: connected, mutation_queue.pending_items: 2, mutation_queue.oldest_observed_wait_ms: 1823}
+DD MSG-13 w1 page 61148 [observability] graphql.mutation_queue.loaded {auth.state: signed-in, network.online: false, graphql.websocket.state: connected, mutation_queue.depth: 1, mutation_queue.age_unknown_items: 0}
+  ✓   4 tests/channels-e2e-dbg/messages.spec.ts:491:1 › MSG-13 a quick reaction shows for both people, counts 2 when the other adds the same, and goes when removed (15.3s)
+  ✓   5 tests/channels-e2e-dbg/composer.spec.ts:93:1 › CMP-13 a message shown as sent is still sent when the page is reloaded at once (7.0s)
+  ✓   2 tests/channels-e2e-dbg/messages.spec.ts:491:1 › MSG-13 a quick reaction shows for both people, counts 2 when the other adds the same, and goes when removed (15.8s)
+  ✓   6 tests/channels-e2e-dbg/messages.spec.ts:491:1 › MSG-13 a quick reaction shows for both people, counts 2 when the other adds the same, and goes when removed (9.5s)
+DD MSG-13 w2 ben 67512 [observability] graphql.mutation_queue.loaded {auth.state: signed-in, network.online: false, graphql.websocket.state: connected, mutation_queue.depth: 1, mutation_queue.age_unknown_items: 0}
+DD MSG-13 w2 ben 68156 [observability] graphql.mutation_queue.skipped {auth.state: signed-in, network.online: false, graphql.websocket.state: connected, mutation_queue.pending_items: 2, mutation_queue.oldest_observed_wait_ms: 979}
+  ✓   7 tests/channels-e2e-dbg/composer.spec.ts:93:1 › CMP-13 a message shown as sent is still sent when the page is reloaded at once (6.4s)
+  ✓   9 tests/channels-e2e-dbg/composer.spec.ts:93:1 › CMP-13 a message shown as sent is still sent when the page is reloaded at once (7.6s)
+  ✓   8 tests/channels-e2e-dbg/messages.spec.ts:491:1 › MSG-13 a quick reaction shows for both people, counts 2 when the other adds the same, and goes when removed (10.1s)
+DD MSG-13 w0 ben 73823 [observability] graphql.mutation_queue.loaded {auth.state: signed-in, network.online: false, graphql.websocket.state: connected, mutation_queue.depth: 1, mutation_queue.age_unknown_items: 0}
+  ✓  11 tests/channels-e2e-dbg/composer.spec.ts:93:1 › CMP-13 a message shown as sent is still sent when the page is reloaded at once (6.7s)
+DD MSG-13 w0 ben 76124 [observability] graphql.mutation_queue.skipped {auth.state: signed-in, network.online: false, graphql.websocket.state: connected, mutation_queue.pending_items: 2, mutation_queue.oldest_observed_wait_ms: 2556}
+DD MSG-13 w3 ben 77219 [observability] graphql.mutation_queue.loaded {auth.state: signed-in, network.online: false, graphql.websocket.state: connected, mutation_queue.depth: 1, mutation_queue.age_unknown_items: 0}
+  ✓  13 tests/channels-e2e-dbg/composer.spec.ts:93:1 › CMP-13 a message shown as sent is still sent when the page is reloaded at once (6.7s)
+DD MSG-13 w3 ben 79481 [observability] graphql.mutation_queue.skipped {auth.state: signed-in, network.online: false, graphql.websocket.state: connected, mutation_queue.pending_items: 2, mutation_queue.oldest_observed_wait_ms: 2524}
+  ✓  10 tests/channels-e2e-dbg/messages.spec.ts:491:1 › MSG-13 a quick reaction shows for both people, counts 2 when the other adds the same, and goes when removed (13.1s)
+  ✓  12 tests/channels-e2e-dbg/messages.spec.ts:491:1 › MSG-13 a quick reaction shows for both people, counts 2 when the other adds the same, and goes when removed (13.0s)
+  ✓  15 tests/channels-e2e-dbg/composer.spec.ts:93:1 › CMP-13 a message shown as sent is still sent when the page is reloaded at once (6.7s)
+DD MSG-13 w1 page 86655 [observability] graphql.mutation_queue.loaded {auth.state: signed-in, network.online: false, graphql.websocket.state: connected, mutation_queue.depth: 1, mutation_queue.age_unknown_items: 0}
+  ✓  14 tests/channels-e2e-dbg/messages.spec.ts:491:1 › MSG-13 a quick reaction shows for both people, counts 2 when the other adds the same, and goes when removed (11.1s)
+  ✓  17 tests/channels-e2e-dbg/composer.spec.ts:93:1 › CMP-13 a message shown as sent is still sent when the page is reloaded at once (6.3s)
+  ✓  16 tests/channels-e2e-dbg/messages.spec.ts:491:1 › MSG-13 a quick reaction shows for both people, counts 2 when the other adds the same, and goes when removed (12.4s)
+  ✓  19 tests/channels-e2e-dbg/composer.spec.ts:93:1 › CMP-13 a message shown as sent is still sent when the page is reloaded at once (6.9s)
+  ✓  18 tests/channels-e2e-dbg/messages.spec.ts:491:1 › MSG-13 a quick reaction shows for both people, counts 2 when the other adds the same, and goes when removed (9.2s)
+DD MSG-13 w3 ben 97711 [observability] graphql.mutation_queue.loaded {auth.state: signed-in, network.online: false, graphql.websocket.state: connected, mutation_queue.depth: 1, mutation_queue.age_unknown_items: 0}
+DD MSG-13 w3 ben 99838 [observability] graphql.mutation_queue.skipped {auth.state: signed-in, network.online: false, graphql.websocket.state: connected, mutation_queue.pending_items: 2, mutation_queue.oldest_observed_wait_ms: 2403}
+DD MSG-13 w1 ben 99877 [observability] graphql.mutation_queue.loaded {auth.state: signed-in, network.online: false, graphql.websocket.state: connected, mutation_queue.depth: 1, mutation_queue.age_unknown_items: 0}
+  ✓  21 tests/channels-e2e-dbg/composer.spec.ts:93:1 › CMP-13 a message shown as sent is still sent when the page is reloaded at once (6.7s)
+DD MSG-13 w1 ben 100644 [observability] graphql.mutation_queue.skipped {auth.state: signed-in, network.online: false, graphql.websocket.state: connected, mutation_queue.pending_items: 2, mutation_queue.oldest_observed_wait_ms: 974}
+  ✓  23 tests/channels-e2e-dbg/composer.spec.ts:93:1 › CMP-13 a message shown as sent is still sent when the page is reloaded at once (6.7s)
+  ✓  20 tests/channels-e2e-dbg/messages.spec.ts:491:1 › MSG-13 a quick reaction shows for both people, counts 2 when the other adds the same, and goes when removed (13.1s)
+DD MSG-13 w1 page 105998 [observability] graphql.mutation_queue.loaded {auth.state: signed-in, network.online: false, graphql.websocket.state: connected, mutation_queue.depth: 1, mutation_queue.age_unknown_items: 0}
+  ✓  22 tests/channels-e2e-dbg/messages.spec.ts:491:1 › MSG-13 a quick reaction shows for both people, counts 2 when the other adds the same, and goes when removed (11.5s)
+DD MSG-13 w0 ben 107220 [observability] graphql.mutation_queue.loaded {auth.state: signed-in, network.online: false, graphql.websocket.state: connected, mutation_queue.depth: 1, mutation_queue.age_unknown_items: 0}
+DD MSG-13 w0 ben 109649 [observability] graphql.mutation_queue.skipped {auth.state: signed-in, network.online: false, graphql.websocket.state: connected, mutation_queue.pending_items: 2, mutation_queue.oldest_observed_wait_ms: 2621}
+  ✓  25 tests/channels-e2e-dbg/composer.spec.ts:93:1 › CMP-13 a message shown as sent is still sent when the page is reloaded at once (6.9s)
+DD MSG-13 w0 page 113355 [observability] graphql.mutation_queue.loaded {auth.state: signed-in, network.online: false, graphql.websocket.state: connected, mutation_queue.depth: 1, mutation_queue.age_unknown_items: 0}
+  ✓  27 tests/channels-e2e-dbg/composer.spec.ts:93:1 › CMP-13 a message shown as sent is still sent when the page is reloaded at once (6.6s)
+  ✓  24 tests/channels-e2e-dbg/messages.spec.ts:491:1 › MSG-13 a quick reaction shows for both people, counts 2 when the other adds the same, and goes when removed (12.9s)
+DD MSG-13 w3 page 116170 [observability] graphql.mutation_queue.loaded {auth.state: signed-in, network.online: false, graphql.websocket.state: connected, mutation_queue.depth: 1, mutation_queue.age_unknown_items: 0}
+  ✓  26 tests/channels-e2e-dbg/messages.spec.ts:491:1 › MSG-13 a quick reaction shows for both people, counts 2 when the other adds the same, and goes when removed (12.2s)
+  ✓  28 tests/channels-e2e-dbg/messages.spec.ts:491:1 › MSG-13 a quick reaction shows for both people, counts 2 when the other adds the same, and goes when removed (9.1s)
+  ✓  29 tests/channels-e2e-dbg/composer.spec.ts:93:1 › CMP-13 a message shown as sent is still sent when the page is reloaded at once (6.6s)
+  ✓  31 tests/channels-e2e-dbg/composer.spec.ts:93:1 › CMP-13 a message shown as sent is still sent when the page is reloaded at once (5.6s)
+DD MSG-13 w0 page 122939 [observability] graphql.mutation_queue.loaded {auth.state: signed-in, network.online: false, graphql.websocket.state: connected, mutation_queue.depth: 1, mutation_queue.age_unknown_items: 0}
+  ✓  30 tests/channels-e2e-dbg/messages.spec.ts:491:1 › MSG-13 a quick reaction shows for both people, counts 2 when the other adds the same, and goes when removed (9.2s)
+DD MSG-13 w2 ben 126073 [observability] graphql.mutation_queue.loaded {auth.state: signed-in, network.online: false, graphql.websocket.state: connected, mutation_queue.depth: 1, mutation_queue.age_unknown_items: 0}
+DD MSG-13 w2 ben 127023 [observability] graphql.mutation_queue.skipped {auth.state: signed-in, network.online: false, graphql.websocket.state: connected, mutation_queue.pending_items: 2, mutation_queue.oldest_observed_wait_ms: 1302}
+  ✓  33 tests/channels-e2e-dbg/composer.spec.ts:93:1 › CMP-13 a message shown as sent is still sent when the page is reloaded at once (6.8s)
+DD MSG-13 w3 ben 130068 [observability] graphql.mutation_queue.loaded {auth.state: signed-in, network.online: false, graphql.websocket.state: connected, mutation_queue.depth: 1, mutation_queue.age_unknown_items: 0}
+  ✓  35 tests/channels-e2e-dbg/composer.spec.ts:93:1 › CMP-13 a message shown as sent is still sent when the page is reloaded at once (6.9s)
+  ✓  32 tests/channels-e2e-dbg/messages.spec.ts:491:1 › MSG-13 a quick reaction shows for both people, counts 2 when the other adds the same, and goes when removed (10.1s)
+DD MSG-13 w3 ben 132527 [observability] graphql.mutation_queue.skipped {auth.state: signed-in, network.online: false, graphql.websocket.state: connected, mutation_queue.pending_items: 2, mutation_queue.oldest_observed_wait_ms: 2797}
+DD MSG-13 w1 ben 134811 [observability] graphql.mutation_queue.loaded {auth.state: signed-in, network.online: false, graphql.websocket.state: connected, mutation_queue.depth: 1, mutation_queue.age_unknown_items: 0}
+  ✓  34 tests/channels-e2e-dbg/messages.spec.ts:491:1 › MSG-13 a quick reaction shows for both people, counts 2 when the other adds the same, and goes when removed (13.4s)
+DD MSG-13 w1 ben 137332 [observability] graphql.mutation_queue.skipped {auth.state: signed-in, network.online: false, graphql.websocket.state: connected, mutation_queue.pending_items: 2, mutation_queue.oldest_observed_wait_ms: 2784}
+  ✓  37 tests/channels-e2e-dbg/composer.spec.ts:93:1 › CMP-13 a message shown as sent is still sent when the page is reloaded at once (6.6s)
+  ✓  38 tests/channels-e2e-dbg/messages.spec.ts:491:1 › MSG-13 a quick reaction shows for both people, counts 2 when the other adds the same, and goes when removed (9.4s)
+  ✓  36 tests/channels-e2e-dbg/messages.spec.ts:491:1 › MSG-13 a quick reaction shows for both people, counts 2 when the other adds the same, and goes when removed (14.1s)
+DD CMP-13 w3 page 142491 [observability] graphql.mutation_queue.loaded {auth.state: signed-in, network.online: false, graphql.websocket.state: connected, mutation_queue.depth: 1, mutation_queue.age_unknown_items: 0}
+DD CMP-13 w3 page 142871 [observability] graphql.mutation_queue.skipped {auth.state: signed-in, network.online: false, graphql.websocket.state: connected, mutation_queue.pending_items: 0, mutation_queue.oldest_observed_wait_ms: 0}
+  ✓  39 tests/channels-e2e-dbg/composer.spec.ts:93:1 › CMP-13 a message shown as sent is still sent when the page is reloaded at once (6.3s)
+DD MSG-13 w0 ben 146546 [observability] graphql.mutation_queue.loaded {auth.state: signed-in, network.online: false, graphql.websocket.state: connected, mutation_queue.depth: 1, mutation_queue.age_unknown_items: 0}
+  ✓  40 tests/channels-e2e-dbg/messages.spec.ts:491:1 › MSG-13 a quick reaction shows for both people, counts 2 when the other adds the same, and goes when removed (8.6s)
+  ✓  41 tests/channels-e2e-dbg/composer.spec.ts:93:1 › CMP-13 a message shown as sent is still sent when the page is reloaded at once (6.2s)
+DD MSG-13 w1 ben 149326 [observability] graphql.mutation_queue.loaded {auth.state: signed-in, network.online: false, graphql.websocket.state: connected, mutation_queue.depth: 1, mutation_queue.age_unknown_items: 0}
+  ✓  43 tests/channels-e2e-dbg/composer.spec.ts:93:1 › CMP-13 a message shown as sent is still sent when the page is reloaded at once (6.7s)
+DD MSG-13 w1 ben 151683 [observability] graphql.mutation_queue.skipped {auth.state: signed-in, network.online: false, graphql.websocket.state: connected, mutation_queue.pending_items: 2, mutation_queue.oldest_observed_wait_ms: 2668}
+  ✓  45 tests/channels-e2e-dbg/composer.spec.ts:93:1 › CMP-13 a message shown as sent is still sent when the page is reloaded at once (6.4s)
+  ✓  42 tests/channels-e2e-dbg/messages.spec.ts:491:1 › MSG-13 a quick reaction shows for both people, counts 2 when the other adds the same, and goes when removed (13.3s)
+DD MSG-13 w0 page 155956 [observability] graphql.mutation_queue.loaded {auth.state: signed-in, network.online: false, graphql.websocket.state: connected, mutation_queue.depth: 1, mutation_queue.age_unknown_items: 0}
+  ✓  44 tests/channels-e2e-dbg/messages.spec.ts:491:1 › MSG-13 a quick reaction shows for both people, counts 2 when the other adds the same, and goes when removed (8.9s)
+  ✓  46 tests/channels-e2e-dbg/messages.spec.ts:491:1 › MSG-13 a quick reaction shows for both people, counts 2 when the other adds the same, and goes when removed (11.1s)
+DD MSG-13 w1 ben 162781 [observability] graphql.mutation_queue.loaded {auth.state: signed-in, network.online: false, graphql.websocket.state: connected, mutation_queue.depth: 1, mutation_queue.age_unknown_items: 0}
+  ✓  47 tests/channels-e2e-dbg/composer.spec.ts:93:1 › CMP-13 a message shown as sent is still sent when the page is reloaded at once (8.1s)
+  ✓  49 tests/channels-e2e-dbg/composer.spec.ts:93:1 › CMP-13 a message shown as sent is still sent when the page is reloaded at once (6.6s)
+DD MSG-13 w1 ben 164963 [observability] graphql.mutation_queue.skipped {auth.state: signed-in, network.online: false, graphql.websocket.state: connected, mutation_queue.pending_items: 2, mutation_queue.oldest_observed_wait_ms: 2423}
+  ✓  48 tests/channels-e2e-dbg/messages.spec.ts:491:1 › MSG-13 a quick reaction shows for both people, counts 2 when the other adds the same, and goes when removed (12.8s)
+  ✓  51 tests/channels-e2e-dbg/composer.spec.ts:93:1 › CMP-13 a message shown as sent is still sent when the page is reloaded at once (6.7s)
+DD MSG-13 w3 page 175196 [observability] graphql.mutation_queue.loaded {auth.state: signed-in, network.online: false, graphql.websocket.state: connected, mutation_queue.depth: 1, mutation_queue.age_unknown_items: 0}
+  ✓  50 tests/channels-e2e-dbg/messages.spec.ts:491:1 › MSG-13 a quick reaction shows for both people, counts 2 when the other adds the same, and goes when removed (12.8s)
+  ✓  52 tests/channels-e2e-dbg/messages.spec.ts:491:1 › MSG-13 a quick reaction shows for both people, counts 2 when the other adds the same, and goes when removed (11.7s)
+DD MSG-13 w2 ben 176390 [observability] graphql.mutation_queue.loaded {auth.state: signed-in, network.online: false, graphql.websocket.state: connected, mutation_queue.depth: 1, mutation_queue.age_unknown_items: 0}
+  ✓  53 tests/channels-e2e-dbg/composer.spec.ts:93:1 › CMP-13 a message shown as sent is still sent when the page is reloaded at once (6.7s)
+DD MSG-13 w2 ben 177045 [observability] graphql.mutation_queue.skipped {auth.state: signed-in, network.online: false, graphql.websocket.state: connected, mutation_queue.pending_items: 2, mutation_queue.oldest_observed_wait_ms: 931}
+  ✓  54 tests/channels-e2e-dbg/messages.spec.ts:491:1 › MSG-13 a quick reaction shows for both people, counts 2 when the other adds the same, and goes when removed (11.2s)
+  ✓  55 tests/channels-e2e-dbg/composer.spec.ts:93:1 › CMP-13 a message shown as sent is still sent when the page is reloaded at once (6.4s)
+  ✓  57 tests/channels-e2e-dbg/composer.spec.ts:93:1 › CMP-13 a message shown as sent is still sent when the page is reloaded at once (6.5s)
+  ✓  56 tests/channels-e2e-dbg/messages.spec.ts:491:1 › MSG-13 a quick reaction shows for both people, counts 2 when the other adds the same, and goes when removed (9.0s)
+DD MSG-13 w2 ben 189188 [observability] graphql.mutation_queue.loaded {auth.state: signed-in, network.online: false, graphql.websocket.state: connected, mutation_queue.depth: 1, mutation_queue.age_unknown_items: 0}
+  ✓  59 tests/channels-e2e-dbg/composer.spec.ts:93:1 › CMP-13 a message shown as sent is still sent when the page is reloaded at once (6.4s)
+DD MSG-13 w1 ben 190453 [observability] graphql.mutation_queue.loaded {auth.state: signed-in, network.online: false, graphql.websocket.state: connected, mutation_queue.depth: 1, mutation_queue.age_unknown_items: 0}
+DD MSG-13 w2 ben 191279 [observability] graphql.mutation_queue.skipped {auth.state: signed-in, network.online: false, graphql.websocket.state: connected, mutation_queue.pending_items: 2, mutation_queue.oldest_observed_wait_ms: 2385}
+  ✓  61 tests/channels-e2e-dbg/composer.spec.ts:93:1 › CMP-13 a message shown as sent is still sent when the page is reloaded at once (6.3s)
+DD MSG-13 w1 ben 192525 [observability] graphql.mutation_queue.skipped {auth.state: signed-in, network.online: false, graphql.websocket.state: connected, mutation_queue.pending_items: 2, mutation_queue.oldest_observed_wait_ms: 2359}
+  ✓  60 tests/channels-e2e-dbg/messages.spec.ts:491:1 › MSG-13 a quick reaction shows for both people, counts 2 when the other adds the same, and goes when removed (12.4s)
+  ✓  58 tests/channels-e2e-dbg/messages.spec.ts:491:1 › MSG-13 a quick reaction shows for both people, counts 2 when the other adds the same, and goes when removed (13.9s)
+  ✓  63 tests/channels-e2e-dbg/composer.spec.ts:93:1 › CMP-13 a message shown as sent is still sent when the page is reloaded at once (7.1s)
+  ✓  65 tests/channels-e2e-dbg/composer.spec.ts:93:1 › CMP-13 a message shown as sent is still sent when the page is reloaded at once (6.6s)
+  ✓  62 tests/channels-e2e-dbg/messages.spec.ts:491:1 › MSG-13 a quick reaction shows for both people, counts 2 when the other adds the same, and goes when removed (13.8s)
+DD MSG-13 w1 page 205517 [observability] graphql.mutation_queue.loaded {auth.state: signed-in, network.online: false, graphql.websocket.state: connected, mutation_queue.depth: 1, mutation_queue.age_unknown_items: 0}
+  ✓  64 tests/channels-e2e-dbg/messages.spec.ts:491:1 › MSG-13 a quick reaction shows for both people, counts 2 when the other adds the same, and goes when removed (9.1s)
+  ✓  66 tests/channels-e2e-dbg/messages.spec.ts:491:1 › MSG-13 a quick reaction shows for both people, counts 2 when the other adds the same, and goes when removed (9.1s)
+  ✓  67 tests/channels-e2e-dbg/composer.spec.ts:93:1 › CMP-13 a message shown as sent is still sent when the page is reloaded at once (6.4s)
+DD CMP-13 w1 page 212078 [observability] graphql.mutation_queue.loaded {auth.state: signed-in, network.online: false, graphql.websocket.state: connected, mutation_queue.depth: 1, mutation_queue.age_unknown_items: 0}
+DD CMP-13 w1 page 212531 [observability] graphql.mutation_queue.skipped {auth.state: signed-in, network.online: false, graphql.websocket.state: connected, mutation_queue.pending_items: 0, mutation_queue.oldest_observed_wait_ms: 0}
+  ✓  69 tests/channels-e2e-dbg/composer.spec.ts:93:1 › CMP-13 a message shown as sent is still sent when the page is reloaded at once (6.6s)
+  ✓  68 tests/channels-e2e-dbg/messages.spec.ts:491:1 › MSG-13 a quick reaction shows for both people, counts 2 when the other adds the same, and goes when removed (11.5s)
+  ✓  71 tests/channels-e2e-dbg/composer.spec.ts:93:1 › CMP-13 a message shown as sent is still sent when the page is reloaded at once (6.1s)
+  ✓  70 tests/channels-e2e-dbg/messages.spec.ts:491:1 › MSG-13 a quick reaction shows for both people, counts 2 when the other adds the same, and goes when removed (9.3s)
+  ✓  73 tests/channels-e2e-dbg/composer.spec.ts:93:1 › CMP-13 a message shown as sent is still sent when the page is reloaded at once (6.6s)
+  ✓  72 tests/channels-e2e-dbg/messages.spec.ts:491:1 › MSG-13 a quick reaction shows for both people, counts 2 when the other adds the same, and goes when removed (9.6s)
+DD MSG-13 w2 ben 223579 [observability] graphql.mutation_queue.loaded {auth.state: signed-in, network.online: false, graphql.websocket.state: connected, mutation_queue.depth: 1, mutation_queue.age_unknown_items: 0}
+  ✓  75 tests/channels-e2e-dbg/composer.spec.ts:93:1 › CMP-13 a message shown as sent is still sent when the page is reloaded at once (6.5s)
+DD MSG-13 w2 ben 225710 [observability] graphql.mutation_queue.skipped {auth.state: signed-in, network.online: false, graphql.websocket.state: connected, mutation_queue.pending_items: 2, mutation_queue.oldest_observed_wait_ms: 2357}
+DD MSG-13 w3 ben 229578 [observability] graphql.mutation_queue.loaded {auth.state: signed-in, network.online: false, graphql.websocket.state: connected, mutation_queue.depth: 1, mutation_queue.age_unknown_items: 0}
+  ✓  77 tests/channels-e2e-dbg/composer.spec.ts:93:1 › CMP-13 a message shown as sent is still sent when the page is reloaded at once (6.7s)
+  ✓  74 tests/channels-e2e-dbg/messages.spec.ts:491:1 › MSG-13 a quick reaction shows for both people, counts 2 when the other adds the same, and goes when removed (13.5s)
+DD MSG-13 w3 ben 232216 [observability] graphql.mutation_queue.skipped {auth.state: signed-in, network.online: false, graphql.websocket.state: connected, mutation_queue.pending_items: 2, mutation_queue.oldest_observed_wait_ms: 2811}
+DD MSG-13 w0 ben 232759 [observability] graphql.mutation_queue.loaded {auth.state: signed-in, network.online: false, graphql.websocket.state: connected, mutation_queue.depth: 1, mutation_queue.age_unknown_items: 0}
+DD MSG-13 w0 ben 235082 [observability] graphql.mutation_queue.skipped {auth.state: signed-in, network.online: false, graphql.websocket.state: connected, mutation_queue.pending_items: 2, mutation_queue.oldest_observed_wait_ms: 2540}
+  ✓  76 tests/channels-e2e-dbg/messages.spec.ts:491:1 › MSG-13 a quick reaction shows for both people, counts 2 when the other adds the same, and goes when removed (13.6s)
+  ✓  79 tests/channels-e2e-dbg/composer.spec.ts:93:1 › CMP-13 a message shown as sent is still sent when the page is reloaded at once (6.5s)
+  ✓  78 tests/channels-e2e-dbg/messages.spec.ts:491:1 › MSG-13 a quick reaction shows for both people, counts 2 when the other adds the same, and goes when removed (12.7s)
+  ✓  81 tests/channels-e2e-dbg/composer.spec.ts:93:1 › CMP-13 a message shown as sent is still sent when the page is reloaded at once (6.2s)
+  ✓  80 tests/channels-e2e-dbg/messages.spec.ts:491:1 › MSG-13 a quick reaction shows for both people, counts 2 when the other adds the same, and goes when removed (12.4s)
+DD MSG-13 w1 ben 244213 [observability] graphql.mutation_queue.loaded {auth.state: signed-in, network.online: false, graphql.websocket.state: connected, mutation_queue.depth: 1, mutation_queue.age_unknown_items: 0}
+  ✓  83 tests/channels-e2e-dbg/composer.spec.ts:93:1 › CMP-13 a message shown as sent is still sent when the page is reloaded at once (6.3s)
+DD MSG-13 w1 ben 246363 [observability] graphql.mutation_queue.skipped {auth.state: signed-in, network.online: false, graphql.websocket.state: connected, mutation_queue.pending_items: 2, mutation_queue.oldest_observed_wait_ms: 2433}
+  ✓  82 tests/channels-e2e-dbg/messages.spec.ts:491:1 › MSG-13 a quick reaction shows for both people, counts 2 when the other adds the same, and goes when removed (13.0s)
+DD MSG-13 w3 ben 250453 [observability] graphql.mutation_queue.loaded {auth.state: signed-in, network.online: false, graphql.websocket.state: connected, mutation_queue.depth: 1, mutation_queue.age_unknown_items: 0}
+  ✓  85 tests/channels-e2e-dbg/composer.spec.ts:93:1 › CMP-13 a message shown as sent is still sent when the page is reloaded at once (6.9s)
+DD MSG-13 w3 ben 252234 [observability] graphql.mutation_queue.skipped {auth.state: signed-in, network.online: false, graphql.websocket.state: connected, mutation_queue.pending_items: 2, mutation_queue.oldest_observed_wait_ms: 2081}
+DD MSG-13 w0 ben 252970 [observability] graphql.mutation_queue.loaded {auth.state: signed-in, network.online: false, graphql.websocket.state: connected, mutation_queue.depth: 1, mutation_queue.age_unknown_items: 0}
+DD MSG-13 w0 ben 255363 [observability] graphql.mutation_queue.skipped {auth.state: signed-in, network.online: false, graphql.websocket.state: connected, mutation_queue.pending_items: 2, mutation_queue.oldest_observed_wait_ms: 2796}
+  ✓  84 tests/channels-e2e-dbg/messages.spec.ts:491:1 › MSG-13 a quick reaction shows for both people, counts 2 when the other adds the same, and goes when removed (12.9s)
+  ✓  87 tests/channels-e2e-dbg/composer.spec.ts:93:1 › CMP-13 a message shown as sent is still sent when the page is reloaded at once (6.5s)
+  ✓  86 tests/channels-e2e-dbg/messages.spec.ts:491:1 › MSG-13 a quick reaction shows for both people, counts 2 when the other adds the same, and goes when removed (14.3s)
+  ✓  88 tests/channels-e2e-dbg/messages.spec.ts:491:1 › MSG-13 a quick reaction shows for both people, counts 2 when the other adds the same, and goes when removed (9.9s)
+  ✓  89 tests/channels-e2e-dbg/composer.spec.ts:93:1 › CMP-13 a message shown as sent is still sent when the page is reloaded at once (6.9s)
+DD MSG-13 w1 ben 264341 [observability] graphql.mutation_queue.loaded {auth.state: signed-in, network.online: false, graphql.websocket.state: connected, mutation_queue.depth: 1, mutation_queue.age_unknown_items: 0}
+DD MSG-13 w1 ben 266451 [observability] graphql.mutation_queue.skipped {auth.state: signed-in, network.online: false, graphql.websocket.state: connected, mutation_queue.pending_items: 2, mutation_queue.oldest_observed_wait_ms: 2321}
+  ✓  91 tests/channels-e2e-dbg/composer.spec.ts:93:1 › CMP-13 a message shown as sent is still sent when the page is reloaded at once (6.6s)
+  ✓  90 tests/channels-e2e-dbg/messages.spec.ts:491:1 › MSG-13 a quick reaction shows for both people, counts 2 when the other adds the same, and goes when removed (12.7s)
+  ✓  93 tests/channels-e2e-dbg/composer.spec.ts:93:1 › CMP-13 a message shown as sent is still sent when the page is reloaded at once (6.6s)
+  ✓  92 tests/channels-e2e-dbg/messages.spec.ts:491:1 › MSG-13 a quick reaction shows for both people, counts 2 when the other adds the same, and goes when removed (12.2s)
+  ✓  94 tests/channels-e2e-dbg/messages.spec.ts:491:1 › MSG-13 a quick reaction shows for both people, counts 2 when the other adds the same, and goes when removed (8.5s)
+  ✓  95 tests/channels-e2e-dbg/composer.spec.ts:93:1 › CMP-13 a message shown as sent is still sent when the page is reloaded at once (6.2s)
+DD MSG-13 w3 ben 278346 [observability] graphql.mutation_queue.loaded {auth.state: signed-in, network.online: false, graphql.websocket.state: connected, mutation_queue.depth: 1, mutation_queue.age_unknown_items: 0}
+DD MSG-13 w3 ben 279993 [observability] graphql.mutation_queue.skipped {auth.state: signed-in, network.online: false, graphql.websocket.state: connected, mutation_queue.pending_items: 2, mutation_queue.oldest_observed_wait_ms: 1897}
+  ✓  96 tests/channels-e2e-dbg/messages.spec.ts:491:1 › MSG-13 a quick reaction shows for both people, counts 2 when the other adds the same, and goes when removed (11.6s)
+
+  96 passed (4.2m)

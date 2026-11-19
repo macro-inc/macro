@@ -1,0 +1,16 @@
+path "/home/teo/.herdr/worktrees/macro/synoet-channels-local-sync-suiteb/apps/web" does not contain a 'flake.nix', searching up
+
+Running 10 tests using 2 workers
+
+  ✓   2 tests/channels-e2e-dbg/offline.spec.ts:187:1 › OFF-06 a thread read while connected shows its replies with no connection, a long one included (12.8s)
+  ✓   1 tests/channels-e2e-dbg/offline.spec.ts:187:1 › OFF-06 a thread read while connected shows its replies with no connection, a long one included (13.2s)
+  ✓   3 tests/channels-e2e-dbg/offline.spec.ts:187:1 › OFF-06 a thread read while connected shows its replies with no connection, a long one included (12.7s)
+  ✓   4 tests/channels-e2e-dbg/offline.spec.ts:187:1 › OFF-06 a thread read while connected shows its replies with no connection, a long one included (12.5s)
+  ✓   5 tests/channels-e2e-dbg/offline.spec.ts:187:1 › OFF-06 a thread read while connected shows its replies with no connection, a long one included (12.0s)
+  ✓   6 tests/channels-e2e-dbg/offline.spec.ts:187:1 › OFF-06 a thread read while connected shows its replies with no connection, a long one included (13.5s)
+  ✓   7 tests/channels-e2e-dbg/offline.spec.ts:187:1 › OFF-06 a thread read while connected shows its replies with no connection, a long one included (12.6s)
+  ✓   8 tests/channels-e2e-dbg/offline.spec.ts:187:1 › OFF-06 a thread read while connected shows its replies with no connection, a long one included (13.0s)
+  ✓   9 tests/channels-e2e-dbg/offline.spec.ts:187:1 › OFF-06 a thread read while connected shows its replies with no connection, a long one included (12.5s)
+  ✓  10 tests/channels-e2e-dbg/offline.spec.ts:187:1 › OFF-06 a thread read while connected shows its replies with no connection, a long one included (12.9s)
+
+  10 passed (1.4m)

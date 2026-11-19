@@ -1,0 +1,255 @@
+path "/home/teo/.herdr/worktrees/macro/synoet-channels-local-sync-suiteb/apps/web" does not contain a 'flake.nix', searching up
+
+Running 4 tests using 4 workers
+
+ZZ w0 DBGq drain-start 1015
+ZZ w1 DBGq drain-start 1047
+ZZ w2 DBGq drain-start 1055
+ZZ w3 DBGq drain-start 1091
+ZZ w1 DBGq revision 1974
+ZZ w1 DBGq owner 1974
+ZZ w1 DBGq p-start 1975
+ZZ w0 DBGq revision 2072
+ZZ w0 DBGq owner 2072
+ZZ w0 DBGq p-start 2073
+ZZ w2 DBGq revision 2039
+ZZ w2 DBGq owner 2040
+ZZ w2 DBGq p-start 2040
+ZZ w3 DBGq revision 2064
+ZZ w3 DBGq owner 2065
+ZZ w3 DBGq p-start 2065
+ZZ w1 DBGq write-start 2536
+ZZ w3 DBGq write-start 2514
+ZZ w2 DBGq write-start 2583
+ZZ w1 DBGq enqueued 2670
+ZZ w1 DBGq preparing 2671
+ZZ w0 DBGq write-start 2737
+ZZ w0 DBGq enqueued 2824
+ZZ w0 DBGq preparing 2825
+ZZ w3 DBGq enqueued 2751
+ZZ w3 DBGq preparing 2752
+ZZ w2 DBGq enqueued 2773
+ZZ w2 DBGq preparing 2774
+ZZ w1 DBGq prepared 4077
+ZZ w1 DBGq sent-live 4078
+ZZ w1 DBGq claimed 4161
+ZZ w1 DBGq claimed? false
+ZZ w2 DBGq prepared 4121
+ZZ w2 DBGq sent-live 4122
+ZZ w3 DBGq prepared 4133
+ZZ w3 DBGq sent-live 4134
+ZZ w3 latency 0 1631ms
+ZZ w1 latency 0 1707ms
+ZZ w2 latency 0 1575ms
+ZZ w0 DBGq prepared 4312
+ZZ w0 DBGq sent-live 4312
+ZZ w3 DBGq claimed 4241
+ZZ w3 DBGq claimed? false
+ZZ w0 DBGq claimed 4448
+ZZ w0 DBGq claimed? false
+ZZ w2 DBGq write-start 4374
+ZZ w0 latency 0 1703ms
+ZZ w2 DBGq p-session 4444
+ZZ w2 DBGq p-list 4466
+ZZ w2 DBGq claimed 4566
+ZZ w2 DBGq claimed? false
+ZZ w0 DBGq write-answer committed 4647
+ZZ w2 DBGq enqueued 4578
+ZZ w2 DBGq preparing 4579
+ZZ w2 DBGq p-inspect 4606
+ZZ w0 DBGq drain-start 4706
+ZZ w0 DBGq revision 4816
+ZZ w0 DBGq owner 4816
+ZZ w1 DBGq write-answer committed 4788
+ZZ w1 DBGq drain-start 4945
+ZZ w2 DBGq write-answer committed 4823
+ZZ w2 DBGq p-generation 4858
+ZZ w1 DBGq revision 5109
+ZZ w1 DBGq owner 5109
+ZZ w2 DBGq sent-replay 5085
+ZZ w2 latency 1 769ms
+ZZ w3 DBGq write-start 5239
+ZZ w2 DBGq write-answer queued 5501
+ZZ w2 DBGq write-committed 5502
+ZZ w3 DBGq enqueued 5500
+ZZ w3 DBGq preparing 5500
+ZZ w2 DBGq drain-start 5619
+ZZ w2 DBGq revision 5717
+ZZ w2 DBGq owner 5717
+ZZ w2 DBGq prepared 5717
+ZZ w3 DBGq write-answer committed 5735
+ZZ w2 DBGq claimed 5836
+ZZ w2 DBGq claimed? false
+ZZ w3 DBGq p-session 5962
+ZZ w3 DBGq p-list 5979
+ZZ w3 DBGq p-inspect 6165
+ZZ w3 DBGq p-generation 6225
+ZZ w0 DBGq write-start 6417
+ZZ w1 DBGq write-start 6435
+ZZ w0 DBGq enqueued 6662
+ZZ w0 DBGq preparing 6662
+ZZ w2 DBGq write-start 6594
+ZZ w0 DBGq p-session 6720
+ZZ w3 DBGq sent-live 6629
+ZZ w1 DBGq p-session 6716
+ZZ w2 DBGq enqueued 6687
+ZZ w2 DBGq preparing 6688
+ZZ w2 DBGq sent-live 6688
+ZZ w3 latency 1 1442ms
+ZZ w1 DBGq p-list 6809
+ZZ w2 latency 2 162ms
+ZZ w0 DBGq prepared 6873
+ZZ w0 DBGq sent-live 6874
+ZZ w0 latency 1 530ms
+ZZ w0 DBGq claimed 7001
+ZZ w0 DBGq claimed? false
+ZZ w0 DBGq p-list 7016
+ZZ w0 DBGq p-inspect 7114
+ZZ w1 DBGq prepared 7109
+ZZ w0 DBGq p-generation 7258
+ZZ w0 DBGq write-answer committed 7286
+ZZ w1 DBGq enqueued 7262
+ZZ w1 DBGq preparing 7263
+ZZ w1 DBGq p-inspect 7295
+ZZ w1 DBGq claimed 7296
+ZZ w1 DBGq claimed? false
+ZZ w1 DBGq p-generation 7355
+ZZ w3 DBGq write-start 7506
+ZZ w3 DBGq enqueued 7900
+ZZ w3 DBGq preparing 7900
+ZZ w3 DBGq sent-live 7900
+ZZ w0 DBGq drain-start 7999
+ZZ w3 DBGq write-answer committed 7937
+ZZ w3 latency 2 471ms
+ZZ w1 DBGq sent-replay 8140
+ZZ w1 latency 1 1700ms
+ZZ w0 DBGq revision 8218
+ZZ w0 DBGq owner 8219
+ZZ w0 DBGq prepared 8234
+ZZ w1 DBGq write-start 8329
+ZZ w0 DBGq claimed 8401
+ZZ w0 DBGq claimed? false
+ZZ w2 DBGq write-answer committed 8361
+ZZ w2 DBGq drain-start 8453
+ZZ w2 DBGq revision 8600
+ZZ w2 DBGq owner 8600
+ZZ w2 DBGq prepared 8600
+ZZ w1 DBGq enqueued 8658
+ZZ w1 DBGq preparing 8659
+ZZ w1 DBGq sent-live 8659
+ZZ w3 DBGq write-answer committed 8703
+ZZ w2 DBGq claimed 8753
+ZZ w2 DBGq claimed? false
+ZZ w3 DBGq drain-start 8742
+ZZ w3 DBGq revision 8834
+ZZ w3 DBGq owner 8834
+ZZ w3 DBGq prepared 8834
+ZZ w3 DBGq claimed 8893
+ZZ w3 DBGq claimed? false
+ZZ w1 DBGq write-answer queued 8912
+ZZ w1 DBGq write-committed 8913
+ZZ w1 latency 2 798ms
+ZZ w1 DBGq write-answer committed 9213
+ZZ w1 DBGq drain-start 9220
+ZZ w1 DBGq revision 9456
+ZZ w1 DBGq owner 9457
+ZZ w1 DBGq prepared 9457
+ZZ w1 DBGq claimed 9858
+ZZ w1 DBGq claimed? false
+ZZ w0 DBGq write-start 10307
+ZZ w2 DBGq write-start 11249
+ZZ w2 DBGq enqueued 11469
+ZZ w2 DBGq preparing 11469
+ZZ w2 DBGq sent-live 11469
+ZZ w2 latency 3 249ms
+ZZ w2 DBGq write-start 11664
+ZZ w0 DBGq enqueued 11990
+ZZ w0 DBGq preparing 11990
+ZZ w0 DBGq sent-live 11990
+ZZ w2 DBGq enqueued 11940
+ZZ w2 DBGq preparing 11941
+ZZ w2 DBGq sent-live 11941
+ZZ w0 latency 2 1593ms
+ZZ w2 latency 4 329ms
+ZZ w2 DBGq write-start 12225
+ZZ w3 DBGq write-start 12383
+ZZ w2 DBGq write-answer committed 12422
+ZZ w2 DBGq enqueued 12456
+ZZ w2 DBGq preparing 12457
+ZZ w2 DBGq sent-live 12457
+ZZ w3 DBGq enqueued 12483
+ZZ w3 DBGq preparing 12483
+ZZ w3 DBGq sent-live 12483
+ZZ w2 latency 5 302ms
+ZZ w3 latency 3 138ms
+  ✓  2 tests/channels-e2e-dbg/zz.spec.ts:75:1 › ZZ-20 online send latency (13.0s)
+ZZ w3 DBGq write-start 12790
+ZZ w3 DBGq enqueued 12807
+ZZ w3 DBGq preparing 12807
+ZZ w3 DBGq sent-live 12807
+ZZ w3 latency 4 80ms
+ZZ w3 DBGq write-start 12997
+ZZ w3 DBGq enqueued 13065
+ZZ w3 DBGq write-answer queued 13066
+ZZ w1 DBGq write-start 13309
+ZZ w3 DBGq write-answer committed 13314
+ZZ w3 DBGq write-answer committed 13356
+ZZ w3 DBGq drain-start 13435
+ZZ w1 DBGq enqueued 13654
+ZZ w1 DBGq preparing 13654
+ZZ w1 DBGq sent-live 13654
+ZZ w3 DBGq revision 13643
+ZZ w3 DBGq owner 13643
+ZZ w3 DBGq prepared 13643
+ZZ w1 latency 3 222ms
+ZZ w3 DBGq claimed 13698
+ZZ w3 DBGq claimed? true
+ZZ w3 DBGq preparing 13699
+ZZ w3 DBGq sent-replay 13699
+ZZ w0 DBGq write-answer committed 13808
+ZZ w0 DBGq drain-start 13819
+ZZ w3 latency 5 737ms
+  ✓  4 tests/channels-e2e-dbg/zz.spec.ts:75:1 › ZZ-20 online send latency (14.1s)
+ZZ w1 DBGq write-start 13878
+ZZ w1 DBGq enqueued 14178
+ZZ w1 DBGq preparing 14178
+ZZ w1 DBGq sent-live 14178
+ZZ w1 latency 4 372ms
+ZZ w1 DBGq write-start 14374
+ZZ w1 DBGq enqueued 14431
+ZZ w1 DBGq preparing 14431
+ZZ w1 DBGq sent-live 14431
+ZZ w1 latency 5 78ms
+  ✓  3 tests/channels-e2e-dbg/zz.spec.ts:75:1 › ZZ-20 online send latency (14.8s)
+ZZ w0 DBGq revision 14624
+ZZ w0 DBGq owner 14624
+ZZ w0 DBGq prepared 14624
+ZZ w0 DBGq claimed 15105
+ZZ w0 DBGq claimed? false
+ZZ w0 DBGq write-start 16589
+ZZ w0 DBGq enqueued 16998
+ZZ w0 DBGq preparing 16998
+ZZ w0 DBGq sent-live 16999
+ZZ w0 latency 3 535ms
+ZZ w0 DBGq write-start 17236
+ZZ w0 DBGq enqueued 17655
+ZZ w0 DBGq write-answer queued 17655
+ZZ w0 DBGq write-answer committed 18756
+ZZ w0 DBGq drain-start 18770
+ZZ w0 DBGq revision 18974
+ZZ w0 DBGq owner 18974
+ZZ w0 DBGq prepared 18974
+ZZ w0 DBGq claimed 19228
+ZZ w0 DBGq claimed? true
+ZZ w0 DBGq preparing 19228
+ZZ w0 DBGq sent-replay 19228
+ZZ w0 latency 4 2037ms
+ZZ w0 DBGq write-start 19391
+ZZ w0 DBGq write-committed 19530
+ZZ w0 DBGq enqueued 19531
+ZZ w0 DBGq preparing 19531
+ZZ w0 DBGq sent-live 19532
+ZZ w0 latency 5 249ms
+  ✓  1 tests/channels-e2e-dbg/zz.spec.ts:75:1 › ZZ-20 online send latency (20.0s)
+
+  4 passed (34.9s)

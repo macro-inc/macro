@@ -1,0 +1,13 @@
+diff --git a/apps/web/src/features/channel/Input/SendAction.tsx b/apps/web/src/features/channel/Input/SendAction.tsx
+index adab3d5a8c..65d44dc461 100644
+--- a/apps/web/src/features/channel/Input/SendAction.tsx
++++ b/apps/web/src/features/channel/Input/SendAction.tsx
+@@ -39,7 +39,7 @@ export function SendAction(props: SendActionProps) {
+       class={cn('touch:rounded-full', local.class)}
+       onPointerDown={(event) => event.preventDefault()}
+       onMouseDown={(event) => event.preventDefault()}
+-      onClick={() => fireAndForget(commands.send(), 'channel-input')}
++      onClick={() => undefined}
+       {...rest}
+     />
+   );

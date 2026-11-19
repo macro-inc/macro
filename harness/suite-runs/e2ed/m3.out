@@ -1,0 +1,293 @@
+path "/home/teo/.herdr/worktrees/macro/synoet-channels-local-sync-suiteb/apps/web" does not contain a 'flake.nix', searching up
+
+Running 150 tests using 4 workers
+
+DJ CHN-07 w1 r1 ben 167727 ["[observability]","graphql.mutation_queue.skipped",{"auth.state":"signed-in","network.online":false,"graphql.websocket.state":"connected","mutation_queue.pending_items":0,"mutation_queue.oldest_observed_wait_ms":0,"mutation_queue.age_unknown_items":0,"mutation_queue.skip_reason":"recovery-timeout"}]
+  ✓    4 tests/channels-e2e-dbg/channels.spec.ts:247:1 › CHN-07 deleting a channel removes it for its owner at once, and its address no longer opens for anyone (13.8s)
+  ✓    3 tests/channels-e2e-dbg/channels.spec.ts:247:1 › CHN-07 deleting a channel removes it for its owner at once, and its address no longer opens for anyone (14.7s)
+  ✓    1 tests/channels-e2e-dbg/channels.spec.ts:247:1 › CHN-07 deleting a channel removes it for its owner at once, and its address no longer opens for anyone (15.2s)
+  ✓    2 tests/channels-e2e-dbg/channels.spec.ts:247:1 › CHN-07 deleting a channel removes it for its owner at once, and its address no longer opens for anyone (15.8s)
+  ✓    5 tests/channels-e2e-dbg/channels.spec.ts:247:1 › CHN-07 deleting a channel removes it for its owner at once, and its address no longer opens for anyone (12.4s)
+  ✓    6 tests/channels-e2e-dbg/channels.spec.ts:247:1 › CHN-07 deleting a channel removes it for its owner at once, and its address no longer opens for anyone (11.7s)
+  ✓    8 tests/channels-e2e-dbg/channels.spec.ts:247:1 › CHN-07 deleting a channel removes it for its owner at once, and its address no longer opens for anyone (12.0s)
+  ✓    7 tests/channels-e2e-dbg/channels.spec.ts:247:1 › CHN-07 deleting a channel removes it for its owner at once, and its address no longer opens for anyone (12.8s)
+  ✓    9 tests/channels-e2e-dbg/channels.spec.ts:247:1 › CHN-07 deleting a channel removes it for its owner at once, and its address no longer opens for anyone (13.9s)
+  ✓   10 tests/channels-e2e-dbg/channels.spec.ts:247:1 › CHN-07 deleting a channel removes it for its owner at once, and its address no longer opens for anyone (14.0s)
+  ✓   12 tests/channels-e2e-dbg/channels.spec.ts:247:1 › CHN-07 deleting a channel removes it for its owner at once, and its address no longer opens for anyone (13.7s)
+  ✓   11 tests/channels-e2e-dbg/channels.spec.ts:247:1 › CHN-07 deleting a channel removes it for its owner at once, and its address no longer opens for anyone (14.4s)
+  ✓   13 tests/channels-e2e-dbg/channels.spec.ts:247:1 › CHN-07 deleting a channel removes it for its owner at once, and its address no longer opens for anyone (12.9s)
+  ✓   14 tests/channels-e2e-dbg/channels.spec.ts:247:1 › CHN-07 deleting a channel removes it for its owner at once, and its address no longer opens for anyone (13.6s)
+  ✓   15 tests/channels-e2e-dbg/channels.spec.ts:247:1 › CHN-07 deleting a channel removes it for its owner at once, and its address no longer opens for anyone (13.3s)
+  ✓   16 tests/channels-e2e-dbg/channels.spec.ts:247:1 › CHN-07 deleting a channel removes it for its owner at once, and its address no longer opens for anyone (12.8s)
+  ✓   17 tests/channels-e2e-dbg/channels.spec.ts:247:1 › CHN-07 deleting a channel removes it for its owner at once, and its address no longer opens for anyone (14.6s)
+  ✓   18 tests/channels-e2e-dbg/channels.spec.ts:247:1 › CHN-07 deleting a channel removes it for its owner at once, and its address no longer opens for anyone (14.6s)
+  ✓   20 tests/channels-e2e-dbg/channels.spec.ts:247:1 › CHN-07 deleting a channel removes it for its owner at once, and its address no longer opens for anyone (14.6s)
+  ✓   21 tests/channels-e2e-dbg/channels.spec.ts:247:1 › CHN-07 deleting a channel removes it for its owner at once, and its address no longer opens for anyone (12.9s)
+  ✓   22 tests/channels-e2e-dbg/channels.spec.ts:247:1 › CHN-07 deleting a channel removes it for its owner at once, and its address no longer opens for anyone (12.4s)
+  ✓   23 tests/channels-e2e-dbg/channels.spec.ts:247:1 › CHN-07 deleting a channel removes it for its owner at once, and its address no longer opens for anyone (12.0s)
+  ✘   19 tests/channels-e2e-dbg/channels.spec.ts:247:1 › CHN-07 deleting a channel removes it for its owner at once, and its address no longer opens for anyone (26.9s)
+  ✓   24 tests/channels-e2e-dbg/channels.spec.ts:247:1 › CHN-07 deleting a channel removes it for its owner at once, and its address no longer opens for anyone (12.3s)
+  ✓   25 tests/channels-e2e-dbg/channels.spec.ts:247:1 › CHN-07 deleting a channel removes it for its owner at once, and its address no longer opens for anyone (12.2s)
+  ✓   26 tests/channels-e2e-dbg/channels.spec.ts:247:1 › CHN-07 deleting a channel removes it for its owner at once, and its address no longer opens for anyone (12.0s)
+  ✓   27 tests/channels-e2e-dbg/channels.spec.ts:247:1 › CHN-07 deleting a channel removes it for its owner at once, and its address no longer opens for anyone (12.3s)
+  ✓   28 tests/channels-e2e-dbg/channels.spec.ts:247:1 › CHN-07 deleting a channel removes it for its owner at once, and its address no longer opens for anyone (11.8s)
+  ✓   29 tests/channels-e2e-dbg/channels.spec.ts:247:1 › CHN-07 deleting a channel removes it for its owner at once, and its address no longer opens for anyone (11.5s)
+  ✓   30 tests/channels-e2e-dbg/channels.spec.ts:247:1 › CHN-07 deleting a channel removes it for its owner at once, and its address no longer opens for anyone (11.6s)
+  ✓   31 tests/channels-e2e-dbg/channels.spec.ts:247:1 › CHN-07 deleting a channel removes it for its owner at once, and its address no longer opens for anyone (12.1s)
+  ✓   33 tests/channels-e2e-dbg/channels.spec.ts:247:1 › CHN-07 deleting a channel removes it for its owner at once, and its address no longer opens for anyone (11.5s)
+  ✓   34 tests/channels-e2e-dbg/channels.spec.ts:247:1 › CHN-07 deleting a channel removes it for its owner at once, and its address no longer opens for anyone (12.0s)
+  ✓   32 tests/channels-e2e-dbg/channels.spec.ts:247:1 › CHN-07 deleting a channel removes it for its owner at once, and its address no longer opens for anyone (12.9s)
+  ✓   35 tests/channels-e2e-dbg/channels.spec.ts:247:1 › CHN-07 deleting a channel removes it for its owner at once, and its address no longer opens for anyone (12.7s)
+  ✓   36 tests/channels-e2e-dbg/channels.spec.ts:247:1 › CHN-07 deleting a channel removes it for its owner at once, and its address no longer opens for anyone (12.7s)
+  ✓   37 tests/channels-e2e-dbg/channels.spec.ts:247:1 › CHN-07 deleting a channel removes it for its owner at once, and its address no longer opens for anyone (13.3s)
+  ✓   38 tests/channels-e2e-dbg/channels.spec.ts:247:1 › CHN-07 deleting a channel removes it for its owner at once, and its address no longer opens for anyone (12.9s)
+  ✓   39 tests/channels-e2e-dbg/channels.spec.ts:247:1 › CHN-07 deleting a channel removes it for its owner at once, and its address no longer opens for anyone (12.1s)
+  ✓   40 tests/channels-e2e-dbg/channels.spec.ts:247:1 › CHN-07 deleting a channel removes it for its owner at once, and its address no longer opens for anyone (11.9s)
+  ✓   41 tests/channels-e2e-dbg/channels.spec.ts:247:1 › CHN-07 deleting a channel removes it for its owner at once, and its address no longer opens for anyone (12.2s)
+  ✓   42 tests/channels-e2e-dbg/channels.spec.ts:247:1 › CHN-07 deleting a channel removes it for its owner at once, and its address no longer opens for anyone (12.9s)
+  ✓   43 tests/channels-e2e-dbg/channels.spec.ts:247:1 › CHN-07 deleting a channel removes it for its owner at once, and its address no longer opens for anyone (11.9s)
+  ✓   44 tests/channels-e2e-dbg/channels.spec.ts:247:1 › CHN-07 deleting a channel removes it for its owner at once, and its address no longer opens for anyone (12.8s)
+  ✓   45 tests/channels-e2e-dbg/channels.spec.ts:247:1 › CHN-07 deleting a channel removes it for its owner at once, and its address no longer opens for anyone (12.0s)
+  ✓   46 tests/channels-e2e-dbg/channels.spec.ts:247:1 › CHN-07 deleting a channel removes it for its owner at once, and its address no longer opens for anyone (12.6s)
+  ✓   47 tests/channels-e2e-dbg/channels.spec.ts:247:1 › CHN-07 deleting a channel removes it for its owner at once, and its address no longer opens for anyone (12.8s)
+  ✓   48 tests/channels-e2e-dbg/channels.spec.ts:247:1 › CHN-07 deleting a channel removes it for its owner at once, and its address no longer opens for anyone (11.7s)
+  ✓   49 tests/channels-e2e-dbg/channels.spec.ts:247:1 › CHN-07 deleting a channel removes it for its owner at once, and its address no longer opens for anyone (12.1s)
+  ✓   50 tests/channels-e2e-dbg/channels.spec.ts:247:1 › CHN-07 deleting a channel removes it for its owner at once, and its address no longer opens for anyone (11.7s)
+  ✓   51 tests/channels-e2e-dbg/channels.spec.ts:247:1 › CHN-07 deleting a channel removes it for its owner at once, and its address no longer opens for anyone (11.6s)
+  ✓   52 tests/channels-e2e-dbg/channels.spec.ts:247:1 › CHN-07 deleting a channel removes it for its owner at once, and its address no longer opens for anyone (11.4s)
+  ✓   53 tests/channels-e2e-dbg/channels.spec.ts:247:1 › CHN-07 deleting a channel removes it for its owner at once, and its address no longer opens for anyone (11.7s)
+  ✓   54 tests/channels-e2e-dbg/channels.spec.ts:247:1 › CHN-07 deleting a channel removes it for its owner at once, and its address no longer opens for anyone (12.2s)
+  ✓   55 tests/channels-e2e-dbg/channels.spec.ts:247:1 › CHN-07 deleting a channel removes it for its owner at once, and its address no longer opens for anyone (12.2s)
+  ✓   56 tests/channels-e2e-dbg/channels.spec.ts:247:1 › CHN-07 deleting a channel removes it for its owner at once, and its address no longer opens for anyone (12.1s)
+  ✓   57 tests/channels-e2e-dbg/channels.spec.ts:247:1 › CHN-07 deleting a channel removes it for its owner at once, and its address no longer opens for anyone (11.7s)
+  ✓   58 tests/channels-e2e-dbg/channels.spec.ts:247:1 › CHN-07 deleting a channel removes it for its owner at once, and its address no longer opens for anyone (12.7s)
+  ✓   59 tests/channels-e2e-dbg/channels.spec.ts:247:1 › CHN-07 deleting a channel removes it for its owner at once, and its address no longer opens for anyone (12.5s)
+DJ CHN-07 w3 r61 ben 370082 ["[observability]","graphql.mutation_queue.loaded",{"auth.state":"signed-in","network.online":false,"graphql.websocket.state":"connected","mutation_queue.depth":1,"mutation_queue.age_unknown_items":0,"mutation_queue.oldest_item_age_ms":4908}]
+  ✓   60 tests/channels-e2e-dbg/channels.spec.ts:247:1 › CHN-07 deleting a channel removes it for its owner at once, and its address no longer opens for anyone (13.3s)
+DJ CHN-07 w1 r62 ben 370944 ["[observability]","graphql.mutation_queue.loaded",{"auth.state":"signed-in","network.online":false,"graphql.websocket.state":"connected","mutation_queue.depth":1,"mutation_queue.age_unknown_items":0,"mutation_queue.oldest_item_age_ms":4808}]
+  ✓   61 tests/channels-e2e-dbg/channels.spec.ts:247:1 › CHN-07 deleting a channel removes it for its owner at once, and its address no longer opens for anyone (13.3s)
+  ✓   62 tests/channels-e2e-dbg/channels.spec.ts:247:1 › CHN-07 deleting a channel removes it for its owner at once, and its address no longer opens for anyone (13.6s)
+  ✓   63 tests/channels-e2e-dbg/channels.spec.ts:247:1 › CHN-07 deleting a channel removes it for its owner at once, and its address no longer opens for anyone (13.9s)
+  ✓   64 tests/channels-e2e-dbg/channels.spec.ts:247:1 › CHN-07 deleting a channel removes it for its owner at once, and its address no longer opens for anyone (12.1s)
+  ✓   65 tests/channels-e2e-dbg/channels.spec.ts:247:1 › CHN-07 deleting a channel removes it for its owner at once, and its address no longer opens for anyone (12.3s)
+  ✓   66 tests/channels-e2e-dbg/channels.spec.ts:247:1 › CHN-07 deleting a channel removes it for its owner at once, and its address no longer opens for anyone (12.3s)
+  ✓   67 tests/channels-e2e-dbg/channels.spec.ts:247:1 › CHN-07 deleting a channel removes it for its owner at once, and its address no longer opens for anyone (13.2s)
+  ✓   68 tests/channels-e2e-dbg/channels.spec.ts:247:1 › CHN-07 deleting a channel removes it for its owner at once, and its address no longer opens for anyone (12.8s)
+  ✓   69 tests/channels-e2e-dbg/channels.spec.ts:247:1 › CHN-07 deleting a channel removes it for its owner at once, and its address no longer opens for anyone (12.2s)
+  ✓   70 tests/channels-e2e-dbg/channels.spec.ts:247:1 › CHN-07 deleting a channel removes it for its owner at once, and its address no longer opens for anyone (12.0s)
+  ✓   71 tests/channels-e2e-dbg/channels.spec.ts:247:1 › CHN-07 deleting a channel removes it for its owner at once, and its address no longer opens for anyone (12.3s)
+  ✓   72 tests/channels-e2e-dbg/channels.spec.ts:247:1 › CHN-07 deleting a channel removes it for its owner at once, and its address no longer opens for anyone (12.0s)
+  ✓   73 tests/channels-e2e-dbg/channels.spec.ts:247:1 › CHN-07 deleting a channel removes it for its owner at once, and its address no longer opens for anyone (11.9s)
+  ✓   74 tests/channels-e2e-dbg/channels.spec.ts:247:1 › CHN-07 deleting a channel removes it for its owner at once, and its address no longer opens for anyone (12.2s)
+  ✓   75 tests/channels-e2e-dbg/channels.spec.ts:247:1 › CHN-07 deleting a channel removes it for its owner at once, and its address no longer opens for anyone (12.1s)
+  ✓   76 tests/channels-e2e-dbg/channels.spec.ts:247:1 › CHN-07 deleting a channel removes it for its owner at once, and its address no longer opens for anyone (12.6s)
+  ✓   77 tests/channels-e2e-dbg/channels.spec.ts:247:1 › CHN-07 deleting a channel removes it for its owner at once, and its address no longer opens for anyone (12.4s)
+  ✓   78 tests/channels-e2e-dbg/channels.spec.ts:247:1 › CHN-07 deleting a channel removes it for its owner at once, and its address no longer opens for anyone (12.3s)
+  ✓   79 tests/channels-e2e-dbg/channels.spec.ts:247:1 › CHN-07 deleting a channel removes it for its owner at once, and its address no longer opens for anyone (12.2s)
+  ✓   80 tests/channels-e2e-dbg/channels.spec.ts:247:1 › CHN-07 deleting a channel removes it for its owner at once, and its address no longer opens for anyone (11.8s)
+  ✓   81 tests/channels-e2e-dbg/channels.spec.ts:247:1 › CHN-07 deleting a channel removes it for its owner at once, and its address no longer opens for anyone (11.9s)
+  ✓   82 tests/channels-e2e-dbg/channels.spec.ts:247:1 › CHN-07 deleting a channel removes it for its owner at once, and its address no longer opens for anyone (11.4s)
+  ✓   83 tests/channels-e2e-dbg/channels.spec.ts:247:1 › CHN-07 deleting a channel removes it for its owner at once, and its address no longer opens for anyone (12.1s)
+  ✓   85 tests/channels-e2e-dbg/channels.spec.ts:247:1 › CHN-07 deleting a channel removes it for its owner at once, and its address no longer opens for anyone (11.4s)
+  ✓   84 tests/channels-e2e-dbg/channels.spec.ts:247:1 › CHN-07 deleting a channel removes it for its owner at once, and its address no longer opens for anyone (12.7s)
+  ✓   86 tests/channels-e2e-dbg/channels.spec.ts:247:1 › CHN-07 deleting a channel removes it for its owner at once, and its address no longer opens for anyone (12.0s)
+  ✓   87 tests/channels-e2e-dbg/channels.spec.ts:247:1 › CHN-07 deleting a channel removes it for its owner at once, and its address no longer opens for anyone (12.1s)
+  ✓   88 tests/channels-e2e-dbg/channels.spec.ts:247:1 › CHN-07 deleting a channel removes it for its owner at once, and its address no longer opens for anyone (11.3s)
+  ✓   89 tests/channels-e2e-dbg/channels.spec.ts:247:1 › CHN-07 deleting a channel removes it for its owner at once, and its address no longer opens for anyone (11.6s)
+  ✓   91 tests/channels-e2e-dbg/channels.spec.ts:247:1 › CHN-07 deleting a channel removes it for its owner at once, and its address no longer opens for anyone (12.2s)
+  ✓   92 tests/channels-e2e-dbg/channels.spec.ts:247:1 › CHN-07 deleting a channel removes it for its owner at once, and its address no longer opens for anyone (11.3s)
+  ✓   93 tests/channels-e2e-dbg/channels.spec.ts:247:1 › CHN-07 deleting a channel removes it for its owner at once, and its address no longer opens for anyone (11.9s)
+  ✘   90 tests/channels-e2e-dbg/channels.spec.ts:247:1 › CHN-07 deleting a channel removes it for its owner at once, and its address no longer opens for anyone (21.4s)
+  ✓   94 tests/channels-e2e-dbg/channels.spec.ts:247:1 › CHN-07 deleting a channel removes it for its owner at once, and its address no longer opens for anyone (12.1s)
+  ✓   95 tests/channels-e2e-dbg/channels.spec.ts:247:1 › CHN-07 deleting a channel removes it for its owner at once, and its address no longer opens for anyone (11.7s)
+  ✓   96 tests/channels-e2e-dbg/channels.spec.ts:247:1 › CHN-07 deleting a channel removes it for its owner at once, and its address no longer opens for anyone (11.7s)
+  ✓   97 tests/channels-e2e-dbg/channels.spec.ts:247:1 › CHN-07 deleting a channel removes it for its owner at once, and its address no longer opens for anyone (12.5s)
+  ✓   98 tests/channels-e2e-dbg/channels.spec.ts:247:1 › CHN-07 deleting a channel removes it for its owner at once, and its address no longer opens for anyone (12.3s)
+  ✓   99 tests/channels-e2e-dbg/channels.spec.ts:247:1 › CHN-07 deleting a channel removes it for its owner at once, and its address no longer opens for anyone (11.8s)
+  ✓  100 tests/channels-e2e-dbg/channels.spec.ts:247:1 › CHN-07 deleting a channel removes it for its owner at once, and its address no longer opens for anyone (12.6s)
+  ✓  101 tests/channels-e2e-dbg/channels.spec.ts:247:1 › CHN-07 deleting a channel removes it for its owner at once, and its address no longer opens for anyone (12.1s)
+  ✓  102 tests/channels-e2e-dbg/channels.spec.ts:247:1 › CHN-07 deleting a channel removes it for its owner at once, and its address no longer opens for anyone (12.0s)
+  ✓  103 tests/channels-e2e-dbg/channels.spec.ts:247:1 › CHN-07 deleting a channel removes it for its owner at once, and its address no longer opens for anyone (11.9s)
+  ✓  104 tests/channels-e2e-dbg/channels.spec.ts:247:1 › CHN-07 deleting a channel removes it for its owner at once, and its address no longer opens for anyone (11.6s)
+  ✓  105 tests/channels-e2e-dbg/channels.spec.ts:247:1 › CHN-07 deleting a channel removes it for its owner at once, and its address no longer opens for anyone (11.6s)
+  ✓  106 tests/channels-e2e-dbg/channels.spec.ts:247:1 › CHN-07 deleting a channel removes it for its owner at once, and its address no longer opens for anyone (12.3s)
+  ✓  107 tests/channels-e2e-dbg/channels.spec.ts:247:1 › CHN-07 deleting a channel removes it for its owner at once, and its address no longer opens for anyone (12.4s)
+  ✓  108 tests/channels-e2e-dbg/channels.spec.ts:247:1 › CHN-07 deleting a channel removes it for its owner at once, and its address no longer opens for anyone (11.3s)
+  ✓  109 tests/channels-e2e-dbg/channels.spec.ts:247:1 › CHN-07 deleting a channel removes it for its owner at once, and its address no longer opens for anyone (12.2s)
+  ✓  110 tests/channels-e2e-dbg/channels.spec.ts:247:1 › CHN-07 deleting a channel removes it for its owner at once, and its address no longer opens for anyone (12.2s)
+  ✓  111 tests/channels-e2e-dbg/channels.spec.ts:247:1 › CHN-07 deleting a channel removes it for its owner at once, and its address no longer opens for anyone (12.9s)
+  ✓  112 tests/channels-e2e-dbg/channels.spec.ts:247:1 › CHN-07 deleting a channel removes it for its owner at once, and its address no longer opens for anyone (12.1s)
+  ✓  113 tests/channels-e2e-dbg/channels.spec.ts:247:1 › CHN-07 deleting a channel removes it for its owner at once, and its address no longer opens for anyone (11.9s)
+  ✓  114 tests/channels-e2e-dbg/channels.spec.ts:247:1 › CHN-07 deleting a channel removes it for its owner at once, and its address no longer opens for anyone (12.4s)
+  ✓  116 tests/channels-e2e-dbg/channels.spec.ts:247:1 › CHN-07 deleting a channel removes it for its owner at once, and its address no longer opens for anyone (11.6s)
+  ✓  115 tests/channels-e2e-dbg/channels.spec.ts:247:1 › CHN-07 deleting a channel removes it for its owner at once, and its address no longer opens for anyone (12.0s)
+  ✓  117 tests/channels-e2e-dbg/channels.spec.ts:247:1 › CHN-07 deleting a channel removes it for its owner at once, and its address no longer opens for anyone (11.9s)
+  ✓  118 tests/channels-e2e-dbg/channels.spec.ts:247:1 › CHN-07 deleting a channel removes it for its owner at once, and its address no longer opens for anyone (12.6s)
+  ✓  120 tests/channels-e2e-dbg/channels.spec.ts:247:1 › CHN-07 deleting a channel removes it for its owner at once, and its address no longer opens for anyone (12.1s)
+  ✓  119 tests/channels-e2e-dbg/channels.spec.ts:247:1 › CHN-07 deleting a channel removes it for its owner at once, and its address no longer opens for anyone (12.6s)
+  ✓  121 tests/channels-e2e-dbg/channels.spec.ts:247:1 › CHN-07 deleting a channel removes it for its owner at once, and its address no longer opens for anyone (11.6s)
+  ✓  124 tests/channels-e2e-dbg/channels.spec.ts:247:1 › CHN-07 deleting a channel removes it for its owner at once, and its address no longer opens for anyone (11.5s)
+  ✓  123 tests/channels-e2e-dbg/channels.spec.ts:247:1 › CHN-07 deleting a channel removes it for its owner at once, and its address no longer opens for anyone (11.7s)
+  ✓  125 tests/channels-e2e-dbg/channels.spec.ts:247:1 › CHN-07 deleting a channel removes it for its owner at once, and its address no longer opens for anyone (11.5s)
+  ✘  122 tests/channels-e2e-dbg/channels.spec.ts:247:1 › CHN-07 deleting a channel removes it for its owner at once, and its address no longer opens for anyone (24.7s)
+  ✓  127 tests/channels-e2e-dbg/channels.spec.ts:247:1 › CHN-07 deleting a channel removes it for its owner at once, and its address no longer opens for anyone (11.3s)
+  ✓  126 tests/channels-e2e-dbg/channels.spec.ts:247:1 › CHN-07 deleting a channel removes it for its owner at once, and its address no longer opens for anyone (11.7s)
+  ✓  128 tests/channels-e2e-dbg/channels.spec.ts:247:1 › CHN-07 deleting a channel removes it for its owner at once, and its address no longer opens for anyone (11.7s)
+  ✓  129 tests/channels-e2e-dbg/channels.spec.ts:247:1 › CHN-07 deleting a channel removes it for its owner at once, and its address no longer opens for anyone (11.3s)
+  ✓  130 tests/channels-e2e-dbg/channels.spec.ts:247:1 › CHN-07 deleting a channel removes it for its owner at once, and its address no longer opens for anyone (12.2s)
+  ✓  131 tests/channels-e2e-dbg/channels.spec.ts:247:1 › CHN-07 deleting a channel removes it for its owner at once, and its address no longer opens for anyone (12.0s)
+  ✓  132 tests/channels-e2e-dbg/channels.spec.ts:247:1 › CHN-07 deleting a channel removes it for its owner at once, and its address no longer opens for anyone (12.4s)
+  ✓  133 tests/channels-e2e-dbg/channels.spec.ts:247:1 › CHN-07 deleting a channel removes it for its owner at once, and its address no longer opens for anyone (11.7s)
+  ✓  134 tests/channels-e2e-dbg/channels.spec.ts:247:1 › CHN-07 deleting a channel removes it for its owner at once, and its address no longer opens for anyone (11.6s)
+  ✓  135 tests/channels-e2e-dbg/channels.spec.ts:247:1 › CHN-07 deleting a channel removes it for its owner at once, and its address no longer opens for anyone (12.1s)
+  ✓  136 tests/channels-e2e-dbg/channels.spec.ts:247:1 › CHN-07 deleting a channel removes it for its owner at once, and its address no longer opens for anyone (12.1s)
+  ✓  137 tests/channels-e2e-dbg/channels.spec.ts:247:1 › CHN-07 deleting a channel removes it for its owner at once, and its address no longer opens for anyone (12.9s)
+  ✓  138 tests/channels-e2e-dbg/channels.spec.ts:247:1 › CHN-07 deleting a channel removes it for its owner at once, and its address no longer opens for anyone (11.1s)
+  ✓  139 tests/channels-e2e-dbg/channels.spec.ts:247:1 › CHN-07 deleting a channel removes it for its owner at once, and its address no longer opens for anyone (12.3s)
+  ✓  140 tests/channels-e2e-dbg/channels.spec.ts:247:1 › CHN-07 deleting a channel removes it for its owner at once, and its address no longer opens for anyone (11.6s)
+  ✓  141 tests/channels-e2e-dbg/channels.spec.ts:247:1 › CHN-07 deleting a channel removes it for its owner at once, and its address no longer opens for anyone (12.6s)
+  ✓  142 tests/channels-e2e-dbg/channels.spec.ts:247:1 › CHN-07 deleting a channel removes it for its owner at once, and its address no longer opens for anyone (12.2s)
+  ✓  143 tests/channels-e2e-dbg/channels.spec.ts:247:1 › CHN-07 deleting a channel removes it for its owner at once, and its address no longer opens for anyone (11.9s)
+  ✓  144 tests/channels-e2e-dbg/channels.spec.ts:247:1 › CHN-07 deleting a channel removes it for its owner at once, and its address no longer opens for anyone (11.7s)
+  ✓  146 tests/channels-e2e-dbg/channels.spec.ts:247:1 › CHN-07 deleting a channel removes it for its owner at once, and its address no longer opens for anyone (11.6s)
+  ✓  145 tests/channels-e2e-dbg/channels.spec.ts:247:1 › CHN-07 deleting a channel removes it for its owner at once, and its address no longer opens for anyone (12.6s)
+  ✓  147 tests/channels-e2e-dbg/channels.spec.ts:247:1 › CHN-07 deleting a channel removes it for its owner at once, and its address no longer opens for anyone (12.0s)
+  ✓  148 tests/channels-e2e-dbg/channels.spec.ts:247:1 › CHN-07 deleting a channel removes it for its owner at once, and its address no longer opens for anyone (12.2s)
+  ✓  149 tests/channels-e2e-dbg/channels.spec.ts:247:1 › CHN-07 deleting a channel removes it for its owner at once, and its address no longer opens for anyone (11.5s)
+  ✓  150 tests/channels-e2e-dbg/channels.spec.ts:247:1 › CHN-07 deleting a channel removes it for its owner at once, and its address no longer opens for anyone (11.7s)
+
+
+  1) tests/channels-e2e-dbg/channels.spec.ts:247:1 › CHN-07 deleting a channel removes it for its owner at once, and its address no longer opens for anyone 
+
+    Error: expect(locator).toHaveCount(expected) failed
+
+    Locator:  getByRole('tree', { name: 'Conversations' }).locator('[data-key="channel:01a1e5c4-6e0b-7c6f-b4f4-85f3c1010dd8"]')
+    Expected: 0
+    Received: 1
+    Timeout:  15000ms
+
+    Call log:
+      - Expect "toHaveCount" with timeout 15000ms
+      - waiting for getByRole('tree', { name: 'Conversations' }).locator('[data-key="channel:01a1e5c4-6e0b-7c6f-b4f4-85f3c1010dd8"]')
+        33 × locator resolved to 1 element
+           - unexpected value "1"
+
+
+      279 |   ).toBeVisible();
+      280 |   await expect(benPage.getByText('soon gone two')).toHaveCount(0);
+    > 281 |   await expect(sidebarRow(benPage, channel.id)).toHaveCount(0);
+          |                                                 ^
+      282 |   await page.reload();
+      283 |   await expect(
+      284 |     page.getByRole('heading', { name: 'Conversation unavailable' })
+        at /home/teo/.herdr/worktrees/macro/synoet-channels-local-sync-suiteb/apps/web/tests/channels-e2e-dbg/channels.spec.ts:281:49
+
+    attachment #1: screenshot (image/png) ──────────────────────────────────────────────────────────
+    ../../../../../../.cache/channels-perf-b/e2ed/m3/test-results/channels-CHN-07-deleting-a-97616--no-longer-opens-for-anyone-repeat18/test-failed-1.png
+    ────────────────────────────────────────────────────────────────────────────────────────────────
+
+    attachment #2: screenshot (image/png) ──────────────────────────────────────────────────────────
+    ../../../../../../.cache/channels-perf-b/e2ed/m3/test-results/channels-CHN-07-deleting-a-97616--no-longer-opens-for-anyone-repeat18/test-failed-2.png
+    ────────────────────────────────────────────────────────────────────────────────────────────────
+
+    Error Context: ../../../../../../.cache/channels-perf-b/e2ed/m3/test-results/channels-CHN-07-deleting-a-97616--no-longer-opens-for-anyone-repeat18/error-context.md
+
+    attachment #4: trace (application/zip) ─────────────────────────────────────────────────────────
+    ../../../../../../.cache/channels-perf-b/e2ed/m3/test-results/channels-CHN-07-deleting-a-97616--no-longer-opens-for-anyone-repeat18/trace.zip
+    Usage:
+
+        npx playwright show-trace ../../../../../../.cache/channels-perf-b/e2ed/m3/test-results/channels-CHN-07-deleting-a-97616--no-longer-opens-for-anyone-repeat18/trace.zip
+
+    ────────────────────────────────────────────────────────────────────────────────────────────────
+
+  2) tests/channels-e2e-dbg/channels.spec.ts:247:1 › CHN-07 deleting a channel removes it for its owner at once, and its address no longer opens for anyone 
+
+    Error: expect(locator).toHaveCount(expected) failed
+
+    Locator:  locator('[data-input-id="channel-input-01a1e5c7-f8b0-79da-859d-6d98538a15b8"]')
+    Expected: 0
+    Received: 1
+    Timeout:  15000ms
+
+    Call log:
+      - Expect "toHaveCount" with timeout 15000ms
+      - waiting for locator('[data-input-id="channel-input-01a1e5c7-f8b0-79da-859d-6d98538a15b8"]')
+        34 × locator resolved to 1 element
+           - unexpected value "1"
+
+
+      270 |   // The owner: the channel is gone from the list and from the screen.
+      271 |   await expect(sidebarRow(page, channel.id)).toHaveCount(0);
+    > 272 |   await expect(view.composer).toHaveCount(0);
+          |                               ^
+      273 |   await expect(page.getByText('soon gone two')).toHaveCount(0);
+      274 |
+      275 |   // Its address no longer opens it, for either; the member's list drops it.
+        at /home/teo/.herdr/worktrees/macro/synoet-channels-local-sync-suiteb/apps/web/tests/channels-e2e-dbg/channels.spec.ts:272:31
+
+    attachment #1: screenshot (image/png) ──────────────────────────────────────────────────────────
+    ../../../../../../.cache/channels-perf-b/e2ed/m3/test-results/channels-CHN-07-deleting-a-97616--no-longer-opens-for-anyone-repeat89/test-failed-1.png
+    ────────────────────────────────────────────────────────────────────────────────────────────────
+
+    attachment #2: screenshot (image/png) ──────────────────────────────────────────────────────────
+    ../../../../../../.cache/channels-perf-b/e2ed/m3/test-results/channels-CHN-07-deleting-a-97616--no-longer-opens-for-anyone-repeat89/test-failed-2.png
+    ────────────────────────────────────────────────────────────────────────────────────────────────
+
+    Error Context: ../../../../../../.cache/channels-perf-b/e2ed/m3/test-results/channels-CHN-07-deleting-a-97616--no-longer-opens-for-anyone-repeat89/error-context.md
+
+    attachment #4: trace (application/zip) ─────────────────────────────────────────────────────────
+    ../../../../../../.cache/channels-perf-b/e2ed/m3/test-results/channels-CHN-07-deleting-a-97616--no-longer-opens-for-anyone-repeat89/trace.zip
+    Usage:
+
+        npx playwright show-trace ../../../../../../.cache/channels-perf-b/e2ed/m3/test-results/channels-CHN-07-deleting-a-97616--no-longer-opens-for-anyone-repeat89/trace.zip
+
+    ────────────────────────────────────────────────────────────────────────────────────────────────
+
+  3) tests/channels-e2e-dbg/channels.spec.ts:247:1 › CHN-07 deleting a channel removes it for its owner at once, and its address no longer opens for anyone 
+
+    Error: expect(locator).toHaveCount(expected) failed
+
+    Locator:  getByRole('tree', { name: 'Conversations' }).locator('[data-key="channel:01a1e5c9-91fb-778d-8c01-4b715386f6e3"]')
+    Expected: 0
+    Received: 1
+    Timeout:  15000ms
+
+    Call log:
+      - Expect "toHaveCount" with timeout 15000ms
+      - waiting for getByRole('tree', { name: 'Conversations' }).locator('[data-key="channel:01a1e5c9-91fb-778d-8c01-4b715386f6e3"]')
+        34 × locator resolved to 1 element
+           - unexpected value "1"
+
+
+      279 |   ).toBeVisible();
+      280 |   await expect(benPage.getByText('soon gone two')).toHaveCount(0);
+    > 281 |   await expect(sidebarRow(benPage, channel.id)).toHaveCount(0);
+          |                                                 ^
+      282 |   await page.reload();
+      283 |   await expect(
+      284 |     page.getByRole('heading', { name: 'Conversation unavailable' })
+        at /home/teo/.herdr/worktrees/macro/synoet-channels-local-sync-suiteb/apps/web/tests/channels-e2e-dbg/channels.spec.ts:281:49
+
+    attachment #1: screenshot (image/png) ──────────────────────────────────────────────────────────
+    ../../../../../../.cache/channels-perf-b/e2ed/m3/test-results/channels-CHN-07-deleting-a-97616--no-longer-opens-for-anyone-repeat121/test-failed-1.png
+    ────────────────────────────────────────────────────────────────────────────────────────────────
+
+    attachment #2: screenshot (image/png) ──────────────────────────────────────────────────────────
+    ../../../../../../.cache/channels-perf-b/e2ed/m3/test-results/channels-CHN-07-deleting-a-97616--no-longer-opens-for-anyone-repeat121/test-failed-2.png
+    ────────────────────────────────────────────────────────────────────────────────────────────────
+
+    Error Context: ../../../../../../.cache/channels-perf-b/e2ed/m3/test-results/channels-CHN-07-deleting-a-97616--no-longer-opens-for-anyone-repeat121/error-context.md
+
+    attachment #4: trace (application/zip) ─────────────────────────────────────────────────────────
+    ../../../../../../.cache/channels-perf-b/e2ed/m3/test-results/channels-CHN-07-deleting-a-97616--no-longer-opens-for-anyone-repeat121/trace.zip
+    Usage:
+
+        npx playwright show-trace ../../../../../../.cache/channels-perf-b/e2ed/m3/test-results/channels-CHN-07-deleting-a-97616--no-longer-opens-for-anyone-repeat121/trace.zip
+
+    ────────────────────────────────────────────────────────────────────────────────────────────────
+
+  3 failed
+    tests/channels-e2e-dbg/channels.spec.ts:247:1 › CHN-07 deleting a channel removes it for its owner at once, and its address no longer opens for anyone 
+    tests/channels-e2e-dbg/channels.spec.ts:247:1 › CHN-07 deleting a channel removes it for its owner at once, and its address no longer opens for anyone 
+    tests/channels-e2e-dbg/channels.spec.ts:247:1 › CHN-07 deleting a channel removes it for its owner at once, and its address no longer opens for anyone 
+  147 passed (8.5m)

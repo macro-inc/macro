@@ -1,0 +1,251 @@
+── cargo fmt (root workspace)
+── cargo shear (unused dependencies)
+shear/unlinked_files
+
+  ⚠ 1 unlinked file in `agent_harness`
+  │ src/outbound/sidecar_pump.rs
+  help: delete this file
+
+shear/unlinked_files
+
+  ⚠ 1 unlinked file in `ai_tools`
+  │ src/schemas/anthropic_tools.rs
+  help: delete this file
+
+shear/unlinked_files
+
+  ⚠ 1 unlinked file in `ai_toolset`
+  │ src/schema/transform/additional_properties.rs
+  help: delete this file
+
+shear/unlinked_files
+
+  ⚠ 2 unlinked files in `anthropic`
+  │ src/types/request/request.rs
+  │ src/types/request/request_util.rs
+  help: delete these files
+
+shear/unlinked_files
+
+  ⚠ 1 unlinked file in `authentication_service`
+  │ src/fetch_and_checksum.rs
+  help: delete this file
+
+shear/unlinked_files
+
+  ⚠ 1 unlinked file in `cache-core`
+  │ src/people/ranking.rs
+  help: delete this file
+
+shear/redundant_ignore
+
+  ⚠ redundant ignore `maybe_send`
+    ╭─[crates/client/cache-turso/Cargo.toml:42:12]
+ 41 │ # next native release.
+ 42 │ ignored = ["maybe_send"]
+    ·            ──────┬─────
+    ·                  ╰── dependency is used
+    ╰────
+  help: remove from ignored list
+
+shear/empty_files
+
+  ⚠ 1 empty file in `document_storage_service`
+  │ src/model/request/annotations/mod.rs
+  help: delete this file
+
+shear/unlinked_files
+
+  ⚠ 1 unlinked file in `documents`
+  │ src/inbound/toolset/read_metadata/test.rs
+  help: delete this file
+
+shear/unlinked_files
+
+  ⚠ 1 unlinked file in `email_service`
+  │ src/api/email/backfill/create.rs
+  help: delete this file
+
+shear/empty_files
+
+  ⚠ 1 empty file in `fig_engine`
+  │ src/inspect/design/test.rs
+  help: delete this file
+
+shear/unlinked_files
+
+  ⚠ 3 unlinked files in `frecency`
+  │ src/domain/services/aggregate_reader.rs
+  │ src/domain/services/event_aggregator.rs
+  │ src/domain/services/event_writer.rs
+  help: delete these files
+
+shear/empty_files
+
+  ⚠ 1 empty file in `last_online_tracker`
+  │ src/domain/models.rs
+  help: delete this file
+
+shear/unlinked_files
+
+  ⚠ 1 unlinked file in `macro_env_var`
+  │ src/secret_manager.rs
+  help: delete this file
+
+shear/unlinked_files
+
+  ⚠ 1 unlinked file in `model`
+  │ src/channel.rs
+  help: delete this file
+
+shear/empty_files
+
+  ⚠ 2 empty files in `models_email`
+  │ src/email/db/cache.rs
+  │ src/email/db/link.rs
+  help: delete these files
+
+shear/unlinked_files
+
+  ⚠ 1 unlinked file in `notification_db_client`
+  │ src/user_notification/create.rs
+  help: delete this file
+
+shear/empty_files
+
+  ⚠ 1 empty file in `notification_db_client`
+  │ src/notification/create.rs
+  help: delete this file
+
+shear/unlinked_files
+
+  ⚠ 2 unlinked files in `notification_sandbox`
+  │ src/interactive/push_attempt.rs
+  │ src/interactive/real_push_attempt.rs
+  help: delete these files
+
+shear/unlinked_files
+
+  ⚠ 1 unlinked file in `notification_service`
+  │ src/poller_tests.rs
+  help: delete this file
+
+shear/empty_files
+
+  ⚠ 1 empty file in `notification_service`
+  │ src/notification/metadata_utils/mod.rs
+  help: delete this file
+
+shear/empty_files
+
+  ⚠ 1 empty file in `projects`
+  │ src/domain/response.rs
+  help: delete this file
+
+shear/empty_files
+
+  ⚠ 1 empty file in `soup`
+  │ src/outbound/pg_soup_repo/unexpanded/dynamic.rs
+  help: delete this file
+
+shear/unlinked_files
+
+  ⚠ 9 unlinked files in `task_dedup`
+  │ tests/eval/cases/empty_task_embedding.rs
+  │ tests/eval/cases/eval_corpus.rs
+  │ tests/eval/cases/eval_end_to_end.rs
+  │ tests/eval/cases/eval_judge_accuracy.rs
+  │ tests/eval/cases/eval_judge_variance.rs
+  │ tests/eval/cases/eval_recall_at_k.rs
+  │ tests/eval/cases/eval_retrieval_recall.rs
+  │ tests/eval/cases/eval_similarity_rerank_floor.rs
+  │ tests/eval/cases/eval_threshold_sweep.rs
+  help: delete these files
+
+shear/summary
+
+  ⚠ 24 warnings
+
+Advice:
+  ☞ run with `--expand` for more accurate results
+  ☞ to suppress a file issue
+   ╭─[Cargo.toml:2:18]
+ 1 │ [package.metadata.cargo-shear] # or [workspace.metadata.cargo-shear]
+ 2 │ ignored-paths = ["tests/compile/*.rs"]
+   ·                  ──────────┬─────────
+   ·                            ╰── add a file pattern here
+   ╰────
+── biome (changed JS/TS format + lint, same flags as CI)
+src/lib/graphql-cache/generated/entity-resolver-schema.ts format ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+
+  × File content differs from formatting output
+  
+     97  97 │       channelMessage: {
+     98  98 │         targets: ['GraphqlChannelMessage'],
+     99     │ - ······argumentPaths:·[
+    100     │ - ········['channelId'],
+    101     │ - ········['messageId'],
+    102     │ - ······],
+         99 │ + ······argumentPaths:·[['channelId'],·['messageId']],
+    103 100 │       },
+    104 101 │       emailThread: {
+  
+
+Checked 55 files in 1046ms. No fixes applied.
+Found 1 error.
+ci ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+
+  × Some errors were emitted while running checks.
+  
+
+   fix: bun run fix, then re-check
+── oxlint (docs/development/style-guide.md FE-12, FE-13)
+src/lib/graphql-cache/worker/coordinator-protocol.ts:519:8: warning eslint(complexity): function `isCacheRequest` has a complexity of 197. Maximum allowed is 20.
+src/lib/graphql-cache/worker/coordinator-protocol.ts:955:8: warning eslint(complexity): function `validateTabToCoordinatorEnvelope` has a complexity of 37. Maximum allowed is 20.
+src/lib/graphql-cache/worker/coordinator-protocol.ts:1088:8: warning eslint(complexity): function `validateCoordinatorToTabEnvelope` has a complexity of 61. Maximum allowed is 20.
+src/lib/graphql-cache/worker/coordinator-protocol.ts:1389:8: warning eslint(complexity): function `validateEngineToCoordinatorEnvelope` has a complexity of 48. Maximum allowed is 20.
+src/lib/graphql-cache/telemetry.ts:233:1: warning eslint(complexity): function `sanitizeObservation` has a complexity of 37. Maximum allowed is 20.
+src/lib/graphql-cache/telemetry.ts:584:8: warning eslint(complexity): function `classifyCacheError` has a complexity of 25. Maximum allowed is 20.
+src/lib/graphql-cache/host/tauri-host.ts:326:8: warning promise(prefer-await-to-then): Prefer await to then()/catch()/finally() help: Use `await` with `try`/`catch` instead of promise chaining for more readable and maintainable async code.
+src/lib/graphql-cache/host/tauri-host.ts:335:8: warning promise(prefer-await-to-then): Prefer await to then()/catch()/finally() help: Use `await` with `try`/`catch` instead of promise chaining for more readable and maintainable async code.
+src/lib/graphql-cache/host/tauri-host.ts:363:8: warning promise(prefer-await-to-then): Prefer await to then()/catch()/finally() help: Use `await` with `try`/`catch` instead of promise chaining for more readable and maintainable async code.
+src/lib/graphql-cache/host/tauri-host.ts:871:12: warning promise(prefer-await-to-then): Prefer await to then()/catch()/finally() help: Use `await` with `try`/`catch` instead of promise chaining for more readable and maintainable async code.
+src/lib/graphql-cache/host/tauri-host.ts:870:12: warning promise(prefer-await-to-then): Prefer await to then()/catch()/finally() help: Use `await` with `try`/`catch` instead of promise chaining for more readable and maintainable async code.
+src/lib/graphql-cache/host/tauri-host.ts:1113:20: warning promise(prefer-await-to-then): Prefer await to then()/catch()/finally() help: Use `await` with `try`/`catch` instead of promise chaining for more readable and maintainable async code.
+src/lib/queries/messages/local/tests/writes.test.ts:204:7: warning promise(prefer-await-to-then): Prefer await to then()/catch()/finally() help: Use `await` with `try`/`catch` instead of promise chaining for more readable and maintainable async code.
+src/lib/graphql-cache/protocol.ts:1362:8: warning eslint(complexity): function `isCachePush` has a complexity of 34. Maximum allowed is 20.
+src/lib/queries/messages/mutations.ts:548:63: warning promise(prefer-await-to-then): Prefer await to then()/catch()/finally() help: Use `await` with `try`/`catch` instead of promise chaining for more readable and maintainable async code.
+src/lib/graphql-cache/worker/wasm-module.ts:414:25: warning promise(prefer-await-to-then): Prefer await to then()/catch()/finally() help: Use `await` with `try`/`catch` instead of promise chaining for more readable and maintainable async code.
+src/lib/queries/messages/local/pages.ts:363:1: warning eslint(complexity): async function `loadPage` has a complexity of 22. Maximum allowed is 20.
+src/lib/graphql-cache/host/tauri-host.test.ts:1362:10: warning promise(prefer-await-to-then): Prefer await to then()/catch()/finally() help: Use `await` with `try`/`catch` instead of promise chaining for more readable and maintainable async code.
+src/lib/graphql-cache/worker/worker-core.ts:250:22: warning eslint(complexity): async method `handleRequest` has a complexity of 24. Maximum allowed is 20.
+src/lib/graphql-cache/worker/worker-core.ts:481:8: warning promise(prefer-await-to-then): Prefer await to then()/catch()/finally() help: Use `await` with `try`/`catch` instead of promise chaining for more readable and maintainable async code.
+src/lib/graphql-cache/worker/worker-core.ts:469:8: warning promise(prefer-await-to-then): Prefer await to then()/catch()/finally() help: Use `await` with `try`/`catch` instead of promise chaining for more readable and maintainable async code.
+src/lib/graphql-cache/worker/worker-core.ts:924:40: warning eslint(complexity): private async method `refreshQueueDiagnostics` has a complexity of 21. Maximum allowed is 20.
+src/lib/graphql-cache/worker/worker-core.ts:947:8: warning promise(prefer-await-to-then): Prefer await to then()/catch()/finally() help: Use `await` with `try`/`catch` instead of promise chaining for more readable and maintainable async code.
+src/lib/graphql-cache/worker/worker-core.ts:946:8: warning promise(prefer-await-to-then): Prefer await to then()/catch()/finally() help: Use `await` with `try`/`catch` instead of promise chaining for more readable and maintainable async code.
+src/lib/graphql-cache/host/worker-host.ts:320:21: warning eslint(complexity): function has a complexity of 26. Maximum allowed is 20.
+src/lib/graphql-cache/host/worker-host.ts:464:32: warning promise(prefer-await-to-then): Prefer await to then()/catch()/finally() help: Use `await` with `try`/`catch` instead of promise chaining for more readable and maintainable async code.
+src/lib/graphql-cache/host/worker-host.ts:752:10: warning promise(prefer-await-to-then): Prefer await to then()/catch()/finally() help: Use `await` with `try`/`catch` instead of promise chaining for more readable and maintainable async code.
+src/lib/graphql-cache/host/worker-host.ts:812:47: warning promise(prefer-await-to-then): Prefer await to then()/catch()/finally() help: Use `await` with `try`/`catch` instead of promise chaining for more readable and maintainable async code.
+src/lib/graphql-cache/host/worker-host.ts:880:18: warning promise(prefer-await-to-then): Prefer await to then()/catch()/finally() help: Use `await` with `try`/`catch` instead of promise chaining for more readable and maintainable async code.
+src/lib/graphql-cache/host/worker-host.ts:919:50: warning promise(prefer-await-to-then): Prefer await to then()/catch()/finally() help: Use `await` with `try`/`catch` instead of promise chaining for more readable and maintainable async code.
+src/lib/graphql-cache/host/worker-host.ts:1264:29: warning promise(prefer-await-to-then): Prefer await to then()/catch()/finally() help: Use `await` with `try`/`catch` instead of promise chaining for more readable and maintainable async code.
+src/lib/graphql-cache/exchange/mutation-queue-runner.ts:483:3: warning eslint(complexity): async function `routeClaimedAttempt` has a complexity of 32. Maximum allowed is 20.
+src/lib/graphql-cache/exchange/mutation-queue-runner.ts:895:3: warning eslint(complexity): async function `settle` has a complexity of 65. Maximum allowed is 20.
+── GraphQL schema compatibility (docs/guides/add-graphql-field.md step 8)
+    Finished `dev` profile [unoptimized + debuginfo] target(s) in 0.49s
+     Running `target/debug/xtask graphql-schema-compat --base 204d9359afee7b46a568275a0e63fd21f54f4e4b`
+    Finished `dev` profile [unoptimized + debuginfo] target(s) in 0.87s
+     Running `target/debug/xtask_graphql_schema_compat --base 204d9359afee7b46a568275a0e63fd21f54f4e4b`
+static_assets/schema.graphql is compatible with 204d9359afee7b46a568275a0e63fd21f54f4e4b (204d9359afee7b46a568275a0e63fd21f54f4e4b)
+── ast-grep code rules (rule ids map to docs/development/style-guide.md)
+Saved lockfile
+[warn] postinstall script did not run; falling back to runtime binary resolution.
+Enable postinstall to avoid the per-invocation overhead.
+apps/web/src/components/app/AppProviders.tsx:42:8: warning[tsx-no-service-client-outside-queries]: Don't import a service client outside the queries package — wrap the call in a query/mutation under queries/ and import that instead.
+── PII scan (added lines vs merge-base)
+
+FAIL
+error: recipe `check` failed with exit code 1
+EXIT 1

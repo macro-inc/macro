@@ -1,0 +1,196 @@
+<<<<<<< HEAD
+function leasedHead(owner: string) {
+  const op = operation();
+  return {
+    transactionId: '1',
+    uuid: 'left-behind',
+    superseded: false,
+    query: stringifyDocument(op.query),
+    variables: op.variables ?? {},
+    optimisticData: {},
+    leaseOwner: owner,
+    leaseGeneration: '3',
+    leaseExpiresAtMs: Date.now() + 60_000,
+  };
+}
+
+it('releases a lease whose runner is gone and claims the head at once', async () => {
+  const { runner, host } = fixture(
+    {},
+    { hold: async () => {}, isAlive: async (owner) => owner !== 'reloaded' }
+  );
+  let leased = true;
+  host.inspectMutations = async () => (leased ? [leasedHead('reloaded')] : []);
+  const claims = vi.fn(async () => undefined);
+  host.claimNextMutation = claims;
+  vi.mocked(host.deferOptimisticWrite).mockImplementation(async () => {
+    leased = false;
+    return { kind: 'deferred' } as never;
+  });
+
+  runner.start();
+  await vi.advanceTimersByTimeAsync(1);
+
+  expect(host.deferOptimisticWrite).toHaveBeenCalledExactlyOnceWith(
+    '1',
+    { owner: 'reloaded', generation: '3' },
+    expect.any(Number),
+    'Lease owner is gone'
+  );
+  // The pump asks again without waiting for its poll.
+  expect(claims).toHaveBeenCalledTimes(2);
+});
+
+it('waits out a lease when its runner is alive', async () => {
+  const { runner, host } = fixture(
+    {},
+    { hold: async () => {}, isAlive: async () => true }
+  );
+  host.inspectMutations = async () => [leasedHead('other-tab')];
+
+  runner.start();
+  await vi.advanceTimersByTimeAsync(1);
+
+  expect(host.deferOptimisticWrite).not.toHaveBeenCalled();
+});
+
+it('releases a lease this runner holds without sending under it', async () => {
+  // An enqueue claimed the head for this runner and its answer was lost.
+  const { runner, host } = fixture();
+  let leased = true;
+  host.inspectMutations = async () => (leased ? [leasedHead('owner')] : []);
+  const claims = vi.fn(async () => undefined);
+  host.claimNextMutation = claims;
+  vi.mocked(host.deferOptimisticWrite).mockImplementation(async () => {
+    leased = false;
+    return { kind: 'deferred' } as never;
+  });
+
+  runner.start();
+  await vi.advanceTimersByTimeAsync(1);
+
+  expect(host.deferOptimisticWrite).toHaveBeenCalledExactlyOnceWith(
+    '1',
+    { owner: 'owner', generation: '3' },
+    expect.any(Number),
+    'Lease was never routed'
+  );
+  expect(claims).toHaveBeenCalledTimes(2);
+});
+
+it('keeps its own lease while the enqueue that may have taken it is on its way', async () => {
+  const { runner, host } = fixture();
+  let leased = true;
+  host.inspectMutations = async () => (leased ? [leasedHead('owner')] : []);
+  vi.mocked(host.deferOptimisticWrite).mockImplementation(async () => {
+    leased = false;
+    return { kind: 'deferred' } as never;
+  });
+  const enqueueEnded = runner.enqueueStarted();
+
+  runner.start();
+  await vi.advanceTimersByTimeAsync(1);
+  expect(host.deferOptimisticWrite).not.toHaveBeenCalled();
+
+  // The answer never came: the next look at the head releases it.
+  enqueueEnded();
+  runner.wake();
+  await vi.advanceTimersByTimeAsync(1);
+  expect(host.deferOptimisticWrite).toHaveBeenCalledOnce();
+});
+
+it('keeps the lease it is sending under', async () => {
+  const { runner, host, forwarded } = fixture();
+  host.inspectMutations = async () => [leasedHead('owner')];
+  await runner.admit(operation(), enqueue(operation(), '3'), runner.epoch());
+  expect(forwarded).toHaveLength(1);
+
+  runner.wake();
+  await vi.advanceTimersByTimeAsync(1);
+
+  expect(host.deferOptimisticWrite).not.toHaveBeenCalled();
+});
+
+it('claims nothing before its owner is registered as alive', async () => {
+  let register!: () => void;
+  const { runner, host } = fixture(
+    {},
+    {
+      hold: () =>
+        new Promise<void>((resolve) => {
+          register = resolve;
+        }),
+      isAlive: async () => true,
+    }
+  );
+  const claims = vi.fn(async () => undefined);
+  host.claimNextMutation = claims;
+
+  runner.start();
+  await vi.advanceTimersByTimeAsync(1);
+  expect(claims).not.toHaveBeenCalled();
+  expect(runner.ownerRegistration()).toBeDefined();
+
+  register();
+  await vi.advanceTimersByTimeAsync(1);
+  expect(claims).toHaveBeenCalledOnce();
+  expect(runner.ownerRegistration()).toBeUndefined();
+});
+
+it('claims again when a write settles while a lease check is waiting', async () => {
+  const { runner, host, forwarded } = fixture(
+    {},
+    { hold: async () => {}, isAlive: async () => true }
+  );
+  let inspected!: (mutations: never[]) => void;
+  host.inspectMutations = () =>
+    new Promise((resolve) => {
+      inspected = resolve;
+    });
+  const claims = vi.fn(async () => undefined);
+  host.claimNextMutation = claims;
+
+  runner.start();
+  await vi.advanceTimersByTimeAsync(1);
+  expect(claims).toHaveBeenCalledOnce();
+
+  // The head this runner was sending settles before the check answers.
+  await runner.admit(operation(), enqueue(operation(), '2'), runner.epoch());
+  await runner.settle(
+    { operation: forwarded[0], data: savedDraft, stale: false, hasNext: false },
+    queueAttemptOf(forwarded[0])!
+  );
+  await vi.advanceTimersByTimeAsync(1);
+  expect(claims).toHaveBeenCalledOnce();
+
+  inspected([]);
+  await vi.advanceTimersByTimeAsync(1);
+  expect(claims).toHaveBeenCalledTimes(2);
+});
+
+it('keeps the drain a settled write asked for when an empty claim answers', async () => {
+  const { runner, host, forwarded } = fixture();
+  let claimAnswered!: (claimed: undefined) => void;
+  const claims = vi.fn(
+    () =>
+      new Promise<undefined>((resolve) => {
+        claimAnswered = resolve;
+      })
+  );
+  host.claimNextMutation = claims;
+
+  runner.start();
+  await vi.advanceTimersByTimeAsync(1);
+  expect(claims).toHaveBeenCalledOnce();
+
+  // The head this runner was sending settles, and asks for the next drain,
+  // just before the first claim answers that nothing is claimable.
+  await runner.admit(operation(), enqueue(operation(), '2'), runner.epoch());
+  await runner.settle(
+    { operation: forwarded[0], data: savedDraft, stale: false, hasNext: false },
+    queueAttemptOf(forwarded[0])!
+  );
+  claimAnswered(undefined);
+  await vi.advanceTimersByTimeAsync(1);
+  expect(claims).toHaveBeenCalledTimes(2);
+=======

@@ -1,0 +1,14 @@
+scripts/cached-wasm-build.sh cache-wasm /home/teo/.herdr/worktrees/macro/synoet-channels-local-sync-fixstack/apps/web/src/lib/graphql-cache/wasm -- env CARGO_TARGET_DIR="/home/teo/.herdr/worktrees/macro/synoet-channels-local-sync-fixstack/apps/web/../../target/cache-wasm" wasm-pack build /home/teo/.herdr/worktrees/macro/synoet-channels-local-sync-fixstack/apps/web/../../crates/client/cache-wasm --target web --release --out-dir /home/teo/.herdr/worktrees/macro/synoet-channels-local-sync-fixstack/apps/web/src/lib/graphql-cache/wasm
+[INFO]: 🎯  Checking for the Wasm target...
+[INFO]: 🌀  Compiling to Wasm...
+   Compiling cache-core v0.1.0 (/home/teo/.herdr/worktrees/macro/synoet-channels-local-sync-fixstack/crates/client/cache-core)
+   Compiling cache-turso v0.1.0 (/home/teo/.herdr/worktrees/macro/synoet-channels-local-sync-fixstack/crates/client/cache-turso)
+   Compiling soup-filter-cache-adapter v0.1.0 (/home/teo/.herdr/worktrees/macro/synoet-channels-local-sync-fixstack/crates/soup_filter_cache_adapter)
+   Compiling cache-wasm v0.6.54 (/home/teo/.herdr/worktrees/macro/synoet-channels-local-sync-fixstack/crates/client/cache-wasm)
+    Finished `release` profile [optimized] target(s) in 18.71s
+[INFO]: found wasm-opt at "/nix/store/p7j7pwaj6izvwkzqahz3l85lfm19ls95-binaryen-129/bin/wasm-opt"
+[INFO]: Optimizing wasm binaries with `wasm-opt`...
+[INFO]: Optional fields missing from Cargo.toml: 'description', 'repository', and 'license'. These are not necessary, but recommended
+[INFO]: ✨   Done in 29.92s
+[INFO]: 📦   Your wasm pkg is ready to publish at /home/teo/.herdr/worktrees/macro/synoet-channels-local-sync-fixstack/apps/web/src/lib/graphql-cache/wasm.
+[WARN]: ⚠️   There's a newer version of wasm-pack available, the new version is: 0.15.1, you are using: 0.15.0. To update, navigate to: https://wasm-bindgen.github.io/wasm-pack/installer/

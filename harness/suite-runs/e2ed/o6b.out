@@ -1,0 +1,324 @@
+path "/home/teo/.herdr/worktrees/macro/synoet-channels-local-sync-suiteb/apps/web" does not contain a 'flake.nix', searching up
+
+Running 128 tests using 4 workers
+
+  ✓    4 tests/channels-e2e-dbg/offline.spec.ts:76:1 › OFF-02 a channel the device has never held says it cannot load offline, and loads when the connection is back (15.3s)
+  ✓    3 tests/channels-e2e-dbg/offline.spec.ts:103:1 › OFF-03 on a very slow connection a held channel shows at once, and what changed meanwhile shows when the answer arrives (16.1s)
+  ✓    1 tests/channels-e2e-dbg/offline.spec.ts:57:1 › OFF-01 a channel the person has read opens whole with no connection (16.1s)
+DD OFF-07 w0 r0 ben 188490 DBG thread-rest-hold 0226c9
+DD OFF-06 w2 r0 ben 188555 DBG thread-rest-hold 6dc548
+DD OFF-07 w0 r0 ben 188779 DBG thread-read 0226c9 covered=false keys=0 seq=null
+DD OFF-06 w2 r0 ben 188856 DBG thread-read 6dc548 covered=false keys=0 seq=null
+DD OFF-07 w0 r0 ben 189000 DBG thread-server 0226c9 replies=24 committing
+DD OFF-07 w0 r0 ben 189060 DBG thread-commit 0226c9 {"kind":"committed","revision":"25","changed":[],"channelSeq":"25"}
+DD OFF-06 w2 r0 ben 189342 DBG thread-server 6dc548 replies=24 committing
+DD OFF-06 w2 r0 ben 189343 DBG thread-commit 6dc548 {"kind":"committed","revision":"28","changed":[],"channelSeq":"26"}
+DD OFF-06 w2 r0 ben 190031 DBG thread-read 6dc548 covered=true keys=24 seq=26
+DD OFF-06 w2 r0 ben 190089 DBG thread-records 6dc548 root=true replies=24
+DD OFF-04 w3 r0 ben 192852 DBG thread-read c8471d covered=false keys=0 seq=263
+DD OFF-04 w3 r0 ben 192949 DBG thread-server c8471d replies=30 committing
+DD OFF-04 w3 r0 ben 193030 DBG thread-commit c8471d {"kind":"committed","revision":"162","changed":[],"channelSeq":"263"}
+DJ OFF-05 w1 r0 ben 196570 ["[observability]","graphql.mutation_queue.skipped",{"auth.state":"signed-in","network.online":false,"graphql.websocket.state":"connected","mutation_queue.pending_items":1,"mutation_queue.oldest_observed_wait_ms":2607,"mutation_queue.age_unknown_items":0,"mutation_queue.oldest_item_age_ms":2607,"mutation_queue.skip_reason":"recovery-timeout"}]
+DD OFF-06 w2 r0 ben 199218 DBG thread-read 6dc548 covered=true keys=24 seq=26
+DD OFF-06 w2 r0 ben 199221 DBG thread-records 6dc548 root=true replies=24
+  ✓    7 tests/channels-e2e-dbg/offline.spec.ts:218:1 › OFF-07 a long thread never opened, opened with no connection, shows every reply or says that there are more (14.2s)
+  ✓    6 tests/channels-e2e-dbg/offline.spec.ts:187:1 › OFF-06 a thread read while connected shows its replies with no connection, a long one included (14.4s)
+DJ OFF-09 w2 r0 ben 203957 ["[observability]","graphql.mutation_queue.loaded",{"auth.state":"signed-in","network.online":false,"graphql.websocket.state":"connected","mutation_queue.depth":2,"mutation_queue.age_unknown_items":0,"mutation_queue.oldest_item_age_ms":2491}]
+DJ OFF-09 w2 r0 ben 204690 ["[observability]","graphql.mutation_queue.skipped",{"auth.state":"signed-in","network.online":false,"graphql.websocket.state":"connected","mutation_queue.pending_items":0,"mutation_queue.oldest_observed_wait_ms":0,"mutation_queue.age_unknown_items":0,"mutation_queue.skip_reason":"lease-owner-gone"}]
+  ✓    5 tests/channels-e2e-dbg/offline.spec.ts:154:1 › OFF-05 scrolling past the oldest held message with no connection keeps what is held on screen (20.9s)
+  ✓    9 tests/channels-e2e-dbg/offline.spec.ts:275:1 › OFF-09 a channel left as soon as its messages showed opens with no connection (10.2s)
+DJ OFF-10 w1 r0 ben 210432 ["[observability]","graphql.mutation_queue.loaded",{"auth.state":"signed-in","network.online":false,"graphql.websocket.state":"connected","mutation_queue.depth":2,"mutation_queue.age_unknown_items":0,"mutation_queue.oldest_item_age_ms":3252}]
+DJ OFF-10 w1 r0 ben 211007 ["[observability]","graphql.mutation_queue.skipped",{"auth.state":"signed-in","network.online":false,"graphql.websocket.state":"connected","mutation_queue.pending_items":0,"mutation_queue.oldest_observed_wait_ms":0,"mutation_queue.age_unknown_items":0,"mutation_queue.skip_reason":"lease-owner-gone"}]
+  ✓    8 tests/channels-e2e-dbg/offline.spec.ts:257:1 › OFF-08 a team owner opening a held channel with no connection sees the channel (13.0s)
+DD OFF-04 w3 r0 ben 214020 DBG thread-read c8471d covered=true keys=30 seq=263
+DD OFF-04 w3 r0 ben 214025 DBG thread-records c8471d root=true replies=30
+DD OFF-12 w0 r0 page 215073 DBG thread-read a8a035 covered=false keys=0 seq=263
+  ✓    2 tests/channels-e2e-dbg/offline.spec.ts:128:1 › OFF-04 messages read far back in a long channel can be scrolled through again with no connection (46.4s)
+DD OFF-12 w0 r0 page 215791 DBG thread-server a8a035 replies=30 committing
+DD OFF-12 w0 r0 page 215858 DBG thread-commit a8a035 {"kind":"committed","revision":"28","changed":[],"channelSeq":"263"}
+  ✓   10 tests/channels-e2e-dbg/offline.spec.ts:297:1 › OFF-10 a message that arrived while the channel was open is there when the channel opens with no connection (11.0s)
+DD THR-02 w1 r0 ben 221384 DBG thread-read c69a1c covered=false keys=0 seq=4
+  ✓   13 tests/channels-e2e-dbg/threads.spec.ts:6:1 › THR-01 a reply written from “Reply” shows under its message for both people, and after reload (6.4s)
+  ✓   11 tests/channels-e2e-dbg/offline.spec.ts:316:1 › OFF-11 opening a held channel with no connection does not say that a new version is out (12.2s)
+DD THR-02 w1 r0 ben 222018 DBG thread-server c69a1c replies=1 committing
+DD THR-02 w1 r0 ben 222796 DBG thread-commit c69a1c {"kind":"committed","revision":"43","changed":[],"channelSeq":"4"}
+DD THR-02 w1 r0 ben 224891 DBG thread-read c69a1c covered=true keys=4 seq=7
+DD THR-02 w1 r0 ben 224892 DBG thread-read c69a1c covered=true keys=4 seq=7
+DD THR-02 w1 r0 ben 224932 DBG thread-records c69a1c root=true replies=4
+DD THR-02 w1 r0 ben 224932 DBG thread-records c69a1c root=true replies=4
+DD THR-03 w3 r0 page 224978 DBG thread-rest-hold 535457
+  ✓   12 tests/channels-e2e-dbg/offline.spec.ts:337:1 › OFF-12 going back to a link to an old message read while connected shows it between its neighbours with no connection (13.0s)
+DD THR-03 w3 r0 page 225385 DBG thread-read 535457 covered=false keys=0 seq=null
+DD THR-03 w3 r0 page 225547 DBG thread-server 535457 replies=16 committing
+DD THR-03 w3 r0 page 225570 DBG thread-commit 535457 {"kind":"committed","revision":"28","changed":[],"channelSeq":"19"}
+  ✓   15 tests/channels-e2e-dbg/threads.spec.ts:108:1 › THR-03 a long thread shows its first three replies and a count, opens to every reply in order, and closes again (3.9s)
+DD THR-02 w1 r0 ben 226948 DBG thread-rest-hold c69a1c
+DD THR-02 w1 r0 page 227190 DBG thread-rest-hold c69a1c
+DD THR-02 w1 r0 ben 227546 DBG thread-read c69a1c covered=true keys=4 seq=7
+  ✓   14 tests/channels-e2e-dbg/threads.spec.ts:48:1 › THR-02 replies from two people to an old message read in one order for both, and leave the channel’s order alone (11.9s)
+  ✓   16 tests/channels-e2e-dbg/threads.spec.ts:171:1 › THR-04 editing my reply shows the new text and “(edited)” to the other person without reload (7.0s)
+DD THR-07 w1 r0 page 231258 DBG thread-rest-hold d6d3b5
+DD THR-07 w1 r0 page 231855 DBG thread-read d6d3b5 covered=false keys=0 seq=null
+DD THR-08 w2 r0 page 231924 DBG thread-rest-hold 3a5dc8
+  ✓   19 tests/channels-e2e-dbg/threads.spec.ts:302:1 › THR-07 a reply from someone else arrives at the end of an open thread without reload (3.9s)
+DD THR-08 w2 r0 page 232777 DBG thread-read 3a5dc8 covered=false keys=0 seq=null
+DJ THR-06 w3 r0 ben 233031 ["[observability]","graphql.mutation_queue.loaded",{"auth.state":"signed-in","network.online":false,"graphql.websocket.state":"connected","mutation_queue.depth":1,"mutation_queue.age_unknown_items":0,"mutation_queue.oldest_item_age_ms":2775}]
+DD THR-08 w2 r0 page 233120 DBG thread-server 3a5dc8 replies=6 committing
+  ✓   17 tests/channels-e2e-dbg/threads.spec.ts:216:1 › THR-05 deleting my reply removes it for the other person without reload, and leaves the others (8.5s)
+  ✓   18 tests/channels-e2e-dbg/threads.spec.ts:253:1 › THR-06 a reaction to a reply shows on that reply for both people, and counts 2 when both react (8.3s)
+DD THR-08 w2 r0 page 234028 DBG thread-commit 3a5dc8 {"kind":"committed","revision":"32","changed":[],"channelSeq":"7"}
+  ✓   20 tests/channels-e2e-dbg/threads.spec.ts:341:1 › THR-08 a reply from someone else to a closed thread raises its count without reload, and is there when opened (5.2s)
+  ✓   24 tests/channels-e2e-dbg/unread.spec.ts:92:1 › UNR-02 a channel with unread messages opens with “New” above the first of them, and “Mark as read” removes it (3.5s)
+  ✓   21 tests/channels-e2e-dbg/threads.spec.ts:384:1 › THR-09 with replies being written to two messages, each goes to the thread it was written in (8.0s)
+  ✓   23 tests/channels-e2e-dbg/unread.spec.ts:43:1 › UNR-01 a message in a channel I do not have open marks its row unread at once; opening it clears the mark, also after reload (7.4s)
+  ✓   25 tests/channels-e2e-dbg/unread.spec.ts:127:1 › UNR-03 my own messages never mark a channel unread for me (4.3s)
+  ✓   28 tests/channels-e2e-dbg/unread.spec.ts:227:1 › UNR-06 a muted channel shows a crossed bell and is not marked unread by new messages; unmuted, it is again (9.5s)
+  ✘   22 tests/channels-e2e-dbg/threads.spec.ts:440:1 › THR-10 “Reply” on a message puts the keyboard in the reply box, so typing goes there (17.9s)
+  ✓   29 tests/channels-e2e-dbg/unread.spec.ts:281:1 › UNR-07 a member who never opened a channel sees it unread, and opening it shows every message and clears the mark (2.8s)
+  ✓   30 tests/channels-e2e-dbg/unread.spec.ts:320:1 › UNR-08 a channel I am added to appears in my list at once, and opens (3.0s)
+DD UNR-04 w1 ANNOT 261431 Error: expect(locator).toBeVisible() failed |  | Locator: getByRole('button', { name: '1 unread notification stack below' }) | Expected: visible | Timeout: 15000ms | Error: element(s) not found |  | Call log: |   - Expect "toBeVisible" with timeout 15000ms |   - waiting for getByRole('button', { name: '1 unread notification stack below' }) | 
+  ✓   26 tests/channels-e2e-dbg/unread.spec.ts:160:1 › UNR-04 scrolled up in an open channel, a new message shows “1 unread … below”, which leads to it (21.4s)
+  ✘   27 tests/channels-e2e-dbg/unread.spec.ts:196:1 › UNR-05 a mention of me in a channel I do not have open shows a count of mentions on its row (21.3s)
+  ✘   31 tests/channels-e2e-dbg/unread.spec.ts:357:1 › UNR-09 the first message in a new channel marks it unread for the other member (17.6s)
+  ✘   32 tests/channels-e2e-dbg/unread.spec.ts:385:1 › UNR-10 a row found with “Search conversations” is marked unread at once when a message arrives (17.8s)
+  ✓   34 tests/channels-e2e-dbg/offline.spec.ts:76:1 › OFF-02 a channel the device has never held says it cannot load offline, and loads when the connection is back (10.9s)
+  ✓   33 tests/channels-e2e-dbg/offline.spec.ts:57:1 › OFF-01 a channel the person has read opens whole with no connection (12.1s)
+DJ OFF-03 w2 r1 ben 278223 ["[observability]","graphql.mutation_queue.loaded",{"auth.state":"signed-in","network.online":false,"graphql.websocket.state":"connected","mutation_queue.depth":1,"mutation_queue.age_unknown_items":0,"mutation_queue.oldest_item_age_ms":3402}]
+DD OFF-06 w1 r1 ben 278435 DBG thread-rest-hold f22c62
+DD OFF-06 w1 r1 ben 279023 DBG thread-read f22c62 covered=false keys=0 seq=null
+DD OFF-06 w1 r1 ben 279214 DBG thread-server f22c62 replies=24 committing
+DD OFF-06 w1 r1 ben 279237 DBG thread-commit f22c62 {"kind":"committed","revision":"28","changed":[],"channelSeq":"26"}
+DD OFF-06 w1 r1 ben 279626 DBG thread-read f22c62 covered=true keys=24 seq=26
+DD OFF-06 w1 r1 ben 279626 DBG thread-records f22c62 root=true replies=24
+  ✓   35 tests/channels-e2e-dbg/offline.spec.ts:103:1 › OFF-03 on a very slow connection a held channel shows at once, and what changed meanwhile shows when the answer arrives (10.5s)
+DD OFF-07 w2 r1 ben 286427 DBG thread-rest-hold 78c2f1
+DD OFF-07 w2 r1 ben 286782 DBG thread-read 78c2f1 covered=false keys=0 seq=null
+DD OFF-07 w2 r1 ben 286945 DBG thread-server 78c2f1 replies=24 committing
+DD OFF-07 w2 r1 ben 286951 DBG thread-commit 78c2f1 {"kind":"committed","revision":"27","changed":[],"channelSeq":"25"}
+DD OFF-06 w1 r1 ben 288694 DBG thread-read f22c62 covered=true keys=24 seq=26
+DD OFF-06 w1 r1 ben 288697 DBG thread-records f22c62 root=true replies=24
+  ✓   38 tests/channels-e2e-dbg/offline.spec.ts:187:1 › OFF-06 a thread read while connected shows its replies with no connection, a long one included (14.6s)
+DD OFF-04 w0 r1 ben 289777 DBG thread-read a8a035 covered=false keys=0 seq=263
+DD OFF-04 w0 r1 ben 289934 DBG thread-server a8a035 replies=30 committing
+DD OFF-04 w0 r1 ben 289955 DBG thread-commit a8a035 {"kind":"committed","revision":"68","changed":[],"channelSeq":"263"}
+  ✓   37 tests/channels-e2e-dbg/offline.spec.ts:154:1 › OFF-05 scrolling past the oldest held message with no connection keeps what is held on screen (20.7s)
+  ✓   39 tests/channels-e2e-dbg/offline.spec.ts:218:1 › OFF-07 a long thread never opened, opened with no connection, shows every reply or says that there are more (13.1s)
+DJ OFF-09 w3 r1 ben 299908 ["[observability]","graphql.mutation_queue.loaded",{"auth.state":"signed-in","network.online":false,"graphql.websocket.state":"connected","mutation_queue.depth":2,"mutation_queue.age_unknown_items":0,"mutation_queue.oldest_item_age_ms":2996}]
+DJ OFF-09 w3 r1 ben 300854 ["[observability]","graphql.mutation_queue.skipped",{"auth.state":"signed-in","network.online":false,"graphql.websocket.state":"connected","mutation_queue.pending_items":0,"mutation_queue.oldest_observed_wait_ms":0,"mutation_queue.age_unknown_items":0,"mutation_queue.skip_reason":"lease-owner-gone"}]
+  ✓   40 tests/channels-e2e-dbg/offline.spec.ts:257:1 › OFF-08 a team owner opening a held channel with no connection sees the channel (12.2s)
+  ✓   41 tests/channels-e2e-dbg/offline.spec.ts:275:1 › OFF-09 a channel left as soon as its messages showed opens with no connection (12.1s)
+  ✓   42 tests/channels-e2e-dbg/offline.spec.ts:297:1 › OFF-10 a message that arrived while the channel was open is there when the channel opens with no connection (12.6s)
+DD OFF-04 w0 r1 ben 310032 DBG thread-read a8a035 covered=true keys=30 seq=263
+DD OFF-04 w0 r1 ben 310036 DBG thread-records a8a035 root=true replies=30
+DD OFF-12 w3 r1 page 311060 DBG thread-read c8471d covered=false keys=0 seq=263
+DD OFF-12 w3 r1 page 311189 DBG thread-server c8471d replies=30 committing
+DD OFF-12 w3 r1 page 311282 DBG thread-commit c8471d {"kind":"committed","revision":"32","changed":[],"channelSeq":"263"}
+  ✓   36 tests/channels-e2e-dbg/offline.spec.ts:128:1 › OFF-04 messages read far back in a long channel can be scrolled through again with no connection (38.5s)
+DJ OFF-11 w1 r1 ben 312787 ["[observability]","graphql.mutation_queue.retry_scheduled",{"mutation_queue.item_id":"01a1e752-9a12-7663-812e-533bf245120c","mutation_queue.transaction_id":"3","graphql.operation.name":"SendChannelMessage","mutation_queue.attempt_count":1,"mutation_queue.server_failure_count":0,"mutation_queue.outcome":"retry-scheduled","mutation_queue.attempt_ms":7,"mutation_queue.observed_wait_ms":21,"mutation_queue.item_age_ms":21,"mutation_queue.age_known":true,"mutation_queue.failure":"network","mutation_queue.retry_delay_ms":1000,"auth.state":"signed-in","network.online":false,"graphql.websocket.state":"connected","mutation_queue.recovered":false}]
+  ✓   43 tests/channels-e2e-dbg/offline.spec.ts:316:1 › OFF-11 opening a held channel with no connection does not say that a new version is out (11.7s)
+  ✓   45 tests/channels-e2e-dbg/threads.spec.ts:6:1 › THR-01 a reply written from “Reply” shows under its message for both people, and after reload (6.2s)
+DD THR-03 w1 r1 page 316998 DBG thread-read ce17c3 covered=false keys=0 seq=19
+DD THR-03 w1 r1 page 317086 DBG thread-server ce17c3 replies=16 committing
+DD THR-03 w1 r1 page 317096 DBG thread-commit ce17c3 {"kind":"committed","revision":"22","changed":[],"channelSeq":"19"}
+DD THR-02 w0 r1 ben 318044 DBG thread-read 4f41fa covered=false keys=0 seq=4
+DD THR-02 w0 r1 ben 318242 DBG thread-server 4f41fa replies=1 committing
+DD THR-02 w0 r1 ben 318361 DBG thread-commit 4f41fa {"kind":"committed","revision":"46","changed":[],"channelSeq":"4"}
+  ✓   47 tests/channels-e2e-dbg/threads.spec.ts:108:1 › THR-03 a long thread shows its first three replies and a count, opens to every reply in order, and closes again (5.5s)
+  ✓   44 tests/channels-e2e-dbg/offline.spec.ts:337:1 › OFF-12 going back to a link to an old message read while connected shows it between its neighbours with no connection (12.3s)
+  ✓   48 tests/channels-e2e-dbg/threads.spec.ts:171:1 › THR-04 editing my reply shows the new text and “(edited)” to the other person without reload (5.8s)
+DD THR-02 w0 r1 ben 320563 DBG thread-read 4f41fa covered=true keys=4 seq=7
+DD THR-02 w0 r1 ben 320563 DBG thread-read 4f41fa covered=true keys=4 seq=7
+DD THR-02 w0 r1 ben 321079 DBG thread-records 4f41fa root=true replies=4
+DD THR-02 w0 r1 ben 321079 DBG thread-records 4f41fa root=true replies=4
+DD THR-02 w0 r1 ben 323535 DBG thread-rest-hold 4f41fa
+DD THR-07 w2 r1 page 323691 DBG thread-rest-hold ec6867
+DD THR-02 w0 r1 page 323834 DBG thread-rest-hold 4f41fa
+DD THR-07 w2 r1 page 324034 DBG thread-read ec6867 covered=false keys=0 seq=null
+  ✓   51 tests/channels-e2e-dbg/threads.spec.ts:302:1 › THR-07 a reply from someone else arrives at the end of an open thread without reload (3.7s)
+DJ THR-05 w1 r1 ben 324379 ["[observability]","graphql.mutation_queue.loaded",{"auth.state":"signed-in","network.online":false,"graphql.websocket.state":"connected","mutation_queue.depth":1,"mutation_queue.age_unknown_items":0,"mutation_queue.oldest_item_age_ms":3589}]
+  ✓   49 tests/channels-e2e-dbg/threads.spec.ts:216:1 › THR-05 deleting my reply removes it for the other person without reload, and leaves the others (6.2s)
+DD THR-02 w0 r1 ben 324636 DBG thread-read 4f41fa covered=true keys=4 seq=7
+DD THR-02 w0 r1 ben 324841 DBG thread-records 4f41fa root=true replies=4
+DD THR-02 w0 r1 page 325016 DBG thread-read 4f41fa covered=false keys=0 seq=7
+DD THR-02 w0 r1 page 325240 DBG thread-server 4f41fa replies=4 committing
+DD THR-02 w0 r1 page 325588 DBG thread-commit 4f41fa {"kind":"committed","revision":"18","changed":[],"channelSeq":"7"}
+  ✓   50 tests/channels-e2e-dbg/threads.spec.ts:253:1 › THR-06 a reaction to a reply shows on that reply for both people, and counts 2 when both react (6.5s)
+  ✓   46 tests/channels-e2e-dbg/threads.spec.ts:48:1 › THR-02 replies from two people to an old message read in one order for both, and leave the channel’s order alone (14.7s)
+DD THR-08 w2 r1 page 327205 DBG thread-rest-hold ecaf3c
+  ✓   52 tests/channels-e2e-dbg/threads.spec.ts:341:1 › THR-08 a reply from someone else to a closed thread raises its count without reload, and is there when opened (3.5s)
+DJ THR-09 w1 r1 page 329231 ["[observability]","graphql.mutation_queue.skipped",{"auth.state":"signed-in","network.online":false,"graphql.websocket.state":"connected","mutation_queue.pending_items":2,"mutation_queue.oldest_observed_wait_ms":2031,"mutation_queue.age_unknown_items":0,"mutation_queue.oldest_item_age_ms":2031,"mutation_queue.skip_reason":"recovery-timeout"}]
+  ✓   53 tests/channels-e2e-dbg/threads.spec.ts:384:1 › THR-09 with replies being written to two messages, each goes to the thread it was written in (6.0s)
+  ✓   56 tests/channels-e2e-dbg/unread.spec.ts:92:1 › UNR-02 a channel with unread messages opens with “New” above the first of them, and “Mark as read” removes it (3.4s)
+  ✓   55 tests/channels-e2e-dbg/unread.spec.ts:43:1 › UNR-01 a message in a channel I do not have open marks its row unread at once; opening it clears the mark, also after reload (6.5s)
+  ✓   57 tests/channels-e2e-dbg/unread.spec.ts:127:1 › UNR-03 my own messages never mark a channel unread for me (3.0s)
+DD UNR-04 w2 r1 page 336100 DBG thread-read 8eb253 covered=false keys=0 seq=40
+  ✓   58 tests/channels-e2e-dbg/unread.spec.ts:160:1 › UNR-04 scrolled up in an open channel, a new message shows “1 unread … below”, which leads to it (5.1s)
+  ✓   61 tests/channels-e2e-dbg/unread.spec.ts:281:1 › UNR-07 a member who never opened a channel sees it unread, and opening it shows every message and clears the mark (3.5s)
+  ✓   60 tests/channels-e2e-dbg/unread.spec.ts:227:1 › UNR-06 a muted channel shows a crossed bell and is not marked unread by new messages; unmuted, it is again (6.7s)
+  ✓   62 tests/channels-e2e-dbg/unread.spec.ts:320:1 › UNR-08 a channel I am added to appears in my list at once, and opens (3.2s)
+  ✘   54 tests/channels-e2e-dbg/threads.spec.ts:440:1 › THR-10 “Reply” on a message puts the keyboard in the reply box, so typing goes there (17.9s)
+  ✘   59 tests/channels-e2e-dbg/unread.spec.ts:196:1 › UNR-05 a mention of me in a channel I do not have open shows a count of mentions on its row (21.0s)
+  ✓   65 tests/channels-e2e-dbg/offline.spec.ts:57:1 › OFF-01 a channel the person has read opens whole with no connection (11.7s)
+  ✘   63 tests/channels-e2e-dbg/unread.spec.ts:357:1 › UNR-09 the first message in a new channel marks it unread for the other member (17.6s)
+  ✘   64 tests/channels-e2e-dbg/unread.spec.ts:385:1 › UNR-10 a row found with “Search conversations” is marked unread at once when a message arrives (17.5s)
+  ✓   66 tests/channels-e2e-dbg/offline.spec.ts:76:1 › OFF-02 a channel the device has never held says it cannot load offline, and loads when the connection is back (10.7s)
+  ✓   67 tests/channels-e2e-dbg/offline.spec.ts:103:1 › OFF-03 on a very slow connection a held channel shows at once, and what changed meanwhile shows when the answer arrives (9.8s)
+DD OFF-06 w0 r2 ben 368623 DBG thread-rest-hold d01e57
+DD OFF-06 w0 r2 ben 368902 DBG thread-read d01e57 covered=false keys=0 seq=null
+DD OFF-06 w0 r2 ben 369150 DBG thread-server d01e57 replies=24 committing
+DD OFF-07 w3 r2 ben 369249 DBG thread-rest-hold 08984f
+DD OFF-07 w3 r2 ben 369477 DBG thread-read 08984f covered=false keys=0 seq=null
+DD OFF-06 w0 r2 ben 369516 DBG thread-commit d01e57 {"kind":"committed","revision":"28","changed":[],"channelSeq":"26"}
+DD OFF-07 w3 r2 ben 369811 DBG thread-server 08984f replies=24 committing
+DD OFF-07 w3 r2 ben 369862 DBG thread-commit 08984f {"kind":"committed","revision":"25","changed":[],"channelSeq":"25"}
+DD OFF-06 w0 r2 ben 370427 DBG thread-read d01e57 covered=true keys=24 seq=26
+DD OFF-06 w0 r2 ben 370427 DBG thread-records d01e57 root=true replies=24
+DD OFF-04 w1 r2 ben 375004 DBG thread-read 691a94 covered=false keys=0 seq=263
+DD OFF-04 w1 r2 ben 375115 DBG thread-server 691a94 replies=30 committing
+DD OFF-04 w1 r2 ben 375158 DBG thread-commit 691a94 {"kind":"committed","revision":"67","changed":[],"channelSeq":"263"}
+  ✓   71 tests/channels-e2e-dbg/offline.spec.ts:218:1 › OFF-07 a long thread never opened, opened with no connection, shows every reply or says that there are more (12.8s)
+DD OFF-06 w0 r2 ben 378758 DBG thread-read d01e57 covered=true keys=24 seq=26
+DD OFF-06 w0 r2 ben 378760 DBG thread-records d01e57 root=true replies=24
+  ✓   70 tests/channels-e2e-dbg/offline.spec.ts:187:1 › OFF-06 a thread read while connected shows its replies with no connection, a long one included (14.0s)
+  ✓   69 tests/channels-e2e-dbg/offline.spec.ts:154:1 › OFF-05 scrolling past the oldest held message with no connection keeps what is held on screen (20.7s)
+DJ OFF-09 w0 r2 ben 383784 ["[observability]","graphql.mutation_queue.loaded",{"auth.state":"signed-in","network.online":false,"graphql.websocket.state":"connected","mutation_queue.depth":2,"mutation_queue.age_unknown_items":0,"mutation_queue.oldest_item_age_ms":2616}]
+DJ OFF-09 w0 r2 ben 384894 ["[observability]","graphql.mutation_queue.skipped",{"auth.state":"signed-in","network.online":false,"graphql.websocket.state":"connected","mutation_queue.pending_items":0,"mutation_queue.oldest_observed_wait_ms":0,"mutation_queue.age_unknown_items":0,"mutation_queue.skip_reason":"lease-owner-gone"}]
+DJ OFF-10 w2 r2 ben 387574 ["[observability]","graphql.mutation_queue.loaded",{"auth.state":"signed-in","network.online":false,"graphql.websocket.state":"connected","mutation_queue.depth":1,"mutation_queue.age_unknown_items":0,"mutation_queue.oldest_item_age_ms":1936}]
+DJ OFF-10 w2 r2 ben 388103 ["[observability]","graphql.mutation_queue.skipped",{"auth.state":"signed-in","network.online":false,"graphql.websocket.state":"connected","mutation_queue.pending_items":0,"mutation_queue.oldest_observed_wait_ms":0,"mutation_queue.age_unknown_items":0,"mutation_queue.skip_reason":"lease-owner-gone"}]
+  ✓   73 tests/channels-e2e-dbg/offline.spec.ts:275:1 › OFF-09 a channel left as soon as its messages showed opens with no connection (11.8s)
+  ✓   72 tests/channels-e2e-dbg/offline.spec.ts:257:1 › OFF-08 a team owner opening a held channel with no connection sees the channel (12.4s)
+  ✓   74 tests/channels-e2e-dbg/offline.spec.ts:297:1 › OFF-10 a message that arrived while the channel was open is there when the channel opens with no connection (11.4s)
+DD OFF-12 w3 r2 page 393702 DBG thread-rest-hold c8471d
+DD OFF-12 w3 r2 page 394035 DBG thread-read c8471d covered=false keys=0 seq=null
+DD OFF-12 w3 r2 page 394244 DBG thread-server c8471d replies=30 committing
+DD OFF-12 w3 r2 page 394298 DBG thread-commit c8471d {"kind":"committed","revision":"25","changed":[],"channelSeq":"263"}
+DD OFF-04 w1 r2 ben 395270 DBG thread-read 691a94 covered=true keys=30 seq=263
+DD OFF-04 w1 r2 ben 395274 DBG thread-records 691a94 root=true replies=30
+  ✓   68 tests/channels-e2e-dbg/offline.spec.ts:128:1 › OFF-04 messages read far back in a long channel can be scrolled through again with no connection (38.1s)
+  ✓   77 tests/channels-e2e-dbg/threads.spec.ts:6:1 › THR-01 a reply written from “Reply” shows under its message for both people, and after reload (5.6s)
+DD THR-02 w1 r2 ben 401983 DBG thread-read c0ef22 covered=false keys=0 seq=4
+DD THR-02 w1 r2 ben 402113 DBG thread-server c0ef22 replies=1 committing
+DD THR-02 w1 r2 ben 402156 DBG thread-commit c0ef22 {"kind":"committed","revision":"42","changed":[],"channelSeq":"4"}
+DD THR-03 w2 r2 page 402238 DBG thread-rest-hold 1fd455
+DD THR-03 w2 r2 page 402526 DBG thread-read 1fd455 covered=false keys=0 seq=null
+DD THR-03 w2 r2 page 402724 DBG thread-server 1fd455 replies=16 committing
+DD THR-03 w2 r2 page 403087 DBG thread-commit 1fd455 {"kind":"committed","revision":"28","changed":[],"channelSeq":"19"}
+  ✓   79 tests/channels-e2e-dbg/threads.spec.ts:108:1 › THR-03 a long thread shows its first three replies and a count, opens to every reply in order, and closes again (4.4s)
+DD OFF-12 w3 r2 page 403280 DBG thread-read c8471d covered=true keys=30 seq=263
+DD OFF-12 w3 r2 page 403282 DBG thread-records c8471d root=true replies=30
+  ✓   76 tests/channels-e2e-dbg/offline.spec.ts:337:1 › OFF-12 going back to a link to an old message read while connected shows it between its neighbours with no connection (12.3s)
+DJ OFF-11 w0 r2 ben 403410 ["[observability]","graphql.mutation_queue.retry_scheduled",{"mutation_queue.item_id":"01a1e753-fc1a-7dd5-a0f1-b100d9ff5098","mutation_queue.transaction_id":"3","graphql.operation.name":"SendChannelMessage","mutation_queue.attempt_count":1,"mutation_queue.server_failure_count":0,"mutation_queue.outcome":"retry-scheduled","mutation_queue.attempt_ms":7,"mutation_queue.observed_wait_ms":22,"mutation_queue.item_age_ms":22,"mutation_queue.age_known":true,"mutation_queue.failure":"network","mutation_queue.retry_delay_ms":1000,"auth.state":"signed-in","network.online":false,"graphql.websocket.state":"connected","mutation_queue.recovered":false}]
+  ✓   75 tests/channels-e2e-dbg/offline.spec.ts:316:1 › OFF-11 opening a held channel with no connection does not say that a new version is out (12.8s)
+DD THR-02 w1 r2 page 404387 DBG thread-read c0ef22 covered=false keys=0 seq=6
+DD THR-02 w1 r2 page 405740 DBG thread-server c0ef22 replies=3 committing
+DD THR-02 w1 r2 page 407165 DBG thread-commit c0ef22 {"kind":"committed","revision":"62","changed":[],"channelSeq":"6"}
+  ✓   81 tests/channels-e2e-dbg/threads.spec.ts:216:1 › THR-05 deleting my reply removes it for the other person without reload, and leaves the others (6.5s)
+  ✓   80 tests/channels-e2e-dbg/threads.spec.ts:171:1 › THR-04 editing my reply shows the new text and “(edited)” to the other person without reload (7.1s)
+  ✓   82 tests/channels-e2e-dbg/threads.spec.ts:253:1 › THR-06 a reaction to a reply shows on that reply for both people, and counts 2 when both react (7.8s)
+DD THR-07 w3 r2 page 412582 DBG thread-rest-hold 79ce35
+DD THR-07 w3 r2 page 412728 DBG thread-read 79ce35 covered=false keys=0 seq=null
+DD THR-07 w3 r2 page 412911 DBG thread-server 79ce35 replies=5 committing
+DD THR-07 w3 r2 page 412964 DBG thread-commit 79ce35 {"kind":"committed","revision":"25","changed":[],"channelSeq":"7"}
+DD THR-08 w2 r2 page 413005 DBG thread-rest-hold ca3cd2
+  ✓   83 tests/channels-e2e-dbg/threads.spec.ts:302:1 › THR-07 a reply from someone else arrives at the end of an open thread without reload (3.4s)
+  ✓   84 tests/channels-e2e-dbg/threads.spec.ts:341:1 › THR-08 a reply from someone else to a closed thread raises its count without reload, and is there when opened (3.0s)
+  ✓   85 tests/channels-e2e-dbg/threads.spec.ts:384:1 › THR-09 with replies being written to two messages, each goes to the thread it was written in (5.2s)
+  ✓   87 tests/channels-e2e-dbg/unread.spec.ts:43:1 › UNR-01 a message in a channel I do not have open marks its row unread at once; opening it clears the mark, also after reload (5.6s)
+DD THR-02 w1 ANNOT 420154 Error: expect(received).toEqual(expected) // deep equality |  | - Expected  - 1 | + Received  + 0 |  |   Array [ |     "Ada Owner: ada replies first", | -   "Ben Member: ben replies second", |     "Ada Owner: ada replies third", |     "Ben Member: ben replies fourth", |   ] |  | Call Log: | - Timeout 15000ms exceeded while waiting on the predicate
+  ✓   88 tests/channels-e2e-dbg/unread.spec.ts:92:1 › UNR-02 a channel with unread messages opens with “New” above the first of them, and “Mark as read” removes it (3.8s)
+DD THR-02 w1 r2 ben 422037 DBG thread-rest-hold c0ef22
+DD THR-02 w1 r2 page 422272 DBG thread-rest-hold c0ef22
+  ✓   89 tests/channels-e2e-dbg/unread.spec.ts:127:1 › UNR-03 my own messages never mark a channel unread for me (3.6s)
+DD THR-02 w1 r2 ben 422802 DBG thread-read c0ef22 covered=true keys=4 seq=7
+DD THR-02 w1 r2 ben 422896 DBG thread-records c0ef22 root=true replies=4
+DD THR-02 w1 r2 page 423227 DBG thread-read c0ef22 covered=true keys=4 seq=7
+DD THR-02 w1 r2 page 423404 DBG thread-records c0ef22 root=true replies=4
+  ✓   78 tests/channels-e2e-dbg/threads.spec.ts:48:1 › THR-02 replies from two people to an old message read in one order for both, and leave the channel’s order alone (27.6s)
+DD UNR-04 w0 r2 page 424892 DBG thread-read f8b1f6 covered=false keys=0 seq=40
+
+  ✓   93 tests/channels-e2e-dbg/unread.spec.ts:281:1 › UNR-07 a member who never opened a channel sees it unread, and opening it shows every message and clears the mark (3.0s)
+  ✘   86 tests/channels-e2e-dbg/threads.spec.ts:440:1 › THR-10 “Reply” on a message puts the keyboard in the reply box, so typing goes there (17.2s)
+  ✓   92 tests/channels-e2e-dbg/unread.spec.ts:227:1 › UNR-06 a muted channel shows a crossed bell and is not marked unread by new messages; unmuted, it is again (6.3s)
+  ✓   94 tests/channels-e2e-dbg/unread.spec.ts:320:1 › UNR-08 a channel I am added to appears in my list at once, and opens (2.8s)
+  ✘   91 tests/channels-e2e-dbg/unread.spec.ts:196:1 › UNR-05 a mention of me in a channel I do not have open shows a count of mentions on its row (20.1s)
+  ✓   97 tests/channels-e2e-dbg/offline.spec.ts:57:1 › OFF-01 a channel the person has read opens whole with no connection (12.8s)
+  ✘   95 tests/channels-e2e-dbg/unread.spec.ts:357:1 › UNR-09 the first message in a new channel marks it unread for the other member (17.8s)
+  ✘   96 tests/channels-e2e-dbg/unread.spec.ts:385:1 › UNR-10 a row found with “Search conversations” is marked unread at once when a message arrives (17.8s)
+  ✓   98 tests/channels-e2e-dbg/offline.spec.ts:76:1 › OFF-02 a channel the device has never held says it cannot load offline, and loads when the connection is back (10.8s)
+  ✓   99 tests/channels-e2e-dbg/offline.spec.ts:103:1 › OFF-03 on a very slow connection a held channel shows at once, and what changed meanwhile shows when the answer arrives (9.9s)
+DD OFF-06 w2 r3 ben 457512 DBG thread-rest-hold 776423
+DD OFF-07 w0 r3 ben 457703 DBG thread-rest-hold 44d4cc
+DD OFF-06 w2 r3 ben 457879 DBG thread-read 776423 covered=false keys=0 seq=null
+DD OFF-07 w0 r3 ben 458092 DBG thread-read 44d4cc covered=false keys=0 seq=null
+DD OFF-06 w2 r3 ben 458095 DBG thread-server 776423 replies=24 committing
+DD OFF-06 w2 r3 ben 458181 DBG thread-commit 776423 {"kind":"committed","revision":"29","changed":[],"channelSeq":"26"}
+DD OFF-07 w0 r3 ben 458561 DBG thread-server 44d4cc replies=24 committing
+DD OFF-07 w0 r3 ben 458562 DBG thread-commit 44d4cc {"kind":"committed","revision":"27","changed":[],"channelSeq":"25"}
+DD OFF-06 w2 r3 ben 458679 DBG thread-read 776423 covered=true keys=24 seq=26
+DD OFF-06 w2 r3 ben 458679 DBG thread-records 776423 root=true replies=24
+DD OFF-07 w0 r3 ben 459096 DBG thread-read 44d4cc covered=true keys=24 seq=25
+DD OFF-07 w0 r3 ben 459115 DBG thread-records 44d4cc root=true replies=24
+DD OFF-04 w3 r3 ben 465150 DBG thread-read c8471d covered=false keys=0 seq=263
+DD OFF-04 w3 r3 ben 465235 DBG thread-server c8471d replies=30 committing
+DD OFF-04 w3 r3 ben 465243 DBG thread-commit c8471d {"kind":"committed","revision":"68","changed":[],"channelSeq":"263"}
+  ✓  103 tests/channels-e2e-dbg/offline.spec.ts:218:1 › OFF-07 a long thread never opened, opened with no connection, shows every reply or says that there are more (12.5s)
+DD OFF-06 w2 r3 ben 467455 DBG thread-read 776423 covered=true keys=24 seq=26
+DD OFF-06 w2 r3 ben 467457 DBG thread-records 776423 root=true replies=24
+  ✓  102 tests/channels-e2e-dbg/offline.spec.ts:187:1 › OFF-06 a thread read while connected shows its replies with no connection, a long one included (13.7s)
+  ✓  101 tests/channels-e2e-dbg/offline.spec.ts:154:1 › OFF-05 scrolling past the oldest held message with no connection keeps what is held on screen (19.3s)
+DJ OFF-09 w2 r3 ben 472658 ["[observability]","graphql.mutation_queue.loaded",{"auth.state":"signed-in","network.online":false,"graphql.websocket.state":"connected","mutation_queue.depth":2,"mutation_queue.age_unknown_items":0,"mutation_queue.oldest_item_age_ms":3003}]
+DJ OFF-09 w2 r3 ben 473432 ["[observability]","graphql.mutation_queue.skipped",{"auth.state":"signed-in","network.online":false,"graphql.websocket.state":"connected","mutation_queue.pending_items":0,"mutation_queue.oldest_observed_wait_ms":0,"mutation_queue.age_unknown_items":0,"mutation_queue.skip_reason":"lease-owner-gone"}]
+  ✓  104 tests/channels-e2e-dbg/offline.spec.ts:257:1 › OFF-08 a team owner opening a held channel with no connection sees the channel (12.0s)
+  ✓  105 tests/channels-e2e-dbg/offline.spec.ts:275:1 › OFF-09 a channel left as soon as its messages showed opens with no connection (11.5s)
+  ✓  106 tests/channels-e2e-dbg/offline.spec.ts:297:1 › OFF-10 a message that arrived while the channel was open is there when the channel opens with no connection (11.8s)
+  ✓  109 tests/channels-e2e-dbg/threads.spec.ts:6:1 › THR-01 a reply written from “Reply” shows under its message for both people, and after reload (5.5s)
+DD OFF-04 w3 r3 ben 486343 DBG thread-read c8471d covered=true keys=30 seq=263
+DD OFF-04 w3 r3 ben 486346 DBG thread-records c8471d root=true replies=30
+  ✓  100 tests/channels-e2e-dbg/offline.spec.ts:128:1 › OFF-04 messages read far back in a long channel can be scrolled through again with no connection (38.8s)
+DD THR-02 w1 r3 ben 490315 DBG thread-read e89436 covered=false keys=0 seq=4
+DD THR-02 w1 r3 ben 490539 DBG thread-server e89436 replies=1 committing
+DD THR-02 w1 r3 ben 490654 DBG thread-commit e89436 {"kind":"committed","revision":"40","changed":[],"channelSeq":"4"}
+DJ OFF-11 w0 r3 ben 490842 ["[observability]","graphql.mutation_queue.retry_scheduled",{"mutation_queue.item_id":"01a1e755-51a2-7773-b63c-ff591fce37f0","mutation_queue.transaction_id":"3","graphql.operation.name":"SendChannelMessage","mutation_queue.attempt_count":1,"mutation_queue.server_failure_count":0,"mutation_queue.outcome":"retry-scheduled","mutation_queue.attempt_ms":10,"mutation_queue.observed_wait_ms":24,"mutation_queue.item_age_ms":24,"mutation_queue.age_known":true,"mutation_queue.failure":"network","mutation_queue.retry_delay_ms":1000,"auth.state":"signed-in","network.online":false,"graphql.websocket.state":"connected","mutation_queue.recovered":false}]
+  ✓  107 tests/channels-e2e-dbg/offline.spec.ts:316:1 › OFF-11 opening a held channel with no connection does not say that a new version is out (12.1s)
+DD THR-03 w3 r3 page 491019 DBG thread-read f6ad44 covered=false keys=0 seq=null
+DD THR-03 w3 r3 page 491107 DBG thread-server f6ad44 replies=16 committing
+DD THR-03 w3 r3 page 491108 DBG thread-commit f6ad44 {"kind":"committed","revision":"22","changed":[],"channelSeq":"19"}
+  ✓  108 tests/channels-e2e-dbg/offline.spec.ts:337:1 › OFF-12 going back to a link to an old message read while connected shows it between its neighbours with no connection (12.1s)
+  ✓  111 tests/channels-e2e-dbg/threads.spec.ts:108:1 › THR-03 a long thread shows its first three replies and a count, opens to every reply in order, and closes again (4.9s)
+DD THR-02 w1 r3 page 495798 DBG thread-read e89436 covered=false keys=0 seq=7
+DD THR-02 w1 r3 page 495800 DBG thread-read e89436 covered=false keys=0 seq=7
+  ✓  112 tests/channels-e2e-dbg/threads.spec.ts:171:1 › THR-04 editing my reply shows the new text and “(edited)” to the other person without reload (5.6s)
+DD THR-02 w1 r3 page 496605 DBG thread-server e89436 replies=4 committing
+DD THR-02 w1 r3 page 496605 DBG thread-server e89436 replies=4 committing
+  ✓  113 tests/channels-e2e-dbg/threads.spec.ts:216:1 › THR-05 deleting my reply removes it for the other person without reload, and leaves the others (6.1s)
+DD THR-02 w1 r3 page 498003 DBG thread-commit e89436 {"kind":"committed","revision":"67","changed":[],"channelSeq":"7"}
+DD THR-02 w1 r3 page 498283 DBG thread-commit e89436 {"kind":"committed","revision":"68","changed":[],"channelSeq":"7"}
+  ✓  114 tests/channels-e2e-dbg/threads.spec.ts:253:1 › THR-06 a reaction to a reply shows on that reply for both people, and counts 2 when both react (6.0s)
+DD THR-07 w0 r3 page 499408 DBG thread-rest-hold b2b403
+DD THR-07 w0 r3 page 499527 DBG thread-read b2b403 covered=false keys=0 seq=null
+DD THR-07 w0 r3 page 499689 DBG thread-server b2b403 replies=5 committing
+DD THR-07 w0 r3 page 499710 DBG thread-commit b2b403 {"kind":"committed","revision":"27","changed":[],"channelSeq":"7"}
+  ✓  115 tests/channels-e2e-dbg/threads.spec.ts:302:1 › THR-07 a reply from someone else arrives at the end of an open thread without reload (3.4s)
+DD THR-08 w2 r3 page 500037 DBG thread-rest-hold 8fe00f
+  ✓  116 tests/channels-e2e-dbg/threads.spec.ts:341:1 › THR-08 a reply from someone else to a closed thread raises its count without reload, and is there when opened (2.8s)
+  ✓  117 tests/channels-e2e-dbg/threads.spec.ts:384:1 › THR-09 with replies being written to two messages, each goes to the thread it was written in (5.9s)
+  ✓  119 tests/channels-e2e-dbg/unread.spec.ts:43:1 › UNR-01 a message in a channel I do not have open marks its row unread at once; opening it clears the mark, also after reload (5.8s)
+  ✓  120 tests/channels-e2e-dbg/unread.spec.ts:92:1 › UNR-02 a channel with unread messages opens with “New” above the first of them, and “Mark as read” removes it (2.8s)
+DD THR-02 w1 ANNOT 507665 Error: expect(received).toEqual(expected) // deep equality |  | - Expected  - 1 | + Received  + 0 |  |   Array [ |     "Ada Owner: ada replies first", | -   "Ben Member: ben replies second", |     "Ada Owner: ada replies third", |     "Ben Member: ben replies fourth", |   ] |  | Call Log: | - Timeout 15000ms exceeded while waiting on the predicate
+  ✓  121 tests/channels-e2e-dbg/unread.spec.ts:127:1 › UNR-03 my own messages never mark a channel unread for me (3.5s)
+DD THR-02 w1 r3 ben 509570 DBG thread-rest-hold e89436
+DD THR-02 w1 r3 page 509816 DBG thread-rest-hold e89436
+DD THR-02 w1 r3 ben 510196 DBG thread-read e89436 covered=true keys=4 seq=7
+  ✓  110 tests/channels-e2e-dbg/threads.spec.ts:48:1 › THR-02 replies from two people to an old message read in one order for both, and leave the channel’s order alone (24.8s)
+DD UNR-04 w3 r3 page 512379 DBG thread-read dce060 covered=false keys=0 seq=40
+  ✓  122 tests/channels-e2e-dbg/unread.spec.ts:160:1 › UNR-04 scrolled up in an open channel, a new message shows “1 unread … below”, which leads to it (5.2s)
+  ✓  125 tests/channels-e2e-dbg/unread.spec.ts:281:1 › UNR-07 a member who never opened a channel sees it unread, and opening it shows every message and clears the mark (2.6s)
+DJ UNR-06 w1 r3 page 516075 ["[observability]","graphql.mutation_queue.loaded",{"auth.state":"signed-in","network.online":false,"graphql.websocket.state":"connected","mutation_queue.depth":1,"mutation_queue.age_unknown_items":0,"mutation_queue.oldest_item_age_ms":2118}]
+  ✓  124 tests/channels-e2e-dbg/unread.spec.ts:227:1 › UNR-06 a muted channel shows a crossed bell and is not marked unread by new messages; unmuted, it is again (5.9s)
+  ✘  118 tests/channels-e2e-dbg/threads.spec.ts:440:1 › THR-10 “Reply” on a message puts the keyboard in the reply box, so typing goes there (17.2s)
+  ✓  126 tests/channels-e2e-dbg/unread.spec.ts:320:1 › UNR-08 a channel I am added to appears in my list at once, and opens (2.8s)
+  ✘  123 tests/channels-e2e-dbg/unread.spec.ts:196:1 › UNR-05 a mention of me in a channel I do not have open shows a count of mentions on its row (19.8s)
+  ✘  127 tests/channels-e2e-dbg/unread.spec.ts:357:1 › UNR-09 the first message in a new channel marks it unread for the other member (17.3s)
+  ✘  128 tests/channels-e2e-dbg/unread.spec.ts:385:1 › UNR-10 a row found with “Search conversations” is marked unread at once when a message arrives (17.4s)
+
+  128 passed (6.4m)

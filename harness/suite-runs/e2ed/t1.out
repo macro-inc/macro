@@ -1,0 +1,37 @@
+path "/home/teo/.herdr/worktrees/macro/synoet-channels-local-sync-suiteb/apps/web" does not contain a 'flake.nix', searching up
+
+Running 8 tests using 4 workers
+
+DD WRT-04 w3 ben 696628 [observability] graphql.mutation_queue.retry_scheduled {mutation_queue.item_id: 01a1e238-2f7c-7000-8459-2f77ef317704, mutation_queue.transaction_id: 1, graphql.operation.name: SendChannelMessage, mutation_queue.attempt_count: 1, mutation_queue.server_failure_count: 0}
+DD WRT-04 w2 ben 697602 [observability] graphql.mutation_queue.loaded {auth.state: signed-in, network.online: false, graphql.websocket.state: connected, mutation_queue.depth: 2, mutation_queue.age_unknown_items: 0}
+DD WRT-04 w1 ben 697867 [observability] graphql.mutation_queue.loaded {auth.state: signed-in, network.online: false, graphql.websocket.state: connected, mutation_queue.depth: 2, mutation_queue.age_unknown_items: 0}
+DD WRT-04 w0 ben 698028 [observability] graphql.mutation_queue.loaded {auth.state: signed-in, network.online: false, graphql.websocket.state: connected, mutation_queue.depth: 2, mutation_queue.age_unknown_items: 0}
+DD WRT-04 w1 ben 699068 [observability] graphql.mutation_queue.retry_scheduled {mutation_queue.item_id: 01a1e238-2eef-766f-bed7-5e7ffb43d88d, mutation_queue.transaction_id: 1, graphql.operation.name: SendChannelMessage, mutation_queue.attempt_count: 2, mutation_queue.server_failure_count: 0}
+DD WRT-04 w0 ben 699072 [observability] graphql.mutation_queue.retry_scheduled {mutation_queue.item_id: 01a1e238-2e41-7117-87ff-1b6bc019609b, mutation_queue.transaction_id: 1, graphql.operation.name: SendChannelMessage, mutation_queue.attempt_count: 2, mutation_queue.server_failure_count: 0}
+DD WRT-04 w3 ben 700154 [observability] graphql.mutation_queue.loaded {auth.state: signed-in, network.online: false, graphql.websocket.state: connected, mutation_queue.depth: 2, mutation_queue.age_unknown_items: 0}
+DD WRT-04 w3 ben 701262 [observability] graphql.mutation_queue.retry_scheduled {mutation_queue.item_id: 01a1e238-2f7c-7000-8459-2f77ef317704, mutation_queue.transaction_id: 1, graphql.operation.name: SendChannelMessage, mutation_queue.attempt_count: 3, mutation_queue.server_failure_count: 0}
+DD WRT-04 w1 ben 703501 [observability] graphql.mutation_queue.committed_after_failure {mutation_queue.item_id: 01a1e238-2eef-766f-bed7-5e7ffb43d88d, mutation_queue.transaction_id: 1, graphql.operation.name: SendChannelMessage, mutation_queue.attempt_count: 3, mutation_queue.server_failure_count: 0}
+  ✓  3 tests/channels-e2e-dbg/writes.spec.ts:127:1 › WRT-04 messages that could not be sent are still there after a reload and are sent once when the services can be reached (11.3s)
+DD WRT-04 w0 ben 704237 [observability] graphql.mutation_queue.committed_after_failure {mutation_queue.item_id: 01a1e238-2e41-7117-87ff-1b6bc019609b, mutation_queue.transaction_id: 1, graphql.operation.name: SendChannelMessage, mutation_queue.attempt_count: 3, mutation_queue.server_failure_count: 0}
+DD WRT-04 w3 ben 705317 [observability] graphql.mutation_queue.committed_after_failure {mutation_queue.item_id: 01a1e238-2f7c-7000-8459-2f77ef317704, mutation_queue.transaction_id: 1, graphql.operation.name: SendChannelMessage, mutation_queue.attempt_count: 4, mutation_queue.server_failure_count: 0}
+  ✓  1 tests/channels-e2e-dbg/writes.spec.ts:127:1 › WRT-04 messages that could not be sent are still there after a reload and are sent once when the services can be reached (13.0s)
+  ✓  4 tests/channels-e2e-dbg/writes.spec.ts:127:1 › WRT-04 messages that could not be sent are still there after a reload and are sent once when the services can be reached (13.6s)
+DD WRT-04 w1 ben 708894 [observability] graphql.mutation_queue.loaded {auth.state: signed-in, network.online: false, graphql.websocket.state: connected, mutation_queue.depth: 2, mutation_queue.age_unknown_items: 0}
+DD WRT-04 w1 ben 709393 [observability] graphql.mutation_queue.retry_scheduled {mutation_queue.item_id: 01a1e238-5b99-7776-bbb6-5bec094a5d61, mutation_queue.transaction_id: 2, graphql.operation.name: SendChannelMessage, mutation_queue.attempt_count: 1, mutation_queue.server_failure_count: 0}
+DD WRT-04 w0 ben 710047 [observability] graphql.mutation_queue.loaded {auth.state: signed-in, network.online: false, graphql.websocket.state: connected, mutation_queue.depth: 3, mutation_queue.age_unknown_items: 0}
+DD WRT-04 w1 ben 710490 [observability] graphql.mutation_queue.committed_after_failure {mutation_queue.item_id: 01a1e238-5b99-7776-bbb6-5bec094a5d61, mutation_queue.transaction_id: 2, graphql.operation.name: SendChannelMessage, mutation_queue.attempt_count: 2, mutation_queue.server_failure_count: 0}
+DD WRT-04 w3 ben 710669 [observability] graphql.mutation_queue.loaded {auth.state: signed-in, network.online: false, graphql.websocket.state: connected, mutation_queue.depth: 3, mutation_queue.age_unknown_items: 0}
+DD WRT-04 w3 ben 711387 [observability] graphql.mutation_queue.retry_scheduled {mutation_queue.item_id: 01a1e238-647d-7889-8f10-10de61b11a6e, mutation_queue.transaction_id: 2, graphql.operation.name: SendChannelMessage, mutation_queue.attempt_count: 1, mutation_queue.server_failure_count: 0}
+  ✓  5 tests/channels-e2e-dbg/writes.spec.ts:127:1 › WRT-04 messages that could not be sent are still there after a reload and are sent once when the services can be reached (6.9s)
+DD WRT-04 w3 ben 712525 [observability] graphql.mutation_queue.committed_after_failure {mutation_queue.item_id: 01a1e238-647d-7889-8f10-10de61b11a6e, mutation_queue.transaction_id: 2, graphql.operation.name: SendChannelMessage, mutation_queue.attempt_count: 2, mutation_queue.server_failure_count: 0}
+  ✓  7 tests/channels-e2e-dbg/writes.spec.ts:127:1 › WRT-04 messages that could not be sent are still there after a reload and are sent once when the services can be reached (6.6s)
+DD WRT-04 w1 ben 715841 [observability] graphql.mutation_queue.loaded {auth.state: signed-in, network.online: false, graphql.websocket.state: connected, mutation_queue.depth: 3, mutation_queue.age_unknown_items: 0}
+DD WRT-04 w1 ben 717062 [observability] graphql.mutation_queue.retry_scheduled {mutation_queue.item_id: 01a1e238-7857-7667-ba6a-9da243c7cee1, mutation_queue.transaction_id: 2, graphql.operation.name: SendChannelMessage, mutation_queue.attempt_count: 1, mutation_queue.server_failure_count: 0}
+DD WRT-04 w1 ben 720172 [observability] graphql.mutation_queue.committed_after_failure {mutation_queue.item_id: 01a1e238-7857-7667-ba6a-9da243c7cee1, mutation_queue.transaction_id: 2, graphql.operation.name: SendChannelMessage, mutation_queue.attempt_count: 3, mutation_queue.server_failure_count: 0}
+  ✓  8 tests/channels-e2e-dbg/writes.spec.ts:127:1 › WRT-04 messages that could not be sent are still there after a reload and are sent once when the services can be reached (9.2s)
+DD WRT-04 ANNOT 739723 Error: the channel as the services hold it
+  ✓  2 tests/channels-e2e-dbg/writes.spec.ts:127:1 › WRT-04 messages that could not be sent are still there after a reload and are sent once when the services can be reached (47.0s)
+DD WRT-04 ANNOT 750685 Error: the channel as the services hold it
+  ✓  6 tests/channels-e2e-dbg/writes.spec.ts:127:1 › WRT-04 messages that could not be sent are still there after a reload and are sent once when the services can be reached (44.5s)
+
+  8 passed (1.2m)

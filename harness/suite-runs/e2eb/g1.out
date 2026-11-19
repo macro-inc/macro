@@ -1,0 +1,457 @@
+path "/home/teo/.herdr/worktrees/macro/synoet-channels-local-sync-suiteb/apps/web" does not contain a 'flake.nix', searching up
+
+Running 175 tests using 4 workers
+
+  ✓    2 tests/channels-e2e/current.spec.ts:132:1 › SYN-02 an open channel whose connection dropped shows every change made meanwhile once it is back, without a reload (4.4s)
+  ✓    3 tests/channels-e2e/current.spec.ts:153:1 › SYN-03 a channel changed while the person was offline and in another channel is right when they come back to it (5.7s)
+  ✓    1 tests/channels-e2e/current.spec.ts:109:1 › SYN-01 a channel left for another one shows everything that changed meanwhile when the person comes back (6.1s)
+  ✓    4 tests/channels-e2e/current.spec.ts:178:1 › SYN-04 a channel changed while the app was closed is right when the app is opened again (9.1s)
+  ✓    7 tests/channels-e2e/current.spec.ts:276:1 › SYN-08 a person removed from a channel while away is not shown the messages their device kept (6.8s)
+  ✓    8 tests/channels-e2e/current.spec.ts:299:1 › SYN-09 changes made while the page is reloading are all there when it has loaded (4.0s)
+  ✓    5 tests/channels-e2e/current.spec.ts:202:1 › SYN-05 what a device caught up on is what it shows the next time it opens the channel with no connection (9.7s)
+  ✓   11 tests/channels-e2e/offline.spec.ts:71:1 › OFF-02 a channel the device has never held says it cannot load offline, and loads when the connection is back (4.4s)
+  ✓   10 tests/channels-e2e/offline.spec.ts:49:1 › OFF-01 a channel the person has read opens whole with no connection (6.1s)
+  ✓    9 tests/channels-e2e/current.spec.ts:321:1 › SYN-10 a channel stays right through rounds of leaving it, losing the connection and reloading (6.7s)
+  ✓   12 tests/channels-e2e/offline.spec.ts:95:1 › OFF-03 on a very slow connection a held channel shows at once, and what changed meanwhile shows when the answer arrives (9.9s)
+  ✓   14 tests/channels-e2e/offline.spec.ts:147:1 › OFF-05 scrolling past the oldest held message with no connection keeps what is held on screen (12.5s)
+  ✓   15 tests/channels-e2e/offline.spec.ts:180:1 › OFF-06 a thread read while connected shows its replies with no connection, a long one included (8.5s)
+  ✓   16 tests/channels-e2e/offline.spec.ts:215:1 › OFF-07 a long thread never opened, opened with no connection, shows every reply or says that there are more (7.0s)
+  ✓   13 tests/channels-e2e/offline.spec.ts:120:1 › OFF-04 messages read far back in a long channel can be scrolled through again with no connection (21.1s)
+  ✓   17 tests/channels-e2e/offline.spec.ts:257:1 › OFF-08 a team owner opening a held channel with no connection sees the channel (6.3s)
+  ✓   18 tests/channels-e2e/offline.spec.ts:275:1 › OFF-09 a channel left as soon as its messages showed opens with no connection (5.5s)
+  ✓   19 tests/channels-e2e/offline.spec.ts:301:1 › OFF-10 a message that arrived while the channel was open is there when the channel opens with no connection (6.9s)
+  ✓   20 tests/channels-e2e/offline.spec.ts:324:1 › OFF-11 opening a held channel with no connection does not say that a new version is out (7.2s)
+  ✓    6 tests/channels-e2e/current.spec.ts:232:1 › SYN-06 a channel more than a thousand changes behind is right when it is opened again (46.2s)
+  ✓   22 tests/channels-e2e/writes.spec.ts:53:1 › WRT-01 a message sent with no connection shows at once and reaches the other person once when the connection is back (8.1s)
+  ✓   23 tests/channels-e2e/writes.spec.ts:84:1 › WRT-02 an edit, a deletion and a reaction made with no connection show at once and all reach the services (5.4s)
+  ✓   24 tests/channels-e2e/writes.spec.ts:112:1 › WRT-03 several messages sent with no connection arrive once each, in the order they were written (7.6s)
+  ✓   25 tests/channels-e2e/writes.spec.ts:141:1 › WRT-04 messages that could not be sent are still there after a reload and are sent once when the services can be reached (6.3s)
+  ✓   26 tests/channels-e2e/writes.spec.ts:171:1 › WRT-05 a message the services took but whose answer never came back is in the channel once (7.2s)
+  ✓   27 tests/channels-e2e/writes.spec.ts:197:1 › WRT-06 a message edited and reacted to before it could be sent arrives as it was last left (4.2s)
+  ✓   30 tests/channels-e2e/writes.spec.ts:275:1 › WRT-09 a message the services refuse is taken back off the screen and the person is told it failed (4.1s)
+  ✓   29 tests/channels-e2e/writes.spec.ts:253:1 › WRT-08 a reply written with no connection shows in its thread at once and reaches the services (5.1s)
+  ✓   28 tests/channels-e2e/writes.spec.ts:223:1 › WRT-07 a message deleted before it could be sent is not shown to anyone once the connection is back (7.3s)
+  ✓   21 tests/channels-e2e/prewarm.spec.ts:17:1 › PRE-01 an unread channel never opened on this device opens with no connection once the app has been left alone (27.6s)
+  ✓   31 tests/channels-e2e/writes.spec.ts:301:1 › WRT-10 a message still waiting to be sent says that it is not sent yet (7.6s)
+  ✓   32 tests/channels-e2e/writes.spec.ts:323:1 › WRT-11 a waiting message written right after another of the same person says that it is not sent yet (7.7s)
+  ✓   34 tests/channels-e2e/writes.spec.ts:386:1 › WRT-13 two devices of one person, one of them offline, end up showing the same channel as the services hold (8.7s)
+  ✓   36 tests/channels-e2e/current.spec.ts:109:1 › SYN-01 a channel left for another one shows everything that changed meanwhile when the person comes back (4.8s)
+  ✓   35 tests/channels-e2e/writes.spec.ts:436:1 › WRT-14 a message written offline in one window shows in the other window of the same device (7.3s)
+  ✓   37 tests/channels-e2e/current.spec.ts:132:1 › SYN-02 an open channel whose connection dropped shows every change made meanwhile once it is back, without a reload (3.5s)
+  ✓   38 tests/channels-e2e/current.spec.ts:153:1 › SYN-03 a channel changed while the person was offline and in another channel is right when they come back to it (4.3s)
+  ✓   39 tests/channels-e2e/current.spec.ts:178:1 › SYN-04 a channel changed while the app was closed is right when the app is opened again (6.1s)
+  ✓   40 tests/channels-e2e/current.spec.ts:202:1 › SYN-05 what a device caught up on is what it shows the next time it opens the channel with no connection (7.6s)
+  ✓   42 tests/channels-e2e/current.spec.ts:276:1 › SYN-08 a person removed from a channel while away is not shown the messages their device kept (5.3s)
+  ✓   43 tests/channels-e2e/current.spec.ts:299:1 › SYN-09 changes made while the page is reloading are all there when it has loaded (3.8s)
+  ✓   44 tests/channels-e2e/current.spec.ts:321:1 › SYN-10 a channel stays right through rounds of leaving it, losing the connection and reloading (6.5s)
+  ✓   45 tests/channels-e2e/offline.spec.ts:49:1 › OFF-01 a channel the person has read opens whole with no connection (6.7s)
+  ✓   46 tests/channels-e2e/offline.spec.ts:71:1 › OFF-02 a channel the device has never held says it cannot load offline, and loads when the connection is back (4.4s)
+  ✓   47 tests/channels-e2e/offline.spec.ts:95:1 › OFF-03 on a very slow connection a held channel shows at once, and what changed meanwhile shows when the answer arrives (10.5s)
+  ✓   49 tests/channels-e2e/offline.spec.ts:147:1 › OFF-05 scrolling past the oldest held message with no connection keeps what is held on screen (12.2s)
+  ✓   48 tests/channels-e2e/offline.spec.ts:120:1 › OFF-04 messages read far back in a long channel can be scrolled through again with no connection (20.8s)
+  ✓   41 tests/channels-e2e/current.spec.ts:232:1 › SYN-06 a channel more than a thousand changes behind is right when it is opened again (43.0s)
+  ✓   50 tests/channels-e2e/offline.spec.ts:180:1 › OFF-06 a thread read while connected shows its replies with no connection, a long one included (7.4s)
+  ✓   33 tests/channels-e2e/writes.spec.ts:346:1 › WRT-12 a message written offline with the channel open in two windows is sent once and shows in both (1.1m)
+  ✓   51 tests/channels-e2e/offline.spec.ts:215:1 › OFF-07 a long thread never opened, opened with no connection, shows every reply or says that there are more (7.8s)
+  ✓   52 tests/channels-e2e/offline.spec.ts:257:1 › OFF-08 a team owner opening a held channel with no connection sees the channel (6.2s)
+  ✓   53 tests/channels-e2e/offline.spec.ts:275:1 › OFF-09 a channel left as soon as its messages showed opens with no connection (5.3s)
+  ✓   54 tests/channels-e2e/offline.spec.ts:301:1 › OFF-10 a message that arrived while the channel was open is there when the channel opens with no connection (6.2s)
+  ✓   55 tests/channels-e2e/offline.spec.ts:324:1 › OFF-11 opening a held channel with no connection does not say that a new version is out (7.0s)
+  ✓   57 tests/channels-e2e/writes.spec.ts:53:1 › WRT-01 a message sent with no connection shows at once and reaches the other person once when the connection is back (6.0s)
+  ✓   58 tests/channels-e2e/writes.spec.ts:84:1 › WRT-02 an edit, a deletion and a reaction made with no connection show at once and all reach the services (5.3s)
+  ✓   59 tests/channels-e2e/writes.spec.ts:112:1 › WRT-03 several messages sent with no connection arrive once each, in the order they were written (7.7s)
+  ✓   60 tests/channels-e2e/writes.spec.ts:141:1 › WRT-04 messages that could not be sent are still there after a reload and are sent once when the services can be reached (6.3s)
+  ✓   62 tests/channels-e2e/writes.spec.ts:197:1 › WRT-06 a message edited and reacted to before it could be sent arrives as it was last left (4.2s)
+  ✓   61 tests/channels-e2e/writes.spec.ts:171:1 › WRT-05 a message the services took but whose answer never came back is in the channel once (8.1s)
+  ✓   64 tests/channels-e2e/writes.spec.ts:253:1 › WRT-08 a reply written with no connection shows in its thread at once and reaches the services (3.1s)
+  ✓   63 tests/channels-e2e/writes.spec.ts:223:1 › WRT-07 a message deleted before it could be sent is not shown to anyone once the connection is back (6.4s)
+  ✓   65 tests/channels-e2e/writes.spec.ts:275:1 › WRT-09 a message the services refuse is taken back off the screen and the person is told it failed (4.9s)
+  ✓   56 tests/channels-e2e/prewarm.spec.ts:17:1 › PRE-01 an unread channel never opened on this device opens with no connection once the app has been left alone (27.7s)
+  ✓   66 tests/channels-e2e/writes.spec.ts:301:1 › WRT-10 a message still waiting to be sent says that it is not sent yet (7.7s)
+  ✓   67 tests/channels-e2e/writes.spec.ts:323:1 › WRT-11 a waiting message written right after another of the same person says that it is not sent yet (7.9s)
+  ✓   71 tests/channels-e2e/current.spec.ts:109:1 › SYN-01 a channel left for another one shows everything that changed meanwhile when the person comes back (4.9s)
+  ✓   70 tests/channels-e2e/writes.spec.ts:436:1 › WRT-14 a message written offline in one window shows in the other window of the same device (7.8s)
+  ✓   72 tests/channels-e2e/current.spec.ts:132:1 › SYN-02 an open channel whose connection dropped shows every change made meanwhile once it is back, without a reload (3.3s)
+  ✓   73 tests/channels-e2e/current.spec.ts:153:1 › SYN-03 a channel changed while the person was offline and in another channel is right when they come back to it (4.8s)
+  ✓   74 tests/channels-e2e/current.spec.ts:178:1 › SYN-04 a channel changed while the app was closed is right when the app is opened again (6.7s)
+  ✓   75 tests/channels-e2e/current.spec.ts:202:1 › SYN-05 what a device caught up on is what it shows the next time it opens the channel with no connection (7.4s)
+  ✓   77 tests/channels-e2e/current.spec.ts:276:1 › SYN-08 a person removed from a channel while away is not shown the messages their device kept (5.1s)
+  ✓   78 tests/channels-e2e/current.spec.ts:299:1 › SYN-09 changes made while the page is reloading are all there when it has loaded (3.6s)
+  ✓   79 tests/channels-e2e/current.spec.ts:321:1 › SYN-10 a channel stays right through rounds of leaving it, losing the connection and reloading (6.6s)
+  ✓   80 tests/channels-e2e/offline.spec.ts:49:1 › OFF-01 a channel the person has read opens whole with no connection (6.0s)
+  ✓   81 tests/channels-e2e/offline.spec.ts:71:1 › OFF-02 a channel the device has never held says it cannot load offline, and loads when the connection is back (4.5s)
+  ✓   82 tests/channels-e2e/offline.spec.ts:95:1 › OFF-03 on a very slow connection a held channel shows at once, and what changed meanwhile shows when the answer arrives (9.7s)
+  ✓   76 tests/channels-e2e/current.spec.ts:232:1 › SYN-06 a channel more than a thousand changes behind is right when it is opened again (42.4s)
+  ✓   68 tests/channels-e2e/writes.spec.ts:346:1 › WRT-12 a message written offline with the channel open in two windows is sent once and shows in both (1.1m)
+  ✓   69 tests/channels-e2e/writes.spec.ts:386:1 › WRT-13 two devices of one person, one of them offline, end up showing the same channel as the services hold (1.1m)
+  ✓   85 tests/channels-e2e/offline.spec.ts:180:1 › OFF-06 a thread read while connected shows its replies with no connection, a long one included (8.4s)
+  ✓   86 tests/channels-e2e/offline.spec.ts:215:1 › OFF-07 a long thread never opened, opened with no connection, shows every reply or says that there are more (6.9s)
+  ✓   84 tests/channels-e2e/offline.spec.ts:147:1 › OFF-05 scrolling past the oldest held message with no connection keeps what is held on screen (12.2s)
+  ✓   87 tests/channels-e2e/offline.spec.ts:257:1 › OFF-08 a team owner opening a held channel with no connection sees the channel (6.2s)
+  ✓   88 tests/channels-e2e/offline.spec.ts:275:1 › OFF-09 a channel left as soon as its messages showed opens with no connection (5.3s)
+  ✓   83 tests/channels-e2e/offline.spec.ts:120:1 › OFF-04 messages read far back in a long channel can be scrolled through again with no connection (20.3s)
+  ✓   89 tests/channels-e2e/offline.spec.ts:301:1 › OFF-10 a message that arrived while the channel was open is there when the channel opens with no connection (7.3s)
+  ✓   90 tests/channels-e2e/offline.spec.ts:324:1 › OFF-11 opening a held channel with no connection does not say that a new version is out (7.1s)
+  ✓   93 tests/channels-e2e/writes.spec.ts:84:1 › WRT-02 an edit, a deletion and a reaction made with no connection show at once and all reach the services (5.4s)
+  ✓   92 tests/channels-e2e/writes.spec.ts:53:1 › WRT-01 a message sent with no connection shows at once and reaches the other person once when the connection is back (7.7s)
+  ✓   94 tests/channels-e2e/writes.spec.ts:112:1 › WRT-03 several messages sent with no connection arrive once each, in the order they were written (6.6s)
+  ✓   95 tests/channels-e2e/writes.spec.ts:141:1 › WRT-04 messages that could not be sent are still there after a reload and are sent once when the services can be reached (5.3s)
+  ✓   96 tests/channels-e2e/writes.spec.ts:171:1 › WRT-05 a message the services took but whose answer never came back is in the channel once (8.5s)
+  ✓   97 tests/channels-e2e/writes.spec.ts:197:1 › WRT-06 a message edited and reacted to before it could be sent arrives as it was last left (5.1s)
+  ✓   98 tests/channels-e2e/writes.spec.ts:223:1 › WRT-07 a message deleted before it could be sent is not shown to anyone once the connection is back (7.6s)
+  ✓  100 tests/channels-e2e/writes.spec.ts:275:1 › WRT-09 a message the services refuse is taken back off the screen and the person is told it failed (4.0s)
+  ✓   99 tests/channels-e2e/writes.spec.ts:253:1 › WRT-08 a reply written with no connection shows in its thread at once and reaches the services (5.0s)
+  ✓   91 tests/channels-e2e/prewarm.spec.ts:17:1 › PRE-01 an unread channel never opened on this device opens with no connection once the app has been left alone (27.6s)
+  ✓  101 tests/channels-e2e/writes.spec.ts:301:1 › WRT-10 a message still waiting to be sent says that it is not sent yet (7.5s)
+  ✓  103 tests/channels-e2e/writes.spec.ts:346:1 › WRT-12 a message written offline with the channel open in two windows is sent once and shows in both (6.4s)
+  ✓  102 tests/channels-e2e/writes.spec.ts:323:1 › WRT-11 a waiting message written right after another of the same person says that it is not sent yet (7.7s)
+  ✓  107 tests/channels-e2e/current.spec.ts:132:1 › SYN-02 an open channel whose connection dropped shows every change made meanwhile once it is back, without a reload (3.6s)
+  ✓  104 tests/channels-e2e/writes.spec.ts:386:1 › WRT-13 two devices of one person, one of them offline, end up showing the same channel as the services hold (6.8s)
+  ✓  106 tests/channels-e2e/current.spec.ts:109:1 › SYN-01 a channel left for another one shows everything that changed meanwhile when the person comes back (5.6s)
+  ✓  105 tests/channels-e2e/writes.spec.ts:436:1 › WRT-14 a message written offline in one window shows in the other window of the same device (8.0s)
+  ✓  108 tests/channels-e2e/current.spec.ts:153:1 › SYN-03 a channel changed while the person was offline and in another channel is right when they come back to it (4.6s)
+  ✓  109 tests/channels-e2e/current.spec.ts:178:1 › SYN-04 a channel changed while the app was closed is right when the app is opened again (6.4s)
+  ✓  110 tests/channels-e2e/current.spec.ts:202:1 › SYN-05 what a device caught up on is what it shows the next time it opens the channel with no connection (7.8s)
+  ✓  112 tests/channels-e2e/current.spec.ts:276:1 › SYN-08 a person removed from a channel while away is not shown the messages their device kept (5.5s)
+  ✓  113 tests/channels-e2e/current.spec.ts:299:1 › SYN-09 changes made while the page is reloading are all there when it has loaded (3.8s)
+  ✓  114 tests/channels-e2e/current.spec.ts:321:1 › SYN-10 a channel stays right through rounds of leaving it, losing the connection and reloading (6.6s)
+  ✓  116 tests/channels-e2e/offline.spec.ts:71:1 › OFF-02 a channel the device has never held says it cannot load offline, and loads when the connection is back (4.6s)
+  ✓  115 tests/channels-e2e/offline.spec.ts:49:1 › OFF-01 a channel the person has read opens whole with no connection (6.2s)
+  ✓  117 tests/channels-e2e/offline.spec.ts:95:1 › OFF-03 on a very slow connection a held channel shows at once, and what changed meanwhile shows when the answer arrives (10.9s)
+  ✓  119 tests/channels-e2e/offline.spec.ts:147:1 › OFF-05 scrolling past the oldest held message with no connection keeps what is held on screen (14.4s)
+  ✓  120 tests/channels-e2e/offline.spec.ts:180:1 › OFF-06 a thread read while connected shows its replies with no connection, a long one included (8.1s)
+  ✓  118 tests/channels-e2e/offline.spec.ts:120:1 › OFF-04 messages read far back in a long channel can be scrolled through again with no connection (20.7s)
+  ✓  121 tests/channels-e2e/offline.spec.ts:215:1 › OFF-07 a long thread never opened, opened with no connection, shows every reply or says that there are more (6.9s)
+  ✓  122 tests/channels-e2e/offline.spec.ts:257:1 › OFF-08 a team owner opening a held channel with no connection sees the channel (6.3s)
+  ✓  123 tests/channels-e2e/offline.spec.ts:275:1 › OFF-09 a channel left as soon as its messages showed opens with no connection (5.4s)
+  ✓  124 tests/channels-e2e/offline.spec.ts:301:1 › OFF-10 a message that arrived while the channel was open is there when the channel opens with no connection (7.2s)
+  ✓  125 tests/channels-e2e/offline.spec.ts:324:1 › OFF-11 opening a held channel with no connection does not say that a new version is out (7.2s)
+  ✓  111 tests/channels-e2e/current.spec.ts:232:1 › SYN-06 a channel more than a thousand changes behind is right when it is opened again (44.4s)
+  ✓  128 tests/channels-e2e/writes.spec.ts:84:1 › WRT-02 an edit, a deletion and a reaction made with no connection show at once and all reach the services (4.3s)
+  ✓  127 tests/channels-e2e/writes.spec.ts:53:1 › WRT-01 a message sent with no connection shows at once and reaches the other person once when the connection is back (7.8s)
+  ✓  129 tests/channels-e2e/writes.spec.ts:112:1 › WRT-03 several messages sent with no connection arrive once each, in the order they were written (7.6s)
+  ✓  130 tests/channels-e2e/writes.spec.ts:141:1 › WRT-04 messages that could not be sent are still there after a reload and are sent once when the services can be reached (5.3s)
+  ✓  132 tests/channels-e2e/writes.spec.ts:197:1 › WRT-06 a message edited and reacted to before it could be sent arrives as it was last left (4.4s)
+  ✓  131 tests/channels-e2e/writes.spec.ts:171:1 › WRT-05 a message the services took but whose answer never came back is in the channel once (8.6s)
+  ✓  133 tests/channels-e2e/writes.spec.ts:223:1 › WRT-07 a message deleted before it could be sent is not shown to anyone once the connection is back (6.3s)
+  ✓  135 tests/channels-e2e/writes.spec.ts:275:1 › WRT-09 a message the services refuse is taken back off the screen and the person is told it failed (4.5s)
+  ✓  134 tests/channels-e2e/writes.spec.ts:253:1 › WRT-08 a reply written with no connection shows in its thread at once and reaches the services (5.4s)
+  ✓  126 tests/channels-e2e/prewarm.spec.ts:17:1 › PRE-01 an unread channel never opened on this device opens with no connection once the app has been left alone (28.1s)
+  ✓  136 tests/channels-e2e/writes.spec.ts:301:1 › WRT-10 a message still waiting to be sent says that it is not sent yet (7.5s)
+  ✓  137 tests/channels-e2e/writes.spec.ts:323:1 › WRT-11 a waiting message written right after another of the same person says that it is not sent yet (7.9s)
+  ✓  141 tests/channels-e2e/current.spec.ts:109:1 › SYN-01 a channel left for another one shows everything that changed meanwhile when the person comes back (4.9s)
+  ✓  140 tests/channels-e2e/writes.spec.ts:436:1 › WRT-14 a message written offline in one window shows in the other window of the same device (7.5s)
+  ✓  142 tests/channels-e2e/current.spec.ts:132:1 › SYN-02 an open channel whose connection dropped shows every change made meanwhile once it is back, without a reload (3.1s)
+  ✓  143 tests/channels-e2e/current.spec.ts:153:1 › SYN-03 a channel changed while the person was offline and in another channel is right when they come back to it (4.5s)
+  ✘  138 tests/channels-e2e/writes.spec.ts:346:1 › WRT-12 a message written offline with the channel open in two windows is sent once and shows in both (20.6s)
+  ✓  144 tests/channels-e2e/current.spec.ts:178:1 › SYN-04 a channel changed while the app was closed is right when the app is opened again (5.6s)
+  ✓  145 tests/channels-e2e/current.spec.ts:202:1 › SYN-05 what a device caught up on is what it shows the next time it opens the channel with no connection (7.7s)
+  ✓  147 tests/channels-e2e/current.spec.ts:276:1 › SYN-08 a person removed from a channel while away is not shown the messages their device kept (5.8s)
+  ✓  148 tests/channels-e2e/current.spec.ts:299:1 › SYN-09 changes made while the page is reloading are all there when it has loaded (3.8s)
+  ✓  149 tests/channels-e2e/current.spec.ts:321:1 › SYN-10 a channel stays right through rounds of leaving it, losing the connection and reloading (6.8s)
+  ✓  150 tests/channels-e2e/offline.spec.ts:49:1 › OFF-01 a channel the person has read opens whole with no connection (6.1s)
+  ✓  151 tests/channels-e2e/offline.spec.ts:71:1 › OFF-02 a channel the device has never held says it cannot load offline, and loads when the connection is back (4.5s)
+  ✓  152 tests/channels-e2e/offline.spec.ts:95:1 › OFF-03 on a very slow connection a held channel shows at once, and what changed meanwhile shows when the answer arrives (9.2s)
+  ✓  154 tests/channels-e2e/offline.spec.ts:147:1 › OFF-05 scrolling past the oldest held message with no connection keeps what is held on screen (12.4s)
+  ✓  153 tests/channels-e2e/offline.spec.ts:120:1 › OFF-04 messages read far back in a long channel can be scrolled through again with no connection (19.2s)
+  ✓  146 tests/channels-e2e/current.spec.ts:232:1 › SYN-06 a channel more than a thousand changes behind is right when it is opened again (42.3s)
+  ✓  156 tests/channels-e2e/offline.spec.ts:215:1 › OFF-07 a long thread never opened, opened with no connection, shows every reply or says that there are more (6.7s)
+  ✓  155 tests/channels-e2e/offline.spec.ts:180:1 › OFF-06 a thread read while connected shows its replies with no connection, a long one included (7.3s)
+  ✓  139 tests/channels-e2e/writes.spec.ts:386:1 › WRT-13 two devices of one person, one of them offline, end up showing the same channel as the services hold (1.1m)
+  ✓  157 tests/channels-e2e/offline.spec.ts:257:1 › OFF-08 a team owner opening a held channel with no connection sees the channel (5.5s)
+  ✓  158 tests/channels-e2e/offline.spec.ts:275:1 › OFF-09 a channel left as soon as its messages showed opens with no connection (5.2s)
+  ✓  159 tests/channels-e2e/offline.spec.ts:301:1 › OFF-10 a message that arrived while the channel was open is there when the channel opens with no connection (5.9s)
+  ✓  162 tests/channels-e2e/writes.spec.ts:53:1 › WRT-01 a message sent with no connection shows at once and reaches the other person once when the connection is back (4.8s)
+  ✓  161 tests/channels-e2e/offline.spec.ts:324:1 › OFF-11 opening a held channel with no connection does not say that a new version is out (6.8s)
+  ✓  163 tests/channels-e2e/writes.spec.ts:84:1 › WRT-02 an edit, a deletion and a reaction made with no connection show at once and all reach the services (5.4s)
+  ✓  164 tests/channels-e2e/writes.spec.ts:112:1 › WRT-03 several messages sent with no connection arrive once each, in the order they were written (6.5s)
+  ✓  165 tests/channels-e2e/writes.spec.ts:141:1 › WRT-04 messages that could not be sent are still there after a reload and are sent once when the services can be reached (5.8s)
+  ✓  166 tests/channels-e2e/writes.spec.ts:171:1 › WRT-05 a message the services took but whose answer never came back is in the channel once (6.1s)
+  ✓  167 tests/channels-e2e/writes.spec.ts:197:1 › WRT-06 a message edited and reacted to before it could be sent arrives as it was last left (4.1s)
+  ✓  169 tests/channels-e2e/writes.spec.ts:253:1 › WRT-08 a reply written with no connection shows in its thread at once and reaches the services (4.8s)
+  ✓  170 tests/channels-e2e/writes.spec.ts:275:1 › WRT-09 a message the services refuse is taken back off the screen and the person is told it failed (3.8s)
+  ✓  168 tests/channels-e2e/writes.spec.ts:223:1 › WRT-07 a message deleted before it could be sent is not shown to anyone once the connection is back (8.5s)
+  ✓  171 tests/channels-e2e/writes.spec.ts:301:1 › WRT-10 a message still waiting to be sent says that it is not sent yet (7.7s)
+  ✓  160 tests/channels-e2e/prewarm.spec.ts:17:1 › PRE-01 an unread channel never opened on this device opens with no connection once the app has been left alone (27.7s)
+  ✓  172 tests/channels-e2e/writes.spec.ts:323:1 › WRT-11 a waiting message written right after another of the same person says that it is not sent yet (7.7s)
+  ✓  175 tests/channels-e2e/writes.spec.ts:436:1 › WRT-14 a message written offline in one window shows in the other window of the same device (7.6s)
+  ✘  173 tests/channels-e2e/writes.spec.ts:346:1 › WRT-12 a message written offline with the channel open in two windows is sent once and shows in both (20.4s)
+  ✓  174 tests/channels-e2e/writes.spec.ts:386:1 › WRT-13 two devices of one person, one of them offline, end up showing the same channel as the services hold (1.1m)
+
+
+  1) tests/channels-e2e/writes.spec.ts:323:1 › WRT-11 a waiting message written right after another of the same person says that it is not sent yet 
+
+    Expected to fail, but passed.
+
+    attachment #1: screenshot (image/png) ──────────────────────────────────────────────────────────
+    ../../../../../../.cache/channels-perf-b/e2eb/g1/test-results/writes-WRT-11-a-waiting-me-e69ca-ays-that-it-is-not-sent-yet/test-failed-1.png
+    ────────────────────────────────────────────────────────────────────────────────────────────────
+
+    attachment #2: trace (application/zip) ─────────────────────────────────────────────────────────
+    ../../../../../../.cache/channels-perf-b/e2eb/g1/test-results/writes-WRT-11-a-waiting-me-e69ca-ays-that-it-is-not-sent-yet/trace.zip
+    Usage:
+
+        npx playwright show-trace ../../../../../../.cache/channels-perf-b/e2eb/g1/test-results/writes-WRT-11-a-waiting-me-e69ca-ays-that-it-is-not-sent-yet/trace.zip
+
+    ────────────────────────────────────────────────────────────────────────────────────────────────
+
+  2) tests/channels-e2e/writes.spec.ts:436:1 › WRT-14 a message written offline in one window shows in the other window of the same device 
+
+    Expected to fail, but passed.
+
+    attachment #1: screenshot (image/png) ──────────────────────────────────────────────────────────
+    ../../../../../../.cache/channels-perf-b/e2eb/g1/test-results/writes-WRT-14-a-message-wr-5e142-r-window-of-the-same-device/test-failed-1.png
+    ────────────────────────────────────────────────────────────────────────────────────────────────
+
+    attachment #2: screenshot (image/png) ──────────────────────────────────────────────────────────
+    ../../../../../../.cache/channels-perf-b/e2eb/g1/test-results/writes-WRT-14-a-message-wr-5e142-r-window-of-the-same-device/test-failed-2.png
+    ────────────────────────────────────────────────────────────────────────────────────────────────
+
+    attachment #3: trace (application/zip) ─────────────────────────────────────────────────────────
+    ../../../../../../.cache/channels-perf-b/e2eb/g1/test-results/writes-WRT-14-a-message-wr-5e142-r-window-of-the-same-device/trace.zip
+    Usage:
+
+        npx playwright show-trace ../../../../../../.cache/channels-perf-b/e2eb/g1/test-results/writes-WRT-14-a-message-wr-5e142-r-window-of-the-same-device/trace.zip
+
+    ────────────────────────────────────────────────────────────────────────────────────────────────
+
+  3) tests/channels-e2e/writes.spec.ts:323:1 › WRT-11 a waiting message written right after another of the same person says that it is not sent yet 
+
+    Expected to fail, but passed.
+
+    attachment #1: screenshot (image/png) ──────────────────────────────────────────────────────────
+    ../../../../../../.cache/channels-perf-b/e2eb/g1/test-results/writes-WRT-11-a-waiting-me-e69ca-ays-that-it-is-not-sent-yet-repeat1/test-failed-1.png
+    ────────────────────────────────────────────────────────────────────────────────────────────────
+
+    attachment #2: trace (application/zip) ─────────────────────────────────────────────────────────
+    ../../../../../../.cache/channels-perf-b/e2eb/g1/test-results/writes-WRT-11-a-waiting-me-e69ca-ays-that-it-is-not-sent-yet-repeat1/trace.zip
+    Usage:
+
+        npx playwright show-trace ../../../../../../.cache/channels-perf-b/e2eb/g1/test-results/writes-WRT-11-a-waiting-me-e69ca-ays-that-it-is-not-sent-yet-repeat1/trace.zip
+
+    ────────────────────────────────────────────────────────────────────────────────────────────────
+
+  4) tests/channels-e2e/writes.spec.ts:436:1 › WRT-14 a message written offline in one window shows in the other window of the same device 
+
+    Expected to fail, but passed.
+
+    attachment #1: screenshot (image/png) ──────────────────────────────────────────────────────────
+    ../../../../../../.cache/channels-perf-b/e2eb/g1/test-results/writes-WRT-14-a-message-wr-5e142-r-window-of-the-same-device-repeat1/test-failed-1.png
+    ────────────────────────────────────────────────────────────────────────────────────────────────
+
+    attachment #2: screenshot (image/png) ──────────────────────────────────────────────────────────
+    ../../../../../../.cache/channels-perf-b/e2eb/g1/test-results/writes-WRT-14-a-message-wr-5e142-r-window-of-the-same-device-repeat1/test-failed-2.png
+    ────────────────────────────────────────────────────────────────────────────────────────────────
+
+    attachment #3: trace (application/zip) ─────────────────────────────────────────────────────────
+    ../../../../../../.cache/channels-perf-b/e2eb/g1/test-results/writes-WRT-14-a-message-wr-5e142-r-window-of-the-same-device-repeat1/trace.zip
+    Usage:
+
+        npx playwright show-trace ../../../../../../.cache/channels-perf-b/e2eb/g1/test-results/writes-WRT-14-a-message-wr-5e142-r-window-of-the-same-device-repeat1/trace.zip
+
+    ────────────────────────────────────────────────────────────────────────────────────────────────
+
+  5) tests/channels-e2e/writes.spec.ts:323:1 › WRT-11 a waiting message written right after another of the same person says that it is not sent yet 
+
+    Expected to fail, but passed.
+
+    attachment #1: screenshot (image/png) ──────────────────────────────────────────────────────────
+    ../../../../../../.cache/channels-perf-b/e2eb/g1/test-results/writes-WRT-11-a-waiting-me-e69ca-ays-that-it-is-not-sent-yet-repeat2/test-failed-1.png
+    ────────────────────────────────────────────────────────────────────────────────────────────────
+
+    attachment #2: trace (application/zip) ─────────────────────────────────────────────────────────
+    ../../../../../../.cache/channels-perf-b/e2eb/g1/test-results/writes-WRT-11-a-waiting-me-e69ca-ays-that-it-is-not-sent-yet-repeat2/trace.zip
+    Usage:
+
+        npx playwright show-trace ../../../../../../.cache/channels-perf-b/e2eb/g1/test-results/writes-WRT-11-a-waiting-me-e69ca-ays-that-it-is-not-sent-yet-repeat2/trace.zip
+
+    ────────────────────────────────────────────────────────────────────────────────────────────────
+
+  6) tests/channels-e2e/writes.spec.ts:436:1 › WRT-14 a message written offline in one window shows in the other window of the same device 
+
+    Expected to fail, but passed.
+
+    attachment #1: screenshot (image/png) ──────────────────────────────────────────────────────────
+    ../../../../../../.cache/channels-perf-b/e2eb/g1/test-results/writes-WRT-14-a-message-wr-5e142-r-window-of-the-same-device-repeat2/test-failed-1.png
+    ────────────────────────────────────────────────────────────────────────────────────────────────
+
+    attachment #2: screenshot (image/png) ──────────────────────────────────────────────────────────
+    ../../../../../../.cache/channels-perf-b/e2eb/g1/test-results/writes-WRT-14-a-message-wr-5e142-r-window-of-the-same-device-repeat2/test-failed-2.png
+    ────────────────────────────────────────────────────────────────────────────────────────────────
+
+    attachment #3: trace (application/zip) ─────────────────────────────────────────────────────────
+    ../../../../../../.cache/channels-perf-b/e2eb/g1/test-results/writes-WRT-14-a-message-wr-5e142-r-window-of-the-same-device-repeat2/trace.zip
+    Usage:
+
+        npx playwright show-trace ../../../../../../.cache/channels-perf-b/e2eb/g1/test-results/writes-WRT-14-a-message-wr-5e142-r-window-of-the-same-device-repeat2/trace.zip
+
+    ────────────────────────────────────────────────────────────────────────────────────────────────
+
+  7) tests/channels-e2e/writes.spec.ts:323:1 › WRT-11 a waiting message written right after another of the same person says that it is not sent yet 
+
+    Expected to fail, but passed.
+
+    attachment #1: screenshot (image/png) ──────────────────────────────────────────────────────────
+    ../../../../../../.cache/channels-perf-b/e2eb/g1/test-results/writes-WRT-11-a-waiting-me-e69ca-ays-that-it-is-not-sent-yet-repeat3/test-failed-1.png
+    ────────────────────────────────────────────────────────────────────────────────────────────────
+
+    attachment #2: trace (application/zip) ─────────────────────────────────────────────────────────
+    ../../../../../../.cache/channels-perf-b/e2eb/g1/test-results/writes-WRT-11-a-waiting-me-e69ca-ays-that-it-is-not-sent-yet-repeat3/trace.zip
+    Usage:
+
+        npx playwright show-trace ../../../../../../.cache/channels-perf-b/e2eb/g1/test-results/writes-WRT-11-a-waiting-me-e69ca-ays-that-it-is-not-sent-yet-repeat3/trace.zip
+
+    ────────────────────────────────────────────────────────────────────────────────────────────────
+
+  8) tests/channels-e2e/writes.spec.ts:346:1 › WRT-12 a message written offline with the channel open in two windows is sent once and shows in both 
+
+    Error: expect(locator).toBeVisible() failed
+
+    Locator: locator('[data-channel-scroll]').locator('[data-message]').filter({ has: locator('[data-message-content]').getByText('from the second window', { exact: true }) })
+    Expected: visible
+    Timeout: 15000ms
+    Error: element(s) not found
+
+    Call log:
+      - Expect "toBeVisible" with timeout 15000ms
+      - waiting for locator('[data-channel-scroll]').locator('[data-message]').filter({ has: locator('[data-message-content]').getByText('from the second window', { exact: true }) })
+
+
+      369 |     'from the second window',
+      370 |   ];
+    > 371 |   await expect(two.message('from the second window')).toBeVisible();
+          |                                                       ^
+      372 |
+      373 |   await goOnline(first.context());
+      374 |   // Defect, in some runs: the second window shows what the first wrote
+        at /home/teo/.herdr/worktrees/macro/synoet-channels-local-sync-suiteb/apps/web/tests/channels-e2e/writes.spec.ts:371:55
+
+    attachment #1: screenshot (image/png) ──────────────────────────────────────────────────────────
+    ../../../../../../.cache/channels-perf-b/e2eb/g1/test-results/writes-WRT-12-a-message-wr-b375b-sent-once-and-shows-in-both-repeat3/test-failed-1.png
+    ────────────────────────────────────────────────────────────────────────────────────────────────
+
+    attachment #2: screenshot (image/png) ──────────────────────────────────────────────────────────
+    ../../../../../../.cache/channels-perf-b/e2eb/g1/test-results/writes-WRT-12-a-message-wr-b375b-sent-once-and-shows-in-both-repeat3/test-failed-2.png
+    ────────────────────────────────────────────────────────────────────────────────────────────────
+
+    Error Context: ../../../../../../.cache/channels-perf-b/e2eb/g1/test-results/writes-WRT-12-a-message-wr-b375b-sent-once-and-shows-in-both-repeat3/error-context.md
+
+    attachment #4: trace (application/zip) ─────────────────────────────────────────────────────────
+    ../../../../../../.cache/channels-perf-b/e2eb/g1/test-results/writes-WRT-12-a-message-wr-b375b-sent-once-and-shows-in-both-repeat3/trace.zip
+    Usage:
+
+        npx playwright show-trace ../../../../../../.cache/channels-perf-b/e2eb/g1/test-results/writes-WRT-12-a-message-wr-b375b-sent-once-and-shows-in-both-repeat3/trace.zip
+
+    ────────────────────────────────────────────────────────────────────────────────────────────────
+
+  9) tests/channels-e2e/writes.spec.ts:436:1 › WRT-14 a message written offline in one window shows in the other window of the same device 
+
+    Expected to fail, but passed.
+
+    attachment #1: screenshot (image/png) ──────────────────────────────────────────────────────────
+    ../../../../../../.cache/channels-perf-b/e2eb/g1/test-results/writes-WRT-14-a-message-wr-5e142-r-window-of-the-same-device-repeat3/test-failed-1.png
+    ────────────────────────────────────────────────────────────────────────────────────────────────
+
+    attachment #2: screenshot (image/png) ──────────────────────────────────────────────────────────
+    ../../../../../../.cache/channels-perf-b/e2eb/g1/test-results/writes-WRT-14-a-message-wr-5e142-r-window-of-the-same-device-repeat3/test-failed-2.png
+    ────────────────────────────────────────────────────────────────────────────────────────────────
+
+    attachment #3: trace (application/zip) ─────────────────────────────────────────────────────────
+    ../../../../../../.cache/channels-perf-b/e2eb/g1/test-results/writes-WRT-14-a-message-wr-5e142-r-window-of-the-same-device-repeat3/trace.zip
+    Usage:
+
+        npx playwright show-trace ../../../../../../.cache/channels-perf-b/e2eb/g1/test-results/writes-WRT-14-a-message-wr-5e142-r-window-of-the-same-device-repeat3/trace.zip
+
+    ────────────────────────────────────────────────────────────────────────────────────────────────
+
+  10) tests/channels-e2e/writes.spec.ts:323:1 › WRT-11 a waiting message written right after another of the same person says that it is not sent yet 
+
+    Expected to fail, but passed.
+
+    attachment #1: screenshot (image/png) ──────────────────────────────────────────────────────────
+    ../../../../../../.cache/channels-perf-b/e2eb/g1/test-results/writes-WRT-11-a-waiting-me-e69ca-ays-that-it-is-not-sent-yet-repeat4/test-failed-1.png
+    ────────────────────────────────────────────────────────────────────────────────────────────────
+
+    attachment #2: trace (application/zip) ─────────────────────────────────────────────────────────
+    ../../../../../../.cache/channels-perf-b/e2eb/g1/test-results/writes-WRT-11-a-waiting-me-e69ca-ays-that-it-is-not-sent-yet-repeat4/trace.zip
+    Usage:
+
+        npx playwright show-trace ../../../../../../.cache/channels-perf-b/e2eb/g1/test-results/writes-WRT-11-a-waiting-me-e69ca-ays-that-it-is-not-sent-yet-repeat4/trace.zip
+
+    ────────────────────────────────────────────────────────────────────────────────────────────────
+
+  11) tests/channels-e2e/writes.spec.ts:346:1 › WRT-12 a message written offline with the channel open in two windows is sent once and shows in both 
+
+    Error: expect(locator).toBeVisible() failed
+
+    Locator: locator('[data-channel-scroll]').locator('[data-message]').filter({ has: locator('[data-message-content]').getByText('from the second window', { exact: true }) })
+    Expected: visible
+    Timeout: 15000ms
+    Error: element(s) not found
+
+    Call log:
+      - Expect "toBeVisible" with timeout 15000ms
+      - waiting for locator('[data-channel-scroll]').locator('[data-message]').filter({ has: locator('[data-message-content]').getByText('from the second window', { exact: true }) })
+
+
+      369 |     'from the second window',
+      370 |   ];
+    > 371 |   await expect(two.message('from the second window')).toBeVisible();
+          |                                                       ^
+      372 |
+      373 |   await goOnline(first.context());
+      374 |   // Defect, in some runs: the second window shows what the first wrote
+        at /home/teo/.herdr/worktrees/macro/synoet-channels-local-sync-suiteb/apps/web/tests/channels-e2e/writes.spec.ts:371:55
+
+    attachment #1: screenshot (image/png) ──────────────────────────────────────────────────────────
+    ../../../../../../.cache/channels-perf-b/e2eb/g1/test-results/writes-WRT-12-a-message-wr-b375b-sent-once-and-shows-in-both-repeat4/test-failed-1.png
+    ────────────────────────────────────────────────────────────────────────────────────────────────
+
+    attachment #2: screenshot (image/png) ──────────────────────────────────────────────────────────
+    ../../../../../../.cache/channels-perf-b/e2eb/g1/test-results/writes-WRT-12-a-message-wr-b375b-sent-once-and-shows-in-both-repeat4/test-failed-2.png
+    ────────────────────────────────────────────────────────────────────────────────────────────────
+
+    Error Context: ../../../../../../.cache/channels-perf-b/e2eb/g1/test-results/writes-WRT-12-a-message-wr-b375b-sent-once-and-shows-in-both-repeat4/error-context.md
+
+    attachment #4: trace (application/zip) ─────────────────────────────────────────────────────────
+    ../../../../../../.cache/channels-perf-b/e2eb/g1/test-results/writes-WRT-12-a-message-wr-b375b-sent-once-and-shows-in-both-repeat4/trace.zip
+    Usage:
+
+        npx playwright show-trace ../../../../../../.cache/channels-perf-b/e2eb/g1/test-results/writes-WRT-12-a-message-wr-b375b-sent-once-and-shows-in-both-repeat4/trace.zip
+
+    ────────────────────────────────────────────────────────────────────────────────────────────────
+
+  12) tests/channels-e2e/writes.spec.ts:436:1 › WRT-14 a message written offline in one window shows in the other window of the same device 
+
+    Expected to fail, but passed.
+
+    attachment #1: screenshot (image/png) ──────────────────────────────────────────────────────────
+    ../../../../../../.cache/channels-perf-b/e2eb/g1/test-results/writes-WRT-14-a-message-wr-5e142-r-window-of-the-same-device-repeat4/test-failed-2.png
+    ────────────────────────────────────────────────────────────────────────────────────────────────
+
+    attachment #2: screenshot (image/png) ──────────────────────────────────────────────────────────
+    ../../../../../../.cache/channels-perf-b/e2eb/g1/test-results/writes-WRT-14-a-message-wr-5e142-r-window-of-the-same-device-repeat4/test-failed-1.png
+    ────────────────────────────────────────────────────────────────────────────────────────────────
+
+    attachment #3: trace (application/zip) ─────────────────────────────────────────────────────────
+    ../../../../../../.cache/channels-perf-b/e2eb/g1/test-results/writes-WRT-14-a-message-wr-5e142-r-window-of-the-same-device-repeat4/trace.zip
+    Usage:
+
+        npx playwright show-trace ../../../../../../.cache/channels-perf-b/e2eb/g1/test-results/writes-WRT-14-a-message-wr-5e142-r-window-of-the-same-device-repeat4/trace.zip
+
+    ────────────────────────────────────────────────────────────────────────────────────────────────
+
+  12 failed
+    tests/channels-e2e/writes.spec.ts:323:1 › WRT-11 a waiting message written right after another of the same person says that it is not sent yet 
+    tests/channels-e2e/writes.spec.ts:436:1 › WRT-14 a message written offline in one window shows in the other window of the same device 
+    tests/channels-e2e/writes.spec.ts:323:1 › WRT-11 a waiting message written right after another of the same person says that it is not sent yet 
+    tests/channels-e2e/writes.spec.ts:436:1 › WRT-14 a message written offline in one window shows in the other window of the same device 
+    tests/channels-e2e/writes.spec.ts:323:1 › WRT-11 a waiting message written right after another of the same person says that it is not sent yet 
+    tests/channels-e2e/writes.spec.ts:436:1 › WRT-14 a message written offline in one window shows in the other window of the same device 
+    tests/channels-e2e/writes.spec.ts:323:1 › WRT-11 a waiting message written right after another of the same person says that it is not sent yet 
+    tests/channels-e2e/writes.spec.ts:346:1 › WRT-12 a message written offline with the channel open in two windows is sent once and shows in both 
+    tests/channels-e2e/writes.spec.ts:436:1 › WRT-14 a message written offline in one window shows in the other window of the same device 
+    tests/channels-e2e/writes.spec.ts:323:1 › WRT-11 a waiting message written right after another of the same person says that it is not sent yet 
+    tests/channels-e2e/writes.spec.ts:346:1 › WRT-12 a message written offline with the channel open in two windows is sent once and shows in both 
+    tests/channels-e2e/writes.spec.ts:436:1 › WRT-14 a message written offline in one window shows in the other window of the same device 
+  163 passed (8.6m)

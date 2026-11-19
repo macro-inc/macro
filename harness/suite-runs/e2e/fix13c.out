@@ -1,0 +1,17 @@
+path "/home/teo/.herdr/worktrees/macro/synoet-channels-local-sync-suite/apps/web" does not contain a 'flake.nix', searching up
+SyntaxError: Unexpected token 'u', "unable to "... is not valid JSON
+
+   at harness/people.ts:116
+
+  114 |     data: { email, redirect_uri: `${stackUrl()}/app` },
+  115 |   });
+> 116 |   const { code } = (await asked.json()) as { code?: string };
+      |                     ^
+  117 |   if (!asked.ok() || !code) {
+  118 |     throw new Error(
+  119 |       `${email} got no sign-in code (${asked.status()}). The stack must return one-time codes, as local stacks do.`
+    at signIn (/home/teo/.herdr/worktrees/macro/synoet-channels-local-sync-suite/apps/web/tests/channels-e2e/harness/people.ts:116:21)
+    at /home/teo/.herdr/worktrees/macro/synoet-channels-local-sync-suite/apps/web/tests/channels-e2e/harness/people.ts:188:21
+    at signEveryoneIn (/home/teo/.herdr/worktrees/macro/synoet-channels-local-sync-suite/apps/web/tests/channels-e2e/harness/people.ts:183:3)
+    at globalSetup (/home/teo/.herdr/worktrees/macro/synoet-channels-local-sync-suite/apps/web/tests/channels-e2e/global-setup.ts:10:3)
+

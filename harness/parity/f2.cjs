@@ -1,0 +1,12 @@
+const {L,setup,j,openPage,DIR,dumpIssues}=require('./common.cjs'); const E=L.ENV.channels; const out={};
+(async()=>{ const {browser,ctxs}=await setup();
+ const {page}=await openPage(ctxs.alice,`${L.BASE}/app/channels/${E.freshness}`); await L.sleep(3000);
+ const sideUnread=async()=>page.evaluate(()=>{const l=[...document.querySelectorAll('*')].filter(n=>n.children.length<6&&/^lobby/.test((n.textContent||'').trim())&&(n.textContent||'').length<30)[0];return l?l.closest('a,[role],li,div').outerHTML.slice(0,500):null});
+ out.lobbySideHtml=await sideUnread();
+ await page.locator('[aria-label*="otification" i]').first().click(); await L.sleep(2500);
+ await page.getByText('Bob in #lobby').first().click(); await L.sleep(4000);
+ await page.screenshot({path:`${DIR}/f-notif-click.png`}); out.url=page.url().replace(L.BASE,'');
+ out.targeted=await page.evaluate(()=>[...document.querySelectorAll('[data-targeted]')].map(n=>n.innerText.replace(/\n+/g,'|').slice(0,100)));
+ out.visibleRows=await page.evaluate(()=>[...document.querySelectorAll('[data-message-id]')].map(n=>n.innerText.replace(/\n+/g,'|').slice(0,60)).slice(-8));
+ out.newDivider=await page.evaluate(()=>/(^|\n)New(\n|$)| - New/.test(document.body.innerText));
+ console.log(JSON.stringify(out,null,1)); dumpIssues('f2'); await browser.close();})().catch(e=>{console.error(e);console.log(JSON.stringify(out));process.exit(1)});

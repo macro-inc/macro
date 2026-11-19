@@ -1,0 +1,13 @@
+diff --git a/apps/web/src/features/channel/Thread/ThreadReplyChannelInput.tsx b/apps/web/src/features/channel/Thread/ThreadReplyChannelInput.tsx
+index a08a0f967b..ee2f4f6f77 100644
+--- a/apps/web/src/features/channel/Thread/ThreadReplyChannelInput.tsx
++++ b/apps/web/src/features/channel/Thread/ThreadReplyChannelInput.tsx
+@@ -149,7 +149,7 @@ export function ThreadReplyChannelInput(props: ThreadReplyChannelInputProps) {
+         if (!senderId) return;
+         const payload = buildPostMessageSendPayload({
+           snapshot,
+-          threadId: props.threadId,
++          threadId: undefined,
+         });
+ 
+         sendMessageMutation.mutate(

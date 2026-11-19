@@ -1,0 +1,26 @@
+const L = require('./lib.cjs'); const fs = require('fs');
+const FX = JSON.parse(fs.readFileSync(L.HERE + '/fixture.json'));
+(async () => {
+  const size = process.argv[2] || 'medium'; const c = FX.channels[size];
+  const browser = await L.launch();
+  const ctx = await L.newContext(browser, { storageState: await L.authState(browser, 'alice@seed.macro.local') });
+  await ctx.addInitScript(L.PROBE);
+  const page = await ctx.newPage(); const rec = await L.recorder(page);
+  page.on('console', (m) => { if (m.type() === 'error') console.log('CONSOLE', m.text().slice(0, 200)); });
+  await page.addInitScript((o) => window.__probe.arm(o), { ids: [], lastId: c.lastRootId });
+  const t0 = Date.now();
+  await page.goto(`${L.BASE}/app/channels/${c.id}${process.argv[3] || ''}`, { waitUntil: 'commit' });
+  const snap = await L.waitFor(async () => { const s = await page.evaluate(() => window.__probe.snapshot()).catch(() => null); return s && s.settled ? s : null; }, { timeout: 60000 });
+  await L.sleep(3000);
+  const s = await page.evaluate(() => window.__probe.snapshot());
+  console.log(JSON.stringify({ ...s, longTasks: s.longTasks.length }, null, 1));
+  const reqs = rec.requests(); const nav = reqs.find((r) => r.type === 'Document');
+  const wf = L.waterfall(reqs, nav.start, s.timeOrigin + (s.firstPaint || 0));
+  for (const w of wf) console.log(String(w.startMs).padStart(6), String(w.durationMs).padStart(6), String(w.bytes).padStart(8), w.status, w.method, w.path.slice(0, 150), w.op || '', w.finishedBeforeFirstPaint ? 'B' : '');
+  console.log('static', JSON.stringify(L.staticSummary(reqs, nav.start)));
+  console.log('ws', JSON.stringify(rec.sockets()), rec.frames().length);
+  for (const f of rec.frames().slice(0, 25)) console.log(f.dir, Math.round(f.at - nav.start), f.preview.slice(0, 160));
+  console.log(await page.evaluate(() => { const sc = document.querySelector('[data-channel-scroll]'); return sc ? { top: sc.scrollTop, h: sc.clientHeight, sh: sc.scrollHeight } : null; }));
+  await page.screenshot({ path: `${L.HERE}/shots/smoke-${size}.png` });
+  await browser.close();
+})().catch((e) => { console.error(e); process.exit(1); });

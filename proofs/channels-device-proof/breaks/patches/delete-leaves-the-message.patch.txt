@@ -1,0 +1,13 @@
+diff --git a/apps/web/src/features/channel/Channel/create-delete-message-confirmation.tsx b/apps/web/src/features/channel/Channel/create-delete-message-confirmation.tsx
+index 10a7977681..41d3de1686 100644
+--- a/apps/web/src/features/channel/Channel/create-delete-message-confirmation.tsx
++++ b/apps/web/src/features/channel/Channel/create-delete-message-confirmation.tsx
+@@ -36,7 +36,7 @@ export function createDeleteMessageConfirmation(
+ 
+   const confirm = () => {
+     const input = pending();
+-    if (input) deleteMessage(input);
++    if (input && !input.messageID) deleteMessage(input);
+     close();
+   };
+ 

@@ -1,0 +1,31 @@
+{
+ "gapBefore": 0,
+ "newPostStatus": 200,
+ "new_ms": 27,
+ "gapAfterNew": 0,
+ "new_rows": 1,
+ "gapAfterBurst": 0,
+ "burstRows": 5,
+ "editStatus": 200,
+ "edit_ms": 4,
+ "edit_after": {
+  "rows": 1,
+  "t": "BM|Bob Marsh|11:40 AM|(edited)|par-D-edited-1794483649473",
+  "oldRows": 0
+ },
+ "reactStatus": 200,
+ "react_ms": 4,
+ "unreact_ms": 5,
+ "thread_text": "BM|Bob Marsh|11:40 AM|(edited)|par-D-edited-1794483649473|BM|Bob Marsh|11:41 AM|par-D-reply-0-1794483649473|par-D-reply-1-1794483649473|par-D-reply-2-1794483649473|BM|1 more reply|Last reply Today",
+ "typing": "Bob Marsh is typing",
+ "delStatus": 200,
+ "delete_after": "This message was deleted.",
+ "plain_delete_gone_ms": 51,
+ "scrolledUp": {
+  "gapBefore": 1020,
+  "gapAfter": 1116
+ },
+ "afterJumpGap": 1116,
+ "afterJumpNewGap": 1212,
+ "afterJumpShown": 0
+}

@@ -1,0 +1,67 @@
+path "/home/teo/.herdr/worktrees/macro/synoet-channels-local-sync-suiteb/apps/web" does not contain a 'flake.nix', searching up
+
+Running 6 tests using 3 workers
+
+DD OFF-6X w0 r0 ben 643371 DBG thread-rest-hold 340382
+DD OFF-6X w1 r1 ben 644020 DBG thread-read ad6c4a covered=false keys=0 seq=26
+DJ OFF-6X w1 r1 ben 644077 ["[observability]","graphql.mutation_queue.skipped",{"auth.state":"signed-in","network.online":false,"graphql.websocket.state":"connected","mutation_queue.pending_items":1,"mutation_queue.oldest_observed_wait_ms":4095,"mutation_queue.age_unknown_items":0,"mutation_queue.oldest_item_age_ms":4096,"mutation_queue.skip_reason":"recovery-timeout"}]
+DD OFF-6X w0 r0 ben 644126 DBG thread-read 340382 covered=false keys=0 seq=null
+DD OFF-6X w2 r2 ben 644566 DBG thread-read f083ac covered=false keys=0 seq=26
+DJ OFF-6X w0 r0 ben 644970 ["[observability]","graphql.mutation_queue.skipped",{"auth.state":"signed-in","network.online":false,"graphql.websocket.state":"connected","mutation_queue.pending_items":1,"mutation_queue.oldest_observed_wait_ms":4701,"mutation_queue.age_unknown_items":0,"mutation_queue.oldest_item_age_ms":4701,"mutation_queue.skip_reason":"recovery-timeout"}]
+DJ OFF-6X w2 r2 ben 645077 ["[observability]","graphql.mutation_queue.skipped",{"auth.state":"signed-in","network.online":false,"graphql.websocket.state":"connected","mutation_queue.pending_items":1,"mutation_queue.oldest_observed_wait_ms":4757,"mutation_queue.age_unknown_items":0,"mutation_queue.oldest_item_age_ms":4757,"mutation_queue.skip_reason":"recovery-timeout"}]
+DD OFF-6X w1 r1 ben 649081 DBG thread-server ad6c4a replies=24 committing
+DD OFF-6X w1 r1 ben 649349 DBG thread-commit ad6c4a {"kind":"committed","revision":"32","changed":[],"channelSeq":"26"}
+DD OFF-6X w2 r2 ben 649437 DBG thread-server f083ac replies=24 committing
+DD OFF-6X w0 r0 ben 649740 DBG thread-server 340382 replies=24 committing
+DD OFF-6X w2 r2 ben 650378 DBG thread-commit f083ac {"kind":"committed","revision":"32","changed":[],"channelSeq":"26"}
+DD OFF-6X w0 r0 ben 650583 DBG thread-commit 340382 {"kind":"committed","revision":"29","changed":[],"channelSeq":"26"}
+DD OFF-6X w1 r1 ben 657869 DBG thread-read ad6c4a covered=true keys=24 seq=26
+DD OFF-6X w1 r1 ben 657986 DBG thread-records ad6c4a root=true replies=24
+DD OFF-6X w2 r2 ben 659383 DBG thread-read f083ac covered=true keys=24 seq=26
+DD OFF-6X w2 r2 ben 659774 DBG thread-records f083ac root=true replies=24
+DD OFF-6X w0 r0 ben 659810 DBG thread-read 340382 covered=true keys=24 seq=26
+DD OFF-6X w0 r0 ben 659947 DBG thread-records 340382 root=true replies=24
+DJ OFF-6X w1 r1 ben 682001 ["[observability]","graphql.mutation_queue.skipped",{"auth.state":"signed-in","network.online":false,"graphql.websocket.state":"connected","mutation_queue.pending_items":0,"mutation_queue.oldest_observed_wait_ms":0,"mutation_queue.age_unknown_items":0,"mutation_queue.skip_reason":"recovery-timeout"}]
+DJ OFF-6X w0 r0 ben 682848 ["[observability]","graphql.mutation_queue.skipped",{"auth.state":"signed-in","network.online":false,"graphql.websocket.state":"connected","mutation_queue.pending_items":0,"mutation_queue.oldest_observed_wait_ms":0,"mutation_queue.age_unknown_items":0,"mutation_queue.skip_reason":"recovery-timeout"}]
+DJ OFF-6X w2 r2 ben 683604 ["[observability]","graphql.mutation_queue.skipped",{"auth.state":"signed-in","network.online":false,"graphql.websocket.state":"connected","mutation_queue.pending_items":0,"mutation_queue.oldest_observed_wait_ms":0,"mutation_queue.age_unknown_items":0,"mutation_queue.skip_reason":"recovery-timeout"}]
+DD OFF-6X w1 r1 ben 694620 DBG thread-read ad6c4a covered=true keys=24 seq=26
+DD OFF-6X w1 r1 ben 694680 DBG thread-records ad6c4a root=true replies=24
+  ✓  3 tests/channels-e2e-dbg/offline.spec.ts:216:1 › OFF-6X slow a thread read while connected shows its replies with no connection, a long one included (1.2m)
+DD OFF-6X w0 r0 ben 696125 DBG thread-read 340382 covered=true keys=24 seq=26
+DD OFF-6X w0 r0 ben 696140 DBG thread-records 340382 root=true replies=24
+  ✓  1 tests/channels-e2e-dbg/offline.spec.ts:216:1 › OFF-6X slow a thread read while connected shows its replies with no connection, a long one included (1.2m)
+DD OFF-6X w2 r2 ben 697023 DBG thread-read f083ac covered=true keys=24 seq=26
+DD OFF-6X w2 r2 ben 697031 DBG thread-records f083ac root=true replies=24
+  ✓  2 tests/channels-e2e-dbg/offline.spec.ts:216:1 › OFF-6X slow a thread read while connected shows its replies with no connection, a long one included (1.2m)
+DD OFF-6X w1 r3 ben 714208 DBG thread-read 6c933d covered=false keys=0 seq=26
+DJ OFF-6X w1 r3 ben 714229 ["[observability]","graphql.mutation_queue.skipped",{"auth.state":"signed-in","network.online":false,"graphql.websocket.state":"connected","mutation_queue.pending_items":0,"mutation_queue.oldest_observed_wait_ms":0,"mutation_queue.age_unknown_items":0,"mutation_queue.skip_reason":"recovery-timeout"}]
+DD OFF-6X w1 r3 ben 716341 DBG thread-server 6c933d replies=24 committing
+DJ OFF-6X w0 r4 ben 716393 ["[observability]","graphql.mutation_queue.skipped",{"auth.state":"signed-in","network.online":false,"graphql.websocket.state":"connected","mutation_queue.pending_items":0,"mutation_queue.oldest_observed_wait_ms":0,"mutation_queue.age_unknown_items":0,"mutation_queue.skip_reason":"recovery-timeout"}]
+DD OFF-6X w0 r4 ben 716905 DBG thread-read 32d58c covered=false keys=0 seq=26
+DD OFF-6X w1 r3 ben 717022 DBG thread-commit 6c933d {"kind":"committed","revision":"28","changed":[],"channelSeq":"26"}
+DJ OFF-6X w2 r5 ben 717307 ["[observability]","graphql.mutation_queue.skipped",{"auth.state":"signed-in","network.online":false,"graphql.websocket.state":"connected","mutation_queue.pending_items":0,"mutation_queue.oldest_observed_wait_ms":0,"mutation_queue.age_unknown_items":0,"mutation_queue.skip_reason":"recovery-timeout"}]
+DD OFF-6X w2 r5 ben 717767 DBG thread-read 1e2bd5 covered=false keys=0 seq=26
+DD OFF-6X w0 r4 ben 720556 DBG thread-server 32d58c replies=24 committing
+DD OFF-6X w2 r5 ben 720921 DBG thread-server 1e2bd5 replies=24 committing
+DD OFF-6X w0 r4 ben 721169 DBG thread-commit 32d58c {"kind":"committed","revision":"29","changed":[],"channelSeq":"26"}
+DD OFF-6X w2 r5 ben 721537 DBG thread-commit 1e2bd5 {"kind":"committed","revision":"29","changed":[],"channelSeq":"26"}
+DD OFF-6X w1 r3 ben 727803 DBG thread-read 6c933d covered=true keys=24 seq=26
+DD OFF-6X w1 r3 ben 728267 DBG thread-records 6c933d root=true replies=24
+DD OFF-6X w2 r5 ben 730716 DBG thread-read 1e2bd5 covered=true keys=24 seq=26
+DD OFF-6X w2 r5 ben 730774 DBG thread-records 1e2bd5 root=true replies=24
+DD OFF-6X w0 r4 ben 730954 DBG thread-read 32d58c covered=true keys=24 seq=26
+DD OFF-6X w0 r4 ben 731324 DBG thread-records 32d58c root=true replies=24
+DJ OFF-6X w1 r3 ben 745609 ["[observability]","graphql.mutation_queue.skipped",{"auth.state":"signed-in","network.online":false,"graphql.websocket.state":"connected","mutation_queue.pending_items":0,"mutation_queue.oldest_observed_wait_ms":0,"mutation_queue.age_unknown_items":0,"mutation_queue.skip_reason":"recovery-timeout"}]
+DJ OFF-6X w0 r4 ben 749348 ["[observability]","graphql.mutation_queue.skipped",{"auth.state":"signed-in","network.online":false,"graphql.websocket.state":"connected","mutation_queue.pending_items":0,"mutation_queue.oldest_observed_wait_ms":0,"mutation_queue.age_unknown_items":0,"mutation_queue.skip_reason":"recovery-timeout"}]
+DJ OFF-6X w2 r5 ben 749842 ["[observability]","graphql.mutation_queue.skipped",{"auth.state":"signed-in","network.online":false,"graphql.websocket.state":"connected","mutation_queue.pending_items":0,"mutation_queue.oldest_observed_wait_ms":0,"mutation_queue.age_unknown_items":0,"mutation_queue.skip_reason":"recovery-timeout"}]
+DD OFF-6X w1 r3 ben 756586 DBG thread-read 6c933d covered=true keys=24 seq=26
+DD OFF-6X w1 r3 ben 756590 DBG thread-records 6c933d root=true replies=24
+  ✓  4 tests/channels-e2e-dbg/offline.spec.ts:216:1 › OFF-6X slow a thread read while connected shows its replies with no connection, a long one included (1.0m)
+DD OFF-6X w0 r4 ben 760601 DBG thread-read 32d58c covered=true keys=24 seq=26
+DD OFF-6X w0 r4 ben 760612 DBG thread-records 32d58c root=true replies=24
+  ✓  5 tests/channels-e2e-dbg/offline.spec.ts:216:1 › OFF-6X slow a thread read while connected shows its replies with no connection, a long one included (1.1m)
+DD OFF-6X w2 r5 ben 761622 DBG thread-read 1e2bd5 covered=true keys=24 seq=26
+DD OFF-6X w2 r5 ben 761628 DBG thread-records 1e2bd5 root=true replies=24
+  ✓  6 tests/channels-e2e-dbg/offline.spec.ts:216:1 › OFF-6X slow a thread read while connected shows its replies with no connection, a long one included (1.1m)
+
+  6 passed (2.5m)

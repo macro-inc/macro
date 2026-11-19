@@ -1,0 +1,31 @@
+unpacking 'https://channels.nixos.org/nixpkgs-unstable/nixexprs.tar.zst' into the Git cache...
+path "/home/teo/.herdr/worktrees/macro/synoet-channels-local-sync-suiteb/apps/web" does not contain a 'flake.nix', searching up
+
+Running 24 tests using 4 workers
+
+  ✓   2 tests/channels-e2e/current.spec.ts:202:1 › SYN-05 what a device caught up on is what it shows the next time it opens the channel with no connection (8.2s)
+  ✓   1 tests/channels-e2e/offline.spec.ts:301:1 › OFF-10 a message that arrived while the channel was open is there when the channel opens with no connection (8.4s)
+  ✓   3 tests/channels-e2e/offline.spec.ts:301:1 › OFF-10 a message that arrived while the channel was open is there when the channel opens with no connection (8.9s)
+  ✓   4 tests/channels-e2e/current.spec.ts:202:1 › SYN-05 what a device caught up on is what it shows the next time it opens the channel with no connection (10.7s)
+  ✓   6 tests/channels-e2e/offline.spec.ts:301:1 › OFF-10 a message that arrived while the channel was open is there when the channel opens with no connection (6.4s)
+  ✓   5 tests/channels-e2e/current.spec.ts:202:1 › SYN-05 what a device caught up on is what it shows the next time it opens the channel with no connection (7.5s)
+  ✓   7 tests/channels-e2e/current.spec.ts:202:1 › SYN-05 what a device caught up on is what it shows the next time it opens the channel with no connection (7.7s)
+  ✓   8 tests/channels-e2e/offline.spec.ts:301:1 › OFF-10 a message that arrived while the channel was open is there when the channel opens with no connection (6.6s)
+  ✓  10 tests/channels-e2e/offline.spec.ts:301:1 › OFF-10 a message that arrived while the channel was open is there when the channel opens with no connection (6.0s)
+  ✓   9 tests/channels-e2e/current.spec.ts:202:1 › SYN-05 what a device caught up on is what it shows the next time it opens the channel with no connection (7.2s)
+  ✓  12 tests/channels-e2e/offline.spec.ts:301:1 › OFF-10 a message that arrived while the channel was open is there when the channel opens with no connection (6.5s)
+  ✓  11 tests/channels-e2e/current.spec.ts:202:1 › SYN-05 what a device caught up on is what it shows the next time it opens the channel with no connection (8.0s)
+  ✓  14 tests/channels-e2e/offline.spec.ts:301:1 › OFF-10 a message that arrived while the channel was open is there when the channel opens with no connection (6.9s)
+  ✓  13 tests/channels-e2e/current.spec.ts:202:1 › SYN-05 what a device caught up on is what it shows the next time it opens the channel with no connection (7.4s)
+  ✓  16 tests/channels-e2e/offline.spec.ts:301:1 › OFF-10 a message that arrived while the channel was open is there when the channel opens with no connection (5.7s)
+  ✓  15 tests/channels-e2e/current.spec.ts:202:1 › SYN-05 what a device caught up on is what it shows the next time it opens the channel with no connection (7.2s)
+  ✓  18 tests/channels-e2e/offline.spec.ts:301:1 › OFF-10 a message that arrived while the channel was open is there when the channel opens with no connection (6.2s)
+  ✓  17 tests/channels-e2e/current.spec.ts:202:1 › SYN-05 what a device caught up on is what it shows the next time it opens the channel with no connection (7.3s)
+  ✓  19 tests/channels-e2e/current.spec.ts:202:1 › SYN-05 what a device caught up on is what it shows the next time it opens the channel with no connection (8.2s)
+  ✓  20 tests/channels-e2e/offline.spec.ts:301:1 › OFF-10 a message that arrived while the channel was open is there when the channel opens with no connection (7.4s)
+  ✓  21 tests/channels-e2e/current.spec.ts:202:1 › SYN-05 what a device caught up on is what it shows the next time it opens the channel with no connection (7.4s)
+  ✓  22 tests/channels-e2e/offline.spec.ts:301:1 › OFF-10 a message that arrived while the channel was open is there when the channel opens with no connection (6.6s)
+  ✓  23 tests/channels-e2e/current.spec.ts:202:1 › SYN-05 what a device caught up on is what it shows the next time it opens the channel with no connection (7.1s)
+  ✓  24 tests/channels-e2e/offline.spec.ts:301:1 › OFF-10 a message that arrived while the channel was open is there when the channel opens with no connection (7.9s)
+
+  24 passed (1.0m)

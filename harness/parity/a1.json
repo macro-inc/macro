@@ -1,0 +1,31 @@
+{
+ "url": "https://localhost:31009/app/channels/5eed92f0-1c06-8932-b12c-277f6a59bad3?channel_message_id=019919ac-aaa3-7809-9baa-d4e6fa0e6502",
+ "target": "019919ac-aaa3-7809-9baa-d4e6fa0e6502",
+ "firstTargetMs": 1654,
+ "samples": [
+  "411/T/23/1862",
+  "411/T/23/1862",
+  "411/T/23/1862",
+  "411/T/23/1862",
+  "411/-/23/1862",
+  "411/-/23/1862",
+  "411/-/23/1862",
+  "411/-/23/1862",
+  "411/-/23/1862",
+  "411/-/23/1862"
+ ],
+ "urlAfter": "/app/channels/5eed92f0-1c06-8932-b12c-277f6a59bad3?channel_message_id=019919ac-aaa3-7809-9baa-d4e6fa0e6502&s0.channels.messageId=019919ac-aaa3-7809-9baa-d4e6fa0e6502",
+ "settled": "411/-/23/1862",
+ "upSeen": 477,
+ "walk": {
+  "seen": 1010,
+  "notInTruth": 113,
+  "minIdx": 31314,
+  "maxIdx": 32210,
+  "gaps": [],
+  "nGaps": 0
+ },
+ "domDupIds": 0,
+ "bottomGap": 5402,
+ "lastDomIdx": 31314
+}

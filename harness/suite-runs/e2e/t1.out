@@ -1,0 +1,106 @@
+path "/home/teo/.herdr/worktrees/macro/synoet-channels-local-sync-suite/apps/web" does not contain a 'flake.nix', searching up
+
+Running 40 tests using 4 workers
+
+  ✓   1 tests/channels-e2e/channels.spec.ts:379:1 › CHN-12 going to another tab and back keeps the message list where it was (3.9s)
+  ✓   4 tests/channels-e2e/members.spec.ts:18:1 › MEM-01 a person invited from the app gets the channel at once, with what was said before and after (8.9s)
+  ✓   3 tests/channels-e2e/direct-messages.spec.ts:66:1 › DM-02 writing to the same person again from “New direct message” continues the one conversation (11.0s)
+  ✓   5 tests/channels-e2e/messages.spec.ts:71:1 › MSG-03 a quick back-and-forth between two people reads in the same order for both, each message once (13.1s)
+  ✓   6 tests/channels-e2e/messages.spec.ts:491:1 › MSG-13 a quick reaction shows for both people, counts 2 when the other adds the same, and goes when removed (10.2s)
+  ✓   7 tests/channels-e2e/messages.spec.ts:677:1 › MSG-18 messages two people send at the same moment end in one order for both, each once (8.2s)
+  ✓   8 tests/channels-e2e/unread.spec.ts:160:1 › UNR-04 scrolled up in an open channel, a new message shows “1 unread … below”, which leads to it (4.3s)
+  ✓   9 tests/channels-e2e/channels.spec.ts:379:1 › CHN-12 going to another tab and back keeps the message list where it was (2.8s)
+  ✓   2 tests/channels-e2e/composer.spec.ts:93:1 › CMP-13 a message shown as sent is still sent when the page is reloaded at once (24.5s)
+  ✓  12 tests/channels-e2e/members.spec.ts:18:1 › MEM-01 a person invited from the app gets the channel at once, with what was said before and after (7.5s)
+  ✓  11 tests/channels-e2e/direct-messages.spec.ts:66:1 › DM-02 writing to the same person again from “New direct message” continues the one conversation (8.9s)
+  ✓  13 tests/channels-e2e/messages.spec.ts:71:1 › MSG-03 a quick back-and-forth between two people reads in the same order for both, each message once (8.8s)
+  ✓  16 tests/channels-e2e/unread.spec.ts:160:1 › UNR-04 scrolled up in an open channel, a new message shows “1 unread … below”, which leads to it (4.6s)
+  ✓  15 tests/channels-e2e/messages.spec.ts:677:1 › MSG-18 messages two people send at the same moment end in one order for both, each once (9.1s)
+  ✓  14 tests/channels-e2e/messages.spec.ts:491:1 › MSG-13 a quick reaction shows for both people, counts 2 when the other adds the same, and goes when removed (10.1s)
+  ✓  10 tests/channels-e2e/composer.spec.ts:93:1 › CMP-13 a message shown as sent is still sent when the page is reloaded at once (21.2s)
+  ✓  17 tests/channels-e2e/channels.spec.ts:379:1 › CHN-12 going to another tab and back keeps the message list where it was (2.8s)
+  ✓  19 tests/channels-e2e/direct-messages.spec.ts:66:1 › DM-02 writing to the same person again from “New direct message” continues the one conversation (9.3s)
+  ✓  20 tests/channels-e2e/members.spec.ts:18:1 › MEM-01 a person invited from the app gets the channel at once, with what was said before and after (8.5s)
+  ✓  21 tests/channels-e2e/messages.spec.ts:71:1 › MSG-03 a quick back-and-forth between two people reads in the same order for both, each message once (9.7s)
+  ✓  24 tests/channels-e2e/unread.spec.ts:160:1 › UNR-04 scrolled up in an open channel, a new message shows “1 unread … below”, which leads to it (4.5s)
+  ✓  23 tests/channels-e2e/messages.spec.ts:677:1 › MSG-18 messages two people send at the same moment end in one order for both, each once (8.8s)
+  ✓  22 tests/channels-e2e/messages.spec.ts:491:1 › MSG-13 a quick reaction shows for both people, counts 2 when the other adds the same, and goes when removed (9.0s)
+  ✓  25 tests/channels-e2e/channels.spec.ts:379:1 › CHN-12 going to another tab and back keeps the message list where it was (2.7s)
+  ✓  18 tests/channels-e2e/composer.spec.ts:93:1 › CMP-13 a message shown as sent is still sent when the page is reloaded at once (22.4s)
+  ✓  27 tests/channels-e2e/members.spec.ts:18:1 › MEM-01 a person invited from the app gets the channel at once, with what was said before and after (7.5s)
+  ✓  28 tests/channels-e2e/direct-messages.spec.ts:66:1 › DM-02 writing to the same person again from “New direct message” continues the one conversation (9.3s)
+  ✓  29 tests/channels-e2e/messages.spec.ts:71:1 › MSG-03 a quick back-and-forth between two people reads in the same order for both, each message once (10.1s)
+  ✓  31 tests/channels-e2e/messages.spec.ts:677:1 › MSG-18 messages two people send at the same moment end in one order for both, each once (8.0s)
+  ✓  30 tests/channels-e2e/messages.spec.ts:491:1 › MSG-13 a quick reaction shows for both people, counts 2 when the other adds the same, and goes when removed (10.0s)
+  ✓  32 tests/channels-e2e/unread.spec.ts:160:1 › UNR-04 scrolled up in an open channel, a new message shows “1 unread … below”, which leads to it (4.3s)
+  ✓  33 tests/channels-e2e/channels.spec.ts:379:1 › CHN-12 going to another tab and back keeps the message list where it was (2.8s)
+  ✓  26 tests/channels-e2e/composer.spec.ts:93:1 › CMP-13 a message shown as sent is still sent when the page is reloaded at once (22.2s)
+  ✓  35 tests/channels-e2e/direct-messages.spec.ts:66:1 › DM-02 writing to the same person again from “New direct message” continues the one conversation (8.8s)
+  ✓  37 tests/channels-e2e/messages.spec.ts:71:1 › MSG-03 a quick back-and-forth between two people reads in the same order for both, each message once (10.4s)
+  ✓  38 tests/channels-e2e/messages.spec.ts:491:1 › MSG-13 a quick reaction shows for both people, counts 2 when the other adds the same, and goes when removed (10.3s)
+  ✓  34 tests/channels-e2e/composer.spec.ts:93:1 › CMP-13 a message shown as sent is still sent when the page is reloaded at once (22.1s)
+  ✓  39 tests/channels-e2e/messages.spec.ts:677:1 › MSG-18 messages two people send at the same moment end in one order for both, each once (8.5s)
+  ✓  40 tests/channels-e2e/unread.spec.ts:160:1 › UNR-04 scrolled up in an open channel, a new message shows “1 unread … below”, which leads to it (4.4s)
+  ✘  36 tests/channels-e2e/members.spec.ts:18:1 › MEM-01 a person invited from the app gets the channel at once, with what was said before and after (1.5m)
+
+
+  1) tests/channels-e2e/members.spec.ts:18:1 › MEM-01 a person invited from the app gets the channel at once, with what was said before and after 
+
+    Test timeout of 90000ms exceeded.
+
+    Error: locator.click: Test timeout of 90000ms exceeded.
+    Call log:
+      - waiting for getByRole('option', { name: 'Invite cy.3@channels-e2e.seed.macro.local' })
+        - locator resolved to <li role="option" aria-setsize="1" aria-posinset="1" data-highlighted="" aria-disabled="false" aria-selected="false" id="combobox-cl-267-listbox-item-cl-271" aria-labelledby="combobox-cl-267-listbox-item-cl-271-label" data-key="current-user-input-cy.3@channels-e2e.seed.macro.local" class="flex flex-row h-9 px-2 rounded-lg justify-between items-center outline-none data-highlighted:bg-ink/5">…</li>
+      - attempting click action
+        - waiting for element to be visible, enabled and stable
+        - element is not stable
+      - retrying click action
+        - waiting for element to be visible, enabled and stable
+        - element is visible, enabled and stable
+        - scrolling into view if needed
+        - done scrolling
+        - element is not visible
+      - retrying click action
+        - waiting 20ms
+        - waiting for element to be visible, enabled and stable
+      - element was detached from the DOM, retrying
+
+
+       at harness/management.ts:196
+
+      194 |   await box.click();
+      195 |   await box.fill(email);
+    > 196 |   await page.getByRole('option', { name: `Invite ${email}` }).click();
+          |                                                               ^
+      197 |   await dialog.getByRole('button', { name: 'Add', exact: true }).click();
+      198 |   await expect(dialog).toBeHidden();
+      199 | }
+        at inviteByEmail (/home/teo/.herdr/worktrees/macro/synoet-channels-local-sync-suite/apps/web/tests/channels-e2e/harness/management.ts:196:63)
+        at /home/teo/.herdr/worktrees/macro/synoet-channels-local-sync-suite/apps/web/tests/channels-e2e/members.spec.ts:35:3
+
+    attachment #1: screenshot (image/png) ──────────────────────────────────────────────────────────
+    ../../../../../../.cache/channels-perf-b/e2e/t1/test-results/members-MEM-01-a-person-in-dd3f2-t-was-said-before-and-after-repeat4/test-failed-1.png
+    ────────────────────────────────────────────────────────────────────────────────────────────────
+
+    attachment #2: screenshot (image/png) ──────────────────────────────────────────────────────────
+    ../../../../../../.cache/channels-perf-b/e2e/t1/test-results/members-MEM-01-a-person-in-dd3f2-t-was-said-before-and-after-repeat4/test-failed-2.png
+    ────────────────────────────────────────────────────────────────────────────────────────────────
+
+    attachment #3: screenshot (image/png) ──────────────────────────────────────────────────────────
+    ../../../../../../.cache/channels-perf-b/e2e/t1/test-results/members-MEM-01-a-person-in-dd3f2-t-was-said-before-and-after-repeat4/test-failed-3.png
+    ────────────────────────────────────────────────────────────────────────────────────────────────
+
+    Error Context: ../../../../../../.cache/channels-perf-b/e2e/t1/test-results/members-MEM-01-a-person-in-dd3f2-t-was-said-before-and-after-repeat4/error-context.md
+
+    attachment #5: trace (application/zip) ─────────────────────────────────────────────────────────
+    ../../../../../../.cache/channels-perf-b/e2e/t1/test-results/members-MEM-01-a-person-in-dd3f2-t-was-said-before-and-after-repeat4/trace.zip
+    Usage:
+
+        npx playwright show-trace ../../../../../../.cache/channels-perf-b/e2e/t1/test-results/members-MEM-01-a-person-in-dd3f2-t-was-said-before-and-after-repeat4/trace.zip
+
+    ────────────────────────────────────────────────────────────────────────────────────────────────
+
+  1 failed
+    tests/channels-e2e/members.spec.ts:18:1 › MEM-01 a person invited from the app gets the channel at once, with what was said before and after 
+  39 passed (3.1m)

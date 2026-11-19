@@ -1,0 +1,560 @@
+path "/home/teo/.herdr/worktrees/macro/synoet-channels-local-sync-suiteb/apps/web" does not contain a 'flake.nix', searching up
+
+Running 8 tests using 4 workers
+
+ZZ w0 reload 0
+ZZ w2 reload 0
+ZZ w1 reload 0
+ZZ w3 reload 0
+ZZ w0 [observability] graphql.mutation_queue.loaded {auth.state: signed-in, network.online: false, graphql.websocket.state: connected, mutation_queue.depth: 1, mutation_queue.age_unknown_items: 0}
+ZZ w0 DBGq claim 2009 9ec9a5 none deferredUntil -
+ZZ w2 DBGq claim 2065 4e934b none deferredUntil -
+ZZ w0 DBGq blocked 2084 {"id":"1","op":"UpdateNotifications","lo":"c5568f","exp":297286,"alive":false,"keys":["transactionId","uuid","superseded","query","operationName","variables","clientMetadata","optimisticData","enqueuedAtMs","leaseOwner","leaseGeneration","leaseExpiresAtMs"]}
+ZZ w2 DBGq blocked 2119 {"id":"1","op":"UpdateNotifications","lo":"4e934b","exp":299255,"alive":true,"keys":["transactionId","uuid","superseded","query","operationName","variables","clientMetadata","optimisticData","enqueuedAtMs","leaseOwner","leaseGeneration","leaseExpiresAtMs"]}
+ZZ w3 DBGq claim 2091 644bb7 none deferredUntil -
+ZZ w1 DBGq claim 2101 42adf7 none deferredUntil -
+ZZ w0 DBGq skipped 2177 lease-owner-gone
+ZZ w0 [observability] graphql.mutation_queue.skipped {auth.state: signed-in, network.online: false, graphql.websocket.state: connected, mutation_queue.pending_items: 2, mutation_queue.oldest_observed_wait_ms: 929}
+ZZ w2 DBGq finish 2176 UpdateNotifications committed {} retryIn -
+ZZ w2 DBGq tfinish 2177 committed {}
+ZZ w1 DBGq blocked 2176 {"id":"1","op":"UpdateNotifications","lo":"42adf7","exp":299122,"alive":true,"keys":["transactionId","uuid","superseded","query","operationName","variables","clientMetadata","optimisticData","enqueuedAtMs","leaseOwner","leaseGeneration","leaseExpiresAtMs"]}
+ZZ w2 DBGq claim 2268 4e934b 2 SendChannelMessage deferredUntil -
+ZZ w3 DBGq blocked 2224 {"id":"1","op":"UpdateNotifications","lo":"644bb7","exp":299205,"alive":true,"keys":["transactionId","uuid","superseded","query","operationName","variables","clientMetadata","optimisticData","enqueuedAtMs","leaseOwner","leaseGeneration","leaseExpiresAtMs"]}
+ZZ w3 DBGq finish 2286 UpdateNotifications committed {} retryIn -
+ZZ w3 DBGq tfinish 2286 committed {}
+ZZ w0 DBGq claim 2431 9ec9a5 1 UpdateNotifications deferredUntil -
+ZZ w3 DBGq claim 2362 644bb7 2 SendChannelMessage deferredUntil -
+ZZ w2 RESULT round 0 sent-after 797ms
+ZZ w2 DBGq finish 2462 SendChannelMessage committed {} retryIn -
+ZZ w2 DBGq tfinish 2462 committed {}
+ZZ w3 DBGq finish 2499 SendChannelMessage committed {} retryIn -
+ZZ w3 DBGq tfinish 2499 committed {}
+ZZ w0 DBGq finish 2595 UpdateNotifications committed {} retryIn -
+ZZ w0 DBGq tfinish 2596 committed {}
+ZZ w3 DBGq claim 2531 644bb7 none deferredUntil -
+ZZ w2 DBGq claim 2599 4e934b none deferredUntil -
+ZZ w3 DBGq blocked 2548 null
+ZZ w2 DBGq blocked 2644 null
+ZZ w0 DBGq claim 2663 9ec9a5 2 UpdateNotifications deferredUntil -
+ZZ w3 RESULT round 0 sent-after 1062ms
+ZZ w0 DBGq finish 2743 UpdateNotifications committed {} retryIn -
+ZZ w0 DBGq tfinish 2743 committed {}
+ZZ w0 DBGq claim 2763 9ec9a5 3 SendChannelMessage deferredUntil -
+ZZ w0 RESULT round 0 sent-after 1332ms
+ZZ w0 DBGq finish 2898 SendChannelMessage committed {} retryIn -
+ZZ w0 DBGq tfinish 2898 committed {}
+ZZ w3 reload 1
+ZZ w1 DBGq finish 2873 UpdateNotifications committed {} retryIn -
+ZZ w1 DBGq tfinish 2874 committed {}
+ZZ w1 DBGq claim 3008 42adf7 2 SendChannelMessage deferredUntil -
+ZZ w1 DBGq finish 3190 SendChannelMessage committed {} retryIn -
+ZZ w1 DBGq tfinish 3190 committed {}
+ZZ w1 DBGq claim 3259 42adf7 none deferredUntil -
+ZZ w1 DBGq blocked 3260 null
+ZZ w1 RESULT round 0 sent-after 1777ms
+ZZ w2 reload 1
+ZZ w0 DBGq claim 3406 9ec9a5 none deferredUntil -
+ZZ w0 DBGq blocked 3413 null
+ZZ w0 reload 1
+ZZ w1 reload 1
+ZZ w3 [observability] graphql.mutation_queue.loaded {auth.state: signed-in, network.online: false, graphql.websocket.state: connected, mutation_queue.depth: 1, mutation_queue.age_unknown_items: 0}
+ZZ w2 DBGq claim 2003 23d788 none deferredUntil -
+ZZ w2 DBGq blocked 2029 null
+ZZ w3 DBGq claim 2421 99dacb none deferredUntil -
+ZZ w3 DBGq blocked 2437 {"id":"3","op":"ReactToChannelMessage","lo":"644bb7","exp":297374,"alive":false,"keys":["transactionId","uuid","superseded","query","operationName","variables","clientMetadata","optimisticData","enqueuedAtMs","leaseOwner","leaseGeneration","leaseExpiresAtMs"]}
+ZZ w3 DBGq skipped 2498 lease-owner-gone
+ZZ w3 [observability] graphql.mutation_queue.skipped {auth.state: signed-in, network.online: false, graphql.websocket.state: connected, mutation_queue.pending_items: 0, mutation_queue.oldest_observed_wait_ms: 0}
+ZZ w3 DBGq claim 2551 99dacb 3 ReactToChannelMessage deferredUntil -
+ZZ w0 DBGq claim 1985 0dafb3 none deferredUntil -
+ZZ w0 DBGq blocked 2002 null
+ZZ w1 DBGq claim 2093 537e3d none deferredUntil -
+ZZ w1 DBGq blocked 2111 null
+ZZ w3 DBGq finish 3425 ReactToChannelMessage committed {} retryIn -
+ZZ w3 DBGq tfinish 3425 committed {}
+ZZ w3 DBGq claim 3489 99dacb none deferredUntil -
+ZZ w3 DBGq blocked 3491 null
+ZZ w2 DBGq claim 32051 23d788 none deferredUntil -
+ZZ w2 DBGq blocked 32052 null
+  ✘  3 tests/channels-e2e-dbg/zz.spec.ts:139:1 › ZZ-40 write around a reload (38.2s)
+  ✘  1 tests/channels-e2e-dbg/zz.spec.ts:139:1 › ZZ-40 write around a reload (38.0s)
+  ✘  2 tests/channels-e2e-dbg/zz.spec.ts:139:1 › ZZ-40 write around a reload (38.1s)
+  ✘  4 tests/channels-e2e-dbg/zz.spec.ts:139:1 › ZZ-40 write around a reload (38.9s)
+ZZ w0 reload 0
+ZZ w3 reload 0
+ZZ w2 reload 0
+ZZ w1 reload 0
+ZZ w0 [observability] graphql.mutation_queue.loaded {auth.state: signed-in, network.online: false, graphql.websocket.state: connected, mutation_queue.depth: 1, mutation_queue.age_unknown_items: 0}
+ZZ w2 [observability] graphql.mutation_queue.loaded {auth.state: signed-in, network.online: false, graphql.websocket.state: connected, mutation_queue.depth: 1, mutation_queue.age_unknown_items: 0}
+ZZ w3 DBGq claim 1906 d716df none deferredUntil -
+ZZ w3 DBGq blocked 1933 {"id":"1","op":"UpdateNotifications","lo":"d716df","exp":299288,"alive":true,"keys":["transactionId","uuid","superseded","query","operationName","variables","clientMetadata","optimisticData","enqueuedAtMs","leaseOwner","leaseGeneration","leaseExpiresAtMs"]}
+ZZ w0 DBGq claim 1972 8f04aa none deferredUntil -
+ZZ w0 DBGq blocked 1997 {"id":"1","op":"UpdateNotifications","lo":"fd6787","exp":297422,"alive":false,"keys":["transactionId","uuid","superseded","query","operationName","variables","clientMetadata","optimisticData","enqueuedAtMs","leaseOwner","leaseGeneration","leaseExpiresAtMs"]}
+ZZ w3 DBGq finish 2143 UpdateNotifications committed {} retryIn -
+ZZ w3 DBGq tfinish 2143 committed {}
+ZZ w2 DBGq claim 2028 72dec3 none deferredUntil -
+ZZ w2 DBGq blocked 2085 {"id":"1","op":"UpdateNotifications","lo":"a60b9a","exp":297384,"alive":false,"keys":["transactionId","uuid","superseded","query","operationName","variables","clientMetadata","optimisticData","enqueuedAtMs","leaseOwner","leaseGeneration","leaseExpiresAtMs"]}
+ZZ w0 DBGq skipped 2233 lease-owner-gone
+ZZ w0 [observability] graphql.mutation_queue.skipped {auth.state: signed-in, network.online: false, graphql.websocket.state: connected, mutation_queue.pending_items: 2, mutation_queue.oldest_observed_wait_ms: 1054}
+ZZ w3 DBGq claim 2262 d716df 2 SendChannelMessage deferredUntil -
+ZZ w1 [observability] graphql.mutation_queue.loaded {auth.state: signed-in, network.online: false, graphql.websocket.state: connected, mutation_queue.depth: 1, mutation_queue.age_unknown_items: 0}
+ZZ w0 DBGq claim 2326 8f04aa 1 UpdateNotifications deferredUntil -
+ZZ w3 DBGq finish 2388 SendChannelMessage committed {} retryIn -
+ZZ w3 DBGq tfinish 2388 committed {}
+ZZ w0 DBGq finish 2427 UpdateNotifications committed {} retryIn -
+ZZ w0 DBGq tfinish 2428 committed {}
+ZZ w3 RESULT round 0 sent-after 1037ms
+ZZ w0 DBGq claim 2477 8f04aa 2 UpdateNotifications deferredUntil -
+ZZ w3 DBGq claim 2490 d716df none deferredUntil -
+ZZ w3 DBGq blocked 2506 null
+ZZ w2 DBGq skipped 2409 lease-owner-gone
+ZZ w2 [observability] graphql.mutation_queue.skipped {auth.state: signed-in, network.online: false, graphql.websocket.state: connected, mutation_queue.pending_items: 2, mutation_queue.oldest_observed_wait_ms: 1193}
+ZZ w0 DBGq finish 2564 UpdateNotifications committed {} retryIn -
+ZZ w0 DBGq tfinish 2564 committed {}
+ZZ w0 DBGq claim 2597 8f04aa 3 SendChannelMessage deferredUntil -
+ZZ w2 DBGq claim 2597 72dec3 1 UpdateNotifications deferredUntil -
+ZZ w0 DBGq finish 2727 SendChannelMessage committed {} retryIn -
+ZZ w0 DBGq tfinish 2727 committed {}
+ZZ w3 reload 1
+ZZ w0 DBGq claim 2823 8f04aa none deferredUntil -
+ZZ w0 DBGq blocked 2903 null
+ZZ w0 RESULT round 0 sent-after 1526ms
+ZZ w2 DBGq finish 3151 UpdateNotifications committed {} retryIn -
+ZZ w2 DBGq tfinish 3151 committed {}
+ZZ w2 DBGq claim 3261 72dec3 2 UpdateNotifications deferredUntil -
+ZZ w2 DBGq finish 3384 UpdateNotifications committed {} retryIn -
+ZZ w2 DBGq tfinish 3384 committed {}
+ZZ w1 DBGq claim 2589 fe8563 none deferredUntil -
+ZZ w1 DBGq blocked 2592 {"id":"1","op":"UpdateNotifications","lo":"161d69","exp":296837,"alive":false,"keys":["transactionId","uuid","superseded","query","operationName","variables","clientMetadata","optimisticData","enqueuedAtMs","leaseOwner","leaseGeneration","leaseExpiresAtMs"]}
+ZZ w1 DBGq skipped 2599 lease-owner-gone
+ZZ w1 [observability] graphql.mutation_queue.skipped {auth.state: signed-in, network.online: false, graphql.websocket.state: connected, mutation_queue.pending_items: 2, mutation_queue.oldest_observed_wait_ms: 1453}
+ZZ w2 DBGq claim 3420 72dec3 3 SendChannelMessage deferredUntil -
+ZZ w2 DBGq finish 3580 SendChannelMessage committed {} retryIn -
+ZZ w2 DBGq tfinish 3580 committed {}
+ZZ w2 DBGq claim 3651 72dec3 none deferredUntil -
+ZZ w2 RESULT round 0 sent-after 2189ms
+ZZ w2 DBGq blocked 3719 null
+ZZ w0 reload 1
+ZZ w1 DBGq claim 2931 fe8563 1 UpdateNotifications deferredUntil -
+ZZ w1 DBGq finish 3129 UpdateNotifications committed {} retryIn -
+ZZ w1 DBGq tfinish 3130 committed {}
+ZZ w1 DBGq claim 3227 fe8563 2 UpdateNotifications deferredUntil -
+ZZ w3 [observability] graphql.mutation_queue.loaded {auth.state: signed-in, network.online: false, graphql.websocket.state: connected, mutation_queue.depth: 1, mutation_queue.age_unknown_items: 0}
+ZZ w1 DBGq finish 3328 UpdateNotifications committed {} retryIn -
+ZZ w1 DBGq tfinish 3328 committed {}
+ZZ w1 DBGq claim 3346 fe8563 3 SendChannelMessage deferredUntil -
+ZZ w1 RESULT round 0 sent-after 1972ms
+ZZ w1 DBGq finish 3411 SendChannelMessage committed {} retryIn -
+ZZ w1 DBGq tfinish 3411 committed {}
+ZZ w1 DBGq claim 3480 fe8563 none deferredUntil -
+ZZ w1 DBGq blocked 3533 null
+ZZ w3 DBGq claim 1768 e274e7 3 ReactToChannelMessage deferredUntil -
+ZZ w3 DBGq finish 1834 ReactToChannelMessage committed {} retryIn -
+ZZ w3 DBGq tfinish 1834 committed {}
+ZZ w3 DBGq claim 1847 e274e7 none deferredUntil -
+ZZ w3 DBGq blocked 1849 null
+ZZ w2 reload 1
+ZZ w1 reload 1
+ZZ w0 DBGq claim 1702 9f6796 none deferredUntil -
+ZZ w0 DBGq blocked 1726 null
+ZZ w2 DBGq claim 1822 3cc8f1 none deferredUntil -
+ZZ w2 DBGq blocked 1828 null
+ZZ w1 DBGq claim 1810 a847cd none deferredUntil -
+ZZ w1 DBGq blocked 1830 null
+ZZ w0 DBGq claim 31728 9f6796 none deferredUntil -
+ZZ w0 DBGq blocked 31728 null
+  ✘  5 tests/channels-e2e-dbg/zz.spec.ts:139:1 › ZZ-40 write around a reload (36.9s)
+  ✘  6 tests/channels-e2e-dbg/zz.spec.ts:139:1 › ZZ-40 write around a reload (38.0s)
+  ✘  7 tests/channels-e2e-dbg/zz.spec.ts:139:1 › ZZ-40 write around a reload (38.6s)
+  ✘  8 tests/channels-e2e-dbg/zz.spec.ts:139:1 › ZZ-40 write around a reload (38.3s)
+
+
+  1) tests/channels-e2e-dbg/zz.spec.ts:139:1 › ZZ-40 write around a reload ─────────────────────────
+
+    Error: the channel as it is on the screen
+
+    the channel as it is on the screen
+
+    expect(received).toEqual(expected) // deep equality
+
+    - Expected  - 0
+    + Received  + 1
+
+      Array [
+        "one",
+        "two",
+        "three",
+    +   "after reload 0",
+      ]
+
+    Call Log:
+    - Timeout 30000ms exceeded while waiting on the predicate
+
+       at harness/device.ts:59
+
+      57 |       timeout: 30_000,
+      58 |     })
+    > 59 |     .toEqual(lines);
+         |      ^
+      60 | }
+      61 |
+      62 | /**
+        at expectShown (/home/teo/.herdr/worktrees/macro/synoet-channels-local-sync-suiteb/apps/web/tests/channels-e2e-dbg/harness/device.ts:59:6)
+        at /home/teo/.herdr/worktrees/macro/synoet-channels-local-sync-suiteb/apps/web/tests/channels-e2e-dbg/zz.spec.ts:153:11
+
+    attachment #1: screenshot (image/png) ──────────────────────────────────────────────────────────
+    ../../../../../../.cache/channels-perf-b/e2ed/q3/test-results/zz-ZZ-40-write-around-a-reload/test-failed-1.png
+    ────────────────────────────────────────────────────────────────────────────────────────────────
+
+    Error Context: ../../../../../../.cache/channels-perf-b/e2ed/q3/test-results/zz-ZZ-40-write-around-a-reload/error-context.md
+
+    attachment #3: trace (application/zip) ─────────────────────────────────────────────────────────
+    ../../../../../../.cache/channels-perf-b/e2ed/q3/test-results/zz-ZZ-40-write-around-a-reload/trace.zip
+    Usage:
+
+        npx playwright show-trace ../../../../../../.cache/channels-perf-b/e2ed/q3/test-results/zz-ZZ-40-write-around-a-reload/trace.zip
+
+    ────────────────────────────────────────────────────────────────────────────────────────────────
+
+  2) tests/channels-e2e-dbg/zz.spec.ts:139:1 › ZZ-40 write around a reload ─────────────────────────
+
+    Error: the channel as it is on the screen
+
+    the channel as it is on the screen
+
+    expect(received).toEqual(expected) // deep equality
+
+    - Expected  - 0
+    + Received  + 1
+
+      Array [
+        "one",
+        "two",
+        "three",
+    +   "after reload 0",
+      ]
+
+    Call Log:
+    - Timeout 30000ms exceeded while waiting on the predicate
+
+       at harness/device.ts:59
+
+      57 |       timeout: 30_000,
+      58 |     })
+    > 59 |     .toEqual(lines);
+         |      ^
+      60 | }
+      61 |
+      62 | /**
+        at expectShown (/home/teo/.herdr/worktrees/macro/synoet-channels-local-sync-suiteb/apps/web/tests/channels-e2e-dbg/harness/device.ts:59:6)
+        at /home/teo/.herdr/worktrees/macro/synoet-channels-local-sync-suiteb/apps/web/tests/channels-e2e-dbg/zz.spec.ts:153:11
+
+    attachment #1: screenshot (image/png) ──────────────────────────────────────────────────────────
+    ../../../../../../.cache/channels-perf-b/e2ed/q3/test-results/zz-ZZ-40-write-around-a-reload-repeat1/test-failed-1.png
+    ────────────────────────────────────────────────────────────────────────────────────────────────
+
+    Error Context: ../../../../../../.cache/channels-perf-b/e2ed/q3/test-results/zz-ZZ-40-write-around-a-reload-repeat1/error-context.md
+
+    attachment #3: trace (application/zip) ─────────────────────────────────────────────────────────
+    ../../../../../../.cache/channels-perf-b/e2ed/q3/test-results/zz-ZZ-40-write-around-a-reload-repeat1/trace.zip
+    Usage:
+
+        npx playwright show-trace ../../../../../../.cache/channels-perf-b/e2ed/q3/test-results/zz-ZZ-40-write-around-a-reload-repeat1/trace.zip
+
+    ────────────────────────────────────────────────────────────────────────────────────────────────
+
+  3) tests/channels-e2e-dbg/zz.spec.ts:139:1 › ZZ-40 write around a reload ─────────────────────────
+
+    Error: the channel as it is on the screen
+
+    the channel as it is on the screen
+
+    expect(received).toEqual(expected) // deep equality
+
+    - Expected  - 1
+    + Received  + 2
+
+      Array [
+        "one",
+    -   "two",
+    +   "two [👍]",
+        "three",
+    +   "after reload 0",
+      ]
+
+    Call Log:
+    - Timeout 30000ms exceeded while waiting on the predicate
+
+       at harness/device.ts:59
+
+      57 |       timeout: 30_000,
+      58 |     })
+    > 59 |     .toEqual(lines);
+         |      ^
+      60 | }
+      61 |
+      62 | /**
+        at expectShown (/home/teo/.herdr/worktrees/macro/synoet-channels-local-sync-suiteb/apps/web/tests/channels-e2e-dbg/harness/device.ts:59:6)
+        at /home/teo/.herdr/worktrees/macro/synoet-channels-local-sync-suiteb/apps/web/tests/channels-e2e-dbg/zz.spec.ts:153:11
+
+    attachment #1: screenshot (image/png) ──────────────────────────────────────────────────────────
+    ../../../../../../.cache/channels-perf-b/e2ed/q3/test-results/zz-ZZ-40-write-around-a-reload-repeat2/test-failed-1.png
+    ────────────────────────────────────────────────────────────────────────────────────────────────
+
+    Error Context: ../../../../../../.cache/channels-perf-b/e2ed/q3/test-results/zz-ZZ-40-write-around-a-reload-repeat2/error-context.md
+
+    attachment #3: trace (application/zip) ─────────────────────────────────────────────────────────
+    ../../../../../../.cache/channels-perf-b/e2ed/q3/test-results/zz-ZZ-40-write-around-a-reload-repeat2/trace.zip
+    Usage:
+
+        npx playwright show-trace ../../../../../../.cache/channels-perf-b/e2ed/q3/test-results/zz-ZZ-40-write-around-a-reload-repeat2/trace.zip
+
+    ────────────────────────────────────────────────────────────────────────────────────────────────
+
+  4) tests/channels-e2e-dbg/zz.spec.ts:139:1 › ZZ-40 write around a reload ─────────────────────────
+
+    Error: the channel as it is on the screen
+
+    the channel as it is on the screen
+
+    expect(received).toEqual(expected) // deep equality
+
+    - Expected  - 1
+    + Received  + 2
+
+      Array [
+        "one",
+    -   "two",
+    +   "two [👍]",
+        "three",
+    +   "after reload 0",
+      ]
+
+    Call Log:
+    - Timeout 30000ms exceeded while waiting on the predicate
+
+       at harness/device.ts:59
+
+      57 |       timeout: 30_000,
+      58 |     })
+    > 59 |     .toEqual(lines);
+         |      ^
+      60 | }
+      61 |
+      62 | /**
+        at expectShown (/home/teo/.herdr/worktrees/macro/synoet-channels-local-sync-suiteb/apps/web/tests/channels-e2e-dbg/harness/device.ts:59:6)
+        at /home/teo/.herdr/worktrees/macro/synoet-channels-local-sync-suiteb/apps/web/tests/channels-e2e-dbg/zz.spec.ts:153:11
+
+    attachment #1: screenshot (image/png) ──────────────────────────────────────────────────────────
+    ../../../../../../.cache/channels-perf-b/e2ed/q3/test-results/zz-ZZ-40-write-around-a-reload-repeat3/test-failed-1.png
+    ────────────────────────────────────────────────────────────────────────────────────────────────
+
+    Error Context: ../../../../../../.cache/channels-perf-b/e2ed/q3/test-results/zz-ZZ-40-write-around-a-reload-repeat3/error-context.md
+
+    attachment #3: trace (application/zip) ─────────────────────────────────────────────────────────
+    ../../../../../../.cache/channels-perf-b/e2ed/q3/test-results/zz-ZZ-40-write-around-a-reload-repeat3/trace.zip
+    Usage:
+
+        npx playwright show-trace ../../../../../../.cache/channels-perf-b/e2ed/q3/test-results/zz-ZZ-40-write-around-a-reload-repeat3/trace.zip
+
+    ────────────────────────────────────────────────────────────────────────────────────────────────
+
+  5) tests/channels-e2e-dbg/zz.spec.ts:139:1 › ZZ-40 write around a reload ─────────────────────────
+
+    Error: the channel as it is on the screen
+
+    the channel as it is on the screen
+
+    expect(received).toEqual(expected) // deep equality
+
+    - Expected  - 1
+    + Received  + 2
+
+      Array [
+        "one",
+    -   "two",
+    +   "two [👍]",
+        "three",
+    +   "after reload 0",
+      ]
+
+    Call Log:
+    - Timeout 30000ms exceeded while waiting on the predicate
+
+       at harness/device.ts:59
+
+      57 |       timeout: 30_000,
+      58 |     })
+    > 59 |     .toEqual(lines);
+         |      ^
+      60 | }
+      61 |
+      62 | /**
+        at expectShown (/home/teo/.herdr/worktrees/macro/synoet-channels-local-sync-suiteb/apps/web/tests/channels-e2e-dbg/harness/device.ts:59:6)
+        at /home/teo/.herdr/worktrees/macro/synoet-channels-local-sync-suiteb/apps/web/tests/channels-e2e-dbg/zz.spec.ts:153:11
+
+    attachment #1: screenshot (image/png) ──────────────────────────────────────────────────────────
+    ../../../../../../.cache/channels-perf-b/e2ed/q3/test-results/zz-ZZ-40-write-around-a-reload-repeat4/test-failed-1.png
+    ────────────────────────────────────────────────────────────────────────────────────────────────
+
+    Error Context: ../../../../../../.cache/channels-perf-b/e2ed/q3/test-results/zz-ZZ-40-write-around-a-reload-repeat4/error-context.md
+
+    attachment #3: trace (application/zip) ─────────────────────────────────────────────────────────
+    ../../../../../../.cache/channels-perf-b/e2ed/q3/test-results/zz-ZZ-40-write-around-a-reload-repeat4/trace.zip
+    Usage:
+
+        npx playwright show-trace ../../../../../../.cache/channels-perf-b/e2ed/q3/test-results/zz-ZZ-40-write-around-a-reload-repeat4/trace.zip
+
+    ────────────────────────────────────────────────────────────────────────────────────────────────
+
+  6) tests/channels-e2e-dbg/zz.spec.ts:139:1 › ZZ-40 write around a reload ─────────────────────────
+
+    Error: the channel as it is on the screen
+
+    the channel as it is on the screen
+
+    expect(received).toEqual(expected) // deep equality
+
+    - Expected  - 1
+    + Received  + 2
+
+      Array [
+        "one",
+    -   "two",
+    +   "two [👍]",
+        "three",
+    +   "after reload 0",
+      ]
+
+    Call Log:
+    - Timeout 30000ms exceeded while waiting on the predicate
+
+       at harness/device.ts:59
+
+      57 |       timeout: 30_000,
+      58 |     })
+    > 59 |     .toEqual(lines);
+         |      ^
+      60 | }
+      61 |
+      62 | /**
+        at expectShown (/home/teo/.herdr/worktrees/macro/synoet-channels-local-sync-suiteb/apps/web/tests/channels-e2e-dbg/harness/device.ts:59:6)
+        at /home/teo/.herdr/worktrees/macro/synoet-channels-local-sync-suiteb/apps/web/tests/channels-e2e-dbg/zz.spec.ts:153:11
+
+    attachment #1: screenshot (image/png) ──────────────────────────────────────────────────────────
+    ../../../../../../.cache/channels-perf-b/e2ed/q3/test-results/zz-ZZ-40-write-around-a-reload-repeat5/test-failed-1.png
+    ────────────────────────────────────────────────────────────────────────────────────────────────
+
+    Error Context: ../../../../../../.cache/channels-perf-b/e2ed/q3/test-results/zz-ZZ-40-write-around-a-reload-repeat5/error-context.md
+
+    attachment #3: trace (application/zip) ─────────────────────────────────────────────────────────
+    ../../../../../../.cache/channels-perf-b/e2ed/q3/test-results/zz-ZZ-40-write-around-a-reload-repeat5/trace.zip
+    Usage:
+
+        npx playwright show-trace ../../../../../../.cache/channels-perf-b/e2ed/q3/test-results/zz-ZZ-40-write-around-a-reload-repeat5/trace.zip
+
+    ────────────────────────────────────────────────────────────────────────────────────────────────
+
+  7) tests/channels-e2e-dbg/zz.spec.ts:139:1 › ZZ-40 write around a reload ─────────────────────────
+
+    Error: the channel as it is on the screen
+
+    the channel as it is on the screen
+
+    expect(received).toEqual(expected) // deep equality
+
+    - Expected  - 1
+    + Received  + 2
+
+      Array [
+        "one",
+    -   "two",
+    +   "two [👍]",
+        "three",
+    +   "after reload 0",
+      ]
+
+    Call Log:
+    - Timeout 30000ms exceeded while waiting on the predicate
+
+       at harness/device.ts:59
+
+      57 |       timeout: 30_000,
+      58 |     })
+    > 59 |     .toEqual(lines);
+         |      ^
+      60 | }
+      61 |
+      62 | /**
+        at expectShown (/home/teo/.herdr/worktrees/macro/synoet-channels-local-sync-suiteb/apps/web/tests/channels-e2e-dbg/harness/device.ts:59:6)
+        at /home/teo/.herdr/worktrees/macro/synoet-channels-local-sync-suiteb/apps/web/tests/channels-e2e-dbg/zz.spec.ts:153:11
+
+    attachment #1: screenshot (image/png) ──────────────────────────────────────────────────────────
+    ../../../../../../.cache/channels-perf-b/e2ed/q3/test-results/zz-ZZ-40-write-around-a-reload-repeat6/test-failed-1.png
+    ────────────────────────────────────────────────────────────────────────────────────────────────
+
+    Error Context: ../../../../../../.cache/channels-perf-b/e2ed/q3/test-results/zz-ZZ-40-write-around-a-reload-repeat6/error-context.md
+
+    attachment #3: trace (application/zip) ─────────────────────────────────────────────────────────
+    ../../../../../../.cache/channels-perf-b/e2ed/q3/test-results/zz-ZZ-40-write-around-a-reload-repeat6/trace.zip
+    Usage:
+
+        npx playwright show-trace ../../../../../../.cache/channels-perf-b/e2ed/q3/test-results/zz-ZZ-40-write-around-a-reload-repeat6/trace.zip
+
+    ────────────────────────────────────────────────────────────────────────────────────────────────
+
+  8) tests/channels-e2e-dbg/zz.spec.ts:139:1 › ZZ-40 write around a reload ─────────────────────────
+
+    Error: the channel as it is on the screen
+
+    the channel as it is on the screen
+
+    expect(received).toEqual(expected) // deep equality
+
+    - Expected  - 0
+    + Received  + 1
+
+      Array [
+        "one",
+        "two",
+        "three",
+    +   "after reload 0",
+      ]
+
+    Call Log:
+    - Timeout 30000ms exceeded while waiting on the predicate
+
+       at harness/device.ts:59
+
+      57 |       timeout: 30_000,
+      58 |     })
+    > 59 |     .toEqual(lines);
+         |      ^
+      60 | }
+      61 |
+      62 | /**
+        at expectShown (/home/teo/.herdr/worktrees/macro/synoet-channels-local-sync-suiteb/apps/web/tests/channels-e2e-dbg/harness/device.ts:59:6)
+        at /home/teo/.herdr/worktrees/macro/synoet-channels-local-sync-suiteb/apps/web/tests/channels-e2e-dbg/zz.spec.ts:153:11
+
+    attachment #1: screenshot (image/png) ──────────────────────────────────────────────────────────
+    ../../../../../../.cache/channels-perf-b/e2ed/q3/test-results/zz-ZZ-40-write-around-a-reload-repeat7/test-failed-1.png
+    ────────────────────────────────────────────────────────────────────────────────────────────────
+
+    Error Context: ../../../../../../.cache/channels-perf-b/e2ed/q3/test-results/zz-ZZ-40-write-around-a-reload-repeat7/error-context.md
+
+    attachment #3: trace (application/zip) ─────────────────────────────────────────────────────────
+    ../../../../../../.cache/channels-perf-b/e2ed/q3/test-results/zz-ZZ-40-write-around-a-reload-repeat7/trace.zip
+    Usage:
+
+        npx playwright show-trace ../../../../../../.cache/channels-perf-b/e2ed/q3/test-results/zz-ZZ-40-write-around-a-reload-repeat7/trace.zip
+
+    ────────────────────────────────────────────────────────────────────────────────────────────────
+
+  8 failed
+    tests/channels-e2e-dbg/zz.spec.ts:139:1 › ZZ-40 write around a reload ──────────────────────────
+    tests/channels-e2e-dbg/zz.spec.ts:139:1 › ZZ-40 write around a reload ──────────────────────────
+    tests/channels-e2e-dbg/zz.spec.ts:139:1 › ZZ-40 write around a reload ──────────────────────────
+    tests/channels-e2e-dbg/zz.spec.ts:139:1 › ZZ-40 write around a reload ──────────────────────────
+    tests/channels-e2e-dbg/zz.spec.ts:139:1 › ZZ-40 write around a reload ──────────────────────────
+    tests/channels-e2e-dbg/zz.spec.ts:139:1 › ZZ-40 write around a reload ──────────────────────────
+    tests/channels-e2e-dbg/zz.spec.ts:139:1 › ZZ-40 write around a reload ──────────────────────────
+    tests/channels-e2e-dbg/zz.spec.ts:139:1 › ZZ-40 write around a reload ──────────────────────────

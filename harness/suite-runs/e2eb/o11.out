@@ -1,0 +1,18 @@
+path "/home/teo/.herdr/worktrees/macro/synoet-channels-local-sync-suiteb/apps/web" does not contain a 'flake.nix', searching up
+
+Running 12 tests using 4 workers
+
+  ✓   1 tests/channels-e2e/offline.spec.ts:120:1 › OFF-04 messages read far back in a long channel can be scrolled through again with no connection (37.1s)
+  ✓   2 tests/channels-e2e/offline.spec.ts:120:1 › OFF-04 messages read far back in a long channel can be scrolled through again with no connection (38.2s)
+  ✓   4 tests/channels-e2e/offline.spec.ts:120:1 › OFF-04 messages read far back in a long channel can be scrolled through again with no connection (38.5s)
+  ✓   3 tests/channels-e2e/offline.spec.ts:120:1 › OFF-04 messages read far back in a long channel can be scrolled through again with no connection (39.5s)
+  ✓   5 tests/channels-e2e/offline.spec.ts:120:1 › OFF-04 messages read far back in a long channel can be scrolled through again with no connection (22.2s)
+  ✓   7 tests/channels-e2e/offline.spec.ts:120:1 › OFF-04 messages read far back in a long channel can be scrolled through again with no connection (22.1s)
+  ✓   6 tests/channels-e2e/offline.spec.ts:120:1 › OFF-04 messages read far back in a long channel can be scrolled through again with no connection (22.8s)
+  ✓   8 tests/channels-e2e/offline.spec.ts:120:1 › OFF-04 messages read far back in a long channel can be scrolled through again with no connection (22.8s)
+  ✓   9 tests/channels-e2e/offline.spec.ts:120:1 › OFF-04 messages read far back in a long channel can be scrolled through again with no connection (21.9s)
+  ✓  10 tests/channels-e2e/offline.spec.ts:120:1 › OFF-04 messages read far back in a long channel can be scrolled through again with no connection (21.1s)
+  ✓  11 tests/channels-e2e/offline.spec.ts:120:1 › OFF-04 messages read far back in a long channel can be scrolled through again with no connection (21.8s)
+  ✓  12 tests/channels-e2e/offline.spec.ts:120:1 › OFF-04 messages read far back in a long channel can be scrolled through again with no connection (21.1s)
+
+  12 passed (1.7m)

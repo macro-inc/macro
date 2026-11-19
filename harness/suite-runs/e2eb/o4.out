@@ -1,0 +1,18 @@
+path "/home/teo/.herdr/worktrees/macro/synoet-channels-local-sync-suiteb/apps/web" does not contain a 'flake.nix', searching up
+
+Running 12 tests using 4 workers
+
+  ✓   4 tests/channels-e2e/offline.spec.ts:71:1 › OFF-02 a channel the device has never held says it cannot load offline, and loads when the connection is back (5.4s)
+  ✓   3 tests/channels-e2e/offline.spec.ts:49:1 › OFF-01 a channel the person has read opens whole with no connection (8.6s)
+  ✓   2 tests/channels-e2e/offline.spec.ts:49:1 › OFF-01 a channel the person has read opens whole with no connection (9.3s)
+  ✓   5 tests/channels-e2e/offline.spec.ts:71:1 › OFF-02 a channel the device has never held says it cannot load offline, and loads when the connection is back (5.8s)
+  ✓   7 tests/channels-e2e/offline.spec.ts:49:1 › OFF-01 a channel the person has read opens whole with no connection (6.7s)
+  ✓   8 tests/channels-e2e/offline.spec.ts:71:1 › OFF-02 a channel the device has never held says it cannot load offline, and loads when the connection is back (4.5s)
+  ✓  10 tests/channels-e2e/offline.spec.ts:49:1 › OFF-01 a channel the person has read opens whole with no connection (6.6s)
+  ✓  11 tests/channels-e2e/offline.spec.ts:71:1 › OFF-02 a channel the device has never held says it cannot load offline, and loads when the connection is back (4.4s)
+  ✓   6 tests/channels-e2e/offline.spec.ts:120:1 › OFF-04 messages read far back in a long channel can be scrolled through again with no connection (24.9s)
+  ✓   1 tests/channels-e2e/offline.spec.ts:120:1 › OFF-04 messages read far back in a long channel can be scrolled through again with no connection (38.4s)
+  ✓   9 tests/channels-e2e/offline.spec.ts:120:1 › OFF-04 messages read far back in a long channel can be scrolled through again with no connection (32.6s)
+  ✓  12 tests/channels-e2e/offline.spec.ts:120:1 › OFF-04 messages read far back in a long channel can be scrolled through again with no connection (21.9s)
+
+  12 passed (1.1m)

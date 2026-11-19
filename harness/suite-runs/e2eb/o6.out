@@ -1,0 +1,14 @@
+path "/home/teo/.herdr/worktrees/macro/synoet-channels-local-sync-suiteb/apps/web" does not contain a 'flake.nix', searching up
+
+Running 8 tests using 4 workers
+
+  ✓  2 tests/channels-e2e/offline.spec.ts:120:1 › OFF-04 messages read far back in a long channel can be scrolled through again with no connection (37.3s)
+  ✓  1 tests/channels-e2e/offline.spec.ts:120:1 › OFF-04 messages read far back in a long channel can be scrolled through again with no connection (38.0s)
+  ✓  3 tests/channels-e2e/offline.spec.ts:120:1 › OFF-04 messages read far back in a long channel can be scrolled through again with no connection (38.5s)
+  ✓  4 tests/channels-e2e/offline.spec.ts:120:1 › OFF-04 messages read far back in a long channel can be scrolled through again with no connection (40.4s)
+  ✓  5 tests/channels-e2e/offline.spec.ts:120:1 › OFF-04 messages read far back in a long channel can be scrolled through again with no connection (22.0s)
+  ✓  7 tests/channels-e2e/offline.spec.ts:120:1 › OFF-04 messages read far back in a long channel can be scrolled through again with no connection (21.8s)
+  ✓  6 tests/channels-e2e/offline.spec.ts:120:1 › OFF-04 messages read far back in a long channel can be scrolled through again with no connection (22.8s)
+  ✓  8 tests/channels-e2e/offline.spec.ts:120:1 › OFF-04 messages read far back in a long channel can be scrolled through again with no connection (24.8s)
+
+  8 passed (1.4m)

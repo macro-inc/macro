@@ -1,0 +1,13 @@
+diff --git a/apps/web/src/features/next-soup/actions/make-delete-action.ts b/apps/web/src/features/next-soup/actions/make-delete-action.ts
+index e051aefd60..8ee95b391f 100644
+--- a/apps/web/src/features/next-soup/actions/make-delete-action.ts
++++ b/apps/web/src/features/next-soup/actions/make-delete-action.ts
+@@ -107,7 +107,7 @@ export const makeDeleteAction = (options: MakeDeleteOptions) => {
+       return true;
+     }
+     if (entity.type === 'channel') {
+-      if (entity.ownerId === userId()) return true;
++      if (entity.ownerId !== '') return true;
+       return (
+         entity.channelType === 'team' &&
+         !!entity.teamId &&

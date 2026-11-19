@@ -1,0 +1,14 @@
+path "/home/teo/.herdr/worktrees/macro/synoet-channels-local-sync-suiteb/apps/web" does not contain a 'flake.nix', searching up
+
+Running 4 tests using 4 workers
+
+DD OFF-04 w3 ANNOT 850418 Error: expect(locator).toBeVisible() failed |  | Locator: locator('[data-input-id="channel-input-01a1e246-1514-7265-ba34-23ce947b64b6"]') | Expected: visible | Timeout: 60000ms | Error: element(s) not found |  | Call log: |   - Expect "toBeVisible" with timeout 60000ms |   - waiting for locator('[data-input-id="channel-input-01a1e246-1514-7265-ba34-23ce947b64b6"]') | 
+  ✓  4 tests/channels-e2e-dbg/offline.spec.ts:128:1 › OFF-04 messages read far back in a long channel can be scrolled through again with no connection (1.4m)
+DD OFF-04 w2 ANNOT 850579 Error: expect(locator).toBeVisible() failed |  | Locator: locator('[data-input-id="channel-input-01a1e246-1511-7fa8-a6dc-3621e2b7a578"]') | Expected: visible | Timeout: 60000ms | Error: element(s) not found |  | Call log: |   - Expect "toBeVisible" with timeout 60000ms |   - waiting for locator('[data-input-id="channel-input-01a1e246-1511-7fa8-a6dc-3621e2b7a578"]') | 
+  ✓  2 tests/channels-e2e-dbg/offline.spec.ts:128:1 › OFF-04 messages read far back in a long channel can be scrolled through again with no connection (1.4m)
+DD OFF-04 w1 ANNOT 850781 Error: expect(locator).toBeVisible() failed |  | Locator: locator('[data-input-id="channel-input-01a1e246-1512-783a-8d25-4e6da9f0c188"]') | Expected: visible | Timeout: 60000ms | Error: element(s) not found |  | Call log: |   - Expect "toBeVisible" with timeout 60000ms |   - waiting for locator('[data-input-id="channel-input-01a1e246-1512-783a-8d25-4e6da9f0c188"]') | 
+  ✓  1 tests/channels-e2e-dbg/offline.spec.ts:128:1 › OFF-04 messages read far back in a long channel can be scrolled through again with no connection (1.4m)
+DD OFF-04 w0 ANNOT 851093 Error: expect(locator).toBeVisible() failed |  | Locator: locator('[data-input-id="channel-input-01a1e246-1511-79d0-b593-e5363866f3e9"]') | Expected: visible | Timeout: 60000ms | Error: element(s) not found |  | Call log: |   - Expect "toBeVisible" with timeout 60000ms |   - waiting for locator('[data-input-id="channel-input-01a1e246-1511-79d0-b593-e5363866f3e9"]') | 
+  ✓  3 tests/channels-e2e-dbg/offline.spec.ts:128:1 › OFF-04 messages read far back in a long channel can be scrolled through again with no connection (1.4m)
+
+  4 passed (1.4m)

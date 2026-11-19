@@ -1,0 +1,640 @@
+path "/home/teo/.herdr/worktrees/macro/synoet-channels-local-sync-suiteb/apps/web" does not contain a 'flake.nix', searching up
+
+Running 32 tests using 4 workers
+
+DD WRT-04 w0 ben 337531 [observability] graphql.mutation_queue.loaded {auth.state: signed-in, network.online: false, graphql.websocket.state: connected, mutation_queue.depth: 2, mutation_queue.age_unknown_items: 0}
+DD WRT-04 w2 ben 337644 [observability] graphql.mutation_queue.loaded {auth.state: signed-in, network.online: false, graphql.websocket.state: connected, mutation_queue.depth: 2, mutation_queue.age_unknown_items: 0}
+DD WRT-04 w3 ben 337741 [observability] graphql.mutation_queue.loaded {auth.state: signed-in, network.online: false, graphql.websocket.state: connected, mutation_queue.depth: 2, mutation_queue.age_unknown_items: 0}
+DD WRT-04 w0 ben 338224 DBGq claim 2261 0eee7f none deferredUntil -
+DD WRT-04 w2 ben 338440 DBGq claim 2292 001ce7 none deferredUntil -
+DD WRT-04 w0 ben 338447 DBGq blocked 2381 {"id":"1","op":"SendChannelMessage","lo":"39a3b4","exp":297482,"alive":false,"keys":["transactionId","uuid","superseded","query","operationName","variables","clientMetadata","optimisticData","enqueuedAtMs","leaseOwner","leaseGeneration","leaseExpiresAtMs"]}
+DD WRT-04 w3 ben 338543 DBGq claim 2310 bde7e7 1 SendChannelMessage deferredUntil -
+DD WRT-04 w1 ben 338615 [observability] graphql.mutation_queue.loaded {auth.state: signed-in, network.online: false, graphql.websocket.state: connected, mutation_queue.depth: 2, mutation_queue.age_unknown_items: 0}
+DD WRT-04 w0 ben 338840 DBGq skipped 2877 lease-owner-gone
+DD WRT-04 w0 ben 338840 [observability] graphql.mutation_queue.skipped {auth.state: signed-in, network.online: false, graphql.websocket.state: connected, mutation_queue.pending_items: 0, mutation_queue.oldest_observed_wait_ms: 0}
+DD WRT-04 w0 ben 338927 DBGq claim 2964 0eee7f 1 SendChannelMessage deferredUntil -
+DD WRT-04 w0 ben 339071 DBGq finish 3107 SendChannelMessage retry-scheduled {"failure":"network","retryDelayMs":2000} retryIn 1943
+DD WRT-04 w0 ben 339071 DBGq tfinish 3108 retry-scheduled {"failure":"network","retryDelayMs":2000}
+DD WRT-04 w0 ben 339071 [observability] graphql.mutation_queue.retry_scheduled {mutation_queue.item_id: 01a1e241-f436-7224-a830-51c6fb778c19, mutation_queue.transaction_id: 1, graphql.operation.name: SendChannelMessage, mutation_queue.attempt_count: 2, mutation_queue.server_failure_count: 0}
+DD WRT-04 w2 ben 339087 DBGq blocked 2820 {"id":"1","op":"SendChannelMessage","lo":"51655e","exp":297341,"alive":false,"keys":["transactionId","uuid","superseded","query","operationName","variables","clientMetadata","optimisticData","enqueuedAtMs","leaseOwner","leaseGeneration","leaseExpiresAtMs"]}
+DD WRT-04 w3 ben 339172 DBGq finish 2962 SendChannelMessage retry-scheduled {"failure":"network","retryDelayMs":2000} retryIn 1414
+DD WRT-04 w3 ben 339172 DBGq tfinish 2962 retry-scheduled {"failure":"network","retryDelayMs":2000}
+DD WRT-04 w3 ben 339172 [observability] graphql.mutation_queue.retry_scheduled {mutation_queue.item_id: 01a1e241-f430-766e-bf32-2ef45145f0b7, mutation_queue.transaction_id: 1, graphql.operation.name: SendChannelMessage, mutation_queue.attempt_count: 2, mutation_queue.server_failure_count: 0}
+DD WRT-04 w2 ben 339243 DBGq skipped 3095 lease-owner-gone
+DD WRT-04 w2 ben 339244 [observability] graphql.mutation_queue.skipped {auth.state: signed-in, network.online: false, graphql.websocket.state: connected, mutation_queue.pending_items: 0, mutation_queue.oldest_observed_wait_ms: 0}
+DD WRT-04 w1 ben 339393 DBGq claim 2243 ab5b7c none deferredUntil -
+DD WRT-04 w2 ben 339503 DBGq claim 3355 001ce7 1 SendChannelMessage deferredUntil -
+DD WRT-04 w2 ben 339678 DBGq finish 3528 SendChannelMessage retry-scheduled {"failure":"network","retryDelayMs":2000} retryIn 1923
+DD WRT-04 w2 ben 339678 DBGq tfinish 3529 retry-scheduled {"failure":"network","retryDelayMs":2000}
+DD WRT-04 w2 ben 339678 [observability] graphql.mutation_queue.retry_scheduled {mutation_queue.item_id: 01a1e241-f43a-7ffa-802b-164db4628617, mutation_queue.transaction_id: 1, graphql.operation.name: SendChannelMessage, mutation_queue.attempt_count: 2, mutation_queue.server_failure_count: 0}
+DD WRT-04 w1 ben 340153 DBGq blocked 2887 {"id":"1","op":"SendChannelMessage","lo":"fec5f5","exp":296487,"alive":false,"keys":["transactionId","uuid","superseded","query","operationName","variables","clientMetadata","optimisticData","enqueuedAtMs","leaseOwner","leaseGeneration","leaseExpiresAtMs"]}
+DD WRT-04 w1 ben 340298 DBGq skipped 3148 lease-owner-gone
+DD WRT-04 w1 ben 340299 [observability] graphql.mutation_queue.skipped {auth.state: signed-in, network.online: false, graphql.websocket.state: connected, mutation_queue.pending_items: 0, mutation_queue.oldest_observed_wait_ms: 0}
+DD WRT-04 w1 ben 340640 DBGq claim 3487 ab5b7c 1 SendChannelMessage deferredUntil -
+DD WRT-04 w1 ben 340801 DBGq finish 3649 SendChannelMessage retry-scheduled {"failure":"network","retryDelayMs":2000} retryIn 1934
+DD WRT-04 w1 ben 340801 DBGq tfinish 3649 retry-scheduled {"failure":"network","retryDelayMs":2000}
+DD WRT-04 w1 ben 340801 [observability] graphql.mutation_queue.retry_scheduled {mutation_queue.item_id: 01a1e241-f4ed-7bbf-b29f-5defa6839f57, mutation_queue.transaction_id: 1, graphql.operation.name: SendChannelMessage, mutation_queue.attempt_count: 2, mutation_queue.server_failure_count: 0}
+DD WRT-04 w2 ben 343336 DBGq claim 7187 001ce7 1 SendChannelMessage deferredUntil -
+DD WRT-04 w3 ben 343621 DBGq claim 7272 bde7e7 1 SendChannelMessage deferredUntil -
+DD WRT-04 w2 ben 343801 DBGq finish 7653 SendChannelMessage committed {} retryIn -
+DD WRT-04 w2 ben 343802 DBGq tfinish 7653 committed {}
+DD WRT-04 w2 ben 343802 [observability] graphql.mutation_queue.committed_after_failure {mutation_queue.item_id: 01a1e241-f43a-7ffa-802b-164db4628617, mutation_queue.transaction_id: 1, graphql.operation.name: SendChannelMessage, mutation_queue.attempt_count: 3, mutation_queue.server_failure_count: 0}
+DD WRT-04 w0 ben 343863 DBGq claim 7755 0eee7f 1 SendChannelMessage deferredUntil -
+DD WRT-04 w1 ben 343912 DBGq claim 6762 ab5b7c 1 SendChannelMessage deferredUntil -
+DD WRT-04 w2 ben 344258 DBGq claim 8110 001ce7 2 SendChannelMessage deferredUntil -
+DD WRT-04 w1 ben 344692 DBGq finish 7542 SendChannelMessage committed {} retryIn -
+DD WRT-04 w1 ben 344692 DBGq tfinish 7542 committed {}
+DD WRT-04 w1 ben 344692 [observability] graphql.mutation_queue.committed_after_failure {mutation_queue.item_id: 01a1e241-f4ed-7bbf-b29f-5defa6839f57, mutation_queue.transaction_id: 1, graphql.operation.name: SendChannelMessage, mutation_queue.attempt_count: 3, mutation_queue.server_failure_count: 0}
+  ✓   3 tests/channels-e2e-dbg/writes.spec.ts:127:1 › WRT-04 messages that could not be sent are still there after a reload and are sent once when the services can be reached (11.6s)
+DD WRT-04 w1 ben 344780 DBGq claim 7630 ab5b7c 2 SendChannelMessage deferredUntil -
+DD WRT-04 w1 ben 344973 DBGq finish 7823 SendChannelMessage committed {} retryIn -
+DD WRT-04 w1 ben 344973 DBGq tfinish 7823 committed {}
+DD WRT-04 w3 ben 345006 DBGq finish 8796 SendChannelMessage committed {} retryIn -
+DD WRT-04 w3 ben 345006 DBGq tfinish 8797 committed {}
+DD WRT-04 w3 ben 345006 [observability] graphql.mutation_queue.committed_after_failure {mutation_queue.item_id: 01a1e241-f430-766e-bf32-2ef45145f0b7, mutation_queue.transaction_id: 1, graphql.operation.name: SendChannelMessage, mutation_queue.attempt_count: 3, mutation_queue.server_failure_count: 0}
+DD WRT-04 w0 ben 345365 DBGq finish 9402 SendChannelMessage committed {} retryIn -
+DD WRT-04 w0 ben 345365 DBGq tfinish 9402 committed {}
+DD WRT-04 w0 ben 345365 [observability] graphql.mutation_queue.committed_after_failure {mutation_queue.item_id: 01a1e241-f436-7224-a830-51c6fb778c19, mutation_queue.transaction_id: 1, graphql.operation.name: SendChannelMessage, mutation_queue.attempt_count: 3, mutation_queue.server_failure_count: 0}
+DD WRT-04 w0 ben 345695 DBGq claim 9732 0eee7f 2 SendChannelMessage deferredUntil -
+DD WRT-04 w3 ben 345701 DBGq claim 9492 bde7e7 2 SendChannelMessage deferredUntil -
+  ✓   4 tests/channels-e2e-dbg/writes.spec.ts:127:1 › WRT-04 messages that could not be sent are still there after a reload and are sent once when the services can be reached (12.7s)
+DD WRT-04 w3 ben 346002 DBGq finish 9792 SendChannelMessage committed {} retryIn -
+DD WRT-04 w3 ben 346002 DBGq tfinish 9793 committed {}
+  ✓   2 tests/channels-e2e-dbg/writes.spec.ts:127:1 › WRT-04 messages that could not be sent are still there after a reload and are sent once when the services can be reached (13.1s)
+  ✓   1 tests/channels-e2e-dbg/writes.spec.ts:127:1 › WRT-04 messages that could not be sent are still there after a reload and are sent once when the services can be reached (13.2s)
+DD WRT-04 w2 ben 349319 [observability] graphql.mutation_queue.loaded {auth.state: signed-in, network.online: false, graphql.websocket.state: connected, mutation_queue.depth: 3, mutation_queue.age_unknown_items: 0}
+DD WRT-04 w2 ben 349755 DBGq claim 1945 021696 none deferredUntil -
+DD WRT-04 w2 ben 349833 DBGq blocked 1972 {"id":"1","op":"UpdateNotifications","lo":"bef296","exp":297069,"alive":false,"keys":["transactionId","uuid","superseded","query","operationName","variables","clientMetadata","optimisticData","enqueuedAtMs","leaseOwner","leaseGeneration","leaseExpiresAtMs"]}
+DD WRT-04 w2 ben 349886 DBGq skipped 2076 lease-owner-gone
+DD WRT-04 w2 ben 349886 [observability] graphql.mutation_queue.skipped {auth.state: signed-in, network.online: false, graphql.websocket.state: connected, mutation_queue.pending_items: 1, mutation_queue.oldest_observed_wait_ms: 858}
+DD WRT-04 w2 ben 350009 DBGq claim 2199 021696 1 UpdateNotifications deferredUntil -
+DD WRT-04 w1 ben 350370 [observability] graphql.mutation_queue.loaded {auth.state: signed-in, network.online: false, graphql.websocket.state: connected, mutation_queue.depth: 3, mutation_queue.age_unknown_items: 0}
+DD WRT-04 w2 ben 350456 DBGq finish 2616 UpdateNotifications committed {} retryIn -
+DD WRT-04 w2 ben 350456 DBGq tfinish 2616 committed {}
+DD WRT-04 w2 ben 350526 DBGq claim 2716 021696 2 SendChannelMessage deferredUntil -
+DD WRT-04 w2 ben 350562 DBGq finish 2748 SendChannelMessage retry-scheduled {"failure":"network","retryDelayMs":1000} retryIn 993
+DD WRT-04 w2 ben 350562 DBGq tfinish 2748 retry-scheduled {"failure":"network","retryDelayMs":1000}
+DD WRT-04 w2 ben 350562 [observability] graphql.mutation_queue.retry_scheduled {mutation_queue.item_id: 01a1e242-2298-7772-a1c7-d7160b0a878f, mutation_queue.transaction_id: 2, graphql.operation.name: SendChannelMessage, mutation_queue.attempt_count: 1, mutation_queue.server_failure_count: 0}
+DD WRT-04 w1 ben 350798 DBGq claim 1878 8fd403 none deferredUntil -
+DD WRT-04 w1 ben 350842 DBGq blocked 1900 {"id":"1","op":"UpdateNotifications","lo":"66da36","exp":297198,"alive":false,"keys":["transactionId","uuid","superseded","query","operationName","variables","clientMetadata","optimisticData","enqueuedAtMs","leaseOwner","leaseGeneration","leaseExpiresAtMs"]}
+DD WRT-04 w3 ben 350860 [observability] graphql.mutation_queue.loaded {auth.state: signed-in, network.online: false, graphql.websocket.state: connected, mutation_queue.depth: 3, mutation_queue.age_unknown_items: 0}
+DD WRT-04 w1 ben 350919 DBGq skipped 1998 lease-owner-gone
+DD WRT-04 w1 ben 350919 [observability] graphql.mutation_queue.skipped {auth.state: signed-in, network.online: false, graphql.websocket.state: connected, mutation_queue.pending_items: 1, mutation_queue.oldest_observed_wait_ms: 823}
+DD WRT-04 w0 ben 350998 [observability] graphql.mutation_queue.loaded {auth.state: signed-in, network.online: false, graphql.websocket.state: connected, mutation_queue.depth: 3, mutation_queue.age_unknown_items: 0}
+DD WRT-04 w1 ben 351273 DBGq claim 2352 8fd403 1 UpdateNotifications deferredUntil -
+DD WRT-04 w3 ben 351281 DBGq claim 1763 2390c8 none deferredUntil -
+DD WRT-04 w3 ben 351358 DBGq blocked 1807 {"id":"1","op":"UpdateNotifications","lo":"2390c8","exp":299378,"alive":true,"keys":["transactionId","uuid","superseded","query","operationName","variables","clientMetadata","optimisticData","enqueuedAtMs","leaseOwner","leaseGeneration","leaseExpiresAtMs"]}
+DD WRT-04 w0 ben 351426 DBGq claim 1791 bd9113 none deferredUntil -
+DD WRT-04 w0 ben 351446 DBGq blocked 1806 {"id":"1","op":"UpdateNotifications","lo":"4d1636","exp":297179,"alive":false,"keys":["transactionId","uuid","superseded","query","operationName","variables","clientMetadata","optimisticData","enqueuedAtMs","leaseOwner","leaseGeneration","leaseExpiresAtMs"]}
+DD WRT-04 w0 ben 351462 DBGq skipped 1828 lease-owner-gone
+DD WRT-04 w0 ben 351462 [observability] graphql.mutation_queue.skipped {auth.state: signed-in, network.online: false, graphql.websocket.state: connected, mutation_queue.pending_items: 1, mutation_queue.oldest_observed_wait_ms: 655}
+DD WRT-04 w0 ben 351487 DBGq claim 1853 bd9113 1 UpdateNotifications deferredUntil -
+DD WRT-04 w2 ben 351576 DBGq claim 3766 021696 2 SendChannelMessage deferredUntil -
+DD WRT-04 w3 ben 351717 DBGq finish 2199 UpdateNotifications committed {} retryIn -
+DD WRT-04 w3 ben 351717 DBGq tfinish 2199 committed {}
+DD WRT-04 w2 ben 351750 DBGq finish 3932 SendChannelMessage committed {} retryIn -
+DD WRT-04 w2 ben 351750 DBGq tfinish 3933 committed {}
+DD WRT-04 w2 ben 351750 [observability] graphql.mutation_queue.committed_after_failure {mutation_queue.item_id: 01a1e242-2298-7772-a1c7-d7160b0a878f, mutation_queue.transaction_id: 2, graphql.operation.name: SendChannelMessage, mutation_queue.attempt_count: 2, mutation_queue.server_failure_count: 0}
+DD WRT-04 w1 ben 351770 DBGq finish 2847 UpdateNotifications committed {} retryIn -
+DD WRT-04 w1 ben 351770 DBGq tfinish 2848 committed {}
+DD WRT-04 w3 ben 351778 DBGq claim 2260 2390c8 2 SendChannelMessage deferredUntil -
+DD WRT-04 w1 ben 351790 DBGq claim 2867 8fd403 2 SendChannelMessage deferredUntil -
+DD WRT-04 w1 ben 351825 DBGq finish 2905 SendChannelMessage retry-scheduled {"failure":"network","retryDelayMs":1000} retryIn 968
+DD WRT-04 w1 ben 351825 DBGq tfinish 2905 retry-scheduled {"failure":"network","retryDelayMs":1000}
+DD WRT-04 w1 ben 351826 [observability] graphql.mutation_queue.retry_scheduled {mutation_queue.item_id: 01a1e242-26ec-7882-9383-9975d8d0680f, mutation_queue.transaction_id: 2, graphql.operation.name: SendChannelMessage, mutation_queue.attempt_count: 1, mutation_queue.server_failure_count: 0}
+DD WRT-04 w3 ben 351834 DBGq finish 2316 SendChannelMessage retry-scheduled {"failure":"network","retryDelayMs":1000} retryIn 987
+DD WRT-04 w3 ben 351834 DBGq tfinish 2316 retry-scheduled {"failure":"network","retryDelayMs":1000}
+DD WRT-04 w3 ben 351834 [observability] graphql.mutation_queue.retry_scheduled {mutation_queue.item_id: 01a1e242-28e1-7663-ba9a-3de900eb2bd2, mutation_queue.transaction_id: 2, graphql.operation.name: SendChannelMessage, mutation_queue.attempt_count: 1, mutation_queue.server_failure_count: 0}
+DD WRT-04 w2 ben 351868 DBGq claim 4040 021696 3 SendChannelMessage deferredUntil -
+DD WRT-04 w0 ben 352077 DBGq finish 2443 UpdateNotifications committed {} retryIn -
+DD WRT-04 w0 ben 352078 DBGq tfinish 2444 committed {}
+DD WRT-04 w0 ben 352154 DBGq claim 2520 bd9113 2 SendChannelMessage deferredUntil -
+DD WRT-04 w2 ben 352323 DBGq finish 4509 SendChannelMessage committed {} retryIn -
+DD WRT-04 w2 ben 352323 DBGq tfinish 4510 committed {}
+DD WRT-04 w2 ben 352452 DBGq claim 4624 021696 4 UpdateNotifications deferredUntil -
+DD WRT-04 w2 ben 352518 DBGq finish 4708 UpdateNotifications committed {} retryIn -
+DD WRT-04 w2 ben 352518 DBGq tfinish 4708 committed {}
+DD WRT-04 w2 ben 352553 DBGq claim 4743 021696 none deferredUntil -
+DD WRT-04 w2 ben 352555 DBGq blocked 4745 null
+  ✓   5 tests/channels-e2e-dbg/writes.spec.ts:127:1 › WRT-04 messages that could not be sent are still there after a reload and are sent once when the services can be reached (7.5s)
+DD WRT-04 w0 ben 352673 DBGq finish 2972 SendChannelMessage committed {} retryIn -
+DD WRT-04 w0 ben 352673 DBGq tfinish 2972 committed {}
+DD WRT-04 w0 ben 352674 DBGq claim 3025 bd9113 3 SendChannelMessage deferredUntil -
+DD WRT-04 w0 ben 352821 DBGq finish 3187 SendChannelMessage committed {} retryIn -
+DD WRT-04 w0 ben 352821 DBGq tfinish 3187 committed {}
+DD WRT-04 w1 ben 352827 DBGq claim 3907 8fd403 2 SendChannelMessage deferredUntil -
+DD WRT-04 w3 ben 352862 DBGq claim 3344 2390c8 2 SendChannelMessage deferredUntil -
+DD WRT-04 w1 ben 352889 DBGq finish 3968 SendChannelMessage committed {} retryIn -
+DD WRT-04 w1 ben 352889 DBGq tfinish 3968 committed {}
+DD WRT-04 w1 ben 352889 [observability] graphql.mutation_queue.committed_after_failure {mutation_queue.item_id: 01a1e242-26ec-7882-9383-9975d8d0680f, mutation_queue.transaction_id: 2, graphql.operation.name: SendChannelMessage, mutation_queue.attempt_count: 2, mutation_queue.server_failure_count: 0}
+DD WRT-04 w0 ben 352915 DBGq claim 3281 bd9113 4 UpdateNotifications deferredUntil -
+DD WRT-04 w1 ben 352989 DBGq claim 4069 8fd403 3 SendChannelMessage deferredUntil -
+DD WRT-04 w0 ben 353034 DBGq finish 3400 UpdateNotifications committed {} retryIn -
+DD WRT-04 w0 ben 353034 DBGq tfinish 3400 committed {}
+DD WRT-04 w0 ben 353120 DBGq claim 3485 bd9113 none deferredUntil -
+DD WRT-04 w0 ben 353122 DBGq blocked 3487 null
+  ✓   8 tests/channels-e2e-dbg/writes.spec.ts:127:1 › WRT-04 messages that could not be sent are still there after a reload and are sent once when the services can be reached (6.4s)
+DD WRT-04 w1 ben 353292 DBGq finish 4372 SendChannelMessage committed {} retryIn -
+DD WRT-04 w1 ben 353292 DBGq tfinish 4372 committed {}
+DD WRT-04 w1 ben 353726 DBGq claim 4785 8fd403 4 UpdateNotifications deferredUntil -
+DD WRT-04 w1 ben 353905 DBGq finish 4984 UpdateNotifications committed {} retryIn -
+DD WRT-04 w1 ben 353905 DBGq tfinish 4984 committed {}
+DD WRT-04 w1 ben 353939 DBGq claim 5005 8fd403 none deferredUntil -
+DD WRT-04 w1 ben 353939 DBGq blocked 5005 null
+  ✓   6 tests/channels-e2e-dbg/writes.spec.ts:127:1 › WRT-04 messages that could not be sent are still there after a reload and are sent once when the services can be reached (7.7s)
+DD WRT-04 w3 ben 354743 DBGq finish 5225 SendChannelMessage committed {} retryIn -
+DD WRT-04 w3 ben 354744 DBGq tfinish 5225 committed {}
+DD WRT-04 w3 ben 354744 [observability] graphql.mutation_queue.committed_after_failure {mutation_queue.item_id: 01a1e242-28e1-7663-ba9a-3de900eb2bd2, mutation_queue.transaction_id: 2, graphql.operation.name: SendChannelMessage, mutation_queue.attempt_count: 2, mutation_queue.server_failure_count: 0}
+DD WRT-04 w3 ben 354840 DBGq claim 5322 2390c8 3 SendChannelMessage deferredUntil -
+  ✓   7 tests/channels-e2e-dbg/writes.spec.ts:127:1 › WRT-04 messages that could not be sent are still there after a reload and are sent once when the services can be reached (8.7s)
+DD WRT-04 w2 ben 356948 [observability] graphql.mutation_queue.loaded {auth.state: signed-in, network.online: false, graphql.websocket.state: connected, mutation_queue.depth: 3, mutation_queue.age_unknown_items: 0}
+DD WRT-04 w2 ben 357346 DBGq claim 1826 e2aca4 none deferredUntil -
+DD WRT-04 w2 ben 357441 DBGq blocked 1902 {"id":"1","op":"UpdateNotifications","lo":"89b60d","exp":297464,"alive":false,"keys":["transactionId","uuid","superseded","query","operationName","variables","clientMetadata","optimisticData","enqueuedAtMs","leaseOwner","leaseGeneration","leaseExpiresAtMs"]}
+DD WRT-04 w0 ben 357532 [observability] graphql.mutation_queue.loaded {auth.state: signed-in, network.online: false, graphql.websocket.state: connected, mutation_queue.depth: 3, mutation_queue.age_unknown_items: 0}
+DD WRT-04 w2 ben 357553 DBGq skipped 2001 lease-owner-gone
+DD WRT-04 w2 ben 357553 [observability] graphql.mutation_queue.skipped {auth.state: signed-in, network.online: false, graphql.websocket.state: connected, mutation_queue.pending_items: 1, mutation_queue.oldest_observed_wait_ms: 870}
+DD WRT-04 w0 ben 357993 DBGq claim 1903 f489f2 none deferredUntil -
+DD WRT-04 w0 ben 358044 DBGq blocked 1934 {"id":"1","op":"UpdateNotifications","lo":"3d7e0f","exp":297276,"alive":false,"keys":["transactionId","uuid","superseded","query","operationName","variables","clientMetadata","optimisticData","enqueuedAtMs","leaseOwner","leaseGeneration","leaseExpiresAtMs"]}
+DD WRT-04 w2 ben 358053 DBGq claim 2519 e2aca4 1 UpdateNotifications deferredUntil -
+DD WRT-04 w0 ben 358103 DBGq skipped 2013 lease-owner-gone
+DD WRT-04 w0 ben 358103 [observability] graphql.mutation_queue.skipped {auth.state: signed-in, network.online: false, graphql.websocket.state: connected, mutation_queue.pending_items: 1, mutation_queue.oldest_observed_wait_ms: 872}
+DD WRT-04 w2 ben 358156 DBGq finish 2636 UpdateNotifications committed {} retryIn -
+DD WRT-04 w2 ben 358156 DBGq tfinish 2637 committed {}
+DD WRT-04 w2 ben 358220 DBGq claim 2692 e2aca4 2 SendChannelMessage deferredUntil -
+DD WRT-04 w1 ben 358248 [observability] graphql.mutation_queue.loaded {auth.state: signed-in, network.online: false, graphql.websocket.state: connected, mutation_queue.depth: 3, mutation_queue.age_unknown_items: 0}
+DD WRT-04 w0 ben 358268 DBGq claim 2152 f489f2 1 UpdateNotifications deferredUntil -
+DD WRT-04 w2 ben 358368 DBGq finish 2847 SendChannelMessage committed {} retryIn -
+DD WRT-04 w2 ben 358368 DBGq tfinish 2848 committed {}
+DD WRT-04 w2 ben 358420 DBGq claim 2901 e2aca4 3 SendChannelMessage deferredUntil -
+DD WRT-04 w2 ben 358614 DBGq finish 3094 SendChannelMessage committed {} retryIn -
+DD WRT-04 w2 ben 358614 DBGq tfinish 3094 committed {}
+DD WRT-04 w3 ben 358616 DBGq claim 2505 3b7489 none deferredUntil -
+DD WRT-04 w2 ben 358704 DBGq claim 3184 e2aca4 4 UpdateNotifications deferredUntil -
+DD WRT-04 w1 ben 358729 DBGq claim 2016 526f28 none deferredUntil -
+DD WRT-04 w3 ben 358734 DBGq blocked 2572 {"id":"1","op":"UpdateNotifications","lo":"3b7489","exp":298970,"alive":true,"keys":["transactionId","uuid","superseded","query","operationName","variables","clientMetadata","optimisticData","enqueuedAtMs","leaseOwner","leaseGeneration","leaseExpiresAtMs"]}
+DD WRT-04 w1 ben 358748 DBGq blocked 2032 {"id":"1","op":"UpdateNotifications","lo":"70c6a5","exp":297323,"alive":false,"keys":["transactionId","uuid","superseded","query","operationName","variables","clientMetadata","optimisticData","enqueuedAtMs","leaseOwner","leaseGeneration","leaseExpiresAtMs"]}
+DD WRT-04 w1 ben 358770 DBGq skipped 2058 lease-owner-gone
+DD WRT-04 w1 ben 358770 [observability] graphql.mutation_queue.skipped {auth.state: signed-in, network.online: false, graphql.websocket.state: connected, mutation_queue.pending_items: 1, mutation_queue.oldest_observed_wait_ms: 808}
+DD WRT-04 w1 ben 358833 DBGq claim 2120 526f28 1 UpdateNotifications deferredUntil -
+  ✓   9 tests/channels-e2e-dbg/writes.spec.ts:127:1 › WRT-04 messages that could not be sent are still there after a reload and are sent once when the services can be reached (6.0s)
+DD WRT-04 w0 ben 359187 DBGq finish 2977 UpdateNotifications committed {} retryIn -
+DD WRT-04 w0 ben 359187 DBGq tfinish 2977 committed {}
+DD WRT-04 w0 ben 359229 DBGq claim 3140 f489f2 2 SendChannelMessage deferredUntil -
+DD WRT-04 w1 ben 359427 DBGq finish 2713 UpdateNotifications committed {} retryIn -
+DD WRT-04 w1 ben 359428 DBGq tfinish 2714 committed {}
+DD WRT-04 w0 ben 359474 DBGq finish 3384 SendChannelMessage committed {} retryIn -
+DD WRT-04 w0 ben 359474 DBGq tfinish 3384 committed {}
+DD WRT-04 w0 ben 359515 DBGq claim 3426 f489f2 3 SendChannelMessage deferredUntil -
+DD WRT-04 w1 ben 359522 DBGq claim 2810 526f28 2 SendChannelMessage deferredUntil -
+DD WRT-04 w1 ben 359626 DBGq finish 2911 SendChannelMessage committed {} retryIn -
+DD WRT-04 w1 ben 359626 DBGq tfinish 2911 committed {}
+DD WRT-04 w1 ben 359659 DBGq claim 2947 526f28 3 SendChannelMessage deferredUntil -
+DD WRT-04 w0 ben 359758 DBGq finish 3641 SendChannelMessage committed {} retryIn -
+DD WRT-04 w0 ben 359758 DBGq tfinish 3641 committed {}
+DD WRT-04 w1 ben 359812 DBGq finish 3099 SendChannelMessage committed {} retryIn -
+DD WRT-04 w1 ben 359813 DBGq tfinish 3100 committed {}
+DD WRT-04 w0 ben 359828 DBGq claim 3738 f489f2 4 UpdateNotifications deferredUntil -
+DD WRT-04 w1 ben 359886 DBGq claim 3173 526f28 4 UpdateNotifications deferredUntil -
+DD WRT-04 w1 ben 360117 DBGq finish 3389 UpdateNotifications committed {} retryIn -
+DD WRT-04 w1 ben 360117 DBGq tfinish 3389 committed {}
+DD WRT-04 w3 ben 360174 [observability] graphql.mutation_queue.loaded {auth.state: signed-in, network.online: false, graphql.websocket.state: connected, mutation_queue.depth: 3, mutation_queue.age_unknown_items: 0}
+DD WRT-04 w0 ben 360412 DBGq finish 4301 UpdateNotifications committed {} retryIn -
+DD WRT-04 w0 ben 360412 DBGq tfinish 4301 committed {}
+DD WRT-04 w0 ben 360473 DBGq claim 4384 f489f2 none deferredUntil -
+DD WRT-04 w0 ben 360508 DBGq blocked 4418 null
+DD WRT-04 w1 ben 360542 DBGq claim 3696 526f28 none deferredUntil -
+DD WRT-04 w1 ben 360644 DBGq blocked 3914 null
+  ✓  11 tests/channels-e2e-dbg/writes.spec.ts:127:1 › WRT-04 messages that could not be sent are still there after a reload and are sent once when the services can be reached (6.3s)
+DD WRT-04 w3 ben 360659 DBGq claim 2032 4e61bc none deferredUntil -
+  ✓  10 tests/channels-e2e-dbg/writes.spec.ts:127:1 › WRT-04 messages that could not be sent are still there after a reload and are sent once when the services can be reached (7.1s)
+DD WRT-04 w3 ben 360775 DBGq blocked 2114 {"id":"1","op":"UpdateNotifications","lo":"3b7489","exp":296939,"alive":false,"keys":["transactionId","uuid","superseded","query","operationName","variables","clientMetadata","optimisticData","enqueuedAtMs","leaseOwner","leaseGeneration","leaseExpiresAtMs"]}
+DD WRT-04 w3 ben 361090 DBGq skipped 2463 lease-owner-gone
+DD WRT-04 w3 ben 361090 [observability] graphql.mutation_queue.skipped {auth.state: signed-in, network.online: false, graphql.websocket.state: connected, mutation_queue.pending_items: 0, mutation_queue.oldest_observed_wait_ms: 0}
+DD WRT-04 w3 ben 361239 DBGq claim 2612 4e61bc 1 UpdateNotifications deferredUntil -
+DD WRT-04 w3 ben 361655 DBGq finish 3022 UpdateNotifications committed {} retryIn -
+DD WRT-04 w3 ben 361655 DBGq tfinish 3023 committed {}
+DD WRT-04 w3 ben 361682 DBGq claim 3055 4e61bc 2 SendChannelMessage deferredUntil -
+DD WRT-04 w3 ben 361844 DBGq finish 3217 SendChannelMessage committed {} retryIn -
+DD WRT-04 w3 ben 361844 DBGq tfinish 3217 committed {}
+DD WRT-04 w3 ben 362020 DBGq claim 3379 4e61bc 3 SendChannelMessage deferredUntil -
+DD WRT-04 w3 ben 362151 DBGq finish 3524 SendChannelMessage committed {} retryIn -
+DD WRT-04 w3 ben 362151 DBGq tfinish 3524 committed {}
+DD WRT-04 w3 ben 362187 DBGq claim 3560 4e61bc none deferredUntil -
+DD WRT-04 w3 ben 362216 DBGq blocked 3582 null
+  ✓  12 tests/channels-e2e-dbg/writes.spec.ts:127:1 › WRT-04 messages that could not be sent are still there after a reload and are sent once when the services can be reached (6.4s)
+DD WRT-04 w2 ben 363530 [observability] graphql.mutation_queue.loaded {auth.state: signed-in, network.online: false, graphql.websocket.state: connected, mutation_queue.depth: 3, mutation_queue.age_unknown_items: 0}
+DD WRT-04 w2 ben 363971 DBGq claim 2011 140bdb none deferredUntil -
+DD WRT-04 w2 ben 364035 DBGq blocked 2045 {"id":"1","op":"UpdateNotifications","lo":"90ae80","exp":297288,"alive":false,"keys":["transactionId","uuid","superseded","query","operationName","variables","clientMetadata","optimisticData","enqueuedAtMs","leaseOwner","leaseGeneration","leaseExpiresAtMs"]}
+DD WRT-04 w2 ben 364139 DBGq skipped 2159 lease-owner-gone
+DD WRT-04 w2 ben 364139 [observability] graphql.mutation_queue.skipped {auth.state: signed-in, network.online: false, graphql.websocket.state: connected, mutation_queue.pending_items: 1, mutation_queue.oldest_observed_wait_ms: 867}
+DD WRT-04 w2 ben 364581 DBGq claim 2607 140bdb 1 UpdateNotifications deferredUntil -
+DD WRT-04 w2 ben 364676 DBGq finish 2716 UpdateNotifications committed {} retryIn -
+DD WRT-04 w2 ben 364676 DBGq tfinish 2716 committed {}
+DD WRT-04 w2 ben 364738 DBGq claim 2775 140bdb 2 SendChannelMessage deferredUntil -
+DD WRT-04 w2 ben 364817 DBGq finish 2857 SendChannelMessage committed {} retryIn -
+DD WRT-04 w2 ben 364817 DBGq tfinish 2857 committed {}
+DD WRT-04 w0 ben 364847 [observability] graphql.mutation_queue.loaded {auth.state: signed-in, network.online: false, graphql.websocket.state: connected, mutation_queue.depth: 1, mutation_queue.age_unknown_items: 0}
+DD WRT-04 w2 ben 364854 DBGq claim 2894 140bdb 3 SendChannelMessage deferredUntil -
+DD WRT-04 w1 ben 364893 [observability] graphql.mutation_queue.loaded {auth.state: signed-in, network.online: false, graphql.websocket.state: connected, mutation_queue.depth: 3, mutation_queue.age_unknown_items: 0}
+DD WRT-04 w2 ben 365053 DBGq finish 3093 SendChannelMessage committed {} retryIn -
+DD WRT-04 w2 ben 365053 DBGq tfinish 3093 committed {}
+DD WRT-04 w2 ben 365159 DBGq claim 3199 140bdb 4 UpdateNotifications deferredUntil -
+DD WRT-04 w0 ben 365357 DBGq claim 1914 69afea none deferredUntil -
+DD WRT-04 w1 ben 365433 DBGq claim 1933 b898f6 none deferredUntil -
+DD WRT-04 w0 ben 365452 DBGq blocked 1995 {"id":"1","op":"UpdateNotifications","lo":"291edb","exp":297412,"alive":false,"keys":["transactionId","uuid","superseded","query","operationName","variables","clientMetadata","optimisticData","enqueuedAtMs","leaseOwner","leaseGeneration","leaseExpiresAtMs"]}
+DD WRT-04 w0 ben 365475 DBGq skipped 2032 lease-owner-gone
+DD WRT-04 w0 ben 365475 [observability] graphql.mutation_queue.skipped {auth.state: signed-in, network.online: false, graphql.websocket.state: connected, mutation_queue.pending_items: 3, mutation_queue.oldest_observed_wait_ms: 906}
+DD WRT-04 w1 ben 365491 DBGq blocked 1976 {"id":"1","op":"UpdateNotifications","lo":"b898f6","exp":299194,"alive":true,"keys":["transactionId","uuid","superseded","query","operationName","variables","clientMetadata","optimisticData","enqueuedAtMs","leaseOwner","leaseGeneration","leaseExpiresAtMs"]}
+DD WRT-04 w2 ben 365602 DBGq finish 3637 UpdateNotifications committed {} retryIn -
+DD WRT-04 w2 ben 365602 DBGq tfinish 3637 committed {}
+DD WRT-04 w2 ben 365733 DBGq claim 3761 140bdb none deferredUntil -
+DD WRT-04 w2 ben 365733 DBGq blocked 3766 null
+  ✓  13 tests/channels-e2e-dbg/writes.spec.ts:127:1 › WRT-04 messages that could not be sent are still there after a reload and are sent once when the services can be reached (6.3s)
+DD WRT-04 w3 ben 365800 DBGq claim 2736 7b1b51 none deferredUntil -
+DD WRT-04 w3 ben 365803 DBGq blocked 2771 {"id":"1","op":"UpdateNotifications","lo":"7b1b51","exp":298902,"alive":true,"keys":["transactionId","uuid","superseded","query","operationName","variables","clientMetadata","optimisticData","enqueuedAtMs","leaseOwner","leaseGeneration","leaseExpiresAtMs"]}
+DD WRT-04 w0 ben 366015 DBGq claim 2572 69afea 1 UpdateNotifications deferredUntil -
+DD WRT-04 w1 ben 366140 DBGq finish 2640 UpdateNotifications committed {} retryIn -
+DD WRT-04 w1 ben 366140 DBGq tfinish 2640 committed {}
+DD WRT-04 w0 ben 366203 DBGq finish 2760 UpdateNotifications committed {} retryIn -
+DD WRT-04 w0 ben 366203 DBGq tfinish 2760 committed {}
+DD WRT-04 w0 ben 366250 DBGq claim 2807 69afea 2 UpdateNotifications deferredUntil -
+DD WRT-04 w1 ben 366254 DBGq claim 2754 b898f6 2 SendChannelMessage deferredUntil -
+DD WRT-04 w1 ben 366299 DBGq finish 2796 SendChannelMessage retry-scheduled {"failure":"network","retryDelayMs":1000} retryIn 980
+DD WRT-04 w1 ben 366299 DBGq tfinish 2796 retry-scheduled {"failure":"network","retryDelayMs":1000}
+DD WRT-04 w1 ben 366299 [observability] graphql.mutation_queue.retry_scheduled {mutation_queue.item_id: 01a1e242-6016-7773-ae7e-7c8990cf5fc7, mutation_queue.transaction_id: 2, graphql.operation.name: SendChannelMessage, mutation_queue.attempt_count: 1, mutation_queue.server_failure_count: 0}
+DD WRT-04 w0 ben 366664 DBGq finish 3199 UpdateNotifications committed {} retryIn -
+DD WRT-04 w0 ben 366664 DBGq tfinish 3199 committed {}
+DD WRT-04 w0 ben 366667 DBGq claim 3220 69afea 3 SendChannelMessage deferredUntil -
+DD WRT-04 w0 ben 366732 DBGq finish 3282 SendChannelMessage retry-scheduled {"failure":"network","retryDelayMs":1000} retryIn 949
+DD WRT-04 w0 ben 366732 DBGq tfinish 3282 retry-scheduled {"failure":"network","retryDelayMs":1000}
+DD WRT-04 w0 ben 366732 [observability] graphql.mutation_queue.retry_scheduled {mutation_queue.item_id: 01a1e242-60b2-7339-8dd3-189885db3e09, mutation_queue.transaction_id: 3, graphql.operation.name: SendChannelMessage, mutation_queue.attempt_count: 1, mutation_queue.server_failure_count: 0}
+DD WRT-04 w3 ben 367153 [observability] graphql.mutation_queue.loaded {auth.state: signed-in, network.online: false, graphql.websocket.state: connected, mutation_queue.depth: 3, mutation_queue.age_unknown_items: 0}
+DD WRT-04 w1 ben 367284 DBGq claim 3784 b898f6 2 SendChannelMessage deferredUntil -
+DD WRT-04 w1 ben 367378 DBGq finish 3878 SendChannelMessage committed {} retryIn -
+DD WRT-04 w1 ben 367379 DBGq tfinish 3878 committed {}
+DD WRT-04 w1 ben 367379 [observability] graphql.mutation_queue.committed_after_failure {mutation_queue.item_id: 01a1e242-6016-7773-ae7e-7c8990cf5fc7, mutation_queue.transaction_id: 2, graphql.operation.name: SendChannelMessage, mutation_queue.attempt_count: 2, mutation_queue.server_failure_count: 0}
+DD WRT-04 w1 ben 367476 DBGq claim 3975 b898f6 3 SendChannelMessage deferredUntil -
+DD WRT-04 w1 ben 367629 DBGq finish 4129 SendChannelMessage committed {} retryIn -
+DD WRT-04 w1 ben 367629 DBGq tfinish 4129 committed {}
+DD WRT-04 w3 ben 367692 DBGq claim 2265 068b73 none deferredUntil -
+DD WRT-04 w1 ben 367732 DBGq claim 4211 b898f6 4 UpdateNotifications deferredUntil -
+DD WRT-04 w3 ben 367754 DBGq blocked 2353 {"id":"1","op":"UpdateNotifications","lo":"7b1b51","exp":296687,"alive":false,"keys":["transactionId","uuid","superseded","query","operationName","variables","clientMetadata","optimisticData","enqueuedAtMs","leaseOwner","leaseGeneration","leaseExpiresAtMs"]}
+DD WRT-04 w0 ben 367774 DBGq claim 4331 69afea 3 SendChannelMessage deferredUntil -
+DD WRT-04 w0 ben 367832 DBGq finish 4389 SendChannelMessage committed {} retryIn -
+DD WRT-04 w0 ben 367832 DBGq tfinish 4389 committed {}
+DD WRT-04 w0 ben 367832 [observability] graphql.mutation_queue.committed_after_failure {mutation_queue.item_id: 01a1e242-60b2-7339-8dd3-189885db3e09, mutation_queue.transaction_id: 3, graphql.operation.name: SendChannelMessage, mutation_queue.attempt_count: 2, mutation_queue.server_failure_count: 0}
+DD WRT-04 w0 ben 367849 DBGq claim 4406 69afea 4 SendChannelMessage deferredUntil -
+DD WRT-04 w3 ben 368007 DBGq skipped 2609 lease-owner-gone
+DD WRT-04 w3 ben 368008 [observability] graphql.mutation_queue.skipped {auth.state: signed-in, network.online: false, graphql.websocket.state: connected, mutation_queue.pending_items: 0, mutation_queue.oldest_observed_wait_ms: 0}
+DD WRT-04 w0 ben 368025 DBGq finish 4582 SendChannelMessage committed {} retryIn -
+DD WRT-04 w0 ben 368025 DBGq tfinish 4582 committed {}
+DD WRT-04 w3 ben 368078 DBGq claim 2680 068b73 1 UpdateNotifications deferredUntil -
+DD WRT-04 w0 ben 368108 DBGq claim 4666 69afea none deferredUntil -
+DD WRT-04 w0 ben 368109 DBGq blocked 4666 null
+DD WRT-04 w1 ben 368247 DBGq finish 4621 UpdateNotifications committed {} retryIn -
+DD WRT-04 w1 ben 368248 DBGq tfinish 4621 committed {}
+DD WRT-04 w1 ben 368322 DBGq claim 4813 b898f6 none deferredUntil -
+DD WRT-04 w1 ben 368330 DBGq blocked 4829 null
+  ✓  14 tests/channels-e2e-dbg/writes.spec.ts:127:1 › WRT-04 messages that could not be sent are still there after a reload and are sent once when the services can be reached (7.4s)
+DD WRT-04 w3 ben 368598 DBGq finish 3184 UpdateNotifications committed {} retryIn -
+DD WRT-04 w3 ben 368598 DBGq tfinish 3184 committed {}
+DD WRT-04 w3 ben 368633 DBGq claim 3233 068b73 2 SendChannelMessage deferredUntil -
+DD WRT-04 w3 ben 368759 DBGq finish 3360 SendChannelMessage committed {} retryIn -
+DD WRT-04 w3 ben 368759 DBGq tfinish 3360 committed {}
+DD WRT-04 w3 ben 368883 DBGq claim 3461 068b73 3 SendChannelMessage deferredUntil -
+DD WRT-04 w3 ben 369000 DBGq finish 3601 SendChannelMessage committed {} retryIn -
+DD WRT-04 w3 ben 369000 DBGq tfinish 3601 committed {}
+DD WRT-04 w3 ben 369096 DBGq claim 3698 068b73 none deferredUntil -
+DD WRT-04 w3 ben 369170 DBGq blocked 3743 null
+  ✓  16 tests/channels-e2e-dbg/writes.spec.ts:127:1 › WRT-04 messages that could not be sent are still there after a reload and are sent once when the services can be reached (7.1s)
+DD WRT-04 w2 ben 370060 [observability] graphql.mutation_queue.loaded {auth.state: signed-in, network.online: false, graphql.websocket.state: connected, mutation_queue.depth: 3, mutation_queue.age_unknown_items: 0}
+DD WRT-04 w2 ben 370491 DBGq claim 1768 46b512 none deferredUntil -
+DD WRT-04 w2 ben 370527 DBGq blocked 1787 {"id":"1","op":"UpdateNotifications","lo":"32ba08","exp":297348,"alive":false,"keys":["transactionId","uuid","superseded","query","operationName","variables","clientMetadata","optimisticData","enqueuedAtMs","leaseOwner","leaseGeneration","leaseExpiresAtMs"]}
+DD WRT-04 w2 ben 370691 DBGq skipped 1938 lease-owner-gone
+DD WRT-04 w2 ben 370691 [observability] graphql.mutation_queue.skipped {auth.state: signed-in, network.online: false, graphql.websocket.state: connected, mutation_queue.pending_items: 1, mutation_queue.oldest_observed_wait_ms: 871}
+DD WRT-04 w2 ben 371099 DBGq claim 2365 46b512 1 UpdateNotifications deferredUntil -
+DD WRT-04 w2 ben 371185 DBGq finish 2462 UpdateNotifications committed {} retryIn -
+DD WRT-04 w2 ben 371185 DBGq tfinish 2462 committed {}
+DD WRT-04 w2 ben 371244 DBGq claim 2518 46b512 2 SendChannelMessage deferredUntil -
+DD WRT-04 w2 ben 371331 DBGq finish 2608 SendChannelMessage committed {} retryIn -
+DD WRT-04 w2 ben 371331 DBGq tfinish 2608 committed {}
+DD WRT-04 w2 ben 371433 DBGq claim 2710 46b512 3 SendChannelMessage deferredUntil -
+DD WRT-04 w2 ben 371642 DBGq finish 2919 SendChannelMessage committed {} retryIn -
+DD WRT-04 w2 ben 371642 DBGq tfinish 2919 committed {}
+DD WRT-04 w2 ben 372057 DBGq claim 3228 46b512 4 UpdateNotifications deferredUntil -
+DD WRT-04 w2 ben 372203 DBGq finish 3479 UpdateNotifications committed {} retryIn -
+DD WRT-04 w2 ben 372203 DBGq tfinish 3479 committed {}
+DD WRT-04 w2 ben 372311 DBGq claim 3582 46b512 none deferredUntil -
+  ✓  17 tests/channels-e2e-dbg/writes.spec.ts:127:1 › WRT-04 messages that could not be sent are still there after a reload and are sent once when the services can be reached (6.1s)
+DD WRT-04 w1 ben 372912 [observability] graphql.mutation_queue.loaded {auth.state: signed-in, network.online: false, graphql.websocket.state: connected, mutation_queue.depth: 3, mutation_queue.age_unknown_items: 0}
+DD WRT-04 w1 ben 373298 DBGq claim 1869 a93106 1 UpdateNotifications deferredUntil -
+DD WRT-04 w1 ben 373390 DBGq finish 1962 UpdateNotifications committed {} retryIn -
+DD WRT-04 w1 ben 373390 DBGq tfinish 1962 committed {}
+DD WRT-04 w1 ben 373496 DBGq claim 2048 a93106 2 SendChannelMessage deferredUntil -
+DD WRT-04 w1 ben 373515 DBGq finish 2087 SendChannelMessage retry-scheduled {"failure":"network","retryDelayMs":1000} retryIn 986
+DD WRT-04 w1 ben 373515 DBGq tfinish 2087 retry-scheduled {"failure":"network","retryDelayMs":1000}
+DD WRT-04 w1 ben 373515 [observability] graphql.mutation_queue.retry_scheduled {mutation_queue.item_id: 01a1e242-7eef-7bb6-b275-f4963efa8bff, mutation_queue.transaction_id: 2, graphql.operation.name: SendChannelMessage, mutation_queue.attempt_count: 1, mutation_queue.server_failure_count: 0}
+DD WRT-04 w3 ben 374239 [observability] graphql.mutation_queue.loaded {auth.state: signed-in, network.online: false, graphql.websocket.state: connected, mutation_queue.depth: 3, mutation_queue.age_unknown_items: 0}
+DD WRT-04 w1 ben 374504 DBGq claim 3076 a93106 2 SendChannelMessage deferredUntil -
+DD WRT-04 w1 ben 374577 DBGq finish 3149 SendChannelMessage committed {} retryIn -
+DD WRT-04 w1 ben 374577 DBGq tfinish 3149 committed {}
+DD WRT-04 w1 ben 374578 [observability] graphql.mutation_queue.committed_after_failure {mutation_queue.item_id: 01a1e242-7eef-7bb6-b275-f4963efa8bff, mutation_queue.transaction_id: 2, graphql.operation.name: SendChannelMessage, mutation_queue.attempt_count: 2, mutation_queue.server_failure_count: 0}
+DD WRT-04 w1 ben 374680 DBGq claim 3252 a93106 3 SendChannelMessage deferredUntil -
+DD WRT-04 w3 ben 374732 DBGq claim 1917 faadcb none deferredUntil -
+DD WRT-04 w3 ben 374783 DBGq blocked 1938 {"id":"1","op":"UpdateNotifications","lo":"d57c2e","exp":297181,"alive":false,"keys":["transactionId","uuid","superseded","query","operationName","variables","clientMetadata","optimisticData","enqueuedAtMs","leaseOwner","leaseGeneration","leaseExpiresAtMs"]}
+DD WRT-04 w3 ben 374916 DBGq skipped 2072 lease-owner-gone
+DD WRT-04 w3 ben 374916 [observability] graphql.mutation_queue.skipped {auth.state: signed-in, network.online: false, graphql.websocket.state: connected, mutation_queue.pending_items: 1, mutation_queue.oldest_observed_wait_ms: 940}
+DD WRT-04 w1 ben 375206 DBGq finish 3776 SendChannelMessage committed {} retryIn -
+DD WRT-04 w1 ben 375206 DBGq tfinish 3776 committed {}
+DD WRT-04 w1 ben 375387 DBGq claim 3921 a93106 none deferredUntil -
+DD WRT-04 w1 ben 375387 DBGq blocked 3928 null
+  ✓  18 tests/channels-e2e-dbg/writes.spec.ts:127:1 › WRT-04 messages that could not be sent are still there after a reload and are sent once when the services can be reached (6.6s)
+DD WRT-04 w3 ben 375580 DBGq claim 2749 faadcb 1 UpdateNotifications deferredUntil -
+DD WRT-04 w3 ben 375652 DBGq finish 2837 UpdateNotifications committed {} retryIn -
+DD WRT-04 w3 ben 375653 DBGq tfinish 2838 committed {}
+DD WRT-04 w3 ben 375700 DBGq claim 2882 faadcb 2 SendChannelMessage deferredUntil -
+DD WRT-04 w3 ben 375818 DBGq finish 3003 SendChannelMessage committed {} retryIn -
+DD WRT-04 w3 ben 375818 DBGq tfinish 3003 committed {}
+DD WRT-04 w3 ben 375863 DBGq claim 3048 faadcb 3 SendChannelMessage deferredUntil -
+DD WRT-04 w3 ben 376082 DBGq finish 3265 SendChannelMessage committed {} retryIn -
+DD WRT-04 w3 ben 376082 DBGq tfinish 3265 committed {}
+DD WRT-04 w3 ben 376142 DBGq claim 3324 faadcb 4 UpdateNotifications deferredUntil -
+DD WRT-04 w2 ben 376565 [observability] graphql.mutation_queue.loaded {auth.state: signed-in, network.online: false, graphql.websocket.state: connected, mutation_queue.depth: 3, mutation_queue.age_unknown_items: 0}
+DD WRT-04 w3 ben 376718 DBGq finish 3892 UpdateNotifications committed {} retryIn -
+DD WRT-04 w3 ben 376718 DBGq tfinish 3892 committed {}
+  ✓  19 tests/channels-e2e-dbg/writes.spec.ts:127:1 › WRT-04 messages that could not be sent are still there after a reload and are sent once when the services can be reached (6.5s)
+DD WRT-04 w2 ben 376902 DBGq claim 1726 9fa4ce none deferredUntil -
+DD WRT-04 w2 ben 376971 DBGq blocked 1764 {"id":"1","op":"UpdateNotifications","lo":"0df885","exp":297594,"alive":false,"keys":["transactionId","uuid","superseded","query","operationName","variables","clientMetadata","optimisticData","enqueuedAtMs","leaseOwner","leaseGeneration","leaseExpiresAtMs"]}
+DD WRT-04 w2 ben 377048 DBGq skipped 1870 lease-owner-gone
+DD WRT-04 w2 ben 377048 [observability] graphql.mutation_queue.skipped {auth.state: signed-in, network.online: false, graphql.websocket.state: connected, mutation_queue.pending_items: 1, mutation_queue.oldest_observed_wait_ms: 740}
+DD WRT-04 w2 ben 377691 DBGq claim 2398 9fa4ce 1 UpdateNotifications deferredUntil -
+DD WRT-04 w2 ben 377835 DBGq finish 2658 UpdateNotifications committed {} retryIn -
+DD WRT-04 w2 ben 377835 DBGq tfinish 2658 committed {}
+DD WRT-04 w2 ben 377885 DBGq claim 2704 9fa4ce 2 SendChannelMessage deferredUntil -
+DD WRT-04 w2 ben 377963 DBGq finish 2787 SendChannelMessage committed {} retryIn -
+DD WRT-04 w2 ben 377964 DBGq tfinish 2787 committed {}
+DD WRT-04 w2 ben 377998 DBGq claim 2822 9fa4ce 3 SendChannelMessage deferredUntil -
+DD WRT-04 w2 ben 378172 DBGq finish 2995 SendChannelMessage committed {} retryIn -
+DD WRT-04 w2 ben 378172 DBGq tfinish 2995 committed {}
+DD WRT-04 w2 ben 378262 DBGq claim 3085 9fa4ce 4 UpdateNotifications deferredUntil -
+DD WRT-04 w2 ben 378769 DBGq finish 3592 UpdateNotifications committed {} retryIn -
+DD WRT-04 w2 ben 378769 DBGq tfinish 3592 committed {}
+DD WRT-04 w2 ben 378886 DBGq claim 3685 9fa4ce none deferredUntil -
+DD WRT-04 w2 ben 378886 DBGq blocked 3690 null
+  ✓  20 tests/channels-e2e-dbg/writes.spec.ts:127:1 › WRT-04 messages that could not be sent are still there after a reload and are sent once when the services can be reached (6.1s)
+DD WRT-04 w1 ben 379829 [observability] graphql.mutation_queue.loaded {auth.state: signed-in, network.online: false, graphql.websocket.state: connected, mutation_queue.depth: 3, mutation_queue.age_unknown_items: 0}
+DD WRT-04 w1 ben 380317 DBGq claim 1876 6e8fe7 1 UpdateNotifications deferredUntil -
+DD WRT-04 w1 ben 381013 DBGq finish 2558 UpdateNotifications committed {} retryIn -
+DD WRT-04 w1 ben 381013 DBGq tfinish 2559 committed {}
+DD WRT-04 w3 ben 381056 [observability] graphql.mutation_queue.loaded {auth.state: signed-in, network.online: false, graphql.websocket.state: connected, mutation_queue.depth: 1, mutation_queue.age_unknown_items: 0}
+DD WRT-04 w1 ben 381062 DBGq claim 2621 6e8fe7 2 SendChannelMessage deferredUntil -
+DD WRT-04 w1 ben 381228 DBGq finish 2787 SendChannelMessage committed {} retryIn -
+DD WRT-04 w1 ben 381229 DBGq tfinish 2787 committed {}
+DD WRT-04 w1 ben 381267 DBGq claim 2825 6e8fe7 3 SendChannelMessage deferredUntil -
+DD WRT-04 w1 ben 381379 DBGq finish 2938 SendChannelMessage committed {} retryIn -
+DD WRT-04 w1 ben 381379 DBGq tfinish 2939 committed {}
+DD WRT-04 w1 ben 381434 DBGq claim 2992 6e8fe7 none deferredUntil -
+DD WRT-04 w1 ben 381434 DBGq blocked 2993 null
+DD WRT-04 w3 ben 381572 DBGq claim 1831 c39a2b none deferredUntil -
+DD WRT-04 w3 ben 381626 DBGq blocked 1866 {"id":"1","op":"UpdateNotifications","lo":"8668bc","exp":297497,"alive":false,"keys":["transactionId","uuid","superseded","query","operationName","variables","clientMetadata","optimisticData","enqueuedAtMs","leaseOwner","leaseGeneration","leaseExpiresAtMs"]}
+DD WRT-04 w3 ben 381703 DBGq skipped 1959 lease-owner-gone
+DD WRT-04 w3 ben 381703 [observability] graphql.mutation_queue.skipped {auth.state: signed-in, network.online: false, graphql.websocket.state: connected, mutation_queue.pending_items: 3, mutation_queue.oldest_observed_wait_ms: 913}
+  ✓  21 tests/channels-e2e-dbg/writes.spec.ts:127:1 › WRT-04 messages that could not be sent are still there after a reload and are sent once when the services can be reached (6.1s)
+DD WRT-04 w3 ben 382394 DBGq claim 2636 c39a2b 1 UpdateNotifications deferredUntil -
+DD WRT-04 w3 ben 382489 DBGq finish 2748 UpdateNotifications committed {} retryIn -
+DD WRT-04 w3 ben 382489 DBGq tfinish 2748 committed {}
+DD WRT-04 w3 ben 382527 DBGq claim 2787 c39a2b 2 UpdateNotifications deferredUntil -
+DD WRT-04 w3 ben 382633 DBGq finish 2892 UpdateNotifications committed {} retryIn -
+DD WRT-04 w3 ben 382634 DBGq tfinish 2892 committed {}
+DD WRT-04 w3 ben 382650 DBGq claim 2910 c39a2b 3 SendChannelMessage deferredUntil -
+DD WRT-04 w3 ben 382767 DBGq finish 3026 SendChannelMessage committed {} retryIn -
+DD WRT-04 w3 ben 382767 DBGq tfinish 3026 committed {}
+DD WRT-04 w3 ben 382899 DBGq claim 3136 c39a2b 4 SendChannelMessage deferredUntil -
+DD WRT-04 w2 ben 383191 [observability] graphql.mutation_queue.loaded {auth.state: signed-in, network.online: false, graphql.websocket.state: connected, mutation_queue.depth: 3, mutation_queue.age_unknown_items: 0}
+DD WRT-04 w3 ben 383473 DBGq finish 3618 SendChannelMessage committed {} retryIn -
+DD WRT-04 w3 ben 383474 DBGq tfinish 3618 committed {}
+DD WRT-04 w3 ben 383549 DBGq claim 3786 c39a2b none deferredUntil -
+DD WRT-04 w3 ben 383549 DBGq blocked 3789 null
+DD WRT-04 w2 ben 383665 DBGq claim 1968 a7b9a4 none deferredUntil -
+DD WRT-04 w2 ben 383701 DBGq blocked 1990 {"id":"1","op":"UpdateNotifications","lo":"cc0a67","exp":297326,"alive":false,"keys":["transactionId","uuid","superseded","query","operationName","variables","clientMetadata","optimisticData","enqueuedAtMs","leaseOwner","leaseGeneration","leaseExpiresAtMs"]}
+DD WRT-04 w2 ben 383735 DBGq skipped 2038 lease-owner-gone
+DD WRT-04 w2 ben 383736 [observability] graphql.mutation_queue.skipped {auth.state: signed-in, network.online: false, graphql.websocket.state: connected, mutation_queue.pending_items: 1, mutation_queue.oldest_observed_wait_ms: 910}
+DD WRT-04 w2 ben 384237 DBGq claim 2537 a7b9a4 1 UpdateNotifications deferredUntil -
+DD WRT-04 w2 ben 384370 DBGq finish 2672 UpdateNotifications committed {} retryIn -
+DD WRT-04 w2 ben 384370 DBGq tfinish 2673 committed {}
+DD WRT-04 w2 ben 384411 DBGq claim 2711 a7b9a4 2 SendChannelMessage deferredUntil -
+DD WRT-04 w2 ben 384498 DBGq finish 2801 SendChannelMessage committed {} retryIn -
+DD WRT-04 w2 ben 384499 DBGq tfinish 2801 committed {}
+DD WRT-04 w2 ben 384536 DBGq claim 2839 a7b9a4 3 SendChannelMessage deferredUntil -
+DD WRT-04 w2 ben 384719 DBGq finish 3022 SendChannelMessage committed {} retryIn -
+DD WRT-04 w2 ben 384719 DBGq tfinish 3022 committed {}
+DD WRT-04 w2 ben 384808 DBGq claim 3110 a7b9a4 4 UpdateNotifications deferredUntil -
+  ✓  23 tests/channels-e2e-dbg/writes.spec.ts:127:1 › WRT-04 messages that could not be sent are still there after a reload and are sent once when the services can be reached (5.9s)
+DD WRT-04 w1 ben 386254 [observability] graphql.mutation_queue.loaded {auth.state: signed-in, network.online: false, graphql.websocket.state: connected, mutation_queue.depth: 1, mutation_queue.age_unknown_items: 0}
+DD WRT-04 w1 ben 386688 DBGq claim 1865 5f6ecb none deferredUntil -
+DD WRT-04 w1 ben 386709 DBGq blocked 1886 {"id":"1","op":"UpdateNotifications","lo":"6e71fc","exp":297311,"alive":false,"keys":["transactionId","uuid","superseded","query","operationName","variables","clientMetadata","optimisticData","enqueuedAtMs","leaseOwner","leaseGeneration","leaseExpiresAtMs"]}
+DD WRT-04 w1 ben 386725 DBGq skipped 1901 lease-owner-gone
+DD WRT-04 w1 ben 386725 [observability] graphql.mutation_queue.skipped {auth.state: signed-in, network.online: false, graphql.websocket.state: connected, mutation_queue.pending_items: 3, mutation_queue.oldest_observed_wait_ms: 760}
+DD WRT-04 w1 ben 386875 DBGq claim 2021 5f6ecb 1 UpdateNotifications deferredUntil -
+DD WRT-04 w1 ben 387448 DBGq finish 2555 UpdateNotifications committed {} retryIn -
+DD WRT-04 w1 ben 387448 DBGq tfinish 2555 committed {}
+DD WRT-04 w1 ben 387477 DBGq claim 2654 5f6ecb 2 UpdateNotifications deferredUntil -
+DD WRT-04 w1 ben 387520 DBGq finish 2696 UpdateNotifications committed {} retryIn -
+DD WRT-04 w1 ben 387521 DBGq tfinish 2696 committed {}
+DD WRT-04 w1 ben 387541 DBGq claim 2717 5f6ecb 3 SendChannelMessage deferredUntil -
+DD WRT-04 w1 ben 387666 DBGq finish 2842 SendChannelMessage committed {} retryIn -
+DD WRT-04 w1 ben 387666 DBGq tfinish 2843 committed {}
+DD WRT-04 w1 ben 387710 DBGq claim 2887 5f6ecb 4 SendChannelMessage deferredUntil -
+DD WRT-04 w1 ben 387837 DBGq finish 3014 SendChannelMessage committed {} retryIn -
+DD WRT-04 w1 ben 387837 DBGq tfinish 3014 committed {}
+DD WRT-04 w1 ben 387978 DBGq claim 3146 5f6ecb none deferredUntil -
+DD WRT-04 w1 ben 388011 DBGq blocked 3188 null
+DD WRT-04 w2 ben 388557 DBGq claim 2554 eae059 none deferredUntil -
+  ✓  24 tests/channels-e2e-dbg/writes.spec.ts:127:1 › WRT-04 messages that could not be sent are still there after a reload and are sent once when the services can be reached (6.2s)
+DD WRT-04 w2 ben 389812 [observability] graphql.mutation_queue.loaded {auth.state: signed-in, network.online: false, graphql.websocket.state: connected, mutation_queue.depth: 3, mutation_queue.age_unknown_items: 0}
+DD WRT-04 w2 ben 390282 DBGq claim 2034 1cee69 none deferredUntil -
+DD WRT-04 w2 ben 390318 DBGq blocked 2053 {"id":"1","op":"UpdateNotifications","lo":"eae059","exp":297035,"alive":false,"keys":["transactionId","uuid","superseded","query","operationName","variables","clientMetadata","optimisticData","enqueuedAtMs","leaseOwner","leaseGeneration","leaseExpiresAtMs"]}
+DD WRT-04 w2 ben 390423 DBGq skipped 2174 lease-owner-gone
+DD WRT-04 w2 ben 390423 [observability] graphql.mutation_queue.skipped {auth.state: signed-in, network.online: false, graphql.websocket.state: connected, mutation_queue.pending_items: 1, mutation_queue.oldest_observed_wait_ms: 837}
+DD WRT-04 w2 ben 390969 DBGq claim 2703 1cee69 1 UpdateNotifications deferredUntil -
+DD WRT-04 w2 ben 391143 DBGq finish 2892 UpdateNotifications committed {} retryIn -
+DD WRT-04 w2 ben 391144 DBGq tfinish 2892 committed {}
+DD WRT-04 w2 ben 391215 DBGq claim 2966 1cee69 2 SendChannelMessage deferredUntil -
+DD WRT-04 w2 ben 391359 DBGq finish 3111 SendChannelMessage committed {} retryIn -
+DD WRT-04 w2 ben 391360 DBGq tfinish 3111 committed {}
+DD WRT-04 w2 ben 391473 DBGq claim 3202 1cee69 3 SendChannelMessage deferredUntil -
+DD WRT-04 w1 ben 391602 DBGq claim 2383 1d01c1 none deferredUntil -
+DD WRT-04 w1 ben 391642 DBGq blocked 2415 {"id":"1","op":"UpdateNotifications","lo":"1d01c1","exp":299039,"alive":true,"keys":["transactionId","uuid","superseded","query","operationName","variables","clientMetadata","optimisticData","enqueuedAtMs","leaseOwner","leaseGeneration","leaseExpiresAtMs"]}
+DD WRT-04 w1 ben 391739 DBGq finish 2520 UpdateNotifications committed {} retryIn -
+DD WRT-04 w1 ben 391739 DBGq tfinish 2520 committed {}
+DD WRT-04 w1 ben 391788 DBGq claim 2570 1d01c1 2 SendChannelMessage deferredUntil -
+DD WRT-04 w1 ben 391847 DBGq finish 2629 SendChannelMessage retry-scheduled {"failure":"network","retryDelayMs":1000} retryIn 983
+DD WRT-04 w1 ben 391848 DBGq tfinish 2629 retry-scheduled {"failure":"network","retryDelayMs":1000}
+DD WRT-04 w1 ben 391848 [observability] graphql.mutation_queue.retry_scheduled {mutation_queue.item_id: 01a1e242-cdae-7aa9-85de-cb5cff55ee0a, mutation_queue.transaction_id: 2, graphql.operation.name: SendChannelMessage, mutation_queue.attempt_count: 1, mutation_queue.server_failure_count: 0}
+DD WRT-04 w2 ben 391992 DBGq finish 3640 SendChannelMessage committed {} retryIn -
+DD WRT-04 w2 ben 391992 DBGq tfinish 3640 committed {}
+DD WRT-04 w2 ben 391997 DBGq claim 3734 1cee69 4 UpdateNotifications deferredUntil -
+DD WRT-04 w2 ben 392215 DBGq finish 3962 UpdateNotifications committed {} retryIn -
+DD WRT-04 w2 ben 392215 DBGq tfinish 3962 committed {}
+  ✓  25 tests/channels-e2e-dbg/writes.spec.ts:127:1 › WRT-04 messages that could not be sent are still there after a reload and are sent once when the services can be reached (6.5s)
+DD WRT-04 w1 ben 392267 DBGq claim 2938 1d01c1 none deferredUntil 682
+DD WRT-04 w1 ben 392267 DBGq blocked 2959 {"id":"2","op":"SendChannelMessage","exp":null,"alive":null,"keys":["transactionId","uuid","superseded","query","operationName","variables","clientMetadata","optimisticData","enqueuedAtMs"]}
+DD WRT-04 w1 ben 393676 [observability] graphql.mutation_queue.loaded {auth.state: signed-in, network.online: false, graphql.websocket.state: connected, mutation_queue.depth: 2, mutation_queue.age_unknown_items: 0}
+DD WRT-04 w1 ben 394058 DBGq claim 1670 9d36ad 2 SendChannelMessage deferredUntil -
+DD WRT-04 w1 ben 394120 DBGq finish 1731 SendChannelMessage retry-scheduled {"failure":"network","retryDelayMs":2000} retryIn 1972
+DD WRT-04 w1 ben 394120 DBGq tfinish 1732 retry-scheduled {"failure":"network","retryDelayMs":2000}
+DD WRT-04 w1 ben 394120 [observability] graphql.mutation_queue.retry_scheduled {mutation_queue.item_id: 01a1e242-cdae-7aa9-85de-cb5cff55ee0a, mutation_queue.transaction_id: 2, graphql.operation.name: SendChannelMessage, mutation_queue.attempt_count: 2, mutation_queue.server_failure_count: 0}
+DD WRT-04 w2 ben 396318 [observability] graphql.mutation_queue.loaded {auth.state: signed-in, network.online: false, graphql.websocket.state: connected, mutation_queue.depth: 3, mutation_queue.age_unknown_items: 0}
+DD WRT-04 w2 ben 396716 DBGq claim 1758 9dbdee none deferredUntil -
+DD WRT-04 w2 ben 396732 DBGq blocked 1771 {"id":"1","op":"UpdateNotifications","lo":"d3d595","exp":297524,"alive":false,"keys":["transactionId","uuid","superseded","query","operationName","variables","clientMetadata","optimisticData","enqueuedAtMs","leaseOwner","leaseGeneration","leaseExpiresAtMs"]}
+DD WRT-04 w2 ben 396753 DBGq skipped 1795 lease-owner-gone
+DD WRT-04 w2 ben 396753 [observability] graphql.mutation_queue.skipped {auth.state: signed-in, network.online: false, graphql.websocket.state: connected, mutation_queue.pending_items: 1, mutation_queue.oldest_observed_wait_ms: 680}
+DD WRT-04 w1 ben 396889 DBGq claim 4500 9d36ad 2 SendChannelMessage deferredUntil -
+DD WRT-04 w2 ben 396906 DBGq claim 1929 9dbdee 1 UpdateNotifications deferredUntil -
+DD WRT-04 w1 ben 397199 DBGq finish 4810 SendChannelMessage committed {} retryIn -
+DD WRT-04 w1 ben 397199 DBGq tfinish 4811 committed {}
+DD WRT-04 w1 ben 397199 [observability] graphql.mutation_queue.committed_after_failure {mutation_queue.item_id: 01a1e242-cdae-7aa9-85de-cb5cff55ee0a, mutation_queue.transaction_id: 2, graphql.operation.name: SendChannelMessage, mutation_queue.attempt_count: 3, mutation_queue.server_failure_count: 0}
+DD WRT-04 w1 ben 397296 DBGq claim 4907 9d36ad 3 SendChannelMessage deferredUntil -
+DD WRT-04 w2 ben 397436 DBGq finish 2422 UpdateNotifications committed {} retryIn -
+DD WRT-04 w2 ben 397436 DBGq tfinish 2423 committed {}
+DD WRT-04 w2 ben 397438 DBGq claim 2469 9dbdee 2 SendChannelMessage deferredUntil -
+DD WRT-04 w2 ben 397448 DBGq finish 2487 SendChannelMessage retry-scheduled {"failure":"network","retryDelayMs":1000} retryIn 996
+DD WRT-04 w2 ben 397448 DBGq tfinish 2487 retry-scheduled {"failure":"network","retryDelayMs":1000}
+DD WRT-04 w2 ben 397448 [observability] graphql.mutation_queue.retry_scheduled {mutation_queue.item_id: 01a1e242-db34-7eec-97bc-dbf90a4a5750, mutation_queue.transaction_id: 2, graphql.operation.name: SendChannelMessage, mutation_queue.attempt_count: 1, mutation_queue.server_failure_count: 0}
+DD WRT-04 w1 ben 397591 DBGq finish 5203 SendChannelMessage committed {} retryIn -
+DD WRT-04 w1 ben 397592 DBGq tfinish 5203 committed {}
+DD WRT-04 w1 ben 397817 DBGq claim 5428 9d36ad none deferredUntil -
+  ✓  26 tests/channels-e2e-dbg/writes.spec.ts:127:1 › WRT-04 messages that could not be sent are still there after a reload and are sent once when the services can be reached (9.0s)
+DD WRT-04 w0 ben 398112 DBGq claim 34669 69afea none deferredUntil -
+DD WRT-04 w0 ben 398112 DBGq blocked 34670 null
+DD WRT-04 w2 ben 398476 DBGq claim 3518 9dbdee 2 SendChannelMessage deferredUntil -
+DD WRT-04 w2 ben 398659 DBGq finish 3701 SendChannelMessage committed {} retryIn -
+DD WRT-04 w2 ben 398659 DBGq tfinish 3701 committed {}
+DD WRT-04 w2 ben 398659 [observability] graphql.mutation_queue.committed_after_failure {mutation_queue.item_id: 01a1e242-db34-7eec-97bc-dbf90a4a5750, mutation_queue.transaction_id: 2, graphql.operation.name: SendChannelMessage, mutation_queue.attempt_count: 2, mutation_queue.server_failure_count: 0}
+DD WRT-04 w2 ben 398690 DBGq claim 3731 9dbdee 3 SendChannelMessage deferredUntil -
+DD WRT-04 w2 ben 398881 DBGq finish 3923 SendChannelMessage committed {} retryIn -
+DD WRT-04 w2 ben 398881 DBGq tfinish 3923 committed {}
+DD WRT-04 w2 ben 398989 DBGq claim 4031 9dbdee 4 UpdateNotifications deferredUntil -
+DD WRT-04 w2 ben 399390 DBGq finish 4432 UpdateNotifications committed {} retryIn -
+DD WRT-04 w2 ben 399390 DBGq tfinish 4432 committed {}
+DD WRT-04 w2 ben 399492 DBGq claim 4514 9dbdee none deferredUntil -
+DD WRT-04 w2 ben 399492 DBGq blocked 4533 null
+  ✓  27 tests/channels-e2e-dbg/writes.spec.ts:127:1 › WRT-04 messages that could not be sent are still there after a reload and are sent once when the services can be reached (7.0s)
+DD WRT-04 w1 ben 402023 [observability] graphql.mutation_queue.loaded {auth.state: signed-in, network.online: false, graphql.websocket.state: connected, mutation_queue.depth: 1, mutation_queue.age_unknown_items: 0}
+DD WRT-04 w1 ben 402542 DBGq claim 1867 69da05 none deferredUntil -
+DD WRT-04 w1 ben 402645 DBGq blocked 1943 {"id":"1","op":"UpdateNotifications","lo":"1dcff4","exp":297488,"alive":false,"keys":["transactionId","uuid","superseded","query","operationName","variables","clientMetadata","optimisticData","enqueuedAtMs","leaseOwner","leaseGeneration","leaseExpiresAtMs"]}
+DD WRT-04 w1 ben 403232 DBGq skipped 2424 lease-owner-gone
+DD WRT-04 w1 ben 403232 [observability] graphql.mutation_queue.skipped {auth.state: signed-in, network.online: false, graphql.websocket.state: connected, mutation_queue.pending_items: 3, mutation_queue.oldest_observed_wait_ms: 1292}
+DD WRT-04 w1 ben 403266 DBGq claim 2591 69da05 1 UpdateNotifications deferredUntil -
+DD WRT-04 w1 ben 403355 DBGq finish 2680 UpdateNotifications committed {} retryIn -
+DD WRT-04 w1 ben 403355 DBGq tfinish 2680 committed {}
+DD WRT-04 w1 ben 403431 DBGq claim 2752 69da05 2 UpdateNotifications deferredUntil -
+DD WRT-04 w1 ben 403545 DBGq finish 2870 UpdateNotifications committed {} retryIn -
+DD WRT-04 w1 ben 403546 DBGq tfinish 2870 committed {}
+DD WRT-04 w1 ben 403586 DBGq claim 2911 69da05 3 SendChannelMessage deferredUntil -
+DD WRT-04 w1 ben 403763 DBGq finish 3086 SendChannelMessage committed {} retryIn -
+DD WRT-04 w1 ben 403763 DBGq tfinish 3086 committed {}
+DD WRT-04 w2 ben 403962 [observability] graphql.mutation_queue.loaded {auth.state: signed-in, network.online: false, graphql.websocket.state: connected, mutation_queue.depth: 3, mutation_queue.age_unknown_items: 0}
+DD WRT-04 w1 ben 404204 DBGq claim 3391 69da05 4 SendChannelMessage deferredUntil -
+DD WRT-04 w2 ben 404349 DBGq claim 1794 468ce2 none deferredUntil -
+DD WRT-04 w1 ben 404378 DBGq finish 3703 SendChannelMessage committed {} retryIn -
+DD WRT-04 w1 ben 404378 DBGq tfinish 3703 committed {}
+DD WRT-04 w2 ben 404389 DBGq blocked 1830 {"id":"1","op":"UpdateNotifications","lo":"b7961f","exp":297367,"alive":false,"keys":["transactionId","uuid","superseded","query","operationName","variables","clientMetadata","optimisticData","enqueuedAtMs","leaseOwner","leaseGeneration","leaseExpiresAtMs"]}
+DD WRT-04 w2 ben 404416 DBGq skipped 1861 lease-owner-gone
+DD WRT-04 w2 ben 404416 [observability] graphql.mutation_queue.skipped {auth.state: signed-in, network.online: false, graphql.websocket.state: connected, mutation_queue.pending_items: 1, mutation_queue.oldest_observed_wait_ms: 733}
+DD WRT-04 w2 ben 404437 DBGq claim 1883 468ce2 1 UpdateNotifications deferredUntil -
+DD WRT-04 w1 ben 404520 DBGq claim 3821 69da05 none deferredUntil -
+DD WRT-04 w1 ben 404520 DBGq blocked 3825 null
+DD WRT-04 w2 ben 404648 DBGq finish 2093 UpdateNotifications committed {} retryIn -
+DD WRT-04 w2 ben 404649 DBGq tfinish 2094 committed {}
+DD WRT-04 w2 ben 404703 DBGq claim 2148 468ce2 2 SendChannelMessage deferredUntil -
+DD WRT-04 w2 ben 405021 DBGq finish 2451 SendChannelMessage retry-scheduled {"failure":"network","retryDelayMs":1000} retryIn 892
+DD WRT-04 w2 ben 405021 DBGq tfinish 2451 retry-scheduled {"failure":"network","retryDelayMs":1000}
+DD WRT-04 w2 ben 405021 [observability] graphql.mutation_queue.retry_scheduled {mutation_queue.item_id: 01a1e242-f860-7778-9277-ef12157ca381, mutation_queue.transaction_id: 2, graphql.operation.name: SendChannelMessage, mutation_queue.attempt_count: 1, mutation_queue.server_failure_count: 0}
+DD WRT-04 w0 ANNOT 406571 Error: the channel as the services hold it |  | the channel as the services hold it |  | expect(received).toEqual(expected) // deep equality |  | - Expected  - 1 | + Received  + 1 |  |   Array [ |     "one", |     "two", |     "three", | -   "kept one", |     "kept two", | +   "kept one", |   ] |  | Call Log: | - Timeout 40000ms exceeded while waiting on the predicate
+DD WRT-04 w2 ben 406614 DBGq claim 4059 468ce2 2 SendChannelMessage deferredUntil -
+  ✓  15 tests/channels-e2e-dbg/writes.spec.ts:127:1 › WRT-04 messages that could not be sent are still there after a reload and are sent once when the services can be reached (45.5s)
+DD WRT-04 w2 ben 406750 DBGq finish 4195 SendChannelMessage committed {} retryIn -
+DD WRT-04 w2 ben 406750 DBGq tfinish 4195 committed {}
+DD WRT-04 w2 ben 406750 [observability] graphql.mutation_queue.committed_after_failure {mutation_queue.item_id: 01a1e242-f860-7778-9277-ef12157ca381, mutation_queue.transaction_id: 2, graphql.operation.name: SendChannelMessage, mutation_queue.attempt_count: 2, mutation_queue.server_failure_count: 0}
+DD WRT-04 w2 ben 406907 DBGq claim 4352 468ce2 3 SendChannelMessage deferredUntil -
+DD WRT-04 w2 ben 407157 DBGq finish 4602 SendChannelMessage committed {} retryIn -
+DD WRT-04 w2 ben 407157 DBGq tfinish 4602 committed {}
+DD WRT-04 w2 ben 407232 DBGq claim 4677 468ce2 4 UpdateNotifications deferredUntil -
+  ✓  29 tests/channels-e2e-dbg/writes.spec.ts:127:1 › WRT-04 messages that could not be sent are still there after a reload and are sent once when the services can be reached (7.3s)
+DD WRT-04 w0 ben 410852 [observability] graphql.mutation_queue.loaded {auth.state: signed-in, network.online: false, graphql.websocket.state: connected, mutation_queue.depth: 1, mutation_queue.age_unknown_items: 0}
+DD WRT-04 w0 ben 411251 DBGq claim 1904 746388 none deferredUntil -
+DD WRT-04 w0 ben 411322 DBGq blocked 1964 {"id":"1","op":"UpdateNotifications","lo":"b6a7f8","exp":297377,"alive":false,"keys":["transactionId","uuid","superseded","query","operationName","variables","clientMetadata","optimisticData","enqueuedAtMs","leaseOwner","leaseGeneration","leaseExpiresAtMs"]}
+DD WRT-04 w0 ben 411353 DBGq skipped 2007 lease-owner-gone
+DD WRT-04 w0 ben 411353 [observability] graphql.mutation_queue.skipped {auth.state: signed-in, network.online: false, graphql.websocket.state: connected, mutation_queue.pending_items: 3, mutation_queue.oldest_observed_wait_ms: 782}
+DD WRT-04 w0 ben 411445 DBGq claim 2099 746388 1 UpdateNotifications deferredUntil -
+DD WRT-04 w2 ben 411754 [observability] graphql.mutation_queue.loaded {auth.state: signed-in, network.online: false, graphql.websocket.state: connected, mutation_queue.depth: 3, mutation_queue.age_unknown_items: 0}
+DD WRT-04 w2 ben 412067 DBGq claim 1695 c31fa8 none deferredUntil -
+DD WRT-04 w2 ben 412095 DBGq blocked 1706 {"id":"1","op":"UpdateNotifications","lo":"c74655","exp":297392,"alive":false,"keys":["transactionId","uuid","superseded","query","operationName","variables","clientMetadata","optimisticData","enqueuedAtMs","leaseOwner","leaseGeneration","leaseExpiresAtMs"]}
+DD WRT-04 w2 ben 412157 DBGq skipped 1785 lease-owner-gone
+DD WRT-04 w2 ben 412157 [observability] graphql.mutation_queue.skipped {auth.state: signed-in, network.online: false, graphql.websocket.state: connected, mutation_queue.pending_items: 1, mutation_queue.oldest_observed_wait_ms: 636}
+DD WRT-04 w2 ben 412185 DBGq claim 1814 c31fa8 1 UpdateNotifications deferredUntil -
+DD WRT-04 w0 ben 412335 DBGq finish 2898 UpdateNotifications committed {} retryIn -
+DD WRT-04 w0 ben 412336 DBGq tfinish 2898 committed {}
+DD WRT-04 w0 ben 412369 DBGq claim 3023 746388 2 UpdateNotifications deferredUntil -
+DD WRT-04 w0 ben 412482 DBGq finish 3135 UpdateNotifications committed {} retryIn -
+DD WRT-04 w0 ben 412482 DBGq tfinish 3136 committed {}
+DD WRT-04 w0 ben 412534 DBGq claim 3188 746388 3 SendChannelMessage deferredUntil -
+DD WRT-04 w0 ben 412630 DBGq finish 3283 SendChannelMessage committed {} retryIn -
+DD WRT-04 w0 ben 412630 DBGq tfinish 3284 committed {}
+DD WRT-04 w0 ben 412655 DBGq claim 3309 746388 4 SendChannelMessage deferredUntil -
+DD WRT-04 w0 ben 412800 DBGq finish 3454 SendChannelMessage committed {} retryIn -
+DD WRT-04 w0 ben 412800 DBGq tfinish 3454 committed {}
+DD WRT-04 w2 ben 412853 DBGq finish 2476 UpdateNotifications committed {} retryIn -
+DD WRT-04 w2 ben 412853 DBGq tfinish 2476 committed {}
+DD WRT-04 w2 ben 412907 DBGq claim 2536 c31fa8 2 SendChannelMessage deferredUntil -
+DD WRT-04 w2 ben 412926 DBGq finish 2555 SendChannelMessage retry-scheduled {"failure":"network","retryDelayMs":1000} retryIn 997
+DD WRT-04 w2 ben 412926 DBGq tfinish 2555 retry-scheduled {"failure":"network","retryDelayMs":1000}
+DD WRT-04 w2 ben 412927 [observability] graphql.mutation_queue.retry_scheduled {mutation_queue.item_id: 01a1e243-172d-7cca-ad7f-7ffbc8d2852c, mutation_queue.transaction_id: 2, graphql.operation.name: SendChannelMessage, mutation_queue.attempt_count: 1, mutation_queue.server_failure_count: 0}
+DD WRT-04 w0 ben 412967 DBGq claim 3621 746388 none deferredUntil -
+DD WRT-04 w0 ben 413383 DBGq blocked 3890 null
+DD WRT-04 w3 ben 413531 DBGq claim 33791 c39a2b none deferredUntil -
+DD WRT-04 w3 ben 413532 DBGq blocked 33791 null
+DD WRT-04 w2 ben 413932 DBGq claim 3560 c31fa8 2 SendChannelMessage deferredUntil -
+DD WRT-04 w2 ben 413998 DBGq finish 3626 SendChannelMessage committed {} retryIn -
+DD WRT-04 w2 ben 413998 DBGq tfinish 3626 committed {}
+DD WRT-04 w2 ben 413998 [observability] graphql.mutation_queue.committed_after_failure {mutation_queue.item_id: 01a1e243-172d-7cca-ad7f-7ffbc8d2852c, mutation_queue.transaction_id: 2, graphql.operation.name: SendChannelMessage, mutation_queue.attempt_count: 2, mutation_queue.server_failure_count: 0}
+DD WRT-04 w2 ben 414099 DBGq claim 3728 c31fa8 3 SendChannelMessage deferredUntil -
+DD WRT-04 w2 ben 414579 DBGq finish 4097 SendChannelMessage committed {} retryIn -
+DD WRT-04 w2 ben 414579 DBGq tfinish 4098 committed {}
+DD WRT-04 w2 ben 414678 DBGq claim 4307 c31fa8 4 UpdateNotifications deferredUntil -
+  ✓  31 tests/channels-e2e-dbg/writes.spec.ts:127:1 › WRT-04 messages that could not be sent are still there after a reload and are sent once when the services can be reached (7.2s)
+DD WRT-04 w2 ben 418263 DBGq claim 2587 38bc82 none deferredUntil -
+DD WRT-04 w2 ben 418265 DBGq blocked 2609 {"id":"1","op":"UpdateNotifications","lo":"38bc82","exp":298824,"alive":true,"keys":["transactionId","uuid","superseded","query","operationName","variables","clientMetadata","optimisticData","enqueuedAtMs","leaseOwner","leaseGeneration","leaseExpiresAtMs"]}
+DD WRT-04 w2 ben 419621 [observability] graphql.mutation_queue.loaded {auth.state: signed-in, network.online: false, graphql.websocket.state: connected, mutation_queue.depth: 3, mutation_queue.age_unknown_items: 0}
+DD WRT-04 w2 ben 420118 DBGq claim 2168 4e6abf none deferredUntil -
+DD WRT-04 w2 ben 420158 DBGq blocked 2197 {"id":"1","op":"UpdateNotifications","lo":"38bc82","exp":296868,"alive":false,"keys":["transactionId","uuid","superseded","query","operationName","variables","clientMetadata","optimisticData","enqueuedAtMs","leaseOwner","leaseGeneration","leaseExpiresAtMs"]}
+DD WRT-04 w2 ben 420164 DBGq skipped 2214 lease-owner-gone
+DD WRT-04 w2 ben 420164 [observability] graphql.mutation_queue.skipped {auth.state: signed-in, network.online: false, graphql.websocket.state: connected, mutation_queue.pending_items: 1, mutation_queue.oldest_observed_wait_ms: 879}
+DD WRT-04 w2 ben 420176 DBGq claim 2225 4e6abf 1 UpdateNotifications deferredUntil -
+DD WRT-04 w2 ben 420746 DBGq finish 2795 UpdateNotifications committed {} retryIn -
+DD WRT-04 w2 ben 420746 DBGq tfinish 2795 committed {}
+DD WRT-04 w2 ben 420797 DBGq claim 2846 4e6abf 2 SendChannelMessage deferredUntil -
+DD WRT-04 w2 ben 420859 DBGq finish 2908 SendChannelMessage committed {} retryIn -
+DD WRT-04 w2 ben 420859 DBGq tfinish 2909 committed {}
+DD WRT-04 w2 ben 420872 DBGq claim 2922 4e6abf 3 SendChannelMessage deferredUntil -
+DD WRT-04 w2 ben 420984 DBGq finish 3033 SendChannelMessage committed {} retryIn -
+DD WRT-04 w2 ben 420984 DBGq tfinish 3033 committed {}
+DD WRT-04 w2 ben 421029 DBGq claim 3078 4e6abf 4 UpdateNotifications deferredUntil -
+DD WRT-04 w2 ben 421152 DBGq finish 3201 UpdateNotifications committed {} retryIn -
+DD WRT-04 w2 ben 421152 DBGq tfinish 3201 committed {}
+DD WRT-04 w2 ben 421502 DBGq claim 3430 4e6abf none deferredUntil -
+DD WRT-04 w2 ben 421502 DBGq blocked 3437 null
+  ✓  32 tests/channels-e2e-dbg/writes.spec.ts:127:1 › WRT-04 messages that could not be sent are still there after a reload and are sent once when the services can be reached (6.2s)
+DD WRT-04 w3 ANNOT 422196 Error: the channel as the services hold it |  | the channel as the services hold it |  | expect(received).toEqual(expected) // deep equality |  | - Expected  - 1 | + Received  + 1 |  |   Array [ |     "one", |     "two", |     "three", | -   "kept one", |     "kept two", | +   "kept one", |   ] |  | Call Log: | - Timeout 40000ms exceeded while waiting on the predicate
+  ✓  22 tests/channels-e2e-dbg/writes.spec.ts:127:1 › WRT-04 messages that could not be sent are still there after a reload and are sent once when the services can be reached (45.1s)
+DD WRT-04 w1 ben 434506 DBGq claim 33831 69da05 none deferredUntil -
+DD WRT-04 w1 ben 434506 DBGq blocked 33832 null
+DD WRT-04 w1 ANNOT 442973 Error: the channel as the services hold it |  | the channel as the services hold it |  | expect(received).toEqual(expected) // deep equality |  | - Expected  - 1 | + Received  + 1 |  |   Array [ |     "one", |     "two", |     "three", | -   "kept one", |     "kept two", | +   "kept one", |   ] |  | Call Log: | - Timeout 40000ms exceeded while waiting on the predicate
+  ✓  28 tests/channels-e2e-dbg/writes.spec.ts:127:1 › WRT-04 messages that could not be sent are still there after a reload and are sent once when the services can be reached (44.6s)
+DD WRT-04 w0 ben 443238 DBGq claim 33892 746388 none deferredUntil -
+DD WRT-04 w0 ben 443238 DBGq blocked 33892 null
+DD WRT-04 w0 ANNOT 451512 Error: the channel as the services hold it |  | the channel as the services hold it |  | expect(received).toEqual(expected) // deep equality |  | - Expected  - 1 | + Received  + 1 |  |   Array [ |     "one", |     "two", |     "three", | -   "kept one", |     "kept two", | +   "kept one", |   ] |  | Call Log: | - Timeout 40000ms exceeded while waiting on the predicate
+  ✓  30 tests/channels-e2e-dbg/writes.spec.ts:127:1 › WRT-04 messages that could not be sent are still there after a reload and are sent once when the services can be reached (44.5s)
+
+  32 passed (2.2m)

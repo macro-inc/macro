@@ -1,0 +1,112 @@
+   Compiling agent_fold v0.1.0 (/home/teo/.herdr/worktrees/macro/synoet-channels-local-sync/crates/folds/agent_fold)
+   Compiling agent_session v0.1.0 (/home/teo/.herdr/worktrees/macro/synoet-channels-local-sync/crates/agent_session)
+   Compiling lexical_client v0.1.0 (/home/teo/.herdr/worktrees/macro/synoet-channels-local-sync/crates/lexical_client)
+   Compiling codex_cloud_agents v0.1.0 (/home/teo/.herdr/worktrees/macro/synoet-channels-local-sync/crates/codex_cloud_agents)
+   Compiling agent_egress v0.1.0 (/home/teo/.herdr/worktrees/macro/synoet-channels-local-sync/crates/agent_egress)
+   Compiling cursor_cloud_agents v0.1.0 (/home/teo/.herdr/worktrees/macro/synoet-channels-local-sync/crates/cursor_cloud_agents)
+   Compiling agent_trigger v0.1.0 (/home/teo/.herdr/worktrees/macro/synoet-channels-local-sync/crates/agent_trigger)
+   Compiling codex_connection v0.1.0 (/home/teo/.herdr/worktrees/macro/synoet-channels-local-sync/crates/codex_connection)
+   Compiling agent_harness v0.1.0 (/home/teo/.herdr/worktrees/macro/synoet-channels-local-sync/crates/agent_harness)
+    Finished `test` profile [unoptimized + debuginfo] target(s) in 19.23s
+     Running unittests src/lib.rs (target/debug/deps/agent_harness-353767a47bab8f83)
+
+running 23 tests
+test domain::service::test::chat_reply::conversations::a_different_person_cannot_prompt_the_reserved_direct_session ... ok
+test domain::service::test::chat_reply::conversations::a_private_reply_posts_each_passage_with_the_steps_before_it_and_only_the_answer_is_news ... ok
+test domain::service::test::chat_reply::conversations::a_turn_end_the_journal_cannot_record_still_frees_the_session ... ok
+test domain::service::test::chat_reply::conversations::a_message_deleted_while_it_waited_fails_and_the_next_one_runs ... ok
+test domain::service::test::chat_reply::conversations::a_completed_conversation_message_never_runs_again_when_the_broker_replays_it ... ok
+test domain::service::test::chat_reply::conversations::a_message_whose_conversation_was_deleted_is_acknowledged_instead_of_redelivered ... ok
+test domain::service::test::chat_reply::conversations::an_answer_that_could_not_be_posted_is_posted_by_recovery ... ok
+test domain::service::test::chat_reply::conversations::a_waiting_message_whose_turn_already_ended_is_dropped ... ok
+test domain::service::test::chat_reply::conversations::an_answer_whose_turn_ended_unwatched_is_still_posted ... ok
+test domain::service::test::chat_reply::conversations::a_turn_whose_runtime_dies_fails_once_and_frees_the_conversation ... ok
+test domain::service::test::chat_reply::conversations::an_external_persona_conversation_binds_the_connected_runtime_without_spawning_a_container ... ok
+test domain::service::test::chat_reply::conversations::direct_conversations_share_one_session_queue_in_order_and_answer_in_the_timeline ... ok
+test domain::service::test::chat_reply::conversations::an_open_conversation_answers_while_another_one_bootstraps ... FAILED
+test domain::service::test::chat_reply::conversations::final_reply::bootstrap_admission_rejection_keeps_the_command_queued_for_recovery ... FAILED
+test domain::service::test::chat_reply::conversations::final_reply::durable_parent_is_rechecked_after_reply_admission ... FAILED
+test domain::service::test::chat_reply::conversations::final_reply::extra_final_passage_ids_survive_a_lost_post_response_and_stale_reconciliation ... FAILED
+test domain::service::test::chat_reply::conversations::final_reply::failed_final_id_persistence_posts_nothing_until_recovery_can_reserve_ids ... FAILED
+test domain::service::test::chat_reply::conversations::final_reply::outcome_only_reply_ids_survive_a_lost_post_response_and_stale_reconciliation ... FAILED
+test domain::service::test::chat_reply::conversations::final_reply::reply_admission_rejection_preserves_the_durable_reply_for_recovery ... FAILED
+test domain::service::test::chat_reply::conversations::notifications::a_running_quiet_batch_leaves_the_next_conversation_message_queued ... FAILED
+test domain::service::test::chat_reply::conversations::quota_denial_finishes_queued_conversation_turns_without_stopping_the_running_turn ... FAILED
+test domain::service::test::chat_reply::conversations::recovered_messages_dispatch_in_durable_order_even_when_delivered_in_reverse ... FAILED
+test domain::service::test::chat_reply::conversations::recovery_posts_the_steps_a_lost_replica_left_running ... FAILED
+
+failures:
+
+---- domain::service::test::chat_reply::conversations::an_open_conversation_answers_while_another_one_bootstraps stdout ----
+
+thread 'domain::service::test::chat_reply::conversations::an_open_conversation_answers_while_another_one_bootstraps' (3604833) panicked at /home/teo/.cargo/registry/src/index.crates.io-1949cf8c6b5b557f/sqlx-core-0.8.6/src/testing/mod.rs:226:14:
+failed to connect to setup test database: PoolTimedOut
+note: run with `RUST_BACKTRACE=1` environment variable to display a backtrace
+
+---- domain::service::test::chat_reply::conversations::final_reply::bootstrap_admission_rejection_keeps_the_command_queued_for_recovery stdout ----
+
+thread 'domain::service::test::chat_reply::conversations::final_reply::bootstrap_admission_rejection_keeps_the_command_queued_for_recovery' (3604836) panicked at /home/teo/.cargo/registry/src/index.crates.io-1949cf8c6b5b557f/sqlx-core-0.8.6/src/testing/mod.rs:226:14:
+failed to connect to setup test database: PoolTimedOut
+
+---- domain::service::test::chat_reply::conversations::final_reply::durable_parent_is_rechecked_after_reply_admission stdout ----
+
+thread 'domain::service::test::chat_reply::conversations::final_reply::durable_parent_is_rechecked_after_reply_admission' (3604838) panicked at /home/teo/.cargo/registry/src/index.crates.io-1949cf8c6b5b557f/sqlx-core-0.8.6/src/testing/mod.rs:226:14:
+failed to connect to setup test database: PoolTimedOut
+
+---- domain::service::test::chat_reply::conversations::final_reply::extra_final_passage_ids_survive_a_lost_post_response_and_stale_reconciliation stdout ----
+
+thread 'domain::service::test::chat_reply::conversations::final_reply::extra_final_passage_ids_survive_a_lost_post_response_and_stale_reconciliation' (3604839) panicked at /home/teo/.cargo/registry/src/index.crates.io-1949cf8c6b5b557f/sqlx-core-0.8.6/src/testing/mod.rs:226:14:
+failed to connect to setup test database: PoolTimedOut
+
+---- domain::service::test::chat_reply::conversations::final_reply::failed_final_id_persistence_posts_nothing_until_recovery_can_reserve_ids stdout ----
+
+thread 'domain::service::test::chat_reply::conversations::final_reply::failed_final_id_persistence_posts_nothing_until_recovery_can_reserve_ids' (3647776) panicked at /home/teo/.cargo/registry/src/index.crates.io-1949cf8c6b5b557f/sqlx-core-0.8.6/src/testing/mod.rs:226:14:
+failed to connect to setup test database: PoolTimedOut
+
+---- domain::service::test::chat_reply::conversations::final_reply::outcome_only_reply_ids_survive_a_lost_post_response_and_stale_reconciliation stdout ----
+
+thread 'domain::service::test::chat_reply::conversations::final_reply::outcome_only_reply_ids_survive_a_lost_post_response_and_stale_reconciliation' (3647777) panicked at /home/teo/.cargo/registry/src/index.crates.io-1949cf8c6b5b557f/sqlx-core-0.8.6/src/testing/mod.rs:226:14:
+failed to connect to setup test database: PoolTimedOut
+
+---- domain::service::test::chat_reply::conversations::final_reply::reply_admission_rejection_preserves_the_durable_reply_for_recovery stdout ----
+
+thread 'domain::service::test::chat_reply::conversations::final_reply::reply_admission_rejection_preserves_the_durable_reply_for_recovery' (3647779) panicked at /home/teo/.cargo/registry/src/index.crates.io-1949cf8c6b5b557f/sqlx-core-0.8.6/src/testing/mod.rs:226:14:
+failed to connect to setup test database: PoolTimedOut
+
+---- domain::service::test::chat_reply::conversations::notifications::a_running_quiet_batch_leaves_the_next_conversation_message_queued stdout ----
+
+thread 'domain::service::test::chat_reply::conversations::notifications::a_running_quiet_batch_leaves_the_next_conversation_message_queued' (3647781) panicked at /home/teo/.cargo/registry/src/index.crates.io-1949cf8c6b5b557f/sqlx-core-0.8.6/src/testing/mod.rs:226:14:
+failed to connect to setup test database: PoolTimedOut
+
+---- domain::service::test::chat_reply::conversations::quota_denial_finishes_queued_conversation_turns_without_stopping_the_running_turn stdout ----
+
+thread 'domain::service::test::chat_reply::conversations::quota_denial_finishes_queued_conversation_turns_without_stopping_the_running_turn' (3687633) panicked at /home/teo/.cargo/registry/src/index.crates.io-1949cf8c6b5b557f/sqlx-core-0.8.6/src/testing/mod.rs:226:14:
+failed to connect to setup test database: PoolTimedOut
+
+---- domain::service::test::chat_reply::conversations::recovered_messages_dispatch_in_durable_order_even_when_delivered_in_reverse stdout ----
+
+thread 'domain::service::test::chat_reply::conversations::recovered_messages_dispatch_in_durable_order_even_when_delivered_in_reverse' (3687634) panicked at /home/teo/.cargo/registry/src/index.crates.io-1949cf8c6b5b557f/sqlx-core-0.8.6/src/testing/mod.rs:226:14:
+failed to connect to setup test database: PoolTimedOut
+
+---- domain::service::test::chat_reply::conversations::recovery_posts_the_steps_a_lost_replica_left_running stdout ----
+
+thread 'domain::service::test::chat_reply::conversations::recovery_posts_the_steps_a_lost_replica_left_running' (3687635) panicked at /home/teo/.cargo/registry/src/index.crates.io-1949cf8c6b5b557f/sqlx-core-0.8.6/src/testing/mod.rs:226:14:
+failed to connect to setup test database: PoolTimedOut
+
+
+failures:
+    domain::service::test::chat_reply::conversations::an_open_conversation_answers_while_another_one_bootstraps
+    domain::service::test::chat_reply::conversations::final_reply::bootstrap_admission_rejection_keeps_the_command_queued_for_recovery
+    domain::service::test::chat_reply::conversations::final_reply::durable_parent_is_rechecked_after_reply_admission
+    domain::service::test::chat_reply::conversations::final_reply::extra_final_passage_ids_survive_a_lost_post_response_and_stale_reconciliation
+    domain::service::test::chat_reply::conversations::final_reply::failed_final_id_persistence_posts_nothing_until_recovery_can_reserve_ids
+    domain::service::test::chat_reply::conversations::final_reply::outcome_only_reply_ids_survive_a_lost_post_response_and_stale_reconciliation
+    domain::service::test::chat_reply::conversations::final_reply::reply_admission_rejection_preserves_the_durable_reply_for_recovery
+    domain::service::test::chat_reply::conversations::notifications::a_running_quiet_batch_leaves_the_next_conversation_message_queued
+    domain::service::test::chat_reply::conversations::quota_denial_finishes_queued_conversation_turns_without_stopping_the_running_turn
+    domain::service::test::chat_reply::conversations::recovered_messages_dispatch_in_durable_order_even_when_delivered_in_reverse
+    domain::service::test::chat_reply::conversations::recovery_posts_the_steps_a_lost_replica_left_running
+
+test result: FAILED. 12 passed; 11 failed; 0 ignored; 0 measured; 549 filtered out; finished in 120.34s
+
+error: test failed, to rerun pass `-p agent_harness --lib`

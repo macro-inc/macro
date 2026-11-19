@@ -1,0 +1,827 @@
+diff --git a/apps/web/src/features/channels-view/queries/channel-detail-source.ts b/apps/web/src/features/channels-view/queries/channel-detail-source.ts
+index e62078defd..bda4b625f5 100644
+--- a/apps/web/src/features/channels-view/queries/channel-detail-source.ts
++++ b/apps/web/src/features/channels-view/queries/channel-detail-source.ts
+@@ -1,3 +1,4 @@
++import { isResponseFreeNetworkError } from '@core/util/request-error';
+ import type { ChannelEntity, EntityData } from '@entity/types/entity';
+ import { type Accessor, createMemo, on } from 'solid-js';
+ import type { ChannelDetailSource } from '../context/channel-detail-source';
+@@ -40,19 +41,28 @@ export function createChannelDetailSource(options: {
+     load: () => {
+       const id = options.channelId();
+       if (!id) return { status: 'pending' };
+-      if (query.isEnabled && query.error)
+-        return { status: 'error', error: query.error };
++      const held = () =>
++        query.data?.entities.find(
++          (entity): entity is ChannelEntity =>
++            entity.type === 'channel' && entity.id === id
++        );
++      if (query.isEnabled && query.error) {
++        // A request that got no response, as without a connection, says
++        // nothing against a channel the device holds.
++        const channel = isResponseFreeNetworkError(query.error)
++          ? held()
++          : undefined;
++        return channel
++          ? { status: 'ready', channel }
++          : { status: 'error', error: query.error };
++      }
+       if (!refreshOnOpen() && options.cached()) {
+         return { status: 'ready', channel: options.cached() };
+       }
+       if (!query.isEnabled) return { status: 'pending' };
+       if (query.isPending || query.isLoading || query.isFetching)
+         return { status: 'pending' };
+-      const channel = query.data?.entities.find(
+-        (entity): entity is ChannelEntity =>
+-          entity.type === 'channel' && entity.id === id
+-      );
+-      return { status: 'ready', channel };
++      return { status: 'ready', channel: held() };
+     },
+     refresh: () => query.refresh(),
+   };
+diff --git a/apps/web/src/lib/queries/channel/detail.ts b/apps/web/src/lib/queries/channel/detail.ts
+index 554bce2858..e84bfdbe7c 100644
+--- a/apps/web/src/lib/queries/channel/detail.ts
++++ b/apps/web/src/lib/queries/channel/detail.ts
+@@ -1,3 +1,4 @@
++import { isResponseFreeNetworkError } from '@core/util/request-error';
+ import { normalizedCacheResultMetadata } from '@graphql-cache/exchange/normalized-cache-exchange';
+ import {
+   ChannelDetailSoupDocument,
+@@ -56,6 +57,14 @@ export function createChannelDetailQuery(
+       ? value.result
+       : undefined;
+   };
++  // A request that got no response, as without a connection, decided
++  // nothing: what the device holds of the channel stays readable.
++  const decided = () => {
++    const value = currentServer();
++    return value?.error && isResponseFreeNetworkError(value.error)
++      ? undefined
++      : value;
++  };
+   const includesChannel = (data: ChannelDetailSoupQuery | undefined) =>
+     data?.user?.soup?.items.some((item) => item.id === channelId()) ?? false;
+   const variables = createMemo(() => {
+@@ -108,7 +117,7 @@ export function createChannelDetailQuery(
+   });
+   const data = createMemo(() => {
+     if (query.isPending) return undefined;
+-    const confirmed = currentServer();
++    const confirmed = decided();
+     if (confirmed?.error) return undefined;
+     // A confirmed absence must also win over later stale positive cache rows.
+     let value = confirmed?.data;
+diff --git a/apps/web/src/lib/queries/messages/local/pages.ts b/apps/web/src/lib/queries/messages/local/pages.ts
+index 0b09eab34c..3bef1013ac 100644
+--- a/apps/web/src/lib/queries/messages/local/pages.ts
++++ b/apps/web/src/lib/queries/messages/local/pages.ts
+@@ -34,6 +34,7 @@ import {
+   channelMessageKey,
+   cursorFromSortKey,
+ } from './sort-key';
++import { forgetUnheldRead, noteUnheldRead } from './unheld-reads';
+ 
+ export type ChannelPageHost = Pick<
+   CacheHost,
+@@ -434,7 +435,10 @@ async function loadPage(
+     heldChannels.delete(request.channelId);
+   }
+   if (device?.kind === 'page') {
+-    if (latest) heldChannels.add(request.channelId);
++    if (latest) {
++      heldChannels.add(request.channelId);
++      forgetUnheldRead({ channelId: request.channelId });
++    }
+     span.setAttr('page.source', 'device');
+     span.setAttr('page.entries', device.page.entries.length);
+     return {
+@@ -445,6 +449,9 @@ async function loadPage(
+   }
+   const { page: server, cached } = fetched ?? (await fetchServer());
+   const coverage = serverPageCoverage(request, server);
++  // The views show this page before the device holds it, and the host may
++  // still be starting; a reload meanwhile leaves it to the next page.
++  if (latest && coverage) noteUnheldRead({ channelId: request.channelId });
+   const store = async (): Promise<string | null> => {
+     await cached;
+     // The page won a race against a host that had not answered: record it
+@@ -452,6 +459,7 @@ async function loadPage(
+     const held = device ?? (await read);
+     if (held.kind === 'unsupported') {
+       markChannelCacheUnsupported(cacheHost);
++      forgetUnheldRead({ channelId: request.channelId });
+       return null;
+     }
+     markChannelCacheAnswered(cacheHost);
+@@ -462,7 +470,10 @@ async function loadPage(
+       touchedAtMs: (options.now ?? Date.now)(),
+     });
+     if (committed.kind !== 'committed') return held.storedSeq;
+-    if (latest && coverage) heldChannels.add(request.channelId);
++    if (latest && coverage) {
++      heldChannels.add(request.channelId);
++      forgetUnheldRead({ channelId: request.channelId });
++    }
+     return committed.channelSeq;
+   };
+   const stored = store();
+diff --git a/apps/web/src/lib/queries/messages/local/prewarm.ts b/apps/web/src/lib/queries/messages/local/prewarm.ts
+index 819949c42a..b10db61f08 100644
+--- a/apps/web/src/lib/queries/messages/local/prewarm.ts
++++ b/apps/web/src/lib/queries/messages/local/prewarm.ts
+@@ -1,11 +1,12 @@
+ import type { CacheHost } from '@graphql-cache/index';
+ import { MAX_EVICTED_CHANNELS } from '@graphql-cache/index';
+ import { Telemetry } from '@macro-inc/observability';
++import { onlineManager } from '@tanstack/solid-query';
+ import { catchUpAndRefresh, type FetchChannelChanges } from './catch-up';
+ import { type FetchChannelServerPage, loadChannelPage } from './pages';
+ 
+ /** The page a channel opens with. */
+-const PREWARM_PAGE_SIZE = 50;
++export const PREWARM_PAGE_SIZE = 50;
+ const CHANNEL_DELAY_MS = 500;
+ /** Channels not opened for this long leave the device. */
+ export const CHANNEL_EVICTION_AGE_MS = 30 * 86_400_000;
+@@ -70,6 +71,9 @@ export async function runChannelPrewarm(
+     for (const channelId of channelIds) {
+       await options.ready?.(signal);
+       if (signal.aborted) break;
++      // Offline every channel would fail; the pass after the reconnect
++      // starts over.
++      if (!onlineManager.isOnline()) break;
+       try {
+         const loaded = await loadChannelPage(
+           host,
+diff --git a/apps/web/src/lib/queries/messages/local/source.ts b/apps/web/src/lib/queries/messages/local/source.ts
+index bdc597cb26..bc7ec02879 100644
+--- a/apps/web/src/lib/queries/messages/local/source.ts
++++ b/apps/web/src/lib/queries/messages/local/source.ts
+@@ -21,8 +21,15 @@ import {
+   loadChannelPage,
+   pageHasPendingWrites,
+ } from './pages';
++import { PREWARM_PAGE_SIZE } from './prewarm';
+ import { sortKeyFromCursor } from './sort-key';
+ import { loadChannelMessage, loadChannelThread } from './thread';
++import {
++  forgetUnheldRead,
++  noteUnheldRead,
++  type UnheldRead,
++  unheldReads,
++} from './unheld-reads';
+ import { watchWaitingWrites } from './waiting-writes';
+ 
+ const SYNC_SURFACE = 'channel-local-sync';
+@@ -175,6 +182,9 @@ async function holdChannelThread(
+   const key = `${channelId}:${rootId}`;
+   if (threadsBeingHeld.has(key)) return;
+   threadsBeingHeld.add(key);
++  // The host may take seconds to start; a reload meanwhile leaves the thread
++  // to the next page.
++  noteUnheldRead({ channelId, rootId });
+   try {
+     await loadChannelThread(host, channelId, rootId);
+   } catch (error) {
+@@ -184,6 +194,44 @@ async function holdChannelThread(
+   }
+ }
+ 
++async function holdUnheldRead(
++  host: CacheHost,
++  { channelId, rootId }: UnheldRead
++): Promise<void> {
++  if (rootId !== undefined) {
++    await loadChannelThread(host, channelId, rootId);
++    return;
++  }
++  const loaded = await loadChannelPage(host, {
++    channelId,
++    limit: PREWARM_PAGE_SIZE,
++  });
++  if (loaded !== 'unsupported' && loaded !== 'not-ready') {
++    if (loaded.source === 'server') await loaded.stored;
++  }
++}
++
++/**
++ * Has the device hold the channel pages and threads a page that is gone
++ * showed from the server and did not see the device store.
++ */
++export async function holdUnheldReads(host: CacheHost): Promise<void> {
++  for (const read of unheldReads()) {
++    // Offline it stays noted for the pass after the reconnect.
++    if (!onlineManager.isOnline()) return;
++    try {
++      await holdUnheldRead(host, read);
++      forgetUnheldRead(read, true);
++    } catch (error) {
++      if (!onlineManager.isOnline()) return;
++      // A channel the person can no longer read, or a failed request: the
++      // prewarm keeps what is still wanted, so this is not tried again.
++      forgetUnheldRead(read, true);
++      reportDeviceFault(error);
++    }
++  }
++}
++
+ /** A channel thread through the device cache; undefined to read over REST. */
+ export async function loadLocalChannelThread(
+   channelId: string,
+diff --git a/apps/web/src/lib/queries/messages/local/tests/pages.test.ts b/apps/web/src/lib/queries/messages/local/tests/pages.test.ts
+index 11dfdbf390..45796ee0fd 100644
+--- a/apps/web/src/lib/queries/messages/local/tests/pages.test.ts
++++ b/apps/web/src/lib/queries/messages/local/tests/pages.test.ts
+@@ -15,6 +15,7 @@ import {
+   serverPageCoverage,
+ } from '../pages';
+ import { channelMessageKey, cursorFromSortKey } from '../sort-key';
++import { resetUnheldReads, unheldReads } from '../unheld-reads';
+ import {
+   CHANNEL_ID,
+   devicePage,
+@@ -53,7 +54,11 @@ const startedHost: typeof fakeHost = (...args) => {
+ };
+ 
+ describe('loadChannelPage', () => {
+-  beforeEach(() => resetPendingChannelPages());
++  beforeEach(() => {
++    resetPendingChannelPages();
++    localStorage.clear();
++    resetUnheldReads();
++  });
+ 
+   it('answers a channel known to be held from the device without a request', async () => {
+     const newest = graphqlMessage(3);
+@@ -222,6 +227,48 @@ describe('loadChannelPage', () => {
+     expect(loaded).toMatchObject({ source: 'device' });
+     expect(fetchPage).not.toHaveBeenCalled();
+   });
++  it('notes a latest page the views show until the device holds it', async () => {
++    const message = graphqlMessage(1);
++    let commit = () => {};
++    const committing = new Promise<void>((resolve) => {
++      commit = resolve;
++    });
++    const host = startedHost([devicePage([], { covered: false, seq: null })]);
++    const record = host.channelTimelineCommit.bind(host);
++    host.channelTimelineCommit = async (args) => {
++      await committing;
++      return record(args);
++    };
++
++    const loaded = await loadChannelPage(
++      host,
++      { channelId: CHANNEL_ID, limit: 50 },
++      { fetchPage: async () => fetched(serverPage({ entries: [message] })) }
++    );
++
++    if (typeof loaded === 'string' || loaded.source !== 'server') {
++      throw new Error('expected a server page');
++    }
++    // A reload here leaves the page to the next one.
++    expect(unheldReads()).toEqual([{ channelId: CHANNEL_ID }]);
++    commit();
++    await loaded.stored;
++    expect(unheldReads()).toEqual([]);
++  });
++
++  it('does not note an older page', async () => {
++    const message = graphqlMessage(1);
++    const host = startedHost([devicePage([], { covered: false, seq: null })]);
++
++    await loadChannelPage(
++      host,
++      { channelId: CHANNEL_ID, limit: 50, before: graphqlMessage(5).sortKey },
++      { fetchPage: async () => fetched(serverPage({ entries: [message] })) }
++    );
++
++    expect(unheldReads()).toEqual([]);
++  });
++
+   it('shows the server page when the device is still starting, then records it', async () => {
+     const message = graphqlMessage(1);
+     const host = fakeHost([devicePage([], { covered: false, seq: null })]);
+diff --git a/apps/web/src/lib/queries/messages/local/tests/prewarm.test.ts b/apps/web/src/lib/queries/messages/local/tests/prewarm.test.ts
+index 20371ee473..79ac85e453 100644
+--- a/apps/web/src/lib/queries/messages/local/tests/prewarm.test.ts
++++ b/apps/web/src/lib/queries/messages/local/tests/prewarm.test.ts
+@@ -1,3 +1,4 @@
++import { onlineManager } from '@tanstack/solid-query';
+ import { afterEach, describe, expect, it, vi } from 'vitest';
+ import { resetChannelSync } from '../catch-up';
+ import type { FetchChannelServerPage } from '../pages';
+@@ -17,7 +18,10 @@ vi.mock('../../../client', () => ({
+   queryClient: { invalidateQueries: vi.fn() },
+ }));
+ 
+-afterEach(() => resetChannelSync());
++afterEach(() => {
++  resetChannelSync();
++  onlineManager.setOnline(true);
++});
+ 
+ describe('runChannelPrewarm', () => {
+   const signal = () => new AbortController().signal;
+@@ -97,6 +101,22 @@ describe('runChannelPrewarm', () => {
+     expect(order).toEqual(['ready', 'fetch a', 'ready', 'fetch b', 'ready']);
+   });
+ 
++  it('asks for nothing without a connection', async () => {
++    onlineManager.setOnline(false);
++    const host = fakeHost(() => devicePage([], { covered: false }));
++    const fetchPage = vi.fn<FetchChannelServerPage>();
++
++    const outcome = await runChannelPrewarm(host, ['a', 'b'], {
++      signal: signal(),
++      delayMs: 0,
++      fetchPage,
++    });
++
++    expect(fetchPage).not.toHaveBeenCalled();
++    expect(host.reads).toEqual([]);
++    expect(outcome).toMatchObject({ fetched: 0, failed: 0 });
++  });
++
+   it('carries on past a channel that fails', async () => {
+     const host = fakeHost(() => devicePage([], { covered: false }));
+     const fetchPage = vi
+diff --git a/apps/web/src/lib/queries/messages/local/tests/source.test.ts b/apps/web/src/lib/queries/messages/local/tests/source.test.ts
+index 01ae92bc35..1429bf2aaf 100644
+--- a/apps/web/src/lib/queries/messages/local/tests/source.test.ts
++++ b/apps/web/src/lib/queries/messages/local/tests/source.test.ts
+@@ -3,11 +3,14 @@ import type {
+   MessageThread,
+   MessageTimelinePage,
+ } from '@service-storage/messages';
+-import { beforeEach, describe, expect, it, vi } from 'vitest';
++import { onlineManager } from '@tanstack/solid-query';
++import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
+ import {
++  holdUnheldReads,
+   loadLocalChannelThread,
+   loadLocalChannelTimelinePage,
+ } from '../source';
++import { noteUnheldRead, resetUnheldReads, unheldReads } from '../unheld-reads';
+ import { CHANNEL_ID } from './fixtures';
+ 
+ const mocks = vi.hoisted(() => ({
+@@ -56,8 +59,12 @@ beforeEach(() => {
+   mocks.channelCacheHost.mockReturnValue(host);
+   mocks.catchUpAndRefresh.mockResolvedValue(undefined);
+   mocks.channelCacheAnswered.mockReturnValue(true);
++  localStorage.clear();
++  resetUnheldReads();
+ });
+ 
++afterEach(() => onlineManager.setOnline(true));
++
+ describe('loadLocalChannelTimelinePage', () => {
+   it('answers with the device page when no push is ahead of it', async () => {
+     mocks.loadChannelPage.mockResolvedValue(devicePage('first', '7'));
+@@ -164,4 +171,93 @@ describe('loadLocalChannelThread', () => {
+       'root'
+     );
+   });
++
++  it('notes a thread REST answered until the device is given it', async () => {
++    mocks.channelCacheAnswered.mockReturnValue(false);
++    // The host is still starting: the hold has not settled.
++    mocks.loadChannelThread.mockReturnValue(new Promise(() => {}));
++
++    await loadLocalChannelThread(CHANNEL_ID, 'root');
++
++    expect(unheldReads()).toEqual([{ channelId: CHANNEL_ID, rootId: 'root' }]);
++  });
++});
++
++describe('holdUnheldReads', () => {
++  const leftPage = { channelId: 'left-channel' };
++  const leftThread = { channelId: CHANNEL_ID, rootId: 'left-root' };
++  // Noted by a page that is gone: in storage, not in this page's memory.
++  const leave = (...reads: Array<{ channelId: string; rootId?: string }>) => {
++    for (const read of reads) noteUnheldRead(read);
++    resetUnheldReads();
++  };
++
++  it('has the device hold the pages and threads a page that is gone left noted', async () => {
++    leave(leftPage, leftThread);
++    let stored = false;
++    mocks.loadChannelPage.mockResolvedValue({
++      page: page('server'),
++      source: 'server',
++      serverSeq: '9',
++      stored: (async () => {
++        await Promise.resolve();
++        stored = true;
++        return '9';
++      })(),
++    });
++    mocks.loadChannelThread.mockResolvedValue({
++      thread: thread('server'),
++      source: 'server',
++    });
++
++    await holdUnheldReads(host);
++
++    expect(mocks.loadChannelPage).toHaveBeenCalledExactlyOnceWith(host, {
++      channelId: 'left-channel',
++      limit: 50,
++    });
++    expect(stored).toBe(true);
++    expect(mocks.loadChannelThread).toHaveBeenCalledExactlyOnceWith(
++      host,
++      CHANNEL_ID,
++      'left-root'
++    );
++    expect(unheldReads()).toEqual([]);
++  });
++
++  it('keeps them noted without a connection', async () => {
++    leave(leftPage, leftThread);
++    onlineManager.setOnline(false);
++
++    await holdUnheldReads(host);
++
++    expect(mocks.loadChannelPage).not.toHaveBeenCalled();
++    expect(unheldReads()).toEqual([leftPage, leftThread]);
++  });
++
++  it('keeps a read noted when the connection drops during it', async () => {
++    leave(leftThread);
++    mocks.loadChannelThread.mockImplementation(async () => {
++      onlineManager.setOnline(false);
++      throw new Error('Failed to fetch');
++    });
++
++    await holdUnheldReads(host);
++
++    expect(unheldReads()).toEqual([leftThread]);
++  });
++
++  it('gives up a read the server refuses and carries on', async () => {
++    leave(leftPage, leftThread);
++    mocks.loadChannelPage.mockRejectedValue(new Error('FORBIDDEN'));
++    mocks.loadChannelThread.mockResolvedValue({
++      thread: thread('device'),
++      source: 'device',
++    });
++
++    await holdUnheldReads(host);
++
++    expect(mocks.loadChannelThread).toHaveBeenCalledTimes(1);
++    expect(unheldReads()).toEqual([]);
++  });
+ });
+diff --git a/apps/web/src/lib/queries/messages/local/tests/thread.test.ts b/apps/web/src/lib/queries/messages/local/tests/thread.test.ts
+index 2d8b14ec20..d487aa6f78 100644
+--- a/apps/web/src/lib/queries/messages/local/tests/thread.test.ts
++++ b/apps/web/src/lib/queries/messages/local/tests/thread.test.ts
+@@ -2,12 +2,13 @@ import {
+   CHANNEL_TIMELINE_HEAD,
+   CHANNEL_TIMELINE_START,
+ } from '@graphql-cache/index';
+-import { describe, expect, it, vi } from 'vitest';
++import { beforeEach, describe, expect, it, vi } from 'vitest';
+ import {
+   type ChannelThreadServerPage,
+   loadChannelMessage,
+   loadChannelThread,
+ } from '../thread';
++import { resetUnheldReads, unheldReads } from '../unheld-reads';
+ import {
+   CHANNEL_ID,
+   devicePage,
+@@ -34,6 +35,11 @@ const threadPage = (
+   ...overrides,
+ });
+ 
++beforeEach(() => {
++  localStorage.clear();
++  resetUnheldReads();
++});
++
+ describe('loadChannelThread', () => {
+   it('reads a held thread from the device, oldest reply first', async () => {
+     const host = fakeHost(
+@@ -108,6 +114,35 @@ describe('loadChannelThread', () => {
+     ]);
+   });
+ 
++  it('notes a thread being fetched until the device holds it', async () => {
++    const host = fakeHost([devicePage([], { covered: false })]);
++    const noted: unknown[] = [];
++    const fetchPage = vi.fn(async () => {
++      // A reload here leaves the thread to the next page.
++      noted.push(...unheldReads());
++      return threadPage({ replies });
++    });
++
++    await loadChannelThread(host, CHANNEL_ID, root.id, fetchPage);
++
++    expect(noted).toEqual([{ channelId: CHANNEL_ID, rootId: root.id }]);
++    expect(host.commits).toHaveLength(1);
++    expect(unheldReads()).toEqual([]);
++  });
++
++  it('keeps a thread noted when its request fails', async () => {
++    const host = fakeHost([devicePage([], { covered: false })]);
++    const fetchPage = vi.fn(async () => {
++      throw new Error('offline');
++    });
++
++    await expect(
++      loadChannelThread(host, CHANNEL_ID, root.id, fetchPage)
++    ).rejects.toThrow('offline');
++
++    expect(unheldReads()).toEqual([{ channelId: CHANNEL_ID, rootId: root.id }]);
++  });
++
+   it('leaves channels to REST on an engine without channel timelines', async () => {
+     const host = fakeHost([{ kind: 'unsupported' }]);
+     expect(
+diff --git a/apps/web/src/lib/queries/messages/local/tests/unheld-reads.test.ts b/apps/web/src/lib/queries/messages/local/tests/unheld-reads.test.ts
+new file mode 100644
+index 0000000000..2cfeb2ef4d
+--- /dev/null
++++ b/apps/web/src/lib/queries/messages/local/tests/unheld-reads.test.ts
+@@ -0,0 +1,55 @@
++import { beforeEach, describe, expect, it } from 'vitest';
++import {
++  forgetUnheldRead,
++  noteUnheldRead,
++  resetUnheldReads,
++  unheldReads,
++} from '../unheld-reads';
++
++const page = { channelId: 'a-channel' };
++const thread = { channelId: 'a-channel', rootId: 'a-root' };
++
++beforeEach(() => {
++  localStorage.clear();
++  resetUnheldReads();
++});
++
++describe('unheld reads', () => {
++  it('keeps a channel page and a thread of the same channel apart', () => {
++    noteUnheldRead(page);
++    noteUnheldRead(thread);
++    noteUnheldRead(page);
++
++    expect(unheldReads()).toEqual([page, thread]);
++
++    forgetUnheldRead(page);
++
++    expect(unheldReads()).toEqual([thread]);
++  });
++
++  it('leaves what an earlier page noted unless told that page is gone', () => {
++    noteUnheldRead(thread);
++    // A new page: nothing noted in memory, the note still in storage.
++    resetUnheldReads();
++
++    forgetUnheldRead(thread);
++    expect(unheldReads()).toEqual([thread]);
++
++    forgetUnheldRead(thread, true);
++    expect(unheldReads()).toEqual([]);
++  });
++
++  it('keeps only the latest fifty', () => {
++    for (let n = 0; n < 55; n += 1) noteUnheldRead({ channelId: `c${n}` });
++
++    const noted = unheldReads();
++    expect(noted).toHaveLength(50);
++    expect(noted[0]).toEqual({ channelId: 'c5' });
++  });
++
++  it('reads nothing from a value it did not write', () => {
++    localStorage.setItem('channel-read-awaiting-device:v1', '{"not":"a list"}');
++
++    expect(unheldReads()).toEqual([]);
++  });
++});
+diff --git a/apps/web/src/lib/queries/messages/local/tests/use-channel-cache.test.ts b/apps/web/src/lib/queries/messages/local/tests/use-channel-cache.test.ts
+index b9619f740a..df607162d0 100644
+--- a/apps/web/src/lib/queries/messages/local/tests/use-channel-cache.test.ts
++++ b/apps/web/src/lib/queries/messages/local/tests/use-channel-cache.test.ts
+@@ -11,6 +11,7 @@ const mocks = vi.hoisted(() => ({
+   rereadChannelsAfterStorageReset: vi.fn(),
+   resetChannelSync: vi.fn(),
+   storeUnstoredPushes: vi.fn(async () => {}),
++  holdUnheldReads: vi.fn(async () => {}),
+   resetPendingChannelPages: vi.fn(),
+   holdUnqueuedSendsPage: vi.fn(),
+   resendUnqueuedSends: vi.fn(async (..._args: unknown[]) => 0),
+@@ -37,6 +38,7 @@ vi.mock('../catch-up', () => ({
+   resetChannelSync: mocks.resetChannelSync,
+   storeUnstoredPushes: mocks.storeUnstoredPushes,
+ }));
++vi.mock('../source', () => ({ holdUnheldReads: mocks.holdUnheldReads }));
+ vi.mock('../pages', () => ({
+   resetPendingChannelPages: mocks.resetPendingChannelPages,
+ }));
+@@ -108,6 +110,7 @@ describe('useChannelCache', () => {
+ 
+     expect(mocks.holdUnqueuedSendsPage).toHaveBeenCalled();
+     expect(mocks.storeUnstoredPushes).toHaveBeenCalledWith(host);
++    expect(mocks.holdUnheldReads).toHaveBeenCalledWith(host);
+     const [resendHost, sender, resend] = mocks.resendUnqueuedSends.mock
+       .calls[0] as [unknown, string, (send: unknown, at: string) => void];
+     expect([resendHost, sender]).toEqual([host, 'sender-1']);
+@@ -143,6 +146,7 @@ describe('useChannelCache', () => {
+     // Held so another tab starting now does not post the same sends.
+     expect(mocks.holdUnqueuedSendsPage).toHaveBeenCalled();
+     expect(mocks.storeUnstoredPushes).not.toHaveBeenCalled();
++    expect(mocks.holdUnheldReads).not.toHaveBeenCalled();
+     expect(mocks.resendUnqueuedSends).toHaveBeenCalledOnce();
+     const [resendHost, sender, resend] = mocks.resendUnqueuedSends.mock
+       .calls[0] as [unknown, string, (send: unknown, at: string) => void];
+diff --git a/apps/web/src/lib/queries/messages/local/thread.ts b/apps/web/src/lib/queries/messages/local/thread.ts
+index f4c77c84ba..91969a4a9e 100644
+--- a/apps/web/src/lib/queries/messages/local/thread.ts
++++ b/apps/web/src/lib/queries/messages/local/thread.ts
+@@ -19,6 +19,7 @@ import type { MessageThread } from '@service-storage/messages';
+ import { fetchCached } from '../../calendar/graphql/network';
+ import { mapChannelMessage, mapChannelRoot } from './map';
+ import { channelMessageKey } from './sort-key';
++import { forgetUnheldRead, noteUnheldRead } from './unheld-reads';
+ 
+ export type ChannelThreadHost = Pick<
+   CacheHost,
+@@ -119,6 +120,8 @@ async function fetchServerThread(
+   rootId: string,
+   fetchPage: FetchChannelThreadPage
+ ): Promise<MessageThread | undefined> {
++  // A reload before the commit below leaves the thread to the next page.
++  noteUnheldRead({ channelId, rootId });
+   const first = await fetchPage({
+     channelId,
+     rootId,
+@@ -130,7 +133,11 @@ async function fetchServerThread(
+   for (const direction of ['before', 'after'] as const) {
+     let cursor = direction === 'before' ? first.olderCursor : first.newerCursor;
+     while (cursor !== null) {
+-      if (pages >= MAX_THREAD_PAGES) return undefined;
++      if (pages >= MAX_THREAD_PAGES) {
++        // Too long for the device to hold: it reads over REST.
++        forgetUnheldRead({ channelId, rootId });
++        return undefined;
++      }
+       const page = await fetchPage({
+         channelId,
+         rootId,
+@@ -154,6 +161,7 @@ async function fetchServerThread(
+     ],
+     seq: { kind: 'lower', seq },
+   });
++  forgetUnheldRead({ channelId, rootId });
+   // Sort keys compare bytewise in display order.
+   const ordered = [...replies.keys()]
+     .sort((left, right) => (left < right ? -1 : left > right ? 1 : 0))
+@@ -177,10 +185,12 @@ export async function loadChannelThread(
+     span.setAttr('thread.root_id', rootId);
+     const device = await readDeviceThread(host, channelId, rootId);
+     if (device === 'unsupported') {
++      forgetUnheldRead({ channelId, rootId });
+       span.setAttr('thread.source', 'unsupported');
+       return undefined;
+     }
+     if (device !== 'miss') {
++      forgetUnheldRead({ channelId, rootId });
+       span.setAttr('thread.source', 'device');
+       span.setAttr('thread.replies', device.replies.length);
+       return { thread: device, source: 'device' as const };
+diff --git a/apps/web/src/lib/queries/messages/local/unheld-reads.ts b/apps/web/src/lib/queries/messages/local/unheld-reads.ts
+new file mode 100644
+index 0000000000..d9e84ae699
+--- /dev/null
++++ b/apps/web/src/lib/queries/messages/local/unheld-reads.ts
+@@ -0,0 +1,90 @@
++import { z } from 'zod';
++
++/**
++ * Channel reads the views were answered from the server that the device does
++ * not hold yet: a channel's latest page, or a whole thread.
++ *
++ * The device stores such a read a moment after the views show it, and only
++ * once its cache has started, which takes a second or two on a new page. A
++ * reload inside that time would leave the device without what the person just
++ * read, and offline it would not open. Each such read is therefore noted here
++ * first, synchronously, and forgotten once the device holds it; the next page
++ * to start has the device hold what a page that is gone left noted.
++ */
++
++const KEY = 'channel-read-awaiting-device:v1';
++/** Only the latest reads are worth holding again. */
++const MAX_NOTED = 50;
++
++export interface UnheldRead {
++  channelId: string;
++  /** The thread that was read; absent for the channel's latest page. */
++  rootId?: string;
++}
++
++const notedSchema = z.array(
++  z.object({ channelId: z.string(), rootId: z.string().optional() })
++);
++
++/** What this page noted and has not seen held. */
++const noted = new Set<string>();
++
++const idOf = (read: UnheldRead) =>
++  read.rootId === undefined
++    ? read.channelId
++    : `${read.channelId}:${read.rootId}`;
++
++function browserStorage(): Pick<Storage, 'getItem' | 'setItem'> | undefined {
++  try {
++    return globalThis.localStorage;
++  } catch {
++    // Storage the browser refuses leaves reads as they were before this.
++    return undefined;
++  }
++}
++
++/** The reads a page noted and did not see held, this one's included. */
++export function unheldReads(): UnheldRead[] {
++  try {
++    const parsed = notedSchema.safeParse(
++      JSON.parse(browserStorage()?.getItem(KEY) ?? '[]')
++    );
++    return parsed.success ? parsed.data : [];
++  } catch {
++    return [];
++  }
++}
++
++function write(reads: UnheldRead[]): void {
++  try {
++    browserStorage()?.setItem(KEY, JSON.stringify(reads));
++  } catch {
++    // A full or refused storage leaves the read to the channel prewarm.
++  }
++}
++
++export function noteUnheldRead(read: UnheldRead): void {
++  const id = idOf(read);
++  if (noted.has(id)) return;
++  noted.add(id);
++  const others = unheldReads().filter((other) => idOf(other) !== id);
++  write([...others, read].slice(-MAX_NOTED));
++}
++
++/**
++ * The device holds the read. Touches storage only for a read this page noted,
++ * unless `left` says an earlier page may have.
++ */
++export function forgetUnheldRead(read: UnheldRead, left = false): void {
++  const id = idOf(read);
++  if (!noted.delete(id) && !left) return;
++  const held = unheldReads();
++  if (held.some((other) => idOf(other) === id)) {
++    write(held.filter((other) => idOf(other) !== id));
++  }
++}
++
++/** For tests. */
++export function resetUnheldReads(): void {
++  noted.clear();
++}
+diff --git a/apps/web/src/lib/queries/messages/local/use-channel-cache.ts b/apps/web/src/lib/queries/messages/local/use-channel-cache.ts
+index 2a2ce5810f..ca2a14b1f9 100644
+--- a/apps/web/src/lib/queries/messages/local/use-channel-cache.ts
++++ b/apps/web/src/lib/queries/messages/local/use-channel-cache.ts
+@@ -25,6 +25,7 @@ import { queueIfAnswering, sendLeftBehindOverRest } from './left-behind-sends';
+ import { resetPendingChannelPages } from './pages';
+ import { evictIdleChannels, runChannelPrewarm } from './prewarm';
+ import { loadPrewarmChannelIds } from './prewarm-list';
++import { holdUnheldReads } from './source';
+ import { holdUnqueuedSendsPage, resendUnqueuedSends } from './unqueued-sends';
+ import { sendChannelMessage } from './writes';
+ 
+@@ -91,8 +92,9 @@ async function runPass(host: CacheHost, signal: AbortSignal): Promise<void> {
+  * for thirty days. When the cache storage is reset under the page, the open
+  * channels' pages and threads are read again so the device holds them again.
+  * Each tab also sends the messages a page that is gone was still handing to
+- * the device queue, and stores the pushed changes such a page had shown but
+- * the device had not taken. With the flag off none of this runs; the sends an
++ * the device queue, stores the pushed changes such a page had shown but the
++ * device had not taken, and has the device hold the channel pages and threads
++ * such a page had shown from the server before the device stored them. With the flag off none of this runs; the sends an
+  * earlier page left noted are posted over REST.
+  */
+ export function useChannelCache(userId: Accessor<string | undefined>): void {
+@@ -177,6 +179,7 @@ export function useChannelCache(userId: Accessor<string | undefined>): void {
+     // Again after a reconnect: offline, the catch-up fails and stays noted.
+     pass();
+     fireAndForget(storeUnstoredPushes(cacheHost), 'channel-local-sync');
++    fireAndForget(holdUnheldReads(cacheHost), 'channel-local-sync');
+   });
+ 
+   createEffect(() => {

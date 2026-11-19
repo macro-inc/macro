@@ -1,0 +1,30 @@
+
+running 7 tests
+test daemon::test::a_fresh_dial_is_not_a_held_connection_until_it_has_lasted ... ok
+test daemon::test::the_event_stream_reconnects_fast_then_backs_off ... ok
+test daemon::test::stop_does_not_wait_for_in_flight_work ... ok
+test daemon::test::prompt_at_ready::an_event_delivered_twice_is_handled_once ... ok
+test daemon::test::prompt_at_ready::a_session_requested_the_instant_the_computer_is_ready_reaches_macrod ... ok
+test daemon::test::startup_without_agents_serves_model_probes_and_stop_closes_the_runtime ... FAILED
+test daemon::test::a_handed_off_agent_keeps_running_and_streaming_under_the_next_daemon ... FAILED
+
+failures:
+
+---- daemon::test::startup_without_agents_serves_model_probes_and_stop_closes_the_runtime stdout ----
+
+thread 'daemon::test::startup_without_agents_serves_model_probes_and_stop_closes_the_runtime' (3011597) panicked at crates/coding_agent_worker/src/daemon/test.rs:157:5:
+stopped daemon must not reconnect
+note: run with `RUST_BACKTRACE=1` environment variable to display a backtrace
+
+---- daemon::test::a_handed_off_agent_keeps_running_and_streaming_under_the_next_daemon stdout ----
+
+thread 'daemon::test::a_handed_off_agent_keeps_running_and_streaming_under_the_next_daemon' (3011594) panicked at crates/coding_agent_worker/src/daemon/test.rs:276:68:
+called `Result::unwrap()` on an `Err` value: Protocol(MissingConnectionUpgradeHeader)
+
+
+failures:
+    daemon::test::a_handed_off_agent_keeps_running_and_streaming_under_the_next_daemon
+    daemon::test::startup_without_agents_serves_model_probes_and_stop_closes_the_runtime
+
+test result: FAILED. 5 passed; 2 failed; 0 ignored; 0 measured; 301 filtered out; finished in 8.17s
+

@@ -1,0 +1,17 @@
+usage: channel_change_plans.ts [-h] [--host {127.0.0.1,localhost,::1}]
+                               --port PORT --user USER
+                               [--maintenance-db MAINTENANCE_DB]
+                               [--suffix SUFFIX] [--output OUTPUT]
+
+Measure exact channel SQL on fresh and stale disposable local databases. No
+existing database is modified or removed. Results include the exact SQL, seed
+and first/repeated JSON plans for custom and generic prepared statements.
+
+options:
+  -h, --help            show this help message and exit
+  --host {127.0.0.1,localhost,::1}
+  --port PORT           Port of a dedicated local test Postgres
+  --user USER           Your local test database role
+  --maintenance-db MAINTENANCE_DB
+  --suffix SUFFIX
+  --output OUTPUT       Directory for plans; defaults under /tmp

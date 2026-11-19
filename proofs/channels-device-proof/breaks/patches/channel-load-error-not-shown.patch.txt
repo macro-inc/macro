@@ -1,0 +1,13 @@
+diff --git a/apps/web/src/features/channel/Channel/Channel.tsx b/apps/web/src/features/channel/Channel/Channel.tsx
+index d6c7afd762..1f0d838754 100644
+--- a/apps/web/src/features/channel/Channel/Channel.tsx
++++ b/apps/web/src/features/channel/Channel/Channel.tsx
+@@ -881,7 +881,7 @@ export function Channel(props: ChannelProps) {
+       <EntityLoadGate
+         result={messagesLoadResult}
+         loadingFallback={<ChannelLoading />}
+-        loadErrorTitle="Unable to load this channel"
++        loadErrorTitle="Loading"
+         onRetry={() => fireAndForget(messagesQuery.refetch(), 'channel')}
+         unauthorized={
+           <ChannelAccessDenied

@@ -1,0 +1,11 @@
+undef $/; $_=<STDIN>;
+my $L = sub { "console.log('DBGq $_[0]', Math.round(performance.now()));" };
+s/(    drainRunning = true;\n    drainRequested = false;\n    try \{\n)/$1      @{[$L->('drain-start')]}\n/ or die 1;
+s/(      await host\.currentRevision\(\);\n)(      if \(ownerRegistration\) await ownerRegistration;\n)(      if \(options\.prepareMutationQueue\) await prepareQueueRecovery\(\);\n      const now = Date\.now\(\);)/$1      @{[$L->('revision')]}\n$2      @{[$L->('owner')]}\n$3\n      @{[$L->('prepared')]}/ or die 2;
+s/(      if \(!claimed\) \{\n        if \(await releaseAbandonedLease)/      @{[$L->('claimed')]} console.log('DBGq claimed?', !!claimed);\n$1/ or die 3;
+s/(      attemptTelemetry\.sent\('live'\);\n)/$1      @{[$L->('sent-live')]}\n/ or die 4;
+s/(      attemptTelemetry\.sent\('replay'\);\n)/$1      @{[$L->('sent-replay')]}\n/ or die 5;
+s/(    try \{\n      if \(options\.prepareMutationQueue\) await prepareQueueRecovery\(\);\n      const admission = )/    @{[$L->('preparing')]}\n$1/ or die 6;
+s/(    notifyOptimisticMutationEnqueued\(op\);\n)/$1    @{[$L->('enqueued')]}\n/ or die 7;
+s/(  function wakeDrain\(\): void \{\n)/$1    @{[$L->('wake')]}\n/ or die 8;
+print;

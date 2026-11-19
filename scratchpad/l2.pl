@@ -1,0 +1,5 @@
+undef $/; $_=<STDIN>;
+s/(    const deferred =\n      lifecycle\.isReady\(\) &&)/    console.log('DBGl write', Math.round(performance.now()), 'off', Math.round(offset), 'adj', Math.round(options.adjustments ?? 0), 'total', Math.round(instance.getTotalSize()), 'sizer', contentRef?.style.height, 'top', Math.round(instance.scrollElement?.scrollTop ?? -1), 'batch', applyingBatch, 'n', props.keys().length, 'cnt', instance.options.count);\n$1/ or die 1;
+s/(      const reportOffset = \(offset: number, isScrolling: boolean\) => \{\n)/$1        console.log('DBGl report', Math.round(performance.now()), 'off', Math.round(offset), 'scr', isScrolling, 'own', writingScroll, 'prog', Math.round(programmaticOffset ?? -1), 'vo', Math.round(instance.scrollOffset ?? -1), 'sh', element?.scrollHeight);\n/ or die 2;
+s/(    programmaticOffset =\n      options\.behavior === 'smooth'\n        \? undefined\n        : instance\.scrollElement\?\.scrollTop;\n)/$1    console.log('DBGl wrote', Math.round(instance.scrollElement?.scrollTop ?? -1), 'sh', instance.scrollElement?.scrollHeight);\n/ or die 3;
+print;

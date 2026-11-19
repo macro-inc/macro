@@ -1,0 +1,6 @@
+11:11:10 send {"appearedMs":36,"rowCountsOver3s":[1,1,1,1,1,1,1,1],"maxRows":1,"requests":["POST /dss/messages/channel/:id/typing 204","POST /dss/messages/channel/:id 200","POST CalendarOccurrences 200","POST CalendarOccurrences 200"]}
+11:11:12 send_request_fails {"optimisticAppearedMs":23,"rolledBackAfterMs":43,"rowsAfter":0,"failureToast":true,"draftRestored":true,"requests":["POST /dss/messages/channel/:id/typing 204","POST /dss/messages/channel/:id failed","GET /dss/messages/channel/:id/threads/:id 404","POST PendingEmailSends 200","GET /dss/messages/channel/:id/threads/:id 404","POST CalendarOccurrences 200"]}
+11:11:22 send_503_busy {"optimisticAppearedMs":20,"rolledBackAfterMs":44,"rowsAfter":0,"failureToast":true,"draftRestored":true,"requests":["POST /dss/messages/channel/:id/typing 204","POST /dss/messages/channel/:id 503","GET /dss/messages/channel/:id/threads/:id 404","POST PendingEmailSends 200","GET /dss/messages/channel/:id/threads/:id 404"]}
+11:11:33 retry {"rows":1,"requests":["POST /dss/messages/channel/:id/typing 204","POST /dss/messages/channel/:id 200","GET /dss/call/active 200","GET /dss/call/meetings/active 200","POST PendingEmailSends 200","GET /dss/call/:id/active 204","GET /dss/slack/imports 200"]}
+11:11:37 reopen {"ownSend":1,"retry":1,"failed":0,"busy":0}
+old exit 0

@@ -1,0 +1,24 @@
+{
+ "base": "https://localhost:31009",
+ "channel": "5eed92f0-15d3-83f5-a505-41d4adcf67c2",
+ "generatedAt": "2026-11-12T16:55:03.633Z",
+ "steps": {
+  "unsent_indicator": {
+   "at2s": {
+    "label": false,
+    "opacity": "1"
+   },
+   "at6s": {
+    "label": true,
+    "opacity": "0.6"
+   },
+   "afterDelivery": {
+    "label": false,
+    "opacity": "1"
+   },
+   "server": {
+    "q-unsent-1794502512590": 1
+   }
+  }
+ }
+}

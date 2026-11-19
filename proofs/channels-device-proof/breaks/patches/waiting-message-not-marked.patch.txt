@@ -1,0 +1,13 @@
+diff --git a/apps/web/src/lib/queries/messages/unsent.ts b/apps/web/src/lib/queries/messages/unsent.ts
+index d17348a11c..691e927100 100644
+--- a/apps/web/src/lib/queries/messages/unsent.ts
++++ b/apps/web/src/lib/queries/messages/unsent.ts
+@@ -5,7 +5,7 @@ import { useMutationState } from '@tanstack/solid-query';
+ export const SEND_MESSAGE_MUTATION_KEY = ['messages', 'send'] as const;
+ 
+ /** How long a send may stay unanswered before its message is marked unsent. */
+-export const UNSENT_AFTER_MS = 5000;
++export const UNSENT_AFTER_MS = 5_000_000;
+ 
+ /**
+  * Whether this session has been trying to send the message for longer than

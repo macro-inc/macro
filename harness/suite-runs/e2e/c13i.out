@@ -1,0 +1,73 @@
+path "/home/teo/.herdr/worktrees/macro/synoet-channels-local-sync-suite/apps/web" does not contain a 'flake.nix', searching up
+
+Running 15 tests using 4 workers
+
+  ✓   3 tests/channels-e2e/composer.spec.ts:93:1 › CMP-13 a message shown as sent is still sent when the page is reloaded at once (7.2s)
+  ✓   2 tests/channels-e2e/composer.spec.ts:93:1 › CMP-13 a message shown as sent is still sent when the page is reloaded at once (8.1s)
+  ✓   1 tests/channels-e2e/composer.spec.ts:93:1 › CMP-13 a message shown as sent is still sent when the page is reloaded at once (9.0s)
+  ✓   5 tests/channels-e2e/composer.spec.ts:93:1 › CMP-13 a message shown as sent is still sent when the page is reloaded at once (7.0s)
+  ✓   7 tests/channels-e2e/composer.spec.ts:93:1 › CMP-13 a message shown as sent is still sent when the page is reloaded at once (5.3s)
+  ✓   6 tests/channels-e2e/composer.spec.ts:93:1 › CMP-13 a message shown as sent is still sent when the page is reloaded at once (6.4s)
+  ✓   9 tests/channels-e2e/composer.spec.ts:93:1 › CMP-13 a message shown as sent is still sent when the page is reloaded at once (5.9s)
+  ✓   8 tests/channels-e2e/composer.spec.ts:93:1 › CMP-13 a message shown as sent is still sent when the page is reloaded at once (6.3s)
+  ✓  10 tests/channels-e2e/composer.spec.ts:93:1 › CMP-13 a message shown as sent is still sent when the page is reloaded at once (6.1s)
+  ✘   4 tests/channels-e2e/composer.spec.ts:93:1 › CMP-13 a message shown as sent is still sent when the page is reloaded at once (22.5s)
+  ✓  11 tests/channels-e2e/composer.spec.ts:93:1 › CMP-13 a message shown as sent is still sent when the page is reloaded at once (6.7s)
+  ✓  12 tests/channels-e2e/composer.spec.ts:93:1 › CMP-13 a message shown as sent is still sent when the page is reloaded at once (6.5s)
+  ✓  13 tests/channels-e2e/composer.spec.ts:93:1 › CMP-13 a message shown as sent is still sent when the page is reloaded at once (6.5s)
+  ✓  14 tests/channels-e2e/composer.spec.ts:93:1 › CMP-13 a message shown as sent is still sent when the page is reloaded at once (6.5s)
+  ✓  15 tests/channels-e2e/composer.spec.ts:93:1 › CMP-13 a message shown as sent is still sent when the page is reloaded at once (5.4s)
+
+
+  1) tests/channels-e2e/composer.spec.ts:93:1 › CMP-13 a message shown as sent is still sent when the page is reloaded at once 
+
+    Error: the last messages in the list
+
+    the last messages in the list
+
+    expect(received).toEqual(expected) // deep equality
+
+    - Expected  - 3
+    + Received  + 1
+
+    - Array [
+    -   "sent just before a reload",
+    - ]
+    + Array []
+
+    Call Log:
+    - Timeout 15000ms exceeded while waiting on the predicate
+
+       at harness/channel.ts:186
+
+      184 |         message: 'the last messages in the list',
+      185 |       })
+    > 186 |       .toEqual(expected);
+          |        ^
+      187 |   }
+      188 |
+      189 |   /** How far the list is from showing its very end, in pixels. */
+        at ChannelView.expectEndsWith (/home/teo/.herdr/worktrees/macro/synoet-channels-local-sync-suite/apps/web/tests/channels-e2e/harness/channel.ts:186:8)
+        at /home/teo/.herdr/worktrees/macro/synoet-channels-local-sync-suite/apps/web/tests/channels-e2e/composer.spec.ts:111:14
+
+    attachment #1: screenshot (image/png) ──────────────────────────────────────────────────────────
+    ../../../../../../.cache/channels-perf-b/e2e/c13i/test-results/composer-CMP-13-a-message--bd722-he-page-is-reloaded-at-once-repeat2/test-failed-2.png
+    ────────────────────────────────────────────────────────────────────────────────────────────────
+
+    attachment #2: screenshot (image/png) ──────────────────────────────────────────────────────────
+    ../../../../../../.cache/channels-perf-b/e2e/c13i/test-results/composer-CMP-13-a-message--bd722-he-page-is-reloaded-at-once-repeat2/test-failed-1.png
+    ────────────────────────────────────────────────────────────────────────────────────────────────
+
+    Error Context: ../../../../../../.cache/channels-perf-b/e2e/c13i/test-results/composer-CMP-13-a-message--bd722-he-page-is-reloaded-at-once-repeat2/error-context.md
+
+    attachment #4: trace (application/zip) ─────────────────────────────────────────────────────────
+    ../../../../../../.cache/channels-perf-b/e2e/c13i/test-results/composer-CMP-13-a-message--bd722-he-page-is-reloaded-at-once-repeat2/trace.zip
+    Usage:
+
+        npx playwright show-trace ../../../../../../.cache/channels-perf-b/e2e/c13i/test-results/composer-CMP-13-a-message--bd722-he-page-is-reloaded-at-once-repeat2/trace.zip
+
+    ────────────────────────────────────────────────────────────────────────────────────────────────
+
+  1 failed
+    tests/channels-e2e/composer.spec.ts:93:1 › CMP-13 a message shown as sent is still sent when the page is reloaded at once 
+  14 passed (47.3s)

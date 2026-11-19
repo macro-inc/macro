@@ -1,0 +1,759 @@
+unpacking 'https://channels.nixos.org/nixpkgs-unstable/nixexprs.tar.zst' into the Git cache...
+path "/home/teo/.herdr/worktrees/macro/synoet-channels-local-sync-suiteb/apps/web" does not contain a 'flake.nix', searching up
+
+Running 12 tests using 3 workers
+
+DD OFF-09 w1 r0 ben 840659 DBG unheld-pass []
+DD OFF-13 w2 r0 dee 840677 DBG unheld-pass []
+DD OFF-09 w1 r0 ben 840866 DBG detail-view 89cd84 loading load=pending
+DD OFF-13 w2 r0 dee 840872 DBG detail-view cc403a loading load=pending
+DD OFF-13 w2 r0 dee 841015 DBG detail-view cc403a ready load=pending
+DD OFF-09 w1 r0 ben 841031 DBG detail-view 89cd84 ready load=ready
+DD OFF-09 w1 r0 ben 841034 DBG detail-result 89cd84 source=live-network stale=false has=true err=none
+DD OFF-09 w1 r0 ben 841034 DBG detail-view 89cd84 ready load=ready
+DD OFF-13 w2 r0 dee 841068 DBG detail-view cc403a ready load=ready
+DD OFF-13 w2 r0 dee 841069 DBG detail-result cc403a source=live-network stale=false has=true err=none
+DD OFF-13 w2 r0 dee 841069 DBG detail-view cc403a ready load=ready
+DD OFF-13 w2 r0 dee 841113 DBG detail-result cc403a source=live-network stale=true has=true err=none
+DD OFF-13 w2 r0 dee 841113 DBG detail-result cc403a source=live-network stale=true has=true err=none
+DD OFF-13 w2 r0 dee 841114 DBG detail-view cc403a ready load=pending
+DD OFF-06 w0 r0 ben 841116 DBG unheld-pass []
+DD OFF-13 w2 r0 dee 841122 DBG unheld-note 2-6413a4cc403a
+DD OFF-09 w1 r0 ben 841175 DBG unheld-note 0-81da8889cd84
+DD OFF-09 w1 r0 ben 841268 DBG detail-result 89cd84 source=live-network stale=false has=true err=none
+DD OFF-09 w1 r0 ben 841269 DBG detail-view 89cd84 ready load=ready
+DD OFF-09 w1 r0 ben 841272 DBG detail-result 89cd84 source=live-network stale=false has=true err=none
+DD OFF-06 w0 r0 ben 841281 DBG detail-view 62c251 loading load=pending
+DD OFF-06 w0 r0 ben 841423 DBG detail-view 62c251 ready load=ready
+DD OFF-06 w0 r0 ben 841427 DBG detail-result 62c251 source=live-network stale=false has=true err=none
+DD OFF-06 w0 r0 ben 841427 DBG detail-view 62c251 ready load=ready
+DD OFF-06 w0 r0 ben 841561 DBG unheld-note 8-669c3062c251
+DD OFF-13 w2 r0 dee 841567 DBG detail-view 269ebe ready load=pending
+DD OFF-13 w2 r0 dee 841584 DBG unheld-note 5-d7f893269ebe
+DD OFF-06 w0 r0 ben 841654 DBG detail-result 62c251 source=live-network stale=false has=true err=none
+DD OFF-06 w0 r0 ben 841654 DBG detail-view 62c251 ready load=ready
+DD OFF-06 w0 r0 ben 841660 DBG detail-result 62c251 source=live-network stale=false has=true err=none
+DD OFF-13 w2 r0 dee 841706 DBG detail-view cc403a ready load=pending
+DD OFF-09 w1 r0 ben 841797 DBG detail-view d657a8 ready load=pending
+DD OFF-09 w1 r0 ben 841821 DBG unheld-note e-4b1e2bd657a8
+DD OFF-13 w2 r0 dee 841866 DBG detail-view cc403a ready load=ready
+DD OFF-13 w2 r0 dee 841866 DBG detail-result cc403a source=live-network stale=false has=true err=none
+DD OFF-13 w2 r0 dee 841867 DBG detail-view cc403a ready load=ready
+DD OFF-13 w2 r0 dee 841871 DBG detail-result cc403a source=live-network stale=false has=true err=none
+DD OFF-13 w2 r0 dee 841888 DBG unheld-forget 2-6413a4cc403a left=false
+DD OFF-09 w1 r0 ben 841906 DBG detail-view d657a8 ready load=ready
+DD OFF-09 w1 r0 ben 841907 DBG detail-result d657a8 source=live-network stale=false has=true err=none
+DD OFF-09 w1 r0 ben 841907 DBG detail-view d657a8 ready load=ready
+DD OFF-13 w2 r0 dee 841909 DBG unheld-forget 5-d7f893269ebe left=false
+DD OFF-09 w1 r0 ben 841912 DBG detail-result d657a8 source=live-network stale=false has=true err=none
+DD OFF-06 w0 r0 ben 841928 DBG unheld-note b-5b84a0673269
+DD OFF-06 w0 r0 ben 842190 DBG detail-view 62c251 ready load=ready
+DD OFF-06 w0 r0 ben 842192 DBG detail-result 62c251 source=live-network stale=false has=true err=none
+DD OFF-06 w0 r0 ben 842192 DBG detail-view 62c251 ready load=ready
+DD OFF-06 w0 r0 ben 842195 DBG detail-result 62c251 source=live-network stale=false has=true err=none
+DD OFF-06 w0 r0 ben 842297 DBG detail-view 1eaa6b ready load=pending
+DD OFF-06 w0 r0 ben 842339 DBG unheld-note 7-73f2661eaa6b
+DD OFF-06 w0 r0 ben 842399 DBG unheld-forget 8-669c3062c251 left=false
+DD OFF-06 w0 r0 ben 842417 DBG detail-view 1eaa6b ready load=ready
+DD OFF-06 w0 r0 ben 842417 DBG detail-result 1eaa6b source=live-network stale=false has=true err=none
+DD OFF-06 w0 r0 ben 842417 DBG detail-view 1eaa6b ready load=ready
+DD OFF-06 w0 r0 ben 842421 DBG detail-result 1eaa6b source=live-network stale=false has=true err=none
+DD OFF-06 w0 r0 ben 842506 DBG unheld-forget 7-73f2661eaa6b left=false
+DD OFF-06 w0 r0 ben 842517 DBG unheld-forget b-5b84a0673269 left=false
+DD OFF-06 w0 r0 ben 842648 DBG detail-view 62c251 ready load=pending
+DD OFF-06 w0 r0 ben 842689 DBG detail-view 62c251 ready load=pending
+DD OFF-06 w0 r0 ben 842689 DBG detail-result 62c251 source=normalized-cache-hit stale=true has=true err=none
+DD OFF-06 w0 r0 ben 842692 DBG detail-result 62c251 source=normalized-cache-hit stale=true has=true err=none
+DD OFF-06 w0 r0 ben 842728 DBG detail-view 62c251 ready load=pending
+DD OFF-06 w0 r0 ben 842729 DBG detail-view 62c251 ready load=ready
+DD OFF-06 w0 r0 ben 842730 DBG detail-result 62c251 source=live-network stale=false has=true err=none
+DD OFF-06 w0 r0 ben 842730 DBG detail-view 62c251 ready load=ready
+DD OFF-09 w1 r0 ben 842731 DBG unheld-pass [{"channelId":"01a1e769-e3c2-715a-9cd0-81da8889cd84"},{"channelId":"01a1e769-e3d2-7899-ba2e-4b1e2bd657a8"}]
+DD OFF-06 w0 r0 ben 842733 DBG detail-result 62c251 source=live-network stale=false has=true err=none
+DD OFF-09 w1 r0 ben 842881 DBG detail-view d657a8 loading load=pending
+DD OFF-09 w1 r0 ben 842898 DBG unheld-note 0-81da8889cd84
+DD OFF-09 w1 r0 ben 843015 DBG detail-view d657a8 ready load=ready
+DD OFF-09 w1 r0 ben 843016 DBG detail-result d657a8 source=live-network stale=false has=true err=none
+DD OFF-09 w1 r0 ben 843017 DBG detail-view d657a8 ready load=ready
+DD OFF-06 w0 r0 ben 843103 DBG detail-view 1eaa6b ready load=pending
+DD OFF-06 w0 r0 ben 843141 DBG detail-view 1eaa6b ready load=pending
+DD OFF-06 w0 r0 ben 843141 DBG detail-result 1eaa6b source=normalized-cache-hit stale=true has=true err=none
+DD OFF-06 w0 r0 ben 843144 DBG detail-result 1eaa6b source=normalized-cache-hit stale=true has=true err=none
+DD OFF-09 w1 r0 ben 843159 DBG unheld-note e-4b1e2bd657a8
+DD OFF-09 w1 r0 ben 843213 DBG detail-result d657a8 source=live-network stale=false has=true err=none
+DD OFF-09 w1 r0 ben 843213 DBG detail-view d657a8 ready load=ready
+DD OFF-06 w0 r0 ben 843225 DBG detail-view 1eaa6b ready load=pending
+DD OFF-06 w0 r0 ben 843225 DBG detail-view 1eaa6b ready load=ready
+DD OFF-06 w0 r0 ben 843225 DBG detail-result 1eaa6b source=live-network stale=false has=true err=none
+DD OFF-06 w0 r0 ben 843225 DBG detail-view 1eaa6b ready load=ready
+DD OFF-06 w0 r0 ben 843225 DBG detail-result 1eaa6b source=live-network stale=false has=true err=none
+DD OFF-09 w1 r0 ben 843227 DBG detail-result d657a8 source=live-network stale=false has=true err=none
+DD OFF-09 w1 r0 ben 843498 DBG detail-view d657a8 ready load=ready
+DD OFF-09 w1 r0 ben 843499 DBG detail-result d657a8 source=live-network stale=false has=true err=none
+DD OFF-09 w1 r0 ben 843500 DBG detail-view d657a8 ready load=ready
+DD OFF-09 w1 r0 ben 843501 DBG detail-result d657a8 source=live-network stale=false has=true err=none
+DD OFF-09 w1 r0 ben 843566 DBG unheld-forget 0-81da8889cd84 left=false
+DD OFF-09 w1 r0 ben 843566 DBG unheld-forget 0-81da8889cd84 left=true
+DD OFF-09 w1 r0 ben 843613 DBG unheld-forget e-4b1e2bd657a8 left=false
+DD OFF-09 w1 r0 ben 843613 DBG unheld-forget e-4b1e2bd657a8 left=true
+DD OFF-06 w0 r0 ben 844089 DBG unheld-pass []
+DD OFF-06 w0 r0 ben 844216 DBG detail-view 1eaa6b loading load=pending
+DD OFF-06 w0 r0 ben 844343 DBG detail-view 1eaa6b ready load=ready
+DD OFF-06 w0 r0 ben 844344 DBG detail-result 1eaa6b source=live-network stale=false has=true err=none
+DD OFF-06 w0 r0 ben 844345 DBG detail-view 1eaa6b ready load=ready
+DD OFF-06 w0 r0 ben 844485 DBG unheld-note 7-73f2661eaa6b
+DD OFF-06 w0 r0 ben 844526 DBG detail-result 1eaa6b source=live-network stale=false has=true err=none
+DD OFF-06 w0 r0 ben 844527 DBG detail-view 1eaa6b ready load=ready
+DD OFF-06 w0 r0 ben 844530 DBG detail-result 1eaa6b source=live-network stale=false has=true err=none
+DD OFF-13 w2 r0 dee 844738 DBG detail-view 269ebe ready load=pending
+DD OFF-06 w0 r0 ben 844937 DBG detail-view 1eaa6b ready load=ready
+DD OFF-06 w0 r0 ben 844937 DBG detail-result 1eaa6b source=live-network stale=false has=true err=none
+DD OFF-06 w0 r0 ben 844937 DBG detail-view 1eaa6b ready load=ready
+DD OFF-06 w0 r0 ben 844938 DBG detail-result 1eaa6b source=live-network stale=false has=true err=none
+DD OFF-06 w0 r0 ben 845059 DBG unheld-forget 7-73f2661eaa6b left=false
+DD OFF-13 w2 r0 dee 845634 DBG unheld-pass []
+DD OFF-13 w2 r0 dee 845780 DBG detail-view 269ebe loading load=pending
+DD OFF-13 w2 r0 dee 845902 DBG detail-view 269ebe ready load=ready
+DD OFF-13 w2 r0 dee 845903 DBG detail-result 269ebe source=live-network stale=false has=true err=none
+DD OFF-13 w2 r0 dee 845903 DBG detail-view 269ebe ready load=ready
+DD OFF-13 w2 r0 dee 846010 DBG unheld-note 5-d7f893269ebe
+DD OFF-13 w2 r0 dee 846041 DBG detail-result 269ebe source=live-network stale=false has=true err=none
+DD OFF-13 w2 r0 dee 846041 DBG detail-view 269ebe ready load=ready
+DD OFF-13 w2 r0 dee 846044 DBG detail-result 269ebe source=live-network stale=false has=true err=none
+DD OFF-13 w2 r0 dee 846359 DBG unheld-forget 5-d7f893269ebe left=false
+DD OFF-13 w2 r0 dee 846362 DBG detail-view 269ebe ready load=ready
+DD OFF-13 w2 r0 dee 846363 DBG detail-result 269ebe source=live-network stale=false has=true err=none
+DD OFF-13 w2 r0 dee 846364 DBG detail-view 269ebe ready load=ready
+DD OFF-13 w2 r0 dee 846365 DBG detail-result 269ebe source=live-network stale=false has=true err=none
+DD OFF-09 w1 r0 ben 848581 DBG detail-view 89cd84 ready load=pending
+DD OFF-09 w1 r0 ben 848595 DBG detail-view 89cd84 ready load=pending
+DD OFF-09 w1 r0 ben 848596 DBG detail-result 89cd84 source=live-network stale=false has=false err=[Network] Failed to fetch
+DD OFF-09 w1 r0 ben 848596 DBG detail-view 89cd84 ready load=error
+DD OFF-09 w1 r0 ben 848598 DBG detail-result 89cd84 source=live-network stale=false has=false err=[Network] Failed to fetch
+DD OFF-09 w1 r0 ben 848795 DBG detail-view 89cd84 ready load=ready
+DD OFF-09 w1 r0 ben 848795 DBG detail-result 89cd84 source=normalized-cache-hit stale=false has=true err=[Network] Failed to fetch
+DD OFF-09 w1 r0 ben 848798 DBG detail-result 89cd84 source=normalized-cache-hit stale=false has=true err=[Network] Failed to fetch
+DD OFF-09 w1 r0 ben 848798 DBG detail-result 89cd84 source=normalized-cache-hit stale=true has=true err=[Network] Failed to fetch
+DD OFF-09 w1 r0 ben 848799 DBG detail-result 89cd84 source=normalized-cache-hit stale=true has=true err=[Network] Failed to fetch
+DD OFF-09 w1 r0 ben 848841 DBG detail-result 89cd84 source=live-network stale=false has=false err=[Network] Failed to fetch
+DD OFF-09 w1 r0 ben 848841 DBG detail-view 89cd84 ready load=ready
+DD OFF-09 w1 r0 ben 848843 DBG detail-result 89cd84 source=live-network stale=false has=false err=[Network] Failed to fetch
+  ✓   3 tests/channels-e2e-dbg/offline.spec.ts:306:1 › OFF-09 a channel left as soon as its messages showed opens with no connection (10.2s)
+DD OFF-13 w2 r0 dee 850921 DBG unheld-note e-fc80510a1c95
+DD OFF-13 w2 r0 dee 850945 DBG unheld-forget e-fc80510a1c95 left=false
+DD OFF-06 w0 r0 ben 850986 DBG detail-view 62c251 ready load=pending
+DD OFF-06 w0 r0 ben 850999 DBG detail-view 62c251 ready load=pending
+DD OFF-06 w0 r0 ben 850999 DBG detail-result 62c251 source=live-network stale=false has=false err=[Network] Failed to fetch
+DD OFF-06 w0 r0 ben 850999 DBG detail-view 62c251 ready load=error
+DD OFF-06 w0 r0 ben 851001 DBG detail-result 62c251 source=live-network stale=false has=false err=[Network] Failed to fetch
+DD OFF-6Y w1 r0 ben 851057 DBG unheld-pass []
+DD OFF-06 w0 r0 ben 851187 DBG detail-view 62c251 ready load=ready
+DD OFF-06 w0 r0 ben 851187 DBG detail-result 62c251 source=normalized-cache-hit stale=false has=true err=[Network] Failed to fetch
+DD OFF-06 w0 r0 ben 851189 DBG detail-result 62c251 source=normalized-cache-hit stale=false has=true err=[Network] Failed to fetch
+DD OFF-06 w0 r0 ben 851190 DBG detail-result 62c251 source=normalized-cache-hit stale=true has=true err=[Network] Failed to fetch
+DD OFF-06 w0 r0 ben 851190 DBG detail-result 62c251 source=normalized-cache-hit stale=true has=true err=[Network] Failed to fetch
+DD OFF-6Y w1 r0 ben 851215 DBG detail-view f766c9 loading load=pending
+DD OFF-06 w0 r0 ben 851227 DBG detail-result 62c251 source=live-network stale=false has=false err=[Network] Failed to fetch
+DD OFF-06 w0 r0 ben 851227 DBG detail-view 62c251 ready load=ready
+DD OFF-06 w0 r0 ben 851229 DBG detail-result 62c251 source=live-network stale=false has=false err=[Network] Failed to fetch
+DD OFF-6Y w1 r0 ben 851386 DBG detail-view f766c9 ready load=ready
+DD OFF-6Y w1 r0 ben 851393 DBG detail-result f766c9 source=live-network stale=false has=true err=none
+DD OFF-6Y w1 r0 ben 851393 DBG detail-view f766c9 ready load=ready
+DD OFF-6Y w1 r0 ben 851544 DBG unheld-note c-a215aef766c9
+DD OFF-6Y w1 r0 ben 851636 DBG detail-result f766c9 source=live-network stale=false has=true err=none
+DD OFF-6Y w1 r0 ben 851636 DBG detail-view f766c9 ready load=ready
+DD OFF-6Y w1 r0 ben 851648 DBG detail-result f766c9 source=live-network stale=false has=true err=none
+  ✓   1 tests/channels-e2e-dbg/offline.spec.ts:187:1 › OFF-06 a thread read while connected shows its replies with no connection, a long one included (12.8s)
+DD OFF-6Y w1 r0 ben 852097 DBG detail-view f766c9 ready load=ready
+DD OFF-6Y w1 r0 ben 852098 DBG detail-result f766c9 source=live-network stale=false has=true err=none
+DD OFF-6Y w1 r0 ben 852098 DBG detail-view f766c9 ready load=ready
+DD OFF-6Y w1 r0 ben 852100 DBG detail-result f766c9 source=live-network stale=false has=true err=none
+DD OFF-13 w2 r0 dee 852120 DBG detail-view cc403a loading load=pending
+DD OFF-13 w2 r0 dee 852130 DBG detail-view cc403a loading load=pending
+DD OFF-13 w2 r0 dee 852130 DBG detail-result cc403a source=live-network stale=false has=false err=[Network] Failed to fetch
+DD OFF-13 w2 r0 dee 852130 DBG detail-view cc403a unavailable load=error
+DD OFF-13 w2 r0 dee 852144 DBG detail-view cc403a ready load=ready
+DD OFF-13 w2 r0 dee 852145 DBG detail-result cc403a source=normalized-cache-hit stale=false has=true err=[Network] Failed to fetch
+DD OFF-6Y w1 r0 ben 852153 DBG unheld-forget c-a215aef766c9 left=false
+DD OFF-13 w2 r0 dee 852159 DBG detail-result cc403a source=normalized-cache-hit stale=true has=true err=none
+DD OFF-13 w2 r0 dee 852162 DBG detail-result cc403a source=normalized-cache-hit stale=true has=true err=none
+DD OFF-13 w2 r0 dee 852167 DBG detail-result cc403a source=live-network stale=false has=false err=[Network] Failed to fetch
+DD OFF-13 w2 r0 dee 852168 DBG detail-view cc403a ready load=ready
+DD OFF-13 w2 r0 dee 852169 DBG detail-result cc403a source=live-network stale=false has=false err=[Network] Failed to fetch
+DD OFF-6Y w1 r0 ben 852224 DBG unheld-note 9-107bfb5cfde1
+DD OFF-6Y w1 r0 ben 852299 DBG detail-result f766c9 source=affected-cache-reread stale=false has=true err=none
+DD OFF-6Y w1 r0 ben 852301 DBG detail-result f766c9 source=affected-cache-reread stale=false has=true err=none
+  ✓   2 tests/channels-e2e-dbg/offline.spec.ts:402:1 › OFF-13 a channel read while connected opens with no connection after a hundred and twenty newer ones were made (13.5s)
+DD OFF-6Y w1 r0 ben 852655 DBG unheld-forget 9-107bfb5cfde1 left=false
+DD OFF-6Y w1 r0 ben 852681 DBG detail-result f766c9 source=affected-cache-reread stale=false has=true err=none
+DD OFF-6Y w1 r0 ben 852681 DBG detail-result f766c9 source=affected-cache-reread stale=false has=true err=none
+DD OFF-6Y w1 r0 ben 852834 DBG detail-view f766c9 ready load=ready
+DD OFF-6Y w1 r0 ben 852835 DBG detail-result f766c9 source=affected-cache-reread stale=false has=true err=none
+DD OFF-6Y w1 r0 ben 852835 DBG detail-result f766c9 source=affected-cache-reread stale=false has=true err=none
+DD OFF-6Y w1 r0 ben 853803 DBG unheld-pass []
+DD OFF-6Y w1 r0 ben 853917 DBG detail-view f766c9 loading load=pending
+DD OFF-6Y w1 r0 ben 854056 DBG detail-view f766c9 ready load=ready
+DD OFF-6Y w1 r0 ben 854059 DBG detail-result f766c9 source=live-network stale=false has=true err=none
+DD OFF-6Y w1 r0 ben 854059 DBG detail-view f766c9 ready load=ready
+DD OFF-6Y w1 r0 ben 854163 DBG unheld-note c-a215aef766c9
+DD OFF-6Y w1 r0 ben 854205 DBG detail-result f766c9 source=live-network stale=false has=true err=none
+DD OFF-6Y w1 r0 ben 854206 DBG detail-view f766c9 ready load=ready
+DD OFF-6Y w1 r0 ben 854214 DBG detail-result f766c9 source=live-network stale=false has=true err=none
+DD OFF-09 w2 r1 ben 854485 DBG unheld-pass []
+DD OFF-6Y w1 r0 ben 854509 DBG unheld-note 9-107bfb5cfde1
+DD OFF-6Y w1 r0 ben 854599 DBG detail-view f766c9 ready load=ready
+DD OFF-6Y w1 r0 ben 854600 DBG detail-result f766c9 source=live-network stale=false has=true err=none
+DD OFF-6Y w1 r0 ben 854600 DBG detail-view f766c9 ready load=ready
+DD OFF-6Y w1 r0 ben 854601 DBG detail-result f766c9 source=live-network stale=false has=true err=none
+DD OFF-06 w0 r1 ben 854645 DBG unheld-pass []
+DD OFF-09 w2 r1 ben 854667 DBG detail-view 6ab262 loading load=pending
+DD OFF-6Y w1 r0 ben 854727 DBG unheld-forget c-a215aef766c9 left=false
+DD OFF-6Y w1 r0 ben 854751 DBG unheld-forget 9-107bfb5cfde1 left=false
+DD OFF-6Y w1 r0 ben 854792 DBG detail-view 7eab05 ready load=pending
+DD OFF-06 w0 r1 ben 854819 DBG detail-view a3ec9a loading load=pending
+DD OFF-09 w2 r1 ben 854830 DBG detail-view 6ab262 ready load=ready
+DD OFF-6Y w1 r0 ben 854832 DBG unheld-note f-d9e7037eab05
+DD OFF-09 w2 r1 ben 854838 DBG detail-result 6ab262 source=live-network stale=false has=true err=none
+DD OFF-09 w2 r1 ben 854838 DBG detail-view 6ab262 ready load=ready
+DD OFF-6Y w1 r0 ben 854886 DBG unheld-forget f-d9e7037eab05 left=false
+DD OFF-6Y w1 r0 ben 854945 DBG detail-view 7eab05 ready load=ready
+DD OFF-6Y w1 r0 ben 854945 DBG detail-result 7eab05 source=live-network stale=false has=true err=none
+DD OFF-6Y w1 r0 ben 854945 DBG detail-view 7eab05 ready load=ready
+DD OFF-6Y w1 r0 ben 854946 DBG detail-result 7eab05 source=live-network stale=false has=true err=none
+DD OFF-09 w2 r1 ben 854999 DBG unheld-note e-194e106ab262
+DD OFF-06 w0 r1 ben 855027 DBG detail-view a3ec9a ready load=ready
+DD OFF-06 w0 r1 ben 855034 DBG detail-result a3ec9a source=live-network stale=false has=true err=none
+DD OFF-06 w0 r1 ben 855035 DBG detail-view a3ec9a ready load=ready
+DD OFF-09 w2 r1 ben 855130 DBG detail-result 6ab262 source=live-network stale=false has=true err=none
+DD OFF-09 w2 r1 ben 855131 DBG detail-view 6ab262 ready load=ready
+DD OFF-09 w2 r1 ben 855135 DBG detail-result 6ab262 source=live-network stale=false has=true err=none
+DD OFF-06 w0 r1 ben 855167 DBG unheld-note a-85375ba3ec9a
+DD OFF-06 w0 r1 ben 855277 DBG detail-result a3ec9a source=live-network stale=false has=true err=none
+DD OFF-06 w0 r1 ben 855277 DBG detail-view a3ec9a ready load=ready
+DD OFF-06 w0 r1 ben 855287 DBG detail-result a3ec9a source=live-network stale=false has=true err=none
+DD OFF-09 w2 r1 ben 855549 DBG detail-view 6ab262 ready load=ready
+DD OFF-09 w2 r1 ben 855549 DBG detail-result 6ab262 source=live-network stale=false has=true err=none
+DD OFF-09 w2 r1 ben 855549 DBG detail-view 6ab262 ready load=ready
+DD OFF-09 w2 r1 ben 855550 DBG detail-result 6ab262 source=live-network stale=false has=true err=none
+DD OFF-06 w0 r1 ben 855553 DBG unheld-note a-aa949ea4b6d2
+DD OFF-09 w2 r1 ben 855643 DBG detail-view fa266b ready load=pending
+DD OFF-09 w2 r1 ben 855687 DBG unheld-note 0-3902dafa266b
+DD OFF-06 w0 r1 ben 855729 DBG detail-view a3ec9a ready load=ready
+DD OFF-06 w0 r1 ben 855729 DBG detail-result a3ec9a source=live-network stale=false has=true err=none
+DD OFF-06 w0 r1 ben 855730 DBG detail-view a3ec9a ready load=ready
+DD OFF-06 w0 r1 ben 855732 DBG detail-result a3ec9a source=live-network stale=false has=true err=none
+DD OFF-06 w0 r1 ben 855798 DBG detail-view 209cc4 ready load=pending
+DD OFF-6Y w1 r0 ben 855814 DBG unheld-pass []
+DD OFF-06 w0 r1 ben 855839 DBG unheld-note 3-09eb1f209cc4
+DD OFF-06 w0 r1 ben 855911 DBG detail-view 209cc4 ready load=ready
+DD OFF-06 w0 r1 ben 855911 DBG detail-result 209cc4 source=live-network stale=false has=true err=none
+DD OFF-06 w0 r1 ben 855911 DBG detail-view 209cc4 ready load=ready
+DD OFF-06 w0 r1 ben 855911 DBG detail-result 209cc4 source=live-network stale=false has=true err=none
+DD OFF-06 w0 r1 ben 855921 DBG unheld-forget a-85375ba3ec9a left=false
+DD OFF-6Y w1 r0 ben 855953 DBG detail-view 7eab05 loading load=pending
+DD OFF-06 w0 r1 ben 856014 DBG unheld-forget 3-09eb1f209cc4 left=false
+DD OFF-06 w0 r1 ben 856020 DBG unheld-forget a-aa949ea4b6d2 left=false
+DD OFF-06 w0 r1 ben 856086 DBG detail-result 209cc4 source=affected-cache-reread stale=false has=true err=none
+DD OFF-06 w0 r1 ben 856086 DBG detail-result 209cc4 source=affected-cache-reread stale=false has=true err=none
+DD OFF-6Y w1 r0 ben 856091 DBG detail-view 7eab05 ready load=ready
+DD OFF-6Y w1 r0 ben 856092 DBG detail-result 7eab05 source=live-network stale=false has=true err=none
+DD OFF-6Y w1 r0 ben 856093 DBG detail-view 7eab05 ready load=ready
+DD OFF-06 w0 r1 ben 856171 DBG detail-view a3ec9a ready load=pending
+DD OFF-06 w0 r1 ben 856207 DBG detail-view a3ec9a ready load=pending
+DD OFF-06 w0 r1 ben 856207 DBG detail-result a3ec9a source=normalized-cache-hit stale=true has=true err=none
+DD OFF-06 w0 r1 ben 856210 DBG detail-result a3ec9a source=normalized-cache-hit stale=true has=true err=none
+DD OFF-6Y w1 r0 ben 856231 DBG unheld-note f-d9e7037eab05
+DD OFF-6Y w1 r0 ben 856275 DBG detail-result 7eab05 source=live-network stale=false has=true err=none
+DD OFF-6Y w1 r0 ben 856275 DBG detail-view 7eab05 ready load=ready
+DD OFF-6Y w1 r0 ben 856279 DBG detail-result 7eab05 source=live-network stale=false has=true err=none
+DD OFF-06 w0 r1 ben 856289 DBG detail-view a3ec9a ready load=pending
+DD OFF-06 w0 r1 ben 856289 DBG detail-result a3ec9a source=affected-cache-reread stale=true has=true err=none
+DD OFF-06 w0 r1 ben 856289 DBG detail-result a3ec9a source=affected-cache-reread stale=true has=true err=none
+DD OFF-06 w0 r1 ben 856412 DBG detail-view a3ec9a ready load=pending
+DD OFF-06 w0 r1 ben 856414 DBG detail-view a3ec9a ready load=ready
+DD OFF-06 w0 r1 ben 856414 DBG detail-result a3ec9a source=live-network stale=false has=true err=none
+DD OFF-06 w0 r1 ben 856414 DBG detail-view a3ec9a ready load=ready
+DD OFF-06 w0 r1 ben 856416 DBG detail-result a3ec9a source=live-network stale=false has=true err=none
+DD OFF-09 w2 r1 ben 856567 DBG unheld-pass [{"channelId":"01a1e76a-1a05-7465-be7e-194e106ab262"},{"channelId":"01a1e76a-1a18-7896-b030-3902dafa266b"}]
+DD OFF-6Y w1 r0 ben 856590 DBG detail-view 7eab05 ready load=ready
+DD OFF-6Y w1 r0 ben 856591 DBG detail-result 7eab05 source=live-network stale=false has=true err=none
+DD OFF-6Y w1 r0 ben 856591 DBG detail-view 7eab05 ready load=ready
+DD OFF-6Y w1 r0 ben 856594 DBG detail-result 7eab05 source=live-network stale=false has=true err=none
+DD OFF-6Y w1 r0 ben 856619 DBG unheld-forget f-d9e7037eab05 left=false
+DD OFF-06 w0 r1 ben 856668 DBG detail-view 209cc4 ready load=pending
+DD OFF-09 w2 r1 ben 856681 DBG detail-view fa266b loading load=pending
+DD OFF-09 w2 r1 ben 856700 DBG unheld-note e-194e106ab262
+DD OFF-06 w0 r1 ben 856701 DBG detail-view 209cc4 ready load=pending
+DD OFF-06 w0 r1 ben 856701 DBG detail-result 209cc4 source=normalized-cache-hit stale=true has=true err=none
+DD OFF-06 w0 r1 ben 856704 DBG detail-result 209cc4 source=normalized-cache-hit stale=true has=true err=none
+DD OFF-09 w2 r1 ben 856814 DBG detail-view fa266b ready load=ready
+DD OFF-09 w2 r1 ben 856816 DBG detail-result fa266b source=live-network stale=false has=true err=none
+DD OFF-09 w2 r1 ben 856816 DBG detail-view fa266b ready load=ready
+DD OFF-09 w2 r1 ben 856930 DBG unheld-note 0-3902dafa266b
+DD OFF-09 w2 r1 ben 856983 DBG detail-result fa266b source=live-network stale=false has=true err=none
+DD OFF-09 w2 r1 ben 856983 DBG detail-view fa266b ready load=ready
+DD OFF-09 w2 r1 ben 856984 DBG detail-result fa266b source=live-network stale=false has=true err=none
+DJ OFF-09 w2 r1 ben 857047 ["[observability]","graphql.mutation_queue.loaded",{"auth.state":"signed-in","network.online":false,"graphql.websocket.state":"connected","mutation_queue.depth":2,"mutation_queue.age_unknown_items":0,"mutation_queue.oldest_item_age_ms":2159}]
+DD OFF-09 w2 r1 ben 857251 DBG detail-view fa266b ready load=ready
+DD OFF-09 w2 r1 ben 857252 DBG detail-result fa266b source=live-network stale=false has=true err=none
+DD OFF-09 w2 r1 ben 857252 DBG detail-view fa266b ready load=ready
+DD OFF-09 w2 r1 ben 857253 DBG detail-result fa266b source=live-network stale=false has=true err=none
+DD OFF-09 w2 r1 ben 857289 DBG unheld-forget 0-3902dafa266b left=false
+DD OFF-09 w2 r1 ben 857345 DBG unheld-forget e-194e106ab262 left=false
+DD OFF-09 w2 r1 ben 857345 DBG unheld-forget e-194e106ab262 left=true
+DD OFF-09 w2 r1 ben 857410 DBG detail-result fa266b source=affected-cache-reread stale=false has=true err=none
+DD OFF-09 w2 r1 ben 857411 DBG detail-result fa266b source=affected-cache-reread stale=false has=true err=none
+DD OFF-09 w2 r1 ben 857437 DBG unheld-forget 0-3902dafa266b left=true
+DJ OFF-09 w2 r1 ben 857472 ["[observability]","graphql.mutation_queue.skipped",{"auth.state":"signed-in","network.online":false,"graphql.websocket.state":"connected","mutation_queue.pending_items":0,"mutation_queue.oldest_observed_wait_ms":0,"mutation_queue.age_unknown_items":0,"mutation_queue.skip_reason":"lease-owner-gone"}]
+DD OFF-06 w0 r1 ben 857576 DBG unheld-pass []
+DD OFF-06 w0 r1 ben 857685 DBG detail-view 209cc4 loading load=pending
+DD OFF-09 w2 r1 ben 857750 DBG detail-result fa266b source=affected-cache-reread stale=false has=true err=none
+DD OFF-09 w2 r1 ben 857750 DBG detail-result fa266b source=affected-cache-reread stale=false has=true err=none
+DD OFF-06 w0 r1 ben 857806 DBG detail-view 209cc4 ready load=ready
+DD OFF-06 w0 r1 ben 857808 DBG detail-result 209cc4 source=live-network stale=false has=true err=none
+DD OFF-06 w0 r1 ben 857808 DBG detail-view 209cc4 ready load=ready
+DD OFF-09 w2 r1 ben 857867 DBG detail-result fa266b source=affected-cache-reread stale=false has=true err=none
+DD OFF-09 w2 r1 ben 857867 DBG detail-result fa266b source=affected-cache-reread stale=false has=true err=none
+DD OFF-06 w0 r1 ben 857917 DBG unheld-note 3-09eb1f209cc4
+DD OFF-06 w0 r1 ben 857953 DBG detail-result 209cc4 source=live-network stale=false has=true err=none
+DD OFF-06 w0 r1 ben 857953 DBG detail-view 209cc4 ready load=ready
+DD OFF-06 w0 r1 ben 857956 DBG detail-result 209cc4 source=live-network stale=false has=true err=none
+DD OFF-09 w2 r1 ben 857971 DBG detail-result fa266b source=affected-cache-reread stale=false has=true err=none
+DD OFF-09 w2 r1 ben 857971 DBG detail-result fa266b source=affected-cache-reread stale=false has=true err=none
+DD OFF-09 w2 r1 ben 858009 DBG detail-result fa266b source=affected-cache-reread stale=false has=true err=none
+DD OFF-09 w2 r1 ben 858009 DBG detail-result fa266b source=affected-cache-reread stale=false has=true err=none
+DD OFF-09 w2 r1 ben 858186 DBG detail-result fa266b source=affected-cache-reread stale=false has=true err=none
+DD OFF-09 w2 r1 ben 858187 DBG detail-result fa266b source=affected-cache-reread stale=false has=true err=none
+DD OFF-06 w0 r1 ben 858312 DBG detail-view 209cc4 ready load=ready
+DD OFF-06 w0 r1 ben 858313 DBG detail-result 209cc4 source=live-network stale=false has=true err=none
+DD OFF-06 w0 r1 ben 858313 DBG detail-view 209cc4 ready load=ready
+DD OFF-06 w0 r1 ben 858315 DBG detail-result 209cc4 source=live-network stale=false has=true err=none
+DD OFF-06 w0 r1 ben 858394 DBG unheld-forget 3-09eb1f209cc4 left=false
+DD OFF-06 w0 r1 ben 858399 DBG detail-result 209cc4 source=affected-cache-reread stale=false has=true err=none
+DD OFF-06 w0 r1 ben 858401 DBG detail-result 209cc4 source=affected-cache-reread stale=false has=true err=none
+DD OFF-6Y w1 r0 ben 861633 DBG detail-view f766c9 ready load=pending
+DD OFF-6Y w1 r0 ben 861649 DBG detail-view f766c9 ready load=pending
+DD OFF-6Y w1 r0 ben 861649 DBG detail-result f766c9 source=live-network stale=false has=false err=[Network] Failed to fetch
+DD OFF-6Y w1 r0 ben 861650 DBG detail-view f766c9 ready load=error
+DD OFF-6Y w1 r0 ben 861652 DBG detail-result f766c9 source=live-network stale=false has=false err=[Network] Failed to fetch
+DD OFF-6Y w1 r0 ben 861654 DBG detail-view f766c9 ready load=ready
+DD OFF-6Y w1 r0 ben 861654 DBG detail-result f766c9 source=normalized-cache-hit stale=false has=true err=[Network] Failed to fetch
+DD OFF-6Y w1 r0 ben 861658 DBG detail-result f766c9 source=normalized-cache-hit stale=false has=true err=[Network] Failed to fetch
+DD OFF-6Y w1 r0 ben 861658 DBG detail-result f766c9 source=normalized-cache-hit stale=true has=true err=[Network] Failed to fetch
+DD OFF-6Y w1 r0 ben 861658 DBG detail-result f766c9 source=normalized-cache-hit stale=true has=true err=[Network] Failed to fetch
+DD OFF-6Y w1 r0 ben 861695 DBG detail-result f766c9 source=live-network stale=false has=false err=[Network] Failed to fetch
+DD OFF-6Y w1 r0 ben 861695 DBG detail-view f766c9 ready load=ready
+DD OFF-6Y w1 r0 ben 861697 DBG detail-result f766c9 source=live-network stale=false has=false err=[Network] Failed to fetch
+  ✓   4 tests/channels-e2e-dbg/offline.spec.ts:434:1 › OFF-6Y a thread read just before a reload shows its replies with no connection (13.1s)
+DD OFF-06 w0 r1 ben 863252 DBG detail-view a3ec9a ready load=pending
+DD OFF-09 w2 r1 ben 863252 DBG unheld-note 7-c07bb6e6443c
+DD OFF-06 w0 r1 ben 863269 DBG detail-view a3ec9a ready load=pending
+DD OFF-06 w0 r1 ben 863269 DBG detail-result a3ec9a source=live-network stale=false has=false err=[Network] Failed to fetch
+DD OFF-06 w0 r1 ben 863269 DBG detail-view a3ec9a ready load=error
+DD OFF-06 w0 r1 ben 863273 DBG detail-result a3ec9a source=live-network stale=false has=false err=[Network] Failed to fetch
+DD OFF-06 w0 r1 ben 863329 DBG detail-view a3ec9a ready load=ready
+DD OFF-06 w0 r1 ben 863329 DBG detail-result a3ec9a source=normalized-cache-hit stale=false has=true err=[Network] Failed to fetch
+DD OFF-09 w2 r1 ben 863331 DBG detail-view 6ab262 ready load=pending
+DD OFF-06 w0 r1 ben 863332 DBG detail-result a3ec9a source=normalized-cache-hit stale=false has=true err=[Network] Failed to fetch
+DD OFF-06 w0 r1 ben 863332 DBG detail-result a3ec9a source=normalized-cache-hit stale=true has=true err=[Network] Failed to fetch
+DD OFF-06 w0 r1 ben 863332 DBG detail-result a3ec9a source=normalized-cache-hit stale=true has=true err=[Network] Failed to fetch
+DD OFF-09 w2 r1 ben 863347 DBG detail-view 6ab262 ready load=pending
+DD OFF-09 w2 r1 ben 863347 DBG detail-result 6ab262 source=live-network stale=false has=false err=[Network] Failed to fetch
+DD OFF-09 w2 r1 ben 863348 DBG detail-view 6ab262 ready load=error
+DD OFF-09 w2 r1 ben 863350 DBG detail-result 6ab262 source=live-network stale=false has=false err=[Network] Failed to fetch
+DD OFF-06 w0 r1 ben 863371 DBG detail-result a3ec9a source=live-network stale=false has=false err=[Network] Failed to fetch
+DD OFF-06 w0 r1 ben 863371 DBG detail-view a3ec9a ready load=ready
+DD OFF-06 w0 r1 ben 863374 DBG detail-result a3ec9a source=live-network stale=false has=false err=[Network] Failed to fetch
+DD OFF-09 w2 r1 ben 863394 DBG unheld-forget 7-c07bb6e6443c left=false
+DD OFF-09 w2 r1 ben 863399 DBG detail-view 6ab262 ready load=ready
+DD OFF-09 w2 r1 ben 863399 DBG detail-result 6ab262 source=normalized-cache-hit stale=false has=true err=[Network] Failed to fetch
+DD OFF-09 w2 r1 ben 863402 DBG detail-result 6ab262 source=normalized-cache-hit stale=false has=true err=[Network] Failed to fetch
+DD OFF-09 w2 r1 ben 863403 DBG detail-result 6ab262 source=normalized-cache-hit stale=true has=true err=[Network] Failed to fetch
+DD OFF-09 w2 r1 ben 863403 DBG detail-result 6ab262 source=normalized-cache-hit stale=true has=true err=[Network] Failed to fetch
+DD OFF-09 w2 r1 ben 863444 DBG detail-result 6ab262 source=live-network stale=false has=false err=[Network] Failed to fetch
+DD OFF-09 w2 r1 ben 863444 DBG detail-view 6ab262 ready load=ready
+DD OFF-09 w2 r1 ben 863446 DBG detail-result 6ab262 source=live-network stale=false has=false err=[Network] Failed to fetch
+  ✓   6 tests/channels-e2e-dbg/offline.spec.ts:306:1 › OFF-09 a channel left as soon as its messages showed opens with no connection (10.8s)
+  ✓   5 tests/channels-e2e-dbg/offline.spec.ts:187:1 › OFF-06 a thread read while connected shows its replies with no connection, a long one included (11.7s)
+DD OFF-13 w1 r1 dee 863914 DBG unheld-pass []
+DD OFF-13 w1 r1 dee 864080 DBG detail-view 341ff8 loading load=pending
+DD OFF-13 w1 r1 dee 864199 DBG detail-view 341ff8 ready load=ready
+DD OFF-13 w1 r1 dee 864204 DBG detail-result 341ff8 source=live-network stale=false has=true err=none
+DD OFF-13 w1 r1 dee 864204 DBG detail-view 341ff8 ready load=ready
+DD OFF-13 w1 r1 dee 864326 DBG unheld-note 6-a2e87a341ff8
+DD OFF-13 w1 r1 dee 864398 DBG detail-result 341ff8 source=live-network stale=false has=true err=none
+DD OFF-13 w1 r1 dee 864398 DBG detail-view 341ff8 ready load=ready
+DD OFF-13 w1 r1 dee 864402 DBG detail-result 341ff8 source=live-network stale=false has=true err=none
+DD OFF-13 w1 r1 dee 864691 DBG detail-view 341ff8 ready load=pending
+DD OFF-13 w1 r1 dee 864692 DBG detail-result 341ff8 source=affected-cache-reread stale=true has=true err=none
+DD OFF-13 w1 r1 dee 864694 DBG detail-result 341ff8 source=affected-cache-reread stale=true has=true err=none
+DD OFF-13 w1 r1 dee 864710 DBG detail-view 341ff8 ready load=ready
+DD OFF-13 w1 r1 dee 864710 DBG detail-result 341ff8 source=live-network stale=false has=true err=none
+DD OFF-13 w1 r1 dee 864710 DBG detail-view 341ff8 ready load=ready
+DD OFF-13 w1 r1 dee 864712 DBG detail-result 341ff8 source=live-network stale=false has=true err=none
+DD OFF-13 w1 r1 dee 864716 DBG unheld-forget 6-a2e87a341ff8 left=false
+DD OFF-13 w1 r1 dee 864822 DBG detail-view 5fdef0 ready load=pending
+DD OFF-13 w1 r1 dee 864853 DBG unheld-note 9-90565a5fdef0
+DD OFF-13 w1 r1 dee 864916 DBG unheld-forget 9-90565a5fdef0 left=false
+DD OFF-13 w1 r1 dee 864961 DBG detail-view 341ff8 ready load=pending
+DD OFF-13 w1 r1 dee 864991 DBG detail-view 341ff8 ready load=pending
+DD OFF-13 w1 r1 dee 864991 DBG detail-result 341ff8 source=normalized-cache-hit stale=true has=true err=none
+DD OFF-13 w1 r1 dee 864995 DBG detail-result 341ff8 source=normalized-cache-hit stale=true has=true err=none
+DD OFF-13 w1 r1 dee 865046 DBG detail-view 341ff8 ready load=ready
+DD OFF-13 w1 r1 dee 865046 DBG detail-result 341ff8 source=live-network stale=false has=true err=none
+DD OFF-13 w1 r1 dee 865046 DBG detail-view 341ff8 ready load=ready
+DD OFF-13 w1 r1 dee 865050 DBG detail-result 341ff8 source=live-network stale=false has=true err=none
+DD OFF-6Y w2 r1 ben 865800 DBG unheld-pass []
+DD OFF-6Y w2 r1 ben 866011 DBG detail-view 958edd loading load=pending
+DD OFF-6Y w2 r1 ben 866148 DBG detail-view 958edd ready load=ready
+DD OFF-6Y w2 r1 ben 866156 DBG detail-result 958edd source=live-network stale=false has=true err=none
+DD OFF-6Y w2 r1 ben 866157 DBG detail-view 958edd ready load=ready
+DD OFF-6Y w2 r1 ben 866304 DBG unheld-note b-0da84b958edd
+DD OFF-6Y w2 r1 ben 866388 DBG detail-result 958edd source=live-network stale=false has=true err=none
+DD OFF-6Y w2 r1 ben 866390 DBG detail-view 958edd ready load=ready
+DD OFF-6Y w2 r1 ben 866394 DBG detail-result 958edd source=live-network stale=false has=true err=none
+DD OFF-06 w0 r2 ben 866698 DBG unheld-pass []
+DD OFF-6Y w2 r1 ben 866810 DBG unheld-note 6-786de143516f
+DD OFF-06 w0 r2 ben 866880 DBG detail-view cc8b7b loading load=pending
+DD OFF-06 w0 r2 ben 867051 DBG detail-view cc8b7b ready load=ready
+DD OFF-06 w0 r2 ben 867060 DBG detail-result cc8b7b source=live-network stale=false has=true err=none
+DD OFF-06 w0 r2 ben 867060 DBG detail-view cc8b7b ready load=ready
+DD OFF-06 w0 r2 ben 867196 DBG unheld-note 8-4520f9cc8b7b
+DD OFF-06 w0 r2 ben 867293 DBG detail-result cc8b7b source=live-network stale=false has=true err=none
+DD OFF-06 w0 r2 ben 867294 DBG detail-view cc8b7b ready load=ready
+DD OFF-06 w0 r2 ben 867307 DBG detail-result cc8b7b source=live-network stale=false has=true err=none
+DD OFF-06 w0 r2 ben 867562 DBG unheld-note 3-bca471bfec47
+DD OFF-6Y w2 r1 ben 867812 DBG unheld-pass [{"channelId":"01a1e76a-4419-7260-a61b-0da84b958edd"},{"channelId":"01a1e76a-4419-7260-a61b-0da84b958edd","rootId":"01a1e76a-4476-7bb9-8e06-786de143516f"}]
+DD OFF-06 w0 r2 ben 867827 DBG detail-view cc8b7b ready load=ready
+DD OFF-06 w0 r2 ben 867829 DBG detail-result cc8b7b source=live-network stale=false has=true err=none
+DD OFF-06 w0 r2 ben 867829 DBG detail-view cc8b7b ready load=ready
+DD OFF-06 w0 r2 ben 867832 DBG detail-result cc8b7b source=live-network stale=false has=true err=none
+DD OFF-13 w1 r1 dee 867916 DBG detail-view 5fdef0 ready load=pending
+DD OFF-6Y w2 r1 ben 867928 DBG detail-view 958edd loading load=pending
+DD OFF-06 w0 r2 ben 867930 DBG detail-view ba5a9b ready load=pending
+DD OFF-6Y w2 r1 ben 867944 DBG unheld-note b-0da84b958edd
+DD OFF-06 w0 r2 ben 867960 DBG unheld-forget 8-4520f9cc8b7b left=false
+DD OFF-06 w0 r2 ben 867970 DBG unheld-note 6-1c0ba9ba5a9b
+DD OFF-06 w0 r2 ben 868051 DBG unheld-forget 3-bca471bfec47 left=false
+DD OFF-6Y w2 r1 ben 868058 DBG detail-view 958edd ready load=ready
+DD OFF-6Y w2 r1 ben 868063 DBG detail-result 958edd source=live-network stale=false has=true err=none
+DD OFF-6Y w2 r1 ben 868063 DBG detail-view 958edd ready load=ready
+DD OFF-06 w0 r2 ben 868114 DBG unheld-forget 6-1c0ba9ba5a9b left=false
+DD OFF-06 w0 r2 ben 868114 DBG detail-view ba5a9b ready load=ready
+DD OFF-06 w0 r2 ben 868114 DBG detail-result ba5a9b source=live-network stale=false has=true err=none
+DD OFF-06 w0 r2 ben 868114 DBG detail-view ba5a9b ready load=ready
+DD OFF-06 w0 r2 ben 868114 DBG detail-result ba5a9b source=live-network stale=false has=true err=none
+DD OFF-6Y w2 r1 ben 868248 DBG detail-result 958edd source=live-network stale=false has=true err=none
+DD OFF-6Y w2 r1 ben 868248 DBG detail-view 958edd ready load=ready
+DD OFF-06 w0 r2 ben 868248 DBG detail-view cc8b7b ready load=pending
+DD OFF-6Y w2 r1 ben 868256 DBG detail-result 958edd source=live-network stale=false has=true err=none
+DJ OFF-6Y w2 r1 ben 868289 ["[observability]","graphql.mutation_queue.loaded",{"auth.state":"signed-in","network.online":false,"graphql.websocket.state":"connected","mutation_queue.depth":1,"mutation_queue.age_unknown_items":0,"mutation_queue.oldest_item_age_ms":2128}]
+DD OFF-6Y w2 r1 ben 868411 DBG unheld-note 6-786de143516f
+DD OFF-06 w0 r2 ben 868420 DBG detail-view cc8b7b ready load=pending
+DD OFF-06 w0 r2 ben 868421 DBG detail-result cc8b7b source=normalized-cache-hit stale=true has=true err=none
+DD OFF-06 w0 r2 ben 868426 DBG detail-result cc8b7b source=normalized-cache-hit stale=true has=true err=none
+DD OFF-06 w0 r2 ben 868516 DBG detail-view cc8b7b ready load=pending
+DD OFF-06 w0 r2 ben 868517 DBG detail-view cc8b7b ready load=ready
+DD OFF-06 w0 r2 ben 868517 DBG detail-result cc8b7b source=live-network stale=false has=true err=none
+DD OFF-06 w0 r2 ben 868517 DBG detail-view cc8b7b ready load=ready
+DD OFF-06 w0 r2 ben 868519 DBG detail-result cc8b7b source=live-network stale=false has=true err=none
+DD OFF-6Y w2 r1 ben 868571 DBG unheld-forget b-0da84b958edd left=false
+DD OFF-6Y w2 r1 ben 868571 DBG unheld-forget b-0da84b958edd left=true
+DD OFF-6Y w2 r1 ben 868574 DBG detail-view 958edd ready load=ready
+DD OFF-6Y w2 r1 ben 868576 DBG detail-result 958edd source=live-network stale=false has=true err=none
+DD OFF-6Y w2 r1 ben 868576 DBG detail-view 958edd ready load=ready
+DD OFF-6Y w2 r1 ben 868577 DBG detail-result 958edd source=live-network stale=false has=true err=none
+DD OFF-06 w0 r2 ben 868671 DBG detail-view ba5a9b ready load=pending
+DD OFF-06 w0 r2 ben 868702 DBG detail-view ba5a9b ready load=pending
+DD OFF-06 w0 r2 ben 868702 DBG detail-result ba5a9b source=normalized-cache-hit stale=true has=true err=none
+DD OFF-06 w0 r2 ben 868705 DBG detail-result ba5a9b source=normalized-cache-hit stale=true has=true err=none
+DD OFF-6Y w2 r1 ben 868709 DBG detail-view 23f52b ready load=pending
+DD OFF-13 w1 r1 dee 868765 DBG unheld-pass []
+DD OFF-6Y w2 r1 ben 868769 DBG unheld-note a-501fe223f52b
+DD OFF-6Y w2 r1 ben 868805 DBG unheld-forget 6-786de143516f left=false
+DD OFF-6Y w2 r1 ben 868851 DBG unheld-forget 6-786de143516f left=true
+DD OFF-6Y w2 r1 ben 868851 DBG unheld-forget a-501fe223f52b left=false
+DJ OFF-6Y w2 r1 ben 868863 ["[observability]","graphql.mutation_queue.skipped",{"auth.state":"signed-in","network.online":false,"graphql.websocket.state":"connected","mutation_queue.pending_items":1,"mutation_queue.oldest_observed_wait_ms":791,"mutation_queue.age_unknown_items":0,"mutation_queue.oldest_item_age_ms":791,"mutation_queue.skip_reason":"lease-owner-gone"}]
+DD OFF-6Y w2 r1 ben 868864 DBG detail-view 23f52b ready load=ready
+DD OFF-6Y w2 r1 ben 868864 DBG detail-result 23f52b source=live-network stale=false has=true err=none
+DD OFF-6Y w2 r1 ben 868865 DBG detail-view 23f52b ready load=ready
+DD OFF-6Y w2 r1 ben 868868 DBG detail-result 23f52b source=live-network stale=false has=true err=none
+DD OFF-13 w1 r1 dee 868953 DBG detail-view 5fdef0 loading load=pending
+DD OFF-13 w1 r1 dee 869069 DBG detail-view 5fdef0 ready load=ready
+DD OFF-13 w1 r1 dee 869070 DBG detail-result 5fdef0 source=live-network stale=false has=true err=none
+DD OFF-13 w1 r1 dee 869070 DBG detail-view 5fdef0 ready load=ready
+DD OFF-13 w1 r1 dee 869169 DBG unheld-note 9-90565a5fdef0
+DD OFF-13 w1 r1 dee 869208 DBG detail-result 5fdef0 source=live-network stale=false has=true err=none
+DD OFF-13 w1 r1 dee 869208 DBG detail-view 5fdef0 ready load=ready
+DD OFF-13 w1 r1 dee 869210 DBG detail-result 5fdef0 source=live-network stale=false has=true err=none
+DD OFF-13 w1 r1 dee 869416 DBG unheld-forget 9-90565a5fdef0 left=false
+DD OFF-06 w0 r2 ben 869532 DBG unheld-pass []
+DD OFF-06 w0 r2 ben 869644 DBG detail-view ba5a9b loading load=pending
+DD OFF-6Y w2 r1 ben 869679 DBG unheld-pass []
+DD OFF-06 w0 r2 ben 869783 DBG detail-view ba5a9b ready load=ready
+DD OFF-06 w0 r2 ben 869785 DBG detail-result ba5a9b source=live-network stale=false has=true err=none
+DD OFF-06 w0 r2 ben 869785 DBG detail-view ba5a9b ready load=ready
+DD OFF-6Y w2 r1 ben 869817 DBG detail-view 23f52b loading load=pending
+DD OFF-06 w0 r2 ben 869904 DBG unheld-note 6-1c0ba9ba5a9b
+DD OFF-6Y w2 r1 ben 869924 DBG detail-view 23f52b ready load=ready
+DD OFF-6Y w2 r1 ben 869925 DBG detail-result 23f52b source=live-network stale=false has=true err=none
+DD OFF-6Y w2 r1 ben 869926 DBG detail-view 23f52b ready load=ready
+DD OFF-06 w0 r2 ben 869944 DBG detail-result ba5a9b source=live-network stale=false has=true err=none
+DD OFF-06 w0 r2 ben 869944 DBG detail-view ba5a9b ready load=ready
+DD OFF-06 w0 r2 ben 869947 DBG detail-result ba5a9b source=live-network stale=false has=true err=none
+DD OFF-6Y w2 r1 ben 870035 DBG unheld-note a-501fe223f52b
+DD OFF-6Y w2 r1 ben 870093 DBG detail-result 23f52b source=live-network stale=false has=true err=none
+DD OFF-6Y w2 r1 ben 870093 DBG detail-view 23f52b ready load=ready
+DD OFF-6Y w2 r1 ben 870093 DBG detail-result 23f52b source=live-network stale=false has=true err=none
+DJ OFF-6Y w2 r1 ben 870154 ["[observability]","graphql.mutation_queue.loaded",{"auth.state":"signed-in","network.online":false,"graphql.websocket.state":"connected","mutation_queue.depth":2,"mutation_queue.age_unknown_items":0,"mutation_queue.oldest_item_age_ms":3997}]
+DD OFF-06 w0 r2 ben 870239 DBG detail-view ba5a9b ready load=ready
+DD OFF-06 w0 r2 ben 870240 DBG detail-result ba5a9b source=live-network stale=false has=true err=none
+DD OFF-06 w0 r2 ben 870240 DBG detail-view ba5a9b ready load=ready
+DD OFF-06 w0 r2 ben 870242 DBG detail-result ba5a9b source=live-network stale=false has=true err=none
+DD OFF-06 w0 r2 ben 870322 DBG unheld-forget 6-1c0ba9ba5a9b left=false
+DD OFF-6Y w2 r1 ben 870510 DBG detail-view 23f52b ready load=ready
+DD OFF-6Y w2 r1 ben 870511 DBG detail-result 23f52b source=live-network stale=false has=true err=none
+DD OFF-6Y w2 r1 ben 870511 DBG detail-view 23f52b ready load=ready
+DD OFF-6Y w2 r1 ben 870513 DBG detail-result 23f52b source=live-network stale=false has=true err=none
+DD OFF-6Y w2 r1 ben 870655 DBG unheld-forget a-501fe223f52b left=false
+DD OFF-6Y w2 r1 ben 870691 DBG detail-result 23f52b source=affected-cache-reread stale=false has=true err=none
+DD OFF-6Y w2 r1 ben 870691 DBG detail-result 23f52b source=affected-cache-reread stale=false has=true err=none
+DD OFF-13 w1 r1 dee 874010 DBG unheld-note 2-42870112562d
+DD OFF-13 w1 r1 dee 874029 DBG unheld-forget 2-42870112562d left=false
+DD OFF-13 w1 r1 dee 875289 DBG detail-view 341ff8 loading load=pending
+DD OFF-13 w1 r1 dee 875301 DBG detail-view 341ff8 loading load=pending
+DD OFF-13 w1 r1 dee 875301 DBG detail-result 341ff8 source=live-network stale=false has=false err=[Network] Failed to fetch
+DD OFF-13 w1 r1 dee 875301 DBG detail-view 341ff8 unavailable load=error
+DD OFF-13 w1 r1 dee 875315 DBG detail-view 341ff8 ready load=ready
+DD OFF-13 w1 r1 dee 875316 DBG detail-result 341ff8 source=normalized-cache-hit stale=false has=true err=[Network] Failed to fetch
+DD OFF-13 w1 r1 dee 875330 DBG detail-result 341ff8 source=live-network stale=false has=false err=[Network] Failed to fetch
+DD OFF-13 w1 r1 dee 875331 DBG detail-view 341ff8 ready load=ready
+DD OFF-13 w1 r1 dee 875333 DBG detail-result 341ff8 source=live-network stale=false has=false err=[Network] Failed to fetch
+DD OFF-13 w1 r1 dee 875334 DBG detail-result 341ff8 source=normalized-cache-hit stale=false has=true err=[Network] Failed to fetch
+DD OFF-13 w1 r1 dee 875337 DBG detail-result 341ff8 source=normalized-cache-hit stale=false has=true err=[Network] Failed to fetch
+DD OFF-13 w1 r1 dee 875338 DBG detail-result 341ff8 source=normalized-cache-hit stale=true has=true err=[Network] Failed to fetch
+DD OFF-13 w1 r1 dee 875338 DBG detail-result 341ff8 source=normalized-cache-hit stale=true has=true err=[Network] Failed to fetch
+DD OFF-13 w1 r1 dee 875378 DBG detail-result 341ff8 source=live-network stale=false has=false err=[Network] Failed to fetch
+DD OFF-13 w1 r1 dee 875378 DBG detail-view 341ff8 ready load=ready
+DD OFF-13 w1 r1 dee 875380 DBG detail-result 341ff8 source=live-network stale=false has=false err=[Network] Failed to fetch
+DD OFF-06 w0 r2 ben 875383 DBG detail-view cc8b7b ready load=pending
+DD OFF-06 w0 r2 ben 875399 DBG detail-view cc8b7b ready load=pending
+DD OFF-06 w0 r2 ben 875399 DBG detail-result cc8b7b source=live-network stale=false has=false err=[Network] Failed to fetch
+DD OFF-06 w0 r2 ben 875399 DBG detail-view cc8b7b ready load=error
+DD OFF-06 w0 r2 ben 875401 DBG detail-result cc8b7b source=live-network stale=false has=false err=[Network] Failed to fetch
+DD OFF-06 w0 r2 ben 875403 DBG detail-view cc8b7b ready load=ready
+DD OFF-06 w0 r2 ben 875403 DBG detail-result cc8b7b source=normalized-cache-hit stale=false has=true err=[Network] Failed to fetch
+DD OFF-06 w0 r2 ben 875406 DBG detail-result cc8b7b source=normalized-cache-hit stale=false has=true err=[Network] Failed to fetch
+DD OFF-06 w0 r2 ben 875407 DBG detail-result cc8b7b source=normalized-cache-hit stale=true has=true err=[Network] Failed to fetch
+DD OFF-06 w0 r2 ben 875407 DBG detail-result cc8b7b source=normalized-cache-hit stale=true has=true err=[Network] Failed to fetch
+DD OFF-6Y w2 r1 ben 875414 DBG detail-view 958edd ready load=pending
+DD OFF-6Y w2 r1 ben 875428 DBG detail-view 958edd ready load=pending
+DD OFF-6Y w2 r1 ben 875428 DBG detail-result 958edd source=live-network stale=false has=false err=[Network] Failed to fetch
+DD OFF-6Y w2 r1 ben 875429 DBG detail-view 958edd ready load=error
+DD OFF-6Y w2 r1 ben 875431 DBG detail-result 958edd source=live-network stale=false has=false err=[Network] Failed to fetch
+DD OFF-06 w0 r2 ben 875445 DBG detail-result cc8b7b source=live-network stale=false has=false err=[Network] Failed to fetch
+DD OFF-06 w0 r2 ben 875446 DBG detail-view cc8b7b ready load=ready
+DD OFF-06 w0 r2 ben 875448 DBG detail-result cc8b7b source=live-network stale=false has=false err=[Network] Failed to fetch
+DD OFF-6Y w2 r1 ben 875481 DBG detail-view 958edd ready load=ready
+DD OFF-6Y w2 r1 ben 875481 DBG detail-result 958edd source=normalized-cache-hit stale=false has=true err=[Network] Failed to fetch
+DD OFF-6Y w2 r1 ben 875485 DBG detail-result 958edd source=normalized-cache-hit stale=false has=true err=[Network] Failed to fetch
+DD OFF-6Y w2 r1 ben 875485 DBG detail-result 958edd source=normalized-cache-hit stale=true has=true err=[Network] Failed to fetch
+DD OFF-6Y w2 r1 ben 875485 DBG detail-result 958edd source=normalized-cache-hit stale=true has=true err=[Network] Failed to fetch
+  ✓   7 tests/channels-e2e-dbg/offline.spec.ts:402:1 › OFF-13 a channel read while connected opens with no connection after a hundred and twenty newer ones were made (12.9s)
+DD OFF-6Y w2 r1 ben 875533 DBG detail-result 958edd source=live-network stale=false has=false err=[Network] Failed to fetch
+DD OFF-6Y w2 r1 ben 875533 DBG detail-view 958edd ready load=ready
+DD OFF-6Y w2 r1 ben 875538 DBG detail-result 958edd source=live-network stale=false has=false err=[Network] Failed to fetch
+  ✓   9 tests/channels-e2e-dbg/offline.spec.ts:187:1 › OFF-06 a thread read while connected shows its replies with no connection, a long one included (11.7s)
+  ✓   8 tests/channels-e2e-dbg/offline.spec.ts:434:1 › OFF-6Y a thread read just before a reload shows its replies with no connection (12.5s)
+DD OFF-13 w0 r2 dee 877132 DBG unheld-pass []
+DD OFF-13 w0 r2 dee 877293 DBG detail-view 5cbc93 loading load=pending
+DD OFF-13 w0 r2 dee 877435 DBG detail-view 5cbc93 ready load=ready
+DD OFF-13 w0 r2 dee 877438 DBG detail-result 5cbc93 source=live-network stale=false has=true err=none
+DD OFF-13 w0 r2 dee 877438 DBG detail-view 5cbc93 ready load=ready
+DD OFF-09 w1 r2 ben 877478 DBG unheld-pass []
+DD OFF-13 w0 r2 dee 877573 DBG unheld-note 6-a0217d5cbc93
+DD OFF-13 w0 r2 dee 877647 DBG detail-result 5cbc93 source=live-network stale=false has=true err=none
+DD OFF-13 w0 r2 dee 877647 DBG detail-view 5cbc93 ready load=ready
+DD OFF-13 w0 r2 dee 877653 DBG detail-result 5cbc93 source=live-network stale=false has=true err=none
+DD OFF-09 w1 r2 ben 877672 DBG detail-view 2d8a74 loading load=pending
+DD OFF-09 w1 r2 ben 877841 DBG detail-view 2d8a74 ready load=ready
+DD OFF-09 w1 r2 ben 877852 DBG detail-result 2d8a74 source=live-network stale=false has=true err=none
+DD OFF-09 w1 r2 ben 877852 DBG detail-view 2d8a74 ready load=ready
+DD OFF-09 w1 r2 ben 878033 DBG unheld-note f-4f1c2c2d8a74
+DD OFF-13 w0 r2 dee 878078 DBG detail-view 5cbc93 ready load=ready
+DD OFF-13 w0 r2 dee 878080 DBG detail-result 5cbc93 source=live-network stale=false has=true err=none
+DD OFF-13 w0 r2 dee 878080 DBG detail-view 5cbc93 ready load=ready
+DD OFF-13 w0 r2 dee 878082 DBG detail-result 5cbc93 source=live-network stale=false has=true err=none
+DD OFF-13 w0 r2 dee 878146 DBG detail-view 3ca839 ready load=pending
+DD OFF-09 w1 r2 ben 878159 DBG detail-result 2d8a74 source=live-network stale=false has=true err=none
+DD OFF-09 w1 r2 ben 878160 DBG detail-view 2d8a74 ready load=ready
+DD OFF-09 w1 r2 ben 878172 DBG detail-result 2d8a74 source=live-network stale=false has=true err=none
+DD OFF-13 w0 r2 dee 878203 DBG unheld-forget 6-a0217d5cbc93 left=false
+DD OFF-13 w0 r2 dee 878346 DBG unheld-note 8-c33d643ca839
+DD OFF-13 w0 r2 dee 878393 DBG unheld-forget 8-c33d643ca839 left=false
+DD OFF-13 w0 r2 dee 878404 DBG detail-view 3ca839 ready load=ready
+DD OFF-13 w0 r2 dee 878404 DBG detail-result 3ca839 source=live-network stale=false has=true err=none
+DD OFF-13 w0 r2 dee 878404 DBG detail-view 3ca839 ready load=ready
+DD OFF-13 w0 r2 dee 878409 DBG detail-result 3ca839 source=live-network stale=false has=true err=none
+DD OFF-13 w0 r2 dee 878462 DBG detail-view 5cbc93 ready load=pending
+DD OFF-13 w0 r2 dee 878491 DBG detail-view 5cbc93 ready load=pending
+DD OFF-13 w0 r2 dee 878491 DBG detail-result 5cbc93 source=normalized-cache-hit stale=true has=true err=none
+DD OFF-13 w0 r2 dee 878494 DBG detail-result 5cbc93 source=normalized-cache-hit stale=true has=true err=none
+DD OFF-13 w0 r2 dee 878611 DBG detail-view 5cbc93 ready load=pending
+DD OFF-13 w0 r2 dee 878612 DBG detail-view 5cbc93 ready load=ready
+DD OFF-13 w0 r2 dee 878613 DBG detail-result 5cbc93 source=live-network stale=false has=true err=none
+DD OFF-13 w0 r2 dee 878613 DBG detail-view 5cbc93 ready load=ready
+DD OFF-13 w0 r2 dee 878614 DBG detail-result 5cbc93 source=live-network stale=false has=true err=none
+DD OFF-09 w1 r2 ben 878678 DBG detail-view 348dcc ready load=pending
+DD OFF-09 w1 r2 ben 878711 DBG unheld-note f-445907348dcc
+DD OFF-09 w1 r2 ben 878771 DBG detail-view 348dcc ready load=ready
+DD OFF-09 w1 r2 ben 878771 DBG detail-result 348dcc source=live-network stale=false has=true err=none
+DD OFF-09 w1 r2 ben 878771 DBG detail-view 348dcc ready load=ready
+DD OFF-09 w1 r2 ben 878776 DBG detail-result 348dcc source=live-network stale=false has=true err=none
+DD OFF-6Y w2 r2 ben 878847 DBG unheld-pass []
+DD OFF-6Y w2 r2 ben 879017 DBG detail-view 62a895 loading load=pending
+DD OFF-6Y w2 r2 ben 879160 DBG detail-view 62a895 ready load=ready
+DD OFF-6Y w2 r2 ben 879167 DBG detail-result 62a895 source=live-network stale=false has=true err=none
+DD OFF-6Y w2 r2 ben 879167 DBG detail-view 62a895 ready load=ready
+DD OFF-6Y w2 r2 ben 879293 DBG unheld-note 6-70941e62a895
+DD OFF-6Y w2 r2 ben 879403 DBG detail-result 62a895 source=live-network stale=false has=true err=none
+DD OFF-6Y w2 r2 ben 879404 DBG detail-view 62a895 ready load=ready
+DD OFF-6Y w2 r2 ben 879413 DBG detail-result 62a895 source=live-network stale=false has=true err=none
+DD OFF-09 w1 r2 ben 879612 DBG unheld-pass [{"channelId":"01a1e76a-746d-7204-a2df-4f1c2c2d8a74"},{"channelId":"01a1e76a-747d-7be4-b44f-445907348dcc"}]
+DD OFF-09 w1 r2 ben 879753 DBG detail-view 348dcc loading load=pending
+DD OFF-09 w1 r2 ben 879791 DBG unheld-note f-4f1c2c2d8a74
+DD OFF-6Y w2 r2 ben 879840 DBG unheld-note 4-cd62a661e6d3
+DD OFF-09 w1 r2 ben 879890 DBG detail-view 348dcc ready load=ready
+DD OFF-09 w1 r2 ben 879891 DBG detail-result 348dcc source=live-network stale=false has=true err=none
+DD OFF-09 w1 r2 ben 879891 DBG detail-view 348dcc ready load=ready
+DD OFF-6Y w2 r2 ben 879927 DBG detail-view 62a895 ready load=ready
+DD OFF-6Y w2 r2 ben 879932 DBG detail-result 62a895 source=live-network stale=false has=true err=none
+DD OFF-6Y w2 r2 ben 879932 DBG detail-view 62a895 ready load=ready
+DD OFF-6Y w2 r2 ben 879934 DBG detail-result 62a895 source=live-network stale=false has=true err=none
+DD OFF-09 w1 r2 ben 879991 DBG unheld-note f-445907348dcc
+DD OFF-6Y w2 r2 ben 880002 DBG detail-view 62a895 ready load=ready
+DD OFF-6Y w2 r2 ben 880003 DBG detail-result 62a895 source=affected-cache-reread stale=false has=true err=none
+DD OFF-6Y w2 r2 ben 880004 DBG detail-result 62a895 source=affected-cache-reread stale=false has=true err=none
+DD OFF-09 w1 r2 ben 880023 DBG detail-result 348dcc source=live-network stale=false has=true err=none
+DD OFF-09 w1 r2 ben 880024 DBG detail-view 348dcc ready load=ready
+DD OFF-09 w1 r2 ben 880026 DBG detail-result 348dcc source=live-network stale=false has=true err=none
+DD OFF-6Y w2 r2 ben 880061 DBG unheld-forget 6-70941e62a895 left=false
+DJ OFF-09 w1 r2 ben 880138 ["[observability]","graphql.mutation_queue.loaded",{"auth.state":"signed-in","network.online":false,"graphql.websocket.state":"connected","mutation_queue.depth":2,"mutation_queue.age_unknown_items":0,"mutation_queue.oldest_item_age_ms":2280}]
+DD OFF-09 w1 r2 ben 880407 DBG detail-view 348dcc ready load=ready
+DD OFF-09 w1 r2 ben 880408 DBG detail-result 348dcc source=live-network stale=false has=true err=none
+DD OFF-09 w1 r2 ben 880408 DBG detail-view 348dcc ready load=ready
+DD OFF-09 w1 r2 ben 880410 DBG detail-result 348dcc source=live-network stale=false has=true err=none
+DD OFF-09 w1 r2 ben 880439 DBG unheld-forget f-4f1c2c2d8a74 left=false
+DD OFF-09 w1 r2 ben 880439 DBG unheld-forget f-4f1c2c2d8a74 left=true
+DD OFF-09 w1 r2 ben 880488 DBG unheld-forget f-445907348dcc left=false
+DD OFF-09 w1 r2 ben 880489 DBG unheld-forget f-445907348dcc left=true
+DD OFF-09 w1 r2 ben 880552 DBG detail-result 348dcc source=affected-cache-reread stale=false has=true err=none
+DD OFF-09 w1 r2 ben 880553 DBG detail-result 348dcc source=affected-cache-reread stale=false has=true err=none
+DJ OFF-09 w1 r2 ben 880597 ["[observability]","graphql.mutation_queue.skipped",{"auth.state":"signed-in","network.online":false,"graphql.websocket.state":"connected","mutation_queue.pending_items":0,"mutation_queue.oldest_observed_wait_ms":0,"mutation_queue.age_unknown_items":0,"mutation_queue.skip_reason":"lease-owner-gone"}]
+DD OFF-6Y w2 r2 ben 880917 DBG unheld-pass [{"channelId":"01a1e76a-7692-740e-a276-70941e62a895","rootId":"01a1e76a-771f-7f57-82e4-cd62a661e6d3"}]
+DD OFF-6Y w2 r2 ben 881050 DBG detail-view 62a895 loading load=pending
+DD OFF-6Y w2 r2 ben 881173 DBG detail-view 62a895 ready load=ready
+DD OFF-6Y w2 r2 ben 881178 DBG detail-result 62a895 source=live-network stale=false has=true err=none
+DD OFF-6Y w2 r2 ben 881178 DBG detail-view 62a895 ready load=ready
+DD OFF-6Y w2 r2 ben 881288 DBG unheld-note 6-70941e62a895
+DD OFF-6Y w2 r2 ben 881327 DBG detail-result 62a895 source=live-network stale=false has=true err=none
+DD OFF-6Y w2 r2 ben 881327 DBG detail-view 62a895 ready load=ready
+DD OFF-6Y w2 r2 ben 881330 DBG detail-result 62a895 source=live-network stale=false has=true err=none
+DD OFF-13 w0 r2 dee 881332 DBG detail-view 3ca839 ready load=pending
+DD OFF-13 w0 r2 dee 881361 DBG detail-view 3ca839 ready load=pending
+DD OFF-13 w0 r2 dee 881361 DBG detail-result 3ca839 source=normalized-cache-hit stale=true has=true err=none
+DD OFF-13 w0 r2 dee 881365 DBG detail-result 3ca839 source=normalized-cache-hit stale=true has=true err=none
+DJ OFF-6Y w2 r2 ben 881461 ["[observability]","graphql.mutation_queue.loaded",{"auth.state":"signed-in","network.online":false,"graphql.websocket.state":"connected","mutation_queue.depth":1,"mutation_queue.age_unknown_items":0,"mutation_queue.oldest_item_age_ms":2294}]
+DD OFF-6Y w2 r2 ben 881510 DBG unheld-note 4-cd62a661e6d3
+DD OFF-6Y w2 r2 ben 881749 DBG detail-view 438a77 ready load=pending
+DD OFF-6Y w2 r2 ben 881788 DBG unheld-note 5-28787f438a77
+DD OFF-6Y w2 r2 ben 881855 DBG detail-view 438a77 ready load=ready
+DD OFF-6Y w2 r2 ben 881856 DBG detail-result 438a77 source=live-network stale=false has=true err=none
+DD OFF-6Y w2 r2 ben 881856 DBG detail-view 438a77 ready load=ready
+DD OFF-6Y w2 r2 ben 881860 DBG detail-result 438a77 source=live-network stale=false has=true err=none
+DD OFF-6Y w2 r2 ben 881870 DBG unheld-forget 4-cd62a661e6d3 left=false
+DD OFF-6Y w2 r2 ben 881870 DBG unheld-forget 4-cd62a661e6d3 left=true
+DD OFF-13 w0 r2 dee 882177 DBG unheld-pass []
+DD OFF-13 w0 r2 dee 882299 DBG detail-view 3ca839 loading load=pending
+DD OFF-13 w0 r2 dee 882417 DBG detail-view 3ca839 ready load=ready
+DD OFF-13 w0 r2 dee 882418 DBG detail-result 3ca839 source=live-network stale=false has=true err=none
+DD OFF-13 w0 r2 dee 882418 DBG detail-view 3ca839 ready load=ready
+DD OFF-13 w0 r2 dee 882526 DBG unheld-note 8-c33d643ca839
+DD OFF-13 w0 r2 dee 882559 DBG detail-result 3ca839 source=live-network stale=false has=true err=none
+DD OFF-13 w0 r2 dee 882559 DBG detail-view 3ca839 ready load=ready
+DD OFF-13 w0 r2 dee 882562 DBG detail-result 3ca839 source=live-network stale=false has=true err=none
+DD OFF-13 w0 r2 dee 882730 DBG unheld-forget 8-c33d643ca839 left=false
+DD OFF-6Y w2 r2 ben 882755 DBG unheld-pass [{"channelId":"01a1e76a-7692-740e-a276-70941e62a895"},{"channelId":"01a1e76a-76c8-7180-b675-28787f438a77"}]
+DD OFF-6Y w2 r2 ben 882861 DBG detail-view 438a77 loading load=pending
+DD OFF-6Y w2 r2 ben 882905 DBG unheld-note 6-70941e62a895
+DD OFF-6Y w2 r2 ben 882985 DBG detail-view 438a77 ready load=ready
+DD OFF-6Y w2 r2 ben 882986 DBG detail-result 438a77 source=live-network stale=false has=true err=none
+DD OFF-6Y w2 r2 ben 882986 DBG detail-view 438a77 ready load=ready
+DD OFF-6Y w2 r2 ben 883095 DBG unheld-note 5-28787f438a77
+DD OFF-6Y w2 r2 ben 883134 DBG detail-result 438a77 source=live-network stale=false has=true err=none
+DD OFF-6Y w2 r2 ben 883134 DBG detail-view 438a77 ready load=ready
+DD OFF-6Y w2 r2 ben 883135 DBG detail-result 438a77 source=live-network stale=false has=true err=none
+DJ OFF-6Y w2 r2 ben 883217 ["[observability]","graphql.mutation_queue.loaded",{"auth.state":"signed-in","network.online":false,"graphql.websocket.state":"connected","mutation_queue.depth":2,"mutation_queue.age_unknown_items":0,"mutation_queue.oldest_item_age_ms":4031}]
+DD OFF-6Y w2 r2 ben 883464 DBG detail-view 438a77 ready load=ready
+DD OFF-6Y w2 r2 ben 883465 DBG detail-result 438a77 source=live-network stale=false has=true err=none
+DD OFF-6Y w2 r2 ben 883466 DBG detail-view 438a77 ready load=ready
+DD OFF-6Y w2 r2 ben 883467 DBG detail-result 438a77 source=live-network stale=false has=true err=none
+DD OFF-6Y w2 r2 ben 883469 DBG unheld-forget 5-28787f438a77 left=false
+DD OFF-6Y w2 r2 ben 883470 DBG unheld-forget 6-70941e62a895 left=false
+DD OFF-6Y w2 r2 ben 883470 DBG unheld-forget 6-70941e62a895 left=true
+DD OFF-6Y w2 r2 ben 883555 DBG detail-result 438a77 source=affected-cache-reread stale=false has=true err=none
+DD OFF-6Y w2 r2 ben 883557 DBG detail-result 438a77 source=affected-cache-reread stale=false has=true err=none
+DD OFF-6Y w2 r2 ben 883559 DBG unheld-forget 5-28787f438a77 left=true
+DD OFF-6Y w2 r2 ben 883607 DBG detail-result 438a77 source=affected-cache-reread stale=false has=true err=none
+DD OFF-6Y w2 r2 ben 883607 DBG detail-result 438a77 source=affected-cache-reread stale=false has=true err=none
+DJ OFF-6Y w2 r2 ben 883608 ["[observability]","graphql.mutation_queue.skipped",{"auth.state":"signed-in","network.online":false,"graphql.websocket.state":"connected","mutation_queue.pending_items":0,"mutation_queue.oldest_observed_wait_ms":0,"mutation_queue.age_unknown_items":0,"mutation_queue.skip_reason":"lease-owner-gone"}]
+DD OFF-6Y w2 r2 ben 883990 DBG detail-result 438a77 source=affected-cache-reread stale=false has=true err=none
+DD OFF-6Y w2 r2 ben 883991 DBG detail-result 438a77 source=affected-cache-reread stale=false has=true err=none
+DD OFF-6Y w2 r2 ben 884087 DBG detail-result 438a77 source=affected-cache-reread stale=false has=true err=none
+DD OFF-6Y w2 r2 ben 884087 DBG detail-result 438a77 source=affected-cache-reread stale=false has=true err=none
+DD OFF-09 w1 r2 ben 886142 DBG unheld-note c-a215aef766c9
+DD OFF-09 w1 r2 ben 886231 DBG unheld-forget c-a215aef766c9 left=false
+DD OFF-09 w1 r2 ben 886329 DBG detail-view 2d8a74 ready load=pending
+DD OFF-09 w1 r2 ben 886342 DBG detail-view 2d8a74 ready load=pending
+DD OFF-09 w1 r2 ben 886342 DBG detail-result 2d8a74 source=live-network stale=false has=false err=[Network] Failed to fetch
+DD OFF-09 w1 r2 ben 886343 DBG detail-view 2d8a74 ready load=error
+DD OFF-09 w1 r2 ben 886345 DBG detail-result 2d8a74 source=live-network stale=false has=false err=[Network] Failed to fetch
+DD OFF-09 w1 r2 ben 886347 DBG detail-view 2d8a74 ready load=ready
+DD OFF-09 w1 r2 ben 886347 DBG detail-result 2d8a74 source=normalized-cache-hit stale=false has=true err=[Network] Failed to fetch
+DD OFF-09 w1 r2 ben 886350 DBG detail-result 2d8a74 source=normalized-cache-hit stale=false has=true err=[Network] Failed to fetch
+DD OFF-09 w1 r2 ben 886350 DBG detail-result 2d8a74 source=normalized-cache-hit stale=true has=true err=[Network] Failed to fetch
+DD OFF-09 w1 r2 ben 886350 DBG detail-result 2d8a74 source=normalized-cache-hit stale=true has=true err=[Network] Failed to fetch
+DD OFF-09 w1 r2 ben 886387 DBG detail-result 2d8a74 source=live-network stale=false has=false err=[Network] Failed to fetch
+DD OFF-09 w1 r2 ben 886387 DBG detail-view 2d8a74 ready load=ready
+DD OFF-09 w1 r2 ben 886389 DBG detail-result 2d8a74 source=live-network stale=false has=false err=[Network] Failed to fetch
+  ✓  10 tests/channels-e2e-dbg/offline.spec.ts:306:1 › OFF-09 a channel left as soon as its messages showed opens with no connection (10.6s)
+DD OFF-13 w0 r2 dee 887435 DBG unheld-note b-775d0713380a
+DD OFF-13 w0 r2 dee 887452 DBG unheld-forget b-775d0713380a left=false
+DD OFF-6Y w2 r2 ben 888513 DBG detail-view 62a895 ready load=pending
+DD OFF-6Y w2 r2 ben 888527 DBG detail-view 62a895 ready load=pending
+DD OFF-6Y w2 r2 ben 888527 DBG detail-result 62a895 source=live-network stale=false has=false err=[Network] Failed to fetch
+DD OFF-6Y w2 r2 ben 888527 DBG detail-view 62a895 ready load=error
+DD OFF-6Y w2 r2 ben 888529 DBG detail-result 62a895 source=live-network stale=false has=false err=[Network] Failed to fetch
+DD OFF-6Y w2 r2 ben 888531 DBG detail-view 62a895 ready load=ready
+DD OFF-6Y w2 r2 ben 888531 DBG detail-result 62a895 source=normalized-cache-hit stale=false has=true err=[Network] Failed to fetch
+DD OFF-6Y w2 r2 ben 888533 DBG detail-result 62a895 source=normalized-cache-hit stale=false has=true err=[Network] Failed to fetch
+DD OFF-6Y w2 r2 ben 888534 DBG detail-result 62a895 source=normalized-cache-hit stale=true has=true err=[Network] Failed to fetch
+DD OFF-6Y w2 r2 ben 888534 DBG detail-result 62a895 source=normalized-cache-hit stale=true has=true err=[Network] Failed to fetch
+DD OFF-6Y w2 r2 ben 888567 DBG detail-result 62a895 source=live-network stale=false has=false err=[Network] Failed to fetch
+DD OFF-6Y w2 r2 ben 888567 DBG detail-view 62a895 ready load=ready
+DD OFF-6Y w2 r2 ben 888569 DBG detail-result 62a895 source=live-network stale=false has=false err=[Network] Failed to fetch
+DD OFF-13 w0 r2 dee 888631 DBG detail-view 5cbc93 loading load=pending
+DD OFF-13 w0 r2 dee 888642 DBG detail-view 5cbc93 loading load=pending
+DD OFF-13 w0 r2 dee 888642 DBG detail-result 5cbc93 source=live-network stale=false has=false err=[Network] Failed to fetch
+DD OFF-13 w0 r2 dee 888642 DBG detail-view 5cbc93 unavailable load=error
+DD OFF-13 w0 r2 dee 888655 DBG detail-view 5cbc93 ready load=ready
+DD OFF-13 w0 r2 dee 888656 DBG detail-result 5cbc93 source=normalized-cache-hit stale=false has=true err=[Network] Failed to fetch
+DD OFF-13 w0 r2 dee 888670 DBG detail-result 5cbc93 source=normalized-cache-hit stale=true has=true err=none
+DD OFF-13 w0 r2 dee 888673 DBG detail-result 5cbc93 source=normalized-cache-hit stale=true has=true err=none
+DD OFF-13 w0 r2 dee 888676 DBG detail-result 5cbc93 source=live-network stale=false has=false err=[Network] Failed to fetch
+DD OFF-13 w0 r2 dee 888676 DBG detail-view 5cbc93 ready load=ready
+DD OFF-13 w0 r2 dee 888678 DBG detail-result 5cbc93 source=live-network stale=false has=false err=[Network] Failed to fetch
+  ✓  11 tests/channels-e2e-dbg/offline.spec.ts:402:1 › OFF-13 a channel read while connected opens with no connection after a hundred and twenty newer ones were made (12.9s)
+  ✓  12 tests/channels-e2e-dbg/offline.spec.ts:434:1 › OFF-6Y a thread read just before a reload shows its replies with no connection (12.6s)
+
+  12 passed (1.1m)

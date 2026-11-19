@@ -1,0 +1,10 @@
+path "/home/teo/.herdr/worktrees/macro/synoet-channels-local-sync-suite/apps/web" does not contain a 'flake.nix', searching up
+
+Running 4 tests using 4 workers
+
+  ✓  1 tests/channels-e2e/composer.spec.ts:93:1 › CMP-13 a message shown as sent is still sent when the page is reloaded at once (9.9s)
+  ✓  3 tests/channels-e2e/composer.spec.ts:93:1 › CMP-13 a message shown as sent is still sent when the page is reloaded at once (23.5s)
+  ✓  4 tests/channels-e2e/composer.spec.ts:93:1 › CMP-13 a message shown as sent is still sent when the page is reloaded at once (24.7s)
+  ✓  2 tests/channels-e2e/composer.spec.ts:93:1 › CMP-13 a message shown as sent is still sent when the page is reloaded at once (24.9s)
+
+  4 passed (39.5s)

@@ -1,0 +1,326 @@
+{
+ "session-throttled-cmp/warm_switch/small": {
+  "old": {
+   "fp": 276.15,
+   "fin": 267.6,
+   "fp90": 293.35
+  },
+  "new": {
+   "fp": 285.7,
+   "fin": 275.5,
+   "fp90": 354.92
+  }
+ },
+ "session-throttled-cmp/revisit/small": {
+  "old": {
+   "fp": 134.55,
+   "fin": 120.85,
+   "fp90": 173.5
+  },
+  "new": {
+   "fp": 134.0,
+   "fin": 120.4,
+   "fp90": 145.4
+  }
+ },
+ "session-throttled-cmp/reload/small": {
+  "old": {
+   "fp": 1225.25,
+   "fin": 1204.1,
+   "fp90": 1228.3
+  },
+  "new": {
+   "fp": 1291.6,
+   "fin": 1281.4,
+   "fp90": 1431.44
+  }
+ },
+ "session-throttled-cmp/warm_switch/medium": {
+  "old": {
+   "fp": 257.9,
+   "fin": 246.6,
+   "fp90": 261.45
+  },
+  "new": {
+   "fp": 272.1,
+   "fin": 248.1,
+   "fp90": 276.38
+  }
+ },
+ "session-throttled-cmp/revisit/medium": {
+  "old": {
+   "fp": 120.45,
+   "fin": 104.6,
+   "fp90": 134.55
+  },
+  "new": {
+   "fp": 120.8,
+   "fin": 100.7,
+   "fp90": 126.3
+  }
+ },
+ "session-throttled-cmp/reload/medium": {
+  "old": {
+   "fp": 1173.35,
+   "fin": 1165.4,
+   "fp90": 1225.25
+  },
+  "new": {
+   "fp": 1213.9,
+   "fin": 1206.0,
+   "fp90": 1264.12
+  }
+ },
+ "session-throttled-cmp/warm_switch/large": {
+  "old": {
+   "fp": 254.55,
+   "fin": 243.25,
+   "fp90": 260.2
+  },
+  "new": {
+   "fp": 267.15,
+   "fin": 242.64999999999998,
+   "fp90": 301.79999999999995
+  }
+ },
+ "session-throttled-cmp/revisit/large": {
+  "old": {
+   "fp": 111.65,
+   "fin": 97.0,
+   "fp90": 122.0
+  },
+  "new": {
+   "fp": 108.6,
+   "fin": 94.7,
+   "fp90": 124.44999999999999
+  }
+ },
+ "session-throttled-cmp/reload/large": {
+  "old": {
+   "fp": 1205.9,
+   "fin": 1193.9,
+   "fp90": 1228.65
+  },
+  "new": {
+   "fp": 1281.6,
+   "fin": 1268.85,
+   "fp90": 1316.0500000000002
+  }
+ },
+ "session-cmp-prewarmed/warm_switch/small": {
+  "old": {
+   "fp": 216.95,
+   "fin": 199.3,
+   "fp90": 287.3
+  },
+  "new": {
+   "fp": 232.75,
+   "fin": 187.2,
+   "fp90": 278.55
+  }
+ },
+ "session-cmp-prewarmed/revisit/small": {
+  "old": {
+   "fp": 149.25,
+   "fin": 132.75,
+   "fp90": 216.2
+  },
+  "new": {
+   "fp": 143.05,
+   "fin": 127.7,
+   "fp90": 173.14999999999998
+  }
+ },
+ "session-cmp-prewarmed/reload/small": {
+  "old": {
+   "fp": 891.45,
+   "fin": 884.2,
+   "fp90": 930.6
+  },
+  "new": {
+   "fp": 905.7,
+   "fin": 892.7,
+   "fp90": 1041.2
+  }
+ },
+ "session-cmp-prewarmed/warm_switch/medium": {
+  "old": {
+   "fp": 214.95,
+   "fin": 192.05,
+   "fp90": 367.65
+  },
+  "new": {
+   "fp": 223.35,
+   "fin": 182.85000000000002,
+   "fp90": 240.8
+  }
+ },
+ "session-cmp-prewarmed/revisit/medium": {
+  "old": {
+   "fp": 122.45,
+   "fin": 105.0,
+   "fp90": 231.35
+  },
+  "new": {
+   "fp": 111.9,
+   "fin": 99.15,
+   "fp90": 116.19
+  }
+ },
+ "session-cmp-prewarmed/reload/medium": {
+  "old": {
+   "fp": 852.55,
+   "fin": 842.5,
+   "fp90": 965.45
+  },
+  "new": {
+   "fp": 878.7,
+   "fin": 864.4,
+   "fp90": 909.61
+  }
+ },
+ "session-cmp-prewarmed/warm_switch/large": {
+  "old": {
+   "fp": 177.64999999999998,
+   "fin": 157.55,
+   "fp90": 199.7
+  },
+  "new": {
+   "fp": 199.2,
+   "fin": 154.05,
+   "fp90": 624.45
+  }
+ },
+ "session-cmp-prewarmed/revisit/large": {
+  "old": {
+   "fp": 143.7,
+   "fin": 121.4,
+   "fp90": 607.7
+  },
+  "new": {
+   "fp": 114.8,
+   "fin": 99.1,
+   "fp90": 128.5
+  }
+ },
+ "session-cmp-prewarmed/reload/large": {
+  "old": {
+   "fp": 846.7,
+   "fin": 832.5,
+   "fp90": 2207.5
+  },
+  "new": {
+   "fp": 845.9000000000001,
+   "fin": 828.9,
+   "fp90": 1072.1
+  }
+ },
+ "session-throttled-cmp-prewarmed/warm_switch/small": {
+  "old": {
+   "fp": 294.1,
+   "fin": 282.0,
+   "fp90": 302.55
+  },
+  "new": {
+   "fp": 233.95,
+   "fin": 190.7,
+   "fp90": 296.6
+  }
+ },
+ "session-throttled-cmp-prewarmed/revisit/small": {
+  "old": {
+   "fp": 135.85000000000002,
+   "fin": 122.2,
+   "fp90": 159.8
+  },
+  "new": {
+   "fp": 143.65,
+   "fin": 128.3,
+   "fp90": 153.35
+  }
+ },
+ "session-throttled-cmp-prewarmed/reload/small": {
+  "old": {
+   "fp": 1220.2,
+   "fin": 1211.9,
+   "fp90": 1268.35
+  },
+  "new": {
+   "fp": 1268.5,
+   "fin": 1258.95,
+   "fp90": 1351.65
+  }
+ },
+ "session-throttled-cmp-prewarmed/warm_switch/medium": {
+  "old": {
+   "fp": 263.75,
+   "fin": 252.4,
+   "fp90": 267.15
+  },
+  "new": {
+   "fp": 194.9,
+   "fin": 170.8,
+   "fp90": 197.72
+  }
+ },
+ "session-throttled-cmp-prewarmed/revisit/medium": {
+  "old": {
+   "fp": 117.4,
+   "fin": 103.55,
+   "fp90": 129.35000000000002
+  },
+  "new": {
+   "fp": 115.3,
+   "fin": 100.2,
+   "fp90": 132.22
+  }
+ },
+ "session-throttled-cmp-prewarmed/reload/medium": {
+  "old": {
+   "fp": 1201.15,
+   "fin": 1193.9,
+   "fp90": 1544.3000000000002
+  },
+  "new": {
+   "fp": 1261.3,
+   "fin": 1253.4,
+   "fp90": 1331.7
+  }
+ },
+ "session-throttled-cmp-prewarmed/warm_switch/large": {
+  "old": {
+   "fp": 274.5,
+   "fin": 263.3,
+   "fp90": 355.20000000000005
+  },
+  "new": {
+   "fp": 186.25,
+   "fin": 158.75,
+   "fp90": 212.89999999999998
+  }
+ },
+ "session-throttled-cmp-prewarmed/revisit/large": {
+  "old": {
+   "fp": 119.15,
+   "fin": 101.35,
+   "fp90": 152.95
+  },
+  "new": {
+   "fp": 120.35,
+   "fin": 105.0,
+   "fp90": 128.64999999999998
+  }
+ },
+ "session-throttled-cmp-prewarmed/reload/large": {
+  "old": {
+   "fp": 1224.85,
+   "fin": 1216.85,
+   "fp90": 1294.9
+  },
+  "new": {
+   "fp": 1227.45,
+   "fin": 1217.5,
+   "fp90": 1275.6
+  }
+ }
+}

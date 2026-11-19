@@ -1,0 +1,90 @@
+{
+ "base": "https://localhost:31009",
+ "channel": "5eed92f0-15d3-83f5-a505-41d4adcf67c2",
+ "generatedAt": "2026-11-12T11:10:19.865Z",
+ "steps": {
+  "send": {
+   "appearedMs": 26,
+   "rowCountsOver3s": [
+    1,
+    1,
+    1,
+    1,
+    1,
+    1,
+    1,
+    1
+   ],
+   "maxRows": 1,
+   "requests": [
+    "POST /dss/messages/channel/:id/typing 204",
+    "POST /dss/messages/channel/:id 200",
+    "POST ChannelTimeline 200",
+    "POST ChannelChanges 200",
+    "POST CalendarOccurrences 200",
+    "POST ChannelTimeline 200",
+    "POST ChannelTimeline 200",
+    "POST ChannelChanges 200",
+    "POST ChannelTimeline 200",
+    "POST CalendarOccurrences 200",
+    "POST ChannelTimeline 200"
+   ]
+  },
+  "send_request_fails": {
+   "optimisticAppearedMs": 14,
+   "rolledBackAfterMs": 37,
+   "rowsAfter": 0,
+   "failureToast": true,
+   "draftRestored": true,
+   "requests": [
+    "POST /dss/messages/channel/:id/typing 204",
+    "POST /dss/messages/channel/:id failed",
+    "POST ChannelThread 200",
+    "GET /dss/messages/channel/:id/threads/:id 404",
+    "POST ChannelTimeline 200",
+    "POST PendingEmailSends 200",
+    "POST ChannelTimeline 200",
+    "POST ChannelThread 200",
+    "GET /dss/messages/channel/:id/threads/:id 404",
+    "POST ChannelTimeline 200",
+    "POST CalendarOccurrences 200"
+   ]
+  },
+  "send_503_busy": {
+   "optimisticAppearedMs": 13,
+   "rolledBackAfterMs": 31,
+   "rowsAfter": 0,
+   "failureToast": true,
+   "draftRestored": true,
+   "requests": [
+    "POST /dss/messages/channel/:id/typing 204",
+    "POST /dss/messages/channel/:id 503",
+    "POST ChannelThread 200",
+    "GET /dss/messages/channel/:id/threads/:id 404",
+    "POST PendingEmailSends 200",
+    "POST ChannelThread 200",
+    "GET /dss/messages/channel/:id/threads/:id 404"
+   ]
+  },
+  "send_after_failures": {
+   "rows": 1,
+   "requests": [
+    "POST /dss/messages/channel/:id/typing 204",
+    "POST /dss/messages/channel/:id 200",
+    "POST ChannelChanges 200",
+    "GET /dss/call/active 200",
+    "GET /dss/call/meetings/active 200",
+    "POST PendingEmailSends 200",
+    "GET /dss/call/:id/active 204",
+    "GET /dss/slack/imports 200"
+   ]
+  },
+  "reopen": {
+   "ownSend": 1,
+   "retry": 1,
+   "failed": 0,
+   "busy": 0
+  }
+ },
+ "lastMarker": "own-retry-1794481851244"
+}

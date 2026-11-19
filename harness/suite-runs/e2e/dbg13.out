@@ -1,0 +1,91 @@
+path "/home/teo/.herdr/worktrees/macro/synoet-channels-local-sync-suite/apps/web" does not contain a 'flake.nix', searching up
+
+Running 40 tests using 4 workers
+
+  ✓   4 tests/channels-e2e/messages.spec.ts:491:1 › MSG-13 a quick reaction shows for both people, counts 2 when the other adds the same, and goes when removed (17.9s)
+  ✓   1 tests/channels-e2e/messages.spec.ts:491:1 › MSG-13 a quick reaction shows for both people, counts 2 when the other adds the same, and goes when removed (18.0s)
+  ✓   3 tests/channels-e2e/messages.spec.ts:491:1 › MSG-13 a quick reaction shows for both people, counts 2 when the other adds the same, and goes when removed (19.3s)
+  ✓   2 tests/channels-e2e/messages.spec.ts:491:1 › MSG-13 a quick reaction shows for both people, counts 2 when the other adds the same, and goes when removed (22.7s)
+  ✓   5 tests/channels-e2e/messages.spec.ts:491:1 › MSG-13 a quick reaction shows for both people, counts 2 when the other adds the same, and goes when removed (12.7s)
+  ✓   6 tests/channels-e2e/messages.spec.ts:491:1 › MSG-13 a quick reaction shows for both people, counts 2 when the other adds the same, and goes when removed (13.0s)
+  ✓   7 tests/channels-e2e/messages.spec.ts:491:1 › MSG-13 a quick reaction shows for both people, counts 2 when the other adds the same, and goes when removed (12.1s)
+  ✓   8 tests/channels-e2e/messages.spec.ts:491:1 › MSG-13 a quick reaction shows for both people, counts 2 when the other adds the same, and goes when removed (12.6s)
+  ✓  11 tests/channels-e2e/messages.spec.ts:491:1 › MSG-13 a quick reaction shows for both people, counts 2 when the other adds the same, and goes when removed (12.9s)
+  ✓  10 tests/channels-e2e/messages.spec.ts:491:1 › MSG-13 a quick reaction shows for both people, counts 2 when the other adds the same, and goes when removed (13.6s)
+  ✓   9 tests/channels-e2e/messages.spec.ts:491:1 › MSG-13 a quick reaction shows for both people, counts 2 when the other adds the same, and goes when removed (14.1s)
+  ✓  12 tests/channels-e2e/messages.spec.ts:491:1 › MSG-13 a quick reaction shows for both people, counts 2 when the other adds the same, and goes when removed (14.1s)
+  ✓  14 tests/channels-e2e/messages.spec.ts:491:1 › MSG-13 a quick reaction shows for both people, counts 2 when the other adds the same, and goes when removed (10.5s)
+  ✓  13 tests/channels-e2e/messages.spec.ts:491:1 › MSG-13 a quick reaction shows for both people, counts 2 when the other adds the same, and goes when removed (13.7s)
+  ✓  15 tests/channels-e2e/messages.spec.ts:491:1 › MSG-13 a quick reaction shows for both people, counts 2 when the other adds the same, and goes when removed (13.4s)
+  ✓  16 tests/channels-e2e/messages.spec.ts:491:1 › MSG-13 a quick reaction shows for both people, counts 2 when the other adds the same, and goes when removed (14.1s)
+  ✓  17 tests/channels-e2e/messages.spec.ts:491:1 › MSG-13 a quick reaction shows for both people, counts 2 when the other adds the same, and goes when removed (11.3s)
+  ✓  19 tests/channels-e2e/messages.spec.ts:491:1 › MSG-13 a quick reaction shows for both people, counts 2 when the other adds the same, and goes when removed (14.0s)
+  ✓  18 tests/channels-e2e/messages.spec.ts:491:1 › MSG-13 a quick reaction shows for both people, counts 2 when the other adds the same, and goes when removed (14.5s)
+  ✓  20 tests/channels-e2e/messages.spec.ts:491:1 › MSG-13 a quick reaction shows for both people, counts 2 when the other adds the same, and goes when removed (13.1s)
+  ✓  21 tests/channels-e2e/messages.spec.ts:491:1 › MSG-13 a quick reaction shows for both people, counts 2 when the other adds the same, and goes when removed (14.8s)
+  ✓  23 tests/channels-e2e/messages.spec.ts:491:1 › MSG-13 a quick reaction shows for both people, counts 2 when the other adds the same, and goes when removed (13.9s)
+  ✓  22 tests/channels-e2e/messages.spec.ts:491:1 › MSG-13 a quick reaction shows for both people, counts 2 when the other adds the same, and goes when removed (14.5s)
+  ✓  24 tests/channels-e2e/messages.spec.ts:491:1 › MSG-13 a quick reaction shows for both people, counts 2 when the other adds the same, and goes when removed (13.7s)
+  ✓  25 tests/channels-e2e/messages.spec.ts:491:1 › MSG-13 a quick reaction shows for both people, counts 2 when the other adds the same, and goes when removed (10.6s)
+  ✓  27 tests/channels-e2e/messages.spec.ts:491:1 › MSG-13 a quick reaction shows for both people, counts 2 when the other adds the same, and goes when removed (12.7s)
+  ✓  26 tests/channels-e2e/messages.spec.ts:491:1 › MSG-13 a quick reaction shows for both people, counts 2 when the other adds the same, and goes when removed (13.6s)
+  ✓  28 tests/channels-e2e/messages.spec.ts:491:1 › MSG-13 a quick reaction shows for both people, counts 2 when the other adds the same, and goes when removed (12.5s)
+  ✓  29 tests/channels-e2e/messages.spec.ts:491:1 › MSG-13 a quick reaction shows for both people, counts 2 when the other adds the same, and goes when removed (12.9s)
+  ✓  32 tests/channels-e2e/messages.spec.ts:491:1 › MSG-13 a quick reaction shows for both people, counts 2 when the other adds the same, and goes when removed (9.7s)
+  ✓  30 tests/channels-e2e/messages.spec.ts:491:1 › MSG-13 a quick reaction shows for both people, counts 2 when the other adds the same, and goes when removed (13.4s)
+  ✓  31 tests/channels-e2e/messages.spec.ts:491:1 › MSG-13 a quick reaction shows for both people, counts 2 when the other adds the same, and goes when removed (12.8s)
+  ✓  35 tests/channels-e2e/messages.spec.ts:491:1 › MSG-13 a quick reaction shows for both people, counts 2 when the other adds the same, and goes when removed (12.5s)
+  ✘  33 tests/channels-e2e/messages.spec.ts:491:1 › MSG-13 a quick reaction shows for both people, counts 2 when the other adds the same, and goes when removed (19.6s)
+  ✓  34 tests/channels-e2e/messages.spec.ts:491:1 › MSG-13 a quick reaction shows for both people, counts 2 when the other adds the same, and goes when removed (13.2s)
+  ✓  36 tests/channels-e2e/messages.spec.ts:491:1 › MSG-13 a quick reaction shows for both people, counts 2 when the other adds the same, and goes when removed (13.6s)
+  ✓  39 tests/channels-e2e/messages.spec.ts:491:1 › MSG-13 a quick reaction shows for both people, counts 2 when the other adds the same, and goes when removed (14.9s)
+  ✓  37 tests/channels-e2e/messages.spec.ts:491:1 › MSG-13 a quick reaction shows for both people, counts 2 when the other adds the same, and goes when removed (15.7s)
+  ✓  38 tests/channels-e2e/messages.spec.ts:491:1 › MSG-13 a quick reaction shows for both people, counts 2 when the other adds the same, and goes when removed (16.2s)
+  ✓  40 tests/channels-e2e/messages.spec.ts:491:1 › MSG-13 a quick reaction shows for both people, counts 2 when the other adds the same, and goes when removed (15.2s)
+
+
+  1) tests/channels-e2e/messages.spec.ts:491:1 › MSG-13 a quick reaction shows for both people, counts 2 when the other adds the same, and goes when removed 
+
+    Error: expect(received).toEqual(expected) // deep equality
+
+    - Expected  - 1
+    + Received  + 1
+
+      Array [
+    -   "👍 2",
+    +   "👍",
+      ]
+
+    Call Log:
+    - Timeout 15000ms exceeded while waiting on the predicate
+
+      519 |   await bens.reaction(bensMessage, '👍').click();
+      520 |   await expect.poll(() => bens.reactions(bensMessage)).toEqual(['👍 2']);
+    > 521 |   await expect.poll(() => mine.reactions(myMessage)).toEqual(['👍 2']);
+          |                                                      ^
+      522 |
+      523 |   await Promise.all([mine.reload(), bens.reload()]);
+      524 |   await expect.poll(() => mine.reactions(myMessage)).toEqual(['👍 2']);
+        at /home/teo/.herdr/worktrees/macro/synoet-channels-local-sync-suite/apps/web/tests/channels-e2e/messages.spec.ts:521:54
+
+    attachment #1: screenshot (image/png) ──────────────────────────────────────────────────────────
+    ../../../../../../.cache/channels-perf-b/e2e/dbg13/test-results/messages-MSG-13-a-quick-re-7a686--same-and-goes-when-removed-repeat32/test-failed-1.png
+    ────────────────────────────────────────────────────────────────────────────────────────────────
+
+    attachment #2: screenshot (image/png) ──────────────────────────────────────────────────────────
+    ../../../../../../.cache/channels-perf-b/e2e/dbg13/test-results/messages-MSG-13-a-quick-re-7a686--same-and-goes-when-removed-repeat32/test-failed-2.png
+    ────────────────────────────────────────────────────────────────────────────────────────────────
+
+    Error Context: ../../../../../../.cache/channels-perf-b/e2e/dbg13/test-results/messages-MSG-13-a-quick-re-7a686--same-and-goes-when-removed-repeat32/error-context.md
+
+    attachment #4: trace (application/zip) ─────────────────────────────────────────────────────────
+    ../../../../../../.cache/channels-perf-b/e2e/dbg13/test-results/messages-MSG-13-a-quick-re-7a686--same-and-goes-when-removed-repeat32/trace.zip
+    Usage:
+
+        npx playwright show-trace ../../../../../../.cache/channels-perf-b/e2e/dbg13/test-results/messages-MSG-13-a-quick-re-7a686--same-and-goes-when-removed-repeat32/trace.zip
+
+    ────────────────────────────────────────────────────────────────────────────────────────────────
+
+  1 failed
+    tests/channels-e2e/messages.spec.ts:491:1 › MSG-13 a quick reaction shows for both people, counts 2 when the other adds the same, and goes when removed 
+  39 passed (2.7m)

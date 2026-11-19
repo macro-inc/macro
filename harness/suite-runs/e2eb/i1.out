@@ -1,0 +1,638 @@
+path "/home/teo/.herdr/worktrees/macro/synoet-channels-local-sync-suiteb/apps/web" does not contain a 'flake.nix', searching up
+
+Running 56 tests using 4 workers
+
+  ✓   3 tests/channels-e2e/writes.spec.ts:84:1 › WRT-02 an edit, a deletion and a reaction made with no connection show at once and all reach the services (7.1s)
+  ✓   4 tests/channels-e2e/writes.spec.ts:323:1 › WRT-11 a waiting message written right after another of the same person says that it is not sent yet (8.7s)
+  ✓   5 tests/channels-e2e/writes.spec.ts:346:1 › WRT-12 a message written offline with the channel open in two windows is sent once and shows in both (7.6s)
+  ✓   2 tests/channels-e2e/messages.spec.ts:677:1 › MSG-18 messages two people send at the same moment end in one order for both, each once (15.7s)
+  ✓   1 tests/channels-e2e/messages.spec.ts:491:1 › MSG-13 a quick reaction shows for both people, counts 2 when the other adds the same, and goes when removed (16.6s)
+  ✓   6 tests/channels-e2e/writes.spec.ts:386:1 › WRT-13 two devices of one person, one of them offline, end up showing the same channel as the services hold (9.1s)
+  ✓   7 tests/channels-e2e/writes.spec.ts:436:1 › WRT-14 a message written offline in one window shows in the other window of the same device (7.8s)
+  ✓  10 tests/channels-e2e/writes.spec.ts:84:1 › WRT-02 an edit, a deletion and a reaction made with no connection show at once and all reach the services (4.8s)
+  ✓   8 tests/channels-e2e/messages.spec.ts:491:1 › MSG-13 a quick reaction shows for both people, counts 2 when the other adds the same, and goes when removed (9.3s)
+  ✓   9 tests/channels-e2e/messages.spec.ts:677:1 › MSG-18 messages two people send at the same moment end in one order for both, each once (9.8s)
+  ✓  12 tests/channels-e2e/writes.spec.ts:346:1 › WRT-12 a message written offline with the channel open in two windows is sent once and shows in both (6.3s)
+  ✓  11 tests/channels-e2e/writes.spec.ts:323:1 › WRT-11 a waiting message written right after another of the same person says that it is not sent yet (7.9s)
+  ✓  14 tests/channels-e2e/writes.spec.ts:436:1 › WRT-14 a message written offline in one window shows in the other window of the same device (8.4s)
+  ✓  16 tests/channels-e2e/messages.spec.ts:677:1 › MSG-18 messages two people send at the same moment end in one order for both, each once (7.8s)
+  ✓  17 tests/channels-e2e/writes.spec.ts:84:1 › WRT-02 an edit, a deletion and a reaction made with no connection show at once and all reach the services (5.1s)
+  ✓  15 tests/channels-e2e/messages.spec.ts:491:1 › MSG-13 a quick reaction shows for both people, counts 2 when the other adds the same, and goes when removed (12.7s)
+  ✓  18 tests/channels-e2e/writes.spec.ts:323:1 › WRT-11 a waiting message written right after another of the same person says that it is not sent yet (7.9s)
+  ✓  21 tests/channels-e2e/writes.spec.ts:436:1 › WRT-14 a message written offline in one window shows in the other window of the same device (6.1s)
+  ✘  13 tests/channels-e2e/writes.spec.ts:386:1 › WRT-13 two devices of one person, one of them offline, end up showing the same channel as the services hold (36.2s)
+  ✓  22 tests/channels-e2e/messages.spec.ts:491:1 › MSG-13 a quick reaction shows for both people, counts 2 when the other adds the same, and goes when removed (10.0s)
+  ✓  23 tests/channels-e2e/messages.spec.ts:677:1 › MSG-18 messages two people send at the same moment end in one order for both, each once (7.6s)
+  ✓  24 tests/channels-e2e/writes.spec.ts:84:1 › WRT-02 an edit, a deletion and a reaction made with no connection show at once and all reach the services (5.3s)
+  ✓  26 tests/channels-e2e/writes.spec.ts:346:1 › WRT-12 a message written offline with the channel open in two windows is sent once and shows in both (6.9s)
+  ✓  25 tests/channels-e2e/writes.spec.ts:323:1 › WRT-11 a waiting message written right after another of the same person says that it is not sent yet (7.6s)
+  ✘  20 tests/channels-e2e/writes.spec.ts:386:1 › WRT-13 two devices of one person, one of them offline, end up showing the same channel as the services hold (36.3s)
+  ✓  28 tests/channels-e2e/writes.spec.ts:436:1 › WRT-14 a message written offline in one window shows in the other window of the same device (7.6s)
+  ✓  29 tests/channels-e2e/messages.spec.ts:491:1 › MSG-13 a quick reaction shows for both people, counts 2 when the other adds the same, and goes when removed (11.2s)
+  ✓  31 tests/channels-e2e/writes.spec.ts:84:1 › WRT-02 an edit, a deletion and a reaction made with no connection show at once and all reach the services (4.2s)
+  ✓  30 tests/channels-e2e/messages.spec.ts:677:1 › MSG-18 messages two people send at the same moment end in one order for both, each once (9.7s)
+  ✓  19 tests/channels-e2e/writes.spec.ts:346:1 › WRT-12 a message written offline with the channel open in two windows is sent once and shows in both (1.1m)
+  ✓  32 tests/channels-e2e/writes.spec.ts:323:1 › WRT-11 a waiting message written right after another of the same person says that it is not sent yet (7.6s)
+  ✓  35 tests/channels-e2e/writes.spec.ts:436:1 › WRT-14 a message written offline in one window shows in the other window of the same device (6.9s)
+  ✘  27 tests/channels-e2e/writes.spec.ts:386:1 › WRT-13 two devices of one person, one of them offline, end up showing the same channel as the services hold (36.1s)
+  ✓  36 tests/channels-e2e/messages.spec.ts:491:1 › MSG-13 a quick reaction shows for both people, counts 2 when the other adds the same, and goes when removed (7.9s)
+  ✓  37 tests/channels-e2e/messages.spec.ts:677:1 › MSG-18 messages two people send at the same moment end in one order for both, each once (7.0s)
+  ✓  38 tests/channels-e2e/writes.spec.ts:84:1 › WRT-02 an edit, a deletion and a reaction made with no connection show at once and all reach the services (4.2s)
+  ✓  39 tests/channels-e2e/writes.spec.ts:323:1 › WRT-11 a waiting message written right after another of the same person says that it is not sent yet (7.6s)
+  ✓  41 tests/channels-e2e/writes.spec.ts:386:1 › WRT-13 two devices of one person, one of them offline, end up showing the same channel as the services hold (9.3s)
+  ✘  34 tests/channels-e2e/writes.spec.ts:386:1 › WRT-13 two devices of one person, one of them offline, end up showing the same channel as the services hold (36.4s)
+  ✓  42 tests/channels-e2e/writes.spec.ts:436:1 › WRT-14 a message written offline in one window shows in the other window of the same device (6.1s)
+  ✓  43 tests/channels-e2e/messages.spec.ts:491:1 › MSG-13 a quick reaction shows for both people, counts 2 when the other adds the same, and goes when removed (9.1s)
+  ✓  44 tests/channels-e2e/messages.spec.ts:677:1 › MSG-18 messages two people send at the same moment end in one order for both, each once (7.9s)
+  ✓  45 tests/channels-e2e/writes.spec.ts:84:1 › WRT-02 an edit, a deletion and a reaction made with no connection show at once and all reach the services (5.0s)
+  ✓  33 tests/channels-e2e/writes.spec.ts:346:1 › WRT-12 a message written offline with the channel open in two windows is sent once and shows in both (1.1m)
+  ✓  46 tests/channels-e2e/writes.spec.ts:323:1 › WRT-11 a waiting message written right after another of the same person says that it is not sent yet (7.9s)
+  ✓  47 tests/channels-e2e/writes.spec.ts:346:1 › WRT-12 a message written offline with the channel open in two windows is sent once and shows in both (9.3s)
+  ✓  49 tests/channels-e2e/writes.spec.ts:436:1 › WRT-14 a message written offline in one window shows in the other window of the same device (6.4s)
+  ✓  48 tests/channels-e2e/writes.spec.ts:386:1 › WRT-13 two devices of one person, one of them offline, end up showing the same channel as the services hold (12.6s)
+  ✓  52 tests/channels-e2e/writes.spec.ts:84:1 › WRT-02 an edit, a deletion and a reaction made with no connection show at once and all reach the services (4.4s)
+  ✓  51 tests/channels-e2e/messages.spec.ts:677:1 › MSG-18 messages two people send at the same moment end in one order for both, each once (8.2s)
+  ✓  50 tests/channels-e2e/messages.spec.ts:491:1 › MSG-13 a quick reaction shows for both people, counts 2 when the other adds the same, and goes when removed (13.9s)
+  ✓  54 tests/channels-e2e/writes.spec.ts:346:1 › WRT-12 a message written offline with the channel open in two windows is sent once and shows in both (6.9s)
+  ✓  53 tests/channels-e2e/writes.spec.ts:323:1 › WRT-11 a waiting message written right after another of the same person says that it is not sent yet (7.9s)
+  ✓  40 tests/channels-e2e/writes.spec.ts:346:1 › WRT-12 a message written offline with the channel open in two windows is sent once and shows in both (1.1m)
+  ✓  56 tests/channels-e2e/writes.spec.ts:436:1 › WRT-14 a message written offline in one window shows in the other window of the same device (7.0s)
+  ✘  55 tests/channels-e2e/writes.spec.ts:386:1 › WRT-13 two devices of one person, one of them offline, end up showing the same channel as the services hold (36.9s)
+
+
+  1) tests/channels-e2e/writes.spec.ts:323:1 › WRT-11 a waiting message written right after another of the same person says that it is not sent yet 
+
+    Expected to fail, but passed.
+
+    attachment #1: screenshot (image/png) ──────────────────────────────────────────────────────────
+    ../../../../../../.cache/channels-perf-b/e2eb/i1/test-results/writes-WRT-11-a-waiting-me-e69ca-ays-that-it-is-not-sent-yet/test-failed-1.png
+    ────────────────────────────────────────────────────────────────────────────────────────────────
+
+    attachment #2: trace (application/zip) ─────────────────────────────────────────────────────────
+    ../../../../../../.cache/channels-perf-b/e2eb/i1/test-results/writes-WRT-11-a-waiting-me-e69ca-ays-that-it-is-not-sent-yet/trace.zip
+    Usage:
+
+        npx playwright show-trace ../../../../../../.cache/channels-perf-b/e2eb/i1/test-results/writes-WRT-11-a-waiting-me-e69ca-ays-that-it-is-not-sent-yet/trace.zip
+
+    ────────────────────────────────────────────────────────────────────────────────────────────────
+
+  2) tests/channels-e2e/writes.spec.ts:436:1 › WRT-14 a message written offline in one window shows in the other window of the same device 
+
+    Expected to fail, but passed.
+
+    attachment #1: screenshot (image/png) ──────────────────────────────────────────────────────────
+    ../../../../../../.cache/channels-perf-b/e2eb/i1/test-results/writes-WRT-14-a-message-wr-5e142-r-window-of-the-same-device/test-failed-1.png
+    ────────────────────────────────────────────────────────────────────────────────────────────────
+
+    attachment #2: screenshot (image/png) ──────────────────────────────────────────────────────────
+    ../../../../../../.cache/channels-perf-b/e2eb/i1/test-results/writes-WRT-14-a-message-wr-5e142-r-window-of-the-same-device/test-failed-2.png
+    ────────────────────────────────────────────────────────────────────────────────────────────────
+
+    attachment #3: trace (application/zip) ─────────────────────────────────────────────────────────
+    ../../../../../../.cache/channels-perf-b/e2eb/i1/test-results/writes-WRT-14-a-message-wr-5e142-r-window-of-the-same-device/trace.zip
+    Usage:
+
+        npx playwright show-trace ../../../../../../.cache/channels-perf-b/e2eb/i1/test-results/writes-WRT-14-a-message-wr-5e142-r-window-of-the-same-device/trace.zip
+
+    ────────────────────────────────────────────────────────────────────────────────────────────────
+
+  3) tests/channels-e2e/writes.spec.ts:323:1 › WRT-11 a waiting message written right after another of the same person says that it is not sent yet 
+
+    Expected to fail, but passed.
+
+    attachment #1: screenshot (image/png) ──────────────────────────────────────────────────────────
+    ../../../../../../.cache/channels-perf-b/e2eb/i1/test-results/writes-WRT-11-a-waiting-me-e69ca-ays-that-it-is-not-sent-yet-repeat1/test-failed-1.png
+    ────────────────────────────────────────────────────────────────────────────────────────────────
+
+    attachment #2: trace (application/zip) ─────────────────────────────────────────────────────────
+    ../../../../../../.cache/channels-perf-b/e2eb/i1/test-results/writes-WRT-11-a-waiting-me-e69ca-ays-that-it-is-not-sent-yet-repeat1/trace.zip
+    Usage:
+
+        npx playwright show-trace ../../../../../../.cache/channels-perf-b/e2eb/i1/test-results/writes-WRT-11-a-waiting-me-e69ca-ays-that-it-is-not-sent-yet-repeat1/trace.zip
+
+    ────────────────────────────────────────────────────────────────────────────────────────────────
+
+  4) tests/channels-e2e/writes.spec.ts:386:1 › WRT-13 two devices of one person, one of them offline, end up showing the same channel as the services hold 
+
+    Error: the channel as it is on the screen
+
+    the channel as it is on the screen
+
+    expect(received).toEqual(expected) // deep equality
+
+    - Expected  - 1
+    + Received  + 1
+
+      Array [
+        "one",
+        "two",
+        "three, edited on the laptop",
+    -   "from the laptop",
+        "from ada",
+    +   "from the laptop",
+      ]
+
+    Call Log:
+    - Timeout 30000ms exceeded while waiting on the predicate
+
+       at harness/device.ts:59
+
+      57 |       timeout: 30_000,
+      58 |     })
+    > 59 |     .toEqual(lines);
+         |      ^
+      60 | }
+      61 |
+      62 | /**
+        at expectShown (/home/teo/.herdr/worktrees/macro/synoet-channels-local-sync-suiteb/apps/web/tests/channels-e2e/harness/device.ts:59:6)
+        at /home/teo/.herdr/worktrees/macro/synoet-channels-local-sync-suiteb/apps/web/tests/channels-e2e/writes.spec.ts:406:9
+
+    attachment #1: screenshot (image/png) ──────────────────────────────────────────────────────────
+    ../../../../../../.cache/channels-perf-b/e2eb/i1/test-results/writes-WRT-13-two-devices--4efd1-hannel-as-the-services-hold-repeat1/test-failed-1.png
+    ────────────────────────────────────────────────────────────────────────────────────────────────
+
+    attachment #2: screenshot (image/png) ──────────────────────────────────────────────────────────
+    ../../../../../../.cache/channels-perf-b/e2eb/i1/test-results/writes-WRT-13-two-devices--4efd1-hannel-as-the-services-hold-repeat1/test-failed-2.png
+    ────────────────────────────────────────────────────────────────────────────────────────────────
+
+    Error Context: ../../../../../../.cache/channels-perf-b/e2eb/i1/test-results/writes-WRT-13-two-devices--4efd1-hannel-as-the-services-hold-repeat1/error-context.md
+
+    attachment #4: trace (application/zip) ─────────────────────────────────────────────────────────
+    ../../../../../../.cache/channels-perf-b/e2eb/i1/test-results/writes-WRT-13-two-devices--4efd1-hannel-as-the-services-hold-repeat1/trace.zip
+    Usage:
+
+        npx playwright show-trace ../../../../../../.cache/channels-perf-b/e2eb/i1/test-results/writes-WRT-13-two-devices--4efd1-hannel-as-the-services-hold-repeat1/trace.zip
+
+    ────────────────────────────────────────────────────────────────────────────────────────────────
+
+  5) tests/channels-e2e/writes.spec.ts:436:1 › WRT-14 a message written offline in one window shows in the other window of the same device 
+
+    Expected to fail, but passed.
+
+    attachment #1: screenshot (image/png) ──────────────────────────────────────────────────────────
+    ../../../../../../.cache/channels-perf-b/e2eb/i1/test-results/writes-WRT-14-a-message-wr-5e142-r-window-of-the-same-device-repeat1/test-failed-1.png
+    ────────────────────────────────────────────────────────────────────────────────────────────────
+
+    attachment #2: screenshot (image/png) ──────────────────────────────────────────────────────────
+    ../../../../../../.cache/channels-perf-b/e2eb/i1/test-results/writes-WRT-14-a-message-wr-5e142-r-window-of-the-same-device-repeat1/test-failed-2.png
+    ────────────────────────────────────────────────────────────────────────────────────────────────
+
+    attachment #3: trace (application/zip) ─────────────────────────────────────────────────────────
+    ../../../../../../.cache/channels-perf-b/e2eb/i1/test-results/writes-WRT-14-a-message-wr-5e142-r-window-of-the-same-device-repeat1/trace.zip
+    Usage:
+
+        npx playwright show-trace ../../../../../../.cache/channels-perf-b/e2eb/i1/test-results/writes-WRT-14-a-message-wr-5e142-r-window-of-the-same-device-repeat1/trace.zip
+
+    ────────────────────────────────────────────────────────────────────────────────────────────────
+
+  6) tests/channels-e2e/writes.spec.ts:323:1 › WRT-11 a waiting message written right after another of the same person says that it is not sent yet 
+
+    Expected to fail, but passed.
+
+    attachment #1: screenshot (image/png) ──────────────────────────────────────────────────────────
+    ../../../../../../.cache/channels-perf-b/e2eb/i1/test-results/writes-WRT-11-a-waiting-me-e69ca-ays-that-it-is-not-sent-yet-repeat2/test-failed-1.png
+    ────────────────────────────────────────────────────────────────────────────────────────────────
+
+    attachment #2: trace (application/zip) ─────────────────────────────────────────────────────────
+    ../../../../../../.cache/channels-perf-b/e2eb/i1/test-results/writes-WRT-11-a-waiting-me-e69ca-ays-that-it-is-not-sent-yet-repeat2/trace.zip
+    Usage:
+
+        npx playwright show-trace ../../../../../../.cache/channels-perf-b/e2eb/i1/test-results/writes-WRT-11-a-waiting-me-e69ca-ays-that-it-is-not-sent-yet-repeat2/trace.zip
+
+    ────────────────────────────────────────────────────────────────────────────────────────────────
+
+  7) tests/channels-e2e/writes.spec.ts:386:1 › WRT-13 two devices of one person, one of them offline, end up showing the same channel as the services hold 
+
+    Error: the channel as it is on the screen
+
+    the channel as it is on the screen
+
+    expect(received).toEqual(expected) // deep equality
+
+    - Expected  - 1
+    + Received  + 1
+
+      Array [
+        "one",
+        "two",
+        "three, edited on the laptop",
+    -   "from the laptop",
+        "from ada",
+    +   "from the laptop",
+      ]
+
+    Call Log:
+    - Timeout 30000ms exceeded while waiting on the predicate
+
+       at harness/device.ts:59
+
+      57 |       timeout: 30_000,
+      58 |     })
+    > 59 |     .toEqual(lines);
+         |      ^
+      60 | }
+      61 |
+      62 | /**
+        at expectShown (/home/teo/.herdr/worktrees/macro/synoet-channels-local-sync-suiteb/apps/web/tests/channels-e2e/harness/device.ts:59:6)
+        at /home/teo/.herdr/worktrees/macro/synoet-channels-local-sync-suiteb/apps/web/tests/channels-e2e/writes.spec.ts:406:9
+
+    attachment #1: screenshot (image/png) ──────────────────────────────────────────────────────────
+    ../../../../../../.cache/channels-perf-b/e2eb/i1/test-results/writes-WRT-13-two-devices--4efd1-hannel-as-the-services-hold-repeat2/test-failed-2.png
+    ────────────────────────────────────────────────────────────────────────────────────────────────
+
+    attachment #2: screenshot (image/png) ──────────────────────────────────────────────────────────
+    ../../../../../../.cache/channels-perf-b/e2eb/i1/test-results/writes-WRT-13-two-devices--4efd1-hannel-as-the-services-hold-repeat2/test-failed-1.png
+    ────────────────────────────────────────────────────────────────────────────────────────────────
+
+    Error Context: ../../../../../../.cache/channels-perf-b/e2eb/i1/test-results/writes-WRT-13-two-devices--4efd1-hannel-as-the-services-hold-repeat2/error-context.md
+
+    attachment #4: trace (application/zip) ─────────────────────────────────────────────────────────
+    ../../../../../../.cache/channels-perf-b/e2eb/i1/test-results/writes-WRT-13-two-devices--4efd1-hannel-as-the-services-hold-repeat2/trace.zip
+    Usage:
+
+        npx playwright show-trace ../../../../../../.cache/channels-perf-b/e2eb/i1/test-results/writes-WRT-13-two-devices--4efd1-hannel-as-the-services-hold-repeat2/trace.zip
+
+    ────────────────────────────────────────────────────────────────────────────────────────────────
+
+  8) tests/channels-e2e/writes.spec.ts:436:1 › WRT-14 a message written offline in one window shows in the other window of the same device 
+
+    Expected to fail, but passed.
+
+    attachment #1: screenshot (image/png) ──────────────────────────────────────────────────────────
+    ../../../../../../.cache/channels-perf-b/e2eb/i1/test-results/writes-WRT-14-a-message-wr-5e142-r-window-of-the-same-device-repeat2/test-failed-1.png
+    ────────────────────────────────────────────────────────────────────────────────────────────────
+
+    attachment #2: screenshot (image/png) ──────────────────────────────────────────────────────────
+    ../../../../../../.cache/channels-perf-b/e2eb/i1/test-results/writes-WRT-14-a-message-wr-5e142-r-window-of-the-same-device-repeat2/test-failed-2.png
+    ────────────────────────────────────────────────────────────────────────────────────────────────
+
+    attachment #3: trace (application/zip) ─────────────────────────────────────────────────────────
+    ../../../../../../.cache/channels-perf-b/e2eb/i1/test-results/writes-WRT-14-a-message-wr-5e142-r-window-of-the-same-device-repeat2/trace.zip
+    Usage:
+
+        npx playwright show-trace ../../../../../../.cache/channels-perf-b/e2eb/i1/test-results/writes-WRT-14-a-message-wr-5e142-r-window-of-the-same-device-repeat2/trace.zip
+
+    ────────────────────────────────────────────────────────────────────────────────────────────────
+
+  9) tests/channels-e2e/writes.spec.ts:323:1 › WRT-11 a waiting message written right after another of the same person says that it is not sent yet 
+
+    Expected to fail, but passed.
+
+    attachment #1: screenshot (image/png) ──────────────────────────────────────────────────────────
+    ../../../../../../.cache/channels-perf-b/e2eb/i1/test-results/writes-WRT-11-a-waiting-me-e69ca-ays-that-it-is-not-sent-yet-repeat3/test-failed-1.png
+    ────────────────────────────────────────────────────────────────────────────────────────────────
+
+    attachment #2: trace (application/zip) ─────────────────────────────────────────────────────────
+    ../../../../../../.cache/channels-perf-b/e2eb/i1/test-results/writes-WRT-11-a-waiting-me-e69ca-ays-that-it-is-not-sent-yet-repeat3/trace.zip
+    Usage:
+
+        npx playwright show-trace ../../../../../../.cache/channels-perf-b/e2eb/i1/test-results/writes-WRT-11-a-waiting-me-e69ca-ays-that-it-is-not-sent-yet-repeat3/trace.zip
+
+    ────────────────────────────────────────────────────────────────────────────────────────────────
+
+  10) tests/channels-e2e/writes.spec.ts:386:1 › WRT-13 two devices of one person, one of them offline, end up showing the same channel as the services hold 
+
+    Error: the channel as it is on the screen
+
+    the channel as it is on the screen
+
+    expect(received).toEqual(expected) // deep equality
+
+    - Expected  - 1
+    + Received  + 1
+
+      Array [
+        "one",
+        "two",
+        "three, edited on the laptop",
+    -   "from the laptop",
+        "from ada",
+    +   "from the laptop",
+      ]
+
+    Call Log:
+    - Timeout 30000ms exceeded while waiting on the predicate
+
+       at harness/device.ts:59
+
+      57 |       timeout: 30_000,
+      58 |     })
+    > 59 |     .toEqual(lines);
+         |      ^
+      60 | }
+      61 |
+      62 | /**
+        at expectShown (/home/teo/.herdr/worktrees/macro/synoet-channels-local-sync-suiteb/apps/web/tests/channels-e2e/harness/device.ts:59:6)
+        at /home/teo/.herdr/worktrees/macro/synoet-channels-local-sync-suiteb/apps/web/tests/channels-e2e/writes.spec.ts:406:9
+
+    attachment #1: screenshot (image/png) ──────────────────────────────────────────────────────────
+    ../../../../../../.cache/channels-perf-b/e2eb/i1/test-results/writes-WRT-13-two-devices--4efd1-hannel-as-the-services-hold-repeat3/test-failed-1.png
+    ────────────────────────────────────────────────────────────────────────────────────────────────
+
+    attachment #2: screenshot (image/png) ──────────────────────────────────────────────────────────
+    ../../../../../../.cache/channels-perf-b/e2eb/i1/test-results/writes-WRT-13-two-devices--4efd1-hannel-as-the-services-hold-repeat3/test-failed-2.png
+    ────────────────────────────────────────────────────────────────────────────────────────────────
+
+    Error Context: ../../../../../../.cache/channels-perf-b/e2eb/i1/test-results/writes-WRT-13-two-devices--4efd1-hannel-as-the-services-hold-repeat3/error-context.md
+
+    attachment #4: trace (application/zip) ─────────────────────────────────────────────────────────
+    ../../../../../../.cache/channels-perf-b/e2eb/i1/test-results/writes-WRT-13-two-devices--4efd1-hannel-as-the-services-hold-repeat3/trace.zip
+    Usage:
+
+        npx playwright show-trace ../../../../../../.cache/channels-perf-b/e2eb/i1/test-results/writes-WRT-13-two-devices--4efd1-hannel-as-the-services-hold-repeat3/trace.zip
+
+    ────────────────────────────────────────────────────────────────────────────────────────────────
+
+  11) tests/channels-e2e/writes.spec.ts:436:1 › WRT-14 a message written offline in one window shows in the other window of the same device 
+
+    Expected to fail, but passed.
+
+    attachment #1: screenshot (image/png) ──────────────────────────────────────────────────────────
+    ../../../../../../.cache/channels-perf-b/e2eb/i1/test-results/writes-WRT-14-a-message-wr-5e142-r-window-of-the-same-device-repeat3/test-failed-2.png
+    ────────────────────────────────────────────────────────────────────────────────────────────────
+
+    attachment #2: screenshot (image/png) ──────────────────────────────────────────────────────────
+    ../../../../../../.cache/channels-perf-b/e2eb/i1/test-results/writes-WRT-14-a-message-wr-5e142-r-window-of-the-same-device-repeat3/test-failed-1.png
+    ────────────────────────────────────────────────────────────────────────────────────────────────
+
+    attachment #3: trace (application/zip) ─────────────────────────────────────────────────────────
+    ../../../../../../.cache/channels-perf-b/e2eb/i1/test-results/writes-WRT-14-a-message-wr-5e142-r-window-of-the-same-device-repeat3/trace.zip
+    Usage:
+
+        npx playwright show-trace ../../../../../../.cache/channels-perf-b/e2eb/i1/test-results/writes-WRT-14-a-message-wr-5e142-r-window-of-the-same-device-repeat3/trace.zip
+
+    ────────────────────────────────────────────────────────────────────────────────────────────────
+
+  12) tests/channels-e2e/writes.spec.ts:323:1 › WRT-11 a waiting message written right after another of the same person says that it is not sent yet 
+
+    Expected to fail, but passed.
+
+    attachment #1: screenshot (image/png) ──────────────────────────────────────────────────────────
+    ../../../../../../.cache/channels-perf-b/e2eb/i1/test-results/writes-WRT-11-a-waiting-me-e69ca-ays-that-it-is-not-sent-yet-repeat4/test-failed-1.png
+    ────────────────────────────────────────────────────────────────────────────────────────────────
+
+    attachment #2: trace (application/zip) ─────────────────────────────────────────────────────────
+    ../../../../../../.cache/channels-perf-b/e2eb/i1/test-results/writes-WRT-11-a-waiting-me-e69ca-ays-that-it-is-not-sent-yet-repeat4/trace.zip
+    Usage:
+
+        npx playwright show-trace ../../../../../../.cache/channels-perf-b/e2eb/i1/test-results/writes-WRT-11-a-waiting-me-e69ca-ays-that-it-is-not-sent-yet-repeat4/trace.zip
+
+    ────────────────────────────────────────────────────────────────────────────────────────────────
+
+  13) tests/channels-e2e/writes.spec.ts:386:1 › WRT-13 two devices of one person, one of them offline, end up showing the same channel as the services hold 
+
+    Error: the channel as it is on the screen
+
+    the channel as it is on the screen
+
+    expect(received).toEqual(expected) // deep equality
+
+    - Expected  - 1
+    + Received  + 1
+
+      Array [
+        "one",
+        "two",
+        "three, edited on the laptop",
+    -   "from the laptop",
+        "from ada",
+    +   "from the laptop",
+      ]
+
+    Call Log:
+    - Timeout 30000ms exceeded while waiting on the predicate
+
+       at harness/device.ts:59
+
+      57 |       timeout: 30_000,
+      58 |     })
+    > 59 |     .toEqual(lines);
+         |      ^
+      60 | }
+      61 |
+      62 | /**
+        at expectShown (/home/teo/.herdr/worktrees/macro/synoet-channels-local-sync-suiteb/apps/web/tests/channels-e2e/harness/device.ts:59:6)
+        at /home/teo/.herdr/worktrees/macro/synoet-channels-local-sync-suiteb/apps/web/tests/channels-e2e/writes.spec.ts:406:9
+
+    attachment #1: screenshot (image/png) ──────────────────────────────────────────────────────────
+    ../../../../../../.cache/channels-perf-b/e2eb/i1/test-results/writes-WRT-13-two-devices--4efd1-hannel-as-the-services-hold-repeat4/test-failed-2.png
+    ────────────────────────────────────────────────────────────────────────────────────────────────
+
+    attachment #2: screenshot (image/png) ──────────────────────────────────────────────────────────
+    ../../../../../../.cache/channels-perf-b/e2eb/i1/test-results/writes-WRT-13-two-devices--4efd1-hannel-as-the-services-hold-repeat4/test-failed-1.png
+    ────────────────────────────────────────────────────────────────────────────────────────────────
+
+    Error Context: ../../../../../../.cache/channels-perf-b/e2eb/i1/test-results/writes-WRT-13-two-devices--4efd1-hannel-as-the-services-hold-repeat4/error-context.md
+
+    attachment #4: trace (application/zip) ─────────────────────────────────────────────────────────
+    ../../../../../../.cache/channels-perf-b/e2eb/i1/test-results/writes-WRT-13-two-devices--4efd1-hannel-as-the-services-hold-repeat4/trace.zip
+    Usage:
+
+        npx playwright show-trace ../../../../../../.cache/channels-perf-b/e2eb/i1/test-results/writes-WRT-13-two-devices--4efd1-hannel-as-the-services-hold-repeat4/trace.zip
+
+    ────────────────────────────────────────────────────────────────────────────────────────────────
+
+  14) tests/channels-e2e/writes.spec.ts:436:1 › WRT-14 a message written offline in one window shows in the other window of the same device 
+
+    Expected to fail, but passed.
+
+    attachment #1: screenshot (image/png) ──────────────────────────────────────────────────────────
+    ../../../../../../.cache/channels-perf-b/e2eb/i1/test-results/writes-WRT-14-a-message-wr-5e142-r-window-of-the-same-device-repeat4/test-failed-1.png
+    ────────────────────────────────────────────────────────────────────────────────────────────────
+
+    attachment #2: screenshot (image/png) ──────────────────────────────────────────────────────────
+    ../../../../../../.cache/channels-perf-b/e2eb/i1/test-results/writes-WRT-14-a-message-wr-5e142-r-window-of-the-same-device-repeat4/test-failed-2.png
+    ────────────────────────────────────────────────────────────────────────────────────────────────
+
+    attachment #3: trace (application/zip) ─────────────────────────────────────────────────────────
+    ../../../../../../.cache/channels-perf-b/e2eb/i1/test-results/writes-WRT-14-a-message-wr-5e142-r-window-of-the-same-device-repeat4/trace.zip
+    Usage:
+
+        npx playwright show-trace ../../../../../../.cache/channels-perf-b/e2eb/i1/test-results/writes-WRT-14-a-message-wr-5e142-r-window-of-the-same-device-repeat4/trace.zip
+
+    ────────────────────────────────────────────────────────────────────────────────────────────────
+
+  15) tests/channels-e2e/writes.spec.ts:323:1 › WRT-11 a waiting message written right after another of the same person says that it is not sent yet 
+
+    Expected to fail, but passed.
+
+    attachment #1: screenshot (image/png) ──────────────────────────────────────────────────────────
+    ../../../../../../.cache/channels-perf-b/e2eb/i1/test-results/writes-WRT-11-a-waiting-me-e69ca-ays-that-it-is-not-sent-yet-repeat5/test-failed-1.png
+    ────────────────────────────────────────────────────────────────────────────────────────────────
+
+    attachment #2: trace (application/zip) ─────────────────────────────────────────────────────────
+    ../../../../../../.cache/channels-perf-b/e2eb/i1/test-results/writes-WRT-11-a-waiting-me-e69ca-ays-that-it-is-not-sent-yet-repeat5/trace.zip
+    Usage:
+
+        npx playwright show-trace ../../../../../../.cache/channels-perf-b/e2eb/i1/test-results/writes-WRT-11-a-waiting-me-e69ca-ays-that-it-is-not-sent-yet-repeat5/trace.zip
+
+    ────────────────────────────────────────────────────────────────────────────────────────────────
+
+  16) tests/channels-e2e/writes.spec.ts:436:1 › WRT-14 a message written offline in one window shows in the other window of the same device 
+
+    Expected to fail, but passed.
+
+    attachment #1: screenshot (image/png) ──────────────────────────────────────────────────────────
+    ../../../../../../.cache/channels-perf-b/e2eb/i1/test-results/writes-WRT-14-a-message-wr-5e142-r-window-of-the-same-device-repeat5/test-failed-1.png
+    ────────────────────────────────────────────────────────────────────────────────────────────────
+
+    attachment #2: screenshot (image/png) ──────────────────────────────────────────────────────────
+    ../../../../../../.cache/channels-perf-b/e2eb/i1/test-results/writes-WRT-14-a-message-wr-5e142-r-window-of-the-same-device-repeat5/test-failed-2.png
+    ────────────────────────────────────────────────────────────────────────────────────────────────
+
+    attachment #3: trace (application/zip) ─────────────────────────────────────────────────────────
+    ../../../../../../.cache/channels-perf-b/e2eb/i1/test-results/writes-WRT-14-a-message-wr-5e142-r-window-of-the-same-device-repeat5/trace.zip
+    Usage:
+
+        npx playwright show-trace ../../../../../../.cache/channels-perf-b/e2eb/i1/test-results/writes-WRT-14-a-message-wr-5e142-r-window-of-the-same-device-repeat5/trace.zip
+
+    ────────────────────────────────────────────────────────────────────────────────────────────────
+
+  17) tests/channels-e2e/writes.spec.ts:323:1 › WRT-11 a waiting message written right after another of the same person says that it is not sent yet 
+
+    Expected to fail, but passed.
+
+    attachment #1: screenshot (image/png) ──────────────────────────────────────────────────────────
+    ../../../../../../.cache/channels-perf-b/e2eb/i1/test-results/writes-WRT-11-a-waiting-me-e69ca-ays-that-it-is-not-sent-yet-repeat6/test-failed-1.png
+    ────────────────────────────────────────────────────────────────────────────────────────────────
+
+    attachment #2: trace (application/zip) ─────────────────────────────────────────────────────────
+    ../../../../../../.cache/channels-perf-b/e2eb/i1/test-results/writes-WRT-11-a-waiting-me-e69ca-ays-that-it-is-not-sent-yet-repeat6/trace.zip
+    Usage:
+
+        npx playwright show-trace ../../../../../../.cache/channels-perf-b/e2eb/i1/test-results/writes-WRT-11-a-waiting-me-e69ca-ays-that-it-is-not-sent-yet-repeat6/trace.zip
+
+    ────────────────────────────────────────────────────────────────────────────────────────────────
+
+  18) tests/channels-e2e/writes.spec.ts:436:1 › WRT-14 a message written offline in one window shows in the other window of the same device 
+
+    Expected to fail, but passed.
+
+    attachment #1: screenshot (image/png) ──────────────────────────────────────────────────────────
+    ../../../../../../.cache/channels-perf-b/e2eb/i1/test-results/writes-WRT-14-a-message-wr-5e142-r-window-of-the-same-device-repeat6/test-failed-1.png
+    ────────────────────────────────────────────────────────────────────────────────────────────────
+
+    attachment #2: screenshot (image/png) ──────────────────────────────────────────────────────────
+    ../../../../../../.cache/channels-perf-b/e2eb/i1/test-results/writes-WRT-14-a-message-wr-5e142-r-window-of-the-same-device-repeat6/test-failed-2.png
+    ────────────────────────────────────────────────────────────────────────────────────────────────
+
+    attachment #3: trace (application/zip) ─────────────────────────────────────────────────────────
+    ../../../../../../.cache/channels-perf-b/e2eb/i1/test-results/writes-WRT-14-a-message-wr-5e142-r-window-of-the-same-device-repeat6/trace.zip
+    Usage:
+
+        npx playwright show-trace ../../../../../../.cache/channels-perf-b/e2eb/i1/test-results/writes-WRT-14-a-message-wr-5e142-r-window-of-the-same-device-repeat6/trace.zip
+
+    ────────────────────────────────────────────────────────────────────────────────────────────────
+
+  19) tests/channels-e2e/writes.spec.ts:323:1 › WRT-11 a waiting message written right after another of the same person says that it is not sent yet 
+
+    Expected to fail, but passed.
+
+    attachment #1: screenshot (image/png) ──────────────────────────────────────────────────────────
+    ../../../../../../.cache/channels-perf-b/e2eb/i1/test-results/writes-WRT-11-a-waiting-me-e69ca-ays-that-it-is-not-sent-yet-repeat7/test-failed-1.png
+    ────────────────────────────────────────────────────────────────────────────────────────────────
+
+    attachment #2: trace (application/zip) ─────────────────────────────────────────────────────────
+    ../../../../../../.cache/channels-perf-b/e2eb/i1/test-results/writes-WRT-11-a-waiting-me-e69ca-ays-that-it-is-not-sent-yet-repeat7/trace.zip
+    Usage:
+
+        npx playwright show-trace ../../../../../../.cache/channels-perf-b/e2eb/i1/test-results/writes-WRT-11-a-waiting-me-e69ca-ays-that-it-is-not-sent-yet-repeat7/trace.zip
+
+    ────────────────────────────────────────────────────────────────────────────────────────────────
+
+  20) tests/channels-e2e/writes.spec.ts:386:1 › WRT-13 two devices of one person, one of them offline, end up showing the same channel as the services hold 
+
+    Error: the channel as it is on the screen
+
+    the channel as it is on the screen
+
+    expect(received).toEqual(expected) // deep equality
+
+    - Expected  - 1
+    + Received  + 1
+
+      Array [
+        "one",
+        "two",
+        "three, edited on the laptop",
+    -   "from the laptop",
+        "from ada",
+    +   "from the laptop",
+      ]
+
+    Call Log:
+    - Timeout 30000ms exceeded while waiting on the predicate
+
+       at harness/device.ts:59
+
+      57 |       timeout: 30_000,
+      58 |     })
+    > 59 |     .toEqual(lines);
+         |      ^
+      60 | }
+      61 |
+      62 | /**
+        at expectShown (/home/teo/.herdr/worktrees/macro/synoet-channels-local-sync-suiteb/apps/web/tests/channels-e2e/harness/device.ts:59:6)
+        at /home/teo/.herdr/worktrees/macro/synoet-channels-local-sync-suiteb/apps/web/tests/channels-e2e/writes.spec.ts:406:9
+
+    attachment #1: screenshot (image/png) ──────────────────────────────────────────────────────────
+    ../../../../../../.cache/channels-perf-b/e2eb/i1/test-results/writes-WRT-13-two-devices--4efd1-hannel-as-the-services-hold-repeat7/test-failed-1.png
+    ────────────────────────────────────────────────────────────────────────────────────────────────
+
+    attachment #2: screenshot (image/png) ──────────────────────────────────────────────────────────
+    ../../../../../../.cache/channels-perf-b/e2eb/i1/test-results/writes-WRT-13-two-devices--4efd1-hannel-as-the-services-hold-repeat7/test-failed-2.png
+    ────────────────────────────────────────────────────────────────────────────────────────────────
+
+    Error Context: ../../../../../../.cache/channels-perf-b/e2eb/i1/test-results/writes-WRT-13-two-devices--4efd1-hannel-as-the-services-hold-repeat7/error-context.md
+
+    attachment #4: trace (application/zip) ─────────────────────────────────────────────────────────
+    ../../../../../../.cache/channels-perf-b/e2eb/i1/test-results/writes-WRT-13-two-devices--4efd1-hannel-as-the-services-hold-repeat7/trace.zip
+    Usage:
+
+        npx playwright show-trace ../../../../../../.cache/channels-perf-b/e2eb/i1/test-results/writes-WRT-13-two-devices--4efd1-hannel-as-the-services-hold-repeat7/trace.zip
+
+    ────────────────────────────────────────────────────────────────────────────────────────────────
+
+  21) tests/channels-e2e/writes.spec.ts:436:1 › WRT-14 a message written offline in one window shows in the other window of the same device 
+
+    Expected to fail, but passed.
+
+    attachment #1: screenshot (image/png) ──────────────────────────────────────────────────────────
+    ../../../../../../.cache/channels-perf-b/e2eb/i1/test-results/writes-WRT-14-a-message-wr-5e142-r-window-of-the-same-device-repeat7/test-failed-1.png
+    ────────────────────────────────────────────────────────────────────────────────────────────────
+
+    attachment #2: screenshot (image/png) ──────────────────────────────────────────────────────────
+    ../../../../../../.cache/channels-perf-b/e2eb/i1/test-results/writes-WRT-14-a-message-wr-5e142-r-window-of-the-same-device-repeat7/test-failed-2.png
+    ────────────────────────────────────────────────────────────────────────────────────────────────
+
+    attachment #3: trace (application/zip) ─────────────────────────────────────────────────────────
+    ../../../../../../.cache/channels-perf-b/e2eb/i1/test-results/writes-WRT-14-a-message-wr-5e142-r-window-of-the-same-device-repeat7/trace.zip
+    Usage:
+
+        npx playwright show-trace ../../../../../../.cache/channels-perf-b/e2eb/i1/test-results/writes-WRT-14-a-message-wr-5e142-r-window-of-the-same-device-repeat7/trace.zip
+
+    ────────────────────────────────────────────────────────────────────────────────────────────────
+
+  21 failed
+    tests/channels-e2e/writes.spec.ts:323:1 › WRT-11 a waiting message written right after another of the same person says that it is not sent yet 
+    tests/channels-e2e/writes.spec.ts:436:1 › WRT-14 a message written offline in one window shows in the other window of the same device 
+    tests/channels-e2e/writes.spec.ts:323:1 › WRT-11 a waiting message written right after another of the same person says that it is not sent yet 
+    tests/channels-e2e/writes.spec.ts:386:1 › WRT-13 two devices of one person, one of them offline, end up showing the same channel as the services hold 
+    tests/channels-e2e/writes.spec.ts:436:1 › WRT-14 a message written offline in one window shows in the other window of the same device 
+    tests/channels-e2e/writes.spec.ts:323:1 › WRT-11 a waiting message written right after another of the same person says that it is not sent yet 
+    tests/channels-e2e/writes.spec.ts:386:1 › WRT-13 two devices of one person, one of them offline, end up showing the same channel as the services hold 
+    tests/channels-e2e/writes.spec.ts:436:1 › WRT-14 a message written offline in one window shows in the other window of the same device 
+    tests/channels-e2e/writes.spec.ts:323:1 › WRT-11 a waiting message written right after another of the same person says that it is not sent yet 
+    tests/channels-e2e/writes.spec.ts:386:1 › WRT-13 two devices of one person, one of them offline, end up showing the same channel as the services hold 
+    tests/channels-e2e/writes.spec.ts:436:1 › WRT-14 a message written offline in one window shows in the other window of the same device 
+    tests/channels-e2e/writes.spec.ts:323:1 › WRT-11 a waiting message written right after another of the same person says that it is not sent yet 
+    tests/channels-e2e/writes.spec.ts:386:1 › WRT-13 two devices of one person, one of them offline, end up showing the same channel as the services hold 
+    tests/channels-e2e/writes.spec.ts:436:1 › WRT-14 a message written offline in one window shows in the other window of the same device 
+    tests/channels-e2e/writes.spec.ts:323:1 › WRT-11 a waiting message written right after another of the same person says that it is not sent yet 
+    tests/channels-e2e/writes.spec.ts:436:1 › WRT-14 a message written offline in one window shows in the other window of the same device 
+    tests/channels-e2e/writes.spec.ts:323:1 › WRT-11 a waiting message written right after another of the same person says that it is not sent yet 
+    tests/channels-e2e/writes.spec.ts:436:1 › WRT-14 a message written offline in one window shows in the other window of the same device 
+    tests/channels-e2e/writes.spec.ts:323:1 › WRT-11 a waiting message written right after another of the same person says that it is not sent yet 
+    tests/channels-e2e/writes.spec.ts:386:1 › WRT-13 two devices of one person, one of them offline, end up showing the same channel as the services hold 
+    tests/channels-e2e/writes.spec.ts:436:1 › WRT-14 a message written offline in one window shows in the other window of the same device 
+  35 passed (3.9m)

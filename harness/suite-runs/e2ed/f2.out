@@ -1,0 +1,229 @@
+unpacking 'https://channels.nixos.org/nixpkgs-unstable/nixexprs.tar.zst' into the Git cache...
+path "/home/teo/.herdr/worktrees/macro/synoet-channels-local-sync-suiteb/apps/web" does not contain a 'flake.nix', searching up
+
+Running 40 tests using 4 workers
+
+  ✓   3 tests/channels-e2e-dbg/offline.spec.ts:212:1 › OFF-07 a long thread never opened, opened with no connection, shows every reply or says that there are more (9.4s)
+  ✓   2 tests/channels-e2e-dbg/offline.spec.ts:298:1 › OFF-10 a message that arrived while the channel was open is there when the channel opens with no connection (9.7s)
+  ✓   4 tests/channels-e2e-dbg/offline.spec.ts:177:1 › OFF-06 a thread read while connected shows its replies with no connection, a long one included (10.5s)
+  ✓   5 tests/channels-e2e-dbg/writes.spec.ts:224:1 › WRT-07 a message deleted before it could be sent is not shown to anyone once the connection is back (7.5s)
+  ✓   7 tests/channels-e2e-dbg/offline.spec.ts:177:1 › OFF-06 a thread read while connected shows its replies with no connection, a long one included (7.6s)
+  ✓   8 tests/channels-e2e-dbg/offline.spec.ts:212:1 › OFF-07 a long thread never opened, opened with no connection, shows every reply or says that there are more (7.2s)
+  ✓   9 tests/channels-e2e-dbg/offline.spec.ts:298:1 › OFF-10 a message that arrived while the channel was open is there when the channel opens with no connection (6.8s)
+  ✓  10 tests/channels-e2e-dbg/writes.spec.ts:224:1 › WRT-07 a message deleted before it could be sent is not shown to anyone once the connection is back (7.3s)
+  ✘   6 tests/channels-e2e-dbg/offline.spec.ts:118:1 › OFF-04 messages read far back in a long channel can be scrolled through again with no connection (22.5s)
+  ✓   1 tests/channels-e2e-dbg/offline.spec.ts:118:1 › OFF-04 messages read far back in a long channel can be scrolled through again with no connection (38.1s)
+  ✓  13 tests/channels-e2e-dbg/offline.spec.ts:212:1 › OFF-07 a long thread never opened, opened with no connection, shows every reply or says that there are more (7.0s)
+  ✓  12 tests/channels-e2e-dbg/offline.spec.ts:177:1 › OFF-06 a thread read while connected shows its replies with no connection, a long one included (9.6s)
+  ✓  14 tests/channels-e2e-dbg/offline.spec.ts:298:1 › OFF-10 a message that arrived while the channel was open is there when the channel opens with no connection (7.9s)
+  ✘  11 tests/channels-e2e-dbg/offline.spec.ts:118:1 › OFF-04 messages read far back in a long channel can be scrolled through again with no connection (21.1s)
+  ✓  15 tests/channels-e2e-dbg/writes.spec.ts:224:1 › WRT-07 a message deleted before it could be sent is not shown to anyone once the connection is back (7.7s)
+  ✓  17 tests/channels-e2e-dbg/offline.spec.ts:177:1 › OFF-06 a thread read while connected shows its replies with no connection, a long one included (7.5s)
+  ✓  18 tests/channels-e2e-dbg/offline.spec.ts:212:1 › OFF-07 a long thread never opened, opened with no connection, shows every reply or says that there are more (6.7s)
+  ✓  19 tests/channels-e2e-dbg/offline.spec.ts:298:1 › OFF-10 a message that arrived while the channel was open is there when the channel opens with no connection (6.8s)
+  ✓  20 tests/channels-e2e-dbg/writes.spec.ts:224:1 › WRT-07 a message deleted before it could be sent is not shown to anyone once the connection is back (8.2s)
+  ✓  22 tests/channels-e2e-dbg/offline.spec.ts:177:1 › OFF-06 a thread read while connected shows its replies with no connection, a long one included (7.5s)
+  ✘  16 tests/channels-e2e-dbg/offline.spec.ts:118:1 › OFF-04 messages read far back in a long channel can be scrolled through again with no connection (22.3s)
+  ✓  24 tests/channels-e2e-dbg/offline.spec.ts:298:1 › OFF-10 a message that arrived while the channel was open is there when the channel opens with no connection (5.9s)
+  ✓  23 tests/channels-e2e-dbg/offline.spec.ts:212:1 › OFF-07 a long thread never opened, opened with no connection, shows every reply or says that there are more (7.2s)
+  ✓  25 tests/channels-e2e-dbg/writes.spec.ts:224:1 › WRT-07 a message deleted before it could be sent is not shown to anyone once the connection is back (8.5s)
+  ✓  27 tests/channels-e2e-dbg/offline.spec.ts:177:1 › OFF-06 a thread read while connected shows its replies with no connection, a long one included (7.5s)
+  ✘  21 tests/channels-e2e-dbg/offline.spec.ts:118:1 › OFF-04 messages read far back in a long channel can be scrolled through again with no connection (21.5s)
+  ✓  28 tests/channels-e2e-dbg/offline.spec.ts:212:1 › OFF-07 a long thread never opened, opened with no connection, shows every reply or says that there are more (6.6s)
+  ✓  29 tests/channels-e2e-dbg/offline.spec.ts:298:1 › OFF-10 a message that arrived while the channel was open is there when the channel opens with no connection (7.4s)
+  ✓  30 tests/channels-e2e-dbg/writes.spec.ts:224:1 › WRT-07 a message deleted before it could be sent is not shown to anyone once the connection is back (7.8s)
+  ✘  26 tests/channels-e2e-dbg/offline.spec.ts:118:1 › OFF-04 messages read far back in a long channel can be scrolled through again with no connection (20.9s)
+  ✓  33 tests/channels-e2e-dbg/offline.spec.ts:212:1 › OFF-07 a long thread never opened, opened with no connection, shows every reply or says that there are more (6.7s)
+  ✓  32 tests/channels-e2e-dbg/offline.spec.ts:177:1 › OFF-06 a thread read while connected shows its replies with no connection, a long one included (8.0s)
+  ✓  34 tests/channels-e2e-dbg/offline.spec.ts:298:1 › OFF-10 a message that arrived while the channel was open is there when the channel opens with no connection (5.8s)
+  ✓  35 tests/channels-e2e-dbg/writes.spec.ts:224:1 › WRT-07 a message deleted before it could be sent is not shown to anyone once the connection is back (8.7s)
+  ✓  37 tests/channels-e2e-dbg/offline.spec.ts:177:1 › OFF-06 a thread read while connected shows its replies with no connection, a long one included (8.6s)
+  ✓  38 tests/channels-e2e-dbg/offline.spec.ts:212:1 › OFF-07 a long thread never opened, opened with no connection, shows every reply or says that there are more (6.4s)
+  ✓  31 tests/channels-e2e-dbg/offline.spec.ts:118:1 › OFF-04 messages read far back in a long channel can be scrolled through again with no connection (30.7s)
+  ✓  39 tests/channels-e2e-dbg/offline.spec.ts:298:1 › OFF-10 a message that arrived while the channel was open is there when the channel opens with no connection (5.8s)
+  ✓  40 tests/channels-e2e-dbg/writes.spec.ts:224:1 › WRT-07 a message deleted before it could be sent is not shown to anyone once the connection is back (7.5s)
+  ✓  36 tests/channels-e2e-dbg/offline.spec.ts:118:1 › OFF-04 messages read far back in a long channel can be scrolled through again with no connection (31.7s)
+
+
+  1) tests/channels-e2e-dbg/offline.spec.ts:118:1 › OFF-04 messages read far back in a long channel can be scrolled through again with no connection 
+
+    Error: lost my place above "history 208": the list shows ["history 075","history 076","history 077","history 078","history 079","history 080","history 081","history 082","history 083","history 084","history 085","history 086","history 087","history 088","history 089","history 090","history 091","history 092","history 093","history 094","history 095","history 096","history 097","history 098"]
+
+       at harness/channel.ts:236
+
+      234 |         const oldestKnown = now.indexOf(seen[0]);
+      235 |         if (oldestKnown === -1)
+    > 236 |           throw new Error(
+          |                 ^
+      237 |             `lost my place above "${seen[0]}": the list shows ${JSON.stringify(now)}`
+      238 |           );
+      239 |         seen.unshift(...now.slice(0, oldestKnown));
+        at record (/home/teo/.herdr/worktrees/macro/synoet-channels-local-sync-suiteb/apps/web/tests/channels-e2e-dbg/harness/channel.ts:236:17)
+        at look (/home/teo/.herdr/worktrees/macro/synoet-channels-local-sync-suiteb/apps/web/tests/channels-e2e-dbg/harness/channel.ts:256:9)
+        at /home/teo/.herdr/worktrees/macro/synoet-channels-local-sync-suiteb/apps/web/tests/channels-e2e-dbg/harness/channel.ts:266:7
+        at Conversation.readTo (/home/teo/.herdr/worktrees/macro/synoet-channels-local-sync-suiteb/apps/web/tests/channels-e2e-dbg/harness/channel.ts:263:5)
+        at /home/teo/.herdr/worktrees/macro/synoet-channels-local-sync-suiteb/apps/web/tests/channels-e2e-dbg/offline.spec.ts:136:5
+        at failsSometimes (/home/teo/.herdr/worktrees/macro/synoet-channels-local-sync-suiteb/apps/web/tests/channels-e2e-dbg/harness/fixtures.ts:99:5)
+        at /home/teo/.herdr/worktrees/macro/synoet-channels-local-sync-suiteb/apps/web/tests/channels-e2e-dbg/offline.spec.ts:133:3
+
+    attachment #1: screenshot (image/png) ──────────────────────────────────────────────────────────
+    ../../../../../../.cache/channels-perf-b/e2ed/f2/test-results/offline-OFF-04-messages-re-3412b-gh-again-with-no-connection-repeat1/test-failed-1.png
+    ────────────────────────────────────────────────────────────────────────────────────────────────
+
+    Error Context: ../../../../../../.cache/channels-perf-b/e2ed/f2/test-results/offline-OFF-04-messages-re-3412b-gh-again-with-no-connection-repeat1/error-context.md
+
+    attachment #3: trace (application/zip) ─────────────────────────────────────────────────────────
+    ../../../../../../.cache/channels-perf-b/e2ed/f2/test-results/offline-OFF-04-messages-re-3412b-gh-again-with-no-connection-repeat1/trace.zip
+    Usage:
+
+        npx playwright show-trace ../../../../../../.cache/channels-perf-b/e2ed/f2/test-results/offline-OFF-04-messages-re-3412b-gh-again-with-no-connection-repeat1/trace.zip
+
+    ────────────────────────────────────────────────────────────────────────────────────────────────
+
+  2) tests/channels-e2e-dbg/offline.spec.ts:118:1 › OFF-04 messages read far back in a long channel can be scrolled through again with no connection 
+
+    Error: lost my place above "history 208": the list shows ["history 075","history 076","history 077","history 078","history 079","history 080","history 081","history 082","history 083","history 084","history 085","history 086","history 087","history 088","history 089","history 090","history 091","history 092","history 093","history 094","history 095","history 096","history 097","history 098"]
+
+       at harness/channel.ts:236
+
+      234 |         const oldestKnown = now.indexOf(seen[0]);
+      235 |         if (oldestKnown === -1)
+    > 236 |           throw new Error(
+          |                 ^
+      237 |             `lost my place above "${seen[0]}": the list shows ${JSON.stringify(now)}`
+      238 |           );
+      239 |         seen.unshift(...now.slice(0, oldestKnown));
+        at record (/home/teo/.herdr/worktrees/macro/synoet-channels-local-sync-suiteb/apps/web/tests/channels-e2e-dbg/harness/channel.ts:236:17)
+        at look (/home/teo/.herdr/worktrees/macro/synoet-channels-local-sync-suiteb/apps/web/tests/channels-e2e-dbg/harness/channel.ts:256:9)
+        at /home/teo/.herdr/worktrees/macro/synoet-channels-local-sync-suiteb/apps/web/tests/channels-e2e-dbg/harness/channel.ts:266:7
+        at Conversation.readTo (/home/teo/.herdr/worktrees/macro/synoet-channels-local-sync-suiteb/apps/web/tests/channels-e2e-dbg/harness/channel.ts:263:5)
+        at /home/teo/.herdr/worktrees/macro/synoet-channels-local-sync-suiteb/apps/web/tests/channels-e2e-dbg/offline.spec.ts:136:5
+        at failsSometimes (/home/teo/.herdr/worktrees/macro/synoet-channels-local-sync-suiteb/apps/web/tests/channels-e2e-dbg/harness/fixtures.ts:99:5)
+        at /home/teo/.herdr/worktrees/macro/synoet-channels-local-sync-suiteb/apps/web/tests/channels-e2e-dbg/offline.spec.ts:133:3
+
+    attachment #1: screenshot (image/png) ──────────────────────────────────────────────────────────
+    ../../../../../../.cache/channels-perf-b/e2ed/f2/test-results/offline-OFF-04-messages-re-3412b-gh-again-with-no-connection-repeat2/test-failed-1.png
+    ────────────────────────────────────────────────────────────────────────────────────────────────
+
+    Error Context: ../../../../../../.cache/channels-perf-b/e2ed/f2/test-results/offline-OFF-04-messages-re-3412b-gh-again-with-no-connection-repeat2/error-context.md
+
+    attachment #3: trace (application/zip) ─────────────────────────────────────────────────────────
+    ../../../../../../.cache/channels-perf-b/e2ed/f2/test-results/offline-OFF-04-messages-re-3412b-gh-again-with-no-connection-repeat2/trace.zip
+    Usage:
+
+        npx playwright show-trace ../../../../../../.cache/channels-perf-b/e2ed/f2/test-results/offline-OFF-04-messages-re-3412b-gh-again-with-no-connection-repeat2/trace.zip
+
+    ────────────────────────────────────────────────────────────────────────────────────────────────
+
+  3) tests/channels-e2e-dbg/offline.spec.ts:118:1 › OFF-04 messages read far back in a long channel can be scrolled through again with no connection 
+
+    Error: lost my place above "history 208": the list shows ["history 075","history 076","history 077","history 078","history 079","history 080","history 081","history 082","history 083","history 084","history 085","history 086","history 087","history 088","history 089","history 090","history 091","history 092","history 093","history 094","history 095","history 096","history 097","history 098"]
+
+       at harness/channel.ts:236
+
+      234 |         const oldestKnown = now.indexOf(seen[0]);
+      235 |         if (oldestKnown === -1)
+    > 236 |           throw new Error(
+          |                 ^
+      237 |             `lost my place above "${seen[0]}": the list shows ${JSON.stringify(now)}`
+      238 |           );
+      239 |         seen.unshift(...now.slice(0, oldestKnown));
+        at record (/home/teo/.herdr/worktrees/macro/synoet-channels-local-sync-suiteb/apps/web/tests/channels-e2e-dbg/harness/channel.ts:236:17)
+        at look (/home/teo/.herdr/worktrees/macro/synoet-channels-local-sync-suiteb/apps/web/tests/channels-e2e-dbg/harness/channel.ts:256:9)
+        at /home/teo/.herdr/worktrees/macro/synoet-channels-local-sync-suiteb/apps/web/tests/channels-e2e-dbg/harness/channel.ts:266:7
+        at Conversation.readTo (/home/teo/.herdr/worktrees/macro/synoet-channels-local-sync-suiteb/apps/web/tests/channels-e2e-dbg/harness/channel.ts:263:5)
+        at /home/teo/.herdr/worktrees/macro/synoet-channels-local-sync-suiteb/apps/web/tests/channels-e2e-dbg/offline.spec.ts:136:5
+        at failsSometimes (/home/teo/.herdr/worktrees/macro/synoet-channels-local-sync-suiteb/apps/web/tests/channels-e2e-dbg/harness/fixtures.ts:99:5)
+        at /home/teo/.herdr/worktrees/macro/synoet-channels-local-sync-suiteb/apps/web/tests/channels-e2e-dbg/offline.spec.ts:133:3
+
+    attachment #1: screenshot (image/png) ──────────────────────────────────────────────────────────
+    ../../../../../../.cache/channels-perf-b/e2ed/f2/test-results/offline-OFF-04-messages-re-3412b-gh-again-with-no-connection-repeat3/test-failed-1.png
+    ────────────────────────────────────────────────────────────────────────────────────────────────
+
+    Error Context: ../../../../../../.cache/channels-perf-b/e2ed/f2/test-results/offline-OFF-04-messages-re-3412b-gh-again-with-no-connection-repeat3/error-context.md
+
+    attachment #3: trace (application/zip) ─────────────────────────────────────────────────────────
+    ../../../../../../.cache/channels-perf-b/e2ed/f2/test-results/offline-OFF-04-messages-re-3412b-gh-again-with-no-connection-repeat3/trace.zip
+    Usage:
+
+        npx playwright show-trace ../../../../../../.cache/channels-perf-b/e2ed/f2/test-results/offline-OFF-04-messages-re-3412b-gh-again-with-no-connection-repeat3/trace.zip
+
+    ────────────────────────────────────────────────────────────────────────────────────────────────
+
+  4) tests/channels-e2e-dbg/offline.spec.ts:118:1 › OFF-04 messages read far back in a long channel can be scrolled through again with no connection 
+
+    Error: lost my place above "history 208": the list shows ["history 075","history 076","history 077","history 078","history 079","history 080","history 081","history 082","history 083","history 084","history 085","history 086","history 087","history 088","history 089","history 090","history 091","history 092","history 093","history 094","history 095","history 096","history 097","history 098"]
+
+       at harness/channel.ts:236
+
+      234 |         const oldestKnown = now.indexOf(seen[0]);
+      235 |         if (oldestKnown === -1)
+    > 236 |           throw new Error(
+          |                 ^
+      237 |             `lost my place above "${seen[0]}": the list shows ${JSON.stringify(now)}`
+      238 |           );
+      239 |         seen.unshift(...now.slice(0, oldestKnown));
+        at record (/home/teo/.herdr/worktrees/macro/synoet-channels-local-sync-suiteb/apps/web/tests/channels-e2e-dbg/harness/channel.ts:236:17)
+        at look (/home/teo/.herdr/worktrees/macro/synoet-channels-local-sync-suiteb/apps/web/tests/channels-e2e-dbg/harness/channel.ts:256:9)
+        at /home/teo/.herdr/worktrees/macro/synoet-channels-local-sync-suiteb/apps/web/tests/channels-e2e-dbg/harness/channel.ts:266:7
+        at Conversation.readTo (/home/teo/.herdr/worktrees/macro/synoet-channels-local-sync-suiteb/apps/web/tests/channels-e2e-dbg/harness/channel.ts:263:5)
+        at /home/teo/.herdr/worktrees/macro/synoet-channels-local-sync-suiteb/apps/web/tests/channels-e2e-dbg/offline.spec.ts:136:5
+        at failsSometimes (/home/teo/.herdr/worktrees/macro/synoet-channels-local-sync-suiteb/apps/web/tests/channels-e2e-dbg/harness/fixtures.ts:99:5)
+        at /home/teo/.herdr/worktrees/macro/synoet-channels-local-sync-suiteb/apps/web/tests/channels-e2e-dbg/offline.spec.ts:133:3
+
+    attachment #1: screenshot (image/png) ──────────────────────────────────────────────────────────
+    ../../../../../../.cache/channels-perf-b/e2ed/f2/test-results/offline-OFF-04-messages-re-3412b-gh-again-with-no-connection-repeat4/test-failed-1.png
+    ────────────────────────────────────────────────────────────────────────────────────────────────
+
+    Error Context: ../../../../../../.cache/channels-perf-b/e2ed/f2/test-results/offline-OFF-04-messages-re-3412b-gh-again-with-no-connection-repeat4/error-context.md
+
+    attachment #3: trace (application/zip) ─────────────────────────────────────────────────────────
+    ../../../../../../.cache/channels-perf-b/e2ed/f2/test-results/offline-OFF-04-messages-re-3412b-gh-again-with-no-connection-repeat4/trace.zip
+    Usage:
+
+        npx playwright show-trace ../../../../../../.cache/channels-perf-b/e2ed/f2/test-results/offline-OFF-04-messages-re-3412b-gh-again-with-no-connection-repeat4/trace.zip
+
+    ────────────────────────────────────────────────────────────────────────────────────────────────
+
+  5) tests/channels-e2e-dbg/offline.spec.ts:118:1 › OFF-04 messages read far back in a long channel can be scrolled through again with no connection 
+
+    Error: lost my place above "history 208": the list shows ["history 075","history 076","history 077","history 078","history 079","history 080","history 081","history 082","history 083","history 084","history 085","history 086","history 087","history 088","history 089","history 090","history 091","history 092","history 093","history 094","history 095","history 096","history 097","history 098"]
+
+       at harness/channel.ts:236
+
+      234 |         const oldestKnown = now.indexOf(seen[0]);
+      235 |         if (oldestKnown === -1)
+    > 236 |           throw new Error(
+          |                 ^
+      237 |             `lost my place above "${seen[0]}": the list shows ${JSON.stringify(now)}`
+      238 |           );
+      239 |         seen.unshift(...now.slice(0, oldestKnown));
+        at record (/home/teo/.herdr/worktrees/macro/synoet-channels-local-sync-suiteb/apps/web/tests/channels-e2e-dbg/harness/channel.ts:236:17)
+        at look (/home/teo/.herdr/worktrees/macro/synoet-channels-local-sync-suiteb/apps/web/tests/channels-e2e-dbg/harness/channel.ts:256:9)
+        at /home/teo/.herdr/worktrees/macro/synoet-channels-local-sync-suiteb/apps/web/tests/channels-e2e-dbg/harness/channel.ts:266:7
+        at Conversation.readTo (/home/teo/.herdr/worktrees/macro/synoet-channels-local-sync-suiteb/apps/web/tests/channels-e2e-dbg/harness/channel.ts:263:5)
+        at /home/teo/.herdr/worktrees/macro/synoet-channels-local-sync-suiteb/apps/web/tests/channels-e2e-dbg/offline.spec.ts:136:5
+        at failsSometimes (/home/teo/.herdr/worktrees/macro/synoet-channels-local-sync-suiteb/apps/web/tests/channels-e2e-dbg/harness/fixtures.ts:99:5)
+        at /home/teo/.herdr/worktrees/macro/synoet-channels-local-sync-suiteb/apps/web/tests/channels-e2e-dbg/offline.spec.ts:133:3
+
+    attachment #1: screenshot (image/png) ──────────────────────────────────────────────────────────
+    ../../../../../../.cache/channels-perf-b/e2ed/f2/test-results/offline-OFF-04-messages-re-3412b-gh-again-with-no-connection-repeat5/test-failed-1.png
+    ────────────────────────────────────────────────────────────────────────────────────────────────
+
+    Error Context: ../../../../../../.cache/channels-perf-b/e2ed/f2/test-results/offline-OFF-04-messages-re-3412b-gh-again-with-no-connection-repeat5/error-context.md
+
+    attachment #3: trace (application/zip) ─────────────────────────────────────────────────────────
+    ../../../../../../.cache/channels-perf-b/e2ed/f2/test-results/offline-OFF-04-messages-re-3412b-gh-again-with-no-connection-repeat5/trace.zip
+    Usage:
+
+        npx playwright show-trace ../../../../../../.cache/channels-perf-b/e2ed/f2/test-results/offline-OFF-04-messages-re-3412b-gh-again-with-no-connection-repeat5/trace.zip
+
+    ────────────────────────────────────────────────────────────────────────────────────────────────
+
+  5 failed
+    tests/channels-e2e-dbg/offline.spec.ts:118:1 › OFF-04 messages read far back in a long channel can be scrolled through again with no connection 
+    tests/channels-e2e-dbg/offline.spec.ts:118:1 › OFF-04 messages read far back in a long channel can be scrolled through again with no connection 
+    tests/channels-e2e-dbg/offline.spec.ts:118:1 › OFF-04 messages read far back in a long channel can be scrolled through again with no connection 
+    tests/channels-e2e-dbg/offline.spec.ts:118:1 › OFF-04 messages read far back in a long channel can be scrolled through again with no connection 
+    tests/channels-e2e-dbg/offline.spec.ts:118:1 › OFF-04 messages read far back in a long channel can be scrolled through again with no connection 
+  35 passed (2.3m)

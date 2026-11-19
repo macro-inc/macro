@@ -1,0 +1,85 @@
+    Blocking waiting for file lock on artifact directory
+    Finished `dev` profile [unoptimized + debuginfo] target(s) in 2m 25s
+     Running `target/debug/xtask deps --check`
+    Blocking waiting for file lock on package cache
+    Blocking waiting for file lock on package cache
+    Blocking waiting for file lock on package cache
+    Blocking waiting for file lock on artifact directory
+   Compiling proc-macro2 v1.0.106
+   Compiling serde_core v1.0.228
+   Compiling serde v1.0.228
+   Compiling libc v0.2.186
+   Compiling either v1.16.0
+   Compiling crossbeam-epoch v0.9.20
+   Compiling hashbrown v0.17.1
+   Compiling getrandom v0.3.4
+   Compiling zerocopy v0.8.48
+   Compiling once_cell v1.21.4
+   Compiling hashbrown v0.12.3
+   Compiling serde_json v1.0.150
+   Compiling rustix v1.1.6
+   Compiling getrandom v0.4.2
+   Compiling smallvec v1.15.1
+   Compiling memchr v2.8.0
+   Compiling rustix v0.38.44
+   Compiling arrayvec v0.5.2
+   Compiling linux-raw-sys v0.12.1
+   Compiling toml_write v0.1.2
+   Compiling static_assertions v1.1.0
+   Compiling linux-raw-sys v0.4.15
+   Compiling debug-ignore v1.0.5
+   Compiling nested v0.1.1
+   Compiling unicode-width v0.1.14
+   Compiling rustc-hash v2.1.2
+   Compiling indenter v0.3.4
+   Compiling owo-colors v3.5.0
+   Compiling twox-hash v2.1.2
+   Compiling ahash v0.8.12
+   Compiling hashbrown v0.15.5
+   Compiling hashbrown v0.16.1
+   Compiling xtask_paths v0.1.0 (/home/teo/.herdr/worktrees/macro/synoet-channels-local-sync/tooling/xtask/crates/xtask_paths)
+   Compiling diffy v0.4.2
+   Compiling guppy-workspace-hack v0.1.0
+   Compiling target-lexicon v0.13.5
+   Compiling indexmap v1.9.3
+   Compiling itertools v0.10.5
+   Compiling itertools v0.14.0
+   Compiling indexmap v2.14.0
+   Compiling iddqd v0.3.18
+   Compiling crossbeam-deque v0.8.6
+   Compiling diffus v0.10.0
+   Compiling petgraph v0.8.3
+   Compiling cfg-expr v0.20.8
+   Compiling rayon-core v1.13.0
+   Compiling camino v1.2.2
+   Compiling semver v1.0.28
+   Compiling cargo-platform v0.3.3
+   Compiling tempfile v3.27.0
+   Compiling rayon v1.12.0
+   Compiling atomicwrites v0.4.4
+   Compiling pathdiff v0.2.3
+   Compiling quote v1.0.45
+   Compiling syn v2.0.117
+   Compiling vte_generate_state_changes v0.1.2
+   Compiling include_dir_macros v0.7.4
+   Compiling vte v0.10.1
+   Compiling include_dir v0.7.4
+   Compiling serde_derive v1.0.228
+   Compiling thiserror-impl v2.0.18
+   Compiling thiserror v2.0.18
+   Compiling strip-ansi-escapes v0.1.1
+   Compiling tabular v0.2.0
+   Compiling toml v0.5.11
+   Compiling cargo_metadata v0.23.1
+   Compiling target-spec v3.6.0
+   Compiling serde_spanned v0.6.9
+   Compiling toml_datetime v0.6.11
+   Compiling guppy-summaries v0.7.1
+   Compiling toml_edit v0.22.27
+   Compiling guppy v0.17.26
+   Compiling toml v0.8.23
+   Compiling xtask_graph v0.1.0 (/home/teo/.herdr/worktrees/macro/synoet-channels-local-sync/tooling/xtask/crates/xtask_graph)
+   Compiling hakari v0.17.9
+   Compiling xtask_deps v0.1.0 (/home/teo/.herdr/worktrees/macro/synoet-channels-local-sync/tooling/xtask/crates/xtask_deps)
+    Finished `dev` profile [unoptimized + debuginfo] target(s) in 3m 06s
+     Running `target/debug/xtask_deps --check`

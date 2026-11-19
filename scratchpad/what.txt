@@ -1,0 +1,20 @@
+- Fixes for what the channels end-to-end suite showed on this path:
+  - A message sent just before a reload was lost when the page went away
+    before the queue stored it. A send is noted in `localStorage`
+    (`unqueued-sends.ts`) until the queue holds it, and the next page to
+    start resends what a page that is gone left noted. The queue's Web
+    Lock lease is released when its page is gone (`mutation-queue-*`), so
+    the next page drains at once instead of waiting out the lease.
+  - A person's own quick sends showed out of order: the optimistic row
+    was placed by this device's clock. `unplacedSortKey` places a queued
+    send past every message the server has placed, and a drain asked for
+    during a lease check or an empty claim is kept (`keepSooner`).
+  - A reaction removed or added around a late answer was put back: the
+    answer to a queued write reaches the views after pushes that are
+    newer than it. `applyQueuedWrite` keeps the reactions on screen and
+    `confirmQueuedReaction` lays only the person's own change over them.
+  - A device page or thread read between a push reaching the views and
+    the device storing it answered with older data. `pushesStored`
+    (`catch-up.ts`) lets such a read wait, at most two seconds, and
+    `source.ts` reads again, at most three times.
+- `crates/messages/proofs`: the write-proof scripts are Bun TypeScript.

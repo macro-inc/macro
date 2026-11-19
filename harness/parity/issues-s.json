@@ -1,0 +1,44 @@
+{
+ "console": [
+  [
+   "Failed to load resource: the server responded with a status of 404 ()",
+   6
+  ]
+ ],
+ "failed": [
+  [
+   "POST https://localhost:31009/email/email/links/health-check net::ERR_ABORTED",
+   2
+  ],
+  [
+   "GET https://localhost:31009/dss/call/:id/active net::ERR_ABORTED",
+   2
+  ],
+  [
+   "PUT https://solaris.us-east1-d.c.macro-435922.internal:31009/local-storage/doc-storage/macro%7Calice%40seed.macro.local/:id/86?x-id=PutObject&X-Amz-Algorithm=AWS4-H net::ERR_ABORTED",
+   1
+  ],
+  [
+   "HEAD https://localhost:31009/sync/document/:id/exists net::ERR_ABORTED",
+   1
+  ],
+  [
+   "POST https://localhost:31009/sync/document/:id/initialize net::ERR_ABORTED",
+   1
+  ]
+ ],
+ "bad": [
+  [
+   "404 GET https://localhost:31009/auth/link/github/status ",
+   2
+  ],
+  [
+   "404 GET https://localhost:31009/scheduled-action/scheduled-actions/suggestions ",
+   3
+  ],
+  [
+   "404 HEAD https://localhost:31009/sync/document/:id/exists ",
+   1
+  ]
+ ]
+}

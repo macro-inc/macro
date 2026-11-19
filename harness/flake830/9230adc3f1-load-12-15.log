@@ -1,0 +1,18 @@
+
+running 1 test
+test daemon::test::prompt_at_ready::an_event_delivered_twice_is_handled_once ... FAILED
+
+failures:
+
+---- daemon::test::prompt_at_ready::an_event_delivered_twice_is_handled_once stdout ----
+
+thread 'daemon::test::prompt_at_ready::an_event_delivered_twice_is_handled_once' (2810825) panicked at crates/coding_agent_worker/src/daemon/test/prompt_at_ready.rs:343:10:
+the first delivery creates the session: Elapsed(())
+note: run with `RUST_BACKTRACE=1` environment variable to display a backtrace
+
+
+failures:
+    daemon::test::prompt_at_ready::an_event_delivered_twice_is_handled_once
+
+test result: FAILED. 0 passed; 1 failed; 0 ignored; 0 measured; 307 filtered out; finished in 5.08s
+

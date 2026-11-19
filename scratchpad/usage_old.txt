@@ -1,0 +1,5 @@
+usage: channel_change_plans.py [-h] [--host {127.0.0.1,localhost,::1}]
+                               --port PORT --user USER
+                               [--maintenance-db MAINTENANCE_DB]
+                               [--suffix SUFFIX] [--output OUTPUT]
+channel_change_plans.py: error: the following arguments are required: --port, --user

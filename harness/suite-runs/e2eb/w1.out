@@ -1,0 +1,14 @@
+path "/home/teo/.herdr/worktrees/macro/synoet-channels-local-sync-suiteb/apps/web" does not contain a 'flake.nix', searching up
+
+Running 8 tests using 4 workers
+
+  ✓  1 tests/channels-e2e/writes.spec.ts:127:1 › WRT-04 messages that could not be sent are still there after a reload and are sent once when the services can be reached (14.5s)
+  ✓  4 tests/channels-e2e/writes.spec.ts:127:1 › WRT-04 messages that could not be sent are still there after a reload and are sent once when the services can be reached (14.5s)
+  ✓  2 tests/channels-e2e/writes.spec.ts:127:1 › WRT-04 messages that could not be sent are still there after a reload and are sent once when the services can be reached (14.8s)
+  ✓  3 tests/channels-e2e/writes.spec.ts:127:1 › WRT-04 messages that could not be sent are still there after a reload and are sent once when the services can be reached (15.0s)
+  ✓  7 tests/channels-e2e/writes.spec.ts:127:1 › WRT-04 messages that could not be sent are still there after a reload and are sent once when the services can be reached (6.7s)
+  ✓  8 tests/channels-e2e/writes.spec.ts:127:1 › WRT-04 messages that could not be sent are still there after a reload and are sent once when the services can be reached (8.3s)
+  ✓  5 tests/channels-e2e/writes.spec.ts:127:1 › WRT-04 messages that could not be sent are still there after a reload and are sent once when the services can be reached (9.6s)
+  ✓  6 tests/channels-e2e/writes.spec.ts:127:1 › WRT-04 messages that could not be sent are still there after a reload and are sent once when the services can be reached (10.4s)
+
+  8 passed (39.8s)

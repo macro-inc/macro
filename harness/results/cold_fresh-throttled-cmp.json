@@ -1,0 +1,19 @@
+{
+ "scenario": "cold_fresh",
+ "throttled": true,
+ "throttle": {
+  "offline": false,
+  "latency": 150,
+  "downloadThroughput": 1250000,
+  "uploadThroughput": 1250000
+ },
+ "n": 6,
+ "sizes": [
+  "small",
+  "medium",
+  "large"
+ ],
+ "base": "https://localhost:31009",
+ "generatedAt": "2026-11-12T09:13:45.706Z",
+ "records": []
+}

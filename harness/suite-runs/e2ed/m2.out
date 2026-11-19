@@ -1,0 +1,368 @@
+path "/home/teo/.herdr/worktrees/macro/synoet-channels-local-sync-suiteb/apps/web" does not contain a 'flake.nix', searching up
+
+Running 120 tests using 4 workers
+
+  ✓    3 tests/channels-e2e-dbg/members.spec.ts:111:1 › MEM-03 a person removed while the channel is open loses it at once (3.1s)
+  ✓    4 tests/channels-e2e-dbg/members.spec.ts:111:1 › MEM-03 a person removed while the channel is open loses it at once (3.1s)
+  ✓    6 tests/channels-e2e-dbg/members.spec.ts:111:1 › MEM-03 a person removed while the channel is open loses it at once (3.1s)
+  ✓    2 tests/channels-e2e-dbg/channels.spec.ts:247:1 › CHN-07 deleting a channel removes it for its owner at once, and its address no longer opens for anyone (11.2s)
+  ✓    1 tests/channels-e2e-dbg/channels.spec.ts:247:1 › CHN-07 deleting a channel removes it for its owner at once, and its address no longer opens for anyone (11.6s)
+  ✓    8 tests/channels-e2e-dbg/members.spec.ts:111:1 › MEM-03 a person removed while the channel is open loses it at once (3.0s)
+  ✓    5 tests/channels-e2e-dbg/channels.spec.ts:247:1 › CHN-07 deleting a channel removes it for its owner at once, and its address no longer opens for anyone (11.6s)
+  ✓   10 tests/channels-e2e-dbg/members.spec.ts:111:1 › MEM-03 a person removed while the channel is open loses it at once (2.8s)
+  ✓    7 tests/channels-e2e-dbg/channels.spec.ts:247:1 › CHN-07 deleting a channel removes it for its owner at once, and its address no longer opens for anyone (11.5s)
+  ✓   12 tests/channels-e2e-dbg/members.spec.ts:111:1 › MEM-03 a person removed while the channel is open loses it at once (3.1s)
+  ✓    9 tests/channels-e2e-dbg/channels.spec.ts:247:1 › CHN-07 deleting a channel removes it for its owner at once, and its address no longer opens for anyone (11.2s)
+  ✓   11 tests/channels-e2e-dbg/channels.spec.ts:247:1 › CHN-07 deleting a channel removes it for its owner at once, and its address no longer opens for anyone (12.3s)
+  ✓   13 tests/channels-e2e-dbg/channels.spec.ts:247:1 › CHN-07 deleting a channel removes it for its owner at once, and its address no longer opens for anyone (11.6s)
+  ✓   16 tests/channels-e2e-dbg/members.spec.ts:111:1 › MEM-03 a person removed while the channel is open loses it at once (2.8s)
+  ✓   18 tests/channels-e2e-dbg/members.spec.ts:111:1 › MEM-03 a person removed while the channel is open loses it at once (2.9s)
+  ✓   15 tests/channels-e2e-dbg/channels.spec.ts:247:1 › CHN-07 deleting a channel removes it for its owner at once, and its address no longer opens for anyone (11.3s)
+  ✓   20 tests/channels-e2e-dbg/members.spec.ts:111:1 › MEM-03 a person removed while the channel is open loses it at once (2.8s)
+  ✘   14 tests/channels-e2e-dbg/members.spec.ts:111:1 › MEM-03 a person removed while the channel is open loses it at once (17.5s)
+  ✓   17 tests/channels-e2e-dbg/channels.spec.ts:247:1 › CHN-07 deleting a channel removes it for its owner at once, and its address no longer opens for anyone (10.9s)
+  ✓   22 tests/channels-e2e-dbg/members.spec.ts:111:1 › MEM-03 a person removed while the channel is open loses it at once (3.0s)
+  ✓   19 tests/channels-e2e-dbg/channels.spec.ts:247:1 › CHN-07 deleting a channel removes it for its owner at once, and its address no longer opens for anyone (11.8s)
+  ✓   24 tests/channels-e2e-dbg/members.spec.ts:111:1 › MEM-03 a person removed while the channel is open loses it at once (3.2s)
+  ✓   21 tests/channels-e2e-dbg/channels.spec.ts:247:1 › CHN-07 deleting a channel removes it for its owner at once, and its address no longer opens for anyone (10.9s)
+  ✓   26 tests/channels-e2e-dbg/members.spec.ts:111:1 › MEM-03 a person removed while the channel is open loses it at once (2.9s)
+  ✓   28 tests/channels-e2e-dbg/members.spec.ts:111:1 › MEM-03 a person removed while the channel is open loses it at once (3.1s)
+  ✓   23 tests/channels-e2e-dbg/channels.spec.ts:247:1 › CHN-07 deleting a channel removes it for its owner at once, and its address no longer opens for anyone (11.8s)
+  ✓   25 tests/channels-e2e-dbg/channels.spec.ts:247:1 › CHN-07 deleting a channel removes it for its owner at once, and its address no longer opens for anyone (11.7s)
+  ✓   27 tests/channels-e2e-dbg/channels.spec.ts:247:1 › CHN-07 deleting a channel removes it for its owner at once, and its address no longer opens for anyone (11.4s)
+  ✓   32 tests/channels-e2e-dbg/members.spec.ts:111:1 › MEM-03 a person removed while the channel is open loses it at once (3.0s)
+  ✓   29 tests/channels-e2e-dbg/channels.spec.ts:247:1 › CHN-07 deleting a channel removes it for its owner at once, and its address no longer opens for anyone (11.2s)
+  ✓   34 tests/channels-e2e-dbg/members.spec.ts:111:1 › MEM-03 a person removed while the channel is open loses it at once (2.5s)
+  ✓   31 tests/channels-e2e-dbg/channels.spec.ts:247:1 › CHN-07 deleting a channel removes it for its owner at once, and its address no longer opens for anyone (11.9s)
+  ✘   30 tests/channels-e2e-dbg/members.spec.ts:111:1 › MEM-03 a person removed while the channel is open loses it at once (17.4s)
+  ✓   36 tests/channels-e2e-dbg/members.spec.ts:111:1 › MEM-03 a person removed while the channel is open loses it at once (2.3s)
+  ✓   33 tests/channels-e2e-dbg/channels.spec.ts:247:1 › CHN-07 deleting a channel removes it for its owner at once, and its address no longer opens for anyone (10.8s)
+  ✓   38 tests/channels-e2e-dbg/members.spec.ts:111:1 › MEM-03 a person removed while the channel is open loses it at once (3.0s)
+  ✓   35 tests/channels-e2e-dbg/channels.spec.ts:247:1 › CHN-07 deleting a channel removes it for its owner at once, and its address no longer opens for anyone (11.9s)
+  ✓   40 tests/channels-e2e-dbg/members.spec.ts:111:1 › MEM-03 a person removed while the channel is open loses it at once (2.9s)
+  ✓   42 tests/channels-e2e-dbg/members.spec.ts:111:1 › MEM-03 a person removed while the channel is open loses it at once (3.1s)
+  ✓   37 tests/channels-e2e-dbg/channels.spec.ts:247:1 › CHN-07 deleting a channel removes it for its owner at once, and its address no longer opens for anyone (11.4s)
+  ✓   44 tests/channels-e2e-dbg/members.spec.ts:111:1 › MEM-03 a person removed while the channel is open loses it at once (2.9s)
+  ✓   39 tests/channels-e2e-dbg/channels.spec.ts:247:1 › CHN-07 deleting a channel removes it for its owner at once, and its address no longer opens for anyone (11.4s)
+  ✓   46 tests/channels-e2e-dbg/members.spec.ts:111:1 › MEM-03 a person removed while the channel is open loses it at once (3.0s)
+  ✓   41 tests/channels-e2e-dbg/channels.spec.ts:247:1 › CHN-07 deleting a channel removes it for its owner at once, and its address no longer opens for anyone (11.4s)
+  ✓   48 tests/channels-e2e-dbg/members.spec.ts:111:1 › MEM-03 a person removed while the channel is open loses it at once (3.0s)
+  ✓   43 tests/channels-e2e-dbg/channels.spec.ts:247:1 › CHN-07 deleting a channel removes it for its owner at once, and its address no longer opens for anyone (12.3s)
+  ✓   45 tests/channels-e2e-dbg/channels.spec.ts:247:1 › CHN-07 deleting a channel removes it for its owner at once, and its address no longer opens for anyone (11.2s)
+  ✓   50 tests/channels-e2e-dbg/members.spec.ts:111:1 › MEM-03 a person removed while the channel is open loses it at once (2.9s)
+  ✓   52 tests/channels-e2e-dbg/members.spec.ts:111:1 › MEM-03 a person removed while the channel is open loses it at once (3.1s)
+  ✓   47 tests/channels-e2e-dbg/channels.spec.ts:247:1 › CHN-07 deleting a channel removes it for its owner at once, and its address no longer opens for anyone (11.9s)
+  ✓   49 tests/channels-e2e-dbg/channels.spec.ts:247:1 › CHN-07 deleting a channel removes it for its owner at once, and its address no longer opens for anyone (11.2s)
+  ✓   54 tests/channels-e2e-dbg/members.spec.ts:111:1 › MEM-03 a person removed while the channel is open loses it at once (3.1s)
+  ✓   56 tests/channels-e2e-dbg/members.spec.ts:111:1 › MEM-03 a person removed while the channel is open loses it at once (3.0s)
+  ✓   51 tests/channels-e2e-dbg/channels.spec.ts:247:1 › CHN-07 deleting a channel removes it for its owner at once, and its address no longer opens for anyone (11.7s)
+  ✓   58 tests/channels-e2e-dbg/members.spec.ts:111:1 › MEM-03 a person removed while the channel is open loses it at once (2.9s)
+  ✓   53 tests/channels-e2e-dbg/channels.spec.ts:247:1 › CHN-07 deleting a channel removes it for its owner at once, and its address no longer opens for anyone (11.7s)
+  ✓   60 tests/channels-e2e-dbg/members.spec.ts:111:1 › MEM-03 a person removed while the channel is open loses it at once (2.6s)
+  ✓   55 tests/channels-e2e-dbg/channels.spec.ts:247:1 › CHN-07 deleting a channel removes it for its owner at once, and its address no longer opens for anyone (11.4s)
+  ✓   57 tests/channels-e2e-dbg/channels.spec.ts:247:1 › CHN-07 deleting a channel removes it for its owner at once, and its address no longer opens for anyone (10.8s)
+  ✓   62 tests/channels-e2e-dbg/members.spec.ts:111:1 › MEM-03 a person removed while the channel is open loses it at once (3.1s)
+  ✓   64 tests/channels-e2e-dbg/members.spec.ts:111:1 › MEM-03 a person removed while the channel is open loses it at once (2.4s)
+  ✓   59 tests/channels-e2e-dbg/channels.spec.ts:247:1 › CHN-07 deleting a channel removes it for its owner at once, and its address no longer opens for anyone (11.5s)
+  ✓   66 tests/channels-e2e-dbg/members.spec.ts:111:1 › MEM-03 a person removed while the channel is open loses it at once (2.9s)
+  ✓   61 tests/channels-e2e-dbg/channels.spec.ts:247:1 › CHN-07 deleting a channel removes it for its owner at once, and its address no longer opens for anyone (11.5s)
+  ✓   63 tests/channels-e2e-dbg/channels.spec.ts:247:1 › CHN-07 deleting a channel removes it for its owner at once, and its address no longer opens for anyone (11.5s)
+  ✓   68 tests/channels-e2e-dbg/members.spec.ts:111:1 › MEM-03 a person removed while the channel is open loses it at once (3.0s)
+  ✓   65 tests/channels-e2e-dbg/channels.spec.ts:247:1 › CHN-07 deleting a channel removes it for its owner at once, and its address no longer opens for anyone (11.1s)
+  ✓   69 tests/channels-e2e-dbg/members.spec.ts:111:1 › MEM-03 a person removed while the channel is open loses it at once (2.9s)
+  ✓   72 tests/channels-e2e-dbg/members.spec.ts:111:1 › MEM-03 a person removed while the channel is open loses it at once (2.6s)
+  ✓   67 tests/channels-e2e-dbg/channels.spec.ts:247:1 › CHN-07 deleting a channel removes it for its owner at once, and its address no longer opens for anyone (11.8s)
+  ✓   70 tests/channels-e2e-dbg/channels.spec.ts:247:1 › CHN-07 deleting a channel removes it for its owner at once, and its address no longer opens for anyone (11.9s)
+  ✓   71 tests/channels-e2e-dbg/channels.spec.ts:247:1 › CHN-07 deleting a channel removes it for its owner at once, and its address no longer opens for anyone (11.4s)
+  ✓   76 tests/channels-e2e-dbg/members.spec.ts:111:1 › MEM-03 a person removed while the channel is open loses it at once (2.4s)
+  ✓   73 tests/channels-e2e-dbg/channels.spec.ts:247:1 › CHN-07 deleting a channel removes it for its owner at once, and its address no longer opens for anyone (11.8s)
+  ✓   78 tests/channels-e2e-dbg/members.spec.ts:111:1 › MEM-03 a person removed while the channel is open loses it at once (2.3s)
+  ✓   75 tests/channels-e2e-dbg/channels.spec.ts:247:1 › CHN-07 deleting a channel removes it for its owner at once, and its address no longer opens for anyone (10.9s)
+  ✓   80 tests/channels-e2e-dbg/members.spec.ts:111:1 › MEM-03 a person removed while the channel is open loses it at once (2.3s)
+  ✘   74 tests/channels-e2e-dbg/members.spec.ts:111:1 › MEM-03 a person removed while the channel is open loses it at once (17.4s)
+  ✓   77 tests/channels-e2e-dbg/channels.spec.ts:247:1 › CHN-07 deleting a channel removes it for its owner at once, and its address no longer opens for anyone (11.3s)
+  ✓   81 tests/channels-e2e-dbg/members.spec.ts:111:1 › MEM-03 a person removed while the channel is open loses it at once (3.1s)
+  ✓   79 tests/channels-e2e-dbg/channels.spec.ts:247:1 › CHN-07 deleting a channel removes it for its owner at once, and its address no longer opens for anyone (11.6s)
+  ✓   82 tests/channels-e2e-dbg/channels.spec.ts:247:1 › CHN-07 deleting a channel removes it for its owner at once, and its address no longer opens for anyone (11.8s)
+  ✓   83 tests/channels-e2e-dbg/channels.spec.ts:247:1 › CHN-07 deleting a channel removes it for its owner at once, and its address no longer opens for anyone (11.1s)
+  ✓   86 tests/channels-e2e-dbg/members.spec.ts:111:1 › MEM-03 a person removed while the channel is open loses it at once (2.9s)
+  ✓   85 tests/channels-e2e-dbg/channels.spec.ts:247:1 › CHN-07 deleting a channel removes it for its owner at once, and its address no longer opens for anyone (11.5s)
+  ✓   88 tests/channels-e2e-dbg/members.spec.ts:111:1 › MEM-03 a person removed while the channel is open loses it at once (3.2s)
+  ✘   84 tests/channels-e2e-dbg/members.spec.ts:111:1 › MEM-03 a person removed while the channel is open loses it at once (17.5s)
+  ✓   90 tests/channels-e2e-dbg/members.spec.ts:111:1 › MEM-03 a person removed while the channel is open loses it at once (2.9s)
+  ✓   92 tests/channels-e2e-dbg/members.spec.ts:111:1 › MEM-03 a person removed while the channel is open loses it at once (2.5s)
+  ✓   87 tests/channels-e2e-dbg/channels.spec.ts:247:1 › CHN-07 deleting a channel removes it for its owner at once, and its address no longer opens for anyone (11.5s)
+  ✓   94 tests/channels-e2e-dbg/members.spec.ts:111:1 › MEM-03 a person removed while the channel is open loses it at once (3.0s)
+  ✓   89 tests/channels-e2e-dbg/channels.spec.ts:247:1 › CHN-07 deleting a channel removes it for its owner at once, and its address no longer opens for anyone (12.1s)
+  ✓   91 tests/channels-e2e-dbg/channels.spec.ts:247:1 › CHN-07 deleting a channel removes it for its owner at once, and its address no longer opens for anyone (12.3s)
+  ✓   96 tests/channels-e2e-dbg/members.spec.ts:111:1 › MEM-03 a person removed while the channel is open loses it at once (2.8s)
+  ✓   93 tests/channels-e2e-dbg/channels.spec.ts:247:1 › CHN-07 deleting a channel removes it for its owner at once, and its address no longer opens for anyone (11.1s)
+  ✓   98 tests/channels-e2e-dbg/members.spec.ts:111:1 › MEM-03 a person removed while the channel is open loses it at once (2.9s)
+  ✓  100 tests/channels-e2e-dbg/members.spec.ts:111:1 › MEM-03 a person removed while the channel is open loses it at once (2.9s)
+  ✓   95 tests/channels-e2e-dbg/channels.spec.ts:247:1 › CHN-07 deleting a channel removes it for its owner at once, and its address no longer opens for anyone (11.3s)
+  ✓  102 tests/channels-e2e-dbg/members.spec.ts:111:1 › MEM-03 a person removed while the channel is open loses it at once (2.8s)
+  ✓   97 tests/channels-e2e-dbg/channels.spec.ts:247:1 › CHN-07 deleting a channel removes it for its owner at once, and its address no longer opens for anyone (11.4s)
+  ✓   99 tests/channels-e2e-dbg/channels.spec.ts:247:1 › CHN-07 deleting a channel removes it for its owner at once, and its address no longer opens for anyone (11.1s)
+  ✓  104 tests/channels-e2e-dbg/members.spec.ts:111:1 › MEM-03 a person removed while the channel is open loses it at once (2.4s)
+  ✓  106 tests/channels-e2e-dbg/members.spec.ts:111:1 › MEM-03 a person removed while the channel is open loses it at once (2.9s)
+  ✓  101 tests/channels-e2e-dbg/channels.spec.ts:247:1 › CHN-07 deleting a channel removes it for its owner at once, and its address no longer opens for anyone (11.4s)
+  ✓  108 tests/channels-e2e-dbg/members.spec.ts:111:1 › MEM-03 a person removed while the channel is open loses it at once (3.0s)
+  ✓  103 tests/channels-e2e-dbg/channels.spec.ts:247:1 › CHN-07 deleting a channel removes it for its owner at once, and its address no longer opens for anyone (12.0s)
+  ✓  110 tests/channels-e2e-dbg/members.spec.ts:111:1 › MEM-03 a person removed while the channel is open loses it at once (2.5s)
+  ✓  105 tests/channels-e2e-dbg/channels.spec.ts:247:1 › CHN-07 deleting a channel removes it for its owner at once, and its address no longer opens for anyone (11.7s)
+  ✓  112 tests/channels-e2e-dbg/members.spec.ts:111:1 › MEM-03 a person removed while the channel is open loses it at once (3.1s)
+  ✓  107 tests/channels-e2e-dbg/channels.spec.ts:247:1 › CHN-07 deleting a channel removes it for its owner at once, and its address no longer opens for anyone (11.4s)
+  ✓  114 tests/channels-e2e-dbg/members.spec.ts:111:1 › MEM-03 a person removed while the channel is open loses it at once (2.9s)
+  ✓  109 tests/channels-e2e-dbg/channels.spec.ts:247:1 › CHN-07 deleting a channel removes it for its owner at once, and its address no longer opens for anyone (12.5s)
+  ✓  111 tests/channels-e2e-dbg/channels.spec.ts:247:1 › CHN-07 deleting a channel removes it for its owner at once, and its address no longer opens for anyone (11.5s)
+  ✓  113 tests/channels-e2e-dbg/channels.spec.ts:247:1 › CHN-07 deleting a channel removes it for its owner at once, and its address no longer opens for anyone (11.3s)
+  ✓  118 tests/channels-e2e-dbg/members.spec.ts:111:1 › MEM-03 a person removed while the channel is open loses it at once (2.9s)
+  ✓  115 tests/channels-e2e-dbg/channels.spec.ts:247:1 › CHN-07 deleting a channel removes it for its owner at once, and its address no longer opens for anyone (11.3s)
+  ✓  117 tests/channels-e2e-dbg/channels.spec.ts:247:1 › CHN-07 deleting a channel removes it for its owner at once, and its address no longer opens for anyone (11.5s)
+  ✘  116 tests/channels-e2e-dbg/members.spec.ts:111:1 › MEM-03 a person removed while the channel is open loses it at once (17.4s)
+  ✓  119 tests/channels-e2e-dbg/channels.spec.ts:247:1 › CHN-07 deleting a channel removes it for its owner at once, and its address no longer opens for anyone (11.2s)
+  ✘  120 tests/channels-e2e-dbg/members.spec.ts:111:1 › MEM-03 a person removed while the channel is open loses it at once (17.3s)
+
+
+  1) tests/channels-e2e-dbg/members.spec.ts:111:1 › MEM-03 a person removed while the channel is open loses it at once 
+
+    Error: expect(locator).toHaveCount(expected) failed
+
+    Locator:  locator('[data-input-id="channel-input-01a1e5af-db00-723c-a44a-0a9c0fc25cd2"]')
+    Expected: 0
+    Received: 1
+    Timeout:  15000ms
+
+    Call log:
+      - Expect "toHaveCount" with timeout 15000ms
+      - waiting for locator('[data-input-id="channel-input-01a1e5af-db00-723c-a44a-0a9c0fc25cd2"]')
+        34 × locator resolved to 1 element
+           - unexpected value "1"
+
+
+      131 |   await ada.removeParticipants(channel.id, [people.cy]);
+      132 |
+    > 133 |   await expect(cyView.composer).toHaveCount(0);
+          |                                 ^
+      134 |   await expect(noAccess(cyPage)).toBeVisible();
+      135 |   await expect(cyPage.getByText('all three here')).toHaveCount(0);
+      136 | });
+        at /home/teo/.herdr/worktrees/macro/synoet-channels-local-sync-suiteb/apps/web/tests/channels-e2e-dbg/members.spec.ts:133:33
+
+    attachment #1: screenshot (image/png) ──────────────────────────────────────────────────────────
+    ../../../../../../.cache/channels-perf-b/e2ed/m2/test-results/members-MEM-03-a-person-re-3c0d9-el-is-open-loses-it-at-once-repeat6/test-failed-1.png
+    ────────────────────────────────────────────────────────────────────────────────────────────────
+
+    Error Context: ../../../../../../.cache/channels-perf-b/e2ed/m2/test-results/members-MEM-03-a-person-re-3c0d9-el-is-open-loses-it-at-once-repeat6/error-context.md
+
+    attachment #3: trace (application/zip) ─────────────────────────────────────────────────────────
+    ../../../../../../.cache/channels-perf-b/e2ed/m2/test-results/members-MEM-03-a-person-re-3c0d9-el-is-open-loses-it-at-once-repeat6/trace.zip
+    Usage:
+
+        npx playwright show-trace ../../../../../../.cache/channels-perf-b/e2ed/m2/test-results/members-MEM-03-a-person-re-3c0d9-el-is-open-loses-it-at-once-repeat6/trace.zip
+
+    ────────────────────────────────────────────────────────────────────────────────────────────────
+
+  2) tests/channels-e2e-dbg/members.spec.ts:111:1 › MEM-03 a person removed while the channel is open loses it at once 
+
+    Error: expect(locator).toHaveCount(expected) failed
+
+    Locator:  locator('[data-input-id="channel-input-01a1e5b0-5ca1-7e58-be72-187a9e4cf3cf"]')
+    Expected: 0
+    Received: 1
+    Timeout:  15000ms
+
+    Call log:
+      - Expect "toHaveCount" with timeout 15000ms
+      - waiting for locator('[data-input-id="channel-input-01a1e5b0-5ca1-7e58-be72-187a9e4cf3cf"]')
+        34 × locator resolved to 1 element
+           - unexpected value "1"
+
+
+      131 |   await ada.removeParticipants(channel.id, [people.cy]);
+      132 |
+    > 133 |   await expect(cyView.composer).toHaveCount(0);
+          |                                 ^
+      134 |   await expect(noAccess(cyPage)).toBeVisible();
+      135 |   await expect(cyPage.getByText('all three here')).toHaveCount(0);
+      136 | });
+        at /home/teo/.herdr/worktrees/macro/synoet-channels-local-sync-suiteb/apps/web/tests/channels-e2e-dbg/members.spec.ts:133:33
+
+    attachment #1: screenshot (image/png) ──────────────────────────────────────────────────────────
+    ../../../../../../.cache/channels-perf-b/e2ed/m2/test-results/members-MEM-03-a-person-re-3c0d9-el-is-open-loses-it-at-once-repeat14/test-failed-1.png
+    ────────────────────────────────────────────────────────────────────────────────────────────────
+
+    Error Context: ../../../../../../.cache/channels-perf-b/e2ed/m2/test-results/members-MEM-03-a-person-re-3c0d9-el-is-open-loses-it-at-once-repeat14/error-context.md
+
+    attachment #3: trace (application/zip) ─────────────────────────────────────────────────────────
+    ../../../../../../.cache/channels-perf-b/e2ed/m2/test-results/members-MEM-03-a-person-re-3c0d9-el-is-open-loses-it-at-once-repeat14/trace.zip
+    Usage:
+
+        npx playwright show-trace ../../../../../../.cache/channels-perf-b/e2ed/m2/test-results/members-MEM-03-a-person-re-3c0d9-el-is-open-loses-it-at-once-repeat14/trace.zip
+
+    ────────────────────────────────────────────────────────────────────────────────────────────────
+
+  3) tests/channels-e2e-dbg/members.spec.ts:111:1 › MEM-03 a person removed while the channel is open loses it at once 
+
+    Error: expect(locator).toHaveCount(expected) failed
+
+    Locator:  locator('[data-input-id="channel-input-01a1e5b1-b4bd-7d5a-831b-34ef6b55ef00"]')
+    Expected: 0
+    Received: 1
+    Timeout:  15000ms
+
+    Call log:
+      - Expect "toHaveCount" with timeout 15000ms
+      - waiting for locator('[data-input-id="channel-input-01a1e5b1-b4bd-7d5a-831b-34ef6b55ef00"]')
+        34 × locator resolved to 1 element
+           - unexpected value "1"
+
+
+      131 |   await ada.removeParticipants(channel.id, [people.cy]);
+      132 |
+    > 133 |   await expect(cyView.composer).toHaveCount(0);
+          |                                 ^
+      134 |   await expect(noAccess(cyPage)).toBeVisible();
+      135 |   await expect(cyPage.getByText('all three here')).toHaveCount(0);
+      136 | });
+        at /home/teo/.herdr/worktrees/macro/synoet-channels-local-sync-suiteb/apps/web/tests/channels-e2e-dbg/members.spec.ts:133:33
+
+    attachment #1: screenshot (image/png) ──────────────────────────────────────────────────────────
+    ../../../../../../.cache/channels-perf-b/e2ed/m2/test-results/members-MEM-03-a-person-re-3c0d9-el-is-open-loses-it-at-once-repeat36/test-failed-1.png
+    ────────────────────────────────────────────────────────────────────────────────────────────────
+
+    Error Context: ../../../../../../.cache/channels-perf-b/e2ed/m2/test-results/members-MEM-03-a-person-re-3c0d9-el-is-open-loses-it-at-once-repeat36/error-context.md
+
+    attachment #3: trace (application/zip) ─────────────────────────────────────────────────────────
+    ../../../../../../.cache/channels-perf-b/e2ed/m2/test-results/members-MEM-03-a-person-re-3c0d9-el-is-open-loses-it-at-once-repeat36/trace.zip
+    Usage:
+
+        npx playwright show-trace ../../../../../../.cache/channels-perf-b/e2ed/m2/test-results/members-MEM-03-a-person-re-3c0d9-el-is-open-loses-it-at-once-repeat36/trace.zip
+
+    ────────────────────────────────────────────────────────────────────────────────────────────────
+
+  4) tests/channels-e2e-dbg/members.spec.ts:111:1 › MEM-03 a person removed while the channel is open loses it at once 
+
+    Error: expect(locator).toHaveCount(expected) failed
+
+    Locator:  locator('[data-input-id="channel-input-01a1e5b2-0986-7999-b086-71ec66a2b337"]')
+    Expected: 0
+    Received: 1
+    Timeout:  15000ms
+
+    Call log:
+      - Expect "toHaveCount" with timeout 15000ms
+      - waiting for locator('[data-input-id="channel-input-01a1e5b2-0986-7999-b086-71ec66a2b337"]')
+        34 × locator resolved to 1 element
+           - unexpected value "1"
+
+
+      131 |   await ada.removeParticipants(channel.id, [people.cy]);
+      132 |
+    > 133 |   await expect(cyView.composer).toHaveCount(0);
+          |                                 ^
+      134 |   await expect(noAccess(cyPage)).toBeVisible();
+      135 |   await expect(cyPage.getByText('all three here')).toHaveCount(0);
+      136 | });
+        at /home/teo/.herdr/worktrees/macro/synoet-channels-local-sync-suiteb/apps/web/tests/channels-e2e-dbg/members.spec.ts:133:33
+
+    attachment #1: screenshot (image/png) ──────────────────────────────────────────────────────────
+    ../../../../../../.cache/channels-perf-b/e2ed/m2/test-results/members-MEM-03-a-person-re-3c0d9-el-is-open-loses-it-at-once-repeat41/test-failed-1.png
+    ────────────────────────────────────────────────────────────────────────────────────────────────
+
+    Error Context: ../../../../../../.cache/channels-perf-b/e2ed/m2/test-results/members-MEM-03-a-person-re-3c0d9-el-is-open-loses-it-at-once-repeat41/error-context.md
+
+    attachment #3: trace (application/zip) ─────────────────────────────────────────────────────────
+    ../../../../../../.cache/channels-perf-b/e2ed/m2/test-results/members-MEM-03-a-person-re-3c0d9-el-is-open-loses-it-at-once-repeat41/trace.zip
+    Usage:
+
+        npx playwright show-trace ../../../../../../.cache/channels-perf-b/e2ed/m2/test-results/members-MEM-03-a-person-re-3c0d9-el-is-open-loses-it-at-once-repeat41/trace.zip
+
+    ────────────────────────────────────────────────────────────────────────────────────────────────
+
+  5) tests/channels-e2e-dbg/members.spec.ts:111:1 › MEM-03 a person removed while the channel is open loses it at once 
+
+    Error: expect(locator).toHaveCount(expected) failed
+
+    Locator:  locator('[data-input-id="channel-input-01a1e5b3-0b4c-7c57-9106-0001ea2bc33e"]')
+    Expected: 0
+    Received: 1
+    Timeout:  15000ms
+
+    Call log:
+      - Expect "toHaveCount" with timeout 15000ms
+      - waiting for locator('[data-input-id="channel-input-01a1e5b3-0b4c-7c57-9106-0001ea2bc33e"]')
+        34 × locator resolved to 1 element
+           - unexpected value "1"
+
+
+      131 |   await ada.removeParticipants(channel.id, [people.cy]);
+      132 |
+    > 133 |   await expect(cyView.composer).toHaveCount(0);
+          |                                 ^
+      134 |   await expect(noAccess(cyPage)).toBeVisible();
+      135 |   await expect(cyPage.getByText('all three here')).toHaveCount(0);
+      136 | });
+        at /home/teo/.herdr/worktrees/macro/synoet-channels-local-sync-suiteb/apps/web/tests/channels-e2e-dbg/members.spec.ts:133:33
+
+    attachment #1: screenshot (image/png) ──────────────────────────────────────────────────────────
+    ../../../../../../.cache/channels-perf-b/e2ed/m2/test-results/members-MEM-03-a-person-re-3c0d9-el-is-open-loses-it-at-once-repeat57/test-failed-1.png
+    ────────────────────────────────────────────────────────────────────────────────────────────────
+
+    Error Context: ../../../../../../.cache/channels-perf-b/e2ed/m2/test-results/members-MEM-03-a-person-re-3c0d9-el-is-open-loses-it-at-once-repeat57/error-context.md
+
+    attachment #3: trace (application/zip) ─────────────────────────────────────────────────────────
+    ../../../../../../.cache/channels-perf-b/e2ed/m2/test-results/members-MEM-03-a-person-re-3c0d9-el-is-open-loses-it-at-once-repeat57/trace.zip
+    Usage:
+
+        npx playwright show-trace ../../../../../../.cache/channels-perf-b/e2ed/m2/test-results/members-MEM-03-a-person-re-3c0d9-el-is-open-loses-it-at-once-repeat57/trace.zip
+
+    ────────────────────────────────────────────────────────────────────────────────────────────────
+
+  6) tests/channels-e2e-dbg/members.spec.ts:111:1 › MEM-03 a person removed while the channel is open loses it at once 
+
+    Error: expect(locator).toHaveCount(expected) failed
+
+    Locator:  locator('[data-input-id="channel-input-01a1e5b3-32ae-77ec-9808-bd53104224f7"]')
+    Expected: 0
+    Received: 1
+    Timeout:  15000ms
+
+    Call log:
+      - Expect "toHaveCount" with timeout 15000ms
+      - waiting for locator('[data-input-id="channel-input-01a1e5b3-32ae-77ec-9808-bd53104224f7"]')
+        34 × locator resolved to 1 element
+           - unexpected value "1"
+
+
+      131 |   await ada.removeParticipants(channel.id, [people.cy]);
+      132 |
+    > 133 |   await expect(cyView.composer).toHaveCount(0);
+          |                                 ^
+      134 |   await expect(noAccess(cyPage)).toBeVisible();
+      135 |   await expect(cyPage.getByText('all three here')).toHaveCount(0);
+      136 | });
+        at /home/teo/.herdr/worktrees/macro/synoet-channels-local-sync-suiteb/apps/web/tests/channels-e2e-dbg/members.spec.ts:133:33
+
+    attachment #1: screenshot (image/png) ──────────────────────────────────────────────────────────
+    ../../../../../../.cache/channels-perf-b/e2ed/m2/test-results/members-MEM-03-a-person-re-3c0d9-el-is-open-loses-it-at-once-repeat59/test-failed-1.png
+    ────────────────────────────────────────────────────────────────────────────────────────────────
+
+    Error Context: ../../../../../../.cache/channels-perf-b/e2ed/m2/test-results/members-MEM-03-a-person-re-3c0d9-el-is-open-loses-it-at-once-repeat59/error-context.md
+
+    attachment #3: trace (application/zip) ─────────────────────────────────────────────────────────
+    ../../../../../../.cache/channels-perf-b/e2ed/m2/test-results/members-MEM-03-a-person-re-3c0d9-el-is-open-loses-it-at-once-repeat59/trace.zip
+    Usage:
+
+        npx playwright show-trace ../../../../../../.cache/channels-perf-b/e2ed/m2/test-results/members-MEM-03-a-person-re-3c0d9-el-is-open-loses-it-at-once-repeat59/trace.zip
+
+    ────────────────────────────────────────────────────────────────────────────────────────────────
+
+  6 failed
+    tests/channels-e2e-dbg/members.spec.ts:111:1 › MEM-03 a person removed while the channel is open loses it at once 
+    tests/channels-e2e-dbg/members.spec.ts:111:1 › MEM-03 a person removed while the channel is open loses it at once 
+    tests/channels-e2e-dbg/members.spec.ts:111:1 › MEM-03 a person removed while the channel is open loses it at once 
+    tests/channels-e2e-dbg/members.spec.ts:111:1 › MEM-03 a person removed while the channel is open loses it at once 
+    tests/channels-e2e-dbg/members.spec.ts:111:1 › MEM-03 a person removed while the channel is open loses it at once 
+    tests/channels-e2e-dbg/members.spec.ts:111:1 › MEM-03 a person removed while the channel is open loses it at once 
+  114 passed (4.3m)

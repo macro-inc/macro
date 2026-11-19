@@ -1,0 +1,23 @@
+<h3>Same-footing run against approach C's method (3 rounds)</h3>
+<p class="muted">One running stack, the bundle swapped main, reads, main, reads, main, reads; main at <code>0e83b8822d</code> and the top of the reads stack at <code>544aff2493</code>, both built with the GraphQL flag on. Median first paint, 2,000-message channel, 12 samples per cell (3 rounds of 4). Run 2026-11-13 22:43 to 2026-11-14 03:02 UTC with this stack's migrations applied; the earlier round that ran without them is discarded. Machine load was 6 to 15 for most cells and 43 at the start of one. Within a cell the 12 samples spread by 15 to 60 ms, so differences under about 20 ms are not findings.</p>
+<div class="scroll"><table>
+<tr><th>Case</th><th>Network</th><th>Cache</th><th class="n">Main</th><th class="n">Reads</th></tr>
+<tr><td>Switch to a channel on the device</td><td>fast</td><td>idle (25 s)</td><td class="n">165 ms</td><td class="n">177 ms</td></tr>
+<tr><td>Switch to a channel on the device</td><td>fast</td><td>busy (6 s)</td><td class="n">144 ms</td><td class="n">157 ms</td></tr>
+<tr><td>Switch to a channel on the device</td><td>150 ms / 10 Mbit</td><td>idle</td><td class="n">254 ms</td><td class="n good">173 ms</td></tr>
+<tr><td>Switch to a channel on the device</td><td>150 ms / 10 Mbit</td><td>busy</td><td class="n">242 ms</td><td class="n good">151 ms</td></tr>
+<tr><td>Revisit</td><td>fast</td><td>idle</td><td class="n">137 ms</td><td class="n">132 ms</td></tr>
+<tr><td>Revisit</td><td>fast</td><td>busy</td><td class="n">138 ms</td><td class="n">137 ms</td></tr>
+<tr><td>Revisit</td><td>150 ms / 10 Mbit</td><td>idle</td><td class="n">139 ms</td><td class="n">130 ms</td></tr>
+<tr><td>Revisit</td><td>150 ms / 10 Mbit</td><td>busy</td><td class="n">137 ms</td><td class="n">133 ms</td></tr>
+<tr><td>Reload</td><td>fast</td><td>idle</td><td class="n">806 ms</td><td class="n">808 ms</td></tr>
+<tr><td>Reload</td><td>fast</td><td>busy</td><td class="n">788 ms</td><td class="n">802 ms</td></tr>
+<tr><td>Reload</td><td>150 ms / 10 Mbit</td><td>idle</td><td class="n">1,159 ms</td><td class="n">1,180 ms</td></tr>
+<tr><td>Reload</td><td>150 ms / 10 Mbit</td><td>busy</td><td class="n">1,148 ms</td><td class="n">1,173 ms</td></tr>
+<tr><td>Cold open, fresh browser</td><td>fast</td><td></td><td class="n">1,114 ms</td><td class="n">1,086 ms (8 samples: round 1 returned none)</td></tr>
+<tr><td>Cold open, fresh browser</td><td>150 ms / 10 Mbit</td><td></td><td class="n">14,715 ms (2 of 12 timed out)</td><td class="n">14,785 ms (2 of 12 timed out)</td></tr>
+<tr><td>Open a cached channel fully offline</td><td>none</td><td>idle</td><td class="n bad">0 of 12 show a message in 15 s</td><td class="n good">12 of 12, median 178 ms (169 to 246)</td></tr>
+</table></div>
+<p><strong>What this says.</strong> On a slow link, switching to a channel the device holds is 80 to 90 ms faster than main (about a third), because the page comes from the device and does not wait for the network. On a fast link the same switch is about 12 ms slower than main in both windows, which is at the edge of the spread. Revisit and reload are the same as main on a fast link; reload on the slow link is 21 to 25 ms later, again inside the spread. Cold open is the same. Offline, main never shows a message and this branch always does.</p>
+<p><strong>Gaps in this run.</strong> The reads bundle's fast-link cold open in round 1 wrote no samples and logged no error, so that cell has 8 samples, one of them 6.4 s taken while machine load was 43. The slow-link cold open timed out twice on each bundle (main in round 2, reads in round 3, the first and last sample each time), and takes about 15 s on both because a fresh browser downloads the whole app at 10 Mbit.</p>
+<p><strong>What the local index does while the engine is busy.</strong> Approach C found its cache engine takes 2.2 to 5.1 s to answer one read between 5 and 13 s after page load. I measured the same windows for this approach with the channel's network requests blocked, so the 50-entry head page can only come from the device index: a switch to a held channel painted in a median of 155 ms at 6 s after load, 163 ms at 9 s, 159 ms at 12 s and 181 ms at 25 s (12 samples each, slowest 195 ms). So an open does not wait on a busy engine here.</p>

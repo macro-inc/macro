@@ -1,0 +1,1105 @@
+path "/home/teo/.herdr/worktrees/macro/synoet-channels-local-sync-suiteb/apps/web" does not contain a 'flake.nix', searching up
+
+Running 324 tests using 4 workers
+
+DD ACC-01 w0 r0 cy 151547 DBG detail result 01a1e5b4-2189-7b02-97f0-7c7476bc0f34 live-network false false false false undefined false
+DD ACC-04 w3 r0 page 151625 DBG detail result 01a1e5b4-21c8-712b-87c1-2cda1e1b98e6 live-network false false false true undefined false
+DD ACC-03 w2 r0 page 151629 DBG detail result 01a1e5b4-21bb-7562-8b56-fa6c1fcb9035 live-network false false false true undefined false
+DD ACC-02 w1 r0 dee 151650 DBG detail result 01a1e5b4-2192-703a-a47e-13a2e6ad009f live-network false false false false undefined false
+DD ACC-03 w2 r0 page 151884 DBG detail result 01a1e5b4-21bb-7562-8b56-fa6c1fcb9035 live-network false false false true undefined true
+DD ACC-03 w2 r0 page 151889 DBG detail result 01a1e5b4-21bb-7562-8b56-fa6c1fcb9035 live-network false false false true undefined false
+  ✓    3 tests/channels-e2e-dbg/access.spec.ts:39:1 › ACC-02 a person outside the team who opens a private channel’s address sees no messages (2.0s)
+  ✓    2 tests/channels-e2e-dbg/access.spec.ts:13:1 › ACC-01 a teammate who is not in a private channel sees no messages and is offered to ask to join (2.0s)
+DD ACC-04 w3 r0 page 151939 DBG detail result 01a1e5b4-21c8-712b-87c1-2cda1e1b98e6 live-network false false false true undefined true
+DD ACC-04 w3 r0 page 151939 DBG detail result 01a1e5b4-21c8-712b-87c1-2cda1e1b98e6 live-network false false false true undefined false
+DD ACC-04 w3 r0 page 152471 DBG detail result 01a1e5b4-21c8-712b-87c1-2cda1e1b98e6 live-network false false false true undefined true
+DD ACC-04 w3 r0 page 152473 DBG detail result 01a1e5b4-21c8-712b-87c1-2cda1e1b98e6 live-network false false false true undefined true
+DD ACC-03 w2 r0 page 152494 DBG devmiss uncovered {"channelId":"01a1e5b4-21bb-7562-8b56-fa6c1fcb9035","limit":50} null false
+DD ACC-04 w3 r0 page 152507 DBG devmiss uncovered {"channelId":"01a1e5b4-21c8-712b-87c1-2cda1e1b98e6","limit":50} null false
+DD ACC-03 w2 r0 page 152553 DBG detail result 01a1e5b4-21bb-7562-8b56-fa6c1fcb9035 live-network false false false true undefined true
+DD ACC-04 w3 r0 page 152554 DBG detail result 01a1e5b4-21c8-712b-87c1-2cda1e1b98e6 affected-cache-reread false false false true undefined true
+DD ACC-03 w2 r0 page 152555 DBG detail result 01a1e5b4-21bb-7562-8b56-fa6c1fcb9035 live-network false false false true undefined true
+DD ACC-04 w3 r0 page 152556 DBG detail result 01a1e5b4-21c8-712b-87c1-2cda1e1b98e6 affected-cache-reread false false false true undefined true
+DD ACC-03 w2 r0 page 152607 DBG store ok {"channelId":"01a1e5b4-21bb-7562-8b56-fa6c1fcb9035","limit":50} 838 2
+DD ACC-04 w3 r0 page 152628 DBG store ok {"channelId":"01a1e5b4-21c8-712b-87c1-2cda1e1b98e6","limit":50} 860 1
+DD ACC-03 w2 r0 cy 153380 DBG detail result 01a1e5b4-21bb-7562-8b56-fa6c1fcb9035 live-network false false false false undefined false
+DD ACC-04 w3 r0 cy 153468 DBG detail result 01a1e5b4-21c8-712b-87c1-2cda1e1b98e6 live-network false false false false undefined false
+DD ACC-05 w1 r0 page 153525 DBG detail result 01a1e5b4-2944-7c5e-8260-2ae79b992b4a live-network false false false true undefined false
+DD ACC-05 w1 r0 page 153850 DBG detail result 01a1e5b4-2944-7c5e-8260-2ae79b992b4a live-network false false false true undefined true
+DD ACC-05 w1 r0 page 153855 DBG detail result 01a1e5b4-2944-7c5e-8260-2ae79b992b4a live-network false false false true undefined false
+DD ACC-05 w1 r0 page 154597 DBG devmiss uncovered {"channelId":"01a1e5b4-2944-7c5e-8260-2ae79b992b4a","limit":50} null false
+DD ACC-05 w1 r0 page 154604 DBG detail result 01a1e5b4-2944-7c5e-8260-2ae79b992b4a live-network false false false true undefined true
+DD ACC-05 w1 r0 page 154606 DBG detail result 01a1e5b4-2944-7c5e-8260-2ae79b992b4a live-network false false false true undefined true
+DD ACC-05 w1 r0 page 154713 DBG store ok {"channelId":"01a1e5b4-2944-7c5e-8260-2ae79b992b4a","limit":50} 964 1
+DD ACC-03 w2 r0 cy 155029 DBG detail result 01a1e5b4-21bb-7562-8b56-fa6c1fcb9035 live-network true false false false undefined true
+DD ACC-03 w2 r0 cy 155123 DBG detail result 01a1e5b4-21bb-7562-8b56-fa6c1fcb9035 live-network false false false true undefined true
+DD ACC-03 w2 r0 cy 155180 DBG devmiss uncovered {"channelId":"01a1e5b4-21bb-7562-8b56-fa6c1fcb9035","limit":50} null false
+DD ACC-03 w2 r0 cy 155210 DBG detail result 01a1e5b4-21bb-7562-8b56-fa6c1fcb9035 normalized-cache-hit true false false true undefined true
+DD ACC-03 w2 r0 cy 155216 DBG detail result 01a1e5b4-21bb-7562-8b56-fa6c1fcb9035 normalized-cache-hit true false false true undefined false
+DD ACC-03 w2 r0 cy 155385 DBG detail result 01a1e5b4-21bb-7562-8b56-fa6c1fcb9035 live-network false false false true undefined true
+DD ACC-03 w2 r0 cy 155387 DBG detail result 01a1e5b4-21bb-7562-8b56-fa6c1fcb9035 live-network false false false true undefined false
+DD ACC-05 w1 r0 cy 155464 DBG detail result 01a1e5b4-2944-7c5e-8260-2ae79b992b4a live-network false false false false undefined false
+DD ACC-03 w2 r0 cy 155501 DBG store ok {"channelId":"01a1e5b4-21bb-7562-8b56-fa6c1fcb9035","limit":50} 240 4
+DD ACC-04 w3 r0 cy 156237 DBG detail result 01a1e5b4-21c8-712b-87c1-2cda1e1b98e6 live-network false false false false undefined false
+  ✓    1 tests/channels-e2e-dbg/access.spec.ts:61:1 › ACC-03 a request to join reaches the owner at once, and approving it lets the person in at once (6.6s)
+  ✓    4 tests/channels-e2e-dbg/access.spec.ts:104:1 › ACC-04 a denied request tells the person so and shows them nothing of the channel (6.6s)
+  ✓    5 tests/channels-e2e-dbg/access.spec.ts:139:1 › ACC-05 a withdrawn request can no longer be approved (5.1s)
+DD ACC-08 w3 r0 page 158068 DBG detail result 01900000-0000-7000-8000-000000000000 live-network false false false false undefined false
+DD ACC-07 w2 r0 dee 158121 DBG detail result 01a1e5b4-3b4c-723d-bedd-bd202512c83e live-network false false false false undefined false
+  ✓    9 tests/channels-e2e-dbg/access.spec.ts:264:1 › ACC-09 a signed-out person who opens a channel’s address is asked to log in and sees nothing of it (1.4s)
+  ✓    7 tests/channels-e2e-dbg/access.spec.ts:212:1 › ACC-07 a person outside the team cannot read a team channel or find it to join (2.0s)
+DD ACC-06 w0 r0 ben 159365 DBG devmiss uncovered {"channelId":"01a1e5b4-2189-7b02-97f0-7c7476bc0f34","limit":50} null false
+DD ACC-06 w0 r0 ben 159478 DBG store ok {"channelId":"01a1e5b4-2189-7b02-97f0-7c7476bc0f34","limit":50} 96 1
+  ✓    8 tests/channels-e2e-dbg/access.spec.ts:248:1 › ACC-08 the address of a channel that does not exist says the conversation is unavailable (3.4s)
+DD CHN-02 w2 r0 ben 160006 DBG detail result 01a1e5b4-435a-76b7-8eb7-8cc69efcfb8b live-network false false false true undefined false
+DD CHN-02 w2 r0 ben 160264 DBG detail result 01a1e5b4-435a-76b7-8eb7-8cc69efcfb8b live-network false false false true undefined true
+DD CHN-02 w2 r0 ben 160269 DBG detail result 01a1e5b4-435a-76b7-8eb7-8cc69efcfb8b live-network false false false true undefined false
+DD ACC-06 w0 r0 ben 160274 DBG devmiss uncovered {"channelId":"01a1e5b3-eea4-74a1-b400-134e6906124b","limit":50} null false
+DD ACC-06 w0 r0 ben 160490 DBG store ok {"channelId":"01a1e5b3-eea4-74a1-b400-134e6906124b","limit":50} 187 263
+DD CHN-01 w1 r0 page 160653 DBG detail result 01a1e5b4-4a09-767f-ad48-5f458fe368cf live-network false false false true undefined false
+DD CHN-01 w1 r0 page 160711 DBG devmiss uncovered {"channelId":"01a1e5b4-4a09-767f-ad48-5f458fe368cf","limit":50} null false
+DD CHN-01 w1 r0 page 160716 DBG detail result 01a1e5b4-4a09-767f-ad48-5f458fe368cf normalized-cache-hit true false false true undefined true
+DD CHN-02 w2 r0 ben 160728 DBG devmiss uncovered {"channelId":"01a1e5b4-435a-76b7-8eb7-8cc69efcfb8b","limit":50} null false
+DD CHN-01 w1 r0 page 160752 DBG detail result 01a1e5b4-4a09-767f-ad48-5f458fe368cf normalized-cache-hit true false false true undefined false
+DD CHN-01 w1 r0 page 160779 DBG detail result 01a1e5b4-4a09-767f-ad48-5f458fe368cf normalized-cache-hit false false false true undefined true
+DD CHN-02 w2 r0 ben 160784 DBG detail result 01a1e5b4-435a-76b7-8eb7-8cc69efcfb8b live-network false false false true undefined true
+DD CHN-02 w2 r0 ben 160784 DBG detail result 01a1e5b4-435a-76b7-8eb7-8cc69efcfb8b live-network false false false true undefined true
+DD CHN-01 w1 r0 page 160785 DBG detail result 01a1e5b4-4a09-767f-ad48-5f458fe368cf normalized-cache-hit false false false true undefined false
+DD CHN-02 w2 r0 ben 160832 DBG detail result 01a1e5b4-435a-76b7-8eb7-8cc69efcfb8b affected-cache-reread false false false true undefined true
+DD CHN-02 w2 r0 ben 160833 DBG detail result 01a1e5b4-435a-76b7-8eb7-8cc69efcfb8b affected-cache-reread false false false true undefined true
+DD CHN-01 w1 r0 page 160921 DBG detail result 01a1e5b4-4a09-767f-ad48-5f458fe368cf live-network false false false true undefined true
+DD CHN-01 w1 r0 page 160921 DBG detail result 01a1e5b4-4a09-767f-ad48-5f458fe368cf live-network false false false true undefined false
+DD CHN-02 w2 r0 ben 160934 DBG store ok {"channelId":"01a1e5b4-435a-76b7-8eb7-8cc69efcfb8b","limit":50} 760 0
+DD ACC-06 w0 r0 ben 161048 DBG devmiss uncovered {"channelId":"01a1e5b3-24ea-7627-b124-d45f92b79413","limit":50} null false
+DD ACC-06 w0 r0 ben 161151 DBG store ok {"channelId":"01a1e5b3-24ea-7627-b124-d45f92b79413","limit":50} 89 2
+DD CHN-03 w3 r0 page 161396 DBG detail result 01a1e5b4-48b0-7083-a8f5-a1e64192cc49 live-network false false false true undefined false
+DD CHN-01 w1 r0 page 161512 DBG store ok {"channelId":"01a1e5b4-4a09-767f-ad48-5f458fe368cf","limit":50} 597 0
+DD CHN-03 w3 r0 page 161615 DBG detail result 01a1e5b4-48b0-7083-a8f5-a1e64192cc49 live-network false false false true undefined true
+DD CHN-03 w3 r0 page 161619 DBG detail result 01a1e5b4-48b0-7083-a8f5-a1e64192cc49 live-network false false false true undefined false
+DD ACC-06 w0 r0 ben 161825 DBG devmiss uncovered {"channelId":"01a1e5b2-e970-7d4f-b956-1cb28bd30a21","limit":50} null false
+DD ACC-06 w0 r0 ben 161956 DBG store ok {"channelId":"01a1e5b2-e970-7d4f-b956-1cb28bd30a21","limit":50} 111 2
+DD CHN-03 w3 r0 page 162196 DBG detail result 01a1e5b4-48b0-7083-a8f5-a1e64192cc49 live-network false false false true undefined true
+DD CHN-03 w3 r0 page 162196 DBG detail result 01a1e5b4-48b0-7083-a8f5-a1e64192cc49 live-network false false false true undefined true
+DD CHN-03 w3 r0 page 162205 DBG devmiss uncovered {"channelId":"01a1e5b4-48b0-7083-a8f5-a1e64192cc49","limit":50} null false
+DD CHN-03 w3 r0 page 162255 DBG detail result 01a1e5b4-48b0-7083-a8f5-a1e64192cc49 affected-cache-reread false false false true undefined true
+DD CHN-03 w3 r0 page 162255 DBG detail result 01a1e5b4-48b0-7083-a8f5-a1e64192cc49 affected-cache-reread false false false true undefined true
+DD CHN-03 w3 r0 page 162299 DBG store ok {"channelId":"01a1e5b4-48b0-7083-a8f5-a1e64192cc49","limit":50} 773 1
+DD ACC-06 w0 r0 ben 162681 DBG devmiss uncovered {"channelId":"01a1e5b2-5391-7304-b874-85c01f133899","limit":50} null false
+DD CHN-02 w2 r0 page 162719 DBG detail result 01a1e5b4-521f-71d3-b182-26e28088af57 live-network false false false true undefined false
+DD CHN-02 w2 r0 page 162741 DBG devmiss uncovered {"channelId":"01a1e5b4-521f-71d3-b182-26e28088af57","limit":50} null false
+DD CHN-02 w2 r0 page 162754 DBG detail result 01a1e5b4-521f-71d3-b182-26e28088af57 normalized-cache-hit true false false true undefined true
+DD CHN-02 w2 r0 page 162818 DBG detail result 01a1e5b4-521f-71d3-b182-26e28088af57 normalized-cache-hit true false false true undefined false
+DD CHN-01 w1 r0 page 162871 DBG detail result 01a1e5b4-4a09-767f-ad48-5f458fe368cf live-network false false false true undefined false
+DD CHN-02 w2 r0 page 162929 DBG detail result 01a1e5b4-521f-71d3-b182-26e28088af57 live-network false false false true undefined true
+DD CHN-02 w2 r0 page 162932 DBG detail result 01a1e5b4-521f-71d3-b182-26e28088af57 live-network false false false true undefined false
+DD ACC-06 w0 r0 ben 162996 DBG store ok {"channelId":"01a1e5b2-5391-7304-b874-85c01f133899","limit":50} 299 2
+DD CHN-01 w1 r0 page 163025 DBG detail result 01a1e5b4-4a09-767f-ad48-5f458fe368cf live-network false false false true undefined true
+DD CHN-01 w1 r0 page 163029 DBG detail result 01a1e5b4-4a09-767f-ad48-5f458fe368cf live-network false false false true undefined false
+DD CHN-03 w3 r0 ben 163043 DBG detail result 01a1e5b4-48b0-7083-a8f5-a1e64192cc49 live-network false false false true undefined false
+DD CHN-03 w3 r0 ben 163287 DBG detail result 01a1e5b4-48b0-7083-a8f5-a1e64192cc49 live-network false false false true undefined true
+DD CHN-03 w3 r0 ben 163293 DBG detail result 01a1e5b4-48b0-7083-a8f5-a1e64192cc49 live-network false false false true undefined false
+DD CHN-01 w1 r0 page 163504 DBG detail result 01a1e5b4-4a09-767f-ad48-5f458fe368cf live-network false false false true undefined true
+DD CHN-01 w1 r0 page 163507 DBG detail result 01a1e5b4-4a09-767f-ad48-5f458fe368cf live-network false false false true undefined true
+DD ACC-06 w0 r0 ben 163823 DBG devmiss uncovered {"channelId":"01a1e5b2-4688-7a6d-a178-832a5af73166","limit":50} null false
+DD CHN-03 w3 r0 ben 163823 DBG devmiss uncovered {"channelId":"01a1e5b4-48b0-7083-a8f5-a1e64192cc49","limit":50} null false
+DD CHN-03 w3 r0 ben 163911 DBG detail result 01a1e5b4-48b0-7083-a8f5-a1e64192cc49 live-network false false false true undefined true
+DD CHN-03 w3 r0 ben 163913 DBG detail result 01a1e5b4-48b0-7083-a8f5-a1e64192cc49 live-network false false false true undefined true
+DD ACC-06 w0 r0 ben 164043 DBG store ok {"channelId":"01a1e5b2-4688-7a6d-a178-832a5af73166","limit":50} 198 2
+DD CHN-03 w3 r0 ben 164061 DBG detail result 01a1e5b4-48b0-7083-a8f5-a1e64192cc49 affected-cache-reread false false false true undefined true
+DD CHN-03 w3 r0 ben 164062 DBG detail result 01a1e5b4-48b0-7083-a8f5-a1e64192cc49 affected-cache-reread false false false true undefined true
+DD CHN-02 w2 r0 page 164170 DBG store ok {"channelId":"01a1e5b4-521f-71d3-b182-26e28088af57","limit":50} 1320 0
+DD CHN-01 w1 r0 page 164208 DBG store ok {"channelId":"01a1e5b4-4a09-767f-ad48-5f458fe368cf","limit":50} 1206 0
+DD CHN-03 w3 r0 ben 164212 DBG store ok {"channelId":"01a1e5b4-48b0-7083-a8f5-a1e64192cc49","limit":50} 906 1
+DD CHN-02 w2 r0 page 164404 DBG detail result 01a1e5b4-521f-71d3-b182-26e28088af57 affected-cache-reread false false false true undefined true
+DD CHN-02 w2 r0 page 164406 DBG detail result 01a1e5b4-521f-71d3-b182-26e28088af57 affected-cache-reread false false false true undefined true
+DD ACC-06 w0 r0 ben 164636 DBG devmiss uncovered {"channelId":"01a1e5b2-38b7-77ae-af1a-abdb64c55154","limit":50} null false
+DD ACC-06 w0 r0 ben 164800 DBG store ok {"channelId":"01a1e5b2-38b7-77ae-af1a-abdb64c55154","limit":50} 146 2
+DD CHN-01 w1 r0 page 164887 DBG detail result 01a1e5b4-4a09-767f-ad48-5f458fe368cf affected-cache-reread false false false true undefined true
+DD CHN-01 w1 r0 page 164889 DBG detail result 01a1e5b4-4a09-767f-ad48-5f458fe368cf affected-cache-reread false false false true undefined true
+DD CHN-03 w3 r0 page 164974 DBG detail result 01a1e5b4-48b0-7083-a8f5-a1e64192cc49 affected-cache-reread true false false true undefined true
+DD CHN-03 w3 r0 page 164974 DBG detail result 01a1e5b4-48b0-7083-a8f5-a1e64192cc49 affected-cache-reread true false false true undefined true
+DD CHN-03 w3 r0 ben 165124 DBG detail result 01a1e5b4-48b0-7083-a8f5-a1e64192cc49 affected-cache-reread false false false true undefined true
+DD CHN-03 w3 r0 ben 165124 DBG detail result 01a1e5b4-48b0-7083-a8f5-a1e64192cc49 affected-cache-reread false false false true undefined true
+DD CHN-03 w3 r0 page 165150 DBG detail result 01a1e5b4-48b0-7083-a8f5-a1e64192cc49 live-network false false false true undefined true
+DD CHN-03 w3 r0 page 165152 DBG detail result 01a1e5b4-48b0-7083-a8f5-a1e64192cc49 live-network false false false true undefined true
+DD CHN-03 w3 r0 page 165341 DBG detail result 01a1e5b4-48b0-7083-a8f5-a1e64192cc49 affected-cache-reread false false false true undefined true
+DD CHN-03 w3 r0 page 165342 DBG detail result 01a1e5b4-48b0-7083-a8f5-a1e64192cc49 affected-cache-reread false false false true undefined true
+DD CHN-02 w2 r0 ben 165922 DBG devmiss uncovered {"channelId":"01a1e5b4-521f-71d3-b182-26e28088af57","limit":50} null false
+DD ACC-06 w0 r0 ben 166009 DBG devmiss uncovered {"channelId":"01a1e5b2-2be0-7c39-8e4a-b2f16e9515c6","limit":50} null false
+DD ACC-06 w0 r0 ben 166185 DBG store ok {"channelId":"01a1e5b2-2be0-7c39-8e4a-b2f16e9515c6","limit":50} 160 2
+DD CHN-02 w2 r0 ben 166614 DBG store ok {"channelId":"01a1e5b4-521f-71d3-b182-26e28088af57","limit":50} 639 1
+DD ACC-06 w0 r0 ben 166809 DBG devmiss uncovered {"channelId":"01a1e5b1-f106-713e-9edd-18610b6d0777","limit":50} null false
+DD ACC-06 w0 r0 ben 167005 DBG store ok {"channelId":"01a1e5b1-f106-713e-9edd-18610b6d0777","limit":50} 180 2
+DD CHN-01 w1 r0 page 167309 DBG detail result 01a1e5b4-4a09-767f-ad48-5f458fe368cf live-network false false false true undefined false
+DD CHN-01 w1 r0 page 167313 DBG detail result 01a1e5b4-4a09-767f-ad48-5f458fe368cf live-network false false false true undefined false
+DD CHN-02 w2 r0 page 167337 DBG devmiss uncovered {"channelId":"01a1e5b4-21bb-7562-8b56-fa6c1fcb9035","limit":50} null false
+DD CHN-02 w2 r0 page 167342 DBG detail result 01a1e5b4-521f-71d3-b182-26e28088af57 affected-cache-reread false false false true undefined true
+DD CHN-02 w2 r0 page 167342 DBG detail result 01a1e5b4-521f-71d3-b182-26e28088af57 affected-cache-reread false false false true undefined true
+  ✓   10 tests/channels-e2e-dbg/channels.spec.ts:30:1 › CHN-01 a private channel made in the app opens empty, shows in the list and takes its first message (8.9s)
+DD CHN-02 w2 r0 page 167588 DBG store ok {"channelId":"01a1e5b4-21bb-7562-8b56-fa6c1fcb9035","limit":50} 229 5
+DD ACC-06 w0 r0 ben 167640 DBG devmiss uncovered {"channelId":"01a1e5b1-2bdc-7133-89cd-399213034864","limit":50} null false
+DD ACC-06 w0 r0 ben 167813 DBG store ok {"channelId":"01a1e5b1-2bdc-7133-89cd-399213034864","limit":50} 159 2
+DD CHN-02 w2 r0 ben 168288 DBG detail result 01a1e5b4-521f-71d3-b182-26e28088af57 live-network false false false true undefined false
+DD CHN-02 w2 r0 ben 168291 DBG detail result 01a1e5b4-521f-71d3-b182-26e28088af57 live-network false false false true undefined false
+  ✓   12 tests/channels-e2e-dbg/channels.spec.ts:119:1 › CHN-03 renaming a channel updates its header and list row, and tells both members in the channel (8.5s)
+  ✓   11 tests/channels-e2e-dbg/channels.spec.ts:60:1 › CHN-02 a team channel made in the app appears for a teammate under the team’s channels and can be read (9.9s)
+DD ACC-06 w0 ANNOT 168742 Error: expect(locator).toHaveCount(expected) failed |  | Locator:  getByRole('button', { name: 'Join', exact: true }) | Expected: 0 | Received: 1 | Timeout:  15000ms |  | Call log: |   - Expect "toHaveCount" with timeout 15000ms |   - waiting for getByRole('button', { name: 'Join', exact: true }) |     31 × locator resolved to 1 element |        - unexpected value "1" | 
+DD CHN-04 w1 r0 ben 168848 DBG detail result 01a1e5b4-65a0-77ea-b514-bc90ea4b2603 live-network false false false true undefined false
+DD CHN-04 w1 r0 ben 169048 DBG detail result 01a1e5b4-65a0-77ea-b514-bc90ea4b2603 live-network false false false true undefined true
+DD CHN-04 w1 r0 ben 169052 DBG detail result 01a1e5b4-65a0-77ea-b514-bc90ea4b2603 live-network false false false true undefined false
+DD CHN-04 w1 r0 ben 169657 DBG devmiss uncovered {"channelId":"01a1e5b4-65a0-77ea-b514-bc90ea4b2603","limit":50} null false
+DD CHN-04 w1 r0 ben 169676 DBG detail result 01a1e5b4-65a0-77ea-b514-bc90ea4b2603 affected-cache-reread true false false true undefined true
+DD CHN-04 w1 r0 ben 169678 DBG detail result 01a1e5b4-65a0-77ea-b514-bc90ea4b2603 affected-cache-reread true false false true undefined true
+DD CHN-04 w1 r0 ben 169697 DBG detail result 01a1e5b4-65a0-77ea-b514-bc90ea4b2603 live-network false false false true undefined true
+DD CHN-04 w1 r0 ben 169700 DBG detail result 01a1e5b4-65a0-77ea-b514-bc90ea4b2603 live-network false false false true undefined true
+DD CHN-04 w1 r0 ben 169734 DBG store ok {"channelId":"01a1e5b4-65a0-77ea-b514-bc90ea4b2603","limit":50} 759 1
+DD CHN-05 w3 r0 page 169954 DBG detail result 01a1e5b4-69e1-7679-8940-ab3499c4d643 live-network false false false true undefined false
+DD ACC-06 w0 r0 ben 169967 DBG detail result 01a1e5b4-2936-7a83-9463-8edc28800f51 live-network false false false true undefined false
+DD CHN-06 w2 r0 page 170033 DBG detail result 01a1e5b4-69e7-73e7-969d-cabc911434a8 live-network false false false true undefined false
+DD ACC-06 w0 r0 ben 170132 DBG detail result 01a1e5b4-2936-7a83-9463-8edc28800f51 live-network true false false true undefined true
+DD ACC-06 w0 r0 ben 170133 DBG detail result 01a1e5b4-2936-7a83-9463-8edc28800f51 live-network true false false true undefined false
+DD CHN-05 w3 r0 page 170262 DBG detail result 01a1e5b4-69e1-7679-8940-ab3499c4d643 live-network false false false true undefined true
+DD CHN-05 w3 r0 page 170274 DBG detail result 01a1e5b4-69e1-7679-8940-ab3499c4d643 live-network false false false true undefined false
+DD CHN-06 w2 r0 page 170299 DBG detail result 01a1e5b4-69e7-73e7-969d-cabc911434a8 live-network false false false true undefined true
+DD CHN-06 w2 r0 page 170305 DBG detail result 01a1e5b4-69e7-73e7-969d-cabc911434a8 live-network false false false true undefined false
+  ✓    6 tests/channels-e2e-dbg/access.spec.ts:168:1 › ACC-06 a teammate finds a team channel they are not in by its name and joins it (18.5s)
+DD CHN-04 w1 r0 ada 170680 DBG detail result 01a1e5b4-65a0-77ea-b514-bc90ea4b2603 live-network false false false true undefined false
+DD CHN-05 w3 r0 page 170841 DBG devmiss uncovered {"channelId":"01a1e5b4-69e1-7679-8940-ab3499c4d643","limit":50} null false
+DD CHN-05 w3 r0 page 170857 DBG detail result 01a1e5b4-69e1-7679-8940-ab3499c4d643 live-network false false false true undefined true
+DD CHN-05 w3 r0 page 170859 DBG detail result 01a1e5b4-69e1-7679-8940-ab3499c4d643 live-network false false false true undefined true
+DD CHN-06 w2 r0 page 170861 DBG devmiss uncovered {"channelId":"01a1e5b4-69e7-73e7-969d-cabc911434a8","limit":50} null false
+DD CHN-06 w2 r0 page 170877 DBG detail result 01a1e5b4-69e7-73e7-969d-cabc911434a8 live-network false false false true undefined true
+DD CHN-06 w2 r0 page 170879 DBG detail result 01a1e5b4-69e7-73e7-969d-cabc911434a8 live-network false false false true undefined true
+DD CHN-04 w1 r0 ada 170929 DBG detail result 01a1e5b4-65a0-77ea-b514-bc90ea4b2603 live-network false false false true undefined true
+DD CHN-04 w1 r0 ada 170934 DBG detail result 01a1e5b4-65a0-77ea-b514-bc90ea4b2603 live-network false false false true undefined false
+DD CHN-05 w3 r0 page 170944 DBG detail result 01a1e5b4-69e1-7679-8940-ab3499c4d643 affected-cache-reread false false false true undefined true
+DD CHN-05 w3 r0 page 170945 DBG detail result 01a1e5b4-69e1-7679-8940-ab3499c4d643 affected-cache-reread false false false true undefined true
+DD CHN-06 w2 r0 page 171010 DBG store ok {"channelId":"01a1e5b4-69e7-73e7-969d-cabc911434a8","limit":50} 817 2
+DD CHN-05 w3 r0 page 171014 DBG store ok {"channelId":"01a1e5b4-69e1-7679-8940-ab3499c4d643","limit":50} 889 1
+DD CHN-04 w1 r0 ada 171524 DBG detail result 01a1e5b4-65a0-77ea-b514-bc90ea4b2603 live-network false false false true undefined true
+DD CHN-04 w1 r0 ada 171526 DBG detail result 01a1e5b4-65a0-77ea-b514-bc90ea4b2603 live-network false false false true undefined true
+DD CHN-04 w1 r0 ada 171539 DBG devmiss uncovered {"channelId":"01a1e5b4-65a0-77ea-b514-bc90ea4b2603","limit":50} null false
+DD CHN-04 w1 r0 ada 171682 DBG store ok {"channelId":"01a1e5b4-65a0-77ea-b514-bc90ea4b2603","limit":50} 835 1
+DD CHN-04 w1 r0 ada 171701 DBG detail result 01a1e5b4-65a0-77ea-b514-bc90ea4b2603 affected-cache-reread false false false true undefined true
+DD CHN-04 w1 r0 ada 171709 DBG detail result 01a1e5b4-65a0-77ea-b514-bc90ea4b2603 affected-cache-reread false false false true undefined true
+DD CHN-07 w0 r0 page 172109 DBG detail result 01a1e5b4-71c0-787f-8670-3ad90c687f23 live-network false false false true undefined false
+DD CHN-04 w1 r0 ada 172224 DBG detail result 01a1e5b4-65a0-77ea-b514-bc90ea4b2603 affected-cache-reread false false false true undefined true
+DD CHN-04 w1 r0 ada 172224 DBG detail result 01a1e5b4-65a0-77ea-b514-bc90ea4b2603 affected-cache-reread false false false true undefined true
+DD CHN-06 w2 r0 ben 172282 DBG detail result 01a1e5b4-69e7-73e7-969d-cabc911434a8 live-network false false false true undefined false
+DD CHN-07 w0 r0 page 172355 DBG detail result 01a1e5b4-71c0-787f-8670-3ad90c687f23 live-network false false false true undefined true
+DD CHN-05 w3 r0 page 172355 DBG detail result 01a1e5b4-69e1-7679-8940-ab3499c4d643 live-network false false false true undefined false
+DD CHN-04 w1 r0 ben 172357 DBG detail result 01a1e5b4-65a0-77ea-b514-bc90ea4b2603 affected-cache-reread false false false true undefined true
+DD CHN-04 w1 r0 ben 172360 DBG detail result 01a1e5b4-65a0-77ea-b514-bc90ea4b2603 affected-cache-reread false false false true undefined true
+DD CHN-07 w0 r0 page 172363 DBG detail result 01a1e5b4-71c0-787f-8670-3ad90c687f23 live-network false false false true undefined false
+DD CHN-06 w2 r0 ben 172554 DBG detail result 01a1e5b4-69e7-73e7-969d-cabc911434a8 live-network false false false true undefined true
+DD CHN-06 w2 r0 ben 172560 DBG detail result 01a1e5b4-69e7-73e7-969d-cabc911434a8 live-network false false false true undefined false
+DD CHN-05 w3 r0 page 172562 DBG detail result 01a1e5b4-69e1-7679-8940-ab3499c4d643 live-network false false false true undefined true
+DD CHN-05 w3 r0 page 172567 DBG detail result 01a1e5b4-69e1-7679-8940-ab3499c4d643 live-network false false false true undefined false
+DJ CHN-05 w3 r0 page 172628 ["[observability]","graphql.mutation_queue.loaded",{"auth.state":"signed-in","network.online":false,"graphql.websocket.state":"connected","mutation_queue.depth":1,"mutation_queue.age_unknown_items":0,"mutation_queue.oldest_item_age_ms":1914}]
+  ✓   15 tests/channels-e2e-dbg/channels.spec.ts:223:1 › CHN-06 Copy Link gives an address that opens the channel for another member (4.5s)
+DD CHN-07 w0 r0 page 172950 DBG devmiss uncovered {"channelId":"01a1e5b4-71c0-787f-8670-3ad90c687f23","limit":50} null false
+DD CHN-07 w0 r0 page 172950 DBG detail result 01a1e5b4-71c0-787f-8670-3ad90c687f23 live-network false false false true undefined true
+DD CHN-07 w0 r0 page 172950 DBG detail result 01a1e5b4-71c0-787f-8670-3ad90c687f23 live-network false false false true undefined true
+DD CHN-05 w3 r0 page 173002 DBG detail result 01a1e5b4-69e1-7679-8940-ab3499c4d643 affected-cache-reread true false false true undefined true
+DD CHN-05 w3 r0 page 173003 DBG detail result 01a1e5b4-69e1-7679-8940-ab3499c4d643 affected-cache-reread true false false true undefined true
+DD CHN-05 w3 r0 page 173010 DBG detail result 01a1e5b4-69e1-7679-8940-ab3499c4d643 live-network false false false true undefined true
+DD CHN-05 w3 r0 page 173011 DBG detail result 01a1e5b4-69e1-7679-8940-ab3499c4d643 live-network false false false true undefined true
+DD CHN-05 w3 r0 page 173020 DBG store ok {"channelId":"01a1e5b4-69e1-7679-8940-ab3499c4d643","limit":50} 544 1
+DD CHN-07 w0 r0 page 173053 DBG store ok {"channelId":"01a1e5b4-71c0-787f-8670-3ad90c687f23","limit":50} 792 2
+DD CHN-04 w1 r0 ben 173726 DBG detail result 01a1e5b4-65a0-77ea-b514-bc90ea4b2603 affected-cache-reread false false false true undefined true
+DD CHN-04 w1 r0 ben 173726 DBG detail result 01a1e5b4-65a0-77ea-b514-bc90ea4b2603 affected-cache-reread false false false true undefined true
+DD CHN-07 w0 r0 ben 173945 DBG detail result 01a1e5b4-71c0-787f-8670-3ad90c687f23 live-network false false false true undefined false
+DD CHN-05 w3 r0 page 174141 DBG detail result 01a1e5b4-69e1-7679-8940-ab3499c4d643 live-network false false false true undefined false
+DD CHN-07 w0 r0 ben 174184 DBG detail result 01a1e5b4-71c0-787f-8670-3ad90c687f23 live-network false false false true undefined true
+DD CHN-07 w0 r0 ben 174189 DBG detail result 01a1e5b4-71c0-787f-8670-3ad90c687f23 live-network false false false true undefined false
+DD CHN-05 w3 r0 page 174307 DBG detail result 01a1e5b4-69e1-7679-8940-ab3499c4d643 live-network false false false true undefined true
+DD CHN-05 w3 r0 page 174309 DBG detail result 01a1e5b4-69e1-7679-8940-ab3499c4d643 live-network false false false true undefined false
+DJ CHN-05 w3 r0 page 174389 ["[observability]","graphql.mutation_queue.loaded",{"auth.state":"signed-in","network.online":false,"graphql.websocket.state":"connected","mutation_queue.depth":2,"mutation_queue.age_unknown_items":0,"mutation_queue.oldest_item_age_ms":3706}]
+DD CHN-08 w2 r0 page 174444 DBG detail result 01a1e5b4-7b5e-7a3b-8b1a-b08ebf372329 live-network false false false true undefined false
+DD CHN-05 w3 r0 page 174665 DBG detail result 01a1e5b4-69e1-7679-8940-ab3499c4d643 live-network false false false true undefined true
+DD CHN-05 w3 r0 page 174666 DBG detail result 01a1e5b4-69e1-7679-8940-ab3499c4d643 live-network false false false true undefined true
+DD CHN-08 w2 r0 page 174692 DBG detail result 01a1e5b4-7b5e-7a3b-8b1a-b08ebf372329 live-network false false false true undefined true
+DD CHN-08 w2 r0 page 174699 DBG detail result 01a1e5b4-7b5e-7a3b-8b1a-b08ebf372329 live-network false false false true undefined false
+DD CHN-05 w3 r0 page 174768 DBG store ok {"channelId":"01a1e5b4-69e1-7679-8940-ab3499c4d643","limit":50} 513 1
+DD CHN-07 w0 r0 ben 174778 DBG detail result 01a1e5b4-71c0-787f-8670-3ad90c687f23 live-network false false false true undefined true
+DD CHN-07 w0 r0 ben 174780 DBG detail result 01a1e5b4-71c0-787f-8670-3ad90c687f23 live-network false false false true undefined true
+DJ CHN-05 w3 r0 page 174796 ["[observability]","graphql.mutation_queue.skipped",{"auth.state":"signed-in","network.online":false,"graphql.websocket.state":"connected","mutation_queue.pending_items":0,"mutation_queue.oldest_observed_wait_ms":0,"mutation_queue.age_unknown_items":0,"mutation_queue.skip_reason":"lease-owner-gone"}]
+DD CHN-07 w0 r0 ben 174834 DBG devmiss uncovered {"channelId":"01a1e5b4-71c0-787f-8670-3ad90c687f23","limit":50} null false
+  ✓   14 tests/channels-e2e-dbg/channels.spec.ts:193:1 › CHN-05 a channel can be made a favorite and taken out again, and both survive a reload (6.4s)
+DD CHN-04 w1 r0 ben 174950 DBG devmiss uncovered {"channelId":"01a1e5b4-3d37-7f12-a65e-8cf1540c4138","limit":50} null false
+DD CHN-07 w0 r0 ben 175116 DBG detail result 01a1e5b4-71c0-787f-8670-3ad90c687f23 affected-cache-reread false false false true undefined true
+DD CHN-07 w0 r0 ben 175116 DBG detail result 01a1e5b4-71c0-787f-8670-3ad90c687f23 affected-cache-reread false false false true undefined true
+DD CHN-07 w0 r0 ben 175116 DBG store ok {"channelId":"01a1e5b4-71c0-787f-8670-3ad90c687f23","limit":50} 1009 2
+DD CHN-07 w0 r0 ben 175251 DBG detail result 01a1e5b4-71c0-787f-8670-3ad90c687f23 affected-cache-reread false false false true undefined true
+DD CHN-07 w0 r0 ben 175251 DBG detail result 01a1e5b4-71c0-787f-8670-3ad90c687f23 affected-cache-reread false false false true undefined true
+DD CHN-08 w2 r0 page 175266 DBG devmiss uncovered {"channelId":"01a1e5b4-7b5e-7a3b-8b1a-b08ebf372329","limit":50} null false
+DD CHN-08 w2 r0 page 175285 DBG detail result 01a1e5b4-7b5e-7a3b-8b1a-b08ebf372329 live-network false false false true undefined true
+DD CHN-08 w2 r0 page 175288 DBG detail result 01a1e5b4-7b5e-7a3b-8b1a-b08ebf372329 live-network false false false true undefined true
+DD CHN-04 w1 r0 ben 175298 DBG store ok {"channelId":"01a1e5b4-3d37-7f12-a65e-8cf1540c4138","limit":50} 289 1
+DD CHN-07 w0 r0 ben 175304 DBG detail result 01a1e5b4-71c0-787f-8670-3ad90c687f23 affected-cache-reread true false false true undefined true
+DD CHN-07 w0 r0 ben 175304 DBG detail result 01a1e5b4-71c0-787f-8670-3ad90c687f23 affected-cache-reread true false false true undefined true
+DD CHN-07 w0 r0 ben 175405 DBG detail result 01a1e5b4-71c0-787f-8670-3ad90c687f23 live-network false false false false undefined true
+DD CHN-08 w2 r0 page 175414 DBG store ok {"channelId":"01a1e5b4-7b5e-7a3b-8b1a-b08ebf372329","limit":50} 822 1
+DD CHN-08 w2 r0 page 175438 DBG detail result 01a1e5b4-7b5e-7a3b-8b1a-b08ebf372329 affected-cache-reread false false false true undefined true
+DD CHN-08 w2 r0 page 175440 DBG detail result 01a1e5b4-7b5e-7a3b-8b1a-b08ebf372329 affected-cache-reread false false false true undefined true
+DD CHN-07 w0 r0 page 175520 DBG detail result 01a1e5b4-71c0-787f-8670-3ad90c687f23 live-network true false false true undefined true
+DD CHN-07 w0 r0 page 175520 DBG detail result 01a1e5b4-71c0-787f-8670-3ad90c687f23 live-network true false false true undefined true
+DD CHN-08 w2 r0 page 175540 DBG detail result 01a1e5b4-7b5e-7a3b-8b1a-b08ebf372329 affected-cache-reread true false false true undefined true
+DD CHN-08 w2 r0 page 175540 DBG detail result 01a1e5b4-7b5e-7a3b-8b1a-b08ebf372329 affected-cache-reread true false false true undefined true
+DD CHN-07 w0 r0 page 175627 DBG detail result 01a1e5b4-71c0-787f-8670-3ad90c687f23 live-network false false false false undefined true
+DD CHN-07 w0 r0 page 175740 DBG detail result 01a1e5b4-71c0-787f-8670-3ad90c687f23 live-network true false false false undefined true
+DD CHN-04 w1 r0 ben 175820 DBG devmiss uncovered {"channelId":"01a1e5b4-2944-7c5e-8260-2ae79b992b4a","limit":50} null false
+DD CHN-07 w0 r0 page 175823 DBG detail result 01a1e5b4-71c0-787f-8670-3ad90c687f23 live-network false false false false undefined true
+DD CHN-07 w0 r0 page 175841 DBG detail result 01a1e5b4-71c0-787f-8670-3ad90c687f23 live-network true false false false undefined true
+DD CHN-04 w1 r0 ada 175895 DBG devmiss uncovered {"channelId":"01a1e5b3-eea4-7277-9bb9-7971ff540ee3","limit":50} null false
+DD CHN-04 w1 r0 ada 175912 DBG detail result 01a1e5b4-65a0-77ea-b514-bc90ea4b2603 affected-cache-reread false false false true undefined true
+DD CHN-04 w1 r0 ada 175912 DBG detail result 01a1e5b4-65a0-77ea-b514-bc90ea4b2603 affected-cache-reread false false false true undefined true
+DD CHN-07 w0 r0 page 175956 DBG detail result 01a1e5b4-71c0-787f-8670-3ad90c687f23 live-network false false false false undefined true
+DD CHN-08 w2 r0 page 175959 DBG detail result 01a1e5b4-7b5e-7a3b-8b1a-b08ebf372329 live-network false false false true undefined true
+DD CHN-08 w2 r0 page 175960 DBG detail result 01a1e5b4-7b5e-7a3b-8b1a-b08ebf372329 live-network false false false true undefined true
+DD CHN-04 w1 r0 ben 176023 DBG store ok {"channelId":"01a1e5b4-2944-7c5e-8260-2ae79b992b4a","limit":50} 176 2
+DD CHN-09 w3 r0 ben 176363 DBG detail result 01a1e5b4-82c4-7dc6-af75-99d59799f8d3 live-network false false false true undefined false
+DD CHN-04 w1 r0 ada 176379 DBG store ok {"channelId":"01a1e5b3-eea4-7277-9bb9-7971ff540ee3","limit":50} 414 263
+DD CHN-09 w3 r0 ben 176650 DBG detail result 01a1e5b4-82c4-7dc6-af75-99d59799f8d3 live-network false false false true undefined true
+DD CHN-09 w3 r0 ben 176655 DBG detail result 01a1e5b4-82c4-7dc6-af75-99d59799f8d3 live-network false false false true undefined false
+DD CHN-04 w1 r0 ben 176678 DBG devmiss uncovered {"channelId":"01a1e5b4-2192-703a-a47e-13a2e6ad009f","limit":50} null false
+DD CHN-04 w1 r0 ben 176826 DBG store ok {"channelId":"01a1e5b4-2192-703a-a47e-13a2e6ad009f","limit":50} 116 1
+DD CHN-04 w1 r0 ada 176901 DBG devmiss uncovered {"channelId":"01a1e5ac-4862-7848-aa09-a1f192733827","limit":50} null false
+  ✓   18 tests/channels-e2e-dbg/channels.spec.ts:320:1 › CHN-09 a member who does not own the channel is not offered Delete (2.2s)
+DD CHN-04 w1 r0 ada 177064 DBG store ok {"channelId":"01a1e5ac-4862-7848-aa09-a1f192733827","limit":50} 147 8
+DD CHN-07 w0 r0 ben 177191 DBG detail result 01a1e5b4-71c0-787f-8670-3ad90c687f23 live-network false false false false undefined false
+  ✓   17 tests/channels-e2e-dbg/channels.spec.ts:290:1 › CHN-08 a deleted channel leaves its owner’s Favorites too (4.4s)
+DD CHN-04 w1 r0 ben 177460 DBG devmiss uncovered {"channelId":"01a1e5b3-eea4-7277-9bb9-7971ff540ee3","limit":50} null false
+DD CHN-04 w1 r0 ada 177591 DBG devmiss uncovered {"channelId":"01a1e5ac-19a8-7bb0-82f1-ec906d9eef31","limit":50} null false
+DD CHN-04 w1 r0 ben 177689 DBG store ok {"channelId":"01a1e5b3-eea4-7277-9bb9-7971ff540ee3","limit":50} 181 263
+DD CHN-04 w1 r0 ada 177754 DBG store ok {"channelId":"01a1e5ac-19a8-7bb0-82f1-ec906d9eef31","limit":50} 146 25
+DD CHN-04 w1 r0 ben 178276 DBG devmiss uncovered {"channelId":"01a1e5b3-32ae-77ec-9808-bd53104224f7","limit":50} null false
+DD CHN-04 w1 r0 ben 178406 DBG store ok {"channelId":"01a1e5b3-32ae-77ec-9808-bd53104224f7","limit":50} 104 2
+DD CHN-10 w3 r0 page 178450 DBG detail result 01a1e5b4-8b6a-792d-82d2-2fdd30ceae5c live-network false false false true undefined false
+DD CHN-07 w0 r0 page 178612 DBG devmiss uncovered {"channelId":"01a1e5b3-eea4-74a1-b400-134e6906124b","limit":50} null false
+DD CHN-10 w3 r0 page 178669 DBG detail result 01a1e5b4-8b6a-792d-82d2-2fdd30ceae5c live-network false false false true undefined true
+DD CHN-10 w3 r0 page 178673 DBG detail result 01a1e5b4-8b6a-792d-82d2-2fdd30ceae5c live-network false false false true undefined false
+DD CHN-04 w1 r0 ada 178726 DBG devmiss uncovered {"channelId":"01a1e5ab-f830-7f0c-95d4-d34c5c60e57f","limit":50} null false
+DD CHN-11 w2 r0 page 178803 DBG detail result 01a1e5b4-8c94-7092-88d1-a77ce1700d30 live-network false false false true undefined false
+DD CHN-07 w0 r0 page 178828 DBG store ok {"channelId":"01a1e5b3-eea4-74a1-b400-134e6906124b","limit":50} 163 263
+DD CHN-04 w1 r0 ada 178909 DBG store ok {"channelId":"01a1e5ab-f830-7f0c-95d4-d34c5c60e57f","limit":50} 167 9
+  ✓   19 tests/channels-e2e-dbg/channels.spec.ts:338:1 › CHN-10 the Participants tab lists the channel’s members by name, with the owner marked (1.9s)
+DD CHN-04 w1 r0 ben 178946 DBG devmiss uncovered {"channelId":"01a1e5b2-f7db-7887-ac7d-2f5e8eeb2061","limit":50} null false
+DD CHN-04 w1 r0 ben 179000 DBG store ok {"channelId":"01a1e5b2-f7db-7887-ac7d-2f5e8eeb2061","limit":50} 31 2
+DD CHN-11 w2 r0 page 179032 DBG detail result 01a1e5b4-8c94-7092-88d1-a77ce1700d30 live-network false false false true undefined true
+DD CHN-11 w2 r0 page 179037 DBG detail result 01a1e5b4-8c94-7092-88d1-a77ce1700d30 live-network false false false true undefined false
+  ✓   20 tests/channels-e2e-dbg/channels.spec.ts:361:1 › CHN-11 the Attachments tab of a channel with no files says there are none (1.9s)
+DD CHN-04 w1 r0 ada 179460 DBG devmiss uncovered {"channelId":"01a1e5ab-cc3a-77bc-9c03-a201f69704cc","limit":50} null false
+DD CHN-04 w1 r0 ben 179501 DBG devmiss uncovered {"channelId":"01a1e5b2-bc98-78f2-be8a-5c757802228e","limit":50} null false
+DD CHN-04 w1 r0 ada 179609 DBG store ok {"channelId":"01a1e5ab-cc3a-77bc-9c03-a201f69704cc","limit":50} 126 8
+DD CHN-04 w1 r0 ben 179940 DBG store ok {"channelId":"01a1e5b2-bc98-78f2-be8a-5c757802228e","limit":50} 365 2
+DD CHN-04 w1 r0 ada 180106 DBG devmiss uncovered {"channelId":"01a1e5ab-6eb8-7057-afa7-dfd9ef878873","limit":50} null false
+DD CHN-07 w0 r0 page 180153 DBG detail result 01a1e5b4-71c0-787f-8670-3ad90c687f23 live-network false false false false undefined false
+DD CHN-04 w1 r0 ada 180256 DBG store ok {"channelId":"01a1e5ab-6eb8-7057-afa7-dfd9ef878873","limit":50} 120 26
+DD CHN-12 w3 r0 page 180417 DBG detail result 01a1e5b3-eea6-7ded-a55a-7d872dbc418e live-network false false false true undefined false
+DD CHN-04 w1 r0 ben 180624 DBG devmiss uncovered {"channelId":"01a1e5b2-b19c-76c1-b5f0-d37fb5bb5dc1","limit":50} null false
+DD CHN-04 w1 r0 ben 180736 DBG store ok {"channelId":"01a1e5b2-b19c-76c1-b5f0-d37fb5bb5dc1","limit":50} 92 2
+DD CHN-12 w3 r0 page 180749 DBG detail result 01a1e5b3-eea6-7ded-a55a-7d872dbc418e live-network false false false true undefined true
+DD CHN-04 w1 r0 ada 180758 DBG devmiss uncovered {"channelId":"01a1e5ab-4694-7af4-985f-2b720d70298d","limit":50} null false
+DD CHN-12 w3 r0 page 180762 DBG detail result 01a1e5b3-eea6-7ded-a55a-7d872dbc418e live-network false false false true undefined false
+DD CHN-13 w2 r0 page 180763 DBG detail result 01a1e5b4-9436-73a2-9c45-ff00f1c9f675 live-network false false false true undefined false
+DD CHN-04 w1 r0 ada 180952 DBG store ok {"channelId":"01a1e5ab-4694-7af4-985f-2b720d70298d","limit":50} 137 8
+DD CHN-13 w2 r0 page 180976 DBG detail result 01a1e5b4-9436-73a2-9c45-ff00f1c9f675 live-network false false false true undefined true
+DD CHN-13 w2 r0 page 180979 DBG detail result 01a1e5b4-9436-73a2-9c45-ff00f1c9f675 live-network false false false true undefined false
+DD CHN-12 w3 r0 page 181229 DBG devmiss uncovered {"channelId":"01a1e5b3-eea6-7ded-a55a-7d872dbc418e","limit":50} null false
+DD CHN-12 w3 r0 page 181269 DBG detail result 01a1e5b3-eea6-7ded-a55a-7d872dbc418e live-network false false false true undefined true
+DD CHN-12 w3 r0 page 181271 DBG detail result 01a1e5b3-eea6-7ded-a55a-7d872dbc418e live-network false false false true undefined true
+DD CHN-12 w3 r0 page 181316 DBG devmiss uncovered {"channelId":"01a1e5b3-eea6-7ded-a55a-7d872dbc418e","limit":100,"before":"00001794855144979711-01a1e5b4-0e13-706a-b6d8-60ccd11feb30"} null false
+DD CHN-12 w3 r0 page 181345 DBG detail result 01a1e5b3-eea6-7ded-a55a-7d872dbc418e live-network true false false true undefined true
+DD CHN-12 w3 r0 page 181346 DBG detail result 01a1e5b3-eea6-7ded-a55a-7d872dbc418e live-network true false false true undefined true
+DD CHN-04 w1 r0 ben 181367 DBG devmiss uncovered {"channelId":"01a1e5b2-0986-7999-b086-71ec66a2b337","limit":50} null false
+DD CHN-04 w1 r0 ben 181408 DBG store ok {"channelId":"01a1e5b2-0986-7999-b086-71ec66a2b337","limit":50} 19 2
+DD CHN-04 w1 r0 ada 181453 DBG devmiss uncovered {"channelId":"01a1e5aa-c15c-71bc-827a-70062c551599","limit":50} null false
+DD CHN-12 w3 r0 page 181504 DBG store ok {"channelId":"01a1e5b3-eea6-7ded-a55a-7d872dbc418e","limit":50} 940 263
+DD CHN-12 w3 r0 page 181507 DBG store ok {"channelId":"01a1e5b3-eea6-7ded-a55a-7d872dbc418e","limit":100,"before":"00001794855144979711-01a1e5b4-0e13-706a-b6d8-60ccd11feb30"} 411 263
+DD CHN-12 w3 r0 page 181511 DBG detail result 01a1e5b3-eea6-7ded-a55a-7d872dbc418e normalized-cache-hit true false false true undefined true
+DD CHN-12 w3 r0 page 181513 DBG detail result 01a1e5b3-eea6-7ded-a55a-7d872dbc418e normalized-cache-hit true false false true undefined true
+DD CHN-13 w2 r0 page 181533 DBG detail result 01a1e5b4-9436-73a2-9c45-ff00f1c9f675 live-network false false false true undefined true
+DD CHN-13 w2 r0 page 181535 DBG detail result 01a1e5b4-9436-73a2-9c45-ff00f1c9f675 live-network false false false true undefined true
+DD CHN-13 w2 r0 page 181566 DBG devmiss uncovered {"channelId":"01a1e5b4-9436-73a2-9c45-ff00f1c9f675","limit":50} null false
+DD CHN-13 w2 r0 page 181616 DBG detail result 01a1e5b4-9436-73a2-9c45-ff00f1c9f675 affected-cache-reread false false false true undefined true
+DD CHN-04 w1 r0 ada 181617 DBG store ok {"channelId":"01a1e5aa-c15c-71bc-827a-70062c551599","limit":50} 148 8
+DD CHN-13 w2 r0 page 181617 DBG detail result 01a1e5b4-9436-73a2-9c45-ff00f1c9f675 affected-cache-reread false false false true undefined true
+DD CHN-13 w2 r0 page 181666 DBG store ok {"channelId":"01a1e5b4-9436-73a2-9c45-ff00f1c9f675","limit":50} 770 2
+  ✓   16 tests/channels-e2e-dbg/channels.spec.ts:247:1 › CHN-07 deleting a channel removes it for its owner at once, and its address no longer opens for anyone (11.4s)
+DD CHN-12 w3 r0 page 181965 DBG detail result 01a1e5b3-eea6-7ded-a55a-7d872dbc418e live-network false false false true undefined true
+DD CHN-12 w3 r0 page 181965 DBG detail result 01a1e5b3-eea6-7ded-a55a-7d872dbc418e live-network false false false true undefined true
+DD CHN-04 w1 r0 ben 182048 DBG devmiss uncovered {"channelId":"01a1e5b1-fbc0-7bb6-8179-4f8111217999","limit":50} null false
+  ✓   21 tests/channels-e2e-dbg/channels.spec.ts:383:1 › CHN-12 going to another tab and back keeps the message list where it was (3.1s)
+DD CHN-04 w1 r0 ben 182118 DBG store ok {"channelId":"01a1e5b1-fbc0-7bb6-8179-4f8111217999","limit":50} 42 2
+DD CHN-04 w1 r0 ada 182119 DBG devmiss uncovered {"channelId":"01a1e5aa-6a21-72c0-84fe-a9acebdcf286","limit":50} null false
+DD CHN-04 w1 r0 ada 182224 DBG store ok {"channelId":"01a1e5aa-6a21-72c0-84fe-a9acebdcf286","limit":50} 88 8
+DD CHN-04 w1 r0 ada 182725 DBG devmiss uncovered {"channelId":"01a1e5aa-3bf9-7d65-b8f3-3bc3f280f64f","limit":50} null false
+DD CHN-04 w1 r0 ada 182791 DBG store ok {"channelId":"01a1e5aa-3bf9-7d65-b8f3-3bc3f280f64f","limit":50} 46 25
+DD CHN-04 w1 r0 ben 182952 DBG devmiss uncovered {"channelId":"01a1e5b1-b4bd-7d5a-831b-34ef6b55ef00","limit":50} null false
+DD CHN-04 w1 r0 ben 183070 DBG store ok {"channelId":"01a1e5b1-b4bd-7d5a-831b-34ef6b55ef00","limit":50} 93 2
+DD CHN-04 w1 r0 ada 183292 DBG devmiss uncovered {"channelId":"01a1e5aa-18ce-78ae-937b-c41cd1f1f6f2","limit":50} null false
+DD CHN-04 w1 r0 ada 183342 DBG store ok {"channelId":"01a1e5aa-18ce-78ae-937b-c41cd1f1f6f2","limit":50} 34 9
+DD CHN-14 w0 r0 page 183368 DBG detail result 01a1e5b4-9e73-7e37-a704-afc761c69622 live-network false false false true undefined false
+DD CHN-15 w3 r0 page 183550 DBG detail result 01a1e5b4-9f0c-74e1-a410-ed483a772607 live-network false false false true undefined false
+DD CHN-14 w0 r0 page 183561 DBG detail result 01a1e5b4-9e73-7e37-a704-afc761c69622 live-network false false false true undefined true
+DD CHN-14 w0 r0 page 183565 DBG detail result 01a1e5b4-9e73-7e37-a704-afc761c69622 live-network false false false true undefined false
+DD CHN-04 w1 r0 ben 183707 DBG devmiss uncovered {"channelId":"01a1e5b1-7806-7657-a404-41eb72da96ee","limit":50} null false
+DD CHN-04 w1 r0 ben 183755 DBG store ok {"channelId":"01a1e5b1-7806-7657-a404-41eb72da96ee","limit":50} 21 2
+DD CHN-15 w3 r0 page 183782 DBG detail result 01a1e5b4-9f0c-74e1-a410-ed483a772607 live-network false false false true undefined true
+DD CHN-15 w3 r0 page 183786 DBG detail result 01a1e5b4-9f0c-74e1-a410-ed483a772607 live-network false false false true undefined false
+DD CHN-04 w1 r0 ada 183844 DBG devmiss uncovered {"channelId":"01a1e5a9-e83c-739d-ab32-1c2247e1ff0b","limit":50} null false
+DD CHN-04 w1 r0 ada 183888 DBG store ok {"channelId":"01a1e5a9-e83c-739d-ab32-1c2247e1ff0b","limit":50} 15 8
+DD CHN-14 w0 r0 page 184154 DBG devmiss uncovered {"channelId":"01a1e5b4-9e73-7e37-a704-afc761c69622","limit":50} null false
+DD CHN-14 w0 r0 page 184160 DBG detail result 01a1e5b4-9e73-7e37-a704-afc761c69622 live-network false false false true undefined true
+DD CHN-14 w0 r0 page 184161 DBG detail result 01a1e5b4-9e73-7e37-a704-afc761c69622 live-network false false false true undefined true
+DD CHN-14 w0 r0 page 184248 DBG store ok {"channelId":"01a1e5b4-9e73-7e37-a704-afc761c69622","limit":50} 757 0
+DD CHN-15 w3 r0 page 184308 DBG devmiss uncovered {"channelId":"01a1e5b4-9f0c-74e1-a410-ed483a772607","limit":50} null false
+DD CHN-15 w3 r0 page 184347 DBG detail result 01a1e5b4-9f0c-74e1-a410-ed483a772607 live-network false false false false undefined true
+DD CHN-04 w1 r0 ada 184390 DBG devmiss uncovered {"channelId":"01a1e5a9-89ab-7ad4-a43a-d0cd2570f366","limit":50} null false
+DD CHN-15 w3 r0 page 184411 DBG store ok {"channelId":"01a1e5b4-9f0c-74e1-a410-ed483a772607","limit":50} 720 1
+DD CHN-04 w1 r0 ada 184415 DBG store ok {"channelId":"01a1e5a9-89ab-7ad4-a43a-d0cd2570f366","limit":50} 12 26
+  ✓   22 tests/channels-e2e-dbg/channels.spec.ts:411:1 › CHN-13 a channel’s history starts with “Channel <name> created” (5.2s)
+DD CHN-04 w1 r0 ben 184503 DBG devmiss uncovered {"channelId":"01a1e5b1-3bf4-79be-b85c-f3d4032ea524","limit":50} null false
+DD CHN-04 w1 r0 ben 184609 DBG store ok {"channelId":"01a1e5b1-3bf4-79be-b85c-f3d4032ea524","limit":50} 85 2
+DD CHN-04 w1 r0 ada 184916 DBG devmiss uncovered {"channelId":"01a1e5a9-619c-79c9-8bbe-d8c68be01260","limit":50} null false
+DD CHN-04 w1 r0 ada 184946 DBG store ok {"channelId":"01a1e5a9-619c-79c9-8bbe-d8c68be01260","limit":50} 14 8
+  ✓   24 tests/channels-e2e-dbg/channels.spec.ts:450:1 › CHN-15 a channel deleted elsewhere closes on its owner’s open page (3.1s)
+DD CHN-04 w1 r0 ben 185262 DBG devmiss uncovered {"channelId":"01a1e5b0-d209-711a-a5b3-21557d073db9","limit":50} null false
+DD CHN-04 w1 r0 ben 185382 DBG store ok {"channelId":"01a1e5b0-d209-711a-a5b3-21557d073db9","limit":50} 103 2
+DD CHN-04 w1 r0 ada 185448 DBG devmiss uncovered {"channelId":"01a1e5a8-d6db-79fd-b2eb-607681a20429","limit":50} null false
+DD CHN-04 w1 r0 ada 185477 DBG store ok {"channelId":"01a1e5a8-d6db-79fd-b2eb-607681a20429","limit":50} 13 8
+DD CHN-16 w2 r0 page 185886 DBG detail result 01a1e5b4-a887-756e-99cc-db4d722e19b3 live-network false false false true undefined false
+DD CHN-04 w1 r0 ada 185979 DBG devmiss uncovered {"channelId":"01a1e5a8-484d-764d-9b10-a31464322d6d","limit":50} null false
+DD CHN-04 w1 r0 ada 186037 DBG store ok {"channelId":"01a1e5a8-484d-764d-9b10-a31464322d6d","limit":50} 12 26
+DD CHN-16 w2 r0 page 186087 DBG detail result 01a1e5b4-a887-756e-99cc-db4d722e19b3 live-network false false false true undefined true
+DD CHN-04 w1 r0 ben 186089 DBG devmiss uncovered {"channelId":"01a1e5b0-5ca1-7e58-be72-187a9e4cf3cf","limit":50} null false
+DD CHN-16 w2 r0 page 186091 DBG detail result 01a1e5b4-a887-756e-99cc-db4d722e19b3 live-network false false false true undefined false
+DD CHN-04 w1 r0 ben 186142 DBG store ok {"channelId":"01a1e5b0-5ca1-7e58-be72-187a9e4cf3cf","limit":50} 27 2
+DD CHN-04 w1 r0 ada 186538 DBG devmiss uncovered {"channelId":"01a1e5a8-2115-7dbb-9496-42c1412d63bf","limit":50} null false
+DD CMP-01 w3 r0 page 186575 DBG detail result 01a1e5b4-ab2a-7705-98d4-c4ce461ef461 live-network false false false true undefined false
+DD CHN-04 w1 r0 ada 186612 DBG store ok {"channelId":"01a1e5a8-2115-7dbb-9496-42c1412d63bf","limit":50} 13 8
+DD CHN-16 w2 r0 page 186664 DBG devmiss uncovered {"channelId":"01a1e5b4-a887-756e-99cc-db4d722e19b3","limit":50} null false
+DD CHN-16 w2 r0 page 186671 DBG detail result 01a1e5b4-a887-756e-99cc-db4d722e19b3 live-network false false false true undefined true
+DD CHN-16 w2 r0 page 186672 DBG detail result 01a1e5b4-a887-756e-99cc-db4d722e19b3 live-network false false false true undefined true
+DD CHN-04 w1 r0 ben 186763 DBG devmiss uncovered {"channelId":"01a1e5af-9436-7a2a-979a-41ccc1907fe8","limit":50} null false
+DD CHN-16 w2 r0 page 186764 DBG store ok {"channelId":"01a1e5b4-a887-756e-99cc-db4d722e19b3","limit":50} 751 1
+DD CMP-01 w3 r0 page 186779 DBG detail result 01a1e5b4-ab2a-7705-98d4-c4ce461ef461 live-network false false false true undefined true
+DD CMP-01 w3 r0 page 186782 DBG detail result 01a1e5b4-ab2a-7705-98d4-c4ce461ef461 live-network false false false true undefined false
+DD CHN-04 w1 r0 ben 186835 DBG store ok {"channelId":"01a1e5af-9436-7a2a-979a-41ccc1907fe8","limit":50} 54 2
+DD CHN-16 w2 r0 page 186868 DBG detail result 01a1e5b4-a887-756e-99cc-db4d722e19b3 affected-cache-reread false false false true undefined true
+DD CHN-16 w2 r0 page 186870 DBG detail result 01a1e5b4-a887-756e-99cc-db4d722e19b3 affected-cache-reread false false false true undefined true
+  ✘   13 tests/channels-e2e-dbg/channels.spec.ts:160:1 › CHN-04 a rename shows in the header of a member who has the channel open (19.5s)
+DD CMP-01 w3 r0 page 187367 DBG devmiss uncovered {"channelId":"01a1e5b4-ab2a-7705-98d4-c4ce461ef461","limit":50} null false
+DD CMP-01 w3 r0 page 187381 DBG detail result 01a1e5b4-ab32-7a93-bed5-b49821fb596a live-network false false false true undefined false
+DD CMP-01 w3 r0 page 187384 DBG detail result 01a1e5b4-ab32-7a93-bed5-b49821fb596a live-network false false false true undefined false
+DD CHN-16 w2 r0 page 187417 DBG detail result 01a1e5b4-a887-756e-99cc-db4d722e19b3 affected-cache-reread false false false true undefined true
+DD CHN-16 w2 r0 page 187418 DBG detail result 01a1e5b4-a887-756e-99cc-db4d722e19b3 affected-cache-reread false false false true undefined true
+DD CMP-01 w3 r0 page 187451 DBG devmiss uncovered {"channelId":"01a1e5b4-ab32-7a93-bed5-b49821fb596a","limit":50} null false
+DD CMP-01 w3 r0 page 187495 DBG store ok {"channelId":"01a1e5b4-ab2a-7705-98d4-c4ce461ef461","limit":50} 788 0
+DD CMP-01 w3 r0 page 187593 DBG store ok {"channelId":"01a1e5b4-ab32-7a93-bed5-b49821fb596a","limit":50} 259 0
+DD CMP-01 w3 r0 page 187599 DBG detail result 01a1e5b4-ab2a-7705-98d4-c4ce461ef461 normalized-cache-hit true false false true undefined false
+DD CMP-01 w3 r0 page 187602 DBG detail result 01a1e5b4-ab2a-7705-98d4-c4ce461ef461 normalized-cache-hit true false false true undefined false
+DD CMP-01 w3 r0 page 188022 DBG detail result 01a1e5b4-ab2a-7705-98d4-c4ce461ef461 live-network false false false true undefined false
+DD CMP-01 w3 r0 page 188022 DBG detail result 01a1e5b4-ab2a-7705-98d4-c4ce461ef461 live-network false false false true undefined false
+  ✓   26 tests/channels-e2e-dbg/composer.spec.ts:21:1 › CMP-01 a draft stays in its channel while I look at another one, and is not shown there (2.9s)
+DD CMP-02 w1 r0 page 188324 DBG detail result 01a1e5b4-b212-7b1a-a3ec-2c4debecfa45 live-network false false false true undefined false
+DD CHN-14 w0 r0 page 188367 DBG devmiss uncovered {"channelId":"01a1e5b3-eea4-74a1-b400-134e6906124b","limit":50} null false
+DD CMP-02 w1 r0 page 188532 DBG detail result 01a1e5b4-b212-7b1a-a3ec-2c4debecfa45 live-network false false false true undefined true
+DD CMP-02 w1 r0 page 188536 DBG detail result 01a1e5b4-b212-7b1a-a3ec-2c4debecfa45 live-network false false false true undefined false
+DD CHN-14 w0 r0 page 188664 DBG store ok {"channelId":"01a1e5b3-eea4-74a1-b400-134e6906124b","limit":50} 239 263
+DD CHN-14 w0 r0 page 189170 DBG devmiss uncovered {"channelId":"01a1e5ab-feb1-7bb3-b158-ff9213e64e1e","limit":50} null false
+DD CHN-14 w0 r0 page 189394 DBG store ok {"channelId":"01a1e5ab-feb1-7bb3-b158-ff9213e64e1e","limit":50} 167 8
+DD CMP-03 w3 r0 ben 189607 DBG detail result 01a1e5b4-b6a1-7142-8cd0-5d17f83949dd live-network false false false true undefined false
+DD CMP-03 w3 r0 ben 189794 DBG detail result 01a1e5b4-b6a1-7142-8cd0-5d17f83949dd live-network false false false true undefined true
+DD CMP-03 w3 r0 ben 189798 DBG detail result 01a1e5b4-b6a1-7142-8cd0-5d17f83949dd live-network false false false true undefined false
+DD CMP-02 w1 r0 page 190156 DBG detail result 01a1e5b4-b212-7b1a-a3ec-2c4debecfa45 live-network false false false true undefined false
+DD CMP-02 w1 r0 page 190320 DBG detail result 01a1e5b4-b212-7b1a-a3ec-2c4debecfa45 live-network false false false true undefined true
+DD CMP-02 w1 r0 page 190329 DBG detail result 01a1e5b4-b212-7b1a-a3ec-2c4debecfa45 live-network false false false true undefined false
+DD CHN-14 w0 r0 page 190393 DBG devmiss uncovered {"channelId":"01a1e5ab-a5ae-7afe-9755-d6186d8aba65","limit":50} null false
+DD CMP-03 w3 r0 ben 190409 DBG devmiss uncovered {"channelId":"01a1e5b4-b6a1-7142-8cd0-5d17f83949dd","limit":50} null false
+  ✓   27 tests/channels-e2e-dbg/composer.spec.ts:47:1 › CMP-02 a draft is still in the composer after a reload (3.5s)
+DD CMP-03 w3 r0 ben 190512 DBG detail result 01a1e5b4-b6a1-7142-8cd0-5d17f83949dd affected-cache-reread true false false true undefined true
+DD CMP-03 w3 r0 ben 190514 DBG detail result 01a1e5b4-b6a1-7142-8cd0-5d17f83949dd affected-cache-reread true false false true undefined true
+DD CMP-03 w3 r0 ben 190522 DBG detail result 01a1e5b4-b6a1-7142-8cd0-5d17f83949dd live-network false false false true undefined true
+DD CMP-03 w3 r0 ben 190524 DBG detail result 01a1e5b4-b6a1-7142-8cd0-5d17f83949dd live-network false false false true undefined true
+DD CMP-03 w3 r0 ben 190549 DBG store ok {"channelId":"01a1e5b4-b6a1-7142-8cd0-5d17f83949dd","limit":50} 826 0
+DD CHN-14 w0 r0 page 190574 DBG store ok {"channelId":"01a1e5ab-a5ae-7afe-9755-d6186d8aba65","limit":50} 163 8
+DD CHN-16 w2 r0 page 191110 DBG devmiss uncovered {"channelId":"01a1e5b4-21bb-7562-8b56-fa6c1fcb9035","limit":50} null false
+DD CHN-14 w0 r0 page 191129 DBG devmiss uncovered {"channelId":"01a1e5ab-777a-7184-9f81-530631fed117","limit":50} null false
+DD CMP-03 w3 r0 page 191184 DBG detail result 01a1e5b4-b6a1-7142-8cd0-5d17f83949dd live-network false false false true undefined false
+DD CHN-14 w0 r0 page 191248 DBG store ok {"channelId":"01a1e5ab-777a-7184-9f81-530631fed117","limit":50} 105 25
+DD CHN-16 w2 r0 page 191365 DBG store ok {"channelId":"01a1e5b4-21bb-7562-8b56-fa6c1fcb9035","limit":50} 236 5
+DD CMP-03 w3 r0 page 191392 DBG detail result 01a1e5b4-b6a1-7142-8cd0-5d17f83949dd live-network false false false true undefined true
+DD CMP-03 w3 r0 page 191398 DBG detail result 01a1e5b4-b6a1-7142-8cd0-5d17f83949dd live-network false false false true undefined false
+DD CHN-14 w0 r0 page 191764 DBG devmiss uncovered {"channelId":"01a1e5ab-5313-7a68-ac0a-2a7bc66946ef","limit":50} null false
+DD CMP-03 w3 r0 page 191843 DBG devmiss uncovered {"channelId":"01a1e5b4-b6a1-7142-8cd0-5d17f83949dd","limit":50} null false
+DD CMP-03 w3 r0 page 191848 DBG detail result 01a1e5b4-b6a1-7142-8cd0-5d17f83949dd live-network false false false true undefined true
+DD CMP-03 w3 r0 page 191850 DBG detail result 01a1e5b4-b6a1-7142-8cd0-5d17f83949dd live-network false false false true undefined true
+DD CHN-14 w0 r0 page 191861 DBG store ok {"channelId":"01a1e5ab-5313-7a68-ac0a-2a7bc66946ef","limit":50} 78 9
+DD CHN-16 w2 r0 page 191910 DBG devmiss uncovered {"channelId":"01a1e5b3-eea4-7c82-9e39-230bd4bace6d","limit":50} null false
+DD CMP-13 w1 r0 ben 191920 DBG detail result 01a1e5b4-bff9-7467-b95b-0f9ac657fe49 live-network false false false true undefined false
+DD CMP-03 w3 r0 page 191969 DBG store ok {"channelId":"01a1e5b4-b6a1-7142-8cd0-5d17f83949dd","limit":50} 648 0
+DD CHN-16 w2 r0 page 192062 DBG store ok {"channelId":"01a1e5b3-eea4-7c82-9e39-230bd4bace6d","limit":50} 128 263
+DD CMP-13 w1 r0 ben 192138 DBG detail result 01a1e5b4-bff9-7467-b95b-0f9ac657fe49 live-network false false false true undefined true
+DD CMP-13 w1 r0 ben 192142 DBG detail result 01a1e5b4-bff9-7467-b95b-0f9ac657fe49 live-network false false false true undefined false
+DD CMP-03 w3 r0 page 192226 DBG detail result 01a1e5b4-b6a1-7142-8cd0-5d17f83949dd affected-cache-reread false false false true undefined true
+DD CMP-03 w3 r0 page 192227 DBG detail result 01a1e5b4-b6a1-7142-8cd0-5d17f83949dd affected-cache-reread false false false true undefined true
+DD CHN-14 w0 r0 page 192363 DBG devmiss uncovered {"channelId":"01a1e5ab-25ad-7a7c-a2a3-c8c94e3ff5ad","limit":50} null false
+DD CHN-14 w0 r0 page 192427 DBG store ok {"channelId":"01a1e5ab-25ad-7a7c-a2a3-c8c94e3ff5ad","limit":50} 47 8
+DD CMP-13 w1 r0 ben 192608 DBG detail result 01a1e5b4-bff9-7467-b95b-0f9ac657fe49 live-network false false false true undefined true
+DD CMP-13 w1 r0 ben 192608 DBG detail result 01a1e5b4-bff9-7467-b95b-0f9ac657fe49 live-network false false false true undefined true
+DD CMP-13 w1 r0 ben 192622 DBG devmiss uncovered {"channelId":"01a1e5b4-bff9-7467-b95b-0f9ac657fe49","limit":50} null false
+DD CMP-13 w1 r0 ben 192686 DBG detail result 01a1e5b4-bff9-7467-b95b-0f9ac657fe49 affected-cache-reread false false false true undefined true
+DD CMP-13 w1 r0 ben 192686 DBG detail result 01a1e5b4-bff9-7467-b95b-0f9ac657fe49 affected-cache-reread false false false true undefined true
+DD CMP-13 w1 r0 ben 192721 DBG store ok {"channelId":"01a1e5b4-bff9-7467-b95b-0f9ac657fe49","limit":50} 663 0
+DD CHN-14 w0 r0 page 192928 DBG devmiss uncovered {"channelId":"01a1e5aa-feff-79aa-a75a-693be93eddb9","limit":50} null false
+DD CHN-16 w2 r0 page 192936 DBG devmiss uncovered {"channelId":"01a1e5ac-5145-716e-8876-ca2485cdc31c","limit":50} null false
+DD CHN-14 w0 r0 page 192984 DBG store ok {"channelId":"01a1e5aa-feff-79aa-a75a-693be93eddb9","limit":50} 40 8
+DD CHN-16 w2 r0 page 193081 DBG store ok {"channelId":"01a1e5ac-5145-716e-8876-ca2485cdc31c","limit":50} 128 9
+DD CHN-14 w0 r0 page 193486 DBG devmiss uncovered {"channelId":"01a1e5aa-ce73-7c1f-8ff8-649d7b067ff2","limit":50} null false
+DD CMP-13 w1 r0 page 193497 DBG detail result 01a1e5b4-bff9-7467-b95b-0f9ac657fe49 live-network false false false true undefined false
+DD CHN-14 w0 r0 page 193538 DBG store ok {"channelId":"01a1e5aa-ce73-7c1f-8ff8-649d7b067ff2","limit":50} 31 25
+DD CHN-16 w2 r0 page 193596 DBG devmiss uncovered {"channelId":"01a1e5ac-0fae-7bea-a987-fe27cf2b239d","limit":50} null false
+DD CMP-03 w3 r0 ben 193600 DBG detail result 01a1e5b4-b6a1-7142-8cd0-5d17f83949dd affected-cache-reread false false false true undefined true
+DD CMP-03 w3 r0 ben 193601 DBG detail result 01a1e5b4-b6a1-7142-8cd0-5d17f83949dd affected-cache-reread false false false true undefined true
+DD CHN-16 w2 r0 page 193699 DBG store ok {"channelId":"01a1e5ac-0fae-7bea-a987-fe27cf2b239d","limit":50} 84 8
+DD CMP-13 w1 r0 page 193701 DBG detail result 01a1e5b4-bff9-7467-b95b-0f9ac657fe49 live-network false false false true undefined true
+DD CMP-13 w1 r0 page 193704 DBG detail result 01a1e5b4-bff9-7467-b95b-0f9ac657fe49 live-network false false false true undefined false
+DD CMP-03 w3 r0 page 193745 DBG detail result 01a1e5b4-b6a1-7142-8cd0-5d17f83949dd live-network false false false true undefined false
+DD CMP-03 w3 r0 page 193911 DBG detail result 01a1e5b4-b6a1-7142-8cd0-5d17f83949dd live-network false false false true undefined true
+DD CMP-03 w3 r0 page 193929 DBG detail result 01a1e5b4-b6a1-7142-8cd0-5d17f83949dd live-network false false false true undefined false
+DD CHN-14 w0 r0 page 194039 DBG devmiss uncovered {"channelId":"01a1e5aa-a495-7f49-a9b6-e5610102b317","limit":50} null false
+DD CHN-14 w0 r0 page 194080 DBG store ok {"channelId":"01a1e5aa-a495-7f49-a9b6-e5610102b317","limit":50} 22 8
+  ✓   28 tests/channels-e2e-dbg/composer.spec.ts:67:1 › CMP-03 sending a message clears its draft, and a reload does not bring it back (6.0s)
+DD CHN-16 w2 r0 page 194226 DBG devmiss uncovered {"channelId":"01a1e5ab-e4c7-7195-a0b3-7bbb1a92e2d3","limit":50} null false
+DD CHN-16 w2 r0 page 194342 DBG store ok {"channelId":"01a1e5ab-e4c7-7195-a0b3-7bbb1a92e2d3","limit":50} 55 8
+DD CHN-14 w0 r0 page 194582 DBG devmiss uncovered {"channelId":"01a1e5aa-1b07-7c95-854f-3e4346681f9f","limit":50} null false
+DD CHN-14 w0 r0 page 194611 DBG store ok {"channelId":"01a1e5aa-1b07-7c95-854f-3e4346681f9f","limit":50} 12 8
+DD CHN-16 w2 r0 page 194843 DBG devmiss uncovered {"channelId":"01a1e5ab-59b3-78f9-9327-b42dfaec303e","limit":50} null false
+DD CHN-16 w2 r0 page 194902 DBG store ok {"channelId":"01a1e5ab-59b3-78f9-9327-b42dfaec303e","limit":50} 41 8
+DD CHN-14 w0 r0 page 195113 DBG devmiss uncovered {"channelId":"01a1e5a9-c335-7f1a-9478-b91faf0b1ba9","limit":50} null false
+DD CHN-14 w0 r0 page 195163 DBG store ok {"channelId":"01a1e5a9-c335-7f1a-9478-b91faf0b1ba9","limit":50} 24 8
+DD CMP-13 w1 r0 page 195195 DBG detail result 01a1e5b4-bff9-7467-b95b-0f9ac657fe49 live-network false false false true undefined false
+DD CMP-13 w1 r0 page 195348 DBG detail result 01a1e5b4-bff9-7467-b95b-0f9ac657fe49 live-network false false false true undefined true
+DD CMP-13 w1 r0 page 195365 DBG detail result 01a1e5b4-bff9-7467-b95b-0f9ac657fe49 live-network false false false true undefined false
+DD CHN-16 w2 r0 page 195404 DBG devmiss uncovered {"channelId":"01a1e5aa-ce0e-785c-9507-76ba8bad4ff1","limit":50} null false
+DD CHN-16 w2 r0 page 195450 DBG store ok {"channelId":"01a1e5aa-ce0e-785c-9507-76ba8bad4ff1","limit":50} 26 26
+DD CMP-04 w3 r0 page 195581 DBG detail result 01a1e5b4-ce27-761f-a960-b7ec0690d044 live-network false false false true undefined false
+DD CHN-14 w0 r0 page 195664 DBG devmiss uncovered {"channelId":"01a1e5a9-815d-7064-94e4-ebb5a4615395","limit":50} null false
+DD CHN-14 w0 r0 page 195692 DBG store ok {"channelId":"01a1e5a9-815d-7064-94e4-ebb5a4615395","limit":50} 12 8
+DD CMP-13 w1 r0 page 195692 DBG devmiss uncovered {"channelId":"01a1e5b4-bff9-7467-b95b-0f9ac657fe49","limit":50} null false
+DD CMP-13 w1 r0 page 195700 DBG detail result 01a1e5b4-bff9-7467-b95b-0f9ac657fe49 live-network false false false true undefined true
+DD CMP-13 w1 r0 page 195702 DBG detail result 01a1e5b4-bff9-7467-b95b-0f9ac657fe49 live-network false false false true undefined true
+DD CMP-13 w1 r0 page 195795 DBG store ok {"channelId":"01a1e5b4-bff9-7467-b95b-0f9ac657fe49","limit":50} 478 0
+DD CMP-04 w3 r0 page 195798 DBG detail result 01a1e5b4-ce27-761f-a960-b7ec0690d044 live-network false false false true undefined true
+DD CMP-04 w3 r0 page 195802 DBG detail result 01a1e5b4-ce27-761f-a960-b7ec0690d044 live-network false false false true undefined false
+DD CHN-16 w2 r0 page 195951 DBG devmiss uncovered {"channelId":"01a1e5aa-b66d-7a88-84f4-1728387d58db","limit":50} null false
+DD CHN-16 w2 r0 page 195993 DBG store ok {"channelId":"01a1e5aa-b66d-7a88-84f4-1728387d58db","limit":50} 24 9
+DD CMP-13 w1 r0 ben 196045 DBG detail result 01a1e5b4-bff9-7467-b95b-0f9ac657fe49 affected-cache-reread false false false true undefined true
+DD CMP-13 w1 r0 ben 196045 DBG detail result 01a1e5b4-bff9-7467-b95b-0f9ac657fe49 affected-cache-reread false false false true undefined true
+DD CMP-13 w1 r0 page 196164 DBG detail result 01a1e5b4-bff9-7467-b95b-0f9ac657fe49 affected-cache-reread false false false true undefined true
+DD CMP-13 w1 r0 page 196166 DBG detail result 01a1e5b4-bff9-7467-b95b-0f9ac657fe49 affected-cache-reread false false false true undefined true
+DD CHN-14 w0 r0 page 196193 DBG devmiss uncovered {"channelId":"01a1e5a9-54f1-73b7-b9ce-0d1b3ffd7bf5","limit":50} null false
+  ✓   30 tests/channels-e2e-dbg/composer.spec.ts:121:1 › CMP-04 the send button is off while the composer is empty, and after sending I can go on typing (2.1s)
+DD CHN-14 w0 r0 page 196261 DBG store ok {"channelId":"01a1e5a9-54f1-73b7-b9ce-0d1b3ffd7bf5","limit":50} 46 8
+DD CHN-16 w2 r0 page 196495 DBG devmiss uncovered {"channelId":"01a1e5aa-88ea-7eba-86a1-bd5e926a56ee","limit":50} null false
+DD CHN-16 w2 r0 page 196533 DBG store ok {"channelId":"01a1e5aa-88ea-7eba-86a1-bd5e926a56ee","limit":50} 22 8
+DD CHN-14 w0 r0 page 196763 DBG devmiss uncovered {"channelId":"01a1e5a9-2686-7be5-8fb2-717f5bca2f2c","limit":50} null false
+DD CHN-14 w0 r0 page 196794 DBG store ok {"channelId":"01a1e5a9-2686-7be5-8fb2-717f5bca2f2c","limit":50} 16 9
+DD CHN-16 w2 r0 page 197035 DBG devmiss uncovered {"channelId":"01a1e5aa-2af5-789f-866e-39fb15f57e6b","limit":50} null false
+DD CHN-16 w2 r0 page 197073 DBG store ok {"channelId":"01a1e5aa-2af5-789f-866e-39fb15f57e6b","limit":50} 20 26
+  ✓   29 tests/channels-e2e-dbg/composer.spec.ts:93:1 › CMP-13 a message shown as sent is still sent when the page is reloaded at once (6.7s)
+DD CHN-14 w0 r0 page 197295 DBG devmiss uncovered {"channelId":"01a1e5a8-e40c-7c14-8397-0aa0ff1f4a85","limit":50} null false
+DD CHN-14 w0 r0 page 197323 DBG store ok {"channelId":"01a1e5a8-e40c-7c14-8397-0aa0ff1f4a85","limit":50} 12 8
+DD CHN-16 w2 r0 page 197574 DBG devmiss uncovered {"channelId":"01a1e5aa-03cf-7f36-8f4c-76c410628777","limit":50} null false
+DD CMP-05 w3 r0 ben 197593 DBG detail result 01a1e5b4-d65a-7fd2-b141-7c030c77c46d live-network false false false true undefined false
+DD CHN-16 w2 r0 page 197612 DBG store ok {"channelId":"01a1e5aa-03cf-7f36-8f4c-76c410628777","limit":50} 22 8
+DD CMP-05 w3 r0 ben 197784 DBG detail result 01a1e5b4-d65a-7fd2-b141-7c030c77c46d live-network false false false true undefined true
+DD CMP-05 w3 r0 ben 197791 DBG detail result 01a1e5b4-d65a-7fd2-b141-7c030c77c46d live-network false false false true undefined false
+DD CHN-14 w0 r0 page 197825 DBG devmiss uncovered {"channelId":"01a1e5a8-be95-76be-875f-b56a114afb58","limit":50} null false
+DD CHN-14 w0 r0 page 197854 DBG store ok {"channelId":"01a1e5a8-be95-76be-875f-b56a114afb58","limit":50} 11 8
+DD CHN-16 w2 r0 page 198114 DBG devmiss uncovered {"channelId":"01a1e5a9-7ad4-7171-a9e1-31799b2b42fc","limit":50} null false
+DD CHN-16 w2 r0 page 198168 DBG store ok {"channelId":"01a1e5a9-7ad4-7171-a9e1-31799b2b42fc","limit":50} 35 8
+DD CMP-05 w3 r0 ben 198320 DBG detail result 01a1e5b4-d65a-7fd2-b141-7c030c77c46d live-network false false false true undefined true
+DD CMP-05 w3 r0 ben 198322 DBG detail result 01a1e5b4-d65a-7fd2-b141-7c030c77c46d live-network false false false true undefined true
+DD CMP-05 w3 r0 ben 198342 DBG devmiss uncovered {"channelId":"01a1e5b4-d65a-7fd2-b141-7c030c77c46d","limit":50} null false
+DD CHN-14 w0 r0 page 198355 DBG devmiss uncovered {"channelId":"01a1e5a8-381f-7be0-83c6-9498a1287054","limit":50} null false
+DD CHN-14 w0 r0 page 198386 DBG store ok {"channelId":"01a1e5a8-381f-7be0-83c6-9498a1287054","limit":50} 13 8
+DD CMP-05 w3 r0 ben 198403 DBG detail result 01a1e5b4-d65a-7fd2-b141-7c030c77c46d affected-cache-reread false false false true undefined true
+DD CMP-05 w3 r0 ben 198404 DBG detail result 01a1e5b4-d65a-7fd2-b141-7c030c77c46d affected-cache-reread false false false true undefined true
+DD CMP-05 w3 r0 ben 198443 DBG store ok {"channelId":"01a1e5b4-d65a-7fd2-b141-7c030c77c46d","limit":50} 713 0
+DD CMP-06 w1 r0 ben 198653 DBG detail result 01a1e5b4-da55-76ec-8080-db28381a2448 live-network false false false true undefined false
+DD CHN-16 w2 r0 page 198670 DBG devmiss uncovered {"channelId":"01a1e5a9-4ae3-7853-ab66-5edc79736cef","limit":50} null false
+  ✘   23 tests/channels-e2e-dbg/channels.spec.ts:431:1 › CHN-14 a brand-new channel with no messages shows its “Channel <name> created” line (16.8s)
+DD CHN-16 w2 r0 page 198718 DBG store ok {"channelId":"01a1e5a9-4ae3-7853-ab66-5edc79736cef","limit":50} 27 8
+DD CMP-06 w1 r0 ben 198894 DBG detail result 01a1e5b4-da55-76ec-8080-db28381a2448 live-network false false false true undefined true
+DD CMP-06 w1 r0 ben 198898 DBG detail result 01a1e5b4-da55-76ec-8080-db28381a2448 live-network false false false true undefined false
+DD CMP-05 w3 r0 page 199187 DBG detail result 01a1e5b4-d65a-7fd2-b141-7c030c77c46d live-network false false false true undefined false
+DD CHN-16 w2 r0 page 199219 DBG devmiss uncovered {"channelId":"01a1e5a9-222c-7aa2-b38d-91b00a37d9ff","limit":50} null false
+DD CHN-16 w2 r0 page 199268 DBG store ok {"channelId":"01a1e5a9-222c-7aa2-b38d-91b00a37d9ff","limit":50} 30 8
+DD CMP-05 w3 r0 page 199391 DBG detail result 01a1e5b4-d65a-7fd2-b141-7c030c77c46d live-network false false false true undefined true
+DD CMP-05 w3 r0 page 199394 DBG detail result 01a1e5b4-d65a-7fd2-b141-7c030c77c46d live-network false false false true undefined false
+DD CMP-06 w1 r0 ben 199415 DBG devmiss uncovered {"channelId":"01a1e5b4-da55-76ec-8080-db28381a2448","limit":50} null false
+DD CMP-06 w1 r0 ben 199450 DBG detail result 01a1e5b4-da55-76ec-8080-db28381a2448 live-network false false false true undefined true
+DD CMP-06 w1 r0 ben 199452 DBG detail result 01a1e5b4-da55-76ec-8080-db28381a2448 live-network false false false true undefined true
+DD CMP-06 w1 r0 ben 199514 DBG store ok {"channelId":"01a1e5b4-da55-76ec-8080-db28381a2448","limit":50} 726 0
+DD CHN-16 w2 r0 page 199770 DBG devmiss uncovered {"channelId":"01a1e5a8-f32c-79f9-9d46-7c725e6ecaaf","limit":50} null false
+DD CHN-16 w2 r0 page 199809 DBG store ok {"channelId":"01a1e5a8-f32c-79f9-9d46-7c725e6ecaaf","limit":50} 23 25
+DD CMP-05 w3 r0 page 199923 DBG devmiss uncovered {"channelId":"01a1e5b4-d65a-7fd2-b141-7c030c77c46d","limit":50} null false
+DD CMP-05 w3 r0 page 200004 DBG detail result 01a1e5b4-d65a-7fd2-b141-7c030c77c46d live-network false false false true undefined true
+DD CMP-05 w3 r0 page 200006 DBG detail result 01a1e5b4-d65a-7fd2-b141-7c030c77c46d live-network false false false true undefined true
+DD CMP-07 w0 r0 ben 200165 DBG detail result 01a1e5b4-e004-725b-87ef-6bbf264cdd7d live-network false false false true undefined false
+DD CMP-06 w1 r0 page 200238 DBG detail result 01a1e5b4-da55-76ec-8080-db28381a2448 live-network false false false true undefined false
+DD CMP-05 w3 r0 page 200254 DBG store ok {"channelId":"01a1e5b4-d65a-7fd2-b141-7c030c77c46d","limit":50} 936 0
+DD CHN-16 w2 r0 page 200313 DBG devmiss uncovered {"channelId":"01a1e5a8-d1eb-728a-958a-5369a8f97f6f","limit":50} null false
+DD CHN-16 w2 r0 page 200360 DBG store ok {"channelId":"01a1e5a8-d1eb-728a-958a-5369a8f97f6f","limit":50} 24 9
+DD CMP-05 w3 r0 page 200373 DBG detail result 01a1e5b4-d65a-7fd2-b141-7c030c77c46d affected-cache-reread false false false true undefined true
+DD CMP-05 w3 r0 page 200373 DBG detail result 01a1e5b4-d65a-7fd2-b141-7c030c77c46d affected-cache-reread false false false true undefined true
+DD CMP-07 w0 r0 ben 200439 DBG detail result 01a1e5b4-e004-725b-87ef-6bbf264cdd7d live-network false false false true undefined true
+DD CMP-07 w0 r0 ben 200443 DBG detail result 01a1e5b4-e004-725b-87ef-6bbf264cdd7d live-network false false false true undefined false
+DD CMP-06 w1 r0 page 200445 DBG detail result 01a1e5b4-da55-76ec-8080-db28381a2448 live-network false false false true undefined true
+DD CMP-06 w1 r0 page 200449 DBG detail result 01a1e5b4-da55-76ec-8080-db28381a2448 live-network false false false true undefined false
+DD CHN-16 w2 r0 page 200861 DBG devmiss uncovered {"channelId":"01a1e5a8-a62e-7ea3-a0fd-6a608cc4840d","limit":50} null false
+DD CMP-05 w3 r0 page 200868 DBG detail result 01a1e5b4-d65a-7fd2-b141-7c030c77c46d affected-cache-reread false false false true undefined true
+DD CMP-05 w3 r0 page 200868 DBG detail result 01a1e5b4-d65a-7fd2-b141-7c030c77c46d affected-cache-reread false false false true undefined true
+DD CHN-16 w2 r0 page 200905 DBG store ok {"channelId":"01a1e5a8-a62e-7ea3-a0fd-6a608cc4840d","limit":50} 26 8
+DD CMP-07 w0 r0 ben 200923 DBG detail result 01a1e5b4-e004-725b-87ef-6bbf264cdd7d live-network false false false true undefined true
+DD CMP-07 w0 r0 ben 200923 DBG detail result 01a1e5b4-e004-725b-87ef-6bbf264cdd7d live-network false false false true undefined true
+DD CMP-07 w0 r0 ben 200978 DBG devmiss uncovered {"channelId":"01a1e5b4-e004-725b-87ef-6bbf264cdd7d","limit":50} null false
+DD CMP-05 w3 r0 page 201027 DBG local page failed {"channelId":"01a1e5b4-d65a-7fd2-b141-7c030c77c46d","limit":50} AbortError: signal is aborted without reason false true
+DD CMP-07 w0 r0 ben 201064 DBG detail result 01a1e5b4-e004-725b-87ef-6bbf264cdd7d affected-cache-reread false false false true undefined true
+DD CMP-07 w0 r0 ben 201064 DBG detail result 01a1e5b4-e004-725b-87ef-6bbf264cdd7d affected-cache-reread false false false true undefined true
+DD CMP-07 w0 r0 ben 201117 DBG store ok {"channelId":"01a1e5b4-e004-725b-87ef-6bbf264cdd7d","limit":50} 778 0
+  ✓   31 tests/channels-e2e-dbg/composer.spec.ts:148:1 › CMP-05 a person picked from the @ menu is named in the message for both people, live (5.1s)
+DD CMP-06 w1 r0 page 201359 DBG devmiss uncovered {"channelId":"01a1e5b4-da55-76ec-8080-db28381a2448","limit":50} null false
+DD CMP-06 w1 r0 page 201367 DBG detail result 01a1e5b4-da55-76ec-8080-db28381a2448 live-network false false false true undefined true
+DD CMP-06 w1 r0 page 201370 DBG detail result 01a1e5b4-da55-76ec-8080-db28381a2448 live-network false false false true undefined true
+DD CHN-16 w2 r0 page 201410 DBG devmiss uncovered {"channelId":"01a1e5a8-7f32-7e96-a5fa-c863d10c21fc","limit":50} null false
+DD CHN-16 w2 r0 page 201481 DBG store ok {"channelId":"01a1e5a8-7f32-7e96-a5fa-c863d10c21fc","limit":50} 32 8
+DD CMP-06 w1 r0 page 201833 DBG store ok {"channelId":"01a1e5b4-da55-76ec-8080-db28381a2448","limit":50} 1352 0
+DD CHN-16 w2 r0 page 201982 DBG devmiss uncovered {"channelId":"01a1e5a8-520b-73a2-a59c-fb2dc674af80","limit":50} null false
+DD CHN-16 w2 r0 page 202031 DBG store ok {"channelId":"01a1e5a8-520b-73a2-a59c-fb2dc674af80","limit":50} 29 25
+  ✓   32 tests/channels-e2e-dbg/composer.spec.ts:178:1 › CMP-06 @here picked from the @ menu is sent as a mention of everyone here (4.8s)
+DD CMP-07 w0 r0 page 202279 DBG detail result 01a1e5b4-e004-725b-87ef-6bbf264cdd7d live-network false false false true undefined false
+DD CMP-07 w0 r0 page 202312 DBG detail result 01a1e5b4-e004-725b-87ef-6bbf264cdd7d live-network true false false true undefined true
+DD CMP-07 w0 r0 page 202313 DBG detail result 01a1e5b4-e004-725b-87ef-6bbf264cdd7d live-network true false false true undefined false
+DD CHN-16 w2 r0 page 202532 DBG devmiss uncovered {"channelId":"01a1e5a8-2f0c-78ae-b058-3bca5239703e","limit":50} null false
+DD CHN-16 w2 r0 page 202560 DBG store ok {"channelId":"01a1e5a8-2f0c-78ae-b058-3bca5239703e","limit":50} 7 9
+  ✘   25 tests/channels-e2e-dbg/channels.spec.ts:474:1 › CHN-16 a rename saved while the list of channels is still being read shows in the header (18.2s)
+DD CMP-08 w3 r0 ben 202927 DBG detail result 01a1e5b4-ea58-76ba-8642-17fa7b8a20cb live-network false false false true undefined false
+DD CMP-07 w0 r0 page 203116 DBG devmiss uncovered {"channelId":"01a1e5b4-e004-725b-87ef-6bbf264cdd7d","limit":50} null false
+DD CMP-08 w3 r0 ben 203127 DBG detail result 01a1e5b4-ea58-76ba-8642-17fa7b8a20cb live-network false false false true undefined true
+DD CMP-08 w3 r0 ben 203131 DBG detail result 01a1e5b4-ea58-76ba-8642-17fa7b8a20cb live-network false false false true undefined false
+DD CMP-07 w0 r0 page 203154 DBG detail result 01a1e5b4-e004-725b-87ef-6bbf264cdd7d normalized-cache-hit false false false true undefined true
+DD CMP-07 w0 r0 page 203156 DBG detail result 01a1e5b4-e004-725b-87ef-6bbf264cdd7d normalized-cache-hit false false false true undefined false
+DD CMP-07 w0 r0 page 203225 DBG store ok {"channelId":"01a1e5b4-e004-725b-87ef-6bbf264cdd7d","limit":50} 907 0
+DD CMP-09 w1 r0 page 203647 DBG detail result 01a1e5b4-ed45-7683-a9f4-d833c7632261 live-network false false false true undefined false
+DD CMP-08 w3 r0 ben 203783 DBG detail result 01a1e5b4-ea58-76ba-8642-17fa7b8a20cb live-network false false false true undefined true
+DD CMP-08 w3 r0 ben 203785 DBG detail result 01a1e5b4-ea58-76ba-8642-17fa7b8a20cb live-network false false false true undefined true
+DD CMP-08 w3 r0 ben 203786 DBG devmiss uncovered {"channelId":"01a1e5b4-ea58-76ba-8642-17fa7b8a20cb","limit":50} null false
+DD CMP-08 w3 r0 ben 203890 DBG store ok {"channelId":"01a1e5b4-ea58-76ba-8642-17fa7b8a20cb","limit":50} 843 1
+DD CMP-09 w1 r0 page 203926 DBG detail result 01a1e5b4-ed45-7683-a9f4-d833c7632261 live-network false false false true undefined true
+DD CMP-09 w1 r0 page 203926 DBG detail result 01a1e5b4-ed45-7683-a9f4-d833c7632261 live-network false false false true undefined false
+DD CMP-07 w0 r0 page 204119 DBG detail result 01a1e5b4-e004-725b-87ef-6bbf264cdd7d affected-cache-reread false false false true undefined true
+DD CMP-07 w0 r0 page 204119 DBG detail result 01a1e5b4-e004-725b-87ef-6bbf264cdd7d affected-cache-reread false false false true undefined false
+DD CMP-07 w0 r0 page 204178 DBG detail result 01a1e5b4-e004-725b-87ef-6bbf264cdd7d affected-cache-reread false false false true undefined true
+DD CMP-07 w0 r0 page 204179 DBG detail result 01a1e5b4-e004-725b-87ef-6bbf264cdd7d affected-cache-reread false false false true undefined false
+DD CMP-10 w2 r0 page 204218 DBG detail result 01a1e5b4-ef93-7e44-ab9f-ea0f55be480d live-network false false false true undefined false
+DD CMP-10 w2 r0 page 204462 DBG detail result 01a1e5b4-ef93-7e44-ab9f-ea0f55be480d live-network false false false true undefined true
+DD CMP-09 w1 r0 page 204465 DBG detail result 01a1e5b4-ed45-7683-a9f4-d833c7632261 live-network false false false true undefined true
+DD CMP-10 w2 r0 page 204467 DBG detail result 01a1e5b4-ef93-7e44-ab9f-ea0f55be480d live-network false false false true undefined false
+DD CMP-09 w1 r0 page 204468 DBG detail result 01a1e5b4-ed45-7683-a9f4-d833c7632261 live-network false false false true undefined true
+DD CMP-09 w1 r0 page 204501 DBG devmiss uncovered {"channelId":"01a1e5b4-ed45-7683-a9f4-d833c7632261","limit":50} null false
+DD CMP-09 w1 r0 page 204552 DBG detail result 01a1e5b4-ed45-7683-a9f4-d833c7632261 affected-cache-reread false false false true undefined true
+DD CMP-09 w1 r0 page 204555 DBG detail result 01a1e5b4-ed45-7683-a9f4-d833c7632261 affected-cache-reread false false false true undefined true
+DD CMP-07 w0 r0 ben 204576 DBG detail result 01a1e5b4-e004-725b-87ef-6bbf264cdd7d affected-cache-reread false false false true undefined true
+DD CMP-07 w0 r0 ben 204576 DBG detail result 01a1e5b4-e004-725b-87ef-6bbf264cdd7d affected-cache-reread false false false true undefined true
+DD CMP-09 w1 r0 page 204599 DBG store ok {"channelId":"01a1e5b4-ed45-7683-a9f4-d833c7632261","limit":50} 832 1
+DD CMP-08 w3 r0 page 204639 DBG detail result 01a1e5b4-ea58-76ba-8642-17fa7b8a20cb live-network false false false true undefined false
+  ✓   36 tests/channels-e2e-dbg/composer.spec.ts:329:1 › CMP-10 typing reported from the other person’s other device shows “… is typing”, and goes when they stop (2.0s)
+  ✓   33 tests/channels-e2e-dbg/composer.spec.ts:208:1 › CMP-07 a text file and a picture attached to a message show before sending, for both people, and under Attachments (6.1s)
+DD CMP-08 w3 r0 page 204888 DBG detail result 01a1e5b4-ea58-76ba-8642-17fa7b8a20cb live-network false false false true undefined true
+DD CMP-08 w3 r0 page 204892 DBG detail result 01a1e5b4-ea58-76ba-8642-17fa7b8a20cb live-network false false false true undefined false
+DD CMP-09 w1 r0 ben 205375 DBG detail result 01a1e5b4-ed45-7683-a9f4-d833c7632261 live-network false false false true undefined false
+DD CMP-08 w3 r0 page 205580 DBG devmiss uncovered {"channelId":"01a1e5b4-ea58-76ba-8642-17fa7b8a20cb","limit":50} null false
+DD CMP-08 w3 r0 page 205580 DBG detail result 01a1e5b4-ea58-76ba-8642-17fa7b8a20cb live-network false false false true undefined true
+DD CMP-08 w3 r0 page 205581 DBG detail result 01a1e5b4-ea58-76ba-8642-17fa7b8a20cb live-network false false false true undefined true
+DD CMP-09 w1 r0 ben 205602 DBG detail result 01a1e5b4-ed45-7683-a9f4-d833c7632261 live-network false false false true undefined true
+DD CMP-09 w1 r0 ben 205611 DBG detail result 01a1e5b4-ed45-7683-a9f4-d833c7632261 live-network false false false true undefined false
+DD CMP-08 w3 r0 page 205723 DBG store ok {"channelId":"01a1e5b4-ea58-76ba-8642-17fa7b8a20cb","limit":50} 934 1
+DD CMP-09 w1 r0 ben 206161 DBG detail result 01a1e5b4-ed45-7683-a9f4-d833c7632261 live-network false false false true undefined true
+DD CMP-09 w1 r0 ben 206163 DBG detail result 01a1e5b4-ed45-7683-a9f4-d833c7632261 live-network false false false true undefined true
+DD CMP-09 w1 r0 ben 206167 DBG devmiss uncovered {"channelId":"01a1e5b4-ed45-7683-a9f4-d833c7632261","limit":50} null false
+DD CMP-09 w1 r0 ben 206223 DBG detail result 01a1e5b4-ed45-7683-a9f4-d833c7632261 affected-cache-reread false false false true undefined true
+DD CMP-09 w1 r0 ben 206225 DBG detail result 01a1e5b4-ed45-7683-a9f4-d833c7632261 affected-cache-reread false false false true undefined true
+DD CMP-11 w2 r0 ben 206267 DBG detail result 01a1e5b4-f74a-7c52-9ae5-3b6349a6e97d live-network false false false true undefined false
+DD CMP-09 w1 r0 ben 206291 DBG store ok {"channelId":"01a1e5b4-ed45-7683-a9f4-d833c7632261","limit":50} 782 1
+DD CMP-08 w3 r0 page 206294 DBG detail result 01a1e5b4-ea58-76ba-8642-17fa7b8a20cb affected-cache-reread false false false true undefined true
+DD CMP-08 w3 r0 page 206294 DBG detail result 01a1e5b4-ea58-76ba-8642-17fa7b8a20cb affected-cache-reread false false false true undefined true
+DD CMP-08 w3 r0 page 206318 DBG detail result 01a1e5b4-ea58-76ba-8642-17fa7b8a20cb affected-cache-reread false false false true undefined true
+DD CMP-08 w3 r0 page 206318 DBG detail result 01a1e5b4-ea58-76ba-8642-17fa7b8a20cb affected-cache-reread false false false true undefined true
+DD CMP-12 w0 r0 ben 206385 DBG detail result 01a1e5b4-f821-70f8-b523-f28c34f025ea live-network false false false true undefined false
+  ✓   34 tests/channels-e2e-dbg/composer.spec.ts:265:1 › CMP-08 a file can be sent on its own, with no text (5.1s)
+DD CMP-11 w2 r0 ben 206519 DBG detail result 01a1e5b4-f74a-7c52-9ae5-3b6349a6e97d live-network false false false true undefined true
+DD CMP-11 w2 r0 ben 206526 DBG detail result 01a1e5b4-f74a-7c52-9ae5-3b6349a6e97d live-network false false false true undefined false
+DD CMP-12 w0 r0 ben 206631 DBG detail result 01a1e5b4-f821-70f8-b523-f28c34f025ea live-network false false false true undefined true
+DD CMP-12 w0 r0 ben 206637 DBG detail result 01a1e5b4-f821-70f8-b523-f28c34f025ea live-network false false false true undefined false
+DD CMP-11 w2 r0 ben 207046 DBG detail result 01a1e5b4-f74a-7c52-9ae5-3b6349a6e97d live-network false false false true undefined true
+DD CMP-11 w2 r0 ben 207046 DBG detail result 01a1e5b4-f74a-7c52-9ae5-3b6349a6e97d live-network false false false true undefined true
+DD CMP-11 w2 r0 ben 207072 DBG devmiss uncovered {"channelId":"01a1e5b4-f74a-7c52-9ae5-3b6349a6e97d","limit":50} null false
+DD CMP-12 w0 r0 ben 207097 DBG devmiss uncovered {"channelId":"01a1e5b4-f821-70f8-b523-f28c34f025ea","limit":50} null false
+DD CMP-11 w2 r0 ben 207140 DBG detail result 01a1e5b4-f74a-7c52-9ae5-3b6349a6e97d affected-cache-reread false false false true undefined true
+DD CMP-11 w2 r0 ben 207141 DBG detail result 01a1e5b4-f74a-7c52-9ae5-3b6349a6e97d affected-cache-reread false false false true undefined true
+DD CMP-12 w0 r0 ben 207179 DBG detail result 01a1e5b4-f821-70f8-b523-f28c34f025ea affected-cache-reread true false false true undefined true
+DD CMP-12 w0 r0 ben 207179 DBG detail result 01a1e5b4-f821-70f8-b523-f28c34f025ea affected-cache-reread true false false true undefined true
+DD CMP-12 w0 r0 ben 207180 DBG detail result 01a1e5b4-f821-70f8-b523-f28c34f025ea live-network false false false true undefined true
+DD CMP-12 w0 r0 ben 207180 DBG detail result 01a1e5b4-f821-70f8-b523-f28c34f025ea live-network false false false true undefined true
+DD CMP-12 w0 r0 ben 207228 DBG store ok {"channelId":"01a1e5b4-f821-70f8-b523-f28c34f025ea","limit":50} 709 0
+DD CMP-09 w1 r0 page 207303 DBG detail result 01a1e5b4-ed45-7683-a9f4-d833c7632261 affected-cache-reread false false false true undefined true
+DD CMP-09 w1 r0 page 207303 DBG detail result 01a1e5b4-ed45-7683-a9f4-d833c7632261 affected-cache-reread false false false true undefined true
+DD CMP-11 w2 r0 ben 207430 DBG store ok {"channelId":"01a1e5b4-f74a-7c52-9ae5-3b6349a6e97d","limit":50} 903 0
+  ✓   35 tests/channels-e2e-dbg/composer.spec.ts:303:1 › CMP-09 while the other person types in their composer I see “… is typing”, until they send (5.6s)
+DD CMP-11 w2 r0 page 208279 DBG detail result 01a1e5b4-f74a-7c52-9ae5-3b6349a6e97d live-network false false false true undefined false
+DD CMP-12 w0 r0 page 208331 DBG detail result 01a1e5b4-f821-70f8-b523-f28c34f025ea live-network false false false true undefined false
+DD CMP-11 w2 r0 page 208516 DBG detail result 01a1e5b4-f74a-7c52-9ae5-3b6349a6e97d live-network false false false true undefined true
+DD CMP-11 w2 r0 page 208521 DBG detail result 01a1e5b4-f74a-7c52-9ae5-3b6349a6e97d live-network false false false true undefined false
+DD SYN-01 w3 r0 ben 208572 DBG detail result 01a1e5b4-fe46-7fdc-ba52-c0e140dad4e4 live-network false false false true undefined false
+DD CMP-12 w0 r0 page 208574 DBG detail result 01a1e5b4-f821-70f8-b523-f28c34f025ea live-network false false false true undefined true
+DD CMP-12 w0 r0 page 208576 DBG detail result 01a1e5b4-f821-70f8-b523-f28c34f025ea live-network false false false true undefined false
+DD SYN-01 w3 r0 ben 208917 DBG detail result 01a1e5b4-fe46-7fdc-ba52-c0e140dad4e4 live-network false false false true undefined true
+DD SYN-01 w3 r0 ben 208926 DBG detail result 01a1e5b4-fe46-7fdc-ba52-c0e140dad4e4 live-network false false false true undefined false
+DD CMP-11 w2 r0 page 209138 DBG devmiss uncovered {"channelId":"01a1e5b4-f74a-7c52-9ae5-3b6349a6e97d","limit":50} null false
+DD CMP-12 w0 r0 page 209155 DBG detail result 01a1e5b4-f821-70f8-b523-f28c34f025ea live-network false false false true undefined true
+DD CMP-12 w0 r0 page 209158 DBG detail result 01a1e5b4-f821-70f8-b523-f28c34f025ea live-network false false false true undefined true
+DD CMP-12 w0 r0 page 209175 DBG devmiss uncovered {"channelId":"01a1e5b4-f821-70f8-b523-f28c34f025ea","limit":50} null false
+DD CMP-11 w2 r0 page 209208 DBG detail result 01a1e5b4-f74a-7c52-9ae5-3b6349a6e97d live-network false false false true undefined true
+DD CMP-11 w2 r0 page 209211 DBG detail result 01a1e5b4-f74a-7c52-9ae5-3b6349a6e97d live-network false false false true undefined true
+DD CMP-12 w0 r0 page 209256 DBG detail result 01a1e5b4-f821-70f8-b523-f28c34f025ea affected-cache-reread false false false true undefined true
+DD CMP-12 w0 r0 page 209257 DBG detail result 01a1e5b4-f821-70f8-b523-f28c34f025ea affected-cache-reread false false false true undefined true
+DD CMP-11 w2 r0 page 209282 DBG store ok {"channelId":"01a1e5b4-f74a-7c52-9ae5-3b6349a6e97d","limit":50} 850 0
+DD CMP-12 w0 r0 page 209316 DBG store ok {"channelId":"01a1e5b4-f821-70f8-b523-f28c34f025ea","limit":50} 849 0
+DD CMP-11 w2 r0 page 209429 DBG detail result 01a1e5b4-f74a-7c52-9ae5-3b6349a6e97d affected-cache-reread false false false true undefined true
+DD CMP-11 w2 r0 page 209430 DBG detail result 01a1e5b4-f74a-7c52-9ae5-3b6349a6e97d affected-cache-reread false false false true undefined true
+DD CMP-12 w0 r0 page 209454 DBG detail result 01a1e5b4-f821-70f8-b523-f28c34f025ea affected-cache-reread false false false true undefined true
+DD CMP-12 w0 r0 page 209454 DBG detail result 01a1e5b4-f821-70f8-b523-f28c34f025ea affected-cache-reread false false false true undefined true
+DD SYN-01 w3 r0 ben 209472 DBG devmiss uncovered {"channelId":"01a1e5b4-fe46-7fdc-ba52-c0e140dad4e4","limit":50} null false
+DD SYN-01 w3 r0 ben 209537 DBG devmiss uncovered {"channelId":"01a1e5b4-fe52-7151-8bbb-4ceb47fdadd2","limit":50} null false
+DD SYN-01 w3 r0 ben 209574 DBG detail result 01a1e5b4-fe52-7151-8bbb-4ceb47fdadd2 live-network false false false true undefined false
+DD SYN-01 w3 r0 ben 209577 DBG detail result 01a1e5b4-fe52-7151-8bbb-4ceb47fdadd2 live-network false false false true undefined false
+DD SYN-01 w3 r0 ben 209582 DBG store ok {"channelId":"01a1e5b4-fe46-7fdc-ba52-c0e140dad4e4","limit":50} 870 7
+DD SYN-01 w3 r0 ben 209700 DBG store ok {"channelId":"01a1e5b4-fe52-7151-8bbb-4ceb47fdadd2","limit":50} 202 1
+DD SYN-01 w3 r0 ben 209727 DBG detail result 01a1e5b4-fe52-7151-8bbb-4ceb47fdadd2 affected-cache-reread false false false true undefined true
+DD SYN-01 w3 r0 ben 209729 DBG detail result 01a1e5b4-fe52-7151-8bbb-4ceb47fdadd2 affected-cache-reread false false false true undefined true
+DD CMP-12 w0 r0 page 209838 DBG detail result 01a1e5b4-f821-70f8-b523-f28c34f025ea affected-cache-reread false false false true undefined true
+DD CMP-12 w0 r0 page 209838 DBG detail result 01a1e5b4-f821-70f8-b523-f28c34f025ea affected-cache-reread false false false true undefined true
+DD SYN-02 w1 r0 ben 209848 DBG detail result 01a1e5b5-033e-7517-911a-b0f94ef2b297 live-network false false false true undefined false
+  ✓   37 tests/channels-e2e-dbg/composer.spec.ts:349:1 › CMP-11 text pasted into the composer is sent as it was copied (5.3s)
+  ✓   38 tests/channels-e2e-dbg/composer.spec.ts:372:1 › CMP-12 a message of 2,499 characters is sent whole (5.2s)
+DD SYN-02 w1 r0 ben 210221 DBG detail result 01a1e5b5-033e-7517-911a-b0f94ef2b297 live-network false false false true undefined true
+DD SYN-02 w1 r0 ben 210221 DBG detail result 01a1e5b5-033e-7517-911a-b0f94ef2b297 live-network false false false true undefined false
+DD SYN-01 w3 r0 ben 210476 DBG detail result 01a1e5b4-fe52-7151-8bbb-4ceb47fdadd2 affected-cache-reread false false false true undefined true
+DD SYN-01 w3 r0 ben 210477 DBG detail result 01a1e5b4-fe52-7151-8bbb-4ceb47fdadd2 affected-cache-reread false false false true undefined true
+DD SYN-02 w1 r0 ben 210598 DBG detail result 01a1e5b5-033e-7517-911a-b0f94ef2b297 live-network false false false true undefined true
+DD SYN-02 w1 r0 ben 210600 DBG detail result 01a1e5b5-033e-7517-911a-b0f94ef2b297 live-network false false false true undefined true
+DD SYN-02 w1 r0 ben 210645 DBG devmiss uncovered {"channelId":"01a1e5b5-033e-7517-911a-b0f94ef2b297","limit":50} null false
+DD SYN-02 w1 r0 ben 210706 DBG detail result 01a1e5b5-033e-7517-911a-b0f94ef2b297 affected-cache-reread false false false true undefined true
+DD SYN-02 w1 r0 ben 210707 DBG detail result 01a1e5b5-033e-7517-911a-b0f94ef2b297 affected-cache-reread false false false true undefined true
+DD SYN-02 w1 r0 ben 210760 DBG store ok {"channelId":"01a1e5b5-033e-7517-911a-b0f94ef2b297","limit":50} 762 7
+DD SYN-02 w1 r0 ben 210863 DBG detail result 01a1e5b5-033e-7517-911a-b0f94ef2b297 affected-cache-reread false false false true undefined true
+DD SYN-02 w1 r0 ben 210864 DBG detail result 01a1e5b5-033e-7517-911a-b0f94ef2b297 affected-cache-reread false false false true undefined true
+DD SYN-02 w1 r0 ben 210901 DBG detail result 01a1e5b5-033e-7517-911a-b0f94ef2b297 affected-cache-reread false false false true undefined true
+DD SYN-02 w1 r0 ben 210901 DBG detail result 01a1e5b5-033e-7517-911a-b0f94ef2b297 affected-cache-reread false false false true undefined true
+DD SYN-02 w1 r0 ben 210970 DBG detail result 01a1e5b5-033e-7517-911a-b0f94ef2b297 affected-cache-reread false false false true undefined true
+DD SYN-02 w1 r0 ben 210970 DBG detail result 01a1e5b5-033e-7517-911a-b0f94ef2b297 affected-cache-reread false false false true undefined true
+DD SYN-01 w3 r0 ben 211033 DBG detail result 01a1e5b4-fe46-7fdc-ba52-c0e140dad4e4 normalized-cache-hit true false false true undefined false
+DD SYN-01 w3 r0 ben 211036 DBG detail result 01a1e5b4-fe46-7fdc-ba52-c0e140dad4e4 normalized-cache-hit true false false true undefined false
+DD SYN-01 w3 r0 ben 211078 DBG local page failed {"channelId":"01a1e5b4-fe46-7fdc-ba52-c0e140dad4e4","limit":50} AbortError: signal is aborted without reason false true
+DD SYN-01 w3 r0 ben 211078 DBG local page failed {"channelId":"01a1e5b4-fe46-7fdc-ba52-c0e140dad4e4","limit":50} AbortError: signal is aborted without reason false true
+DD SYN-01 w3 r0 ben 211079 DBG local page failed {"channelId":"01a1e5b4-fe46-7fdc-ba52-c0e140dad4e4","limit":50} AbortError: signal is aborted without reason false true
+DD SYN-01 w3 r0 ben 211079 DBG local page failed {"channelId":"01a1e5b4-fe46-7fdc-ba52-c0e140dad4e4","limit":50} AbortError: signal is aborted without reason false true
+DD SYN-01 w3 r0 ben 211079 DBG local page failed {"channelId":"01a1e5b4-fe46-7fdc-ba52-c0e140dad4e4","limit":50} AbortError: signal is aborted without reason false true
+DD SYN-01 w3 r0 ben 211079 DBG local page failed {"channelId":"01a1e5b4-fe46-7fdc-ba52-c0e140dad4e4","limit":50} AbortError: signal is aborted without reason false true
+DD SYN-01 w3 r0 ben 211079 DBG local page failed {"channelId":"01a1e5b4-fe46-7fdc-ba52-c0e140dad4e4","limit":50} AbortError: signal is aborted without reason false true
+DD SYN-01 w3 r0 ben 211079 DBG local page failed {"channelId":"01a1e5b4-fe46-7fdc-ba52-c0e140dad4e4","limit":50} AbortError: signal is aborted without reason false true
+DD SYN-01 w3 r0 ben 211079 DBG local page failed {"channelId":"01a1e5b4-fe46-7fdc-ba52-c0e140dad4e4","limit":50} AbortError: signal is aborted without reason false true
+DD SYN-01 w3 r0 ben 211079 DBG local page failed {"channelId":"01a1e5b4-fe46-7fdc-ba52-c0e140dad4e4","limit":50} AbortError: signal is aborted without reason false true
+DD SYN-01 w3 r0 ben 211079 DBG local page failed {"channelId":"01a1e5b4-fe46-7fdc-ba52-c0e140dad4e4","limit":50} AbortError: signal is aborted without reason false true
+DD SYN-01 w3 r0 ben 211079 DBG local page failed {"channelId":"01a1e5b4-fe46-7fdc-ba52-c0e140dad4e4","limit":50} AbortError: signal is aborted without reason false true
+DD SYN-01 w3 r0 ben 211080 DBG local page failed {"channelId":"01a1e5b4-fe46-7fdc-ba52-c0e140dad4e4","limit":50} AbortError: signal is aborted without reason false true
+DD SYN-01 w3 r0 ben 211080 DBG local page failed {"channelId":"01a1e5b4-fe46-7fdc-ba52-c0e140dad4e4","limit":50} AbortError: signal is aborted without reason false true
+DD SYN-01 w3 r0 ben 211080 DBG local page failed {"channelId":"01a1e5b4-fe46-7fdc-ba52-c0e140dad4e4","limit":50} AbortError: signal is aborted without reason false true
+DD SYN-01 w3 r0 ben 211080 DBG local page failed {"channelId":"01a1e5b4-fe46-7fdc-ba52-c0e140dad4e4","limit":50} AbortError: signal is aborted without reason false true
+DD SYN-01 w3 r0 ben 211080 DBG local page failed {"channelId":"01a1e5b4-fe46-7fdc-ba52-c0e140dad4e4","limit":50} AbortError: signal is aborted without reason false true
+DD SYN-01 w3 r0 ben 211133 DBG detail result 01a1e5b4-fe46-7fdc-ba52-c0e140dad4e4 live-network false false false true undefined false
+DD SYN-01 w3 r0 ben 211134 DBG detail result 01a1e5b4-fe46-7fdc-ba52-c0e140dad4e4 live-network false false false true undefined false
+  ✓   39 tests/channels-e2e-dbg/current.spec.ts:109:1 › SYN-01 a channel left for another one shows everything that changed meanwhile when the person comes back (4.8s)
+DD SYN-02 w1 r0 ben 211321 DBG detail result 01a1e5b5-033e-7517-911a-b0f94ef2b297 affected-cache-reread false false false true undefined true
+DD SYN-02 w1 r0 ben 211321 DBG detail result 01a1e5b5-033e-7517-911a-b0f94ef2b297 affected-cache-reread false false false true undefined true
+DD SYN-03 w2 r0 ben 211817 DBG detail result 01a1e5b5-0bee-7c42-8d1d-368004e79b75 live-network false false false true undefined false
+DD SYN-04 w0 r0 ben 211852 DBG detail result 01a1e5b5-0c2a-7810-b0a3-37d093f67980 live-network false false false true undefined false
+DD SYN-03 w2 r0 ben 212116 DBG detail result 01a1e5b5-0bee-7c42-8d1d-368004e79b75 live-network false false false true undefined true
+DD SYN-03 w2 r0 ben 212120 DBG detail result 01a1e5b5-0bee-7c42-8d1d-368004e79b75 live-network false false false true undefined false
+DD SYN-04 w0 r0 ben 212131 DBG detail result 01a1e5b5-0c2a-7810-b0a3-37d093f67980 live-network false false false true undefined true
+DD SYN-04 w0 r0 ben 212135 DBG detail result 01a1e5b5-0c2a-7810-b0a3-37d093f67980 live-network false false false true undefined false
+DD SYN-03 w2 r0 ben 212514 DBG detail result 01a1e5b5-0bee-7c42-8d1d-368004e79b75 live-network false false false true undefined true
+DD SYN-03 w2 r0 ben 212516 DBG detail result 01a1e5b5-0bee-7c42-8d1d-368004e79b75 live-network false false false true undefined true
+DD SYN-04 w0 r0 ben 212526 DBG detail result 01a1e5b5-0c2a-7810-b0a3-37d093f67980 live-network false false false true undefined true
+DD SYN-04 w0 r0 ben 212527 DBG detail result 01a1e5b5-0c2a-7810-b0a3-37d093f67980 live-network false false false true undefined true
+DD SYN-03 w2 r0 ben 212555 DBG devmiss uncovered {"channelId":"01a1e5b5-0bee-7c42-8d1d-368004e79b75","limit":50} null false
+DD SYN-04 w0 r0 ben 212599 DBG devmiss uncovered {"channelId":"01a1e5b5-0c2a-7810-b0a3-37d093f67980","limit":50} null false
+DD SYN-04 w0 r0 ben 212659 DBG devmiss uncovered {"channelId":"01a1e5b5-0c3a-7ec3-8673-71c618908013","limit":50} null false
+DD SYN-03 w2 r0 ben 212672 DBG devmiss uncovered {"channelId":"01a1e5b5-0bf7-7fc1-9a8c-f715a6204373","limit":50} null false
+DD SYN-04 w0 r0 ben 212693 DBG detail result 01a1e5b5-0c3a-7ec3-8673-71c618908013 live-network false false false true undefined false
+DD SYN-04 w0 r0 ben 212700 DBG detail result 01a1e5b5-0c3a-7ec3-8673-71c618908013 live-network false false false true undefined false
+DD SYN-04 w0 r0 ben 212925 DBG store ok {"channelId":"01a1e5b5-0c2a-7810-b0a3-37d093f67980","limit":50} 842 7
+DD SYN-04 w0 r0 ben 212926 DBG store ok {"channelId":"01a1e5b5-0c3a-7ec3-8673-71c618908013","limit":50} 295 1
+DD SYN-05 w3 r0 ben 212957 DBG detail result 01a1e5b5-111e-7cf0-8225-68c6825ae5f4 live-network false false false true undefined false
+DD SYN-03 w2 r0 ben 212958 DBG store ok {"channelId":"01a1e5b5-0bee-7c42-8d1d-368004e79b75","limit":50} 898 7
+DD SYN-03 w2 r0 ben 212959 DBG detail result 01a1e5b5-0bf7-7fc1-9a8c-f715a6204373 live-network false false false true undefined false
+DD SYN-03 w2 r0 ben 212959 DBG detail result 01a1e5b5-0bf7-7fc1-9a8c-f715a6204373 live-network false false false true undefined false
+DD SYN-04 w0 r0 ben 212960 DBG detail result 01a1e5b5-0c3a-7ec3-8673-71c618908013 affected-cache-reread false false false true undefined true
+DD SYN-03 w2 r0 ben 212961 DBG store ok {"channelId":"01a1e5b5-0bf7-7fc1-9a8c-f715a6204373","limit":50} 243 1
+DD SYN-04 w0 r0 ben 212962 DBG detail result 01a1e5b5-0c3a-7ec3-8673-71c618908013 affected-cache-reread false false false true undefined true
+DD SYN-04 w0 r0 ben 213220 DBG local page failed {"channelId":"01a1e5b5-0c2a-7810-b0a3-37d093f67980","limit":50} CacheNavigationError: cache worker host was disposed for page navigation false true
+DJ SYN-04 w0 r0 ben 213224 ["[observability]","graphql.mutation_queue.ack_lost","?"]
+DD SYN-05 w3 r0 ben 213265 DBG detail result 01a1e5b5-111e-7cf0-8225-68c6825ae5f4 live-network false false false true undefined true
+DD SYN-05 w3 r0 ben 213271 DBG detail result 01a1e5b5-111e-7cf0-8225-68c6825ae5f4 live-network false false false true undefined false
+DD SYN-03 w2 r0 ben 213641 DBG detail result 01a1e5b5-0bf7-7fc1-9a8c-f715a6204373 affected-cache-reread false false false true undefined true
+DD SYN-03 w2 r0 ben 213641 DBG detail result 01a1e5b5-0bf7-7fc1-9a8c-f715a6204373 affected-cache-reread false false false true undefined true
+DD SYN-05 w3 r0 ben 213690 DBG detail result 01a1e5b5-111e-7cf0-8225-68c6825ae5f4 live-network false false false true undefined true
+DD SYN-05 w3 r0 ben 213691 DBG detail result 01a1e5b5-111e-7cf0-8225-68c6825ae5f4 live-network false false false true undefined true
+DD SYN-05 w3 r0 ben 213765 DBG devmiss uncovered {"channelId":"01a1e5b5-111e-7cf0-8225-68c6825ae5f4","limit":50} null false
+DD SYN-05 w3 r0 ben 213786 DBG devmiss uncovered {"channelId":"01a1e5b5-1128-7887-8da5-b6ae597d49a4","limit":50} null false
+DD SYN-05 w3 r0 ben 213867 DBG detail result 01a1e5b5-1128-7887-8da5-b6ae597d49a4 live-network false false false true undefined false
+DD SYN-05 w3 r0 ben 213872 DBG detail result 01a1e5b5-1128-7887-8da5-b6ae597d49a4 live-network false false false true undefined false
+DD SYN-05 w3 r0 ben 213882 DBG store ok {"channelId":"01a1e5b5-111e-7cf0-8225-68c6825ae5f4","limit":50} 730 7
+DD SYN-05 w3 r0 ben 213995 DBG store ok {"channelId":"01a1e5b5-1128-7887-8da5-b6ae597d49a4","limit":50} 208 1
+DD SYN-05 w3 r0 ben 214117 DBG detail result 01a1e5b5-1128-7887-8da5-b6ae597d49a4 affected-cache-reread false false false true undefined true
+DD SYN-05 w3 r0 ben 214120 DBG detail result 01a1e5b5-1128-7887-8da5-b6ae597d49a4 affected-cache-reread false false false true undefined true
+DD SYN-05 w3 r0 ben 214418 DBG detail result 01a1e5b5-1128-7887-8da5-b6ae597d49a4 affected-cache-reread false false false true undefined true
+DD SYN-05 w3 r0 ben 214418 DBG detail result 01a1e5b5-1128-7887-8da5-b6ae597d49a4 affected-cache-reread false false false true undefined true
+DD SYN-02 w1 r0 ben 214924 DBG detail result 01a1e5b5-033e-7517-911a-b0f94ef2b297 affected-cache-reread false false false true undefined true
+DD SYN-02 w1 r0 ben 214925 DBG detail result 01a1e5b5-033e-7517-911a-b0f94ef2b297 affected-cache-reread false false false true undefined true
+DD SYN-05 w3 r0 ben 215402 DBG detail result 01a1e5b5-111e-7cf0-8225-68c6825ae5f4 normalized-cache-hit true false false true undefined false
+DD SYN-05 w3 r0 ben 215405 DBG detail result 01a1e5b5-111e-7cf0-8225-68c6825ae5f4 normalized-cache-hit true false false true undefined false
+DD SYN-04 w0 r0 ben 215417 DBG detail result 01a1e5b5-0c2a-7810-b0a3-37d093f67980 live-network false false false true undefined false
+DD SYN-05 w3 r0 ben 215470 DBG detail result 01a1e5b5-111e-7cf0-8225-68c6825ae5f4 affected-cache-reread true false false true undefined false
+DD SYN-05 w3 r0 ben 215470 DBG detail result 01a1e5b5-111e-7cf0-8225-68c6825ae5f4 affected-cache-reread true false false true undefined false
+DD SYN-05 w3 r0 ben 215500 DBG local page failed {"channelId":"01a1e5b5-111e-7cf0-8225-68c6825ae5f4","limit":50} AbortError: signal is aborted without reason false true
+DD SYN-05 w3 r0 ben 215500 DBG local page failed {"channelId":"01a1e5b5-111e-7cf0-8225-68c6825ae5f4","limit":50} AbortError: signal is aborted without reason false true
+DD SYN-05 w3 r0 ben 215500 DBG local page failed {"channelId":"01a1e5b5-111e-7cf0-8225-68c6825ae5f4","limit":50} AbortError: signal is aborted without reason false true
+DD SYN-05 w3 r0 ben 215500 DBG local page failed {"channelId":"01a1e5b5-111e-7cf0-8225-68c6825ae5f4","limit":50} AbortError: signal is aborted without reason false true
+DD SYN-05 w3 r0 ben 215500 DBG local page failed {"channelId":"01a1e5b5-111e-7cf0-8225-68c6825ae5f4","limit":50} AbortError: signal is aborted without reason false true
+DD SYN-05 w3 r0 ben 215500 DBG local page failed {"channelId":"01a1e5b5-111e-7cf0-8225-68c6825ae5f4","limit":50} AbortError: signal is aborted without reason false true
+DD SYN-05 w3 r0 ben 215501 DBG local page failed {"channelId":"01a1e5b5-111e-7cf0-8225-68c6825ae5f4","limit":50} AbortError: signal is aborted without reason false true
+DD SYN-05 w3 r0 ben 215501 DBG local page failed {"channelId":"01a1e5b5-111e-7cf0-8225-68c6825ae5f4","limit":50} AbortError: signal is aborted without reason false true
+DD SYN-05 w3 r0 ben 215501 DBG local page failed {"channelId":"01a1e5b5-111e-7cf0-8225-68c6825ae5f4","limit":50} AbortError: signal is aborted without reason false true
+DD SYN-05 w3 r0 ben 215501 DBG local page failed {"channelId":"01a1e5b5-111e-7cf0-8225-68c6825ae5f4","limit":50} AbortError: signal is aborted without reason false true
+DD SYN-05 w3 r0 ben 215501 DBG local page failed {"channelId":"01a1e5b5-111e-7cf0-8225-68c6825ae5f4","limit":50} AbortError: signal is aborted without reason false true
+DD SYN-05 w3 r0 ben 215501 DBG local page failed {"channelId":"01a1e5b5-111e-7cf0-8225-68c6825ae5f4","limit":50} AbortError: signal is aborted without reason false true
+DD SYN-05 w3 r0 ben 215501 DBG local page failed {"channelId":"01a1e5b5-111e-7cf0-8225-68c6825ae5f4","limit":50} AbortError: signal is aborted without reason false true
+DD SYN-05 w3 r0 ben 215501 DBG local page failed {"channelId":"01a1e5b5-111e-7cf0-8225-68c6825ae5f4","limit":50} AbortError: signal is aborted without reason false true
+DD SYN-05 w3 r0 ben 215501 DBG local page failed {"channelId":"01a1e5b5-111e-7cf0-8225-68c6825ae5f4","limit":50} AbortError: signal is aborted without reason false true
+DD SYN-05 w3 r0 ben 215501 DBG local page failed {"channelId":"01a1e5b5-111e-7cf0-8225-68c6825ae5f4","limit":50} AbortError: signal is aborted without reason false true
+DD SYN-05 w3 r0 ben 215501 DBG local page failed {"channelId":"01a1e5b5-111e-7cf0-8225-68c6825ae5f4","limit":50} AbortError: signal is aborted without reason false true
+DD SYN-05 w3 r0 ben 215501 DBG local page failed {"channelId":"01a1e5b5-111e-7cf0-8225-68c6825ae5f4","limit":50} AbortError: signal is aborted without reason false true
+DD SYN-05 w3 r0 ben 215623 DBG detail result 01a1e5b5-111e-7cf0-8225-68c6825ae5f4 live-network false false false true undefined false
+DD SYN-05 w3 r0 ben 215626 DBG detail result 01a1e5b5-111e-7cf0-8225-68c6825ae5f4 live-network false false false true undefined false
+DD SYN-05 w3 r0 ben 215749 DBG detail result 01a1e5b5-1128-7887-8da5-b6ae597d49a4 normalized-cache-hit true false false true undefined false
+DD SYN-05 w3 r0 ben 215751 DBG detail result 01a1e5b5-1128-7887-8da5-b6ae597d49a4 normalized-cache-hit true false false true undefined false
+DD SYN-04 w0 r0 ben 215796 DBG detail result 01a1e5b5-0c2a-7810-b0a3-37d093f67980 live-network false false false true undefined true
+DD SYN-04 w0 r0 ben 215796 DBG detail result 01a1e5b5-0c2a-7810-b0a3-37d093f67980 live-network false false false true undefined false
+DJ SYN-04 w0 r0 ben 215819 ["[observability]","graphql.mutation_queue.loaded",{"auth.state":"signed-in","network.online":false,"graphql.websocket.state":"connected","mutation_queue.depth":1,"mutation_queue.age_unknown_items":0,"mutation_queue.oldest_item_age_ms":3932}]
+DD SYN-02 w1 r0 ben 215870 DBG devmiss uncovered {"channelId":"01a1e5b5-034e-7ca5-88d6-f49a88f9a9d5","limit":50} null false
+  ✓   42 tests/channels-e2e-dbg/current.spec.ts:178:1 › SYN-04 a channel changed while the app was closed is right when the app is opened again (5.9s)
+DD SYN-02 w1 r0 ben 216090 DBG store ok {"channelId":"01a1e5b5-034e-7ca5-88d6-f49a88f9a9d5","limit":50} 207 1
+DD SYN-02 w1 r0 ben 216592 DBG devmiss uncovered {"channelId":"01a1e5b4-ed45-7683-a9f4-d833c7632261","limit":50} null false
+DD SYN-05 w3 r0 ben 216840 DBG detail result 01a1e5b5-1128-7887-8da5-b6ae597d49a4 live-network false false false true undefined false
+DD SYN-05 w3 r0 ben 217001 DBG detail result 01a1e5b5-1128-7887-8da5-b6ae597d49a4 live-network false false false true undefined true
+DD SYN-05 w3 r0 ben 217014 DBG detail result 01a1e5b5-1128-7887-8da5-b6ae597d49a4 live-network false false false true undefined false
+DD SYN-02 w1 r0 ben 217096 DBG devmiss uncovered {"channelId":"01a1e5b4-da55-76ec-8080-db28381a2448","limit":50} null false
+DJ SYN-05 w3 r0 ben 217097 ["[observability]","graphql.mutation_queue.loaded",{"auth.state":"signed-in","network.online":false,"graphql.websocket.state":"connected","mutation_queue.depth":3,"mutation_queue.age_unknown_items":0,"mutation_queue.oldest_item_age_ms":1447}]
+DD SYN-05 w3 r0 ben 217416 DBG detail result 01a1e5b5-1128-7887-8da5-b6ae597d49a4 live-network false false false true undefined true
+DD SYN-05 w3 r0 ben 217420 DBG detail result 01a1e5b5-1128-7887-8da5-b6ae597d49a4 live-network false false false true undefined true
+DD SYN-05 w3 r0 ben 217521 DBG detail result 01a1e5b5-1128-7887-8da5-b6ae597d49a4 affected-cache-reread false false false true undefined true
+DD SYN-05 w3 r0 ben 217523 DBG detail result 01a1e5b5-1128-7887-8da5-b6ae597d49a4 affected-cache-reread false false false true undefined true
+DD SYN-05 w3 r0 ben 217585 DBG store ok {"channelId":"01a1e5b5-1128-7887-8da5-b6ae597d49a4","limit":50} 624 1
+DJ SYN-05 w3 r0 ben 217606 ["[observability]","graphql.mutation_queue.skipped",{"auth.state":"signed-in","network.online":false,"graphql.websocket.state":"connected","mutation_queue.pending_items":0,"mutation_queue.oldest_observed_wait_ms":0,"mutation_queue.age_unknown_items":0,"mutation_queue.skip_reason":"lease-owner-gone"}]
+DD SYN-02 w1 r0 ben 217609 DBG detail result 01a1e5b5-033e-7517-911a-b0f94ef2b297 affected-cache-reread true false false true undefined true
+DD SYN-02 w1 r0 ben 217609 DBG detail result 01a1e5b5-033e-7517-911a-b0f94ef2b297 affected-cache-reread true false false true undefined true
+DD SYN-06 w0 r0 ben 217729 DBG detail result 01a1e5b5-234a-75ef-8bef-23fb806198b3 live-network false false false true undefined false
+DD SYN-02 w1 r0 ben 217779 DBG detail result 01a1e5b5-033e-7517-911a-b0f94ef2b297 affected-cache-reread false false false true undefined true
+DD SYN-02 w1 r0 ben 217781 DBG detail result 01a1e5b5-033e-7517-911a-b0f94ef2b297 affected-cache-reread false false false true undefined true
+DD SYN-02 w1 r0 ben 217867 DBG detail result 01a1e5b5-033e-7517-911a-b0f94ef2b297 affected-cache-reread false false false true undefined true
+DD SYN-02 w1 r0 ben 217867 DBG detail result 01a1e5b5-033e-7517-911a-b0f94ef2b297 affected-cache-reread false false false true undefined true
+DD SYN-02 w1 r0 ben 217867 DBG devmiss uncovered {"channelId":"01a1e5b4-bff9-7467-b95b-0f9ac657fe49","limit":50} null false
+  ✓   40 tests/channels-e2e-dbg/current.spec.ts:132:1 › SYN-02 an open channel whose connection dropped shows every change made meanwhile once it is back, without a reload (10.1s)
+DD SYN-06 w0 r0 ben 218014 DBG detail result 01a1e5b5-234a-75ef-8bef-23fb806198b3 live-network false false false true undefined true
+DD SYN-06 w0 r0 ben 218016 DBG detail result 01a1e5b5-234a-75ef-8bef-23fb806198b3 live-network false false false true undefined false
+DD SYN-03 w2 r0 ben 218362 DBG devmiss uncovered {"channelId":"01a1e5b4-f74a-7c52-9ae5-3b6349a6e97d","limit":50} null false
+DD SYN-06 w0 r0 ben 218417 DBG devmiss uncovered {"channelId":"01a1e5b5-234a-75ef-8bef-23fb806198b3","limit":50} null false
+DD SYN-06 w0 r0 ben 218494 DBG devmiss uncovered {"channelId":"01a1e5b5-2352-7115-9321-53f0447c8c27","limit":50} null false
+DD SYN-06 w0 r0 ben 218783 DBG store ok {"channelId":"01a1e5b5-234a-75ef-8bef-23fb806198b3","limit":50} 834 7
+DD SYN-06 w0 r0 ben 218786 DBG detail result 01a1e5b5-2352-7115-9321-53f0447c8c27 live-network false false false true undefined false
+DD SYN-06 w0 r0 ben 218786 DBG detail result 01a1e5b5-2352-7115-9321-53f0447c8c27 live-network false false false true undefined false
+DD SYN-06 w0 r0 ben 218786 DBG store ok {"channelId":"01a1e5b5-2352-7115-9321-53f0447c8c27","limit":50} 283 1
+DD SYN-03 w2 r0 ben 219110 DBG devmiss uncovered {"channelId":"01a1e5b4-ef93-7e44-ab9f-ea0f55be480d","limit":50} null false
+DD SYN-06 w0 r0 ben 219112 DBG detail result 01a1e5b5-234a-75ef-8bef-23fb806198b3 live-network false false false true undefined false
+DD SYN-06 w0 r0 ben 219117 DBG detail result 01a1e5b5-234a-75ef-8bef-23fb806198b3 live-network false false false true undefined false
+DD SYN-03 w2 r0 ben 219270 DBG detail result 01a1e5b5-0bee-7c42-8d1d-368004e79b75 live-network false false false true undefined false
+DD SYN-03 w2 r0 ben 219276 DBG detail result 01a1e5b5-0bee-7c42-8d1d-368004e79b75 live-network false false false true undefined false
+  ✓   41 tests/channels-e2e-dbg/current.spec.ts:153:1 › SYN-03 a channel changed while the person was offline and in another channel is right when they come back to it (9.5s)
+DD SYN-08 w1 r0 ben 219702 DBG detail result 01a1e5b5-2add-7fa5-b67e-be70ebf14cf1 live-network false false false true undefined false
+DD SYN-08 w1 r0 ben 219972 DBG detail result 01a1e5b5-2add-7fa5-b67e-be70ebf14cf1 live-network false false false true undefined true
+DD SYN-08 w1 r0 ben 219976 DBG detail result 01a1e5b5-2add-7fa5-b67e-be70ebf14cf1 live-network false false false true undefined false
+DD SYN-08 w1 r0 ben 220441 DBG detail result 01a1e5b5-2add-7fa5-b67e-be70ebf14cf1 live-network false false false true undefined true
+DD SYN-08 w1 r0 ben 220443 DBG detail result 01a1e5b5-2add-7fa5-b67e-be70ebf14cf1 live-network false false false true undefined true
+DD SYN-08 w1 r0 ben 220448 DBG devmiss uncovered {"channelId":"01a1e5b5-2add-7fa5-b67e-be70ebf14cf1","limit":50} null false
+DD SYN-08 w1 r0 ben 220581 DBG devmiss uncovered {"channelId":"01a1e5b5-2aeb-7d2b-ad05-ba538f804727","limit":50} null false
+DD SYN-08 w1 r0 ben 220649 DBG store ok {"channelId":"01a1e5b5-2add-7fa5-b67e-be70ebf14cf1","limit":50} 797 7
+DD SYN-08 w1 r0 ben 220673 DBG detail result 01a1e5b5-2aeb-7d2b-ad05-ba538f804727 live-network false false false true undefined false
+DD SYN-08 w1 r0 ben 220678 DBG detail result 01a1e5b5-2aeb-7d2b-ad05-ba538f804727 live-network false false false true undefined false
+DD SYN-08 w1 r0 ben 220731 DBG store ok {"channelId":"01a1e5b5-2aeb-7d2b-ad05-ba538f804727","limit":50} 137 1
+DD SYN-08 w1 r0 ben 220749 DBG detail result 01a1e5b5-2aeb-7d2b-ad05-ba538f804727 affected-cache-reread false false false true undefined true
+DD SYN-08 w1 r0 ben 220750 DBG detail result 01a1e5b5-2aeb-7d2b-ad05-ba538f804727 affected-cache-reread false false false true undefined true
+DD SYN-08 w1 r0 ben 220973 DBG detail result 01a1e5b5-2add-7fa5-b67e-be70ebf14cf1 normalized-cache-hit true false false true undefined false
+DD SYN-08 w1 r0 ben 220976 DBG detail result 01a1e5b5-2add-7fa5-b67e-be70ebf14cf1 normalized-cache-hit true false false true undefined false
+DD SYN-08 w1 r0 ben 221277 DBG detail result 01a1e5b5-2add-7fa5-b67e-be70ebf14cf1 affected-cache-reread true false false true undefined false
+DD SYN-08 w1 r0 ben 221277 DBG detail result 01a1e5b5-2add-7fa5-b67e-be70ebf14cf1 affected-cache-reread true false false true undefined false
+DD SYN-08 w1 r0 ben 221398 DBG detail result 01a1e5b5-2add-7fa5-b67e-be70ebf14cf1 live-network false false false true undefined false
+DD SYN-08 w1 r0 ben 221403 DBG detail result 01a1e5b5-2add-7fa5-b67e-be70ebf14cf1 live-network false false false true undefined false
+DD SYN-09 w2 r0 ben 221433 DBG detail result 01a1e5b5-3138-743d-8a9e-a431543081cd live-network false false false true undefined false
+DD SYN-09 w2 r0 ben 221753 DBG detail result 01a1e5b5-3138-743d-8a9e-a431543081cd live-network false false false true undefined true
+DD SYN-09 w2 r0 ben 221757 DBG detail result 01a1e5b5-3138-743d-8a9e-a431543081cd live-network false false false true undefined false
+DD SYN-08 w1 r0 ben 222959 DBG detail result 01a1e5b5-2add-7fa5-b67e-be70ebf14cf1 live-network false false false false undefined false
+DD SYN-09 w2 r0 ben 223088 DBG detail result 01a1e5b5-3138-743d-8a9e-a431543081cd live-network false false false true undefined false
+  ✓   45 tests/channels-e2e-dbg/current.spec.ts:272:1 › SYN-08 a person removed from a channel while away is not shown the messages their device kept (5.3s)
+DD SYN-09 w2 r0 ben 223299 DBG detail result 01a1e5b5-3138-743d-8a9e-a431543081cd live-network false false false true undefined true
+DD SYN-09 w2 r0 ben 223304 DBG detail result 01a1e5b5-3138-743d-8a9e-a431543081cd live-network false false false true undefined false
+DD SYN-05 w3 r0 ben 223533 DBG detail result 01a1e5b5-111e-7cf0-8225-68c6825ae5f4 live-network false false true false undefined false
+DD SYN-05 w3 r0 ben 223536 DBG detail result 01a1e5b5-111e-7cf0-8225-68c6825ae5f4 live-network false false true false undefined false
+DD SYN-09 w2 r0 ben 223537 DBG detail result 01a1e5b5-3138-743d-8a9e-a431543081cd live-network false false false true undefined true
+DD SYN-09 w2 r0 ben 223539 DBG detail result 01a1e5b5-3138-743d-8a9e-a431543081cd live-network false false false true undefined true
+  ✓   46 tests/channels-e2e-dbg/current.spec.ts:295:1 › SYN-09 changes made while the page is reloading are all there when it has loaded (4.1s)
+DD SYN-05 w3 r0 ben 223669 DBG detail result 01a1e5b5-111e-7cf0-8225-68c6825ae5f4 normalized-cache-hit false false true true undefined true
+DD SYN-05 w3 r0 ben 223671 DBG detail result 01a1e5b5-111e-7cf0-8225-68c6825ae5f4 normalized-cache-hit false false true true undefined true
+DD SYN-05 w3 r0 ben 223671 DBG detail result 01a1e5b5-111e-7cf0-8225-68c6825ae5f4 normalized-cache-hit true false true true true true
+DD SYN-05 w3 r0 ben 223671 DBG detail result 01a1e5b5-111e-7cf0-8225-68c6825ae5f4 normalized-cache-hit true false true true true true
+DD SYN-05 w3 r0 ben 223676 DBG detail result 01a1e5b5-111e-7cf0-8225-68c6825ae5f4 live-network false false true false true true
+DD SYN-05 w3 r0 ben 223678 DBG detail result 01a1e5b5-111e-7cf0-8225-68c6825ae5f4 live-network false false true false true true
+  ✓   43 tests/channels-e2e-dbg/current.spec.ts:202:1 › SYN-05 what a device caught up on is what it shows the next time it opens the channel with no connection (12.5s)
+DD SYN-10 w1 r0 ben 224920 DBG detail result 01a1e5b5-3fae-7dd8-afa9-9962feab1f9c live-network false false false true undefined false
+DD DM-01  w2 r0 ben 224997 DBG detail result 01a1e5b5-4147-75ce-94e1-13ebdc3fd09e live-network false false false true undefined false
+DD SYN-10 w1 r0 ben 225150 DBG detail result 01a1e5b5-3fae-7dd8-afa9-9962feab1f9c live-network false false false true undefined true
+DD SYN-10 w1 r0 ben 225154 DBG detail result 01a1e5b5-3fae-7dd8-afa9-9962feab1f9c live-network false false false true undefined false
+DD DM-01  w2 r0 ben 225281 DBG detail result 01a1e5b5-4147-75ce-94e1-13ebdc3fd09e live-network false false false true undefined true
+DD DM-01  w2 r0 ben 225285 DBG detail result 01a1e5b5-4147-75ce-94e1-13ebdc3fd09e live-network false false false true undefined false
+DD DM-02  w3 r0 cy 225312 DBG detail result 01a1e5b5-424d-7f7b-816c-8581c4d0572f live-network false false false true undefined false
+DD DM-02  w3 r0 cy 225565 DBG detail result 01a1e5b5-424d-7f7b-816c-8581c4d0572f live-network false false false true undefined true
+DD DM-02  w3 r0 cy 225569 DBG detail result 01a1e5b5-424d-7f7b-816c-8581c4d0572f live-network false false false true undefined false
+DD SYN-10 w1 r0 ben 225603 DBG detail result 01a1e5b5-3fae-7dd8-afa9-9962feab1f9c live-network false false false true undefined true
+DD SYN-10 w1 r0 ben 225605 DBG detail result 01a1e5b5-3fae-7dd8-afa9-9962feab1f9c live-network false false false true undefined true
+DD SYN-10 w1 r0 ben 225666 DBG devmiss uncovered {"channelId":"01a1e5b5-3fae-7dd8-afa9-9962feab1f9c","limit":50} null false
+DD SYN-10 w1 r0 ben 225734 DBG detail result 01a1e5b5-3fae-7dd8-afa9-9962feab1f9c affected-cache-reread false false false true undefined true
+DD SYN-10 w1 r0 ben 225735 DBG detail result 01a1e5b5-3fae-7dd8-afa9-9962feab1f9c affected-cache-reread false false false true undefined true
+DD DM-01  w2 r0 ben 225752 DBG detail result 01a1e5b5-4147-75ce-94e1-13ebdc3fd09e live-network false false false true undefined true
+DD DM-01  w2 r0 ben 225752 DBG detail result 01a1e5b5-4147-75ce-94e1-13ebdc3fd09e live-network false false false true undefined true
+DD DM-01  w2 r0 ben 225764 DBG devmiss uncovered {"channelId":"01a1e5b5-4147-75ce-94e1-13ebdc3fd09e","limit":50} null false
+DD SYN-10 w1 r0 ben 225786 DBG store ok {"channelId":"01a1e5b5-3fae-7dd8-afa9-9962feab1f9c","limit":50} 752 7
+DD DM-01  w2 r0 ben 225831 DBG detail result 01a1e5b5-4147-75ce-94e1-13ebdc3fd09e affected-cache-reread false false false true undefined true
+DD DM-01  w2 r0 ben 225834 DBG detail result 01a1e5b5-4147-75ce-94e1-13ebdc3fd09e affected-cache-reread false false false true undefined true
+DD DM-01  w2 r0 ben 225939 DBG store ok {"channelId":"01a1e5b5-4147-75ce-94e1-13ebdc3fd09e","limit":50} 769 0
+DD SYN-10 w1 r0 ben 225940 DBG detail result 01a1e5b5-3fae-7dd8-afa9-9962feab1f9c affected-cache-reread false false false true undefined true
+DD SYN-10 w1 r0 ben 225940 DBG detail result 01a1e5b5-3fae-7dd8-afa9-9962feab1f9c affected-cache-reread false false false true undefined true
+DD SYN-10 w1 r0 ben 226009 DBG detail result 01a1e5b5-3fae-7dd8-afa9-9962feab1f9c affected-cache-reread false false false true undefined true
+DD SYN-10 w1 r0 ben 226009 DBG detail result 01a1e5b5-3fae-7dd8-afa9-9962feab1f9c affected-cache-reread false false false true undefined true
+DD DM-02  w3 r0 cy 226065 DBG detail result 01a1e5b5-424d-7f7b-816c-8581c4d0572f live-network false false false true undefined true
+DD DM-02  w3 r0 cy 226065 DBG detail result 01a1e5b5-424d-7f7b-816c-8581c4d0572f live-network false false false true undefined true
+DD SYN-10 w1 r0 ben 226096 DBG detail result 01a1e5b5-3fae-7dd8-afa9-9962feab1f9c affected-cache-reread false false false true undefined true
+DD SYN-10 w1 r0 ben 226096 DBG detail result 01a1e5b5-3fae-7dd8-afa9-9962feab1f9c affected-cache-reread false false false true undefined true
+DD DM-02  w3 r0 cy 226143 DBG devmiss uncovered {"channelId":"01a1e5b5-424d-7f7b-816c-8581c4d0572f","limit":50} null false
+DD DM-02  w3 r0 cy 226220 DBG detail result 01a1e5b5-424d-7f7b-816c-8581c4d0572f affected-cache-reread false false false true undefined true
+DD DM-02  w3 r0 cy 226220 DBG detail result 01a1e5b5-424d-7f7b-816c-8581c4d0572f affected-cache-reread false false false true undefined true
+DD SYN-10 w1 r0 ben 226271 DBG detail result 01a1e5b5-3fae-7dd8-afa9-9962feab1f9c affected-cache-reread false false false true undefined true
+DD SYN-10 w1 r0 ben 226271 DBG detail result 01a1e5b5-3fae-7dd8-afa9-9962feab1f9c affected-cache-reread false false false true undefined true
+DD DM-02  w3 r0 cy 226277 DBG store ok {"channelId":"01a1e5b5-424d-7f7b-816c-8581c4d0572f","limit":50} 787 0
+DD DM-01  w2 r0 page 226840 DBG detail result 01a1e5b5-4147-75ce-94e1-13ebdc3fd09e live-network false false false true undefined false
+DD DM-01  w2 r0 page 227121 DBG detail result 01a1e5b5-4147-75ce-94e1-13ebdc3fd09e live-network false false false true undefined true
+DD DM-01  w2 r0 page 227121 DBG detail result 01a1e5b5-4147-75ce-94e1-13ebdc3fd09e live-network false false false true undefined false
+DD DM-02  w3 r0 page 227204 DBG detail result 01a1e5b5-424d-7f7b-816c-8581c4d0572f live-network false false false true undefined false
+DD DM-02  w3 r0 page 227446 DBG detail result 01a1e5b5-424d-7f7b-816c-8581c4d0572f live-network false false false true undefined true
+DD DM-02  w3 r0 page 227451 DBG detail result 01a1e5b5-424d-7f7b-816c-8581c4d0572f live-network false false false true undefined false
+DD DM-01  w2 r0 page 228050 DBG devmiss uncovered {"channelId":"01a1e5b5-4147-75ce-94e1-13ebdc3fd09e","limit":50} null false
+DD DM-02  w3 r0 page 228051 DBG devmiss uncovered {"channelId":"01a1e5b5-424d-7f7b-816c-8581c4d0572f","limit":50} null false
+DD DM-02  w3 r0 page 228129 DBG store ok {"channelId":"01a1e5b5-424d-7f7b-816c-8581c4d0572f","limit":50} 757 0
+DD DM-01  w2 r0 page 228384 DBG store ok {"channelId":"01a1e5b5-4147-75ce-94e1-13ebdc3fd09e","limit":50} 1286 0
+DD DM-01  w2 r0 page 228796 DBG devmiss uncovered {"channelId":"01a1dfa6-f4d3-7a63-9fc5-34c4f2239ed6","limit":50} null false
+DD DM-01  w2 r0 page 228891 DBG devmiss uncovered {"channelId":"01a1dfa6-f4d3-7a63-9fc5-34c4f2239ed6","limit":50,"around":"GraphqlChannelMessage:01a1e5b5-5372-7449-b24f-f3ed1fa4378f"} null false
+DD DM-01  w2 r0 page 228964 DBG detail result 01a1dfa6-f4d3-7a63-9fc5-34c4f2239ed6 live-network false false false true undefined false
+DD DM-01  w2 r0 page 228967 DBG detail result 01a1dfa6-f4d3-7a63-9fc5-34c4f2239ed6 live-network false false false true undefined false
+DD DM-02  w3 r0 page 229110 DBG devmiss uncovered {"channelId":"01a1df5b-a1ea-7886-8ec6-43ad9f9d3aac","limit":50} null false
+DD DM-02  w3 r0 page 229159 DBG devmiss uncovered {"channelId":"01a1df5b-a1ea-7886-8ec6-43ad9f9d3aac","limit":50,"around":"GraphqlChannelMessage:01a1e5b5-53d2-7cc3-898c-a083d6abeffa"} null false
+DD DM-02  w3 r0 page 229170 DBG detail result 01a1df5b-a1ea-7886-8ec6-43ad9f9d3aac live-network false false false true undefined false
+DD DM-02  w3 r0 page 229172 DBG detail result 01a1df5b-a1ea-7886-8ec6-43ad9f9d3aac live-network false false false true undefined false
+DD DM-01  w2 r0 page 229332 DBG store ok {"channelId":"01a1dfa6-f4d3-7a63-9fc5-34c4f2239ed6","limit":50} 335 47
+DD DM-02  w3 r0 page 229347 DBG store ok {"channelId":"01a1df5b-a1ea-7886-8ec6-43ad9f9d3aac","limit":50} 159 31
+DD DM-01  w2 r0 page 229415 DBG store ok {"channelId":"01a1dfa6-f4d3-7a63-9fc5-34c4f2239ed6","limit":50,"around":"GraphqlChannelMessage:01a1e5b5-5372-7449-b24f-f3ed1fa4378f"} 381 47
+DD DM-02  w3 r0 page 229507 DBG store ok {"channelId":"01a1df5b-a1ea-7886-8ec6-43ad9f9d3aac","limit":50,"around":"GraphqlChannelMessage:01a1e5b5-53d2-7cc3-898c-a083d6abeffa"} 254 31
+DD DM-01  w2 r0 page 229760 DBG detail result 01a1dfa6-f4d3-7a63-9fc5-34c4f2239ed6 affected-cache-reread false false false true undefined true
+DD DM-01  w2 r0 page 229761 DBG detail result 01a1dfa6-f4d3-7a63-9fc5-34c4f2239ed6 affected-cache-reread false false false true undefined true
+DD SYN-10 w1 r0 ben 229996 DBG detail result 01a1e5b5-3fae-7dd8-afa9-9962feab1f9c affected-cache-reread false false false true undefined true
+DD SYN-10 w1 r0 ben 229996 DBG detail result 01a1e5b5-3fae-7dd8-afa9-9962feab1f9c affected-cache-reread false false false true undefined true
+DD DM-01  w2 r0 ben 230087 DBG devmiss uncovered {"channelId":"01a1dfa6-f4d3-7a63-9fc5-34c4f2239ed6","limit":50} null false
+DD DM-01  w2 r0 ben 230116 DBG detail result 01a1dfa6-f4d3-7a63-9fc5-34c4f2239ed6 live-network false false false true undefined false
+DD DM-01  w2 r0 ben 230121 DBG detail result 01a1dfa6-f4d3-7a63-9fc5-34c4f2239ed6 live-network false false false true undefined false
+DD DM-02  w3 r0 cy 230224 DBG devmiss uncovered {"channelId":"01a1df5b-a1ea-7886-8ec6-43ad9f9d3aac","limit":50} null false
+DD DM-01  w2 r0 ben 230292 DBG store ok {"channelId":"01a1dfa6-f4d3-7a63-9fc5-34c4f2239ed6","limit":50} 330 47
+DD DM-02  w3 r0 cy 230297 DBG store ok {"channelId":"01a1df5b-a1ea-7886-8ec6-43ad9f9d3aac","limit":50} 38 31
+DD DM-01  w2 r0 ben 230579 DBG detail result 01a1dfa6-f4d3-7a63-9fc5-34c4f2239ed6 affected-cache-reread false false false true undefined true
+DD DM-01  w2 r0 ben 230580 DBG detail result 01a1dfa6-f4d3-7a63-9fc5-34c4f2239ed6 affected-cache-reread false false false true undefined true
+DD DM-02  w3 r0 cy 230868 DBG devmiss uncovered {"channelId":"01a1e5b4-8b6a-792d-82d2-2fdd30ceae5c","limit":50} null false
+DD SYN-10 w1 r0 ben 230929 DBG devmiss uncovered {"channelId":"01a1e5b5-3fb6-7119-8209-eb9299c9bb3c","limit":50} null false
+DD DM-02  w3 r0 cy 230934 DBG store ok {"channelId":"01a1e5b4-8b6a-792d-82d2-2fdd30ceae5c","limit":50} 36 1
+DD SYN-10 w1 r0 ben 231060 DBG store ok {"channelId":"01a1e5b5-3fb6-7119-8209-eb9299c9bb3c","limit":50} 117 1
+DD DM-01  w2 r0 ben 231356 DBG detail result 01a1dfa6-f4d3-7a63-9fc5-34c4f2239ed6 affected-cache-reread false false false true undefined true
+DD DM-01  w2 r0 ben 231356 DBG detail result 01a1dfa6-f4d3-7a63-9fc5-34c4f2239ed6 affected-cache-reread false false false true undefined true
+DD DM-02  w3 r0 cy 231436 DBG devmiss uncovered {"channelId":"01a1e59c-0a9c-76b1-b821-78432c90e506","limit":50} null false
+DD DM-02  w3 r0 cy 231480 DBG store ok {"channelId":"01a1e59c-0a9c-76b1-b821-78432c90e506","limit":50} 31 1
+DD SYN-10 w1 r0 ben 231562 DBG devmiss uncovered {"channelId":"01a1e5b5-2aeb-7d2b-ad05-ba538f804727","limit":50} null false
+DD SYN-10 w1 r0 ben 231652 DBG store ok {"channelId":"01a1e5b5-2aeb-7d2b-ad05-ba538f804727","limit":50} 76 1
+DD DM-02  w3 r0 cy 232071 DBG devmiss uncovered {"channelId":"01a1e59b-cf25-7a3a-9cc3-c94a3edc7726","limit":50} null false
+DD DM-02  w3 r0 cy 232141 DBG store ok {"channelId":"01a1e59b-cf25-7a3a-9cc3-c94a3edc7726","limit":50} 45 5
+DD DM-02  w3 r0 page 232183 DBG detail result 01a1df5b-a1ea-7886-8ec6-43ad9f9d3aac normalized-cache-hit true false false true undefined false
+DD DM-02  w3 r0 page 232186 DBG detail result 01a1df5b-a1ea-7886-8ec6-43ad9f9d3aac normalized-cache-hit true false false true undefined false
+DD DM-01  w2 r0 page 232252 DBG detail result 01a1dfa6-f4d3-7a63-9fc5-34c4f2239ed6 live-network false false false true undefined false
+DD SYN-10 w1 r0 ben 232272 DBG detail result 01a1e5b5-3fae-7dd8-afa9-9962feab1f9c affected-cache-reread false false false true undefined true
+DD SYN-10 w1 r0 ben 232272 DBG detail result 01a1e5b5-3fae-7dd8-afa9-9962feab1f9c affected-cache-reread false false false true undefined true
+DD DM-02  w3 r0 page 232283 DBG detail result 01a1df5b-a1ea-7886-8ec6-43ad9f9d3aac live-network false false false true undefined false
+DD DM-02  w3 r0 page 232286 DBG detail result 01a1df5b-a1ea-7886-8ec6-43ad9f9d3aac live-network false false false true undefined false
+DD DM-01  w2 r0 page 232310 DBG detail result 01a1dfa6-f4d3-7a63-9fc5-34c4f2239ed6 live-network true false false true undefined true
+DD DM-01  w2 r0 page 232311 DBG detail result 01a1dfa6-f4d3-7a63-9fc5-34c4f2239ed6 live-network true false false true undefined false
+DD DM-02  w3 r0 page 232337 DBG detail result 01a1df5b-a1ea-7886-8ec6-43ad9f9d3aac affected-cache-reread false false false true undefined true
+DD DM-02  w3 r0 page 232338 DBG detail result 01a1df5b-a1ea-7886-8ec6-43ad9f9d3aac affected-cache-reread false false false true undefined true
+  ✓   48 tests/channels-e2e-dbg/direct-messages.spec.ts:22:1 › DM-01 a direct message I start reaches the other person at once under “Direct messages”, and they can answer (9.0s)
+DD DM-02  w3 r0 cy 232650 DBG detail result 01a1df5b-a1ea-7886-8ec6-43ad9f9d3aac live-network false false false true undefined false
+DD DM-02  w3 r0 cy 232655 DBG detail result 01a1df5b-a1ea-7886-8ec6-43ad9f9d3aac live-network false false false true undefined false
+DD SYN-10 w1 r0 ben 232757 DBG detail result 01a1e5b5-3fb6-7119-8209-eb9299c9bb3c live-network false false false true undefined false
+DD SYN-10 w1 r0 ben 232758 DBG detail result 01a1e5b5-3fb6-7119-8209-eb9299c9bb3c live-network false false false true undefined false
+DD DM-02  w3 r0 cy 232958 DBG detail result 01a1df5b-a1ea-7886-8ec6-43ad9f9d3aac affected-cache-reread false false false true undefined true
+DD DM-02  w3 r0 cy 232961 DBG detail result 01a1df5b-a1ea-7886-8ec6-43ad9f9d3aac affected-cache-reread false false false true undefined true
+DD DM-03  w2 r0 cy 234132 DBG detail result 01a1e5b5-648d-7f81-963a-cb54e7d97323 live-network false false false true undefined false
+DD DM-02  w3 r0 page 234194 DBG detail result 01a1df5b-a1ea-7886-8ec6-43ad9f9d3aac live-network false false false true undefined false
+DD DM-02  w3 r0 page 234252 DBG detail result 01a1df5b-a1ea-7886-8ec6-43ad9f9d3aac live-network true false false true undefined true
+DD DM-02  w3 r0 page 234252 DBG detail result 01a1df5b-a1ea-7886-8ec6-43ad9f9d3aac live-network true false false true undefined false
+DD DM-03  w2 r0 cy 234370 DBG detail result 01a1e5b5-648d-7f81-963a-cb54e7d97323 live-network false false false true undefined true
+DD DM-03  w2 r0 cy 234374 DBG detail result 01a1e5b5-648d-7f81-963a-cb54e7d97323 live-network false false false true undefined false
+DD SYN-10 w1 r0 ben 234405 DBG detail result 01a1e5b5-3fb6-7119-8209-eb9299c9bb3c live-network false false false true undefined false
+DD SYN-10 w1 r0 ben 234440 DBG detail result 01a1e5b5-3fb6-7119-8209-eb9299c9bb3c live-network true false false true undefined true
+DD SYN-10 w1 r0 ben 234440 DBG detail result 01a1e5b5-3fb6-7119-8209-eb9299c9bb3c live-network true false false true undefined false
+  ✓   49 tests/channels-e2e-dbg/direct-messages.spec.ts:66:1 › DM-02 writing to the same person again from “New direct message” continues the one conversation (10.7s)
+DD DM-03  w2 r0 cy 234966 DBG detail result 01a1e5b5-648d-7f81-963a-cb54e7d97323 live-network false false false true undefined true
+DD DM-03  w2 r0 cy 234967 DBG detail result 01a1e5b5-648d-7f81-963a-cb54e7d97323 live-network false false false true undefined true
+DD SYN-10 w1 r0 ben 234988 DBG detail result 01a1e5b5-3fb6-7119-8209-eb9299c9bb3c affected-cache-reread false false false true undefined true
+DD SYN-10 w1 r0 ben 234990 DBG detail result 01a1e5b5-3fb6-7119-8209-eb9299c9bb3c affected-cache-reread false false false true undefined false
+DD DM-03  w2 r0 cy 235024 DBG devmiss uncovered {"channelId":"01a1e5b5-648d-7f81-963a-cb54e7d97323","limit":50} null false
+DD DM-03  w2 r0 cy 235134 DBG store ok {"channelId":"01a1e5b5-648d-7f81-963a-cb54e7d97323","limit":50} 818 0
+DD DM-03  w2 r0 ben 235760 DBG detail result 01a1e5b5-648d-7f81-963a-cb54e7d97323 live-network false false false true undefined false
+DD SYN-10 w1 r0 ben 235777 DBG store ok {"channelId":"01a1e5b5-3fb6-7119-8209-eb9299c9bb3c","limit":50} 1238 1
+DD DM-03  w2 r0 ben 235971 DBG detail result 01a1e5b5-648d-7f81-963a-cb54e7d97323 live-network false false false true undefined true
+DD DM-04  w3 r0 ben 235972 DBG detail result 01a1e5b5-6c00-7ade-9f8d-912a9e232d09 live-network false false false true undefined false
+DD DM-03  w2 r0 ben 235976 DBG detail result 01a1e5b5-648d-7f81-963a-cb54e7d97323 live-network false false false true undefined false
+DD SYN-10 w1 r0 ben 236153 DBG detail result 01a1e5b5-3fb6-7119-8209-eb9299c9bb3c affected-cache-reread false false false true undefined true
+DD SYN-10 w1 r0 ben 236153 DBG detail result 01a1e5b5-3fb6-7119-8209-eb9299c9bb3c affected-cache-reread false false false true undefined false
+DD DM-04  w3 r0 ben 236226 DBG detail result 01a1e5b5-6c00-7ade-9f8d-912a9e232d09 live-network false false false true undefined true
+DD DM-04  w3 r0 ben 236230 DBG detail result 01a1e5b5-6c00-7ade-9f8d-912a9e232d09 live-network false false false true undefined false
+DD DM-03  w2 r0 ben 236616 DBG devmiss uncovered {"channelId":"01a1e5b5-648d-7f81-963a-cb54e7d97323","limit":50} null false
+DD DM-04  w3 r0 ben 236675 DBG detail result 01a1e5b5-6c00-7ade-9f8d-912a9e232d09 live-network false false false true undefined true
+DD DM-04  w3 r0 ben 236677 DBG detail result 01a1e5b5-6c00-7ade-9f8d-912a9e232d09 live-network false false false true undefined true
+DD DM-04  w3 r0 ben 236701 DBG devmiss uncovered {"channelId":"01a1e5b5-6c00-7ade-9f8d-912a9e232d09","limit":50} null false
+DD DM-04  w3 r0 ben 236755 DBG detail result 01a1e5b5-6c00-7ade-9f8d-912a9e232d09 affected-cache-reread false false false true undefined true
+DD DM-04  w3 r0 ben 236755 DBG detail result 01a1e5b5-6c00-7ade-9f8d-912a9e232d09 affected-cache-reread false false false true undefined true
+DD DM-04  w3 r0 ben 236794 DBG store ok {"channelId":"01a1e5b5-6c00-7ade-9f8d-912a9e232d09","limit":50} 666 0
+DD DM-03  w2 r0 ben 236885 DBG detail result 01a1e5b5-648d-7f81-963a-cb54e7d97323 affected-cache-reread true false false true undefined true
+DD DM-03  w2 r0 ben 236885 DBG detail result 01a1e5b5-648d-7f81-963a-cb54e7d97323 affected-cache-reread true false false true undefined true
+DD DM-03  w2 r0 ben 236885 DBG detail result 01a1e5b5-648d-7f81-963a-cb54e7d97323 live-network false false false true undefined true
+DD DM-03  w2 r0 ben 236885 DBG detail result 01a1e5b5-648d-7f81-963a-cb54e7d97323 live-network false false false true undefined true
+DD DM-03  w2 r0 ben 236885 DBG store ok {"channelId":"01a1e5b5-648d-7f81-963a-cb54e7d97323","limit":50} 968 0
+DD DM-04  w3 r0 cy 237697 DBG detail result 01a1e5b5-6c00-7ade-9f8d-912a9e232d09 live-network false false false true undefined false
+DD DM-04  w3 r0 cy 237917 DBG detail result 01a1e5b5-6c00-7ade-9f8d-912a9e232d09 live-network false false false true undefined true
+DD DM-04  w3 r0 cy 237926 DBG detail result 01a1e5b5-6c00-7ade-9f8d-912a9e232d09 live-network false false false true undefined false
+DD DM-04  w3 r0 cy 238551 DBG devmiss uncovered {"channelId":"01a1e5b5-6c00-7ade-9f8d-912a9e232d09","limit":50} null false
+DD DM-04  w3 r0 cy 238577 DBG detail result 01a1e5b5-6c00-7ade-9f8d-912a9e232d09 live-network false false false true undefined true
+DD DM-04  w3 r0 cy 238577 DBG detail result 01a1e5b5-6c00-7ade-9f8d-912a9e232d09 live-network false false false true undefined true
+DD DM-04  w3 r0 cy 238690 DBG store ok {"channelId":"01a1e5b5-6c00-7ade-9f8d-912a9e232d09","limit":50} 838 0
+DD DM-03  w2 r0 ben 238722 DBG devmiss uncovered {"channelId":"01a1dfb1-b862-7eed-bd3a-66baa331490b","limit":50} null false
+DD DM-03  w2 r0 ben 238925 DBG detail result 01a1dfb1-b862-7eed-bd3a-66baa331490b live-network false false false true undefined false
+DD DM-03  w2 r0 ben 238928 DBG detail result 01a1dfb1-b862-7eed-bd3a-66baa331490b live-network false false false true undefined false
+DD DM-03  w2 r0 ben 239049 DBG store ok {"channelId":"01a1dfb1-b862-7eed-bd3a-66baa331490b","limit":50} 289 28
+DD DM-03  w2 r0 cy 239065 DBG devmiss uncovered {"channelId":"01a1e5b4-21bb-7562-8b56-fa6c1fcb9035","limit":50} null false
+DD DM-03  w2 r0 cy 239153 DBG store ok {"channelId":"01a1e5b4-21bb-7562-8b56-fa6c1fcb9035","limit":50} 29 5
+DD DM-04  w3 r0 page 239394 DBG detail result 01a1e5b5-6c00-7ade-9f8d-912a9e232d09 live-network false false false true undefined false
+DD DM-03  w2 r0 ben 239624 DBG detail result 01a1dfb1-b862-7eed-bd3a-66baa331490b affected-cache-reread false false false true undefined true
+DD DM-03  w2 r0 ben 239626 DBG detail result 01a1dfb1-b862-7eed-bd3a-66baa331490b affected-cache-reread false false false true undefined true
+DD DM-04  w3 r0 page 239669 DBG detail result 01a1e5b5-6c00-7ade-9f8d-912a9e232d09 live-network false false false true undefined true
+DD DM-04  w3 r0 page 239675 DBG detail result 01a1e5b5-6c00-7ade-9f8d-912a9e232d09 live-network false false false true undefined false
+DD DM-03  w2 r0 cy 239716 DBG devmiss uncovered {"channelId":"01a1e59b-9807-7a2d-8949-592fb9a025ae","limit":50} null false
+DD DM-03  w2 r0 cy 239814 DBG store ok {"channelId":"01a1e59b-9807-7a2d-8949-592fb9a025ae","limit":50} 74 1
+DD DM-03  w2 r0 cy 239952 DBG devmiss uncovered {"channelId":"01a1dfb1-b862-7eed-bd3a-66baa331490b","limit":50} null false
+DD DM-03  w2 r0 cy 240127 DBG detail result 01a1dfb1-b862-7eed-bd3a-66baa331490b live-network false false false true undefined false
+DD DM-03  w2 r0 cy 240133 DBG detail result 01a1dfb1-b862-7eed-bd3a-66baa331490b live-network false false false true undefined false
+DD DM-03  w2 r0 cy 240143 DBG store ok {"channelId":"01a1dfb1-b862-7eed-bd3a-66baa331490b","limit":50} 184 29
+DD SYN-10 w1 r0 ben 240227 DBG detail result 01a1e5b5-3fae-7dd8-afa9-9962feab1f9c normalized-cache-hit true false false true undefined false
+DD SYN-10 w1 r0 ben 240230 DBG detail result 01a1e5b5-3fae-7dd8-afa9-9962feab1f9c normalized-cache-hit true false false true undefined false
+DD DM-04  w3 r0 page 240270 DBG devmiss uncovered {"channelId":"01a1e5b5-6c00-7ade-9f8d-912a9e232d09","limit":50} null false
+DD DM-03  w2 r0 cy 240288 DBG detail result 01a1dfb1-b862-7eed-bd3a-66baa331490b affected-cache-reread false false false true undefined true
+DD DM-03  w2 r0 cy 240289 DBG detail result 01a1dfb1-b862-7eed-bd3a-66baa331490b affected-cache-reread false false false true undefined true
+DD DM-04  w3 r0 page 240295 DBG store ok {"channelId":"01a1e5b5-6c00-7ade-9f8d-912a9e232d09","limit":50} 693 0
+DD SYN-10 w1 r0 ben 240526 DBG detail result 01a1e5b5-3fae-7dd8-afa9-9962feab1f9c affected-cache-reread true false false true undefined false
+DD SYN-10 w1 r0 ben 240526 DBG detail result 01a1e5b5-3fae-7dd8-afa9-9962feab1f9c affected-cache-reread true false false true undefined false
+DD SYN-10 w1 r0 ben 240556 DBG detail result 01a1e5b5-3fae-7dd8-afa9-9962feab1f9c live-network false false false true undefined false
+DD SYN-10 w1 r0 ben 240557 DBG detail result 01a1e5b5-3fae-7dd8-afa9-9962feab1f9c live-network false false false true undefined false
+DD SYN-10 w1 r0 ben 240804 DBG detail result 01a1e5b5-3fae-7dd8-afa9-9962feab1f9c affected-cache-reread false false false true undefined true
+DD SYN-10 w1 r0 ben 240809 DBG detail result 01a1e5b5-3fae-7dd8-afa9-9962feab1f9c affected-cache-reread false false false true undefined true
+DD DM-04  w3 r0 ben 241160 DBG devmiss uncovered {"channelId":"01a1e5b5-111e-7cf0-8225-68c6825ae5f4","limit":50} null false
+DD DM-04  w3 r0 ben 241317 DBG store ok {"channelId":"01a1e5b5-111e-7cf0-8225-68c6825ae5f4","limit":50} 115 24
+DD DM-03  w2 r0 ben 241327 DBG detail result 01a1e5b5-648d-7f81-963a-cb54e7d97323 live-network false false false true undefined false
+DD DM-03  w2 r0 ben 241487 DBG detail result 01a1e5b5-648d-7f81-963a-cb54e7d97323 live-network false false false true undefined true
+DD DM-03  w2 r0 ben 241491 DBG detail result 01a1e5b5-648d-7f81-963a-cb54e7d97323 live-network false false false true undefined false
+DD DM-04  w3 r0 ben 241842 DBG devmiss uncovered {"channelId":"01a1e5b5-1128-7887-8da5-b6ae597d49a4","limit":50} null false
+DD DM-03  w2 r0 ben 241930 DBG detail result 01a1dfb1-b862-7eed-bd3a-66baa331490b live-network false false false true undefined false
+DD DM-03  w2 r0 ben 241932 DBG detail result 01a1dfb1-b862-7eed-bd3a-66baa331490b live-network false false false true undefined false
+DD DM-04  w3 r0 ben 242061 DBG store ok {"channelId":"01a1e5b5-1128-7887-8da5-b6ae597d49a4","limit":50} 81 1
+DD DM-04  w3 r0 page 242065 DBG detail result 01a1e5b5-85ba-77d3-a000-1620224c42f8 live-network false false false true undefined false
+DD DM-04  w3 r0 page 242130 DBG detail result 01a1e5b5-85ba-77d3-a000-1620224c42f8 live-network false false false true undefined true
+DD DM-04  w3 r0 page 242137 DBG detail result 01a1e5b5-85ba-77d3-a000-1620224c42f8 live-network false false false true undefined false
+DD DM-04  w3 r0 page 242157 DBG devmiss uncovered {"channelId":"01a1e5b5-85ba-77d3-a000-1620224c42f8","limit":50} null false
+  ✓   50 tests/channels-e2e-dbg/direct-messages.spec.ts:122:1 › DM-03 “Message …” on a channel’s participant opens my conversation with them, the same one every time (9.5s)
+DD DM-04  w3 r0 page 242196 DBG store ok {"channelId":"01a1e5b5-85ba-77d3-a000-1620224c42f8","limit":50} 140 1
+DD DM-04  w3 r0 page 242263 DBG detail result 01a1e5b5-85ba-77d3-a000-1620224c42f8 affected-cache-reread false false false true undefined true
+DD DM-04  w3 r0 page 242263 DBG detail result 01a1e5b5-85ba-77d3-a000-1620224c42f8 affected-cache-reread false false false true undefined true
+DD SYN-10 w1 r0 ben 242620 DBG detail result 01a1e5b5-3fae-7dd8-afa9-9962feab1f9c live-network false false false true undefined false
+DD SYN-10 w1 r0 ben 242662 DBG detail result 01a1e5b5-3fae-7dd8-afa9-9962feab1f9c live-network true false false true undefined true
+DD SYN-10 w1 r0 ben 242662 DBG detail result 01a1e5b5-3fae-7dd8-afa9-9962feab1f9c live-network true false false true undefined false
+DD DM-04  w3 r0 cy 242727 DBG devmiss uncovered {"channelId":"01a1e5b5-85ba-77d3-a000-1620224c42f8","limit":50} null false
+DD DM-04  w3 r0 cy 242784 DBG store ok {"channelId":"01a1e5b5-85ba-77d3-a000-1620224c42f8","limit":50} 44 1
+  ✓   47 tests/channels-e2e-dbg/current.spec.ts:317:1 › SYN-10 a channel stays right through rounds of leaving it, losing the connection and reloading (19.7s)
+DD DM-04  w3 r0 page 243032 DBG detail result 01a1e5b5-85ba-77d3-a000-1620224c42f8 affected-cache-reread false false false true undefined true
+DD DM-04  w3 r0 page 243032 DBG detail result 01a1e5b5-85ba-77d3-a000-1620224c42f8 affected-cache-reread false false false true undefined true
+DD DM-04  w3 r0 ben 243175 DBG devmiss uncovered {"channelId":"01a1e5b4-fe46-7fdc-ba52-c0e140dad4e4","limit":50} null false
+DD DM-04  w3 r0 ben 243191 DBG detail result 01a1e5b5-85ba-77d3-a000-1620224c42f8 live-network false false false true undefined false
+DD DM-04  w3 r0 ben 243193 DBG detail result 01a1e5b5-85ba-77d3-a000-1620224c42f8 live-network false false false true undefined false
+DD DM-04  w3 r0 ben 243480 DBG devmiss uncovered {"channelId":"01a1e5b5-85ba-77d3-a000-1620224c42f8","limit":50} null false
+DD DM-05  w2 r0 dee 243599 DBG detail result 01a1e5b5-89bb-7cc9-b025-bd67de7f10c5 live-network false false false true undefined false
+DD DM-05  w2 r0 dee 243759 DBG detail result 01a1e5b5-89bb-7cc9-b025-bd67de7f10c5 live-network false false false true undefined true
+DD DM-05  w2 r0 dee 243763 DBG detail result 01a1e5b5-89bb-7cc9-b025-bd67de7f10c5 live-network false false false true undefined false
+DD DM-04  w3 r0 cy 243774 DBG detail result 01a1e5b5-85ba-77d3-a000-1620224c42f8 live-network false false false true undefined false
+DD DM-04  w3 r0 cy 243777 DBG detail result 01a1e5b5-85ba-77d3-a000-1620224c42f8 live-network false false false true undefined false
+DD DM-04  w3 r0 ben 243785 DBG store ok {"channelId":"01a1e5b5-85ba-77d3-a000-1620224c42f8","limit":50} 670 1
+DD DM-04  w3 r0 ben 243853 DBG store ok {"channelId":"01a1e5b4-fe46-7fdc-ba52-c0e140dad4e4","limit":50} 615 24
+DD DM-05  w2 r0 dee 244066 DBG devmiss uncovered {"channelId":"01a1e5b5-89bb-7cc9-b025-bd67de7f10c5","limit":50} null false
+DD DM-05  w2 r0 dee 244123 DBG store ok {"channelId":"01a1e5b5-89bb-7cc9-b025-bd67de7f10c5","limit":50} 413 0
+DD DM-06  w1 r0 page 244255 DBG detail result 01a1e5b5-8cae-74a8-8ca0-f09a3dec6a55 live-network false false false true undefined false
+  ✓   52 tests/channels-e2e-dbg/direct-messages.spec.ts:228:1 › DM-05 a conversation with someone I never wrote to opens empty, saying “Say hello”, and nothing can be sent until I type (2.3s)
+DD DM-06  w1 r0 page 244485 DBG detail result 01a1e5b5-8cae-74a8-8ca0-f09a3dec6a55 live-network false false false true undefined true
+DD DM-06  w1 r0 page 244489 DBG detail result 01a1e5b5-8cae-74a8-8ca0-f09a3dec6a55 live-network fa

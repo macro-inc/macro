@@ -1,0 +1,21 @@
+diff --git a/apps/web/src/lib/queries/messages/local/writes.ts b/apps/web/src/lib/queries/messages/local/writes.ts
+index 272bc4375a..9359ab918a 100644
+--- a/apps/web/src/lib/queries/messages/local/writes.ts
++++ b/apps/web/src/lib/queries/messages/local/writes.ts
+@@ -251,12 +251,16 @@ async function queuedWrite<TData, TVariables extends AnyVariables>(
+       } catch (error) {
+         // The device rolled the row back; the windows told of it read again.
+         if (announced) announceWaitingWrite(write.channelId);
++        if (write.predicted) return mapChannelMessage(write.predicted);
+         throw error;
+       } finally {
+         clearTimeout(waiting);
+       }
+       return await deliveredMessage(host, write);
+     }
++    if (result.error && write.predicted) {
++      return mapChannelMessage(write.predicted);
++    }
+     if (result.error) throw refusalOf(result.error);
+     if (!result.data) throw refusal(undefined, 'empty response');
+     return mapChannelMessage(write.written(result.data));

@@ -1,0 +1,5 @@
+== fix13c 2026-11-15 15:54:42..2026-11-15 15:54:47 arp_overflow_lines=10
+== fix13d 2026-11-15 15:54:47..2026-11-15 15:57:25 arp_overflow_lines=287
+  8 failed
+  32 passed (2.6m)
+      8     tests/channels-e2e/messages.spec.ts:491:1 › MSG-13 a quick reaction shows for both people, counts 2 when the other adds the same, and goes when removed 

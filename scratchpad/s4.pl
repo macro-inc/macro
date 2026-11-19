@@ -1,0 +1,3 @@
+undef $/; $_ = <STDIN>;
+s#  if \(parent\.type === 'channel' && typeof seq === 'number'\) \{\n    noteChannelPush\(parent\.id, seq\);\n  \}\n\}#  if (parent.type === 'channel' && typeof seq === 'number') {\n    noteChannelPush(parent.id, seq, !channelViewLoading(parent));\n  }\n}\n\n/** Whether an open timeline or thread of the channel is waiting on a read. */\nfunction channelViewLoading(parent: MessageParent): boolean {\n  const prefixes = [\n    [...messageKeys.messages._def, parent],\n    [...messageKeys.threadReplies._def, parent],\n  ];\n  return prefixes.some(\n    (queryKey) =>\n      queryClient.getQueryCache().findAll({\n        queryKey,\n        type: 'active',\n        fetchStatus: 'fetching',\n      }).length > 0\n  );\n}# or die "a";
+print;

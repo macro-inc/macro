@@ -1,0 +1,3 @@
+undef $/; $_ = <STDIN>;
+s#(/\*\* Forgets pages still being written; for account changes and tests\. \*/)#/**\n * Forgets the channel's server pages still being written. One fetched before\n * a change that has since been pushed lacks it, and the read made again to\n * recover that change must not be answered with the same page.\n */\nexport function forgetPendingChannelPages(channelId: string): void {\n  for (const key of pendingServerPages.keys()) {\n    const args: ChannelTimelineCacheArgs = JSON.parse(key);\n    if (args.channelId === channelId) pendingServerPages.delete(key);\n  }\n}\n\n$1# or die "a";
+print;

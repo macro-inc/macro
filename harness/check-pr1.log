@@ -1,0 +1,7 @@
+warning: Git tree '/home/teo/.herdr/worktrees/macro/synoet-channels-local-sync-stacktmp' is dirty
+    Checking teams v0.1.0 (/home/teo/.herdr/worktrees/macro/synoet-channels-local-sync-stacktmp/crates/teams)
+    Checking messages v0.1.0 (/home/teo/.herdr/worktrees/macro/synoet-channels-local-sync-stacktmp/crates/messages)
+    Checking bots v0.1.0 (/home/teo/.herdr/worktrees/macro/synoet-channels-local-sync-stacktmp/crates/bots)
+    Checking calendar_scheduling v0.1.0 (/home/teo/.herdr/worktrees/macro/synoet-channels-local-sync-stacktmp/crates/calendar_scheduling)
+    Checking calendar_service v0.1.0 (/home/teo/.herdr/worktrees/macro/synoet-channels-local-sync-stacktmp/services/calendar_service)
+    Finished `dev` profile [unoptimized + debuginfo] target(s) in 12.56s

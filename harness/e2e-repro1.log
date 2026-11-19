@@ -1,0 +1,505 @@
+path "/home/teo/.herdr/worktrees/macro/synoet-channels-local-sync-suite/apps/web" does not contain a 'flake.nix', searching up
+
+Running 24 tests using 4 workers
+
+2026/11/15 13:17:48 socat[1085809] E write(6, 0x569d13a07000, 24): Broken pipe
+2026/11/15 13:17:48 socat[1084814] E write(6, 0x569d13a07000, 24): Broken pipe
+2026/11/15 13:17:48 socat[1085825] E write(6, 0x569d13a07000, 24): Broken pipe
+2026/11/15 13:17:48 socat[1085839] E write(6, 0x569d13a07000, 24): Broken pipe
+  ✓   3 tests/channels-e2e/channels.spec.ts:379:1 › CHN-12 going to another tab and back keeps the message list where it was (2.7s)
+2026/11/15 13:17:50 socat[1090914] E write(6, 0x569d13a07000, 24): Broken pipe
+2026/11/15 13:17:51 socat[1054256] W waitpid(-1, {}, WNOHANG): no (more) child has exited
+2026/11/15 13:17:51 socat[1059199] W waitpid(-1, {}, WNOHANG): no (more) child has exited
+2026/11/15 13:17:53 socat[1091105] E write(6, 0x569d13a07000, 24): Broken pipe
+2026/11/15 13:17:53 socat[1091146] E write(6, 0x569d13a07000, 24): Broken pipe
+2026/11/15 13:17:53 socat[1093586] E write(6, 0x569d13a08000, 24): Broken pipe
+2026/11/15 13:17:53 socat[1092288] E write(6, 0x569d13a07000, 24): Broken pipe
+2026/11/15 13:17:53 socat[1093595] E write(6, 0x569d13a08000, 24): Broken pipe
+2026/11/15 13:17:53 socat[1093599] E write(6, 0x569d13a08000, 24): Broken pipe
+2026/11/15 13:17:53 socat[1085836] E write(6, 0x569d13a07000, 24): Broken pipe
+2026/11/15 13:17:53 socat[1085851] E write(6, 0x569d13a07000, 24): Broken pipe
+2026/11/15 13:17:53 socat[1085874] E write(6, 0x569d13a07000, 24): Broken pipe
+  ✓   1 tests/channels-e2e/members.spec.ts:18:1 › MEM-01 a person invited from the app gets the channel at once, with what was said before and after (6.9s)
+2026/11/15 13:17:54 socat[1054256] W waitpid(-1, {}, WNOHANG): no (more) child has exited
+2026/11/15 13:17:54 socat[1059199] W waitpid(-1, {}, WNOHANG): no (more) child has exited
+2026/11/15 13:17:54 socat[1092453] E write(6, 0x569d13a07000, 24): Broken pipe
+2026/11/15 13:17:54 socat[1092520] E write(6, 0x569d13a07000, 24): Broken pipe
+2026/11/15 13:17:54 socat[1092518] E write(6, 0x569d13a07000, 24): Broken pipe
+2026/11/15 13:17:54 socat[1085841] E write(6, 0x569d13a07000, 24): Broken pipe
+2026/11/15 13:17:54 socat[1054256] W waitpid(-1, {}, WNOHANG): no (more) child has exited
+2026/11/15 13:17:54 socat[1059199] W waitpid(-1, {}, WNOHANG): no (more) child has exited
+2026/11/15 13:17:54 socat[1085848] E write(6, 0x569d13a07000, 24): Broken pipe
+2026/11/15 13:17:54 socat[1096134] E write(6, 0x569d13a08000, 24): Broken pipe
+2026/11/15 13:17:54 socat[1096312] E write(6, 0x569d13a08000, 24): Broken pipe
+2026/11/15 13:17:54 socat[1059199] W waitpid(-1, {}, WNOHANG): no (more) child has exited
+2026/11/15 13:17:54 socat[1054256] W waitpid(-1, {}, WNOHANG): no (more) child has exited
+2026/11/15 13:17:54 socat[1096323] E write(6, 0x569d13a08000, 24): Broken pipe
+  ✓   2 tests/channels-e2e/direct-messages.spec.ts:66:1 › DM-02 writing to the same person again from “New direct message” continues the one conversation (8.7s)
+2026/11/15 13:17:56 socat[1102137] E write(6, 0x569d13a08000, 24): Broken pipe
+2026/11/15 13:17:56 socat[1102170] E write(6, 0x569d13a08000, 24): Broken pipe
+2026/11/15 13:17:56 socat[1102108] E write(6, 0x569d13a08000, 24): Broken pipe
+2026/11/15 13:17:56 socat[1102134] E write(6, 0x569d13a08000, 24): Broken pipe
+2026/11/15 13:17:56 socat[1102148] E write(6, 0x569d13a08000, 24): Broken pipe
+  ✓   5 tests/channels-e2e/messages.spec.ts:71:1 › MSG-03 a quick back-and-forth between two people reads in the same order for both, each message once (7.4s)
+2026/11/15 13:17:56 socat[1096583] E write(6, 0x569d13a08000, 24): Broken pipe
+2026/11/15 13:17:56 socat[1096588] E write(6, 0x569d13a08000, 24): Broken pipe
+2026/11/15 13:17:56 socat[1059199] W waitpid(-1, {}, WNOHANG): no (more) child has exited
+2026/11/15 13:17:56 socat[1054256] W waitpid(-1, {}, WNOHANG): no (more) child has exited
+2026/11/15 13:17:58 socat[1103972] E write(6, 0x569d13a08000, 24): Broken pipe
+2026/11/15 13:17:58 socat[1103599] E write(6, 0x569d13a08000, 24): Broken pipe
+2026/11/15 13:17:58 socat[1103970] E write(6, 0x569d13a08000, 24): Broken pipe
+2026/11/15 13:17:58 socat[1102579] E write(6, 0x569d13a08000, 24): Broken pipe
+2026/11/15 13:17:58 socat[1102615] E write(6, 0x569d13a08000, 24): Broken pipe
+2026/11/15 13:17:58 socat[1102601] E write(6, 0x569d13a08000, 88): Broken pipe
+2026/11/15 13:17:58 socat[1102602] E write(6, 0x555555624000, 88): Broken pipe
+2026/11/15 13:17:58 socat[1102592] E write(6, 0x569d13a08000, 24): Broken pipe
+2026/11/15 13:17:58 socat[1102623] E write(6, 0x569d13a08000, 24): Broken pipe
+2026/11/15 13:17:59 socat[1105852] E write(6, 0x569d13a08000, 24): Broken pipe
+2026/11/15 13:17:59 socat[1095488] E write(6, 0x569d13a08000, 24): Broken pipe
+2026/11/15 13:17:59 socat[1105889] E write(6, 0x569d13a08000, 24): Broken pipe
+2026/11/15 13:17:59 socat[1106021] E write(6, 0x569d13a08000, 24): Broken pipe
+2026/11/15 13:17:59 socat[1105865] E write(6, 0x569d13a08000, 24): Broken pipe
+2026/11/15 13:17:59 socat[1105887] E write(6, 0x569d13a08000, 24): Broken pipe
+2026/11/15 13:17:59 socat[1105955] E write(6, 0x569d13a08000, 24): Broken pipe
+  ✓   6 tests/channels-e2e/messages.spec.ts:491:1 › MSG-13 a quick reaction shows for both people, counts 2 when the other adds the same, and goes when removed (6.8s)
+2026/11/15 13:18:00 socat[1106485] E write(6, 0x569d13a08000, 24): Broken pipe
+2026/11/15 13:18:00 socat[1097227] E write(6, 0x569d13a08000, 24): Broken pipe
+2026/11/15 13:18:00 socat[1106508] E write(6, 0x569d13a08000, 24): Broken pipe
+2026/11/15 13:18:00 socat[1106520] E write(6, 0x569d13a08000, 24): Broken pipe
+2026/11/15 13:18:00 socat[1106506] E write(6, 0x569d13a08000, 24): Broken pipe
+2026/11/15 13:18:00 socat[1106519] E write(6, 0x569d13a08000, 24): Broken pipe
+  ✓   7 tests/channels-e2e/messages.spec.ts:677:1 › MSG-18 messages two people send at the same moment end in one order for both, each once (5.4s)
+2026/11/15 13:18:02 socat[1054256] W waitpid(-1, {}, WNOHANG): no (more) child has exited
+2026/11/15 13:18:02 socat[1109127] E write(6, 0x569d13a08000, 24): Broken pipe
+2026/11/15 13:18:02 socat[1110692] E write(6, 0x569d13a08000, 24): Broken pipe
+  ✓   9 tests/channels-e2e/channels.spec.ts:379:1 › CHN-12 going to another tab and back keeps the message list where it was (2.5s)
+2026/11/15 13:18:04 socat[1113468] E write(6, 0x569d13a08000, 24): Broken pipe
+2026/11/15 13:18:06 socat[1085823] E write(6, 0x569d13a07000, 24): Broken pipe
+2026/11/15 13:18:06 socat[1054256] W waitpid(-1, {}, WNOHANG): no (more) child has exited
+2026/11/15 13:18:06 socat[1085832] E write(6, 0x569d13a07000, 24): Broken pipe
+2026/11/15 13:18:06 socat[1085843] E write(6, 0x569d13a07000, 24): Broken pipe
+2026/11/15 13:18:06 socat[1093340] E write(6, 0x569d13a07000, 24): Broken pipe
+2026/11/15 13:18:06 socat[1093574] E write(6, 0x569d13a08000, 24): Broken pipe
+2026/11/15 13:18:06 socat[1093592] E write(6, 0x569d13a08000, 24): Broken pipe
+  ✘   4 tests/channels-e2e/composer.spec.ts:93:1 › CMP-13 a message shown as sent is still sent when the page is reloaded at once (20.1s)
+2026/11/15 13:18:13 socat[1124371] E write(6, 0x569d13a08000, 24): Broken pipe
+2026/11/15 13:18:13 socat[1124402] E write(6, 0x569d13a08000, 24): Broken pipe
+2026/11/15 13:18:13 socat[1124622] E write(6, 0x569d13a08000, 24): Broken pipe
+2026/11/15 13:18:13 socat[1127630] E write(6, 0x569d13a08000, 24): Broken pipe
+2026/11/15 13:18:13 socat[1127661] E write(6, 0x569d13a08000, 24): Broken pipe
+2026/11/15 13:18:13 socat[1127793] E write(6, 0x569d13a08000, 24): Broken pipe
+2026/11/15 13:18:13 socat[1122254] E write(6, 0x569d13a08000, 24): Broken pipe
+  ✓  12 tests/channels-e2e/members.spec.ts:18:1 › MEM-01 a person invited from the app gets the channel at once, with what was said before and after (6.0s)
+2026/11/15 13:18:13 socat[1059199] W waitpid(-1, {}, WNOHANG): no (more) child has exited
+2026/11/15 13:18:15 socat[1105803] E write(6, 0x569d13a08000, 24): Broken pipe
+2026/11/15 13:18:15 socat[1105862] E write(6, 0x569d13a08000, 24): Broken pipe
+  ✓   8 tests/channels-e2e/unread.spec.ts:160:1 › UNR-04 scrolled up in an open channel, a new message shows “1 unread … below”, which leads to it (18.8s)
+2026/11/15 13:18:15 socat[1054256] W waitpid(-1, {}, WNOHANG): no (more) child has exited
+2026/11/15 13:18:17 socat[1133785] E write(6, 0x569d13a08000, 24): Broken pipe
+2026/11/15 13:18:17 socat[1133879] E write(6, 0x569d13a08000, 24): Broken pipe
+2026/11/15 13:18:17 socat[1133881] E write(6, 0x569d13a08000, 24): Broken pipe
+2026/11/15 13:18:18 socat[1136799] E write(6, 0x569d13a08000, 24): Broken pipe
+2026/11/15 13:18:18 socat[1136918] E write(6, 0x569d13a08000, 24): Broken pipe
+2026/11/15 13:18:18 socat[1059199] W waitpid(-1, {}, WNOHANG): no (more) child has exited
+2026/11/15 13:18:18 socat[1136916] E write(6, 0x569d13a08000, 24): Broken pipe
+2026/11/15 13:18:19 socat[1137966] E write(6, 0x569d13a08000, 24): Broken pipe
+2026/11/15 13:18:19 socat[1137957] E write(6, 0x569d13a08000, 24): Broken pipe
+2026/11/15 13:18:19 socat[1137910] E write(6, 0x569d13a08000, 24): Broken pipe
+2026/11/15 13:18:19 socat[1129138] E write(6, 0x569d13a08000, 24): Broken pipe
+2026/11/15 13:18:19 socat[1137944] E write(6, 0x569d13a08000, 24): Broken pipe
+2026/11/15 13:18:19 socat[1137954] E write(6, 0x569d13a08000, 24): Broken pipe
+  ✓  13 tests/channels-e2e/messages.spec.ts:71:1 › MSG-03 a quick back-and-forth between two people reads in the same order for both, each message once (6.1s)
+2026/11/15 13:18:19 socat[1112025] E write(6, 0x569d13a08000, 24): Broken pipe
+2026/11/15 13:18:19 socat[1112057] E write(6, 0x569d13a08000, 24): Broken pipe
+2026/11/15 13:18:19 socat[1059199] W waitpid(-1, {}, WNOHANG): no (more) child has exited
+2026/11/15 13:18:20 socat[1115652] E write(6, 0x569d13a08000, 24): Broken pipe
+2026/11/15 13:18:20 socat[1115673] E write(6, 0x569d13a08000, 24): Broken pipe
+2026/11/15 13:18:20 socat[1115701] E write(6, 0x569d13a08000, 24): Broken pipe
+  ✘  10 tests/channels-e2e/composer.spec.ts:93:1 › CMP-13 a message shown as sent is still sent when the page is reloaded at once (19.3s)
+2026/11/15 13:18:20 socat[1138340] E write(6, 0x569d13a08000, 24): Broken pipe
+2026/11/15 13:18:21 socat[1138023] E write(6, 0x569d13a08000, 24): Broken pipe
+2026/11/15 13:18:21 socat[1138326] E write(6, 0x569d13a08000, 24): Broken pipe
+2026/11/15 13:18:23 socat[1145535] E write(6, 0x569d13a08000, 24): Broken pipe
+2026/11/15 13:18:23 socat[1145539] E write(6, 0x569d13a08000, 24): Broken pipe
+2026/11/15 13:18:23 socat[1135325] E write(6, 0x569d13a08000, 24): Broken pipe
+2026/11/15 13:18:23 socat[1145507] E write(6, 0x569d13a08000, 24): Broken pipe
+2026/11/15 13:18:23 socat[1145516] E write(6, 0x569d13a08000, 24): Broken pipe
+  ✓  14 tests/channels-e2e/messages.spec.ts:491:1 › MSG-13 a quick reaction shows for both people, counts 2 when the other adds the same, and goes when removed (7.7s)
+2026/11/15 13:18:24 socat[1114107] E write(6, 0x569d13a08000, 24): Broken pipe
+2026/11/15 13:18:24 socat[1114467] E write(6, 0x569d13a08000, 24): Broken pipe
+2026/11/15 13:18:24 socat[1115857] E read(6, 0x569d13a08000, 8192): Connection reset by peer
+2026/11/15 13:18:24 socat[1115947] E read(6, 0x569d13a08000, 8192): Connection reset by peer
+2026/11/15 13:18:24 socat[1059199] W waitpid(-1, {}, WNOHANG): no (more) child has exited
+2026/11/15 13:18:24 socat[1115881] E write(6, 0x569d13a08000, 24): Broken pipe
+2026/11/15 13:18:24 socat[1115948] E write(6, 0x555555624000, 24): Broken pipe
+2026/11/15 13:18:24 socat[1143725] E read(6, 0x569d13a08000, 8192): Connection reset by peer
+2026/11/15 13:18:24 socat[1143902] E read(6, 0x569d13a08000, 8192): Connection reset by peer
+2026/11/15 13:18:24 socat[1143904] E write(6, 0x555555624000, 24): Broken pipe
+2026/11/15 13:18:24 socat[1143735] E read(6, 0x569d13a08000, 8192): Connection reset by peer
+2026/11/15 13:18:24 socat[1143895] E read(6, 0x569d13a08000, 8192): Connection reset by peer
+2026/11/15 13:18:24 socat[1143896] E write(6, 0x555555624000, 24): Broken pipe
+  ✘  11 tests/channels-e2e/direct-messages.spec.ts:66:1 › DM-02 writing to the same person again from “New direct message” continues the one conversation (21.8s)
+2026/11/15 13:18:25 socat[1054256] W waitpid(-1, {}, WNOHANG): no (more) child has exited
+2026/11/15 13:18:26 socat[1148879] E write(6, 0x569d13a08000, 24): Broken pipe
+2026/11/15 13:18:26 socat[1148921] E write(6, 0x569d13a08000, 24): Broken pipe
+2026/11/15 13:18:26 socat[1148915] E write(6, 0x569d13a08000, 24): Broken pipe
+2026/11/15 13:18:26 socat[1054256] W waitpid(-1, {}, WNOHANG): no (more) child has exited
+2026/11/15 13:18:26 socat[1148914] E write(6, 0x569d13a08000, 24): Broken pipe
+2026/11/15 13:18:26 socat[1148923] E write(6, 0x569d13a08000, 24): Broken pipe
+  ✓  15 tests/channels-e2e/messages.spec.ts:677:1 › MSG-18 messages two people send at the same moment end in one order for both, each once (7.3s)
+2026/11/15 13:18:27 socat[1147104] E write(6, 0x569d13a08000, 24): Broken pipe
+2026/11/15 13:18:27 socat[1054256] W waitpid(-1, {}, WNOHANG): no (more) child has exited
+2026/11/15 13:18:27 socat[1148267] E write(6, 0x569d13a08000, 24): Broken pipe
+2026/11/15 13:18:27 socat[1148292] E write(6, 0x569d13a08000, 24): Broken pipe
+  ✓  17 tests/channels-e2e/channels.spec.ts:379:1 › CHN-12 going to another tab and back keeps the message list where it was (3.4s)
+2026/11/15 13:18:30 socat[1155211] E read(6, 0x569d13a08000, 8192): Connection reset by peer
+2026/11/15 13:18:30 socat[1155900] E read(6, 0x569d13a08000, 8192): Connection reset by peer
+2026/11/15 13:18:30 socat[1059199] W waitpid(-1, {}, WNOHANG): no (more) child has exited
+2026/11/15 13:18:31 socat[1054256] W waitpid(-1, {}, WNOHANG): no (more) child has exited
+2026/11/15 13:18:35 socat[1156982] E write(6, 0x569d13a08000, 24): Broken pipe
+2026/11/15 13:18:35 socat[1157029] E write(6, 0x569d13a08000, 24): Broken pipe
+2026/11/15 13:18:35 socat[1157061] E write(6, 0x569d13a08000, 24): Broken pipe
+2026/11/15 13:18:35 socat[1157418] E read(6, 0x569d13a08000, 8192): Connection reset by peer
+2026/11/15 13:18:35 socat[1157419] E write(6, 0x555555624000, 8192): Broken pipe
+2026/11/15 13:18:35 socat[1162922] E write(6, 0x569d13a08000, 24): Broken pipe
+2026/11/15 13:18:35 socat[1162928] E write(6, 0x569d13a08000, 24): Broken pipe
+2026/11/15 13:18:35 socat[1154855] E write(6, 0x569d13a08000, 24): Broken pipe
+2026/11/15 13:18:35 socat[1059199] W waitpid(-1, {}, WNOHANG): no (more) child has exited
+2026/11/15 13:18:35 socat[1154883] E write(6, 0x569d13a08000, 24): Broken pipe
+2026/11/15 13:18:35 socat[1154923] E write(6, 0x569d13a08000, 24): Broken pipe
+  ✓  20 tests/channels-e2e/members.spec.ts:18:1 › MEM-01 a person invited from the app gets the channel at once, with what was said before and after (8.6s)
+2026/11/15 13:18:41 socat[1167459] E write(6, 0x569d13a08000, 24): Broken pipe
+2026/11/15 13:18:41 socat[1167501] E write(6, 0x569d13a08000, 24): Broken pipe
+2026/11/15 13:18:41 socat[1167504] E read(6, 0x569d13a08000, 8192): Connection reset by peer
+2026/11/15 13:18:41 socat[1167505] E write(6, 0x555555624000, 128): Broken pipe
+2026/11/15 13:18:41 socat[1167513] E write(6, 0x569d13a08000, 24): Broken pipe
+2026/11/15 13:18:41 socat[1148120] E write(6, 0x569d13a08000, 24): Broken pipe
+2026/11/15 13:18:41 socat[1148146] E write(6, 0x569d13a08000, 24): Broken pipe
+2026/11/15 13:18:41 socat[1148156] E write(6, 0x569d13a08000, 24): Broken pipe
+  ✓  16 tests/channels-e2e/unread.spec.ts:160:1 › UNR-04 scrolled up in an open channel, a new message shows “1 unread … below”, which leads to it (20.3s)
+2026/11/15 13:18:42 socat[1176434] E write(6, 0x569d13a08000, 24): Broken pipe
+2026/11/15 13:18:42 socat[1176440] E write(6, 0x569d13a08000, 24): Broken pipe
+2026/11/15 13:18:42 socat[1176454] E write(6, 0x569d13a08000, 24): Broken pipe
+2026/11/15 13:18:42 socat[1176442] E write(6, 0x569d13a08000, 24): Broken pipe
+  ✓  21 tests/channels-e2e/messages.spec.ts:71:1 › MSG-03 a quick back-and-forth between two people reads in the same order for both, each message once (6.5s)
+2026/11/15 13:18:42 socat[1176480] E write(6, 0x569d13a08000, 24): Broken pipe
+2026/11/15 13:18:42 socat[1054256] W waitpid(-1, {}, WNOHANG): no (more) child has exited
+2026/11/15 13:18:44 socat[1178752] E write(6, 0x569d13a08000, 24): Broken pipe
+2026/11/15 13:18:45 socat[1178762] E write(6, 0x569d13a08000, 24): Broken pipe
+2026/11/15 13:18:46 socat[1153764] E write(6, 0x569d13a08000, 24): Broken pipe
+2026/11/15 13:18:46 socat[1153822] E write(6, 0x569d13a08000, 24): Broken pipe
+2026/11/15 13:18:46 socat[1153873] E write(6, 0x569d13a08000, 24): Broken pipe
+2026/11/15 13:18:47 socat[1183279] E write(6, 0x569d13a08000, 24): Broken pipe
+2026/11/15 13:18:47 socat[1183428] E write(6, 0x569d13a08000, 24): Broken pipe
+2026/11/15 13:18:47 socat[1059199] W waitpid(-1, {}, WNOHANG): no (more) child has exited
+2026/11/15 13:18:47 socat[1054256] W waitpid(-1, {}, WNOHANG): no (more) child has exited
+2026/11/15 13:18:47 socat[1183939] E write(6, 0x569d13a08000, 24): Broken pipe
+2026/11/15 13:18:47 socat[1185185] E write(6, 0x569d13a08000, 24): Broken pipe
+2026/11/15 13:18:47 socat[1157078] E write(6, 0x569d13a08000, 24): Broken pipe
+2026/11/15 13:18:47 socat[1157084] E write(6, 0x569d13a08000, 24): Broken pipe
+2026/11/15 13:18:47 socat[1157104] E write(6, 0x569d13a08000, 24): Broken pipe
+2026/11/15 13:18:47 socat[1179108] E write(6, 0x569d13a08000, 24): Broken pipe
+2026/11/15 13:18:47 socat[1179174] E write(6, 0x569d13a08000, 24): Broken pipe
+2026/11/15 13:18:47 socat[1179169] E write(6, 0x569d13a08000, 24): Broken pipe
+  ✘  18 tests/channels-e2e/composer.spec.ts:93:1 › CMP-13 a message shown as sent is still sent when the page is reloaded at once (21.5s)
+  ✘  23 tests/channels-e2e/messages.spec.ts:677:1 › MSG-18 messages two people send at the same moment end in one order for both, each once (5.1s)
+2026/11/15 13:18:48 socat[1190334] E write(6, 0x569d13a08000, 24): Broken pipe
+2026/11/15 13:18:48 socat[1190347] E write(6, 0x569d13a08000, 24): Broken pipe
+2026/11/15 13:18:48 socat[1190393] E write(6, 0x569d13a08000, 24): Broken pipe
+2026/11/15 13:18:48 socat[1190313] E write(6, 0x569d13a08000, 24): Broken pipe
+2026/11/15 13:18:48 socat[1190327] E write(6, 0x569d13a08000, 24): Broken pipe
+2026/11/15 13:18:48 socat[1190337] E write(6, 0x569d13a08000, 24): Broken pipe
+  ✓  22 tests/channels-e2e/messages.spec.ts:491:1 › MSG-13 a quick reaction shows for both people, counts 2 when the other adds the same, and goes when removed (6.9s)
+2026/11/15 13:18:50 socat[1154880] E write(6, 0x569d13a08000, 24): Broken pipe
+2026/11/15 13:18:50 socat[1154911] E write(6, 0x569d13a08000, 24): Broken pipe
+2026/11/15 13:18:51 socat[1156940] E write(6, 0x569d13a08000, 24): Broken pipe
+2026/11/15 13:18:51 socat[1156979] E write(6, 0x569d13a08000, 24): Broken pipe
+2026/11/15 13:18:51 socat[1157023] E write(6, 0x569d13a08000, 24): Broken pipe
+  ✘  19 tests/channels-e2e/direct-messages.spec.ts:66:1 › DM-02 writing to the same person again from “New direct message” continues the one conversation (24.0s)
+2026/11/15 13:19:06 socat[1193951] E write(6, 0x569d13a08000, 24): Broken pipe
+2026/11/15 13:19:06 socat[1193965] E write(6, 0x569d13a08000, 24): Broken pipe
+2026/11/15 13:19:06 socat[1193968] E write(6, 0x569d13a08000, 24): Broken pipe
+  ✓  24 tests/channels-e2e/unread.spec.ts:160:1 › UNR-04 scrolled up in an open channel, a new message shows “1 unread … below”, which leads to it (18.6s)
+
+
+  1) tests/channels-e2e/composer.spec.ts:93:1 › CMP-13 a message shown as sent is still sent when the page is reloaded at once 
+
+    Error: the last messages in the list
+
+    the last messages in the list
+
+    expect(received).toEqual(expected) // deep equality
+
+    - Expected  - 3
+    + Received  + 1
+
+    - Array [
+    -   "sent just before a reload",
+    - ]
+    + Array []
+
+    Call Log:
+    - Timeout 15000ms exceeded while waiting on the predicate
+
+       at harness/channel.ts:186
+
+      184 |         message: 'the last messages in the list',
+      185 |       })
+    > 186 |       .toEqual(expected);
+          |        ^
+      187 |   }
+      188 |
+      189 |   /** How far the list is from showing its very end, in pixels. */
+        at ChannelView.expectEndsWith (/home/teo/.herdr/worktrees/macro/synoet-channels-local-sync-suite/apps/web/tests/channels-e2e/harness/channel.ts:186:8)
+        at /home/teo/.herdr/worktrees/macro/synoet-channels-local-sync-suite/apps/web/tests/channels-e2e/composer.spec.ts:110:14
+
+    attachment #1: screenshot (image/png) ──────────────────────────────────────────────────────────
+    ../../../../../../.cache/channels-perf-b/e2e/repro1/test-results/composer-CMP-13-a-message--bd722-he-page-is-reloaded-at-once/test-failed-2.png
+    ────────────────────────────────────────────────────────────────────────────────────────────────
+
+    attachment #2: screenshot (image/png) ──────────────────────────────────────────────────────────
+    ../../../../../../.cache/channels-perf-b/e2e/repro1/test-results/composer-CMP-13-a-message--bd722-he-page-is-reloaded-at-once/test-failed-1.png
+    ────────────────────────────────────────────────────────────────────────────────────────────────
+
+    Error Context: ../../../../../../.cache/channels-perf-b/e2e/repro1/test-results/composer-CMP-13-a-message--bd722-he-page-is-reloaded-at-once/error-context.md
+
+    attachment #4: trace (application/zip) ─────────────────────────────────────────────────────────
+    ../../../../../../.cache/channels-perf-b/e2e/repro1/test-results/composer-CMP-13-a-message--bd722-he-page-is-reloaded-at-once/trace.zip
+    Usage:
+
+        npx playwright show-trace ../../../../../../.cache/channels-perf-b/e2e/repro1/test-results/composer-CMP-13-a-message--bd722-he-page-is-reloaded-at-once/trace.zip
+
+    ────────────────────────────────────────────────────────────────────────────────────────────────
+
+  2) tests/channels-e2e/composer.spec.ts:93:1 › CMP-13 a message shown as sent is still sent when the page is reloaded at once 
+
+    Error: the last messages in the list
+
+    the last messages in the list
+
+    expect(received).toEqual(expected) // deep equality
+
+    - Expected  - 3
+    + Received  + 1
+
+    - Array [
+    -   "sent just before a reload",
+    - ]
+    + Array []
+
+    Call Log:
+    - Timeout 15000ms exceeded while waiting on the predicate
+
+       at harness/channel.ts:186
+
+      184 |         message: 'the last messages in the list',
+      185 |       })
+    > 186 |       .toEqual(expected);
+          |        ^
+      187 |   }
+      188 |
+      189 |   /** How far the list is from showing its very end, in pixels. */
+        at ChannelView.expectEndsWith (/home/teo/.herdr/worktrees/macro/synoet-channels-local-sync-suite/apps/web/tests/channels-e2e/harness/channel.ts:186:8)
+        at /home/teo/.herdr/worktrees/macro/synoet-channels-local-sync-suite/apps/web/tests/channels-e2e/composer.spec.ts:110:14
+
+    attachment #1: screenshot (image/png) ──────────────────────────────────────────────────────────
+    ../../../../../../.cache/channels-perf-b/e2e/repro1/test-results/composer-CMP-13-a-message--bd722-he-page-is-reloaded-at-once-repeat1/test-failed-1.png
+    ────────────────────────────────────────────────────────────────────────────────────────────────
+
+    attachment #2: screenshot (image/png) ──────────────────────────────────────────────────────────
+    ../../../../../../.cache/channels-perf-b/e2e/repro1/test-results/composer-CMP-13-a-message--bd722-he-page-is-reloaded-at-once-repeat1/test-failed-2.png
+    ────────────────────────────────────────────────────────────────────────────────────────────────
+
+    Error Context: ../../../../../../.cache/channels-perf-b/e2e/repro1/test-results/composer-CMP-13-a-message--bd722-he-page-is-reloaded-at-once-repeat1/error-context.md
+
+    attachment #4: trace (application/zip) ─────────────────────────────────────────────────────────
+    ../../../../../../.cache/channels-perf-b/e2e/repro1/test-results/composer-CMP-13-a-message--bd722-he-page-is-reloaded-at-once-repeat1/trace.zip
+    Usage:
+
+        npx playwright show-trace ../../../../../../.cache/channels-perf-b/e2e/repro1/test-results/composer-CMP-13-a-message--bd722-he-page-is-reloaded-at-once-repeat1/trace.zip
+
+    ────────────────────────────────────────────────────────────────────────────────────────────────
+
+  3) tests/channels-e2e/composer.spec.ts:93:1 › CMP-13 a message shown as sent is still sent when the page is reloaded at once 
+
+    Error: the last messages in the list
+
+    the last messages in the list
+
+    expect(received).toEqual(expected) // deep equality
+
+    - Expected  - 3
+    + Received  + 1
+
+    - Array [
+    -   "sent just before a reload",
+    - ]
+    + Array []
+
+    Call Log:
+    - Timeout 15000ms exceeded while waiting on the predicate
+
+       at harness/channel.ts:186
+
+      184 |         message: 'the last messages in the list',
+      185 |       })
+    > 186 |       .toEqual(expected);
+          |        ^
+      187 |   }
+      188 |
+      189 |   /** How far the list is from showing its very end, in pixels. */
+        at ChannelView.expectEndsWith (/home/teo/.herdr/worktrees/macro/synoet-channels-local-sync-suite/apps/web/tests/channels-e2e/harness/channel.ts:186:8)
+        at /home/teo/.herdr/worktrees/macro/synoet-channels-local-sync-suite/apps/web/tests/channels-e2e/composer.spec.ts:110:14
+
+    attachment #1: screenshot (image/png) ──────────────────────────────────────────────────────────
+    ../../../../../../.cache/channels-perf-b/e2e/repro1/test-results/composer-CMP-13-a-message--bd722-he-page-is-reloaded-at-once-repeat2/test-failed-1.png
+    ────────────────────────────────────────────────────────────────────────────────────────────────
+
+    attachment #2: screenshot (image/png) ──────────────────────────────────────────────────────────
+    ../../../../../../.cache/channels-perf-b/e2e/repro1/test-results/composer-CMP-13-a-message--bd722-he-page-is-reloaded-at-once-repeat2/test-failed-2.png
+    ────────────────────────────────────────────────────────────────────────────────────────────────
+
+    Error Context: ../../../../../../.cache/channels-perf-b/e2e/repro1/test-results/composer-CMP-13-a-message--bd722-he-page-is-reloaded-at-once-repeat2/error-context.md
+
+    attachment #4: trace (application/zip) ─────────────────────────────────────────────────────────
+    ../../../../../../.cache/channels-perf-b/e2e/repro1/test-results/composer-CMP-13-a-message--bd722-he-page-is-reloaded-at-once-repeat2/trace.zip
+    Usage:
+
+        npx playwright show-trace ../../../../../../.cache/channels-perf-b/e2e/repro1/test-results/composer-CMP-13-a-message--bd722-he-page-is-reloaded-at-once-repeat2/trace.zip
+
+    ────────────────────────────────────────────────────────────────────────────────────────────────
+
+  4) tests/channels-e2e/direct-messages.spec.ts:66:1 › DM-02 writing to the same person again from “New direct message” continues the one conversation 
+
+    Error: expect(locator).toContainText(expected) failed
+
+    Locator: getByRole('tree', { name: 'Conversations' }).locator('[data-key="direct_messages"]').locator('[data-key="channel:01a1df5b-a1ea-7886-8ec6-43ad9f9d3aac"]')
+    Expected substring: "Ada Owner"
+    Timeout: 15000ms
+    Error: element(s) not found
+
+    Call log:
+      - Expect "toContainText" with timeout 15000ms
+      - waiting for getByRole('tree', { name: 'Conversations' }).locator('[data-key="direct_messages"]').locator('[data-key="channel:01a1df5b-a1ea-7886-8ec6-43ad9f9d3aac"]')
+
+
+      101 |     `[data-key="channel:${id}"]`
+      102 |   );
+    > 103 |   await expect(cyRow).toContainText('Ada Owner');
+          |                       ^
+      104 |   await cyRow.getByRole('treeitem').click();
+      105 |   const cyView = new ChannelView(cyPage, id);
+      106 |   await cyView.shown();
+        at /home/teo/.herdr/worktrees/macro/synoet-channels-local-sync-suite/apps/web/tests/channels-e2e/direct-messages.spec.ts:103:23
+
+    attachment #1: screenshot (image/png) ──────────────────────────────────────────────────────────
+    ../../../../../../.cache/channels-perf-b/e2e/repro1/test-results/direct-messages-DM-02-writ-8cce8-tinues-the-one-conversation-repeat1/test-failed-1.png
+    ────────────────────────────────────────────────────────────────────────────────────────────────
+
+    attachment #2: screenshot (image/png) ──────────────────────────────────────────────────────────
+    ../../../../../../.cache/channels-perf-b/e2e/repro1/test-results/direct-messages-DM-02-writ-8cce8-tinues-the-one-conversation-repeat1/test-failed-2.png
+    ────────────────────────────────────────────────────────────────────────────────────────────────
+
+    Error Context: ../../../../../../.cache/channels-perf-b/e2e/repro1/test-results/direct-messages-DM-02-writ-8cce8-tinues-the-one-conversation-repeat1/error-context.md
+
+    attachment #4: trace (application/zip) ─────────────────────────────────────────────────────────
+    ../../../../../../.cache/channels-perf-b/e2e/repro1/test-results/direct-messages-DM-02-writ-8cce8-tinues-the-one-conversation-repeat1/trace.zip
+    Usage:
+
+        npx playwright show-trace ../../../../../../.cache/channels-perf-b/e2e/repro1/test-results/direct-messages-DM-02-writ-8cce8-tinues-the-one-conversation-repeat1/trace.zip
+
+    ────────────────────────────────────────────────────────────────────────────────────────────────
+
+  5) tests/channels-e2e/direct-messages.spec.ts:66:1 › DM-02 writing to the same person again from “New direct message” continues the one conversation 
+
+    Error: expect(locator).toContainText(expected) failed
+
+    Locator: getByRole('tree', { name: 'Conversations' }).locator('[data-key="direct_messages"]').locator('[data-key="channel:01a1df5c-0876-78ed-9f5b-28f37c0ca05c"]')
+    Expected substring: "Ada Owner"
+    Timeout: 15000ms
+    Error: element(s) not found
+
+    Call log:
+      - Expect "toContainText" with timeout 15000ms
+      - waiting for getByRole('tree', { name: 'Conversations' }).locator('[data-key="direct_messages"]').locator('[data-key="channel:01a1df5c-0876-78ed-9f5b-28f37c0ca05c"]')
+
+
+      101 |     `[data-key="channel:${id}"]`
+      102 |   );
+    > 103 |   await expect(cyRow).toContainText('Ada Owner');
+          |                       ^
+      104 |   await cyRow.getByRole('treeitem').click();
+      105 |   const cyView = new ChannelView(cyPage, id);
+      106 |   await cyView.shown();
+        at /home/teo/.herdr/worktrees/macro/synoet-channels-local-sync-suite/apps/web/tests/channels-e2e/direct-messages.spec.ts:103:23
+
+    attachment #1: screenshot (image/png) ──────────────────────────────────────────────────────────
+    ../../../../../../.cache/channels-perf-b/e2e/repro1/test-results/direct-messages-DM-02-writ-8cce8-tinues-the-one-conversation-repeat2/test-failed-1.png
+    ────────────────────────────────────────────────────────────────────────────────────────────────
+
+    attachment #2: screenshot (image/png) ──────────────────────────────────────────────────────────
+    ../../../../../../.cache/channels-perf-b/e2e/repro1/test-results/direct-messages-DM-02-writ-8cce8-tinues-the-one-conversation-repeat2/test-failed-2.png
+    ────────────────────────────────────────────────────────────────────────────────────────────────
+
+    Error Context: ../../../../../../.cache/channels-perf-b/e2e/repro1/test-results/direct-messages-DM-02-writ-8cce8-tinues-the-one-conversation-repeat2/error-context.md
+
+    attachment #4: trace (application/zip) ─────────────────────────────────────────────────────────
+    ../../../../../../.cache/channels-perf-b/e2e/repro1/test-results/direct-messages-DM-02-writ-8cce8-tinues-the-one-conversation-repeat2/trace.zip
+    Usage:
+
+        npx playwright show-trace ../../../../../../.cache/channels-perf-b/e2e/repro1/test-results/direct-messages-DM-02-writ-8cce8-tinues-the-one-conversation-repeat2/trace.zip
+
+    ────────────────────────────────────────────────────────────────────────────────────────────────
+
+  6) tests/channels-e2e/messages.spec.ts:677:1 › MSG-18 messages two people send at the same moment end in one order for both, each once 
+
+    Error: expect(received).toEqual(expected) // deep equality
+
+    - Expected  - 1
+    + Received  + 1
+
+      Array [
+    +   "ben 4",
+        "ben 1",
+        "ben 2",
+        "ben 3",
+    -   "ben 4",
+      ]
+
+      722 |     expect(
+      723 |       (await view.topLevel()).filter((text) => text.startsWith('ben'))
+    > 724 |     ).toEqual(['ben 1', 'ben 2', 'ben 3', 'ben 4']);
+          |       ^
+      725 |   }
+      726 |   // Known defect on main, in most runs: a message that was on its way while
+      727 |   // the other person's landed first keeps the place it was given on its
+        at /home/teo/.herdr/worktrees/macro/synoet-channels-local-sync-suite/apps/web/tests/channels-e2e/messages.spec.ts:724:7
+
+    attachment #1: screenshot (image/png) ──────────────────────────────────────────────────────────
+    ../../../../../../.cache/channels-perf-b/e2e/repro1/test-results/messages-MSG-18-messages-t-caf49-ne-order-for-both-each-once-repeat2/test-failed-2.png
+    ────────────────────────────────────────────────────────────────────────────────────────────────
+
+    attachment #2: screenshot (image/png) ──────────────────────────────────────────────────────────
+    ../../../../../../.cache/channels-perf-b/e2e/repro1/test-results/messages-MSG-18-messages-t-caf49-ne-order-for-both-each-once-repeat2/test-failed-1.png
+    ────────────────────────────────────────────────────────────────────────────────────────────────
+
+    Error Context: ../../../../../../.cache/channels-perf-b/e2e/repro1/test-results/messages-MSG-18-messages-t-caf49-ne-order-for-both-each-once-repeat2/error-context.md
+
+    attachment #4: trace (application/zip) ─────────────────────────────────────────────────────────
+    ../../../../../../.cache/channels-perf-b/e2e/repro1/test-results/messages-MSG-18-messages-t-caf49-ne-order-for-both-each-once-repeat2/trace.zip
+    Usage:
+
+        npx playwright show-trace ../../../../../../.cache/channels-perf-b/e2e/repro1/test-results/messages-MSG-18-messages-t-caf49-ne-order-for-both-each-once-repeat2/trace.zip
+
+    ────────────────────────────────────────────────────────────────────────────────────────────────
+
+  6 failed
+    tests/channels-e2e/composer.spec.ts:93:1 › CMP-13 a message shown as sent is still sent when the page is reloaded at once 
+    tests/channels-e2e/composer.spec.ts:93:1 › CMP-13 a message shown as sent is still sent when the page is reloaded at once 
+    tests/channels-e2e/composer.spec.ts:93:1 › CMP-13 a message shown as sent is still sent when the page is reloaded at once 
+    tests/channels-e2e/direct-messages.spec.ts:66:1 › DM-02 writing to the same person again from “New direct message” continues the one conversation 
+    tests/channels-e2e/direct-messages.spec.ts:66:1 › DM-02 writing to the same person again from “New direct message” continues the one conversation 
+    tests/channels-e2e/messages.spec.ts:677:1 › MSG-18 messages two people send at the same moment end in one order for both, each once 
+  18 passed (1.6m)
+2026/11/15 13:19:06 socat[1059199] W exiting on signal 15
+2026/11/15 13:19:06 socat[1054256] W exiting on signal 15

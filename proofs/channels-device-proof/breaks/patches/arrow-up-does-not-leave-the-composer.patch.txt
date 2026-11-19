@@ -1,0 +1,13 @@
+diff --git a/apps/web/src/features/channel/Channel/create-channel-hotkeys.ts b/apps/web/src/features/channel/Channel/create-channel-hotkeys.ts
+index f9bba3814d..e5645c0017 100644
+--- a/apps/web/src/features/channel/Channel/create-channel-hotkeys.ts
++++ b/apps/web/src/features/channel/Channel/create-channel-hotkeys.ts
+@@ -227,7 +227,7 @@ export function createChannelHotkeys(options: CreateChannelHotkeysOptions) {
+     hotkeyToken: TOKENS.channel.focusPreviousMessage,
+     description: 'Select last message',
+     runWithInputFocused: true,
+-    condition: options.isInputEmpty,
++    condition: () => false,
+     keyDownHandler: () => {
+       const id = options.selection.selectPrevious();
+       if (id) {

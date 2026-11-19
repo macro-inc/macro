@@ -1,0 +1,362 @@
+{
+ "now": "2026-11-11T20:30:00+00:00",
+ "channels": {
+  "small": {
+   "id": "5eed92f0-944c-80f4-be59-1c15bb155d6a",
+   "counts": {
+    "roots": 38,
+    "replies": 12,
+    "edited": 2,
+    "deleted": 0,
+    "mentions": 5,
+    "reactions": 40,
+    "reacted_messages": 8,
+    "attachments": 1,
+    "threads": 3,
+    "threads_gt3": 1,
+    "threads_100plus": 0,
+    "total": 50
+   },
+   "lastRootId": "01a1cc44-7180-7e25-a3e1-115d13065700",
+   "latestRootIds": [
+    "01a1bd87-8550-7ab5-a95e-254cb253abeb",
+    "01a1be0b-b7ab-7386-ac99-7f6649118dc2",
+    "01a1be21-2884-7481-876d-d0acbed8185e",
+    "01a1be98-b380-739b-bb42-227ac5359742",
+    "01a1beb2-d697-775a-9022-18e556ba52b0",
+    "01a1bef2-5f4d-7a51-86f3-2ec30595e01a",
+    "01a1bf15-ac46-7e41-9246-9728ea8dd86c",
+    "01a1bf7a-4c93-7b3b-b74d-043b0c21ba7b",
+    "01a1bffe-8539-7fb9-a3f9-9bac59843a4e",
+    "01a1c00c-1a95-77fe-ac98-e53bc62b563c",
+    "01a1c0ce-6c5e-795d-aaa3-fd5c650ec527",
+    "01a1c163-337e-7d73-99a7-047ae95f4596",
+    "01a1c1d4-084e-7848-bdc9-ed25c8960eb2",
+    "01a1c24c-bdec-7667-9d9b-54a0c7e92b2d",
+    "01a1c272-3bff-7b56-849c-c4f4281e8488",
+    "01a1c38e-0bf2-7473-a45c-a92ece31c454",
+    "01a1c3dc-6b51-7eba-b0ef-640142926643",
+    "01a1c414-559b-70e0-9088-ee3bc7a1f5c7",
+    "01a1c432-6598-741e-9d73-55481cb9d6e0",
+    "01a1c446-8181-7cef-b845-e5a830a6d625",
+    "01a1c44c-3724-7c2c-9f26-498c4f477265",
+    "01a1c462-8817-7178-a7fc-bb401bac5aea",
+    "01a1c480-95f2-7016-a350-e9f3213bdd80",
+    "01a1c59c-04b7-7fe7-96db-d4c7556ae529",
+    "01a1c683-1924-7c79-b3fd-c171fd65f26b",
+    "01a1c6bc-d423-7091-8cab-cb73b0b72980",
+    "01a1c6e0-1416-7751-b7cb-39d146d6d044",
+    "01a1c823-54f6-7353-a11c-9a2f985552d9",
+    "01a1c827-b787-745b-8070-fadb45cc21d2",
+    "01a1c8bb-38ad-78d4-a463-edfe974584d8",
+    "01a1c92f-dd02-7e81-ba6e-5c386d9e99aa",
+    "01a1c957-0b0d-7029-b3ce-2efba782f239",
+    "01a1c97c-8108-7fa8-9838-2c48b8549502",
+    "01a1ca08-45c8-7072-b464-42a1aac7c078",
+    "01a1ca75-7c32-7877-8de6-98b692db6856",
+    "01a1cac0-0fb3-7e33-838d-ec18a0dd7a44",
+    "01a1cc20-25f6-752b-b262-f211088b1edf",
+    "01a1cc44-7180-7e25-a3e1-115d13065700"
+   ],
+   "latestPageThreads": [
+    {
+     "rootId": "01a1bf7a-4c93-7b3b-b74d-043b0c21ba7b",
+     "replies": 8
+    },
+    {
+     "rootId": "01a1c6bc-d423-7091-8cab-cb73b0b72980",
+     "replies": 3
+    },
+    {
+     "rootId": "01a1c97c-8108-7fa8-9838-2c48b8549502",
+     "replies": 1
+    }
+   ],
+   "oldRoot": {
+    "id": "01a1bf7a-4c93-7b3b-b74d-043b0c21ba7b",
+    "indexFromLatest": 30,
+    "createdAt": "2026-11-09T08:43:45.683237+00:00"
+   },
+   "threadReply": {
+    "rootId": "01a1bf7a-4c93-7b3b-b74d-043b0c21ba7b",
+    "rootIndexFromLatest": 30,
+    "replyId": "01a1bfab-bcd3-71cc-a39c-cccb00a37241",
+    "replyIndex": 5,
+    "threadReplies": 8
+   },
+   "biggestThreads": [
+    {
+     "rootId": "01a1bf7a-4c93-7b3b-b74d-043b0c21ba7b",
+     "replies": 8,
+     "rootIndexFromLatest": 30
+    },
+    {
+     "rootId": "01a1c6bc-d423-7091-8cab-cb73b0b72980",
+     "replies": 3,
+     "rootIndexFromLatest": 12
+    },
+    {
+     "rootId": "01a1c97c-8108-7fa8-9838-2c48b8549502",
+     "replies": 1,
+     "rootIndexFromLatest": 5
+    }
+   ]
+  },
+  "medium": {
+   "id": "5eed92f0-3a83-8200-a790-dd4a69089719",
+   "counts": {
+    "roots": 1500,
+    "replies": 500,
+    "edited": 51,
+    "deleted": 14,
+    "mentions": 53,
+    "reactions": 847,
+    "reacted_messages": 200,
+    "attachments": 7,
+    "threads": 69,
+    "threads_gt3": 32,
+    "threads_100plus": 1,
+    "total": 2000
+   },
+   "lastRootId": "01a1cc44-7180-7c75-b355-7e0d69eec7f8",
+   "latestRootIds": [
+    "01a1bf74-98fd-7605-90c3-f68d6f82e5f9",
+    "01a1bf8d-f62c-7ff3-82a1-4ad39d21cd95",
+    "01a1bf9e-9643-7289-970e-92db2e17bfcc",
+    "01a1c0b8-f537-731f-8c4a-7c1735303770",
+    "01a1c106-3e1b-7090-973e-3afb909b9156",
+    "01a1c139-7408-72f0-83e0-ba23de38a15a",
+    "01a1c18e-d6e9-7fc4-b08e-f0602e504952",
+    "01a1c1d6-fdb8-7f2f-9333-acffeab9c145",
+    "01a1c214-7f79-7a9c-ad17-88be27bdc7aa",
+    "01a1c22f-5c3e-75ea-940c-20ae835f3bec",
+    "01a1c28f-c4bb-7c8f-88ac-a51a13840887",
+    "01a1c29f-e9b9-713e-86ba-f0753ee29469",
+    "01a1c2aa-69c7-7ab3-8539-6b9bdc63c9d9",
+    "01a1c37e-2581-7a8e-b91c-42e51f167fff",
+    "01a1c3a5-c147-75af-94c7-d79cd249bbe5",
+    "01a1c3cb-d28a-7792-b760-5636481a8a9d",
+    "01a1c3de-f594-7323-8181-3c82adc9e82f",
+    "01a1c3f1-744d-7ef5-aefe-a7573f88b95b",
+    "01a1c406-e194-732a-a10b-1d4ee8354b33",
+    "01a1c41b-5cef-784c-85a7-0a6efa804c95",
+    "01a1c430-ba8a-7b3f-a1bb-0d5f338bf589",
+    "01a1c4a1-a834-755b-918c-6eff6af352eb",
+    "01a1c4fc-800f-773c-bbfe-7db16a17c456",
+    "01a1c533-ec1b-7bbb-b79a-0057ba1f488a",
+    "01a1c54d-e881-7a2c-b16b-0aef17f4a9fb",
+    "01a1c551-ce69-7cc0-889d-4ddf88f1d431",
+    "01a1c555-d0f1-764a-b28a-8b8a0e9798af",
+    "01a1c5a4-9e17-7e1d-9ac8-ffed35d930af",
+    "01a1c673-dafc-7699-ad34-4a263cdbdcf4",
+    "01a1c6d3-a81e-73c5-8f52-51e6ed387704",
+    "01a1c6f4-8aa3-79cb-963d-1f2d2043abce",
+    "01a1c71d-7d58-7d24-8028-6fd73a86609d",
+    "01a1c748-81fa-7cd8-93f2-e851ed309e6d",
+    "01a1c74a-4136-7e68-9086-4f9c3e471948",
+    "01a1c782-cbe9-71db-9424-8d80e4888e09",
+    "01a1c78b-c404-71b3-8c66-ffc7aafa0bdb",
+    "01a1c798-8fe6-7947-9288-3f965e2bf288",
+    "01a1c7ca-1363-7780-a684-dc15188e0dc9",
+    "01a1c806-cd4f-7eb6-bce8-6461dfd1ebdc",
+    "01a1c823-0a48-7d5a-a242-82cc008d200f",
+    "01a1c879-722d-7ce7-abaa-184cd1f7bd8d",
+    "01a1c87d-6c1d-7c22-a106-47419f4b8543",
+    "01a1c8bd-47ff-7ba0-b185-ab3bb438af02",
+    "01a1c9b9-5354-73db-99be-6c23429f84c9",
+    "01a1c9d2-96f1-7f3d-abac-f58d3cf3937e",
+    "01a1c9d3-e73d-7251-9ac8-4a601e77dc2a",
+    "01a1c9e2-9e9e-7a85-9967-a983a07633a2",
+    "01a1ca02-b0a1-78e8-b1c3-cb998601c348",
+    "01a1ca7f-9375-7bbf-a1c3-f393b7ebcb3b",
+    "01a1cab0-6209-7af8-806f-05a7a735f96a",
+    "01a1cafb-20d7-701d-b7a0-efad2c16a2f4",
+    "01a1cafc-8011-799b-95c0-b5c7878086f9",
+    "01a1cb0f-deab-76b8-948e-1a4449ec8709",
+    "01a1cba0-66d5-75c7-8991-58468a259e52",
+    "01a1cbb2-0874-7e1d-ad44-fb3f62659d66",
+    "01a1cbe1-484d-7feb-b3bd-26ad946c6229",
+    "01a1cc13-dab1-7b8a-a8ce-074af3c1f363",
+    "01a1cc22-5017-7126-9f28-d8ffabb3bb83",
+    "01a1cc2e-27a3-7504-af49-2c2339b8557c",
+    "01a1cc44-7180-7c75-b355-7e0d69eec7f8"
+   ],
+   "latestPageThreads": [
+    {
+     "rootId": "01a1c823-0a48-7d5a-a242-82cc008d200f",
+     "replies": 60
+    },
+    {
+     "rootId": "01a1c9b9-5354-73db-99be-6c23429f84c9",
+     "replies": 2
+    }
+   ],
+   "oldRoot": {
+    "id": "01a0d45e-9a6d-78df-bb72-6dea2dae8081",
+    "indexFromLatest": 1199,
+    "createdAt": "2026-09-24T17:02:44.845526+00:00"
+   },
+   "threadReply": {
+    "rootId": "01a0e623-99ef-7a0c-8960-84f3028b7849",
+    "rootIndexFromLatest": 1100,
+    "replyId": "01a0e96d-e2ef-792f-b03e-68a0d342bd1c",
+    "replyIndex": 91,
+    "threadReplies": 130
+   },
+   "biggestThreads": [
+    {
+     "rootId": "01a0e623-99ef-7a0c-8960-84f3028b7849",
+     "replies": 130,
+     "rootIndexFromLatest": 1100
+    },
+    {
+     "rootId": "01a1c823-0a48-7d5a-a242-82cc008d200f",
+     "replies": 60,
+     "rootIndexFromLatest": 20
+    },
+    {
+     "rootId": "01a1aede-5eb6-742a-9f7b-b40b1f168e0c",
+     "replies": 12,
+     "rootIndexFromLatest": 127
+    },
+    {
+     "rootId": "01a1a067-452e-7faf-9505-f744f34ad02b",
+     "replies": 12,
+     "rootIndexFromLatest": 198
+    }
+   ]
+  },
+  "large": {
+   "id": "5eed92f0-1c06-8932-b12c-277f6a59bad3",
+   "counts": {
+    "roots": 40000,
+    "replies": 10000,
+    "edited": 1523,
+    "deleted": 360,
+    "mentions": 1480,
+    "reactions": 19589,
+    "reacted_messages": 4892,
+    "attachments": 219,
+    "threads": 2196,
+    "threads_gt3": 993,
+    "threads_100plus": 3,
+    "total": 50000
+   },
+   "lastRootId": "01a1cc44-7180-7907-a1ab-b1dc33eb8c99",
+   "latestRootIds": [
+    "01a1c85f-0a16-79be-9eee-4fef25d8c8af",
+    "01a1c85f-7f73-782f-918a-b66f2cdcc0a6",
+    "01a1c879-cc7a-7cbb-95a9-b2ffba761081",
+    "01a1c87d-4f26-7594-b900-8f8c44684a96",
+    "01a1c883-c333-7be2-b7c0-05c9ddbf885b",
+    "01a1c88a-a40c-709c-9077-85bc50f41c3c",
+    "01a1c8a2-95c9-7b91-88e8-cfca5c6c6e05",
+    "01a1c8b3-a37e-7e85-91fa-7b1c8e2f0e1b",
+    "01a1c8b3-e892-7e4b-8941-515cd1df213c",
+    "01a1c8be-4a6a-7218-9936-8db47df6cd77",
+    "01a1c8d4-4ecb-738c-8d11-ebe6d12e4e0f",
+    "01a1c8d5-925e-79d7-9e66-9c0b853e3a04",
+    "01a1c8dc-b2de-7fb5-94d6-761697909b78",
+    "01a1c8df-9a2e-7781-b8f2-73a0cf458dd8",
+    "01a1c8e5-3068-7091-ba9a-ad599b15fde0",
+    "01a1c91b-01b0-7c15-9425-25293f306e8e",
+    "01a1c921-3589-79fd-b23a-3643c4c2834a",
+    "01a1c924-7695-71ff-bcc5-ba1b4cdb9ee1",
+    "01a1c930-30f3-740e-a62a-69a0617783f6",
+    "01a1c93b-d598-7fd4-8e97-208ea58362c4",
+    "01a1c944-3e90-759a-85f3-a4ae5eea0d5d",
+    "01a1c94b-786e-7680-9cb3-fd83a11662d7",
+    "01a1c975-da07-705b-af5a-3db76fc544b4",
+    "01a1c994-cc71-73d2-9fe2-56f910ad18db",
+    "01a1c995-6197-721b-bf7f-587c439cc656",
+    "01a1c9a0-df32-7dc3-8d57-18ce68bfb996",
+    "01a1c9bf-ca1d-7294-8631-dd3a156634f3",
+    "01a1c9c1-23e5-727e-b09f-a12353022da3",
+    "01a1c9ea-65b3-7bda-ab55-422fc28826e7",
+    "01a1c9f3-6bad-75a3-9ed2-79993dfb253e",
+    "01a1ca06-ab52-71db-998c-fcf7ae76ef42",
+    "01a1ca23-17d4-7121-ac66-71f7f85ab27d",
+    "01a1ca32-3f5f-7ef6-b1c9-a233e255d2cd",
+    "01a1ca37-9068-7230-abe2-9e28883c7277",
+    "01a1ca3d-4b80-7101-bb22-ef880229c57f",
+    "01a1ca61-2d54-7140-823f-2d98ea6aa44a",
+    "01a1ca75-2492-7319-a530-9819384f8c24",
+    "01a1ca80-1497-789c-85bc-92b96433a19e",
+    "01a1ca9a-c8f4-7ec5-a49c-192a0201eb95",
+    "01a1ca9d-5053-77fe-86e3-8cf48fab5352",
+    "01a1caad-6927-7e38-960f-150bf259218a",
+    "01a1caad-9ac4-7f13-8274-418bbeb62331",
+    "01a1cab5-dd8b-7797-b46f-97a1dbf977b5",
+    "01a1cada-9cc6-7e26-b297-c98ac17f4341",
+    "01a1cadf-f770-7247-901c-a0968a2c011b",
+    "01a1cb1c-e161-7586-bc45-8bdfc197ff3a",
+    "01a1cb32-05e1-7b77-8f2a-f7f88e163151",
+    "01a1cb34-c4f9-7432-bcb4-aa07556aa949",
+    "01a1cb36-4e19-7e2a-8738-f577b2f73133",
+    "01a1cb40-f540-7eb1-a67d-70a9f6d8a5af",
+    "01a1cb5a-6d92-7114-b253-b93f5701fff0",
+    "01a1cb5d-0513-7623-af51-21b429c634d1",
+    "01a1cb74-154a-7cc1-b28b-606e11edbedd",
+    "01a1cbc5-7baa-7a48-a682-1f2ef6b53ed5",
+    "01a1cbd0-44b6-7af9-91da-53757005a8ee",
+    "01a1cbdc-b3dd-7c4c-9df8-8a479f7327ed",
+    "01a1cc00-fe11-7742-bca1-215279a41fbd",
+    "01a1cc0f-976e-761f-993f-9a47263dcf8b",
+    "01a1cc1e-7074-7f61-a925-b10778f22c65",
+    "01a1cc44-7180-7907-a1ab-b1dc33eb8c99"
+   ],
+   "latestPageThreads": [
+    {
+     "rootId": "01a1c9c1-23e5-727e-b09f-a12353022da3",
+     "replies": 2
+    },
+    {
+     "rootId": "01a1ca3d-4b80-7101-bb22-ef880229c57f",
+     "replies": 3
+    },
+    {
+     "rootId": "01a1ca9d-5053-77fe-86e3-8cf48fab5352",
+     "replies": 110
+    },
+    {
+     "rootId": "01a1cb1c-e161-7586-bc45-8bdfc197ff3a",
+     "replies": 1
+    }
+   ],
+   "oldRoot": {
+    "id": "019919ac-aaa3-7809-9baa-d4e6fa0e6502",
+    "indexFromLatest": 31999,
+    "createdAt": "2025-09-05T11:39:30.339817+00:00"
+   },
+   "threadReply": {
+    "rootId": "0199a7ca-1eeb-7464-a5bb-8258d0458c89",
+    "rootIndexFromLatest": 30000,
+    "replyId": "0199aa4e-a6eb-7d03-98ae-e4f740b30909",
+    "replyIndex": 175,
+    "threadReplies": 250
+   },
+   "biggestThreads": [
+    {
+     "rootId": "0199a7ca-1eeb-7464-a5bb-8258d0458c89",
+     "replies": 250,
+     "rootIndexFromLatest": 30000
+    },
+    {
+     "rootId": "019db32f-2321-7056-ae05-75cbf91cb861",
+     "replies": 150,
+     "rootIndexFromLatest": 15000
+    },
+    {
+     "rootId": "01a1ca9d-5053-77fe-86e3-8cf48fab5352",
+     "replies": 110,
+     "rootIndexFromLatest": 20
+    },
+    {
+     "rootId": "01a1c325-e113-7a7a-afa0-5dc7dbcff991",
+     "replies": 12,
+     "rootIndexFromLatest": 139
+    }
+   ]
+  }
+ }
+}

@@ -1,0 +1,30 @@
+path "/home/teo/.herdr/worktrees/macro/synoet-channels-local-sync-suiteb/apps/web" does not contain a 'flake.nix', searching up
+
+Running 24 tests using 4 workers
+
+  ✓   2 tests/channels-e2e/offline.spec.ts:301:1 › OFF-10 a message that arrived while the channel was open is there when the channel opens with no connection (8.1s)
+  ✓   3 tests/channels-e2e/current.spec.ts:202:1 › SYN-05 what a device caught up on is what it shows the next time it opens the channel with no connection (10.2s)
+  ✓   4 tests/channels-e2e/offline.spec.ts:301:1 › OFF-10 a message that arrived while the channel was open is there when the channel opens with no connection (10.3s)
+  ✓   1 tests/channels-e2e/current.spec.ts:202:1 › SYN-05 what a device caught up on is what it shows the next time it opens the channel with no connection (11.9s)
+  ✓   5 tests/channels-e2e/current.spec.ts:202:1 › SYN-05 what a device caught up on is what it shows the next time it opens the channel with no connection (7.3s)
+  ✓   6 tests/channels-e2e/offline.spec.ts:301:1 › OFF-10 a message that arrived while the channel was open is there when the channel opens with no connection (6.4s)
+  ✓   7 tests/channels-e2e/current.spec.ts:202:1 › SYN-05 what a device caught up on is what it shows the next time it opens the channel with no connection (7.1s)
+  ✓   8 tests/channels-e2e/offline.spec.ts:301:1 › OFF-10 a message that arrived while the channel was open is there when the channel opens with no connection (5.9s)
+  ✓   9 tests/channels-e2e/current.spec.ts:202:1 › SYN-05 what a device caught up on is what it shows the next time it opens the channel with no connection (7.0s)
+  ✓  12 tests/channels-e2e/offline.spec.ts:301:1 › OFF-10 a message that arrived while the channel was open is there when the channel opens with no connection (5.6s)
+  ✓  10 tests/channels-e2e/offline.spec.ts:301:1 › OFF-10 a message that arrived while the channel was open is there when the channel opens with no connection (7.1s)
+  ✓  11 tests/channels-e2e/current.spec.ts:202:1 › SYN-05 what a device caught up on is what it shows the next time it opens the channel with no connection (7.2s)
+  ✓  13 tests/channels-e2e/current.spec.ts:202:1 › SYN-05 what a device caught up on is what it shows the next time it opens the channel with no connection (6.8s)
+  ✓  14 tests/channels-e2e/offline.spec.ts:301:1 › OFF-10 a message that arrived while the channel was open is there when the channel opens with no connection (6.8s)
+  ✓  15 tests/channels-e2e/current.spec.ts:202:1 › SYN-05 what a device caught up on is what it shows the next time it opens the channel with no connection (7.9s)
+  ✓  16 tests/channels-e2e/offline.spec.ts:301:1 › OFF-10 a message that arrived while the channel was open is there when the channel opens with no connection (7.7s)
+  ✓  17 tests/channels-e2e/current.spec.ts:202:1 › SYN-05 what a device caught up on is what it shows the next time it opens the channel with no connection (8.0s)
+  ✓  18 tests/channels-e2e/offline.spec.ts:301:1 › OFF-10 a message that arrived while the channel was open is there when the channel opens with no connection (7.0s)
+  ✓  20 tests/channels-e2e/offline.spec.ts:301:1 › OFF-10 a message that arrived while the channel was open is there when the channel opens with no connection (6.6s)
+  ✓  19 tests/channels-e2e/current.spec.ts:202:1 › SYN-05 what a device caught up on is what it shows the next time it opens the channel with no connection (7.6s)
+  ✓  22 tests/channels-e2e/offline.spec.ts:301:1 › OFF-10 a message that arrived while the channel was open is there when the channel opens with no connection (6.6s)
+  ✓  21 tests/channels-e2e/current.spec.ts:202:1 › SYN-05 what a device caught up on is what it shows the next time it opens the channel with no connection (7.0s)
+  ✓  23 tests/channels-e2e/current.spec.ts:202:1 › SYN-05 what a device caught up on is what it shows the next time it opens the channel with no connection (7.1s)
+  ✓  24 tests/channels-e2e/offline.spec.ts:301:1 › OFF-10 a message that arrived while the channel was open is there when the channel opens with no connection (7.6s)
+
+  24 passed (1.0m)

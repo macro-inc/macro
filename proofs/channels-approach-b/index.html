@@ -1,0 +1,297 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Channels on the device: approach B</title>
+<style>
+:root{
+  --bg:#f6f5f1; --panel:#ffffff; --ink:#1c1b19; --muted:#625f58; --line:#dcd9d0;
+  --accent:#1f5fbf; --accent-soft:#e6eefb; --ok:#1d7a46; --ok-soft:#e3f3ea;
+  --warn:#9a5b00; --warn-soft:#fbf0d9; --bad:#a8322a; --bad-soft:#fae6e3;
+  --code:#f0eee8;
+}
+@media (prefers-color-scheme: dark){
+  :root:not([data-theme="light"]){
+    --bg:#15161a; --panel:#1d1f25; --ink:#ecebe7; --muted:#a3a19a; --line:#33363f;
+    --accent:#7fb0ff; --accent-soft:#1c2a44; --ok:#6fd39b; --ok-soft:#173225;
+    --warn:#f0bb5e; --warn-soft:#3a2c10; --bad:#ff9288; --bad-soft:#40201d;
+    --code:#262931;
+  }
+}
+:root[data-theme="dark"]{
+  --bg:#15161a; --panel:#1d1f25; --ink:#ecebe7; --muted:#a3a19a; --line:#33363f;
+  --accent:#7fb0ff; --accent-soft:#1c2a44; --ok:#6fd39b; --ok-soft:#173225;
+  --warn:#f0bb5e; --warn-soft:#3a2c10; --bad:#ff9288; --bad-soft:#40201d;
+  --code:#262931;
+}
+*{box-sizing:border-box}
+html{-webkit-text-size-adjust:100%}
+body{margin:0;background:var(--bg);color:var(--ink);
+  font:16px/1.6 ui-sans-serif,system-ui,-apple-system,"Segoe UI",Roboto,sans-serif}
+main{max-width:920px;margin:0 auto;padding:40px 16px 96px}
+h1{font-size:34px;line-height:1.15;margin:0 0 10px;letter-spacing:-.02em}
+h2{font-size:23px;margin:56px 0 12px;letter-spacing:-.01em;padding-top:8px;border-top:1px solid var(--line)}
+h3{font-size:17px;margin:28px 0 8px}
+p{margin:0 0 14px}
+.lede{font-size:18px;color:var(--muted);max-width:720px}
+.meta{font-size:13px;color:var(--muted);margin-top:14px}
+a{color:var(--accent)}
+code,pre{font-family:ui-monospace,SFMono-Regular,Menlo,Consolas,monospace;font-size:13.5px}
+code{background:var(--code);padding:1px 5px;border-radius:4px}
+pre{background:var(--code);padding:14px 16px;border-radius:8px;overflow-x:auto;line-height:1.5;margin:0 0 16px}
+pre code{background:none;padding:0}
+ul,ol{margin:0 0 14px;padding-left:22px}
+li{margin:5px 0}
+.card{background:var(--panel);border:1px solid var(--line);border-radius:10px;padding:18px 20px;margin:0 0 16px}
+.grid{display:grid;gap:14px;grid-template-columns:repeat(auto-fit,minmax(250px,1fr));margin:0 0 16px}
+.grid .card{margin:0}
+.tag{display:inline-block;font-size:12px;font-weight:600;padding:2px 8px;border-radius:999px;margin-right:6px;vertical-align:middle}
+.tag.on{background:var(--ok-soft);color:var(--ok)}
+.tag.off{background:var(--bad-soft);color:var(--bad)}
+.tag.warn{background:var(--warn-soft);color:var(--warn)}
+.tag.info{background:var(--accent-soft);color:var(--accent)}
+.note{border-left:4px solid var(--accent);background:var(--accent-soft);padding:12px 16px;border-radius:0 8px 8px 0;margin:0 0 16px}
+.note.warn{border-color:var(--warn);background:var(--warn-soft)}
+.note.bad{border-color:var(--bad);background:var(--bad-soft)}
+.tablewrap{overflow-x:auto;margin:0 0 16px}
+table{border-collapse:collapse;width:100%;font-size:14.5px;background:var(--panel);border:1px solid var(--line);border-radius:10px}
+th,td{text-align:left;padding:9px 12px;border-bottom:1px solid var(--line);vertical-align:top}
+th{font-size:12.5px;text-transform:uppercase;letter-spacing:.04em;color:var(--muted)}
+tr:last-child td{border-bottom:none}
+/* layer stack */
+.stack{display:flex;flex-direction:column;gap:8px;margin:0 0 18px}
+.layer{display:grid;grid-template-columns:44px 1fr;gap:14px;align-items:start;background:var(--panel);
+  border:1px solid var(--line);border-radius:10px;padding:14px 16px}
+.layer .n{width:36px;height:36px;border-radius:50%;background:var(--accent);color:var(--bg);
+  font-weight:700;display:flex;align-items:center;justify-content:center}
+.layer h3{margin:0 0 4px}
+.layer p{margin:0;color:var(--muted);font-size:14.5px}
+.layer .where{font-size:12.5px;margin-top:6px}
+/* flows */
+.flow{display:flex;flex-direction:column;gap:0;margin:0 0 18px}
+.step{display:grid;grid-template-columns:28px 1fr;gap:12px}
+.step .rail{display:flex;flex-direction:column;align-items:center}
+.step .dot{width:14px;height:14px;border-radius:50%;border:3px solid var(--accent);background:var(--bg);margin-top:5px;flex:none}
+.step .bar{width:2px;flex:1;background:var(--line)}
+.step:last-child .bar{display:none}
+.step .body{padding:0 0 16px}
+.step .body b{display:block}
+.step .body span{color:var(--muted);font-size:14.5px}
+nav{font-size:14px;margin:22px 0 0;display:flex;flex-wrap:wrap;gap:6px 14px}
+nav a{text-decoration:none;border-bottom:1px solid var(--line)}
+@media (max-width:560px){h1{font-size:27px}h2{font-size:20px}}
+</style>
+</head>
+<body>
+<main>
+
+<h1>Channels on the device: approach B</h1>
+<p class="lede">How channels open from the device cache, stay current without refetching, and keep a person's own writes through an outage. What is built, how each piece works, what the flag does and does not cover, and what is still open.</p>
+<p class="meta">State as of 2026-11-18, top of stack <code>0573ea32eb</code> (#10466). Nothing is merged. Sources: the five PR descriptions, the guides the stack adds to the repository, and the diff against main.</p>
+<nav>
+  <a href="#idea">The idea</a><a href="#layers">Five layers</a><a href="#seq">1 Change sequence</a><a href="#gql">2 GraphQL reads</a>
+  <a href="#engine">3 Cache engine</a><a href="#reads">4 Web reads</a><a href="#writes">5 Queued writes</a>
+  <a href="#reload">Reload safety</a><a href="#flag">The flag</a><a href="#limits">Numbers</a><a href="#proof">Proof</a><a href="#open">Open</a>
+</nav>
+
+<h2 id="idea">The idea in one paragraph</h2>
+<p>Today a channel is read over REST every time it is opened. Nothing is kept on the device, so each open, reload and switch waits on the network, and nothing shows offline. Approach B keeps channel messages in the same device cache that already holds the rest of the app's GraphQL data. Three things make that safe:</p>
+<div class="grid">
+  <div class="card"><h3 style="margin-top:0">A sequence per channel</h3><p style="margin:0">Every committed change to a channel gets the next number. A device that holds a channel at number N can ask "what changed after N" and get a complete, ordered answer, or be told to start over. This is what "never out of date" rests on.</p></div>
+  <div class="card"><h3 style="margin-top:0">An index that knows what it holds</h3><p style="margin:0">The device records which stretches of a channel are complete. It answers a read only when the requested window lies inside one of those stretches. Otherwise it reports a miss and the server is asked.</p></div>
+  <div class="card"><h3 style="margin-top:0">A durable queue for writes</h3><p style="margin:0">A send, edit, delete or reaction is stored on the device before it is sent. It survives a reload and an outage, is delivered in the order written, and cannot post twice.</p></div>
+</div>
+<div class="note">REST is not removed. It remains the fallback for every read that fails, for older native builds, for anyone without the device cache, and for everything when the flag is off.</div>
+
+<h2 id="layers">Five layers, five pull requests</h2>
+<p>Each layer is a pull request stacked on the one below. Only the first and fourth target main, so those two are where CI runs.</p>
+<div class="stack">
+  <div class="layer"><div class="n">5</div><div><h3>Queued writes</h3><p>A person's send, edit, delete and reaction go through the device's durable mutation queue instead of REST.</p><p class="where"><a href="https://github.com/macro-inc/macro/pull/10466">#10466</a> · web · behind the flag</p></div></div>
+  <div class="layer"><div class="n">4</div><div><h3>Web reads</h3><p>Channels open from the device, catch up by sequence, prewarm while idle, evict after thirty days.</p><p class="where"><a href="https://github.com/macro-inc/macro/pull/10441">#10441</a> · web · behind the flag · targets main, so its diff contains layers 1 to 3</p></div></div>
+  <div class="layer"><div class="n">3</div><div><h3>Cache engine</h3><p>The device cache gains an ordered index of each channel, the list of ranges it holds completely, and the sequence it holds them at.</p><p class="where"><a href="https://github.com/macro-inc/macro/pull/10443">#10443</a> · Rust compiled to wasm, plus the native plugin · storage schema 13</p></div></div>
+  <div class="layer"><div class="n">2</div><div><h3>GraphQL reads</h3><p>Four fields that read a channel page, a thread page, the changes after a sequence, and one message.</p><p class="where"><a href="https://github.com/macro-inc/macro/pull/10442">#10442</a> · backend · no client calls them until layer 4</p></div></div>
+  <div class="layer"><div class="n">1</div><div><h3>Change sequence</h3><p>Every committed change to a channel's timeline gets the next number, written in the same transaction.</p><p class="where"><a href="https://github.com/macro-inc/macro/pull/10440">#10440</a> · backend and database · runs for every channel write once deployed</p></div></div>
+</div>
+
+<h2 id="seq">Layer 1: the change sequence</h2>
+<p>Two new tables, with no foreign keys and nothing added to existing tables:</p>
+<ul>
+  <li><code>channel_change_counters</code>: one row per channel holding its current sequence number.</li>
+  <li><code>channel_change_log</code>: one row per change, keyed by channel and sequence. A row is a message change, an activity change, or a reset marker. Rows are never updated.</li>
+</ul>
+<pre><code>message / reaction / thread / activity / call-status write
+  -&gt; admission for this channel (in memory, before a database connection is taken)
+  -&gt; transaction: the write itself
+  -&gt; last statement: bump the channel's counter, insert one log row
+  -&gt; commit        (the counter row stays locked from the bump to the commit)
+  -&gt; push to open clients, carrying the committed sequence</code></pre>
+<h3>Why the counter is locked last</h3>
+<p>Because the counter row is locked as the final statement and held until commit, sequence order equals commit order within a channel. A reader can never see change N+1 while N is still invisible. That is the property the device depends on: "everything after N" is always complete. You confirmed on 2026-11-16 that this design stays.</p>
+<h3>The cost, and the guard against it</h3>
+<p>Writers to one channel now queue on one row. A flood of writes to a single channel could otherwise hold database connections while waiting. An in-process admission gate caps that:</p>
+<ul>
+  <li>At most four writes per channel are in flight in one process.</li>
+  <li>Further writers wait in memory for up to two seconds, then get a retryable "service unavailable" answer.</li>
+  <li>A five-second lock timeout covers a writer that stalls while holding the counter.</li>
+</ul>
+<p>Admission is per process, not across processes. Other message parents (documents, emails and so on) run no extra statement.</p>
+<h3>Who writes through it</h3>
+<p>Everything that changes a channel timeline: people's messages, reactions and threads, plus bots, calls, the agent harness, the Slack integration, document activity and imports. This is why the diff touches many backend crates.</p>
+<h3>Retention</h3>
+<p>Log rows older than thirty days are pruned hourly, in bounded batches. Counters are kept, so numbers are never reused. A device asking from before the oldest kept row is told to reset.</p>
+
+<h2 id="gql">Layer 2: GraphQL reads</h2>
+<p>Four fields on the signed-in user, all backed by the existing message service and its permission checks:</p>
+<div class="tablewrap"><table>
+<tr><th>Field</th><th>Returns</th></tr>
+<tr><td><code>channelTimeline</code></td><td>One page of root messages and timeline activities, with cursors for before, after or around a point, and the channel's sequence at read time.</td></tr>
+<tr><td><code>channelThread</code></td><td>One bounded page of a thread's replies.</td></tr>
+<tr><td><code>channelChanges</code></td><td>The changes after a given sequence, at most 200 per page, including deletions and the root of each changed reply. It sets <code>resetRequired</code> when the device is more than 1,000 changes behind or past retention.</td></tr>
+<tr><td><code>channelMessage</code></td><td>One message, used when jumping to a location.</td></tr>
+</table></div>
+<ul>
+  <li><b>Sequence first, then the page.</b> The server reads the channel's sequence before loading the page, so replaying from that number cannot skip a write that raced the read.</li>
+  <li><b>Same data as REST.</b> Timestamps keep microseconds and optional fields are formatted as the REST API formats them. The pull request compared both APIs row for row on channels of 38, 1,490 and 5,950 rows.</li>
+  <li><b>Stable order.</b> Each row carries a sort key the device can order by; message ids break ties at equal times.</li>
+</ul>
+
+<h2 id="engine">Layer 3: the cache engine</h2>
+<p>The device cache already stored records and query results, but it had no order over messages and did not know which parts of a channel it held. The engine now keeps, per channel and per thread:</p>
+<ul>
+  <li><b>An index</b> of message keys by sort key.</li>
+  <li><b>Covered ranges</b>: stretches known to be complete. Fetching a page merges its range in, so adjacent pages join into one range and a jump to an old message leaves a separate island.</li>
+  <li><b>The sequence</b> the channel is held at. It advances only from the value the caller read, so two tabs cannot skip a change between them.</li>
+</ul>
+<pre><code>channelTimeline(channel, thread?, limit, before | after | around)
+  -&gt; page: keys, cursors, sequence, whether the window is covered
+  -&gt; or "unsupported" (an older native build)
+channelTimelineCommit(channel, coverage, removed keys, sequence, reset?)
+channelTimelineEvict(not touched since, max channels)</code></pre>
+<p><b>The rule that keeps it honest:</b> a read is answered from the device only when the whole requested window lies inside one covered range. Anything else is a miss, and the caller fetches. A reset drops coverage but keeps the records.</p>
+<p><b>Storage:</b> this is storage schema 13. It is a cutover, not a migration: browsers open a fresh database, and native apps replace the older cache along with any mutations still queued in it. Native binaries must be rebuilt to gain the new tables and commands, which is why #10441 fails the iOS and Android native checks until the version bumps are made. An older native build answers "unsupported" and keeps reading over REST.</p>
+
+<h2 id="reads">Layer 4: how a channel opens and stays current</h2>
+<h3>Opening, paging and jumping</h3>
+<div class="flow">
+  <div class="step"><div class="rail"><div class="dot"></div><div class="bar"></div></div><div class="body"><b>Ask the device</b><span>If the window is held and covered, the channel renders with no request.</span></div></div>
+  <div class="step"><div class="rail"><div class="dot"></div><div class="bar"></div></div><div class="body"><b>On a miss, ask GraphQL</b><span>The page is shown, then its rows, its range and the sequence are committed to the device.</span></div></div>
+  <div class="step"><div class="rail"><div class="dot"></div><div class="bar"></div></div><div class="body"><b>If GraphQL fails, use REST</b><span>The existing read, unchanged.</span></div></div>
+</div>
+<p><b>Opening never waits on the device.</b> While the cache is still starting (a second or two on a new page), and for the latest page of a channel not yet known to be held, the server is asked at the same time and the first answer shows. The existing view model, page shape and cursors are unchanged.</p>
+
+<h3>Staying current</h3>
+<div class="flow">
+  <div class="step"><div class="rail"><div class="dot"></div><div class="bar"></div></div><div class="body"><b>A push arrives for an open channel</b><span>The open view is patched directly from the push, as today. Nothing is refetched.</span></div></div>
+  <div class="step"><div class="rail"><div class="dot"></div><div class="bar"></div></div><div class="body"><b>The device takes the same change by sequence</b><span>One <code>channelChanges(after held sequence)</code> request commits the delta. Pushes that arrive while one is being stored share the next request.</span></div></div>
+  <div class="step"><div class="rail"><div class="dot"></div><div class="bar"></div></div><div class="body"><b>Reconnect or reopen</b><span>The same request, from the sequence the device holds. Nothing changed means an empty answer.</span></div></div>
+  <div class="step"><div class="rail"><div class="dot"></div><div class="bar"></div></div><div class="body"><b>Too far behind</b><span><code>resetRequired</code>: coverage is dropped and the latest page is fetched fresh.</span></div></div>
+</div>
+<p>The device takes a push a moment after the screen does. So a device page that is older than a push already on screen waits for that push to be stored and is read again, at most three times. A push not stored within two seconds is not waited on further.</p>
+
+<h3>Prewarm and eviction</h3>
+<ul>
+  <li><b>Prewarm:</b> while the person leaves the app alone, the latest page of up to forty unread and twenty recent channels is loaded, one request at a time. It stops without a connection.</li>
+  <li><b>Eviction:</b> channels not opened for thirty days are removed from the device.</li>
+</ul>
+
+<h3>Offline</h3>
+<p>Timeline and thread queries run "offline first", so a held channel opens without a connection. A channel lookup that got no response decides nothing: the cached copy opens the channel, however many newer channels the person has. A read the device cannot serve offline waits for the connection without using up its retry.</p>
+
+<h2 id="writes">Layer 5: writes that survive an outage</h2>
+<pre><code>send / edit / delete / react
+  -&gt; the optimistic row on screen, as before
+  -&gt; device queue: optimistic cached row + a durable mutation
+       online   -&gt; sent over GraphQL; the returned row replaces the optimistic one
+       offline  -&gt; stays queued, survives a reload, delivered in order on reconnect
+       busy     -&gt; "service unavailable": retried with backoff, never counted as a failure
+       refused  -&gt; rolled back, with the usual toast and draft restore</code></pre>
+<ul>
+  <li><b>No double posts.</b> A send's identity in the queue is the message id the client minted. If the answer is lost and the send is replayed, the server returns the stored message for that id. A repeated delete returns the tombstone. Edits and reactions were already repeatable.</li>
+  <li><b>Long outages.</b> A first delivery accepts an id minted up to thirty days ago, so a message typed during a long outage still posts.</li>
+  <li><b>Order.</b> A queued send is placed past every message the server has positioned, never by the device's clock, so quick sends stay in the order written. When its delivery arrives, the message moves to where the server's time puts it.</li>
+  <li><b>Other windows.</b> A write still queued after a second is announced to the device's other windows, which read the device again to show it. Such a message carries a "Not sent yet" mark.</li>
+  <li><b>What stays on REST.</b> Anchored posts, other message parents, agents, bots and API tokens.</li>
+</ul>
+<p>The message hooks keep their optimistic rows, toasts and rollback. Only the function that performs the write is swapped.</p>
+
+<h2 id="reload">Reload safety: the three notes in local storage</h2>
+<p>The device cache runs in a worker and answers some milliseconds after the screen shows something, or a second or two later on a fresh page. A reload inside that gap would lose what the person just saw. Three small synchronous notes close the gap. Each is written first, forgotten once the device holds the thing, and picked up by the next page to start.</p>
+<div class="tablewrap"><table>
+<tr><th>Note</th><th>Covers</th><th>The next page does</th></tr>
+<tr><td>Unqueued sends</td><td>A send handed to the queue but not yet stored by it.</td><td>Resends what the closed page left, in the order written.</td></tr>
+<tr><td>Unstored pushes</td><td>A push that reached the screen before the device stored it.</td><td>Catches up those channels at start and after reconnect.</td></tr>
+<tr><td>Unheld reads</td><td>A latest page or thread the server answered before the device held it.</td><td>Has the device hold them, so they open offline.</td></tr>
+</table></div>
+<p>Two related repairs: if the cache storage is reset under an open page, the open channels' pages and threads are read again; and the queue releases a claim on its first write when the page that claimed it is gone, instead of waiting five minutes for the claim to lapse.</p>
+
+<h2 id="flag">What the flag covers, and what it does not</h2>
+<p>The flag is <code>enable-channel-local-sync</code>. It exists in PostHog, on for company accounts and off for everyone else. A local or CI build sets <code>VITE_ENABLE_CHANNEL_LOCAL_SYNC</code> instead, which wins over PostHog. A change takes effect at the next reload.</p>
+<div class="grid">
+  <div class="card">
+    <p><span class="tag on">Gated</span><b>Everything the web app does with channels</b></p>
+    <p>One function, <code>channelCacheHost()</code>, returns nothing when the flag is off, and every caller then takes the existing REST path.</p>
+    <ul style="margin-bottom:0">
+      <li>Device reads, catch-up, prewarm, eviction</li>
+      <li>Queued writes for send, edit, delete, react</li>
+      <li>The "Not sent yet" mark and other-window updates</li>
+    </ul>
+  </div>
+  <div class="card">
+    <p><span class="tag off">Not gated</span><b>Runs for everyone once deployed</b></p>
+    <ul style="margin-bottom:0">
+      <li><b>The backend.</b> There is no backend flag. Every channel write bumps the counter and appends to the log.</li>
+      <li><b>Shared web code:</b> the mutation queue runner (also used by email drafts), the GraphQL mutation retry helper, the query gate, the calendar GraphQL network file, and the channel detail lookup.</li>
+      <li><b>The cache engine build</b> and storage schema 13.</li>
+      <li><b>Native code,</b> which needs the version bumps.</li>
+    </ul>
+  </div>
+</div>
+<div class="note warn"><b>Turning the flag off stops clients from using B. It does not undo the server write path.</b> That needs a revert or a backend switch of its own, which is not built.</div>
+<p><b>Writes already waiting when the flag goes off</b> are not lost. Writes in the device queue are still delivered, because the cache runs its queue regardless of this flag. Sends that were only noted in local storage are posted over REST under their own id at the next page start.</p>
+
+<h2 id="limits">The numbers that define its behaviour</h2>
+<div class="tablewrap"><table>
+<tr><th>Limit</th><th>Value</th><th>What happens at the limit</th></tr>
+<tr><td>Change log retention</td><td>30 days</td><td>A device further behind resets and fetches the latest page.</td></tr>
+<tr><td>Catch-up page</td><td>200 changes</td><td>More pages are requested.</td></tr>
+<tr><td>Catch-up lag</td><td>1,000 changes</td><td>Reset instead of replaying.</td></tr>
+<tr><td>Concurrent writes per channel, per process</td><td>4</td><td>Others wait in memory.</td></tr>
+<tr><td>Wait for admission</td><td>2 seconds</td><td>Retryable "service unavailable"; the client keeps the write queued.</td></tr>
+<tr><td>Counter lock timeout</td><td>5 seconds</td><td>The write fails rather than hold a connection.</td></tr>
+<tr><td>Prewarm</td><td>40 unread + 20 recent channels</td><td>Other channels load on first open.</td></tr>
+<tr><td>Device eviction</td><td>30 days unopened</td><td>The channel is fetched again when next opened.</td></tr>
+<tr><td>Send id age</td><td>30 days</td><td>An older queued send is refused.</td></tr>
+<tr><td>Queue server failures</td><td>10</td><td>The write is dropped and rolled back; "busy" answers are not counted.</td></tr>
+<tr><td>Wait for a push to be stored</td><td>2 seconds, 3 rereads</td><td>The read is shown as it is.</td></tr>
+</table></div>
+
+<h2 id="proof">What is proven so far</h2>
+<p>The channels end-to-end suite drives a whole local stack in a real browser. The base suite (#10864, 119 tests) describes main; the B suite (#10868, 164 tests) adds B's offline, write, prewarm and sync behaviour and runs with the flag on and off.</p>
+<div class="tablewrap"><table>
+<tr><th>Build</th><th>Latest whole-suite result (#10868 at <code>f5e3a35c63</code>)</th></tr>
+<tr><td>Local sync on</td><td>164 passed</td></tr>
+<tr><td>Local sync off (REST)</td><td>129 passed, 35 skipped. The skipped tests are B-only behaviour.</td></tr>
+</table></div>
+<ul>
+  <li><b>CI:</b> the gate is green on #10440. On #10441 everything passes except the two native bump checks. #10466 and #10868 have no CI run of their own, because CI runs only on pull requests into main.</li>
+  <li><b>Defects recorded, not hidden:</b> the suite lists 10 known and 17 sometimes-failing behaviours. Those examined so far are on main too, not caused by B.</li>
+  <li><b>Detailed results:</b> <a href="../channels-device-proof/">device proof page</a>, <a href="../channels-e2e-videos/">videos of the base suite</a>, <a href="../channels-e2e-base/">base suite results</a>.</li>
+</ul>
+
+<h2 id="open">What is open</h2>
+<div class="tablewrap"><table>
+<tr><th>Item</th><th>State</th></tr>
+<tr><td>Native version bumps for #10441</td><td>Waiting on your decision. The pull request cannot go green without them.</td></tr>
+<tr><td>Backend kill switch for the change-log write</td><td>Not built. Without it the server half can only be reverted, not switched off.</td></tr>
+<tr><td>Channel detail change is not behind the flag</td><td>With the flag off, a cached channel now opens offline showing failing message reads instead of "Conversation unavailable". No test covers it.</td></tr>
+<tr><td>Shared queue and retry changes against email and calendar</td><td>Not exercised. The channels suite does not cover those features.</td></tr>
+<tr><td>First send after a page load</td><td>Can wait one to two seconds, because the queue first recovers email drafts. In shared code, unfixed.</td></tr>
+<tr><td>Cost of the extra write per channel message in production</td><td>Measured only on local synthetic data (query plans in <code>crates/messages/proofs</code>).</td></tr>
+<tr><td>Unread dot sometimes missing in heavy repeat runs</td><td>Unsettled. Seen only on test users with hundreds of unread channels, never in a whole run.</td></tr>
+<tr><td>Reload-safety test</td><td>Depends on a timed pause, so it could fail on a slower machine without a defect.</td></tr>
+</table></div>
+
+</main>
+</body>
+</html>

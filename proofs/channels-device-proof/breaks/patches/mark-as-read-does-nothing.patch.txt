@@ -1,0 +1,13 @@
+diff --git a/apps/web/src/features/channel/activity-tracker.ts b/apps/web/src/features/channel/activity-tracker.ts
+index 8e76f859ed..5cc6eb995e 100644
+--- a/apps/web/src/features/channel/activity-tracker.ts
++++ b/apps/web/src/features/channel/activity-tracker.ts
+@@ -41,7 +41,7 @@ export function createActivityTracker(
+     });
+ 
+   const dismissNewMessages = () => {
+-    setNewMessagesDismissed(true);
++    setNewMessagesDismissed(false);
+   };
+ 
+   return {

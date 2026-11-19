@@ -1,0 +1,32 @@
+path "/home/teo/.herdr/worktrees/macro/synoet-channels-local-sync-suite/apps/web" does not contain a 'flake.nix', searching up
+
+Running 119 tests using 4 workers
+
+  ✓    3 tests/channels-e2e/access.spec.ts:39:1 › ACC-02 a person outside the team who opens a private channel’s address sees no messages (1.8s)
+  ✓    1 tests/channels-e2e/access.spec.ts:13:1 › ACC-01 a teammate who is not in a private channel sees no messages and is offered to ask to join (1.9s)
+  ✓    5 tests/channels-e2e/access.spec.ts:139:1 › ACC-05 a withdrawn request can no longer be approved (13.8s)
+  ✓    7 tests/channels-e2e/access.spec.ts:212:1 › ACC-07 a person outside the team cannot read a team channel or find it to join (1.7s)
+  ✓    8 tests/channels-e2e/access.spec.ts:248:1 › ACC-08 the address of a channel that does not exist says the conversation is unavailable (3.1s)
+  ✓    6 tests/channels-e2e/access.spec.ts:168:1 › ACC-06 a teammate finds a team channel they are not in by its name and joins it (18.6s)
+  ✘    2 tests/channels-e2e/access.spec.ts:104:1 › ACC-04 a denied request tells the person so and shows them nothing of the channel (19.8s)
+  ✘    4 tests/channels-e2e/access.spec.ts:61:1 › ACC-03 a request to join reaches the owner at once, and approving it lets the person in at once (19.9s)
+  ✓    9 tests/channels-e2e/access.spec.ts:264:1 › ACC-09 a signed-out person who opens a channel’s address is asked to log in and sees nothing of it (1.4s)
+  ✓   12 tests/channels-e2e/channels.spec.ts:118:1 › CHN-03 renaming a channel updates its header and list row, and tells both members in the channel (6.9s)
+  ✓   10 tests/channels-e2e/channels.spec.ts:29:1 › CHN-01 a private channel made in the app opens empty, shows in the list and takes its first message (8.5s)
+  ✓   11 tests/channels-e2e/channels.spec.ts:59:1 › CHN-02 a team channel made in the app appears for a teammate under the team’s channels and can be read (9.3s)
+  ✓   15 tests/channels-e2e/channels.spec.ts:219:1 › CHN-06 Copy Link gives an address that opens the channel for another member (4.3s)
+  ✓   14 tests/channels-e2e/channels.spec.ts:189:1 › CHN-05 a channel can be made a favorite and taken out again, and both survive a reload (7.3s)
+  ✓   17 tests/channels-e2e/channels.spec.ts:286:1 › CHN-08 a deleted channel leaves its owner’s Favorites too (3.6s)
+  ✓   18 tests/channels-e2e/channels.spec.ts:316:1 › CHN-09 a member who does not own the channel is not offered Delete (2.5s)
+  ✓   19 tests/channels-e2e/channels.spec.ts:334:1 › CHN-10 the Participants tab lists the channel’s members by name, with the owner marked (2.1s)
+  ✓   20 tests/channels-e2e/channels.spec.ts:357:1 › CHN-11 the Attachments tab of a channel with no files says there are none (2.3s)
+  ✓   16 tests/channels-e2e/channels.spec.ts:243:1 › CHN-07 deleting a channel removes it for its owner at once, and its address no longer opens for anyone (10.7s)
+  ✘   13 tests/channels-e2e/channels.spec.ts:156:1 › CHN-04 a rename shows in the header of a member who has the channel open (19.8s)
+  ✓   22 tests/channels-e2e/channels.spec.ts:407:1 › CHN-13 a channel’s history starts with “Channel <name> created” (2.2s)
+  ✓   21 tests/channels-e2e/channels.spec.ts:379:1 › CHN-12 going to another tab and back keeps the message list where it was (3.8s)
+
+  ✓   25 tests/channels-e2e/composer.spec.ts:21:1 › CMP-01 a draft stays in its channel while I look at another one, and is not shown there (3.0s)
+  ✓   26 tests/channels-e2e/composer.spec.ts:47:1 › CMP-02 a draft is still in the composer after a reload (3.7s)
+  ✓   29 tests/channels-e2e/composer.spec.ts:121:1 › CMP-04 the send button is off while the composer is empty, and after sending I can go on typing (2.4s)
+  ✓   27 tests/channels-e2e/composer.spec.ts:67:1 › CMP-03 sending a message clears its draft, and a reload does not bring it back (6.3s)
+  ✓   30 tests/channels-e2e/composer.spec.ts:148:1 › CMP-05 a person picked from the @ menu is named in the message for both 

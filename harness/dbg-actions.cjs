@@ -1,0 +1,20 @@
+const L = require(__dirname + '/lib.cjs');
+(async () => {
+  const browser = await L.launch();
+  const state = await L.authState(browser, 'alice@seed.macro.local');
+  const ctx = await L.newContext(browser, { storageState: state });
+  const page = await ctx.newPage();
+  await page.goto(`${L.BASE}/app/channels/${L.ENV.channels.freshness}`); await page.waitForSelector('[data-channel-scroll] [data-message-id]', { timeout: 90000 }); await L.sleep(4000);
+  const m = `dbg-act-${Date.now()}`;
+  await page.locator('[data-markdown-editable]').last().click(); await page.keyboard.type(m); await page.keyboard.press('Enter'); await L.sleep(2500);
+  const row = page.locator('[data-channel-scroll] [data-message-id]', { hasText: m }).last();
+  await row.hover(); await L.sleep(600);
+  const dump = (sel) => page.evaluate((s) => [...document.querySelectorAll(s)].slice(0, 40).map((b) => `${b.tagName} aria=${b.getAttribute('aria-label')} title=${b.getAttribute('title')} text=${(b.textContent || '').trim().slice(0, 30)} data=${[...b.attributes].filter((a) => a.name.startsWith('data-')).map((a) => a.name).join(',')}`), sel);
+  console.log('TOOLBAR\n' + (await dump('[data-message-hover-actions] button, [data-message-hover-actions] [role=button]')).join('\n'));
+  const btns = page.locator('[data-message-hover-actions]').last().locator('button');
+  const n = await btns.count(); console.log('count', n);
+  await btns.nth(n - 1).click().catch((e) => console.log('click err', String(e).slice(0, 100))); await L.sleep(800);
+  console.log('MENU\n' + (await dump('[role=menuitem], [role=menu] button')).join('\n'));
+  await page.screenshot({ path: __dirname + '/tmp/dbg-actions.png' });
+  await browser.close();
+})().catch((e) => { console.error(String(e).slice(0, 600)); process.exit(1); });

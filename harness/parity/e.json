@@ -1,0 +1,140 @@
+{
+ "reload": {
+  "freshness": {
+   "latestServer": "01a1cf99-67d3-78ff-9318-53cdaf1934fa",
+   "lastShownRoot": "01a1cf99-67d3-78ff-9318-53cdaf1934fa",
+   "match": true,
+   "missingOfLast15": 0
+  },
+  "lobby": {
+   "latestServer": "01a1cf99-0ca5-75d3-b2ae-bbb156525f87",
+   "lastShownRoot": "01a1cf99-0ca5-75d3-b2ae-bbb156525f87",
+   "match": true,
+   "missingOfLast15": 0
+  },
+  "small": {
+   "latestServer": "01a1cc44-7180-7e25-a3e1-115d13065700",
+   "lastShownRoot": "01a1cc44-7180-7e25-a3e1-115d13065700",
+   "match": true,
+   "missingOfLast15": 2
+  }
+ },
+ "switch": [
+  {
+   "k": "lobby",
+   "early": 27
+  },
+  {
+   "k": "small",
+   "early": 17
+  },
+  {
+   "k": "medium",
+   "early": 12
+  },
+  {
+   "k": "freshness",
+   "early": 23
+  },
+  {
+   "k": "large",
+   "early": 17
+  },
+  {
+   "k": "small",
+   "early": 17
+  },
+  {
+   "k": "lobby",
+   "early": 27
+  },
+  {
+   "k": "freshness",
+   "early": 23
+  },
+  {
+   "k": "medium",
+   "early": 12
+  },
+  {
+   "k": "large",
+   "early": 17
+  }
+ ],
+ "final": {
+  "url": "/app/channels/5eed92f0-1c06-8932-b12c-277f6a59bad3",
+  "rows": 17
+ },
+ "verify": [
+  {
+   "k": "lobby",
+   "rows": 27,
+   "unknownToTruth": 0,
+   "staleFromOtherChannel": 0,
+   "url": "5eed92f0"
+  },
+  {
+   "k": "small",
+   "rows": 17,
+   "unknownToTruth": 4,
+   "staleFromOtherChannel": 0,
+   "url": "5eed92f0"
+  },
+  {
+   "k": "medium",
+   "rows": 12,
+   "unknownToTruth": 0,
+   "staleFromOtherChannel": 0,
+   "url": "5eed92f0"
+  },
+  {
+   "k": "freshness",
+   "rows": 23,
+   "unknownToTruth": 5,
+   "staleFromOtherChannel": 0,
+   "url": "5eed92f0"
+  },
+  {
+   "k": "large",
+   "rows": 17,
+   "unknownToTruth": 1,
+   "staleFromOtherChannel": 0,
+   "url": "5eed92f0"
+  },
+  {
+   "k": "small",
+   "rows": 17,
+   "unknownToTruth": 4,
+   "staleFromOtherChannel": 0,
+   "url": "5eed92f0"
+  },
+  {
+   "k": "lobby",
+   "rows": 27,
+   "unknownToTruth": 0,
+   "staleFromOtherChannel": 0,
+   "url": "5eed92f0"
+  },
+  {
+   "k": "freshness",
+   "rows": 23,
+   "unknownToTruth": 5,
+   "staleFromOtherChannel": 0,
+   "url": "5eed92f0"
+  },
+  {
+   "k": "medium",
+   "rows": 12,
+   "unknownToTruth": 0,
+   "staleFromOtherChannel": 0,
+   "url": "5eed92f0"
+  },
+  {
+   "k": "large",
+   "rows": 17,
+   "unknownToTruth": 1,
+   "staleFromOtherChannel": 0,
+   "url": "5eed92f0"
+  }
+ ]
+}

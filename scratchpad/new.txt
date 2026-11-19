@@ -1,0 +1,23 @@
+/**
+ * Waits until the device holds what the open views were pushed. The device
+ * takes a push a moment after the views do, from the server's log, so what it
+ * answers meanwhile is older than what is on screen. Resolves true when there
+ * was such a push: a device read made before this resolved is to be made
+ * again, not shown. `heldSeq` is the sequence that read was made at, when it
+ * is known; a read at or past every pushed change is already current.
+ */
+export async function pushesStored(
+  channelId: string,
+  heldSeq?: string | null
+): Promise<boolean> {
+  const state = channels.get(channelId);
+  const storing = state?.storing;
+  if (!state || !storing) return false;
+  if (heldSeq != null) {
+    const held = BigInt(heldSeq);
+    const ahead = [...state.pushed].some((seq) => BigInt(seq) > held);
+    if (!ahead) return false;
+  }
+  await Promise.race([storing.promise, sleep(PUSH_STORE_WAIT_MS)]);
+  return true;
+}

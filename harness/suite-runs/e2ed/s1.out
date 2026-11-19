@@ -1,0 +1,30 @@
+path "/home/teo/.herdr/worktrees/macro/synoet-channels-local-sync-suiteb/apps/web" does not contain a 'flake.nix', searching up
+
+Running 4 tests using 4 workers
+
+DD WRT-04 w0 ben 993709 [observability] graphql.mutation_queue.loaded {auth.state: signed-in, network.online: false, graphql.websocket.state: connected, mutation_queue.depth: 1, mutation_queue.age_unknown_items: 0}
+DJ WRT-04 w0 993726 ["[observability]","graphql.mutation_queue.loaded",{"auth.state":"signed-in","network.online":false,"graphql.websocket.state":"connected","mutation_queue.depth":1,"mutation_queue.age_unknown_items":0,"mutation_queue.oldest_item_age_ms":2240}]
+DD WRT-04 w3 ben 993791 [observability] graphql.mutation_queue.loaded {auth.state: signed-in, network.online: false, graphql.websocket.state: connected, mutation_queue.depth: 3, mutation_queue.age_unknown_items: 0}
+DD WRT-04 w2 ben 993808 [observability] graphql.mutation_queue.loaded {auth.state: signed-in, network.online: false, graphql.websocket.state: connected, mutation_queue.depth: 3, mutation_queue.age_unknown_items: 0}
+DJ WRT-04 w3 993810 ["[observability]","graphql.mutation_queue.loaded",{"auth.state":"signed-in","network.online":false,"graphql.websocket.state":"connected","mutation_queue.depth":3,"mutation_queue.age_unknown_items":0,"mutation_queue.oldest_item_age_ms":2345}]
+DJ WRT-04 w2 993812 ["[observability]","graphql.mutation_queue.loaded",{"auth.state":"signed-in","network.online":false,"graphql.websocket.state":"connected","mutation_queue.depth":3,"mutation_queue.age_unknown_items":0,"mutation_queue.oldest_item_age_ms":2406}]
+DD WRT-04 w1 ben 993819 [observability] graphql.mutation_queue.loaded {auth.state: signed-in, network.online: false, graphql.websocket.state: connected, mutation_queue.depth: 1, mutation_queue.age_unknown_items: 0}
+DJ WRT-04 w1 993822 ["[observability]","graphql.mutation_queue.loaded",{"auth.state":"signed-in","network.online":false,"graphql.websocket.state":"connected","mutation_queue.depth":1,"mutation_queue.age_unknown_items":0,"mutation_queue.oldest_item_age_ms":2291}]
+DD WRT-04 w0 ben 293896 [observability] graphql.mutation_queue.summary {auth.state: signed-in, network.online: false, graphql.websocket.state: connected, mutation_queue.pending_items: 3, mutation_queue.oldest_observed_wait_m
+DJ WRT-04 w0 293899 ["[observability]","graphql.mutation_queue.summary",{"auth.state":"signed-in","network.online":false,"graphql.websocket.state":"connected","mutation_queue.pending_items":3,"mutation_queue.oldest_observed_wait_ms":300440,"mutation_queue.depth":4,"mutation_queue.age_unknown_items":0,"mutation_queue.oldest_item_age_ms":302444,"mutation_queue.max_attempt_count":0,"mutation_queue.summary_interval_ms":300000,"mutation_queue.count.enqueue.persisted":3}]
+DD WRT-04 w3 ben 294016 [observability] graphql.mutation_queue.summary {auth.state: signed-in, network.online: false, graphql.websocket.state: connected, mutation_queue.pending_items: 1, mutation_queue.oldest_observed_wait_m
+DJ WRT-04 w3 294019 ["[observability]","graphql.mutation_queue.summary",{"auth.state":"signed-in","network.online":false,"graphql.websocket.state":"connected","mutation_queue.pending_items":1,"mutation_queue.oldest_observed_wait_ms":300464,"mutation_queue.depth":4,"mutation_queue.age_unknown_items":0,"mutation_queue.oldest_item_age_ms":302574,"mutation_queue.max_attempt_count":0,"mutation_queue.summary_interval_ms":300000,"mutation_queue.count.enqueue.persisted":1}]
+DD WRT-04 w1 ben 294036 [observability] graphql.mutation_queue.summary {auth.state: signed-in, network.online: false, graphql.websocket.state: connected, mutation_queue.pending_items: 3, mutation_queue.oldest_observed_wait_m
+DJ WRT-04 w1 294041 ["[observability]","graphql.mutation_queue.summary",{"auth.state":"signed-in","network.online":false,"graphql.websocket.state":"connected","mutation_queue.pending_items":3,"mutation_queue.oldest_observed_wait_ms":300515,"mutation_queue.depth":4,"mutation_queue.age_unknown_items":0,"mutation_queue.oldest_item_age_ms":302509,"mutation_queue.max_attempt_count":0,"mutation_queue.summary_interval_ms":300000,"mutation_queue.count.enqueue.persisted":3}]
+DD WRT-04 w2 ben 294048 [observability] graphql.mutation_queue.summary {auth.state: signed-in, network.online: false, graphql.websocket.state: connected, mutation_queue.pending_items: 1, mutation_queue.oldest_observed_wait_m
+DJ WRT-04 w2 294051 ["[observability]","graphql.mutation_queue.summary",{"auth.state":"signed-in","network.online":false,"graphql.websocket.state":"connected","mutation_queue.pending_items":1,"mutation_queue.oldest_observed_wait_ms":300535,"mutation_queue.depth":4,"mutation_queue.age_unknown_items":0,"mutation_queue.oldest_item_age_ms":302646,"mutation_queue.max_attempt_count":0,"mutation_queue.summary_interval_ms":300000,"mutation_queue.count.enqueue.persisted":1}]
+DBGLATE WRT-04 server has them after 306 s
+  ✓  1 tests/channels-e2e-dbg/writes.spec.ts:127:1 › WRT-04 messages that could not be sent are still there after a reload and are sent once when the services can be reached (5.1m)
+DBGLATE WRT-04 server has them after 307 s
+DBGLATE WRT-04 server has them after 307 s
+DBGLATE WRT-04 server has them after 307 s
+  ✓  4 tests/channels-e2e-dbg/writes.spec.ts:127:1 › WRT-04 messages that could not be sent are still there after a reload and are sent once when the services can be reached (5.1m)
+  ✓  3 tests/channels-e2e-dbg/writes.spec.ts:127:1 › WRT-04 messages that could not be sent are still there after a reload and are sent once when the services can be reached (5.1m)
+  ✓  2 tests/channels-e2e-dbg/writes.spec.ts:127:1 › WRT-04 messages that could not be sent are still there after a reload and are sent once when the services can be reached (5.1m)
+
+  4 passed (5.1m)

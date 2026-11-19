@@ -1,0 +1,42 @@
+
+ RUN  v5.0.1 /home/teo/.herdr/worktrees/macro/synoet-channels-local-sync/apps/web
+
+4:22:42 PM [vite] (client) warning: The JSX import source cannot be set without also enabling React's "automatic" JSX transform
+1570|  
+1571|  /**
+1572|   * @jsxImportSource solid-js
+   |                      ^
+1573|   */
+1574|  /**
+
+  Plugin: vite:esbuild
+  File: /home/teo/.herdr/worktrees/macro/synoet-channels-local-sync/node_modules/virtua/lib/solid/index.jsx
+4:22:42 PM [vite] (client) warning: The JSX import source cannot be set without also enabling React's "automatic" JSX transform
+1570|  
+1571|  /**
+1572|   * @jsxImportSource solid-js
+   |                      ^
+1573|   */
+1574|  /**
+
+  Plugin: vite:esbuild
+  File: /home/teo/.herdr/worktrees/macro/synoet-channels-local-sync/node_modules/virtua/lib/solid/index.jsx
+
+ Test Files  67 passed | 1 skipped (68)
+      Tests  1065 passed | 1 skipped (1066)
+   Start at  16:22:31
+   Duration  16.82s (transform 68%, environment 14%, import 14%, tests 4%)
+
+  Transform  |queries| transforming modules took 93.79s · 72% of tracked time, re-done on every run
+             persist transforms across runs with fsModuleCache: true
+             learn more: https://vitest.dev/guide/improving-performance#caching-between-reruns
+
+  Transform  |graphql-cache| transforming modules took 48.45s · 65% of tracked time, re-done on every run
+             persist transforms across runs with fsModuleCache: true
+             learn more: https://vitest.dev/guide/improving-performance#caching-between-reruns
+
+  Transform  |service-clients| transforming modules took 116.10s · 67% of tracked time, re-done on every run
+             persist transforms across runs with fsModuleCache: true
+             learn more: https://vitest.dev/guide/improving-performance#caching-between-reruns
+
+EXIT 0

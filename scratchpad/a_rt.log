@@ -1,0 +1,622 @@
+waiting for another Nix process to finish fetching input 'git+file:///home/teo/.herdr/worktrees/macro/synoet-channels-local-sync'...
+   Compiling item_filters v0.1.0 (/home/teo/.herdr/worktrees/macro/synoet-channels-local-sync/crates/item_filters)
+   Compiling macro_db_migrator v0.1.0 (/home/teo/.herdr/worktrees/macro/synoet-channels-local-sync/crates/macro_db_migrator)
+   Compiling messages v0.1.0 (/home/teo/.herdr/worktrees/macro/synoet-channels-local-sync/crates/messages)
+   Compiling graphql_common v0.1.0 (/home/teo/.herdr/worktrees/macro/synoet-channels-local-sync/crates/graphql_common)
+   Compiling channels v0.1.0 (/home/teo/.herdr/worktrees/macro/synoet-channels-local-sync/crates/channels)
+   Compiling graphql_channel v0.1.0 (/home/teo/.herdr/worktrees/macro/synoet-channels-local-sync/crates/graphql_channel)
+    Finished `test` profile [unoptimized + debuginfo] target(s) in 22.18s
+     Running unittests src/lib.rs (target/debug/deps/graphql_channel-a657d603db0db74c)
+
+running 2 tests
+test inputs::test::unexpected_negative_positions_encode_as_zero ... ok
+test test::record_channel_activity_authorizes_and_delegates_only_channel_activity ... ok
+
+test result: ok. 2 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s
+
+     Running unittests src/lib.rs (target/debug/deps/messages-cf54725bc1380d01)
+
+running 226 tests
+test domain::changes::test::channel_reset_boundaries_preserve_the_last_replayable_position ... ok
+test domain::agent_hops::test::bots_answering_each_other_count_one_hop_per_turn_since_the_last_person ... ok
+test domain::annotations::test::annotation_owner_cannot_delete_someone_elses_discussion ... ok
+test domain::models::test::a_markdown_anchor_carries_its_normalized_snapshot ... ok
+test domain::changes::test::channel_retention_drains_batches_with_one_fixed_thirty_day_cutoff ... ok
+test domain::delivery::test::channel_events_are_rejected_by_discussion_delivery ... ok
+test domain::delivery::test::document_events_never_reach_channel_delivery_and_vice_versa ... ok
+test domain::effects::test::call_chat_reaches_both_agent_targets_and_the_parent_transport ... ok
+test domain::delivery::test::call_chat_only_reaches_authorized_live_subscribers ... ok
+test domain::effects::test::typing_only_reaches_the_parent_transport ... ok
+test domain::delivery::test::edits_and_reactions_only_publish_live_updates ... ok
+test domain::effects::test::every_committed_target_is_attempted_even_if_any_or_all_fail ... ok
+test domain::delivery::test::realtime_outage_does_not_skip_notifications ... ok
+test domain::delivery::test::revoked_viewers_receive_neither_content_nor_notifications ... ok
+test domain::delivery::test::crm_records_without_an_owner_only_notify_mentions_and_participants ... ok
+test domain::delivery::test::initiative_mentions_recheck_access_without_granting_document_shares ... ok
+test domain::delivery::test::document_mentions_inherit_link_sharing_for_uuid_parents ... ok
+test domain::models::test::call_chat_does_not_disable_other_entity_discussions ... ok
+test domain::models::test::a_marked_text_snapshot_is_trimmed_bounded_and_optional ... ok
+test domain::models::test::a_stored_anchor_without_a_snapshot_still_reads ... ok
+test domain::models::test::anchors_require_a_known_kind_and_stable_uuid ... ok
+test domain::models::test::email_threads_are_not_message_parents ... ok
+test domain::notification::test::channel_messages_do_not_generate_comment_notifications ... ok
+test domain::notification::test::initiative_recipients_follow_mentions_replies_assignments_and_live_access ... ok
+test domain::notification::test::priority_deduplicates_and_excludes_actor_and_revoked_users ... ok
+test domain::notification::test::roots_do_not_notify_participants ... ok
+test domain::models::test::parent_identifiers_are_validated_and_round_trip ... ok
+test domain::models::test::spreadsheet_anchor_round_trips_without_legacy_metadata ... ok
+test domain::models::test::fig_anchor_round_trips_with_and_without_a_layer ... ok
+test domain::ports::test::live_activity_finds_the_timeline_its_reads_would_show ... ok
+test domain::service::test::a_missing_parent_is_rejected_by_the_service_before_persistence ... ok
+test domain::service::test::a_person_cannot_say_an_agent_session_is_typing ... ok
+test domain::service::test::a_channel_root_keeps_its_thread_and_its_tombstone ... ok
+test domain::service::test::a_reply_author_can_delete_their_reply_but_not_the_root_above_it ... ok
+test domain::service::test::an_agent_types_through_its_bot_naming_the_session ... ok
+test domain::service::test::anchors_are_only_accepted_on_document_roots ... ok
+test domain::service::test::a_short_side_lends_its_room_to_the_other ... ok
+test domain::service::test::call_retries::call_reply_retry_returns_the_existing_reply_without_delivery ... ok
+test domain::service::test::call_posts_use_the_canonical_thread_and_reject_another_root ... ok
+test domain::service::test::call_retries::call_retry_cannot_recover_another_actor_or_parents_message ... ok
+test domain::service::test::call_retries::call_retry_does_not_restore_a_deleted_message ... ok
+test domain::service::test::call_retries::call_root_retry_returns_the_canonical_message_without_delivery ... ok
+test domain::service::test::bot_posts_and_edits_extract_mentions_and_preserve_trusted_attribution_and_policy ... ok
+test domain::service::test::call_roots::a_call_without_a_channel_thread_has_no_root_to_create ... ok
+test domain::service::test::call_retries::call_retry_recovers_a_concurrent_commit_without_delivery ... ok
+test domain::service::test::call_viewers_can_read_but_cannot_post ... ok
+test domain::service::test::call_root_deletion_preserves_chat_and_cannot_delete_other_authors ... ok
+test domain::service::test::call_roots::a_call_root_page_entry_carries_the_calls_life_and_a_deleted_record_reads_as_such ... ok
+test domain::service::test::call_roots::asking_for_an_existing_root_again_creates_and_announces_nothing ... ok
+test domain::service::test::call_roots::a_call_root_is_created_from_the_calls_record_and_announced_only_as_itself ... ok
+test domain::service::test::call_roots::a_stale_client_cannot_post_to_the_call_parent_of_a_channel_thread_call ... ok
+test domain::service::test::call_retries::call_retry_still_rejects_a_deleted_parent ... ok
+test domain::service::test::changes::channel_changes_keep_tombstones_reply_roots_and_report_hard_deletes ... ok
+test domain::service::test::changes::channel_changes_requires_the_same_channel_capability_as_timeline ... ok
+test domain::service::test::call_roots::nobody_can_change_a_call_root_including_its_sender_and_a_channel_owner ... ok
+test domain::service::test::centered_mixed_timeline_preserves_anchor_and_pages_to_both_ends ... ok
+test domain::service::test::client_ids_must_be_recent_uuid_v7 ... ok
+test domain::service::test::centered_window_reads_each_sides_share_not_a_page_per_side ... ok
+test domain::service::test::changes::channel_changes_pages_log_rows_and_coalesces_current_states ... ok
+test domain::service::test::changes::channel_changes_resolve_current_call_status_and_missing_records ... ok
+test domain::service::test::changes::channel_changes_resets_before_hydration_even_for_a_reset_after_the_first_page ... ok
+test domain::service::test::client_retries::a_first_post_writes_and_publishes_once ... ok
+test domain::service::test::client_retries::a_first_post_held_offline_for_days_is_still_written ... ok
+test domain::service::test::client_retries::a_post_that_loses_the_race_recovers_the_committed_message ... ok
+test domain::service::test::client_retries::a_post_minted_in_the_future_is_rejected ... ok
+test domain::service::test::client_retries::a_post_without_an_id_or_with_a_forged_one_is_rejected ... ok
+test domain::service::test::client_retries::a_repeated_delete_returns_the_tombstone_without_publishing ... ok
+test domain::service::test::client_retries::a_repeated_post_cannot_claim_another_author_parent_or_thread ... ok
+test domain::service::test::client_retries::deleting_a_message_that_never_existed_is_still_not_found ... ok
+test domain::service::test::commenters_can_resolve_but_cannot_detach_document_text ... ok
+test domain::service::test::client_retries::a_repeated_post_returns_the_stored_message_without_writing_or_publishing ... ok
+test domain::service::test::client_retries::a_repeated_edit_does_not_attach_the_same_entity_twice ... ok
+test domain::service::test::document_editor_can_detach_another_authors_mark_without_deleting_the_thread ... ok
+test domain::service::test::email_access_cannot_authorize_message_operations ... ok
+test domain::service::test::display_only_mention_kinds_are_stored_without_authorization ... ok
+test domain::service::test::document_owner_can_delete_another_authors_reply ... ok
+test domain::service::test::document_and_unknown_group_mentions_are_rejected_before_persistence ... ok
+test domain::service::test::deleting_a_document_root_deletes_the_whole_discussion ... ok
+test domain::service::test::event_posts::a_delayed_server_event_posts_but_a_client_with_the_same_old_id_is_rejected ... ok
+test domain::service::test::fig_anchors_need_bounded_ids_and_finite_positions ... ok
+test domain::service::test::event_posts::replay_preserves_edited_content_and_does_not_publish_again ... ok
+test domain::service::test::event_posts::replay_returns_a_deleted_discussion_without_resurrecting_it ... ok
+test domain::service::test::event_posts::replay_cannot_reuse_another_author_parent_or_thread ... ok
+test domain::service::test::event_posts::concurrent_event_delivery_recovers_the_committed_message ... ok
+test domain::service::test::event_posts::trusted_event_posts_still_validate_ids_content_and_references ... ok
+test domain::service::test::guest_chat::guest_read_and_post_require_current_session_for_the_same_call ... ok
+test domain::service::test::guest_chat::guest_reads_the_member_thread_and_posts_with_server_owned_attribution ... ok
+test domain::service::test::guest_chat::guest_retries_recover_the_original_without_publishing_again ... ok
+test domain::service::test::guest_chat::guest_posts_reject_empty_oversize_and_invalid_ids ... ok
+test domain::service::test::only_root_document_messages_can_have_anchors ... ok
+test domain::service::test::editor_reference_tags_are_authorized_for_posts_and_edits ... ok
+test domain::service::test::inaccessible_references_are_rejected_before_persistence ... ok
+test domain::service::test::initiative::deleted_initiative_threads_reject_replies ... ok
+test domain::service::test::initiative::initiative_discussions_resolve_but_never_accept_document_anchors ... ok
+test domain::service::test::fig_anchors_require_a_design_root ... ok
+test domain::service::test::other_commenter_cannot_delete_but_parent_owner_can_moderate ... ok
+test domain::service::test::initiative::initiative_messages_use_parent_capabilities_and_authorship ... ok
+test domain::service::test::receipt_for_another_parent_cannot_authorize_a_message ... ok
+test domain::service::test::partial_attachment_changes_preserve_unreplaced_body_mentions_and_attachment_metadata ... ok
+test domain::service::test::reaction_retries_return_the_message_without_publishing_another_change ... ok
+test domain::service::test::sequences::unchanged_channel_reactions_publish_no_sequence_or_event ... ok
+test domain::service::test::human_can_post_canonical_agent_mentions_on_documents_and_channels ... ok
+test domain::service::test::replies_must_target_a_live_root_in_the_same_parent ... ok
+test domain::service::test::reconciling_an_unchanged_bot_reply_does_not_publish_a_second_completion ... ok
+test domain::service::test::system_timeline_rejects_message_filters_and_keeps_discussions_message_only ... ok
+test domain::service::test::view_access_cannot_mint_a_write_receipt ... ok
+test domain::service::test::thread_patch_cannot_detach_non_markdown_anchors ... ok
+test domain::service::test::user_mentions_do_not_require_or_grant_parent_sharing ... ok
+test domain::service::test::thread_reads::paged_thread_and_root_reads_share_rest_parent_and_thread_policy ... ok
+test domain::service::timeline::test::activity_only_pages_can_continue_without_messages ... ok
+test domain::service::test::tombstoned_messages_are_immutable ... ok
+test domain::service::timeline::test::exhausted_activity_only_page_has_no_next_cursor ... ok
+test domain::service::timeline::test::forward_page_keeps_nearest_items_and_returns_newest_first ... ok
+test domain::service::test::spreadsheet_anchors_require_a_spreadsheet_root_and_valid_range ... ok
+test domain::service::timeline::test::message_source_lookahead_survives_full_merged_page ... ok
+test domain::service::timeline::test::mixed_pages_share_uuid_ties_and_bounds ... ok
+test domain::service::timeline::test::response_tags_each_entry_with_its_kind ... ok
+test inbound::toolset::test::comment_needs_a_target ... ok
+test inbound::axum_router::test::other_repository_failures_remain_internal_errors ... ok
+test inbound::axum_router::test::contended_write_is_retryable_without_exposing_the_database_cause ... ok
+test domain::service::test::sequences::committed_channel_sequences_reach_existing_message_events ... ok
+test inbound::toolset::test::comment_needs_comment_access ... ok
+test inbound::toolset::test::a_comment_through_an_mcp_client_names_the_client ... ok
+test inbound::toolset::test::comment_on_a_project_posts_as_the_bot_for_the_user ... ok
+test inbound::toolset::test::contended_comment_has_retry_guidance_and_retains_the_internal_cause ... ok
+test inbound::toolset::test::comment_on_an_unknown_item_points_at_the_kind ... ok
+test inbound::toolset::test::comments_from_two_agents_post_as_each_agent_for_the_user ... ok
+test inbound::toolset::test::edit_comment_rejects_empty_text ... ok
+test inbound::toolset::test::delete_comment_explains_who_can_delete ... ok
+test inbound::toolset::test::edit_comment_explains_that_only_the_author_can_edit ... ok
+test inbound::toolset::test::read_discussion_on_an_unknown_item_points_at_the_kind ... ok
+test inbound::toolset::test::delete_comment_reports_whether_the_thread_went_with_it ... ok
+test inbound::toolset::test::read_discussion_rejects_an_invalid_id ... ok
+test inbound::toolset::test::reply_in_a_channel_thread_is_refused ... ok
+test inbound::toolset::test::reply_to_an_unknown_thread_says_so ... ok
+test inbound::toolset::test::reply_by_thread_id_alone_finds_its_item ... ok
+test inbound::toolset::test::reply_with_its_item_given_needs_no_lookup ... ok
+test inbound::toolset::test::read_discussion_lists_threads_oldest_first_with_every_live_reply ... ok
+test inbound::toolset::test::edit_comment_rewrites_the_assistants_comment_as_the_bot ... ok
+test inbound::toolset::test::resolve_defaults_to_resolving ... ok
+test inbound::toolset::test::edit_comment_rewrites_the_users_own_comment_as_the_user ... ok
+test inbound::toolset::test::entity_type_without_entity_id_is_refused ... ok
+test inbound::toolset::test::reply_to_a_thread_not_on_the_item_says_so ... ok
+test inbound::toolset::test::resolve_needs_comment_access ... ok
+test inbound::toolset::test::resolve_resolves_the_thread_as_the_bot_for_the_user ... ok
+test outbound::pg_message_repo::change_log::test::append_connection_failures_keep_the_repository_error ... ok
+test outbound::pg_message_repo::change_log::test::user_requested_and_unrecognized_cancellations_keep_the_repository_error ... ok
+test outbound::pg_message_repo::change_log::test::append_timeouts_are_retryable_and_preserve_the_database_cause ... ok
+test outbound::broker::test::only_finalized_bot_replies_reach_agent_triggers_with_or_without_a_mention ... ok
+test inbound::toolset::test::resolve_false_reopens_the_thread ... ok
+test outbound::broker::test::deletions_publish_and_reactions_typing_and_thread_state_stay_off_the_topic ... ok
+test outbound::broker::test::an_edit_publishes_patched_and_attachment_deltas ... ok
+test outbound::pg_message_repo::test::benchmark::admission_pool::repository_admission_pool_isolation ... ignored, fixed 1000/3000 per second flood and 20/s neighbor; run alone in release
+test outbound::pg_message_repo::test::benchmark::bounded::repository_bounded_write_latency ... ignored, below-ceiling current writes; run alone in release mode on a dedicated database
+test outbound::pg_message_repo::test::benchmark::open_loop::repository_commit_delay_write_latency ... ignored, synthetic 2/5ms pre-commit holds; run alone in release mode on a dedicated database
+test outbound::pg_message_repo::test::benchmark::open_loop::repository_open_loop_write_latency ... ignored, fixed-arrival mixed writes; run alone in release mode on a dedicated database
+test outbound::pg_message_repo::test::benchmark::pool_isolation::repository_shared_pool_isolation ... ignored, 100 flood writers and independent 5/s probes share the DSS production pool
+test outbound::pg_message_repo::test::benchmark::repository_commit_phase_latency ... ignored, SQL tracing diagnostic on 16 Tokio workers; run separately from write latency
+test outbound::pg_message_repo::test::benchmark::repository_current_thread_commit_phase_latency ... ignored, SQL tracing diagnostic on the SQLx current-thread test runtime
+test outbound::pg_message_repo::test::benchmark::repository_current_thread_write_latency ... ignored, 3 runs of 2000 writes per case on the SQLx current-thread test runtime
+test outbound::pg_message_repo::test::benchmark::repository_write_latency ... ignored, 3 runs of 2000 writes per case on 16 Tokio workers; run with an idle database
+test outbound::broker::test::a_post_publishes_posted_attachment_and_one_mention_per_entity_for_both_parents ... ok
+test inbound::toolset::test::tool_schemas_are_valid ... ok
+test domain::service::test::a_group_remains_one_authored_reference_and_resolves_current_recipients_on_post_and_edit ... ok
+test outbound::pg_message_repo::historical::test::validates_timestamps_ids_counts_and_byte_limits ... ok
+test outbound::pg_message_repo::changes::test::channel_log_detects_reset_after_page_and_bounds_excessive_lag ... FAILED
+test outbound::pg_message_repo::historical::test::reactions_mentions_are_unique_and_have_no_live_effects ... FAILED
+test outbound::pg_message_repo::historical::test::historical_batch_reset_is_once_per_batch_and_transactional ... FAILED
+test outbound::pg_message_repo::historical::test::rejects_foreign_missing_reply_and_deleted_roots ... FAILED
+test outbound::pg_message_repo::changes::test::channel_change_hydration_keeps_tombstones_roots_and_parent_isolation ... FAILED
+test outbound::pg_message_repo::test::roots_get_thread_rows_without_the_bookkeeping_trigger ... FAILED
+test outbound::pg_message_repo::test::concurrent_first_call_messages_share_one_thread ... FAILED
+test outbound::pg_message_repo::historical::test::body_patch_is_guarded_silent_and_transactional ... FAILED
+test outbound::pg_message_repo::test::a_mark_identifies_one_live_discussion_per_document ... FAILED
+test outbound::pg_message_repo::test::threads::thread_pages_preserve_import_order_ties_tombstones_and_bounds ... FAILED
+test outbound::pg_message_repo::historical::test::read_targets_validate_live_roots_and_preserve_orphan_structure ... FAILED
+test outbound::pg_message_repo::historical::test::existing_id_is_a_conflict_without_partial_writes_or_overwrite ... FAILED
+test outbound::pg_message_repo::test::attachments_read_back_in_the_order_they_were_sent ... FAILED
+test outbound::pg_message_repo::historical::test::reaction_failure_rolls_back_savepoint_and_outer_transaction_stays_usable ... FAILED
+test outbound::pg_message_repo::test::guests_and_members_share_the_persisted_call_discussion ... FAILED
+test outbound::pg_message_repo::test::sequences::concurrent_channel_replies_and_root_writers_finish_without_deadlocks ... FAILED
+test outbound::pg_message_repo::test::schema_drop::soft_delete_cleans_only_matching_parent_message_notifications ... FAILED
+test outbound::pg_message_repo::test::pdf_root_tombstone_keeps_anchor_and_thread_deletion_removes_placeable ... FAILED
+test outbound::pg_message_repo::test::highlight_attachment_is_scoped_and_explicit_thread_deletion_preserves_highlight ... FAILED
+test outbound::pg_message_repo::changes::test::channel_log_prunes_bounded_prefixes_without_reusing_the_counter ... FAILED
+test outbound::pg_message_repo::test::admission::retry_after_admission_rejection_without_client_id_creates_one_message ... FAILED
+test outbound::pg_message_repo::test::sequences::channel_counter_guard_rolls_back_the_entire_message ... FAILED
+test outbound::pg_message_repo::test::client_supplied_ids_are_kept_and_never_reused ... FAILED
+test outbound::pg_message_repo::test::highlight_threads_read_the_text_the_highlight_covers ... FAILED
+test outbound::pg_message_repo::test::sequences::concurrent_writers_publish_gap_free_committed_prefix ... FAILED
+test outbound::pg_message_repo::test::discussion_delivery_context_reads_document_assignees_and_thread_authors ... FAILED
+test outbound::pg_message_repo::test::quick_call_chat_survives_archiving ... FAILED
+test outbound::pg_message_repo::test::retrying_first_call_message_cannot_append_it_twice ... FAILED
+test outbound::pg_message_repo::historical::test::roots_replies_attribution_and_order_across_batches ... FAILED
+test outbound::pg_message_repo::test::initiative::initiative_threads_reject_cross_parent_replies_and_thread_deletion_hides_messages ... FAILED
+test outbound::pg_message_repo::test::call_chat_survives_archiving_and_is_removed_with_the_record ... FAILED
+test outbound::pg_message_repo::test::legacy_ids_resolve_through_the_import_mapping_tables ... FAILED
+test outbound::pg_message_repo::test::deleted_markdown_threads_keep_paged_cleanup_identity ... FAILED
+test outbound::pg_message_repo::test::a_deleted_discussion_reads_back_as_a_root_tombstone_without_replies ... FAILED
+test outbound::pg_message_repo::test::spreadsheet_threads_round_trip_resolve_and_delete ... FAILED
+test outbound::pg_message_repo::test::reactions_attachments_and_resolution_use_shared_message_data ... FAILED
+test outbound::pg_message_repo::test::scheduled_call_chat_survives_archiving ... FAILED
+test outbound::pg_message_repo::test::admission::parent_admission_rejects_without_a_connection_and_client_id_retry_is_unique ... FAILED
+test outbound::pg_message_repo::test::write_hydration::channel_write_hydration_matches_reads_through_message_lifecycle ... FAILED
+test outbound::pg_message_repo::test::sequences::channel_reply_locks_its_deferred_fk_before_the_counter ... FAILED
+test outbound::pg_message_repo::test::channel_and_document_attachments_use_message_parent_identity ... FAILED
+test outbound::pg_message_repo::test::soft_deleted_parents_disappear_and_cursor_does_not_repeat_roots ... FAILED
+test outbound::pg_message_repo::test::placeable_anchor_creation_is_atomic_with_its_root ... FAILED
+test outbound::pg_message_repo::test::parent_of_names_only_a_live_message_parent ... FAILED
+test outbound::pg_message_repo::test::shared_reads_preserve_system_and_deleted_bot_profiles ... FAILED
+test outbound::pg_message_repo::test::replacement_attachments_preserve_retained_ids_and_remove_only_missing_items ... FAILED
+test outbound::pg_message_repo::test::detaching_a_mark_retains_the_complete_thread_and_makes_it_unanchored ... FAILED
+test outbound::pg_message_repo::test::timeline::timeline_keyset_rewrite_matches_previous_sql_selection ... FAILED
+test outbound::pg_message_repo::test::write_hydration::channel_write_hydration_preserves_system_deleted_and_unknown_bot_profiles ... FAILED
+test outbound::pg_message_repo::test::fig_threads_round_trip_on_layers_and_the_canvas ... FAILED
+test outbound::pg_message_repo::test::sequences::channel_stalled_holder_guard_applies_with_database_timeouts_disabled ... FAILED
+test outbound::pg_message_repo::test::initiative::project_discussions_use_shared_parent_lifecycle_checks ... FAILED
+test outbound::pg_message_repo::test::sql_trace::document_writes_execute_exactly_the_previous_statements ... FAILED
+test outbound::pg_message_repo::test::sequences::channel_changes_sequence_mutations_but_not_reaction_noops ... FAILED
+test outbound::pg_message_repo::test::schema_drop::channel_parent_fk_rejects_missing_channels_and_cascades ... FAILED
+test outbound::pg_message_repo::test::a_markdown_anchor_stores_the_marked_text_beside_its_mark ... FAILED
+test outbound::pg_message_repo::test::agent_context_stays_in_the_document_thread_and_omits_tombstones ... FAILED
+test outbound::pg_message_repo::test::benchmark::admission_pool::twenty_simultaneous_channel_posts_succeed_with_commit_holds ... FAILED
+test outbound::pg_message_repo::test::both_parents_use_bounded_previews_and_bidirectional_windows ... FAILED
+test outbound::pg_message_repo::test::imported_call_discussion_needs_no_native_session ... FAILED
+test outbound::pg_message_repo::test::thread_identity_tombstones_and_parent_isolation ... FAILED
+
+failures:
+
+---- outbound::pg_message_repo::changes::test::channel_log_detects_reset_after_page_and_bounds_excessive_lag stdout ----
+
+thread 'outbound::pg_message_repo::changes::test::channel_log_detects_reset_after_page_and_bounds_excessive_lag' (3746334) panicked at /home/teo/.cargo/registry/src/index.crates.io-1949cf8c6b5b557f/sqlx-core-0.8.6/src/testing/mod.rs:261:14:
+failed to apply migrations: VersionMismatch(20261110150956)
+note: run with `RUST_BACKTRACE=1` environment variable to display a backtrace
+
+---- outbound::pg_message_repo::historical::test::reactions_mentions_are_unique_and_have_no_live_effects stdout ----
+
+thread 'outbound::pg_message_repo::historical::test::reactions_mentions_are_unique_and_have_no_live_effects' (3746340) panicked at /home/teo/.cargo/registry/src/index.crates.io-1949cf8c6b5b557f/sqlx-core-0.8.6/src/testing/mod.rs:261:14:
+failed to apply migrations: VersionMismatch(20261110150956)
+
+---- outbound::pg_message_repo::historical::test::historical_batch_reset_is_once_per_batch_and_transactional stdout ----
+
+thread 'outbound::pg_message_repo::historical::test::historical_batch_reset_is_once_per_batch_and_transactional' (3746338) panicked at /home/teo/.cargo/registry/src/index.crates.io-1949cf8c6b5b557f/sqlx-core-0.8.6/src/testing/mod.rs:261:14:
+failed to apply migrations: VersionMismatch(20261110150956)
+
+---- outbound::pg_message_repo::historical::test::rejects_foreign_missing_reply_and_deleted_roots stdout ----
+
+thread 'outbound::pg_message_repo::historical::test::rejects_foreign_missing_reply_and_deleted_roots' (3746342) panicked at /home/teo/.cargo/registry/src/index.crates.io-1949cf8c6b5b557f/sqlx-core-0.8.6/src/testing/mod.rs:261:14:
+failed to apply migrations: VersionMismatch(20261110150956)
+
+---- outbound::pg_message_repo::changes::test::channel_change_hydration_keeps_tombstones_roots_and_parent_isolation stdout ----
+
+thread 'outbound::pg_message_repo::changes::test::channel_change_hydration_keeps_tombstones_roots_and_parent_isolation' (3746333) panicked at /home/teo/.cargo/registry/src/index.crates.io-1949cf8c6b5b557f/sqlx-core-0.8.6/src/testing/mod.rs:261:14:
+failed to apply migrations: VersionMismatch(20261110150956)
+
+---- outbound::pg_message_repo::test::roots_get_thread_rows_without_the_bookkeeping_trigger stdout ----
+
+thread 'outbound::pg_message_repo::test::roots_get_thread_rows_without_the_bookkeeping_trigger' (3746376) panicked at /home/teo/.cargo/registry/src/index.crates.io-1949cf8c6b5b557f/sqlx-core-0.8.6/src/testing/mod.rs:261:14:
+failed to apply migrations: VersionMismatch(20261110150956)
+
+---- outbound::pg_message_repo::test::concurrent_first_call_messages_share_one_thread stdout ----
+
+thread 'outbound::pg_message_repo::test::concurrent_first_call_messages_share_one_thread' (3746357) panicked at /home/teo/.cargo/registry/src/index.crates.io-1949cf8c6b5b557f/sqlx-core-0.8.6/src/testing/mod.rs:261:14:
+failed to apply migrations: VersionMismatch(20261110150956)
+
+---- outbound::pg_message_repo::historical::test::body_patch_is_guarded_silent_and_transactional stdout ----
+
+thread 'outbound::pg_message_repo::historical::test::body_patch_is_guarded_silent_and_transactional' (3746336) panicked at /home/teo/.cargo/registry/src/index.crates.io-1949cf8c6b5b557f/sqlx-core-0.8.6/src/testing/mod.rs:261:14:
+failed to apply migrations: VersionMismatch(20261110150956)
+
+---- outbound::pg_message_repo::test::a_mark_identifies_one_live_discussion_per_document stdout ----
+
+thread 'outbound::pg_message_repo::test::a_mark_identifies_one_live_discussion_per_document' (3746346) panicked at /home/teo/.cargo/registry/src/index.crates.io-1949cf8c6b5b557f/sqlx-core-0.8.6/src/testing/mod.rs:261:14:
+failed to apply migrations: VersionMismatch(20261110150956)
+
+---- outbound::pg_message_repo::test::threads::thread_pages_preserve_import_order_ties_tombstones_and_bounds stdout ----
+
+thread 'outbound::pg_message_repo::test::threads::thread_pages_preserve_import_order_ties_tombstones_and_bounds' (3746392) panicked at /home/teo/.cargo/registry/src/index.crates.io-1949cf8c6b5b557f/sqlx-core-0.8.6/src/testing/mod.rs:261:14:
+failed to apply migrations: VersionMismatch(20261110150956)
+
+---- outbound::pg_message_repo::historical::test::read_targets_validate_live_roots_and_preserve_orphan_structure stdout ----
+
+thread 'outbound::pg_message_repo::historical::test::read_targets_validate_live_roots_and_preserve_orphan_structure' (3746341) panicked at /home/teo/.cargo/registry/src/index.crates.io-1949cf8c6b5b557f/sqlx-core-0.8.6/src/testing/mod.rs:261:14:
+failed to apply migrations: VersionMismatch(20261110150956)
+
+---- outbound::pg_message_repo::historical::test::existing_id_is_a_conflict_without_partial_writes_or_overwrite stdout ----
+
+thread 'outbound::pg_message_repo::historical::test::existing_id_is_a_conflict_without_partial_writes_or_overwrite' (3746337) panicked at /home/teo/.cargo/registry/src/index.crates.io-1949cf8c6b5b557f/sqlx-core-0.8.6/src/testing/mod.rs:261:14:
+failed to apply migrations: VersionMismatch(20261110150956)
+
+---- outbound::pg_message_repo::test::attachments_read_back_in_the_order_they_were_sent stdout ----
+
+thread 'outbound::pg_message_repo::test::attachments_read_back_in_the_order_they_were_sent' (3746351) panicked at /home/teo/.cargo/registry/src/index.crates.io-1949cf8c6b5b557f/sqlx-core-0.8.6/src/testing/mod.rs:261:14:
+failed to apply migrations: VersionMismatch(20261110150956)
+
+---- outbound::pg_message_repo::historical::test::reaction_failure_rolls_back_savepoint_and_outer_transaction_stays_usable stdout ----
+
+thread 'outbound::pg_message_repo::historical::test::reaction_failure_rolls_back_savepoint_and_outer_transaction_stays_usable' (3746339) panicked at /home/teo/.cargo/registry/src/index.crates.io-1949cf8c6b5b557f/sqlx-core-0.8.6/src/testing/mod.rs:261:14:
+failed to apply migrations: VersionMismatch(20261110150956)
+
+---- outbound::pg_message_repo::test::guests_and_members_share_the_persisted_call_discussion stdout ----
+
+thread 'outbound::pg_message_repo::test::guests_and_members_share_the_persisted_call_discussion' (3746362) panicked at /home/teo/.cargo/registry/src/index.crates.io-1949cf8c6b5b557f/sqlx-core-0.8.6/src/testing/mod.rs:261:14:
+failed to apply migrations: VersionMismatch(20261110150956)
+
+---- outbound::pg_message_repo::test::sequences::concurrent_channel_replies_and_root_writers_finish_without_deadlocks stdout ----
+
+thread 'outbound::pg_message_repo::test::sequences::concurrent_channel_replies_and_root_writers_finish_without_deadlocks' (3746384) panicked at /home/teo/.cargo/registry/src/index.crates.io-1949cf8c6b5b557f/sqlx-core-0.8.6/src/testing/mod.rs:261:14:
+failed to apply migrations: VersionMismatch(20261110150956)
+
+---- outbound::pg_message_repo::test::schema_drop::soft_delete_cleans_only_matching_parent_message_notifications stdout ----
+
+thread 'outbound::pg_message_repo::test::schema_drop::soft_delete_cleans_only_matching_parent_message_notifications' (3746379) panicked at /home/teo/.cargo/registry/src/index.crates.io-1949cf8c6b5b557f/sqlx-core-0.8.6/src/testing/mod.rs:261:14:
+failed to apply migrations: VersionMismatch(20261110150956)
+
+---- outbound::pg_message_repo::test::pdf_root_tombstone_keeps_anchor_and_thread_deletion_removes_placeable stdout ----
+
+thread 'outbound::pg_message_repo::test::pdf_root_tombstone_keeps_anchor_and_thread_deletion_removes_placeable' (3746370) panicked at /home/teo/.cargo/registry/src/index.crates.io-1949cf8c6b5b557f/sqlx-core-0.8.6/src/testing/mod.rs:261:14:
+failed to apply migrations: VersionMismatch(20261110150956)
+
+---- outbound::pg_message_repo::test::highlight_attachment_is_scoped_and_explicit_thread_deletion_preserves_highlight stdout ----
+
+thread 'outbound::pg_message_repo::test::highlight_attachment_is_scoped_and_explicit_thread_deletion_preserves_highlight' (3746363) panicked at /home/teo/.cargo/registry/src/index.crates.io-1949cf8c6b5b557f/sqlx-core-0.8.6/src/testing/mod.rs:261:14:
+failed to apply migrations: VersionMismatch(20261110150956)
+
+---- outbound::pg_message_repo::changes::test::channel_log_prunes_bounded_prefixes_without_reusing_the_counter stdout ----
+
+thread 'outbound::pg_message_repo::changes::test::channel_log_prunes_bounded_prefixes_without_reusing_the_counter' (3746335) panicked at /home/teo/.cargo/registry/src/index.crates.io-1949cf8c6b5b557f/sqlx-core-0.8.6/src/testing/mod.rs:261:14:
+failed to apply migrations: VersionMismatch(20261110150956)
+
+---- outbound::pg_message_repo::test::admission::retry_after_admission_rejection_without_client_id_creates_one_message stdout ----
+
+thread 'outbound::pg_message_repo::test::admission::retry_after_admission_rejection_without_client_id_creates_one_message' (3746349) panicked at /home/teo/.cargo/registry/src/index.crates.io-1949cf8c6b5b557f/sqlx-core-0.8.6/src/testing/mod.rs:226:14:
+failed to connect to setup test database: Database(PgDatabaseError { severity: Error, code: "53100", message: "could not create file \"base/73027/34696\": No space left on device", detail: None, hint: None, position: None, where: None, schema: None, table: None, column: None, data_type: None, constraint: None, file: Some("md.c"), line: Some(252), routine: Some("mdcreate") })
+
+---- outbound::pg_message_repo::test::sequences::channel_counter_guard_rolls_back_the_entire_message stdout ----
+
+thread 'outbound::pg_message_repo::test::sequences::channel_counter_guard_rolls_back_the_entire_message' (3746381) panicked at /home/teo/.cargo/registry/src/index.crates.io-1949cf8c6b5b557f/sqlx-core-0.8.6/src/testing/mod.rs:226:14:
+failed to connect to setup test database: Database(PgDatabaseError { severity: Error, code: "53100", message: "could not create file \"base/73033/33565\": No space left on device", detail: None, hint: None, position: None, where: None, schema: None, table: None, column: None, data_type: None, constraint: None, file: Some("md.c"), line: Some(252), routine: Some("mdcreate") })
+
+---- outbound::pg_message_repo::test::client_supplied_ids_are_kept_and_never_reused stdout ----
+
+thread 'outbound::pg_message_repo::test::client_supplied_ids_are_kept_and_never_reused' (3746356) panicked at /home/teo/.cargo/registry/src/index.crates.io-1949cf8c6b5b557f/sqlx-core-0.8.6/src/testing/mod.rs:226:14:
+failed to connect to setup test database: Database(PgDatabaseError { severity: Error, code: "53100", message: "could not create file \"base/73024/34696\": No space left on device", detail: None, hint: None, position: None, where: None, schema: None, table: None, column: None, data_type: None, constraint: None, file: Some("md.c"), line: Some(252), routine: Some("mdcreate") })
+
+---- outbound::pg_message_repo::test::highlight_threads_read_the_text_the_highlight_covers stdout ----
+
+thread 'outbound::pg_message_repo::test::highlight_threads_read_the_text_the_highlight_covers' (3746364) panicked at /home/teo/.cargo/registry/src/index.crates.io-1949cf8c6b5b557f/sqlx-core-0.8.6/src/testing/mod.rs:226:14:
+failed to connect to setup test database: Database(PgDatabaseError { severity: Error, code: "53100", message: "could not create file \"base/73029/33604\": No space left on device", detail: None, hint: None, position: None, where: None, schema: None, table: None, column: None, data_type: None, constraint: None, file: Some("md.c"), line: Some(252), routine: Some("mdcreate") })
+
+---- outbound::pg_message_repo::test::sequences::concurrent_writers_publish_gap_free_committed_prefix stdout ----
+
+thread 'outbound::pg_message_repo::test::sequences::concurrent_writers_publish_gap_free_committed_prefix' (3746386) panicked at /home/teo/.cargo/registry/src/index.crates.io-1949cf8c6b5b557f/sqlx-core-0.8.6/src/testing/mod.rs:226:14:
+failed to connect to setup test database: Database(PgDatabaseError { severity: Error, code: "53100", message: "could not create file \"base/73034/33596\": No space left on device", detail: None, hint: None, position: None, where: None, schema: None, table: None, column: None, data_type: None, constraint: None, file: Some("md.c"), line: Some(252), routine: Some("mdcreate") })
+
+---- outbound::pg_message_repo::test::discussion_delivery_context_reads_document_assignees_and_thread_authors stdout ----
+
+thread 'outbound::pg_message_repo::test::discussion_delivery_context_reads_document_assignees_and_thread_authors' (3746360) panicked at /home/teo/.cargo/registry/src/index.crates.io-1949cf8c6b5b557f/sqlx-core-0.8.6/src/testing/mod.rs:226:14:
+failed to connect to setup test database: Database(PgDatabaseError { severity: Error, code: "53100", message: "could not create file \"base/73022/34698\": No space left on device", detail: None, hint: None, position: None, where: None, schema: None, table: None, column: None, data_type: None, constraint: None, file: Some("md.c"), line: Some(252), routine: Some("mdcreate") })
+
+---- outbound::pg_message_repo::test::quick_call_chat_survives_archiving stdout ----
+
+thread 'outbound::pg_message_repo::test::quick_call_chat_survives_archiving' (3746372) panicked at /home/teo/.cargo/registry/src/index.crates.io-1949cf8c6b5b557f/sqlx-core-0.8.6/src/testing/mod.rs:226:14:
+failed to connect to setup test database: Database(PgDatabaseError { severity: Error, code: "53100", message: "could not create file \"base/73032/34241\": No space left on device", detail: None, hint: None, position: None, where: None, schema: None, table: None, column: None, data_type: None, constraint: None, file: Some("md.c"), line: Some(252), routine: Some("mdcreate") })
+
+---- outbound::pg_message_repo::test::retrying_first_call_message_cannot_append_it_twice stdout ----
+
+thread 'outbound::pg_message_repo::test::retrying_first_call_message_cannot_append_it_twice' (3746375) panicked at /home/teo/.cargo/registry/src/index.crates.io-1949cf8c6b5b557f/sqlx-core-0.8.6/src/testing/mod.rs:226:14:
+failed to connect to setup test database: Database(PgDatabaseError { severity: Error, code: "53100", message: "could not create file \"base/73028/33829\": No space left on device", detail: None, hint: None, position: None, where: None, schema: None, table: None, column: None, data_type: None, constraint: None, file: Some("md.c"), line: Some(252), routine: Some("mdcreate") })
+
+---- outbound::pg_message_repo::historical::test::roots_replies_attribution_and_order_across_batches stdout ----
+
+thread 'outbound::pg_message_repo::historical::test::roots_replies_attribution_and_order_across_batches' (3746343) panicked at /home/teo/.cargo/registry/src/index.crates.io-1949cf8c6b5b557f/sqlx-core-0.8.6/src/testing/mod.rs:226:14:
+failed to connect to setup test database: Database(PgDatabaseError { severity: Error, code: "53100", message: "could not create file \"base/73026/34698\": No space left on device", detail: None, hint: None, position: None, where: None, schema: None, table: None, column: None, data_type: None, constraint: None, file: Some("md.c"), line: Some(252), routine: Some("mdcreate") })
+
+---- outbound::pg_message_repo::test::initiative::initiative_threads_reject_cross_parent_replies_and_thread_deletion_hides_messages stdout ----
+
+thread 'outbound::pg_message_repo::test::initiative::initiative_threads_reject_cross_parent_replies_and_thread_deletion_hides_messages' (3746366) panicked at /home/teo/.cargo/registry/src/index.crates.io-1949cf8c6b5b557f/sqlx-core-0.8.6/src/testing/mod.rs:226:14:
+failed to connect to setup test database: Database(PgDatabaseError { severity: Error, code: "53100", message: "could not create file \"base/73030/34420\": No space left on device", detail: None, hint: None, position: None, where: None, schema: None, table: None, column: None, data_type: None, constraint: None, file: Some("md.c"), line: Some(252), routine: Some("mdcreate") })
+
+---- outbound::pg_message_repo::test::call_chat_survives_archiving_and_is_removed_with_the_record stdout ----
+
+thread 'outbound::pg_message_repo::test::call_chat_survives_archiving_and_is_removed_with_the_record' (3746354) panicked at /home/teo/.cargo/registry/src/index.crates.io-1949cf8c6b5b557f/sqlx-core-0.8.6/src/testing/mod.rs:226:14:
+failed to connect to setup test database: Database(PgDatabaseError { severity: Error, code: "53100", message: "could not create file \"base/73020/34524\": No space left on device", detail: None, hint: None, position: None, where: None, schema: None, table: None, column: None, data_type: None, constraint: None, file: Some("md.c"), line: Some(252), routine: Some("mdcreate") })
+
+---- outbound::pg_message_repo::test::legacy_ids_resolve_through_the_import_mapping_tables stdout ----
+
+thread 'outbound::pg_message_repo::test::legacy_ids_resolve_through_the_import_mapping_tables' (3746368) panicked at /home/teo/.cargo/registry/src/index.crates.io-1949cf8c6b5b557f/sqlx-core-0.8.6/src/testing/mod.rs:226:14:
+failed to connect to setup test database: Database(PgDatabaseError { severity: Error, code: "53100", message: "could not create file \"base/73031/34262\": No space left on device", detail: None, hint: None, position: None, where: None, schema: None, table: None, column: None, data_type: None, constraint: None, file: Some("md.c"), line: Some(252), routine: Some("mdcreate") })
+
+---- outbound::pg_message_repo::test::deleted_markdown_threads_keep_paged_cleanup_identity stdout ----
+
+thread 'outbound::pg_message_repo::test::deleted_markdown_threads_keep_paged_cleanup_identity' (3746358) panicked at /home/teo/.cargo/registry/src/index.crates.io-1949cf8c6b5b557f/sqlx-core-0.8.6/src/testing/mod.rs:226:14:
+failed to connect to setup test database: Database(PgDatabaseError { severity: Error, code: "53100", message: "could not create file \"base/73025/34661\": No space left on device", detail: None, hint: None, position: None, where: None, schema: None, table: None, column: None, data_type: None, constraint: None, file: Some("md.c"), line: Some(252), routine: Some("mdcreate") })
+
+---- outbound::pg_message_repo::test::a_deleted_discussion_reads_back_as_a_root_tombstone_without_replies stdout ----
+
+thread 'outbound::pg_message_repo::test::a_deleted_discussion_reads_back_as_a_root_tombstone_without_replies' (3746345) panicked at /home/teo/.cargo/registry/src/index.crates.io-1949cf8c6b5b557f/sqlx-core-0.8.6/src/testing/mod.rs:226:14:
+failed to connect to setup test database: Database(PgDatabaseError { severity: Error, code: "53100", message: "could not create file \"base/73023/34698\": No space left on device", detail: None, hint: None, position: None, where: None, schema: None, table: None, column: None, data_type: None, constraint: None, file: Some("md.c"), line: Some(252), routine: Some("mdcreate") })
+
+---- outbound::pg_message_repo::test::spreadsheet_threads_round_trip_resolve_and_delete stdout ----
+
+thread 'outbound::pg_message_repo::test::spreadsheet_threads_round_trip_resolve_and_delete' (3746389) panicked at /home/teo/.cargo/registry/src/index.crates.io-1949cf8c6b5b557f/sqlx-core-0.8.6/src/testing/mod.rs:226:14:
+failed to connect to setup test database: Database(PgDatabaseError { severity: Error, code: "53100", message: "could not create file \"base/73021/34674\": No space left on device", detail: None, hint: None, position: None, where: None, schema: None, table: None, column: None, data_type: None, constraint: None, file: Some("md.c"), line: Some(252), routine: Some("mdcreate") })
+
+---- outbound::pg_message_repo::test::reactions_attachments_and_resolution_use_shared_message_data stdout ----
+
+thread 'outbound::pg_message_repo::test::reactions_attachments_and_resolution_use_shared_message_data' (3746373) panicked at /home/teo/.cargo/registry/src/index.crates.io-1949cf8c6b5b557f/sqlx-core-0.8.6/src/testing/mod.rs:226:14:
+failed to connect to setup test database: Database(PgDatabaseError { severity: Error, code: "53100", message: "could not create file \"base/73017/41992\": No space left on device", detail: None, hint: None, position: None, where: None, schema: None, table: None, column: None, data_type: None, constraint: None, file: Some("md.c"), line: Some(252), routine: Some("mdcreate") })
+
+---- outbound::pg_message_repo::test::scheduled_call_chat_survives_archiving stdout ----
+
+thread 'outbound::pg_message_repo::test::scheduled_call_chat_survives_archiving' (3746377) panicked at /home/teo/.cargo/registry/src/index.crates.io-1949cf8c6b5b557f/sqlx-core-0.8.6/src/testing/mod.rs:226:14:
+failed to connect to setup test database: Database(PgDatabaseError { severity: Error, code: "53100", message: "could not create file \"base/73019/42013\": No space left on device", detail: None, hint: None, position: None, where: None, schema: None, table: None, column: None, data_type: None, constraint: None, file: Some("md.c"), line: Some(252), routine: Some("mdcreate") })
+
+---- outbound::pg_message_repo::test::admission::parent_admission_rejects_without_a_connection_and_client_id_retry_is_unique stdout ----
+
+thread 'outbound::pg_message_repo::test::admission::parent_admission_rejects_without_a_connection_and_client_id_retry_is_unique' (3746348) panicked at /home/teo/.cargo/registry/src/index.crates.io-1949cf8c6b5b557f/sqlx-core-0.8.6/src/testing/mod.rs:226:14:
+failed to connect to setup test database: Database(PgDatabaseError { severity: Error, code: "53100", message: "could not create file \"base/73018/42087\": No space left on device", detail: None, hint: None, position: None, where: None, schema: None, table: None, column: None, data_type: None, constraint: None, file: Some("md.c"), line: Some(252), routine: Some("mdcreate") })
+
+---- outbound::pg_message_repo::test::write_hydration::channel_write_hydration_matches_reads_through_message_lifecycle stdout ----
+
+thread 'outbound::pg_message_repo::test::write_hydration::channel_write_hydration_matches_reads_through_message_lifecycle' (3746394) panicked at /home/teo/.cargo/registry/src/index.crates.io-1949cf8c6b5b557f/sqlx-core-0.8.6/src/testing/mod.rs:226:14:
+failed to connect to setup test database: Database(PgDatabaseError { severity: Error, code: "53100", message: "could not create file \"base/73016/42033\": No space left on device", detail: None, hint: None, position: None, where: None, schema: None, table: None, column: None, data_type: None, constraint: None, file: Some("md.c"), line: Some(252), routine: Some("mdcreate") })
+
+---- outbound::pg_message_repo::test::sequences::channel_reply_locks_its_deferred_fk_before_the_counter stdout ----
+
+thread 'outbound::pg_message_repo::test::sequences::channel_reply_locks_its_deferred_fk_before_the_counter' (3746382) panicked at /home/teo/.cargo/registry/src/index.crates.io-1949cf8c6b5b557f/sqlx-core-0.8.6/src/testing/mod.rs:226:14:
+failed to connect to setup test database: Database(PgDatabaseError { severity: Error, code: "53100", message: "could not create file \"base/73015/42033\": No space left on device", detail: None, hint: None, position: None, where: None, schema: None, table: None, column: None, data_type: None, constraint: None, file: Some("md.c"), line: Some(252), routine: Some("mdcreate") })
+
+---- outbound::pg_message_repo::test::channel_and_document_attachments_use_message_parent_identity stdout ----
+
+thread 'outbound::pg_message_repo::test::channel_and_document_attachments_use_message_parent_identity' (3746355) panicked at /home/teo/.cargo/registry/src/index.crates.io-1949cf8c6b5b557f/sqlx-core-0.8.6/src/testing/mod.rs:226:14:
+failed to connect to setup test database: Database(PgDatabaseError { severity: Error, code: "53100", message: "could not create file \"base/73042/36528\": No space left on device", detail: None, hint: None, position: None, where: None, schema: None, table: None, column: None, data_type: None, constraint: None, file: Some("md.c"), line: Some(252), routine: Some("mdcreate") })
+
+---- outbound::pg_message_repo::test::soft_deleted_parents_disappear_and_cursor_does_not_repeat_roots stdout ----
+
+thread 'outbound::pg_message_repo::test::soft_deleted_parents_disappear_and_cursor_does_not_repeat_roots' (3746388) panicked at /home/teo/.cargo/registry/src/index.crates.io-1949cf8c6b5b557f/sqlx-core-0.8.6/src/testing/mod.rs:226:14:
+failed to connect to setup test database: Database(PgDatabaseError { severity: Error, code: "53100", message: "could not create file \"base/73051/36152\": No space left on device", detail: None, hint: None, position: None, where: None, schema: None, table: None, column: None, data_type: None, constraint: None, file: Some("md.c"), line: Some(252), routine: Some("mdcreate") })
+
+---- outbound::pg_message_repo::test::placeable_anchor_creation_is_atomic_with_its_root stdout ----
+
+thread 'outbound::pg_message_repo::test::placeable_anchor_creation_is_atomic_with_its_root' (3746371) panicked at /home/teo/.cargo/registry/src/index.crates.io-1949cf8c6b5b557f/sqlx-core-0.8.6/src/testing/mod.rs:226:14:
+failed to connect to setup test database: Database(PgDatabaseError { severity: Error, code: "53100", message: "could not create file \"base/73043/35994\": No space left on device", detail: None, hint: None, position: None, where: None, schema: None, table: None, column: None, data_type: None, constraint: None, file: Some("md.c"), line: Some(252), routine: Some("mdcreate") })
+
+---- outbound::pg_message_repo::test::parent_of_names_only_a_live_message_parent stdout ----
+
+thread 'outbound::pg_message_repo::test::parent_of_names_only_a_live_message_parent' (3746369) panicked at /home/teo/.cargo/registry/src/index.crates.io-1949cf8c6b5b557f/sqlx-core-0.8.6/src/testing/mod.rs:226:14:
+failed to connect to setup test database: Database(PgDatabaseError { severity: Error, code: "53100", message: "could not create file \"base/73050/36299\": No space left on device", detail: None, hint: None, position: None, where: None, schema: None, table: None, column: None, data_type: None, constraint: None, file: Some("md.c"), line: Some(252), routine: Some("mdcreate") })
+
+---- outbound::pg_message_repo::test::shared_reads_preserve_system_and_deleted_bot_profiles stdout ----
+
+thread 'outbound::pg_message_repo::test::shared_reads_preserve_system_and_deleted_bot_profiles' (3746387) panicked at /home/teo/.cargo/registry/src/index.crates.io-1949cf8c6b5b557f/sqlx-core-0.8.6/src/testing/mod.rs:226:14:
+failed to connect to setup test database: Database(PgDatabaseError { severity: Error, code: "53100", message: "could not create file \"base/73047/36424\": No space left on device", detail: None, hint: None, position: None, where: None, schema: None, table: None, column: None, data_type: None, constraint: None, file: Some("md.c"), line: Some(252), routine: Some("mdcreate") })
+
+---- outbound::pg_message_repo::test::replacement_attachments_preserve_retained_ids_and_remove_only_missing_items stdout ----
+
+thread 'outbound::pg_message_repo::test::replacement_attachments_preserve_retained_ids_and_remove_only_missing_items' (3746374) panicked at /home/teo/.cargo/registry/src/index.crates.io-1949cf8c6b5b557f/sqlx-core-0.8.6/src/testing/mod.rs:226:14:
+failed to connect to setup test database: Database(PgDatabaseError { severity: Error, code: "53100", message: "could not create file \"base/73040/37922\": No space left on device", detail: None, hint: None, position: None, where: None, schema: None, table: None, column: None, data_type: None, constraint: None, file: Some("md.c"), line: Some(252), routine: Some("mdcreate") })
+
+---- outbound::pg_message_repo::test::detaching_a_mark_retains_the_complete_thread_and_makes_it_unanchored stdout ----
+
+thread 'outbound::pg_message_repo::test::detaching_a_mark_retains_the_complete_thread_and_makes_it_unanchored' (3746359) panicked at /home/teo/.cargo/registry/src/index.crates.io-1949cf8c6b5b557f/sqlx-core-0.8.6/src/testing/mod.rs:226:14:
+failed to connect to setup test database: Database(PgDatabaseError { severity: Error, code: "53100", message: "could not create file \"base/73053/35946\": No space left on device", detail: None, hint: None, position: None, where: None, schema: None, table: None, column: None, data_type: None, constraint: None, file: Some("md.c"), line: Some(252), routine: Some("mdcreate") })
+
+---- outbound::pg_message_repo::test::timeline::timeline_keyset_rewrite_matches_previous_sql_selection stdout ----
+
+thread 'outbound::pg_message_repo::test::timeline::timeline_keyset_rewrite_matches_previous_sql_selection' (3746393) panicked at /home/teo/.cargo/registry/src/index.crates.io-1949cf8c6b5b557f/sqlx-core-0.8.6/src/testing/mod.rs:226:14:
+failed to connect to setup test database: Database(PgDatabaseError { severity: Error, code: "53100", message: "could not create file \"base/73044/35162\": No space left on device", detail: None, hint: None, position: None, where: None, schema: None, table: None, column: None, data_type: None, constraint: None, file: Some("md.c"), line: Some(252), routine: Some("mdcreate") })
+
+---- outbound::pg_message_repo::test::write_hydration::channel_write_hydration_preserves_system_deleted_and_unknown_bot_profiles stdout ----
+
+thread 'outbound::pg_message_repo::test::write_hydration::channel_write_hydration_preserves_system_deleted_and_unknown_bot_profiles' (3746395) panicked at /home/teo/.cargo/registry/src/index.crates.io-1949cf8c6b5b557f/sqlx-core-0.8.6/src/testing/mod.rs:226:14:
+failed to connect to setup test database: Database(PgDatabaseError { severity: Error, code: "53100", message: "could not create file \"base/73039/37651\": No space left on device", detail: None, hint: None, position: None, where: None, schema: None, table: None, column: None, data_type: None, constraint: None, file: Some("md.c"), line: Some(252), routine: Some("mdcreate") })
+
+---- outbound::pg_message_repo::test::fig_threads_round_trip_on_layers_and_the_canvas stdout ----
+
+thread 'outbound::pg_message_repo::test::fig_threads_round_trip_on_layers_and_the_canvas' (3746361) panicked at /home/teo/.cargo/registry/src/index.crates.io-1949cf8c6b5b557f/sqlx-core-0.8.6/src/testing/mod.rs:226:14:
+failed to connect to setup test database: Database(PgDatabaseError { severity: Error, code: "53100", message: "could not create file \"base/73048/36111\": No space left on device", detail: None, hint: None, position: None, where: None, schema: None, table: None, column: None, data_type: None, constraint: None, file: Some("md.c"), line: Some(252), routine: Some("mdcreate") })
+
+---- outbound::pg_message_repo::test::sequences::channel_stalled_holder_guard_applies_with_database_timeouts_disabled stdout ----
+
+thread 'outbound::pg_message_repo::test::sequences::channel_stalled_holder_guard_applies_with_database_timeouts_disabled' (3746383) panicked at /home/teo/.cargo/registry/src/index.crates.io-1949cf8c6b5b557f/sqlx-core-0.8.6/src/testing/mod.rs:226:14:
+failed to connect to setup test database: Database(PgDatabaseError { severity: Error, code: "53100", message: "could not create file \"base/73041/37864\": No space left on device", detail: None, hint: None, position: None, where: None, schema: None, table: None, column: None, data_type: None, constraint: None, file: Some("md.c"), line: Some(252), routine: Some("mdcreate") })
+
+---- outbound::pg_message_repo::test::initiative::project_discussions_use_shared_parent_lifecycle_checks stdout ----
+
+thread 'outbound::pg_message_repo::test::initiative::project_discussions_use_shared_parent_lifecycle_checks' (3746367) panicked at /home/teo/.cargo/registry/src/index.crates.io-1949cf8c6b5b557f/sqlx-core-0.8.6/src/testing/mod.rs:226:14:
+failed to connect to setup test database: Database(PgDatabaseError { severity: Error, code: "53100", message: "could not create file \"base/73054/36139\": No space left on device", detail: None, hint: None, position: None, where: None, schema: None, table: None, column: None, data_type: None, constraint: None, file: Some("md.c"), line: Some(252), routine: Some("mdcreate") })
+
+---- outbound::pg_message_repo::test::sql_trace::document_writes_execute_exactly_the_previous_statements stdout ----
+
+thread 'outbound::pg_message_repo::test::sql_trace::document_writes_execute_exactly_the_previous_statements' (3746390) panicked at /home/teo/.cargo/registry/src/index.crates.io-1949cf8c6b5b557f/sqlx-core-0.8.6/src/testing/mod.rs:226:14:
+failed to connect to setup test database: Database(PgDatabaseError { severity: Error, code: "53100", message: "could not create file \"base/73052/35012\": No space left on device", detail: None, hint: None, position: None, where: None, schema: None, table: None, column: None, data_type: None, constraint: None, file: Some("md.c"), line: Some(252), routine: Some("mdcreate") })
+
+---- outbound::pg_message_repo::test::sequences::channel_changes_sequence_mutations_but_not_reaction_noops stdout ----
+
+thread 'outbound::pg_message_repo::test::sequences::channel_changes_sequence_mutations_but_not_reaction_noops' (3746380) panicked at /home/teo/.cargo/registry/src/index.crates.io-1949cf8c6b5b557f/sqlx-core-0.8.6/src/testing/mod.rs:226:14:
+failed to connect to setup test database: Database(PgDatabaseError { severity: Error, code: "53100", message: "could not create file \"base/73049/34307\": No space left on device", detail: None, hint: None, position: None, where: None, schema: None, table: None, column: None, data_type: None, constraint: None, file: Some("md.c"), line: Some(252), routine: Some("mdcreate") })
+
+---- outbound::pg_message_repo::test::schema_drop::channel_parent_fk_rejects_missing_channels_and_cascades stdout ----
+
+thread 'outbound::pg_message_repo::test::schema_drop::channel_parent_fk_rejects_missing_channels_and_cascades' (3746378) panicked at /home/teo/.cargo/registry/src/index.crates.io-1949cf8c6b5b557f/sqlx-core-0.8.6/src/testing/mod.rs:226:14:
+failed to connect to setup test database: Database(PgDatabaseError { severity: Error, code: "53100", message: "could not create file \"base/73046/34839\": No space left on device", detail: None, hint: None, position: None, where: None, schema: None, table: None, column: None, data_type: None, constraint: None, file: Some("md.c"), line: Some(252), routine: Some("mdcreate") })
+
+---- outbound::pg_message_repo::test::a_markdown_anchor_stores_the_marked_text_beside_its_mark stdout ----
+
+thread 'outbound::pg_message_repo::test::a_markdown_anchor_stores_the_marked_text_beside_its_mark' (3746347) panicked at /home/teo/.cargo/registry/src/index.crates.io-1949cf8c6b5b557f/sqlx-core-0.8.6/src/testing/mod.rs:226:14:
+failed to connect to setup test database: Database(PgDatabaseError { severity: Error, code: "53100", message: "could not create file \"base/73037/37805\": No space left on device", detail: None, hint: None, position: None, where: None, schema: None, table: None, column: None, data_type: None, constraint: None, file: Some("md.c"), line: Some(252), routine: Some("mdcreate") })
+
+---- outbound::pg_message_repo::test::agent_context_stays_in_the_document_thread_and_omits_tombstones stdout ----
+
+thread 'outbound::pg_message_repo::test::agent_context_stays_in_the_document_thread_and_omits_tombstones' (3746350) panicked at /home/teo/.cargo/registry/src/index.crates.io-1949cf8c6b5b557f/sqlx-core-0.8.6/src/testing/mod.rs:226:14:
+failed to connect to setup test database: Database(PgDatabaseError { severity: Error, code: "53100", message: "could not create file \"base/73038/37435\": No space left on device", detail: None, hint: None, position: None, where: None, schema: None, table: None, column: None, data_type: None, constraint: None, file: Some("md.c"), line: Some(252), routine: Some("mdcreate") })
+
+---- outbound::pg_message_repo::test::benchmark::admission_pool::twenty_simultaneous_channel_posts_succeed_with_commit_holds stdout ----
+
+thread 'outbound::pg_message_repo::test::benchmark::admission_pool::twenty_simultaneous_channel_posts_succeed_with_commit_holds' (3746352) panicked at /home/teo/.cargo/registry/src/index.crates.io-1949cf8c6b5b557f/sqlx-core-0.8.6/src/testing/mod.rs:226:14:
+failed to connect to setup test database: Database(PgDatabaseError { severity: Error, code: "53100", message: "could not create file \"base/73035/37462\": No space left on device", detail: None, hint: None, position: None, where: None, schema: None, table: None, column: None, data_type: None, constraint: None, file: Some("md.c"), line: Some(252), routine: Some("mdcreate") })
+
+---- outbound::pg_message_repo::test::both_parents_use_bounded_previews_and_bidirectional_windows stdout ----
+
+thread 'outbound::pg_message_repo::test::both_parents_use_bounded_previews_and_bidirectional_windows' (3746353) panicked at /home/teo/.cargo/registry/src/index.crates.io-1949cf8c6b5b557f/sqlx-core-0.8.6/src/testing/mod.rs:226:14:
+failed to connect to setup test database: Database(PgDatabaseError { severity: Error, code: "53100", message: "could not create file \"base/73045/37922\": No space left on device", detail: None, hint: None, position: None, where: None, schema: None, table: None, column: None, data_type: None, constraint: None, file: Some("md.c"), line: Some(252), routine: Some("mdcreate") })
+
+---- outbound::pg_message_repo::test::imported_call_discussion_needs_no_native_session stdout ----
+
+thread 'outbound::pg_message_repo::test::imported_call_discussion_needs_no_native_session' (3746365) panicked at /home/teo/.cargo/registry/src/index.crates.io-1949cf8c6b5b557f/sqlx-core-0.8.6/src/testing/mod.rs:226:14:
+failed to connect to setup test database: Database(PgDatabaseError { severity: Error, code: "53100", message: "could not create file \"base/73036/37421\": No space left on device", detail: None, hint: None, position: None, where: None, schema: None, table: None, column: None, data_type: None, constraint: None, file: Some("md.c"), line: Some(252), routine: Some("mdcreate") })
+
+---- outbound::pg_message_repo::test::thread_identity_tombstones_and_parent_isolation stdout ----
+
+thread 'outbound::pg_message_repo::test::thread_identity_tombstones_and_parent_isolation' (3746391) panicked at /home/teo/.cargo/registry/src/index.crates.io-1949cf8c6b5b557f/sqlx-core-0.8.6/src/testing/mod.rs:261:14:
+failed to apply migrations: VersionMismatch(20261110150956)
+
+
+failures:
+    outbound::pg_message_repo::changes::test::channel_change_hydration_keeps_tombstones_roots_and_parent_isolation
+    outbound::pg_message_repo::changes::test::channel_log_detects_reset_after_page_and_bounds_excessive_lag
+    outbound::pg_message_repo::changes::test::channel_log_prunes_bounded_prefixes_without_reusing_the_counter
+    outbound::pg_message_repo::historical::test::body_patch_is_guarded_silent_and_transactional
+    outbound::pg_message_repo::historical::test::existing_id_is_a_conflict_without_partial_writes_or_overwrite
+    outbound::pg_message_repo::historical::test::historical_batch_reset_is_once_per_batch_and_transactional
+    outbound::pg_message_repo::historical::test::reaction_failure_rolls_back_savepoint_and_outer_transaction_stays_usable
+    outbound::pg_message_repo::historical::test::reactions_mentions_are_unique_and_have_no_live_effects
+    outbound::pg_message_repo::historical::test::read_targets_validate_live_roots_and_preserve_orphan_structure
+    outbound::pg_message_repo::historical::test::rejects_foreign_missing_reply_and_deleted_roots
+    outbound::pg_message_repo::historical::test::roots_replies_attribution_and_order_across_batches
+    outbound::pg_message_repo::test::a_deleted_discussion_reads_back_as_a_root_tombstone_without_replies
+    outbound::pg_message_repo::test::a_mark_identifies_one_live_discussion_per_document
+    outbound::pg_message_repo::test::a_markdown_anchor_stores_the_marked_text_beside_its_mark
+    outbound::pg_message_repo::test::admission::parent_admission_rejects_without_a_connection_and_client_id_retry_is_unique
+    outbound::pg_message_repo::test::admission::retry_after_admission_rejection_without_client_id_creates_one_message
+    outbound::pg_message_repo::test::agent_context_stays_in_the_document_thread_and_omits_tombstones
+    outbound::pg_message_repo::test::attachments_read_back_in_the_order_they_were_sent
+    outbound::pg_message_repo::test::benchmark::admission_pool::twenty_simultaneous_channel_posts_succeed_with_commit_holds
+    outbound::pg_message_repo::test::both_parents_use_bounded_previews_and_bidirectional_windows
+    outbound::pg_message_repo::test::call_chat_survives_archiving_and_is_removed_with_the_record
+    outbound::pg_message_repo::test::channel_and_document_attachments_use_message_parent_identity
+    outbound::pg_message_repo::test::client_supplied_ids_are_kept_and_never_reused
+    outbound::pg_message_repo::test::concurrent_first_call_messages_share_one_thread
+    outbound::pg_message_repo::test::deleted_markdown_threads_keep_paged_cleanup_identity
+    outbound::pg_message_repo::test::detaching_a_mark_retains_the_complete_thread_and_makes_it_unanchored
+    outbound::pg_message_repo::test::discussion_delivery_context_reads_document_assignees_and_thread_authors
+    outbound::pg_message_repo::test::fig_threads_round_trip_on_layers_and_the_canvas
+    outbound::pg_message_repo::test::guests_and_members_share_the_persisted_call_discussion
+    outbound::pg_message_repo::test::highlight_attachment_is_scoped_and_explicit_thread_deletion_preserves_highlight
+    outbound::pg_message_repo::test::highlight_threads_read_the_text_the_highlight_covers
+    outbound::pg_message_repo::test::imported_call_discussion_needs_no_native_session
+    outbound::pg_message_repo::test::initiative::initiative_threads_reject_cross_parent_replies_and_thread_deletion_hides_messages
+    outbound::pg_message_repo::test::initiative::project_discussions_use_shared_parent_lifecycle_checks
+    outbound::pg_message_repo::test::legacy_ids_resolve_through_the_import_mapping_tables
+    outbound::pg_message_repo::test::parent_of_names_only_a_live_message_parent
+    outbound::pg_message_repo::test::pdf_root_tombstone_keeps_anchor_and_thread_deletion_removes_placeable
+    outbound::pg_message_repo::test::placeable_anchor_creation_is_atomic_with_its_root
+    outbound::pg_message_repo::test::quick_call_chat_survives_archiving
+    outbound::pg_message_repo::test::reactions_attachments_and_resolution_use_shared_message_data
+    outbound::pg_message_repo::test::replacement_attachments_preserve_retained_ids_and_remove_only_missing_items
+    outbound::pg_message_repo::test::retrying_first_call_message_cannot_append_it_twice
+    outbound::pg_message_repo::test::roots_get_thread_rows_without_the_bookkeeping_trigger
+    outbound::pg_message_repo::test::scheduled_call_chat_survives_archiving
+    outbound::pg_message_repo::test::schema_drop::channel_parent_fk_rejects_missing_channels_and_cascades
+    outbound::pg_message_repo::test::schema_drop::soft_delete_cleans_only_matching_parent_message_notifications
+    outbound::pg_message_repo::test::sequences::channel_changes_sequence_mutations_but_not_reaction_noops
+    outbound::pg_message_repo::test::sequences::channel_counter_guard_rolls_back_the_entire_message
+    outbound::pg_message_repo::test::sequences::channel_reply_locks_its_deferred_fk_before_the_counter
+    outbound::pg_message_repo::test::sequences::channel_stalled_holder_guard_applies_with_database_timeouts_disabled
+    outbound::pg_message_repo::test::sequences::concurrent_channel_replies_and_root_writers_finish_without_deadlocks
+    outbound::pg_message_repo::test::sequences::concurrent_writers_publish_gap_free_committed_prefix
+    outbound::pg_message_repo::test::shared_reads_preserve_system_and_deleted_bot_profiles
+    outbound::pg_message_repo::test::soft_deleted_parents_disappear_and_cursor_does_not_repeat_roots
+    outbound::pg_message_repo::test::spreadsheet_threads_round_trip_resolve_and_delete
+    outbound::pg_message_repo::test::sql_trace::document_writes_execute_exactly_the_previous_statements
+    outbound::pg_message_repo::test::thread_identity_tombstones_and_parent_isolation
+    outbound::pg_message_repo::test::threads::thread_pages_preserve_import_order_ties_tombstones_and_bounds
+    outbound::pg_message_repo::test::timeline::timeline_keyset_rewrite_matches_previous_sql_selection
+    outbound::pg_message_repo::test::write_hydration::channel_write_hydration_matches_reads_through_message_lifecycle
+    outbound::pg_message_repo::test::write_hydration::channel_write_hydration_preserves_system_deleted_and_unknown_bot_profiles
+
+test result: FAILED. 156 passed; 61 failed; 9 ignored; 0 measured; 0 filtered out; finished in 1.11s
+
+error: test failed, to rerun pass `-p messages --lib`
+EXIT 101

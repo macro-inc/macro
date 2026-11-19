@@ -1,0 +1,558 @@
+{
+ "scenario": "channels-perf",
+ "description": "Channel open-path perf fixture: 21 personas, small/medium/large channels, DMs.",
+ "users": {
+  "alice": {
+   "email": "alice@seed.macro.local",
+   "first_name": "Alice",
+   "last_name": "Quinn",
+   "roles": [
+    "team_subscriber",
+    "sub_opus"
+   ]
+  },
+  "bob": {
+   "email": "bob@seed.macro.local",
+   "first_name": "Bob",
+   "last_name": "Marsh",
+   "roles": [
+    "team_subscriber",
+    "sub_opus"
+   ]
+  },
+  "carol": {
+   "email": "carol@seed.macro.local",
+   "first_name": "Carol",
+   "last_name": "Diaz",
+   "roles": [
+    "team_subscriber",
+    "sub_opus"
+   ]
+  },
+  "dave": {
+   "email": "dave@seed.macro.local",
+   "first_name": "Dave",
+   "last_name": "Okafor",
+   "roles": [
+    "team_subscriber",
+    "sub_opus"
+   ]
+  },
+  "erin": {
+   "email": "erin@seed.macro.local",
+   "first_name": "Erin",
+   "last_name": "Walsh",
+   "roles": [
+    "team_subscriber",
+    "sub_opus"
+   ]
+  },
+  "frank": {
+   "email": "frank@seed.macro.local",
+   "first_name": "Frank",
+   "last_name": "Nguyen",
+   "roles": [
+    "team_subscriber",
+    "sub_opus"
+   ]
+  },
+  "grace": {
+   "email": "grace@seed.macro.local",
+   "first_name": "Grace",
+   "last_name": "Lindqvist",
+   "roles": [
+    "team_subscriber",
+    "sub_opus"
+   ]
+  },
+  "heidi": {
+   "email": "heidi@seed.macro.local",
+   "first_name": "Heidi",
+   "last_name": "Baker",
+   "roles": [
+    "team_subscriber",
+    "sub_opus"
+   ]
+  },
+  "ivan": {
+   "email": "ivan@seed.macro.local",
+   "first_name": "Ivan",
+   "last_name": "Petrov",
+   "roles": [
+    "team_subscriber",
+    "sub_opus"
+   ]
+  },
+  "judy": {
+   "email": "judy@seed.macro.local",
+   "first_name": "Judy",
+   "last_name": "Chen",
+   "roles": [
+    "team_subscriber",
+    "sub_opus"
+   ]
+  },
+  "kevin": {
+   "email": "kevin@seed.macro.local",
+   "first_name": "Kevin",
+   "last_name": "Morales",
+   "roles": [
+    "team_subscriber",
+    "sub_opus"
+   ]
+  },
+  "laura": {
+   "email": "laura@seed.macro.local",
+   "first_name": "Laura",
+   "last_name": "Rossi",
+   "roles": [
+    "team_subscriber",
+    "sub_opus"
+   ]
+  },
+  "mallory": {
+   "email": "mallory@seed.macro.local",
+   "first_name": "Mallory",
+   "last_name": "Stern",
+   "roles": [
+    "team_subscriber",
+    "sub_opus"
+   ]
+  },
+  "nina": {
+   "email": "nina@seed.macro.local",
+   "first_name": "Nina",
+   "last_name": "Kowalski",
+   "roles": [
+    "team_subscriber",
+    "sub_opus"
+   ]
+  },
+  "oscar": {
+   "email": "oscar@seed.macro.local",
+   "first_name": "Oscar",
+   "last_name": "Hughes",
+   "roles": [
+    "team_subscriber",
+    "sub_opus"
+   ]
+  },
+  "priya": {
+   "email": "priya@seed.macro.local",
+   "first_name": "Priya",
+   "last_name": "Natarajan",
+   "roles": [
+    "team_subscriber",
+    "sub_opus"
+   ]
+  },
+  "quentin": {
+   "email": "quentin@seed.macro.local",
+   "first_name": "Quentin",
+   "last_name": "Webb",
+   "roles": [
+    "team_subscriber",
+    "sub_opus"
+   ]
+  },
+  "rosa": {
+   "email": "rosa@seed.macro.local",
+   "first_name": "Rosa",
+   "last_name": "Jensen",
+   "roles": [
+    "team_subscriber",
+    "sub_opus"
+   ]
+  },
+  "sam": {
+   "email": "sam@seed.macro.local",
+   "first_name": "Sam",
+   "last_name": "Turner",
+   "roles": [
+    "team_subscriber",
+    "sub_opus"
+   ]
+  },
+  "tina": {
+   "email": "tina@seed.macro.local",
+   "first_name": "Tina",
+   "last_name": "Abbott",
+   "roles": [
+    "team_subscriber",
+    "sub_opus"
+   ]
+  },
+  "umar": {
+   "email": "umar@seed.macro.local",
+   "first_name": "Umar",
+   "last_name": "Kim",
+   "roles": [
+    "team_subscriber",
+    "sub_opus"
+   ]
+  }
+ },
+ "teams": {
+  "perfco": {
+   "name": "Perf Co",
+   "owner": "alice",
+   "members": {
+    "bob": "admin",
+    "carol": "member",
+    "dave": "member",
+    "erin": "admin",
+    "frank": "member",
+    "grace": "member",
+    "heidi": "member",
+    "ivan": "member",
+    "judy": "member",
+    "kevin": "member",
+    "laura": "member",
+    "mallory": "member",
+    "nina": "member",
+    "oscar": "member",
+    "priya": "member",
+    "quentin": "member",
+    "rosa": "member",
+    "sam": "member",
+    "tina": "member",
+    "umar": "member"
+   }
+  }
+ },
+ "channels": {
+  "perf-small": {
+   "type": "private",
+   "owner": "alice",
+   "members": [
+    "bob",
+    "carol",
+    "dave",
+    "erin",
+    "frank",
+    "grace",
+    "heidi",
+    "ivan",
+    "judy",
+    "kevin",
+    "laura",
+    "mallory",
+    "nina",
+    "oscar",
+    "priya",
+    "quentin",
+    "rosa",
+    "sam",
+    "tina",
+    "umar"
+   ]
+  },
+  "perf-medium": {
+   "type": "private",
+   "owner": "alice",
+   "members": [
+    "bob",
+    "carol",
+    "dave",
+    "erin",
+    "frank",
+    "grace",
+    "heidi",
+    "ivan",
+    "judy",
+    "kevin",
+    "laura",
+    "mallory",
+    "nina",
+    "oscar",
+    "priya",
+    "quentin",
+    "rosa",
+    "sam",
+    "tina",
+    "umar"
+   ]
+  },
+  "perf-large": {
+   "type": "private",
+   "owner": "alice",
+   "members": [
+    "bob",
+    "carol",
+    "dave",
+    "erin",
+    "frank",
+    "grace",
+    "heidi",
+    "ivan",
+    "judy",
+    "kevin",
+    "laura",
+    "mallory",
+    "nina",
+    "oscar",
+    "priya",
+    "quentin",
+    "rosa",
+    "sam",
+    "tina",
+    "umar"
+   ]
+  },
+  "lobby": {
+   "type": "public",
+   "owner": "alice",
+   "members": [
+    "bob",
+    "carol",
+    "dave",
+    "erin",
+    "frank",
+    "grace",
+    "heidi",
+    "ivan",
+    "judy",
+    "kevin",
+    "laura",
+    "mallory",
+    "nina",
+    "oscar",
+    "priya",
+    "quentin",
+    "rosa",
+    "sam",
+    "tina",
+    "umar"
+   ]
+  },
+  "freshness": {
+   "type": "private",
+   "owner": "alice",
+   "members": [
+    "bob",
+    "carol"
+   ]
+  },
+  "perfco-hq": {
+   "type": "team",
+   "team": "perfco"
+  },
+  "dm-alice-bob": {
+   "type": "direct_message",
+   "members": [
+    "alice",
+    "bob"
+   ]
+  },
+  "dm-alice-carol": {
+   "type": "direct_message",
+   "members": [
+    "alice",
+    "carol"
+   ]
+  },
+  "dm-alice-dave": {
+   "type": "direct_message",
+   "members": [
+    "alice",
+    "dave"
+   ]
+  },
+  "dm-alice-erin": {
+   "type": "direct_message",
+   "members": [
+    "alice",
+    "erin"
+   ]
+  },
+  "dm-alice-frank": {
+   "type": "direct_message",
+   "members": [
+    "alice",
+    "frank"
+   ]
+  },
+  "dm-alice-grace": {
+   "type": "direct_message",
+   "members": [
+    "alice",
+    "grace"
+   ]
+  }
+ },
+ "documents": {
+  "launch-notes": {
+   "owner": "alice",
+   "name": "Launch notes",
+   "content": "# Launch notes\n\nShip it.\n",
+   "share": [
+    {
+     "with": "team:perfco",
+     "level": "view"
+    }
+   ]
+  }
+ },
+ "messages": [
+  {
+   "channel": "lobby",
+   "from": "alice",
+   "text": "Lobby chatter #1: welcome to Perf Co."
+  },
+  {
+   "channel": "lobby",
+   "from": "bob",
+   "text": "Lobby chatter #2: welcome to Perf Co."
+  },
+  {
+   "channel": "lobby",
+   "from": "carol",
+   "text": "Lobby chatter #3: welcome to Perf Co."
+  },
+  {
+   "channel": "lobby",
+   "from": "dave",
+   "text": "Lobby chatter #4: welcome to Perf Co."
+  },
+  {
+   "channel": "lobby",
+   "from": "erin",
+   "text": "Lobby chatter #5: welcome to Perf Co."
+  },
+  {
+   "channel": "lobby",
+   "from": "frank",
+   "text": "Lobby chatter #6: welcome to Perf Co."
+  },
+  {
+   "channel": "lobby",
+   "from": "grace",
+   "text": "Lobby chatter #7: welcome to Perf Co."
+  },
+  {
+   "channel": "lobby",
+   "from": "heidi",
+   "text": "Lobby chatter #8: welcome to Perf Co."
+  },
+  {
+   "channel": "lobby",
+   "from": "ivan",
+   "text": "Lobby chatter #9: welcome to Perf Co."
+  },
+  {
+   "channel": "lobby",
+   "from": "judy",
+   "text": "Lobby chatter #10: welcome to Perf Co."
+  },
+  {
+   "channel": "lobby",
+   "from": "kevin",
+   "text": "Lobby chatter #11: welcome to Perf Co."
+  },
+  {
+   "channel": "lobby",
+   "from": "laura",
+   "text": "Lobby chatter #12: welcome to Perf Co."
+  },
+  {
+   "channel": "perfco-hq",
+   "from": "bob",
+   "text": "Team sync at 3pm."
+  },
+  {
+   "channel": "freshness",
+   "from": "alice",
+   "text": "Freshness test channel."
+  },
+  {
+   "channel": "dm-alice-bob",
+   "from": "bob",
+   "text": "Hey Alice, got a minute later today?"
+  },
+  {
+   "channel": "dm-alice-bob",
+   "from": "alice",
+   "text": "Sure, what's up?"
+  },
+  {
+   "channel": "dm-alice-bob",
+   "from": "bob",
+   "text": "Wanted to sync on the launch notes before Friday."
+  },
+  {
+   "channel": "dm-alice-carol",
+   "from": "carol",
+   "text": "Hey Alice, got a minute later today?"
+  },
+  {
+   "channel": "dm-alice-carol",
+   "from": "alice",
+   "text": "Sure, what's up?"
+  },
+  {
+   "channel": "dm-alice-carol",
+   "from": "carol",
+   "text": "Wanted to sync on the launch notes before Friday."
+  },
+  {
+   "channel": "dm-alice-dave",
+   "from": "dave",
+   "text": "Hey Alice, got a minute later today?"
+  },
+  {
+   "channel": "dm-alice-dave",
+   "from": "alice",
+   "text": "Sure, what's up?"
+  },
+  {
+   "channel": "dm-alice-dave",
+   "from": "dave",
+   "text": "Wanted to sync on the launch notes before Friday."
+  },
+  {
+   "channel": "dm-alice-erin",
+   "from": "erin",
+   "text": "Hey Alice, got a minute later today?"
+  },
+  {
+   "channel": "dm-alice-erin",
+   "from": "alice",
+   "text": "Sure, what's up?"
+  },
+  {
+   "channel": "dm-alice-erin",
+   "from": "erin",
+   "text": "Wanted to sync on the launch notes before Friday."
+  },
+  {
+   "channel": "dm-alice-frank",
+   "from": "frank",
+   "text": "Hey Alice, got a minute later today?"
+  },
+  {
+   "channel": "dm-alice-frank",
+   "from": "alice",
+   "text": "Sure, what's up?"
+  },
+  {
+   "channel": "dm-alice-frank",
+   "from": "frank",
+   "text": "Wanted to sync on the launch notes before Friday."
+  },
+  {
+   "channel": "dm-alice-grace",
+   "from": "grace",
+   "text": "Hey Alice, got a minute later today?"
+  },
+  {
+   "channel": "dm-alice-grace",
+   "from": "alice",
+   "text": "Sure, what's up?"
+  },
+  {
+   "channel": "dm-alice-grace",
+   "from": "grace",
+   "text": "Wanted to sync on the launch notes before Friday."
+  }
+ ]
+}

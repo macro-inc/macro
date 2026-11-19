@@ -1,0 +1,31 @@
+{
+ "clips": [
+  {
+   "n": 2,
+   "file": null,
+   "scenario": "first switch to a channel",
+   "wentWrong": [
+    "open #lobby: the page did not answer",
+    "the recording script stopped: Error: page.evaluate: Target page, context or browser has been closed",
+    "no video: Error: ENOENT: no such file or directory, rename '/home/teo/.cache/channels-perf-b/demo-trial/raw/page@c8e4874b50a7bf4208cb57b59c04c0f5.webm' -> '/home/teo/.cache/channels-perf-b/demo-trial/02-first-s"
+   ],
+   "take": 1
+  },
+  {
+   "n": 9,
+   "file": null,
+   "scenario": "offline, then back online",
+   "wentWrong": [
+    "the recording script stopped: Error: browserContext.newPage: Target page, context or browser has been closed",
+    "no video: TypeError: Cannot read properties of undefined (reading 'video')"
+   ],
+   "take": 1
+  }
+ ],
+ "label": "b",
+ "commit": "8408dabf70",
+ "bundle": "top of stack (writes branch) built with the GraphQL flag on, staged on the stack",
+ "stackUrl": "https://localhost:31009/app/",
+ "video": "1440x900 webm, real time",
+ "method": "One browser profile per run, signed in as alice, first tab open on #lobby for 20 s before any clip and then closed; each clip is a new tab in that profile. After a page load a clip waits 15 s before its measured action. The clock starts at the navigation request, the pointer press, or the moment the other person's request is sent, and each line under it is stamped when the thing is first on screen. The other person is bob, through the message API. A stamp that reads \"did not happen\" waited 25 s."
+}

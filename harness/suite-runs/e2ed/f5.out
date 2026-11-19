@@ -1,0 +1,107 @@
+path "/home/teo/.herdr/worktrees/macro/synoet-channels-local-sync-suiteb/apps/web" does not contain a 'flake.nix', searching up
+
+Running 36 tests using 4 workers
+
+  ✓   4 tests/channels-e2e-dbg/offline.spec.ts:48:1 › OFF-01 a channel the person has read opens whole with no connection (8.9s)
+  ✓   1 tests/channels-e2e-dbg/offline.spec.ts:48:1 › OFF-01 a channel the person has read opens whole with no connection (10.0s)
+  ✓   2 tests/channels-e2e-dbg/offline.spec.ts:298:1 › OFF-10 a message that arrived while the channel was open is there when the channel opens with no connection (10.1s)
+  ✓   3 tests/channels-e2e-dbg/offline.spec.ts:177:1 › OFF-06 a thread read while connected shows its replies with no connection, a long one included (10.9s)
+  ✓   5 tests/channels-e2e-dbg/offline.spec.ts:177:1 › OFF-06 a thread read while connected shows its replies with no connection, a long one included (7.6s)
+  ✓   6 tests/channels-e2e-dbg/offline.spec.ts:298:1 › OFF-10 a message that arrived while the channel was open is there when the channel opens with no connection (6.8s)
+  ✓   7 tests/channels-e2e-dbg/offline.spec.ts:48:1 › OFF-01 a channel the person has read opens whole with no connection (6.8s)
+  ✓   8 tests/channels-e2e-dbg/offline.spec.ts:177:1 › OFF-06 a thread read while connected shows its replies with no connection, a long one included (7.8s)
+  ✓   9 tests/channels-e2e-dbg/offline.spec.ts:298:1 › OFF-10 a message that arrived while the channel was open is there when the channel opens with no connection (6.2s)
+  ✓  11 tests/channels-e2e-dbg/offline.spec.ts:48:1 › OFF-01 a channel the person has read opens whole with no connection (7.1s)
+  ✓  10 tests/channels-e2e-dbg/offline.spec.ts:177:1 › OFF-06 a thread read while connected shows its replies with no connection, a long one included (7.7s)
+  ✓  12 tests/channels-e2e-dbg/offline.spec.ts:298:1 › OFF-10 a message that arrived while the channel was open is there when the channel opens with no connection (6.5s)
+  ✓  13 tests/channels-e2e-dbg/offline.spec.ts:48:1 › OFF-01 a channel the person has read opens whole with no connection (7.0s)
+  ✓  15 tests/channels-e2e-dbg/offline.spec.ts:298:1 › OFF-10 a message that arrived while the channel was open is there when the channel opens with no connection (7.0s)
+  ✓  14 tests/channels-e2e-dbg/offline.spec.ts:177:1 › OFF-06 a thread read while connected shows its replies with no connection, a long one included (7.9s)
+  ✓  16 tests/channels-e2e-dbg/offline.spec.ts:48:1 › OFF-01 a channel the person has read opens whole with no connection (7.2s)
+  ✓  18 tests/channels-e2e-dbg/offline.spec.ts:298:1 › OFF-10 a message that arrived while the channel was open is there when the channel opens with no connection (6.0s)
+  ✓  19 tests/channels-e2e-dbg/offline.spec.ts:48:1 › OFF-01 a channel the person has read opens whole with no connection (6.5s)
+  ✓  17 tests/channels-e2e-dbg/offline.spec.ts:177:1 › OFF-06 a thread read while connected shows its replies with no connection, a long one included (9.2s)
+  ✓  20 tests/channels-e2e-dbg/offline.spec.ts:177:1 › OFF-06 a thread read while connected shows its replies with no connection, a long one included (7.5s)
+  ✓  21 tests/channels-e2e-dbg/offline.spec.ts:298:1 › OFF-10 a message that arrived while the channel was open is there when the channel opens with no connection (6.7s)
+  ✓  22 tests/channels-e2e-dbg/offline.spec.ts:48:1 › OFF-01 a channel the person has read opens whole with no connection (6.5s)
+  ✓  24 tests/channels-e2e-dbg/offline.spec.ts:298:1 › OFF-10 a message that arrived while the channel was open is there when the channel opens with no connection (6.3s)
+  ✓  23 tests/channels-e2e-dbg/offline.spec.ts:177:1 › OFF-06 a thread read while connected shows its replies with no connection, a long one included (8.2s)
+  ✓  25 tests/channels-e2e-dbg/offline.spec.ts:48:1 › OFF-01 a channel the person has read opens whole with no connection (7.0s)
+  ✓  26 tests/channels-e2e-dbg/offline.spec.ts:177:1 › OFF-06 a thread read while connected shows its replies with no connection, a long one included (7.7s)
+  ✓  27 tests/channels-e2e-dbg/offline.spec.ts:298:1 › OFF-10 a message that arrived while the channel was open is there when the channel opens with no connection (6.6s)
+  ✓  28 tests/channels-e2e-dbg/offline.spec.ts:48:1 › OFF-01 a channel the person has read opens whole with no connection (6.4s)
+  ✓  31 tests/channels-e2e-dbg/offline.spec.ts:48:1 › OFF-01 a channel the person has read opens whole with no connection (6.5s)
+  ✓  30 tests/channels-e2e-dbg/offline.spec.ts:298:1 › OFF-10 a message that arrived while the channel was open is there when the channel opens with no connection (6.9s)
+  ✓  32 tests/channels-e2e-dbg/offline.spec.ts:177:1 › OFF-06 a thread read while connected shows its replies with no connection, a long one included (8.3s)
+  ✓  33 tests/channels-e2e-dbg/offline.spec.ts:298:1 › OFF-10 a message that arrived while the channel was open is there when the channel opens with no connection (5.8s)
+  ✓  34 tests/channels-e2e-dbg/offline.spec.ts:48:1 › OFF-01 a channel the person has read opens whole with no connection (6.1s)
+  ✓  35 tests/channels-e2e-dbg/offline.spec.ts:177:1 › OFF-06 a thread read while connected shows its replies with no connection, a long one included (8.2s)
+  ✓  36 tests/channels-e2e-dbg/offline.spec.ts:298:1 › OFF-10 a message that arrived while the channel was open is there when the channel opens with no connection (6.3s)
+  ✘  29 tests/channels-e2e-dbg/offline.spec.ts:177:1 › OFF-06 a thread read while connected shows its replies with no connection, a long one included (22.0s)
+
+
+  1) tests/channels-e2e-dbg/offline.spec.ts:177:1 › OFF-06 a thread read while connected shows its replies with no connection, a long one included 
+
+    Error: expect(received).toEqual(expected) // deep equality
+
+    - Expected  - 21
+    + Received  +  0
+
+      Array [
+        "reply 01",
+        "reply 02",
+        "reply 03",
+    -   "reply 04",
+    -   "reply 05",
+    -   "reply 06",
+    -   "reply 07",
+    -   "reply 08",
+    -   "reply 09",
+    -   "reply 10",
+    -   "reply 11",
+    -   "reply 12",
+    -   "reply 13",
+    -   "reply 14",
+    -   "reply 15",
+    -   "reply 16",
+    -   "reply 17",
+    -   "reply 18",
+    -   "reply 19",
+    -   "reply 20",
+    -   "reply 21",
+    -   "reply 22",
+    -   "reply 23",
+    -   "reply 24",
+      ]
+
+    Call Log:
+    - Timeout 15000ms exceeded while waiting on the predicate
+
+      204 |   // says that there are more.
+      205 |   await failsSometimes(() =>
+    > 206 |     expect.poll(() => offline.replies(root.id)).toEqual(replies)
+          |                                                 ^
+      207 |   );
+      208 | });
+      209 |
+        at check (/home/teo/.herdr/worktrees/macro/synoet-channels-local-sync-suiteb/apps/web/tests/channels-e2e-dbg/offline.spec.ts:206:49)
+        at failsSometimes (/home/teo/.herdr/worktrees/macro/synoet-channels-local-sync-suiteb/apps/web/tests/channels-e2e-dbg/harness/fixtures.ts:99:11)
+        at /home/teo/.herdr/worktrees/macro/synoet-channels-local-sync-suiteb/apps/web/tests/channels-e2e-dbg/offline.spec.ts:205:9
+
+    attachment #1: screenshot (image/png) ──────────────────────────────────────────────────────────
+    ../../../../../../.cache/channels-perf-b/e2ed/f5/test-results/offline-OFF-06-a-thread-re-c002b-nection-a-long-one-included-repeat9/test-failed-1.png
+    ────────────────────────────────────────────────────────────────────────────────────────────────
+
+    Error Context: ../../../../../../.cache/channels-perf-b/e2ed/f5/test-results/offline-OFF-06-a-thread-re-c002b-nection-a-long-one-included-repeat9/error-context.md
+
+    attachment #3: trace (application/zip) ─────────────────────────────────────────────────────────
+    ../../../../../../.cache/channels-perf-b/e2ed/f5/test-results/offline-OFF-06-a-thread-re-c002b-nection-a-long-one-included-repeat9/trace.zip
+    Usage:
+
+        npx playwright show-trace ../../../../../../.cache/channels-perf-b/e2ed/f5/test-results/offline-OFF-06-a-thread-re-c002b-nection-a-long-one-included-repeat9/trace.zip
+
+    ────────────────────────────────────────────────────────────────────────────────────────────────
+
+  1 failed
+    tests/channels-e2e-dbg/offline.spec.ts:177:1 › OFF-06 a thread read while connected shows its replies with no connection, a long one included 
+  35 passed (1.5m)

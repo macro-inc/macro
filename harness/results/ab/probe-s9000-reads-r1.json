@@ -1,0 +1,261 @@
+{
+ "scenario": "probe",
+ "throttled": false,
+ "throttle": null,
+ "n": 4,
+ "sizes": [
+  "medium"
+ ],
+ "base": "https://localhost:31009",
+ "generatedAt": "2026-11-14T00:05:28.136Z",
+ "records": [
+  {
+   "size": "medium",
+   "i": 0,
+   "phase": "probe",
+   "settle": 9000,
+   "sinceLoadMs": 9027,
+   "lobbyShownMs": 823,
+   "firstDomMs": 97.1,
+   "firstPaintMs": 168.9,
+   "lastSeenMs": 97.1,
+   "settledMs": null,
+   "targetVisibleMs": null,
+   "targetHighlightedMs": null,
+   "timedOut": false,
+   "domMessages": 12,
+   "visibleMessages": 7,
+   "domNodes": 1531,
+   "scroll": {
+    "top": 4258,
+    "h": 779,
+    "sh": 5037,
+    "atBottom": true
+   },
+   "cpuToSettle": {
+    "taskMs": 222.4,
+    "scriptMs": 83.1,
+    "layoutMs": 6.7,
+    "recalcStyleMs": 28.3,
+    "layouts": 15,
+    "heapMB": 141,
+    "nodes": 8711
+   },
+   "cpuToSettlePlus2s": {
+    "taskMs": 345.4,
+    "scriptMs": 133.5,
+    "layoutMs": 6.7,
+    "recalcStyleMs": 29.3,
+    "layouts": 15,
+    "heapMB": 152.9,
+    "nodes": 8711
+   },
+   "longTasks": {
+    "count": 1,
+    "totalMs": 75,
+    "maxMs": 75
+   },
+   "requests": {
+    "total": 11,
+    "startedBeforeFirstPaint": 6,
+    "finishedBeforeFirstPaint": 5,
+    "bytesBeforeFirstPaint": 2070,
+    "channelScoped": 7
+   },
+   "static": {
+    "count": 0,
+    "bytes": 0,
+    "fromDiskCache": 0,
+    "lastEndMs": null
+   },
+   "channelId": "5eed92f0-3a83-8200-a790-dd4a69089719",
+   "blocked": 1
+  },
+  {
+   "size": "medium",
+   "i": 1,
+   "phase": "probe",
+   "settle": 9000,
+   "sinceLoadMs": 9016,
+   "lobbyShownMs": 803,
+   "firstDomMs": 86.3,
+   "firstPaintMs": 154,
+   "lastSeenMs": 86.3,
+   "settledMs": null,
+   "targetVisibleMs": null,
+   "targetHighlightedMs": null,
+   "timedOut": false,
+   "domMessages": 12,
+   "visibleMessages": 7,
+   "domNodes": 1531,
+   "scroll": {
+    "top": 4258,
+    "h": 779,
+    "sh": 5037,
+    "atBottom": true
+   },
+   "cpuToSettle": {
+    "taskMs": 181.3,
+    "scriptMs": 65.4,
+    "layoutMs": 5.9,
+    "recalcStyleMs": 24.5,
+    "layouts": 15,
+    "heapMB": 156.3,
+    "nodes": 8650
+   },
+   "cpuToSettlePlus2s": {
+    "taskMs": 287.1,
+    "scriptMs": 110.7,
+    "layoutMs": 5.9,
+    "recalcStyleMs": 25.2,
+    "layouts": 15,
+    "heapMB": 142.4,
+    "nodes": 8650
+   },
+   "longTasks": {
+    "count": 1,
+    "totalMs": 68,
+    "maxMs": 68
+   },
+   "requests": {
+    "total": 11,
+    "startedBeforeFirstPaint": 6,
+    "finishedBeforeFirstPaint": 5,
+    "bytesBeforeFirstPaint": 2020,
+    "channelScoped": 7
+   },
+   "static": {
+    "count": 0,
+    "bytes": 0,
+    "fromDiskCache": 0,
+    "lastEndMs": null
+   },
+   "channelId": "5eed92f0-3a83-8200-a790-dd4a69089719",
+   "blocked": 1
+  },
+  {
+   "size": "medium",
+   "i": 2,
+   "phase": "probe",
+   "settle": 9000,
+   "sinceLoadMs": 9020,
+   "lobbyShownMs": 815,
+   "firstDomMs": 93.2,
+   "firstPaintMs": 167.7,
+   "lastSeenMs": 93.2,
+   "settledMs": null,
+   "targetVisibleMs": null,
+   "targetHighlightedMs": null,
+   "timedOut": false,
+   "domMessages": 12,
+   "visibleMessages": 7,
+   "domNodes": 1531,
+   "scroll": {
+    "top": 4258,
+    "h": 779,
+    "sh": 5037,
+    "atBottom": true
+   },
+   "cpuToSettle": {
+    "taskMs": 197.7,
+    "scriptMs": 69,
+    "layoutMs": 6.5,
+    "recalcStyleMs": 27.7,
+    "layouts": 15,
+    "heapMB": 154.6,
+    "nodes": 8711
+   },
+   "cpuToSettlePlus2s": {
+    "taskMs": 312.1,
+    "scriptMs": 119.9,
+    "layoutMs": 6.5,
+    "recalcStyleMs": 29.1,
+    "layouts": 15,
+    "heapMB": 140.4,
+    "nodes": 8711
+   },
+   "longTasks": {
+    "count": 1,
+    "totalMs": 79,
+    "maxMs": 79
+   },
+   "requests": {
+    "total": 11,
+    "startedBeforeFirstPaint": 6,
+    "finishedBeforeFirstPaint": 5,
+    "bytesBeforeFirstPaint": 1996,
+    "channelScoped": 7
+   },
+   "static": {
+    "count": 0,
+    "bytes": 0,
+    "fromDiskCache": 0,
+    "lastEndMs": null
+   },
+   "channelId": "5eed92f0-3a83-8200-a790-dd4a69089719",
+   "blocked": 1
+  },
+  {
+   "size": "medium",
+   "i": 3,
+   "phase": "probe",
+   "settle": 9000,
+   "sinceLoadMs": 9023,
+   "lobbyShownMs": 796,
+   "firstDomMs": 95.5,
+   "firstPaintMs": 160.9,
+   "lastSeenMs": 95.5,
+   "settledMs": null,
+   "targetVisibleMs": null,
+   "targetHighlightedMs": null,
+   "timedOut": false,
+   "domMessages": 12,
+   "visibleMessages": 7,
+   "domNodes": 1531,
+   "scroll": {
+    "top": 4258,
+    "h": 779,
+    "sh": 5037,
+    "atBottom": true
+   },
+   "cpuToSettle": {
+    "taskMs": 193,
+    "scriptMs": 65.2,
+    "layoutMs": 6.1,
+    "recalcStyleMs": 24.6,
+    "layouts": 15,
+    "heapMB": 141.2,
+    "nodes": 8711
+   },
+   "cpuToSettlePlus2s": {
+    "taskMs": 254.5,
+    "scriptMs": 90.2,
+    "layoutMs": 6.1,
+    "recalcStyleMs": 25.2,
+    "layouts": 15,
+    "heapMB": 154.9,
+    "nodes": 8711
+   },
+   "longTasks": {
+    "count": 1,
+    "totalMs": 68,
+    "maxMs": 68
+   },
+   "requests": {
+    "total": 10,
+    "startedBeforeFirstPaint": 6,
+    "finishedBeforeFirstPaint": 5,
+    "bytesBeforeFirstPaint": 2093,
+    "channelScoped": 7
+   },
+   "static": {
+    "count": 0,
+    "bytes": 0,
+    "fromDiskCache": 0,
+    "lastEndMs": null
+   },
+   "channelId": "5eed92f0-3a83-8200-a790-dd4a69089719",
+   "blocked": 1
+  }
+ ]
+}

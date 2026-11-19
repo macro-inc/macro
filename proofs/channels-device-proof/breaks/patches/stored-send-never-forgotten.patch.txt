@@ -1,0 +1,12 @@
+diff --git a/apps/web/src/lib/queries/messages/local/unqueued-sends.ts b/apps/web/src/lib/queries/messages/local/unqueued-sends.ts
+index 8b0ce0d4a3..9ab869e1e4 100644
+--- a/apps/web/src/lib/queries/messages/local/unqueued-sends.ts
++++ b/apps/web/src/lib/queries/messages/local/unqueued-sends.ts
+@@ -165,6 +165,7 @@ export function noteUnqueuedSend(
+   writeEntry(storage, { pageId: deps.pageId ?? PAGE_ID, createdAt, send });
+   const key = entryKey(send.senderId, send.id);
+   const stored = () => {
++    if (key) return;
+     try {
+       storage.removeItem(key);
+     } catch {

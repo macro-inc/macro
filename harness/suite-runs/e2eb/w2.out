@@ -1,0 +1,176 @@
+path "/home/teo/.herdr/worktrees/macro/synoet-channels-local-sync-suiteb/apps/web" does not contain a 'flake.nix', searching up
+
+Running 32 tests using 4 workers
+
+  ✓   2 tests/channels-e2e/writes.spec.ts:347:1 › WRT-12 a message written offline with the channel open in two windows is sent once and shows in both (8.5s)
+  ✓   1 tests/channels-e2e/writes.spec.ts:324:1 › WRT-11 a waiting message written right after another of the same person says that it is not sent yet (8.6s)
+  ✓   3 tests/channels-e2e/writes.spec.ts:387:1 › WRT-13 two devices of one person, one of them offline, end up showing the same channel as the services hold (10.5s)
+  ✓   5 tests/channels-e2e/writes.spec.ts:324:1 › WRT-11 a waiting message written right after another of the same person says that it is not sent yet (7.9s)
+  ✓   7 tests/channels-e2e/writes.spec.ts:387:1 › WRT-13 two devices of one person, one of them offline, end up showing the same channel as the services hold (9.1s)
+  ✓   9 tests/channels-e2e/writes.spec.ts:324:1 › WRT-11 a waiting message written right after another of the same person says that it is not sent yet (8.1s)
+  ✘   4 tests/channels-e2e/writes.spec.ts:437:1 › WRT-14 a message written offline in one window shows in the other window of the same device (34.7s)
+  ✓  11 tests/channels-e2e/writes.spec.ts:387:1 › WRT-13 two devices of one person, one of them offline, end up showing the same channel as the services hold (8.8s)
+  ✘   8 tests/channels-e2e/writes.spec.ts:437:1 › WRT-14 a message written offline in one window shows in the other window of the same device (34.2s)
+  ✓  13 tests/channels-e2e/writes.spec.ts:324:1 › WRT-11 a waiting message written right after another of the same person says that it is not sent yet (8.1s)
+  ✓   6 tests/channels-e2e/writes.spec.ts:347:1 › WRT-12 a message written offline with the channel open in two windows is sent once and shows in both (1.1m)
+  ✘  12 tests/channels-e2e/writes.spec.ts:437:1 › WRT-14 a message written offline in one window shows in the other window of the same device (34.4s)
+  ✓  10 tests/channels-e2e/writes.spec.ts:347:1 › WRT-12 a message written offline with the channel open in two windows is sent once and shows in both (1.1m)
+  ✓  17 tests/channels-e2e/writes.spec.ts:324:1 › WRT-11 a waiting message written right after another of the same person says that it is not sent yet (8.1s)
+  ✘  16 tests/channels-e2e/writes.spec.ts:437:1 › WRT-14 a message written offline in one window shows in the other window of the same device (34.6s)
+  ✓  14 tests/channels-e2e/writes.spec.ts:347:1 › WRT-12 a message written offline with the channel open in two windows is sent once and shows in both (1.1m)
+  ✓  15 tests/channels-e2e/writes.spec.ts:387:1 › WRT-13 two devices of one person, one of them offline, end up showing the same channel as the services hold (1.1m)
+  ✓  21 tests/channels-e2e/writes.spec.ts:324:1 › WRT-11 a waiting message written right after another of the same person says that it is not sent yet (7.8s)
+  ✓  22 tests/channels-e2e/writes.spec.ts:347:1 › WRT-12 a message written offline with the channel open in two windows is sent once and shows in both (7.8s)
+  ✘  20 tests/channels-e2e/writes.spec.ts:437:1 › WRT-14 a message written offline in one window shows in the other window of the same device (34.3s)
+  ✓  18 tests/channels-e2e/writes.spec.ts:347:1 › WRT-12 a message written offline with the channel open in two windows is sent once and shows in both (1.1m)
+  ✓  25 tests/channels-e2e/writes.spec.ts:324:1 › WRT-11 a waiting message written right after another of the same person says that it is not sent yet (8.3s)
+  ✓  19 tests/channels-e2e/writes.spec.ts:387:1 › WRT-13 two devices of one person, one of them offline, end up showing the same channel as the services hold (1.1m)
+  ✓  26 tests/channels-e2e/writes.spec.ts:347:1 › WRT-12 a message written offline with the channel open in two windows is sent once and shows in both (7.1s)
+  ✓  27 tests/channels-e2e/writes.spec.ts:387:1 › WRT-13 two devices of one person, one of them offline, end up showing the same channel as the services hold (11.0s)
+  ✘  24 tests/channels-e2e/writes.spec.ts:437:1 › WRT-14 a message written offline in one window shows in the other window of the same device (34.8s)
+  ✓  29 tests/channels-e2e/writes.spec.ts:324:1 › WRT-11 a waiting message written right after another of the same person says that it is not sent yet (8.0s)
+  ✓  30 tests/channels-e2e/writes.spec.ts:347:1 › WRT-12 a message written offline with the channel open in two windows is sent once and shows in both (6.7s)
+  ✘  28 tests/channels-e2e/writes.spec.ts:437:1 › WRT-14 a message written offline in one window shows in the other window of the same device (34.6s)
+  ✓  23 tests/channels-e2e/writes.spec.ts:387:1 › WRT-13 two devices of one person, one of them offline, end up showing the same channel as the services hold (1.1m)
+  ✘  32 tests/channels-e2e/writes.spec.ts:437:1 › WRT-14 a message written offline in one window shows in the other window of the same device (34.4s)
+  ✓  31 tests/channels-e2e/writes.spec.ts:387:1 › WRT-13 two devices of one person, one of them offline, end up showing the same channel as the services hold (1.1m)
+
+
+  1) tests/channels-e2e/writes.spec.ts:324:1 › WRT-11 a waiting message written right after another of the same person says that it is not sent yet 
+
+    Expected to fail, but passed.
+
+    attachment #1: screenshot (image/png) ──────────────────────────────────────────────────────────
+    ../../../../../../.cache/channels-perf-b/e2eb/w2/test-results/writes-WRT-11-a-waiting-me-e69ca-ays-that-it-is-not-sent-yet/test-failed-1.png
+    ────────────────────────────────────────────────────────────────────────────────────────────────
+
+    attachment #2: trace (application/zip) ─────────────────────────────────────────────────────────
+    ../../../../../../.cache/channels-perf-b/e2eb/w2/test-results/writes-WRT-11-a-waiting-me-e69ca-ays-that-it-is-not-sent-yet/trace.zip
+    Usage:
+
+        npx playwright show-trace ../../../../../../.cache/channels-perf-b/e2eb/w2/test-results/writes-WRT-11-a-waiting-me-e69ca-ays-that-it-is-not-sent-yet/trace.zip
+
+    ────────────────────────────────────────────────────────────────────────────────────────────────
+
+  2) tests/channels-e2e/writes.spec.ts:324:1 › WRT-11 a waiting message written right after another of the same person says that it is not sent yet 
+
+    Expected to fail, but passed.
+
+    attachment #1: screenshot (image/png) ──────────────────────────────────────────────────────────
+    ../../../../../../.cache/channels-perf-b/e2eb/w2/test-results/writes-WRT-11-a-waiting-me-e69ca-ays-that-it-is-not-sent-yet-repeat1/test-failed-1.png
+    ────────────────────────────────────────────────────────────────────────────────────────────────
+
+    attachment #2: trace (application/zip) ─────────────────────────────────────────────────────────
+    ../../../../../../.cache/channels-perf-b/e2eb/w2/test-results/writes-WRT-11-a-waiting-me-e69ca-ays-that-it-is-not-sent-yet-repeat1/trace.zip
+    Usage:
+
+        npx playwright show-trace ../../../../../../.cache/channels-perf-b/e2eb/w2/test-results/writes-WRT-11-a-waiting-me-e69ca-ays-that-it-is-not-sent-yet-repeat1/trace.zip
+
+    ────────────────────────────────────────────────────────────────────────────────────────────────
+
+  3) tests/channels-e2e/writes.spec.ts:324:1 › WRT-11 a waiting message written right after another of the same person says that it is not sent yet 
+
+    Expected to fail, but passed.
+
+    attachment #1: screenshot (image/png) ──────────────────────────────────────────────────────────
+    ../../../../../../.cache/channels-perf-b/e2eb/w2/test-results/writes-WRT-11-a-waiting-me-e69ca-ays-that-it-is-not-sent-yet-repeat2/test-failed-1.png
+    ────────────────────────────────────────────────────────────────────────────────────────────────
+
+    attachment #2: trace (application/zip) ─────────────────────────────────────────────────────────
+    ../../../../../../.cache/channels-perf-b/e2eb/w2/test-results/writes-WRT-11-a-waiting-me-e69ca-ays-that-it-is-not-sent-yet-repeat2/trace.zip
+    Usage:
+
+        npx playwright show-trace ../../../../../../.cache/channels-perf-b/e2eb/w2/test-results/writes-WRT-11-a-waiting-me-e69ca-ays-that-it-is-not-sent-yet-repeat2/trace.zip
+
+    ────────────────────────────────────────────────────────────────────────────────────────────────
+
+  4) tests/channels-e2e/writes.spec.ts:324:1 › WRT-11 a waiting message written right after another of the same person says that it is not sent yet 
+
+    Expected to fail, but passed.
+
+    attachment #1: screenshot (image/png) ──────────────────────────────────────────────────────────
+    ../../../../../../.cache/channels-perf-b/e2eb/w2/test-results/writes-WRT-11-a-waiting-me-e69ca-ays-that-it-is-not-sent-yet-repeat3/test-failed-1.png
+    ────────────────────────────────────────────────────────────────────────────────────────────────
+
+    attachment #2: trace (application/zip) ─────────────────────────────────────────────────────────
+    ../../../../../../.cache/channels-perf-b/e2eb/w2/test-results/writes-WRT-11-a-waiting-me-e69ca-ays-that-it-is-not-sent-yet-repeat3/trace.zip
+    Usage:
+
+        npx playwright show-trace ../../../../../../.cache/channels-perf-b/e2eb/w2/test-results/writes-WRT-11-a-waiting-me-e69ca-ays-that-it-is-not-sent-yet-repeat3/trace.zip
+
+    ────────────────────────────────────────────────────────────────────────────────────────────────
+
+  5) tests/channels-e2e/writes.spec.ts:324:1 › WRT-11 a waiting message written right after another of the same person says that it is not sent yet 
+
+    Expected to fail, but passed.
+
+    attachment #1: screenshot (image/png) ──────────────────────────────────────────────────────────
+    ../../../../../../.cache/channels-perf-b/e2eb/w2/test-results/writes-WRT-11-a-waiting-me-e69ca-ays-that-it-is-not-sent-yet-repeat4/test-failed-1.png
+    ────────────────────────────────────────────────────────────────────────────────────────────────
+
+    attachment #2: trace (application/zip) ─────────────────────────────────────────────────────────
+    ../../../../../../.cache/channels-perf-b/e2eb/w2/test-results/writes-WRT-11-a-waiting-me-e69ca-ays-that-it-is-not-sent-yet-repeat4/trace.zip
+    Usage:
+
+        npx playwright show-trace ../../../../../../.cache/channels-perf-b/e2eb/w2/test-results/writes-WRT-11-a-waiting-me-e69ca-ays-that-it-is-not-sent-yet-repeat4/trace.zip
+
+    ────────────────────────────────────────────────────────────────────────────────────────────────
+
+  6) tests/channels-e2e/writes.spec.ts:324:1 › WRT-11 a waiting message written right after another of the same person says that it is not sent yet 
+
+    Expected to fail, but passed.
+
+    attachment #1: screenshot (image/png) ──────────────────────────────────────────────────────────
+    ../../../../../../.cache/channels-perf-b/e2eb/w2/test-results/writes-WRT-11-a-waiting-me-e69ca-ays-that-it-is-not-sent-yet-repeat5/test-failed-1.png
+    ────────────────────────────────────────────────────────────────────────────────────────────────
+
+    attachment #2: trace (application/zip) ─────────────────────────────────────────────────────────
+    ../../../../../../.cache/channels-perf-b/e2eb/w2/test-results/writes-WRT-11-a-waiting-me-e69ca-ays-that-it-is-not-sent-yet-repeat5/trace.zip
+    Usage:
+
+        npx playwright show-trace ../../../../../../.cache/channels-perf-b/e2eb/w2/test-results/writes-WRT-11-a-waiting-me-e69ca-ays-that-it-is-not-sent-yet-repeat5/trace.zip
+
+    ────────────────────────────────────────────────────────────────────────────────────────────────
+
+  7) tests/channels-e2e/writes.spec.ts:324:1 › WRT-11 a waiting message written right after another of the same person says that it is not sent yet 
+
+    Expected to fail, but passed.
+
+    attachment #1: screenshot (image/png) ──────────────────────────────────────────────────────────
+    ../../../../../../.cache/channels-perf-b/e2eb/w2/test-results/writes-WRT-11-a-waiting-me-e69ca-ays-that-it-is-not-sent-yet-repeat6/test-failed-1.png
+    ────────────────────────────────────────────────────────────────────────────────────────────────
+
+    attachment #2: trace (application/zip) ─────────────────────────────────────────────────────────
+    ../../../../../../.cache/channels-perf-b/e2eb/w2/test-results/writes-WRT-11-a-waiting-me-e69ca-ays-that-it-is-not-sent-yet-repeat6/trace.zip
+    Usage:
+
+        npx playwright show-trace ../../../../../../.cache/channels-perf-b/e2eb/w2/test-results/writes-WRT-11-a-waiting-me-e69ca-ays-that-it-is-not-sent-yet-repeat6/trace.zip
+
+    ────────────────────────────────────────────────────────────────────────────────────────────────
+
+  8) tests/channels-e2e/writes.spec.ts:324:1 › WRT-11 a waiting message written right after another of the same person says that it is not sent yet 
+
+    Expected to fail, but passed.
+
+    attachment #1: screenshot (image/png) ──────────────────────────────────────────────────────────
+    ../../../../../../.cache/channels-perf-b/e2eb/w2/test-results/writes-WRT-11-a-waiting-me-e69ca-ays-that-it-is-not-sent-yet-repeat7/test-failed-1.png
+    ────────────────────────────────────────────────────────────────────────────────────────────────
+
+    attachment #2: trace (application/zip) ─────────────────────────────────────────────────────────
+    ../../../../../../.cache/channels-perf-b/e2eb/w2/test-results/writes-WRT-11-a-waiting-me-e69ca-ays-that-it-is-not-sent-yet-repeat7/trace.zip
+    Usage:
+
+        npx playwright show-trace ../../../../../../.cache/channels-perf-b/e2eb/w2/test-results/writes-WRT-11-a-waiting-me-e69ca-ays-that-it-is-not-sent-yet-repeat7/trace.zip
+
+    ────────────────────────────────────────────────────────────────────────────────────────────────
+
+  8 failed
+    tests/channels-e2e/writes.spec.ts:324:1 › WRT-11 a waiting message written right after another of the same person says that it is not sent yet 
+    tests/channels-e2e/writes.spec.ts:324:1 › WRT-11 a waiting message written right after another of the same person says that it is not sent yet 
+    tests/channels-e2e/writes.spec.ts:324:1 › WRT-11 a waiting message written right after another of the same person says that it is not sent yet 
+    tests/channels-e2e/writes.spec.ts:324:1 › WRT-11 a waiting message written right after another of the same person says that it is not sent yet 
+    tests/channels-e2e/writes.spec.ts:324:1 › WRT-11 a waiting message written right after another of the same person says that it is not sent yet 
+    tests/channels-e2e/writes.spec.ts:324:1 › WRT-11 a waiting message written right after another of the same person says that it is not sent yet 
+    tests/channels-e2e/writes.spec.ts:324:1 › WRT-11 a waiting message written right after another of the same person says that it is not sent yet 
+    tests/channels-e2e/writes.spec.ts:324:1 › WRT-11 a waiting message written right after another of the same person says that it is not sent yet 
+  24 passed (4.7m)

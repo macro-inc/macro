@@ -1,0 +1,16 @@
+path "/home/teo/.herdr/worktrees/macro/synoet-channels-local-sync-suiteb/apps/web" does not contain a 'flake.nix', searching up
+
+Running 2 tests using 2 workers
+
+DD MEM-03 w0 r0 cy 706206 DBG detail result 01a1e57f-8fb5-731e-9d37-9680de26767f live-network false false false true undefined false
+DD MEM-03 w1 r1 cy 706261 DBG detail result 01a1e57f-8fca-72d4-8881-27c9664764bd live-network false false false true undefined false
+DD MEM-03 w0 r0 cy 706435 DBG detail result 01a1e57f-8fb5-731e-9d37-9680de26767f live-network false false false true undefined true
+DD MEM-03 w0 r0 cy 706439 DBG detail result 01a1e57f-8fb5-731e-9d37-9680de26767f live-network false false false true undefined false
+DD MEM-03 w1 r1 cy 706474 DBG detail result 01a1e57f-8fca-72d4-8881-27c9664764bd live-network false false false true undefined true
+DD MEM-03 w1 r1 cy 706477 DBG detail result 01a1e57f-8fca-72d4-8881-27c9664764bd live-network false false false true undefined false
+DD MEM-03 w0 r0 cy 706891 DBG detail result 01a1e57f-8fb5-731e-9d37-9680de26767f live-network false false false false undefined true
+DD MEM-03 w1 r1 cy 706962 DBG detail result 01a1e57f-8fca-72d4-8881-27c9664764bd live-network false false false false undefined true
+  ✓  2 tests/channels-e2e-dbg/members.spec.ts:111:1 › MEM-03 a person removed while the channel is open loses it at once (3.0s)
+  ✓  1 tests/channels-e2e-dbg/members.spec.ts:111:1 › MEM-03 a person removed while the channel is open loses it at once (3.0s)
+
+  2 passed (16.8s)

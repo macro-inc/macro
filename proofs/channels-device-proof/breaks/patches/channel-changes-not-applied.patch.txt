@@ -1,0 +1,12 @@
+diff --git a/apps/web/src/lib/queries/messages/local/catch-up.ts b/apps/web/src/lib/queries/messages/local/catch-up.ts
+index 23884c8e1c..db9e778bd2 100644
+--- a/apps/web/src/lib/queries/messages/local/catch-up.ts
++++ b/apps/web/src/lib/queries/messages/local/catch-up.ts
+@@ -87,6 +87,7 @@ async function runCatchUp(
+       span.setAttr('catch_up.outcome', 'not-held');
+       return { kind: 'not-held' };
+     }
++    return { kind: 'current', seq: from };
+     let after = from;
+     let changes = 0;
+     for (let page = 0; page < MAX_CHANGE_PAGES; page += 1) {

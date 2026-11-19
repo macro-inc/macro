@@ -1,0 +1,15 @@
+=== channels-perf session tag=cmp 09:33:26 load=31.85
+09:40:20 session  small 5 session ERROR page.waitForSelector: Timeout 90000ms exceeded.
+=== channels-perf-b session tag=cmp 09:41:02 load=28.24
+=== channels-perf session --throttle tag=cmp 09:47:26 load=36.24
+=== channels-perf-b session --throttle tag=cmp 09:53:55 load=37.16
+09:55:03 session thr small 1 session ERROR page.goto: net::ERR_NETWORK_CHANGED at https://localhost:31009/app/channels/5eed92f0-ce3c-8a78-8d37-54d69b9d9ee1
+09:56:33 session thr medium 1 session ERROR page.waitForSelector: Timeout 90000ms exceeded.
+=== channels-perf session tag=cmp-prewarmed 10:01:15 load=19.54
+=== channels-perf-b session tag=cmp-prewarmed 10:17:55 load=36.54
+10:20:23 session  medium 0 session ERROR page.waitForSelector: Timeout 90000ms exceeded.
+10:23:43 session  medium 1 session ERROR page.waitForSelector: Timeout 90000ms exceeded.
+=== channels-perf session --throttle tag=cmp-prewarmed 10:35:42 load=23.11
+=== channels-perf-b session --throttle tag=cmp-prewarmed 10:52:31 load=28.35
+10:57:46 session thr medium 1 session ERROR page.waitForSelector: Timeout 90000ms exceeded.
+ALL_DONE2 11:09:47

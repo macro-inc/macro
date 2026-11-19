@@ -1,0 +1,75 @@
+import type { ItemMention } from '@core/component/LexicalMarkdown/plugins';
+import type { Accessor } from 'solid-js';
+import { createInputCommands } from './create-input-commands';
+import { createInputView } from './create-input-view';
+import type {
+  InputAttachmentTracker,
+  InputCallbacks,
+  InputCommands,
+  InputData,
+  InputPersistenceKey,
+  InputSnapshot,
+} from './types';
+
+type CreateInputStateOptions = {
+  initialInput: InputData;
+  mentions: Accessor<ItemMention[]>;
+  attachmentTracker: InputAttachmentTracker;
+  clearComposer?: () => void;
+  restoreEditor?: (snapshot: InputSnapshot) => void;
+  attachFiles?: (files: File[]) => Promise<void> | void;
+  clearInput?: () => void;
+  callbacks?: InputCallbacks;
+  persistenceKey?: InputPersistenceKey;
+};
+
+export type InputState = {
+  view: Accessor<InputData>;
+  snapshot: Accessor<InputSnapshot>;
+  commands: InputCommands;
+  setValue: (value: string) => void;
+  setIsDraggedOver: (value: boolean) => void;
+  reset: () => void;
+};
+
+export function createInputState(options: CreateInputStateOptions): InputState {
+  const view = createInputView({
+    initialInput: options.initialInput,
+    mentions: options.mentions,
+    attachmentTracker: options.attachmentTracker,
+    callbacks: options.callbacks,
+    persistenceKey: options.persistenceKey,
+  });
+
+  const commands = createInputCommands({
+    view: view.view,
+    snapshot: view.snapshot,
+    setIsSending: view.setIsSending,
+    setShowFormatRibbon: view.setShowFormatRibbon,
+    // Sending/closing clears the editor once, through the focus-preserving path.
+    clearComposer: options.clearComposer ?? options.clearInput,
+    reset: view.reset,
+    restoreSnapshot: (snapshot) => {
+      console.log('DBG13 restoreSnapshot', new Error().stack);
+      view.setValue(snapshot.value);
+      options.attachmentTracker.setAttachments(snapshot.attachments);
+      options.restoreEditor?.(snapshot);
+    },
+    removeTrackedAttachment: (id) =>
+      options.attachmentTracker.removeAttachment(id),
+    attachFiles: options.attachFiles,
+    callbacks: options.callbacks,
+  });
+
+  return {
+    view: view.view,
+    snapshot: view.snapshot,
+    commands,
+    setValue: (v: string) => { if (v) console.log('DBG13 setValue', v.slice(0, 30)); view.setValue(v); },
+    setIsDraggedOver: view.setIsDraggedOver,
+    reset: () => {
+      view.reset();
+      options.clearInput?.();
+    },
+  };
+}

@@ -1,0 +1,42 @@
+{
+ "scenario": "held",
+ "throttled": true,
+ "throttle": {
+  "offline": false,
+  "latency": 150,
+  "downloadThroughput": 1250000,
+  "uploadThroughput": 1250000
+ },
+ "n": 4,
+ "sizes": [
+  "medium"
+ ],
+ "base": "https://localhost:31009",
+ "generatedAt": "2026-11-13T19:03:50.267Z",
+ "records": [
+  {
+   "size": "medium",
+   "i": 0,
+   "phase": "held",
+   "error": "page.goto: Page crashed\nCall log:\n\u001b[2m  - navigating to \"https://localhost:31009/app/channels/5eed92f0-3a83-8200-a790-dd4a69089719\", waiting until \"load\"\u001b[22m\n\n    at run (/home/teo/.cache/channels-perf-b/ab.cjs:138:22)"
+  },
+  {
+   "size": "medium",
+   "i": 1,
+   "phase": "held",
+   "error": "page.waitForSelector: Page crashed\nCall log:\n\u001b[2m  - waiting for locator('[data-channel-scroll] [data-message-id]') to be visible\u001b[22m\n\n    at run (/home/teo/.cache/channels-perf-b/ab.cjs:139:22)"
+  },
+  {
+   "size": "medium",
+   "i": 2,
+   "phase": "held",
+   "error": "page.waitForSelector: Target crashed \nCall log:\n\u001b[2m  - waiting for locator('[data-channel-scroll] [data-message-id]') to be visible\u001b[22m\n\n    at run (/home/teo/.cache/channels-perf-b/ab.cjs:139:22)"
+  },
+  {
+   "size": "medium",
+   "i": 3,
+   "phase": "held",
+   "error": "page.goto: Page crashed\nCall log:\n\u001b[2m  - navigating to \"https://localhost:31009/app/channels/5eed92f0-ce3c-8a78-8d37-54d69b9d9ee1\", waiting until \"load\"\u001b[22m\n\n    at run (/home/teo/.cache/channels-perf-b/ab.cjs:142:22)"
+  }
+ ]
+}

@@ -1,0 +1,4 @@
+undef $/; $_=<STDIN>;
+s/      \/\/ Online, the push of the delivered write reaches the other windows\.\n      if \(!onlineManager\.isOnline\(\)\) announceWaitingWrite\(write\.channelId\);\n      await settlements\.committed\(disposition\.transactionId\);\n      return await deliveredMessage\(host, write\);/      \/\/ A write delivered at once reaches the other windows as its push.\n      const waiting = setTimeout(\n        () => announceWaitingWrite(write.channelId),\n        WAITING_ANNOUNCE_MS\n      );\n      try {\n        await settlements.committed(disposition.transactionId);\n      } finally {\n        clearTimeout(waiting);\n      }\n      return await deliveredMessage(host, write);/ or die 1;
+s/(\/\*\*\n \* The row the device shows until the server's copy replaces it\.)/\/** How long the queue holds a write before the device's other windows are told. *\/\nexport const WAITING_ANNOUNCE_MS = 1_000;\n\n$1/ or die 2;
+print;

@@ -1,0 +1,338 @@
+path "/home/teo/.herdr/worktrees/macro/synoet-channels-local-sync-suiteb/apps/web" does not contain a 'flake.nix', searching up
+
+Running 60 tests using 4 workers
+
+  ✓   2 tests/channels-e2e-dbg/offline.spec.ts:272:1 › OFF-09 a channel left as soon as its messages showed opens with no connection (7.0s)
+  ✓   4 tests/channels-e2e-dbg/current.spec.ts:202:1 › SYN-05 what a device caught up on is what it shows the next time it opens the channel with no connection (9.4s)
+  ✓   1 tests/channels-e2e-dbg/offline.spec.ts:177:1 › OFF-06 a thread read while connected shows its replies with no connection, a long one included (10.3s)
+  ✓   5 tests/channels-e2e-dbg/writes.spec.ts:224:1 › WRT-07 a message deleted before it could be sent is not shown to anyone once the connection is back (8.0s)
+  ✓   6 tests/channels-e2e-dbg/current.spec.ts:202:1 › SYN-05 what a device caught up on is what it shows the next time it opens the channel with no connection (7.9s)
+  ✓   7 tests/channels-e2e-dbg/offline.spec.ts:177:1 › OFF-06 a thread read while connected shows its replies with no connection, a long one included (7.6s)
+  ✓   8 tests/channels-e2e-dbg/offline.spec.ts:272:1 › OFF-09 a channel left as soon as its messages showed opens with no connection (6.1s)
+  ✓  10 tests/channels-e2e-dbg/writes.spec.ts:224:1 › WRT-07 a message deleted before it could be sent is not shown to anyone once the connection is back (8.3s)
+  ✓  11 tests/channels-e2e-dbg/current.spec.ts:202:1 › SYN-05 what a device caught up on is what it shows the next time it opens the channel with no connection (8.8s)
+  ✓  12 tests/channels-e2e-dbg/offline.spec.ts:177:1 › OFF-06 a thread read while connected shows its replies with no connection, a long one included (7.6s)
+  ✓  13 tests/channels-e2e-dbg/offline.spec.ts:272:1 › OFF-09 a channel left as soon as its messages showed opens with no connection (5.6s)
+  ✓  14 tests/channels-e2e-dbg/offline.spec.ts:298:1 › OFF-10 a message that arrived while the channel was open is there when the channel opens with no connection (6.2s)
+  ✘   3 tests/channels-e2e-dbg/offline.spec.ts:298:1 › OFF-10 a message that arrived while the channel was open is there when the channel opens with no connection (40.4s)
+  ✓  15 tests/channels-e2e-dbg/writes.spec.ts:224:1 › WRT-07 a message deleted before it could be sent is not shown to anyone once the connection is back (8.8s)
+  ✓  16 tests/channels-e2e-dbg/current.spec.ts:202:1 › SYN-05 what a device caught up on is what it shows the next time it opens the channel with no connection (7.7s)
+  ✓  17 tests/channels-e2e-dbg/offline.spec.ts:177:1 › OFF-06 a thread read while connected shows its replies with no connection, a long one included (7.5s)
+  ✓  18 tests/channels-e2e-dbg/offline.spec.ts:272:1 › OFF-09 a channel left as soon as its messages showed opens with no connection (5.8s)
+  ✓  19 tests/channels-e2e-dbg/offline.spec.ts:298:1 › OFF-10 a message that arrived while the channel was open is there when the channel opens with no connection (6.8s)
+  ✘   9 tests/channels-e2e-dbg/offline.spec.ts:298:1 › OFF-10 a message that arrived while the channel was open is there when the channel opens with no connection (37.4s)
+  ✓  20 tests/channels-e2e-dbg/writes.spec.ts:224:1 › WRT-07 a message deleted before it could be sent is not shown to anyone once the connection is back (7.7s)
+  ✓  21 tests/channels-e2e-dbg/current.spec.ts:202:1 › SYN-05 what a device caught up on is what it shows the next time it opens the channel with no connection (8.3s)
+  ✓  23 tests/channels-e2e-dbg/offline.spec.ts:272:1 › OFF-09 a channel left as soon as its messages showed opens with no connection (5.2s)
+  ✓  22 tests/channels-e2e-dbg/offline.spec.ts:177:1 › OFF-06 a thread read while connected shows its replies with no connection, a long one included (8.4s)
+  ✓  24 tests/channels-e2e-dbg/offline.spec.ts:298:1 › OFF-10 a message that arrived while the channel was open is there when the channel opens with no connection (6.9s)
+  ✓  25 tests/channels-e2e-dbg/writes.spec.ts:224:1 › WRT-07 a message deleted before it could be sent is not shown to anyone once the connection is back (8.6s)
+  ✓  26 tests/channels-e2e-dbg/current.spec.ts:202:1 › SYN-05 what a device caught up on is what it shows the next time it opens the channel with no connection (7.5s)
+  ✓  28 tests/channels-e2e-dbg/offline.spec.ts:272:1 › OFF-09 a channel left as soon as its messages showed opens with no connection (5.2s)
+  ✓  27 tests/channels-e2e-dbg/offline.spec.ts:177:1 › OFF-06 a thread read while connected shows its replies with no connection, a long one included (8.5s)
+  ✓  29 tests/channels-e2e-dbg/offline.spec.ts:298:1 › OFF-10 a message that arrived while the channel was open is there when the channel opens with no connection (8.3s)
+  ✓  30 tests/channels-e2e-dbg/writes.spec.ts:224:1 › WRT-07 a message deleted before it could be sent is not shown to anyone once the connection is back (8.8s)
+  ✓  31 tests/channels-e2e-dbg/current.spec.ts:202:1 › SYN-05 what a device caught up on is what it shows the next time it opens the channel with no connection (9.7s)
+  ✓  32 tests/channels-e2e-dbg/offline.spec.ts:177:1 › OFF-06 a thread read while connected shows its replies with no connection, a long one included (8.3s)
+  ✓  33 tests/channels-e2e-dbg/offline.spec.ts:272:1 › OFF-09 a channel left as soon as its messages showed opens with no connection (6.5s)
+  ✓  34 tests/channels-e2e-dbg/offline.spec.ts:298:1 › OFF-10 a message that arrived while the channel was open is there when the channel opens with no connection (7.1s)
+  ✓  35 tests/channels-e2e-dbg/writes.spec.ts:224:1 › WRT-07 a message deleted before it could be sent is not shown to anyone once the connection is back (8.6s)
+  ✓  38 tests/channels-e2e-dbg/offline.spec.ts:272:1 › OFF-09 a channel left as soon as its messages showed opens with no connection (5.6s)
+  ✓  37 tests/channels-e2e-dbg/offline.spec.ts:177:1 › OFF-06 a thread read while connected shows its replies with no connection, a long one included (8.4s)
+  ✓  39 tests/channels-e2e-dbg/offline.spec.ts:298:1 › OFF-10 a message that arrived while the channel was open is there when the channel opens with no connection (6.1s)
+  ✓  40 tests/channels-e2e-dbg/writes.spec.ts:224:1 › WRT-07 a message deleted before it could be sent is not shown to anyone once the connection is back (7.8s)
+  ✓  41 tests/channels-e2e-dbg/current.spec.ts:202:1 › SYN-05 what a device caught up on is what it shows the next time it opens the channel with no connection (8.9s)
+  ✓  42 tests/channels-e2e-dbg/offline.spec.ts:177:1 › OFF-06 a thread read while connected shows its replies with no connection, a long one included (8.1s)
+  ✓  43 tests/channels-e2e-dbg/offline.spec.ts:272:1 › OFF-09 a channel left as soon as its messages showed opens with no connection (5.5s)
+  ✓  44 tests/channels-e2e-dbg/offline.spec.ts:298:1 › OFF-10 a message that arrived while the channel was open is there when the channel opens with no connection (6.4s)
+  ✓  45 tests/channels-e2e-dbg/writes.spec.ts:224:1 › WRT-07 a message deleted before it could be sent is not shown to anyone once the connection is back (6.2s)
+  ✓  46 tests/channels-e2e-dbg/current.spec.ts:202:1 › SYN-05 what a device caught up on is what it shows the next time it opens the channel with no connection (7.8s)
+  ✓  48 tests/channels-e2e-dbg/offline.spec.ts:272:1 › OFF-09 a channel left as soon as its messages showed opens with no connection (5.5s)
+  ✓  47 tests/channels-e2e-dbg/offline.spec.ts:177:1 › OFF-06 a thread read while connected shows its replies with no connection, a long one included (7.7s)
+  ✓  49 tests/channels-e2e-dbg/offline.spec.ts:298:1 › OFF-10 a message that arrived while the channel was open is there when the channel opens with no connection (6.5s)
+  ✘  36 tests/channels-e2e-dbg/current.spec.ts:202:1 › SYN-05 what a device caught up on is what it shows the next time it opens the channel with no connection (38.4s)
+  ✓  50 tests/channels-e2e-dbg/writes.spec.ts:224:1 › WRT-07 a message deleted before it could be sent is not shown to anyone once the connection is back (8.0s)
+  ✓  53 tests/channels-e2e-dbg/offline.spec.ts:272:1 › OFF-09 a channel left as soon as its messages showed opens with no connection (5.7s)
+  ✓  52 tests/channels-e2e-dbg/offline.spec.ts:177:1 › OFF-06 a thread read while connected shows its replies with no connection, a long one included (8.2s)
+  ✓  54 tests/channels-e2e-dbg/offline.spec.ts:298:1 › OFF-10 a message that arrived while the channel was open is there when the channel opens with no connection (6.6s)
+  ✓  55 tests/channels-e2e-dbg/writes.spec.ts:224:1 › WRT-07 a message deleted before it could be sent is not shown to anyone once the connection is back (7.5s)
+  ✓  57 tests/channels-e2e-dbg/offline.spec.ts:177:1 › OFF-06 a thread read while connected shows its replies with no connection, a long one included (9.2s)
+  ✓  58 tests/channels-e2e-dbg/offline.spec.ts:272:1 › OFF-09 a channel left as soon as its messages showed opens with no connection (5.4s)
+  ✓  59 tests/channels-e2e-dbg/offline.spec.ts:298:1 › OFF-10 a message that arrived while the channel was open is there when the channel opens with no connection (6.2s)
+  ✓  60 tests/channels-e2e-dbg/writes.spec.ts:224:1 › WRT-07 a message deleted before it could be sent is not shown to anyone once the connection is back (6.2s)
+  ✘  51 tests/channels-e2e-dbg/current.spec.ts:202:1 › SYN-05 what a device caught up on is what it shows the next time it opens the channel with no connection (38.4s)
+  ✘  56 tests/channels-e2e-dbg/current.spec.ts:202:1 › SYN-05 what a device caught up on is what it shows the next time it opens the channel with no connection (37.9s)
+
+
+  1) tests/channels-e2e-dbg/current.spec.ts:202:1 › SYN-05 what a device caught up on is what it shows the next time it opens the channel with no connection 
+
+    Error: the channel as it is on the screen
+
+    the channel as it is on the screen
+
+    expect(received).toEqual(expected) // deep equality
+
+    - Expected  - 2
+    + Received  + 0
+
+    @@ -5,8 +5,6 @@
+        "  > third reply",
+        "four, edited",
+        "five [❤️]",
+        "six [👍 2]",
+        "seven",
+    -   "eight, edited",
+    -   "  > reply to eight",
+      ]
+
+    Call Log:
+    - Timeout 30000ms exceeded while waiting on the predicate
+
+       at harness/device.ts:59
+
+      57 |       timeout: 30_000,
+      58 |     })
+    > 59 |     .toEqual(lines);
+         |      ^
+      60 | }
+      61 |
+      62 | /**
+        at expectShown (/home/teo/.herdr/worktrees/macro/synoet-channels-local-sync-suiteb/apps/web/tests/channels-e2e-dbg/harness/device.ts:59:6)
+        at /home/teo/.herdr/worktrees/macro/synoet-channels-local-sync-suiteb/apps/web/tests/channels-e2e-dbg/current.spec.ts:225:11
+        at failsSometimes (/home/teo/.herdr/worktrees/macro/synoet-channels-local-sync-suiteb/apps/web/tests/channels-e2e-dbg/harness/fixtures.ts:99:5)
+        at /home/teo/.herdr/worktrees/macro/synoet-channels-local-sync-suiteb/apps/web/tests/channels-e2e-dbg/current.spec.ts:223:3
+
+    attachment #1: screenshot (image/png) ──────────────────────────────────────────────────────────
+    ../../../../../../.cache/channels-perf-b/e2ed/f4/test-results/current-SYN-05-what-a-devi-02ea9--channel-with-no-connection-repeat7/test-failed-1.png
+    ────────────────────────────────────────────────────────────────────────────────────────────────
+
+    Error Context: ../../../../../../.cache/channels-perf-b/e2ed/f4/test-results/current-SYN-05-what-a-devi-02ea9--channel-with-no-connection-repeat7/error-context.md
+
+    attachment #3: trace (application/zip) ─────────────────────────────────────────────────────────
+    ../../../../../../.cache/channels-perf-b/e2ed/f4/test-results/current-SYN-05-what-a-devi-02ea9--channel-with-no-connection-repeat7/trace.zip
+    Usage:
+
+        npx playwright show-trace ../../../../../../.cache/channels-perf-b/e2ed/f4/test-results/current-SYN-05-what-a-devi-02ea9--channel-with-no-connection-repeat7/trace.zip
+
+    ────────────────────────────────────────────────────────────────────────────────────────────────
+
+  2) tests/channels-e2e-dbg/current.spec.ts:202:1 › SYN-05 what a device caught up on is what it shows the next time it opens the channel with no connection 
+
+    Error: the channel as it is on the screen
+
+    the channel as it is on the screen
+
+    expect(received).toEqual(expected) // deep equality
+
+    - Expected  - 2
+    + Received  + 1
+
+    @@ -5,8 +5,7 @@
+        "  > third reply",
+        "four, edited",
+        "five [❤️]",
+        "six [👍 2]",
+        "seven",
+    -   "eight, edited",
+    -   "  > reply to eight",
+    +   "eight",
+      ]
+
+    Call Log:
+    - Timeout 30000ms exceeded while waiting on the predicate
+
+       at harness/device.ts:59
+
+      57 |       timeout: 30_000,
+      58 |     })
+    > 59 |     .toEqual(lines);
+         |      ^
+      60 | }
+      61 |
+      62 | /**
+        at expectShown (/home/teo/.herdr/worktrees/macro/synoet-channels-local-sync-suiteb/apps/web/tests/channels-e2e-dbg/harness/device.ts:59:6)
+        at /home/teo/.herdr/worktrees/macro/synoet-channels-local-sync-suiteb/apps/web/tests/channels-e2e-dbg/current.spec.ts:225:11
+        at failsSometimes (/home/teo/.herdr/worktrees/macro/synoet-channels-local-sync-suiteb/apps/web/tests/channels-e2e-dbg/harness/fixtures.ts:99:5)
+        at /home/teo/.herdr/worktrees/macro/synoet-channels-local-sync-suiteb/apps/web/tests/channels-e2e-dbg/current.spec.ts:223:3
+
+    attachment #1: screenshot (image/png) ──────────────────────────────────────────────────────────
+    ../../../../../../.cache/channels-perf-b/e2ed/f4/test-results/current-SYN-05-what-a-devi-02ea9--channel-with-no-connection-repeat10/test-failed-1.png
+    ────────────────────────────────────────────────────────────────────────────────────────────────
+
+    Error Context: ../../../../../../.cache/channels-perf-b/e2ed/f4/test-results/current-SYN-05-what-a-devi-02ea9--channel-with-no-connection-repeat10/error-context.md
+
+    attachment #3: trace (application/zip) ─────────────────────────────────────────────────────────
+    ../../../../../../.cache/channels-perf-b/e2ed/f4/test-results/current-SYN-05-what-a-devi-02ea9--channel-with-no-connection-repeat10/trace.zip
+    Usage:
+
+        npx playwright show-trace ../../../../../../.cache/channels-perf-b/e2ed/f4/test-results/current-SYN-05-what-a-devi-02ea9--channel-with-no-connection-repeat10/trace.zip
+
+    ────────────────────────────────────────────────────────────────────────────────────────────────
+
+  3) tests/channels-e2e-dbg/current.spec.ts:202:1 › SYN-05 what a device caught up on is what it shows the next time it opens the channel with no connection 
+
+    Error: the channel as it is on the screen
+
+    the channel as it is on the screen
+
+    expect(received).toEqual(expected) // deep equality
+
+    - Expected  - 4
+    + Received  + 3
+
+      Array [
+        "one, edited",
+    -   "This message was deleted.",
+    -   "  > first reply, edited",
+    +   "two",
+    +   "  > first reply",
+    +   "  > second reply",
+        "  > third reply",
+        "four, edited",
+        "five [❤️]",
+        "six [👍 2]",
+        "seven",
+    -   "eight, edited",
+    -   "  > reply to eight",
+      ]
+
+    Call Log:
+    - Timeout 30000ms exceeded while waiting on the predicate
+
+       at harness/device.ts:59
+
+      57 |       timeout: 30_000,
+      58 |     })
+    > 59 |     .toEqual(lines);
+         |      ^
+      60 | }
+      61 |
+      62 | /**
+        at expectShown (/home/teo/.herdr/worktrees/macro/synoet-channels-local-sync-suiteb/apps/web/tests/channels-e2e-dbg/harness/device.ts:59:6)
+        at /home/teo/.herdr/worktrees/macro/synoet-channels-local-sync-suiteb/apps/web/tests/channels-e2e-dbg/current.spec.ts:225:11
+        at failsSometimes (/home/teo/.herdr/worktrees/macro/synoet-channels-local-sync-suiteb/apps/web/tests/channels-e2e-dbg/harness/fixtures.ts:99:5)
+        at /home/teo/.herdr/worktrees/macro/synoet-channels-local-sync-suiteb/apps/web/tests/channels-e2e-dbg/current.spec.ts:223:3
+
+    attachment #1: screenshot (image/png) ──────────────────────────────────────────────────────────
+    ../../../../../../.cache/channels-perf-b/e2ed/f4/test-results/current-SYN-05-what-a-devi-02ea9--channel-with-no-connection-repeat11/test-failed-1.png
+    ────────────────────────────────────────────────────────────────────────────────────────────────
+
+    Error Context: ../../../../../../.cache/channels-perf-b/e2ed/f4/test-results/current-SYN-05-what-a-devi-02ea9--channel-with-no-connection-repeat11/error-context.md
+
+    attachment #3: trace (application/zip) ─────────────────────────────────────────────────────────
+    ../../../../../../.cache/channels-perf-b/e2ed/f4/test-results/current-SYN-05-what-a-devi-02ea9--channel-with-no-connection-repeat11/trace.zip
+    Usage:
+
+        npx playwright show-trace ../../../../../../.cache/channels-perf-b/e2ed/f4/test-results/current-SYN-05-what-a-devi-02ea9--channel-with-no-connection-repeat11/trace.zip
+
+    ────────────────────────────────────────────────────────────────────────────────────────────────
+
+  4) tests/channels-e2e-dbg/offline.spec.ts:298:1 › OFF-10 a message that arrived while the channel was open is there when the channel opens with no connection 
+
+    Error: the channel as it is on the screen
+
+    the channel as it is on the screen
+
+    expect(received).toEqual(expected) // deep equality
+
+    - Expected  - 1
+    + Received  + 0
+
+    @@ -2,7 +2,6 @@
+        "one, edited",
+        "This message was deleted.",
+        "  > a reply",
+        "three [👍]",
+        "four",
+    -   "five",
+      ]
+
+    Call Log:
+    - Timeout 30000ms exceeded while waiting on the predicate
+
+       at harness/device.ts:59
+
+      57 |       timeout: 30_000,
+      58 |     })
+    > 59 |     .toEqual(lines);
+         |      ^
+      60 | }
+      61 |
+      62 | /**
+        at expectShown (/home/teo/.herdr/worktrees/macro/synoet-channels-local-sync-suiteb/apps/web/tests/channels-e2e-dbg/harness/device.ts:59:6)
+        at /home/teo/.herdr/worktrees/macro/synoet-channels-local-sync-suiteb/apps/web/tests/channels-e2e-dbg/offline.spec.ts:314:11
+        at failsSometimes (/home/teo/.herdr/worktrees/macro/synoet-channels-local-sync-suiteb/apps/web/tests/channels-e2e-dbg/harness/fixtures.ts:99:5)
+        at /home/teo/.herdr/worktrees/macro/synoet-channels-local-sync-suiteb/apps/web/tests/channels-e2e-dbg/offline.spec.ts:312:3
+
+    attachment #1: screenshot (image/png) ──────────────────────────────────────────────────────────
+    ../../../../../../.cache/channels-perf-b/e2ed/f4/test-results/offline-OFF-10-a-message-t-36a77-el-opens-with-no-connection/test-failed-1.png
+    ────────────────────────────────────────────────────────────────────────────────────────────────
+
+    Error Context: ../../../../../../.cache/channels-perf-b/e2ed/f4/test-results/offline-OFF-10-a-message-t-36a77-el-opens-with-no-connection/error-context.md
+
+    attachment #3: trace (application/zip) ─────────────────────────────────────────────────────────
+    ../../../../../../.cache/channels-perf-b/e2ed/f4/test-results/offline-OFF-10-a-message-t-36a77-el-opens-with-no-connection/trace.zip
+    Usage:
+
+        npx playwright show-trace ../../../../../../.cache/channels-perf-b/e2ed/f4/test-results/offline-OFF-10-a-message-t-36a77-el-opens-with-no-connection/trace.zip
+
+    ────────────────────────────────────────────────────────────────────────────────────────────────
+
+  5) tests/channels-e2e-dbg/offline.spec.ts:298:1 › OFF-10 a message that arrived while the channel was open is there when the channel opens with no connection 
+
+    Error: the channel as it is on the screen
+
+    the channel as it is on the screen
+
+    expect(received).toEqual(expected) // deep equality
+
+    - Expected  - 1
+    + Received  + 0
+
+    @@ -2,7 +2,6 @@
+        "one, edited",
+        "This message was deleted.",
+        "  > a reply",
+        "three [👍]",
+        "four",
+    -   "five",
+      ]
+
+    Call Log:
+    - Timeout 30000ms exceeded while waiting on the predicate
+
+       at harness/device.ts:59
+
+      57 |       timeout: 30_000,
+      58 |     })
+    > 59 |     .toEqual(lines);
+         |      ^
+      60 | }
+      61 |
+      62 | /**
+        at expectShown (/home/teo/.herdr/worktrees/macro/synoet-channels-local-sync-suiteb/apps/web/tests/channels-e2e-dbg/harness/device.ts:59:6)
+        at /home/teo/.herdr/worktrees/macro/synoet-channels-local-sync-suiteb/apps/web/tests/channels-e2e-dbg/offline.spec.ts:314:11
+        at failsSometimes (/home/teo/.herdr/worktrees/macro/synoet-channels-local-sync-suiteb/apps/web/tests/channels-e2e-dbg/harness/fixtures.ts:99:5)
+        at /home/teo/.herdr/worktrees/macro/synoet-channels-local-sync-suiteb/apps/web/tests/channels-e2e-dbg/offline.spec.ts:312:3
+
+    attachment #1: screenshot (image/png) ──────────────────────────────────────────────────────────
+    ../../../../../../.cache/channels-perf-b/e2ed/f4/test-results/offline-OFF-10-a-message-t-36a77-el-opens-with-no-connection-repeat1/test-failed-1.png
+    ────────────────────────────────────────────────────────────────────────────────────────────────
+
+    Error Context: ../../../../../../.cache/channels-perf-b/e2ed/f4/test-results/offline-OFF-10-a-message-t-36a77-el-opens-with-no-connection-repeat1/error-context.md
+
+    attachment #3: trace (application/zip) ─────────────────────────────────────────────────────────
+    ../../../../../../.cache/channels-perf-b/e2ed/f4/test-results/offline-OFF-10-a-message-t-36a77-el-opens-with-no-connection-repeat1/trace.zip
+    Usage:
+
+        npx playwright show-trace ../../../../../../.cache/channels-perf-b/e2ed/f4/test-results/offline-OFF-10-a-message-t-36a77-el-opens-with-no-connection-repeat1/trace.zip
+
+    ────────────────────────────────────────────────────────────────────────────────────────────────
+
+  5 failed
+    tests/channels-e2e-dbg/current.spec.ts:202:1 › SYN-05 what a device caught up on is what it shows the next time it opens the channel with no connection 
+    tests/channels-e2e-dbg/current.spec.ts:202:1 › SYN-05 what a device caught up on is what it shows the next time it opens the channel with no connection 
+    tests/channels-e2e-dbg/current.spec.ts:202:1 › SYN-05 what a device caught up on is what it shows the next time it opens the channel with no connection 
+    tests/channels-e2e-dbg/offline.spec.ts:298:1 › OFF-10 a message that arrived while the channel was open is there when the channel opens with no connection 
+    tests/channels-e2e-dbg/offline.spec.ts:298:1 › OFF-10 a message that arrived while the channel was open is there when the channel opens with no connection 
+  55 passed (3.0m)

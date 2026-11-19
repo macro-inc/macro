@@ -1,0 +1,43 @@
+path "/home/teo/.herdr/worktrees/macro/synoet-channels-local-sync-suite/apps/web" does not contain a 'flake.nix', searching up
+
+Running 16 tests using 4 workers
+
+  ✓   2 tests/channels-e2e/unread.spec.ts:160:1 › UNR-04 scrolled up in an open channel, a new message shows “1 unread … below”, which leads to it (20.3s)
+  ✓   3 tests/channels-e2e/unread.spec.ts:160:1 › UNR-04 scrolled up in an open channel, a new message shows “1 unread … below”, which leads to it (20.3s)
+  ✓   1 tests/channels-e2e/unread.spec.ts:160:1 › UNR-04 scrolled up in an open channel, a new message shows “1 unread … below”, which leads to it (20.5s)
+  ✓   4 tests/channels-e2e/unread.spec.ts:160:1 › UNR-04 scrolled up in an open channel, a new message shows “1 unread … below”, which leads to it (20.5s)
+  ✓   5 tests/channels-e2e/unread.spec.ts:160:1 › UNR-04 scrolled up in an open channel, a new message shows “1 unread … below”, which leads to it (4.9s)
+  ✓   8 tests/channels-e2e/unread.spec.ts:160:1 › UNR-04 scrolled up in an open channel, a new message shows “1 unread … below”, which leads to it (4.7s)
+  ✓   9 tests/channels-e2e/unread.spec.ts:160:1 › UNR-04 scrolled up in an open channel, a new message shows “1 unread … below”, which leads to it (4.6s)
+  ✓  10 tests/channels-e2e/unread.spec.ts:160:1 › UNR-04 scrolled up in an open channel, a new message shows “1 unread … below”, which leads to it (4.7s)
+  ✓  11 tests/channels-e2e/unread.spec.ts:160:1 › UNR-04 scrolled up in an open channel, a new message shows “1 unread … below”, which leads to it (4.5s)
+  ✓  12 tests/channels-e2e/unread.spec.ts:160:1 › UNR-04 scrolled up in an open channel, a new message shows “1 unread … below”, which leads to it (4.4s)
+  ✓   6 tests/channels-e2e/unread.spec.ts:160:1 › UNR-04 scrolled up in an open channel, a new message shows “1 unread … below”, which leads to it (19.3s)
+  ✓  13 tests/channels-e2e/unread.spec.ts:160:1 › UNR-04 scrolled up in an open channel, a new message shows “1 unread … below”, which leads to it (4.6s)
+  ✓  14 tests/channels-e2e/unread.spec.ts:160:1 › UNR-04 scrolled up in an open channel, a new message shows “1 unread … below”, which leads to it (4.7s)
+  ✓  15 tests/channels-e2e/unread.spec.ts:160:1 › UNR-04 scrolled up in an open channel, a new message shows “1 unread … below”, which leads to it (4.8s)
+  ✓  16 tests/channels-e2e/unread.spec.ts:160:1 › UNR-04 scrolled up in an open channel, a new message shows “1 unread … below”, which leads to it (18.8s)
+  ✘   7 tests/channels-e2e/unread.spec.ts:160:1 › UNR-04 scrolled up in an open channel, a new message shows “1 unread … below”, which leads to it (1.5m)
+
+
+  1) tests/channels-e2e/unread.spec.ts:160:1 › UNR-04 scrolled up in an open channel, a new message shows “1 unread … below”, which leads to it 
+
+    Test timeout of 90000ms exceeded.
+
+    attachment #1: screenshot (image/png) ──────────────────────────────────────────────────────────
+    ../../../../../../.cache/channels-perf-b/e2e/u4b/test-results/unread-UNR-04-scrolled-up--377c1--…-below”-which-leads-to-it-repeat6/test-failed-1.png
+    ────────────────────────────────────────────────────────────────────────────────────────────────
+
+    Error Context: ../../../../../../.cache/channels-perf-b/e2e/u4b/test-results/unread-UNR-04-scrolled-up--377c1--…-below”-which-leads-to-it-repeat6/error-context.md
+
+    attachment #3: trace (application/zip) ─────────────────────────────────────────────────────────
+    ../../../../../../.cache/channels-perf-b/e2e/u4b/test-results/unread-UNR-04-scrolled-up--377c1--…-below”-which-leads-to-it-repeat6/trace.zip
+    Usage:
+
+        npx playwright show-trace ../../../../../../.cache/channels-perf-b/e2e/u4b/test-results/unread-UNR-04-scrolled-up--377c1--…-below”-which-leads-to-it-repeat6/trace.zip
+
+    ────────────────────────────────────────────────────────────────────────────────────────────────
+
+  1 failed
+    tests/channels-e2e/unread.spec.ts:160:1 › UNR-04 scrolled up in an open channel, a new message shows “1 unread … below”, which leads to it 
+  15 passed (2.1m)

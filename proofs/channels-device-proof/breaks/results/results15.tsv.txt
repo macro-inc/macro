@@ -1,0 +1,31 @@
+left-behind-reads-not-held	OFF-06	PASSED	
+left-behind-reads-not-held	OFF-09	PASSED	
+left-behind-reads-not-held	OFF-14	FAILED	Error: expect(received).toEqual(expected) // deep equality | - Expected  - 2
+device-not-used	OFF-01	FAILED	Error: expect(locator).toBeVisible() failed | Locator: locator('[data-input-id="channel-input-01a1e7d4-304c-7233-b0ac-f39d6b030466"]')
+device-not-used	OFF-04	DEFECT-CHECK-FAILED	Error: expect(locator).toBeVisible() failed
+device-not-used	OFF-05	FAILED	Error: expect(locator).toBeVisible() failed | Locator: locator('[data-input-id="channel-input-01a1e7d4-3261-7755-b53c-1229d66263bc"]')
+device-not-used	OFF-06	FAILED	Error: expect(locator).toBeVisible() failed | Locator: locator('[data-input-id="channel-input-01a1e7d5-4a04-77c1-a83e-7a1ec8d668a0"]')
+device-not-used	OFF-07	FAILED	Error: expect(locator).toBeVisible() failed | Locator: locator('[data-input-id="channel-input-01a1e7d5-5f1e-7b60-b8d0-f138db541451"]')
+device-not-used	OFF-08	FAILED	Error: expect(locator).toBeVisible() failed | Locator: locator('[data-input-id="channel-input-01a1e7d5-7493-772c-9397-d64f109a3e22"]')
+device-not-used	OFF-09	FAILED	Error: the channel as it is on the screen | the channel as it is on the screen
+device-not-used	OFF-10	FAILED	Error: expect(locator).toBeVisible() failed | Locator: locator('[data-input-id="channel-input-01a1e7d6-7c1b-79b8-a8ea-22a7171c1d82"]')
+device-not-used	OFF-11	FAILED	Error: expect(locator).toBeVisible() failed | Locator: locator('[data-input-id="channel-input-01a1e7d6-8eb8-7879-b374-832b1371c59e"]')
+device-not-used	OFF-13	FAILED	Error: expect(locator).toBeVisible() failed | Locator: locator('[data-input-id="channel-input-01a1e7d7-0651-7722-b9e1-303b2495d26b"]')
+device-not-used	OFF-14	FAILED	Error: expect(locator).toBeVisible() failed | Locator: locator('[data-input-id="channel-input-01a1e7d7-986a-7385-804a-58c50390c6f1"]')
+device-not-used	PRE-01	FAILED	Error: expect(locator).toBeVisible() failed | Locator: locator('[data-input-id="channel-input-01a1e7d7-ae01-7340-9783-fa4240a69ca4"]')
+device-not-used	WRT-02	FAILED	Error: the channel as it is on the screen | the channel as it is on the screen
+device-not-used	WRT-05	FAILED	Error: the channel as the services hold it | the channel as the services hold it
+device-not-used	WRT-06	FAILED	Test timeout of 90000ms exceeded.
+device-not-used	WRT-07	FAILED	Test timeout of 90000ms exceeded.
+favorite-does-nothing	CHN-05	FAILED	Error: expect(locator).toHaveText(expected) failed | Locator: getByRole('tree', { name: 'Conversations' }).locator('[data-key="favorite:channel:01a1e7da-e90b-76
+favorite-does-nothing	CHN-08	FAILED	Error: expect(locator).toHaveText(expected) failed | Locator: getByRole('tree', { name: 'Conversations' }).locator('[data-key="favorite:channel:01a1e7da-e90d-76
+copy-text-copies-nothing	MSG-17	FAILED	Error: expect(received).toBe(expected) // Object.is equality | Expected: "copy exactly this, please"
+prewarm-limits-changed	PRE-02	FAILED	Error: expect(locator).toBeVisible() failed | Locator: getByText('Unable to load this channel')
+prewarm-limits-changed	PRE-03	FAILED	Error: expect(locator).toBeVisible() failed | Locator: getByText('Unable to load this channel')
+prewarm-limits-changed	PRE-04	FAILED	Error: expect(locator).toBeVisible() failed | Locator: locator('[data-channel-scroll]').locator('[data-message]').filter({ has: locator('[data-message-content]'
+waiting-write-not-shown-in-other-window	WRT-14	FAILED	Error: the channel as it is on the screen | the channel as it is on the screen
+teammate-not-offered-by-name	DM-01	PASSED	
+teammate-not-offered-by-name	DM-06	FAILED	Error: expect(locator).toBeVisible() failed | Locator: getByRole('option', { name: /Ben Member/ })
+deletion-elsewhere-not-noticed	CHN-07	PASSED	
+deletion-elsewhere-not-noticed	CHN-15	PASSED	
+deletion-elsewhere-not-noticed	MEM-03	PASSED	

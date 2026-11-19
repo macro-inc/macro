@@ -1,0 +1,15 @@
+=== channels-perf cold_fresh 08:30:37 load=26.68
+=== channels-perf-b cold_fresh 08:31:51 load=37.31
+=== channels-perf session 08:34:31 load=34.07
+=== channels-perf-b session 08:40:56 load=24.40
+08:46:24 session  large 3 session ERROR page.waitForSelector: Timeout 90000ms exceeded.
+=== channels-perf jump_old 08:48:34 load=35.31
+=== channels-perf-b jump_old 08:49:40 load=31.48
+=== channels-perf jump_reply 08:52:16 load=31.15
+=== channels-perf-b jump_reply 08:53:26 load=28.75
+=== channels-perf cold_login 08:54:40 load=32.51
+=== channels-perf-b cold_login 08:58:00 load=31.10
+=== channels-perf cold_fresh --throttle 09:01:22 load=31.72
+=== channels-perf-b cold_fresh --throttle 09:11:44 load=48.30
+=== channels-perf session --throttle 09:13:45 load=26.04
+=== channels-perf-b session --throttle 09:20:16 load=25.67

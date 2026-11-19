@@ -1,0 +1,239 @@
+path "/home/teo/.herdr/worktrees/macro/synoet-channels-local-sync-suiteb/apps/web" does not contain a 'flake.nix', searching up
+
+Running 4 tests using 4 workers
+
+ZZ w3 reload 0
+ZZ w0 reload 0
+ZZ w1 reload 0
+ZZ w1 [observability] graphql.mutation_queue.loaded {auth.state: signed-in, network.online: false, graphql.websocket.state: connected, mutation_queue.depth: 1, mutation_queue.age_unknown_items: 0}
+ZZ w2 DBGq skipped 4241 recovery-timeout
+ZZ w2 [observability] graphql.mutation_queue.skipped {auth.state: signed-in, network.online: false, graphql.websocket.state: connected, mutation_queue.pending_items: 1, mutation_queue.oldest_observed_wait_ms: 2728}
+ZZ w2 DBGq skipped 4241 recovery-timeout
+ZZ w2 reload 0
+ZZ w2 DBGq claim 4394 6aa993 none deferredUntil -
+ZZ w0 DBGq claim 2230 1d7f4e none deferredUntil -
+ZZ w0 DBGq blocked 2250 {"id":"1","op":"UpdateNotifications","lo":"1d7f4e","exp":299165,"alive":true,"keys":["transactionId","uuid","superseded","query","operationName","variables","clientMetadata","optimisticData","enqueuedAtMs","leaseOwner","leaseGeneration","leaseExpiresAtMs"]}
+ZZ w0 DBGq finish 2351 UpdateNotifications committed {} retryIn -
+ZZ w0 DBGq tfinish 2352 committed {}
+ZZ w0 DBGq claim 2393 1d7f4e 2 SendChannelMessage deferredUntil -
+ZZ w0 RESULT round 0 sent-after 776ms
+ZZ w1 DBGq claim 2467 57ea8c none deferredUntil -
+ZZ w0 DBGq finish 2549 SendChannelMessage committed {} retryIn -
+ZZ w0 DBGq tfinish 2549 committed {}
+ZZ w0 DBGq claim 2683 1d7f4e none deferredUntil -
+ZZ w0 DBGq blocked 2693 null
+ZZ w3 DBGq claim 2880 1a52ae none deferredUntil -
+ZZ w3 DBGq blocked 2883 {"id":"1","op":"UpdateNotifications","lo":"1a52ae","exp":298556,"alive":true,"keys":["transactionId","uuid","superseded","query","operationName","variables","clientMetadata","optimisticData","enqueuedAtMs","leaseOwner","leaseGeneration","leaseExpiresAtMs"]}
+ZZ w3 DBGq finish 3000 UpdateNotifications committed {} retryIn -
+ZZ w3 DBGq tfinish 3001 committed {}
+ZZ w3 DBGq claim 3045 1a52ae 2 SendChannelMessage deferredUntil -
+ZZ w3 DBGq finish 3182 SendChannelMessage committed {} retryIn -
+ZZ w3 DBGq tfinish 3182 committed {}
+ZZ w1 DBGq blocked 2788 {"id":"1","op":"UpdateNotifications","lo":"f6cee9","exp":296739,"alive":false,"keys":["transactionId","uuid","superseded","query","operationName","variables","clientMetadata","optimisticData","enqueuedAtMs","leaseOwner","leaseGeneration","leaseExpiresAtMs"]}
+ZZ w1 DBGq skipped 3330 lease-owner-gone
+ZZ w1 [observability] graphql.mutation_queue.skipped {auth.state: signed-in, network.online: false, graphql.websocket.state: connected, mutation_queue.pending_items: 2, mutation_queue.oldest_observed_wait_ms: 1994}
+ZZ w1 DBGq claim 3536 57ea8c 1 UpdateNotifications deferredUntil -
+ZZ w2 [observability] graphql.mutation_queue.loaded {auth.state: signed-in, network.online: false, graphql.websocket.state: connected, mutation_queue.depth: 1, mutation_queue.age_unknown_items: 0}
+ZZ w3 DBGq claim 3598 1a52ae none deferredUntil -
+ZZ w3 DBGq blocked 3628 null
+ZZ w3 RESULT round 0 sent-after 2059ms
+ZZ w1 DBGq finish 3702 UpdateNotifications committed {} retryIn -
+ZZ w1 DBGq tfinish 3702 committed {}
+ZZ w1 DBGq claim 3921 57ea8c 2 UpdateNotifications deferredUntil -
+ZZ w1 DBGq finish 4174 UpdateNotifications committed {} retryIn -
+ZZ w1 DBGq tfinish 4174 committed {}
+ZZ w1 DBGq claim 4305 57ea8c 3 SendChannelMessage deferredUntil -
+ZZ w1 DBGq finish 4848 SendChannelMessage committed {} retryIn -
+ZZ w1 DBGq tfinish 4848 committed {}
+ZZ w1 RESULT round 0 sent-after 3356ms
+ZZ w1 DBGq claim 5167 57ea8c none deferredUntil -
+ZZ w1 DBGq blocked 5232 null
+ZZ w2 DBGq skipped 3977 recovery-timeout
+ZZ w2 [observability] graphql.mutation_queue.skipped {auth.state: signed-in, network.online: false, graphql.websocket.state: connected, mutation_queue.pending_items: 0, mutation_queue.oldest_observed_wait_ms: 0}
+ZZ w2 DBGq claim 5212 7315a1 none deferredUntil -
+ZZ w2 DBGq blocked 5485 {"id":"2","op":"ReactToChannelMessage","lo":"7315a1","exp":299917,"alive":true,"keys":["transactionId","uuid","superseded","query","operationName","variables","clientMetadata","optimisticData","enqueuedAtMs","leaseOwner","leaseGeneration","leaseExpiresAtMs"]}
+ZZ w2 DBGq skipped 7513 recovery-timeout
+ZZ w2 DBGq finish 8963 ReactToChannelMessage committed {} retryIn -
+ZZ w2 DBGq tfinish 8963 committed {}
+ZZ w2 DBGq skipped 12155 recovery-timeout
+ZZ w2 DBGq claim 14033 7315a1 3 SendChannelMessage deferredUntil -
+ZZ w2 DBGq skipped 16136 recovery-timeout
+ZZ w2 RESULT round 0 sent-after 14574ms
+ZZ w2 DBGq finish 18734 SendChannelMessage committed {} retryIn -
+ZZ w2 DBGq tfinish 18734 committed {}
+ZZ w2 DBGq skipped 22672 recovery-timeout
+ZZ w2 DBGq claim 24435 7315a1 none deferredUntil -
+ZZ w2 DBGq blocked 25938 null
+ZZ w0 DBGq claim 32696 1d7f4e none deferredUntil -
+ZZ w0 DBGq blocked 32697 null
+ZZ w3 DBGq claim 34871 1a52ae none deferredUntil -
+ZZ w3 DBGq blocked 34943 null
+ZZ w1 DBGq claim 35596 57ea8c none deferredUntil -
+ZZ w1 DBGq blocked 35611 null
+ZZ w2 DBGq claim 56898 7315a1 none deferredUntil -
+ZZ w2 DBGq blocked 57141 null
+ZZ w0 DBGq claim 64084 1d7f4e none deferredUntil -
+ZZ w0 DBGq blocked 64085 null
+ZZ w3 DBGq claim 65589 1a52ae none deferredUntil -
+ZZ w3 DBGq blocked 65607 null
+ZZ w1 DBGq claim 66891 57ea8c none deferredUntil -
+ZZ w1 DBGq blocked 66963 null
+ZZ w2 DBGq claim 87960 7315a1 none deferredUntil -
+ZZ w2 DBGq blocked 88221 null
+ZZ w0 DBGq claim 94088 1d7f4e none deferredUntil -
+ZZ w0 DBGq blocked 94088 null
+ZZ w3 DBGq claim 95609 1a52ae none deferredUntil -
+ZZ w3 DBGq blocked 95610 null
+ZZ w1 DBGq claim 96965 57ea8c none deferredUntil -
+ZZ w1 DBGq blocked 96966 null
+  ✘  1 tests/channels-e2e-dbg/zz.spec.ts:139:1 › ZZ-40 write around a reload (2.0m)
+  ✘  2 tests/channels-e2e-dbg/zz.spec.ts:139:1 › ZZ-40 write around a reload (2.0m)
+  ✘  3 tests/channels-e2e-dbg/zz.spec.ts:139:1 › ZZ-40 write around a reload (2.0m)
+  ✘  4 tests/channels-e2e-dbg/zz.spec.ts:139:1 › ZZ-40 write around a reload (2.0m)
+
+
+  1) tests/channels-e2e-dbg/zz.spec.ts:139:1 › ZZ-40 write around a reload ─────────────────────────
+
+    Test timeout of 120000ms exceeded.
+
+    Error: locator.click: Target page, context or browser has been closed
+    Call log:
+      - waiting for locator('[data-channel-scroll]').locator('[data-message-id="01a1e211-62c3-7fe2-bb9a-610c7ae8e946"]').locator('[data-message-hover-actions]').getByRole('button', { name: 'React 🎉' })
+
+
+       at harness/messages.ts:151
+
+      149 |   async quickReact(message: Locator, emoji: string): Promise<void> {
+      150 |     const actions = await this.actions(message);
+    > 151 |     await actions.getByRole('button', { name: `React ${emoji}` }).click();
+          |                                                                   ^
+      152 |   }
+      153 |
+      154 |   /** Picks an emoji by its name in the open emoji picker. */
+        at Conversation.quickReact (/home/teo/.herdr/worktrees/macro/synoet-channels-local-sync-suiteb/apps/web/tests/channels-e2e-dbg/harness/messages.ts:151:67)
+        at /home/teo/.herdr/worktrees/macro/synoet-channels-local-sync-suiteb/apps/web/tests/channels-e2e-dbg/zz.spec.ts:149:5
+
+    attachment #1: screenshot (image/png) ──────────────────────────────────────────────────────────
+    ../../../../../../.cache/channels-perf-b/e2ed/q1/test-results/zz-ZZ-40-write-around-a-reload/test-failed-1.png
+    ────────────────────────────────────────────────────────────────────────────────────────────────
+
+    Error Context: ../../../../../../.cache/channels-perf-b/e2ed/q1/test-results/zz-ZZ-40-write-around-a-reload/error-context.md
+
+    attachment #3: trace (application/zip) ─────────────────────────────────────────────────────────
+    ../../../../../../.cache/channels-perf-b/e2ed/q1/test-results/zz-ZZ-40-write-around-a-reload/trace.zip
+    Usage:
+
+        npx playwright show-trace ../../../../../../.cache/channels-perf-b/e2ed/q1/test-results/zz-ZZ-40-write-around-a-reload/trace.zip
+
+    ────────────────────────────────────────────────────────────────────────────────────────────────
+
+  2) tests/channels-e2e-dbg/zz.spec.ts:139:1 › ZZ-40 write around a reload ─────────────────────────
+
+    Test timeout of 120000ms exceeded.
+
+    Error: locator.click: Target page, context or browser has been closed
+    Call log:
+      - waiting for locator('[data-channel-scroll]').locator('[data-message-id="01a1e211-62b6-7c19-9951-fb82a725383f"]').locator('[data-message-hover-actions]').getByRole('button', { name: 'React 🎉' })
+
+
+       at harness/messages.ts:151
+
+      149 |   async quickReact(message: Locator, emoji: string): Promise<void> {
+      150 |     const actions = await this.actions(message);
+    > 151 |     await actions.getByRole('button', { name: `React ${emoji}` }).click();
+          |                                                                   ^
+      152 |   }
+      153 |
+      154 |   /** Picks an emoji by its name in the open emoji picker. */
+        at Conversation.quickReact (/home/teo/.herdr/worktrees/macro/synoet-channels-local-sync-suiteb/apps/web/tests/channels-e2e-dbg/harness/messages.ts:151:67)
+        at /home/teo/.herdr/worktrees/macro/synoet-channels-local-sync-suiteb/apps/web/tests/channels-e2e-dbg/zz.spec.ts:149:5
+
+    attachment #1: screenshot (image/png) ──────────────────────────────────────────────────────────
+    ../../../../../../.cache/channels-perf-b/e2ed/q1/test-results/zz-ZZ-40-write-around-a-reload-repeat1/test-failed-1.png
+    ────────────────────────────────────────────────────────────────────────────────────────────────
+
+    Error Context: ../../../../../../.cache/channels-perf-b/e2ed/q1/test-results/zz-ZZ-40-write-around-a-reload-repeat1/error-context.md
+
+    attachment #3: trace (application/zip) ─────────────────────────────────────────────────────────
+    ../../../../../../.cache/channels-perf-b/e2ed/q1/test-results/zz-ZZ-40-write-around-a-reload-repeat1/trace.zip
+    Usage:
+
+        npx playwright show-trace ../../../../../../.cache/channels-perf-b/e2ed/q1/test-results/zz-ZZ-40-write-around-a-reload-repeat1/trace.zip
+
+    ────────────────────────────────────────────────────────────────────────────────────────────────
+
+  3) tests/channels-e2e-dbg/zz.spec.ts:139:1 › ZZ-40 write around a reload ─────────────────────────
+
+    Test timeout of 120000ms exceeded.
+
+    Error: locator.click: Target page, context or browser has been closed
+    Call log:
+      - waiting for locator('[data-channel-scroll]').locator('[data-message-id="01a1e211-6293-7af5-b64c-64188a289236"]').locator('[data-message-hover-actions]').getByRole('button', { name: 'React 🎉' })
+
+
+       at harness/messages.ts:151
+
+      149 |   async quickReact(message: Locator, emoji: string): Promise<void> {
+      150 |     const actions = await this.actions(message);
+    > 151 |     await actions.getByRole('button', { name: `React ${emoji}` }).click();
+          |                                                                   ^
+      152 |   }
+      153 |
+      154 |   /** Picks an emoji by its name in the open emoji picker. */
+        at Conversation.quickReact (/home/teo/.herdr/worktrees/macro/synoet-channels-local-sync-suiteb/apps/web/tests/channels-e2e-dbg/harness/messages.ts:151:67)
+        at /home/teo/.herdr/worktrees/macro/synoet-channels-local-sync-suiteb/apps/web/tests/channels-e2e-dbg/zz.spec.ts:149:5
+
+    attachment #1: screenshot (image/png) ──────────────────────────────────────────────────────────
+    ../../../../../../.cache/channels-perf-b/e2ed/q1/test-results/zz-ZZ-40-write-around-a-reload-repeat2/test-failed-1.png
+    ────────────────────────────────────────────────────────────────────────────────────────────────
+
+    Error Context: ../../../../../../.cache/channels-perf-b/e2ed/q1/test-results/zz-ZZ-40-write-around-a-reload-repeat2/error-context.md
+
+    attachment #3: trace (application/zip) ─────────────────────────────────────────────────────────
+    ../../../../../../.cache/channels-perf-b/e2ed/q1/test-results/zz-ZZ-40-write-around-a-reload-repeat2/trace.zip
+    Usage:
+
+        npx playwright show-trace ../../../../../../.cache/channels-perf-b/e2ed/q1/test-results/zz-ZZ-40-write-around-a-reload-repeat2/trace.zip
+
+    ────────────────────────────────────────────────────────────────────────────────────────────────
+
+  4) tests/channels-e2e-dbg/zz.spec.ts:139:1 › ZZ-40 write around a reload ─────────────────────────
+
+    Test timeout of 120000ms exceeded.
+
+    Error: locator.click: Target page, context or browser has been closed
+    Call log:
+      - waiting for locator('[data-channel-scroll]').locator('[data-message-id="01a1e211-6298-7b33-b030-8e75a3cbd087"]').locator('[data-message-hover-actions]').getByRole('button', { name: 'React 🎉' })
+
+
+       at harness/messages.ts:151
+
+      149 |   async quickReact(message: Locator, emoji: string): Promise<void> {
+      150 |     const actions = await this.actions(message);
+    > 151 |     await actions.getByRole('button', { name: `React ${emoji}` }).click();
+          |                                                                   ^
+      152 |   }
+      153 |
+      154 |   /** Picks an emoji by its name in the open emoji picker. */
+        at Conversation.quickReact (/home/teo/.herdr/worktrees/macro/synoet-channels-local-sync-suiteb/apps/web/tests/channels-e2e-dbg/harness/messages.ts:151:67)
+        at /home/teo/.herdr/worktrees/macro/synoet-channels-local-sync-suiteb/apps/web/tests/channels-e2e-dbg/zz.spec.ts:149:5
+
+    attachment #1: screenshot (image/png) ──────────────────────────────────────────────────────────
+    ../../../../../../.cache/channels-perf-b/e2ed/q1/test-results/zz-ZZ-40-write-around-a-reload-repeat3/test-failed-1.png
+    ────────────────────────────────────────────────────────────────────────────────────────────────
+
+    Error Context: ../../../../../../.cache/channels-perf-b/e2ed/q1/test-results/zz-ZZ-40-write-around-a-reload-repeat3/error-context.md
+
+    attachment #3: trace (application/zip) ─────────────────────────────────────────────────────────
+    ../../../../../../.cache/channels-perf-b/e2ed/q1/test-results/zz-ZZ-40-write-around-a-reload-repeat3/trace.zip
+    Usage:
+
+        npx playwright show-trace ../../../../../../.cache/channels-perf-b/e2ed/q1/test-results/zz-ZZ-40-write-around-a-reload-repeat3/trace.zip
+
+    ────────────────────────────────────────────────────────────────────────────────────────────────
+
+  4 failed
+    tests/channels-e2e-dbg/zz.spec.ts:139:1 › ZZ-40 write around a reload ──────────────────────────
+    tests/channels-e2e-dbg/zz.spec.ts:139:1 › ZZ-40 write around a reload ──────────────────────────
+    tests/channels-e2e-dbg/zz.spec.ts:139:1 › ZZ-40 write around a reload ──────────────────────────
+    tests/channels-e2e-dbg/zz.spec.ts:139:1 › ZZ-40 write around a reload ──────────────────────────

@@ -1,0 +1,296 @@
+{
+ "base": "https://localhost:31009",
+ "watchMs": 150000,
+ "total": {
+  "n": 179,
+  "ms": 7781,
+  "bytes": 402633
+ },
+ "withoutPrewarm": {
+  "n": 127,
+  "ms": 6959,
+  "bytes": 350507
+ },
+ "prewarm": {
+  "n": 52,
+  "ms": 822,
+  "bytes": 52126,
+  "firstAtMs": 6145,
+  "lastAtMs": 33298,
+  "maxConcurrent": 1,
+  "per10s": {
+   "0": 8,
+   "10": 19,
+   "20": 18,
+   "30": 7
+  }
+ },
+ "channelLists": null,
+ "byOp": {
+  "/app/": {
+   "n": 1,
+   "ms": 3,
+   "bytes": 13982
+  },
+  "/auth/user/legacy_user_permissions": {
+   "n": 1,
+   "ms": 7,
+   "bytes": 446
+  },
+  "/email/email/links": {
+   "n": 1,
+   "ms": 6,
+   "bytes": 73
+  },
+  "/dss/comms/channels": {
+   "n": 4,
+   "ms": 101,
+   "bytes": 32505
+  },
+  "/dss/channels/activity": {
+   "n": 1,
+   "ms": 13,
+   "bytes": 880
+  },
+  "/dss/items/soup": {
+   "n": 6,
+   "ms": 158,
+   "bytes": 8601
+  },
+  "/dss/bots": {
+   "n": 1,
+   "ms": 5,
+   "bytes": 36
+  },
+  "/dss/databases": {
+   "n": 1,
+   "ms": 10,
+   "bytes": 289
+  },
+  "/dss/forms/accessible": {
+   "n": 1,
+   "ms": 8,
+   "bytes": 34
+  },
+  "/scheduled-action/scheduled-actions": {
+   "n": 1,
+   "ms": 6,
+   "bytes": 31
+  },
+  "/auth/jwt/refresh": {
+   "n": 1,
+   "ms": 6,
+   "bytes": 752
+  },
+  "/auth/user/language": {
+   "n": 1,
+   "ms": 6,
+   "bytes": 50
+  },
+  "/auth/team": {
+   "n": 1,
+   "ms": 79,
+   "bytes": 425
+  },
+  "/notification/unsubscribe": {
+   "n": 1,
+   "ms": 4,
+   "bytes": 33
+  },
+  "/auth/system-status": {
+   "n": 2,
+   "ms": 8,
+   "bytes": 215
+  },
+  "/email/email/links/health-check": {
+   "n": 1,
+   "ms": 305,
+   "bytes": 0
+  },
+  "/notification/user_notifications/preferences": {
+   "n": 1,
+   "ms": 4,
+   "bytes": 55
+  },
+  "/dss/items/soup/ast": {
+   "n": 1,
+   "ms": 75,
+   "bytes": 11075
+  },
+  "/dss/call/active": {
+   "n": 5,
+   "ms": 38,
+   "bytes": 643
+  },
+  "/dss/call/meetings/active": {
+   "n": 10,
+   "ms": 80,
+   "bytes": 1194
+  },
+  "/auth/user/name": {
+   "n": 1,
+   "ms": 5,
+   "bytes": 149
+  },
+  "/dss/properties/tags": {
+   "n": 1,
+   "ms": 16,
+   "bytes": 380
+  },
+  "/dss/crm/settings": {
+   "n": 1,
+   "ms": 7,
+   "bytes": 184
+  },
+  "/dss/properties/definitions": {
+   "n": 2,
+   "ms": 18,
+   "bytes": 1205
+  },
+  "/cognition/onboarding/prompts": {
+   "n": 1,
+   "ms": 5,
+   "bytes": 49
+  },
+  "/dss/agents": {
+   "n": 1,
+   "ms": 5,
+   "bytes": 35
+  },
+  "/dss/harnesses/directory": {
+   "n": 1,
+   "ms": 7,
+   "bytes": 35
+  },
+  "/auth/cursor-api-key": {
+   "n": 1,
+   "ms": 4,
+   "bytes": 120
+  },
+  "/agent-harness/agent-models/load": {
+   "n": 1,
+   "ms": 4,
+   "bytes": 592
+  },
+  "/agent-harness/agent-sessions/warm": {
+   "n": 1,
+   "ms": 3,
+   "bytes": 48
+  },
+  "/auth/ai-billing/summary": {
+   "n": 1,
+   "ms": 14,
+   "bytes": 372
+  },
+  "/agent-harness/agent-capabilities/discover": {
+   "n": 2,
+   "ms": 10,
+   "bytes": 1476
+  },
+  "/cognition/pipedream/mcp/connections": {
+   "n": 1,
+   "ms": 5,
+   "bytes": 33
+  },
+  "/cognition/mcp/servers": {
+   "n": 1,
+   "ms": 8,
+   "bytes": 33
+  },
+  "/dss/documents/system_skills": {
+   "n": 1,
+   "ms": 4,
+   "bytes": 272
+  },
+  "/cognition/ai-projections": {
+   "n": 2,
+   "ms": 21,
+   "bytes": 296
+  },
+  "/auth/link/github/status": {
+   "n": 1,
+   "ms": 4,
+   "bytes": 100
+  },
+  "image/svg+xml,%3Csvg%20width%3D%22100%25%22%20height%3D%22100%25%22%20fill%3D%22oklch(0.7%200.12%20250deg%20%2F%201)%22%20viewBox%3D%220%200%2024%2024%22%20xmlns%3D%22http%3A%2F%2Fwww.w3.org%2F2000%2Fsvg%22%3E%0A%20%20%3Cpath%20d%3D%22M0%2010.014v6.801a.75.75%200%200%200%20.225.513l2.742%202.644%202.002-.8v-7.099l-2.97-2.859z%22%2F%3E%0A%20%20%3Cpath%20d%3D%22M4.078%204.8v5.786l1.36%201.309v1.313L12.481%2020l2.002-.8-.001-7.1L6.078%204z%22%2F%3E%0A%20%20%3Cpath%20d%3D%22M13.594%204.8v5.786l1.36%201.311-.013%201.3L22%2020%2024%2019.2V12.42a.75.75%200%200%200-.225-.533L15.595%204z%22%2F%3E%0A%3C%2Fsvg%3E%0A": {
+   "n": 1,
+   "ms": 0,
+   "bytes": 0
+  },
+  "CrmContacts": {
+   "n": 1,
+   "ms": 20,
+   "bytes": 153
+  },
+  "Favorites": {
+   "n": 1,
+   "ms": 18,
+   "bytes": 373
+  },
+  "ChannelUnreadPresence": {
+   "n": 2,
+   "ms": 147,
+   "bytes": 11061
+  },
+  "/dss/items/soup/graphql": {
+   "n": 18,
+   "ms": 5121,
+   "bytes": 249689
+  },
+  "PendingEmailSends": {
+   "n": 15,
+   "ms": 255,
+   "bytes": 3429
+  },
+  "/auth/user/get_names_with_email": {
+   "n": 1,
+   "ms": 7,
+   "bytes": 190
+  },
+  "/auth/user/profile_pictures": {
+   "n": 1,
+   "ms": 7,
+   "bytes": 50
+  },
+  "MailAccounts": {
+   "n": 1,
+   "ms": 8,
+   "bytes": 162
+  },
+  "ItemPreviews": {
+   "n": 1,
+   "ms": 30,
+   "bytes": 524
+  },
+  "Calendars": {
+   "n": 1,
+   "ms": 13,
+   "bytes": 149
+  },
+  "CalendarOccurrences": {
+   "n": 19,
+   "ms": 238,
+   "bytes": 3931
+  },
+  "ContactDirectoryBackfill": {
+   "n": 1,
+   "ms": 13,
+   "bytes": 1657
+  },
+  "ContactDirectoryByUserIds": {
+   "n": 1,
+   "ms": 13,
+   "bytes": 1632
+  },
+  "/dss/channels/preview": {
+   "n": 1,
+   "ms": 7,
+   "bytes": 809
+  },
+  "ChannelTimeline": {
+   "n": 52,
+   "ms": 822,
+   "bytes": 52126
+  }
+ }
+}

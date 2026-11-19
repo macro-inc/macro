@@ -1,0 +1,112 @@
+path "/home/teo/.herdr/worktrees/macro/synoet-channels-local-sync-suiteb/apps/web" does not contain a 'flake.nix', searching up
+
+Running 12 tests using 4 workers
+
+DD MSG-13 w1 ben 745455 [observability] graphql.mutation_queue.loaded {auth.state: signed-in, network.online: false, graphql.websocket.state: connected, mutation_queue.depth: 1, mutation_queue.age_unknown_items: 0}
+DJ MSG-13 w1 745536 ["[observability]","graphql.mutation_queue.loaded",{"auth.state":"signed-in","network.online":false,"graphql.websocket.state":"connected","mutation_queue.depth":1,"mutation_queue.age_unknown_items":0,"mutation_queue.oldest_item_age_ms":2698}]
+  ✓   1 tests/channels-e2e-dbg/composer.spec.ts:93:1 › CMP-13 a message shown as sent is still sent when the page is reloaded at once (8.4s)
+DD MSG-13 w3 ben 746975 [observability] graphql.mutation_queue.loaded {auth.state: signed-in, network.online: false, graphql.websocket.state: connected, mutation_queue.depth: 1, mutation_queue.age_unknown_items: 0}
+DJ MSG-13 w3 747072 ["[observability]","graphql.mutation_queue.loaded",{"auth.state":"signed-in","network.online":false,"graphql.websocket.state":"connected","mutation_queue.depth":1,"mutation_queue.age_unknown_items":0,"mutation_queue.oldest_item_age_ms":3026}]
+DD MSG-13 w1 ben 747680 [observability] graphql.mutation_queue.skipped {auth.state: signed-in, network.online: false, graphql.websocket.state: connected, mutation_queue.pending_items: 1, mutation_queue.oldest_observed_wait_m
+DJ MSG-13 w1 747882 ["[observability]","graphql.mutation_queue.skipped",{"auth.state":"signed-in","network.online":false,"graphql.websocket.state":"connected","mutation_queue.pending_items":1,"mutation_queue.oldest_observed_wait_ms":1946,"mutation_queue.age_unknown_items":0,"mutation_queue.oldest_item_age_ms":1946,"mutation_queue.skip_reason":"recovery-timeout"}]
+  ✓   2 tests/channels-e2e-dbg/composer.spec.ts:93:1 › CMP-13 a message shown as sent is still sent when the page is reloaded at once (11.0s)
+  ✓   5 tests/channels-e2e-dbg/composer.spec.ts:93:1 › CMP-13 a message shown as sent is still sent when the page is reloaded at once (8.3s)
+  ✓   6 tests/channels-e2e-dbg/messages.spec.ts:491:1 › MSG-13 a quick reaction shows for both people, counts 2 when the other adds the same, and goes when removed (9.8s)
+  ✓   7 tests/channels-e2e-dbg/composer.spec.ts:93:1 › CMP-13 a message shown as sent is still sent when the page is reloaded at once (5.8s)
+  ✘   4 tests/channels-e2e-dbg/messages.spec.ts:491:1 › MSG-13 a quick reaction shows for both people, counts 2 when the other adds the same, and goes when removed (23.4s)
+  ✘   3 tests/channels-e2e-dbg/messages.spec.ts:491:1 › MSG-13 a quick reaction shows for both people, counts 2 when the other adds the same, and goes when removed (24.9s)
+  ✓   8 tests/channels-e2e-dbg/messages.spec.ts:491:1 › MSG-13 a quick reaction shows for both people, counts 2 when the other adds the same, and goes when removed (7.9s)
+  ✓   9 tests/channels-e2e-dbg/composer.spec.ts:93:1 › CMP-13 a message shown as sent is still sent when the page is reloaded at once (6.9s)
+  ✓  10 tests/channels-e2e-dbg/messages.spec.ts:491:1 › MSG-13 a quick reaction shows for both people, counts 2 when the other adds the same, and goes when removed (8.9s)
+  ✓  11 tests/channels-e2e-dbg/composer.spec.ts:93:1 › CMP-13 a message shown as sent is still sent when the page is reloaded at once (7.1s)
+  ✓  12 tests/channels-e2e-dbg/messages.spec.ts:491:1 › MSG-13 a quick reaction shows for both people, counts 2 when the other adds the same, and goes when removed (7.9s)
+
+
+  1) tests/channels-e2e-dbg/messages.spec.ts:491:1 › MSG-13 a quick reaction shows for both people, counts 2 when the other adds the same, and goes when removed 
+
+    Error: expect(received).toEqual(expected) // deep equality
+
+    - Expected  - 1
+    + Received  + 1
+
+      Array [
+    -   "👍",
+    +   "👍 2",
+      ]
+
+    Call Log:
+    - Timeout 15000ms exceeded while waiting on the predicate
+
+      531 |   await bens.reaction(bensMessage, '👍').click();
+      532 |   await expect.poll(() => bens.reactions(bensMessage)).toEqual(['👍']);
+    > 533 |   await expect.poll(() => mine.reactions(myMessage)).toEqual(['👍']);
+          |                                                      ^
+      534 |
+      535 |   await mine.reaction(myMessage, '👍').click();
+      536 |   await expect.poll(() => mine.reactions(myMessage)).toEqual([]);
+        at /home/teo/.herdr/worktrees/macro/synoet-channels-local-sync-suiteb/apps/web/tests/channels-e2e-dbg/messages.spec.ts:533:54
+
+    attachment #1: screenshot (image/png) ──────────────────────────────────────────────────────────
+    ../../../../../../.cache/channels-perf-b/e2ed/s4/test-results/messages-MSG-13-a-quick-re-7a686--same-and-goes-when-removed/test-failed-1.png
+    ────────────────────────────────────────────────────────────────────────────────────────────────
+
+    attachment #2: screenshot (image/png) ──────────────────────────────────────────────────────────
+    ../../../../../../.cache/channels-perf-b/e2ed/s4/test-results/messages-MSG-13-a-quick-re-7a686--same-and-goes-when-removed/test-failed-2.png
+    ────────────────────────────────────────────────────────────────────────────────────────────────
+
+    Error Context: ../../../../../../.cache/channels-perf-b/e2ed/s4/test-results/messages-MSG-13-a-quick-re-7a686--same-and-goes-when-removed/error-context.md
+
+    attachment #4: trace (application/zip) ─────────────────────────────────────────────────────────
+    ../../../../../../.cache/channels-perf-b/e2ed/s4/test-results/messages-MSG-13-a-quick-re-7a686--same-and-goes-when-removed/trace.zip
+    Usage:
+
+        npx playwright show-trace ../../../../../../.cache/channels-perf-b/e2ed/s4/test-results/messages-MSG-13-a-quick-re-7a686--same-and-goes-when-removed/trace.zip
+
+    ────────────────────────────────────────────────────────────────────────────────────────────────
+
+  2) tests/channels-e2e-dbg/messages.spec.ts:491:1 › MSG-13 a quick reaction shows for both people, counts 2 when the other adds the same, and goes when removed 
+
+    Error: expect(received).toEqual(expected) // deep equality
+
+    - Expected  - 1
+    + Received  + 1
+
+      Array [
+    -   "👍",
+    +   "👍 2",
+      ]
+
+    Call Log:
+    - Timeout 15000ms exceeded while waiting on the predicate
+
+      531 |   await bens.reaction(bensMessage, '👍').click();
+      532 |   await expect.poll(() => bens.reactions(bensMessage)).toEqual(['👍']);
+    > 533 |   await expect.poll(() => mine.reactions(myMessage)).toEqual(['👍']);
+          |                                                      ^
+      534 |
+      535 |   await mine.reaction(myMessage, '👍').click();
+      536 |   await expect.poll(() => mine.reactions(myMessage)).toEqual([]);
+        at /home/teo/.herdr/worktrees/macro/synoet-channels-local-sync-suiteb/apps/web/tests/channels-e2e-dbg/messages.spec.ts:533:54
+
+    attachment #1: screenshot (image/png) ──────────────────────────────────────────────────────────
+    ../../../../../../.cache/channels-perf-b/e2ed/s4/test-results/messages-MSG-13-a-quick-re-7a686--same-and-goes-when-removed-repeat1/test-failed-2.png
+    ────────────────────────────────────────────────────────────────────────────────────────────────
+
+    attachment #2: screenshot (image/png) ──────────────────────────────────────────────────────────
+    ../../../../../../.cache/channels-perf-b/e2ed/s4/test-results/messages-MSG-13-a-quick-re-7a686--same-and-goes-when-removed-repeat1/test-failed-1.png
+    ────────────────────────────────────────────────────────────────────────────────────────────────
+
+    Error Context: ../../../../../../.cache/channels-perf-b/e2ed/s4/test-results/messages-MSG-13-a-quick-re-7a686--same-and-goes-when-removed-repeat1/error-context.md
+
+    attachment #4: trace (application/zip) ─────────────────────────────────────────────────────────
+    ../../../../../../.cache/channels-perf-b/e2ed/s4/test-results/messages-MSG-13-a-quick-re-7a686--same-and-goes-when-removed-repeat1/trace.zip
+    Usage:
+
+        npx playwright show-trace ../../../../../../.cache/channels-perf-b/e2ed/s4/test-results/messages-MSG-13-a-quick-re-7a686--same-and-goes-when-removed-repeat1/trace.zip
+
+    ────────────────────────────────────────────────────────────────────────────────────────────────
+
+  2 failed
+    tests/channels-e2e-dbg/messages.spec.ts:491:1 › MSG-13 a quick reaction shows for both people, counts 2 when the other adds the same, and goes when removed 
+    tests/channels-e2e-dbg/messages.spec.ts:491:1 › MSG-13 a quick reaction shows for both people, counts 2 when the other adds the same, and goes when removed 
+  10 passed (52.6s)

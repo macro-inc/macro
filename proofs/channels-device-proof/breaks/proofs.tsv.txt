@@ -1,0 +1,169 @@
+test	change	outcome
+ACC-01	ledger/breaks/no-access-shown-as-unavailable.patch	failed: Error: expect(locator).toBeVisible() failed
+ACC-02	ledger/breaks/no-access-shown-as-unavailable.patch	failed: Error: expect(locator).toBeVisible() failed
+ACC-03	ledger/breaks/join-request-not-shown-to-members.patch	failed: Test timeout of 90000ms exceeded.
+ACC-04	ledger/breaks/join-request-not-shown-to-members.patch	failed: Test timeout of 90000ms exceeded.
+ACC-05	ledger/breaks/join-request-not-shown-to-members.patch	failed: Error: expect(locator).toBeVisible() failed
+ACC-06	ledger/breaks/system-lines-not-drawn.patch	failed: Error: the last messages and system lines in the list
+ACC-07	ledger/breaks/no-access-shown-as-unavailable.patch	failed: Error: expect(locator).toBeVisible() failed
+ACC-08	ledger/breaks/missing-channel-shown-as-no-access.patch	failed: Error: expect(locator).toBeVisible() failed
+ACC-09	ledger/breaks/signed-out-not-offered-login.patch	failed: Error: expect(locator).toBeVisible() failed
+CHN-01	ledger/breaks/new-channel-not-opened.patch	failed: Error: expect(page).toHaveURL(expected) failed
+CHN-02	ledger/breaks/new-channel-not-opened.patch	failed: Error: expect(page).toHaveURL(expected) failed
+CHN-03	ledger/breaks/system-lines-not-drawn.patch	failed: Error: the last messages and system lines in the list
+CHN-05	ledger/breaks/favorite-does-nothing.patch	failed: Error: expect(locator).toHaveText(expected) failed
+CHN-06	ledger/breaks/channel-link-opens-nothing.patch	failed: Error: expect(locator).toBeVisible() failed
+CHN-07	ledger/breaks/missing-channel-shown-as-no-access.patch	failed: Error: expect(locator).toBeVisible() failed
+CHN-09	ledger/breaks/non-owner-offered-delete.patch	failed: Error: expect(locator).toHaveCount(expected) failed
+CHN-10	ledger/breaks/participants-tab-empty.patch	failed: Error: expect(locator).toContainText(expected) failed
+CHN-11	ledger/breaks/attachments-tab-says-nothing-when-empty.patch	failed: Error: expect(locator).toBeVisible() failed
+CHN-12	ledger/breaks/list-always-follows-new-messages.patch	failed: Error: expect(locator).toBeInViewport() failed
+CHN-13	ledger/breaks/channel-start-line-missing.patch	failed: Error: expect(locator).toBeVisible() failed
+CMP-01	ledger/breaks/draft-shown-in-every-channel.patch	failed: Error: expect(locator).toHaveText(expected) failed
+CMP-02	ledger/breaks/draft-lost-on-reload.patch	failed: Error: expect(locator).toHaveText(expected) failed
+CMP-03	ledger/breaks/changes-reach-neither-screen-nor-device.patch	failed with the flag, where the break above changes code the build does not run: Error: the last messages in the list
+CMP-03	ledger/breaks/live-events-ignored.patch	failed: Error: the last messages in the list
+CMP-04	ledger/breaks/send-button-always-on.patch	failed: Error: expect(locator).toBeDisabled() failed
+CMP-05	ledger/breaks/mention-sent-as-plain-text.patch	failed: Error: expect(locator).toBeVisible() failed
+CMP-06	ledger/breaks/mention-sent-as-plain-text.patch	failed: Error: expect(locator).toBeVisible() failed
+CMP-07	ledger/breaks/attachment-not-sent.patch	failed: Error: expect(locator).toBeVisible() failed
+CMP-08	ledger/breaks/attachment-not-sent.patch	failed: Error: expect(locator).toHaveCount(expected) failed
+CMP-09	ledger/breaks/typing-line-never-shows.patch	failed: Error: expect(locator).toBeVisible() failed
+CMP-10	ledger/breaks/typing-line-never-shows.patch	failed: Error: expect(locator).toBeVisible() failed
+CMP-11	ledger/breaks/paste-inserts-nothing.patch	failed: Error: expect(locator).toHaveText(expected) failed
+CMP-12	ledger/breaks/long-message-cut-short.patch	failed: Error: expect(locator).toHaveText(expected) failed
+CMP-13	ledger/breaks/changes-reach-neither-screen-nor-device.patch	failed with the flag, where the break above changes code the build does not run: Error: the last messages in the list
+CMP-13	ledger/breaks/live-events-ignored.patch	failed: Error: the last messages in the list
+DM-01	ledger/breaks/message-to-people-is-not-sent.patch	failed: Error: expect(page).toHaveURL(expected) failed
+DM-02	ledger/breaks/message-to-people-is-not-sent.patch	failed: Error: expect(page).toHaveURL(expected) failed
+DM-03	ledger/breaks/message-link-forgets-the-conversation.patch	failed: Error: expect(locator).toBeVisible() failed
+DM-04	ledger/breaks/message-to-people-is-not-sent.patch	failed: Error: expect(page).toHaveURL(expected) failed
+DM-05	ledger/breaks/send-button-always-on.patch	failed: Error: expect(locator).toBeDisabled() failed
+KEY-01	ledger/breaks/find-bar-does-not-open.patch	failed: Error: expect(locator).toBeFocused() failed
+KEY-02	ledger/breaks/find-bar-does-not-open.patch	failed: Error: expect(locator).toBeFocused() failed
+KEY-03	ledger/breaks/find-bar-does-not-open.patch	failed: Error: expect(locator).toBeFocused() failed
+KEY-04	ledger/breaks/find-bar-does-not-open.patch	failed: Error: expect(locator).toBeFocused() failed
+KEY-05	ledger/breaks/arrow-up-does-not-leave-the-composer.patch	failed: Error: expect(locator).toBeFocused() failed
+KEY-07	ledger/breaks/e-key-does-not-edit.patch	failed: Error: expect(locator).toBeFocused() failed
+KEY-08	ledger/breaks/backspace-does-not-ask-to-delete.patch	failed: Error: expect(locator).toBeVisible() failed
+KEY-09	ledger/breaks/scroll-to-bottom-does-nothing.patch	failed: Error: distance of the list from its end
+KEY-10	ledger/breaks/composer-not-focused-on-arrival.patch	failed: Error: expect(locator).toBeFocused() failed
+KEY-11	ledger/breaks/escape-does-not-return-to-the-list.patch	failed: Error: expect(locator).toBeFocused() failed
+KEY-12	ledger/breaks/backspace-does-not-ask-to-delete.patch	failed: Error: expect(locator).toBeVisible() failed
+MEM-01	ledger/breaks/system-lines-not-drawn.patch	failed: Error: the last messages and system lines in the list
+MEM-02	ledger/breaks/participants-tab-empty.patch	failed: Error: expect(locator).toBeVisible() failed
+MEM-04	ledger/breaks/no-access-shown-as-unavailable.patch	failed: Error: expect(locator).toBeVisible() failed
+MEM-05	ledger/breaks/system-lines-not-drawn.patch	failed: Error: expect(locator).toBeVisible() failed
+MEM-06	ledger/breaks/system-lines-not-drawn.patch	failed: Error: the last messages and system lines in the list
+MEM-07	ledger/breaks/participants-tab-empty.patch	failed: Error: expect(locator).toContainText(expected) failed
+MEM-08	ledger/breaks/system-lines-not-drawn.patch	failed: Error: the last messages and system lines in the list
+MSG-01	ledger/breaks/device-newest-two-swapped.patch	failed with the flag, where the break above changes code the build does not run: Error: expect(received).toEqual(expected) // deep equality
+MSG-01	ledger/breaks/new-message-goes-above-the-last.patch	failed: Error: expect(received).toEqual(expected) // deep equality
+MSG-02	ledger/breaks/send-button-does-nothing.patch	failed: Error: expect(received).toEqual(expected) // deep equality
+MSG-03	ledger/breaks/device-newest-two-swapped.patch	failed with the flag, where the break above changes code the build does not run: Error: expect(received).toEqual(expected) // deep equality
+MSG-03	ledger/breaks/new-message-goes-above-the-last.patch	failed: Error: expect(received).toEqual(expected) // deep equality
+MSG-04	ledger/breaks/shift-enter-sends.patch	failed: Error: expect(locator).toHaveCount(expected) failed
+MSG-05	ledger/breaks/bold-shown-plain.patch	failed: Error: expect(locator).toHaveCSS(expected) failed
+MSG-06	ledger/breaks/every-message-repeats-its-author.patch	failed: Error: expect(locator).toHaveCount(expected) failed
+MSG-07	ledger/breaks/edit-keeps-the-old-text.patch	failed: Error: expect(received).toEqual(expected) // deep equality
+MSG-08	ledger/breaks/e-key-does-not-edit.patch	failed: Error: expect(locator).toHaveText(expected) failed
+MSG-09	ledger/breaks/cancel-saves-the-edit.patch	failed: Error: expect(received).toEqual(expected) // deep equality
+MSG-10	ledger/breaks/delete-leaves-the-message.patch	failed: Error: expect(received).toEqual(expected) // deep equality
+MSG-11	ledger/breaks/delete-leaves-the-message.patch	failed: Error: expect(received).toEqual(expected) // deep equality
+MSG-12	ledger/breaks/edit-offered-on-others-messages.patch	failed: Error: expect(locator).toHaveCount(expected) failed
+MSG-13	ledger/breaks/reaction-not-shown.patch	failed: Error: expect(received).toEqual(expected) // deep equality
+MSG-14	ledger/breaks/picked-emoji-not-added.patch	failed: Error: expect(received).toEqual(expected) // deep equality
+MSG-15	ledger/breaks/reaction-not-shown.patch	failed: Error: expect(received).toEqual(expected) // deep equality
+MSG-16	ledger/breaks/device-newest-two-swapped.patch	failed with the flag, where the break above changes code the build does not run: Error: expect(received).toEqual(expected) // deep equality
+MSG-16	ledger/breaks/new-message-goes-above-the-last.patch	failed: Error: expect(received).toEqual(expected) // deep equality
+MSG-17	ledger/breaks/copy-text-copies-nothing.patch	failed: Error: expect(received).toBe(expected) // Object.is equality
+MSG-18	ledger/breaks/changes-reach-neither-screen-nor-device.patch	failed with the flag, where the break above changes code the build does not run: Error: expect(received).toEqual(expected) // deep equality
+MSG-18	ledger/breaks/live-events-ignored.patch	failed: Error: expect(received).toEqual(expected) // deep equality
+NAV-01	ledger/breaks/link-target-not-marked.patch	failed: Error: messages marked as the target of the link
+NAV-02	ledger/breaks/device-link-target-ignored.patch	failed with the flag, where the break above changes code the build does not run: Error: expect(locator).toBeInViewport() failed
+NAV-02	ledger/breaks/link-target-ignored.patch	failed: Error: expect(locator).toBeInViewport() failed
+NAV-03	ledger/breaks/device-link-target-ignored.patch	failed with the flag, where the break above changes code the build does not run: Error: expect(locator).toBeInViewport() failed
+NAV-03	ledger/breaks/link-target-ignored.patch	failed: Error: expect(locator).toBeInViewport() failed
+NAV-04	ledger/breaks/missing-message-not-recognised.patch	failed: Error: expect(locator).toBeVisible() failed
+NAV-06	ledger/breaks/device-link-target-ignored.patch	failed with the flag, where the break above changes code the build does not run: Error: expect(locator).toBeInViewport() failed
+NAV-06	ledger/breaks/link-target-ignored.patch	failed: Error: expect(locator).toBeInViewport() failed
+NAV-07	ledger/breaks/copied-link-loses-its-message.patch	failed: Error: expect(received).toContain(expected) // indexOf
+OFF-01	ledger/breaks/device-not-used.patch	failed: Error: expect(locator).toBeVisible() failed
+OFF-02	ledger/breaks/channel-load-error-not-shown.patch	failed: Error: expect(locator).toBeVisible() failed
+OFF-03	ledger/breaks/channel-changes-not-applied.patch	failed: Error: the channel as it is on the screen
+OFF-04	ledger/breaks/device-not-used.patch	failed: Error: expect(locator).toBeVisible() failed
+OFF-05	ledger/breaks/device-not-used.patch	failed: Error: expect(locator).toBeVisible() failed
+OFF-06	ledger/breaks/device-not-used.patch	failed: Error: expect(locator).toBeVisible() failed
+OFF-07	ledger/breaks/device-not-used.patch	failed: Error: expect(locator).toBeVisible() failed
+OFF-08	ledger/breaks/device-not-used.patch	failed: Error: expect(locator).toBeVisible() failed
+OFF-09	ledger/breaks/device-not-used.patch	failed: Error: the channel as it is on the screen
+OFF-10	ledger/breaks/device-not-used.patch	failed: Error: expect(locator).toBeVisible() failed
+OFF-11	ledger/breaks/device-not-used.patch	failed: Error: expect(locator).toBeVisible() failed
+OFF-12	ledger/breaks/device-not-used.patch	failed: Error: expect(locator).toBeVisible() failed
+OPEN-01	ledger/breaks/device-page-loses-a-message.patch	failed with the flag, where the break above changes code the build does not run: Error: the last messages in the list
+OPEN-01	ledger/breaks/page-loses-a-message.patch	failed: Error: the last messages in the list
+OPEN-02	ledger/breaks/timeline-cache-ignores-the-channel.patch	failed: Error: the last messages in the list
+PRE-01	ledger/breaks/device-not-used.patch	failed: Error: expect(locator).toBeVisible() failed
+PRE-02	ledger/breaks/prewarm-limits-changed.patch	failed: Error: expect(locator).toBeVisible() failed
+PRE-03	ledger/breaks/prewarm-limits-changed.patch	failed: Error: expect(locator).toBeVisible() failed
+PRE-04	ledger/breaks/prewarm-limits-changed.patch	failed: Error: expect(locator).toBeVisible() failed
+PRE-05	ledger/breaks/idle-channels-never-evicted.patch	failed: Error: expect(locator).toBeVisible() failed
+REC-01	ledger/breaks/timeline-cache-ignores-the-channel.patch	failed: Error: expect(locator).toBeVisible() failed
+REC-02	ledger/breaks/timeline-cache-ignores-the-channel.patch	failed: Error: expect(locator).toBeVisible() failed
+REC-03	ledger/breaks/timeline-cache-ignores-the-channel.patch	failed: Error: the last messages in the list
+REC-04	none: the build as it is, with or without the flag	failed: Error: expect(locator).toHaveCount(expected) failed
+SCROLL-01	ledger/breaks/device-page-loses-a-message.patch	failed with the flag, where the break above changes code the build does not run: Error: the last messages in the list
+SCROLL-01	ledger/breaks/page-loses-a-message.patch	failed: Error: the last messages in the list
+SCROLL-02	ledger/breaks/list-always-follows-new-messages.patch	failed: Error: expect(locator).toBeVisible() failed
+SCROLL-03	ledger/breaks/timeline-cache-ignores-the-channel.patch	failed: Error: expect(locator).toBeInViewport() failed
+SCROLL-04	ledger/breaks/list-always-follows-new-messages.patch	failed: Error: expect(locator).toBeVisible() failed
+SYN-01	ledger/breaks/changes-reach-neither-screen-nor-device.patch	failed: Error: the channel as it is on the screen
+SYN-02	ledger/breaks/changes-reach-neither-screen-nor-device.patch	failed: Error: the channel as it is on the screen
+SYN-03	ledger/breaks/changes-reach-neither-screen-nor-device.patch	failed: Error: the channel as it is on the screen
+SYN-04	ledger/breaks/held-channel-shown-as-it-was-left.patch	failed: Error: the channel as it is on the screen
+SYN-05	ledger/breaks/channel-changes-not-applied.patch	failed: Error: the channel as it is on the screen
+SYN-06	ledger/breaks/held-channel-shown-as-it-was-left.patch	failed: Error: the channel as it is on the screen
+SYN-08	ledger/breaks/no-access-shown-as-unavailable.patch	failed: Error: expect(locator).toBeVisible() failed
+SYN-09	ledger/breaks/held-channel-shown-as-it-was-left.patch	failed: Error: the channel as it is on the screen
+SYN-10	ledger/breaks/held-channel-shown-as-it-was-left.patch	failed: Error: the channel as it is on the screen
+TAB-01	ledger/breaks/timeline-cache-ignores-the-channel.patch	failed: Error: the last messages in the list
+TAB-02	ledger/breaks/timeline-cache-ignores-the-channel.patch	failed: Error: expect(locator).toHaveCount(expected) failed
+THR-01	ledger/breaks/reply-goes-to-the-channel.patch	failed: Error: expect(received).toEqual(expected) // deep equality
+THR-02	ledger/breaks/reply-goes-to-the-channel.patch	failed: Error: expect(received).toEqual(expected) // deep equality
+THR-03	ledger/breaks/opened-thread-shows-only-its-first-replies.patch	failed: Error: expect(received).toEqual(expected) // deep equality
+THR-04	ledger/breaks/edit-keeps-the-old-text.patch	failed: Error: expect(received).toEqual(expected) // deep equality
+THR-05	ledger/breaks/delete-leaves-the-message.patch	failed: Error: expect(received).toEqual(expected) // deep equality
+THR-06	ledger/breaks/reaction-not-shown.patch	failed: Error: expect(received).toEqual(expected) // deep equality
+THR-07	ledger/breaks/opened-thread-shows-only-its-first-replies.patch	failed: Error: expect(received).toEqual(expected) // deep equality
+THR-08	ledger/breaks/opened-thread-shows-only-its-first-replies.patch	failed: Error: expect(received).toEqual(expected) // deep equality
+THR-09	ledger/breaks/reply-goes-to-the-channel.patch	failed: Error: expect(received).toEqual(expected) // deep equality
+UNR-01	ledger/breaks/unread-mark-never-shows.patch	failed: Error: expect(locator).toBeVisible() failed
+UNR-02	ledger/breaks/mark-as-read-does-nothing.patch	failed: Error: expect(locator).toHaveCount(expected) failed
+UNR-03	ledger/breaks/unread-mark-never-shows.patch	failed: Error: expect(locator).toBeVisible() failed
+UNR-04	ledger/breaks/unread-below-notice-missing.patch	failed: Error: expect(locator).toBeVisible() failed
+UNR-06	ledger/breaks/muted-channel-shows-no-bell.patch	failed: Error: expect(locator).toBeVisible() failed
+UNR-07	ledger/breaks/unread-mark-never-shows.patch	failed: Error: expect(locator).toBeVisible() failed
+UNR-08	ledger/breaks/found-list-misses-new-channels.patch	passed on 94876dc650, with and without the flag: this break no longer reaches the rows a search shows, and no other break is recorded for the test
+UNR-10	ledger/breaks/unread-mark-never-shows.patch	failed: Error: expect(locator).toBeVisible() failed
+WRT-01	ledger/breaks/queued-writes-never-sent.patch	failed: Error: the channel as it is on the screen
+WRT-02	ledger/breaks/device-not-used.patch	failed: Error: the channel as it is on the screen
+WRT-03	ledger/breaks/queued-writes-never-sent.patch	failed: Error: the channel as the services hold it
+WRT-04	ledger/breaks/queued-writes-never-sent.patch	failed: Error: the channel as the services hold it
+WRT-05	ledger/breaks/device-not-used.patch	failed: Error: the channel as the services hold it
+WRT-06	ledger/breaks/device-not-used.patch	failed: Test timeout of 90000ms exceeded.
+WRT-07	ledger/breaks/device-not-used.patch	failed: Test timeout of 90000ms exceeded.
+WRT-08	ledger/breaks/queued-writes-never-sent.patch	failed: Error: the channel as the services hold it
+WRT-09	ledger/breaks/refused-write-kept.patch	failed: Error: expect(locator).toBeVisible() failed
+WRT-10	ledger/breaks/waiting-message-not-marked.patch	failed: Error: expect(locator).toBeVisible() failed
+WRT-11	ledger/breaks/waiting-message-not-marked.patch	failed: Error: expect(locator).toBeVisible() failed
+WRT-12	ledger/breaks/queued-writes-never-sent.patch	failed: Error: the channel as the services hold it
+WRT-13	ledger/breaks/queued-writes-never-sent.patch	failed: Error: the channel as the services hold it
+WRT-14	ledger/breaks/waiting-write-not-shown-in-other-window.patch	failed: Error: the channel as it is on the screen
+WRT-15	ledger/breaks/stored-send-never-forgotten.patch	failed: Error: the channel as the services hold it
+CHN-16	none: the build as it is, with or without the flag	failed: Error: expect(locator).toContainText(expected) failed
+OFF-13	ledger/breaks/device-not-used.patch	failed: Error: expect(locator).toBeVisible() failed
+OFF-14	ledger/breaks/left-behind-reads-not-held.patch	failed: Error: expect(received).toEqual(expected) // deep equality
+CHN-08	ledger/breaks/favorite-does-nothing.patch	failed: Error: expect(locator).toHaveText(expected) failed (at the Favorites step, before the deletion; no break of the deletion itself has been built)
+DM-06	ledger/breaks/teammate-not-offered-by-name.patch	failed: Error: expect(locator).toBeVisible() failed
+CHN-15	ledger/breaks/channel-gone-not-believed.patch	its marked check failed 14 of 14 (Error: expect(locator).toHaveCount(expected) failed); 7 of 13 without the break
+MEM-03	ledger/breaks/channel-gone-not-believed.patch	its marked check failed 4 of 4 (Error: expect(locator).toHaveCount(expected) failed); 0 of 3 without the break

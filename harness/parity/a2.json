@@ -1,0 +1,19 @@
+{
+ "url": "https://localhost:31009/app/channels/5eed92f0-1c06-8932-b12c-277f6a59bad3?channel_message_id=0199aa4e-a6eb-7d03-98ae-e4f740b30909&channel_thread_id=0199a7ca-1eeb-7464-a5bb-8258d0458c89",
+ "target": "0199aa4e-a6eb-7d03-98ae-e4f740b30909",
+ "firstTargetMs": 2361,
+ "samples": [
+  "411/T/263/18666",
+  "411/T/263/18666",
+  "411/T/263/18666",
+  "411/T/263/18666",
+  "411/-/263/18666",
+  "411/-/263/18666",
+  "411/-/263/18666",
+  "411/-/263/18666",
+  "411/-/263/18666",
+  "411/-/263/18666"
+ ],
+ "urlAfter": "/app/channels/5eed92f0-1c06-8932-b12c-277f6a59bad3?channel_message_id=0199aa4e-a6eb-7d03-98ae-e4f740b30909&channel_thread_id=0199a7ca-1eeb-7464-a5bb-8258d0458c89&s0.channels.messageId=0199aa4e-a6eb-7d03-98ae-e4f740b30909&s0.channels.threadId=0199a7ca-1eeb-7464-a5bb-8258d0458c89",
+ "settled": "411/-/263/18666"
+}

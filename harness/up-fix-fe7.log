@@ -1,0 +1,10 @@
+cargo run --quiet --manifest-path Cargo.toml --target-dir target/xtask -p xtask_local --features local-stack -- stack "$@"
+
+[+] macro local stack update — instance chb-fix
+  ✓ Rebuilding & reloading services                  Done 1m9s
+  ✓ Preparing frontend dependencies                  Done 0s
+  ✓ Building frontend bundle                         Done 27s
+  ✓ Caching frontend bundle                          Done 0s
+  ✓ Staging frontend bundle                          Done 0s
+  ✓ Recreating proxy (frontend bundle)               Done 1s
+  ✓ Waiting for backend (proxy /auth/health)         Done 0s

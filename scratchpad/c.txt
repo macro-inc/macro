@@ -1,0 +1,272 @@
+── cargo fmt (root workspace)
+── cargo shear (unused dependencies)
+shear/unlinked_files
+
+  ⚠ 1 unlinked file in `agent_harness`
+  │ src/outbound/sidecar_pump.rs
+  help: delete this file
+
+shear/unlinked_files
+
+  ⚠ 1 unlinked file in `ai_tools`
+  │ src/schemas/anthropic_tools.rs
+  help: delete this file
+
+shear/unlinked_files
+
+  ⚠ 1 unlinked file in `ai_toolset`
+  │ src/schema/transform/additional_properties.rs
+  help: delete this file
+
+shear/unlinked_files
+
+  ⚠ 2 unlinked files in `anthropic`
+  │ src/types/request/request.rs
+  │ src/types/request/request_util.rs
+  help: delete these files
+
+shear/unlinked_files
+
+  ⚠ 1 unlinked file in `authentication_service`
+  │ src/fetch_and_checksum.rs
+  help: delete this file
+
+shear/unlinked_files
+
+  ⚠ 1 unlinked file in `cache-core`
+  │ src/people/ranking.rs
+  help: delete this file
+
+shear/redundant_ignore
+
+  ⚠ redundant ignore `maybe_send`
+    ╭─[crates/client/cache-turso/Cargo.toml:42:12]
+ 41 │ # next native release.
+ 42 │ ignored = ["maybe_send"]
+    ·            ──────┬─────
+    ·                  ╰── dependency is used
+    ╰────
+  help: remove from ignored list
+
+shear/empty_files
+
+  ⚠ 1 empty file in `document_storage_service`
+  │ src/model/request/annotations/mod.rs
+  help: delete this file
+
+shear/unlinked_files
+
+  ⚠ 1 unlinked file in `documents`
+  │ src/inbound/toolset/read_metadata/test.rs
+  help: delete this file
+
+shear/unlinked_files
+
+  ⚠ 1 unlinked file in `email_service`
+  │ src/api/email/backfill/create.rs
+  help: delete this file
+
+shear/empty_files
+
+  ⚠ 1 empty file in `fig_engine`
+  │ src/inspect/design/test.rs
+  help: delete this file
+
+shear/unlinked_files
+
+  ⚠ 3 unlinked files in `frecency`
+  │ src/domain/services/aggregate_reader.rs
+  │ src/domain/services/event_aggregator.rs
+  │ src/domain/services/event_writer.rs
+  help: delete these files
+
+shear/unused_optional_dependency
+
+  ⚠ unused optional dependency `macro_uuid`
+    ╭─[crates/initiative/Cargo.toml:50:1]
+ 49 │ macro_user_id = { path = "../macro_user_id" }
+ 50 │ macro_uuid = { path = "../macro_uuid", optional = true }
+    · ─────┬────
+    ·      ╰── not used in code
+ 51 │ model-entity = { path = "../model-entity" }
+    ╰────
+
+Advice: 
+  ☞ removing an optional dependency may be a breaking change
+
+Advice: 
+  ☞ used in feature `postgres`
+    ╭─[crates/initiative/Cargo.toml:27:3]
+ 26 │   "dep:share_permission_db_utils",
+ 27 │   "dep:macro_uuid",
+    ·   ────────┬───────
+    ·           ╰── enabled here
+ 28 │   "outbound",
+    ╰────
+
+shear/empty_files
+
+  ⚠ 1 empty file in `last_online_tracker`
+  │ src/domain/models.rs
+  help: delete this file
+
+shear/unlinked_files
+
+  ⚠ 1 unlinked file in `macro_env_var`
+  │ src/secret_manager.rs
+  help: delete this file
+
+shear/unlinked_files
+
+  ⚠ 1 unlinked file in `model`
+  │ src/channel.rs
+  help: delete this file
+
+shear/empty_files
+
+  ⚠ 2 empty files in `models_email`
+  │ src/email/db/cache.rs
+  │ src/email/db/link.rs
+  help: delete these files
+
+shear/unlinked_files
+
+  ⚠ 1 unlinked file in `notification_db_client`
+  │ src/user_notification/create.rs
+  help: delete this file
+
+shear/empty_files
+
+  ⚠ 1 empty file in `notification_db_client`
+  │ src/notification/create.rs
+  help: delete this file
+
+shear/unlinked_files
+
+  ⚠ 2 unlinked files in `notification_sandbox`
+  │ src/interactive/push_attempt.rs
+  │ src/interactive/real_push_attempt.rs
+  help: delete these files
+
+shear/unlinked_files
+
+  ⚠ 1 unlinked file in `notification_service`
+  │ src/poller_tests.rs
+  help: delete this file
+
+shear/empty_files
+
+  ⚠ 1 empty file in `notification_service`
+  │ src/notification/metadata_utils/mod.rs
+  help: delete this file
+
+shear/empty_files
+
+  ⚠ 1 empty file in `projects`
+  │ src/domain/response.rs
+  help: delete this file
+
+shear/empty_files
+
+  ⚠ 1 empty file in `soup`
+  │ src/outbound/pg_soup_repo/unexpanded/dynamic.rs
+  help: delete this file
+
+shear/unlinked_files
+
+  ⚠ 9 unlinked files in `task_dedup`
+  │ tests/eval/cases/empty_task_embedding.rs
+  │ tests/eval/cases/eval_corpus.rs
+  │ tests/eval/cases/eval_end_to_end.rs
+  │ tests/eval/cases/eval_judge_accuracy.rs
+  │ tests/eval/cases/eval_judge_variance.rs
+  │ tests/eval/cases/eval_recall_at_k.rs
+  │ tests/eval/cases/eval_retrieval_recall.rs
+  │ tests/eval/cases/eval_similarity_rerank_floor.rs
+  │ tests/eval/cases/eval_threshold_sweep.rs
+  help: delete these files
+
+shear/summary
+
+  ⚠ 25 warnings
+
+Advice:
+  ☞ run with `--expand` for more accurate results
+  ☞ to suppress a dependency issue
+   ╭─[Cargo.toml:2:12]
+ 1 │ [package.metadata.cargo-shear] # or [workspace.metadata.cargo-shear]
+ 2 │ ignored = ["crate-name"]
+   ·            ──────┬─────
+   ·                  ╰── add a crate name here
+   ╰────
+  ☞ to suppress a file issue
+   ╭─[Cargo.toml:2:18]
+ 1 │ [package.metadata.cargo-shear] # or [workspace.metadata.cargo-shear]
+ 2 │ ignored-paths = ["tests/compile/*.rs"]
+   ·                  ──────────┬─────────
+   ·                            ╰── add a file pattern here
+   ╰────
+── biome (changed JS/TS format + lint, same flags as CI)
+Checked 81 files in 748ms. No fixes applied.
+── oxlint (docs/development/style-guide.md FE-12, FE-13)
+src/lib/queries/messages/local/tests/catch-up.test.ts:177:46: warning promise(prefer-await-to-then): Prefer await to then()/catch()/finally() help: Use `await` with `try`/`catch` instead of promise chaining for more readable and maintainable async code.
+src/features/channel/StandaloneThread/Replies.tsx:172:23: warning promise(prefer-await-to-then): Prefer await to then()/catch()/finally() help: Use `await` with `try`/`catch` instead of promise chaining for more readable and maintainable async code.
+src/lib/queries/messages/local/tests/writes.test.ts:221:7: warning promise(prefer-await-to-then): Prefer await to then()/catch()/finally() help: Use `await` with `try`/`catch` instead of promise chaining for more readable and maintainable async code.
+src/lib/queries/messages/local/source.ts:104:8: warning eslint(complexity): async function `loadLocalChannelTimelinePage` has a complexity of 23. Maximum allowed is 20.
+src/lib/graphql-cache/telemetry.ts:233:1: warning eslint(complexity): function `sanitizeObservation` has a complexity of 37. Maximum allowed is 20.
+src/lib/graphql-cache/telemetry.ts:584:8: warning eslint(complexity): function `classifyCacheError` has a complexity of 25. Maximum allowed is 20.
+src/lib/queries/messages/local/pages.ts:366:1: warning eslint(complexity): async function `loadPage` has a complexity of 23. Maximum allowed is 20.
+src/features/channel/Thread/ChannelThread.tsx:43:8: warning eslint(complexity): function `ChannelThread` has a complexity of 22. Maximum allowed is 20.
+src/lib/graphql-cache/worker/wasm-module.ts:472:25: warning promise(prefer-await-to-then): Prefer await to then()/catch()/finally() help: Use `await` with `try`/`catch` instead of promise chaining for more readable and maintainable async code.
+src/lib/queries/messages/mutations.ts:555:63: warning promise(prefer-await-to-then): Prefer await to then()/catch()/finally() help: Use `await` with `try`/`catch` instead of promise chaining for more readable and maintainable async code.
+src/lib/graphql-cache/exchange/mutation-queue-telemetry.ts:287:8: warning eslint(complexity): function `classifyMutationFailure` has a complexity of 28. Maximum allowed is 20.
+src/lib/graphql-cache/protocol.ts:1393:8: warning eslint(complexity): function `isCachePush` has a complexity of 34. Maximum allowed is 20.
+src/lib/graphql-cache/host/tauri-host.ts:326:8: warning promise(prefer-await-to-then): Prefer await to then()/catch()/finally() help: Use `await` with `try`/`catch` instead of promise chaining for more readable and maintainable async code.
+src/lib/graphql-cache/host/tauri-host.ts:335:8: warning promise(prefer-await-to-then): Prefer await to then()/catch()/finally() help: Use `await` with `try`/`catch` instead of promise chaining for more readable and maintainable async code.
+src/lib/graphql-cache/host/tauri-host.ts:363:8: warning promise(prefer-await-to-then): Prefer await to then()/catch()/finally() help: Use `await` with `try`/`catch` instead of promise chaining for more readable and maintainable async code.
+src/lib/graphql-cache/host/tauri-host.ts:871:12: warning promise(prefer-await-to-then): Prefer await to then()/catch()/finally() help: Use `await` with `try`/`catch` instead of promise chaining for more readable and maintainable async code.
+src/lib/graphql-cache/host/tauri-host.ts:870:12: warning promise(prefer-await-to-then): Prefer await to then()/catch()/finally() help: Use `await` with `try`/`catch` instead of promise chaining for more readable and maintainable async code.
+src/lib/graphql-cache/host/tauri-host.ts:1113:20: warning promise(prefer-await-to-then): Prefer await to then()/catch()/finally() help: Use `await` with `try`/`catch` instead of promise chaining for more readable and maintainable async code.
+src/lib/graphql-cache/exchange/normalized-cache-exchange.ts:699:12: warning promise(prefer-await-to-then): Prefer await to then()/catch()/finally() help: Use `await` with `try`/`catch` instead of promise chaining for more readable and maintainable async code.
+src/lib/graphql-cache/exchange/normalized-cache-exchange.ts:702:18: warning promise(prefer-await-to-then): Prefer await to then()/catch()/finally() help: Use `await` with `try`/`catch` instead of promise chaining for more readable and maintainable async code.
+src/lib/graphql-cache/exchange/normalized-cache-exchange.ts:726:17: warning promise(prefer-await-to-then): Prefer await to then()/catch()/finally() help: Use `await` with `try`/`catch` instead of promise chaining for more readable and maintainable async code.
+src/lib/graphql-cache/exchange/normalized-cache-exchange.ts:1065:7: warning eslint(complexity): async function `readThenRoute` has a complexity of 24. Maximum allowed is 20.
+src/lib/graphql-cache/exchange/normalized-cache-exchange.ts:1356:7: warning eslint(complexity): async function `persistQueryResult` has a complexity of 25. Maximum allowed is 20.
+src/lib/graphql-cache/exchange/normalized-cache-exchange.ts:1436:18: warning promise(prefer-await-to-then): Prefer await to then()/catch()/finally() help: Use `await` with `try`/`catch` instead of promise chaining for more readable and maintainable async code.
+src/lib/graphql-cache/exchange/normalized-cache-exchange.ts:1422:18: warning promise(prefer-await-to-then): Prefer await to then()/catch()/finally() help: Use `await` with `try`/`catch` instead of promise chaining for more readable and maintainable async code.
+src/lib/graphql-cache/exchange/normalized-cache-exchange.ts:1489:7: warning eslint(complexity): async function `writeThrough` has a complexity of 43. Maximum allowed is 20.
+src/lib/graphql-cache/exchange/normalized-cache-exchange.ts:1719:35: warning promise(prefer-await-to-then): Prefer await to then()/catch()/finally() help: Use `await` with `try`/`catch` instead of promise chaining for more readable and maintainable async code.
+src/lib/graphql-cache/worker/worker-core.ts:294:22: warning eslint(complexity): async method `handleRequest` has a complexity of 24. Maximum allowed is 20.
+src/lib/graphql-cache/worker/worker-core.ts:543:8: warning promise(prefer-await-to-then): Prefer await to then()/catch()/finally() help: Use `await` with `try`/`catch` instead of promise chaining for more readable and maintainable async code.
+src/lib/graphql-cache/worker/worker-core.ts:531:8: warning promise(prefer-await-to-then): Prefer await to then()/catch()/finally() help: Use `await` with `try`/`catch` instead of promise chaining for more readable and maintainable async code.
+src/lib/graphql-cache/worker/worker-core.ts:1055:40: warning eslint(complexity): private async method `refreshQueueDiagnostics` has a complexity of 21. Maximum allowed is 20.
+src/lib/graphql-cache/worker/worker-core.ts:1078:8: warning promise(prefer-await-to-then): Prefer await to then()/catch()/finally() help: Use `await` with `try`/`catch` instead of promise chaining for more readable and maintainable async code.
+src/lib/graphql-cache/worker/worker-core.ts:1077:8: warning promise(prefer-await-to-then): Prefer await to then()/catch()/finally() help: Use `await` with `try`/`catch` instead of promise chaining for more readable and maintainable async code.
+src/lib/graphql-cache/exchange/mutation-queue-runner.ts:568:3: warning eslint(complexity): async function `routeClaimedAttempt` has a complexity of 32. Maximum allowed is 20.
+src/lib/graphql-cache/exchange/mutation-queue-runner.ts:1022:3: warning eslint(complexity): async function `settle` has a complexity of 65. Maximum allowed is 20.
+src/lib/graphql-cache/host/worker-host.ts:323:21: warning eslint(complexity): function has a complexity of 26. Maximum allowed is 20.
+src/lib/graphql-cache/host/worker-host.ts:467:32: warning promise(prefer-await-to-then): Prefer await to then()/catch()/finally() help: Use `await` with `try`/`catch` instead of promise chaining for more readable and maintainable async code.
+src/lib/graphql-cache/host/worker-host.ts:770:10: warning promise(prefer-await-to-then): Prefer await to then()/catch()/finally() help: Use `await` with `try`/`catch` instead of promise chaining for more readable and maintainable async code.
+src/lib/graphql-cache/host/worker-host.ts:830:47: warning promise(prefer-await-to-then): Prefer await to then()/catch()/finally() help: Use `await` with `try`/`catch` instead of promise chaining for more readable and maintainable async code.
+src/lib/graphql-cache/host/worker-host.ts:898:18: warning promise(prefer-await-to-then): Prefer await to then()/catch()/finally() help: Use `await` with `try`/`catch` instead of promise chaining for more readable and maintainable async code.
+src/lib/graphql-cache/host/worker-host.ts:937:50: warning promise(prefer-await-to-then): Prefer await to then()/catch()/finally() help: Use `await` with `try`/`catch` instead of promise chaining for more readable and maintainable async code.
+src/lib/graphql-cache/host/worker-host.ts:1322:29: warning promise(prefer-await-to-then): Prefer await to then()/catch()/finally() help: Use `await` with `try`/`catch` instead of promise chaining for more readable and maintainable async code.
+src/lib/graphql-cache/worker/coordinator-protocol.ts:519:8: warning eslint(complexity): function `isCacheRequest` has a complexity of 199. Maximum allowed is 20.
+src/lib/graphql-cache/worker/coordinator-protocol.ts:957:8: warning eslint(complexity): function `validateTabToCoordinatorEnvelope` has a complexity of 37. Maximum allowed is 20.
+src/lib/graphql-cache/worker/coordinator-protocol.ts:1090:8: warning eslint(complexity): function `validateCoordinatorToTabEnvelope` has a complexity of 61. Maximum allowed is 20.
+src/lib/graphql-cache/worker/coordinator-protocol.ts:1391:8: warning eslint(complexity): function `validateEngineToCoordinatorEnvelope` has a complexity of 48. Maximum allowed is 20.
+src/lib/graphql-cache/host/tauri-host.test.ts:1362:10: warning promise(prefer-await-to-then): Prefer await to then()/catch()/finally() help: Use `await` with `try`/`catch` instead of promise chaining for more readable and maintainable async code.
+── GraphQL schema compatibility (docs/guides/add-graphql-field.md step 8)
+    Finished `dev` profile [unoptimized + debuginfo] target(s) in 0.43s
+     Running `target/debug/xtask graphql-schema-compat --base c66307ee7986311630cb87b6b7c941ff33eed1bc`
+    Finished `dev` profile [unoptimized + debuginfo] target(s) in 0.48s
+     Running `target/debug/xtask_graphql_schema_compat --base c66307ee7986311630cb87b6b7c941ff33eed1bc`
+static_assets/schema.graphql is compatible with c66307ee7986311630cb87b6b7c941ff33eed1bc (c66307ee7986311630cb87b6b7c941ff33eed1bc)
+── ast-grep code rules (rule ids map to docs/development/style-guide.md)
+Saved lockfile
+[warn] postinstall script did not run; falling back to runtime binary resolution.
+Enable postinstall to avoid the per-invocation overhead.
+apps/web/src/components/app/AppProviders.tsx:43:8: warning[tsx-no-service-client-outside-queries]: Don't import a service client outside the queries package — wrap the call in a query/mutation under queries/ and import that instead.
+── PII scan (added lines vs merge-base)
+
+OK

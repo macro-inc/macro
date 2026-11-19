@@ -1,0 +1,15 @@
+{
+ "mid": "01a1cf93-b6c8-740c-8145-937f375d1ce2",
+ "lobbyRowBefore": {
+  "text": "lobby",
+  "html": 1310,
+  "unreadish": []
+ },
+ "url": "/app/notifications?s0.inbox.row=channel%3A5eed92f0-ce3c-8a78-8d37-54d69b9d9ee1%23thread%3A01a1cf93-b6c8-740c-8145-937f375d1ce2",
+ "afterInboxClick": {
+  "present": true,
+  "top": 426,
+  "targeted": false,
+  "gap": 1524
+ }
+}

@@ -1,0 +1,526 @@
+path "/home/teo/.herdr/worktrees/macro/synoet-channels-local-sync-suiteb/apps/web" does not contain a 'flake.nix', searching up
+
+Running 65 tests using 4 workers
+
+  ✓   3 tests/channels-e2e-dbg/current.spec.ts:202:1 › SYN-05 what a device caught up on is what it shows the next time it opens the channel with no connection (8.6s)
+  ✓   1 tests/channels-e2e-dbg/offline.spec.ts:48:1 › OFF-01 a channel the person has read opens whole with no connection (8.9s)
+  ✓   6 tests/channels-e2e-dbg/offline.spec.ts:272:1 › OFF-09 a channel left as soon as its messages showed opens with no connection (5.7s)
+  ✓   7 tests/channels-e2e-dbg/offline.spec.ts:298:1 › OFF-10 a message that arrived while the channel was open is there when the channel opens with no connection (6.9s)
+  ✘   4 tests/channels-e2e-dbg/offline.spec.ts:177:1 › OFF-06 a thread read while connected shows its replies with no connection, a long one included (25.3s)
+  ✓   8 tests/channels-e2e-dbg/offline.spec.ts:320:1 › OFF-11 opening a held channel with no connection does not say that a new version is out (5.9s)
+  ✘   5 tests/channels-e2e-dbg/offline.spec.ts:212:1 › OFF-07 a long thread never opened, opened with no connection, shows every reply or says that there are more (22.1s)
+  ✓   9 tests/channels-e2e-dbg/writes.spec.ts:53:1 › WRT-01 a message sent with no connection shows at once and reaches the other person once when the connection is back (6.6s)
+  ✓  10 tests/channels-e2e-dbg/writes.spec.ts:112:1 › WRT-03 several messages sent with no connection arrive once each, in the order they were written (6.6s)
+  ✓   2 tests/channels-e2e-dbg/offline.spec.ts:118:1 › OFF-04 messages read far back in a long channel can be scrolled through again with no connection (38.9s)
+  ✓  11 tests/channels-e2e-dbg/writes.spec.ts:141:1 › WRT-04 messages that could not be sent are still there after a reload and are sent once when the services can be reached (7.6s)
+  ✓  12 tests/channels-e2e-dbg/writes.spec.ts:224:1 › WRT-07 a message deleted before it could be sent is not shown to anyone once the connection is back (8.2s)
+  ✓  13 tests/channels-e2e-dbg/writes.spec.ts:437:1 › WRT-14 a message written offline in one window shows in the other window of the same device (8.4s)
+  ✓  15 tests/channels-e2e-dbg/offline.spec.ts:48:1 › OFF-01 a channel the person has read opens whole with no connection (6.3s)
+  ✓  14 tests/channels-e2e-dbg/current.spec.ts:202:1 › SYN-05 what a device caught up on is what it shows the next time it opens the channel with no connection (8.1s)
+  ✓  17 tests/channels-e2e-dbg/offline.spec.ts:177:1 › OFF-06 a thread read while connected shows its replies with no connection, a long one included (7.6s)
+  ✓  19 tests/channels-e2e-dbg/offline.spec.ts:272:1 › OFF-09 a channel left as soon as its messages showed opens with no connection (5.3s)
+  ✓  18 tests/channels-e2e-dbg/offline.spec.ts:212:1 › OFF-07 a long thread never opened, opened with no connection, shows every reply or says that there are more (7.5s)
+  ✓  21 tests/channels-e2e-dbg/offline.spec.ts:320:1 › OFF-11 opening a held channel with no connection does not say that a new version is out (7.1s)
+
+  ✘  16 tests/channels-e2e-dbg/offline.spec.ts:118:1 › OFF-04 messages read far back in a long channel can be scrolled through again with no connection (22.5s)
+  ✓  23 tests/channels-e2e-dbg/writes.spec.ts:112:1 › WRT-03 several messages sent with no connection arrive once each, in the order they were written (6.6s)
+  ✓  24 tests/channels-e2e-dbg/writes.spec.ts:141:1 › WRT-04 messages that could not be sent are still there after a reload and are sent once when the services can be reached (6.7s)
+  ✓  26 tests/channels-e2e-dbg/writes.spec.ts:437:1 › WRT-14 a message written offline in one window shows in the other window of the same device (7.8s)
+  ✓  27 tests/channels-e2e-dbg/current.spec.ts:202:1 › SYN-05 what a device caught up on is what it shows the next time it opens the channel with no connection (7.7s)
+  ✓  28 tests/channels-e2e-dbg/offline.spec.ts:48:1 › OFF-01 a channel the person has read opens whole with no connection (5.9s)
+  ✘  20 tests/channels-e2e-dbg/offline.spec.ts:298:1 › OFF-10 a message that arrived while the channel was open is there when the channel opens with no connection (36.2s)
+  ✓  30 tests/channels-e2e-dbg/offline.spec.ts:177:1 › OFF-06 a thread read while connected shows its replies with no connection, a long one included (7.7s)
+  ✓  32 tests/channels-e2e-dbg/offline.spec.ts:272:1 › OFF-09 a channel left as soon as its messages showed opens with no connection (5.6s)
+  ✓  33 tests/channels-e2e-dbg/offline.spec.ts:298:1 › OFF-10 a message that arrived while the channel was open is there when the channel opens with no connection (5.8s)
+  ✘  25 tests/channels-e2e-dbg/writes.spec.ts:224:1 › WRT-07 a message deleted before it could be sent is not shown to anyone once the connection is back (35.3s)
+  ✓  29 tests/channels-e2e-dbg/offline.spec.ts:118:1 › OFF-04 messages read far back in a long channel can be scrolled through again with no connection (30.1s)
+  ✓  34 tests/channels-e2e-dbg/offline.spec.ts:320:1 › OFF-11 opening a held channel with no connection does not say that a new version is out (7.9s)
+  ✓  35 tests/channels-e2e-dbg/writes.spec.ts:53:1 › WRT-01 a message sent with no connection shows at once and reaches the other person once when the connection is back (6.5s)
+  ✘  31 tests/channels-e2e-dbg/offline.spec.ts:212:1 › OFF-07 a long thread never opened, opened with no connection, shows every reply or says that there are more (21.5s)
+  ✓  36 tests/channels-e2e-dbg/writes.spec.ts:112:1 › WRT-03 several messages sent with no connection arrive once each, in the order they were written (7.7s)
+  ✓  38 tests/channels-e2e-dbg/writes.spec.ts:224:1 › WRT-07 a message deleted before it could be sent is not shown to anyone once the connection is back (6.2s)
+  ✓  37 tests/channels-e2e-dbg/writes.spec.ts:141:1 › WRT-04 messages that could not be sent are still there after a reload and are sent once when the services can be reached (7.5s)
+  ✓  39 tests/channels-e2e-dbg/writes.spec.ts:437:1 › WRT-14 a message written offline in one window shows in the other window of the same device (7.5s)
+  ✓  41 tests/channels-e2e-dbg/offline.spec.ts:48:1 › OFF-01 a channel the person has read opens whole with no connection (6.0s)
+  ✓  40 tests/channels-e2e-dbg/current.spec.ts:202:1 › SYN-05 what a device caught up on is what it shows the next time it opens the channel with no connection (8.3s)
+  ✓  45 tests/channels-e2e-dbg/offline.spec.ts:272:1 › OFF-09 a channel left as soon as its messages showed opens with no connection (5.7s)
+  ✓  43 tests/channels-e2e-dbg/offline.spec.ts:177:1 › OFF-06 a thread read while connected shows its replies with no connection, a long one included (8.3s)
+  ✓  46 tests/channels-e2e-dbg/offline.spec.ts:298:1 › OFF-10 a message that arrived while the channel was open is there when the channel opens with no connection (7.2s)
+  ✓  47 tests/channels-e2e-dbg/offline.spec.ts:320:1 › OFF-11 opening a held channel with no connection does not say that a new version is out (7.2s)
+  ✓  49 tests/channels-e2e-dbg/writes.spec.ts:112:1 › WRT-03 several messages sent with no connection arrive once each, in the order they were written (6.8s)
+  ✓  48 tests/channels-e2e-dbg/writes.spec.ts:53:1 › WRT-01 a message sent with no connection shows at once and reaches the other person once when the connection is back (8.6s)
+  ✘  44 tests/channels-e2e-dbg/offline.spec.ts:212:1 › OFF-07 a long thread never opened, opened with no connection, shows every reply or says that there are more (21.9s)
+  ✓  42 tests/channels-e2e-dbg/offline.spec.ts:118:1 › OFF-04 messages read far back in a long channel can be scrolled through again with no connection (31.4s)
+  ✓  50 tests/channels-e2e-dbg/writes.spec.ts:141:1 › WRT-04 messages that could not be sent are still there after a reload and are sent once when the services can be reached (8.2s)
+  ✓  51 tests/channels-e2e-dbg/writes.spec.ts:224:1 › WRT-07 a message deleted before it could be sent is not shown to anyone once the connection is back (7.7s)
+  ✓  52 tests/channels-e2e-dbg/writes.spec.ts:437:1 › WRT-14 a message written offline in one window shows in the other window of the same device (7.5s)
+  ✓  53 tests/channels-e2e-dbg/current.spec.ts:202:1 › SYN-05 what a device caught up on is what it shows the next time it opens the channel with no connection (8.1s)
+  ✓  54 tests/channels-e2e-dbg/offline.spec.ts:48:1 › OFF-01 a channel the person has read opens whole with no connection (6.8s)
+  ✓  56 tests/channels-e2e-dbg/offline.spec.ts:177:1 › OFF-06 a thread read while connected shows its replies with no connection, a long one included (7.6s)
+  ✓  58 tests/channels-e2e-dbg/offline.spec.ts:272:1 › OFF-09 a channel left as soon as its messages showed opens with no connection (5.5s)
+  ✓  57 tests/channels-e2e-dbg/offline.spec.ts:212:1 › OFF-07 a long thread never opened, opened with no connection, shows every reply or says that there are more (7.5s)
+  ✓  59 tests/channels-e2e-dbg/offline.spec.ts:298:1 › OFF-10 a message that arrived while the channel was open is there when the channel opens with no connection (6.5s)
+  ✓  60 tests/channels-e2e-dbg/offline.spec.ts:320:1 › OFF-11 opening a held channel with no connection does not say that a new version is out (6.5s)
+  ✓  61 tests/channels-e2e-dbg/writes.spec.ts:53:1 › WRT-01 a message sent with no connection shows at once and reaches the other person once when the connection is back (7.5s)
+  ✘  55 tests/channels-e2e-dbg/offline.spec.ts:118:1 › OFF-04 messages read far back in a long channel can be scrolled through again with no connection (21.2s)
+  ✓  62 tests/channels-e2e-dbg/writes.spec.ts:112:1 › WRT-03 several messages sent with no connection arrive once each, in the order they were written (6.9s)
+  ✓  63 tests/channels-e2e-dbg/writes.spec.ts:141:1 › WRT-04 messages that could not be sent are still there after a reload and are sent once when the services can be reached (8.5s)
+  ✓  64 tests/channels-e2e-dbg/writes.spec.ts:224:1 › WRT-07 a message deleted before it could be sent is not shown to anyone once the connection is back (7.5s)
+  ✓  65 tests/channels-e2e-dbg/writes.spec.ts:437:1 › WRT-14 a message written offline in one window shows in the other window of the same device (7.1s)
+
+
+  1) tests/channels-e2e-dbg/offline.spec.ts:177:1 › OFF-06 a thread read while connected shows its replies with no connection, a long one included 
+
+    Error: expect(received).toEqual(expected) // deep equality
+
+    - Expected  - 21
+    + Received  +  0
+
+      Array [
+        "reply 01",
+        "reply 02",
+        "reply 03",
+    -   "reply 04",
+    -   "reply 05",
+    -   "reply 06",
+    -   "reply 07",
+    -   "reply 08",
+    -   "reply 09",
+    -   "reply 10",
+    -   "reply 11",
+    -   "reply 12",
+    -   "reply 13",
+    -   "reply 14",
+    -   "reply 15",
+    -   "reply 16",
+    -   "reply 17",
+    -   "reply 18",
+    -   "reply 19",
+    -   "reply 20",
+    -   "reply 21",
+    -   "reply 22",
+    -   "reply 23",
+    -   "reply 24",
+      ]
+
+    Call Log:
+    - Timeout 15000ms exceeded while waiting on the predicate
+
+      204 |   // says that there are more.
+      205 |   await failsSometimes(() =>
+    > 206 |     expect.poll(() => offline.replies(root.id)).toEqual(replies)
+          |                                                 ^
+      207 |   );
+      208 | });
+      209 |
+        at check (/home/teo/.herdr/worktrees/macro/synoet-channels-local-sync-suiteb/apps/web/tests/channels-e2e-dbg/offline.spec.ts:206:49)
+        at failsSometimes (/home/teo/.herdr/worktrees/macro/synoet-channels-local-sync-suiteb/apps/web/tests/channels-e2e-dbg/harness/fixtures.ts:99:11)
+        at /home/teo/.herdr/worktrees/macro/synoet-channels-local-sync-suiteb/apps/web/tests/channels-e2e-dbg/offline.spec.ts:205:9
+
+    attachment #1: screenshot (image/png) ──────────────────────────────────────────────────────────
+    ../../../../../../.cache/channels-perf-b/e2ed/f1/test-results/offline-OFF-06-a-thread-re-c002b-nection-a-long-one-included/test-failed-1.png
+    ────────────────────────────────────────────────────────────────────────────────────────────────
+
+    Error Context: ../../../../../../.cache/channels-perf-b/e2ed/f1/test-results/offline-OFF-06-a-thread-re-c002b-nection-a-long-one-included/error-context.md
+
+    attachment #3: trace (application/zip) ─────────────────────────────────────────────────────────
+    ../../../../../../.cache/channels-perf-b/e2ed/f1/test-results/offline-OFF-06-a-thread-re-c002b-nection-a-long-one-included/trace.zip
+    Usage:
+
+        npx playwright show-trace ../../../../../../.cache/channels-perf-b/e2ed/f1/test-results/offline-OFF-06-a-thread-re-c002b-nection-a-long-one-included/trace.zip
+
+    ────────────────────────────────────────────────────────────────────────────────────────────────
+
+  2) tests/channels-e2e-dbg/offline.spec.ts:212:1 › OFF-07 a long thread never opened, opened with no connection, shows every reply or says that there are more 
+
+    Error: expect(received).toBe(expected) // Object.is equality
+
+    Expected: true
+    Received: false
+
+    Call Log:
+    - Timeout 15000ms exceeded while waiting on the predicate
+
+      246 |         return drawn.length === replies.length || (more && drawn.length > 0);
+      247 |       })
+    > 248 |       .toBe(true)
+          |        ^
+      249 |   );
+      250 | });
+      251 |
+        at check (/home/teo/.herdr/worktrees/macro/synoet-channels-local-sync-suiteb/apps/web/tests/channels-e2e-dbg/offline.spec.ts:248:8)
+        at failsSometimes (/home/teo/.herdr/worktrees/macro/synoet-channels-local-sync-suiteb/apps/web/tests/channels-e2e-dbg/harness/fixtures.ts:99:11)
+        at /home/teo/.herdr/worktrees/macro/synoet-channels-local-sync-suiteb/apps/web/tests/channels-e2e-dbg/offline.spec.ts:241:9
+
+    attachment #1: screenshot (image/png) ──────────────────────────────────────────────────────────
+    ../../../../../../.cache/channels-perf-b/e2ed/f1/test-results/offline-OFF-07-a-long-thre-88834-or-says-that-there-are-more/test-failed-1.png
+    ────────────────────────────────────────────────────────────────────────────────────────────────
+
+    Error Context: ../../../../../../.cache/channels-perf-b/e2ed/f1/test-results/offline-OFF-07-a-long-thre-88834-or-says-that-there-are-more/error-context.md
+
+    attachment #3: trace (application/zip) ─────────────────────────────────────────────────────────
+    ../../../../../../.cache/channels-perf-b/e2ed/f1/test-results/offline-OFF-07-a-long-thre-88834-or-says-that-there-are-more/trace.zip
+    Usage:
+
+        npx playwright show-trace ../../../../../../.cache/channels-perf-b/e2ed/f1/test-results/offline-OFF-07-a-long-thre-88834-or-says-that-there-are-more/trace.zip
+
+    ────────────────────────────────────────────────────────────────────────────────────────────────
+
+  3) tests/channels-e2e-dbg/offline.spec.ts:118:1 › OFF-04 messages read far back in a long channel can be scrolled through again with no connection 
+
+    Error: lost my place above "history 208": the list shows ["history 075","history 076","history 077","history 078","history 079","history 080","history 081","history 082","history 083","history 084","history 085","history 086","history 087","history 088","history 089","history 090","history 091","history 092","history 093","history 094","history 095","history 096","history 097","history 098"]
+
+       at harness/channel.ts:236
+
+      234 |         const oldestKnown = now.indexOf(seen[0]);
+      235 |         if (oldestKnown === -1)
+    > 236 |           throw new Error(
+          |                 ^
+      237 |             `lost my place above "${seen[0]}": the list shows ${JSON.stringify(now)}`
+      238 |           );
+      239 |         seen.unshift(...now.slice(0, oldestKnown));
+        at record (/home/teo/.herdr/worktrees/macro/synoet-channels-local-sync-suiteb/apps/web/tests/channels-e2e-dbg/harness/channel.ts:236:17)
+        at look (/home/teo/.herdr/worktrees/macro/synoet-channels-local-sync-suiteb/apps/web/tests/channels-e2e-dbg/harness/channel.ts:256:9)
+        at /home/teo/.herdr/worktrees/macro/synoet-channels-local-sync-suiteb/apps/web/tests/channels-e2e-dbg/harness/channel.ts:266:7
+        at Conversation.readTo (/home/teo/.herdr/worktrees/macro/synoet-channels-local-sync-suiteb/apps/web/tests/channels-e2e-dbg/harness/channel.ts:263:5)
+        at /home/teo/.herdr/worktrees/macro/synoet-channels-local-sync-suiteb/apps/web/tests/channels-e2e-dbg/offline.spec.ts:136:5
+        at failsSometimes (/home/teo/.herdr/worktrees/macro/synoet-channels-local-sync-suiteb/apps/web/tests/channels-e2e-dbg/harness/fixtures.ts:99:5)
+        at /home/teo/.herdr/worktrees/macro/synoet-channels-local-sync-suiteb/apps/web/tests/channels-e2e-dbg/offline.spec.ts:133:3
+
+    attachment #1: screenshot (image/png) ──────────────────────────────────────────────────────────
+    ../../../../../../.cache/channels-perf-b/e2ed/f1/test-results/offline-OFF-04-messages-re-3412b-gh-again-with-no-connection-repeat1/test-failed-1.png
+    ────────────────────────────────────────────────────────────────────────────────────────────────
+
+    Error Context: ../../../../../../.cache/channels-perf-b/e2ed/f1/test-results/offline-OFF-04-messages-re-3412b-gh-again-with-no-connection-repeat1/error-context.md
+
+    attachment #3: trace (application/zip) ─────────────────────────────────────────────────────────
+    ../../../../../../.cache/channels-perf-b/e2ed/f1/test-results/offline-OFF-04-messages-re-3412b-gh-again-with-no-connection-repeat1/trace.zip
+    Usage:
+
+        npx playwright show-trace ../../../../../../.cache/channels-perf-b/e2ed/f1/test-results/offline-OFF-04-messages-re-3412b-gh-again-with-no-connection-repeat1/trace.zip
+
+    ────────────────────────────────────────────────────────────────────────────────────────────────
+
+  4) tests/channels-e2e-dbg/offline.spec.ts:298:1 › OFF-10 a message that arrived while the channel was open is there when the channel opens with no connection 
+
+    Error: the channel as it is on the screen
+
+    the channel as it is on the screen
+
+    expect(received).toEqual(expected) // deep equality
+
+    - Expected  - 1
+    + Received  + 0
+
+    @@ -2,7 +2,6 @@
+        "one, edited",
+        "This message was deleted.",
+        "  > a reply",
+        "three [👍]",
+        "four",
+    -   "five",
+      ]
+
+    Call Log:
+    - Timeout 30000ms exceeded while waiting on the predicate
+
+       at harness/device.ts:59
+
+      57 |       timeout: 30_000,
+      58 |     })
+    > 59 |     .toEqual(lines);
+         |      ^
+      60 | }
+      61 |
+      62 | /**
+        at expectShown (/home/teo/.herdr/worktrees/macro/synoet-channels-local-sync-suiteb/apps/web/tests/channels-e2e-dbg/harness/device.ts:59:6)
+        at /home/teo/.herdr/worktrees/macro/synoet-channels-local-sync-suiteb/apps/web/tests/channels-e2e-dbg/offline.spec.ts:314:11
+        at failsSometimes (/home/teo/.herdr/worktrees/macro/synoet-channels-local-sync-suiteb/apps/web/tests/channels-e2e-dbg/harness/fixtures.ts:99:5)
+        at /home/teo/.herdr/worktrees/macro/synoet-channels-local-sync-suiteb/apps/web/tests/channels-e2e-dbg/offline.spec.ts:312:3
+
+    attachment #1: screenshot (image/png) ──────────────────────────────────────────────────────────
+    ../../../../../../.cache/channels-perf-b/e2ed/f1/test-results/offline-OFF-10-a-message-t-36a77-el-opens-with-no-connection-repeat1/test-failed-1.png
+    ────────────────────────────────────────────────────────────────────────────────────────────────
+
+    Error Context: ../../../../../../.cache/channels-perf-b/e2ed/f1/test-results/offline-OFF-10-a-message-t-36a77-el-opens-with-no-connection-repeat1/error-context.md
+
+    attachment #3: trace (application/zip) ─────────────────────────────────────────────────────────
+    ../../../../../../.cache/channels-perf-b/e2ed/f1/test-results/offline-OFF-10-a-message-t-36a77-el-opens-with-no-connection-repeat1/trace.zip
+    Usage:
+
+        npx playwright show-trace ../../../../../../.cache/channels-perf-b/e2ed/f1/test-results/offline-OFF-10-a-message-t-36a77-el-opens-with-no-connection-repeat1/trace.zip
+
+    ────────────────────────────────────────────────────────────────────────────────────────────────
+
+  5) tests/channels-e2e-dbg/offline.spec.ts:212:1 › OFF-07 a long thread never opened, opened with no connection, shows every reply or says that there are more 
+
+    Error: expect(received).toBe(expected) // Object.is equality
+
+    Expected: true
+    Received: false
+
+    Call Log:
+    - Timeout 15000ms exceeded while waiting on the predicate
+
+      246 |         return drawn.length === replies.length || (more && drawn.length > 0);
+      247 |       })
+    > 248 |       .toBe(true)
+          |        ^
+      249 |   );
+      250 | });
+      251 |
+        at check (/home/teo/.herdr/worktrees/macro/synoet-channels-local-sync-suiteb/apps/web/tests/channels-e2e-dbg/offline.spec.ts:248:8)
+        at failsSometimes (/home/teo/.herdr/worktrees/macro/synoet-channels-local-sync-suiteb/apps/web/tests/channels-e2e-dbg/harness/fixtures.ts:99:11)
+        at /home/teo/.herdr/worktrees/macro/synoet-channels-local-sync-suiteb/apps/web/tests/channels-e2e-dbg/offline.spec.ts:241:9
+
+    attachment #1: screenshot (image/png) ──────────────────────────────────────────────────────────
+    ../../../../../../.cache/channels-perf-b/e2ed/f1/test-results/offline-OFF-07-a-long-thre-88834-or-says-that-there-are-more-repeat2/test-failed-1.png
+    ────────────────────────────────────────────────────────────────────────────────────────────────
+
+    Error Context: ../../../../../../.cache/channels-perf-b/e2ed/f1/test-results/offline-OFF-07-a-long-thre-88834-or-says-that-there-are-more-repeat2/error-context.md
+
+    attachment #3: trace (application/zip) ─────────────────────────────────────────────────────────
+    ../../../../../../.cache/channels-perf-b/e2ed/f1/test-results/offline-OFF-07-a-long-thre-88834-or-says-that-there-are-more-repeat2/trace.zip
+    Usage:
+
+        npx playwright show-trace ../../../../../../.cache/channels-perf-b/e2ed/f1/test-results/offline-OFF-07-a-long-thre-88834-or-says-that-there-are-more-repeat2/trace.zip
+
+    ────────────────────────────────────────────────────────────────────────────────────────────────
+
+  6) tests/channels-e2e-dbg/offline.spec.ts:212:1 › OFF-07 a long thread never opened, opened with no connection, shows every reply or says that there are more 
+
+    Error: expect(received).toBe(expected) // Object.is equality
+
+    Expected: true
+    Received: false
+
+    Call Log:
+    - Timeout 15000ms exceeded while waiting on the predicate
+
+      246 |         return drawn.length === replies.length || (more && drawn.length > 0);
+      247 |       })
+    > 248 |       .toBe(true)
+          |        ^
+      249 |   );
+      250 | });
+      251 |
+        at check (/home/teo/.herdr/worktrees/macro/synoet-channels-local-sync-suiteb/apps/web/tests/channels-e2e-dbg/offline.spec.ts:248:8)
+        at failsSometimes (/home/teo/.herdr/worktrees/macro/synoet-channels-local-sync-suiteb/apps/web/tests/channels-e2e-dbg/harness/fixtures.ts:99:11)
+        at /home/teo/.herdr/worktrees/macro/synoet-channels-local-sync-suiteb/apps/web/tests/channels-e2e-dbg/offline.spec.ts:241:9
+
+    attachment #1: screenshot (image/png) ──────────────────────────────────────────────────────────
+    ../../../../../../.cache/channels-perf-b/e2ed/f1/test-results/offline-OFF-07-a-long-thre-88834-or-says-that-there-are-more-repeat3/test-failed-1.png
+    ────────────────────────────────────────────────────────────────────────────────────────────────
+
+    Error Context: ../../../../../../.cache/channels-perf-b/e2ed/f1/test-results/offline-OFF-07-a-long-thre-88834-or-says-that-there-are-more-repeat3/error-context.md
+
+    attachment #3: trace (application/zip) ─────────────────────────────────────────────────────────
+    ../../../../../../.cache/channels-perf-b/e2ed/f1/test-results/offline-OFF-07-a-long-thre-88834-or-says-that-there-are-more-repeat3/trace.zip
+    Usage:
+
+        npx playwright show-trace ../../../../../../.cache/channels-perf-b/e2ed/f1/test-results/offline-OFF-07-a-long-thre-88834-or-says-that-there-are-more-repeat3/trace.zip
+
+    ────────────────────────────────────────────────────────────────────────────────────────────────
+
+  7) tests/channels-e2e-dbg/offline.spec.ts:118:1 › OFF-04 messages read far back in a long channel can be scrolled through again with no connection 
+
+    Error: lost my place above "history 208": the list shows ["history 075","history 076","history 077","history 078","history 079","history 080","history 081","history 082","history 083","history 084","history 085","history 086","history 087","history 088","history 089","history 090","history 091","history 092","history 093","history 094","history 095","history 096","history 097","history 098"]
+
+       at harness/channel.ts:236
+
+      234 |         const oldestKnown = now.indexOf(seen[0]);
+      235 |         if (oldestKnown === -1)
+    > 236 |           throw new Error(
+          |                 ^
+      237 |             `lost my place above "${seen[0]}": the list shows ${JSON.stringify(now)}`
+      238 |           );
+      239 |         seen.unshift(...now.slice(0, oldestKnown));
+        at record (/home/teo/.herdr/worktrees/macro/synoet-channels-local-sync-suiteb/apps/web/tests/channels-e2e-dbg/harness/channel.ts:236:17)
+        at look (/home/teo/.herdr/worktrees/macro/synoet-channels-local-sync-suiteb/apps/web/tests/channels-e2e-dbg/harness/channel.ts:256:9)
+        at /home/teo/.herdr/worktrees/macro/synoet-channels-local-sync-suiteb/apps/web/tests/channels-e2e-dbg/harness/channel.ts:266:7
+        at Conversation.readTo (/home/teo/.herdr/worktrees/macro/synoet-channels-local-sync-suiteb/apps/web/tests/channels-e2e-dbg/harness/channel.ts:263:5)
+        at /home/teo/.herdr/worktrees/macro/synoet-channels-local-sync-suiteb/apps/web/tests/channels-e2e-dbg/offline.spec.ts:136:5
+        at failsSometimes (/home/teo/.herdr/worktrees/macro/synoet-channels-local-sync-suiteb/apps/web/tests/channels-e2e-dbg/harness/fixtures.ts:99:5)
+        at /home/teo/.herdr/worktrees/macro/synoet-channels-local-sync-suiteb/apps/web/tests/channels-e2e-dbg/offline.spec.ts:133:3
+
+    attachment #1: screenshot (image/png) ──────────────────────────────────────────────────────────
+    ../../../../../../.cache/channels-perf-b/e2ed/f1/test-results/offline-OFF-04-messages-re-3412b-gh-again-with-no-connection-repeat4/test-failed-1.png
+    ────────────────────────────────────────────────────────────────────────────────────────────────
+
+    Error Context: ../../../../../../.cache/channels-perf-b/e2ed/f1/test-results/offline-OFF-04-messages-re-3412b-gh-again-with-no-connection-repeat4/error-context.md
+
+    attachment #3: trace (application/zip) ─────────────────────────────────────────────────────────
+    ../../../../../../.cache/channels-perf-b/e2ed/f1/test-results/offline-OFF-04-messages-re-3412b-gh-again-with-no-connection-repeat4/trace.zip
+    Usage:
+
+        npx playwright show-trace ../../../../../../.cache/channels-perf-b/e2ed/f1/test-results/offline-OFF-04-messages-re-3412b-gh-again-with-no-connection-repeat4/trace.zip
+
+    ────────────────────────────────────────────────────────────────────────────────────────────────
+
+  8) tests/channels-e2e-dbg/writes.spec.ts:437:1 › WRT-14 a message written offline in one window shows in the other window of the same device 
+
+    Expected to fail, but passed.
+
+    attachment #1: screenshot (image/png) ──────────────────────────────────────────────────────────
+    ../../../../../../.cache/channels-perf-b/e2ed/f1/test-results/writes-WRT-14-a-message-wr-5e142-r-window-of-the-same-device/test-failed-1.png
+    ────────────────────────────────────────────────────────────────────────────────────────────────
+
+    attachment #2: screenshot (image/png) ──────────────────────────────────────────────────────────
+    ../../../../../../.cache/channels-perf-b/e2ed/f1/test-results/writes-WRT-14-a-message-wr-5e142-r-window-of-the-same-device/test-failed-2.png
+    ────────────────────────────────────────────────────────────────────────────────────────────────
+
+    attachment #3: trace (application/zip) ─────────────────────────────────────────────────────────
+    ../../../../../../.cache/channels-perf-b/e2ed/f1/test-results/writes-WRT-14-a-message-wr-5e142-r-window-of-the-same-device/trace.zip
+    Usage:
+
+        npx playwright show-trace ../../../../../../.cache/channels-perf-b/e2ed/f1/test-results/writes-WRT-14-a-message-wr-5e142-r-window-of-the-same-device/trace.zip
+
+    ────────────────────────────────────────────────────────────────────────────────────────────────
+
+  9) tests/channels-e2e-dbg/writes.spec.ts:224:1 › WRT-07 a message deleted before it could be sent is not shown to anyone once the connection is back 
+
+    Error: the channel as it is on the screen
+
+    the channel as it is on the screen
+
+    expect(received).toEqual(expected) // deep equality
+
+    - Expected  - 6
+    + Received  + 1
+
+    - Array [
+    -   "one",
+    -   "two",
+    -   "three",
+    -   "kept",
+    - ]
+    + Array []
+
+    Call Log:
+    - Timeout 30000ms exceeded while waiting on the predicate
+
+       at harness/device.ts:59
+
+      57 |       timeout: 30_000,
+      58 |     })
+    > 59 |     .toEqual(lines);
+         |      ^
+      60 | }
+      61 |
+      62 | /**
+        at expectShown (/home/teo/.herdr/worktrees/macro/synoet-channels-local-sync-suiteb/apps/web/tests/channels-e2e-dbg/harness/device.ts:59:6)
+        at /home/teo/.herdr/worktrees/macro/synoet-channels-local-sync-suiteb/apps/web/tests/channels-e2e-dbg/writes.spec.ts:241:9
+
+    attachment #1: screenshot (image/png) ──────────────────────────────────────────────────────────
+    ../../../../../../.cache/channels-perf-b/e2ed/f1/test-results/writes-WRT-07-a-message-de-275df-once-the-connection-is-back-repeat1/test-failed-2.png
+    ────────────────────────────────────────────────────────────────────────────────────────────────
+
+    attachment #2: screenshot (image/png) ──────────────────────────────────────────────────────────
+    ../../../../../../.cache/channels-perf-b/e2ed/f1/test-results/writes-WRT-07-a-message-de-275df-once-the-connection-is-back-repeat1/test-failed-1.png
+    ────────────────────────────────────────────────────────────────────────────────────────────────
+
+    Error Context: ../../../../../../.cache/channels-perf-b/e2ed/f1/test-results/writes-WRT-07-a-message-de-275df-once-the-connection-is-back-repeat1/error-context.md
+
+    attachment #4: trace (application/zip) ─────────────────────────────────────────────────────────
+    ../../../../../../.cache/channels-perf-b/e2ed/f1/test-results/writes-WRT-07-a-message-de-275df-once-the-connection-is-back-repeat1/trace.zip
+    Usage:
+
+        npx playwright show-trace ../../../../../../.cache/channels-perf-b/e2ed/f1/test-results/writes-WRT-07-a-message-de-275df-once-the-connection-is-back-repeat1/trace.zip
+
+    ────────────────────────────────────────────────────────────────────────────────────────────────
+
+  10) tests/channels-e2e-dbg/writes.spec.ts:437:1 › WRT-14 a message written offline in one window shows in the other window of the same device 
+
+    Expected to fail, but passed.
+
+    attachment #1: screenshot (image/png) ──────────────────────────────────────────────────────────
+    ../../../../../../.cache/channels-perf-b/e2ed/f1/test-results/writes-WRT-14-a-message-wr-5e142-r-window-of-the-same-device-repeat1/test-failed-1.png
+    ────────────────────────────────────────────────────────────────────────────────────────────────
+
+    attachment #2: screenshot (image/png) ──────────────────────────────────────────────────────────
+    ../../../../../../.cache/channels-perf-b/e2ed/f1/test-results/writes-WRT-14-a-message-wr-5e142-r-window-of-the-same-device-repeat1/test-failed-2.png
+    ────────────────────────────────────────────────────────────────────────────────────────────────
+
+    attachment #3: trace (application/zip) ─────────────────────────────────────────────────────────
+    ../../../../../../.cache/channels-perf-b/e2ed/f1/test-results/writes-WRT-14-a-message-wr-5e142-r-window-of-the-same-device-repeat1/trace.zip
+    Usage:
+
+        npx playwright show-trace ../../../../../../.cache/channels-perf-b/e2ed/f1/test-results/writes-WRT-14-a-message-wr-5e142-r-window-of-the-same-device-repeat1/trace.zip
+
+    ────────────────────────────────────────────────────────────────────────────────────────────────
+
+  11) tests/channels-e2e-dbg/writes.spec.ts:437:1 › WRT-14 a message written offline in one window shows in the other window of the same device 
+
+    Expected to fail, but passed.
+
+    attachment #1: screenshot (image/png) ──────────────────────────────────────────────────────────
+    ../../../../../../.cache/channels-perf-b/e2ed/f1/test-results/writes-WRT-14-a-message-wr-5e142-r-window-of-the-same-device-repeat2/test-failed-1.png
+    ────────────────────────────────────────────────────────────────────────────────────────────────
+
+    attachment #2: screenshot (image/png) ──────────────────────────────────────────────────────────
+    ../../../../../../.cache/channels-perf-b/e2ed/f1/test-results/writes-WRT-14-a-message-wr-5e142-r-window-of-the-same-device-repeat2/test-failed-2.png
+    ────────────────────────────────────────────────────────────────────────────────────────────────
+
+    attachment #3: trace (application/zip) ─────────────────────────────────────────────────────────
+    ../../../../../../.cache/channels-perf-b/e2ed/f1/test-results/writes-WRT-14-a-message-wr-5e142-r-window-of-the-same-device-repeat2/trace.zip
+    Usage:
+
+        npx playwright show-trace ../../../../../../.cache/channels-perf-b/e2ed/f1/test-results/writes-WRT-14-a-message-wr-5e142-r-window-of-the-same-device-repeat2/trace.zip
+
+    ────────────────────────────────────────────────────────────────────────────────────────────────
+
+  12) tests/channels-e2e-dbg/writes.spec.ts:437:1 › WRT-14 a message written offline in one window shows in the other window of the same device 
+
+    Expected to fail, but passed.
+
+    attachment #1: screenshot (image/png) ──────────────────────────────────────────────────────────
+    ../../../../../../.cache/channels-perf-b/e2ed/f1/test-results/writes-WRT-14-a-message-wr-5e142-r-window-of-the-same-device-repeat3/test-failed-2.png
+    ────────────────────────────────────────────────────────────────────────────────────────────────
+
+    attachment #2: screenshot (image/png) ──────────────────────────────────────────────────────────
+    ../../../../../../.cache/channels-perf-b/e2ed/f1/test-results/writes-WRT-14-a-message-wr-5e142-r-window-of-the-same-device-repeat3/test-failed-1.png
+    ────────────────────────────────────────────────────────────────────────────────────────────────
+
+    attachment #3: trace (application/zip) ─────────────────────────────────────────────────────────
+    ../../../../../../.cache/channels-perf-b/e2ed/f1/test-results/writes-WRT-14-a-message-wr-5e142-r-window-of-the-same-device-repeat3/trace.zip
+    Usage:
+
+        npx playwright show-trace ../../../../../../.cache/channels-perf-b/e2ed/f1/test-results/writes-WRT-14-a-message-wr-5e142-r-window-of-the-same-device-repeat3/trace.zip
+
+    ────────────────────────────────────────────────────────────────────────────────────────────────
+
+  13) tests/channels-e2e-dbg/writes.spec.ts:437:1 › WRT-14 a message written offline in one window shows in the other window of the same device 
+
+    Expected to fail, but passed.
+
+    attachment #1: screenshot (image/png) ──────────────────────────────────────────────────────────
+    ../../../../../../.cache/channels-perf-b/e2ed/f1/test-results/writes-WRT-14-a-message-wr-5e142-r-window-of-the-same-device-repeat4/test-failed-1.png
+    ────────────────────────────────────────────────────────────────────────────────────────────────
+
+    attachment #2: screenshot (image/png) ──────────────────────────────────────────────────────────
+    ../../../../../../.cache/channels-perf-b/e2ed/f1/test-results/writes-WRT-14-a-message-wr-5e142-r-window-of-the-same-device-repeat4/test-failed-2.png
+    ────────────────────────────────────────────────────────────────────────────────────────────────
+
+    attachment #3: trace (application/zip) ─────────────────────────────────────────────────────────
+    ../../../../../../.cache/channels-perf-b/e2ed/f1/test-results/writes-WRT-14-a-message-wr-5e142-r-window-of-the-same-device-repeat4/trace.zip
+    Usage:
+
+        npx playwright show-trace ../../../../../../.cache/channels-perf-b/e2ed/f1/test-results/writes-WRT-14-a-message-wr-5e142-r-window-of-the-same-device-repeat4/trace.zip
+
+    ────────────────────────────────────────────────────────────────────────────────────────────────
+
+  13 failed
+    tests/channels-e2e-dbg/offline.spec.ts:177:1 › OFF-06 a thread read while connected shows its replies with no connection, a long one included 
+    tests/channels-e2e-dbg/offline.spec.ts:212:1 › OFF-07 a long thread never opened, opened with no connection, shows every reply or says that there are more 
+    tests/channels-e2e-dbg/offline.spec.ts:118:1 › OFF-04 messages read far back in a long channel can be scrolled through again with no connection 
+    tests/channels-e2e-dbg/offline.spec.ts:298:1 › OFF-10 a message that arrived while the channel was open is there when the channel opens with no connection 
+    tests/channels-e2e-dbg/offline.spec.ts:212:1 › OFF-07 a long thread never opened, opened with no connection, shows every reply or says that there are more 
+    tests/channels-e2e-dbg/offline.spec.ts:212:1 › OFF-07 a long thread never opened, opened with no connection, shows every reply or says that there are more 
+    tests/channels-e2e-dbg/offline.spec.ts:118:1 › OFF-04 messages read far back in a long channel can be scrolled through again with no connection 
+    tests/channels-e2e-dbg/writes.spec.ts:437:1 › WRT-14 a message written offline in one window shows in the other window of the same device 
+    tests/channels-e2e-dbg/writes.spec.ts:224:1 › WRT-07 a message deleted before it could be sent is not shown to anyone once the connection is back 
+    tests/channels-e2e-dbg/writes.spec.ts:437:1 › WRT-14 a message written offline in one window shows in the other window of the same device 
+    tests/channels-e2e-dbg/writes.spec.ts:437:1 › WRT-14 a message written offline in one window shows in the other window of the same device 
+    tests/channels-e2e-dbg/writes.spec.ts:437:1 › WRT-14 a message written offline in one window shows in the other window of the same device 
+    tests/channels-e2e-dbg/writes.spec.ts:437:1 › WRT-14 a message written offline in one window shows in the other window of the same device 
+  52 passed (3.3m)

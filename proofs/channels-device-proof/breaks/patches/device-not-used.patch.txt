@@ -1,0 +1,10 @@
+--- a/apps/web/src/lib/queries/messages/local/flag.ts
++++ b/apps/web/src/lib/queries/messages/local/flag.ts
+@@ -39,6 +39,7 @@
+  * cache is unavailable, or the native engine cannot serve channel timelines.
+  */
+ export function channelCacheHost(): CacheHost | undefined {
++  return undefined;
+   // No host is the common REST case and needs no flag read.
+   const host = getGraphqlSoupCacheHost();
+   if (!host || host.disabled || unsupportedHosts.has(host)) return undefined;

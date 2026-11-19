@@ -1,0 +1,38 @@
+--- bundle main 17:28:17 served=e679090f want=e679090f
+=== main-r1 s=25000 held 17:28:17 load=18.13
+=== main-r1 s=25000 held --throttle 17:37:32 load=28.16
+=== main-r1 s=6000 held 17:46:49 load=14.92
+=== main-r1 s=6000 held --throttle 17:54:45 load=9.30
+=== main-r1 s=6000 cold_fresh 18:02:43 load=28.24
+=== main-r1 s=6000 cold_fresh --throttle 18:03:00 load=24.62
+18:04:34 cold_fresh thr medium 0 cold_fresh first=null settled=null target=null dom=0 reqBeforeFP=0 task=1734.3 TIMEOUT
+=== main-r1 s=25000 offline 18:05:26 load=28.78
+18:06:20 offline  medium 0 offline_open first=null settled=null target=null dom=0 reqBeforeFP=0 task=1160.5 TIMEOUT
+18:07:12 offline  medium 1 offline_open first=null settled=null target=null dom=0 reqBeforeFP=0 task=1134 TIMEOUT
+18:08:03 offline  medium 2 offline_open first=null settled=null target=null dom=0 reqBeforeFP=0 task=1256.5 TIMEOUT
+18:08:55 offline  medium 3 offline_open first=null settled=null target=null dom=0 reqBeforeFP=0 task=1120.1 TIMEOUT
+--- bundle reads 18:09:00 served=f4c08f92 want=f4c08f92
+=== reads-r1 s=25000 held 18:09:00 load=15.04
+=== reads-r1 s=25000 held --throttle 18:18:14 load=32.18
+=== reads-r1 s=6000 held 18:27:30 load=17.81
+=== reads-r1 s=6000 held --throttle 18:35:28 load=14.00
+=== reads-r1 s=6000 cold_fresh 18:43:27 load=18.41
+=== reads-r1 s=6000 cold_fresh --throttle 18:43:44 load=15.91
+=== reads-r1 s=25000 offline 18:44:55 load=24.90
+=== reads-r1 s=6000 probe 18:47:23 load=21.45
+=== reads-r1 s=9000 probe 18:48:37 load=48.31
+=== reads-r1 s=12000 probe 18:50:02 load=28.67
+=== reads-r1 s=25000 probe 18:51:54 load=69.23
+--- bundle main 18:54:27 served=e679090f want=e679090f
+=== main-r2 s=25000 held 18:54:27 load=35.61
+19:03:33 held  medium 3 held ERROR locator.click: Target crashed 
+=== main-r2 s=25000 held --throttle 19:03:33 load=37.31
+19:03:36 held thr medium 0 held ERROR page.goto: Page crashed
+19:03:39 held thr medium 1 held ERROR page.waitForSelector: Page crashed
+19:03:40 held thr medium 2 held ERROR page.waitForSelector: Target crashed 
+19:03:50 held thr medium 3 held ERROR page.goto: Page crashed
+=== main-r2 s=6000 held 19:03:50 load=56.29
+19:04:03 held  medium 0 held ERROR page.goto: Page crashed
+19:04:12 held  medium 1 held ERROR page.goto: Page crashed
+21:52:41 held  medium 2 held ERROR locator.scrollIntoViewIfNeeded: Target page, context or browser has been closed
+21:52:41 held  medium 3 held ERROR browser.newContext: Target page, context or browser has been closed

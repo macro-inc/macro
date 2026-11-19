@@ -1,0 +1,267 @@
+<!doctype html><html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">
+<title>Device suite breaks</title><style>
+:root{--bg:#f7f6f2;--fg:#1d1f23;--muted:#5d636d;--line:#dcd9d0;--surface:#fff;--accent:#2f5fd0}
+@media (prefers-color-scheme:dark){:root{--bg:#15171a;--fg:#e8e9eb;--muted:#a0a6b0;--line:#33373e;--surface:#1d2024;--accent:#8fb0ff;color-scheme:dark}}
+body{background:var(--bg);color:var(--fg);font:15px/1.55 system-ui,sans-serif;margin:24px 16px 64px}main{max-width:1100px;margin:0 auto}
+h1{font-size:26px;margin:0 0 8px}h2{font-size:19px;margin:32px 0 8px}p,li{max-width:75ch}a{color:var(--accent)}.muted{color:var(--muted)}
+.scroll{overflow-x:auto;border:1px solid var(--line);border-radius:10px;background:var(--surface)}table{border-collapse:collapse;width:100%;font-size:14px}
+th,td{text-align:left;vertical-align:top;padding:7px 12px;border-bottom:1px solid var(--line)}th{color:var(--muted);font-size:12px;text-transform:uppercase}td.id{white-space:nowrap;font-weight:600}
+</style></head><body><main>
+<h1>Channels on the device: the deliberate breaks</h1>
+<p class="muted"><a href="../">Back to the result page</a></p>
+<p>To show that each test can fail, the product was broken on purpose where the behaviour lives, the app rebuilt, and the tests run against it. These are the 74 patches, what each run did, and which break each of 168 tests failed for. They were in pull request #10868 under <code>ledger/breaks/</code> and <code>ledger/proofs.tsv</code> until 17 November 2026, when they were taken out of the committed suite; this is the copy that was kept.</p>
+<p>The patches apply to the branch as it was at <code>a0b9c92622</code> (approach B at <code>ce183ced7f</code>). Eight were built and run on that head; the others were last run on earlier heads and only checked to still apply. None was run again after the merge that removed them. A row that says a marked check failed is a test whose check is recorded as failing in some runs: under the break it failed every time.</p>
+<h2>What each run did</h2>
+<ul>
+<li><a href="results/results15.tsv.txt">results15.tsv</a>: the breaks built on <code>ce183ced7f</code> (patch, test, outcome, error).</li>
+<li><a href="results/results.tsv.txt">results.tsv</a>: every break on earlier heads.</li>
+<li><a href="results/results-device-fresh.tsv.txt">results-device-fresh.tsv</a>, <a href="results/results-stale-engine.tsv.txt">results-stale-engine.tsv</a>, <a href="results/results-before-63e04.tsv.txt">results-before-63e04.tsv</a>: the device breaks on three earlier builds.</li>
+<li><a href="proofs.tsv.txt">proofs.tsv</a>: the table below as a file.</li>
+</ul>
+<h2>Each test and the break it failed for</h2>
+<div class="scroll"><table><tr><th>Test</th><th>Break</th><th>How it failed</th></tr>
+<tr><td class="id">ACC-01</td><td><a href="patches/no-access-shown-as-unavailable.patch.txt">no-access-shown-as-unavailable</a></td><td>failed: Error: expect(locator).toBeVisible() failed</td></tr>
+<tr><td class="id">ACC-02</td><td><a href="patches/no-access-shown-as-unavailable.patch.txt">no-access-shown-as-unavailable</a></td><td>failed: Error: expect(locator).toBeVisible() failed</td></tr>
+<tr><td class="id">ACC-03</td><td><a href="patches/join-request-not-shown-to-members.patch.txt">join-request-not-shown-to-members</a></td><td>failed: Test timeout of 90000ms exceeded.</td></tr>
+<tr><td class="id">ACC-04</td><td><a href="patches/join-request-not-shown-to-members.patch.txt">join-request-not-shown-to-members</a></td><td>failed: Test timeout of 90000ms exceeded.</td></tr>
+<tr><td class="id">ACC-05</td><td><a href="patches/join-request-not-shown-to-members.patch.txt">join-request-not-shown-to-members</a></td><td>failed: Error: expect(locator).toBeVisible() failed</td></tr>
+<tr><td class="id">ACC-06</td><td><a href="patches/system-lines-not-drawn.patch.txt">system-lines-not-drawn</a></td><td>failed: Error: the last messages and system lines in the list</td></tr>
+<tr><td class="id">ACC-07</td><td><a href="patches/no-access-shown-as-unavailable.patch.txt">no-access-shown-as-unavailable</a></td><td>failed: Error: expect(locator).toBeVisible() failed</td></tr>
+<tr><td class="id">ACC-08</td><td><a href="patches/missing-channel-shown-as-no-access.patch.txt">missing-channel-shown-as-no-access</a></td><td>failed: Error: expect(locator).toBeVisible() failed</td></tr>
+<tr><td class="id">ACC-09</td><td><a href="patches/signed-out-not-offered-login.patch.txt">signed-out-not-offered-login</a></td><td>failed: Error: expect(locator).toBeVisible() failed</td></tr>
+<tr><td class="id">CHN-01</td><td><a href="patches/new-channel-not-opened.patch.txt">new-channel-not-opened</a></td><td>failed: Error: expect(page).toHaveURL(expected) failed</td></tr>
+<tr><td class="id">CHN-02</td><td><a href="patches/new-channel-not-opened.patch.txt">new-channel-not-opened</a></td><td>failed: Error: expect(page).toHaveURL(expected) failed</td></tr>
+<tr><td class="id">CHN-03</td><td><a href="patches/system-lines-not-drawn.patch.txt">system-lines-not-drawn</a></td><td>failed: Error: the last messages and system lines in the list</td></tr>
+<tr><td class="id">CHN-05</td><td><a href="patches/favorite-does-nothing.patch.txt">favorite-does-nothing</a></td><td>failed: Error: expect(locator).toHaveText(expected) failed</td></tr>
+<tr><td class="id">CHN-06</td><td><a href="patches/channel-link-opens-nothing.patch.txt">channel-link-opens-nothing</a></td><td>failed: Error: expect(locator).toBeVisible() failed</td></tr>
+<tr><td class="id">CHN-07</td><td><a href="patches/missing-channel-shown-as-no-access.patch.txt">missing-channel-shown-as-no-access</a></td><td>failed: Error: expect(locator).toBeVisible() failed</td></tr>
+<tr><td class="id">CHN-09</td><td><a href="patches/non-owner-offered-delete.patch.txt">non-owner-offered-delete</a></td><td>failed: Error: expect(locator).toHaveCount(expected) failed</td></tr>
+<tr><td class="id">CHN-10</td><td><a href="patches/participants-tab-empty.patch.txt">participants-tab-empty</a></td><td>failed: Error: expect(locator).toContainText(expected) failed</td></tr>
+<tr><td class="id">CHN-11</td><td><a href="patches/attachments-tab-says-nothing-when-empty.patch.txt">attachments-tab-says-nothing-when-empty</a></td><td>failed: Error: expect(locator).toBeVisible() failed</td></tr>
+<tr><td class="id">CHN-12</td><td><a href="patches/list-always-follows-new-messages.patch.txt">list-always-follows-new-messages</a></td><td>failed: Error: expect(locator).toBeInViewport() failed</td></tr>
+<tr><td class="id">CHN-13</td><td><a href="patches/channel-start-line-missing.patch.txt">channel-start-line-missing</a></td><td>failed: Error: expect(locator).toBeVisible() failed</td></tr>
+<tr><td class="id">CMP-01</td><td><a href="patches/draft-shown-in-every-channel.patch.txt">draft-shown-in-every-channel</a></td><td>failed: Error: expect(locator).toHaveText(expected) failed</td></tr>
+<tr><td class="id">CMP-02</td><td><a href="patches/draft-lost-on-reload.patch.txt">draft-lost-on-reload</a></td><td>failed: Error: expect(locator).toHaveText(expected) failed</td></tr>
+<tr><td class="id">CMP-03</td><td><a href="patches/changes-reach-neither-screen-nor-device.patch.txt">changes-reach-neither-screen-nor-device</a></td><td>failed with the flag, where the break above changes code the build does not run: Error: the last messages in the list</td></tr>
+<tr><td class="id">CMP-03</td><td><a href="patches/live-events-ignored.patch.txt">live-events-ignored</a></td><td>failed: Error: the last messages in the list</td></tr>
+<tr><td class="id">CMP-04</td><td><a href="patches/send-button-always-on.patch.txt">send-button-always-on</a></td><td>failed: Error: expect(locator).toBeDisabled() failed</td></tr>
+<tr><td class="id">CMP-05</td><td><a href="patches/mention-sent-as-plain-text.patch.txt">mention-sent-as-plain-text</a></td><td>failed: Error: expect(locator).toBeVisible() failed</td></tr>
+<tr><td class="id">CMP-06</td><td><a href="patches/mention-sent-as-plain-text.patch.txt">mention-sent-as-plain-text</a></td><td>failed: Error: expect(locator).toBeVisible() failed</td></tr>
+<tr><td class="id">CMP-07</td><td><a href="patches/attachment-not-sent.patch.txt">attachment-not-sent</a></td><td>failed: Error: expect(locator).toBeVisible() failed</td></tr>
+<tr><td class="id">CMP-08</td><td><a href="patches/attachment-not-sent.patch.txt">attachment-not-sent</a></td><td>failed: Error: expect(locator).toHaveCount(expected) failed</td></tr>
+<tr><td class="id">CMP-09</td><td><a href="patches/typing-line-never-shows.patch.txt">typing-line-never-shows</a></td><td>failed: Error: expect(locator).toBeVisible() failed</td></tr>
+<tr><td class="id">CMP-10</td><td><a href="patches/typing-line-never-shows.patch.txt">typing-line-never-shows</a></td><td>failed: Error: expect(locator).toBeVisible() failed</td></tr>
+<tr><td class="id">CMP-11</td><td><a href="patches/paste-inserts-nothing.patch.txt">paste-inserts-nothing</a></td><td>failed: Error: expect(locator).toHaveText(expected) failed</td></tr>
+<tr><td class="id">CMP-12</td><td><a href="patches/long-message-cut-short.patch.txt">long-message-cut-short</a></td><td>failed: Error: expect(locator).toHaveText(expected) failed</td></tr>
+<tr><td class="id">CMP-13</td><td><a href="patches/changes-reach-neither-screen-nor-device.patch.txt">changes-reach-neither-screen-nor-device</a></td><td>failed with the flag, where the break above changes code the build does not run: Error: the last messages in the list</td></tr>
+<tr><td class="id">CMP-13</td><td><a href="patches/live-events-ignored.patch.txt">live-events-ignored</a></td><td>failed: Error: the last messages in the list</td></tr>
+<tr><td class="id">DM-01</td><td><a href="patches/message-to-people-is-not-sent.patch.txt">message-to-people-is-not-sent</a></td><td>failed: Error: expect(page).toHaveURL(expected) failed</td></tr>
+<tr><td class="id">DM-02</td><td><a href="patches/message-to-people-is-not-sent.patch.txt">message-to-people-is-not-sent</a></td><td>failed: Error: expect(page).toHaveURL(expected) failed</td></tr>
+<tr><td class="id">DM-03</td><td><a href="patches/message-link-forgets-the-conversation.patch.txt">message-link-forgets-the-conversation</a></td><td>failed: Error: expect(locator).toBeVisible() failed</td></tr>
+<tr><td class="id">DM-04</td><td><a href="patches/message-to-people-is-not-sent.patch.txt">message-to-people-is-not-sent</a></td><td>failed: Error: expect(page).toHaveURL(expected) failed</td></tr>
+<tr><td class="id">DM-05</td><td><a href="patches/send-button-always-on.patch.txt">send-button-always-on</a></td><td>failed: Error: expect(locator).toBeDisabled() failed</td></tr>
+<tr><td class="id">KEY-01</td><td><a href="patches/find-bar-does-not-open.patch.txt">find-bar-does-not-open</a></td><td>failed: Error: expect(locator).toBeFocused() failed</td></tr>
+<tr><td class="id">KEY-02</td><td><a href="patches/find-bar-does-not-open.patch.txt">find-bar-does-not-open</a></td><td>failed: Error: expect(locator).toBeFocused() failed</td></tr>
+<tr><td class="id">KEY-03</td><td><a href="patches/find-bar-does-not-open.patch.txt">find-bar-does-not-open</a></td><td>failed: Error: expect(locator).toBeFocused() failed</td></tr>
+<tr><td class="id">KEY-04</td><td><a href="patches/find-bar-does-not-open.patch.txt">find-bar-does-not-open</a></td><td>failed: Error: expect(locator).toBeFocused() failed</td></tr>
+<tr><td class="id">KEY-05</td><td><a href="patches/arrow-up-does-not-leave-the-composer.patch.txt">arrow-up-does-not-leave-the-composer</a></td><td>failed: Error: expect(locator).toBeFocused() failed</td></tr>
+<tr><td class="id">KEY-07</td><td><a href="patches/e-key-does-not-edit.patch.txt">e-key-does-not-edit</a></td><td>failed: Error: expect(locator).toBeFocused() failed</td></tr>
+<tr><td class="id">KEY-08</td><td><a href="patches/backspace-does-not-ask-to-delete.patch.txt">backspace-does-not-ask-to-delete</a></td><td>failed: Error: expect(locator).toBeVisible() failed</td></tr>
+<tr><td class="id">KEY-09</td><td><a href="patches/scroll-to-bottom-does-nothing.patch.txt">scroll-to-bottom-does-nothing</a></td><td>failed: Error: distance of the list from its end</td></tr>
+<tr><td class="id">KEY-10</td><td><a href="patches/composer-not-focused-on-arrival.patch.txt">composer-not-focused-on-arrival</a></td><td>failed: Error: expect(locator).toBeFocused() failed</td></tr>
+<tr><td class="id">KEY-11</td><td><a href="patches/escape-does-not-return-to-the-list.patch.txt">escape-does-not-return-to-the-list</a></td><td>failed: Error: expect(locator).toBeFocused() failed</td></tr>
+<tr><td class="id">KEY-12</td><td><a href="patches/backspace-does-not-ask-to-delete.patch.txt">backspace-does-not-ask-to-delete</a></td><td>failed: Error: expect(locator).toBeVisible() failed</td></tr>
+<tr><td class="id">MEM-01</td><td><a href="patches/system-lines-not-drawn.patch.txt">system-lines-not-drawn</a></td><td>failed: Error: the last messages and system lines in the list</td></tr>
+<tr><td class="id">MEM-02</td><td><a href="patches/participants-tab-empty.patch.txt">participants-tab-empty</a></td><td>failed: Error: expect(locator).toBeVisible() failed</td></tr>
+<tr><td class="id">MEM-04</td><td><a href="patches/no-access-shown-as-unavailable.patch.txt">no-access-shown-as-unavailable</a></td><td>failed: Error: expect(locator).toBeVisible() failed</td></tr>
+<tr><td class="id">MEM-05</td><td><a href="patches/system-lines-not-drawn.patch.txt">system-lines-not-drawn</a></td><td>failed: Error: expect(locator).toBeVisible() failed</td></tr>
+<tr><td class="id">MEM-06</td><td><a href="patches/system-lines-not-drawn.patch.txt">system-lines-not-drawn</a></td><td>failed: Error: the last messages and system lines in the list</td></tr>
+<tr><td class="id">MEM-07</td><td><a href="patches/participants-tab-empty.patch.txt">participants-tab-empty</a></td><td>failed: Error: expect(locator).toContainText(expected) failed</td></tr>
+<tr><td class="id">MEM-08</td><td><a href="patches/system-lines-not-drawn.patch.txt">system-lines-not-drawn</a></td><td>failed: Error: the last messages and system lines in the list</td></tr>
+<tr><td class="id">MSG-01</td><td><a href="patches/device-newest-two-swapped.patch.txt">device-newest-two-swapped</a></td><td>failed with the flag, where the break above changes code the build does not run: Error: expect(received).toEqual(expected) // deep equality</td></tr>
+<tr><td class="id">MSG-01</td><td><a href="patches/new-message-goes-above-the-last.patch.txt">new-message-goes-above-the-last</a></td><td>failed: Error: expect(received).toEqual(expected) // deep equality</td></tr>
+<tr><td class="id">MSG-02</td><td><a href="patches/send-button-does-nothing.patch.txt">send-button-does-nothing</a></td><td>failed: Error: expect(received).toEqual(expected) // deep equality</td></tr>
+<tr><td class="id">MSG-03</td><td><a href="patches/device-newest-two-swapped.patch.txt">device-newest-two-swapped</a></td><td>failed with the flag, where the break above changes code the build does not run: Error: expect(received).toEqual(expected) // deep equality</td></tr>
+<tr><td class="id">MSG-03</td><td><a href="patches/new-message-goes-above-the-last.patch.txt">new-message-goes-above-the-last</a></td><td>failed: Error: expect(received).toEqual(expected) // deep equality</td></tr>
+<tr><td class="id">MSG-04</td><td><a href="patches/shift-enter-sends.patch.txt">shift-enter-sends</a></td><td>failed: Error: expect(locator).toHaveCount(expected) failed</td></tr>
+<tr><td class="id">MSG-05</td><td><a href="patches/bold-shown-plain.patch.txt">bold-shown-plain</a></td><td>failed: Error: expect(locator).toHaveCSS(expected) failed</td></tr>
+<tr><td class="id">MSG-06</td><td><a href="patches/every-message-repeats-its-author.patch.txt">every-message-repeats-its-author</a></td><td>failed: Error: expect(locator).toHaveCount(expected) failed</td></tr>
+<tr><td class="id">MSG-07</td><td><a href="patches/edit-keeps-the-old-text.patch.txt">edit-keeps-the-old-text</a></td><td>failed: Error: expect(received).toEqual(expected) // deep equality</td></tr>
+<tr><td class="id">MSG-08</td><td><a href="patches/e-key-does-not-edit.patch.txt">e-key-does-not-edit</a></td><td>failed: Error: expect(locator).toHaveText(expected) failed</td></tr>
+<tr><td class="id">MSG-09</td><td><a href="patches/cancel-saves-the-edit.patch.txt">cancel-saves-the-edit</a></td><td>failed: Error: expect(received).toEqual(expected) // deep equality</td></tr>
+<tr><td class="id">MSG-10</td><td><a href="patches/delete-leaves-the-message.patch.txt">delete-leaves-the-message</a></td><td>failed: Error: expect(received).toEqual(expected) // deep equality</td></tr>
+<tr><td class="id">MSG-11</td><td><a href="patches/delete-leaves-the-message.patch.txt">delete-leaves-the-message</a></td><td>failed: Error: expect(received).toEqual(expected) // deep equality</td></tr>
+<tr><td class="id">MSG-12</td><td><a href="patches/edit-offered-on-others-messages.patch.txt">edit-offered-on-others-messages</a></td><td>failed: Error: expect(locator).toHaveCount(expected) failed</td></tr>
+<tr><td class="id">MSG-13</td><td><a href="patches/reaction-not-shown.patch.txt">reaction-not-shown</a></td><td>failed: Error: expect(received).toEqual(expected) // deep equality</td></tr>
+<tr><td class="id">MSG-14</td><td><a href="patches/picked-emoji-not-added.patch.txt">picked-emoji-not-added</a></td><td>failed: Error: expect(received).toEqual(expected) // deep equality</td></tr>
+<tr><td class="id">MSG-15</td><td><a href="patches/reaction-not-shown.patch.txt">reaction-not-shown</a></td><td>failed: Error: expect(received).toEqual(expected) // deep equality</td></tr>
+<tr><td class="id">MSG-16</td><td><a href="patches/device-newest-two-swapped.patch.txt">device-newest-two-swapped</a></td><td>failed with the flag, where the break above changes code the build does not run: Error: expect(received).toEqual(expected) // deep equality</td></tr>
+<tr><td class="id">MSG-16</td><td><a href="patches/new-message-goes-above-the-last.patch.txt">new-message-goes-above-the-last</a></td><td>failed: Error: expect(received).toEqual(expected) // deep equality</td></tr>
+<tr><td class="id">MSG-17</td><td><a href="patches/copy-text-copies-nothing.patch.txt">copy-text-copies-nothing</a></td><td>failed: Error: expect(received).toBe(expected) // Object.is equality</td></tr>
+<tr><td class="id">MSG-18</td><td><a href="patches/changes-reach-neither-screen-nor-device.patch.txt">changes-reach-neither-screen-nor-device</a></td><td>failed with the flag, where the break above changes code the build does not run: Error: expect(received).toEqual(expected) // deep equality</td></tr>
+<tr><td class="id">MSG-18</td><td><a href="patches/live-events-ignored.patch.txt">live-events-ignored</a></td><td>failed: Error: expect(received).toEqual(expected) // deep equality</td></tr>
+<tr><td class="id">NAV-01</td><td><a href="patches/link-target-not-marked.patch.txt">link-target-not-marked</a></td><td>failed: Error: messages marked as the target of the link</td></tr>
+<tr><td class="id">NAV-02</td><td><a href="patches/device-link-target-ignored.patch.txt">device-link-target-ignored</a></td><td>failed with the flag, where the break above changes code the build does not run: Error: expect(locator).toBeInViewport() failed</td></tr>
+<tr><td class="id">NAV-02</td><td><a href="patches/link-target-ignored.patch.txt">link-target-ignored</a></td><td>failed: Error: expect(locator).toBeInViewport() failed</td></tr>
+<tr><td class="id">NAV-03</td><td><a href="patches/device-link-target-ignored.patch.txt">device-link-target-ignored</a></td><td>failed with the flag, where the break above changes code the build does not run: Error: expect(locator).toBeInViewport() failed</td></tr>
+<tr><td class="id">NAV-03</td><td><a href="patches/link-target-ignored.patch.txt">link-target-ignored</a></td><td>failed: Error: expect(locator).toBeInViewport() failed</td></tr>
+<tr><td class="id">NAV-04</td><td><a href="patches/missing-message-not-recognised.patch.txt">missing-message-not-recognised</a></td><td>failed: Error: expect(locator).toBeVisible() failed</td></tr>
+<tr><td class="id">NAV-06</td><td><a href="patches/device-link-target-ignored.patch.txt">device-link-target-ignored</a></td><td>failed with the flag, where the break above changes code the build does not run: Error: expect(locator).toBeInViewport() failed</td></tr>
+<tr><td class="id">NAV-06</td><td><a href="patches/link-target-ignored.patch.txt">link-target-ignored</a></td><td>failed: Error: expect(locator).toBeInViewport() failed</td></tr>
+<tr><td class="id">NAV-07</td><td><a href="patches/copied-link-loses-its-message.patch.txt">copied-link-loses-its-message</a></td><td>failed: Error: expect(received).toContain(expected) // indexOf</td></tr>
+<tr><td class="id">OFF-01</td><td><a href="patches/device-not-used.patch.txt">device-not-used</a></td><td>failed: Error: expect(locator).toBeVisible() failed</td></tr>
+<tr><td class="id">OFF-02</td><td><a href="patches/channel-load-error-not-shown.patch.txt">channel-load-error-not-shown</a></td><td>failed: Error: expect(locator).toBeVisible() failed</td></tr>
+<tr><td class="id">OFF-03</td><td><a href="patches/channel-changes-not-applied.patch.txt">channel-changes-not-applied</a></td><td>failed: Error: the channel as it is on the screen</td></tr>
+<tr><td class="id">OFF-04</td><td><a href="patches/device-not-used.patch.txt">device-not-used</a></td><td>failed: Error: expect(locator).toBeVisible() failed</td></tr>
+<tr><td class="id">OFF-05</td><td><a href="patches/device-not-used.patch.txt">device-not-used</a></td><td>failed: Error: expect(locator).toBeVisible() failed</td></tr>
+<tr><td class="id">OFF-06</td><td><a href="patches/device-not-used.patch.txt">device-not-used</a></td><td>failed: Error: expect(locator).toBeVisible() failed</td></tr>
+<tr><td class="id">OFF-07</td><td><a href="patches/device-not-used.patch.txt">device-not-used</a></td><td>failed: Error: expect(locator).toBeVisible() failed</td></tr>
+<tr><td class="id">OFF-08</td><td><a href="patches/device-not-used.patch.txt">device-not-used</a></td><td>failed: Error: expect(locator).toBeVisible() failed</td></tr>
+<tr><td class="id">OFF-09</td><td><a href="patches/device-not-used.patch.txt">device-not-used</a></td><td>failed: Error: the channel as it is on the screen</td></tr>
+<tr><td class="id">OFF-10</td><td><a href="patches/device-not-used.patch.txt">device-not-used</a></td><td>failed: Error: expect(locator).toBeVisible() failed</td></tr>
+<tr><td class="id">OFF-11</td><td><a href="patches/device-not-used.patch.txt">device-not-used</a></td><td>failed: Error: expect(locator).toBeVisible() failed</td></tr>
+<tr><td class="id">OFF-12</td><td><a href="patches/device-not-used.patch.txt">device-not-used</a></td><td>failed: Error: expect(locator).toBeVisible() failed</td></tr>
+<tr><td class="id">OPEN-01</td><td><a href="patches/device-page-loses-a-message.patch.txt">device-page-loses-a-message</a></td><td>failed with the flag, where the break above changes code the build does not run: Error: the last messages in the list</td></tr>
+<tr><td class="id">OPEN-01</td><td><a href="patches/page-loses-a-message.patch.txt">page-loses-a-message</a></td><td>failed: Error: the last messages in the list</td></tr>
+<tr><td class="id">OPEN-02</td><td><a href="patches/timeline-cache-ignores-the-channel.patch.txt">timeline-cache-ignores-the-channel</a></td><td>failed: Error: the last messages in the list</td></tr>
+<tr><td class="id">PRE-01</td><td><a href="patches/device-not-used.patch.txt">device-not-used</a></td><td>failed: Error: expect(locator).toBeVisible() failed</td></tr>
+<tr><td class="id">PRE-02</td><td><a href="patches/prewarm-limits-changed.patch.txt">prewarm-limits-changed</a></td><td>failed: Error: expect(locator).toBeVisible() failed</td></tr>
+<tr><td class="id">PRE-03</td><td><a href="patches/prewarm-limits-changed.patch.txt">prewarm-limits-changed</a></td><td>failed: Error: expect(locator).toBeVisible() failed</td></tr>
+<tr><td class="id">PRE-04</td><td><a href="patches/prewarm-limits-changed.patch.txt">prewarm-limits-changed</a></td><td>failed: Error: expect(locator).toBeVisible() failed</td></tr>
+<tr><td class="id">PRE-05</td><td><a href="patches/idle-channels-never-evicted.patch.txt">idle-channels-never-evicted</a></td><td>failed: Error: expect(locator).toBeVisible() failed</td></tr>
+<tr><td class="id">REC-01</td><td><a href="patches/timeline-cache-ignores-the-channel.patch.txt">timeline-cache-ignores-the-channel</a></td><td>failed: Error: expect(locator).toBeVisible() failed</td></tr>
+<tr><td class="id">REC-02</td><td><a href="patches/timeline-cache-ignores-the-channel.patch.txt">timeline-cache-ignores-the-channel</a></td><td>failed: Error: expect(locator).toBeVisible() failed</td></tr>
+<tr><td class="id">REC-03</td><td><a href="patches/timeline-cache-ignores-the-channel.patch.txt">timeline-cache-ignores-the-channel</a></td><td>failed: Error: the last messages in the list</td></tr>
+<tr><td class="id">REC-04</td><td>none: the build as it is, with or without the flag</td><td>failed: Error: expect(locator).toHaveCount(expected) failed</td></tr>
+<tr><td class="id">SCROLL-01</td><td><a href="patches/device-page-loses-a-message.patch.txt">device-page-loses-a-message</a></td><td>failed with the flag, where the break above changes code the build does not run: Error: the last messages in the list</td></tr>
+<tr><td class="id">SCROLL-01</td><td><a href="patches/page-loses-a-message.patch.txt">page-loses-a-message</a></td><td>failed: Error: the last messages in the list</td></tr>
+<tr><td class="id">SCROLL-02</td><td><a href="patches/list-always-follows-new-messages.patch.txt">list-always-follows-new-messages</a></td><td>failed: Error: expect(locator).toBeVisible() failed</td></tr>
+<tr><td class="id">SCROLL-03</td><td><a href="patches/timeline-cache-ignores-the-channel.patch.txt">timeline-cache-ignores-the-channel</a></td><td>failed: Error: expect(locator).toBeInViewport() failed</td></tr>
+<tr><td class="id">SCROLL-04</td><td><a href="patches/list-always-follows-new-messages.patch.txt">list-always-follows-new-messages</a></td><td>failed: Error: expect(locator).toBeVisible() failed</td></tr>
+<tr><td class="id">SYN-01</td><td><a href="patches/changes-reach-neither-screen-nor-device.patch.txt">changes-reach-neither-screen-nor-device</a></td><td>failed: Error: the channel as it is on the screen</td></tr>
+<tr><td class="id">SYN-02</td><td><a href="patches/changes-reach-neither-screen-nor-device.patch.txt">changes-reach-neither-screen-nor-device</a></td><td>failed: Error: the channel as it is on the screen</td></tr>
+<tr><td class="id">SYN-03</td><td><a href="patches/changes-reach-neither-screen-nor-device.patch.txt">changes-reach-neither-screen-nor-device</a></td><td>failed: Error: the channel as it is on the screen</td></tr>
+<tr><td class="id">SYN-04</td><td><a href="patches/held-channel-shown-as-it-was-left.patch.txt">held-channel-shown-as-it-was-left</a></td><td>failed: Error: the channel as it is on the screen</td></tr>
+<tr><td class="id">SYN-05</td><td><a href="patches/channel-changes-not-applied.patch.txt">channel-changes-not-applied</a></td><td>failed: Error: the channel as it is on the screen</td></tr>
+<tr><td class="id">SYN-06</td><td><a href="patches/held-channel-shown-as-it-was-left.patch.txt">held-channel-shown-as-it-was-left</a></td><td>failed: Error: the channel as it is on the screen</td></tr>
+<tr><td class="id">SYN-08</td><td><a href="patches/no-access-shown-as-unavailable.patch.txt">no-access-shown-as-unavailable</a></td><td>failed: Error: expect(locator).toBeVisible() failed</td></tr>
+<tr><td class="id">SYN-09</td><td><a href="patches/held-channel-shown-as-it-was-left.patch.txt">held-channel-shown-as-it-was-left</a></td><td>failed: Error: the channel as it is on the screen</td></tr>
+<tr><td class="id">SYN-10</td><td><a href="patches/held-channel-shown-as-it-was-left.patch.txt">held-channel-shown-as-it-was-left</a></td><td>failed: Error: the channel as it is on the screen</td></tr>
+<tr><td class="id">TAB-01</td><td><a href="patches/timeline-cache-ignores-the-channel.patch.txt">timeline-cache-ignores-the-channel</a></td><td>failed: Error: the last messages in the list</td></tr>
+<tr><td class="id">TAB-02</td><td><a href="patches/timeline-cache-ignores-the-channel.patch.txt">timeline-cache-ignores-the-channel</a></td><td>failed: Error: expect(locator).toHaveCount(expected) failed</td></tr>
+<tr><td class="id">THR-01</td><td><a href="patches/reply-goes-to-the-channel.patch.txt">reply-goes-to-the-channel</a></td><td>failed: Error: expect(received).toEqual(expected) // deep equality</td></tr>
+<tr><td class="id">THR-02</td><td><a href="patches/reply-goes-to-the-channel.patch.txt">reply-goes-to-the-channel</a></td><td>failed: Error: expect(received).toEqual(expected) // deep equality</td></tr>
+<tr><td class="id">THR-03</td><td><a href="patches/opened-thread-shows-only-its-first-replies.patch.txt">opened-thread-shows-only-its-first-replies</a></td><td>failed: Error: expect(received).toEqual(expected) // deep equality</td></tr>
+<tr><td class="id">THR-04</td><td><a href="patches/edit-keeps-the-old-text.patch.txt">edit-keeps-the-old-text</a></td><td>failed: Error: expect(received).toEqual(expected) // deep equality</td></tr>
+<tr><td class="id">THR-05</td><td><a href="patches/delete-leaves-the-message.patch.txt">delete-leaves-the-message</a></td><td>failed: Error: expect(received).toEqual(expected) // deep equality</td></tr>
+<tr><td class="id">THR-06</td><td><a href="patches/reaction-not-shown.patch.txt">reaction-not-shown</a></td><td>failed: Error: expect(received).toEqual(expected) // deep equality</td></tr>
+<tr><td class="id">THR-07</td><td><a href="patches/opened-thread-shows-only-its-first-replies.patch.txt">opened-thread-shows-only-its-first-replies</a></td><td>failed: Error: expect(received).toEqual(expected) // deep equality</td></tr>
+<tr><td class="id">THR-08</td><td><a href="patches/opened-thread-shows-only-its-first-replies.patch.txt">opened-thread-shows-only-its-first-replies</a></td><td>failed: Error: expect(received).toEqual(expected) // deep equality</td></tr>
+<tr><td class="id">THR-09</td><td><a href="patches/reply-goes-to-the-channel.patch.txt">reply-goes-to-the-channel</a></td><td>failed: Error: expect(received).toEqual(expected) // deep equality</td></tr>
+<tr><td class="id">UNR-01</td><td><a href="patches/unread-mark-never-shows.patch.txt">unread-mark-never-shows</a></td><td>failed: Error: expect(locator).toBeVisible() failed</td></tr>
+<tr><td class="id">UNR-02</td><td><a href="patches/mark-as-read-does-nothing.patch.txt">mark-as-read-does-nothing</a></td><td>failed: Error: expect(locator).toHaveCount(expected) failed</td></tr>
+<tr><td class="id">UNR-03</td><td><a href="patches/unread-mark-never-shows.patch.txt">unread-mark-never-shows</a></td><td>failed: Error: expect(locator).toBeVisible() failed</td></tr>
+<tr><td class="id">UNR-04</td><td><a href="patches/unread-below-notice-missing.patch.txt">unread-below-notice-missing</a></td><td>failed: Error: expect(locator).toBeVisible() failed</td></tr>
+<tr><td class="id">UNR-06</td><td><a href="patches/muted-channel-shows-no-bell.patch.txt">muted-channel-shows-no-bell</a></td><td>failed: Error: expect(locator).toBeVisible() failed</td></tr>
+<tr><td class="id">UNR-07</td><td><a href="patches/unread-mark-never-shows.patch.txt">unread-mark-never-shows</a></td><td>failed: Error: expect(locator).toBeVisible() failed</td></tr>
+<tr><td class="id">UNR-08</td><td><a href="patches/found-list-misses-new-channels.patch.txt">found-list-misses-new-channels</a></td><td>passed on 94876dc650, with and without the flag: this break no longer reaches the rows a search shows, and no other break is recorded for the test</td></tr>
+<tr><td class="id">UNR-10</td><td><a href="patches/unread-mark-never-shows.patch.txt">unread-mark-never-shows</a></td><td>failed: Error: expect(locator).toBeVisible() failed</td></tr>
+<tr><td class="id">WRT-01</td><td><a href="patches/queued-writes-never-sent.patch.txt">queued-writes-never-sent</a></td><td>failed: Error: the channel as it is on the screen</td></tr>
+<tr><td class="id">WRT-02</td><td><a href="patches/device-not-used.patch.txt">device-not-used</a></td><td>failed: Error: the channel as it is on the screen</td></tr>
+<tr><td class="id">WRT-03</td><td><a href="patches/queued-writes-never-sent.patch.txt">queued-writes-never-sent</a></td><td>failed: Error: the channel as the services hold it</td></tr>
+<tr><td class="id">WRT-04</td><td><a href="patches/queued-writes-never-sent.patch.txt">queued-writes-never-sent</a></td><td>failed: Error: the channel as the services hold it</td></tr>
+<tr><td class="id">WRT-05</td><td><a href="patches/device-not-used.patch.txt">device-not-used</a></td><td>failed: Error: the channel as the services hold it</td></tr>
+<tr><td class="id">WRT-06</td><td><a href="patches/device-not-used.patch.txt">device-not-used</a></td><td>failed: Test timeout of 90000ms exceeded.</td></tr>
+<tr><td class="id">WRT-07</td><td><a href="patches/device-not-used.patch.txt">device-not-used</a></td><td>failed: Test timeout of 90000ms exceeded.</td></tr>
+<tr><td class="id">WRT-08</td><td><a href="patches/queued-writes-never-sent.patch.txt">queued-writes-never-sent</a></td><td>failed: Error: the channel as the services hold it</td></tr>
+<tr><td class="id">WRT-09</td><td><a href="patches/refused-write-kept.patch.txt">refused-write-kept</a></td><td>failed: Error: expect(locator).toBeVisible() failed</td></tr>
+<tr><td class="id">WRT-10</td><td><a href="patches/waiting-message-not-marked.patch.txt">waiting-message-not-marked</a></td><td>failed: Error: expect(locator).toBeVisible() failed</td></tr>
+<tr><td class="id">WRT-11</td><td><a href="patches/waiting-message-not-marked.patch.txt">waiting-message-not-marked</a></td><td>failed: Error: expect(locator).toBeVisible() failed</td></tr>
+<tr><td class="id">WRT-12</td><td><a href="patches/queued-writes-never-sent.patch.txt">queued-writes-never-sent</a></td><td>failed: Error: the channel as the services hold it</td></tr>
+<tr><td class="id">WRT-13</td><td><a href="patches/queued-writes-never-sent.patch.txt">queued-writes-never-sent</a></td><td>failed: Error: the channel as the services hold it</td></tr>
+<tr><td class="id">WRT-14</td><td><a href="patches/waiting-write-not-shown-in-other-window.patch.txt">waiting-write-not-shown-in-other-window</a></td><td>failed: Error: the channel as it is on the screen</td></tr>
+<tr><td class="id">WRT-15</td><td><a href="patches/stored-send-never-forgotten.patch.txt">stored-send-never-forgotten</a></td><td>failed: Error: the channel as the services hold it</td></tr>
+<tr><td class="id">CHN-16</td><td>none: the build as it is, with or without the flag</td><td>failed: Error: expect(locator).toContainText(expected) failed</td></tr>
+<tr><td class="id">OFF-13</td><td><a href="patches/device-not-used.patch.txt">device-not-used</a></td><td>failed: Error: expect(locator).toBeVisible() failed</td></tr>
+<tr><td class="id">OFF-14</td><td><a href="patches/left-behind-reads-not-held.patch.txt">left-behind-reads-not-held</a></td><td>failed: Error: expect(received).toEqual(expected) // deep equality</td></tr>
+<tr><td class="id">CHN-08</td><td><a href="patches/favorite-does-nothing.patch.txt">favorite-does-nothing</a></td><td>failed: Error: expect(locator).toHaveText(expected) failed (at the Favorites step, before the deletion; no break of the deletion itself has been built)</td></tr>
+<tr><td class="id">DM-06</td><td><a href="patches/teammate-not-offered-by-name.patch.txt">teammate-not-offered-by-name</a></td><td>failed: Error: expect(locator).toBeVisible() failed</td></tr>
+<tr><td class="id">CHN-15</td><td><a href="patches/channel-gone-not-believed.patch.txt">channel-gone-not-believed</a></td><td>its marked check failed 14 of 14 (Error: expect(locator).toHaveCount(expected) failed); 7 of 13 without the break</td></tr>
+<tr><td class="id">MEM-03</td><td><a href="patches/channel-gone-not-believed.patch.txt">channel-gone-not-believed</a></td><td>its marked check failed 4 of 4 (Error: expect(locator).toHaveCount(expected) failed); 0 of 3 without the break</td></tr>
+</table></div>
+<h2>Every patch</h2><ul>
+<li><a href="patches/arrow-up-does-not-leave-the-composer.patch.txt">arrow-up-does-not-leave-the-composer</a></li>
+<li><a href="patches/attachment-not-sent.patch.txt">attachment-not-sent</a></li>
+<li><a href="patches/attachments-tab-says-nothing-when-empty.patch.txt">attachments-tab-says-nothing-when-empty</a></li>
+<li><a href="patches/backspace-does-not-ask-to-delete.patch.txt">backspace-does-not-ask-to-delete</a></li>
+<li><a href="patches/bold-shown-plain.patch.txt">bold-shown-plain</a></li>
+<li><a href="patches/cancel-saves-the-edit.patch.txt">cancel-saves-the-edit</a></li>
+<li><a href="patches/changes-reach-neither-screen-nor-device.patch.txt">changes-reach-neither-screen-nor-device</a></li>
+<li><a href="patches/channel-changes-not-applied.patch.txt">channel-changes-not-applied</a></li>
+<li><a href="patches/channel-gone-not-believed.patch.txt">channel-gone-not-believed</a></li>
+<li><a href="patches/channel-link-opens-nothing.patch.txt">channel-link-opens-nothing</a></li>
+<li><a href="patches/channel-load-error-not-shown.patch.txt">channel-load-error-not-shown</a></li>
+<li><a href="patches/channel-start-line-missing.patch.txt">channel-start-line-missing</a></li>
+<li><a href="patches/composer-not-focused-on-arrival.patch.txt">composer-not-focused-on-arrival</a></li>
+<li><a href="patches/copied-link-loses-its-message.patch.txt">copied-link-loses-its-message</a></li>
+<li><a href="patches/copy-text-copies-nothing.patch.txt">copy-text-copies-nothing</a></li>
+<li><a href="patches/delete-leaves-the-message.patch.txt">delete-leaves-the-message</a></li>
+<li><a href="patches/device-link-target-ignored.patch.txt">device-link-target-ignored</a></li>
+<li><a href="patches/device-newest-two-swapped.patch.txt">device-newest-two-swapped</a></li>
+<li><a href="patches/device-not-used.patch.txt">device-not-used</a></li>
+<li><a href="patches/device-page-loses-a-message.patch.txt">device-page-loses-a-message</a></li>
+<li><a href="patches/draft-lost-on-reload.patch.txt">draft-lost-on-reload</a></li>
+<li><a href="patches/draft-shown-in-every-channel.patch.txt">draft-shown-in-every-channel</a></li>
+<li><a href="patches/e-key-does-not-edit.patch.txt">e-key-does-not-edit</a></li>
+<li><a href="patches/edit-keeps-the-old-text.patch.txt">edit-keeps-the-old-text</a></li>
+<li><a href="patches/edit-offered-on-others-messages.patch.txt">edit-offered-on-others-messages</a></li>
+<li><a href="patches/escape-does-not-return-to-the-list.patch.txt">escape-does-not-return-to-the-list</a></li>
+<li><a href="patches/every-message-repeats-its-author.patch.txt">every-message-repeats-its-author</a></li>
+<li><a href="patches/favorite-does-nothing.patch.txt">favorite-does-nothing</a></li>
+<li><a href="patches/find-bar-does-not-open.patch.txt">find-bar-does-not-open</a></li>
+<li><a href="patches/found-list-misses-new-channels.patch.txt">found-list-misses-new-channels</a></li>
+<li><a href="patches/held-channel-shown-as-it-was-left.patch.txt">held-channel-shown-as-it-was-left</a></li>
+<li><a href="patches/idle-channels-never-evicted.patch.txt">idle-channels-never-evicted</a></li>
+<li><a href="patches/join-request-not-shown-to-members.patch.txt">join-request-not-shown-to-members</a></li>
+<li><a href="patches/left-behind-reads-not-held.patch.txt">left-behind-reads-not-held</a></li>
+<li><a href="patches/link-target-ignored.patch.txt">link-target-ignored</a></li>
+<li><a href="patches/link-target-not-marked.patch.txt">link-target-not-marked</a></li>
+<li><a href="patches/list-always-follows-new-messages.patch.txt">list-always-follows-new-messages</a></li>
+<li><a href="patches/live-events-ignored.patch.txt">live-events-ignored</a></li>
+<li><a href="patches/long-message-cut-short.patch.txt">long-message-cut-short</a></li>
+<li><a href="patches/mark-as-read-does-nothing.patch.txt">mark-as-read-does-nothing</a></li>
+<li><a href="patches/mention-sent-as-plain-text.patch.txt">mention-sent-as-plain-text</a></li>
+<li><a href="patches/message-link-forgets-the-conversation.patch.txt">message-link-forgets-the-conversation</a></li>
+<li><a href="patches/message-to-people-is-not-sent.patch.txt">message-to-people-is-not-sent</a></li>
+<li><a href="patches/missing-channel-shown-as-no-access.patch.txt">missing-channel-shown-as-no-access</a></li>
+<li><a href="patches/missing-message-not-recognised.patch.txt">missing-message-not-recognised</a></li>
+<li><a href="patches/muted-channel-shows-no-bell.patch.txt">muted-channel-shows-no-bell</a></li>
+<li><a href="patches/new-channel-not-opened.patch.txt">new-channel-not-opened</a></li>
+<li><a href="patches/new-message-goes-above-the-last.patch.txt">new-message-goes-above-the-last</a></li>
+<li><a href="patches/no-access-shown-as-unavailable.patch.txt">no-access-shown-as-unavailable</a></li>
+<li><a href="patches/non-owner-offered-delete.patch.txt">non-owner-offered-delete</a></li>
+<li><a href="patches/opened-thread-shows-only-its-first-replies.patch.txt">opened-thread-shows-only-its-first-replies</a></li>
+<li><a href="patches/page-loses-a-message.patch.txt">page-loses-a-message</a></li>
+<li><a href="patches/participants-tab-empty.patch.txt">participants-tab-empty</a></li>
+<li><a href="patches/paste-inserts-nothing.patch.txt">paste-inserts-nothing</a></li>
+<li><a href="patches/picked-emoji-not-added.patch.txt">picked-emoji-not-added</a></li>
+<li><a href="patches/prewarm-limits-changed.patch.txt">prewarm-limits-changed</a></li>
+<li><a href="patches/queued-writes-never-sent.patch.txt">queued-writes-never-sent</a></li>
+<li><a href="patches/reaction-not-shown.patch.txt">reaction-not-shown</a></li>
+<li><a href="patches/refused-write-kept.patch.txt">refused-write-kept</a></li>
+<li><a href="patches/reply-goes-to-the-channel.patch.txt">reply-goes-to-the-channel</a></li>
+<li><a href="patches/scroll-to-bottom-does-nothing.patch.txt">scroll-to-bottom-does-nothing</a></li>
+<li><a href="patches/send-button-always-on.patch.txt">send-button-always-on</a></li>
+<li><a href="patches/send-button-does-nothing.patch.txt">send-button-does-nothing</a></li>
+<li><a href="patches/shift-enter-sends.patch.txt">shift-enter-sends</a></li>
+<li><a href="patches/signed-out-not-offered-login.patch.txt">signed-out-not-offered-login</a></li>
+<li><a href="patches/stored-send-never-forgotten.patch.txt">stored-send-never-forgotten</a></li>
+<li><a href="patches/system-lines-not-drawn.patch.txt">system-lines-not-drawn</a></li>
+<li><a href="patches/teammate-not-offered-by-name.patch.txt">teammate-not-offered-by-name</a></li>
+<li><a href="patches/timeline-cache-ignores-the-channel.patch.txt">timeline-cache-ignores-the-channel</a></li>
+<li><a href="patches/typing-line-never-shows.patch.txt">typing-line-never-shows</a></li>
+<li><a href="patches/unread-below-notice-missing.patch.txt">unread-below-notice-missing</a></li>
+<li><a href="patches/unread-mark-never-shows.patch.txt">unread-mark-never-shows</a></li>
+<li><a href="patches/waiting-message-not-marked.patch.txt">waiting-message-not-marked</a></li>
+<li><a href="patches/waiting-write-not-shown-in-other-window.patch.txt">waiting-write-not-shown-in-other-window</a></li>
+</ul></main></body></html>

@@ -1,0 +1,10 @@
+cargo run --quiet --manifest-path Cargo.toml --target-dir target/xtask -p xtask_local --features local-stack -- stack "$@"
+
+[+] macro local stack update — instance channels-b
+  ✓ Rebuilding & reloading services                  Done 3s
+  ✗ Waiting for backend (proxy /auth/health)         Failed 2m16s
+Command failed: bash -lc 'for i in $(seq 1 600); do curl -fsS --cacert '\''/home/teo/.herdr/worktrees/macro/synoet-channels-local-sync/infra/local/certs/ca.pem'\'' --max-time 3 https://localhost:31009/auth/health >/dev/null 2>&1 && exit 0; sleep 0.2; done; echo '\''backend not ready'\''; exit 1'
+Output:
+  backend not ready
+Error: `bash` exited with exit status: 1
+error: recipe `stack` failed on line 54 with exit code 1

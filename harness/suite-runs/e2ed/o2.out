@@ -1,0 +1,69 @@
+unpacking 'https://channels.nixos.org/nixpkgs-unstable/nixexprs.tar.zst' into the Git cache...
+path "/home/teo/.herdr/worktrees/macro/synoet-channels-local-sync-suiteb/apps/web" does not contain a 'flake.nix', searching up
+
+Running 3 tests using 3 workers
+
+DD OFF-04 w2 r2 ben 626368 DBG detail result 01a1e106-1bd5-7467-b71d-851edee01f32 live-network false false false true undefined false
+DD OFF-04 w0 r0 ben 626408 DBG detail result 01a1e106-1bd5-731a-943a-56362c7ce709 live-network false false false true undefined false
+DD OFF-04 w1 r1 ben 626501 DBG detail result 01a1e106-1bd3-7f78-9c02-3d7b00641bbf live-network false false false true undefined false
+DD OFF-04 w2 r2 ben 626716 DBG detail result 01a1e106-1bd5-7467-b71d-851edee01f32 live-network false false false true undefined true
+DD OFF-04 w2 r2 ben 626726 DBG detail result 01a1e106-1bd5-7467-b71d-851edee01f32 live-network false false false true undefined false
+DD OFF-04 w0 r0 ben 626771 DBG detail result 01a1e106-1bd5-731a-943a-56362c7ce709 live-network false false false true undefined true
+DD OFF-04 w0 r0 ben 626784 DBG detail result 01a1e106-1bd5-731a-943a-56362c7ce709 live-network false false false true undefined false
+DD OFF-04 w1 r1 ben 626835 DBG detail result 01a1e106-1bd3-7f78-9c02-3d7b00641bbf live-network false false false true undefined true
+DD OFF-04 w1 r1 ben 626843 DBG detail result 01a1e106-1bd3-7f78-9c02-3d7b00641bbf live-network false false false true undefined false
+DD OFF-04 w2 r2 ben 627227 DBG detail result 01a1e106-1bd5-7467-b71d-851edee01f32 live-network false false false true undefined true
+DD OFF-04 w2 r2 ben 627228 DBG detail result 01a1e106-1bd5-7467-b71d-851edee01f32 live-network false false false true undefined true
+DD OFF-04 w0 r0 ben 627308 DBG detail result 01a1e106-1bd5-731a-943a-56362c7ce709 live-network false false false true undefined true
+DD OFF-04 w0 r0 ben 627310 DBG detail result 01a1e106-1bd5-731a-943a-56362c7ce709 live-network false false false true undefined true
+DD OFF-04 w1 r1 ben 627416 DBG detail result 01a1e106-1bd3-7f78-9c02-3d7b00641bbf live-network false false false true undefined true
+DD OFF-04 w1 r1 ben 627419 DBG detail result 01a1e106-1bd3-7f78-9c02-3d7b00641bbf live-network false false false true undefined true
+DD OFF-04 w2 r2 ben 628067 DBG devmiss uncovered {"channelId":"01a1e106-1bd5-7467-b71d-851edee01f32","limit":100,"before":"00001794776645153763-01a1e106-3e21-7f82-bcba-09acd373b8fa"} 263 false
+DD OFF-04 w0 r0 ben 628084 DBG devmiss uncovered {"channelId":"01a1e106-1bd5-731a-943a-56362c7ce709","limit":100,"before":"00001794776644996307-01a1e106-3d84-7176-818e-b1dfb0eaa592"} 263 false
+DD OFF-04 w1 r1 ben 628087 DBG devmiss uncovered {"channelId":"01a1e106-1bd3-7f78-9c02-3d7b00641bbf","limit":100,"before":"00001794776645191178-01a1e106-3e46-7d89-bf6c-6e8877971298"} 263 false
+DD OFF-04 w2 r2 ben 634257 DBG devmiss uncovered {"channelId":"01a1e106-1bd5-7467-b71d-851edee01f32","limit":100,"before":"00001794776640460614-01a1e106-2bcc-7dc7-a254-da43e3858a6d"} 263 false
+DD OFF-04 w0 r0 ben 634271 DBG devmiss uncovered {"channelId":"01a1e106-1bd5-731a-943a-56362c7ce709","limit":100,"before":"00001794776640546688-01a1e106-2c22-7829-ab4f-9cb1b32c9928"} 263 false
+DD OFF-04 w1 r1 ben 634279 DBG devmiss uncovered {"channelId":"01a1e106-1bd3-7f78-9c02-3d7b00641bbf","limit":100,"before":"00001794776640160751-01a1e106-2aa0-741e-bdfc-191964d02391"} 263 false
+DD OFF-04 w1 r1 ben 639977 DBG detail result 01a1e58d-98d5-7e9c-bc19-f20a7025399c live-network false false false true undefined false
+DD OFF-04 w1 r1 ben 639980 DBG detail result 01a1e58d-98d5-7e9c-bc19-f20a7025399c live-network false false false true undefined false
+DD OFF-04 w2 r2 ben 641171 DBG detail result 01a1e58d-98d9-7f12-85d3-62a17d3be6aa live-network false false false true undefined false
+DD OFF-04 w1 r1 ben 641194 DBG detail result 01a1e58d-98d5-7e9c-bc19-f20a7025399c live-network false false false true undefined false
+DD OFF-04 w2 r2 ben 641374 DBG detail result 01a1e58d-98d9-7f12-85d3-62a17d3be6aa live-network false false false true undefined true
+DD OFF-04 w2 r2 ben 641378 DBG detail result 01a1e58d-98d9-7f12-85d3-62a17d3be6aa live-network false false false true undefined false
+DD OFF-04 w1 r1 ben 641407 DBG detail result 01a1e58d-98d5-7e9c-bc19-f20a7025399c live-network false false false true undefined true
+DD OFF-04 w1 r1 ben 641412 DBG detail result 01a1e58d-98d5-7e9c-bc19-f20a7025399c live-network false false false true undefined false
+DD OFF-04 w0 r0 ben 641501 DBG detail result 01a1e58d-98d8-7869-9aa5-417c4ba46798 live-network false false false true undefined false
+DD OFF-04 w0 r0 ben 641710 DBG detail result 01a1e58d-98d8-7869-9aa5-417c4ba46798 live-network false false false true undefined true
+DD OFF-04 w0 r0 ben 641715 DBG detail result 01a1e58d-98d8-7869-9aa5-417c4ba46798 live-network false false false true undefined false
+DD OFF-04 w1 r1 ben 642074 DBG detail result 01a1e58d-98d5-7e9c-bc19-f20a7025399c live-network false false false true undefined true
+DD OFF-04 w1 r1 ben 642077 DBG detail result 01a1e58d-98d5-7e9c-bc19-f20a7025399c live-network false false false true undefined true
+DD OFF-04 w2 r2 ben 642135 DBG detail result 01a1e58d-98d9-7f12-85d3-62a17d3be6aa live-network false false false true undefined true
+DD OFF-04 w2 r2 ben 642137 DBG detail result 01a1e58d-98d9-7f12-85d3-62a17d3be6aa live-network false false false true undefined true
+DD OFF-04 w0 r0 ben 642434 DBG detail result 01a1e58d-98d8-7869-9aa5-417c4ba46798 live-network false false false true undefined true
+DD OFF-04 w0 r0 ben 642435 DBG detail result 01a1e58d-98d8-7869-9aa5-417c4ba46798 live-network false false false true undefined true
+DD OFF-04 w2 r2 ben 642649 DBG detail result 01a1e58d-98d9-7f12-85d3-62a17d3be6aa affected-cache-reread false false false true undefined true
+DD OFF-04 w2 r2 ben 642651 DBG detail result 01a1e58d-98d9-7f12-85d3-62a17d3be6aa affected-cache-reread false false false true undefined true
+DD OFF-04 w1 r1 ben 642686 DBG detail result 01a1e58d-98d5-7e9c-bc19-f20a7025399c affected-cache-reread false false false true undefined true
+DD OFF-04 w1 r1 ben 642687 DBG detail result 01a1e58d-98d5-7e9c-bc19-f20a7025399c affected-cache-reread false false false true undefined true
+DD OFF-04 w0 r0 ben 642900 DBG detail result 01a1e58d-98d8-7869-9aa5-417c4ba46798 affected-cache-reread false false false true undefined true
+DD OFF-04 w0 r0 ben 642901 DBG detail result 01a1e58d-98d8-7869-9aa5-417c4ba46798 affected-cache-reread false false false true undefined true
+DD OFF-04 w0 r0 ben 647087 DBG detail result 01a1e106-1bd5-731a-943a-56362c7ce709 live-network false false true false undefined false
+DD OFF-04 w0 r0 ben 647281 DBG detail result 01a1e106-1bd5-731a-943a-56362c7ce709 normalized-cache-hit false false true true undefined true
+DD OFF-04 w0 r0 ben 647281 DBG detail result 01a1e106-1bd5-731a-943a-56362c7ce709 normalized-cache-hit true false true true true true
+DD OFF-04 w0 r0 ben 647289 DBG detail result 01a1e106-1bd5-731a-943a-56362c7ce709 live-network false false true false true true
+DD OFF-04 w2 r2 ben 647766 DBG detail result 01a1e106-1bd5-7467-b71d-851edee01f32 live-network false false true false undefined false
+DD OFF-04 w1 r1 ben 647801 DBG detail result 01a1e106-1bd3-7f78-9c02-3d7b00641bbf live-network false false true false undefined false
+DD OFF-04 w2 r2 ben 647824 DBG detail result 01a1e106-1bd5-7467-b71d-851edee01f32 normalized-cache-hit false false true true undefined true
+DD OFF-04 w2 r2 ben 647825 DBG detail result 01a1e106-1bd5-7467-b71d-851edee01f32 normalized-cache-hit true false true true true true
+DD OFF-04 w2 r2 ben 647832 DBG detail result 01a1e106-1bd5-7467-b71d-851edee01f32 live-network false false true false true true
+DD OFF-04 w1 r1 ben 647910 DBG detail result 01a1e106-1bd3-7f78-9c02-3d7b00641bbf normalized-cache-hit false false true true undefined true
+DD OFF-04 w1 r1 ben 647910 DBG detail result 01a1e106-1bd3-7f78-9c02-3d7b00641bbf normalized-cache-hit true false true true true true
+DD OFF-04 w1 r1 ben 647916 DBG detail result 01a1e106-1bd3-7f78-9c02-3d7b00641bbf live-network false false true false true true
+DD OFF-04 w0 ANNOT 707104 Error: expect(locator).toBeVisible() failed |  | Locator: locator('[data-input-id="channel-input-01a1e106-1bd5-731a-943a-56362c7ce709"]') | Expected: visible | Timeout: 60000ms | Error: element(s) not found |  | Call log: |   - Expect "toBeVisible" with timeout 60000ms |   - waiting for locator('[data-input-id="channel-input-01a1e106-1bd5-731a-943a-56362c7ce709"]') | 
+DD OFF-04 w2 ANNOT 707778 Error: expect(locator).toBeVisible() failed |  | Locator: locator('[data-input-id="channel-input-01a1e106-1bd5-7467-b71d-851edee01f32"]') | Expected: visible | Timeout: 60000ms | Error: element(s) not found |  | Call log: |   - Expect "toBeVisible" with timeout 60000ms |   - waiting for locator('[data-input-id="channel-input-01a1e106-1bd5-7467-b71d-851edee01f32"]') | 
+DD OFF-04 w1 ANNOT 707812 Error: expect(locator).toBeVisible() failed |  | Locator: locator('[data-input-id="channel-input-01a1e106-1bd3-7f78-9c02-3d7b00641bbf"]') | Expected: visible | Timeout: 60000ms | Error: element(s) not found |  | Call log: |   - Expect "toBeVisible" with timeout 60000ms |   - waiting for locator('[data-input-id="channel-input-01a1e106-1bd3-7f78-9c02-3d7b00641bbf"]') | 
+  ✓  2 tests/channels-e2e-dbg/offline.spec.ts:128:1 › OFF-04 messages read far back in a long channel can be scrolled through again with no connection (1.4m)
+  ✓  3 tests/channels-e2e-dbg/offline.spec.ts:128:1 › OFF-04 messages read far back in a long channel can be scrolled through again with no connection (1.4m)
+  ✓  1 tests/channels-e2e-dbg/offline.spec.ts:128:1 › OFF-04 messages read far back in a long channel can be scrolled through again with no connection (1.4m)
+
+  3 passed (1.4m)

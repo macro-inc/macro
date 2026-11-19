@@ -1,0 +1,14 @@
+const {L,setup,openPage,DIR,dumpIssues}=require('./common.cjs'); const ch=L.ENV.channels.freshness; const idA='01a1cf8d-2b26-7ff4-b1e9-e05ac989e2e1'; const T=Date.now(); const R1=`par-reply1-${T}`,R2=`par-reply2-${T}`; const out={};
+(async()=>{ const {browser,ctxs}=await setup(); const {page}=await openPage(ctxs.alice,`${L.BASE}/app/channels/${ch}`); await L.sleep(4000);
+ const root=()=>page.locator(`[data-message-id="${idA}"]`).first();
+ const txt=()=>page.evaluate((id)=>{const r=document.querySelector(`[data-message-id="${id}"]`);const row=r.closest('[data-channel-thread-row]')||r.parentElement;return row.innerText.replace(/\n+/g,'|').slice(0,400)},idA);
+ const cnt=(t)=>page.evaluate((t)=>[...document.querySelectorAll('[data-channel-scroll] [data-message-id]')].filter(n=>(n.textContent||'').includes(t)).length,t);
+ await root().hover(); await L.sleep(300); await root().locator('[data-message-action="reply"]').first().click(); await L.sleep(1000);
+ const ed=page.locator('[data-markdown-editable]').filter({hasNot:page.locator('x')}); console.log('editables',await ed.count());
+ const rep=page.locator('[aria-label="Send a reply"]').first(); await rep.click(); await page.keyboard.type(R1); await page.keyboard.press('Enter'); await L.sleep(2500);
+ out.afterR1={rows:await cnt(R1),thread:await txt()}; await page.screenshot({path:`${DIR}/c-reply1.png`});
+ await page.locator('[aria-label="Send a reply"]').first().click().catch(()=>{}); await page.keyboard.type(R2); await page.keyboard.press('Enter'); await L.sleep(2500);
+ out.afterR2={rows:await cnt(R2),thread:await txt()}; await page.screenshot({path:`${DIR}/c-reply2.png`});
+ await page.reload(); await page.waitForSelector('[data-channel-scroll] [data-message-id]',{timeout:60000}); await L.sleep(4000);
+ out.reload={thread:await txt(),R1:await cnt(R1),R2:await cnt(R2)}; await page.screenshot({path:`${DIR}/c-reply-reloaded.png`});
+ console.log(JSON.stringify(out,null,1)); dumpIssues('c2'); await browser.close();})().catch(e=>{console.error(e);console.log(JSON.stringify(out));process.exit(1)});
