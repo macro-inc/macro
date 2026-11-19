@@ -20,16 +20,13 @@ const screenFile = 'screen.ts';
 const queueDirectory = 'queue';
 
 /** What chat adds to the agent's context: Macro, what it remembers of conversations, and who is waiting on it. */
-export const chatContext = ({
-  macro,
-  config,
-  state,
-  join,
-  disk,
-  log,
-}: Base) => {
+export const chatContext = (
+  { macro, config, state, join, disk, log }: Base,
+  /** The agent's function names, from its catalog once it is built. */
+  toolNames: () => Iterable<string> = () => []
+) => {
   const sdk = sdkChat({ macro, myName: config.identity.name });
-  const chat = { ...sdk, ...observeOutgoing(sdk, log) };
+  const chat = { ...sdk, ...observeOutgoing(sdk, log, toolNames) };
   const unanswered = channel<Conversation>();
   const screenPath = join(import.meta.dir, screenFile);
   return behavior<Base>().decorate({

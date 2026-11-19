@@ -24,7 +24,8 @@ test('SDK wording is warned about on posts, replies and DMs without recording th
       event: async (stream, entry) => {
         events.push({ stream, ...entry });
       },
-    }
+    },
+    () => []
   );
   const text = 'I checked macro.email.links() and macro.email.inbox().';
   expect(await chat.send('channel', text)).toEqual(posted);
@@ -56,7 +57,8 @@ test('ordinary replies do not warn, and a failed warning cannot prevent a reply'
         warnings += 1;
         throw new Error('log unavailable');
       },
-    }
+    },
+    () => []
   );
   const plain = 'I checked your inbox. I can open the browser next.';
   await chat.send('channel', plain);
@@ -65,4 +67,69 @@ test('ordinary replies do not warn, and a failed warning cannot prevent a reply'
   await chat.reply('channel', 'root', internal);
   expect(warnings).toBe(1);
   expect(sent).toEqual([plain, internal]);
+});
+
+/** The reasons a text is warned for, with the given catalog function names. */
+const reasonsFor = async (
+  text: string,
+  toolNames: readonly string[] = []
+): Promise<readonly string[]> => {
+  const events: { reasons?: readonly string[] }[] = [];
+  const send = async () => ({ channelId: 'channel', messageId: 'message' });
+  const chat = observeOutgoing(
+    { send, dm: send, reply: send },
+    {
+      event: async (_stream, entry) => {
+        events.push(entry);
+      },
+    },
+    () => toolNames
+  );
+  await chat.send('channel', text);
+  return events.flatMap((event) => event.reasons ?? []);
+};
+
+test('ordinary prose about Macro is not internal wording', async () => {
+  for (const text of [
+    'Welcome to Macro. Let me know what you need.',
+    'I use Macro.app on my laptop.',
+    'Here it is: https://macro.com/app/md/0190a1b2',
+    'Ask <m-user-mention>{"userId":"macro|ada@macro.com","email":"ada@macro.com"}</m-user-mention> about it.',
+    'Write to ada@macro.com.',
+    'We watched the Muppets last night.',
+    'I posted your message in the channel.',
+    'The meeting is at 4:05.',
+  ])
+    expect(await reasonsFor(text, ['postMessage', 'readEmailThread'])).toEqual(
+      []
+    );
+});
+
+test("the agent's own function names, from its catalog, are internal wording", async () => {
+  expect(
+    await reasonsFor('I will use readEmailThread to check.', [
+      'postMessage',
+      'readEmailThread',
+    ])
+  ).toEqual(['tool-name']);
+  // Names are the catalog's, not a fixed list: an unknown one is not flagged.
+  expect(await reasonsFor('I will use readEmailThread to check.', [])).toEqual(
+    []
+  );
+});
+
+test('raw errors and the runtime package are internal wording', async () => {
+  for (const text of [
+    'The request failed with HTTP 503.',
+    'It answered with status code 404.',
+    'Error: fetch failed',
+    'It broke at loadThread (/home/macro/agent/workspace/x.ts:12:3).',
+  ])
+    expect(await reasonsFor(text)).toEqual(['raw-error']);
+  expect(await reasonsFor('That lives in @macro-inc/muppet/core.')).toEqual([
+    'execution-details',
+  ]);
+  expect(await reasonsFor('I checked macro.email.inbox().')).toEqual([
+    'sdk-call',
+  ]);
 });
