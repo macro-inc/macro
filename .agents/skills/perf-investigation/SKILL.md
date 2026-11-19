@@ -61,8 +61,8 @@ Verified against production web-app spans:
   `@ui.outcome:success`, phases `@flow.outcome:success`. Views are roots
   (`@flow.kind:view`) or phases of `navigation`/`app.boot`; filter by
   `resource_name:view.*` to get both.
-- Phases overlap; never sum them. `<phase>.waited:false` means it was already
-  loaded, not necessarily a cache hit.
+- Phases overlap; never sum them. `<phase>.waited:false` means the flow
+  reached the phase after it was already ready or had failed.
 - `ui.long_task_*` and `ui.long_animation_frame_*` overlap each other and are
   not CPU time.
 
@@ -92,9 +92,9 @@ return agg(
       sort: { type: "measure", aggregation: "pc95", metric: "@ui.elapsed_ms", order: "desc" } } ]);
 ```
 
-Views (roots and phases): query `resource_name:view.* -@flow.outcome:cancelled
--@ui.outcome:(cancelled OR hidden OR timeout)`, metric `@duration`, group by
-`@route.id`.
+Views (roots and phases): query `resource_name:view.*
+-@flow.outcome:(cancelled OR error) -@ui.outcome:(cancelled OR error OR hidden OR timeout)`,
+metric `@duration`, group by `@route.id`.
 
 **2. Split the slow flow** by who sees it: add `groupBy` entries for
 `@app.platform`, `@os.type`, `@app.runtime` and `@version`, each with

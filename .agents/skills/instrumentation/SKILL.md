@@ -70,13 +70,14 @@ hold releases.
   route; add phases inside it.
 - **Phases: `usePending(name, accessor)`**, right after creating the query,
   e.g. `usePending('channel.messages', () => query.isLoading)`. While the
-  accessor is true it holds the flow as a child span; it can start again each
-  time the flow is open. Already false when the flow reaches it (a cache hit or
-  an earlier view's load) records a `<name>.ready` event and
-  `<name>.waited=false` instead of a span; a real wait sets
-  `<name>.waited=true` on the parent. Read status only: reading pending
-  `query.data` suspends the enclosing shell. Track initial loading, not
-  background refreshes or a disabled query that cannot complete.
+  accessor is `true` it holds the flow as a child span and sets
+  `<name>.waited=true` on the parent. `false` completes the phase or records
+  `<name>.ready` and `<name>.waited=false` when already ready. Use
+  `undefined` for an inapplicable phase, which cancels any open span for it.
+  Use `'error'` for a failed phase, even if it failed before the flow started
+  waiting. An errored phase records `flow.outcome=error` and propagates to
+  the root as `ui.outcome=error`. Read query status since reading pending
+  `query.data` suspends the enclosing shell. Track initial readiness.
 - **Nested flows:** `<TraceFlow name="doc.editor">` around an independently
   loaded subtree, placed **inside** its Suspense boundary (outside it the flow
   can settle while the fallback shows). A view can hold several. Pass `key` to
@@ -98,9 +99,12 @@ hold releases.
   admission (before auth or queueing) and `.run(...)` the send in it.
 - **User actions: `beginInteraction('channel.tab')`** for an in-view action
   that mounts content without navigation: update state, then `.end()` in a
-  `finally`. The window is synchronous; flows created inside it join it. Use
-  `startUiOperation` directly only for a measured action that mounts no flow (a
-  cell commit, a submit), calling `afterPaint()` once the UI updated.
+  `finally`. Flows created within that synchronous window join it. For async
+  work, call `interaction.hold()` before closing the window and release the
+  hold when the work settles. Pass `'error'` to the release function on
+  failure. Use `startUiOperation` directly only for a measured action that
+  mounts no flow (a cell commit, a submit), calling `afterPaint()` once the UI
+  updated.
 - **Sampling** is per trace; see [What gets exported](#what-gets-exported).
 - `flow.kind`, `route.id`, `flow.root`, `flow.outcome`, `<phase>.waited`,
   `macro.sampling.*` and the `ui.*` timing fields come from the owners; never

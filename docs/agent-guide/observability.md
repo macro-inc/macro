@@ -389,11 +389,18 @@ Attributes every perf trace carries, set by the owners (`ui-operation.ts`,
 | On | Attributes |
 | --- | --- |
 | Every span in a classed trace, including HTTP client spans started in it | `macro.sampling.class` (the class it asked for, else its parent's) and `macro.sampling.rate` (that class's rate; weight by its inverse) |
-| Roots | `flow.kind`, `route.id` (when known), `ui.operation`, `ui.outcome` (`success`, `cancelled`, `hidden`, `timeout`), `ui.elapsed_ms`, `ui.work_to_ready_ms` (success only), `ui.long_task_count`, `ui.long_task_overlap_ms`, `ui.long_animation_frame_count`, `ui.long_animation_frame_overlap_ms`, `ui.long_animation_frame_blocking_ms`, `ui.visibility`; with an input event, `ui.input_to_ready_ms`, `ui.input_to_paint_opportunity_ms` and `ui.event_*` |
+| Roots | `flow.kind`, `route.id` (when known), `ui.operation`, `ui.outcome` (`success`, `error`, `cancelled`, `hidden`, `timeout`), `ui.elapsed_ms`, `ui.work_to_ready_ms` (success only), `ui.long_task_count`, `ui.long_task_overlap_ms`, `ui.long_animation_frame_count`, `ui.long_animation_frame_overlap_ms`, `ui.long_animation_frame_blocking_ms`, `ui.visibility`; with an input event, `ui.input_to_ready_ms`, `ui.input_to_paint_opportunity_ms` and `ui.event_*` |
 | Flow roots | `flow.phase_count` (child spans opened), `flow.ready_phase_count` (`usePending` phases already loaded when reached) |
-| Phases | `flow.root` (the root's name), `route.id` (the nearest view's), `flow.outcome` (`success` or `cancelled`) |
-| A phase's parent | `<phase>.waited`: `false` when it was already loaded (cache or an earlier load), `true` when the flow waited for it |
+| Phases | `flow.root` (the root's name), `route.id` (the nearest view's), `flow.outcome` (`success`, `error`, or `cancelled`) |
+| A phase's parent | `<phase>.waited`: `false` when the phase was already ready or had already failed, `true` when the flow waited for it |
 | Resource (Datadog tags and facets) | `service.name=web-app`, `service.version` (Datadog `version`), `deployment.environment` (Datadog `env`), `app.runtime` (`browser`, `tauri`), `app.platform` (`web`, `desktop`, `ios`, `android`), `os.type` (`darwin`, `windows`, `linux`, `ios`, `android`, `chromeos`, `unknown`), `frontend_instance_id` |
+
+`usePending` holds a phase open while its accessor returns `true`. Use
+`false` for ready, `undefined` for a phase that does not apply, and
+`'error'` for a failed phase. An error propagates to the enclosing flow.
+`Interaction.hold()` keeps asynchronous work in an interaction after
+`end()` closes the window in which new views can join. Releasing the hold
+with `'error'` marks the interaction failed when it settles.
 
 Entity context is opaque ids and categories only, on the phase that loads the
 entity (`block.type` and `document.id` on `block.data`, `channel.id`,
