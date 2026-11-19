@@ -551,7 +551,7 @@ impl SchedulingRuntime {
 /// Compose routine scheduling and event workers alongside the harness API.
 #[expect(
     clippy::too_many_arguments,
-    reason = "the shared clients and gates the composition root owns"
+    reason = "each argument is a separate resource the composition root shares with scheduling; bundling them only moves the list"
 )]
 pub async fn build<Ingress: notification::domain::service::NotificationIngress>(
     config: Config,
@@ -562,6 +562,7 @@ pub async fn build<Ingress: notification::domain::service::NotificationIngress>(
     notifications: Arc<Ingress>,
     search: search_service_client::SearchServiceClient,
     redis: redis::Client,
+    routine_connect: Option<Arc<pipedream_mcp::outbound::dispatch::ConnectorBackends>>,
 ) -> Result<SchedulingRuntime> {
     let environment = config.environment;
     let lifecycle = ServiceLifecycle::default();
@@ -871,6 +872,14 @@ pub async fn build<Ingress: notification::domain::service::NotificationIngress>(
             activity::outbound::pg_activity_repo::PgActivityRepo::new(db.clone()),
         )))
         .with_conditions_enabled(conditions_enabled)
+        // A routine's draft may require the apps its owner connected,
+        // counted as saving and every run count them.
+        .with_apps(Arc::new(
+            crate::routine_sessions::PipedreamConnectedApps::new(
+                pipedream_mcp::outbound::pg_connection_repo::PgConnectionRepo::new(db.clone()),
+                routine_connect.clone(),
+            ),
+        ))
         .with_finding(DraftFinding {
             model: Arc::new(routine_drafting::RouterDraftModels {
                 admission: Arc::clone(&ai_admission),
@@ -932,8 +941,9 @@ pub async fn build<Ingress: notification::domain::service::NotificationIngress>(
                 config.internal_api_key.to_string(),
                 EmailServiceUrl::new()?.to_string(),
             )),
-            apps: crate::routine_sessions::PipedreamConnectedApps(
+            apps: crate::routine_sessions::PipedreamConnectedApps::new(
                 pipedream_mcp::outbound::pg_connection_repo::PgConnectionRepo::new(db.clone()),
+                routine_connect,
             ),
         }),
         suggestion_code,
