@@ -224,3 +224,48 @@ describe('agent faces in the picture cache', () => {
     expect(profilePictureItem(id)?.face).toEqual(face);
   });
 });
+
+describe('reads that a newer read superseded', () => {
+  beforeEach(() => {
+    postProfilePictures.mockReset();
+  });
+
+  it('keeps a saved picture from an older refresh that finishes after it', async () => {
+    const id = 'macro|superseded@example.com';
+    postProfilePictures.mockImplementation(picturesFor('https://x/file/old'));
+    await getProfilePictureUrl(id);
+
+    // A refresh that started before the save answers with the old picture
+    // only after the save's own refresh has stored the new one.
+    const older = Promise.withResolvers<Result<unknown, unknown>>();
+    postProfilePictures.mockReturnValueOnce(older.promise);
+    const stale = refreshProfilePicture(id);
+    postProfilePictures.mockImplementationOnce(
+      picturesFor('https://x/file/new')
+    );
+    await refreshProfilePicture(id);
+    older.resolve(ok({ pictures: [{ id, url: 'https://x/file/old' }] }));
+    await stale;
+
+    expect(profilePictureItem(id)?.url).toBe('https://x/file/new');
+  });
+
+  it('keeps a saved picture from an older batch that found none', async () => {
+    const id = 'macro|batch-superseded@example.com';
+    const batch = Promise.withResolvers<Result<unknown, unknown>>();
+    postProfilePictures.mockReturnValueOnce(batch.promise);
+    const reading = getProfilePictureUrl(id);
+    await vi.waitFor(() =>
+      expect(postProfilePictures).toHaveBeenCalledTimes(1)
+    );
+
+    postProfilePictures.mockImplementationOnce(
+      picturesFor('https://x/file/new')
+    );
+    await refreshProfilePicture(id);
+    batch.resolve(ok({ pictures: [] }));
+
+    expect(await reading).toBe('https://x/file/new');
+    expect(profilePictureItem(id)?.url).toBe('https://x/file/new');
+  });
+});

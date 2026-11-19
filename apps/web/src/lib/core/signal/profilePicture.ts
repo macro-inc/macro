@@ -103,8 +103,23 @@ const processFetchQueue = debounce(async () => {
   await batchFetchProfilePictures(items);
 }, 50);
 
+/**
+ * The newest read of each user's picture. A response writes only the users it
+ * is still the newest read for, so a read that started before an avatar save
+ * (or before another refresh) can't put the old picture back.
+ */
+const newestRead: Record<string, number> = {};
+let reads = 0;
+
+function startRead(ids: string[]): number {
+  reads += 1;
+  for (const id of ids) newestRead[id] = reads;
+  return reads;
+}
+
 async function batchFetchProfilePictures(ids: string[]) {
   const accountSession = queryAccountSession();
+  const read = startRead(ids);
   const requestedAt = ids.map((id) => userProfilePictures[id]?._createdAt);
   const [nameResults] = await Promise.all([
     ids.length > 0 ? fetchProfilePictures(ids) : Promise.resolve([]),
@@ -135,6 +150,9 @@ async function batchFetchProfilePictures(ids: string[]) {
   [...nameResults].forEach((result) => {
     updates[result.id] = result;
   });
+  for (const id of Object.keys(updates)) {
+    if (newestRead[id] !== read) delete updates[id];
+  }
 
   setUserProfilePictures((prev) => ({ ...prev, ...updates }));
 }
@@ -220,15 +238,23 @@ export async function refreshProfilePicture(userId: string): Promise<void> {
   if (!cached) return;
 
   const accountSession = queryAccountSession();
+  const read = startRead([userId]);
   const result = await authServiceClient.postProfilePictures({
     user_id_list: [userId],
   });
   if (result.isErr()) {
     console.error('Failed to refresh user profile picture');
+    // A batch this refresh superseded left the entry loading: retry later.
+    if (newestRead[userId] === read && userProfilePictures[userId]?.loading)
+      setUserProfilePictures(userId, {
+        loading: false,
+        _createdAt: new Date(0),
+      });
     return;
   }
 
   if (queryAccountSession() !== accountSession) return;
+  if (newestRead[userId] !== read) return;
   const picture = result.value.pictures.find(({ id }) => id === userId);
   setUserProfilePictures(
     userId,
