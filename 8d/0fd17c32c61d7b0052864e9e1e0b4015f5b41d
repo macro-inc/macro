@@ -1,0 +1,2142 @@
+apps/web/src/lib/service-clients/service-storage/entity-appearance.ts
+  s_024592623b7afc::t_e318f9fbac229c 11-12,26
+apps/web/src/lib/core/component/AI/component/message/AssistantMessageParts.test.tsx
+  s_024592623b7afc::t_e318f9fbac229c 611-646
+crates/email/src/outbound/email_pg_repo/test/draft.rs
+  s_024592623b7afc::t_e318f9fbac229c 311,317,342-406
+apps/web/src/features/block-agent/browser-test/activity-turn.ts
+  s_024592623b7afc::t_e318f9fbac229c 486,515
+apps/web/scripts/android-benchmark/run.ts
+  s_024592623b7afc::t_e318f9fbac229c 17-23,25,27-32,83-91,100-104,125-126,131-146,151-152,206,208,213,223,245,249,276,278-285,290-297,303-304,308-318,327,329-331,346-347
+apps/web/src/features/agents-view/components/AgentsSidebar.tsx
+  s_024592623b7afc::t_e318f9fbac229c 399-403,445-480,484-485,513-514,616-617
+crates/opensearch_client/src/email.rs
+  s_024592623b7afc::t_e318f9fbac229c 5-9,42
+crates/scheduled_action/src/outbound/pg_draft_hand_backs/test.rs
+  s_024592623b7afc::t_e318f9fbac229c 28
+docs/agent-guide/calls.md
+  s_024592623b7afc::t_e318f9fbac229c 51-53,66-92,286-289
+services/search_processing_service/src/inbound/kafka_consumer/attempts.rs
+  s_024592623b7afc::t_e318f9fbac229c 111-115,139-152,158
+services/search_processing_service/src/outbound/publisher.rs
+  s_024592623b7afc::t_e318f9fbac229c 21,23,28
+infra/local/openbao/bootstrap.py
+  s_024592623b7afc::t_e318f9fbac229c 2,37,48-52
+apps/web/src/components/app/mobile/navigation-browser-test/index.html
+  s_024592623b7afc::t_e318f9fbac229c 1-5
+apps/web/src/features/entity-appearance/core/appearance.test.ts
+  s_024592623b7afc::t_e318f9fbac229c 2-6,43-53
+  s_024592623b7afc::t_0e4edc28cac47b 54
+crates/crm/src/outbound/email_rule_discovery/test.rs
+  s_024592623b7afc::t_e318f9fbac229c 1-106
+apps/web/src/features/calendar-view/components/CalendarSidebar.tsx
+  s_024592623b7afc::t_e318f9fbac229c 86-91,112-123,293-298,336,371-377
+crates/passwords/src/outbound/postgres/update_record.sql
+  s_024592623b7afc::t_e318f9fbac229c 1-15
+services/document_storage_service/Cargo.toml
+  s_024592623b7afc::t_e318f9fbac229c 82,256
+crates/passwords/src/outbound/openbao.rs
+  s_024592623b7afc::t_e318f9fbac229c 80,82-88,162-176,201-212
+  s_024592623b7afc::t_4d4a7de00ae298 213-215
+docs/agent-guide/channels.md
+  s_024592623b7afc::t_e318f9fbac229c 40-43,67-71,1095-1100,1189-1209,1791-1802
+apps/web/src/features/passwords/components/item-form.tsx
+  s_024592623b7afc::t_e318f9fbac229c 56,339-349
+crates/calendar_events/src/outbound/gateway_refresh.rs
+  s_024592623b7afc::t_e318f9fbac229c 1-316
+apps/web/src/features/crm/components/crm-sidebar.tsx
+  s_024592623b7afc::t_e318f9fbac229c 52,71-72,76-81,109-110,114-119
+apps/web/src/components/view-shell/SidebarSectionHeader.tsx
+  s_024592623b7afc::t_e318f9fbac229c 1-23
+crates/code_execution/Cargo.toml
+  s_024592623b7afc::t_e318f9fbac229c 22
+services/email_service/Cargo.toml
+  s_024592623b7afc::t_e318f9fbac229c 100
+services/search_freshness_probe/src/domain/watch/test.rs
+  s_024592623b7afc::t_e318f9fbac229c 1-283
+apps/web/src/features/channels-view/components/rail/next/ChannelSectionHeading.tsx
+  s_024592623b7afc::t_e318f9fbac229c 2-3,66-70,73
+apps/web/src/features/channel/Call/tests/open-channel-call-tab.test.ts
+  s_024592623b7afc::t_e318f9fbac229c 1-82
+docs/architecture/macro-computers.md
+  s_024592623b7afc::t_e318f9fbac229c 469-471
+crates/email/src/domain/mailbox/connection/gmail.rs
+  s_024592623b7afc::t_e318f9fbac229c 59,118,151,161,235-254
+  s_024592623b7afc::t_a74c7ffae62be8 255-256
+apps/web/src/components/view-shell/README.md
+  s_024592623b7afc::t_e318f9fbac229c 35-71
+apps/web/tests/email-e2e/send-delivery.spec.ts
+  s_024592623b7afc::t_e318f9fbac229c 163-168,200
+crates/team_agents/src/domain/models.rs
+  s_024592623b7afc::t_e318f9fbac229c 236-237,248-250,254-255
+services/search_processing_service/Cargo.toml
+  s_024592623b7afc::t_e318f9fbac229c 11,59
+crates/outlook_emulator/src/control.rs
+  s_024592623b7afc::t_e318f9fbac229c 216,310-314
+  s_024592623b7afc::t_9d80d9ccd99c80 315-316
+services/authentication_service/src/outbound/computer_billing/test.rs
+  s_024592623b7afc::t_e318f9fbac229c 643-652
+services/email_refresh_handler/AGENTS.md
+  s_024592623b7afc::t_e318f9fbac229c 7-8,15,37-42
+services/search_freshness_probe/src/outbound/properties/test.rs
+  s_024592623b7afc::t_e318f9fbac229c 1-107
+crates/passwords/AGENTS.md
+  s_024592623b7afc::t_e318f9fbac229c 16-20,67-72,96-97,104-107
+crates/opensearch_client/src/calendar_event.rs
+  s_024592623b7afc::t_e318f9fbac229c 4-8,49
+crates/opensearch_client/src/search/documents/test.rs
+  s_024592623b7afc::t_e318f9fbac229c 39-40,648,682,758,779-867
+  s_024592623b7afc::t_d7a912f58fc830 868
+crates/opensearch_client/src/search/query.rs
+  s_024592623b7afc::t_e318f9fbac229c 61-98
+services/agent_harness_service/src/computers.rs
+  s_024592623b7afc::t_e318f9fbac229c 15-17,627,637-639,650
+apps/web/src/components/view-shell/SectionDropIndicator.tsx
+  s_024592623b7afc::t_e318f9fbac229c 1-19
+services/search_processing_service/src/domain/backfill_gate/test.rs
+  s_024592623b7afc::t_e318f9fbac229c 1-238
+apps/web/src/features/channel/Call/primitives/use-active-call-companion.ts
+  s_024592623b7afc::t_e318f9fbac229c 2-3,30-36,38-51,70
+.agents/rules/web/mobile.md
+  s_024592623b7afc::t_e318f9fbac229c 101-106
+apps/web/src/features/sharing/native-share-sheet/NativeShareSheet.tsx
+  s_024592623b7afc::t_e318f9fbac229c 485-486
+crates/team_agents/src/domain/service/test.rs
+  s_024592623b7afc::t_e318f9fbac229c 277-281,339-348,350-354,583-600,712-728
+  s_024592623b7afc::t_cef626afeb1303 729-730
+apps/web/src/features/routines/context/routine-slots.ts
+  s_024592623b7afc::t_e318f9fbac229c 35-36
+apps/web/src/components/app/mobile/navigation-browser-test/stand-ins/block-effect-runner.tsx
+  s_024592623b7afc::t_e318f9fbac229c 1-3
+crates/opensearch_client/src/search/chats.rs
+  s_024592623b7afc::t_e318f9fbac229c 9,17,145,216
+crates/passwords/src/domain/service/import.rs
+  s_024592623b7afc::t_e318f9fbac229c 52-53
+crates/agent_code_mode/SKILL.md
+  s_024592623b7afc::t_e318f9fbac229c 3,9,12,24,26,32,34
+services/search_freshness_probe/src/main.rs
+  s_024592623b7afc::t_e318f9fbac229c 1-101
+crates/email/fixtures/email_crm_long_selected_thread.sql
+  s_024592623b7afc::t_e318f9fbac229c 1-21
+crates/email/src/domain/mailbox/connection/test/fixtures.rs
+  s_024592623b7afc::t_e318f9fbac229c 40-41,67-68,171-173,224-228
+crates/opensearch_client/src/upsert/call_record.rs
+  s_024592623b7afc::t_e318f9fbac229c 6,17,20,163-165,170,199,220
+services/agent_harness_service/src/computers/agent_enrollment.rs
+  s_024592623b7afc::t_e318f9fbac229c 14-16
+crates/crm/src/outbound/companies_repo.rs
+  s_024592623b7afc::t_e318f9fbac229c 135-143,442-450
+apps/web/src/features/entity-appearance/queries/pending-appearance.ts
+  s_024592623b7afc::t_e318f9fbac229c 5,13
+services/search_freshness_probe/src/config.rs
+  s_024592623b7afc::t_e318f9fbac229c 1-23
+crates/code_execution/src/outbound/deno/test/ocaml.rs
+  s_024592623b7afc::t_9870c5ce55b6e4 1025,1028-1032,1041-1045,1056
+  s_024592623b7afc::t_9dd94e4d0b25d5 29,41,995
+crates/scheduled_action/src/outbound/knob_entities.rs
+  s_024592623b7afc::t_e318f9fbac229c 1-122
+crates/passwords/src/outbound/openbao/test.rs
+  s_024592623b7afc::t_e318f9fbac229c 6
+packages/sdk/specs/agent-harness.json
+  s_024592623b7afc::t_fcac5732d4f0d8 7417
+apps/web/src/features/block-agent/component/parts/CodeExecutionToolCall.test.tsx
+  s_024592623b7afc::t_e318f9fbac229c 49
+apps/web/src/features/routines/primitives/routine-composer.test.ts
+  s_024592623b7afc::t_e318f9fbac229c 116
+services/authentication_service/src/api/internal/remove_link.rs
+  s_024592623b7afc::t_e318f9fbac229c 2,61,63-71,73,76
+apps/web/src/features/tasks-view/components/TasksFilterDrawer.tsx
+  s_024592623b7afc::t_e318f9fbac229c 3,68-69,71-72
+apps/web/src/features/property/editors/selectors/PropertyEntitySelector.tsx
+  s_024592623b7afc::t_e318f9fbac229c 46,202-203,205,302,352-359
+crates/passwords/src/domain/models.rs
+  s_024592623b7afc::t_e318f9fbac229c 9,104,161,344,367-369,385
+docs/agent-guide/observability.md
+  s_024592623b7afc::t_e318f9fbac229c 396
+crates/ai_tools/src/build_context.rs
+  s_024592623b7afc::t_e318f9fbac229c 299-301,445-447
+services/search_processing_service/src/process/call/test.rs
+  s_024592623b7afc::t_e318f9fbac229c 1-25
+crates/crm/src/domain/email_rule_discovery/test.rs
+  s_024592623b7afc::t_e318f9fbac229c 1-731
+docs/agent-guide/navigation.md
+  s_024592623b7afc::t_e318f9fbac229c 490-510,688-691,1386-1388,1532-1533,1538-1540,1542-1544,1586-1589
+apps/web/src/features/email-compose/primitives/draft-session-scenarios.test.ts
+  s_024592623b7afc::t_e318f9fbac229c 44-127
+apps/web/tests/email-e2e/ledger/manifest/organise.ts
+  s_024592623b7afc::t_e318f9fbac229c 1038,1041
+packages/code-mode-sdk/AGENTS.md
+  s_024592623b7afc::t_e318f9fbac229c 32-36
+apps/web/scripts/android-benchmark/comparison.ts
+  s_024592623b7afc::t_e318f9fbac229c 1-123
+services/search_processing_service/src/domain/models.rs
+  s_024592623b7afc::t_e318f9fbac229c 12,16-18,78-79
+apps/web/src/lib/core/component/LexicalMarkdown/component/decorator/MarkdownImage.native.test.tsx
+  s_024592623b7afc::t_e318f9fbac229c 1-147
+apps/web/src/features/saved-views/queries/saved-views.ts
+  s_024592623b7afc::t_e318f9fbac229c 21-22,28,39,81,117-118,121-128,130,148,162-164,167,172-181
+crates/saved_views/src/pgsql/test.rs
+  s_024592623b7afc::t_e318f9fbac229c 101-108,146-153,191,202,234,245,256,286,319,361,375,454,515-673
+apps/web/src/components/app/mobile/close-on-navigation.test.tsx
+  s_024592623b7afc::t_e318f9fbac229c 1-263
+infra/stacks/search-freshness-probe/Pulumi.dev.yaml
+  s_024592623b7afc::t_e318f9fbac229c 1-3
+crates/folds/agent_fold/src/domain/model/segment/test.rs
+  s_024592623b7afc::t_e318f9fbac229c 164,189,247,267,271,275-319
+services/search_freshness_probe/src/outbound/fixtures.rs
+  s_024592623b7afc::t_e318f9fbac229c 1-179
+crates/calendar_scheduling/README.md
+  s_024592623b7afc::t_e318f9fbac229c 92-94
+crates/scheduled_action/src/domain.rs
+  s_024592623b7afc::t_e318f9fbac229c 10
+crates/hosted_runtimes/src/domain/service/billing.rs
+  s_024592623b7afc::t_e318f9fbac229c 23-28,65-69,624-633,843,899,904,906,910-917,938,957,959
+tooling/xtask/crates/xtask_local/src/local/passwords_vault.rs
+  s_024592623b7afc::t_e318f9fbac229c 1-134
+apps/web/src/features/routines/queries/compose-routine.ts
+  s_024592623b7afc::t_e318f9fbac229c 13,145-147,159-166
+  s_024592623b7afc::t_122524b9f3f238 167-168
+apps/web/src/features/passwords/tests/import-dialog.test.tsx
+  s_024592623b7afc::t_e318f9fbac229c 761-774
+services/search_freshness_probe/AGENTS.md
+  s_024592623b7afc::t_e318f9fbac229c 1-78
+.github/workspace-dep-closures.json
+  s_024592623b7afc::t_e318f9fbac229c 13946,13948,14103-14221
+  s_024592623b7afc::t_70c753c1d6463f 14222
+apps/web/src/features/saved-views/components/saved-view-menu.tsx
+  s_024592623b7afc::t_e318f9fbac229c 9,15,33
+crates/email/src/domain/service/thread.rs
+  s_024592623b7afc::t_e318f9fbac229c 18,97-99,113-120,127,132,174,178,299,301
+packages/sdk/src/entities/crm-email-privacy/email-rules.ts
+  s_024592623b7afc::t_e318f9fbac229c 27
+services/search_processing_service/src/inbound/kafka_consumer/scaling.rs
+  s_024592623b7afc::t_e318f9fbac229c 1-57
+crates/passwords/Cargo.toml
+  s_024592623b7afc::t_e318f9fbac229c 40
+apps/web/src/features/routines/components/routine-knob-entity.test.tsx
+  s_024592623b7afc::t_e318f9fbac229c 1-395
+crates/team_agents/src/outbound/hosted_runtimes_computers/test.rs
+  s_024592623b7afc::t_e318f9fbac229c 24,34,38,42-46,92-98
+  s_024592623b7afc::t_6dcf7dd5058613 99
+crates/agent_code_mode/AGENTS.md
+  s_024592623b7afc::t_e318f9fbac229c 21-26,29-31
+services/authentication_service/src/server.rs
+  s_024592623b7afc::t_e318f9fbac229c 816-826,917-937,966,1047-1048,1119
+services/search_freshness_probe/src/outbound/search.rs
+  s_024592623b7afc::t_e318f9fbac229c 1-180
+services/search_processing_service/src/outbound/cloudwatch_backlog/test.rs
+  s_024592623b7afc::t_e318f9fbac229c 1-82
+services/search_freshness_probe/src/outbound/search/test.rs
+  s_024592623b7afc::t_e318f9fbac229c 1-201
+tooling/xtask/crates/xtask_workflows/src/workflows/scripts/run_tests.sh
+  s_024592623b7afc::t_e318f9fbac229c 26-27,34
+crates/routine_program/src/knob/test.rs
+  s_024592623b7afc::t_e318f9fbac229c 92-103,152-247
+apps/web/src/features/routines/components/routine-icon.tsx
+  s_024592623b7afc::t_e318f9fbac229c 1-37
+crates/agent_code_mode/src/inbound/toolset/guides/ai.md
+  s_024592623b7afc::t_e318f9fbac229c 3,5,11,16
+crates/crm/src/domain/model.rs
+  s_024592623b7afc::t_e318f9fbac229c 546-549,576-577
+infra/stacks/search-freshness-probe/AGENTS.md
+  s_024592623b7afc::t_e318f9fbac229c 1-37
+services/authentication_service/src/outbound.rs
+  s_024592623b7afc::t_e318f9fbac229c 7
+crates/agent_code_mode/src/domain/user.rs
+  s_024592623b7afc::t_e318f9fbac229c 4,8,102-118
+services/agent_harness_service/src/config/test.rs
+  s_024592623b7afc::t_e318f9fbac229c 4,21
+crates/scheduled_action/src/domain/program_runner/test.rs
+  s_024592623b7afc::t_e318f9fbac229c 847-935
+README.md
+  s_024592623b7afc::t_e318f9fbac229c 63
+crates/comms_db_client/src/channels/mod.rs
+  s_024592623b7afc::t_e318f9fbac229c 1
+crates/crm/src/outbound/companies_repo/email_privacy.rs
+  s_024592623b7afc::t_e318f9fbac229c 13,202,208-209,219,233-354,360,362-363,403,538-541
+apps/web/src/features/crm/views/record-detail.test.tsx
+  s_024592623b7afc::t_e318f9fbac229c 36-39,228,327,339,356,374
+infra/stacks/monitoring/AGENTS.md
+  s_024592623b7afc::t_e318f9fbac229c 114-117
+crates/calendar_events/src/lib.rs
+  s_024592623b7afc::t_e318f9fbac229c 20-21
+crates/lexical_client/src/parse_markdown.rs
+  s_024592623b7afc::t_e318f9fbac229c 486-515,523
+crates/team_agents/src/domain/ports.rs
+  s_024592623b7afc::t_e318f9fbac229c 201-207
+apps/web/src/lib/i18n/locales/en/passwords.ts
+  s_024592623b7afc::t_e318f9fbac229c 43-45,312
+apps/web/src/features/channel/Input/browser-test/README.md
+  s_024592623b7afc::t_e318f9fbac229c 41-47,66-71
+  s_024592623b7afc::t_50f42f0960134c 72
+services/document_storage_service/src/api/context.rs
+  s_024592623b7afc::t_e318f9fbac229c 347
+packages/sdk/src/entities/saved-views/namespace.ts
+  s_024592623b7afc::t_e318f9fbac229c 1,46-47
+apps/web/src/features/entity-appearance/AGENTS.md
+  s_024592623b7afc::t_e318f9fbac229c 6,10,14,66
+crates/code_execution/src/domain/models.rs
+  s_024592623b7afc::t_f550829d8f4dfd 11,17,250-252
+  s_024592623b7afc::t_cc545dcde09850 32-33
+  s_024592623b7afc::t_e318f9fbac229c 91-111,382-390,397
+apps/web/src/features/channels-view/components/rail/ExpandedChannelsRail.tsx
+  s_024592623b7afc::t_e318f9fbac229c 28,664
+infra/stacks/search-freshness-probe/Pulumi.yaml
+  s_024592623b7afc::t_e318f9fbac229c 1-3
+packages/graphics/tests/touch-navigation.test.ts
+  s_024592623b7afc::t_e318f9fbac229c 86,123-139,403-641
+  s_024592623b7afc::t_c8dadd8697088e 642
+services/search_freshness_probe/src/doppler_config.rs
+  s_024592623b7afc::t_e318f9fbac229c 1-22
+apps/web/src/features/email-compose/primitives/reply-composer.ts
+  s_024592623b7afc::t_e318f9fbac229c 140-141,1623-1624,1628-1629,1631-1634,1637,1640-1656,1669-1716,1817
+apps/web/src/features/passwords/components/vault-sidebar.tsx
+  s_024592623b7afc::t_e318f9fbac229c 401-427,505-519,534-537
+apps/web/scripts/android-benchmark/measure.ts
+  s_024592623b7afc::t_e318f9fbac229c 3,16-19,64-68,114-116,118-122,136-137
+crates/code_execution/AGENTS.md
+  s_024592623b7afc::t_11deaee7571b32 5-9
+  s_024592623b7afc::t_e318f9fbac229c 1,14-17,21-22,84-94
+crates/code_execution/src/outbound/deno/test.rs
+  s_024592623b7afc::t_e318f9fbac229c 19,23-42,372,374,378-385,1225-1240,1308-1334,1430-1448,1892-1952
+  s_024592623b7afc::t_f550829d8f4dfd 1953
+crates/agent_code_mode/src/inbound/toolset/user/discovery.md
+  s_024592623b7afc::t_e318f9fbac229c 1,3
+apps/web/src/features/channels-view/components/rail/next/ResizableRailSection.tsx
+  s_024592623b7afc::t_e318f9fbac229c 2,154
+crates/passwords/src/outbound/postgres/test/update_plan.rs
+  s_024592623b7afc::t_e318f9fbac229c 1-91
+apps/web/src/features/channel/components/AccessRequestActivityRow.tsx
+  s_024592623b7afc::t_e318f9fbac229c 11,22-23
+crates/agent_runtime_protocol/src/domain/schema/v0.rs
+  s_024592623b7afc::t_e318f9fbac229c 136-139,179-186
+  s_024592623b7afc::t_5b59aaabdd629d 187
+apps/web/src/features/settings/core/settings-search.test.ts
+  s_024592623b7afc::t_e318f9fbac229c 121
+crates/macro_db_client/migrations/20261119171842_scheduling_booking_processing.up.sql
+  s_024592623b7afc::t_e318f9fbac229c 1-13
+apps/web/tests/email-e2e/states-send3-shared.spec.ts
+  s_024592623b7afc::t_e318f9fbac229c 13-17,20,25,54-55,63-71,79-80,103-107,109-112,117,132-187
+  s_024592623b7afc::t_9a4c3a6f6494d1 188
+crates/email/src/outbound/email_pg_repo/dynamic/query/team_scope.rs
+  s_024592623b7afc::t_e318f9fbac229c 27-35,37-38,55-56,63,70-77,84-89,91-93,101-104,106-107,119-122,124-152,162,203-207,244-245,266-267,343,358,364,367-368,373-387,400,407,434-437,451-462,464-465,470,500,502-503,509,512-524,530,559-571,574,634,636-639,647,649,662,670,675-679,770,775,796,798-801,804,812-822,856-858,864-872,877,906-909,911-914
+crates/email/src/outbound/mailbox_pg/progress.rs
+  s_024592623b7afc::t_e318f9fbac229c 65-66,68,124
+crates/team_agents/src/outbound/hosted_runtimes_computers.rs
+  s_024592623b7afc::t_e318f9fbac229c 89,95,124-134,186-190,201,205-206
+services/search_processing_service/README.md
+  s_024592623b7afc::t_e318f9fbac229c 156,213,215,233,248-256
+  s_024592623b7afc::t_5803f360215736 257
+crates/scheduled_action/src/swagger.rs
+  s_024592623b7afc::t_e318f9fbac229c 67,126
+apps/web/src/components/view-shell/CollapsibleSection.tsx
+  s_024592623b7afc::t_e318f9fbac229c 12-14,23-26,30-36,41-45,48-68,74-85,94
+apps/web/src/components/view-shell/primitives/create-sidebar-section-order.ts
+  s_024592623b7afc::t_e318f9fbac229c 1-92
+crates/agent_harness/src/domain/ports.rs
+  s_024592623b7afc::t_e318f9fbac229c 189-198,208-209,214
+apps/web/src/features/drive-view/views/drive-sidebar.tsx
+  s_024592623b7afc::t_e318f9fbac229c 7,130-143,146-147,151-156,173-174,178-183,190-191,349-360,363
+crates/opensearch_client/src/test_support.rs
+  s_024592623b7afc::t_e318f9fbac229c 91-166
+docs/agent-guide/ai-chat.md
+  s_024592623b7afc::t_e318f9fbac229c 1034-1050,1436-1442,1463-1467,1527-1528,1544-1546,1610-1611
+crates/code_execution/src/domain/service/test.rs
+  s_024592623b7afc::t_38a3c9cd6fa62b 563
+  s_024592623b7afc::t_9870c5ce55b6e4 268
+  s_024592623b7afc::t_e318f9fbac229c 23-41,55,108,194-267,269-394,406-562,564-575
+apps/web/src/lib/queries/email/local-draft-source.test.ts
+  s_024592623b7afc::t_e318f9fbac229c 18-21,23,25,47-59,63,77,83-172,212
+services/agent_harness_service/src/routine_sessions/test.rs
+  s_024592623b7afc::t_e318f9fbac229c 1-188
+services/calendar_service/Cargo.toml
+  s_024592623b7afc::t_e318f9fbac229c 29
+crates/email/src/outbound/email_pg_repo/dynamic/query.rs
+  s_024592623b7afc::t_e318f9fbac229c 9,1241-1280,1290,1311,1321,1331,1358,1368,1378-1379,1397-1398,1478-1487
+rules/ast-grep/email-domain-no-concrete-io.yml
+  s_024592623b7afc::t_e318f9fbac229c 22,74
+tooling/xtask/crates/xtask_local/src/local/passwords_vault/test.rs
+  s_024592623b7afc::t_e318f9fbac229c 1-49
+crates/email/src/outbound/email_pg_repo/thread.rs
+  s_024592623b7afc::t_e318f9fbac229c 310-311,318-326,330-352,358,360
+crates/routine_program/src/model.rs
+  s_024592623b7afc::t_e318f9fbac229c 115-125
+apps/web/src/features/passwords/components/item-detail.tsx
+  s_024592623b7afc::t_e318f9fbac229c 188-190,530,543
+crates/agent_code_mode/src/domain/service/test.rs
+  s_024592623b7afc::t_f2f0227e53c5d4 195
+  s_024592623b7afc::t_e318f9fbac229c 120-137,179-194,196-212,417-424,503-510,668-675
+docs/agent-guide/pull-requests.md
+  s_024592623b7afc::t_e318f9fbac229c 114-115
+apps/web/src/lib/core/mobile/IosPushNotificationModal.tsx
+  s_024592623b7afc::t_e318f9fbac229c 25-26
+apps/web/src/features/routines/components/routine-code-step.tsx
+  s_024592623b7afc::t_e318f9fbac229c 6,44-47,82,89-93
+crates/agent_code_mode/src/inbound/toolset/guides/templates.md
+  s_024592623b7afc::t_e318f9fbac229c 3,6
+crates/email/src/outbound/email_pg_repo/dynamic/query/team_scope/selected_match.sql
+  s_024592623b7afc::t_e318f9fbac229c 7
+crates/hosted_runtimes/src/domain/operator/test/redeploy.rs
+  s_024592623b7afc::t_e318f9fbac229c 308
+crates/email/src/outbound/mailbox_pg/ingest.rs
+  s_024592623b7afc::t_e318f9fbac229c 304,308,310-315
+crates/outlook_emulator/src/fault.rs
+  s_024592623b7afc::t_e318f9fbac229c 240-243,277-281
+docs/design/passwords.md
+  s_024592623b7afc::t_e318f9fbac229c 16-26
+packages/sdk/src/entities/calendar/booking.ts
+  s_024592623b7afc::t_e318f9fbac229c 100-104
+apps/web/src/features/external-view/external-view.tsx
+  s_024592623b7afc::t_e318f9fbac229c 148-151,159-170,193-197
+crates/email/src/outbound/mailbox_pg/drafts/test/delivery_status.rs
+  s_024592623b7afc::t_e318f9fbac229c 97-163
+crates/suggestion_generation/bench/personas.test.ts
+  s_024592623b7afc::t_e318f9fbac229c 1-58
+packages/code-mode-sdk/scripts/generate.ts
+  s_024592623b7afc::t_e318f9fbac229c 194,219-223,226
+crates/crm/src/outbound.rs
+  s_024592623b7afc::t_e318f9fbac229c 34-37
+services/document_storage_service/AGENTS.md
+  s_024592623b7afc::t_e318f9fbac229c 21,62-69,118-120,193-194
+crates/macro_db_client/migrations/20261119053512_in_progress_user_link_identity_release.sql
+  s_024592623b7afc::t_e318f9fbac229c 1-10
+apps/web/tests/email-e2e/ledger/manifest/elsewhere.ts
+  s_024592623b7afc::t_e318f9fbac229c 485-486,530-537,808-815
+  s_024592623b7afc::t_f7960e828ac257 816
+services/agent_harness_service/Cargo.toml
+  s_024592623b7afc::t_e318f9fbac229c 170
+docs/agent-guide/passwords.md
+  s_024592623b7afc::t_e318f9fbac229c 71-85,156
+crates/email/src/outbound/mailbox_pg/gmail_history.rs
+  s_024592623b7afc::t_e318f9fbac229c 16-24,26
+apps/web/src/features/routines/routine-creator.test.tsx
+  s_024592623b7afc::t_e318f9fbac229c 1-2,1046-1065
+  s_024592623b7afc::t_9f51f04dd2acd5 1066
+apps/web/src/features/entity-appearance/views/appearance-editor.tsx
+  s_024592623b7afc::t_e318f9fbac229c 5,15,18,68
+services/agent_harness_service/src/internal_mcp.rs
+  s_024592623b7afc::t_e318f9fbac229c 142
+crates/suggestion_generation/AGENTS.md
+  s_024592623b7afc::t_e318f9fbac229c 18-21,133-134
+crates/opensearch_query_builder/src/query.rs
+  s_024592623b7afc::t_e318f9fbac229c 8,27,52-53,83,173-174
+  s_024592623b7afc::t_54bbb493cfeda1 175
+crates/scheduled_action/src/domain/ports.rs
+  s_024592623b7afc::t_e318f9fbac229c 34-90,315-317,323,408-414,714-731
+  s_024592623b7afc::t_37e07b9b30644b 732
+crates/passwords/src/domain/models/import.rs
+  s_024592623b7afc::t_e318f9fbac229c 138-139,151
+crates/agent_code_mode/src/inbound/toolset/session/execute_code.md
+  s_024592623b7afc::t_e318f9fbac229c 1
+apps/web/src/features/routines/queries/keys.ts
+  s_024592623b7afc::t_e318f9fbac229c 26-29
+crates/opensearch_client/src/project.rs
+  s_024592623b7afc::t_e318f9fbac229c 4-8,43
+apps/web/src/features/routines/core/routine-draft.ts
+  s_024592623b7afc::t_e318f9fbac229c 246-252,254,258-261
+apps/web/src/lib/analytics/posthog.test.tsx
+  s_024592623b7afc::t_e318f9fbac229c 14,81,183-206
+  s_024592623b7afc::t_ec69f4580b9855 207
+packages/sdk/generated/scheduled-action/sdk.gen.ts
+  s_024592623b7afc::t_e318f9fbac229c 5,275-276
+  s_024592623b7afc::t_d49508ce70a6c5 277-278
+apps/web/src/features/saved-views/AGENTS.md
+  s_024592623b7afc::t_e318f9fbac229c 19,25
+services/search_processing_service/src/outbound/backfill_control.rs
+  s_024592623b7afc::t_e318f9fbac229c 1-66
+services/search_processing_service/src/api/context.rs
+  s_024592623b7afc::t_e318f9fbac229c 12,26-29
+crates/agent_code_mode/src/inbound/toolset/test.rs
+  s_024592623b7afc::t_e318f9fbac229c 132-137,635-720,722-745
+  s_024592623b7afc::t_4a2390d57e33c8 634,721
+crates/agent_code_mode/src/inbound/toolset.rs
+  s_024592623b7afc::t_e318f9fbac229c 143,168,170,470,484,486
+apps/web/src/lib/core/constant/settingsTabsConfig.tsx
+  s_024592623b7afc::t_e318f9fbac229c 70,103-104,112,138,171,219,247,288,435,446
+apps/web/src/components/app/mobile/MobileDrawer.tsx
+  s_024592623b7afc::t_e318f9fbac229c 14,346-348,355-362,368-369,371-375,380-381,388-396,404,407
+apps/web/src/components/view-shell/ViewSidebar.tsx
+  s_024592623b7afc::t_e318f9fbac229c 7,21-23,30-33,35-46,301-304,307-309,317-323,532-533
+crates/calendar_scheduling/src/domain/ports.rs
+  s_024592623b7afc::t_e318f9fbac229c 48-58
+crates/email/src/outbound/email_pg_repo.rs
+  s_024592623b7afc::t_e318f9fbac229c 15,17,54-84,88,93-103,224-232
+crates/macro_db_client/src/in_progress_user_link.rs
+  s_024592623b7afc::t_e318f9fbac229c 26,106-108,120,194-197,203-210,219-283,289,295-296,301-302
+Cargo.toml
+  s_024592623b7afc::t_e318f9fbac229c 227
+apps/web/src/features/reviews-view/components/ReviewsSidebar.tsx
+  s_024592623b7afc::t_e318f9fbac229c 162-173,209-220,263-274,334,369-392
+nix/cloud-storage.nix
+  s_024592623b7afc::t_e318f9fbac229c 659-662
+  s_024592623b7afc::t_a16005f51b16c9 658
+packages/sdk/src/entities/ui/namespace.ts
+  s_024592623b7afc::t_e318f9fbac229c 47,49-54
+services/calendar_service/src/api/context.rs
+  s_024592623b7afc::t_e318f9fbac229c 15,24,47
+apps/web/src/features/routines/queries/unusable-items.test.ts
+  s_024592623b7afc::t_e318f9fbac229c 1-19
+crates/passwords/src/domain/service/import/test.rs
+  s_024592623b7afc::t_e318f9fbac229c 381,723-777
+apps/web/src/features/notifications/PendingNotificationNavigationEffect.tsx
+  s_024592623b7afc::t_e318f9fbac229c 2,130-132,161-163
+packages/sdk/generated/agent-harness/types.gen.ts
+  s_024592623b7afc::t_fcac5732d4f0d8 2084
+services/agent_harness_service/src/internal_mcp/test/code_mode.rs
+  s_024592623b7afc::t_e318f9fbac229c 75-84,88-89,358-363
+apps/web/src/features/tasks-view/components/TasksHeader.tsx
+  s_024592623b7afc::t_e318f9fbac229c 11,37-40,52-56
+crates/crm/src/outbound/companies_repo/email_policy/mutations.rs
+  s_024592623b7afc::t_e318f9fbac229c 4-6,46-61
+  s_024592623b7afc::t_05952a78b2a76a 62-63
+crates/opensearch_client/src/search/agent_sessions/test.rs
+  s_024592623b7afc::t_e318f9fbac229c 37
+apps/web/src/features/routines/components/routine-knob-entity.tsx
+  s_024592623b7afc::t_e318f9fbac229c 1-279
+apps/web/src/lib/queries/mutation-coverage.test.ts
+  s_024592623b7afc::t_e318f9fbac229c 25-26
+apps/web/src/features/email-thread/thread-read-adapter.ts
+  s_024592623b7afc::t_e318f9fbac229c 29-32,37,43-88,98-99,102,116
+crates/outlook_emulator/src/mailbox.rs
+  s_024592623b7afc::t_e318f9fbac229c 625-651
+docs/agent-guide/email.md
+  s_024592623b7afc::t_e318f9fbac229c 61-69,813-815,826-830,934-936,1167-1175,1186-1190,1342-1344,1419-1422,1627-1630,1812
+  s_024592623b7afc::t_97e1f2563f0c26 1813
+services/search_processing_service/src/domain/mod.rs
+  s_024592623b7afc::t_e318f9fbac229c 11-12
+apps/web/AGENTS.md
+  s_024592623b7afc::t_e318f9fbac229c 420,662-666,1220,1516-1532,2050-2053
+packages/sdk/src/entities/crm-email-privacy/email-privacy.ts
+  s_024592623b7afc::t_e318f9fbac229c 164-165,192-193
+crates/email/src/outbound/mailbox_pg/gmail_history/test.rs
+  s_024592623b7afc::t_e318f9fbac229c 85-169
+apps/web/src/lib/core/component/LexicalMarkdown/builder/MarkdownShell.tsx
+  s_024592623b7afc::t_e318f9fbac229c 241-248
+services/authentication_service/AGENTS.md
+  s_024592623b7afc::t_e318f9fbac229c 51,281-292
+apps/web/src/features/routines/components/routine-connections.test.tsx
+  s_024592623b7afc::t_e318f9fbac229c 1-41
+services/email_service/src/outbound/mailbox_init.rs
+  s_024592623b7afc::t_e318f9fbac229c 406
+services/search_processing_service/src/process/chat/test.rs
+  s_024592623b7afc::t_e318f9fbac229c 1-90
+packages/sdk/specs/scheduled-action.json
+  s_024592623b7afc::t_e318f9fbac229c 1887-1948,3437-3443,4101-4107,4115-4121,5009-5015,5174-5210,5215-5251,6730-6766
+crates/macro_db_client/AGENTS.md
+  s_024592623b7afc::t_e318f9fbac229c 42,45-49
+  s_024592623b7afc::t_97d03564a0bfc7 50
+crates/email_api_client/AGENTS.md
+  s_024592623b7afc::t_e318f9fbac229c 111-113
+apps/web/tests/email-e2e/full-stack-notifications.spec.ts
+  s_024592623b7afc::t_e318f9fbac229c 3-5,7,11,39-110,161-192,301-391
+  s_024592623b7afc::t_1bcd4e3094bd75 392-393
+apps/web/src/features/block-canvas/browser-test/touch-layout.browser.e2e.ts
+  s_024592623b7afc::t_e318f9fbac229c 578-581,584,592,631-635,736-798
+  s_024592623b7afc::t_12f04d0cd95362 799-800
+crates/code_execution/src/domain/operations/test.rs
+  s_024592623b7afc::t_e318f9fbac229c 1-21
+services/search_processing_service/src/domain/service/test.rs
+  s_024592623b7afc::t_e318f9fbac229c 1,92,94,102,140-146,159-233,247-253,286-292,311-317,333-339,354-360,377-383,448-454,486-492,506,510,520-526,540-546,575,578,586-592,611,614,629-635,726-732,761-767,786-792,807-813,856-862,894-900,944-950,958-1086
+crates/hosted_runtimes/src/domain/ports.rs
+  s_024592623b7afc::t_e318f9fbac229c 350-357,447-450,465
+crates/hosted_runtimes/src/domain/service.rs
+  s_024592623b7afc::t_e318f9fbac229c 229-230,236-243,271-274
+crates/code_execution/src/outbound/deno/check/test.rs
+  s_024592623b7afc::t_e318f9fbac229c 14,30-36,50-53,75-78,105-108,124,128-130,152-156,162-166,188-190,196-248,255-258
+docs/agent-guide/canvas.md
+  s_024592623b7afc::t_e318f9fbac229c 51-56
+apps/web/src/lib/core/component/Toast/ToastRegion.test.tsx
+  s_024592623b7afc::t_e318f9fbac229c 29,40-80
+  s_024592623b7afc::t_b23fefb0e8e10f 81
+crates/opensearch_client/src/search/documents.rs
+  s_024592623b7afc::t_e318f9fbac229c 9,17,278,328,332-335
+apps/web/src/lib/core/util/nativeImageSrc.ts
+  s_024592623b7afc::t_e318f9fbac229c 1-104
+docs/agent-guide/toasts.md
+  s_024592623b7afc::t_e318f9fbac229c 15-18
+apps/web/tests/email-e2e/states-compose-elsewhere.spec.ts
+  s_024592623b7afc::t_e318f9fbac229c 174-178,199
+crates/opensearch_client/src/delete/call_record.rs
+  s_024592623b7afc::t_e318f9fbac229c 5-6,15-18,20-24,36-47,49-50,56-57
+crates/hosted_runtimes/AGENTS.md
+  s_024592623b7afc::t_e318f9fbac229c 21,125-130,138-139,142-144,153-156
+apps/web/src/components/ui/components/CollapsedInput.tsx
+  s_024592623b7afc::t_e318f9fbac229c 107-111
+apps/web/src/lib/queries/email/send-queue.test.ts
+  s_024592623b7afc::t_e318f9fbac229c 25,54,91,320-380
+tooling/xtask/crates/xtask_local/src/local/local_env.rs
+  s_024592623b7afc::t_e318f9fbac229c 24-26,145,794-796
+crates/email/src/outbound/email_pg_repo/dynamic/query/team_scope/selected_participants.sql
+  s_024592623b7afc::t_e318f9fbac229c 1-17
+apps/web/src/components/view-shell/SidebarSection.tsx
+  s_024592623b7afc::t_e318f9fbac229c 1-83
+crates/coding_agent_worker/src/agent_env.rs
+  s_024592623b7afc::t_e318f9fbac229c 19-31,39,41,54-62,64,66,73-74
+services/agent_harness_service/src/scheduling.rs
+  s_024592623b7afc::t_e318f9fbac229c 19,37-38,66,452-523,546-549,558,583-601,676-677,826-828,859-866,928,930,941
+services/email_service/src/outbound/inbox_connection/transactions.rs
+  s_024592623b7afc::t_e318f9fbac229c 3,97-120
+crates/agent_harness/src/outbound/forward.rs
+  s_024592623b7afc::t_e318f9fbac229c 120-122,141-146,148
+apps/web/src/features/routines/components/routine-steps.tsx
+  s_024592623b7afc::t_e318f9fbac229c 27,64-65,82-83,102
+services/search_processing_service/src/process/worker.rs
+  s_024592623b7afc::t_e318f9fbac229c 1-2,5-6,12-53,56-57,59,64-81,85,95-114,123-126,136-138,141-287,290-400
+apps/web/src/features/channel/Call/views/CallParticipantTiles.tsx
+  s_024592623b7afc::t_e318f9fbac229c 141
+crates/comms_db_client/src/channels/channel_exists.rs
+  s_024592623b7afc::t_e318f9fbac229c 1-14
+crates/scheduled_action/src/domain/suggestions/test.rs
+  s_024592623b7afc::t_e318f9fbac229c 248-253,257-263,279,1110-1138
+rules/ast-grep/email-inbound-no-concrete-io.yml
+  s_024592623b7afc::t_e318f9fbac229c 31,83
+apps/web/src/lib/queries/email/local-draft-source.ts
+  s_024592623b7afc::t_e318f9fbac229c 8,17,19,24-39,41-44,49,59,61-62,64,67-70,78-81,83,86,88-91,93-97
+apps/web/src/observability/desktop.ts
+  s_024592623b7afc::t_e318f9fbac229c 1,10,12,236-260
+  s_024592623b7afc::t_e44917d8c86cde 261
+crates/agent_runtime_protocol/Cargo.toml
+  s_024592623b7afc::t_e318f9fbac229c 18
+apps/web/src/features/routines/core/routine-steps.ts
+  s_024592623b7afc::t_e318f9fbac229c 171-177
+packages/sdk/generated/storage/sdk.gen.ts
+  s_024592623b7afc::t_e318f9fbac229c 5,4568-4581,4938-4940,4947
+  s_024592623b7afc::t_20bfdc341d1b1b 4941-4946,4948
+crates/email/src/outbound/mailbox_pg/drafts.rs
+  s_024592623b7afc::t_e318f9fbac229c 249,275,348
+apps/web/src/lib/core/component/LexicalMarkdown/component/decorator/MarkdownImage.tsx
+  s_024592623b7afc::t_e318f9fbac229c 9,90-94,202,346,363-368,371,431,433
+packages/sdk/src/macro.ts
+  s_024592623b7afc::t_e318f9fbac229c 601
+crates/system_skills/src/compose_routines/instructions.md
+  s_024592623b7afc::t_e318f9fbac229c 23,37-41,54
+services/email_service/src/api/context.rs
+  s_024592623b7afc::t_e318f9fbac229c 41
+crates/opensearch_query_builder/src/query/match_bool_prefix.rs
+  s_024592623b7afc::t_e318f9fbac229c 1-63
+crates/scheduled_action/src/domain/suggestions/decode.rs
+  s_024592623b7afc::t_e318f9fbac229c 217-218,248-249
+services/search_freshness_probe/src/lib.rs
+  s_024592623b7afc::t_e318f9fbac229c 1-8
+packages/sdk/specs/calendar.json
+  s_024592623b7afc::t_e318f9fbac229c 1065-1067
+apps/web/src/features/calendar/hooks/use-calendar-accounts.test.ts
+  s_024592623b7afc::t_e318f9fbac229c 14,25,37,57,70-80,85-86,90-91,107,131
+packages/sdk/generated/calendar/types.gen.ts
+  s_024592623b7afc::t_e318f9fbac229c 2298-2301
+apps/web/tests/email-e2e/scheduled-failure.spec.ts
+  s_024592623b7afc::t_e318f9fbac229c 4,11,18-22,47,89,183-187,198-229
+services/agent_harness_service/src/config.rs
+  s_024592623b7afc::t_e318f9fbac229c 17
+apps/web/src/features/entity-appearance/queries/appearance-saved-views.test.ts
+  s_024592623b7afc::t_e318f9fbac229c 1-278
+apps/web/src/features/property/tags/SidebarTagsSection.tsx
+  s_024592623b7afc::t_e318f9fbac229c 81-82
+apps/web/src/components/app/mobile/navigation-browser-test/sheets-close-on-navigation.browser.e2e.ts
+  s_024592623b7afc::t_e318f9fbac229c 1-119
+services/search_processing_service/src/inbound/kafka_consumer/test.rs
+  s_024592623b7afc::t_e318f9fbac229c 3463-3582,3734-3746
+crates/team_agents/src/domain/service.rs
+  s_024592623b7afc::t_e318f9fbac229c 471-473
+crates/complete_graph/src/saved_view.rs
+  s_024592623b7afc::t_e318f9fbac229c 21-22,40,152-153,217
+apps/web/src/components/app/split-layout/tests/parked-split-discard.test.ts
+  s_024592623b7afc::t_e318f9fbac229c 1-61
+apps/web/src/features/channel/Call/open-channel-call-tab.ts
+  s_024592623b7afc::t_e318f9fbac229c 3-6,26-29,32-34
+tooling/just/xtask.just
+  s_024592623b7afc::t_e318f9fbac229c 27-32
+crates/email/src/outbound/email_pg_repo/draft_resolution.rs
+  s_024592623b7afc::t_e318f9fbac229c 97
+crates/macro_db_client/migrations/20261119171842_scheduling_booking_processing.down.sql
+  s_024592623b7afc::t_e318f9fbac229c 1-2
+crates/coding_agent_worker/src/agent_env/test.rs
+  s_024592623b7afc::t_e318f9fbac229c 5-15,34,57-58,72-75,90-106
+crates/routine_program/src/validate/test.rs
+  s_024592623b7afc::t_e318f9fbac229c 255-288
+crates/hosted_runtimes/src/inbound/axum_router.rs
+  s_024592623b7afc::t_e318f9fbac229c 723
+services/search_freshness_probe/src/outbound.rs
+  s_024592623b7afc::t_e318f9fbac229c 1-8
+apps/web/src/features/property/editors/selectors/entityUtils.ts
+  s_024592623b7afc::t_e318f9fbac229c 29,73-87
+  s_024592623b7afc::t_4b7feb8e34c677 88-89
+services/search_processing_service/src/outbound/source/test.rs
+  s_024592623b7afc::t_e318f9fbac229c 36,47,73-78,120-125
+apps/web/src/observability/browser.test.ts
+  s_024592623b7afc::t_e318f9fbac229c 49,103
+crates/scheduled_action/src/domain/suggestions/prompt/test.rs
+  s_024592623b7afc::t_e318f9fbac229c 13,87-121
+apps/web/src/features/routines/core/routine-steps.test.ts
+  s_024592623b7afc::t_e318f9fbac229c 7,139-165
+  s_024592623b7afc::t_d3166499082c13 166
+apps/web/tests/email-e2e/states-send3-queue.spec.ts
+  s_024592623b7afc::t_e318f9fbac229c 25,65,78-90,92-138
+crates/sqs_worker/src/lib.rs
+  s_024592623b7afc::t_e318f9fbac229c 42-63
+apps/web/src/observability/browser.ts
+  s_024592623b7afc::t_e318f9fbac229c 18,153-156
+crates/code_execution/src/domain/context.rs
+  s_024592623b7afc::t_e318f9fbac229c 1-55
+crates/passwords/src/inbound/router/test/admission.rs
+  s_024592623b7afc::t_e318f9fbac229c 40
+apps/web/src/features/email-view/AGENTS.md
+  s_024592623b7afc::t_e318f9fbac229c 48,50-52,56
+crates/opensearch_client/src/search/model.rs
+  s_024592623b7afc::t_e318f9fbac229c 366-377
+crates/agent_code_mode/src/domain/documentation/test.rs
+  s_024592623b7afc::t_e318f9fbac229c 410-411
+crates/passwords/src/inbound/router/test.rs
+  s_024592623b7afc::t_e318f9fbac229c 130-131,696-699
+  s_024592623b7afc::t_7de014eb673c4a 700
+apps/web/src/features/routines/queries/routine-sources.ts
+  s_024592623b7afc::t_e318f9fbac229c 15,18,41,44,128-137,210
+crates/hosted_runtimes/src/domain/lifecycle/test/first_start.rs
+  s_024592623b7afc::t_e318f9fbac229c 291-370
+apps/web/src/features/saved-views/saved-view-appearance.tsx
+  s_024592623b7afc::t_e318f9fbac229c 1-33
+services/search_processing_service/src/domain/service.rs
+  s_024592623b7afc::t_e318f9fbac229c 10,33,44,47-49,57-61,73-76,138,147,152,168,179,182-184,192-196,202-216,224,237,253-266,268-274,281-284,299,311,324,326,338,350,362-368,378,390
+apps/web/src/features/property/editors/selectors/PropertyEntitySelector.test.tsx
+  s_024592623b7afc::t_e318f9fbac229c 1-156
+apps/web/src/lib/core/component/Toast/ToastRegion.tsx
+  s_024592623b7afc::t_e318f9fbac229c 9,13,56-74,82-85
+packages/sdk/src/entities/routines/namespace.ts
+  s_024592623b7afc::t_e318f9fbac229c 10-16,41-43,47,124-126,135-136,138-147,199-202,216-219,221,233-234
+services/search_processing_service/src/process/channel/test.rs
+  s_024592623b7afc::t_e318f9fbac229c 91-146
+docs/runbooks/routine-suggestions.md
+  s_024592623b7afc::t_e318f9fbac229c 10-17,32-36
+crates/opensearch_client/AGENTS.md
+  s_024592623b7afc::t_e318f9fbac229c 101-107,119-123
+apps/web/src/features/routines/routine-detail.test.tsx
+  s_024592623b7afc::t_e318f9fbac229c 2,22-25,71,151-158,223,320,384,1141-1254
+crates/complete_graph/Cargo.toml
+  s_024592623b7afc::t_e318f9fbac229c 68
+crates/suggestion_generation/bench/personas.ts
+  s_024592623b7afc::t_e318f9fbac229c 81-135,141-143,149-152,156-158,219-239
+  s_024592623b7afc::t_cee1136025618d 240
+docs/runbooks/firecracker-computers-rollout.md
+  s_024592623b7afc::t_e318f9fbac229c 80-84,124-129,148-152
+crates/soup/src/inbound/axum_router.rs
+  s_024592623b7afc::t_e318f9fbac229c 943-945,971-973,976-979,983,1026,1106,1175
+crates/agent_harness/src/inbound/runtime_gateway/test.rs
+  s_024592623b7afc::t_e318f9fbac229c 331-349
+infra/stacks/monitoring/monitors/search-freshness.ts
+  s_024592623b7afc::t_e318f9fbac229c 48-66,81-83,109-123,133-136,227-264,408-464
+packages/sdk/src/entities/databases/namespace.ts
+  s_024592623b7afc::t_e318f9fbac229c 20,25-27
+crates/agent_code_mode/src/domain/user/test.rs
+  s_024592623b7afc::t_e318f9fbac229c 30-37,190-243
+services/email_service/src/outbound/inbox_connection/test.rs
+  s_024592623b7afc::t_e318f9fbac229c 1-148
+crates/code_execution/src/outbound/ocaml/check.rs
+  s_024592623b7afc::t_c635949712b133 88-93,100,107-108,124
+crates/crm/src/outbound/email_rule_discovery.rs
+  s_024592623b7afc::t_e318f9fbac229c 1-608
+docs/agent-guide/setup-cards.md
+  s_024592623b7afc::t_e318f9fbac229c 89-95,164-165
+docs/architecture/email.md
+  s_024592623b7afc::t_e318f9fbac229c 183-188
+crates/email/src/outbound/email_pg_repo/draft_transfer.rs
+  s_024592623b7afc::t_e318f9fbac229c 513
+crates/agent_session/src/outbound/activity_summarizer/test.rs
+  s_024592623b7afc::t_e318f9fbac229c 28-37
+apps/web/src/features/passwords/tests/unreachable.test.tsx
+  s_024592623b7afc::t_e318f9fbac229c 1,17-18,73,81,143,153-242
+  s_024592623b7afc::t_813b83feb9e8b4 243
+infra/stacks/monitoring/routing.test.ts
+  s_024592623b7afc::t_e318f9fbac229c 228-230
+apps/web/src/features/passwords/tests/vault.test.tsx
+  s_024592623b7afc::t_e318f9fbac229c 844-895
+docs/CRM_EMAIL_PRIVACY.md
+  s_024592623b7afc::t_e318f9fbac229c 199-200,204-206,373-379,383-439,454-482
+  s_024592623b7afc::t_b0e1e57c20bc43 483
+crates/email/src/outbound/email_pg_repo/dynamic/query/team_scope/viewed.rs
+  s_024592623b7afc::t_e318f9fbac229c 1-201
+apps/web/src/features/passwords/queries/source.ts
+  s_024592623b7afc::t_e318f9fbac229c 50-53,55-57,83-84,86-90,94,96,101-112,118-122,136-140,144-145,174-178,190-222,235-241,287-293,309-315,353-360
+  s_024592623b7afc::t_890347fbb80c51 361
+services/search_freshness_probe/src/domain/model.rs
+  s_024592623b7afc::t_e318f9fbac229c 1-226
+apps/web/src/lib/tauri/native-build.ts
+  s_024592623b7afc::t_e318f9fbac229c 1-27
+apps/web/src/features/external-chat/views/external-chat-view.tsx
+  s_024592623b7afc::t_e318f9fbac229c 167-172,174-182,189,521
+services/search_freshness_probe/src/inbound/health.rs
+  s_024592623b7afc::t_e318f9fbac229c 1-10
+services/search_processing_service/src/process/worker/test.rs
+  s_024592623b7afc::t_e318f9fbac229c 1-301
+services/agent_harness_service/src/routine_code.rs
+  s_024592623b7afc::t_7b580cc019fc08 18-20
+  s_024592623b7afc::t_e318f9fbac229c 225-229
+apps/web/src/features/external-chat/AGENTS.md
+  s_024592623b7afc::t_e318f9fbac229c 97-101
+apps/web/src/features/calendar-view/components/SetupStatus.tsx
+  s_024592623b7afc::t_e318f9fbac229c 167,182
+crates/email/src/outbound/mailbox_pg/test/outlook_import.rs
+  s_024592623b7afc::t_e318f9fbac229c 1-7,21-23,27,30,42-43,46,48,84,106,268-444
+crates/code_execution/src/outbound/deno.rs
+  s_024592623b7afc::t_f550829d8f4dfd 1,316-320
+docs/development/android.md
+  s_024592623b7afc::t_e318f9fbac229c 96-100
+packages/sdk/generated/storage/index.ts
+  s_024592623b7afc::t_e318f9fbac229c 4
+crates/agent_harness/src/inbound/runtime_gateway.rs
+  s_024592623b7afc::t_e318f9fbac229c 31-32,49-50,185-188
+services/search_processing_service/src/inbound/kafka_consumer/message.rs
+  s_024592623b7afc::t_e318f9fbac229c 14-16,94,99-112,118-119,121,147
+crates/macro_db_client/migrations/20261118224852_saved_view_appearance.sql
+  s_024592623b7afc::t_e318f9fbac229c 1-3
+crates/saved_views/src/pgsql.rs
+  s_024592623b7afc::t_e318f9fbac229c 14-42,102-103,107-108,110,126-127,129,143,146,152-153,158,173,204,251,256,265-285,287
+crates/agent_code_mode/src/inbound/toolset/session/discovery.md
+  s_024592623b7afc::t_e318f9fbac229c 1,3
+apps/web/src/features/settings/MobileSettingsSheet.test.tsx
+  s_024592623b7afc::t_e318f9fbac229c 45
+apps/web/src/features/block-canvas/views/mobile/canvas-view.tsx
+  s_024592623b7afc::t_e318f9fbac229c 223-237,310,318-322,357-358
+crates/opensearch_client/src/upsert/chat_message.rs
+  s_024592623b7afc::t_e318f9fbac229c 3,14,17,223-225,230,256,277
+crates/scheduled_action/src/domain/drafts/finding/instructions.md
+  s_024592623b7afc::t_e318f9fbac229c 3,23,29
+crates/code_execution/src/domain/service.rs
+  s_024592623b7afc::t_bb633bba408ae9 151-154,261-265
+  s_024592623b7afc::t_e318f9fbac229c 1,13,19-39,43-51,55,61,110,118,138-150,155-260,266-344,429-486
+  s_024592623b7afc::t_5349b2d688c3df 487
+crates/sqs_client/src/search.rs
+  s_024592623b7afc::t_e318f9fbac229c 74-76,80,206-211,213-230,235,249,258,263-264,266-268,270-282,284-330,332-334
+apps/web/src/components/app/mobile/navigation-browser-test/stand-ins/split-panel.tsx
+  s_024592623b7afc::t_e318f9fbac229c 1-12
+services/search_freshness_probe/src/domain/rotation.rs
+  s_024592623b7afc::t_e318f9fbac229c 1-360
+apps/web/src/lib/service-clients/service-storage/graphql/saved-views.graphql
+  s_024592623b7afc::t_e318f9fbac229c 8
+services/search_processing_service/src/api/internal/backfill.rs
+  s_024592623b7afc::t_e318f9fbac229c 29,36,38,52,61,65,75,238-288,295-299,351-366
+apps/web/src/lib/queries/email/local-drafts.ts
+  s_024592623b7afc::t_e318f9fbac229c 27,199-201,203
+apps/web/src/components/view-shell/sidebar-section-context.ts
+  s_024592623b7afc::t_e318f9fbac229c 1-14
+services/calendar_service/src/main.rs
+  s_024592623b7afc::t_e318f9fbac229c 6,112-121,170,206,234,263,289
+crates/opensearch_client/src/upsert/project.rs
+  s_024592623b7afc::t_e318f9fbac229c 3,87-88,94,120,141
+apps/web/src/features/entity-appearance/appearance-dialog.tsx
+  s_024592623b7afc::t_e318f9fbac229c 14,28-31
+apps/web/tests/email-e2e/ways-send-reply.spec.ts
+  s_024592623b7afc::t_e318f9fbac229c 96-97
+packages/starter-agent/behavior/capabilities/secrets/wire.ts
+  s_024592623b7afc::t_e318f9fbac229c 185
+apps/web/src/features/passwords/primitives/vault.ts
+  s_024592623b7afc::t_e318f9fbac229c 6,36,55-59,84-87,211-213,215-222,567-595,764,781
+crates/code_execution/src/outbound/deno/bootstrap.mjs
+  s_024592623b7afc::t_e318f9fbac229c 450,511-537,542
+apps/web/src/lib/queries/email/send-queue.ts
+  s_024592623b7afc::t_e318f9fbac229c 217-226
+services/search_processing_service/src/process/properties/test.rs
+  s_024592623b7afc::t_e318f9fbac229c 1-91
+apps/web/src/lib/queries/email/local-draft-store.ts
+  s_024592623b7afc::t_e318f9fbac229c 23,277-280,287-291,293-317
+crates/passwords/src/domain/service.rs
+  s_024592623b7afc::t_e318f9fbac229c 20-21,45-76,78-103,293-294
+packages/sdk/src/entities/agent-sessions/code-execution.ts
+  s_024592623b7afc::t_e318f9fbac229c 61
+crates/crm/src/outbound/companies_repo/email_privacy/witnesses.sql
+  s_024592623b7afc::t_e318f9fbac229c 1-24
+crates/calendar_scheduling/src/outbound/postgres.rs
+  s_024592623b7afc::t_e318f9fbac229c 159-170,215-223,273-281,345-395
+  s_024592623b7afc::t_f819ebcad955c3 396-397
+crates/code_execution/src/lib.rs
+  s_024592623b7afc::t_e318f9fbac229c 5-6
+crates/email/src/outbound/email_pg_repo/dynamic/query/team_scope/test/selected.rs
+  s_024592623b7afc::t_e318f9fbac229c 6-7,31,51-55,390,434-437,451,459-463,497,506,526,540,550-975
+services/agent_harness_service/src/harness_bindings/test.rs
+  s_024592623b7afc::t_e318f9fbac229c 346-352,355-361,388-394,409-413,431-437,474-487
+services/agent_harness_service/src/public_mcp/tool_service/test.rs
+  s_024592623b7afc::t_e318f9fbac229c 863,871,873-874,879-887,890,905,913,922,928-930,932,935
+services/agent_harness_service/src/scheduling/routine_suggestions.rs
+  s_024592623b7afc::t_e318f9fbac229c 18,20,23,26
+apps/web/src/features/sidebar-promotion/core/promotions.ts
+  s_024592623b7afc::t_e318f9fbac229c 44-54,56,64-96,99
+services/authentication_service/src/api/oauth2/google.rs
+  s_024592623b7afc::t_e318f9fbac229c 189-190,192-193,196-200,208-211,224,236,244,249,254,257-271,274-275
+services/search_freshness_probe/src/outbound/metrics/test.rs
+  s_024592623b7afc::t_e318f9fbac229c 1-147
+apps/web/tests/email-e2e/ledger/full-stack-only.tsv
+  s_024592623b7afc::t_e318f9fbac229c 22,37-38,92,96
+crates/crm/Cargo.toml
+  s_024592623b7afc::t_e318f9fbac229c 47-48
+crates/calendar_scheduling/src/inbound/router.rs
+  s_024592623b7afc::t_e318f9fbac229c 469
+crates/email/src/outbound/email_pg_repo/preview.rs
+  s_024592623b7afc::t_e318f9fbac229c 15,17,22-23,36,44,67,75
+apps/web/src/lib/service-clients/service-scheduled-action/client.ts
+  s_024592623b7afc::t_e318f9fbac229c 76,278-281
+  s_024592623b7afc::t_a6d0f0acee6612 282-284
+services/search_processing_service/src/main.rs
+  s_024592623b7afc::t_e318f9fbac229c 5-7,11-17,19,269-278,287,294,298-305,309-310,317-318,340-341,355,367-368,370-384,415-416,423-425,427-430,440-441
+crates/email/src/outbound/email_pg_repo/dynamic/query/team_scope/test.rs
+  s_024592623b7afc::t_e318f9fbac229c 12,18,118-129,154,181,328-332,337,369,615-622,816-824,839-847
+crates/routine_program/AGENTS.md
+  s_024592623b7afc::t_e318f9fbac229c 26-32,94-103
+docs/design/saved-views.md
+  s_024592623b7afc::t_e318f9fbac229c 236-239
+services/user_link_cleanup_handler/README.md
+  s_024592623b7afc::t_e318f9fbac229c 3-5
+crates/passwords/src/inbound/agent_router.rs
+  s_024592623b7afc::t_e318f9fbac229c 166-167,240,329,346,363,380,394
+crates/email/src/domain/mailbox/progress.rs
+  s_024592623b7afc::t_e318f9fbac229c 104-106,163
+apps/web/src/features/email-compose/tests/reply.ts
+  s_024592623b7afc::t_e318f9fbac229c 20-21
+crates/passwords/src/outbound/postgres/favorites/test.rs
+  s_024592623b7afc::t_e318f9fbac229c 1-149
+crates/suggestion_generation/bench/README.md
+  s_024592623b7afc::t_e318f9fbac229c 36-37,41,89-112,175-177,202-208,334-336
+apps/web/src/features/block-canvas/views/shared/canvas-view-parts.tsx
+  s_024592623b7afc::t_e318f9fbac229c 354-355,504
+crates/routine_program/src/contract/test.rs
+  s_024592623b7afc::t_e318f9fbac229c 121-141
+  s_024592623b7afc::t_9c46c249b37db4 120
+crates/routine_program/src/lib.rs
+  s_024592623b7afc::t_e318f9fbac229c 25-26
+apps/web/tests/email-e2e/ledger/manifest/thread.ts
+  s_024592623b7afc::t_e318f9fbac229c 253,993,1524-1536
+  s_024592623b7afc::t_600ef428588598 1537
+crates/saved_views/src/lib.rs
+  s_024592623b7afc::t_e318f9fbac229c 22-24,45
+packages/graphics/tests/connector-controls.test.ts
+  s_024592623b7afc::t_e318f9fbac229c 149-166
+packages/sdk/generated/scheduled-action/types.gen.ts
+  s_024592623b7afc::t_e318f9fbac229c 295-300,624-628,634-638,1165-1170,1280-1308,1311-1324,2169-2185,3030-3057
+  s_024592623b7afc::t_7eb3be55b5a9c3 3058
+crates/code_execution/src/domain/ports.rs
+  s_024592623b7afc::t_e318f9fbac229c 1,6,9-18,77,85,96
+apps/web/src/features/passwords/tests/item-form.test.tsx
+  s_024592623b7afc::t_e318f9fbac229c 10,19,232-243
+  s_024592623b7afc::t_4e6660b8709952 244
+crates/suggestion_generation/src/domain/service/test.rs
+  s_024592623b7afc::t_e318f9fbac229c 1160,1936-1943
+crates/passwords/src/outbound/openbao/token_cache/test.rs
+  s_024592623b7afc::t_e318f9fbac229c 356-385
+apps/web/src/observability/desktop.test.ts
+  s_024592623b7afc::t_e318f9fbac229c 1,9,163-221
+  s_024592623b7afc::t_518092818a1aa6 222
+crates/email/src/outbound/email_pg_repo/test/shared_thread_reply.rs
+  s_024592623b7afc::t_e318f9fbac229c 9-12,142-217
+  s_024592623b7afc::t_ff0430d3a81bd6 218-220
+apps/web/src/features/scheduling/views/booking-workspace-view.tsx
+  s_024592623b7afc::t_e318f9fbac229c 291-294,302-305,307-368
+apps/web/src/features/channel/browser-test/access-request.browser.e2e.ts
+  s_024592623b7afc::t_e318f9fbac229c 29,74-87
+  s_024592623b7afc::t_56a804c3c705ee 88
+apps/web/src/features/routines/components/routine-connections.tsx
+  s_024592623b7afc::t_e318f9fbac229c 10-11,20,25-37,41-63
+apps/web/src/features/routines/views/routine-detail.tsx
+  s_024592623b7afc::t_e318f9fbac229c 134-135,200,216
+docs/agent-guide/calendar.md
+  s_024592623b7afc::t_e318f9fbac229c 219-221,228-230,232-234,492-493,553-555
+packages/sdk/generated/scheduled-action/index.ts
+  s_024592623b7afc::t_e318f9fbac229c 4
+crates/hosted_runtimes/src/domain/operator/test/agent.rs
+  s_024592623b7afc::t_e318f9fbac229c 94-133
+apps/web/src/features/entity-appearance/queries/appearance.ts
+  s_024592623b7afc::t_e318f9fbac229c 15-17,22,29,32,41-43,48,50-54,57,66,70-82,91,122,145,160,167-168,214,220,228-232,252,255,259,267-268,273,277-281,294,305,307,383
+crates/scheduled_action/src/domain/drafts/finding/test.rs
+  s_024592623b7afc::t_e318f9fbac229c 10-11,1035-1056
+  s_024592623b7afc::t_01a1688ddf523e 1057
+apps/web/src/components/view-shell/SidebarSectionDragHandle.tsx
+  s_024592623b7afc::t_e318f9fbac229c 1-109
+apps/web/src/features/routines/queries/unusable-items.ts
+  s_024592623b7afc::t_e318f9fbac229c 1-17
+crates/crm/src/outbound/companies_repo/test/population_lifecycle.rs
+  s_024592623b7afc::t_e318f9fbac229c 1-268
+apps/web/src/features/routines/core/routine-apps.test.ts
+  s_024592623b7afc::t_e318f9fbac229c 1-19
+crates/hosted_runtimes/src/domain/lifecycle/test/charging.rs
+  s_024592623b7afc::t_e318f9fbac229c 430-433,464-467
+crates/outlook_emulator/src/test/faults.rs
+  s_024592623b7afc::t_e318f9fbac229c 230-232
+  s_024592623b7afc::t_bb9083b7ff846c 229
+services/search_processing_service/AGENTS.md
+  s_024592623b7afc::t_e318f9fbac229c 73-77,99-104
+apps/web/src/features/passwords/tests/import.test.ts
+  s_024592623b7afc::t_e318f9fbac229c 347-445
+services/search_freshness_probe/src/outbound/metrics.rs
+  s_024592623b7afc::t_e318f9fbac229c 1-70
+crates/code_execution/src/outbound/deno/test/js_tools.rs
+  s_024592623b7afc::t_9870c5ce55b6e4 55
+  s_024592623b7afc::t_9dd94e4d0b25d5 668
+infra/stacks/search-freshness-probe/Pulumi.prod.yaml
+  s_024592623b7afc::t_e318f9fbac229c 1-3
+crates/crm/src/domain/email_rule_discovery/core.rs
+  s_024592623b7afc::t_e318f9fbac229c 1-510
+apps/web/src/components/app/mobile/navigation-browser-test/playwright.config.ts
+  s_024592623b7afc::t_e318f9fbac229c 1-38
+crates/email/src/domain/mailbox/inbox_sync/test/import_fakes.rs
+  s_024592623b7afc::t_e318f9fbac229c 277-282
+packages/sdk/tests/saved-views.test.ts
+  s_024592623b7afc::t_e318f9fbac229c 76-77,80,91,93,100,104,177-268
+apps/web/src/features/entity-appearance/entity-appearance.tsx
+  s_024592623b7afc::t_e318f9fbac229c 12,14,24,50,52-53,55-63,69-71,76-79,82,84,96
+docs/runbooks/queues.md
+  s_024592623b7afc::t_e318f9fbac229c 52-54
+apps/web/src/features/saved-views/components/saved-view-list.tsx
+  s_024592623b7afc::t_e318f9fbac229c 7,24-25,169-173
+crates/macro_db_client/src/in_progress_user_link/test.rs
+  s_024592623b7afc::t_e318f9fbac229c 50,107-178,180-181
+  s_024592623b7afc::t_934cccf1d81f49 179
+apps/web/src/features/tasks-view/primitives/create-task-saved-view-draft.ts
+  s_024592623b7afc::t_e318f9fbac229c 208,212-219
+crates/coding_agent_worker/src/harness.rs
+  s_024592623b7afc::t_e318f9fbac229c 291-292,361,366,375-382,386-388
+apps/web/src/features/routines/core/knobs.test.ts
+  s_024592623b7afc::t_e318f9fbac229c 5,10-12,138-247
+packages/sdk/AGENTS.md
+  s_024592623b7afc::t_e318f9fbac229c 51-59,72-78,106,179,301
+apps/web/tests/email-e2e/ways-thread-state.spec.ts
+  s_024592623b7afc::t_e318f9fbac229c 157-162
+services/search_processing_service/src/domain/backfill_gate.rs
+  s_024592623b7afc::t_e318f9fbac229c 1-217
+crates/crm/src/outbound/companies_repo/email_policy/population.rs
+  s_024592623b7afc::t_e318f9fbac229c 35-37
+crates/macro_db_client/migrations/20261119072854_outlook_subscription_upkeep_failures.up.sql
+  s_024592623b7afc::t_e318f9fbac229c 1-5
+apps/web/tests/email-e2e/ways-compose3-body.spec.ts
+  s_024592623b7afc::t_e318f9fbac229c 99-103
+apps/web/src/features/channels-view/components/rail/next/useSectionReorder.ts
+  s_024592623b7afc::t_e318f9fbac229c 1,7,15-21
+crates/email/src/domain/mailbox.rs
+  s_024592623b7afc::t_e318f9fbac229c 66,716-726
+crates/scheduled_action/AGENTS.md
+  s_024592623b7afc::t_e318f9fbac229c 119-120,125-145,149-151,155,212-225,234-236,425-428
+docs/runbooks/search-freshness.md
+  s_024592623b7afc::t_e318f9fbac229c 10-14,44-46,60-61,66-78,153-200
+  s_024592623b7afc::t_ac69a80428036c 201
+services/search_processing_service/src/process/document/raw_document.rs
+  s_024592623b7afc::t_e318f9fbac229c 37-40,67-82,437-439,540,652-664,691-696
+  s_024592623b7afc::t_f5924a335b956b 697-698
+crates/macro_db_client/migrations/20261119072854_outlook_subscription_upkeep_failures.down.sql
+  s_024592623b7afc::t_e318f9fbac229c 1
+apps/web/src/features/email-thread/queries/thread-source.ts
+  s_024592623b7afc::t_e318f9fbac229c 144-147
+crates/opensearch_client/src/call_record.rs
+  s_024592623b7afc::t_e318f9fbac229c 7,42
+services/search_processing_service/src/domain/backlog.rs
+  s_024592623b7afc::t_e318f9fbac229c 1-24
+crates/email_api_client/src/outbound/outlook/transport.rs
+  s_024592623b7afc::t_e318f9fbac229c 264,362
+crates/hosted_runtimes/src/domain/lifecycle/billing.rs
+  s_024592623b7afc::t_e318f9fbac229c 1-267
+crates/opensearch_query_builder/src/query/match_bool_prefix/test.rs
+  s_024592623b7afc::t_e318f9fbac229c 1-17
+apps/web/src/features/calendar-view/components/ConnectCalendarsPromotion.test.tsx
+  s_024592623b7afc::t_e318f9fbac229c 11,15-18,27-30,33-43,54-55,60,67-68,117-130,137-142,148-196
+  s_024592623b7afc::t_027e07feb88430 197
+apps/web/src/features/channel/SystemActivity.tsx
+  s_024592623b7afc::t_e318f9fbac229c 119
+crates/routine_program/src/validate.rs
+  s_024592623b7afc::t_e318f9fbac229c 6,270-288
+  s_024592623b7afc::t_2be8cdce8fd6ea 289-290
+crates/calendar_events/AGENTS.md
+  s_024592623b7afc::t_e318f9fbac229c 23-30,46-47,235-236
+crates/email/src/outbound/email_pg_repo/dynamic/query/owned_scope/stream_plan.rs
+  s_024592623b7afc::t_e318f9fbac229c 1-167
+apps/web/src/components/view-shell/core/section-order.ts
+  s_024592623b7afc::t_e318f9fbac229c 1-52
+crates/email/src/domain/mailbox/telemetry.rs
+  s_024592623b7afc::t_e318f9fbac229c 25
+apps/web/scripts/android-benchmark/targets.ts
+  s_024592623b7afc::t_e318f9fbac229c 1-135
+apps/web/src/components/ui/components/Dialog.tsx
+  s_024592623b7afc::t_e318f9fbac229c 1,4,43-47,82,112-117
+  s_024592623b7afc::t_f94a447696a2fc 118
+crates/email/src/outbound/email_pg_repo/dynamic/query/team_scope/test/viewed.rs
+  s_024592623b7afc::t_e318f9fbac229c 1-51
+crates/folds/agent_fold/src/domain/model/segment/code_execution.rs
+  s_024592623b7afc::t_e318f9fbac229c 11-23,80-83,85,107-109,113-123,127-133,136,138-144
+crates/outlook_emulator/AGENTS.md
+  s_024592623b7afc::t_e318f9fbac229c 165-167
+crates/opensearch_client/src/delete/chat/test.rs
+  s_024592623b7afc::t_e318f9fbac229c 1-102
+crates/crm/src/domain/email_rule_discovery/ports.rs
+  s_024592623b7afc::t_e318f9fbac229c 1-229
+crates/passwords/src/inbound/agent_router/test.rs
+  s_024592623b7afc::t_e318f9fbac229c 132-146
+.agents/skills/feature-flags/SKILL.md
+  s_024592623b7afc::t_e318f9fbac229c 90-93
+crates/opensearch_client/src/upsert/email.rs
+  s_024592623b7afc::t_e318f9fbac229c 4,152-159,164,217-223,225
+apps/web/src/lib/core/component/AI/component/message/AssistantMessageParts.tsx
+  s_024592623b7afc::t_e318f9fbac229c 4,427-432
+crates/scheduled_action/src/domain/service/test/check.rs
+  s_024592623b7afc::t_e318f9fbac229c 80,110,172-180,182-190,193-201,257,346-421
+crates/crm/src/inbound/axum_router.rs
+  s_024592623b7afc::t_e318f9fbac229c 337-342
+crates/passwords/src/domain/agent.rs
+  s_024592623b7afc::t_e318f9fbac229c 704-706,717
+crates/calendar_events/src/outbound/gateway_refresh/test.rs
+  s_024592623b7afc::t_e318f9fbac229c 1-471
+crates/agent_harness/src/outbound/runtime_registry/test.rs
+  s_024592623b7afc::t_e318f9fbac229c 248,339,400,457
+crates/email/src/domain/scheduled.rs
+  s_024592623b7afc::t_e318f9fbac229c 27,33-34
+crates/suggestion_generation/src/domain/service.rs
+  s_024592623b7afc::t_e318f9fbac229c 912-915
+services/search_processing_service/src/inbound/kafka_consumer/property.rs
+  s_024592623b7afc::t_e318f9fbac229c 10,97,107-114
+services/email_service/src/server.rs
+  s_024592623b7afc::t_e318f9fbac229c 145
+crates/crm/AGENTS.md
+  s_024592623b7afc::t_e318f9fbac229c 95-109,232-243
+apps/web/src/features/email-view/components/EmailFilterDrawer.tsx
+  s_024592623b7afc::t_e318f9fbac229c 2,67-68,70-71
+crates/agent_harness/AGENTS.md
+  s_024592623b7afc::t_e318f9fbac229c 196-200
+apps/web/src/features/routines/components/routine-editor.tsx
+  s_024592623b7afc::t_e318f9fbac229c 6,8,10,63,66-68,145-152,168-179,202-204,211,227-230,235-242,245,283
+crates/suggestion_generation/bench/judge.ts
+  s_024592623b7afc::t_e318f9fbac229c 13,19-25,127-129,135,226-246,254-257,263,270-272,276-294,297-298
+  s_024592623b7afc::t_a97afa644f1e04 299
+apps/web/tests/email-e2e/compose-body.spec.ts
+  s_024592623b7afc::t_e318f9fbac229c 217-221
+crates/hosted_runtimes/src/outbound/pg.rs
+  s_024592623b7afc::t_e318f9fbac229c 792-802
+crates/passwords/src/outbound/openbao/test/not_provisioned.rs
+  s_024592623b7afc::t_e318f9fbac229c 1-95
+apps/web/src/features/block-channel/component/NewChannelBlockAdapter.tsx
+  s_024592623b7afc::t_e318f9fbac229c 202,207
+crates/passwords/src/inbound/router.rs
+  s_024592623b7afc::t_e318f9fbac229c 64-67,185-186,219,301,320,335,349,367,385,400,415,428,449,464,478,492,506,520,531,546,559,573,586,601,616,634-661
+services/search_processing_service/src/config.rs
+  s_024592623b7afc::t_e318f9fbac229c 134-139
+apps/web/src/features/channel/Call/CallControls/CallMediaControls.tsx
+  s_024592623b7afc::t_e318f9fbac229c 177-181
+apps/web/src/lib/core/mobile/IpadUnsupportedDialog.tsx
+  s_024592623b7afc::t_e318f9fbac229c 38-39
+services/agent_harness_service/src/public_mcp/code_mode_instructions.md
+  s_024592623b7afc::t_e318f9fbac229c 1
+infra/local/openbao/README.md
+  s_024592623b7afc::t_e318f9fbac229c 33-54,69
+apps/web/src/components/app/split-layout/SplitLayout.tsx
+  s_024592623b7afc::t_e318f9fbac229c 114,117-118
+crates/email/src/outbound/email_pg_repo/scheduled.rs
+  s_024592623b7afc::t_e318f9fbac229c 136-147
+crates/email/src/outbound/mailbox_pg/test/import_reads.rs
+  s_024592623b7afc::t_e318f9fbac229c 100-106
+apps/web/tauri/desktop-cef/AGENTS.md
+  s_024592623b7afc::t_e318f9fbac229c 31-58
+crates/routine_program/src/code_steps.md
+  s_024592623b7afc::t_e318f9fbac229c 4,6-7,17,21
+crates/email/src/domain/mailbox/watches.rs
+  s_024592623b7afc::t_e318f9fbac229c 14-15,78-80,85,247,257-259,261-264,355-381
+  s_024592623b7afc::t_dc6bd99a806fa3 382-384
+apps/web/src/features/passwords/context/passwords-context.tsx
+  s_024592623b7afc::t_e318f9fbac229c 33-37,42-43,64-65
+apps/web/src/features/block-email/EmailBlockAdapter.test.tsx
+  s_024592623b7afc::t_e318f9fbac229c 2-6,17-23,35,65-68,70,78-79,82-115
+  s_024592623b7afc::t_7aa05c50411dba 116
+apps/web/src/features/passwords/tests/fake-source.ts
+  s_024592623b7afc::t_e318f9fbac229c 42-43,108-114,246-251
+packages/graphics/src/browser/connectors.ts
+  s_024592623b7afc::t_e318f9fbac229c 64,70-74,173
+crates/soup/AGENTS.md
+  s_024592623b7afc::t_e318f9fbac229c 96-97
+services/email_service/AGENTS.md
+  s_024592623b7afc::t_e318f9fbac229c 17-18
+crates/email/src/inbound/axum/axum_impls.rs
+  s_024592623b7afc::t_e318f9fbac229c 46-50
+services/agent_harness_service/src/runtime_commands.rs
+  s_024592623b7afc::t_e318f9fbac229c 46,60,105-110,113,115,118-179,183,186-187,198-202
+deny.toml
+  s_024592623b7afc::t_e318f9fbac229c 233
+apps/web/src/features/calls-view/components/calls-sidebar.tsx
+  s_024592623b7afc::t_e318f9fbac229c 9,79,87-88,92-97,163,176-196,199,218
+crates/opensearch_client/src/upsert/document.rs
+  s_024592623b7afc::t_e318f9fbac229c 6,420-422,428,455,478
+apps/web/src/features/routines/routine-detail.tsx
+  s_024592623b7afc::t_e318f9fbac229c 22,30-34,153-162,174-176,221
+apps/web/tests/email-e2e/README.md
+  s_024592623b7afc::t_e318f9fbac229c 53-57,153-154,258
+docs/agent-guide/tasks.md
+  s_024592623b7afc::t_e318f9fbac229c 49-51,367
+  s_024592623b7afc::t_6eac2ca199363d 368
+services/calendar_service/AGENTS.md
+  s_024592623b7afc::t_e318f9fbac229c 94-97
+apps/web/src/features/routines/queries/compose-routine.test.ts
+  s_024592623b7afc::t_e318f9fbac229c 250-271
+apps/web/scripts/android-benchmark/compare.ts
+  s_024592623b7afc::t_e318f9fbac229c 1-48
+packages/code-mode-sdk/README.md
+  s_024592623b7afc::t_e318f9fbac229c 7-11,13
+crates/crm/src/outbound/companies_repo/email_privacy/interactions.sql
+  s_024592623b7afc::t_e318f9fbac229c 9-10,17,193-201,203-225
+apps/web/src/lib/analytics/posthog.tsx
+  s_024592623b7afc::t_e318f9fbac229c 30-33,38-40,43-45
+apps/web/scripts/android-benchmark/targets.test.ts
+  s_024592623b7afc::t_e318f9fbac229c 1-136
+apps/web/src/features/passwords/core/import.ts
+  s_024592623b7afc::t_e318f9fbac229c 262
+apps/web/tests/email-e2e/ledger/functions.tsv
+  s_024592623b7afc::t_e318f9fbac229c 43
+apps/web/src/components/view-shell/SidebarSections.tsx
+  s_024592623b7afc::t_e318f9fbac229c 1-127
+crates/crm/src/domain/email_rule_discovery.rs
+  s_024592623b7afc::t_e318f9fbac229c 1-235
+apps/web/src/features/passwords/tests/source.test.ts
+  s_024592623b7afc::t_e318f9fbac229c 7-11,486,526-529,534-544,551-557,656-758
+.agents/skills/run-ci/SKILL.md
+  s_024592623b7afc::t_e318f9fbac229c 41-42,89-106
+apps/web/src/features/routines/routine-new.tsx
+  s_024592623b7afc::t_e318f9fbac229c 12-16,61
+crates/calendar_scheduling/src/domain/service/test.rs
+  s_024592623b7afc::t_e318f9fbac229c 74-99,1230-1271
+  s_024592623b7afc::t_b486edd1093dd2 1272-1273
+crates/macro_db_client/migrations/20261119085328_password_item_favorites.up.sql
+  s_024592623b7afc::t_e318f9fbac229c 1-36
+crates/teams/AGENTS.md
+  s_024592623b7afc::t_e318f9fbac229c 57
+crates/agent_code_mode/src/inbound/toolset/shared/entities.md
+  s_024592623b7afc::t_e318f9fbac229c 1
+services/agent_harness_service/src/routine_sessions.rs
+  s_024592623b7afc::t_e318f9fbac229c 12,16-19,24,29,39,48,53-62,64-94,97-99,101,106-129,134-185
+services/document_storage_service/src/api/swagger.rs
+  s_024592623b7afc::t_e318f9fbac229c 243-244,689
+services/agent_harness_service/src/runtime_commands/test.rs
+  s_024592623b7afc::t_e318f9fbac229c 258-259,269-271,292,297-303,320-321,354-355,389-466
+crates/hosted_runtimes/src/domain/service/test/charging.rs
+  s_024592623b7afc::t_e318f9fbac229c 9,374-427
+  s_024592623b7afc::t_b7e8edea984c70 428
+crates/scheduled_action/src/domain/service.rs
+  s_024592623b7afc::t_e318f9fbac229c 4,446,702-753,1016,1024,1031-1032,1037,1249-1258
+services/email_service/src/outbound/inbox_connection.rs
+  s_024592623b7afc::t_e318f9fbac229c 7-8
+services/search_freshness_probe/src/outbound/macro_api.rs
+  s_024592623b7afc::t_e318f9fbac229c 1-180
+apps/web/src/features/channel/Call/CallControls/CallControlBar.tsx
+  s_024592623b7afc::t_e318f9fbac229c 139-144
+crates/scheduled_action/src/domain/target_validation.rs
+  s_024592623b7afc::t_e318f9fbac229c 11-15,34-39,58-64,67-85,90-91,94,98-99,101-109,127-142,145-168
+services/authentication_service/src/domain.rs
+  s_024592623b7afc::t_e318f9fbac229c 4
+apps/web/src/features/routines/views/routine-sections.tsx
+  s_024592623b7afc::t_e318f9fbac229c 12,38-39,114,134
+crates/email/src/outbound/mailbox_pg/catalog.rs
+  s_024592623b7afc::t_e318f9fbac229c 127,131,136,139-143,146-149
+packages/starter-agent/behavior/capabilities/secrets/index.ts
+  s_024592623b7afc::t_e318f9fbac229c 121-122
+crates/agent_code_mode/src/inbound/toolset/test/js_tools.rs
+  s_024592623b7afc::t_a5f0b4252f8628 7,11,48,62-72,74,178,183,340,345,383,392
+crates/email/src/outbound/email_pg_repo/dynamic.rs
+  s_024592623b7afc::t_e318f9fbac229c 13,15
+services/search_freshness_probe/src/domain/watch.rs
+  s_024592623b7afc::t_e318f9fbac229c 1-139
+crates/crm/src/outbound/companies_repo/test/population_locks.rs
+  s_024592623b7afc::t_e318f9fbac229c 13-80
+packages/sdk/specs/storage.json
+  s_024592623b7afc::t_e318f9fbac229c 23288-23297,23356-23365,23436-23445,24334,24461,24823,24943,25070,25272,25339,25417,25476,25574,25747,25814,25965,26041,26100,26176,26238,26549-26668,26731,26809,26871,26940,27011,27070,27138,27197,27265,29292-29371,39394-39404,56312-56313,56768-56769,56914-56915,57150,57302,57521,60950-60960,68784-68794
+crates/calendar_events/src/outbound/mod.rs
+  s_024592623b7afc::t_e318f9fbac229c 9-11
+crates/scheduled_action/src/domain/drafts/apps.md
+  s_024592623b7afc::t_e318f9fbac229c 1-9
+services/calendar_service/src/calendar_backfill.rs
+  s_024592623b7afc::t_e318f9fbac229c 37,64,80,107,317-323,335-337
+crates/opensearch_client/src/delete/mod.rs
+  s_024592623b7afc::t_e318f9fbac229c 2
+crates/email/src/outbound/mailbox_pg/test.rs
+  s_024592623b7afc::t_e318f9fbac229c 11,710-787
+  s_024592623b7afc::t_60837655176cd1 788
+crates/opensearch_client/src/delete/document.rs
+  s_024592623b7afc::t_e318f9fbac229c 15-52,54-60,64-66,69,72-75,77-89,99
+crates/teams/src/outbound/customer_repo/item_changes.rs
+  s_024592623b7afc::t_e318f9fbac229c 77-95
+services/authentication_service/src/domain/google_identity_links/test.rs
+  s_024592623b7afc::t_e318f9fbac229c 1-138
+apps/web/src/features/block-agent/component/AgentMessage.test.tsx
+  s_024592623b7afc::t_e318f9fbac229c 739,772
+crates/passwords/src/domain/service/fakes.rs
+  s_024592623b7afc::t_e318f9fbac229c 23,59,162-165,476-508,535-557,563-567,723-724,727-732,759,775,799,817,843,880,892,906,913,925,938
+apps/web/src/components/app/mobile/navigation-browser-test/fixture.tsx
+  s_024592623b7afc::t_e318f9fbac229c 1-223
+apps/web/src/features/channel/Call/views/MobileCallIsland.tsx
+  s_024592623b7afc::t_e318f9fbac229c 22,56
+apps/web/src/features/tasks-view/AGENTS.md
+  s_024592623b7afc::t_e318f9fbac229c 23,63
+crates/suggestion_generation/bench/score.ts
+  s_024592623b7afc::t_e318f9fbac229c 61-67
+infra/stacks/search-freshness-probe/index.ts
+  s_024592623b7afc::t_e318f9fbac229c 1-27
+services/email_refresh_handler/src/domain/ports.rs
+  s_024592623b7afc::t_e318f9fbac229c 27-32
+apps/web/src/features/entity-appearance/types.ts
+  s_024592623b7afc::t_e318f9fbac229c 1-13
+apps/web/src/features/email-view/views/email-saved-views.tsx
+  s_024592623b7afc::t_e318f9fbac229c 20,58,135,188,257,343-345,510,514,518-519,525,533
+packages/starter-agent/behavior/capabilities/secrets/test/stub.ts
+  s_024592623b7afc::t_e318f9fbac229c 112
+apps/web/src/lib/i18n/locales/en/calls.ts
+  s_024592623b7afc::t_e318f9fbac229c 34
+apps/web/src/features/notifications/PendingNotificationNavigationEffect.test.tsx
+  s_024592623b7afc::t_e318f9fbac229c 15,48,142-161
+  s_024592623b7afc::t_195d06eab97774 162-163
+services/authentication_service/src/outbound/google_identity_links.rs
+  s_024592623b7afc::t_e318f9fbac229c 1-174
+docs/design/crm-selective-email-contribution.md
+  s_024592623b7afc::t_e318f9fbac229c 388-445,622-624,693-735
+crates/agent_code_mode/src/inbound/toolset/user/overview.md
+  s_024592623b7afc::t_e318f9fbac229c 1
+crates/opensearch_client/src/upsert/properties/test.rs
+  s_024592623b7afc::t_e318f9fbac229c 1-92
+services/authentication_service/src/config/test.rs
+  s_024592623b7afc::t_e318f9fbac229c 632-651
+apps/web/src/features/entity-appearance/core/appearance.ts
+  s_024592623b7afc::t_e318f9fbac229c 13
+crates/passwords/src/outbound/postgres/test.rs
+  s_024592623b7afc::t_e318f9fbac229c 870
+apps/web/src/features/block-canvas/README.md
+  s_024592623b7afc::t_e318f9fbac229c 198-205,211-221
+apps/web/src/lib/i18n/locales/en/view-menus.ts
+  s_024592623b7afc::t_e318f9fbac229c 16-24
+crates/complete_graph/AGENTS.md
+  s_024592623b7afc::t_e318f9fbac229c 137
+services/search_processing_service/src/domain/jobs/test.rs
+  s_024592623b7afc::t_e318f9fbac229c 64,133,211-277
+crates/email/src/domain/mailbox/connection/test.rs
+  s_024592623b7afc::t_e318f9fbac229c 102,226,255,338,417,683-741
+crates/scheduled_action/src/outbound.rs
+  s_024592623b7afc::t_e318f9fbac229c 6
+apps/web/src/features/email-view/components/EmailSidebar.tsx
+  s_024592623b7afc::t_e318f9fbac229c 106-127,130-151,153-159,162-172,187,215
+crates/crm/src/lib.rs
+  s_024592623b7afc::t_e318f9fbac229c 30
+apps/web/src/features/block-email/EmailBlockAdapter.tsx
+  s_024592623b7afc::t_e318f9fbac229c 1-2,9,11-12,19,35,63-64,134-160,178
+crates/macro_db_client/migrations/20261119085328_password_item_favorites.down.sql
+  s_024592623b7afc::t_e318f9fbac229c 1-6
+crates/email/src/domain/service/previews.rs
+  s_024592623b7afc::t_e318f9fbac229c 108
+crates/saved_views/src/domain.rs
+  s_024592623b7afc::t_e318f9fbac229c 3,110-116,478,492-494,509,602-636,775,785-791,821,823,834-840
+  s_024592623b7afc::t_d102eb0f3315ea 841
+packages/sdk/src/entities/documents/create.test.ts
+  s_024592623b7afc::t_e318f9fbac229c 24-25
+packages/sdk/src/entities/search/namespace.ts
+  s_024592623b7afc::t_e318f9fbac229c 55-56,63,77
+infra/stacks/search-freshness-probe/package.json
+  s_024592623b7afc::t_e318f9fbac229c 1-7
+crates/scheduled_action/src/inbound/axum_router.rs
+  s_024592623b7afc::t_e318f9fbac229c 9,26,103-107,243-246,352-356,363,830-861,969-971
+packages/sdk/src/entities/routines/routine.ts
+  s_024592623b7afc::t_e318f9fbac229c 4,8-9,27,84-113,120,131-141,158-165,581-589,593-596,604-610,612,618,627
+packages/graphics/src/browser/touch-navigation.ts
+  s_024592623b7afc::t_e318f9fbac229c 12-16,80-87,103,111-113,122-127,263-316,324-325,328-336,338,343-344,353,358,373-380,392-425,430-435,461
+crates/routine_program/src/knob.rs
+  s_024592623b7afc::t_e318f9fbac229c 86-134,137-242,251-252,263-264,269-271,273-277,296-312,318-319,330-337,464-465,479-483
+services/document_storage_service/src/server.rs
+  s_024592623b7afc::t_e318f9fbac229c 471-473,496-498,2357,2361-2362
+services/email_refresh_handler/src/domain/service/test.rs
+  s_024592623b7afc::t_e318f9fbac229c 13-14,23,50-54,79-82,118,270-298
+rules/ast-grep/email-worker-no-runtime-io.yml
+  s_024592623b7afc::t_e318f9fbac229c 26,78,152
+crates/crm/src/domain/service/email_policy_api.rs
+  s_024592623b7afc::t_e318f9fbac229c 182-191,273
+apps/web/src/features/crm/components/pipeline-sidebar.tsx
+  s_024592623b7afc::t_e318f9fbac229c 20-31
+crates/passwords/src/outbound/postgres/favorites.rs
+  s_024592623b7afc::t_e318f9fbac229c 1-77
+crates/ai_tools/AGENTS.md
+  s_024592623b7afc::t_e318f9fbac229c 18-19
+crates/code_execution/src/outbound/deno/exit/test.rs
+  s_024592623b7afc::t_e318f9fbac229c 202-207,262-267
+crates/scheduled_action/src/domain/program_runner.rs
+  s_024592623b7afc::t_e318f9fbac229c 7,29,32-33,44-46,52,62,80,83-89,151,164-172,269-305
+  s_024592623b7afc::t_9e9ee4f371125a 306
+apps/web/scripts/android-benchmark/comparison.test.ts
+  s_024592623b7afc::t_e318f9fbac229c 1-103
+.agents/skills/perf-investigation/SKILL.md
+  s_024592623b7afc::t_e318f9fbac229c 36-40,157-166
+  s_024592623b7afc::t_1e2a7cd8cfc6d2 167-168
+packages/sdk/src/entities/agent-sessions/namespace.ts
+  s_024592623b7afc::t_e318f9fbac229c 28-29
+services/authentication_service/src/api/webhooks/user/delete_user_webhook.rs
+  s_024592623b7afc::t_e318f9fbac229c 92-94,98
+services/search_freshness_probe/src/domain/ports.rs
+  s_024592623b7afc::t_e318f9fbac229c 1-174
+crates/email/src/outbound/mailbox_pg/watches/test.rs
+  s_024592623b7afc::t_e318f9fbac229c 123,221-223,257-261,264-265,267-278
+crates/scheduled_action/src/domain/knob_entities/test.rs
+  s_024592623b7afc::t_e318f9fbac229c 1-243
+packages/sdk/src/entities/saved-views/saved-view.ts
+  s_024592623b7afc::t_e318f9fbac229c 1-4,25,62-67,75,91-109,126,159-160,173
+crates/crm/src/domain/email_policy_api.rs
+  s_024592623b7afc::t_e318f9fbac229c 240-245,288-296
+apps/web/src/features/email-view/components/EmailInboxSelector.tsx
+  s_024592623b7afc::t_e318f9fbac229c 219-221,223,229-233,299
+services/search_processing_service/src/process/call.rs
+  s_024592623b7afc::t_e318f9fbac229c 22-26,107-109
+crates/email/src/outbound/email_pg_repo/test/crm_team_read/viewed.rs
+  s_024592623b7afc::t_e318f9fbac229c 1-188
+apps/web/src/lib/queries/email/read-state.ts
+  s_024592623b7afc::t_e318f9fbac229c 1,3-7,11,19-24,44-89,91
+  s_024592623b7afc::t_da8a97b5ea0875 90
+crates/email/src/outbound/email_pg_repo/test/crm_team_read.rs
+  s_024592623b7afc::t_e318f9fbac229c 14-15,233-259,267,283
+.github/services-config.json
+  s_024592623b7afc::t_e318f9fbac229c 198-212
+services/agent_harness_service/src/cognition/server.rs
+  s_024592623b7afc::t_e318f9fbac229c 254-256,452-454
+crates/opensearch_client/src/chat.rs
+  s_024592623b7afc::t_e318f9fbac229c 4-8,71
+crates/scheduled_action/src/outbound/knob_entities/test.rs
+  s_024592623b7afc::t_e318f9fbac229c 1-266
+crates/suggestions/src/domain/prompt.md
+  s_024592623b7afc::t_e318f9fbac229c 7-19,26,32,56-58,112-114,116,127,130,132,144-145,159-161
+apps/web/src/features/channels-view/components/rail/next/ExpandedChannelsRail.tsx
+  s_024592623b7afc::t_e318f9fbac229c 38,907
+crates/hosted_runtimes/src/domain/operator/test.rs
+  s_024592623b7afc::t_e318f9fbac229c 486,516,521,558,589,612,792,915
+crates/opensearch_client/src/search/call_records.rs
+  s_024592623b7afc::t_e318f9fbac229c 11,18,233,279
+crates/scheduled_action/src/domain/drafts/test.rs
+  s_024592623b7afc::t_e318f9fbac229c 192-193,216,255-259,325,774-776,778,797-905,907-908,912-1090
+  s_024592623b7afc::t_94f739e3c43c6e 1091
+services/agent_harness_service/src/routine_code/test.rs
+  s_024592623b7afc::t_e318f9fbac229c 169-176,201,344-351,520-526,535,819-1033
+  s_024592623b7afc::t_65ed99845c891d 1034
+apps/web/scripts/android-benchmark/visual.ts
+  s_024592623b7afc::t_e318f9fbac229c 18-25,27,68-71,196,199,201
+services/agent_harness_service/src/scheduling/test.rs
+  s_024592623b7afc::t_e318f9fbac229c 255-276
+crates/email/src/outbound/email_pg_repo/dynamic/query/owned_scope.rs
+  s_024592623b7afc::t_e318f9fbac229c 16-20,49-53,83-85,670-685,688-691,731-740,745
+services/search_freshness_probe/src/domain/probe.rs
+  s_024592623b7afc::t_e318f9fbac229c 1-129
+crates/scheduled_action/src/domain/knob_entities.rs
+  s_024592623b7afc::t_e318f9fbac229c 1-176
+crates/coding_agent_worker/src/daemon/test.rs
+  s_024592623b7afc::t_e318f9fbac229c 107-108
+services/search_freshness_probe/src/domain/model/test.rs
+  s_024592623b7afc::t_e318f9fbac229c 1-70
+.github/workflows/deploy-service-generic.yml
+  s_024592623b7afc::t_e318f9fbac229c 34
+apps/web/src/features/calendar-view/components/ConnectCalendarsPromotion.tsx
+  s_024592623b7afc::t_e318f9fbac229c 12,26,39-42,65,78-79,81-92,102,104,115-116,118-133
+apps/web/src/lib/service-clients/service-storage/mail-cache-profile.test.ts
+  s_024592623b7afc::t_e318f9fbac229c 66-71
+  s_024592623b7afc::t_60a11a19099012 62-65
+crates/hosted_runtimes/src/domain/operator/test/data_disk.rs
+  s_024592623b7afc::t_e318f9fbac229c 30
+apps/web/src/features/block-agent/browser-test/activity.browser.e2e.ts
+  s_024592623b7afc::t_e318f9fbac229c 89-91
+crates/opensearch_client/src/delete/chat.rs
+  s_024592623b7afc::t_e318f9fbac229c 5-6,9-12,19-28,39-45,48,51-52,54-76,78-80
+packages/sdk/generated/storage/types.gen.ts
+  s_024592623b7afc::t_e318f9fbac229c 5703,16239,16516,16631,16750,16864,17039,19017,24121,34862-34865,34894-34897,34930-34933,35269-35271,35313-35315,35426-35428,35466-35468,35506-35508,35589-35591,35620-35622,35652-35654,35684-35686,35718-35720,35781-35783,35812-35814,35874-35876,35900-35902,35932-35934,35964-35966,35990-35992,36088-36090,36102-36159,36172-36174,36204-36206,36230-36232,36262-36264,36294-36296,36326-36328,36358-36360,36384-36386,36416-36418,37268-37293
+  s_024592623b7afc::t_00410970ce5d2b 37294
+services/email_service/src/outbound/inbox_connection/links.rs
+  s_024592623b7afc::t_e318f9fbac229c 68-80,91
+services/search_processing_service/src/outbound/mod.rs
+  s_024592623b7afc::t_e318f9fbac229c 2-4
+packages/sdk/src/utils/verbs.ts
+  s_024592623b7afc::t_e318f9fbac229c 297
+apps/web/src/features/passwords/browser-test/vault.browser.e2e.ts
+  s_024592623b7afc::t_e318f9fbac229c 829-895
+apps/web/src/features/routines/context/routine-sources.ts
+  s_024592623b7afc::t_e318f9fbac229c 6,30-34
+services/authentication_service/src/outbound/google_identity_links/test.rs
+  s_024592623b7afc::t_e318f9fbac229c 1-198
+services/search_processing_service/src/process/test_support.rs
+  s_024592623b7afc::t_e318f9fbac229c 1-40
+services/agent_harness_service/src/code_mode/test.rs
+  s_024592623b7afc::t_12f527a1cf4b3c 1180
+  s_024592623b7afc::t_e318f9fbac229c 1248-1331,1333-1353
+  s_024592623b7afc::t_484d370d802c0f 1247,1332
+services/search_processing_service/src/domain/email_attachment_status.rs
+  s_024592623b7afc::t_e318f9fbac229c 10,157,161-166,184-188,196,217-220
+crates/email/src/outbound/mailbox_pg/progress/test.rs
+  s_024592623b7afc::t_e318f9fbac229c 110-112,144,169-177,182,215,240
+apps/web/src/features/block-agent/state/section-steps.test.ts
+  s_024592623b7afc::t_e318f9fbac229c 51
+apps/web/src/lib/service-clients/service-storage/graphql-email-read-state.ts
+  s_024592623b7afc::t_e318f9fbac229c 49-50,56
+crates/scheduled_action/src/domain/drafts/finding.rs
+  s_024592623b7afc::t_e318f9fbac229c 536
+crates/email/src/outbound/mailbox_pg/lifecycle.rs
+  s_024592623b7afc::t_e318f9fbac229c 404
+crates/opensearch_query_builder/src/lib.rs
+  s_024592623b7afc::t_e318f9fbac229c 16-19
+services/search_freshness_probe/src/inbound.rs
+  s_024592623b7afc::t_e318f9fbac229c 1-3
+services/agent_harness_service/AGENTS.md
+  s_024592623b7afc::t_e318f9fbac229c 31-32,303-306
+apps/web/src/features/channel/Input/browser-test/draft.tsx
+  s_024592623b7afc::t_e318f9fbac229c 174
+apps/web/src/features/routines/queries/schedules.ts
+  s_024592623b7afc::t_e318f9fbac229c 148-179,248-250
+  s_024592623b7afc::t_b72a3b9c2baf0c 251
+crates/email/src/inbound/axum/axum_impls/test.rs
+  s_024592623b7afc::t_e318f9fbac229c 127-144
+services/authentication_service/src/outbound/computer_billing.rs
+  s_024592623b7afc::t_e318f9fbac229c 398-400
+crates/sqs_client/Cargo.toml
+  s_024592623b7afc::t_e318f9fbac229c 28,45
+apps/web/src/features/saved-views/core/saved-view.ts
+  s_024592623b7afc::t_e318f9fbac229c 1,10,19,21-24
+crates/folds/agent_fold/AGENTS.md
+  s_024592623b7afc::t_e318f9fbac229c 26-27
+apps/web/src/features/email-compose/queries/draft-lifecycle.ts
+  s_024592623b7afc::t_e318f9fbac229c 1-2,102-121,125-134
+crates/opensearch_client/src/search/unified/test.rs
+  s_024592623b7afc::t_e318f9fbac229c 1528-1558
+crates/scheduled_action/src/domain/suggestions/prompt.md
+  s_024592623b7afc::t_e318f9fbac229c 3,5-14,20,24
+apps/web/src/lib/core/component/AI/component/tool/CodeMode.test.tsx
+  s_024592623b7afc::t_e318f9fbac229c 5-6,19,21,27,36-73
+tooling/xtask/crates/xtask_local/Cargo.toml
+  s_024592623b7afc::t_e318f9fbac229c 28
+docs/development/running-locally.md
+  s_024592623b7afc::t_e318f9fbac229c 375-377
+crates/hosted_runtimes/src/domain/fakes.rs
+  s_024592623b7afc::t_e318f9fbac229c 716-721
+crates/saved_views/AGENTS.md
+  s_024592623b7afc::t_e318f9fbac229c 5,13
+services/authentication_service/src/domain/google_identity_links.rs
+  s_024592623b7afc::t_e318f9fbac229c 1-161
+services/email_refresh_handler/src/outbound/postgres.rs
+  s_024592623b7afc::t_e318f9fbac229c 82-112
+crates/agent_session/src/outbound/activity_summarizer_prompt.md
+  s_024592623b7afc::t_e318f9fbac229c 14-15
+crates/agent_code_mode/src/domain/service.rs
+  s_024592623b7afc::t_ddf5f7bc559c32 5-7,882
+  s_024592623b7afc::t_e318f9fbac229c 252-262,313-314,848-870
+  s_024592623b7afc::t_0ea498b3b64631 170
+  s_024592623b7afc::t_7db46f4d5f99b0 871-873
+apps/web/src/features/sidebar-promotion/sidebar-promotion.tsx
+  s_024592623b7afc::t_e318f9fbac229c 23
+apps/web/src/lib/service-clients/service-storage/graphql/saved-view-appearance-cache-write.graphql
+  s_024592623b7afc::t_e318f9fbac229c 1-9
+crates/hosted_runtimes/src/domain/lifecycle.rs
+  s_024592623b7afc::t_e318f9fbac229c 21-22,46-49,308-310,325,556-562,576-589,708-721,773-787,887-890,945
+apps/web/tests/email-e2e/states-organise-title.spec.ts
+  s_024592623b7afc::t_e318f9fbac229c 14,28,240-242,256-259
+crates/code_execution/src/domain/operations.rs
+  s_024592623b7afc::t_e318f9fbac229c 87-166
+services/search_processing_service/src/inbound/kafka_consumer/attempts/test.rs
+  s_024592623b7afc::t_e318f9fbac229c 233-248
+services/search_processing_service/src/process/chat.rs
+  s_024592623b7afc::t_e318f9fbac229c 42-49,91-120,143-145
+apps/web/src/features/block-canvas/primitives/text-input.test.ts
+  s_024592623b7afc::t_e318f9fbac229c 8-20
+apps/web/src/features/block-canvas/primitives/create-canvas-state.test.ts
+  s_024592623b7afc::t_e318f9fbac229c 183-227
+crates/macro_db_client/migrations/20261119085330_password_item_favorites_backfill.up.sql
+  s_024592623b7afc::t_e318f9fbac229c 1-44
+docs/runbooks/outlook-sync.md
+  s_024592623b7afc::t_e318f9fbac229c 10,20,23,31-41,70-75
+  s_024592623b7afc::t_60c79d80c19bc9 76
+crates/email/src/domain/models/error.rs
+  s_024592623b7afc::t_e318f9fbac229c 14-17
+apps/web/src/features/saved-views/queries/active-queries.ts
+  s_024592623b7afc::t_e318f9fbac229c 1-29
+apps/web/tests/email-e2e/states-elsewhere-surfaces.spec.ts
+  s_024592623b7afc::t_e318f9fbac229c 9,12,21,24-25,175-207
+  s_024592623b7afc::t_752ecb78280fe5 208
+crates/opensearch_client/src/search/agent_sessions.rs
+  s_024592623b7afc::t_e318f9fbac229c 10,12,85
+services/search_freshness_probe/Cargo.toml
+  s_024592623b7afc::t_e318f9fbac229c 1-51
+apps/web/src/lib/service-clients/service-storage/mail-cache-profile.ts
+  s_024592623b7afc::t_e318f9fbac229c 1,3,19,33-36,39,47-49,55
+services/search_processing_service/src/process/context.rs
+  s_024592623b7afc::t_e318f9fbac229c 16-19
+apps/web/src/lib/queries/email/local-draft-store.test.ts
+  s_024592623b7afc::t_e318f9fbac229c 887-920,1007-1059
+crates/folds/agent_fold/src/domain/model/segment.rs
+  s_024592623b7afc::t_e318f9fbac229c 35-36
+crates/email/src/outbound/email_pg_repo/dynamic/filters/address_queries.rs
+  s_024592623b7afc::t_e318f9fbac229c 3-5,55-78
+crates/opensearch_client/src/upsert/calendar_event.rs
+  s_024592623b7afc::t_e318f9fbac229c 3,126-127,133,159,180
+packages/sdk/src/coverage/skipped.ts
+  s_024592623b7afc::t_e318f9fbac229c 311,466,471
+apps/web/src/features/block-canvas/browser-test/README.md
+  s_024592623b7afc::t_e318f9fbac229c 66-68
+crates/scheduled_action/src/domain/target_validation/test.rs
+  s_024592623b7afc::t_e318f9fbac229c 379-421
+crates/sqs_client/src/search/test.rs
+  s_024592623b7afc::t_e318f9fbac229c 1-204
+services/email_refresh_handler/src/domain/service.rs
+  s_024592623b7afc::t_e318f9fbac229c 9-11,32-33,124-154
+  s_024592623b7afc::t_957daea8368488 155-158
+apps/web/scripts/android-benchmark/session.ts
+  s_024592623b7afc::t_e318f9fbac229c 13-15,206-210,212-216,235-236,239-243,250,264-416
+  s_024592623b7afc::t_f3bac40f8e7344 417
+docs/agent-guide/files.md
+  s_024592623b7afc::t_e318f9fbac229c 107,112-116
+crates/agent_harness/src/outbound/runtime_registry.rs
+  s_024592623b7afc::t_e318f9fbac229c 30-31,128-132,325
+apps/web/src/features/channel/Call/views/CallParticipantVolume.tsx
+  s_024592623b7afc::t_e318f9fbac229c 2,8,10,39,41-86,88-95,97-120,122-126
+apps/web/src/features/tasks-view/components/TasksSidebar.tsx
+  s_024592623b7afc::t_e318f9fbac229c 134-135,139-144,184-188,207-208,210-216,218-219
+crates/opensearch_client/src/delete/by_query/test.rs
+  s_024592623b7afc::t_e318f9fbac229c 1-71
+crates/pipedream_mcp/src/outbound/pg_connection_repo.rs
+  s_024592623b7afc::t_e318f9fbac229c 102
+crates/code_execution/README.md
+  s_024592623b7afc::t_e318f9fbac229c 11,14,35-78,266-272,309,359-360
+  s_024592623b7afc::t_11deaee7571b32 3,5-9,285
+services/search_processing_service/src/inbound/kafka_consumer/metrics.rs
+  s_024592623b7afc::t_e318f9fbac229c 37,230-252
+  s_024592623b7afc::t_98f3e7bd98d312 253
+apps/web/src/lib/queries/email/read-state-graphql.test.tsx
+  s_024592623b7afc::t_e318f9fbac229c 7,38,44,54,107-149,183-186,299,329
+services/agent_harness_service/src/computers/agent_enrollment/test.rs
+  s_024592623b7afc::t_e318f9fbac229c 1-27
+apps/web/src/features/calendar/hooks/use-calendar-accounts.ts
+  s_024592623b7afc::t_e318f9fbac229c 20-21,27-33,46-61
+crates/scheduled_action/src/domain/suggestions.rs
+  s_024592623b7afc::t_e318f9fbac229c 56,87-89,295,415,424-428,445,455
+crates/calendar_scheduling/src/domain/service.rs
+  s_024592623b7afc::t_e318f9fbac229c 269-276
+services/search_processing_service/src/outbound/property_search_indexer.rs
+  s_024592623b7afc::t_e318f9fbac229c 31
+apps/web/src/features/calendar-view/components/SetupStatus.test.tsx
+  s_024592623b7afc::t_e318f9fbac229c 185-192
+apps/web/src/features/channel/Input/browser-test/long-mention.browser.e2e.ts
+  s_024592623b7afc::t_e318f9fbac229c 1-148
+crates/email/src/outbound/email_pg_repo/dynamic/filters/address_queries/test.rs
+  s_024592623b7afc::t_e318f9fbac229c 1-167
+crates/calendar_events/Cargo.toml
+  s_024592623b7afc::t_e318f9fbac229c 27-29,58,90-93
+crates/scheduled_action/src/domain/models.rs
+  s_024592623b7afc::t_e318f9fbac229c 16,200-204
+services/search_processing_service/src/outbound/cloudwatch_backlog.rs
+  s_024592623b7afc::t_e318f9fbac229c 1-116
+apps/web/src/features/channel/Input/browser-test/caret.browser.e2e.ts
+  s_024592623b7afc::t_e318f9fbac229c 1-134
+apps/web/src/features/block-canvas/primitives/create-canvas-state.ts
+  s_024592623b7afc::t_e318f9fbac229c 49-61,215-224
+crates/email/src/outbound/email_pg_repo/dynamic/query/team_scope/selected_allowed.sql
+  s_024592623b7afc::t_e318f9fbac229c 1-20
+crates/opensearch_client/src/error.rs
+  s_024592623b7afc::t_e318f9fbac229c 47
+services/agent_harness_service/src/computers/presence/test.rs
+  s_024592623b7afc::t_e318f9fbac229c 27-40,87-91
+crates/email/src/outbound/mailbox_pg/watches.rs
+  s_024592623b7afc::t_e318f9fbac229c 26,30,101-107,146
+crates/opensearch_client/src/document.rs
+  s_024592623b7afc::t_e318f9fbac229c 7,51-69,101
+crates/hosted_runtimes/src/domain/models.rs
+  s_024592623b7afc::t_e318f9fbac229c 626-637
+packages/sdk/tests/routines.test.ts
+  s_024592623b7afc::t_e318f9fbac229c 2-7,157-231,379-543
+crates/code_execution/src/outbound/deno/check.rs
+  s_024592623b7afc::t_e318f9fbac229c 12-17,43-44,53-55,61-62,68,76-91,115,125,146-165,212-215,217,225,227,244,247-251,258-259,261-281
+crates/crm/src/domain.rs
+  s_024592623b7afc::t_e318f9fbac229c 12-15
+apps/web/src/features/routines/routine-apps.tsx
+  s_024592623b7afc::t_e318f9fbac229c 1-2,9,116-141
+  s_024592623b7afc::t_8b1f7049a4f022 142-143
+apps/web/src/features/block-canvas/views/mobile/canvas-sheets.tsx
+  s_024592623b7afc::t_e318f9fbac229c 144-149,213-219
+apps/web/src/features/entity-appearance/appearance-menu.tsx
+  s_024592623b7afc::t_e318f9fbac229c 7,12-15,32-39
+crates/email/AGENTS.md
+  s_024592623b7afc::t_e318f9fbac229c 200,202-215,219-231,317,334-345,369-371,499-507,582-585,590-598,612-617,626-627
+crates/code_execution/src/domain/service/program.rs
+  s_024592623b7afc::t_e318f9fbac229c 5-12
+crates/email/src/domain/service/followup.rs
+  s_024592623b7afc::t_e318f9fbac229c 110
+crates/opensearch_client/src/upsert/properties.rs
+  s_024592623b7afc::t_e318f9fbac229c 21-34
+crates/opensearch_client/src/search/unified.rs
+  s_024592623b7afc::t_e318f9fbac229c 976-983,996-1003,1005-1012,1034-1039
+  s_024592623b7afc::t_589b478ea80ade 1040
+services/authentication_service/src/config.rs
+  s_024592623b7afc::t_e318f9fbac229c 77-80,217-218,344-354
+  s_024592623b7afc::t_7bbf9b1952a025 355-356
+crates/email/src/domain/mailbox/connection/ports.rs
+  s_024592623b7afc::t_e318f9fbac229c 46-49,95-96
+services/document_storage_service/src/api/saved_views/definitions.rs
+  s_024592623b7afc::t_e318f9fbac229c 45,70-71,87,130-131,329,384-410
+  s_024592623b7afc::t_954b21fe37414f 411-415
+crates/agent_code_mode/src/inbound/toolset/user/execute_code.md
+  s_024592623b7afc::t_e318f9fbac229c 1
+apps/web/src/features/entity-appearance/queries/appearance-readers.ts
+  s_024592623b7afc::t_e318f9fbac229c 29-34,37,83,94-99,188,196
+crates/macro_db_client/migrations/20261118190000_computer_agent_redeliver.sql
+  s_024592623b7afc::t_e318f9fbac229c 1-5
+crates/folds/agent_fold/src/domain/model.rs
+  s_024592623b7afc::t_e318f9fbac229c 65
+apps/web/src/features/passwords/primitives/import.ts
+  s_024592623b7afc::t_e318f9fbac229c 120,144,155-156,191-192,194-195,221-222,246-247,262-268
+  s_024592623b7afc::t_df5148ea6ada23 269
+crates/opensearch_client/src/delete/call_record/test.rs
+  s_024592623b7afc::t_e318f9fbac229c 1-105
+services/search_processing_service/src/domain/jobs.rs
+  s_024592623b7afc::t_e318f9fbac229c 133,175-196,198-211,342-345,441-442,456,550,566-589
+  s_024592623b7afc::t_0fba0957210677 590-591
+crates/agent_code_mode/src/domain/models.rs
+  s_024592623b7afc::t_ddf5f7bc559c32 171
+apps/web/scripts/android-benchmark/README.md
+  s_024592623b7afc::t_e318f9fbac229c 32,38-43,45-54,71-72,126-129,135-137,140-175,185,253-260,269-273,300-301
+services/search_processing_service/src/process/document/raw_document/test.rs
+  s_024592623b7afc::t_e318f9fbac229c 527,533,553-557,574-578,620,653-949
+crates/agent_code_mode/src/inbound/toolset/test/ocaml.rs
+  s_024592623b7afc::t_a5f0b4252f8628 63-82,84,211
+docs/design/entity-appearance.md
+  s_024592623b7afc::t_e318f9fbac229c 6
+apps/web/src/features/email-compose/views/reply-input.test.tsx
+  s_024592623b7afc::t_e318f9fbac229c 44,47-48,59,86-87
+  s_024592623b7afc::t_4a93131b9dc9ab 88
+apps/web/src/lib/queries/email/thread.ts
+  s_024592623b7afc::t_e318f9fbac229c 35-41,227-232,235-237
+crates/passwords/src/outbound/openbao/token_cache.rs
+  s_024592623b7afc::t_e318f9fbac229c 40-41,99,150-153,159
+apps/web/src/features/email-view/primitives/create-email-saved-view-draft.ts
+  s_024592623b7afc::t_e318f9fbac229c 193,197-204
+infra/stacks/doppler-projects/index.ts
+  s_024592623b7afc::t_e318f9fbac229c 11
+apps/web/scripts/android-benchmark/harness.ts
+  s_024592623b7afc::t_e318f9fbac229c 4-21,26-48,70-100,106-107,109-116,131-136,148,176-231,235,237,239,243-268
+crates/teams/src/outbound/customer_repo/item_changes/test.rs
+  s_024592623b7afc::t_e318f9fbac229c 414-497
+apps/web/src/features/entity-appearance/views/appearance-menu.tsx
+  s_024592623b7afc::t_e318f9fbac229c 8,52
+apps/web/src/features/routines/components/routine-run-button.tsx
+  s_024592623b7afc::t_e318f9fbac229c 25-26
+docs/architecture/email-backend.md
+  s_024592623b7afc::t_e318f9fbac229c 109
+apps/web/src/features/passwords/components/import-steps.tsx
+  s_024592623b7afc::t_e318f9fbac229c 491
+apps/web/src/components/app/mobile/navigation-browser-test/vite.config.ts
+  s_024592623b7afc::t_e318f9fbac229c 1-69
+infra/local/openbao/AGENTS.md
+  s_024592623b7afc::t_e318f9fbac229c 17-19
+apps/web/src/features/email-thread/views/thread-reply-input.test.tsx
+  s_024592623b7afc::t_e318f9fbac229c 35
+services/email_refresh_handler/src/test.rs
+  s_024592623b7afc::t_e318f9fbac229c 1-3,111-203
+  s_024592623b7afc::t_a5acc9faffbfe3 204-206
+services/search_freshness_probe/src/domain/probe/test.rs
+  s_024592623b7afc::t_e318f9fbac229c 1-229
+services/search_freshness_probe/src/domain/rotation/test.rs
+  s_024592623b7afc::t_e318f9fbac229c 1-421
+crates/agent_code_mode/src/inbound/toolset/shared/program.md
+  s_024592623b7afc::t_e318f9fbac229c 3
+crates/email/src/domain/ports.rs
+  s_024592623b7afc::t_e318f9fbac229c 168
+infra/stacks/search-processing-service/service.ts
+  s_024592623b7afc::t_e318f9fbac229c 26-29,31-41,121-141,181,404-408,428-454
+  s_024592623b7afc::t_3c28a8fbdeb48b 455
+services/agent_harness_service/src/harness_bindings.rs
+  s_024592623b7afc::t_e318f9fbac229c 18,165
+crates/suggestion_generation/bench/bench.ts
+  s_024592623b7afc::t_e318f9fbac229c 12,14,215-216,261-263,271,274-284,292,300-312,324-326,331-349,389,405-406
+crates/suggestion_generation/src/domain/model.rs
+  s_024592623b7afc::t_e318f9fbac229c 89-92,94
+infra/stacks/monitoring/monitors/computers.ts
+  s_024592623b7afc::t_e318f9fbac229c 15-19,66-86
+  s_024592623b7afc::t_e5410e11f8e74f 87
+services/search_freshness_probe/src/outbound/entities.rs
+  s_024592623b7afc::t_e318f9fbac229c 1-534
+crates/crm/src/outbound/companies_repo/test.rs
+  s_024592623b7afc::t_e318f9fbac229c 32
+apps/web/src/components/app/mobile/navigation-browser-test/stand-ins/block-loader.tsx
+  s_024592623b7afc::t_e318f9fbac229c 1-3
+services/search_processing_service/src/process/properties.rs
+  s_024592623b7afc::t_e318f9fbac229c 3-6,11-21,31,37,58-67,73,75-79,94-96
+crates/crm/src/outbound/companies_repo/email_policy/mutations/test.rs
+  s_024592623b7afc::t_e318f9fbac229c 1-36
+apps/web/src/features/saved-views/views/saved-view-dialogs.tsx
+  s_024592623b7afc::t_e318f9fbac229c 55-61,94
+services/search_processing_service/src/inbound/kafka_consumer/scaling/test.rs
+  s_024592623b7afc::t_e318f9fbac229c 1-170
+apps/web/tests/email-e2e/ledger/proofs.tsv
+  s_024592623b7afc::t_e318f9fbac229c 143,274-275,507,672,675,688,720,770,823,896,969,1055
+apps/web/src/features/email-compose/queries/draft-lifecycle-source.test.tsx
+  s_024592623b7afc::t_e318f9fbac229c 1,6,18-30,108,110-111,148-237
+  s_024592623b7afc::t_256304c38f6a8b 238
+apps/web/src/components/view-shell/primitives/create-section-reorder.ts
+  s_024592623b7afc::t_e318f9fbac229c 1-100
+packages/graphics/src/browser/index.ts
+  s_024592623b7afc::t_e318f9fbac229c 75-80,134
+  s_024592623b7afc::t_685617458438e7 74
+crates/scheduled_action/src/domain/drafts/progress/test.rs
+  s_024592623b7afc::t_e318f9fbac229c 30
+infra/stacks/search-freshness-probe/service.ts
+  s_024592623b7afc::t_e318f9fbac229c 1-228
+crates/hosted_runtimes/src/domain/operator/test/setup_notice.rs
+  s_024592623b7afc::t_e318f9fbac229c 15,18,48,100
+crates/hosted_runtimes/src/domain/operator.rs
+  s_024592623b7afc::t_e318f9fbac229c 223-225,230,240,249,252-264,274
+crates/email/src/domain/mailbox/inbox_sync/test/history.rs
+  s_024592623b7afc::t_e318f9fbac229c 272-287
+  s_024592623b7afc::t_e796b8049090bd 271
+apps/web/src/lib/queries/email/email-send-journal.ts
+  s_024592623b7afc::t_e318f9fbac229c 15-20,241-260,271-302
+  s_024592623b7afc::t_5dfa681727fb61 303
+crates/coding_agent_worker/src/outbound/link.rs
+  s_024592623b7afc::t_e318f9fbac229c 4-6,23-24
+crates/soup/src/inbound/axum_router/tests.rs
+  s_024592623b7afc::t_e318f9fbac229c 2497-2518
+apps/web/src/features/routines/components/routine-step-knobs.tsx
+  s_024592623b7afc::t_e318f9fbac229c 1-2,15-16,18-22,49-50,73,87,99,109-114,128-129,150-151,162-163,186,188-190,194-203,209-210,216-219,223,225-226,228-234,237-240,243-244,257-258,273-279,284-286,294-296,308-314,321-323,331-332,350,385-398,418-419,560-569
+  s_024592623b7afc::t_ea370b25c2f216 570
+services/email_service/src/outbound/mailbox_init/test.rs
+  s_024592623b7afc::t_e318f9fbac229c 499-506,513-524
+  s_024592623b7afc::t_d9c51d82855336 525
+crates/routine_program/src/catalog/updates.ts
+  s_024592623b7afc::t_e318f9fbac229c 1,4-5
+services/email_service/src/composition/api.rs
+  s_024592623b7afc::t_e318f9fbac229c 60-62,82,111-113,193-198
+apps/web/src/components/app/tab-layout/tests/tab-layers.test.tsx
+  s_024592623b7afc::t_e318f9fbac229c 6,43-47,167-169,286-324
+  s_024592623b7afc::t_e931bc12d62940 325
+docs/agent-guide/notifications.md
+  s_024592623b7afc::t_e318f9fbac229c 17-21
+services/search_processing_service/src/domain/ports.rs
+  s_024592623b7afc::t_e318f9fbac229c 32-33,37-45
+apps/web/src/features/email-view/components/EmailHeader.tsx
+  s_024592623b7afc::t_e318f9fbac229c 13,52,62-65,76-82,93,114,135-138,175-183
+crates/passwords/src/domain/service/test.rs
+  s_024592623b7afc::t_e318f9fbac229c 834-962
+apps/web/tests/email-e2e/ledger/manifest/send.ts
+  s_024592623b7afc::t_e318f9fbac229c 1740-1748
+infra/stacks/search-freshness-probe/tsconfig.json
+  s_024592623b7afc::t_e318f9fbac229c 1-3
+crates/scheduled_action/src/domain/suggestions/prompt.rs
+  s_024592623b7afc::t_e318f9fbac229c 47-49,54-66,68-69,74,94-97,109-117
+apps/web/src/features/settings/components/settings-sidebar.tsx
+  s_024592623b7afc::t_e318f9fbac229c 34,72-80,102-111,131
+apps/web/src/lib/core/component/EntityIcon.tsx
+  s_024592623b7afc::t_e318f9fbac229c 107,110,152-153,162-168,706,762
+apps/web/tests/functional/whatsapp-linked.spec.ts
+  s_024592623b7afc::t_e318f9fbac229c 2007-2071
+crates/crm/src/outbound/companies_repo/email_policy/authoring.rs
+  s_024592623b7afc::t_e318f9fbac229c 289-312,403-432
+  s_024592623b7afc::t_5bbca827797eca 433
+services/document_storage_service/src/api/saved_views/definitions/test.rs
+  s_024592623b7afc::t_e318f9fbac229c 48-51,96,135,165-174,587-628
+  s_024592623b7afc::t_e9b4e19ab6f901 629-630
+crates/macro_db_client/migrations/20261119085330_password_item_favorites_backfill.down.sql
+  s_024592623b7afc::t_e318f9fbac229c 1-2
+services/search_freshness_probe/src/outbound/entities/test.rs
+  s_024592623b7afc::t_e318f9fbac229c 1-314
+crates/code_execution/src/domain.rs
+  s_024592623b7afc::t_e318f9fbac229c 3,12
+crates/lexical_client/Cargo.toml
+  s_024592623b7afc::t_e318f9fbac229c 16
+services/search_freshness_probe/src/outbound/macro_api/test.rs
+  s_024592623b7afc::t_e318f9fbac229c 1-121
+apps/web/src/features/passwords/views/vault-view.tsx
+  s_024592623b7afc::t_e318f9fbac229c 165,260-262,878-897
+crates/hosted_runtimes/src/domain/lifecycle/event.rs
+  s_024592623b7afc::t_e318f9fbac229c 16-20,118-120,220-221,237
+apps/web/src/features/channel/Channel/ActiveCallMessage.tsx
+  s_024592623b7afc::t_e318f9fbac229c 14,24-27,38-46,48-51,64,66-69,71-82,84-92
+apps/web/src/features/routines/knob-kinds.test.ts
+  s_024592623b7afc::t_e318f9fbac229c 1-30
+apps/web/src/features/routines/core/knobs.ts
+  s_024592623b7afc::t_e318f9fbac229c 1-5,39-47,50-170,218-227,239-242,259-270,274-275,278,382-384,388-399,426-428
+crates/email/src/outbound/email_pg_repo/dynamic/query/team_scope/test/selected/participants.rs
+  s_024592623b7afc::t_e318f9fbac229c 1-33
+crates/email_api_client/src/outbound/outlook/transport/test.rs
+  s_024592623b7afc::t_e318f9fbac229c 102,116-119,172,178
+apps/web/src/features/channels-view/components/rail/ChannelsRail.test.tsx
+  s_024592623b7afc::t_e318f9fbac229c 152-155,159-163,286-302,363-370,381-383,510,625-649
+apps/web/scripts/android-benchmark/scenarios.ts
+  s_024592623b7afc::t_e318f9fbac229c 3,14-17,23-29,42-50,52-57,59,62-65,67-111,122-126,132-138,141,146,155,161-162,169,171,175-178,185,193
+services/agent_harness_service/src/lib.rs
+  s_024592623b7afc::t_e318f9fbac229c 184,207-214,558-559,563-578,735-747,752,763,789,794,822,856,1900-1912,1915-1916,1935-1936,1938-1943,1945,1958-1960,2096-2099,2123-2126
+services/search_freshness_probe/src/outbound/properties.rs
+  s_024592623b7afc::t_e318f9fbac229c 1-119
+apps/web/src/lib/core/component/AI/component/tool/CodeMode.tsx
+  s_024592623b7afc::t_e318f9fbac229c 3-7,10,24-45,53
+tooling/xtask/crates/xtask_local/src/local/cli.rs
+  s_024592623b7afc::t_e318f9fbac229c 43-44,311-316
+  s_024592623b7afc::t_b3af56e4d1a5df 317
+crates/passwords/src/outbound/postgres.rs
+  s_024592623b7afc::t_e318f9fbac229c 162,591-607,625,631,634,721-722
+services/search_processing_service/src/domain/agent_session_index/test.rs
+  s_024592623b7afc::t_e318f9fbac229c 13-14,57-59,129,140,149-203
+apps/web/tests/email-e2e/states-thread-toasts.spec.ts
+  s_024592623b7afc::t_e318f9fbac229c 15,85-146,175
+docs/agent-guide/crm.md
+  s_024592623b7afc::t_e318f9fbac229c 467-469
+crates/saved_views/Cargo.toml
+  s_024592623b7afc::t_e318f9fbac229c 9
+services/search_processing_service/src/domain/agent_session_index.rs
+  s_024592623b7afc::t_e318f9fbac229c 3,155,169-173,196-200,214-217
+apps/web/src/features/tasks-view/views/task-saved-views.tsx
+  s_024592623b7afc::t_e318f9fbac229c 15,37,211,322-324,420,423-424,426,429,436
+services/search_processing_service/src/domain/email_attachment_status/test.rs
+  s_024592623b7afc::t_e318f9fbac229c 1,147,183,190-194,217,235,260,283,307,334-338
+apps/web/src/components/app/split-layout/layoutManager.ts
+  s_024592623b7afc::t_e318f9fbac229c 1168-1170,1189-1191
+apps/web/src/features/email-compose/views/reply-input.tsx
+  s_024592623b7afc::t_e318f9fbac229c 82,103-108,136,146-148,176
+crates/email/src/outbound/mailbox_pg/test/outlook_subscriptions.rs
+  s_024592623b7afc::t_e318f9fbac229c 1-123
+services/search_freshness_probe/src/outbound/fixtures/test.rs
+  s_024592623b7afc::t_e318f9fbac229c 1-122
+apps/web/src/features/scheduling/views/settings-view.test.tsx
+  s_024592623b7afc::t_e318f9fbac229c 89
+crates/email/src/outbound/mailbox_pg/settings.rs
+  s_024592623b7afc::t_e318f9fbac229c 327
+services/search_processing_service/src/inbound/kafka_consumer.rs
+  s_024592623b7afc::t_e318f9fbac229c 47,109,225-226,234-236,245-246
+apps/web/src/features/email-thread/queries/offline-reply.test.ts
+  s_024592623b7afc::t_e318f9fbac229c 21
+crates/outlook_emulator/src/lib.rs
+  s_024592623b7afc::t_e318f9fbac229c 516-522
+crates/passwords/src/domain/ports.rs
+  s_024592623b7afc::t_e318f9fbac229c 83-84,103-117,120-121
+packages/sdk/src/entities/connected-apps/namespace.ts
+  s_024592623b7afc::t_e318f9fbac229c 28-29,35
+apps/web/src/components/app/mobile/close-on-navigation.ts
+  s_024592623b7afc::t_e318f9fbac229c 1-106
+apps/web/src/features/passwords/components/failure-notice.tsx
+  s_024592623b7afc::t_e318f9fbac229c 26-31
+crates/calendar_scheduling/src/outbound/postgres/test.rs
+  s_024592623b7afc::t_e318f9fbac229c 32-37,547-691
+services/search_processing_service/src/process/channel.rs
+  s_024592623b7afc::t_e318f9fbac229c 12-22,28,30,36-53,62,70
+crates/hosted_runtimes/src/domain/service/test.rs
+  s_024592623b7afc::t_e318f9fbac229c 59-60,186-188,1021-1039,1055-1058,1087-1090,1107,1115-1118
+crates/crm/src/outbound/companies_repo/test/email_policy/api/limits.rs
+  s_024592623b7afc::t_e318f9fbac229c 1-123
+crates/opensearch_client/src/delete/by_query.rs
+  s_024592623b7afc::t_e318f9fbac229c 1-72
+crates/agent_code_mode/src/inbound/toolset/session/overview.md
+  s_024592623b7afc::t_e318f9fbac229c 1
+services/search_processing_service/src/process.rs
+  s_024592623b7afc::t_e318f9fbac229c 10-11
+crates/team_agents/src/outbound/pg_team_agents_repo.rs
+  s_024592623b7afc::t_e318f9fbac229c 82-86,217-333
+  s_024592623b7afc::t_e0f2f150b2b069 334-335
+crates/crm/src/outbound/companies_repo/test/email_policy/api.rs
+  s_024592623b7afc::t_e318f9fbac229c 3
+services/search_freshness_probe/src/domain.rs
+  s_024592623b7afc::t_e318f9fbac229c 1-8
+crates/routine_program/src/catalog.rs
+  s_024592623b7afc::t_e318f9fbac229c 173,184,187,191
+apps/web/tests/email-e2e/states-send2-kept.spec.ts
+  s_024592623b7afc::t_e318f9fbac229c 17,19,232-233,251,294-384
+services/search_processing_service/src/inbound/kafka_consumer/metrics/test.rs
+  s_024592623b7afc::t_e318f9fbac229c 233-274
+docs/design/outlook-email-support.md
+  s_024592623b7afc::t_e318f9fbac229c 752-754
+crates/scheduled_action/src/domain/drafts.rs
+  s_024592623b7afc::t_e318f9fbac229c 35,47-48,50,90-92,194-201,272-273,309,325-332,401-403,507-525,527-541,615,681-682,688-714,1100-1102,1110,1115-1136,1179,1183,1187,1291-1293,1303-1304,1317-1366,1372,1390-1391,1405-1406
+crates/crm/src/outbound/companies_repo/email_privacy/admission.sql
+  s_024592623b7afc::t_e318f9fbac229c 1-24
+.github/workflows/code_check_cloud_storage.yml
+  s_024592623b7afc::t_bbe93309e48cd6 999-1000,1007,1062-1063,1070
+.sqlx/query-05ccd3b8b636432a4d11321419eaf12cadda9675175b1db018b823935168eaba.json
+  s_024592623b7afc::t_6f012754e0754c 1-42
+.sqlx/query-09c4ed2d01f4927c9acccfa3a9440c4e9ad01a639af9bb7f0d04b10d4af726a1.json
+  s_024592623b7afc::t_9c60cea83a35e9 3,10-11,16
+.sqlx/query-1724731227ed85e5baf64d2998c94cff169fd0f01aa8230f3090ef9a1ae54db9.json
+  s_024592623b7afc::t_082c332713c7d9 1-22
+.sqlx/query-18414eab6c30d8b65073517cbc94e89bd43e4634f978ee8dd8f87b0f6460c572.json
+  s_024592623b7afc::t_7e7f653385ef19 3,45-49,70,74
+.sqlx/query-194e15419d43a429fb2c6702e164b24be53f324dc490f5c1f3b62da49cede147.json
+  s_024592623b7afc::t_3f9c64379548a2 1-45
+.sqlx/query-1d46a4c3429d6c40f61d3ccc1ae9da8bb64f15277bde285bdae47f8938011f26.json
+  s_024592623b7afc::t_7877e8ebc11967 3,15
+.sqlx/query-1f84ee8c989f825dffe394a14dd27051c6e29d05d886bbd4d442dfe56e4b3dc6.json
+  s_024592623b7afc::t_97cd663e05c717 3,21
+.sqlx/query-23d82983ac7388b0f3b9d28072dae65fdda3ad0f0c4bcd7ee9b69ff86200bf72.json
+  s_024592623b7afc::t_d6d1e0bff1f27d 3,13
+.sqlx/query-2acffaa56008728b8af434a5cd7eb1c2ddb484ea131db5581ed9142dac89ca1e.json
+  s_024592623b7afc::t_ae8fbb47b32010 3,45-49,65,69
+.sqlx/query-2c64392652498b5d105bc4e33aa7e9aa0743d151d908ac0dee0a714f6ec62f43.json
+  s_024592623b7afc::t_78f6e6411e32de 1-23
+.sqlx/query-2e983f9bc9766908171b652a7e63a275795514510560a80d5eeaeb5db58f6033.json
+  s_024592623b7afc::t_c82d9e776944b7 3,8-9,15,19,22
+.sqlx/query-388259dd2e87d2c9dd37e6b28b39c5d1567661c8337451db4361e8b934bd1f1d.json
+  s_024592623b7afc::t_ece98f94fe3c76 1-36
+.sqlx/query-3a6325fd1d62d1a74eec1b52206439cc0f5f96e1bdf989f583eadb8a083ed67f.json
+  s_024592623b7afc::t_fd93a5be6557e4 3,70-74,93,97
+.sqlx/query-3d3ef801ec84913f876f93c0a514d7359f1c30588b553447fe1c6942ef7a9aa4.json
+  s_024592623b7afc::t_b19190565754a7 3,22
+.sqlx/query-3f4c4e1d828cb1af2f9ad0545ef57b3994e2366bd33693144ce518613398fb74.json
+  s_024592623b7afc::t_5091779e3ad947 3,15
+.sqlx/query-4906114bfeb4321cb713d8f5565bef4d141c209f2518b129675b29ea84173156.json
+  s_024592623b7afc::t_48ac2292b124ec 3,8-14,24-25,28
+.sqlx/query-55e48af0ad851f509e8941e8cd4a1e1e7dd641a781342dbe9a1036b71f10dd72.json
+  s_024592623b7afc::t_ce1557f99bdeb8 1-35
+.sqlx/query-60ad2c9a7c037e1ffd3261cb01eba13c2f5b24ae6b8dabda8bce3dabe183fef3.json
+  s_024592623b7afc::t_e96442fcec3a1e 3,15
+.sqlx/query-62eaf84e86ac60bdf3ad19efcc4f3a0a95194f7301342d4a76f623d933ed3bee.json
+  s_024592623b7afc::t_af1f446d4a9630 3,15
+.sqlx/query-6bf3ed47c8b298b076e8d2e74751428e6b74e3c8ba2568286639aef2b9495b37.json
+  s_024592623b7afc::t_202ab7c062ef63 3,14-15,20
+.sqlx/query-7074d64fca12031b07def67299f01f50356e4b9d6ce10c0d9fdfb6eeb163c4c5.json
+  s_024592623b7afc::t_24f17f1735bfdb 3,48-52,77,81
+.sqlx/query-729497fdca143f04c9656ad4ba4f41f8dd548f2bcd43e737103a3e9c2496c391.json
+  s_024592623b7afc::t_4c848c98d3b26a 3,13
+.sqlx/query-73e98a011362a2d403cf246537dbbe4052ffd3b3c3a2c7d89567578e7df71526.json
+  s_024592623b7afc::t_c0edcb6e02f85a 1-57
+.sqlx/query-7842fe387967ebb56e644d2077937bfdff39a5e341774d3c9abe9a06ab101ddd.json
+  s_024592623b7afc::t_f902ea925372a2 1-33
+.sqlx/query-8637f127a91873e26f59b52f3ff509dd83be7085bd7348b33c39e83c0e0d6dbe.json
+  s_024592623b7afc::t_47c61c564dfbd2 3,18-22,27,41,45
+.sqlx/query-89526955c8808c5ced4e59b06eef7e25f86ecb9fc36f990abda09ae2100a1bf2.json
+  s_024592623b7afc::t_48bfec1a0e06d8 3,21
+.sqlx/query-93078aa8580f9b3c127f5415cfc30539d0457d7c8958692962a601e29addf9b8.json
+  s_024592623b7afc::t_b54d428be14288 3,8,15
+.sqlx/query-99fc73c211077148ee9c23cb4116f0b71b0d2abdf73e2cf37dbd4b291abb9d3a.json
+  s_024592623b7afc::t_bdff78c6af0c9b 1-72
+.sqlx/query-9d702984bc958c5f8fe9b94d865fc137e9ef376f9f623a745df85dacfe93bdee.json
+  s_024592623b7afc::t_e3a120e19ea5e8 3,45-49,65,69
+.sqlx/query-a8a1181a9be888d5918572377117d36de736dd79784a54f4a9870b3e7575dc66.json
+  s_024592623b7afc::t_c145201037444d 1-15
+.sqlx/query-abb31e212ef12af3a0f32287744fd3a28165f17e450b5ef177435ea0c1d4e402.json
+  s_024592623b7afc::t_7a82887329a5c3 1-12
+.sqlx/query-ad83af5ac9e9f31185cc1a862ebde13617253ca60a6b443d38ef0269c2e39244.json
+  s_024592623b7afc::t_5593807ee55170 1-22
+.sqlx/query-af08cfc74901a7b7d3ca21e0289db1b3508cd98dc19668c5cf9efda2c85bb9fd.json
+  s_024592623b7afc::t_b1a0c9c8727897 3,15
+.sqlx/query-b0bf106361a67a062a07836175f93a1aff2ebb3623c4256570816048a0d89d57.json
+  s_024592623b7afc::t_0437cb9e345bbb 1-24
+.sqlx/query-be960f30dc2f0cf4420679420265f803996ee7e00277b60f96d6c7e5994275ee.json
+  s_024592623b7afc::t_e09343ac7ea2d0 3,13
+.sqlx/query-c090f0f2fce77531aba3ad995e23971d96f37b8f72a6fc5082bd78e2e2e23095.json
+  s_024592623b7afc::t_ee7e4706e7516c 3,11-12,17
+.sqlx/query-d2bfc16a9c14a1eabecc25d9116d6495c1dac1aff8a88ce60b49df5d4d720bb5.json
+  s_024592623b7afc::t_23295a79d503e8 1-27
+.sqlx/query-d50e0b7495228d881bba1744e44a94b460df55bace5c9e4eafab19fed46fc63e.json
+  s_024592623b7afc::t_1bea0f821a698b 3,13
+.sqlx/query-d700a70d48e154237acfae9c6895b738d153eafc3d149f792c486ac3e1469513.json
+  s_024592623b7afc::t_3be45a95a3ed0f 3,20-54,65-74,77
+.sqlx/query-dd647bfa0f8f6e7b0806a7a9a2ff9e51c0f9f5341fadd873645a360091fc04a5.json
+  s_024592623b7afc::t_8dc8ec9ab2f780 1-16
+.sqlx/query-e395a54cebbd57db9000bd0b72e4ed6903ebc9dd28b31e2e6ed8e5ab4cde7c8d.json
+  s_024592623b7afc::t_a91dc246d0f394 3,45-49,65,69
+.sqlx/query-e6fecd74eb164b652a0e2fcd1f097d5a734b4fe55fc3395fc55c23e7030a6db7.json
+  s_024592623b7afc::t_767a7cc4c669c5 1-25
+.sqlx/query-ea69e9940828de5fc6049ea20628103e6864726e7fb6de49fd8d9b6799b1036d.json
+  s_024592623b7afc::t_72b6ae78d3cf0c 1-54
+.sqlx/query-ecab95e8a775535ca3ae92845e43a24f0705a2a535dc19b261fb31fc1dfe0528.json
+  s_024592623b7afc::t_f687a9377af884 1-22
+.sqlx/query-f42a6c4b7bccacdcd52b2b2c80bf1c19d42aae6c01fe33748f8d00dc22f35480.json
+  s_024592623b7afc::t_6e383e002adc81 1-26
+.sqlx/query-f858fc4256c8b864a974bdbbfc20156d5e87a350964e92c9330cea73e08415eb.json
+  s_024592623b7afc::t_fb1804fcd0749f 3,167
+.sqlx/query-faf7fd6f14ccfd44bc84057954a6605b148593bc47e3ba56239fa083d8c23ca5.json
+  s_024592623b7afc::t_67fd7a6d2830e9 3,5-11,18-20,22
+.sqlx/query-fda7c2421b62f86f895af14a1c64d36e1e4adc977aca1a39c18cd040a102b9c2.json
+  s_024592623b7afc::t_cc9ab09cb9ac36 1-22
+.sqlx/query-fe364197af9ffb296a26b4d066b7f01360db86c8e8b5e6ec902672a08adfe73d.json
+  s_024592623b7afc::t_3a2e157bcc4ec7 1-15
+Cargo.lock
+  s_024592623b7afc::t_e3967a1d20ece9 792,1022,4071,4087-4088,4101-4102,4797,15756,18387,18585-18622,18631,24603
+apps/web/src/lib/service-clients/service-agent-harness/generated/schemas/executionRecord.ts
+  s_024592623b7afc::t_ba0cfcc5c2b12c 46
+apps/web/src/lib/service-clients/service-agent-harness/openapi.json
+  s_024592623b7afc::t_5f7d15e01901a7 7417
+apps/web/src/lib/service-clients/service-calendar/generated/client.ts
+  s_024592623b7afc::t_7f107d2d0b8b55 1179-1183,1192
+apps/web/src/lib/service-clients/service-calendar/openapi.json
+  s_024592623b7afc::t_ffc65842c13cb1 1065-1067
+apps/web/src/lib/service-clients/service-cognition/generated/tools/types.ts
+  s_024592623b7afc::t_43c25a2b13baf5 8545,8547-8548,8558,8562,16714,16722,16744
+apps/web/src/lib/service-clients/service-scheduled-action/generated/client.ts
+  s_024592623b7afc::t_794a30a9656fe1 54,1974-2034
+apps/web/src/lib/service-clients/service-scheduled-action/generated/schemas/checkRoutineRequest.ts
+  s_024592623b7afc::t_6ed9471e099af5 10,20-23
+apps/web/src/lib/service-clients/service-scheduled-action/generated/schemas/draftedRoutine.ts
+  s_024592623b7afc::t_ad84add32b26fb 8,18-20,24-26
+apps/web/src/lib/service-clients/service-scheduled-action/generated/schemas/index.ts
+  s_024592623b7afc::t_23aafe614ac346 198-200,206-208,354-356
+apps/web/src/lib/service-clients/service-scheduled-action/generated/schemas/routineCheck.ts
+  s_024592623b7afc::t_acdc23ce41efc7 8,10,18-21
+apps/web/src/lib/service-clients/service-scheduled-action/generated/schemas/routineKnob.ts
+  s_024592623b7afc::t_0128d79ac10e23 11,26-27
+apps/web/src/lib/service-clients/service-scheduled-action/generated/schemas/routineKnobEntity.ts
+  s_024592623b7afc::t_f2f02883f1eaef 1-19
+apps/web/src/lib/service-clients/service-scheduled-action/generated/schemas/routineKnobEntityId.ts
+  s_024592623b7afc::t_4d1cee4e047b26 1-12
+apps/web/src/lib/service-clients/service-scheduled-action/generated/schemas/routineKnobEntityType.ts
+  s_024592623b7afc::t_a58c1f20517be2 1-32
+apps/web/src/lib/service-clients/service-scheduled-action/generated/schemas/routineKnobOneOfOnethree.ts
+  s_024592623b7afc::t_445229211bce2b 1-28
+apps/web/src/lib/service-clients/service-scheduled-action/generated/schemas/routineKnobOneOfOnethreeType.ts
+  s_024592623b7afc::t_e4a16ad64dd581 1-15
+apps/web/src/lib/service-clients/service-scheduled-action/generated/schemas/routineKnobOneOfOnethreeValue.ts
+  s_024592623b7afc::t_01f21b22c5bf33 1-10
+apps/web/src/lib/service-clients/service-scheduled-action/generated/schemas/unusableKnob.ts
+  s_024592623b7afc::t_0cf1bacc6a3ab0 1-22
+apps/web/src/lib/service-clients/service-scheduled-action/generated/schemas/unusableKnobItem.ts
+  s_024592623b7afc::t_3d386d9b4176a6 1-10
+apps/web/src/lib/service-clients/service-scheduled-action/generated/schemas/unusableKnobStep.ts
+  s_024592623b7afc::t_7a9405b57ef2bb 1-10
+apps/web/src/lib/service-clients/service-scheduled-action/openapi.json
+  s_024592623b7afc::t_2dca64d69ed27e 1887-1948,3437-3443,4101-4107,4115-4121,5009-5015,5174-5210,5215-5251,6730-6766
+apps/web/src/lib/service-clients/service-storage/generated/schemas/createSavedViewDefinitionRequest.ts
+  s_024592623b7afc::t_71093434ea4f60 7,13
+apps/web/src/lib/service-clients/service-storage/generated/schemas/createSavedViewDefinitionRequestAppearance.ts
+  s_024592623b7afc::t_2a60e92a10c379 1-10
+apps/web/src/lib/service-clients/service-storage/generated/schemas/index.ts
+  s_024592623b7afc::t_cdf8d152c10a22 783,2754,3535
+apps/web/src/lib/service-clients/service-storage/generated/schemas/passwordAgentErrorCode.ts
+  s_024592623b7afc::t_edd9b402fcfca5 30
+apps/web/src/lib/service-clients/service-storage/generated/schemas/passwordErrorCode.ts
+  s_024592623b7afc::t_a553c214938714 23
+apps/web/src/lib/service-clients/service-storage/generated/schemas/passwordImportErrorCode.ts
+  s_024592623b7afc::t_6750ad18a93120 23
+apps/web/src/lib/service-clients/service-storage/generated/schemas/passwordItemFields.ts
+  s_024592623b7afc::t_4d2bf217905fad 20
+apps/web/src/lib/service-clients/service-storage/generated/schemas/passwordPatchItem.ts
+  s_024592623b7afc::t_6387e6751dbdbe 18
+apps/web/src/lib/service-clients/service-storage/generated/schemas/passwordWriteItem.ts
+  s_024592623b7afc::t_da9b49b94440b2 20
+apps/web/src/lib/service-clients/service-storage/generated/schemas/savedViewDefinition.ts
+  s_024592623b7afc::t_3cc72407a5beb9 7,15
+apps/web/src/lib/service-clients/service-storage/generated/schemas/savedViewDefinitionAppearance.ts
+  s_024592623b7afc::t_181d1813d6e422 1-9
+apps/web/src/lib/service-clients/service-storage/generated/schemas/view.ts
+  s_024592623b7afc::t_159379fd96e413 7,10
+apps/web/src/lib/service-clients/service-storage/generated/schemas/viewAppearance.ts
+  s_024592623b7afc::t_88dd331b176389 1-9
+apps/web/src/lib/service-clients/service-storage/generated/zod.ts
+  s_024592623b7afc::t_caae589d07e960 80617,80674-80676,80766-80768,80851-80853,80954-80956,81042-81044,81134-81136,81219-81221,81322-81324,81357-81359,81686-81709,84291-84357,84378-84438,84481-84547,84579-84639,84671-84745,84765-84827,84894-85104
+apps/web/src/lib/service-clients/service-storage/graphql/generated/graphql.ts
+  s_024592623b7afc::t_c7fc52b6ef5a1f 262-263,17526-17535,17544,17551,17558,17565,17579,28501-28502,28615-28619,28621
+apps/web/src/lib/service-clients/service-storage/openapi.json
+  s_024592623b7afc::t_e949c8a66f3872 23288-23297,23356-23365,23436-23445,24334,24461,24823,24943,25070,25272,25339,25417,25476,25574,25747,25814,25965,26041,26100,26176,26238,26549-26668,26731,26809,26871,26940,27011,27070,27138,27197,27265,29292-29371,39394-39404,56312-56313,56768-56769,56914-56915,57150,57302,57521,60950-60960,68784-68794
+infra/bun.lock
+  s_024592623b7afc::t_d05c055c3f6fe9 226-229,866-867
+infra/stacks/search-freshness-probe/CLAUDE.md
+  s_024592623b7afc::t_4cf4a7bc490c23 1
+packages/sdk-mcp/src/__snapshots__/tools.entity.json
+  s_024592623b7afc::t_9a6d1ade10d736 13-14,61,94-95,98
+packages/sdk-mcp/src/__snapshots__/tools.method.json
+  s_024592623b7afc::t_9003b87cbcd407 12,18,630-634,766,777,779-780,782,786-787
+services/search_freshness_probe/CLAUDE.md
+  s_024592623b7afc::t_0e21eb5888210c 1
+static_assets/schema.graphql
+  s_024592623b7afc::t_08541edd43442f 755-758,7769-7772
+tooling/xtask/crates/xtask_local/src/local.rs
+  s_024592623b7afc::t_6037a9f3ce4663 45,534-536
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.7.7",
+  "base_commit_sha": "8d0fd17c32c61d7b0052864e9e1e0b4015f5b41d",
+  "prompts": {},
+  "sessions": {
+    "s_024592623b7afc": {
+      "agent_id": {
+        "tool": "claude",
+        "id": "ff44e640-d545-4448-b666-9917880bbb24",
+        "model": "claude-opus-5-5"
+      },
+      "human_author": "Eric Hayes <56524199+ehayes2000@users.noreply.github.com>"
+    }
+  }
+}
