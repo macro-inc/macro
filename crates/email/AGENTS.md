@@ -197,14 +197,22 @@ tools — hexagonal, heavily feature-gated.
   sender lookup stops one past the initial superset cap, so generic plans can
   stop on that index instead of building a bitmap of all its messages; the
   cap cannot truncate a page the probe proved sparse.
-  Indexed recipient lookups apply only to all-recipient-role groups. A rare
+  Indexed text-recipient lookups apply only to all-recipient-role groups. A rare
   requested role can scan a dense domain before the cap finds a match, so
-  role-restricted recipient groups keep joined SQL. Dense underfill fallbacks
-  and larger Owned round probes also keep joined SQL; per-message probes can make those
-  large sets slower. Checked General branches keep their original joins so
-  mailbox-fact checks are planned with the messages. Optimized Team probes
-  and pages share a read-only repeatable-read snapshot, as Owned reads do,
-  so imports cannot outgrow the probe's cap between statements; privacy changes
+  role-restricted text-recipient groups keep joined SQL. Complete-address
+  all-role recipient branches drive their capped probe and sparse page from
+  the deduplicated contact IDs, with an `OFFSET 0` fence around each recipient
+  lookup and message primary-key fetch. Restricted roles keep joined SQL so
+  dense contacts can use role-first or parallel plans. Dense underfill
+  fallbacks and larger Owned round probes also keep joined SQL; per-message
+  probes can make those large sets slower. Checked General branches keep their
+  original joins so mailbox-fact checks are planned with the messages. The
+  initial Owned sparse page, like Team's superset, fetches distinct matched
+  thread IDs through a primary-key fence before mailbox and cursor filters;
+  its CTE estimate must not turn those IDs into a whole-mailbox filter.
+  Optimized Team probes and pages share a read-only repeatable-read snapshot,
+  as Owned reads do, so imports cannot outgrow the probe's cap between statements;
+  privacy changes
   committed mid-request apply to the next request. Resolve contribution modes
   in that snapshot too. If none of the requested contributors uses selected
   mode, keep the all-mail probe/page SQL without selected-rule work. General
