@@ -8,6 +8,7 @@ agent-harness.json #/components/schemas/ConnectedTool/properties/inputSchema: a 
 agent-harness.json #/components/schemas/ConnectedToolResult/properties/content/items: a free-form object
 agent-harness.json #/components/schemas/ConnectedToolResult/properties/structuredContent: a free-form object
 agent-harness.json #/components/schemas/ControlRequest/allOf/1/properties/context: a free-form object
+agent-harness.json #/components/schemas/ExecutionReceipt/properties/result: the spec gives no type (serde_json::Value)
 agent-harness.json #/components/schemas/ExecutionRecord/properties/result: the spec gives no type (serde_json::Value)
 agent-harness.json #/components/schemas/LogFrameDto/properties/content: a free-form object
 agent-harness.json #/components/schemas/PresentView/properties/view: a free-form object

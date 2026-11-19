@@ -2752,6 +2752,16 @@ type nonrec decision_via =
 val decision_via_of_yojson : Yojson.Safe.t -> decision_via
 val yojson_of_decision_via : decision_via -> Yojson.Safe.t
 
+(** How an approval ended without approving. *)
+type nonrec declined_status =
+  | Denied
+  | Cancelled
+  | Expired
+  | Unknown of string  (** A value this SDK version does not know. *)
+
+val declined_status_of_yojson : Yojson.Safe.t -> declined_status
+val yojson_of_declined_status : declined_status -> Yojson.Safe.t
+
 type nonrec discover_agent_capabilities_request = {
   harness : capability_harness_dto;  (** Provider to probe. *)
   harness_id : string option;
@@ -2976,6 +2986,7 @@ type nonrec recorded_call_status =
   | Completed
   | Failed
   | Unknown_
+  | Refused
   | Unknown of string  (** A value this SDK version does not know. *)
 
 val recorded_call_status_of_yojson : Yojson.Safe.t -> recorded_call_status
@@ -3000,6 +3011,145 @@ val make_execution_activity :
   unit ->
   execution_activity
 (** A bounded SDK operation observed during execution; not an authorization or write receipt. *)
+
+type nonrec gated_operation = {
+  action : permission_action option;
+  group : string;
+      (** Its group id; [unclassified] for an operation the registry does not
+know. *)
+  group_name : string;  (** Its group's display name. *)
+  label : string;
+      (** What it does, for a person. [service.operation] for an operation the
+registry does not know. *)
+  operation : string;  (** The raw operationId, e.g. [send_message]. *)
+  origin : tool_permission_origin;  (** Where the state comes from. *)
+  service : string;  (** The SDK's spec name, e.g. [email]. *)
+  state : tool_permission_state;  (** Its effective state. *)
+}
+(** One SDK operation a program may call, as the gate judged it: what the
+approval dialog lists and a refusal names. *)
+
+val gated_operation_of_yojson : Yojson.Safe.t -> gated_operation
+val yojson_of_gated_operation : gated_operation -> Yojson.Safe.t
+
+val make_gated_operation :
+  ?action:permission_action ->
+  group:string ->
+  group_name:string ->
+  label:string ->
+  operation:string ->
+  origin:tool_permission_origin ->
+  service:string ->
+  state:tool_permission_state ->
+  unit ->
+  gated_operation
+(** One SDK operation a program may call, as the gate judged it: what the
+approval dialog lists and a refusal names. *)
+
+(** Why a program did not run, when its permissions stopped it. *)
+type nonrec execution_permission =
+  | Blocked of {
+      operations : gated_operation list;  (** The operations set to never. *)
+    }
+      (** It may call operations set to never: nothing ran, nobody was asked. *)
+  | Declined of {
+      operations : gated_operation list;  (** The operations it asked about. *)
+      status : declined_status;  (** How the approval ended. *)
+    }  (** It may call operations set to ask, and the person did not approve. *)
+  | Unknown of Yojson.Safe.t
+      (** A case this SDK version does not know, as received. *)
+
+val execution_permission_of_yojson : Yojson.Safe.t -> execution_permission
+val yojson_of_execution_permission : execution_permission -> Yojson.Safe.t
+
+val make_execution_permission_blocked :
+  operations:gated_operation list -> unit -> execution_permission
+(** It may call operations set to never: nothing ran, nobody was asked. *)
+
+val make_execution_permission_declined :
+  operations:gated_operation list ->
+  status:declined_status ->
+  unit ->
+  execution_permission
+(** It may call operations set to ask, and the person did not approve. *)
+
+(** The media type of a model image; only PNG. *)
+type nonrec model_image_media_type =
+  | Image_png
+  | Unknown of string  (** A value this SDK version does not know. *)
+
+val model_image_media_type_of_yojson : Yojson.Safe.t -> model_image_media_type
+val yojson_of_model_image_media_type : model_image_media_type -> Yojson.Safe.t
+
+(** The kind of model media; only images. *)
+type nonrec model_media_type =
+  | Image
+  | Unknown of string  (** A value this SDK version does not know. *)
+
+val model_media_type_of_yojson : Yojson.Safe.t -> model_media_type
+val yojson_of_model_media_type : model_media_type -> Yojson.Safe.t
+
+type nonrec model_image = {
+  data : string;  (** Base64 PNG bytes. *)
+  media_type : model_image_media_type;  (** Always a PNG. *)
+  type_ : model_media_type;  (** Always an image. *)
+}
+(** Base64 PNG pixels the model sees as an image block, never a URL. *)
+
+val model_image_of_yojson : Yojson.Safe.t -> model_image
+val yojson_of_model_image : model_image -> Yojson.Safe.t
+
+val make_model_image :
+  data:string ->
+  media_type:model_image_media_type ->
+  type_:model_media_type ->
+  unit ->
+  model_image
+(** Base64 PNG pixels the model sees as an image block, never a URL. *)
+
+(** The recorded outcome of a program. *)
+type nonrec execution_status =
+  | Running
+  | Succeeded
+  | Failed
+  | Cancelled
+  | Timed_out
+  | Unknown of string  (** A value this SDK version does not know. *)
+
+val execution_status_of_yojson : Yojson.Safe.t -> execution_status
+val yojson_of_execution_status : execution_status -> Yojson.Safe.t
+
+type nonrec execution_receipt = {
+  activity : execution_activity list option;
+      (** Observed SDK operations for conversation activity snapshots. *)
+  error : string option;
+      (** Safe failure text, when execution did not succeed. *)
+  execution_id : execution_id;
+      (** Reference to the session's durable rendering record. *)
+  model_media : model_image list option;
+      (** Pixels of the images [main] returned in [images], for the model. *)
+  permission : execution_permission option;
+  result : Yojson.Safe.t option;
+      (** Only the value explicitly returned by the program. *)
+  status : execution_status;
+      (** Last recorded outcome; running may be stale after a process interruption. *)
+}
+(** Compact model result with an identity the UI uses to load the durable record. *)
+
+val execution_receipt_of_yojson : Yojson.Safe.t -> execution_receipt
+val yojson_of_execution_receipt : execution_receipt -> Yojson.Safe.t
+
+val make_execution_receipt :
+  ?activity:execution_activity list ->
+  ?error:string ->
+  execution_id:execution_id ->
+  ?model_media:model_image list ->
+  ?permission:execution_permission ->
+  ?result:Yojson.Safe.t ->
+  status:execution_status ->
+  unit ->
+  execution_receipt
+(** Compact model result with an identity the UI uses to load the durable record. *)
 
 (** Which authenticated participant's access a tool call requests. *)
 type nonrec tool_actor =
@@ -3050,18 +3200,6 @@ type nonrec program_language =
 val program_language_of_yojson : Yojson.Safe.t -> program_language
 val yojson_of_program_language : program_language -> Yojson.Safe.t
 
-(** The recorded outcome of a program. *)
-type nonrec execution_status =
-  | Running
-  | Succeeded
-  | Failed
-  | Cancelled
-  | Timed_out
-  | Unknown of string  (** A value this SDK version does not know. *)
-
-val execution_status_of_yojson : Yojson.Safe.t -> execution_status
-val yojson_of_execution_status : execution_status -> Yojson.Safe.t
-
 type nonrec execution_record = {
   acting_as : tool_actor option;
   activity : execution_activity list option;
@@ -3076,6 +3214,7 @@ type nonrec execution_record = {
       (** The language [source] is written in; historical records are JavaScript.
 JavaScript, the default, is left out, so records of sessions without
 OCaml serialize as they did before languages. *)
+  permission : execution_permission option;
   result : Yojson.Safe.t option;
       (** JSON returned by the program, if successful. *)
   sdk_fingerprint : string option;
@@ -3101,6 +3240,7 @@ val make_execution_record :
   ?error:string ->
   execution_id:execution_id ->
   ?language:program_language ->
+  ?permission:execution_permission ->
   ?result:Yojson.Safe.t ->
   ?sdk_fingerprint:string ->
   source:string ->
@@ -3374,6 +3514,20 @@ val make_extract_input_response :
   unit ->
   extract_input_response
 (** Validated suggestions for a particular client draft revision. *)
+
+type nonrec group_selection = {
+  actions : permission_action list option;
+      (** The actions to show; empty or absent shows all five. *)
+  group : string;  (** A group id, such as [documents] or [email]. *)
+}
+(** One group, and which of its actions. *)
+
+val group_selection_of_yojson : Yojson.Safe.t -> group_selection
+val yojson_of_group_selection : group_selection -> Yojson.Safe.t
+
+val make_group_selection :
+  ?actions:permission_action list -> group:string -> unit -> group_selection
+(** One group, and which of its actions. *)
 
 (** Defines who can access an item through its share link. *)
 type nonrec link_share =
@@ -3974,6 +4128,83 @@ val make_share_permission_v2 :
   ?team_share_access_level:access_level ->
   unit ->
   share_permission_v2
+
+type nonrec shown_permission = {
+  origin : tool_permission_origin;  (** Where the state comes from. *)
+  state : tool_permission_state;  (** Its effective state. *)
+  target : tool_permission_target;  (** The group action or operation. *)
+}
+(** One shown setting as it stands now. *)
+
+val shown_permission_of_yojson : Yojson.Safe.t -> shown_permission
+val yojson_of_shown_permission : shown_permission -> Yojson.Safe.t
+
+val make_shown_permission :
+  origin:tool_permission_origin ->
+  state:tool_permission_state ->
+  target:tool_permission_target ->
+  unit ->
+  shown_permission
+(** One shown setting as it stands now. *)
+
+type nonrec tool_selection = {
+  operation : string;  (** The raw operationId, as a refusal names it. *)
+  service : string;  (** The SDK's spec name, such as [email]. *)
+}
+(** One SDK operation. *)
+
+val tool_selection_of_yojson : Yojson.Safe.t -> tool_selection
+val yojson_of_tool_selection : tool_selection -> Yojson.Safe.t
+
+val make_tool_selection :
+  operation:string -> service:string -> unit -> tool_selection
+(** One SDK operation. *)
+
+type nonrec show_permissions_selection = {
+  groups : group_selection list;
+      (** The groups, each with the actions shown (all five when none were named). *)
+  tools : tool_selection list;  (** The operations. *)
+}
+(** What was shown, resolved. *)
+
+val show_permissions_selection_of_yojson :
+  Yojson.Safe.t -> show_permissions_selection
+
+val yojson_of_show_permissions_selection :
+  show_permissions_selection -> Yojson.Safe.t
+
+val make_show_permissions_selection :
+  groups:group_selection list ->
+  tools:tool_selection list ->
+  unit ->
+  show_permissions_selection
+(** What was shown, resolved. *)
+
+type nonrec show_permissions_result = {
+  agent_id : string;  (** The agent whose permissions these are. *)
+  current : shown_permission list;  (** Each shown setting as it stands now. *)
+  message : string;  (** What the model should do next. *)
+  reason : string option;  (** The agent's sentence for above the controls. *)
+  selection : show_permissions_selection;  (** What to show. *)
+  session_id : string;  (** The session the card is in. *)
+}
+(** [ShowPermissions]' result: what the chat card shows, and a snapshot for
+the model. The card reads the live settings itself. *)
+
+val show_permissions_result_of_yojson : Yojson.Safe.t -> show_permissions_result
+val yojson_of_show_permissions_result : show_permissions_result -> Yojson.Safe.t
+
+val make_show_permissions_result :
+  agent_id:string ->
+  current:shown_permission list ->
+  message:string ->
+  ?reason:string ->
+  selection:show_permissions_selection ->
+  session_id:string ->
+  unit ->
+  show_permissions_result
+(** [ShowPermissions]' result: what the chat card shows, and a snapshot for
+the model. The card reads the live settings itself. *)
 
 type nonrec start_fresh_agent_conversation_request = {
   session_id : string;
