@@ -91,11 +91,12 @@ return {refresh_token, expires_at_ms}
 );
 
 /// Puts a taken session back under its key until exactly its original
-/// deadline, unless that has passed or the code exists again. An unbound
-/// record's write carries a relative expiry, since a server that predates
-/// the deadline checks reads that key and redeems a record without one;
-/// PEXPIREAT then pins it. A bound record left without an expiry, should
-/// PEXPIREAT fail after its write, is one the takes refuse.
+/// deadline, unless that has passed or the code exists again. PEXPIREAT
+/// pins the deadline; should it fail, the record is deleted and the error
+/// returned, so the code stays spent rather than outliving its deadline.
+/// An unbound write also carries a relative expiry in case that delete
+/// fails too, since a server that predates the deadline checks redeems an
+/// unbound record without one; the takes here refuse it.
 /// KEYS: the session's key. ARGV: the refresh token, the deadline, then for
 /// a bound code the record's fields and challenge.
 const RESTORE_MOBILE_LOGIN_SESSION: &str = r"
@@ -112,7 +113,11 @@ if ARGV[3] then
 else
   redis.call('SET', KEYS[1], ARGV[1], 'PX', ttl_ms)
 end
-redis.call('PEXPIREAT', KEYS[1], ARGV[2])
+local pinned = redis.pcall('PEXPIREAT', KEYS[1], ARGV[2])
+if type(pinned) == 'table' and pinned.err then
+  redis.call('DEL', KEYS[1])
+  return pinned
+end
 return 1
 ";
 

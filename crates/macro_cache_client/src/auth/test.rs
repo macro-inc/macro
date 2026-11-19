@@ -5,13 +5,64 @@ macro_env_var::maybe_env_var! {
     struct RedisUrl;
 }
 
-fn cache() -> MacroCache {
+fn redis_url() -> String {
     let redis_url = RedisUrl::new();
-    let url = redis_url
+    redis_url
         .as_ref()
         .and_then(RedisUrl::value)
-        .unwrap_or("redis://127.0.0.1:6379");
-    MacroCache::new(url)
+        .unwrap_or("redis://127.0.0.1:6379")
+        .to_owned()
+}
+
+fn cache() -> MacroCache {
+    MacroCache::new(&redis_url())
+}
+
+/// A cache signed in as a fresh ACL user that may run every command but
+/// `refused`, and the user's name, to remove it with [`delete_user`].
+async fn cache_refusing(cache: &MacroCache, refused: &[&str]) -> (MacroCache, String) {
+    let mut connection = cache
+        .inner
+        .get_multiplexed_async_connection()
+        .await
+        .unwrap();
+    let user = fresh_code("acl");
+    let mut setuser = redis::cmd("ACL");
+    setuser
+        .arg("SETUSER")
+        .arg(&user)
+        .arg("on")
+        .arg("nopass")
+        .arg("~*")
+        .arg("+@all");
+    for command in refused {
+        setuser.arg(format!("-{command}"));
+    }
+    setuser.query_async::<()>(&mut connection).await.unwrap();
+    let url = redis_url();
+    let address = url.strip_prefix("redis://").unwrap();
+    assert!(
+        !address.contains('@'),
+        "REDIS_URL must carry no credentials"
+    );
+    (
+        MacroCache::new(&format!("redis://{user}:unused@{address}")),
+        user,
+    )
+}
+
+async fn delete_user(cache: &MacroCache, user: &str) {
+    let mut connection = cache
+        .inner
+        .get_multiplexed_async_connection()
+        .await
+        .unwrap();
+    redis::cmd("ACL")
+        .arg("DELUSER")
+        .arg(user)
+        .query_async::<()>(&mut connection)
+        .await
+        .unwrap();
 }
 
 fn fresh_code(label: &str) -> String {
@@ -36,9 +87,26 @@ async fn redis_now_ms(cache: &MacroCache) -> i64 {
     seconds * 1000 + micros / 1000
 }
 
+/// Whether the server has PEXPIRETIME, which came in Redis 7.0 together with
+/// the `REDIS_VERSION_NUM` its scripts can read.
+async fn has_pexpiretime(cache: &MacroCache) -> bool {
+    let mut connection = cache
+        .inner
+        .get_multiplexed_async_connection()
+        .await
+        .unwrap();
+    let version: i64 = redis::cmd("EVAL")
+        .arg("return redis.REDIS_VERSION_NUM or 0")
+        .arg(0)
+        .query_async(&mut connection)
+        .await
+        .unwrap();
+    version >= 0x07_00_00
+}
+
 /// When `key` expires on Redis's clock, read directly rather than through a
-/// take; `None` on a server without PEXPIRETIME (before Redis 7.0).
-async fn stored_deadline_ms(cache: &MacroCache, key: &str) -> Option<i64> {
+/// take. Needs PEXPIRETIME.
+async fn stored_deadline_ms(cache: &MacroCache, key: &str) -> i64 {
     let mut connection = cache
         .inner
         .get_multiplexed_async_connection()
@@ -48,15 +116,31 @@ async fn stored_deadline_ms(cache: &MacroCache, key: &str) -> Option<i64> {
         .arg(key)
         .query_async(&mut connection)
         .await
-        .ok()
+        .unwrap()
+}
+
+/// Milliseconds before `key` expires: -1 when it never does, -2 when absent.
+async fn ttl_ms(cache: &MacroCache, key: &str) -> i64 {
+    let mut connection = cache
+        .inner
+        .get_multiplexed_async_connection()
+        .await
+        .unwrap();
+    redis::cmd("PTTL")
+        .arg(key)
+        .query_async(&mut connection)
+        .await
+        .unwrap()
 }
 
 /// Whether a take read back the deadline `stored`: exactly, where Redis has
-/// PEXPIRETIME, and otherwise no more than a millisecond early.
+/// PEXPIRETIME. Before that the take adds the TTL left to a clock it read
+/// first, so it is never late, and early by the time between the two.
 async fn read_back(cache: &MacroCache, read: i64, stored: i64) -> bool {
-    match stored_deadline_ms(cache, "absent").await {
-        Some(_) => read == stored,
-        None => (-1..=0).contains(&(read - stored)),
+    if has_pexpiretime(cache).await {
+        read == stored
+    } else {
+        (-100..=0).contains(&(read - stored))
     }
 }
 
@@ -256,7 +340,8 @@ async fn a_restored_session_redeems_once_more_within_its_lifetime() {
             .unwrap()
     );
     // The restore keeps the original deadline instead of starting a new one.
-    if let Some(stored) = stored_deadline_ms(&cache, &mobile_login_session_key(&code)).await {
+    if has_pexpiretime(&cache).await {
+        let stored = stored_deadline_ms(&cache, &mobile_login_session_key(&code)).await;
         assert_eq!(stored, taken.expires_at_ms);
     }
 
@@ -431,7 +516,8 @@ async fn a_restored_code_keeps_its_challenge() {
             .unwrap()
     );
     assert_eq!(stored_keys(&cache, &code).await, [false, true]);
-    if let Some(stored) = stored_deadline_ms(&cache, &bound_mobile_login_session_key(&code)).await {
+    if has_pexpiretime(&cache).await {
+        let stored = stored_deadline_ms(&cache, &bound_mobile_login_session_key(&code)).await;
         assert_eq!(stored, taken.expires_at_ms);
     }
     let again = cache
@@ -480,5 +566,93 @@ async fn a_session_past_its_original_deadline_is_not_restored() {
             .await
             .unwrap()
             .is_none()
+    );
+}
+
+#[tokio::test]
+async fn a_take_fails_rather_than_guess_when_redis_refuses_to_read_the_deadline() {
+    let cache = cache();
+    // Before Redis 7.0 a take reads TIME and PTTL instead.
+    if !has_pexpiretime(&cache).await {
+        return;
+    }
+    let (refused, user) = cache_refusing(&cache, &["pexpiretime"]).await;
+    let unbound = fresh_code("refused-deadline");
+    cache
+        .set_mobile_login_session(&unbound, "fake-refresh-token", None)
+        .await
+        .unwrap();
+    let bound = fresh_code("bound-refused-deadline");
+    cache
+        .set_mobile_login_session(&bound, "fake-refresh-token", Some(FAKE_CHALLENGE))
+        .await
+        .unwrap();
+
+    let mut failed = Vec::new();
+    for code in [&unbound, &bound] {
+        failed.push(refused.take_mobile_login_session(code).await.is_err());
+    }
+    delete_user(&cache, &user).await;
+    assert_eq!(failed, [true, true]);
+}
+
+#[tokio::test]
+async fn a_restore_that_cannot_pin_its_deadline_leaves_the_code_spent() {
+    let cache = cache();
+    let (refused, user) = cache_refusing(&cache, &["pexpireat"]).await;
+    let unbound = fresh_code("unpinned");
+    cache
+        .set_mobile_login_session(&unbound, "fake-refresh-token", None)
+        .await
+        .unwrap();
+    let bound = fresh_code("bound-unpinned");
+    cache
+        .set_mobile_login_session(&bound, "fake-refresh-token", Some(FAKE_CHALLENGE))
+        .await
+        .unwrap();
+
+    let mut outcomes = Vec::new();
+    for code in [&unbound, &bound] {
+        let taken = cache
+            .take_mobile_login_session(code)
+            .await
+            .unwrap()
+            .unwrap();
+        let restored = refused.restore_mobile_login_session(code, &taken).await;
+        outcomes.push((restored.is_err(), stored_keys(&cache, code).await));
+    }
+    delete_user(&cache, &user).await;
+    assert_eq!(
+        outcomes,
+        [(true, [false, false]), (true, [false, false])],
+        "a refused expiry must not leave a record behind"
+    );
+}
+
+#[tokio::test]
+async fn an_unbound_restore_that_can_neither_pin_nor_delete_still_expires() {
+    // A server that predates the deadline checks redeems an unbound record
+    // with no expiry, so the write itself carries one.
+    let cache = cache();
+    let (refused, user) = cache_refusing(&cache, &["pexpireat", "del"]).await;
+    let code = fresh_code("unpinned-undeleted");
+    cache
+        .set_mobile_login_session(&code, "fake-refresh-token", None)
+        .await
+        .unwrap();
+    let taken = cache
+        .take_mobile_login_session(&code)
+        .await
+        .unwrap()
+        .unwrap();
+
+    let restored = refused.restore_mobile_login_session(&code, &taken).await;
+    delete_user(&cache, &user).await;
+    let left_ms = ttl_ms(&cache, &mobile_login_session_key(&code)).await;
+    let lifetime_ms = i64::try_from(MACRO_MOBILE_LOGIN_SESSION_EXPIRY_SECONDS * 1000).unwrap();
+    assert!(restored.is_err());
+    assert!(
+        left_ms > 0 && left_ms <= lifetime_ms,
+        "left with {left_ms} ms"
     );
 }
