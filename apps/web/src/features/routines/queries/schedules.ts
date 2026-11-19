@@ -35,6 +35,21 @@ function upsertSchedule(schedule: ScheduledAction) {
         current ? { ...current, ...schedule } : undefined
     );
 
+  if (schedule.sub_routine) {
+    if (!schedule.id) return;
+    // The children query controls active membership. A detail response can
+    // also describe a completed child, so only update an existing row.
+    removeSchedule(schedule.id);
+    queryClient.setQueryData(
+      scheduledActionKeys.subRoutines.queryKey,
+      (current: ScheduledAction[] | undefined) =>
+        current?.map((item) =>
+          item.id === schedule.id ? { ...item, ...schedule } : item
+        )
+    );
+    return;
+  }
+
   queryClient.setQueryData(
     scheduledActionKeys.list.queryKey,
     (current: ScheduledAction[] | undefined) => {
@@ -339,6 +354,11 @@ export function useSetScheduleEnabledMutation(
             queryClient
               .getQueryData<ScheduledAction[]>(
                 scheduledActionKeys.list.queryKey
+              )
+              ?.find((item) => item.id === scheduleId)?.enabled ??
+            queryClient
+              .getQueryData<ScheduledAction[]>(
+                scheduledActionKeys.subRoutines.queryKey
               )
               ?.find((item) => item.id === scheduleId)?.enabled;
           patchScheduleEnabled(scheduleId, enabled);

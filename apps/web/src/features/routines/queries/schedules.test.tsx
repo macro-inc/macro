@@ -88,6 +88,34 @@ afterEach(() => {
 });
 
 describe('routine activation', () => {
+  it('keeps an updated copy in the child cache if the top-level list refresh fails', async () => {
+    const child: ScheduledAction = {
+      ...routine,
+      id: 'copy',
+      sub_routine: { parent_id: 'routine', created_by_run_id: 'run' },
+      task: { sub_routine: 'remind', inputs: {} },
+    };
+    const childKey = scheduledActionKeys.subRoutines.queryKey;
+    const saved = { ...child, enabled: false, configuration_revision: 2 };
+    queryClient.setQueryData(childKey, [child]);
+    setEnabled.mockResolvedValue(ok(saved));
+    // Put the in-flight list read into an error state with retained data.
+    await expect(
+      queryClient.fetchQuery({
+        queryKey: scheduledActionKeys.list.queryKey,
+        staleTime: 0,
+        retry: false,
+        queryFn: async () => {
+          throw new Error('List unavailable');
+        },
+      })
+    ).rejects.toThrow('List unavailable');
+
+    await mountMutation().mutateAsync({ scheduleId: 'copy', enabled: false });
+    expect(schedules()).toEqual([routine, other]);
+    expect(queryClient.getQueryData(childKey)).toEqual([saved]);
+  });
+
   it('pauses only the target routine while saving, then keeps the saved row', async () => {
     const respond = respondLater();
     const pausing = mountMutation().mutateAsync({

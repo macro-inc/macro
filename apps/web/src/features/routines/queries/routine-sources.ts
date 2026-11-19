@@ -406,7 +406,7 @@ export function createRoutineListSource(
     ),
     routines: createMemo(() =>
       (query.isSuccess || query.isError ? (query.data ?? []) : [])
-        .filter((item) => item.id)
+        .filter((item) => item.id && !item.sub_routine)
         .map(toRoutine)
     ),
     loading: () => query.isPending,
