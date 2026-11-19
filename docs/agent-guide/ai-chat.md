@@ -967,7 +967,9 @@ email, channel or task event adds **Open item**. Each code step has
 Runs recorded before this change have neither, and runs recorded with the
 removed tool or decision steps show their outcome without per-step detail.
 
-**Draft it** on a new routine writes code and Ask AI steps. The
+**Draft it** on a new routine writes code and Ask AI steps, and for work the
+routine does later once per item, a sub-routine it defines once and its code
+schedules (see the routines list in [navigation](navigation.md)). The
 scheduler drafts on the server (`POST /scheduled-actions/drafts`, one request
 while the button shows **Drafting…**, at most two minutes): the request carries
 only the description and settings (time zone, model, decisions, code steps).

@@ -1284,6 +1284,25 @@ sub-routines and switching it on resumes only those; deleting it deletes them,
 and the delete dialog says **The N routines it created will be deleted too.**
 In a run's details, **Created** lists the sub-routines that run created.
 
+A routine can instead define a sub-routine once, for work its runs schedule
+per item (Draft it does this for "for each task due this week, remind me the
+day before"). The routine's page and the draft's review list each definition
+after the steps under **Sub-routines** (**Scheduled once per item by this
+routine’s runs**): its title, the name its code schedules it by, **Each one is
+given** with each input's label and type, and its steps, edited like the
+routine's own (without the **Then…** box) and saved with the routine. A run's
+code calls `macro.routines.schedule` with a trigger and the inputs; each copy
+it makes is a sub-routine as above that stores only the definition's name and
+those values. A copy's page shows **Runs “<title>” from <routine>. Its steps
+are edited there, and an edit reaches this routine until it runs.**, the
+values under **Given**, **Edit in <routine>**, which opens the parent, and the
+definition's steps read-only, as the copy will run them: an edit to the
+definition reaches every copy that hasn't run. If the parent no longer
+defines it, the page says so and the copy fails when it runs. **Keep as my
+routine** on a copy writes the definition's steps and its values into it
+first. With the `enable-sub-routines` flag off (PostHog), a routine with
+definitions can't be saved and runs schedule nothing.
+
 The list's top bar has **Routines** with **All** / **On** tabs (each with a
 count) on the left and **New** and search on the right; **Cmd/Ctrl+F** focuses
 search, which matches name, Trigger and Steps. When
