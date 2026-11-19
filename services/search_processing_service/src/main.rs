@@ -76,6 +76,12 @@ pub type EmailAttachmentStatusBackfill =
         outbound::email_attachment_search::OpenSearchEmailAttachmentFlags,
     >;
 
+/// Production wiring for the deleted chat message repair.
+pub type DeletedChatMessageRepair = domain::chat_message_repair::DeletedChatMessageRepair<
+    outbound::chat_message_repair::OpenSearchChatMessages,
+    outbound::chat_message_repair::PgChatRows,
+>;
+
 /// Resolve a read-replica macrodb URL and
 /// connect a small pool. Returns `None` when the replica URL is missing,
 /// blank. Failures
@@ -287,6 +293,13 @@ async fn main() -> anyhow::Result<()> {
         backfill_gate.clone(),
     ));
 
+    let deleted_chat_message_repair = Arc::new(DeletedChatMessageRepair::new(
+        outbound::chat_message_repair::OpenSearchChatMessages(opensearch_client.clone()),
+        outbound::chat_message_repair::PgChatRows::new(backfill_db.clone()),
+        outbound::chat_message_repair::PgChatRows::new(db.clone()),
+        backfill_gate.clone(),
+    ));
+
     let backfill_service = Arc::new(BackfillOrchestrator::new(
         PgBackfillSource::new(backfill_db, db.clone(), config.backfill_page_sizes()?),
         SqsSearchEventPublisher::new(sqs_client.clone()),
@@ -403,6 +416,7 @@ async fn main() -> anyhow::Result<()> {
             backfill_service,
             backfill_jobs,
             email_attachment_status_backfill,
+            deleted_chat_message_repair,
             macro_event_broker,
             backfill_control,
             backfill_gate,

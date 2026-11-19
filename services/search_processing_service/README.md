@@ -244,10 +244,11 @@ Every search-indexed entity has a POST endpoint on sps's internal surface. They 
 | Documents | `POST /internal/backfill/documents` | `{"file_types": ["pdf"], "sub_type": "task", "updated_after": "...", "updated_before": "..."}` |
 | Emails | `POST /internal/backfill/emails` | `{"thread_ids": ["<uuid>"], "since": "2026-03-16T00:00:00Z", "index_override": "emails_v2", "batch_size": 100}` |
 | Email attachment status | `POST /internal/backfill/email-attachment-status` | `{"after_document_id": "<cursor>", "page_size": 500, "docs_per_second": 100}` — `{}` = every document linked to an email attachment, updated directly; see below |
+| Deleted chat messages | `POST /internal/backfill/deleted-chat-messages` | `{"dry_run": false, "after_message_id": "<cursor>", "page_size": 500, "messages_per_second": 1000}` — `{}` = a dry run over every indexed chat message; see below |
 
 ### Backfill cap and pause
 
-Every backfill in a task shares one cap on the work it has in flight, `BACKFILL_MAX_IN_FLIGHT` (default 20). Each wait is for a single unit, so the semaphore serves the queue workers and the direct backfills in arrival order. An SQS worker waits for one unit, takes whatever else is free up to `QUEUE_MAX_MESSAGES`, receives at most that many messages with a 2-second wait, and gives back the units it got no message for; each message keeps one unit until it is processed. A worker that finds the queue empty holds nothing and asks again after the rest of the queue's long-poll wait, so after a quiet spell the first new message can wait up to about 18 seconds to be picked up. Direct backfills (agent sessions, properties, email attachment status) take one unit per write. The cap is per task, so the service-wide limit is the cap times the running task count. Everything on the search event queue passes the gate, including the user-profile removals an account deletion sends and the replays of live events whose attempts failed; the Kafka consumer itself does not. A pause therefore also holds those replays, which stay on the queue until it lifts.
+Every backfill in a task shares one cap on the work it has in flight, `BACKFILL_MAX_IN_FLIGHT` (default 20). Each wait is for a single unit, so the semaphore serves the queue workers and the direct backfills in arrival order. An SQS worker waits for one unit, takes whatever else is free up to `QUEUE_MAX_MESSAGES`, receives at most that many messages with a 2-second wait, and gives back the units it got no message for; each message keeps one unit until it is processed. A worker that finds the queue empty holds nothing and asks again after the rest of the queue's long-poll wait, so after a quiet spell the first new message can wait up to about 18 seconds to be picked up. Direct backfills (agent sessions, properties, email attachment status, deleted chat messages) take one unit per write or page. The cap is per task, so the service-wide limit is the cap times the running task count. Everything on the search event queue passes the gate, including the user-profile removals an account deletion sends and the replays of live events whose attempts failed; the Kafka consumer itself does not. A pause therefore also holds those replays, which stay on the queue until it lifts.
 
 `PUT /internal/backfill/pause` with `{"paused": true}` pauses every backfill in every task, and `{"paused": false}` resumes them; `GET /internal/backfill/pause` reads the switch. It is one item (`control:backfills`) in the backfill jobs table. A task reads it before it starts its workers (giving up after 5 seconds and starting unpaused) and then 10 seconds after each read (a read that takes over 5 seconds is abandoned and keeps the last state), so a change takes effect within about 15 seconds. While paused, SQS workers take no messages, which wait on the queue (they still expire after its retention, 4 days by default); backfills that enqueue stop between pages; direct backfills wait before their next write; and a cancel or shutdown still ends a paused job. Work already admitted finishes. A paused backfill job still reports `running`. A task that cannot read the switch keeps the state it last read.
 
@@ -292,6 +293,35 @@ existed. A release that reaches an environment before its mapping therefore
 loses nothing permanently: its full writes leave the flag unindexed in
 `_source`, the backfill reindexes every attachment's parent, and an unindexed
 `false` reads the same as an absent field.
+
+### Deleted chat messages
+
+Deleting one message from a chat used to leave its document in the `chats`
+index, where chat search still matches the chat through it, and a backfill
+only writes, so it cannot remove them. This job walks the index's message
+documents in message id order, looks up their `ChatMessage` rows, and deletes
+the documents whose row is gone; a message's row is deleted outright, so a
+missing row is a deleted message. Each page is looked up on the backfill
+replica, and every message the replica lacks is looked up again on the primary
+before it is counted or deleted, so a lagging replica cannot remove a message
+just written. Messages of a chat whose row is also gone are removed the same
+way. Database access is two primary-key lookups per page; nothing is written
+there.
+
+The job is a dry run unless the body says `"dry_run": false`: it reads and
+counts, and deletes nothing. Run the dry run first. The status poll reports
+`enqueued` (indexed messages read), `missing` (messages whose row is gone, the
+documents a run deletes), `updated` (documents deleted, 0 in a dry run),
+`failed`, and `cursor`, the last message id it finished. Each page's
+`search.deleted_chat_messages.page` span also records `gone_with_chat`, how
+many of its gone messages belong to a chat whose row is gone too.
+
+It reads at most `messages_per_second` (default 1000) indexed messages a
+second, in pages of `page_size` (default 500, at most 1000), and deletes with
+routed `_bulk` deletes. A 429 or a cluster block stops it with status
+`stopped`, as does a page with any failed delete; resume with
+`{"after_message_id": "<cursor>"}`, which repeats that page. A failed or
+cancelled job resumes the same way.
 
 ### Against dev (deployed service)
 
