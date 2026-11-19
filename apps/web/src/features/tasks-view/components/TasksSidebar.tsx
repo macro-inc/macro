@@ -204,10 +204,16 @@ export function TasksSidebar() {
 
       <ViewSidebar.Content>
         <SidebarRoutineSuggestions surface="tasks" />
-        <TasksNavigation
-          items={BUILT_IN_TASK_TABS}
+        <ViewSidebar.Section
+          id="views"
           label={t('viewMenus.taskViews')}
-        />
+          headerless
+        >
+          <TasksNavigation
+            items={BUILT_IN_TASK_TABS}
+            label={t('viewMenus.taskViews')}
+          />
+        </ViewSidebar.Section>
         <CollapsibleSection.Root
           sectionId="projects"
           sectionLabel={t('viewMenus.projects')}

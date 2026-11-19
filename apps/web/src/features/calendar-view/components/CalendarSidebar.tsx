@@ -368,7 +368,13 @@ export function CalendarSidebar() {
         >
           <TutorialSidebarItem tutorial="calendar" />
         </ViewSidebar.Nav>
-        <CalendarMiniCalendar />
+        <ViewSidebar.Section
+          id="month"
+          label={t('viewMenus.monthCalendar')}
+          headerless
+        >
+          <CalendarMiniCalendar />
+        </ViewSidebar.Section>
         <Show when={shell.breakpoints.narrow?.()}>
           <CalendarSchedulingActions sidebar />
         </Show>

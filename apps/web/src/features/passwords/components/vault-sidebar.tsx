@@ -398,21 +398,27 @@ export function VaultSidebarContent(props: {
 
   return (
     <>
-      <ViewSidebar.Nav aria-label={t('passwords.navigation')}>
-        <For each={COLLECTIONS}>
-          {(collection) => (
-            <ViewSidebar.Item
-              active={props.filter === collection.id}
-              onClick={() => props.onFilter(collection.id)}
-            >
-              <ViewSidebar.Icon>
-                <Dynamic component={collection.icon} class="size-4" />
-              </ViewSidebar.Icon>
-              <span class="truncate">{t(`passwords.${collection.id}`)}</span>
-            </ViewSidebar.Item>
-          )}
-        </For>
-      </ViewSidebar.Nav>
+      <ViewSidebar.Section
+        id="views"
+        label={t('viewMenus.vaultViews')}
+        headerless
+      >
+        <ViewSidebar.Nav aria-label={t('passwords.navigation')}>
+          <For each={COLLECTIONS}>
+            {(collection) => (
+              <ViewSidebar.Item
+                active={props.filter === collection.id}
+                onClick={() => props.onFilter(collection.id)}
+              >
+                <ViewSidebar.Icon>
+                  <Dynamic component={collection.icon} class="size-4" />
+                </ViewSidebar.Icon>
+                <span class="truncate">{t(`passwords.${collection.id}`)}</span>
+              </ViewSidebar.Item>
+            )}
+          </For>
+        </ViewSidebar.Nav>
+      </ViewSidebar.Section>
       <CollapsibleSection.Root
         sectionId="folders"
         sectionLabel={t('passwords.folders')}
@@ -496,14 +502,21 @@ export function VaultSidebarContent(props: {
       </CollapsibleSection.Root>
       <Show when={props.onLock}>
         {(lock) => (
-          <ViewSidebar.Nav aria-label={t('passwords.lock')} class="mt-auto">
-            <ViewSidebar.Item onClick={() => lock()()}>
-              <ViewSidebar.Icon>
-                <LockIcon class="size-4" />
-              </ViewSidebar.Icon>
-              <span class="truncate">{t('passwords.lock')}</span>
-            </ViewSidebar.Item>
-          </ViewSidebar.Nav>
+          <ViewSidebar.Section
+            id="lock"
+            label={t('passwords.lock')}
+            pinned
+            class="mt-auto"
+          >
+            <ViewSidebar.Nav aria-label={t('passwords.lock')}>
+              <ViewSidebar.Item onClick={() => lock()()}>
+                <ViewSidebar.Icon>
+                  <LockIcon class="size-4" />
+                </ViewSidebar.Icon>
+                <span class="truncate">{t('passwords.lock')}</span>
+              </ViewSidebar.Item>
+            </ViewSidebar.Nav>
+          </ViewSidebar.Section>
         )}
       </Show>
     </>

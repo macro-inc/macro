@@ -23,6 +23,7 @@ export type CollapsibleSectionRootProps = Omit<
   /** Stable identity within the owning ViewSidebar's saved order. */
   sectionId?: string;
   sectionLabel?: string;
+  pinned?: boolean;
 };
 
 function Root(props: CollapsibleSectionRootProps) {
@@ -30,6 +31,7 @@ function Root(props: CollapsibleSectionRootProps) {
     'class',
     'sectionId',
     'sectionLabel',
+    'pinned',
   ]);
   const content = () => (
     <Collapsible
@@ -56,6 +58,7 @@ function Root(props: CollapsibleSectionRootProps) {
         <SidebarSection
           id={id()}
           label={local.sectionLabel ?? id()}
+          pinned={local.pinned}
           class={local.class}
         >
           {content()}

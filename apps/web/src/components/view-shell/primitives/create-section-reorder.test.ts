@@ -112,3 +112,73 @@ it('rejects cancellation, another scope, missing targets, and an account round t
     dispose();
   });
 });
+
+it('excludes pinned drag sources, targets, and indicators', () => {
+  createRoot((dispose) => {
+    const keys = () => ['a', 'pinned', 'b', 'c'];
+    const setOrder = vi.fn();
+    const reorder = createSectionReorder({
+      keys,
+      order: keys,
+      pinned: () => ['pinned'],
+      setOrder,
+      account: () => 'viewer',
+      scope: 'view',
+      animate: (update) => update(),
+    });
+    const pinnedSource: Drag = {
+      draggable: { data: { dndScope: 'view', section: 'pinned' } },
+      droppable: { data: { dndScope: 'view', section: 'b' } },
+    };
+    runtime.state.active = {
+      draggable: pinnedSource.draggable,
+      droppable: pinnedSource.droppable,
+    };
+    expect(reorder.isDragging('pinned')).toBe(false);
+    expect(reorder.dropEdge('b')).toBeUndefined();
+    runtime.start(pinnedSource);
+    runtime.end(pinnedSource);
+
+    const pinnedTarget: Drag = {
+      draggable: { data: { dndScope: 'view', section: 'a' } },
+      droppable: { data: { dndScope: 'view', section: 'pinned' } },
+    };
+    runtime.state.active = {
+      draggable: pinnedTarget.draggable,
+      droppable: pinnedTarget.droppable,
+    };
+    expect(reorder.dropEdge('pinned')).toBeUndefined();
+    runtime.start(pinnedTarget);
+    runtime.end(pinnedTarget);
+    reorder.move('pinned', 1);
+    expect(setOrder).not.toHaveBeenCalled();
+    dispose();
+  });
+});
+
+it('removes stored pinned keys while preserving hidden non-pinned slots', () => {
+  createRoot((dispose) => {
+    const [order, setOrder] = createSignal(['a', 'hidden', 'pinned', 'b', 'c']);
+    const keys = () => order().filter((key) => key !== 'hidden');
+    const reorder = createSectionReorder({
+      keys,
+      order,
+      pinned: () => ['pinned'],
+      setOrder,
+      account: () => 'viewer',
+      scope: 'view',
+      animate: (update) => update(),
+    });
+    expect(reorder.dropEdge('c')).toBeUndefined();
+    reorder.move('a', 1);
+    expect(order()).toEqual(['b', 'hidden', 'a', 'c']);
+    const event: Drag = {
+      draggable: { data: { dndScope: 'view', section: 'c' } },
+      droppable: { data: { dndScope: 'view', section: 'a' } },
+    };
+    runtime.start(event);
+    runtime.end(event);
+    expect(order()).toEqual(['b', 'hidden', 'c', 'a']);
+    dispose();
+  });
+});

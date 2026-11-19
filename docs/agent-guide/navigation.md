@@ -489,7 +489,8 @@ controls. Use the shared slots described in
 
 ### Reorder workspace sidebar sections
 
-On desktop, drag a section heading past another heading to change their order.
+On desktop, drag a section heading or the hover/focus gutter grip beside an
+unnamed navigation group past another section to change their shared order.
 An eight-pixel mouse movement starts the drag; a click still collapses the
 section, and header actions still run normally. Tab to a section's **Reorder**
 control and press Up or Down for keyboard reordering. This works in Email,
@@ -499,8 +500,10 @@ section preferences.
 
 Reload to verify persistence. Each account and workspace has its own local
 order; moving Email sections does not move Drive sections. New sections retain
-their default slot, and removed sections are ignored. Plain navigation rows,
-create actions, promotions, the mini calendar, and footer tools remain fixed.
+their default slot, and removed sections are ignored. Unnamed navigation groups
+and the mini calendar reorder without gaining a visible heading. Account and
+workspace selectors, search/create controls, promotions, and footer tools stay
+pinned; they have no drag handle or drop target. Old saved keys cannot move them.
 At 390×844 with touch emulation, headings still collapse and actions still work;
 section dragging and the keyboard reorder control are desktop-only.
 

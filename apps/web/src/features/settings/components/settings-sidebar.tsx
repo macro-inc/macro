@@ -69,9 +69,15 @@ export function SettingsSidebar(props: {
       <ViewSidebar.Content>
         {/* Search results replace the pills, so they replace the action too. */}
         <Show when={action() && !props.searchQuery.trim()}>
-          <ViewSidebar.Nav aria-label={t('settingsNav.teamActions')}>
-            {action()}
-          </ViewSidebar.Nav>
+          <ViewSidebar.Section
+            id="team-actions"
+            label={t('settingsNav.teamActions')}
+            pinned
+          >
+            <ViewSidebar.Nav aria-label={t('settingsNav.teamActions')}>
+              {action()}
+            </ViewSidebar.Nav>
+          </ViewSidebar.Section>
         </Show>
         <Show
           when={!props.searchQuery.trim()}

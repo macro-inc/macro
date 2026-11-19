@@ -366,24 +366,30 @@ export function ReviewsSidebar(props: {
       </Show>
       <ViewSidebar.Content>
         <SidebarRoutineSuggestions surface="reviews" />
-        <ViewSidebar.Nav aria-label="Pull request views">
-          <For each={REVIEWS_SCOPES}>
-            {(scope) => {
-              const Icon = SCOPE_ITEMS[scope].icon;
-              return (
-                <ViewSidebar.Item
-                  active={props.scope === scope}
-                  onClick={() => props.onScopeChange(scope)}
-                >
-                  <ViewSidebar.Icon>
-                    <Icon class="size-4" />
-                  </ViewSidebar.Icon>
-                  <span class="truncate">{SCOPE_ITEMS[scope].label}</span>
-                </ViewSidebar.Item>
-              );
-            }}
-          </For>
-        </ViewSidebar.Nav>
+        <ViewSidebar.Section
+          id="views"
+          label={t('viewMenus.reviewViews')}
+          headerless
+        >
+          <ViewSidebar.Nav aria-label="Pull request views">
+            <For each={REVIEWS_SCOPES}>
+              {(scope) => {
+                const Icon = SCOPE_ITEMS[scope].icon;
+                return (
+                  <ViewSidebar.Item
+                    active={props.scope === scope}
+                    onClick={() => props.onScopeChange(scope)}
+                  >
+                    <ViewSidebar.Icon>
+                      <Icon class="size-4" />
+                    </ViewSidebar.Icon>
+                    <span class="truncate">{SCOPE_ITEMS[scope].label}</span>
+                  </ViewSidebar.Item>
+                );
+              }}
+            </For>
+          </ViewSidebar.Nav>
+        </ViewSidebar.Section>
         <ReviewFavorites
           onOpenReview={props.onOpenReview}
           activeForeignEntityId={props.activeForeignEntityId}

@@ -211,4 +211,99 @@ describe('sidebar section composition', () => {
     const checkbox = result.getByRole('checkbox', { name: 'Show calendar' });
     expect(checkbox instanceof HTMLInputElement && checkbox.checked).toBe(true);
   });
+
+  it('reorders unnamed groups with headed sections while ignoring saved pinned keys', () => {
+    localStorage.setItem(
+      'sidebar-section-order:pinned:sidebar-viewer',
+      JSON.stringify({
+        version: 1,
+        order: ['last', 'accounts', 'mail-folders', 'footer'],
+      })
+    );
+    const result = render(() => (
+      <DragDropProvider>
+        <ViewSidebar.Root reorderId="pinned">
+          <ViewSidebar.Content>
+            <ViewSidebar.Section id="accounts" label="Accounts" pinned>
+              <ViewSidebar.SectionHeader>
+                <h2>Accounts</h2>
+              </ViewSidebar.SectionHeader>
+              <button type="button">Select account</button>
+            </ViewSidebar.Section>
+            <ViewSidebar.Section
+              id="mail-folders"
+              label="Mail folders"
+              headerless
+            >
+              <button type="button">Inbox</button>
+            </ViewSidebar.Section>
+            <Section id="last" />
+            <ViewSidebar.Section id="footer" label="Footer" pinned>
+              <button type="button">Settings</button>
+            </ViewSidebar.Section>
+          </ViewSidebar.Content>
+        </ViewSidebar.Root>
+      </DragDropProvider>
+    ));
+    const order = () =>
+      [...result.container.querySelectorAll('[data-sidebar-section]')].map(
+        (node) => node.getAttribute('data-sidebar-section')
+      );
+    const folders = result.getByRole('region', { name: 'Mail folders' });
+    expect(folders.textContent).toBe('Inbox');
+    expect(folders.querySelector('h1, h2, h3')).toBeNull();
+    expect(order()).toEqual(['accounts', 'last', 'mail-folders', 'footer']);
+    expect(
+      result.queryByRole('button', { name: 'Reorder Accounts' })
+    ).toBeNull();
+    expect(result.queryByRole('button', { name: 'Reorder Footer' })).toBeNull();
+    const handle = result.getByRole('button', { name: 'Reorder Mail folders' });
+    handle.focus();
+    fireEvent.keyDown(handle, { key: 'ArrowUp' });
+    expect(order()).toEqual(['accounts', 'mail-folders', 'last', 'footer']);
+    expect(document.activeElement).toBe(handle);
+    fireEvent.keyDown(handle, { key: 'ArrowUp' });
+    expect(order()).toEqual(['accounts', 'mail-folders', 'last', 'footer']);
+    expect(
+      JSON.parse(
+        localStorage.getItem('sidebar-section-order:pinned:sidebar-viewer') ??
+          '{}'
+      ).order
+    ).toEqual(['mail-folders', 'last']);
+  });
+
+  it('starts unnamed-section dragging from its grip, not its navigation buttons', () => {
+    const dragStarted = vi.fn();
+    const result = render(() => (
+      <DragDropProvider onDragStart={dragStarted}>
+        <DragDropSensors />
+        <ViewSidebar.Root reorderId="unnamed-pointer">
+          <ViewSidebar.Content>
+            <ViewSidebar.Section
+              id="mail-folders"
+              label="Mail folders"
+              headerless
+            >
+              <button type="button">Inbox</button>
+            </ViewSidebar.Section>
+            <Section id="last" />
+          </ViewSidebar.Content>
+        </ViewSidebar.Root>
+      </DragDropProvider>
+    ));
+    fireEvent.mouseDown(result.getByRole('button', { name: 'Inbox' }), {
+      button: 0,
+      clientY: 0,
+    });
+    fireEvent.mouseMove(document, { clientY: 20 });
+    fireEvent.mouseUp(document);
+    expect(dragStarted).not.toHaveBeenCalled();
+    fireEvent.mouseDown(
+      result.getByRole('button', { name: 'Reorder Mail folders' }),
+      { button: 0, clientY: 0 }
+    );
+    fireEvent.mouseMove(document, { clientY: 20 });
+    expect(dragStarted).toHaveBeenCalledOnce();
+    fireEvent.mouseUp(document);
+  });
 });

@@ -19,6 +19,7 @@ export type SectionReorder<Key extends string = string> = {
 export function createSectionReorder<Key extends string>(options: {
   keys: Accessor<readonly Key[]>;
   order: Accessor<readonly Key[]>;
+  pinned?: Accessor<readonly Key[]>;
   account: Accessor<unknown>;
   scope: string;
   setOrder: (keys: Key[]) => void;
@@ -27,13 +28,27 @@ export function createSectionReorder<Key extends string>(options: {
   const [state, actions] = useDragDropContext() ?? [];
   let drag: { account: unknown } | undefined;
 
+  const sortableKeys = () => {
+    const pinned = new Set(options.pinned?.() ?? []);
+    return options.keys().filter((key) => !pinned.has(key));
+  };
   const persist = (sections: Key[]) =>
-    options.animate(() =>
-      options.setOrder(replaceVisibleSectionOrder(options.order(), sections))
-    );
+    options.animate(() => {
+      const pinned = new Set(options.pinned?.() ?? []);
+      options.setOrder(
+        replaceVisibleSectionOrder(
+          options.order().filter((key) => !pinned.has(key)),
+          sections.filter((key) => !pinned.has(key))
+        )
+      );
+    });
 
   actions?.onDragStart(({ draggable }) => {
-    if (draggable.data.dndScope === options.scope) {
+    drag = undefined;
+    if (
+      draggable.data.dndScope === options.scope &&
+      sortableKeys().includes(draggable.data.section)
+    ) {
       drag = { account: options.account() };
     }
   });
@@ -46,7 +61,7 @@ export function createSectionReorder<Key extends string>(options: {
     )
       return;
     const next = reorderSection(
-      options.keys(),
+      sortableKeys(),
       draggable.data.section,
       droppable.data.section
     );
@@ -64,10 +79,10 @@ export function createSectionReorder<Key extends string>(options: {
         target.data.section !== key
       )
         return;
-      return sectionDropEdge(options.keys(), source.data.section, key);
+      return sectionDropEdge(sortableKeys(), source.data.section, key);
     },
     move: (section, direction) => {
-      const keys = options.keys();
+      const keys = sortableKeys();
       const from = keys.indexOf(section);
       const target = keys[from + direction];
       if (from < 0 || target === undefined) return;
@@ -75,6 +90,7 @@ export function createSectionReorder<Key extends string>(options: {
       if (next) persist(next);
     },
     isDragging: (key) =>
+      sortableKeys().includes(key) &&
       state?.active.draggable?.data.dndScope === options.scope &&
       state.active.draggable.data.section === key,
     cancel: () => {

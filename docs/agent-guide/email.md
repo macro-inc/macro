@@ -61,9 +61,11 @@ Signal; selecting it while in Focus or Noise keeps that tab.
 By default the desktop sidebar continues with `Favorites`, `Drafts`, `Sent`,
 `Scheduled`, and `Reminders` (when enabled), followed by **Library** (`All mail`,
 `Archived`, `Shared`, `Spam`, and `Trash`) and **Saved views** (flagged, see
-[Saved email views](#saved-email-views)). Drag the Accounts, Library, or Saved
-views heading to reorder those sections locally; section order is per account
-and survives reloads. Sidebar number shortcuts retain their default destination
+[Saved email views](#saved-email-views)). Drag the Library or Saved views
+heading, or the hover/focus gutter grip beside the unnamed Inbox/Favorites/
+Drafts/Sent group, to reorder those sections locally. Accounts stays pinned at
+the top and is not a drop target. Section order is per account and survives
+reloads. Sidebar number shortcuts retain their default destination
 order. `Tab` and `Shift+Tab` move between the Inbox tabs (from another mailbox,
 `Tab` opens the first, Focus when it shows, else Signal, and `Shift+Tab` Noise).
 This holds while the email list itself has focus, as it does after `Escape`

@@ -220,6 +220,7 @@ function InboxAccountGroup(props: {
       id="accounts"
       label="Accounts"
       aria-label="Email accounts"
+      pinned
       class={cn(
         'shrink-0 rounded-xl border border-edge-button bg-control not-touch:elevated p-1',
         props.class

@@ -127,14 +127,20 @@ export function DriveSidebarContent(props: { onNavigate?: () => void }) {
 
   return (
     <>
-      <DriveNavigation
-        locationMenu={DriveLocationMenu}
-        location={state.value().location}
-        onNavigate={(tab) => {
-          state.selectTab(tab);
-          props.onNavigate?.();
-        }}
-      />
+      <ViewSidebar.Section
+        id="views"
+        label={t('viewMenus.driveViews')}
+        headerless
+      >
+        <DriveNavigation
+          locationMenu={DriveLocationMenu}
+          location={state.value().location}
+          onNavigate={(tab) => {
+            state.selectTab(tab);
+            props.onNavigate?.();
+          }}
+        />
+      </ViewSidebar.Section>
       <Show when={sidebar.favorites().length > 0}>
         <CollapsibleSection.Root
           sectionId="favorites"

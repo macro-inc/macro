@@ -38,6 +38,13 @@ Give `ViewSidebar.Root` a stable `reorderId` for its view. Give each top-level
 `CollapsibleSection.Root` a stable `sectionId` and a `sectionLabel`, and compose
 its trigger and actions inside `CollapsibleSection.Header`. Non-collapsible
 sections use `ViewSidebar.Section` (`id`, `label`) and `ViewSidebar.SectionHeader`.
+For an unnamed navigation group, use `headerless`: `label` supplies only its
+accessible name, while a hover/focus gutter grip provides mouse and Up/Down
+keyboard reordering without adding a heading. Both kinds share one order.
+Mark fixed account/workspace selectors or other controls inside Content with
+`pinned`; pinned sections have no drag handle or drop target, retain their DOM
+slot, and their keys are ignored in stored orders. Header, Primary, and Footer
+slots remain outside the reorder region.
 Keep these sections as direct resolved children of `ViewSidebar.Content`;
 fragments, conditional children, and components returning a section are supported.
 Nested disclosure groups remain contents of their owning section, not separate drag targets.
@@ -55,7 +62,7 @@ notifications; account/view changes retire their previous listeners.
 Storage is schema-validated through `makePersistedState`; unavailable storage
 leaves in-memory ordering usable. Unknown keys are ignored and new sections stay
 in their default slots. Temporarily hidden sections retain their saved positions.
-Fixed rows and footer controls do not move. Sections move
+Pinned controls and footer controls do not move. Sections move
 as existing DOM nodes, not CSS `order`, preserving input state and reading order.
 
 The backend-free `browser-test/sidebar-reorder.browser.e2e.ts` regression covers

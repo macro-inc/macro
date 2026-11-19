@@ -1,77 +1,97 @@
+import { isTouchDevice } from '@core/mobile/isTouchDevice';
 import { mergeRefs } from '@solid-primitives/refs';
 import { createDroppable } from '@thisbeyond/solid-dnd';
 import { cn } from '@ui';
 import { type JSX, Show, splitProps, useContext } from 'solid-js';
+import type { SectionReorder } from './primitives/create-section-reorder';
 import { SectionDropIndicator } from './SectionDropIndicator';
+import { SidebarSectionDragHandle } from './SidebarSectionDragHandle';
 import {
   SidebarSectionContext,
   SidebarSectionsContext,
 } from './sidebar-section-context';
 
-/** An identity-bearing section; navigation rows outside sections keep their slots. */
+/** A section identity with an optional gutter grip or a fixed, non-droppable slot. */
 export function SidebarSection(
   props: JSX.HTMLAttributes<HTMLElement> & {
     id: string;
     label: string;
+    headerless?: boolean;
+    pinned?: boolean;
   }
 ) {
   const [local, rest] = splitProps(props, [
     'id',
     'label',
+    'headerless',
+    'pinned',
     'class',
     'classList',
     'children',
     'ref',
   ]);
   const parent = useContext(SidebarSectionsContext);
-  const droppable =
-    parent &&
-    createDroppable(`${parent.reorder.scope}:${local.id}`, {
-      dndScope: parent.reorder.scope,
-      section: local.id,
-    });
-  const content = () => (
-    <section
-      aria-label={local.label}
-      {...rest}
-      ref={mergeRefs(local.ref, (element) => droppable?.ref(element))}
-      data-sidebar-section={local.id}
-      class={cn('relative min-w-0 shrink-0', local.class)}
-      classList={{
-        ...local.classList,
-        'opacity-40': parent?.reorder.isDragging(local.id),
-      }}
-    >
+  const render = (reorder?: SectionReorder) => {
+    const droppable = reorder
+      ? createDroppable(`${reorder.scope}:${local.id}`, {
+          dndScope: reorder.scope,
+          section: local.id,
+        })
+      : undefined;
+    const content = () => (
       <SidebarSectionsContext.Provider value={undefined}>
         {local.children}
       </SidebarSectionsContext.Provider>
-      <SectionDropIndicator edge={parent?.reorder.dropEdge(local.id)} />
-    </section>
-  );
-  return (
-    <Show
-      when={parent}
-      fallback={
-        <SidebarSectionContext.Provider value={undefined}>
-          {content()}
-        </SidebarSectionContext.Provider>
-      }
-    >
-      {(context) => (
-        <SidebarSectionContext.Provider
-          value={{
-            get id() {
-              return local.id;
-            },
-            get label() {
-              return local.label;
-            },
-            reorder: context().reorder,
+    );
+    return (
+      <SidebarSectionContext.Provider
+        value={
+          reorder
+            ? {
+                get id() {
+                  return local.id;
+                },
+                get label() {
+                  return local.label;
+                },
+                reorder,
+              }
+            : undefined
+        }
+      >
+        <section
+          aria-label={local.label}
+          {...rest}
+          ref={mergeRefs(local.ref, (element) => droppable?.ref(element))}
+          data-sidebar-section={local.id}
+          data-sidebar-section-pinned={local.pinned ? 'true' : undefined}
+          class={cn('relative min-w-0 shrink-0', local.class)}
+          classList={{
+            ...local.classList,
+            'opacity-40': reorder?.isDragging(local.id),
           }}
         >
-          {content()}
-        </SidebarSectionContext.Provider>
-      )}
+          <Show when={local.headerless && reorder} fallback={content()}>
+            {(controller) => (
+              <SidebarSectionDragHandle
+                section={local.id}
+                label={local.label}
+                reorder={controller()}
+                disabled={isTouchDevice()}
+                gutter
+              >
+                {content()}
+              </SidebarSectionDragHandle>
+            )}
+          </Show>
+          <SectionDropIndicator edge={reorder?.dropEdge(local.id)} />
+        </section>
+      </SidebarSectionContext.Provider>
+    );
+  };
+  return (
+    <Show when={!local.pinned && parent} fallback={render()}>
+      {(context) => render(context().reorder)}
     </Show>
   );
 }

@@ -33,6 +33,7 @@ export function SidebarSections(props: {
   });
   const scope = `sidebar-sections:${createUniqueId()}`;
   let sections: Accessor<LayoutAnimationItem[]> = () => [];
+  let pinned: Accessor<string[]> = () => [];
   const keys = () =>
     mergeSectionOrder(
       sections().map(({ key }) => key),
@@ -45,6 +46,7 @@ export function SidebarSections(props: {
   onCleanup(motion.cancel);
   const reorder = createSectionReorder({
     keys,
+    pinned: () => pinned(),
     order: preference.order,
     setOrder: preference.setOrder,
     account: preference.account,
@@ -82,20 +84,34 @@ export function SidebarSections(props: {
   // Resolve children inside the provider so each section receives this controller.
   const renderContent = () => {
     const content = children(() => props.children);
-    sections = createMemo(() =>
+    const sectionNodes = createMemo(() =>
       content.toArray().flatMap((node) => {
         if (!(node instanceof HTMLElement)) return [];
         const key = node.dataset.sidebarSection;
         return key ? [{ key, element: node, layout: node }] : [];
       })
     );
+    pinned = () =>
+      sectionNodes()
+        .filter(
+          ({ element }) => element.dataset.sidebarSectionPinned === 'true'
+        )
+        .map(({ key }) => key);
+    sections = () =>
+      sectionNodes().filter(
+        ({ element }) => element.dataset.sidebarSectionPinned !== 'true'
+      );
     const orderedContent = createMemo(() => {
       const byKey = new Map(
         sections().map(({ key, element }) => [key, element])
       );
       let index = 0;
       return content.toArray().map((node) => {
-        if (!(node instanceof HTMLElement) || !node.dataset.sidebarSection)
+        if (
+          !(node instanceof HTMLElement) ||
+          !node.dataset.sidebarSection ||
+          node.dataset.sidebarSectionPinned === 'true'
+        )
           return node;
         return byKey.get(keys()[index++]);
       });
