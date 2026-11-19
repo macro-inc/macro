@@ -222,6 +222,7 @@ impl<I: ChatMessageIndex, R: ChatRows> DeletedChatMessageRepair<I, R> {
             read = Empty,
             gone = Empty,
             gone_with_chat = Empty,
+            gone_sample = Empty,
             deleted = Empty,
             not_found = Empty,
             last_message_id = Empty,
@@ -282,6 +283,9 @@ impl<I: ChatMessageIndex, R: ChatRows> DeletedChatMessageRepair<I, R> {
                 .collect()
         };
         span.record("gone", gone.len());
+        if !gone.is_empty() {
+            span.record("gone_sample", gone_sample(&gone).as_str());
+        }
 
         if !gone.is_empty() {
             let chat_ids: Vec<String> = gone
@@ -343,6 +347,20 @@ impl<I: ChatMessageIndex, R: ChatRows> DeletedChatMessageRepair<I, R> {
             delete,
         }))
     }
+}
+
+/// How many of a page's gone messages its span names, so a dry run's finds can
+/// be checked against the database by hand.
+const GONE_SAMPLE: usize = 10;
+
+/// Up to [`GONE_SAMPLE`] gone messages, as `chat_id:message_id` (their document
+/// ids), comma separated.
+fn gone_sample(gone: &[IndexedChatMessage]) -> String {
+    gone.iter()
+        .take(GONE_SAMPLE)
+        .map(|message| format!("{}:{}", message.chat_id, message.message_id))
+        .collect::<Vec<_>>()
+        .join(",")
 }
 
 fn message_ids<'a>(messages: impl Iterator<Item = &'a IndexedChatMessage>) -> Vec<String> {

@@ -163,6 +163,18 @@ fn request(dry_run: bool, page_size: u16) -> DeletedChatMessageRepairRequest {
 }
 
 #[test]
+fn a_page_names_at_most_ten_of_its_gone_messages() {
+    let gone: Vec<_> = (0..12)
+        .map(|i| message("chat-1", &format!("message-{i:02}")))
+        .collect();
+
+    let sample = gone_sample(&gone);
+
+    assert_eq!(sample.split(',').count(), 10);
+    assert!(sample.starts_with("chat-1:message-00,chat-1:message-01,"));
+}
+
+#[test]
 fn a_request_without_dry_run_is_a_dry_run() {
     let req: DeletedChatMessageRepairRequest = serde_json::from_str("{}").unwrap();
     assert!(req.dry_run);

@@ -322,7 +322,9 @@ a run. The status poll reports
 documents a run deletes), `updated` (documents deleted, 0 in a dry run),
 `failed`, and `cursor`, the last message id it finished. Each page's
 `search.deleted_chat_messages.page` span also records `gone_with_chat`, how
-many of its gone messages belong to a chat whose row is gone too.
+many of its gone messages belong to a chat whose row is gone too, and
+`gone_sample`, up to 10 of them as `chat_id:message_id`, to check a dry run's
+finds against `ChatMessage` before the real run.
 
 It reads at most `messages_per_second` (default 1000) indexed messages a
 second, in pages of `page_size` (default 500, at most 1000), and deletes with
