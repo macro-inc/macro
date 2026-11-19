@@ -22,7 +22,7 @@ const { steps, warnings } = compareRuns(a, b);
 const fmt = (value: number) => (Number.isNaN(value) ? '-' : String(Math.round(value)));
 const header = ['scenario', 'variant', 'cpu', 'A n', 'A median', 'B n', 'B median', 'change', 'detect'];
 const lines = steps.map((step) => [
-  `${step.scenario}${step.differentTargets ? ' !' : ''}`,
+  `${step.scenario}${step.differentTargets || step.differentReadiness ? ' !' : ''}`,
   step.variant,
   `${step.cpuThrottle}×`,
   String(step.a.n),
@@ -44,5 +44,5 @@ console.log(render(header));
 for (const line of lines) console.log(render(line));
 console.log('Times in ms. detect is the larger run\'s detectable change as a share of A\'s median; smaller changes are noise.');
 for (const warning of warnings) console.warn(`Warning: ${warning}`);
-if (steps.some((step) => step.differentTargets))
-  console.warn('Rows marked ! opened different targets in A and B.');
+if (steps.some((step) => step.differentTargets || step.differentReadiness))
+  console.warn('Rows marked ! opened different targets, or ended at different points, in A and B.');

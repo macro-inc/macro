@@ -106,7 +106,12 @@ async function tapAndMeasure(
   // Rows that open an item must not show unread when the touch lands.
   await session.guardTap(step.opens ? UNREAD : undefined);
   await session.device.tap(point.x, point.y, holdMs);
-  const start = await waitForTap(session, before);
+  let start: number;
+  try {
+    start = await waitForTap(session, before);
+  } finally {
+    await session.clearTapGuard();
+  }
   const refused = await session.tapRefused();
   if (refused) throw new Error(`${step.id}: touch dropped, ${refused}`);
   const root = await session.waitForSpan(
@@ -188,20 +193,28 @@ export async function waitForBootFlow(
   return flow;
 }
 
-/** Classifies a candidate's row without opening it. */
+/**
+ * Classifies a candidate's row without opening it, and says whether finding
+ * it scrolled the page.
+ */
 async function observe(
   session: Session,
   item: Targets[TargetKey],
-  key: TargetKey
+  key: TargetKey,
+  scrolled: () => void
 ): Promise<Observation> {
   try {
     // A virtual list can replace the row as it scrolls into place: look again.
     for (let attempt = 0; attempt < 3; attempt++) {
-      if (await session.locate(row(item, key))) return 'quiet';
+      const point = await session.locate(row(item, key));
+      if (point?.moved) scrolled();
+      if (point) return 'quiet';
       await sleep(300);
     }
     return 'missing';
   } catch (error) {
+    // A search that scrolled and failed still moved the list.
+    scrolled();
     const message = (error as Error).message;
     if (message.includes(SHOWS_UNREAD)) return 'unread';
     if (message.includes(NOT_IN_LIST)) return 'missing';
@@ -237,15 +250,20 @@ export async function prepare(
   if (!scenario.opens?.length) return { targets, choices };
   // The list may still be loading: wait for any row first.
   await session.waitFor(`document.querySelectorAll('[data-soup-entity]')`);
+  let moved = false;
   for (const key of scenario.opens) {
     const items = candidates(file, key);
     const { choice, skipped } = await chooseCandidate(key, items, (item) =>
-      observe(session, item, key)
+      observe(session, item, key, () => {
+        moved = true;
+      })
     );
     for (const reason of skipped) console.warn(`  ${reason}; skipped`);
     targets[key] = items[choice.index];
     choices.push(choice);
   }
   await sleep(settleMs);
+  // Pages a search's scrolling started must not land in the first step.
+  if (moved) await session.waitForQuiet();
   return { targets, choices };
 }

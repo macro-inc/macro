@@ -40,9 +40,10 @@ for (Notifications' rows) is timed in the page: from the touch on, it checks
 in animation frames after each DOM change for the first such row a touch
 would reach, and records the frame after it, the same paint opportunity the
 spans end at. `contentMs` is that time from the touch, and `readyMs` the later
-of it and the spans. For views, channels and back
+of it and the spans. For views without such content, channels and back
 navigations `readyMs − spanMs` is the time from the touch to the handler; for
-documents `readyMs` runs on to the end of `doc.editor`.
+documents `readyMs` runs on to the end of `doc.editor`, and for Notifications
+to its rows' paint.
 
 Before the first timed step of a launch the harness waits for the boot
 `view.app` flow (the app shell's route view) to end, then `--boot-settle`.

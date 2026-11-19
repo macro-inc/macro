@@ -6,7 +6,7 @@ export type Results = {
   meta: { label?: string; environment?: { app?: string } };
   samples: Pick<
     Sample,
-    'scenario' | 'variant' | 'cpuThrottle' | 'readyMs' | 'target'
+    'scenario' | 'variant' | 'cpuThrottle' | 'readyMs' | 'contentMs' | 'target'
   >[];
 };
 
@@ -20,6 +20,8 @@ export type ComparedStep = {
   change: number;
   /** The two runs did not open the same target for this step. */
   differentTargets: boolean;
+  /** One run waited for content (`contentMs`) and the other did not. */
+  differentReadiness: boolean;
 };
 
 /** Steps whose time depends on the target; older results don't say which. */
@@ -91,6 +93,14 @@ export function compareRuns(a: Results, b: Results) {
           `${label}: A opened ${describe(targetsA)}, B opened ${describe(targetsB)}; not comparable`
         );
     }
+    // Older results end a content-gated view at its span, newer at its content.
+    const waitsForContent = (samples: Results['samples']) =>
+      samples.some((sample) => sample.contentMs !== undefined);
+    const differentReadiness = waitsForContent(samplesA) !== waitsForContent(samplesB);
+    if (differentReadiness)
+      warnings.push(
+        `${label}: ${waitsForContent(samplesA) ? 'A' : 'B'} waited for content to paint, the other ended at the span; not comparable`
+      );
     const summaryA = summarize(samplesA.map((sample) => sample.readyMs));
     const summaryB = summarize(samplesB.map((sample) => sample.readyMs));
     steps.push({
@@ -101,6 +111,7 @@ export function compareRuns(a: Results, b: Results) {
       b: { n: summaryB.n, median: summaryB.median, detect: summaryB.detectableChange },
       change: summaryB.median / summaryA.median - 1,
       differentTargets,
+      differentReadiness,
     });
   }
   for (const stepKey of groupsB.keys())

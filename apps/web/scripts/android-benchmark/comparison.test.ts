@@ -10,7 +10,12 @@ const channel = (index: number, fingerprint: string): TargetChoice => ({
 });
 
 function run(
-  samples: { scenario: string; readyMs: number; target?: TargetChoice }[]
+  samples: {
+    scenario: string;
+    readyMs: number;
+    contentMs?: number;
+    target?: TargetChoice;
+  }[]
 ): Results {
   return {
     meta: {},
@@ -75,6 +80,16 @@ describe('compareRuns', () => {
     const a = run([{ scenario: 'channel.back', readyMs: 300, target: channel(0, 'aaaa0000') }]);
     const b = run([{ scenario: 'channel.back', readyMs: 300, target: channel(1, 'bbbb1111') }]);
     expect(compareRuns(a, b).steps[0].differentTargets).toBe(true);
+  });
+
+  it('warns when only one run waited for content to paint', () => {
+    const a = run([{ scenario: 'view.notifications', readyMs: 120 }]);
+    const b = run([{ scenario: 'view.notifications', readyMs: 600, contentMs: 600 }]);
+    const { steps, warnings } = compareRuns(a, b);
+    expect(steps[0].differentReadiness).toBe(true);
+    expect(warnings).toEqual([
+      'view.notifications cold at 4×: B waited for content to paint, the other ended at the span; not comparable',
+    ]);
   });
 
   it('lists steps only one run measured', () => {

@@ -102,7 +102,9 @@ export function row(item: TargetItem | undefined, key: string) {
       await frame();
       await frame();
       if (scroller.scrollTop !== top || scroller.scrollHeight !== height) still = 0;
-      // At the end: give a next page about three seconds to arrive.
+      // At the end while a next page loads: wait for it, within the deadline.
+      else if (document.querySelector('[aria-busy="true"]')) await pause(150);
+      // At the end and idle: give a next page about three seconds to start.
       else if (++still > 20) break;
       else await pause(150);
     }

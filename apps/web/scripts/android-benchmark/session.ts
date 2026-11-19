@@ -325,6 +325,7 @@ export class Session {
    * events that follow it. {@link tapRefused} says whether it did.
    */
   async guardTap(unreadSelector: string | undefined): Promise<void> {
+    await this.clearTapGuard();
     await this.cdp.evaluate(`(() => {
       const target = window.__macroBenchmarkTarget;
       const unread = ${JSON.stringify(unreadSelector ?? null)};
@@ -347,7 +348,13 @@ export class Session {
         }, 2000);
       };
       addEventListener('pointerdown', check, { capture: true, once: true });
+      guard.remove = () => removeEventListener('pointerdown', check, { capture: true });
     })()`);
+  }
+
+  /** Removes a guard whose touch never arrived, so it cannot catch the next one. */
+  async clearTapGuard(): Promise<void> {
+    await this.cdp.evaluate('window.__macroBenchmarkGuard?.remove?.()');
   }
 
   /** Why the guarded touch was dropped, if it was. */
@@ -362,7 +369,8 @@ export class Session {
   /**
    * Waits until a list has finished reacting to a scroll: no element says it
    * is loading (`aria-busy`) and the scroll containers' heights have held
-   * for half a second, up to `timeoutMs`.
+   * for half a second. Throws when that takes longer than `timeoutMs`: a
+   * step timed then would include the loading.
    */
   async waitForQuiet(timeoutMs = 10_000): Promise<void> {
     const deadline = Date.now() + timeoutMs;
@@ -386,6 +394,7 @@ export class Session {
       } else if (!state.startsWith('busy') && Date.now() - stableSince >= 500) return;
       await sleep(100);
     }
+    throw new Error(`The list did not come to rest within ${timeoutMs} ms`);
   }
 
   /** When the watched content was painted, waiting up to `timeoutMs`. */
