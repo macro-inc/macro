@@ -87,6 +87,31 @@ afterEach(() => {
 });
 
 describe('scheduled-action websocket synchronization', () => {
+  it('synchronizes a copy claim in the active and per-parent child caches', () => {
+    const copy: ScheduledAction = {
+      ...schedule,
+      id: 'copy',
+      task: { sub_routine: 'remind', inputs: {} },
+      sub_routine: { parent_id: 'routine', created_by_run_id: 'run' },
+    };
+    const keys = [
+      scheduledActionKeys.subRoutines.queryKey,
+      scheduledActionKeys.children({ scheduleId: 'routine' }).queryKey,
+    ];
+    for (const key of keys) queryClient.setQueryData(key, [copy]);
+
+    send(update('started', { action_id: 'copy' }));
+    for (const key of keys)
+      expect(queryClient.getQueryData(key)).toEqual([
+        { ...copy, claimed: '2026-09-28T12:00:00.000Z' },
+      ]);
+    expect(schedules()?.[0]).toEqual(schedule);
+
+    send(update('stopped', { action_id: 'copy' }));
+    for (const key of keys)
+      expect(queryClient.getQueryData(key)).toEqual([copy]);
+  });
+
   it.each([
     { chat_id: chat.id },
     { chat_id: chat.id, resource: chat },

@@ -55,17 +55,20 @@ function patchClaimed(actionId: string, claimed: string | null): void {
       current ? { ...current, claimed } : undefined
   );
 
-  queryClient.setQueryData(
+  for (const queryKey of [
     scheduledActionKeys.list.queryKey,
-    (current: ScheduledAction[] | undefined) => {
+    scheduledActionKeys.subRoutines.queryKey,
+    scheduledActionKeys.children._def,
+  ]) {
+    queryClient.setQueriesData<ScheduledAction[]>({ queryKey }, (current) => {
       if (!current) return current;
       const idx = current.findIndex((a) => a.id === actionId);
       if (idx === -1) return current;
       const next = [...current];
       next[idx] = { ...next[idx], claimed: claimed ?? undefined };
       return next;
-    }
-  );
+    });
+  }
 }
 
 function upsertPendingHistoryRow(
