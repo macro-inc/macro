@@ -7,6 +7,7 @@
  */
 import type { UnusableKnobItem } from './unusableKnobItem';
 import type { UnusableKnobStep } from './unusableKnobStep';
+import type { UnusableKnobSubRoutine } from './unusableKnobSubRoutine';
 
 /**
  * An entity knob of a saved routine whose item needs a new pick: it was
@@ -19,4 +20,8 @@ export interface UnusableKnob {
   /** Why it can't be used, for the routine's owner. */
   reason: string;
   step?: UnusableKnobStep;
+  /** The sub-routine whose step it is; absent for the routine's own steps.
+Step ids are unique only among the steps they run with, so a step of
+the routine and one of a sub-routine can share one. */
+  sub_routine?: UnusableKnobSubRoutine;
 }

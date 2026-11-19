@@ -7056,6 +7056,10 @@
                 "description": "Its step's id. A step saved before steps had ids has none until it is\nsaved again; a client can't place that one, but its run still fails."
               }
             ]
+          },
+          "sub_routine": {
+            "type": ["string", "null"],
+            "description": "The sub-routine whose step it is; absent for the routine's own steps.\nStep ids are unique only among the steps they run with, so a step of\nthe routine and one of a sub-routine can share one."
           }
         }
       },

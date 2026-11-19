@@ -374,5 +374,6 @@ export * from './templateVariableOneOfThreeKind';
 export * from './unusableKnob';
 export * from './unusableKnobItem';
 export * from './unusableKnobStep';
+export * from './unusableKnobSubRoutine';
 export * from './upgradeOutcome';
 export * from './variableFill';
