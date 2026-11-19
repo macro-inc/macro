@@ -54,21 +54,45 @@ export type KnobEntityType = RoutineKnobEntityType;
 export type KnobEntity = { type: KnobEntityType; id: string };
 
 /**
- * A picked item its owner can't use now (deleted, or out of their reach),
- * with why, as the scheduler checked the saved routine. Its knobs need a new
- * pick, and the steps reading them fail until they get one.
+ * A knob whose picked item its owner can't use now (deleted, or out of their
+ * reach), with why, as the scheduler checked the saved routine. The knob needs
+ * a new pick, and its step fails until it gets one.
  */
-export type UnusableItem = { item: KnobEntity; reason: string };
+export type UnusableItem = {
+  /** The knob's step's position among the routine's steps, from 0. */
+  step: number;
+  /** The knob's name. */
+  knob: string;
+  item: KnobEntity;
+  /** Why, naming the knob by its label. */
+  reason: string;
+};
 
-/** Why `knob`'s picked item needs a new pick, when it is one of `unusable`. */
+/** The entries of `unusable` for the step at `position`. */
+export function unusableInStep(
+  unusable: readonly UnusableItem[],
+  position: number
+): UnusableItem[] {
+  return unusable.filter((entry) => entry.step === position);
+}
+
+/**
+ * Why `knob` needs a new pick, from its own step's `unusable` entries. Each
+ * knob gets the reason naming it, even when another holds the same item; one
+ * picked again since holds another item and gets none.
+ */
 export function unusableReason(
   knob: Knob,
   unusable: readonly UnusableItem[]
 ): string | undefined {
   if (knob.type !== 'entity' || !knob.value) return undefined;
   const { type, id } = knob.value;
-  return unusable.find(({ item }) => item.type === type && item.id === id)
-    ?.reason;
+  return unusable.find(
+    (entry) =>
+      entry.knob === knob.name &&
+      entry.item.type === type &&
+      entry.item.id === id
+  )?.reason;
 }
 
 /** What each kind of item is called, for its owner. */

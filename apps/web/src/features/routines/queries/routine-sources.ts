@@ -135,8 +135,8 @@ export function createRoutineDetailSource(
   const unusableItems = createMemo((): UnusableItem[] =>
     unusable.isPending
       ? []
-      : (unusable.data ?? []).flatMap(({ item, reason }) =>
-          item ? [{ item, reason }] : []
+      : (unusable.data ?? []).flatMap(({ step, knob, item, reason }) =>
+          item ? [{ step, knob, item, reason }] : []
         )
   );
   const codeReview = createMemo(() => {

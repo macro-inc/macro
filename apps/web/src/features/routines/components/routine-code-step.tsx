@@ -3,6 +3,7 @@ import {
   type Knob,
   knobsOutsideSentence,
   sentenceParts,
+  unusableInStep,
   withKnobValue,
 } from '../core/knobs';
 import type { CodeStepDraft } from '../core/routine-steps';
@@ -40,6 +41,12 @@ export function CodeStepBody(props: {
       : undefined;
   };
   const settings = () => knobsOutsideSentence(sentence(), props.step.knobs);
+  // This step's own: a knob of another step can have the same name.
+  const unusable = () =>
+    unusableInStep(
+      steps.unusableItems(),
+      steps.steps().findIndex((step) => step.id === props.step.id)
+    );
   const setKnob = (name: string, value: Knob['value']) =>
     props.onChange({
       ...props.step,
@@ -74,7 +81,7 @@ export function CodeStepBody(props: {
               sentence={sentence()}
               knobs={props.step.knobs}
               onKnob={setKnob}
-              unusable={steps.unusableItems()}
+              unusable={unusable()}
             />
           )}
         </Show>
@@ -84,7 +91,7 @@ export function CodeStepBody(props: {
               <KnobSettings
                 knobs={knobs()}
                 onKnob={setKnob}
-                unusable={steps.unusableItems()}
+                unusable={unusable()}
               />
             </Field>
           )}

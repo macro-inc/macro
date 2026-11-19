@@ -305,7 +305,14 @@ describe('an entity knob whose item its owner can no longer use', () => {
         onKnob={(name, value) =>
           setCurrent(withKnobValue(current(), name, value))
         }
-        unusable={[{ item: { type: 'channel', id: 'c1' }, reason: GONE }]}
+        unusable={[
+          {
+            step: 0,
+            knob: 'bugs',
+            item: { type: 'channel', id: 'c1' },
+            reason: GONE,
+          },
+        ]}
       />
     ));
     return current;
@@ -345,7 +352,14 @@ describe('an entity knob whose item its owner can no longer use', () => {
       <KnobSettings
         knobs={[bugs]}
         onKnob={() => {}}
-        unusable={[{ item: { type: 'channel', id: 'c1' }, reason: GONE }]}
+        unusable={[
+          {
+            step: 0,
+            knob: 'bugs',
+            item: { type: 'channel', id: 'c1' },
+            reason: GONE,
+          },
+        ]}
       />
     ));
     expect(
