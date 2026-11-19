@@ -235,6 +235,15 @@ async fn a_run_and_its_bookkeeping_are_spans_of_one_firing() {
         spans.parents("routine.event_run.finalize"),
         [Some("routine.event_run")]
     );
+    // The run and the write each run inside their span, not just beside it.
+    assert_eq!(
+        spans.parents("test.execute_call"),
+        [Some("routine.execute")]
+    );
+    assert_eq!(
+        spans.parents("test.finalize_write"),
+        [Some("routine.event_run.finalize")]
+    );
     assert_eq!(spans.outcomes("routine.execute"), ["succeeded"]);
     assert_eq!(spans.outcomes("routine.event_run.finalize"), ["finalized"]);
     // The run's span ends with the run, before its bookkeeping starts.

@@ -362,6 +362,7 @@ impl EventRunRepository for Repo {
         }))
     }
     async fn finalize(&self, run: FinalizeEventRun) -> Result<FinalizationResult, Report> {
+        drop(tracing::info_span!("test.finalize_write"));
         let mut state = self.0.lock().unwrap();
         if state.fail_finalize {
             return Err(rootcause::report!("bookkeeping unavailable"));
@@ -449,6 +450,7 @@ impl EventExecutor for Executor {
         run: &ClaimedEventRun,
         _: impl Future<Output = ()> + Send,
     ) -> EventExecutionResult {
+        drop(tracing::info_span!("test.execute_call"));
         self.calls.lock().unwrap().push(run.run.pending.key());
         assert!(run.run.access.authorizes(&user(), &run.run.pending.event));
         EventExecutionResult {

@@ -1,13 +1,16 @@
 //! A layer for tests that read the spans a flow opened: each span's name,
 //! parent and fields (as created and as recorded later), and the order spans
 //! opened and closed in. It sits on `tracing_subscriber`'s registry, which
-//! tracks the current span and closes a span once nothing holds it.
+//! tracks the current span and closes a span once nothing holds it. Test
+//! doubles open `test.*` spans where the code under test calls them, so a
+//! test can see which span that call ran in.
 
 use std::sync::{Arc, Mutex, OnceLock};
 
 use tracing::field::{Field, Visit};
 use tracing::span::{Attributes, Id, Record};
-use tracing::{Dispatch, Subscriber};
+use tracing::subscriber::Interest;
+use tracing::{Dispatch, Event, Metadata, Subscriber};
 use tracing_subscriber::layer::{Context, Layer, SubscriberExt};
 use tracing_subscriber::registry::LookupSpan;
 
@@ -35,29 +38,62 @@ struct Span {
 /// the registry reuses ids once spans close.
 struct Number(usize);
 
-/// Keeps a second dispatcher registered for the test binary's life. With
-/// only one registered, tracing works out a newly reached callsite's
-/// interest from the thread that reaches it, so a test thread with no
-/// subscriber would cache that no one wants it, and a capture on another
-/// thread would never see it. With two, every dispatcher alive is asked.
-fn keep_interest_shared() {
-    static SECOND: OnceLock<Dispatch> = OnceLock::new();
-    SECOND.get_or_init(|| Dispatch::new(tracing::subscriber::NoSubscriber::default()));
+/// The test binary's global subscriber: it records nothing, but says every
+/// callsite may be wanted. tracing caches each callsite's interest the
+/// first time any thread reaches it, and while at most one dispatcher is
+/// registered it asks only the reaching thread's: a test thread with no
+/// subscriber would cache that no one wants the callsite, and a capture on
+/// another thread would never see its spans. With this answering
+/// "sometimes" for threads with no capture, the cache never says never, and
+/// tracing asks each thread's own subscriber.
+struct Interested;
+
+impl Subscriber for Interested {
+    fn register_callsite(&self, _: &'static Metadata<'static>) -> Interest {
+        Interest::sometimes()
+    }
+
+    fn enabled(&self, _: &Metadata<'_>) -> bool {
+        false
+    }
+
+    fn new_span(&self, _: &Attributes<'_>) -> Id {
+        Id::from_u64(1)
+    }
+
+    fn record(&self, _: &Id, _: &Record<'_>) {}
+
+    fn record_follows_from(&self, _: &Id, _: &Id) {}
+
+    fn event(&self, _: &Event<'_>) {}
+
+    fn enter(&self, _: &Id) {}
+
+    fn exit(&self, _: &Id) {}
+}
+
+/// Installs `Interested` once. Callsites reached before that, by a thread
+/// still working its interest out as this registers, can keep the answer
+/// it found without a subscriber; tracing gives no way to wait for that
+/// thread, so only the binary's first capture can miss such a callsite.
+fn install() {
+    static INSTALLED: OnceLock<()> = OnceLock::new();
+    INSTALLED.get_or_init(|| {
+        // The binary sets no other global subscriber; if one is set, it
+        // answers for threads with no capture instead.
+        let _ = tracing::subscriber::set_global_default(Interested);
+    });
 }
 
 impl Spans {
     /// Collects the spans this thread opens until the guard drops.
     pub(crate) fn capture() -> (Arc<Self>, tracing::dispatcher::DefaultGuard) {
-        keep_interest_shared();
+        install();
         let spans = Arc::new(Self::default());
         let subscriber = tracing_subscriber::registry().with(Recorder(Arc::clone(&spans)));
-        // Registering the capture recomputes every registered callsite's
-        // interest with it. A callsite another thread was registering at
-        // that moment may have worked its interest out just before; it is
-        // registered within microseconds, so recompute once more after.
+        // Registering the capture recomputes every callsite's interest with
+        // it, under the lock tracing takes once two dispatchers exist.
         let guard = tracing::dispatcher::set_default(&Dispatch::new(subscriber));
-        std::thread::sleep(std::time::Duration::from_millis(20));
-        tracing::callsite::rebuild_interest_cache();
         (spans, guard)
     }
 
