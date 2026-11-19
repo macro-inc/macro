@@ -1,0 +1,8 @@
+{"version":2,"width":150,"height":40,"timestamp":1795115876,"idle_time_limit":2.0,"command":"scratch/run-scenario.sh after ~/.herdr/worktrees/macro/email-focus-linked/target/e2e-after ~/.herdr/worktrees/macro/email-focus-linked/target/debug/deps/focus-a0f2464e88eb7269 gmail_a_linked_inbox_follows_the_flag_of_the_user_who_linked_it","env":{"SHELL":"/nix/store/v8llyqw71lygr2llhmcc8ya5bdlzq45v-bash-5.3p9/bin/bash"}}
+[0.01658, "o", "\r\n== after: email_focus_worker built from 24240332806 (this branch)\r\n== scenario: gmail_a_linked_inbox_follows_the_flag_of_the_user_who_linked_it\r\n   Ada has the Focus flag and links the mailbox of Bob, who has a Macro account and no flag.\r\n   Carol and Dan have no flag; Carol links Dan's mailbox. Dan's mail arrives first,\r\n"]
+[0.016588, "o", "   Bob's once the worker has passed over Dan's. The test waits up to 120 s for Bob's verdict.\r\n\r\n"]
+[13.83137, "o", "running 1 test\r\ntest gmail_a_linked_inbox_follows_the_flag_of_the_user_who_linked_it ... ok\r\ntest result: ok. 1 passed; 0 failed; 0 ignored; 0 measured; 5 filtered out; finished in 13.80s\r\n"]
+[13.834378, "o", "\r\n== after: test exited 0 after 14s\r\n"]
+[13.837524, "o", "== what the worker decided (email_focus_worker.log)\r\n"]
+[13.84021, "o", "2026-11-19T19:18:08Z DEBUG focus skipped, thread_id: 01a1f53e-b128-7bf2-b188-a1352ecf9964, outcome: NotEnabled\r\n2026-11-19T19:18:09Z  INFO focus classified, thread_id: 01a1f53e-b514-7292-acd5-238e2f9a882c, is_focus: true, category: other, importance: 50\r\n"]
+[13.840738, "x", "0"]

@@ -1,0 +1,65 @@
+   Compiling agent_fold v0.1.0 (~/.herdr/worktrees/macro/email-focus-linked/crates/folds/agent_fold)
+   Compiling database_sql v0.1.0 (~/.herdr/worktrees/macro/email-focus-linked/crates/database_sql)
+   Compiling lexical_client v0.1.0 (~/.herdr/worktrees/macro/email-focus-linked/crates/lexical_client)
+   Compiling agent_session v0.1.0 (~/.herdr/worktrees/macro/email-focus-linked/crates/agent_session)
+   Compiling databases v0.1.0 (~/.herdr/worktrees/macro/email-focus-linked/crates/databases)
+   Compiling crm v0.1.0 (~/.herdr/worktrees/macro/email-focus-linked/crates/crm)
+   Compiling email v0.1.0 (~/.herdr/worktrees/macro/email-focus-linked/crates/email)
+   Compiling suggestions v0.1.0 (~/.herdr/worktrees/macro/email-focus-linked/crates/suggestions)
+   Compiling scheduled_action v0.1.0 (~/.herdr/worktrees/macro/email-focus-linked/crates/scheduled_action)
+   Compiling memory v0.1.0 (~/.herdr/worktrees/macro/email-focus-linked/crates/memory)
+   Compiling email_focus_worker v0.1.0 (~/.herdr/worktrees/macro/email-focus-linked/services/email_focus_worker)
+    Finished `test` profile [unoptimized + debuginfo] target(s) in 25.20s
+     Running unittests src/main.rs (target/debug/deps/email_focus_worker-c9dff363e435ddd8)
+
+running 41 tests
+test inbound::backfill::test::a_completed_pass_times_a_new_inbox_and_not_one_found_at_the_start ... ok
+test inbound::backfill::test::a_stopped_pass_holds_the_rest_until_the_next_look_and_runs_again ... ok
+test inbound::backfill::test::a_pass_that_finds_the_inbox_out_of_the_rollout_leaves_it_for_the_next_look ... ok
+test inbound::backfill::test::fill_speed ... ignored, a timing measurement, not a check
+test inbound::backfill::test::every_first_pass_goes_before_any_rest ... ok
+test inbound::backfill::test::an_inbox_is_filled_once_while_its_owner_stays_in ... ok
+test inbound::backfill::test::only_inboxes_found_after_the_first_look_are_new_and_a_retry_keeps_its_find ... ok
+test inbound::backfill::test::a_waiting_pass_asks_who_the_inbox_is_linked_to_at_the_latest_look ... ok
+test inbound::backfill::test::an_owner_who_leaves_and_comes_back_is_filled_again ... ok
+test inbound::kafka_consumer::test::other_events_are_ignored ... ok
+test inbound::kafka_consumer::test::incoming_mail_and_replies_trigger_classification ... ok
+test inbound::kafka_consumer::classifications::test::capacity_bounds_the_threads_running ... ok
+test inbound::kafka_consumer::classifications::test::shutdown_drops_what_is_running ... ok
+test inbound::kafka_consumer::classifications::test::a_slow_thread_does_not_hold_up_another ... ok
+test metrics::test::counts_sum_and_samples_keep_every_value_until_taken ... ok
+test inbound::kafka_consumer::classifications::test::a_panic_gives_its_slot_back ... ok
+test inbound::kafka_consumer::classifications::test::mail_during_a_run_classifies_once_more_afterwards ... ok
+test metrics::test::every_metric_has_a_name_and_a_unit ... ok
+test metrics::test::every_count_goes_out_even_at_zero_and_samples_only_when_seen ... ok
+test metrics::test::samples_go_out_as_distinct_values_with_counts ... ok
+test outbound::cloudwatch_metrics::test::counts_go_out_as_one_value_and_samples_as_values_with_counts ... ok
+test metrics::test::a_batch_goes_out_at_start_each_minute_and_the_last_one_at_shutdown ... ok
+test outbound::flag_enrollment::test::each_owner_is_enrolled_by_their_own_flag_and_a_failed_read_is_an_error ... ok
+test outbound::cloudwatch_metrics::test::many_distinct_samples_split_across_datums ... ok
+test outbound::gateway_notifier::test::a_burst_in_one_inbox_collapses_into_few_pushes ... ok
+test outbound::gateway_notifier::test::a_classification_after_the_window_closes_pushes_at_once_again ... ok
+test outbound::gateway_notifier::test::one_classification_pushes_at_once_and_repeats_for_the_replica ... ok
+test outbound::gateway_notifier::test::shutdown_ends_an_open_window_without_waiting_for_it ... ok
+test outbound::gateway_notifier::test::inboxes_do_not_share_a_window ... ok
+test outbound::harness_due_dates::test::asks_as_the_owner_and_reads_the_date_back ... ok
+test outbound::harness_due_dates::test::no_deadline_reads_as_no_date ... ok
+test outbound::metered::test::a_call_dropped_because_the_worker_stops_is_no_failure ... ok
+test outbound::harness_due_dates::test::a_failure_reports_no_mail_text ... ok
+test outbound::metered::test::every_call_counts_and_each_failure_by_its_kind ... ok
+test outbound::metered::test::jev_usage_counts_its_tokens_and_cost_and_is_still_recorded ... ok
+test outbound::harness_due_dates::test::each_ask_counts_with_the_tokens_and_cost_the_harness_reports ... ok
+test outbound::gateway_notifier::test::a_push_reaches_the_owner_and_delegates_as_one_refresh_email ... ok
+test outbound::metered::test::a_price_read_from_the_pricing_table_prices_later_costs ... ok
+test outbound::flag_enrollment::test::with_posthog_and_the_database::only_inboxes_whose_owner_has_the_flag_are_classified ... ok
+test inbound::backfill::test::an_enrolled_inbox_fills_with_no_mail_arriving ... ok
+test outbound::flag_enrollment::test::with_posthog_and_the_database::a_linked_inbox_follows_the_flag_of_the_user_it_is_linked_to ... ok
+
+test result: ok. 40 passed; 0 failed; 1 ignored; 0 measured; 0 filtered out; finished in 0.19s
+
+     Running unittests src/doppler_config.rs (target/debug/deps/email_focus_worker_doppler_config-bb3288515e0fee30)
+
+running 0 tests
+
+test result: ok. 0 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s
+

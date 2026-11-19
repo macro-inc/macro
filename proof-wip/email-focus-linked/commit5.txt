@@ -1,0 +1,17 @@
+fix(email-focus): recheck a thread and refill an inbox once who reads it changes
+
+Why: the sweep admits an inbox with the linked users it remembered, and a
+queued backfill pass kept the linked users of the look that queued it. When
+a user was unlinked in between, a thread's read found the inbox out of the
+rollout and was settled as checked at its latest mail, and the pass counted
+the inbox as filled, so a re-link left those threads unclassified until new
+mail arrived.
+
+What:
+- The sweep never settles a NotEnabled thread; it stops walking that inbox
+  and counts it in SweepReport::inboxes_left.
+- Each look gives every waiting backfill the linked users it just read.
+- A pass that found its inbox out of the rollout, at the start or partway,
+  is dropped rather than counted as filled, so the next look queues it again.
+- The runbook says an inbox someone still enrolled reads keeps being
+  classified after a user is removed.

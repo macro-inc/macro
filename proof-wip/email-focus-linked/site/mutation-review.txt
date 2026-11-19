@@ -1,0 +1,19 @@
+# Mutant 1: the sweep settles a NotEnabled thread again (service.rs), and found() keeps a waiting inbox's old linked users (backfill.rs)
+#   sed: report.inboxes_left += 1;  ->  report.inboxes_left += 1; self.settled().insert(thread_id, latest_at);
+#   sed: waiting.inbox = (*inbox).clone();  ->  let _ = inbox;
+# cargo test -p email --all-features --lib -- domain::focus ; cargo test -p email_focus_worker -- backfill
+test domain::focus::service::test::a_thread_found_out_of_the_rollout_is_checked_again_once_its_inbox_is_back_in ... FAILED
+thread 'domain::focus::service::test::a_thread_found_out_of_the_rollout_is_checked_again_once_its_inbox_is_back_in' (1132572) panicked at crates/email/src/domain/focus/service/test.rs:1766:5:
+test result: FAILED. 137 passed; 1 failed; 0 ignored; 0 measured; 1658 filtered out; finished in 0.01s
+test inbound::backfill::test::a_waiting_pass_asks_who_the_inbox_is_linked_to_at_the_latest_look ... FAILED
+thread 'inbound::backfill::test::a_waiting_pass_asks_who_the_inbox_is_linked_to_at_the_latest_look' (1154096) panicked at services/email_focus_worker/src/inbound/backfill/test.rs:139:5:
+test result: FAILED. 8 passed; 1 failed; 1 ignored; 0 measured; 31 filtered out; finished in 0.16s
+
+# Mutant 2: a pass that found the inbox out of the rollout counts as completed again (backfill.rs)
+#   sed: (in_rollout && !report.stopped_early, report.stopped_early)  ->  (!report.stopped_early, report.stopped_early)
+# cargo test -p email_focus_worker -- backfill
+test inbound::backfill::test::a_pass_that_finds_the_inbox_out_of_the_rollout_leaves_it_for_the_next_look ... FAILED
+thread 'inbound::backfill::test::a_pass_that_finds_the_inbox_out_of_the_rollout_leaves_it_for_the_next_look' (1162868) panicked at services/email_focus_worker/src/inbound/backfill/test.rs:177:9:
+test result: FAILED. 8 passed; 1 failed; 1 ignored; 0 measured; 31 filtered out; finished in 0.14s
+
+# With the fix: domain::focus 138 passed; email_focus_worker 40 passed, 1 ignored (see test-email.txt, test-worker.txt)

@@ -1,0 +1,21 @@
+                                                                    QUERY PLAN                                                                     
+---------------------------------------------------------------------------------------------------------------------------------------------------
+ Gather  (cost=1000.41..5695.12 rows=2140 width=41) (actual time=0.227..174.385 rows=50501 loops=1)
+   Workers Planned: 1
+   Workers Launched: 1
+   Buffers: shared hit=644145
+   ->  Nested Loop  (cost=0.41..4481.12 rows=1259 width=41) (actual time=0.037..159.256 rows=25250 loops=2)
+         Buffers: shared hit=644145
+         ->  Parallel Seq Scan on macro_user_links mul  (cost=0.00..2152.59 rows=1259 width=41) (actual time=0.007..6.942 rows=80250 loops=2)
+               Buffers: shared hit=2140
+         ->  Index Scan using email_links_pkey on email_links el  (cost=0.41..1.84 rows=1 width=43) (actual time=0.002..0.002 rows=0 loops=160501)
+               Index Cond: (id = mul.link_id)
+               Filter: (is_sync_active AND (mul.primary_macro_id <> macro_id))
+               Rows Removed by Filter: 1
+               Buffers: shared hit=642005
+ Planning:
+   Buffers: shared hit=530
+ Planning Time: 0.816 ms
+ Execution Time: 175.888 ms
+(17 rows)
+

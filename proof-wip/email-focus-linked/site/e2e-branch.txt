@@ -1,0 +1,29 @@
+ Stress test [   8.888s] iteration 17/20: 1 test run: 1 passed, 5 skipped
+────────────
+ Stress test iteration 18/20 (00:02:28 elapsed so far, 3 iterations remaining)
+        PASS [   6.790s] [18/20] (1/1) email_e2e::focus gmail_a_linked_inbox_follows_the_flag_of_the_user_who_linked_it
+ Stress test [   6.790s] iteration 18/20: 1 test run: 1 passed, 5 skipped
+────────────
+ Stress test iteration 19/20 (00:02:35 elapsed so far, 2 iterations remaining)
+        PASS [   6.919s] [19/20] (1/1) email_e2e::focus gmail_a_linked_inbox_follows_the_flag_of_the_user_who_linked_it
+ Stress test [   6.919s] iteration 19/20: 1 test run: 1 passed, 5 skipped
+────────────
+ Stress test iteration 20/20 (00:02:42 elapsed so far, 1 iteration remaining)
+        PASS [   7.943s] [20/20] (1/1) email_e2e::focus gmail_a_linked_inbox_follows_the_flag_of_the_user_who_linked_it
+ Stress test [   7.944s] iteration 20/20: 1 test run: 1 passed, 5 skipped
+────────────
+     Summary [ 170.300s] 20/20 stress run iterations: 20 passed
+stress-exit=0
+    Finished `test` profile [unoptimized + debuginfo] target(s) in 1.80s
+────────────
+ Nextest run ID 5e75e9f4-2625-4da8-af98-b752a5d66bc6 with nextest profile: email-e2e
+    Starting 6 tests across 1 binary
+        PASS [  11.941s] (1/6) email_e2e::focus gmail_a_linked_inbox_follows_the_flag_of_the_user_who_linked_it
+        PASS [   9.816s] (2/6) email_e2e::focus gmail_a_senders_mail_leaves_focus_as_noise_and_returns_as_signal
+        PASS [   8.942s] (3/6) email_e2e::focus gmail_mail_of_an_owner_without_the_focus_flag_is_not_classified
+        PASS [   7.983s] (4/6) email_e2e::focus gmail_mail_the_model_wants_is_in_focus_and_other_mail_is_not
+        PASS [  14.116s] (5/6) email_e2e::focus outlook_a_senders_mail_leaves_focus_as_noise_and_returns_as_signal
+        PASS [   8.946s] (6/6) email_e2e::focus outlook_mail_the_model_wants_is_in_focus_and_other_mail_is_not
+────────────
+     Summary [  61.745s] 6 tests run: 6 passed, 0 skipped
+file-exit=0

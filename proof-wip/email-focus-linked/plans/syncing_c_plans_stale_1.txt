@@ -1,0 +1,25 @@
+                                                                                     QUERY PLAN                                                                                      
+-------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------
+ Hash Left Join  (cost=2363.21..6447.13 rows=7928 width=75) (actual time=106.893..162.514 rows=150002 loops=1)
+   Hash Cond: (el.id = d.link_id)
+   Buffers: shared hit=164591 read=28
+   ->  Seq Scan on email_links el  (cost=0.00..4043.28 rows=7928 width=43) (actual time=0.007..21.714 rows=150002 loops=1)
+         Filter: is_sync_active
+         Rows Removed by Filter: 50000
+         Buffers: shared hit=3964
+   ->  Hash  (cost=2336.46..2336.46 rows=2140 width=48) (actual time=106.872..106.874 rows=105002 loops=1)
+         Buckets: 131072 (originally 4096)  Batches: 1 (originally 1)  Memory Usage: 12985kB
+         Buffers: shared hit=160568 read=28
+         ->  Subquery Scan on d  (cost=0.41..2336.46 rows=2140 width=48) (actual time=0.034..94.082 rows=105002 loops=1)
+               Buffers: shared hit=160568 read=28
+               ->  GroupAggregate  (cost=0.41..2315.06 rows=2140 width=48) (actual time=0.034..88.077 rows=105002 loops=1)
+                     Group Key: mul.link_id
+                     Buffers: shared hit=160568 read=28
+                     ->  Index Scan using macro_user_links_link_idx on macro_user_links mul  (cost=0.41..2277.61 rows=2140 width=41) (actual time=0.019..51.879 rows=160501 loops=1)
+                           Buffers: shared hit=160568 read=28
+ Planning:
+   Buffers: shared hit=343 read=1
+ Planning Time: 0.605 ms
+ Execution Time: 167.438 ms
+(21 rows)
+

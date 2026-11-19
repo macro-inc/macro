@@ -1,0 +1,13 @@
+diff --git a/crates/email/src/domain/focus/service.rs b/crates/email/src/domain/focus/service.rs
+index 44e620593a7..13848eb2c7d 100644
+--- a/crates/email/src/domain/focus/service.rs
++++ b/crates/email/src/domain/focus/service.rs
+@@ -249,7 +249,7 @@ where
+     ) -> Result<bool, Report> {
+         let mut enrolled = false;
+         let mut unknown = None;
+-        for reader in std::iter::once(owner).chain(delegates) {
++        for reader in std::iter::once(owner) {
+             match self.enrollment.is_enrolled(reader).await {
+                 Ok(true) => {
+                     enrolled = true;

@@ -1,0 +1,250 @@
+    Blocking waiting for file lock on package cache
+    Blocking waiting for file lock on package cache
+    Blocking waiting for file lock on package cache
+   Compiling agent_fold v0.1.0 (~/.herdr/worktrees/macro/email-focus-linked/crates/folds/agent_fold)
+   Compiling database_sql v0.1.0 (~/.herdr/worktrees/macro/email-focus-linked/crates/database_sql)
+   Compiling lexical_client v0.1.0 (~/.herdr/worktrees/macro/email-focus-linked/crates/lexical_client)
+   Compiling databases v0.1.0 (~/.herdr/worktrees/macro/email-focus-linked/crates/databases)
+   Compiling crm v0.1.0 (~/.herdr/worktrees/macro/email-focus-linked/crates/crm)
+   Compiling email v0.1.0 (~/.herdr/worktrees/macro/email-focus-linked/crates/email)
+    Finished `test` profile [unoptimized + debuginfo] target(s) in 39.00s
+     Running unittests src/lib.rs (target/debug/deps/email-dab6bd3c5534e38e)
+
+running 182 tests
+test domain::focus::calendar::test::a_change_uses_the_events_end_else_its_start ... ok
+test domain::focus::calendar::test::a_change_holds_until_the_last_changed_event_is_over ... ok
+test domain::focus::calendar::test::a_change_with_no_single_end_holds_for_the_fallback ... ok
+test domain::focus::calendar::test::a_change_subject_holds_until_the_last_saved_event_is_over ... ok
+test domain::focus::calendar::test::saved_methods_tell_changes_from_new_invites_and_rsvps ... ok
+test domain::focus::calendar::test::a_saved_change_or_rsvp_decides_whatever_the_subject_says ... ok
+test domain::focus::calendar::test::an_all_day_event_is_over_once_its_day_has_ended_everywhere ... ok
+test domain::focus::calendar::test::a_new_invite_or_unread_file_reads_as_its_subject_or_as_new ... ok
+test domain::focus::importance::test::a_base_outside_the_scale_reads_as_its_top ... ok
+test domain::focus::importance::test::each_day_covers_a_share_of_the_distance_left ... ok
+test domain::focus::importance::test::fading_can_go_below_the_floors_that_set_the_base ... ok
+test domain::focus::calendar::test::the_sweeps_pattern_matches_every_change_prefix_and_nothing_else ... ok
+test domain::focus::importance::test::flat_threads_never_move ... ok
+test domain::focus::importance::test::a_message_dated_in_the_future_counts_as_no_time ... ok
+test domain::focus::importance::test::it_moves_within_a_day_too ... ok
+test domain::focus::importance::test::mid_range_threads_keep_their_order_over_the_list_window ... ok
+test domain::focus::importance::test::nothing_moves_before_any_time_passes ... ok
+test domain::focus::importance::test::the_trend_follows_the_rate ... ok
+test domain::focus::importance::test::the_trend_is_flat_once_there_is_nowhere_left_to_go ... ok
+test domain::focus::calendar::test::subjects_tell_changes_from_new_invites_and_rsvps ... ok
+test domain::focus::input::test::new_text_drops_quoted_history ... ok
+test domain::focus::input::test::closing_replies_owe_nobody_an_answer ... ok
+test domain::focus::input::test::no_profile_means_address_only ... ok
+test domain::focus::input::test::a_bump_shows_the_quoted_request ... ok
+test domain::focus::input::test::a_deadline_stays_in_view_through_replies_that_never_mention_it ... ok
+test domain::focus::input::test::the_due_date_input_collapses_wrapped_lines_and_bounds_each_message ... ok
+test domain::focus::input::test::long_recipient_lists_are_cut ... ok
+test domain::focus::input::test::the_due_date_input_marks_the_owners_messages_and_names_no_sender ... ok
+test domain::focus::input::test::long_text_is_cut_on_a_character_boundary ... ok
+test domain::focus::questions::test::every_question_fits_jev_limits ... ok
+test domain::focus::input::test::with_nothing_else_to_go_on_a_message_counts_from_its_utc_day ... ok
+test domain::focus::input::test::with_no_readable_header_someone_elses_message_counts_from_the_owners_time_zone ... ok
+test domain::focus::input::test::the_due_date_input_falls_back_to_a_snippet_only_with_no_body ... ok
+test domain::focus::questions::test::texts_follow_the_answer_order ... ok
+test domain::focus::rule::test::a_calendar_change_on_mail_that_earned_focus_stays_in_after_the_hold ... ok
+test domain::focus::input::test::shows_the_last_three_messages_with_the_profile ... ok
+test domain::focus::rule::test::a_clear_lean_sets_a_signed_rate_scaled_by_how_clear_it_is ... ok
+test domain::focus::rule::test::a_held_calendar_change_can_still_need_a_reply ... ok
+test domain::focus::questions::test::questions_name_no_particular_person_or_company ... ok
+test domain::focus::rule::test::a_reply_the_owner_owes_stays_in_on_a_low_score ... ok
+test domain::focus::rule::test::a_thread_awaiting_a_reply_waits_for_the_read_to_join_focus ... ok
+test domain::focus::rule::test::automated_mail_needs_someone_to_vouch_for_it ... ok
+test domain::focus::rule::test::answers_stored_before_the_time_questions_decode_as_flat ... ok
+test domain::focus::input::test::the_due_date_input_reads_a_replys_own_words_and_never_its_quoted_history ... ok
+test domain::focus::rule::test::a_calendar_change_is_held_whatever_else_it_reads_as ... ok
+test domain::focus::input::test::someone_elses_message_counts_from_the_offset_they_wrote_at ... ok
+test domain::focus::rule::test::flags_need_a_confident_yes ... ok
+test domain::focus::rule::test::flags_only_apply_inside_focus ... ok
+test domain::focus::rule::test::contacts_get_a_lower_bar_unless_it_is_a_pitch ... ok
+test domain::focus::rule::test::importance_reflects_why_a_thread_is_in ... ok
+test domain::focus::rule::test::customers_outrank_other_focus_categories ... ok
+test domain::focus::importance::test::it_moves_steadily_towards_its_end_and_never_past_it ... ok
+test domain::focus::rule::test::jevs_calendar_answer_neither_holds_nor_vetoes ... ok
+test domain::focus::input::test::the_owners_own_message_counts_from_the_owners_time_zone ... ok
+test domain::focus::input::test::brush_offs ... ok
+test domain::focus::input::test::the_due_date_input_is_bounded_counting_back_from_the_latest ... ok
+test domain::focus::rule::test::no_clear_lean_reads_as_flat ... ok
+test domain::focus::rule::test::new_invites_and_rsvps_stay_out_even_when_relevant ... ok
+test domain::focus::rule::test::outreach_from_strangers_needs_a_firmer_yes ... ok
+test domain::focus::rule::test::mail_from_recent_contacts_stays_in_on_a_low_score ... ok
+test domain::focus::input::test::the_due_date_input_leaves_out_messages_with_no_words_of_their_own ... ok
+test domain::focus::rule::test::who_wrote_last_settles_reply_or_follow_up ... ok
+test domain::focus::service::test::a_backfill_reads_no_mail_of_an_owner_outside_the_rollout ... ok
+test domain::focus::service::test::a_backfill_reads_no_mail_once_the_primary_user_has_left ... ok
+test domain::focus::rule::test::every_experiment_thread_reads_flat_without_the_time_answers ... ok
+test domain::focus::service::test::a_failed_extraction_leaves_the_classification_intact ... ok
+test domain::focus::service::test::a_hung_extraction_only_costs_the_timeout ... ok
+test domain::focus::rule::test::reproduces_the_experiment_verdicts ... ok
+test domain::focus::service::test::a_linked_inbox_is_classified_while_its_primary_user_is_in_the_rollout ... FAILED
+test domain::focus::service::test::a_linked_inbox_is_unknown_when_a_place_fails_and_nobody_is_in ... FAILED
+test domain::focus::service::test::a_focus_thread_stores_the_day_its_mail_says_it_is_due ... ok
+test domain::focus::service::test::a_linked_inbox_drops_out_once_it_is_unlinked ... FAILED
+test domain::focus::service::test::a_linked_inbox_stops_when_its_primary_user_leaves_the_rollout ... FAILED
+test domain::focus::service::test::a_look_counts_owners_whose_rollout_is_unknown ... ok
+test domain::focus::service::test::a_backfill_reads_due_dates_only_for_threads_active_since_its_cutoff ... ok
+test domain::focus::service::test::a_backfill_stops_when_the_classifier_is_down ... ok
+test domain::focus::service::test::a_look_finds_enrolled_inboxes_before_any_mail_and_the_sweep_covers_them ... ok
+test domain::focus::service::test::a_thread_of_only_sent_mail_never_reaches_the_classifier ... ok
+test domain::focus::service::test::a_stored_classification_tells_the_inbox_readers ... ok
+test domain::focus::service::test::a_backfill_classifies_every_stale_thread_in_the_inbox ... ok
+test domain::focus::service::test::a_primary_user_who_joins_gets_their_linked_inbox_found_and_backfilled ... FAILED
+test domain::focus::service::test::an_unknown_rollout_reads_no_mail_and_fails_the_thread ... ok
+test domain::focus::service::test::a_thread_that_cannot_be_in_focus_makes_no_model_call ... ok
+test domain::focus::service::test::an_older_rule_is_decided_again_without_the_classifier ... ok
+test domain::focus::service::test::a_thread_with_no_words_of_its_own_makes_no_model_call ... ok
+test domain::focus::service::test::a_thread_the_owner_answered_last_is_classified_outside_the_signal_inbox ... ok
+test domain::focus::service::test::an_enrolled_owner_settles_it_without_asking_who_the_inbox_is_linked_to ... ok
+test domain::focus::service::test::an_unknown_time_zone_falls_back_without_failing ... ok
+test domain::focus::service::test::a_thread_only_awaiting_a_reply_still_gets_a_due_date ... ok
+test domain::focus::service::test::classifies_and_stores_an_enabled_inbox ... ok
+test domain::focus::rule::test::the_experiment_bounds_what_calendar_mail_adds ... ok
+test domain::focus::service::test::deciding_again_under_a_new_rule_tells_the_inbox_readers ... ok
+test domain::focus::service::test::answers_that_no_longer_decode_go_back_to_the_classifier ... ok
+test domain::focus::service::test::deciding_again_keeps_the_stored_date_and_calls_no_model ... ok
+test domain::focus::service::test::never_reads_mail_of_an_owner_outside_the_rollout ... ok
+test domain::focus::service::test::classifier_failures_store_nothing ... ok
+test domain::focus::service::test::key_mail_outside_the_signal_inbox_tells_the_inbox_readers ... ok
+test domain::focus::service::test::new_mail_with_no_deadline_clears_the_stored_date ... ok
+test domain::focus::service::test::new_mail_goes_to_the_classifier_even_under_an_older_rule ... ok
+test domain::focus::service::test::an_unreadable_owner_does_not_hold_back_an_enrolled_primary_user ... FAILED
+test domain::focus::service::test::skips_threads_outside_the_signal_inbox_and_up_to_date_ones ... ok
+test domain::focus::service::test::reports_up_to_date_when_a_later_result_is_already_stored ... ok
+test domain::focus::service::test::nothing_stored_tells_nobody ... ok
+test domain::focus::service::test::sweep_does_nothing_outside_the_rollout ... ok
+test domain::focus::service::test::sweep_counts_threads_decided_again_apart_from_classified_ones ... ok
+test domain::focus::service::test::only_a_full_sweep_forgets_what_it_settled ... ok
+test domain::focus::service::test::sweep_covers_only_inboxes_whose_owner_is_in_the_rollout ... ok
+test domain::focus::service::test::sweep_leaves_out_an_inbox_whose_rollout_is_unknown ... ok
+test domain::focus::service::test::outside_the_signal_inbox_only_key_mail_reaches_the_classifier ... ok
+test domain::focus::service::test::the_lists_apply_a_three_day_wait ... ok
+test domain::focus::service::test::sweep_covers_an_inbox_seen_in_the_rollout_before_it_holds_focus ... ok
+test domain::focus::service::test::sweep_classifies_every_stale_thread ... ok
+test domain::focus::signals::test::a_brushed_off_sender_is_not_a_contact ... ok
+test domain::focus::service::test::the_sweep_leaves_an_inbox_being_backfilled_to_the_backfill ... ok
+test domain::focus::signals::test::a_new_invite_or_rsvp_behind_a_later_message_is_a_conversation ... ok
+test domain::focus::signals::test::a_real_reply_in_the_thread_is_a_recent_contact ... ok
+test domain::focus::signals::test::a_stranger_is_not_a_contact ... ok
+test domain::focus::signals::test::a_real_reply_makes_a_contact ... ok
+test domain::focus::signals::test::a_notice_counts_only_as_the_threads_latest_message ... ok
+test domain::focus::signals::test::a_recent_contact_is_someone_the_owner_wrote_to_within_the_window ... ok
+test domain::focus::service::test::sweep_leaves_rejected_and_settled_threads_until_new_mail ... ok
+test domain::focus::service::test::sweep_stops_when_the_classifier_is_down ... ok
+test domain::focus::service::test::the_owners_time_zone_sets_the_day_a_message_counts_from ... ok
+test domain::focus::service::test::the_rollout_is_checked_only_for_threads_in_the_inbox ... ok
+test domain::focus::signals::test::a_support_thread_opened_by_a_tool_still_awaits_a_reply ... ok
+test domain::focus::signals::test::key_mail_is_changes_to_events_ahead_recent_contacts_and_waiting_threads ... ok
+test domain::focus::signals::test::only_mail_sent_by_the_owner_awaits_nothing ... ok
+test domain::focus::service::test::sweeps_reach_threads_behind_ones_that_never_store_a_result ... ok
+test domain::focus::signals::test::freemail_owners_have_no_teammates ... ok
+test domain::focus::signals::test::someone_the_owner_wrote_to_is_a_contact ... ok
+test domain::focus::service::test::sweep_stops_when_the_classifier_rejects_everything ... ok
+test domain::focus::signals::test::teammates_count_unless_it_is_bulk_mail ... ok
+test domain::focus::signals::test::the_owners_own_calendar_notice_awaits_nothing ... ok
+test domain::focus::signals::test::bulk_and_automated_senders_are_never_recent_contacts ... ok
+test domain::focus::signals::test::the_owner_answering_last_awaits_a_reply ... ok
+test domain::focus::rule::test::calendar_only_ever_describes_a_change_or_a_thread_left_out ... ok
+test domain::focus::rule::test::the_time_answers_change_nothing_but_the_rate ... ok
+test outbound::focus_pg::test::a_messages_date_header_is_read_for_its_offset ... ok
+test outbound::focus_pg::test::a_classification_of_an_older_message_never_replaces_a_newer_date ... ok
+test outbound::focus_pg::test::a_change_subject_on_a_first_revision_holds_by_the_events_own_time ... ok
+test outbound::focus_pg::test::a_mailbox_several_people_read_names_each_of_them_once ... ok
+test outbound::focus_pg::test::a_stored_due_date_reads_back_as_a_calendar_date ... ok
+test outbound::focus_pg::test::a_held_thread_that_needs_a_reply_loses_the_flag_with_the_hold ... ok
+test outbound::focus_pg::test::a_held_thread_marked_done_leaves_focus ... ok
+test outbound::focus_pg::test::a_row_stored_before_the_time_questions_stays_flat_without_asking_jev_again ... ok
+test outbound::focus_pg::test::a_follow_up_that_lost_signal_reads_as_out ... ok
+test outbound::focus_pg::test::a_counter_proposal_is_in ... ok
+test outbound::focus_pg::test::a_cancellation_is_in ... ok
+test outbound::focus_pg::test::a_person_writing_after_a_notice_makes_it_a_conversation ... ok
+test outbound::focus_pg::test::a_row_from_an_older_rule_is_swept_even_outside_the_signal_inbox ... ok
+test outbound::focus_pg::test::a_reschedule_reaches_focus_from_outside_the_signal_inbox ... ok
+test outbound::focus_pg::test::a_new_invite_stays_out ... ok
+test outbound::focus_pg::test::a_series_or_a_subject_alone_holds_for_a_week_after_the_notice ... ok
+test outbound::focus_pg::test::a_thread_in_focus_for_more_than_the_hold_stays_after_the_event ... ok
+test outbound::focus_pg::test::a_thread_that_lost_signal_leaves_focus_unless_pinned ... ok
+test outbound::focus_pg::test::focus_covers_inboxes_linked_to_the_owner ... ok
+test outbound::focus_pg::test::a_thread_of_only_sent_mail_stays_out ... ok
+test outbound::focus_pg::test::an_answer_ends_the_wait_however_long_ago_it_came ... ok
+test outbound::focus_pg::test::every_read_of_a_linked_inbox_names_the_user_it_is_linked_to ... ok
+test outbound::focus_pg::test::an_upcoming_reschedule_is_in_until_the_event_is_over ... ok
+test outbound::focus_pg::test::an_older_classification_never_replaces_a_newer_one ... ok
+test outbound::focus_pg::test::deciding_a_row_again_keeps_its_due_date_without_asking_the_model ... ok
+test outbound::focus_pg::test::focus_list_is_the_owners_inbox_newest_first ... ok
+test outbound::focus_pg::test::a_thread_the_owner_answered_last_reaches_the_list_after_the_wait ... ok
+test outbound::focus_pg::test::importance_moves_at_its_stored_rate_as_the_classified_message_ages ... ok
+test outbound::focus_pg::test::editing_a_draft_never_changes_who_wrote_last ... ok
+test outbound::focus_pg::test::done_threads_and_closed_exchanges_are_not_waiting ... ok
+test outbound::focus_pg::test::importance_never_changes_who_is_on_the_list ... ok
+test outbound::focus_pg::test::an_update_to_an_event_already_over_stays_out ... ok
+test outbound::focus_pg::test::inboxes_with_focus_are_those_holding_a_focus_thread ... ok
+test outbound::focus_pg::test::mail_from_a_recent_contact_is_found_and_pinned_outside_the_signal_inbox ... ok
+test outbound::focus_pg::test::marks_bulk_mail_and_finds_brush_offs ... ok
+test outbound::focus_pg::test::newer_mail_stops_importance_moving_before_the_worker_gets_to_the_thread ... ok
+test outbound::focus_pg::test::syncing_inboxes_are_every_connected_inbox_still_syncing ... ok
+test outbound::focus_pg::test::threads_with_the_same_latest_mail_do_not_fall_between_pages ... ok
+test outbound::focus_pg::test::reads_a_thread_with_its_relationship ... ok
+test outbound::focus_pg::test::the_next_message_sets_a_new_rate_and_restarts_the_clock ... ok
+test outbound::focus_pg::test::rows_from_an_older_rule_read_right_and_are_decided_again_without_the_classifier ... ok
+test outbound::focus_pg::test::the_sweep_ignores_a_change_only_in_the_owners_mail_or_a_draft ... ok
+test outbound::focus_pg::test::stale_threads_cover_enabled_inbox_signal_mail_in_the_window ... ok
+test outbound::focus_pg::test::the_owner_answering_a_notice_ends_the_hold ... ok
+test outbound::focus_pg::test::the_owner_writing_again_restarts_the_wait ... ok
+
+failures:
+
+---- domain::focus::service::test::a_linked_inbox_is_classified_while_its_primary_user_is_in_the_rollout stdout ----
+
+thread 'domain::focus::service::test::a_linked_inbox_is_classified_while_its_primary_user_is_in_the_rollout' (2266303) panicked at crates/email/src/domain/focus/service/test.rs:1648:5:
+NotEnabled
+
+---- domain::focus::service::test::a_linked_inbox_is_unknown_when_a_place_fails_and_nobody_is_in stdout ----
+
+thread 'domain::focus::service::test::a_linked_inbox_is_unknown_when_a_place_fails_and_nobody_is_in' (2266304) panicked at crates/email/src/domain/focus/service/test.rs:1828:5:
+assertion failed: service.classify_thread(id).await.is_err()
+note: run with `RUST_BACKTRACE=1` environment variable to display a backtrace
+
+---- domain::focus::service::test::a_linked_inbox_drops_out_once_it_is_unlinked stdout ----
+
+thread 'domain::focus::service::test::a_linked_inbox_drops_out_once_it_is_unlinked' (2266302) panicked at crates/email/src/domain/focus/service/test.rs:1711:5:
+assertion `left == right` failed
+  left: 0
+ right: 1
+
+---- domain::focus::service::test::a_linked_inbox_stops_when_its_primary_user_leaves_the_rollout stdout ----
+
+thread 'domain::focus::service::test::a_linked_inbox_stops_when_its_primary_user_leaves_the_rollout' (2266305) panicked at crates/email/src/domain/focus/service/test.rs:1688:5:
+assertion `left == right` failed
+  left: (0, 0)
+ right: (1, 1)
+
+---- domain::focus::service::test::a_primary_user_who_joins_gets_their_linked_inbox_found_and_backfilled stdout ----
+
+thread 'domain::focus::service::test::a_primary_user_who_joins_gets_their_linked_inbox_found_and_backfilled' (2266313) panicked at crates/email/src/domain/focus/service/test.rs:1760:5:
+assertion `left == right` failed
+  left: EnrolledInboxes { enrolled: [], unknown: 0 }
+ right: EnrolledInboxes { enrolled: [FocusInboxOwner { link_id: 9abf8fa2-a9b2-4c2c-8153-2e8b86b214a0, owner: macro|owner@acme.example, delegates: [macro|primary@acme.example] }], unknown: 0 }
+
+---- domain::focus::service::test::an_unreadable_owner_does_not_hold_back_an_enrolled_primary_user stdout ----
+
+thread 'domain::focus::service::test::an_unreadable_owner_does_not_hold_back_an_enrolled_primary_user' (2266326) panicked at crates/email/src/domain/focus/service/test.rs:1811:10:
+called `Result::unwrap()` on an `Err` value: 
+ ● "the flag service is down"
+ ╰ crates/email/src/domain/focus/service/test.rs:294
+
+
+
+failures:
+    domain::focus::service::test::a_linked_inbox_drops_out_once_it_is_unlinked
+    domain::focus::service::test::a_linked_inbox_is_classified_while_its_primary_user_is_in_the_rollout
+    domain::focus::service::test::a_linked_inbox_is_unknown_when_a_place_fails_and_nobody_is_in
+    domain::focus::service::test::a_linked_inbox_stops_when_its_primary_user_leaves_the_rollout
+    domain::focus::service::test::a_primary_user_who_joins_gets_their_linked_inbox_found_and_backfilled
+    domain::focus::service::test::an_unreadable_owner_does_not_hold_back_an_enrolled_primary_user
+
+test result: FAILED. 176 passed; 6 failed; 0 ignored; 0 measured; 1613 filtered out; finished in 0.79s
+
+error: test failed, to rerun pass `-p email --lib`

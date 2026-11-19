@@ -1,0 +1,303 @@
+<title>Linked Inbox Focus</title>
+<meta name="claude:viewport-fit-sides" content="cover">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Instrument+Sans:wght@400;500;600;700&family=JetBrains+Mono:wght@400;600&display=swap">
+<style>
+/* Layout: one reading column, wide figures and tables scroll inside their own frames. */
+:root {
+  --bg: #f5f6f9;
+  --surface: #ffffff;
+  --fg: #1a1f2c;
+  --muted: #586074;
+  --line: #dce0e9;
+  --accent: #3043b0;
+  --accent-soft: #e6e9fb;
+  --ok: #1d7448;
+  --ok-soft: #e3f3ea;
+  --bad: #ad3029;
+  --bad-soft: #f9e5e3;
+  --code-bg: #eef0f5;
+  --font-body: "Instrument Sans", "Segoe UI", system-ui, sans-serif;
+  --font-mono: "JetBrains Mono", ui-monospace, "SFMono-Regular", Menlo, monospace;
+}
+@media (prefers-color-scheme: dark) {
+  :root:not([data-theme="light"]) {
+    --bg: #10131a; --surface: #171b25; --fg: #e5e8f1; --muted: #9ba3b7; --line: #2a3142;
+    --accent: #93a2ff; --accent-soft: #232a4a; --ok: #63cf97; --ok-soft: #173326;
+    --bad: #f0877d; --bad-soft: #3a1f1d; --code-bg: #1d2230; color-scheme: dark;
+  }
+}
+:root[data-theme="dark"] {
+  --bg: #10131a; --surface: #171b25; --fg: #e5e8f1; --muted: #9ba3b7; --line: #2a3142;
+  --accent: #93a2ff; --accent-soft: #232a4a; --ok: #63cf97; --ok-soft: #173326;
+  --bad: #f0877d; --bad-soft: #3a1f1d; --code-bg: #1d2230; color-scheme: dark;
+}
+body { background: var(--bg); color: var(--fg); font: 16px/1.6 var(--font-body); }
+.page {
+  max-width: 920px; margin: 0 auto;
+  padding-left: max(16px, env(safe-area-inset-left, 0px));
+  padding-right: max(16px, env(safe-area-inset-right, 0px));
+  padding-block: 40px 72px;
+  display: grid; gap: 44px;
+}
+header { display: grid; gap: 12px; }
+.eyebrow { font: 600 12px/1.2 var(--font-mono); letter-spacing: .08em; text-transform: uppercase; color: var(--accent); }
+h1 { font-size: clamp(30px, 5vw, 42px); line-height: 1.1; margin: 0; font-weight: 700; text-wrap: balance; }
+h2 { font-size: 22px; margin: 0; font-weight: 650; text-wrap: balance; }
+h3 { font-size: 16px; margin: 0; font-weight: 650; }
+p { margin: 0; max-width: 68ch; }
+section { display: grid; gap: 14px; min-width: 0; }
+.meta { display: flex; flex-wrap: wrap; gap: 8px 18px; font: 13px/1.5 var(--font-mono); color: var(--muted); }
+.meta a, a { color: var(--accent); }
+a:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
+.lede { font-size: 18px; }
+code, pre { font-family: var(--font-mono); font-size: 13px; }
+code { background: var(--code-bg); padding: 1px 5px; border-radius: 4px; }
+pre { background: var(--code-bg); padding: 14px 16px; border-radius: 8px; overflow-x: auto; margin: 0; line-height: 1.5; }
+pre code { background: none; padding: 0; }
+.frame { overflow-x: auto; min-width: 0; }
+table { border-collapse: collapse; width: 100%; font-size: 14px; font-variant-numeric: tabular-nums; }
+th, td { text-align: left; vertical-align: top; padding: 9px 12px; border-bottom: 1px solid var(--line); }
+th { font-weight: 600; color: var(--muted); font-size: 12px; text-transform: uppercase; letter-spacing: .05em; }
+.chip { display: inline-block; font: 600 12px/1.4 var(--font-mono); padding: 2px 8px; border-radius: 999px; white-space: nowrap; }
+.chip.ok { background: var(--ok-soft); color: var(--ok); }
+.chip.bad { background: var(--bad-soft); color: var(--bad); }
+.chip.same { background: var(--code-bg); color: var(--muted); }
+.chip.new { background: var(--accent-soft); color: var(--accent); }
+.runs { display: grid; gap: 22px; }
+.run { display: grid; gap: 8px; min-width: 0; }
+.run-head { display: flex; flex-wrap: wrap; align-items: baseline; gap: 8px 12px; }
+.player { border: 1px solid var(--line); border-radius: 8px; overflow: hidden; min-width: 0; background: #121212; }
+.note { color: var(--muted); font-size: 14px; }
+ul.plain { margin: 0; padding-left: 20px; display: grid; gap: 8px; max-width: 72ch; }
+figure { margin: 0; display: grid; gap: 10px; min-width: 0; }
+figure svg { width: 100%; height: auto; min-width: 640px; color: var(--fg); }
+figcaption { color: var(--muted); font-size: 14px; max-width: 72ch; }
+.svg-frame { overflow-x: auto; border: 1px solid var(--line); border-radius: 8px; background: var(--surface); padding: 12px; }
+.grid2 { display: grid; grid-template-columns: repeat(auto-fit, minmax(260px, 1fr)); gap: 14px; }
+.card { background: var(--surface); border: 1px solid var(--line); border-radius: 8px; padding: 14px 16px; display: grid; gap: 6px; min-width: 0; }
+.card .num { font: 600 22px/1.2 var(--font-mono); }
+.files { font: 13px/1.6 var(--font-mono); }
+@media (prefers-reduced-motion: reduce) { * { scroll-behavior: auto; } }
+/*PLAYER_CSS*/
+</style>
+
+<div class="page">
+  <header>
+    <div class="eyebrow">Email Focus · linked inboxes</div>
+    <h1>A linked inbox follows its primary user's Focus flag</h1>
+    <div class="meta">
+      <span>PR <a href="{{PR_URL}}">#{{PR_NUMBER}}</a></span>
+      <span>head <code>{{HEAD}}</code></span>
+      <span>base main <code>e22fa6483f5</code></span>
+      <span><a href="{{DIFFD}}">code tour</a> (tailnet)</span>
+      <span>2026-11-19</span>
+    </div>
+  </header>
+
+  <section>
+    <h2>What it does</h2>
+    <p class="lede">Focus only ran for a user's own inbox. When someone links a mailbox whose address has its own Macro account, the inbox stays that account's, and the Focus worker asked only that account's flag. The person who linked it saw the inbox in their Focus tab, but its mail was never classified.</p>
+    <p>Now an inbox is classified while anyone whose Focus tab shows it has the <code>enable-email-focus</code> flag: its owner, or a user it is linked to through <code>macro_user_links</code>. A linked inbox whose primary user is not on the flag is not classified unless its own owner or another user it is linked to has the flag. Taking a primary user off the flag stops every inbox only they kept in.</p>
+  </section>
+
+  <section>
+    <h2>Before and after, on the real services</h2>
+    <p>The same <code>email_e2e</code> scenario against the real email service, workers, document storage and Focus worker, with the Gmail emulator, a model stand-in and PostHog flag definitions served locally. Ada has the flag and links Bob's mailbox; Bob has a Macro account and no flag. Carol and Dan have no flag; Carol links Dan's mailbox. Only the Focus worker binary differs between the two runs.</p>
+    <div class="runs">
+      <div class="run">
+        <div class="run-head"><h3>main's worker (e22fa6483f5)</h3><span class="chip bad">failed after 134 s</span></div>
+        <div class="player" id="before"></div>
+        <p class="note">Both threads are skipped with <code>NotEnabled</code>: Bob's mail is never classified, and the test times out waiting for its verdict.</p>
+      </div>
+      <div class="run">
+        <div class="run-head"><h3>this branch's worker (24240332806)</h3><span class="chip ok">passed in 14 s</span></div>
+        <div class="player" id="after"></div>
+        <p class="note">Dan's thread is still skipped with <code>NotEnabled</code>. Bob's is classified (<code>is_focus: true</code>), listed on Ada's Home and pushed to Ada's app; the model was never asked about Dan's.</p>
+      </div>
+      <div class="run">
+        <div class="run-head"><h3>this branch, with only the owner asked</h3><span class="chip bad">failed after 131 s</span></div>
+        <div class="player" id="mutant"></div>
+        <p class="note">The branch's worker rebuilt with one line changed (<a href="mutation.diff">mutation.diff</a>): <code>is_enrolled</code> asks only the owner. The scenario fails exactly as on main, so the linked users are what makes it pass. This is the break recorded for the scenario in <code>coverage/proofs.tsv</code>.</p>
+      </div>
+    </div>
+    <p class="note">Recordings: <a href="before.cast">before.cast</a>, <a href="after.cast">after.cast</a>, <a href="mutant.cast">mutant.cast</a> (asciicast v2). Paths are shortened; the names are the harness's synthetic users.</p>
+  </section>
+
+  <section>
+    <h2>The rule</h2>
+    <div class="frame">
+      <table>
+        <thead><tr><th>Owner's flag</th><th>Linked users' flags</th><th>main</th><th>This PR</th></tr></thead>
+        <tbody>
+          <tr><td>on</td><td>any</td><td><span class="chip ok">classified</span></td><td><span class="chip ok">classified</span> <span class="chip same">one check, as before</span></td></tr>
+          <tr><td>off</td><td>one on</td><td><span class="chip bad">not classified</span></td><td><span class="chip ok">classified</span> <span class="chip new">new</span></td></tr>
+          <tr><td>off</td><td>all off, or none linked</td><td><span class="chip bad">not classified</span></td><td><span class="chip bad">not classified</span></td></tr>
+          <tr><td>unreadable</td><td>one on</td><td><span class="chip same">unknown, retried</span></td><td><span class="chip ok">classified</span> <span class="chip new">new</span></td></tr>
+          <tr><td>off or unreadable</td><td>none on, one unreadable</td><td>owner's answer only</td><td><span class="chip same">unknown, retried</span> <span class="chip new">fails closed</span></td></tr>
+        </tbody>
+      </table>
+    </div>
+    <p class="note">"Unknown" means the flag could not be read (PostHog unreachable): the thread is left for a later pass rather than classified or dropped.</p>
+  </section>
+
+  <section>
+    <h2>Where the check changed</h2>
+    <figure>
+      <div class="svg-frame">
+        <svg viewBox="0 0 880 266" role="img" aria-label="On main the worker reads a thread's inbox owner and asks only the owner's flag. On this branch the same read also returns the users the inbox is linked to, and the worker asks each of them after the owner.">
+          <defs>
+            <marker id="arr" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse"><path d="M0,0 L10,5 L0,10 z" fill="currentColor"/></marker>
+            <marker id="arrA" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse"><path d="M0,0 L10,5 L0,10 z" fill="var(--accent)"/></marker>
+          </defs>
+          <g font-family="Instrument Sans, system-ui, sans-serif" font-size="13" fill="currentColor">
+            <text x="10" y="22" font-weight="700" font-size="12" letter-spacing="1">MAIN</text>
+            <text x="10" y="142" font-weight="700" font-size="12" letter-spacing="1" fill="var(--accent)">THIS BRANCH</text>
+          </g>
+          <!-- main lane -->
+          <g fill="none" stroke="currentColor" stroke-width="1.3">
+            <rect x="10" y="36" width="150" height="56" rx="7"/>
+            <rect x="220" y="36" width="190" height="56" rx="7"/>
+            <rect x="470" y="36" width="150" height="56" rx="7"/>
+            <rect x="680" y="36" width="190" height="56" rx="7"/>
+            <line x1="160" y1="64" x2="218" y2="64" marker-end="url(#arr)"/>
+            <line x1="410" y1="64" x2="468" y2="64" marker-end="url(#arr)"/>
+            <line x1="620" y1="64" x2="678" y2="64" marker-end="url(#arr)"/>
+          </g>
+          <g font-family="Instrument Sans, system-ui, sans-serif" font-size="13" fill="currentColor" text-anchor="middle">
+            <text x="85" y="60">mail event</text><text x="85" y="78" font-size="11" opacity=".7">Kafka, look, sweep, backfill</text>
+            <text x="315" y="60">thread_inbox</text><text x="315" y="78" font-size="11" opacity=".7">owner = Bob</text>
+            <text x="545" y="60">flag(Bob)?</text><text x="545" y="78" font-size="11" opacity=".7">no</text>
+            <text x="775" y="60" fill="var(--bad)">NotEnabled</text><text x="775" y="78" font-size="11" opacity=".7">never classified</text>
+          </g>
+          <!-- branch lane -->
+          <g fill="none" stroke="currentColor" stroke-width="1.3">
+            <rect x="10" y="156" width="150" height="56" rx="7"/>
+            <rect x="220" y="156" width="190" height="56" rx="7"/>
+            <rect x="470" y="156" width="150" height="56" rx="7"/>
+            <line x1="160" y1="184" x2="218" y2="184" marker-end="url(#arr)"/>
+            <line x1="410" y1="184" x2="468" y2="184" marker-end="url(#arr)"/>
+          </g>
+          <g fill="none" stroke="var(--accent)" stroke-width="1.8">
+            <rect x="680" y="156" width="190" height="56" rx="7"/>
+            <line x1="620" y1="184" x2="678" y2="184" marker-end="url(#arrA)"/>
+            <path d="M315 212 V236 H775 V214" stroke-dasharray="4 4" marker-end="url(#arrA)"/>
+          </g>
+          <g font-family="Instrument Sans, system-ui, sans-serif" font-size="13" fill="currentColor" text-anchor="middle">
+            <text x="85" y="180">mail event</text><text x="85" y="198" font-size="11" opacity=".7">same four paths</text>
+            <text x="315" y="180">thread_inbox</text><text x="315" y="198" font-size="11" opacity=".7">owner = Bob, delegates = [Ada]</text>
+            <text x="545" y="180">flag(Bob)?</text><text x="545" y="198" font-size="11" opacity=".7">no</text>
+            <text x="775" y="180" fill="var(--accent)">flag(Ada)? yes</text><text x="775" y="198" font-size="11" fill="var(--ok)">classified</text>
+            <text x="545" y="256" font-size="11" fill="var(--accent)">delegates: one macro_user_links_link_idx probe per inbox</text>
+          </g>
+        </svg>
+      </div>
+      <figcaption>The worker's reads now return each inbox's linked users alongside its owner, and the rollout check asks them after the owner. The four paths that classify (live Kafka events, the every-minute look, the hourly sweep, backfill) all go through the same check. Reads of Focus and the push to the app already covered linked inboxes.</figcaption>
+    </figure>
+  </section>
+
+  <section>
+    <h2>Walkthrough</h2>
+    <p><b>Data.</b> <code>FocusInbox</code> and <code>FocusInboxOwner</code> gain <code>delegates</code>, the users other than the owner the inbox is linked to. The three reads that produce them (<code>thread_inbox</code>, <code>inboxes_with_focus</code>, <code>syncing_inboxes</code> in <code>crates/email/src/outbound/focus_pg.rs</code>) each add the same correlated array:</p>
+<pre><code>ARRAY(
+    SELECT mul.primary_macro_id
+    FROM macro_user_links mul
+    WHERE mul.link_id = el.id AND mul.primary_macro_id &lt;&gt; el.macro_id
+) AS "delegates!"</code></pre>
+    <p>Rust sorts and deduplicates the ids (one user can reach a mailbox through more than one account), and leaves out a malformed id with a warning that names the link, never the id, so one bad row cannot fail a read of many inboxes.</p>
+    <p><b>Rule.</b> <code>FocusService::is_enrolled</code> in <code>crates/email/src/domain/focus/service.rs</code> asks the owner first, then each linked user:</p>
+<pre><code>for reader in std::iter::once(owner).chain(delegates) {
+    match self.enrollment.is_enrolled(reader).await {
+        Ok(true) =&gt; { enrolled = true; break; }
+        Ok(false) =&gt; {}
+        Err(error) =&gt; { unknown.get_or_insert(error); }
+    }
+}
+if !enrolled &amp;&amp; let Some(error) = unknown {
+    return Err(error);
+}</code></pre>
+    <p>The remembered set of enrolled inboxes now keeps each inbox's linked users, and the hourly sweep prefers the ones it just read over the remembered ones, so an unlinked inbox drops out at the next sweep. <code>FlagEnrollment</code> in the worker is unchanged in behaviour: it already answered for any user id.</p>
+    <p class="files">models.rs · ports.rs · service.rs · focus_pg.rs · flag_enrollment.rs (docs) · backfill.rs (docs) · .sqlx (3 queries replaced) · fixtures/email_focus_linked_shared.sql · tests/focus.rs · coverage/checks.tsv and proofs.tsv · AGENTS.md of email and email_e2e · docs/runbooks/email-focus.md</p>
+  </section>
+
+  <section>
+    <h2>Decisions</h2>
+    <ul class="plain">
+      <li><b>The owner still counts.</b> The brief said the primary user's flag decides. A <code>macro_user_links</code> edge exists only when the address has a Macro account of its own (or is a shared mailbox's own user), so going by the primary alone would turn off that account's own Focus. Asking the owner first also keeps an account's own inbox at one flag check.</li>
+      <li><b>Yes wins; an error only blocks when nobody says yes.</b> An unreadable owner does not hold back an enrolled linked user, and a failed read never enrolls anyone.</li>
+      <li><b>One index probe per inbox.</b> For the whole-set look, a hash join of all edges (100–175 ms) and a pre-aggregated join (170–195 ms) were no cheaper than the probe (190–315 ms), and a <code>GROUP BY</code> form spilled 9 MB to disk under stale statistics. Deduplicating in Rust instead of in SQL took the probe from about 275 ms to 190 ms.</li>
+      <li><b>No statement timeout.</b> None of the reads depends on one tenant's data; the two whole-set reads run from single background loops that wait for each other, and the worker runs as one replica.</li>
+    </ul>
+  </section>
+
+  <section>
+    <h2>Review fixes</h2>
+    <p>CodeRabbit found two places where a remembered list of linked users could go stale. Both are fixed in {{FIX}}.</p>
+    <ul class="plain">
+      <li><b>The sweep no longer settles a thread it found out of the rollout.</b> The sweep admits an inbox it saw enrolled earlier, with the linked users it read then. When a thread's own read finds the inbox out (the user was unlinked since), the thread was stored as checked at its latest mail, so after a re-link neither the sweep nor a backfill looked at it again until new mail came. Now <code>NotEnabled</code> is never settled, the sweep stops walking that inbox and gives the unstarted threads back to its budget, and the report counts it as <code>inboxes_left</code>.</li>
+      <li><b>A backfill pass that finds the inbox out is not counted as filled.</b> A queued pass kept the linked users of the look that queued it, and a pass that found the inbox out (at the start, or partway) still counted as done, so the inbox could be marked filled without being filled. Now each look gives every waiting inbox the linked users it just read, and such a pass is dropped, so the next look queues the inbox again if it is in.</li>
+    </ul>
+    <div class="grid2">
+      <div class="card"><span class="num">1 new service test</span><span><code>a_thread_found_out_of_the_rollout_is_checked_again_once_its_inbox_is_back_in</code></span><span class="note">fails when the thread is settled again · <a href="mutation-review.txt">log</a></span></div>
+      <div class="card"><span class="num">2 new worker tests</span><span><code>a_waiting_pass_asks_who_the_inbox_is_linked_to_at_the_latest_look</code>, <code>a_pass_that_finds_the_inbox_out_of_the_rollout_leaves_it_for_the_next_look</code></span><span class="note">each fails with its half of the fix undone · <a href="mutation-review.txt">log</a></span></div>
+    </div>
+  </section>
+
+  <section>
+    <h2>Tests</h2>
+    <p class="note">Unit and database tests run on {{FIX}}, the head; the e2e scenarios ran on 24240332806 locally and on CI as below. d14e84d2f6d adds only the scenario's two coverage rows (the owner-only run and the coverage report ran on it), b8bc8201563 only docs and doc comments that still named only the owner.</p>
+    <div class="grid2">
+      <div class="card"><span class="num">1793 of 1796 · 3 of 3 alone</span><span><code>cargo test -p email --all-features</code></span><span class="note">includes 9 new service tests and 2 new database read tests; every Focus test passed. The 3 that failed in the parallel run are log-capture tests in files this PR doesn't touch, which race on the tracing subscriber under threads; they pass alone · <a href="test-email.txt">log</a></span></div>
+      <div class="card"><span class="num">40 passed</span><span><code>cargo test -p email_focus_worker</code></span><span class="note">1 ignored, a timing measurement already on main · new: PostHog local evaluation plus the real database, flag on for the linked user, then off for everyone, and the two backfill queue tests · <a href="test-worker.txt">log</a></span></div>
+      <div class="card"><span class="num">6 of 6 · 20 of 20</span><span><code>email_e2e --test focus</code></span><span class="note">every Focus scenario, then the new one 20 times with <code>--stress-count 20</code> · <a href="e2e-branch.txt">log</a></span></div>
+      <div class="card"><span class="num">7 failed</span><span>owner-only mutation</span><span class="note">with the check limited to the owner (<a href="mutation.diff">diff</a>), 6 service tests and the worker test fail, and the scenario above · <a href="mutation-email.txt">email</a>, <a href="mutation-worker.txt">worker</a></span></div>
+    </div>
+    <p class="note"><code>just check</code> (format, shear, ast-grep, PII scan) passed on d14e84d2f6d and again on b8bc8201563. Clippy with <code>-Dwarnings</code> passed for <code>email</code> with all features, with no default features, and with each of <code>ports</code>, <code>inbound</code> and <code>outbound</code>, plus <code>email_focus_worker</code> and <code>email_e2e</code> with their tests. The test targets of <code>email</code> have clippy findings already on main, none in a file this PR touches; CI lints without them. <code>xtask_email_coverage report</code> accepts the new rows and counts Classify (F-027) as proved on Gmail. CI: {{CI}}.</p>
+  </section>
+
+  <section>
+    <h2>Query plans</h2>
+    <p>Measured with <code>EXPLAIN (ANALYZE, BUFFERS)</code> on PostgreSQL 14.23 (production runs 14.22), the exact SQL from <code>.sqlx</code>, custom and generic plans, first and repeated runs, with fresh statistics and with statistics taken before the bulk of the seed. Seed: 200,000 mailboxes (150,000 syncing), 160,500 links including one mailbox read by 500 users, 2,050,000 threads, 2,500 inboxes holding Focus.</p>
+    <div class="frame">
+      <table>
+        <thead><tr><th>Query</th><th>Runs</th><th>Plan</th><th>Time</th><th>Buffers</th></tr></thead>
+        <tbody>
+          <tr><td><code>thread_inbox</code></td><td>each mail event</td><td>primary keys, then <code>macro_user_links_link_idx</code></td><td>0.01–0.11 ms repeated</td><td>15–22 (10 for 500 edges)</td></tr>
+          <tr><td><code>inboxes_with_focus</code></td><td>hourly sweep</td><td>recursive skip scan as before, probe per inbox</td><td>13–18 ms</td><td>23–26k hits</td></tr>
+          <tr><td><code>syncing_inboxes</code></td><td>every minute</td><td>whole <code>email_links</code> as before, 150,000 probes</td><td>190–315 ms (main ~25 ms)</td><td>~511k hits</td></tr>
+        </tbody>
+      </table>
+    </div>
+    <p class="note">Same plan shape in every run. Plans: <a href="plans-fresh.txt">fresh statistics</a>, <a href="plans-stale.txt">stale statistics</a>, <a href="seed.sql">seed</a>.</p>
+  </section>
+
+  <section>
+    <h2>Not proven</h2>
+    <ul class="plain">
+      <li>The web app was not driven in a browser. No web code changed; the scenario reads Home's list and a thread's Focus with the GraphQL queries the web app sends. The browser suite's stack server cannot start the Focus worker.</li>
+      <li>The production flag's conditions were not read or changed. Both the worker test and the scenario serve flag definitions locally and use the worker's real local evaluation.</li>
+      <li>Production row counts were not measured; the seed is assumed larger than production for mailboxes. The every-minute look grows linearly with connected mailboxes.</li>
+      <li>A primary user losing the flag mid-run (the five-minute flag refresh) is covered by service fakes and by the worker test with the flag off, not by an end-to-end run. Outlook links (delegate and rehome) are covered by the database read tests, not by a scenario.</li>
+    </ul>
+  </section>
+
+  <section>
+    <h2>Noticed, not changed</h2>
+    <ul class="plain">
+      <li>Classification is profiled and metered against the inbox's owner, not the linked user whose flag enrolled it.</li>
+      <li>The gateway push reads the same edges again for every push; it could take the linked users the service already has.</li>
+      <li>A backfill checks the rollout once, when it starts, so one under way finishes its pass after the user who enrolled the inbox leaves. Owners had the same behaviour.</li>
+    </ul>
+  </section>
+</div>
+
+<script src="https://cdn.jsdelivr.net/npm/asciinema-player@3.8.2/dist/bundle/asciinema-player.min.js"></script>
+<script>
+  (function () {
+    if (!window.AsciinemaPlayer) return;
+    var options = { fit: "width", idleTimeLimit: 2, terminalFontSize: "12px", poster: "npt:0:30" };
+    AsciinemaPlayer.create("before.cast", document.getElementById("before"), options);
+    AsciinemaPlayer.create("after.cast", document.getElementById("after"), Object.assign({}, options, { poster: "npt:0:20" }));
+    AsciinemaPlayer.create("mutant.cast", document.getElementById("mutant"), options);
+  })();
+</script>

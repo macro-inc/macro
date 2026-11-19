@@ -1,0 +1,22 @@
+                                                            QUERY PLAN                                                             
+-----------------------------------------------------------------------------------------------------------------------------------
+ Hash Join  (cost=7836.75..12003.08 rows=120230 width=41) (actual time=52.637..96.956 rows=50500 loops=1)
+   Hash Cond: (mul.link_id = el.id)
+   Join Filter: (mul.primary_macro_id <> el.macro_id)
+   Rows Removed by Join Filter: 7500
+   Buffers: shared hit=6104
+   ->  Seq Scan on macro_user_links mul  (cost=0.00..3745.00 rows=160500 width=41) (actual time=0.004..8.266 rows=160500 loops=1)
+         Buffers: shared hit=2140
+   ->  Hash  (cost=5964.00..5964.00 rows=149820 width=42) (actual time=52.092..52.095 rows=150000 loops=1)
+         Buckets: 262144  Batches: 1  Memory Usage: 12953kB
+         Buffers: shared hit=3964
+         ->  Seq Scan on email_links el  (cost=0.00..5964.00 rows=149820 width=42) (actual time=0.006..26.005 rows=150000 loops=1)
+               Filter: is_sync_active
+               Rows Removed by Filter: 50000
+               Buffers: shared hit=3964
+ Planning:
+   Buffers: shared hit=558
+ Planning Time: 1.228 ms
+ Execution Time: 98.597 ms
+(18 rows)
+

@@ -1,0 +1,18 @@
+                                                                          QUERY PLAN                                                                          
+--------------------------------------------------------------------------------------------------------------------------------------------------------------
+ Seq Scan on email_links el  (cost=0.00..24854.28 rows=7928 width=75) (actual time=0.029..205.379 rows=150002 loops=1)
+   Filter: is_sync_active
+   Rows Removed by Filter: 50000
+   Buffers: shared hit=511478
+   SubPlan 1
+     ->  Index Scan using macro_user_links_link_idx on macro_user_links mul  (cost=0.41..2.63 rows=1 width=25) (actual time=0.001..0.001 rows=0 loops=150002)
+           Index Cond: (link_id = el.id)
+           Filter: (primary_macro_id <> el.macro_id)
+           Rows Removed by Filter: 0
+           Buffers: shared hit=507514
+ Planning:
+   Buffers: shared hit=309
+ Planning Time: 0.584 ms
+ Execution Time: 209.693 ms
+(14 rows)
+

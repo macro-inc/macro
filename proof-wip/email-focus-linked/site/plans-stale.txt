@@ -1,0 +1,446 @@
+=== thread_inbox force_custom_plan first (md5(big1)::uuid)
+                                                                        QUERY PLAN                                                                         
+-----------------------------------------------------------------------------------------------------------------------------------------------------------
+ Nested Loop Left Join  (cost=1.24..10.53 rows=1 width=200) (actual time=0.170..0.172 rows=1 loops=1)
+   Join Filter: (f.thread_id = t.id)
+   Buffers: shared hit=13 read=9
+   ->  Nested Loop  (cost=0.83..5.26 rows=1 width=82) (actual time=0.048..0.049 rows=1 loops=1)
+         Buffers: shared hit=4 read=4
+         ->  Index Scan using email_threads_pkey on email_threads t  (cost=0.42..2.64 rows=1 width=34) (actual time=0.032..0.033 rows=1 loops=1)
+               Index Cond: (id = 'a8be047b-494c-fccb-c2d0-b5928a8742bc'::uuid)
+               Buffers: shared read=4
+         ->  Index Scan using email_links_pkey on email_links el  (cost=0.41..2.62 rows=1 width=64) (actual time=0.014..0.014 rows=1 loops=1)
+               Index Cond: (id = t.link_id)
+               Buffers: shared hit=4
+   ->  Index Scan using email_thread_focus_pkey on email_thread_focus f  (cost=0.41..2.63 rows=1 width=102) (actual time=0.022..0.022 rows=1 loops=1)
+         Index Cond: (thread_id = 'a8be047b-494c-fccb-c2d0-b5928a8742bc'::uuid)
+         Buffers: shared read=4
+   SubPlan 1
+     ->  Index Scan using macro_user_links_link_idx on macro_user_links mul  (cost=0.41..2.63 rows=1 width=25) (actual time=0.019..0.067 rows=500 loops=1)
+           Index Cond: (link_id = t.link_id)
+           Filter: (primary_macro_id <> el.macro_id)
+           Buffers: shared hit=9 read=1
+ Planning:
+   Buffers: shared hit=782 read=61
+ Planning Time: 1.951 ms
+ Execution Time: 0.218 ms
+(23 rows)
+
+=== thread_inbox force_custom_plan repeated (md5(big1)::uuid)
+                                                                        QUERY PLAN                                                                         
+-----------------------------------------------------------------------------------------------------------------------------------------------------------
+ Nested Loop Left Join  (cost=1.24..10.53 rows=1 width=200) (actual time=0.091..0.092 rows=1 loops=1)
+   Join Filter: (f.thread_id = t.id)
+   Buffers: shared hit=22
+   ->  Nested Loop  (cost=0.83..5.26 rows=1 width=82) (actual time=0.012..0.012 rows=1 loops=1)
+         Buffers: shared hit=8
+         ->  Index Scan using email_threads_pkey on email_threads t  (cost=0.42..2.64 rows=1 width=34) (actual time=0.007..0.007 rows=1 loops=1)
+               Index Cond: (id = 'a8be047b-494c-fccb-c2d0-b5928a8742bc'::uuid)
+               Buffers: shared hit=4
+         ->  Index Scan using email_links_pkey on email_links el  (cost=0.41..2.62 rows=1 width=64) (actual time=0.003..0.003 rows=1 loops=1)
+               Index Cond: (id = t.link_id)
+               Buffers: shared hit=4
+   ->  Index Scan using email_thread_focus_pkey on email_thread_focus f  (cost=0.41..2.63 rows=1 width=102) (actual time=0.005..0.005 rows=1 loops=1)
+         Index Cond: (thread_id = 'a8be047b-494c-fccb-c2d0-b5928a8742bc'::uuid)
+         Buffers: shared hit=4
+   SubPlan 1
+     ->  Index Scan using macro_user_links_link_idx on macro_user_links mul  (cost=0.41..2.63 rows=1 width=25) (actual time=0.006..0.050 rows=500 loops=1)
+           Index Cond: (link_id = t.link_id)
+           Filter: (primary_macro_id <> el.macro_id)
+           Buffers: shared hit=10
+ Planning:
+   Buffers: shared hit=7
+ Planning Time: 0.251 ms
+ Execution Time: 0.109 ms
+(23 rows)
+
+=== thread_inbox force_custom_plan first (md5(thread4)::uuid)
+                                                                       QUERY PLAN                                                                        
+---------------------------------------------------------------------------------------------------------------------------------------------------------
+ Nested Loop Left Join  (cost=1.24..10.53 rows=1 width=200) (actual time=0.067..0.068 rows=1 loops=1)
+   Join Filter: (f.thread_id = t.id)
+   Buffers: shared hit=10 read=5
+   ->  Nested Loop  (cost=0.83..5.26 rows=1 width=82) (actual time=0.040..0.041 rows=1 loops=1)
+         Buffers: shared hit=5 read=3
+         ->  Index Scan using email_threads_pkey on email_threads t  (cost=0.42..2.64 rows=1 width=34) (actual time=0.027..0.028 rows=1 loops=1)
+               Index Cond: (id = '72b82c5f-4b4d-a9ad-b247-46617c8b62c1'::uuid)
+               Buffers: shared hit=1 read=3
+         ->  Index Scan using email_links_pkey on email_links el  (cost=0.41..2.62 rows=1 width=64) (actual time=0.011..0.011 rows=1 loops=1)
+               Index Cond: (id = t.link_id)
+               Buffers: shared hit=4
+   ->  Index Scan using email_thread_focus_pkey on email_thread_focus f  (cost=0.41..2.63 rows=1 width=102) (actual time=0.014..0.014 rows=1 loops=1)
+         Index Cond: (thread_id = '72b82c5f-4b4d-a9ad-b247-46617c8b62c1'::uuid)
+         Buffers: shared hit=2 read=2
+   SubPlan 1
+     ->  Index Scan using macro_user_links_link_idx on macro_user_links mul  (cost=0.41..2.63 rows=1 width=25) (actual time=0.009..0.010 rows=0 loops=1)
+           Index Cond: (link_id = t.link_id)
+           Filter: (primary_macro_id <> el.macro_id)
+           Buffers: shared hit=3
+ Planning:
+   Buffers: shared hit=7
+ Planning Time: 0.253 ms
+ Execution Time: 0.090 ms
+(23 rows)
+
+=== thread_inbox force_custom_plan repeated (md5(thread4)::uuid)
+                                                                       QUERY PLAN                                                                        
+---------------------------------------------------------------------------------------------------------------------------------------------------------
+ Nested Loop Left Join  (cost=1.24..10.53 rows=1 width=200) (actual time=0.025..0.026 rows=1 loops=1)
+   Join Filter: (f.thread_id = t.id)
+   Buffers: shared hit=15
+   ->  Nested Loop  (cost=0.83..5.26 rows=1 width=82) (actual time=0.013..0.014 rows=1 loops=1)
+         Buffers: shared hit=8
+         ->  Index Scan using email_threads_pkey on email_threads t  (cost=0.42..2.64 rows=1 width=34) (actual time=0.008..0.008 rows=1 loops=1)
+               Index Cond: (id = '72b82c5f-4b4d-a9ad-b247-46617c8b62c1'::uuid)
+               Buffers: shared hit=4
+         ->  Index Scan using email_links_pkey on email_links el  (cost=0.41..2.62 rows=1 width=64) (actual time=0.004..0.004 rows=1 loops=1)
+               Index Cond: (id = t.link_id)
+               Buffers: shared hit=4
+   ->  Index Scan using email_thread_focus_pkey on email_thread_focus f  (cost=0.41..2.63 rows=1 width=102) (actual time=0.005..0.005 rows=1 loops=1)
+         Index Cond: (thread_id = '72b82c5f-4b4d-a9ad-b247-46617c8b62c1'::uuid)
+         Buffers: shared hit=4
+   SubPlan 1
+     ->  Index Scan using macro_user_links_link_idx on macro_user_links mul  (cost=0.41..2.63 rows=1 width=25) (actual time=0.004..0.004 rows=0 loops=1)
+           Index Cond: (link_id = t.link_id)
+           Filter: (primary_macro_id <> el.macro_id)
+           Buffers: shared hit=3
+ Planning:
+   Buffers: shared hit=7
+ Planning Time: 0.212 ms
+ Execution Time: 0.041 ms
+(23 rows)
+
+=== thread_inbox force_generic_plan first (md5(big1)::uuid)
+                                                                        QUERY PLAN                                                                         
+-----------------------------------------------------------------------------------------------------------------------------------------------------------
+ Nested Loop Left Join  (cost=1.24..10.53 rows=1 width=200) (actual time=0.097..0.098 rows=1 loops=1)
+   Join Filter: (f.thread_id = t.id)
+   Buffers: shared hit=22
+   ->  Nested Loop  (cost=0.83..5.26 rows=1 width=82) (actual time=0.017..0.017 rows=1 loops=1)
+         Buffers: shared hit=8
+         ->  Index Scan using email_threads_pkey on email_threads t  (cost=0.42..2.64 rows=1 width=34) (actual time=0.012..0.012 rows=1 loops=1)
+               Index Cond: (id = $1)
+               Buffers: shared hit=4
+         ->  Index Scan using email_links_pkey on email_links el  (cost=0.41..2.62 rows=1 width=64) (actual time=0.005..0.005 rows=1 loops=1)
+               Index Cond: (id = t.link_id)
+               Buffers: shared hit=4
+   ->  Index Scan using email_thread_focus_pkey on email_thread_focus f  (cost=0.41..2.63 rows=1 width=102) (actual time=0.004..0.004 rows=1 loops=1)
+         Index Cond: (thread_id = $1)
+         Buffers: shared hit=4
+   SubPlan 1
+     ->  Index Scan using macro_user_links_link_idx on macro_user_links mul  (cost=0.41..2.63 rows=1 width=25) (actual time=0.006..0.050 rows=500 loops=1)
+           Index Cond: (link_id = t.link_id)
+           Filter: (primary_macro_id <> el.macro_id)
+           Buffers: shared hit=10
+ Planning:
+   Buffers: shared hit=7
+ Planning Time: 0.157 ms
+ Execution Time: 0.112 ms
+(23 rows)
+
+=== thread_inbox force_generic_plan repeated (md5(big1)::uuid)
+                                                                        QUERY PLAN                                                                         
+-----------------------------------------------------------------------------------------------------------------------------------------------------------
+ Nested Loop Left Join  (cost=1.24..10.53 rows=1 width=200) (actual time=0.074..0.074 rows=1 loops=1)
+   Join Filter: (f.thread_id = t.id)
+   Buffers: shared hit=22
+   ->  Nested Loop  (cost=0.83..5.26 rows=1 width=82) (actual time=0.005..0.005 rows=1 loops=1)
+         Buffers: shared hit=8
+         ->  Index Scan using email_threads_pkey on email_threads t  (cost=0.42..2.64 rows=1 width=34) (actual time=0.003..0.003 rows=1 loops=1)
+               Index Cond: (id = $1)
+               Buffers: shared hit=4
+         ->  Index Scan using email_links_pkey on email_links el  (cost=0.41..2.62 rows=1 width=64) (actual time=0.001..0.002 rows=1 loops=1)
+               Index Cond: (id = t.link_id)
+               Buffers: shared hit=4
+   ->  Index Scan using email_thread_focus_pkey on email_thread_focus f  (cost=0.41..2.63 rows=1 width=102) (actual time=0.002..0.002 rows=1 loops=1)
+         Index Cond: (thread_id = $1)
+         Buffers: shared hit=4
+   SubPlan 1
+     ->  Index Scan using macro_user_links_link_idx on macro_user_links mul  (cost=0.41..2.63 rows=1 width=25) (actual time=0.003..0.043 rows=500 loops=1)
+           Index Cond: (link_id = t.link_id)
+           Filter: (primary_macro_id <> el.macro_id)
+           Buffers: shared hit=10
+ Planning Time: 0.011 ms
+ Execution Time: 0.082 ms
+(21 rows)
+
+=== thread_inbox force_generic_plan first (md5(thread4)::uuid)
+                                                                       QUERY PLAN                                                                        
+---------------------------------------------------------------------------------------------------------------------------------------------------------
+ Nested Loop Left Join  (cost=1.24..10.53 rows=1 width=200) (actual time=0.015..0.016 rows=1 loops=1)
+   Join Filter: (f.thread_id = t.id)
+   Buffers: shared hit=15
+   ->  Nested Loop  (cost=0.83..5.26 rows=1 width=82) (actual time=0.007..0.008 rows=1 loops=1)
+         Buffers: shared hit=8
+         ->  Index Scan using email_threads_pkey on email_threads t  (cost=0.42..2.64 rows=1 width=34) (actual time=0.004..0.004 rows=1 loops=1)
+               Index Cond: (id = $1)
+               Buffers: shared hit=4
+         ->  Index Scan using email_links_pkey on email_links el  (cost=0.41..2.62 rows=1 width=64) (actual time=0.003..0.003 rows=1 loops=1)
+               Index Cond: (id = t.link_id)
+               Buffers: shared hit=4
+   ->  Index Scan using email_thread_focus_pkey on email_thread_focus f  (cost=0.41..2.63 rows=1 width=102) (actual time=0.004..0.004 rows=1 loops=1)
+         Index Cond: (thread_id = $1)
+         Buffers: shared hit=4
+   SubPlan 1
+     ->  Index Scan using macro_user_links_link_idx on macro_user_links mul  (cost=0.41..2.63 rows=1 width=25) (actual time=0.003..0.003 rows=0 loops=1)
+           Index Cond: (link_id = t.link_id)
+           Filter: (primary_macro_id <> el.macro_id)
+           Buffers: shared hit=3
+ Planning Time: 0.005 ms
+ Execution Time: 0.021 ms
+(21 rows)
+
+=== thread_inbox force_generic_plan repeated (md5(thread4)::uuid)
+                                                                       QUERY PLAN                                                                        
+---------------------------------------------------------------------------------------------------------------------------------------------------------
+ Nested Loop Left Join  (cost=1.24..10.53 rows=1 width=200) (actual time=0.005..0.006 rows=1 loops=1)
+   Join Filter: (f.thread_id = t.id)
+   Buffers: shared hit=15
+   ->  Nested Loop  (cost=0.83..5.26 rows=1 width=82) (actual time=0.002..0.003 rows=1 loops=1)
+         Buffers: shared hit=8
+         ->  Index Scan using email_threads_pkey on email_threads t  (cost=0.42..2.64 rows=1 width=34) (actual time=0.001..0.001 rows=1 loops=1)
+               Index Cond: (id = $1)
+               Buffers: shared hit=4
+         ->  Index Scan using email_links_pkey on email_links el  (cost=0.41..2.62 rows=1 width=64) (actual time=0.001..0.001 rows=1 loops=1)
+               Index Cond: (id = t.link_id)
+               Buffers: shared hit=4
+   ->  Index Scan using email_thread_focus_pkey on email_thread_focus f  (cost=0.41..2.63 rows=1 width=102) (actual time=0.001..0.001 rows=1 loops=1)
+         Index Cond: (thread_id = $1)
+         Buffers: shared hit=4
+   SubPlan 1
+     ->  Index Scan using macro_user_links_link_idx on macro_user_links mul  (cost=0.41..2.63 rows=1 width=25) (actual time=0.001..0.001 rows=0 loops=1)
+           Index Cond: (link_id = t.link_id)
+           Filter: (primary_macro_id <> el.macro_id)
+           Buffers: shared hit=3
+ Planning Time: 0.004 ms
+ Execution Time: 0.010 ms
+(21 rows)
+
+=== inboxes_with_focus force_custom_plan first 
+                                                                                         QUERY PLAN                                                                                          
+---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------
+ Nested Loop  (cost=53.02..579.39 rows=101 width=75) (actual time=0.096..17.687 rows=2500 loops=1)
+   Buffers: shared hit=25334 read=546
+   CTE focus_links
+     ->  Recursive Union  (cost=0.29..52.62 rows=101 width=16) (actual time=0.039..5.988 rows=2501 loops=1)
+           Buffers: shared hit=7418 read=122
+           ->  Limit  (cost=0.29..0.36 rows=1 width=16) (actual time=0.037..0.038 rows=1 loops=1)
+                 Buffers: shared read=3
+                 ->  Index Only Scan using email_thread_focus_list_idx on email_thread_focus f_1  (cost=0.29..1593.68 rows=21812 width=16) (actual time=0.036..0.036 rows=1 loops=1)
+                       Heap Fetches: 1
+                       Buffers: shared read=3
+           ->  WorkTable Scan on focus_links l_1  (cost=0.00..5.02 rows=10 width=16) (actual time=0.002..0.002 rows=1 loops=2501)
+                 Filter: (link_id IS NOT NULL)
+                 Rows Removed by Filter: 0
+                 Buffers: shared hit=7418 read=119
+                 SubPlan 1
+                   ->  Limit  (cost=0.29..0.48 rows=1 width=16) (actual time=0.002..0.002 rows=1 loops=2500)
+                         Buffers: shared hit=7418 read=119
+                         ->  Index Only Scan using email_thread_focus_list_idx on email_thread_focus f  (cost=0.29..1435.43 rows=7271 width=16) (actual time=0.002..0.002 rows=1 loops=2500)
+                               Index Cond: (link_id > l_1.link_id)
+                               Heap Fetches: 2499
+                               Buffers: shared hit=7418 read=119
+   ->  CTE Scan on focus_links l  (cost=0.00..2.02 rows=101 width=16) (actual time=0.040..6.294 rows=2501 loops=1)
+         Buffers: shared hit=7418 read=122
+   ->  Index Scan using email_links_pkey on email_links el  (cost=0.41..2.57 rows=1 width=43) (actual time=0.002..0.002 rows=1 loops=2501)
+         Index Cond: (id = l.link_id)
+         Buffers: shared hit=10000
+   SubPlan 3
+     ->  Index Scan using macro_user_links_link_idx on macro_user_links mul  (cost=0.41..2.63 rows=1 width=25) (actual time=0.002..0.002 rows=0 loops=2500)
+           Index Cond: (link_id = el.id)
+           Filter: (primary_macro_id <> el.macro_id)
+           Rows Removed by Filter: 0
+           Buffers: shared hit=7916 read=424
+ Planning:
+   Buffers: shared hit=415
+ Planning Time: 0.928 ms
+ Execution Time: 17.860 ms
+(36 rows)
+
+=== inboxes_with_focus force_custom_plan repeated 
+                                                                                         QUERY PLAN                                                                                          
+---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------
+ Nested Loop  (cost=53.02..579.39 rows=101 width=75) (actual time=0.026..15.561 rows=2500 loops=1)
+   Buffers: shared hit=25880
+   CTE focus_links
+     ->  Recursive Union  (cost=0.29..52.62 rows=101 width=16) (actual time=0.009..5.830 rows=2501 loops=1)
+           Buffers: shared hit=7540
+           ->  Limit  (cost=0.29..0.36 rows=1 width=16) (actual time=0.009..0.010 rows=1 loops=1)
+                 Buffers: shared hit=3
+                 ->  Index Only Scan using email_thread_focus_list_idx on email_thread_focus f_1  (cost=0.29..1593.68 rows=21812 width=16) (actual time=0.008..0.009 rows=1 loops=1)
+                       Heap Fetches: 1
+                       Buffers: shared hit=3
+           ->  WorkTable Scan on focus_links l_1  (cost=0.00..5.02 rows=10 width=16) (actual time=0.002..0.002 rows=1 loops=2501)
+                 Filter: (link_id IS NOT NULL)
+                 Rows Removed by Filter: 0
+                 Buffers: shared hit=7537
+                 SubPlan 1
+                   ->  Limit  (cost=0.29..0.48 rows=1 width=16) (actual time=0.002..0.002 rows=1 loops=2500)
+                         Buffers: shared hit=7537
+                         ->  Index Only Scan using email_thread_focus_list_idx on email_thread_focus f  (cost=0.29..1435.43 rows=7271 width=16) (actual time=0.002..0.002 rows=1 loops=2500)
+                               Index Cond: (link_id > l_1.link_id)
+                               Heap Fetches: 2499
+                               Buffers: shared hit=7537
+   ->  CTE Scan on focus_links l  (cost=0.00..2.02 rows=101 width=16) (actual time=0.010..6.131 rows=2501 loops=1)
+         Buffers: shared hit=7540
+   ->  Index Scan using email_links_pkey on email_links el  (cost=0.41..2.57 rows=1 width=43) (actual time=0.002..0.002 rows=1 loops=2501)
+         Index Cond: (id = l.link_id)
+         Buffers: shared hit=10000
+   SubPlan 3
+     ->  Index Scan using macro_user_links_link_idx on macro_user_links mul  (cost=0.41..2.63 rows=1 width=25) (actual time=0.001..0.002 rows=0 loops=2500)
+           Index Cond: (link_id = el.id)
+           Filter: (primary_macro_id <> el.macro_id)
+           Rows Removed by Filter: 0
+           Buffers: shared hit=8340
+ Planning Time: 0.010 ms
+ Execution Time: 15.683 ms
+(34 rows)
+
+=== inboxes_with_focus force_generic_plan first 
+                                                                                         QUERY PLAN                                                                                          
+---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------
+ Nested Loop  (cost=53.02..579.39 rows=101 width=75) (actual time=0.026..16.244 rows=2500 loops=1)
+   Buffers: shared hit=25880
+   CTE focus_links
+     ->  Recursive Union  (cost=0.29..52.62 rows=101 width=16) (actual time=0.010..6.096 rows=2501 loops=1)
+           Buffers: shared hit=7540
+           ->  Limit  (cost=0.29..0.36 rows=1 width=16) (actual time=0.009..0.011 rows=1 loops=1)
+                 Buffers: shared hit=3
+                 ->  Index Only Scan using email_thread_focus_list_idx on email_thread_focus f_1  (cost=0.29..1593.68 rows=21812 width=16) (actual time=0.009..0.009 rows=1 loops=1)
+                       Heap Fetches: 1
+                       Buffers: shared hit=3
+           ->  WorkTable Scan on focus_links l_1  (cost=0.00..5.02 rows=10 width=16) (actual time=0.002..0.002 rows=1 loops=2501)
+                 Filter: (link_id IS NOT NULL)
+                 Rows Removed by Filter: 0
+                 Buffers: shared hit=7537
+                 SubPlan 1
+                   ->  Limit  (cost=0.29..0.48 rows=1 width=16) (actual time=0.002..0.002 rows=1 loops=2500)
+                         Buffers: shared hit=7537
+                         ->  Index Only Scan using email_thread_focus_list_idx on email_thread_focus f  (cost=0.29..1435.43 rows=7271 width=16) (actual time=0.002..0.002 rows=1 loops=2500)
+                               Index Cond: (link_id > l_1.link_id)
+                               Heap Fetches: 2499
+                               Buffers: shared hit=7537
+   ->  CTE Scan on focus_links l  (cost=0.00..2.02 rows=101 width=16) (actual time=0.011..6.398 rows=2501 loops=1)
+         Buffers: shared hit=7540
+   ->  Index Scan using email_links_pkey on email_links el  (cost=0.41..2.57 rows=1 width=43) (actual time=0.002..0.002 rows=1 loops=2501)
+         Index Cond: (id = l.link_id)
+         Buffers: shared hit=10000
+   SubPlan 3
+     ->  Index Scan using macro_user_links_link_idx on macro_user_links mul  (cost=0.41..2.63 rows=1 width=25) (actual time=0.002..0.002 rows=0 loops=2500)
+           Index Cond: (link_id = el.id)
+           Filter: (primary_macro_id <> el.macro_id)
+           Rows Removed by Filter: 0
+           Buffers: shared hit=8340
+ Planning Time: 0.013 ms
+ Execution Time: 16.373 ms
+(34 rows)
+
+=== inboxes_with_focus force_generic_plan repeated 
+                                                                                         QUERY PLAN                                                                                          
+---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------
+ Nested Loop  (cost=53.02..579.39 rows=101 width=75) (actual time=0.024..15.200 rows=2500 loops=1)
+   Buffers: shared hit=25880
+   CTE focus_links
+     ->  Recursive Union  (cost=0.29..52.62 rows=101 width=16) (actual time=0.009..5.693 rows=2501 loops=1)
+           Buffers: shared hit=7540
+           ->  Limit  (cost=0.29..0.36 rows=1 width=16) (actual time=0.008..0.010 rows=1 loops=1)
+                 Buffers: shared hit=3
+                 ->  Index Only Scan using email_thread_focus_list_idx on email_thread_focus f_1  (cost=0.29..1593.68 rows=21812 width=16) (actual time=0.008..0.009 rows=1 loops=1)
+                       Heap Fetches: 1
+                       Buffers: shared hit=3
+           ->  WorkTable Scan on focus_links l_1  (cost=0.00..5.02 rows=10 width=16) (actual time=0.002..0.002 rows=1 loops=2501)
+                 Filter: (link_id IS NOT NULL)
+                 Rows Removed by Filter: 0
+                 Buffers: shared hit=7537
+                 SubPlan 1
+                   ->  Limit  (cost=0.29..0.48 rows=1 width=16) (actual time=0.002..0.002 rows=1 loops=2500)
+                         Buffers: shared hit=7537
+                         ->  Index Only Scan using email_thread_focus_list_idx on email_thread_focus f  (cost=0.29..1435.43 rows=7271 width=16) (actual time=0.002..0.002 rows=1 loops=2500)
+                               Index Cond: (link_id > l_1.link_id)
+                               Heap Fetches: 2499
+                               Buffers: shared hit=7537
+   ->  CTE Scan on focus_links l  (cost=0.00..2.02 rows=101 width=16) (actual time=0.009..5.971 rows=2501 loops=1)
+         Buffers: shared hit=7540
+   ->  Index Scan using email_links_pkey on email_links el  (cost=0.41..2.57 rows=1 width=43) (actual time=0.002..0.002 rows=1 loops=2501)
+         Index Cond: (id = l.link_id)
+         Buffers: shared hit=10000
+   SubPlan 3
+     ->  Index Scan using macro_user_links_link_idx on macro_user_links mul  (cost=0.41..2.63 rows=1 width=25) (actual time=0.001..0.001 rows=0 loops=2500)
+           Index Cond: (link_id = el.id)
+           Filter: (primary_macro_id <> el.macro_id)
+           Rows Removed by Filter: 0
+           Buffers: shared hit=8340
+ Planning Time: 0.012 ms
+ Execution Time: 15.317 ms
+(34 rows)
+
+=== syncing_inboxes force_custom_plan first 
+                                                                          QUERY PLAN                                                                          
+--------------------------------------------------------------------------------------------------------------------------------------------------------------
+ Seq Scan on email_links el  (cost=0.00..24854.28 rows=7928 width=75) (actual time=0.029..307.071 rows=150002 loops=1)
+   Filter: is_sync_active
+   Rows Removed by Filter: 50000
+   Buffers: shared hit=510487 read=991 written=323
+   SubPlan 1
+     ->  Index Scan using macro_user_links_link_idx on macro_user_links mul  (cost=0.41..2.63 rows=1 width=25) (actual time=0.002..0.002 rows=0 loops=150002)
+           Index Cond: (link_id = el.id)
+           Filter: (primary_macro_id <> el.macro_id)
+           Rows Removed by Filter: 0
+           Buffers: shared hit=507373 read=141 written=18
+ Planning:
+   Buffers: shared hit=306
+ Planning Time: 0.598 ms
+ Execution Time: 311.894 ms
+(14 rows)
+
+=== syncing_inboxes force_custom_plan repeated 
+                                                                          QUERY PLAN                                                                          
+--------------------------------------------------------------------------------------------------------------------------------------------------------------
+ Seq Scan on email_links el  (cost=0.00..24854.28 rows=7928 width=75) (actual time=0.013..296.387 rows=150002 loops=1)
+   Filter: is_sync_active
+   Rows Removed by Filter: 50000
+   Buffers: shared hit=511478
+   SubPlan 1
+     ->  Index Scan using macro_user_links_link_idx on macro_user_links mul  (cost=0.41..2.63 rows=1 width=25) (actual time=0.001..0.002 rows=0 loops=150002)
+           Index Cond: (link_id = el.id)
+           Filter: (primary_macro_id <> el.macro_id)
+           Rows Removed by Filter: 0
+           Buffers: shared hit=507514
+ Planning Time: 0.005 ms
+ Execution Time: 301.182 ms
+(12 rows)
+
+=== syncing_inboxes force_generic_plan first 
+                                                                          QUERY PLAN                                                                          
+--------------------------------------------------------------------------------------------------------------------------------------------------------------
+ Seq Scan on email_links el  (cost=0.00..24854.28 rows=7928 width=75) (actual time=0.013..229.698 rows=150002 loops=1)
+   Filter: is_sync_active
+   Rows Removed by Filter: 50000
+   Buffers: shared hit=511478
+   SubPlan 1
+     ->  Index Scan using macro_user_links_link_idx on macro_user_links mul  (cost=0.41..2.63 rows=1 width=25) (actual time=0.001..0.001 rows=0 loops=150002)
+           Index Cond: (link_id = el.id)
+           Filter: (primary_macro_id <> el.macro_id)
+           Rows Removed by Filter: 0
+           Buffers: shared hit=507514
+ Planning Time: 0.007 ms
+ Execution Time: 234.037 ms
+(12 rows)
+
+=== syncing_inboxes force_generic_plan repeated 
+                                                                          QUERY PLAN                                                                          
+--------------------------------------------------------------------------------------------------------------------------------------------------------------
+ Seq Scan on email_links el  (cost=0.00..24854.28 rows=7928 width=75) (actual time=0.015..311.041 rows=150002 loops=1)
+   Filter: is_sync_active
+   Rows Removed by Filter: 50000
+   Buffers: shared hit=511478
+   SubPlan 1
+     ->  Index Scan using macro_user_links_link_idx on macro_user_links mul  (cost=0.41..2.63 rows=1 width=25) (actual time=0.002..0.002 rows=0 loops=150002)
+           Index Cond: (link_id = el.id)
+           Filter: (primary_macro_id <> el.macro_id)
+           Rows Removed by Filter: 0
+           Buffers: shared hit=507514
+ Planning Time: 0.008 ms
+ Execution Time: 315.931 ms
+(12 rows)
+

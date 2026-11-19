@@ -1,0 +1,21 @@
+feat(email-focus): classify a linked inbox while its primary user has the flag
+
+Why: Focus asked only the inbox owner's enable-email-focus flag. A
+mailbox linked to someone else's account is owned by the address's own
+Macro account, so the person whose Focus tab lists it never got it
+classified unless that address was on the flag too.
+
+What: an inbox is now in the rollout while its owner or any user it is
+linked to (macro_user_links.primary_macro_id) has the flag. The owner is
+still asked first, so an account's own inbox keeps following its own
+flag; a linked user is asked only when the owner is out, and a failed
+read leaves the answer unknown only when nobody says yes.
+
+- FocusInbox and FocusInboxOwner carry the linked users, read by
+  thread_inbox, inboxes_with_focus and syncing_inboxes with one
+  macro_user_links_link_idx probe per inbox.
+- The Kafka path, the sweep, the every-minute look and backfill all use
+  the same check, so a primary user who joins gets their linked inboxes
+  backfilled and one who leaves stops all of them.
+- An inbox whose owner and linked users are all outside the rollout is
+  not classified, as before.
