@@ -20,7 +20,6 @@ import { MacOSNotificationUpdateRequiredError } from '@app/lib/tauri/notificatio
 import { globalSplitManager } from '@app/signal/splitLayout';
 import { GlobalAppStateProvider } from '@components/app/GlobalAppState';
 import { useReactiveFavicon } from '@components/app/useReactiveFavicon';
-import { useGlobalAttachableHistory } from '@core/component/AI/signal/globalAttachments';
 import { toast } from '@core/component/Toast/Toast';
 import { TeamContextProvider } from '@core/context/team';
 import { useIsAuthenticated, useUserId, useUserInfo } from '@core/context/user';
@@ -134,7 +133,6 @@ export function AppProviders(props: ParentProps) {
   useChannelCache(userId);
   useWarmPromptDismissals(userId);
   useResumeFolderUploads(userId);
-  useGlobalAttachableHistory();
   useInterfaceLanguageSync();
 
   return (

@@ -21,6 +21,7 @@ import { ImperativeDialogHost } from '@ui';
 import { Layer } from '@ui/components/Layer';
 import { createSignal, Show } from 'solid-js';
 import { render } from 'solid-js/web';
+import { macroDarkTheme } from '../../../theme/themes/macro-dark';
 import { macroLightTheme } from '../../../theme/themes/macro-light';
 import { themeCssVars } from '../../../theme/utils/themeCssVars';
 import { TeamMembers } from '../../TeamMembers';
@@ -29,9 +30,14 @@ import {
   TeamAgentStatusChip,
 } from '../../views/team-agent-dm-status';
 
-for (const [key, token] of Object.entries(themeCssVars(macroLightTheme)))
+// `?dark` renders the page in the dark theme.
+const dark = new URLSearchParams(window.location.search).has('dark');
+for (const [key, token] of Object.entries(
+  themeCssVars(dark ? macroDarkTheme : macroLightTheme)
+))
   document.documentElement.style.setProperty(key, token);
-document.documentElement.dataset.themeLight = 'true';
+document.documentElement.style.colorScheme = dark ? 'dark' : 'light';
+document.documentElement.dataset.themeLight = String(!dark);
 // The fixture uses the same touch variant switch as the app entry point.
 document.documentElement.dataset.touchDevice = String(isTouchDevice());
 

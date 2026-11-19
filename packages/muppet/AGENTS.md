@@ -23,13 +23,16 @@ fails isn't run.
   its own with `inSubprocess`).
 - `utilities/scripts/index.ts`: the type checker and loader for
   scripts.
+- `utilities/greeting/index.ts`: a new agent's first hello, and the model
+  for a utility that is a behavior with every port injected.
 - `examples/`: two small agents that run without credentials.
 
 ## Scope
 
 - Owns: the behavior, event, hook, capability and runtime mechanisms; the
   Claude Code agent; utilities any agent can use (schedules, jobs,
-  credentials, browser (a running Chromium's tab over CDP), Macro chat, failures, time).
+  credentials, browser (a running Chromium's tab over CDP), Macro chat, failures, time,
+  greeting (a new agent's first hello to its owner, from the agent's own prompt file)).
 - Not here: any particular agent's prompts, memory or product logic →
   the agent's own repository, started from `../starter-agent`.
 
@@ -70,8 +73,12 @@ in `packages/sdk`:
 - Credentials: `sopsCredentials` (self-hosted), `envFileCredentials` over
   `parseEnvFile` (a hosted agent's enrollment file, read-only), and
   `withheldCredentials` (names only, for a script's own process).
-- The Claude Code tools are `RunCapabilityScript` and `DescribeCapabilities`:
-  never Macro's own MCP tool names (`ExecuteCode`, `DescribeCodeTools`,
-  `ReadCodeDocs`), which an agent may also be given.
+- The Claude Code tools are `RunCapabilityScript` and `DescribeCapabilities`
+  (`agents/code-tools.ts`): never Macro's own MCP tool names (`ExecuteCode`,
+  `DescribeCodeTools`, `ReadCodeDocs`), which an agent may also be given. An
+  agent passes both sets to the greeting's `unsayable` as its own words.
+- Typing that overlaps in one channel (a greeting and a reply) goes through
+  `typingIndicators` (`utilities/macro/chat`): each indicator has its own
+  stop, and "stop" reaches Macro only when the last one stops.
 - Agents import this library from source and restart to pick up a change, so
   a change to an exported function is a breaking change for every agent.

@@ -607,3 +607,14 @@ pub trait DatabaseMetadataReads: Send + Sync + 'static {
         receipt: EntityAccessReceipt<ViewAccessLevel>,
     ) -> impl Future<Output = Result<Database, DatabaseError>> + Send;
 }
+
+/// Lifecycle facts for trusted backend hosts that already know an entity id.
+/// This returns no content or ownership information and grants no access.
+pub trait DatabaseLifecycleReads: Send + Sync + 'static {
+    /// Whether the database app entity exists outside trash, independently
+    /// of any viewer's current permissions.
+    fn database_is_live(
+        &self,
+        id: DatabaseId,
+    ) -> impl Future<Output = Result<bool, DatabaseError>> + Send;
+}

@@ -38,6 +38,28 @@ pub const MAX_CRASHES: usize = 3;
 /// A Stripe subscription item, one per billed computer.
 pub type SubscriptionItemId = stripe::SubscriptionItemId;
 
+/// How long an agent teammate has to report itself online after its
+/// computer's macrod connects, before its start counts as failed.
+pub const AGENT_START_DEADLINE: Duration = Duration::minutes(3);
+/// Failed first starts after which a computer is released and its purchase
+/// refunded: one failure leaves it for the team to retry.
+pub const MAX_FIRST_START_FAILURES: u8 = 2;
+/// How long the purchase request has to answer its own charge before the
+/// billing worker takes it over ([`TimerKind::ChargeUnsettled`]): longer
+/// than any one subscription update takes, so it only fires for a request
+/// that died part way.
+pub const CHARGE_TAKEOVER: Duration = Duration::minutes(2);
+
+/// The credit note and refund that undid a computer's purchase.
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+pub struct PurchaseRefund {
+    /// The credit note on the purchase's invoice.
+    pub credit_note: stripe::CreditNoteId,
+    /// The refund to the card; `None` when the invoice was paid from the
+    /// team's credit balance, which the credit note restores instead.
+    pub refund: Option<stripe::RefundId>,
+}
+
 /// How long billing waits before acting, from the deployment's configuration.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub struct BillingPolicy {
@@ -144,6 +166,50 @@ pub enum Billing {
         /// Why the computer is free.
         reason: String,
     },
+    /// Bought and provisioning while its purchase's charge (the computer's
+    /// item at its saved price, plus `extra_items`, keyed
+    /// `computer-add:{computer id}`) settles. Nothing is billed yet; a
+    /// refused charge releases it.
+    Charging {
+        /// Joined into the same subscription update as the computer's item.
+        extra_items: Vec<crate::domain::models::SubscriptionItem>,
+        /// Who is answering the charge now.
+        charger: Charger,
+    },
+}
+
+/// Who runs a just-bought computer's charge.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(rename_all = "snake_case")]
+pub enum Charger {
+    /// The purchase request, while the guest is created beside it.
+    Request,
+    /// The billing worker ([`Effect::Charge`]), after the request could not
+    /// answer it: the outcome was unknown, or the request died.
+    Worker,
+}
+
+/// Where the buyer heard that a purchase's charge was refused.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(rename_all = "snake_case")]
+pub enum DeclineSeen {
+    /// The purchase request answered the refusal itself (402), and its
+    /// caller undoes whatever it set up for the computer.
+    ByBuyer,
+    /// The purchase was answered before the refusal was known (202), so
+    /// the buyer is told and an agent teammate bought with it taken back.
+    Later,
+}
+
+/// What a fenced charge's item is, if it landed after its computer was
+/// released while charging.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(rename_all = "snake_case")]
+pub enum LandedCharge {
+    /// Removed without proration, like any released computer's item.
+    Remove,
+    /// Refunded, then removed: the computer failed its first start.
+    Refund,
 }
 
 impl Billing {
@@ -154,8 +220,13 @@ impl Billing {
             | Self::PastDue {
                 subscription_item, ..
             } => Some(subscription_item),
-            Self::EndsAt { .. } | Self::Comped { .. } => None,
+            Self::EndsAt { .. } | Self::Comped { .. } | Self::Charging { .. } => None,
         }
+    }
+
+    /// Whether the purchase's charge has not settled yet.
+    pub fn is_charging(&self) -> bool {
+        matches!(self, Self::Charging { .. })
     }
 }
 
@@ -196,6 +267,18 @@ pub struct ComputerState {
     /// written before it existed.
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub failure: Option<Failure>,
+    /// Bought for an agent teammate that hasn't reported itself online yet:
+    /// its first start isn't over until it does. Absent in rows written
+    /// before it existed.
+    #[serde(default)]
+    pub awaiting_agent: bool,
+    /// Give-ups during the first start; at [`MAX_FIRST_START_FAILURES`] the
+    /// computer is released and its purchase refunded.
+    #[serde(default)]
+    pub first_start_failures: u8,
+    /// The refund of a computer released after failing its first start.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub refund: Option<PurchaseRefund>,
 }
 
 /// Why a computer gave up, in terms the team may see. The full error
@@ -213,6 +296,11 @@ pub enum Failure {
     HostLost,
     /// No enrollment generation is left to recreate the guest with.
     SetupExhausted,
+    /// The agent teammate didn't report itself online within
+    /// [`AGENT_START_DEADLINE`] of macrod connecting.
+    AgentNotStarted,
+    /// The purchase's charge was refused, so the computer was released.
+    Payment,
 }
 
 impl Failure {
@@ -224,6 +312,8 @@ impl Failure {
             Self::KeptCrashing => "The computer kept crashing.",
             Self::HostLost => "The computer's host stopped responding.",
             Self::SetupExhausted => "The computer couldn't be set up again.",
+            Self::AgentNotStarted => "The agent teammate didn't start on its computer.",
+            Self::Payment => "The payment for the computer didn't go through, so it was released.",
         }
     }
 }
@@ -238,6 +328,12 @@ impl ComputerState {
             .and(self.provision_traceparent.as_deref())
     }
 
+    /// Whether the computer is still on its first start: setup hasn't
+    /// finished, or the agent teammate it runs hasn't reported online.
+    pub fn first_start(&self) -> bool {
+        self.awaiting_agent || self.setup.as_ref().is_some_and(|setup| !setup.complete())
+    }
+
     /// Whether an on request is waiting for host capacity rather than setup.
     pub fn waiting_for_capacity(&self) -> bool {
         self.power == Power::On
@@ -246,6 +342,21 @@ impl ComputerState {
                 self.phase,
                 Phase::Provisioning { start: false } | Phase::Stopped
             )
+    }
+
+    /// Whether the purchase's payment is confirmed, for the setup timeline.
+    pub fn payment_progress(&self) -> crate::domain::setup::PaymentProgress {
+        if self.billing.is_charging() {
+            crate::domain::setup::PaymentProgress::Charging
+        } else {
+            crate::domain::setup::PaymentProgress::Settled
+        }
+    }
+
+    /// Whether the computer was released because its purchase's charge was
+    /// refused: it never belonged to the team, so it is never listed.
+    pub fn declined(&self) -> bool {
+        self.phase == Phase::Destroying && self.failure == Some(Failure::Payment)
     }
 
     /// Whether the computer still holds sold capacity on its host.
@@ -289,12 +400,15 @@ pub struct Context {
     pub policy: BillingPolicy,
 }
 
-/// The first state of a computer whose purchase was just confirmed, with
-/// the effects that start provisioning it.
+/// The first state of a just-bought computer, with the effects that start
+/// provisioning it. A [`Billing::Charging`] computer is charged by its
+/// purchase request beside the creation; its [`TimerKind::ChargeUnsettled`]
+/// hands the charge to the billing worker if the request never answers.
 pub fn provision(
     billing: Billing,
     setup: crate::domain::setup::SetupTimeline,
     provision_traceparent: Option<String>,
+    for_agent: bool,
     context: Context,
 ) -> (ComputerState, Vec<Effect>) {
     let start = context.host_has_room;
@@ -312,6 +426,9 @@ pub fn provision(
         capacity_wait: None,
         retried_by_team: false,
         failure: None,
+        awaiting_agent: for_agent,
+        first_start_failures: 0,
+        refund: None,
     };
     let mut effects = Vec::new();
     schedule_create(
@@ -321,6 +438,12 @@ pub fn provision(
         start,
         context.enrollment_generation,
     );
+    if state.billing.is_charging() {
+        effects.push(Effect::ScheduleTimer {
+            kind: TimerKind::ChargeUnsettled,
+            at: context.now + CHARGE_TAKEOVER,
+        });
+    }
     (state, effects)
 }
 
@@ -338,6 +461,11 @@ pub fn transition(
     let host = context.host;
     let policy = context.policy;
 
+    if let Event::PurchaseRefunded { refund } = event {
+        next.refund = Some(refund.clone());
+        return Ok((next, effects));
+    }
+
     if state.phase == Phase::Destroying {
         return match event {
             Event::PowerOn
@@ -350,6 +478,17 @@ pub fn transition(
             | Event::ReleaseNow => Err(Rejected::Released),
             _ => Ok((next, effects)),
         };
+    }
+
+    // Nothing is billed yet to cancel, undo or restore while the charge
+    // settles. Releasing is allowed: it fences the charge.
+    if state.billing.is_charging()
+        && matches!(
+            event,
+            Event::CancelAtPeriodEnd { .. } | Event::UndoCancel { .. } | Event::Restore { .. }
+        )
+    {
+        return Err(Rejected::PaymentPending);
     }
 
     match event {
@@ -403,6 +542,11 @@ pub fn transition(
         Event::MacrodConnected => {
             next.macrod_connected = true;
             next.macrod_misses = 0;
+            // An agent's credentials are handed over only once its
+            // computer is paid for: a charging one waits for the charge.
+            if state.awaiting_agent && !state.macrod_connected && !state.billing.is_charging() {
+                deliver_agent(&mut effects, now);
+            }
             if let Phase::Booting = state.phase {
                 if state.power == Power::On {
                     next.phase = Phase::Running;
@@ -528,6 +672,24 @@ pub fn transition(
             }
         }
 
+        Event::AgentOnline => {
+            next.awaiting_agent = false;
+        }
+
+        Event::AgentStartDue => {
+            if state.awaiting_agent && state.macrod_connected && !gave_up(&state.phase) {
+                give_up(
+                    &mut next,
+                    &mut effects,
+                    Failure::AgentNotStarted,
+                    "the agent teammate never reported online".to_owned(),
+                );
+            }
+        }
+
+        // Handled before the phase checks above.
+        Event::PurchaseRefunded { .. } => {}
+
         Event::HostLost => {
             if !gave_up(&state.phase) {
                 give_up(
@@ -538,6 +700,26 @@ pub fn transition(
                 );
             }
         }
+
+        Event::Moved => match state.phase {
+            // It was stopped for the move: boot it on its new host, which
+            // `host` (the row's host_id) already is, with the idempotent
+            // start a crashed guest gets.
+            Phase::Running | Phase::Booting => {
+                boot(&mut next, &mut effects, now, Some(Effect::Restart { host }));
+            }
+            // A stop in flight completes on the new host.
+            Phase::Stopping => {
+                next.macrod_connected = false;
+                next.macrod_misses = 0;
+                effects.push(Effect::Stop { host });
+            }
+            Phase::Stopped | Phase::Crashed { .. } => {
+                next.macrod_connected = false;
+                next.macrod_misses = 0;
+            }
+            Phase::Provisioning { .. } | Phase::Destroying => return Err(Rejected::NotMovable),
+        },
 
         Event::EffectFailed { failure, reason } => {
             if !gave_up(&state.phase) {
@@ -571,6 +753,7 @@ pub fn transition(
             }
             Billing::Comped { .. } => end_billing(&mut next, &mut effects, host, now, policy),
             Billing::EndsAt { .. } => return Err(Rejected::AlreadyCanceled),
+            Billing::Charging { .. } => return Err(Rejected::PaymentPending),
         },
 
         Event::UndoCancel { subscription_item } => {
@@ -584,7 +767,7 @@ pub fn transition(
             restore_allowed(state, now)?;
             match billing {
                 Billing::Active { .. } | Billing::Comped { .. } => next.billing = billing.clone(),
-                Billing::PastDue { .. } | Billing::EndsAt { .. } => {
+                Billing::PastDue { .. } | Billing::EndsAt { .. } | Billing::Charging { .. } => {
                     return Err(Rejected::InvalidRestore);
                 }
             }
@@ -594,6 +777,11 @@ pub fn transition(
             if let Some(subscription_item) = state.billing.subscription_item() {
                 effects.push(Effect::RemoveBillingItem {
                     subscription_item: subscription_item.clone(),
+                });
+            }
+            if state.billing.is_charging() {
+                effects.push(Effect::SettleCharge {
+                    landed: LandedCharge::Remove,
                 });
             }
             // A released computer is never billed again.
@@ -655,7 +843,7 @@ pub fn transition(
                             subscription_item: subscription_item.clone(),
                         };
                     }
-                    Billing::EndsAt { .. } | Billing::Comped { .. } => {}
+                    Billing::EndsAt { .. } | Billing::Comped { .. } | Billing::Charging { .. } => {}
                 }
             }
         }
@@ -682,6 +870,56 @@ pub fn transition(
                 destroy(&mut next, &mut effects, host);
             }
         }
+
+        Event::ChargeSucceeded { subscription_item } => {
+            if state.billing.is_charging() {
+                next.billing = Billing::Active {
+                    subscription_item: subscription_item.clone(),
+                };
+                // macrod connected before the charge settled: hand the agent
+                // over now.
+                if state.awaiting_agent && state.macrod_connected && !gave_up(&state.phase) {
+                    deliver_agent(&mut effects, now);
+                }
+            }
+        }
+
+        Event::ChargeUnsettled => {
+            if let Billing::Charging {
+                extra_items,
+                charger: Charger::Request,
+            } = &state.billing
+            {
+                next.billing = Billing::Charging {
+                    extra_items: extra_items.clone(),
+                    charger: Charger::Worker,
+                };
+                effects.push(Effect::Charge);
+            }
+        }
+
+        // Nothing was charged, so there is no item to remove.
+        Event::ChargeFailed { seen } => {
+            if state.billing.is_charging() {
+                next.billing = Billing::EndsAt { at: now };
+                next.failure = Some(Failure::Payment);
+                next.power = Power::Off;
+                next.awaiting_agent = false;
+                destroy(&mut next, &mut effects, host);
+                match seen {
+                    DeclineSeen::ByBuyer => {}
+                    DeclineSeen::Later => {
+                        effects.push(Effect::UndoAgentInvite);
+                        effects.push(Effect::NotifySetup {
+                            outcome: SetupOutcome::Failed {
+                                failure: Failure::Payment,
+                                failed_at: now,
+                            },
+                        });
+                    }
+                }
+            }
+        }
     }
 
     if !next.waiting_for_capacity() {
@@ -690,10 +928,62 @@ pub fn transition(
     if next.billing != state.billing {
         next.billing_changed_at = now;
     }
+    // A host outage is not the computer's failure: counting it would release
+    // and refund every computer that was setting up on the host.
+    if state.first_start()
+        && !gave_up(&state.phase)
+        && gave_up(&next.phase)
+        && next.failure != Some(Failure::HostLost)
+    {
+        next.first_start_failures = state.first_start_failures.saturating_add(1);
+        if next.first_start_failures >= MAX_FIRST_START_FAILURES {
+            release_failed_start(state, &mut next, &mut effects, host, now);
+            return Ok((next, effects));
+        }
+    }
     if let Some(outcome) = setup_outcome(state, &next, now) {
         effects.push(Effect::NotifySetup { outcome });
     }
     Ok((next, effects))
+}
+
+/// A computer that failed its first start [`MAX_FIRST_START_FAILURES`]
+/// times: release it, refund its purchase and take back the agent teammate
+/// it was bought for. The team is not billed for a computer that never
+/// worked, and nothing it bought is left behind.
+fn release_failed_start(
+    state: &ComputerState,
+    next: &mut ComputerState,
+    effects: &mut Vec<Effect>,
+    host: HostId,
+    now: DateTime<Utc>,
+) {
+    // The give-up's own page is replaced by the release.
+    effects.retain(|effect| !matches!(effect, Effect::PageOperator { .. }));
+    next.billing = Billing::EndsAt { at: now };
+    next.power = Power::Off;
+    next.awaiting_agent = false;
+    destroy(next, effects, host);
+    if let Some(subscription_item) = state.billing.subscription_item() {
+        effects.push(Effect::RefundPurchase {
+            subscription_item: subscription_item.clone(),
+        });
+    }
+    // The charge may still land: fence it, and refund an item that did.
+    if state.billing.is_charging() {
+        effects.push(Effect::SettleCharge {
+            landed: LandedCharge::Refund,
+        });
+    }
+    effects.push(Effect::UndoAgentInvite);
+    if let Some(failure) = next.failure {
+        effects.push(Effect::NotifySetup {
+            outcome: SetupOutcome::Released {
+                failure,
+                failed_at: now,
+            },
+        });
+    }
 }
 
 /// How this transition ended first setup, if it did. The applier latches
@@ -704,8 +994,11 @@ fn setup_outcome(
     next: &ComputerState,
     now: DateTime<Utc>,
 ) -> Option<SetupOutcome> {
-    state.setup.as_ref().filter(|setup| !setup.complete())?;
-    if !state.macrod_connected && next.macrod_connected {
+    if !state.first_start() {
+        return None;
+    }
+    let setting_up = state.setup.as_ref().is_some_and(|setup| !setup.complete());
+    if setting_up && !state.macrod_connected && next.macrod_connected {
         return Some(SetupOutcome::Ready);
     }
     if !gave_up(&state.phase) && gave_up(&next.phase) {
@@ -727,6 +1020,7 @@ pub fn undo_allowed(state: &ComputerState, now: DateTime<Utc>) -> Result<(), Rej
         Billing::Active { .. } | Billing::PastDue { .. } | Billing::Comped { .. } => {
             Err(Rejected::NotCanceled)
         }
+        Billing::Charging { .. } => Err(Rejected::PaymentPending),
     }
 }
 
@@ -740,7 +1034,18 @@ pub fn restore_allowed(state: &ComputerState, now: DateTime<Utc>) -> Result<(), 
         Billing::Active { .. } | Billing::PastDue { .. } | Billing::Comped { .. } => {
             Err(Rejected::NotCanceled)
         }
+        Billing::Charging { .. } => Err(Rejected::PaymentPending),
     }
+}
+
+/// Hand the agent teammate to the connected macrod and give it
+/// [`AGENT_START_DEADLINE`] to report online.
+fn deliver_agent(effects: &mut Vec<Effect>, now: DateTime<Utc>) {
+    effects.push(Effect::DeliverAgent);
+    effects.push(Effect::ScheduleTimer {
+        kind: TimerKind::AgentStartDue,
+        at: now + AGENT_START_DEADLINE,
+    });
 }
 
 /// Enter Booting, optionally with the effect that starts the VM, and arm the

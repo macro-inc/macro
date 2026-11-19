@@ -248,6 +248,15 @@ pub trait MailboxSyncRepository: Send + Sync + 'static {
         lease: &StreamLease,
         retry_after_seconds: u32,
     ) -> impl Future<Output = Result<(), MailboxError>> + Send;
+    /// Puts the stream back for `retry_after_seconds`, unread, while its
+    /// mailbox has at least `queued` import messages due. Returns whether it
+    /// did.
+    fn pace_import(
+        &self,
+        lease: &StreamLease,
+        queued: u32,
+        retry_after_seconds: u32,
+    ) -> impl Future<Output = Result<bool, MailboxError>> + Send;
     fn claim_message(
         &self,
         lease_id: Uuid,
@@ -320,17 +329,31 @@ pub trait MailboxIngest: Send + Sync + 'static {
 pub struct MailboxSyncService<R, P, I> {
     repo: R,
     provider: P,
+    /// Reads an import: a folder's first delta round and the messages it
+    /// queues. The host gives it a provider that leaves room under the
+    /// mailbox's provider limits for the live work `provider` reads, and that
+    /// waits briefly for that room instead of parking the work.
+    import_provider: P,
     ingest: I,
     imports: ImportTally,
 }
 
 impl<R, P, I> MailboxSyncService<R, P, I> {
-    pub fn new(repo: R, provider: P, ingest: I) -> Self {
+    pub fn new(repo: R, provider: P, import_provider: P, ingest: I) -> Self {
         Self {
             repo,
             provider,
+            import_provider,
             ingest,
             imports: ImportTally::default(),
+        }
+    }
+
+    fn provider_for(&self, is_import: bool) -> &P {
+        if is_import {
+            &self.import_provider
+        } else {
+            &self.provider
         }
     }
 
@@ -453,10 +476,28 @@ impl<R: MailboxSyncRepository, P: MailboxGateway, I: MailboxIngest> MailboxSyncS
 
     async fn enumerate(&self, lease: &StreamLease) -> Result<bool, MailboxError> {
         let span = Span::current();
+        if !lease.initial_complete {
+            match self
+                .repo
+                .pace_import(lease, IMPORT_QUEUED_AHEAD, IMPORT_PACE_SECONDS)
+                .await
+            {
+                Ok(false) => {}
+                Ok(true) => {
+                    record_stream(&span, false, false, false);
+                    record_done(&span, "paced");
+                    return Ok(false);
+                }
+                Err(error) => {
+                    record_failed(&span, lease.mailbox.link_id, &error);
+                    return Err(error);
+                }
+            }
+        }
         let outcome = maintain_lease(
             async {
                 Ok(self
-                    .provider
+                    .provider_for(!lease.initial_complete)
                     .changes(lease.mailbox, &lease.folder, lease.position.as_ref())
                     .await?)
             },
@@ -549,8 +590,11 @@ impl<R: MailboxSyncRepository, P: MailboxGateway, I: MailboxIngest> MailboxSyncS
         let operation = async {
             let folders = self.repo.folders(lease.mailbox).await?;
             let (snapshot, graph_calls) = email_api_client::domain::request_count::counted(
-                self.provider
-                    .message(lease.mailbox, &lease.provider_id, &folders),
+                self.provider_for(lease.is_import).message(
+                    lease.mailbox,
+                    &lease.provider_id,
+                    &folders,
+                ),
             )
             .await;
             span.record("outlook.graph_calls", i64::from(graph_calls));
@@ -658,6 +702,17 @@ where
         }
     }
 }
+
+/// Due import messages a mailbox may have before its folders' import rounds
+/// stop reading pages: two pages. Gmail's backfill lists its next page
+/// behind the threads it queued; this keeps an Outlook walk about as far
+/// ahead of its import, so another mailbox's import, and a message that waited
+/// for room, queue behind a couple of pages rather than the whole import.
+const IMPORT_QUEUED_AHEAD: u32 = 200;
+
+/// How long such a folder waits before it checks again. A mailbox imports at
+/// most about 12 messages a second, so its two pages outlast the wait.
+const IMPORT_PACE_SECONDS: u32 = 10;
 
 /// Claims after which a message the provider keeps refusing outright
 /// (malformed, forbidden) is abandoned: 3 tries, 10 minutes apart.

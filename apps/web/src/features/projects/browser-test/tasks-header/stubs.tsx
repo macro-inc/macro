@@ -33,7 +33,7 @@ export function TasksContent() {
   return <p class="p-4 text-sm text-ink-muted">No tasks in this view.</p>;
 }
 
-export function TasksControls() {
+export function TasksControls(props: { inline?: boolean }) {
   return (
     <Show
       when={isTouchDevice()}
@@ -43,6 +43,7 @@ export function TasksControls() {
     >
       <MobileFilterDrawer
         triggerLabel="Open task filters"
+        inline={props.inline}
         label="Task list controls"
         activeCount={0}
         onClear={() => {}}
@@ -57,6 +58,18 @@ export function createProjectTasksDataSource(): never {
   throw new Error('The header fixture has no task data');
 }
 
-export function PropertyEntitySelector() {
-  return <input aria-label="Search tasks" />;
+export function PropertyEntitySelector(props: {
+  setSelectedOptions(ids: Set<string>): void;
+}) {
+  return (
+    <>
+      <input type="text" aria-label="Search tasks" />
+      <Button
+        variant="secondary"
+        onClick={() => props.setSelectedOptions(new Set(['unlinked']))}
+      >
+        Select tasks
+      </Button>
+    </>
+  );
 }

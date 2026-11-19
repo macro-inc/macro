@@ -19,13 +19,8 @@ export const [agents, setAgents] = createSignal<FixtureAgent[]>([]);
 
 export const [settingsOpened, setSettingsOpened] = createSignal<string>();
 
-/** The Agents page Try it opened, with the params it passed. */
-export type AgentsPageOpened = {
-  page: string;
-  params: Record<string, unknown>;
-};
-export const [agentsPageOpened, setAgentsPageOpened] =
-  createSignal<AgentsPageOpened>();
+/** The agent whose DM Chat with opened, by bot id. */
+export const [agentDmOpened, setAgentDmOpened] = createSignal<string>();
 
 declare global {
   interface Window {
@@ -33,8 +28,6 @@ declare global {
       setHarnesses: typeof setHarnesses;
       setAgents: typeof setAgents;
       settingsOpened: typeof settingsOpened;
-      agentsPageOpened: typeof agentsPageOpened;
-      setAgentsPageOpened: typeof setAgentsPageOpened;
       setSettingsOpened: typeof setSettingsOpened;
       /** Set by the fixture once its notice code loads. */
       notify: (content: ComputerSetupContent) => Promise<void>;
@@ -46,8 +39,6 @@ window.computerFixture = {
   setHarnesses,
   setAgents,
   settingsOpened,
-  agentsPageOpened,
-  setAgentsPageOpened,
   setSettingsOpened,
   notify: async () => {},
 };

@@ -2,8 +2,8 @@
 //! price of its own, per computer.
 
 use crate::domain::model::{
-    CustomerError, ItemChangeSettlement, ItemChangeStatus, ItemProration, ItemQuantityChange,
-    ItemRemoval, PriceInfo, SubscriptionItemView, SubscriptionTerms, TeamError,
+    ComputerPurchaseCredit, CustomerError, ItemChangeSettlement, ItemChangeStatus, ItemProration,
+    ItemQuantityChange, ItemRemoval, PriceInfo, SubscriptionItemView, SubscriptionTerms, TeamError,
 };
 
 /// Errors from changing or reading a team subscription's items.
@@ -70,6 +70,16 @@ pub trait TeamSubscriptionItems: Clone + Send + Sync + 'static {
         item_id: &stripe::SubscriptionItemId,
         idempotency_key: &str,
     ) -> impl Future<Output = Result<ItemRemoval, TeamSubscriptionItemsError>> + Send;
+
+    /// Undo `computer_id`'s purchase with a credit note on the invoice it
+    /// paid, refunding the card part. Idempotent on `idempotency_key`.
+    /// `None` when no paid invoice carries the computer.
+    fn refund_computer_purchase(
+        &self,
+        team_id: &uuid::Uuid,
+        computer_id: computer_id::ComputerId,
+        idempotency_key: &str,
+    ) -> impl Future<Output = Result<Option<ComputerPurchaseCredit>, TeamSubscriptionItemsError>> + Send;
 
     /// Every item on the team subscription.
     fn team_subscription_items(

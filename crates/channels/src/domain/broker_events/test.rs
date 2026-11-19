@@ -111,8 +111,38 @@ fn events_are_keyed_by_channel_id() {
     let event = ChannelMacroEvent::deleted(ChannelDeletedMetadata {
         channel_id,
         actor: user("macro|owner@example.com"),
+        participant_user_ids: Vec::new(),
     });
     assert_eq!(event.key(), channel_id.to_string());
+}
+
+#[test]
+fn deleted_event_from_before_members_were_carried_decodes_without_them() {
+    let channel_id = Uuid::nil();
+    let payload = json!({
+        "event_id": "00000000-0000-0000-0000-000000000000",
+        "schema_version": 1,
+        "event_type": "channel.deleted",
+        "metadata": {
+            "channel_id": channel_id,
+            "actor": "macro|owner@example.com",
+        },
+    });
+
+    let decoded = ChannelMacroEvent::decode(
+        &channel_id.to_string(),
+        &serde_json::to_vec(&payload).expect("serializable"),
+    )
+    .expect("decodable payload");
+
+    assert_eq!(
+        decoded.event().event,
+        ChannelTopicEvent::Deleted(ChannelDeletedMetadata {
+            channel_id,
+            actor: user("macro|owner@example.com"),
+            participant_user_ids: Vec::new(),
+        })
+    );
 }
 
 #[test]
