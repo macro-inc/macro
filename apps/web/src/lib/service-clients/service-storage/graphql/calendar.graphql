@@ -176,6 +176,15 @@ query Calendars {
 	}
 }
 
+query CalendarListRefresh {
+	user {
+		id
+		calendars {
+			...CalendarFields
+		}
+	}
+}
+
 query CalendarChanges($input: CalendarChangesInput!) {
 	user {
 		id

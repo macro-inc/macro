@@ -21,6 +21,7 @@ const context: CrmContext = {
   retryAccess: async () => {},
   EmailThreadMention: unused,
   createEmailPrivacy: unused,
+  createEmailPolicy: unused,
   createPipelines: unused,
   openCreateItem: unused,
   openEmailComposer: unused,

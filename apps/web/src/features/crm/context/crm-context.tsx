@@ -56,6 +56,7 @@ import type {
   TeamSource,
   TeamViewsSource,
 } from './crm-sources';
+import type { EmailPolicySource } from './email-policy';
 import type {
   AddToPipelineSource,
   PipelineEditor,
@@ -70,6 +71,7 @@ export type CrmContext = {
   canAccess: Accessor<boolean>;
   accessState: Accessor<'pending' | 'allowed' | 'denied' | 'error'>;
   retryAccess(): Promise<unknown>;
+  createEmailPolicy(): EmailPolicySource;
   /** Owner-scoped email reference, available independently of CRM viewing access. */
   EmailThreadMention: Component<{
     threadId: string;

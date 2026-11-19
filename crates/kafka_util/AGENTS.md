@@ -44,3 +44,9 @@ environments, with trace propagation and typed grouped/ungrouped consumers.
   partition's high watermark stops moving once its prefetch queue is full.
 - `KafkaEventProducer::send` records the payload's event type on the
   `kafka.publish` span as `macro.event.type`.
+- With `auto.offset.reset` set, librdkafka resets a partition's position after
+  an error (out of range, a truncated log, a failing offset query) without
+  telling the application; it only logs an `OFFSET` warning. Every consumer counts those in `kafka.consumer.offset_resets`
+  (`topic`), which the search freshness monitors read. rust-rdkafka sets
+  librdkafka's log level from the `log` crate's (off in tests), so consumer
+  configs keep it at warning or above; a lower level hides the reset.

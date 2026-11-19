@@ -1,5 +1,6 @@
 import type { ItemDragOverlayData } from '@app/components/app/ItemDragAndDrop';
 import { ListSkeleton } from '@app/components/view-shell/ListSkeleton';
+import { t } from '@app/lib/i18n';
 import { isTouchDevice } from '@core/mobile/isTouchDevice';
 import CaretDownIcon from '@icon/system/regular/caret-down.svg';
 import CaretUpIcon from '@icon/system/regular/caret-up.svg';
@@ -504,16 +505,21 @@ function CrmContent(props: { onOpenThread?: () => void }) {
 
   return (
     <Show when={teamQuery.data} fallback={<NoTeamState />}>
-      <SettingsPage
-        title="CRM"
-        description="Manage email sharing and shape your team’s deal pipeline."
-      >
-        <CrmEmailPrivacySettings onOpenThread={props.onOpenThread} />
-        <Show when={canAccess()}>
-          <StagesSection />
-          <EmailSyncSection />
-        </Show>
-      </SettingsPage>
+      <CrmEmailPrivacySettings
+        onOpenThread={props.onOpenThread}
+        renderOverview={(content) => (
+          <SettingsPage
+            title="CRM"
+            description={t('crm.policySettingsDescription')}
+          >
+            {content}
+            <Show when={canAccess()}>
+              <StagesSection />
+              <EmailSyncSection />
+            </Show>
+          </SettingsPage>
+        )}
+      />
     </Show>
   );
 }

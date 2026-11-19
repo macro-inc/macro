@@ -21,12 +21,14 @@ import {
   lastToast,
   setStatusUnavailable,
 } from './preview-adapters';
+import { SelectiveSettingsFixture } from './selective-fixture';
 import { ThreadMenuFixture } from './thread-menu-fixture';
 
 document.documentElement.dataset.touchDevice = String(isTouchDevice());
 queryClient.setQueryDefaults(crmKeys.excludedEmailThreads._def, {
   retry: false,
 });
+queryClient.setQueryDefaults(crmKeys.emailPrivacy._def, { retry: false });
 queryClient.setQueryData(authKeys.userInfo.queryKey, {
   id: 'member@example.com',
   authenticated: true,
@@ -86,7 +88,13 @@ if (root)
             path="*"
             component={() => (
               <PrivacyNavigationFixture>
-                <Fixture />
+                {new URLSearchParams(location.search).has(
+                  'selective-settings'
+                ) ? (
+                  <SelectiveSettingsFixture />
+                ) : (
+                  <Fixture />
+                )}
               </PrivacyNavigationFixture>
             )}
           />

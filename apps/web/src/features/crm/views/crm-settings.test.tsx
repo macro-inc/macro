@@ -1,5 +1,5 @@
 import { cleanup, fireEvent, render, screen } from '@solidjs/testing-library';
-import { createSignal, onCleanup } from 'solid-js';
+import { createSignal, type JSX, onCleanup } from 'solid-js';
 import { afterEach, beforeEach, expect, it, vi } from 'vitest';
 import type { CrmTeamRole } from '../core/team-config';
 import { Crm } from './crm-settings';
@@ -28,10 +28,12 @@ const state = vi.hoisted(() => ({
 }));
 
 vi.mock('./email-privacy', () => ({
-  CrmEmailPrivacySettings: () => {
+  CrmEmailPrivacySettings: (props: {
+    renderOverview: (content: JSX.Element) => JSX.Element;
+  }) => {
     state.privacyMounted();
     onCleanup(state.privacyDisposed);
-    return <div>Email contribution settings</div>;
+    return props.renderOverview(<div>Email contribution settings</div>);
   },
 }));
 vi.mock('../components/stage-icon', () => ({ CrmStageIcon: () => null }));
