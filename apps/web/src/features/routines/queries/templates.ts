@@ -127,7 +127,15 @@ export function useUnshareTemplateMutation(
       );
     },
     ...withCallbacks(
-      { onSuccess: (_result, { scheduleId }) => setTemplate(scheduleId, null) },
+      {
+        onSuccess: async (_result, { scheduleId }) => {
+          await queryClient.cancelQueries({
+            queryKey: scheduledActionKeys.template({ scheduleId }).queryKey,
+            exact: true,
+          });
+          setTemplate(scheduleId, null);
+        },
+      },
       callbacks
     ),
   }));

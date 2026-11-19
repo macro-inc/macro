@@ -1,6 +1,9 @@
 import { NOOP_SPAN, type Span, Telemetry } from '@macro-inc/observability';
 import { queryClient } from '@queries/client';
-import type { ScheduledAction } from '@service-scheduled-action/generated/schemas';
+import type {
+  RoutineTemplate,
+  ScheduledAction,
+} from '@service-scheduled-action/generated/schemas';
 import { QueryClientProvider } from '@tanstack/solid-query';
 import { err, ok } from 'neverthrow';
 import { render } from 'solid-js/web';
@@ -16,6 +19,10 @@ import {
   useSetScheduleEnabledMutation,
   useSubRoutinesQuery,
 } from './schedules';
+import {
+  useRoutineTemplateQuery,
+  useUnshareTemplateMutation,
+} from './templates';
 
 const setEnabled = vi.hoisted(() => vi.fn());
 const createSchedule = vi.hoisted(() => vi.fn());
@@ -25,6 +32,8 @@ const detach = vi.hoisted(() => vi.fn());
 const listSchedules = vi.hoisted(() => vi.fn());
 const listSubRoutines = vi.hoisted(() => vi.fn());
 const listChildren = vi.hoisted(() => vi.fn());
+const getTemplate = vi.hoisted(() => vi.fn());
+const unshareTemplate = vi.hoisted(() => vi.fn());
 const track = vi.hoisted(() => vi.fn());
 vi.mock('@service-scheduled-action/client', () => ({
   scheduledActionClient: {
@@ -36,6 +45,8 @@ vi.mock('@service-scheduled-action/client', () => ({
     listSchedules,
     listSubRoutines,
     listChildren,
+    getTemplate,
+    unshareTemplate,
   },
 }));
 vi.mock('@app/lib/analytics', () => ({ analytics: { track } }));
@@ -94,6 +105,8 @@ function schedules(): ScheduledAction[] | undefined {
 }
 
 beforeEach(() => {
+  getTemplate.mockReset();
+  unshareTemplate.mockReset();
   setEnabled.mockReset();
   createSchedule.mockReset();
   runNow.mockReset();
@@ -104,6 +117,54 @@ beforeEach(() => {
   listChildren.mockReset();
   track.mockReset();
   queryClient.setQueryData(scheduledActionKeys.list.queryKey, [routine, other]);
+});
+
+it('keeps sharing revoked when an older status response arrives after DELETE', async () => {
+  const template: RoutineTemplate = {
+    id: 'routine',
+    author: routine.owner,
+    name: routine.name,
+    description: '',
+    active_count: 0,
+    created_at: routine.created_at,
+    updated_at: routine.updated_at,
+    appearance: {},
+    task: routine.task,
+    trigger: routine.trigger,
+    variables: [],
+  };
+  const key = scheduledActionKeys.template({ scheduleId: 'routine' }).queryKey;
+  queryClient.setQueryData(key, template);
+  let finishRead!: () => void;
+  const oldResponse = new Promise((resolve) => {
+    finishRead = () => resolve(ok(template));
+  });
+  getTemplate.mockReturnValue(oldResponse);
+  unshareTemplate.mockResolvedValue(ok(undefined));
+  let mutation!: ReturnType<typeof useUnshareTemplateMutation>;
+  function Probe() {
+    useRoutineTemplateQuery(() => 'routine');
+    mutation = useUnshareTemplateMutation();
+    return null;
+  }
+  dispose = render(
+    () => (
+      <QueryClientProvider client={queryClient}>
+        <Probe />
+      </QueryClientProvider>
+    ),
+    document.createElement('div')
+  );
+
+  await vi.waitFor(() => expect(getTemplate).toHaveBeenCalledOnce());
+  const read = queryClient.getQueryCache().find({ queryKey: key })?.promise;
+  const settled = read?.catch(() => undefined);
+  await mutation.mutateAsync({ scheduleId: 'routine' });
+  expect(queryClient.getQueryData(key)).toBeNull();
+
+  finishRead();
+  await settled;
+  expect(queryClient.getQueryData(key)).toBeNull();
 });
 
 afterEach(() => {
