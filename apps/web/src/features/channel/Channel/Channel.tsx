@@ -487,9 +487,7 @@ export function Channel(props: ChannelProps) {
     }),
   });
 
-  const dragState = createChannelDragState({
-    channelId: props.channelId,
-  });
+  const dragState = createChannelDragState();
 
   const channelName = useChannelName(props.channelId);
   const channel = useChannel(props.channelId);

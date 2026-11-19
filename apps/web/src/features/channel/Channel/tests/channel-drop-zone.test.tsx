@@ -20,8 +20,9 @@ const entity: ChannelEntity = {
   ownerId: 'owner',
 };
 
-function setup() {
+function setup(options: { twice?: boolean } = {}) {
   const insertEntityMention = vi.fn();
+  const insertSecondMention = vi.fn();
   const insertThreadMention = vi.fn();
   let hovered: Element | null = null;
   const collision = createPointerCollisionDetector(
@@ -52,7 +53,7 @@ function setup() {
   // it loads, after the channel itself has mounted.
   const [loaded, setLoaded] = createSignal(false);
   function Channel() {
-    const dragState = createChannelDragState({ channelId: 'channel' });
+    const dragState = createChannelDragState();
     dragState.setEntityMentionInputHandlers({ insertEntityMention });
     return (
       <Show when={loaded()}>
@@ -65,11 +66,28 @@ function setup() {
     );
   }
 
+  // The same channel open again (beside its call panel, or in another split).
+  const [secondOpen, setSecondOpen] = createSignal(options.twice ?? false);
+  function SecondView() {
+    const dragState = createChannelDragState();
+    dragState.setEntityMentionInputHandlers({
+      insertEntityMention: insertSecondMention,
+    });
+    return (
+      <ChannelDropZone dragState={dragState}>
+        <span data-testid="second-message">message</span>
+      </ChannelDropZone>
+    );
+  }
+
   const view = render(() => (
     <DragDropProvider collisionDetector={collision}>
       <DragDropSensors />
       <Row />
       <Channel />
+      <Show when={secondOpen()}>
+        <SecondView />
+      </Show>
     </DragDropProvider>
   ));
   setLoaded(true);
@@ -86,7 +104,13 @@ function setup() {
     fireEvent.mouseUp(document, { button: 0 });
   };
 
-  return { insertEntityMention, insertThreadMention, dragRowOnto };
+  return {
+    insertEntityMention,
+    insertSecondMention,
+    insertThreadMention,
+    dragRowOnto,
+    closeSecondView: () => setSecondOpen(false),
+  };
 }
 
 afterEach(() => {
@@ -113,5 +137,28 @@ describe('ChannelDropZone', () => {
     dragRowOnto('thread-reply');
     expect(insertThreadMention).toHaveBeenCalledOnce();
     expect(insertEntityMention).not.toHaveBeenCalled();
+  });
+
+  it('mentions only in the view of a channel open twice that took the drop', () => {
+    const { dragRowOnto, insertEntityMention, insertSecondMention } = setup({
+      twice: true,
+    });
+    dragRowOnto('message');
+    expect(insertEntityMention).toHaveBeenCalledOnce();
+    expect(insertSecondMention).not.toHaveBeenCalled();
+
+    dragRowOnto('second-message');
+    expect(insertSecondMention).toHaveBeenCalledOnce();
+    expect(insertEntityMention).toHaveBeenCalledOnce();
+  });
+
+  it('keeps taking drops after another view of the channel closes', async () => {
+    const { dragRowOnto, insertEntityMention, closeSecondView } = setup({
+      twice: true,
+    });
+    closeSecondView();
+    await Promise.resolve();
+    dragRowOnto('composer');
+    expect(insertEntityMention).toHaveBeenCalledOnce();
   });
 });
