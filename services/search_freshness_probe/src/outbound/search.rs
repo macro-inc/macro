@@ -10,7 +10,7 @@ use models_search::{MatchType, SearchOn};
 use reqwest::Method;
 
 use super::macro_api::{ApiError, Call, MacroApi};
-use crate::domain::model::{EntityId, EntityType, MARKER, SearchQuery};
+use crate::domain::model::{EntityId, EntityType, MARKER, SearchQuery, is_probe_title};
 use crate::domain::ports::Search;
 
 #[cfg(test)]
@@ -31,19 +31,36 @@ impl UnifiedSearch {
         Self { api }
     }
 
-    /// The probe user's entities of `entity_type` titled with the probe's
-    /// marker, most relevant first: how the probe finds a fixture seeded for
-    /// it.
-    pub async fn marked(&self, entity_type: EntityType) -> Result<Vec<EntityId>, ApiError> {
-        self.send(UnifiedSearchRequest {
-            query: MARKER.to_owned(),
-            match_type: MatchType::Exact,
-            filters: only(entity_type, EntityFilters::default()),
-            search_on: SearchOn::Name,
-            ..request_defaults()
-        })
-        .await
-        .map(|hits| hits_of(entity_type, hits))
+    /// The fixtures of `entity_type` the probe user can see, in search's
+    /// order: agent sessions and call records titled as the probe titles
+    /// them. A fixture is seeded once, and this is how the probe finds it.
+    pub async fn fixtures(&self, entity_type: EntityType) -> Result<Vec<EntityId>, ApiError> {
+        let response = self
+            .send(UnifiedSearchRequest {
+                query: MARKER.to_owned(),
+                match_type: MatchType::Exact,
+                filters: only(entity_type, EntityFilters::default()),
+                search_on: SearchOn::Name,
+                ..request_defaults()
+            })
+            .await?;
+        Ok(response
+            .results
+            .into_iter()
+            .filter_map(|item| match (entity_type, item) {
+                (EntityType::AgentSession, UnifiedSearchResponseItem::AgentSession(session)) => {
+                    is_probe_title(&session.name).then_some(session.id)
+                }
+                (EntityType::Call, UnifiedSearchResponseItem::Call(call)) => call
+                    .extra
+                    .name
+                    .as_deref()
+                    .is_some_and(is_probe_title)
+                    .then_some(call.extra.call_id),
+                _ => None,
+            })
+            .map(EntityId)
+            .collect())
     }
 
     async fn send(&self, request: UnifiedSearchRequest) -> Result<UnifiedSearchResponse, ApiError> {

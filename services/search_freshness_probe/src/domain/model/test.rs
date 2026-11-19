@@ -57,3 +57,13 @@ fn tags_match_the_indexers_entity_types_and_the_monitors_outcomes() {
     assert_eq!(Outcome::WriteFailed.as_str(), "write_failed");
     assert_eq!(Outcome::SearchFailed.as_str(), "search_failed");
 }
+
+#[test]
+fn only_the_probes_own_titles_count_as_probe_titles() {
+    assert!(is_probe_title(MARKER));
+    assert!(is_probe_title(&Token::random().title()));
+    assert!(!is_probe_title("Search probe notes"));
+    assert!(!is_probe_title("Search probes"));
+    assert!(!is_probe_title(&format!("{} x", Token::random().title())));
+    assert!(!is_probe_title("Notes on the search probe"));
+}

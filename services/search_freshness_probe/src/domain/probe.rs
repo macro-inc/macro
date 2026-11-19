@@ -60,6 +60,7 @@ pub async fn run<R: Rotation, S: Search, K: RoundSink>(
         write_ms = Empty,
         seen_ms = Empty,
         polls = Empty,
+        failed_polls = Empty,
         otel.status_code = Empty,
     )
 )]
@@ -89,6 +90,7 @@ async fn round<R: Rotation, S: Search>(
                 watched = watch(search, &change.checks, schedule, written_at) => watched,
             };
             span.record("polls", watched.polls);
+            span.record("failed_polls", watched.failed_polls);
             (change.operation, watched.outcome)
         }
     };

@@ -1,5 +1,6 @@
 use chrono::Utc;
 use models_search::SearchHighlight;
+use models_search::agent_session::AgentSessionSearchResponseItem;
 use models_search::channel::ChannelMessageSearchResponseItem;
 use models_search::document::{DocumentSearchResponseItem, DocumentSearchResponseItemWithMetadata};
 use models_search::project::{ProjectSearchResponseItem, ProjectSearchResponseItemWithMetadata};
@@ -42,6 +43,18 @@ fn project(id: Uuid) -> UnifiedSearchResponseItem {
             created_at: Utc::now(),
             project_search_results: Vec::new(),
         },
+    })
+}
+
+fn session(id: Uuid, name: &str) -> UnifiedSearchResponseItem {
+    UnifiedSearchResponseItem::AgentSession(AgentSessionSearchResponseItem {
+        id,
+        name: name.to_owned(),
+        owner_id: String::new(),
+        bot_id: Uuid::nil(),
+        created_at: Utc::now(),
+        updated_at: Utc::now(),
+        agent_session_search_results: Vec::new(),
     })
 }
 
@@ -167,15 +180,20 @@ async fn a_property_search_filters_a_title_search_by_the_value() {
 }
 
 #[tokio::test]
-async fn a_fixture_is_found_by_the_marker_in_its_title() {
-    let (server, search) = answering(vec![]).await;
+async fn a_fixture_is_an_agent_session_titled_as_the_probe_titles_it() {
+    let fixture = Uuid::new_v4();
+    let (server, search) = answering(vec![
+        session(Uuid::new_v4(), "Search probe notes"),
+        session(fixture, &Token::random().title()),
+    ])
+    .await;
 
     let found = search
-        .marked(EntityType::AgentSession)
+        .fixtures(EntityType::AgentSession)
         .await
         .expect("searched");
 
-    assert!(found.is_empty());
+    assert_eq!(found, [EntityId(fixture)]);
     let body = sent(&server).await;
     assert_eq!(body["query"], MARKER);
     assert_eq!(body["search_on"], "name");

@@ -65,7 +65,7 @@ struct ReplaceMarkdown<'a> {
     expected_revision: String,
 }
 
-/// Mirrors `documents::domain::models::EditDocumentArgs`' name field.
+/// Mirrors `documents::domain::models::EditDocumentServiceArgs`' name field.
 #[derive(Serialize)]
 #[serde(rename_all = "camelCase")]
 struct RenameDocument {
@@ -238,7 +238,7 @@ impl CreatedWrites for Messages {
     async fn create(&mut self, texts: &[(Body, Token)]) -> Result<EntityId, ApiError> {
         let channel = self.channel().await?;
         let content = token_of(texts, Body).unwrap_or_else(Token::random);
-        let created: Created = self
+        let posted: Result<Created, ApiError> = self
             .api
             .json(
                 Call::new(
@@ -258,8 +258,16 @@ impl CreatedWrites for Messages {
                     nonce: None,
                 }),
             )
-            .await?;
-        Ok(EntityId(created.id))
+            .await;
+        if let Err(ApiError::Status {
+            status: StatusCode::NOT_FOUND | StatusCode::FORBIDDEN,
+            ..
+        }) = posted
+        {
+            // The channel is gone or no longer ours: make a new one next time.
+            self.channel = None;
+        }
+        Ok(EntityId(posted?.id))
     }
 
     async fn set(&mut self, id: EntityId, _: Body, token: &Token) -> Result<(), ApiError> {

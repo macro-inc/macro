@@ -100,6 +100,19 @@ impl Token {
     }
 }
 
+/// Whether `title` is one the probe gives: [`MARKER`] alone, as a seeded
+/// fixture starts, or followed by a token. Anyone's "Search probe notes" is
+/// not.
+pub fn is_probe_title(title: &str) -> bool {
+    let Some(rest) = title.strip_prefix(MARKER) else {
+        return false;
+    };
+    let Some(token) = rest.strip_prefix(' ') else {
+        return rest.is_empty();
+    };
+    token.len() == TOKEN_LEN && token.bytes().all(|byte| byte.is_ascii_lowercase())
+}
+
 /// What a search asks.
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub enum SearchQuery {

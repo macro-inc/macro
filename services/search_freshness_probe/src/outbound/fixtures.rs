@@ -3,8 +3,8 @@
 //! runtime, and a call record exists only once a call with a transcript is
 //! archived, so the probe renames them instead.
 //!
-//! A fixture is found through search, by the marker in its title, once per
-//! process. Their rename bodies are spelled out here for the same reason as
+//! A fixture is found through search, by its title, and looked up again after
+//! a rename fails. Their rename bodies are spelled out here for the same reason as
 //! in `entities.rs`.
 
 use reqwest::Method;
@@ -52,7 +52,7 @@ impl FixtureWrites for AgentSessions {
     async fn find(&mut self) -> Result<Option<EntityId>, ApiError> {
         Ok(self
             .search
-            .marked(Self::ENTITY_TYPE)
+            .fixtures(Self::ENTITY_TYPE)
             .await?
             .first()
             .copied())
@@ -96,7 +96,7 @@ impl FixtureWrites for Calls {
     async fn find(&mut self) -> Result<Option<EntityId>, ApiError> {
         Ok(self
             .search
-            .marked(Self::ENTITY_TYPE)
+            .fixtures(Self::ENTITY_TYPE)
             .await?
             .first()
             .copied())

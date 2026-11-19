@@ -87,8 +87,11 @@ impl MacroApi {
         key.set_sensitive(true);
         let mut headers = HeaderMap::new();
         headers.insert(API_KEY_HEADER, key);
+        // No redirects: reqwest strips only Authorization and Cookie when it
+        // follows one to another host, so the key would go along.
         let http = reqwest::Client::builder()
             .default_headers(headers)
+            .redirect(reqwest::redirect::Policy::none())
             .timeout(REQUEST_TIMEOUT)
             .build()
             .map_err(|_| InvalidApiKey)?;
@@ -126,6 +129,7 @@ impl MacroApi {
 
     #[tracing::instrument(
         name = "search.freshness_probe.request",
+        err,
         skip_all,
         fields(
             otel.kind = "client",

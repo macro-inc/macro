@@ -8,14 +8,18 @@ import {
   withTelemetry,
 } from '../../packages/resources';
 import { EcrImage } from '../../packages/service';
-import { DopplerEcsEnvironment, stack } from '../../packages/shared';
+import {
+  DopplerEcsEnvironment,
+  grafanaTelemetryEnabled,
+  stack,
+} from '../../packages/shared';
 
 const BASE_NAME = pulumi.getProject();
 const REPO_ROOT = '../../..';
 
-// Shutdown cancels the rounds in progress and deletes the entities the probe
-// created, a few API calls, well inside ECS's default 30 s.
-const STOP_TIMEOUT_SECONDS = 30;
+// Shutdown waits for a write in progress (up to two 10 s requests), then
+// deletes what the probe created (a project takes two), so 30 s can be short.
+const STOP_TIMEOUT_SECONDS = 60;
 
 type SearchFreshnessProbeArgs = {
   vpc: {
@@ -137,7 +141,8 @@ export class SearchFreshnessProbe extends pulumi.ComponentResource {
         },
         taskDefinitionArgs: {
           cpu: '256',
-          memory: '512',
+          // Dev adds the Alloy sidecar, whose limit alone is 512 MB.
+          memory: grafanaTelemetryEnabled ? '1024' : '512',
           taskRole: { roleArn: this.role.arn },
           executionRole: { roleArn: dopplerEcsEnvironment.executionRole.arn },
           runtimePlatform: {

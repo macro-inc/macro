@@ -25,6 +25,10 @@ pub struct Schedule {
     pub slow: Duration,
     /// When an unseen change counts as missed.
     pub give_up_after: Duration,
+    /// How long searches may fail in a row before the round ends as a search
+    /// failure. A round in an outage then lasts this long rather than the
+    /// whole five minutes, so an outage fails a round every minute.
+    pub failing_for: Duration,
 }
 
 impl Schedule {
@@ -34,6 +38,7 @@ impl Schedule {
         fast_for: Duration::from_secs(60),
         slow: Duration::from_secs(5),
         give_up_after: Duration::from_secs(300),
+        failing_for: Duration::from_secs(30),
     };
 
     fn gap_after(&self, elapsed: Duration) -> Duration {
@@ -52,12 +57,15 @@ pub struct Watched {
     pub outcome: Outcome,
     /// Polls run, each one search per check.
     pub polls: u32,
+    /// Polls whose search failed.
+    pub failed_polls: u32,
 }
 
 /// Searches on `schedule` until every check holds in the same poll, and says
 /// how long after `written_at` that poll answered. A failed poll is retried at
-/// the next one; the round ends `SearchFailed` only when the last poll before
-/// giving up failed, since then search's state at the deadline is unknown.
+/// the next one. The round ends `SearchFailed` when searches have failed for
+/// `failing_for` in a row, or when the last poll before the deadline failed:
+/// then search's state is unknown, so the round is not a miss.
 pub async fn watch<S: Search>(
     search: &S,
     checks: &[Check],
@@ -66,6 +74,9 @@ pub async fn watch<S: Search>(
 ) -> Watched {
     let deadline = written_at + schedule.give_up_after;
     let mut polls = 0;
+    let mut failed_polls = 0;
+    // When the current run of failed polls began.
+    let mut failing_since: Option<Instant> = None;
 
     loop {
         let started = Instant::now();
@@ -77,27 +88,40 @@ pub async fn watch<S: Search>(
         .await;
         let answered = Instant::now();
 
-        let last_failed = match poll {
+        match poll {
             Ok(results) if results.iter().all(|holds| *holds) => {
                 return Watched {
                     outcome: Outcome::Seen(answered - written_at),
                     polls,
+                    failed_polls,
                 };
             }
-            Ok(_) => false,
+            Ok(_) => failing_since = None,
             Err(error) => {
-                tracing::warn!(error = ?error, polls, "search failed during a probe round");
-                true
+                failed_polls += 1;
+                let since = *failing_since.get_or_insert(started);
+                if answered - since >= schedule.failing_for || answered >= deadline {
+                    tracing::warn!(
+                        error = ?error,
+                        polls,
+                        failed_polls,
+                        "search kept failing during a probe round"
+                    );
+                    return Watched {
+                        outcome: Outcome::SearchFailed,
+                        polls,
+                        failed_polls,
+                    };
+                }
             }
-        };
+        }
 
         if answered >= deadline {
-            let outcome = if last_failed {
-                Outcome::SearchFailed
-            } else {
-                Outcome::Unseen
+            return Watched {
+                outcome: Outcome::Unseen,
+                polls,
+                failed_polls,
             };
-            return Watched { outcome, polls };
         }
 
         let next = started + schedule.gap_after(started - written_at);

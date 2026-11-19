@@ -67,7 +67,8 @@ async fn a_change_already_searchable_is_seen_on_the_first_poll() {
         watched,
         Watched {
             outcome: Outcome::Seen(Duration::ZERO),
-            polls: 1
+            polls: 1,
+            failed_polls: 0,
         }
     );
 }
@@ -89,7 +90,8 @@ async fn the_first_minute_is_polled_every_second() {
         watched,
         Watched {
             outcome: Outcome::Seen(Duration::from_secs(3)),
-            polls: 4
+            polls: 4,
+            failed_polls: 0,
         }
     );
 }
@@ -112,7 +114,8 @@ async fn after_a_minute_polls_come_every_five_seconds() {
         watched,
         Watched {
             outcome: Outcome::Seen(Duration::from_secs(65)),
-            polls: 62
+            polls: 62,
+            failed_polls: 0,
         }
     );
 }
@@ -129,7 +132,8 @@ async fn a_change_never_searchable_is_unseen_after_five_minutes() {
         watched,
         Watched {
             outcome: Outcome::Unseen,
-            polls: 61 + 48
+            polls: 61 + 48,
+            failed_polls: 0,
         }
     );
     assert_eq!(Instant::now() - started, Duration::from_secs(300));
@@ -197,9 +201,29 @@ async fn a_failed_poll_is_retried_at_the_next_one() {
         watched,
         Watched {
             outcome: Outcome::Seen(Duration::from_secs(2)),
-            polls: 3
+            polls: 3,
+            failed_polls: 2,
         }
     );
+}
+
+#[tokio::test(start_paused = true)]
+async fn a_search_outage_ends_the_round_after_30_seconds_of_failures() {
+    let token = Token::random();
+    let started = Instant::now();
+
+    let watched = watch_with(&[check(&token, Presence::Present)], |_, _| Err(Down)).await;
+
+    // A round a minute fails during an outage, rather than one in five.
+    assert_eq!(
+        watched,
+        Watched {
+            outcome: Outcome::SearchFailed,
+            polls: 31,
+            failed_polls: 31,
+        }
+    );
+    assert_eq!(Instant::now() - started, Duration::from_secs(30));
 }
 
 #[tokio::test(start_paused = true)]
@@ -207,7 +231,7 @@ async fn a_round_whose_last_poll_failed_is_a_search_failure_not_a_miss() {
     let token = Token::random();
 
     let watched = watch_with(&[check(&token, Presence::Present)], |_, elapsed| {
-        if elapsed >= Duration::from_secs(250) {
+        if elapsed >= Duration::from_secs(290) {
             Err(Down)
         } else {
             Ok(vec![])
@@ -216,14 +240,15 @@ async fn a_round_whose_last_poll_failed_is_a_search_failure_not_a_miss() {
     .await;
 
     assert_eq!(watched.outcome, Outcome::SearchFailed);
+    assert_eq!(watched.failed_polls, 3);
 }
 
 #[tokio::test(start_paused = true)]
-async fn a_search_outage_that_ends_before_the_deadline_still_ends_unseen() {
+async fn a_short_search_outage_does_not_end_the_round() {
     let token = Token::random();
 
     let watched = watch_with(&[check(&token, Presence::Present)], |_, elapsed| {
-        if elapsed < Duration::from_secs(200) {
+        if elapsed < Duration::from_secs(20) {
             Err(Down)
         } else {
             Ok(vec![])
@@ -231,5 +256,12 @@ async fn a_search_outage_that_ends_before_the_deadline_still_ends_unseen() {
     })
     .await;
 
-    assert_eq!(watched.outcome, Outcome::Unseen);
+    assert_eq!(
+        watched,
+        Watched {
+            outcome: Outcome::Unseen,
+            polls: 61 + 48,
+            failed_polls: 20,
+        }
+    );
 }

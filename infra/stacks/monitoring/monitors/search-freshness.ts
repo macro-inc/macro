@@ -52,7 +52,9 @@
 //   `entity_type` (`document`, `message`, `project`, `property`,
 //   `agent_session`, `call`), tagged `operation` (`create`, `edit`,
 //   `rename`, `delete`). Searches come every second for the first minute,
-//   then every 5 s; a round gives up at 300 s.
+//   then every 5 s; a round gives up at 300 s, or after 30 s of failed
+//   searches. Search hides a deleted entity through its database check, so a
+//   delete round measures that, not the index.
 // - `search.freshness.probe_rounds`: finished probe rounds (counter), tagged
 //   `entity_type`, `operation` and `outcome` (`seen`, `unseen`, and the
 //   probe's own failures `write_failed` and `search_failed`).
@@ -102,7 +104,10 @@ const LIVE_RETENTION = pending(`!${EMAIL}`, 'topic', MS_PER_DAY);
 const DROPPED = `sum:search.index.dropped_events{${PROD}} by {entity_type}.as_count()`;
 const OFFSET_RESETS = `sum:kafka.consumer.offset_resets{${PROD}} by {topic}.as_count()`;
 const READINGS = `max:search.index.oldest_pending_ms{${PROD}}.fill(null)`;
-const PROBE_SECONDS = `max:search.freshness.probe_seconds{${PROD_PROBE}} by {entity_type}.fill(null)`;
+// Deletes leave this out: search drops a deleted entity through its database
+// check at once, whatever the index holds, so a delete round is always fast
+// and would hide slow creates, edits and renames in the window's minimum.
+const PROBE_SECONDS = `max:search.freshness.probe_seconds{${PROD_PROBE},!operation:delete} by {entity_type}.fill(null)`;
 const PROBE_UNSEEN = `sum:search.freshness.probe_rounds{${PROD_PROBE},outcome:unseen} by {entity_type}.as_count()`;
 const PROBE_FAILING = `sum:search.freshness.probe_rounds{${PROD_PROBE},!outcome:seen,!outcome:unseen} by {entity_type}.as_count()`;
 const PROBE_ROUNDS = `sum:search.freshness.probe_rounds{${PROD_PROBE}} by {entity_type}.as_count()`;
@@ -223,7 +228,7 @@ export const searchFreshnessDashboard = new datadog.Dashboard(
         }),
         thresholdGraph({
           title: TITLES.probeUnseen,
-          query: `${PROBE_UNSEEN}.rollup(sum, 600)`,
+          query: `${PROBE_UNSEEN}.rollup(sum, 1800)`,
           critical: '2',
         }),
         thresholdGraph({
@@ -403,8 +408,9 @@ prodMonitor('search-probe-late', {
   query: `min(last_10m):${PROBE_SECONDS} > 60`,
   monitorThresholds: { critical: '60' },
   pages: false,
+  requireFullWindow: true,
   description:
-    'For 10 minutes, every {{entity_type.name}} change the probe made took longer than the threshold, in seconds, to show in search, measured from the API acknowledging the write. Users see their {{entity_type.name}} changes in search that late.',
+    'For 10 minutes, every {{entity_type.name}} create, edit and rename the probe made took longer than the threshold, in seconds, to show in search, measured from the API acknowledging the write. Users see their {{entity_type.name}} changes in search that late.',
   dashboard,
   runbook: `${RUNBOOK}#probe-late`,
 });
@@ -412,11 +418,11 @@ prodMonitor('search-probe-late', {
 prodMonitor('search-probe-unseen', {
   title: TITLES.probeUnseen,
   service: PROBE_SERVICE,
-  query: `sum(last_10m):${PROBE_UNSEEN} >= 2`,
+  query: `sum(last_30m):${PROBE_UNSEEN} >= 2`,
   monitorThresholds: { critical: '2' },
   pages: false,
   description:
-    "In the last 10 minutes, search still did not show the probe's {{entity_type.name}} change five minutes after the write, more than once. A change that never shows is a freshness miss.",
+    "In the last 30 minutes, search still did not show the probe's {{entity_type.name}} change five minutes after the write, more than once. A change that never shows is a freshness miss. An unseen round lasts five minutes, so a type has at most six in the window.",
   dashboard,
   runbook: `${RUNBOOK}#probe-unseen`,
   alertDetail: '{{value}} rounds',
@@ -430,7 +436,7 @@ prodMonitor('search-probe-failing', {
   monitorThresholds: { critical: '7' },
   pages: false,
   description:
-    "More than half of the probe's {{entity_type.name}} rounds in 15 minutes failed to write or to search. Freshness of {{entity_type.name}} is not measured while it lasts; the API or the probe's fixture may be broken.",
+    "More than half of the probe's {{entity_type.name}} rounds in 15 minutes failed to write or to search; a round ends as a search failure after 30 s of failed searches, so a search outage fails one a minute. Freshness of {{entity_type.name}} is not measured while it lasts.",
   dashboard,
   runbook: `${RUNBOOK}#probe-failing`,
   alertDetail: '{{value}} rounds',

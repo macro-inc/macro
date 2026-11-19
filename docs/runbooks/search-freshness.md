@@ -152,8 +152,10 @@ unknown, not zero.
 
 ## Probe late
 
-For 10 minutes, every round of one entity type took longer than 60 s from the
-API acknowledging the write to a search showing it. Compare **Seconds until
+For 10 minutes, every create, edit and rename round of one entity type took
+longer than 60 s from the API acknowledging the write to a search showing it.
+Deletes are left out: search hides a deleted entity through its database check
+at once, whatever the index still holds. Compare **Seconds until
 search showed a probe change** with the indexer's lag for the same type on the
 dashboard:
 
@@ -174,7 +176,8 @@ dropped, or indexed wrongly, or search no longer finds the entity.
   failed publishes of that type.
 - Find the round's span (`search.freshness_probe`, `outcome:unseen`) for the
   `entity_id`, and search for it in the app as the probe user. A delete that
-  never disappears means the delete did not reach the index.
+  stays visible means the entity still exists in its source: search hides
+  deleted entities by checking the database, not the index.
 
 ## Probe failing
 
@@ -185,7 +188,8 @@ search. Freshness of that type is not measured meanwhile.
   record titled `Search probe`; seed one (see the probe's AGENTS.md).
 - Other write failures: the `search.freshness_probe.request` span names the
   route and status. A 401 means the probe user's key was revoked.
-- `search_failed`: `POST /dss/search` is failing for users too.
+- `search_failed`: searches failed for 30 s in a row, so `POST /dss/search`
+  is failing for users too.
 
 ## Probe silent
 

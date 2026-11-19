@@ -21,14 +21,16 @@ From `infra/`: `bun run check`, `bunx biome check stacks/search-freshness-probe`
 
 - One task, replaced stop-first (`deploymentMinimumHealthyPercent: 0`): two
   probes would rename the same fixtures and report each other's titles as
-  misses.
+  misses. The stop timeout is 60 s so shutdown can finish a write and delete
+  what the probe made.
 - No ECS container health check: the runtime image has no HTTP client. The
   `search-probe-silent` monitor notices a probe that stops.
 - Deploys need the `doppler-projects` stack applied first: `DopplerEcsEnvironment`
   reads `/doppler-sync/search-freshness-probe/<stack>`.
 - Once it runs in prod, set `PROBE_RUNS_IN_PROD` in
   `infra/stacks/monitoring/monitors/search-freshness.ts` so its heartbeat
-  monitor exists.
+  monitor exists, and add `search-probe-silent` to both monitor lists in
+  `infra/stacks/monitoring/routing.test.ts` (prod monitors and heartbeats).
 
 ## Related
 

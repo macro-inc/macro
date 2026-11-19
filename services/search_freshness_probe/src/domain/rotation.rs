@@ -131,19 +131,20 @@ impl<A: CreatedWrites> Rotation for Created<A> {
             return self.create().await;
         };
         let id = live.id;
-        // A failed write leaves the entity's state unknown, so the same step
-        // is tried again next round: a set with a fresh token, or a delete,
-        // which succeeds on an entity already gone.
         let Some((field, old)) = live.texts.get(self.next_field).cloned() else {
+            // A delete that failed is tried again next round; one that took
+            // effect before failing succeeds then, on an entity already gone.
             return self.delete(id).await;
         };
 
         let operation = field.operation();
         let new = Token::random();
-        self.api
-            .set(id, field, &new)
-            .await
-            .map_err(failed(operation))?;
+        if let Err(error) = self.api.set(id, field, &new).await {
+            // The entity may be gone or broken: delete it next round and
+            // start over with a new one, rather than failing on it forever.
+            self.next_field = live.texts.len();
+            return Err(failed(operation)(error));
+        }
 
         if let Some(live) = self.live.as_mut()
             && let Some(slot) = live.texts.get_mut(self.next_field)
@@ -216,13 +217,16 @@ impl<A: FixtureWrites> Rotation for Fixture<A> {
                 .map_err(failed(Operation::Rename))?
                 .ok_or_else(|| failed(Operation::Rename)(NoFixture(A::ENTITY_TYPE)))?,
         };
-        self.id = Some(id);
 
         let new = Token::random();
-        self.api
-            .rename(id, &new)
-            .await
-            .map_err(failed(Operation::Rename))?;
+        if let Err(error) = self.api.rename(id, &new).await {
+            // The fixture may have been archived or deleted: look it up again
+            // next round.
+            self.id = None;
+            self.title = None;
+            return Err(failed(Operation::Rename)(error));
+        }
+        self.id = Some(id);
 
         let mut checks = vec![text_check(A::ENTITY_TYPE, &new, id, Presence::Present)];
         if let Some(old) = self.title.replace(new) {
@@ -316,8 +320,17 @@ impl<A: PropertyWrites> Rotation for PropertyValue<A> {
         if let Some(old) = &self.value {
             checks.push(Self::check(definition, &holder, old, Presence::Absent));
         }
+        if let Err(error) = written {
+            // The document or the definition may be gone: replace both next
+            // round, deleting this document now so it does not linger.
+            if let Err(error) = self.api.delete_document(holder.id).await {
+                tracing::warn!(error = ?error, entity_id = %holder.id, "the probe could not delete its property document");
+            }
+            self.definition = None;
+            self.value = None;
+            return Err(failed(Operation::Edit)(error));
+        }
         self.holder = Some(holder);
-        written.map_err(failed(Operation::Edit))?;
 
         self.value = Some(new);
         Ok(Change {

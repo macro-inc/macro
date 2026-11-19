@@ -161,15 +161,16 @@ async fn a_failed_write_is_tried_again_next_round() {
         );
     }
 
+    // A failed edit starts the entity over; a failed delete is tried again.
     assert_eq!(
         results,
         [
             Ok(Operation::Create),
             Err(Operation::Edit),
-            Ok(Operation::Edit),
-            Ok(Operation::Rename),
             Err(Operation::Delete),
             Ok(Operation::Delete),
+            Ok(Operation::Create),
+            Ok(Operation::Edit),
         ]
     );
 }
@@ -210,6 +211,7 @@ struct FakeSessions {
     fixture: Option<EntityId>,
     finds: u32,
     renames: Vec<EntityId>,
+    refuse_rename: bool,
 }
 
 impl FixtureWrites for FakeSessions {
@@ -224,6 +226,9 @@ impl FixtureWrites for FakeSessions {
 
     async fn rename(&mut self, id: EntityId, _: &Token) -> Result<(), Refused> {
         self.renames.push(id);
+        if std::mem::take(&mut self.refuse_rename) {
+            return Err(Refused);
+        }
         Ok(())
     }
 }
@@ -234,6 +239,7 @@ async fn a_missing_fixture_fails_the_rename_until_one_exists() {
         fixture: None,
         finds: 0,
         renames: Vec::new(),
+        refuse_rename: false,
     });
 
     let failed = rotation.change().await.expect_err("no fixture");
@@ -254,11 +260,30 @@ async fn a_missing_fixture_fails_the_rename_until_one_exists() {
     );
 }
 
+#[tokio::test]
+async fn a_failed_rename_looks_the_fixture_up_again() {
+    let mut rotation = Fixture::new(FakeSessions {
+        fixture: Some(id(9)),
+        finds: 0,
+        renames: Vec::new(),
+        refuse_rename: true,
+    });
+
+    rotation.change().await.expect_err("refused");
+    let renamed = rotation.change().await.expect("renamed");
+
+    assert_eq!(rotation.api.finds, 2);
+    // The title after a failed rename is unknown, so no old title is checked.
+    assert!(tokens(&renamed, Presence::Absent).is_empty());
+}
+
 /// A property API with one definition, refusing the first document create
-/// when `refuse_create` is set.
+/// when `refuse_create` is set and the first value when `refuse_set` is.
 #[derive(Default)]
 struct FakeProperties {
     refuse_create: bool,
+    refuse_set: bool,
+    definitions: u32,
     documents: Vec<EntityId>,
     sets: Vec<(EntityId, EntityId)>,
     deleted: Vec<EntityId>,
@@ -268,6 +293,7 @@ impl PropertyWrites for FakeProperties {
     type Err = Refused;
 
     async fn definition(&mut self) -> Result<EntityId, Refused> {
+        self.definitions += 1;
         Ok(id(100))
     }
 
@@ -287,6 +313,9 @@ impl PropertyWrites for FakeProperties {
         _: &Token,
     ) -> Result<(), Refused> {
         self.sets.push((document, definition));
+        if std::mem::take(&mut self.refuse_set) {
+            return Err(Refused);
+        }
         Ok(())
     }
 
@@ -336,4 +365,21 @@ async fn a_property_value_is_replaced_every_round_on_one_document() {
     };
     assert_eq!(*property_id, id(100));
     assert_eq!(name, first_name);
+}
+
+#[tokio::test]
+async fn a_failed_value_replaces_the_document_and_definition_next_round() {
+    let mut rotation = PropertyValue::new(FakeProperties {
+        refuse_set: true,
+        ..FakeProperties::default()
+    });
+
+    rotation.change().await.expect_err("the value is refused");
+    let next = rotation.change().await.expect("set on a new document");
+
+    assert_eq!(rotation.api.documents, [id(200), id(201)]);
+    assert_eq!(rotation.api.deleted, [id(200)]);
+    assert_eq!(rotation.api.definitions, 2);
+    assert_eq!(next.entity_id, id(201));
+    assert!(tokens(&next, Presence::Absent).is_empty());
 }
