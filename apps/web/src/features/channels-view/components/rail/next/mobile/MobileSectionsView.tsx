@@ -12,11 +12,10 @@ import { useChannelLabelsQuery } from '@queries/channel-labels/channel-labels';
 import { useFavoritesData } from '@queries/favorites/favorites';
 import { queryReadyGate } from '@queries/gate';
 import { useCurrentTeamQuery } from '@queries/team/teams';
-import { createMemo, createSignal, Show } from 'solid-js';
+import { type Accessor, createMemo, createSignal, Show } from 'solid-js';
 import { useChannelsView } from '../../../../channels-view-context';
 import type { ChannelsDataSource, ChannelsSources } from '../../../../queries';
 import { deduplicateChannels } from '../../../../queries';
-import { useChannelListSearchPool } from '../../../../queries/channel-list-search-pool';
 import { ChannelsMobileView } from '../../../ChannelsMobileView';
 import { SectionChannelsPicker } from '../SectionChannelsDialog';
 import { MobileSectionOptions } from './MobileSectionOptions';
@@ -32,6 +31,7 @@ import { useMobileSectionActions } from './use-mobile-section-actions';
 export function MobileSectionsView(props: {
   sources: ChannelsSources;
   pinned: readonly ChannelEntity[];
+  localChannels: Accessor<ChannelEntity[]>;
   openPreview?: (channel: ChannelEntity) => boolean;
 }) {
   const { state, sectionsEnabled, setSectionPreferences, setSectionOrder } =
@@ -61,7 +61,7 @@ export function MobileSectionsView(props: {
       ...state.sectionPreferences[`label:${label.id}`],
     };
   };
-  const localChannels = useChannelListSearchPool();
+  const localChannels = props.localChannels;
   const members = useCachedChannelsByIds(
     () => selectedLabel()?.channelIds ?? [],
     sectionsEnabled

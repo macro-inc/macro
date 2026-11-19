@@ -103,7 +103,6 @@ export default {
     close: 'Tutup',
     delete: 'Hapus',
     rename: 'Ganti nama',
-    more: 'Lainnya',
     search: 'Cari',
     settings: 'Setelan',
   },

@@ -6,6 +6,7 @@ mod export;
 mod guest_policy;
 mod invitations;
 mod join_requests;
+mod nul_characters;
 #[cfg(feature = "outlook")]
 mod outlook;
 mod replacement;
@@ -868,6 +869,7 @@ impl CalendarRepository for PgCalendarRepository {
             #[cfg(test)]
             CalendarEventWrite::Fixture(upsert) => upsert,
         };
+        nul_characters::remove_from_upsert(&mut upsert);
         let source = upsert.source.details();
         let source_kind = upsert.source.kind();
         let source_link_id = source.email_link_id;
@@ -3342,7 +3344,7 @@ impl CalendarBackfillRepository for PgCalendarRepository {
         let lease_token = Uuid::now_v7();
         let required_scopes = GOOGLE_CALENDAR_SCOPES.map(str::to_owned);
         let mut tx = self.pool.begin().await.map_err(report)?;
-        let claimed_account_id = sqlx::query_scalar!(
+        let claimed = sqlx::query!(
             r#"
             UPDATE calendar_backfill_jobs
             SET status = 'running',
@@ -3375,7 +3377,7 @@ impl CalendarBackfillRepository for PgCalendarRepository {
                       AND lease_expires_at < now()
                   )
               )
-            RETURNING account_id
+            RETURNING account_id, started_at AS "started_at!"
             "#,
             key.job_id,
             key.email_link_id,
@@ -3385,8 +3387,8 @@ impl CalendarBackfillRepository for PgCalendarRepository {
         .fetch_optional(&mut *tx)
         .await
         .map_err(report)?;
-        if let Some(account_id) = claimed_account_id {
-            let Some(account_id) = account_id else {
+        if let Some(claimed) = claimed {
+            let Some(account_id) = claimed.account_id else {
                 tx.rollback().await.map_err(report)?;
                 return Err(rootcause::report!(
                     "Google Calendar backfill job has no calendar account"
@@ -3396,6 +3398,7 @@ impl CalendarBackfillRepository for PgCalendarRepository {
             return Ok(CalendarBackfillClaim::Claimed {
                 lease_token,
                 account_id,
+                round_started_at: claimed.started_at,
             });
         }
 
@@ -3577,6 +3580,52 @@ impl CalendarBackfillRepository for PgCalendarRepository {
     ) -> Result<CalendarBackfillFailureOutcome, Report> {
         self.persist_google_backfill_failure(key, Some(lease_token), disposition, message)
             .await
+    }
+
+    #[tracing::instrument(skip(self), err)]
+    async fn defer_google_backfill(
+        &self,
+        key: CalendarBackfillJobKey,
+        lease_token: Uuid,
+    ) -> Result<(), Report> {
+        let required_scopes = GOOGLE_CALENDAR_SCOPES.map(str::to_owned);
+        // started_at stays, so the round's next delivery skips what this one
+        // synced; the account keeps its status and error, as nothing failed.
+        let deferred = sqlx::query!(
+            r#"
+            UPDATE calendar_backfill_jobs
+            SET status = 'pending',
+                lease_token = NULL,
+                lease_expires_at = NULL,
+                updated_at = now()
+            WHERE id = $1
+              AND email_link_id = $2
+              AND kind = 'google_calendar'
+              AND status = 'running'
+              AND lease_token = $3
+              AND lease_expires_at > now()
+              AND EXISTS (
+                    SELECT 1
+                    FROM email_link_google_scopes scopes
+                    WHERE scopes.link_id = calendar_backfill_jobs.email_link_id
+                      AND scopes.grant_version = calendar_backfill_jobs.grant_version
+                      AND scopes.granted_scopes @> $4::text[]
+              )
+            "#,
+            key.job_id,
+            key.email_link_id,
+            lease_token,
+            &required_scopes,
+        )
+        .execute(&self.pool)
+        .await
+        .map_err(report)?;
+        if deferred.rows_affected() != 1 {
+            return Err(rootcause::report!(
+                "Google Calendar backfill lease was lost"
+            ));
+        }
+        Ok(())
     }
 }
 

@@ -263,7 +263,10 @@ the search in the field and clears it from the list after a selection. In a real
 and keeps its full width when there is room. Inside an `@container/split-header`
 600px or narrower, the toolbar New (`ViewCreateButton`) drops its label, keeping
 its icon, its caret when it opens a menu, its name and its tooltip, as header
-actions do.
+actions do. `list-split.browser.e2e.ts` resizes a list view (`asideList`) opened
+as a second split across 720px: the list docks beside the empty preview above it
+and fills the split below it, never leaving an empty preview behind Show
+navigation.
 
 A project's Tasks header keeps search, filters and Add existing tasks on screen at
 320–430px phone widths, with search closed and open, by collapsing Add existing
@@ -1212,7 +1215,7 @@ resolved session ID; keep the existing `AgentSessionProvider` subscription to
   session pane shares the split's hotkey scope. Covered by
   `ViewSidebar.test.tsx` and `AgentsSidebar.test.tsx`.
 - Keep desktop headers on the shared `ListHeader` / `HeaderActionGroup` pattern: view `Tabs` as pills after the title, semantic islands with 8px gaps on the right, fully rounded frames, New then expandable Search; retain `md` sizing for New and Search. Keep a bar at one height: detail-header islands and view `Tabs` use `sm`/`icon-sm` (28px controls), and list-header islands and Tabs (any header with New or Search) use `md`/`icon-md` (32px) to match New and Search. A labelled action outside an island is 32px, so in a detail header give it `grouped` inside a `HeaderActionGroup`. Change desktop headers in desktop views; never edit a mobile view for a desktop change ([mobile rule](../../.agents/rules/web/mobile.md#detection-and-input)). Compose ButtonGroup actions with explicit `ButtonGroup.Button` segments; use `variant="secondary" finish="raised"` on action frames. Standalone Buttons do not inherit group styling. Pick each control by role from the [design system rule](../../.agents/rules/web/design-system.md); see [UI conventions](../../docs/agent-guide/ui-conventions.md#top-bars). Never use recessed/inset backgrounds in headers.
-- Keep desktop model, effort and priority tier controls separate: the model selector opens the catalog, and Effort and Priority tier (`ComposerSettingMenu`) show their current value beside the icon and list the runtime's advertised choices; on touch they are icon buttons that open a bottom sheet.
+- Use the unified model selector in every agent composer, including Home, new chats, inline and standalone sessions, and universal-input AI drafts. Reuse it for routine agent/model targets. Keep each host's saved preferences and session mutations; show Reasoning effort and Speed only when that host applies them. Retain the old controls unwired for reference.
 - Render GitHub comment and PR description bodies through `normalizeGithubMarkdown` (`@macro-inc/lexical-core`), not ad hoc HTML stripping; `<details>` renders as a native collapsible section in `StaticMarkdown`. The backend-free desktop/phone regression over CodeRabbit-shaped comments is
   `bunx playwright test --config src/features/block-pr/browser-test/playwright.config.ts`; the same config's
   `changes-split.browser.e2e.ts` checks that a narrow PR split opens Changes over the PR, never as a split inside it.
@@ -1722,8 +1725,9 @@ The stream's JavaScript object, on the other hand, is collected while a `Respons
 
 ### Agent session failure indicators
 
-Use the existing status dot in Home and Agents rows with `bg-failure` when the
-persisted `turnState` is `failed`; open the session to inspect its error.
+Use the red five-dot × for persisted failed turns in the redesigned desktop
+Agents list; keep Home and the legacy phone list on their existing `bg-failure`
+status dot. Open the session to inspect its error.
 
 ### Agent transcript projection
 
@@ -1974,6 +1978,7 @@ and bot personas share one renderer; keep surface sizing in the caller.
 
 Use `MessageLoadError` for compact discussion/thread failures; missing resources
 show an unavailable state without a retry action or composer.
+Compose phone project, task, and company Discussion entries with `src/components/discussion/`; keep their existing conversation sources and desktop inline threads, and use opt-in `MobileDrawer` snap points with `FixedContent fitSnapPoint` and `KeyboardFooter` for half/full sheets with a pinned input; leave other drawers' sizing unchanged.
 
 Keep collaborative drafts as cursor-based overlays outside the shared editor tree.
 Flush pending text, catch up missing server history before publication, then

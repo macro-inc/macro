@@ -20,6 +20,10 @@ use uuid::Uuid;
 
 /// Link f01 in the Focus fixtures, held by owner@acme.example.
 pub const OWNERS_LINK: Uuid = uuid::uuid!("00000000-0000-0000-0000-000000000f01");
+/// Link f02 in the Focus fixtures, held by other@elsewhere.example. The
+/// email_focus_linked fixture links it to owner@acme.example, whose Focus tab
+/// lists it as a secondary inbox.
+pub const OTHERS_LINK: Uuid = uuid::uuid!("00000000-0000-0000-0000-000000000f02");
 /// Thread f201 in link f01.
 pub const OWNERS_THREAD: Uuid = uuid::uuid!("00000000-0000-0000-0000-00000000f201");
 /// Thread f207 in link f02, held by other@elsewhere.example.

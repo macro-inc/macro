@@ -2,6 +2,7 @@ import { TraceFlow, usePending } from '@app/observability/flow';
 import { SidePanel } from '@components/app/side-panel';
 import { createOpenTracker } from '@core/internal/open-tracker';
 import { createMemo, Match, onCleanup, Show, Suspense, Switch } from 'solid-js';
+import { CompanyDiscussionSection } from '../company-discussion-section';
 import { CrmListSkeleton } from '../components/list-state';
 import { RecordOverview } from '../components/record-overview';
 import { useCrmContext } from '../context/crm-context';
@@ -12,7 +13,6 @@ import {
   sameRecordScope,
 } from '../core/record';
 import { CompanyContactsSection } from './company-contacts-section';
-import { CompanyDiscussionSection } from './company-discussion-section';
 import { CompanyEmailsSection } from './company-emails-section';
 import { CompanyHeader } from './company-header';
 import { CompanyListsSection } from './company-list-membership';

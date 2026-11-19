@@ -1,9 +1,12 @@
+import { createPipedreamCatalogConnect } from '@core/pipedream/catalog';
+import { fireAndForget } from '@core/util/fireAndForget';
 import PlusIcon from '@icon/system/regular/plus.svg';
 import { Popover } from '@kobalte/core/popover';
 import PlugsIcon from '@phosphor/plugs.svg';
 import { usePipedreamConnectedSlugs } from '@queries/pipedream-connectors';
 import { Button, badgeTriggerClasses } from '@ui';
 import { type Accessor, Show } from 'solid-js';
+import { ConnectAction } from '../settings/integration-ui';
 import { PipedreamAppPicker } from '../settings/PipedreamAppPicker';
 import type { RoutineApp } from './core/draft';
 
@@ -108,5 +111,33 @@ export function RoutineApps(props: {
         </Popover.Content>
       </Popover.Portal>
     </Popover>
+  );
+}
+
+/**
+ * Connects one app a routine requires that the viewer hasn't connected,
+ * through Pipedream Connect; the row shows it connected once it is.
+ */
+export function RoutineConnectApp(props: { app: RoutineApp }) {
+  let anchor: HTMLSpanElement | undefined;
+  // Mount Connect inside the enclosing dialog so its focus trap allows it.
+  const dialog = () =>
+    anchor?.closest<HTMLElement>('[role="dialog"]') ?? undefined;
+  const { connect, busy } = createPipedreamCatalogConnect({
+    entry: () => ({
+      app_slug: props.app.app_slug,
+      display_name: props.app.server_name,
+    }),
+    container: dialog,
+  });
+  return (
+    <span ref={anchor} class="contents">
+      <ConnectAction
+        label="Connect"
+        ariaLabel={`Connect ${props.app.server_name}`}
+        loading={busy()}
+        onClick={() => fireAndForget(connect(), 'routines')}
+      />
+    </span>
   );
 }

@@ -31,7 +31,7 @@ import {
 } from '@queries/soup/search';
 import type { EntityType } from '@service-properties/generated/schemas/entityType';
 import { debounce } from '@solid-primitives/scheduled';
-import { Button, cn } from '@ui';
+import { Button, cn, InlineCheckbox, inputClasses } from '@ui';
 import * as EmailValidator from 'email-validator';
 import {
   createEffect,
@@ -72,6 +72,8 @@ type EntityInputProps = {
   onClose?: () => void;
   /** Escape in the search; `onClose` when absent, as a popover saves on close. */
   onCancel?: () => void;
+  /** Standalone sheet spacing; leaves the popover presentation unchanged. */
+  presentation?: 'sheet';
   /** Override empty-result content; null hides the default message. */
   emptyState?: JSX.Element;
 };
@@ -671,6 +673,7 @@ export function PropertyEntitySelector(props: EntityInputProps) {
   useSearchInputFocus(() => searchInputRef);
 
   const fills = () => props.config.fillHeight === true;
+  const inSheet = () => props.presentation === 'sheet';
   const keepSearchFocus = (event: Event) => event.preventDefault();
 
   const selectedEntityCountAtOpen = createMemo(() => {
@@ -691,10 +694,22 @@ export function PropertyEntitySelector(props: EntityInputProps) {
   return (
     <div class={cn(fills() && 'flex min-h-0 flex-1 flex-col')}>
       <div class="relative shrink-0">
-        <div class="flex w-full items-center py-2 gap-2 px-2 border-b border-edge-muted">
-          <SearchIcon class="size-4 text-ink-muted" />
+        <div
+          class={cn(
+            'flex w-full items-center gap-2',
+            inSheet() ? 'px-4 pb-4' : 'py-2 px-2 border-b border-edge-muted'
+          )}
+        >
+          <Show when={!inSheet()}>
+            <SearchIcon class="size-4 text-ink-muted" />
+          </Show>
           <input
-            class="w-full caret-accent"
+            class={
+              inSheet()
+                ? inputClasses({ class: 'min-h-11' })
+                : 'w-full caret-accent'
+            }
+            aria-label={props.config.placeholder}
             ref={searchInputRef}
             type="text"
             value={inputValue()}
@@ -710,7 +725,10 @@ export function PropertyEntitySelector(props: EntityInputProps) {
           it would drop the phone keyboard until the refocus below. iOS
           devices still send mousedown after a cancelled pointerdown. */}
         <div
-          class={cn('p-1.5', fills() && 'flex min-h-0 flex-1 flex-col')}
+          class={cn(
+            inSheet() ? 'px-4' : 'p-1.5',
+            fills() && 'flex min-h-0 flex-1 flex-col'
+          )}
           onPointerDown={keepSearchFocus}
           onMouseDown={keepSearchFocus}
         >
@@ -733,19 +751,30 @@ export function PropertyEntitySelector(props: EntityInputProps) {
 
                   return (
                     <>
-                      <Show when={shouldShowSelectedDivider(index())}>
+                      <Show
+                        when={!inSheet() && shouldShowSelectedDivider(index())}
+                      >
                         <div class="my-1 border-t border-edge-muted" />
                       </Show>
                       <div
                         data-entity-index={index()}
+                        role={inSheet() ? 'checkbox' : undefined}
+                        aria-checked={inSheet() ? isSelected() : undefined}
+                        tabIndex={inSheet() ? 0 : undefined}
                         class="group rounded-lg w-full flex items-center justify-between gap-1.5 p-1.5 px-2 text-left text-ink font-normal cursor-default min-w-0 touch:min-h-12"
                         classList={{
                           'bg-hover': isKeyboardSelected(),
                         }}
                         onClick={() => toggleEntity(entity)}
-                        onKeyDown={(e) =>
-                          e.key === 'Enter' && toggleEntity(entity)
-                        }
+                        onKeyDown={(event) => {
+                          if (
+                            event.key === 'Enter' ||
+                            (inSheet() && event.key === ' ')
+                          ) {
+                            event.preventDefault();
+                            toggleEntity(entity);
+                          }
+                        }}
                         onMouseEnter={() => {
                           if (!keyboardMode()) {
                             setSelectedIndex(index());
@@ -755,11 +784,21 @@ export function PropertyEntitySelector(props: EntityInputProps) {
                       >
                         <Show when={props.config.isMultiSelect}>
                           <div class="shrink-0 flex">
-                            <OptionCheckBox
-                              checked={isSelected()}
-                              multiselect
-                              visible={props.config.visibleCheckboxes}
-                            />
+                            <Show
+                              when={inSheet()}
+                              fallback={
+                                <OptionCheckBox
+                                  checked={isSelected()}
+                                  multiselect
+                                  visible={props.config.visibleCheckboxes}
+                                />
+                              }
+                            >
+                              <InlineCheckbox
+                                checked={isSelected()}
+                                size="md"
+                              />
+                            </Show>
                           </div>
                         </Show>
                         <div class="flex items-center gap-2 flex-1 min-w-0">

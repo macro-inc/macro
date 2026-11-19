@@ -20,6 +20,7 @@ import {
 import { withEntityNotifications } from '@app/features/soup/entity-notifications';
 import { useFeatureFlag } from '@app/lib/analytics/posthog';
 import { t } from '@app/lib/i18n';
+import { usePending } from '@app/observability/flow';
 import { favoriteSplitContent } from '@app/util/favorites';
 import { prefetchLatestChannelMessages } from '@channel/queries/prefetch-channel-target';
 import {
@@ -438,8 +439,12 @@ export function ChannelsRail(props: ChannelsRailProps) {
     sectionsEnabled() ? [] : missingChannelIds()
   );
   const nextReferencedChannels = useCachedChannelsByIds(
-    referencedChannelIds,
+    missingChannelIds,
     sectionsEnabled
+  );
+  usePending(
+    'channels.sidebar.references',
+    () => sectionsEnabled() && nextReferencedChannels.isLoading()
   );
   const referencedChannels = createMemo<ChannelEntity[]>(
     (previous) =>
@@ -526,7 +531,10 @@ export function ChannelsRail(props: ChannelsRailProps) {
         return 'loading';
     };
     if (state.expandedGroups.favorites) {
-      statuses.favorites = statusFor(favoriteChannelIds());
+      // Favorite records already render their rows. Metadata enrichment cannot
+      // promise another visible row, especially under the Unread-only filter.
+      const status = statusFor(favoriteChannelIds());
+      if (status === 'error') statuses.favorites = status;
     }
     for (const label of labels()) {
       if (isLabelOpen(label.id)) {
@@ -563,7 +571,12 @@ export function ChannelsRail(props: ChannelsRailProps) {
     }
 
     const items = {
-      favorites: favorites(),
+      favorites: favorites().filter(
+        (favorite) =>
+          !sectionsEnabled() ||
+          favorite.entityType !== 'channel' ||
+          !nextReferencedChannels.unavailableIds().has(favorite.entityId)
+      ),
       team_channels: deduplicateChannels([
         props.sources.team_channels.items(),
         unreadForCollapsedGroup('team_channels').filter(
@@ -972,6 +985,9 @@ export function ChannelsRail(props: ChannelsRailProps) {
             if (row?.kind === 'all-threads') setThreadsChannelId(undefined);
             else if (row?.kind === 'conversation')
               setThreadsChannelId(row.channel.id);
+          } else if (shell.aside.fillsShell()) {
+            // A rail filling a narrow split opens a conversation on Enter,
+            // not on every move, which would hide the rail under the cursor.
           } else if (row?.kind === 'conversation') {
             previewAfterNavigation(row.channel);
           } else if (

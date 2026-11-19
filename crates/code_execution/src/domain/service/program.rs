@@ -2,6 +2,14 @@ use super::*;
 
 #[async_trait::async_trait]
 impl ProgramExecutor for ExecutionService {
+    async fn check_program(
+        &self,
+        request: &ExecuteRequest,
+        shape: ContextShape,
+        cancellation: CancellationToken,
+    ) -> Result<(), Outcome> {
+        self.precheck(request, shape, cancellation).await
+    }
     async fn execute_program(
         &self,
         request: ExecuteRequest,
