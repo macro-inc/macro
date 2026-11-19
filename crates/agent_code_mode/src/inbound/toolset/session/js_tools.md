@@ -1,0 +1,9 @@
+JavaScript tools programs (language: "js_tools"). Everything above describes TypeScript ES modules, the default; pass language "js_tools" to run a JavaScript tools script instead, in the same sandbox with the same limits and acting_as account. It is plain JavaScript (no TypeScript) run as one script, with top-level await and return: no export, import, require, classes, getters or setters, and no macro, fetch, Deno, globalThis, eval or timers. Its only way to Macro is a tool call, await tools.<service>.<operation>({path, query, body}): service is an SDK service with - written _ (storage, email, calendar, agent_harness, ...), operation its operationId, and path, query and body the operation's path parameters, query parameters and JSON body, each left out when it has none. A call returns the response's JSON and throws "HTTP <status>: <body>" for an error response, which the program can catch. The script's return value is the receipt's data (no reviews or views); context holds sessionId, executionId and webAppUrl; console.log output is kept as logs. A run makes at most 256 calls. Find operations and their signatures with a program that returns search("create task"); search calls nothing and needs no permission. Name every operation literally where you call it: tools.<service>.<operation>(...) or tools.<service>["<operation>"](...), never assigned, destructured, passed or tested, never computed, and no variable or parameter named tools or require. A program that breaks this rule, names an operation that doesn't exist or doesn't parse does not run, and the receipt names main.js:<line>:<column> and why.
+
+```js
+const task = await tools.storage.create_task_handler({
+  body: { taskName: "Fix login redirect loop", markdown: "Signing in from a deep link returns to the login page." },
+});
+const doc = await tools.storage.get_document_markdown({ path: { document_id: task.documentId } });
+return { taskId: task.documentId, markdown: doc.markdown };
+```

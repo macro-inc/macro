@@ -516,6 +516,13 @@ pub fn code_mode_assets() -> Step<Run> {
     Step::new("Build code-mode assets").run(include_str!("scripts/code_mode_assets.sh"))
 }
 
+/// Build code mode's OCaml bundle (`nix build .#code-mode-ocaml`) and point
+/// later cargo steps at it with `CODE_MODE_OCAML_DIR`, which
+/// `crates/code_mode_assets` reads at build time.
+pub fn code_mode_ocaml() -> Step<Run> {
+    Step::new("Build code mode's OCaml bundle").run(include_str!("scripts/code_mode_ocaml.sh"))
+}
+
 /// Where [`start_opensearch`]'s cluster answers.
 pub const SEARCH_OPENSEARCH_URL: &str = "http://127.0.0.1:9200";
 

@@ -1,3 +1,4 @@
+pub use agent_permissions::domain::model::{DeclinedStatus, ExecutionPermission, GatedOperation};
 use agent_session::domain::model::AgentSessionId;
 use macro_user_id::user_id::MacroUserIdStr;
 use macro_uuid::Uuid;
@@ -55,6 +56,52 @@ pub struct ExecutionIdentity {
     pub turn: Uuid,
 }
 
+/// The language of a session program. OCaml is offered only to sessions
+/// whose owner has the OCaml rollout ([`OwnerRollout`](super::OwnerRollout)),
+/// JavaScript tools programs only to sessions whose owner has agent
+/// permissions, which gate them.
+#[derive(
+    Debug, Clone, Copy, Default, PartialEq, Eq, Serialize, Deserialize, JsonSchema, ToSchema,
+)]
+#[serde(rename_all = "snake_case")]
+pub enum ProgramLanguage {
+    /// A JavaScript ES module exporting `main`.
+    #[default]
+    Javascript,
+    /// An OCaml program (`main.ml`) that calls `Code_mode.run` with the OCaml SDK.
+    Ocaml,
+    /// A script in opencode's JavaScript dialect (`main.js`) that calls SDK
+    /// operations as `tools.<service>.<operation>(input)`.
+    JsTools,
+}
+
+impl ProgramLanguage {
+    /// Whether this is the default, JavaScript.
+    pub fn is_javascript(&self) -> bool {
+        *self == Self::Javascript
+    }
+}
+
+impl From<ProgramLanguage> for code_execution::domain::Language {
+    fn from(language: ProgramLanguage) -> Self {
+        match language {
+            ProgramLanguage::Javascript => Self::Javascript,
+            ProgramLanguage::Ocaml => Self::Ocaml,
+            ProgramLanguage::JsTools => Self::JsTools,
+        }
+    }
+}
+
+impl From<code_execution::domain::Language> for ProgramLanguage {
+    fn from(language: code_execution::domain::Language) -> Self {
+        match language {
+            code_execution::domain::Language::Javascript => Self::Javascript,
+            code_execution::domain::Language::Ocaml => Self::Ocaml,
+            code_execution::domain::Language::JsTools => Self::JsTools,
+        }
+    }
+}
+
 /// The recorded outcome of a program.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize, JsonSchema, ToSchema)]
 #[serde(rename_all = "snake_case")]
@@ -103,6 +150,9 @@ pub enum RecordedCallStatus {
     Failed,
     /// Execution ended before a response was observed.
     Unknown,
+    /// Never sent: the operation was outside what the permission gate checked
+    /// the program to call.
+    Refused,
 }
 
 /// Durable source and final outcome, with historical bridge calls when present.
@@ -118,8 +168,19 @@ pub struct ExecutionRecord {
     /// Original turn, preventing another requester from replaying a saved result.
     #[serde(default)]
     pub turn_id: Option<Uuid>,
-    /// The submitted TypeScript module.
+    /// The submitted program: a TypeScript module, an OCaml `main.ml` or a
+    /// JavaScript tools script.
     pub source: String,
+    /// The language `source` is written in; historical records are JavaScript.
+    /// JavaScript, the default, is left out, so records of sessions without
+    /// OCaml serialize as they did before languages.
+    #[serde(default, skip_serializing_if = "ProgramLanguage::is_javascript")]
+    pub language: ProgramLanguage,
+    /// For an OCaml program, the fingerprint of the OCaml SDK bundle it ran
+    /// against (SDK version plus a hash of its interfaces); for a JavaScript
+    /// tools program, of the interpreter and catalog it ran with.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub sdk_fingerprint: Option<String>,
     /// Overall execution state.
     pub status: ExecutionStatus,
     /// JSON returned by the program, if successful.
@@ -134,6 +195,11 @@ pub struct ExecutionRecord {
     /// Additional request activity was omitted at the bounded observation limit.
     #[serde(default)]
     pub activity_truncated: bool,
+    /// Set when the agent's permissions stopped the program before it ran:
+    /// an operation set to never, or an approval that was not given. The
+    /// status is then `failed`, and `error` says why in the model's words.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub permission: Option<ExecutionPermission>,
 }
 
 /// Compact model result with an identity the UI uses to load the durable record.
@@ -154,6 +220,10 @@ pub struct ExecutionReceipt {
     /// Pixels of the images `main` returned in `images`, for the model.
     #[serde(default, skip_serializing_if = "Vec::is_empty")]
     pub model_media: Vec<ModelImage>,
+    /// Set when the agent's permissions stopped the program; see
+    /// [`ExecutionRecord::permission`].
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub permission: Option<ExecutionPermission>,
 }
 
 /// Most images one result may show the model, as for a RenderCanvas result.
@@ -216,6 +286,18 @@ pub enum ModelImageMediaType {
     Png,
 }
 
+/// A program that was not run, with what the model is told and, when its
+/// permissions stopped it, how. The run is recorded as failed and the
+/// caller gets a receipt, not an error: the program was the problem.
+#[derive(Debug, Clone)]
+pub struct NotRun {
+    /// What the model is told: why, and what to do instead.
+    pub message: String,
+    /// How the agent's permissions stopped it; `None` when the program has
+    /// to be rewritten (it cannot be analyzed, or does not compile).
+    pub permission: Option<ExecutionPermission>,
+}
+
 /// Safe service errors, separate from failures returned by a running program.
 #[derive(Debug, thiserror::Error)]
 pub enum CodeModeError {
@@ -260,6 +342,10 @@ pub enum CodeModeError {
     /// The supervised request task failed unexpectedly.
     #[error("code execution task failed")]
     Task(#[source] tokio::task::JoinError),
+    /// The program was checked before running and not run. `run` records it
+    /// and returns a receipt instead of this error.
+    #[error("{}", .0.message)]
+    NotRun(NotRun),
 }
 
 /// A bounded SDK operation observed during execution; not an authorization or write receipt.

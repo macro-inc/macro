@@ -1,0 +1,10 @@
+; Generated sources: regenerate with `just generate`, never edit by hand.
+; Warning 30: record labels and constructors repeat across a recursive type
+; group, as the spec's types do; codecs are annotated, so it is harmless.
+
+(library
+ (name macro_sdk)
+ (public_name macro_sdk)
+ (libraries macro_sdk.runtime yojson)
+ (flags
+  (:standard -w -30)))

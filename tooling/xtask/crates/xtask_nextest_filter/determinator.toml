@@ -25,3 +25,9 @@ globs = [
   "packages/sdk/**",
 ]
 mark-changed = ["code_mode_assets"]
+
+# Code mode's OCaml bundle (the flake's code-mode-ocaml package), whose path
+# code_mode_assets bakes in and whose programs code_execution's Deno suite runs.
+[[path-rule]]
+globs = ["packages/sdk-ocaml/**"]
+mark-changed = ["code_mode_assets"]

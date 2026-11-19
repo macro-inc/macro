@@ -30,6 +30,8 @@ members = [
   "crates/agent_preview",
   "crates/agent_code_mode",
   "crates/agent_correlation",
+  "crates/agent_permission_registry",
+  "crates/agent_permissions",
   "crates/code_mode_assets",
   "crates/dynamic_ui",
   "crates/agent_inmem",

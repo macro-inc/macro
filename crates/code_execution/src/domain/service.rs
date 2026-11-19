@@ -105,6 +105,8 @@ impl ExecutionService {
         let span = tracing::info_span!(
             "code_execution.run",
             run_id = %run_id.0,
+            language = job.request.language.as_str(),
+            allowed_operations = job.environment.allowed_operations.as_ref().map(Vec::len),
             check = tracing::field::Empty,
             outcome = tracing::field::Empty,
         );
@@ -146,6 +148,10 @@ impl ExecutionService {
         let span = tracing::Span::current();
         if job.environment.unattended.is_some() {
             span.record("check", "skipped");
+        } else if job.request.language != Language::Javascript {
+            // OCaml programs compile, and JS tools programs are analyzed,
+            // in the runner: there are no TypeScript types to check.
+            span.record("check", "not_typescript");
         } else if self.take_prechecked(job.environment.shape(), &job.request.source) {
             span.record("check", "prechecked");
         } else {
@@ -252,6 +258,11 @@ impl ExecutionService {
         cancellation: CancellationToken,
     ) -> Result<(), Outcome> {
         let span = tracing::info_span!("code_execution.precheck", check = tracing::field::Empty);
+        // Only TypeScript programs are type-checked; see `check_then_run`.
+        if request.language != Language::Javascript {
+            span.record("check", "not_typescript");
+            return Ok(());
+        }
         if request.source.trim().is_empty() || request.source.len() > self.limits.max_source_bytes {
             span.record("check", "invalid");
             return Err(ExecutionFailure::new(

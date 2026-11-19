@@ -3,10 +3,16 @@
  * above the composer so there is only one place to answer them.
  */
 
+import { permissionRunTitle } from '@app/features/agent-permissions';
+import { t } from '@app/lib/i18n';
 import type { MessagePart } from '@service-agent-fold/generated/types';
 import { Show } from 'solid-js';
 import { match } from 'ts-pattern';
 import { useOptionalAgentSession } from '../../context/AgentSessionContext';
+import {
+  PERMISSION_HOLD_SLUG,
+  parsePermissionHold,
+} from '../../state/permission-approval';
 import {
   describeToolCall,
   possessive,
@@ -39,6 +45,44 @@ export function ToolApprovalPart(props: {
     );
     return action.charAt(0).toUpperCase() + action.slice(1);
   };
+  const hold = () =>
+    props.part.serverSlug === PERMISSION_HOLD_SLUG
+      ? parsePermissionHold(props.part.arguments)
+      : undefined;
+  // The person who answered, as the viewer reads it: "you" for themselves.
+  const answeredBy = () => {
+    const resolvedBy = props.part.resolvedBy;
+    if (!resolvedBy) return undefined;
+    if (resolvedBy === session?.userId()) return t('agentPermissionsChat.you');
+    return session?.displayName(resolvedBy) ?? resolvedBy;
+  };
+  const permissionOutcome = () => {
+    const name = answeredBy();
+    return match(props.part.status)
+      .with('pending', () => '')
+      .with('approved', () => {
+        if (props.part.remembered) {
+          return name
+            ? t('agentPermissionsChat.allowedForSessionBy', { name })
+            : t('agentPermissionsChat.allowedForSession');
+        }
+        return name
+          ? t('agentPermissionsChat.approvedBy', { name })
+          : t('agentPermissionsChat.approved');
+      })
+      .with('denied', () =>
+        name
+          ? t('agentPermissionsChat.declinedBy', { name })
+          : t('agentPermissionsChat.declined')
+      )
+      .with('cancelled', () =>
+        name
+          ? t('agentPermissionsChat.cancelledBy', { name })
+          : t('agentPermissionsChat.cancelled')
+      )
+      .with('expired', () => t('agentPermissionsChat.notApprovedInTime'))
+      .exhaustive();
+  };
   const outcome = () =>
     match(props.part.status)
       .with('pending', () => 'Waiting for approval')
@@ -53,11 +97,24 @@ export function ToolApprovalPart(props: {
 
   return (
     <Show when={props.part.status !== 'pending'}>
-      <ToolCard
-        title={title()}
-        trailing={<span class="text-ink">{outcome()}</span>}
-        status="completed"
-      />
+      <Show
+        when={hold()}
+        fallback={
+          <ToolCard
+            title={title()}
+            trailing={<span class="text-ink">{outcome()}</span>}
+            status="completed"
+          />
+        }
+      >
+        {(current) => (
+          <ToolCard
+            title={permissionRunTitle(current().operations)}
+            trailing={<span class="text-ink">{permissionOutcome()}</span>}
+            status="completed"
+          />
+        )}
+      </Show>
     </Show>
   );
 }

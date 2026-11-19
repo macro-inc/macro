@@ -1,0 +1,48 @@
+rejected.ml:2:1: An external declaration is not allowed in code-mode programs
+rejected.ml:4:12: Binding Stdlib to a module is not allowed in code-mode programs
+rejected.ml:6:9: Obj is not allowed in code-mode programs
+rejected.ml:8:12: Obj is not allowed in code-mode programs
+rejected.ml:10:15: Obj is not allowed in code-mode programs
+rejected.ml:11:9: Sys.command is not allowed in code-mode programs
+rejected.ml:12:9: Marshal is not allowed in code-mode programs
+rejected.ml:13:9: Obj is not allowed in code-mode programs
+rejected.ml:16:3: An external declaration is not allowed in code-mode programs
+rejected.ml:19:12: Obj is not allowed in code-mode programs
+rejected.ml:22:11: Binding Stdlib to a module is not allowed in code-mode programs
+rejected.ml:26:12: Obj is not allowed in code-mode programs
+rejected.ml:27:3: Obj is not allowed in code-mode programs
+rejected.ml:29:17: Obj is not allowed in code-mode programs
+rejected.ml:37:3: Using Sys as a module (other than Sys.name or open Sys) is not allowed in code-mode programs
+rejected.ml:46:23: Sys.command behind a signature is not allowed in code-mode programs
+rejected.ml:52:30: Sys.command behind a signature is not allowed in code-mode programs
+rejected.ml:54:29: Sys.command behind a signature is not allowed in code-mode programs
+rejected.ml:56:29: Sys.command behind a signature is not allowed in code-mode programs
+rejected.ml:57:11: Using Sys as a module (other than Sys.name or open Sys) is not allowed in code-mode programs
+rejected.ml:61:11: Using Sys as a module (other than Sys.name or open Sys) is not allowed in code-mode programs
+rejected.ml:64:30: Sys.command behind a signature is not allowed in code-mode programs
+rejected.ml:65:11: Using Sys as a module (other than Sys.name or open Sys) is not allowed in code-mode programs
+rejected.ml:69:28: Using Sys as a module (other than Sys.name or open Sys) is not allowed in code-mode programs
+rejected.ml:72:22: Sys.command behind a signature is not allowed in code-mode programs
+rejected.ml:85:37: Sys as a submodule behind a signature is not allowed in code-mode programs
+rejected.ml:88:9: input_value (unmarshalling) is not allowed in code-mode programs
+rejected.ml:89:9: output_value (marshalling) is not allowed in code-mode programs
+rejected.ml:90:9: Camlinternal* (the compiler's internals) is not allowed in code-mode programs
+rejected.ml:91:9: Camlinternal* (the compiler's internals) is not allowed in code-mode programs
+rejected.ml:95:37: Sys as a submodule behind a signature is not allowed in code-mode programs
+rejected.ml:98:28: Sys as a submodule behind a signature is not allowed in code-mode programs
+rejected.ml:108:3: Sys as a submodule behind a signature is not allowed in code-mode programs
+rejected.ml:117:7: Sys as a submodule behind a signature is not allowed in code-mode programs
+rejected.ml:119:51: Sys.command behind a signature is not allowed in code-mode programs
+rejected.ml:123:31: Sys as a submodule behind a signature is not allowed in code-mode programs
+rejected.ml:126:11: Sys.command is not allowed in code-mode programs
+rejected.ml:132:3: Sys as a submodule behind a signature is not allowed in code-mode programs
+rejected.ml:135:24: Sys.command behind a signature is not allowed in code-mode programs
+rejected.ml:141:28: Sys as a submodule behind a signature is not allowed in code-mode programs
+rejected.ml:150:11: Sys.command is not allowed in code-mode programs
+rejected.ml:160:11: Sys.command is not allowed in code-mode programs
+rejected.ml:163:34: Sys.command behind a signature is not allowed in code-mode programs
+rejected.ml:164:11: Sys as a submodule behind a signature is not allowed in code-mode programs
+rejected.ml:168:38: Sys as a submodule behind a signature is not allowed in code-mode programs
+rejected.ml:172:45: Using Sys as a module (other than Sys.name or open Sys) is not allowed in code-mode programs
+rejected.ml:173:11: Sys.command is not allowed in code-mode programs
+rejected.ml:276:30: A module behind a signature that the check cannot expand is not allowed in code-mode programs

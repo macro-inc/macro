@@ -1,0 +1,7 @@
+; The SDK generator. Not installed: run it with `just generate`.
+
+(executable
+ (name main)
+ (libraries yojson ppxlib compiler-libs.common)
+ (preprocess
+  (pps ppxlib.metaquot)))

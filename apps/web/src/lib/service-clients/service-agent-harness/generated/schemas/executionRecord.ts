@@ -9,8 +9,11 @@ import type { ExecutionActivity } from './executionActivity';
 import type { ExecutionId } from './executionId';
 import type { ExecutionRecordActingAs } from './executionRecordActingAs';
 import type { ExecutionRecordError } from './executionRecordError';
+import type { ExecutionRecordPermission } from './executionRecordPermission';
+import type { ExecutionRecordSdkFingerprint } from './executionRecordSdkFingerprint';
 import type { ExecutionRecordTurnId } from './executionRecordTurnId';
 import type { ExecutionStatus } from './executionStatus';
+import type { ProgramLanguage } from './programLanguage';
 import type { RecordedToolCall } from './recordedToolCall';
 
 /**
@@ -29,9 +32,19 @@ export interface ExecutionRecord {
   error?: ExecutionRecordError;
   /** Execution identity. */
   executionId: ExecutionId;
+  /** The language `source` is written in; historical records are JavaScript.
+JavaScript, the default, is left out, so records of sessions without
+OCaml serialize as they did before languages. */
+  language?: ProgramLanguage;
+  permission?: ExecutionRecordPermission;
   /** JSON returned by the program, if successful. */
   result?: unknown;
-  /** The submitted TypeScript module. */
+  /** For an OCaml program, the fingerprint of the OCaml SDK bundle it ran
+against (SDK version plus a hash of its interfaces); for a JavaScript
+tools program, of the interpreter and catalog it ran with. */
+  sdkFingerprint?: ExecutionRecordSdkFingerprint;
+  /** The submitted program: a TypeScript module, an OCaml `main.ml` or a
+JavaScript tools script. */
   source: string;
   /** Overall execution state. */
   status: ExecutionStatus;

@@ -1,0 +1,33 @@
+(executable
+ (name test_fetch)
+ (modes wasm)
+ (enabled_if
+  (= %{profile} wasm))
+ (libraries kinds_sdk macro_sdk.runtime macro_sdk_fetch js_of_ocaml))
+
+; run.mjs plays the code-mode bootstrap and the API. It reads
+; ../sdk/specs and ../sdk/generated through DUNE_SOURCEROOT, outside this
+; dune project, so the rule always reruns.
+
+(rule
+ (alias runtest)
+ (enabled_if
+  (= %{profile} wasm))
+ (deps
+  test_fetch.bc.wasm.js
+  (glob_files test_fetch.bc.wasm.assets/*)
+  (universe))
+ (action
+  (run
+   deno
+   run
+   --no-prompt
+   --no-config
+   --no-lock
+   --no-remote
+   --allow-read
+   --allow-net=127.0.0.1
+   --allow-env
+   %{dep:run.mjs}
+   test_fetch.bc.wasm.js
+   %{env:DUNE_SOURCEROOT=../../../..}/../sdk)))

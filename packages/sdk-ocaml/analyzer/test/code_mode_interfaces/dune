@@ -1,0 +1,17 @@
+; Code mode's libraries as programs see them: the interfaces of
+; ../../../fetch and ../../../code_mode, which build only in the wasm
+; profile, compiled natively so corpus programs can type-check against them.
+; Copies of the real .mli files, so the corpus sees exactly what code-mode
+; programs see. Never linked: interfaces only.
+
+(copy_files
+ (files %{project_root}/fetch/macro_sdk_fetch.mli))
+
+(copy_files
+ (files %{project_root}/code_mode/code_mode.mli))
+
+(library
+ (name code_mode_interfaces)
+ (wrapped false)
+ (modules_without_implementation macro_sdk_fetch code_mode)
+ (libraries macro_sdk.runtime yojson))

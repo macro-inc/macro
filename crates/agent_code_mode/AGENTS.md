@@ -7,8 +7,9 @@ attribution while using the explicitly selected `acting_as` account's API
 permissions. Credential issuance resolves and approves that selection before
 minting. ExecuteCode requires the originating prompt’s `turn_id`; admission and
 credential approval must reject a replacement turn before adopting its account.
-Saved execution retries must match both actor selection and original
-turn, so a later requester cannot inherit an earlier execution result.
+Saved execution retries must match the actor selection, the original
+turn and the language, so a later requester cannot inherit an earlier
+execution result.
 
 Owns session-authorized code executions, user-scoped executions for the public
 MCP, SDK documentation selection, saved execution records, and durable review
@@ -106,10 +107,50 @@ stacks. Process isolation belongs to
   (`compose_routines::DIRECT`). No byte budget counts the skill, so it never
   takes another entity's place. `mcp_guides` and `entity_guide` (no attached skill) serve
   hosts that carry areas whole. All of it is generated from the SDK; edit the TSDoc.
-- `src/inbound/toolset.rs`: `toolset()` for sessions, `user_toolset()` for the
-  public MCP. Tool texts are composed: host-specific parts in `toolset/session/`
+- OCaml programs: a session whose owner has the backend flag
+  `enable-ocaml-code-mode` (an `OwnerRollout`, the harness's `OcamlFlag`; off
+  when it can't be read) and whose harness build has the OCaml bundle
+  (`CodeModeService::with_ocaml`) may run `ExecuteCode` with
+  `language: "ocaml"` (`SessionCodeMode::ocaml_enabled`). Everyone else gets
+  today's tool unchanged (`toolset()`); `execute` refuses an OCaml request
+  without the rollout before minting a credential, and the approval hold
+  names `language` for OCaml runs. A record keeps its `language` (left out
+  for JavaScript, so those records read as before) and, for OCaml, the
+  bundle's `sdkFingerprint`, all in the `agent_code_execution.record` JSON,
+  so no migration. The flag must be created in PostHog at 0% before anyone
+  can be targeted. The public MCP's `UserExecuteCode` stays JavaScript only.
+- JavaScript tools programs (`ProgramLanguage::JsTools`, `js_tools`): a
+  session whose owner has `enable-agent-permissions` (the only flag on them;
+  the harness's `JsToolsRollout`) and whose harness gates them
+  (`CodeModeService::with_js_tools`, wired wherever Deno runs programs) may
+  run `ExecuteCode` with `language: "js_tools"`
+  (`SessionCodeMode::js_tools_enabled`); `permissions_enabled` is then on
+  too. `execute` refuses one without the rollout before minting a
+  credential. Records keep `language` and the interpreter and catalog's
+  `sdkFingerprint` (`code_mode_assets::JS_TOOLS_FINGERPRINT`).
+- `src/inbound/toolset.rs`: `toolset()` for sessions, `toolset_with_ocaml()`
+  for a session that may run OCaml (`session_toolset` picks; its description
+  adds `toolset/session/ocaml.md`, the `Code_mode.run` contract and one
+  example), `toolset_with_ocaml_permissions()` when agent permissions gate
+  its OCaml programs (`SessionCodeMode::permissions_enabled`; adds
+  `toolset/session/ocaml_permissions.md`), `toolset_with_js_tools()` for a
+  session that may run JS tools programs (`ExecuteCodeWithJsTools`: adds
+  `toolset/session/js_tools.md` and `js_tools_permissions.md`; it wins over
+  OCaml, whose language it accepts without advertising it),
+  `user_toolset()` for the public MCP. With JS tools off, the session tools
+  are pinned byte for byte by `toolset/test/without_js_tools.json`
+  (`UPDATE_TOOLSET_SNAPSHOT=1` rewrites it; only for a change meant for
+  everyone).
+  Tool texts are composed: host-specific parts in `toolset/session/`
   and `toolset/user/`, guidance both share in `toolset/shared/`. Edit shared
   guidance once, there.
+- Agent permissions: credential issue may answer `CodeModeError::NotRun`
+  (the program was checked and not run). `run` records it as `failed` with
+  `error` (the model's text) and, when its permissions stopped it,
+  `permission` (`ExecutionPermission`: `blocked` or `declined`), on both the
+  record and the receipt, and returns the receipt. Absent `permission`
+  serializes as before. The `code_mode.execution` span's `permission` field
+  says `off`, `admitted`, `blocked`, `declined` or `cannot_analyze`.
 
 ## Boundaries
 
@@ -143,6 +184,12 @@ longer delivery state.
 
 - `cargo test -p agent_code_mode --lib` from the repository root, with live local
   database configuration and `SQLX_OFFLINE` unset.
+- Keep `toolset/session/ocaml.md`'s example compiling: it is the program
+  `code_execution`'s OCaml suite runs (`ocaml_tool_example_creates_and_reads_a_task`).
+  `toolset/session/js_tools.md`'s example runs the same way
+  (`toolset/test/js_tools.rs`, `-- --include-ignored` with Deno 2.9.6 on
+  `PATH`), and its operations must be in the JS tools catalog
+  (`the_js_tools_texts_call_catalog_operations`).
 - The review toolset test builds every review tool through shared provider schema
   validation.
 - The SDK catalog and operation labels come from `crates/code_mode_assets`,

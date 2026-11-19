@@ -209,6 +209,7 @@ fn test() -> Job {
         .add_step(steps::configure_namespace_sccache(vars::CI_SCCACHE_NAME))
         .add_step(steps::start_sccache_server())
         .add_step(steps::code_mode_assets())
+        .add_step(setup_code_mode_ocaml())
         .add_step(configure_postgres())
         .add_step(prepare_tests())
         .add_step(run_tests())
@@ -286,6 +287,15 @@ const BUILD_SERVICE_BINS_CONDITION: &str = "needs.path-check.outputs.should_run 
      || contains(needs.path-check.outputs.rust_packages, 'email_service') \
      || contains(needs.path-check.outputs.rust_packages, 'authentication_service'))";
 
+/// The packages whose tests run real Deno processes (`test_execution_runtime`).
+const DENO_TESTS_CONDITION: &str = "env.RUST_PACKAGES == 'all' || contains(env.RUST_PACKAGES, 'code_execution') || contains(env.RUST_PACKAGES, 'agent_code_mode') || contains(env.RUST_PACKAGES, 'agent_harness_service')";
+
+/// Build code mode's OCaml bundle before anything compiles, so the Deno
+/// suite's OCaml programs compile and run against it.
+fn setup_code_mode_ocaml() -> Step<Run> {
+    steps::code_mode_ocaml().if_condition(Expression::new(DENO_TESTS_CONDITION))
+}
+
 /// Install the same pinned runtime shipped in the agent harness container.
 fn setup_execution_runtime() -> Step<gh_workflow::Use> {
     Step::new("Set up code execution runtime")
@@ -295,9 +305,7 @@ fn setup_execution_runtime() -> Step<gh_workflow::Use> {
             "22d081ff2d3a40755e97629de92e3bcbfa7cf2ed",
         ) // v2
         .add_with(("deno-version", "2.9.6"))
-        .if_condition(Expression::new(
-            "env.RUST_PACKAGES == 'all' || contains(env.RUST_PACKAGES, 'code_execution') || contains(env.RUST_PACKAGES, 'agent_code_mode') || contains(env.RUST_PACKAGES, 'agent_harness_service')",
-        ))
+        .if_condition(Expression::new(DENO_TESTS_CONDITION))
 }
 
 /// Exercise the real permission boundary, authenticated SDK execution, and
@@ -307,9 +315,7 @@ fn test_execution_runtime() -> Step<Run> {
     Step::new("Test Deno sandbox and authenticated SDK execution")
         .run(include_str!("scripts/run_tests.sh"))
         .add_env(("NEXTEST_RUN_DENO_TESTS", "true"))
-        .if_condition(Expression::new(
-            "env.RUST_PACKAGES == 'all' || contains(env.RUST_PACKAGES, 'code_execution') || contains(env.RUST_PACKAGES, 'agent_code_mode') || contains(env.RUST_PACKAGES, 'agent_harness_service')",
-        ))
+        .if_condition(Expression::new(DENO_TESTS_CONDITION))
 }
 
 // --- workflow-specific steps -------------------------------------------------
@@ -350,6 +356,7 @@ fn paths_filter() -> Step<gh_workflow::Use> {
                   - 'packages/sdk/**'
                   - 'packages/sdk-docs/**'
                   - 'packages/code-mode-sdk/**'
+                  - 'packages/sdk-ocaml/**'
                   - '.github/actions/setup-nix/**'
                   - '.github/actions/setup-nix-dev-shell/**'
                   - '.github/actions/teardown-nix/**'

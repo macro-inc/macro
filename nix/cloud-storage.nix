@@ -247,6 +247,9 @@
           && (
             builtins.elem rel [
               "bun.lock"
+              "crates"
+              "crates/agent_permission_registry"
+              "crates/agent_permission_registry/registry.json"
               "package.json"
               "packages"
             ]
@@ -283,6 +286,118 @@
       codeModeAssetsEnv = {
         CODE_MODE_ASSETS_DIR = "${codeModeAssets}";
       };
+
+      # ── Code-mode OCaml bundle ────────────────────────────────────
+      # What code mode needs at run time to compile and run OCaml programs
+      # (packages/sdk-ocaml/README.md, "Code mode bundle"): the OCaml SDK,
+      # its dependencies, Macro_sdk_fetch and Code_mode as wasm_of_ocaml
+      # archives (JSPI), the .cmi files programs compile against, the
+      # prebuilt library modules, ocamlc + wasm_of_ocaml + binaryen, and the
+      # SDK fingerprint. Built from the committed generated/ sources, so
+      # only the SDK's own files are inputs.
+      codeModeOcamlSrc = pkgs.lib.cleanSourceWith {
+        src = ../packages/sdk-ocaml;
+        name = "code-mode-ocaml-src";
+        filter =
+          path: type:
+          let
+            rel = pkgs.lib.removePrefix ((toString ../packages/sdk-ocaml) + "/") (toString path);
+            isUnder = directory: rel == directory || pkgs.lib.hasPrefix "${directory}/" rel;
+          in
+          !(isUnder "fetch/test")
+          && !(isUnder "analyzer/test")
+          && !(isUnder "code_mode/test")
+          && !(isUnder "code_mode/policy/test")
+          && (
+            builtins.elem rel [
+              "dune-project"
+              "dune-workspace"
+            ]
+            || builtins.any isUnder [
+              "runtime"
+              "generated"
+              "fetch"
+              "code_mode"
+              "analyzer"
+            ]
+          );
+      };
+
+      codeModeOcaml = pkgs.stdenv.mkDerivation {
+        pname = "code-mode-ocaml";
+        version = "0.1.0";
+        src = codeModeOcamlSrc;
+        strictDeps = true;
+        nativeBuildInputs = with pkgs.ocamlPackages; [
+          ocaml
+          dune_3
+          findlib
+          js_of_ocaml-compiler
+          wasm_of_ocaml-compiler
+          pkgs.binaryen
+          pkgs.removeReferencesTo
+        ];
+        buildInputs = with pkgs.ocamlPackages; [
+          yojson
+          uri
+          js_of_ocaml
+        ];
+        dontConfigure = true;
+        buildPhase = ''
+          runHook preBuild
+          export HOME="$TMPDIR/home"
+          patchShebangs code_mode/bundle
+          bash code_mode/bundle/build.sh "$out"
+          # The copied compilers need none of the OCaml installation at run
+          # time (build.sh); keep it out of the image.
+          remove-references-to -t ${pkgs.ocamlPackages.ocaml} -t ${pkgs.ocamlPackages.findlib} \
+            "$out/bin/ocamlc" "$out/bin/wasm_of_ocaml" "$out/bin/code_mode_policy" \
+            "$out/bin/macro_sdk_calls"
+          runHook postBuild
+        '';
+        dontInstall = true;
+        dontFixup = true;
+      };
+
+      # The bundle's path, the way CODE_MODE_ASSETS_DIR is: a build of
+      # crates/code_mode_assets with it set compiles and runs OCaml programs
+      # against this bundle (crates/code_execution); without it they fail
+      # with a message saying so. The agent harness's deploy build merges it
+      # (deployServiceBinaryPackage).
+      codeModeOcamlEnv = {
+        CODE_MODE_OCAML_DIR = "${codeModeOcaml}";
+      };
+
+      # A program compiles against the bundle with only its own toolchain
+      # and runs under Deno 2.9.6 with code mode's flags; prints the
+      # per-program compile time and startup.
+      codeModeOcamlSample =
+        pkgs.runCommand "code-mode-ocaml-sample"
+          {
+            nativeBuildInputs = [ (pkgs.callPackage ../packages/sdk-ocaml/nix/deno.nix { }) ];
+            src = pkgs.lib.cleanSourceWith {
+              src = ../packages/sdk-ocaml/code_mode;
+              name = "code-mode-ocaml-sample-src";
+              filter =
+                path: type:
+                let
+                  rel = pkgs.lib.removePrefix ((toString ../packages/sdk-ocaml/code_mode) + "/") (toString path);
+                in
+                builtins.elem rel [
+                  "bundle"
+                  "bundle/check.sh"
+                  "test"
+                  "test/run.mjs"
+                  "test/sample.ml"
+                  "test/sample.expected.json"
+                ];
+            };
+          }
+          ''
+            export HOME="$TMPDIR/home"
+            bash "$src/bundle/check.sh" ${codeModeOcaml} 11 | tee report.txt
+            install -Dm644 report.txt "$out/report.txt"
+          '';
 
       commonArgs = {
         inherit src;
@@ -632,6 +747,10 @@
           // pkgs.lib.optionalAttrs (builtins.elem "crates/code_mode_assets" (
             workspaceDepClosures.${packageName} or [ ]
           )) codeModeAssetsEnv
+          # The agent harness runs code mode's OCaml programs: its binary
+          # names the OCaml bundle, so the bundle's closure ships in its
+          # image (the deploy copies the binary's whole runtime closure).
+          // pkgs.lib.optionalAttrs (packageName == "agent_harness_service") codeModeOcamlEnv
           // {
             # Pruned source: this derivation only rebuilds when a crate in
             # the service's own workspace closure changes.
@@ -1240,6 +1359,7 @@
     {
       checks = {
         code-mode-assets = codeModeAssets;
+        code-mode-ocaml-sample = codeModeOcamlSample;
         # Deploy builds compile [patch.crates-io] crates from the pruned
         # source, so their real code (not mkDummySrc's stubs) must be there.
         pruned-deploy-src-vendored-patches = pkgs.runCommand "cloud-storage-pruned-vendored-patches" { } ''
@@ -1337,6 +1457,7 @@
           ;
         default = cargoArtifacts;
         code-mode-assets = codeModeAssets;
+        code-mode-ocaml = codeModeOcaml;
         macro-js-node-modules = jsNodeModules;
       }
       // dopplerConfigBinPackages

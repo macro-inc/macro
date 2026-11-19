@@ -32,7 +32,7 @@ use xtask_paths::RepoGlob;
 use crate::workflows::{
     cargo_deny, cargo_workspace_dependency_check, check_generated, check_node_modules_nix,
     check_tauri_lockfiles, code_check_conventions, code_check_infra, observability_image, runners,
-    sdk_check, steps, test_macrod_update,
+    sdk_check, sdk_ocaml_check, steps, test_macrod_update,
 };
 
 #[cfg(test)]
@@ -124,6 +124,12 @@ const CALLS: &[Call] = &[
         name: "SDK",
         file: "sdk-check.yml",
         paths: Some(sdk_check::PATHS),
+    },
+    Call {
+        id: "sdk-ocaml",
+        name: "OCaml SDK",
+        file: "sdk-ocaml-check.yml",
+        paths: Some(sdk_ocaml_check::PATHS),
     },
     Call {
         id: "observability-image",

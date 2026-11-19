@@ -193,6 +193,7 @@ async fn each_harness_gets_only_internal_tools_and_writes_only_its_session() {
                 reviews: Arc::new(OnceLock::new()),
                 gate: Arc::new(agent_inmem::domain::tool_gate::UngatedNativeTools),
                 app_url: "https://macro.com".into(),
+                permissions: None,
             },
         );
         for (host, expected) in [
@@ -429,4 +430,432 @@ fn code_results_send_pixels_as_images_and_keep_the_receipt_structured() {
         ("iVBORw0KGgo=", "image/png")
     );
     assert_eq!(result.content.len(), 2);
+}
+
+/// Code mode whose OCaml and JS tools rollouts are fixed, recording each
+/// run's language.
+struct OwnerRollout {
+    on: bool,
+    permissions: bool,
+    js_tools: bool,
+    languages: std::sync::Mutex<Vec<code_execution::domain::Language>>,
+}
+
+#[async_trait::async_trait]
+impl SessionCodeMode for OwnerRollout {
+    async fn execute(
+        &self,
+        _: &agent_session::domain::model::AgentSession,
+        execution: agent_code_mode::domain::ExecutionId,
+        _: ai_toolset::actor::ToolActor,
+        _: macro_uuid::Uuid,
+        request: code_execution::domain::ExecuteRequest,
+        _: tokio_util::sync::CancellationToken,
+    ) -> Result<agent_code_mode::domain::ExecutionReceipt, agent_code_mode::domain::CodeModeError>
+    {
+        self.languages.lock().unwrap().push(request.language);
+        Ok(agent_code_mode::domain::ExecutionReceipt {
+            execution_id: execution,
+            status: agent_code_mode::domain::ExecutionStatus::Succeeded,
+            activity: Vec::new(),
+            result: None,
+            error: None,
+            model_media: Vec::new(),
+            permission: None,
+        })
+    }
+    async fn read(
+        &self,
+        _: &entity_access::domain::models::EntityAccessReceipt<
+            entity_access::domain::models::ViewAccessLevel,
+        >,
+        _: agent_code_mode::domain::ExecutionId,
+    ) -> Result<agent_code_mode::domain::ExecutionRecord, agent_code_mode::domain::CodeModeError>
+    {
+        Err(agent_code_mode::domain::CodeModeError::NotFound)
+    }
+    async fn ocaml_enabled(&self, _: &agent_session::domain::model::AgentSession) -> bool {
+        self.on
+    }
+    async fn js_tools_enabled(&self, _: &agent_session::domain::model::AgentSession) -> bool {
+        self.js_tools
+    }
+    async fn permissions_enabled(&self, _: &agent_session::domain::model::AgentSession) -> bool {
+        self.js_tools || (self.on && self.permissions)
+    }
+}
+
+#[tokio::test]
+async fn execute_code_offers_and_accepts_ocaml_only_with_the_rollout() {
+    for on in [false, true] {
+        let repo = InMemoryAgentSessionRepo::new();
+        let session = test_agent_session(AgentSessionId::new());
+        repo.insert_session(session.clone());
+        repo.set_egress_token_hash(session.id, &SessionToken::new("secret").hash())
+            .await
+            .unwrap();
+        let tasks = FixedTasks::default();
+        let code_mode = Arc::new(OwnerRollout {
+            on,
+            permissions: false,
+            js_tools: false,
+            languages: Default::default(),
+        });
+        let app = router(
+            Arc::new(repo.clone()),
+            configured_hosts(&["http://agent-harness-service:8102"]).unwrap(),
+            InternalTools {
+                service: Arc::new(SessionPullRequestService::new(
+                    repo.clone(),
+                    RecordingRealtime::new(),
+                    Arc::new(tasks.clone()),
+                )),
+                tasks: Arc::new(tasks),
+                code_mode: Some(code_mode.clone()),
+                cognition: None,
+                reviews: Arc::new(OnceLock::new()),
+                gate: Arc::new(agent_inmem::domain::tool_gate::UngatedNativeTools),
+                app_url: "https://macro.com".into(),
+                permissions: None,
+            },
+        );
+        let (status, listed) = rpc(
+            app.clone(),
+            Some("secret"),
+            "tools/list",
+            serde_json::json!({}),
+        )
+        .await;
+        assert_eq!(status, StatusCode::OK, "{listed}");
+        let execute = listed["result"]["tools"]
+            .as_array()
+            .unwrap()
+            .iter()
+            .find(|tool| tool["name"] == "ExecuteCode")
+            .unwrap()
+            .clone();
+        assert_eq!(
+            execute["inputSchema"]["properties"]
+                .get("language")
+                .is_some(),
+            on
+        );
+        assert_eq!(
+            execute["description"]
+                .as_str()
+                .unwrap()
+                .contains("Code_mode.run"),
+            on
+        );
+        let (_, called) = rpc(
+            app,
+            Some("secret"),
+            "tools/call",
+            serde_json::json!({
+                "name": "ExecuteCode",
+                "arguments": {
+                    "turn_id": "00000000-0000-0000-0000-000000000001",
+                    "language": "ocaml",
+                    "source": "let () = Code_mode.run (fun _ -> `Null)",
+                },
+            }),
+        )
+        .await;
+        if on {
+            assert!(called.get("error").is_none(), "{called}");
+            assert_eq!(
+                *code_mode.languages.lock().unwrap(),
+                [code_execution::domain::Language::Ocaml]
+            );
+        } else {
+            // Today's ExecuteCode has no language: the call is refused unrun.
+            assert!(called.get("error").is_some(), "{called}");
+            assert!(code_mode.languages.lock().unwrap().is_empty());
+        }
+    }
+}
+
+/// JavaScript tools programs are offered, with ShowPermissions, only to a
+/// session whose owner has agent permissions, which gate them.
+#[tokio::test]
+async fn execute_code_offers_and_accepts_js_tools_only_with_permissions() {
+    for js_tools in [false, true] {
+        let repo = InMemoryAgentSessionRepo::new();
+        let session = test_agent_session(AgentSessionId::new());
+        repo.insert_session(session.clone());
+        repo.set_egress_token_hash(session.id, &SessionToken::new("secret").hash())
+            .await
+            .unwrap();
+        let tasks = FixedTasks::default();
+        let code_mode = Arc::new(OwnerRollout {
+            on: false,
+            permissions: false,
+            js_tools,
+            languages: Default::default(),
+        });
+        let app = router(
+            Arc::new(repo.clone()),
+            configured_hosts(&["http://agent-harness-service:8102"]).unwrap(),
+            InternalTools {
+                service: Arc::new(SessionPullRequestService::new(
+                    repo.clone(),
+                    RecordingRealtime::new(),
+                    Arc::new(tasks.clone()),
+                )),
+                tasks: Arc::new(tasks),
+                code_mode: Some(code_mode.clone()),
+                cognition: None,
+                reviews: Arc::new(OnceLock::new()),
+                gate: Arc::new(agent_inmem::domain::tool_gate::UngatedNativeTools),
+                app_url: "https://macro.com".into(),
+                permissions: Some(Arc::new(Unrestricted)),
+            },
+        );
+        let (status, listed) = rpc(
+            app.clone(),
+            Some("secret"),
+            "tools/list",
+            serde_json::json!({}),
+        )
+        .await;
+        assert_eq!(status, StatusCode::OK, "{listed}");
+        let tools = listed["result"]["tools"].as_array().unwrap();
+        let execute = tools
+            .iter()
+            .find(|tool| tool["name"] == "ExecuteCode")
+            .unwrap();
+        assert_eq!(
+            execute["inputSchema"]["properties"]["language"]
+                .to_string()
+                .contains("js_tools"),
+            js_tools
+        );
+        assert_eq!(
+            execute["description"]
+                .as_str()
+                .unwrap()
+                .contains("tools.<service>.<operation>"),
+            js_tools
+        );
+        assert_eq!(
+            tools.iter().any(|tool| tool["name"] == "ShowPermissions"),
+            js_tools
+        );
+        // Off, ShowPermissions is refused even when named directly.
+        let (_, shown) = rpc(
+            app.clone(),
+            Some("secret"),
+            "tools/call",
+            serde_json::json!({
+                "name": "ShowPermissions",
+                "arguments": {"groups": [{"group": "email"}]},
+            }),
+        )
+        .await;
+        assert_eq!(
+            shown.to_string().contains("not available in this session"),
+            !js_tools,
+            "{shown}"
+        );
+        let (_, called) = rpc(
+            app,
+            Some("secret"),
+            "tools/call",
+            serde_json::json!({
+                "name": "ExecuteCode",
+                "arguments": {
+                    "turn_id": "00000000-0000-0000-0000-000000000001",
+                    "language": "js_tools",
+                    "source": "return await tools.storage.get_document_markdown({path: {document_id: \"d\"}})",
+                },
+            }),
+        )
+        .await;
+        if js_tools {
+            assert!(called.get("error").is_none(), "{called}");
+            assert_eq!(
+                *code_mode.languages.lock().unwrap(),
+                [code_execution::domain::Language::JsTools]
+            );
+        } else {
+            assert!(called.get("error").is_some(), "{called}");
+            assert!(code_mode.languages.lock().unwrap().is_empty());
+        }
+    }
+}
+
+/// Permissions whose view is the registry with nothing set.
+struct Unrestricted;
+
+#[async_trait::async_trait]
+impl agent_permissions::domain::service::AgentPermissions for Unrestricted {
+    async fn catalog(
+        &self,
+        _: &agent_permissions::domain::model::Caller,
+    ) -> Result<
+        agent_permissions::domain::model::ToolPermissionCatalog,
+        agent_permissions::domain::model::PermissionError,
+    > {
+        Err(agent_permissions::domain::model::PermissionError::NotFound)
+    }
+    async fn view_agent(
+        &self,
+        _: &agent_permissions::domain::model::Caller,
+        agent: bot_id::BotId,
+    ) -> Result<
+        agent_permissions::domain::model::PermissionsView,
+        agent_permissions::domain::model::PermissionError,
+    > {
+        Ok(agent_permissions::domain::resolve::view(
+            &agent_permissions::outbound::registry::registry_catalog(),
+            agent,
+            agent_permissions::domain::model::PolicyKind::Agent,
+            agent_permissions::domain::resolve::ViewAccess {
+                can_edit: false,
+                can_tighten: true,
+            },
+            Vec::new(),
+            None,
+        ))
+    }
+    async fn view_session(
+        &self,
+        _: &agent_permissions::domain::model::Caller,
+        _: &entity_access::domain::models::EntityAccessReceipt<
+            entity_access::domain::models::ViewAccessLevel,
+        >,
+    ) -> Result<
+        agent_permissions::domain::model::PermissionsView,
+        agent_permissions::domain::model::PermissionError,
+    > {
+        Err(agent_permissions::domain::model::PermissionError::NotFound)
+    }
+    async fn set(
+        &self,
+        _: &agent_permissions::domain::model::Caller,
+        _: bot_id::BotId,
+        _: Vec<agent_permissions::domain::model::Change>,
+    ) -> Result<
+        agent_permissions::domain::model::PermissionsView,
+        agent_permissions::domain::model::PermissionError,
+    > {
+        Err(agent_permissions::domain::model::PermissionError::NotFound)
+    }
+    async fn tighten(
+        &self,
+        _: &agent_permissions::domain::model::Caller,
+        _: bot_id::BotId,
+        _: Vec<agent_permissions::domain::model::Change>,
+    ) -> Result<
+        agent_permissions::domain::model::Tightened,
+        agent_permissions::domain::model::PermissionError,
+    > {
+        Err(agent_permissions::domain::model::PermissionError::NotFound)
+    }
+    async fn reset(
+        &self,
+        _: &agent_permissions::domain::model::Caller,
+        _: bot_id::BotId,
+    ) -> Result<
+        agent_permissions::domain::model::PermissionsView,
+        agent_permissions::domain::model::PermissionError,
+    > {
+        Err(agent_permissions::domain::model::PermissionError::NotFound)
+    }
+    async fn resolve_calls(
+        &self,
+        _: &agent_permissions::domain::model::SessionPolicy,
+        _: &[agent_permissions::domain::model::OperationKey],
+    ) -> Result<
+        Vec<agent_permissions::domain::model::ResolvedCall>,
+        agent_permissions::domain::model::PermissionError,
+    > {
+        Err(agent_permissions::domain::model::PermissionError::NotFound)
+    }
+}
+
+#[tokio::test]
+async fn show_permissions_is_offered_only_where_permissions_gate_ocaml() {
+    for (on, permissions) in [(false, true), (true, false), (true, true)] {
+        let repo = InMemoryAgentSessionRepo::new();
+        let session = test_agent_session(AgentSessionId::new());
+        repo.insert_session(session.clone());
+        repo.set_egress_token_hash(session.id, &SessionToken::new("secret").hash())
+            .await
+            .unwrap();
+        let tasks = FixedTasks::default();
+        let app = router(
+            Arc::new(repo.clone()),
+            configured_hosts(&["http://agent-harness-service:8102"]).unwrap(),
+            InternalTools {
+                service: Arc::new(SessionPullRequestService::new(
+                    repo.clone(),
+                    RecordingRealtime::new(),
+                    Arc::new(tasks.clone()),
+                )),
+                tasks: Arc::new(tasks),
+                code_mode: Some(Arc::new(OwnerRollout {
+                    on,
+                    permissions,
+                    js_tools: false,
+                    languages: Default::default(),
+                })),
+                cognition: None,
+                reviews: Arc::new(OnceLock::new()),
+                gate: Arc::new(agent_inmem::domain::tool_gate::UngatedNativeTools),
+                app_url: "https://macro.com".into(),
+                permissions: Some(Arc::new(Unrestricted)),
+            },
+        );
+        let offered = on && permissions;
+        let (_, listed) = rpc(
+            app.clone(),
+            Some("secret"),
+            "tools/list",
+            serde_json::json!({}),
+        )
+        .await;
+        let show = listed["result"]["tools"]
+            .as_array()
+            .unwrap()
+            .iter()
+            .find(|tool| tool["name"] == "ShowPermissions")
+            .cloned();
+        assert_eq!(show.is_some(), offered, "{listed}");
+        if let Some(show) = show {
+            assert_eq!(show["annotations"]["readOnlyHint"], true);
+            // It spends nobody's access, so it takes no acting_as.
+            assert!(show["inputSchema"]["properties"].get("acting_as").is_none());
+        }
+        let (_, called) = rpc(
+            app.clone(),
+            Some("secret"),
+            "tools/call",
+            serde_json::json!({
+                "name": "ShowPermissions",
+                "arguments": {"groups": [{"group": "email", "actions": ["send"]}]},
+            }),
+        )
+        .await;
+        if offered {
+            let result = &called["result"];
+            assert_ne!(result["isError"], true, "{called}");
+            let content = &result["structuredContent"];
+            assert_eq!(content["sessionId"], session.id.to_string(), "{called}");
+            assert_eq!(content["current"][0]["state"], "always");
+            let (_, refused) = rpc(
+                app,
+                Some("secret"),
+                "tools/call",
+                serde_json::json!({
+                    "name": "ShowPermissions",
+                    "arguments": {"groups": [{"group": "spaceships"}]},
+                }),
+            )
+            .await;
+            assert_eq!(refused["result"]["isError"], true, "{refused}");
+        } else {
+            assert_eq!(called["result"]["isError"], true, "{called}");
+        }
+    }
 }
