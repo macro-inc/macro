@@ -195,7 +195,8 @@ function App() {
           <MobileSplitContainer
             splitManager={manager}
             stack={stack}
-            splits={manager.splits}
+            parkedPanes={() => []}
+            openPanes={router.panes}
             panelRefs={new Map()}
           />
         </div>
