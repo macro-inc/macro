@@ -161,8 +161,8 @@ async function setNewEmail(page: Page, on: boolean) {
 /**
  * Opens the Notifications inbox and answers its list. Chrome fails every
  * request in flight when the machine's network changes (`loadAppSteadily`),
- * and an inbox whose list was among them says it couldn't be loaded: only
- * then is it asked again.
+ * and an inbox whose list request was among them says it couldn't be
+ * loaded: only then is it asked again.
  */
 async function openNotifications(
   page: Page,
@@ -170,7 +170,10 @@ async function openNotifications(
 ): Promise<Locator> {
   let dropped = false;
   const onFailed = (request: Request) => {
-    if (request.failure()?.errorText === 'net::ERR_NETWORK_CHANGED') {
+    if (
+      request.failure()?.errorText === 'net::ERR_NETWORK_CHANGED' &&
+      (request.postData() ?? '').includes('"operationName":"NotificationInbox"')
+    ) {
       dropped = true;
     }
   };
@@ -181,7 +184,7 @@ async function openNotifications(
   await expect(inbox.getByRole('row').first().or(again)).toBeVisible();
   page.off('requestfailed', onFailed);
   if (await again.isVisible()) {
-    expect(dropped, 'the inbox failed with no network change').toBe(true);
+    expect(dropped, 'the inbox failed, and not on a network change').toBe(true);
     await again.click();
   }
   return inbox;
