@@ -81,14 +81,16 @@ beforeEach(() => {
 afterEach(() => vi.clearAllMocks());
 
 describe('AgentPermissionsPage', () => {
-  it('says the settings cover OCaml programs only, not JavaScript ones', async () => {
+  it('says plainly which programs the settings cover and what they miss', async () => {
     renderPage();
     expect(
-      await screen.findByText('Applies to OCaml programs only, for now.')
+      await screen.findByText(
+        'Applies to JS tools and OCaml programs only, for now.'
+      )
     ).toBeTruthy();
     expect(
       screen.getByText(
-        /Its JavaScript programs, other tools and your connected apps work as before\./
+        /Scout’s plain JavaScript programs, its other tools and your connected apps aren’t covered: they work as before, even where a setting says Never\./
       )
     ).toBeTruthy();
   });

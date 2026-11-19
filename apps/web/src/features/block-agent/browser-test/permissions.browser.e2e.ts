@@ -19,13 +19,15 @@ async function shot(
   const path = SHOTS
     ? `${SHOTS}/${name}-${isMobile ? 'mobile' : 'desktop'}-${THEME ?? 'dark'}.png`
     : test.info().outputPath(`${name}.png`);
-  // The transcript scrolls inside the page, as in the app: grow the window
-  // to the whole session for the picture, then put it back.
+  // The transcript (or the page) scrolls inside the window, as in the app:
+  // grow the window to all of it for the picture, then put it back.
   const size = page.viewportSize();
   const height = await page.evaluate(() => {
     const transcript = document.querySelector('[aria-label="Agent session"]');
     const main = document.querySelector('main');
-    if (!transcript || !main) return 0;
+    if (!main) return 0;
+    // The permissions page scrolls the whole main.
+    if (!transcript) return main.scrollHeight;
     return (
       main.scrollHeight - transcript.clientHeight + transcript.scrollHeight
     );
@@ -37,46 +39,97 @@ async function shot(
   if (size) await page.setViewportSize(size);
 }
 
-test('a blocked program says what was refused and links to the permissions', async ({
+// The same cards for programs in either checked language; a JS tools
+// program also has a saved record, which the cards load.
+const LANGUAGES = [
+  { language: 'ocaml', program: 'Email.send_message' },
+  { language: 'js_tools', program: 'tools.email.send_message' },
+] as const;
+
+for (const { language, program } of LANGUAGES) {
+  test.describe(`${language} programs`, () => {
+    test('a blocked program says what was refused and links to the permissions', async ({
+      page,
+      isMobile,
+    }) => {
+      await page.goto(fixture(`language=${language}`));
+      const blocked = page.getByRole('region', {
+        name: 'Blocked by permissions',
+      });
+      await expect(blocked).toBeVisible();
+      await expect(blocked).toContainText(
+        'Nothing ran. This program could delete email, and Scout is never allowed to.'
+      );
+      await expect(blocked).toContainText('Delete email filter');
+      // A blocked program stands alone; a declined one is a quiet row in its
+      // tool group, which doesn't count it as failed.
+      await page.getByRole('button', { name: 'Used 1 tool' }).click();
+      await expect(
+        page.getByText('Didn’t run a program that may send email').first()
+      ).toBeVisible();
+      await expect(
+        page.getByText('Allowed for this session by you')
+      ).toBeVisible();
+      await blocked.getByRole('button', { name: 'Review permissions' }).click();
+      await expect(page.locator('body')).toHaveAttribute(
+        'data-opened-settings',
+        'Agents'
+      );
+      await shot(page, `blocked-${language}`, isMobile);
+    });
+
+    test('the approver approves a held program', async ({ page, isMobile }) => {
+      await page.goto(fixture(`language=${language}`));
+      const request = page.getByRole('region', {
+        name: 'Permission approval request',
+      });
+      await expect(request).toContainText('Approval needed');
+      await expect(request).toContainText(
+        'Scout wants to run a program that may:'
+      );
+      await expect(request).toContainText('Rename document');
+      await request.getByRole('button', { name: 'View program' }).click();
+      await expect(request).toContainText(program);
+      // Long lines wrap, so nothing the person approves is cut off.
+      const source = request.locator('pre');
+      expect(
+        await source.evaluate((pre) => pre.scrollWidth <= pre.clientWidth)
+      ).toBe(true);
+      await shot(page, `approval-${language}`, isMobile);
+      await request.getByRole('button', { name: 'Hide program' }).click();
+      await request
+        .getByRole('button', { name: 'Approve', exact: true })
+        .click();
+      await expect(request).toHaveCount(0);
+    });
+  });
+}
+
+test('the permissions page says which programs it covers', async ({
   page,
   isMobile,
 }) => {
-  await page.goto(fixture());
-  const blocked = page.getByRole('region', { name: 'Blocked by permissions' });
-  await expect(blocked).toBeVisible();
-  await expect(blocked).toContainText(
-    'Nothing ran. This program could delete email, and Scout is never allowed to.'
-  );
-  await expect(blocked).toContainText('Delete email filter');
-  // A blocked program stands alone; a declined one is a quiet row in its
-  // tool group, which doesn't count it as failed.
-  await page.getByRole('button', { name: 'Used 1 tool' }).click();
+  await page.goto(fixture('view=page'));
   await expect(
-    page.getByText('Didn’t run a program that may send email').first()
+    page.getByText('Applies to JS tools and OCaml programs only, for now.')
   ).toBeVisible();
-  await expect(page.getByText('Allowed for this session by you')).toBeVisible();
-  await blocked.getByRole('button', { name: 'Review permissions' }).click();
-  await expect(page.locator('body')).toHaveAttribute(
-    'data-opened-settings',
-    'Agents'
+  await expect(
+    page.getByText(
+      'What Scout may do in the JS tools and OCaml programs it runs for you.',
+      { exact: false }
+    )
+  ).toBeVisible();
+  await expect(
+    page.getByText('Scout’s plain JavaScript programs', { exact: false })
+  ).toBeVisible();
+  await page.getByRole('button', { name: /Email/ }).first().click();
+  const send = page.getByRole('radiogroup', { name: 'Email: Send' });
+  await expect(send.getByRole('radio', { name: 'Ask' })).toBeChecked();
+  // Let the group finish opening before the picture.
+  await page.evaluate(() =>
+    Promise.all(document.getAnimations().map((animation) => animation.finished))
   );
-  await shot(page, 'blocked', isMobile);
-});
-
-test('the approver approves a held program', async ({ page, isMobile }) => {
-  await page.goto(fixture());
-  const request = page.getByRole('region', {
-    name: 'Permission approval request',
-  });
-  await expect(request).toContainText('Approval needed');
-  await expect(request).toContainText('Scout wants to run a program that may:');
-  await expect(request).toContainText('Rename document');
-  await request.getByRole('button', { name: 'View program' }).click();
-  await expect(request).toContainText('Email.send_message');
-  await request.getByRole('button', { name: 'Hide program' }).click();
-  await shot(page, 'approval', isMobile);
-  await request.getByRole('button', { name: 'Approve', exact: true }).click();
-  await expect(request).toHaveCount(0);
+  await shot(page, 'page', isMobile);
 });
 
 test('a ShowPermissions card saves a change', async ({ page, isMobile }) => {
