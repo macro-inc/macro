@@ -137,6 +137,8 @@ export type ReplyComposerOptions = {
   replyingTo: Accessor<EmailMessage | undefined>;
   isEditingExisting?: boolean;
   draft?: EmailMessage;
+  /** The initial committed read identifies the reply for replacement recovery. */
+  initialSavedDraftId?: string;
   localDraft?: import('../core/local-draft').LocalDraft;
   localAttachments?: DraftFormAttachment[];
   preloadedHtml?: string;
@@ -1664,9 +1666,10 @@ export function createReplyComposer(
     void autosave.save().catch(() => {});
   };
 
-  // A reopened working copy can have a saved server ID even when rapid edits
-  // keep the new session's identity lookup queued.
-  const mountedServerDraftId = props.localDraft?.serverDraftId;
+  // The initial read or working copy can identify the saved row before the
+  // live session confirms it for delivery and lifecycle reads.
+  const mountedServerDraftId =
+    props.initialSavedDraftId ?? props.localDraft?.serverDraftId;
   const mountedDraftEpoch = session.epoch();
   const savedReplyIdentity = (state: ReturnType<typeof session.state>) => {
     const draft = state.identity;

@@ -64,56 +64,66 @@ describe('draft session: reply composer', () => {
     }
   });
 
-  it('recognizes a replaced reply while its reopened session still has an unconfirmed ID', async () => {
-    const context = createComposeContext();
-    const draft = message('saved-reply', { is_draft: true });
-    const localDraft: LocalDraft = {
-      key: 'client-handle',
-      draftId: 'client-handle',
-      serverDraftId: draft.db_id,
-      serverThreadId: draft.thread_db_id,
-      inboxId: draft.link_id,
-      accountId: 'owner',
-      generation: 'local-generation',
-      revision: 1,
-      acknowledgedRevision: 1,
-      status: 'synced',
-      content: { subject: draft.subject ?? '' },
-      attachments: [],
-      updatedAt: Date.now(),
-    };
-    context.drafts.readDraft = vi.fn(async (id) =>
-      id === draft.db_id
-        ? {
-            draft,
-            persistence: 'queued' as const,
-            local: { ...localDraft, revision: 2, status: 'dirty' as const },
-          }
-        : {
-            draft: message(id, { is_draft: true }),
-            persistence: 'committed' as const,
-          }
-    );
-    context.drafts.watchDrafts = () => () => {};
-    vi.mocked(context.drafts.saveDraft).mockResolvedValue(
-      committed('replacement')
-    );
-    const state = mountReplyComposer(context, undefined, { draft, localDraft });
-    const lifecycle = vi.mocked(context.draftLifecycle.observe).mock
-      .calls[0][0];
-    try {
-      state.edit('More text on the reopened reply');
-      expect(lifecycle.draftId()).toBeUndefined();
-      await vi.advanceTimersByTimeAsync(600);
-
-      expect(lifecycle.draftId()).toBe('replacement');
-      expect(context.notices.feedback.alert).toHaveBeenCalledExactlyOnceWith(
-        'The draft changed elsewhere. Your newer text was kept as a new draft.'
+  it.each(['working copy', 'initial server read'])(
+    'recognizes a replaced reply from its %s before the live session confirms its ID',
+    async (source) => {
+      const context = createComposeContext();
+      const draft = message('saved-reply', { is_draft: true });
+      const localDraft: LocalDraft = {
+        key: 'client-handle',
+        draftId: 'client-handle',
+        serverDraftId: draft.db_id,
+        serverThreadId: draft.thread_db_id,
+        inboxId: draft.link_id,
+        accountId: 'owner',
+        generation: 'local-generation',
+        revision: 1,
+        acknowledgedRevision: 1,
+        status: 'synced',
+        content: { subject: draft.subject ?? '' },
+        attachments: [],
+        updatedAt: Date.now(),
+      };
+      const fromWorkingCopy = source === 'working copy';
+      context.drafts.readDraft = vi.fn(async (id) =>
+        id === draft.db_id
+          ? {
+              draft,
+              persistence: 'queued' as const,
+              local: fromWorkingCopy
+                ? { ...localDraft, revision: 2, status: 'dirty' as const }
+                : undefined,
+            }
+          : {
+              draft: message(id, { is_draft: true }),
+              persistence: 'committed' as const,
+            }
       );
-    } finally {
-      state.dispose();
+      context.drafts.watchDrafts = () => () => {};
+      vi.mocked(context.drafts.saveDraft).mockResolvedValue(
+        committed('replacement')
+      );
+      const state = mountReplyComposer(context, undefined, {
+        draft,
+        localDraft: fromWorkingCopy ? localDraft : undefined,
+        initialSavedDraftId: fromWorkingCopy ? undefined : draft.db_id,
+      });
+      const lifecycle = vi.mocked(context.draftLifecycle.observe).mock
+        .calls[0][0];
+      try {
+        state.edit('More text on the reopened reply');
+        expect(lifecycle.draftId()).toBeUndefined();
+        await vi.advanceTimersByTimeAsync(600);
+
+        expect(lifecycle.draftId()).toBe('replacement');
+        expect(context.notices.feedback.alert).toHaveBeenCalledExactlyOnceWith(
+          'The draft changed elsewhere. Your newer text was kept as a new draft.'
+        );
+      } finally {
+        state.dispose();
+      }
     }
-  });
+  );
 
   it('preserves the seeded ID as a handle until a save confirms it when lookup has no record', async () => {
     const context = createComposeContext();
