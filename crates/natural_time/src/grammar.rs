@@ -7,7 +7,7 @@ use nom::{
     branch::alt,
     bytes::complete::{tag, take_while1},
     character::complete::{char, digit1, one_of, space0},
-    combinator::{eof, map, map_opt, opt, peek, recognize, rest, value, verify},
+    combinator::{eof, map, map_opt, not, opt, peek, recognize, rest, value, verify},
     multi::many0,
     sequence::{preceded, terminated},
 };
@@ -27,10 +27,38 @@ pub(crate) enum Item {
     Duration(Length),
     /// Elapsed minutes from now: `in 2 hours`.
     Offset(i64),
+    /// A quantity that says neither `in` nor `for`: `2 days`.
+    Quantity(Quantity),
     /// A range separator: `-`, `to`, `until`, `through`.
     To,
     /// A repeating phrase, such as `every friday`, which isn't read yet.
     Repeat,
+}
+
+/// A quantity written alone, as in `2 days`: when, if nothing else in the
+/// phrase says when, and otherwise how long.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub(crate) struct Quantity {
+    /// Read as `in 2 days`.
+    pub(crate) when: Option<When>,
+    /// Read as `for 2 days`.
+    pub(crate) length: Option<Length>,
+}
+
+/// When `in` a quantity is: calendar days, or elapsed minutes for hours.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub(crate) enum When {
+    Day(DayRef),
+    Offset(i64),
+}
+
+impl From<When> for Item {
+    fn from(when: When) -> Self {
+        match when {
+            When::Day(day) => Self::Day(day),
+            When::Offset(minutes) => Self::Offset(minutes),
+        }
+    }
 }
 
 type Res<'a, T> = IResult<&'a str, T>;
@@ -64,6 +92,14 @@ const END_OF_DAY: [&str; 14] = [
     "eod",
     "eob",
     "cob",
+];
+
+/// Words after a quantity that count it from something else, as in
+/// `2 days before friday`; the quantity alone is then not read, rather than
+/// misread as a length.
+const COUNTED_FROM: [&str; 14] = [
+    "from", "before", "after", "since", "past", "prior", "later", "earlier", "until", "till",
+    "til", "to", "through", "thru",
 ];
 
 /// Words describing a repeat; the phrase is then not read.
@@ -154,6 +190,7 @@ fn element(i: &str) -> Res<'_, Vec<Item>> {
         relative_day,
         offset,
         one(duration),
+        one(bare_quantity),
         one(numeric_date),
         one(named_date),
         one(period),
@@ -425,7 +462,7 @@ fn minutes_in(quantity: &[(f64, Unit)]) -> Option<f64> {
 
 /// `in 2 hours` is elapsed time; `in 3 days` and `in a month` are calendar
 /// days and months. `sign` is -1 for `ago`.
-fn shifted(quantity: &[(f64, Unit)], sign: i64, from_days: i64) -> Option<Item> {
+fn shifted(quantity: &[(f64, Unit)], sign: i64, from_days: i64) -> Option<When> {
     if quantity
         .iter()
         .all(|(_, unit)| matches!(unit, Unit::Minute | Unit::Hour))
@@ -433,13 +470,13 @@ fn shifted(quantity: &[(f64, Unit)], sign: i64, from_days: i64) -> Option<Item> 
         if from_days != 0 {
             return None;
         }
-        return whole(minutes_in(quantity)?).map(|minutes| Item::Offset(sign * minutes));
+        return whole(minutes_in(quantity)?).map(|minutes| When::Offset(sign * minutes));
     }
     let [(amount, unit)] = quantity else {
         return None;
     };
     let amount = sign * whole(*amount)?;
-    Some(Item::Day(match unit {
+    Some(When::Day(match unit {
         Unit::Day => DayRef::Relative(from_days + amount),
         Unit::Week => DayRef::Relative(from_days + amount * 7),
         Unit::Month if from_days == 0 => DayRef::Months(i32::try_from(amount).ok()?),
@@ -458,14 +495,14 @@ fn offset(i: &str) -> Res<'_, Vec<Item>> {
     map(
         alt((
             map_opt(preceded(spaced(kws(&["in", "within"])), quantity), |q| {
-                shifted(&q, 1, 0)
+                shifted(&q, 1, 0).map(Item::from)
             }),
             map_opt(
                 (quantity, sp, kw("from"), sp, start),
-                |(q, _, _, _, from)| shifted(&q, 1, from),
+                |(q, _, _, _, from)| shifted(&q, 1, from).map(Item::from),
             ),
             map_opt(terminated(quantity, (sp, kw("ago"))), |q| {
-                shifted(&q, -1, 0)
+                shifted(&q, -1, 0).map(Item::from)
             }),
             value(Item::Offset(0), kws(&["now", "rn"])),
         )),
@@ -474,21 +511,40 @@ fn offset(i: &str) -> Res<'_, Vec<Item>> {
     .parse(i)
 }
 
+/// How long a quantity lasts: whole days when it counts only days and
+/// weeks, and otherwise minutes.
+fn length(quantity: &[(f64, Unit)]) -> Option<Length> {
+    let days_only = quantity
+        .iter()
+        .all(|(_, unit)| matches!(unit, Unit::Day | Unit::Week));
+    let length = if days_only {
+        Length::Days(whole(minutes_in(quantity)? / 1440.0)?)
+    } else {
+        Length::Minutes(whole(minutes_in(quantity)?)?)
+    };
+    match length {
+        Length::Days(0) | Length::Minutes(0) => None,
+        length => Some(length),
+    }
+}
+
 /// `for 45 minutes`, `for an hour and a half`, `for 3 days`.
 fn duration(i: &str) -> Res<'_, Item> {
     map_opt(preceded(spaced(kw("for")), quantity), |quantity| {
-        let days_only = quantity
-            .iter()
-            .all(|(_, unit)| matches!(unit, Unit::Day | Unit::Week));
-        let length = if days_only {
-            Length::Days(whole(minutes_in(&quantity)? / 1440.0)?)
-        } else {
-            Length::Minutes(whole(minutes_in(&quantity)?)?)
-        };
-        match length {
-            Length::Days(0) | Length::Minutes(0) => None,
-            length => Some(Item::Duration(length)),
-        }
+        length(&quantity).map(Item::Duration)
+    })
+    .parse(i)
+}
+
+/// `2 days`, `an hour`, `1h30m`: a quantity that doesn't say whether it is
+/// when or how long. One counted from something else (`2 days before
+/// friday`) isn't read.
+fn bare_quantity(i: &str) -> Res<'_, Item> {
+    let counted_from = preceded(opt(sp), alt((tag("-"), kws(&COUNTED_FROM))));
+    map_opt(terminated(quantity, not(counted_from)), |quantity| {
+        let when = shifted(&quantity, 1, 0);
+        let length = length(&quantity);
+        (when.is_some() || length.is_some()).then_some(Item::Quantity(Quantity { when, length }))
     })
     .parse(i)
 }

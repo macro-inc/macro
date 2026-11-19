@@ -591,6 +591,80 @@ fn event_ranges_and_lengths() {
 }
 
 #[test]
+fn a_quantity_alone_says_when_unless_the_phrase_already_does() {
+    let reminders = [
+        ("2 days", "2026-11-08 09:00 [time]"),
+        ("2 day", "2026-11-08 09:00 [time]"),
+        ("a week", "2026-11-13 09:00 [time]"),
+        ("a couple days", "2026-11-08 09:00 [time]"),
+        ("2 months", "2027-01-06 09:00 [time]"),
+        ("2 hours", "+120m"),
+        ("2h", "+120m"),
+        ("an hour", "+60m"),
+        ("half an hour", "+30m"),
+        ("1h30m", "+90m"),
+        ("30 min", "+30m"),
+        ("2 days 3pm", "2026-11-08 15:00"),
+        ("3pm 2 days", "2026-11-08 15:00"),
+        ("2 days at 3pm", "2026-11-08 15:00"),
+        // Beside a date or time, a quantity is how long, which a reminder
+        // drops as it drops `for 2 days`.
+        ("next monday 2 days", "2026-11-09 09:00 [time]"),
+        ("next monday for 2 days", "2026-11-09 09:00 [time]"),
+        ("from next monday for 2 days", "2026-11-09 09:00 [time]"),
+        ("3pm 2 hours", "2026-11-06 15:00"),
+        ("tomorrow 9-11", "2026-11-07 09:00 [meridiem]"),
+    ];
+    check(FRIDAY, Caller::Reminder, &reminders);
+    check(
+        FRIDAY,
+        Caller::Event,
+        &[
+            ("2 days", "2026-11-08"),
+            ("2 day", "2026-11-08"),
+            ("2 hours", "+120m"),
+            ("2 days 3pm", "2026-11-08 15:00"),
+            ("next monday 2 days", "2026-11-09 → 2026-11-10"),
+            ("2 days next monday", "2026-11-09 → 2026-11-10"),
+            ("next monday for 2 days", "2026-11-09 → 2026-11-10"),
+            ("from next monday for 2 days", "2026-11-09 → 2026-11-10"),
+            ("3pm 2 hours", "2026-11-06 15:00 → 2026-11-06 17:00"),
+            ("tomorrow 3pm 45 min", "2026-11-07 15:00 → 2026-11-07 15:45"),
+            ("2 hours 30 min", "+150m"),
+            (
+                "tomorrow 9-11",
+                "2026-11-07 09:00 → 2026-11-07 11:00 [meridiem]",
+            ),
+            ("tomorrow 2 hours", "error: DurationWithoutTime"),
+            ("for 2 days", "error: Unrecognized"),
+            ("3pm 2 hours for 30 min", "error: Conflict"),
+            ("2 days 2-3pm", "2026-11-08 14:00 → 2026-11-08 15:00"),
+        ],
+    );
+    // A quantity counted from something else isn't read rather than misread
+    // as a length on that day.
+    let counted_from = [
+        "2 days from next monday",
+        "2 days before friday",
+        "2 days after friday",
+        "2 days past friday",
+        "2 hours before 3pm",
+        "2 days until friday",
+        "2 days to friday",
+        "2 days - friday",
+        "2 days later",
+        "2 days earlier",
+    ];
+    for caller in [Caller::Reminder, Caller::Event] {
+        let cases: Vec<_> = counted_from
+            .iter()
+            .map(|phrase| (*phrase, "error: Unrecognized"))
+            .collect();
+        check(FRIDAY, caller, &cases);
+    }
+}
+
+#[test]
 fn due_dates_and_reminders_take_one_end_of_a_range() {
     check(
         FRIDAY,
