@@ -325,12 +325,19 @@ where
             // parent, so that code can't write as its owner before they
             // change it.
             if let Replacement::Changed(action) = self.replacement(action, input, false).await? {
-                let mut written = self.rewritten_sources(parent_id).await?;
-                written.extend(self.upgrades.inherited_rewrites(parent_id).await?);
-                let mut rewritten: Vec<String> = code_sources(&action.task)
-                    .into_iter()
-                    .filter(|source| written.contains(source))
-                    .collect();
+                let sources = code_sources(&action.task);
+                // A copy without code keeps nothing, so its parent's
+                // upgrades aren't read.
+                let mut rewritten: Vec<String> = if sources.is_empty() {
+                    Vec::new()
+                } else {
+                    let mut written = self.rewritten_sources(parent_id).await?;
+                    written.extend(self.upgrades.inherited_rewrites(parent_id).await?);
+                    sources
+                        .into_iter()
+                        .filter(|source| written.contains(source))
+                        .collect()
+                };
                 rewritten.sort();
                 rewritten.dedup();
                 let detached = self
