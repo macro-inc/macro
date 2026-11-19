@@ -58,6 +58,7 @@ fn usage(cpu_seconds: u64) -> Usage {
     Usage {
         resident_memory_bytes: 600 * 1024 * 1024,
         private_memory_bytes: 0,
+        swap_bytes: Some(0),
         cpu_usage_microseconds: cpu_seconds * 1_000_000,
     }
 }

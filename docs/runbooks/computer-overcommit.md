@@ -72,6 +72,14 @@ UPDATE hosted_runtime_host SET admitting = false WHERE name = 'fc-host-1';
 
 ## Diagnose
 
+- Grafana, **Macro computers fleet** (hosts with
+  `macro.firecrackerHost.alloy.enable`): host memory against the watermarks,
+  awake vCPUs per core, the busiest and largest computers by `computer_id`,
+  CPU held back by limits, host pressure, and memory sold per byte held.
+  Raise a ratio only while pressure stays flat; a host whose CPU waiting
+  climbs with few busy computers is short of CPU for another reason: check
+  the host's own work and steal time first, and lower the CPU ratio only if
+  neither explains it.
 - `computer.host.memory.used_ratio` against `…high_watermark_ratio` by `host`:
   how close each host is to refusing. `report_age` above 30 s means the host
   admits nothing.
