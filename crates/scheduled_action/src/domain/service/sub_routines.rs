@@ -303,12 +303,17 @@ where
             routine.sub_routines = tracing::field::Empty,
             routine.sub_routines.changed = tracing::field::Empty,
             routine.sub_routines.failed = tracing::field::Empty,
+            outcome = tracing::field::Empty,
+            otel.status_code = tracing::field::Empty,
         );
         async {
+            let span = tracing::Span::current();
             let children = match self.repo.active_children(&[parent_id]).await {
                 Ok(children) => children,
                 Err(error) => {
                     tracing::warn!(?error, "could not read a routine's sub-routines");
+                    span.record("outcome", "read_failed");
+                    span.record("otel.status_code", "ERROR");
                     return;
                 }
             };
@@ -351,10 +356,15 @@ where
                     }
                 }
             }
-            let span = tracing::Span::current();
             span.record("routine.sub_routines", total);
             span.record("routine.sub_routines.changed", changed);
             span.record("routine.sub_routines.failed", failed);
+            if failed > 0 {
+                span.record("outcome", "partial");
+                span.record("otel.status_code", "ERROR");
+            } else {
+                span.record("outcome", "followed");
+            }
         }
         .instrument(span)
         .await

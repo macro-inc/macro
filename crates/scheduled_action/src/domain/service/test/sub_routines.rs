@@ -274,6 +274,39 @@ async fn sub_routines_pause_with_their_parent_and_only_those_resume_with_it() {
 }
 
 #[tokio::test]
+async fn a_parent_switched_off_records_whether_its_sub_routines_followed() {
+    let (spans, _capture) = crate::domain::test_spans::Spans::capture();
+    let service = service(false);
+    let parent = top_level(&service, "parent").await;
+    start_run(&service, &parent, PARENT_RUN);
+    let child = create(&service, "child", from_code(&parent), None)
+        .await
+        .unwrap()
+        .into_action();
+    service
+        .set_enabled(edit_receipt(parent.id.unwrap()), false, Requester::Person)
+        .await
+        .unwrap();
+
+    // Its sub-routines can't be read: the switch holds, and the trace says
+    // they didn't follow.
+    *service.repo.active_children_fail.lock().unwrap() = true;
+    service
+        .set_enabled(edit_receipt(parent.id.unwrap()), true, Requester::Person)
+        .await
+        .unwrap();
+    assert!(!stored(&service, child.id.unwrap()).enabled);
+    assert_eq!(
+        spans.outcomes("routine.follow_parent"),
+        ["followed", "read_failed"]
+    );
+    assert_eq!(
+        spans.values("routine.follow_parent", "otel.status_code"),
+        ["ERROR"]
+    );
+}
+
+#[tokio::test]
 async fn a_run_of_a_paused_routine_creates_sub_routines_that_wait_for_it() {
     let service = service(false);
     let parent = top_level(&service, "parent").await;
