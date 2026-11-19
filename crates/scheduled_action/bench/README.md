@@ -65,11 +65,14 @@ draft on a busy machine can be told apart.
   made for them with its body, its own notifications, what its run
   returned, and the copies of its sub-routines its run scheduled, read
   before the routine is deleted, which deletes them: each one's
-  sub-routine, its inputs (the checks look the item up by the seeded id
-  among their values), its key, trigger, whether it was made switched off,
-  and its definition's step kinds. The first copy is then run at once and
-  what it said read, so a check sees that it does the later work for its
-  item. The routine is saved with the sub-routines it defines, so the stack's
+  sub-routine, its inputs (the checks look the item up by an input value
+  equal to its seeded id), its key, trigger, whether it was made switched off,
+  and its definition's step kinds. Every copy is then run at once, and the
+  messages, tasks and notifications are read after them, so a check sees
+  what each copy's Ask AI step replied (it must name its item) and what the
+  copies wrote. These checks match strings and run each copy once, by hand;
+  they don't see a copy run at its time or after its item changed, such as
+  a task that left review. The routine is saved with the sub-routines it defines, so the stack's
   owner needs the `enable-sub-routines` flag too. Mail it sent and rows it added to a database aren't read, so
   the two database cases pass on a run without error. A run whose condition wasn't met did
   nothing. A fired event the trigger doesn't match is never admitted, so the
@@ -188,7 +191,10 @@ call on 16.
 `harness --bin <dir>` points the stack at one build; `reread` checks results
 again after a change to the checks (`--traces` reads the traces again,
 `--judge` grades again); it reads the database without the lock, so it can
-run beside a draft, but each grade waits for the lock.
+run beside a draft, but each grade waits for the lock. A run check needs
+the evidence its result saved: results saved before a check read a field
+(a copy's runs, the time it fired) fail it when read again, so compare
+fresh runs.
 
 If every draft prints `no trace`, the stack isn't exporting: when the shared
 collector restarts it drops off the instance's network, and the harness logs

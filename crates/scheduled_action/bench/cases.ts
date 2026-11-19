@@ -93,22 +93,24 @@ export type Effects = {
   tasks: { id: string; name: string; text: string }[];
   /** The owner's new notifications, as text. */
   notifications: string[];
-  /** The copies of its sub-routines the routine's runs scheduled (absent in results saved before they were read). */
-  copies?: CopyMade[];
   /**
-   * The runs of the first copy, run once at once (`execute`) to see what a
-   * copy does when its time comes, with an agent step's reply. Absent when
-   * the routine scheduled none.
+   * The copies of its sub-routines the routine's runs since it fired
+   * scheduled (absent in results saved before they were read). The
+   * messages, tasks and notifications above are read after every copy ran.
    */
-  copyRuns?: { isSuccess: boolean; result: unknown; reply?: string }[];
+  copies?: CopyMade[];
+  /** When the eval fired the routine (absent in results saved before it was kept). */
+  firedAt?: string;
 };
 
 /**
  * A copy a run scheduled of one of the routine's sub-routines: its id, which
  * one, the names of the inputs it was given and their text values (the
  * seeded ids it names), when it runs, its definition's step kinds, the key it
- * was scheduled under, and whether it was made switched off (not merely
- * paused with a parent saved off).
+ * was scheduled under, whether it was made switched off (not merely paused
+ * with a parent saved off), and its runs once the eval ran it at once
+ * (`execute`) to see what it does when its time comes, with an agent step's
+ * reply.
  */
 export type CopyMade = {
   id?: string;
@@ -119,6 +121,7 @@ export type CopyMade = {
   steps: string[];
   key: string | null;
   switchedOff: boolean;
+  runs?: { isSuccess: boolean; result: unknown; reply?: string }[];
 };
 
 export type RunCheck = {
@@ -416,7 +419,8 @@ const said = (effects: Effects) =>
 
 const ran = (effects: Effects) => effects.runs.some(didRun);
 
-type Local = ReturnType<typeof local>;
+/** A time on the person's clock, to the second, and the instant it is. */
+type Local = ReturnType<typeof local> & { second: number; instant: Date };
 
 /**
  * When a copy runs, on the person's clock, if it runs once on a `once`
@@ -425,7 +429,10 @@ type Local = ReturnType<typeof local>;
  */
 function runsOnceAt(trigger: unknown, timezone: string): Local | undefined {
   const once = trigger as { type?: unknown; at?: unknown } | null;
-  return once?.type === 'once' && typeof once.at === 'string' ? local(new Date(once.at), timezone) : undefined;
+  if (once?.type !== 'once' || typeof once.at !== 'string') return undefined;
+  const instant = new Date(once.at);
+  // Every time zone's offset is whole minutes, so seconds read the same on any clock.
+  return { ...local(instant, timezone), second: instant.getUTCSeconds() + instant.getUTCMilliseconds() / 1000, instant };
 }
 
 /** Days from the person's today to a date on their clock: 0 is today. */
@@ -445,9 +452,9 @@ const SEEDED_TASKS: SeededTask[] = Object.entries(tasks()).map(([key, task]) => 
   id: seedId(SCENARIO_NAME, 'task', key),
 }));
 
-/** The one seeded task a copy's input values name by id, if exactly one. */
+/** The one seeded task a copy's input values are the id of, if exactly one. */
 const taskOf = (copy: CopyMade) => {
-  const named = SEEDED_TASKS.filter((task) => (copy.values ?? []).some((value) => value.includes(task.id)));
+  const named = SEEDED_TASKS.filter((task) => (copy.values ?? []).some((value) => value === task.id));
   return named.length === 1 ? named[0] : undefined;
 };
 
@@ -458,28 +465,32 @@ const unquoted = (value: string) =>
     .replace(/["'“”‘’`*_]/g, '')
     .replace(/\s+/g, ' ');
 
+/** What a copy's Ask AI step told the owner when the eval ran it: its replies, not its code's output. */
+const copyReplies = (copy: CopyMade) =>
+  (copy.runs ?? [])
+    .filter(didRun)
+    .map((run) => run.reply ?? '')
+    .join('\n');
+
 /**
- * The run scheduled copies of a sub-routine, each keyed, not switched off on
- * its own, run once, ending in an Ask AI step (a code step can't tell the
- * owner anything), and naming by id a task `wanted` accepts, at a time `when`
- * accepts for that task; no task twice, and `enough` accepts the tasks
- * named. The first copy, run at once, succeeded and named its task: it does
- * the later work for that item, reading its definition from the routine.
+ * The run scheduled copies of a sub-routine, each not switched off on its
+ * own, run once, ending in an Ask AI step (a code step can't tell the owner
+ * anything), with an input value that is the id of a task `wanted` accepts,
+ * keyed by that id (so a run that schedules it again updates it rather than
+ * adding another), at a whole minute `when` accepts for that task; no task
+ * twice, and `enough` accepts the tasks named. Each copy, run at once,
+ * succeeded and its Ask AI step's reply names its task: it does the later
+ * work for that item, reading its definition from the routine.
  */
 const scheduled =
   (
     wanted: (task: SeededTask) => boolean,
-    when: (at: Local, task: SeededTask, context: Context) => boolean,
+    when: (at: Local, task: SeededTask, context: Context, effects: Effects) => boolean,
     enough: (named: SeededTask[]) => boolean,
   ) =>
   (effects: Effects, context: Context) => {
     const made = effects.copies ?? [];
     const named = made.map(taskOf);
-    const first = named[0];
-    const copySaid = (effects.copyRuns ?? [])
-      .filter(didRun)
-      .map((run) => `${text(run.result)}\n${run.reply ?? ''}`)
-      .join('\n');
     return (
       ran(effects) &&
       made.length > 0 &&
@@ -488,21 +499,29 @@ const scheduled =
         const task = named[index];
         return (
           copy.subRoutine !== null &&
-          copy.key !== null &&
           !copy.switchedOff &&
           copy.steps.at(-1) === 'agent' &&
           task !== undefined &&
           wanted(task) &&
+          copy.key?.includes(task.id) === true &&
           at !== undefined &&
-          when(at, task, context)
+          at.second === 0 &&
+          when(at, task, context, effects) &&
+          unquoted(copyReplies(copy)).includes(unquoted(task.name))
         );
       }) &&
       new Set(named.map((task) => task?.id)).size === named.length &&
-      enough(named.filter((task): task is SeededTask => task !== undefined)) &&
-      first !== undefined &&
-      unquoted(copySaid).includes(unquoted(first.name))
+      enough(named.filter((task): task is SeededTask => task !== undefined))
     );
   };
+
+/**
+ * Three days after the task moved, give or take an hour (a daylight-saving
+ * change, and the moments between the move and the run that schedules it):
+ * not midnight or 9am of the third day.
+ */
+const aboutThreeDaysAfter = (at: Date, firedAt: string | undefined) =>
+  firedAt !== undefined && Math.abs(at.getTime() - (new Date(firedAt).getTime() + 3 * 86_400_000)) <= 3_600_000;
 
 /** The owner's open tasks, as `setup` seeds them. */
 const ownerOpen = (task: SeededTask) =>
@@ -887,7 +906,7 @@ export const CASES: Case[] = [
     text: "Every morning at 8, for each of my open tasks due in the next seven days, schedule a reminder that tells me about it at 9am the day before it's due.",
     expect: [drafted, at(8, 0), definesLaterWork, nothingUnused],
     run: {
-      says: "a run schedules a keyed one-time copy of the reminder, given the task and ending in an Ask AI step, at 9am the day before each open task of the owner's due in the coming week, naming it by id, and the first copy, run at once, names its task",
+      says: "a run schedules a one-time copy of the reminder, given the task's id, keyed by it and ending in an Ask AI step, at 9:00:00 the day before each open task of the owner's due in the coming week, and each copy, run at once, names its task in its Ask AI reply",
       fire: execute,
       holds: remindsDayBefore,
     },
@@ -897,6 +916,8 @@ export const CASES: Case[] = [
     kind: 'routine',
     code: true,
     text: 'Whenever a task in the Website Redesign project moves to In review, check on it three days later and tell me if it is still in review.',
+    // Not checked: that a copy run after the task left review says nothing
+    // or says so; the run puts the task back only after its copy ran.
     expect: [
       drafted,
       watches('task.status_changed', 'task.property_changed'),
@@ -906,11 +927,11 @@ export const CASES: Case[] = [
       nothingUnused,
     ],
     run: {
-      says: 'moving the homepage hero task to In review schedules one keyed one-time copy of the check, given the task and ending in an Ask AI step, three days later, and that copy, run at once, names the task',
+      says: "moving the homepage hero task to In review schedules one one-time copy of the check, given the task's id, keyed by it and ending in an Ask AI step, 72 hours later (within an hour, on a whole minute), and that copy, run at once, names the task in its Ask AI reply",
       fire: () => ({ type: 'task_status', task: 'task:homepage-hero', status: 'in_review', restore: 'in_progress' }),
       holds: scheduled(
         (task) => task.key === 'homepage-hero',
-        (at, _task, context) => daysFromToday(at, context) === 3,
+        (at, _task, _context, effects) => aboutThreeDaysAfter(at.instant, effects.firedAt),
         (named) => named.length === 1,
       ),
     },

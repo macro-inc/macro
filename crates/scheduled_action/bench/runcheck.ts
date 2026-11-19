@@ -30,14 +30,16 @@ export type SavedRoutine = {
 type Definition = { name?: unknown; steps?: unknown[] };
 
 /**
- * The copies `parent`'s runs scheduled of its sub-routines, read before it is
- * deleted, which deletes them too. A copy holds only which sub-routine it
- * runs and its inputs; its step kinds are its definition's in `parent`.
+ * The copies `parent`'s runs scheduled of its sub-routines since `since`,
+ * read before it is deleted, which deletes them too. A copy holds only which
+ * sub-routine it runs and its inputs; its step kinds are its definition's in
+ * `parent`.
  */
-async function copiesOf(at: Stack, token: string, parent: SavedRoutine): Promise<CopyMade[]> {
+async function copiesOf(at: Stack, token: string, parent: SavedRoutine, since: Date): Promise<CopyMade[]> {
   const children = await call<SavedRoutine[]>(`${routines(at)}?parent=${parent.id}`, { token });
   const definitions = (parent.task.sub_routines ?? []) as Definition[];
-  return children.map((child) => {
+  const made = children.filter((child) => new Date(child.created_at).getTime() >= since.getTime() - 1000);
+  return made.map((child) => {
     const { sub_routine: subRoutine, inputs } = child.task as { sub_routine?: unknown; inputs?: unknown };
     const definition = definitions.find((each) => each.name === subRoutine);
     const given = inputs && typeof inputs === 'object' ? (inputs as Record<string, unknown>) : {};
@@ -336,11 +338,19 @@ export async function runCheck(
     }
     ms = performance.now() - started;
     if (runs.length) await Bun.sleep(SETTLE_MS);
+    runs = runs.length ? await withReplies(db, await runsSince(at, owner, routine.id, t0)) : runs;
+    // Every copy runs at once, as it will when its time comes; what they
+    // write counts among the run's effects, read after them.
+    const copies = await copiesOf(at, owner, routine, t0);
+    await Promise.all(
+      copies.map(async (copy) => {
+        if (copy.id) copy.runs = await runCopy(at, owner, db, copy.id);
+      }),
+    );
     effects = await read(db, context, t0, firedMessage, (id) => sdk(at, owner).tasks.byId(id).content());
-    effects.runs = runs.length ? await withReplies(db, await runsSince(at, owner, routine.id, t0)) : runs;
-    effects.copies = await copiesOf(at, owner, routine);
-    const first = effects.copies[0]?.id;
-    if (first) effects.copyRuns = await runCopy(at, owner, db, first);
+    effects.runs = runs;
+    effects.copies = copies;
+    effects.firedAt = t0.toISOString();
   } finally {
     // Deleted first, so putting the task back doesn't fire it again.
     await call(`${routines(at)}/${routine.id}`, { method: 'DELETE', token: owner }).catch(() => undefined);
