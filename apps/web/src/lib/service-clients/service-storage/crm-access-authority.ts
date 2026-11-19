@@ -12,11 +12,13 @@ import { createSignal } from 'solid-js';
 
 export type CrmAccessState = 'pending' | 'allowed' | 'denied' | 'error';
 export type CrmRetirementScope = 'permission' | 'session';
+/** What the first owner observation retires; `none` is a decision, not a gap. */
+export type CrmInitialRetirement = CrmRetirementScope | 'none';
 type Options = {
   hint?: CacheAuthority;
   earlyProof?: boolean;
   initialize?: (generation: string) => void;
-  restore?: (authority: CacheAuthority) => CrmRetirementScope | undefined;
+  restore?: (authority: CacheAuthority) => CrmInitialRetirement | undefined;
   fetchProof: (timeoutMs: number) => Promise<string>;
   retire: (
     scope: CrmRetirementScope | undefined,
@@ -141,9 +143,9 @@ export function createCrmAccessAuthority(options: Options) {
       initialized = true;
       const scope =
         options.restore?.(next) ??
-        (next.policy?.endsWith(':denied') ? 'permission' : undefined);
-      if (scope) retire(scope, next.generation);
-      else options.initialize?.(next.generation);
+        (next.policy?.endsWith(':denied') ? 'permission' : 'none');
+      if (scope === 'none') options.initialize?.(next.generation);
+      else retire(scope, next.generation);
       return;
     }
     if (previous?.generation === next.generation) {

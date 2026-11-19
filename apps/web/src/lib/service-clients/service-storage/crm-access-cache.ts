@@ -8,6 +8,8 @@ import {
 import { StaleCacheAuthorityError } from '@graphql-cache/authority';
 import {
   initialCacheRetirement,
+  readPrunedGeneration,
+  rememberPrunedGeneration,
   startupAuthorityHint,
 } from '@graphql-cache/generation-mirror';
 import type { CacheHost } from '@graphql-cache/host/types';
@@ -64,7 +66,11 @@ async function retireVisibleSnapshots(
       await queryClient.cancelQueries();
       // Permission changes are rare and CRM references can appear in any query
       // family. Retire every TanStack snapshot rather than maintain a second schema.
-      if (scope) await queryPersistence.retire(() => true);
+      if (scope) {
+        await queryPersistence.retire(() => true);
+        // Only a completed prune lets a later start skip it for this generation.
+        rememberPrunedGeneration(generation);
+      }
     }, generation);
   } finally {
     // Failed disk pruning remains quarantined, but fresh server reads can still
@@ -130,13 +136,17 @@ function install() {
       // startup write stamp was rejected by the shared owner.
     },
     restore: (authority) => {
-      const scope = initialCacheRetirement(startupAuthorityHint, authority);
+      const scope = initialCacheRetirement(
+        startupAuthorityHint,
+        authority,
+        readPrunedGeneration()
+      );
       if (scope)
         perfMark('cache.generation-baseline', {
           mirrorMatches: false,
           retirement: scope,
         });
-      return scope;
+      return scope ?? 'none';
     },
     fetchProof,
     retire: retireVisibleSnapshots,

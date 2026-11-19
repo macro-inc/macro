@@ -1,3 +1,4 @@
+import { z } from 'zod/v3';
 import {
   type CacheAuthority,
   CacheAuthoritySchema,
@@ -39,20 +40,55 @@ export function rememberGeneration(authority: CacheAuthority): void {
 
 export const startupAuthorityHint = readGenerationMirror();
 
+const PRUNED_KEY = 'graphql-cache:permission-pruned:v1';
+const PrunedGenerationSchema = z.object({
+  identity: z.string(),
+  generation: z.string(),
+});
+
+/** The owner generation whose retirement last finished pruning this profile's
+ * persisted queries. Unreadable storage only costs another prune. */
+export function readPrunedGeneration(
+  identity = getOrCreateCacheScope()
+): string | undefined {
+  try {
+    const parsed = PrunedGenerationSchema.safeParse(
+      JSON.parse(localStorage.getItem(PRUNED_KEY) ?? 'null')
+    );
+    if (parsed.success && parsed.data.identity === identity)
+      return parsed.data.generation;
+  } catch {
+    // The next start prunes again.
+  }
+}
+
+export function rememberPrunedGeneration(
+  generation: string,
+  identity = getOrCreateCacheScope()
+): void {
+  try {
+    localStorage.setItem(PRUNED_KEY, JSON.stringify({ identity, generation }));
+  } catch {
+    // The next start prunes again.
+  }
+}
+
 export function initialCacheRetirement(
   hint: CacheAuthority | undefined,
-  owner: CacheAuthority
+  owner: CacheAuthority,
+  prunedGeneration?: string
 ): 'session' | 'permission' | undefined {
   if (
     hint &&
     (hint.identity !== owner.identity || hint.account !== owner.account)
   )
     return 'session';
-  if (
-    owner.policy?.endsWith(':denied') ||
-    (owner.policy !== null && !owner.ready)
-  )
-    return 'permission';
+  if (owner.policy !== null && !owner.ready) return 'permission';
+  if (owner.policy?.endsWith(':denied')) {
+    // A durable denial is found again on every start. Its full prune need not
+    // repeat once it has completed for this generation.
+    return prunedGeneration === owner.generation ? undefined : 'permission';
+  }
   if (!hint) {
     // Discovering a non-denied owner is not an access change. Keep mounted
     // readers (and their open menus). Only copied writes rejected by the owner
