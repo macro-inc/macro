@@ -1333,7 +1333,8 @@ task and can be detached with the event flag off.
   uses steps this editor cannot open. An unfired overdue one-time trigger is
   due immediately on create. Required apps across retained definitions must
   be connected. Tasks with definitions or program input values require the
-  owner's rollout flag.
+  owner's rollout flag. A scheduled copy that reads its parent's definition
+  can be duplicated only after **Keep as my routine** makes it standalone.
 
 The list defers connection reads until a row menu opens and a candidate
 requires apps. On a copy's page, a loaded parent with a missing definition

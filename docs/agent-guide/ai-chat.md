@@ -995,9 +995,10 @@ write code and its owner has `enable-sub-routines`. The server refuses a new
 draft that defines them without that permission, a check that the scheduler's
 rollout rejects, or a step draft checked with definitions different from the
 routine's. The API returns the definitions in `subRoutines` and names the
-definition in `subRoutine` on each of its code problems. The current editor
-loads the routine's own steps and matches problems by step index. It has no
-definition review and does not carry new definitions into Save.
+definition in `subRoutine` on each of its code problems. The editor shows the
+drafted definitions under **Sub-routines** for review, places each code
+problem on its step by definition and index, and saves the definitions with
+the routine.
 
 The review lists what was created, from what the session named and
 from its recorded activity, under "Created for this routine" or "Created, not

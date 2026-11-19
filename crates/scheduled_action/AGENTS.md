@@ -101,8 +101,8 @@ each run.
   cannot express. Work that repeats until something happens is a routine on
   that schedule looking for what is still open. The draft API carries definitions
   in `subRoutines`, and a code problem in one names it in `subRoutine`. The
-  current editor reads the routine's own steps and matches errors by index.
-  It has no definition review and omits new definitions from Save. The prompt carries
+  web editor shows the drafted definitions, places each problem by definition
+  and step index, and saves the definitions with the routine. The prompt carries
   only the request, the owner and time, the found and left items, and the reference
   of the areas named, or of the commonest ones when the SDK has none of
   them, then of up to three areas that find the names not looked up (a
