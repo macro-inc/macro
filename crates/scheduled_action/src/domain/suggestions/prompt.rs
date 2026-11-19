@@ -74,7 +74,10 @@ pub fn brief(data: &BriefData<'_>) -> String {
         .join(", ");
     let occasion = match data.trigger {
         GenerationTrigger::Onboarding => {
-            "The user just signed up. Be quick: they are waiting.".to_owned()
+            "The user just signed up. Be quick: they are waiting. At signup their mail \
+             is what shows their work, so work from the mail below: don't search or \
+             list anything in their workspace."
+                .to_owned()
         }
         GenerationTrigger::Nightly => format!(
             "This is the week's run (routine suggestions come once a week). {WEEKLY_REVIEW}"
