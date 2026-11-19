@@ -78,8 +78,14 @@ export type Persona = {
   routinesTruth?: RoutinesTruth;
 };
 
+// A held-out writer makes addresses from first names, so one may carry an
+// accent ("inès@…"), which the seed CLI refuses: read every address with its
+// local part spelled in ASCII, the same way everywhere a persona is used.
+const asciiAddress = (local: string) => local.normalize('NFD').replace(/[̀-ͯ]/g, '').replace(/[^\x21-\x7e]/g, '');
 const readJson = <T>(path: string): T | undefined =>
-  existsSync(path) ? (JSON.parse(readFileSync(path, 'utf8')) as T) : undefined;
+  existsSync(path)
+    ? (JSON.parse(readFileSync(path, 'utf8').replace(/[^\s<>"',;:()@]+(?=@[\w.-]+\.\w+)/gu, (local) => (/^[\x21-\x7e]*$/.test(local) ? local : asciiAddress(local)))) as T)
+    : undefined;
 
 function load(dir: string, name: string, heldout: boolean): Persona {
   const workspace = readJson<Persona['workspace']>(join(dir, 'workspace.json'));
