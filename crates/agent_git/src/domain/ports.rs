@@ -4,8 +4,8 @@ use macro_user_id::user_id::MacroUserIdStr;
 use uuid::Uuid;
 
 use crate::domain::models::{
-    AgentGitError, AgentRepo, AuthorizedRepo, CreatedRepo, GitCredential, GitRequest, GitResponse,
-    RepoToken, RepoTokenHash,
+    AgentGitError, AgentRepo, AuthorizedRepo, CreatedRepo, GitCredential, GitHold, GitRequest,
+    GitResponse, RepoToken, RepoTokenHash,
 };
 use crate::domain::template::{PersonaSeed, RenderedFile};
 use crate::domain::voice::VoiceConfig;
@@ -142,11 +142,13 @@ pub trait GitBackend: Send + Sync + 'static {
     /// Adapter error.
     type Err: std::error::Error + Send + Sync + 'static;
 
-    /// Run the request against the authorized repo.
+    /// Run the request against the authorized repo, keeping `hold` until
+    /// its process ends.
     fn serve(
         &self,
         repo: &AuthorizedRepo,
         request: GitRequest,
+        hold: GitHold,
     ) -> impl Future<Output = Result<GitResponse, Self::Err>> + Send;
 }
 

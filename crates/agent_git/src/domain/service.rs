@@ -9,7 +9,7 @@ use uuid::Uuid;
 use crate::domain::git_slots::GitSlots;
 use crate::domain::models::{
     AgentGitError, AuthorizedRepo, CreatedRepo, GitAccess, GitBody, GitCredential, GitEndpoint,
-    GitRequest, GitResponse, GitService, RepoLimits, RepoToken,
+    GitHold, GitRequest, GitResponse, GitService, RepoLimits, RepoToken,
 };
 use crate::domain::ports::{
     AgentGitService, GitBackend, PushRateLimiter, RepoRepository, RepoStore, TeamAdmins,
@@ -350,12 +350,6 @@ where
             .map_err(internal)?
             .ok_or(AgentGitError::InvalidToken)?;
 
-        // The kill switch: with the rollout off for the agent's creator (as
-        // its brain checks it), its repo looks absent to every credential.
-        if !self.rollout_on(agent_user_id).await {
-            return Err(AgentGitError::InvalidToken);
-        }
-
         let access = request.endpoint.access();
 
         match credential {
@@ -381,6 +375,14 @@ where
                     return Err(AgentGitError::Forbidden(access));
                 }
             }
+        }
+
+        // The kill switch: with the rollout off for the agent's creator (as
+        // its brain checks it), its repo looks absent to every credential.
+        // Checked after the credential, so an unauthenticated caller never
+        // triggers a flag evaluation whose latency would tell it apart.
+        if !self.rollout_on(agent_user_id).await {
+            return Err(AgentGitError::InvalidToken);
         }
 
         if request.endpoint == GitEndpoint::Rpc(GitService::ReceivePack)
@@ -460,21 +462,15 @@ where
             }
         }
 
-        let mut response = self
-            .adapters
+        self.adapters
             .backend
             .serve(
                 &AuthorizedRepo::new(repo.agent_user_id, access, max_input_size),
                 request,
+                GitHold::new((slot, lock)),
             )
             .await
-            .map_err(internal)?;
-        // The slot, and a push's lock, are held until the response ends.
-        response.body = Box::pin(response.body.map(move |chunk| {
-            let _held = (&slot, &lock);
-            chunk
-        }));
-        Ok(response)
+            .map_err(internal)
     }
 }
 

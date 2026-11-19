@@ -115,6 +115,23 @@ pub struct GitResponse {
     pub body: GitBody,
 }
 
+/// What a git request holds while its process runs: its process slot and,
+/// for a push, the repo's lock. The backend keeps it until the process ends,
+/// not until the response does: a client that stops reading cannot keep it
+/// past the deadline, and one that disconnects early cannot release a lock
+/// git is still writing under.
+pub struct GitHold {
+    _held: Box<dyn Send>,
+}
+
+impl GitHold {
+    pub(crate) fn new(held: impl Send + 'static) -> Self {
+        Self {
+            _held: Box::new(held),
+        }
+    }
+}
+
 /// A repo the caller has been authorized for, at an access level.
 ///
 /// Only the domain service constructs it; backends take it as proof.

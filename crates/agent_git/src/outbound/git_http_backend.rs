@@ -8,7 +8,7 @@ use tokio_util::{io::ReaderStream, sync::CancellationToken, task::TaskTracker};
 use tracing::Instrument;
 
 use crate::domain::models::{
-    AuthorizedRepo, GitAccess, GitEndpoint, GitRequest, GitResponse, GitService,
+    AuthorizedRepo, GitAccess, GitEndpoint, GitHold, GitRequest, GitResponse, GitService,
 };
 use crate::domain::ports::GitBackend;
 use crate::outbound::repo_directories::{RepoDirectories, git_command};
@@ -103,6 +103,32 @@ fn parse_cgi_headers(block: &[u8]) -> Result<(u16, Vec<(String, String)>), GitHt
     Ok((status, response_headers))
 }
 
+/// A git process group, killed when dropped before its leader is reaped
+/// (the deadline, or the runtime dropping the task at shutdown).
+struct ProcessGroup(Option<rustix::process::Pid>);
+
+impl ProcessGroup {
+    /// The leader was reaped: its id may be reused, so never signal it again.
+    fn disarm(&mut self) {
+        self.0 = None;
+    }
+
+    fn kill(&mut self) {
+        if let Some(group) = self.0.take() {
+            let _ = rustix::process::kill_process_group(group, rustix::process::Signal::KILL)
+                .inspect_err(|error| {
+                    tracing::warn!(error = %error, "could not kill the git process group");
+                });
+        }
+    }
+}
+
+impl Drop for ProcessGroup {
+    fn drop(&mut self) {
+        self.kill();
+    }
+}
+
 /// A body's byte count, recorded on the current span once, when the body is
 /// dropped: finished, failed or abandoned.
 struct ByteCount {
@@ -141,6 +167,7 @@ impl GitBackend for GitHttpBackend {
         &self,
         repo: &AuthorizedRepo,
         request: GitRequest,
+        hold: GitHold,
     ) -> Result<GitResponse, GitHttpBackendError> {
         let (method, endpoint_path, query) = path_and_query(request.endpoint);
         let path_info = format!(
@@ -198,10 +225,12 @@ impl GitBackend for GitHttpBackend {
         }
 
         let mut child = command.spawn()?;
-        let process_group = child
-            .id()
-            .and_then(|id| i32::try_from(id).ok())
-            .and_then(rustix::process::Pid::from_raw);
+        let mut process_group = ProcessGroup(
+            child
+                .id()
+                .and_then(|id| i32::try_from(id).ok())
+                .and_then(rustix::process::Pid::from_raw),
+        );
         let (Some(mut stdin), Some(stdout), Some(mut stderr)) =
             (child.stdin.take(), child.stdout.take(), child.stderr.take())
         else {
@@ -248,6 +277,8 @@ impl GitBackend for GitHttpBackend {
         self.tasks.spawn(
             async move {
                 let _process_finished = process_finished;
+                // Released when git ends, however the response fares.
+                let _hold = hold;
                 let finished = tokio::time::timeout(deadline, async {
                     let mut output = String::new();
                     if stderr.read_to_string(&mut output).await.is_ok() && !output.is_empty() {
@@ -265,18 +296,13 @@ impl GitBackend for GitHttpBackend {
                     tracing::warn!(?deadline, "git request ran past its deadline; killing it");
                     // Killing the group closes every pipe git holds, so the
                     // response ends and the request pump is cancelled.
-                    if let Some(group) = process_group {
-                        let _ = rustix::process::kill_process_group(
-                            group,
-                            rustix::process::Signal::KILL,
-                        )
-                        .inspect_err(|error| {
-                            tracing::warn!(error = %error, "could not kill the git process group");
-                        });
-                    }
+                    process_group.kill();
                     let _ = child.kill().await;
                     return;
                 };
+                if finished.is_ok() {
+                    process_group.disarm();
+                }
 
                 match finished {
                     Ok(status) if !status.success() => {

@@ -1,5 +1,5 @@
 use super::*;
-use crate::domain::models::GitBody;
+use crate::domain::models::{GitBody, GitHold};
 use crate::domain::ports::RepoStore;
 use crate::domain::template::RenderedFile;
 use crate::outbound::bare_repo_store::BareRepoStore;
@@ -89,7 +89,7 @@ async fn git_enforces_remaining_input_bytes_before_publishing_objects() {
         TaskTracker::new(),
         GIT_REQUEST_DEADLINE,
     )
-    .serve(&repo, push(oid.trim(), pack))
+    .serve(&repo, push(oid.trim(), pack), GitHold::new(()))
     .await
     .unwrap();
     let report = drain(response.body).await;
@@ -148,7 +148,7 @@ async fn git_fsck_refuses_a_commit_without_an_author() {
         TaskTracker::new(),
         GIT_REQUEST_DEADLINE,
     )
-    .serve(&repo, push(oid.trim(), pack))
+    .serve(&repo, push(oid.trim(), pack), GitHold::new(()))
     .await
     .unwrap();
     let report = drain(response.body).await;
@@ -186,6 +186,7 @@ async fn shutdown_tracker_waits_for_the_request_pump() {
                     Ok(Bytes::from_static(b"0000"))
                 })),
             },
+            GitHold::new(()),
         )
         .await
         .unwrap();
@@ -215,6 +216,7 @@ async fn completed_git_process_cancels_an_unfinished_input_pump() {
                 git_protocol: None,
                 body: Box::pin(futures::stream::pending()),
             },
+            GitHold::new(()),
         )
         .await
         .unwrap();
@@ -248,6 +250,7 @@ async fn a_request_that_outlives_its_deadline_is_killed_and_its_pumps_end() {
                     git_protocol: None,
                     body: Box::pin(futures::stream::pending()),
                 },
+                GitHold::new(()),
             )
             .await;
         if let Ok(response) = response {
@@ -261,4 +264,72 @@ async fn a_request_that_outlives_its_deadline_is_killed_and_its_pumps_end() {
     tokio::time::timeout(std::time::Duration::from_secs(5), tasks.wait())
         .await
         .unwrap();
+}
+
+#[tokio::test]
+async fn the_hold_is_released_by_the_deadline_even_while_the_response_is_unread() {
+    let storage = tempfile::tempdir().unwrap();
+    let (directories, agent) = target(storage.path()).await;
+    let backend = GitHttpBackend::new(
+        directories,
+        TaskTracker::new(),
+        std::time::Duration::from_millis(300),
+    );
+    let (held, released) = tokio::sync::oneshot::channel::<()>();
+    let response = backend
+        .serve(
+            &AuthorizedRepo::new(agent, GitAccess::Push, Some(1024)),
+            GitRequest {
+                endpoint: GitEndpoint::Rpc(GitService::ReceivePack),
+                content_type: Some("application/x-git-receive-pack-request".to_owned()),
+                content_encoding: None,
+                git_protocol: None,
+                body: Box::pin(futures::stream::pending()),
+            },
+            GitHold::new(held),
+        )
+        .await;
+
+    // A client that stops reading: the response is kept, never polled.
+    let released = tokio::time::timeout(std::time::Duration::from_secs(10), released).await;
+    assert!(
+        matches!(released, Ok(Err(_))),
+        "the hold outlived the deadline"
+    );
+    drop(response);
+}
+
+#[tokio::test]
+async fn the_hold_outlives_a_dropped_response_until_git_exits() {
+    let storage = tempfile::tempdir().unwrap();
+    let (directories, agent) = target(storage.path()).await;
+    let backend = GitHttpBackend::new(directories, TaskTracker::new(), GIT_REQUEST_DEADLINE);
+    let (finish, finished) = tokio::sync::oneshot::channel::<()>();
+    let (held, mut released) = tokio::sync::oneshot::channel::<()>();
+    let response = backend
+        .serve(
+            &AuthorizedRepo::new(agent, GitAccess::Read, None),
+            GitRequest {
+                endpoint: GitEndpoint::Rpc(GitService::UploadPack),
+                content_type: Some("application/x-git-upload-pack-request".to_owned()),
+                content_encoding: None,
+                git_protocol: None,
+                body: Box::pin(futures::stream::once(async move {
+                    let _ = finished.await;
+                    Ok(Bytes::from_static(b"0000"))
+                })),
+            },
+            GitHold::new(held),
+        )
+        .await;
+
+    // The client is gone, but git is still reading its request.
+    drop(response);
+    assert!(matches!(
+        released.try_recv(),
+        Err(tokio::sync::oneshot::error::TryRecvError::Empty)
+    ));
+    finish.send(()).unwrap();
+    let released = tokio::time::timeout(std::time::Duration::from_secs(10), released).await;
+    assert!(matches!(released, Ok(Err(_))));
 }

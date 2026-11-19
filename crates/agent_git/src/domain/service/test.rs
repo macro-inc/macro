@@ -306,7 +306,8 @@ impl PushRateLimiter for FakeLimiter {
     }
 }
 
-/// Answers 200 with the bytes it read, so tests can see the body limit.
+/// Answers 200 with the bytes it read, so tests can see the body limit. Its
+/// "process" lives until the response body is dropped, keeping the hold.
 #[derive(Clone, Default)]
 struct EchoBackend {
     served: Arc<Mutex<Vec<(String, GitAccess)>>>,
@@ -320,6 +321,7 @@ impl GitBackend for EchoBackend {
         &self,
         repo: &AuthorizedRepo,
         request: GitRequest,
+        hold: GitHold,
     ) -> Result<GitResponse, std::io::Error> {
         self.input_limits
             .lock()
@@ -339,7 +341,12 @@ impl GitBackend for EchoBackend {
         Ok(GitResponse {
             status: 200,
             headers: Vec::new(),
-            body: Box::pin(futures::stream::iter([Ok(Bytes::from(received))])),
+            body: Box::pin(
+                futures::stream::iter([Ok(Bytes::from(received))]).map(move |chunk| {
+                    let _hold = &hold;
+                    chunk
+                }),
+            ),
         })
     }
 }
