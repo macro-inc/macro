@@ -140,19 +140,39 @@ function fetchCodeUpgrades(scheduleId: string) {
   );
 }
 
-// Cached past unmount; closes over the resolved schedule id only.
+type CodeUpgradeTrace = { active: TraceContext | undefined };
+
+// Cached past unmount. A traced refresh supplies a holder that clears on settle.
 function codeUpgradesQueryOptions(
   scheduleId: string | null | undefined,
-  enabled: boolean
+  enabled: boolean,
+  trace?: CodeUpgradeTrace
 ) {
+  const fetch = () => fetchCodeUpgrades(scheduleId!);
   return queryOptions({
     queryKey: scheduledActionKeys.codeUpgrades({
       scheduleId: scheduleId ?? '__none__',
     }).queryKey,
     enabled: enabled && Boolean(scheduleId),
-    queryFn: () => fetchCodeUpgrades(scheduleId!),
+    queryFn: () => (trace?.active ? trace.active.run(fetch) : fetch()),
     ...QUERY_REFETCH_BEHAVIOR,
   });
+}
+
+async function refreshCodeUpgrades(id: string, parentSpan: TraceContext) {
+  // Keep the explicit parent through retries and release it if the query
+  // retains these options after the operation settles.
+  const trace: CodeUpgradeTrace = { active: parentSpan };
+  const options = codeUpgradesQueryOptions(id, true, trace);
+  try {
+    await queryClient.cancelQueries({
+      queryKey: options.queryKey,
+      exact: true,
+    });
+    return await queryClient.fetchQuery({ ...options, staleTime: 0 });
+  } finally {
+    trace.active = undefined;
+  }
 }
 
 /** How the routine's code steps were brought to new SDKs, newest first. */
@@ -177,24 +197,7 @@ export function useCodeUpgradesQuery(
       const id = scheduleId();
       if (!parentSpan || !id) return query.refetch(options);
 
-      const request = codeUpgradesQueryOptions(id, enabled());
-      // Keep the explicit parent through TanStack retries and release it when
-      // the operation settles, even if the query retains these options.
-      let trace: TraceContext | undefined = parentSpan;
-      const fetch = () => fetchCodeUpgrades(id);
-      try {
-        await queryClient.cancelQueries({
-          queryKey: request.queryKey,
-          exact: true,
-        });
-        return await queryClient.fetchQuery({
-          ...request,
-          staleTime: 0,
-          queryFn: () => (trace ? trace.run(fetch) : fetch()),
-        });
-      } finally {
-        trace = undefined;
-      }
+      return refreshCodeUpgrades(id, parentSpan);
     },
   };
 }
