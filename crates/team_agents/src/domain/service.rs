@@ -468,6 +468,9 @@ where
         self.ensure_enabled(&created_by).await?;
         let request = validate(request)?;
         let team_id = team_id(&receipt)?;
+        // A buyer the computers rollout doesn't include is refused before an
+        // account, seat or repository exists to take back.
+        self.computers.require_purchase_rollout(&created_by).await?;
 
         let mut undo = Undo::default();
         let (user_id, seed) = match self
@@ -642,17 +645,19 @@ where
             .ok_or(TeamAgentError::NotFound)?;
         let first = record.first_online_at.is_none();
         span.record("first", first);
-        if !first {
-            return Ok(());
-        }
 
-        // Told before the stamp, so a failed hand-off or notice is retried by
-        // the agent's next report; both are idempotent, so a repeat changes
-        // nothing.
+        // Every report tells the computer, which is idempotent: a computer
+        // whose agent was first stamped online before the computer recorded
+        // its setup with it catches up on the agent's next report. Told
+        // before the stamp, so a failed hand-off or notice is retried by the
+        // agent's next report.
         let computer_id = self.computers.computer_for_agent(team_id, &agent).await?;
         if let Some(computer_id) = computer_id {
             span.record("computer_id", tracing::field::display(computer_id));
             self.computers.agent_online(team_id, computer_id).await?;
+        }
+        if !first {
+            return Ok(());
         }
         if let (Some(computer_id), Some(inviter)) = (computer_id, record.created_by) {
             let computer = self.computers.details(team_id, computer_id).await?;

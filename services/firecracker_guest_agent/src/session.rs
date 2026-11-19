@@ -30,10 +30,27 @@ pub async fn serve(stream: impl AsyncRead + AsyncWrite + Send + 'static) -> Resu
         }
         None => return Ok(()),
     };
+    // The host agent's trace id: this agent exports no traces, so its log
+    // lines are found from the host's trace by this field.
+    let span = tracing::info_span!(
+        "firecracker_guest_agent.exec",
+        trace_id = request.trace_id.as_deref().unwrap_or_default(),
+        program = request.argv.first().map(String::as_str).unwrap_or_default(),
+        uid = request.uid,
+    );
+    tracing::Instrument::instrument(run(request, reader, writer), span).await
+}
 
+/// Run `request`'s program and relay its frames until its exit is reported.
+async fn run(
+    request: ExecRequest,
+    reader: impl AsyncRead + Send + Unpin + 'static,
+    mut writer: impl AsyncWrite + Send + Unpin + 'static,
+) -> Result<(), FrameError> {
     let mut child = match spawn(&request) {
         Ok(child) => child,
         Err(error) => {
+            tracing::warn!(error = ?error, "could not start the program");
             let failed = Frame::Failed(format!("could not start {:?}: {error}", request.argv));
             return write_frame(&mut writer, &failed).await;
         }
@@ -78,6 +95,11 @@ pub async fn serve(stream: impl AsyncRead + AsyncWrite + Send + 'static) -> Resu
         }
     };
     input.abort();
+    match &exit_frame {
+        Frame::Exited(code) => tracing::info!(exit_code = code, "exec ended"),
+        Frame::Failed(reason) => tracing::warn!(reason = %reason, "exec failed"),
+        _ => {}
+    }
 
     // A full queue only means the host reads slowly; the exit still goes last.
     let _ = outgoing.send(exit_frame).await;

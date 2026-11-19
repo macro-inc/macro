@@ -667,6 +667,7 @@ mod code_mode {
         assert!(code_mode_instructions.contains("Code mode is on"));
         assert!(code_mode_instructions.contains("ExecuteCode"));
         assert!(code_mode_instructions.contains("DescribeCodeTools"));
+        assert!(code_mode_instructions.contains("Never guess an SDK method"));
         for leaked in [
             "NameSearch",
             "ReadContent",
@@ -860,7 +861,7 @@ mod code_mode {
 
     #[tokio::test]
     #[ignore = "requires pinned Deno runtime"]
-    async fn a_user_runs_real_javascript_over_mcp() {
+    async fn a_user_runs_a_checked_program_over_mcp() {
         let scratch = tempfile::tempdir().unwrap();
         let path = tokio::process::Command::new("which")
             .arg("deno")
@@ -868,15 +869,26 @@ mod code_mode {
             .await
             .unwrap();
         assert!(path.status.success(), "Deno 2.9.6 must be on PATH");
+        let binary: std::path::PathBuf = String::from_utf8(path.stdout).unwrap().trim().into();
         let deno = code_execution::outbound::deno::DenoRunner::new(
-            String::from_utf8(path.stdout).unwrap().trim().into(),
-            scratch.path().to_owned(),
+            binary.clone(),
+            scratch.path().join("runs"),
             128,
+        )
+        .await
+        .unwrap();
+        let checker = code_execution::outbound::deno::check::DenoChecker::new(
+            binary,
+            scratch.path().join("checks"),
+            1,
+            4,
+            64 * 1024,
         )
         .await
         .unwrap();
         let runner = code_execution::domain::ExecutionService::new(
             Arc::new(deno),
+            Arc::new(checker),
             code_execution::domain::Limits::default(),
         )
         .unwrap();
@@ -891,7 +903,7 @@ mod code_mode {
             "tools/call",
             serde_json::json!({
                 "name": "ExecuteCode",
-                "arguments": {"source": "export async function main({macro, session}) { return {data: {sdk: typeof macro.documents, session: session ?? null, sum: [1, 2, 3].reduce((a, b) => a + b)}}; }"},
+                "arguments": {"source": "export async function main({macro}: CodeContext) { return {data: {sdk: typeof macro.documents, sum: [1, 2, 3].reduce((a, b) => a + b)}}; }"},
             }),
         )
         .await;
@@ -899,7 +911,7 @@ mod code_mode {
         assert_eq!(receipt["status"], "succeeded", "{succeeded}");
         assert_eq!(
             receipt["result"],
-            serde_json::json!({"data": {"sdk": "object", "session": null, "sum": 6}})
+            serde_json::json!({"data": {"sdk": "object", "sum": 6}})
         );
 
         let failed = rpc(
@@ -908,15 +920,19 @@ mod code_mode {
             "tools/call",
             serde_json::json!({
                 "name": "ExecuteCode",
-                "arguments": {"source": "export async function main({macro}) { return {data: await macro.noSuchEntity.list()}; }"},
+                "arguments": {"source": "export async function main({macro}: CodeContext) { return {data: await macro.noSuchEntity.list()}; }"},
             }),
         )
         .await;
         let receipt = &failed["result"]["structuredContent"];
         assert_eq!(receipt["status"], "failed", "{failed}");
+        // A public run has no session, and the SDK has no such entity.
+        let error = receipt["error"].as_str().unwrap();
+        assert!(error.contains("doesn't type-check"), "{failed}");
         assert!(
-            receipt["error"].as_str().unwrap().contains("TypeError"),
+            error.contains("Property 'noSuchEntity' does not exist on type 'Macro"),
             "{failed}"
         );
+        assert!(error.contains("at main.ts:1:"), "{failed}");
     }
 }

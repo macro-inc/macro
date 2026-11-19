@@ -21,8 +21,8 @@ import {
 } from './channel';
 import { EmailInboxChip } from './email';
 import { GithubPullRequestPills } from './foreign';
+import { NarrowRowGrid } from './narrow-row-grid';
 import { RowEnd } from './row-end';
-import { SOUP_ROW_CLASS } from './row-geometry';
 import { type LayoutProps, RowIndicator } from './shared';
 
 export function NarrowLayout(props: ParentProps<LayoutProps>) {
@@ -32,25 +32,13 @@ export function NarrowLayout(props: ParentProps<LayoutProps>) {
     const entity = props.entity;
     return isGithubPrEntity(entity) ? entity : undefined;
   };
+  const gridVariant = () => {
+    if (compactTask()) return 'compact';
+    if (pullRequest()) return 'expanded';
+    return 'standard';
+  };
   return (
-    <Entity.Layout
-      class={cn(
-        SOUP_ROW_CLASS.narrow,
-        'w-full items-center text-sm pr-2 grid',
-        compactTask()
-          ? 'gap-x-0 pl-0'
-          : 'gap-x-(--soup-row-column-gap) pl-(--soup-row-padding-l)'
-      )}
-      style={{
-        'grid-template-columns': compactTask()
-          ? '0.5rem minmax(0, 1fr) max-content'
-          : 'var(--soup-row-indicator-width) 1fr max-content',
-        'grid-template-rows': pullRequest() ? '44px auto' : '44px',
-        'grid-template-areas': pullRequest()
-          ? '"indicator title timestamp" ". body body"'
-          : '"indicator title timestamp"',
-      }}
-    >
+    <NarrowRowGrid variant={gridVariant()}>
       <Entity.Slot placement="indicator" class="relative">
         <Show
           when={compactTask()}
@@ -202,6 +190,6 @@ export function NarrowLayout(props: ParentProps<LayoutProps>) {
           </Show>
         </Entity.Slot>
       </Show>
-    </Entity.Layout>
+    </NarrowRowGrid>
   );
 }

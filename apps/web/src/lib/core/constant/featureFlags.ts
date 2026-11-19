@@ -480,6 +480,12 @@ export const enableCrmThreadExclusions = defineFlag({
   key: 'enable-crm-thread-exclusions',
 });
 
+// Default off in dev and local too; authoring requires the matching server gate.
+export const enableCrmSelectiveEmailContribution = defineFlag({
+  key: 'enable-crm-selective-email-contribution',
+  env: 'ENABLE_CRM_SELECTIVE_EMAIL_CONTRIBUTION',
+});
+
 // Company collections are paused until ready; preserve stored lists while off.
 export const enableCrmLists = defineFlag({
   key: 'enable-crm-lists',
@@ -671,6 +677,16 @@ export const enableChatSidebarSections = defineFlag({
   default: onInDev,
 });
 
+// Channel and Chat section Notification Settings (All messages, Messages
+// involving me, Nothing, Custom) beside Mute, in place of Only @mentions. On in
+// development; deployed environments defer to PostHog. Override with
+// VITE_ENABLE_CHANNEL_NOTIFICATION_SETTINGS.
+export const enableChannelNotificationSettings = defineFlag({
+  key: 'enable-channel-notification-settings',
+  env: 'ENABLE_CHANNEL_NOTIFICATION_SETTINGS',
+  default: onInDev,
+});
+
 // Opt-in vertical resizing for desktop Chat sections. Keep it off in development
 // too so sections use their natural height unless PostHog or a local override enables it.
 export const enableChatSidebarSectionResize = defineFlag({
@@ -751,6 +767,13 @@ export const enableUnifiedNotifications = defineFlag({
   key: 'enable-unified-notifications',
   env: 'ENABLE_UNIFIED_NOTIFICATIONS',
   default: onInDev,
+});
+
+// Keep navigation numbers off in every environment while unread counts are
+// being investigated. Unified unread dots continue to use the subscription.
+export const enableNavigationUnreadCounts = defineFlag({
+  env: 'ENABLE_NAVIGATION_UNREAD_COUNTS',
+  default: false,
 });
 
 // Agents home: pending updates from coding agents shown as a stack under the

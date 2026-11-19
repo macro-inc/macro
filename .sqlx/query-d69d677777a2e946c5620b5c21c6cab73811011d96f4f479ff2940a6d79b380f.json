@@ -1,0 +1,23 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "\n            SELECT c.email_address AS \"email!\"\n            FROM email_messages m\n            JOIN email_message_recipients r ON r.message_id = m.id\n            JOIN email_contacts c ON c.id = r.contact_id\n            WHERE m.link_id = $1 AND m.provider_id = $2 AND m.is_sent AND NOT m.is_draft\n                AND NOT COALESCE((m.mailbox_state->>'provider_missing')::boolean,false)\n            UNION ALL\n            SELECT c.email_address\n            FROM email_messages m\n            JOIN email_contacts c ON c.id = m.from_contact_id\n            WHERE m.link_id = $1 AND m.provider_id = $2 AND NOT m.is_sent AND NOT m.is_draft\n                AND NOT COALESCE((m.mailbox_state->>'provider_missing')::boolean,false)\n        ",
+  "describe": {
+    "columns": [
+      {
+        "ordinal": 0,
+        "name": "email!",
+        "type_info": "Varchar"
+      }
+    ],
+    "parameters": {
+      "Left": [
+        "Uuid",
+        "Text"
+      ]
+    },
+    "nullable": [
+      null
+    ]
+  },
+  "hash": "d69d677777a2e946c5620b5c21c6cab73811011d96f4f479ff2940a6d79b380f"
+}

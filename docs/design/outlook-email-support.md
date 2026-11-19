@@ -749,8 +749,9 @@ folder may have moved elsewhere. Check its current immutable-ID location and
 reconcile folder membership before changing its mailbox visibility. Confirmed
 absence produces a recoverable tombstone; it does not immediately delete stored
 bodies, local metadata, or attachment blobs, and thread reads leave the message
-out as they do a discarded draft. Repeat reconciliation for transient 404s and
-catalog changes. Incomplete scans never authorize deletion by absence.
+out as they do a discarded draft. Repeat reconciliation for live work's
+transient 404s and for catalog changes. Incomplete scans never authorize
+deletion by absence.
 
 An expired cursor starts a new generation for the affected stream while keeping
 the existing projection available. Sweep obsolete membership only after that

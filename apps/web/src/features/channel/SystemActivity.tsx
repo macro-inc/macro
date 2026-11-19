@@ -116,10 +116,7 @@ function AccessRequestActivity(props: {
         kind: 'pending',
         canAnswer: isParticipant(),
       }))
-      .with('approved', () => ({
-        kind: 'approved',
-        by: name(current.resolved_by),
-      }))
+      .with('approved', () => ({ kind: 'approved' }))
       .with('denied', () => ({ kind: 'denied', by: name(current.resolved_by) }))
       .with('cancelled', () => ({ kind: 'withdrawn' }))
       .exhaustive(() => ({ kind: 'unavailable' }));

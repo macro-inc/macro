@@ -49,14 +49,8 @@ impl PasswordService {
             return Err(Error::Invalid);
         }
         let admin = self.repository.is_team_admin(&actor.user_id, team).await?;
-        let items: Vec<ItemView> = self
-            .repository
-            .matching(actor, team, &names)
-            .await?
-            .into_iter()
-            .filter(|record| admin || Self::permission(actor, team, record, false))
-            .map(|record| Self::view(record, actor, admin))
-            .collect();
+        let records = self.repository.matching(actor, team, &names).await?;
+        let items = self.views(actor, team, records, admin).await?;
         tracing::Span::current().record("matched", items.len() as i64);
         Ok(items)
     }

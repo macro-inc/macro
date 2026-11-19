@@ -27,7 +27,8 @@ use tokio::sync::mpsc;
 use tokio::task::JoinHandle;
 
 use crate::domain::ports::{
-    ConnectionRecorded, HarnessBindings, HarnessPresence, RuntimeConnectionId, RuntimeConnections,
+    ConnectionRecorded, HarnessBindings, HarnessPresence, RuntimeAccepts, RuntimeConnectionId,
+    RuntimeConnections,
 };
 
 #[cfg(test)]
@@ -45,13 +46,6 @@ pub struct LiveRuntimeSessions {
     pub acp_sessions: Vec<ListedSession>,
     /// The span that asked, for reattaching to follow from.
     pub span: tracing::Span,
-}
-
-/// The optional messages a runtime said, when it dialed, that it accepts.
-#[derive(Debug, Clone, Copy, Default, PartialEq, Eq)]
-pub struct RuntimeAccepts {
-    /// `ToRuntimeMessage::AgentsChanged`.
-    pub agents_changed: bool,
 }
 
 /// A connection and the identity its presence reports carry.
@@ -129,6 +123,11 @@ where
     #[must_use]
     pub fn is_connected(&self, harness: HarnessId) -> bool {
         self.connections.contains_key(&harness)
+    }
+
+    /// The dial a harness's runtime is connected on here, if any.
+    pub fn connection_of(&self, harness: HarnessId) -> Option<RuntimeConnectionId> {
+        self.connections.get(&harness).map(|listed| listed.id)
     }
 
     /// Ask a harness's live runtime to probe a fresh ACP process.
@@ -323,7 +322,7 @@ async fn record_connected<Sender>(
 ) where
     Sender: TransportSender<ToRuntimeMessage>,
 {
-    let recorded = presence.connected(harness, listed.id).await;
+    let recorded = presence.connected(harness, listed.id, listed.accepts).await;
     if recorded != ConnectionRecorded::AgentBound || !listed.accepts.agents_changed {
         return;
     }
