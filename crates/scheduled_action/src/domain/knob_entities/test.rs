@@ -227,17 +227,64 @@ async fn a_saved_routine_lists_its_knobs_needing_a_new_pick_by_step_id() {
         unusable_knobs(&items, &owner, &program).await.unwrap(),
         [
             UnusableKnob {
+                sub_routine: None,
                 step: Some(StepId::try_from("post_elsewhere".to_owned()).unwrap()),
                 knob: "bugs".into(),
                 item: Some(channel("deleted")),
                 reason: "The channel picked for \"Channel to post in\" was deleted or you no longer have access to it. Pick another in the routine's settings.".into(),
             },
             UnusableKnob {
+                sub_routine: None,
                 step: None,
                 knob: "bugs".into(),
                 item: Some(channel("deleted")),
                 reason: "The channel picked for \"Channel to post in\" was deleted or you no longer have access to it. Pick another in the routine's settings.".into(),
             },
         ]
+    );
+}
+
+#[tokio::test]
+async fn a_sub_routines_knob_needing_a_new_pick_names_its_sub_routine() {
+    // The routine's step and the sub-routine's share an id and a knob name,
+    // as ids are unique only among the steps they run with.
+    let with_id = |id: &str, mut step: serde_json::Value| {
+        step["id"] = json!(id);
+        step
+    };
+    let program = RoutineProgram::from_task(&json!({
+        "steps": [with_id("post", posting_step("Post", "kept"))],
+        "sub_routines": [{
+            "name": "remind", "title": "Remind",
+            "steps": [with_id("post", posting_step("Post", "deleted"))],
+        }],
+    }))
+    .unwrap();
+    let items = Items {
+        usable: vec!["channel:kept"],
+        ..Items::default()
+    };
+    let owner = MacroUserIdStr::parse_from_str("macro|owner@macro.com").unwrap();
+    let unusable = unusable_knobs(&items, &owner, &program).await.unwrap();
+    assert_eq!(
+        unusable,
+        [UnusableKnob {
+            sub_routine: Some("remind".into()),
+            step: Some(StepId::try_from("post".to_owned()).unwrap()),
+            knob: "bugs".into(),
+            item: Some(channel("deleted")),
+            reason: "The channel picked for \"Channel to post in\" was deleted or you no longer have access to it. Pick another in the routine's settings.".into(),
+        }]
+    );
+    // The routine's own knobs leave the field out on the wire.
+    let own = UnusableKnob {
+        sub_routine: None,
+        ..unusable[0].clone()
+    };
+    assert!(
+        serde_json::to_value(own)
+            .unwrap()
+            .get("sub_routine")
+            .is_none()
     );
 }
