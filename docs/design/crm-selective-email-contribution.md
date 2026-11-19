@@ -706,7 +706,7 @@ flag-off-as-all-mail turns a rollout control into a disclosure.
    first-page plans used the existing source indexes (0.158–2.772 ms). Full first
    pages still continue individually; these plans do not establish throughput
    for thousands of full sources. Another 2,048 authenticated API requests all
-   succeeded: company-domain admission took roughly 237–288 ms for validation
+   succeeded: company-domain admission took roughly 232–288 ms for validation
    and 246–307 ms for replacement, including its existing locks. That API fixture
    retained 299,106 mailbox contacts but omitted thread/message history, and its
    stale profile covered source/rule growth with fresh mailbox-contact statistics.
