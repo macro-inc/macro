@@ -481,11 +481,11 @@ its first row unringed, unless the first tab stop is a text field, the sheet
 focused something itself, or it names its own target; Tab then moves into the
 rows, which do show the ring.
 Its `row-press.browser.e2e.ts` presses the real touch rows of Chat (a
-conversation and a pinned favorite), Home, the Notifications inbox, Agents and
-Search on phone and tablet: each shows the one press grey on one layer, holds
-it after release and through a quick tap's click, and never shows it for a
-press that turns into a scroll (`ROW_PRESS_SCREENSHOT_DIR` saves the pressed
-screenshots).
+conversation and a pinned favorite), Home, a Soup list, the Notifications
+inbox, Agents and Search on phone and tablet: each shows the same rendered
+grey at its centre and edge, holds it after release and through a quick tap's
+click, and never shows it for a press that turns into a scroll
+(`ROW_PRESS_SCREENSHOT_DIR` saves the pressed screenshots).
 
 CRM creation has backend-free desktop/phone coverage for name-only companies,
 personal-email contacts, contacts added by name alone, explicit company selection,
