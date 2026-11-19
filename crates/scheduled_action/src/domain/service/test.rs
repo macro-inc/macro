@@ -51,6 +51,8 @@ pub(crate) struct FakeRepo {
     running: Mutex<Vec<RunningRun>>,
     /// The parent's rewritten sources each copy kept when made standalone.
     inherited: Mutex<Vec<(Uuid, Vec<String>)>>,
+    /// Reading a parent's active sub-routines fails.
+    active_children_fail: Mutex<bool>,
 }
 
 impl SubRoutines for FakeRepo {
@@ -77,6 +79,9 @@ impl SubRoutines for FakeRepo {
     }
 
     async fn active_children(&self, parents: &[Uuid]) -> Result<Vec<ScheduledAction>> {
+        if *self.active_children_fail.lock().unwrap() {
+            anyhow::bail!("sub-routines unavailable");
+        }
         let actions = self.actions.lock().unwrap();
         Ok(actions
             .iter()
