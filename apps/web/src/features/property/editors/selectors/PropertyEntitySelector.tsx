@@ -43,6 +43,7 @@ import {
   Show,
 } from 'solid-js';
 import {
+  allowsEntityType,
   type CombinedEntity,
   createEntitySearchConfig,
   createRosterSearch,
@@ -198,10 +199,10 @@ export function PropertyEntitySelector(props: EntityInputProps) {
   const quickAccessItems = quickAccess.items;
   const isQuickAccessLoading = quickAccess.isLoading;
 
-  // Fetch emails for browsing (only when THREAD type or generic ENTITY)
+  // Fetch emails for browsing whenever threads are allowed: THREAD alone,
+  // among several kinds, or any kind.
   const needsEmailSearch = () =>
-    props.config.specificEntityType === 'THREAD' ||
-    !props.config.specificEntityType;
+    allowsEntityType(props.config.specificEntityType, 'THREAD');
 
   const emailsQuery = createEmailsInfiniteQuery(() => ({ view: 'all' }), {
     disabled: () => !needsEmailSearch(),
@@ -298,8 +299,7 @@ export function PropertyEntitySelector(props: EntityInputProps) {
   const pinnedUsers = usePinnedContactUsers(
     props.selectedOptions,
     () =>
-      (!props.config.specificEntityType ||
-        props.config.specificEntityType === 'USER') &&
+      allowsEntityType(props.config.specificEntityType, 'USER') &&
       !props.config.users
   );
 
@@ -349,9 +349,14 @@ export function PropertyEntitySelector(props: EntityInputProps) {
       }
     }
 
-    // For generic entity type, also include emails
-    if (!specificEntityType) {
-      converted.push(...emails().map(threadMapper));
+    // Where threads are one of the allowed kinds, add the email browse list.
+    if (allowsEntityType(specificEntityType, 'THREAD')) {
+      const listed = new Set(converted.map((entity) => entity.id));
+      converted.push(
+        ...emails()
+          .map(threadMapper)
+          .filter((entity) => !listed.has(entity.id))
+      );
     }
 
     return converted;

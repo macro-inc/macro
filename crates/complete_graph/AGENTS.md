@@ -134,7 +134,7 @@ work budget, and omitted `matching` retains the deployed subsequence behavior.
 can differ by viewer. Keep the bounded read context in DSS HTTP and websocket
 request data and run the `contacts` schema tests after changes.
 
-Saved-view definitions live under authenticated `GraphqlUser`; mutations use the authenticated request user and a domain service from request data. Run `cargo test -p complete_graph --lib saved_view_contract` after changing the saved-view contract.
+Saved-view definitions live under authenticated `GraphqlUser`; reads include shared appearance and creation accepts optional validated appearance. Mutations use the authenticated request user and a domain service from request data. Run `cargo test -p complete_graph --lib saved_view_contract` after changing the saved-view contract.
 
 - Mail capsule negotiation lives in `mail_cache_profile`: absent/unknown capabilities receive v2; explicit `soup-mail-v5` receives current capsules. Never infer client support from the server version.
 

@@ -186,6 +186,16 @@ pub enum ConnectionRecorded {
     AgentBound,
 }
 
+/// The optional messages a runtime said, when it dialed, that it accepts.
+#[derive(Debug, Clone, Copy, Default, PartialEq, Eq)]
+pub struct RuntimeAccepts {
+    /// `ToRuntimeMessage::AgentsChanged`.
+    pub agents_changed: bool,
+    /// `ToRuntimeMessage::ApplyAgent`: without it the runtime can't run an
+    /// agent teammate.
+    pub apply_agent: bool,
+}
+
 /// Durable attach/detach bookkeeping for harness runtime connections.
 ///
 /// The registry itself is in-process liveness; this is what lets the rest of
@@ -195,12 +205,13 @@ pub enum ConnectionRecorded {
 /// Methods take `Arc<Self>` and return owned futures so the registry can fire
 /// them from its own background tasks.
 pub trait HarnessPresence: Send + Sync + 'static {
-    /// A runtime attached for this harness. Says whether recording it bound
-    /// an agent to the harness.
+    /// A runtime attached for this harness, accepting the optional messages
+    /// in `accepts`. Says whether recording it bound an agent to the harness.
     fn connected(
         self: Arc<Self>,
         harness: HarnessId,
         connection: RuntimeConnectionId,
+        accepts: RuntimeAccepts,
     ) -> Pin<Box<dyn Future<Output = ConnectionRecorded> + Send>>;
 
     /// This connection closed. Other connections of the harness are unaffected.
