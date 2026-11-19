@@ -420,6 +420,16 @@ General fallback keeps mode resolution, discovery and its page in one snapshot.
 Discovery bounds do not bound every later candidate/message/fallback cost;
 those remain activation checks.
 
+Address-filtered Team All Mail pages also use the optimized reader for
+ViewedUpdated sorting when their filter does not inspect view history. A saved
+view time overrides message recency. Sparse matches look up history by primary
+key; dense pages merge viewed and never-viewed sources and refill in the same
+snapshot. The same eligibility and competing-copy checks apply in every round.
+Any later failure returns an error, never a partial page. Window sizes bound
+emitted candidates, not all rejected source rows or timestamp ties; the existing
+request deadline still applies. Other unsupported sorts and filters retain
+General. The common `crm.team_email_read` span records sort and chosen path.
+
 The optimized reader probes positive targets first, so sparse selections do not
 require walking a record's entire mailbox history. In a selected page, each
 candidate and competing-copy check expands its non-draft participants once and

@@ -624,7 +624,14 @@ async fn general_page_keeps_the_live_sources_checked_by_discovery(
     .execute(&pool)
     .await?;
 
-    // A viewed sort naturally rejects the optimized Team reader. Exercise
+    sqlx::query!(
+        "INSERT INTO email_user_history (link_id, thread_id, updated_at) VALUES ($1, $2, NOW())",
+        S_LINK,
+        S_THREAD,
+    )
+    .execute(&pool)
+    .await?;
+    // ViewedAt naturally rejects the optimized Team reader. Exercise
     // the repository's default dispatch as well as the forced-General tests.
     let query = || PreviewCursorQuery {
         view: all_mail(),
@@ -632,7 +639,7 @@ async fn general_page_keeps_the_live_sources_checked_by_discovery(
         limit: 50,
         query: Query::new(
             None,
-            SimpleSortMethod::ViewedUpdated,
+            SimpleSortMethod::ViewedAt,
             Some(Arc::new(any_direction("peer.example"))),
         ),
         team_id: Some(S_TEAM),
@@ -854,7 +861,14 @@ async fn general_owner_filter_skips_unrelated_selected_discovery(
     let repo =
         crate::outbound::EmailPgRepo::new(pool.clone()).with_rule_discovery(discovery.clone());
     let user = macro_user_id::user_id::MacroUserIdStr::parse_from_str(S_USER)?.into_owned();
-    for sort in [SimpleSortMethod::UpdatedAt, SimpleSortMethod::ViewedUpdated] {
+    sqlx::query!(
+        "INSERT INTO email_user_history (link_id, thread_id, updated_at) VALUES ($1, $2, NOW())",
+        S_COPY_LINK,
+        S_COPY,
+    )
+    .execute(&pool)
+    .await?;
+    for sort in [SimpleSortMethod::UpdatedAt, SimpleSortMethod::ViewedAt] {
         let owner = Expr::Literal(EmailLiteral::Owner(S_COPY_LINK));
         let filter = match sort {
             // No address superset, and a history sort with an address filter:

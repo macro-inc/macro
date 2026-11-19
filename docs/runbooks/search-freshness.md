@@ -38,8 +38,9 @@ Kafka timestamp, so it includes time the event waited behind others.
   - Look for one key, such as a busy agent session or document, that fills its
     worker.
 - **Levers**:
-  - Add tasks to the service. More tasks help only while OpenSearch has CPU
-    headroom.
+  - Add tasks to the service. Autoscaling already adds them on a backlog, up
+    to its ceiling (see [Adding tasks](#adding-tasks)). More tasks help only
+    while OpenSearch has CPU headroom.
   - Pause the bulk work that competes with the live topics, then let the
     backlog drain.
 
@@ -53,10 +54,24 @@ partition with its live mail, so new mail on that partition waits behind them.
   (`email.thread_backfilled`, `email.threads_reindex_requested`) from live mail.
   A rise in import traffic usually explains the backlog.
 - Levers:
-  - Add tasks to the service while OpenSearch has headroom.
+  - Add tasks to the service while OpenSearch has headroom
+    ([Adding tasks](#adding-tasks)).
   - Slow or pause the imports behind the backlog.
 - Watch the [retention monitors](#retention). The backlog becomes data loss
   when it outlives the topic's retention.
+
+## Adding tasks
+
+The service scales on its backlog as well as CPU: each task publishes its
+oldest pending age per lane (`live`, `email`) to CloudWatch as
+`Macro/SearchProcessing` `OldestPendingSeconds`, and target tracking adds tasks
+while either lane is over its target (30 s live, 60 s email). A backlog in
+either lane also blocks scale-in. The floor and ceiling are `MIN_TASKS` and
+`maxCapacity` in
+[`infra/stacks/search-processing-service/service.ts`](../../infra/stacks/search-processing-service/service.ts);
+raise them there (a deploy of that stack) to add more. Every topic has six
+partitions, so a seventh task gets no Kafka partition and adds no Kafka
+throughput; it runs only SQS backfill and replay work.
 
 ## Retention
 

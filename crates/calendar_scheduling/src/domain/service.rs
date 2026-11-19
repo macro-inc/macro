@@ -266,15 +266,14 @@ impl<R: Repository, C: Calendars, D: Directory> Service<R, C, D> {
         if end < now || start > now + Duration::days(i64::from(event.horizon_days) + 1) {
             return Ok(vec![]);
         }
-        let records = self.repository.bookings(profile_id, start, end).await?;
-        let count = records
-            .iter()
-            .filter(|r| {
-                r.booking.event_type_id == event_id && r.booking.status != BookingStatus::Cancelled
-            })
-            .count();
-        if event.daily_limit.is_some_and(|n| count >= usize::from(n)) {
-            return Ok(vec![]);
+        if let Some(limit) = event.daily_limit {
+            let count = self
+                .repository
+                .daily_bookings(profile_id, event_id, start, end)
+                .await?;
+            if count >= i64::from(limit) {
+                return Ok(vec![]);
+            }
         }
         let busy_start = start - Duration::minutes(i64::from(event.before_minutes));
         let busy_end = end + Duration::minutes(i64::from(event.after_minutes));

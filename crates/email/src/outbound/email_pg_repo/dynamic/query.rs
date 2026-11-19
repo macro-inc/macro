@@ -1246,7 +1246,7 @@ fn extract_project_filter(ast: &Expr<EmailLiteral>) -> Vec<String> {
 #[tracing::instrument(
     name = "dynamic_email_thread_cursor",
     skip(pool, view, query, user_id, discovery),
-    fields(view = view.span_value()),
+    fields(view = view.span_value(), sort = %query.sort_method()),
     err
 )]
 pub(crate) async fn dynamic_email_thread_cursor_with_discovery(

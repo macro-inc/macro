@@ -133,6 +133,18 @@ async fn change_schedule(
             super::send_attempt::cancel_revoked_attempts(&mut tx, &[message_id], link_id)
                 .await
                 .map_err(anyhow::Error::from)?;
+            if outlook.is_some() {
+                // A definitive rejection has already rewound the Outlook checkpoint
+                // to Ready. Let the draft worker settle it without a delivery schedule.
+                sqlx::query!(
+                    "UPDATE email_mailbox_drafts SET state = 'pending', error_code = NULL, available_at = now(), updated_at = now()
+                     WHERE link_id = $1 AND message_id = $2 AND state = 'failed' AND error_code = 'send_rejected' AND NOT delete_requested",
+                    link_id, message_id,
+                )
+                .execute(&mut *tx)
+                .await
+                .map_err(anyhow::Error::from)?;
+            }
             sqlx::query!(
                 "UPDATE email_messages SET is_draft = true, updated_at = NOW() WHERE id = $1 AND link_id = $2 AND NOT is_sent",
                 message_id, link_id,
