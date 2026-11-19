@@ -421,15 +421,22 @@ again, every time:
    If step 9 turned auto-sync on, first set `macro.cluster.autoSync = false`
    in that change and let `apps` apply it (a pinned `--revision` sync is
    refused while auto-sync is on). Sync `grafana` at the revert's commit and
-   wait for it to finish rolling (`argocd app wait argocd/grafana --operation
-   --health`, then `kubectl --context observability -n observability rollout
-   status deployment/grafana`), so no Grafana pod that notifies is left before
-   the host's starts. Then sync `loki` and `tempo` at the same commit and wait
-   and check as in step 4: the buckets are `macro-observability-k8s-loki` and
-   `macro-observability-k8s-tempo` again. Then check no pod of the old revision
-   is left: `kubectl --context observability -n observability get pods
-   -l 'app.kubernetes.io/name in (loki,tempo)'` shows only pods younger than
-   the sync.
+   wait until no pod of the old ReplicaSet is left, not even terminating, so
+   no Grafana that notifies is running when the host's starts:
+   ```sh
+   argocd app wait argocd/grafana --operation --health
+   k="kubectl --context observability -n observability"
+   hash=$($k get deployment grafana -o jsonpath='{.metadata.annotations.deployment\.kubernetes\.io/revision}')
+   rs=$($k get rs -l app.kubernetes.io/name=grafana -o json |
+     jq -r --arg rev "$hash" '.items[] | select(.metadata.annotations["deployment.kubernetes.io/revision"] == $rev) | .metadata.labels["pod-template-hash"]')
+   until [ -z "$($k get pods -l "app.kubernetes.io/name=grafana,pod-template-hash!=$rs" -o name)" ]; do sleep 5; done
+   ```
+   Then sync `loki` and `tempo` at the same commit and wait and check as in
+   step 4: the buckets are `macro-observability-k8s-loki` and
+   `macro-observability-k8s-tempo` again. Then check no pod of the old
+   revision is left, not even terminating: `kubectl --context observability
+   -n observability get pods -l 'app.kubernetes.io/name in (loki,tempo)'`
+   shows only pods younger than the sync.
 2. **If step 8 ran**, revert *Host, GoAlert only* on main and deploy it with
    Deploy Observability (dry run, then for real). The new host starts all its
    services.
