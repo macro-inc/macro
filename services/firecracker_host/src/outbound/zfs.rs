@@ -5,6 +5,9 @@
 
 use std::path::PathBuf;
 
+#[cfg(test)]
+mod test;
+
 /// A `zfs`/`zpool` command failed, or the pool cannot clone blocks.
 #[derive(Debug, thiserror::Error)]
 pub enum ZfsError {
@@ -80,6 +83,7 @@ pub struct Datasets {
 impl Datasets {
     /// Check that the pool clones blocks, make the `computers` and
     /// `goldens` children, and return the parent's mountpoint.
+    #[tracing::instrument(name = "firecracker_host.zfs_open", err)]
     pub async fn open(parent: &str) -> Result<(Self, PathBuf), ZfsError> {
         let pool = parent.split('/').next().unwrap_or(parent);
         let feature = zfs_output(
@@ -125,6 +129,7 @@ impl Datasets {
     }
 
     /// Create `relative` (and its parents) unless it exists.
+    #[tracing::instrument(name = "firecracker_host.zfs_ensure", skip(self), err)]
     pub async fn ensure(
         &self,
         relative: &str,
@@ -138,19 +143,13 @@ impl Datasets {
         {
             return self.refuse_pending(&name).await;
         }
-        let mut arguments = vec!["create".to_owned(), "-p".to_owned()];
-        if let Some(recordsize) = recordsize {
-            arguments.extend(["-o".to_owned(), format!("recordsize={recordsize}")]);
-        }
-        if let Some(bytes) = refquota_bytes {
-            arguments.extend(["-o".to_owned(), format!("refquota={bytes}")]);
-        }
-        arguments.push(name);
+        let arguments = create_arguments(&name, recordsize, refquota_bytes);
         let arguments: Vec<&str> = arguments.iter().map(String::as_str).collect();
         zfs_output("zfs", &arguments).await.map(drop)
     }
 
     /// Whether `relative` exists.
+    #[tracing::instrument(name = "firecracker_host.zfs_exists", skip(self), err)]
     pub async fn exists(&self, relative: &str) -> Result<bool, ZfsError> {
         let name = self.name(relative);
         match zfs_output("zfs", &["list", "-H", "-o", "name", &name]).await {
@@ -163,6 +162,7 @@ impl Datasets {
     }
 
     /// Set `relative`'s `refquota`.
+    #[tracing::instrument(name = "firecracker_host.zfs_set_refquota", skip(self), err)]
     pub async fn set_refquota(&self, relative: &str, bytes: u64) -> Result<(), ZfsError> {
         let name = self.name(relative);
         let refquota = format!("refquota={bytes}");
@@ -172,12 +172,14 @@ impl Datasets {
     }
 
     /// Snapshot `relative` as `@<name>`.
+    #[tracing::instrument(name = "firecracker_host.zfs_snapshot", skip(self), err)]
     pub async fn snapshot(&self, relative: &str, name: &str) -> Result<(), ZfsError> {
         let snapshot = format!("{}@{name}", self.name(relative));
         zfs_output("zfs", &["snapshot", &snapshot]).await.map(drop)
     }
 
     /// The newest snapshot of `relative`, as a full `dataset@name`.
+    #[tracing::instrument(name = "firecracker_host.zfs_latest_snapshot", skip(self), err)]
     pub async fn latest_snapshot(&self, relative: &str) -> Result<Option<String>, ZfsError> {
         let name = self.name(relative);
         let listing = zfs_output(
@@ -191,6 +193,7 @@ impl Datasets {
     }
 
     /// Create `relative` as a clone of `snapshot` unless it exists.
+    #[tracing::instrument(name = "firecracker_host.zfs_clone", skip(self), err)]
     pub async fn clone_from(
         &self,
         snapshot: &str,
@@ -205,14 +208,9 @@ impl Datasets {
         {
             return self.refuse_pending(&name).await;
         }
-        let recordsize = format!("recordsize={recordsize}");
-        let refquota = format!("refquota={refquota_bytes}");
-        zfs_output(
-            "zfs",
-            &["clone", "-o", &recordsize, "-o", &refquota, snapshot, &name],
-        )
-        .await
-        .map(drop)
+        let arguments = clone_arguments(snapshot, &name, recordsize, refquota_bytes);
+        let arguments: Vec<&str> = arguments.iter().map(String::as_str).collect();
+        zfs_output("zfs", &arguments).await.map(drop)
     }
 
     /// Clone `snapshot` as `relative`, tagged `tag` in [`SPARE_PROPERTY`]
@@ -244,6 +242,7 @@ impl Datasets {
     }
 
     /// Tag spare `relative` as `tag`.
+    #[tracing::instrument(name = "firecracker_host.zfs_tag_spare", skip(self), err)]
     pub async fn tag_spare(&self, relative: &str, tag: &str) -> Result<(), ZfsError> {
         let tag = format!("{SPARE_PROPERTY}={tag}");
         zfs_output("zfs", &["set", &tag, &self.name(relative)])
@@ -253,6 +252,7 @@ impl Datasets {
 
     /// Every spare under `spares/`: its name relative to the parent and its
     /// tag.
+    #[tracing::instrument(name = "firecracker_host.zfs_spares", skip(self), fields(count = tracing::field::Empty), err)]
     pub async fn spares(&self) -> Result<Vec<(String, String)>, ZfsError> {
         let root = self.name("spares");
         let property = format!("name,{SPARE_PROPERTY}");
@@ -273,7 +273,7 @@ impl Datasets {
         )
         .await?;
         let prefix = format!("{}/", self.parent);
-        Ok(listing
+        let spares: Vec<(String, String)> = listing
             .lines()
             .filter_map(|line| line.split_once('\t'))
             .filter(|(name, _)| *name != root)
@@ -281,7 +281,9 @@ impl Datasets {
                 name.strip_prefix(&prefix)
                     .map(|relative| (relative.to_owned(), tag.to_owned()))
             })
-            .collect())
+            .collect();
+        tracing::Span::current().record("count", spares.len());
+        Ok(spares)
     }
 
     /// Make spare `spare` the dataset `relative`, with its quota and
@@ -378,6 +380,41 @@ impl Datasets {
         }
         Ok(())
     }
+}
+
+/// `zfs create` of `name` with its parents and the given properties.
+fn create_arguments(
+    name: &str,
+    recordsize: Option<&str>,
+    refquota_bytes: Option<u64>,
+) -> Vec<String> {
+    let mut arguments = vec!["create".to_owned(), "-p".to_owned()];
+    if let Some(recordsize) = recordsize {
+        arguments.extend(["-o".to_owned(), format!("recordsize={recordsize}")]);
+    }
+    if let Some(bytes) = refquota_bytes {
+        arguments.extend(["-o".to_owned(), format!("refquota={bytes}")]);
+    }
+    arguments.push(name.to_owned());
+    arguments
+}
+
+/// `zfs clone` of `snapshot` as `name` with a recordsize and a quota.
+fn clone_arguments(
+    snapshot: &str,
+    name: &str,
+    recordsize: &str,
+    refquota_bytes: u64,
+) -> Vec<String> {
+    vec![
+        "clone".to_owned(),
+        "-o".to_owned(),
+        format!("recordsize={recordsize}"),
+        "-o".to_owned(),
+        format!("refquota={refquota_bytes}"),
+        snapshot.to_owned(),
+        name.to_owned(),
+    ]
 }
 
 async fn zfs_output(program: &str, arguments: &[&str]) -> Result<String, ZfsError> {
