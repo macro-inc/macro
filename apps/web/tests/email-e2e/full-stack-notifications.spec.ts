@@ -46,10 +46,11 @@ const GMAIL_SYNC_QUEUES = [
 const NOTIFICATION_INGRESS_QUEUE = 'notification-ingress-queue';
 
 /**
- * How long the Mail badge must stay out once read: far longer than the
- * notification service takes to decide on a message it has taken.
+ * How long the test watches the read Mail badge stay out: a window for a
+ * notification row still on its way, which the service makes within
+ * moments of taking the message (it allows each one 15 seconds).
  */
-const HOLD_MS = 10_000;
+const WATCH_MS = 10_000;
 
 type QueueListing = {
   ReceiveMessageResponse?: {
@@ -334,16 +335,27 @@ for (const provider of PROVIDERS) {
       ).toBeVisible();
       await expect(badge).not.toHaveAttribute('data-unread');
       // It stays out. The service gives no sign that it has dropped a
-      // notification, so this outwaits one that was still on its way: a row
-      // for "Lunch?" made now would light the badge again.
-      const holdUntil = Date.now() + HOLD_MS;
-      while (Date.now() < holdUntil) {
-        await page.waitForTimeout(1_000);
-        expect(await badge.getAttribute('data-unread')).toBeNull();
-        expect(
-          (await notifications(mailbox)).map((each) => each.entity_id)
-        ).not.toContain(unannounced.id);
-      }
+      // notification, so the test watches for one still on its way: a row
+      // for "Lunch?" made now would light the badge again. Once seen, a
+      // light or a row fails the test even if it goes away.
+      const watchUntil = Date.now() + WATCH_MS;
+      let seen = '';
+      await expect
+        .poll(
+          async () => {
+            if ((await badge.getAttribute('data-unread')) !== null) {
+              seen ||= 'the Mail badge lit again';
+            }
+            const listed = await notifications(mailbox);
+            if (listed.some((each) => each.entity_id === unannounced.id)) {
+              seen ||= 'a notification for "Lunch?"';
+            }
+            if (seen) return seen;
+            return Date.now() >= watchUntil ? 'stayed out' : 'watching';
+          },
+          { timeout: WATCH_MS + 10_000, intervals: [1_000] }
+        )
+        .toBe('stayed out');
       expect((await mailbox.synced('Lunch?')).isRead).toBe(false);
       saw('STX-032');
     });
