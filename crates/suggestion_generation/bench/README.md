@@ -95,19 +95,21 @@ routines judgement reads the first seat's mail and the seat's suggestions
 renamed (`routinesEvidence`), so the seats of one round share the person,
 mail, catalog and key word for word; those go after the rubric, which the
 route caches, and the round's first judgement writes the cache the others then
-read. Any other seat is judged on its own mail, uncached. Rejudged that way,
-the same generations scored within the judge's own pass-to-pass difference
-(main 12.3 against 12.3 and 11.0, a single-session build 64.7 against 66.3) at
-about half the judge's cost.
+read. Any other seat is judged on its own mail, which no other seat's
+judgement shares. Rejudged that way, the same generations scored within the
+judge's own pass-to-pass difference (main 12.3 against 12.3 and 11.0, a
+single-session build 64.7 against 66.3) at about half the judge's cost.
 
 A run records its judge (`JUDGE` in `judge.ts`: the model and a version to
 bump with any change to a rubric, a schema or what a judgement reads), and
 `compare` and `noise` refuse two sides judged by different judges (`rejudge`
 each run of the older side) or a side whose judge wasn't recorded, and no side
 joins runs without one. A run also records a digest of each persona's
-workspace and mail as its generations read them, and `rejudge` refuses a run
-whose persona has changed since, or one from before the digest was kept, so
-the judge reads what the generation read: run that one again instead.
+workspace and mail as its generations read them: `compare` and `noise` refuse
+two sides that read a persona they share differently or without a digest, no
+side joins runs that do, and `rejudge` refuses a run whose persona has changed
+since, or one from before the digest was kept, so the judge reads what the
+generation read: run that one again instead.
 
 ## Running it
 
@@ -170,9 +172,9 @@ bun $B/bench.ts noise <main-a run.json> <main-b run.json>
 ```
 
 A side of `compare`, `noise` or `report` may be several runs of one section
-and set, judged by one recorded judge, joined by commas (`a1.json,a2.json`),
-read as one. The margins hold at the default size: a smaller run (fewer seats
-or reps) is only a look.
+and set, judged by one recorded judge on personas read the same way, joined by
+commas (`a1.json,a2.json`), read as one. The margins hold at the default size:
+a smaller run (fewer seats or reps) is only a look.
 
 ### Held-out personas
 

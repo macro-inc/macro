@@ -258,6 +258,9 @@ async function runSection(section: Section, values: Record<string, string | unde
 
 const readRun = (path: string) => JSON.parse(readFileSync(path, 'utf8')) as RunFile;
 
+/** The digest a run recorded for a persona, if it recorded one. */
+const digestOf = (run: RunFile, name: string) => (run.personas && Object.hasOwn(run.personas, name) ? run.personas[name] : undefined);
+
 /**
  * One side of a comparison: a run file, or several of the same section
  * joined with commas, read as one run whose reps follow on (the second
@@ -269,6 +272,16 @@ function readSide(arg: string): RunFile {
     if (new Set(runs.map((run) => run[field])).size > 1) throw new Error(`${arg} mixes ${field}s`);
   }
   if (runs.length > 1 && runs.some((run) => !run.judge)) throw new Error(`${arg} joins runs with no judge recorded, which may come from different judges`);
+  // A persona read two ways can't be one side's.
+  const personas = new Map<string, string>();
+  for (const run of runs.length > 1 ? runs : []) {
+    for (const name of new Set(run.attempts.map((attempt) => attempt.persona))) {
+      const digest = digestOf(run, name);
+      if (!digest) throw new Error(`${arg} joins a run with no digest of ${name}, so what its generations read is unknown: run it again`);
+      if ((personas.get(name) ?? digest) !== digest) throw new Error(`${arg} joins runs that read ${name}'s workspace or mail differently`);
+      personas.set(name, digest);
+    }
+  }
   let offset = 0;
   const attempts = runs.flatMap((run) => {
     const shifted = run.attempts.map((attempt) => ({ ...attempt, rep: attempt.rep + offset }));
@@ -276,7 +289,7 @@ function readSide(arg: string): RunFile {
     return shifted;
   });
   const joined = (values: string[]) => [...new Set(values)].join('+');
-  return { ...runs[0], label: joined(runs.map((run) => run.label)), commit: joined(runs.map((run) => run.commit)), attempts };
+  return { ...runs[0], label: joined(runs.map((run) => run.label)), commit: joined(runs.map((run) => run.commit)), attempts, ...(runs.length > 1 && { personas: Object.fromEntries(personas) }) };
 }
 
 /** Judge and score a run again, without generating: for a changed judge or answer key. */
@@ -315,14 +328,22 @@ async function rejudge(path: string, values: Record<string, string | undefined>)
   console.log(reportLines([run]).join('\n'));
 }
 
-/** Two sides judged by one judge, or why they can't be set side by side. */
-function sameJudge(a: RunFile, b: RunFile) {
+/** Two sides judged by one judge on the same personas, or why they can't be set side by side. */
+function comparable(a: RunFile, b: RunFile) {
   for (const side of [a, b]) {
     // Runs from before the judge was recorded may come from different judges too.
     if (!side.judge) throw new Error(`${side.label} has no judge recorded, so its marks may come from another judge: run it again`);
   }
   if (a.judge !== b.judge) {
     throw new Error(`${a.label} and ${b.label} were judged by different judges (${a.judge ?? 'unrecorded'}, ${b.judge ?? 'unrecorded'}): rejudge the older one first`);
+  }
+  // A changed mailbox or workspace would read as a change of build.
+  const names = (run: RunFile) => new Set(run.attempts.map((attempt) => attempt.persona));
+  const inB = names(b);
+  for (const name of [...names(a)].filter((name) => inB.has(name))) {
+    const [da, db] = [digestOf(a, name), digestOf(b, name)];
+    if (!da || !db) throw new Error(`${(da ? b : a).label} has no digest of ${name}, so what its generations read is unknown: run it again`);
+    if (da !== db) throw new Error(`${a.label} and ${b.label} read ${name}'s workspace or mail differently`);
   }
 }
 
@@ -365,7 +386,7 @@ async function main() {
     case 'compare': {
       const [a, b] = rest.map(readSide);
       if (a.section !== b.section) throw new Error('compare two runs of the same section');
-      sameJudge(a, b);
+      comparable(a, b);
       const margins = { ...MARGINS[a.section], ...(values.margin ? { score: Number(values.margin) } : {}) };
       const v = verdict(a.attempts, b.attempts, margins);
       const s = v.parts.score;
@@ -382,7 +403,7 @@ async function main() {
     case 'noise': {
       const [a, b] = rest.map(readSide);
       if (a.section !== b.section) throw new Error('noise takes two runs of the same section');
-      sameJudge(a, b);
+      comparable(a, b);
       const n = noiseMargins(a.attempts, b.attempts);
       console.log(`${a.section}: ${n.score.attempts.join(' and ')} attempts of the same build over ${n.score.people} personas`);
       for (const [part, c] of Object.entries(n)) {

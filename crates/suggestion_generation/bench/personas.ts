@@ -86,8 +86,8 @@ export type Persona = {
 // its original spelling where that would leave it empty or the same as
 // another address of the persona. Files are parsed first, so an escaped
 // spelling ("in\\u00e8s") reads the same. An apostrophe inside a local part
-// ("o'neil") belongs to it; one around an address quotes it.
-const ADDRESS = /([^\s<>"',;:()@]+(?:'+[^\s<>"',;:()@]+)*)@([\w.-]+\.\w+)/gu;
+// ("o'neil") belongs to it; one around an address quotes it, as brackets do.
+const ADDRESS = /([^\s<>"',;:()@[\]]+(?:'+[^\s<>"',;:()@[\]]+)*)@([\w.-]+\.\w+)/gu;
 const isAscii = (text: string) => /^[\x21-\x7e]*$/.test(text);
 
 const strings = (value: unknown): string[] => {
