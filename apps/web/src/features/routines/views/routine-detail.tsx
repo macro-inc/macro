@@ -149,6 +149,7 @@ export function RoutineDetailView(props: {
   onCopyPrompt(prompt: string): Promise<void | boolean>;
   onShare?(): void;
   onStopSharing?(): void;
+  onRetrySharing?(): void;
   stopSharingPending?: boolean;
   appearanceMenu?: JSX.Element;
   identityIcon?: JSX.Element;
@@ -342,6 +343,11 @@ export function RoutineDetailView(props: {
                         onSelect={props.onStopSharing}
                       >
                         {t('subRoutines.stopSharing')}
+                      </Dropdown.Item>
+                    </Show>
+                    <Show when={props.onRetrySharing}>
+                      <Dropdown.Item onSelect={props.onRetrySharing}>
+                        {t('subRoutines.retrySharing')}
                       </Dropdown.Item>
                     </Show>
                     <Show when={props.source.canKeepAsOwn()}>

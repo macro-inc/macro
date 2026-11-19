@@ -78,6 +78,8 @@ const mocks = vi.hoisted(() => ({
   sharing: (): boolean => false,
   subRoutineWrites: (): boolean => true,
   shared: (): boolean => false,
+  templateError: (): boolean => false,
+  refetchTemplate: vi.fn(async () => {}),
   stopSharing: vi.fn(),
   detach: vi.fn(),
 }));
@@ -115,8 +117,12 @@ vi.mock('./routine-template', () => ({
 }));
 vi.mock('./queries/templates', () => ({
   useRoutineTemplateQuery: () => ({
+    refetch: mocks.refetchTemplate,
     get isSuccess() {
-      return mocks.shared();
+      return mocks.shared() && !mocks.templateError();
+    },
+    get isError() {
+      return mocks.templateError();
     },
     get data() {
       return mocks.shared() ? { id: 'routine-id' } : null;
@@ -443,6 +449,7 @@ beforeEach(() => {
   mocks.sharing = () => false;
   mocks.subRoutineWrites = () => true;
   mocks.shared = () => false;
+  mocks.templateError = () => false;
   mocks.history = () => [
     {
       id: 'run-id',
@@ -1484,6 +1491,36 @@ describe('sub-routines defined once', () => {
     expect(mocks.stopSharing).toHaveBeenCalledExactlyOnceWith({
       scheduleId: 'routine-id',
     });
+  });
+
+  it('can revoke a cached template when its background refresh fails', () => {
+    setSchedules([{ ...parent, id: 'routine-id' }]);
+    mocks.sharing = () => true;
+    mocks.shared = () => true;
+    mocks.templateError = () => true;
+    render(() => <Routine />);
+    openActions();
+    fireEvent.keyDown(screen.getByRole('menuitem', { name: 'Stop sharing' }), {
+      key: 'Enter',
+    });
+    expect(mocks.stopSharing).toHaveBeenCalledExactlyOnceWith({
+      scheduleId: 'routine-id',
+    });
+  });
+
+  it('retries sharing status when the initial template read fails', () => {
+    setSchedules([{ ...parent, id: 'routine-id' }]);
+    mocks.sharing = () => true;
+    mocks.templateError = () => true;
+    render(() => <Routine />);
+    openActions();
+    fireEvent.keyDown(
+      screen.getByRole('menuitem', { name: 'Retry sharing status' }),
+      {
+        key: 'Enter',
+      }
+    );
+    expect(mocks.refetchTemplate).toHaveBeenCalledOnce();
   });
 
   it('keeps metadata writable while rollout blocks task edits and Duplicate', async () => {

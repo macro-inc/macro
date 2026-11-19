@@ -25,6 +25,7 @@ export default {
   stopSharing: 'Stop sharing',
   stoppedSharing: 'Stopped sharing',
   stopSharingFailed: 'Could not stop sharing',
+  retrySharing: 'Retry sharing status',
   discardEdits: 'Discard unsaved edits',
   approvalResumeFailed: 'Code saved, but the routine could not resume',
   approvalRefreshFailed: 'Code saved, but the review status could not refresh',

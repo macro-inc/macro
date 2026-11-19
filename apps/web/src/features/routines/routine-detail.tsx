@@ -165,6 +165,10 @@ export function RoutineDetail(props: {
     () => props.scheduleId,
     needsRevocation
   );
+  const hasPublishedSnapshot = () =>
+    needsRevocation() &&
+    (published.isSuccess || published.isError) &&
+    Boolean(published.data);
   const unshare = useUnshareTemplateMutation({
     onSuccess: () => toast.success(t('subRoutines.stoppedSharing')),
     onError: () => toast.failure(t('subRoutines.stopSharingFailed')),
@@ -227,8 +231,13 @@ export function RoutineDetail(props: {
           sharing().enabled && source.routine()?.shareable ? share : undefined
         }
         onStopSharing={
-          needsRevocation() && published.isSuccess && published.data
+          hasPublishedSnapshot()
             ? () => unshare.mutate({ scheduleId: props.scheduleId })
+            : undefined
+        }
+        onRetrySharing={
+          needsRevocation() && published.isError && !hasPublishedSnapshot()
+            ? () => fireAndForget(published.refetch(), 'routines')
             : undefined
         }
         stopSharingPending={unshare.isPending}
