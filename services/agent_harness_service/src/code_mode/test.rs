@@ -842,7 +842,6 @@ async fn the_permission_gate_refuses_holds_or_limits_a_run(pool: sqlx::PgPool) {
     // Flag off, or JavaScript: exactly today's run, never analyzed.
     for (rollout, language) in [
         (false, ProgramLanguage::Ocaml),
-        (false, ProgramLanguage::JsTools),
         (true, ProgramLanguage::Javascript),
     ] {
         let parts = gate(analysis(), &[], ToolApprovalStatus::Approved, rollout);
@@ -853,6 +852,21 @@ async fn the_permission_gate_refuses_holds_or_limits_a_run(pool: sqlx::PgPool) {
         assert_eq!(*analyzer.calls.lock().unwrap(), 0);
     }
     let before = correlations().await;
+
+    // A JS tools program the gate did not check (its rollout read off, as
+    // when the flags can't be read) never runs ungated: refused before
+    // anyone is asked, a correlation or a credential.
+    let parts = gate(analysis(), &[], ToolApprovalStatus::Approved, false);
+    let (issued, asked) = issue(parts, ProgramLanguage::JsTools).await;
+    assert!(matches!(
+        issued,
+        Err(CodeModeError::NotRun(agent_code_mode::domain::NotRun {
+            permission: None,
+            ..
+        }))
+    ));
+    assert_eq!(asked, 0);
+    assert_eq!(correlations().await, before);
 
     // Never: refused before the owner hold, a correlation or a credential.
     let parts = gate(
@@ -997,6 +1011,11 @@ async fn the_gate_follows_the_permissions_flag_and_for_ocaml_its_flag() {
     // Code mode's OCaml permissions text stays OCaml's.
     assert!(!OwnerRollout::enabled(&rollout, &permissions).await);
     assert!(OwnerRollout::enabled(&rollout, &both).await);
+    // JavaScript tools programs are offered on the permissions flag alone.
+    let js_tools = JsToolsRollout(rollout);
+    assert!(OwnerRollout::enabled(&js_tools, &permissions).await);
+    assert!(OwnerRollout::enabled(&js_tools, &both).await);
+    assert!(!OwnerRollout::enabled(&js_tools, &ocaml_only).await);
     assert!(
         !LanguageRollout::enabled(
             &PermissionsFlag::<FakeFeatureFlags>(None),

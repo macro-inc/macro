@@ -2055,11 +2055,13 @@ export type ExecutionRecord = {
     result?: unknown;
     /**
      * For an OCaml program, the fingerprint of the OCaml SDK bundle it ran
-     * against (SDK version plus a hash of its interfaces).
+     * against (SDK version plus a hash of its interfaces); for a JavaScript
+     * tools program, of the interpreter and catalog it ran with.
      */
     sdkFingerprint?: string | null;
     /**
-     * The submitted program: a JavaScript module or an OCaml `main.ml`.
+     * The submitted program: a JavaScript module, an OCaml `main.ml` or a
+     * JavaScript tools script.
      */
     source: string;
     /**
@@ -2614,8 +2616,9 @@ export type PreviewAgentSessionsResponse = {
 
 /**
  * The language of a session program. OCaml is offered only to sessions
- * whose owner has the OCaml rollout ([`OwnerRollout`](super::OwnerRollout));
- * JavaScript tools programs are not offered yet.
+ * whose owner has the OCaml rollout ([`OwnerRollout`](super::OwnerRollout)),
+ * JavaScript tools programs only to sessions whose owner has agent
+ * permissions, which gate them.
  */
 export type ProgramLanguage = 'javascript' | 'ocaml' | 'js_tools';
 

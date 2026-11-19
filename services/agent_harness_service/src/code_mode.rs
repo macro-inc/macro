@@ -129,6 +129,18 @@ impl ExecutionCredentials for RunCredentials {
             Some(gate) => gate.check(identity, source, language).await?,
             None => None,
         };
+        // Code mode offers JS tools programs only to owners the gate applies
+        // to, so one it did not check (its rollout read off this time, say
+        // because the flags could not be read) never runs ungated.
+        if language == ProgramLanguage::JsTools && checked.is_none() {
+            tracing::warn!("a JS tools program was not checked by the permission gate");
+            return Err(CodeModeError::NotRun(agent_code_mode::domain::NotRun {
+                message: "This program did not run: its permissions could not be checked. \
+                          Nothing was sent; try again."
+                    .to_owned(),
+                permission: None,
+            }));
+        }
         let actor = approve_run(self.gate.as_ref(), identity, source, language, &cancel).await?;
         if let (Some(gate), Some(checked)) = (&self.permissions, &checked) {
             gate.hold(checked, identity, &actor, source, &cancel)
@@ -344,6 +356,19 @@ impl<Flags: feature_flags::FeatureFlags + 'static> agent_code_mode::domain::Owne
 {
     async fn enabled(&self, owner: &MacroUserIdStr<'static>) -> bool {
         permissions::LanguageRollout::enabled(self, owner, ProgramLanguage::Ocaml).await
+    }
+}
+
+/// Whether an owner may run JavaScript tools programs: [`PERMISSIONS_FLAG`]
+/// alone, the gate's rollout for them, since permissions gate every one.
+pub struct JsToolsRollout<Flags>(pub PermissionsFlag<Flags>);
+
+#[async_trait]
+impl<Flags: feature_flags::FeatureFlags + 'static> agent_code_mode::domain::OwnerRollout
+    for JsToolsRollout<Flags>
+{
+    async fn enabled(&self, owner: &MacroUserIdStr<'static>) -> bool {
+        permissions::LanguageRollout::enabled(&self.0, owner, ProgramLanguage::JsTools).await
     }
 }
 

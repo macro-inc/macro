@@ -1,8 +1,8 @@
 # Code execution in the agent harness
 
 `ExecuteCode` accepts a JavaScript ES module exporting `main`. This crate
-also runs OCaml programs and JS tools programs (below); `ExecuteCode` does
-not offer JS tools programs yet. The agent harness
+also runs OCaml programs and JS tools programs (below); `ExecuteCode` offers
+JS tools programs to sessions whose owner has agent permissions. The agent harness
 starts a fresh Deno 2.9.6 child for each execution; there is no separate runner
 service. Macro SDK and Handlebars imports are bundled ahead of time, with no
 per-run package download or TypeScript compilation.
