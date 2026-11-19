@@ -156,6 +156,15 @@ interface RoutineCommonOptions {
    */
   runVisibility?: RunVisibility;
   /**
+   * An icon and color for what the routine does, picked by the agent writing
+   * it: `{ icon: { kind: 'macro', name }, color }`, with `name` from Macro's
+   * icon catalog (a check or save naming another lists the catalog). Saved
+   * on create, and on an update made for the routine's owner, unless the
+   * owner chose the routine's look with {@link Routine.setAppearance}, which
+   * it never replaces; omit it to keep the stored look.
+   */
+  appearance?: EntityAppearance;
+  /**
    * Apps outside Macro (Linear, GitHub, Notion…) the routine's Ask AI step
    * uses. The owner must have each connected: saving and every run check.
    * Only an Ask AI step reaches them, so a routine without one requires
@@ -637,6 +646,7 @@ export function routineBody(options: RoutineOptions) {
     name: options.name,
     enabled: options.enabled,
     run_visibility: options.runVisibility,
+    appearance: options.appearance,
     trigger: triggerBody(options.trigger),
     task: taskBody(options),
   };

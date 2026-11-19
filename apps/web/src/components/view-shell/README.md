@@ -32,6 +32,43 @@ align trailing controls by their outer edges or offset an individual icon.
 - Use `--sidebar-action-inset` for a trailing control beside a separate selectable
   row, as in Email's inbox list. Do not repeat numeric offsets in the workspace.
 
+## Section order
+
+Give `ViewSidebar.Root` a stable `reorderId` for its view. Give each top-level
+`CollapsibleSection.Root` a stable `sectionId` and a `sectionLabel`, and compose
+its trigger and actions inside `CollapsibleSection.Header`. Non-collapsible
+sections use `ViewSidebar.Section` (`id`, `label`) and `ViewSidebar.SectionHeader`.
+For an unnamed navigation group, use `headerless`: `label` supplies only its
+accessible region name. It has no drag handle, drag source, or keyboard move
+control, but remains a drop target in the same order as headed sections. Move a
+headed section before or after the unnamed group to change their relative order;
+the unnamed group's row layout and navigation remain unchanged.
+Mark fixed account/workspace selectors or other controls inside Content with
+`pinned`; pinned sections have no drag handle or drop target, retain their DOM
+slot, and their keys are ignored in stored orders. Header, Primary, and Footer
+slots remain outside the reorder region.
+Keep these sections as direct resolved children of `ViewSidebar.Content`;
+fragments, conditional children, and components returning a section are supported.
+Nested disclosure groups remain contents of their owning section, not separate drag targets.
+
+The shared app drag provider supplies isolated scopes for each sidebar instance.
+Drag a section header with the mouse, or Tab to its Reorder control and use
+Up/Down. Header action buttons keep their normal behavior. Touch retains normal
+scrolling and collapse behavior without section dragging. The shared handle,
+drop indicator, reorder math, and layout animation also serve Chat; Chat retains
+its own preference storage.
+
+Order is local to the account and view (`sidebar-section-order:<view>:<account>`).
+Open splits and tabs of the same account/view synchronize through storage
+notifications; account/view changes retire their previous listeners.
+Storage is schema-validated through `makePersistedState`; unavailable storage
+leaves in-memory ordering usable. Unknown keys are ignored and new sections stay
+in their default slots. Temporarily hidden sections retain their saved positions.
+Pinned controls and footer controls do not move. Sections move
+as existing DOM nodes, not CSS `order`, preserving input state and reading order.
+
+## Navigation layout
+
 Desktop multi-split close controls live in the outer frame corner. The inherited split controller sets `closeButtonPlacement` to `frame` to suppress duplicate header/sidebar close buttons; touch layouts retain header placement.
 
 Automatic navigation closure after the first measurable layout keeps the docked

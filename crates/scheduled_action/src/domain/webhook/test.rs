@@ -77,7 +77,7 @@ impl ScheduledActionRepo for Repo {
     async fn set_appearance(
         &self,
         _: crate::domain::appearance::ChangeAppearance,
-    ) -> Result<Option<model_entity::EntityAppearance>> {
+    ) -> Result<crate::domain::appearance::AppearanceSet> {
         unimplemented!()
     }
     async fn create_action(&self, _: ScheduledAction) -> Result<ScheduledAction> {

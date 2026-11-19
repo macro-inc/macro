@@ -132,23 +132,18 @@ impl CompaniesRepositoryImpl {
         // queued job's participants, dates, direction, or former consent.
         // The mailbox scan is the slow step, so it runs before the domain
         // lock: populations of other addresses on the domain don't wait on it.
-        let Some(interaction) = Self::eligible_interactions_with_authority(
-            &mut tx,
-            *team_id,
-            *link_id,
-            &normalized_email,
-            authority,
-        )
-        .await?
+        let Some(interaction) = self
+            .eligible_interactions_with_authority(
+                &mut tx,
+                *team_id,
+                *link_id,
+                &normalized_email,
+                authority,
+            )
+            .await?
         else {
             return Ok(());
         };
-
-        #[cfg(test)]
-        if let Some(gate) = &self.after_eligible_scan {
-            gate.entered.notify_one();
-            gate.resume.notified().await;
-        }
 
         // Serialize on (team, lower(domain)): the unique constraint on
         // crm_domains catches the race only after an orphan crm_companies
@@ -444,14 +439,15 @@ impl CompaniesRepositoryImpl {
         if !Self::team_exists(&mut tx, team_id).await? {
             return Ok(());
         }
-        let Some(interaction) = Self::eligible_interactions_with_authority(
-            &mut tx,
-            *team_id,
-            *link_id,
-            normalized_email,
-            authority,
-        )
-        .await?
+        let Some(interaction) = self
+            .eligible_interactions_with_authority(
+                &mut tx,
+                *team_id,
+                *link_id,
+                normalized_email,
+                authority,
+            )
+            .await?
         else {
             return Ok(());
         };

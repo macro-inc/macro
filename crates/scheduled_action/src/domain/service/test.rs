@@ -44,6 +44,11 @@ const FOREIGN_USER: &str = "macro|other@macro.com";
 pub(crate) struct FakeRepo {
     actions: Mutex<Vec<ScheduledAction>>,
     activities: Mutex<Vec<activity::Activity>>,
+    /// Routines whose owner chose their appearance.
+    owner_chosen: Mutex<Vec<Uuid>>,
+    /// An owner's choice that commits while the next agent's pick waits
+    /// for the routine's row.
+    owner_choice_before_the_pick: Mutex<Option<model_entity::EntityAppearance>>,
     records: Mutex<Vec<ActionExecutionRecord>>,
     /// Runs in progress, as claims would show them.
     running: Mutex<Vec<RunningRun>>,
@@ -146,20 +151,37 @@ impl ScheduledActionRepo for FakeRepo {
     async fn set_appearance(
         &self,
         change: crate::domain::appearance::ChangeAppearance,
-    ) -> Result<Option<model_entity::EntityAppearance>> {
+    ) -> Result<AppearanceSet> {
         let mut actions = self.actions.lock().unwrap();
         let action = actions
             .iter_mut()
             .find(|action| action.id == Some(change.id))
             .ok_or_else(|| anyhow::anyhow!("scheduled action not found"))?;
+        let mut owner_chosen = self.owner_chosen.lock().unwrap();
+        if change.chooser == AppearanceChooser::Agent
+            && let Some(look) = self.owner_choice_before_the_pick.lock().unwrap().take()
+        {
+            action.appearance = look;
+            owner_chosen.push(change.id);
+        }
+        let chosen = owner_chosen.contains(&change.id);
+        if chosen && change.chooser == AppearanceChooser::Agent {
+            return Ok(AppearanceSet::Kept {
+                current: action.appearance.clone(),
+            });
+        }
+        if !chosen && change.chooser == AppearanceChooser::Owner {
+            owner_chosen.push(change.id);
+        }
         let Some(activity) = change.activity(&action.appearance) else {
-            return Ok(None);
+            return Ok(AppearanceSet::Kept {
+                current: action.appearance.clone(),
+            });
         };
         self.activities.lock().unwrap().push(activity);
-        Ok(Some(std::mem::replace(
-            &mut action.appearance,
-            change.appearance,
-        )))
+        Ok(AppearanceSet::Changed {
+            previous: std::mem::replace(&mut action.appearance, change.appearance),
+        })
     }
 
     async fn create_action(&self, mut action: ScheduledAction) -> Result<ScheduledAction> {
@@ -466,6 +488,7 @@ pub(crate) fn configuration(events: bool) -> ActionConfiguration {
         enabled: true,
         run_visibility: RunVisibility::Unlisted,
         description: String::new(),
+        appearance: None,
     }
 }
 
@@ -479,6 +502,7 @@ fn update(config: ActionConfiguration) -> ActionConfigurationUpdate {
         enabled: Some(config.enabled),
         run_visibility: Some(config.run_visibility),
         description: Some(config.description),
+        appearance: config.appearance,
     }
 }
 

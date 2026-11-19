@@ -22,6 +22,12 @@ export type AcceptSuggestionRequest = {
  */
 export type ActionConfiguration = {
     /**
+     * An icon and colour an agent picked for what the routine does. Saved
+     * unless the owner chose the routine's appearance, which only the
+     * appearance endpoint does; absent leaves the stored one.
+     */
+    appearance?: EntityAppearance;
+    /**
      * What the routine is for, in the owner's words; empty when unset.
      */
     description?: string;
@@ -42,6 +48,11 @@ export type ActionConfiguration = {
  * `description` keeps them too, so clients that predate them do not reset them.
  */
 export type ActionConfigurationUpdate = {
+    /**
+     * An icon and colour an agent picked, as on create. Saved only when the
+     * update is made for the routine's owner; skipped for anyone else.
+     */
+    appearance?: EntityAppearance;
     /**
      * An empty string clears it.
      */
@@ -621,6 +632,11 @@ export type DraftUpdateState = 'drafting' | 'ready' | 'failed' | 'removed';
  * A drafted routine.
  */
 export type DraftedRoutine = {
+    /**
+     * The icon and colour AI picked for it from Macro's icons; absent when
+     * it picked none, or one Macro doesn't have.
+     */
+    appearance?: EntityAppearance;
     /**
      * Apps outside Macro its Ask AI step uses that its owner connected,
      * which the routine requires (its task's `mcp_servers`).
