@@ -193,7 +193,10 @@ async fn a_firing_that_cannot_be_consumed_does_not_run_and_gives_its_claim_back(
         },
         Runner::default(),
     );
+    let (spans, _guard) = Spans::capture();
     assert!(executor.execute_action(action()).await.is_err());
+    drain(&executor).await;
+    assert_eq!(spans.outcomes("routine.execute"), ["failed"]);
     assert_eq!(executor.runner.calls.load(Ordering::SeqCst), 0);
     assert_eq!(executor.repo.releases.load(Ordering::SeqCst), 1);
     assert!(executor.repo.claim.lock().unwrap().is_none());
@@ -627,8 +630,10 @@ async fn claim_is_fenced_to_the_snapshot_revision() {
 async fn manual_claim_failure_never_prepares_or_runs() {
     let executor = executor(Repo::default(), Runner::default());
     *executor.repo.claim.lock().unwrap() = Some(ClaimToken::generate());
+    let (spans, _guard) = Spans::capture();
     assert!(executor.execute_action(action()).await.is_err());
     drain(&executor).await;
+    assert_eq!(spans.outcomes("routine.execute"), ["failed"]);
     assert_eq!(executor.runner.preparations.load(Ordering::SeqCst), 0);
     assert_eq!(executor.repo.releases.load(Ordering::SeqCst), 0);
 }
@@ -672,8 +677,10 @@ async fn failed_execution_and_failed_bookkeeping_never_rerun_agent() {
         },
     );
     executor.runner.finish.cancel();
+    let (spans, _guard) = Spans::capture();
     executor.execute_action(action()).await.unwrap();
     drain(&executor).await;
+    assert_eq!(spans.outcomes("routine.execute"), ["failed"]);
     assert_eq!(executor.runner.calls.load(Ordering::SeqCst), 1);
     assert_eq!(executor.repo.releases.load(Ordering::SeqCst), 1);
     assert!(!executor.repo.records.lock().unwrap()[0].is_success);
@@ -1062,8 +1069,10 @@ async fn due_and_manual_runs_are_reported_once_with_their_trigger() {
     ] {
         let (executor, observer) = observed(executor(Repo::default(), Runner::default()));
         executor.runner.finish.cancel();
+        let (spans, _guard) = Spans::capture();
         executor.execute_action(action.clone()).await.unwrap();
         drain(&executor).await;
+        assert_eq!(spans.outcomes("routine.execute"), ["succeeded"]);
         assert_eq!(
             ends(&observer),
             [(trigger, RunTarget::Model, RunEnd::Succeeded)]
@@ -1266,5 +1275,6 @@ async fn a_copy_stopped_while_reading_its_parent_records_the_read_interrupted() 
         spans.outcomes("routine.copy.read_definition"),
         ["interrupted"]
     );
+    assert_eq!(spans.outcomes("routine.execute"), ["interrupted"]);
     assert_eq!(executor.runner.calls.load(Ordering::SeqCst), 0);
 }

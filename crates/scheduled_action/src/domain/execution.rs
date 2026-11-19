@@ -443,7 +443,9 @@ where
             routine.parent_id = link.map(|link| tracing::field::display(link.parent_id)),
             routine.created_by_run_id =
                 link.map(|link| tracing::field::display(link.created_by_run_id)),
+            outcome = tracing::field::Empty,
         );
+        let outcome = OutcomeOnce::new(span.clone(), "interrupted");
         let run = async move {
             let claim = bounded(
                 deadline,
@@ -456,6 +458,11 @@ where
             let token = match claim {
                 Ok(token) => token,
                 Err(error) => {
+                    outcome.record(if error.is::<ExecutionCancelled>() {
+                        "interrupted"
+                    } else {
+                        "failed"
+                    });
                     let _ = ready_tx.send(Err(error));
                     return;
                 }
@@ -482,6 +489,7 @@ where
                     ) {
                         tracing::error!(action_id = %id, "failed to release action claim");
                     }
+                    outcome.record("failed");
                     let _ = ready_tx.send(Err(anyhow::anyhow!(
                         "Couldn't start this scheduled run; it will be retried."
                     )));
@@ -560,6 +568,11 @@ where
                 executor.stopped(&action, &handle, result.is_ok()),
             )
             .await;
+            outcome.record(match &result {
+                Ok(()) => "succeeded",
+                Err(error) if error.is::<ExecutionCancelled>() => "interrupted",
+                Err(_) => "failed",
+            });
             if let Err(error) = result {
                 // The error can quote step content; it is kept in the
                 // owner's run history, not in logs.
