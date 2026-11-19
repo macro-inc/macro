@@ -1,6 +1,5 @@
 export default {
-  inviteKind: 'What to invite',
-  people: 'People',
+  inviteTitle: 'Invite an agent',
   agent: 'Agent',
   intro:
     'An agent is a member of your team with its own Macro computer. You talk to it in a DM or a channel, like anyone else.',

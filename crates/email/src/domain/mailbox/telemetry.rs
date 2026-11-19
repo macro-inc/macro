@@ -22,8 +22,10 @@ pub fn defer_reason(error: &MailboxError) -> &'static str {
         // Graph refuses one item (`ErrorAccessDenied`) while the grant still
         // works; a revoked grant answers 401 and is `auth_required`.
         MailboxError::Provider(EmailApiError::Forbidden) => "forbidden",
+        MailboxError::Provider(EmailApiError::NotFound) => "not_found",
         MailboxError::Provider(EmailApiError::Permanent { .. }) => "permanent",
         MailboxError::Persistence | MailboxError::Database(_) => "persistence",
+        MailboxError::Unstorable(_) => "unstorable",
         MailboxError::Effect(_) => "effect",
         MailboxError::LocationUnsettled => "location_unsettled",
         MailboxError::CalendarPartsUnavailable => "calendar_parts",

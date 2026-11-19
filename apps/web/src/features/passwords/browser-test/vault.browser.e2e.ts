@@ -826,3 +826,70 @@ test('agent list failures remain in the item pane and retry replaces obsolete ac
     section.getByText('This request changed. Showing the latest.')
   ).toBeVisible();
 });
+
+for (const viewport of [VIEWPORTS[0], VIEWPORTS[1]]) {
+  test.describe(`${viewport.name} favorites`, () => {
+    test.setTimeout(60_000);
+    test.use({
+      hasTouch: viewport.name !== 'desktop',
+      isMobile: viewport.name !== 'desktop',
+    });
+    test(`${viewport.name}: a viewer can favorite and unfavorite without editing`, async ({
+      page,
+    }) => {
+      await page.setViewportSize(viewport);
+      const errors: string[] = [];
+      page.on('pageerror', (error) => errors.push(error.message));
+      await page.goto('/src/features/passwords/browser-test/vault.html');
+      await page
+        .getByRole('button', { name: /View-only login/ })
+        .first()
+        .click();
+      await expect(
+        page.getByRole('heading', { name: 'View-only login' })
+      ).toBeVisible();
+      await expect(
+        page.getByRole('button', { name: 'Edit', exact: true })
+      ).toHaveCount(0);
+      await page.getByRole('button', { name: 'Add to favorites' }).click();
+      await expect(
+        page.getByRole('button', { name: 'Remove from favorites' })
+      ).toBeEnabled();
+      await page.screenshot({ path: test.info().outputPath('starred.png') });
+      await page.getByRole('button', { name: 'Remove from favorites' }).click();
+      await expect(
+        page.getByRole('button', { name: 'Add to favorites' })
+      ).toBeEnabled();
+      expect(errors).toEqual([]);
+    });
+    test(`${viewport.name}: favorites are chosen at creation and changed with the detail star`, async ({
+      page,
+    }) => {
+      await page.setViewportSize(viewport);
+      await page.goto('/src/features/passwords/browser-test/vault.html');
+      await startNew(page, viewport, 'Login');
+      await page
+        .getByLabel('Name', { exact: true })
+        .fill('Favorite creation fixture');
+      await page.getByText('Favorite', { exact: true }).click();
+      await press(page, viewport, 'Save');
+      await expect(
+        page.getByRole('heading', { name: 'Favorite creation fixture' })
+      ).toBeVisible();
+      await expect(
+        page.getByRole('button', { name: 'Remove from favorites' })
+      ).toBeEnabled();
+      await press(page, viewport, 'Edit');
+      await expect(page.getByLabel('Name', { exact: true })).toHaveValue(
+        'Favorite creation fixture'
+      );
+      await expect(
+        page.getByRole('checkbox', { name: 'Favorite', exact: true })
+      ).toHaveCount(0);
+      await press(page, viewport, 'Discard');
+      await expect(
+        page.getByRole('button', { name: 'Remove from favorites' })
+      ).toBeEnabled();
+    });
+  });
+}

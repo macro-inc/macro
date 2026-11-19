@@ -170,7 +170,15 @@ attempt, so a busy database never fails a computer or abandons a removal.
   omits sizes no host can run awake (waiting would never make them
   available) and reports `soldOut` for the rest; a purchase no host can fit
   returns `ComputerError::SoldOut(size)` (409, "No capacity for <size> right
-  now") before billing. `allocation` reads the same holdings per host; see
+  now") before billing. `GET /team/computers/purchase-offers` lists the same
+  sizes for the buy dialog (admins only: it names the card), each with
+  `dueToday` (the prorated rest of the period a purchase invoices, less the
+  customer's credit balance; 0 when comped), plus `renewsAt` and the `card`
+  charged (brand and last four; `null` when comped or paid another way). It
+  comes from `Billing::purchase_terms`: one expanded subscription read and one
+  `invoices/upcoming/lines` preview for every size, never on the purchase
+  path. `/offers` stays unchanged for clients that predate it. `allocation`
+  reads the same holdings per host; see
   Observability for its gauges.
 - **Overcommit** (`domain/overcommit.rs`, pure): each host row holds its
   settings (`cpu_allocation_percent`, `ram_allocation_percent`,
@@ -586,6 +594,14 @@ One computer's first setup is one trace, rooted at the purchase (Buy computer). 
   units have a total; hosts record no disk capacity. Read by
   `infra/stacks/monitoring/monitors/computer-capacity.ts`; see the
   [capacity runbook](../runbooks/computer-capacity.md).
+- Usage shown to teams (Settings → Machines, CPU and memory over the last
+  day): the overcommit pass keeps one reading per running computer per
+  minute from the host's cgroup numbers, span `computer.usage.record`
+  (`samples`, `kept`) under `computer.overcommit.host`; `computer.usage.prune`
+  (`deleted`) every ten minutes; `computer.usage.read` (`computers`,
+  `samples`) under `GET /team/computers/usage`. No guest agent is involved,
+  and metrics carry no computer ids. Operators read per-computer series in
+  Grafana instead (see [Firecracker computers](firecracker-computers.md#hosts)).
 - Overcommit, every overcommit pass, by `host_id` and `host`:
   `computer.host.memory.{used,low_watermark,high_watermark,hard_ceiling}_ratio`
   (shares of host memory, so monitors compare usage with each host's own
