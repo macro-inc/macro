@@ -96,7 +96,8 @@ export type Effects = {
   /**
    * The copies of its sub-routines the routine's runs since it fired
    * scheduled (absent in results saved before they were read). The
-   * messages, tasks and notifications above are read after every copy ran.
+   * messages, tasks and notifications above include copy runs only when
+   * the case checks their behavior.
    */
   copies?: CopyMade[];
   /** When the eval fired the routine (absent in results saved before it was kept). */
@@ -127,6 +128,8 @@ export type CopyMade = {
 export type RunCheck = {
   says: string;
   fire: (draft: DraftResult) => Fire;
+  /** Execute definition copies because this case checks what they do. */
+  runCopies?: boolean;
   holds: (effects: Effects, context: Context) => boolean;
 };
 
@@ -909,6 +912,7 @@ export const CASES: Case[] = [
     run: {
       says: "a run schedules a one-time copy of the reminder, given the task's id, keyed by it and ending in an Ask AI step, at 9:00:00 the day before each open task of the owner's due in the coming week, and each copy, run at once, names its task in its Ask AI reply",
       fire: execute,
+      runCopies: true,
       holds: remindsDayBefore,
     },
   },
@@ -930,6 +934,7 @@ export const CASES: Case[] = [
     run: {
       says: "moving the homepage hero task to In review schedules one one-time copy of the check, given the task's id, keyed by it and ending in an Ask AI step, 72 hours later (within an hour), and that copy, run at once, names the task in its Ask AI reply",
       fire: () => ({ type: 'task_status', task: 'task:homepage-hero', status: 'in_review', restore: 'in_progress' }),
+      runCopies: true,
       holds: scheduled(
         (task) => task.key === 'homepage-hero',
         (at, _task, _context, effects) => aboutThreeDaysAfter(at.instant, effects.firedAt),

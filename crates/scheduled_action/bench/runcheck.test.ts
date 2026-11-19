@@ -32,6 +32,7 @@ const item: Case = {
   },
 };
 const copy = (id: string) => ({ ...parent, id, task: { sub_routine: 'remind' } });
+const copyCase = { ...item, run: { ...item.run!, runCopies: true } };
 
 function fixture(children: SavedRoutine[], failReply = false) {
   const db = (async (parts: TemplateStringsArray, ...args: unknown[]) => {
@@ -72,9 +73,27 @@ afterEach(() => mock.restore());
 
 test('a copy reply read failure leaves the other copy results available', async () => {
   const check = fixture([copy('failed-copy'), copy('other-copy')], true);
-  const result = await check.run();
+  const result = await check.run(copyCase);
   expect(result?.effects.copies?.map((copy) => copy.runs?.map((run) => run.reply))).toEqual([
     [],
     ['Reminder'],
   ]);
+});
+
+test('only cases that check copy behavior execute definition copies', async () => {
+  const definitionCopy = copy('definition-copy');
+  const ordinaryChild = { ...parent, id: 'ordinary-child', task: { steps: [] } };
+  const { fetch, run } = fixture([definitionCopy, ordinaryChild]);
+  const executions = () =>
+    fetch.mock.calls.flatMap(([url, init]) =>
+      init?.method === 'POST' ? [new URL(String(url)).pathname.split('/').at(-2)] : [],
+    );
+  const parentOnly = await run();
+  expect(executions()).toEqual(['parent']);
+  expect(parentOnly?.effects.copies?.map((copy) => copy.id)).toEqual(['definition-copy', 'ordinary-child']);
+
+  fetch.mockClear();
+  const withCopies = await run(copyCase);
+  expect(executions()).toEqual(['parent', 'definition-copy']);
+  expect(withCopies?.effects.copies?.map((copy) => copy.runs?.length)).toEqual([1, undefined]);
 });

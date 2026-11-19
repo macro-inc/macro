@@ -346,14 +346,14 @@ export async function runCheck(
     ms = performance.now() - started;
     if (runs.length) await Bun.sleep(SETTLE_MS);
     runs = runs.length ? await withReplies(db, await runsSince(at, owner, routine.id, t0)) : runs;
-    // Every copy runs at once, as it will when its time comes; what they
-    // write counts among the run's effects, read after them.
     const copies = await copiesOf(at, owner, routine, t0);
-    await Promise.all(
-      copies.map(async (copy) => {
-        if (copy.id) copy.runs = await runCopy(at, owner, db, copy.id);
-      }),
-    );
+    if (item.run.runCopies) {
+      await Promise.all(
+        copies.map(async (copy) => {
+          if (copy.subRoutine !== null && copy.id) copy.runs = await runCopy(at, owner, db, copy.id);
+        }),
+      );
+    }
     effects = await read(db, context, t0, firedMessage, (id) => sdk(at, owner).tasks.byId(id).content());
     effects.runs = runs;
     effects.copies = copies;
