@@ -176,7 +176,9 @@ nix develop -c just apps/web/test-email-e2e-full-stack email-e2e reply   # only 
   test names its script with `scriptName`. `modelRequests(name)` answers
   what the assistant sent, tool declarations included.
   `full-stack-assistant.spec.ts` drafts an email for review and reads mail
-  through scripted tool calls this way.
+  through scripted tool calls this way. Type the entry point of each scripted
+  ExecuteCode program with the ambient `CodeContext` so the real checker can
+  validate the SDK calls before execution.
 - The tier writes its evidence to `ledger-results/full-stack/`, and the
   report counts it together with the per-test run's. What only the tier
   covers is listed in `ledger/full-stack-only.tsv` (`ledger/README.md`):
