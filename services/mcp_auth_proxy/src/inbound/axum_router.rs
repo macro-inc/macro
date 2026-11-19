@@ -107,12 +107,14 @@ const EMAIL_SIGN_IN_PATH: &str = "email-sign-in";
 /// sibling domain can plant one.
 const BROWSER_BINDING_COOKIE: &str = "__Host-macro_mcp_oauth";
 
-/// The consent screen loads nothing, runs nothing, and cannot be framed, so a
-/// page that overlays it cannot trick a click onto Allow.
-const CONSENT_PAGE_CSP: &str =
-    "default-src 'none'; style-src 'unsafe-inline'; frame-ancestors 'none'; base-uri 'none'";
+/// The consent screen loads nothing from anywhere, runs nothing, and cannot be
+/// framed, so a page that overlays it cannot trick a click onto Allow. Its one
+/// font is inlined in the page (`templates/roboto_slab_font.css`).
+const CONSENT_PAGE_CSP: &str = "default-src 'none'; style-src 'unsafe-inline'; font-src data:; frame-ancestors 'none'; base-uri 'none'";
 
-const CONSENT_DECLINED_PAGE: &str = include_str!("../../templates/consent_declined.html");
+#[derive(Template)]
+#[template(path = "consent_declined.html")]
+struct ConsentDeclinedPage;
 
 #[derive(Template)]
 #[template(path = "consent.html")]
@@ -352,7 +354,7 @@ async fn submit_consent<I: InflightAuthStore + 'static>(
     match submission.decision {
         ConsentDecision::Deny => {
             tracing::info!(client_id = %submission.request.client_id, "user declined an MCP client");
-            html_page(CONSENT_DECLINED_PAGE.to_owned())
+            render_page(&ConsentDeclinedPage, "consent_declined")
         }
         ConsentDecision::Approve => {
             authorization_response(

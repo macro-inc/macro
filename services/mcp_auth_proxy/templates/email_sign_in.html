@@ -12,18 +12,21 @@
   <body>
     <main>
       {% if let Some(email) = code_sent_to %}
-      <h1>Check your email</h1>
-      <p>Enter the code we sent to <strong>{{ email }}</strong>.</p>
-      {% if let Some(error) = error %}
-      <p class="warning" role="alert">{{ error }}</p>
-      {% endif %}
+      <div class="intro">
+        {% include "macro_mark.html" %}
+        <h1>Check your email</h1>
+        <p class="lede">Enter the code we sent to <strong>{{ email }}</strong>.</p>
+      </div>
       <form method="post" action="email-sign-in">
         <input type="hidden" name="session" value="{{ session }}" />
         <input type="hidden" name="form_token" value="{{ form_token }}" />
         <input type="hidden" name="email" value="{{ email }}" />
-        <label for="code">Code</label>
-        <input id="code" name="code" type="text" inputmode="numeric" autocomplete="one-time-code" required autofocus />
         <div class="stack">
+          <label class="sr-only" for="code">Code</label>
+          <input id="code" name="code" type="text" inputmode="numeric" autocomplete="one-time-code" placeholder="Code" required autofocus />
+          {% if let Some(error) = error %}
+          <p class="error" role="alert">{{ error }}</p>
+          {% endif %}
           <button class="approve" type="submit">Continue</button>
         </div>
       </form>
@@ -31,22 +34,23 @@
         <input type="hidden" name="session" value="{{ session }}" />
         <input type="hidden" name="form_token" value="{{ form_token }}" />
         <input type="hidden" name="email" value="{{ email }}" />
-        <div class="stack">
-          <button class="deny" type="submit">Send a new code</button>
-        </div>
+        <button class="deny" type="submit">Send a new code</button>
       </form>
       {% else %}
-      <h1>Sign in with email</h1>
-      <p>We'll send a code to your email address.</p>
-      {% if let Some(error) = error %}
-      <p class="warning" role="alert">{{ error }}</p>
-      {% endif %}
+      <div class="intro">
+        {% include "macro_mark.html" %}
+        <h1>Sign in with email</h1>
+        <p class="lede">We'll send a code to your email address.</p>
+      </div>
       <form method="post" action="email-sign-in">
         <input type="hidden" name="session" value="{{ session }}" />
         <input type="hidden" name="form_token" value="{{ form_token }}" />
-        <label for="email">Email</label>
-        <input id="email" name="email" type="email" autocomplete="email" required autofocus />
         <div class="stack">
+          <label class="sr-only" for="email">Email</label>
+          <input id="email" name="email" type="email" autocomplete="email" placeholder="Email address" required autofocus />
+          {% if let Some(error) = error %}
+          <p class="error" role="alert">{{ error }}</p>
+          {% endif %}
           <button class="approve" type="submit">Send code</button>
         </div>
       </form>
