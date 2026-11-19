@@ -30,7 +30,6 @@ AC-319	-	bug	Escape in the phone reply Subject: field does not leave it: the com
 STC-314	-	no-user-path	the recipient picker leaves the user's own address out of its suggestions, and typed or pasted it becomes a plain chip
 STC-046	-	no-user-path	a composer that learns its draft was sent elsewhere closes in the same step that sets this state: the reply composer hides itself, and the standalone one is replaced by the thread
 AC-067	-	needs	exists only with enable-graphql-soup off, and the bundle of the suite is built with it on, as the app runs: there the sync banner recovers a rejected draft instead
-AC-915	-	bug	a rejected scheduled send that is cancelled in an Outlook inbox stays locked (outlook-cancelled-failed-schedule-stays-locked); its test is kept as a known bug
 STC-031	-	no-user-path	Every composer send goes through the send journal and carries an attempt id, so the legacy unschedule path that raises this never runs.
 STC-043	-	no-user-path	the code that raises this wraps only a call that cannot fail on the spot: every way marking done after a send can fail comes later, and shows as the thread's own notice (STL-075)
 STC-060	-	no-user-path	every way of picking a send time (a preset, the calendar, a typed query) hands over a valid date, so the check that raises this cannot fail
