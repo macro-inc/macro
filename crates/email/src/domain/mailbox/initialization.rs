@@ -207,15 +207,13 @@ fn decide(
         });
     };
     // Email-address equality cannot adopt another Microsoft mailbox's content.
-    // A link on its way out holds the address for nobody, so a different
-    // mailbox at that address connects alongside it.
+    // A link on its way out keeps the address until its purge deletes it: a
+    // second link beside it can collide with it on credentials and address.
     if existing.tenant_id.as_deref() != Some(&grant.tenant_id)
         || existing.mailbox_id.as_deref() != Some(&grant.mailbox_id)
     {
         if existing.being_removed || !existing.owner_account_exists {
-            return Ok(InitializationDecision::Create {
-                owner: address_owner(request, snapshot),
-            });
+            return Err(InitializationError::InboxBeingRemoved);
         }
         return Err(InitializationError::IdentityConflict);
     }

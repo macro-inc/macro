@@ -174,18 +174,16 @@ fn an_inbox_being_removed_is_neither_shared_nor_reconnected() {
 }
 
 #[test]
-fn a_departing_link_at_the_address_does_not_block_a_different_mailbox() {
+fn a_departing_link_holds_its_address_for_a_different_mailbox_until_it_is_gone() {
     let (request, mut grant, mut snapshot) = fixtures();
     grant.mailbox_id = "recycled-address".into();
     for (being_removed, owner_account_exists) in [(true, true), (false, false)] {
         let existing = snapshot.existing.as_mut().unwrap();
         existing.being_removed = being_removed;
         existing.owner_account_exists = owner_account_exists;
-        assert_eq!(
-            decide(&request, &grant, &snapshot).unwrap(),
-            InitializationDecision::Create {
-                owner: request.actor.clone()
-            }
-        );
+        assert!(matches!(
+            decide(&request, &grant, &snapshot),
+            Err(InitializationError::InboxBeingRemoved)
+        ));
     }
 }

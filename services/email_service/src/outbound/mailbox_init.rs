@@ -246,11 +246,8 @@ impl MailboxInitializationRepository for PgMailboxInitialization {
             return Err(InitializationError::Changed);
         }
 
-        let is_new = matches!(decision, InitializationDecision::Create { .. });
-        // Create may leave a removed link with the same address beside it;
-        // the revalidated snapshot keeps every decision valid for this link.
         let (link_id, owner, restart) = match (decision, &current.existing) {
-            (InitializationDecision::Create { owner }, _) => {
+            (InitializationDecision::Create { owner }, None) => {
                 let id = macro_uuid::generate_uuid_v7();
                 sqlx::query!(r#"
                     INSERT INTO email_links (id,macro_id,fusionauth_user_id,email_address,provider,
@@ -331,7 +328,7 @@ impl MailboxInitializationRepository for PgMailboxInitialization {
                 last_sync_error_at = NULL,updated_at = now(),
                 sync_generation = sync_generation + CASE WHEN $6 AND $7 THEN 1 ELSE 0 END
             WHERE id = $1 RETURNING sync_generation
-        "#,link_id,grant.id,grant.generation,grant.owner.to_string(),grant.email,restart,!is_new)
+        "#,link_id,grant.id,grant.generation,grant.owner.to_string(),grant.email,restart,current.existing.is_some())
             .fetch_one(&mut *tx).await.map_err(unavailable)?;
         sqlx::query!(r#"INSERT INTO email_mailbox_custodians(link_id,actor_id,fusionauth_user_id,grant_id,grant_generation,granted_scopes)
             VALUES ($1,$2,$3,$4,$5,$6) ON CONFLICT(link_id,actor_id) DO UPDATE SET fusionauth_user_id = EXCLUDED.fusionauth_user_id,
@@ -425,7 +422,7 @@ impl MailboxInitializationRepository for PgMailboxInitialization {
         }
         sqlx::query!("INSERT INTO email_link_initializations (attempt_id,actor_id,link_id) VALUES ($1,$2,$3)",request.attempt,request.actor.as_ref(),link_id)
             .execute(&mut *tx).await.map_err(unavailable)?;
-        let event = serde_json::json!({"kind":"link_connected","actor_id":request.actor.as_ref(),"is_new":is_new});
+        let event = serde_json::json!({"kind":"link_connected","actor_id":request.actor.as_ref(),"is_new":current.existing.is_none()});
         sqlx::query!("INSERT INTO email_projection_outbox (id,link_id,generation,payload) VALUES ($1,$2,$3,$4)",macro_uuid::generate_uuid_v7(),link_id,link.sync_generation,event)
             .execute(&mut *tx).await.map_err(unavailable)?;
         tx.commit().await.map_err(unavailable)?;
