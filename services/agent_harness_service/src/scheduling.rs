@@ -482,17 +482,17 @@ impl LiveItems for RoutineLiveItems {
                             || document.sub_type
                                 == Some(document_sub_type::DocumentSubType::Task))),
                     Err(sqlx::Error::RowNotFound) => Ok(false),
-                    Err(error) => Err(rootcause::Report::new(error).into_dynamic()),
+                    Err(error) => Err(live_check_error(&error)),
                 }
             }
             EntityKind::Project => match self.projects.get_basic_project(id).await {
                 Ok(project) => Ok(project.is_some_and(|project| project.deleted_at.is_none())),
-                Err(error) => Err(rootcause::report!("{error:?}")),
+                Err(error) => Err(live_check_error(&error)),
             },
             EntityKind::Chat => match self.chats.get_metadata(id).await {
                 Ok(chat) => Ok(chat.deleted_at.is_none()),
                 Err(chat::domain::models::ChatErr::NotFound) => Ok(false),
-                Err(error) => Err(rootcause::report!("{error:?}")),
+                Err(error) => Err(live_check_error(&error)),
             },
             // Deleted outright: the access check already found it gone.
             EntityKind::Channel
@@ -504,6 +504,21 @@ impl LiveItems for RoutineLiveItems {
             | EntityKind::Initiative => Ok(true),
         }
     }
+}
+
+/// A failed lookup's error for its report, which `routine.unusable_knobs`
+/// records on its span. A stored owner that doesn't parse is left out:
+/// [`model_owner::OwnerParseError`] carries the raw principal, an email for a
+/// person.
+fn live_check_error(error: &(dyn std::error::Error + 'static)) -> rootcause::Report {
+    let mut cause = Some(error);
+    while let Some(current) = cause {
+        if current.is::<model_owner::OwnerParseError>() {
+            return rootcause::report!("the item's stored owner doesn't parse");
+        }
+        cause = current.source();
+    }
+    rootcause::report!("{error:?}")
 }
 
 /// Scheduling routes and workers owned by the harness process.
