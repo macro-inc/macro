@@ -2,17 +2,15 @@ import type {
   CacheAuthority,
   CacheAuthorityHost,
 } from '@graphql-cache/authority';
-import {
-  type CrmRetirementScope,
-  configureCrmAccessAuthority,
-  crmAccessAuthority,
-} from '@service-storage/crm-access-authority';
+import { createNoopCacheHost } from '@graphql-cache/host/noop-host';
+import { cacheSessionGeneration } from '@graphql-cache/session-generation';
+import { ok } from 'neverthrow';
 import { expect, it, vi } from 'vitest';
-import { crmProtectedQueryKey } from './crm-cache-scope';
 import type { PersistedQueryEntry } from './persistence/per-query-idb';
 
 const fixture = vi.hoisted(() => ({
   entries: new Map<string, PersistedQueryEntry>(),
+  proof: vi.fn(),
 }));
 vi.mock('./soup/normalized-cache/normalizer', () => ({
   initSoupNormalizer: () => {},
@@ -37,7 +35,17 @@ vi.mock('./persistence-scopes', () => ({
     },
   ],
 }));
+vi.mock('./auth/user-info', () => ({ fetchUserInfo: vi.fn() }));
+vi.mock('@service-storage/client', () => ({ dssFetch: fixture.proof }));
+vi.mock('@core/constant/servers', () => ({
+  SERVER_HOSTS: { 'document-storage-service': 'http://localhost/dss' },
+}));
 
+import { crmAccessAuthority } from '@service-storage/crm-access-authority';
+import {
+  installCrmCacheHost,
+  setCrmAccessSession,
+} from '@service-storage/crm-access-cache';
 import { queryClient, queryPersistence } from './client';
 
 it('retires and keeps out protected snapshots after a proven denial the owner could not commit', async () => {
@@ -58,16 +66,14 @@ it('retires and keeps out protected snapshots after a proven denial the owner co
       return { authority, revision: '0', affectedOps: [], changed: false };
     },
   };
-  const retired = Promise.withResolvers<void>();
-  const retire = vi.fn(async (scope: CrmRetirementScope | undefined) => {
-    if (!scope) return;
-    await queryPersistence.retire(crmProtectedQueryKey);
-    retired.resolve();
+  fixture.proof.mockResolvedValue(ok({ team_id: team, allowed: true }));
+  // The production glue: its retirement clears and prunes the real persistence.
+  installCrmCacheHost({
+    ...createNoopCacheHost(),
+    disabled: false,
+    authority: owner,
   });
-  const fetchProof = vi.fn(async (): Promise<string> => `${team}:allowed`);
-  configureCrmAccessAuthority({ fetchProof, retire });
-  crmAccessAuthority.setHost(owner);
-  crmAccessAuthority.setSession('viewer');
+  setCrmAccessSession('viewer');
   await crmAccessAuthority.refresh();
 
   const queryKey = ['email', 'threadMessages', 'messages', 'crm-shared-thread'];
@@ -86,10 +92,9 @@ it('retires and keeps out protected snapshots after a proven denial the owner co
     body: 'offline snapshot',
   });
 
-  fetchProof.mockResolvedValue(`${team}:denied`);
+  fixture.proof.mockResolvedValue(ok({ team_id: team, allowed: false }));
   await expect(crmAccessAuthority.refresh()).rejects.toThrow('disk failure');
-  expect(retire).toHaveBeenCalledWith('permission', authority.generation);
-  await retired.promise;
+  await cacheSessionGeneration.settled();
   // The owner never recorded the denial, so its snapshot still reads allowed.
   expect(crmAccessAuthority.snapshot()?.policy).toBe(`${team}:allowed`);
   expect(queryClient.getQueryData(queryKey)).toBeUndefined();
@@ -98,6 +103,8 @@ it('retires and keeps out protected snapshots after a proven denial the owner co
   fixture.entries.set(queryHash, entry);
   await queryPersistence.restoreQuery(queryKey);
   expect(queryClient.getQueryData(queryKey)).toBeUndefined();
+  crmAccessAuthority.setSession(undefined);
+  installCrmCacheHost(undefined);
   queryPersistence.dispose();
   queryClient.clear();
 });
