@@ -1171,77 +1171,6 @@ async fn google_claim_rejects_a_job_without_its_grant_provisioned_account(pool: 
     assert!(state.lease_token.is_none());
 }
 
-/// Postgres text and `jsonb` cannot hold U+0000, so a provider event carrying
-/// one in its text or its raw payload used to fail its write on every retry.
-/// It is written with the NUL characters removed.
-#[sqlx::test(migrator = "MACRO_DB_MIGRATIONS")]
-async fn an_event_with_nul_characters_is_written_without_them(pool: PgPool) {
-    let owner_id = "macro|calendar-nul@example.com";
-    let link_id = insert_link(&pool, owner_id).await;
-    let repo = PgCalendarRepository::new(pool.clone());
-    repo.apply_google_grant(
-        link_id,
-        complete_grant(),
-        CalendarGrantIntent::CalendarRequested,
-    )
-    .await
-    .unwrap();
-    let provider = provider_ids(&repo, link_id).await;
-    let mut upsert = timed_upsert(
-        owner_id,
-        link_id,
-        provider,
-        "nul@example.com",
-        "Quarterly\0 review",
-        1,
-    );
-    upsert.event.description = Some("Agenda\0 attached".to_string());
-    upsert.event.location = Some("Room\0 2".to_string());
-    upsert.event.attendees[0].display_name = Some("Gu\0est".to_string());
-    let CalendarEventSource::Google(source) = &mut upsert.source else {
-        unreachable!("timed_upsert builds a Google source");
-    };
-    source.raw_payload = serde_json::json!({
-        "summary": "Quarterly\u{0} review",
-        "extendedProperties": { "private": { "no\u{0}te": ["a\u{0}b"] } },
-    });
-
-    let event_id = repo.upsert_event_fixture(upsert).await.unwrap();
-
-    let stored = sqlx::query!(
-        r#"
-        SELECT event.title, event.description, event.location,
-               source.raw_payload, source.normalized_payload
-        FROM calendar_events event
-        JOIN calendar_event_sources source ON source.event_id = event.id
-        WHERE event.id = $1
-        "#,
-        event_id,
-    )
-    .fetch_one(&pool)
-    .await
-    .unwrap();
-    assert_eq!(stored.title, "Quarterly review");
-    assert_eq!(stored.description.as_deref(), Some("Agenda attached"));
-    assert_eq!(stored.location.as_deref(), Some("Room 2"));
-    assert_eq!(
-        stored.raw_payload,
-        serde_json::json!({
-            "summary": "Quarterly review",
-            "extendedProperties": { "private": { "note": ["ab"] } },
-        })
-    );
-    assert!(!stored.normalized_payload.to_string().contains("\\u0000"));
-    let attendee = sqlx::query_scalar!(
-        "SELECT display_name FROM calendar_event_attendees WHERE event_id = $1",
-        event_id,
-    )
-    .fetch_one(&pool)
-    .await
-    .unwrap();
-    assert_eq!(attendee.as_deref(), Some("Guest"));
-}
-
 #[sqlx::test(migrator = "MACRO_DB_MIGRATIONS")]
 async fn canonical_precedence_uses_the_selected_source_clock(pool: PgPool) {
     let owner_id = "macro|calendar-source-clock@example.com";
@@ -7838,6 +7767,7 @@ mod join_requests;
 mod meeting_copies;
 mod meeting_uid;
 mod mention_join_link;
+mod nul_characters;
 mod organizer_calendar;
 mod source_access;
 mod sync_health;
