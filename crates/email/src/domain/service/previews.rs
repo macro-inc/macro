@@ -169,7 +169,7 @@ where
     /// Hydrate the Soup preview of each receipt-authorized thread. The
     /// receipts settled who may read the threads; the preview query only
     /// renders them, scoped to the inboxes that own them.
-    #[tracing::instrument(err, skip(self, receipts), fields(thread_count = receipts.len()))]
+    #[tracing::instrument(err, skip(self, viewer, receipts), fields(thread_count = receipts.len()))]
     pub(crate) async fn get_email_thread_previews_by_receipts_impl(
         &self,
         viewer: MacroUserIdStr<'static>,
@@ -194,7 +194,7 @@ where
     /// The preview of one thread in the caller's own or delegated inboxes,
     /// fresh from this service's pool. Ownership is checked here, never by
     /// the caller.
-    #[tracing::instrument(err, skip(self), fields(user_id = %macro_id, %thread_id))]
+    #[tracing::instrument(err, skip(self, macro_id), fields(%thread_id))]
     pub(crate) async fn get_owned_email_thread_preview_impl(
         &self,
         macro_id: MacroUserIdStr<'static>,

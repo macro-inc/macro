@@ -1,6 +1,8 @@
 //! UpdateThreadLabels tool for adding or removing a label from all messages in a thread.
 
-use crate::domain::models::{LinkLabel, UserProvider, mailbox_action::MailboxAction};
+use crate::domain::models::{
+    LinkLabel, UserProvider, label::system_labels, mailbox_action::MailboxAction,
+};
 use crate::domain::ports::{EmailService, GmailTokenProvider};
 use ai_toolset::{AsyncTool, RequestContext, ServiceContext, ToolCallError, ToolResult};
 use ai_toolset::{ToolAnnotated, ToolAnnotations};
@@ -38,7 +40,7 @@ Common operations:\n\
 - Star: add `STARRED` (add=true) / Unstar: remove (add=false)\n\
 - Move to trash: add `TRASH` (add=true) / Restore: remove (add=false)\n\
 - Mark important: add `IMPORTANT` (add=true) / Mark unimportant: remove (add=false)\n\
-- Report spam: add `SPAM` (add=true) / Not spam: remove (add=false)\n\
+- Report spam: add `SPAM` (add=true), which also takes the thread out of the inbox / Not spam: remove (add=false), which puts mail that was in Spam back in the inbox\n\
 - Apply custom user label: add the label with that display name (add=true) / Remove: (add=false)\n\
 \n\
 In an Outlook inbox the same system label names set the matching mailbox state (archive, read, \
@@ -132,7 +134,6 @@ where
     type Output = UpdateThreadLabelsResponse;
 
     #[tracing::instrument(skip_all, fields(
-        user_id=?request_context.user_id,
         thread_id=%self.thread_id,
         label_id=?self.label_id,
         add=%self.add,
@@ -202,28 +203,62 @@ where
             });
         }
 
-        let label_id = match selector {
-            LabelSelector::Id(id) => id,
+        let labels = service_context
+            .service
+            .list_labels(&link)
+            .await
+            .map_err(|e| ToolCallError {
+                description: format!("Failed to list the inbox's labels: {e}"),
+                internal_error: e.into(),
+            })?;
+        let label = match selector {
+            LabelSelector::Id(id) => labels.iter().find(|label| label.id == id).ok_or_else(|| {
+                ToolCallError {
+                    description:
+                        "No label with this id in this thread's inbox. Call ListLabels to see its labels."
+                            .to_string(),
+                    internal_error: anyhow::anyhow!("unknown label id"),
+                }
+            })?,
             LabelSelector::Name(name) => {
-                let labels = service_context
-                    .service
-                    .list_labels(&link)
-                    .await
-                    .map_err(|e| ToolCallError {
-                        description: format!("Failed to list the inbox's labels: {e}"),
-                        internal_error: e.into(),
-                    })?;
-                LinkLabel::find(&labels, name)
-                    .map(|label| label.id)
-                    .ok_or_else(|| ToolCallError {
-                        description: format!(
-                            "No label named \"{}\" in this thread's inbox. Call ListLabels to see its labels.",
-                            name.trim()
-                        ),
-                        internal_error: anyhow::anyhow!("unknown label name"),
-                    })?
+                LinkLabel::find(&labels, name).ok_or_else(|| ToolCallError {
+                    description: format!(
+                        "No label named \"{}\" in this thread's inbox. Call ListLabels to see its labels.",
+                        name.trim()
+                    ),
+                    internal_error: anyhow::anyhow!("unknown label name"),
+                })?
             }
         };
+        let label_id = label.id;
+
+        // Report spam and Not spam move a Gmail thread between the inbox and
+        // Spam, as Gmail's own buttons do; the SPAM label alone would leave
+        // reported mail in the inbox and rescued mail archived.
+        if link.provider == UserProvider::Gmail && label.provider_label_id == system_labels::SPAM {
+            let changed = service_context
+                .service
+                .change_thread_mailbox_state(
+                    MacroUserIdStr((*request_context.user_id).clone()),
+                    self.thread_id,
+                    MailboxAction::Junk(self.add),
+                )
+                .await
+                .map_err(|e| ToolCallError {
+                    description: format!("Failed to update the thread: {e}"),
+                    internal_error: e.into(),
+                })?;
+            let summary = if self.add {
+                "Reported the thread as spam."
+            } else {
+                "Marked the thread as not spam."
+            };
+            return Ok(UpdateThreadLabelsResponse {
+                successful_count: changed,
+                failed_count: 0,
+                summary: summary.to_string(),
+            });
+        }
 
         let result = service_context
             .service

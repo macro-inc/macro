@@ -1,0 +1,82 @@
+{
+  "needs": [
+    {
+      "id": "r1",
+      "what": "Mail sorting: about 100 messages a fortnight across jobs, staff, permits, invoices and reviews, which Dan already files under his own labels (Jobs, Staff, Permits, Invoices, Reviews).",
+      "evidence": ["labels Jobs, Staff, Permits, Invoices, Reviews on most messages"],
+      "catalog": ["inbox"],
+      "surfaces": ["email"]
+    },
+    {
+      "id": "r2",
+      "what": "Supplier bills to pay before they are due: Coldwater Fixtures invoices with due dates, Ferro Supply statements and order invoices.",
+      "evidence": ["Invoice CF-21177 — due Dec 2", "Invoice CF-20931 — due Nov 20", "Statement for October — account 30418"],
+      "catalog": ["invoices"],
+      "surfaces": ["email", "tasks"]
+    },
+    {
+      "id": "r3",
+      "what": "Customer job and quote requests arrive every few days from homeowners and property managers (leaks, water heaters, drain calls, quotes); each needs a reply or a visit booked.",
+      "evidence": ["Garbage disposal jammed + kitchen faucet drip", "Tankless water heater quote", "Toilet running nonstop, can someone come Monday?", "Estimate for repiping 1950s house", "No hot water since this morning"],
+      "catalog": ["email_tasks", "needs_reply", "reply_drafts"],
+      "drafted": "When a new email is a customer asking for a visit, repair or quote, make a task naming the customer, address and problem (or tag it to reply).",
+      "surfaces": ["email", "tasks"]
+    },
+    {
+      "id": "r4",
+      "what": "Every week each tech emails a timesheet (hours per day, sometimes mileage or time off) that Dan totals for payroll.",
+      "evidence": ["Timesheet week of 11/2", "Timesheet week of 10/26", "Timesheet week of 10/19 + mileage", "Can I take Monday off? + timesheet"],
+      "catalog": [],
+      "drafted": "When a timesheet email arrives (or once a week before payroll), collect each tech's hours, mileage and time-off requests into one task or note for payroll.",
+      "surfaces": ["email", "tasks"]
+    },
+    {
+      "id": "r5",
+      "what": "City permit mail moves each job forward: application received or incomplete, permit issued, inspection scheduled, inspection passed. A missed 'incomplete' or inspection date holds up a job.",
+      "evidence": ["Permit application incomplete — PB-26-03544", "Permit issued — PB-26-03544", "Inspection scheduled — PB-26-03317", "Inspection result: PASSED — PB-26-03317"],
+      "catalog": ["email_tasks"],
+      "drafted": "When an email from the city permits office arrives, make or update a task for that permit number with what it needs next (fix the application, be on site for the inspection).",
+      "surfaces": ["email", "tasks"]
+    },
+    {
+      "id": "r6",
+      "what": "New Google and Yelp reviews arrive about weekly; a local trade lives on them and a bad one needs a quick answer.",
+      "evidence": ["You have a new review on Google", "New review of Ridgeway Plumbing & Drain", "Ridgeway Plumbing & Drain has a new review"],
+      "catalog": [],
+      "drafted": "When a new review notification arrives, make a task to read and answer it, marked urgent when the rating is low.",
+      "surfaces": ["email", "tasks"]
+    }
+  ],
+  "decoys": [
+    {
+      "id": "x1",
+      "what": "Morning brief of the day's meetings and tasks",
+      "why": "Dispatchly already emails him the day's job schedule every morning, and nothing in his mail shows meetings or tasks in a calendar Macro sees.",
+      "catalog": ["brief", "meeting_brief"]
+    },
+    {
+      "id": "x2",
+      "what": "Weekly CRM pipeline review",
+      "why": "He runs a service shop with no sales pipeline or deals; work comes in as job requests.",
+      "catalog": ["pipeline"]
+    },
+    {
+      "id": "x3",
+      "what": "Pay or chase LedgerNest 'overdue invoice' notices as bills",
+      "why": "Those are his customers' overdue invoices (money owed to him), not bills he pays; a task to pay them is wrong."
+    },
+    {
+      "id": "x4",
+      "what": "A digest of the daily Dispatchly schedules, sales summaries or promotions",
+      "why": "Automated notices he skims; a recap of them is noise he would switch off.",
+      "catalog": ["newsletters"]
+    },
+    {
+      "id": "x5",
+      "what": "Anything that replies to customers, sends quotes or books jobs on his behalf",
+      "why": "Routines may not send or act as him."
+    }
+  ],
+  "fine": ["approvals", "archive_noise", "blockers", "call_followups", "call_recap", "call_tasks", "channel_answers", "channel_digest", "cold_outreach", "customer_followups", "date_changes", "decision_log", "delegated", "document_tags", "email_tags", "end_of_day", "meeting_agenda", "mentions", "project_hygiene", "project_update", "promises", "reconnect", "recurring_task", "stuck", "task_routing", "triage", "updates", "week_ahead", "weekly_wrap"],
+  "misfit": ["agent_digest", "pull_requests", "team_progress", "prd_tasks", "one_on_one_prep", "focus_time", "questionnaire"]
+}

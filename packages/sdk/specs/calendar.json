@@ -1562,6 +1562,11 @@
           "answers"
         ],
         "properties": {
+          "abandonedAt": {
+            "type": ["string", "null"],
+            "format": "date-time",
+            "description": "When Macro stopped trying to update the host's calendar for the\nbooking's latest change. A failed booking with this set is not being\nretried, and cancelling it is the way to release its time."
+          },
           "answers": {
             "type": "object",
             "description": "Answers keyed by question identity.",

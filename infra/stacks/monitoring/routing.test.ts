@@ -183,6 +183,15 @@ test('every prod monitor is graphed on its dashboard with its thresholds', () =>
     'computer-fleet-capacity',
     'computer-host-capacity',
     'error-logs-anomaly',
+    'firecracker-create-failures',
+    'firecracker-golden-failures',
+    'firecracker-golden-secret-refused',
+    'firecracker-hibernate-failures',
+    'firecracker-host-memory',
+    'firecracker-host-unhealthy',
+    'firecracker-reconcile-drift',
+    'firecracker-restore-latency',
+    'firecracker-wake-failures',
     'kafka-consumer-lag-high',
     'kafka-consumer-not-caught-up',
     'macrodb-blocked-connections',
@@ -335,5 +344,52 @@ test('pool graphs never sum or take percentiles across tasks', () => {
   }
   expect(queries.join()).toContain(
     'max:db.client.connection.used{env:$env.value,service:cloud-storage-service} by {db.client.connection.pool.name,availability-zone}, max:db.client.connection.max{'
+  );
+});
+
+test('Firecracker readiness detects lost telemetry without paging idle operations', () => {
+  const host = monitors().find((r) => r.name === 'firecracker-host-unhealthy');
+  expect(host?.inputs.notifyNoData).toBe(true);
+  expect(host?.inputs.noDataTimeframe).toBe(5);
+  expect(host?.inputs.query).toContain('by {host}.fill(null) < 1');
+  for (const resource of monitors().filter(
+    (r) => r.name.startsWith('firecracker-') && r !== host
+  )) {
+    expect(resource.inputs.notifyNoData).not.toBe(true);
+  }
+});
+
+test('Firecracker restore percentiles use an enabled distribution of successful snapshot launches', () => {
+  const duration = resources.find(
+    (r) => r.name === 'firecracker-restore-duration'
+  );
+  expect(duration?.inputs.compute).toEqual({
+    aggregationType: 'distribution',
+    path: '@duration',
+    includePercentiles: true,
+  });
+  expect(duration?.inputs.filter.query).toContain(
+    '@source:(golden OR hibernation) status:ok'
+  );
+  expect(duration?.inputs.groupBies).toEqual([
+    { path: 'env', tagName: 'env' },
+    { path: 'host', tagName: 'host' },
+    { path: '@source', tagName: 'source' },
+  ]);
+});
+
+test('Firecracker memory follows admission policy and unresolved drift persists before alerting', () => {
+  const memory = monitors().find((r) => r.name === 'firecracker-host-memory');
+  expect(memory?.inputs.query).toContain(
+    'computer.host.memory.used_ratio{env:prod}'
+  );
+  expect(memory?.inputs.query).toContain(
+    '/ min:computer.host.memory.high_watermark_ratio{env:prod}'
+  );
+  const drift = monitors().find(
+    (r) => r.name === 'firecracker-reconcile-drift'
+  );
+  expect(drift?.inputs.query).toBe(
+    'min(last_5m):max:firecracker_host.reconcile.drift{env:prod,service:firecracker-host} by {host} > 0'
   );
 });

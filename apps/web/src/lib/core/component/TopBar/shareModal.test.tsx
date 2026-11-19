@@ -70,9 +70,6 @@ vi.mock('@app/signal/splitLayout', () => ({
 vi.mock('@components/app/useReactiveFavicon', () => ({
   useReactiveFavicon: () => {},
 }));
-vi.mock('@core/component/AI/signal/globalAttachments', () => ({
-  useGlobalAttachableHistory: () => {},
-}));
 vi.mock('@core/context/team', () => ({
   TeamContextProvider: (props: { children: unknown }) => props.children,
 }));

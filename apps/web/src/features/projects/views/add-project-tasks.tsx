@@ -1,94 +1,83 @@
-import { isMobile } from '@core/mobile/isMobile';
 import { fireAndForget } from '@core/util/fireAndForget';
 import ListPlusIcon from '@icon/system/regular/list-plus.svg';
 import { EditorPopover } from '@property/editors/popover/EditorPopover';
 import { PropertyEntitySelector } from '@property/editors/selectors/PropertyEntitySelector';
 import { Button, Dropdown } from '@ui';
-import { createMemo, createSignal, Show, Suspense } from 'solid-js';
+import { createSignal, Show, Suspense } from 'solid-js';
+import { match } from 'ts-pattern';
 import { useProjectsContext } from '../context/projects-context';
 import type { ProjectDetail } from '../core/project';
+import {
+  type AddProjectTasksError,
+  createAddProjectTasks,
+} from '../primitives/add-project-tasks';
 
-export function AddProjectTasks(props: { project: ProjectDetail }) {
+function errorText(error: AddProjectTasksError) {
+  return match(error)
+    .with(
+      { kind: 'partial' },
+      ({ count, reason }) =>
+        `${count} ${count === 1 ? 'task could' : 'tasks could'} not be added. ${reason}`
+    )
+    .with(
+      { kind: 'request' },
+      ({ message }) => message ?? 'Could not add tasks. Try again.'
+    )
+    .exhaustive();
+}
+
+export function AddProjectTasksMenu(props: { project: ProjectDetail }) {
   const commands = useProjectsContext().createCommands();
+  const picker = createAddProjectTasks({
+    project: () => props.project,
+    assignTasks: commands.assignTasks,
+  });
   const [open, setOpen] = createSignal(false);
-  const [selected, setSelected] = createSignal(new Set<string>());
-  const [error, setError] = createSignal<string>();
-  const [saving, setSaving] = createSignal(false);
-  const excludedIds = createMemo(() => new Set(props.project.taskIds));
   const close = () => {
-    if (!saving()) setOpen(false);
+    if (!picker.saving()) setOpen(false);
   };
   const add = async () => {
-    const taskIds = [...selected()].filter((id) => !excludedIds().has(id));
-    if (saving() || !taskIds.length) return;
-    setSaving(true);
-    setError(undefined);
-    try {
-      const results = await commands.assignTasks(props.project.id, taskIds);
-      const failed = results.filter((result) => result.error);
-      if (!failed.length) {
-        setOpen(false);
-        return;
-      }
-      setSelected(new Set(failed.map((result) => result.taskId)));
-      setError(
-        `${failed.length} ${failed.length === 1 ? 'task could' : 'tasks could'} not be added. ${failed[0].error}`
-      );
-    } catch (error) {
-      setError(
-        error instanceof Error
-          ? error.message
-          : 'Could not add tasks. Try again.'
-      );
-    } finally {
-      setSaving(false);
-    }
+    if (await picker.add()) setOpen(false);
   };
 
   return (
     <Dropdown
       open={open()}
       onOpenChange={(nextOpen) => {
-        if (saving()) return;
-        if (nextOpen) {
-          setSelected(new Set<string>());
-          setError(undefined);
-        }
+        if (picker.saving()) return;
+        if (nextOpen) picker.reset();
         setOpen(nextOpen);
       }}
       placement="bottom-end"
     >
-      <Dropdown.Trigger
-        variant="secondary"
-        size={isMobile() ? 'icon-md' : 'md'}
-        aria-label={isMobile() ? 'Add existing tasks' : undefined}
-      >
-        <ListPlusIcon class={isMobile() ? 'size-6' : 'size-4'} />
-        {isMobile() ? null : 'Add existing tasks'}
+      <Dropdown.Trigger variant="secondary" size="md">
+        <ListPlusIcon class="size-4" />
+        Add existing tasks
       </Dropdown.Trigger>
       <Show when={open()}>
         <EditorPopover onClose={close}>
-          <div inert={saving()} classList={{ 'opacity-50': saving() }}>
+          <div
+            inert={picker.saving()}
+            classList={{ 'opacity-50': picker.saving() }}
+          >
             <Suspense fallback={<p role="status">Loading tasks…</p>}>
               <PropertyEntitySelector
                 config={{
                   specificEntityType: 'TASK',
                   isMultiSelect: true,
                   placeholder: 'Search tasks…',
-                  excludedIds,
+                  excludedIds: picker.excludedIds,
                 }}
-                selectedOptions={selected}
-                setSelectedOptions={(ids) => {
-                  if (!saving()) setSelected(ids);
-                }}
+                selectedOptions={picker.selected}
+                setSelectedOptions={picker.select}
                 onClose={close}
               />
             </Suspense>
           </div>
-          <Show when={error()}>
-            {(message) => (
+          <Show when={picker.error()}>
+            {(error) => (
               <p role="alert" class="px-3 pb-2 text-sm text-failure">
-                {message()}
+                {errorText(error())}
               </p>
             )}
           </Show>
@@ -104,7 +93,7 @@ export function AddProjectTasks(props: { project: ProjectDetail }) {
             <Button
               variant="ghost"
               size="sm"
-              disabled={saving()}
+              disabled={picker.saving()}
               onClick={close}
             >
               Cancel
@@ -112,12 +101,12 @@ export function AddProjectTasks(props: { project: ProjectDetail }) {
             <Button
               size="sm"
               variant="primary"
-              disabled={saving() || !selected().size}
+              disabled={picker.saving() || !picker.selected().size}
               onClick={() => fireAndForget(add(), 'projects')}
             >
-              {saving()
+              {picker.saving()
                 ? 'Adding tasks…'
-                : `Add ${selected().size || ''} ${selected().size === 1 ? 'task' : 'tasks'}`}
+                : `Add ${picker.selected().size || ''} ${picker.selected().size === 1 ? 'task' : 'tasks'}`}
             </Button>
           </div>
         </EditorPopover>

@@ -43,7 +43,8 @@ fn is_gate_refusal(error: &MailboxError) -> bool {
     )
 }
 
-/// The unit committed its work: `imported` or, for a vanished message, `absent`.
+/// The unit committed its work: `imported` or, for a vanished message,
+/// `absent`; `paced` for an import round's folder that waited for its import.
 pub(super) fn record_done(span: &Span, outcome: &'static str) {
     span.record("outlook.outcome", outcome);
 }
