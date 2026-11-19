@@ -365,6 +365,24 @@ fn coalescible_reread_key(event: &DeclaredMacroEvent) -> Option<String> {
     }
 }
 
+/// Key of the coalescible reread an event ends when it hands off: the event
+/// runs after that reread and may undo what it writes, so the entity's next
+/// hint must queue behind the event rather than be absorbed.
+fn reread_barrier_key(event: &DeclaredMacroEvent) -> Option<String> {
+    match event {
+        DeclaredMacroEvent::EmailMacroEvent(event) => email::reread_barrier(event),
+        DeclaredMacroEvent::AgentSessionLifecycleMacroEvent(_)
+        | DeclaredMacroEvent::CalendarMacroEvent(_)
+        | DeclaredMacroEvent::CallMacroEvent(_)
+        | DeclaredMacroEvent::ChannelMacroEvent(_)
+        | DeclaredMacroEvent::ChatMacroEvent(_)
+        | DeclaredMacroEvent::DocumentMacroEvent(_)
+        | DeclaredMacroEvent::MessageMacroEvent(_)
+        | DeclaredMacroEvent::ProjectMacroEvent(_)
+        | DeclaredMacroEvent::PropertyMacroEvent(_) => None,
+    }
+}
+
 /// Entities with a coalescible reread queued on a worker but not yet started.
 ///
 /// While one reread for an entity waits in its worker's channel, later hints
@@ -494,6 +512,9 @@ impl WorkerPool {
                 OutcomeRecord::skipped(EventOutcome::Coalesced),
             );
             return HandoffOutcome::Coalesced;
+        }
+        if let Some(key) = reread_barrier_key(&event.event) {
+            self.pending_rereads.release(&key);
         }
 
         match sender.send(event).await {

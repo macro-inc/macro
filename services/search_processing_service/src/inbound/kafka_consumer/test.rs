@@ -2612,24 +2612,32 @@ async fn distinct_sessions_and_non_reread_events_each_hand_off() {
 }
 
 #[tokio::test]
-async fn a_queued_thread_reindex_absorbs_later_reindexes_of_that_thread_only() {
+async fn a_queued_thread_reindex_absorbs_later_reindexes_until_a_message_event_queues_behind_it() {
     let (pool, mut receivers) = test_pool(1, 8);
-    let thread_read = EmailTopicEvent::ThreadRead(ThreadReadMetadata {
-        link_id: EMAIL_LINK_ID,
-        owner: user_id(),
-        actor: None,
-        thread_id: EMAIL_THREAD_ID,
-        is_read: true,
-        origin: EmailEventOrigin::UserAction,
-    });
+    let thread_read = |offset| {
+        received_email(
+            EmailTopicEvent::ThreadRead(ThreadReadMetadata {
+                link_id: EMAIL_LINK_ID,
+                owner: user_id(),
+                actor: None,
+                thread_id: EMAIL_THREAD_ID,
+                is_read: true,
+                origin: EmailEventOrigin::UserAction,
+            }),
+            offset,
+        )
+    };
 
     let mut coalesced = Vec::new();
     for event in [
         received_thread_backfilled_event(EMAIL_THREAD_ID, 1),
-        received_email(thread_read, 2),
-        received_email(received_email_event(false), 3),
-        received_thread_backfilled_event(EMAIL_THREAD_ID, 4),
-        received_thread_backfilled_event(SECOND_EMAIL_THREAD_ID, 5),
+        thread_read(2),
+        received_thread_backfilled_event(SECOND_EMAIL_THREAD_ID, 3),
+        // Removes the message from the index whatever the reindex at offset 1
+        // writes, so the next reindex must run after it.
+        received_email(received_email_event(true), 4),
+        thread_read(5),
+        received_thread_backfilled_event(EMAIL_THREAD_ID, 6),
     ] {
         let outcome = pool.handoff(Ok::<_, EventBrokerError>(event)).await;
         coalesced.push(matches!(outcome, HandoffOutcome::Coalesced));
@@ -2640,11 +2648,11 @@ async fn a_queued_thread_reindex_absorbs_later_reindexes_of_that_thread_only() {
     while let Some(event) = receivers[0].recv().await {
         offsets.push(event.offset);
     }
-    assert_eq!(coalesced, [false, true, false, true, false]);
+    assert_eq!(coalesced, [false, true, false, false, false, true]);
     assert_eq!(
         offsets,
-        [1, 3, 5],
-        "a message upsert and another thread's reindex are not absorbed"
+        [1, 3, 4, 5],
+        "another thread's reindex, a message removal, and the reindex behind it are not absorbed"
     );
 }
 

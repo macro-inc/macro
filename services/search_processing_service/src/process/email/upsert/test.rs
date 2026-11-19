@@ -265,7 +265,7 @@ async fn a_thread_reindex_stops_at_its_first_short_page(pool: sqlx::PgPool) {
     // Another test thread may have registered the page query's callsite with
     // a "never" interest, so register it with a first pass, then recompute its
     // interest. The recompute runs under this subscriber because, while it is
-    // the only one ever registered, tracing consults just the thread default.
+    // the only dispatcher registered, tracing consults just the thread default.
     let warm_up = thread_with_messages(&pool, 1).await;
     let (opensearch, _) = fake_opensearch().await;
     process_upsert_thread_message(&opensearch, &pool, warm_up, "macro|owner@example.com", None)
