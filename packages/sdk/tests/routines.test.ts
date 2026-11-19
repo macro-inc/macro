@@ -1,8 +1,10 @@
 import { afterEach, expect, test } from 'bun:test';
 import type {
   CodeStep,
+  RoutineKnob,
   ScheduledActionResponse,
 } from '../generated/scheduled-action/types.gen';
+import type { RoutineKnobOptions } from '../src/entities/routines/routine';
 import { Macro } from '../src/macro';
 import { MacroApiError } from '../src/utils';
 
@@ -375,7 +377,7 @@ test('MacroApiError messages carry the message or error of a JSON body', () => {
   );
 });
 
-test('a code step passed back as stored keeps its entity knobs, picked or not', async () => {
+test('a stored code step passes back with its picked items as handles, and its unpicked knobs as null', async () => {
   const bodies: unknown[] = [];
   globalThis.fetch = Object.assign(
     async (input: RequestInfo | URL) => {
@@ -389,7 +391,7 @@ test('a code step passed back as stored keeps its entity knobs, picked or not', 
     token: 'user',
     hosts: { 'scheduled-action': 'https://routines.test' },
   });
-  // As `routine.detail()` returns it: entity knobs hold `{ type, id }`.
+  // As the routine stores it: entity knobs hold `{ type, id }`, or nothing.
   const stored: CodeStep = {
     id: 'step-1',
     title: 'Post open bugs',
@@ -418,10 +420,32 @@ test('a code step passed back as stored keeps its entity knobs, picked or not', 
       },
     ],
   };
+  // Each picked item given again as its handle, as a caller passes it back.
+  const handles = (knob: RoutineKnob): RoutineKnobOptions => {
+    if (knob.type !== 'entity') return knob;
+    const { value, ...rest } = knob;
+    return {
+      ...rest,
+      value:
+        value?.type === 'channel'
+          ? { type: 'channel', entity: macro.channels.byId(value.id) }
+          : null,
+    };
+  };
+  const knobs = (stored.knobs ?? []).map(handles);
+  const asStored: RoutineKnobOptions = {
+    type: 'entity',
+    name: 'bugs',
+    label: 'Channel to post in',
+    entity_types: ['channel'],
+    // @ts-expect-error A knob takes the item's handle, never its id.
+    value: { type: 'channel', id: 'channel-1' },
+  };
+  expect(asStored.type).toBe('entity');
   await macro.routines.byId('routine-1').update({
     name: 'Post open bugs',
     trigger: { type: 'cron', schedule: '0 0 9 * * MON', timezone: 'UTC' },
-    steps: [{ type: 'code', ...stored }],
+    steps: [{ type: 'code', ...stored, knobs }],
   });
   expect(bodies[0]).toMatchObject({
     task: {
