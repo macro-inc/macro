@@ -148,12 +148,14 @@ pub(crate) async fn context(
         connection_gateway_client.clone(),
     ));
     let inbox_health = Arc::new(crate::composition::inbox_health(
+        crate::outbound::inbox_health::PgInboxHealth {
+            db: db.clone(),
+            redis: redis_client.clone(),
+            queue: sqs_client.clone(),
+        },
         imap_gateway.clone(),
-        db.clone(),
         email_api.clone(),
         auth_service_client.clone(),
-        redis_client.clone(),
-        sqs_client.clone(),
         macro_event_broker.clone(),
         contacts_ingress,
     ));

@@ -93,6 +93,8 @@ rows, initiatives, ...) and get back a single unified, paginated result.
 - Attention feeds admit visible CRM records through current team membership,
   independently of mailbox contribution consent or the retired team CRM switch.
   Hidden companies, their contacts, and hidden company-less contacts stay out.
+- Preserve email-rule resource failures as HTTP 503 with the named limit; do
+  not turn a failed CRM Team email read into an empty or partial Soup page.
 - `crm_association.rs` resolves CRM scope before filtering, sorting, and paging.
   Activity uses property edges rather than references and matches email within
   the caller's mailbox. It reads only what the request's sources can return

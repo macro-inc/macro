@@ -93,12 +93,12 @@ impl Attempt {
         self.finished = true;
     }
     pub(super) fn ignore(mut self) {
-        if let Ok(mut states) = self.health.0.lock() {
-            if let Some(state) = states.get_mut(&self.key) {
-                state.probe_in_flight = false;
-                state.in_flight = state.in_flight.saturating_sub(1);
-                state.last_seen = Some(Instant::now());
-            }
+        if let Ok(mut states) = self.health.0.lock()
+            && let Some(state) = states.get_mut(&self.key)
+        {
+            state.probe_in_flight = false;
+            state.in_flight = state.in_flight.saturating_sub(1);
+            state.last_seen = Some(Instant::now());
         }
         self.finished = true;
     }

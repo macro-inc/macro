@@ -268,16 +268,16 @@ impl AsyncRead for Stream {
                                 tag(&b"}\r\n"[..]),
                             )
                             .parse(tail);
-                            if let Ok((rest, n)) = parsed {
-                                if rest.is_empty() {
-                                    if n > MAX_LITERAL {
-                                        return Poll::Ready(Err(io::Error::new(
-                                            io::ErrorKind::InvalidData,
-                                            "mail literal limit",
-                                        )));
-                                    }
-                                    self.literal = n;
+                            if let Ok((rest, n)) = parsed
+                                && rest.is_empty()
+                            {
+                                if n > MAX_LITERAL {
+                                    return Poll::Ready(Err(io::Error::new(
+                                        io::ErrorKind::InvalidData,
+                                        "mail literal limit",
+                                    )));
                                 }
+                                self.literal = n;
                             }
                         }
                         self.line.clear();

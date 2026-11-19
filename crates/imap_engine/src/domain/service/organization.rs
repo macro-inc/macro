@@ -116,29 +116,28 @@ impl Engine {
                 .destination_uid
                 .filter(|(epoch, _)| *epoch == destination.uid_validity)
             {
-                if current.gmail_labels.is_some() {
-                    if let Some(label) = destination
+                if current.gmail_labels.is_some()
+                    && let Some(label) = destination
                         .virtual_label
                         .as_deref()
                         .filter(|l| !matches!(*l, "\\All" | "\\Trash" | "\\Spam"))
-                    {
-                        self.transport
-                            .apply(
-                                &credentials,
-                                &destination.path,
-                                epoch,
-                                uid,
-                                RemoteAction::GmailLabels {
-                                    add: vec![label.to_owned()],
-                                    remove: if label != "\\Inbox" {
-                                        vec!["\\Inbox".into()]
-                                    } else {
-                                        Vec::new()
-                                    },
+                {
+                    self.transport
+                        .apply(
+                            &credentials,
+                            &destination.path,
+                            epoch,
+                            uid,
+                            RemoteAction::GmailLabels {
+                                add: vec![label.to_owned()],
+                                remove: if label != "\\Inbox" {
+                                    vec!["\\Inbox".into()]
+                                } else {
+                                    Vec::new()
                                 },
-                            )
-                            .await?;
-                    }
+                            },
+                        )
+                        .await?;
                 }
                 let facts = self
                     .transport

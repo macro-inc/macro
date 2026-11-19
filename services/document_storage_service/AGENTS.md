@@ -114,7 +114,9 @@ threads, pins, recents, notifications, folders, activity.
 - Inject the same client into CRM's selective contribution gate. The owner-only
   policy API stays default-off for grants; GET never initializes identity,
   including when the flag is on. Keep its OpenAPI contract and generated storage
-  SDK current; public SDK wrappers are deferred to the next phase.
+  SDK current; public wrappers live in `macro.crm.emailPrivacy`.
+  Inject CRM rule discovery into both primary and replica EmailPgRepo instances;
+  CRM-scoped reads still select the primary and retain typed resource errors.
   Keep the email-policy enum closure modifier in `api/swagger/email_policy.rs`
   until schema generation propagates `deny_unknown_fields` to variant objects.
 
@@ -187,6 +189,8 @@ Cleanup, reconciliation and internal team purge do not evaluate rollout flags.
 The session-only `/passwords/teams/{team}/imports/{import_id}/items` route accepts
 normalized import batches up to 4 MiB; its domain service reuses ordinary creation
 and TOTP enrollment and records counts-only batch activity.
+Session-only PUT/DELETE `items/{item}/favorite` changes a viewer's private
+preference with view access; it bypasses credential leases and version guards.
 Postgres stores metadata; values stay in OpenBao. Admission checks current human
 account classification and membership, including session-shaped agent accounts.
 

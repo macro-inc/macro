@@ -413,7 +413,7 @@ async fn rebind_work(
     old: i64,
     new: i64,
 ) -> Result<(), InboxLifecycleError> {
-    sqlx::query!("UPDATE email_mailbox_watch_work SET next_run_at=now(),revision=revision+1 WHERE link_id=$1",link)
+    sqlx::query!("UPDATE email_mailbox_watch_work SET next_run_at=now(),revision=revision+1,failures=0 WHERE link_id=$1",link)
         .execute(&mut **tx).await.map_err(failed)?;
     // The import run continues in the new generation, so it keeps its stamps.
     sqlx::query!(r#"INSERT INTO email_sync_streams(id,link_id,generation,kind,scope_id,position,initial_complete,scan_id,import_started_at,import_completed_at,reader_revision,round_started_at)

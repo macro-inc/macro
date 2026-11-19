@@ -4,13 +4,19 @@ use std::time::Duration;
 use tokio_util::{sync::CancellationToken, task::TaskTracker};
 use tracing::Instrument;
 
+struct AccountWatchers {
+    tasks: TaskTracker,
+    stopped: CancellationToken,
+    current: Option<super::watchers::Watcher>,
+}
+
 impl Engine {
     /// Wake an owned account after a fenced configuration or provider notification.
     pub fn wake_account(&self, link: Uuid) {
-        if let Ok(wakeups) = self.wakeups.lock() {
-            if let Some((_, wake)) = wakeups.get(&link) {
-                wake.notify_one();
-            }
+        if let Ok(wakeups) = self.wakeups.lock()
+            && let Some((_, wake)) = wakeups.get(&link)
+        {
+            wake.notify_one();
         }
     }
     /// Own a primary and optional watcher until shutdown or permanent credential refusal.
@@ -25,33 +31,26 @@ impl Engine {
             .lock()
             .map_err(|_| Error::ConnectionUnavailable)?
             .insert(binding.link_id, (owner, wake.clone()));
-        let watcher_tasks = TaskTracker::new();
-        let watcher_stopped = cancellation.child_token();
-        let mut watcher = None;
+        let mut watchers = AccountWatchers {
+            tasks: TaskTracker::new(),
+            stopped: cancellation.child_token(),
+            current: None,
+        };
         let result = self
-            .account_loop(
-                binding,
-                owner,
-                &cancellation,
-                &wake,
-                &watcher_tasks,
-                &watcher_stopped,
-                &mut watcher,
-            )
+            .account_loop(binding, owner, &cancellation, &wake, &mut watchers)
             .await;
-        watcher_stopped.cancel();
-        if let Some(watcher) = watcher {
+        watchers.stopped.cancel();
+        if let Some(watcher) = &watchers.current {
             watcher.stop.cancel();
         }
-        watcher_tasks.close();
-        let drained = tokio::time::timeout(Duration::from_secs(10), watcher_tasks.wait()).await;
-        if let Ok(mut wakeups) = self.wakeups.lock() {
-            if wakeups
+        watchers.tasks.close();
+        let drained = tokio::time::timeout(Duration::from_secs(10), watchers.tasks.wait()).await;
+        if let Ok(mut wakeups) = self.wakeups.lock()
+            && wakeups
                 .get(&binding.link_id)
                 .is_some_and(|(stored, _)| *stored == owner)
-            {
-                wakeups.remove(&binding.link_id);
-            }
+        {
+            wakeups.remove(&binding.link_id);
         }
         // On a failed drain leave the owner lease in place until expiry rather than permit overlapping sockets.
         if drained.is_err() {
@@ -70,9 +69,7 @@ impl Engine {
         owner: Uuid,
         cancellation: &CancellationToken,
         wake: &Arc<tokio::sync::Notify>,
-        watcher_tasks: &TaskTracker,
-        watcher_stopped: &CancellationToken,
-        watcher: &mut Option<super::watchers::Watcher>,
+        watchers: &mut AccountWatchers,
     ) -> Result<(), Error> {
         let mut failures = 0u32;
         let mut credential_refusals = 0u8;
@@ -98,9 +95,9 @@ impl Engine {
                     binding,
                     owner,
                     wake,
-                    watcher_tasks,
-                    watcher_stopped,
-                    watcher,
+                    &watchers.tasks,
+                    &watchers.stopped,
+                    &mut watchers.current,
                 )
                 .await?;
                 let host = credentials.imap.endpoint.host.clone();
@@ -111,10 +108,10 @@ impl Engine {
                         .idle_policy
                         .lock()
                         .map_err(|_| Error::ConnectionUnavailable)?;
-                    if policy.state(&host).is_none() {
-                        if let Some(state) = previous {
-                            policy.restore(&host, state);
-                        }
+                    if policy.state(&host).is_none()
+                        && let Some(state) = previous
+                    {
+                        policy.restore(&host, state);
                     }
                     policy.restart_seconds(&host)
                 };

@@ -105,7 +105,9 @@ pub(crate) async fn api_context(deps: ApiDependencies) -> anyhow::Result<ApiCont
     );
     let email_service = EmailRouterState::new(
         EmailServiceImpl::new(
-            EmailPgRepo::new(db.clone()),
+            EmailPgRepo::new(db.clone()).with_rule_discovery(Arc::new(
+                crm::outbound::email_rule_discovery::PgEmailRuleDiscovery,
+            )),
             FrecencyQueryServiceImpl::new(FrecencyPgStorage::new(db.clone())),
             (*sqs_client).clone(),
             crm_service,
@@ -386,12 +388,14 @@ pub(crate) async fn api_context(deps: ApiDependencies) -> anyhow::Result<ApiCont
         ),
         inbox_catalog,
         inbox_health: Arc::new(crate::composition::inbox_health(
+            crate::outbound::inbox_health::PgInboxHealth {
+                db: db.clone(),
+                redis: redis_client.as_ref().clone(),
+                queue: sqs_client.as_ref().clone(),
+            },
             imap_gateway.clone(),
-            db.clone(),
             email_api.clone(),
             auth_service_client.as_ref().clone(),
-            redis_client.as_ref().clone(),
-            sqs_client.as_ref().clone(),
             macro_event_broker.clone(),
             contacts_ingress,
         )),

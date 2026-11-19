@@ -146,17 +146,16 @@ fn hydrate(state: &mut AccountState, rows: &[Entry]) -> Result<(), Error> {
                         .map_err(|_| Error::ConnectionUnavailable)?,
                 );
             }
-        } else if e.kind == "attachment" {
-            if let Some(d) = e
+        } else if e.kind == "attachment"
+            && let Some(d) = e
                 .message_id
                 .as_ref()
                 .and_then(|id| state.drafts.get_mut(id))
-            {
-                let attachment: AttachmentInput = serde_json::from_value(e.document.clone())
-                    .map_err(|_| Error::ConnectionUnavailable)?;
-                d.attachments
-                    .insert(attachment.content_id.clone(), attachment);
-            }
+        {
+            let attachment: AttachmentInput = serde_json::from_value(e.document.clone())
+                .map_err(|_| Error::ConnectionUnavailable)?;
+            d.attachments
+                .insert(attachment.content_id.clone(), attachment);
         }
     }
     for f in state.folders.values_mut() {

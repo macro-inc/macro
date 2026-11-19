@@ -169,10 +169,6 @@ pub(crate) fn binary_dir() -> Result<PathBuf, Report> {
 
 /// Nix dev binaries need their native libraries even though service configuration
 /// is isolated. Inherit this one loader setting, never the parent's service keys.
-#[expect(
-    clippy::disallowed_methods,
-    reason = "test subprocesses inherit the development shell's native library search path"
-)]
 fn native_library_path() -> impl Iterator<Item = (&'static str, std::ffi::OsString)> {
     std::env::var_os("LD_LIBRARY_PATH")
         .map(|value| ("LD_LIBRARY_PATH", value))

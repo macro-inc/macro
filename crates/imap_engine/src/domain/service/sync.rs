@@ -274,12 +274,11 @@ pub(super) fn merge_snapshot(
                     if let Some(old) = by_locator
                         .get(&(folder_id.clone(), remote.uid_validity, item.uid))
                         .copied()
+                        && let Some(message) = state.messages.get(&old.message_id)
                     {
-                        if let Some(message) = state.messages.get(&old.message_id) {
-                            next_messages.insert(old.message_id.clone(), message.clone());
-                            next_members.insert((old.folder_id.clone(), old.message_id.clone()));
-                            next_locations.push(old.clone());
-                        }
+                        next_messages.insert(old.message_id.clone(), message.clone());
+                        next_members.insert((old.folder_id.clone(), old.message_id.clone()));
+                        next_locations.push(old.clone());
                     }
                     tracing::warn!(
                         "IMAP message headers could not be parsed; preserving prior snapshot"
@@ -431,11 +430,11 @@ pub(super) fn merge_snapshot(
         }
     }
     for (id, message) in &next_messages {
-        if message.draft_correlation.is_some() {
-            if let Some(draft) = state.drafts.get_mut(id) {
-                draft.submission = Some(SubmissionOutcome::Accepted);
-                draft.draft.is_draft = false;
-            }
+        if message.draft_correlation.is_some()
+            && let Some(draft) = state.drafts.get_mut(id)
+        {
+            draft.submission = Some(SubmissionOutcome::Accepted);
+            draft.draft.is_draft = false;
         }
     }
     state.messages = next_messages;

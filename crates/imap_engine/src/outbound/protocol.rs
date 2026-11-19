@@ -924,10 +924,9 @@ impl ProtocolTransport {
                         h.get_key().eq_ignore_ascii_case("Message-ID")
                             && h.get_value().trim().trim_matches(['<', '>'])
                                 == message_id.trim().trim_matches(['<', '>'])
-                    }) {
-                        if let Some(uid) = item.uid {
-                            found.insert(uid);
-                        }
+                    }) && let Some(uid) = item.uid
+                    {
+                        found.insert(uid);
                     }
                 }
             }

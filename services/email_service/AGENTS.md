@@ -21,6 +21,8 @@ the gateway `/email` prefix.
   It composes optional activity correlation and the saved-invitation service;
   `ApiContext` holds services, authentication/router states and configuration;
   raw database/provider clients belong to the composed adapters.
+  Inject CRM rule discovery into the API EmailPgRepo for selected Team reads;
+  the adapter uses the reader's transaction and owns no additional pool.
 - `src/composition/workers.rs`: shared worker service aliases and invitation
   extraction composition. Per-worker constructors stay in `worker::context`.
 - `src/outbound/message_reads.rs`: query adapter for the email domain's synced

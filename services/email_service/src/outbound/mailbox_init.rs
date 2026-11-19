@@ -418,7 +418,7 @@ impl MailboxInitializationRepository for PgMailboxInitialization {
             .map_err(unavailable)?;
             sqlx::query!("INSERT INTO email_mailbox_settings_work(id,link_id,kind,resource_key) VALUES($1,$2,'catalog','') ON CONFLICT(link_id,kind,resource_key) DO UPDATE SET next_run_at=now()", macro_uuid::generate_uuid_v7(), link_id)
                 .execute(&mut *tx).await.map_err(unavailable)?;
-            sqlx::query!("INSERT INTO email_mailbox_watch_work(link_id) VALUES($1) ON CONFLICT(link_id) DO UPDATE SET next_run_at=now(),revision=email_mailbox_watch_work.revision+1",link_id)
+            sqlx::query!("INSERT INTO email_mailbox_watch_work(link_id) VALUES($1) ON CONFLICT(link_id) DO UPDATE SET next_run_at=now(),revision=email_mailbox_watch_work.revision+1,failures=0",link_id)
                 .execute(&mut *tx).await.map_err(unavailable)?;
             for kind in ["contacts_catalog", "contacts_profile"] {
                 sqlx::query!(

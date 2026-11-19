@@ -496,11 +496,32 @@ async fn reconnect_deletes_the_superseded_generations_sync_work(db: PgPool) {
     .execute(&db)
     .await
     .unwrap();
+    // The old grant's subscription upkeep had been failing.
+    sqlx::query!(
+        "UPDATE email_mailbox_watch_work SET failures = 7, next_run_at = now() + interval '12 hours' WHERE link_id = $1",
+        link
+    )
+    .execute(&db)
+    .await
+    .unwrap();
 
     MailboxInitializationService::new(PgMailboxInitialization(db.clone()), Grants(grant(owner.0)))
         .initialize(attempt(&db, owner.clone()).await)
         .await
         .unwrap();
+
+    let upkeep = sqlx::query!(
+        r#"SELECT failures, next_run_at <= now() AS "due!" FROM email_mailbox_watch_work WHERE link_id = $1"#,
+        link
+    )
+    .fetch_one(&db)
+    .await
+    .unwrap();
+    assert_eq!(
+        (upkeep.failures, upkeep.due),
+        (0, true),
+        "a reconnect retries the subscription at once, with its failures forgotten"
+    );
 
     let streams = sqlx::query!(
         "SELECT generation,kind FROM email_sync_streams WHERE link_id = $1 ORDER BY kind",

@@ -9,6 +9,7 @@ mod import_pacing;
 mod import_reads;
 mod live_pass;
 mod outlook_import;
+mod outlook_subscriptions;
 mod retries;
 mod unstorable_values;
 

@@ -2024,6 +2024,10 @@ only conceal revealed values, never drafts. The vault is keyed by account,
 sign-in session and team: a scope change remounts it and aborts its requests,
 so drafts and late responses never cross viewers. Load and copy usernames
 through their field-scoped endpoints, and derive sharing counts from metadata.
+Toggle private favorites with their PUT/DELETE endpoint for every viewer, using
+an optimistic update in the account/session/team cache and rollback on failure;
+never route a star through the credential metadata PATCH. Keep the form Favorite
+checkbox creation-only; existing items use the detail star.
 Compose the view from `ViewShell`, `ViewSidebar` and Drive's `FolderTree`
 rather than feature-local chrome. Adapt Passwords metadata to the app's existing
 item drag provider and tree drop slots; never coerce vault items into Drive entities

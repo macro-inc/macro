@@ -493,10 +493,10 @@ impl Engine {
                 if !self.writes_enabled.load(Ordering::Acquire) {
                     return Err(Error::ConnectionUnavailable);
                 }
-                if let Some(draft) = a.state.drafts.get(&id) {
-                    if draft.draft.version != version || draft.submission.is_some() {
-                        return Err(Error::Conflict);
-                    }
+                if let Some(draft) = a.state.drafts.get(&id)
+                    && (draft.draft.version != version || draft.submission.is_some())
+                {
+                    return Err(Error::Conflict);
                 }
                 a.state.drafts.remove(&id);
                 a.state.uploads.retain(|_, u| u.draft_id != id);
@@ -519,10 +519,10 @@ impl Engine {
                 }
                 let metadata = attachment_metadata(&input)?;
                 let draft = editable(&mut a.state, &id)?;
-                if let Some(existing) = draft.attachments.get(&input.content_id) {
-                    if existing.data_base64 != input.data_base64 {
-                        return Err(Error::Conflict);
-                    }
+                if let Some(existing) = draft.attachments.get(&input.content_id)
+                    && existing.data_base64 != input.data_base64
+                {
+                    return Err(Error::Conflict);
                 }
                 draft.attachments.insert(input.content_id.clone(), input);
                 self.repository.save(a).await?;

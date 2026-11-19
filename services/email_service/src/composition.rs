@@ -87,21 +87,17 @@ pub type InboxHealth = InboxHealthService<
 >;
 
 pub fn inbox_health(
+    repository: PgInboxHealth,
     imap: crate::outbound::email_api::imap::ImapMailboxGateway,
-    db: sqlx::PgPool,
     gmail: GmailApi,
     auth: authentication_service_client::AuthServiceClient,
-    redis: crate::util::redis::RedisClient,
-    queue: sqs_client::SQS,
     broker: MacroEventBrokerService<KafkaEventPublisher, TaskTracker>,
     contacts: std::sync::Arc<SqsContactsIngress<SqsContactsQueue>>,
 ) -> InboxHealth {
+    let db = repository.db.clone();
+    let queue = repository.queue.clone();
     InboxHealthService::new(
-        PgInboxHealth {
-            db: db.clone(),
-            redis,
-            queue: queue.clone(),
-        },
+        repository,
         ProviderInboxHealth {
             imap,
             gmail,

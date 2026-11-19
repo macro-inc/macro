@@ -118,10 +118,10 @@ impl ProtocolTransport {
                     && connection.opened.elapsed() < Duration::from_secs(1800)
                     && connection.messages < 100
             });
-            if let Some(key) = &key {
-                if let Some(connection) = pool.remove(key) {
-                    return Ok((Some(key.clone()), connection));
-                }
+            if let Some(key) = &key
+                && let Some(connection) = pool.remove(key)
+            {
+                return Ok((Some(key.clone()), connection));
             }
         }
         let (stream, extensions) = self.smtp_with_features(&credentials.smtp).await?;
