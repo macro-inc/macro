@@ -155,11 +155,6 @@ pub async fn process_message(
         #[cfg(feature = "processing")]
         SearchQueueMessage::ReplayBrokerEvent(replay) => {
             use crate::inbound::kafka_consumer::{ReplayDone, replay_broker_event};
-            // One attempt can outlast the queue's visibility timeout; a second
-            // delivery running beside it would count the replay twice.
-            let visibility =
-                i32::try_from(worker::MESSAGE_PROCESSING_TIMEOUT.as_secs()).unwrap_or(i32::MAX);
-            ctx.worker.extend_visibility(message, visibility).await?;
             let receive_count = sqs_worker::receive_count(message).unwrap_or(1);
             if replay_broker_event(&ctx.broker_events, &replay, receive_count).await
                 == ReplayDone::Redeliver
