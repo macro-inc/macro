@@ -1664,16 +1664,30 @@ export function createReplyComposer(
     void autosave.save().catch(() => {});
   };
 
+  // A reopened working copy can have a saved server ID even when rapid edits
+  // keep the new session's identity lookup queued.
+  const mountedServerDraftId = props.localDraft?.serverDraftId;
+  const mountedDraftEpoch = session.epoch();
+  const savedReplyIdentity = (state: ReturnType<typeof session.state>) => {
+    const draft = state.identity;
+    if (draft.kind === 'server') return draft;
+    if (
+      draft.kind === 'handle' &&
+      state.epoch === mountedDraftEpoch &&
+      draft.draftId === mountedServerDraftId
+    )
+      return draft;
+  };
   createEffect(
     on(session.state, (current, previous) => {
       // A pending save can recreate a deleted reply before the lifecycle
       // read sees it go away. Keep the replacement the server already saved.
       const draft = current.identity;
-      const replaced = previous?.identity;
+      const replaced = previous && savedReplyIdentity(previous);
       if (
         !hasLocalChanges ||
         draft.kind !== 'server' ||
-        replaced?.kind !== 'server' ||
+        !replaced ||
         current.epoch !== previous?.epoch ||
         draft.draftId === replaced.draftId ||
         !draft.threadId ||

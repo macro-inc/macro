@@ -17,6 +17,7 @@ export function mountReplyComposer(
   callbacks: Pick<
     ReplyComposerOptions,
     | 'draft'
+    | 'localDraft'
     | 'preloadedHtml'
     | 'sideEffectOnSend'
     | 'onMarkDone'
