@@ -1,30 +1,73 @@
 use super::*;
 
+const NOTHING: Said = Said {
+    passed_on_head: false,
+    failed_on_head: false,
+    failed_elsewhere: false,
+};
+const PASSED: Said = Said {
+    passed_on_head: true,
+    ..NOTHING
+};
+
 #[test]
 fn posts_a_pass_recorded_here_that_the_commit_does_not_carry_yet() {
-    assert_eq!(posting(Some(true), false, false), Posting::Pass);
-    assert_eq!(posting(Some(true), true, false), Posting::Standing);
+    assert_eq!(posting(Some(true), NOTHING), Posting::Pass);
+    assert_eq!(posting(Some(true), PASSED), Posting::Standing);
 }
 
-/// A failure on these files is final for `PR CI`; posting the pass again
-/// would only read as if it still counted.
+/// A failure on this tree is final for `PR CI`; posting the pass again would
+/// only read as if it still counted.
 #[test]
-fn never_posts_over_a_failure_on_the_same_files() {
-    assert_eq!(posting(Some(true), false, true), Posting::Contradicted);
-    assert_eq!(posting(Some(true), true, true), Posting::Contradicted);
+fn never_posts_over_a_failure_on_the_same_tree() {
+    let failed_here = Said {
+        failed_on_head: true,
+        ..NOTHING
+    };
+    let failed_before = Said {
+        failed_elsewhere: true,
+        ..NOTHING
+    };
+
+    assert_eq!(posting(Some(true), failed_here), Posting::Contradicted);
+    assert_eq!(posting(Some(true), failed_before), Posting::Contradicted);
+    assert_eq!(
+        posting(
+            Some(true),
+            Said {
+                passed_on_head: true,
+                ..failed_here
+            }
+        ),
+        Posting::Contradicted
+    );
+}
+
+/// `PR CI` reads the head only. A pass it carries over a failure that sits
+/// on another commit with the same files would still skip the job.
+#[test]
+fn withdraws_a_pass_the_head_carries_once_the_tree_has_failed_anywhere() {
+    let audited_on_an_earlier_commit = Said {
+        failed_elsewhere: true,
+        ..PASSED
+    };
+
+    assert_eq!(posting(Some(false), PASSED), Posting::Withdraw);
+    assert_eq!(
+        posting(Some(true), audited_on_an_earlier_commit),
+        Posting::Withdraw
+    );
+    assert_eq!(
+        posting(None, audited_on_an_earlier_commit),
+        Posting::Withdraw
+    );
 }
 
 #[test]
-fn withdraws_a_pass_the_commit_carries_once_the_check_fails_here() {
-    assert_eq!(posting(Some(false), true, false), Posting::Withdraw);
-    assert_eq!(posting(Some(false), true, true), Posting::Nothing);
-    assert_eq!(posting(Some(false), false, false), Posting::Nothing);
-}
-
-#[test]
-fn posts_nothing_for_files_this_machine_never_ran_the_check_on() {
-    assert_eq!(posting(None, false, false), Posting::Nothing);
-    assert_eq!(posting(None, true, false), Posting::Nothing);
+fn posts_nothing_for_a_tree_the_check_failed_or_never_ran_on_here() {
+    assert_eq!(posting(Some(false), NOTHING), Posting::Nothing);
+    assert_eq!(posting(None, NOTHING), Posting::Nothing);
+    assert_eq!(posting(None, PASSED), Posting::Nothing);
 }
 
 #[test]

@@ -40,8 +40,7 @@ mod test;
 
 /// How many paths a message names before it counts the rest.
 const PATHS_SHOWN: usize = 3;
-/// How many reworded or empty commits before the head `post` reads statuses
-/// of.
+/// How many other commits with the head's tree `post` reads statuses of.
 const SAME_TREE_COMMITS: usize = 5;
 
 #[derive(Parser)]
@@ -88,24 +87,42 @@ enum Action {
 enum Posting {
     /// A pass on this tree is recorded here and not yet on the commit.
     Pass,
-    /// The check failed here on the tree the commit says it passed on.
+    /// The commit says the check passed on a tree it has failed on since,
+    /// here or on a runner.
     Withdraw,
     /// The commit already carries the pass.
     Standing,
-    /// Something failed it on this tree: a runner's audit, or a later run.
+    /// Something failed it on this tree, and the commit does not say it
+    /// passed: a runner's audit, or a later run.
     Contradicted,
     /// This machine has no pass for this tree.
     Nothing,
 }
 
-/// `recorded` is what this machine saw on exactly this tree; the flags are
-/// what the statuses say about it.
-fn posting(recorded: Option<bool>, says_passed: bool, says_failed: bool) -> Posting {
+/// What the statuses say about a check on one tree.
+#[derive(Clone, Copy, Default)]
+struct Said {
+    /// The head carries a pass. `PR CI` reads the head only.
+    passed_on_head: bool,
+    /// The head carries a failure, which is final there.
+    failed_on_head: bool,
+    /// Another commit with the same tree carries a failure.
+    failed_elsewhere: bool,
+}
+
+/// `recorded` is what this machine saw on exactly this tree. A failure
+/// anywhere on the tree outweighs a pass, and a pass the head still carries
+/// over such a failure has to be withdrawn there: nothing else reaches
+/// `PR CI`.
+fn posting(recorded: Option<bool>, said: Said) -> Posting {
+    let failed = said.failed_on_head || said.failed_elsewhere || recorded == Some(false);
+    if failed && said.passed_on_head && !said.failed_on_head {
+        return Posting::Withdraw;
+    }
     match recorded {
-        Some(true) if says_failed => Posting::Contradicted,
-        Some(true) if says_passed => Posting::Standing,
+        Some(true) if failed => Posting::Contradicted,
+        Some(true) if said.passed_on_head => Posting::Standing,
         Some(true) => Posting::Pass,
-        Some(false) if says_passed && !says_failed => Posting::Withdraw,
         Some(false) | None => Posting::Nothing,
     }
 }
@@ -363,13 +380,15 @@ fn post(base: &str) -> Result<(), Report> {
         );
     }
 
-    // PR CI reads the head's statuses. A failure on a reworded or empty
-    // commit before it was about these same files, so it is read too.
+    // PR CI reads the head's statuses. A failure on another commit with the
+    // same files, one this head reworded, amended or followed with an empty
+    // commit, was about these files, so those are read too. A commit GitHub
+    // never saw has no statuses to read.
     let on_head = github::statuses(&github_repository, &head)?;
-    let mut on_same_tree = on_head.clone();
+    let mut elsewhere = Vec::new();
     if !behind {
-        for earlier in tree::same_tree_before(&repository.root, &head, SAME_TREE_COMMITS)? {
-            on_same_tree.extend(github::statuses(&github_repository, &earlier)?);
+        for other in tree::same_tree_elsewhere(&repository.root, &head, SAME_TREE_COMMITS)? {
+            elsewhere.extend(github::statuses(&github_repository, &other).unwrap_or_default());
         }
     }
 
@@ -381,19 +400,31 @@ fn post(base: &str) -> Result<(), Report> {
                     claim.fingerprint == check.fingerprint && claim.tree == tested
                 })
         };
-        let says_passed = on_head
-            .iter()
-            .filter(about_this_tree)
-            .any(|status| status.state == "success");
-        let says_failed = on_same_tree
-            .iter()
-            .filter(about_this_tree)
-            .any(|status| status.state != "success");
+        let failed = |statuses: &[github::Status]| {
+            statuses
+                .iter()
+                .filter(about_this_tree)
+                .any(|status| status.state != "success")
+        };
+        let said = Said {
+            passed_on_head: on_head
+                .iter()
+                .filter(about_this_tree)
+                .any(|status| status.state == "success"),
+            failed_on_head: failed(&on_head),
+            failed_elsewhere: failed(&elsewhere),
+        };
         let recorded = receipts
             .find(&check.id, &check.fingerprint, &tested)
             .map(|receipt| receipt.passed);
 
-        let line = match posting(recorded, says_passed, says_failed) {
+        // A failure someone else recorded for this tree is this machine's to
+        // remember: the same files on a later commit must not pass again.
+        if recorded == Some(true) && (said.failed_on_head || said.failed_elsewhere) {
+            receipts.record(&check.id, &check.fingerprint, &tested, false, &head)?;
+        }
+
+        let line = match posting(recorded, said) {
             Posting::Pass => {
                 github::post_status(
                     &github_repository,
@@ -413,11 +444,11 @@ fn post(base: &str) -> Result<(), Report> {
                     &github::description(
                         &check.fingerprint,
                         &tested,
-                        Some("failed on the machine that attested it"),
+                        Some("failed on these files since it was attested"),
                     ),
                 )?;
                 format!(
-                    "FAIL  {}: failed here since; its attestation is withdrawn",
+                    "FAIL  {}: failed on this tree since; its attestation is withdrawn",
                     check.id
                 )
             }

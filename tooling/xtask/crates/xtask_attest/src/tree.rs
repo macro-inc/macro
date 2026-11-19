@@ -48,12 +48,18 @@ pub fn differs_under(dir: &Path, from: &str, to: &str, paths: &[String]) -> Resu
     }
 }
 
-/// The commits before `commit`, following first parents, that hold the same
-/// tree: a reworded or empty commit. What was said about their files was
-/// said about these.
-pub fn same_tree_before(dir: &Path, commit: &str, limit: usize) -> Result<Vec<String>, Report> {
+/// How far back the reflog is read for commits `HEAD` was on before.
+const REFLOG_ENTRIES: usize = 50;
+
+/// Other commits that hold `commit`'s tree: the ones before it, following
+/// first parents (an empty commit keeps its parent's files), and the ones
+/// `HEAD` was on before it (an amended or reworded commit replaces one with
+/// the same files). What was said about their files was said about these.
+pub fn same_tree_elsewhere(dir: &Path, commit: &str, limit: usize) -> Result<Vec<String>, Report> {
     let tree = tree_of(dir, commit)?;
-    let listed = git(
+    let mut same = Vec::new();
+
+    let parents = git(
         dir,
         &[
             "rev-list",
@@ -62,13 +68,30 @@ pub fn same_tree_before(dir: &Path, commit: &str, limit: usize) -> Result<Vec<St
             commit,
         ],
     )?;
-
-    let mut same = Vec::new();
-    for earlier in listed.lines().skip(1) {
+    for earlier in parents.lines().skip(1) {
         if tree_of(dir, earlier)? != tree {
             break;
         }
         same.push(earlier.to_owned());
     }
+
+    // A working tree that has no reflog has no earlier commits to offer.
+    let visited = git(
+        dir,
+        &[
+            "reflog",
+            "--format=%H",
+            &format!("--max-count={REFLOG_ENTRIES}"),
+        ],
+    )
+    .unwrap_or_default();
+    for other in visited.lines() {
+        let known = other == commit || same.iter().any(|seen| seen == other);
+        if !known && tree_of(dir, other).is_ok_and(|other_tree| other_tree == tree) {
+            same.push(other.to_owned());
+        }
+    }
+
+    same.truncate(limit);
     Ok(same)
 }

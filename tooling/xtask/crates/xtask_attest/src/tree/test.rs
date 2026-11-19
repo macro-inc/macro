@@ -61,20 +61,15 @@ fn a_commit_that_changes_no_file_keeps_the_tree() {
         tree_of(dir.path(), &again).expect("a tree")
     );
     assert_eq!(
-        same_tree_before(dir.path(), &again, 5).expect("commits"),
+        same_tree_elsewhere(dir.path(), &again, 5).expect("commits"),
         vec![reworded.clone(), first.clone()]
     );
     assert_eq!(
-        same_tree_before(dir.path(), &again, 1).expect("commits"),
+        same_tree_elsewhere(dir.path(), &again, 1).expect("commits"),
         vec![reworded]
     );
     assert!(
-        same_tree_before(dir.path(), &changed, 5)
-            .expect("commits")
-            .is_empty()
-    );
-    assert!(
-        same_tree_before(dir.path(), &first, 5)
+        same_tree_elsewhere(dir.path(), &changed, 5)
             .expect("commits")
             .is_empty()
     );
@@ -104,4 +99,33 @@ fn tells_whether_a_branch_changed_what_triggers_a_check() {
     assert!(!differs(&["crates", "Cargo.lock"]));
     assert!(differs(&["README.md"]));
     assert!(differs(&["."]));
+}
+
+/// An amended commit is not an ancestor of the one that replaces it; the
+/// reflog is the only place that still names it.
+#[test]
+fn finds_the_commit_an_amend_replaced() {
+    let (dir, first) = repository();
+    git(
+        dir.path(),
+        &[
+            "-c",
+            "user.name=test",
+            "-c",
+            "user.email=test@example.com",
+            "commit",
+            "--quiet",
+            "--amend",
+            "-m",
+            "first, reworded",
+        ],
+    )
+    .expect("git commit --amend");
+    let amended = git(dir.path(), &["rev-parse", "HEAD"]).expect("a commit");
+
+    assert_ne!(amended, first);
+    assert_eq!(
+        same_tree_elsewhere(dir.path(), &amended, 5).expect("commits"),
+        vec![first]
+    );
 }
