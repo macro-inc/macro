@@ -151,7 +151,8 @@ function mailUnread(page: Page, scroll = false): Promise<number> {
       ) {
         return -1;
       }
-      const ids = new Set<string>();
+      // Each thread's mark as last seen, so one read during the walk drops out.
+      const marks = new Map<string, boolean>();
       const idOf = (row: Element) =>
         row.querySelector('[data-entity-id]')?.getAttribute('data-entity-id') ??
         row.id;
@@ -159,16 +160,23 @@ function mailUnread(page: Page, scroll = false): Promise<number> {
         !!row.querySelector('[role="img"][aria-label="Unread"]');
       const read = () => {
         for (const row of grid.querySelectorAll('[data-soup-entity]')) {
-          if (unread(row)) ids.add(idOf(row));
+          marks.set(idOf(row), unread(row));
         }
       };
-      read();
-      if (!walk) return ids.size;
+      const total = () => [...marks.values()].filter(Boolean).length;
+      if (!walk) {
+        read();
+        return total();
+      }
       const scrolls = (element: Element) =>
         element.scrollHeight > element.clientHeight + 1 &&
         /auto|scroll/.test(getComputedStyle(element).overflowY);
       const scroller = [...grid.querySelectorAll('*')].find(scrolls);
-      if (!scroller) return ids.size;
+      // No scroller: the whole list is in view.
+      if (!scroller) {
+        read();
+        return total();
+      }
       const step = scroller.clientHeight / 2;
       if (step < 1) return -1;
       // The next frame, or a tenth of a second when the page holds frames back.
@@ -197,7 +205,7 @@ function mailUnread(page: Page, scroll = false): Promise<number> {
         read();
       }
       scroller.scrollTop = 0;
-      return ids.size;
+      return total();
     }, scroll)
     .catch(() => -1);
 }
@@ -298,9 +306,10 @@ type ChatRow = { name: string; dot: boolean; mentions: boolean };
 /**
  * The conversations Chat's sidebar marks: with the unread dot, or with a
  * count of unread mentions in its place. A conversation listed in two
- * sections counts once.
+ * sections counts once. Undefined when the sidebar lists no conversations or
+ * can't be read.
  */
-async function chatMarked(page: Page): Promise<ChatRow[]> {
+async function chatMarked(page: Page): Promise<ChatRow[] | undefined> {
   const rows = await page
     .locator('[role="treeitem"]')
     .evaluateAll((items) =>
@@ -320,7 +329,8 @@ async function chatMarked(page: Page): Promise<ChatRow[]> {
           ),
         }))
     )
-    .catch(() => []);
+    .catch(() => undefined);
+  if (!rows?.length) return undefined;
   const byKey = new Map<string, ChatRow>();
   for (const { key, ...row } of rows) {
     if (!row.dot && !row.mentions) continue;
@@ -350,7 +360,7 @@ function chatSectionsUnread(page: Page): Promise<number> {
 }
 
 async function chatRow(page: Page, name: string): Promise<ChatRow | undefined> {
-  return (await chatMarked(page)).find((row) => row.name.includes(name));
+  return (await chatMarked(page))?.find((row) => row.name.includes(name));
 }
 
 async function messagesIn(mailbox: Mailbox, threadId: string): Promise<number> {
@@ -742,7 +752,7 @@ test.describe('the unread numbers beside each view', {
       'channels',
       unread,
       {
-        view: async () => (await chatMarked(page)).length,
+        view: async () => (await chatMarked(page))?.length ?? -1,
         note: 'a welcome message the stack sends new users can be unread here',
       }
     );
