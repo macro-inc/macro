@@ -124,6 +124,14 @@ impl DenoRunner {
         }
         let language = job.request.language;
         let ocaml = match language {
+            // Only the OCaml fetch names each request's operation, so only
+            // an OCaml run can be held to a set of them.
+            Language::Javascript if job.environment.allowed_operations.is_some() => {
+                return Err(ExecutionFailure::new(
+                    FailureCode::Internal,
+                    "only OCaml programs can be limited to operations",
+                ));
+            }
             Language::Javascript => None,
             Language::Ocaml => Some(self.ocaml.as_ref().ok_or_else(|| {
                 ExecutionFailure::new(

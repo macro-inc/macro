@@ -93,7 +93,7 @@
       "start_claude_sign_in": {"group": "agents", "action": "create", "label": "Start Claude sign in"},
       "start_fresh_agent_conversation": {"group": "agents", "action": "create", "label": "Start fresh agent conversation"},
       "steer_queued_action": {"group": "agents", "action": "update", "label": "Steer queued action"},
-      "tighten_agent_tool_permissions": {"group": "agents", "action": "update", "label": "Restrict agent tool permissions"},
+      "tighten_agent_tool_permissions": {"group": "agents", "action": "update", "label": "Restrict agent tool permissions", "always_allowed": true},
       "unlink_agent_session_pull_request": {"group": "agents", "action": "update", "label": "Unlink agent session pull request"},
       "unregister_agent_session_work": {"group": "agents", "action": "update", "label": "Unregister agent session work"},
       "update_agent_session_permissions": {"group": "sharing", "action": "send", "label": "Update agent session permissions"},

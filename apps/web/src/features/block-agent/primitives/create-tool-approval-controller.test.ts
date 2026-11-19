@@ -16,6 +16,7 @@ const held = {
   serverName: 'Macro',
   toolName: 'ListEmails',
   requestedBy: 'macro|julia@macro.com',
+  approver: null,
 } satisfies PendingInteraction;
 
 const permission = {

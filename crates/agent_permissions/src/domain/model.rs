@@ -23,6 +23,7 @@ use utoipa::ToSchema;
     Serialize,
     Deserialize,
     ToSchema,
+    schemars::JsonSchema,
     strum::EnumString,
     strum::IntoStaticStr,
 )]
@@ -238,8 +239,11 @@ pub struct Catalog {
     pub version: String,
     /// The groups, in display order.
     pub groups: Vec<CatalogGroup>,
-    /// The operations, in registry order.
+    /// The operations settings can name, in registry order.
     pub entries: Vec<CatalogEntry>,
+    /// The operations no setting applies to: always allowed, e.g. the
+    /// agent's own tightening, which can only restrict it.
+    pub always_allowed: Vec<CatalogEntry>,
 }
 
 impl Catalog {
@@ -248,9 +252,16 @@ impl Catalog {
         self.groups.iter().find(|group| group.id == id)
     }
 
-    /// The operation `service.operation`.
+    /// The operation `service.operation`, if settings can name it.
     pub fn entry(&self, service: &str, operation: &str) -> Option<&CatalogEntry> {
         self.entries
+            .iter()
+            .find(|entry| entry.service == service && entry.operation == operation)
+    }
+
+    /// The operation `service.operation`, if it is always allowed.
+    pub fn always_allowed(&self, service: &str, operation: &str) -> Option<&CatalogEntry> {
+        self.always_allowed
             .iter()
             .find(|entry| entry.service == service && entry.operation == operation)
     }
@@ -307,7 +318,9 @@ pub enum PolicyKind {
 }
 
 /// Where an effective state comes from.
-#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, ToSchema)]
+#[derive(
+    Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize, ToSchema, schemars::JsonSchema,
+)]
 #[serde(rename_all = "snake_case")]
 #[schema(as = ToolPermissionOrigin)]
 pub enum Origin {
@@ -490,4 +503,73 @@ pub enum PermissionError {
     /// Storage or a directory failed; details stay in server diagnostics.
     #[error("internal error")]
     Internal(rootcause::Report),
+}
+
+/// One SDK operation a program may call, as the gate judged it: what the
+/// approval dialog lists and a refusal names.
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize, ToSchema, schemars::JsonSchema)]
+#[serde(rename_all = "camelCase")]
+pub struct GatedOperation {
+    /// The SDK's spec name, e.g. `email`.
+    pub service: String,
+    /// The raw operationId, e.g. `send_message`.
+    pub operation: String,
+    /// What it does, for a person. `service.operation` for an operation the
+    /// registry does not know.
+    pub label: String,
+    /// Its group id; `unclassified` for an operation the registry does not
+    /// know.
+    pub group: String,
+    /// Its group's display name.
+    pub group_name: String,
+    /// Its action; absent for an operation the registry does not know.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub action: Option<Action>,
+    /// Its effective state.
+    pub state: PermissionState,
+    /// Where the state comes from.
+    pub origin: Origin,
+}
+
+/// Why a program did not run, when its permissions stopped it.
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize, ToSchema, schemars::JsonSchema)]
+#[serde(tag = "outcome", rename_all = "snake_case")]
+pub enum ExecutionPermission {
+    /// It may call operations set to never: nothing ran, nobody was asked.
+    Blocked {
+        /// The operations set to never.
+        operations: Vec<GatedOperation>,
+    },
+    /// It may call operations set to ask, and the person did not approve.
+    Declined {
+        /// How the approval ended.
+        status: DeclinedStatus,
+        /// The operations it asked about.
+        operations: Vec<GatedOperation>,
+    },
+}
+
+/// How an approval ended without approving.
+#[derive(
+    Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize, ToSchema, schemars::JsonSchema,
+)]
+#[serde(rename_all = "snake_case")]
+pub enum DeclinedStatus {
+    /// The person declined.
+    Denied,
+    /// Someone cancelled the wait, or the turn ended.
+    Cancelled,
+    /// Nobody answered in time.
+    Expired,
+}
+
+/// What a session's permissions say about everything a program may call.
+#[derive(Debug, Clone, PartialEq, Eq, Default)]
+pub struct Admission {
+    /// Operations set to never: the program must not run.
+    pub blocked: Vec<GatedOperation>,
+    /// Operations set to ask: the program runs only once a person approves.
+    pub ask: Vec<GatedOperation>,
+    /// Operations always allowed.
+    pub allowed: Vec<GatedOperation>,
 }

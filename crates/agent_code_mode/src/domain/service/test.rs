@@ -295,6 +295,7 @@ async fn unfinished_journal_reads_and_retries_report_uncertainty_without_replayi
         calls: Vec::new(),
         activity: Vec::new(),
         activity_truncated: false,
+        permission: None,
     };
     store.create(session.id, &record).await.unwrap();
     let access = EntityAccessReceipt::dangerously_assert_authenticated_user(
@@ -499,6 +500,7 @@ fn activity_rejects_unknown_operations_and_is_bounded() {
         calls: vec![],
         activity: vec![],
         activity_truncated: false,
+        permission: None,
     };
     super::super::activity::observe(
         &mut record.activity,
@@ -699,6 +701,7 @@ fn with_ocaml(service: CodeModeService, on: bool) -> CodeModeService {
     service.with_ocaml(OcamlPrograms {
         fingerprint: "0.1.0+fixture".into(),
         rollout: Arc::new(Rollout(on)),
+        permissions: None,
     })
 }
 
@@ -810,4 +813,142 @@ fn records_saved_before_languages_read_as_javascript() {
     .unwrap();
     assert_eq!(record.language, ProgramLanguage::Javascript);
     assert_eq!(record.sdk_fingerprint, None);
+}
+
+/// Credentials that check the program and refuse to run it.
+struct NotRunCredentials(Option<ExecutionPermission>);
+#[async_trait]
+impl ExecutionCredentials for NotRunCredentials {
+    async fn issue(
+        &self,
+        _: &ExecutionIdentity,
+        _: &str,
+        _: ProgramLanguage,
+        _: CancellationToken,
+    ) -> Result<code_execution::domain::RunEnvironment, CodeModeError> {
+        Err(CodeModeError::NotRun(NotRun {
+            message: "This OCaml program did not run.".into(),
+            permission: self.0.clone(),
+        }))
+    }
+}
+
+fn blocked() -> ExecutionPermission {
+    ExecutionPermission::Blocked {
+        operations: vec![GatedOperation {
+            service: "email".into(),
+            operation: "send_message".into(),
+            label: "Send an email".into(),
+            group: "email".into(),
+            group_name: "Email".into(),
+            action: Some(agent_permission_registry::Action::Send),
+            state: agent_permissions::domain::model::PermissionState::Never,
+            origin: agent_permissions::domain::model::Origin::GroupAction,
+        }],
+    }
+}
+
+#[tokio::test]
+async fn a_program_its_permissions_stop_is_recorded_as_failed_with_why() {
+    for permission in [Some(blocked()), None] {
+        let store = Arc::new(MemoryStore::default());
+        let service = with_ocaml(
+            CodeModeService::new(
+                Some(Arc::new(Executor)),
+                Arc::new(NotRunCredentials(permission.clone())),
+                store.clone(),
+                Arc::new(TestTurns::default()),
+            ),
+            true,
+        );
+        let session =
+            test_agent_session(AgentSessionId::new_from_uuid(macro_uuid::generate_uuid_v7()));
+        let receipt = run(&service, &session, ExecutionId::mint(), ocaml_request())
+            .await
+            .expect("a receipt, not an error");
+        assert_eq!(receipt.status, ExecutionStatus::Failed);
+        assert_eq!(
+            receipt.error.as_deref(),
+            Some("This OCaml program did not run.")
+        );
+        assert_eq!(receipt.permission, permission);
+        assert_eq!(receipt.result, None);
+        let record = store.get(session.id, receipt.execution_id).await.unwrap();
+        assert_eq!(record.status, ExecutionStatus::Failed);
+        assert_eq!(record.permission, permission);
+        let stored = serde_json::to_value(&record).unwrap();
+        let read: ExecutionRecord = serde_json::from_value(stored.clone()).unwrap();
+        assert_eq!(read.permission, permission);
+        if permission.is_some() {
+            assert_eq!(stored["permission"]["outcome"], "blocked");
+            assert_eq!(
+                serde_json::to_value(&receipt).unwrap()["permission"]["outcome"],
+                "blocked"
+            );
+        }
+    }
+}
+
+#[test]
+fn records_and_receipts_without_a_permission_serialize_as_before() {
+    let id = ExecutionId::from_uuid(macro_uuid::Uuid::from_u128(7));
+    let record = ExecutionRecord {
+        execution_id: id,
+        acting_as: None,
+        turn_id: None,
+        source: "export async function main() {}".into(),
+        language: ProgramLanguage::Javascript,
+        sdk_fingerprint: None,
+        status: ExecutionStatus::Succeeded,
+        result: Some(json!({"data": 1})),
+        error: None,
+        calls: Vec::new(),
+        activity: Vec::new(),
+        activity_truncated: false,
+        permission: None,
+    };
+    assert_eq!(
+        serde_json::to_value(&record).unwrap(),
+        json!({
+            "executionId": "00000000-0000-0000-0000-000000000007",
+            "actingAs": null,
+            "turnId": null,
+            "source": "export async function main() {}",
+            "status": "succeeded",
+            "result": {"data": 1},
+            "error": null,
+            "calls": [],
+            "activity": [],
+            "activityTruncated": false,
+        })
+    );
+    assert_eq!(
+        serde_json::to_value(receipt(&record)).unwrap(),
+        json!({
+            "executionId": "00000000-0000-0000-0000-000000000007",
+            "status": "succeeded",
+            "activity": [],
+            "result": {"data": 1},
+            "error": null,
+        })
+    );
+}
+
+#[test]
+fn a_request_the_gate_refused_is_recorded_as_refused() {
+    let mut activity = Vec::new();
+    let mut truncated = false;
+    super::super::activity::observe(
+        &mut activity,
+        &mut truncated,
+        json!({"id": 1, "service": "contacts", "operation": "getContacts", "status": "refused"}),
+    );
+    assert_eq!(activity.len(), 1);
+    assert_eq!(activity[0].status, RecordedCallStatus::Refused);
+    super::super::activity::finish(&mut activity);
+    assert_eq!(activity[0].status, RecordedCallStatus::Refused);
+    assert_eq!(
+        serde_json::to_value(&activity[0]).unwrap()["status"],
+        "refused"
+    );
 }

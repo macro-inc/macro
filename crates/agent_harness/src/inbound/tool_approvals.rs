@@ -21,7 +21,10 @@ use axum::routing::post;
 use entity_access::domain::models::EditAccessLevel;
 use entity_access::domain::ports::EntityAccessService;
 use entity_access::inbound::axum_extractors::AgentSessionAccessLevelExtractor;
-use macro_authorization::{MacroAuthorizationService, MacroAuthorizationState};
+use macro_authorization::{
+    AnyPrincipal, MacroAuthorization, MacroAuthorizationExtractor, MacroAuthorizationService,
+    MacroAuthorizationState,
+};
 use macro_uuid::Uuid;
 use serde::{Deserialize, Serialize};
 use utoipa::ToSchema;
@@ -192,6 +195,9 @@ impl IntoResponse for ToolApprovalApiError {
                 "a call a bot made on nobody's behalf cannot be approved for good",
             )
                 .into_response(),
+            ToolApprovalError::NeedsPerson => {
+                (StatusCode::FORBIDDEN, "a person must answer this in Macro").into_response()
+            }
             ToolApprovalError::Egress(error) => {
                 tracing::error!(error = ?error, "answering a tool approval failed");
                 (StatusCode::INTERNAL_SERVER_ERROR, "internal error").into_response()
@@ -213,7 +219,7 @@ impl IntoResponse for ToolApprovalApiError {
     responses(
         (status = 200, body = AnswerToolApprovalResponse),
         (status = 401, body = String),
-        (status = 403, body = String, description = "Not the owner, for approve or deny; or no edit access"),
+        (status = 403, body = String, description = "Not the owner, for approve or deny; or no edit access; or, for a hold on the agent's permissions, not a person's own session"),
         (status = 404, body = String),
         (status = 409, body = String, description = "Already resolved"),
         (status = 422, body = String, description = "Approve for good, for a call no person asked for"),
@@ -226,6 +232,7 @@ impl IntoResponse for ToolApprovalApiError {
 #[tracing::instrument(skip_all, fields(%session_id, %approval_id), err(Debug))]
 pub async fn answer_tool_approval_handler<Approvals, Access, Auth>(
     access: AgentSessionAccessLevelExtractor<EditAccessLevel, Access, Auth>,
+    caller: MacroAuthorizationExtractor<Auth, AnyPrincipal>,
     State(state): State<ToolApprovalsRouterState<Approvals, Access, Auth>>,
     Path((session_id, approval_id)): Path<(Uuid, Uuid)>,
     Json(request): Json<AnswerToolApprovalRequest>,
@@ -241,6 +248,12 @@ where
         .get_authenticated_user()
         .map_err(|_| (StatusCode::FORBIDDEN, "a person must answer").into_response())?
         .clone();
+    // A person in their own session, not an agent's or a program's
+    // credential: only one may answer a hold on an agent's permissions.
+    let by_person = matches!(
+        &caller.authorization,
+        MacroAuthorization::User(user) if user.is_human_session()
+    );
     let approval = state
         .approvals
         .answer(
@@ -248,6 +261,7 @@ where
             ToolApprovalId::from_uuid(approval_id),
             request.answer.into(),
             &by,
+            by_person,
         )
         .await
         .map_err(|error| ToolApprovalApiError(error).into_response())?;

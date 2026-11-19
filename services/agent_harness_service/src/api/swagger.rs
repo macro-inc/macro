@@ -152,6 +152,17 @@ impl Modify for SecurityAddon {
         crate::computers::claude::claude_mode_handler,
     ),
     components(schemas(
+        // What the chat renders for an OCaml program its permissions
+        // stopped, and for ShowPermissions.
+        agent_code_mode::domain::ExecutionReceipt,
+        agent_permissions::domain::model::ExecutionPermission,
+        agent_permissions::domain::model::GatedOperation,
+        agent_permissions::domain::model::DeclinedStatus,
+        agent_permissions::inbound::toolset::ShowPermissionsResult,
+        agent_permissions::inbound::toolset::ShowPermissionsSelection,
+        agent_permissions::inbound::toolset::ShownPermission,
+        agent_permissions::inbound::toolset::GroupSelection,
+        agent_permissions::inbound::toolset::ToolSelection,
         team_agents::domain::voice::Voice,
         CodingAgent,
         CodingAgentsResponse,

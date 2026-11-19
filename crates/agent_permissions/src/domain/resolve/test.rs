@@ -32,6 +32,7 @@ fn catalog() -> Catalog {
             entry("email", "list_threads", "email", Action::Read),
             entry("calendar", "create_event", "calendar", Action::Create),
         ],
+        always_allowed: Vec::new(),
     }
 }
 
@@ -56,6 +57,13 @@ fn tool_rule(service: &str, operation: &str, state: PermissionState) -> Rule {
         state,
         via_agent: false,
         updated_at: DateTime::UNIX_EPOCH,
+    }
+}
+
+fn agent_tool_rule(service: &str, operation: &str, state: PermissionState) -> Rule {
+    Rule {
+        via_agent: true,
+        ..tool_rule(service, operation, state)
     }
 }
 
@@ -118,6 +126,94 @@ fn the_session_overlay_only_ever_makes_an_operation_stricter() {
 }
 
 #[test]
+fn an_agents_tool_setting_never_exempts_it_from_a_stricter_group_setting() {
+    // The agent pins `send_email` to ask while Email·Send is always.
+    let mut saved = vec![
+        group_rule("email", Action::Send, Always),
+        agent_tool_rule("email", "send_email", Ask),
+    ];
+    assert_eq!(
+        state_of(&saved, &[], "email", "send_email"),
+        (Ask, Origin::Tool)
+    );
+
+    // The person then sets Email·Send to never: the tool follows.
+    saved[0] = group_rule("email", Action::Send, Never);
+    assert_eq!(
+        state_of(&saved, &[], "email", "send_email"),
+        (Never, Origin::GroupAction)
+    );
+
+    // An agent's tool setting equal to its group's adds nothing.
+    saved[0] = group_rule("email", Action::Send, Ask);
+    assert_eq!(
+        state_of(&saved, &[], "email", "send_email"),
+        (Ask, Origin::GroupAction)
+    );
+
+    // A person's tool setting still replaces its group's.
+    saved[0] = group_rule("email", Action::Send, Never);
+    saved[1] = tool_rule("email", "send_email", Ask);
+    assert_eq!(
+        state_of(&saved, &[], "email", "send_email"),
+        (Ask, Origin::Tool)
+    );
+}
+
+#[test]
+fn an_overlay_tool_setting_never_exempts_it_from_the_overlays_group_setting() {
+    let overlay = [
+        tool_rule("email", "send_email", Ask),
+        group_rule("email", Action::Send, Never),
+    ];
+    assert_eq!(
+        state_of(&[], &overlay, "email", "send_email"),
+        (Never, Origin::Session)
+    );
+}
+
+#[test]
+fn asking_for_a_tool_state_looser_than_it_has_is_refused() {
+    let catalog = catalog();
+    let saved = [group_rule("email", Action::Send, Never)];
+    let ask = [change(tool("email", "send_email"), Some(Ask))];
+    let loosened = asks_looser(&catalog, (&saved, &[]), &ask).unwrap_err();
+    assert_eq!(loosened[0].from, Never);
+    assert_eq!(loosened[0].to, Ask);
+
+    // Moving the group's never onto the tool asks for nothing looser.
+    let never = [change(tool("email", "send_email"), Some(Never))];
+    assert_eq!(asks_looser(&catalog, (&saved, &[]), &never), Ok(()));
+    // Nor does pinning ask under an always group.
+    assert_eq!(asks_looser(&catalog, (&[], &[]), &ask), Ok(()));
+}
+
+#[test]
+fn removing_or_loosening_a_group_setting_is_refused_even_when_no_operation_moves() {
+    let catalog = catalog();
+    // Every documents·destroy operation has a person's own setting, so
+    // dropping the group's never moves nothing today.
+    let saved = [
+        group_rule("documents", Action::Destroy, Never),
+        tool_rule("storage", "delete_document", Never),
+        tool_rule("storage", "delete_project", Never),
+    ];
+    for state in [None, Some(Always), Some(Ask)] {
+        let drop = [change(group_action("documents", Action::Destroy), state)];
+        assert!(asks_looser(&catalog, (&saved, &[]), &drop).is_err());
+    }
+
+    // A group and action with no operations yet.
+    let saved = [group_rule("calendar", Action::Send, Never)];
+    let drop = [change(group_action("calendar", Action::Send), None)];
+    assert_eq!(asks_looser(&catalog, (&saved, &[]), &drop), Err(Vec::new()));
+
+    // Tightening a group passes.
+    let never = [change(group_action("calendar", Action::Send), Some(Never))];
+    assert_eq!(asks_looser(&catalog, (&saved, &[]), &never), Ok(()));
+}
+
+#[test]
 fn a_new_operation_takes_its_groups_action_and_a_new_group_is_always() {
     // Rules saved before `delete_project` or `calendar` existed.
     let saved = [
@@ -137,7 +233,7 @@ fn a_new_operation_takes_its_groups_action_and_a_new_group_is_always() {
 
 fn tighten(saved: &[Rule], changes: Vec<Change>) -> Result<(), Vec<LoosenedOperation>> {
     let changes = normalize(changes, false);
-    let after = apply(saved, &changes);
+    let after = apply(saved, &changes, false);
     tighten_only(&catalog(), (saved, &[]), (&after, &[]))
 }
 
@@ -218,18 +314,27 @@ fn tightening_passes_and_every_way_of_loosening_is_refused() {
 }
 
 #[test]
-fn moving_a_groups_never_onto_each_of_its_tools_is_not_loosening() {
-    assert_eq!(
-        tighten(
-            &[group_rule("documents", Action::Destroy, Never)],
-            vec![
-                change(tool("storage", "delete_document"), Some(Never)),
-                change(tool("storage", "delete_project"), Some(Never)),
-                change(group_action("documents", Action::Destroy), None),
-            ],
-        ),
-        Ok(())
-    );
+fn an_agents_tool_pin_is_tightening_and_survives_as_the_stricter_setting() {
+    // Under an always group, the agent pins a tool to ask: a tightening.
+    let catalog = catalog();
+    let saved = [group_rule("email", Action::Send, Always)];
+    let pin = normalize(vec![change(tool("email", "send_email"), Some(Ask))], true);
+    let after = apply(&saved, &pin, true);
+    assert_eq!(tighten_only(&catalog, (&saved, &[]), (&after, &[])), Ok(()));
+    assert!(after.iter().any(|rule| rule.via_agent));
+}
+
+#[test]
+fn moving_a_groups_never_onto_each_of_its_tools_loosens_no_operation_but_is_refused() {
+    let saved = [group_rule("documents", Action::Destroy, Never)];
+    let changes = vec![
+        change(tool("storage", "delete_document"), Some(Never)),
+        change(tool("storage", "delete_project"), Some(Never)),
+        change(group_action("documents", Action::Destroy), None),
+    ];
+    assert_eq!(tighten(&saved, changes.clone()), Ok(()));
+    // An operation added to documents·destroy later would be always.
+    assert!(asks_looser(&catalog(), (&saved, &[]), &changes).is_err());
 }
 
 #[test]
@@ -238,7 +343,7 @@ fn a_session_overlay_can_tighten_but_never_loosen() {
     let overlay = [tool_rule("email", "send_email", Never)];
 
     let removal = normalize(vec![change(tool("email", "send_email"), None)], true);
-    let after = apply(&overlay, &removal);
+    let after = apply(&overlay, &removal, true);
     assert!(tighten_only(&catalog, (&[], &overlay), (&[], &after)).is_err());
 
     // An overlay holds no `always`: it becomes a removal.

@@ -20,7 +20,11 @@ mod test;
 /// What an operation does to its group's data, the unit a person allows,
 /// asks about or refuses.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash, PartialOrd, Ord, Deserialize, Serialize)]
-#[cfg_attr(feature = "openapi", derive(utoipa::ToSchema), schema(as = PermissionAction))]
+#[cfg_attr(
+    feature = "openapi",
+    derive(utoipa::ToSchema, schemars::JsonSchema),
+    schema(as = PermissionAction)
+)]
 #[serde(rename_all = "lowercase")]
 pub enum Action {
     /// Makes something new.
@@ -87,6 +91,11 @@ pub struct Operation {
     pub action: Action,
     /// What it does, e.g. "Send email".
     pub label: String,
+    /// No setting applies to it: it is always allowed and not offered as a
+    /// setting. Only for an operation that can only ever restrict the agent
+    /// itself, which a setting could turn from always safe into gated.
+    #[serde(default)]
+    pub always_allowed: bool,
 }
 
 #[derive(Deserialize)]

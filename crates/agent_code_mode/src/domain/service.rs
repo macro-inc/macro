@@ -33,6 +33,12 @@ pub trait SessionCodeMode: Send + Sync + 'static {
     /// bundle and the session owner has the rollout. Off when either is missing
     /// or the flag cannot be read.
     async fn ocaml_enabled(&self, session: &AgentSession) -> bool;
+    /// Whether the agent's permissions gate `session`'s OCaml programs: OCaml
+    /// is on and the owner has the permissions rollout too.
+    async fn permissions_enabled(&self, session: &AgentSession) -> bool {
+        let _ = session;
+        false
+    }
 }
 
 /// OCaml programs, offered when the runner has the OCaml bundle.
@@ -41,6 +47,9 @@ pub struct OcamlPrograms {
     pub fingerprint: String,
     /// The per-owner rollout.
     pub rollout: Arc<dyn OcamlRollout>,
+    /// The per-owner rollout of agent permissions, which gate OCaml programs;
+    /// `None` where they are not wired.
+    pub permissions: Option<Arc<dyn OcamlRollout>>,
 }
 
 struct Inner {
@@ -115,6 +124,7 @@ impl CodeModeService {
             calls: Vec::new(),
             activity: Vec::new(),
             activity_truncated: false,
+            permission: None,
         };
         match self.0.store.create(identity.session, &record).await {
             Ok(()) => {}
@@ -156,7 +166,33 @@ impl CodeModeService {
             .issue(&identity, &request.source, record.language, cancel.clone())
             .await
         {
-            Ok(environment) => environment,
+            Ok(environment) => {
+                tracing::Span::current().record(
+                    "permission",
+                    if environment.allowed_operations.is_some() {
+                        "admitted"
+                    } else {
+                        "off"
+                    },
+                );
+                environment
+            }
+            // Checked and not run: the program's outcome, not the service's.
+            Err(CodeModeError::NotRun(not_run)) => {
+                tracing::Span::current().record(
+                    "permission",
+                    match &not_run.permission {
+                        Some(ExecutionPermission::Blocked { .. }) => "blocked",
+                        Some(ExecutionPermission::Declined { .. }) => "declined",
+                        None => "cannot_analyze",
+                    },
+                );
+                record.status = ExecutionStatus::Failed;
+                record.error = Some(not_run.message);
+                record.permission = not_run.permission;
+                self.0.store.save(identity.session, &record).await?;
+                return Ok(receipt(&record));
+            }
             Err(error) => {
                 record.status = ExecutionStatus::Failed;
                 record.error = Some(error.to_string());
@@ -512,6 +548,7 @@ impl SessionCodeMode for CodeModeService {
             status = tracing::field::Empty,
             activity = tracing::field::Empty,
             result_bytes = tracing::field::Empty,
+            permission = tracing::field::Empty,
         );
         // Finish the journal even when the MCP request future is dropped. The drop
         // guard cancels the runner; its final cleanup then persists the outcome.
@@ -567,6 +604,24 @@ impl SessionCodeMode for CodeModeService {
         };
         match session.owner_user() {
             Ok(owner) => ocaml.rollout.enabled(owner).await,
+            Err(_) => false,
+        }
+    }
+
+    async fn permissions_enabled(&self, session: &AgentSession) -> bool {
+        let Some(permissions) = self
+            .0
+            .ocaml
+            .as_ref()
+            .and_then(|ocaml| ocaml.permissions.clone())
+        else {
+            return false;
+        };
+        if !self.ocaml_enabled(session).await {
+            return false;
+        }
+        match session.owner_user() {
+            Ok(owner) => permissions.enabled(owner).await,
             Err(_) => false,
         }
     }
@@ -667,6 +722,7 @@ fn receipt(record: &ExecutionRecord) -> ExecutionReceipt {
         activity: record.activity.clone(),
         result: record.result.clone(),
         error: execution_error(record),
+        permission: record.permission.clone(),
     }
 }
 

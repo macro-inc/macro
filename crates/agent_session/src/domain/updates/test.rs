@@ -146,6 +146,7 @@ fn pending_interaction_variants_keep_their_user_facing_details() {
             server_name: "GitHub".into(),
             tool_name: "merge_pr".into(),
             requested_by: None,
+            approver: None,
         }),
         &[],
         session.last_activity,

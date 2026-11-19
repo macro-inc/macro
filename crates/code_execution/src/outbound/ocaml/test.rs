@@ -75,3 +75,41 @@ fn only_the_runtimes_own_fatal_lines_mean_out_of_memory() {
         Some("main.ml".into())
     );
 }
+
+#[test]
+fn the_analyzers_answers_parse_and_anything_else_is_refused() {
+    let ok = br#"{"status":"ok","operations":[{"service":"storage","operation":"create_task_handler","path":"Macro_sdk.Storage.create_task_handler","method":"POST","route":"/documents/create_task","rivals":[{"service":"storage","route":"/documents/{}"}],"locations":[]}]}"#;
+    assert_eq!(
+        analysis(ok),
+        Some(Analysis::Calls(
+            [SdkCall {
+                operation: SdkOperation {
+                    service: "storage".into(),
+                    operation_id: "create_task_handler".into(),
+                },
+                method: "POST".into(),
+                route: "/documents/create_task".into(),
+                rivals: vec![SdkRoute {
+                    service: "storage".into(),
+                    route: "/documents/{}".into(),
+                }],
+            }]
+            .into()
+        ))
+    );
+    let cannot = br#"{"status":"cannot_analyze","reasons":[{"message":"belongs to Obj","location":{"file":"main.ml","line":5,"column":2}}]}"#;
+    assert_eq!(
+        analysis(cannot),
+        Some(Analysis::CannotAnalyze(vec![AnalysisReason {
+            message: "belongs to Obj".into(),
+            line: 5,
+            column: 3,
+        }]))
+    );
+    assert_eq!(
+        analysis(br#"{"status":"cannot_analyze","reasons":[]}"#),
+        None
+    );
+    assert_eq!(analysis(br#"{"status":"maybe"}"#), None);
+    assert_eq!(analysis(b"not json"), None);
+}
