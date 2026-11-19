@@ -53,8 +53,8 @@ behind its own Cargo feature.
 ## Gotchas
 
 - Keep each Lua script or `MULTI` to one key. On a Redis cluster a script
-  whose keys hash to different slots fails with `CROSSSLOT`, and CI's Redis
-  is a single node that never shows it.
+  whose keys hash to different slots fails with `CROSSSLOT`. CI's Redis runs
+  without cluster mode, so it never shows that.
 
 ## Related
 
