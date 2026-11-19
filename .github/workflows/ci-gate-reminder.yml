@@ -57,7 +57,8 @@ jobs:
 
         const API = 'https://api.github.com';
         const DESCRIPTION_LIMIT = 140;
-        const READ_ATTEMPTS = 3;
+        // For a request that is safe to repeat: a read, or posting a status.
+        const ATTEMPTS = 3;
         // How many attested checks a failing verdict names; the log has them all.
         const NAMED_CHECKS = 2;
         // An open request. Only trusted runs set statuses: a fork's token can't.
@@ -117,10 +118,16 @@ jobs:
           return true;
         }
 
-        /// One request. A read is tried again when GitHub or the network fails it.
-        async function request(method: string, path: string, body?: unknown): Promise<Response> {
+        /// One request, tried again up to `attempts` times when GitHub or the network
+        /// fails it.
+        async function request(
+          method: string,
+          path: string,
+          body: unknown,
+          attempts: number,
+        ): Promise<Response> {
           for (let attempt = 1; ; attempt++) {
-            const last = method !== 'GET' || attempt === READ_ATTEMPTS;
+            const last = attempt >= attempts;
             try {
               const response = await fetch(`${API}${path}`, {
                 method,
@@ -143,8 +150,13 @@ jobs:
           }
         }
 
-        async function github(method: string, path: string, body?: unknown): Promise<any> {
-          const response = await request(method, path, body);
+        async function github(
+          method: string,
+          path: string,
+          body?: unknown,
+          attempts = method === 'GET' ? ATTEMPTS : 1,
+        ): Promise<any> {
+          const response = await request(method, path, body, attempts);
           // Removing a label that is already gone is the outcome we wanted.
           if (method === 'DELETE' && response.status === 404) {
             return null;
@@ -276,6 +288,18 @@ jobs:
           return entries.filter((entry) => !current.includes(entry)).map(entryCheck);
         }
 
+        /// The entries a run took on trust: those whose check did not also run and
+        /// pass here. `path-check` sends an accepted check to a runner when this run
+        /// selects something else, and that result needs no attestation.
+        export function trustedEntries(entries: string[], checks: GateCheck[], jobs: RunJob[]): string[] {
+          const ranAndPassed = (id: string) => {
+            const check = checks.find((each) => each.id === id);
+            const own = check ? jobsOf(check, jobs) : [];
+            return own.length > 0 && own.every((job) => job.conclusion === 'success');
+          };
+          return entries.filter((entry) => !ranAndPassed(entryCheck(entry)));
+        }
+
         /// Each job of a run as its newest attempt left it. A re-run of some jobs
         /// keeps the others' results from the attempt that ran them.
         export function newestJobs(jobs: RunJob[]): RunJob[] {
@@ -385,12 +409,18 @@ jobs:
           description: string,
           targetUrl: string,
         ) {
-          await github('POST', `/repos/${repo()}/statuses/${sha}`, {
-            state,
-            context: statusContext,
-            description: description.slice(0, DESCRIPTION_LIMIT),
-            target_url: targetUrl,
-          });
+          // A status posted twice reads the same as one posted once.
+          await github(
+            'POST',
+            `/repos/${repo()}/statuses/${sha}`,
+            {
+              state,
+              context: statusContext,
+              description: description.slice(0, DESCRIPTION_LIMIT),
+              target_url: targetUrl,
+            },
+            ATTEMPTS,
+          );
           console.log(`${statusContext} on ${sha.slice(0, 10)}: ${state}: ${description}`);
         }
 
@@ -616,7 +646,7 @@ jobs:
           );
         }
 
-        /// Why a run that skipped jobs on attestations can no longer pass, or null.
+        /// Why a run that took checks on attestation can no longer pass, or null.
         /// Start decided what to skip, and a re-run of failed jobs keeps that decision
         /// while the commit's statuses move on: an attestation is withdrawn, or
         /// another run audits the commit. When GitHub can't say, nothing is vouched
@@ -669,9 +699,20 @@ jobs:
             if (failures.length > 0) {
               console.log(`Attested but failed here: ${failures.join(', ')}`);
             }
+            // What a runner contradicted stops counting, whatever run asks next.
+            for (const check of failures) {
+              await postStatus(
+                head,
+                `${env('ATTESTED_PREFIX')}${check}`,
+                'failure',
+                'Failed on a runner in an audit',
+                env('RUN_URL'),
+              ).catch((error) => console.log(`::warning::Could not withdraw ${check}: ${error}`));
+            }
             outcome = withAttestations(verdict, skippedAttested(entries, checks, jobs), failures);
 
-            const lapsed = entries.length > 0 ? await attestationsLapsed(head, entries) : null;
+            const trusted = trustedEntries(entries, checks, jobs);
+            const lapsed = trusted.length > 0 ? await attestationsLapsed(head, trusted) : null;
             if (lapsed) {
               outcome = { state: 'failure', description: lapsed };
             }

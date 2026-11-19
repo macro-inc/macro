@@ -71,9 +71,10 @@ What `PR CI` accepts:
   job the change selects. An attested check that fails there fails the run, and
   `CI gate` reads `Attested but failed here: <checks>`. Nothing else runs these
   jobs for a pull request, so treat that as a defect: find why the machine and
-  the runner disagree before attesting the check again. An audit leaves an
-  `attestation audit` status on the commit, and every later run on that commit
-  is an audit too: asking again does not get a failed audit past the runner.
+  the runner disagree before attesting the check again. The audit withdraws
+  the attestation it saw fail and leaves an `attestation audit` status on the
+  commit, and every later run on that commit is an audit too: asking again
+  does not get a failed audit past the runner.
 - `CI gate` reads the statuses again when the run ends, because re-running
   failed jobs keeps what `Start` decided. A run that relied on an attestation
   withdrawn meanwhile fails with `No longer attested: <checks>`, and one that

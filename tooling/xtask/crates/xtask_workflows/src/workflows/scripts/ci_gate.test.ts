@@ -20,6 +20,7 @@ import {
   PR_CI_PATH,
   skippedAttested,
   START_JOB,
+  trustedEntries,
   withAttestations,
   withdrawnAttestations,
 } from './ci_gate.ts';
@@ -424,6 +425,28 @@ describe('withdrawnAttestations', () => {
 
   test('names nothing while every attestation Start accepted still holds', () => {
     assert.deepEqual(withdrawnAttestations(entries, [...entries, 'web-app/test@-']), []);
+  });
+});
+
+describe('trustedEntries', () => {
+  const entries = ['cloud-storage/check@0123456789abcdef', 'web-app/test@0123456789abcdef'];
+
+  test('leaves out a check that ran and passed here after all', () => {
+    const trusted = trustedEntries(entries, GATE_CHECKS, [
+      { name: 'Cloud Storage / check', conclusion: 'success' },
+      { name: 'Web App / Test (1/6)', conclusion: 'skipped' },
+    ]);
+
+    assert.deepEqual(trusted, ['web-app/test@0123456789abcdef']);
+  });
+
+  test('keeps a check whose job is skipped, failed, partly run or not listed', () => {
+    const trusted = trustedEntries(entries, GATE_CHECKS, [
+      { name: 'Web App / Test (1/6)', conclusion: 'success' },
+      { name: 'Web App / Test (2/6)', conclusion: 'skipped' },
+    ]);
+
+    assert.deepEqual(trusted, entries);
   });
 });
 
