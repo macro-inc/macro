@@ -16,6 +16,9 @@ const SOURCE = `export async function main(macro) {
 const REVISED = SOURCE.replace('limit: 5', 'limit: 10');
 const PROBLEM =
   "routine.ts(2,38): error TS2339: Property 'list' does not exist on type 'Threads'.";
+const STEP_ERROR =
+  "TypeError: Cannot read properties of undefined (reading 'length')";
+const RUN_ERROR = 'The agent could not start: sandbox image unavailable';
 
 const step: CodeStepDraft = {
   id: 'count',
@@ -39,14 +42,16 @@ const slots: RoutineStepSlots = {
 };
 
 /**
- * Every place a routine shows code or output, as the routine page renders
- * it: a code step (its menu shows the code), a rewritten step with its code
- * changes, a paused routine's proposed update, and a run's step output.
+ * Every place a routine shows code, output or an error, as the routine page
+ * renders it: a code step (its menu shows the code), a rewritten step with its
+ * code changes, a paused routine's reason and proposed update, a run's step
+ * output, and a failed run's step and run errors. It scrolls itself, since
+ * the app's body doesn't and a drag needs its block on screen.
  */
 function Fixture() {
   const [steps, setSteps] = createSignal<StepDraft[]>([step]);
   return (
-    <div class="@container/routine grid min-h-screen max-w-3xl gap-8 bg-page p-8 text-ink">
+    <div class="@container/routine grid h-screen max-w-3xl content-start gap-8 overflow-y-auto bg-page p-8 text-ink">
       <RoutineSteps
         steps={steps()}
         onChange={setSteps}
@@ -62,7 +67,7 @@ function Fixture() {
       />
       <CodeReviewNotice
         review={{
-          reason: 'The SDK renamed threads.list.',
+          reason: `The proposed update fails type-checking:\n${PROBLEM}`,
           sdk: '2',
           proposal: {
             task: { prompt: '', user_prompt: '' },
@@ -89,6 +94,28 @@ function Fixture() {
           ],
         }}
         title="Count threads"
+        describe={() => 'Count threads'}
+      />
+      <RunDetail
+        record={{
+          id: 'failed-step',
+          success: false,
+          steps: [
+            {
+              path: '0',
+              kind: 'code',
+              calls: [],
+              callsTruncated: false,
+              error: STEP_ERROR,
+            },
+          ],
+        }}
+        title="Failed step"
+        describe={() => 'Count threads'}
+      />
+      <RunDetail
+        record={{ id: 'failed-run', success: false, error: RUN_ERROR }}
+        title="Failed run"
         describe={() => 'Count threads'}
       />
     </div>

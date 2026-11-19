@@ -1388,7 +1388,7 @@ whose only step is **Ask AI** saves in the original single-agent form.
 step. There are two kinds. **Code** steps run TypeScript against Macro's SDK;
 AI writes them (**Draft it**, the starter templates, or a conversation about
 the routine), and they run with the owner's access. Each shows the sentence
-of what it does, with its values to change; its code is in the step's ⋯ menu. Code, type-check problems, code changes, a paused routine's proposed update and a run's step output can be selected and copied (`bunx playwright test --config src/features/routines/browser-test/playwright.config.ts` from `apps/web` checks each). **Ask AI** hands the run to a model or agent with instructions; it sees
+of what it does, with its values to change; its code is in the step's ⋯ menu. Code, type-check problems, code changes, a paused routine's reason and proposed update, a run's step output and a failed run's errors can be selected and copied (`bunx playwright test --config src/features/routines/browser-test/playwright.config.ts` from `apps/web` checks each). **Ask AI** hands the run to a model or agent with instructions; it sees
 the triggering event and what earlier steps returned, a routine has one, and
 its required apps go to it. The tray under the last step card (like the tray
 under Home's composer) holds **Then… say what should happen next**, where AI

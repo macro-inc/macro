@@ -76,11 +76,20 @@ test('a rewritten step’s code changes and problems can be selected and copied'
   expect(errors).toEqual([]);
 });
 
-test('a paused routine’s proposed update can be selected and copied', async ({
+test('a paused routine’s reason and proposed update can be selected and copied', async ({
   page,
 }) => {
   const { errors } = await open(page);
   const notice = page.getByRole('region', { name: 'Code update needed' });
+  const reason = await dragAndCopy(
+    page,
+    notice.getByText('The proposed update fails type-checking', {
+      exact: false,
+    })
+  );
+  expect(reason.selected).toContain('TS2339');
+  expect(reason.copied).toContain('TS2339');
+
   await notice.getByRole('button', { name: 'Review the update' }).click();
 
   for (const [label, line] of [
@@ -100,11 +109,28 @@ test('a paused routine’s proposed update can be selected and copied', async ({
 
 test('a run’s step output can be selected and copied', async ({ page }) => {
   const { errors } = await open(page);
-  const run = page.getByRole('region', { name: 'Run details' });
+  const run = page.getByRole('region', { name: 'Run details' }).first();
   await run.getByRole('button', { name: 'Show output' }).click();
 
   const output = await dragAndCopy(page, run.locator('pre'));
   expect(output.selected).toContain('"newest": "Quarterly invoice"');
   expect(output.copied).toContain('"newest": "Quarterly invoice"');
+  expect(errors).toEqual([]);
+});
+
+test('a failed run’s errors can be selected and copied', async ({ page }) => {
+  const { errors } = await open(page);
+  const runs = page.getByRole('region', { name: 'Run details' });
+
+  const step = await dragAndCopy(
+    page,
+    runs.nth(1).getByText('TypeError: Cannot read properties of undefined')
+  );
+  expect(step.selected).toContain("(reading 'length')");
+  expect(step.copied).toContain("(reading 'length')");
+
+  const run = await dragAndCopy(page, runs.nth(2).getByRole('alert'));
+  expect(run.selected).toContain('sandbox image unavailable');
+  expect(run.copied).toContain('sandbox image unavailable');
   expect(errors).toEqual([]);
 });

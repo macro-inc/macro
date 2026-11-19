@@ -25,7 +25,7 @@ export function CodeReviewNotice(props: {
           <span class="text-sm font-medium text-ink">
             Paused: its code needs an update
           </span>
-          <span class="whitespace-pre-wrap text-sm text-ink-muted">
+          <span class="select-text whitespace-pre-wrap text-sm text-ink-muted">
             {props.review.reason}
           </span>
         </div>
