@@ -182,10 +182,18 @@ where
         let owner = action.owner_user()?.clone();
         let action_id = action.id.context("persisted action required")?;
         // A copy runs its definition as its parent holds it now.
-        if let (Some(_), Some(parent_id)) =
+        if let (Some(copy), Some(parent_id)) =
             (SubRoutineCopy::from_task(&action.task), action.parent_id())
         {
-            handle.parent = self.repo.get_action(&parent_id).await?;
+            handle.parent = self
+                .repo
+                .get_action(&parent_id)
+                .instrument(tracing::info_span!(
+                    "routine.copy.read_definition",
+                    routine.parent_id = %parent_id,
+                    routine.sub_routine = %copy.sub_routine,
+                ))
+                .await?;
         }
         let program = handle.program(action)?;
         let runs_model = program.agent_steps().into_iter().any(|step| {
@@ -401,7 +409,17 @@ where
         let (ready_tx, ready_rx) = tokio::sync::oneshot::channel();
         let executor = self.clone();
         // The run outlives the request that started it; keep it on that trace.
-        let span = tracing::info_span!("routine.execute", action_id = %id);
+        // A sub-routine's run, often on another replica a day later, names
+        // the routine and run that made it, as `routine.schedule` recorded
+        // them, so its trace can be found from theirs and back.
+        let link = action.sub_routine.as_ref();
+        let span = tracing::info_span!(
+            "routine.execute",
+            action_id = %id,
+            routine.parent_id = link.map(|link| tracing::field::display(link.parent_id)),
+            routine.created_by_run_id =
+                link.map(|link| tracing::field::display(link.created_by_run_id)),
+        );
         let run = async move {
             let claim = bounded(
                 deadline,
