@@ -7,11 +7,13 @@ import {
 } from '@channel/Call/meeting-invitation-resolution';
 import { DEV_MODE_ENV } from '@core/constant/featureFlags';
 import { useUserId } from '@core/context/user';
+import { isTouchDevice } from '@core/mobile/isTouchDevice';
 import { fireAndForget } from '@core/util/fireAndForget';
 import { usePlatformNotificationState } from '@notifications';
+import { DefaultUserNameResolver } from '@notifications/notification-resolvers';
 import { invalidateActiveMeetings } from '@queries/call/meetings';
 import { useNavigate } from '@solidjs/router';
-import { onCleanup, type ParentProps } from 'solid-js';
+import { onCleanup, type ParentProps, Show } from 'solid-js';
 import { callerDisplayName } from './caller-name';
 import { IncomingChannelCallsContext } from './context/incoming-channel-calls';
 import { IncomingMeetingInvitationsContext } from './context/incoming-meeting-invitations';
@@ -23,6 +25,7 @@ import {
 import { createIncomingChannelCalls } from './incoming-channel-calls';
 import { createIncomingMeetingInvitations } from './primitives/incoming-meeting-invitations';
 import { IncomingCallNotifications } from './views/incoming-call-notifications';
+import { MobileIncomingCallNotifications } from './views/mobile/incoming-call-notifications';
 
 /**
  * App-wide receiver for incoming calls (meeting invitations and ringing channel
@@ -49,7 +52,8 @@ function IncomingMeetingInvitationsReceiver() {
     userId,
     ring: (key, shouldStop, duration) =>
       startCallRinger(key, shouldStop, duration).stop,
-    callerName: callerDisplayName,
+    // Touch devices keep the names they showed before the desktop stack.
+    callerName: isTouchDevice() ? DefaultUserNameResolver : callerDisplayName,
     publishResolution: publishMeetingInvitationResolution,
     openMeeting: (shareToken) => navigate(getMeetingPath(shareToken)),
     notify: async (invitation, handlers) => {
@@ -93,7 +97,11 @@ function IncomingMeetingInvitationsReceiver() {
       <IncomingChannelCallsContext.Provider
         value={createIncomingChannelCalls()}
       >
-        <IncomingCallNotifications />
+        {/* Phones and tablets keep their own incoming call UI; the stack
+            at the top of the window is desktop only. */}
+        <Show when={isTouchDevice()} fallback={<IncomingCallNotifications />}>
+          <MobileIncomingCallNotifications />
+        </Show>
       </IncomingChannelCallsContext.Provider>
     </IncomingMeetingInvitationsContext.Provider>
   );

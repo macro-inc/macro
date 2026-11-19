@@ -48,6 +48,7 @@ ignores:
   - apps/web/src/features/email-view/components/EmailComposeRouteView.tsx
   - apps/web/src/features/email-view/components/EmailDetailView.tsx
   - apps/web/src/features/entity-appearance/appearance-menu.tsx
+  - apps/web/src/features/meetings/incoming-meeting-invitations.tsx
   - apps/web/src/features/projects/add-project-tasks.tsx
   - apps/web/src/features/projects/new-project-task.tsx
   - apps/web/src/features/projects/project-top-bar.tsx
