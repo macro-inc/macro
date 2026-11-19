@@ -23,4 +23,6 @@ pub(crate) struct KafkaProcessingContext {
     /// Whole-inbox index deletes, run off the consumer's workers.
     pub(crate) mailbox_deletes: MailboxDeletes,
     pub(crate) metrics: IndexMetrics,
+    /// Where events whose attempts failed wait for their replay.
+    pub(crate) replays: Arc<sqs_client::SQS>,
 }
