@@ -84,7 +84,7 @@ comparison panel, off by default.
 https://wolf-macro-google.tailc6809.ts.net:41471/, pinned in the local repo `/home/wolf/tmp/teammate-e2e/screen-compare/ui`:
 - `593cd75`: the version he saw, with the 27 screenshots in `shots/`.
 - `1fd4444`: adds the screenshot he reviewed, `approval/wolf-review-screenshot.png`.
-- The simplified v1 version comes in a following commit.
+- `cae08dd`: the simplified v1 version he approved (32 fresh screenshots; the developer comparison panel opens with `?dev=1`).
 
 His words: "we dont need the technical details or the discussion section for v1", then "anyways this sounds good".
 All three real transports are built against this UI. Merge stays on hold until he has seen the measured comparison.
