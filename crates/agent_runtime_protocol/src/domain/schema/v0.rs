@@ -153,6 +153,31 @@ pub enum ToRuntimeMessage {
     /// once rather than at its next poll. Runtimes that do not serve
     /// triggers ignore it.
     AgentsChanged,
+    /// Run this agent teammate on the computer: write its environment where
+    /// the guest's agent service reads it, which (re)starts the agent. Sent
+    /// to a warm pool computer a purchase took for an agent; the agent's own
+    /// online report, not a reply, confirms it.
+    ApplyAgent {
+        /// The agent's environment.
+        environment: AgentEnvironment,
+    },
+}
+
+/// An agent teammate's environment: credentials and addresses, one variable
+/// each. Debug shows only the names.
+#[derive(Clone, PartialEq, Eq, Serialize, Deserialize, Type)]
+#[serde(transparent)]
+pub struct AgentEnvironment(
+    #[specta(type = std::collections::HashMap<String, String>)]
+    pub  std::collections::BTreeMap<String, String>,
+);
+
+impl std::fmt::Debug for AgentEnvironment {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        f.debug_struct("AgentEnvironment")
+            .field("names", &self.0.keys().collect::<Vec<_>>())
+            .finish()
+    }
 }
 
 /// Agent Runtime to Agent Service traffic on the logical protocol stream.

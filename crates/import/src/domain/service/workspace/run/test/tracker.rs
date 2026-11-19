@@ -337,3 +337,5 @@ async fn failed_projects_keep_child_relationships_retryable(pool: PgPool) {
         [created]
     );
 }
+
+mod lifecycle;

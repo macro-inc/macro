@@ -65,12 +65,11 @@ for (const provider of PROVIDERS) {
       await expect.poll(() => rowIds(page)).toEqual([beta.id, alpha.id]);
     });
 
-    // Known bug touch-saved-views-reorder: the sheet lists the desktop's
-    // rows, whose menus have no Move up or Move down. When this passes, the
-    // bug is fixed: remove the tag.
-    test('known bug: touch-saved-views-reorder: row menus of the sheet move a view only where they can @known-bug', {
-      tag: '@known-bug',
-    }, async ({ page, mailbox }) => {
+    // If the sheet loses the Move items, a tap cannot change the order.
+    test('row menus of the sheet move a view only where they can', async ({
+      page,
+      mailbox,
+    }) => {
       await storeView(mailbox, 'Alpha mail', { subject: ['Alpha'] });
       await storeView(mailbox, 'Beta mail', { subject: ['Beta'] });
       const stored = await storedNames(mailbox);
@@ -84,7 +83,7 @@ for (const provider of PROVIDERS) {
       await expect.poll(() => listedNames(page)).toEqual(stored);
       // The top view only moves down, the bottom one only up.
       await sheet.getByRole('button', { name: `Actions for ${upper}` }).tap();
-      await expect(moveDown).toBeVisible();
+      await expect(moveDown).toBeVisible({ timeout: 5_000 });
       await expect(moveUp).toHaveCount(0);
       await closeMenus(page);
       await sheet.getByRole('button', { name: `Actions for ${lower}` }).tap();

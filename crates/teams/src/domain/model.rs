@@ -306,6 +306,16 @@ pub struct SubscriptionItemView {
     pub computer_id: Option<String>,
 }
 
+/// The credit note that undid a computer's purchase.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct ComputerPurchaseCredit {
+    /// The credit note on the purchase's invoice.
+    pub credit_note: stripe::CreditNoteId,
+    /// The card refund it made; `None` when the invoice was paid from the
+    /// team's credit balance, which the note restores instead.
+    pub refund: Option<stripe::RefundId>,
+}
+
 /// What removing one subscription item did.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum ItemRemoval {

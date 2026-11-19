@@ -195,7 +195,10 @@ export class LocalStack implements EmailStack {
     .map((byte) => (byte % 36).toString(36))
     .join('')}.test`;
 
-  constructor(private readonly addresses: LocalStackAddresses) {
+  constructor(
+    private readonly addresses: LocalStackAddresses,
+    private readonly options?: { seedGoogleGrant: boolean }
+  ) {
     this.info = {
       id: 'local-stack',
       emailUrl: `${addresses.proxyUrl}/email`,
@@ -230,9 +233,13 @@ export class LocalStack implements EmailStack {
   /** Creates the mailbox at the provider unless this test already did. */
   private async mailbox(provider: Provider, address: string): Promise<void> {
     if (this.providers.has(address)) return;
+    const scopes =
+      provider === 'GMAIL' && this.options?.seedGoogleGrant === false
+        ? []
+        : undefined;
     await sendJson(`${this.emulator(provider)}/_emulator/mailboxes`, {
       method: 'POST',
-      body: { email: address },
+      body: { email: address, scopes },
     });
     this.providers.set(address, provider);
   }
