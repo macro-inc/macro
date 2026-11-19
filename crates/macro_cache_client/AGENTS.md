@@ -48,7 +48,10 @@ behind its own Cargo feature.
   need Redis: CI's on `127.0.0.1:6379`, or set `REDIS_URL`. To check a new
   script against a cluster, point `REDIS_URL` at a one-node cluster:
   `redis-server --port <p> --cluster-enabled yes`, then
-  `redis-cli -p <p> cluster addslotsrange 0 16383`.
+  `redis-cli -p <p> cluster addslotsrange 0 16383`. The session code takes
+  read a deadline with PEXPIRETIME on Redis 7.0 and later and rebuild it from
+  TIME and PTTL before that; to check the older path, run the tests against a
+  Redis 6.2 (`nix build github:NixOS/nixpkgs/nixos-21.11#redis`).
 
 ## Gotchas
 

@@ -26,16 +26,17 @@ const CHALLENGE_FIELD: &str = "challenge";
 
 /// Lua defining `deadline_ms(key)`: when `key` expires, in milliseconds
 /// since the epoch on Redis's own clock, or a negative number when it has no
-/// expiry. PEXPIRETIME (Redis 7.0) reads the stored deadline exactly. An
-/// older Redis rebuilds it from TIME, read first, and the TTL left, which can
-/// put it a millisecond early but never late.
+/// expiry. Redis 7.0 reads the stored deadline exactly with PEXPIRETIME, and
+/// any error from it fails the script. An older Redis, which has neither
+/// PEXPIRETIME nor `REDIS_VERSION_NUM`, rebuilds the deadline from TIME, read
+/// first, and the TTL left, which can put it a millisecond early but never
+/// late.
 macro_rules! deadline_lua {
     () => {
         r"
 local function deadline_ms(key)
-  local stored = redis.pcall('PEXPIRETIME', key)
-  if type(stored) == 'number' then
-    return stored
+  if (redis.REDIS_VERSION_NUM or 0) >= 0x070000 then
+    return redis.call('PEXPIRETIME', key)
   end
   local now = redis.call('TIME')
   local ttl_ms = redis.call('PTTL', key)
@@ -90,8 +91,11 @@ return {refresh_token, expires_at_ms}
 );
 
 /// Puts a taken session back under its key until exactly its original
-/// deadline, unless that has passed or the code exists again. Should the
-/// expiry fail after the write, the takes refuse the record that has none.
+/// deadline, unless that has passed or the code exists again. An unbound
+/// record's write carries a relative expiry, since a server that predates
+/// the deadline checks reads that key and redeems a record without one;
+/// PEXPIREAT then pins it. A bound record left without an expiry, should
+/// PEXPIREAT fail after its write, is one the takes refuse.
 /// KEYS: the session's key. ARGV: the refresh token, the deadline, then for
 /// a bound code the record's fields and challenge.
 const RESTORE_MOBILE_LOGIN_SESSION: &str = r"
@@ -99,13 +103,14 @@ if redis.call('EXISTS', KEYS[1]) == 1 then
   return 0
 end
 local now = redis.call('TIME')
-if tonumber(ARGV[2]) <= now[1] * 1000 + math.floor(now[2] / 1000) then
+local ttl_ms = tonumber(ARGV[2]) - (now[1] * 1000 + math.floor(now[2] / 1000))
+if ttl_ms <= 0 then
   return 0
 end
 if ARGV[3] then
   redis.call('HSET', KEYS[1], ARGV[3], ARGV[1], ARGV[4], ARGV[5])
 else
-  redis.call('SET', KEYS[1], ARGV[1])
+  redis.call('SET', KEYS[1], ARGV[1], 'PX', ttl_ms)
 end
 redis.call('PEXPIREAT', KEYS[1], ARGV[2])
 return 1
