@@ -1432,30 +1432,41 @@ title menu) has two entries in place of the one above:
   ("Until 3:00 PM", or "Muted by Engineering" when every section holding it is
   muted). Unmuting a channel its sections mute keeps that one channel
   notifying inside them. **Only @mentions** is gone from Mute.
-- **Notification settings** is one choice: **All messages**, **Messages
-  involving me** (thread replies, @mentions, calls and join requests; no
-  top-level messages or reactions), **Custom settings…** or **Nothing**.
-  Custom opens a dialog with six checkboxes (Top-level messages, Thread
-  replies, @mentions, Emoji reactions, Calls, Join requests); the choice shows
-  Custom whenever the boxes match no preset. Choosing on a channel sets all
-  six on the channel itself. **Following Engineering** at the top means the
-  channel takes everything from its sections; **Use section settings** clears
-  the channel's own choices. Document mentions follow top-level messages
-  outside a thread and thread replies inside one. Nothing differs from Mute:
-  it has no duration, and Mute still silences everything.
+- **Notification settings** shows the current choice under its name and is
+  one choice: **All messages**, **Messages involving me** (thread replies,
+  @mentions, calls and join requests; no top-level messages or reactions),
+  **Custom settings…** or **Nothing**. Custom opens a dialog with six
+  checkboxes (Top-level messages, Thread replies, @mentions, Emoji reactions,
+  Calls, Join requests) under where the settings come from ("This channel" or
+  "Inherited from Engineering"); the choice shows Custom whenever the boxes
+  match no preset. A channel either inherits every kind from its sections
+  (the submenu then starts with **Inherited from Engineering**) or has its own
+  full set: any choice on an inheriting channel saves all six on the channel.
+  **Use section default**, first in the submenu with what it gives ("All
+  messages · Engineering"), hands them all back. Document mentions follow
+  top-level messages outside a thread and thread replies inside one. Nothing
+  differs from Mute: it has no duration, and Mute still silences everything.
 
 Sections (Favorites, Direct messages, the team section and custom sections,
 never All channels) have their own **Mute** and **Notification settings**,
 stored on the section, so channels added later follow them. A channel notifies
 for a kind when any section holding it allows it, its sections mute it only
-when all of them are muted, and an untouched section allows everything. The
-channel's own choice wins kind by kind. Rows show only the muted bell (for
-channel or section mute), never an indicator for notification settings. On a
-phone, the long-press sheet and the title menu drill into the same choices,
-and Custom settings drills into the six kinds as toggling rows; custom
-sections' option sheets do the same. Built-in sections have these controls on
-desktop only. A channel with a legacy mentions-only setting shows Custom
-(@mentions only) until its settings are next changed, which converts it.
+when all of them are muted, and an untouched section allows everything. A
+channel with its own settings ignores its sections' kinds. Changing a
+section's settings when some of its channels have their own different ones,
+or muting or snoozing it when some are set to keep notifying in muted
+sections, first opens **Some channels have their own settings**: the channels
+listed unchecked, **Select all**, and **Cancel**, **Override** (the checked
+channels follow the section) or **OK** (save, keep theirs). Rows show only the
+muted bell (for channel or section mute), never an indicator for notification
+settings. On a phone, the long-press sheet and the title menu drill into the
+same choices, with the current choice at the end of the Notification settings
+row, and Custom settings drills into the six kinds as toggling rows; custom
+sections' option sheets do the same, but a section's Custom page saves (and
+checks its channels) once when you leave it. Built-in sections have these
+controls on desktop only. A channel with a legacy mentions-only setting shows
+its own settings with only @mentions until its settings are next changed,
+which replaces it.
 
 **Add to section** lists eligible sections with checked membership, then New
 section. Rule-only matches stay checked and read-only; edit the rule to remove
