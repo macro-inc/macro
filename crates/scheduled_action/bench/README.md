@@ -73,7 +73,13 @@ draft on a busy machine can be told apart.
   mentions, like a message's, are read with their names) and what the
   copies wrote. These checks match strings and run each copy once, by hand;
   they don't see a copy run at its time or after its item changed, such as
-  a task that left review. The routine is saved with the sub-routines it defines, so the stack's
+  a task that left review. A copy is taken to be the run's by time: any
+  child of the routine made from a second before it was fired (the clock
+  starts before the fire request, so its tolerance is to that request),
+  and every child read is run, whatever the case, so an ordinary child's
+  writes can satisfy another check. A reply's mentions are read with the
+  names their items have when the check runs, so `reread` of a saved
+  result can differ once an item is renamed. The routine is saved with the sub-routines it defines, so the stack's
   owner needs the `enable-sub-routines` flag too. Mail it sent and rows it added to a database aren't read, so
   the two database cases pass on a run without error. A run whose condition wasn't met did
   nothing. A fired event the trigger doesn't match is never admitted, so the
