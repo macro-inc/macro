@@ -129,27 +129,12 @@ export function forgetSignInAttempts(): void {
 }
 
 /**
- * What a return URL's query field is named for the page it lands on: decoded
- * by that page, and before that by the auth service's extra decode of
- * `original_url`.
- */
-function returnFieldNames(field: string): string[] {
-  const once = decodeFieldName(field);
-  return [once, decodeFieldName(once)];
-}
-
-/** A leading `&` keeps a name that starts with `?` from losing it. */
-function decodeFieldName(field: string): string {
-  return new URLSearchParams(`&${field}`).keys().next().value ?? '';
-}
-
-/**
  * `callbackUrl`, naming `attempt` for the page that redeems its code. The
  * session code and attempt an earlier return left on the page are dropped,
- * however their names are encoded, so a sign-in started again from a failed
- * return never carries them into its own. The rest of the query is kept byte
- * for byte: the desktop callback's `redirect` is encoded for the auth
- * service's extra decode.
+ * under any spelling the page reading the return decodes to their names, so a
+ * sign-in started again from a failed return never carries them into its own.
+ * The rest of the query is kept byte for byte: the desktop callback's
+ * `redirect` is encoded for the auth service's extra decode.
  */
 export function withSignInAttempt(
   callbackUrl: string,
@@ -159,13 +144,12 @@ export function withSignInAttempt(
   const kept = url.search
     .slice(1)
     .split('&')
-    .filter(
-      (field) =>
-        field !== '' &&
-        !returnFieldNames(field).some((name) =>
-          EARLIER_RETURN_PARAMS.includes(name)
-        )
-    );
+    .filter((field) => {
+      // Named as the page reading the return decodes it (`%74oken` is a
+      // `token`); a leading `&` keeps a name that starts with `?` whole.
+      const name = new URLSearchParams(`&${field}`).keys().next().value;
+      return name !== undefined && !EARLIER_RETURN_PARAMS.includes(name);
+    });
   kept.push(`${SIGN_IN_ATTEMPT_PARAM}=${encodeURIComponent(attempt.id)}`);
   url.search = `?${kept.join('&')}`;
   return url.toString();

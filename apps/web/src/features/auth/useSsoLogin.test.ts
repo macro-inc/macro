@@ -110,8 +110,10 @@ afterEach(() => vi.unstubAllGlobals());
  * checking that attempt is pending here and is the one `authUrl` binds the
  * session code to.
  */
-async function expectBoundCallback(authUrl: URL): Promise<string> {
-  const callback = authUrl.searchParams.get('original_url') ?? '';
+async function expectBoundCallback(
+  authUrl: URL,
+  callback = authUrl.searchParams.get('original_url') ?? ''
+): Promise<string> {
   const named = /[?&]sign_in_attempt=([^&#]*)/.exec(callback);
   const verifier = takeSignInAttempt(named?.[1]);
   if (!named || !verifier) throw new Error('names no pending attempt');
@@ -119,6 +121,11 @@ async function expectBoundCallback(authUrl: URL): Promise<string> {
     await signInChallenge(verifier)
   );
   return callback.replace(named[0], '');
+}
+
+/** A handoff's callback as the auth service reads it: decoded once more. */
+function handoffCallback(authUrl: URL): string {
+  return decodeURIComponent(authUrl.searchParams.get('original_url') ?? '');
 }
 
 describe('useSsoLogin', () => {
@@ -147,7 +154,9 @@ describe('useSsoLogin', () => {
       if (handoff) {
         // The code comes back on the URL, so it must name this attempt.
         expect(redirect.searchParams.get('is_mobile')).toBe('true');
-        expect(await expectBoundCallback(redirect)).toBe(loginUrl);
+        expect(
+          await expectBoundCallback(redirect, handoffCallback(redirect))
+        ).toBe(loginUrl);
       } else {
         // The hosted callback sets cookies; no code reaches the URL.
         expect(redirect.searchParams.get('is_mobile')).toBeNull();
@@ -183,7 +192,7 @@ describe('useSsoLogin', () => {
     await useSsoLogin({ signupMode: true })('google');
 
     const redirect = new URL(window.location.href);
-    expect(await expectBoundCallback(redirect)).toBe(
+    expect(await expectBoundCallback(redirect, handoffCallback(redirect))).toBe(
       'https://localhost:3003/app/doc/document-id?referral_code=original-invite#comment'
     );
     expect(redirect.searchParams.get('referral_code')).toBe('original-invite');
@@ -193,6 +202,26 @@ describe('useSsoLogin', () => {
       { method: 'google' },
       ['posthog']
     );
+  });
+
+  // The auth service decodes `original_url` a second time. Sent encoded
+  // for that, an encoded `#` or `&` in the page's query reaches the return
+  // as data, so the attempt stays in the query.
+  it('returns a handoff to the page it started on, encoded data and all', async () => {
+    mocks.servers['auth-service'] = proxyAuthHost;
+    const start =
+      'https://localhost:3003/app/login?redirect=%2Fdocs%23heading&label=a%26b';
+    window.location.href = start;
+
+    await useSsoLogin()('google');
+
+    const redirect = new URL(window.location.href);
+    const callback = handoffCallback(redirect);
+    expect(await expectBoundCallback(redirect, callback)).toBe(start);
+    const read = new URL(callback);
+    expect(read.searchParams.get('redirect')).toBe('/docs#heading');
+    expect(read.searchParams.get('label')).toBe('a&b');
+    expect(read.hash).toBe('');
   });
 
   // The desktop shell must not depend on the native navigation plugin

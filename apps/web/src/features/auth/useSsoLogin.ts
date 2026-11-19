@@ -251,7 +251,13 @@ export function useSsoLogin(opts?: {
       }
       originalUrl = withSignInAttempt(originalUrl, attempt);
     }
-    authUrl.searchParams.set('original_url', originalUrl);
+    authUrl.searchParams.set(
+      'original_url',
+      // The auth service decodes `original_url` once more. Encoded for that,
+      // a handoff returns to the URL as built: an encoded `#` or `&` in its
+      // query stays data instead of hiding the attempt or adding a field.
+      handoff ? encodeURIComponent(originalUrl) : originalUrl
+    );
 
     analytics.track(analyticsEvent, { method: idp_name }, analyticsProviders);
 

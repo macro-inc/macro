@@ -114,27 +114,27 @@ describe('withSignInAttempt', () => {
     );
   });
 
-  // The page reading the return decodes names, so `%74oken` is a `token`,
-  // and so does the auth service before it, so `%2574oken` is one too.
+  // The page reading the return decodes names, so `%74oken` is a `token`.
   it('drops them under any spelling of their names', async () => {
     const attempt = await createSignInAttempt();
     expect(
       withSignInAttempt(
-        'macro:///login?%74oken=old-code&sign%5Fin%5F%61ttempt=old&redirect=%252Fx&%2574oken=older-code',
+        'macro:///login?%74oken=old-code&sign%5Fin%5F%61ttempt=old&redirect=%252Fx',
         attempt
       )
     ).toBe(`macro:///login?redirect=%252Fx&sign_in_attempt=${attempt.id}`);
   });
 
+  // `?token` and `%2574oken` (`%74oken` to that page) name other fields.
   it('keeps fields that only look like them', async () => {
     const attempt = await createSignInAttempt();
     expect(
       withSignInAttempt(
-        'https://macro.test/app/login?x=1&?token=shown&token_hint=a',
+        'https://macro.test/app/login?x=1&?token=shown&token_hint=a&%2574oken=b',
         attempt
       )
     ).toBe(
-      `https://macro.test/app/login?x=1&?token=shown&token_hint=a&sign_in_attempt=${attempt.id}`
+      `https://macro.test/app/login?x=1&?token=shown&token_hint=a&%2574oken=b&sign_in_attempt=${attempt.id}`
     );
   });
 });
