@@ -112,8 +112,8 @@ projects.
 - Build a `has_child` clause's per-term query with `query::child_content_query`.
   A single word matches as `match_bool_prefix`, not `match_phrase_prefix`:
   OpenSearch expands a phrase prefix again for every inner hit of every
-  returned parent, and keeps only the first `max_expansions` terms of each
-  segment, so words past them never match.
+  returned parent, and keeps only the first `max_expansions` terms of the
+  shard, so words past them never match.
 - Document content has two matching shapes (`DocumentTermMatching`). `All`
   is one `has_child` per term: every term somewhere in the document, each a
   prefix. `Dynamic` is one `has_child` for queries of three or more terms:

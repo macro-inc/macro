@@ -74,7 +74,7 @@ const MIN_PREFIX_LEN: usize = 3;
 ///
 /// The single word avoids `match_phrase_prefix` because OpenSearch expands its
 /// prefix again for every inner hit of every returned parent, and keeps only
-/// the first `max_expansions` terms of each segment, silently dropping the
+/// the first `max_expansions` terms of the shard, silently dropping the
 /// matches past them. A prefix query expands lazily and keeps every match.
 /// Its children score as a constant, so inner hits come back in index order.
 pub(crate) fn child_content_query<'a>(term: &str, match_type: &str) -> QueryType<'a> {

@@ -369,8 +369,8 @@ pub(crate) struct SearchResponse<T> {
     pub phase_took: Option<PhaseTook>,
 }
 
-/// How long the slowest shard spent in each phase of one search, in
-/// milliseconds; `took` minus these is coordination and queueing.
+/// Wall time of the query and fetch phases of one search, in milliseconds,
+/// as the coordinating node measured them.
 #[derive(Debug, serde::Serialize, serde::Deserialize)]
 pub(crate) struct PhaseTook {
     pub query: u64,

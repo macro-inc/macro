@@ -973,7 +973,14 @@ fn paginate_unified_hits(
     (results, cursor)
 }
 
-#[tracing::instrument(skip(client, args))]
+#[tracing::instrument(
+    skip(client, args),
+    fields(
+        opensearch_took_ms = tracing::field::Empty,
+        opensearch_query_ms = tracing::field::Empty,
+        opensearch_fetch_ms = tracing::field::Empty,
+    )
+)]
 pub(crate) async fn search_unified(
     client: &opensearch::OpenSearch,
     args: UnifiedSearchArgs,
@@ -1024,11 +1031,16 @@ pub(crate) async fn search_unified(
 
     result.warn_on_shard_failures(OpensearchOperation::SearchUnified);
 
+    let span = tracing::Span::current();
+    span.record("opensearch_took_ms", result.took);
+    if let Some(phase_took) = &result.phase_took {
+        span.record("opensearch_query_ms", phase_took.query);
+        span.record("opensearch_fetch_ms", phase_took.fetch);
+    }
+
     tracing::info!(
         response_body_bytes = bytes.len(),
         opensearch_took_ms = result.took,
-        opensearch_query_ms = result.phase_took.as_ref().map(|phase| phase.query),
-        opensearch_fetch_ms = result.phase_took.as_ref().map(|phase| phase.fetch),
         hit_count = result.hits.hits.len(),
         "opensearch response"
     );
