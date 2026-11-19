@@ -29,8 +29,11 @@ import type { CrmMemberAccessResponse } from './generated/schemas/crmMemberAcces
 
 let host: CacheHost | undefined;
 let installed = false;
+const HINT_RETRY_MIN_MS = 1_000;
+const HINT_RETRY_MAX_MS = 5 * 60_000;
 let lastMismatchedHint: string | undefined;
 let lastHintAttempt = 0;
+let hintFailures = 0;
 let hintRefresh: Promise<void> | undefined;
 let hintRerun = false;
 let hintSession = 0;
@@ -94,12 +97,26 @@ function refreshHint(hint: string) {
     hintRerun = true;
     return;
   }
-  if (hint === lastMismatchedHint && Date.now() - lastHintAttempt < 1_000)
+  // The same hint waits out the current delay. So does any hint while earlier
+  // ones have not converged: a failing endpoint, a denial that cannot commit or
+  // a header that disagrees with the proof must not be polled per response.
+  // The delay doubles with each attempt that does not converge.
+  const delay = Math.min(
+    HINT_RETRY_MIN_MS * 2 ** Math.max(hintFailures - 1, 0),
+    HINT_RETRY_MAX_MS
+  );
+  if (
+    (hint === lastMismatchedHint || hintFailures > 0) &&
+    Date.now() - lastHintAttempt < delay
+  )
     return;
   lastMismatchedHint = hint;
   lastHintAttempt = Date.now();
   hintRerun = false;
   const session = hintSession;
+  const converged = () =>
+    !lastMismatchedHint ||
+    lastMismatchedHint === crmAccessAuthority.snapshot()?.policy;
   const work = (async () => {
     let failure: unknown;
     try {
@@ -109,15 +126,16 @@ function refreshHint(hint: string) {
     }
     // The joined proof may predate this hint. If it did not establish the
     // hinted policy, take one fresh proof after it settles; bursts coalesce.
-    if (
-      session === hintSession &&
-      lastMismatchedHint &&
-      lastMismatchedHint !== crmAccessAuthority.snapshot()?.policy &&
-      (!failure || hintRerun)
-    ) {
-      await crmAccessAuthority.refresh();
-      return;
+    if (session === hintSession && !converged() && (!failure || hintRerun)) {
+      failure = undefined;
+      try {
+        await crmAccessAuthority.refresh();
+      } catch (error) {
+        failure = error;
+      }
     }
+    if (session === hintSession)
+      hintFailures = !failure && converged() ? 0 : hintFailures + 1;
     if (failure) throw failure;
   })().finally(() => {
     if (hintRefresh === work) hintRefresh = undefined;
@@ -213,8 +231,10 @@ function install() {
     return (response) => {
       const hint = response.headers.get('x-macro-crm-access');
       const policy = crmAccessAuthority.snapshot()?.policy;
-      if (hint === policy) lastMismatchedHint = undefined;
-      else if (isCrmPolicy(hint)) refreshHint(hint);
+      if (hint === policy) {
+        lastMismatchedHint = undefined;
+        hintFailures = 0;
+      } else if (isCrmPolicy(hint)) refreshHint(hint);
       else if (
         isStorage &&
         path.startsWith('/crm/') &&
@@ -249,6 +269,7 @@ export function setCrmAccessSession(account: string | undefined, epoch = 0) {
   install();
   if (crmAccessAuthority.setSession(account, epoch)) {
     hintSession += 1;
+    hintFailures = 0;
     hintRefresh = undefined;
     hintRerun = false;
     lastMismatchedHint = undefined;

@@ -354,6 +354,48 @@ it('retries a repeated mismatched hint after a failed proof and a bounded cooldo
   }
 });
 
+it('backs off hint-triggered proofs while they keep failing and resets once the hint agrees', async () => {
+  await boot();
+  let now = Date.now();
+  vi.spyOn(Date, 'now').mockImplementation(() => now);
+  const hint = (policy: string) =>
+    prepareResponseObservers('http://localhost/dss/crm/companies')(
+      new Response(null, { headers: { 'x-macro-crm-access': policy } })
+    );
+  const failing = async () => {
+    const failed = Promise.withResolvers<void>();
+    mocks.proof.mockImplementationOnce(async () => {
+      failed.resolve();
+      return err([{ code: 'SERVER_ERROR' }]);
+    });
+    hint(`${TEAM}:denied`);
+    await failed.promise;
+    // Await only the proof the hint dispatched, never initiate one.
+    await expect(crmAccessAuthority.refresh()).rejects.toThrow();
+  };
+  try {
+    mocks.proof.mockClear();
+    await failing();
+    now += 1_100;
+    await failing();
+    expect(mocks.proof).toHaveBeenCalledTimes(2);
+    // The second failure doubled the wait, so the next second stays quiet.
+    now += 1_100;
+    hint(`${TEAM}:denied`);
+    expect(mocks.proof).toHaveBeenCalledTimes(2);
+    now += 1_000;
+    await failing();
+    expect(mocks.proof).toHaveBeenCalledTimes(3);
+    // A hint that agrees with the policy ends the episode.
+    hint(`${TEAM}:allowed`);
+    now += 1_100;
+    await failing();
+    expect(mocks.proof).toHaveBeenCalledTimes(4);
+  } finally {
+    vi.mocked(Date.now).mockRestore();
+  }
+});
+
 it('rejects an older REST read after retirement while preserving a write outcome', async () => {
   await boot();
   const read = await prepareResponseObservers(
