@@ -1873,6 +1873,7 @@ describe('sub-routines defined once', () => {
   });
 
   it('sends an explicit empty app selection when the last definition app is removed', async () => {
+    const appName = 'A'.repeat(160);
     setSchedules([
       {
         ...parent,
@@ -1882,14 +1883,17 @@ describe('sub-routines defined once', () => {
           sub_routines: [
             {
               ...remind,
-              mcp_servers: [{ app_slug: 'example', server_name: 'Example' }],
+              mcp_servers: [{ app_slug: 'example', server_name: appName }],
             },
           ],
         },
       },
     ]);
     render(() => <Routine />);
-    const remove = screen.getByRole('button', { name: 'Remove Example' });
+    const label = screen.getByText(appName);
+    expect(label.parentElement?.classList.contains('min-w-0')).toBe(true);
+    expect(label.classList.contains('break-words')).toBe(true);
+    const remove = screen.getByRole('button', { name: `Remove ${appName}` });
     expect(remove.classList.contains('touch:min-h-[44px]')).toBe(true);
     expect(remove.classList.contains('touch:min-w-[44px]')).toBe(true);
     fireEvent.click(remove);
