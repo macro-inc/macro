@@ -914,6 +914,80 @@ async fn a_sender_or_recipient_without_an_address_is_left_out() {
 }
 
 #[tokio::test]
+async fn a_null_read_state_reads_as_unread_like_a_missing_one() {
+    let (server, api, token) = setup().await;
+    Mock::given(method("GET"))
+        .and(path("/v1.0/me/messages/null-read"))
+        .respond_with(ResponseTemplate::new(200).set_body_json(json!({
+            "id":"null-read", "conversationId":"conversation", "isRead":null, "isDraft":false
+        })))
+        .mount(&server)
+        .await;
+    Mock::given(method("GET"))
+        .and(path("/v1.0/me/messages/missing-read"))
+        .respond_with(ResponseTemplate::new(200).set_body_json(json!({
+            "id":"missing-read", "conversationId":"conversation", "isDraft":false
+        })))
+        .mount(&server)
+        .await;
+    Mock::given(method("GET"))
+        .and(path("/v1.0/me/messages/read"))
+        .respond_with(ResponseTemplate::new(200).set_body_json(json!({
+            "id":"read", "conversationId":"conversation", "isRead":true, "isDraft":false
+        })))
+        .mount(&server)
+        .await;
+    for attachments in [
+        "/v1.0/me/messages/null-read/attachments",
+        "/v1.0/me/messages/missing-read/attachments",
+        "/v1.0/me/messages/read/attachments",
+    ] {
+        Mock::given(method("GET"))
+            .and(path(attachments))
+            .respond_with(ResponseTemplate::new(200).set_body_json(json!({"value":[]})))
+            .mount(&server)
+            .await;
+    }
+
+    let null_read = api
+        .message(
+            &token,
+            Uuid::now_v7(),
+            &ProviderId::new("null-read").unwrap(),
+            &[],
+        )
+        .await
+        .unwrap()
+        .unwrap();
+    let missing_read = api
+        .message(
+            &token,
+            Uuid::now_v7(),
+            &ProviderId::new("missing-read").unwrap(),
+            &[],
+        )
+        .await
+        .unwrap()
+        .unwrap();
+    let read = api
+        .message(
+            &token,
+            Uuid::now_v7(),
+            &ProviderId::new("read").unwrap(),
+            &[],
+        )
+        .await
+        .unwrap()
+        .unwrap();
+
+    assert!(!null_read.state.is_read);
+    assert!(!null_read.content.message.is_read);
+    assert!(!missing_read.state.is_read);
+    assert!(read.state.is_read);
+    assert!(read.content.message.is_read);
+}
+
+#[tokio::test]
 async fn an_undecodable_response_names_where_it_failed_but_not_the_value() {
     let (server, api, token) = setup().await;
     Mock::given(method("GET"))

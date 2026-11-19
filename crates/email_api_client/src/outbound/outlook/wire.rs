@@ -86,8 +86,10 @@ pub(super) struct Message {
     pub cc_recipients: Vec<Recipient>,
     #[serde(default)]
     pub bcc_recipients: Vec<Recipient>,
+    /// Graph sends null for some messages; it reads as unread, as a missing
+    /// value does.
     #[serde(default)]
-    pub is_read: bool,
+    pub is_read: Option<bool>,
     #[serde(default)]
     pub is_draft: bool,
     #[serde(default)]
