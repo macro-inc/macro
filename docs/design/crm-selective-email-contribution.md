@@ -619,8 +619,9 @@ flag-off-as-all-mail turns a rollout control into a disclosure.
    statement timeout. Sparse policies probe positive targets before record
    history; live domains resolve against scoped mailbox contacts once
    per page, and fenced participant lookups reuse existing indexes. Resolve
-   contribution modes inside the optimized Team snapshot; all-mail-only pages
-   keep their existing SQL without selected-rule work. Test both directions
+   contribution modes inside the Team snapshot, including General fallbacks.
+   Optimized all-mail-only pages keep their existing SQL without selected-rule
+   work; General retains its scalar page SQL. Test both directions
    of a concurrent mode change across resolution, probe and page.
    Base new migrations after the latest merged
    dependency; never change an applied migration.
@@ -716,10 +717,22 @@ flag-off-as-all-mail turns a rollout control into a disclosure.
    messages with 2.905 million background messages; the full ten-million
    background tier remains required before activation on a quieter host.
    Selectivity-dependent plans and index-only probes may change at that tier.
-   Also close the General reader's contribution-mode partition race and bound
-   later candidate/message/recipient/fallback work; discovery alone does not
-   establish those properties. Retain the deterministic
-   all-mail/selected snapshot-transition regressions added in PR 2.
+   The General reader now keeps mode resolution, discovery and the scalar page
+   in one read-only snapshot, including initially all-mail requests. Its tests
+   cover both mode transitions, live-source changes after discovery, and
+   next-request withdrawal and thread exceptions. Optimized selected pages reuse
+   a complete participant set for inclusion and domain vetoes, avoiding a second
+   message/recipient expansion when both need participants. This does not bound
+   long threads or dense fallback work. Bound later candidate/message/recipient/fallback
+   work before activation; discovery alone does not establish those properties.
+   ViewedUpdated record pages now use the optimized reader: sparse matches
+   look up saved views by primary key, while dense pages merge viewed and
+   never-viewed sources and refill within the same snapshot and deadline.
+   Saved view times override newer mail; competing-copy priority and every
+   privacy veto remain cursor-independent. This does not bound rejected source
+   rows, timestamp ties or every unsupported General shape. Retain the
+   deterministic all-mail/selected snapshot-transition regressions added in
+   PR 2 and the full-page ViewedUpdated parity tests.
    CRM-scoped email search is deferred: email search rejects CRM filters with
    HTTP 400 and reads no team mail. **If CRM-scoped search ships before selected
    activation**, it becomes a fourth contribution reader and must enforce the

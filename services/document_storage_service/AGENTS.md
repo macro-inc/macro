@@ -18,7 +18,7 @@ threads, pins, recents, notifications, folders, activity.
   `pins`, `recents`, `notification`, `instructions`, `internal`.
 - `/databases/query` mounts the `databases_sql` HTTP adapter, sharing the database/access services and the primary Soup reader; SQL authorization stays in its domain service. Browser people SQL executes separately in local Turso; there is no dedicated `/databases/read` endpoint or deployment prerequisite for browser execution.
 - `/channel-labels` retains legacy participant-only label semantics; additive `/channel-sections` mounts `channel_labels` with `for_sections` services for exclusive manual or name-rule membership and visible unjoined team channels.
-- `src/service/saved_views.rs`: composes saved-view storage with the primary-backed Teams repository, reusing `get_user_teams` and `get_all_team_members`. REST and GraphQL share its owner-only domain policy. `src/api/saved_views/definitions.rs` is the SDK's REST adapter over the same `SavedViewApi` as GraphQL (kinds, revisions, sharing, order); the legacy `/saved_views` routes beside it share the CRM configuration-kind permission gate. All three use the one `ApiContext::saved_views` service built in `server.rs`, whose `outbound/saved_view_changes.rs` notifier pushes `saved_views_changed` through the gateway on `event_broker_tracker`, resolving team members off the request path.
+- `src/service/saved_views.rs`: composes saved-view storage with the primary-backed Teams repository, reusing `get_user_teams` and `get_all_team_members`. REST and GraphQL share its owner-only domain policy. `PUT /saved_views/definitions/{id}/appearance` changes shared icon/color metadata without advancing the filter revision or timestamp, and creation accepts optional initial appearance. `src/api/saved_views/definitions.rs` is the SDK's REST adapter over the same `SavedViewApi` as GraphQL (kinds, revisions, sharing, order); the legacy `/saved_views` routes beside it share the CRM configuration-kind permission gate. All three use the one `ApiContext::saved_views` service built in `server.rs`, whose `outbound/saved_view_changes.rs` notifier pushes `saved_views_changed` through the gateway on `event_broker_tracker`, resolving team members off the request path.
 - Personal contact pages use `graphql_contacts` and the contacts directory service.
   Compose primary-backed graph and name readers in `server.rs`, and insert the
   context through the shared GraphQL HTTP/websocket request-data function.
@@ -59,13 +59,14 @@ threads, pins, recents, notifications, folders, activity.
   objects keyed by part paths/hashes. The export route maps the documents domain's
   pending result to 409 with `Retry-After`; never reuse document-id-only archives.
   Location and export URLs share signing helpers in `src/service/cloudfront.rs`.
-- `src/outbound/calendar_refresh.rs`: the `refresh_calendar` nudge for a new
-  request to join a calendar event, which this service hosts while answers
-  belong to `calendar_service`. It finds delegates by `link_id` alone, as the
-  request list admits them; `get_primaries_for_link` also filters on the child,
-  which a promoted shared mailbox's older events do not carry as their owner.
-  Nudges follow a committed write, so they share `event_broker_tracker`'s
-  bounded shutdown drain with event broker publishes.
+- The `refresh_calendar` nudge for a new request to join a calendar event,
+  which this service hosts while answers belong to `calendar_service`, is
+  `calendar_events`' `GatewayCalendarRefresh`, composed in `server.rs`. It
+  finds delegates by `link_id` alone, as the request list admits them;
+  `get_primaries_for_link` also filters on the child, which a promoted shared
+  mailbox's older events do not carry as their owner. Nudges follow a
+  committed write, so they share `event_broker_tracker`'s bounded shutdown
+  drain with event broker publishes.
 - `src/service/delete_document_worker.rs`: background worker handling document
   deletion side effects (feature-gated: `delete_document_worker`).
 - `src/released_attachments.rs`: drains `released_email_attachment_documents`

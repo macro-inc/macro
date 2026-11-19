@@ -2359,11 +2359,12 @@ async fn run_server() -> anyhow::Result<()> {
                     calendar_events::outbound::notification_notifier::NotificationCalendarJoinRequestNotifier::new(
                         (*notification_ingress_service).clone(),
                     ),
-                    crate::outbound::calendar_refresh::ConnectionGatewayCalendarRefresh::new(
+                    calendar_events::outbound::gateway_refresh::GatewayCalendarRefresh::new(
                         (*conn_gateway_client).clone(),
                         db.clone(),
                         event_broker_tracker.clone(),
-                    ),
+                    )
+                    .with_sends(cfg!(feature = "connection_gateway")),
                 ),
             ),
             authorization_state.clone(),

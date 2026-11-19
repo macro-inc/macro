@@ -26,6 +26,7 @@ aws-sdk-secretsmanager = { workspace = true }
 aws-sdk-sqs = { workspace = true }
 axum = { workspace = true }
 calendar_events = { path = "../../crates/calendar_events", features = [
+  "gateway-refresh",
   "google",
   "inbound",
   "postgres",

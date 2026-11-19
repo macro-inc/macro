@@ -197,18 +197,27 @@ tools — hexagonal, heavily feature-gated.
   sender lookup stops one past the initial superset cap, so generic plans can
   stop on that index instead of building a bitmap of all its messages; the
   cap cannot truncate a page the probe proved sparse.
-  Indexed recipient lookups apply only to all-recipient-role groups. A rare
+  Indexed text-recipient lookups apply only to all-recipient-role groups. A rare
   requested role can scan a dense domain before the cap finds a match, so
-  role-restricted recipient groups keep joined SQL. Dense underfill fallbacks
-  and larger Owned round probes also keep joined SQL; per-message probes can make those
-  large sets slower. Checked General branches keep their original joins so
-  mailbox-fact checks are planned with the messages. Optimized Team probes
-  and pages share a read-only repeatable-read snapshot, as Owned reads do,
-  so imports cannot outgrow the probe's cap between statements; privacy changes
+  role-restricted text-recipient groups keep joined SQL. Complete-address
+  all-role recipient branches drive their capped probe and sparse page from
+  the deduplicated contact IDs, with an `OFFSET 0` fence around each recipient
+  lookup and message primary-key fetch. Restricted roles keep joined SQL so
+  dense contacts can use role-first or parallel plans. Dense underfill
+  fallbacks and larger Owned round probes also keep joined SQL; per-message
+  probes can make those large sets slower. Checked General branches keep their
+  original joins so mailbox-fact checks are planned with the messages. The
+  initial Owned sparse page, like Team's superset, fetches distinct matched
+  thread IDs through a primary-key fence before mailbox and cursor filters;
+  its CTE estimate must not turn those IDs into a whole-mailbox filter.
+  Optimized Team probes and pages share a read-only repeatable-read snapshot,
+  as Owned reads do, so imports cannot outgrow the probe's cap between statements;
+  privacy changes
   committed mid-request apply to the next request. Resolve contribution modes
   in that snapshot too. If none of the requested contributors uses selected
   mode, keep the all-mail probe/page SQL without selected-rule work. General
-  reads keep their existing page transaction.
+  Team fallbacks keep that same snapshot through discovery and their page too;
+  reopening a transaction can read a policy that discovery never checked.
 - Selected Team reads require an injected `EmailRuleDiscoveryService` on
   `EmailPgRepo`. Discover once in the read snapshot and reuse complete contacts
   in probe/page; all-mail reads call no discovery and keep their SQL unchanged.
@@ -216,7 +225,10 @@ tools — hexagonal, heavily feature-gated.
   HTTP 503 with the limit, never an empty or truncated page. The CRM core also
   admits policy writes; do not implement separate limits in the email adapter.
   A bare repository fails closed for selected reads if composition omitted
-  discovery. General mode-partition races remain a separate activation gate.
+  discovery. Keep General's scalar eligibility read in the discovery snapshot.
+  In optimized selected pages, share the complete non-draft participant set
+  between inclusion and domain vetoes; an early positive match must not hide
+  a later private participant. Keep all-mail-only eligibility SQL unchanged.
 - A requested sender may be a verified Gmail send-as alias, not just an inbox
   address: `resolve_sending_inbox` (AI tools) picks the inbox that owns it, and
   `resolve_sender` (drafts, REST `from`) checks it against the chosen inbox.
@@ -302,7 +314,7 @@ tools — hexagonal, heavily feature-gated.
   once per page, retaining bounded IDs for per-thread indexed probes. Its
   positive-target probe runs before the record probe and
   resolves live company domains once against each selected mailbox's
-  contacts. All-mail-only reads retain their existing candidate path.
+  contacts. All-mail-only reads skip selected-rule discovery.
   Keep selected-policy contact resolution within the requested mailboxes;
   record probes and sparse pages reuse the shared indexed sender/recipient
   branches. Positive-target discovery probes participants by their IDs. Do not
@@ -319,6 +331,18 @@ tools — hexagonal, heavily feature-gated.
   own inbox's contacts (`parse_and_upsert_message_contacts`); a writer that
   broke that would drop threads from the Team view, and their conversations'
   other copies with them (`docs/CRM_EMAIL_PRIVACY.md`).
+- `TeamRead` also covers `ViewedUpdated` when the filter itself does not use
+  view history. A saved view overrides message recency, even if the view is
+  older; keep `COALESCE`, not `GREATEST`. Sparse matches use the history primary
+  key. Dense pages merge viewed and never-viewed sources, complete timestamp
+  ties before the ID tiebreaker, and refill below the last raw window in the
+  same snapshot. Apply source filters before each cap so a short source proves
+  exhaustion. Competing copies use their own view time and never the page or
+  refill cursor. Discard accumulated rows on any later error. Emitted windows
+  do not bound rejected rows or history ties; retain the request deadline.
+  `crm.team_email_read` records the sort and `general`/`optimized` path across
+  both branches, including errors; its optimized child records refill rounds.
+  ViewedAt filters and sorts still use General.
 - The unfiltered inbox's viewed sorts (`preview_views/new_inbox.sql`) never sort
   the inbox: each inbox takes a page of opened threads and a page of
   never-opened threads (`idx_email_threads_inbox_reminder_sort` for
@@ -342,6 +366,9 @@ tools — hexagonal, heavily feature-gated.
   inbox's whole folder.
 - Restore Outlook junk drafts to Drafts without Inbox membership; continue rejecting
   attempts to mark clean drafts as junk.
+- Include a reader’s cross-inbox reply draft on a shared thread at Edit only
+  when it belongs to an inbox in the reader’s Drafts scope. Apply the same
+  rule to full and parsed thread reads.
 
 - Reconcile deferred message deletion before claiming scheduled work; unresolved sends retain their message, attachments, and delivery job.
 - `domain/scheduled_delivery/{state,identity,deletion}.rs` owns claim

@@ -24,8 +24,20 @@ async fn stale_close_preserves_replacement_on_another_replica(pool: PgPool) {
     let second = Arc::new(PgHarnessPresence::new(pool.clone(), ReplicaId::mint()));
     let old = RuntimeConnectionId::generate();
     let replacement = RuntimeConnectionId::generate();
-    Arc::clone(&first).connected(harness, old).await;
-    Arc::clone(&second).connected(harness, replacement).await;
+    Arc::clone(&first)
+        .connected(
+            harness,
+            old,
+            agent_harness::domain::ports::RuntimeAccepts::default(),
+        )
+        .await;
+    Arc::clone(&second)
+        .connected(
+            harness,
+            replacement,
+            agent_harness::domain::ports::RuntimeAccepts::default(),
+        )
+        .await;
 
     let mut old_close = PresenceGuard::lock(&pool, harness).await.unwrap();
     first.disconnected(harness, old).await;
@@ -72,7 +84,11 @@ async fn observation_checks_lease_time_after_guard_started(pool: PgPool) {
     .unwrap();
     let presence = Arc::new(PgHarnessPresence::new(pool.clone(), ReplicaId::mint()));
     presence
-        .connected(harness, RuntimeConnectionId::generate())
+        .connected(
+            harness,
+            RuntimeConnectionId::generate(),
+            agent_harness::domain::ports::RuntimeAccepts::default(),
+        )
         .await;
     let mut guard = PresenceGuard::lock(&pool, harness).await.unwrap();
     assert!(guard.is_connected().await.unwrap());

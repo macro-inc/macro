@@ -54,7 +54,7 @@ event contract (schema, sanitization, delivery semantics).
   (`finish_in_flight_locked`): Stripe runs a key at most once, answers a
   finished request with its saved result and a running one with 409. Only a
   409 or other unknown answer refuses with `ItemChangeInFlight`. Callers
-  keep one key per intent across retries (e.g. `computer-remove:{effect}:{n}`
+  keep one key per intent across retries (e.g. `computer-remove:{computer}:{effect}:{n}`; keys must be unique across every environment sharing the Stripe account, so they carry a computer or other global id, never only a per-database sequence number
   moves to `n+1` only once `n` definitely did not apply), so a retry replays
   its own change rather than being refused by it. A trialing subscription never
   gains a computer item (`SubscriptionTrialing`); its own replay sends the stored endpoint and exact

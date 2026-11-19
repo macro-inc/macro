@@ -182,9 +182,14 @@ describe('SetupStatus', () => {
     ]);
     render(() => <SetupStatus />);
 
-    expect(
-      screen.getByText('Calendar for stopped@example.com stopped syncing')
-    ).toBeTruthy();
+    const title = screen.getByText(
+      'Calendar for stopped@example.com stopped syncing'
+    );
+    // The app-wide prompt for the same inbox opens in the bottom-right toast
+    // stack; the pill rides above it instead of hiding under it.
+    expect(title.parentElement?.className).toContain(
+      'var(--desktop-toast-inset-bottom'
+    );
     expect(
       screen.queryByText('Reconnect to show its events in Macro again.')
     ).toBeNull();
