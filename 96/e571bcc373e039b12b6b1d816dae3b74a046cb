@@ -1,0 +1,20 @@
+packages/code-mode-sdk/src/js-tools/catalog.ts
+  s_f3a48b3a685142::t_3b20d232f71d96 244-290,341,356-357,359-362,366,371-372
+  s_f3a48b3a685142::t_82a43652da531b 291-299,383
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.7.7",
+  "base_commit_sha": "96e571bcc373e039b12b6b1d816dae3b74a046cb",
+  "prompts": {},
+  "sessions": {
+    "s_f3a48b3a685142": {
+      "agent_id": {
+        "tool": "claude",
+        "id": "65b2bcf0-02e2-4f2c-88ae-8e6cea990f9a",
+        "model": "claude-opus-5-5"
+      },
+      "human_author": null
+    }
+  }
+}
