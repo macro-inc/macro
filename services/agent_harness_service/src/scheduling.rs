@@ -576,7 +576,7 @@ pub async fn build<Ingress: notification::domain::service::NotificationIngress>(
         db.clone(),
     )));
     // The items routines' entity knobs name, checked as the owner on save
-    // and before each code step that uses one.
+    // and before each code step that uses one, each item once a run.
     let knob_entities: Arc<dyn KnobEntities> = Arc::new(KnobEntityAccess::new(
         access.as_ref().clone(),
         RoutinePeople(

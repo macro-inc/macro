@@ -1,8 +1,8 @@
 //! The items a routine's entity knobs name, checked as its owner: on save,
-//! so a routine never stores one they can't use, before each code step
-//! runs, so a deleted item or lost access fails that step plainly instead of
-//! inside the code, and for the routine's page, so its owner sees which
-//! knobs need a new pick.
+//! so a routine never stores one they can't use; in a run, when the first
+//! code step that uses one starts, so a deleted item or lost access fails
+//! that step plainly instead of inside the code; and for the routine's page,
+//! so its owner sees which knobs need a new pick.
 
 use std::collections::HashMap;
 
@@ -80,9 +80,20 @@ pub async fn unusable_items(
     owner: &MacroUserIdStr<'static>,
     steps: &[&CodeStep],
 ) -> Result<Vec<UnusableItem>, Report> {
-    let mut usable: HashMap<&EntityValue, bool> = HashMap::new();
+    unusable_items_known(entities, owner, steps, &mut HashMap::new()).await
+}
+
+/// [`unusable_items`], taking whether an item is usable from `known` when it
+/// was looked up already, and adding each item it looks up. A run passes one
+/// map to every step, so an item several steps pick is looked up once a run.
+pub async fn unusable_items_known<'a>(
+    entities: &dyn KnobEntities,
+    owner: &MacroUserIdStr<'static>,
+    steps: &[&'a CodeStep],
+    known: &mut HashMap<&'a EntityValue, bool>,
+) -> Result<Vec<UnusableItem>, Report> {
     let mut unusable = Vec::new();
-    for (position, step) in steps.iter().enumerate() {
+    for (position, &step) in steps.iter().enumerate() {
         for (knob, item, kinds) in step.entities() {
             let unusable_item = |kind, item: Option<&EntityValue>| UnusableItem {
                 position,
@@ -100,11 +111,11 @@ pub async fn unusable_items(
                 unusable.push(unusable_item(kind, None));
                 continue;
             };
-            let ok = match usable.get(item) {
+            let ok = match known.get(item) {
                 Some(ok) => *ok,
                 None => {
                     let ok = entities.usable(owner, item).await?;
-                    usable.insert(item, ok);
+                    known.insert(item, ok);
                     ok
                 }
             };

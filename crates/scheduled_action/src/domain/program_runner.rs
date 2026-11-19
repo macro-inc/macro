@@ -4,7 +4,7 @@
 //! A failed step stops the run. Each step's result is recorded on the run's
 //! handle as it happens, so history survives a failure or a deadline.
 
-use std::sync::Arc;
+use std::{collections::HashMap, sync::Arc};
 
 use anyhow::{Context, Result, anyhow, bail};
 use chrono::{DateTime, Utc};
@@ -26,7 +26,7 @@ use super::{
         ActionTrigger, ConditionRequirement, EventFilters, EventReference, RoutineTrigger,
     },
     execution::ExecutionHandle,
-    knob_entities::unusable_items,
+    knob_entities::unusable_items_known,
     models::{RunInfo, RunStart, Schedule, ScheduledAction},
     ports::{
         CodeOutcome, CodeRun, CodeUpgrades, KnobEntities, NoKnobEntities, NoRoutineCode,
@@ -82,7 +82,7 @@ impl<Agents, Content, Code, Upgrades> ProgramRunner<Agents, Content, Code, Upgra
     }
 
     /// Check, before each code step, that its owner can still use the
-    /// items its entity knobs name.
+    /// items its entity knobs name, each item once a run.
     pub fn with_knob_entities(mut self, entities: Arc<dyn KnobEntities>) -> Self {
         self.entities = entities;
         self
@@ -148,6 +148,7 @@ where
         .await?;
         tracing::Span::current().record("steps", program.steps.len());
         let mut outputs = json!({});
+        let mut known_items = HashMap::new();
         for (index, step) in program.steps.iter().enumerate() {
             let path = StepPath::root(index);
             match step {
@@ -160,7 +161,7 @@ where
                         acts_as,
                         routine_id,
                     };
-                    let outcome = match self.unusable_item(owner, step).await {
+                    let outcome = match self.unusable_item(owner, step, &mut known_items).await {
                         Some(failure) => CodeOutcome {
                             result: Err(failure),
                             calls: Vec::new(),
@@ -267,20 +268,33 @@ where
 
     /// Why `step` can't run because an item its entity knobs name is gone
     /// or out of its owner's reach, or the lookup failed; `None` when every
-    /// item is usable.
+    /// item is usable. `known` holds what the run's earlier steps found, so
+    /// an item several steps pick is looked up once a run.
     #[tracing::instrument(name = "routine.knob_items", skip_all, fields(
         items = step.entities().count(),
+        looked_up = tracing::field::Empty,
+        lookup_failed = tracing::field::Empty,
         unusable = tracing::field::Empty,
     ))]
-    async fn unusable_item(
+    async fn unusable_item<'a>(
         &self,
         owner: &MacroUserIdStr<'static>,
-        step: &routine_program::CodeStep,
+        step: &'a routine_program::CodeStep,
+        known: &mut HashMap<&'a routine_program::EntityValue, bool>,
     ) -> Option<String> {
         step.entities().next()?;
-        match unusable_items(self.entities.as_ref(), owner, &[step]).await {
+        let before = known.len();
+        let result = unusable_items_known(self.entities.as_ref(), owner, &[step], known).await;
+        let span = tracing::Span::current();
+        // A lookup that failed was tried but left nothing in `known`.
+        span.record(
+            "looked_up",
+            known.len() - before + usize::from(result.is_err()),
+        );
+        span.record("lookup_failed", result.is_err());
+        match result {
             Ok(unusable) => {
-                tracing::Span::current().record("unusable", unusable.len());
+                span.record("unusable", unusable.len());
                 unusable.first().map(|item| item.run_failure())
             }
             Err(error) => {

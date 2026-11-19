@@ -195,7 +195,8 @@ each run.
   grant on what they trashed): `TargetValidation` refuses an unpicked item or one the
   owner can't open on create, check and update, and the program runner
   checks again before each code step that has one, failing it with the
-  reason and without running its code. `GET
+  reason and without running its code; an item several steps pick is
+  looked up once a run, the later steps reusing what the first found. `GET
   /scheduled-actions/{id}/unusable-items` lists a saved routine's knobs that
   need a new pick, by step id (not position, so a page editing the routine
   keeps each on its step), with the same reason, for its page. A composition without
