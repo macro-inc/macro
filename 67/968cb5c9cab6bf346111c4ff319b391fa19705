@@ -1,0 +1,40 @@
+packages/code-mode-sdk/src/js-tools/runtime.ts
+  s_f3a48b3a685142::t_b9728ea51e1ce5 60
+  s_f3a48b3a685142::t_4b46242006ece4 1-17,22-45,49-59,61-63,66-100
+  s_f3a48b3a685142::t_95bcd5bac02290 64-65
+  s_f3a48b3a685142::t_cdcd6e1007e989 18-21,46-48
+packages/code-mode-sdk/src/js-tools/runtime.test.ts
+  s_f3a48b3a685142::t_cdcd6e1007e989 109
+  s_f3a48b3a685142::t_b40ecfef7e4eb8 1-108,110-147
+packages/code-mode-sdk/src/js-tools/pins.test.ts
+  s_f3a48b3a685142::t_cb02f951da98b7 122,127-131
+  s_f3a48b3a685142::t_9cc42fa66b4827 1-5,7,9-11,24-25,28-33,36-121,123-126,132-134
+  s_f3a48b3a685142::t_0105129446c9ed 8,14
+  s_f3a48b3a685142::t_438979ece79925 6,12-13,15-23,26-27,34-35
+packages/code-mode-sdk/src/js-tools/analyze.test.ts
+  s_f3a48b3a685142::t_cdcd6e1007e989 47-54,57-60,62-85,87-90,92-95,103-110,114-165,168-171,174-197,203-210,215-222,226-229,232-235,241-272,282-285,287-290,295-298,301-348,350-357,360-367,370-373,377-384,391-394,396-403,405-408,411-414,416-419
+  s_f3a48b3a685142::t_fe5e259947b63a 464-483,543
+  s_f3a48b3a685142::t_95bcd5bac02290 560
+  s_f3a48b3a685142::t_4f428656c8a148 586
+  s_f3a48b3a685142::t_4bd905b7ea8da7 1-46,55-56,61,86,91,96-102,111-113,166-167,172-173,198-202,211-214,223-225,230-231,236-240,273-281,286,291-294,299-300,349,358-359,368-369,374-376,385-390,395,404,409-410,415,420-463,484-542,544-559,561-585,587-591
+packages/code-mode-sdk/src/js-tools/analyze.ts
+  s_f3a48b3a685142::t_cdcd6e1007e989 32-37,124-127
+  s_f3a48b3a685142::t_ab9223de292ce4 315
+  s_f3a48b3a685142::t_bc2962b58017c2 1-31,38-123,128-314,316-325
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.7.7",
+  "base_commit_sha": "67968cb5c9cab6bf346111c4ff319b391fa19705",
+  "prompts": {},
+  "sessions": {
+    "s_f3a48b3a685142": {
+      "agent_id": {
+        "tool": "claude",
+        "id": "65b2bcf0-02e2-4f2c-88ae-8e6cea990f9a",
+        "model": "claude-opus-5-5"
+      },
+      "human_author": null
+    }
+  }
+}
