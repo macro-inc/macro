@@ -1439,8 +1439,9 @@ step) and **Create routine**, which saves it and opens its page in the same
 pane. Nothing is written before **Create routine**. The unsent draft is kept for
 three minutes after the last edit, so reloading `/app/routines/new` resumes it;
 starting another routine (the creator or a template card) while the page is
-open replaces it with the new one. A routine
-whose only step is **Ask AI** saves in the original single-agent form.
+open replaces it with the new one. A routine whose only step is **Ask AI**
+saves in the original single-agent form unless it has sub-routine definitions
+or stored program input values. Those routines save as a program.
 
 **Steps.** A routine runs its steps in order and stops at the first failed
 step. There are two kinds. **Code** steps run TypeScript against Macro's SDK;
@@ -1565,6 +1566,8 @@ right after the name, then the **Overview** / **Runs** tabs (Runs with a count),
 and at the right the save state (**Saving…** / **Saved**; **Not saved** in red
 when saving failed, or **Not saved: fix the routine** with the reason on hover
 while an edit is invalid), **Run now** with its **Run options** menu.
+A scheduled copy hides **Run now** when its loaded parent no longer defines
+the sub-routine or its stored inputs are incompatible with that definition.
 Overview is the routine as a page:
 its icon, an editable title, an editable description (**Add a description…**;
 saves on blur or Enter, Escape discards, up to 1000 characters; a drafted
