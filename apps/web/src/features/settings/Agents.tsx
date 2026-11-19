@@ -3,6 +3,7 @@ import {
   AgentPermissionsPage,
   AgentPermissionsSection,
   type PermissionFocus,
+  useAgentPermissionsAvailable,
   useAgentPermissionsFlag,
 } from '@app/features/agent-permissions';
 import {
@@ -199,6 +200,8 @@ export function Agents(props: {
   };
   const [editingAgent, setEditingAgent] = createSignal<AgentWithHarnessId>();
   const permissionsFlag = useAgentPermissionsFlag();
+  // Macro's shield shows only when the API has its permissions (not on a 404).
+  const macroPermissions = useAgentPermissionsAvailable(() => MACRO_NEW_BOT_ID);
   // An agent's permissions page opened from the list (Macro's shield) or a
   // link; Back returns to the list.
   const [permissionsFor, setPermissionsFor] = createSignal<{
@@ -484,7 +487,7 @@ export function Agents(props: {
                       }
                       messagePending={agentDm?.pending()}
                       onPermissions={
-                        permissionsFlag() && agent.id === MACRO_AGENT_BOT_ID
+                        macroPermissions() && agent.id === MACRO_AGENT_BOT_ID
                           ? () => openMacroPermissions()
                           : undefined
                       }
