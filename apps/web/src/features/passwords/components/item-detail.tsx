@@ -185,7 +185,9 @@ export function ItemDetailBody(props: {
                         ? t('passwords.loadingUsername')
                         : props.state.failure === 'unreachable'
                           ? t('passwords.unreachable')
-                          : t('passwords.usernameUnavailable')}
+                          : props.state.failure === 'serviceUnavailable'
+                            ? t('passwords.serviceUnavailable')
+                            : t('passwords.usernameUnavailable')}
                     </span>
                   }
                 >

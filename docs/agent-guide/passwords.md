@@ -78,10 +78,11 @@ form.
 
 Usernames load with a Copy action and never reveal the password. An empty account
 identifier or API Key shows a dash; lookup failures stay visible. When Macro does
-not answer (offline, or a gateway returning 502-504) the banner, the username row
-and a notice above the list read "Can't reach Macro. Check your connection.", and
-the notice's Retry reloads the list and the selected username. Missing provider
-username slots read as
+not answer (offline, or a gateway returning 502 or 504) the banner, the username
+row and a notice above the list read "Can't reach Macro. Check your connection.";
+when the service answers 503 they read "Passwords is temporarily unavailable.
+Try again in a minute." Either notice's Retry reloads the list and the selected
+username. Missing provider username slots read as
 empty without requiring a re-import. Any signed-in team member with
 access can reveal and copy the password, notes and verification code; there is
 no separate re-sign-in step. Revealed values and codes clear on Lock
@@ -152,7 +153,7 @@ estimate from the rate so far, and a note to keep the page open (or import
 the same file again in this tab to finish) show, and leaving the page asks
 first. The result counts imported, already present, skipped and failed items,
 lists the failed ones by reason (couldn't reach the server, which includes a
-gateway's 502-504, server error, busy, folder deleted, not accepted, not
+gateway's 502 or 504, server error (including a service 503), busy, folder deleted, not accepted, not
 allowed, no answer, account changed) and offers Open folder. The import id is
 kept in sessionStorage under a hash of the viewer and the file's contents
 (hashed in the worker), with the destination, privacy and the source keys of

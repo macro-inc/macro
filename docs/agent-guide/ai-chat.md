@@ -1393,6 +1393,13 @@ idempotency key. No separate member confirmation is required. The server still
 refuses restricted credentials and unavailable rollout gates; CRM viewing
 permission is separate from these own-member controls. A conflict requires
 inspection and a new decision, never an automatic refresh and retry.
+Validation and replacement share a live-expansion resource check. A named limit
+error refuses activation and leaves the current policy unchanged; narrow the
+rules before retrying. Validation does not reserve capacity, so replacement can
+still refuse after live data changes. Later growth can make a Team email read
+fail with a named resource limit instead of returning an incomplete feed;
+withdrawal stays available. Do not describe validation as a permanent guarantee
+that a live rule will fit.
 
 The agent explains that a matching participant shares the whole past/future
 thread; contact/company selectors follow live records, all exclusions win, and

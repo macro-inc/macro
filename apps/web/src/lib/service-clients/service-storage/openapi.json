@@ -23285,6 +23285,16 @@
                 }
               }
             }
+          },
+          "503": {
+            "description": "Selected email rules exceeded a resource limit",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
           }
         }
       },
@@ -23336,6 +23346,16 @@
           },
           "500": {
             "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "503": {
+            "description": "Selected email rules exceeded a resource limit",
             "content": {
               "application/json": {
                 "schema": {
@@ -23406,6 +23426,16 @@
           },
           "500": {
             "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "503": {
+            "description": "Selected email rules exceeded a resource limit",
             "content": {
               "application/json": {
                 "schema": {

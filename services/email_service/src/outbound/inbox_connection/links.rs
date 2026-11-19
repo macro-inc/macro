@@ -88,7 +88,7 @@ impl<R: ConnectionLinkLookup> ConnectionLinks for PgConnectionLinks<R> {
     }
 
     async fn cleanup_attempt(&self, link_id: Uuid, owner: &str) {
-        macro_db_client::in_progress_user_link::delete_owned_in_progress_user_link(&self.db, link_id, owner)
+        macro_db_client::in_progress_user_link::discard_owned_in_progress_user_link(&self.db, link_id, owner)
             .await
             .inspect_err(|del_err| {
                 tracing::warn!(error = ?del_err, ?link_id, "Failed to clean up in_progress_user_link after failed init");

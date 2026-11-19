@@ -40,6 +40,8 @@ export default {
   loading: 'Loading passwords…',
   failed: 'Could not complete this action. Please try again.',
   unreachable: "Can't reach Macro. Check your connection.",
+  serviceUnavailable:
+    'Passwords is temporarily unavailable. Try again in a minute.',
   vaultNotProvisioned: "This team's vault isn't set up yet.",
   retry: 'Retry',
   name: 'Name',
