@@ -24,12 +24,13 @@ export interface CalendarAccount {
 
 /**
  * Classifies the viewer's own inboxes into one calendar action each. An inbox
- * whose enabled calendar grant has expired offers `reconnect`. Missing calendar
- * access — never granted, declined, or turned off — offers `enable`, including
- * when the mailbox also needs reconnection; one that already
+ * that needs a full reconnect offers `reconnect`, whether or not its grant
+ * still has calendar access, as the calendar view does; its consent asks for
+ * the mailbox and calendar together. Otherwise missing calendar access — never
+ * granted, declined, or turned off — offers `enable`, and an inbox that already
  * has it offers `turnOff`. An inbox whose calendar used to sync and lost its
- * capability ({@link calendarStoppedSyncing}) offers `reconnect` instead, marked
- * `stoppedSyncing`: its events are gone until it re-grants.
+ * capability ({@link calendarStoppedSyncing}) offers `reconnect` instead of
+ * `enable`, marked `stoppedSyncing`: its events are gone until it re-grants.
  *
  * Delegated inboxes are dropped: the viewer reads the owner's calendar but must
  * not enable or delete the owner's calendar from here. The viewer's primary
@@ -50,13 +51,12 @@ export function toCalendarAccounts(
         emailAddress: link.email_address,
         consentScopes: calendarConsentScopes(link),
         stoppedSyncing,
-        action: link.needs_calendar_permission
-          ? stoppedSyncing
+        action:
+          link.needs_reauth || stoppedSyncing
             ? 'reconnect'
-            : 'enable'
-          : link.needs_reauth
-            ? 'reconnect'
-            : 'turnOff',
+            : link.needs_calendar_permission
+              ? 'enable'
+              : 'turnOff',
       };
     });
 }

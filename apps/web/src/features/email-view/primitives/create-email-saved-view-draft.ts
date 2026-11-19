@@ -190,10 +190,18 @@ export function createEmailSavedViewDraft(options: {
     )
       return { kind: 'unavailable' };
     const snapshot = confirmed();
+    const identity = options.source.data();
     return options.viewerId() && snapshot?.record.id === id
       ? {
           kind: 'saved',
-          record: snapshot.record,
+          // Identity changes remain live while temporary filter edits retain their baseline.
+          record: {
+            ...snapshot.record,
+            appearance:
+              identity?.id === id
+                ? identity.appearance
+                : snapshot.record.appearance,
+          },
           dirty: dirty(),
           issues: snapshot.issues,
         }

@@ -65,6 +65,7 @@ tracing = { workspace = true }
 uuid = { workspace = true }
 workspace-hack = { version = "0.1", path = "../workspace-hack" }
 
+model_entity = { package = "model-entity", path = "../model-entity" }
 saved_views = { path = "../saved_views" }
 
 [dev-dependencies]

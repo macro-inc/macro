@@ -1,6 +1,6 @@
 {
   "db_name": "PostgreSQL",
-  "query": "SELECT id, user_id, name, config, created_at, updated_at, revision, shared_team_id FROM saved_view WHERE id = $1",
+  "query": "SELECT id, user_id, name, config, created_at, updated_at, revision, shared_team_id, appearance AS \"appearance: sqlx::types::Json<model_entity::EntityAppearance>\" FROM saved_view WHERE user_id = $1",
   "describe": {
     "columns": [
       {
@@ -42,11 +42,16 @@
         "ordinal": 7,
         "name": "shared_team_id",
         "type_info": "Uuid"
+      },
+      {
+        "ordinal": 8,
+        "name": "appearance: sqlx::types::Json<model_entity::EntityAppearance>",
+        "type_info": "Jsonb"
       }
     ],
     "parameters": {
       "Left": [
-        "Uuid"
+        "Text"
       ]
     },
     "nullable": [
@@ -57,8 +62,9 @@
       false,
       false,
       false,
+      true,
       true
     ]
   },
-  "hash": "856742e5c0c103ddd4952863dc950a83f78d7161aa6d9d08ea85bb778c6b4a05"
+  "hash": "e395a54cebbd57db9000bd0b72e4ed6903ebc9dd28b31e2e6ed8e5ab4cde7c8d"
 }

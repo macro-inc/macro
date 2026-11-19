@@ -44,6 +44,7 @@ mod offsets;
 mod project;
 mod property;
 mod replay;
+mod scaling;
 #[cfg(test)]
 mod test;
 
@@ -105,6 +106,7 @@ pub(crate) use self::{
     context::KafkaProcessingContext,
     metrics::IndexMetrics,
     replay::{ReplayDone, replay_broker_event},
+    scaling::publish_lane_backlog,
 };
 
 /// Consumer group used for live search-index event offsets.

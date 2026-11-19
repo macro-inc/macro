@@ -9,8 +9,6 @@ STL-409	-	needs	shown only with the GraphQL list off: with it on, the check befo
 STL-400	-	needs	shown only when a failed next page reaches the list. The Mail list pages from the local cache, which often drops a failed page first: a test that failed the request saw the notice in about half of its runs, and Next item did nothing in the others. Needs a way to fail the cache host's paging
 AC-317	-	needs	shown only after a window of recipient suggestions failed. They are read from the local contacts cache, which no stack makes fail: needs a way to fail the cache host's directory reads
 STL-410	-	needs	the tour is off unless the flag service or the build turns in-app tours on, and the suite's bundle does neither
-AL-139	-	bug	u and Shift+U in a thread opened inline reach the list behind it and not the thread (inline-thread-read-keys-reach-the-list); its test is kept as a known bug
-AL-140	-	bug	u and Shift+U in a thread opened inline reach the list behind it and not the thread (inline-thread-read-keys-reach-the-list); its test is kept as a known bug
 AL-500	-	needs	needs the notification service, and no test on the full-stack tier does it yet
 AL-503	-	needs	needs the static file service, and no test on the full-stack tier does it yet
 AL-512	-	needs	needs the calendar service, and no test on the full-stack tier does it yet
@@ -31,9 +29,7 @@ STL-605	-	needs	needs the notification service, and no test on the full-stack ti
 AC-319	-	bug	Escape in the phone reply Subject: field does not leave it: the composer puts the focus straight back (phone-reply-subject-escape-keeps-focus); its test is kept as a known bug
 STC-314	-	no-user-path	the recipient picker leaves the user's own address out of its suggestions, and typed or pasted it becomes a plain chip
 STC-046	-	no-user-path	a composer that learns its draft was sent elsewhere closes in the same step that sets this state: the reply composer hides itself, and the standalone one is replaced by the thread
-STC-047	-	bug	a draft deleted in one browser stays editable in another that has it open (deleted-draft-open-elsewhere-stays-editable); its test is kept as a known bug
 AC-067	-	needs	exists only with enable-graphql-soup off, and the bundle of the suite is built with it on, as the app runs: there the sync banner recovers a rejected draft instead
-AC-915	-	bug	a rejected scheduled send that is cancelled in an Outlook inbox stays locked (outlook-cancelled-failed-schedule-stays-locked); its test is kept as a known bug
 STC-031	-	no-user-path	Every composer send goes through the send journal and carries an attempt id, so the legacy unschedule path that raises this never runs.
 STC-043	-	no-user-path	the code that raises this wraps only a call that cannot fail on the spot: every way marking done after a send can fail comes later, and shows as the thread's own notice (STL-075)
 STC-060	-	no-user-path	every way of picking a send time (a preset, the calendar, a typed query) hands over a valid date, so the check that raises this cannot fail
