@@ -18,9 +18,10 @@ carries the total. The numbers are pushed by the server and follow reads, done,
 clears and new activity within about a second, on every open tab; nothing
 polls. With the flag off the buttons keep their dots and show no number.
 A type turned off in Settings → Notifications ("New email", say) counts
-differently in the two: with the flag on, the server makes no row for activity
-that arrives while it is off, and rows made before stay counted until read or
-done; with the flag off, the Mail dot reads the setting and goes out at once.
+differently in the two: with the flag on, the notification service makes no
+row for activity it receives while the type is off, and rows made before stay
+counted until read or done; with the flag off, the Mail dot reads the setting
+and goes out at once.
 
 Each list row is one row of the server's notification inbox
 (`user.notificationInbox`): an email thread, a channel's top-level messages, one

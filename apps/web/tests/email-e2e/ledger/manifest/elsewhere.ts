@@ -483,13 +483,12 @@ export const elsewhere = {
       surface: 'SX-29',
       fn: ['F-162'],
       action:
-        'Toggle "New email" notifications (mail that arrives while off is not counted on the Mail badge)',
+        'Toggle "New email" notifications (mail the notification service receives while it is off adds nothing to the Mail badge)',
       trigger: 'switch on the row "New email" ("When a new email arrives")',
       source: [
         'src/features/settings/Notifications.tsx',
         'src/features/notifications/notification-event-catalog.ts',
       ],
-      needs: 'the notification service',
     },
     {
       id: 'AX-324',
@@ -528,7 +527,7 @@ export const elsewhere = {
       surface: 'SX-17',
       fn: ['F-042'],
       state:
-        'Unread count on the Mail navigation entry: unread mail that arrived while "New email" notifications were on',
+        'Unread count on the Mail navigation entry: the unread mail rows of the Notifications inbox, which mail received while "New email" notifications are off does not make',
       trigger:
         'an unread thread with a new-email row in the Notifications inbox (the server counts them)',
       source: [
@@ -805,6 +804,15 @@ export const elsewhere = {
         'Tour steps "Find the signal in your inbox" and "Move faster with shortcuts", with the Macro Mail video',
       trigger: 'start the Email tour',
       source: ['src/features/email-view/tour.ts'],
+    },
+    {
+      id: 'STX-943',
+      surface: 'SX-29',
+      fn: ['F-162'],
+      state:
+        'result: the "New email" switch shows the chosen setting, also after a reload',
+      trigger: 'after the action succeeds',
+      source: ['src/features/settings/Notifications.tsx'],
     },
     {
       id: 'STX-944',

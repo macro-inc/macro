@@ -36,61 +36,69 @@ async function disabledTypes(mailbox: Mailbox): Promise<string[]> {
   return body.disabled_types;
 }
 
-/**
- * The queues a new mail's notification passes through: Gmail's sync hands it
- * on as it finishes the queue message that stored the thread, and the
- * notification service reads the user's types as it takes it off its own.
- */
-const NOTIFYING_QUEUES = [
+/** Gmail's sync queues, whose messages name the inbox they sync. */
+const GMAIL_SYNC_QUEUES = [
   'email-service-gmail-inbox-sync-queue',
   'email-service-gmail-inbox-retry-queue',
-  'notification-ingress-queue',
 ];
 
-/**
- * Whether the services have decided if a thread's new mail notifies, which
- * happens after the thread is listed. Outlook's sync hands the mail on from
- * its projection, whose outbox row for the thread goes when it is done; then
- * every queue on the way must be empty. The local stack's queues are shared,
- * so this also waits for other tests' mail.
- */
-async function decided(mailbox: Mailbox, threadId: string): Promise<boolean> {
-  const [outbox] = await mailbox.stack.sql<{ waiting: number }>(
-    `SELECT count(*)::int AS waiting FROM email_projection_outbox
-     WHERE link_id = '${mailbox.inbox.linkId}' AND payload->>'thread_id' = '${threadId}'`
-  );
-  if ((outbox?.waiting ?? 0) > 0) return false;
-  for (const queue of NOTIFYING_QUEUES) {
-    if (await queueBusy(queue)) return false;
-  }
-  return true;
-}
+/** The notification service's queue, whose messages name their thread. */
+const NOTIFICATION_INGRESS_QUEUE = 'notification-ingress-queue';
 
-/** Whether a queue of the local stack holds a message, waiting or taken. */
-async function queueBusy(queue: string): Promise<boolean> {
+type QueueListing = {
+  ReceiveMessageResponse?: {
+    ReceiveMessageResult: {
+      Message: { Body: string } | { Body: string }[];
+    } | null;
+  };
+};
+
+/**
+ * The bodies of the messages on a queue of the local stack, waiting, taken
+ * or delayed, through LocalStack's own listing, which takes none of them.
+ */
+async function queued(queue: string): Promise<string[]> {
   const sqs = localStackAddresses()?.sqsUrl;
   if (!sqs)
     throw new Error(
       "EMAIL_E2E_STACK_SQS_URL is not set: the address of the stack's LocalStack"
     );
-  const answer = await fetch(`${sqs}/000000000000/${queue}`, {
-    method: 'POST',
-    headers: { 'content-type': 'application/x-www-form-urlencoded' },
-    body: new URLSearchParams({
-      Action: 'GetQueueAttributes',
-      Version: '2012-11-05',
-      'AttributeName.1': 'All',
-    }),
+  const listing = new URL(`${sqs}/_aws/sqs/messages`);
+  listing.searchParams.set('QueueUrl', `${sqs}/000000000000/${queue}`);
+  listing.searchParams.set('ShowInvisible', 'true');
+  listing.searchParams.set('ShowDelayed', 'true');
+  const answer = await fetch(listing, {
+    headers: { accept: 'application/json' },
   });
   const text = await answer.text();
   expect(answer.status, text).toBe(200);
-  const counts = [
-    ...text.matchAll(
-      /<Name>ApproximateNumberOfMessages\w*<\/Name>\s*<Value>(\d+)<\/Value>/g
-    ),
-  ];
-  expect(counts, text).toHaveLength(3);
-  return counts.some(([, count]) => count !== '0');
+  const body = JSON.parse(text) as QueueListing;
+  expect(body.ReceiveMessageResponse, text).toBeDefined();
+  const result = body.ReceiveMessageResponse?.ReceiveMessageResult;
+  return result ? [result.Message].flat().map((each) => each.Body) : [];
+}
+
+/**
+ * Whether the services have decided if a thread's new mail notifies, which
+ * happens after the thread is listed. The email service hands the mail on
+ * when Outlook's sync has projected it (its outbox row for the thread is
+ * gone) or Gmail's has finished the queue messages of the inbox; the
+ * notification service reads the user's types as it takes the mail off its
+ * queue, and removes it when done.
+ */
+async function decided(mailbox: Mailbox, threadId: string): Promise<boolean> {
+  const { linkId } = mailbox.inbox;
+  const [outbox] = await mailbox.stack.sql<{ waiting: number }>(
+    `SELECT count(*)::int AS waiting FROM email_projection_outbox
+     WHERE link_id = '${linkId}' AND payload->>'thread_id' = '${threadId}'`
+  );
+  if ((outbox?.waiting ?? 0) > 0) return false;
+  for (const queue of GMAIL_SYNC_QUEUES) {
+    if ((await queued(queue)).some((body) => body.includes(linkId)))
+      return false;
+  }
+  const ingress = await queued(NOTIFICATION_INGRESS_QUEUE);
+  return !ingress.some((body) => body.includes(threadId));
 }
 
 /** The ids of what the user muted, as the notification service keeps them. */
@@ -291,9 +299,19 @@ for (const provider of PROVIDERS) {
         text: 'Noon at the quarry?',
       });
       const unannounced = await mailbox.synced('Lunch?');
+      // Twice in a row: LocalStack moves a message it hands out from waiting
+      // to taken in two steps, and a listing between them shows neither.
+      let settled = 0;
       await expect
-        .poll(() => decided(mailbox, unannounced.id), { timeout: 60_000 })
-        .toBe(true);
+        .poll(
+          async () => {
+            const now = await decided(mailbox, unannounced.id);
+            settled = now ? settled + 1 : 0;
+            return settled;
+          },
+          { timeout: 60_000, intervals: [250] }
+        )
+        .toBe(2);
       expect(
         (await notifications(mailbox)).map((each) => each.entity_id)
       ).not.toContain(unannounced.id);
