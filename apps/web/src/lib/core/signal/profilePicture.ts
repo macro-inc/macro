@@ -1,7 +1,9 @@
+import { type AgentFace, parseAgentFace } from '@macro-inc/agent-faces';
 import { debounce } from '@core/util/debounce';
 import { fireAndForget } from '@core/util/fireAndForget';
 
 import { authServiceClient } from '@service-auth/client';
+import type { UserProfilePicture } from '@service-auth/generated/schemas/userProfilePicture';
 import { until } from '@solid-primitives/promise';
 import {
   type Accessor,
@@ -22,8 +24,24 @@ export type ProfilePictureItem = {
   _createdAt: Date;
   id: string;
   url?: string;
+  /** The user's saved face; it is drawn instead of `url`, which is its PNG. */
+  face?: AgentFace;
   loading: boolean;
 };
+
+/** A cache entry from one row of `POST /user/profile_pictures`. */
+function pictureItem(picture: UserProfilePicture): ProfilePictureItem {
+  // A face-only agent may have no PNG yet, so the url can be null.
+  const face =
+    'avatar_face' in picture ? parseAgentFace(picture.avatar_face) : undefined;
+  return {
+    _createdAt: new Date(),
+    id: picture.id,
+    url: picture.url ?? undefined,
+    face,
+    loading: false,
+  };
+}
 
 const [profilePictureFetchQueue, setProfilePictureFetchQueue] = createSignal<
   string[]
@@ -66,13 +84,7 @@ async function fetchProfilePictures(
     }));
   }
 
-  const { pictures } = result.value;
-  return pictures.map(({ id, url }) => ({
-    _createdAt: new Date(),
-    id,
-    url,
-    loading: false,
-  }));
+  return result.value.pictures.map(pictureItem);
 }
 
 type ProfilePictureUrlFetcher = [
@@ -96,7 +108,11 @@ async function batchFetchProfilePictures(ids: string[]) {
     ids.length > 0 ? fetchProfilePictures(ids) : Promise.resolve([]),
   ]);
 
+  // The response leaves out users with no picture; they are loaded too.
   const updates: ProfilePictureStore = {};
+  for (const id of ids) {
+    updates[id] = { _createdAt: new Date(), id, loading: false };
+  }
 
   [...nameResults].forEach((result) => {
     updates[result.id] = result;
@@ -156,6 +172,14 @@ export function useProfilePictureUrl(id?: string): ProfilePictureUrlFetcher {
   return [accessor, controls];
 }
 
+/**
+ * A user's cache entry, read reactively; `undefined` until
+ * `useProfilePictureUrl` has asked for it.
+ */
+export function profilePictureItem(id: string): ProfilePictureItem | undefined {
+  return userProfilePictures[id];
+}
+
 /** A user's profile picture URL from the shared cache, fetched if needed. */
 export async function getProfilePictureUrl(
   id: string
@@ -186,12 +210,12 @@ export async function refreshProfilePicture(userId: string): Promise<void> {
   }
 
   const picture = result.value.pictures.find(({ id }) => id === userId);
-  setUserProfilePictures(userId, {
-    _createdAt: new Date(),
-    id: userId,
-    url: picture?.url,
-    loading: false,
-  });
+  setUserProfilePictures(
+    userId,
+    picture
+      ? pictureItem(picture)
+      : { _createdAt: new Date(), id: userId, loading: false }
+  );
 }
 
 const userPictureChangedSchema = z.object({ user_id: z.string().min(1) });

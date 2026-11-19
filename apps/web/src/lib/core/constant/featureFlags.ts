@@ -275,6 +275,17 @@ export const ENABLE_PROFILE_PICTURES = defineFlag({
   default: true,
 }).enabled;
 
+/**
+ * Draw agent teammates' parametric faces: a saved face, or one derived from
+ * an agent's user id when it has no picture. On in development. Env-only
+ * because every `UserIcon` reads it, including ones rendered outside the
+ * PostHog provider.
+ */
+export const ENABLE_AGENT_FACES = defineFlag({
+  env: 'ENABLE_AGENT_FACES',
+  default: DEV_MODE_ENV,
+}).enabled;
+
 export const ENABLE_VIDEO_BLOCK = defineFlag({
   env: 'ENABLE_VIDEO_BLOCK',
   default: true,
