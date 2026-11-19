@@ -606,9 +606,12 @@ impl EventFilter {
                     inbox,
                     ..
                 } => {
+                    // Received mail always carries its inbox at admission. A
+                    // stored run doesn't (`run_event`): admission checked it,
+                    // and a changed filter supersedes the run by revision.
                     self.ids.as_ref().is_none_or(|ids| ids.contains(entity_id))
                         && self.inboxes.as_ref().is_none_or(|inboxes| {
-                            inbox.is_some_and(|inbox| inboxes.contains(&inbox))
+                            inbox.is_none_or(|inbox| inboxes.contains(&inbox))
                         })
                         && self
                             .property
@@ -700,8 +703,8 @@ impl EventFilters {
     }
 
     /// What a run of this routine keeps of `event`: only routines that test
-    /// property changes keep them, and only routines that pick inboxes keep
-    /// the inbox, so older replicas can still read every other run.
+    /// property changes keep them, so older replicas can still read every
+    /// other run. No run keeps the inbox, so every replica can read every run.
     pub fn run_event(&self, event: &EventReference) -> EventReference {
         let mut kept = event.clone();
         if let EventSource::Entity {
@@ -713,9 +716,7 @@ impl EventFilters {
             if !self.0.iter().any(|filter| filter.property.is_some()) {
                 *property_change = None;
             }
-            if !self.0.iter().any(|filter| filter.inboxes.is_some()) {
-                *inbox = None;
-            }
+            *inbox = None;
         }
         kept
     }
@@ -816,7 +817,8 @@ pub enum EventSource {
         message_id: Option<Uuid>,
         change_source: Option<PropertyChangeSource>,
         property_change: Option<PropertyChange>,
-        /// The inbox (email link) received mail arrived in.
+        /// The inbox (email link) received mail arrived in. Admission only:
+        /// a stored event never keeps it, so a run read back has none.
         inbox: Option<Uuid>,
     },
     /// A delivery from Macro's GitHub App. Boxed: it carries its payload.
@@ -839,8 +841,6 @@ struct EventReferenceInput {
     change_source: Option<PropertyChangeSource>,
     #[serde(default, skip_serializing_if = "Option::is_none")]
     property_change: Option<PropertyChange>,
-    #[serde(default, skip_serializing_if = "Option::is_none")]
-    inbox: Option<Uuid>,
 }
 
 fn skip_message_id(message_id: &Option<Option<Uuid>>) -> bool {
@@ -855,9 +855,7 @@ impl TryFrom<EventReferenceInput> for EventReference {
         let source = match (input.entity_id, input.github) {
             (Some(entity_id), None) if !name.is_external() => {
                 let message_id = input.message_id.flatten();
-                if name.has_message() != message_id.is_some()
-                    || (input.inbox.is_some() && name != EventName::EmailMessageReceived)
-                {
+                if name.has_message() != message_id.is_some() {
                     return Err(EventRejection::InvalidContext);
                 }
                 EventSource::Entity {
@@ -865,14 +863,13 @@ impl TryFrom<EventReferenceInput> for EventReference {
                     message_id,
                     change_source: input.change_source,
                     property_change: input.property_change,
-                    inbox: input.inbox,
+                    inbox: None,
                 }
             }
             (None, Some(delivery))
                 if name == EventName::Github
                     && input.change_source.is_none()
-                    && input.property_change.is_none()
-                    && input.inbox.is_none() =>
+                    && input.property_change.is_none() =>
             {
                 EventSource::Github(delivery)
             }
@@ -896,21 +893,20 @@ impl From<EventReference> for EventReferenceInput {
             github: None,
             change_source: None,
             property_change: None,
-            inbox: None,
         };
         match event.source {
+            // The inbox is only for admission: a stored event never keeps it.
             EventSource::Entity {
                 entity_id,
                 message_id,
                 change_source,
                 property_change,
-                inbox,
+                inbox: _,
             } => {
                 input.entity_id = Some(entity_id);
                 input.message_id = Some(message_id);
                 input.change_source = change_source;
                 input.property_change = property_change;
-                input.inbox = inbox;
             }
             EventSource::Github(delivery) => input.github = Some(delivery),
         }

@@ -1128,21 +1128,25 @@ fn an_inbox_filter_is_only_for_received_mail_alone_in_its_filter() {
 }
 
 #[test]
-fn the_inbox_survives_storage_only_for_routines_that_pick_inboxes() {
+fn no_run_keeps_the_inbox_and_a_run_of_a_routine_that_picks_one_still_starts() {
     let event = received_in(INBOX);
-    let stored: EventReference =
-        serde_json::from_value(serde_json::to_value(&event).unwrap()).unwrap();
-    assert_eq!(stored, event);
-
     let picking = filters(json!([{"events": ["email.message_received"], "inboxes": [INBOX]}]));
-    assert_eq!(picking.run_event(&event), event);
-    // What a run keeps still matches when the run is about to start.
-    assert!(picking.matches(&picking.run_event(&event), event.published_at()));
-
     let every = filters(json!([{"events": ["email.message_received"]}]));
-    let kept = serde_json::to_value(every.run_event(&event)).unwrap();
-    assert!(kept.get("inbox").is_none());
+    for routine in [&picking, &every] {
+        let kept = serde_json::to_value(routine.run_event(&event)).unwrap();
+        // The stored form older replicas read, with no key they'd reject.
+        assert!(kept.get("inbox").is_none(), "{kept}");
+        let stored: EventReference = serde_json::from_value(kept).unwrap();
+        assert_eq!(stored, routine.run_event(&event));
+        // What a run keeps still matches when the run is about to start.
+        assert!(routine.matches(&stored, event.published_at()));
+    }
+    // Admission still turns away mail into an inbox the routine didn't pick.
+    assert!(!picking.matches(&received_in(OTHER_INBOX), event.published_at()));
 
+    let mut mail = serde_json::to_value(&event).unwrap();
+    mail["inbox"] = json!(INBOX);
+    assert!(serde_json::from_value::<EventReference>(mail).is_err());
     let mut document = serde_json::to_value(
         incoming("document.created", metadata())
             .normalize()

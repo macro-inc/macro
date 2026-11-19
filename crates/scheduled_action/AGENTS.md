@@ -456,13 +456,16 @@ that listener is ready. Cancellation can stop the gate before startup finishes.
   same own-plus-delegated set the app lists, one index probe per pick), so the
   check never reads the owner's other inboxes or an inbox's other delegates.
   `routine.admit_event` counts the routines only their inboxes turned away as
-  `outside_inboxes`. The run event keeps the received `inbox` only for
-  routines with an inbox filter, so dispatch re-checks the same filter. A
-  shared template drops its inboxes: they are the publisher's own.
+  `outside_inboxes`. No run keeps the received `inbox`, so every replica can
+  read every run: admission checks it, and a filter changed since supersedes
+  the run by revision. A shared template drops its inboxes: they are the
+  publisher's own. Code without inbox filters can't decode a routine that
+  picks some, and skips it at intake.
 - `EventReference` rejects unknown keys, so a replica still on older code can't
   read a run row with a new key: write a new optional key only when it is set.
-  Its dispatcher fails a whole page of pending runs on one such row, so rolling
-  back past a new key means finishing those runs and removing the key first.
+  Its dispatcher fails a whole page of pending runs on one such row, stopping
+  every routine's event runs, so don't store what only admission needs, as
+  the received inbox.
 
 ## Related
 
