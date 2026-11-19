@@ -189,10 +189,11 @@ with access to the system named:
 4. **Service accounts**: Grafana service accounts and their tokens live in the
    database, so they don't come over from the host; recreate the ones still
    in use and hand out the new tokens.
-5. **GoAlert's Grafana path**: the host's nginx lets `/api/v2/grafana/` on
-   `oncall.macro-internal.com` through, so this Grafana's contact points can
-   page once it notifies. A host change, shipped with Deploy Observability
-   (dry run first) any time before the switch.
+5. **GoAlert's Grafana path**: the host's nginx lets `POST /api/v2/grafana/incoming`
+   on `oncall.macro-internal.com` through, so this Grafana's contact points can
+   page once it notifies. A host change, deployed with Deploy Observability
+   (dry run first) before the switch: the Pulumi change in the switch can only
+   be applied once every host change on main is deployed.
 
 ### Testing before the switch
 
@@ -223,20 +224,23 @@ machine with cluster access (`aws eks update-kubeconfig --name observability
   ```
   In Grafana, Explore finds `{service_name="switch-test"}` in Loki and trace
   `5b8efff798038103d269b633813fc60c` in Tempo.
-- **A lost node**: `kubectl --context observability drain <node>
-  --ignore-daemonsets --delete-emptydir-data`. Grafana keeps answering and
-  the ingest calls above keep succeeding while the pods move; then `kubectl
-  uncordon <node>`.
+- **A lost node**: watch `kubectl --context observability -n observability
+  get deploy,sts -w` in one terminal and run `kubectl --context observability
+  drain <node> --ignore-daemonsets --delete-emptydir-data` in another. Every
+  Deployment and StatefulSet keeps at least one ready replica throughout (a
+  port-forward drops when its pod is evicted; start it again). Then rerun the
+  ingest calls and `kubectl --context observability uncordon <node>`.
 - **The Mimir backfill, with one old block.** In `../aws/` set
   `mimirBackfill.enable = true`, plan and apply. On the host (SSM, see
-  `infra/stacks/observability/README.md` "Runtime"), copy one of Prometheus'
-  oldest blocks (a directory named by a ULID):
+  `infra/stacks/observability/README.md` "Runtime"), as root (`sudo -i`:
+  Prometheus' directory is readable only by root and `prometheus`), copy one
+  of Prometheus' oldest blocks (directories named by a ULID, oldest first):
   ```sh
   cd /srv/observability/prometheus/data
-  sudo ls -d 01*/ | head -3                  # oldest first
+  ls -d 01*/ | head -3
   block=<one of them, without the slash>
-  sudo cat "$block/meta.json"                 # minTime and maxTime, in ms
-  sudo aws s3 sync --region us-east-2 \
+  cat "$block/meta.json"                      # minTime and maxTime, in ms
+  test -f "$block/meta.json" && aws s3 sync --region us-east-2 \
     "$block" "s3://macro-observability-k8s-mimir/blocks/anonymous/$block"
   ```
   Within about 15 minutes (Mimir's compactor rebuilds the bucket index), the
@@ -249,98 +253,180 @@ machine with cluster access (`aws eks update-kubeconfig --name observability
 
 Loki and Tempo must never run on the host and in the cluster against the same
 bucket, and traffic moves last. Every step has its preview; nothing below runs
-before its go-ahead.
+before its go-ahead. No host deploy may run between step 3 and step 8: a new
+host starts Loki and Tempo again.
 
 **Prepared beforehand, reviewed, not merged:**
 
 - *Cluster, buckets*: `macro.backends.buckets` set to `../aws/`'s
   `host_buckets` output (`loki` = `logs`, `tempo` = `traces`), rendered.
-- *Cluster, switched*: `macro.grafana.notify = true`, `macro.grafana.localTesting
-  = false` and `macro.edge.albReadinessGate = true`, rendered.
+- *Cluster, public*: `macro.grafana.localTesting = false` and
+  `macro.edge.albReadinessGate = true`, rendered.
+- *Cluster, notify*: `macro.grafana.notify = true`, rendered.
 - *AWS layer*: `switched = true` and `mimirBackfill.enable = true` in
   `../aws/settings.nix`; its plan reviewed (two listener rules, four alarms,
   Mimir's bucket policy).
 - *Pulumi, listener rule*: the observability stack's priority-1 rule, its
   target group and attachment, and the `observability-ui` alarm removed. The
-  deploy workflow refuses these deletes, so it is merged and then applied by
-  hand. Its `pulumi preview --diff` must list exactly those four deletions:
-  the stack looks up the AMI built from main's `nixos/`, so a host change
-  merged since the last deploy shows up as a replaced instance. Deploy that
-  first.
+  deploy workflow refuses these deletes, so it is applied by hand. Before
+  merging, from its branch up to date with main, `pulumi preview --diff
+  --stack macro-inc/observability/prod` must list exactly those four
+  deletions. The stack looks up the AMI built from the checkout's `nixos/`, so
+  a host change on main that isn't deployed shows up as a replaced instance:
+  deploy it first, since after this merges the deploy workflow refuses to run
+  until the deletions are applied.
 - *Host, GoAlert only*: the host stops running Grafana, Loki, Tempo,
-  Prometheus and Alloy; a Deploy Observability dry run passed.
+  Prometheus and Alloy, and the image's smoke test checks only what remains.
+  Deploy Observability runs from main only, so its dry run comes after the
+  merge, in step 8.
+
+**On the host**, every step uses this to stop a unit and keep it stopped
+(bootstrap and `observability-secrets` start them again otherwise, and NixOS
+units in `/etc` take precedence over `systemctl mask --runtime`):
+
+```sh
+hold() {
+  for unit in "$@"; do
+    sudo mkdir -p "/run/systemd/system/$unit.service.d"
+    printf '[Unit]\nConditionPathExists=/run/observability-switch-never\n' |
+      sudo tee "/run/systemd/system/$unit.service.d/switch-hold.conf" >/dev/null
+  done
+  sudo systemctl daemon-reload
+  sudo systemctl stop "$@"
+  systemctl show -p Id -p ActiveState "$@"    # every one: ActiveState=inactive
+}
+release() {
+  for unit in "$@"; do sudo rm -f "/run/systemd/system/$unit.service.d/switch-hold.conf"; done
+  sudo systemctl daemon-reload
+  sudo systemctl start "$@"
+}
+```
 
 **Steps:**
 
-1. **Stop the host's Loki and Tempo**, flushing what they hold in memory. On
-   the host:
+1. **Apply the AWS layer** and wait for healthy targets (`../aws/README.md`
+   "The switch"). No traffic moves yet.
+2. **Merge *Cluster, public***. Sync `observability-namespace` first, so the
+   new edge pods get the readiness gate, then `edge` and `grafana`:
    ```sh
+   argocd app sync argocd/observability-namespace
+   argocd app sync argocd/edge argocd/grafana
+   argocd app wait argocd/edge argocd/grafana --sync --health --timeout 900
+   kubectl --context observability -n observability get pods -l app.kubernetes.io/name=edge \
+     -o jsonpath='{range .items[*]}{.metadata.name} {.spec.readinessGates[*].conditionType}{"\n"}{end}'
+   ```
+   Every edge pod lists a `target-health.elbv2.k8s.aws/...` gate and is
+   ready, which means the ALB sees it healthy. Grafana now expects
+   `grafana.macro-internal.com`, which still reaches the host; its
+   notifications stay muted.
+3. **Baseline, then stop the host's Loki and Tempo.** First note what reaches
+   the host, to compare in step 6:
+   ```sh
+   curl -fsS http://127.0.0.1:9090/api/v1/query --data-urlencode 'query=count by (job) ({__name__=~".+"})'
+   curl -fsS http://127.0.0.1:3100/loki/api/v1/query --data-urlencode 'query=sum by (service_name) (count_over_time({service_name=~".+"}[10m]))'
+   ```
+   Then flush and stop. Loki's endpoint returns once its chunks are in S3;
+   Tempo's answers at once and flushes in the background, so wait for its log
+   line:
+   ```sh
+   since=$(date '+%F %T')
    curl -fsS -X POST 'http://127.0.0.1:3100/ingester/shutdown?flush=true&terminate=false'
    curl -fsS -X POST http://127.0.0.1:3200/shutdown
-   sudo systemctl mask --runtime --now loki tempo   # bootstrap would restart them otherwise
+   timeout 900 sh -c "until journalctl -u tempo --since '$since' | grep -q 'shutdown handler complete'; do sleep 5; done" \
+     && hold loki tempo
    ```
-   Logs and traces sent from now until step 4 are lost: a few minutes.
-2. **Merge *Cluster, buckets*** and sync `loki` and `tempo` (Argo CD, if
-   auto-sync is off), and wait for them to roll:
+   If the wait times out, stop here and read `journalctl -u tempo`. Logs and
+   traces sent from now until step 5 is done are lost: the time steps 4 and 5
+   take.
+4. **Merge *Cluster, buckets*** and sync `loki` and `tempo`
+   (`argocd app sync argocd/loki argocd/tempo`), then wait until both are
+   synced at that commit and every pod has rolled:
    ```sh
+   argocd app wait argocd/loki argocd/tempo --sync --health --timeout 1800
    for w in statefulset/loki statefulset/tempo-ingester statefulset/tempo-metrics-generator \
-     deployment/tempo-compactor deployment/tempo-querier deployment/tempo-distributor; do
+     deployment/tempo-compactor deployment/tempo-querier deployment/tempo-query-frontend \
+     deployment/tempo-distributor; do
      kubectl --context observability -n observability rollout status "$w"
    done
    ```
-   Then check the history is there: in Grafana at localhost, Explore shows
-   last week's logs and traces.
-3. **Apply the AWS layer** and wait for healthy targets (`../aws/README.md`
-   "The switch").
-4. **Merge *Pulumi, listener rule*, preview it again, and `pulumi up`**
-   from `infra/stacks/observability`. The ALB now sends
-   `grafana.` and `otlp.macro-internal.com` here. At once, on the host:
-   `sudo systemctl mask --runtime --now grafana`, since its rules now see no
-   new data and would page.
-5. **Check, then let this Grafana notify.** After about 10 minutes of new
-   metrics, the `Prod alerts` dashboard at localhost shows rules with data and
-   nothing firing that isn't firing on the host's. Merge *Cluster, switched*
-   and sync `grafana`, `edge` and `observability-namespace`; the edge rolls its
-   pods to add the readiness gate. From now on sign in at
-   https://grafana.macro-internal.com.
-   Between step 4 and here no Grafana notifies; CloudWatch alarms still do.
-6. **Copy the metrics history into Mimir.** On the host, take a snapshot with
-   Prometheus' own binary (the service has no admin API), then copy it:
+   Check the history is there, a week back:
    ```sh
-   sudo systemctl mask --runtime --now prometheus
-   prom=$(systemctl cat prometheus | grep -o '/nix/store/[^ ]*/bin/prometheus' | head -1)
+   kubectl --context observability -n observability port-forward svc/loki 3100 &
+   kubectl --context observability -n observability port-forward svc/tempo-query-frontend 3200 &
+   week=$(date -d '7 days ago' +%s)
+   curl -fsS -G http://localhost:3100/loki/api/v1/query --data-urlencode time=$week \
+     --data-urlencode 'query=sum by (service_name) (count_over_time({service_name=~".+"}[1h]))'
+   curl -fsS -G http://localhost:3200/api/search --data-urlencode start=$week \
+     --data-urlencode end=$((week + 3600)) --data-urlencode limit=5
+   ```
+   Both list services and traces. Empty means the buckets are wrong: go back.
+5. **Move the traffic.** Merge *Pulumi, listener rule*; from
+   `infra/stacks/observability` on main, `pulumi preview --diff --stack
+   macro-inc/observability/prod` again (the same four deletions), then `pulumi
+   up --stack macro-inc/observability/prod`. The ALB now sends `grafana.` and
+   `otlp.macro-internal.com` here. At once, on the host, `hold grafana`: its
+   rules now see no new data and would page.
+6. **Check, then let this Grafana notify.** Sign in at
+   https://grafana.macro-internal.com. After about 10 minutes, Explore on
+   `prometheus` and `loki` runs the two baseline queries of step 3: the jobs
+   and services that send to `otlp.` are there with fresh samples (the host's
+   own scrape jobs aren't; the cluster scrapes itself). Then the `Prod alerts`
+   dashboard shows rules with data and nothing firing that wasn't firing
+   before. Merge *Cluster, notify* and sync `grafana`. Between step 5 and here
+   no Grafana notifies; CloudWatch alarms still do.
+7. **Copy the metrics history into Mimir.** On the host, start `sudo bash -euo
+   pipefail` (any failing command then ends it before the next runs), paste
+   `hold`, and take a snapshot with Prometheus' own binary (the service has no
+   admin API), check it, then copy it:
+   ```sh
+   prom=$(systemctl show -p ExecStart --value prometheus | grep -o '/nix/store/[^ ]*/bin/prometheus' | head -1)
+   test -x "$prom"
    data=/srv/observability/prometheus/data
-   printf 'global: {}\n' | sudo tee /run/snapshot-prometheus.yml >/dev/null
+   hold prometheus
+   printf 'global: {}\n' > /run/snapshot-prometheus.yml
    sudo -u prometheus "$prom" --config.file=/run/snapshot-prometheus.yml \
      --storage.tsdb.path="$data" --storage.tsdb.retention.time=1y \
-     --web.listen-address=127.0.0.1:9091 --web.enable-admin-api &
-   until curl -fsS http://127.0.0.1:9091/-/ready; do sleep 5; done   # WAL replay
+     --web.listen-address=127.0.0.1:9091 --web.enable-admin-api >/run/snapshot-prometheus.log 2>&1 &
+   timeout 900 sh -c 'until curl -fsS http://127.0.0.1:9091/-/ready; do sleep 5; done' # WAL replay
    name=$(curl -fsS -X POST http://127.0.0.1:9091/api/v1/admin/tsdb/snapshot | grep -o '"name":"[^"]*"' | cut -d'"' -f4)
-   sudo pkill -f -- '--web.listen-address=127.0.0.1:9091'
-   sudo aws s3 sync --region us-east-2 \
-     "$data/snapshots/$name/" s3://macro-observability-k8s-mimir/blocks/anonymous/
+   pkill -f -- '--web.listen-address=127.0.0.1:9091'
+   echo "snapshot: ${name:?no snapshot}"
+   ls "$data/snapshots/$name"                  # block directories, 01...
+   aws s3 sync --region us-east-2 "$data/snapshots/$name/" s3://macro-observability-k8s-mimir/blocks/anonymous/
    ```
-   About 15 minutes later Grafana shows the host's 30 days of metrics, except
-   its last 12 hours, which Mimir reads from blocks only once they are 12
-   hours old (`query_store_after`). Then set `mimirBackfill.enable = false` in
-   `../aws/` and apply.
-7. **Deploy *Host, GoAlert only*** with Deploy Observability. It is the next
-   host deploy: any other would start Loki and Tempo on the host again.
-8. **Afterwards**: remove the localhost redirect URI from the Google OAuth
+   If the readiness wait times out, read `/run/snapshot-prometheus.log`. About
+   15 minutes after the copy Grafana shows the host's 30 days of metrics,
+   except its last 12 hours, which Mimir reads from blocks only once they are
+   12 hours old (`query_store_after`). Then set `mimirBackfill.enable = false`
+   in `../aws/` and apply.
+8. **Merge *Host, GoAlert only***, run Deploy Observability as a dry run,
+   then for real. It replaces the host, which also drops every `hold`.
+9. **Afterwards**: remove the localhost redirect URI from the Google OAuth
    client, and set `macro.cluster.autoSync = true`.
 
 ### Going back
 
-- **Before step 4** (traffic still goes to the host): revert *Cluster,
-  buckets* and wait for Loki and Tempo to roll; then on the host `sudo
-  systemctl unmask --runtime loki tempo && sudo systemctl start loki tempo`.
-- **After step 4**: first point the cluster's Loki and Tempo back at their own
-  buckets (revert *Cluster, buckets*, and *Cluster, switched* if merged) and
-  wait for the rollout; then unmask and start `loki tempo grafana prometheus`
-  on the host; then revert *Pulumi, listener rule* with `pulumi up`. Metrics
-  written to Mimir meanwhile don't come back to the host's Prometheus.
-- **After step 7**: revert *Host, GoAlert only* with Deploy Observability
-  first (it replaces the host), then as above.
+The cluster's Loki and Tempo leave the host's buckets before the host's run
+again, every time:
+
+1. Revert *Cluster, buckets* (and *Cluster, notify* if merged), sync `loki`
+   and `tempo`, and wait as in step 4. Then check no pod of the old revision
+   is left: `kubectl --context observability -n observability get pods
+   -l 'app.kubernetes.io/name in (loki,tempo)'` shows only pods younger than
+   the sync.
+2. **If step 8 ran**, revert *Host, GoAlert only* on main and deploy it with
+   Deploy Observability (dry run, then for real). The new host starts all its
+   services.
+   **Otherwise**, on the host: `release loki tempo grafana prometheus` (the
+   ones held so far).
+3. **If step 5 ran**, revert *Pulumi, listener rule* on main, then `pulumi
+   preview --diff` and `pulumi up` (`--stack macro-inc/observability/prod`)
+   by hand, as in step 5, so the ALB sends both names to the host again.
+   Revert *Cluster, public* if Grafana should be tested at localhost again.
+
+Logs, traces and metrics written to the cluster in the meantime stay there:
+metrics in Mimir's own bucket, and logs and traces in the host's buckets but
+with the cluster's index, which the host's Loki and Tempo may not list.
 
 ## Why it's built this way
 
