@@ -58,6 +58,44 @@ pub(crate) fn create_query<'a>(params: CreateQueryParams<'a>) -> QueryType<'a> {
     }
 }
 
+/// Fewest characters a content term needs before it matches as a prefix.
+/// Shorter prefixes expand to too many tokens.
+const MIN_PREFIX_LEN: usize = 3;
+
+/// Builds the per-term query a `has_child` clause runs against children's
+/// `content`.
+///
+/// - `exact` match type, a quoted phrase (term with whitespace), or a term
+///   shorter than [`MIN_PREFIX_LEN`] → `match_phrase`.
+/// - A single ASCII word → `match_bool_prefix`, a prefix query over every
+///   token starting with the word.
+/// - Anything else (punctuation, non-ASCII text the analyzer may split into
+///   several tokens) → `match_phrase_prefix`.
+///
+/// The single word avoids `match_phrase_prefix` because OpenSearch expands its
+/// prefix again for every inner hit of every returned parent, and keeps only
+/// the first `max_expansions` terms of the shard, silently dropping the
+/// matches past them. A prefix query expands lazily and keeps every match.
+/// Its children score as a constant, so inner hits come back in index order.
+pub(crate) fn child_content_query<'a>(term: &str, match_type: &str) -> QueryType<'a> {
+    let exact = match_type == "exact"
+        || term.chars().any(char::is_whitespace)
+        || term.chars().count() < MIN_PREFIX_LEN;
+    if exact {
+        return QueryType::MatchPhrase(MatchPhraseQuery::new("content", term.to_string()));
+    }
+
+    let single_word = term.chars().all(|c| c.is_ascii_alphanumeric());
+    if single_word {
+        return QueryType::MatchBoolPrefix(MatchBoolPrefixQuery::new("content", term.to_string()));
+    }
+
+    QueryType::MatchPhrasePrefix(
+        MatchPhrasePrefixQuery::new("content", term.to_string())
+            .max_expansions(MATCH_PHRASE_PREFIX_MAX_EXPANSIONS),
+    )
+}
+
 impl QueryKey {
     /// Creates a query key given a match type
     pub fn from_match_type(match_type: &str) -> Result<Self> {

@@ -120,6 +120,10 @@ pub fn drafted_pick(
     match (common, problems.is_empty()) {
         (Some((reason, surfaces, keep_probability)), true) => {
             routine.enabled = false;
+            // A kept suggestion has no look of its own yet: it is stored as a
+            // configuration, which a replica built before `appearance` refuses
+            // to read, and it outlives a deploy and a rollback.
+            routine.appearance = None;
             Ok(CheckedSuggestion {
                 surfaces,
                 reason,

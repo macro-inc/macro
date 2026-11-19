@@ -72,11 +72,19 @@ export function SavedViewForm(
     invalid?: boolean;
     team?: { id: string; name: string };
     onSave: (name: string, team: string | null) => void;
+    onChange?: (fields: { name: string; sharedTeamId: string | null }) => void;
   }
 ) {
   const [name, setName] = createSignal(props.name);
   const [shared, setShared] = createSignal(Boolean(props.sharedTeamId));
   const [body, setBody] = createSignal<HTMLDivElement>();
+  const changed = () =>
+    props.onChange?.({
+      name: name(),
+      sharedTeamId: shared()
+        ? (props.sharedTeamId ?? props.team?.id ?? null)
+        : null,
+    });
   return (
     // The body scrolls as one, the name included; the actions stay in reach.
     <form
@@ -108,7 +116,10 @@ export function SavedViewForm(
             Name
             <Input
               value={name()}
-              onInput={(event) => setName(event.currentTarget.value)}
+              onInput={(event) => {
+                setName(event.currentTarget.value);
+                changed();
+              }}
               maxLength={120}
               required
               disabled={props.pending}
@@ -126,7 +137,10 @@ export function SavedViewForm(
             <div class="flex items-center gap-1.5">
               <Checkbox
                 checked={shared()}
-                onChange={setShared}
+                onChange={(value) => {
+                  setShared(value);
+                  changed();
+                }}
                 disabled={props.pending}
               >
                 <Checkbox.Control />

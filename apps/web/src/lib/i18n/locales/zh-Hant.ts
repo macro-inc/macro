@@ -103,7 +103,6 @@ export default {
     close: '關閉',
     delete: '刪除',
     rename: '重新命名',
-    more: '更多',
     search: '搜尋',
     settings: '設定',
   },

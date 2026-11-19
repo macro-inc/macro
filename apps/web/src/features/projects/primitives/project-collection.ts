@@ -15,8 +15,17 @@ import { debouncedDependent } from '@core/util/debounce';
 import { fireAndForget } from '@core/util/fireAndForget';
 import { SYSTEM_PROPERTY_IDS } from '@property/identifiers';
 import { type Accessor, createMemo, createSignal } from 'solid-js';
+import { createStore } from 'solid-js/store';
 import type { ProjectRow, ProjectsContext } from '../context/projects-context';
-import type { ProjectFilters, ProjectScope } from '../core/project';
+import {
+  DEFAULT_PROJECT_SETTINGS,
+  type ProjectCollectionSettings,
+  type ProjectFilters,
+  type ProjectListGroupBy,
+  type ProjectScope,
+} from '../core/project';
+
+export type { ProjectListGroupBy } from '../core/project';
 
 export type ProjectListEntity = ProjectRow & {
   id: string;
@@ -24,7 +33,6 @@ export type ProjectListEntity = ProjectRow & {
   assigneeGroup?: string;
 };
 export type ProjectListItem = SoupRow<ProjectListEntity>;
-export type ProjectListGroupBy = 'none' | 'status' | 'priority' | 'assignee';
 export type ProjectListActivation = { event?: MouseEvent; newSplit?: boolean };
 
 export type ProjectCollectionSnapshot = {
@@ -51,30 +59,58 @@ export function createProjectCollection(capabilities: {
   createSource: ProjectsContext['createCollectionSource'];
   userId: Accessor<string | undefined>;
   scope?: Accessor<ProjectScope>;
+  enabled?: Accessor<boolean>;
   onOpen?: (id: string, metadata?: ProjectListActivation) => void;
   initialState?: ProjectCollectionSnapshot;
   captureState?: (read: Accessor<ProjectCollectionSnapshot>) => void;
   search?: { value: Accessor<string>; onChange: (value: string) => void };
+  settings?: {
+    value: Accessor<ProjectCollectionSettings>;
+    update: (patch: Partial<ProjectCollectionSettings>) => void;
+  };
 }) {
   const initial = capabilities.initialState;
-  const [layout, setLayout] = createSignal<'list' | 'gantt'>(
-    initial?.layout ?? 'list'
-  );
+  const [localSettings, setLocalSettings] =
+    createStore<ProjectCollectionSettings>({
+      ...DEFAULT_PROJECT_SETTINGS,
+      ...(initial && {
+        layout: initial.layout ?? 'list',
+        status: initial.status,
+        priority: initial.priority,
+        dueBefore: initial.dueBefore,
+        dueAfter: initial.dueAfter,
+        mine: initial.mine,
+        sort: initial.sort,
+        groupBy: initial.groupBy,
+      }),
+    });
+  const settings = capabilities.settings?.value ?? (() => localSettings);
+  const updateSettings = capabilities.settings?.update ?? setLocalSettings;
+  const layout = () => settings().layout;
+  const setLayout = (layout: ProjectCollectionSettings['layout']) => {
+    updateSettings({ layout });
+    return layout;
+  };
   const [localSearch, setLocalSearch] = createSignal(initial?.search ?? '');
   const search = capabilities.search?.value ?? localSearch;
   const setSearch = capabilities.search?.onChange ?? setLocalSearch;
   const query = debouncedDependent(search, 150);
-  const [status, setStatus] = createSignal(initial?.status ?? '');
-  const [priority, setPriority] = createSignal(initial?.priority ?? '');
-  const [dueBefore, setDueBefore] = createSignal(initial?.dueBefore ?? '');
-  const [dueAfter, setDueAfter] = createSignal(initial?.dueAfter ?? '');
-  const [mine, setMine] = createSignal(initial?.mine ?? false);
-  const [sort, setSort] = createSignal<NonNullable<ProjectFilters['sort']>>(
-    initial?.sort ?? 'updated'
-  );
-  const [groupBy, setGroupBy] = createSignal<ProjectListGroupBy>(
-    initial?.groupBy ?? 'status'
-  );
+  const status = () => settings().status;
+  const setStatus = (status: string) => updateSettings({ status });
+  const priority = () => settings().priority;
+  const setPriority = (priority: string) => updateSettings({ priority });
+  const dueBefore = () => settings().dueBefore;
+  const setDueBefore = (dueBefore: string) => updateSettings({ dueBefore });
+  const dueAfter = () => settings().dueAfter;
+  const setDueAfter = (dueAfter: string) => updateSettings({ dueAfter });
+  const mine = () => settings().mine;
+  const setMine = (mine: boolean) => updateSettings({ mine });
+  const sort = () => settings().sort;
+  const setSort = (sort: ProjectCollectionSettings['sort']) =>
+    updateSettings({ sort });
+  const groupBy = () => settings().groupBy;
+  const setGroupBy = (groupBy: ProjectListGroupBy) =>
+    updateSettings({ groupBy });
   const [scrollOffset, setScrollOffset] = createSignal(
     initial?.scrollOffset ?? 0
   );
@@ -102,7 +138,10 @@ export function createProjectCollection(capabilities: {
       sort: sort(),
       descending: true,
     }),
-    () => scope() === 'all' || Boolean(capabilities.userId())
+    () => {
+      if (capabilities.enabled && !capabilities.enabled()) return false;
+      return scope() === 'all' || Boolean(capabilities.userId());
+    }
   );
   const state = createMemo((): ProjectsViewState => {
     const rows = source.rows();
@@ -225,6 +264,9 @@ export function createProjectCollection(capabilities: {
     focusKey: list.focus.key(),
   }));
   return {
+    scope,
+    settings,
+    updateSettings,
     layout,
     setLayout: (value: 'list' | 'gantt') => setLayout(value),
     state,

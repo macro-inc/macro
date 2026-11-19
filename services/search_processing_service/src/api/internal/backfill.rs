@@ -42,6 +42,7 @@ pub fn router() -> Router<ApiContext> {
         .route("/agent-sessions", post(agent_sessions))
         .route("/calls", post(calls))
         .route("/chats", post(chats))
+        .route("/deleted-chat-messages", post(deleted_chat_messages))
         .route("/channels", post(channels))
         .route("/documents", post(documents))
         .route("/email-attachment-status", post(email_attachment_status))
@@ -159,6 +160,31 @@ async fn email_attachment_status(
         jobs,
         "email-attachment-status",
         move |svc, progress, cancel| async move { svc.backfill(req, progress, cancel).await },
+    )
+    .await
+}
+
+#[tracing::instrument(skip(service, jobs, _internal_authorization, req))]
+async fn deleted_chat_messages(
+    State(service): State<Arc<crate::DeletedChatMessageRepair>>,
+    State(jobs): State<BackfillJobs>,
+    _internal_authorization: MacroAuthorizationExtractor<AuthorizationService, InternalOnly>,
+    extract::Json(req): extract::Json<
+        crate::domain::chat_message_repair::DeletedChatMessageRepairRequest,
+    >,
+) -> Response {
+    // The job record names the mode, since a dry run and a run report the
+    // same counters.
+    let entity = if req.dry_run {
+        "deleted-chat-messages-dry-run"
+    } else {
+        "deleted-chat-messages"
+    };
+    spawn_backfill(
+        service,
+        jobs,
+        entity,
+        move |svc, progress, cancel| async move { svc.repair(req, progress, cancel).await },
     )
     .await
 }

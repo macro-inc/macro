@@ -226,6 +226,8 @@ export function createGraphqlGroupedSoupAstItemsQuery(
     isEnabled: () => query.isEnabled,
     isLoading: () => !cachedMail() && query.isLoading,
     isFetching: () => query.isFetching,
+    hasPageData: () =>
+      query.data?.inputKey === inputKey() && query.data?.data !== undefined,
     isFetchingNextPage: () => !!cachedMail() && local.isFetchingNextPage(),
     isFetchNextPageError: () => !!cachedMail() && local.isFetchNextPageError(),
     isPlaceholderData: () => false,

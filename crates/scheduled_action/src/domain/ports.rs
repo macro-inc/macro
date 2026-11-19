@@ -1,4 +1,4 @@
-use super::appearance::ChangeAppearance;
+use super::appearance::{AppearanceSet, ChangeAppearance};
 use super::event_runs::{AuthorizedEventRun, ClaimToken, ConfigurationRevision};
 use super::event_trigger::{EventName, EventReference};
 use super::execution::ExecutionHandle;
@@ -130,11 +130,13 @@ pub trait ScheduledActionRepo: Send + Sync + 'static {
         action: ScheduledAction,
     ) -> impl Future<Output = Result<ScheduledAction>> + Send;
 
-    /// Atomically replace presentation and record the actual change in entity history.
+    /// Atomically replace presentation and record the actual change in entity
+    /// history. An agent's pick is skipped once the owner has chosen the
+    /// appearance; the owner's choice marks it chosen even when unchanged.
     fn set_appearance(
         &self,
         change: ChangeAppearance,
-    ) -> impl Future<Output = Result<Option<EntityAppearance>>> + Send;
+    ) -> impl Future<Output = Result<AppearanceSet>> + Send;
 
     /// Deletes the action row, its `entity_access` rows (`entity_type =
     /// 'scheduled_action'`), history, and the `entity` row in one transaction. A missing
@@ -312,12 +314,15 @@ pub trait ScheduledActionService: Send + Sync + 'static {
     /// routine as it would be stored, without saving anything. A check made
     /// by a routine draft's session (`correlation`, the code-mode invocation
     /// the request's credential names) is kept as that draft's answer, with
-    /// the items it says it `created` for the routine.
+    /// the items it says it `created` for the routine and the apps it needs
+    /// that `principal` hasn't connected (`missing_apps`, kept as
+    /// [`super::models::RoutineCheck::missing_apps`] says).
     fn check_action(
         &self,
         principal: &CreationPrincipal,
         input: ActionConfiguration,
         created: Vec<super::models::CreatedItem>,
+        missing_apps: Vec<AgentMcpServer>,
         correlation: Option<Uuid>,
     ) -> impl Future<Output = Result<super::models::RoutineCheck>> + Send;
 
@@ -706,6 +711,25 @@ impl SessionCreations for NoSessionCreations {
     async fn created_by(&self, _session: Uuid) -> Result<Vec<super::models::CreatedItem>> {
         Ok(Vec::new())
     }
+}
+
+/// The apps a person connected, which a routine drafted for them may
+/// require: the ones saving and every run count as connected. Object-safe so
+/// the drafter holds it erased.
+#[async_trait::async_trait]
+pub trait DraftApps: Send + Sync + 'static {
+    /// `owner`'s connected apps, by slug and display name.
+    async fn connected(&self, owner: &MacroUserIdStr<'static>) -> Result<Vec<AgentMcpServer>>;
+
+    /// The ones of `apps` a routine of `owner`'s can require once they
+    /// connect them, in order: not one `owner` can't connect at all, nor
+    /// one they would connect to its vendor's own MCP server, which never
+    /// makes it an app a routine can require.
+    async fn requirable(
+        &self,
+        owner: &MacroUserIdStr<'static>,
+        apps: Vec<AgentMcpServer>,
+    ) -> Result<Vec<AgentMcpServer>>;
 }
 
 /// The agent session a code-mode request came from, by the invocation its

@@ -15,7 +15,7 @@ use calendar_events::domain::{
         GoogleWatchConfig, OccurrenceRange,
     },
     service::{
-        CalendarReauthAnnouncer, GoogleCalendarBackfillCoordinator,
+        CalendarReauthAnnouncer, GoogleBackfillOutcome, GoogleCalendarBackfillCoordinator,
         GoogleCalendarBackfillFailureService, GoogleCalendarBackfillRunError,
     },
 };
@@ -119,6 +119,8 @@ enum Disposition {
     Ack,
     /// Leave the message for redelivery after its visibility timeout.
     Retry(anyhow::Error),
+    /// Leave the message hidden until the inbox's request window frees.
+    Defer(Duration),
 }
 
 /// Poll the calendar backfill queue until cancellation is requested, restarting
@@ -203,6 +205,17 @@ async fn process_message(
         }
         Disposition::Retry(error) => {
             tracing::warn!(error = ?error, "retryable calendar backfill error; leaving message for redelivery");
+            Ok(())
+        }
+        // `extend_visibility` logs its own failure, and the message then
+        // redelivers after the queue's visibility timeout, which the resumed
+        // round tolerates.
+        Disposition::Defer(retry_after) => {
+            let seconds = i32::try_from(retry_after.as_secs()).unwrap_or(i32::MAX);
+            ctx.sqs_worker
+                .extend_visibility(message, seconds)
+                .await
+                .ok();
             Ok(())
         }
     }
@@ -338,7 +351,8 @@ async fn run_coordinator(
     }
 
     match run_result {
-        Ok(()) => Disposition::Ack,
+        Ok(GoogleBackfillOutcome::Complete) => Disposition::Ack,
+        Ok(GoogleBackfillOutcome::Deferred { retry_after }) => Disposition::Defer(retry_after),
         Err(error) => {
             ctx.reauth.announce_run_error(link.id, &error).await;
             let retryable = matches!(
