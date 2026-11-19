@@ -148,6 +148,8 @@ export function RoutineDetailView(props: {
   onDelete(): void;
   onCopyPrompt(prompt: string): Promise<void | boolean>;
   onShare?(): void;
+  onStopSharing?(): void;
+  stopSharingPending?: boolean;
   appearanceMenu?: JSX.Element;
   identityIcon?: JSX.Element;
   /** Opens an agent conversation about this routine. */
@@ -316,6 +318,14 @@ export function RoutineDetailView(props: {
                       <Dropdown.Item onSelect={props.onShare}>
                         <ShareIcon class="size-4" />
                         Share
+                      </Dropdown.Item>
+                    </Show>
+                    <Show when={props.onStopSharing}>
+                      <Dropdown.Item
+                        disabled={props.stopSharingPending}
+                        onSelect={props.onStopSharing}
+                      >
+                        {t('subRoutines.stopSharing')}
                       </Dropdown.Item>
                     </Show>
                     <Show when={routine().parent}>

@@ -27,6 +27,10 @@ import {
   createChatHistoryMetadata,
 } from './queries/history-metadata';
 import { createRoutineDetailSource } from './queries/routine-sources';
+import {
+  useRoutineTemplateQuery,
+  useUnshareTemplateMutation,
+} from './queries/templates';
 import { createRoutineConnectedApps, RoutineApps } from './routine-apps';
 import { RoutineExecutionPicker } from './routine-execution-picker';
 import { RoutinePromptEditor } from './routine-prompt-editor';
@@ -146,6 +150,18 @@ export function RoutineDetail(props: {
     const routine = source.routine();
     return routine ? routine.ownerId === userId() : true;
   };
+  const needsRevocation = () =>
+    sharing().enabled &&
+    source.routine()?.shareable === false &&
+    ownedByViewer();
+  const published = useRoutineTemplateQuery(
+    () => props.scheduleId,
+    needsRevocation
+  );
+  const unshare = useUnshareTemplateMutation({
+    onSuccess: () => toast.success(t('subRoutines.stoppedSharing')),
+    onError: () => toast.failure(t('subRoutines.stopSharingFailed')),
+  });
   return (
     <Show
       when={ownedByViewer()}
@@ -203,6 +219,12 @@ export function RoutineDetail(props: {
         onShare={
           sharing().enabled && source.routine()?.shareable ? share : undefined
         }
+        onStopSharing={
+          needsRevocation() && published.isSuccess && published.data
+            ? () => unshare.mutate({ scheduleId: props.scheduleId })
+            : undefined
+        }
+        stopSharingPending={unshare.isPending}
         onCompose={compose}
         onOpenTemplate={sharing().enabled ? open : undefined}
         onOpenRoutine={open}

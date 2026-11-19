@@ -22,6 +22,9 @@ export default {
   createdByGone: 'Created by another routine',
   keep: 'Keep as my routine',
   kept: 'Kept as your routine',
+  stopSharing: 'Stop sharing',
+  stoppedSharing: 'Stopped sharing',
+  stopSharingFailed: 'Could not stop sharing',
   deleteNote: {
     one: 'The {{count}} routine it created will be deleted too.',
     other: 'The {{count}} routines it created will be deleted too.',

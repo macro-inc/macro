@@ -1624,7 +1624,9 @@ and, once shared, **Stop sharing**, which hides the template while activated
 routines keep running. Every Share and Copy Link first publishes a snapshot of
 the saved routine. The owner's own mention and the schedules' time zone fill in
 as whoever activates it; other references stay the same for everyone, and
-re-sharing keeps the fills an earlier template set.
+re-sharing keeps the fills an earlier template set. If a published routine gains
+definitions or input values, its owner's **Routine actions** menu still offers
+**Stop sharing** to revoke the existing snapshot.
 
 In a channel composer (including thread replies), routines the owner can share
 as templates appear under **Routines** in the `@` menu. Picking one publishes its template the same

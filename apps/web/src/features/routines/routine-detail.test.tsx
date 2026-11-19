@@ -64,6 +64,9 @@ const mocks = vi.hoisted(() => ({
   changeTarget: (_target: RoutineTarget): void => {},
   rename: (_value: string): void => {},
   duplicate: (): void => {},
+  sharing: (): boolean => false,
+  shared: (): boolean => false,
+  stopSharing: vi.fn(),
 }));
 vi.mock('@core/context/user', () => ({
   useUserId: () => () => 'macro|owner@example.com',
@@ -92,6 +95,20 @@ vi.mock('./routine-template', () => ({
     <div>Template for {props.scheduleId}</div>
   ),
   openShareRoutineDialog: vi.fn(),
+}));
+vi.mock('./queries/templates', () => ({
+  useRoutineTemplateQuery: () => ({
+    get isSuccess() {
+      return mocks.shared();
+    },
+    get data() {
+      return mocks.shared() ? { id: 'routine-id' } : null;
+    },
+  }),
+  useUnshareTemplateMutation: () => ({
+    mutate: mocks.stopSharing,
+    isPending: false,
+  }),
 }));
 vi.mock('@core/block', async (importOriginal) => ({
   ...(await importOriginal<typeof import('@core/block')>()),
@@ -169,7 +186,7 @@ vi.mock('@components/app/split-layout/components/SplitFileMenu', () => ({
   },
 }));
 vi.mock('@app/lib/analytics/posthog', () => ({
-  useFeatureFlag: () => () => ({ enabled: false }),
+  useFeatureFlag: () => () => ({ enabled: mocks.sharing() }),
 }));
 vi.mock('./routine-ai-composer', () => ({
   RoutineAiComposer: () => null,
@@ -372,6 +389,8 @@ beforeEach(() => {
   mocks.chatMetadata = () => ({ chat: { name: 'Run transcript' } });
   mocks.agentMetadata = () => ({ name: 'Agent transcript' });
   mocks.codeUpgrades = () => [];
+  mocks.sharing = () => false;
+  mocks.shared = () => false;
   mocks.history = () => [
     {
       id: 'run-id',
@@ -1220,6 +1239,22 @@ describe('sub-routines defined once', () => {
     task: { sub_routine: 'remind', inputs: { taskId: 'Ship the deck' } },
     sub_routine: { parent_id: 'parent-id', created_by_run_id: 'run-1' },
   };
+
+  it('revokes a published snapshot after the routine gains definitions', () => {
+    setSchedules([{ ...parent, id: 'routine-id' }]);
+    mocks.sharing = () => true;
+    mocks.shared = () => true;
+    render(() => <Routine />);
+    openActions();
+
+    expect(screen.queryByRole('menuitem', { name: 'Share' })).toBeNull();
+    fireEvent.keyDown(screen.getByRole('menuitem', { name: 'Stop sharing' }), {
+      key: 'Enter',
+    });
+    expect(mocks.stopSharing).toHaveBeenCalledExactlyOnceWith({
+      scheduleId: 'routine-id',
+    });
+  });
 
   it('shows each sub-routine with what it is given, and saves an edit to it with the routine', async () => {
     setSchedules([parent]);
