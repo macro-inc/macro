@@ -915,8 +915,9 @@ native upgrade. It does not prove reverse IPC compatibility: a later-built OTA
 or republished rollback can still contain older JS and satisfy the native floor.
 Preserve the legacy command contract on newer binaries when older bundles omit
 new arguments. The [CRM cache authority contract](../../apps/web/docs/ios-releases.md#crm-cache-command-compatibility)
-uses this rule; an omitted claim keeps legacy cache behavior, while a supplied
-missing or stale generation is rejected. Cut the store build from the final
+uses this rule; an omitted `generation` keeps legacy cache behavior, while a
+supplied stale generation is rejected on response writes. Reads and watches do
+not require an admission claim. Cut the store build from the final
 native tree, including this compatibility behavior.
 
 Android ConnectivityManager reports the validated default network and takes a

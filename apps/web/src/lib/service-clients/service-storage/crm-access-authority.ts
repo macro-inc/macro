@@ -152,23 +152,26 @@ export function createCrmAccessAuthority(options: Options) {
     const expectedAccount = account;
     const current = () =>
       captured === session && target === owner && expectedAccount === account;
-    const work = Telemetry.span('crm.access.refresh', async () => {
+    const work = Telemetry.span('crm.access.refresh', async (span) => {
       for (let attempt = 0; ; attempt++) {
         try {
-          let before = await target.current();
+          let before = await span.span('crm.access.current', () =>
+            target.current()
+          );
           if (!current()) return;
-          if (before.account !== expectedAccount && options.bindAccount) {
-            await options.bindAccount(
-              target,
-              before.generation,
-              expectedAccount
+          const bindAccount = options.bindAccount;
+          if (before.account !== expectedAccount && bindAccount) {
+            await span.span('crm.access.bind_account', () =>
+              bindAccount(target, before.generation, expectedAccount)
             );
-            before = await target.current();
+            before = await span.span('crm.access.current', () =>
+              target.current()
+            );
           }
           if (!current()) return;
-          observe(before, true);
-          const policy = await options.fetchProof(
-            attempt === 0 ? 15_000 : 3_000
+          span.run(() => observe(before, true));
+          const policy = await span.span('crm.access.proof', () =>
+            options.fetchProof(attempt === 0 ? 15_000 : 3_000)
           );
           if (!current()) return;
           if (!isCrmPolicy(policy))
@@ -176,9 +179,11 @@ export function createCrmAccessAuthority(options: Options) {
           // A proven denial hides entry points even if local disk cleanup fails.
           if (policy.endsWith(':denied') || policy === 'none')
             setState('denied');
-          const result = await target.transition(before.generation, policy);
+          const result = await span.span('crm.access.transition', () =>
+            target.transition(before.generation, policy)
+          );
           if (!current()) return;
-          observe(result.authority);
+          span.run(() => observe(result.authority));
           await retiring;
           return;
         } catch (error) {

@@ -291,7 +291,7 @@ async fn retire_optimism<S: PredicateIndexStorage>(
         .load_mutation_queue()
         .await
         .map_err(EngineError::Storage)?;
-    tracing::Span::current().record("crm.access.queued", queued.len());
+    tracing::Span::current().record("crm.access.queued", queued.len() as i64);
     let mut selected = std::collections::BTreeSet::new();
     for entry in queued {
         let source =
@@ -365,7 +365,7 @@ async fn retire_optimism<S: PredicateIndexStorage>(
             selected.insert(entry.id);
         }
     }
-    tracing::Span::current().record("crm.access.retired", selected.len());
+    tracing::Span::current().record("crm.access.retired", selected.len() as i64);
     engine
         .retire_optimistic_snapshots_where(|entry, source| {
             if !selected.contains(&entry.id) {
@@ -525,7 +525,7 @@ async fn retire_property_owners<S: PredicateIndexStorage>(
         }
     }
 
-    tracing::Span::current().record("crm.access.scanned", scanned);
+    tracing::Span::current().record("crm.access.scanned", scanned as i64);
     Ok(())
 }
 
@@ -581,7 +581,7 @@ async fn retire_option_owners<S: PredicateIndexStorage>(
         }
     }
 
-    tracing::Span::current().record("crm.access.scanned", scanned);
+    tracing::Span::current().record("crm.access.scanned", scanned as i64);
     Ok(())
 }
 
@@ -647,7 +647,7 @@ async fn retire_records<S: PredicateIndexStorage>(
             }
         }
     }
-    tracing::Span::current().record("crm.access.scanned", scanned);
+    tracing::Span::current().record("crm.access.scanned", scanned as i64);
     Ok(())
 }
 
@@ -694,6 +694,6 @@ async fn retire_projections<S: PredicateIndexStorage>(
             }
         }
     }
-    tracing::Span::current().record("crm.access.scanned", scanned);
+    tracing::Span::current().record("crm.access.scanned", scanned as i64);
     Ok(())
 }
