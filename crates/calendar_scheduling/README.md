@@ -91,7 +91,8 @@ new start, stays failed at the requested time with both intervals held. Keyed de
 retirement. Completion-persistence failures still return the durable private receipt. Rescheduling reserves the old and new intervals until the provider
 accepts the update, then releases the old interval. A booking link's daily limit likewise
 counts a move whose first attempt is still waiting on the calendar on both days, so a
-refusal that returns it cannot leave its original day over the limit. Calendar projections without a
+refusal that returns it cannot leave its original day over the limit. Replacement times for a
+reschedule skip a day already at the limit, without counting the booking being moved. Calendar projections without a
 source time zone for all-day events conservatively block all possible UTC offsets.
 
 This change does not include payments, workflow automation, routing forms, advanced
