@@ -11,6 +11,8 @@ fn only_a_draft_that_may_define_sub_routines_is_told_how_to_schedule_later_work(
     let told = prompts.instructions(true, true, true, model);
     assert!(told.contains(LATER.trim()));
     assert!(told.contains("macro.routines.schedule('remind_before_due'"));
+    // A draft can't give a definition apps, so its work never needs one.
+    assert!(told.contains("A sub-routine's steps can't use apps outside Macro"));
     assert!(
         !prompts
             .instructions(true, true, false, model)

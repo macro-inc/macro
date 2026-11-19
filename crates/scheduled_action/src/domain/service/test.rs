@@ -53,6 +53,8 @@ pub(crate) struct FakeRepo {
     inherited: Mutex<Vec<(Uuid, Vec<String>)>>,
     /// Reading a parent's active sub-routines fails.
     active_children_fail: Mutex<bool>,
+    /// Saving this routine fails.
+    update_fails_for: Mutex<Option<Uuid>>,
 }
 
 impl SubRoutines for FakeRepo {
@@ -231,6 +233,9 @@ impl ScheduledActionRepo for FakeRepo {
     }
 
     async fn update_action(&self, action: ScheduledAction) -> Result<ScheduledAction> {
+        if action.id.is_some() && *self.update_fails_for.lock().unwrap() == action.id {
+            anyhow::bail!("the routine could not be saved");
+        }
         let mut actions = self.actions.lock().unwrap();
         let stored = actions.iter_mut().find(|a| a.id == action.id).unwrap();
         if stored.configuration_revision.next()? != action.configuration_revision {

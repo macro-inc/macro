@@ -174,6 +174,7 @@ where
             }
         };
         tracing::Span::current().record("steps", program.steps.len());
+        let copy = SubRoutineCopy::from_task(&action.task).is_some();
         let mut outputs = json!({});
         let mut known_items = HashMap::new();
         for (index, step) in program.steps.iter().enumerate() {
@@ -188,7 +189,10 @@ where
                         acts_as,
                         routine_id,
                     };
-                    let outcome = match self.unusable_item(owner, step, &mut known_items).await {
+                    let outcome = match self
+                        .unusable_item(owner, step, &mut known_items, copy)
+                        .await
+                    {
                         Some(failure) => CodeOutcome {
                             result: Err(failure),
                             calls: Vec::new(),
@@ -296,7 +300,8 @@ where
     /// Why `step` can't run because an item its entity knobs name is gone
     /// or out of its owner's reach, or the lookup failed; `None` when every
     /// item is usable. `known` holds what the run's earlier steps found, so
-    /// an item several steps pick is looked up once a run.
+    /// an item several steps pick is looked up once a run. A sub-routine's
+    /// copy (`copy`) sends its owner to the parent, which holds its knobs.
     #[tracing::instrument(name = "routine.knob_items", skip_all, fields(
         items = step.entities().count(),
         looked_up = tracing::field::Empty,
@@ -308,6 +313,7 @@ where
         owner: &MacroUserIdStr<'static>,
         step: &'a routine_program::CodeStep,
         known: &mut HashMap<&'a routine_program::EntityValue, bool>,
+        copy: bool,
     ) -> Option<String> {
         step.entities().next()?;
         let before = known.len();
@@ -322,7 +328,13 @@ where
         match result {
             Ok(unusable) => {
                 span.record("unusable", unusable.len());
-                unusable.first().map(|item| item.run_failure())
+                unusable.first().map(|item| {
+                    if copy {
+                        item.copy_run_failure()
+                    } else {
+                        item.run_failure()
+                    }
+                })
             }
             Err(error) => {
                 tracing::warn!(error = ?error, "could not check a step's items");
