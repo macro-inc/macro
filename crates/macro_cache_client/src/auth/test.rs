@@ -19,7 +19,9 @@ fn cache() -> MacroCache {
 }
 
 /// A cache signed in as a fresh ACL user that may run every command but
-/// `refused`, and the user's name, to remove it with [`remove_user`].
+/// `refused`, and the user's name, to remove it with [`remove_user`]. Its
+/// password comes from Redis and is never kept, so a user a failed test
+/// leaves behind lets no one sign in.
 async fn cache_refusing(cache: &MacroCache, refused: &[&str]) -> (MacroCache, String) {
     let url = redis_url();
     let address = url
@@ -29,19 +31,24 @@ async fn cache_refusing(cache: &MacroCache, refused: &[&str]) -> (MacroCache, St
         !address.contains('@'),
         "REDIS_URL must carry no credentials"
     );
-    let user = fresh_code("acl");
-    let refusing = MacroCache::new(&format!("redis://{user}:unused@{address}"));
     let mut connection = cache
         .inner
         .get_multiplexed_async_connection()
         .await
         .unwrap();
+    let user = fresh_code("acl");
+    let password: String = redis::cmd("ACL")
+        .arg("GENPASS")
+        .query_async(&mut connection)
+        .await
+        .unwrap();
+    let refusing = MacroCache::new(&format!("redis://{user}:{password}@{address}"));
     let mut setuser = redis::cmd("ACL");
     setuser
         .arg("SETUSER")
         .arg(&user)
         .arg("on")
-        .arg("nopass")
+        .arg(format!(">{password}"))
         .arg("~*")
         .arg("+@all");
     for command in refused {
