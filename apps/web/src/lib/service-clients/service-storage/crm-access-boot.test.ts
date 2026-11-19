@@ -34,8 +34,29 @@ beforeEach(() => {
 });
 afterEach(() => vi.unstubAllGlobals());
 
-/** One page load: fresh modules over the profile's surviving local storage. */
-async function start(generation: string) {
+const deniedAt = (generation: string, identity: string): CacheAuthority => ({
+  identity,
+  account: 'viewer',
+  generation,
+  policy: `${TEAM}:denied`,
+  ready: true,
+});
+
+type Profile = {
+  identity: string;
+  /** What a window's owner observation and completed prune leave behind. */
+  record(authority: CacheAuthority, pruned?: string): void;
+};
+
+/**
+ * One page load: fresh modules over the profile's surviving local storage.
+ * `meanwhile` runs after the page has read its startup state and before its
+ * first owner observation, as another window's work would.
+ */
+async function start(
+  generation: string,
+  meanwhile?: (profile: Profile) => void
+) {
   vi.resetModules();
   const { installCrmCacheHost, initializeCrmCacheOwner } = await import(
     './crm-access-cache'
@@ -43,13 +64,19 @@ async function start(generation: string) {
   const { cacheSessionGeneration } = await import(
     '@graphql-cache/session-generation'
   );
-  const state: CacheAuthority = {
-    identity: 'profile',
-    account: 'viewer',
-    generation,
-    policy: `${TEAM}:denied`,
-    ready: true,
+  const { rememberGeneration, rememberPrunedGeneration } = await import(
+    '@graphql-cache/generation-mirror'
+  );
+  const { getOrCreateCacheScope } = await import('@graphql-cache/scope');
+  const profile: Profile = {
+    identity: getOrCreateCacheScope(),
+    record(authority, pruned) {
+      rememberGeneration(authority);
+      if (pruned) rememberPrunedGeneration(pruned);
+    },
   };
+  meanwhile?.(profile);
+  const state = deniedAt(generation, profile.identity);
   const authority: CacheAuthorityHost = {
     current: async () => state,
     snapshot: () => state,
@@ -65,6 +92,8 @@ async function start(generation: string) {
   });
   await initializeCrmCacheOwner();
   await cacheSessionGeneration.settled();
+  // The host's authority observer mirrors every validated observation.
+  rememberGeneration(state);
 }
 
 it('prunes once for a durable denial and not again on later starts at that generation', async () => {
@@ -92,5 +121,27 @@ it('prunes again on the next start when the earlier prune failed', async () => {
 
   mocks.retire.mockClear();
   await start(denied);
+  expect(mocks.retire).toHaveBeenCalledOnce();
+});
+
+it('retires what a start restored when another window recorded the denial during that start', async () => {
+  const denied = '00000000-0000-4000-8000-000000000002';
+  // This page read its startup state before the denial was recorded.
+  await start(denied, (profile) =>
+    profile.record(deniedAt(denied, profile.identity), denied)
+  );
+  expect(mocks.retire).toHaveBeenCalledOnce();
+  expect(mocks.cancel).toHaveBeenCalled();
+});
+
+it('retires what a start restored when the prune for its denial finished after the start began', async () => {
+  const denied = '00000000-0000-4000-8000-000000000002';
+  mocks.retire.mockRejectedValueOnce(new Error('disk failure'));
+  await start(denied);
+  mocks.retire.mockClear();
+  // The mirror already names the denial; its prune completes only now.
+  await start(denied, (profile) =>
+    profile.record(deniedAt(denied, profile.identity), denied)
+  );
   expect(mocks.retire).toHaveBeenCalledOnce();
 });

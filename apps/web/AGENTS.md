@@ -116,7 +116,9 @@ Retire all TanStack memory snapshots on permission changes. If disk pruning
 fails, unpause live queries and refetch while keeping the affected persistence
 scope quarantined against restore and writes until a later prune succeeds.
 A durable denial is found again on every start: prune for it once per owner
-generation and skip the prune on later starts at the generation already pruned.
+generation. Skip the prune only on a start that read, before restoring anything,
+both that exact denial in the mirror and its completed prune; any other start may
+hold snapshots restored before another window recorded the denial and retires them.
 
 Keep mutation outcomes and authored queue state through retirement. Stale queued
 commits settle identities without copied content, projections or link recipes;

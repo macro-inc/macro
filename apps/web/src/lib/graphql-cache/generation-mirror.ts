@@ -48,7 +48,7 @@ const PrunedGenerationSchema = z.object({
 
 /** The owner generation whose retirement last finished pruning this profile's
  * persisted queries. Unreadable storage only costs another prune. */
-export function readPrunedGeneration(
+function readPrunedGeneration(
   identity = getOrCreateCacheScope()
 ): string | undefined {
   try {
@@ -73,6 +73,13 @@ export function rememberPrunedGeneration(
   }
 }
 
+/** Read with the hint, before this page restores anything from disk. */
+export const startupPrunedGeneration = readPrunedGeneration();
+
+/**
+ * What the first owner observation of a page retires. `hint` and
+ * `prunedGeneration` are what the page read as it started.
+ */
 export function initialCacheRetirement(
   hint: CacheAuthority | undefined,
   owner: CacheAuthority,
@@ -86,8 +93,14 @@ export function initialCacheRetirement(
   if (owner.policy !== null && !owner.ready) return 'permission';
   if (owner.policy?.endsWith(':denied')) {
     // A durable denial is found again on every start. Its full prune need not
-    // repeat once it has completed for this generation.
-    return prunedGeneration === owner.generation ? undefined : 'permission';
+    // repeat when the page began under that exact denial with the prune already
+    // complete: nothing it restored can predate the denial. Any other start may
+    // hold snapshots restored before another window recorded or pruned it.
+    const startedDenied =
+      hint?.generation === owner.generation && hint.policy === owner.policy;
+    return startedDenied && prunedGeneration === owner.generation
+      ? undefined
+      : 'permission';
   }
   if (!hint) {
     // Discovering a non-denied owner is not an access change. Keep mounted

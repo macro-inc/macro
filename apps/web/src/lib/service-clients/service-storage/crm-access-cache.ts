@@ -9,9 +9,9 @@ import {
 import { StaleCacheAuthorityError } from '@graphql-cache/authority';
 import {
   initialCacheRetirement,
-  readPrunedGeneration,
   rememberPrunedGeneration,
   startupAuthorityHint,
+  startupPrunedGeneration,
 } from '@graphql-cache/generation-mirror';
 import type { CacheHost } from '@graphql-cache/host/types';
 import { cacheSessionGeneration } from '@graphql-cache/session-generation';
@@ -158,7 +158,7 @@ function install() {
       const scope = initialCacheRetirement(
         startupAuthorityHint,
         authority,
-        readPrunedGeneration()
+        startupPrunedGeneration
       );
       if (scope)
         perfMark('cache.generation-baseline', {
