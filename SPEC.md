@@ -73,6 +73,13 @@ In a call: agent shares   tab ⇄ desktop   (call tile shows which; Stop)
 | 3 | Agent's "Watch my screen" chip, surface label + Switch/Stop | agent tool, chip attachment |
 | 4 | Tab mode in calls, tab ⇄ desktop switch, D9 participant rule | `packages/starter-agent` calls: add the CDP tab share next to the desktop share |
 
+**v1 UI scope (Wolf, 2026-11-19).** The panel shows the screen and its title; the state (live, reconnecting,
+paused, ended); the tab/desktop choice; Take over, Hand back, Stop and pop-out; the phone zoom, touch and keyboard
+controls; and a minimal "Wolf is driving". It shows **no** transport, codec, resolution, fps, latency or bandwidth
+stats or badges, and **no** watching/session activity list. Audit rows and enforcement on the server are unchanged;
+only the user-facing feed is gone. The transport switch and benchmark numbers live only in a separate developer
+comparison panel, off by default.
+
 ## Decisions for Wolf
 
 - **D1 Who watches, who drives?** I recommend watch = `View` (every team member, as today) and drive = `Manage`
