@@ -178,13 +178,23 @@ dropped, or indexed wrongly, or search no longer finds the entity.
   `entity_id`, and search for it in the app as the probe user. A delete that
   stays visible means the entity still exists in its source: search hides
   deleted entities by checking the database, not the index.
-- `operation:crowded_prefix` on documents: a new document holding one word
-  that sorts late under `con` was not found by a partial search for `con`
-  alone, while the exact-token rounds pass. Content prefix search is dropping
-  matches: a prefix query that expands only the first few hundred words of a
-  shard starting with the prefix, before permission filtering, as
-  `match_phrase_prefix` with `max_expansions` 256 did. Check how
-  `crates/opensearch_client/src/search/query.rs` builds content prefixes.
+
+## Probe prefix unseen
+
+The probe's `crowded_prefix` round missed twice in 30 minutes, while its
+exact-token rounds pass. Each round writes a new private document holding one
+word that sorts late under `con` (`con`, `zz`, then random letters) and
+searches `con` alone as a partial content match, narrowed to that document.
+Content prefix search is dropping matches: a prefix query that expands only
+the first few hundred words of a shard starting with the prefix, before
+permission filtering, as `match_phrase_prefix` with `max_expansions` 256 did,
+never reaches the probe's word. Users then miss results for short prefixes.
+
+- Check how `crates/opensearch_client/src/search/query.rs`
+  (`child_content_query`) builds content prefixes, and what deployed last.
+- The round's span (`search.freshness_probe`, `operation:crowded_prefix`)
+  names the document; search for that word exactly in the app as the probe
+  user: if it is found, the index has it and only the prefix search misses it.
 
 ## Probe failing
 

@@ -111,11 +111,17 @@ const OFFSET_RESETS = `sum:kafka.consumer.offset_resets{${PROD}} by {topic}.as_c
 const READINGS = `max:search.index.oldest_pending_ms{${PROD}}.fill(null)`;
 // Late and unseen are counted, not timed: a slow round records its seconds
 // only when it ends, so slow rounds leave the minutes between them empty.
-// They and the failing share are per entity type and operation: documents
-// have two rounds a minute, and a failure of one would hide in the other's
-// count, while a crowded-prefix miss means something else than a slow index.
-const PROBE_LATE = `sum:search.freshness.probe_rounds{${PROD_PROBE},outcome:late} by {entity_type,operation}.as_count()`;
-const PROBE_UNSEEN = `sum:search.freshness.probe_rounds{${PROD_PROBE},outcome:unseen} by {entity_type,operation}.as_count()`;
+// They judge each entity type's rotation rounds together, one a minute,
+// since a type's operations take turns and alone would be too few rounds to
+// judge. The crowded-prefix round is a recall check, not a freshness one, so
+// it is judged apart.
+const ROTATION = '!operation:crowded_prefix';
+const CROWDED_PREFIX = 'operation:crowded_prefix';
+const PROBE_LATE = `sum:search.freshness.probe_rounds{${PROD_PROBE},${ROTATION},outcome:late} by {entity_type}.as_count()`;
+const PROBE_UNSEEN = `sum:search.freshness.probe_rounds{${PROD_PROBE},${ROTATION},outcome:unseen} by {entity_type}.as_count()`;
+const PROBE_PREFIX_UNSEEN = `sum:search.freshness.probe_rounds{${PROD_PROBE},${CROWDED_PREFIX},outcome:unseen} by {entity_type}.as_count()`;
+// The failing share is per operation: documents have two kinds of round, and
+// a failure of one would sit at half the share and never pass it.
 // A round skipped because its fixture is not seeded yet (`fixture_missing`)
 // probed nothing, so it counts neither as a failure nor in the share.
 const PROBE_FAILING = `sum:search.freshness.probe_rounds{${PROD_PROBE},!outcome:seen,!outcome:late,!outcome:unseen,!outcome:fixture_missing} by {entity_type,operation}.as_count()`;
@@ -138,6 +144,7 @@ const TITLES = {
   silent: 'Search indexer reports no backlog readings',
   probeLate: 'Search shows changes late end to end',
   probeUnseen: 'Search never showed probe changes',
+  probePrefixUnseen: 'Search content prefix search drops matches',
   probeFailing: 'Search freshness probe cannot write or search',
   probeSilent: 'Search freshness probe reports no rounds',
 };
@@ -239,6 +246,11 @@ export const searchFreshnessDashboard = new datadog.Dashboard(
         thresholdGraph({
           title: TITLES.probeUnseen,
           query: `${PROBE_UNSEEN}.rollup(sum, 1800)`,
+          critical: '2',
+        }),
+        thresholdGraph({
+          title: TITLES.probePrefixUnseen,
+          query: `${PROBE_PREFIX_UNSEEN}.rollup(sum, 1800)`,
           critical: '2',
         }),
         thresholdGraph({
@@ -419,7 +431,7 @@ prodMonitor('search-probe-late', {
   monitorThresholds: { critical: '3' },
   pages: false,
   description:
-    "In the last 15 minutes, search showed at least the threshold's number of the probe's {{entity_type.name}} {{operation.name}} changes only after 60 s, measured from the API acknowledging the write. Users see their {{entity_type.name}} changes in search that late.",
+    "In the last 15 minutes, search showed at least the threshold's number of the probe's {{entity_type.name}} changes only after 60 s, measured from the API acknowledging the write. Users see their {{entity_type.name}} changes in search that late.",
   alertDetail: '{{value}} rounds',
   recoveryDetail: '{{value}} rounds',
   dashboard,
@@ -433,9 +445,23 @@ prodMonitor('search-probe-unseen', {
   monitorThresholds: { critical: '2' },
   pages: false,
   description:
-    "In the last 30 minutes, search still did not show the probe's {{entity_type.name}} {{operation.name}} change five minutes after the write, more than once. A change that never shows is a freshness miss; for crowded_prefix, content prefix search is dropping matches. An unseen round lasts five minutes, so each kind of round has at most six in the window.",
+    "In the last 30 minutes, search still did not show the probe's {{entity_type.name}} change five minutes after the write, more than once. A change that never shows is a freshness miss. An unseen round lasts five minutes, so a type has at most six in the window.",
   dashboard,
   runbook: `${RUNBOOK}#probe-unseen`,
+  alertDetail: '{{value}} rounds',
+  recoveryDetail: '{{value}} rounds',
+});
+
+prodMonitor('search-probe-prefix-unseen', {
+  title: TITLES.probePrefixUnseen,
+  service: PROBE_SERVICE,
+  query: `sum(last_30m):${PROBE_PREFIX_UNSEEN} >= 2`,
+  monitorThresholds: { critical: '2' },
+  pages: false,
+  description:
+    "In the last 30 minutes, the probe's crowded_prefix round missed its {{entity_type.name}} more than once: a partial search for con alone did not find the probe's new document, one word that sorts late under con, though the exact-token rounds pass. Content prefix search is dropping matches, as a prefix expansion capped per shard does, so users miss results for short prefixes. An unseen round lasts five minutes, so there are at most six in the window.",
+  dashboard,
+  runbook: `${RUNBOOK}#probe-prefix-unseen`,
   alertDetail: '{{value}} rounds',
   recoveryDetail: '{{value}} rounds',
 });
