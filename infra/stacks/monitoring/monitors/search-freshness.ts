@@ -63,14 +63,17 @@ const MS_PER_HOUR = 3_600_000;
 const MS_PER_DAY = 86_400_000;
 const EMAIL = 'topic:macro.email';
 
-/** The oldest pending record in prod, per `by`, in `divisor` units. */
-function pending(filter: string, by: string, divisor: number): string {
-  return `max:search.index.oldest_pending_ms{${PROD},${filter}} by {${by}}.fill(null) / ${divisor}`;
+/** The oldest pending record in prod, per `by` if given, in `divisor` units. */
+function pending(filter: string, by: string | null, divisor: number): string {
+  const groups = by === null ? '' : ` by {${by}}`;
+  return `max:search.index.oldest_pending_ms{${PROD},${filter}}${groups}.fill(null) / ${divisor}`;
 }
 
 const LIVE_BACKLOG = pending(`!${EMAIL}`, 'entity_type', 1000);
-const EMAIL_BACKLOG = pending(EMAIL, 'partition', MS_PER_HOUR);
-const EMAIL_RETENTION = pending(EMAIL, 'partition', MS_PER_DAY);
+// One alert for the whole topic, its worst partition: an email backlog spans
+// many partitions at once, and each group of a monitor posts on its own.
+const EMAIL_BACKLOG = pending(EMAIL, null, MS_PER_HOUR);
+const EMAIL_RETENTION = pending(EMAIL, null, MS_PER_DAY);
 const LIVE_RETENTION = pending(`!${EMAIL}`, 'topic', MS_PER_DAY);
 const DROPPED = `sum:search.index.dropped_events{${PROD}} by {entity_type}.as_count()`;
 const OFFSET_RESETS = `sum:kafka.consumer.offset_resets{${PROD}} by {topic}.as_count()`;
@@ -248,7 +251,7 @@ prodMonitor('search-email-backlog', {
   monitorThresholds: { critical: '24', warning: '6' },
   pages: false,
   description:
-    'For 15 minutes, the oldest email event not yet indexed on macro.email partition {{partition.name}} has been older than the threshold, in hours. Mailbox imports share these partitions with live mail, so new mail on the partition waits behind them.',
+    "For 15 minutes, the oldest email event not yet indexed has been older than the threshold, in hours, on macro.email's worst partition (the dashboard's partition list shows which). Mailbox imports share each mailbox's partition with its live mail, so new mail there waits behind them.",
   dashboard,
   runbook: `${RUNBOOK}#email-backlog`,
 });
@@ -260,7 +263,7 @@ prodMonitor('search-email-near-retention', {
   monitorThresholds: { critical: '9', warning: '8' },
   pages: false,
   description:
-    'The oldest email event not yet indexed on macro.email partition {{partition.name}} is older than the threshold, in days. The topic keeps events for 10 days; past that the indexer skips straight to the newest and the events between are lost.',
+    "The oldest email event not yet indexed, on macro.email's worst partition, is older than the threshold, in days. The topic keeps events for 10 days; past that the indexer skips straight to the newest and the events between are lost.",
   dashboard,
   runbook: `${RUNBOOK}#retention`,
 });
