@@ -108,6 +108,11 @@ export function SwipableRowProvider(
     triggerBehavior?:
       | TriggerBehavior
       | { left?: TriggerBehavior; right?: TriggerBehavior };
+    /**
+     * Receives `collapseRow(id)`, which folds a row's height away. A list
+     * that removes a row on an action (mark done) awaits it before removing
+     * the row, so the rows below slide up instead of jumping.
+     */
     setCollapseEntity?: Setter<((id: string) => Promise<void>) | undefined>;
   }>
 ) {
@@ -193,7 +198,14 @@ export function SwipableRowProvider(
     }, SPRING_BACK_SPEED);
   }
 
+  // Folds the row's height to nothing (the row's grid goes from 1fr to 0fr)
+  // so the rows below slide up before the caller removes it. With reduced
+  // motion the row has no transition, so it resolves at once.
   const collapseRow = (entityId: string): Promise<void> => {
+    if (window.matchMedia('(prefers-reduced-motion: reduce)').matches) {
+      setState(entityId, { phase: 'complete' });
+      return Promise.resolve();
+    }
     return new Promise((resolve) => {
       setState(entityId, { phase: 'collapsing' });
       setTimeout(() => {
@@ -255,8 +267,11 @@ export function SwipableRowProvider(
       swipeHandler();
     }, TRANSLATE_AFTER_TRIGGERED_SPEED);
 
-    // If row has not been removed, reset it:
+    // If the row stayed in the list, reset it. A row the handler is
+    // collapsing keeps its content off-screen until it unmounts; snapping it
+    // back mid-collapse would flash it.
     setTimeout(() => {
+      if (isAtLeastPhase(stateById()[id]?.phase, 'collapsing')) return;
       els.contentEl.style.transition = ``;
       els.contentEl.style.transform = 'translateX(0px)';
     }, COLLAPSE_SPEED);
@@ -557,7 +572,7 @@ export function SwipableRow(
       data-swipe-direction={swipeDirection() ?? undefined}
       data-swipe-interacting={isSwipeInteracting() ? '' : undefined}
       class={cn(
-        'grow w-full grid grid-cols-1 relative overflow-hidden transition-[grid-template-rows] duration-250 ease-in-out',
+        'grow w-full grid grid-cols-1 relative overflow-hidden transition-[grid-template-rows] duration-250 ease-in-out motion-reduce:transition-none',
         props.class,
         {
           'bg-transparent': swipePhase() === 'idle',
