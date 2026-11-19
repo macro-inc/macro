@@ -130,8 +130,8 @@ attempt, so a busy database never fails a computer or abandons a removal.
   Drift logs an operator error without resizing.
   Docker enforces/checks CPU and RAM only (overlayfs has no disk quota).
   The disk quota splits into a fixed `image::ROOT_DISK_GIB` (32 GiB) root disk
-  and a data disk of the rest (`image::data_disk_gib`; 68/168/368 GiB for the
-  current sizes); drift checks compare the root disk only.
+  and a data disk of the rest (`image::data_disk_gib`; per tier in the table above);
+  drift checks compare the root disk only.
   Subscription reconcile matches computer ids, never prices.
   `ComputerStatus` exposes `vcpus`, `memoryGib`, `diskGib`, `catalogEntry`.
   Read configured offers without billing through `ComputerService::catalog()`
