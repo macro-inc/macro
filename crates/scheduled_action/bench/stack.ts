@@ -328,6 +328,18 @@ export async function useHarness(at: Stack, bin: string) {
       `      - ${resolve(bin)}:/app/out:ro`,
       '      - /nix/store:/nix/store:ro',
       '      - /var/run/docker.sock:/var/run/docker.sock',
+      // LOCAL ONLY (draft-prompt): main's harness needs REPO_STORAGE_ROOT to be a directory.
+      `      - ${join(homedir(), '.cache/routines-eval/agent-git')}:/data/agent-git`,
+      '    environment:',
+      '      REPO_STORAGE_ROOT: /data/agent-git',
+      "      MAX_REPO_SIZE_BYTES: '524288000'",
+      "      PUSHES_PER_MINUTE: '30'",
+      '      COMPUTERS_AGENT_IMAGE: macro-box-agent:latest',
+      '      PATH: /nix/store/msr1v91ybfw6j12rs5mfl8ghb2rqsnsr-git-2.55.0/bin:/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin',
+      // LOCAL ONLY (draft-prompt): flags from a local PostHog test double (~/.cache/routines-eval/draft-prompt/posthog-stub).
+      '      POSTHOG_HOST: http://host.docker.internal:18931',
+      '    extra_hosts:',
+      "      - 'host.docker.internal:host-gateway'",
       '',
     ].join('\n'),
   );

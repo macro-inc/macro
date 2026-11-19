@@ -114,6 +114,7 @@ impl<H: HttpClientExt + Clone + 'static> HttpClientExt for AnthropicPromptLayout
 }
 
 fn shape_request(request: Request<Bytes>) -> http_client::Result<Request<Bytes>> {
+    let request = dump_request(request);
     let (mut parts, body) = request.into_parts();
     let Some(shaped) =
         shape_body(&body).map_err(|error| http_client::Error::Instance(error.into()))?
@@ -294,4 +295,18 @@ fn count_breakpoints(body: &Map<String, Value>) -> usize {
         + blocks("tools")
         + blocks("system")
         + message_blocks
+}
+
+// THROWAWAY (never commit): write every Anthropic request body to /tmp/prompt-dumps (inside the container) when
+// that directory exists, to break a session's prompt down by tokens.
+fn dump_request(request: Request<Bytes>) -> Request<Bytes> {
+    let dir = std::path::Path::new("/tmp/prompt-dumps");
+    if dir.is_dir() {
+        let nanos = std::time::SystemTime::now()
+            .duration_since(std::time::UNIX_EPOCH)
+            .map(|d| d.as_nanos())
+            .unwrap_or_default();
+        let _ = std::fs::write(dir.join(format!("{nanos}.json")), request.body());
+    }
+    request
 }
