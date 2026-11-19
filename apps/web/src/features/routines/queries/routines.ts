@@ -21,7 +21,24 @@ export function useRoutineQuery(id: Accessor<string>) {
   return useQuery(() => routineQueryOptions(id()));
 }
 
-/** Read for approval. A newer revision already in the cache makes it stale. */
+export function hasNewerRoutineRevision(id: string, revision: number) {
+  const detail = queryClient.getQueryData<ScheduledAction>(
+    scheduledActionKeys.detail({ scheduleId: id }).queryKey
+  );
+  if (detail && detail.configuration_revision > revision) return true;
+
+  // The editor falls back to the list before detail has loaded.
+  const list = queryClient.getQueryData<ScheduledAction[]>(
+    scheduledActionKeys.list.queryKey
+  );
+  return (
+    list?.some(
+      (item) => item.id === id && item.configuration_revision > revision
+    ) ?? false
+  );
+}
+
+/** Read for approval. Either cache the editor reads can make it stale. */
 export async function readFreshRoutine(id: string, parent: TraceContext) {
   const fresh = await parent.run(() =>
     throwOnErr(() =>
@@ -29,15 +46,9 @@ export async function readFreshRoutine(id: string, parent: TraceContext) {
     )
   );
   const queryKey = scheduledActionKeys.detail({ scheduleId: id }).queryKey;
-  const hasNewerRevision = () => {
-    const cached = queryClient.getQueryData<ScheduledAction>(queryKey);
-    return (
-      !!cached && cached.configuration_revision > fresh.configuration_revision
-    );
-  };
-  if (hasNewerRevision()) return;
+  if (hasNewerRoutineRevision(id, fresh.configuration_revision)) return;
   await queryClient.cancelQueries({ queryKey, exact: true });
-  if (hasNewerRevision()) return;
+  if (hasNewerRoutineRevision(id, fresh.configuration_revision)) return;
   queryClient.setQueryData(queryKey, fresh);
   return fresh;
 }

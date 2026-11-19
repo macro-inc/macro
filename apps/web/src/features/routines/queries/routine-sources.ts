@@ -50,7 +50,11 @@ import {
   traceRoutineRequest,
   withRoutineQueryTrace,
 } from './routine-trace';
-import { readFreshRoutine, useRoutineQuery } from './routines';
+import {
+  hasNewerRoutineRevision,
+  readFreshRoutine,
+  useRoutineQuery,
+} from './routines';
 import { toHistoryRecord } from './run-resource';
 import {
   fetchChildren,
@@ -472,7 +476,13 @@ export function createRoutineDetailSource(
               failed(t('subRoutines.approvalCheckFailed'), error);
               return;
             }
-            if (!current) {
+            if (
+              !current ||
+              hasNewerRoutineRevision(
+                scheduleId,
+                current.configuration_revision
+              )
+            ) {
               failed(t('subRoutines.approvalCheckFailed'));
               return;
             }
