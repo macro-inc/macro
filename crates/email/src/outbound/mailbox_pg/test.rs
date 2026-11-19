@@ -756,6 +756,36 @@ async fn a_folder_moved_to_trash_turns_a_queued_import_recheck_into_live_work(db
 }
 
 #[sqlx::test(migrator = "MACRO_DB_MIGRATIONS")]
+async fn a_404_read_before_a_newer_change_leaves_the_message_for_that_change(db: PgPool) {
+    use email_api_client::domain::models::MailboxState;
+    let (repo, link) = fixture(&db).await;
+    sqlx::query!("INSERT INTO email_message_reconciliation(link_id,generation,provider_id,is_import) VALUES($1,1,'stored',true)",link).execute(&db).await.unwrap();
+    let initial = repo.claim_message(Uuid::new_v4()).await.unwrap().unwrap();
+    repo.ingest(
+        &initial,
+        snapshot(link, "stored", MailboxState::default(), "etag"),
+    )
+    .await
+    .unwrap();
+    repo.complete_message(&initial).await.unwrap();
+    sqlx::query!("INSERT INTO email_message_reconciliation(link_id,generation,provider_id,is_import) VALUES($1,1,'stored',true)",link).execute(&db).await.unwrap();
+    let recheck = repo.claim_message(Uuid::new_v4()).await.unwrap().unwrap();
+
+    // While Graph answers the recheck's read with 404, a live change to the
+    // message is queued on the same row.
+    sqlx::query!("UPDATE email_message_reconciliation SET revision = revision + 1,is_import = false WHERE link_id=$1 AND provider_id='stored'",link).execute(&db).await.unwrap();
+    repo.absent(&recheck).await.unwrap();
+    repo.complete_message(&recheck).await.unwrap();
+
+    let missing = sqlx::query_scalar!("SELECT COALESCE((mailbox_state->>'provider_missing')::boolean,false) AS \"missing!\" FROM email_messages WHERE link_id=$1 AND provider_id='stored'",link).fetch_one(&db).await.unwrap();
+    assert!(!missing, "the stale 404 leaves the message as it was");
+    let row = sqlx::query!("SELECT revision,lease_id,available_at <= now() AS \"due!\" FROM email_message_reconciliation WHERE link_id=$1 AND provider_id='stored'",link).fetch_one(&db).await.unwrap();
+    assert_eq!(row.revision, recheck.revision + 1);
+    assert!(row.lease_id.is_none());
+    assert!(row.due, "the newer change is read next");
+}
+
+#[sqlx::test(migrator = "MACRO_DB_MIGRATIONS")]
 async fn completed_import_rechecks_attachments_after_later_sent_correspondence(db: PgPool) {
     use email_api_client::domain::models::MailboxState;
     use models_email::service::address::ContactInfo;
