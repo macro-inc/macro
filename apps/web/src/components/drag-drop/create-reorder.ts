@@ -33,9 +33,10 @@ export function createReorder<Drop extends ReorderLanding>(options: {
   const [drop, setDrop] = createSignal<Drop>();
   const [preview, setPreview] = createSignal<HTMLElement>();
   let pointerOrigin: { x: number; y: number } | undefined;
+  let cancelled = false;
   const collisionDetector: CollisionDetector = (draggable, droppables) => {
     const viewport = options.getViewport();
-    if (!pointerOrigin || !viewport || !options.enabled()) {
+    if (cancelled || !pointerOrigin || !viewport || !options.enabled()) {
       setDrop(undefined);
       return null;
     }
@@ -63,11 +64,15 @@ export function createReorder<Drop extends ReorderLanding>(options: {
     setPreview(cloneDragPreview(draggable.node, options.previewMarker));
   const onDragEnd: DragEventHandler = ({ draggable }) => {
     const current = drop();
-    setDrop(undefined);
-    setPreview(undefined);
-    pointerOrigin = undefined;
-    if (options.enabled() && current)
-      options.onDrop(String(draggable.id), current.targetId, current.edge);
+    try {
+      if (!cancelled && options.enabled() && current)
+        options.onDrop(String(draggable.id), current.targetId, current.edge);
+    } finally {
+      setDrop(undefined);
+      setPreview(undefined);
+      pointerOrigin = undefined;
+      cancelled = false;
+    }
   };
   return {
     drop,
@@ -75,9 +80,15 @@ export function createReorder<Drop extends ReorderLanding>(options: {
     collisionDetector,
     onDragStart,
     onDragEnd,
-    cancel: () => setDrop(undefined),
+    cancel: () => {
+      cancelled = true;
+      setDrop(undefined);
+      setPreview(undefined);
+      pointerOrigin = undefined;
+    },
     /** Where the drag began; the pointer's travel is measured from it. */
     start: (event: MouseEvent) => {
+      cancelled = false;
       pointerOrigin = { x: event.clientX, y: event.clientY };
     },
   };

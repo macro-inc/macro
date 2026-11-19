@@ -8,7 +8,6 @@ import { TruncatedText } from '@core/component/FileList/TruncatedText';
 import type { EntityDragData } from '@entity';
 import {
   DragDropProvider,
-  DragDropSensors,
   DragOverlay,
   useDragDropContext,
 } from '@thisbeyond/solid-dnd';
@@ -23,6 +22,7 @@ import {
   Show,
   useContext,
 } from 'solid-js';
+import { createItemDragSensor } from './item-drag-sensor';
 import { createPointerCollisionDetector } from './pointer-collision';
 
 type DragOperationContextValue = {
@@ -150,53 +150,36 @@ export function ItemDndProvider(props: { children: JSXElement }) {
     }
   };
 
-  const handlePointerMove = (e: PointerEvent) => {
-    pointerPosition = { x: e.clientX, y: e.clientY };
+  const clearDrag = () => {
+    pointerPosition = undefined;
   };
 
-  const handleMouseMove = (e: MouseEvent) => {
-    pointerPosition = { x: e.clientX, y: e.clientY };
-  };
+  const resetAlt = () => setIsAltPressed(false);
 
-  // The mouse sensor finishes on mouseup, after pointerup. Clearing on
-  // pointerup can erase the drop target during an intervening scroll update.
-  const handlePointerEnd = () => {
-    queueMicrotask(() => {
-      pointerPosition = undefined;
+  const ItemSensors = () => {
+    createItemDragSensor({
+      move: (position) => {
+        pointerPosition = position;
+      },
+      clear: clearDrag,
     });
+    return null;
   };
 
   window.addEventListener('keydown', handleKeyDown);
   window.addEventListener('keyup', handleKeyUp);
-  window.addEventListener('pointermove', handlePointerMove, { capture: true });
-  window.addEventListener('pointercancel', handlePointerEnd, { capture: true });
-  window.addEventListener('mousemove', handleMouseMove, { capture: true });
-  window.addEventListener('mouseup', handlePointerEnd, { capture: true });
+  window.addEventListener('blur', resetAlt);
 
   onCleanup(() => {
     window.removeEventListener('keydown', handleKeyDown);
     window.removeEventListener('keyup', handleKeyUp);
-    window.removeEventListener('pointermove', handlePointerMove, {
-      capture: true,
-    });
-    window.removeEventListener('pointercancel', handlePointerEnd, {
-      capture: true,
-    });
-    window.removeEventListener('mousemove', handleMouseMove, {
-      capture: true,
-    });
-    window.removeEventListener('mouseup', handlePointerEnd, {
-      capture: true,
-    });
+    window.removeEventListener('blur', resetAlt);
   });
 
   return (
     <DragOperationContext.Provider value={{ isAltKey: isAltPressed }}>
-      <DragDropProvider
-        collisionDetector={pointerWithin}
-        onDragEnd={handlePointerEnd}
-      >
-        <DragDropSensors />
+      <DragDropProvider collisionDetector={pointerWithin}>
+        <ItemSensors />
         {props.children}
         <DragOverlay class="z-drag pointer-events-none">
           <ItemDragOverlay />
