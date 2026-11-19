@@ -52,8 +52,9 @@ export function EntityAppearanceTrigger(props: {
   /** What to draw: the entity's type icon in its appearance by default. */
   children?: JSX.Element;
 }) {
+  const given = children(() => props.children);
   const icon = () =>
-    props.children ?? (
+    given() ?? (
       <EntityIcon
         targetType={getEntityIconType(props.entity)}
         appearance={props.entity.appearance}
