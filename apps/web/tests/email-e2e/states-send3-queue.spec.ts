@@ -22,7 +22,7 @@ import {
 import { saw } from './ledger/record';
 
 /** Waits for the next answer the services give the GraphQL operation `name`. */
-function answered(page: Page, name: string): Promise<unknown> {
+function answered(page: Page, name: string) {
   return page.waitForResponse(
     (response) => graphqlOperation(response.request()) === name && response.ok()
   );
@@ -62,19 +62,7 @@ test.describe('an Undo whose outcome this browser cannot read back, in a Gmail i
   test.use({ stackEnv: { SENT_UNDO_DELAY_SECS: '45' } });
   test.beforeEach(({ page }) => loadAppSteadily(page));
 
-  // When this fails, Undo no longer says it failed when this browser cannot
-  // learn what became of the send: the service confirmed the cancellation,
-  // the browser put the draft back and dropped the send from its journal,
-  // and then the read of the send's status, which Undo needs before it calls
-  // the send cancelled, did not get through. Undo then says nothing, or that
-  // the send was cancelled on a confirmation it never read.
-  //
-  // Which of two things the browser does first decides what Undo finds: when
-  // it reads the journal while the send is still there, marked cancelled, it
-  // needs no status and says "Send cancelled" (about one run in seven on a
-  // loaded machine). The draft is then back in the composer, so the test
-  // sends it and takes it back again, up to four times.
-  test('an Undo the service confirms and this browser cannot read back says it failed', async ({
+  test('a confirmed Undo says it cancelled even when the status read fails', async ({
     page,
     mailbox,
   }) => {
@@ -86,40 +74,68 @@ test.describe('an Undo whose outcome this browser cannot read back, in a Gmail i
     // From Undo on, every read of the send's status is lost on the way.
     let undoing = false;
     await failOperation(page, 'EmailSendAttempt', () => undoing);
-    const failed = notice(page, 'Failed to undo send');
     const send = page.getByRole('button', { name: 'Send email' });
-    for (let attempt = 0; attempt < 4; attempt++) {
-      undoing = false;
-      const accepted = answered(page, 'SendEmailMessage');
-      await send.click();
-      await accepted;
-      const cancelled = answered(page, 'CancelEmailSend');
-      undoing = true;
-      await notice(page, 'Sending…')
-        .last()
-        .getByRole('button', { name: 'Undo' })
-        .click();
-      await cancelled;
-      // Undo says how it ended as soon as "Cancelling send…" goes.
-      await expect(notice(page, 'Cancelling send…')).toHaveCount(0);
-      const saidFailed = await failed
-        .waitFor({ state: 'visible', timeout: 3_000 })
-        .then(
-          () => true,
-          () => false
-        );
-      if (saidFailed) break;
-      // It said the send was cancelled: the draft is back, to send again.
-      await expect(send).toBeVisible();
-      await expect(page.getByPlaceholder(/subject/i)).toHaveValue(
-        'Take it back'
-      );
-      await expect(page.getByText('grace@example.com').first()).toBeVisible();
-    }
-    await expect(failed).toBeVisible();
-    saw('STC-032');
-    // The service did cancel it.
+    const accepted = answered(page, 'SendEmailMessage');
+    await send.click();
+    expect(await (await accepted).json()).toMatchObject({
+      data: { sendEmailMessage: { attempt: { status: 'ACCEPTED' } } },
+    });
+    const cancelled = answered(page, 'CancelEmailSend');
+    undoing = true;
+    await notice(page, 'Sending…')
+      .getByRole('button', { name: 'Undo' })
+      .click();
+    expect(await (await cancelled).json()).toMatchObject({
+      data: { cancelEmailSend: { attempt: { status: 'CANCELLED' } } },
+    });
     expect(await openSendAttempts(mailbox)).toBe(0);
+    await expect(notice(page, 'Send cancelled')).toBeVisible({
+      timeout: 6_000,
+    });
+    saw('STC-028');
+    await expect(notice(page, 'Failed to undo send')).toHaveCount(0);
+    await expect(send).toBeVisible();
+    await expect(page.getByPlaceholder(/subject/i)).toHaveValue('Take it back');
+    await expect(page.getByText('grace@example.com').first()).toBeVisible();
+  });
+
+  test('Undo reports failure when the browser cannot save its cancellation request', async ({
+    page,
+    mailbox,
+  }) => {
+    await composeNew(page, mailbox, {
+      to: 'grace@example.com',
+      subject: 'Still sending',
+      body: 'The numbers are in.',
+    });
+    const accepted = answered(page, 'SendEmailMessage');
+    await page.getByRole('button', { name: 'Send email' }).click();
+    expect(await (await accepted).json()).toMatchObject({
+      data: { sendEmailMessage: { attempt: { status: 'ACCEPTED' } } },
+    });
+    await page.evaluate(() => {
+      const put = IDBObjectStore.prototype.put;
+      IDBObjectStore.prototype.put = function (
+        this: IDBObjectStore,
+        value,
+        key
+      ) {
+        if (this.name === 'sends' && value?.cancellationRequested === true) {
+          IDBObjectStore.prototype.put = put;
+          throw new DOMException(
+            'The quota has been exceeded.',
+            'QuotaExceededError'
+          );
+        }
+        return put.call(this, value, key);
+      };
+    });
+    await notice(page, 'Sending…')
+      .getByRole('button', { name: 'Undo' })
+      .click();
+    await expect(notice(page, 'Failed to undo send')).toBeVisible();
+    saw('STC-032');
+    expect(await openSendAttempts(mailbox)).toBe(1);
   });
 });
 

@@ -131,13 +131,17 @@ function TaskFavorites(props: {
   return (
     <Show when={favorites().length > 0}>
       <CollapsibleSection.Root
+        sectionId="favorites"
+        sectionLabel="Favorites"
         open={props.open}
         onOpenChange={props.onOpenChange}
       >
-        <CollapsibleSection.Trigger>
-          <span class="min-w-0 truncate">Favorites</span>
-          <CollapsibleSection.Indicator />
-        </CollapsibleSection.Trigger>
+        <CollapsibleSection.Header>
+          <CollapsibleSection.Trigger>
+            <span class="min-w-0 truncate">Favorites</span>
+            <CollapsibleSection.Indicator />
+          </CollapsibleSection.Trigger>
+        </CollapsibleSection.Header>
         <CollapsibleSection.Content>
           <ViewSidebar.Nav aria-label="Favorite tasks">
             <For each={favorites()}>
@@ -177,7 +181,11 @@ export function TasksSidebar() {
   });
 
   return (
-    <ViewSidebar.Root aria-label="Tasks navigation" class="relative">
+    <ViewSidebar.Root
+      reorderId="tasks"
+      aria-label="Tasks navigation"
+      class="relative"
+    >
       <SidebarCreateHeader
         title="Tasks"
         createAction={
@@ -196,11 +204,19 @@ export function TasksSidebar() {
 
       <ViewSidebar.Content>
         <SidebarRoutineSuggestions surface="tasks" />
-        <TasksNavigation
-          items={BUILT_IN_TASK_TABS}
+        <ViewSidebar.Section
+          id="views"
           label={t('viewMenus.taskViews')}
-        />
+          headerless
+        >
+          <TasksNavigation
+            items={BUILT_IN_TASK_TABS}
+            label={t('viewMenus.taskViews')}
+          />
+        </ViewSidebar.Section>
         <CollapsibleSection.Root
+          sectionId="projects"
+          sectionLabel={t('viewMenus.projects')}
           open={isSidebarSectionOpen('projects')}
           onOpenChange={(open) => setSidebarSectionOpen('projects', open)}
         >

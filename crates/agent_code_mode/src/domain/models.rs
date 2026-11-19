@@ -168,7 +168,7 @@ pub struct ExecutionRecord {
     /// Original turn, preventing another requester from replaying a saved result.
     #[serde(default)]
     pub turn_id: Option<Uuid>,
-    /// The submitted program: a JavaScript module, an OCaml `main.ml` or a
+    /// The submitted program: a TypeScript module, an OCaml `main.ml` or a
     /// JavaScript tools script.
     pub source: String,
     /// The language `source` is written in; historical records are JavaScript.

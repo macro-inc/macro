@@ -52,6 +52,7 @@ fn environment(address: std::net::SocketAddr, allowed: Option<Vec<SdkCall>>) -> 
         },
         unattended: None,
         allowed_operations: allowed,
+        egress: Egress::Direct,
     }
 }
 
@@ -664,7 +665,7 @@ async fn js_tools_runs_get_exactly_a_javascript_runs_deno_flags() {
     assert!(writer.wait().await.unwrap().success());
     let scratch = root.path().join("scratch");
     let runner = DenoRunner::new(deno, scratch, 128).await.unwrap();
-    let service = ExecutionService::new(Arc::new(runner), Limits::default()).unwrap();
+    let service = ExecutionService::new(Arc::new(runner), Arc::new(super::Unchecked), Limits::default()).unwrap();
     let environment = RunEnvironment {
         endpoints: SdkEndpoints {
             hosts: BTreeMap::from([

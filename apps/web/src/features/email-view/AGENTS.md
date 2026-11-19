@@ -45,12 +45,15 @@ the Soup-backed thread list, and saved email views.
 - `primitives/create-email-saved-view-draft.ts`: confirmed baseline, dirty
   state, and revision-aware reconciliation.
 - `views/email-saved-views.tsx`: sidebar section, menus, the builder dialog,
-  header actions, unavailable and skipped-setting states. The section uses
+  header actions, unavailable and skipped-setting states. Saved-view rows use
   the shell's sidebar layout to choose drag or, in the navigation sheet,
-  Move up and Move down.
+  Move up and Move down. The unnamed mail-folder group, Library, and Saved views
+  use shared `ViewSidebar` ordering with per-account local preferences; Accounts
+  is explicitly pinned above those sections.
 
 ## Gotchas
 
+- Keep saved-view appearance live in sidebar rows and breadcrumbs even with unsaved filters; expose owner-only Change icon in the shared menus behind `enableEntityAppearance`.
 - Keep tags in the desktop Filters menu and mobile filter drawer, not in the
   sidebar; filter changes stay on the current tab.
 - A saveable tab is a built-in view: it starts from its own restrictions

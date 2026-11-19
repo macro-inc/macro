@@ -227,6 +227,10 @@ async fn graph_error_statuses_map_to_the_clients_errors() {
         EmailApiError::Forbidden
     ));
     assert!(matches!(
+        fail(FaultError::ExtensionForbidden).await,
+        EmailApiError::Forbidden
+    ));
+    assert!(matches!(
         fail(FaultError::Unauthorized).await,
         EmailApiError::AuthRequired
     ));

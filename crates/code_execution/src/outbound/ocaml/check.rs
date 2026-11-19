@@ -85,20 +85,27 @@ impl ProgramChecker for OcamlChecker {
         self.bundle.fingerprint()
     }
 
-    async fn check(&self, source: &str, declarations: &str) -> Result<Vec<Diagnostic>, CheckError> {
+    async fn check(
+        &self,
+        source: &str,
+        declarations: &str,
+        imports: ProgramImports,
+    ) -> Result<Vec<Diagnostic>, CheckError> {
         self.check_files(
             &[SourceFile {
                 name: PROGRAM.to_owned(),
                 source: source.to_owned(),
             }],
             declarations,
+            imports,
         )
         .await
     }
 
     /// An OCaml program is one file, `main.ml`. `declarations` are
     /// TypeScript and must be empty: an OCaml program's context types come
-    /// from `Code_mode`.
+    /// from `Code_mode`, and it imports only the bundle's libraries, so
+    /// `imports` (the TypeScript modules) doesn't apply.
     #[tracing::instrument(
         name = "code_execution.check",
         skip_all,
@@ -114,6 +121,7 @@ impl ProgramChecker for OcamlChecker {
         &self,
         files: &[SourceFile],
         declarations: &str,
+        _imports: ProgramImports,
     ) -> Result<Vec<Diagnostic>, CheckError> {
         let [file] = files else {
             return Err(CheckError::InvalidSource);

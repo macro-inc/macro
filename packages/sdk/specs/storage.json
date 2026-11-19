@@ -23285,6 +23285,16 @@
                 }
               }
             }
+          },
+          "503": {
+            "description": "Selected email rules exceeded a resource limit",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
           }
         }
       },
@@ -23336,6 +23346,16 @@
           },
           "500": {
             "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "503": {
+            "description": "Selected email rules exceeded a resource limit",
             "content": {
               "application/json": {
                 "schema": {
@@ -23406,6 +23426,16 @@
           },
           "500": {
             "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "503": {
+            "description": "Selected email rules exceeded a resource limit",
             "content": {
               "application/json": {
                 "schema": {
@@ -24301,7 +24331,7 @@
             }
           },
           "409": {
-            "description": "",
+            "description": "A conflict code, or `vault_not_provisioned` when the team's vault is not set up",
             "content": {
               "application/json": {
                 "schema": {
@@ -24428,7 +24458,7 @@
             }
           },
           "409": {
-            "description": "",
+            "description": "A conflict code, or `vault_not_provisioned` when the team's vault is not set up",
             "content": {
               "application/json": {
                 "schema": {
@@ -24790,7 +24820,7 @@
             }
           },
           "409": {
-            "description": "",
+            "description": "A conflict code, or `vault_not_provisioned` when the team's vault is not set up",
             "content": {
               "application/json": {
                 "schema": {
@@ -24910,7 +24940,7 @@
             }
           },
           "409": {
-            "description": "",
+            "description": "A conflict code, or `vault_not_provisioned` when the team's vault is not set up",
             "content": {
               "application/json": {
                 "schema": {
@@ -25037,7 +25067,7 @@
             }
           },
           "409": {
-            "description": "",
+            "description": "A conflict code, or `vault_not_provisioned` when the team's vault is not set up",
             "content": {
               "application/json": {
                 "schema": {
@@ -25239,7 +25269,7 @@
             }
           },
           "409": {
-            "description": "",
+            "description": "`version_conflict`, `vault_busy`, `folder_missing`, or `vault_not_provisioned` when the team's vault is not set up",
             "content": {
               "application/json": {
                 "schema": {
@@ -25306,7 +25336,7 @@
             }
           },
           "409": {
-            "description": "",
+            "description": "`version_conflict`, `vault_busy`, `folder_missing`, or `vault_not_provisioned` when the team's vault is not set up",
             "content": {
               "application/json": {
                 "schema": {
@@ -25384,7 +25414,7 @@
             }
           },
           "409": {
-            "description": "",
+            "description": "`version_conflict`, `vault_busy`, `folder_missing`, or `vault_not_provisioned` when the team's vault is not set up",
             "content": {
               "application/json": {
                 "schema": {
@@ -25443,7 +25473,7 @@
             }
           },
           "409": {
-            "description": "",
+            "description": "`version_conflict`, `vault_busy`, `folder_missing`, or `vault_not_provisioned` when the team's vault is not set up",
             "content": {
               "application/json": {
                 "schema": {
@@ -25541,7 +25571,7 @@
             }
           },
           "409": {
-            "description": "",
+            "description": "`version_conflict`, `vault_busy`, `folder_missing`, or `vault_not_provisioned` when the team's vault is not set up",
             "content": {
               "application/json": {
                 "schema": {
@@ -25714,7 +25744,7 @@
             }
           },
           "409": {
-            "description": "",
+            "description": "`version_conflict`, `vault_busy`, `folder_missing`, or `vault_not_provisioned` when the team's vault is not set up",
             "content": {
               "application/json": {
                 "schema": {
@@ -25781,7 +25811,7 @@
             }
           },
           "409": {
-            "description": "",
+            "description": "`version_conflict`, `vault_busy`, `folder_missing`, or `vault_not_provisioned` when the team's vault is not set up",
             "content": {
               "application/json": {
                 "schema": {
@@ -25932,7 +25962,7 @@
             }
           },
           "409": {
-            "description": "",
+            "description": "`version_conflict`, `vault_busy`, `folder_missing`, or `vault_not_provisioned` when the team's vault is not set up",
             "content": {
               "application/json": {
                 "schema": {
@@ -26008,7 +26038,7 @@
             }
           },
           "409": {
-            "description": "",
+            "description": "`version_conflict`, `vault_busy`, `folder_missing`, or `vault_not_provisioned` when the team's vault is not set up",
             "content": {
               "application/json": {
                 "schema": {
@@ -26067,7 +26097,7 @@
             }
           },
           "409": {
-            "description": "",
+            "description": "`version_conflict`, `vault_busy`, `folder_missing`, or `vault_not_provisioned` when the team's vault is not set up",
             "content": {
               "application/json": {
                 "schema": {
@@ -26143,7 +26173,7 @@
             }
           },
           "409": {
-            "description": "",
+            "description": "`version_conflict`, `vault_busy`, `folder_missing`, or `vault_not_provisioned` when the team's vault is not set up",
             "content": {
               "application/json": {
                 "schema": {
@@ -26205,7 +26235,7 @@
             }
           },
           "409": {
-            "description": "",
+            "description": "`version_conflict`, `vault_busy`, `folder_missing`, or `vault_not_provisioned` when the team's vault is not set up",
             "content": {
               "application/json": {
                 "schema": {
@@ -26516,6 +26546,126 @@
             }
           },
           "409": {
+            "description": "`version_conflict`, `vault_busy`, `folder_missing`, or `vault_not_provisioned` when the team's vault is not set up",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/PasswordFailure"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/passwords/teams/{team}/items/{item}/favorite": {
+      "put": {
+        "tags": ["passwords"],
+        "summary": "Change only the authenticated viewer's private preference.",
+        "operationId": "passwords_set_favorite",
+        "parameters": [
+          {
+            "name": "team",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid"
+            }
+          },
+          {
+            "name": "item",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid"
+            }
+          },
+          {
+            "name": "X-Macro-Passwords",
+            "in": "header",
+            "description": "Required CSRF header; send 1",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "204": {
+            "description": ""
+          },
+          "404": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/PasswordFailure"
+                }
+              }
+            }
+          },
+          "503": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/PasswordFailure"
+                }
+              }
+            }
+          }
+        }
+      },
+      "delete": {
+        "tags": ["passwords"],
+        "summary": "Change only the authenticated viewer's private preference.",
+        "operationId": "passwords_remove_favorite",
+        "parameters": [
+          {
+            "name": "team",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid"
+            }
+          },
+          {
+            "name": "item",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid"
+            }
+          },
+          {
+            "name": "X-Macro-Passwords",
+            "in": "header",
+            "description": "Required CSRF header; send 1",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "204": {
+            "description": ""
+          },
+          "404": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/PasswordFailure"
+                }
+              }
+            }
+          },
+          "503": {
             "description": "",
             "content": {
               "application/json": {
@@ -26578,7 +26728,7 @@
             }
           },
           "409": {
-            "description": "",
+            "description": "`version_conflict`, `vault_busy`, `folder_missing`, or `vault_not_provisioned` when the team's vault is not set up",
             "content": {
               "application/json": {
                 "schema": {
@@ -26656,7 +26806,7 @@
             }
           },
           "409": {
-            "description": "",
+            "description": "`version_conflict`, `vault_busy`, `folder_missing`, or `vault_not_provisioned` when the team's vault is not set up",
             "content": {
               "application/json": {
                 "schema": {
@@ -26718,7 +26868,7 @@
             }
           },
           "409": {
-            "description": "",
+            "description": "`version_conflict`, `vault_busy`, `folder_missing`, or `vault_not_provisioned` when the team's vault is not set up",
             "content": {
               "application/json": {
                 "schema": {
@@ -26787,7 +26937,7 @@
             }
           },
           "409": {
-            "description": "",
+            "description": "`version_conflict`, `vault_busy`, `folder_missing`, or `vault_not_provisioned` when the team's vault is not set up",
             "content": {
               "application/json": {
                 "schema": {
@@ -26858,7 +27008,7 @@
             }
           },
           "409": {
-            "description": "",
+            "description": "`version_conflict`, `vault_busy`, `folder_missing`, or `vault_not_provisioned` when the team's vault is not set up",
             "content": {
               "application/json": {
                 "schema": {
@@ -26917,7 +27067,7 @@
             }
           },
           "409": {
-            "description": "",
+            "description": "`version_conflict`, `vault_busy`, `folder_missing`, or `vault_not_provisioned` when the team's vault is not set up",
             "content": {
               "application/json": {
                 "schema": {
@@ -26985,7 +27135,7 @@
             }
           },
           "409": {
-            "description": "",
+            "description": "`version_conflict`, `vault_busy`, `folder_missing`, or `vault_not_provisioned` when the team's vault is not set up",
             "content": {
               "application/json": {
                 "schema": {
@@ -27044,7 +27194,7 @@
             }
           },
           "409": {
-            "description": "",
+            "description": "`version_conflict`, `vault_busy`, `folder_missing`, or `vault_not_provisioned` when the team's vault is not set up",
             "content": {
               "application/json": {
                 "schema": {
@@ -27112,7 +27262,7 @@
             }
           },
           "409": {
-            "description": "",
+            "description": "`version_conflict`, `vault_busy`, `folder_missing`, or `vault_not_provisioned` when the team's vault is not set up",
             "content": {
               "application/json": {
                 "schema": {
@@ -29117,6 +29267,86 @@
             }
           },
           "409": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "500": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/saved_views/definitions/{saved_view_id}/appearance": {
+      "put": {
+        "tags": ["saved_views"],
+        "operationId": "set_saved_view_appearance",
+        "parameters": [
+          {
+            "name": "saved_view_id",
+            "in": "path",
+            "description": "The saved view to edit",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/EntityAppearance"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/SavedViewDefinition"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "404": {
             "description": "",
             "content": {
               "application/json": {
@@ -39161,6 +39391,17 @@
         "type": "object",
         "required": ["name", "config"],
         "properties": {
+          "appearance": {
+            "oneOf": [
+              {
+                "type": "null"
+              },
+              {
+                "$ref": "#/components/schemas/EntityAppearance",
+                "description": "Optional initial icon and color metadata; retries retain the original value."
+              }
+            ]
+          },
           "config": {
             "type": "object",
             "description": "Consumer configuration with its `kind` and `version`, at most 32 KiB."
@@ -56068,7 +56309,8 @@
           "version_conflict",
           "vault_busy",
           "rate_limited",
-          "vault_unavailable"
+          "vault_unavailable",
+          "vault_not_provisioned"
         ]
       },
       "PasswordAgentFailure": {
@@ -56523,7 +56765,8 @@
           "version_conflict",
           "vault_busy",
           "folder_missing",
-          "vault_unavailable"
+          "vault_unavailable",
+          "vault_not_provisioned"
         ]
       },
       "PasswordFailure": {
@@ -56668,7 +56911,8 @@
           "version_conflict",
           "folder_missing",
           "busy",
-          "vault_unavailable"
+          "vault_unavailable",
+          "vault_not_provisioned"
         ]
       },
       "PasswordImportFolder": {
@@ -56903,7 +57147,7 @@
           },
           "favorite": {
             "type": "boolean",
-            "description": "Whether the item is marked as a favorite."
+            "description": "The current viewer's private favorite in responses; legacy initial flag in storage."
           },
           "folderId": {
             "type": ["string", "null"],
@@ -57055,7 +57299,7 @@
           },
           "favorite": {
             "type": "boolean",
-            "description": "Whether the item is marked as a favorite."
+            "description": "Legacy accepted field, ignored; change private preferences through the favorite endpoint."
           },
           "folderId": {
             "type": ["string", "null"],
@@ -57274,7 +57518,7 @@
           },
           "favorite": {
             "type": "boolean",
-            "description": "Whether the item is marked as a favorite."
+            "description": "Initial creator preference on create; ignored on update. Use the favorite endpoint afterward."
           },
           "folderId": {
             "type": ["string", "null"],
@@ -60703,6 +60947,17 @@
           "updatedAt"
         ],
         "properties": {
+          "appearance": {
+            "oneOf": [
+              {
+                "type": "null"
+              },
+              {
+                "$ref": "#/components/schemas/EntityAppearance",
+                "description": "Icon and color metadata, separate from configuration."
+              }
+            ]
+          },
           "config": {
             "type": "object",
             "description": "Versioned configuration interpreted by the consuming feature, with its\n`kind` (such as `email` or `task`) and `version`."
@@ -68526,6 +68781,17 @@
           "updatedAt"
         ],
         "properties": {
+          "appearance": {
+            "oneOf": [
+              {
+                "type": "null"
+              },
+              {
+                "$ref": "#/components/schemas/EntityAppearance",
+                "description": "Validated icon and color metadata, independent of configuration revisions."
+              }
+            ]
+          },
           "config": {
             "description": "It is an explicit choice that the structure of the view configuration\nis up to the frontend. The structure and composition of view configuration\nis still very much in flux."
           },

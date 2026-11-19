@@ -8,13 +8,13 @@ use uuid::Uuid;
 #[serde(transparent)]
 pub struct RunId(pub Uuid);
 
-/// A program to run: a JavaScript ES module exporting an async `main`
+/// A program to run: a TypeScript ES module exporting an async `main`
 /// function, an OCaml `main.ml` calling `Code_mode.run`, or a JS tools
 /// script.
 #[derive(Clone, Serialize, Deserialize)]
 #[serde(deny_unknown_fields)]
 pub struct ExecuteRequest {
-    /// The complete program: a JavaScript module, including imports and
+    /// The complete program: a TypeScript module, including imports and
     /// `export async function main`, an OCaml compilation unit, or a JS tools
     /// script.
     pub source: String,
@@ -29,8 +29,8 @@ pub struct ExecuteRequest {
 #[derive(Debug, Clone, Copy, Default, PartialEq, Eq, Serialize, Deserialize)]
 #[serde(rename_all = "snake_case")]
 pub enum Language {
-    /// A JavaScript ES module (TypeScript for an unattended program), run by
-    /// Deno directly.
+    /// A TypeScript ES module, type-checked against the SDK when attended,
+    /// then run by Deno directly.
     #[default]
     Javascript,
     /// An OCaml program written against the OCaml SDK and `Code_mode`,
@@ -86,6 +86,27 @@ pub struct RunEnvironment {
     /// doesn't start. `None` sends every request, as before the gate.
     #[serde(skip_serializing_if = "Option::is_none")]
     pub allowed_operations: Option<Vec<SdkCall>>,
+}
+
+/// The handles an attended program's `main` receives besides the SDK, which
+/// decide the `CodeContext` it is type-checked with.
+#[derive(Clone, Copy, Debug, Default, PartialEq, Eq)]
+pub struct ContextShape {
+    /// `session`: the run belongs to an agent session.
+    pub session: bool,
+    /// `execution`: the run is one of the session's code executions.
+    pub execution: bool,
+}
+
+impl RunEnvironment {
+    /// What `main` receives: `execution` only with `session`, as the
+    /// bootstrap passes them.
+    pub fn shape(&self) -> ContextShape {
+        ContextShape {
+            session: self.session_id.is_some(),
+            execution: self.session_id.is_some() && self.execution_id.is_some(),
+        }
+    }
 }
 
 /// How a program's requests reach the SDK hosts.
@@ -226,9 +247,9 @@ pub enum AdmissionError {
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
 #[serde(rename_all = "snake_case")]
 pub enum FailureCode {
-    /// The program didn't compile, failed the policy check (OCaml), or
-    /// didn't parse or pass the analysis (JS tools). Older persisted
-    /// outcomes use it for JavaScript too.
+    /// The program didn't type-check against the SDK (TypeScript), didn't
+    /// compile or failed the policy check (OCaml), or didn't parse or pass
+    /// the analysis (JS tools), so it never ran.
     Compile,
     /// Program threw or exited without a result.
     Runtime,
@@ -358,13 +379,22 @@ pub struct SourceFile {
     pub source: String,
 }
 
+/// The modules a checked program may import besides its own files.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum ProgramImports {
+    /// Only `@macro-inc/sdk`, as an unattended program runs with.
+    Sdk,
+    /// `@macro-inc/sdk` and `handlebars`, as an attended program runs with.
+    SdkAndHandlebars,
+}
+
 /// The checker couldn't decide whether a program checks.
 #[derive(Debug, thiserror::Error)]
 pub enum CheckError {
     /// Empty or oversized source.
     #[error("source must be nonempty and within the configured size limit")]
     InvalidSource,
-    /// Every checker slot is busy.
+    /// Every checker slot and queue place is taken.
     #[error("type checking is busy; try again later")]
     Busy,
     /// The checker process failed or ran out of time.

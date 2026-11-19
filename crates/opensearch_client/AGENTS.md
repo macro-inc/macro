@@ -98,6 +98,13 @@ projects.
   and a backfill stops and is rerun. A delete creates a missing index even with `require_alias`, so
   the reconcile and the session delete first read the parent, which fails on a
   missing index or alias.
+- Chat messages and call segments carry their own id in `entity_id` and no
+  parent fields such as `channel_id`; only their join field names the
+  parent. A delete or update of a chat or call reaches its children with
+  `parent_id` (or `has_parent` on a parent field), never a term on the
+  parent's `entity_id`. The ignored tests in `delete/chat/test.rs` and
+  `delete/call_record/test.rs` check this on a scratch copy of the live
+  `chats` and `call_records` mappings.
 - The request-level `_source` filter does not reach `has_child` inner hits:
   each one returns the child's whole document unless its `InnerHits` names
   `source_fields`. Every join query names the fields its hit's `_source`
@@ -109,6 +116,11 @@ projects.
   (`INNER_HITS_PER_RESULT`, divided by `split_inner_hits_budget`), so a
   result carries at most that many matches, not every match; do not give
   each term its own.
+- Build a `has_child` clause's per-term query with `query::child_content_query`.
+  A single word matches as `match_bool_prefix`, not `match_phrase_prefix`:
+  OpenSearch expands a phrase prefix again for every inner hit of every
+  returned parent, and keeps only the first `max_expansions` terms of the
+  shard, so words past them never match.
 - Document content has two matching shapes (`DocumentTermMatching`). `All`
   is one `has_child` per term: every term somewhere in the document, each a
   prefix. `Dynamic` is one `has_child` for queries of three or more terms:

@@ -1,4 +1,4 @@
-//! Fresh JavaScript processes with run-only credentials and allowlisted API
+//! Fresh Deno processes with run-only credentials and allowlisted API
 //! egress. OCaml programs are compiled to WebAssembly first
 //! (`super::ocaml`) and run by the same bootstrap, as are JS tools programs,
 //! in the interpreter `code_mode_assets::JS_TOOLS` bundles.
@@ -313,12 +313,11 @@ impl DenoRunner {
                 "OCaml programs take no arguments yet",
             ));
         }
-        // An unattended program is TypeScript; Deno strips its types on load.
-        let program = match (language, &job.environment.unattended) {
-            (Language::Ocaml, _) => OCAML_PROGRAM,
-            (Language::JsTools, _) => JS_TOOLS_PROGRAM,
-            (Language::Javascript, Some(_)) => "main.ts",
-            (Language::Javascript, None) => "main.mjs",
+        // JavaScript programs are TypeScript; Deno strips their types on load.
+        let program = match language {
+            Language::Ocaml => OCAML_PROGRAM,
+            Language::JsTools => JS_TOOLS_PROGRAM,
+            Language::Javascript => "main.ts",
         };
         tokio::fs::write(root.join(program), &job.request.source)
             .await

@@ -43,7 +43,7 @@ OCaml serialize as they did before languages. */
 against (SDK version plus a hash of its interfaces); for a JavaScript
 tools program, of the interpreter and catalog it ran with. */
   sdkFingerprint?: ExecutionRecordSdkFingerprint;
-  /** The submitted program: a JavaScript module, an OCaml `main.ml` or a
+  /** The submitted program: a TypeScript module, an OCaml `main.ml` or a
 JavaScript tools script. */
   source: string;
   /** Overall execution state. */

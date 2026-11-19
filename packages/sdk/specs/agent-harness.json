@@ -7414,7 +7414,7 @@
           },
           "source": {
             "type": "string",
-            "description": "The submitted program: a JavaScript module, an OCaml `main.ml` or a\nJavaScript tools script."
+            "description": "The submitted program: a TypeScript module, an OCaml `main.ml` or a\nJavaScript tools script."
           },
           "status": {
             "$ref": "#/components/schemas/ExecutionStatus",

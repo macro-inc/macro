@@ -97,14 +97,13 @@ async fn an_import_reads_through_the_import_provider_and_live_work_through_the_l
     .await
     .unwrap();
     assert!(service.enumerate_once().await.unwrap());
-    // Live rows are claimed first. Neither message is found yet, so both
-    // are released to be read again.
-    for _ in 0..2 {
-        assert!(matches!(
-            service.reconcile_once().await,
-            Err(MailboxError::LocationUnsettled)
-        ));
-    }
+    // Live rows are claimed first. Neither message is found: the live one
+    // is released to be read again, the import one settles as gone.
+    assert!(matches!(
+        service.reconcile_once().await,
+        Err(MailboxError::LocationUnsettled)
+    ));
+    assert!(service.reconcile_once().await.unwrap());
 
     assert_eq!(
         *reads.lock().unwrap(),

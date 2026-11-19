@@ -60,8 +60,28 @@ impl ExecutionTurns for Turn {
     }
 }
 
+/// Passes every program: OCaml and JS tools programs aren't type-checked
+/// as TypeScript, so it is never asked about them.
+pub(super) struct Unchecked;
+
+#[async_trait]
+impl code_execution::domain::ProgramChecker for Unchecked {
+    fn sdk_fingerprint(&self) -> &str {
+        "unchecked"
+    }
+
+    async fn check_files(
+        &self,
+        _: &[code_execution::domain::SourceFile],
+        _: &str,
+        _: code_execution::domain::ProgramImports,
+    ) -> Result<Vec<code_execution::domain::Diagnostic>, code_execution::domain::CheckError> {
+        Ok(Vec::new())
+    }
+}
+
 /// The example returns no images.
-struct NoImages;
+pub(super) struct NoImages;
 #[async_trait]
 impl ModelImages for NoImages {
     async fn load_png(
@@ -188,7 +208,7 @@ async fn ocaml_tool_example_creates_and_reads_a_task() {
     let store = Arc::new(Store::default());
     let service = CodeModeService::new(
         Some(Arc::new(
-            ExecutionService::new(Arc::new(runner), Limits::default()).unwrap(),
+            ExecutionService::new(Arc::new(runner), Arc::new(Unchecked), Limits::default()).unwrap(),
         )),
         Arc::new(Credentials(format!("http://{address}"))),
         store.clone(),

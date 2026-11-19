@@ -63,7 +63,7 @@ pub enum MailboxError {
     Effect(EffectFailure),
     #[error("mailbox generation or worker lease changed")]
     Stale,
-    /// The provider no longer reports the message where it was; a later
+    /// The provider does not return the message a live change named; a later
     /// attempt either finds it or settles that it is gone.
     #[error("mailbox message location has not settled")]
     LocationUnsettled,
@@ -713,7 +713,17 @@ impl<R: MailboxSyncRepository, P: MailboxGateway, I: MailboxIngest> MailboxSyncS
                     self.ingest.ingest(lease, snapshot).await?;
                     "imported"
                 }
-                None if lease.attempts < 3 => return Err(MailboxError::LocationUnsettled),
+                // Live work follows a change Graph or Macro just made, which
+                // Graph's message read can briefly miss, so its 404 is read
+                // again. Import work lists what a folder already held, or
+                // rechecks mail Macro stored before: its 404 means the message
+                // has left the mailbox, or the entry is one Graph lists but
+                // never serves as a message (Deleted Items holds them). Ids
+                // are immutable, so a message moved meanwhile still reads,
+                // and a retry would only repeat the answer later.
+                None if !lease.is_import && lease.attempts < 3 => {
+                    return Err(MailboxError::LocationUnsettled);
+                }
                 None => {
                     self.ingest.absent(lease).await?;
                     "absent"

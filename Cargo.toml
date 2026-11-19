@@ -224,6 +224,7 @@ members = [
   "services/organization_retention_handler",
   "services/organization_retention_trigger",
   "crates/scheduled_action",
+  "services/search_freshness_probe",
   "services/search_processing_service",
   "services/search_upload_handler",
   "services/sha_cleanup_worker",

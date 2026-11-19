@@ -16,12 +16,13 @@ Reusable named view definitions. Consumers are main Tasks and Email; the generic
 ## Boundaries
 
 - Keep Task filters, navigation, and configuration decoding in `features/tasks-view`, and Email's in `features/email-view`.
-- Order is personal and server-owned (`reorderSavedViews`); consumers show a pending move locally only until the list itself changes, never by splicing the cache.
+- Saved-view row order is personal and server-owned (`reorderSavedViews`); consumers show a pending move locally only until the list itself changes, never by splicing the cache. The containing `saved-views` sidebar section uses the shared view shell's local per-account section order.
 - Readers re-read on focus, after a gateway reconnect, and on a `saved_views_changed` push for their kind (`queries/saved-view-changes.ts`), which is how writes made outside the page, such as an agent's, appear; the push carries no definition.
 - Consumers pass the list's accessible label, row status (`trailing` plus `statusLabel`), drag wiring, and Move up/Move down handlers (Email passes them only where rows can't be dragged); rows never create drag items themselves, since only a desktop list mounts the drag provider. Pass `onCopyLink` only when a link can open the view for someone else (Tasks shares with teams; Email views are private).
 - A consumer that edits definitions in the dialog passes `fields`, `invalid`, and a replacement `config`; edit without `config` keeps renaming and sharing only. `hint` renders the consumer's note under the name (Email uses it on create).
 - Do not migrate CRM's legacy personal views or team settings into this consumer.
 - Share definitions, not access to their matching entities; the backend owns authorization.
+- Store icon and color on the shared definition, outside consumer config; only owners edit through the entity-appearance picker. Gate editing with `enableEntityAppearance`, never rendering, and preserve appearance through list/detail reads and temporary filter edits.
 - Rebuild loaded cursor chains after confirmed membership changes; never invent permission state or splice a full page.
 - Keep consumer edits on failed saves; only confirmed writes replace the baseline.
 - Keep sharing guidance beside the checkbox as a focusable info control; support hover and tap without toggling sharing.

@@ -4,11 +4,11 @@
 //! runtime, against a stub of the storage service. The real-runtime tests
 //! need Deno 2.9.6 on `PATH`.
 
-use super::ocaml::{Store, Turn, read_request};
+use super::ocaml::{NoImages, Store, Turn, Unchecked, read_request};
 use super::*;
 use crate::domain::{
     CodeModeService, ExecutionCredentials, ExecutionIdentity, ExecutionPermission, ExecutionStatus,
-    JsToolsPrograms, NotRun, OwnerRollout, ProgramLanguage,
+    IssuedRun, JsToolsPrograms, NotRun, OwnerRollout, ProgramLanguage,
 };
 use agent_session::domain::model::AgentSessionId;
 use ai_toolset::ToolSet as _;
@@ -45,7 +45,7 @@ impl ExecutionCredentials for Credentials {
         _: &str,
         language: ProgramLanguage,
         _: CancellationToken,
-    ) -> Result<RunEnvironment, CodeModeError> {
+    ) -> Result<IssuedRun, CodeModeError> {
         self.asked.lock().unwrap().push(language);
         let allowed_operations = match &self.gate {
             Gate::Admit(calls) => Some(calls.clone()),
@@ -59,16 +59,19 @@ impl ExecutionCredentials for Credentials {
                 }));
             }
         };
-        Ok(RunEnvironment {
-            token: "fixture-run-token".into(),
-            endpoints: SdkEndpoints {
-                hosts: BTreeMap::from([("storage".into(), self.storage.clone())]),
-                web_app_url: "https://app.example.test".into(),
+        Ok(IssuedRun {
+            environment: RunEnvironment {
+                token: "fixture-run-token".into(),
+                endpoints: SdkEndpoints {
+                    hosts: BTreeMap::from([("storage".into(), self.storage.clone())]),
+                    web_app_url: "https://app.example.test".into(),
+                },
+                session_id: Some(identity.session.as_uuid()),
+                execution_id: Some(identity.execution.as_uuid()),
+                allowed_operations,
+                ..Default::default()
             },
-            session_id: Some(identity.session.as_uuid()),
-            execution_id: Some(identity.execution.as_uuid()),
-            allowed_operations,
-            ..Default::default()
+            acting_user: identity.owner.clone(),
         })
     }
 }
@@ -172,11 +175,12 @@ async fn service(
     let store = Arc::new(Store::default());
     let service = CodeModeService::new(
         Some(Arc::new(
-            ExecutionService::new(Arc::new(runner), Limits::default()).unwrap(),
+            ExecutionService::new(Arc::new(runner), Arc::new(Unchecked), Limits::default()).unwrap(),
         )),
         credentials.clone(),
         store.clone(),
         Arc::new(Turn),
+        Arc::new(NoImages),
     )
     .with_js_tools(JsToolsPrograms {
         fingerprint: code_mode_assets::JS_TOOLS_FINGERPRINT.into(),
@@ -333,11 +337,12 @@ async fn js_tools_without_the_rollout_is_refused_before_a_credential() {
     });
     let service = CodeModeService::new(
         Some(Arc::new(
-            ExecutionService::new(Arc::new(Never), Limits::default()).unwrap(),
+            ExecutionService::new(Arc::new(Never), Arc::new(Unchecked), Limits::default()).unwrap(),
         )),
         credentials.clone(),
         Arc::new(Store::default()),
         Arc::new(Turn),
+        Arc::new(NoImages),
     )
     .with_js_tools(JsToolsPrograms {
         fingerprint: code_mode_assets::JS_TOOLS_FINGERPRINT.into(),
@@ -375,7 +380,7 @@ async fn js_tools_and_ocaml_wire_in_either_order() {
     let base = || {
         CodeModeService::new(
             Some(Arc::new(
-                ExecutionService::new(Arc::new(Never), Limits::default()).unwrap(),
+                ExecutionService::new(Arc::new(Never), Arc::new(Unchecked), Limits::default()).unwrap(),
             )),
             Arc::new(Credentials {
                 storage: "http://127.0.0.1:9".into(),
@@ -384,6 +389,7 @@ async fn js_tools_and_ocaml_wire_in_either_order() {
             }),
             Arc::new(Store::default()),
             Arc::new(Turn),
+            Arc::new(NoImages),
         )
     };
     let ocaml = || crate::domain::OcamlPrograms {

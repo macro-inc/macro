@@ -12,8 +12,9 @@ use crate::domain::{
     },
 };
 use macro_user_id::user_id::MacroUserIdStr;
-use sqlx::PgPool;
+use sqlx::{PgConnection, PgPool};
 use std::collections::HashMap;
+use std::sync::Arc;
 use uuid::Uuid;
 
 #[cfg(feature = "mailbox")]
@@ -50,14 +51,56 @@ mod thread;
 #[cfg(test)]
 mod test;
 
+pub(crate) type RuleDiscoveryPort =
+    dyn crm::domain::email_rule_discovery::EmailRuleDiscoveryService<PgConnection>;
+
+/// Internal read errors preserve resource failures until the domain boundary.
+#[derive(Debug, thiserror::Error)]
+pub(crate) enum PreviewReadError {
+    #[error(transparent)]
+    Database(#[from] sqlx::Error),
+    #[error(transparent)]
+    Rules(#[from] crm::domain::model::CrmError),
+    #[error("selected email rule discovery is not configured")]
+    RuleDiscoveryUnavailable,
+    #[error("selected email rule discovery is incomplete")]
+    IncompleteRuleDiscovery,
+    #[error("selected email rule discovery requires a team scope")]
+    MissingTeamScope,
+    #[error("team email read deadline exceeded")]
+    ReadDeadlineExceeded,
+}
+
+impl From<PreviewReadError> for EmailErr {
+    fn from(error: PreviewReadError) -> Self {
+        match error {
+            PreviewReadError::Rules(crm::domain::model::CrmError::EmailRuleLimitExceeded(
+                limit,
+            )) => Self::EmailRuleLimitExceeded(limit),
+            other => Self::RepoErr(anyhow::Error::new(other)),
+        }
+    }
+}
+
 #[derive(Clone)]
 pub struct EmailPgRepo {
     pool: PgPool,
+    rule_discovery: Option<Arc<RuleDiscoveryPort>>,
 }
 
 impl EmailPgRepo {
     pub fn new(pool: PgPool) -> Self {
-        EmailPgRepo { pool }
+        EmailPgRepo {
+            pool,
+            rule_discovery: None,
+        }
+    }
+
+    /// Configure the owning CRM domain's discovery in composition. Selected
+    /// reads fail closed without it; all-mail reads never invoke this port.
+    pub fn with_rule_discovery(mut self, discovery: Arc<RuleDiscoveryPort>) -> Self {
+        self.rule_discovery = Some(discovery);
+        self
     }
 
     pub async fn link_by_fusionauth_email_provider(
@@ -178,8 +221,15 @@ impl EmailRepo for EmailPgRepo {
         &self,
         query: PreviewCursorQuery,
         user_id: MacroUserIdStr<'static>,
-    ) -> Result<Vec<EmailThreadPreview>, Self::Err> {
-        preview::previews_for_view_cursor(&self.pool, query, user_id).await
+    ) -> Result<Vec<EmailThreadPreview>, EmailErr> {
+        preview::previews_for_view_cursor(
+            &self.pool,
+            query,
+            user_id,
+            self.rule_discovery.as_deref(),
+        )
+        .await
+        .map_err(EmailErr::from)
     }
 
     async fn attachments_by_thread_ids(

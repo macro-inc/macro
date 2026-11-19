@@ -1177,7 +1177,7 @@ async fn the_permission_gate_refuses_holds_or_limits_a_run(pool: sqlx::PgPool) {
         "js_tools"
     );
     assert_eq!(
-        issued.unwrap().allowed_operations,
+        issued.unwrap().environment.allowed_operations,
         Some(vec![
             call("email", "send_message"),
             call("storage", "get_document")
@@ -1243,4 +1243,111 @@ async fn the_gate_follows_the_permissions_flag_and_for_ocaml_its_flag() {
         )
         .await
     );
+}
+
+/// Answers every run with success, so a check is all that stands between a
+/// program and success.
+struct Accepts;
+
+#[async_trait::async_trait]
+impl code_execution::domain::CodeRunner for Accepts {
+    async fn run(
+        &self,
+        _job: code_execution::domain::ExecutionJob,
+        _events: &mut code_execution::domain::EventSink,
+        _cancellation: tokio_util::sync::CancellationToken,
+    ) -> code_execution::domain::Outcome {
+        code_execution::domain::Outcome::Succeeded {
+            value: serde_json::Value::Null,
+        }
+    }
+}
+
+/// The suggestions session runs the brief's programs as written: each one,
+/// put in the brief's program shape, type-checks against the current SDK.
+#[tokio::test]
+#[ignore = "requires pinned Deno runtime"]
+async fn suggestions_brief_programs_type_check() {
+    use code_execution::domain::{
+        EventKind, ExecuteRequest, ExecutionService, Limits, Outcome, RunEnvironment,
+    };
+    use suggestions::domain::{model::GenerationTrigger, prompt::brief};
+
+    let root = tempfile::tempdir().unwrap();
+    let binary = tokio::process::Command::new("which")
+        .arg("deno")
+        .output()
+        .await
+        .unwrap();
+    assert!(binary.status.success(), "Deno 2.9.6 must be on PATH");
+    let checker = code_execution::outbound::deno::check::DenoChecker::new(
+        String::from_utf8(binary.stdout).unwrap().trim().into(),
+        root.path().to_owned(),
+        2,
+        8,
+        64 * 1024,
+    )
+    .await
+    .unwrap();
+    let service = ExecutionService::new(
+        std::sync::Arc::new(Accepts),
+        std::sync::Arc::new(checker),
+        Limits::default(),
+    )
+    .unwrap();
+
+    let text = brief(
+        GenerationTrigger::Nightly,
+        "UTC",
+        chrono::Utc::now(),
+        "",
+        "a-model",
+    );
+    let blocks: Vec<&str> = text
+        .split("```typescript\n")
+        .skip(1)
+        .map(|block| block.split("```").next().unwrap())
+        .collect();
+    let [shape, map, documents, suggest, draft, check] = blocks[..] else {
+        panic!("expected the shape and five programs, got {}", blocks.len());
+    };
+    let marker =
+        "  // the program's own lines go here and end with: return { data, reviews: [] };\n";
+    assert!(shape.contains(marker));
+    // What the brief leaves the session to fill in.
+    let session_values = "const docId = '', threadId = '', channelId = '', callId = '', messageId = '', dedupKey = '', title = '', summary = '', prompt = '', subject = '', bodyText = '', reason = '', now = '';\nconst importance = 50;\nconst keys: string[] = [];\n";
+    let programs = [
+        map.to_owned(),
+        documents.to_owned(),
+        format!("{suggest}{draft}return {{ data: results, reviews: [] }};\n"),
+        check.to_owned(),
+    ];
+    for program in programs {
+        let source = shape.replace(marker, &format!("{session_values}{program}"));
+        let mut handle = service
+            .execute(
+                ExecuteRequest {
+                    source: source.clone(),
+                    timeout_ms: 30_000,
+                    language: code_execution::domain::Language::Javascript,
+                },
+                RunEnvironment {
+                    session_id: Some(uuid::Uuid::now_v7()),
+                    execution_id: Some(uuid::Uuid::now_v7()),
+                    ..RunEnvironment::default()
+                },
+            )
+            .unwrap();
+        let outcome = loop {
+            match handle.events.recv().await.unwrap().kind {
+                EventKind::Finished { outcome } => break outcome,
+                _ => continue,
+            }
+        };
+        assert!(
+            matches!(outcome, Outcome::Succeeded { .. }),
+            "{source}\n{outcome:?}"
+        );
+    }
+    service.shutdown().await;
 }

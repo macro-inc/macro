@@ -2081,7 +2081,7 @@ export type ExecutionRecord = {
      */
     sdkFingerprint?: string | null;
     /**
-     * The submitted program: a JavaScript module, an OCaml `main.ml` or a
+     * The submitted program: a TypeScript module, an OCaml `main.ml` or a
      * JavaScript tools script.
      */
     source: string;

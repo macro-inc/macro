@@ -9,6 +9,7 @@ import {
 } from '../components/routine-step-editor';
 import type { RoutineEditorSlots } from '../context/routine-slots';
 import { DEFAULT_RUN_VISIBILITY, type ScheduleDraft } from '../core/draft';
+import type { UnusableItem } from '../core/knobs';
 import { draftSteps } from '../core/routine-draft';
 import { firstAgent, type StepDraft } from '../core/routine-steps';
 
@@ -34,6 +35,8 @@ export function routineSections(props: {
   runsAsDescription: string;
   /** Shown in the trigger card when there is no draft to edit. */
   unsupported?: JSX.Element;
+  /** Picked items its owner can't use now, on a saved routine's page. */
+  unusableItems?: Accessor<readonly UnusableItem[]>;
 }) {
   const triggers = () => props.draft()?.triggers ?? [];
   const hasCodeStep = () => {
@@ -108,6 +111,7 @@ export function routineSections(props: {
                   }
                 }
                 slots={props.slots}
+                unusableItems={props.unusableItems?.()}
               />
             </Show>
           </>
@@ -127,6 +131,7 @@ export function routineSections(props: {
               props.onChange((current) => ({ ...current, apps }))
             }
             Picker={props.slots.Apps}
+            Connect={props.slots.ConnectApp}
           />
         )}
       </Show>
