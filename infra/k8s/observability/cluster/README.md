@@ -261,8 +261,12 @@ before its go-ahead.
   `../aws/settings.nix`; its plan reviewed (two listener rules, four alarms,
   Mimir's bucket policy).
 - *Pulumi, listener rule*: the observability stack's priority-1 rule, its
-  target group and the `observability-ui` alarm removed; `pulumi preview
-  --diff` reviewed.
+  target group and attachment, and the `observability-ui` alarm removed. The
+  deploy workflow refuses these deletes, so it is merged and then applied by
+  hand. Its `pulumi preview --diff` must list exactly those four deletions:
+  the stack looks up the AMI built from main's `nixos/`, so a host change
+  merged since the last deploy shows up as a replaced instance. Deploy that
+  first.
 - *Host, GoAlert only*: the host stops running Grafana, Loki, Tempo,
   Prometheus and Alloy; a Deploy Observability dry run passed.
 
@@ -288,7 +292,8 @@ before its go-ahead.
    last week's logs and traces.
 3. **Apply the AWS layer** and wait for healthy targets (`../aws/README.md`
    "The switch").
-4. **`pulumi up` *Pulumi, listener rule***. The ALB now sends
+4. **Merge *Pulumi, listener rule*, preview it again, and `pulumi up`**
+   from `infra/stacks/observability`. The ALB now sends
    `grafana.` and `otlp.macro-internal.com` here. At once, on the host:
    `sudo systemctl mask --runtime --now grafana`, since its rules now see no
    new data and would page.
