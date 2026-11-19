@@ -56,6 +56,8 @@ type AvailabilityRequest = (String, OccurrenceRange, Option<Vec<String>>);
 struct FakeService {
     requests: Mutex<Vec<AvailabilityRequest>>,
     too_many: bool,
+    /// The deployment's team-sharing gate is off.
+    disabled: bool,
 }
 
 impl CalendarTeamService for FakeService {
@@ -110,6 +112,9 @@ impl CalendarTeamService for FakeService {
         ));
         if self.too_many {
             return Err(rootcause::report!(TeamCalendarError::TooManyMembers).into());
+        }
+        if self.disabled {
+            return Err(rootcause::report!(TeamCalendarError::Disabled).into());
         }
         Ok(TeamAvailability {
             start: range.starts_at,
@@ -241,4 +246,31 @@ async fn availability_for_too_many_teammates_is_a_bad_request() {
     .await;
 
     assert_eq!(status, StatusCode::BAD_REQUEST);
+}
+
+/// With the deployment's team-sharing gate off the read still fails closed,
+/// but says why: a caller such as an agent's program can tell the user the
+/// feature is off instead of reporting a missing route.
+#[tokio::test]
+async fn availability_with_team_sharing_off_says_so() {
+    let service = Arc::new(FakeService {
+        disabled: true,
+        ..Default::default()
+    });
+
+    let (status, body) = post_availability(
+        service,
+        serde_json::json!({
+            "start": "2026-10-07T09:00:00Z",
+            "end": "2026-10-07T17:00:00Z",
+        }),
+    )
+    .await;
+
+    assert_eq!(status, StatusCode::NOT_FOUND);
+    assert_eq!(body["code"], "team_sharing_disabled");
+    assert_eq!(
+        body["message"],
+        "Team availability is turned off for this workspace."
+    );
 }

@@ -147,32 +147,82 @@ pub struct AvailabilityCalendarsResponse {
     pub calendars: Vec<AvailabilityCalendar>,
 }
 
+/// What kind of failure a team calendar request met, for callers to branch on.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, utoipa::ToSchema)]
+#[serde(rename_all = "snake_case")]
+pub enum TeamCalendarErrorCode {
+    /// The window, cursor or selection is not valid.
+    InvalidRequest,
+    /// The addressed calendar is not the requester's.
+    NotFound,
+    /// The deployment's team-sharing gate is off, so team reads fail closed.
+    TeamSharingDisabled,
+    /// The request failed on the server.
+    Internal,
+}
+
 /// Adapter error without internal/provider details.
-#[derive(Debug)]
-pub struct TeamCalendarApiError(StatusCode);
+#[derive(Debug, Serialize, utoipa::ToSchema)]
+pub struct TeamCalendarApiError {
+    #[serde(skip)]
+    status: StatusCode,
+    /// The failure's kind.
+    code: TeamCalendarErrorCode,
+    /// What a person reads.
+    message: &'static str,
+}
+
+impl TeamCalendarApiError {
+    fn new(status: StatusCode, code: TeamCalendarErrorCode, message: &'static str) -> Self {
+        Self {
+            status,
+            code,
+            message,
+        }
+    }
+
+    fn invalid() -> Self {
+        Self::new(
+            StatusCode::BAD_REQUEST,
+            TeamCalendarErrorCode::InvalidRequest,
+            "Bad Request",
+        )
+    }
+}
+
 impl IntoResponse for TeamCalendarApiError {
     fn into_response(self) -> Response {
-        (self.0, Json(serde_json::json!({"message": self.0.canonical_reason().unwrap_or("calendar request failed")}))).into_response()
+        (self.status, Json(self)).into_response()
     }
 }
 impl From<rootcause::Report> for TeamCalendarApiError {
     fn from(error: rootcause::Report) -> Self {
-        let status = match error
+        match error
             .as_ref()
             .downcast_current_context::<TeamCalendarError>()
         {
             Some(TeamCalendarError::InvalidQuery | TeamCalendarError::TooManyMembers) => {
-                StatusCode::BAD_REQUEST
+                Self::invalid()
             }
-            Some(TeamCalendarError::NotFound | TeamCalendarError::Disabled) => {
-                StatusCode::NOT_FOUND
-            }
+            Some(TeamCalendarError::NotFound) => Self::new(
+                StatusCode::NOT_FOUND,
+                TeamCalendarErrorCode::NotFound,
+                "Not Found",
+            ),
+            Some(TeamCalendarError::Disabled) => Self::new(
+                StatusCode::NOT_FOUND,
+                TeamCalendarErrorCode::TeamSharingDisabled,
+                "Team availability is turned off for this workspace.",
+            ),
             None => {
                 tracing::error!(error=?error, "team calendar request failed");
-                StatusCode::INTERNAL_SERVER_ERROR
+                Self::new(
+                    StatusCode::INTERNAL_SERVER_ERROR,
+                    TeamCalendarErrorCode::Internal,
+                    "Internal Server Error",
+                )
             }
-        };
-        Self(status)
+        }
     }
 }
 
@@ -187,7 +237,7 @@ pub async fn list_team_calendar<S: CalendarTeamService, A: MacroAuthorizationSer
         .cursor
         .map(|cursor| serde_json::from_str(&cursor))
         .transpose()
-        .map_err(|_| TeamCalendarApiError(StatusCode::BAD_REQUEST))?;
+        .map_err(|_| TeamCalendarApiError::invalid())?;
     let range = team_range(query.start, query.end)?;
     Ok(Json(
         state
@@ -203,7 +253,7 @@ pub async fn list_team_calendar<S: CalendarTeamService, A: MacroAuthorizationSer
 }
 
 /// Merge the requester's and selected teammates' busy time in a bounded window.
-#[utoipa::path(post, path="/calendar-events/team/availability", request_body=TeamAvailabilityRequest, responses((status=200, body=TeamAvailability), (status=400, description="Invalid window or more than 100 teammates"), (status=404, description="Team calendar sharing is disabled")), tag="calendar_events")]
+#[utoipa::path(post, path="/calendar-events/team/availability", request_body=TeamAvailabilityRequest, responses((status=200, body=TeamAvailability), (status=400, body=TeamCalendarApiError, description="Invalid window or more than 100 teammates (code invalid_request)"), (status=404, body=TeamCalendarApiError, description="Team calendar sharing is disabled (code team_sharing_disabled)")), tag="calendar_events")]
 #[tracing::instrument(skip_all, fields(selected = body.user_ids.as_ref().map(Vec::len)), err(Debug))]
 pub async fn get_team_availability<S: CalendarTeamService, A: MacroAuthorizationService>(
     State(state): State<CalendarTeamRouterState<S, A>>,
@@ -233,7 +283,7 @@ fn team_range(
     } else {
         end.date_naive()
             .succ_opt()
-            .ok_or(TeamCalendarApiError(StatusCode::BAD_REQUEST))?
+            .ok_or(TeamCalendarApiError::invalid())?
     };
     Ok(OccurrenceRange {
         starts_at: start,

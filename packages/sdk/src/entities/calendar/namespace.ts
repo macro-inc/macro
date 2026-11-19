@@ -318,6 +318,11 @@ export class CalendarNamespace {
    * or pass `[]` for only the user. Busy blocks carry no event titles, and
    * working hours are not applied.
    *
+   * Throws a `MacroApiError` 404 whose `data.code` is `team_sharing_disabled`
+   * when team availability is turned off for the workspace: tell the user it
+   * is off rather than retrying, and use `occurrences()` for the user's own
+   * calendar.
+   *
    * @readonly
    */
   async teamAvailability(opts: {
