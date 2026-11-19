@@ -24,16 +24,15 @@ export function usePageViewTracking(pageTitle: string) {
     analytics.pageView(pageTitle);
     analytics.track('open_view', { viewId: pageTitle });
   };
-  onMount(track);
+  // A view still loading when it was parked opens when it is shown.
+  onMount(() => {
+    if (!hidden()) track();
+  });
   // A parked view shown again is opened again, as when it remounted.
   createEffect(
-    on(
-      hidden,
-      (isHidden, wasHidden) => {
-        if (wasHidden && !isHidden) track();
-      },
-      { defer: true }
-    )
+    on(hidden, (isHidden, wasHidden) => {
+      if (wasHidden === true && !isHidden) track();
+    })
   );
 }
 

@@ -148,6 +148,23 @@ it('retains desktop Home previews', () => {
   expect(screen.queryByText('Standalone Home detail')).toBeNull();
 });
 
+it('counts a view that mounts while parked once, when it is shown', () => {
+  const [hidden, setHidden] = createSignal(true);
+  function TrackedView() {
+    usePageViewTracking('mail');
+    return null;
+  }
+  render(() => (
+    <PaneHiddenContext.Provider value={hidden}>
+      <TrackedView />
+    </PaneHiddenContext.Provider>
+  ));
+  expect(pageViews).toEqual([]);
+
+  setHidden(false);
+  expect(pageViews).toEqual(['mail']);
+});
+
 it('counts a parked view shown again as another page view, and none while hidden', () => {
   const [hidden, setHidden] = createSignal(false);
   function TrackedView() {
