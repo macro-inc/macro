@@ -1,6 +1,4 @@
-use std::collections::HashMap;
-
-use model::user::{ProfilePictures, UserProfilePicture};
+use model::user::{AvatarFace, ProfilePictures, UserProfilePicture};
 
 #[tracing::instrument(skip(db))]
 pub async fn update_profile_picture(
@@ -18,7 +16,8 @@ pub async fn update_profile_picture(
         ON CONFLICT (macro_user_id)
         DO UPDATE SET 
             profile_picture = EXCLUDED.profile_picture,
-            profile_picture_hash = EXCLUDED.profile_picture_hash
+            profile_picture_hash = EXCLUDED.profile_picture_hash,
+            avatar_face = NULL
     "#,
         macro_user_id,
         picture,
@@ -40,55 +39,32 @@ pub async fn get_profile_pictures(
         return Ok(ProfilePictures::default());
     }
 
-    let macro_user_id_list: Vec<(String, uuid::Uuid)> = sqlx::query!(
+    let rows = sqlx::query!(
         r#"
-        SELECT 
-            u.id as user_profile_id, 
-            mu.id as macro_user_id
-        FROM macro_user mu
-        JOIN "User" u ON mu.id = u.macro_user_id
+        SELECT u.id, info.profile_picture, info.profile_picture_hash, info.avatar_face
+        FROM "User" u
+        JOIN macro_user_info info ON info.macro_user_id = u.macro_user_id
         WHERE u.id = ANY($1)
+          AND (info.profile_picture IS NOT NULL OR info.avatar_face IS NOT NULL)
         "#,
-        user_profile_ids_list
+        user_profile_ids_list,
     )
-    .map(|row| (row.user_profile_id, row.macro_user_id))
     .fetch_all(db)
     .await?;
 
-    let macro_user_id_list: HashMap<uuid::Uuid, String> = macro_user_id_list
+    let pictures = rows
         .into_iter()
-        .map(|(id, macro_user_id)| (macro_user_id, id))
-        .collect();
-
-    let macro_user_ids: Vec<uuid::Uuid> = macro_user_id_list.keys().copied().collect();
-
-    let pictures: Vec<(uuid::Uuid, String, Option<String>)> = sqlx::query!(
-        r#"
-        SELECT macro_user_id, profile_picture as "profile_picture!", profile_picture_hash FROM macro_user_info
-        WHERE macro_user_id = ANY($1) and profile_picture IS NOT NULL
-        "#,
-        &macro_user_ids
-    )
-    .map(|row| (row.macro_user_id, row.profile_picture, row.profile_picture_hash))
-    .fetch_all(db)
-    .await?;
-
-    let result: Vec<UserProfilePicture> = pictures
-        .into_iter()
-        .filter_map(|(macro_user_id, url, checksum)| {
-            macro_user_id_list
-            .get(&macro_user_id)
-            .map(|user_id| UserProfilePicture {
-                id: user_id.to_string(),
-                url,
-                checksum,
-            })
-            .or_else(|| {
-                tracing::warn!(macro_user_id=?macro_user_id, "user_id not found for macro_user_id");
-                None
-            })
+        .map(|row| UserProfilePicture {
+            id: row.id,
+            url: row.profile_picture,
+            checksum: row.profile_picture_hash,
+            // A malformed legacy recipe must not fail the batch for everyone else.
+            avatar_face: row
+                .avatar_face
+                .and_then(|json| serde_json::from_value::<AvatarFace>(json).ok())
+                .filter(AvatarFace::is_valid),
         })
         .collect();
 
-    Ok(ProfilePictures { pictures: result })
+    Ok(ProfilePictures { pictures })
 }
