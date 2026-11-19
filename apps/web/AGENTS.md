@@ -761,6 +761,12 @@ controls. CI runs it when
 cut `Gantt.BarTitle` (or the label itself overflowing) counts as a cramped bar,
 so wrap a bar's title in it.
 
+Routine webhook triggers have a backend-free desktop/phone regression over the
+real trigger list, menu and webhook URL panel: adding **Webhook received** from
+its own group, making its URL (shown once with a JSON `curl` example, wrapping
+inside the panel on phones) and the JSON body tests:
+`bunx playwright test --config src/features/routines/browser-test/playwright.config.ts`.
+
 Column renames have a backend-free desktop/phone regression using the real
 schema query and mutation adapter with delayed service responses:
 `bunx playwright test --config src/features/block-database/browser-test/playwright.config.ts rename.browser.e2e.ts`.
@@ -1421,6 +1427,7 @@ resolved session ID; keep the existing `AgentSessionProvider` subscription to
   property `interface_language` when the account language loads.
 - When adding or changing a feature flag, follow the `feature-flags` skill.
 - Gate routine template actions, pages, dialogs, and message cards on `enable-routine-sharing`; keep ordinary routines usable while it is off.
+- Offer the routine **Webhooks** trigger group only under `enable-routine-webhooks`; saved webhook triggers still show and can be removed while it is off.
 - When adding or changing a view's feature tour, follow the `add-tour` skill.
 - Keep Tasks date ranges on view-owned date-bucket boundaries in `features/tasks-view/core/task-due-date.ts`; send `sort_method=property` with the selected definition and direction, use keyed `date_ranges` grouping, and restart pages when midnight/timezone/resume changes the query key; preserve text-search ordering.
 - Render Tasks due dates in an editable list-property column with a calendar icon for set dates and a slashed calendar for no due date; show only the icon on phones and narrow panes, preserve urgency colors for set dates, keep the current date visible in its dropdown, and limit warning urgency to today and tomorrow.

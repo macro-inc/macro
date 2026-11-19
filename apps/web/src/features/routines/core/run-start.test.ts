@@ -32,6 +32,9 @@ describe('what started a run', () => {
     expect(describeRunStart({ kind: 'manual', by: 'macro|me' }, person)).toBe(
       'Run by you'
     );
+    expect(
+      describeRunStart({ kind: 'webhook', body: 'Deploy failed' }, person)
+    ).toBe('Webhook received');
   });
 
   it('says since when, and when it counts as happening only when it started late', () => {

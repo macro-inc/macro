@@ -29,6 +29,12 @@ function valuePlaceholder(op: PayloadTestOp) {
  * queued, so a busy source costs nothing until a delivery passes them all.
  */
 export function RoutinePayloadTests(props: {
+  /** What the tests read, as "Only when the …" says it; the payload by default. */
+  subject?: string;
+  /** An example field for the first input; a GitHub one by default. */
+  pathPlaceholder?: string;
+  /** A field reaching into a list, for the help line; a GitHub one by default. */
+  listExample?: string;
   tests: PayloadTestDraft[];
   onChange: (tests: PayloadTestDraft[] | undefined) => void;
 }) {
@@ -42,14 +48,16 @@ export function RoutinePayloadTests(props: {
   };
   return (
     <div class="mt-3 grid gap-2">
-      <p class="text-xs font-medium">Only when the payload</p>
+      <p class="text-xs font-medium">
+        Only when the {props.subject ?? 'payload'}
+      </p>
       <For each={props.tests}>
         {(test, index) => (
           <div class="grid grid-cols-[1fr_auto] gap-1">
             <div class="grid min-w-0 grid-cols-[1fr_auto] gap-1">
               <input
                 aria-label="Payload field"
-                placeholder="workflow_run.conclusion"
+                placeholder={props.pathPlaceholder ?? 'workflow_run.conclusion'}
                 value={test.path}
                 onInput={(e) =>
                   update(index(), { path: e.currentTarget.value.trim() })
@@ -112,7 +120,8 @@ export function RoutinePayloadTests(props: {
       </Show>
       <p class="text-xs text-ink-extra-muted">
         Fields are keys joined by dots; <code>*</code> checks every item of a
-        list, like <code>pull_request.labels.*.name</code>.
+        list, like{' '}
+        <code>{props.listExample ?? 'pull_request.labels.*.name'}</code>.
       </p>
     </div>
   );

@@ -348,7 +348,38 @@ each run.
   off. `sweep` does the same for every
   enabled routine when the harness starts after a release.
 - `src/domain/event_trigger/github_selector.rs`, `payload_match.rs`: the
-  `github` selector and the exact payload `match` GitHub filters take.
+  `github` selector and the exact payload `match` GitHub and webhook filters
+  take.
+- `src/domain/webhook.rs` + `src/inbound/webhook_router.rs` +
+  `src/outbound/pg_webhook_store.rs`: routine webhooks. A routine watches its
+  webhook with a `webhook` event filter (alone in its filter, no ids, an
+  optional `match` on the body as JSON and the usual AI `condition`); it
+  needs no event rollout when it watches nothing else
+  (`EventFilters::needs_rollout`). Its owner mints the URL, signed in as
+  themselves (`managing_caller`: never an API token, an agent's code, a
+  routine's run or a bot), through `GET`/`POST`/`DELETE
+  /scheduled-actions/{id}/webhook`; the secret (`mrw_` + 256 random bits) is
+  shown once and only its SHA-256 is kept in `scheduled_action_webhook`.
+  Rotating replaces it; saving the routine without the filter, removing or
+  deleting revokes it. `POST /scheduled-action/hooks/{hook}/{secret}` (or
+  `/hooks/{hook}` with `Authorization: Bearer`) is public and outside CORS:
+  every refusal of the URL is the same 404 after the same constant-time
+  comparison; the body is UTF-8 text up to 64 KiB (413/400 otherwise);
+  calls are counted per address (before the secret is checked) and per hook
+  in Redis (`webhook_limits.rs`, 429, 503 when Redis is down); 20 waiting
+  deliveries per routine at most; a repeated `Idempotency-Key` within a day
+  answers with the first run; a paused routine is 409. Admission rechecks the
+  hook, secret and filter under the routine's lock (`FOR UPDATE OF a, w`),
+  tests `match` there (a body that fails is 200 with no run), and queues a
+  `webhook` event run carrying the body, content type and hook id; the 202
+  names the run, whose claim token is the event id. A queued delivery whose
+  hook id is no longer the routine's (rotated or removed) is superseded.
+  Code reads `trigger.item.webhook.json` (or `.body` when not JSON); the run
+  page keeps the body as sent; the queue row drops it when the run ends. The
+  claim checks the hook again (`FOR SHARE`), so a rotation or removal that
+  returned never lets an earlier delivery start. The
+  secret is never logged or traced (`the_secret_is_never_traced`); the
+  request spans record route placeholders, not paths.
 - `src/domain/event_trigger/property_selector.rs`: the `property` selector task
   property change filters take, matched on the values a change adds.
 - `src/domain/event_trigger/describe.rs`: a trigger in words for a routine
@@ -381,7 +412,9 @@ each run.
   (`domain/event_rollout.rs`): saving one needs it, and dispatch cancels runs
   (`NotEnabled`) for owners without it. Pausing an event routine never needs
   it. Without PostHog configured, no one has it and the host starts no event
-  intake.
+  intake. Webhook deliveries need no flag, at save (when the filters
+  watch nothing else) or at dispatch, so the host runs the event-run worker
+  even without intake.
 - Not here: the target being run (an agent turn, a routine's tool logic) →
   `crates/agent_session`, `ai_tools`; Jev condition evaluation → `crates/jev`.
 

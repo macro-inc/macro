@@ -30,4 +30,5 @@ export const EventName = {
   callstarted: 'call.started',
   callended: 'call.ended',
   github: 'github',
+  webhook: 'webhook',
 } as const;

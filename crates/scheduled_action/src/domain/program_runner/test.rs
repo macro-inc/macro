@@ -846,6 +846,61 @@ async fn a_run_without_code_steps_records_no_code_identity() {
 }
 
 #[tokio::test]
+async fn code_reads_a_webhook_json_body_as_its_event_item() {
+    use crate::domain::event_trigger::EventId;
+    use crate::domain::webhook::{HookId, WebhookDelivery};
+
+    let code = Arc::new(Code::default());
+    let item = json!({
+        "event": "webhook",
+        "webhook": {"content_type": "application/json", "json": {"order": {"id": 42}}},
+    });
+    let fixture = Fixture::with_content(Agents::default(), Ok(item));
+    let runner = fixture
+        .runner
+        .with_code(Arc::clone(&code), Arc::new(NoCodeUpgrades));
+    let mut action = action(json!({ "steps": [code_step("order", "Read the order")] }));
+    action.trigger =
+        serde_json::from_value(json!({"type": "events", "filters": [{"events": ["webhook"]}]}))
+            .unwrap();
+    let body = r#"{"order": {"id": 42}}"#;
+    let run = AuthorizedEventRun {
+        access: EventAccessCapability::Webhook {
+            owner: MacroUserIdStr::parse_from_str(OWNER).unwrap(),
+        },
+        pending: PendingEventRun {
+            action_id: action.id.unwrap(),
+            revision: action.configuration_revision,
+            event: EventReference::webhook(
+                EventId::try_from(generate_uuid_v7()).unwrap(),
+                WebhookDelivery::new(HookId::generate(), body, Some("application/json"), None),
+            ),
+            admitted_at: Utc::now(),
+        },
+    };
+    let mut handle = ExecutionHandle::default();
+    runner
+        .run(&action, &mut handle, RoutineRun::Event(&run))
+        .await
+        .unwrap();
+
+    let runs = code.runs.lock().unwrap().clone();
+    let trigger = &runs[0].context["trigger"];
+    assert_eq!(trigger["kind"], "event");
+    assert_eq!(trigger["event"], "webhook");
+    assert_eq!(trigger["item"]["webhook"]["json"]["order"]["id"], 42);
+    assert_eq!(trigger["item"]["entity_id"], Value::Null);
+    // The run page keeps what was sent, as sent.
+    assert_eq!(
+        handle.run.as_ref().map(|run| &run.started_by),
+        Some(&crate::domain::models::RunStart::Webhook {
+            body: Some(body.into()),
+            content_type: Some("application/json".into()),
+        })
+    );
+}
+
+#[tokio::test]
 async fn a_code_step_whose_item_was_deleted_fails_plainly_without_running() {
     use crate::domain::knob_entities::test::{Items, posting_step};
     let code = Arc::new(Code::default());

@@ -1412,7 +1412,7 @@ focus on the moved card), **Duplicate** and **Delete step**.
 
 **Add trigger** opens a menu with **Search triggers** and one row per kind:
 **Schedule** (**On a schedule**, **Once**), **Email**, **Tasks**, **Channels**,
-**Documents**, **Calls** and **GitHub**. Each row opens a submenu of its events, each with a
+**Documents**, **Calls**, **GitHub** and **Webhooks**. Each row opens a submenu of its events, each with a
 one-line description of what makes it fire. Typing flattens the list: a typed
 schedule such as **every weekday at 9am** becomes the top row with its time
 zone, and matching events show their group at the right. Arrow keys, Enter and
@@ -1491,6 +1491,26 @@ a controlled repository's delivery and matching routine history. Wildcard
 routines can run more often, and manually redelivering a webhook from GitHub
 can run a routine again.
 
+**Webhooks** (**Webhook received**) is offered while `enable-routine-webhooks`
+is on (on by default in development), whatever `enable-event-routines` says:
+the server serves webhook routines without either flag. A saved webhook trigger
+reads **Webhook received at its URL**, where **its URL** reopens its panel;
+the panel shows **Webhook URL** and **Only when the JSON
+body…** rows (the GitHub payload rows, over the POSTed JSON). Until the
+routine is saved with the trigger (in the **Add trigger** panel too) it says
+**Add this trigger and save the routine to get its URL.**; then **Create
+URL** in the saved trigger's panel mints one (routine owner with edit access, in a person's own session;
+the server answers 409 until a webhook trigger is saved). The URL, a curl
+example with a JSON body, and under **Keep the secret out of the URL** the
+bearer address and secret, each with **Copy**, show only until the panel
+closes. Afterwards it reads **Made <date>, last used <date>** with **New URL**
+(the old one stops working at once) and **Delete URL**. A POST
+(`/scheduled-action/hooks/<hook>/<secret>`, or `/scheduled-action/hooks/<hook>` with
+`Authorization: Bearer <secret>`) answers 202 `{"runId"}`, 200 `{"runId":
+null}` when the body fails the trigger's tests, 409 while the routine is
+paused, and 404 for any wrong, rotated or removed URL. Bodies are UTF-8 text
+up to 64 KiB; a code step reads JSON as `trigger.item.webhook.json`.
+
 Every activity trigger can take one
 **Only if** check, a yes/no question about each event, such as **Is this email
 an invoice or a receipt?** (**+ Filter** on the page, **Only run if AI says
@@ -1552,7 +1572,9 @@ row with **Show**. The newest run with steps is open on the right: its title,
 time, outcome, how long it took and, for runs with code steps, **Code acted as
 you** or **Code acted as the agent**, then a timeline with each AI decision and
 its probability bar, each action with a check or a cross and its reason, and
-**Open conversation** when the run had an agent session. Below 720px the list
+**Open conversation** when the run had an agent session. A run a webhook started
+shows **Webhook body** (its content type, then the body as sent, as plain
+text) above the steps. Below 720px the list
 shows alone and a run opens full width with a **Runs** back button. A run that
 only ran its agent opens its session when clicked or on Enter; Shift opens it
 in another split. **Back to routines** returns to the list in the same pane.

@@ -140,7 +140,14 @@ impl<
                 .cancel(&pending, CancellationReason::NotUserOwned)
                 .await;
         };
-        match self.rollout.enabled_for(owner).await {
+        // The rollout gates Macro and GitHub events; a webhook needs only its URL.
+        let webhook = pending.event.webhook_delivery().is_some();
+        let enabled = if webhook {
+            Ok(true)
+        } else {
+            self.rollout.enabled_for(owner).await
+        };
+        match enabled {
             Ok(true) => {}
             Ok(false) => return self.cancel(&pending, CancellationReason::NotEnabled).await,
             // An unreadable flag leaves the run pending, like authorization
@@ -204,15 +211,16 @@ impl<
         if cancellation.as_mut().now_or_never().is_some() {
             return Ok(DispatchResult::NotStarted);
         }
+        // A webhook's 202 named its run before it started: the delivery's id.
+        let token = if webhook {
+            ClaimToken::try_from(pending.event.event_id().as_uuid())?
+        } else {
+            ClaimToken::generate()
+        };
         let started_at = Utc::now();
         let Some(run) = self
             .repository
-            .claim(
-                authorized,
-                ClaimToken::generate(),
-                started_at,
-                started_at + MAX_ACTION_TIME,
-            )
+            .claim(authorized, token, started_at, started_at + MAX_ACTION_TIME)
             .await?
         else {
             return Ok(DispatchResult::NotStarted);

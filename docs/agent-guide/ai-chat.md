@@ -973,8 +973,10 @@ while the button shows **Drafting…**, at most two minutes): the request carrie
 only the description and settings (time zone, model, decisions, code steps).
 First a fast call, billed as the person's automation usage, names the
 channels, people, folders, labels, tags, agents and other items the
-description refers to; document storage looks those names up as the person
-(`POST /search/names`) and settles each on the one item with that name, or
+description refers to; the harness looks those names up as the person with
+document storage's name search (`/internal/search` and
+`/internal/search/channel/name`, exact match) and settles each on the one
+item with that name, or
 leaves out a name that matches nothing or several items, so the review shows
 the normal picker for it. The routine is then written in a hidden agent
 session of the in-process Macro agent, as the person, on the model their Ask
@@ -2637,7 +2639,10 @@ and never messages the routine's owner: an Ask AI step tells them, as in the
 routine drafter. Hosts without code get the skill in the form they can follow:
 each kind's lookup tool (`NameSearch`, `ListLabels`, `ListTeamMembers` and the
 like), then `CreateRoutine`, `ReadRoutine` and `UpdateRoutine`.
-GitHub triggers are set on the routine's page, not through these tools.
+GitHub triggers are set on the routine's page, not through these tools. So are
+webhook triggers, which an agent's program can also save through
+`macro.routines`; only the owner makes the webhook's URL, on the routine's
+page, and no agent sees or mints it.
 **Compose with agent** (right of **Enabled** and **Owned by** under a routine's
 title) opens a
 new conversation in a split with the skill and the routine already mentioned,

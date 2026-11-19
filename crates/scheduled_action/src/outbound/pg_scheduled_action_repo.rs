@@ -380,6 +380,9 @@ impl<B: BotFacts + 'static> ScheduledActionRepo for PgScheduledActionRepo<B> {
         };
         let trigger = TriggerColumns::try_from(&action.trigger)?;
         let kind = kind_to_str(&action.kind);
+        // A save without a webhook trigger revokes its URL in the same
+        // transaction, so saving it back later never revives the old one.
+        let mut tx = self.pool.begin().await?;
         let row = sqlx::query_as!(
             ActionRow,
             r#"
@@ -441,10 +444,20 @@ impl<B: BotFacts + 'static> ScheduledActionRepo for PgScheduledActionRepo<B> {
                 .as_ref()
                 .is_some_and(|link| link.paused_by_parent),
         )
-        .fetch_optional(&self.pool)
+        .fetch_optional(&mut *tx)
         .await?
         .ok_or(ActionPolicyError::UpdateConflict)?;
-        ScheduledAction::try_from(row)
+        let updated = ScheduledAction::try_from(row)?;
+        if !updated.trigger.has_webhook() {
+            sqlx::query!(
+                "DELETE FROM scheduled_action_webhook WHERE action_id = $1",
+                id,
+            )
+            .execute(&mut *tx)
+            .await?;
+        }
+        tx.commit().await?;
+        Ok(updated)
     }
 
     async fn set_appearance(

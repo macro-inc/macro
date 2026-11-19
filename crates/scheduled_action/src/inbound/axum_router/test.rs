@@ -113,7 +113,7 @@ pub(crate) struct FakeAuth;
 impl MacroAuthorizationService for FakeAuth {
     async fn authorize(&self, jwt: &str) -> Result<UserContext, Report<MacroAuthorizationError>> {
         match jwt {
-            "owner" | "agent" | "routine" => Ok(UserContext {
+            "owner" | "agent" | "routine" | "routine-session" => Ok(UserContext {
                 user_id: USER.into(),
                 ..Default::default()
             }),
@@ -149,6 +149,10 @@ impl MacroAuthorizationService for FakeAuth {
             }
             "routine" => {
                 credential.origin = macro_authorization::CredentialOrigin::MacroApiJwt;
+                credential.identity.routine_id = Some(macro_uuid::Uuid::from_u128(9));
+            }
+            // Signed for a routine's run yet arriving as a session.
+            "routine-session" => {
                 credential.identity.routine_id = Some(macro_uuid::Uuid::from_u128(9));
             }
             _ => {}

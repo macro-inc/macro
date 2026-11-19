@@ -1,20 +1,26 @@
 import { useFeatureFlag } from '@app/lib/analytics/posthog';
-import { enableEventRoutines } from '@core/constant/featureFlags';
+import {
+  enableEventRoutines,
+  enableRoutineWebhooks,
+} from '@core/constant/featureFlags';
 import { Show, Suspense } from 'solid-js';
 import { RoutineEventCondition } from './components/routine-event-condition';
 import { RoutineGithubConnect } from './components/routine-github-connect';
 import { RoutineGithubSettings } from './components/routine-github-settings';
 import { RoutinePayloadTests } from './components/routine-payload-tests';
 import { RoutineTriggers as TriggerList } from './components/routine-triggers';
+import { RoutineWebhookUrl } from './components/routine-webhook-url';
 import {
   type EventTriggerDraft,
   eventScopeKind,
+  hasWebhookTrigger,
   type RoutineTriggerDraft,
   taskTriggerProperty,
   withPropertyValues,
 } from './core/routine-triggers';
 import { createGithubConnection } from './queries/github-link';
 import { createGithubRepositoryOptions } from './queries/github-repositories';
+import { createRoutineWebhook } from './queries/webhook';
 import {
   RoutineEventPropertyValues,
   RoutineEventValueLabel,
@@ -24,10 +30,10 @@ import {
   RoutineEventScopeLabel,
 } from './routine-event-scope';
 
-/** The Macro entity kind a trigger narrows to; GitHub has none. */
+/** The Macro entity kind a trigger narrows to; GitHub and webhooks have none. */
 function entityKind(trigger: EventTriggerDraft) {
   const kind = eventScopeKind(trigger);
-  return kind === 'GITHUB' ? undefined : kind;
+  return kind === 'GITHUB' || kind === 'WEBHOOK' ? undefined : kind;
 }
 
 function RepositoryScopeLabel(props: { trigger: EventTriggerDraft }) {
@@ -44,8 +50,11 @@ export function RoutineTriggers(props: {
   triggers: RoutineTriggerDraft[];
   onChange: (triggers: RoutineTriggerDraft[]) => void;
   layout?: 'rows' | 'add' | 'inline';
+  /** The saved routine's id; its webhook URL is made once a webhook trigger is saved. */
+  routineId?: string;
 }) {
   const eventRoutines = useFeatureFlag(enableEventRoutines);
+  const webhooks = useFeatureFlag(enableRoutineWebhooks);
   const github = createGithubConnection();
   const repositories = createGithubRepositoryOptions(
     () =>
@@ -55,6 +64,7 @@ export function RoutineTriggers(props: {
           trigger.kind === 'event' && trigger.events.includes('github')
       )
   );
+  const webhook = createRoutineWebhook(() => props.routineId);
   const connect = (message: string) => (
     <RoutineGithubConnect
       message={message}
@@ -81,6 +91,7 @@ export function RoutineTriggers(props: {
         onChange={props.onChange}
         layout={props.layout === 'add' ? 'add' : 'rows'}
         offerEvents={eventRoutines().enabled}
+        offerWebhooks={webhooks().enabled}
         renderEventGroup={(group, options) => (
           <Show
             when={group !== 'GitHub' || github().linked !== false}
@@ -132,6 +143,22 @@ export function RoutineTriggers(props: {
                   />
                 </Show>
               )}
+            </Show>
+            <Show when={eventScopeKind(trigger()) === 'WEBHOOK'}>
+              <RoutineWebhookUrl
+                state={
+                  props.routineId && hasWebhookTrigger(props.triggers)
+                    ? webhook()
+                    : undefined
+                }
+              />
+              <RoutinePayloadTests
+                subject="JSON body"
+                pathPlaceholder="status"
+                listExample="alerts.*.severity"
+                tests={trigger().match ?? []}
+                onChange={(match) => onChange({ match })}
+              />
             </Show>
           </>
         )}

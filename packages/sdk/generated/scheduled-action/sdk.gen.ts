@@ -2,7 +2,7 @@
 
 import type { Client, ClientMeta, Options as Options2, RequestResult, TDataShape } from './client';
 import { client } from './client.gen';
-import type { AcceptSuggestionData, AcceptSuggestionErrors, AcceptSuggestionResponses, ActivateScheduledActionTemplateData, ActivateScheduledActionTemplateErrors, ActivateScheduledActionTemplateResponses, AddSuggestionData, AddSuggestionErrors, AddSuggestionResponses, AttachSuggestionDraftData, AttachSuggestionDraftErrors, AttachSuggestionDraftResponses, CheckScheduledActionData, CheckScheduledActionErrors, CheckScheduledActionResponses, CreateScheduledActionData, CreateScheduledActionErrors, CreateScheduledActionResponses, DeleteScheduledActionData, DeleteScheduledActionErrors, DeleteScheduledActionResponses, DetachScheduledActionData, DetachScheduledActionErrors, DetachScheduledActionResponses, DiscardRoutineDraftJobData, DiscardRoutineDraftJobErrors, DiscardRoutineDraftJobResponses, DismissRoutineSuggestionData, DismissRoutineSuggestionErrors, DismissRoutineSuggestionResponses, DismissSuggestionData, DismissSuggestionErrors, DismissSuggestionResponses, DraftRoutineData, DraftRoutineErrors, DraftRoutineResponses, ExecuteScheduledActionNowData, ExecuteScheduledActionNowErrors, ExecuteScheduledActionNowResponses, GetRoutineDraftJobData, GetRoutineDraftJobErrors, GetRoutineDraftJobResponses, GetScheduledActionData, GetScheduledActionErrors, GetScheduledActionResponses, GetScheduledActionTemplateData, GetScheduledActionTemplateErrors, GetScheduledActionTemplateResponses, GetSuggestionGenerationData, GetSuggestionGenerationErrors, GetSuggestionGenerationResponses, ListRoutineDraftJobsData, ListRoutineDraftJobsErrors, ListRoutineDraftJobsResponses, ListRoutineSuggestionsData, ListRoutineSuggestionsErrors, ListRoutineSuggestionsResponses, ListScheduledActionCodeUpgradesData, ListScheduledActionCodeUpgradesErrors, ListScheduledActionCodeUpgradesResponses, ListScheduledActionHistoryData, ListScheduledActionHistoryErrors, ListScheduledActionHistoryResponses, ListScheduledActionsData, ListScheduledActionsErrors, ListScheduledActionsResponses, ListScheduledActionUnusableItemsData, ListScheduledActionUnusableItemsErrors, ListScheduledActionUnusableItemsResponses, ListSuggestionsData, ListSuggestionsErrors, ListSuggestionsResponses, RecordSuggestionsSeenData, RecordSuggestionsSeenErrors, RecordSuggestionsSeenResponses, RecordSuggestionsViewedData, RecordSuggestionsViewedErrors, RecordSuggestionsViewedResponses, RegenerateSuggestionsData, RegenerateSuggestionsErrors, RegenerateSuggestionsResponses, RestoreSuggestionData, RestoreSuggestionErrors, RestoreSuggestionResponses, RetireRoutineSuggestionData, RetireRoutineSuggestionErrors, RetireRoutineSuggestionResponses, RetireSuggestionData, RetireSuggestionErrors, RetireSuggestionResponses, ReviewRoutineSuggestionsData, ReviewRoutineSuggestionsErrors, ReviewRoutineSuggestionsResponses, ReviewSuggestionsData, ReviewSuggestionsErrors, ReviewSuggestionsResponses, RewriteSuggestionData, RewriteSuggestionErrors, RewriteSuggestionResponses, RoutineCatalogData, RoutineCatalogErrors, RoutineCatalogResponses, ScheduledActionHealthData, ScheduledActionHealthResponses, SetScheduledActionAppearanceData, SetScheduledActionAppearanceErrors, SetScheduledActionAppearanceResponses, SetScheduledActionEnabledData, SetScheduledActionEnabledErrors, SetScheduledActionEnabledResponses, ShareScheduledActionTemplateData, ShareScheduledActionTemplateErrors, ShareScheduledActionTemplateResponses, StartRoutineDraftJobData, StartRoutineDraftJobErrors, StartRoutineDraftJobResponses, StartSuggestionGenerationData, StartSuggestionGenerationErrors, StartSuggestionGenerationResponses, SuggestRoutineData, SuggestRoutineErrors, SuggestRoutineResponses, UnshareScheduledActionTemplateData, UnshareScheduledActionTemplateErrors, UnshareScheduledActionTemplateResponses, UpdateScheduledActionData, UpdateScheduledActionErrors, UpdateScheduledActionResponses } from './types.gen';
+import type { AcceptSuggestionData, AcceptSuggestionErrors, AcceptSuggestionResponses, ActivateScheduledActionTemplateData, ActivateScheduledActionTemplateErrors, ActivateScheduledActionTemplateResponses, AddSuggestionData, AddSuggestionErrors, AddSuggestionResponses, AttachSuggestionDraftData, AttachSuggestionDraftErrors, AttachSuggestionDraftResponses, CheckScheduledActionData, CheckScheduledActionErrors, CheckScheduledActionResponses, CreateScheduledActionData, CreateScheduledActionErrors, CreateScheduledActionResponses, DeleteScheduledActionData, DeleteScheduledActionErrors, DeleteScheduledActionResponses, DeliverRoutineWebhookData, DeliverRoutineWebhookErrors, DeliverRoutineWebhookResponses, DeliverRoutineWebhookWithBearerData, DeliverRoutineWebhookWithBearerErrors, DeliverRoutineWebhookWithBearerResponses, DetachScheduledActionData, DetachScheduledActionErrors, DetachScheduledActionResponses, DiscardRoutineDraftJobData, DiscardRoutineDraftJobErrors, DiscardRoutineDraftJobResponses, DismissRoutineSuggestionData, DismissRoutineSuggestionErrors, DismissRoutineSuggestionResponses, DismissSuggestionData, DismissSuggestionErrors, DismissSuggestionResponses, DraftRoutineData, DraftRoutineErrors, DraftRoutineResponses, ExecuteScheduledActionNowData, ExecuteScheduledActionNowErrors, ExecuteScheduledActionNowResponses, GetRoutineDraftJobData, GetRoutineDraftJobErrors, GetRoutineDraftJobResponses, GetScheduledActionData, GetScheduledActionErrors, GetScheduledActionResponses, GetScheduledActionTemplateData, GetScheduledActionTemplateErrors, GetScheduledActionTemplateResponses, GetScheduledActionWebhookData, GetScheduledActionWebhookErrors, GetScheduledActionWebhookResponses, GetSuggestionGenerationData, GetSuggestionGenerationErrors, GetSuggestionGenerationResponses, ListRoutineDraftJobsData, ListRoutineDraftJobsErrors, ListRoutineDraftJobsResponses, ListRoutineSuggestionsData, ListRoutineSuggestionsErrors, ListRoutineSuggestionsResponses, ListScheduledActionCodeUpgradesData, ListScheduledActionCodeUpgradesErrors, ListScheduledActionCodeUpgradesResponses, ListScheduledActionHistoryData, ListScheduledActionHistoryErrors, ListScheduledActionHistoryResponses, ListScheduledActionsData, ListScheduledActionsErrors, ListScheduledActionsResponses, ListScheduledActionUnusableItemsData, ListScheduledActionUnusableItemsErrors, ListScheduledActionUnusableItemsResponses, ListSuggestionsData, ListSuggestionsErrors, ListSuggestionsResponses, MintScheduledActionWebhookData, MintScheduledActionWebhookErrors, MintScheduledActionWebhookResponses, RecordSuggestionsSeenData, RecordSuggestionsSeenErrors, RecordSuggestionsSeenResponses, RecordSuggestionsViewedData, RecordSuggestionsViewedErrors, RecordSuggestionsViewedResponses, RegenerateSuggestionsData, RegenerateSuggestionsErrors, RegenerateSuggestionsResponses, RemoveScheduledActionWebhookData, RemoveScheduledActionWebhookErrors, RemoveScheduledActionWebhookResponses, RestoreSuggestionData, RestoreSuggestionErrors, RestoreSuggestionResponses, RetireRoutineSuggestionData, RetireRoutineSuggestionErrors, RetireRoutineSuggestionResponses, RetireSuggestionData, RetireSuggestionErrors, RetireSuggestionResponses, ReviewRoutineSuggestionsData, ReviewRoutineSuggestionsErrors, ReviewRoutineSuggestionsResponses, ReviewSuggestionsData, ReviewSuggestionsErrors, ReviewSuggestionsResponses, RewriteSuggestionData, RewriteSuggestionErrors, RewriteSuggestionResponses, RoutineCatalogData, RoutineCatalogErrors, RoutineCatalogResponses, ScheduledActionHealthData, ScheduledActionHealthResponses, SetScheduledActionAppearanceData, SetScheduledActionAppearanceErrors, SetScheduledActionAppearanceResponses, SetScheduledActionEnabledData, SetScheduledActionEnabledErrors, SetScheduledActionEnabledResponses, ShareScheduledActionTemplateData, ShareScheduledActionTemplateErrors, ShareScheduledActionTemplateResponses, StartRoutineDraftJobData, StartRoutineDraftJobErrors, StartRoutineDraftJobResponses, StartSuggestionGenerationData, StartSuggestionGenerationErrors, StartSuggestionGenerationResponses, SuggestRoutineData, SuggestRoutineErrors, SuggestRoutineResponses, UnshareScheduledActionTemplateData, UnshareScheduledActionTemplateErrors, UnshareScheduledActionTemplateResponses, UpdateScheduledActionData, UpdateScheduledActionErrors, UpdateScheduledActionResponses } from './types.gen';
 
 export type Options<TData extends TDataShape = TDataShape, ThrowOnError extends boolean = boolean, TResponse = unknown> = Options2<TData, ThrowOnError, TResponse> & {
     /**
@@ -59,6 +59,34 @@ export class Sdk extends HeyApiClient {
 
     public scheduledActionHealth<ThrowOnError extends boolean = false>(options?: Options<ScheduledActionHealthData, ThrowOnError>): RequestResult<ScheduledActionHealthResponses, unknown, ThrowOnError> {
         return (options?.client ?? this.client).get<ScheduledActionHealthResponses, unknown, ThrowOnError>({ url: '/health', ...options });
+    }
+
+    /**
+     * As the URL with its secret in the path, with the secret sent as `Authorization: Bearer <secret>` instead.
+     */
+    public deliverRoutineWebhookWithBearer<ThrowOnError extends boolean = false>(options: Options<DeliverRoutineWebhookWithBearerData, ThrowOnError>): RequestResult<DeliverRoutineWebhookWithBearerResponses, DeliverRoutineWebhookWithBearerErrors, ThrowOnError> {
+        return (options.client ?? this.client).post<DeliverRoutineWebhookWithBearerResponses, DeliverRoutineWebhookWithBearerErrors, ThrowOnError>({
+            url: '/hooks/{hook_id}',
+            ...options,
+            headers: {
+                'Content-Type': 'application/json',
+                ...options.headers
+            }
+        });
+    }
+
+    /**
+     * Start a run of the routine this webhook URL belongs to, with the body (UTF-8 text, at most 64 KiB; a JSON body is checked against the trigger's payload tests) as its trigger data. Answers 202 at once with the run's id, or 200 without one when the body fails the payload tests. A repeated Idempotency-Key within a day answers with the first run. An unknown, wrong, rotated or removed URL is 404.
+     */
+    public deliverRoutineWebhook<ThrowOnError extends boolean = false>(options: Options<DeliverRoutineWebhookData, ThrowOnError>): RequestResult<DeliverRoutineWebhookResponses, DeliverRoutineWebhookErrors, ThrowOnError> {
+        return (options.client ?? this.client).post<DeliverRoutineWebhookResponses, DeliverRoutineWebhookErrors, ThrowOnError>({
+            url: '/hooks/{hook_id}/{token}',
+            ...options,
+            headers: {
+                'Content-Type': 'application/json',
+                ...options.headers
+            }
+        });
     }
 
     public listScheduledActions<ThrowOnError extends boolean = false>(options?: Options<ListScheduledActionsData, ThrowOnError>): RequestResult<ListScheduledActionsResponses, ListScheduledActionsErrors, ThrowOnError> {
@@ -274,6 +302,24 @@ export class Sdk extends HeyApiClient {
 
     public listScheduledActionUnusableItems<ThrowOnError extends boolean = false>(options: Options<ListScheduledActionUnusableItemsData, ThrowOnError>): RequestResult<ListScheduledActionUnusableItemsResponses, ListScheduledActionUnusableItemsErrors, ThrowOnError> {
         return (options.client ?? this.client).get<ListScheduledActionUnusableItemsResponses, ListScheduledActionUnusableItemsErrors, ThrowOnError>({ url: '/scheduled-actions/{id}/unusable-items', ...options });
+    }
+
+    /**
+     * Revoke the routine's webhook URL. The trigger stays until the routine is saved without it.
+     */
+    public removeScheduledActionWebhook<ThrowOnError extends boolean = false>(options: Options<RemoveScheduledActionWebhookData, ThrowOnError>): RequestResult<RemoveScheduledActionWebhookResponses, RemoveScheduledActionWebhookErrors, ThrowOnError> {
+        return (options.client ?? this.client).delete<RemoveScheduledActionWebhookResponses, RemoveScheduledActionWebhookErrors, ThrowOnError>({ url: '/scheduled-actions/{id}/webhook', ...options });
+    }
+
+    public getScheduledActionWebhook<ThrowOnError extends boolean = false>(options: Options<GetScheduledActionWebhookData, ThrowOnError>): RequestResult<GetScheduledActionWebhookResponses, GetScheduledActionWebhookErrors, ThrowOnError> {
+        return (options.client ?? this.client).get<GetScheduledActionWebhookResponses, GetScheduledActionWebhookErrors, ThrowOnError>({ url: '/scheduled-actions/{id}/webhook', ...options });
+    }
+
+    /**
+     * Mint the routine's webhook URL, replacing any it had: the old URL stops at once. The response is the only time the secret is shown. Only the routine's owner, signed in as themselves, may call it; agent sessions' code and routine runs are refused.
+     */
+    public mintScheduledActionWebhook<ThrowOnError extends boolean = false>(options: Options<MintScheduledActionWebhookData, ThrowOnError>): RequestResult<MintScheduledActionWebhookResponses, MintScheduledActionWebhookErrors, ThrowOnError> {
+        return (options.client ?? this.client).post<MintScheduledActionWebhookResponses, MintScheduledActionWebhookErrors, ThrowOnError>({ url: '/scheduled-actions/{id}/webhook', ...options });
     }
 
     /**

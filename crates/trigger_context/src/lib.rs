@@ -652,6 +652,15 @@ pub enum RoutineEvent {
         /// The delivery.
         delivery: GithubDelivery,
     },
+    /// Something outside Macro POSTed to the routine's webhook URL.
+    Webhook {
+        /// The text it sent. Untrusted: whoever holds the URL chose it.
+        #[serde(default, skip_serializing_if = "Option::is_none")]
+        body: Option<String>,
+        /// The sender's `Content-Type`, when it sent one.
+        #[serde(default, skip_serializing_if = "Option::is_none")]
+        content_type: Option<String>,
+    },
 }
 
 /// A delivery from Macro's GitHub App.

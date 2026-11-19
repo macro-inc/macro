@@ -17,6 +17,7 @@ use super::event_trigger::{
     IncomingEvent,
 };
 use super::models::{ActionExecutionRecord, ScheduledAction};
+use super::webhook::HookId;
 
 pub mod admission;
 pub mod condition;
@@ -188,6 +189,9 @@ pub struct EventActionConfiguration {
     pub revision: ConfigurationRevision,
     pub filters: EventFilters,
     pub activated_at: DateTime<Utc>,
+    /// Its webhook URL's id now. A delivery through another, rotated or
+    /// removed since, doesn't run.
+    pub hook_id: Option<HookId>,
 }
 
 #[derive(Debug, Clone)]
@@ -220,6 +224,11 @@ pub enum EventAccessCapability {
         owner: MacroUserIdStr<'static>,
         installation_id: u64,
     },
+    /// The owner's own webhook delivered: it carries its content, and the
+    /// routine is theirs.
+    Webhook {
+        owner: MacroUserIdStr<'static>,
+    },
 }
 
 impl EventAccessCapability {
@@ -251,6 +260,9 @@ impl EventAccessCapability {
                         event.source(),
                         EventSource::Github(delivery) if delivery.installation_id == *installation_id
                     )
+            }
+            (Self::Webhook { owner: claimant }, EventEntityType::Webhook) => {
+                claimant == owner && matches!(event.source(), EventSource::Webhook(_))
             }
             _ => false,
         }
@@ -298,13 +310,20 @@ impl AuthorizedEventRun {
 }
 
 impl EventActionConfiguration {
-    fn check_pending(&self, pending: &PendingEventRun) -> Result<(), CancellationReason> {
+    pub(crate) fn check_pending(
+        &self,
+        pending: &PendingEventRun,
+    ) -> Result<(), CancellationReason> {
         if !self.enabled {
             return Err(CancellationReason::Disabled);
         }
         if self.action_id != pending.action_id
             || self.revision != pending.revision
             || !self.filters.matches(&pending.event, self.activated_at)
+            || pending
+                .event
+                .webhook_delivery()
+                .is_some_and(|delivery| Some(delivery.hook_id) != self.hook_id)
         {
             return Err(CancellationReason::Superseded);
         }

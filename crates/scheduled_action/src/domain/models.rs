@@ -460,6 +460,14 @@ pub enum RunStart {
         /// Who started it.
         by: String,
     },
+    /// Something POSTed to its webhook URL.
+    Webhook {
+        /// The text it sent. Untrusted: whoever holds the URL chose it.
+        body: Option<String>,
+        /// The sender's `Content-Type`, when it sent one.
+        #[serde(default, skip_serializing_if = "Option::is_none")]
+        content_type: Option<String>,
+    },
 }
 
 /// What the run page says about a run: what started it, when it counts as

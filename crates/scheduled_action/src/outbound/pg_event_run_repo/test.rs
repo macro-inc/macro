@@ -399,6 +399,7 @@ fn invalid_configuration_classifications_do_not_include_persisted_content() {
             configuration_revision: 1,
             event_filters: json!([{"events": ["document.updated"]}]),
             event_activated_at: Utc::now(),
+            hook_id: None,
         }
     }
     let mut owner = row();

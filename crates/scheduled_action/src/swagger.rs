@@ -29,6 +29,14 @@ use crate::inbound::draft_router::__path_draft_routine;
 use crate::inbound::template_router::{
     __path_activate_template, __path_get_template, __path_share_template, __path_unshare_template,
 };
+#[expect(
+    unused_imports,
+    reason = "utoipa path macros require these generated symbols in scope"
+)]
+use crate::inbound::webhook_router::{
+    __path_deliver_in_path, __path_deliver_with_bearer, __path_get_webhook, __path_mint_webhook,
+    __path_remove_webhook,
+};
 
 use crate::domain::event_trigger::{
     ActionTrigger, EventFilter, EventFilters, EventName, GithubSelectorInput,
@@ -80,10 +88,20 @@ use model_entity::{AppearanceColor, AppearanceIcon, EntityAppearance};
         crate::inbound::template_router::get_template,
         crate::inbound::template_router::unshare_template,
         crate::inbound::template_router::activate_template,
+        crate::inbound::webhook_router::get_webhook,
+        crate::inbound::webhook_router::mint_webhook,
+        crate::inbound::webhook_router::remove_webhook,
+        crate::inbound::webhook_router::deliver_in_path,
+        crate::inbound::webhook_router::deliver_with_bearer,
     ),
     components(
         schemas(
             AiAdmissionErrorBody,
+            crate::inbound::webhook_router::WebhookStatusResponse,
+            crate::inbound::webhook_router::MintedWebhookResponse,
+            crate::inbound::webhook_router::WebhookDeliveryResponse,
+            crate::domain::webhook::WebhookInfo,
+            crate::domain::webhook::HookId,
             crate::inbound::axum_router::ExecutionRecordResponse,
             crate::domain::models::SubRoutine,
             crate::domain::models::CreatedRoutine,

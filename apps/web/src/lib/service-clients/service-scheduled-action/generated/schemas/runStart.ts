@@ -6,10 +6,15 @@
  * OpenAPI spec version: 0.1.0
  */
 import type { RunStartOneOf } from './runStartOneOf';
+import type { RunStartOneOfEight } from './runStartOneOfEight';
 import type { RunStartOneOfSix } from './runStartOneOfSix';
 import type { RunStartOneOfThree } from './runStartOneOfThree';
 
 /**
  * What started a run, for its page.
  */
-export type RunStart = RunStartOneOf | RunStartOneOfThree | RunStartOneOfSix;
+export type RunStart =
+  | RunStartOneOf
+  | RunStartOneOfThree
+  | RunStartOneOfSix
+  | RunStartOneOfEight;

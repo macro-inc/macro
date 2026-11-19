@@ -557,6 +557,24 @@ await routine.update({
 });
 ```
 
+A webhook trigger starts a run when another app or script POSTs to the
+routine's secret URL. The owner makes, replaces and deletes the URL on the
+routine's page in the app; the SDK can't, since anyone holding it can start runs.
+`match` tests a JSON body, and a code step reads it as
+`trigger.item.webhook.json` (other text as `trigger.item.webhook.body`):
+
+```ts
+await routine.update({
+  ...options,
+  trigger: {
+    type: 'events',
+    filters: [
+      { events: ['webhook'], match: [{ path: ['status'], equals: 'failed' }] },
+    ],
+  },
+});
+```
+
 ### Agents, conversations and hosts
 
 `macro.agents.list/create/byId` manage agent configuration; listed agents read

@@ -44,6 +44,7 @@ use crate::domain::{
     event_runs::{AuthorizedEventRun, EventAccessCapability, condition::EventContentReader},
     event_trigger::{EventName, EventReference, EventSource},
     ports::RoutineEventReader,
+    webhook::WebhookDelivery,
 };
 
 mod routine_event;
@@ -155,6 +156,8 @@ enum EventContent {
     Call(Option<CallRecord>),
     /// A GitHub delivery, as it was received.
     Github(Box<GithubWebhookReceived>),
+    /// A webhook delivery, as it was received.
+    Webhook(Box<WebhookDelivery>),
 }
 
 struct ChannelMessage {
@@ -192,8 +195,14 @@ where
             // External deliveries carry their own content; there is nothing to read.
             EventAccessCapability::GithubInstallation { .. } => match event.source() {
                 EventSource::Github(delivery) => Ok(EventContent::Github(delivery.clone())),
-                EventSource::Entity { .. } => Err(rootcause::report!(
+                EventSource::Entity { .. } | EventSource::Webhook(_) => Err(rootcause::report!(
                     "an external capability was minted for a Macro event"
+                )),
+            },
+            EventAccessCapability::Webhook { .. } => match event.webhook_delivery() {
+                Some(delivery) => Ok(EventContent::Webhook(Box::new(delivery.clone()))),
+                None => Err(rootcause::report!(
+                    "a webhook capability was minted for another event"
                 )),
             },
         }
@@ -375,7 +384,20 @@ fn content_json(event: &EventReference, content: &EventContent) -> Value {
             ),
         }),
         EventContent::Github(delivery) => json!({ "github": github_json(delivery) }),
+        EventContent::Webhook(delivery) => json!({ "webhook": webhook_json(delivery) }),
     }
+}
+
+/// A webhook body as code and conditions read it: `json` holds the parsed
+/// body (null when it isn't JSON), and `body` the text only when it isn't,
+/// so a JSON body is carried once.
+fn webhook_json(delivery: &WebhookDelivery) -> Value {
+    let parsed = delivery.json();
+    let mut value = json!({ "content_type": delivery.content_type, "json": parsed });
+    if parsed.is_none() {
+        value["body"] = json!(delivery.body);
+    }
+    value
 }
 
 /// The Macro entity a Macro event names.

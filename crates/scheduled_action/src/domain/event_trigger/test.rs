@@ -1047,3 +1047,75 @@ fn a_condition_applies_only_to_the_filter_whose_property_value_matched() {
         ConditionRequirement::AnyOf(_)
     ));
 }
+
+#[test]
+fn a_webhook_stands_alone_and_takes_a_payload_match_but_no_selector() {
+    let parse = |filter: serde_json::Value| serde_json::from_value::<EventFilter>(filter);
+
+    assert!(parse(json!({ "events": ["webhook"] })).is_ok());
+    assert!(
+        parse(json!({
+            "events": ["webhook"],
+            "match": [{ "path": ["status"], "equals": "failed" }],
+            "condition": "Is this alert about production?",
+        }))
+        .is_ok()
+    );
+    assert!(parse(json!({ "events": ["webhook", "document.created"] })).is_err());
+    assert!(parse(json!({ "events": ["webhook", "github"], "github": {} })).is_err());
+    assert!(parse(json!({ "events": ["webhook"], "ids": [] })).is_err());
+    assert!(parse(json!({ "events": ["webhook"], "github": {} })).is_err());
+}
+
+#[test]
+fn a_routine_has_a_webhook_while_a_filter_watches_it() {
+    let trigger =
+        |value: serde_json::Value| serde_json::from_value::<ActionTrigger>(value).unwrap();
+    let webhook = trigger(json!({"type": "events", "filters": [{"events": ["webhook"]}]}));
+    assert!(webhook.has_webhook());
+    let filters = webhook.event_filters().unwrap();
+    assert!(!filters.needs_rollout());
+    let mixed = trigger(json!({"type": "multiple", "triggers": [
+        {"type": "cron", "schedule": "0 0 9 * * *", "timezone": "UTC"},
+        {"type": "events", "filters": [{"events": ["webhook"]}, {"events": ["document.created"]}]},
+    ]}));
+    assert!(mixed.has_webhook());
+    assert!(mixed.event_filters().unwrap().needs_rollout());
+    let documents =
+        trigger(json!({"type": "events", "filters": [{"events": ["document.created"]}]}));
+    assert!(!documents.has_webhook());
+    assert!(
+        !trigger(json!({"type": "cron", "schedule": "0 0 9 * * *", "timezone": "UTC"}))
+            .has_webhook()
+    );
+}
+
+#[test]
+fn a_webhook_body_passes_the_payload_tests_only_as_matching_json() {
+    use crate::domain::webhook::{HookId, WebhookDelivery};
+
+    let filters: EventFilters = serde_json::from_value(json!([{
+        "events": ["webhook"],
+        "match": [{ "path": ["status"], "equals": "failed" }],
+    }]))
+    .unwrap();
+    let activated = Utc::now() - chrono::Duration::minutes(1);
+    let delivery = |body: &str| {
+        EventReference::webhook(
+            EventId::try_from(macro_uuid::generate_uuid_v7()).unwrap(),
+            WebhookDelivery::new(HookId::generate(), body, None, None),
+        )
+    };
+    assert!(filters.matches(&delivery(r#"{"status": "failed"}"#), activated));
+    assert!(!filters.matches(&delivery(r#"{"status": "passed"}"#), activated));
+    assert!(!filters.matches(&delivery("status: failed"), activated));
+    let any: EventFilters = serde_json::from_value(json!([{"events": ["webhook"]}])).unwrap();
+    assert!(any.matches(&delivery("status: failed"), activated));
+    // A stored webhook event reads back as written.
+    let event = delivery("hi");
+    let stored = serde_json::to_value(&event).unwrap();
+    assert_eq!(
+        serde_json::from_value::<EventReference>(stored).unwrap(),
+        event
+    );
+}

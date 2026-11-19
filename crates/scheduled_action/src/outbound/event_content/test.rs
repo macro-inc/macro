@@ -324,3 +324,37 @@ fn deleted_documents_say_so_without_content() {
     assert_eq!(value["deleted"], true);
     assert_eq!(value["content"], Value::Null);
 }
+
+#[test]
+fn a_json_webhook_body_reaches_code_parsed_and_other_text_as_text() {
+    use crate::domain::event_trigger::EventId;
+    use crate::domain::webhook::HookId;
+
+    let delivered = |body: &str, content_type: Option<&str>| {
+        let event = EventReference::webhook(
+            EventId::try_from(macro_uuid::generate_uuid_v7()).unwrap(),
+            WebhookDelivery::new(HookId::generate(), body, content_type, None),
+        );
+        let content = EventContent::Webhook(Box::new(event.webhook_delivery().unwrap().clone()));
+        content_json(&event, &content)
+    };
+    assert_eq!(
+        delivered(
+            r#"{"alert": {"severity": "high", "hosts": ["a", "b"]}}"#,
+            Some("application/json"),
+        ),
+        json!({"webhook": {
+            "content_type": "application/json",
+            "json": {"alert": {"severity": "high", "hosts": ["a", "b"]}},
+        }})
+    );
+    // JSON is read as JSON whatever the sender called it.
+    assert_eq!(
+        delivered("[1, 2]", Some("text/plain"))["webhook"]["json"],
+        json!([1, 2])
+    );
+    assert_eq!(
+        delivered("status: failed", None),
+        json!({"webhook": {"content_type": null, "json": null, "body": "status: failed"}})
+    );
+}

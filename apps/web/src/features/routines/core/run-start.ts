@@ -35,6 +35,8 @@ export function describeRunStart(
       return eventLabel(start.event);
     case 'manual':
       return `Run by ${person(start.by)}`;
+    case 'webhook':
+      return 'Webhook received';
   }
 }
 
@@ -59,7 +61,7 @@ export function runStartLine(
     Math.abs(Date.parse(startedAt) - Date.parse(run.at)) >= LATE_MS;
   if (late)
     parts.push(
-      run.start.kind === 'event'
+      run.start.kind === 'event' || run.start.kind === 'webhook'
         ? `happened ${formatTime(run.at)}`
         : `due ${formatTime(run.at)}`
     );

@@ -89,6 +89,10 @@ pub(super) fn routine_event(
                 payload: delivery.payload,
             },
         }),
+        EventContent::Webhook(delivery) => Ok(RoutineEvent::Webhook {
+            body: delivery.body,
+            content_type: delivery.content_type,
+        }),
     }
 }
 

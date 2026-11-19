@@ -3,8 +3,9 @@
 //! Adapters strip the broker envelope into [`IncomingEvent`]. Only explicitly
 //! allowlisted human actions, inbound emails, call lifecycle events, task status
 //! changes from GitHub pull requests and GitHub App deliveries become
-//! [`EventReference`]s. GitHub deliveries can also be filtered on exact payload
-//! values.
+//! [`EventReference`]s. A POST to a routine's webhook URL becomes one for that
+//! routine alone, without passing through here. GitHub deliveries and JSON
+//! webhook bodies can also be filtered on exact payload values.
 
 use activity::Actor;
 use call::domain::events::CallTopicEvent;
@@ -35,6 +36,7 @@ use system_properties::SystemPropertyKey;
 use utoipa::ToSchema;
 
 use super::models::Schedule;
+use super::webhook::WebhookDelivery;
 
 mod describe;
 mod github_selector;
@@ -152,6 +154,12 @@ impl ActionTrigger {
         }
     }
 
+    /// Whether a POST to the routine's webhook URL may start it.
+    pub fn has_webhook(&self) -> bool {
+        self.event_filters()
+            .is_some_and(EventFilters::watches_webhook)
+    }
+
     pub fn has_schedule(&self) -> bool {
         match self {
             Self::Cron { .. } | Self::Once { .. } => true,
@@ -259,6 +267,9 @@ pub enum EventName {
     /// A delivery from Macro's GitHub App; the filter's `github` selector narrows it.
     #[serde(rename = "github")]
     Github,
+    /// A POST to the routine's own webhook URL.
+    #[serde(rename = "webhook")]
+    Webhook,
 }
 
 impl EventName {
@@ -280,6 +291,7 @@ impl EventName {
             Self::CallStarted => "call.started",
             Self::CallEnded => "call.ended",
             Self::Github => "github",
+            Self::Webhook => "webhook",
         }
     }
 
@@ -300,13 +312,14 @@ impl EventName {
             | Self::ChannelMessagePatched
             | Self::ChannelMessageAttachmentCreated => EventEntityType::Channel,
             Self::Github => EventEntityType::GithubInstallation,
+            Self::Webhook => EventEntityType::Webhook,
         }
     }
 
     /// Events from outside Macro: they carry their payload, take a payload
     /// match, and stand alone in their filter.
     const fn is_external(self) -> bool {
-        matches!(self, Self::Github)
+        matches!(self, Self::Github | Self::Webhook)
     }
 
     const fn has_message(self) -> bool {
@@ -339,6 +352,8 @@ pub enum EventEntityType {
     Call,
     /// The GitHub App installation a delivery came through.
     GithubInstallation,
+    /// The routine whose webhook URL received a delivery.
+    Webhook,
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, thiserror::Error)]
@@ -349,11 +364,11 @@ pub enum FilterValidationError {
     EventCount,
     #[error("expected at most 100 entity IDs per filter")]
     IdCount,
-    #[error("github needs a filter of its own, without ids")]
+    #[error("github and webhook each need a filter of their own, without ids")]
     ExternalEventMix,
     #[error("a github filter needs a github selector, and only it takes one")]
     GithubSelector,
-    #[error("only github filters take a payload match")]
+    #[error("only github and webhook filters take a payload match")]
     PayloadMatch,
     #[error("a property selector needs task property change events that report its property")]
     PropertyEvents,
@@ -368,10 +383,10 @@ pub enum FilterValidationError {
 /// An event name AND an entity ID must match within the same filter. A
 /// condition further requires the event's content to answer it with yes.
 ///
-/// `github` comes from outside Macro and carries its payload: it stands
-/// alone in its filter, takes no ids, and may require
-/// exact payload values with `match`. A `github` filter narrows deliveries
-/// with its `github` selector.
+/// `github` and `webhook` come from outside Macro and carry their payload:
+/// each stands alone in its filter, takes no ids, and may require exact
+/// payload values with `match` (a webhook's when its body is JSON). A
+/// `github` filter narrows deliveries with its `github` selector.
 #[derive(Debug, Clone, PartialEq, Eq, PartialOrd, Ord, Serialize, Deserialize, ToSchema)]
 #[serde(try_from = "FilterInput")]
 pub struct EventFilter {
@@ -551,6 +566,7 @@ impl EventFilter {
                         .is_some_and(|selector| selector.accepts(delivery))
                         && self.payload_accepts(delivery.payload.as_ref())
                 }
+                EventSource::Webhook(delivery) => self.payload_accepts(delivery.json().as_ref()),
             }
     }
 
@@ -621,6 +637,24 @@ impl EventFilters {
         self.0
             .iter()
             .any(|filter| filter.events.contains(&EventName::Github))
+    }
+
+    pub fn watches_webhook(&self) -> bool {
+        self.0
+            .iter()
+            .any(|filter| filter.events.contains(&EventName::Webhook))
+    }
+
+    /// Whether they watch anything but the routine's webhook, which the
+    /// event-routine rollout gates. A webhook needs only its URL, minted by
+    /// the owner.
+    pub fn needs_rollout(&self) -> bool {
+        self.0.iter().any(|filter| {
+            filter
+                .events
+                .iter()
+                .any(|event| *event != EventName::Webhook)
+        })
     }
 
     /// What a matching event must satisfy before its run starts. A matching
@@ -716,6 +750,8 @@ pub enum EventSource {
     },
     /// A delivery from Macro's GitHub App. Boxed: it carries its payload.
     Github(Box<GithubWebhookReceived>),
+    /// A POST to a routine's webhook URL. Boxed: it carries its body.
+    Webhook(Box<WebhookDelivery>),
 }
 
 #[derive(Serialize, Deserialize)]
@@ -731,6 +767,8 @@ struct EventReferenceInput {
     #[serde(default, skip_serializing_if = "Option::is_none")]
     github: Option<Box<GithubWebhookReceived>>,
     #[serde(default, skip_serializing_if = "Option::is_none")]
+    webhook: Option<Box<WebhookDelivery>>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
     change_source: Option<PropertyChangeSource>,
     #[serde(default, skip_serializing_if = "Option::is_none")]
     property_change: Option<PropertyChange>,
@@ -745,8 +783,9 @@ impl TryFrom<EventReferenceInput> for EventReference {
 
     fn try_from(input: EventReferenceInput) -> Result<Self, Self::Error> {
         let name = input.event_name;
-        let source = match (input.entity_id, input.github) {
-            (Some(entity_id), None) if !name.is_external() => {
+        let external = input.change_source.is_none() && input.property_change.is_none();
+        let source = match (input.entity_id, input.github, input.webhook) {
+            (Some(entity_id), None, None) if !name.is_external() => {
                 let message_id = input.message_id.flatten();
                 if name.has_message() != message_id.is_some() {
                     return Err(EventRejection::InvalidContext);
@@ -758,12 +797,13 @@ impl TryFrom<EventReferenceInput> for EventReference {
                     property_change: input.property_change,
                 }
             }
-            (None, Some(delivery))
-                if name == EventName::Github
-                    && input.change_source.is_none()
-                    && input.property_change.is_none() =>
-            {
+            (None, Some(delivery), None) if name == EventName::Github && external => {
                 EventSource::Github(delivery)
+            }
+            (None, None, Some(delivery))
+                if name == EventName::Webhook && external && input.message_id.is_none() =>
+            {
+                EventSource::Webhook(delivery)
             }
             _ => return Err(EventRejection::InvalidContext),
         };
@@ -783,6 +823,7 @@ impl From<EventReference> for EventReferenceInput {
             entity_id: None,
             message_id: None,
             github: None,
+            webhook: None,
             change_source: None,
             property_change: None,
         };
@@ -799,12 +840,27 @@ impl From<EventReference> for EventReferenceInput {
                 input.property_change = property_change;
             }
             EventSource::Github(delivery) => input.github = Some(delivery),
+            EventSource::Webhook(delivery) => input.webhook = Some(delivery),
         }
         input
     }
 }
 
 impl EventReference {
+    /// A webhook delivery, under the id minted when it arrived.
+    pub fn webhook(event_id: EventId, delivery: WebhookDelivery) -> Self {
+        Self {
+            event_id,
+            event_name: EventName::Webhook,
+            source: EventSource::Webhook(Box::new(delivery)),
+        }
+    }
+    pub fn webhook_delivery(&self) -> Option<&WebhookDelivery> {
+        match &self.source {
+            EventSource::Webhook(delivery) => Some(delivery),
+            EventSource::Entity { .. } | EventSource::Github(_) => None,
+        }
+    }
     pub fn event_id(&self) -> EventId {
         self.event_id
     }
@@ -821,19 +877,19 @@ impl EventReference {
     pub fn entity_id(&self) -> Option<Uuid> {
         match self.source {
             EventSource::Entity { entity_id, .. } => Some(entity_id),
-            EventSource::Github(_) => None,
+            EventSource::Github(_) | EventSource::Webhook(_) => None,
         }
     }
     pub fn message_id(&self) -> Option<Uuid> {
         match self.source {
             EventSource::Entity { message_id, .. } => message_id,
-            EventSource::Github(_) => None,
+            EventSource::Github(_) | EventSource::Webhook(_) => None,
         }
     }
     pub fn change_source(&self) -> Option<&PropertyChangeSource> {
         match &self.source {
             EventSource::Entity { change_source, .. } => change_source.as_ref(),
-            EventSource::Github(_) => None,
+            EventSource::Github(_) | EventSource::Webhook(_) => None,
         }
     }
     pub fn published_at(&self) -> DateTime<Utc> {

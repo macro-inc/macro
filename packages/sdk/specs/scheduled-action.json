@@ -28,6 +28,171 @@
         }
       }
     },
+    "/hooks/{hook_id}": {
+      "post": {
+        "tags": ["routine webhooks"],
+        "description": "As the URL with its secret in the path, with the secret sent as `Authorization: Bearer <secret>` instead.",
+        "operationId": "deliver_routine_webhook_with_bearer",
+        "parameters": [
+          {
+            "name": "hook_id",
+            "in": "path",
+            "description": "The webhook's public id",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "Idempotency-Key",
+            "in": "header",
+            "description": "Up to 255 visible ASCII characters",
+            "required": false,
+            "schema": {
+              "type": ["string", "null"]
+            }
+          }
+        ],
+        "requestBody": {
+          "description": "Any UTF-8 text up to 64 KiB, of any content type; JSON is parsed for the payload tests and code",
+          "content": {
+            "application/json": {
+              "schema": {}
+            },
+            "text/plain": {
+              "schema": {
+                "type": "string"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/WebhookDeliveryResponse"
+                }
+              }
+            }
+          },
+          "202": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/WebhookDeliveryResponse"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": ""
+          },
+          "404": {
+            "description": ""
+          },
+          "409": {
+            "description": ""
+          },
+          "413": {
+            "description": ""
+          },
+          "429": {
+            "description": ""
+          }
+        }
+      }
+    },
+    "/hooks/{hook_id}/{token}": {
+      "post": {
+        "tags": ["routine webhooks"],
+        "description": "Start a run of the routine this webhook URL belongs to, with the body (UTF-8 text, at most 64 KiB; a JSON body is checked against the trigger's payload tests) as its trigger data. Answers 202 at once with the run's id, or 200 without one when the body fails the payload tests. A repeated Idempotency-Key within a day answers with the first run. An unknown, wrong, rotated or removed URL is 404.",
+        "operationId": "deliver_routine_webhook",
+        "parameters": [
+          {
+            "name": "hook_id",
+            "in": "path",
+            "description": "The webhook's public id",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "token",
+            "in": "path",
+            "description": "The webhook's secret",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "Idempotency-Key",
+            "in": "header",
+            "description": "Up to 255 visible ASCII characters",
+            "required": false,
+            "schema": {
+              "type": ["string", "null"]
+            }
+          }
+        ],
+        "requestBody": {
+          "description": "Any UTF-8 text up to 64 KiB, of any content type; JSON is parsed for the payload tests and code",
+          "content": {
+            "application/json": {
+              "schema": {}
+            },
+            "text/plain": {
+              "schema": {
+                "type": "string"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "description": "The body failed the trigger's payload tests: no run",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/WebhookDeliveryResponse"
+                }
+              }
+            }
+          },
+          "202": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/WebhookDeliveryResponse"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "The body is not UTF-8 text, or the key is invalid"
+          },
+          "404": {
+            "description": ""
+          },
+          "409": {
+            "description": "The routine is paused"
+          },
+          "413": {
+            "description": ""
+          },
+          "429": {
+            "description": "Too many requests, or too many runs waiting"
+          }
+        }
+      }
+    },
     "/scheduled-actions": {
       "get": {
         "tags": ["scheduled actions"],
@@ -1942,6 +2107,114 @@
                 }
               }
             }
+          }
+        }
+      }
+    },
+    "/scheduled-actions/{id}/webhook": {
+      "get": {
+        "tags": ["scheduled actions"],
+        "operationId": "get_scheduled_action_webhook",
+        "parameters": [
+          {
+            "name": "id",
+            "in": "path",
+            "description": "ID of the routine",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/WebhookStatusResponse"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": ""
+          },
+          "403": {
+            "description": ""
+          },
+          "404": {
+            "description": ""
+          }
+        }
+      },
+      "post": {
+        "tags": ["scheduled actions"],
+        "description": "Mint the routine's webhook URL, replacing any it had: the old URL stops at once. The response is the only time the secret is shown. Only the routine's owner, signed in as themselves, may call it; agent sessions' code and routine runs are refused.",
+        "operationId": "mint_scheduled_action_webhook",
+        "parameters": [
+          {
+            "name": "id",
+            "in": "path",
+            "description": "ID of the routine",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "201": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/MintedWebhookResponse"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": ""
+          },
+          "403": {
+            "description": ""
+          },
+          "404": {
+            "description": ""
+          },
+          "409": {
+            "description": "The routine has no webhook trigger"
+          }
+        }
+      },
+      "delete": {
+        "tags": ["scheduled actions"],
+        "description": "Revoke the routine's webhook URL. The trigger stays until the routine is saved without it.",
+        "operationId": "remove_scheduled_action_webhook",
+        "parameters": [
+          {
+            "name": "id",
+            "in": "path",
+            "description": "ID of the routine",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "204": {
+            "description": ""
+          },
+          "401": {
+            "description": ""
+          },
+          "403": {
+            "description": ""
+          },
+          "404": {
+            "description": ""
           }
         }
       }
@@ -4249,7 +4522,7 @@
       },
       "EventFilter": {
         "type": "object",
-        "description": "An event name AND an entity ID must match within the same filter. A\ncondition further requires the event's content to answer it with yes.\n\n`github` comes from outside Macro and carries its payload: it stands\nalone in its filter, takes no ids, and may require\nexact payload values with `match`. A `github` filter narrows deliveries\nwith its `github` selector.",
+        "description": "An event name AND an entity ID must match within the same filter. A\ncondition further requires the event's content to answer it with yes.\n\n`github` and `webhook` come from outside Macro and carry their payload:\neach stands alone in its filter, takes no ids, and may require exact\npayload values with `match` (a webhook's when its body is JSON). A\n`github` filter narrows deliveries with its `github` selector.",
         "required": ["events"],
         "properties": {
           "condition": {
@@ -4326,7 +4599,8 @@
           "channel.message_attachment_created",
           "call.started",
           "call.ended",
-          "github"
+          "github",
+          "webhook"
         ]
       },
       "ExecutionRecordResponse": {
@@ -4598,6 +4872,11 @@
         },
         "additionalProperties": false
       },
+      "HookId": {
+        "type": "string",
+        "format": "uuid",
+        "description": "A webhook URL's public id."
+      },
       "InProgressExecution": {
         "type": "object",
         "required": ["action_id"],
@@ -4673,6 +4952,32 @@
           "name": {
             "type": "string",
             "description": "The name as the words use it."
+          }
+        }
+      },
+      "MintedWebhookResponse": {
+        "type": "object",
+        "description": "A new webhook URL. Shown this once: Macro keeps only its secret's hash.",
+        "required": ["hookId", "url", "bearerUrl", "secret", "createdAt"],
+        "properties": {
+          "bearerUrl": {
+            "type": "string",
+            "description": "Or POST here with `Authorization: Bearer <secret>`, which keeps the\nsecret out of URLs and access logs."
+          },
+          "createdAt": {
+            "type": "string",
+            "format": "date-time"
+          },
+          "hookId": {
+            "type": "string",
+            "format": "uuid"
+          },
+          "secret": {
+            "type": "string"
+          },
+          "url": {
+            "type": "string",
+            "description": "POST here to start a run; the secret is in the path."
           }
         }
       },
@@ -5695,6 +6000,25 @@
               "kind": {
                 "type": "string",
                 "enum": ["manual"]
+              }
+            }
+          },
+          {
+            "type": "object",
+            "description": "Something POSTed to its webhook URL.",
+            "required": ["kind"],
+            "properties": {
+              "body": {
+                "type": ["string", "null"],
+                "description": "The text it sent. Untrusted: whoever holds the URL chose it."
+              },
+              "content_type": {
+                "type": ["string", "null"],
+                "description": "The sender's `Content-Type`, when it sent one."
+              },
+              "kind": {
+                "type": "string",
+                "enum": ["webhook"]
               }
             }
           }
@@ -6773,6 +7097,51 @@
         "type": "string",
         "description": "How a variable is filled when someone activates the template.",
         "enum": ["activator", "shared", "choice"]
+      },
+      "WebhookDeliveryResponse": {
+        "type": "object",
+        "description": "An accepted delivery: the run it started, or none when the body failed\nthe trigger's payload tests.",
+        "properties": {
+          "runId": {
+            "type": ["string", "null"],
+            "format": "uuid"
+          }
+        }
+      },
+      "WebhookInfo": {
+        "type": "object",
+        "description": "A routine's webhook, without its secret.",
+        "required": ["hookId", "createdAt"],
+        "properties": {
+          "createdAt": {
+            "type": "string",
+            "format": "date-time"
+          },
+          "hookId": {
+            "$ref": "#/components/schemas/HookId"
+          },
+          "lastUsedAt": {
+            "type": ["string", "null"],
+            "format": "date-time",
+            "description": "The last delivery it accepted."
+          }
+        }
+      },
+      "WebhookStatusResponse": {
+        "type": "object",
+        "description": "A routine's webhook, if it has a URL.",
+        "properties": {
+          "webhook": {
+            "oneOf": [
+              {
+                "type": "null"
+              },
+              {
+                "$ref": "#/components/schemas/WebhookInfo"
+              }
+            ]
+          }
+        }
       }
     }
   },

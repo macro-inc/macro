@@ -321,6 +321,11 @@ const routineEvent = z.discriminatedUnion('event', [
       payload: z.unknown().optional(),
     }),
   }),
+  z.object({
+    event: z.literal('webhook'),
+    body: z.string().optional(),
+    content_type: z.string().min(1).optional(),
+  }),
 ]);
 
 const routineFiring = z.discriminatedUnion('type', [

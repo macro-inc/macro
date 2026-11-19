@@ -15,7 +15,7 @@ use macro_authorization::{
     InternalAuthConfig, MacroAuthJwtValidator, MacroAuthorizationServiceImpl,
     MacroAuthorizationState, PgUserApiKeyAuthorizationRepo, PgUserApiKeyAuthorizer,
 };
-use macro_service_urls::{ConnectionGatewayUrl, EmailServiceUrl, LexicalServiceUrl};
+use macro_service_urls::{ApiGatewayUrl, ConnectionGatewayUrl, EmailServiceUrl, LexicalServiceUrl};
 use macro_user_id::user_id::MacroUserIdStr;
 pub mod config;
 mod routine_analytics;
@@ -45,6 +45,7 @@ use scheduled_action::domain::suggestions::{
 use scheduled_action::domain::target_runner::TargetRunner;
 use scheduled_action::domain::target_validation::TargetValidation;
 use scheduled_action::domain::templates::RoutineTemplateServiceImpl;
+use scheduled_action::domain::webhook::RoutineWebhooks;
 use scheduled_action::inbound::axum_router::{ScheduledActionRouterState, scheduled_action_router};
 use scheduled_action::inbound::draft_job_router::{
     RoutineDraftJobRouterState, routine_draft_job_router,
@@ -57,6 +58,9 @@ use scheduled_action::inbound::suggestion_router::{
 };
 use scheduled_action::inbound::template_router::{
     RoutineTemplateRouterState, routine_template_router,
+};
+use scheduled_action::inbound::webhook_router::{
+    WebhookRouterState, webhook_delivery_router, webhook_management_router,
 };
 use scheduled_action::outbound::agent_session_client::AgentSessionClient;
 use scheduled_action::outbound::conn_gateway_live_updates::ConnGatewayLiveUpdates;
@@ -74,6 +78,8 @@ use scheduled_action::outbound::pg_polling_dispatcher::{
 use scheduled_action::outbound::pg_routine_template_repo::PgRoutineTemplateRepo;
 use scheduled_action::outbound::pg_scheduled_action_repo::PgScheduledActionRepo;
 use scheduled_action::outbound::pg_suggestion_repo::PgSuggestionRepo as PgRoutineSuggestionRepo;
+use scheduled_action::outbound::pg_webhook_store::PgWebhookStore;
+use scheduled_action::outbound::webhook_limits::SharedWebhookLimits;
 use scheduled_action::swagger::ApiDoc;
 use suggestion_generation::domain::audience::PaidAudience;
 use suggestion_generation::domain::model::GenerationAgent;
@@ -555,6 +561,7 @@ pub async fn build<Ingress: notification::domain::service::NotificationIngress>(
     ready: tokio::sync::watch::Receiver<bool>,
     notifications: Arc<Ingress>,
     search: search_service_client::SearchServiceClient,
+    redis: redis::Client,
     routine_connect: Option<Arc<pipedream_mcp::outbound::dispatch::ConnectorBackends>>,
 ) -> Result<SchedulingRuntime> {
     let environment = config.environment;
@@ -575,6 +582,15 @@ pub async fn build<Ingress: notification::domain::service::NotificationIngress>(
 
     let registrar = OwnedEntityRegistrar::new(OwnerGrantPolicy::new(PgBotsRepo::new(db.clone())));
     let repo = Arc::new(PgScheduledActionRepo::new(db.clone(), registrar.clone()));
+    // A routine's webhook URL, checked against its stored hash and counted
+    // in Redis so every replica limits a caller together.
+    let webhooks = Arc::new(RoutineWebhooks::new(
+        Arc::clone(&repo),
+        PgWebhookStore::new(db.clone()),
+        SharedWebhookLimits::new(rate_limit::RateLimitServiceImpl {
+            repo: rate_limit::RedisRateLimitAdapter { redis },
+        }),
+    ));
 
     let event_repo = Arc::new(PgEventRunRepo::new(db.clone()));
     let access = Arc::new(EntityAccessServiceImpl::new(PgAccessRepository::new(
@@ -1143,6 +1159,18 @@ pub async fn build<Ingress: notification::domain::service::NotificationIngress>(
         service: draft_jobs,
         authorization_state: authorization_state.clone(),
     };
+    let webhook_state = WebhookRouterState {
+        service: Arc::clone(&webhooks),
+        access_service: Arc::clone(&access),
+        authorization_state: authorization_state.clone(),
+        // The URL is for senders off Macro's network, so it uses the public
+        // gateway origin (the stack's proxy locally), not the in-network address.
+        public_base: format!(
+            "{}/scheduled-action",
+            ApiGatewayUrl::new()?.as_ref().trim_end_matches('/')
+        )
+        .into(),
+    };
     let state = ScheduledActionRouterState {
         service,
         access_service: access,
@@ -1154,10 +1182,17 @@ pub async fn build<Ingress: notification::domain::service::NotificationIngress>(
         .merge(routine_draft_job_router::<_, _, ()>(draft_job_state))
         .merge(routine_suggestion_router::<_, _, ()>(suggestion_state))
         .merge(suggestion_router::<_, _, ()>(feed_state))
-        .merge(generation_router::<_, _, ()>(generation_state));
+        .merge(generation_router::<_, _, ()>(generation_state))
+        .merge(webhook_management_router::<_, _, _, ()>(webhook_state));
 
     let router = mount_router(authed_routes)
         .layer(macro_cors::cors_layer())
+        // Webhook URLs are called by servers, not pages: no CORS, so no
+        // browser on another site can read their answers.
+        .merge(Router::new().nest(
+            GATEWAY_PATH_PREFIX,
+            webhook_delivery_router::<_, ()>(webhooks),
+        ))
         .layer(
             macro_tower_layers::MacroRequestIdAndTracingLayer::new(Duration::from_millis(200))
                 .into_inner(),
@@ -1312,6 +1347,8 @@ fn start_event_tasks<C, F>(
     C: FnMut() -> F + Send + 'static,
     F: Future<Output = Result<(), rootcause::Report>> + Send + 'static,
 {
+    // Webhook deliveries need the worker even where event intake is off.
+    lifecycle.workers.spawn(worker);
     if !enabled {
         return;
     }
@@ -1320,7 +1357,6 @@ fn start_event_tasks<C, F>(
         lifecycle.stop_consumers.clone(),
         CONSUMER_RESTART_DELAY,
     ));
-    lifecycle.workers.spawn(worker);
 }
 
 /// Run `sweep` at once and then every `interval` on a worker of its own

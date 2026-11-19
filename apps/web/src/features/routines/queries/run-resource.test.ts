@@ -303,6 +303,20 @@ describe('step outputs and run starts in run history', () => {
       run({ kind: 'event', event: 'channel.mentioned', entity_id: null }).run
         ?.start
     ).toEqual({ kind: 'event', event: 'channel.mentioned' });
+    expect(
+      run({
+        kind: 'webhook',
+        body: '{"status":"failed"}',
+        content_type: 'application/json',
+      }).run?.start
+    ).toEqual({
+      kind: 'webhook',
+      body: '{"status":"failed"}',
+      contentType: 'application/json',
+    });
+    expect(run({ kind: 'webhook', body: null }).run?.start).toEqual({
+      kind: 'webhook',
+    });
     // Runs recorded before runs kept what started them have none.
     expect(run({ kind: 'unknown' }).run).toBeUndefined();
   });

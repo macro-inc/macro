@@ -23,7 +23,8 @@ use super::{
     code_upgrade::{NoCodeUpgrades, current_code},
     event_runs::{AuthorizedEventRun, condition::EventContentReader},
     event_trigger::{
-        ActionTrigger, ConditionRequirement, EventFilters, EventReference, RoutineTrigger,
+        ActionTrigger, ConditionRequirement, EventFilters, EventName, EventReference,
+        RoutineTrigger,
     },
     execution::ExecutionHandle,
     knob_entities::unusable_items_known,
@@ -340,9 +341,16 @@ where
             ),
             RoutineRun::Event(run) => (
                 run.pending.event.event_id().published_at(),
-                RunStart::Event {
-                    event: run.pending.event.event_name().as_str().to_owned(),
-                    entity_id: run.pending.event.entity_id().map(|id| id.to_string()),
+                match run.pending.event.webhook_delivery() {
+                    // The run page shows what the sender sent.
+                    Some(delivery) => RunStart::Webhook {
+                        body: delivery.body.clone(),
+                        content_type: delivery.content_type.clone(),
+                    },
+                    None => RunStart::Event {
+                        event: run.pending.event.event_name().as_str().to_owned(),
+                        entity_id: run.pending.event.entity_id().map(|id| id.to_string()),
+                    },
                 },
             ),
         };
@@ -364,6 +372,10 @@ where
             }
             RunStart::Event { event, .. } => {
                 json!({ "kind": "event", "event": event, "item": item })
+            }
+            // Code reads a webhook as the event it is; its item holds the body.
+            RunStart::Webhook { .. } => {
+                json!({ "kind": "event", "event": EventName::Webhook.as_str(), "item": item })
             }
             RunStart::Manual { by } => json!({ "kind": "manual", "by": by }),
         };

@@ -1,0 +1,29 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "\n            SELECT r.action_id, r.event_id FROM scheduled_action_event_run r\n            JOIN scheduled_action a ON a.id = r.action_id\n            LEFT JOIN scheduled_action_webhook w ON w.action_id = a.id\n            WHERE (r.state = 'started' AND r.deadline <= $1)\n               OR (r.state = 'pending' AND (NOT a.enabled OR a.configuration_revision <> r.configuration_revision\n                   OR (a.event_filters IS NULL AND w.action_id IS NULL)))\n            ORDER BY r.admission_order LIMIT $2 FOR UPDATE OF a SKIP LOCKED\n            ",
+  "describe": {
+    "columns": [
+      {
+        "ordinal": 0,
+        "name": "action_id",
+        "type_info": "Uuid"
+      },
+      {
+        "ordinal": 1,
+        "name": "event_id",
+        "type_info": "Uuid"
+      }
+    ],
+    "parameters": {
+      "Left": [
+        "Timestamptz",
+        "Int8"
+      ]
+    },
+    "nullable": [
+      false,
+      false
+    ]
+  },
+  "hash": "a7e6e1c5e8933b4b988ef75bd03d916c544d87ba5bfaa45b5d83a35d34fa68c2"
+}

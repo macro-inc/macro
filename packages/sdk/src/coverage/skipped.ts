@@ -315,6 +315,15 @@ export const scheduledActionExcluded = [
   'regenerateSuggestions', // The app's refresh button, at most hourly; generation sessions may not call it.
   'recordSuggestionsViewed', // The app records the person opening the feed; an agent's read is not a visit.
   'dismissRoutineSuggestion', // The app's suggestion surfaces.
+  // A webhook URL is managed only by the person in the app: the service refuses
+  // API tokens, agents and routine runs, which is how the SDK calls it.
+  'getScheduledActionWebhook',
+  'mintScheduledActionWebhook',
+  'removeScheduledActionWebhook',
+  // What another app or script calls with the URL's secret; it carries no Macro
+  // credentials, so it is no SDK call.
+  'deliverRoutineWebhook',
+  'deliverRoutineWebhookWithBearer',
   'scheduledActionHealth',
 ] as const satisfies readonly (keyof ScheduledActionSdk)[];
 

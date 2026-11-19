@@ -67,6 +67,8 @@ type EventSlots = {
   ) => JSX.Element;
   /** False hides event triggers from the menu; existing ones stay editable. */
   offerEvents?: boolean;
+  /** False hides the Webhooks group, whatever `offerEvents` says. */
+  offerWebhooks?: boolean;
 };
 
 function triggerGroup(trigger: EventTriggerDraft): RoutineEventGroup {
@@ -78,6 +80,7 @@ function triggerGroup(trigger: EventTriggerDraft): RoutineEventGroup {
     .with('CALL_RECORD', () => 'Calls')
     .with('CHANNEL', () => 'Channels')
     .with('GITHUB', () => 'GitHub')
+    .with('WEBHOOK', () => 'Webhooks')
     .exhaustive();
 }
 
@@ -104,6 +107,7 @@ function scopeFieldLabel(trigger: EventTriggerDraft) {
     .with('CHANNEL', () => 'Which channels')
     .with('CALL_RECORD', () => 'Which calls')
     .with('GITHUB', () => 'Repositories')
+    .with('WEBHOOK', () => 'URL')
     .exhaustive();
 }
 
@@ -420,6 +424,7 @@ function AddTrigger(
         onSelect={setPending}
         renderGroup={props.renderEventGroup}
         offerEvents={props.offerEvents}
+        offerWebhooks={props.offerWebhooks}
         triggerLabel="Add trigger"
         triggerVariant={props.variant}
         triggerSize={props.size}
@@ -532,6 +537,7 @@ function EventToken(
         current={eventTriggerLabel(props.trigger)}
         renderGroup={props.renderEventGroup}
         offerEvents={props.offerEvents}
+        offerWebhooks={props.offerWebhooks}
         onSelect={(value) => {
           if (value.kind !== 'event') {
             setSchedule({ ...value, id: props.trigger.id });
@@ -614,12 +620,17 @@ function ScopeToken(
   );
 }
 
-/** "in All repositories": a GitHub trigger's selector and payload tests, in its panel. */
-function GithubToken(
+/**
+ * "in All repositories" or "at its URL": a GitHub or webhook trigger's
+ * settings and payload tests, in its panel.
+ */
+function SettingsToken(
   props: EventSlots & {
     trigger: EventTriggerDraft;
     onSave: (trigger: RoutineTriggerDraft) => void;
     onRemove: () => void;
+    /** What the token reads; the event's label by default. */
+    text?: string;
   }
 ) {
   const [open, setOpen] = createSignal(false);
@@ -640,7 +651,7 @@ function GithubToken(
         content: (
           <>
             <span class="min-w-0 truncate">
-              {props.renderEventLabel(trigger)}
+              {props.text ?? props.renderEventLabel(trigger)}
             </span>
             <CaretDownIcon class="size-3 shrink-0 text-ink-muted" />
           </>
@@ -866,7 +877,17 @@ function TriggerSentence(
                     <Match when={eventScopeKind(value()) === 'GITHUB'}>
                       <span class="flex min-w-0 max-w-full items-center gap-2">
                         <span class="text-sm text-ink-muted">in</span>
-                        <GithubToken {...props} trigger={value()} />
+                        <SettingsToken {...props} trigger={value()} />
+                      </span>
+                    </Match>
+                    <Match when={eventScopeKind(value()) === 'WEBHOOK'}>
+                      <span class="flex min-w-0 max-w-full items-center gap-2">
+                        <span class="text-sm text-ink-muted">at</span>
+                        <SettingsToken
+                          {...props}
+                          trigger={value()}
+                          text="its URL"
+                        />
                       </span>
                     </Match>
                   </Switch>
@@ -923,6 +944,7 @@ export function RoutineTriggers(
     renderEventCondition: props.renderEventCondition,
     renderEventGroup: props.renderEventGroup,
     offerEvents: props.offerEvents,
+    offerWebhooks: props.offerWebhooks,
   });
   return (
     <Switch>

@@ -12,4 +12,6 @@ pub mod pg_polling_dispatcher;
 pub mod pg_routine_template_repo;
 pub mod pg_scheduled_action_repo;
 pub mod pg_suggestion_repo;
+pub mod pg_webhook_store;
 pub mod tokio_dispatcher;
+pub mod webhook_limits;

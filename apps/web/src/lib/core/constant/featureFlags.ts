@@ -847,6 +847,16 @@ export const enableEventRoutines = defineFlag({
   env: 'ENABLE_EVENT_ROUTINES',
 });
 
+// The Webhooks trigger group: a routine that runs when something POSTs to its
+// secret URL. Only the menu reads it; the server serves webhook routines
+// without a flag, and existing webhook triggers stay editable when it is off.
+// Override with VITE_ENABLE_ROUTINE_WEBHOOKS.
+export const enableRoutineWebhooks = defineFlag({
+  key: 'enable-routine-webhooks',
+  env: 'ENABLE_ROUTINE_WEBHOOKS',
+  default: onInDev,
+});
+
 // The Recent view: the touched-by-me feed (everything the viewer mutated,
 // newest own-touch first). Gates the view (the route redirects to the inbox
 // when off) and its sidebar entry. PostHog-gated with a dev-mode default;

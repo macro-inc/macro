@@ -1,0 +1,14 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "UPDATE scheduled_action_webhook SET last_used_at = now() WHERE action_id = $1",
+  "describe": {
+    "columns": [],
+    "parameters": {
+      "Left": [
+        "Uuid"
+      ]
+    },
+    "nullable": []
+  },
+  "hash": "e6e0ae2174b47abedf27e1168ac625f4452bf61224f9e41017f393dac20912bb"
+}

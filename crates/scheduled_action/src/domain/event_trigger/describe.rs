@@ -197,6 +197,7 @@ fn event_label(event: EventName, filter: &EventFilter) -> &'static str {
         },
         EventName::EmailMessageReceived => "New email received",
         EventName::ChannelCreated => "Channel created",
+        EventName::Webhook => "Webhook received",
         EventName::ChannelMessagePosted => "Message sent in channel",
         EventName::ChannelMentioned => "@ mentioned in channel",
         EventName::ChannelMessagePatched => "Message edited",

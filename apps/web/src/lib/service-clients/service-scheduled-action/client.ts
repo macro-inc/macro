@@ -62,6 +62,7 @@ import type {
   ExecutionRecordResponse,
   GenerationOverview,
   InProgressExecution,
+  MintedWebhookResponse,
   RegenerationCooldown,
   RoutineSuggestions,
   RoutineTemplate,
@@ -74,6 +75,7 @@ import type {
   SuggestionChanged,
   SuggestionFeed,
   UnusableKnob,
+  WebhookStatusResponse,
 } from './generated/schemas';
 
 /** How `POST /suggestions/regenerate` answered. */
@@ -304,6 +306,25 @@ export const scheduledActionClient = {
       `/scheduled-actions/${args.templateId}/template/activate`,
       { method: 'POST', body: JSON.stringify(args.body) }
     ),
+
+  /** The routine's webhook URL without its secret; `webhook` is absent when it has none. */
+  getWebhook: (scheduleId: string) =>
+    scheduledActionFetch<WebhookStatusResponse>(
+      `/scheduled-actions/${scheduleId}/webhook`,
+      { method: 'GET' }
+    ),
+
+  /** A new webhook URL, replacing any the routine had; its secret is in this response only. */
+  mintWebhook: (scheduleId: string) =>
+    scheduledActionFetch<MintedWebhookResponse>(
+      `/scheduled-actions/${scheduleId}/webhook`,
+      { method: 'POST', cache: 'no-store' }
+    ),
+
+  removeWebhook: (scheduleId: string) =>
+    scheduledActionFetch(`/scheduled-actions/${scheduleId}/webhook`, {
+      method: 'DELETE',
+    }),
 
   /**
    * The caller's feed of suggestions. `timezone` is the IANA zone they are

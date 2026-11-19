@@ -171,6 +171,8 @@ pub(crate) enum GraphqlScheduledActionEventName {
     CallEnded,
     /// Macro's GitHub App received a delivery.
     Github,
+    /// Someone POSTed to the routine's webhook URL.
+    Webhook,
 }
 
 impl From<EventName> for GraphqlScheduledActionEventName {
@@ -192,6 +194,7 @@ impl From<EventName> for GraphqlScheduledActionEventName {
             EventName::CallStarted => Self::CallStarted,
             EventName::CallEnded => Self::CallEnded,
             EventName::Github => Self::Github,
+            EventName::Webhook => Self::Webhook,
         }
     }
 }

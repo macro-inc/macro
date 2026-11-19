@@ -702,10 +702,10 @@ export type EntityType = 'user' | 'chat' | 'channel' | 'channel_message' | 'docu
  * An event name AND an entity ID must match within the same filter. A
  * condition further requires the event's content to answer it with yes.
  *
- * `github` comes from outside Macro and carries its payload: it stands
- * alone in its filter, takes no ids, and may require
- * exact payload values with `match`. A `github` filter narrows deliveries
- * with its `github` selector.
+ * `github` and `webhook` come from outside Macro and carry their payload:
+ * each stands alone in its filter, takes no ids, and may require exact
+ * payload values with `match` (a webhook's when its body is JSON). A
+ * `github` filter narrows deliveries with its `github` selector.
  */
 export type EventFilter = {
     /**
@@ -732,7 +732,7 @@ export type EventFilters = Array<EventFilter>;
  * Closed allowlist: unknown names, deletions and ambiguous attribution are not
  * selectors. Adding a broker variant does not automatically enable routines.
  */
-export type EventName = 'document.created' | 'document.updated' | 'document.deleted' | 'task.created' | 'task.status_changed' | 'task.priority_changed' | 'task.property_changed' | 'email.message_received' | 'channel.created' | 'channel.message_posted' | 'channel.mentioned' | 'channel.message_patched' | 'channel.message_attachment_created' | 'call.started' | 'call.ended' | 'github';
+export type EventName = 'document.created' | 'document.updated' | 'document.deleted' | 'task.created' | 'task.status_changed' | 'task.priority_changed' | 'task.property_changed' | 'email.message_received' | 'channel.created' | 'channel.message_posted' | 'channel.mentioned' | 'channel.message_patched' | 'channel.message_attachment_created' | 'call.started' | 'call.ended' | 'github' | 'webhook';
 
 /**
  * A finished run, with the routines it created.
@@ -906,6 +906,11 @@ export type GithubSelector = {
     repositories?: Array<string>;
 };
 
+/**
+ * A webhook URL's public id.
+ */
+export type HookId = string;
+
 export type InProgressExecution = {
     action_id: string;
     chat_id?: string | null;
@@ -941,6 +946,24 @@ export type LeftName = {
      * The name as the words use it.
      */
     name: string;
+};
+
+/**
+ * A new webhook URL. Shown this once: Macro keeps only its secret's hash.
+ */
+export type MintedWebhookResponse = {
+    /**
+     * Or POST here with `Authorization: Bearer <secret>`, which keeps the
+     * secret out of URLs and access logs.
+     */
+    bearerUrl: string;
+    createdAt: string;
+    hookId: string;
+    secret: string;
+    /**
+     * POST here to start a run; the secret is in the path.
+     */
+    url: string;
 };
 
 /**
@@ -1587,6 +1610,16 @@ export type RunStart = {
      */
     by: string;
     kind: 'manual';
+} | {
+    /**
+     * The text it sent. Untrusted: whoever holds the URL chose it.
+     */
+    body?: string | null;
+    /**
+     * The sender's `Content-Type`, when it sent one.
+     */
+    content_type?: string | null;
+    kind: 'webhook';
 };
 
 /**
@@ -2193,6 +2226,33 @@ export type UpgradeOutcome = 'running' | 'checked' | 'rewritten' | 'needs_update
  */
 export type VariableFill = 'activator' | 'shared' | 'choice';
 
+/**
+ * An accepted delivery: the run it started, or none when the body failed
+ * the trigger's payload tests.
+ */
+export type WebhookDeliveryResponse = {
+    runId?: string | null;
+};
+
+/**
+ * A routine's webhook, without its secret.
+ */
+export type WebhookInfo = {
+    createdAt: string;
+    hookId: HookId;
+    /**
+     * The last delivery it accepted.
+     */
+    lastUsedAt?: string | null;
+};
+
+/**
+ * A routine's webhook, if it has a URL.
+ */
+export type WebhookStatusResponse = {
+    webhook?: null | WebhookInfo;
+};
+
 export type ScheduledActionHealthData = {
     body?: never;
     path?: never;
@@ -2208,6 +2268,94 @@ export type ScheduledActionHealthResponses = {
 };
 
 export type ScheduledActionHealthResponse = ScheduledActionHealthResponses[keyof ScheduledActionHealthResponses];
+
+export type DeliverRoutineWebhookWithBearerData = {
+    /**
+     * Any UTF-8 text up to 64 KiB, of any content type; JSON is parsed for the payload tests and code
+     */
+    body: unknown;
+    headers?: {
+        /**
+         * Up to 255 visible ASCII characters
+         */
+        'Idempotency-Key'?: string | null;
+    };
+    path: {
+        /**
+         * The webhook's public id
+         */
+        hook_id: string;
+    };
+    query?: never;
+    url: '/hooks/{hook_id}';
+};
+
+export type DeliverRoutineWebhookWithBearerErrors = {
+    400: unknown;
+    404: unknown;
+    409: unknown;
+    413: unknown;
+    429: unknown;
+};
+
+export type DeliverRoutineWebhookWithBearerResponses = {
+    200: WebhookDeliveryResponse;
+    202: WebhookDeliveryResponse;
+};
+
+export type DeliverRoutineWebhookWithBearerResponse = DeliverRoutineWebhookWithBearerResponses[keyof DeliverRoutineWebhookWithBearerResponses];
+
+export type DeliverRoutineWebhookData = {
+    /**
+     * Any UTF-8 text up to 64 KiB, of any content type; JSON is parsed for the payload tests and code
+     */
+    body: unknown;
+    headers?: {
+        /**
+         * Up to 255 visible ASCII characters
+         */
+        'Idempotency-Key'?: string | null;
+    };
+    path: {
+        /**
+         * The webhook's public id
+         */
+        hook_id: string;
+        /**
+         * The webhook's secret
+         */
+        token: string;
+    };
+    query?: never;
+    url: '/hooks/{hook_id}/{token}';
+};
+
+export type DeliverRoutineWebhookErrors = {
+    /**
+     * The body is not UTF-8 text, or the key is invalid
+     */
+    400: unknown;
+    404: unknown;
+    /**
+     * The routine is paused
+     */
+    409: unknown;
+    413: unknown;
+    /**
+     * Too many requests, or too many runs waiting
+     */
+    429: unknown;
+};
+
+export type DeliverRoutineWebhookResponses = {
+    /**
+     * The body failed the trigger's payload tests: no run
+     */
+    200: WebhookDeliveryResponse;
+    202: WebhookDeliveryResponse;
+};
+
+export type DeliverRoutineWebhookResponse = DeliverRoutineWebhookResponses[keyof DeliverRoutineWebhookResponses];
 
 export type ListScheduledActionsData = {
     body?: never;
@@ -3055,6 +3203,82 @@ export type ListScheduledActionUnusableItemsResponses = {
 };
 
 export type ListScheduledActionUnusableItemsResponse = ListScheduledActionUnusableItemsResponses[keyof ListScheduledActionUnusableItemsResponses];
+
+export type RemoveScheduledActionWebhookData = {
+    body?: never;
+    path: {
+        /**
+         * ID of the routine
+         */
+        id: string;
+    };
+    query?: never;
+    url: '/scheduled-actions/{id}/webhook';
+};
+
+export type RemoveScheduledActionWebhookErrors = {
+    401: unknown;
+    403: unknown;
+    404: unknown;
+};
+
+export type RemoveScheduledActionWebhookResponses = {
+    204: void;
+};
+
+export type RemoveScheduledActionWebhookResponse = RemoveScheduledActionWebhookResponses[keyof RemoveScheduledActionWebhookResponses];
+
+export type GetScheduledActionWebhookData = {
+    body?: never;
+    path: {
+        /**
+         * ID of the routine
+         */
+        id: string;
+    };
+    query?: never;
+    url: '/scheduled-actions/{id}/webhook';
+};
+
+export type GetScheduledActionWebhookErrors = {
+    401: unknown;
+    403: unknown;
+    404: unknown;
+};
+
+export type GetScheduledActionWebhookResponses = {
+    200: WebhookStatusResponse;
+};
+
+export type GetScheduledActionWebhookResponse = GetScheduledActionWebhookResponses[keyof GetScheduledActionWebhookResponses];
+
+export type MintScheduledActionWebhookData = {
+    body?: never;
+    path: {
+        /**
+         * ID of the routine
+         */
+        id: string;
+    };
+    query?: never;
+    url: '/scheduled-actions/{id}/webhook';
+};
+
+export type MintScheduledActionWebhookErrors = {
+    401: unknown;
+    403: unknown;
+    404: unknown;
+    /**
+     * The routine has no webhook trigger
+     */
+    409: unknown;
+};
+
+export type MintScheduledActionWebhookResponses = {
+    201: MintedWebhookResponse;
+};
+
+export type MintScheduledActionWebhookResponse = MintScheduledActionWebhookResponses[keyof MintScheduledActionWebhookResponses];
 
 export type ListSuggestionsData = {
     body?: never;

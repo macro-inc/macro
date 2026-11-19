@@ -312,6 +312,8 @@ fn a_run_that_sends_nothing_is_refused_every_send_in_the_sdk() {
         "scheduled-action.detachScheduledAction",
         // A routine's icon and color show only in its owner's lists.
         "scheduled-action.setScheduledActionAppearance",
+        // Deleting a webhook URL only stops runs of the owner's own routine.
+        "scheduled-action.removeScheduledActionWebhook",
         "scheduled-action.unshareScheduledActionTemplate",
         "storage.deleteEntityMention",
         "storage.entityMessageDeleteMessage",

@@ -20,6 +20,7 @@ use crate::domain::event_runs::{
 use crate::domain::event_trigger::{ActionTrigger, EventReference, EventSource};
 use crate::domain::models::{ActionExecutionRecord, MAX_ACTION_TIME, ScheduledAction};
 use crate::domain::models::{SubRoutine, SubRoutineKey};
+use crate::domain::webhook::HookId;
 
 #[cfg(test)]
 mod test;
@@ -45,6 +46,7 @@ struct ConfigurationRow {
     configuration_revision: i64,
     event_filters: Value,
     event_activated_at: DateTime<Utc>,
+    hook_id: Option<Uuid>,
 }
 
 /// Deliberately excludes persisted content and underlying parser errors.
@@ -74,6 +76,7 @@ impl TryFrom<ConfigurationRow> for EventActionConfiguration {
             filters: serde_json::from_value(row.event_filters)
                 .map_err(|_| InvalidConfiguration::Filters)?,
             activated_at: row.event_activated_at,
+            hook_id: row.hook_id.map(HookId::from),
         })
     }
 }
@@ -104,7 +107,7 @@ impl TryFrom<PendingRow> for PendingEventRun {
 fn github_event(event: &EventReference) -> Option<&str> {
     match event.source() {
         EventSource::Github(delivery) => Some(delivery.event.as_str()),
-        EventSource::Entity { .. } => None,
+        EventSource::Entity { .. } | EventSource::Webhook(_) => None,
     }
 }
 
@@ -131,7 +134,9 @@ impl EventRunRepository for PgEventRunRepo {
             ConfigurationRow,
             r#"
             SELECT id AS action_id, owner, enabled, configuration_revision,
-                   event_filters AS "event_filters!", event_activated_at AS "event_activated_at!"
+                   event_filters AS "event_filters!", event_activated_at AS "event_activated_at!",
+                   -- Macro and GitHub events: never a webhook's.
+                   NULL::uuid AS hook_id
             FROM scheduled_action
             WHERE enabled AND event_filters IS NOT NULL
               AND ($1::uuid IS NULL OR id > $1)
@@ -181,8 +186,9 @@ impl EventRunRepository for PgEventRunRepo {
             ConfigurationRow,
             r#"
             SELECT id AS action_id, owner, enabled, configuration_revision,
-                   event_filters AS "event_filters!", event_activated_at AS "event_activated_at!"
-            FROM scheduled_action WHERE id = $1 AND event_filters IS NOT NULL
+                   event_filters AS "event_filters!", event_activated_at AS "event_activated_at!",
+                   (SELECT hook_id FROM scheduled_action_webhook w WHERE w.action_id = a.id) AS hook_id
+            FROM scheduled_action a WHERE id = $1 AND event_filters IS NOT NULL
             "#,
             action_id,
         )
@@ -347,6 +353,24 @@ impl EventRunRepository for PgEventRunRepo {
             tx.rollback().await?;
             return Ok(None);
         }
+        // A delivery starts only while its URL is still the routine's. The
+        // share lock makes a rotation or removal wait for this claim, so none
+        // that has returned lets an earlier delivery start; the next poll
+        // supersedes the run instead.
+        if let Some(delivery) = pending.event.webhook_delivery() {
+            let current = sqlx::query_scalar!(
+                r#"SELECT 1 AS "current!" FROM scheduled_action_webhook
+                WHERE action_id = $1 AND hook_id = $2 FOR SHARE"#,
+                key.action_id,
+                delivery.hook_id.as_uuid(),
+            )
+            .fetch_optional(&mut *tx)
+            .await?;
+            if current.is_none() {
+                tx.rollback().await?;
+                return Ok(None);
+            }
+        }
         let action = ScheduledAction {
             id: Some(action.id),
             owner: Owner::from_principal_str(&action.owner)?,
@@ -499,7 +523,7 @@ impl EventRunRepository for PgEventRunRepo {
             r#"
             UPDATE scheduled_action_event_run
             SET state = 'finished', finished_at = $3, outcome = $4, execution_record_id = $5,
-                event_context = event_context #- '{github,payload}'
+                event_context = event_context #- '{github,payload}' #- '{webhook,body}'
             WHERE action_id = $1 AND event_id = $2
             "#,
             run.key.action_id,
@@ -531,7 +555,7 @@ impl EventRunRepository for PgEventRunRepo {
         sqlx::query!(
             r#"
             UPDATE scheduled_action_event_run SET state = 'finished', finished_at = now(), outcome = $4,
-                event_context = event_context #- '{github,payload}'
+                event_context = event_context #- '{github,payload}' #- '{webhook,body}'
             WHERE action_id = $1 AND event_id = $2 AND configuration_revision = $3 AND state = 'pending'
             "#,
             key.action_id,
@@ -565,7 +589,7 @@ impl EventRunRepository for PgEventRunRepo {
         let skipped = sqlx::query_scalar!(
             r#"
             UPDATE scheduled_action_event_run SET state = 'finished', finished_at = now(), outcome = $4,
-                event_context = event_context #- '{github,payload}'
+                event_context = event_context #- '{github,payload}' #- '{webhook,body}'
             WHERE action_id = $1 AND event_id = $2 AND configuration_revision = $3 AND state = 'pending'
             RETURNING event_id
             "#,
@@ -640,7 +664,7 @@ impl EventRunRepository for PgEventRunRepo {
                 r#"
                 UPDATE scheduled_action_event_run r
                 SET state = 'finished', finished_at = $3,
-                    event_context = r.event_context #- '{github,payload}',
+                    event_context = r.event_context #- '{github,payload}' #- '{webhook,body}',
                     outcome = CASE WHEN r.state = 'started' THEN $4::jsonb
                         WHEN NOT a.enabled THEN $5::jsonb ELSE $6::jsonb END
                 FROM scheduled_action a
