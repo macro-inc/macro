@@ -12,9 +12,12 @@
 //
 // - `search.index.lag_ms`: ms from the record's Kafka timestamp, set when it
 //   was published, to the end of its processing (histogram), tagged
-//   `entity_type`, `event_type` (the wire type, e.g. `email.message_received`)
-//   and `outcome` (`indexed`, `ignored`, `dropped`, `coalesced`,
-//   `no_index_change`). Freshness reads `outcome:indexed`. It covers processed
+//   `entity_type`, `event_type` (the wire type, e.g. `email.message_received`),
+//   `outcome` (`indexed`, `ignored`, `dropped`, `coalesced`,
+//   `no_index_change`, `retry_queued`, `failed`, `source_missing`) and
+//   `delivery` (`kafka`, or `sqs_replay` for a replay, whose lag still counts
+//   from the original record). Freshness reads `outcome:indexed`;
+//   `retry_queued` marks an event that will be late. It covers processed
 //   events only: a stalled consumer records nothing here.
 // - `search.index.oldest_pending_ms`: per assigned `topic` and `partition`, ms
 //   since the oldest record not yet processed was recorded, 0 when caught up
