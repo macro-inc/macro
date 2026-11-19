@@ -74,7 +74,7 @@ const searchTypes: readonly SearchType[] = [
  * Skills are instructions to follow. When a request names a skill that is not attached, find it by name with macro.documents.skills({query}), which includes built-in skills, read its instructions with skill.content() before doing the task, and follow them for that request only.
  *
  * @example Find a contract across email and documents, in one inbox
- * ```js
+ * ```typescript
  * const page = await macro.search.page('"master services agreement"', {
  *   types: ['email', 'document'], inbox: 'me@example.com', matchType: 'exact',
  * });

@@ -1072,11 +1072,11 @@ For this draft:
 
 2. Don't create the routine itself, run it or test it: you hand it back for them to review.
 
-3. Write the routine as `macro.routines.check` takes it: read `RoutineNamespace.check` and the types it names first, and follow them exactly, since the check type-checks code steps but not your options. Triggers: `{{type: 'events', filters: [{{events, entities?}}]}}`, `{{type: 'cron', schedule, timezone: '{timezone}'}}` or `{{type: 'once', at}}`. {conditions}
+3. Write the routine as `macro.routines.check` takes it: read `RoutineNamespace.check` and the types it names first, and follow them exactly: the program is type-checked against them before it runs. Build it as `const routine: RoutineOptions = {{...}}`, with `import type {{ RoutineOptions }} from '@macro-inc/sdk'`, so its literal values keep their types. Triggers: `{{type: 'events', filters: [{{events, entities?}}]}}`, `{{type: 'cron', schedule, timezone: '{timezone}'}}` or `{{type: 'once', at}}`. {conditions}
 
 {steps}
 
-4. Hand it back by checking it: `await macro.routines.check(routine, {{ created }})`, where `created` lists the handles of everything you created for it (empty when you created nothing). The check saves nothing and returns `ok`, `problems` and the code `steps` that don't type-check. Every check is taken as your answer, the last one winning: only ever check the whole routine you mean to hand back, never a test, a part of it or a variant without the items you found. Fix what it reports and check the whole routine again until `ok` is true. A code step's `main` takes `StepContext`: `export async function main({{ macro, trigger }}: StepContext)`. As soon as a check passes, stop with one short line."
+4. Hand it back by checking it: `await macro.routines.check(routine, {{ created }})`, where `created` lists the handles of everything you created for it (empty when you created nothing). The check saves nothing and returns `ok`, `problems` and the code `steps` that don't type-check. Every check is taken as your answer, the last one winning: only ever check the whole routine you mean to hand back, never a test, a part of it or a variant without the items you found. Fix what it reports and check the whole routine again until `ok` is true. The program's own `main` takes `CodeContext` (`export async function main({{ macro }}: CodeContext)`); a code step's `main` takes `StepContext`: `export async function main({{ macro, trigger }}: StepContext)`. As soon as a check passes, stop with one short line."
     ))
 }
 
