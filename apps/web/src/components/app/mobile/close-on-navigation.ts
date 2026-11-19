@@ -36,8 +36,9 @@ export function shownPage(): unknown {
  * Asks every open sheet to close, as tapping its scrim does, then runs
  * `navigate`. For a navigation that may land on the page already shown, such
  * as a notification tap: asking first lets a sheet the destination opens on
- * arrival stay open. Until `navigate` settles, its own page change doesn't ask
- * again, so an owner that refuses (to confirm a discard) is asked once.
+ * arrival stay open. The first page change before `navigate` settles is its
+ * own and doesn't ask again, so an owner that refuses (to confirm a discard)
+ * is asked once; a later one asks as usual.
  */
 export async function closeSheetsForNavigation<T>(
   navigate: () => Promise<T>
@@ -90,7 +91,13 @@ export function createCloseOnNavigation(options: {
         (shown) => {
           if (shown === openedOver) return;
           openedOver = shown;
-          if (!sheet.askedByNavigation) sheet.request();
+          // The navigation that asked already gets one page change for free;
+          // any other asks again.
+          if (sheet.askedByNavigation) {
+            sheet.askedByNavigation = false;
+            return;
+          }
+          sheet.request();
         },
         { defer: true }
       )

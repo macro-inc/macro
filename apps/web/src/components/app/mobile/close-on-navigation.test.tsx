@@ -229,6 +229,25 @@ it('leaves a sheet opened during startup to its owner until a navigation closes 
   await expectClosed();
 });
 
+it('asks again for another navigation while a notification tap is under way', async () => {
+  const { onOpenChange } = renderControlled({ refuseClose: true });
+  let land!: () => void;
+  const landed = new Promise<void>((resolve) => {
+    land = resolve;
+  });
+
+  const tap = closeSheetsForNavigation(() => landed);
+  setPage({ split: 'channel-pane', view: 'general' });
+  expect(onOpenChange).toHaveBeenCalledTimes(2);
+
+  // An agent opens something else before the tap's navigation settles.
+  setPage({ split: 'front', view: 'notes' });
+  expect(onOpenChange).toHaveBeenCalledTimes(3);
+
+  land();
+  await tap;
+});
+
 it('asks an owner that refuses once per notification navigation', async () => {
   const { onOpenChange } = renderControlled({ refuseClose: true });
 
