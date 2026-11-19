@@ -1,7 +1,7 @@
 import { t } from '@app/lib/i18n';
 import { toast } from '@core/component/Toast/Toast';
 import { queryAccountSession } from '@queries/auth/account-scope';
-import { ensureComputers } from '@queries/computers/computers';
+import { fetchComputers } from '@queries/computers/computers';
 import type { NotifEvent } from '@service-notification/generated/schemas/notifEvent';
 import { match } from 'ts-pattern';
 
@@ -36,12 +36,13 @@ export function holdSetupNotices(computerId: string): () => void {
 }
 
 /**
- * Whether the team's list says `computerId` finished its setup, read when
- * the cache is cold. Unreadable counts as unfinished: the notice still shows.
+ * Whether the team's list says `computerId` finished its setup, read fresh:
+ * the notification just invalidated a cached row that may predate it.
+ * Unreadable counts as unfinished: the notice still shows.
  */
 async function setupComplete(computerId: string): Promise<boolean> {
   try {
-    const computers = await ensureComputers();
+    const computers = await fetchComputers();
     return !!computers.find((computer) => computer.id === computerId)
       ?.setupCompletedAt;
   } catch {

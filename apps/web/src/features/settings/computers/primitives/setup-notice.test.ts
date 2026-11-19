@@ -11,7 +11,7 @@ type Options = {
 const mocks = vi.hoisted(() => ({
   shown: [] as { kind: string; title: string; options: Options }[],
   dismissed: [] as number[],
-  ensureComputers: vi.fn<() => Promise<Partial<ComputerStatus>[]>>(),
+  fetchComputers: vi.fn<() => Promise<Partial<ComputerStatus>[]>>(),
   session: 1,
 }));
 
@@ -20,7 +20,7 @@ vi.mock('@queries/auth/account-scope', () => ({
 }));
 
 vi.mock('@queries/computers/computers', () => ({
-  ensureComputers: mocks.ensureComputers,
+  fetchComputers: mocks.fetchComputers,
 }));
 
 vi.mock('@core/component/Toast/Toast', () => ({
@@ -37,8 +37,8 @@ vi.mock('@core/component/Toast/Toast', () => ({
 }));
 
 beforeEach(() => {
-  mocks.ensureComputers.mockReset();
-  mocks.ensureComputers.mockResolvedValue([]);
+  mocks.fetchComputers.mockReset();
+  mocks.fetchComputers.mockResolvedValue([]);
   mocks.session = 1;
   for (const notice of mocks.shown) notice.options.onDismiss?.();
   mocks.shown = [];
@@ -131,8 +131,8 @@ it('shows no ready notice while the computer is in its buy dialog, and takes one
   expect(mocks.shown).toHaveLength(3);
 });
 
-it('shows no ready notice for a computer whose setup is complete, read when the cache is cold', async () => {
-  mocks.ensureComputers.mockResolvedValue([
+it('shows no ready notice for a computer whose setup is complete, read fresh', async () => {
+  mocks.fetchComputers.mockResolvedValue([
     { id: 'computer-1', setupCompletedAt: '2026-11-18T18:38:00Z' },
   ]);
   await showComputerSetupNotice(
@@ -144,12 +144,12 @@ it('shows no ready notice for a computer whose setup is complete, read when the 
     },
     vi.fn()
   );
-  expect(mocks.ensureComputers).toHaveBeenCalledOnce();
+  expect(mocks.fetchComputers).toHaveBeenCalledOnce();
   expect(mocks.shown).toHaveLength(0);
 });
 
 it('still shows the ready notice when the list cannot be read', async () => {
-  mocks.ensureComputers.mockRejectedValue(new Error('offline'));
+  mocks.fetchComputers.mockRejectedValue(new Error('offline'));
   await showComputerSetupNotice(
     {
       computerId: 'computer-1',
@@ -182,7 +182,7 @@ it('keeps notices away until the last of two dialogs for a computer closes', asy
 });
 
 it('shows no ready notice when another login happened while the list was read', async () => {
-  mocks.ensureComputers.mockImplementation(async () => {
+  mocks.fetchComputers.mockImplementation(async () => {
     mocks.session = 2;
     return [];
   });

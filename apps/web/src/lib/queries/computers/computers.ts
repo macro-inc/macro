@@ -123,11 +123,6 @@ export async function fetchComputers(): Promise<ComputerStatus[]> {
   });
 }
 
-/** The team's computers from the cache, read once when it is empty. */
-export async function ensureComputers(): Promise<ComputerStatus[]> {
-  return await queryClient.ensureQueryData(computersQueryOptions(true));
-}
-
 export function useComputersQuery(enabled: () => boolean) {
   const computers = useQuery(() => computersQueryOptions(enabled()));
   const harnesses = useHarnessesQuery();
