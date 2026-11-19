@@ -26,8 +26,8 @@ export function crmProtectedQueryKey(key: readonly unknown[]): boolean {
     return true;
   if (kind === 'soup') return true;
   if (kind === 'email') {
-    // Retire copied mail on a proven denial. Allowed members retain the
-    // ordinary seven-day thread persistence and offline reads.
+    // Retire copied mail on a proven denial. Normalized email-thread storage
+    // is separate from the disabled legacy TanStack thread scope.
     return ![
       'links',
       'linksHealthProbe',
