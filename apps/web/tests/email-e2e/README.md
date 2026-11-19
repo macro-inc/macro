@@ -147,8 +147,11 @@ nix develop -c just apps/web/test-email-e2e-full-stack email-e2e reply   # only 
   connecting through the authentication service and the providers' consent
   (including administrator approval), search, notifications, sharing a
   thread with another user, a file too large to attach, mail on Home and
-  in a contact's record, a reminder coming due, and the calendar
-  (invitations, an event made from an email).
+  in a contact's record, a reminder coming due, the calendar
+  (invitations, an event made from an email), and the unread numbers beside
+  each view checked against what the view shows
+  (`full-stack-unread-counts.spec.ts`, which records both per step in
+  `EMAIL_E2E_UNREAD_COUNTS_OUT` or the test's output folder).
 - `test.use({ access: 'mail-and-calendar' })` links the mailbox with its
   calendar too. Tests that need a ready calendar use `calendarReady` in
   `full-stack-calendar.spec.ts`. The first-sync scenario starts with an empty

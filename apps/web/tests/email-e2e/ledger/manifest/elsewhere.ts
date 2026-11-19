@@ -528,7 +528,10 @@ export const elsewhere = {
       state:
         'Unread mark on the Mail navigation entry; hidden when "New email" notifications are off',
       trigger: 'an unread, not-done Signal thread in the loaded page',
-      source: ['src/components/app/use-navigation-unread.ts'],
+      source: [
+        'src/components/app/use-navigation-unread.ts',
+        'src/components/app/view-unread.ts',
+      ],
     },
     {
       id: 'STX-300',
