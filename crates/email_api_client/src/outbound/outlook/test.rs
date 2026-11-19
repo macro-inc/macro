@@ -914,6 +914,68 @@ async fn a_sender_or_recipient_without_an_address_is_left_out() {
 }
 
 #[tokio::test]
+async fn null_read_and_draft_states_read_like_missing_ones() {
+    let (server, api, token) = setup().await;
+    Mock::given(method("GET"))
+        .and(path("/v1.0/me/messages/null-states"))
+        .respond_with(ResponseTemplate::new(200).set_body_json(json!({
+            "id":"null-states", "conversationId":"conversation",
+            "isRead":null, "isDraft":null,
+            "createdDateTime":null, "lastModifiedDateTime":null, "receivedDateTime":null
+        })))
+        .mount(&server)
+        .await;
+    Mock::given(method("GET"))
+        .and(path("/v1.0/me/messages/missing-states"))
+        .respond_with(ResponseTemplate::new(200).set_body_json(json!({
+            "id":"missing-states", "conversationId":"conversation"
+        })))
+        .mount(&server)
+        .await;
+    Mock::given(method("GET"))
+        .and(path("/v1.0/me/messages/read-draft"))
+        .respond_with(ResponseTemplate::new(200).set_body_json(json!({
+            "id":"read-draft", "conversationId":"conversation", "isRead":true, "isDraft":true
+        })))
+        .mount(&server)
+        .await;
+    for attachments in [
+        "/v1.0/me/messages/null-states/attachments",
+        "/v1.0/me/messages/missing-states/attachments",
+        "/v1.0/me/messages/read-draft/attachments",
+    ] {
+        Mock::given(method("GET"))
+            .and(path(attachments))
+            .respond_with(ResponseTemplate::new(200).set_body_json(json!({"value":[]})))
+            .mount(&server)
+            .await;
+    }
+
+    let read = |id: &'static str| {
+        let api = &api;
+        let token = &token;
+        async move {
+            api.message(token, Uuid::now_v7(), &ProviderId::new(id).unwrap(), &[])
+                .await
+                .unwrap()
+                .unwrap()
+        }
+    };
+    let null_states = read("null-states").await;
+    let missing_states = read("missing-states").await;
+    let read_draft = read("read-draft").await;
+
+    assert!(!null_states.state.is_read);
+    assert!(!null_states.state.is_draft);
+    assert!(!null_states.content.message.is_read);
+    assert!(!null_states.content.message.is_draft);
+    assert!(!missing_states.state.is_read);
+    assert!(!missing_states.state.is_draft);
+    assert!(read_draft.state.is_read);
+    assert!(read_draft.state.is_draft);
+}
+
+#[tokio::test]
 async fn an_undecodable_response_names_where_it_failed_but_not_the_value() {
     let (server, api, token) = setup().await;
     Mock::given(method("GET"))

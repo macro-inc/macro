@@ -1,0 +1,23 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "SELECT EXISTS(SELECT 1 FROM \"User\" WHERE lower(email) = lower($1))\n                OR EXISTS(SELECT 1 FROM email_links WHERE lower(email_address) = lower($1)\n                    AND provider = 'GMAIL' AND fusionauth_user_id = $2) AS \"backed!\"",
+  "describe": {
+    "columns": [
+      {
+        "ordinal": 0,
+        "name": "backed!",
+        "type_info": "Bool"
+      }
+    ],
+    "parameters": {
+      "Left": [
+        "Text",
+        "Text"
+      ]
+    },
+    "nullable": [
+      null
+    ]
+  },
+  "hash": "2c64392652498b5d105bc4e33aa7e9aa0743d151d908ac0dee0a714f6ec62f43"
+}

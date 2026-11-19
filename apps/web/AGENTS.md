@@ -452,8 +452,8 @@ regression over the production `ThreadList` is
 Discussion link scrolling has a backend-free browser regression:
 `bunx playwright test --config src/lib/core/messages/browser-test/playwright.config.ts`.
 
-Adding an agent teammate from Team → Members (People | Agent in Invite to
-Team, behind `enable-agent-teammates`): the dialog waiting until the agent is
+Adding an agent teammate from Team → Members (its Invite Agent button,
+behind `enable-agent-teammates`; members see only Invite Human): the dialog waiting until the agent is
 online, falling back to the row after five seconds, a declined card and a size
 with no room in place, its row's Setting up step and failed Retry, the ready and failed notifications (Message, Connect Claude plan for
 admins only, Retry), Connect Claude plan's one-screen sign-in with its
@@ -950,6 +950,7 @@ resolved session ID; keep the existing `AgentSessionProvider` subscription to
   which has no dev/local override while backend ingestion rolls out;
   another contributor's copy remains eligible. Desktop/phone coverage lives in
   `src/features/crm/browser-test/privacy`.
+- Keep selective CRM settings reads side-effect free, validate on **Save and share**, preserve drafts across conflicts until explicit policy review, and retain inspection/history/withdrawal when the gate is off; see `src/features/crm/README.md`.
 - Show CRM mailbox-domain block refusals beside the submitted input and existing
   matching-entry explanations in the shared settings row description; retain
   removal and distinguish company domains from personal providers.
@@ -1026,7 +1027,9 @@ resolved session ID; keep the existing `AgentSessionProvider` subscription to
   wait in the dialog up to five seconds for the computer (or agent) to come
   up (`computers/primitives/wait-for-progress.ts`), offer no power,
   billing or release while `purchasing`, confirm Restore before billing again,
-  and release only after the computer's name is typed. See the
+  and release only after the computer's name is typed. A row's usage line
+  (`computers/components/computer-usage.tsx`, `useComputerUsageQuery`) never
+  holds the row back: a pending or failed read shows none. See the
   [Macro computers walkthrough](../../docs/agent-guide/settings.md#macro-computers).
 - Keep bot setup focused on the token-and-SDK workflow; Agent and Ownership
   controls live under collapsed Advanced settings. See the
@@ -1120,7 +1123,7 @@ resolved session ID; keep the existing `AgentSessionProvider` subscription to
   pending edits against the persisted server snapshot instead of replaying an older one.
 - Mobile dock customization shares the navigation island’s measured capacity; persist ordering per user with `mobile-dock-order.ts`, preserve gated destinations, and keep Search and More fixed. Reorder handles drag without a hold delay; the rest of each row scrolls.
 - Native iOS navigation follows UIKit's preferred vertical-bar edge through `tauri/layout_plugin`; place it in UIKit's bar layout region within the system column, not beyond the content safe area. Keep the same dock mounted while its axis changes, size overflow along that axis, and leave independent safe-area clearance for content and composers. Keep JS compact-width behavior and the `mobile:` CSS variant aligned with the native size class.
-- Share sidebar and mobile dock unread presence through `components/app/use-navigation-unread.ts`; keep badges reactive to read/done changes, guard all query data with `queryReadyGate` so pending preferences or paused queries cannot suspend the shell, and avoid fetching extra pages for counts.
+- Share sidebar and mobile dock unread state through `components/app/use-navigation-unread.ts`. Gate numbers separately so unified dots can keep following the unread subscription. Keep badges reactive to read/done changes, guard query data with `queryReadyGate` so pending preferences or paused queries cannot suspend the shell, and avoid fetching extra pages for counts.
 - Show notification unread dots on favorite rows in Chat, Tasks, Drive, and Reviews; reuse Chat's channel activity and the existing Soup entity hydration plus `getEntityNotifications` elsewhere, without a separate notification query or refresh registry. Never paginate favorites or the global notification feed just for dots.
 - Name Home thread rows from their latest scoped notification, including document mentions and reactions; use the thread author only when no notification exists. Document rows whose newest outstanding notification is a comment, and calendar event rows whose newest is a join request, say who did it (`row-notification.ts`).
 - Use `ChannelTitleIcon` for conversation breadcrumbs so DMs retain participant or agent avatars and named channels retain their pictures; suppress avatar actions inside breadcrumb buttons.
@@ -1402,6 +1405,8 @@ resolved session ID; keep the existing `AgentSessionProvider` subscription to
 - Sender filter writes and Undo return no per-thread classification. Refresh
   active GraphQL Soup readers with an email Importance predicate so their
   server pages reconcile Signal and Noise membership.
+- Project calendar invitations from GraphQL Mail aggregate facts into the
+  shared row flag so the Calendar invite facet also matches inline invitations.
 - Render user-visible text in new UI, and every menu and navigation label,
   with `t()` from `@app/lib/i18n`, adding only the English to
   `src/lib/i18n/locales/en/`. The periodic `update-translations` skill fills
@@ -1501,6 +1506,23 @@ promises into error results so failure cleanup acknowledges the tap and shows
 the existing error toast. Keep the startup cover fallback in the same owner,
 and let it defer to a pending tap's deadline. The deadline requires responsive
 JavaScript and IPC; it cannot recover a frozen WebContent process.
+
+Open sheets and touch dialogs close when the app navigates, as a scrim tap
+closes them (`createCloseOnNavigation` in `MobileDrawer` and `Dialog`): when
+the active pane shows another view (a link, an agent, the dock, Back), and
+before a notification tap navigates, since it may land on the page already
+shown. A search change (filters) or a pane adopting its content's real id
+keeps the view, so those sheets stay open; so does a sheet the destination
+opens on arrival, and an owner that refuses or confirms a close still does.
+A detail opened inside the same view (a tablet's inline preview) is not a new
+view, so its list's sheets stay. Phones keep the pane behind mounted for
+swipe-back, so without this its sheets stayed over the new page. Opt out with
+`keepOpenOnNavigation` only where dismissing does something the user didn't
+choose: the incoming-share sheet (discards the shared files) and the push and
+iPad prompts (record the prompt as dismissed). The
+backend-free phone and tablet regression drives the real pane stack, router and
+notification tap path with simulated native IPC:
+`bunx playwright test --config src/components/app/mobile/navigation-browser-test/playwright.config.ts`.
 
 The frontend cover deadline has a backend-free phone browser regression:
 `bunx playwright test --config src/lib/tauri/browser-test/playwright.config.ts`.
@@ -1884,10 +1906,13 @@ searching, rank with `NAME_MATCH_RANKING`; an agent needs the typed words, not s
 letters, and never ranks above a person who matches as well. Cap a list's people (`capPeople`), never its agents, and
 don't boost bots in a menu's search score. Until the contact directory answers for the
 first time after it opens, a directory-backed @ menu lists only the rows that lead every
-person (Macro) and keeps its People preview's rows as loading rows (`holdsRows`); phones list
-nothing below them yet. The hold ends at `UNANSWERED_SEARCH_LIMIT_MS`, when Cmd+K stops
-saying "Searching…". The menu reads a failed people window again once by itself, holding
-the rows meanwhile, and offers Retry only when that read fails too (`peopleFailed`).
+person (Macro) and keeps its People preview's rows as loading rows (`holdsRows`; in a menu
+with other sections also when no agent matches, `peopleHolding`), holding the highlighted
+row meanwhile; phones list nothing below them yet. On desktop, Booking Links, which arrive
+from the network, are a section below People; phones pin People rows above the rest. The hold ends at `UNANSWERED_SEARCH_LIMIT_MS`, when
+Cmd+K stops saying "Searching…". The menu reads a failed people window again once by
+itself, holding the rows meanwhile, and offers Retry only when that read fails too
+(`peopleFailed`).
 
 ### Tag picker selection and creation
 
@@ -2016,6 +2041,10 @@ only conceal revealed values, never drafts. The vault is keyed by account,
 sign-in session and team: a scope change remounts it and aborts its requests,
 so drafts and late responses never cross viewers. Load and copy usernames
 through their field-scoped endpoints, and derive sharing counts from metadata.
+Toggle private favorites with their PUT/DELETE endpoint for every viewer, using
+an optimistic update in the account/session/team cache and rollback on failure;
+never route a star through the credential metadata PATCH. Keep the form Favorite
+checkbox creation-only; existing items use the detail star.
 Compose the view from `ViewShell`, `ViewSidebar` and Drive's `FolderTree`
 rather than feature-local chrome. Adapt Passwords metadata to the app's existing
 item drag provider and tree drop slots; never coerce vault items into Drive entities

@@ -42,6 +42,12 @@ Entity appearance is nullable JSON on each owning entity table (including routin
 template snapshots and saved-view definitions); appearance-only writes preserve content timestamps. Document
 lists and content save responses retain the stored appearance alongside ordinary metadata.
 
+`password_item_favorites` stores private human preferences. Its composite item
+and membership foreign keys cascade on deletion. Item triggers seed the creator's
+initial flag and clear soft-deleted items; never reseed on metadata updates.
+The legacy JSON favorite bit stays for rollback but is no longer a read source;
+remove it in a later migration after rollback compatibility is retired.
+
 ## Boundaries
 
 - Depends on: `entity_access_db_utils`, `entity_registry_db_utils`,

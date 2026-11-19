@@ -235,6 +235,7 @@ impl Fleet for SimHost {
                     hibernated: guest.hibernated,
                     private_memory_bytes: (!guest.hibernated)
                         .then_some(guest.private_mib * 1024 * 1024),
+                    swap_bytes: (!guest.hibernated).then_some(0),
                     cpu_usage_microseconds: (!guest.hibernated)
                         .then_some(guest.cpu_usage_microseconds),
                 })
@@ -531,6 +532,27 @@ async fn a_purchase_burst_spreads_over_hosts_and_pressure_hibernates_only_idle_c
     operator.overcommit().await.unwrap();
     assert_eq!(a.state.lock().unwrap().hibernated.len(), 2);
     assert!(operator_admits(&repo, hosts["sim-a"], clock.now()).await);
+
+    // The pass also kept host a's usage readings for Settings: one per
+    // guest for the minute sixteen minutes in (the passes before the burst
+    // saw no guests in the first minute; the pass after it is the same
+    // minute again), each at its 4 GiB.
+    let readings = crate::domain::ports::UsageHistory::usage_since(
+        &repo,
+        pressured,
+        clock.now() - Duration::hours(1),
+    )
+    .await
+    .unwrap();
+    assert_eq!(readings.len(), 12);
+    assert!(
+        readings
+            .iter()
+            .all(|(_, reading)| reading.sampled_at == clock.now()
+                && reading.memory_bytes == 4 * GIB * 1024 * 1024
+                && reading.cpu_usage_microseconds == 2_000_000),
+        "{readings:?}"
+    );
 
     // Its team powers one on: it wakes through the admission it freed.
     assert_eq!(

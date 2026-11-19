@@ -9,8 +9,11 @@
 //! entity is already queued, so one busy entity cannot fill its worker's
 //! channel and stall every topic. Malformed records are committed without a
 //! handoff so they cannot wedge a partition.
-//! Processing is retried in-process; exhausted events are logged and dropped
-//! because their offsets are already committed. A graceful stop gives the
+//! Processing is retried in-process, longer while OpenSearch refuses writes
+//! ([`attempts`]); an event whose attempts fail is queued on the search event
+//! queue and replayed a minute later ([`replay`]), because its offset is
+//! already committed. It is dropped only when that queueing fails too. A
+//! graceful stop gives the
 //! workers a few seconds, then commits each partition it still owns back to its
 //! first record no worker started ([`offsets`]), so a scale-in or deploy
 //! redelivers the events still queued instead of losing them. Events a worker
@@ -25,6 +28,8 @@
 #![allow(clippy::enum_variant_names)]
 
 mod agent_session;
+mod attempts;
+mod backlog;
 mod calendar_event;
 mod call;
 mod channel;
@@ -32,10 +37,13 @@ mod chat;
 mod context;
 mod document;
 mod email;
+mod entity_type;
 mod message;
+mod metrics;
 mod offsets;
 mod project;
 mod property;
+mod replay;
 #[cfg(test)]
 mod test;
 
@@ -70,25 +78,34 @@ use rdkafka::{
     message::{BorrowedMessage, Message as _},
 };
 use rootcause::prelude::{Report, ResultExt as _};
-use tokio::{sync::mpsc, task::JoinHandle};
-use tokio_retry::{Retry, strategy::ExponentialBackoff};
+use tokio::{sync::mpsc, task::JoinHandle, time::MissedTickBehavior};
+use tokio_util::sync::CancellationToken;
 use tracing::{Instrument as _, field};
 use uuid::Uuid;
 
 use self::{
+    attempts::{Attempted, Attempts, Exhausted, Failure, Handled},
+    backlog::{BacklogSampler, SAMPLE_INTERVAL},
     calendar_event::process_calendar_event,
     call::{describe_call_event, process_call_event},
     channel::{describe_channel_event, process_channel_event},
     chat::{describe_chat_event, process_chat_event},
     document::{describe_document_event, process_document_event},
     email::{describe_email_event, email_ordering_key, process_email_event},
+    entity_type::EntityType,
     message::{describe_message_event, process_message_event},
     offsets::{OffsetLedger, RecordPosition, WorkerReport},
     project::{describe_project_event, process_project_event},
     property::{describe_property_event, process_property_event},
+    replay::{ReplayQueue, conclude_kafka_attempts},
 };
 
-pub(crate) use self::context::KafkaProcessingContext;
+use self::metrics::Loss;
+pub(crate) use self::{
+    context::KafkaProcessingContext,
+    metrics::IndexMetrics,
+    replay::{ReplayDone, replay_broker_event},
+};
 
 /// Consumer group used for live search-index event offsets.
 pub(crate) struct SearchProcessingConsumerGroup;
@@ -148,10 +165,6 @@ const SHUTDOWN_DRAIN_DEADLINE: Duration = Duration::from_secs(5);
 const ABORT_GRACE: Duration = Duration::from_millis(500);
 /// Delay before polling Kafka again after a receive error.
 const RECEIVE_ERROR_RETRY_DELAY: Duration = Duration::from_secs(1);
-/// Total processing attempts before an event is dropped.
-const MAX_PROCESSING_ATTEMPTS: u32 = 3;
-/// Delay before the first retry; each later delay doubles.
-const PROCESSING_RETRY_BASE_DELAY: Duration = Duration::from_secs(1);
 
 /// A decoded search-processing event and its Kafka coordinates.
 struct ReceivedEvent {
@@ -163,9 +176,24 @@ struct ReceivedEvent {
     event_type: &'static str,
     /// When the broker recorded the event, in Unix milliseconds, if it did.
     produced_at_ms: Option<i64>,
+    /// The record's key and payload as read, for a replay of the event.
+    key: String,
+    payload: String,
+    delivery: Delivery,
     /// The record's `kafka.process` span, from receipt until processing ends,
-    /// so its duration includes the wait in the worker channel.
+    /// so its duration includes the wait in the worker channel. A replay's
+    /// `search.replay_event` span.
     span: tracing::Span,
+}
+
+/// How an event reached processing.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, strum::IntoStaticStr)]
+#[strum(serialize_all = "snake_case")]
+pub(crate) enum Delivery {
+    /// Read from its topic.
+    Kafka,
+    /// Replayed from the search event queue after its attempts failed.
+    SqsReplay,
 }
 
 impl ReceivedEvent {
@@ -187,12 +215,73 @@ enum EventOutcome {
     Indexed,
     /// The recognized event does not require a search-index operation.
     Ignored,
-    /// Processing failed after all retries and the already-committed event was dropped.
+    /// The event's attempts failed and it was queued for a replay: late, not
+    /// lost.
+    RetryQueued,
+    /// A replay failed and the queue delivers it again.
+    Failed,
+    /// The event's source is gone for good, or a replay found a row it needs
+    /// still missing, so there is nothing left to apply.
+    SourceMissing,
+    /// Lost: a Kafka event whose attempts failed and whose replay could not be
+    /// queued, or a replay that failed on its last delivery and moves to the
+    /// dead-letter queue.
     Dropped,
     /// Committed without processing: a reread for the same entity was queued.
     Coalesced,
     /// Committed without processing: the event changes nothing indexed.
     NoIndexChange,
+}
+
+impl From<Handled> for EventOutcome {
+    fn from(handled: Handled) -> Self {
+        match handled {
+            Handled::Indexed => Self::Indexed,
+            Handled::Ignored => Self::Ignored,
+            Handled::SourceMissing => Self::SourceMissing,
+        }
+    }
+}
+
+/// How one event's processing ended, recorded on its `process_event` span.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+struct OutcomeRecord {
+    outcome: EventOutcome,
+    /// Why its last attempt failed, when one did.
+    failure: Option<Failure>,
+    attempts: u32,
+    /// Items OpenSearch failed in the last attempt's bulk request.
+    failed_items: u32,
+}
+
+impl OutcomeRecord {
+    /// An event committed without an attempt.
+    fn skipped(outcome: EventOutcome) -> Self {
+        Self {
+            outcome,
+            failure: None,
+            attempts: 0,
+            failed_items: 0,
+        }
+    }
+
+    fn handled(handled: Handled, attempts: u32) -> Self {
+        Self {
+            outcome: handled.into(),
+            failure: None,
+            attempts,
+            failed_items: 0,
+        }
+    }
+
+    fn failed(outcome: EventOutcome, exhausted: &Exhausted) -> Self {
+        Self {
+            outcome,
+            failure: Some(exhausted.diagnosis.failure),
+            attempts: exhausted.attempts,
+            failed_items: exhausted.diagnosis.failed_items,
+        }
+    }
 }
 
 /// Result of decoding and attempting a channel handoff.
@@ -210,37 +299,6 @@ enum HandoffOutcome<E> {
     NoIndexChange,
     MalformedRecord(E),
     WorkerClosed,
-}
-
-fn processing_retry_strategy() -> impl Iterator<Item = Duration> {
-    ExponentialBackoff::from_millis(2)
-        .factor(500)
-        .take((MAX_PROCESSING_ATTEMPTS - 1) as usize)
-}
-
-async fn retry_processing_with_strategy<I, F, Fut, E>(
-    strategy: I,
-    mut operation: F,
-) -> Result<(), E>
-where
-    I: Iterator<Item = Duration>,
-    F: FnMut(u32) -> Fut,
-    Fut: Future<Output = Result<(), E>>,
-{
-    let mut attempt = 0;
-    Retry::start(strategy, || {
-        attempt += 1;
-        operation(attempt)
-    })
-    .await
-}
-
-async fn retry_processing<F, Fut, E>(operation: F) -> Result<(), E>
-where
-    F: FnMut(u32) -> Fut,
-    Fut: Future<Output = Result<(), E>>,
-{
-    retry_processing_with_strategy(processing_retry_strategy(), operation).await
 }
 
 /// Sharding key that serializes all events mutating the same search documents.
@@ -338,6 +396,7 @@ impl PendingRereads {
 struct WorkerPool {
     senders: Vec<mpsc::Sender<ReceivedEvent>>,
     pending_rereads: Arc<PendingRereads>,
+    metrics: IndexMetrics,
 }
 
 impl WorkerPool {
@@ -345,6 +404,7 @@ impl WorkerPool {
     fn new(
         senders: Vec<mpsc::Sender<ReceivedEvent>>,
         pending_rereads: Arc<PendingRereads>,
+        metrics: IndexMetrics,
     ) -> Self {
         assert!(
             !senders.is_empty(),
@@ -353,16 +413,18 @@ impl WorkerPool {
         Self {
             senders,
             pending_rereads,
+            metrics,
         }
     }
 
     /// Spawns [`WORKER_COUNT`] workers sharing `context` and returns their
     /// join handles alongside the pool. Each worker reports to `reports` when
-    /// it starts and finishes a record. Dropping the pool closes every worker
-    /// channel, letting the workers drain and exit.
+    /// it starts and finishes a record and follows `stop`. Dropping the pool
+    /// closes every worker channel, letting the workers drain and exit.
     fn spawn(
         context: &KafkaProcessingContext,
         reports: &mpsc::UnboundedSender<WorkerReport>,
+        stop: &WorkerStop,
     ) -> (Self, Vec<JoinHandle<()>>) {
         let pending_rereads = Arc::new(PendingRereads::default());
         let (senders, workers) = (0..WORKER_COUNT)
@@ -375,11 +437,15 @@ impl WorkerPool {
                         receiver,
                         Arc::clone(&pending_rereads),
                         reports.clone(),
+                        stop.clone(),
                     )),
                 )
             })
             .unzip();
-        (Self::new(senders, pending_rereads), workers)
+        (
+            Self::new(senders, pending_rereads, context.metrics.clone()),
+            workers,
+        )
     }
 
     fn shard_index(&self, key: &str) -> usize {
@@ -396,7 +462,12 @@ impl WorkerPool {
         // Before any reread claim: an event that changes nothing must not hold
         // one and absorb a later event that does.
         if !changes_search_index(&event.event) {
-            record_outcome(&processing_span(&event), EventOutcome::NoIndexChange);
+            record_outcome(
+                &self.metrics,
+                &processing_span(&event),
+                &event,
+                OutcomeRecord::skipped(EventOutcome::NoIndexChange),
+            );
             return HandoffOutcome::NoIndexChange;
         }
 
@@ -411,7 +482,12 @@ impl WorkerPool {
         if let Some(key) = &reread_key
             && !self.pending_rereads.claim(key.clone())
         {
-            record_outcome(&processing_span(&event), EventOutcome::Coalesced);
+            record_outcome(
+                &self.metrics,
+                &processing_span(&event),
+                &event,
+                OutcomeRecord::skipped(EventOutcome::Coalesced),
+            );
             return HandoffOutcome::Coalesced;
         }
 
@@ -440,6 +516,9 @@ fn attach_event_coordinates<E>(
         partition,
         offset,
         produced_at_ms: None,
+        key: String::new(),
+        payload: String::new(),
+        delivery: Delivery::Kafka,
         span,
     })
 }
@@ -458,6 +537,11 @@ fn receive_record<M: rdkafka::Message, E>(
         attach_event_coordinates(decoded, message.partition(), message.offset(), span.clone()).map(
             |received| ReceivedEvent {
                 produced_at_ms: message.timestamp().to_millis(),
+                // A decoded record's key and payload are UTF-8: the payload
+                // is JSON and the key an entity id.
+                key: String::from_utf8_lossy(message.key().unwrap_or_default()).into_owned(),
+                payload: String::from_utf8_lossy(message.payload().unwrap_or_default())
+                    .into_owned(),
                 // The offset ledger keys the record by the topic it arrived
                 // on, so its start and finish reports match its receipt.
                 topic: subscribed_topic(message.topic()).unwrap_or(received.topic),
@@ -577,37 +661,63 @@ fn processing_span(received: &ReceivedEvent) -> tracing::Span {
         partition = received.partition,
         offset = received.offset,
         event_type = received.event_type,
+        entity_type = <&'static str>::from(EntityType::of(&received.event)),
         entity_id = entity_id(&received.event).as_deref(),
+        delivery = <&'static str>::from(received.delivery),
         record_age_ms,
         outcome = field::Empty,
+        failure = field::Empty,
+        attempts = field::Empty,
+        failed_items = field::Empty,
         otel.status_code = field::Empty,
     )
 }
 
-fn record_outcome(span: &tracing::Span, outcome: EventOutcome) {
-    span.record("outcome", <&'static str>::from(outcome));
-    if outcome == EventOutcome::Dropped {
+/// Records how `received` ended on its `process_event` span and in `metrics`.
+fn record_outcome(
+    metrics: &IndexMetrics,
+    span: &tracing::Span,
+    received: &ReceivedEvent,
+    record: OutcomeRecord,
+) {
+    span.record("outcome", <&'static str>::from(record.outcome));
+    span.record("attempts", record.attempts);
+    if let Some(failure) = record.failure {
+        span.record("failure", <&'static str>::from(failure));
+        span.record("failed_items", record.failed_items);
+    }
+    if record.outcome == EventOutcome::Dropped {
         span.record("otel.status_code", "ERROR");
     }
+    metrics.record_processed(received, record);
 }
 
-/// Runs one record's processing inside its spans and records the outcome. A
-/// dropped event also fails the record's span, the consumer's top-level span,
-/// so drops count in the service's error rate.
-async fn process_received<'a, F, Fut>(received: &'a ReceivedEvent, process: F)
-where
+/// Runs one record's processing inside its spans and records the outcome. An
+/// event whose attempts fail is queued on `replays`. A dropped event also fails
+/// the record's span, the consumer's top-level span, so drops count in the
+/// service's error rate.
+async fn process_received<'a, F, Fut, Q>(
+    metrics: &IndexMetrics,
+    received: &'a ReceivedEvent,
+    replays: &Q,
+    process: F,
+) where
     F: FnOnce(&'a ReceivedEvent) -> Fut,
-    Fut: Future<Output = EventOutcome>,
+    Fut: Future<Output = Attempted>,
+    Q: ReplayQueue,
 {
     let span = processing_span(received);
     // A span ends at its last exit, so the record's span is entered again
     // here to cover the processing it waited for.
-    let outcome = process(received)
-        .instrument(span.clone())
-        .instrument(received.span.clone())
-        .await;
-    record_outcome(&span, outcome);
-    if outcome == EventOutcome::Dropped {
+    let record = async {
+        let attempted = process(received).await;
+        conclude_kafka_attempts(received, attempted, replays).await
+    }
+    .instrument(span.clone())
+    .instrument(received.span.clone())
+    .await;
+    record_outcome(metrics, &span, received, record);
+    if record.outcome == EventOutcome::Dropped {
         record_span_error(&received.span, "event dropped after its processing retries");
     }
 }
@@ -617,16 +727,17 @@ async fn process_event(
     event: &DeclaredMacroEvent,
     partition: i32,
     offset: i64,
-) -> EventOutcome {
+    attempts: &Attempts,
+) -> Attempted {
     let db = &context.db;
     let opensearch_client = context.opensearch_client.as_ref();
 
     match event {
         DeclaredMacroEvent::AgentSessionLifecycleMacroEvent(event) => {
-            agent_session::process_agent_session_event(context, event).await
+            agent_session::process_agent_session_event(context, event, attempts).await
         }
         DeclaredMacroEvent::CallMacroEvent(event) => {
-            process_call_event(db, opensearch_client, event, partition, offset).await
+            process_call_event(db, opensearch_client, event, partition, offset, attempts).await
         }
         DeclaredMacroEvent::CalendarMacroEvent(event) => {
             if !context.calendar_search_enabled {
@@ -638,21 +749,21 @@ async fn process_event(
                     offset,
                     "calendar search is disabled; skipping calendar event"
                 );
-                return EventOutcome::Ignored;
+                return Ok((Handled::Ignored, 0));
             }
-            process_calendar_event(context, event, partition, offset).await
+            process_calendar_event(context, event, partition, offset, attempts).await
         }
         DeclaredMacroEvent::ChannelMacroEvent(event) => {
-            process_channel_event(db, opensearch_client, event, partition, offset).await
+            process_channel_event(db, opensearch_client, event, partition, offset, attempts).await
         }
         DeclaredMacroEvent::ChatMacroEvent(event) => {
-            process_chat_event(db, opensearch_client, event, partition, offset).await
+            process_chat_event(db, opensearch_client, event, partition, offset, attempts).await
         }
         DeclaredMacroEvent::DocumentMacroEvent(event) => {
-            process_document_event(context, event, partition, offset).await
+            process_document_event(context, event, partition, offset, attempts).await
         }
         DeclaredMacroEvent::MessageMacroEvent(event) => {
-            process_message_event(db, opensearch_client, event, partition, offset).await
+            process_message_event(db, opensearch_client, event, partition, offset, attempts).await
         }
         DeclaredMacroEvent::EmailMacroEvent(event) => {
             process_email_event(
@@ -662,14 +773,15 @@ async fn process_event(
                 event,
                 partition,
                 offset,
+                attempts,
             )
             .await
         }
         DeclaredMacroEvent::ProjectMacroEvent(event) => {
-            process_project_event(db, opensearch_client, event, partition, offset).await
+            process_project_event(db, opensearch_client, event, partition, offset, attempts).await
         }
         DeclaredMacroEvent::PropertyMacroEvent(event) => {
-            process_property_event(db, opensearch_client, event, partition, offset).await
+            process_property_event(db, opensearch_client, event, partition, offset, attempts).await
         }
     }
 }
@@ -679,19 +791,37 @@ async fn run_event_worker(
     events: mpsc::Receiver<ReceivedEvent>,
     pending_rereads: Arc<PendingRereads>,
     reports: mpsc::UnboundedSender<WorkerReport>,
+    stop: WorkerStop,
 ) {
     let context = &context;
-    drain_worker_events(events, pending_rereads, reports, |received| async move {
-        process_received(&received, |received| {
-            process_event(
-                context,
-                &received.event,
-                received.partition,
-                received.offset,
+    let WorkerStop {
+        stopping,
+        rewinding,
+    } = stop;
+    let attempts = &Attempts::Retry { stopping };
+    drain_worker_events(
+        events,
+        pending_rereads,
+        reports,
+        rewinding,
+        |received| async move {
+            process_received(
+                &context.metrics,
+                &received,
+                context.replays.as_ref(),
+                |received| {
+                    process_event(
+                        context,
+                        &received.event,
+                        received.partition,
+                        received.offset,
+                        attempts,
+                    )
+                },
             )
-        })
-        .await;
-    })
+            .await;
+        },
+    )
     .await;
     tracing::trace!("search processing event worker drained");
 }
@@ -705,12 +835,18 @@ async fn drain_worker_events<F, Fut>(
     mut events: mpsc::Receiver<ReceivedEvent>,
     pending_rereads: Arc<PendingRereads>,
     reports: mpsc::UnboundedSender<WorkerReport>,
+    rewinding: CancellationToken,
     mut process: F,
 ) where
     F: FnMut(ReceivedEvent) -> Fut,
     Fut: Future<Output = ()>,
 {
     while let Some(received) = events.recv().await {
+        // Once a graceful stop rewinds the partitions, a record left unstarted
+        // is redelivered; one started now could be cut off and lost.
+        if rewinding.is_cancelled() {
+            break;
+        }
         if let Some(key) = coalescible_reread_key(&received.event) {
             pending_rereads.release(&key);
         }
@@ -758,14 +894,50 @@ fn track_handoff<E>(
     }
 }
 
+/// Waits for a record's `handoff`, which a full worker channel holds. The wait
+/// is a stall, so worker reports still reach `ledger` and pending ages are
+/// still sampled meanwhile. Returns `None` if `shutdown` resolves first,
+/// without waiting: the record was never committed and stays open.
+async fn await_handoff<T>(
+    handoff: impl Future<Output = T>,
+    shutdown: &mut (impl Future<Output = ()> + Unpin),
+    sample_tick: &mut tokio::time::Interval,
+    reports: &mut mpsc::UnboundedReceiver<WorkerReport>,
+    ledger: &mut OffsetLedger,
+    mut sample: impl FnMut(&OffsetLedger),
+) -> Option<T> {
+    let mut handoff = std::pin::pin!(handoff);
+    loop {
+        tokio::select! {
+            biased;
+            _ = &mut *shutdown => return None,
+            outcome = &mut handoff => return Some(outcome),
+            _ = sample_tick.tick() => sample(ledger),
+            Some(report) = reports.recv() => ledger.report(report),
+        }
+    }
+}
+
+/// How polling ended.
+struct PollEnd {
+    result: Result<(), Report>,
+    /// The record polling took and left uncommitted, which the group
+    /// redelivers whatever the stop does with its partition.
+    uncommitted: Option<RecordPosition>,
+}
+
 async fn poll_events(
     consumer: &SearchProcessingKafkaConsumer,
     workers: WorkerPool,
     ledger: &mut OffsetLedger,
     reports: &mut mpsc::UnboundedReceiver<WorkerReport>,
     shutdown: impl Future<Output = ()> + Send,
-) -> Result<(), Report> {
+) -> PollEnd {
     let mut shutdown = std::pin::pin!(shutdown);
+    let mut uncommitted = None;
+    let mut sampler = BacklogSampler::new(workers.metrics.pending_ages().clone());
+    let mut sample_tick = tokio::time::interval(SAMPLE_INTERVAL);
+    sample_tick.set_missed_tick_behavior(MissedTickBehavior::Delay);
     loop {
         tokio::select! {
             biased;
@@ -773,6 +945,7 @@ async fn poll_events(
                 tracing::info!("search processing event consumer shutting down");
                 break;
             }
+            _ = sample_tick.tick() => sampler.sample_consumer(consumer, ledger),
             Some(report) = reports.recv() => {
                 ledger.report(report);
                 while let Ok(report) = reports.try_recv() {
@@ -803,18 +976,21 @@ async fn poll_events(
                     }
                 });
                 if let Some(position) = position {
-                    ledger.received(position);
+                    ledger.received(position, kafka_message.timestamp().to_millis());
                 }
 
-                // A full worker channel holds the handoff. Shutdown does not
-                // wait for it: the record was never committed and stays open.
-                let outcome = tokio::select! {
-                    biased;
-                    _ = &mut shutdown => {
-                        tracing::info!("search processing event consumer shutting down");
-                        break;
-                    }
-                    outcome = workers.handoff(decoded).instrument(span.clone()) => outcome,
+                let Some(outcome) = await_handoff(
+                    workers.handoff(decoded).instrument(span.clone()),
+                    &mut shutdown,
+                    &mut sample_tick,
+                    reports,
+                    ledger,
+                    |ledger| sampler.sample_consumer(consumer, ledger),
+                )
+                .await else {
+                    tracing::info!("search processing event consumer shutting down");
+                    uncommitted = position;
+                    break;
                 };
                 if let Some(position) = position {
                     track_handoff(ledger, position, &outcome);
@@ -825,6 +1001,9 @@ async fn poll_events(
                     | HandoffOutcome::NoIndexChange => {}
                     HandoffOutcome::MalformedRecord(error) => {
                         record_span_error(&span, &error);
+                        workers
+                            .metrics
+                            .record_loss(rdkafka::Message::topic(kafka_message), Loss::Undecodable);
                         tracing::error!(
                             parent: &span,
                             error = %error,
@@ -843,12 +1022,15 @@ async fn poll_events(
                             offset = kafka_message.offset(),
                             "search processing event worker channel closed; leaving offset uncommitted"
                         );
-                        return Err(rootcause::report!(
-                            "search processing event worker channel closed for topic {} at partition {} offset {}",
-                            rdkafka::Message::topic(kafka_message),
-                            kafka_message.partition(),
-                            kafka_message.offset(),
-                        ));
+                        return PollEnd {
+                            result: Err(rootcause::report!(
+                                "search processing event worker channel closed for topic {} at partition {} offset {}",
+                                rdkafka::Message::topic(kafka_message),
+                                kafka_message.partition(),
+                                kafka_message.offset(),
+                            )),
+                            uncommitted: position,
+                        };
                     }
                 }
 
@@ -859,7 +1041,10 @@ async fn poll_events(
         }
     }
 
-    Ok(())
+    PollEnd {
+        result: Ok(()),
+        uncommitted,
+    }
 }
 
 /// What committing back at a stop achieved.
@@ -930,6 +1115,15 @@ fn rewind_queued(consumer: &SearchProcessingKafkaConsumer, ledger: &OffsetLedger
         not_rewound,
         unconfirmed,
     }
+}
+
+/// What a stopping consumer asks of its workers.
+#[derive(Clone, Default)]
+struct WorkerStop {
+    /// Cut short any wait between attempts.
+    stopping: CancellationToken,
+    /// Start no more records: the stop rewinds the partitions past them.
+    rewinding: CancellationToken,
 }
 
 /// How the workers ended.
@@ -1032,13 +1226,24 @@ pub(crate) async fn run_event_consumer(
     );
 
     let (report_sender, mut reports) = mpsc::unbounded_channel();
-    let (pool, workers) = WorkerPool::spawn(&context, &report_sender);
+    let stop = WorkerStop::default();
+    let (pool, workers) = WorkerPool::spawn(&context, &report_sender, &stop);
     // Only the workers hold senders now, so `reports` closes once they all exit.
     drop(report_sender);
     let mut ledger = OffsetLedger::default();
     // Passing the pool by value drops every sender when polling stops, which
     // closes the worker channels so the workers drain and exit.
-    let poll_result = poll_events(&consumer, pool, &mut ledger, &mut reports, shutdown).await;
+    let PollEnd {
+        result: poll_result,
+        uncommitted,
+    } = poll_events(&consumer, pool, &mut ledger, &mut reports, shutdown).await;
+    // A worker waiting to retry queues its event for a replay instead. After
+    // a graceful stop it also starts no more records, which the rewind
+    // redelivers; after an error nothing is rewound, so it drains them.
+    stop.stopping.cancel();
+    if poll_result.is_ok() {
+        stop.rewinding.cancel();
+    }
 
     let graceful = poll_result.is_ok();
     let span = tracing::info_span!(
@@ -1076,6 +1281,9 @@ pub(crate) async fn run_event_consumer(
         }
         if graceful && drained.panic.is_none() {
             let rewind = rewind_queued(&consumer, &ledger);
+            for (record, loss) in losses_at_stop(&lost, Some(&rewind), &[], uncommitted) {
+                context.metrics.record_loss(record.topic, loss);
+            }
             span.record("rewound_partitions", rewind.rewound.len());
             span.record("not_rewound", rewind.not_rewound.len());
             span.record("unconfirmed", rewind.unconfirmed.len());
@@ -1099,6 +1307,9 @@ pub(crate) async fn run_event_consumer(
             }
         } else {
             let queued = ledger.queued();
+            for (record, loss) in losses_at_stop(&lost, None, &queued, uncommitted) {
+                context.metrics.record_loss(record.topic, loss);
+            }
             span.record("not_rewound", queued.len());
             if !queued.is_empty() {
                 tracing::warn!(
@@ -1117,6 +1328,58 @@ pub(crate) async fn run_event_consumer(
         Err(rootcause::report!(error))?;
     }
     Ok(())
+}
+
+/// The records a stop loses, which the group will not redeliver, with why.
+///
+/// `lost` were started and cut off; a partition committed back to an offset
+/// at or before one replays it. After a `rewind`, the queued records it could
+/// not commit back are lost; without one, every `queued` record is, since it
+/// was committed at handoff. The `uncommitted` record never was, so it is
+/// redelivered either way.
+fn losses_at_stop(
+    lost: &[RecordPosition],
+    rewind: Option<&Rewind>,
+    queued: &[RecordPosition],
+    uncommitted: Option<RecordPosition>,
+) -> Vec<(RecordPosition, Loss)> {
+    let replayed = |record: &RecordPosition| {
+        rewind.is_some_and(|rewind| {
+            rewind.rewound.iter().any(|point| {
+                point.topic == record.topic
+                    && point.partition == record.partition
+                    && point.offset <= record.offset
+            })
+        })
+    };
+    let cut_off = lost
+        .iter()
+        .filter(|record| !replayed(record))
+        .map(|record| (*record, Loss::CutOffAtStop));
+    let queued_losses: Vec<_> = match rewind {
+        Some(rewind) => rewind
+            .not_rewound
+            .iter()
+            .map(|record| (*record, Loss::NotRewound))
+            .chain(
+                rewind
+                    .unconfirmed
+                    .iter()
+                    .map(|record| (*record, Loss::RewindUnconfirmed)),
+            )
+            .collect(),
+        None => queued
+            .iter()
+            .map(|record| (*record, Loss::QueuedWithoutRewind))
+            .collect(),
+    };
+    cut_off
+        .chain(
+            queued_losses
+                .into_iter()
+                .filter(|(record, _)| Some(*record) != uncommitted),
+        )
+        .collect()
 }
 
 fn display_positions(positions: &[RecordPosition]) -> String {

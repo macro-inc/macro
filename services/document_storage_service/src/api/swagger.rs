@@ -240,6 +240,8 @@ use email_policy::EmailPolicySchemas;
         passwords::inbound::import::import_batch,
         passwords::inbound::import::match_names,
         passwords::inbound::router::detail,
+        passwords::inbound::router::set_favorite,
+        passwords::inbound::router::remove_favorite,
         passwords::inbound::router::username,
         passwords::inbound::router::copy_username,
         passwords::inbound::router::update,

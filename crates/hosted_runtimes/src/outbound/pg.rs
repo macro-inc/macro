@@ -33,6 +33,7 @@ mod moves;
 mod records;
 mod reservations;
 mod row;
+mod usage;
 use row::{ComputerRow, ReservationRow};
 
 #[cfg(test)]
@@ -785,6 +786,17 @@ impl ComputerRepo for PgComputerRepo {
             .await?;
         }
         tx.commit().await?;
+        Ok(())
+    }
+
+    async fn defer_effect(&self, id: i64, run_after: DateTime<Utc>) -> Result<(), PgComputerError> {
+        sqlx::query!(
+            "UPDATE hosted_runtime_effect SET run_after = $2 WHERE id = $1",
+            id,
+            run_after,
+        )
+        .execute(&self.pool)
+        .await?;
         Ok(())
     }
 

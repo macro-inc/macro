@@ -41,7 +41,16 @@ pub async fn process_entity_property_update(
             .update_call_record_properties(entity_id, &properties)
             .await
             .context("failed to update call record properties in search index"),
-        other => {
+        EntityType::CalendarEvent => opensearch_client
+            .update_calendar_event_properties(entity_id, &properties)
+            .await
+            .context("failed to update calendar event properties in search index"),
+        other @ (EntityType::Channel
+        | EntityType::Company
+        | EntityType::Contact
+        | EntityType::DatabaseRow
+        | EntityType::Initiative
+        | EntityType::User) => {
             tracing::warn!(
                 entity_type = %other,
                 entity_id = %entity_id,
@@ -64,3 +73,6 @@ pub fn to_indexed_properties(properties: Vec<IndexedEntityProperty>) -> Vec<Inde
         })
         .collect()
 }
+
+#[cfg(test)]
+mod test;

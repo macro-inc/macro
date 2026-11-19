@@ -16236,7 +16236,7 @@ export type PasswordAgentEditableMetadata = {
 /**
  * Closed, payload-free failure codes of the agent vault API.
  */
-export type PasswordAgentErrorCode = 'unauthorized' | 'invalid_agent' | 'invalid_session_attribution' | 'not_found' | 'not_granted' | 'pending' | 'forbidden' | 'invalid_request' | 'unsupported_kind' | 'field_not_set' | 'version_conflict' | 'vault_busy' | 'rate_limited' | 'vault_unavailable';
+export type PasswordAgentErrorCode = 'unauthorized' | 'invalid_agent' | 'invalid_session_attribution' | 'not_found' | 'not_granted' | 'pending' | 'forbidden' | 'invalid_request' | 'unsupported_kind' | 'field_not_set' | 'version_conflict' | 'vault_busy' | 'rate_limited' | 'vault_unavailable' | 'vault_not_provisioned';
 
 /**
  * Sanitized agent vault failure.
@@ -16513,7 +16513,7 @@ export type PasswordCreateFolderBody = {
 /**
  * Closed, payload-free failure codes exposed by the human vault API.
  */
-export type PasswordErrorCode = 'not_found' | 'forbidden' | 'invalid_request' | 'version_conflict' | 'vault_busy' | 'folder_missing' | 'vault_unavailable';
+export type PasswordErrorCode = 'not_found' | 'forbidden' | 'invalid_request' | 'version_conflict' | 'vault_busy' | 'folder_missing' | 'vault_unavailable' | 'vault_not_provisioned';
 
 /**
  * Sanitized vault failure shared with generated HTTP clients.
@@ -16628,7 +16628,7 @@ export type PasswordImportBatchResult = {
 /**
  * Closed, sanitized per-item failure categories.
  */
-export type PasswordImportErrorCode = 'not_found' | 'forbidden' | 'invalid_request' | 'version_conflict' | 'folder_missing' | 'busy' | 'vault_unavailable';
+export type PasswordImportErrorCode = 'not_found' | 'forbidden' | 'invalid_request' | 'version_conflict' | 'folder_missing' | 'busy' | 'vault_unavailable' | 'vault_not_provisioned';
 
 /**
  * Source folder; parents must precede children in every batch.
@@ -16747,7 +16747,7 @@ export type PasswordItemFields = {
      */
     createdAt: string;
     /**
-     * Whether the item is marked as a favorite.
+     * The current viewer's private favorite in responses; legacy initial flag in storage.
      */
     favorite: boolean;
     /**
@@ -16861,7 +16861,7 @@ export type PasswordPatchItem = {
      */
     expectedVersion: number;
     /**
-     * Whether the item is marked as a favorite.
+     * Legacy accepted field, ignored; change private preferences through the favorite endpoint.
      */
     favorite: boolean;
     /**
@@ -17036,7 +17036,7 @@ export type PasswordWriteItem = {
      */
     expectedVersion?: number | null;
     /**
-     * Whether the item is marked as a favorite.
+     * Initial creator preference on create; ignored on update. Use the favorite endpoint afterward.
      */
     favorite: boolean;
     /**
@@ -34859,6 +34859,10 @@ export type GetItemsSoupErrors = {
      */
     403: ErrorResponse;
     500: ErrorResponse;
+    /**
+     * Selected email rules exceeded a resource limit
+     */
+    503: ErrorResponse;
 };
 
 export type GetItemsSoupError = GetItemsSoupErrors[keyof GetItemsSoupErrors];
@@ -34887,6 +34891,10 @@ export type PostItemsSoupErrors = {
      */
     403: ErrorResponse;
     500: ErrorResponse;
+    /**
+     * Selected email rules exceeded a resource limit
+     */
+    503: ErrorResponse;
 };
 
 export type PostItemsSoupError = PostItemsSoupErrors[keyof PostItemsSoupErrors];
@@ -34919,6 +34927,10 @@ export type PostItemsSoupAstErrors = {
      */
     404: ErrorResponse;
     500: ErrorResponse;
+    /**
+     * Selected email rules exceeded a resource limit
+     */
+    503: ErrorResponse;
 };
 
 export type PostItemsSoupAstError = PostItemsSoupAstErrors[keyof PostItemsSoupAstErrors];
@@ -35254,6 +35266,9 @@ export type PasswordsAgentCreateErrors = {
     401: PasswordAgentFailure;
     403: PasswordAgentFailure;
     404: PasswordAgentFailure;
+    /**
+     * A conflict code, or `vault_not_provisioned` when the team's vault is not set up
+     */
     409: PasswordAgentFailure;
     503: PasswordAgentFailure;
 };
@@ -35295,6 +35310,9 @@ export type PasswordsAgentUpdateErrors = {
     401: PasswordAgentFailure;
     403: PasswordAgentFailure;
     404: PasswordAgentFailure;
+    /**
+     * A conflict code, or `vault_not_provisioned` when the team's vault is not set up
+     */
     409: PasswordAgentFailure;
     503: PasswordAgentFailure;
 };
@@ -35405,6 +35423,9 @@ export type PasswordsAgentDiscloseErrors = {
     401: PasswordAgentFailure;
     403: PasswordAgentFailure;
     404: PasswordAgentFailure;
+    /**
+     * A conflict code, or `vault_not_provisioned` when the team's vault is not set up
+     */
     409: PasswordAgentFailure;
     503: PasswordAgentFailure;
 };
@@ -35442,6 +35463,9 @@ export type PasswordsAgentSetTotpErrors = {
     401: PasswordAgentFailure;
     403: PasswordAgentFailure;
     404: PasswordAgentFailure;
+    /**
+     * A conflict code, or `vault_not_provisioned` when the team's vault is not set up
+     */
     409: PasswordAgentFailure;
     503: PasswordAgentFailure;
 };
@@ -35479,6 +35503,9 @@ export type PasswordsAgentTotpCodeErrors = {
     401: PasswordAgentFailure;
     403: PasswordAgentFailure;
     404: PasswordAgentFailure;
+    /**
+     * A conflict code, or `vault_not_provisioned` when the team's vault is not set up
+     */
     409: PasswordAgentFailure;
     503: PasswordAgentFailure;
 };
@@ -35559,6 +35586,9 @@ export type PasswordsFoldersData = {
 
 export type PasswordsFoldersErrors = {
     403: PasswordFailure;
+    /**
+     * `version_conflict`, `vault_busy`, `folder_missing`, or `vault_not_provisioned` when the team's vault is not set up
+     */
     409: PasswordFailure;
 };
 
@@ -35587,6 +35617,9 @@ export type PasswordsCreateFolderData = {
 
 export type PasswordsCreateFolderErrors = {
     403: PasswordFailure;
+    /**
+     * `version_conflict`, `vault_busy`, `folder_missing`, or `vault_not_provisioned` when the team's vault is not set up
+     */
     409: PasswordFailure;
 };
 
@@ -35616,6 +35649,9 @@ export type PasswordsRemoveFolderData = {
 
 export type PasswordsRemoveFolderErrors = {
     403: PasswordFailure;
+    /**
+     * `version_conflict`, `vault_busy`, `folder_missing`, or `vault_not_provisioned` when the team's vault is not set up
+     */
     409: PasswordFailure;
 };
 
@@ -35645,6 +35681,9 @@ export type PasswordsRenameFolderData = {
 
 export type PasswordsRenameFolderErrors = {
     403: PasswordFailure;
+    /**
+     * `version_conflict`, `vault_busy`, `folder_missing`, or `vault_not_provisioned` when the team's vault is not set up
+     */
     409: PasswordFailure;
 };
 
@@ -35676,6 +35715,9 @@ export type PasswordsMoveFolderErrors = {
     400: PasswordFailure;
     403: PasswordFailure;
     404: PasswordFailure;
+    /**
+     * `version_conflict`, `vault_busy`, `folder_missing`, or `vault_not_provisioned` when the team's vault is not set up
+     */
     409: PasswordFailure;
 };
 
@@ -35736,6 +35778,9 @@ export type PasswordsListData = {
 
 export type PasswordsListErrors = {
     403: PasswordFailure;
+    /**
+     * `version_conflict`, `vault_busy`, `folder_missing`, or `vault_not_provisioned` when the team's vault is not set up
+     */
     409: PasswordFailure;
 };
 
@@ -35764,6 +35809,9 @@ export type PasswordsCreateData = {
 
 export type PasswordsCreateErrors = {
     403: PasswordFailure;
+    /**
+     * `version_conflict`, `vault_busy`, `folder_missing`, or `vault_not_provisioned` when the team's vault is not set up
+     */
     409: PasswordFailure;
 };
 
@@ -35823,6 +35871,9 @@ export type PasswordsRemoveData = {
 
 export type PasswordsRemoveErrors = {
     403: PasswordFailure;
+    /**
+     * `version_conflict`, `vault_busy`, `folder_missing`, or `vault_not_provisioned` when the team's vault is not set up
+     */
     409: PasswordFailure;
 };
 
@@ -35846,6 +35897,9 @@ export type PasswordsDetailData = {
 
 export type PasswordsDetailErrors = {
     403: PasswordFailure;
+    /**
+     * `version_conflict`, `vault_busy`, `folder_missing`, or `vault_not_provisioned` when the team's vault is not set up
+     */
     409: PasswordFailure;
 };
 
@@ -35875,6 +35929,9 @@ export type PasswordsPatchData = {
 
 export type PasswordsPatchErrors = {
     403: PasswordFailure;
+    /**
+     * `version_conflict`, `vault_busy`, `folder_missing`, or `vault_not_provisioned` when the team's vault is not set up
+     */
     409: PasswordFailure;
 };
 
@@ -35904,6 +35961,9 @@ export type PasswordsUpdateData = {
 
 export type PasswordsUpdateErrors = {
     403: PasswordFailure;
+    /**
+     * `version_conflict`, `vault_busy`, `folder_missing`, or `vault_not_provisioned` when the team's vault is not set up
+     */
     409: PasswordFailure;
 };
 
@@ -35927,6 +35987,9 @@ export type PasswordsActivityData = {
 
 export type PasswordsActivityErrors = {
     403: PasswordFailure;
+    /**
+     * `version_conflict`, `vault_busy`, `folder_missing`, or `vault_not_provisioned` when the team's vault is not set up
+     */
     409: PasswordFailure;
 };
 
@@ -36022,6 +36085,9 @@ export type PasswordsCopyData = {
 
 export type PasswordsCopyErrors = {
     403: PasswordFailure;
+    /**
+     * `version_conflict`, `vault_busy`, `folder_missing`, or `vault_not_provisioned` when the team's vault is not set up
+     */
     409: PasswordFailure;
 };
 
@@ -36032,6 +36098,64 @@ export type PasswordsCopyResponses = {
 };
 
 export type PasswordsCopyResponse = PasswordsCopyResponses[keyof PasswordsCopyResponses];
+
+export type PasswordsRemoveFavoriteData = {
+    body?: never;
+    headers: {
+        /**
+         * Required CSRF header; send 1
+         */
+        'X-Macro-Passwords': string;
+    };
+    path: {
+        team: string;
+        item: string;
+    };
+    query?: never;
+    url: '/passwords/teams/{team}/items/{item}/favorite';
+};
+
+export type PasswordsRemoveFavoriteErrors = {
+    404: PasswordFailure;
+    503: PasswordFailure;
+};
+
+export type PasswordsRemoveFavoriteError = PasswordsRemoveFavoriteErrors[keyof PasswordsRemoveFavoriteErrors];
+
+export type PasswordsRemoveFavoriteResponses = {
+    204: void;
+};
+
+export type PasswordsRemoveFavoriteResponse = PasswordsRemoveFavoriteResponses[keyof PasswordsRemoveFavoriteResponses];
+
+export type PasswordsSetFavoriteData = {
+    body?: never;
+    headers: {
+        /**
+         * Required CSRF header; send 1
+         */
+        'X-Macro-Passwords': string;
+    };
+    path: {
+        team: string;
+        item: string;
+    };
+    query?: never;
+    url: '/passwords/teams/{team}/items/{item}/favorite';
+};
+
+export type PasswordsSetFavoriteErrors = {
+    404: PasswordFailure;
+    503: PasswordFailure;
+};
+
+export type PasswordsSetFavoriteError = PasswordsSetFavoriteErrors[keyof PasswordsSetFavoriteErrors];
+
+export type PasswordsSetFavoriteResponses = {
+    204: void;
+};
+
+export type PasswordsSetFavoriteResponse = PasswordsSetFavoriteResponses[keyof PasswordsSetFavoriteResponses];
 
 export type PasswordsHistoryData = {
     body?: never;
@@ -36045,6 +36169,9 @@ export type PasswordsHistoryData = {
 
 export type PasswordsHistoryErrors = {
     403: PasswordFailure;
+    /**
+     * `version_conflict`, `vault_busy`, `folder_missing`, or `vault_not_provisioned` when the team's vault is not set up
+     */
     409: PasswordFailure;
 };
 
@@ -36074,6 +36201,9 @@ export type PasswordsRevealData = {
 
 export type PasswordsRevealErrors = {
     403: PasswordFailure;
+    /**
+     * `version_conflict`, `vault_busy`, `folder_missing`, or `vault_not_provisioned` when the team's vault is not set up
+     */
     409: PasswordFailure;
 };
 
@@ -36097,6 +36227,9 @@ export type PasswordsGrantsData = {
 
 export type PasswordsGrantsErrors = {
     403: PasswordFailure;
+    /**
+     * `version_conflict`, `vault_busy`, `folder_missing`, or `vault_not_provisioned` when the team's vault is not set up
+     */
     409: PasswordFailure;
 };
 
@@ -36126,6 +36259,9 @@ export type PasswordsShareData = {
 
 export type PasswordsShareErrors = {
     403: PasswordFailure;
+    /**
+     * `version_conflict`, `vault_busy`, `folder_missing`, or `vault_not_provisioned` when the team's vault is not set up
+     */
     409: PasswordFailure;
 };
 
@@ -36155,6 +36291,9 @@ export type PasswordsRemoveTotpData = {
 
 export type PasswordsRemoveTotpErrors = {
     403: PasswordFailure;
+    /**
+     * `version_conflict`, `vault_busy`, `folder_missing`, or `vault_not_provisioned` when the team's vault is not set up
+     */
     409: PasswordFailure;
 };
 
@@ -36184,6 +36323,9 @@ export type PasswordsSetTotpData = {
 
 export type PasswordsSetTotpErrors = {
     403: PasswordFailure;
+    /**
+     * `version_conflict`, `vault_busy`, `folder_missing`, or `vault_not_provisioned` when the team's vault is not set up
+     */
     409: PasswordFailure;
 };
 
@@ -36213,6 +36355,9 @@ export type PasswordsTotpData = {
 
 export type PasswordsTotpErrors = {
     403: PasswordFailure;
+    /**
+     * `version_conflict`, `vault_busy`, `folder_missing`, or `vault_not_provisioned` when the team's vault is not set up
+     */
     409: PasswordFailure;
 };
 
@@ -36236,6 +36381,9 @@ export type PasswordsUsernameData = {
 
 export type PasswordsUsernameErrors = {
     403: PasswordFailure;
+    /**
+     * `version_conflict`, `vault_busy`, `folder_missing`, or `vault_not_provisioned` when the team's vault is not set up
+     */
     409: PasswordFailure;
 };
 
@@ -36265,6 +36413,9 @@ export type PasswordsCopyUsernameData = {
 
 export type PasswordsCopyUsernameErrors = {
     403: PasswordFailure;
+    /**
+     * `version_conflict`, `vault_busy`, `folder_missing`, or `vault_not_provisioned` when the team's vault is not set up
+     */
     409: PasswordFailure;
 };
 
