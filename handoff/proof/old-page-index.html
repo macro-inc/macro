@@ -1,0 +1,190 @@
+<!doctype html><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover"><style>body{margin:0}</style>
+<title>Routine Webhook Proof</title>
+<meta name="claude:viewport-fit-sides" content="cover">
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600&family=Space+Grotesk:wght@500;600&family=JetBrains+Mono:wght@400;500&display=swap">
+<style>
+/* Layout: one reading column; a verdict list, the recording, the editor steps as a grid, then the terminal log. */
+:root {
+  --bg: #f6f7f9; --surface: #ffffff; --fg: #16181d; --muted: #5b616e; --line: #dfe2e8;
+  --accent: #3a5bd9; --ok: #1d7a46; --ok-bg: #e3f3ea; --no: #a8321f; --no-bg: #f9e6e2;
+  --code-bg: #eef0f4;
+  --display: "Space Grotesk", "Inter", system-ui, sans-serif;
+  --body: "Inter", system-ui, -apple-system, sans-serif;
+  --mono: "JetBrains Mono", ui-monospace, SFMono-Regular, Menlo, monospace;
+}
+@media (prefers-color-scheme: dark) { :root:not([data-theme="light"]) {
+  --bg: #111318; --surface: #191c22; --fg: #e8eaef; --muted: #9aa1ae; --line: #2b2f38;
+  --accent: #8ea6ff; --ok: #6fd39c; --ok-bg: #173225; --no: #ff9a86; --no-bg: #3a1d17; --code-bg: #20242c;
+  color-scheme: dark; } }
+:root[data-theme="dark"] {
+  --bg: #111318; --surface: #191c22; --fg: #e8eaef; --muted: #9aa1ae; --line: #2b2f38;
+  --accent: #8ea6ff; --ok: #6fd39c; --ok-bg: #173225; --no: #ff9a86; --no-bg: #3a1d17; --code-bg: #20242c;
+  color-scheme: dark; }
+body { background: var(--bg); color: var(--fg); font: 15px/1.6 var(--body); }
+.wrap { max-width: 980px; margin: 0 auto; padding-block: 40px 64px;
+  padding-left: max(16px, env(safe-area-inset-left, 0px)); padding-right: max(16px, env(safe-area-inset-right, 0px));
+  display: flex; flex-direction: column; gap: 40px; }
+h1, h2 { font-family: var(--display); text-wrap: balance; margin: 0; }
+h1 { font-size: 2rem; line-height: 1.15; }
+h2 { font-size: 1.25rem; }
+p { margin: 0; max-width: 68ch; }
+.muted { color: var(--muted); }
+.eyebrow { font: 500 0.75rem/1 var(--body); letter-spacing: 0.08em; text-transform: uppercase; color: var(--muted); }
+header { display: flex; flex-direction: column; gap: 12px; }
+section { display: flex; flex-direction: column; gap: 16px; min-width: 0; }
+code, .mono { font-family: var(--mono); font-size: 0.85em; }
+code { background: var(--code-bg); padding: 1px 5px; border-radius: 4px; }
+.verdicts { list-style: none; margin: 0; padding: 0; display: flex; flex-direction: column; border: 1px solid var(--line); border-radius: 10px; background: var(--surface); }
+.verdicts li { display: grid; grid-template-columns: 4.5rem 1fr; gap: 16px; padding: 12px 16px; align-items: baseline; }
+.verdicts li + li { border-top: 1px solid var(--line); }
+.pill { font: 600 0.8rem/1 var(--mono); padding: 5px 0; border-radius: 999px; text-align: center; font-variant-numeric: tabular-nums; }
+.pill.ok { background: var(--ok-bg); color: var(--ok); }
+.pill.no { background: var(--no-bg); color: var(--no); }
+video { width: 100%; max-width: 100%; border-radius: 10px; border: 1px solid var(--line); background: var(--surface); }
+.shots { display: grid; grid-template-columns: repeat(auto-fill, minmax(280px, 1fr)); gap: 20px; }
+figure { margin: 0; display: flex; flex-direction: column; gap: 8px; min-width: 0; }
+figure a { display: block; border: 1px solid var(--line); border-radius: 8px; overflow: hidden; background: var(--surface); }
+figure a:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
+figure img { display: block; width: 100%; aspect-ratio: 1280 / 860; object-fit: cover; object-position: top; }
+figcaption { font-size: 0.875rem; color: var(--muted); }
+figcaption b { color: var(--fg); font-weight: 600; }
+.log { display: flex; flex-direction: column; gap: 14px; }
+.call { border: 1px solid var(--line); border-radius: 10px; background: var(--surface); overflow: hidden; }
+.call-head { display: flex; gap: 12px; align-items: center; padding: 10px 14px; border-bottom: 1px solid var(--line); flex-wrap: wrap; }
+.call-head .pill { width: 3.5rem; }
+.call pre { margin: 0; padding: 12px 14px; overflow-x: auto; font: 0.8rem/1.55 var(--mono); background: var(--code-bg); }
+.call .resp { padding: 8px 14px; font: 0.8rem/1.5 var(--mono); color: var(--muted); border-top: 1px solid var(--line); overflow-x: auto; }
+ul.notes { margin: 0; padding-left: 1.2em; display: flex; flex-direction: column; gap: 8px; max-width: 72ch; }
+@media (max-width: 520px) { h1 { font-size: 1.6rem; } .verdicts li { grid-template-columns: 4rem 1fr; gap: 12px; } }
+.commit { display: inline-block; margin-top: 10px; font: 500 0.85rem/1.4 var(--mono); background: var(--code-bg); padding: 6px 10px; border-radius: 6px; overflow-wrap: anywhere; }
+pre.src { margin: 0 0 14px; padding: 12px 14px; overflow-x: auto; font: 0.8rem/1.55 var(--mono); background: var(--code-bg); border-radius: 8px; }
+</style>
+
+<div class="wrap">
+  <header>
+    <span class="eyebrow">Proof · local stack · 2026-11-17</span>
+    <h1>Starting a routine from a webhook</h1>
+    <div class="commit">Recorded on commit 919f20d064bf39432a2bdc19f95e71412b168e02 (PR head)</div>
+    <p class="muted">The real web app and services, built from that commit, on a local Macro stack, driven by a browser script as a synthetic account. The first routine is given its trigger in the editor's Add trigger menu; deliveries come from <code>curl</code>. Every secret is blurred on screen and written as <code>mrw_&lt;secret&gt;</code> below; the API key is written as <code>&lt;api key&gt;</code>.</p>
+  </header>
+
+  <section aria-labelledby="h-results">
+    <h2 id="h-results">What happened</h2>
+    <ul class="verdicts">
+      <li><span class="pill ok">202</span><span>A JSON POST to the URL started one run, which shows the body as sent under <b>Webhook body</b>.</span></li>
+      <li><span class="pill no">404</span><span>The bearer form with no <code>Authorization</code> header was refused.</span></li>
+      <li><span class="pill no">404</span><span>A made-up secret was refused, with the same answer.</span></li>
+      <li><span class="pill no">404</span><span>After <b>New URL</b>, the old URL was refused at once.</span></li>
+      <li><span class="pill ok">202</span><span>The new URL started a second run.</span></li>
+      <li><span class="pill ok">202</span><span>A routine whose code step reads <code>trigger.item.webhook.json</code> ran on a POST; the step's output shows <code>"build": 5107</code> and <code>"failed": 7</code> from the posted body.</span></li>
+      <li><span class="pill no">403</span><span>With the owner's own API key, reading, making and deleting the URL were all refused: "only the routine's owner can manage its webhook, from their own account".</span></li>
+      <li><span class="pill ok">202</span><span>The code routine's URL still worked after those refusals.</span></li>
+    </ul>
+    <p class="muted">Reopening the panel after closing it shows only when the URL was made; the secret is gone from the page.</p>
+  </section>
+
+  <section aria-labelledby="h-video">
+    <h2 id="h-video">Recording</h2>
+    <video controls muted playsinline preload="metadata" src="walkthrough.webm"></video>
+    <p class="muted">The whole browser session, start to finish (about four minutes, mostly waiting on runs). Terminal deliveries happen between the panel closing and the Runs tab opening.</p>
+  </section>
+
+  <section aria-labelledby="h-steps">
+    <h2 id="h-steps">In the editor</h2>
+    <div class="shots">
+      <figure><a href="01-routine.png"><img src="01-routine.png" alt="A saved routine with a Sundays 9:00 AM schedule and one Ask AI step" loading="lazy"></a>
+        <figcaption><b>A routine.</b> One Ask AI step and a weekly schedule, made through the API because the local stack has no AI to write a step.</figcaption></figure>
+      <figure><a href="02-menu.png"><img src="02-menu.png" alt="The Add trigger menu open on its Webhooks group" loading="lazy"></a>
+        <figcaption><b>Add trigger → Webhooks.</b> Webhook received has its own group.</figcaption></figure>
+      <figure><a href="03-webhook-panel.png"><img src="03-webhook-panel.png" alt="The Webhook received panel before the trigger is added" loading="lazy"></a>
+        <figcaption><b>The trigger's panel.</b> It explains what a sender POSTs and how code steps read it.</figcaption></figure>
+      <figure><a href="04-saved.png"><img src="04-saved.png" alt="The trigger list showing the schedule or Webhook received at its URL" loading="lazy"></a>
+        <figcaption><b>Saved.</b> "Webhook received at its URL", beside the schedule.</figcaption></figure>
+      <figure><a href="05-panel.png"><img src="05-panel.png" alt="The saved trigger's panel offering Create URL" loading="lazy"></a>
+        <figcaption><b>Before a URL exists.</b> The saved trigger's panel offers Create URL.</figcaption></figure>
+      <figure><a href="06-url-made.png"><img src="06-url-made.png" alt="The panel showing a blurred URL, a blurred curl example and copy buttons" loading="lazy"></a>
+        <figcaption><b>Create URL.</b> The URL and a JSON <code>curl</code> example, shown once. Blurred here.</figcaption></figure>
+      <figure><a href="07-reopened.png"><img src="07-reopened.png" alt="The reopened panel: made today, not used yet, with New URL and Delete URL" loading="lazy"></a>
+        <figcaption><b>Reopened.</b> "Made 11/17/2026, not used yet", with New URL and Delete URL; no secret.</figcaption></figure>
+      <figure><a href="08-run.png"><img src="08-run.png" alt="The Runs tab with one run started by Webhook received and its JSON body" loading="lazy"></a>
+        <figcaption><b>The run.</b> "Webhook received · first run", with the body as sent. The AI step then fails because this stack runs without AI computers.</figcaption></figure>
+      <figure><a href="09-rotated.png"><img src="09-rotated.png" alt="The panel after New URL, showing a fresh blurred URL" loading="lazy"></a>
+        <figcaption><b>New URL.</b> A fresh URL, shown once; the old one stops working. Blurred here.</figcaption></figure>
+      <figure><a href="10-code-run.png"><img src="10-code-run.png" alt="A run of the code routine: the webhook body and the step output with build 5107 and failed 7" loading="lazy"></a>
+        <figcaption><b>A code step reads the body.</b> "Read the build" succeeded; its output is <code>{"build": 5107, "failed": 7, "status": "failed"}</code>, taken from the posted JSON.</figcaption></figure>
+    </div>
+  </section>
+
+  <section aria-labelledby="h-code">
+    <h2 id="h-code">The code step</h2>
+    <p class="muted">The second routine has one code step and only the <code>webhook</code> event trigger, made through the API; its URL was made through the owner route.</p>
+    <pre class="src">export async function main({ trigger }: StepContext) {
+  if (trigger.kind !== 'event') return null;
+  const sent = trigger.item.webhook?.json;
+  if (typeof sent?.build !== 'number') return null;
+  return { build: sent.build, status: sent.status, failed: sent.tests?.failed ?? null };
+}</pre>
+  </section>
+
+  <section aria-labelledby="h-log">
+    <h2 id="h-log">From the terminal</h2>
+    <p class="muted">In order. The host is the stack's public proxy, shown as <code>&lt;local-stack&gt;</code>. Hook and routine ids are not secret; only the secret after the hook id and the API key are hidden.</p>
+    <div class="log">
+      <div class="call"><div class="call-head"><span class="pill ok">202</span><span>A JSON POST to the URL</span></div>
+        <pre>curl -X POST https://&lt;local-stack&gt;/scheduled-action/hooks/01a1eb9c-8a61-7d6c-8de0-6b0b900c11a8/mrw_&lt;secret&gt; \
+  -H 'Content-Type: application/json' \
+  --data '{"build":4821,"status":"passed","branch":"main","tests":{"passed":912,"failed":0}}'</pre>
+        <div class="resp">{"runId":"01a1eb9c-c2f5-724e-921e-e453e72bdfc8"}</div></div>
+      <div class="call"><div class="call-head"><span class="pill no">404</span><span>No secret (bearer form, no Authorization)</span></div>
+        <pre>curl -X POST https://&lt;local-stack&gt;/scheduled-action/hooks/01a1eb9c-8a61-7d6c-8de0-6b0b900c11a8 \
+  -H 'Content-Type: application/json' \
+  --data '{"build":4821,"status":"passed","branch":"main","tests":{"passed":912,"failed":0}}'</pre>
+        <div class="resp">Not found</div></div>
+      <div class="call"><div class="call-head"><span class="pill no">404</span><span>A made-up secret</span></div>
+        <pre>curl -X POST https://&lt;local-stack&gt;/scheduled-action/hooks/01a1eb9c-8a61-7d6c-8de0-6b0b900c11a8/mrw_&lt;made-up&gt; \
+  --data '{"build":4821,"status":"passed","branch":"main","tests":{"passed":912,"failed":0}}'</pre>
+        <div class="resp">Not found</div></div>
+      <div class="call"><div class="call-head"><span class="pill no">404</span><span>The old URL, after rotation</span></div>
+        <pre>curl -X POST https://&lt;local-stack&gt;/scheduled-action/hooks/01a1eb9c-8a61-7d6c-8de0-6b0b900c11a8/mrw_&lt;secret&gt; \
+  -H 'Content-Type: application/json' \
+  --data '{"build":4821,"status":"passed","branch":"main","tests":{"passed":912,"failed":0}}'</pre>
+        <div class="resp">Not found</div></div>
+      <div class="call"><div class="call-head"><span class="pill ok">202</span><span>The new URL</span></div>
+        <pre>curl -X POST https://&lt;local-stack&gt;/scheduled-action/hooks/01a1eb9d-0f87-7c51-b58f-14a850b7be74/mrw_&lt;secret&gt; \
+  -H 'Content-Type: application/json' \
+  --data '{"build":4822,"status":"failed"}'</pre>
+        <div class="resp">{"runId":"01a1eb9d-4b38-75a8-8acb-ee1616e1f935"}</div></div>
+      <div class="call"><div class="call-head"><span class="pill ok">202</span><span>A JSON POST to the code routine</span></div>
+        <pre>curl -X POST https://&lt;local-stack&gt;/scheduled-action/hooks/01a1eb9d-4f58-70c4-a908-9dfa69eecc56/mrw_&lt;secret&gt; \
+  -H 'Content-Type: application/json' \
+  --data '{"build":5107,"status":"failed","branch":"main","tests":{"passed":905,"failed":7}}'</pre>
+        <div class="resp">{"runId":"01a1eb9d-675b-75ee-ba7d-653416e9d160"}</div></div>
+      <div class="call"><div class="call-head"><span class="pill no">403</span><span>Read the URL with an API key</span></div>
+        <pre>curl -X GET https://&lt;local-stack&gt;/scheduled-action/scheduled-actions/01a1eb9d-4f47-72eb-a1ad-dfa594a26296/webhook \
+  -H 'x-macro-user-api-key: &lt;api key&gt;'</pre>
+        <div class="resp">only the routine's owner can manage its webhook, from their own account</div></div>
+      <div class="call"><div class="call-head"><span class="pill no">403</span><span>Make or replace the URL with an API key</span></div>
+        <pre>curl -X POST https://&lt;local-stack&gt;/scheduled-action/scheduled-actions/01a1eb9d-4f47-72eb-a1ad-dfa594a26296/webhook \
+  -H 'x-macro-user-api-key: &lt;api key&gt;'</pre>
+        <div class="resp">only the routine's owner can manage its webhook, from their own account</div></div>
+      <div class="call"><div class="call-head"><span class="pill no">403</span><span>Delete the URL with an API key</span></div>
+        <pre>curl -X DELETE https://&lt;local-stack&gt;/scheduled-action/scheduled-actions/01a1eb9d-4f47-72eb-a1ad-dfa594a26296/webhook \
+  -H 'x-macro-user-api-key: &lt;api key&gt;'</pre>
+        <div class="resp">only the routine's owner can manage its webhook, from their own account</div></div>
+      <div class="call"><div class="call-head"><span class="pill ok">202</span><span>The code routine’s URL still works after those refusals</span></div>
+        <pre>curl -X POST https://&lt;local-stack&gt;/scheduled-action/hooks/01a1eb9d-4f58-70c4-a908-9dfa69eecc56/mrw_&lt;secret&gt; \
+  -H 'Content-Type: application/json' \
+  --data '{"build":5108,"status":"passed"}'</pre>
+        <div class="resp">{"runId":"01a1eb9d-ac35-703f-90a3-b465da4666b4"}</div></div>
+    </div>
+  </section>
+
+  <section aria-labelledby="h-notes">
+    <h2 id="h-notes">Notes</h2>
+    <ul class="notes">
+      <li>The first routine's runs end in "failed" only because this stack starts without AI computers (<code>--no-computers</code>); the start, the trigger and the body are what this proof covers. The code routine needs no AI and succeeds.</li>
+      <li>With the stack's AI computers on, the stack points the public gateway at an in-network host, so a URL made locally names a host a terminal cannot reach. This recording ran without computers so the URLs use the stack's public proxy. Dev and production are unaffected.</li>
+      <li>The API key was made for the same account that owns the routines, so the 403s are the API-token refusal, not an ownership check.</li>
+    </ul>
+  </section>
+</div>
