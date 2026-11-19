@@ -452,7 +452,7 @@ export function createRoutineDetailSource(
               approval.error(title);
               callbacks.onError(title, error);
             };
-            let current: ScheduledActionResponse;
+            let current: ScheduledActionResponse | undefined;
             try {
               const phase = approval.span('routine.code_approval.check');
               current = await traceRoutineRequest(phase, () =>
@@ -460,6 +460,10 @@ export function createRoutineDetailSource(
               );
             } catch (error) {
               failed(t('subRoutines.approvalCheckFailed'), error);
+              return;
+            }
+            if (!current) {
+              failed(t('subRoutines.approvalCheckFailed'));
               return;
             }
             if (

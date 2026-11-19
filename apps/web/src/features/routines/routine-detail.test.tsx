@@ -1428,6 +1428,61 @@ describe('routine code that needs an update', () => {
     }
   });
 
+  it('retains a newer detail response received while the approval GET was pending', async () => {
+    const reply = Promise.withResolvers<ScheduledAction>();
+    const newer: ScheduledAction = {
+      ...paused,
+      configuration_revision: paused.configuration_revision + 1,
+      task: {
+        steps: [{ type: 'agent', model: 'm', instructions: 'Summarize' }],
+      },
+    };
+    let current = paused;
+    setSchedules([paused]);
+    mocks.codeUpgrades = () => [
+      upgrade(code('macro.tasks.add(x)', '0.3.0+new')),
+    ];
+    mocks.realRoutineQuery = true;
+    mocks.getRoutine.mockImplementation(async (_id, options) =>
+      ok(options?.cache === 'no-store' ? await reply.promise : current)
+    );
+    const key = scheduledActionKeys.detail({
+      scheduleId: 'routine-id',
+    }).queryKey;
+    queryClient.setQueryData(key, paused);
+    const { unmount } = render(() => (
+      <QueryClientProvider client={queryClient}>
+        <Routine />
+      </QueryClientProvider>
+    ));
+    try {
+      fireEvent.click(
+        screen.getByRole('button', { name: 'Approve and resume' })
+      );
+      expect(mocks.getRoutine).toHaveBeenCalledWith('routine-id', {
+        cache: 'no-store',
+      });
+      current = newer;
+      await queryClient.refetchQueries({ queryKey: key, exact: true });
+      expect(queryClient.getQueryData(key)).toEqual(newer);
+
+      reply.resolve(paused);
+      await vi.advanceTimersByTimeAsync(0);
+      expect(queryClient.getQueryData(key)).toEqual(newer);
+      expect(
+        screen.queryByRole('button', { name: 'Approve and resume' })
+      ).toBeNull();
+      expect(mocks.update).not.toHaveBeenCalled();
+      expect(mocks.setEnabled).not.toHaveBeenCalled();
+      expect(toast.alert).toHaveBeenCalledWith(
+        'Could not check the current routine before approving'
+      );
+    } finally {
+      unmount();
+      queryClient.removeQueries({ queryKey: key });
+    }
+  });
+
   it('holds approval while an autosave is queued or in flight', async () => {
     const saving = Promise.withResolvers<ScheduledAction>();
     setSchedules([paused]);
