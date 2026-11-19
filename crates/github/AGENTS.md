@@ -69,6 +69,9 @@ link flow, following the hexagonal architecture pattern.
   is gone, using the old owner as a compare-and-swap condition. Hold the user
   guard then the GitHub account guard through OAuth grant writes and DB changes;
   disconnect follows the same order. Cache tokens by identity and GitHub account.
+- A link token GitHub's `/user` accepted is handed out without asking again for
+  60 s (`TOKEN_VALIDATION_WINDOW`, per process); rejected tokens are never
+  remembered. Connected-app calls read the token on every request.
 - Keep lock-pool acquisition and advisory waits bounded at five seconds; only
   the dedicated lock connections use the five-second lock and ten-second
   statement timeouts. Never expire idle transactions while grant writes run.
