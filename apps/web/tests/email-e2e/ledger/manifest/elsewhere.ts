@@ -529,7 +529,7 @@ export const elsewhere = {
       state:
         'Unread mark on the Mail navigation entry: lit while the Notifications inbox has an unread mail row, which mail received while "New email" notifications are off does not make',
       trigger:
-        'an unread new-email row in the Notifications inbox (the server counts them), until it is read',
+        'an unread mail row in the Notifications inbox (new mail or an email reminder; the server counts them), until it is read',
       source: [
         'src/components/app/use-navigation-unread.ts',
         'src/features/notifications-inbox/queries/inbox-unread.ts',

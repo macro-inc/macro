@@ -299,7 +299,9 @@ for (const provider of PROVIDERS) {
       });
       const unannounced = await mailbox.synced('Lunch?');
       // Twice in a row: LocalStack moves a message it hands out from waiting
-      // to taken in two steps, and a listing between them shows neither.
+      // to taken in two steps, and a listing between them shows neither. A
+      // message caught there is processed within moments of being taken,
+      // and the badge and the service are read seconds later.
       let settled = 0;
       await expect
         .poll(

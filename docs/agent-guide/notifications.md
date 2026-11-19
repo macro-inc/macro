@@ -14,11 +14,11 @@ from the inbox's `notificationInboxUnreadUpdates` subscription. The updates
 follow reads, done, clears and new activity within about a second on each open
 tab. With unified notifications off, the buttons use their earlier presence
 checks.
-A type turned off in Settings → Notifications ("New email", say) lights the
-buttons differently in the two: with unified notifications on, the notification
-service makes no row for activity it receives while the type is off, and rows
-made before stay unread until read or done; with it off, the Mail dot reads
-the setting and goes out at once.
+The notification service makes no row for activity it receives while a type
+is turned off in Settings → Notifications ("New email", say), whichever the
+flag. With unified notifications on, rows made before stay unread, and keep
+their button lit, until read or done; with it off, the Mail dot reads the
+setting and goes out at once.
 
 Unread numbers are off by default in every environment while their accuracy is
 under investigation. Set `VITE_ENABLE_NAVIGATION_UNREAD_COUNTS=true` for a
