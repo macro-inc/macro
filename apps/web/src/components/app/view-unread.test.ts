@@ -70,6 +70,7 @@ function mail(options: {
   emails: EmailEntity[];
   hasNextPage?: boolean;
   exact?: boolean;
+  preferencesPending?: boolean;
 }) {
   return createRoot((disposer) => {
     dispose = disposer;
@@ -80,13 +81,19 @@ function mail(options: {
     const [fetchingNextPage, setFetchingNextPage] = createSignal(false);
     const [nextPageFailed, setNextPageFailed] = createSignal(false);
     const [disabledTypes, setDisabledTypes] = createSignal<string[]>([]);
+    const [preferencesPending, setPreferencesPending] = createSignal(
+      options.preferencesPending ?? false
+    );
     const [pending, setPending] = createSignal(false);
     const fetchNextPage = vi.fn(async () => {
       setFetchingNextPage(true);
     });
     mocks.notificationPreferences.mockReturnValue({
-      isPending: false,
+      get isPending() {
+        return preferencesPending();
+      },
       get data() {
+        if (preferencesPending()) return undefined;
         return { disabled_types: disabledTypes() };
       },
     });
@@ -117,6 +124,7 @@ function mail(options: {
       setFetchingNextPage,
       setNextPageFailed,
       setDisabledTypes,
+      setPreferencesPending,
       setPending,
     };
   });
@@ -256,6 +264,19 @@ describe('createMailUnread', () => {
 
     // Turned back on: the number needs the page again.
     setDisabledTypes([]);
+    expect(fetchNextPage).toHaveBeenCalledTimes(1);
+  });
+
+  it('reads no further page until the New email setting is known', () => {
+    const { fetchNextPage, setEmails, setPreferencesPending } = mail({
+      emails: threads(100),
+      hasNextPage: true,
+      preferencesPending: true,
+    });
+    setEmails(threads(100).slice(5));
+    expect(fetchNextPage).not.toHaveBeenCalled();
+
+    setPreferencesPending(false);
     expect(fetchNextPage).toHaveBeenCalledTimes(1);
   });
 

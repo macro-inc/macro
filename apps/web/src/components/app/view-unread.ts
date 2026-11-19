@@ -58,6 +58,10 @@ export function createMailUnread(options: ViewUnreadOptions): Accessor<number> {
   const newEmailOff = () =>
     queryReadyGate(preferencesQuery) &&
     preferencesQuery.data.disabled_types.includes('new_email');
+  // Known to be on: a page is read for the number only then.
+  const newEmailOn = () =>
+    queryReadyGate(preferencesQuery) &&
+    !preferencesQuery.data.disabled_types.includes('new_email');
   const email = useSoupAstItemsQuery(
     () =>
       buildEmailQuery({
@@ -79,7 +83,7 @@ export function createMailUnread(options: ViewUnreadOptions): Accessor<number> {
   });
   const unknownPastLoaded = () =>
     options.exact &&
-    !newEmailOff() &&
+    newEmailOn() &&
     queryReadyGate(email) &&
     email.hasNextPage &&
     loaded() < COUNTED_EXACTLY;
