@@ -617,7 +617,7 @@ F-161	a new-mail notification shows nothing of the mail
 F-162	the New email switch saves nothing
 F-163	a notification row opens nothing
 F-164	Mark done on Home does nothing
-F-165	New email on a contact's record does nothing
+F-165	New email on a contact's record does nothing, or sending from a manual contact's record creates a second team contact for the same address or changes the original contact's ID or Company
 F-166	The universal input builds its email (emailMessage in actions.ts) with an empty body, so the saved draft and the sent message lose their text: the send test fails at the provider's copy, the draft test at the opened draft's text.
 F-167	Create task on a thread opens no task composer, and Ask Macro opens a conversation without the thread attached
 F-168	the card of an email the assistant drafted sends the assistant's subject, not the one the user typed
