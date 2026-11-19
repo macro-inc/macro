@@ -507,7 +507,7 @@ pub struct SizeOffer {
     pub vcpus: u32,
     /// Memory in GiB.
     pub memory_gb: u32,
-    /// Root disk size in GiB.
+    /// Whole disk quota in GiB: root and `/home` together.
     pub disk_gb: u32,
     /// Price for one computer.
     pub quote: Quote,

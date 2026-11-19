@@ -83,37 +83,82 @@ pub struct CatalogEntry {
     pub resources: ComputerResources,
 }
 
-/// The catalog offered for new purchases; existing rows retain their snapshot.
+/// One tier as sold, every quantity written out rather than derived. The
+/// root and `/home` disks and the capacity units must agree with what the
+/// fleet derives from a recorded purchase ([`ComputerResources::units`],
+/// [`crate::domain::image::data_disk_gib`]); the size tests check that.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub struct SizeSpec {
+    /// Versioned catalog identity recorded at purchase, `label@version`.
+    pub id: &'static str,
+    /// The tier.
+    pub size: ComputerSize,
+    /// Virtual CPU count.
+    pub vcpus: Vcpus,
+    /// Memory in GiB.
+    pub memory_gib: MemoryGib,
+    /// Root disk in GiB: the system, replaced by image updates.
+    pub root_disk_gib: DiskGib,
+    /// `/home` data disk in GiB: survives image updates.
+    pub home_disk_gib: DiskGib,
+    /// Host capacity units one computer of this tier holds.
+    pub units: u32,
+}
+
+/// The tiers offered for new purchases; existing rows retain their snapshot.
+pub const SIZE_SPECS: [SizeSpec; 3] = [
+    SizeSpec {
+        id: "standard@2026-11",
+        size: ComputerSize::Standard,
+        vcpus: Vcpus::new(4),
+        memory_gib: MemoryGib::new(8),
+        root_disk_gib: DiskGib::new(32),
+        home_disk_gib: DiskGib::new(68),
+        units: 1,
+    },
+    SizeSpec {
+        id: "large@2026-11",
+        size: ComputerSize::Large,
+        vcpus: Vcpus::new(8),
+        memory_gib: MemoryGib::new(16),
+        root_disk_gib: DiskGib::new(32),
+        home_disk_gib: DiskGib::new(168),
+        units: 2,
+    },
+    SizeSpec {
+        id: "xl@2026-11",
+        size: ComputerSize::Xl,
+        vcpus: Vcpus::new(16),
+        memory_gib: MemoryGib::new(32),
+        root_disk_gib: DiskGib::new(32),
+        home_disk_gib: DiskGib::new(368),
+        units: 4,
+    },
+];
+
+impl SizeSpec {
+    /// The resources a purchase records: the disk quota is root plus `/home`.
+    pub const fn resources(&self) -> ComputerResources {
+        ComputerResources {
+            vcpus: self.vcpus,
+            memory_gib: self.memory_gib,
+            disk_gib: DiskGib::new(self.root_disk_gib.get() + self.home_disk_gib.get()),
+        }
+    }
+
+    /// The purchase offer for this tier.
+    pub fn catalog_entry(&self) -> CatalogEntry {
+        CatalogEntry {
+            id: CatalogEntryId(self.id.to_owned()),
+            size: self.size,
+            resources: self.resources(),
+        }
+    }
+}
+
+/// The catalog offered for new purchases, from [`SIZE_SPECS`].
 pub fn current_catalog() -> Vec<CatalogEntry> {
-    vec![
-        CatalogEntry {
-            id: CatalogEntryId("standard@2026-11".to_owned()),
-            size: ComputerSize::Standard,
-            resources: ComputerResources {
-                vcpus: Vcpus::new(4),
-                memory_gib: MemoryGib::new(8),
-                disk_gib: DiskGib::new(100),
-            },
-        },
-        CatalogEntry {
-            id: CatalogEntryId("large@2026-11".to_owned()),
-            size: ComputerSize::Large,
-            resources: ComputerResources {
-                vcpus: Vcpus::new(8),
-                memory_gib: MemoryGib::new(16),
-                disk_gib: DiskGib::new(200),
-            },
-        },
-        CatalogEntry {
-            id: CatalogEntryId("xl@2026-11".to_owned()),
-            size: ComputerSize::Xl,
-            resources: ComputerResources {
-                vcpus: Vcpus::new(16),
-                memory_gib: MemoryGib::new(32),
-                disk_gib: DiskGib::new(400),
-            },
-        },
-    ]
+    SIZE_SPECS.iter().map(SizeSpec::catalog_entry).collect()
 }
 
 impl ComputerSize {
