@@ -26,6 +26,20 @@ horizontally and removal remains available without hover. Composer fixture
 screenshots: [desktop](media/share-images/desktop.png) and
 [phone](media/share-images/mobile.png).
 
+Opening a document or file in a Drive, Home, CRM or Tasks detail view (tasks,
+snippets and skills included) records the open once in the user's history,
+which orders Recents and Cmd+K. On dev, expect one `POST /history/document/<id>`
+per open, none when access changes or a retry reloads the same document. Agent
+sessions opened from the Agents view, Tasks projects, CRM companies and contacts,
+and Drive folders record their opens the same way, as `agent_session`,
+`initiative`, `crm_company`, `crm_contact` and `project` history. An opened
+document, chat or folder is then first in empty Cmd+K, including one opened for
+the first time or last viewed long ago: the open stamps its viewed time on its
+record in the GraphQL cache, which orders cached history. An item the cache does
+not hold yet is loaded by id (one `HistoryViewItem` request) after the history
+POST succeeds. To check that case, open a document that empty Cmd+K does not
+list.
+
 Verify **Public → View** links in a fresh signed-out browser context. The
 `/app/drive/md/<id>` route (including folder/tab document links and legacy
 `/app/md/<id>` redirects) must show the document without private Drive lists or
@@ -880,9 +894,10 @@ Right-click inside the cell text editor retains the native text-editing menu.
 Opening a saved spreadsheet from Files/Drive (including a favorite) keeps the
 Drive navigation sidebar in place. Collapse it with the sidebar control; the
 spreadsheet header then shows the navigation toggle to reopen it. Opening a
-spreadsheet does not change the saved sidebar preference. The header keeps the
-Files location breadcrumbs before the sheet title; click a location breadcrumb
-to return to that file listing.
+spreadsheet does not change the saved sidebar preference. Opened from a Drive
+list, the header keeps that list's location breadcrumbs before the sheet title;
+click a location breadcrumb to return to that file listing. Opened from anywhere
+else, the title stands alone.
 
 ## Spreadsheet comments
 

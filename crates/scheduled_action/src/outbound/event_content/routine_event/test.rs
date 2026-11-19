@@ -502,6 +502,7 @@ fn a_channel_reply_carries_its_thread_through_the_message() {
         channel: ChannelMetadata {
             channel_type: ChannelKind::Public,
             channel_name: "eng".into(),
+            named: true,
         },
         message: Some(ChannelMessage {
             message: prompt.clone(),

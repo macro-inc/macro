@@ -6,8 +6,8 @@ use opensearch_client::OpensearchClient;
 use properties::domain::events::{PropertyMacroEvent, PropertyTopicEvent};
 use sqlx::PgPool;
 
-use super::{EventOutcome, MAX_PROCESSING_ATTEMPTS, PROCESSING_RETRY_BASE_DELAY, retry_processing};
-use crate::process::properties::process_entity_property_update;
+use super::{Attempted, Attempts, Handled};
+use crate::process::properties::{PropertyRefresh, process_entity_property_update};
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub(super) enum PropertyIndexAction<'a> {
@@ -76,7 +76,8 @@ pub(super) async fn process_property_event(
     event: &PropertyMacroEvent,
     partition: i32,
     offset: i64,
-) -> EventOutcome {
+    attempts: &Attempts,
+) -> Attempted {
     let description = describe_property_event(&event.event().event);
     let PropertyIndexAction::Reindex {
         entity_id,
@@ -89,55 +90,28 @@ pub(super) async fn process_property_event(
             offset,
             "ignoring property event without a search-index action"
         );
-        return EventOutcome::Ignored;
+        return Ok((Handled::Ignored, 0));
     };
 
-    let result = retry_processing(|attempt| async move {
-        tracing::trace!(
-            entity_id,
-            entity_type = %entity_type,
-            event_type = description.event_type,
-            partition,
-            offset,
-            attempt,
-            "processing property search-index event"
-        );
-        process_entity_property_update(opensearch_client, db, entity_id, entity_type)
-            .await
-            .inspect_err(|error| {
-                if attempt < MAX_PROCESSING_ATTEMPTS {
-                    let retry_delay =
-                        PROCESSING_RETRY_BASE_DELAY * 2u32.pow(attempt.saturating_sub(1));
-                    tracing::warn!(
-                        error = ?error,
-                        entity_id,
-                        entity_type = %entity_type,
-                        event_type = description.event_type,
-                        partition,
-                        offset,
-                        attempt,
-                        delay_secs = retry_delay.as_secs(),
-                        "property search-index processing failed, retrying"
-                    );
-                }
-            })
-    })
-    .await;
-
-    match result {
-        Ok(()) => EventOutcome::Indexed,
-        Err(error) => {
-            tracing::error!(
-                error = ?error,
+    attempts
+        .run_handled(|attempt| async move {
+            tracing::trace!(
                 entity_id,
                 entity_type = %entity_type,
                 event_type = description.event_type,
                 partition,
                 offset,
-                attempts = MAX_PROCESSING_ATTEMPTS,
-                "dropping property event after processing retries were exhausted"
+                attempt,
+                "processing property search-index event"
             );
-            EventOutcome::Dropped
-        }
-    }
+            let refresh =
+                process_entity_property_update(opensearch_client, db, entity_id, entity_type)
+                    .await?;
+            Ok::<_, anyhow::Error>(match refresh {
+                PropertyRefresh::Written => Handled::Indexed,
+                PropertyRefresh::NotIndexed => Handled::NoIndexChange,
+                PropertyRefresh::UnindexedType => Handled::Ignored,
+            })
+        })
+        .await
 }

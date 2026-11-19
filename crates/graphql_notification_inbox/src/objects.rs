@@ -3,7 +3,7 @@ use graphql_notification::GraphqlNotification;
 use graphql_soup::{GraphqlSoupEntity, SoupEntityEdges};
 use notification_inbox::domain::models::{
     ClearAction, ClearStatus, InboxActor, InboxChange, InboxEntry, InboxPage, InboxRow,
-    InboxRowAction, InboxRowActionKind,
+    InboxRowAction, InboxRowActionKind, UnreadRows,
 };
 use soup::domain::models::SoupProjectionHydration;
 
@@ -140,6 +140,18 @@ impl GraphqlNotificationInboxRow {
     /// The row's kind.
     async fn row_type(&self) -> GraphqlNotificationInboxRowType {
         self.0.row_type.into()
+    }
+
+    /// Other kinds an inbox scope lists the row under, because what it shows
+    /// is that too: a thread whose reply mentions the viewer is listed under
+    /// mentions as well. A clear of any of these kinds takes the row.
+    async fn also_listed_as(&self) -> Vec<GraphqlNotificationInboxRowType> {
+        self.0
+            .also_listed_as
+            .iter()
+            .copied()
+            .map(Into::into)
+            .collect()
     }
 
     /// For a thread row, the channel root message or discussion root
@@ -363,6 +375,34 @@ impl<E: SoupEntityEdges> From<InboxChange<SoupProjectionHydration>>
                 group_id: ID(group.id()),
             }),
         }
+    }
+}
+
+/// How many unread rows of one kind the viewer's inbox holds.
+#[derive(SimpleObject, Clone, Debug, PartialEq, Eq)]
+#[graphql(name = "NotificationInboxUnreadCount")]
+pub struct GraphqlNotificationInboxUnreadCount {
+    /// The kind of row.
+    row_type: GraphqlNotificationInboxRowType,
+    /// Its unread rows across the whole inbox. Counting stops soon after
+    /// 100, so present a total of 100 or more as "99+".
+    count: i32,
+}
+
+impl GraphqlNotificationInboxUnreadCount {
+    /// The counts of every kind with an unread row, in the kinds' declared
+    /// order.
+    pub fn list(unread: &UnreadRows) -> Vec<Self> {
+        let mut counts: Vec<Self> = unread
+            .counts()
+            .into_iter()
+            .map(|(row_type, count)| Self {
+                row_type: row_type.into(),
+                count: i32::try_from(count).unwrap_or(i32::MAX),
+            })
+            .collect();
+        counts.sort_by_key(|count| count.row_type as usize);
+        counts
     }
 }
 

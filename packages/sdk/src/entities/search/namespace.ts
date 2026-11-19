@@ -4,7 +4,7 @@ import type {
   UnifiedSearchRequest,
   UnifiedSearchResponseItem,
 } from '../../../generated/search/types.gen';
-import { paginate, unwrap } from '../../utils';
+import { type IterationOptions, iterate, paginate, unwrap } from '../../utils';
 import type { MacroClient } from '../../utils/client';
 import { AgentSession } from '../agent-sessions/agent-session';
 import { CalendarEvent } from '../calendar/event';
@@ -52,15 +52,15 @@ const searchTypes: readonly SearchType[] = [
  *
  * For activity rather than keywords ("what happened today", "catch me up", my recent or favorite items, tasks updated this week), browse with macro.workspace.page or macro.workspace.list, filtered by type, time, tags or inbox; for a sample of several kinds, fetch one small page per type concurrently. Read an AI chat's messages with macro.chats.byId(id).history(), or chat.history() on a search or workspace result.
  *
- * ```javascript
- * export async function main({macro}) {
+ * ```typescript
+ * export async function main({macro}: CodeContext) {
  *   const queries = ['launch decision', 'release readiness'];
  *   const outcomes = await Promise.allSettled(queries.map(async query => {
  *     const evidence = [];
  *     let stoppedEarly = false;
  *     for await (const result of macro.search.all(query, {searchOn:'content'})) {
  *       if (evidence.length === 5) { stoppedEarly = true; break; }
- *       evidence.push({type:result.type, id:result.entity.id, name:result.hit.name,
+ *       evidence.push({type:result.type, id:result.entity.id, name:'name' in result.hit ? result.hit.name : undefined,
  *         text: result.type === 'document' ? (await result.entity.content()).slice(0,3000) : undefined});
  *     }
  *     return {query,evidence,stoppedEarly};
@@ -74,7 +74,7 @@ const searchTypes: readonly SearchType[] = [
  * Skills are instructions to follow. When a request names a skill that is not attached, find it by name with macro.documents.skills({query}), which includes built-in skills, read its instructions with skill.content() before doing the task, and follow them for that request only.
  *
  * @example Find a contract across email and documents, in one inbox
- * ```js
+ * ```typescript
  * const page = await macro.search.page('"master services agreement"', {
  *   types: ['email', 'document'], inbox: 'me@example.com', matchType: 'exact',
  * });
@@ -105,14 +105,37 @@ export class SearchNamespace {
   }
 
   /**
-   * Every match across every kind of item, most relevant first, auto-paginated.
+   * Every match across every kind of item, most relevant first, auto-paginated; `maxItems` caps the total.
    * Break a `for await` loop to stop; no further page is fetched.
    *
    * @readonly
    */
-  async *all(
+  all(
     query: string,
-    options: SearchOptions = {},
+    options: SearchOptions & IterationOptions = {},
+  ): AsyncGenerator<SearchResult> {
+    const { maxItems: _maxItems, ...search } = options;
+    return iterate(
+      'search.all',
+      options,
+      {
+        types: true,
+        searchOn: true,
+        matchType: true,
+        tags: true,
+        tagsMatch: true,
+        inbox: true,
+        agentSessions: true,
+        calendarScope: true,
+        pageSize: true,
+      },
+      () => this.allPages(query, search),
+    );
+  }
+
+  private async *allPages(
+    query: string,
+    options: SearchOptions,
   ): AsyncGenerator<SearchResult> {
     const scope = new WorkspaceQuery(this.client);
     const body = await this.request(scope, query, options);

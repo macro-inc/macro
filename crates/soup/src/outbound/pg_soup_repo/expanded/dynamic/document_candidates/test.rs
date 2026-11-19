@@ -1,7 +1,7 @@
 use super::super::{
-    DocumentArmAccess, DocumentGrants, DocumentIdArrays, EACH_CANDIDATE_LIMIT, begin_dynamic_query,
-    build_query, document_candidate_arm, fetch_user_source_ids, first_document_id_slot,
-    push_not_inward,
+    DocumentArmAccess, DocumentGrants, DocumentIdArrays, EACH_CANDIDATE_LIMIT, FeedArm, ItemSource,
+    begin_dynamic_query, build_query, build_query_from, document_candidate_arm,
+    fetch_user_source_ids, first_document_id_slot, push_not_inward,
 };
 use super::{CandidateArm, DocumentCandidates};
 use crate::domain::models::DynamicSort;
@@ -125,6 +125,58 @@ fn a_conjunction_starts_from_the_side_naming_fewer_participants() {
     assert_eq!(
         DocumentCandidates::of(&expr),
         Some(candidates(&[], &[], &["pat@acme.test"]))
+    );
+}
+
+/// With `source_items` enabled, a filter with candidates still starts its
+/// document arm from them, even one the projection could serve: a project's
+/// documents from one domain are a lookup there.
+#[test]
+fn candidates_start_the_document_arm_on_the_source_items_path() {
+    let viewer = "macro|viewer@example.com";
+    let expr = Expr::and(
+        Expr::val(DocumentLiteral::ProjectId(DOC_B)),
+        domain("acme.test"),
+    );
+    let filter = documents(expr.clone());
+    let sort = DynamicSort::from(SimpleSortMethod::UpdatedAt);
+    let first = first_document_id_slot(sort, false);
+    assert!(
+        FeedArm::document(
+            Some(&expr),
+            None,
+            false,
+            viewer,
+            &mut DocumentIdArrays::starting_at(first)
+        )
+        .is_some(),
+        "the projection serves this filter without candidates"
+    );
+    let candidates_of_filter = DocumentCandidates::of(&push_not_inward(&expr, false));
+    assert_eq!(
+        candidates_of_filter,
+        Some(candidates(&[], &["acme.test"], &[]))
+    );
+
+    let (query, _) = build_query_from(
+        &filter,
+        false,
+        sort,
+        DocumentGrants::Estimated,
+        ItemSource::SourceItems,
+        viewer,
+        &mut DocumentIdArrays::starting_at(first),
+        candidates_of_filter.map(CandidateArm::EachCandidate),
+    );
+
+    assert_eq!(
+        query
+            .sql()
+            .matches(r#"JOIN "Document" d ON d.id = candidates.id"#)
+            .count(),
+        1,
+        "{}",
+        query.sql()
     );
 }
 

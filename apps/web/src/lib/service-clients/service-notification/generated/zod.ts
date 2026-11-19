@@ -2425,6 +2425,12 @@ export const listTypedNotificationsResponse = zod
                                       "Why, in the words the computer's status shows."
                                     ),
                                   kind: zod.enum(['failed']),
+                                  released: zod
+                                    .boolean()
+                                    .optional()
+                                    .describe(
+                                      'Setup gave up a second time, so the computer was released and its\npurchase refunded (and an agent teammate taken back): there is\nnothing to retry.'
+                                    ),
                                 })
                                 .describe(
                                   'Setup gave up before the computer was ready.'
@@ -4734,6 +4740,12 @@ export const bulkGetTypedNotificationsByEventItemIdsResponse = zod
                                       "Why, in the words the computer's status shows."
                                     ),
                                   kind: zod.enum(['failed']),
+                                  released: zod
+                                    .boolean()
+                                    .optional()
+                                    .describe(
+                                      'Setup gave up a second time, so the computer was released and its\npurchase refunded (and an agent teammate taken back): there is\nnothing to retry.'
+                                    ),
                                 })
                                 .describe(
                                   'Setup gave up before the computer was ready.'
@@ -6993,6 +7005,12 @@ export const getTypedNotificationsByEventItemIdResponse = zod
                                       "Why, in the words the computer's status shows."
                                     ),
                                   kind: zod.enum(['failed']),
+                                  released: zod
+                                    .boolean()
+                                    .optional()
+                                    .describe(
+                                      'Setup gave up a second time, so the computer was released and its\npurchase refunded (and an agent teammate taken back): there is\nnothing to retry.'
+                                    ),
                                 })
                                 .describe(
                                   'Setup gave up before the computer was ready.'
@@ -9084,6 +9102,12 @@ export const getTypedNotificationByIdResponse = zod
                               "Why, in the words the computer's status shows."
                             ),
                           kind: zod.enum(['failed']),
+                          released: zod
+                            .boolean()
+                            .optional()
+                            .describe(
+                              'Setup gave up a second time, so the computer was released and its\npurchase refunded (and an agent teammate taken back): there is\nnothing to retry.'
+                            ),
                         })
                         .describe(
                           'Setup gave up before the computer was ready.'

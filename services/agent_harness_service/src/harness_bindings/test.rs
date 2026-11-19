@@ -343,10 +343,22 @@ async fn a_stale_close_on_another_replica_leaves_a_redialed_harness_connected(po
     let old_socket = RuntimeConnectionId::generate();
     let new_socket = RuntimeConnectionId::generate();
 
-    Arc::clone(&replica_a).connected(harness, old_socket).await;
+    Arc::clone(&replica_a)
+        .connected(
+            harness,
+            old_socket,
+            agent_harness::domain::ports::RuntimeAccepts::default(),
+        )
+        .await;
     // The old socket goes silent. The daemon redials, reaching the other replica
     // before the first one notices.
-    Arc::clone(&replica_b).connected(harness, new_socket).await;
+    Arc::clone(&replica_b)
+        .connected(
+            harness,
+            new_socket,
+            agent_harness::domain::ports::RuntimeAccepts::default(),
+        )
+        .await;
     assert!(reads_connected(&pool, harness).await);
 
     replica_a.disconnected(harness, old_socket).await;
@@ -373,7 +385,13 @@ async fn a_replica_crash_ends_its_connections_when_their_lease_lapses(pool: PgPo
     let harness = insert_harness(&pool).await;
     let crashed = presence_on_a_replica(&pool);
     let connection = RuntimeConnectionId::generate();
-    crashed.connected(harness, connection).await;
+    crashed
+        .connected(
+            harness,
+            connection,
+            agent_harness::domain::ports::RuntimeAccepts::default(),
+        )
+        .await;
     assert!(reads_connected(&pool, harness).await);
 
     // A crash writes no disconnect; all that happens is renewals stop.
@@ -388,7 +406,11 @@ async fn a_replica_crash_ends_its_connections_when_their_lease_lapses(pool: PgPo
     // The daemon's next dial brings it back and clears the dead row.
     let successor = presence_on_a_replica(&pool);
     successor
-        .connected(harness, RuntimeConnectionId::generate())
+        .connected(
+            harness,
+            RuntimeConnectionId::generate(),
+            agent_harness::domain::ports::RuntimeAccepts::default(),
+        )
         .await;
     assert!(reads_connected(&pool, harness).await);
     let rows = sqlx::query_scalar!(
@@ -406,7 +428,13 @@ async fn renewal_extends_a_lease_and_restores_a_missing_row(pool: PgPool) {
     let harness = insert_harness(&pool).await;
     let replica = presence_on_a_replica(&pool);
     let connection = RuntimeConnectionId::generate();
-    Arc::clone(&replica).connected(harness, connection).await;
+    Arc::clone(&replica)
+        .connected(
+            harness,
+            connection,
+            agent_harness::domain::ports::RuntimeAccepts::default(),
+        )
+        .await;
 
     sqlx::query!(
         r#"UPDATE harness_runtime_connection SET lease_expires_at = now() - interval '1 second'"#,
@@ -443,8 +471,20 @@ async fn simultaneous_final_closes_leave_a_harness_offline(pool: PgPool) {
         let replica_b = presence_on_a_replica(&pool);
         let first = RuntimeConnectionId::generate();
         let second = RuntimeConnectionId::generate();
-        Arc::clone(&replica_a).connected(harness, first).await;
-        Arc::clone(&replica_b).connected(harness, second).await;
+        Arc::clone(&replica_a)
+            .connected(
+                harness,
+                first,
+                agent_harness::domain::ports::RuntimeAccepts::default(),
+            )
+            .await;
+        Arc::clone(&replica_b)
+            .connected(
+                harness,
+                second,
+                agent_harness::domain::ports::RuntimeAccepts::default(),
+            )
+            .await;
 
         tokio::join!(
             replica_a.disconnected(harness, first),

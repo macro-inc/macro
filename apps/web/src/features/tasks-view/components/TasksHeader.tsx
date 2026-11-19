@@ -8,8 +8,9 @@ import {
   ListHeaderSearch,
 } from '@app/components/view-shell/ListHeader';
 import { useSplitPanelOrThrow } from '@components/app/split-layout/layoutUtils';
+import { EntityIcon } from '@core/component/EntityIcon';
 import { isTouchDevice } from '@core/mobile/isTouchDevice';
-import BookmarkIcon from '@phosphor/bookmark-simple.svg';
+import ArrowLeftIcon from '@icon/system/regular/arrow-left.svg';
 import { Show } from 'solid-js';
 import { TASK_TABS } from '../constants';
 import { taskSavedViewTitle } from '../primitives/create-task-saved-view-draft';
@@ -33,6 +34,10 @@ export function TaskViewBreadcrumbItem() {
     state.savedViewActive && savedViews
       ? taskSavedViewTitle(savedViews.view())
       : (TASK_TABS.find((tab) => tab.id === state.tab)?.label ?? 'Tasks');
+  const appearance = () => {
+    const view = savedViews?.view();
+    return view?.kind === 'saved' ? view.record.appearance : undefined;
+  };
 
   return (
     <ViewBreadcrumbs.Item
@@ -44,11 +49,17 @@ export function TaskViewBreadcrumbItem() {
         const label = () => (
           <>
             <Show when={state.savedViewActive}>
-              <BookmarkIcon class="size-4 shrink-0" aria-hidden="true" />
+              <EntityIcon
+                targetType="saved_view"
+                appearance={appearance()}
+                size="xs"
+              />
             </Show>
             <span class="truncate">{tabTitle()}</span>
           </>
         );
+        // A compact (phone) bar keeps its room for the open entity's name, so
+        // the way back is an arrow; the view's name stays its accessible name.
         const button = () => (
           <ViewBreadcrumbs.ReturnButton
             isActive={item.isActive()}
@@ -56,7 +67,16 @@ export function TaskViewBreadcrumbItem() {
             tooltip={tabTitle()}
             class="gap-2"
           >
-            {label()}
+            <span
+              data-compact-back
+              aria-hidden="true"
+              class="hidden group-data-[compact]/location:flex"
+            >
+              <ArrowLeftIcon class="size-4 shrink-0" />
+            </span>
+            <span class="flex min-w-0 items-center gap-2 group-data-[compact]/location:sr-only">
+              {label()}
+            </span>
           </ViewBreadcrumbs.ReturnButton>
         );
         // At the list itself the name switches views; deeper, it returns here.

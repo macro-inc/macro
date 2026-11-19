@@ -28,6 +28,12 @@ HTML worker belong to `packages/sdk-docs`.
   entity. Agents route on the sentence; the guide is how that area works,
   inlined into unrouted prompts and loaded with the entity on routed turns.
 - `src/index.ts`: public SDK exports used by programs.
+- `sdk-types.json` holds the SDK's declarations, which every program is
+  type-checked against, and Handlebars' (`handlebars`), kept out of the
+  fingerprint routines record. `@agent` examples of whole programs are fenced
+  `typescript` and typed with `CodeContext`; `crates/agent_code_mode` checks
+  each one.
+- `crmEmailPrivacy` documents `macro.crm.emailPrivacy` separately from CRM records so both entity indexes stay within the 16 KiB bound; this changes neither the public namespace nor endpoint authorization.
 - The bundled SDK adds its hand-assigned display verb to each generated call
   when code mode enables the verb header in the bootstrap.
 - Keep `generate.ts`'s `postReads` in step with

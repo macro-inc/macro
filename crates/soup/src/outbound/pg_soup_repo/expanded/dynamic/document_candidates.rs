@@ -24,7 +24,7 @@ use crate::outbound::pg_soup_repo::candidate_gates::PER_CANDIDATE;
 mod test;
 
 /// Where a document arm with [`DocumentCandidates`] starts.
-#[derive(Debug)]
+#[derive(Clone, Debug)]
 pub(in crate::outbound::pg_soup_repo) enum CandidateArm {
     /// From each candidate, checking its own grants: the cost follows the
     /// candidates alone, however much the caller can access.
@@ -81,7 +81,7 @@ fn each_candidate_access(source_ids: usize) -> String {
 }
 
 /// A superset of the documents a filter matches.
-#[derive(Debug, Default, PartialEq, Eq)]
+#[derive(Clone, Debug, Default, PartialEq, Eq)]
 pub(in crate::outbound::pg_soup_repo) struct DocumentCandidates {
     /// Documents named by id.
     pub(in crate::outbound::pg_soup_repo) ids: Vec<Uuid>,

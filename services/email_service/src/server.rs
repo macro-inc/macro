@@ -142,6 +142,7 @@ async fn run_server() -> anyhow::Result<()> {
         connection_gateway_client,
         jwt_args,
         macro_event_broker,
+        event_broker_tracker: event_broker_tracker.clone(),
     })
     .await?;
     let api_result = api::setup_and_serve(state).await;

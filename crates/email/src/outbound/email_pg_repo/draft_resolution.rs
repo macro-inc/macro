@@ -94,7 +94,7 @@ pub(super) async fn commit(
                     sqlx::query!(r#"
                         INSERT INTO email_message_reconciliation (link_id,generation,provider_id,revision,is_import)
                         VALUES ($1,$2,$3,1,false) ON CONFLICT (link_id,generation,provider_id) DO UPDATE SET
-                            revision = email_message_reconciliation.revision + 1,available_at = now()
+                            revision = email_message_reconciliation.revision + 1,available_at = now(),is_import = false
                     "#,link.id,link.sync_generation,provider_id).execute(&mut *tx).await.map_err(anyhow::Error::from)?;
                 }
                 _ => unreachable!("outer match limits content resolutions"),

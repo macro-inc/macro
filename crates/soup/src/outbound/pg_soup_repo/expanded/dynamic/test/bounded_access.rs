@@ -122,6 +122,7 @@ async fn flat(pool: &PgPool, filter: EntityFilterAst) -> anyhow::Result<Vec<Uuid
             cursor: Query::Sort(SORT, filter),
             exclude_frecency: false,
         },
+        false,
     )
     .await?
     .iter()
@@ -148,6 +149,7 @@ async fn pages(
                 cursor,
                 exclude_frecency,
             },
+            false,
         )
         .await?;
         let Some(last) = page.last() else {

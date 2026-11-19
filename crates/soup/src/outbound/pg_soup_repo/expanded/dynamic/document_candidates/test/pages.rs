@@ -2,7 +2,9 @@
 //! listing started from the caller's access: the same documents in the same
 //! order, whatever the caller may or may not open.
 
-use super::super::super::{ExpandedDynamicCursorArgs, expanded_dynamic_cursor_soup_hydrated_with};
+use super::super::super::{
+    ExpandedDynamicCursorArgs, ItemSource, expanded_dynamic_cursor_soup_hydrated_with,
+};
 use super::super::{CandidateArm, DocumentCandidates};
 use super::{address, documents, domain, id, task};
 use crate::domain::models::{DynamicSort, SoupSortDirection};
@@ -396,6 +398,7 @@ async fn listing(
                 cursor,
                 exclude_frecency: false,
             },
+            ItemSource::ItemTables,
             |picked| {
                 let candidates = picked.map(|picked| match picked {
                     CandidateArm::EachCandidate(candidates)

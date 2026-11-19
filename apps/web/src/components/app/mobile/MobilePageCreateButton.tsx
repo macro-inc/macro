@@ -25,7 +25,10 @@ import {
 } from './MobileCreateMenu';
 import type { MobileNavViewId } from './mobile-nav-views';
 import { mobilePageCreateBlock } from './mobile-page-create-action';
-import { useForegroundMobileView } from './use-mobile-nav';
+import {
+  useForegroundMobileView,
+  useForegroundProject,
+} from './use-mobile-nav';
 
 const QUICK_CREATE_VIEWS = [
   { view: 'mail', icon: EmailIcon },
@@ -56,6 +59,7 @@ type PageCreateAction = Pick<
 /** The current non-AI view's New action above the navigation dock. */
 export function MobilePageCreateButton() {
   const foregroundView = useForegroundMobileView();
+  const foregroundProject = useForegroundProject();
   const createBlocks = useCreateMenuBlocks();
   const openEventComposer = useOpenEventComposer();
   const openCreateMenu = () => setCreateMenuOpen(true);
@@ -132,8 +136,15 @@ export function MobilePageCreateButton() {
     return viewAction() && key ? t(key) : t('mobile.new');
   };
 
+  // A project's own pill creates its tasks in the project; this one would not,
+  // so it stays out of the slot while the project's tabs load.
+  const shown = () =>
+    foregroundView() !== 'agents' &&
+    !foregroundProject() &&
+    !virtualKeyboardVisible();
+
   return (
-    <Show when={foregroundView() !== 'agents' && !virtualKeyboardVisible()}>
+    <Show when={shown()}>
       <Show
         when={foregroundView() === 'home'}
         fallback={

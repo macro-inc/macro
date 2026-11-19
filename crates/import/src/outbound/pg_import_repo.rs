@@ -19,6 +19,7 @@ use std::str::FromStr;
 use std::sync::Arc;
 use uuid::Uuid;
 
+mod lifecycle;
 mod notion_run;
 mod plan;
 /// Canonical target transaction helpers for composition roots.

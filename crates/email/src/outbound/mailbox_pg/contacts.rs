@@ -35,6 +35,7 @@ impl AddressBookRepository for PgMailboxSync {
                         grant_generation: row.grant_generation,
                     },
                     folder: ProviderId::new(row.scope_id)?,
+                    pass: FolderPass::Folder,
                     position: row.position.map(StreamToken::new),
                     initial_complete: row.initial_complete,
                     lease_id,
