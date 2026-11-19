@@ -311,6 +311,8 @@ async fn main() -> anyhow::Result<()> {
     );
 
     #[cfg(feature = "processing")]
+    let queue_workers = TaskTracker::new();
+    #[cfg(feature = "processing")]
     let consumer_supervisor = {
         // Ensures that pdfium binary exists so we can kill the container early on failure
         #[cfg(all(feature = "pdf", not(feature = "no_pdf")))]
@@ -359,7 +361,13 @@ async fn main() -> anyhow::Result<()> {
             backfill_gate: backfill_gate.clone(),
             messages_per_receive: u32::try_from(config.queue_max_messages).unwrap_or(1),
         };
-        run_search_processing_workers(search_processing_context, config.worker_count);
+        run_search_processing_workers(
+            search_processing_context,
+            config.worker_count,
+            shutdown_token.clone(),
+            &queue_workers,
+        );
+        queue_workers.close();
         tokio::spawn(supervise_event_consumer(
             config.kafka_brokers.as_ref().to_owned(),
             kafka_processing_context,
@@ -399,10 +407,13 @@ async fn main() -> anyhow::Result<()> {
 
     shutdown_token.cancel();
     backfill_pause_tracker.wait().await;
+    // The queue workers drain beside the Kafka consumer, inside the task's
+    // stop timeout.
     #[cfg(feature = "processing")]
-    let consumer_result = consumer_supervisor
-        .await
-        .context("search processing event consumer supervisor failed");
+    let (consumer_result, ()) = tokio::join!(consumer_supervisor, queue_workers.wait());
+    #[cfg(feature = "processing")]
+    let consumer_result =
+        consumer_result.context("search processing event consumer supervisor failed");
     if let Err(error) = telemetry.force_flush().await {
         tracing::warn!(error = ?error, "could not flush telemetry after the consumer stopped");
     }

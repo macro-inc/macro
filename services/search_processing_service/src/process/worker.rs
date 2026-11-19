@@ -1,10 +1,25 @@
+use std::time::Duration;
+
 use crate::process::{self, context::SearchProcessingContext};
 use futures::StreamExt;
+use tokio_util::{sync::CancellationToken, task::TaskTracker};
 use tracing::Instrument as _;
 
 /// How long a worker processes one message before giving up on it.
 pub(crate) const MESSAGE_PROCESSING_TIMEOUT: std::time::Duration =
     std::time::Duration::from_secs(300);
+
+/// How often a message being processed has its visibility extended, well
+/// inside the queue's 120 s visibility timeout.
+const VISIBILITY_HEARTBEAT: Duration = Duration::from_secs(30);
+/// How far each heartbeat pushes a message's visibility out.
+const VISIBILITY_EXTENSION_SECONDS: i32 = 120;
+/// How long one visibility change may take; the queue client has no timeout
+/// of its own, and a stalled change would hold the work and a stop up.
+const VISIBILITY_CALL_TIMEOUT: Duration = Duration::from_secs(3);
+/// How long the messages a worker holds may keep running after a stop before
+/// they are released to the queue. The task is killed 10 s after the stop.
+const DRAIN_GRACE: Duration = Duration::from_secs(5);
 
 /// How long a worker holding backfill units waits for its first message.
 const ADMITTED_RECEIVE_WAIT_SECONDS: i32 = 2;
@@ -23,13 +38,20 @@ fn idle_backoff(ctx: &SearchProcessingContext) -> std::time::Duration {
     std::time::Duration::from_secs(u64::try_from(rest).unwrap_or(0))
 }
 
-/// Spawns multiple search processing workers.
-pub fn run_search_processing_workers(ctx: SearchProcessingContext, worker_count: u8) {
+/// Spawns multiple search processing workers on `workers`. They take no new
+/// messages after `stop`, and finish or release the ones they hold.
+pub fn run_search_processing_workers(
+    ctx: SearchProcessingContext,
+    worker_count: u8,
+    stop: CancellationToken,
+    workers: &TaskTracker,
+) {
     for worker_id in 0..worker_count {
         let ctx_clone = ctx.clone();
-        tokio::spawn(async move {
+        let stop = stop.clone();
+        workers.spawn(async move {
             tracing::info!(worker_id, "spawning worker");
-            run_search_processing_worker_with_id(ctx_clone, worker_id).await;
+            run_search_processing_worker_with_id(ctx_clone, worker_id, stop).await;
         });
     }
 }
@@ -40,16 +62,22 @@ enum Round {
     Processed,
     Empty,
     ReceiveFailed,
+    Stopped,
 }
 
 /// Delay before receiving again after a receive error.
 const RECEIVE_ERROR_RETRY_DELAY: std::time::Duration = std::time::Duration::from_secs(1);
 
-#[tracing::instrument(skip(ctx))]
-pub async fn run_search_processing_worker_with_id(ctx: SearchProcessingContext, worker_id: u8) {
+#[tracing::instrument(skip(ctx, stop))]
+pub async fn run_search_processing_worker_with_id(
+    ctx: SearchProcessingContext,
+    worker_id: u8,
+    stop: CancellationToken,
+) {
     loop {
         let worker_result = tokio::spawn({
             let ctx = ctx.clone();
+            let stop = stop.clone();
             async move {
                 tracing::info!("worker started");
                 let mut last_heartbeat = std::time::Instant::now();
@@ -66,12 +94,19 @@ pub async fn run_search_processing_worker_with_id(ctx: SearchProcessingContext, 
                         "search.queue_worker.round",
                         worker_id,
                         messages = tracing::field::Empty,
+                        released = tracing::field::Empty,
+                        timed_out = tracing::field::Empty,
                     );
-                    match receive_and_process(&ctx).instrument(round).await {
-                        Round::Processed => {}
-                        Round::Empty => tokio::time::sleep(idle_backoff(&ctx)).await,
-                        Round::ReceiveFailed => {
-                            tokio::time::sleep(RECEIVE_ERROR_RETRY_DELAY).await;
+                    let pause = match receive_and_process(&ctx, &stop).instrument(round).await {
+                        Round::Processed => None,
+                        Round::Empty => Some(idle_backoff(&ctx)),
+                        Round::ReceiveFailed => Some(RECEIVE_ERROR_RETRY_DELAY),
+                        Round::Stopped => break,
+                    };
+                    if let Some(pause) = pause {
+                        tokio::select! {
+                            () = stop.cancelled() => break,
+                            () = tokio::time::sleep(pause) => {}
                         }
                     }
                 }
@@ -80,6 +115,10 @@ pub async fn run_search_processing_worker_with_id(ctx: SearchProcessingContext, 
         .await;
 
         match worker_result {
+            Ok(_) if stop.is_cancelled() => {
+                tracing::info!("worker stopped");
+                return;
+            }
             Ok(_) => {
                 // This should never be hit
                 tracing::error!("worker exited successfully?");
@@ -89,21 +128,27 @@ pub async fn run_search_processing_worker_with_id(ctx: SearchProcessingContext, 
             }
         }
 
+        if stop.is_cancelled() {
+            return;
+        }
         // Add a delay before restarting to avoid rapid restart loops
         tracing::info!("WORKER RESTARTING...");
-        tokio::time::sleep(std::time::Duration::from_secs(5)).await;
+        tokio::select! {
+            () = stop.cancelled() => return,
+            () = tokio::time::sleep(std::time::Duration::from_secs(5)) => {}
+        }
     }
 }
 
 /// Take backfill units, receive at most that many messages, and process them.
-async fn receive_and_process(ctx: &SearchProcessingContext) -> Round {
+async fn receive_and_process(ctx: &SearchProcessingContext, stop: &CancellationToken) -> Round {
     // Units are taken before the receive, so a paused or capped worker leaves
     // messages on the queue instead of holding them; the short wait keeps an
     // idle worker from holding units another backfill could use.
-    let mut batch = ctx
-        .backfill_gate
-        .admit_up_to(ctx.messages_per_receive)
-        .await;
+    let mut batch = tokio::select! {
+        () = stop.cancelled() => return Round::Stopped,
+        batch = ctx.backfill_gate.admit_up_to(ctx.messages_per_receive) => batch,
+    };
     let wanted = i32::try_from(batch.units()).unwrap_or(1);
     let receive = ctx
         .worker
@@ -126,6 +171,14 @@ async fn receive_and_process(ctx: &SearchProcessingContext) -> Round {
     if messages.is_empty() {
         return Round::Empty;
     }
+    if stop.is_cancelled() {
+        // Received as the service stops: hand them straight back.
+        for message in &messages {
+            release(&ReceivedMessage { ctx, message }).await;
+        }
+        tracing::Span::current().record("released", messages.len());
+        return Round::Stopped;
+    }
     let admitted: Vec<_> = messages
         .into_iter()
         .map(|message| (message, batch.take_one()))
@@ -135,35 +188,151 @@ async fn receive_and_process(ctx: &SearchProcessingContext) -> Round {
         .map(|(message, permit)| {
             let ctx = ctx.clone();
             async move {
-                let result = tokio::time::timeout(
-                    MESSAGE_PROCESSING_TIMEOUT,
+                let result = supervise(
                     process::process_message(&ctx, &message),
+                    &ReceivedMessage {
+                        ctx: &ctx,
+                        message: &message,
+                    },
+                    stop,
                 )
                 .await;
                 drop(permit);
 
                 match result {
-                    Ok(Ok(_)) => Ok(()),
-                    Ok(Err(e)) => Err((message.message_id.clone().unwrap_or_default(), e)),
-                    Err(_) => {
+                    Supervised::Finished(Ok(_)) => Ok(Outcome::Done),
+                    Supervised::Finished(Err(e)) => {
+                        Err((message.message_id.clone().unwrap_or_default(), e))
+                    }
+                    Supervised::TimedOut => {
                         tracing::error!(
                             message_id = message.message_id.as_deref().unwrap_or("unknown"),
                             "Message processing timed out after 5 minutes"
                         );
-                        Err((
-                            message.message_id.clone().unwrap_or_default(),
-                            anyhow::anyhow!("Processing timeout"),
-                        ))
+                        Ok(Outcome::TimedOut)
+                    }
+                    Supervised::Released => {
+                        tracing::info!(
+                            message_id = message.message_id.as_deref().unwrap_or("unknown"),
+                            "handed a message back to the queue at the stop"
+                        );
+                        Ok(Outcome::Released)
                     }
                 }
             }
         })
         .buffer_unordered(10)
-        .collect::<Vec<Result<(), (String, anyhow::Error)>>>()
+        .collect::<Vec<Result<Outcome, (String, anyhow::Error)>>>()
         .await;
 
+    let count = |wanted: Outcome| {
+        result
+            .iter()
+            .filter(|outcome| outcome.as_ref().is_ok_and(|outcome| *outcome == wanted))
+            .count()
+    };
+    let span = tracing::Span::current();
+    span.record("released", count(Outcome::Released));
+    span.record("timed_out", count(Outcome::TimedOut));
     for (message_id, error) in result.into_iter().filter_map(Result::err) {
         tracing::error!(message_id, error=?error, "error processing message");
     }
-    Round::Processed
+    if stop.is_cancelled() {
+        Round::Stopped
+    } else {
+        Round::Processed
+    }
 }
+
+/// How one message of a round ended, when it did not fail.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+enum Outcome {
+    Done,
+    TimedOut,
+    Released,
+}
+
+/// Hides a received message from other workers, or hands it back.
+pub(crate) trait MessageVisibility {
+    /// Keep the message hidden for `seconds` from now; 0 hands it back.
+    fn hide_for(&self, seconds: i32) -> impl Future<Output = anyhow::Result<()>> + Send;
+}
+
+/// Hide `message` for `seconds`, within [`VISIBILITY_CALL_TIMEOUT`].
+async fn hide(message: &impl MessageVisibility, seconds: i32) -> anyhow::Result<()> {
+    tokio::time::timeout(VISIBILITY_CALL_TIMEOUT, message.hide_for(seconds))
+        .await
+        .map_err(|_| anyhow::anyhow!("changing the message's visibility timed out"))?
+}
+
+/// Hand `message` back to the queue at once, for another worker.
+async fn release(message: &impl MessageVisibility) {
+    if let Err(error) = hide(message, 0).await {
+        tracing::warn!(error = ?error, "failed to hand a message back to the queue; it returns after its visibility timeout");
+    }
+}
+
+/// A message this task received from the search event queue.
+struct ReceivedMessage<'a> {
+    ctx: &'a SearchProcessingContext,
+    message: &'a aws_sdk_sqs::types::Message,
+}
+
+impl MessageVisibility for ReceivedMessage<'_> {
+    fn hide_for(&self, seconds: i32) -> impl Future<Output = anyhow::Result<()>> + Send {
+        self.ctx.worker.extend_visibility(self.message, seconds)
+    }
+}
+
+/// How the work on one message ended.
+#[derive(Debug, PartialEq, Eq)]
+pub(crate) enum Supervised<T> {
+    Finished(T),
+    /// Still running after [`MESSAGE_PROCESSING_TIMEOUT`]; abandoned, and the
+    /// message returns once its visibility lapses.
+    TimedOut,
+    /// Still running [`DRAIN_GRACE`] after a stop; abandoned and handed back.
+    Released,
+}
+
+/// Run `work` for one received message: keep the message hidden while it
+/// runs, give up after the processing timeout, and after a stop give it a
+/// short grace before handing the message back.
+pub(crate) async fn supervise<T>(
+    work: impl Future<Output = T>,
+    message: &impl MessageVisibility,
+    stop: &CancellationToken,
+) -> Supervised<T> {
+    tokio::pin!(work);
+    let timeout = tokio::time::sleep(MESSAGE_PROCESSING_TIMEOUT);
+    tokio::pin!(timeout);
+    let drained = async {
+        stop.cancelled().await;
+        tokio::time::sleep(DRAIN_GRACE).await;
+    };
+    tokio::pin!(drained);
+    let mut heartbeat = tokio::time::interval_at(
+        tokio::time::Instant::now() + VISIBILITY_HEARTBEAT,
+        VISIBILITY_HEARTBEAT,
+    );
+    heartbeat.set_missed_tick_behavior(tokio::time::MissedTickBehavior::Delay);
+    loop {
+        tokio::select! {
+            biased;
+            output = &mut work => return Supervised::Finished(output),
+            () = &mut drained => {
+                release(message).await;
+                return Supervised::Released;
+            }
+            () = &mut timeout => return Supervised::TimedOut,
+            _ = heartbeat.tick() => {
+                if let Err(error) = hide(message, VISIBILITY_EXTENSION_SECONDS).await {
+                    tracing::warn!(error = ?error, "failed to extend a message's visibility");
+                }
+            }
+        }
+    }
+}
+
+#[cfg(test)]
+mod test;
