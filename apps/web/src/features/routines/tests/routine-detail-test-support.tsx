@@ -18,9 +18,9 @@ import {
   untrack,
 } from 'solid-js';
 import { afterEach, beforeEach, vi } from 'vitest';
-import type { RoutineTarget } from './core/routine-target';
-import { Routine as RoutineUnderTest } from './routine-detail';
-import type { HistoryRecord } from './views/routine-history';
+import type { RoutineTarget } from '../core/routine-target';
+import { Routine as RoutineUnderTest } from '../routine-detail';
+import type { HistoryRecord } from '../views/routine-history';
 
 vi.mock('@app/lib/analytics/posthog', () => ({
   useFeatureFlag: () => () => ({ enabled: false, loading: false }),
@@ -113,8 +113,8 @@ vi.mock('@service-scheduled-action/client', async (importOriginal) => {
     },
   };
 });
-vi.mock('./queries/routines', async (importOriginal) => {
-  const actual = await importOriginal<typeof import('./queries/routines')>();
+vi.mock('../queries/routines', async (importOriginal) => {
+  const actual = await importOriginal<typeof import('../queries/routines')>();
   return {
     ...actual,
     readFreshRoutine: (id: string, parent: TraceContext) =>
@@ -140,16 +140,16 @@ vi.mock('./queries/routines', async (importOriginal) => {
           },
   };
 });
-vi.mock('./routine-triggers', () => ({
+vi.mock('../routine-triggers', () => ({
   RoutineTriggers: () => <div>Triggers</div>,
 }));
-vi.mock('./routine-template', () => ({
+vi.mock('../routine-template', () => ({
   RoutineTemplatePage: (props: { scheduleId: string }) => (
     <div>Template for {props.scheduleId}</div>
   ),
   openShareRoutineDialog: vi.fn(),
 }));
-vi.mock('./queries/templates', () => ({
+vi.mock('../queries/templates', () => ({
   readRoutineTemplateStatus: async (id: string, parent: TraceContext) => {
     mocks.readSharingStatus(id, parent);
   },
@@ -263,7 +263,7 @@ vi.mock('@app/lib/analytics/posthog', () => ({
           : mocks.sharing(),
   }),
 }));
-vi.mock('./routine-ai-composer', () => ({
+vi.mock('../routine-ai-composer', () => ({
   RoutineAiComposer: () => null,
   useComposerContext: () => () => ({}),
 }));
@@ -275,7 +275,7 @@ vi.mock('@queries/storage/system-skills', () => ({
 vi.mock('@app/features/chat/ChatWithAgentButton', () => ({
   openChatWithInput: mocks.openChat,
 }));
-vi.mock('./routine-step-pickers', () => ({
+vi.mock('../routine-step-pickers', () => ({
   routineToolSlots: {
     LabelPicker: () => null,
     TagPicker: () => null,
@@ -284,7 +284,7 @@ vi.mock('./routine-step-pickers', () => ({
     FolderPicker: () => null,
   },
 }));
-vi.mock('./routine-prompt-editor', () => ({
+vi.mock('../routine-prompt-editor', () => ({
   RoutinePromptEditor: (props: {
     initialValue: string;
     disabled?: boolean;
@@ -303,10 +303,10 @@ vi.mock('./routine-prompt-editor', () => ({
     );
   },
 }));
-vi.mock('./routine-apps', () => ({
+vi.mock('../routine-apps', () => ({
   RoutineApps: () => null,
 }));
-vi.mock('./queries/connected-apps', () => ({
+vi.mock('../queries/connected-apps', () => ({
   createRoutineConnectedApps: () => () => mocks.connectedApps(),
 }));
 vi.mock('@queries/agents/agents', () => ({
@@ -329,7 +329,7 @@ vi.mock('@queries/agents/agents', () => ({
     },
   }),
 }));
-vi.mock('./routine-execution-picker', () => ({
+vi.mock('../routine-execution-picker', () => ({
   RoutineExecutionPicker: (props: {
     target: RoutineTarget;
     onChange: (target: RoutineTarget) => void;
@@ -395,7 +395,7 @@ vi.mock('@queries/agent-session/session', () => ({
     };
   },
 }));
-vi.mock('./queries/schedules', () => ({
+vi.mock('../queries/schedules', () => ({
   useSchedulesQuery: () => ({
     refetch: mocks.refetchList,
     get data() {

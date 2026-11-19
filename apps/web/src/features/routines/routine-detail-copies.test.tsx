@@ -19,7 +19,7 @@ import {
   setListStatus,
   setSchedules,
   usePending,
-} from './routine-detail-test-support';
+} from './tests/routine-detail-test-support';
 
 describe('scheduled copies', () => {
   const copy: ScheduledAction = {

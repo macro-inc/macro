@@ -18,7 +18,7 @@ import {
   Routine,
   setSchedules,
   toast,
-} from './routine-detail-test-support';
+} from './tests/routine-detail-test-support';
 
 describe('routine code that needs an update', () => {
   const code = (source: string, sdk: string): RoutineTask => ({

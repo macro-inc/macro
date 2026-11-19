@@ -29,7 +29,7 @@ import {
   setSchedules,
   setStatus,
   toast,
-} from './routine-detail-test-support';
+} from './tests/routine-detail-test-support';
 
 describe('routine execution target autosave', () => {
   it('shows another owner’s routine as its template, without its controls', () => {

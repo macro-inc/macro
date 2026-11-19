@@ -11,7 +11,7 @@ import {
   Routine,
   remind,
   setSchedules,
-} from './routine-detail-test-support';
+} from './tests/routine-detail-test-support';
 
 describe('routine definitions', () => {
   it('starts an interaction before reading sharing status from the menu', () => {
