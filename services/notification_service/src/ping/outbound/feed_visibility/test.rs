@@ -6,8 +6,16 @@ use futures::future::BoxFuture;
 use macro_user_id::user_id::MacroUserIdStr;
 use model_entity::EntityType;
 
-use super::FeedCandidateVisibility;
+use super::{FeedCandidateVisibility, SharedName, channel_name, shared};
 use crate::ping::FeedVisibility;
+use models_soup::comms::ChannelType;
+
+/// Test sources carry no names.
+impl SharedName for () {
+    fn shared_name(&self) -> Option<String> {
+        None
+    }
+}
 
 /// Nobody is on a team.
 struct NoTeams;
@@ -34,7 +42,7 @@ async fn asks_only_the_inbox_with_the_link_probed() {
         viewers: NoTeams,
     };
 
-    assert!(feeds.admits(&viewer(), &listed).await.unwrap());
+    assert!(feeds.listing(&viewer(), &listed).await.unwrap().is_some());
     let requests = source.requests.lock().unwrap();
     let [request]: &[CandidateRequest] = &requests[..] else {
         panic!("one request, the inbox's: {requests:?}");
@@ -52,9 +60,38 @@ async fn refuses_what_the_inbox_would_not_list() {
     };
 
     assert!(
-        !feeds
-            .admits(&viewer(), &entity(EntityType::Document, 1))
+        feeds
+            .listing(&viewer(), &entity(EntityType::Document, 1))
             .await
             .unwrap()
+            .is_none()
     );
+}
+
+#[test]
+fn names_a_channel_the_way_its_messages_do_and_a_direct_message_not_at_all() {
+    assert_eq!(
+        channel_name(ChannelType::Public, Some("launch")).as_deref(),
+        Some("#launch")
+    );
+    assert_eq!(
+        channel_name(ChannelType::Team, Some("eng")).as_deref(),
+        Some("#eng")
+    );
+    assert_eq!(
+        channel_name(ChannelType::Private, Some("Offsite")).as_deref(),
+        Some("Offsite")
+    );
+    // Each side of a direct message names it after the other.
+    assert_eq!(channel_name(ChannelType::DirectMessage, Some("Ada")), None);
+    // A group chat without a name has none to share.
+    assert_eq!(channel_name(ChannelType::Private, None), None);
+}
+
+#[test]
+fn a_blank_name_is_no_name() {
+    assert_eq!(shared(Some("  Q3 plan ")).as_deref(), Some("Q3 plan"));
+    assert_eq!(shared(Some(" \n ")), None);
+    assert_eq!(channel_name(ChannelType::Public, Some("  ")), None);
+    assert_eq!(shared(None), None);
 }

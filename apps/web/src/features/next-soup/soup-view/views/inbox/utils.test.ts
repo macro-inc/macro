@@ -64,10 +64,8 @@ it('shows what a ping says, not the linked channel message', () => {
     notification_event_type: 'ping',
     notification_metadata: {
       tag: 'ping',
-      content: { title: 'Deploy finished', body: 'All 3 services are live.' },
+      content: { body: 'All 3 services are live.' },
     },
   };
-  expect(itemContent(entity, notification)).toBe(
-    'Deploy finished — All 3 services are live.'
-  );
+  expect(itemContent(entity, notification)).toBe('All 3 services are live.');
 });

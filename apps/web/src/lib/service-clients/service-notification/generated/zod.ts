@@ -2866,10 +2866,13 @@ export const listTypedNotificationsResponse = zod
                                 ),
                             ])
                             .optional(),
-                          body: zod
+                          body: zod.string().describe('What the sender wrote.'),
+                          entityName: zod
                             .string()
                             .nullish()
-                            .describe('More detail, as the sender wrote it.'),
+                            .describe(
+                              "The linked entity's name when it was sent, for a push to show under\nwho sent it. Absent when it has none that reads the same to every\nrecipient, such as a direct message."
+                            ),
                           message: zod
                             .union([
                               zod.null(),
@@ -2890,12 +2893,9 @@ export const listTypedNotificationsResponse = zod
                                 ),
                             ])
                             .optional(),
-                          title: zod
-                            .string()
-                            .describe('The headline, as the sender wrote it.'),
                         })
                         .describe(
-                          "A notification written by its sender: a title, an optional body, and the\nentity it opens. The sender is the notification's `sender_id`, or nobody\nwhen people notify themselves. One about a channel message is filed under\nthe message's channel and names the message."
+                          "A notification written by its sender: their words, and the entity it\nopens. The sender is the notification's `sender_id`, or nobody when people\nnotify themselves. One about a channel message is filed under the\nmessage's channel and names the message."
                         ),
                       tag: zod.enum(['ping']),
                     })
@@ -5244,10 +5244,13 @@ export const bulkGetTypedNotificationsByEventItemIdsResponse = zod
                                 ),
                             ])
                             .optional(),
-                          body: zod
+                          body: zod.string().describe('What the sender wrote.'),
+                          entityName: zod
                             .string()
                             .nullish()
-                            .describe('More detail, as the sender wrote it.'),
+                            .describe(
+                              "The linked entity's name when it was sent, for a push to show under\nwho sent it. Absent when it has none that reads the same to every\nrecipient, such as a direct message."
+                            ),
                           message: zod
                             .union([
                               zod.null(),
@@ -5268,12 +5271,9 @@ export const bulkGetTypedNotificationsByEventItemIdsResponse = zod
                                 ),
                             ])
                             .optional(),
-                          title: zod
-                            .string()
-                            .describe('The headline, as the sender wrote it.'),
                         })
                         .describe(
-                          "A notification written by its sender: a title, an optional body, and the\nentity it opens. The sender is the notification's `sender_id`, or nobody\nwhen people notify themselves. One about a channel message is filed under\nthe message's channel and names the message."
+                          "A notification written by its sender: their words, and the entity it\nopens. The sender is the notification's `sender_id`, or nobody when people\nnotify themselves. One about a channel message is filed under the\nmessage's channel and names the message."
                         ),
                       tag: zod.enum(['ping']),
                     })
@@ -7572,10 +7572,13 @@ export const getTypedNotificationsByEventItemIdResponse = zod
                                 ),
                             ])
                             .optional(),
-                          body: zod
+                          body: zod.string().describe('What the sender wrote.'),
+                          entityName: zod
                             .string()
                             .nullish()
-                            .describe('More detail, as the sender wrote it.'),
+                            .describe(
+                              "The linked entity's name when it was sent, for a push to show under\nwho sent it. Absent when it has none that reads the same to every\nrecipient, such as a direct message."
+                            ),
                           message: zod
                             .union([
                               zod.null(),
@@ -7596,12 +7599,9 @@ export const getTypedNotificationsByEventItemIdResponse = zod
                                 ),
                             ])
                             .optional(),
-                          title: zod
-                            .string()
-                            .describe('The headline, as the sender wrote it.'),
                         })
                         .describe(
-                          "A notification written by its sender: a title, an optional body, and the\nentity it opens. The sender is the notification's `sender_id`, or nobody\nwhen people notify themselves. One about a channel message is filed under\nthe message's channel and names the message."
+                          "A notification written by its sender: their words, and the entity it\nopens. The sender is the notification's `sender_id`, or nobody when people\nnotify themselves. One about a channel message is filed under the\nmessage's channel and names the message."
                         ),
                       tag: zod.enum(['ping']),
                     })
@@ -7723,8 +7723,9 @@ export const sendPingBody = zod
   .object({
     body: zod
       .string()
-      .nullish()
-      .describe('More detail, at most 1000 characters.'),
+      .describe(
+        'What to tell them, at most 280 characters once trimmed: one or two\nsentences, since `link` holds the detail.'
+      ),
     link: zod
       .object({
         entityId: zod.string().describe("The entity's id."),
@@ -7765,7 +7766,6 @@ export const sendPingBody = zod
       .describe(
         'Who gets it, at most 100; the caller when omitted or empty. Anyone\nwho cannot already see `link`, or whose inbox would not list it, is\nskipped, never given access.'
       ),
-    title: zod.string().describe('The headline, at most 120 characters.'),
   })
   .describe('A notification written by the caller.');
 
@@ -9817,10 +9817,13 @@ export const getTypedNotificationByIdResponse = zod
                         ),
                     ])
                     .optional(),
-                  body: zod
+                  body: zod.string().describe('What the sender wrote.'),
+                  entityName: zod
                     .string()
                     .nullish()
-                    .describe('More detail, as the sender wrote it.'),
+                    .describe(
+                      "The linked entity's name when it was sent, for a push to show under\nwho sent it. Absent when it has none that reads the same to every\nrecipient, such as a direct message."
+                    ),
                   message: zod
                     .union([
                       zod.null(),
@@ -9837,12 +9840,9 @@ export const getTypedNotificationByIdResponse = zod
                         .describe('The channel message a ping points at.'),
                     ])
                     .optional(),
-                  title: zod
-                    .string()
-                    .describe('The headline, as the sender wrote it.'),
                 })
                 .describe(
-                  "A notification written by its sender: a title, an optional body, and the\nentity it opens. The sender is the notification's `sender_id`, or nobody\nwhen people notify themselves. One about a channel message is filed under\nthe message's channel and names the message."
+                  "A notification written by its sender: their words, and the entity it\nopens. The sender is the notification's `sender_id`, or nobody when people\nnotify themselves. One about a channel message is filed under the\nmessage's channel and names the message."
                 ),
               tag: zod.enum(['ping']),
             })

@@ -23,16 +23,20 @@ worker that sends email/mobile-push/websocket notifications.
 - The ingress worker reads Chat section membership through
   `channel_labels::outbound::section_membership`, wired in `main.rs`.
 - `src/ping.rs` + `src/api/ping.rs`: pings
-  (`POST /user_notifications/send`, the SDK's `notifications.send`). The
-  domain checks that the sender can see the link and that the inbox lists
+  (`POST /user_notifications/send`, the SDK's `notifications.send`). A ping
+  is a required body of at most 280 characters (`MAX_BODY_CHARS`) and a link,
+  with no title. The domain checks that the sender can see the link and that the inbox lists
   its kind (`notification_inbox`'s `CANDIDATE_TYPES`), then for each
   recipient that they can see it, that their inbox would list it
   (`FeedVisibility`, adapter in `src/ping/outbound/feed_visibility.rs`
-  over the inbox's `admits_new_notification`, with the recipient's team, and
+  over the inbox's `new_notification_listing`, with the recipient's team, and
   Soup on the primary pool, built in `src/wiring.rs`) and that they have room
   under the 60-an-hour cap on what one person receives from others; anyone
   who fails one is skipped and reported. It snapshots the sending agent and
-  enqueues through the notification ingress. A channel message link is read
+  the link's name (`entity_name`, from the first notified recipient's
+  listing; none for a direct message, whose name differs by side) for the
+  push, which reads "<sender> pinged you" / entity name / body, and enqueues
+  through the notification ingress. A channel message link is read
   through the message service (`src/ping/outbound/channel_messages.rs`) and
   filed under its channel. Its notification ids are derived from sender,
   entity, recipients, text and the fixed ten-minute window the send falls in,

@@ -926,7 +926,7 @@ fn ping(
     minute: u32,
 ) -> FeedNotification {
     let mut content = json!({
-        "title": "Deploy finished",
+        "body": "Deploy finished",
         "agent": { "id": uuid(0xB07), "name": "Scout" },
     });
     if let Some(message) = message {
@@ -971,7 +971,7 @@ fn a_ping_joins_its_entitys_comments_from_its_agent_or_its_sender() {
         3,
         entity(EntityType::Document, DOC),
         "ping",
-        json!({ "title": "Invoice sent" }),
+        json!({ "body": "Invoice sent" }),
         3,
         NotificationState::Unseen,
     );

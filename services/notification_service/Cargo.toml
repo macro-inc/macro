@@ -68,6 +68,7 @@ model_notifications = { path = "../../crates/model_notifications" }
 models_pagination = { path = "../../crates/models_pagination", features = [
   "axum",
 ] }
+models_soup = { path = "../../crates/models_soup" }
 notification = { path = "../../crates/notification", features = ["axum"] }
 notification_db_client = { path = "../../crates/notification_db_client" }
 notification_inbox = { path = "../../crates/notification_inbox" }

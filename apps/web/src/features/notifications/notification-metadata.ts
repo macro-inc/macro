@@ -123,7 +123,7 @@ export function getNotificationAction(n: UnifiedNotification): string {
           .with('expired', () => `${agent} sign-in expired`)
           .exhaustive(() => `${agent} sign-in expires soon`);
       })
-      .with('ping', () => 'notified you')
+      .with('ping', () => 'pinged you')
       .with('runtime_access_removed', () => 'removed your access to')
       // The computer, or the agent teammate it runs, is the actor:
       // "<computer> is ready", "<agent> couldn't be set up".
@@ -305,7 +305,7 @@ export function getNotificationContent(
           .exhaustive();
         return `Its ${agent} sign-in ${when}. Sign in again in Settings → Machines.`;
       })
-      .with({ tag: 'ping' }, (m) => pingText(m.content))
+      .with({ tag: 'ping' }, (m) => m.content.body)
       .with({ tag: 'runtime_access_removed' }, (m) =>
         stoppedAgentsText(m.content.agents, m.content.runtimeName)
       )
@@ -429,12 +429,27 @@ function agentDisplayName(agent: AgentProvider): string {
     .exhaustive();
 }
 
-/** A ping's words: its title, then its body when it has one. */
-export function pingText(content: {
-  title: string;
-  body?: string | null;
+/**
+ * Who pinged: "<sender> pinged you", where the sender is the agent or person
+ * who sent it. A ping people send themselves from a script has no sender.
+ */
+export function pingedBy(sender: string | undefined): string {
+  return sender ? `${sender} pinged you` : 'You pinged yourself';
+}
+
+/**
+ * What a ping is about, as its row names it: a channel as its messages do,
+ * anything else by its own name. A DM names the other person.
+ */
+export function pingPlace(entity: {
+  type: string;
+  name: string;
+  channelType?: string;
 }): string {
-  return content.body ? `${content.title} — ${content.body}` : content.title;
+  return entity.type === 'channel' &&
+    (entity.channelType === 'public' || entity.channelType === 'team')
+    ? `#${entity.name}`
+    : entity.name;
 }
 
 function routineRunFailed(n: UnifiedNotification): boolean {

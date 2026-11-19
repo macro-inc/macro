@@ -12,7 +12,6 @@ import EnvelopeIcon from '@icon/system/regular/envelope.svg';
 import GitPullRequestIcon from '@icon/system/regular/git-pull-request.svg';
 import HashIcon from '@icon/system/regular/hash.svg';
 import LockKeyIcon from '@icon/system/regular/lock-key.svg';
-import PaperPlaneTiltIcon from '@icon/system/regular/paper-plane-tilt.svg';
 import RobotIcon from '@icon/system/regular/robot.svg';
 import SmileyIcon from '@icon/system/regular/smiley.svg';
 import UserPlusIcon from '@icon/system/regular/user-plus.svg';
@@ -32,7 +31,8 @@ const iconFor = (kind: InboxCardKind) =>
     .with('invite', () => UserPlusIcon)
     .with('access', () => LockKeyIcon)
     .with('agent', () => RobotIcon)
-    .with('ping', () => PaperPlaneTiltIcon)
+    // A ping shows what it is about; see `InboxKindIcon`.
+    .with('ping', () => getIconConfig('default').icon)
     .with('task', () => CheckSquareIcon)
     .with('pull_request', () => GitPullRequestIcon)
     .with('event', () => CalendarBlankIcon)
@@ -70,11 +70,24 @@ export const inboxEntityColor = (entity: EntityData) => {
   return getIconConfig(type === 'emailRead' ? 'email' : type).foreground;
 };
 
-/** The glyph for a kind of notification. */
-export function InboxKindIcon(props: { kind: InboxCardKind; class?: string }) {
+/**
+ * The glyph for a kind of notification on `entity`. A ping, whichever row it
+ * joined, shows the icon of what it is about.
+ */
+export const inboxKindGlyph = (kind: InboxCardKind, entity: EntityData) =>
+  kind === 'ping'
+    ? getIconConfig(getEntityIconType(entity)).icon
+    : iconFor(kind);
+
+/** The glyph for a kind of notification; see {@link inboxKindGlyph}. */
+export function InboxKindIcon(props: {
+  kind: InboxCardKind;
+  entity: EntityData;
+  class?: string;
+}) {
   return (
     <Dynamic
-      component={iconFor(props.kind)}
+      component={inboxKindGlyph(props.kind, props.entity)}
       class={props.class}
       aria-hidden="true"
     />

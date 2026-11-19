@@ -194,7 +194,7 @@ describe('maybeHandlePlatformNotification', () => {
     expect(resolveDocumentName).not.toHaveBeenCalled();
   });
 
-  it('shows a ping as written, from the agent that sent it', async () => {
+  it('shows a ping like its push: who pinged, what about, their words', async () => {
     const result = await toPlatformNotificationData(
       baseNotification({
         entity_id: 'task-1',
@@ -204,8 +204,8 @@ describe('maybeHandlePlatformNotification', () => {
         notification_metadata: {
           tag: 'ping',
           content: {
-            title: 'Deploy finished',
             body: 'All 3 services are live.',
+            entityName: 'Deploy plan',
             agent: {
               id: '01a00000-0000-7000-8000-0000000000b7',
               name: 'Deploy bot',
@@ -220,15 +220,36 @@ describe('maybeHandlePlatformNotification', () => {
     );
 
     expect(result).toEqual({
-      title: 'Deploy finished',
+      title: 'Deploy bot pinged you — Deploy plan',
       options: { body: 'All 3 services are live.', icon: 'favicon.ico' },
       sender: {
         id: 'macro|sender@macro.com',
-        name: 'Deploy bot',
+        name: 'Deploy bot pinged you',
         avatarUrl: 'https://example.com/bot.png',
       },
-      conversation: { id: 'task-1' },
+      conversation: { id: 'task-1', name: 'Deploy plan' },
     });
+  });
+
+  it('leaves out what a ping is about when it has no shared name', async () => {
+    const result = await toPlatformNotificationData(
+      baseNotification({
+        entity_id: 'dm-1',
+        entity_type: 'channel',
+        sender_id: 'macro|sender@macro.com',
+        notification_event_type: 'ping',
+        notification_metadata: {
+          tag: 'ping',
+          content: { body: 'Can you look?' },
+        },
+      }),
+      async () => 'Ada',
+      async () => 'Unexpected name',
+      async () => undefined
+    );
+
+    expect(result?.title).toBe('Ada pinged you');
+    expect(result?.options?.body).toBe('Can you look?');
   });
 
   it('skips GitHub PR events so they do not render as browser notifications', async () => {

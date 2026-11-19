@@ -36,11 +36,10 @@ use uuid::Uuid;
 /// to show their settings.
 pub(crate) const AGENT_NOTIFICATIONS_FLAG: &str = "enable-agent-notifications";
 
-/// The longest title, in characters; longer ones are rejected, not cut.
-pub(crate) const MAX_TITLE_CHARS: usize = 120;
-
-/// The longest body, in characters; longer ones are rejected, not cut.
-pub(crate) const MAX_BODY_CHARS: usize = 1000;
+/// The longest body, in characters once trimmed; longer ones are rejected,
+/// not cut. One or two sentences: the linked entity holds the detail, a row
+/// shows one line, and a push about four.
+pub(crate) const MAX_BODY_CHARS: usize = 280;
 
 /// The most recipients one notification can name. A sanity bound, far above
 /// any real audience.
@@ -111,8 +110,7 @@ pub(crate) struct PingSender {
 pub(crate) struct PingDraft {
     /// Who gets it; empty sends it to the sender.
     pub recipients: Vec<MacroUserIdStr<'static>>,
-    pub title: String,
-    pub body: Option<String>,
+    pub body: String,
     pub link: Entity<'static>,
 }
 
@@ -175,10 +173,8 @@ pub(crate) enum PingError {
     /// The sender's flags could not be read, so nothing says they may send.
     #[error("could not check whether agent notifications are enabled: {0:?}")]
     FlagsUnavailable(rootcause::Report),
-    #[error("title must not be empty")]
-    EmptyTitle,
-    #[error("title is longer than {MAX_TITLE_CHARS} characters")]
-    TitleTooLong,
+    #[error("body must not be empty")]
+    EmptyBody,
     #[error("body is longer than {MAX_BODY_CHARS} characters")]
     BodyTooLong,
     #[error("a notification can name at most {MAX_RECIPIENTS} recipients")]
@@ -214,11 +210,21 @@ pub(crate) trait LinkAccess: Send + Sync + 'static {
 /// Whether a viewer's Notifications inbox would list a new notification about
 /// an entity, by the inbox's own membership rules.
 pub(crate) trait FeedVisibility: Send + Sync + 'static {
-    fn admits(
+    /// `None` when the viewer's inbox would not list it.
+    fn listing(
         &self,
         viewer: &MacroUserIdStr<'static>,
         link: &Entity<'static>,
-    ) -> impl Future<Output = Result<bool, rootcause::Report>> + Send;
+    ) -> impl Future<Output = Result<Option<Listing>, rootcause::Report>> + Send;
+}
+
+/// How a viewer's inbox would list a link.
+#[derive(Debug, Clone, Default, PartialEq, Eq)]
+pub(crate) struct Listing {
+    /// The link's name as everyone reads it: `#name` for a public or team
+    /// channel, an email's subject, an item's own name. `None` when it has
+    /// none, or one that differs by viewer, such as a direct message's.
+    pub name: Option<String>,
 }
 
 /// Where a channel message is.
@@ -354,23 +360,11 @@ where
             return Err(PingError::NotEnabled);
         }
 
-        let title = draft.title.trim().to_string();
-        if title.is_empty() {
-            return Err(PingError::EmptyTitle);
+        let body = draft.body.trim().to_string();
+        if body.is_empty() {
+            return Err(PingError::EmptyBody);
         }
-
-        if title.chars().count() > MAX_TITLE_CHARS {
-            return Err(PingError::TitleTooLong);
-        }
-
-        let body = draft
-            .body
-            .map(|body| body.trim().to_string())
-            .filter(|body| !body.is_empty());
-        if body
-            .as_ref()
-            .is_some_and(|body| body.chars().count() > MAX_BODY_CHARS)
-        {
+        if body.chars().count() > MAX_BODY_CHARS {
             return Err(PingError::BodyTooLong);
         }
 
@@ -421,9 +415,14 @@ where
             .collect()
             .await;
         let mut failed = None;
+        // Every listing names the link alike, so the first one does.
+        let mut entity_name = None;
         for (recipient, admission) in admissions {
             match admission {
-                Ok(()) => outcome.notified.push(recipient),
+                Ok(listing) => {
+                    entity_name = entity_name.or(listing.name);
+                    outcome.notified.push(recipient);
+                }
                 Err(Admission::Skipped(reason)) => outcome.skipped.push(SkippedRecipient {
                     user_id: recipient,
                     reason,
@@ -473,8 +472,8 @@ where
         }
 
         let metadata = PingMetadata {
-            title,
             body,
+            entity_name,
             agent,
             message: target.message,
         };
@@ -527,7 +526,7 @@ where
         recipient: MacroUserIdStr<'static>,
         own: bool,
         entity: &Entity<'static>,
-    ) -> (MacroUserIdStr<'static>, Result<(), Admission>) {
+    ) -> (MacroUserIdStr<'static>, Result<Listing, Admission>) {
         // The semaphore is never closed, so acquiring cannot fail.
         let admission = match ADMISSION_SLOTS.acquire().await {
             Ok(_slot) => self.check(&recipient, own, entity).await,
@@ -543,7 +542,7 @@ where
         recipient: &MacroUserIdStr<'static>,
         own: bool,
         entity: &Entity<'static>,
-    ) -> Result<(), Admission> {
+    ) -> Result<Listing, Admission> {
         if !own {
             let sees_link = self
                 .access
@@ -555,14 +554,12 @@ where
             }
         }
 
-        let listed = self
+        let listing = self
             .feeds
-            .admits(recipient, entity)
+            .listing(recipient, entity)
             .await
-            .map_err(Admission::internal)?;
-        if !listed {
-            return Err(Admission::Skipped(SkipReason::NotListed));
-        }
+            .map_err(Admission::internal)?
+            .ok_or(Admission::Skipped(SkipReason::NotListed))?;
 
         if !own {
             let room = self
@@ -574,7 +571,7 @@ where
                 return Err(Admission::Skipped(SkipReason::RecipientLimit));
             }
         }
-        Ok(())
+        Ok(listing)
     }
 
     /// Give back the received counts [`Self::admit`] took for `outcome`'s
@@ -675,7 +672,6 @@ fn notification_id(
         entity.entity_type.to_string(),
         entity.entity_id,
         metadata.message,
-        metadata.title,
         metadata.body,
         recipients,
         window,

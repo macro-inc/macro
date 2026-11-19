@@ -312,7 +312,7 @@ it('opens a ping linked to a document whose metadata fails to load', async () =>
     notification_event_type: 'ping',
     notification_metadata: {
       tag: 'ping',
-      content: { title: 'Deploy finished' },
+      content: { body: 'Deploy finished' },
     },
   } as UnifiedNotification;
 
@@ -341,7 +341,7 @@ it('opens a ping about a channel message at that message', async () => {
     notification_metadata: {
       tag: 'ping',
       content: {
-        title: 'Needs an answer',
+        body: 'Needs an answer',
         message: { messageId: 'reply', threadId: 'root' },
       },
     },
@@ -377,7 +377,7 @@ it('opens a ping on a project, an event and a contact', async () => {
       notification_event_type: 'ping',
       notification_metadata: {
         tag: 'ping',
-        content: { title: 'Deploy finished' },
+        content: { body: 'Deploy finished' },
       },
     }) as UnifiedNotification;
 

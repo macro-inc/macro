@@ -1512,19 +1512,21 @@ async fn new_activity_brings_a_read_row_back_into_an_unread_inbox() {
 }
 
 #[tokio::test]
-async fn admitting_a_new_notification_probes_the_inbox_candidate_query() {
+async fn a_new_notification_listing_probes_the_inbox_candidate_query() {
     let listed = entity(EntityType::Document, 1);
     let source = FakeSource::with(vec![candidate("doc", listed.clone(), Some(1), None)]);
 
-    assert!(
-        admits_new_notification(&source, &viewer(), listed.clone())
+    assert_eq!(
+        new_notification_listing(&source, &viewer(), listed.clone())
             .await
-            .unwrap()
+            .unwrap(),
+        Some("doc")
     );
-    assert!(
-        !admits_new_notification(&source, &viewer(), entity(EntityType::Document, 2))
+    assert_eq!(
+        new_notification_listing(&source, &viewer(), entity(EntityType::Document, 2))
             .await
-            .unwrap()
+            .unwrap(),
+        None
     );
 
     let requests = source.requests.lock().unwrap();

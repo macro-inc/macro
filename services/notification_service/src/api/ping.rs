@@ -102,11 +102,9 @@ pub struct SendPingRequest {
     #[serde(default)]
     #[schema(value_type = Vec<String>)]
     pub recipient_ids: Vec<MacroUserIdStr<'static>>,
-    /// The headline, at most 120 characters.
-    pub title: String,
-    /// More detail, at most 1000 characters.
-    #[serde(default)]
-    pub body: Option<String>,
+    /// What to tell them, at most 280 characters once trimmed: one or two
+    /// sentences, since `link` holds the detail.
+    pub body: String,
     /// What the notification opens; the caller must be able to see it.
     pub link: PingLink,
 }
@@ -159,7 +157,6 @@ pub(crate) async fn send_ping(
             },
             PingDraft {
                 recipients: request.recipient_ids,
-                title: request.title,
                 body: request.body,
                 link: request
                     .link
@@ -195,8 +192,7 @@ fn error_response(error: PingError) -> Response {
             )
             .into_response()
         }
-        PingError::EmptyTitle
-        | PingError::TitleTooLong
+        PingError::EmptyBody
         | PingError::BodyTooLong
         | PingError::TooManyRecipients
         | PingError::UnlinkableEntity(_)

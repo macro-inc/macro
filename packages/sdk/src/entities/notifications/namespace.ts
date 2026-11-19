@@ -51,10 +51,12 @@ export type NotificationLink =
 
 /** A ping (a notification you write) to send with {@link NotificationNamespace.send}. */
 export interface SendNotificationOptions {
-  /** The headline, at most 120 characters; shown as the notification's preview. */
-  title: string;
-  /** More detail, at most 1000 characters. */
-  body?: string;
+  /**
+   * What to tell them, at most 280 characters once trimmed: one or two
+   * sentences, since `link` holds the detail. Shown under who pinged and what
+   * it is about.
+   */
+  body: string;
   /** What it is about and opens; each recipient must already be able to open it. */
   link: NotificationLink;
   /** Who gets it, at most 100 people; you when omitted. An empty list sends nothing. */
@@ -132,7 +134,8 @@ export class NotificationNamespace {
    * The ping appears in each recipient's Notifications on the row of
    * what `link` is (a task's or document's comments, a channel or one of its
    * message threads, an email, a project, a calendar event, a company or
-   * contact), with `title` as its preview, and opens `link` when clicked.
+   * contact) as "<your name> pinged you", the name of `link`, then `body`, and
+   * opens `link` when clicked. A push reads the same way.
    * Routines should use this to report back, linking the document or listed
    * session the run produced; links to routines, databases and forms are
    * refused because the inbox would never show them.
@@ -147,7 +150,7 @@ export class NotificationNamespace {
    * desktop and phone push) and respects each recipient's notification
    * preferences, so someone in `notified` may still have it muted.
    *
-   * Do not send in a loop to repeat yourself: the same title and body about
+   * Do not send in a loop to repeat yourself: the same body about
    * the same `link` to the same people is delivered once in each ten-minute
    * window of the clock, so a repeat is dropped unless it falls in the next
    * window.
@@ -165,8 +168,7 @@ export class NotificationNamespace {
    * ```ts
    * const task = macro.tasks.byId(taskId);
    * const { skipped } = await macro.notifications.send({
-   *   title: 'Ready for review',
-   *   body: 'The fix is in; tests pass.',
+   *   body: 'The fix is in and tests pass; ready for your review.',
    *   link: task,
    *   to: [reviewer, owner],
    * });
@@ -183,7 +185,6 @@ export class NotificationNamespace {
     const outcome = unwrap(
       await this.client.notification.sendPing({
         body: {
-          title: options.title,
           body: options.body,
           link: linkReference(options.link),
           recipientIds:

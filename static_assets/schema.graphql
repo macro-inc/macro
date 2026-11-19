@@ -7047,13 +7047,14 @@ Metadata for a notification its sender wrote.
 """
 type GraphqlPingMetadata {
 	"""
-	The headline, as the sender wrote it.
+	What the sender wrote.
 	"""
-	title: String!
+	body: String!
 	"""
-	More detail, as the sender wrote it.
+	The linked entity's name when it was sent, when it has one that reads
+	the same to every recipient.
 	"""
-	body: String
+	entityName: String
 	"""
 	The agent whose code sent it, when one did.
 	"""

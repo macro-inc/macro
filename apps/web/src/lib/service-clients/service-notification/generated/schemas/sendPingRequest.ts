@@ -4,22 +4,19 @@
  * notification_service
  * OpenAPI spec version: 0.1.0
  */
-
 import type { PingLink } from './pingLink';
-import type { SendPingRequestBody } from './sendPingRequestBody';
 
 /**
  * A notification written by the caller.
  */
 export interface SendPingRequest {
-  /** More detail, at most 1000 characters. */
-  body?: SendPingRequestBody;
+  /** What to tell them, at most 280 characters once trimmed: one or two
+sentences, since `link` holds the detail. */
+  body: string;
   /** What the notification opens; the caller must be able to see it. */
   link: PingLink;
   /** Who gets it, at most 100; the caller when omitted or empty. Anyone
 who cannot already see `link`, or whose inbox would not list it, is
 skipped, never given access. */
   recipientIds?: string[];
-  /** The headline, at most 120 characters. */
-  title: string;
 }

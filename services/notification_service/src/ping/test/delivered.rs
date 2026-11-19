@@ -175,8 +175,7 @@ fn sender() -> PingSender {
 fn draft(recipient: Option<&str>, link: Entity<'static>) -> PingDraft {
     PingDraft {
         recipients: recipient.map(user).into_iter().collect(),
-        title: format!("{} finished", link.entity_type),
-        body: None,
+        body: format!("{} finished", link.entity_type),
         link,
     }
 }
@@ -422,6 +421,22 @@ async fn every_linkable_kind_reaches_a_recipients_inbox_and_home(pool: Pool<Post
         sender_inbox.is_empty() && sender_home.is_empty(),
         "the sender is not notified"
     );
+
+    // A push names the link as the recipient's inbox does.
+    let names: Vec<(String, Option<String>)> = sqlx::query!(
+        r#"SELECT event_item_type AS "entity_type!", metadata->>'entityName' AS entity_name
+        FROM notification WHERE notification_event_type = 'ping'"#
+    )
+    .fetch_all(&pool)
+    .await
+    .unwrap()
+    .into_iter()
+    .map(|row| (row.entity_type, row.entity_name))
+    .collect();
+    assert!(
+        names.contains(&("document".to_string(), Some("Release notes".to_string()))),
+        "{names:?}"
+    );
 }
 
 #[sqlx::test(
@@ -537,7 +552,7 @@ async fn a_link_shared_just_before_sending_is_accepted(pool: Pool<Postgres>) {
     let after = send(
         &notifications,
         PingDraft {
-            title: "Shared now".to_string(),
+            body: "Shared now".to_string(),
             ..draft(Some(USER_3), link.clone())
         },
     )
@@ -618,7 +633,7 @@ async fn benchmark_recipient_checks(pool: Pool<Postgres>) {
         .unwrap();
         sqlx::query!("ANALYZE").execute(&pool).await.unwrap();
         for _ in 0..5 {
-            notifications.feeds.admits(&viewer, &link).await.unwrap();
+            notifications.feeds.listing(&viewer, &link).await.unwrap();
         }
 
         let started = std::time::Instant::now();
@@ -628,17 +643,24 @@ async fn benchmark_recipient_checks(pool: Pool<Postgres>) {
         let access = started.elapsed() / ROUNDS;
         let started = std::time::Instant::now();
         for _ in 0..ROUNDS {
-            assert!(notifications.feeds.admits(&viewer, &link).await.unwrap());
+            assert!(
+                notifications
+                    .feeds
+                    .listing(&viewer, &link)
+                    .await
+                    .unwrap()
+                    .is_some()
+            );
         }
         let feed = started.elapsed() / ROUNDS;
         let started = std::time::Instant::now();
         let results = futures::future::join_all(
-            (0..ROUNDS).map(|_| notifications.feeds.admits(&viewer, &link)),
+            (0..ROUNDS).map(|_| notifications.feeds.listing(&viewer, &link)),
         )
         .await;
         let all_at_once = started.elapsed();
         assert!(
-            results.into_iter().all(|listed| listed.unwrap()),
+            results.into_iter().all(|listed| listed.unwrap().is_some()),
             "every concurrent check succeeds and lists the link"
         );
         println!(

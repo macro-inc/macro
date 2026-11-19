@@ -228,13 +228,14 @@ fn candidate_request(viewer: &FeedViewer) -> CandidateRequest {
     }
 }
 
-/// Whether the viewer's inbox would list a new notification about `entity`.
-pub async fn admits_new_notification<S: CandidateSource>(
+/// The entity as the viewer's inbox would list a new notification about it;
+/// `None` when it would not.
+pub async fn new_notification_listing<S: CandidateSource>(
     source: &S,
     viewer: &FeedViewer,
     entity: Entity<'static>,
-) -> Result<bool, Report> {
-    reader::would_list(source, candidate_request(viewer), entity).await
+) -> Result<Option<S::Entity>, Report> {
+    reader::listed(source, candidate_request(viewer), entity).await
 }
 
 /// A group cut into every one of its rows.

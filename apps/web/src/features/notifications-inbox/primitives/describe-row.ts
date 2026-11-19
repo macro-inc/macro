@@ -3,6 +3,8 @@ import {
   getNotificationAction,
   getNotificationContent,
   getNotificationTargetName,
+  pingedBy,
+  pingPlace,
 } from '@notifications/notification-metadata';
 import { getNotificationSenderFallbackName } from '@notifications/notification-sender';
 import type { UnifiedNotification } from '@notifications/types';
@@ -108,23 +110,6 @@ const groupChatRowName = (row: NotificationInboxRow, place: string) => {
   const name = entity.type === 'channel' && entity.name ? entity.name : place;
   return groupChatName(name);
 };
-
-/**
- * Where a ping on a row's entity is: the channel as its messages name it, and
- * anything else by its own name. A DM names the other person.
- */
-const pingPlace = (entity: NotificationInboxRow['content']['entity']) =>
-  entity.type === 'channel' &&
-  (entity.channelType === 'public' || entity.channelType === 'team')
-    ? `#${entity.name}`
-    : entity.name;
-
-/**
- * What a ping's sender did. A ping people send themselves from a script has
- * no one to name, so it says what it is instead.
- */
-const pingDeed = (sender: string | undefined) =>
-  sender ? `${sender} pinged you` : 'Ping';
 
 /** Channel verbs drop their preposition in a DM, which needs no place. */
 function channelAction(
@@ -234,7 +219,7 @@ function describeNotification(
       subject: content ?? entityName,
     }))
     .with({ tag: 'ping' }, () => ({
-      action: pingDeed(actor),
+      action: pingedBy(actor),
       subject: content ?? entityName,
     }))
     .with(
@@ -428,7 +413,7 @@ export function describeInboxCard(
     );
     return withoutRepeats(
       {
-        who: onlyPings || !who ? pingDeed(who || undefined) : who,
+        who: onlyPings || !who ? pingedBy(who || undefined) : who,
         what: pingPlace(row.content.entity),
         body,
       },
@@ -565,7 +550,7 @@ export function describeStackItem(
     id: notification.id,
     by:
       notification.notification_metadata.tag === 'ping'
-        ? pingDeed(sender)
+        ? pingedBy(sender)
         : join(sender, stackVerb(notification)),
     text: describeNotification(row, notification, sender).subject,
     at: new Date(notification.created_at),

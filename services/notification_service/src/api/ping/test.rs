@@ -48,3 +48,14 @@ async fn a_spent_allowance_says_when_to_try_again() {
     assert_eq!(response.status(), StatusCode::TOO_MANY_REQUESTS);
     assert_eq!(response.headers()[RETRY_AFTER], "90");
 }
+
+#[tokio::test]
+async fn a_body_over_the_limit_is_refused_with_the_limit_named() {
+    let response = error_response(PingError::BodyTooLong);
+
+    assert_eq!(response.status(), StatusCode::BAD_REQUEST);
+    assert_eq!(
+        message(response).await,
+        "body is longer than 280 characters"
+    );
+}

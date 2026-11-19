@@ -675,8 +675,8 @@ fragment SoupNotificationNavigationMetadataFields on GraphqlNotifEvent {
 		computerSetupFailureReason: failureReason
 	}
 	... on GraphqlPingMetadata {
-		pingTitle: title
 		pingBody: body
+		pingEntityName: entityName
 		pingAgentId: agentId
 		pingAgentName: agentName
 		pingAgentAvatarUrl: agentAvatarUrl

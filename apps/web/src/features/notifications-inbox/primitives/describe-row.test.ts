@@ -515,10 +515,7 @@ describe('describeInboxCard', () => {
 
 describe('a ping', () => {
   const ping = (id: string, sender = 'Scout') =>
-    sent(id, 'ping', sender, {
-      title: 'Deploy finished',
-      body: 'All 3 services are live.',
-    });
+    sent(id, 'ping', sender, { body: 'All 3 services are live.' });
 
   const on = (
     entity: Record<string, unknown>,
@@ -539,7 +536,7 @@ describe('a ping', () => {
     ).toEqual({
       who: 'Scout pinged you',
       what: 'Ship the inbox',
-      body: 'Deploy finished — All 3 services are live.',
+      body: 'All 3 services are live.',
     });
   });
 
@@ -556,7 +553,7 @@ describe('a ping', () => {
       ).toEqual({
         who: 'Scout pinged you',
         what: entity.name,
-        body: 'Deploy finished — All 3 services are live.',
+        body: 'All 3 services are live.',
       });
     }
   });
@@ -576,7 +573,7 @@ describe('a ping', () => {
     ).toBe('#launch');
   });
 
-  it('is a Ping when nobody is named as its sender', () => {
+  it('says you pinged yourself when nobody is named as its sender', () => {
     // A ping people send themselves from a script has no sender and no agent.
     const own = {
       ...ping('1'),
@@ -584,12 +581,12 @@ describe('a ping', () => {
     } as unknown as UnifiedNotification;
     const row = on(task, stack('discussion_messages', [own]));
     expect(describeInboxCard(row, people)).toEqual({
-      who: 'Ping',
+      who: 'You pinged yourself',
       what: 'Ship the inbox',
-      body: 'Deploy finished — All 3 services are live.',
+      body: 'All 3 services are live.',
     });
-    expect(describeInboxRow(row, people).action).toBe('Ping');
-    expect(itemsOf(row)[0].by).toBe('Ping');
+    expect(describeInboxRow(row, people).action).toBe('You pinged yourself');
+    expect(itemsOf(row)[0].by).toBe('You pinged yourself');
   });
 
   it('keeps its verb when a stack holds nothing but pings', () => {
@@ -611,12 +608,12 @@ describe('a ping', () => {
     expect(describeInboxCard(row, people)).toEqual({
       who: 'Scout and Sam',
       what: 'Ship the inbox',
-      body: 'Scout: Deploy finished — All 3 services are live.',
+      body: 'Scout: All 3 services are live.',
     });
     expect(itemsOf(row).map(({ by, text }) => ({ by, text }))).toEqual([
       {
         by: 'Scout pinged you',
-        text: 'Deploy finished — All 3 services are live.',
+        text: 'All 3 services are live.',
       },
       { by: 'Sam commented', text: 'Looks good' },
     ]);

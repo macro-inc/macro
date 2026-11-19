@@ -47,7 +47,6 @@ test('sends a task link to teammates as a document and reports who was skipped',
   const outsider = sdk.users.byId('macro|outsider@example.com');
 
   const result = await sdk.notifications.send({
-    title: 'Deploy finished',
     body: 'All 3 services are live.',
     link: sdk.tasks.byId('task-1'),
     to: [teammate, outsider],
@@ -57,7 +56,6 @@ test('sends a task link to teammates as a document and reports who was skipped',
   expect(requests[0].method).toBe('POST');
   expect(new URL(requests[0].url).pathname).toBe('/v1/user_notifications/send');
   expect(await requests[0].json()).toEqual({
-    title: 'Deploy finished',
     body: 'All 3 services are live.',
     link: { entityType: 'document', entityId: 'task-1' },
     recipientIds: ['macro|teammate@example.com', 'macro|outsider@example.com'],
@@ -75,13 +73,13 @@ test('one recipient need not be a list', async () => {
   const sdk = macro();
 
   const result = await sdk.notifications.send({
-    title: 'Look at this',
+    body: 'Look at this',
     link: sdk.documents.byId('doc-1'),
     to: sdk.users.byId('macro|teammate@example.com'),
   });
 
   expect(await requests[0].json()).toEqual({
-    title: 'Look at this',
+    body: 'Look at this',
     link: { entityType: 'document', entityId: 'doc-1' },
     recipientIds: ['macro|teammate@example.com'],
   });
@@ -96,12 +94,12 @@ test('a ping to yourself names no recipient and returns you', async () => {
   const sdk = macro();
 
   const result = await sdk.notifications.send({
-    title: '3 new leads',
+    body: '3 new leads',
     link: sdk.agentSessions.byId('session-1'),
   });
 
   expect(await requests[0].json()).toEqual({
-    title: '3 new leads',
+    body: '3 new leads',
     link: { entityType: 'agent_session', entityId: 'session-1' },
   });
   expect(result.notified.map((user) => user.id)).toEqual([
@@ -114,7 +112,7 @@ test('an empty recipient list sends nothing', async () => {
   const sdk = macro();
 
   const result = await sdk.notifications.send({
-    title: 'Nobody matched',
+    body: 'Nobody matched',
     link: sdk.agentSessions.byId('session-1'),
     to: [],
   });
@@ -133,7 +131,7 @@ test('a link the sender cannot see is refused', async () => {
   const sdk = macro();
 
   const sending = sdk.notifications.send({
-    title: 'Look at this',
+    body: 'Look at this',
     link: sdk.documents.byId('doc-1'),
     to: sdk.users.byId('macro|teammate@example.com'),
   });
@@ -146,7 +144,7 @@ test('a link to an entity notifications cannot open is rejected before sending',
   const sdk = macro();
 
   const sending = sdk.notifications.send({
-    title: 'Look at this',
+    body: 'Look at this',
     link: sdk.users.byId('macro|teammate@example.com') as never,
   });
 
@@ -175,12 +173,12 @@ test('each kind of link names its entity type', async () => {
   ] as const;
 
   for (const [link] of links) {
-    await sdk.notifications.send({ title: 'New activity', link });
+    await sdk.notifications.send({ body: 'New activity', link });
   }
 
   expect(await Promise.all(requests.map((request) => request.json()))).toEqual(
     links.map(([, entityType, entityId]) => ({
-      title: 'New activity',
+      body: 'New activity',
       link: { entityType, entityId },
     })),
   );
@@ -193,7 +191,7 @@ test('a sender over the hourly ceiling is told why and when to retry', async () 
   const sdk = macro();
 
   const sending = sdk.notifications.send({
-    title: 'Look at this',
+    body: 'Look at this',
     link: sdk.documents.byId('doc-1'),
   });
 
@@ -206,7 +204,7 @@ test('a sender without the feature is told it is not enabled', async () => {
   const sdk = macro();
 
   const sending = sdk.notifications.send({
-    title: 'Look at this',
+    body: 'Look at this',
     link: sdk.documents.byId('doc-1'),
   });
 
@@ -224,7 +222,7 @@ test('links the inbox never lists are rejected before sending', async () => {
     sdk.forms.byId('form-1'),
   ]) {
     const sending = sdk.notifications.send({
-      title: 'New response',
+      body: 'New response',
       link: link as never,
     });
     await expect(sending).rejects.toBeInstanceOf(TypeError);

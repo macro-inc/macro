@@ -130,7 +130,11 @@ pub async fn admits_new_notification<S: CandidateSource>(
         types: Vec::new(),
         include_snippets: false,
     };
-    reader::would_list(source, candidate_request(viewer, &scope), entity).await
+    Ok(
+        reader::listed(source, candidate_request(viewer, &scope), entity)
+            .await?
+            .is_some(),
+    )
 }
 
 /// Build one item from its loaded candidate. Returns `None` when, after

@@ -5,20 +5,22 @@
  * OpenAPI spec version: 0.1.0
  */
 import type { PingMetadataAgent } from './pingMetadataAgent';
-import type { PingMetadataBody } from './pingMetadataBody';
+import type { PingMetadataEntityName } from './pingMetadataEntityName';
 import type { PingMetadataMessage } from './pingMetadataMessage';
 
 /**
- * A notification written by its sender: a title, an optional body, and the
-entity it opens. The sender is the notification's `sender_id`, or nobody
-when people notify themselves. One about a channel message is filed under
-the message's channel and names the message.
+ * A notification written by its sender: their words, and the entity it
+opens. The sender is the notification's `sender_id`, or nobody when people
+notify themselves. One about a channel message is filed under the
+message's channel and names the message.
  */
 export interface PingMetadata {
   agent?: PingMetadataAgent;
-  /** More detail, as the sender wrote it. */
-  body?: PingMetadataBody;
+  /** What the sender wrote. */
+  body: string;
+  /** The linked entity's name when it was sent, for a push to show under
+who sent it. Absent when it has none that reads the same to every
+recipient, such as a direct message. */
+  entityName?: PingMetadataEntityName;
   message?: PingMetadataMessage;
-  /** The headline, as the sender wrote it. */
-  title: string;
 }

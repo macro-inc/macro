@@ -8,6 +8,7 @@ import {
   getNotificationAction,
   getNotificationContent,
   getNotificationTargetName,
+  pingedBy,
   shouldShowNotificationTarget,
 } from './notification-metadata';
 import { openNotification } from './notification-navigation';
@@ -135,19 +136,20 @@ export async function toPlatformNotificationData(
       }
     : undefined;
 
-  // A ping is the sender's own words: its title and body
-  // show as written, with no actor sentence built around them.
+  // A ping reads like its push: who pinged and what about, then their words.
   if (metadata.tag === 'ping') {
+    const about = metadata.content.entityName ?? undefined;
+    const deed = pingedBy(actorName);
     return {
-      title: metadata.content.title,
+      title: about ? `${deed} — ${about}` : deed,
       options: {
-        body: metadata.content.body
-          ? markdownToPlainText(metadata.content.body)
-          : actor,
+        body: markdownToPlainText(metadata.content.body),
         icon,
       },
-      sender,
-      conversation: { id: notification.entity_id },
+      // macOS titles an alert with its sender and puts the conversation
+      // beneath, so the sender says what they did.
+      sender: sender && { ...sender, name: deed },
+      conversation: { id: notification.entity_id, name: about },
     };
   }
 

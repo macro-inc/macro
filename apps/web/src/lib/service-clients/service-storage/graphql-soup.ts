@@ -1726,8 +1726,8 @@ function mapGraphqlNotificationMetadata(
         ({
           tag: 'ping',
           content: {
-            title: metadata.pingTitle,
             body: metadata.pingBody,
+            entityName: metadata.pingEntityName,
             agent: metadata.pingAgentId
               ? {
                   id: metadata.pingAgentId,

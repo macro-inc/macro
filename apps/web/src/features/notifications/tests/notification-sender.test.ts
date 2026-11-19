@@ -17,7 +17,7 @@ const manual = (content: Record<string, unknown>, senderId: string | null) =>
 describe('who a ping is from', () => {
   it('is its agent alone when an agent sent it for a user', () => {
     const ping = manual(
-      { title: 'Deploy finished', agent: { id: 'bot', name: 'Scout' } },
+      { body: 'Deploy finished', agent: { id: 'bot', name: 'Scout' } },
       'macro|ana@example.com'
     );
     expect(getNotificationAgentSender(ping)).toEqual({
@@ -28,14 +28,14 @@ describe('who a ping is from', () => {
   });
 
   it('is the sending user when no agent sent it', () => {
-    const ping = manual({ title: 'Invoice sent' }, 'macro|ana@example.com');
+    const ping = manual({ body: 'Invoice sent' }, 'macro|ana@example.com');
     expect(getNotificationAgentSender(ping)).toBeUndefined();
     expect(getNotificationUserSenderId(ping)).toBe('macro|ana@example.com');
   });
 
   it('is nobody when people notify themselves without an agent', () => {
     expect(
-      getNotificationUserSenderId(manual({ title: 'Reminder to self' }, null))
+      getNotificationUserSenderId(manual({ body: 'Reminder to self' }, null))
     ).toBeUndefined();
   });
 

@@ -37,7 +37,7 @@ agent session, runtime or team-scoped vault access request). Built on the shared
 - Depends on: `attention_feed`, `notification` (the bulk action store port),
   `item_filters`, `filter_ast`, `model_notifications`.
 - Used by: `graphql_notification_inbox`, `document_storage_service`,
-  `notification_service` (`admits_new_notification`, for pings)
+  `notification_service` (`new_notification_listing`, for pings)
   (composition).
 
 ## Recipes

@@ -913,14 +913,15 @@ pub struct GraphqlPingMetadata(PingMetadata);
 /// Metadata for a notification its sender wrote.
 #[Object]
 impl GraphqlPingMetadata {
-    /// The headline, as the sender wrote it.
-    async fn title(&self) -> &str {
-        &self.0.title
+    /// What the sender wrote.
+    async fn body(&self) -> &str {
+        &self.0.body
     }
 
-    /// More detail, as the sender wrote it.
-    async fn body(&self) -> Option<&str> {
-        self.0.body.as_deref()
+    /// The linked entity's name when it was sent, when it has one that reads
+    /// the same to every recipient.
+    async fn entity_name(&self) -> Option<&str> {
+        self.0.entity_name.as_deref()
     }
 
     /// The agent whose code sent it, when one did.

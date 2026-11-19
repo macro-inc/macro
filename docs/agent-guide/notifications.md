@@ -449,7 +449,7 @@ Team → Members (see Agent teammates in [settings.md](settings.md)).
 ## Pings
 
 Agent code (ExecuteCode) and SDK scripts ping people: they put a notification
-they write on an entity with `macro.notifications.send({ title, body?, link, to? })`, which
+they write on an entity with `macro.notifications.send({ body, link, to? })`, which
 calls `POST /user_notifications/send` on the notification service. It becomes a
 ping (notification kind `ping`): in-app, desktop/browser alert and phone push, all
 subject to each recipient's preferences (**Settings → Notifications → AI →
@@ -463,6 +463,10 @@ stack both sides are on for everyone; `VITE_ENABLE_AGENT_NOTIFICATIONS=false`
 turns the web side off there. A deployment asks PostHog, and the notification
 service needs `POSTHOG_API_KEY` to do so: without it nobody can send.
 
+`body` is the whole message: required, at most 280 characters once trimmed
+(400 "body is longer than 280 characters" past that, 400 when blank). A ping
+has no title; who sent it and what it is about frame it.
+
 `link` is what the notification is about: a document or task, a channel or
 one of its messages, an email thread, a folder, a project, a calendar event, a
 company or contact, a chat or a listed agent session. `to` is one user or a
@@ -475,8 +479,8 @@ kind turned off are in `notified`: the sender is not told their settings. A
 background run that may send nothing (`no_send` scope) cannot ping anyone,
 itself included: the request is refused before it reaches the handler.
 
-Two guards stop a looping program from flooding people. The same title and
-body about the same `link` to the same recipients from the same sender is
+Two guards stop a looping program from flooding people. The same body about
+the same `link` to the same recipients from the same sender is
 delivered once in each ten-minute window. Windows are fixed spans of the
 clock, so a repeat that falls in the next one is delivered again; a dropped
 repeat still answers 200. One call
@@ -484,9 +488,18 @@ names at most 100 recipients (400 past that), and a sender can notify at most
 1,000 recipients an hour, counted per notified recipient: past that the call
 answers 429 with a message and `Retry-After`, and notifies nobody.
 
-The alert's title and body are the sender's words. An agent's notification
-reads as from the agent (its name and avatar as they were when sent); without
-an agent it reads as from the sending user.
+A push reads "<sender> pinged you", then what it is about, then the body: on
+iOS the entity's name is the subtitle, and Android, which has no subtitle,
+titles it "<sender> pinged you — <entity>". A browser alert is titled like
+Android; the macOS app shows "<sender> pinged you" with the entity beneath,
+like iOS. An email digest lists it as "<sender> pinged you — <entity>" over
+the body. The sender is the agent (its name and avatar as they were
+when sent), else the sending user by the local part of their email, as other
+pushes name people; a ping to oneself without an agent reads "You pinged
+yourself". The entity's name is taken when the ping is sent, from the
+recipients' own inbox listing: `#name` for a public or team channel, an
+email's subject, an item's name. A direct message has no name that reads the
+same to both sides, so its push has no subtitle.
 
 A link must be something the Notifications view lists, or the ping would be
 delivered and never shown. The service takes the allowed kinds from the
@@ -509,7 +522,8 @@ others still get it. Pings to oneself are not counted, so a person's own
 routines and agents always get through.
 
 In the unified Notifications view a ping joins the row its
-entity already has, stacked with what is there, and is a **Ping**:
+entity already has, stacked with what is there, and its badge is the icon of
+that entity (a task's, a document's, a channel's, an email's):
 
 | Linked entity | Row it joins |
 | --- | --- |
@@ -521,14 +535,16 @@ entity already has, stacked with what is there, and is a **Ping**:
 | Chat, agent session | The agent row |
 
 The card names the sender ("Scout pinged you"), then the entity, then the
-title and body. A ping people send themselves without an agent names no one
-and reads "Ping". Clicking the row opens the entity; a ping on a channel message
-opens the channel at that message.
+body. A ping people send themselves without an agent reads "You pinged
+yourself". Home shows it the same way, under the entity's icon. Clicking the
+row opens the entity; a ping on a channel message opens the channel at that
+message.
 
 Verify from an agent session: ask the agent to ping you and two teammates
 about a task, one who can open it and one who cannot. You and the teammate
-with access each get a row on that task with the agent's avatar and the
-title, and a desktop alert titled as written; clicking the row opens the task.
+with access each get a row on that task reading "<agent> pinged you", the
+task's name and the body, with the task icon as its badge, and a desktop alert
+from "<agent> pinged you" about the task; clicking the row opens the task.
 The agent's result lists the other teammate under `skipped` (`no_access`),
 and they receive nothing. Someone who has only the task's public link is
 skipped as `not_listed`.

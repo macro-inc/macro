@@ -17,8 +17,8 @@ use uuid::Uuid;
 
 use super::{
     AGENT_NOTIFICATIONS_FLAG, AgentProfiles, AllowanceExceeded, ChannelMessages, DEDUPE_WINDOW,
-    FeedVisibility, LinkAccess, LocatedMessage, MAX_RECIPIENTS, PingDraft, PingError, PingOutcome,
-    PingSender, Pings, SendAllowance, SkipReason, SkippedRecipient,
+    FeedVisibility, LinkAccess, Listing, LocatedMessage, MAX_BODY_CHARS, MAX_RECIPIENTS, PingDraft,
+    PingError, PingOutcome, PingSender, Pings, SendAllowance, SkipReason, SkippedRecipient,
 };
 
 mod delivered;
@@ -87,21 +87,25 @@ impl LinkAccess for GrantedAccess {
 }
 
 /// An inbox that lists everything except `session-unlisted`, for everyone,
-/// and the (user, entity id) pairs it leaves out.
+/// and the (user, entity id) pairs it leaves out. It names `doc-1` "Q3 plan"
+/// and nothing else.
 #[derive(Default)]
 struct InboxLeavesOut(HashSet<(&'static str, &'static str)>);
 
 impl FeedVisibility for InboxLeavesOut {
-    async fn admits(
+    async fn listing(
         &self,
         viewer: &MacroUserIdStr<'static>,
         link: &Entity<'static>,
-    ) -> Result<bool, Report> {
-        Ok(link.entity_id != "session-unlisted"
+    ) -> Result<Option<Listing>, Report> {
+        let listed = link.entity_id != "session-unlisted"
             && !self
                 .0
                 .iter()
-                .any(|(user, entity)| viewer.as_ref() == *user && link.entity_id == *entity))
+                .any(|(user, entity)| viewer.as_ref() == *user && link.entity_id == *entity);
+        Ok(listed.then(|| Listing {
+            name: (link.entity_id == "doc-1").then(|| "Q3 plan".to_string()),
+        }))
     }
 }
 
@@ -252,8 +256,7 @@ fn sender() -> PingSender {
 fn draft(recipients: &[&str], link: Entity<'static>) -> PingDraft {
     PingDraft {
         recipients: recipients.iter().map(|id| user(id)).collect(),
-        title: "Look at this".to_string(),
-        body: None,
+        body: "Look at this".to_string(),
         link,
     }
 }
@@ -300,8 +303,7 @@ async fn notifies_a_recipient_who_can_see_the_link_from_the_sender() {
             },
             PingDraft {
                 recipients: vec![user("macro|teammate@macro.com")],
-                title: "  Deploy finished ".to_string(),
-                body: Some("All 3 services are live.".to_string()),
+                body: "  All 3 services are live. ".to_string(),
                 link: document(),
             },
             at(0),
@@ -322,8 +324,8 @@ async fn notifies_a_recipient_who_can_see_the_link_from_the_sender() {
         serde_json::json!({
             "tag": "ping",
             "content": {
-                "title": "Deploy finished",
                 "body": "All 3 services are live.",
+                "entityName": "Q3 plan",
                 "agent": {
                     "id": "00000000-0000-0000-0000-000000000b07",
                     "name": "Deploy bot",
@@ -335,7 +337,11 @@ async fn notifies_a_recipient_who_can_see_the_link_from_the_sender() {
     assert_eq!(recipients_of(request), ["macro|teammate@macro.com"]);
     assert_eq!(
         request["build_apns"]["notif"]["aps"]["alert"],
-        serde_json::json!({ "title": "Deploy finished", "body": "All 3 services are live." })
+        serde_json::json!({
+            "title": "Deploy bot pinged you",
+            "subtitle": "Q3 plan",
+            "body": "All 3 services are live.",
+        })
     );
     assert_eq!(request["send_conn_gateway"], true);
 }
@@ -349,8 +355,7 @@ async fn a_note_to_oneself_has_no_sender_so_the_ingress_keeps_it() {
             sender(),
             PingDraft {
                 recipients: Vec::new(),
-                title: "3 new leads".to_string(),
-                body: Some("   ".to_string()),
+                body: "3 new leads".to_string(),
                 link: EntityType::AgentSession.with_entity_string("session-1".to_string()),
             },
             at(0),
@@ -364,7 +369,7 @@ async fn a_note_to_oneself_has_no_sender_so_the_ingress_keeps_it() {
     assert_eq!(recipients_of(&sent[0]), ["macro|sender@macro.com"]);
     assert_eq!(
         sent[0]["req"]["notification"],
-        serde_json::json!({ "tag": "ping", "content": { "title": "3 new leads" } })
+        serde_json::json!({ "tag": "ping", "content": { "body": "3 new leads" } })
     );
 }
 
@@ -606,30 +611,30 @@ async fn refuses_blank_or_oversized_text_and_unlinkable_entities() {
         ("macro|sender@macro.com", "doc-1"),
         ("macro|sender@macro.com", "user-1"),
     ]);
-    let text = |title: &str, body: Option<String>| PingDraft {
+    let text = |body: String| PingDraft {
         recipients: Vec::new(),
-        title: title.to_string(),
         body,
         link: document(),
     };
 
     let blank = notifications
-        .send(sender(), text(" \n ", None), at(0))
+        .send(sender(), text(" \n ".to_string()), at(0))
         .await
         .unwrap_err();
-    assert!(matches!(blank, PingError::EmptyTitle));
+    assert!(matches!(blank, PingError::EmptyBody));
 
-    let long_title = notifications
-        .send(sender(), text(&"a".repeat(121), None), at(0))
+    // Counted in characters once trimmed, not in bytes.
+    let longest = format!("  {}  ", "é".repeat(MAX_BODY_CHARS));
+    service(&[("macro|sender@macro.com", "doc-1")])
+        .send(sender(), text(longest), at(0))
         .await
-        .unwrap_err();
-    assert!(matches!(long_title, PingError::TitleTooLong));
-
+        .unwrap();
     let long_body = notifications
-        .send(sender(), text("Done", Some("é".repeat(1001))), at(0))
+        .send(sender(), text("é".repeat(MAX_BODY_CHARS + 1)), at(0))
         .await
         .unwrap_err();
     assert!(matches!(long_body, PingError::BodyTooLong));
+    assert_eq!(long_body.to_string(), "body is longer than 280 characters");
 
     let user_link = notifications
         .send(
@@ -657,8 +662,7 @@ async fn refuses_more_recipients_than_one_notification_can_name() {
         recipients: (0..count)
             .map(|n| user(&format!("macro|user{n}@macro.com")))
             .collect(),
-        title: "Look at this".to_string(),
-        body: None,
+        body: "Look at this".to_string(),
         link: document(),
     };
 
@@ -713,7 +717,7 @@ async fn counts_each_notified_recipient_against_the_senders_allowance() {
         .send(
             sender(),
             PingDraft {
-                title: "Something else".to_string(),
+                body: "Something else".to_string(),
                 ..draft(
                     &["macro|teammate@macro.com", "macro|reviewer@macro.com"],
                     document(),
@@ -741,12 +745,12 @@ async fn a_repeat_within_the_window_has_the_same_id_so_it_is_delivered_once() {
         ("macro|teammate@macro.com", "doc-1"),
         ("macro|reviewer@macro.com", "doc-1"),
     ]);
-    let send = async |recipients: &[&str], title: &str, minute: i64| {
+    let send = async |recipients: &[&str], body: &str, minute: i64| {
         notifications
             .send(
                 sender(),
                 PingDraft {
-                    title: title.to_string(),
+                    body: body.to_string(),
                     ..draft(recipients, document())
                 },
                 at(minute),
@@ -786,7 +790,7 @@ async fn refuses_a_sender_whose_flag_is_off_before_anything_else() {
         .send(
             sender(),
             PingDraft {
-                title: " ".to_string(),
+                body: " ".to_string(),
                 ..draft(&["macro|teammate@macro.com"], document())
             },
             at(0),
