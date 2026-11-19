@@ -46,6 +46,7 @@ export type ToolApprovalCardProps = {
     approve?: string;
     cancel?: string;
   };
+};
 
 /**
  * A tool call held for the session owner: approve or decline for them,
