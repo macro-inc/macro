@@ -57,6 +57,20 @@ describe('parsePermissionHold', () => {
     ).toEqual({ source: 'let () = ()', operations: [SEND] });
   });
 
+  it('reads a JS tools program the same way', () => {
+    const source = 'await tools.email.send_message({ body: {} })';
+    expect(
+      parsePermissionHold({
+        source,
+        permission: {
+          executionId: EXECUTION_ID,
+          language: 'js_tools',
+          operations: [SEND],
+        },
+      })
+    ).toEqual({ source, operations: [SEND] });
+  });
+
   it('is not a permission hold without operations', () => {
     expect(parsePermissionHold({ path: '/x' })).toBeUndefined();
     expect(parsePermissionHold(null)).toBeUndefined();
