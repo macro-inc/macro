@@ -31,7 +31,7 @@ import ArrowCounterClockwise from '@icon/system/regular/arrow-counter-clockwise.
 import EnvelopeIcon from '@icon/system/regular/envelope.svg';
 import SpinnerIcon from '@icon/system/regular/spinner-gap.svg';
 import { Telemetry } from '@macro-inc/observability';
-import { fetchEmailConnectionProviders } from '@queries/auth/outlook-link';
+import { useEmailConnectionProviders } from '@queries/auth/outlook-link';
 import {
   invalidateAllAfterLogin,
   useUserInfoQuery,
@@ -311,9 +311,9 @@ function EmailLinkCallbackHandler(props: Pick<EmailAuthParams, 'successPath'>) {
     emailAddress: string;
     ownerEmail: string;
   } | null>(null);
-  const [adminConsent, setAdminConsent] = createSignal<{
-    url: string | undefined;
-  } | null>(null);
+  const [adminConsent, setAdminConsent] = createSignal(false);
+  // On returning from Microsoft, the signed-in identity may still be loading.
+  const providers = useEmailConnectionProviders(adminConsent);
 
   const navigateToSuccess = () => {
     navigate(props.successPath, { replace: true });
@@ -458,20 +458,7 @@ function EmailLinkCallbackHandler(props: Pick<EmailAuthParams, 'successPath'>) {
       navigateAfterLink();
       return;
     }
-    setAdminConsent({ url: undefined });
-    fireAndForget(loadAdminConsentUrl(), 'email-auth');
-  };
-
-  // The approval link is built server-side so the client never carries the
-  // Microsoft client id. The dialog stays open while it loads; a failure
-  // leaves the copy action disabled with an explanation.
-  const loadAdminConsentUrl = async () => {
-    const providers = await fetchEmailConnectionProviders();
-    setAdminConsent((current) =>
-      current
-        ? { ...current, url: providers.outlook_admin_consent_url ?? undefined }
-        : current
-    );
+    setAdminConsent(true);
   };
 
   // Completing consent does not depend on the old inbox list loading first.
@@ -518,21 +505,19 @@ function EmailLinkCallbackHandler(props: Pick<EmailAuthParams, 'successPath'>) {
   return (
     <Switch fallback={<FinishingConnection onBack={navigateAfterLink} />}>
       <Match when={adminConsent()}>
-        {(consent) => (
-          <AdminConsentRequiredDialog
-            open
-            adminConsentUrl={consent().url}
-            onClose={() => {
-              setAdminConsent(null);
-              navigateAfterLink();
-            }}
-            onConnectDifferentAccount={() => {
-              setAdminConsent(null);
-              openAddInboxDialog();
-              navigateAfterLink();
-            }}
-          />
-        )}
+        <AdminConsentRequiredDialog
+          open
+          adminConsentUrl={providers()?.outlook_admin_consent_url ?? undefined}
+          onClose={() => {
+            setAdminConsent(false);
+            navigateAfterLink();
+          }}
+          onConnectDifferentAccount={() => {
+            setAdminConsent(false);
+            openAddInboxDialog();
+            navigateAfterLink();
+          }}
+        />
       </Match>
       <Match when={conflict()}>
         {(c) => (

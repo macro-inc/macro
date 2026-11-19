@@ -23,8 +23,11 @@ code, not in its prompt. The harness also signs the scope into the credential
   the person's full access (agent sessions, session control, tool
   approvals, review decisions, running or rewriting
   chat tool calls, and agents, bots, the computers they run on and their
-  credentials); `dry_run` (a routine step's dry run, signed with no
-  correlation): reads by method and `POST_READS`, nothing else, held to the
+  credentials). IMAP enrollment and explicit discovery are refused because
+  they transmit credentials or the mailbox address to remote servers; owner
+  folder preferences and internal-only sync wakeups remain nonsending operations
+  at this layer, without bypassing their route authentication; `dry_run` (a
+  routine step's dry run, signed with no correlation): reads by method and `POST_READS`, nothing else, held to the
   SDK catalog by the harness test `the_dry_run_scope_is_every_sdk_read_and_no_write`.
   The harness tests
   `a_run_that_sends_nothing_is_refused_every_send_in_the_sdk` (every

@@ -204,7 +204,8 @@ sharing an inbox or thread inside Macro remains available.
 
 A Microsoft 365 tenant that lets only administrators consent sends the user
 back to an `Admin approval required` dialog with `Copy admin approval link`
-(a tenant-wide approval link for IT) and `Connect a different account`.
+(a tenant-wide approval link for IT) and `Connect a different account`. The
+copy action becomes available once the signed-in session and its approval link load.
 Cancelling on the provider's consent screen returns to the previous view
 silently. An administrator who opens the approval link returns to
 `Approved. Try connecting again.` with the connect dialog open. On native

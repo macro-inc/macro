@@ -39,6 +39,10 @@ const SENDS: &[(&str, &str)] = &[
     ("POST", "/email/drafts/{id}/transfer"),
     ("POST", "/email/calendar-events/{id}/forward"),
     ("POST", "/email/fusionauth_resend"),
+    // Setup authenticates to supplied mail servers; discovery sends the address
+    // to remote autoconfiguration services, even though neither submits mail.
+    ("POST", "/email/links/imap"),
+    ("POST", "/email/links/imap/discover"),
     ("POST", "/calendar/events/create-confirmed"),
     ("POST", "/events"),
     ("PATCH", "/events/{id}"),

@@ -64,24 +64,23 @@ export function fetchEmailConnectionProviders() {
 export function useOutlookAvailable(
   enabled: Accessor<boolean> = () => true
 ): Accessor<boolean> {
-  return useMailProviderAvailable('outlook', enabled);
+  const providers = useEmailConnectionProviders(enabled);
+  return () => !!providers()?.outlook;
 }
 
 export function useImapAvailable(
   enabled: Accessor<boolean> = () => true
 ): Accessor<boolean> {
-  return useMailProviderAvailable('imap', enabled);
+  const providers = useEmailConnectionProviders(enabled);
+  return () => !!providers()?.imap;
 }
 
-function useMailProviderAvailable(
-  provider: 'outlook' | 'imap',
-  enabled: Accessor<boolean>
-): Accessor<boolean> {
+export function useEmailConnectionProviders(enabled: Accessor<boolean>) {
   const account = useQueryAccount();
   const query = useQuery(() => ({
     ...emailConnectionProvidersQuery(account()),
     enabled: !!account() && enabled(),
   }));
   // Gate the read: a pending query's data suspends the caller's boundary.
-  return () => queryReadyGate(query) && !!query.data[provider];
+  return () => (account() && queryReadyGate(query) ? query.data : undefined);
 }

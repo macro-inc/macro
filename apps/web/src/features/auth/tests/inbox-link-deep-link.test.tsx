@@ -34,7 +34,7 @@ vi.mock('@app/features/inbox/ShareInboxConflictDialog', () => ({
   ShareInboxConflictDialog: () => null,
 }));
 vi.mock('@queries/auth/outlook-link', () => ({
-  fetchEmailConnectionProviders: vi.fn(),
+  useEmailConnectionProviders: () => () => undefined,
 }));
 vi.mock('@core/email-link', () => ({
   useEmailLinks: () => ({

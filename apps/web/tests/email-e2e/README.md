@@ -280,6 +280,10 @@ calendar bug class; the recipe lists them. The CI job runs it beside this
 suite. `src/features/calendar/browser-test` mounts the calendar over scripted
 `/calendar` routes until `calendar_service` is part of the stack.
 
+The full-stack onboarding tests use unique synthetic addresses in the local Gmail
+and Outlook emulators’ native domains to exercise the direct provider buttons.
+An unknown domain uses the IMAP suggestion when that rollout is enabled.
+
 ### IMAP and SMTP
 
 Run `just imap-e2e-browser` for the desktop and phone IMAP enrollment and reply
