@@ -158,7 +158,10 @@ in
     }
     location ^~ /api/v2/generic/incoming { ${pagingIngress} }
     location ^~ /api/v2/heartbeat/ { ${pagingIngress} }
-    # Grafana pages GoAlert over loopback; other inbound integrations are unused.
+    # The observability cluster's Grafana pages through here; this host's
+    # Grafana pages over loopback.
+    location ^~ /api/v2/grafana/incoming { ${pagingIngress} }
+    # Other inbound integrations, and the rest of Grafana's, are unused.
     location ~ ^/(api/v2/(grafana|prometheusalertmanager|site24x7|mailgun|uik|twilio)|v1/webhooks|health/) {
       return 404;
     }
