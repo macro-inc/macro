@@ -1192,10 +1192,9 @@ async fn runs_without_a_transcript_still_announce_start_and_stop_and_keep_their_
 
 /// The outcomes a span recorded while `body` ran with it.
 fn outcomes_of(body: impl FnOnce(tracing::Span)) -> Vec<String> {
-    let spans = Arc::new(Spans::default());
-    tracing::subscriber::with_default(Arc::clone(&spans), || {
-        body(tracing::info_span!("read", outcome = tracing::field::Empty));
-    });
+    let (spans, guard) = Spans::capture();
+    body(tracing::info_span!("read", outcome = tracing::field::Empty));
+    drop(guard);
     spans.outcomes("read")
 }
 
@@ -1239,7 +1238,13 @@ async fn a_copy_stopped_while_reading_its_parent_records_the_read_interrupted() 
     let (spans, _spans) = Spans::capture();
 
     let stop = async {
-        executor.repo.parent_read_stalled.notified().await;
+        // A copy that never reads its parent fails here rather than hanging.
+        tokio::time::timeout(
+            std::time::Duration::from_secs(10),
+            executor.repo.parent_read_stalled.notified(),
+        )
+        .await
+        .expect("the copy never read its parent");
         executor.cancellation.cancel();
     };
     let _ = tokio::join!(executor.execute_action(copy), stop);

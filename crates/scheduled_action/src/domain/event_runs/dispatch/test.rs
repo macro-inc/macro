@@ -209,6 +209,7 @@ async fn claim_race_never_executes_but_disable_after_start_does_not_undo_run() {
 #[tokio::test]
 async fn a_run_and_its_bookkeeping_are_spans_of_one_firing() {
     let (repo, access, executor, pending) = setup();
+    let key = pending.key();
     let service = EventDispatchService::new(repo, access, executor, ROLLED_OUT);
     let (spans, _spans) = crate::domain::test_spans::Spans::capture();
 
@@ -219,6 +220,14 @@ async fn a_run_and_its_bookkeeping_are_spans_of_one_firing() {
 
     assert_eq!(spans.parents("routine.event_run"), [None]);
     assert_eq!(
+        spans.values("routine.event_run", "event_id"),
+        [macro_uuid::Uuid::from(key.event_id).to_string()]
+    );
+    assert_eq!(
+        spans.values("routine.event_run", "action_id"),
+        [key.action_id.to_string()]
+    );
+    assert_eq!(
         spans.parents("routine.execute"),
         [Some("routine.event_run")]
     );
@@ -226,7 +235,16 @@ async fn a_run_and_its_bookkeeping_are_spans_of_one_firing() {
         spans.parents("routine.event_run.finalize"),
         [Some("routine.event_run")]
     );
+    assert_eq!(spans.outcomes("routine.execute"), ["succeeded"]);
     assert_eq!(spans.outcomes("routine.event_run.finalize"), ["finalized"]);
+    // The run's span ends with the run, before its bookkeeping starts.
+    let log = spans.log();
+    let at = |entry: &str| log.iter().position(|seen| seen == entry);
+    assert!(
+        at("close routine.execute") < at("open routine.event_run.finalize")
+            && at("close routine.execute").is_some(),
+        "{log:?}"
+    );
 }
 
 #[tokio::test]
