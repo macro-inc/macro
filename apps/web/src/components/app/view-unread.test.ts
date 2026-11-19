@@ -223,6 +223,42 @@ describe('createMailUnread', () => {
     expect(fetchNextPage).toHaveBeenCalledTimes(2);
   });
 
+  it('asks again for a page that added nothing once a loaded thread is read', () => {
+    const { fetchNextPage, setEmails, setFetchingNextPage } = mail({
+      emails: threads(100),
+      hasNextPage: true,
+    });
+
+    setEmails(threads(100).slice(5));
+    expect(fetchNextPage).toHaveBeenCalledTimes(1);
+    setFetchingNextPage(true);
+    setFetchingNextPage(false);
+    expect(fetchNextPage).toHaveBeenCalledTimes(1);
+
+    // Read in place: as many rows, one fewer unread.
+    setEmails(
+      threads(100)
+        .slice(5)
+        .map((row, index) => (index === 0 ? { ...row, isRead: true } : row))
+    );
+    expect(fetchNextPage).toHaveBeenCalledTimes(2);
+  });
+
+  it('reads no further page while New email notifications are off', () => {
+    const { count, fetchNextPage, setEmails, setDisabledTypes } = mail({
+      emails: threads(100),
+      hasNextPage: true,
+    });
+    setDisabledTypes(['new_email']);
+    setEmails(threads(100).slice(5));
+    expect(fetchNextPage).not.toHaveBeenCalled();
+    expect(count()).toBe(0);
+
+    // Turned back on: the number needs the page again.
+    setDisabledTypes([]);
+    expect(fetchNextPage).toHaveBeenCalledTimes(1);
+  });
+
   it('reads no page past the loaded ones for a dot alone', () => {
     const { count, fetchNextPage, setEmails } = mail({
       emails: threads(3),
