@@ -65,6 +65,39 @@ export function renderFace(face: AgentFace, opts?: { size?: number }): string {
   return draw(recipeFor(face.seed, face.pins), opts?.size);
 }
 
+/**
+ * The option each part is drawn with, pinned or chosen by the seed, as its
+ * position in the part's options. Pinning every part to these positions draws
+ * the same face.
+ */
+export function resolvedParts(face: AgentFace): Record<FacePart, number> {
+  const recipe = recipeFor(face.seed, face.pins);
+  const position = (part: FacePart) => {
+    const options: readonly { id: string }[] = OPTIONS[part];
+    return options.findIndex((option) => option.id === recipe[part].id);
+  };
+
+  return {
+    head: position('head'),
+    skin: position('skin'),
+    hair: position('hair'),
+    hairColor: position('hairColor'),
+    facialHair: position('facialHair'),
+    eyes: position('eyes'),
+    brows: position('brows'),
+    nose: position('nose'),
+    mouth: position('mouth'),
+    cheeks: position('cheeks'),
+    glasses: position('glasses'),
+    headwear: position('headwear'),
+    earrings: position('earrings'),
+    accent: position('accent'),
+    shirt: position('shirt'),
+    shirtColor: position('shirtColor'),
+    background: position('background'),
+  };
+}
+
 /** Reads a stored face. Anything that is not a valid version 1 face is undefined. */
 export function parseAgentFace(json: unknown): AgentFace | undefined {
   if (typeof json !== 'object' || json === null) return undefined;
