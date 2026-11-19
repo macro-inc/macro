@@ -216,9 +216,9 @@ is off vs Enable calendar wording counts only own inboxes, and Grant access, Tur
 on and Reconnect only start consent for one of them. It covers the grid only in a
 week without events and with no working calendar the viewer can see; a working
 calendar shared with them keeps it to the bottom-right pill, so a delegate whose
-only working calendar is shared sees the pill in every week. The pill rides
-above the desktop toast stack while it shows anything, so the app-wide prompt
-for the same inbox never covers it.
+only working calendar is shared sees the pill in every week. On desktop the
+pill rides above the toast stack while it shows anything, so the app-wide
+prompt for the same inbox doesn't cover it.
 An own inbox whose calendar used to sync but lost calendar access without the
 user turning it off (a Google grant from before Macro narrowed its calendar
 scopes, which the server turns off and clears hourly) shows **Calendar for
