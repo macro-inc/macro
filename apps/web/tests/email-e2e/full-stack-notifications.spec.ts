@@ -45,6 +45,12 @@ const GMAIL_SYNC_QUEUES = [
 /** The notification service's queue, whose messages name their thread. */
 const NOTIFICATION_INGRESS_QUEUE = 'notification-ingress-queue';
 
+/**
+ * How long the Mail badge must stay out once read: far longer than the
+ * notification service takes to decide on a message it has taken.
+ */
+const HOLD_MS = 10_000;
+
 type QueueListing = {
   ReceiveMessageResponse?: {
     ReceiveMessageResult: {
@@ -299,9 +305,7 @@ for (const provider of PROVIDERS) {
       });
       const unannounced = await mailbox.synced('Lunch?');
       // Twice in a row: LocalStack moves a message it hands out from waiting
-      // to taken in two steps, and a listing between them shows neither. A
-      // message caught there is processed within moments of being taken,
-      // and the badge and the service are read seconds later.
+      // to taken in two steps, and a listing between them shows neither.
       let settled = 0;
       await expect
         .poll(
@@ -329,10 +333,19 @@ for (const provider of PROVIDERS) {
         page.getByRole('heading', { name: 'Dinner instead' }).first()
       ).toBeVisible();
       await expect(badge).not.toHaveAttribute('data-unread');
+      // It stays out. The service gives no sign that it has dropped a
+      // notification, so this outwaits one that was still on its way: a row
+      // for "Lunch?" made now would light the badge again.
+      const holdUntil = Date.now() + HOLD_MS;
+      while (Date.now() < holdUntil) {
+        await page.waitForTimeout(1_000);
+        expect(await badge.getAttribute('data-unread')).toBeNull();
+        expect(
+          (await notifications(mailbox)).map((each) => each.entity_id)
+        ).not.toContain(unannounced.id);
+      }
+      expect((await mailbox.synced('Lunch?')).isRead).toBe(false);
       saw('STX-032');
-      expect(
-        (await notifications(mailbox)).map((each) => each.entity_id)
-      ).not.toContain(unannounced.id);
     });
 
     // When this fails, muting a thread from the list does not reach the
