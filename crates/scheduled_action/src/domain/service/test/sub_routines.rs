@@ -616,9 +616,10 @@ async fn scheduling_needs_a_run_a_defined_name_and_inputs_that_fit() {
 }
 
 /// Postgres can't store a NUL in text, and its refusal would be a server
-/// error quoting the text: a key or name holding one is refused first.
+/// error quoting the text: a key, name or trigger holding one is refused
+/// first.
 #[tokio::test]
-async fn a_scheduled_key_or_name_holding_a_nul_is_refused_before_the_write() {
+async fn a_scheduled_key_name_or_trigger_holding_a_nul_is_refused_before_the_write() {
     let service = service(true);
     let parent = reminders(&service).await;
     start_run(&service, &parent, PARENT_RUN);
@@ -630,13 +631,21 @@ async fn a_scheduled_key_or_name_holding_a_nul_is_refused_before_the_write() {
     );
     let mut nul_name = remind("Ship", None);
     nul_name.name = Some("Ship\u{0}it".into());
-    assert_eq!(
-        schedule(&service, nul_name, from_code(&parent))
-            .await
-            .unwrap_err()
-            .to_string(),
-        "a scheduled sub-routine's name can't hold a NUL character"
-    );
+    let mut nul_trigger = remind("Ship", None);
+    nul_trigger.trigger = serde_json::from_value(json!({
+        "type": "events",
+        "filters": [{ "events": ["task.created"], "condition": "Is it\u{0} urgent?" }],
+    }))
+    .unwrap();
+    for request in [nul_name, nul_trigger] {
+        assert_eq!(
+            schedule(&service, request, from_code(&parent))
+                .await
+                .unwrap_err()
+                .to_string(),
+            "a scheduled sub-routine's name or trigger can't hold a NUL character"
+        );
+    }
     assert_eq!(stored_actions(&service).len(), 1);
 }
 

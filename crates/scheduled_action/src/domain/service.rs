@@ -1120,9 +1120,8 @@ where
                     | ActionPolicyError::UnknownSubRoutine
                     | ActionPolicyError::SubRoutineInputs(_),
                 ) => "refused_definition",
-                Some(ActionPolicyError::InvalidKey | ActionPolicyError::ScheduledNameNul) => {
-                    "refused_key"
-                }
+                Some(ActionPolicyError::InvalidKey) => "refused_key",
+                Some(ActionPolicyError::ScheduledTextNul) => "refused_text",
                 _ => "failed",
             },
         };

@@ -155,12 +155,17 @@ where
         let parent_id = run.parent_id.unwrap_or(run.routine_id);
         record_run(&run, parent_id);
         let key = request.key.as_deref().map(SubRoutineKey::new).transpose()?;
-        if request
-            .name
-            .as_deref()
-            .is_some_and(|name| name.contains('\0'))
+        // Postgres can't store a NUL, and its refusal would quote the text
+        // into a logged error. A trigger's filters hold the caller's text.
+        let trigger_nul = serde_json::to_value(&request.trigger)
+            .is_ok_and(|trigger| routine_program::holds_nul(&trigger));
+        if trigger_nul
+            || request
+                .name
+                .as_deref()
+                .is_some_and(|name| name.contains('\0'))
         {
-            return Err(ActionPolicyError::ScheduledNameNul.into());
+            return Err(ActionPolicyError::ScheduledTextNul.into());
         }
         // The caller's text is never repeated back: it could be anything.
         let name = SubRoutineName::try_from(request.sub_routine.clone())

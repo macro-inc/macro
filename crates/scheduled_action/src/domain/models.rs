@@ -362,8 +362,8 @@ pub enum ActionPolicyError {
     #[error("{0}")]
     SubRoutineInputs(String),
     /// Postgres can't store a NUL in text.
-    #[error("a scheduled sub-routine's name can't hold a NUL character")]
-    ScheduledNameNul,
+    #[error("a scheduled sub-routine's name or trigger can't hold a NUL character")]
+    ScheduledTextNul,
 }
 
 /// Most active sub-routines one routine can have; finished one-time ones

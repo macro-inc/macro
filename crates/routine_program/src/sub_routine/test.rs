@@ -68,9 +68,9 @@ fn a_copy_needs_every_input_its_definition_declares_and_no_other() {
         refused(json!({ "taskId": "t-1" })),
         "input `daysLeft` needs a value"
     );
-    // An undeclared key is the caller's text, even one shaped like a name:
-    // it isn't repeated.
-    for key in ["jane_doe", "someone@example.com"] {
+    // An undeclared key is the caller's text, even one shaped like an
+    // input's name: it isn't repeated.
+    for key in ["ownerId", "jane_doe", "someone@example.com"] {
         let mut inputs = json!({ "taskId": "t-1", "daysLeft": 2 });
         inputs[key] = json!("x");
         assert_eq!(
