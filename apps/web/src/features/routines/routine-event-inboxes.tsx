@@ -1,3 +1,4 @@
+import { t } from '@app/lib/i18n';
 import { useUserId } from '@core/context/user';
 import { useEmailLinksQuery } from '@queries/email/link';
 import { queryReadyGate } from '@queries/gate';
@@ -35,9 +36,9 @@ export function InboxScopeLabel() {
   const choices = useInboxChoices();
   const label = () => {
     const value = choices();
-    return value.state === 'ready' && value.inboxes.length > 1
-      ? 'Your inboxes'
-      : 'Your inbox';
+    return t('routineFilters.yourInboxes', {
+      count: value.state === 'ready' ? value.inboxes.length : 1,
+    });
   };
   return <span>{label()}</span>;
 }

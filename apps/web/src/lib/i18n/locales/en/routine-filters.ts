@@ -26,4 +26,6 @@ export default {
   noInboxesChecked:
     'None checked: runs for mail into every inbox, yours and those shared with you.',
   inboxCount: { one: '{{count}} inbox', other: '{{count}} inboxes' },
+  /** Where a new-email trigger watches: the person's one inbox, or all of them. */
+  yourInboxes: { one: 'Your inbox', other: 'Your inboxes' },
 };
