@@ -1,0 +1,17 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "\n            INSERT INTO macro_user_info (macro_user_id, profile_picture, profile_picture_hash, avatar_face)\n            SELECT u.macro_user_id, $3, NULL, $4\n            FROM \"User\" u\n            JOIN team_agents ta ON ta.user_id = u.id\n            WHERE u.id = $1 AND ta.team_id = $2 AND u.\"isAgent\" = TRUE\n            ON CONFLICT (macro_user_id) DO UPDATE SET\n                profile_picture = EXCLUDED.profile_picture,\n                profile_picture_hash = NULL,\n                avatar_face = EXCLUDED.avatar_face\n            ",
+  "describe": {
+    "columns": [],
+    "parameters": {
+      "Left": [
+        "Text",
+        "Uuid",
+        "Text",
+        "Jsonb"
+      ]
+    },
+    "nullable": []
+  },
+  "hash": "49838dc99b9a3eeded6fc1cd0d690197b948f2f69af3170f60ea358c0d7fdafa"
+}

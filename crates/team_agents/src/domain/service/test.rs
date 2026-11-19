@@ -33,9 +33,12 @@ fn request() -> CreateTeamAgent {
         personality: "Dry, direct, kind.".to_owned(),
         size: ComputerSize::Standard,
         avatar_url: None,
+        avatar_face: None,
         voice: None,
     }
 }
+
+mod avatar;
 
 /// Every port call, in order.
 #[derive(Clone, Default)]
@@ -137,6 +140,19 @@ impl TeamAgentRepository for FakeRepository {
             .collect())
     }
 
+    async fn set_avatar(
+        &self,
+        team_id: Uuid,
+        agent: &MacroUserIdStr<'_>,
+        _: &AgentAvatar,
+    ) -> Result<bool, FakeError> {
+        self.journal.record("avatar.save");
+        Ok(self
+            .records()
+            .iter()
+            .any(|record| record.team_id == team_id && record.user_id == *agent))
+    }
+
     async fn mark_online(&self, user_id: &MacroUserIdStr<'_>) -> Result<(), FakeError> {
         self.journal.record("agent.mark_online");
         for agent in self.agents.lock().unwrap().iter_mut() {
@@ -148,6 +164,14 @@ impl TeamAgentRepository for FakeRepository {
             }
         }
         Ok(())
+    }
+}
+
+struct PictureChanges(Journal);
+
+impl AgentPictureChanges for PictureChanges {
+    fn picture_changed(&self, _: &MacroUserIdStr<'_>, _: Option<&str>) {
+        self.0.record("picture.changed");
     }
 }
 
@@ -435,6 +459,7 @@ fn service_with_flags(flag: bool, computers: FakeComputers) -> (Service, Journal
         Some(flags.clone()),
         FakeNotices::default(),
         Addresses,
+        PictureChanges(journal.clone()),
     );
     (service, journal, flags)
 }
