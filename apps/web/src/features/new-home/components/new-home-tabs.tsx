@@ -3,7 +3,7 @@ import BellIcon from '@icon/system/regular/bell.svg';
 import ClockCounterClockwiseIcon from '@icon/system/regular/clock-counter-clockwise.svg';
 import { createElementSize } from '@solid-primitives/resize-observer';
 import { Tabs } from '@ui';
-import { createMemo, createSignal } from 'solid-js';
+import { createSignal } from 'solid-js';
 import type { NewHomeTab } from '../core/new-home-mode';
 
 /** Below this list width the tabs keep only their icons. */
@@ -23,26 +23,34 @@ export function NewHomeTabs(props: {
   const size = createElementSize(frame);
   const iconOnly = () =>
     size.width !== null && size.width > 0 && size.width < ICON_ONLY_WIDTH_PX;
-  const options = createMemo(() => [
+  // One object per tab for the view's life: the tabs keep their elements,
+  // and with them focus and tooltips, as the dot comes and goes.
+  const options = [
     {
       value: 'recent' as const,
-      label: t('home.recent'),
+      get label() {
+        return t('home.recent');
+      },
       icon: ClockCounterClockwiseIcon,
     },
     {
       value: 'notifications' as const,
-      label: t('home.notifications'),
+      get label() {
+        return t('home.notifications');
+      },
       icon: BellIcon,
-      dot: props.unread,
+      get dot() {
+        return props.unread;
+      },
     },
-  ]);
+  ];
   return (
     <div ref={setFrame} class="shrink-0 px-3 pb-1">
       <Tabs
         aria-label={t('home.views')}
         fullWidth
         iconOnly={iconOnly()}
-        options={options()}
+        options={options}
         value={props.value}
         onChange={props.onChange}
       />

@@ -69,6 +69,8 @@ export function NewHomeNotificationsView() {
           <HomeChatStart
             title={title()}
             onStartedSession={showStartedSession}
+            // The inbox's Enter opens its focused row, as it does today.
+            shareEnter
           />
         ),
       }}

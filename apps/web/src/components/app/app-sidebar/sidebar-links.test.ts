@@ -49,7 +49,7 @@ describe('buildSidebarLinks', () => {
     expect(linksOnKey(links, 'i')).toEqual([]);
   });
 
-  it('sends g h to Home once New Home replaces it, and drops g i', () => {
+  it('sends g h to New Home once it replaces Home, and drops g i', () => {
     const links = buildSidebarLinks(
       false,
       false,
@@ -59,7 +59,7 @@ describe('buildSidebarLinks', () => {
       true,
       'new-only'
     );
-    expect(linksOnKey(links, 'h')).toEqual(['home']);
+    expect(linksOnKey(links, 'h')).toEqual(['new-home']);
     expect(linksOnKey(links, 'i')).toEqual([]);
   });
 

@@ -24,6 +24,8 @@ export function HomeChatStart(props: {
   title: string;
   /** Show the session the composer just started, beside the list. */
   onStartedSession: (sessionId: string) => void;
+  /** Leave Enter to the list while it has a row to open. */
+  shareEnter?: boolean;
 }) {
   const shell = useViewShell();
   const suggestions = useSuggestionsFlag();
@@ -68,6 +70,7 @@ export function HomeChatStart(props: {
                 <HomeAgentComposer
                   autoFocus={false}
                   onStarted={props.onStartedSession}
+                  shareEnter={props.shareEnter}
                 />
               </DebugSuspense>
             </div>

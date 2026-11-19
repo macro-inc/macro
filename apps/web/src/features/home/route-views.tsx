@@ -9,10 +9,8 @@ import {
   withAuth,
 } from '@components/app/split-layout/split-router/app-route-shell';
 import { useViewRestoration } from '@components/app/split-layout/view-restoration';
-import { useUserId } from '@core/context/user';
 import { Match, Show, Switch } from 'solid-js';
 import { homeRouteShows } from '../new-home/core/new-home-mode';
-import { readNewHomeTab } from '../new-home/new-home-preferences';
 import { NewHomeRecentView } from '../new-home/new-home-recent';
 import { useNewHomeMode } from '../new-home/use-new-home-mode';
 import {
@@ -62,20 +60,12 @@ export const HomeRouteView = withAuth(() => {
   const params = useParams<HomeDetailParams>();
   const [tabSearch] = createSearchParams(homeTabSearch);
   const mode = useNewHomeMode();
-  const userId = useUserId();
   const detailRequested = () =>
     homeDetailParamsFromRoute(params) !== undefined ||
     typeof params.period === 'string';
 
-  const shown = () => {
-    const id = userId();
-    return homeRouteShows({
-      mode: mode(),
-      recentTab: tabSearch.tab === 'recent',
-      detailRequested: detailRequested(),
-      lastTab: id ? readNewHomeTab(id) : 'recent',
-    });
-  };
+  const shown = () =>
+    homeRouteShows({ mode: mode(), recentTab: tabSearch.tab === 'recent' });
 
   return (
     <Switch>
@@ -98,9 +88,6 @@ export const HomeRouteView = withAuth(() => {
         >
           <NewHomeRecentView />
         </AppView>
-      </Match>
-      <Match when={shown() === 'new-notifications'}>
-        <RedirectSplit to={{ type: 'component', id: 'notifications' }} />
       </Match>
       <Match when={shown() === 'pending'}>
         <HomePendingView />

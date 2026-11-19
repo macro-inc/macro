@@ -55,30 +55,20 @@ export function newHomeNavActive(input: {
 }
 
 /** Which Home a `/home` split shows. */
-export type HomeRouteShows = 'old' | 'new' | 'new-notifications' | 'pending';
+export type HomeRouteShows = 'old' | 'new' | 'pending';
 
 /**
- * New Home's Recent is `/home` on the Recent tab. Once old Home is off it is
- * every `/home`, and one that names no tab or item opens the tab New Home
- * was last left on. A Recent link waits for the flags; any other `/home`
- * shows old Home meanwhile, as it always has.
+ * New Home's Recent is `/home` on the Recent tab, and every `/home` once old
+ * Home is off. A Recent link waits for the flags; any other `/home` shows
+ * old Home meanwhile, as it always has.
  */
 export function homeRouteShows(input: {
   mode: NewHomeMode | undefined;
   recentTab: boolean;
-  detailRequested: boolean;
-  lastTab: NewHomeTab;
 }): HomeRouteShows {
   const { mode, recentTab } = input;
   if (mode === undefined) return recentTab ? 'pending' : 'old';
   if (mode === 'off') return 'old';
   if (mode === 'both') return recentTab ? 'new' : 'old';
-  if (
-    !recentTab &&
-    !input.detailRequested &&
-    input.lastTab === 'notifications'
-  ) {
-    return 'new-notifications';
-  }
   return 'new';
 }

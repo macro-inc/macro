@@ -313,7 +313,8 @@ is `/app/notifications`.
 
 `g i` goes away with New Home on: Notifications is a New Home tab. The rail
 item and `g h` go through `/new-home`, which opens the tab New Home was last
-left on (kept per user); once old Home is off a bare `/home` does the same.
+left on (kept per user), without the preview it had open. Once old Home is
+off, a `/home` link opens Recent.
 New Home is called **New Home** (rail tooltip and split title) while old
 Home is beside it, and **Home** once it replaces it. Touch devices keep
 today's Home and Notifications in every state. `VITE_ENABLE_NEW_HOME` and

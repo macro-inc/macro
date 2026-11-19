@@ -30,6 +30,7 @@ export function AgentSessionRow(props: {
   onOpen?: (event: MouseEvent) => void;
 }) {
   const metadata = children(() => props.children);
+  const hoverAction = children(() => props.hoverAction);
   return (
     <ViewSidebar.Item
       as="div"
@@ -76,9 +77,9 @@ export function AgentSessionRow(props: {
         </span>
         {metadata()}
       </span>
-      <Show when={props.hoverAction}>
+      <Show when={hoverAction()}>
         <span class="relative hidden shrink-0 group-hover/agent-session:flex">
-          {props.hoverAction}
+          {hoverAction()}
         </span>
       </Show>
     </ViewSidebar.Item>

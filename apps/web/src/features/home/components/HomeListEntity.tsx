@@ -21,7 +21,7 @@ import { getCalendarJoinRequestNotification } from '@notifications/row-notificat
 import type { UnifiedNotification } from '@notifications/types';
 import { getBotDisplayName } from '@queries/messages/message-sender';
 import { cn, pressHandlers } from '@ui';
-import { type JSX, Match, Show, Switch } from 'solid-js';
+import { children, type JSX, Match, Show, Switch } from 'solid-js';
 import { match } from 'ts-pattern';
 import { HomeEntityIcon } from './HomeEntityIcon';
 
@@ -46,6 +46,8 @@ export function HomeListEntity(props: HomeListEntityProps) {
   const joinRequestNotification = () =>
     getCalendarJoinRequestNotification(props.entity);
   const unread = () => props.unread ?? unreadFilterFn(props.entity);
+  // Resolved once: each read of a JSX prop would build the button again.
+  const hoverAction = children(() => props.hoverAction);
   const notificationSource = useGlobalNotificationSource();
   const muted = () =>
     entityIsMuted(notificationSource.mutedEntities(), props.entity);
@@ -139,7 +141,7 @@ export function HomeListEntity(props: HomeListEntityProps) {
                 />
               </span>
               <Show
-                when={props.hoverAction}
+                when={hoverAction()}
                 fallback={
                   <Show when={unread()}>
                     <span
@@ -158,7 +160,7 @@ export function HomeListEntity(props: HomeListEntityProps) {
                     />
                   </Show>
                   <span class="hidden group-hover/home-item:flex">
-                    {props.hoverAction}
+                    {hoverAction()}
                   </span>
                 </span>
               </Show>
@@ -171,7 +173,7 @@ export function HomeListEntity(props: HomeListEntityProps) {
               surface="home"
               active={props.checked || props.highlighted}
               unread={unread()}
-              hoverAction={props.hoverAction}
+              hoverAction={hoverAction()}
               onOpen={(event) => {
                 event.preventDefault();
                 props.onClick?.(event);

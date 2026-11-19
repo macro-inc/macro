@@ -116,39 +116,20 @@ describe('newHomeNavActive', () => {
 });
 
 describe('homeRouteShows', () => {
-  const shows = (
-    mode: Parameters<typeof homeRouteShows>[0]['mode'],
-    overrides: Partial<Parameters<typeof homeRouteShows>[0]> = {}
-  ) =>
-    homeRouteShows({
-      mode,
-      recentTab: false,
-      detailRequested: false,
-      lastTab: 'recent',
-      ...overrides,
-    });
-
   it('keeps old Home at /home beside New Home, which has the Recent tab', () => {
-    expect(shows('both')).toBe('old');
-    expect(shows('both', { recentTab: true })).toBe('new');
-    expect(shows('off', { recentTab: true })).toBe('old');
+    expect(homeRouteShows({ mode: 'both', recentTab: false })).toBe('old');
+    expect(homeRouteShows({ mode: 'both', recentTab: true })).toBe('new');
+    expect(homeRouteShows({ mode: 'off', recentTab: true })).toBe('old');
   });
 
-  it('opens New Home’s last tab from a bare /home once old Home is off', () => {
-    expect(shows('new-only')).toBe('new');
-    expect(shows('new-only', { lastTab: 'notifications' })).toBe(
-      'new-notifications'
-    );
-    expect(
-      shows('new-only', { lastTab: 'notifications', recentTab: true })
-    ).toBe('new');
-    expect(
-      shows('new-only', { lastTab: 'notifications', detailRequested: true })
-    ).toBe('new');
+  it('shows New Home at every /home once old Home is off', () => {
+    expect(homeRouteShows({ mode: 'new-only', recentTab: false })).toBe('new');
   });
 
   it('holds a Recent link until the flags answer', () => {
-    expect(shows(undefined, { recentTab: true })).toBe('pending');
-    expect(shows(undefined)).toBe('old');
+    expect(homeRouteShows({ mode: undefined, recentTab: true })).toBe(
+      'pending'
+    );
+    expect(homeRouteShows({ mode: undefined, recentTab: false })).toBe('old');
   });
 });

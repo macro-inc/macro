@@ -49,6 +49,8 @@ import type { SidebarPrefs } from './use-sidebar-prefs';
 export type SidebarNextNavItem = Omit<SidebarItem, 'hotkeyToken'> & {
   /** Only destinations with a registered GoTo shortcut expose a key hint. */
   hotkeyToken?: SidebarItem['hotkeyToken'];
+  /** The view the item opens, when it isn't the item's own id. */
+  viewId?: string;
   icon: NavIcon;
   /** Matching active variant of `icon`, shown while the view is active. */
   iconActive: NavIcon;
@@ -315,20 +317,27 @@ const withNewHome = (order: readonly string[]): readonly string[] =>
 
 /**
  * Beside New Home, old Home gives up `g h`, which opens New Home, and opens
- * on its own tab: New Home's Recent is `/home` too.
+ * on its own tab: New Home's Recent is `/home` too. Once old Home is off,
+ * the Home item opens New Home on the tab it was left on.
  */
-const withOldHome = (
+const withHomeMode = (
   item: SidebarNextNavItem,
   gates: NavItemGates
-): SidebarNextNavItem =>
-  item.id === 'home' && gates.homeMode === 'both'
-    ? {
-        ...item,
-        hotkey: undefined,
-        hotkeyToken: undefined,
-        search: { [homeTabSearch.namespace]: undefined },
-      }
-    : item;
+): SidebarNextNavItem => {
+  if (item.id !== 'home') return item;
+  if (gates.homeMode === 'both') {
+    return {
+      ...item,
+      hotkey: undefined,
+      hotkeyToken: undefined,
+      search: { [homeTabSearch.namespace]: undefined },
+    };
+  }
+  if (gates.homeMode === 'new-only') {
+    return { ...item, viewId: 'new-home', href: '/new-home' };
+  }
+  return item;
+};
 
 /**
  * Apply the user's custom order. Home stays first. Ids absent from `order`
@@ -383,7 +392,7 @@ export const customizableNavItems = (
   orderNavItems(
     SIDEBAR_NEXT_NAV_ITEMS.filter((item) =>
       isNavItemAvailable(item, gates)
-    ).map((item) => withOldHome(item, gates)),
+    ).map((item) => withHomeMode(item, gates)),
     gates.homeMode === 'both'
       ? withNewHome(gates.prefs.order)
       : gates.prefs.order

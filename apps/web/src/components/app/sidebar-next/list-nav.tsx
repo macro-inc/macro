@@ -65,7 +65,8 @@ export const ListNav = (props: ListNavProps) => {
   const layout = useSplitLayout();
   const router = useSplitRouter();
 
-  const content = () => sidebarContent(props.item.id, props.item.params);
+  const content = () =>
+    sidebarContent(props.item.viewId ?? props.item.id, props.item.params);
   const preload = () => layout.preloadContent(content());
 
   // Split content mirrors the router's current entry, including the owning
@@ -116,7 +117,7 @@ export const ListNav = (props: ListNavProps) => {
     }
     if (!selected || event.shiftKey) {
       navigateToSidebarView({
-        viewId: props.item.id,
+        viewId: props.item.viewId ?? props.item.id,
         params: props.item.params,
         search: props.item.search,
         shiftKey: event.shiftKey,

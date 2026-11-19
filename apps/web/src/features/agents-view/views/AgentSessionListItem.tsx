@@ -5,7 +5,7 @@ import type { AgentSessionEntity } from '@entity';
 import FilledSparkleIcon from '@icon/system/fill/sparkle-fill.svg?component-solid';
 import RoutineIcon from '@icon/system/regular/clock-clockwise.svg';
 import SparkleIcon from '@icon/system/regular/sparkle.svg';
-import { type JSX, Show } from 'solid-js';
+import { children, type JSX, Show } from 'solid-js';
 import { AgentSessionCodeDetails } from '../components/AgentSessionCodeDetails';
 import {
   AgentSessionRow,
@@ -42,6 +42,7 @@ export function AgentSessionListItem(props: Props) {
   const state = () =>
     conversationState(props.entity.status, props.entity.turnState);
   const failed = () => props.entity.turnState === 'failed';
+  const hoverAction = children(() => props.hoverAction);
   const activity = useSessionActivity(() => props.entity.id);
   const summary = () => (state() === 'working' ? activity() : undefined);
   const details = () =>
@@ -78,7 +79,7 @@ export function AgentSessionListItem(props: Props) {
       unread={props.unread}
       hideLeading={hideLeading()}
       onOpen={props.onOpen}
-      hoverAction={props.hoverAction}
+      hoverAction={hoverAction()}
       timestamp={compactAge(conversationTimestamp(props.entity))}
       leading={
         <Show
@@ -112,7 +113,7 @@ export function AgentSessionListItem(props: Props) {
               classList={{
                 'bg-failure': failed(),
                 'bg-accent': !failed(),
-                'group-hover/agent-session:hidden': Boolean(props.hoverAction),
+                'group-hover/agent-session:hidden': Boolean(hoverAction()),
               }}
             />
           </Show>

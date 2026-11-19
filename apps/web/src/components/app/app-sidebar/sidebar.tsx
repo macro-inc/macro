@@ -394,17 +394,17 @@ const NOTIFICATIONS_LINK: SidebarItem = {
   hotkeyToken: TOKENS.sidebar.goTo.notifications,
 };
 
-/** `g h` beside old Home: New Home, on the tab it was left on. */
-const NEW_HOME_LINK: SidebarItem = {
+/** `g h` with New Home on: New Home, on the tab it was left on. */
+const newHomeLink = (label: () => string): SidebarItem => ({
   id: 'new-home',
   get label() {
-    return t('home.newHome');
+    return label();
   },
   href: '/new-home',
   icon: HomeIcon,
   hotkey: 'h',
   hotkeyToken: TOKENS.sidebar.goTo.home,
-};
+});
 
 const ACTIVITY_LINK: SidebarItem = {
   id: 'activity',
@@ -479,11 +479,12 @@ export const buildSidebarLinks = (
 
   // Home leads; Notifications, Recent and Activity follow it in that order.
   let anchorId = 'home';
-  if (homeMode === 'both') {
-    links = links.map((link) => (link.id === 'home' ? NEW_HOME_LINK : link));
+  if (homeMode === 'both' || homeMode === 'new-only') {
+    const newHome = newHomeLink(() =>
+      homeMode === 'both' ? t('home.newHome') : t('nav.home')
+    );
+    links = links.map((link) => (link.id === 'home' ? newHome : link));
     anchorId = 'new-home';
-  } else if (homeMode === 'new-only') {
-    links = links.map((link) => (link.id === 'home' ? homeLink('h') : link));
   } else if (showNotifications) {
     links = links.map((link) => (link.id === 'home' ? homeLink('h') : link));
     insertAfter(anchorId, NOTIFICATIONS_LINK);

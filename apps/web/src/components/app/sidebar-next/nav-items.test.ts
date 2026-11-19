@@ -294,6 +294,7 @@ describe('New Home on the rail', () => {
   it('is the Home item once old Home is off', () => {
     const gates = defaultGates({ homeMode: 'new-only' });
     expect(ids(gates)[0]).toBe('home');
+    expect(visibleNavItems(gates)[0]?.viewId).toBe('new-home');
     expect(ids(gates)).not.toContain('new-home');
     expect(ids(gates)).not.toContain('notifications');
   });
