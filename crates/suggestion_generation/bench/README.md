@@ -92,13 +92,14 @@ mail or suggestions names the first seat's domain in any case or its own in
 another case, and its mail renamed is the first seat's word for word: a
 snippet cut at 500 characters can cut a longer domain's copy elsewhere), a
 routines judgement reads the first seat's mail and the seat's suggestions
-renamed (`routinesEvidence`), so the seats of one round share the person,
-mail, catalog and key word for word; those go after the rubric, which the
-route caches, and the round's first judgement writes the cache the others then
-read. Any other seat is judged on its own mail, which no other seat's
-judgement shares. Rejudged that way, the same generations scored within the
-judge's own pass-to-pass difference (main 12.3 against 12.3 and 11.0, a
-single-session build 64.7 against 66.3) at about half the judge's cost.
+renamed (`routinesEvidence`), so a persona's seats, in every rep of the run
+(all at one "now"), share the person, mail, catalog and key word for word;
+those go after the rubric, which the route caches, and the persona's first
+judgement writes the cache the others then read. Any other seat is judged on
+its own mail, which no other seat's judgement shares. Rejudged that way, the
+same generations scored within the judge's own pass-to-pass difference (main
+12.3 against 12.3 and 11.0, a single-session build 64.7 against 66.3) at about
+half the judge's cost.
 
 A run records its judge (`JUDGE` in `judge.ts`: the model and a version to
 bump with any change to a rubric, a schema or what a judgement reads), and
@@ -140,8 +141,9 @@ seat is a copy of a persona under a domain of its own (`founder`,
 by side (see **Seats** below). Seats sign up on their first run (one signup
 each for `routines`, five for `feed`'s teams), against the webhook's 50
 an hour: on a new stack, run the two sections an hour apart, or `all` stops
-part way through the feed when the webhook refuses a seat. Judging runs alongside, as three
-grader accounts, while the next rep seeds.
+part way through the feed when the webhook refuses a seat. Judging runs as
+three grader accounts: the feed's while the next rep seeds, the routines'
+once the last rep has generated (see **Seats** below).
 
 Each run writes `~/.cache/suggestions-bench/runs/<label>-<section>-<set>-<time>/run.json`,
 with each attempt's suggestions, the judge's marks, the score and the
@@ -330,10 +332,14 @@ cost nothing beyond the model calls.
   session (`delivery_unknown`) a bench error, so a build that breaks prompt
   delivery has nothing scored and `compare` refuses it rather than calling it
   a loss. The feed section indexes the
-  seeded items for search first. Judging runs alongside, three grader
-  accounts at a time, each judgement's cost read from its grader's usage
-  (a routines round's first judgement pays to write the cache its other
-  seats read).
+  seeded items for search first. Judging takes three grader accounts at a
+  time, each judgement's cost read from its grader's usage. The feed's
+  runs alongside, while the next rep seeds. Every rep of a routines run
+  reads its mail at the run's one "now", so a persona's judgements share
+  one cached prefix (the rubric, mail, catalog and key) across seats and
+  reps; they wait for the last rep, so the cache is still warm, and each
+  persona's first judgement pays to write it once, not once a rep
+  (`judgeLast`).
 
 ## Adding a persona or a section
 

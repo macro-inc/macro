@@ -35,6 +35,11 @@ type SectionSpec = {
    * more than the 30 s it allows to accept a session's first prompt.
    */
   concurrency: number;
+  /**
+   * Whether a persona's judgements share a cached prefix: then every rep
+   * reads its mail at one `now` and judging starts after the last rep.
+   */
+  judgeLast: boolean;
 };
 
 /**
@@ -54,6 +59,7 @@ export const SECTIONS: Record<Section, SectionSpec> = {
     seats: 3,
     reps: 3,
     concurrency: 3,
+    judgeLast: true,
   },
   feed: {
     about: 'The Suggestions feed: a "fresh suggestions" generation with only suggestions on, over a workspace in use for weeks.',
@@ -65,6 +71,7 @@ export const SECTIONS: Record<Section, SectionSpec> = {
     reps: 3,
     // One session a generation.
     concurrency: 9,
+    judgeLast: false,
   },
 };
 
@@ -223,10 +230,16 @@ async function runSection(section: Section, values: Record<string, string | unde
     await setFlags(at.instance, spec.flags);
     await seedGraders(at.instance);
     const base = (slot: Persona, rep: number) => join(dir, `${slotName(slot).replace('/', '-')}-${rep}`);
-    // Judging needs only what a generation wrote, so it runs on while the next round seeds.
+    // Judging needs only what a generation wrote, so it runs on while the next
+    // round seeds, except where a persona's judgements share a cached prefix
+    // (`judgeLast`): there every rep reads the mail at one `now` and judging
+    // waits for the last rep, so the prefix is written once a persona, not
+    // once a rep.
+    const runNow = Date.now();
     const judged: Promise<void>[] = [];
+    const unjudged: { slot: Persona; attempt: Attempt; done: () => void }[] = [];
     for (let rep = 1; rep <= reps; rep++) {
-      const now = Date.now();
+      const now = spec.judgeLast ? runNow : Date.now();
       await eachAtMost(slots, SEEDING, (slot) => prepare(at, slot, spec.variant, now, base(slot, rep)));
       // A held-out set is read once its people are seeded and generations start.
       if (rep === 1 && set !== 'tune') spend(set, section, values.label!);
@@ -245,9 +258,15 @@ async function runSection(section: Section, values: Record<string, string | unde
         };
         if (generation.buildFailed) attempt.score = failedScore(truth.length);
         else if (generation.error) attempt.benchError = `generation: ${generation.error}`;
+        else if (spec.judgeLast) return void unjudged.push({ slot, attempt, done });
         else return void judged.push(judgeAndScore(at, section, slot, attempt).then(done));
         done();
       });
+    }
+    // Each persona's first judgement takes a grader first and writes the prefix the rest read.
+    const firsts = unjudged.filter((item, i) => unjudged.findIndex((other) => other.slot.name === item.slot.name) === i);
+    for (const { slot, attempt, done } of [...firsts, ...unjudged.filter((item) => !firsts.includes(item))]) {
+      judged.push(judgeAndScore(at, section, slot, attempt).then(done));
     }
     await Promise.all(judged);
   });
