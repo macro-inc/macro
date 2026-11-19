@@ -37,6 +37,10 @@ pub type Outputs = BTreeMap<String, String>;
 const DEV_SHELL_ACTION: &str = "./.github/actions/setup-nix-dev-shell";
 const DEFAULT_DEV_SHELL: &str = "default";
 
+/// The action that checks the repository out; its `fetch-depth` says how
+/// much history the job reads.
+const CHECKOUT_ACTION: &str = "actions/checkout@";
+
 /// Where runner images keep the user's files; step environments name it.
 const RUNNER_HOME: &str = "/home/runner";
 
@@ -72,7 +76,11 @@ pub enum Plan<'a> {
 
 pub enum JobResult {
     Passed(Outputs),
-    Failed { step: String },
+    Failed {
+        step: String,
+    },
+    /// This machine can't run the job as a runner would; why.
+    Unavailable(String),
 }
 
 /// This machine, standing in for a runner.
@@ -87,6 +95,8 @@ pub struct Machine<'a> {
     /// The `github` context, by dotted name, and the matching `GITHUB_*` variables.
     pub github: BTreeMap<&'static str, String>,
     pub changed_files: Vec<String>,
+    /// Whether the checkout's history is cut short.
+    pub shallow: bool,
 }
 
 /// What steps share across a job, composite actions included.
@@ -269,6 +279,20 @@ impl Machine<'_> {
             .context(format!("job `{job_id}` has no steps"))?;
         if job.get("services").is_some() && !matches!(plan, Plan::FiltersOnly) {
             bail!("job `{job_id}` needs service containers, which cargo x attest does not start");
+        }
+
+        // `fetch-depth: 0` is a job saying it reads history a shallow clone lacks.
+        let reads_all_history = steps.iter().any(|step| {
+            step["uses"]
+                .as_str()
+                .is_some_and(|uses| uses.starts_with(CHECKOUT_ACTION))
+                && scalar(&step["with"]["fetch-depth"]).as_deref() == Some("0")
+        });
+        if reads_all_history && self.shallow && !matches!(plan, Plan::FiltersOnly) {
+            return Ok(JobResult::Unavailable(
+                "it reads the full history, and this clone is shallow (`git fetch --unshallow` in your repository lets it run)"
+                    .to_owned(),
+            ));
         }
 
         let dev_env = match plan {

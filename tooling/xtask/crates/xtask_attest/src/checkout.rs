@@ -34,6 +34,8 @@ pub struct Checkout {
     pub base_branch: String,
     /// `owner/name` on GitHub.
     pub repository: String,
+    /// Whether history is cut short, as it is when the source is a shallow clone.
+    pub shallow: bool,
     /// The pull request's files as GitHub lists them: a rename is two paths.
     pub changed_files: Vec<String>,
     /// Released when the checkout is dropped.
@@ -210,6 +212,7 @@ pub fn prepare(source: &Path, base_branch: &str) -> Result<Checkout, Report> {
     .map(str::to_owned)
     .collect();
 
+    let shallow = git(&dir, &["rev-parse", "--is-shallow-repository"])? == "true";
     let checkout = Checkout {
         dir,
         common_dir,
@@ -219,6 +222,7 @@ pub fn prepare(source: &Path, base_branch: &str) -> Result<Checkout, Report> {
         merge,
         base_branch: base_branch.to_owned(),
         repository: repository_of(&remote_url)?,
+        shallow,
         changed_files,
         _lock: lock,
     };

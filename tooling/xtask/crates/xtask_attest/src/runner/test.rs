@@ -73,6 +73,13 @@ jobs:
         echo unreachable > "$GITHUB_WORKSPACE/unreachable"
     - name: never
       run: echo never > "$GITHUB_WORKSPACE/never"
+  history:
+    steps:
+    - uses: actions/checkout@abc
+      with:
+        fetch-depth: 0
+    - name: read history
+      run: "true"
   unknown-action:
     steps:
     - uses: someone/lints@v1
@@ -156,6 +163,7 @@ impl Fixture {
             runner_home: self.runner_home.clone(),
             github: BTreeMap::from([("workspace", self.workspace.display().to_string())]),
             changed_files: changed.iter().map(|path| (*path).to_owned()).collect(),
+            shallow: false,
         }
     }
 
@@ -172,6 +180,7 @@ fn passed(result: JobResult) -> Outputs {
     match result {
         JobResult::Passed(outputs) => outputs,
         JobResult::Failed { step } => panic!("`{step}` failed"),
+        JobResult::Unavailable(why) => panic!("unavailable: {why}"),
     }
 }
 
@@ -362,6 +371,31 @@ fn refuses_what_a_machine_cannot_stand_in_for() {
             .run_job(&workflow(), "services", &Plan::EveryStep, &none)
             .is_err()
     );
+}
+
+/// A job that asks its checkout for every commit would fail or, worse, pass
+/// for the wrong reason on a clone whose history stops early.
+#[test]
+fn a_job_that_reads_all_history_is_unavailable_on_a_shallow_clone() {
+    let fixture = Fixture::new();
+    let listed = steps(&["read history"]);
+    let none = BTreeMap::new();
+
+    let complete = fixture.machine(&[]);
+    passed(
+        complete
+            .run_job(&workflow(), "history", &Plan::Steps(&listed), &none)
+            .expect("runs"),
+    );
+
+    let shallow = Machine {
+        shallow: true,
+        ..fixture.machine(&[])
+    };
+    let result = shallow
+        .run_job(&workflow(), "history", &Plan::Steps(&listed), &none)
+        .expect("runs");
+    assert!(matches!(result, JobResult::Unavailable(_)));
 }
 
 /// The digest `accept_attested_checks.test.ts` pins for the same outputs.

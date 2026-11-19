@@ -68,6 +68,8 @@ enum Verdict {
     Failed {
         step: String,
     },
+    /// This machine can't run it as a runner would; why.
+    Unavailable(String),
 }
 
 fn load(root: &Path, workflow: &str) -> Result<serde_yaml::Value, Report> {
@@ -176,7 +178,7 @@ impl Session<'_> {
                     &BTreeMap::new(),
                 )? {
                     JobResult::Passed(outputs) => Some(outputs),
-                    JobResult::Failed { .. } => None,
+                    JobResult::Failed { .. } | JobResult::Unavailable(_) => None,
                 };
                 self.selections.insert(check.workflow.clone(), selection);
             }
@@ -199,6 +201,7 @@ impl Session<'_> {
             .run_job(&workflow, &check.job, &Plan::Steps(&check.steps), &needs)?
         {
             JobResult::Failed { step } => Ok(Verdict::Failed { step }),
+            JobResult::Unavailable(why) => Ok(Verdict::Unavailable(why)),
             JobResult::Passed(_) => {
                 let digest = match needs.values().next() {
                     Some(selection) => runner::inputs_digest(&check.inputs, selection),
@@ -276,6 +279,7 @@ fn run(asked: &[String], post_statuses: bool, base_branch: &str) -> Result<bool,
             ("repository", checkout.repository.clone()),
         ]),
         changed_files: checkout.changed_files.clone(),
+        shallow: checkout.shallow,
     };
 
     let caller = load(&checkout.dir, &manifest.caller)?;
@@ -287,6 +291,7 @@ fn run(asked: &[String], post_statuses: bool, base_branch: &str) -> Result<bool,
     )? {
         JobResult::Passed(outputs) => outputs,
         JobResult::Failed { step } => bail!("deciding the caller's path filters ran `{step}`"),
+        JobResult::Unavailable(why) => bail!("the caller's path filters can't be decided: {why}"),
     };
     let mut session = Session {
         checkout: &checkout,
@@ -315,6 +320,9 @@ fn run(asked: &[String], post_statuses: bool, base_branch: &str) -> Result<bool,
                     "FAIL  {}: `{step}` failed; its job will run in PR CI",
                     check.id
                 );
+            }
+            Verdict::Unavailable(why) => {
+                println!("skip  {}: {why}; its job will run in PR CI", check.id);
             }
             Verdict::Passed { description } => {
                 let context = format!("{}{}", manifest.status_prefix, check.id);
