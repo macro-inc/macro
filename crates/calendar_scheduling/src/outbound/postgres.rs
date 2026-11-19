@@ -349,7 +349,8 @@ impl Repository for PostgresRepository {
 /// refuses it (`recovery::finish_operation`), so it also counts on the day it
 /// left. Later attempts are never put back. The second count reads only the
 /// profile's in-flight bookings, through `scheduling_booking_processing`.
-/// Sets a 5 s statement timeout for the rest of the caller's transaction.
+/// The count runs under a 5 s statement timeout, restored afterwards so the
+/// caller's later writes keep their own.
 async fn count_daily_bookings(
     tx: &mut sqlx::Transaction<'_, sqlx::Postgres>,
     profile: Uuid,
@@ -362,7 +363,7 @@ async fn count_daily_bookings(
         .execute(&mut **tx)
         .await
         .map_err(db_error)?;
-    sqlx::query_scalar!(
+    let count = sqlx::query_scalar!(
         r#"SELECT
              (SELECT count(*) FROM scheduling_booking
                WHERE profile_id = $1 AND starts_at >= $3 AND starts_at < $4
@@ -386,7 +387,12 @@ async fn count_daily_bookings(
     )
     .fetch_one(&mut **tx)
     .await
-    .map_err(db_error)
+    .map_err(db_error)?;
+    sqlx::query!("SET LOCAL statement_timeout = DEFAULT")
+        .execute(&mut **tx)
+        .await
+        .map_err(db_error)?;
+    Ok(count)
 }
 
 #[cfg(test)]
