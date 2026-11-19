@@ -70,6 +70,11 @@ OpenSearch, and exposes backfill HTTP routes for each.
   pending record from the ledger and the client's cached watermarks, also while
   the poll loop waits on a full worker channel; a new consumer loop needs its
   own `BacklogSampler`.
+- Autoscaling tracks the CloudWatch metric `Macro/SearchProcessing`
+  `OldestPendingSeconds` (`Environment`, `Lane`) that `scaling.rs` publishes
+  through `outbound/cloudwatch_backlog.rs`; its name, dimensions and lanes are
+  the contract with `infra/stacks/search-processing-service/service.ts`, and
+  the task role may write only that namespace. A local service only logs it.
 - Channel messages and agent-session prompts and replies are indexed through
   `parsers::message_text::with_pastes_as_content`: `mention_utils`'
   formatters drop `<m-paste>` (long pastes; in agent sessions also quoted
@@ -91,6 +96,12 @@ OpenSearch, and exposes backfill HTTP routes for each.
   say which.
 - Full-scan backfills page by UUID, not `modified_at`, and cannot discover
   already-deleted IDs — target specific IDs for those.
+- Every backfill writer passes the task's `BackfillGate`
+  (`domain/backfill_gate.rs`): the shared in-flight cap and the operator
+  pause (`PUT /internal/backfill/pause`). A new backfill path takes a permit
+  per write, or per received batch for queue workers; never gate the live
+  Kafka path, whose `reconcile` the agent-session backfill shares, so gate
+  the backfill loop, not the shared function.
 - Run `POST /internal/backfill/email-attachment-status` on an environment only
   after the `is_email_attachment` mapping is applied there, and check
   `_cat/allocation` disk headroom first. It is throttled (`docs_per_second`,

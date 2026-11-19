@@ -72,6 +72,13 @@ export type GraphicsInputOptions = {
    */
   longPress?: () => ((point: Point) => void) | undefined;
   /**
+   * One finger pans instead of going to the tool, as two already do, once it
+   * has moved far enough not to be a hand settling. A host answers yes while a
+   * pen does the drawing, so that the hand holding it leaves no marks. Asked
+   * as the first finger lands.
+   */
+  fingerPans?: () => boolean;
+  /**
    * Lay the selection's handles out for fingers: the rotation knob stands
    * further off the frame, and corner-radius handles are left to the host's
    * inspector. Fingers get larger handle targets whether or not this is set.
@@ -124,6 +131,7 @@ export function attachCameraControls(
     ignoreTarget: options.ignoreTarget,
     navigation: options.navigation,
     longPress: options.longPress,
+    fingerPans: options.fingerPans,
   });
   let hoverPointer: PointerEvent | undefined;
   const clearHover = () => {

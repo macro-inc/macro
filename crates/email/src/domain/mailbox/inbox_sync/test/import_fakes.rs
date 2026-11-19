@@ -274,8 +274,12 @@ impl InboxSyncHistory for Fake {
         batch: ChangeBatch,
     ) -> BoxFuture<'a, Result<(), crate::domain::mailbox::MailboxError>> {
         Box::pin(async move {
-            self.io("accept", (expected, batch))
-                .map_err(|_| crate::domain::mailbox::MailboxError::Persistence)
+            // A failed journal commit fails as a lock timeout does.
+            self.io("accept", (expected, batch)).map_err(|_| {
+                crate::domain::mailbox::MailboxError::database(
+                    crate::domain::mailbox::DatabaseFailure::Sqlstate("55P03".into()),
+                )
+            })
         })
     }
 }

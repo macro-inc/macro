@@ -9,12 +9,13 @@ use macro_user_id::cowlike::CowLike;
 use macro_user_id::email::EmailStr;
 use models_pagination::{Query, SimpleSortMethod};
 use sqlx::Execute;
-use std::cell::RefCell;
+use std::cell::{Cell, RefCell};
 use std::sync::Arc;
 use tokio::sync::oneshot;
 
 pub(super) mod selected;
 mod stream_plan;
+mod viewed;
 
 const TEAM: Uuid = Uuid::from_u128(0xf1);
 const OWN: Uuid = Uuid::from_u128(1);
@@ -114,6 +115,18 @@ fn leaves_other_requests_to_the_general_builder() {
 
     let view = all_mail();
     assert!(team_read(&view, &filter, params(SimpleSortMethod::ViewedAt)).is_none());
+    assert!(team_read(&view, &filter, params(SimpleSortMethod::ViewedUpdated)).is_some());
+    let viewed_filter = record_and(Expr::Literal(EmailLiteral::ViewedAt(
+        DateLiteral::GreaterThan(Utc.with_ymd_and_hms(2026, 1, 1, 0, 0, 0).unwrap()),
+    )));
+    assert!(
+        team_read(
+            &view,
+            &viewed_filter,
+            params(SimpleSortMethod::ViewedUpdated)
+        )
+        .is_none()
+    );
 
     let mut shared = params(SimpleSortMethod::UpdatedAt);
     shared.shared = SharedEmailFilter::Include;
@@ -312,7 +325,11 @@ async fn checks_read_only_the_threads_id_and_inbox(pool: sqlx::PgPool) -> anyhow
     }
 
     let view = all_mail();
-    for sort in [SimpleSortMethod::UpdatedAt, SimpleSortMethod::CreatedAt] {
+    for sort in [
+        SimpleSortMethod::UpdatedAt,
+        SimpleSortMethod::CreatedAt,
+        SimpleSortMethod::ViewedUpdated,
+    ] {
         for filter in &filters {
             let read = team_read(&view, filter, params(sort))
                 .ok_or_else(|| anyhow::anyhow!("no team read for {sort:?} {filter:?}"))?;
@@ -595,6 +612,14 @@ struct ProbePause {
 
 tokio::task_local! {
     static PROBE_PAUSE: RefCell<Option<ProbePause>>;
+    static EXPIRE_VIEWED_AFTER_WINDOW: Cell<Option<usize>>;
+}
+
+/// Expire only the scoped request, after a real underfilled page query.
+pub(super) fn expire_viewed_after_window(rows: usize) -> bool {
+    EXPIRE_VIEWED_AFTER_WINDOW
+        .try_with(|slot| slot.set(Some(rows)))
+        .is_ok()
 }
 
 /// Pause only the request scoped by a concurrency test, after its real probe.

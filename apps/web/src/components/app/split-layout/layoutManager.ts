@@ -1165,7 +1165,9 @@ export function createSplitLayout(
   /** Forgets a split whose pane the router removed. */
   function dropSplit(id: SplitId) {
     const index = splitIndexById(id);
-    if (index < 0) return;
+    // A discarded parked split is not open, but its state and captors go too.
+    const parked = state.parked.some((split) => split.id === id);
+    if (index < 0 && !parked) return;
 
     contentChangeListeners.delete(id);
     entryStateCaptors.delete(id);
@@ -1184,7 +1186,9 @@ export function createSplitLayout(
         setState('activeSplitId', front.id);
         viewState.activate(front.id);
       }
-      dispatchEvent(SplitEvent.Remove, { splitId: id, splitIndex: index });
+      if (index >= 0) {
+        dispatchEvent(SplitEvent.Remove, { splitId: id, splitIndex: index });
+      }
     });
   }
 
