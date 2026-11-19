@@ -40,6 +40,8 @@ export type RoutineDetailSource = {
   codeUpdatePending: Accessor<boolean>;
   /** The routines this routine's runs created, finished ones included. */
   subRoutines: Accessor<readonly RoutineSnapshot[]>;
+  /** How many routines a delete removes with this one, read now. */
+  createdCount(): Promise<number | undefined>;
   /** The routine whose run created this one, when it is still there. */
   parent: Accessor<RoutineParentSummary | undefined>;
   parentLoading: Accessor<boolean>;

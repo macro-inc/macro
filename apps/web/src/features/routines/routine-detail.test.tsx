@@ -10,6 +10,7 @@ import {
   screen,
   within,
 } from '@solidjs/testing-library';
+import { ResultAsync } from 'neverthrow';
 import { describe, expect, it, vi } from 'vitest';
 import type { RoutineTarget } from './core/routine-target';
 
@@ -21,6 +22,7 @@ import {
   events,
   mocks,
   openActions,
+  openDeleteModal,
   openRunOptions,
   Routine,
   runButton,
@@ -100,6 +102,31 @@ describe('routine execution target autosave', () => {
       body: expect.objectContaining({ task: saved.task }),
       parentSpan: NOOP_SPAN,
     });
+  });
+
+  it('counts for Delete the sub-routines a fresh children read finds', async () => {
+    const read = Promise.withResolvers<ScheduledAction[]>();
+    mocks.fetchChildren.mockReturnValueOnce(
+      ResultAsync.fromSafePromise(read.promise)
+    );
+    render(() => <Routine />);
+    openActions();
+    fireEvent.keyDown(screen.getByRole('menuitem', { name: 'Delete' }), {
+      key: 'Enter',
+    });
+    expect(mocks.fetchChildren).toHaveBeenCalledExactlyOnceWith('routine-id');
+    const options = vi.mocked(openDeleteModal).mock.calls.at(-1)?.[0];
+    // The page's list holds none; the read finds the ones a run just made.
+    expect(options?.note).toBeUndefined();
+    read.resolve([
+      { ...cron, id: 'a' },
+      { ...cron, id: 'b' },
+    ]);
+    await vi.waitFor(() =>
+      expect(options?.note).toBe(
+        'The 2 routines it created will be deleted too.'
+      )
+    );
   });
 
   it('duplicates the saved task when its steps cannot open in the editor', () => {

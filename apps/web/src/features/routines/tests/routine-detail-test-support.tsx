@@ -1,3 +1,4 @@
+import { openBulkEditModal } from '@app/features/entity/bulk-edit/BulkEditEntityModal';
 import {
   beginInteraction as flowBeginInteraction,
   usePending as flowUsePending,
@@ -9,6 +10,7 @@ import type {
   ScheduledAction,
 } from '@service-scheduled-action/generated/schemas';
 import { cleanup, fireEvent, screen } from '@solidjs/testing-library';
+import { okAsync, type ResultAsync } from 'neverthrow';
 import {
   type Accessor,
   createEffect,
@@ -85,6 +87,8 @@ const mocks = vi.hoisted(() => ({
   connectedApps: (): ReadonlySet<string> | undefined => new Set(),
   realRoutineQuery: false,
   getRoutine: vi.fn(),
+  fetchChildren:
+    vi.fn<(id: string) => ResultAsync<ScheduledAction[], unknown>>(),
   agentsPending: (): boolean => false,
   agentsFailed: (): boolean => false,
   agentsRetained: (): boolean => false,
@@ -433,6 +437,7 @@ vi.mock('../queries/schedules', () => ({
     refetch: mocks.refetchUpgrades,
   }),
   useChildrenQuery: () => ({ isSuccess: true, data: [] }),
+  fetchChildren: (id: string) => mocks.fetchChildren(id),
   useDetachScheduleMutation: () => ({
     mutateAsync: mocks.detach,
     isPending: false,
@@ -518,6 +523,7 @@ beforeEach(() => {
   );
   mocks.update.mockReset().mockResolvedValue(cron);
   mocks.writeClipboardData.mockReset().mockResolvedValue(true);
+  mocks.fetchChildren.mockReset().mockReturnValue(okAsync([]));
   vi.useFakeTimers();
   [mocks.status, setStatus] = createSignal('success');
   [mocks.listStatus, setListStatus] = createSignal('');
@@ -651,3 +657,5 @@ export const beginInteraction = flowBeginInteraction;
 export const usePending = flowUsePending;
 export const toast = testToast;
 export const Routine = RoutineUnderTest;
+/** The mocked bulk-edit modal Delete opens. */
+export const openDeleteModal = openBulkEditModal;

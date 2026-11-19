@@ -116,21 +116,28 @@ export function RoutineDetail(props: {
   const remove = () => {
     const entity = source.entity();
     if (!entity || entity.ownerId !== userId()) return;
-    // Its sub-routines are deleted with it: say how many.
-    const created = source.subRoutines().length;
+    // Its sub-routines are deleted with it: say how many. The page's list
+    // gives the count at once; a fresh read replaces it when it arrives, as
+    // in the list's row menu.
+    const [created, setCreated] = createSignal(source.subRoutines().length);
+    fireAndForget(readCreatedCount(setCreated), 'routines');
     openBulkEditModal({
       view: 'delete',
       entities: [entity],
-      note:
-        created > 0
-          ? t('subRoutines.deleteNote', { count: created })
-          : undefined,
+      get note() {
+        const count = created();
+        return count > 0 ? t('subRoutines.deleteNote', { count }) : undefined;
+      },
       onFinish: () => {
         toast.success('Deleted');
         back();
       },
       onError: () => toast.failure('Failed to delete'),
     });
+  };
+  const readCreatedCount = async (setCount: (count: number) => void) => {
+    const count = await source.createdCount();
+    if (count !== undefined) setCount(count);
   };
   const owner = getOwner();
   const share = () => {

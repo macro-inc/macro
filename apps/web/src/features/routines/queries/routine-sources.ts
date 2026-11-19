@@ -409,6 +409,10 @@ export function createRoutineDetailSource(
     historyError: () => history.isError,
     refreshHistory: () => history.refetch(),
     subRoutines: children,
+    async createdCount() {
+      const created = await fetchChildren(id());
+      return created.isOk() ? created.value.length : undefined;
+    },
     parent,
     parentLoading,
     parentError,
