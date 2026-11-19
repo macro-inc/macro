@@ -1093,7 +1093,21 @@ where
                     // the calendars after this one would only meet it again.
                     // They stay due, unfailed, and so does this one; the
                     // calendar list is not reconciled from a partial walk.
+                    // Calendars that failed earlier in the walk did fail, so
+                    // they are recorded now rather than when the round ends.
                     if error.kind() == CalendarProviderErrorKind::Deferred {
+                        for (calendar_id, kind, message) in isolated_failures {
+                            self.repository
+                                .record_google_calendar_sync_error(
+                                    key,
+                                    lease_token,
+                                    account_id,
+                                    calendar_id,
+                                    kind,
+                                    &message,
+                                )
+                                .await?;
+                        }
                         return Ok(defer_round(&error, Some(&walk)));
                     }
                     tracing::warn!(

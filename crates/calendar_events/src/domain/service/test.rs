@@ -1170,6 +1170,8 @@ const INBOX_GATE_WINDOW: std::time::Duration = std::time::Duration::from_secs(60
 struct GatedGoogleProvider {
     calendar_count: usize,
     admitted: Arc<Mutex<usize>>,
+    /// A calendar Google itself fails once the gate admits its call.
+    failing_calendar: Option<String>,
     /// Every calendar `sync_events` was asked for, admitted or refused.
     sync_requests: Arc<Mutex<Vec<String>>>,
 }
@@ -1179,6 +1181,7 @@ impl GatedGoogleProvider {
         Self {
             calendar_count,
             admitted: Arc::new(Mutex::new(admitted)),
+            failing_calendar: None,
             sync_requests: Arc::new(Mutex::new(Vec::new())),
         }
     }
@@ -1227,6 +1230,12 @@ impl GoogleCalendarProvider for GatedGoogleProvider {
             .unwrap()
             .push(context.target.provider_calendar_id.clone());
         self.admit()?;
+        if self.failing_calendar.as_ref() == Some(&context.target.provider_calendar_id) {
+            return Err(CalendarProviderError::new(
+                CalendarProviderErrorKind::Transient,
+                "Google failed this calendar's poll",
+            ));
+        }
         Ok(GoogleEventSyncBatch {
             upserts: Vec::new(),
             observed_provider_event_ids: Some(Vec::new()),
@@ -1339,6 +1348,52 @@ async fn the_inbox_rate_limit_defers_the_round_until_every_calendar_syncs() {
         "only the delivery that walked every calendar reconciles the list"
     );
     assert_eq!(reconciled[0].len(), 12);
+}
+
+/// A calendar Google failed before the gate stopped the round has failed, so
+/// its error is stored before the round defers, while the refused calendar
+/// records nothing.
+#[tokio::test]
+async fn a_deferred_round_records_the_calendars_that_failed_before_it() {
+    let lifecycle = FakeLifecycle::claimed();
+    let repository = FakeRepo::tracking_calendars();
+    let recorded_sync_errors = repository.recorded_sync_errors.clone();
+    let provider = GatedGoogleProvider {
+        failing_calendar: Some("calendar-0".to_string()),
+        ..GatedGoogleProvider::new(4, 3)
+    };
+    let coordinator = GoogleCalendarBackfillCoordinator::new(
+        repository,
+        provider.clone(),
+        lifecycle.clone(),
+        NoopMacroEventBroker,
+        None,
+    );
+
+    let mut report = GoogleBackfillRunReport::default();
+    let outcome = coordinator
+        .run(
+            CalendarBackfillJobKey {
+                job_id: Uuid::now_v7(),
+                email_link_id: Uuid::now_v7(),
+            },
+            "macro|calendar@example.com",
+            "secret",
+            OccurrenceRange::maintenance_horizon(Utc::now()),
+            &mut report,
+        )
+        .await
+        .unwrap();
+
+    assert!(matches!(outcome, GoogleBackfillOutcome::Deferred { .. }));
+    assert_eq!(
+        provider.take_sync_requests(),
+        ["calendar-0", "calendar-1", "calendar-2"]
+    );
+    assert_eq!(
+        recorded_sync_errors.lock().unwrap().as_slice(),
+        ["Google failed this calendar's poll"]
+    );
 }
 
 /// A gate that refuses the calendar list defers the round before any
