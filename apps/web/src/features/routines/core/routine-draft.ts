@@ -104,15 +104,21 @@ export function withDraftSteps(
 }
 
 /**
- * Replace a new routine's steps. A lone agent step takes the simple form, so
- * a routine that is only an agent is stored as one wherever it started.
+ * Replace a new routine's steps. A lone agent step takes the simple form
+ * when there are no definitions or input values to keep.
  */
 export function withNewDraftSteps(
   draft: ScheduleDraft,
   steps: StepDraft[]
 ): ScheduleDraft {
   const [only, ...rest] = steps;
-  if (only?.kind !== 'agent' || rest.length) return { ...draft, steps };
+  if (
+    only?.kind !== 'agent' ||
+    rest.length ||
+    draft.subRoutines?.length ||
+    draft.inputs?.length
+  )
+    return { ...draft, steps };
   if (
     draft.steps === undefined &&
     draft.prompt === only.instructions &&

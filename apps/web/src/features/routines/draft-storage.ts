@@ -37,6 +37,7 @@ const draftFields = {
   id: z.string().optional(),
   triggers: z.array(routineTriggerSchema).max(16).optional(),
   steps: z.array(stepDraftSchema).optional(),
+  inputs: z.array(inputSchema).max(12).optional(),
   // A drafted routine's sub-routines; drafts from before have none.
   subRoutines: z
     .array(

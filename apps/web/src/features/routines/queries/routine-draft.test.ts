@@ -10,6 +10,7 @@ import {
   draftSteps,
   validateRoutineDraft,
   withDraftSteps,
+  withNewDraftSteps,
 } from '../core/routine-draft';
 import {
   draftFromSchedule,
@@ -906,6 +907,46 @@ describe('routines with sub-routines', () => {
       sub_routines: [remind],
     });
   });
+
+  it.each(['sub_routines', 'inputs'] as const)(
+    'creates and reloads a new routine with %s after editing its lone Ask AI step',
+    (field) => {
+      const task = {
+        steps: remind.steps,
+        [field]:
+          field === 'sub_routines'
+            ? [remind]
+            : [
+                {
+                  type: 'text' as const,
+                  name: 'taskId',
+                  label: 'Task',
+                  value: 'task-1',
+                },
+              ],
+      };
+      const initial = loadedDraft({ ...events, task });
+      const edited = withNewDraftSteps(initial, [
+        {
+          id: 'only',
+          kind: 'agent',
+          instructions: 'Remind me now',
+          target: { kind: 'model', model: 'claude' },
+        },
+      ]);
+
+      const created = draftToCreateBody(edited);
+      expect(created.task).toMatchObject({
+        steps: [{ type: 'agent', instructions: 'Remind me now' }],
+        [field]: task[field],
+      });
+      const reopened = loadedDraft({ ...events, task: created.task });
+      expect(reopened.subRoutines?.map(({ name }) => name)).toEqual(
+        initial.subRoutines?.map(({ name }) => name)
+      );
+      expect(reopened.inputs).toEqual(initial.inputs);
+    }
+  );
 
   it('keeps the values a kept routine’s code reads', () => {
     const inputs = [

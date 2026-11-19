@@ -153,6 +153,25 @@ describe('routine composer storage', () => {
 });
 
 describe('a stored draft with sub-routines', () => {
+  it('restores a new program with input values', () => {
+    const saved: ScheduleDraft = {
+      ...draft,
+      steps: [
+        {
+          id: 'ask',
+          kind: 'agent',
+          instructions: draft.prompt,
+          target: draft.target,
+        },
+      ],
+      inputs: [
+        { name: 'taskId', label: 'Task', type: 'text', value: 'task-1' },
+      ],
+    };
+    saveRoutineComposerDraft(saved);
+    expect(loadRoutineComposerDraft()).toEqual(saved);
+  });
+
   it('keeps them, so reopening New routine still has them', () => {
     const subRoutines: ScheduleDraft['subRoutines'] = [
       {
