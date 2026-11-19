@@ -681,6 +681,33 @@ describe('routine execution target autosave', () => {
     });
   });
 
+  it('duplicates the saved task when its steps cannot open in the editor', () => {
+    const saved: ScheduledAction = {
+      ...cron,
+      task: JSON.parse(
+        JSON.stringify({
+          steps: [{ type: 'future-step', source: 'Work to preserve' }],
+        })
+      ),
+    };
+    setSchedules([saved]);
+    render(() => <Routine />);
+    expect(
+      screen.getByText('This routine has an unsupported task configuration.')
+    ).toBeTruthy();
+    openActions();
+    fireEvent.keyDown(screen.getByRole('menuitem', { name: 'Duplicate' }), {
+      key: 'Enter',
+    });
+    expect(mocks.create).toHaveBeenCalledExactlyOnceWith({
+      body: expect.objectContaining({
+        task: saved.task,
+        trigger: saved.trigger,
+      }),
+      parentSpan: NOOP_SPAN,
+    });
+  });
+
   it('disables immediate Run now until the latest target has saved', async () => {
     const save = deferredSave();
     mocks.update.mockReturnValueOnce(save.promise);

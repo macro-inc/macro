@@ -331,7 +331,7 @@ export function RoutineDetailView(props: {
                     {props.appearanceMenu}
                     <Show when={props.source.canDuplicate()}>
                       <Dropdown.Item
-                        disabled={!state() || props.source.duplicationPending()}
+                        disabled={props.source.duplicationPending()}
                         onSelect={() => props.source.duplicate()}
                       >
                         <CopyIcon class="size-4" />
