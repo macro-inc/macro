@@ -486,8 +486,6 @@ where
     }
 }
 
-/// Name the run a create comes from on the request's span, before anything
-/// can refuse it.
 /// Whether `task` defines sub-routines. A single agent task's stray
 /// `sub_routines` define none: its parser skips them, and a save drops them.
 pub(super) fn defines_sub_routines(task: &serde_json::Value) -> bool {
@@ -498,6 +496,8 @@ pub(super) fn defines_sub_routines(task: &serde_json::Value) -> bool {
             .is_some_and(|definitions| !definitions.is_empty())
 }
 
+/// Name the run a create comes from on the request's span, before anything
+/// can refuse it.
 fn record_run(run: &RunningRun, parent_id: Uuid) {
     let span = tracing::Span::current();
     span.record("routine.parent_id", tracing::field::display(parent_id));
