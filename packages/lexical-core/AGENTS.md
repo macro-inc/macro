@@ -62,6 +62,10 @@ Table cells import and export through their own transformer sets in
 (`EXTERNAL_TRANSFORMERS` order for export), or a table drops chips a paragraph
 keeps.
 
+`PROMPT_LANGUAGE` (`prompt`) marks a code block as a prompt block. It is
+hidden from generic language menus (`show: false`); the web editors that opt
+in offer it themselves, and email shows the fence as code.
+
 An image under a list item is a child of that `ListItemNode`. Lexical runs
 element transformers only on top-level nodes, so `listItemImage` exports it as
 an indented line, and the image importers attach an indented image line after a

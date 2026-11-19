@@ -1951,6 +1951,8 @@ continue to show the other person's user picture.
 Opening the slash menu with `/` lists Normal Text, headings, and the other
 Markdown options before Query and Database. Typing `/query` filters to the Query
 action; `/database` creates a new database and inserts its editable card.
+Typing `/prompt` inserts a prompt block; sent messages show it as a card with
+an agent picker and **Run**. See [Prompt blocks](documents.md#prompt-blocks).
 
 When Databases is enabled, type `/query` in a channel message or thread reply and choose **Query** to insert a live question. Ask with Enter or the Ask button, then accept the answer before sending the message. Enter in the question box belongs to the question and must not send the channel draft. Recipients can read the live answer subject to their database access. Database @ mentions in message composers remain compact; **Expand** turns one into an editable database card.
 

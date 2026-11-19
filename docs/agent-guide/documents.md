@@ -369,6 +369,33 @@ it; folding the section holding the caret moves the caret to the heading. Code:
 `LexicalMarkdown/plugins/heading-folds`, controls in
 `component/misc/HeadingFoldControls.tsx`.
 
+## Prompt blocks
+
+A prompt block is a full-width card holding a prompt anyone who reads it can
+send to an agent. It is a code block in the `prompt` language, saved as a
+```` ```prompt ```` fence. Create one by typing `/prompt` (choose **Prompt**),
+or open a code block's type menu (its language label, top left) and choose
+**Executable prompt**; the same menu turns it back into code. The card's header
+reads **Prompt** with an agent picker and **Run** at the top right; its text
+is plain prose with no line numbers.
+
+The picker starts on **Auto** (Macro where the composer's Auto mode is off) and
+lists the agents and coding agents that can start. Auto picks Chat or Code per
+prompt, as the new chat composer does. **Run** opens a **Run this prompt?**
+confirmation showing the whole prompt and warning that the agent acts on the
+viewer's workspace; **Cancel** does nothing, **Proceed** starts a session with
+the prompt as its first message and opens it in a new split (full screen on a
+phone). Read-only viewers can run a prompt too.
+
+Prompt blocks are offered in documents, collaborative surfaces (task and
+project descriptions), channel and thread composers, comment composers, and
+the task and document composers. Email composers, agent composers, and
+plain-text hosts (a WhatsApp group) do not offer them, and a received email
+renders a prompt fence as ordinary code. Code: `features/prompt-block`, wired
+through `LexicalMarkdown/plugins/code/prompt-blocks.ts` (`withCode({
+promptBlocks: true })` opts an editor in), `CodeBoxAccessory.tsx`, and the
+static renderer's `StaticPromptBlock`.
+
 ## Databases in documents
 
 Opening the slash menu with `/` lists Normal Text, headings, and the other
