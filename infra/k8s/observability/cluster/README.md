@@ -234,11 +234,11 @@ with access to the system named:
 4. **Service accounts**: Grafana service accounts and their tokens live in the
    database, so they don't come over from the host; recreate the ones still
    in use and hand out the new tokens.
-5. **GoAlert's Grafana path**: the host's nginx lets `POST /api/v2/grafana/incoming`
-   on `oncall.macro-internal.com` through, so this Grafana's contact points can
-   page once it notifies. A host change, deployed with Deploy Observability
-   (dry run first) before the switch: the Pulumi change in the switch can only
-   be applied once every host change on main is deployed.
+5. **GoAlert's Grafana path**: this Grafana's GoAlert contact points post to
+   `POST /api/v2/grafana/incoming` on `oncall.macro-internal.com`. The host
+   running before the switch answers 404 there; the GoAlert-only host lets it
+   through, so they page only from the switch's step 8 on. The watchdog's
+   heartbeat path passes on both.
 
 ### Testing before the switch
 
@@ -311,19 +311,24 @@ host starts Loki and Tempo again.
 - *AWS layer*: `switched = true` and `mimirBackfill.enable = true` in
   `../aws/settings.nix`; its plan reviewed (two listener rules, four alarms,
   Mimir's bucket policy).
-- *Pulumi, listener rule*: the observability stack's priority-1 rule, its
-  target group and attachment, and the `observability-ui` alarm removed. The
-  deploy workflow refuses these deletes, so it is applied by hand. Before
-  merging, from its branch up to date with main, `pulumi preview --diff
-  --stack macro-inc/observability/prod` must list exactly those four
-  deletions. The stack looks up the AMI built from the checkout's `nixos/`, so
-  a host change on main that isn't deployed shows up as a replaced instance:
-  deploy it first, since after this merges the deploy workflow refuses to run
-  until the deletions are applied.
-- *Host, GoAlert only*: the host stops running Grafana, Loki, Tempo,
-  Prometheus and Alloy, and the image's smoke test checks only what remains.
-  Deploy Observability runs from main only, so its dry run comes after the
-  merge, in step 8.
+
+**On main already, not applied:** the observability Pulumi stack
+(`infra/stacks/observability`) describes the host after the switch, and prod
+runs the host from before it. Three changes are pending there:
+
+- *Listener rule*: the stack's priority-1 rule, its target group and
+  attachment, and the `observability-ui` alarm are removed. Step 5 applies
+  only these, by hand, with `--target`.
+- *Host role*: narrowed to GoAlert's bucket prefix. Step 8 applies it by hand.
+- *Host image*: GoAlert only; the host stops running Grafana, Loki, Tempo,
+  Prometheus and Alloy, and its nginx lets Grafana's GoAlert path through.
+  Step 8 deploys it.
+
+Deploy Observability refuses a plan with deletes or a role change, so it
+can't replace the host before step 8, and no other host change can ship
+until then. `pulumi preview` needs an AMI tagged for main's image source: a
+dry run of Deploy Observability builds and tags one, then stops at its plan
+check (expected while these are pending).
 
 **On the host**, every step uses this to stop a unit and keep it stopped
 (bootstrap and `observability-secrets` start them again otherwise, and NixOS
@@ -413,12 +418,20 @@ release() {
      --data-urlencode end=$((week + 3600)) --data-urlencode limit=5
    ```
    Both list services and traces. Empty means the buckets are wrong: go back.
-5. **Move the traffic.** Merge *Pulumi, listener rule*; from
-   `infra/stacks/observability` on main, `pulumi preview --diff --stack
-   macro-inc/observability/prod` again (the same four deletions), then `pulumi
-   up --stack macro-inc/observability/prod`. The ALB now sends `grafana.` and
-   `otlp.macro-internal.com` here. At once, on the host, `hold grafana`: its
-   rules now see no new data and would page.
+5. **Move the traffic.** From `infra/stacks/observability` on main, apply
+   only the *listener rule* deletions (a dry run of Deploy Observability must
+   have tagged main's AMI first):
+   ```sh
+   p=urn:pulumi:prod::observability
+   targets=(--target "$p::aws:lb/listenerRule:ListenerRule::observability-hosts"
+     --target "$p::aws:lb/targetGroupAttachment:TargetGroupAttachment::observability"
+     --target "$p::aws:lb/targetGroup:TargetGroup::observability"
+     --target "$p::aws:cloudwatch/metricAlarm:MetricAlarm::observability-ui")
+   pulumi preview --stack macro-inc/observability/prod --diff "${targets[@]}"   # exactly four deletes
+   pulumi up --stack macro-inc/observability/prod --diff "${targets[@]}"
+   ```
+   The ALB now sends `grafana.` and `otlp.macro-internal.com` here. At once,
+   on the host, `hold grafana`: its rules now see no new data and would page.
 6. **Check, then let this Grafana notify.** Sign in at
    https://grafana.macro-internal.com. After about 10 minutes, Explore on
    `prometheus` and `loki` runs the two baseline queries of step 3: the jobs
@@ -426,7 +439,10 @@ release() {
    own scrape jobs aren't; the cluster scrapes itself). Then the `Prod alerts`
    dashboard shows rules with data and nothing firing that wasn't firing
    before. Merge *Cluster, notify* and sync `grafana`. Between step 5 and here
-   no Grafana notifies; CloudWatch alarms still do.
+   no Grafana notifies; CloudWatch alarms still do. Until step 8 its GoAlert
+   contact points still fail (the old host's nginx answers 404 on their path),
+   so only its SNS contact points and the watchdog reach anyone: keep steps 7
+   and 8 close together.
 7. **Copy the metrics history into Mimir.** On the host, start `sudo bash -euo
    pipefail` (any failing command then ends it before the next runs), paste
    `hold`, and take a snapshot with Prometheus' own binary (the service has no
@@ -452,7 +468,7 @@ release() {
    except its last 12 hours, which Mimir reads from blocks only once they are
    12 hours old (`query_store_after`). Then set `mimirBackfill.enable = false`
    in `../aws/` and apply.
-8. **Merge *Host, GoAlert only***, then follow "The GoAlert-only rollout" in
+8. **Deploy the GoAlert-only host**: follow "The GoAlert-only rollout" in
    `infra/stacks/observability/README.md`: its checks, a dry run of Deploy
    Observability, a targeted `pulumi up` of the narrowed host role (the deploy
    workflow refuses role changes), then the real run. It replaces the host,
@@ -487,16 +503,19 @@ again, every time:
    revision is left, not even terminating: `kubectl --context observability
    -n observability get pods -l 'app.kubernetes.io/name in (loki,tempo)'`
    shows only pods younger than the sync.
-2. **If step 8 ran**, revert *Host, GoAlert only* on main and deploy it as
-   "Going back to the full host" in `infra/stacks/observability/README.md`
-   says: widen the role with the targeted `pulumi up`, then Deploy
-   Observability, dry run first. The new host starts all its services.
+2. **If step 8 ran**, put the full host back on main (the *host image* and
+   *host role* parts of `infra/stacks/observability` as they were before the
+   switch) and deploy it as "Going back to the full host" in
+   `infra/stacks/observability/README.md` says: widen the role with the
+   targeted `pulumi up`, then Deploy Observability, dry run first. The new
+   host starts all its services.
    **Otherwise**, on the host: `release loki tempo grafana prometheus` (the
    ones held so far).
-3. **If step 5 ran**, revert *Pulumi, listener rule* on main, then `pulumi
-   preview --diff` and `pulumi up` (`--stack macro-inc/observability/prod`)
-   by hand, as in step 5, so the ALB sends both names to the host again.
-   Revert *Cluster, public* if Grafana should be tested at localhost again.
+3. **If step 5 ran**, put the *listener rule*, target group, attachment and
+   alarm back in `infra/stacks/observability/index.ts` on main, then preview
+   and apply them by hand with the same `--target`s as step 5, so the ALB
+   sends both names to the host again. Revert *Cluster, public* if Grafana
+   should be tested at localhost again.
 
 Logs, traces and metrics written to the cluster in the meantime stay there:
 metrics in Mimir's own bucket, and logs and traces in the host's buckets but
