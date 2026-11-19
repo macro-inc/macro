@@ -140,9 +140,18 @@ Address: informal tu.
 | notifications | Notifiche |
 | done | Completati |
 | mark as read | Segna come letto |
-| snooze | Posticipa notifiche… |
+| snooze | Posticipa notifiche |
 | archive | Archivia |
 | settings | Impostazioni |
+| computer (Macro computer) | Nuovo computer Macro |
+| machine (runs agents) | Le tue macchine |
+| session (agent) | Questa sessione è archiviata |
+| routine | Tutte le routine |
+| saved view | Nuova vista salvata |
+| call | Partecipa alla chiamata |
+| contact (CRM) | Cambia azienda del contatto |
+| company (CRM) | Aggiungi azienda |
+| thread (email) | Thread esclusi |
 
 ## Dutch (`nl`)
 
