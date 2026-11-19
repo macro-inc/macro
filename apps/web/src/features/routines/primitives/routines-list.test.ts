@@ -2,6 +2,7 @@ import { createRoot } from 'solid-js';
 import { describe, expect, it } from 'vitest';
 import type { RoutineListSource } from '../context/routine-sources';
 import type { RoutineSnapshot } from '../core/routine';
+import { createEmptyDraft } from '../core/routine-draft';
 import { createRoutineRows } from './routines-list';
 
 function routine(
@@ -84,6 +85,35 @@ describe('createRoutineRows', () => {
 
       expect(rows().map((row) => row.id)).toEqual(['other', 'parent']);
       expect(rows().flatMap((row) => row.children)).toEqual([]);
+      dispose();
+    });
+  });
+
+  it('offers sharing only for a routine the scheduler takes as a template', () => {
+    createRoot((dispose) => {
+      const draft = createEmptyDraft('model');
+      const definition = {
+        name: 'remind',
+        title: 'Remind me',
+        inputs: [],
+        steps: [],
+        apps: [],
+      };
+      const rows = createRoutineRows(
+        source(
+          [
+            { ...PARENT, draft: { ...draft, subRoutines: [definition] } },
+            { ...OTHER, draft },
+          ],
+          []
+        ),
+        () => 'owner'
+      );
+
+      expect(rows().map((row) => [row.id, row.shareable])).toEqual([
+        ['other', true],
+        ['parent', false],
+      ]);
       dispose();
     });
   });

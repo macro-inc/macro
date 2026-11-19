@@ -87,6 +87,7 @@ function routine(
     editable: true,
     children: [],
     pausedByParent: false,
+    shareable: true,
     ...extra,
   };
 }

@@ -29,10 +29,11 @@ export type RoutineMenuSurface = {
  * gets only opening and links.
  */
 export function routineMenuGroups(
-  row: Pick<RoutineRow, 'editable' | 'enabled'>,
+  row: Pick<RoutineRow, 'editable' | 'enabled' | 'shareable'>,
   surface: RoutineMenuSurface
 ): RoutineMenuItem[][] {
   const owned = row.editable;
+  const share = owned && surface.share && row.shareable;
   const groups: RoutineMenuItem[][] = [
     [
       ...(surface.splits ? (['open-in-split'] as const) : []),
@@ -40,11 +41,7 @@ export function routineMenuGroups(
     ],
     owned ? ['run-now', row.enabled ? 'turn-off' : 'turn-on'] : [],
     owned ? ['duplicate', ...(surface.nested ? (['keep'] as const) : [])] : [],
-    [
-      'copy-link',
-      'copy-id',
-      ...(owned && surface.share ? (['share'] as const) : []),
-    ],
+    ['copy-link', 'copy-id', ...(share ? (['share'] as const) : [])],
     owned ? ['delete'] : [],
   ];
   return groups.filter((group) => group.length > 0);

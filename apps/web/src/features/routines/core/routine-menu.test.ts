@@ -16,7 +16,10 @@ const DESKTOP: RoutineMenuSurface = {
 describe('routine menu groups', () => {
   it('offers its owner opening, running, copying, links and delete', () => {
     expect(
-      routineMenuGroups({ editable: true, enabled: true }, DESKTOP)
+      routineMenuGroups(
+        { editable: true, enabled: true, shareable: true },
+        DESKTOP
+      )
     ).toEqual([
       ['open-in-split', 'open-in-tab'],
       ['run-now', 'turn-off'],
@@ -28,14 +31,17 @@ describe('routine menu groups', () => {
 
   it('turns a paused routine on', () => {
     expect(
-      routineMenuGroups({ editable: true, enabled: false }, DESKTOP)[1]
+      routineMenuGroups(
+        { editable: true, enabled: false, shareable: true },
+        DESKTOP
+      )[1]
     ).toEqual(['run-now', 'turn-on']);
   });
 
   it('keeps a sub-routine as the owner’s own', () => {
     expect(
       routineMenuGroups(
-        { editable: true, enabled: true },
+        { editable: true, enabled: true, shareable: true },
         { ...DESKTOP, nested: true }
       )[2]
     ).toEqual(['duplicate', 'keep']);
@@ -44,7 +50,7 @@ describe('routine menu groups', () => {
   it('leaves out what the host cannot offer', () => {
     expect(
       routineMenuGroups(
-        { editable: true, enabled: true },
+        { editable: true, enabled: true, shareable: true },
         { nested: false, splits: false, tabs: false, share: false }
       )
     ).toEqual([
@@ -58,13 +64,22 @@ describe('routine menu groups', () => {
   it('gives everyone else opening and links only', () => {
     expect(
       routineMenuGroups(
-        { editable: false, enabled: true },
+        { editable: false, enabled: true, shareable: true },
         { ...DESKTOP, nested: true }
       )
     ).toEqual([
       ['open-in-split', 'open-in-tab'],
       ['copy-link', 'copy-id'],
     ]);
+  });
+
+  it('leaves out sharing a routine the scheduler takes no template of', () => {
+    expect(
+      routineMenuGroups(
+        { editable: true, enabled: true, shareable: false },
+        DESKTOP
+      )[3]
+    ).toEqual(['copy-link', 'copy-id']);
   });
 });
 

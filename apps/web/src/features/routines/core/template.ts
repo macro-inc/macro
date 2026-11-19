@@ -155,6 +155,15 @@ function routineTimezone(draft: ScheduleDraft | undefined) {
 }
 
 /**
+ * Whether the scheduler takes the routine as a template: not a sub-routine's
+ * copy, whose steps are its parent's, nor a routine with sub-routines or
+ * input values, since a template offers only the references in its own steps.
+ */
+export function sharesAsTemplate(draft: ScheduleDraft): boolean {
+  return !draft.copy && !draft.subRoutines?.length && !draft.inputs?.length;
+}
+
+/**
  * What sharing a routine publishes: its current references, each filled the
  * way the template already shared fills it, else by the defaults.
  */

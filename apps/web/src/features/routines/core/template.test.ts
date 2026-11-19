@@ -4,8 +4,45 @@ import {
   extractTemplateVariables,
   fillTemplatePrompt,
   fillTemplateTrigger,
+  sharesAsTemplate,
   templateShareBody,
 } from './template';
+
+describe('sharesAsTemplate', () => {
+  const draft = createEmptyDraft('model');
+  const definition = {
+    name: 'remind',
+    title: 'Remind me',
+    inputs: [],
+    steps: [],
+    apps: [],
+  };
+
+  it('shares a routine of its own steps', () => {
+    expect(sharesAsTemplate(draft)).toBe(true);
+    expect(sharesAsTemplate({ ...draft, subRoutines: [], inputs: [] })).toBe(
+      true
+    );
+  });
+
+  it('keeps a copy, and a routine with sub-routines or input values, unshared', () => {
+    expect(
+      sharesAsTemplate({
+        ...draft,
+        copy: { subRoutine: 'remind', inputs: { taskId: 't' } },
+      })
+    ).toBe(false);
+    expect(sharesAsTemplate({ ...draft, subRoutines: [definition] })).toBe(
+      false
+    );
+    expect(
+      sharesAsTemplate({
+        ...draft,
+        inputs: [{ type: 'text', name: 'taskId', label: 'Task', value: 't' }],
+      })
+    ).toBe(false);
+  });
+});
 
 const AUTHOR =
   '<m-user-mention>{"userId":"macro|eric@macro.com","email":"eric@macro.com","displayName":"Eric"}</m-user-mention>';

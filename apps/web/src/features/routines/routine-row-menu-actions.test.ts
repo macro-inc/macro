@@ -62,6 +62,7 @@ const triage: RoutineRow = {
   editable: true,
   children: [],
   pausedByParent: false,
+  shareable: true,
 };
 
 /** The one sub-routine of triage the list holds: an active one. */

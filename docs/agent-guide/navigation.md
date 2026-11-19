@@ -1615,7 +1615,7 @@ only the web gate; exercising templates needs the backend flag enabled too.
 
 A routine runs with its owner's access. Sharing publishes a template. Publishing
 rejects scheduled copies and routines with sub-routine definitions or saved input
-values, even if **Share** appears in the menu.
+values, so those have no **Share** in the list menu or on their page.
 The three-dot menu's **Share** opens the standard Share dialog, **Share:
 name**: a channel-or-people picker, an optional message, and **Share**, which
 posts the routine mention; below it, **Anyone with the link** shows **Just me**
