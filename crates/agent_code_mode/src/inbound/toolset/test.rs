@@ -207,6 +207,27 @@ fn both_execute_code_descriptions_share_one_runtime_contract() {
 }
 
 #[test]
+fn every_code_tool_forbids_guessing_the_sdk() {
+    let never_guess = include_str!("shared/never_guess.md").trim();
+    assert!(toolset().tools["ExecuteCode"].description.contains(never_guess));
+    assert!(user_toolset().tools["ExecuteCode"].description.contains(never_guess));
+    assert!(unseen_execute_code_description().contains(never_guess));
+    let (session, user) = (toolset().tools, user_toolset().tools);
+    for describe in [
+        &session["DescribeCodeTools"].description,
+        &user["DescribeCodeTools"].description,
+    ] {
+        assert!(describe.contains("Never guess a method"));
+    }
+    for read in [
+        &session["ReadCodeDocs"].description,
+        &user["ReadCodeDocs"].description,
+    ] {
+        assert!(read.contains("read a result's type before using its fields"));
+    }
+}
+
+#[test]
 fn symbols_from_an_index_read_as_their_own_references() {
     let read = ReadCodeDocs {
         symbols: vec![
