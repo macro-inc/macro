@@ -1071,7 +1071,7 @@ was made from. **Approve** and **Approve and resume** are disabled until
 autosave is clean and the editor has no validation error. Approval for an
 event-triggered routine requires the `enable-event-routines` flag. Approval
 reads the routine again from the server before saving. If the editor already
-has a newer configuration revision, it keeps that revision and stops the
+has a newer configuration revision from its detail read, it keeps that revision and stops the
 approval. If the saved task changed, the notice disappears. When the approval
 check discovers the task change, the page explains it. Editing, settings and activation
 controls are locked during the check and save. **Approve and resume** turns a
