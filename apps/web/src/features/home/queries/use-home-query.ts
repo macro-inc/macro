@@ -468,7 +468,10 @@ function useSoupHomeDataSource(
       result = buildGroupedSoupRows(
         mergeRecents() || state.tab === 'recent'
           ? groupHomeEntitiesByDate(shownEntities(), new Date(now()))
-          : groupHomeEntitiesByTabDate(shownEntities(), viewContext())
+          : groupHomeEntitiesByTabDate(shownEntities(), viewContext()),
+        // The viewer's own activity moves a Recent row to a newer section;
+        // keyed by entity, it keeps its focus and selection as it moves.
+        { keyByEntity: state.tab === 'recent' }
       );
     } else {
       result = buildFlatSoupRows(shownEntities());
