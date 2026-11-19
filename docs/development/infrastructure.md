@@ -22,6 +22,7 @@ and the traps. To add a whole service, follow the
 | `infra/packages/service` | `EcrImage`, least-privilege DynamoDB, cluster stack reference. |
 | `infra/packages/lambda` | `Lambda` component and `WorkerTrigger`. |
 | `infra/packages/vpc` | IDs of the one VPC everything runs in (`get_coparse_api_vpc()`). |
+| `infra/k8s/observability/aws/` | Not Pulumi: the observability EKS cluster's AWS layer, OpenTofu written in Nix (terranix), applied by hand. See its README. |
 
 Stacks are `macro-inc/dev` and `macro-inc/prod`; a few are prod-only
 (`monitoring`, `doppler-projects`) or dev-only (`github-runners`,
