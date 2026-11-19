@@ -1,0 +1,256 @@
+crates/calendar_scheduling/README.md
+  s_024592623b7afc::t_724e4e477b48e3 94-95
+crates/calendar_scheduling/src/domain/service/test.rs
+  s_024592623b7afc::t_724e4e477b48e3 80,90,1276-1331
+  s_024592623b7afc::t_509206ea68446a 1332-1333
+docs/design/entity-appearance.md
+  s_024592623b7afc::t_724e4e477b48e3 36-38
+crates/agent_code_mode/src/inbound/toolset/user/execute_code.md
+  s_024592623b7afc::t_724e4e477b48e3 3
+apps/web/src/features/routines/routine-creator.test.tsx
+  s_024592623b7afc::t_724e4e477b48e3 1067-1111
+apps/web/src/features/routines/draft-storage.ts
+  s_024592623b7afc::t_724e4e477b48e3 2,43-53
+  s_024592623b7afc::t_95612065b7df54 54
+crates/scheduled_action/src/outbound/pg_scheduled_action_repo.rs
+  s_024592623b7afc::t_724e4e477b48e3 18,67-74,227-230,238-239,241,467-468,470-476,482-513,515-521,523-525,529-532,535
+crates/system_skills/src/compose_routines/instructions.md
+  s_024592623b7afc::t_724e4e477b48e3 22-24,59
+crates/activity/AGENTS.md
+  s_024592623b7afc::t_724e4e477b48e3 19
+packages/starter-agent/behavior/capabilities/chat/test/outgoing.test.ts
+  s_024592623b7afc::t_724e4e477b48e3 1-135
+crates/agent_code_mode/SKILL.md
+  s_024592623b7afc::t_724e4e477b48e3 63,70
+apps/web/src/features/channels-view/queries.test.ts
+  s_024592623b7afc::t_724e4e477b48e3 3,49-56,59-60,65,338-393,486-820,850-899
+  s_024592623b7afc::t_ce7994af9daa0c 900
+crates/calendar_scheduling/src/outbound/postgres.rs
+  s_024592623b7afc::t_724e4e477b48e3 165,168
+apps/web/src/features/channels-view/components/rail/ChannelsRail.tsx
+  s_024592623b7afc::t_724e4e477b48e3 23,442,445-448,534-537,574-579
+apps/web/src/lib/queries/soup/graphql/items.ts
+  s_024592623b7afc::t_724e4e477b48e3 59-60
+crates/scheduled_action/src/domain/suggestions/text/test.rs
+  s_024592623b7afc::t_724e4e477b48e3 21
+crates/scheduled_action/src/domain/drafts/finding/instructions.md
+  s_024592623b7afc::t_724e4e477b48e3 23
+crates/scheduled_action/src/domain/service/test/sub_routines.rs
+  s_024592623b7afc::t_724e4e477b48e3 465-518
+crates/scheduled_action/src/domain/execution/test.rs
+  s_024592623b7afc::t_724e4e477b48e3 236
+crates/scheduled_action/src/domain/service/sub_routines.rs
+  s_024592623b7afc::t_724e4e477b48e3 78-82,181
+crates/scheduled_action/src/domain/service/test.rs
+  s_024592623b7afc::t_724e4e477b48e3 47-51,154,160-175,177-179,182-184,491,505
+packages/starter-agent/behavior/capabilities/chat/outgoing.ts
+  s_024592623b7afc::t_724e4e477b48e3 1-80
+services/agent_harness_service/src/public_mcp/code_mode_instructions.md
+  s_024592623b7afc::t_724e4e477b48e3 1
+crates/system_skills/Cargo.toml
+  s_024592623b7afc::t_724e4e477b48e3 12-15
+crates/agent_inmem/src/outbound/rig_engine/unseen.md
+  s_024592623b7afc::t_724e4e477b48e3 19
+crates/scheduled_action/src/domain/appearance.rs
+  s_024592623b7afc::t_724e4e477b48e3 6-8,16-17,26-61,74-90
+apps/web/src/lib/queries/channel/by-ids.ts
+  s_024592623b7afc::t_724e4e477b48e3 11,106,112,150-162
+crates/activity/src/outbound/pg_activity_repo.rs
+  s_024592623b7afc::t_724e4e477b48e3 140-174
+packages/sdk/tests/routines.test.ts
+  s_024592623b7afc::t_724e4e477b48e3 336-368
+apps/web/src/lib/queries/soup/items.transport-refetch.test.ts
+  s_024592623b7afc::t_724e4e477b48e3 8-9,28,68-70,77-79,141-142,158-164
+  s_024592623b7afc::t_1b814c4c5ef707 165-166
+packages/sdk/specs/scheduled-action.json
+  s_024592623b7afc::t_724e4e477b48e3 2969-2972,3004-3007,4109-4112
+packages/sdk/AGENTS.md
+  s_024592623b7afc::t_724e4e477b48e3 56-60
+crates/calendar_scheduling/src/domain/ports.rs
+  s_024592623b7afc::t_724e4e477b48e3 51,58
+crates/scheduled_action/src/domain/target_runner/test.rs
+  s_024592623b7afc::t_724e4e477b48e3 660
+packages/starter-agent/AGENT.md
+  s_024592623b7afc::t_724e4e477b48e3 92-95
+packages/starter-agent/behavior/capabilities/chat/context.ts
+  s_024592623b7afc::t_724e4e477b48e3 10,23-29
+packages/starter-agent/behavior/index.ts
+  s_024592623b7afc::t_724e4e477b48e3 52-55,83,114-117
+apps/web/src/features/routines/draft-storage.test.ts
+  s_024592623b7afc::t_724e4e477b48e3 49-57
+crates/activity/src/outbound/pg_activity_repo/test/transaction.rs
+  s_024592623b7afc::t_724e4e477b48e3 2-5,68-150
+crates/agent_inmem/src/outbound/rig_engine/test.rs
+  s_024592623b7afc::t_724e4e477b48e3 253
+apps/web/src/features/channels-view/components/rail/next/mobile/MobileSectionsView.tsx
+  s_024592623b7afc::t_724e4e477b48e3 15,34,64
+crates/scheduled_action/src/domain/drafts/progress/test.rs
+  s_024592623b7afc::t_724e4e477b48e3 29
+apps/web/src/features/crm/queries/activity.test.ts
+  s_024592623b7afc::t_724e4e477b48e3 73
+crates/prompt/src/code_mode.rs
+  s_024592623b7afc::t_724e4e477b48e3 9,18
+apps/web/src/lib/queries/soup/graphql/grouped-items.ts
+  s_024592623b7afc::t_724e4e477b48e3 229-230
+apps/web/src/lib/queries/soup/graphql/items.test.ts
+  s_024592623b7afc::t_724e4e477b48e3 210-295
+  s_024592623b7afc::t_83bc330c937be8 209
+crates/scheduled_action/src/domain/ports.rs
+  s_024592623b7afc::t_724e4e477b48e3 1,133-135,139
+crates/agent_code_mode/src/inbound/toolset.rs
+  s_024592623b7afc::t_724e4e477b48e3 128-129,142,151,478-479,536,758
+crates/scheduled_action/src/domain/service/test/appearance.rs
+  s_024592623b7afc::t_724e4e477b48e3 3,132-279
+crates/scheduled_action/src/domain/service.rs
+  s_024592623b7afc::t_724e4e477b48e3 22,351-363,427-431,547-581,752-769,1209-1224,1238,1243,1270
+apps/web/src/features/channels-view/components/rail/ChannelsRail.test.tsx
+  s_024592623b7afc::t_724e4e477b48e3 34-36,311-313,357-359,581-583,660-706
+crates/scheduled_action/AGENTS.md
+  s_024592623b7afc::t_724e4e477b48e3 119-121,374-391,475-482
+crates/scheduled_action/src/domain/drafts/test.rs
+  s_024592623b7afc::t_724e4e477b48e3 397,1140-1172
+crates/scheduled_action/src/domain/suggestions/decode.rs
+  s_024592623b7afc::t_724e4e477b48e3 123-126
+apps/web/src/lib/queries/soup/items.ts
+  s_024592623b7afc::t_724e4e477b48e3 378-379,501-508
+  s_024592623b7afc::t_0c6adc1e40d6b4 509
+crates/scheduled_action/src/domain/drafts.rs
+  s_024592623b7afc::t_724e4e477b48e3 43,195-199,1400-1404
+crates/scheduled_action/src/outbound/pg_polling_dispatcher/test.rs
+  s_024592623b7afc::t_724e4e477b48e3 65
+crates/scheduled_action/src/outbound/pg_scheduled_action_repo/test/appearance.rs
+  s_024592623b7afc::t_724e4e477b48e3 2,28,33-34,38,44-47,117,129-504
+packages/sdk/generated/scheduled-action/types.gen.ts
+  s_024592623b7afc::t_724e4e477b48e3 24-29,51-55,635-639
+crates/model-entity/src/appearance.rs
+  s_024592623b7afc::t_724e4e477b48e3 138-142
+apps/web/src/features/routines/queries/compose-routine.test.ts
+  s_024592623b7afc::t_724e4e477b48e3 215-230
+Cargo.toml
+  s_024592623b7afc::t_724e4e477b48e3 256
+crates/scheduled_action/src/outbound/pg_draft_hand_backs/test.rs
+  s_024592623b7afc::t_724e4e477b48e3 3-5,29,116-180
+  s_024592623b7afc::t_69beabc76bb487 181
+apps/web/src/features/channels-view/AGENTS.md
+  s_024592623b7afc::t_724e4e477b48e3 1-32
+crates/scheduled_action/src/outbound/pg_draft_hand_backs.rs
+  s_024592623b7afc::t_724e4e477b48e3 9-10,34-62,90,133-134
+apps/web/src/lib/queries/channel/list-entity.ts
+  s_024592623b7afc::t_724e4e477b48e3 1-41
+apps/web/src/features/routines/core/draft.ts
+  s_024592623b7afc::t_724e4e477b48e3 1,45-49
+apps/web/src/features/channels-view/queries.ts
+  s_024592623b7afc::t_724e4e477b48e3 7,16-17,35,73-77,326-327,329-330,334,339-350,355-433,437-438,443,446-448,452-453,455,462,468,470-471,477-478,483-484,489-490,495-496,501-502,510-550
+  s_024592623b7afc::t_7e6f0919351858 551
+apps/web/src/features/email-view/queries/use-email-query.test.ts
+  s_024592623b7afc::t_724e4e477b48e3 248-250,280-282
+apps/web/src/lib/queries/soup/graphql/create-soup-live-query.ts
+  s_024592623b7afc::t_724e4e477b48e3 1104-1112,1151-1155
+apps/web/src/features/channels-view/queries/channel-list-search-pool.ts
+  s_024592623b7afc::t_724e4e477b48e3 3,17-25
+crates/agent_code_mode/src/inbound/toolset/test.rs
+  s_024592623b7afc::t_724e4e477b48e3 201,213-228
+  s_024592623b7afc::t_28a27096da4032 229-230
+crates/model-entity/src/lib.rs
+  s_024592623b7afc::t_724e4e477b48e3 20
+docs/agent-guide/ai-chat.md
+  s_024592623b7afc::t_724e4e477b48e3 995-1000
+crates/agent_code_mode/src/inbound/toolset/shared/never_guess.md
+  s_024592623b7afc::t_724e4e477b48e3 1
+crates/scheduled_action/src/domain/models.rs
+  s_024592623b7afc::t_724e4e477b48e3 184-189,258-262,279
+crates/scheduled_action/src/domain/drafts/finding/test.rs
+  s_024592623b7afc::t_724e4e477b48e3 453-459,465-486
+crates/system_skills/src/test.rs
+  s_024592623b7afc::t_724e4e477b48e3 89-116
+docs/agent-guide/channels.md
+  s_024592623b7afc::t_724e4e477b48e3 1210-1217
+crates/agent_code_mode/src/inbound/toolset/session/execute_code.md
+  s_024592623b7afc::t_724e4e477b48e3 3
+crates/calendar_scheduling/src/outbound/postgres/test.rs
+  s_024592623b7afc::t_724e4e477b48e3 588,593-605,650,656-664,699,705-713
+crates/scheduled_action/src/domain/drafts/finding.rs
+  s_024592623b7afc::t_724e4e477b48e3 240
+apps/web/src/features/routines/queries/routine-draft.ts
+  s_024592623b7afc::t_724e4e477b48e3 227
+apps/web/src/features/channels-view/channels-view.tsx
+  s_024592623b7afc::t_724e4e477b48e3 38,83-86,142,179,190,194,262,281-282,321,329-332,353-356
+crates/macro_db_client/migrations/20261118184750_routine_appearance_chosen_by_owner.sql
+  s_024592623b7afc::t_724e4e477b48e3 1-22
+docs/agent-guide/ui-conventions.md
+  s_024592623b7afc::t_724e4e477b48e3 132-134
+packages/sdk/src/entities/routines/routine.ts
+  s_024592623b7afc::t_724e4e477b48e3 159-166,649
+  s_024592623b7afc::t_f70e919fbe2cf8 158
+packages/starter-agent/AGENTS.md
+  s_024592623b7afc::t_724e4e477b48e3 18-19
+crates/scheduled_action/src/domain/suggestions/test.rs
+  s_024592623b7afc::t_724e4e477b48e3 1111-1157
+packages/starter-agent/behavior/capabilities/chat/prompt.ts
+  s_024592623b7afc::t_724e4e477b48e3 20-21
+services/agent_harness_service/src/public_mcp/tool_service/test.rs
+  s_024592623b7afc::t_724e4e477b48e3 670
+apps/web/src/features/routines/queries/compose-routine.ts
+  s_024592623b7afc::t_724e4e477b48e3 145
+apps/web/src/features/routines/views/routine-new.tsx
+  s_024592623b7afc::t_724e4e477b48e3 96
+crates/prompt/src/lib.rs
+  s_024592623b7afc::t_724e4e477b48e3 186-192
+crates/scheduled_action/src/domain/service/test/user_cleanup.rs
+  s_024592623b7afc::t_724e4e477b48e3 62
+packages/starter-agent/behavior/capabilities/chat/DESIGN.md
+  s_024592623b7afc::t_724e4e477b48e3 13,45-54
+apps/web/src/features/home/queries/use-home-query.test.ts
+  s_024592623b7afc::t_724e4e477b48e3 142-144
+crates/calendar_scheduling/src/domain/service.rs
+  s_024592623b7afc::t_724e4e477b48e3 272,779-785,791-813
+  s_024592623b7afc::t_1fc1e889545b34 814
+apps/web/src/lib/queries/soup/transform-utils.ts
+  s_024592623b7afc::t_724e4e477b48e3 62,899-902
+.sqlx/query-19105081b667bd8b3d3d67f96d323a7ad5df16bfba56e6b8c286c1ffa8673ae1.json
+  s_024592623b7afc::t_56c47693cd07bc 3,9-11,16
+.sqlx/query-3063dba5170f2d4f3fa31b0dc511e9beb3414c62b32c009b71c8deac6c956506.json
+  s_024592623b7afc::t_7781b89f489116 1-24
+.sqlx/query-d1a6096fb9ae7a7c0cb4c8d5f96d736ddf5d87ea3065aeb4d8ef50eef7ab5807.json
+  s_024592623b7afc::t_886468adcad918 3,10-19,28-29,33
+.sqlx/query-f717536cd55a8de892a4e296ce1d0ce059ea97a5173ede1a578f7d4475dd8933.json
+  s_024592623b7afc::t_41e3d32e603e57 3,193
+Cargo.lock
+  s_024592623b7afc::t_07f571bbc19264 21070,21073
+apps/web/src/features/channels-view/CLAUDE.md
+  s_024592623b7afc::t_3b4e92d49de63e 1
+apps/web/src/lib/service-clients/service-cognition/generated/tools/types.ts
+  s_024592623b7afc::t_c6d3caf1317cae 16625,16716-16718,16844
+apps/web/src/lib/service-clients/service-scheduled-action/generated/schemas/actionConfiguration.ts
+  s_024592623b7afc::t_c2cd60076bfdbf 8,11,20-23
+apps/web/src/lib/service-clients/service-scheduled-action/generated/schemas/actionConfigurationUpdate.ts
+  s_024592623b7afc::t_034458cfac5a46 8,14,23-25
+apps/web/src/lib/service-clients/service-scheduled-action/generated/schemas/draftedRoutine.ts
+  s_024592623b7afc::t_622f4b3df36093 8,12,20-22
+apps/web/src/lib/service-clients/service-scheduled-action/openapi.json
+  s_024592623b7afc::t_1f0cecad453fdf 2969-2972,3004-3007,4109-4112
+packages/sdk-mcp/src/__snapshots__/tools.entity.json
+  s_024592623b7afc::t_8817e972ca052f 48,94-95
+packages/sdk-mcp/src/__snapshots__/tools.method.json
+  s_024592623b7afc::t_28fcbe2b4ad9d1 434,766,777,779-780,782
+packages/sdk-ocaml/generated/scheduled_action.ml
+  s_024592623b7afc::t_4b047fccf07511 28-142,1182-1185,1203,1218,1229,1232-1241,1245-1247,1266,1282,1293-1305,2194-2196,2220,2236,2248-2249,2251,5616,5644,5985,6003,6291,6313
+packages/sdk-ocaml/generated/scheduled_action.mli
+  s_024592623b7afc::t_82d8e8f4c41c68 21-70,651-654,672,686-688,709,1167-1169,1193,3015,3145,3244
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.7.7",
+  "base_commit_sha": "f2f7c0108073253580af23504e5fc2bd7aa30f51",
+  "prompts": {},
+  "sessions": {
+    "s_024592623b7afc": {
+      "agent_id": {
+        "tool": "claude",
+        "id": "ff44e640-d545-4448-b666-9917880bbb24",
+        "model": "claude-opus-5-5"
+      },
+      "human_author": "Eric Hayes <56524199+ehayes2000@users.noreply.github.com>"
+    }
+  }
+}
