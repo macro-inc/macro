@@ -206,7 +206,9 @@ export function SingleSidebar(props: {
         </Show>
       </nav>
 
-      <div class="flex shrink-0 items-center gap-1 px-2 pt-2 pb-3">
+      {/* Wraps rather than clipping Settings when an update, the mobile app
+          button and a call all show at once. */}
+      <div class="flex shrink-0 flex-wrap items-center justify-end gap-1 px-2 pt-2 pb-3">
         <MoreMenu gates={gates()} />
         <div class="min-w-0 flex-1" />
         <ReturnToCallButton />
