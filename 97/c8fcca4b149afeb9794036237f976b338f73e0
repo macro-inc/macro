@@ -1,0 +1,23 @@
+crates/agent_code_mode/src/inbound/toolset.rs
+  s_024592623b7afc::t_335e2879522062 374-375
+crates/agent_code_mode/src/inbound/toolset/test/without_js_tools.json
+  s_024592623b7afc::t_e188d2556ff8a9 65,68,99,193,196,336,339
+crates/agent_code_mode/src/inbound/toolset/session/js_tools.md
+  s_024592623b7afc::t_2af07d3895e7a3 1
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.7.7",
+  "base_commit_sha": "97c8fcca4b149afeb9794036237f976b338f73e0",
+  "prompts": {},
+  "sessions": {
+    "s_024592623b7afc": {
+      "agent_id": {
+        "tool": "claude",
+        "id": "ff44e640-d545-4448-b666-9917880bbb24",
+        "model": "claude-opus-5-5"
+      },
+      "human_author": "Eric Hayes <56524199+ehayes2000@users.noreply.github.com>"
+    }
+  }
+}
