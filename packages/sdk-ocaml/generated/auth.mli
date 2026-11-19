@@ -189,6 +189,22 @@ type nonrec billing_status =
 val billing_status_of_yojson : Yojson.Safe.t -> billing_status
 val yojson_of_billing_status : billing_status -> Yojson.Safe.t
 
+(** A card network. *)
+type nonrec card_brand =
+  | Amex
+  | Diners
+  | Discover
+  | Eftpos_au
+  | Jcb
+  | Mastercard
+  | Unionpay
+  | Visa
+  | Unknown_
+  | Unknown of string  (** A value this SDK version does not know. *)
+
+val card_brand_of_yojson : Yojson.Safe.t -> card_brand
+val yojson_of_card_brand : card_brand -> Yojson.Safe.t
+
 (** The paid plan a seat is billed at. Every member of a paying team has one;
 a team may mix them, and its Stripe subscription carries one seat item per
 plan in use. *)
@@ -2204,6 +2220,18 @@ val yojson_of_patch_user_tutorial_request :
 val make_patch_user_tutorial_request :
   tutorial_complete:bool -> unit -> patch_user_tutorial_request
 
+type nonrec payment_card = {
+  brand : card_brand;  (** Card network. *)
+  last4 : string;  (** Last four digits. *)
+}
+(** A card as its owner recognizes it: "Visa ending 4242". *)
+
+val payment_card_of_yojson : Yojson.Safe.t -> payment_card
+val yojson_of_payment_card : payment_card -> Yojson.Safe.t
+
+val make_payment_card : brand:card_brand -> last4:string -> unit -> payment_card
+(** A card as its owner recognizes it: "Visa ending 4242". *)
+
 type nonrec permission = {
   description : string;  (** The description of the permission *)
   id : string;  (** The permission *)
@@ -2372,6 +2400,80 @@ val make_purchase_body :
   purchase_body
 (** Body of a team purchase. *)
 
+type nonrec quote = {
+  amount : int64;  (** In the currency's smallest unit. *)
+  currency : string;  (** Billing currency code. *)
+  interval : billing_interval;  (** Subscription billing interval. *)
+  price_id : string;  (** Stripe price saved for billing replay. *)
+  size : computer_size;  (** Purchased catalog size. *)
+}
+(** What one computer of a size costs the team. *)
+
+val quote_of_yojson : Yojson.Safe.t -> quote
+val yojson_of_quote : quote -> Yojson.Safe.t
+
+val make_quote :
+  amount:int64 ->
+  currency:string ->
+  interval:billing_interval ->
+  price_id:string ->
+  size:computer_size ->
+  unit ->
+  quote
+(** What one computer of a size costs the team. *)
+
+type nonrec purchase_size_offer = {
+  disk_gb : int;  (** Root disk size in GiB. *)
+  memory_gb : int;  (** Memory in GiB. *)
+  quote : quote;  (** Price for one computer. *)
+  size : computer_size;  (** Purchased catalog size. *)
+  sold_out : bool;  (** Whether no host can currently sell this size. *)
+  vcpus : int;  (** Virtual CPU count. *)
+  due_today : int64;
+      (** The prorated rest of the current period, invoiced at purchase, in the
+currency's smallest unit, less the team's credit balance; 0 when the
+team is comped. The charge itself is prorated to the second it is
+bought. *)
+}
+(** A size on sale and what buying it charges today. *)
+
+val purchase_size_offer_of_yojson : Yojson.Safe.t -> purchase_size_offer
+val yojson_of_purchase_size_offer : purchase_size_offer -> Yojson.Safe.t
+
+val make_purchase_size_offer :
+  disk_gb:int ->
+  memory_gb:int ->
+  quote:quote ->
+  size:computer_size ->
+  sold_out:bool ->
+  vcpus:int ->
+  due_today:int64 ->
+  unit ->
+  purchase_size_offer
+(** A size on sale and what buying it charges today. *)
+
+type nonrec purchase_offers = {
+  card : payment_card option;
+  renews_at : string;
+      (** When the current billing period ends: each computer bills its full
+[quote.amount] every [quote.interval] from then. *)
+  sizes : purchase_size_offer list;  (** Every size some host can run awake. *)
+}
+(** What the buy dialog shows before a purchase: each size with what buying
+it charges today, when the full price bills from, and the card charged. *)
+
+val purchase_offers_of_yojson : Yojson.Safe.t -> purchase_offers
+val yojson_of_purchase_offers : purchase_offers -> Yojson.Safe.t
+
+val make_purchase_offers :
+  ?card:payment_card ->
+  renews_at:string ->
+  sizes:purchase_size_offer list ->
+  unit ->
+  purchase_offers
+(** What the buy dialog shows before a purchase: each size with what buying
+it charges today, when the full price bills from, and the card charged. *)
+
 (** Why a purchase was refused, as a stable code the buy and add-agent dialogs
 show their own way. One vocabulary for [/team/computers] and
 [/team_agents]. *)
@@ -2487,28 +2589,6 @@ val yojson_of_put_user_name_query_params :
 
 val make_put_user_name_query_params :
   ?first_name:string -> ?last_name:string -> unit -> put_user_name_query_params
-
-type nonrec quote = {
-  amount : int64;  (** In the currency's smallest unit. *)
-  currency : string;  (** Billing currency code. *)
-  interval : billing_interval;  (** Subscription billing interval. *)
-  price_id : string;  (** Stripe price saved for billing replay. *)
-  size : computer_size;  (** Purchased catalog size. *)
-}
-(** What one computer of a size costs the team. *)
-
-val quote_of_yojson : Yojson.Safe.t -> quote
-val yojson_of_quote : quote -> Yojson.Safe.t
-
-val make_quote :
-  amount:int64 ->
-  currency:string ->
-  interval:billing_interval ->
-  price_id:string ->
-  size:computer_size ->
-  unit ->
-  quote
-(** What one computer of a size costs the team. *)
 
 type nonrec redeem_gtm_invite_link_request = {
   token : string;  (** The token from the link URL. *)
@@ -4146,6 +4226,14 @@ val list_team_computer_offers :
 (** [GET /team/computers/offers]
 
 Every size with its price and availability. *)
+
+val list_team_computer_purchase_offers :
+  unit -> (purchase_offers, error_response) Macro_sdk_runtime.Request.t
+(** [GET /team/computers/purchase-offers]
+
+Every size with its price and availability, what buying it charges
+today, the renewal date and the card charged: what the buy dialog shows.
+For the team's owner and admins, who may buy: it names the team's card. *)
 
 val get_team_computer_rollout :
   unit ->

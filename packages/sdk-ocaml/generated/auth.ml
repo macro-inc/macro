@@ -352,6 +352,47 @@ and yojson_of_billing_status : billing_status -> Yojson.Safe.t =
   | Comped -> `String "comped"
   | Unknown other -> `String other
 
+(** A card network. *)
+type nonrec card_brand =
+  | Amex
+  | Diners
+  | Discover
+  | Eftpos_au
+  | Jcb
+  | Mastercard
+  | Unionpay
+  | Visa
+  | Unknown_
+  | Unknown of string  (** A value this SDK version does not know. *)
+
+let card_brand_of_yojson : Yojson.Safe.t -> card_brand =
+ fun json ->
+  match Json.string json with
+  | "amex" -> Amex
+  | "diners" -> Diners
+  | "discover" -> Discover
+  | "eftpos_au" -> Eftpos_au
+  | "jcb" -> Jcb
+  | "mastercard" -> Mastercard
+  | "unionpay" -> Unionpay
+  | "visa" -> Visa
+  | "unknown" -> Unknown_
+  | other -> Json.unknown "card_brand" json (Unknown other)
+
+and yojson_of_card_brand : card_brand -> Yojson.Safe.t =
+ fun value ->
+  match value with
+  | Amex -> `String "amex"
+  | Diners -> `String "diners"
+  | Discover -> `String "discover"
+  | Eftpos_au -> `String "eftpos_au"
+  | Jcb -> `String "jcb"
+  | Mastercard -> `String "mastercard"
+  | Unionpay -> `String "unionpay"
+  | Visa -> `String "visa"
+  | Unknown_ -> `String "unknown"
+  | Unknown other -> `String other
+
 (** The paid plan a seat is billed at. Every member of a paying team has one;
 a team may mix them, and its Stripe subscription carries one seat item per
 plan in use. *)
@@ -3764,6 +3805,31 @@ and yojson_of_patch_user_tutorial_request :
 let make_patch_user_tutorial_request ~(tutorial_complete : bool) () =
   ({ tutorial_complete } : patch_user_tutorial_request)
 
+type nonrec payment_card = {
+  brand : card_brand;  (** Card network. *)
+  last4 : string;  (** Last four digits. *)
+}
+(** A card as its owner recognizes it: "Visa ending 4242". *)
+
+let payment_card_of_yojson : Yojson.Safe.t -> payment_card =
+ fun json ->
+  let fields = Json.obj json in
+  {
+    brand = Json.required fields "brand" card_brand_of_yojson;
+    last4 = Json.required fields "last4" Json.string;
+  }
+
+and yojson_of_payment_card : payment_card -> Yojson.Safe.t =
+ fun value ->
+  Json.record
+    [
+      ("brand", Some (yojson_of_card_brand value.brand));
+      ("last4", Some (Json.of_string value.last4));
+    ]
+
+let make_payment_card ~(brand : card_brand) ~(last4 : string) () =
+  ({ brand; last4 } : payment_card)
+
 type nonrec permission = {
   description : string;  (** The description of the permission *)
   id : string;  (** The permission *)
@@ -4084,6 +4150,122 @@ let make_purchase_body ?name ~(purchase_key : string) ~(size : computer_size) ()
     =
   ({ name; purchase_key; size } : purchase_body)
 
+type nonrec quote = {
+  amount : int64;  (** In the currency's smallest unit. *)
+  currency : string;  (** Billing currency code. *)
+  interval : billing_interval;  (** Subscription billing interval. *)
+  price_id : string;  (** Stripe price saved for billing replay. *)
+  size : computer_size;  (** Purchased catalog size. *)
+}
+(** What one computer of a size costs the team. *)
+
+let quote_of_yojson : Yojson.Safe.t -> quote =
+ fun json ->
+  let fields = Json.obj json in
+  {
+    amount = Json.required fields "amount" Json.int64;
+    currency = Json.required fields "currency" Json.string;
+    interval = Json.required fields "interval" billing_interval_of_yojson;
+    price_id = Json.required fields "priceId" Json.string;
+    size = Json.required fields "size" computer_size_of_yojson;
+  }
+
+and yojson_of_quote : quote -> Yojson.Safe.t =
+ fun value ->
+  Json.record
+    [
+      ("amount", Some (Json.of_int64 value.amount));
+      ("currency", Some (Json.of_string value.currency));
+      ("interval", Some (yojson_of_billing_interval value.interval));
+      ("priceId", Some (Json.of_string value.price_id));
+      ("size", Some (yojson_of_computer_size value.size));
+    ]
+
+let make_quote ~(amount : int64) ~(currency : string)
+    ~(interval : billing_interval) ~(price_id : string) ~(size : computer_size)
+    () =
+  ({ amount; currency; interval; price_id; size } : quote)
+
+type nonrec purchase_size_offer = {
+  disk_gb : int;  (** Root disk size in GiB. *)
+  memory_gb : int;  (** Memory in GiB. *)
+  quote : quote;  (** Price for one computer. *)
+  size : computer_size;  (** Purchased catalog size. *)
+  sold_out : bool;  (** Whether no host can currently sell this size. *)
+  vcpus : int;  (** Virtual CPU count. *)
+  due_today : int64;
+      (** The prorated rest of the current period, invoiced at purchase, in the
+currency's smallest unit, less the team's credit balance; 0 when the
+team is comped. The charge itself is prorated to the second it is
+bought. *)
+}
+(** A size on sale and what buying it charges today. *)
+
+let purchase_size_offer_of_yojson : Yojson.Safe.t -> purchase_size_offer =
+ fun json ->
+  let fields = Json.obj json in
+  {
+    disk_gb = Json.required fields "diskGb" Json.int;
+    memory_gb = Json.required fields "memoryGb" Json.int;
+    quote = Json.required fields "quote" quote_of_yojson;
+    size = Json.required fields "size" computer_size_of_yojson;
+    sold_out = Json.required fields "soldOut" Json.bool;
+    vcpus = Json.required fields "vcpus" Json.int;
+    due_today = Json.required fields "dueToday" Json.int64;
+  }
+
+and yojson_of_purchase_size_offer : purchase_size_offer -> Yojson.Safe.t =
+ fun value ->
+  Json.record
+    [
+      ("diskGb", Some (Json.of_int value.disk_gb));
+      ("memoryGb", Some (Json.of_int value.memory_gb));
+      ("quote", Some (yojson_of_quote value.quote));
+      ("size", Some (yojson_of_computer_size value.size));
+      ("soldOut", Some (Json.of_bool value.sold_out));
+      ("vcpus", Some (Json.of_int value.vcpus));
+      ("dueToday", Some (Json.of_int64 value.due_today));
+    ]
+
+let make_purchase_size_offer ~(disk_gb : int) ~(memory_gb : int)
+    ~(quote : quote) ~(size : computer_size) ~(sold_out : bool) ~(vcpus : int)
+    ~(due_today : int64) () =
+  ({ disk_gb; memory_gb; quote; size; sold_out; vcpus; due_today }
+    : purchase_size_offer)
+
+type nonrec purchase_offers = {
+  card : payment_card option;
+  renews_at : string;
+      (** When the current billing period ends: each computer bills its full
+[quote.amount] every [quote.interval] from then. *)
+  sizes : purchase_size_offer list;  (** Every size some host can run awake. *)
+}
+(** What the buy dialog shows before a purchase: each size with what buying
+it charges today, when the full price bills from, and the card charged. *)
+
+let purchase_offers_of_yojson : Yojson.Safe.t -> purchase_offers =
+ fun json ->
+  let fields = Json.obj json in
+  {
+    card = Json.optional fields "card" payment_card_of_yojson;
+    renews_at = Json.required fields "renewsAt" Json.string;
+    sizes =
+      Json.required fields "sizes" (Json.list purchase_size_offer_of_yojson);
+  }
+
+and yojson_of_purchase_offers : purchase_offers -> Yojson.Safe.t =
+ fun value ->
+  Json.record
+    [
+      ("card", Option.map yojson_of_payment_card value.card);
+      ("renewsAt", Some (Json.of_string value.renews_at));
+      ("sizes", Some ((Json.of_list yojson_of_purchase_size_offer) value.sizes));
+    ]
+
+let make_purchase_offers ?card ~(renews_at : string)
+    ~(sizes : purchase_size_offer list) () =
+  ({ card; renews_at; sizes } : purchase_offers)
+
 (** Why a purchase was refused, as a stable code the buy and add-agent dialogs
 show their own way. One vocabulary for [/team/computers] and
 [/team_agents]. *)
@@ -4270,42 +4452,6 @@ and yojson_of_put_user_name_query_params :
 
 let make_put_user_name_query_params ?first_name ?last_name () =
   ({ first_name; last_name } : put_user_name_query_params)
-
-type nonrec quote = {
-  amount : int64;  (** In the currency's smallest unit. *)
-  currency : string;  (** Billing currency code. *)
-  interval : billing_interval;  (** Subscription billing interval. *)
-  price_id : string;  (** Stripe price saved for billing replay. *)
-  size : computer_size;  (** Purchased catalog size. *)
-}
-(** What one computer of a size costs the team. *)
-
-let quote_of_yojson : Yojson.Safe.t -> quote =
- fun json ->
-  let fields = Json.obj json in
-  {
-    amount = Json.required fields "amount" Json.int64;
-    currency = Json.required fields "currency" Json.string;
-    interval = Json.required fields "interval" billing_interval_of_yojson;
-    price_id = Json.required fields "priceId" Json.string;
-    size = Json.required fields "size" computer_size_of_yojson;
-  }
-
-and yojson_of_quote : quote -> Yojson.Safe.t =
- fun value ->
-  Json.record
-    [
-      ("amount", Some (Json.of_int64 value.amount));
-      ("currency", Some (Json.of_string value.currency));
-      ("interval", Some (yojson_of_billing_interval value.interval));
-      ("priceId", Some (Json.of_string value.price_id));
-      ("size", Some (yojson_of_computer_size value.size));
-    ]
-
-let make_quote ~(amount : int64) ~(currency : string)
-    ~(interval : billing_interval) ~(price_id : string) ~(size : computer_size)
-    () =
-  ({ amount; currency; interval; price_id; size } : quote)
 
 type nonrec redeem_gtm_invite_link_request = {
   token : string;  (** The token from the link URL. *)
@@ -8114,6 +8260,29 @@ let list_team_computer_offers () =
      decode_error = Request.error_json [ 503 ] error_response_of_yojson;
    }
     : (size_offer list, error_response) Macro_sdk_runtime.Request.t)
+
+(** [GET /team/computers/purchase-offers]
+
+Every size with its price and availability, what buying it charges
+today, the renewal date and the card charged: what the buy dialog shows.
+For the team's owner and admins, who may buy: it names the team's card. *)
+let list_team_computer_purchase_offers () =
+  ({
+     Request.service = "auth";
+     operation = "list_team_computer_purchase_offers";
+     meth = `GET;
+     path = "/team/computers/purchase-offers";
+     query = List.filter (fun (_, values) -> values <> []) [];
+     headers =
+       List.concat_map
+         (fun (name, values) -> List.map (fun v -> (name, v)) values)
+         [];
+     body = None;
+     decode_reply = Request.json purchase_offers_of_yojson;
+     decode_error =
+       Request.error_json [ 401; 403; 422; 502; 503 ] error_response_of_yojson;
+   }
+    : (purchase_offers, error_response) Macro_sdk_runtime.Request.t)
 
 (** [GET /team/computers/rollout]
 
