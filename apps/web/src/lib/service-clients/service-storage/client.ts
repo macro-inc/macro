@@ -242,11 +242,11 @@ export function dssFetch(
   url: string,
   init?: FetchWithTokenInit
 ): Promise<Result<void, ResultError<FetchWithTokenErrorCode>[]>>;
-export function dssFetch<T extends Record<string, any>>(
+export function dssFetch<T extends Record<string, any> | null>(
   url: string,
   init?: FetchWithTokenInit
 ): Promise<Result<T, ResultError<FetchWithTokenErrorCode>[]>>;
-export function dssFetch<T extends Record<string, any> = never>(
+export function dssFetch<T extends Record<string, any> | null = never>(
   url: string,
   init?: FetchWithTokenInit
 ):

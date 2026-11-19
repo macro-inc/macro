@@ -79,8 +79,9 @@ gateway `/calendar` prefix.
   (`calendar.projection_publish`), and refreshes each inbox the batch changed
   once. A round that claims fewer waits for the next two-second poll, so a
   first import or a bulk change refreshes open clients about every two
-  seconds instead of once per event. It is the only refresh for an Outlook
-  event's changes, Macro writes included, so it runs while either
+  seconds instead of once per event. It is the only topic publish and viewer
+  refresh for an Outlook event's changes, Macro writes included, so it runs
+  while either
   `OUTLOOK_SYNC_ENABLED` or `OUTLOOK_WRITES_ENABLED` is on (inside
   `CALENDAR_SYNC_ENABLED`; `config::OutlookLoops`), and startup logs which
   Outlook loops the task runs.

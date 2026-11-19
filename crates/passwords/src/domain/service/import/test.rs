@@ -378,6 +378,7 @@ async fn trace_and_errors_never_contain_item_metadata_or_secrets() {
             Error::Conflict,
             Error::FolderMissing,
             Error::Unavailable,
+            Error::NotProvisioned,
         ] {
             assert!(!error.to_string().contains(sentinel));
             assert!(!format!("{error:?}").contains(sentinel));
@@ -757,4 +758,20 @@ async fn imported_favorite_belongs_to_importer_and_retry_does_not_restore_it() {
             .expect("preference retained")
             .favorite
     );
+}
+
+#[tokio::test]
+async fn unprovisioned_team_vault_fails_every_item_as_not_provisioned() {
+    let (service, repository, provider, actor, team) = fixture();
+    provider.unprovisioned.store(true, Ordering::SeqCst);
+    let result = service
+        .import_batch(&actor, team, Uuid::now_v7(), batch())
+        .await
+        .unwrap();
+    assert_eq!(result.items[0].outcome, ImportOutcome::Failed);
+    assert_eq!(
+        result.items[0].error_code,
+        Some(ImportErrorCode::VaultNotProvisioned)
+    );
+    assert!(repository.records.lock().unwrap().is_empty());
 }

@@ -158,17 +158,22 @@ export function bookingIsPast(booking: Booking, now: number): boolean {
   return new Date(booking.endsAt).getTime() <= now;
 }
 
+/** A failed booking Macro stopped retrying; only cancelling releases it. */
+export function bookingAbandoned(booking: Booking): boolean {
+  return booking.status === 'failed' && !!booking.abandonedAt;
+}
+
 export function canManageBooking(
   booking: Booking,
   canManageBookings: boolean,
   currentUserId: string,
   now: number
 ): boolean {
+  const host = canManageBookings || booking.hosts.includes(currentUserId);
   return (
     (canManageBookings && booking.status === 'pending') ||
-    ((canManageBookings || booking.hosts.includes(currentUserId)) &&
-      booking.status === 'confirmed' &&
-      !bookingIsPast(booking, now))
+    (host && booking.status === 'confirmed' && !bookingIsPast(booking, now)) ||
+    (host && bookingAbandoned(booking))
   );
 }
 

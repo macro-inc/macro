@@ -2860,6 +2860,46 @@ impl CalendarRepository for PgCalendarRepository {
     }
 }
 
+impl PgCalendarRepository {
+    /// Turn one link's Google calendar off if its grant still lacks the
+    /// capability. The link row is the lock a grant or disconnect takes, so a
+    /// link one of them holds is left to the next round; the scopes row is
+    /// locked too, so a grant that committed since this statement's snapshot
+    /// is re-checked rather than read stale.
+    async fn disable_google_account_without_capability(
+        &self,
+        email_link_id: Uuid,
+        required_scopes: &[String],
+    ) -> Result<bool, Report> {
+        let mut tx = self.pool.begin().await.map_err(report)?;
+        let locked = sqlx::query_scalar!(
+            r#"
+            SELECT link.id
+            FROM email_links link
+            JOIN calendar_accounts account ON account.email_link_id = link.id
+            JOIN email_link_google_scopes scopes ON scopes.link_id = link.id
+            WHERE link.id = $1
+              AND account.provider = 'google'
+              AND account.sync_status <> 'disabled'
+              AND NOT scopes.granted_scopes @> $2::text[]
+            FOR UPDATE OF link, scopes SKIP LOCKED
+            "#,
+            email_link_id,
+            required_scopes,
+        )
+        .fetch_optional(&mut *tx)
+        .await
+        .map_err(report)?;
+        if locked.is_none() {
+            return Ok(false);
+        }
+        let mut log = ChangeLogBatch::default();
+        disable_calendar_capability_tx(&mut tx, &mut log, email_link_id).await?;
+        log.commit(tx).await?;
+        Ok(true)
+    }
+}
+
 impl GoogleCalendarSyncRepository for PgCalendarRepository {
     #[tracing::instrument(skip(self), err)]
     async fn schedule_due_google_syncs(&self, due_before: DateTime<Utc>) -> Result<usize, Report> {
@@ -2970,6 +3010,50 @@ impl GoogleCalendarSyncRepository for PgCalendarRepository {
         .await
         .map_err(report)?;
         Ok(reaped as usize)
+    }
+
+    #[tracing::instrument(skip(self), err)]
+    async fn disable_google_accounts_without_calendar_capability(&self) -> Result<usize, Report> {
+        let required_scopes = GOOGLE_CALENDAR_SCOPES.map(str::to_owned);
+        // A grant from before Macro narrowed its calendar scopes still
+        // reports the broad scope, which never counts as the capability, so
+        // nothing syncs the account; Outlook's claim maintenance treats the
+        // same gap this way. Each account gets its own transaction, since
+        // removing a large calendar holds a lock per event until commit, and
+        // a round takes a few so the scheduler's other work is not held up.
+        let candidates = sqlx::query_scalar!(
+            r#"
+            SELECT account.email_link_id
+            FROM calendar_accounts account
+            JOIN email_link_google_scopes scopes ON scopes.link_id = account.email_link_id
+            WHERE account.provider = 'google'
+              AND account.sync_status <> 'disabled'
+              AND NOT scopes.granted_scopes @> $1::text[]
+            ORDER BY account.email_link_id
+            LIMIT 10
+            "#,
+            &required_scopes,
+        )
+        .fetch_all(&self.pool)
+        .await
+        .map_err(report)?;
+        let mut disabled = 0;
+        for email_link_id in candidates {
+            match self
+                .disable_google_account_without_capability(email_link_id, &required_scopes)
+                .await
+            {
+                Ok(true) => {
+                    disabled += 1;
+                    tracing::info!(%email_link_id, "turned off a Google calendar without the calendar capability");
+                }
+                Ok(false) => {}
+                Err(error) => {
+                    tracing::warn!(%email_link_id, error = ?error, "could not turn off a Google calendar without the calendar capability");
+                }
+            }
+        }
+        Ok(disabled)
     }
 }
 

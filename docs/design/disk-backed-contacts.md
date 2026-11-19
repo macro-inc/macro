@@ -183,7 +183,7 @@ expanded workflows. Disk and write costs are measured, not assumed free.
 
 **Name-policy cutover:** the approved [name-focused search design](contact-name-search-proposal.md)
 is now the active local-only suggestion path: among exact full or first names and all-word prefixes, people the viewer has a direct message with come first (policy 6), each group by name tier;
-then literal contains, recent-first with identity ties. Consumers preserve that
+then literal contains, then address terms, recent-first with identity ties. Consumers preserve that
 order; server suggestion fallback and old person scoring are removed. Partial
 hydration stays explicit, and refresh schedules background sync. Fresh regular-profile
 runs of `94dce7c0` put 100k broad command reads at 89–92 ms, recipient reads at

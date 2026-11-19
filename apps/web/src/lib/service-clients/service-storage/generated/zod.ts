@@ -80614,6 +80614,7 @@ export const passwordsImportBatchResponse = zod
                     'folder_missing',
                     'busy',
                     'vault_unavailable',
+                    'vault_not_provisioned',
                   ])
                   .describe('Closed, sanitized per-item failure categories.'),
               ])
@@ -87208,6 +87209,32 @@ export const editThreadV2Response = zod.object({
   }),
   error: zod.boolean().describe('Indicates if an error occurred'),
 });
+
+/**
+ * @summary List a thread owner's grants to channels they participate in.
+ */
+export const getThreadChannelSharesParams = zod.object({
+  thread_id: zod.string().describe('Thread ID'),
+});
+
+export const getThreadChannelSharesResponseItem = zod
+  .object({
+    access_level: zod
+      .enum(['view', 'comment', 'edit', 'owner'])
+      .describe('Ordered from least to most access top -> bottom'),
+    channel_id: zod.uuid().describe('The channel with access to the thread.'),
+    channel_name: zod
+      .string()
+      .nullish()
+      .describe("The channel's configured name, if it has one."),
+    channel_type: zod
+      .enum(['public', 'private', 'direct_message', 'team'])
+      .describe('Type of channel.'),
+  })
+  .describe('A channel grant the thread owner can see in the sharing roster.');
+export const getThreadChannelSharesResponse = zod.array(
+  getThreadChannelSharesResponseItem
+);
 
 /**
  * @summary List the caller's API keys.

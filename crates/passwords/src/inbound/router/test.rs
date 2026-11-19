@@ -693,6 +693,11 @@ async fn access_and_lease_contention_have_distinct_typed_failures() {
             StatusCode::SERVICE_UNAVAILABLE,
             FailureCode::VaultUnavailable,
         ),
+        (
+            Error::NotProvisioned,
+            StatusCode::CONFLICT,
+            FailureCode::VaultNotProvisioned,
+        ),
     ] {
         let response = ApiError(error).into_response();
         assert_eq!(response.status(), status);

@@ -1018,6 +1018,8 @@ export function getGraphqlSoupClient(): Client {
             // Preserve optimistic intent only while transport failures retry.
             shouldRetryMutation: shouldRetryGraphqlMutation,
             mutationQueueTelemetry,
+            // Undefined where the browser has no Web Locks.
+            mutationQueueLocks: navigator.locks,
             delegateRevalidation: delegateChannelNotificationRefresh,
             externalWriteTypes: resolveCrmExternalWriteTypes,
             isUncachedSubscription: isActivityUpdatesSubscription,
@@ -2085,10 +2087,15 @@ export function mapGraphqlAgentSessionRow(
   };
 }
 
+/** GraphQL rows carry Mail facts alongside the legacy Soup row shape. */
+export type SoupItemWithCalendarInvite = SoupApiItem & {
+  hasCalendarInvite?: boolean;
+};
+
 export function mapGraphqlSoupItem(
   item: GraphqlSoupItem,
   options?: { emailView?: GraphqlEmailView | null }
-): SoupApiItem | null {
+): SoupItemWithCalendarInvite | null {
   // Rows are read by the database SQL engine, never listed as Soup items.
   if (item.__typename === 'GraphqlSoupDatabaseRow') return null;
   // Kept in the schema for older clients; the server never returns one.
@@ -2206,6 +2213,13 @@ export function mapGraphqlSoupItem(
           tag: 'emailThread',
           frecency_score: frecency,
           is_favorited: entity.isFavorited,
+          // Native invitations can arrive as calendar parts without attachments.
+          hasCalendarInvite:
+            'mailDraftState' in entity &&
+            (entity.mailDraftState?.baseline.hasCalendarAttachment === true ||
+              entity.mailDraftState?.drafts.some(
+                (draft) => draft.facts.hasCalendarAttachment
+              ) === true),
           data: {
             id: entity.id,
             providerId: entity.providerId ?? undefined,
@@ -2257,7 +2271,7 @@ export function mapGraphqlSoupItem(
             properties: mapGraphqlProperties(entity.properties),
             notifications: mapGraphqlNotifications(entity.notifications),
           },
-        }) as SoupApiItem
+        }) as SoupItemWithCalendarInvite
     )
     .with(
       { __typename: 'GraphqlSoupChannel' },

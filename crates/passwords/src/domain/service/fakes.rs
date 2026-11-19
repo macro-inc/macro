@@ -720,8 +720,16 @@ pub struct FakeProvider {
     pub writes_completed: Mutex<Vec<Uuid>>,
     pub writes_in_flight: AtomicUsize,
     pub max_writes_in_flight: AtomicUsize,
+    /// Every value operation fails as an OpenBao team login to a missing namespace would.
+    pub unprovisioned: AtomicBool,
 }
 impl FakeProvider {
+    fn login(&self) -> Result<(), Error> {
+        if self.unprovisioned.load(Ordering::SeqCst) {
+            return Err(Error::NotProvisioned);
+        }
+        Ok(())
+    }
     fn revoke_during_disclosure(&self) {
         if let Some(repository) = self.revoke_on_disclosure.lock().unwrap().take() {
             repository.memberships.lock().unwrap().clear();
@@ -748,6 +756,7 @@ impl FakeProvider {
             writes_completed: Mutex::new(vec![]),
             writes_in_flight: AtomicUsize::new(0),
             max_writes_in_flight: AtomicUsize::new(0),
+            unprovisioned: AtomicBool::new(false),
         }
     }
 }
@@ -763,6 +772,7 @@ impl SecretProvider for FakeProvider {
     }
     async fn username(&self, _: TeamId, item: ItemId, version: i32) -> Result<SecretString, Error> {
         self.calls.fetch_add(1, Ordering::SeqCst);
+        self.login()?;
         let gate = self.username_gate.lock().expect("fixture lock").clone();
         if let Some((started, release)) = gate {
             started.notify_one();
@@ -786,6 +796,7 @@ impl SecretProvider for FakeProvider {
     }
     async fn current_version(&self, _: TeamId, item: ItemId) -> Result<Option<i32>, Error> {
         self.calls.fetch_add(1, Ordering::SeqCst);
+        self.login()?;
         if self
             .tombstones
             .lock()
@@ -803,6 +814,7 @@ impl SecretProvider for FakeProvider {
     }
     async fn status(&self, _: TeamId, item: ItemId) -> Result<Option<(i32, Uuid)>, Error> {
         self.calls.fetch_add(1, Ordering::SeqCst);
+        self.login()?;
         self.reads.fetch_add(1, Ordering::SeqCst);
         if self
             .tombstones
@@ -828,6 +840,7 @@ impl SecretProvider for FakeProvider {
         values: &SecretValues,
     ) -> Result<i32, Error> {
         self.calls.fetch_add(1, Ordering::SeqCst);
+        self.login()?;
         let gate = self
             .write_gates
             .lock()
@@ -864,6 +877,7 @@ impl SecretProvider for FakeProvider {
     }
     async fn read(&self, _: TeamId, item: ItemId, version: i32) -> Result<SecretValues, Error> {
         self.calls.fetch_add(1, Ordering::SeqCst);
+        self.login()?;
         self.revoke_during_disclosure();
         self.reads.fetch_add(1, Ordering::SeqCst);
         let stored = self.stored.lock().expect("fixture lock");
@@ -875,6 +889,7 @@ impl SecretProvider for FakeProvider {
     }
     async fn delete(&self, _: TeamId, item: ItemId) -> Result<(), Error> {
         self.calls.fetch_add(1, Ordering::SeqCst);
+        self.login()?;
         if self.fail_delete.load(Ordering::SeqCst) {
             return Err(Error::Unavailable);
         }
@@ -888,12 +903,14 @@ impl SecretProvider for FakeProvider {
     }
     async fn history(&self, _: TeamId, _: ItemId) -> Result<Vec<Version>, Error> {
         self.calls.fetch_add(1, Ordering::SeqCst);
+        self.login()?;
         self.revoke_during_disclosure();
         Ok(vec![])
     }
 
     async fn set_totp(&self, _: TeamId, key: TotpKeyId, seed: &SecretString) -> Result<(), Error> {
         self.calls.fetch_add(1, Ordering::SeqCst);
+        self.login()?;
         self.totp_seeds
             .lock()
             .expect("fixture lock")
@@ -905,6 +922,7 @@ impl SecretProvider for FakeProvider {
     }
     async fn delete_totp(&self, _: TeamId, key: TotpKeyId) -> Result<(), Error> {
         self.calls.fetch_add(1, Ordering::SeqCst);
+        self.login()?;
         if self.fail_delete.load(Ordering::SeqCst) {
             return Err(Error::Unavailable);
         }
@@ -917,6 +935,7 @@ impl SecretProvider for FakeProvider {
     }
     async fn totp(&self, _: TeamId, key: TotpKeyId) -> Result<TotpCode, Error> {
         self.calls.fetch_add(1, Ordering::SeqCst);
+        self.login()?;
         self.revoke_during_disclosure();
         if !self
             .totp_seeds

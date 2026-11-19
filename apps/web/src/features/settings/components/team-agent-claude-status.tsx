@@ -28,12 +28,16 @@ export function TeamAgentClaudeStatus(props: {
     if (!props.connected) return undefined;
     return match(props.state)
       .with('loading', () => undefined)
-      .with('credits', 'expired', () => ({
-        label: t('teamAgents.signInToClaude'),
+      .with('credits', () => ({
+        label: t('teamAgents.connectClaude'),
+        onClick: props.onSignIn,
+      }))
+      .with('expired', () => ({
+        label: t('teamAgents.reconnectClaude'),
         onClick: props.onSignIn,
       }))
       .with('signed_in', () => ({
-        label: t('teamAgents.useCredits'),
+        label: t('computers.claudeSwitchToCredits'),
         onClick: props.onUseCredits,
       }))
       .exhaustive();
