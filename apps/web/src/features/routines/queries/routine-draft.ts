@@ -469,14 +469,6 @@ export function scheduleToDuplicateBody(
     return undefined;
   const trigger = schedule.trigger ?? getCronTrigger(schedule);
   if (!trigger) return undefined;
-  const triggers = trigger.type === 'multiple' ? trigger.triggers : [trigger];
-  const now = Date.now();
-  if (
-    triggers.some(
-      (entry) => entry.type === 'once' && Date.parse(entry.at) <= now
-    )
-  )
-    return undefined;
   return {
     enabled: schedule.enabled,
     kind: schedule.kind,

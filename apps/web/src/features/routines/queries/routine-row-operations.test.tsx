@@ -250,7 +250,7 @@ describe('routine row operations', () => {
     );
   });
 
-  it('withholds Duplicate for elapsed one-time triggers at the menu and dispatch', async () => {
+  it('duplicates an elapsed one-time trigger using the saved schedule', async () => {
     const elapsed: ScheduledAction = {
       ...briefing,
       enabled: false,
@@ -261,16 +261,21 @@ describe('routine row operations', () => {
       trigger: { type: 'once', at: '2099-01-01T09:00:00Z' },
     };
     client.listSchedules.mockResolvedValue(ok([elapsed, future]));
+    client.createSchedule.mockResolvedValue(ok({ ...elapsed, id: 'copy' }));
     queryClient.setQueryData(scheduledActionKeys.list.queryKey, [
       elapsed,
       future,
     ]);
     const operations = mount();
-    expect(operations.canDuplicate('briefing')).toBe(false);
+    expect(operations.canDuplicate('briefing')).toBe(true);
     expect(operations.canDuplicate('digest')).toBe(true);
     operations.duplicate('briefing');
-    await Promise.resolve();
-    expect(client.createSchedule).not.toHaveBeenCalled();
+    await vi.waitFor(() =>
+      expect(callbacks.onDuplicated).toHaveBeenCalledWith('copy')
+    );
+    expect(client.createSchedule.mock.calls[0]?.[0].trigger).toEqual(
+      elapsed.trigger
+    );
   });
 
   it('requires connections for retained definitions before duplicating', async () => {
