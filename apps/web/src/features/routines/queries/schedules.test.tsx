@@ -6,6 +6,7 @@ import { render } from 'solid-js/web';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { scheduledActionKeys } from './keys';
 import {
+  useCodeUpgradesQuery,
   useCreateScheduleMutation,
   useRunScheduleNowMutation,
   useSetScheduleEnabledMutation,
@@ -14,9 +15,15 @@ import {
 const setEnabled = vi.hoisted(() => vi.fn());
 const createSchedule = vi.hoisted(() => vi.fn());
 const runNow = vi.hoisted(() => vi.fn());
+const listCodeUpgrades = vi.hoisted(() => vi.fn());
 const track = vi.hoisted(() => vi.fn());
 vi.mock('@service-scheduled-action/client', () => ({
-  scheduledActionClient: { setEnabled, createSchedule, runNow },
+  scheduledActionClient: {
+    setEnabled,
+    createSchedule,
+    runNow,
+    listCodeUpgrades,
+  },
 }));
 vi.mock('@app/lib/analytics', () => ({ analytics: { track } }));
 vi.mock('@queries/client', async () => {
@@ -77,6 +84,7 @@ beforeEach(() => {
   setEnabled.mockReset();
   createSchedule.mockReset();
   runNow.mockReset();
+  listCodeUpgrades.mockReset();
   track.mockReset();
   queryClient.setQueryData(scheduledActionKeys.list.queryKey, [routine, other]);
 });
@@ -85,6 +93,51 @@ afterEach(() => {
   dispose?.();
   dispose = undefined;
   queryClient.clear();
+  queryClient.setDefaultOptions({});
+});
+
+it('uses the approval trace context again on an actual query retry', async () => {
+  queryClient.setDefaultOptions({ queries: { retry: 1, retryDelay: 0 } });
+  let active = false;
+  const parentSpan = {
+    run<T>(work: () => T): T {
+      active = true;
+      try {
+        return work();
+      } finally {
+        active = false;
+      }
+    },
+  };
+  const contexts: boolean[] = [];
+  listCodeUpgrades
+    .mockImplementationOnce(async () => {
+      contexts.push(active);
+      return err([{ message: 'Temporarily unavailable' }]);
+    })
+    .mockImplementationOnce(async () => {
+      contexts.push(active);
+      return ok([]);
+    });
+  let query!: ReturnType<typeof useCodeUpgradesQuery>;
+  function Probe() {
+    query = useCodeUpgradesQuery(
+      () => 'routine',
+      () => false
+    );
+    return null;
+  }
+  dispose = render(
+    () => (
+      <QueryClientProvider client={queryClient}>
+        <Probe />
+      </QueryClientProvider>
+    ),
+    document.createElement('div')
+  );
+  const options = { throwOnError: true, parentSpan };
+  await parentSpan.run(() => query.refetch(options));
+  expect(contexts).toEqual([true, true]);
 });
 
 describe('routine activation', () => {

@@ -25,6 +25,7 @@ import type { Accessor } from 'solid-js';
 import { sharesAsTemplate, templateShareBody } from '../core/template';
 import { scheduledActionKeys } from './keys';
 import { draftFromSchedule } from './routine-draft';
+import { traceRoutineRequest } from './routine-trace';
 import { routineQueryOptions } from './routines';
 import { invalidateSchedules } from './schedules';
 
@@ -101,7 +102,12 @@ export function useUnshareTemplateMutation(
 ) {
   return useMutation(() => ({
     mutationFn: (args: { scheduleId: string }) =>
-      throwOnErr(() => scheduledActionClient.unshareTemplate(args)),
+      traceRoutineRequest(
+        Telemetry.span('routine.template.unshare', {
+          attributes: { 'routine.id': args.scheduleId },
+        }),
+        () => throwOnErr(() => scheduledActionClient.unshareTemplate(args))
+      ),
     ...withCallbacks(
       { onSuccess: (_result, { scheduleId }) => setTemplate(scheduleId, null) },
       callbacks

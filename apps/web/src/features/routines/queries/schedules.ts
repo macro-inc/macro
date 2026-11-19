@@ -14,6 +14,7 @@ import type {
 import {
   keepPreviousData,
   queryOptions,
+  type RefetchOptions,
   useMutation,
   useQuery,
 } from '@tanstack/solid-query';
@@ -21,6 +22,7 @@ import { ResultAsync } from 'neverthrow';
 import type { Accessor } from 'solid-js';
 import { scheduledActionKeys } from './keys';
 import { routineTargetKind } from './routine-draft';
+import { traceRoutineRequest } from './routine-trace';
 
 const QUERY_REFETCH_BEHAVIOR = {
   refetchOnMount: 'always' as const,
@@ -132,6 +134,12 @@ export function useScheduleHistoryQuery(
   return useQuery(() => scheduleHistoryQueryOptions(scheduleId(), enabled()));
 }
 
+function fetchCodeUpgrades(scheduleId: string) {
+  return throwOnErr(() =>
+    scheduledActionClient.listCodeUpgrades({ scheduleId })
+  );
+}
+
 // Cached past unmount; closes over the resolved schedule id only.
 function codeUpgradesQueryOptions(
   scheduleId: string | null | undefined,
@@ -142,13 +150,7 @@ function codeUpgradesQueryOptions(
       scheduleId: scheduleId ?? '__none__',
     }).queryKey,
     enabled: enabled && Boolean(scheduleId),
-    queryFn: async () =>
-      throwOnErr(
-        async () =>
-          await scheduledActionClient.listCodeUpgrades({
-            scheduleId: scheduleId!,
-          })
-      ),
+    queryFn: () => fetchCodeUpgrades(scheduleId!),
     ...QUERY_REFETCH_BEHAVIOR,
   });
 }
@@ -158,7 +160,43 @@ export function useCodeUpgradesQuery(
   scheduleId: Accessor<string | null | undefined>,
   enabled: Accessor<boolean>
 ) {
-  return useQuery(() => codeUpgradesQueryOptions(scheduleId(), enabled()));
+  const query = useQuery(() =>
+    codeUpgradesQueryOptions(scheduleId(), enabled())
+  );
+  return {
+    get data() {
+      return query.data;
+    },
+    get isSuccess() {
+      return query.isSuccess;
+    },
+    async refetch({
+      parentSpan,
+      ...options
+    }: RefetchOptions & { parentSpan?: TraceContext } = {}) {
+      const id = scheduleId();
+      if (!parentSpan || !id) return query.refetch(options);
+
+      const request = codeUpgradesQueryOptions(id, enabled());
+      // Keep the explicit parent through TanStack retries and release it when
+      // the operation settles, even if the query retains these options.
+      let trace: TraceContext | undefined = parentSpan;
+      const fetch = () => fetchCodeUpgrades(id);
+      try {
+        await queryClient.cancelQueries({
+          queryKey: request.queryKey,
+          exact: true,
+        });
+        return await queryClient.fetchQuery({
+          ...request,
+          staleTime: 0,
+          queryFn: () => (trace ? trace.run(fetch) : fetch()),
+        });
+      } finally {
+        trace = undefined;
+      }
+    },
+  };
 }
 
 function fetchSubRoutines() {
@@ -386,8 +424,13 @@ export function useDetachScheduleMutation(
   callbacks?: MutationCallbacks<ScheduledAction, Error, { scheduleId: string }>
 ) {
   return useMutation(() => ({
-    mutationFn: async (args: { scheduleId: string }) =>
-      throwOnErr(async () => await scheduledActionClient.detach(args)),
+    mutationFn: (args: { scheduleId: string }) =>
+      traceRoutineRequest(
+        Telemetry.span('routine.detach', {
+          attributes: { 'routine.id': args.scheduleId },
+        }),
+        () => throwOnErr(() => scheduledActionClient.detach(args))
+      ),
     ...withCallbacks(
       {
         onSuccess: async (schedule: ScheduledAction) => {

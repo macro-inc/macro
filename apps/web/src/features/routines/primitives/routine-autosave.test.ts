@@ -18,7 +18,7 @@ function deferred(): {
 
 let dispose: () => void;
 function setup(
-  save: (draft: string) => Promise<void>
+  save: (draft: string, queuedAt: number) => Promise<void>
 ): ReturnType<typeof createRoutineAutosave<string>> {
   return createRoot((cleanup) => {
     dispose = cleanup;
@@ -43,7 +43,7 @@ describe('routine autosave', () => {
     expect(save).not.toHaveBeenCalled();
     expect(autosave.dirty()).toBe(true);
     await vi.advanceTimersByTimeAsync(1);
-    expect(save).toHaveBeenCalledExactlyOnceWith('agent');
+    expect(save).toHaveBeenCalledExactlyOnceWith('agent', expect.any(Number));
     expect(autosave.dirty()).toBe(false);
   });
 
@@ -59,12 +59,14 @@ describe('routine autosave', () => {
     await vi.advanceTimersByTimeAsync(300);
     autosave.queue('second');
     await vi.advanceTimersByTimeAsync(300);
+    const lastQueuedAt = Date.now();
     autosave.queue('last');
     await vi.advanceTimersByTimeAsync(300);
     expect(save).toHaveBeenCalledTimes(1);
     first.resolve();
     await vi.advanceTimersByTimeAsync(0);
-    expect(save.mock.calls).toEqual([['first'], ['last']]);
+    expect(save.mock.calls.map(([draft]) => draft)).toEqual(['first', 'last']);
+    expect(save).toHaveBeenLastCalledWith('last', lastQueuedAt);
     expect(autosave.dirty()).toBe(true);
     expect(autosave.saving()).toBe(true);
     last.resolve();
@@ -114,7 +116,7 @@ describe('routine autosave', () => {
     await vi.advanceTimersByTimeAsync(300);
     first.reject(new Error('Old failure'));
     await vi.advanceTimersByTimeAsync(0);
-    expect(save.mock.calls).toEqual([['old'], ['new']]);
+    expect(save.mock.calls.map(([draft]) => draft)).toEqual(['old', 'new']);
     expect(autosave.error()).toBeUndefined();
     expect(autosave.dirty()).toBe(false);
   });
@@ -153,7 +155,7 @@ describe('routine autosave', () => {
     expect(save).toHaveBeenCalledTimes(1);
     first.resolve();
     await vi.advanceTimersByTimeAsync(0);
-    expect(save.mock.calls).toEqual([['old'], ['fresh']]);
+    expect(save.mock.calls.map(([draft]) => draft)).toEqual(['old', 'fresh']);
     expect(autosave.dirty()).toBe(false);
   });
 });

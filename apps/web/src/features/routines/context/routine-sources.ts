@@ -18,7 +18,7 @@ export type RoutineDetailSource = {
   entity: Accessor<RoutineEntity | undefined>;
   loading: Accessor<boolean>;
   error: Accessor<boolean>;
-  update(draft: ScheduleDraft): Promise<RoutineSnapshot>;
+  update(draft: ScheduleDraft, queuedAt: number): Promise<RoutineSnapshot>;
   run(): void;
   runPending: Accessor<boolean>;
   setEnabled(enabled: boolean): void;

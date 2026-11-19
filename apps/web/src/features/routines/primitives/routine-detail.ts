@@ -50,33 +50,35 @@ export function createRoutineDetail(
     );
   };
 
-  const autosave = createRoutineAutosave<ScheduleDraft>(async (draft) => {
-    const previous = schedule();
-    if (!previous || !editableTrigger()) {
-      throw new Error('This routine is no longer editable.');
-    }
-    // A code upgrade changes the configuration but not its revision.
-    if (
-      previous.revision >= baselineRevision &&
-      previous.configurationKey !== baselineKey
-    )
-      throw new RoutineConflictError();
-    const saved = await source.update(draft);
-    baselineRevision = saved.revision;
-    baselineKey = saved.configurationKey;
-    // Saving names steps' outputs; keep those names so a later edit, such
-    // as a new step with the same tool before this one, can't move them.
-    const outputs = assignedOutputs(
-      draft.steps ?? [],
-      saved.draft?.steps ?? []
-    );
-    if (outputs.size)
-      setRawState((current) =>
-        current?.steps
-          ? { ...current, steps: withAssignedOutputs(current.steps, outputs) }
-          : current
+  const autosave = createRoutineAutosave<ScheduleDraft>(
+    async (draft, queuedAt) => {
+      const previous = schedule();
+      if (!previous || !editableTrigger()) {
+        throw new Error('This routine is no longer editable.');
+      }
+      // A code upgrade changes the configuration but not its revision.
+      if (
+        previous.revision >= baselineRevision &&
+        previous.configurationKey !== baselineKey
+      )
+        throw new RoutineConflictError();
+      const saved = await source.update(draft, queuedAt);
+      baselineRevision = saved.revision;
+      baselineKey = saved.configurationKey;
+      // Saving names steps' outputs; keep those names so a later edit, such
+      // as a new step with the same tool before this one, can't move them.
+      const outputs = assignedOutputs(
+        draft.steps ?? [],
+        saved.draft?.steps ?? []
       );
-  });
+      if (outputs.size)
+        setRawState((current) =>
+          current?.steps
+            ? { ...current, steps: withAssignedOutputs(current.steps, outputs) }
+            : current
+        );
+    }
+  );
 
   function setState(update: (prev: ScheduleDraft) => ScheduleDraft): void {
     const current = state();

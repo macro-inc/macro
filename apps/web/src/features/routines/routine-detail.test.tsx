@@ -1552,6 +1552,7 @@ describe('sub-routines defined once', () => {
       .mocked(usePending)
       .mock.calls.find(([name]) => name === 'routine.parent_definition');
     expect(phase?.[1]()).toBe(true);
+    expect(phase?.[2]?.['routine.parent_id']).toBe('parent-id');
     setSchedules([copy, parent]);
     setListStatus('success');
     expect(phase?.[1]()).toBe(false);

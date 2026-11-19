@@ -13,12 +13,12 @@ type RoutineAutosave<T> = {
 
 /** Serializes routine writes; undefined invalidates an older, still-valid draft. */
 export function createRoutineAutosave<T>(
-  save: (draft: T) => Promise<void>
+  save: (draft: T, queuedAt: number) => Promise<void>
 ): RoutineAutosave<T> {
   const [dirty, setDirty] = createSignal(false);
   const [saving, setSaving] = createSignal(false);
   const [error, setError] = createSignal<unknown>();
-  let pending: { draft: T; revision: number } | undefined;
+  let pending: { draft: T; revision: number; queuedAt: number } | undefined;
   let revision = 0;
   let ready = false;
   let disposed = false;
@@ -30,7 +30,7 @@ export function createRoutineAutosave<T>(
     ready = false;
     setSaving(true);
     try {
-      await save(write.draft);
+      await save(write.draft, write.queuedAt);
       if (!disposed && write.revision === revision) {
         setDirty(false);
         setError(undefined);
@@ -55,7 +55,10 @@ export function createRoutineAutosave<T>(
   function queue(draft: T | undefined): void {
     if (disposed) return;
     revision += 1;
-    pending = draft === undefined ? undefined : { draft, revision };
+    pending =
+      draft === undefined
+        ? undefined
+        : { draft, revision, queuedAt: Date.now() };
     ready = false;
     setDirty(true);
     setError(undefined);
@@ -65,6 +68,7 @@ export function createRoutineAutosave<T>(
 
   function retry(): void {
     if (disposed || !pending) return;
+    pending = { ...pending, queuedAt: Date.now() };
     setError(undefined);
     debouncedSave.clear();
     ready = true;

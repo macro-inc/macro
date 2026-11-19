@@ -38,6 +38,7 @@ import {
   isUnchangedUpdate,
   scheduleToDuplicateBody,
 } from './routine-draft';
+import { traceRoutineRequest } from './routine-trace';
 import { useRoutineQuery } from './routines';
 import { toHistoryRecord } from './run-resource';
 import {
@@ -109,17 +110,6 @@ function canKeepSchedule(
   if (!parent || parent.id !== link.parent_id) return false;
   const definition = wireDefinition(parent.task, copy.subRoutine);
   return Boolean(definition && copyInputsFit(copy, definition));
-}
-
-async function traceRoutineRequest<T>(span: Span, request: () => Promise<T>) {
-  try {
-    return await span.run(request);
-  } catch (error) {
-    span.error('Routine request failed');
-    throw error;
-  } finally {
-    span.end();
-  }
 }
 
 export function createRoutineDetailSource(
@@ -201,6 +191,9 @@ export function createRoutineDetailSource(
   // Start the parent hold before releasing the detail hold when a copy arrives.
   usePending('routine.parent_definition', parentLoading, {
     'routine.id': id(),
+    get 'routine.parent_id'() {
+      return parentId() ?? '';
+    },
   });
   usePending('routine.detail', () => detail.isLoading, { 'routine.id': id() });
   const rawParent = createMemo(() =>
@@ -234,7 +227,10 @@ export function createRoutineDetailSource(
         canKeepSchedule(current, rawParent())
     );
   };
-  const save = async (draft: ScheduleDraft, approval?: Span) => {
+  const save = async (
+    draft: ScheduleDraft,
+    { approval, queuedAt }: { approval?: Span; queuedAt?: number }
+  ) => {
     const scheduleId = id();
     const previous = raw();
     const body = previous && draftToUpdateBody(draft, previous);
@@ -251,8 +247,12 @@ export function createRoutineDetailSource(
     const span =
       approval?.span('routine.save') ??
       Telemetry.span('routine.save', {
+        startTime: queuedAt,
         attributes: { 'routine.id': scheduleId },
       });
+    if (queuedAt !== undefined) {
+      span.setAttr('routine.save.queue_ms', Math.max(0, Date.now() - queuedAt));
+    }
     return traceRoutineRequest(span, async () =>
       toRoutine(
         await update.mutateAsync({ scheduleId, body, parentSpan: span })
@@ -270,7 +270,7 @@ export function createRoutineDetailSource(
     },
     loading: () => detail.isPending,
     error: () => detail.isError,
-    update: save,
+    update: (draft, queuedAt) => save(draft, { queuedAt }),
     run: () => run.mutate({ scheduleId: id() }),
     runPending: () => run.isPending,
     setEnabled: (enabled) => {
@@ -334,7 +334,7 @@ export function createRoutineDetailSource(
               ...withDraftSteps(draft, steps),
               ...(subRoutines.length ? { subRoutines } : {}),
             },
-            approval
+            { approval }
           );
         } catch (error) {
           failed('Failed to update the routine’s code', error);
@@ -356,9 +356,12 @@ export function createRoutineDetailSource(
         }
         if (id() === scheduleId) {
           try {
-            await traceRoutineRequest(
-              approval.span('routine.code_approval.refetch'),
-              () => upgrades.refetch({ throwOnError: true })
+            const phase = approval.span('routine.code_approval.refetch');
+            await traceRoutineRequest(phase, () =>
+              upgrades.refetch({
+                throwOnError: true,
+                parentSpan: phase,
+              })
             );
           } catch (error) {
             failed(t('subRoutines.approvalRefreshFailed'), error);
