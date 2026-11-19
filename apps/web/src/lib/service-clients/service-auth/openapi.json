@@ -5896,6 +5896,89 @@
         }
       }
     },
+    "/team_agents/{agent_user_id}/avatar": {
+      "put": {
+        "tags": ["team-agents"],
+        "summary": "Replace an agent's avatar. Requires an owner or admin of its team.",
+        "operationId": "set_team_agent_avatar",
+        "parameters": [
+          {
+            "name": "agent_user_id",
+            "in": "path",
+            "description": "The agent's Macro user id.",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/AgentAvatar"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "204": {
+            "description": ""
+          },
+          "400": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "500": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
     "/team_agents/{agent_user_id}/voice": {
       "get": {
         "tags": ["team-agents"],
@@ -7020,7 +7103,7 @@
     "/user/profile_pictures": {
       "post": {
         "tags": ["user::post_profile_pictures"],
-        "summary": "Retrieves profile picture URLs for a list of users",
+        "summary": "Retrieves profile picture URLs and saved face recipes for a list of users.",
         "operationId": "post_profile_pictures",
         "requestBody": {
           "content": {
@@ -7504,6 +7587,28 @@
         "description": "A provider an agent can bring its own key for.",
         "enum": ["anthropic", "openai"]
       },
+      "AgentAvatar": {
+        "type": "object",
+        "description": "Replace an agent's face and its PNG, or save a photo and clear the face.\nA missing URL clears the old PNG, so a failed render never leaves stale art.",
+        "properties": {
+          "face": {
+            "oneOf": [
+              {
+                "type": "null"
+              },
+              {
+                "$ref": "#/components/schemas/AvatarFace",
+                "description": "Face recipe, or `None` to use a photo (or remove the picture)."
+              }
+            ]
+          },
+          "url": {
+            "type": ["string", "null"],
+            "description": "Uploaded PNG or photo URL; `None` when the upload failed or to remove it."
+          }
+        },
+        "additionalProperties": false
+      },
       "AgentSetupResponse": {
         "type": "object",
         "description": "What an agent needs to start using the SDK.",
@@ -7636,6 +7741,36 @@
             "description": "Reload the balance back up to this, in customer cents."
           }
         }
+      },
+      "AvatarFace": {
+        "type": "object",
+        "description": "A versioned recipe rendered by `@macro-inc/agent-faces`. The server validates\nits envelope; the renderer owns the available parts and option counts.",
+        "required": ["v", "seed", "pins"],
+        "properties": {
+          "pins": {
+            "type": "object",
+            "description": "Pinned parts and their zero-based option indexes.",
+            "additionalProperties": {
+              "type": "integer",
+              "format": "int32",
+              "minimum": 0
+            },
+            "propertyNames": {
+              "type": "string"
+            }
+          },
+          "seed": {
+            "type": "string",
+            "description": "Stable seed, between 1 and 64 characters."
+          },
+          "v": {
+            "type": "integer",
+            "format": "int32",
+            "description": "Renderer version. Only version 1 can currently be saved.",
+            "minimum": 0
+          }
+        },
+        "additionalProperties": false
       },
       "BillingInterval": {
         "type": "string",
@@ -8130,6 +8265,17 @@
         "description": "Input for inviting an agent teammate and buying its computer.",
         "required": ["purchaseKey", "name", "size"],
         "properties": {
+          "avatarFace": {
+            "oneOf": [
+              {
+                "type": "null"
+              },
+              {
+                "$ref": "#/components/schemas/AvatarFace",
+                "description": "Saved recipe; kept even when uploading its PNG failed."
+              }
+            ]
+          },
           "avatarUrl": {
             "type": ["string", "null"],
             "description": "Profile picture URL (a static file the caller uploaded)."
@@ -11243,8 +11389,19 @@
       },
       "UserProfilePicture": {
         "type": "object",
-        "required": ["id", "url"],
+        "required": ["id"],
         "properties": {
+          "avatar_face": {
+            "oneOf": [
+              {
+                "type": "null"
+              },
+              {
+                "$ref": "#/components/schemas/AvatarFace",
+                "description": "The saved face recipe, including when its optional PNG could not be uploaded."
+              }
+            ]
+          },
           "checksum": {
             "type": ["string", "null"]
           },
@@ -11252,7 +11409,7 @@
             "type": "string"
           },
           "url": {
-            "type": "string"
+            "type": ["string", "null"]
           }
         }
       },
