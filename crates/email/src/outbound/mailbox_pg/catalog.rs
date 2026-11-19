@@ -140,7 +140,7 @@ impl PgMailboxSync {
             SELECT m.link_id,$2,m.provider_id,false FROM email_messages m
             JOIN email_mailbox_folders f ON f.link_id = m.link_id AND f.provider_id = m.provider_folder_id
             WHERE m.link_id = $1 AND (f.deleted_at IS NOT NULL OR f.provider_id=ANY($3)) AND m.provider_id IS NOT NULL
-            ON CONFLICT (link_id,generation,provider_id) DO UPDATE SET revision = email_message_reconciliation.revision + 1,available_at = now()
+            ON CONFLICT (link_id,generation,provider_id) DO UPDATE SET revision = email_message_reconciliation.revision + 1,available_at = now(),is_import = false
         "#,lease.mailbox.link_id,lease.mailbox.sync_generation,&trash_changes).execute(&mut *tx).await.map_err(db_error)?;
         // Stop polling folders that no longer exist, and their live passes;
         // retained messages are handled by mailbox-wide reconciliation above,
