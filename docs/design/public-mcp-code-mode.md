@@ -98,7 +98,9 @@ pub trait UserCodeMode: Send + Sync + 'static {
 - **No journal:** the MCP response is the record, and there is no UI to load a
   saved execution into. The MCP `ExecuteCode` therefore drops `execution_id`.
 - **No reviews:** there is no session stream to present into. `main` returns
-  `{data}`; review references fail the run. `session` / `execution` are undefined
+  `{data}`, optionally with up to two SDK PNGs in `images`, which the receipt
+  carries as `modelMedia` and MCP returns as image blocks; review references
+  fail the run. `session` / `execution` are undefined
   (the bootstrap already handles absent ids).
 - **Cancellation:** the rmcp request token (`context.ct`); no turn watcher.
 - **Admission:** a separate `ExecutionService` with its own limits, sharing the
