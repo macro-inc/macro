@@ -1379,6 +1379,10 @@ edits still sync. Repeat across tabs: a newer local edit racing Send must block
 the stale submission, and old send cleanup must preserve a restored draft and
 its attachments. Logout should warn about queued sends even after their original
 local working copies have been retired; it must not claim to cancel server sends.
+Reload a thread after its reply reaches the provider but before the browser
+receives the send response. The open thread shows one sent reply and leaves
+the composer collapsed. The outbox holds the local reply until the send
+settles. Cancelling an unsent reply makes its restored draft editable again.
 Approved local sends survive sign-out, are hidden from other accounts, and resume
 only when the same account signs back in. The status panel also lists failed,
 unconfirmed, and scheduled server attempts from other devices, with pagination. A

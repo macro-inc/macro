@@ -884,6 +884,40 @@ const sendIntent = (
 });
 
 describe('independent send recovery records', () => {
+  it('keeps a reserved reply out of the thread after reopening until it is restored', async () => {
+    const name = crypto.randomUUID();
+    const first = open(name);
+    const owner = await first.activate('owner');
+    const reply = snapshot('Approved');
+    reply.content.replying_to_id = 'parent';
+    await first.save(owner, reply);
+    await first.save(owner, {
+      ...reply,
+      key: 'other-reply',
+      draftId: 'other-reply',
+    });
+    const intent = sendIntent();
+    intent.metadata.payload.input.message.replyingToId = 'parent';
+    intent.metadata.payload.draft.replyingToId = 'parent';
+    await first.putSend(owner, intent, true);
+    await first.close();
+
+    const second = open(name);
+    const reopened = await second.activate('owner');
+    const threadDrafts = { omitSendLockedReplies: true };
+    expect(await second.list(reopened)).toHaveLength(2);
+    expect(await second.list(reopened, threadDrafts)).toMatchObject([
+      { key: 'other-reply' },
+    ]);
+
+    await second.putSend(reopened, { ...intent, cancellationRequested: true });
+    await second.restoreSend(reopened, intent.uuid);
+    expect(await second.list(reopened, threadDrafts)).toMatchObject([
+      { key: 'local', content: { replying_to_id: 'parent' } },
+      { key: 'other-reply' },
+    ]);
+  });
+
   it('retains the frozen snapshot and attempt identity independently of the cache', async () => {
     const name = crypto.randomUUID();
     const first = open(name);
