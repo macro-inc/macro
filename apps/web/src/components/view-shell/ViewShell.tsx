@@ -844,13 +844,18 @@ function Main(props: ViewShellMainProps) {
 }
 
 function TopBar(
-  props: JSX.HTMLAttributes<HTMLDivElement> & { floating?: boolean }
+  props: JSX.HTMLAttributes<HTMLDivElement> & {
+    floating?: boolean;
+    /** Replaces automatic navigation when the host owns the leading action. */
+    navigation?: JSX.Element;
+  }
 ) {
   const [local, rest] = splitProps(props, [
     'children',
     'class',
     'ref',
     'floating',
+    'navigation',
   ]);
   const [bar, setBar] = createSignal<HTMLDivElement>();
   // On touch the bar floats over its pane as islands, like a standalone
@@ -875,7 +880,7 @@ function TopBar(
         }
         data-view-shell-top-bar=""
       >
-        <ViewNavigationControls />
+        {local.navigation ?? <ViewNavigationControls />}
         {local.children}
       </div>
     </SplitHeaderContextMenu>
