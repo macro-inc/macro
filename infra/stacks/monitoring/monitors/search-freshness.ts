@@ -51,7 +51,9 @@
 //   as its own user through the public gateway once a minute per
 //   `entity_type` (`document`, `message`, `project`, `property`,
 //   `agent_session`, `call`), tagged `operation` (`create`, `edit`,
-//   `rename`, `delete`). Searches come every second for the first minute,
+//   `rename`, `delete`, and `crowded_prefix`: a document found by a crowded
+//   prefix alone, which only a search expanding every match finds). Searches
+//   come every second for the first minute,
 //   then every 5 s; a round gives up at 300 s, or after 30 s of failed
 //   searches. Search hides a deleted entity through its database check, so a
 //   delete round measures that, not the index.

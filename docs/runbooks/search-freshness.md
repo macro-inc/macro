@@ -178,6 +178,13 @@ dropped, or indexed wrongly, or search no longer finds the entity.
   `entity_id`, and search for it in the app as the probe user. A delete that
   stays visible means the entity still exists in its source: search hides
   deleted entities by checking the database, not the index.
+- `operation:crowded_prefix` on documents: a new document holding one word
+  that sorts late under `con` was not found by a partial search for `con`
+  alone, while the exact-token rounds pass. Content prefix search is dropping
+  matches: a prefix query that expands only the first few hundred words of a
+  shard starting with the prefix, before permission filtering, as
+  `match_phrase_prefix` with `max_expansions` 256 did. Check how
+  `crates/opensearch_client/src/search/query.rs` builds content prefixes.
 
 ## Probe failing
 

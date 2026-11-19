@@ -92,6 +92,19 @@ impl Search for UnifiedSearch {
                     ..request_defaults()
                 },
             ),
+            SearchQuery::Prefix {
+                entity_type,
+                prefix,
+            } => (
+                *entity_type,
+                UnifiedSearchRequest {
+                    query: prefix.as_str().to_owned(),
+                    match_type: MatchType::Partial,
+                    filters: only(*entity_type, EntityFilters::default()),
+                    search_on: SearchOn::Content,
+                    ..request_defaults()
+                },
+            ),
             SearchQuery::Property {
                 property_id,
                 name,

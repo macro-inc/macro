@@ -4,9 +4,10 @@
 use macro_entrypoint::{MacroEntrypoint, shutdown_signal};
 use macro_service_urls::ApiGatewayUrl;
 use search_freshness_probe::config::Config;
+use search_freshness_probe::domain::model::CrowdedPrefix;
 use search_freshness_probe::domain::ports::Rotation;
 use search_freshness_probe::domain::probe;
-use search_freshness_probe::domain::rotation::{Created, Fixture, PropertyValue};
+use search_freshness_probe::domain::rotation::{Created, Fixture, LatePrefixWord, PropertyValue};
 use search_freshness_probe::domain::watch::Schedule;
 use search_freshness_probe::inbound::health;
 use search_freshness_probe::outbound::entities::{Documents, Messages, Projects};
@@ -17,6 +18,10 @@ use search_freshness_probe::outbound::properties::Properties;
 use search_freshness_probe::outbound::search::UnifiedSearch;
 use tokio_util::sync::CancellationToken;
 use tokio_util::task::TaskTracker;
+
+/// Starts far more indexed words in every shard than a capped prefix
+/// expansion keeps, in dev and in prod (services/search_freshness_probe/AGENTS.md).
+const CROWDED_PREFIX: &str = "con";
 
 #[tokio::main]
 async fn main() -> Result<(), rootcause::Report> {
@@ -59,6 +64,10 @@ async fn run() -> Result<(), rootcause::Report> {
         shutdown,
     };
     probes.start(Created::new(Documents::new(api.clone())));
+    probes.start(LatePrefixWord::new(
+        Documents::new(api.clone()),
+        CrowdedPrefix::new(CROWDED_PREFIX)?,
+    ));
     probes.start(Created::new(Messages::new(api.clone())));
     probes.start(Created::new(Projects::new(api.clone())));
     probes.start(PropertyValue::new(Properties::new(api.clone())));

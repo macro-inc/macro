@@ -27,6 +27,11 @@ API besides `GET /health`.
   messages post, edit, delete (in a private channel of the probe's own);
   projects rename, trash and purge, create; a text property on a document of
   its own; an agent session and a call record are fixtures, renamed only.
+  The crowded-prefix round (`LatePrefixWord`, operation `crowded_prefix`)
+  writes a new document each round whose word sorts late under a prefix that
+  starts hundreds of indexed words (`con` + `zz` + nonce) and searches the
+  prefix alone: a prefix search that keeps only the first expansions of a
+  shard, as `match_phrase_prefix`'s 256 did before #11475, never finds it.
 - `outbound/`: the routes, with the user API key in `x-macro-user-api-key`, and
   `POST /dss/search` restricted to one type the way the SDK restricts it.
 
@@ -52,6 +57,13 @@ dedicated probe user. Required, no fallback. `ENVIRONMENT` picks the gateway
 - `cargo test -p search_freshness_probe` (no database needed; `SQLX_OFFLINE=true`)
 
 ## Gotchas
+
+- The crowded prefix (`CROWDED_PREFIX` in `main.rs`) must start more than 256
+  indexed words per shard of the documents index in every environment, or the
+  round passes whatever search does. Check one with a word `<prefix>zz<nonce>`:
+  a partial search for `<prefix>.` still builds a capped `match_phrase_prefix`
+  (punctuation), so it misses the word on a crowded shard and finds it on a
+  quiet one, while `<prefix>` finds it on both.
 
 - Nothing the probe makes may be shared: the probe user may belong to a team.
   A new document or project starts with the team's default link share, so the
