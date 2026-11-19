@@ -230,6 +230,7 @@ function Fixture() {
       .join(',') ?? '';
   const [successes, setSuccesses] = createSignal(0);
   const [failures, setFailures] = createSignal(0);
+  const [accepted, setAccepted] = createSignal(0);
   const save = useBulkSaveEntityPropertiesMutation({
     onSuccess: () => {
       setSuccesses((value) => value + 1);
@@ -269,6 +270,7 @@ function Fixture() {
         Pending: {save.isPending ? 'yes' : 'no'} · Succeeded: {successes()} ·
         Failed: {failures()}
       </p>
+      <p aria-label="Accepted saves">{accepted()}</p>
       <Show when={groupedMode}>
         <output aria-label="Historical grouped pages">
           {historyReady() ? '130 ready' : 'Loading'}
@@ -329,6 +331,7 @@ function Fixture() {
                 property: property(entityId),
                 apiValues: { valueType: 'SELECT_STRING', values: [urgent] },
               })),
+              onAccepted: () => setAccepted((value) => value + 1),
             })
           }
         >
