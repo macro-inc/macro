@@ -35,6 +35,13 @@ gh pr create --title "..." --body-file body.md --label run-ci         # a new PR
 gh api repos/macro-inc/macro/issues/<pr>/labels -f "labels[]=run-ci"  # after a push
 ```
 
+If `run-ci` is still present, remove it before adding it again:
+
+```sh
+gh api -X DELETE repos/macro-inc/macro/issues/<pr>/labels/run-ci
+gh api repos/macro-inc/macro/issues/<pr>/labels -f "labels[]=run-ci"
+```
+
 `gh pr edit <pr> --add-label run-ci` does the same on a recent gh; older
 releases fail on a Projects (classic) error before adding the label.
 
@@ -65,9 +72,11 @@ releases fail on a Projects (classic) error before adding the label.
 
 ## Wait for it
 
-Use the `babysit-pr` skill's watcher: `pr-wait <pr> --until green`. It exits 1
-with the command to run when CI has not run on the head, and exits 1 when
-`CI gate` fails. Never poll with your own loop.
+Use the `babysit-pr` watcher's `pr-wait <pr> --until green` when available;
+otherwise use `gh pr checks <pr> --watch --interval 20`. Inspect `CI gate`
+when the watcher exits. `pr-wait` exits 1 with the command to run when CI
+has not run on the head, and exits 1 when `CI gate` fails. Never poll with
+your own loop.
 
 To read the state once, look at the `CI gate` row of `gh pr checks <pr>`:
 
@@ -86,14 +95,24 @@ on a push but not when `main` moves, and runs nothing on a conflicting PR. So on
 such a PR the label alone starts nothing; `CI Gate Label Check` then removes it
 and says why in `CI gate`.
 
-## Fix a failure
+## Review results and fix failures
 
-- A flaky job: re-run the failed jobs of the `PR CI` run
-  (`gh run rerun <run-id> --failed`). `CI gate` re-runs with them and updates
-  the status; no new label is needed.
-- A real failure: fix it, push, and add the label again.
-- The checks inside the run are named `<workflow> / <job>`, such as
-  `Web App / Typecheck` or `Cloud Storage / test`.
+- After every run, inspect `gh pr checks <pr>` and read every failed job's logs
+  with `gh run view <run-id> --log-failed`; use `--job <job-id> --log-failed`
+  when the failed job needs a separate log inspection.
+- Fix every real failure in the branch, run the affected local checks, commit,
+  and push; confirm the remote head before requesting CI again.
+- If evidence identifies an unrelated failure on `main` or a flaky test outside
+  the changed code, record the job, error, and evidence in the PR body and
+  `PROGRESS.md`, then rerun once to check whether the failure is intermittent.
+  Do not classify a persistent failure as flaky or waive a failing gate.
+- Request retries with the `run-ci` label, removing it first if it is still
+  present; repeat result review and fixes after later failures without waiting
+  for another request.
+- Finish only when `CI gate` passes on the PR's latest commit.
+
+The checks inside the run are named `<workflow> / <job>`, such as
+`Web App / Typecheck` or `Cloud Storage / test`.
 
 ## Fork PRs
 
