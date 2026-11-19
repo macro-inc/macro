@@ -1439,7 +1439,8 @@ with **Cancel** (returns to the list, first asking **Discard this routine?**
 with **Discard** / **Keep editing** once it has a name, description, trigger or
 step) and **Create routine**, which saves it and opens its page in the same
 pane. Nothing is written before **Create routine**. The unsent draft is kept for
-three minutes after the last edit, so reloading `/app/routines/new` resumes it;
+a day after the last edit (logging out clears it), so reloading
+`/app/routines/new` resumes it;
 starting another routine (the creator or a template card) while the page is
 open replaces it with the new one. A routine whose only step is **Ask AI**
 saves in the original single-agent form unless it has sub-routine definitions
