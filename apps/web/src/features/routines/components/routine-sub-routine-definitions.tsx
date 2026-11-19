@@ -147,16 +147,20 @@ export function SubRoutineCopySteps(props: {
           </dl>
         </Show>
         <Show when={props.parentName && props.onOpenParent}>
-          <div>
+          <div class="min-w-0">
+            {/* A long parent name truncates rather than overflow a phone. */}
             <Button
               variant="secondary"
               size="sm"
+              class="max-w-full shrink"
               onClick={() => props.onOpenParent?.()}
             >
-              {t('subRoutines.editInParent', {
-                parent: props.parentName ?? '',
-              })}
-              <ArrowUpRightIcon class="size-3.5" />
+              <span class="min-w-0 truncate">
+                {t('subRoutines.editInParent', {
+                  parent: props.parentName ?? '',
+                })}
+              </span>
+              <ArrowUpRightIcon class="size-3.5 shrink-0" />
             </Button>
           </div>
         </Show>
