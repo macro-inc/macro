@@ -35,6 +35,7 @@ export default {
   contentAlreadyOpen: 'Content already open',
 
   // Rail buttons
+  appNavigation: 'App navigation',
   hideFromSidebar: 'Hide from sidebar',
   unreadItems: 'Unread items',
   unreadNotifications: {

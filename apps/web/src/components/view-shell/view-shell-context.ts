@@ -24,6 +24,8 @@ export type ViewShellLayout = {
     isSheet: Accessor<boolean>;
     /** Whether a list aside (`asideList`) fills a narrow shell in place of Main. */
     fillsShell: Accessor<boolean>;
+    /** Whether navigation lives in the single sidebar instead of this shell. */
+    isHosted: Accessor<boolean>;
     collapse: () => void;
     expand: () => void;
     toggle: () => void;
@@ -53,6 +55,8 @@ export type ViewShellInternal = ViewShellLayout & {
   navigationTrigger: Accessor<HTMLButtonElement | undefined>;
   registerNavigationTrigger: (element: HTMLButtonElement) => void;
   chooseAsideWidth: (width: number) => void;
+  /** The single sidebar's slot while this shell's navigation is shown there. */
+  hostSlot: Accessor<HTMLElement | undefined>;
 };
 
 export const ViewShellContext = createContext<ViewShellInternal>();

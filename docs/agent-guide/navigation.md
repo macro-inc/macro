@@ -620,6 +620,20 @@ stay centered and the preview body fills the remaining height below the divider.
 
 The outer sidebar is an icon rail; labels appear in tooltips.
 
+With `enable-single-sidebar` (desktop only; on in dev), one 256px **App
+navigation** sidebar replaces the rail and every split's own sidebar. Create
+and Search sit at the top, the apps are labelled rows (same unread dots,
+counts, next-meeting badge, context menu and Shift-click as the rail), and More,
+Help and Settings sit in a row at the bottom. The **active split's** workspace
+navigation (Email's inboxes, Chat's channels, Tasks' views) renders under its
+app's row and fills the space the rows leave; a workspace reached from More or
+a link shows it after the last row. Its header keeps only search and actions,
+because the row names the app and the split closes from its own header. Other
+splits show no navigation until they become active; there is no Hide/Show
+navigation control or `Cmd+.` toggle in this mode. While the flag loads, the
+rail shows. Check: open Email, then Chat in a second split, and click between
+them: the sidebar's expanded app follows the active split.
+
 Open **More → Customize sidebar** to show, hide, or reorder available apps.
 On desktop, drag an app by its **Reorder <name>** handle; Up/Down on the focused
 handle also moves it. Touch devices offer move buttons. Home stays first and

@@ -31,12 +31,15 @@ const SidebarViewContext = createContext<{ view: () => string | undefined }>();
 
 function Root(props: JSX.HTMLAttributes<HTMLElement> & { reorderId?: string }) {
   const [local, rest] = splitProps(props, ['children', 'class', 'reorderId']);
+  const ws = useContext(ViewShellContext);
   return (
     <SidebarViewContext.Provider value={{ view: () => local.reorderId }}>
       <aside
         {...rest}
         class={cn(
-          'flex size-full min-h-0 min-w-0 flex-col bg-panel',
+          'flex size-full min-h-0 min-w-0 flex-col',
+          // The single sidebar's own surface shows through.
+          !ws?.aside.isHosted() && 'bg-panel',
           local.class
         )}
         data-view-sidebar=""
@@ -82,6 +85,9 @@ function Header(
   // which has no header; sheets and overlays keep theirs.
   const dockedOnTouch = () =>
     isTouchDevice() && !!ws && !ws.aside.isSheet() && !ws.aside.isOverlay();
+  // In the single sidebar the app's row names the view and the split closes
+  // from its own header, so only the actions remain.
+  const hosted = () => ws?.aside.isHosted() === true;
   const [open, setOpen] = createSignal(false);
   const searchOpen = () => local.searchOpen ?? open();
   let searchArea: HTMLDivElement | undefined;
@@ -106,32 +112,37 @@ function Header(
       when={!dockedOnTouch()}
       fallback={<div aria-hidden="true" class="h-(--safe-top) shrink-0" />}
     >
-      <SplitHeaderContextMenu>
-        <div
-          {...rest}
-          class={cn(
-            'flex h-12 min-w-0 shrink-0 items-center justify-between gap-3 py-3 pl-(--sidebar-content-inset) pr-(--sidebar-header-action-inset) touch:h-[calc(var(--safe-top,0px)+3rem)] touch:pb-0 touch:pt-(--safe-top) [&_[data-split-panel-close]]:ml-(--sidebar-control-overhang)',
-            local.class
-          )}
-          data-view-sidebar-header=""
-        >
-          <div class="min-w-0 flex-1">{local.children}</div>
-          <div class="ml-auto flex shrink-0 items-center gap-1">
-            {local.actions}
-            <Show when={!isTouchDevice() && local.search}>
-              <Control
-                ref={searchButton}
-                aria-label={local.searchLabel ?? 'Search'}
-                aria-expanded={searchOpen()}
-                onClick={toggleSearch}
-              >
-                <SearchIcon class="size-4" />
-              </Control>
-            </Show>
-            {local.collapseControl ?? <ViewSidebarToggle action="collapse" />}
+      <Show when={!hosted() || local.search || local.actions}>
+        <SplitHeaderContextMenu>
+          <div
+            {...rest}
+            class={cn(
+              'flex h-12 min-w-0 shrink-0 items-center justify-between gap-3 py-3 pl-(--sidebar-content-inset) pr-(--sidebar-header-action-inset) touch:h-[calc(var(--safe-top,0px)+3rem)] touch:pb-0 touch:pt-(--safe-top) [&_[data-split-panel-close]]:ml-(--sidebar-control-overhang)',
+              hosted() && 'h-8 py-0',
+              local.class
+            )}
+            data-view-sidebar-header=""
+          >
+            <div class="min-w-0 flex-1">
+              <Show when={!hosted()}>{local.children}</Show>
+            </div>
+            <div class="ml-auto flex shrink-0 items-center gap-1">
+              {local.actions}
+              <Show when={!isTouchDevice() && local.search}>
+                <Control
+                  ref={searchButton}
+                  aria-label={local.searchLabel ?? 'Search'}
+                  aria-expanded={searchOpen()}
+                  onClick={toggleSearch}
+                >
+                  <SearchIcon class="size-4" />
+                </Control>
+              </Show>
+              {local.collapseControl ?? <ViewSidebarToggle action="collapse" />}
+            </div>
           </div>
-        </div>
-      </SplitHeaderContextMenu>
+        </SplitHeaderContextMenu>
+      </Show>
       <Show when={!isTouchDevice() && searchOpen()}>
         <div
           ref={searchArea}

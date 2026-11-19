@@ -88,6 +88,8 @@ const MobileAppButton = () => {
  */
 export const FooterActions = (props: {
   onMenuOpenChange?: (open: boolean) => void;
+  /** Lays the buttons out in a row, for the single sidebar's footer. */
+  horizontal?: boolean;
 }) => {
   const analytics = useAnalytics();
   const update = useAppUpdate();
@@ -117,7 +119,12 @@ export const FooterActions = (props: {
   };
 
   return (
-    <div class="flex w-full shrink-0 flex-col items-center gap-1">
+    <div
+      class={cn(
+        'flex w-full shrink-0 flex-col items-center gap-1',
+        props.horizontal && 'w-auto flex-row'
+      )}
+    >
       {/* Keyed by id: a new update remounts the button, so its popover opens again. */}
       <Show when={!isTouchDevice() && update()?.id} keyed>
         {(_id) => (

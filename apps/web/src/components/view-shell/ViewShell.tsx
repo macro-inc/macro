@@ -33,9 +33,11 @@ import {
   untrack,
   useContext,
 } from 'solid-js';
+import { Portal } from 'solid-js/web';
 import { createFrameWidth } from './create-frame-width';
 import { createSidebarMotion } from './create-sidebar-motion';
 import { NavigationSheet } from './NavigationSheet';
+import { NavigationHostContext } from './navigation-host';
 import {
   createTouchTopBarInset,
   TopBarActions,
@@ -173,6 +175,10 @@ function Root(props: ViewShellRootProps) {
   ]);
 
   const panel = useContext(SplitPanelContext);
+  const navigationHost = useContext(NavigationHostContext);
+  // A shell nested in another keeps its own navigation; only a split's
+  // outermost workspace hands its navigation to the single sidebar.
+  const nestedShell = useContext(ViewShellContext) !== undefined;
   // A view opened beside another split starts with navigation, as any split
   // above the layout breakpoint does, then keeps that split's choice as the
   // split moves between views; only the primary split follows, and writes,
@@ -312,14 +318,32 @@ function Root(props: ViewShellRootProps) {
     !collectionLayout();
   // A list aside takes turns with Main in narrow layouts rather than
   // overlaying it, so the overlay and its open state don't apply there.
+  // The single sidebar shows the active split's navigation, so no split keeps
+  // a column of its own while it is up.
+  const asideHosted = () =>
+    navigationHost?.active() === true &&
+    panel !== undefined &&
+    !nestedShell &&
+    local.aside !== false &&
+    !isTouchDevice();
+  const hostSlot = () =>
+    asideHosted() && panel?.isPanelActive()
+      ? navigationHost?.slot()
+      : undefined;
   const narrowList = (): 'list' | 'main' | undefined => {
-    if (!local.asideList || local.aside === false || !atLayoutBreakpoint()) {
+    if (
+      !local.asideList ||
+      local.aside === false ||
+      asideHosted() ||
+      !atLayoutBreakpoint()
+    ) {
       return undefined;
     }
     return local.asideList.open ? 'main' : 'list';
   };
 
   const asideMode = (): AsideMode => {
+    if (asideHosted()) return 'collapsed';
     if (collectionLayout()) return sheetOpen() ? 'docked' : 'collapsed';
     const list = narrowList();
     if (list) return list === 'list' ? 'docked' : 'collapsed';
@@ -455,6 +479,7 @@ function Root(props: ViewShellRootProps) {
     narrowList,
     returnToList: () => local.asideList?.onBack(),
     chooseAsideWidth: (width) => setChosenAsideWidth(width / asideScale()),
+    hostSlot,
     aside: {
       layout: asideLayout,
       mode: asideMode,
@@ -462,11 +487,13 @@ function Root(props: ViewShellRootProps) {
       canCollapse: () =>
         local.asidePreferenceKey !== undefined &&
         local.aside !== false &&
+        !asideHosted() &&
         !asidePinned() &&
         !narrowList(),
       isOverlay: asideOverlay,
       isSheet: navigationSheet,
       fillsShell: () => narrowList() === 'list',
+      isHosted: asideHosted,
       collapse: () => setAsideOpen(false),
       expand: () => setAsideOpen(true),
       toggle: () => {
@@ -542,6 +569,9 @@ function Aside(props: JSX.HTMLAttributes<HTMLDivElement>) {
   return (
     <ViewShellPaneContext.Provider value="aside">
       <Switch>
+        <Match when={ws.aside.isHosted()}>
+          <HostedAside {...props} />
+        </Match>
         <Match when={ws.asideHost() === 'sheet'}>
           <NavigationSheet {...props} />
         </Match>
@@ -553,6 +583,41 @@ function Aside(props: JSX.HTMLAttributes<HTMLDivElement>) {
         </Match>
       </Switch>
     </ViewShellPaneContext.Provider>
+  );
+}
+
+/**
+ * Navigation shown in the single sidebar. The split keeps a collapsed column
+ * so Main's panel index is unchanged; only the active split's shell renders
+ * its navigation, under its app in the sidebar.
+ */
+function HostedAside(props: JSX.HTMLAttributes<HTMLDivElement>) {
+  const [local, rest] = splitProps(props, ['children', 'class']);
+  const ws = useViewShellInternal();
+  return (
+    <>
+      <Resize.Panel
+        id={`${ws.id}-aside`}
+        index={0}
+        minSize={0}
+        collapsed={() => true}
+      >
+        <div class="hidden" />
+      </Resize.Panel>
+      <Show when={ws.hostSlot()} keyed>
+        {(slot) => (
+          <Portal mount={slot}>
+            <div
+              {...rest}
+              class={cn('flex min-h-0 min-w-0 flex-1 flex-col', local.class)}
+              data-view-shell-aside=""
+            >
+              {local.children}
+            </div>
+          </Portal>
+        )}
+      </Show>
+    </>
   );
 }
 

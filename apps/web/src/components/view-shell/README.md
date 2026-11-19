@@ -84,6 +84,14 @@ Breakpoint transitions own host changes; pin changes only animate the active
 host and do not cancel a pending narrow exit.
 Reduced-motion and browsers without WAAPI switch hosts immediately.
 
+Under `NavigationHostContext` (the single sidebar, `enable-single-sidebar`),
+a split's outermost desktop shell hosts its navigation outside the split:
+`aside.isHosted()` is true, the aside column stays collapsed, `canCollapse()`
+is false and `narrowList` never applies. Only the shell in the active split
+portals `ViewShell.Aside` into the host's slot, still wrapped in
+`data-view-shell-aside`; `ViewSidebar.Header` then drops its title row and keeps
+search and actions. Nested shells and touch layouts keep their own navigation.
+
 A view whose aside is its entity list (Notifications, desktop Chat) passes
 `asideList`.
 Narrow, it bypasses the overlay: the list fills the shell over an inert Main
