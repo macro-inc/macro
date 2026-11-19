@@ -34,7 +34,10 @@
 //   `rewind_unconfirmed`, `queued_without_rewind`).
 // - `search.index.failed_bulk_items`: items OpenSearch failed in the last
 //   attempt of an event queued for a replay or dropped (counter), tagged
-//   `entity_type` and `outcome`.
+//   `entity_type` (each type has its index), `outcome` and that attempt's
+//   `failure`: `overloaded` when OpenSearch refused the write to protect
+//   itself (a full write queue's 429, a tripped breaker), `bulk_items` when it
+//   failed the items themselves.
 // - `kafka.consumer.offset_resets`: partition positions librdkafka reset after
 //   an error (counter), tagged `topic`. Usually the position was out of range,
 //   older than the topic's retention, and the consumer moved to the newest
@@ -107,6 +110,10 @@ const EMAIL_BACKLOG = pending(EMAIL, null, MS_PER_HOUR);
 const EMAIL_RETENTION = pending(EMAIL, null, MS_PER_DAY);
 const LIVE_RETENTION = pending(`!${EMAIL}`, 'topic', MS_PER_DAY);
 const DROPPED = `sum:search.index.dropped_events{${PROD}} by {entity_type}.as_count()`;
+// Failed items per 5 minutes, a missing bucket read as none. The monitor wants
+// every bucket of half an hour to have some: a burst, such as a drain's 429s
+// that the replays absorb, comes and goes inside that.
+const FAILED_ITEMS = `default_zero(sum:search.index.failed_bulk_items{${PROD}} by {entity_type,failure}.as_count().rollup(sum, 300))`;
 const OFFSET_RESETS = `sum:kafka.consumer.offset_resets{${PROD}} by {topic}.as_count()`;
 const READINGS = `max:search.index.oldest_pending_ms{${PROD}}.fill(null)`;
 // Late and unseen are counted, not timed: a slow round records its seconds
@@ -140,6 +147,7 @@ const TITLES = {
   emailRetention: 'Search email backlog within a day of Kafka retention',
   liveRetention: 'Search backlog within a day of Kafka retention',
   dropped: 'Search events committed without reaching the index',
+  failedItems: 'Search index writes keep failing items',
   offsetReset: 'Search indexer reset a Kafka position after an error',
   silent: 'Search indexer reports no backlog readings',
   probeLate: 'Search shows changes late end to end',
@@ -220,6 +228,11 @@ export const searchFreshnessDashboard = new datadog.Dashboard(
           query: LIVE_RETENTION,
           critical: '6',
           warning: '5',
+        }),
+        thresholdGraph({
+          title: TITLES.failedItems,
+          query: FAILED_ITEMS,
+          critical: '0',
         }),
         thresholdGraph({
           title: TITLES.dropped,
@@ -307,6 +320,10 @@ export const searchFreshnessDashboard = new datadog.Dashboard(
           `count:search.index.lag_ms{${INDEXER}} by {outcome}.as_count()`
         ),
         bars(
+          'Failed bulk items by entity type and failure',
+          `default_zero(sum:search.index.failed_bulk_items{${INDEXER}} by {entity_type,failure,outcome}.as_count())`
+        ),
+        bars(
           'Dropped events by entity type',
           `default_zero(sum:search.index.dropped_events{${INDEXER}} by {entity_type,failure}.as_count())`
         ),
@@ -381,6 +398,20 @@ prodMonitor('search-near-retention', {
     'The oldest event not yet indexed on {{topic.name}} is older than the threshold, in days. The topic keeps events for 7 days; past that the indexer skips straight to the newest and the events between are lost.',
   dashboard,
   runbook: `${RUNBOOK}#retention`,
+});
+
+prodMonitor('search-failed-bulk-items', {
+  title: TITLES.failedItems,
+  service: SERVICE,
+  query: `min(last_30m):${FAILED_ITEMS} > 0`,
+  monitorThresholds: { critical: '0' },
+  pages: false,
+  description:
+    'For 30 minutes, OpenSearch has failed {{entity_type.name}} index writes in every 5 minutes, for the reason {{failure.name}}: overloaded when it keeps refusing writes to protect itself, bulk_items when it fails the items. Those changes wait for a replay and reach search late, or not at all once their replay fails too.',
+  dashboard,
+  runbook: `${RUNBOOK}#failed-bulk-items`,
+  alertDetail: '{{value}} items in the last 5 minutes',
+  recoveryDetail: '{{value}} items in the last 5 minutes',
 });
 
 prodMonitor('search-dropped-events', {

@@ -221,6 +221,7 @@ test('every prod monitor is graphed on its dashboard with its thresholds', () =>
     'search-dropped-events',
     'search-email-backlog',
     'search-email-near-retention',
+    'search-failed-bulk-items',
     'search-indexer-silent',
     'search-live-backlog',
     'search-near-retention',
