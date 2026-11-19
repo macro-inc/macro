@@ -100,6 +100,9 @@ window.teamAgentsFixture = {
   openDm: setDmWith,
 };
 setGlobalSplitManager({
+  // No panes: the sheets that close on navigation see no page.
+  activeSplitId: () => undefined,
+  splitState: () => undefined,
   openWithSplit(content: SplitContent) {
     window.teamAgentsFixture.opened.push(content);
     return { status: 'unavailable' };
