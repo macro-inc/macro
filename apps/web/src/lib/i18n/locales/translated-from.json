@@ -3473,6 +3473,11 @@
       "entityActions.snoozeNotifications": "c5dec69afe",
       "settingsNav.tabRuntimes": "c061da196e"
     },
+    "ru": {
+      "commands.toggleSettings": "b7b98613db",
+      "entityActions.snoozeNotifications": "c5dec69afe",
+      "settingsNav.tabRuntimes": "c061da196e"
+    },
     "sv": {
       "commands.toggleSettings": "b7b98613db",
       "entityActions.snoozeNotifications": "c5dec69afe",

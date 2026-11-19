@@ -395,9 +395,18 @@ Address: вы, lowercase.
 | notifications | Уведомления |
 | done | Выполненные |
 | mark as read | Отметить как прочитанное |
-| snooze | Отложить уведомления… |
+| snooze | Отложить уведомления |
 | archive | Архивировать |
 | settings | Настройки |
+| computer (Macro computer) | Новый компьютер Macro |
+| machine (runs agents) | Ваши машины |
+| session (agent) | Начать сеанс |
+| routine | Все рутины |
+| saved view | Новое сохранённое представление |
+| call | Начать звонок |
+| contact (CRM) | Клиенты и контакты не найдены |
+| company (CRM) | Добавить компанию |
+| thread (email) | Исключить цепочку из CRM |
 
 ## Japanese (`ja`)
 
