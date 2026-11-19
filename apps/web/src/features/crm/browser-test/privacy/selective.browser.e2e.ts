@@ -49,13 +49,19 @@ test('read-only overview, aligned rule kinds, automatic validation and verified 
     page.getByRole('button', { name: 'Validate', exact: true })
   ).toHaveCount(0);
   const draft = page.getByRole('textbox', { name: 'Sharing rules JSON' });
-  await expect(draft).toHaveValue(/schema_version/);
+  await expect(draft).toHaveValue(
+    /^\{\n {2}"schema_version": 1,\n {2}"include": \[/
+  );
+  await draft.fill(JSON.stringify(JSON.parse(await draft.inputValue())));
   await page
     .getByRole('button', { name: 'Save and share', exact: true })
     .click();
   await expect(
     page.getByRole('status').filter({ hasText: /saved/ })
   ).toBeVisible();
+  await expect(draft).toHaveValue(
+    /^\{\n {2}"schema_version": 1,\n {2}"include": \[/
+  );
   const sequence: string[] = JSON.parse((await calls.textContent()) ?? '[]');
   expect(sequence.indexOf('validate')).toBeLessThan(
     sequence.indexOf('replace')
@@ -91,6 +97,7 @@ test('a conflict retains the draft until the member inspects and accepts current
   await expect(
     page.getByRole('heading', { name: 'Sharing changed since you opened this' })
   ).toBeVisible();
+  await expect(page.getByRole('alert')).toHaveCount(0);
   await expect(draft).toHaveValue(json);
   await expect(save).toBeDisabled();
   await page

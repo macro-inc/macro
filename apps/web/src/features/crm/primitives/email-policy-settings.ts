@@ -93,8 +93,12 @@ export function createEmailPolicySettings(
     errors: ResultError[],
     target: 'error' | 'previewError' = 'error'
   ) {
+    if (errors.some((e) => e.code === 'CONFLICT')) {
+      setState(target, undefined);
+      setState('conflict', true);
+      return;
+    }
     setState(target, errors.map((e) => e.message).join('\n'));
-    if (errors.some((e) => e.code === 'CONFLICT')) setState('conflict', true);
   }
 
   function beginEdit() {

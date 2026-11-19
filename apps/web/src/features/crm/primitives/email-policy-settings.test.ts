@@ -108,6 +108,7 @@ describe('email sharing decisions', () => {
   it('does not mutate when settings or the editor open', () => {
     const { settings, validate, change } = mount();
     settings.beginEdit();
+    expect(settings.state.draft).toBe(JSON.stringify(RULES, null, 2));
     expect(validate).not.toHaveBeenCalled();
     expect(change).not.toHaveBeenCalled();
   });
@@ -145,6 +146,7 @@ describe('email sharing decisions', () => {
     expect(order).toEqual(['validate', 'save']);
     expect(settings.state.validation?.broad_rule_indices).toEqual([0]);
     expect(settings.state.canonicalized).toBe(true);
+    expect(settings.state.draft).toBe(JSON.stringify(RULES, null, 2));
     expect(settings.canSave()).toBe(false);
   });
 
@@ -187,6 +189,8 @@ describe('email sharing decisions', () => {
     settings.beginEdit();
     const draft = settings.state.draft;
     await settings.save();
+    expect(settings.state.error).toBeUndefined();
+    expect(settings.stale()).toBe(true);
     expect(settings.canSave()).toBe(false);
     expect(settings.state.draft).toBe(draft);
     expect(source.read).not.toHaveBeenCalled();
@@ -280,6 +284,7 @@ describe('email sharing decisions', () => {
     settings.beginEdit();
     await settings.inspectPreview();
     await settings.startPreview();
+    expect(settings.state.previewError).toBeUndefined();
     expect(source.preview).toHaveBeenCalledTimes(1);
     expect(source.startPreview).toHaveBeenCalledWith({
       rules: RULES,

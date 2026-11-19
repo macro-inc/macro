@@ -100,7 +100,8 @@ export const policyClient = {
       return err([
         {
           code: 'CONFLICT' as const,
-          message: 'Sharing changed since you opened this.',
+          message:
+            'email contribution changed; inspect the current policy before retrying',
         },
       ]);
     }

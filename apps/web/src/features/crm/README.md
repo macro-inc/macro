@@ -53,7 +53,8 @@ view ID so switching boards also retires unfinished visual moves and sort prompt
 Selective email settings use generated storage-service schemas through the
 storage client. The owner/session/team query scope retires drafts on account
 changes; each edit pins its observed policy token. Save validates first and
-activates only canonical valid rules. Conflicts keep the draft and require an
+activates only canonical valid rules. Conflicts show the review card without
+duplicating the raw server error, keep the draft, and require an
 explicit current-policy comparison before admitting a fresh decision. Preview
 work starts only on a member action and polls only while its page is open;
 unknown or stale counts never appear as current totals. Saved history supplies
