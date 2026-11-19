@@ -987,8 +987,17 @@ never does the routine's own work now ("every Monday make a task" makes no
 task). It hands the routine back by checking it with `macro.routines.check`
 (`POST /scheduled-actions/check`: saving's checks, including the type check
 of its code steps together, with nothing saved), naming what it created, and
-fixes what the check reports. The last passing check (else the last check) is
-the draft: the review lists what was created, from what the session named and
+fixes what the check reports. The server uses the last passing check, or the
+last check if none passed. A new draft may define sub-routines when it can
+write code and its owner has `enable-sub-routines`. The server refuses a new
+draft that defines them without that permission, a check that the scheduler's
+rollout rejects, or a step draft checked with definitions different from the
+routine's. The API returns the definitions in `subRoutines` and names the
+definition in `subRoutine` on each of its code problems. The current editor
+loads the routine's own steps and matches problems by step index. It has no
+definition review and does not carry new definitions into Save.
+
+The review lists what was created, from what the session named and
 from its recorded activity, under "Created for this routine" or "Created, not
 used by this routine" (both stay if the routine isn't saved), a code step that still fails stays in it with its errors listed, and
 the routine can't be created until it is drafted again or the step is

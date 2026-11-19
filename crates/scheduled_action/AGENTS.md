@@ -78,8 +78,8 @@ each run.
   condition by name and id; a new item the request asks for is created
   once and used by id), the code-step guide, the catalog's code
   routines marked `example`, and the reference of the routines and `ai` areas.
-  They are the same for every draft on one model with the same mix of
-  code and conditions, so the agent puts them in its cached prompt prefix
+  They are the same for every draft on one model with the same availability
+  of code, conditions and sub-routine drafting, so the agent puts them in its cached prompt prefix
   (`PrepareRoutineSession::instructions`). A code step never messages or
   emails the routine's owner (Macro refuses a message to oneself): telling
   the owner something is an Ask AI step's job. Work done once, later, per
@@ -91,12 +91,18 @@ each run.
   at a time on the owner's clock (`finding/later.md`). Only a new routine
   that may have code is told this, and only when its owner may save
   sub-routines (`DraftSubRoutines`, the `enable-sub-routines` flag read per
-  owner; unreadable is off). A draft whose check the rollout refused fails
-  with `SUB_ROUTINES_OFF` instead of being handed back. Work that repeats until something happens is
-  a routine on that schedule looking for what is still open. A step added
-  or changed keeps the routine's sub-routines as they are and is checked
-  with them; a drafted routine carries them in `subRoutines`, and a
-  problem in one names it (`StepProblem::sub_routine`). The prompt carries
+  owner; unreadable is off). Step drafts and drafts without code skip that
+  lookup in the brief. The scheduler independently checks the rollout
+  when the submitted task uses definitions, inputs or a copy. Hand-back
+  fails with `SUB_ROUTINES_OFF` when the check reports a rollout refusal.
+  It also fails if an ineligible new draft defines sub-routines or an added
+  or changed step was checked against different definitions. The comparison
+  normalizes names and ordering and ignores definition app selections the SDK
+  cannot express. Work that repeats until something happens is a routine on
+  that schedule looking for what is still open. The draft API carries definitions
+  in `subRoutines`, and a code problem in one names it in `subRoutine`. The
+  current editor reads the routine's own steps and matches errors by index.
+  It has no definition review and omits new definitions from Save. The prompt carries
   only the request, the owner and time, the found and left items, and the reference
   of the areas named, or of the commonest ones when the SDK has none of
   them, then of up to three areas that find the names not looked up (a
