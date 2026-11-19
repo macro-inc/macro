@@ -11,10 +11,10 @@ use crate::{
 mod test;
 
 /// Relation name for parent docs in the chats join field.
-const PARENT_RELATION: &str = "chat";
+pub(crate) const PARENT_RELATION: &str = "chat";
 
 /// Relation name for child (message) docs in the chats join field.
-const CHILD_RELATION: &str = "message";
+pub(crate) const CHILD_RELATION: &str = "message";
 
 /// The arguments for upserting a chat message into the opensearch index
 #[derive(Debug, serde::Serialize)]
