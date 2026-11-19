@@ -1,7 +1,8 @@
 # Code execution in the agent harness
 
 `ExecuteCode` accepts a JavaScript ES module exporting `main`. This crate
-also runs OCaml programs (below); `ExecuteCode` does not offer them yet. The agent harness
+also runs OCaml programs and JS tools programs (below); `ExecuteCode` does
+not offer JS tools programs yet. The agent harness
 starts a fresh Deno 2.9.6 child for each execution; there is no separate runner
 service. Macro SDK and Handlebars imports are bundled ahead of time, with no
 per-run package download or TypeScript compilation.
@@ -124,6 +125,66 @@ Measured on big-pickle, 2026-11-16, median of 11 (one program, warm bundle,
 cold processes): compile 62 ms; a whole OCaml run (compile, Deno start,
 `Code_mode.run`, exit) 216 ms, against 106 ms for an empty JavaScript run.
 
+## JS tools programs
+
+`Language::JsTools` (`js_tools`) runs a script in the JavaScript dialect of
+`@opencode/codemode` (pinned 2.3.2): plain JavaScript with top-level `await`
+and `return`, no classes, getters, imports or `require`, and no `fetch`,
+`Deno`, `globalThis`, timers or `eval`. Its only way out is a tool call,
+`tools.<service>.<operationId>({ path?, query?, body? })`: the spec name with
+`-` written `_`, then the raw operationId, so the path is the permission
+registry's key. The return value becomes the result's `data`, and
+`context` holds `sessionId`, `executionId` and `webAppUrl`:
+
+```js
+const task = await tools.storage.create_task_handler({
+  body: { taskName: "Fix login redirect loop", markdown: "Signing in from a deep link returns to the login page." },
+});
+const doc = await tools.storage.get_document_markdown({ path: { document_id: task.documentId } });
+return { taskId: task.documentId, markdown: doc.markdown };
+```
+
+`search("create task")` inside a program lists operations and their
+signatures; it calls nothing. The interpreter, the analyzer and the catalog
+(`js-tools.mjs`, `js-tools.json`) come from `crates/code_mode_assets`, built
+by `packages/code-mode-sdk` (its README covers the catalog and the analyzer's
+rules). They are written into the run's scratch beside the SDK, and the run
+gets exactly a JavaScript run's Deno flags (a test pins it).
+
+Every run, in the bootstrap:
+
+1. analyzes `main.js` with the bundle's `analyze`: a program that doesn't
+   parse, or reaches operations the analysis can't see (aliasing `tools`,
+   `require`, `import`, an unknown operation), fails with
+   `FailureCode::Compile` and `main.js:<line>:<column>: <reason>`. With
+   `RunEnvironment::allowed_operations` (the permission gate), every
+   operation found must be one of them, or the run fails the same way
+   before anything is sent;
+2. runs it with one tool per catalog operation, of which only those found
+   may run: the interpreter's `tool.before` hook refuses the rest;
+3. sends each call through the generated SDK method itself (only the
+   program's `path`, `query` and `body` reach it, and each path parameter
+   must be one segment: no object, `.` or `..`), naming its operation to
+   `fetch`, which adds the usual headers and the operation's verb, reports
+   progress and applies the `allowed_operations` backstop (operation,
+   method, host, route and route rivals) as for OCaml.
+
+The token stays in the bootstrap: no value the program can reach holds it,
+and tool results cross back as JSON. An error response throws
+`HTTP <status>: <body>` to the program. The interpreter stops at the run's
+deadline less 500 ms, so its logs still arrive and the run ends `TimedOut`;
+it allows 256 tool calls and keeps at most a frame's worth of result and
+logs. A JS tools program can't run unattended. The bootstrap gives the
+interpreter back the timers it schedules with; the program has none.
+
+`src/outbound/deno/js_tools_analyze.mjs` is the analyzer as a process, for
+the permission gate: beside `js-tools.mjs` and `js-tools.json`, run with
+the deny flags plus `--deny-net` and `--allow-read=<its directory>`, it reads
+the source on stdin and prints one line of JSON in `macro_sdk_calls --json`'s
+shape, plus a `diagnostics` status (its header has the interface). Analysis
+takes about 0.1 s in a fresh process; a run adds about 0.1 s to load the
+bundle and catalog.
+
 ## Unattended programs
 
 A host can run a program with nobody watching (a routine step) by setting
@@ -166,7 +227,8 @@ fingerprint stays valid until it changes.
 | Concurrent Deno executions per harness replica | 8 (public MCP: 4 more) |
 | Additional queued executions | 16 (public MCP: 8 more) |
 | Total execution lifetime, including queueing, OCaml compiling and API calls | 30 seconds |
-| JavaScript or OCaml source | 64 KiB |
+| JavaScript, OCaml or JS tools source | 64 KiB |
+| Tool calls per JS tools run | 256 |
 | Model-facing result (larger `data` is summarized; an unattended one fails) | 64 KiB |
 | Child frame | 256 KiB |
 | Combined program stdout/stderr | 2 MiB |
@@ -221,4 +283,6 @@ Handlebars, plain JavaScript entry modules, filesystem/import/process/network
 restrictions including redirects, output bounds, cancellation, deadlines,
 backpressure, and cleanup, and the same for OCaml programs plus compiling,
 the policy check, the compile memory cap and timeouts while compiling (they need
-`CODE_MODE_OCAML_DIR`, see `AGENTS.md`). It makes no model-provider calls.
+`CODE_MODE_OCAML_DIR`, see `AGENTS.md`), and for JS tools programs plus their
+analysis, the gate's backstops and the analyzer process. It makes no
+model-provider calls.

@@ -2,8 +2,9 @@
 
 ## Scope
 
-Runs a bounded JavaScript program, or an OCaml program compiled to
-WebAssembly first, in a fresh Deno process inside the calling service.
+Runs a bounded JavaScript program, an OCaml program compiled to
+WebAssembly first, or a JS tools program in `@opencode/codemode`'s
+interpreter, in a fresh Deno process inside the calling service.
 Session authentication, token issuance and execution storage belong to
 `crates/agent_code_mode` and its composition root.
 
@@ -23,6 +24,10 @@ Session authentication, token issuance and execution storage belong to
   agent permissions gate.
 - `src/domain/operations.rs`: the generated operation catalog (labels, routes,
   read or write) and the SDK fingerprint.
+- JS tools programs: `runJsTools` and `callTool` in `bootstrap.mjs`;
+  `src/outbound/deno/js_tools_analyze.mjs`, the analyzer as a process for the
+  permission gate (interface in its header); tests in
+  `src/outbound/deno/test/js_tools.rs`.
 
 ## Gotchas
 
@@ -63,16 +68,29 @@ without one they fail saying so. The bootstrap evaluates wasm_of_ocaml's
 loader by splitting it after its first statement (`(Object));`), so a
 wasm_of_ocaml upgrade that changes the loader's shape fails every OCaml test
 with "unexpected wasm_of_ocaml loader shape". `RunEnvironment::allowed_operations`
-(set by the permission gate, OCaml only; a JavaScript run carrying it fails)
-makes the bootstrap refuse any OCaml request whose `macroSdkOperation`
+(set by the permission gate, OCaml and JS tools only; a JavaScript run carrying
+it fails) makes the bootstrap refuse any OCaml or JS tools request whose `macroSdkOperation`
 service, raw `operationId`, method, host and route don't match one of them,
 or whose path a more specific rival route also matches (a parameter equal to a
 sibling's literal segment, `/documents/{}` reaching `/documents/system_skills`;
 the analyzer lists each call's `rivals`, from the SDK's routes only: a
 route a service serves outside its OpenAPI spec is not one), reporting it as
-`refused` activity; `None` sends everything as before. The policy check
+`refused` activity; `None` sends everything as before for OCaml, and a JS
+tools run without it never starts (`DenoRunner` refuses it, and the bootstrap
+again). The policy check
 (`packages/sdk-ocaml/code_mode/policy`) is defense in depth: keep the Deno
 flags the boundary for OCaml as for JavaScript.
+
+A JS tools run analyzes `main.js` again with the same `js-tools.mjs` the gate
+used and refuses one that may call outside `allowed_operations` before it
+starts; the interpreter's `tool.before` hook admits only what the analysis
+found. Its Deno flags are a JavaScript run's, exactly
+(`js_tools_runs_get_exactly_a_javascript_runs_deno_flags`): keep them so.
+The bootstrap bans timers for JavaScript but gives them back to a JS tools
+run, whose interpreter (Effect) schedules with them; the program has none.
+`callTool` calls the generated SDK method from the client's prototype, not
+the SDK's observed wrapper (which demands a display verb that unwrapped
+operations lack), so `fetch` reports it like an OCaml request.
 
 ## Checks
 
@@ -81,5 +99,6 @@ flags the boundary for OCaml as for JavaScript.
   The OCaml tests (`src/outbound/deno/test/ocaml.rs`) also need the bundle:
   `CODE_MODE_OCAML_DIR=$(nix build --no-link --print-out-paths .#code-mode-ocaml)`
   set for the build. Every isolation test of the JavaScript path has an OCaml
-  twin there or is listed as not applying in that file's header; add one
-  with each new one.
+  twin there and a JS tools twin in `src/outbound/deno/test/js_tools.rs`, or
+  is listed as not applying in that file's header; add one with each new
+  one.

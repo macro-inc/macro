@@ -96,6 +96,9 @@ stacks. Process isolation belongs to
   bundle's `sdkFingerprint`, all in the `agent_code_execution.record` JSON,
   so no migration. The flag must be created in PostHog at 0% before anyone
   can be targeted. The public MCP's `UserExecuteCode` stays JavaScript only.
+  `code_execution` can also run JS tools programs (`Language::JsTools`), but
+  sessions aren't offered them yet: `execute` refuses one before minting a
+  credential, and `ProgramLanguage` has no such value.
 - `src/inbound/toolset.rs`: `toolset()` for sessions, `toolset_with_ocaml()`
   for a session that may run OCaml (`session_toolset` picks; its description
   adds `toolset/session/ocaml.md`, the `Code_mode.run` contract and one

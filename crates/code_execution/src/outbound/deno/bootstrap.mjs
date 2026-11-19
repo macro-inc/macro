@@ -69,6 +69,9 @@ globalThis.console = {
 const sleepBanned = (name) => function () {
   throw new Error(`${name} is unavailable in ExecuteCode: do not sleep or poll in a program. Finish this execution, and to check back later create a routine with macro.routines.create.`);
 };
+// The interpreter JS tools programs run in schedules its own work with
+// timers, and gives programs none: those runs get them back.
+const hostTimers = {setTimeout, setInterval, setImmediate};
 for (const name of ["setTimeout", "setInterval", "setImmediate", "Worker"]) globalThis[name] = sleepBanned(name);
 AbortSignal.timeout = sleepBanned("AbortSignal.timeout");
 Atomics.wait = sleepBanned("Atomics.wait");
@@ -180,8 +183,70 @@ async function runOcaml(context, assets) {
   }
   return parse(frame);
 }
+// A JS tools program refused before it ran: it doesn't parse, or the
+// analysis can't see everything it may call. Reported like a compile error.
+class ProgramRefused extends Error {}
+// A JS tools program the interpreter stopped at its deadline, which it keeps
+// a little before the run's, so its logs still arrive.
+class ProgramTimedOut extends Error {}
+// Where in main.js a diagnostic is, as `main.js:<line>:<column>: ` (both
+// 1-based); `location.column` is 0-based.
+const at = location => location ? `main.js:${location.line}:${location.column + 1}: ` : "main.js: ";
+// Runs a JS tools program (main.js) in @opencode/codemode's interpreter
+// (js-tools.mjs), which has no fetch, no Deno and no imports: its only way
+// out is a tool call, and `callTool` sends it. The program is analyzed
+// first with the same bundle the permission gate analyzed it with, and only
+// the operations found may run (the interpreter's tool.before hook), and
+// `allowedOperations`, the ones the gate checked it to call, must cover them
+// all. A run without them never starts (DenoRunner refuses it first).
+async function runJsTools(context, limits, allowedOperations, callTool) {
+  if (!isArray(allowedOperations)) {
+    throw new Error("JS tools programs run only with the operations they were checked to call");
+  }
+  const jsTools = await import(new URL("./js-tools.mjs", import.meta.url).href);
+  const catalog = parse(Deno.readTextFileSync(new URL("./js-tools.json", import.meta.url)));
+  const source = Deno.readTextFileSync(new URL("./main.js", import.meta.url));
+  const analysis = jsTools.analyze(source, jsTools.toolsByPath(catalog));
+  if (analysis.status === "diagnostics") {
+    throw new ProgramRefused(analysis.diagnostics.map(diagnostic => `${at(diagnostic.location)}${diagnostic.message}`).join("\n"));
+  }
+  if (analysis.status !== "ok") {
+    throw new ProgramRefused(analysis.reasons.map(reason => `${at(reason.location)}${reason.message}`).join("\n"));
+  }
+  const unchecked = analysis.operations.filter(found => !allowedOperations.some(call =>
+    call.service === found.service && call.operationId === found.operation &&
+    call.method === found.method && call.route === found.route));
+  if (unchecked.length > 0) {
+    throw new ProgramRefused(`${at()}the program calls ${unchecked.map(found => `tools.${found.path}`).join(", ")}, which it wasn't checked to call; it changed after it was checked.`);
+  }
+  const runtime = jsTools.makeRuntime({
+    catalog,
+    admitted: new Set(analysis.operations.map(found => found.path)),
+    call: callTool,
+    limits,
+  });
+  const result = await runtime.execute(source, {
+    context: {sessionId: context.sessionId ?? null, executionId: context.executionId ?? null, webAppUrl: context.webAppUrl},
+  });
+  // The interpreter bounds its logs' text, not their frames: JSON escaping
+  // can make a line up to six times longer, so a line over a frame is cut
+  // to what fits escaped.
+  const fitted = message => {
+    const frame = encoder.encode(stringify({type: "log", level: "info", message})).length;
+    return frame <= limits.maxOutputBytes ? message : message.slice(0, Math.floor((limits.maxOutputBytes - 64) / 6));
+  };
+  for (const message of result.logs ?? []) emit({type: "log", level: "info", message: fitted(message)});
+  for (const warning of result.warnings ?? []) emit({type: "log", level: "warn", message: fitted(warning.message)});
+  if (!result.ok) {
+    const {kind, message} = result.error;
+    if (kind === "ParseError" || kind === "UnsupportedSyntax") throw new ProgramRefused(`${at(result.error.location && {line: result.error.location.line, column: result.error.location.column - 1})}${message}`);
+    if (kind === "TimeoutExceeded") throw new ProgramTimedOut(message);
+    throw new Error(`${kind}: ${message}`);
+  }
+  return {data: result.value};
+}
 try {
-  const {maxResultBytes, operations, unattended, language, ocamlAssets, allowedOperations, ...context} = await new Response(Deno.stdin.readable).json();
+  const {maxResultBytes, operations, unattended, language, ocamlAssets, allowedOperations, jsTools, ...context} = await new Response(Deno.stdin.readable).json();
   // The requests an OCaml program was checked to send (the permission gate);
   // absent, every request goes as before. Each is matched by its operation
   // and by where it goes: method, the service's host and the route. A
@@ -209,7 +274,7 @@ try {
     }
     return false;
   };
-  const allowed = language === "ocaml" && Array.isArray(allowedOperations)
+  const allowed = (language === "ocaml" || language === "js_tools") && isArray(allowedOperations)
     ? allowedOperations.map(call => ({
       ...call,
       ...target(call.service, String(call.route)),
@@ -276,12 +341,12 @@ try {
     }
     return originalFetch(request);
   };
-  // The OCaml SDK names each call's operation on fetch itself
-  // (init.macroSdkOperation, see packages/sdk-ocaml/fetch); the TypeScript
-  // SDK reports the same events and asks the same gate from inside. Ids
-  // are numbers, as the TypeScript SDK's are: the host's activity reads
-  // only those.
-  let nextOcamlRequest = 0;
+  // The OCaml SDK and a JS tools call name each call's operation on fetch
+  // itself (init.macroSdkOperation, see packages/sdk-ocaml/fetch and
+  // callTool); the TypeScript SDK reports the same events and asks the same
+  // gate from inside. Ids are numbers, as the TypeScript SDK's are: the
+  // host's activity reads only those.
+  let nextNamedRequest = 0;
   globalThis.fetch = async (input, init) => {
     const operation = init?.macroSdkOperation;
     // The gate's backstop: a request outside what the program was checked
@@ -294,12 +359,12 @@ try {
       if (!admitted(operation, request)) {
         const service = String(operation?.service ?? "unknown");
         const operationId = String(operation?.operationId ?? "unknown");
-        if (operation) observe({id: ++nextOcamlRequest, service, operation: String(operation.operation), status: "refused"});
+        if (operation) observe({id: ++nextNamedRequest, service, operation: String(operation.operation), status: "refused"});
         throw new Error(`${service}.${operationId} is outside what this program was checked to call; it was not sent.`);
       }
     }
-    if (language !== "ocaml" || !operation) return sendRequest(input, init);
-    const event = {id: ++nextOcamlRequest, service: String(operation.service), operation: String(operation.operation)};
+    if (!language || !operation) return sendRequest(input, init);
+    const event = {id: ++nextNamedRequest, service: String(operation.service), operation: String(operation.operation)};
     if (dryRun && catalog.get(`${event.service}.${event.operation}`)?.write !== false) {
       observe({...event, status: "skipped"});
       return Response.json({});
@@ -319,9 +384,10 @@ try {
   // permissions. Compute this specifier so the entire generated graph is loaded
   // at runtime and every local module read requires the scratch permission.
   const program = new URL(unattended ? "./main.ts" : "./main.mjs", import.meta.url).href;
-  if (unattended) {
-    // A dry run's backstop lives in fetch; nothing else may reach the
-    // network (raw sockets) or start a realm with its own fetch (workers).
+  if (unattended || language === "js_tools") {
+    // A dry run's and the permission gate's backstop lives in fetch; nothing
+    // else may reach the network (raw sockets) or start a realm with its
+    // own fetch (workers).
     for (const name of ["connect", "connectTls", "startTls"]) Object.defineProperty(Deno, name, {value: undefined});
     globalThis.Worker = undefined;
   }
@@ -337,6 +403,32 @@ try {
     }, ocamlAssets);
     if (frame.type !== "result") throw new Error(String(frame.message));
     value = frame.value;
+  } else if (language === "js_tools") {
+    // One tool call: the generated SDK method itself, not the SDK's observed
+    // wrapper, so this process's fetch reports and gates it as a named
+    // request, as it does OCaml's. Only the method's path, query and body
+    // come from the program (the runtime picks them); the credential and
+    // hosts stay in `macro`.
+    const callTool = async (tool, input) => {
+      const sdk = macro._client[tool.client];
+      const prototype = sdk && Object.getPrototypeOf(sdk);
+      if (!prototype || !hasOwn(prototype, tool.method)) throw new Error(`tools.${tool.path.join(".")} has no SDK method`);
+      const operation = {service: tool.service, operation: tool.method, operationId: tool.operationId};
+      const {data, error, response} = await prototype[tool.method].call(sdk, {
+        ...input,
+        headers: tool.verb ? {"x-macro-sdk-verb": tool.verb} : {},
+        fetch: request => fetch(request, {macroSdkOperation: operation}),
+      });
+      // A request that never got an answer (refused here, or unreachable)
+      // comes back as the Error; an error response as its parsed body.
+      if (error instanceof Error) throw error;
+      if (error !== undefined || !response?.ok) {
+        throw new Error(`HTTP ${response?.status}: ${cut(stringify(error) ?? "", 2048)}`);
+      }
+      return data ?? null;
+    };
+    Object.assign(globalThis, hostTimers);
+    value = await runJsTools(context, jsTools, allowedOperations, callTool);
   } else if (unattended) {
     const { main } = await import(program);
     if (typeof main !== "function") throw new Error("Export an async main(context: StepContext) function.");
@@ -363,6 +455,8 @@ try {
   }
   exit(0);
 } catch (error) {
-  emit({type: "error", message: String(error)});
+  if (error instanceof ProgramRefused) emit({type: "error", message: error.message, failure: "compile"});
+  else if (error instanceof ProgramTimedOut) emit({type: "error", message: error.message, failure: "timed_out"});
+  else emit({type: "error", message: String(error)});
   exit(0);
 }

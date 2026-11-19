@@ -42,6 +42,11 @@ through `apps/web/src/features/agent-permissions/core/registry.ts`.
 - `nix-shell shell.nix --run "dune build && dune test"` in
   `packages/sdk-ocaml`: `analyzer/test/test_registry.ml` fails on an
   unclassified operation or one that no longer exists (CI: `OCaml SDK Check`).
+- `bun run test` in `packages/code-mode-sdk`: generating the JS tools catalog
+  fails on an operation without a line here, and `catalog.test.ts` fails on
+  a line for an operation of the TypeScript SDK's services that is neither a
+  tool nor skipped. A JS tools program calls an operation as
+  `tools.<service with - written _>.<operationId>`.
 
 ## Gotchas
 

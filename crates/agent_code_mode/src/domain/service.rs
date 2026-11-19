@@ -108,6 +108,7 @@ impl CodeModeService {
         &self,
         mut identity: ExecutionIdentity,
         execution: ExecutionId,
+        language: ProgramLanguage,
         request: ExecuteRequest,
         cancel: CancellationToken,
     ) -> Result<ExecutionReceipt, CodeModeError> {
@@ -116,8 +117,8 @@ impl CodeModeService {
             acting_as: Some(identity.acting_as),
             turn_id: Some(identity.turn),
             source: request.source.clone(),
-            language: request.language.into(),
-            sdk_fingerprint: self.sdk_fingerprint(request.language.into()),
+            language,
+            sdk_fingerprint: self.sdk_fingerprint(language),
             status: ExecutionStatus::Running,
             result: None,
             error: None,
@@ -522,7 +523,10 @@ impl SessionCodeMode for CodeModeService {
                     .into(),
             ));
         }
-        let language = ProgramLanguage::from(request.language);
+        // JS tools programs are not offered to sessions yet.
+        let language = ProgramLanguage::try_from(request.language).map_err(|unoffered| {
+            CodeModeError::Invalid(format!("{unoffered}; write a JavaScript module."))
+        })?;
         let permit = Arc::clone(&self.0.admission)
             .try_acquire_owned()
             .map_err(|_| CodeModeError::Busy)?;
@@ -555,7 +559,9 @@ impl SessionCodeMode for CodeModeService {
         tokio::spawn(
             async move {
                 let _permit = permit;
-                let result = service.run(identity, execution, request, cancel).await;
+                let result = service
+                    .run(identity, execution, language, request, cancel)
+                    .await;
                 match &result {
                     Ok(receipt) => {
                         let span = tracing::Span::current();
@@ -710,6 +716,7 @@ pub(super) fn validate_request(request: &ExecuteRequest) -> Result<(), CodeModeE
         return Err(CodeModeError::Invalid(match request.language {
             Language::Javascript => "Provide a nonempty JavaScript module exporting main() of at most 64 KiB and timeout_ms between 1 and 30000.",
             Language::Ocaml => "Provide a nonempty OCaml program calling Code_mode.run of at most 64 KiB and timeout_ms between 1 and 30000.",
+            Language::JsTools => "Provide a nonempty JS tools program of at most 64 KiB and timeout_ms between 1 and 30000.",
         }.into()));
     }
     Ok(())

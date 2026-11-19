@@ -64,23 +64,6 @@ async fn run_ocaml(
     .await
 }
 
-fn failure(outcome: &Outcome) -> &ExecutionFailure {
-    match outcome {
-        Outcome::Failed { error } => error,
-        other => panic!("expected a failure, got {other:?}"),
-    }
-}
-
-fn progress(events: &[ExecutionEvent]) -> Vec<&serde_json::Value> {
-    events
-        .iter()
-        .filter_map(|event| match &event.kind {
-            EventKind::Progress { value } => Some(value),
-            _ => None,
-        })
-        .collect()
-}
-
 /// A program `ocamlc` takes far longer than any test's deadline to
 /// compile: the exhaustiveness check of a 26-column diagonal match is
 /// exponential (n=22 takes 3 s).
