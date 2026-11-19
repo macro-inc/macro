@@ -147,7 +147,7 @@ impl IdentityLinkAttempts for PgIdentityLinkAttempts {
         // The address got an account of its own, whose sign-in the identity
         // now is, or the requester connected the inbox after all.
         Ok(sqlx::query_scalar!(
-            r#"SELECT EXISTS(SELECT 1 FROM "User" WHERE email = $1)
+            r#"SELECT EXISTS(SELECT 1 FROM "User" WHERE lower(email) = lower($1))
                 OR EXISTS(SELECT 1 FROM email_links WHERE lower(email_address) = lower($1)
                     AND provider = 'GMAIL' AND fusionauth_user_id = $2) AS "backed!""#,
             attempt.email,

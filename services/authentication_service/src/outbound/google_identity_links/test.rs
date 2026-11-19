@@ -92,10 +92,10 @@ async fn a_link_is_still_needed_by_the_addresss_account_or_the_requesters_inbox(
 
     assert!(
         attempts
-            .still_needed(&attempt("own@example.com"))
+            .still_needed(&attempt("Own@Example.com"))
             .await
             .unwrap(),
-        "the address's own account signs in with it"
+        "the address's own account signs in with it, whatever the case"
     );
     assert!(
         attempts
