@@ -7,7 +7,10 @@ import WarningCircleIcon from '@icon/system/regular/warning-circle.svg';
 import { Button } from '@ui';
 import { type Component, type ComponentProps, type JSX, Show } from 'solid-js';
 
-/** Permissions only cover the agent's OCaml programs, not JavaScript ones. */
+/**
+ * Permissions only cover the programs the harness checks before they run
+ * (OCaml and JS tools), not the agent's plain JavaScript ones.
+ */
 export function PermissionsScopeNote(props: { agent: string }) {
   return (
     <p class="flex gap-2.5 rounded-xl border border-edge-muted px-3.5 py-2.5 text-sm leading-relaxed text-ink-muted">
