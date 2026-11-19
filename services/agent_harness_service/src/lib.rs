@@ -180,6 +180,7 @@ use model_providers::{
 };
 use permission_policy::PgPermissionPolicySource;
 use pipedream_mcp::outbound::api::{PipedreamClient, PipedreamConfig};
+use pipedream_mcp::outbound::connect::ConnectAdapter;
 use pipedream_mcp::outbound::dispatch::ConnectorBackends;
 use pipedream_mcp::outbound::pg_connection_repo::PgConnectionRepo;
 use rdkafka::consumer::CommitMode;
@@ -545,17 +546,27 @@ pub async fn run() -> anyhow::Result<()> {
     .context("failed to build Pipedream client")?;
     // Grants held by Macro Connect are reached through its MCP gateway; a
     // user on Connect alone gets no Pipedream grant.
-    let mut connectors = ConnectorBackends::new(
-        Arc::new(pipedream),
-        ai_tools::connect_adapter(config.connect_customer_key.value())?,
-    );
-    if let Some(rollout) = ai_tools::macro_connect_rollout(
+    let connect = ai_tools::connect_adapter(config.connect_customer_key.value())?;
+    let connect_rollout = ai_tools::macro_connect_rollout(
         config.posthog_api_key.value(),
         config.posthog_host.value(),
         config.environment,
-    )? {
-        connectors = connectors.with_rollout(rollout);
-    }
+    )?;
+    let pipedream = Arc::new(pipedream);
+    let backends = |connect: Option<Arc<ConnectAdapter>>| {
+        let backends = ConnectorBackends::new(Arc::clone(&pipedream), connect);
+        match &connect_rollout {
+            Some(rollout) => backends.with_rollout(Arc::clone(rollout)),
+            None => backends,
+        }
+    };
+    // Routines count the grants these same backends dispatch, so they ask
+    // them who is on Connect alone and which apps Connect serves; `None`
+    // where Connect isn't configured.
+    let routine_connect = connect
+        .clone()
+        .map(|connect| Arc::new(backends(Some(connect))));
+    let connectors = backends(connect);
 
     // Session egress reaches only public addresses, except on a local stack
     // whose MCP and preview services sit on the compose network.
@@ -795,6 +806,7 @@ pub async fn run() -> anyhow::Result<()> {
             config.document_storage_service_auth_key.clone(),
             macro_service_urls::DocumentStorageServiceUrl::new()?.to_string(),
         ),
+        routine_connect.clone(),
     )
     .await?;
     let scheduling_router = scheduling_runtime.router.clone();
@@ -1775,13 +1787,23 @@ pub async fn run() -> anyhow::Result<()> {
     let runtime_command_runtimes = Arc::clone(&runtimes);
     // The replica holding an agent computer's socket issues its agent's
     // environment; it never crosses the runtime bus. The authentication
-    // service checks its own internal key, not ours.
-    let runtime_command_agents: Arc<dyn hosted_runtimes::domain::agent::AgentEnrollmentSource> =
-        Arc::new(computers::agent_enrollment::AuthAgentEnrollment::new(
-            config.authentication_service_secret_key.as_ref(),
-        )?);
+    // service checks its own internal key, not ours. Only a deployment that
+    // drives a fleet hands agents over, so nothing here can fail startup
+    // without one.
+    let runtime_command_agents: Option<
+        Arc<dyn hosted_runtimes::domain::agent::AgentEnrollmentSource>,
+    > = match &computer_operator {
+        Some(_) => Some(Arc::new(
+            computers::agent_enrollment::AuthAgentEnrollment::new(
+                config.authentication_service_secret_key.as_ref(),
+            )?,
+        )),
+        None => None,
+    };
     let (runtime_commands_ready, mut runtime_commands_readiness) =
         tokio::sync::watch::channel(false);
+    // Outside the retry: a resubscription must not forget what was issued.
+    let runtime_command_issued = Arc::new(runtime_commands::IssuedAgents::default());
     let runtime_commands = tokio::spawn(async move {
         let result = Retry::start(
             FixedInterval::new(std::time::Duration::from_secs(1))
@@ -1800,11 +1822,17 @@ pub async fn run() -> anyhow::Result<()> {
                     runtime_command_models.clone(),
                     {
                         let runtimes = Arc::clone(&runtime_command_runtimes);
-                        let agents = Arc::clone(&runtime_command_agents);
+                        let agents = runtime_command_agents.clone();
+                        let issued = Arc::clone(&runtime_command_issued);
                         Arc::new(move |request| {
-                            let connected = {
+                            let Some(agents) = agents.clone() else {
+                                tracing::warn!(computer_id = %request.computer_id,
+                                    "an agent hand-off reached a deployment without a fleet; ignoring it");
+                                return Box::pin(async {});
+                            };
+                            let connection_of = {
                                 let runtimes = Arc::clone(&runtimes);
-                                Arc::new(move |harness| runtimes.is_connected(harness))
+                                Arc::new(move |harness| runtimes.connection_of(harness))
                             };
                             let send: runtime_commands::SendAgent = {
                                 let runtimes = Arc::clone(&runtimes);
@@ -1817,8 +1845,9 @@ pub async fn run() -> anyhow::Result<()> {
                             };
                             Box::pin(runtime_commands::deliver_agent_to_runtime(
                                 request,
-                                Arc::clone(&agents),
-                                connected,
+                                agents,
+                                Arc::clone(&issued),
+                                connection_of,
                                 send,
                             ))
                         })
@@ -1954,7 +1983,10 @@ pub async fn run() -> anyhow::Result<()> {
             session_repo.clone(),
             PgHarnessRepo::new(pool.clone()),
         ),
-        PgConnectionRepo::new(pool.clone()),
+        routine_sessions::PipedreamConnectedApps::new(
+            PgConnectionRepo::new(pool.clone()),
+            routine_connect.clone(),
+        ),
         MacroAuthorizationState::new(Arc::new(authorization_service.clone())),
     );
     let coding_agents = coding_agents::router(
@@ -1978,7 +2010,10 @@ pub async fn run() -> anyhow::Result<()> {
             ),
             draining_sessions.clone(),
             (*harness).clone(),
-            routine_sessions::PipedreamConnectedApps(PgConnectionRepo::new(pool.clone())),
+            routine_sessions::PipedreamConnectedApps::new(
+                PgConnectionRepo::new(pool.clone()),
+                routine_connect.clone(),
+            ),
         ),
         session_repo.clone(),
         MacroAuthorizationState::new(Arc::new(authorization_service.clone())),

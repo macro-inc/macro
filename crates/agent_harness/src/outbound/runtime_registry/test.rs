@@ -245,6 +245,7 @@ impl HarnessPresence for RecordingPresence {
         self: Arc<Self>,
         _harness: HarnessId,
         connection: RuntimeConnectionId,
+        _accepts: RuntimeAccepts,
     ) -> std::pin::Pin<Box<dyn Future<Output = ConnectionRecorded> + Send>> {
         Box::pin(async move {
             self.events
@@ -335,6 +336,7 @@ async fn a_close_waits_for_its_own_connected_write() {
         connection: RuntimeConnection::connect(runtime.clone()),
         accepts: RuntimeAccepts {
             agents_changed: true,
+            apply_agent: false,
         },
     };
     registry
@@ -395,6 +397,7 @@ async fn a_dial_that_binds_an_agent_tells_its_runtime_its_agents_changed() {
         connection: RuntimeConnection::connect(runtime.clone()),
         accepts: RuntimeAccepts {
             agents_changed: true,
+            apply_agent: false,
         },
     };
 
@@ -451,6 +454,7 @@ async fn a_dial_that_binds_nothing_sends_its_runtime_nothing() {
         connection: RuntimeConnection::connect(runtime.clone()),
         accepts: RuntimeAccepts {
             agents_changed: true,
+            apply_agent: false,
         },
     };
 

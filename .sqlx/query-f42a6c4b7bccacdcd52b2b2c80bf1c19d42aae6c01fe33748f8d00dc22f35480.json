@@ -1,0 +1,26 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "SELECT\n             (SELECT count(*) FROM scheduling_booking\n               WHERE profile_id = $1 AND starts_at >= $3 AND starts_at < $4\n                 AND event_type_id = $2 AND status <> 'cancelled'\n                 AND ($5::uuid IS NULL OR id <> $5))\n           + (SELECT count(*) FROM scheduling_booking\n               WHERE profile_id = $1 AND status = 'processing'\n                 AND event_type_id = $2\n                 AND ($5::uuid IS NULL OR id <> $5)\n                 AND NOT (starts_at >= $3 AND starts_at < $4)\n                 AND record->'operation'->>'attempt' = '0'\n                 AND record->'operation'->'kind'->>'kind' = 'move'\n                 AND (record->'operation'->'kind'->>'original_start')::timestamptz >= $3\n                 AND (record->'operation'->'kind'->>'original_start')::timestamptz < $4)\n           AS \"count!\"",
+  "describe": {
+    "columns": [
+      {
+        "ordinal": 0,
+        "name": "count!",
+        "type_info": "Int8"
+      }
+    ],
+    "parameters": {
+      "Left": [
+        "Uuid",
+        "Uuid",
+        "Timestamptz",
+        "Timestamptz",
+        "Uuid"
+      ]
+    },
+    "nullable": [
+      null
+    ]
+  },
+  "hash": "f42a6c4b7bccacdcd52b2b2c80bf1c19d42aae6c01fe33748f8d00dc22f35480"
+}
