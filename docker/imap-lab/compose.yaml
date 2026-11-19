@@ -1,0 +1,26 @@
+services:
+  localstack:
+    image: localstack/localstack:4
+    environment:
+      SERVICES: kms
+      AWS_DEFAULT_REGION: us-east-1
+    ports:
+      - "127.0.0.1:${IMAP_LAB_KMS_PORT:-35456}:4566"
+  dovecot:
+    image: dovecot/dovecot:2.4.4
+    environment:
+      USER_PASSWORD: pass
+    volumes:
+      - ./dovecot.conf:/etc/dovecot/conf.d/zz-macro-lab.conf:ro
+      - ./generated:/etc/dovecot/lab-tls:ro
+    ports:
+      - "127.0.0.1:${IMAP_LAB_IMAPS_PORT:-35993}:31993"
+      - "127.0.0.1:${IMAP_LAB_STARTTLS_PORT:-35143}:31143"
+      - "127.0.0.1:${IMAP_LAB_SMTPS_PORT:-35465}:31465"
+      - "127.0.0.1:${IMAP_LAB_SUBMISSION_PORT:-35587}:31587"
+    depends_on:
+      - mailpit
+  mailpit:
+    image: axllent/mailpit:v1.20
+    ports:
+      - "127.0.0.1:${IMAP_LAB_MAILPIT_PORT:-35825}:8025"
