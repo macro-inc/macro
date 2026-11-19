@@ -20,7 +20,9 @@ export type {
  * after a person approves), or `never`. Each operation belongs to a group
  * (Documents, Email, ...) and has an action (create, read, update, destroy,
  * send); its state is its own setting, else its group's action setting, else
- * `always`. Permissions apply to OCaml `ExecuteCode` programs.
+ * `always`. An operation setting the agent made only adds to its group's: it
+ * takes the stricter of the two. Permissions apply to OCaml `ExecuteCode`
+ * programs.
  */
 export type ToolPermissions = Omit<AgentToolPermissions, 'agentId'> & {
   /** The agent (or built-in persona) the permissions belong to. */

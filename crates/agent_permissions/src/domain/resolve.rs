@@ -1,11 +1,14 @@
 //! Resolution: what state each operation has under a policy's saved settings
 //! and a session's overlay, the view built from it, and the tighten-only rule.
 //!
-//! An operation's state is its own setting if it has one, else its group's
-//! action setting, else always. The session overlay is resolved the same way
-//! and can only add restrictions: the effective state is the stricter of the
-//! two. Nothing is inferred: a new operation takes its group's action setting
-//! and a new group has no settings, so it is always.
+//! An operation's state is its own setting if a person made it, else its
+//! group's action setting, else always. An operation setting the agent made
+//! by restricting itself only adds to its group's action: it takes the
+//! stricter of the two, so a person's later, stricter group setting still
+//! applies to it. The session overlay is the agent's too and can only add
+//! restrictions: the effective state is the stricter of the saved state and
+//! the overlay's. Nothing is inferred: a new operation takes its group's
+//! action setting and a new group has no settings, so it is always.
 
 #[cfg(test)]
 mod test;
@@ -27,7 +30,14 @@ use super::model::{
 #[derive(Debug, Default)]
 pub struct Layer<'a> {
     group_actions: HashMap<(&'a str, Action), PermissionState>,
-    tools: HashMap<(&'a str, &'a str), PermissionState>,
+    tools: HashMap<(&'a str, &'a str), ToolSetting>,
+}
+
+/// An operation's own setting, and whether the agent made it.
+#[derive(Debug, Clone, Copy)]
+struct ToolSetting {
+    state: PermissionState,
+    via_agent: bool,
 }
 
 impl<'a> Layer<'a> {
@@ -42,9 +52,13 @@ impl<'a> Layer<'a> {
                         .insert((group.as_str(), *action), rule.state);
                 }
                 Target::Tool { service, operation } => {
-                    layer
-                        .tools
-                        .insert((service.as_str(), operation.as_str()), rule.state);
+                    layer.tools.insert(
+                        (service.as_str(), operation.as_str()),
+                        ToolSetting {
+                            state: rule.state,
+                            via_agent: rule.via_agent,
+                        },
+                    );
                 }
             }
         }
@@ -55,7 +69,7 @@ impl<'a> Layer<'a> {
         self.group_actions.get(&(group, action)).copied()
     }
 
-    fn tool(&self, entry: &CatalogEntry) -> Option<PermissionState> {
+    fn tool(&self, entry: &CatalogEntry) -> Option<ToolSetting> {
         self.tools
             .get(&(entry.service.as_str(), entry.operation.as_str()))
             .copied()
@@ -91,16 +105,31 @@ pub fn effective(
     overlay: &Layer,
     entry: &CatalogEntry,
 ) -> (PermissionState, Origin) {
-    let (base, origin) = match saved.tool(entry) {
-        Some(state) => (state, Origin::Tool),
-        None => match saved.group_action(&entry.group, entry.action) {
-            Some(state) => (state, Origin::GroupAction),
-            None => (PermissionState::Always, Origin::Default),
-        },
+    let group = match saved.group_action(&entry.group, entry.action) {
+        Some(state) => (state, Origin::GroupAction),
+        None => (PermissionState::Always, Origin::Default),
     };
+    let (base, origin) = match saved.tool(entry) {
+        // A person's setting on the operation replaces its group's.
+        Some(ToolSetting {
+            state,
+            via_agent: false,
+        }) => (state, Origin::Tool),
+        // The agent's only adds to it: a stricter group setting still wins.
+        Some(ToolSetting {
+            state,
+            via_agent: true,
+        }) if state > group.0 => (state, Origin::Tool),
+        Some(_) | None => group,
+    };
+    // The overlay is all the agent's, so it too is the stricter of the
+    // operation's and its group's.
     let extra = overlay
         .tool(entry)
-        .or_else(|| overlay.group_action(&entry.group, entry.action))
+        .map(|setting| setting.state)
+        .into_iter()
+        .chain(overlay.group_action(&entry.group, entry.action))
+        .max()
         .unwrap_or(PermissionState::Always);
     if extra > base {
         (extra, Origin::Session)
@@ -278,9 +307,9 @@ pub fn normalize(changes: Vec<Change>, restriction: bool) -> Vec<Change> {
 }
 
 /// `rules` with normalized `changes` applied, as the store will hold them,
-/// for resolving before anything is saved. Only targets and states matter to
-/// resolution, so new rules are stamped now and not by the agent.
-pub fn apply(rules: &[Rule], changes: &[Change]) -> Vec<Rule> {
+/// for resolving before anything is saved: `via_agent` as the write will
+/// mark them. New rules are stamped now, which resolution ignores.
+pub fn apply(rules: &[Rule], changes: &[Change], via_agent: bool) -> Vec<Rule> {
     let now = Utc::now();
     let mut applied: Vec<Rule> = rules.to_vec();
     for change in changes {
@@ -289,7 +318,7 @@ pub fn apply(rules: &[Rule], changes: &[Change]) -> Vec<Rule> {
             applied.push(Rule {
                 target: change.target.clone(),
                 state,
-                via_agent: false,
+                via_agent,
                 updated_at: now,
             });
         }
@@ -328,4 +357,59 @@ pub fn tighten_only(
     } else {
         Err(loosened)
     }
+}
+
+/// Refuses a change that asks for a state looser than its target has now:
+/// an operation's own state looser than its effective state, or a group's
+/// action looser than its setting (removing it asks for always). The agent's
+/// setting on an operation only adds to its group's, so the first would be
+/// saved as a no-op; the second would drop a person's setting even where no
+/// operation's state moves today (each operation has its own setting, or the
+/// group has no operations for that action yet), and every operation
+/// resolving through it later would be looser. Both are refused.
+pub fn asks_looser(
+    catalog: &Catalog,
+    (saved, overlay): (&[Rule], &[Rule]),
+    changes: &[Change],
+) -> Result<(), Vec<LoosenedOperation>> {
+    let (saved, overlay) = (Layer::new(saved), Layer::new(overlay));
+    let loosened = |entry: &CatalogEntry, from, to| LoosenedOperation {
+        service: entry.service.clone(),
+        operation: entry.operation.clone(),
+        label: entry.label.clone(),
+        from,
+        to,
+    };
+    let mut refused = false;
+    let mut operations: Vec<LoosenedOperation> = Vec::new();
+    for change in changes {
+        match &change.target {
+            Target::Tool { service, operation } => {
+                let (Some(to), Some(entry)) = (change.state, catalog.entry(service, operation))
+                else {
+                    continue;
+                };
+                let (from, _) = effective(&saved, &overlay, entry);
+                if to < from {
+                    refused = true;
+                    operations.push(loosened(entry, from, to));
+                }
+            }
+            Target::GroupAction { group, action } => {
+                let to = change.state.unwrap_or(PermissionState::Always);
+                let (from, _) = action_state(&saved, &overlay, group, *action);
+                if to < from {
+                    refused = true;
+                    operations.extend(
+                        catalog
+                            .entries
+                            .iter()
+                            .filter(|entry| entry.group == *group && entry.action == *action)
+                            .map(|entry| loosened(entry, from, to)),
+                    );
+                }
+            }
+        }
+    }
+    if refused { Err(operations) } else { Ok(()) }
 }

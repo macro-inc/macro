@@ -215,7 +215,7 @@ fn caller(user: MacroUserAuthentication) -> Caller {
     )
 )]
 /// Every group, action and SDK operation an agent permission can name.
-#[tracing::instrument(skip_all, err(Debug))]
+#[tracing::instrument(skip_all, err(Debug, level = "warn"))]
 pub async fn get_catalog_handler<Access, Auth>(
     State(state): State<AgentPermissionsRouterState<Access, Auth>>,
     authorization: MacroAuthorizationExtractor<Auth, UserOnly>,
@@ -258,7 +258,7 @@ where
 )]
 /// An agent's tool permissions: its own when the caller may edit it or is the
 /// agent, the caller's own settings for a built-in persona.
-#[tracing::instrument(skip_all, fields(%agent_id), err(Debug))]
+#[tracing::instrument(skip_all, fields(%agent_id), err(Debug, level = "warn"))]
 pub async fn get_agent_handler<Access, Auth>(
     State(state): State<AgentPermissionsRouterState<Access, Auth>>,
     authorization: MacroAuthorizationExtractor<Auth, UserOnly>,
@@ -295,7 +295,7 @@ where
 /// The tool permissions that apply in a session: its agent's (for a built-in
 /// persona, the session owner's) and the agent's restrictions on itself for
 /// this session (`sessionRules`).
-#[tracing::instrument(skip_all, fields(%session_id), err(Debug))]
+#[tracing::instrument(skip_all, fields(%session_id), err(Debug, level = "warn"))]
 pub async fn get_session_handler<Access, Auth>(
     access: AgentSessionAccessLevelExtractor<ViewAccessLevel, Access, Auth>,
     State(state): State<AgentPermissionsRouterState<Access, Auth>>,
@@ -335,7 +335,7 @@ where
 /// Change an agent's tool permissions in either direction. Only a person
 /// signed in to Macro who may edit the agent; for a built-in persona, the
 /// caller's own settings.
-#[tracing::instrument(skip_all, fields(%agent_id), err(Debug))]
+#[tracing::instrument(skip_all, fields(%agent_id), err(Debug, level = "warn"))]
 pub async fn set_handler<Access, Auth>(
     State(state): State<AgentPermissionsRouterState<Access, Auth>>,
     authorization: MacroAuthorizationExtractor<Auth, UserOnly>,
@@ -378,7 +378,7 @@ where
 /// itself; it is saved to the agent when the person it acts for may edit
 /// it, else to the current session only. Refused when any operation would
 /// become more permissive.
-#[tracing::instrument(skip_all, fields(%agent_id), err(Debug))]
+#[tracing::instrument(skip_all, fields(%agent_id), err(Debug, level = "warn"))]
 pub async fn tighten_handler<Access, Auth>(
     State(state): State<AgentPermissionsRouterState<Access, Auth>>,
     authorization: MacroAuthorizationExtractor<Auth, UserOnly>,
@@ -416,7 +416,7 @@ where
 )]
 /// Reset an agent's tool permissions so everything is always allowed. Only a
 /// person signed in to Macro who may edit the agent.
-#[tracing::instrument(skip_all, fields(%agent_id), err(Debug))]
+#[tracing::instrument(skip_all, fields(%agent_id), err(Debug, level = "warn"))]
 pub async fn reset_handler<Access, Auth>(
     State(state): State<AgentPermissionsRouterState<Access, Auth>>,
     authorization: MacroAuthorizationExtractor<Auth, UserOnly>,
