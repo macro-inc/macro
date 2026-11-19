@@ -7,8 +7,8 @@ use ai_billing::AiAdmissionError;
 use serde_json::{Value, json};
 
 use super::super::test::{
-    BUG_REPORTS, Rows, Sessions, Turn, agent, code_step, configuration, context, message_posted,
-    owner, plain, routine,
+    BUG_REPORTS, Connected, Rows, Sessions, Turn, agent, app, code_step, configuration, context,
+    message_posted, owner, plain, routine,
 };
 use super::super::{Draft, DraftedRoutine, RoutineDrafts};
 use super::*;
@@ -1059,4 +1059,27 @@ fn a_kind_one_name_couldnt_be_read_for_leaves_only_that_name_unknown() {
             .collect::<Vec<_>>(),
         ["Roadmap"]
     );
+}
+
+/// A found draft's prompt lists the apps its owner connected; its
+/// instructions, which every draft shares, never do.
+#[tokio::test(start_paused = true)]
+async fn the_apps_its_owner_connected_are_in_the_prompt_not_the_instructions() {
+    let model = Arc::new(Model::finding(named(&[])));
+    let (drafts, sessions, _) = finding(
+        &model,
+        &Arc::new(Names::default()),
+        Box::new(|_| Vec::new()),
+    );
+    let drafts = drafts.with_apps(Arc::new(Connected(Some(vec![app("linear", "Linear")]))));
+
+    draft(&drafts, routine("file each bug in Linear")).await;
+
+    let (instructions, prompt) = briefs(&sessions);
+    assert!(prompt.contains("## Apps they connected"), "{prompt}");
+    assert!(
+        prompt.contains(r#"{ slug: "linear", name: "Linear" }"#),
+        "{prompt}"
+    );
+    assert!(!instructions.unwrap().contains("Linear"));
 }

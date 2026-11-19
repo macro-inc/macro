@@ -28,6 +28,7 @@ fn check(name: &str) -> RoutineCheck {
             description: String::new(),
             appearance: None,
         },
+        missing_apps: Vec::new(),
     }
 }
 

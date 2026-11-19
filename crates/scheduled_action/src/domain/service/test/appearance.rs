@@ -173,6 +173,7 @@ async fn an_unknown_icon_is_refused_with_the_names_to_use() {
             &user_principal(),
             picking(icon("not-an-icon")),
             Vec::new(),
+            Vec::new(),
             None,
         )
         .await

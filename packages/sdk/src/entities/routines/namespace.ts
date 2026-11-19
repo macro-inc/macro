@@ -7,7 +7,13 @@ import type {
 import { unwrap } from '../../utils';
 import type { MacroClient } from '../../utils/client';
 import type { MacroEntityType } from '../entity';
-import { Routine, type RoutineOptions, routineBody } from './routine';
+import {
+  appsBody,
+  Routine,
+  type RoutineApp,
+  type RoutineOptions,
+  routineBody,
+} from './routine';
 import { RoutineSuggestion } from './suggestion';
 
 /** Something created for a routine to use: any handle with an entity type, such as a `Database`. */
@@ -38,6 +44,7 @@ export interface CreatedEntity {
  * - Never do the routine's own work while setting it up; it does its work each time it runs. "Every Monday make a task" makes no task today; "when an email arrives, reply" sends nothing; "post the weekly summary" posts nothing.
  * - In a cron `schedule` (six fields: second minute hour day-of-month month day-of-week), name weekdays MON to SUN: weekday numbers start at 1 = Sunday, so Monday to Friday is `MON-FRI`, never `1-5`.
  * - In code, check the whole routine with `macro.routines.check` before creating it, naming in `created` what you created for it, and fix what it reports until `ok` is true.
+ * - Only an Ask AI step reaches apps outside Macro (Linear, GitHub, Notion…); a code step never does. List in `apps` each one the step uses: a connected app from `macro.connectedApps.list(execution)` (`kind` `app`) as `{ slug: app.key, name: app.name }`. Saving refuses an app the user hasn't connected: tell them to connect it.
  *
  * Events an `events` trigger starts on (`EventName` lists every one):
  *
@@ -189,7 +196,10 @@ export class RoutineNamespace {
    * it would be stored. Check before creating, and fix what it reports.
    * `created` names what you created for the routine to use, such as the
    * database it writes to, so whoever reviews a drafted routine knows it
-   * exists.
+   * exists. `missingApps` names apps the routine's Ask AI step needs that
+   * the user hasn't connected (a connector's `slug` and `name` from
+   * `macro.connectedApps.discover`), which a drafted routine's review asks
+   * them to connect; the check returns them as `missingApps`.
    *
    * @example
    * const check = await macro.routines.check({
@@ -203,8 +213,12 @@ export class RoutineNamespace {
    */
   async check(
     options: RoutineOptions,
-    extra?: { created?: CreatedEntity[] },
+    extra?: {
+      created?: CreatedEntity[];
+      missingApps?: readonly RoutineApp[];
+    },
   ): Promise<RoutineCheck> {
+    const missingApps = appsBody(extra?.missingApps);
     return unwrap(
       await this.client.scheduledAction.checkScheduledAction({
         body: {
@@ -216,6 +230,8 @@ export class RoutineNamespace {
             entityType: item.entityType,
             entityId: item.id,
           })),
+          // Sent only when named, so a check reaches a server without it.
+          ...(missingApps?.length ? { missingApps } : {}),
         },
       }),
     );
