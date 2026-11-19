@@ -49,6 +49,10 @@ read their code, and follow that pattern rather than inventing a new one.
 - Keep tooltips disabled on touch devices, including focus and controlled-open states.
 - Keep `@ui` Button's touch sizing (no `noTouchResize` without cause); rows
   are 44px on touch (`touch:min-h-[44px]`).
+- A tappable list row marks the element that paints it `data-press-surface`
+  (or sits in a `data-soup-entity` row) and gets the shared press grey from
+  `components/app/mobile/rowPress.ts`, with UIKit timing; never add a per-row
+  `active:` tint. A row that navigates calls `holdRowPress` from its click.
 - Long-press goes through the `touchHandler` directive. On scrollable rows,
   selecting or dragging starts only after a long press; dedicated reorder
   handles instead drag after a small movement with no hold delay and reserve

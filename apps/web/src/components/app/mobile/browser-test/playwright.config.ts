@@ -30,5 +30,10 @@ export default defineConfig({
       name: 'phone',
       use: { ...devices['iPhone 13'], defaultBrowserType: 'chromium' },
     },
+    {
+      name: 'tablet',
+      testMatch: 'row-press.browser.e2e.ts',
+      use: { ...devices['iPad Pro 11'], defaultBrowserType: 'chromium' },
+    },
   ],
 });
