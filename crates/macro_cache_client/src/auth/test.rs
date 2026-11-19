@@ -59,8 +59,11 @@ async fn remove_user(cache: &MacroCache, user: &str) -> Vec<String> {
         .get_multiplexed_async_connection()
         .await
         .unwrap();
-    let log: Vec<std::collections::HashMap<String, String>> = redis::cmd("ACL")
+    // The log holds every client's newest refusals and returns ten unless
+    // asked for more; ask for all it keeps by default.
+    let log: Vec<std::collections::HashMap<String, redis::Value>> = redis::cmd("ACL")
         .arg("LOG")
+        .arg(128)
         .query_async(&mut connection)
         .await
         .unwrap();
@@ -70,13 +73,19 @@ async fn remove_user(cache: &MacroCache, user: &str) -> Vec<String> {
         .query_async::<()>(&mut connection)
         .await
         .unwrap();
-    let mut refused: Vec<String> = log
-        .into_iter()
-        .filter(|entry| entry.get("username").map(String::as_str) == Some(user))
-        .filter_map(|mut entry| entry.remove("object"))
-        .collect();
+    let mut refused: Vec<String> =
+        log.into_iter()
+            .filter_map(
+                |mut entry| match (entry.remove("username"), entry.remove("object")) {
+                    (
+                        Some(redis::Value::BulkString(name)),
+                        Some(redis::Value::BulkString(object)),
+                    ) if name == user.as_bytes() => String::from_utf8(object).ok(),
+                    _ => None,
+                },
+            )
+            .collect();
     refused.sort();
-    refused.dedup();
     refused
 }
 
@@ -591,7 +600,6 @@ async fn a_take_fails_rather_than_guess_when_redis_refuses_to_read_the_deadline(
     if !has_pexpiretime(&cache).await {
         return;
     }
-    let (refused, user) = cache_refusing(&cache, &["pexpiretime"]).await;
     let unbound = fresh_code("refused-deadline");
     cache
         .set_mobile_login_session(&unbound, "fake-refresh-token", None)
@@ -603,18 +611,20 @@ async fn a_take_fails_rather_than_guess_when_redis_refuses_to_read_the_deadline(
         .await
         .unwrap();
 
-    let mut failed = Vec::new();
+    let mut outcomes = Vec::new();
     for code in [&unbound, &bound] {
-        failed.push(refused.take_mobile_login_session(code).await.is_err());
+        // A user per take, so each one's refusal is in the log.
+        let (refused, user) = cache_refusing(&cache, &["pexpiretime"]).await;
+        let failed = refused.take_mobile_login_session(code).await.is_err();
+        outcomes.push((failed, remove_user(&cache, &user).await));
     }
-    assert_eq!(remove_user(&cache, &user).await, ["pexpiretime"]);
-    assert_eq!(failed, [true, true]);
+    let refused = vec!["pexpiretime".to_owned()];
+    assert_eq!(outcomes, [(true, refused.clone()), (true, refused)]);
 }
 
 #[tokio::test]
 async fn a_restore_that_cannot_pin_its_deadline_leaves_the_code_spent() {
     let cache = cache();
-    let (refused, user) = cache_refusing(&cache, &["pexpireat"]).await;
     let unbound = fresh_code("unpinned");
     cache
         .set_mobile_login_session(&unbound, "fake-refresh-token", None)
@@ -633,13 +643,21 @@ async fn a_restore_that_cannot_pin_its_deadline_leaves_the_code_spent() {
             .await
             .unwrap()
             .unwrap();
+        let (refused, user) = cache_refusing(&cache, &["pexpireat"]).await;
         let restored = refused.restore_mobile_login_session(code, &taken).await;
-        outcomes.push((restored.is_err(), stored_keys(&cache, code).await));
+        outcomes.push((
+            restored.is_err(),
+            remove_user(&cache, &user).await,
+            stored_keys(&cache, code).await,
+        ));
     }
-    assert_eq!(remove_user(&cache, &user).await, ["pexpireat"]);
+    let refused = vec!["pexpireat".to_owned()];
     assert_eq!(
         outcomes,
-        [(true, [false, false]), (true, [false, false])],
+        [
+            (true, refused.clone(), [false, false]),
+            (true, refused, [false, false])
+        ],
         "a refused expiry must not leave a record behind"
     );
 }
