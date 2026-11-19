@@ -1531,6 +1531,12 @@ async fn a_step_added_to_a_routine_with_sub_routines_is_checked_with_them() {
                 prompt.contains("Keep its sub-routines (`subRoutines`) exactly as they are too"),
                 "{prompt}"
             );
+            // Its data holds agents as stored; the SDK the session checks with takes a handle.
+            assert!(
+                prompt
+                    .contains("`agent: { bot_id }` in them is `agent: macro.agents.byId(bot_id)`"),
+                "{prompt}"
+            );
             assert!(prompt.contains(r#""subRoutines":[{"#), "{prompt}");
             let mut routine = schedules_reminders(definition.clone());
             routine.task["steps"]
@@ -1680,6 +1686,53 @@ async fn a_step_checked_with_the_routines_sub_routines_less_their_apps_is_handed
         &rows,
         Box::new(move |_| {
             let mut routine = schedules_reminders(definition.clone());
+            routine.task["steps"]
+                .as_array_mut()
+                .unwrap()
+                .push(code_step("Post a summary", "good"));
+            vec![plain(routine)]
+        }),
+    ));
+    let request = DraftRequest::AddStep {
+        description: "then post a summary".into(),
+        routine: RoutineSoFar {
+            trigger: Some(message_posted(&[])),
+            steps: so_far.task["steps"].as_array().unwrap().clone(),
+            sub_routines: so_far.task["sub_routines"].as_array().unwrap().clone(),
+        },
+        kind: Some(StepKind::Code),
+    };
+
+    let drafted = drafted_step(draft(&drafts(&rows, &sessions), request).await);
+
+    assert_eq!(drafted.step["title"], "Post a summary");
+}
+
+#[tokio::test]
+async fn a_step_checked_with_the_routines_sub_routines_in_another_order_is_handed_back() {
+    fn with_two() -> ActionConfiguration {
+        let mut routine =
+            schedules_reminders(json!([code_step("Read the task", "good"), agent_step()]));
+        let mut check = routine.task["sub_routines"][0].clone();
+        check["name"] = json!("check");
+        check["title"] = json!("Check on a task");
+        routine.task["sub_routines"]
+            .as_array_mut()
+            .unwrap()
+            .push(check);
+        routine
+    }
+    let so_far = with_two();
+    let rows = Arc::new(Rows::default());
+    let sessions = Arc::new(Sessions::new(
+        &rows,
+        Box::new(|_| {
+            // The session sent them back sorted, `check` before `remind`.
+            let mut routine = with_two();
+            routine.task["sub_routines"]
+                .as_array_mut()
+                .unwrap()
+                .reverse();
             routine.task["steps"]
                 .as_array_mut()
                 .unwrap()

@@ -1237,7 +1237,7 @@ fn keep_sub_routines(routine: &RoutineSoFar) -> &'static str {
     if routine.sub_routines.is_empty() {
         ""
     } else {
-        " Keep its sub-routines (`subRoutines`) exactly as they are too, and check the routine with them."
+        " Keep its sub-routines (`subRoutines`) exactly as they are too, and check the routine with them; an Ask AI step's `agent: { bot_id }` in them is `agent: macro.agents.byId(bot_id)` there."
     }
 }
 
@@ -1282,10 +1282,11 @@ fn agent_task_steps(task: &Value) -> Option<Vec<Value>> {
 }
 
 /// Sub-routines as a routine's task holds them once checked: parsed, with
-/// their code steps named, so the same definitions compare equal however
-/// they were sent. Without their apps, which the SDK a session checks with
-/// can't hold and no code reads: the step is applied to the routine as the
-/// editor holds it, apps and all.
+/// their code steps named (within each), so the same definitions compare
+/// equal however they were sent, and in name order, since copies find theirs
+/// by name. Without their apps, which the SDK a session checks with can't
+/// hold and no code reads: the step is applied to the routine as the editor
+/// holds it, apps and all.
 fn checked_sub_routines(sub_routines: &[Value]) -> Value {
     let task = named_steps(&json!({ "steps": [], "sub_routines": sub_routines }));
     let mut definitions = task
@@ -1298,6 +1299,13 @@ fn checked_sub_routines(sub_routines: &[Value]) -> Value {
                 fields.remove("mcp_servers");
             }
         }
+        let name = |definition: &Value| {
+            definition
+                .get("name")
+                .and_then(Value::as_str)
+                .map(str::to_owned)
+        };
+        definitions.sort_by_key(name);
     }
     definitions
 }
