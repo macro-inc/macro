@@ -335,8 +335,9 @@ while nothing is open; a chat started from Notifications opens on Recent.
 - **Notifications** is the Notifications view with All/Unread beneath the
   tabs and Display options (sliders) in place of the settings button:
   **Condensed** (kept per user) and **Notification settings…**. Condensed
-  rows are Home's rows for the same entity (icon and name; "who in #channel"
-  for any row about a thread: replies, mentions, reactions; "who commented on" for a comment); on hover the time shows
+  rows are Home's rows for the same entity: icon and name; the reply icon
+  and "who in #channel" for any row about a thread (replies, mentions,
+  reactions); "who commented on" for a comment. On hover the time shows
   and Mark done takes the unread dot's place. Condensed rows sit under Home's
   date dividers, and a condensed stack stays one row.
 
