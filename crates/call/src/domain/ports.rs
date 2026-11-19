@@ -73,7 +73,8 @@ pub trait CallRepository: Send + Sync + 'static {
         client: &str,
     ) -> impl Future<Output = Result<(), Self::Err>> + Send;
 
-    /// Atomically archive a call whose only active participants have been programs for 60 seconds.
+    /// Atomically archive a call whose only active participants have been
+    /// programs for 60 seconds, unless it is a scheduled meeting before its end.
     fn archive_call_if_program_only(
         &self,
         call_id: &Uuid,
@@ -369,7 +370,8 @@ pub trait CallRepository: Send + Sync + 'static {
         call_id: &Uuid,
     ) -> impl Future<Output = Result<ArchivedCall, CallError>> + Send;
 
-    /// Archive only if there are still no participants while holding the call lock.
+    /// Archive only if there are still no participants while holding the call
+    /// lock. A scheduled meeting before its end stays open instead.
     fn archive_call_if_empty(
         &self,
         call_id: &Uuid,
@@ -757,8 +759,14 @@ pub trait CallSummarizer: Send + Sync + 'static {
 /// RTC client port for interacting with the real-time communication service (e.g., LiveKit).
 #[cfg_attr(test, mockall::automock)]
 pub trait CallRtcClient: Send + Sync + 'static {
-    /// Create a new RTC room with the given name.
-    fn create_room(&self, room_name: &str) -> impl Future<Output = anyhow::Result<()>> + Send;
+    /// Create a new RTC room with the given name. `departure_timeout` keeps
+    /// it open that long after its last participant leaves, instead of the
+    /// RTC default.
+    fn create_room(
+        &self,
+        room_name: &str,
+        departure_timeout: Option<std::time::Duration>,
+    ) -> impl Future<Output = anyhow::Result<()>> + Send;
 
     /// Reserve an empty room for setup, expiring automatically without participants.
     fn prepare_room(&self, room_name: &str) -> impl Future<Output = anyhow::Result<()>> + Send;

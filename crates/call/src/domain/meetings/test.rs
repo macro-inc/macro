@@ -114,3 +114,42 @@ fn clearing_schedule_is_explicit_and_cannot_conflict_with_new_times() {
         .is_err()
     );
 }
+
+#[test]
+fn only_scheduled_meetings_hold_an_empty_session_until_their_end() {
+    let now = Utc::now();
+    let meeting = |scheduled_end: Option<DateTime<Utc>>, channel_id: Option<Uuid>| Meeting {
+        id: Uuid::now_v7(),
+        share_token: MeetingToken::generate(),
+        title: "Review".to_string(),
+        scheduled_start: scheduled_end.map(|end| end - TimeDelta::hours(1)),
+        scheduled_end,
+        channel_id,
+        call_id: None,
+        user_id: "macro|owner@example.com".to_string(),
+        channel_call_id: None,
+    };
+    let instant = meeting(None, None);
+    assert!(!holds_empty_session(instant.scheduled_end, now));
+    assert_eq!(instant.held_room_departure_timeout(now), None);
+
+    let scheduled = meeting(Some(now + TimeDelta::minutes(30)), None);
+    assert!(holds_empty_session(scheduled.scheduled_end, now));
+    assert_eq!(
+        scheduled.held_room_departure_timeout(now),
+        Some(std::time::Duration::from_secs(30 * 60))
+    );
+
+    let over = meeting(Some(now - TimeDelta::minutes(1)), None);
+    assert!(!holds_empty_session(over.scheduled_end, now));
+    assert_eq!(over.held_room_departure_timeout(now), None);
+
+    let channel_link = meeting(Some(now + TimeDelta::minutes(30)), Some(Uuid::now_v7()));
+    assert_eq!(channel_link.held_room_departure_timeout(now), None);
+
+    let long = meeting(Some(now + TimeDelta::days(3)), None);
+    assert_eq!(
+        long.held_room_departure_timeout(now),
+        Some(std::time::Duration::from_secs(24 * 60 * 60))
+    );
+}

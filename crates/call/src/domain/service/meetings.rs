@@ -311,14 +311,22 @@ impl<
         {
             return Ok((call, false));
         }
-        let preparation = self.repo.get_meeting_preparation(&meeting.id).await?;
+        let held_timeout = meeting.held_room_departure_timeout(chrono::Utc::now());
+        // A prepared room was created with the RTC default departure timeout,
+        // so a scheduled meeting held until its end creates its own room
+        // instead; the unused preparation expires on its own.
+        let preparation = if held_timeout.is_some() {
+            None
+        } else {
+            self.repo.get_meeting_preparation(&meeting.id).await?
+        };
         let candidate_id = preparation
             .as_ref()
             .map_or_else(Uuid::now_v7, |room| room.id);
         let candidate_room = candidate_id.to_string();
         if preparation.is_none() {
             self.rtc_client
-                .create_room(&candidate_room)
+                .create_room(&candidate_room, held_timeout)
                 .await
                 .map_err(CallError::Internal)?;
         }

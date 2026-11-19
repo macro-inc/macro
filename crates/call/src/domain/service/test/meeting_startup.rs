@@ -130,6 +130,36 @@ async fn prepared_room_skips_external_creation_and_a_concurrent_join_does_not_de
 }
 
 #[tokio::test]
+async fn held_scheduled_meeting_skips_its_prepared_room_and_holds_its_own() {
+    let mut meeting = invitation_for_test();
+    meeting.call_id = None;
+    meeting.scheduled_start = Some(Utc::now());
+    meeting.scheduled_end = Some(Utc::now() + chrono::Duration::minutes(30));
+    let call = started_event_call(user(ARCHIVED_EVENT_CREATOR).as_ref());
+    let mut repo = MockCallRepository::new();
+    // The prepared room has the RTC default departure timeout, so it is not used.
+    repo.expect_get_meeting_preparation().never();
+    repo.expect_get_or_create_meeting_call()
+        .times(1)
+        .return_once(move |_, _| Box::pin(async move { Ok((call, false)) }));
+    let mut rtc = MockCallRtcClient::new();
+    rtc.expect_create_room()
+        .times(1)
+        .returning(|_, departure_timeout| {
+            let held = departure_timeout.expect("a held meeting sets a departure timeout");
+            assert!(held > Duration::from_secs(29 * 60) && held <= Duration::from_secs(30 * 60));
+            Box::pin(async { Ok(()) })
+        });
+    rtc.expect_delete_room()
+        .times(1)
+        .returning(|_| Box::pin(async { Ok(()) }));
+    service(repo, rtc)
+        .prepare_meeting_call(&meeting)
+        .await
+        .unwrap();
+}
+
+#[tokio::test]
 async fn cancelling_an_unowned_or_claimed_preparation_never_deletes_media() {
     for cancellable in [false, true] {
         let id = Uuid::now_v7();
@@ -221,7 +251,7 @@ async fn meeting_allocation_does_not_wait_for_recording_or_transcription() {
     let mut rtc = MockCallRtcClient::new();
     rtc.expect_create_room()
         .times(1)
-        .returning(|_| Box::pin(async { Ok(()) }));
+        .returning(|_, _| Box::pin(async { Ok(()) }));
     rtc.expect_dispatch_transcription_agent()
         .times(1)
         .return_once(move |_| {

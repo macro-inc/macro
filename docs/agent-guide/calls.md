@@ -471,6 +471,13 @@ Rejoining from a new page waits for the prior page's pending leave cleanup befor
 requesting another connection, so a slow leave cannot disconnect the replacement.
 Leaving the last participant archives the session first and tears down its media
 in the background, so the next call does not wait for that room to be deleted.
+That holds for channel, DM, and instant calls. A scheduled call is one session
+for its whole slot: when everyone leaves before its scheduled end, the session,
+its room, recording, and transcription stay open, and rejoining from the link
+returns to the same call history entry. It ends once its slot is over, when the
+last person leaves after the end or, if already empty, within about a minute.
+Check that leaving and rejoining a scheduled call keeps one entry, and that an
+instant call does not.
 It keeps its label and shows a checkmark for a few seconds after copying, then
 restores the copy icon.
 
@@ -738,7 +745,8 @@ An agent account joins with its own API key through the SDK. Starting a channel
 call uses `POST /call/{channel_id}`; joining an existing call uses
 `POST /call/record/{call_id}/join`, which never starts one. Meeting joins use
 `POST /call/meetings/join/{token}`. When only programs have remained in a call
-for 60 seconds, the call ends automatically.
+for 60 seconds, the call ends automatically, except a scheduled call before its
+scheduled end.
 
 ### Pinning call tiles on desktop
 

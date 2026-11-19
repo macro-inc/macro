@@ -341,6 +341,7 @@ impl CallRepository for PgCallRepo {
             call_id,
             false,
             Some(Utc::now() - chrono::TimeDelta::seconds(60)),
+            true,
         )
         .await
     }
@@ -1136,7 +1137,7 @@ impl CallRepository for PgCallRepo {
     }
 
     async fn archive_call(&self, call_id: &Uuid) -> Result<ArchivedCall, CallError> {
-        self.archive_session(call_id, false, None)
+        self.archive_session(call_id, false, None, false)
             .await?
             .ok_or_else(|| CallError::NotFound(call_id.to_string()))
     }
@@ -1144,7 +1145,7 @@ impl CallRepository for PgCallRepo {
         &self,
         call_id: &Uuid,
     ) -> Result<Option<ArchivedCall>, CallError> {
-        self.archive_session(call_id, true, None).await
+        self.archive_session(call_id, true, None, true).await
     }
 
     #[tracing::instrument(err, skip(self))]

@@ -3504,6 +3504,73 @@ async fn standalone_meeting_archives_guest_names_and_preserves_invitation(
     fixtures(path = "../../../fixtures", scripts("call_repo")),
     migrator = "MACRO_DB_MIGRATIONS"
 )]
+async fn emptied_scheduled_meeting_stays_one_session_until_its_end(
+    pool: Pool<Postgres>,
+) -> anyhow::Result<()> {
+    insert_user_mapping(&pool, USER_B.deref(), MACRO_USER_B).await?;
+    let repo = repo(pool.clone());
+    let now = Utc::now();
+    let meeting = repo
+        .create_meeting(crate::domain::meetings::Meeting {
+            scheduled_start: Some(now - chrono::TimeDelta::minutes(10)),
+            scheduled_end: Some(now + chrono::TimeDelta::minutes(50)),
+            ..standalone_meeting()
+        })
+        .await?;
+    let (call, _) = repo
+        .get_or_create_meeting_call(&meeting.id, &Uuid::now_v7())
+        .await?;
+    assert_eq!(repo.get_participant_count(&call.id).await?, 0);
+
+    // Before the slot ends, emptying keeps the session.
+    assert!(repo.archive_call_if_empty(&call.id).await?.is_none());
+    let (rejoined, created) = repo
+        .get_or_create_meeting_call(&meeting.id, &Uuid::now_v7())
+        .await?;
+    assert!(!created);
+    assert_eq!(rejoined.id, call.id);
+
+    // Once the slot is over, the empty session ends like any other.
+    sqlx::query!(
+        "UPDATE call_meetings SET scheduled_start = $2, scheduled_end = $3 WHERE id = $1",
+        meeting.id,
+        now - chrono::TimeDelta::hours(2),
+        now - chrono::TimeDelta::hours(1),
+    )
+    .execute(&pool)
+    .await?;
+    assert!(repo.archive_call_if_empty(&call.id).await?.is_some());
+    assert!(repo.get_call_by_id(&call.id).await?.is_none());
+    Ok(())
+}
+
+#[sqlx::test(
+    fixtures(path = "../../../fixtures", scripts("call_repo")),
+    migrator = "MACRO_DB_MIGRATIONS"
+)]
+async fn emptied_cancelled_scheduled_meeting_ends(pool: Pool<Postgres>) -> anyhow::Result<()> {
+    insert_user_mapping(&pool, USER_B.deref(), MACRO_USER_B).await?;
+    let repo = repo(pool);
+    let now = Utc::now();
+    let meeting = repo
+        .create_meeting(crate::domain::meetings::Meeting {
+            scheduled_start: Some(now),
+            scheduled_end: Some(now + chrono::TimeDelta::hours(1)),
+            ..standalone_meeting()
+        })
+        .await?;
+    let (call, _) = repo
+        .get_or_create_meeting_call(&meeting.id, &Uuid::now_v7())
+        .await?;
+    assert!(repo.cancel_meeting(&meeting.id, USER_B.as_ref()).await?);
+    assert!(repo.archive_call_if_empty(&call.id).await?.is_some());
+    Ok(())
+}
+
+#[sqlx::test(
+    fixtures(path = "../../../fixtures", scripts("call_repo")),
+    migrator = "MACRO_DB_MIGRATIONS"
+)]
 async fn guest_join_racing_archival_fails_instead_of_stranding_a_guest(
     pool: Pool<Postgres>,
 ) -> anyhow::Result<()> {
