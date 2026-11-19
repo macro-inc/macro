@@ -122,7 +122,7 @@ export function stepsFromWire(steps: RoutineStep[]): StepDraft[] | undefined {
         knobs: (step.knobs ?? []).map(knobFromWire),
         ...(step.sentence ? { sentence: step.sentence } : {}),
       }))
-      .exhaustive();
+      .exhaustive(() => undefined);
     if (!draft) return undefined;
     drafts.push(draft);
   }

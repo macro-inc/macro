@@ -296,6 +296,9 @@ function programTask(draft: ScheduleDraft, previous: ScheduledAction) {
   const previousApps = programApps(previous.task);
   const previousOperatesAsUser = programOperatesAsUser(previous.task);
   const previousSubRoutines = subRoutinesFromWire(previous.task);
+  const previousSteps = programSteps(previous.task);
+  if ('steps' in previous.task && (!previousSteps || !previousSubRoutines))
+    return undefined;
   const clears = {
     clearsApps: previousApps.length > 0,
     clearsOperatesAsUser: previousOperatesAsUser,
@@ -309,7 +312,6 @@ function programTask(draft: ScheduleDraft, previous: ScheduledAction) {
         ...clears,
       })
     : buildTask(draft);
-  const previousSteps = programSteps(previous.task);
   return previousSteps &&
     previousSubRoutines &&
     JSON.stringify(task) ===
@@ -346,6 +348,8 @@ function programUpdateBody(
 ): ActionConfigurationUpdate | undefined {
   const { triggers } = draft;
   if (!triggers) return undefined;
+  const task = programTask(draft, previous);
+  if (!task) return undefined;
   return {
     name:
       draft.name === previous.name
@@ -353,7 +357,7 @@ function programUpdateBody(
         : draft.name.trim() || deriveRoutineName(draft),
     trigger: serializedTrigger({ ...draft, triggers }, previous),
     kind: previous.kind,
-    task: programTask(draft, previous),
+    task,
     run_visibility: draft.runVisibility ?? previous.run_visibility,
     ...descriptionField(draft, previous),
   };

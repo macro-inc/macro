@@ -1026,4 +1026,17 @@ describe('routines with sub-routines', () => {
     };
     expect(draftFromSchedule(unshown)).toBeUndefined();
   });
+
+  it('leaves a routine read-only when a definition returns a future step type', () => {
+    const task: RoutineTask = JSON.parse(
+      JSON.stringify({
+        ...parent.task,
+        sub_routines: [{ ...remind, steps: [{ type: 'future' }] }],
+      })
+    );
+    const newer = { ...parent, task };
+
+    expect(draftFromSchedule(newer)).toBeUndefined();
+    expect(draftToUpdateBody(loadedDraft(parent), newer)).toBeUndefined();
+  });
 });
