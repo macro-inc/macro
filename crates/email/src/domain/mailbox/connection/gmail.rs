@@ -56,6 +56,7 @@ where
                     database(error, "Failed to look up child link before delegation")
                 })?;
             if let Some(child_link) = child {
+                refuse_removed(&service.links, child_link.id).await?;
                 service
                     .transactions
                     .delegate(
@@ -114,6 +115,7 @@ where
                 .await
                 .map_err(|error| database(error, "Failed to check existing link by email"))?
             {
+                refuse_removed(&service.links, existing_link_id).await?;
                 let applied = grants::apply_and_consume(
                     &service.grants,
                     existing_link_id,
@@ -145,30 +147,15 @@ where
                         )
                     })?
                 && existing_link.macro_id.as_ref() != request.actor_id.as_str()
+                && let Some(promoted) = share(
+                    &service.links,
+                    &service.transactions,
+                    request,
+                    &linked_email,
+                    &existing_link,
+                )
+                .await?
             {
-                if !request.force_share {
-                    return Err(ConnectionError::SharedInboxConflict {
-                        email_address: linked_email.clone(),
-                        existing_owner_email: existing_link.macro_id.email_str().to_string(),
-                        existing_link_id: existing_link.id,
-                    });
-                }
-                let organization = service
-                    .links
-                    .organization(existing_link.macro_id.as_ref())
-                    .await
-                    .map_err(|error| {
-                        database(error, "Failed to fetch organization for shared-inbox owner")
-                    })?;
-                let promoted = service
-                    .transactions
-                    .promote(
-                        &request.actor_id,
-                        &linked_email,
-                        &existing_link,
-                        organization,
-                    )
-                    .await?;
                 shared::relocate(
                     &service.links,
                     &service.provider,
@@ -239,6 +226,60 @@ where
         link_id: link.id,
         backfill_job_id: Some(job),
     })
+}
+
+/// Offers to share a mailbox another account holds, and promotes it once the
+/// actor confirms. As on Outlook, a link whose owner's account is gone is no
+/// conflict (`None`): the actor connects a link of their own, and the deleted
+/// account's purge removes the old one. A promotion that finds the owner gone
+/// answers `None` the same way.
+async fn share(
+    links: &impl ConnectionLinks,
+    transactions: &impl ConnectionTransactions,
+    request: &ConnectionRequest,
+    email: &str,
+    existing: &Link,
+) -> Result<Option<SharedInboxPromotion>, ConnectionError> {
+    let status = links
+        .link_status(existing.id)
+        .await
+        .map_err(|error| database(error, "Failed to read the existing link's status"))?;
+    if status.being_removed {
+        return Err(ConnectionError::MailboxInitialization(
+            InitializationError::InboxBeingRemoved,
+        ));
+    }
+    if !status.owner_account_exists {
+        return Ok(None);
+    }
+    if !request.force_share {
+        return Err(ConnectionError::SharedInboxConflict {
+            email_address: email.to_string(),
+            existing_owner_email: existing.macro_id.email_str().to_string(),
+            existing_link_id: existing.id,
+        });
+    }
+    transactions
+        .promote(&request.actor_id, email, existing)
+        .await
+}
+
+/// A link being removed is purged with everything attached to it, so nothing
+/// connects to it until it is gone.
+async fn refuse_removed(
+    links: &impl ConnectionLinks,
+    link: uuid::Uuid,
+) -> Result<(), ConnectionError> {
+    let status = links
+        .link_status(link)
+        .await
+        .map_err(|error| database(error, "Failed to read the existing link's status"))?;
+    if status.being_removed {
+        return Err(ConnectionError::MailboxInitialization(
+            InitializationError::InboxBeingRemoved,
+        ));
+    }
+    Ok(())
 }
 
 fn new_gmail_link(

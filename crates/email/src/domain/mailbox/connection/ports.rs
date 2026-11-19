@@ -1,7 +1,9 @@
 //! Facts and effects sequenced by inbox connection.
 
 use super::super::initialization::{InitializationError, InitializeMailbox};
-use super::{ConnectionError, ConnectionRequest, GoogleConnectionAttempt, SharedInboxPromotion};
+use super::{
+    ConnectionError, ConnectionRequest, GoogleConnectionAttempt, LinkStatus, SharedInboxPromotion,
+};
 use calendar_events::domain::models::{AppliedGoogleGrant, CalendarGrantIntent};
 use email_api_client::domain::models::{AccessToken, EmailApiError};
 use macro_user_id::user_id::MacroUserIdStr;
@@ -43,6 +45,9 @@ pub trait ConnectionLinks: Send + Sync + 'static {
         &self,
         email: &str,
     ) -> impl Future<Output = Result<Option<Link>, Self::Err>> + Send;
+    /// A link deleted since it was read reports `being_removed`.
+    fn link_status(&self, link: Uuid)
+    -> impl Future<Output = Result<LinkStatus, Self::Err>> + Send;
     fn link_for_identity(
         &self,
         owner: &str,
@@ -57,10 +62,6 @@ pub trait ConnectionLinks: Send + Sync + 'static {
         &self,
         email: &str,
     ) -> impl Future<Output = Result<Option<Uuid>, Self::Err>> + Send;
-    fn organization(
-        &self,
-        actor: &str,
-    ) -> impl Future<Output = Result<Option<i32>, Self::Err>> + Send;
     fn set_credential_owner(
         &self,
         link: Uuid,
@@ -92,13 +93,13 @@ pub trait ConnectionTransactions: Send + Sync + 'static {
         link: Link,
         cursor: &str,
     ) -> impl Future<Output = Result<Link, ConnectionError>> + Send;
+    /// `None` when the existing link's owner account no longer exists.
     fn promote(
         &self,
         actor: &str,
         email: &str,
         existing: &Link,
-        organization: Option<i32>,
-    ) -> impl Future<Output = Result<SharedInboxPromotion, ConnectionError>> + Send;
+    ) -> impl Future<Output = Result<Option<SharedInboxPromotion>, ConnectionError>> + Send;
 }
 
 /// Provider watch, credentials, scope discovery and grant relocation.

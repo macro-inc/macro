@@ -37,6 +37,9 @@ pub(super) struct Data {
     pub scopes: Vec<String>,
     pub update_failures: usize,
     pub watched: Option<Link>,
+    pub owner_account_exists: bool,
+    pub being_removed: bool,
+    pub owner_gone_at_promotion: bool,
 }
 
 impl Default for Data {
@@ -62,6 +65,9 @@ impl Default for Data {
             scopes: Vec::new(),
             update_failures: 0,
             watched: None,
+            owner_account_exists: true,
+            being_removed: false,
+            owner_gone_at_promotion: false,
         }
     }
 }
@@ -164,9 +170,13 @@ impl ConnectionLinks for Fake {
         self.record("child_fusion")?;
         Ok(self.0.lock().unwrap().child_fusion)
     }
-    async fn organization(&self, _: &str) -> Result<Option<i32>, FakeError> {
-        self.record("organization")?;
-        Ok(Some(7))
+    async fn link_status(&self, _: Uuid) -> Result<LinkStatus, FakeError> {
+        self.record("link_status")?;
+        let data = self.0.lock().unwrap();
+        Ok(LinkStatus {
+            owner_account_exists: data.owner_account_exists,
+            being_removed: data.being_removed,
+        })
     }
     async fn set_credential_owner(&self, _: Uuid, _: &str) -> Result<(), FakeError> {
         self.record("update_owner")?;
@@ -215,14 +225,15 @@ impl ConnectionTransactions for Fake {
         _: &str,
         _: &str,
         _: &Link,
-        organization: Option<i32>,
-    ) -> Result<SharedInboxPromotion, ConnectionError> {
-        assert_eq!(organization, Some(7));
+    ) -> Result<Option<SharedInboxPromotion>, ConnectionError> {
         self.connection_call("promote")?;
-        Ok(SharedInboxPromotion {
+        if self.0.lock().unwrap().owner_gone_at_promotion {
+            return Ok(None);
+        }
+        Ok(Some(SharedInboxPromotion {
             link_id: LINK,
             mailbox_fusion_id: OWNER,
-        })
+        }))
     }
 }
 

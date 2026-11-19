@@ -84,8 +84,7 @@ impl ConnectionTransactions for PgConnectionTransactions {
         actor: &str,
         email: &str,
         existing: &Link,
-        organization: Option<i32>,
-    ) -> Result<SharedInboxPromotion, ConnectionError> {
+    ) -> Result<Option<SharedInboxPromotion>, ConnectionError> {
         let mut tx = self
             .0
             .begin()
@@ -94,6 +93,18 @@ impl ConnectionTransactions for PgConnectionTransactions {
         crate::outbound::mailbox_init::lock_gmail_connection(&mut tx, actor, email)
             .await
             .map_err(ConnectionError::MailboxInitialization)?;
+        // Lock the owner's account so it cannot be deleted before the access
+        // edge the promotion writes for it.
+        let Some(organization) = sqlx::query_scalar!(
+            r#"SELECT "organizationId" FROM "User" WHERE id = $1 FOR KEY SHARE"#,
+            existing.macro_id.as_ref()
+        )
+        .fetch_optional(&mut *tx)
+        .await
+        .context("Failed to fetch organization for shared-inbox owner")?
+        else {
+            return Ok(None);
+        };
         let promoted = macro_db_client::shared_inbox::promote_link_to_shared(
             &mut tx,
             existing.id,
@@ -107,10 +118,10 @@ impl ConnectionTransactions for PgConnectionTransactions {
         tx.commit()
             .await
             .context("Failed to commit shared-inbox promotion transaction")?;
-        Ok(SharedInboxPromotion {
+        Ok(Some(SharedInboxPromotion {
             mailbox_fusion_id: promoted.mailbox_fusion_id,
             link_id: promoted.link_id,
-        })
+        }))
     }
 }
 
