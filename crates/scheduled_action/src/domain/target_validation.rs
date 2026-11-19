@@ -137,6 +137,12 @@ pub(super) fn without_fields_beside_agent(task: &Value) -> Value {
     task
 }
 
+/// Whether `task` has steps: only such a task defines sub-routines or holds
+/// inputs; a single agent's are skipped by its parser and mean nothing.
+pub(super) fn defines_steps(task: &Value) -> bool {
+    task.get("steps").is_some_and(|steps| !steps.is_null())
+}
+
 /// The raw JSON preserves absent versus explicit null without changing stored contracts.
 /// Even a malformed historical selection must not be silently erased by an old client.
 pub(super) fn require_explicit_selection(previous: &Value, incoming: &Value) -> Result<()> {
@@ -167,7 +173,7 @@ pub(super) fn require_explicit_selection(previous: &Value, incoming: &Value) -> 
     // knows, so saving would delete the definitions its copies run, or the
     // inputs a detached copy's code reads. A single agent's are neither.
     for field in ["sub_routines", "inputs"] {
-        if previous.get("steps").is_some_and(|steps| !steps.is_null())
+        if defines_steps(previous)
             && previous
                 .get(field)
                 .and_then(Value::as_array)
@@ -179,10 +185,11 @@ pub(super) fn require_explicit_selection(previous: &Value, incoming: &Value) -> 
     }
     // A sub-routine's apps too: a client that can't hold them (the SDK) sends
     // the definition back without them. One left out is removed on purpose.
+    // Only a task with steps defines any: a single agent's are ignored.
     let definitions = |task: &Value| {
-        task.get("sub_routines")
-            .and_then(Value::as_array)
-            .cloned()
+        defines_steps(task)
+            .then(|| task.get("sub_routines").and_then(Value::as_array).cloned())
+            .flatten()
             .unwrap_or_default()
     };
     let kept = definitions(incoming);

@@ -1190,3 +1190,52 @@ async fn a_copy_made_standalone_keeps_its_parents_rewritten_code_off_its_owners_
         .unwrap();
     assert_eq!(saved.task["dangerously_operate_as_user"], true);
 }
+
+#[tokio::test]
+async fn a_single_agents_stray_definitions_never_refuse_its_keyed_repeat_or_edit() {
+    let service = service(false);
+    let parent = top_level(&service, "parent").await;
+    start_run(&service, &parent, PARENT_RUN);
+    // Main stored fields a single agent's parser skips, and clients send a
+    // task back as they loaded it.
+    let stray = json!([{ "name": "remind", "title": "Remind me", "inputs": [], "steps": [] }]);
+    let input = |prompt: &str| ActionConfiguration {
+        name: "follow up".into(),
+        task: json!({
+            "model": "model",
+            "prompt": "summarize",
+            "user_prompt": prompt,
+            "sub_routines": stray.clone(),
+        }),
+        ..configuration(false)
+    };
+    let key = || Some(SubRoutineKey::new("task-1").unwrap());
+
+    let first = service
+        .create_action_from(&user_principal(), input("task"), from_code(&parent), key())
+        .await
+        .unwrap();
+    let SavedAction::Created(first) = first else {
+        panic!("the first create under a key must create");
+    };
+    // The same body under the same key updates what the first made.
+    let repeat = service
+        .create_action_from(&user_principal(), input("task"), from_code(&parent), key())
+        .await
+        .unwrap();
+    let SavedAction::Updated(repeat) = repeat else {
+        panic!("a repeat under one key must update");
+    };
+    assert_eq!(repeat.id, first.id);
+    // A person's edit of the linked routine, sent back with the same fields.
+    let edited = service
+        .update_action(
+            edit_receipt(first.id.unwrap()),
+            update(input("new task")),
+            Requester::Person,
+        )
+        .await
+        .unwrap();
+    assert_eq!(edited.task["user_prompt"], "new task");
+    assert_eq!(edited.task.get("sub_routines"), None);
+}

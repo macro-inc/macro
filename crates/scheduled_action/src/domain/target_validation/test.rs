@@ -384,6 +384,15 @@ fn an_update_must_restate_a_sub_routines_apps_to_keep_or_clear_them() {
     // A definition without apps needs nothing restated.
     require_explicit_selection(&task(vec![definition(None)]), &task(vec![definition(None)]))
         .unwrap();
+    // A single agent's stray definitions are none: turning it into a program
+    // that defines its own app-free `remind` restates nothing.
+    let single_agent = json!({
+        "model": "m",
+        "prompt": "",
+        "user_prompt": "Tell me",
+        "sub_routines": [definition(Some(json!([{ "app_slug": "linear", "server_name": "Linear" }])))],
+    });
+    require_explicit_selection(&single_agent, &task(vec![definition(None)])).unwrap();
 }
 
 #[tokio::test]

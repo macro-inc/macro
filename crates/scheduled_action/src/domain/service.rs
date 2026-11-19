@@ -38,7 +38,7 @@ use super::ports::{
 
 mod sub_routines;
 use super::target_validation::{
-    ModelOnlyTargets, require_explicit_selection, without_fields_beside_agent,
+    ModelOnlyTargets, defines_steps, require_explicit_selection, without_fields_beside_agent,
 };
 
 #[cfg(test)]
@@ -1377,14 +1377,17 @@ where
     }
 }
 
-/// Whether `task` is a routine whose code writes as its owner.
-/// Whether `task` defines sub-routines.
+/// Whether `task` defines sub-routines. A single agent task's stray
+/// `sub_routines` define none: its parser skips them, and a save drops them.
 fn defines_sub_routines(task: &serde_json::Value) -> bool {
-    task.get("sub_routines")
-        .and_then(serde_json::Value::as_array)
-        .is_some_and(|definitions| !definitions.is_empty())
+    defines_steps(task)
+        && task
+            .get("sub_routines")
+            .and_then(serde_json::Value::as_array)
+            .is_some_and(|definitions| !definitions.is_empty())
 }
 
+/// Whether `task` is a routine whose code writes as its owner.
 fn writes_as_owner(task: &serde_json::Value) -> bool {
     RoutineProgram::from_task(task)
         .is_ok_and(|program| program.code_identity() == CodeIdentity::Owner)
