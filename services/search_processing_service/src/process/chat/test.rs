@@ -15,11 +15,11 @@ async fn a_message_of_a_chat_that_is_gone_removes_the_chat_from_search(pool: sql
             .iter()
             .map(|(line, _)| line.as_str())
             .collect::<Vec<_>>(),
-        ["POST /chats/_delete_by_query"]
+        ["GET /chats/_refresh", "POST /chats/_delete_by_query"]
     );
-    assert!(requests[0].1.contains("\"chat-gone\""), "{requests:?}");
+    assert!(requests[1].1.contains("\"chat-gone\""), "{requests:?}");
     assert!(
-        !requests[0].1.contains("message-gone"),
+        !requests[1].1.contains("message-gone"),
         "the whole chat goes, not one message: {requests:?}"
     );
 }
@@ -44,9 +44,9 @@ async fn a_message_that_is_gone_from_a_live_chat_removes_only_that_message(pool:
             .iter()
             .map(|(line, _)| line.as_str())
             .collect::<Vec<_>>(),
-        ["POST /chats/_delete_by_query"]
+        ["GET /chats/_refresh", "POST /chats/_delete_by_query"]
     );
-    assert!(requests[0].1.contains("message-gone"), "{requests:?}");
+    assert!(requests[1].1.contains("message-gone"), "{requests:?}");
 }
 
 #[sqlx::test(
@@ -69,10 +69,10 @@ async fn a_message_that_is_gone_from_a_trashed_chat_removes_only_that_message(po
             .iter()
             .map(|(line, _)| line.as_str())
             .collect::<Vec<_>>(),
-        ["POST /chats/_delete_by_query"]
+        ["GET /chats/_refresh", "POST /chats/_delete_by_query"]
     );
     assert!(
-        requests[0].1.contains("message-gone"),
+        requests[1].1.contains("message-gone"),
         "a trashed chat stays searchable: {requests:?}"
     );
 }

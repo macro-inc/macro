@@ -16,7 +16,10 @@ async fn an_event_for_a_call_that_is_gone_removes_it_from_search(pool: sqlx::PgP
             .iter()
             .map(|(line, _)| line.as_str())
             .collect::<Vec<_>>(),
-        ["POST /call_records/_delete_by_query"]
+        [
+            "GET /call_records/_refresh",
+            "POST /call_records/_delete_by_query"
+        ]
     );
-    assert!(requests[0].1.contains(&call_id.to_string()), "{requests:?}");
+    assert!(requests[1].1.contains(&call_id.to_string()), "{requests:?}");
 }
