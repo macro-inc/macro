@@ -1014,6 +1014,11 @@ export type callToolResponse400 = {
   status: 400;
 };
 
+export type callToolResponse403 = {
+  data: string;
+  status: 403;
+};
+
 export type callToolResponse404 = {
   data: string;
   status: 404;
@@ -1029,6 +1034,7 @@ export type callToolResponseSuccess = callToolResponse200 & {
 };
 export type callToolResponseError = (
   | callToolResponse400
+  | callToolResponse403
   | callToolResponse404
   | callToolResponse500
 ) & {

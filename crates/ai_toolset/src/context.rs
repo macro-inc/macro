@@ -4,6 +4,9 @@ use std::ops::{Deref, DerefMut};
 use std::sync::Arc;
 use tokio_util::sync::CancellationToken;
 
+#[cfg(test)]
+mod test;
+
 /// Service context wrapper for shared state passed to tools.
 ///
 /// This is provides access to
@@ -50,6 +53,41 @@ pub struct RequestContext {
     /// agent session actor does, for the in-process runtime - so each call is
     /// counted once.
     pub genai_telemetry: bool,
+    /// The approval this call carries, if any (see [`UserApproval`]); the
+    /// model's arguments never set it.
+    approval: Option<UserApproval>,
+}
+
+/// The approval a tool call carries. [`ApprovalKind::Reviewed`] is a person's:
+/// only this crate makes it, when a user tool is finished after review
+/// ([`crate::AsyncToolCollection::try_user_tool_call`]).
+/// [`ApprovalKind::Quoted`] is the model's claim: any caller makes it from a
+/// non-blank quote ([`RequestContext::with_quoted_confirmation`]), and nothing
+/// checks the quote against what the user said.
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub struct UserApproval(ApprovalKind);
+
+/// The kinds of [`UserApproval`].
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub enum ApprovalKind {
+    /// The user accepted the call on a review card or in a composer.
+    Reviewed,
+    /// The call quotes what it says is the user's reply approving it: only as
+    /// strong as the model's honesty, like a send's `userConfirmation`.
+    Quoted,
+}
+
+impl UserApproval {
+    /// A user tool call the user reviewed and accepted.
+    pub(crate) fn reviewed() -> Self {
+        Self(ApprovalKind::Reviewed)
+    }
+
+    /// How the user approved the call.
+    #[must_use]
+    pub fn kind(self) -> ApprovalKind {
+        self.0
+    }
 }
 
 impl RequestContext {
@@ -63,7 +101,32 @@ impl RequestContext {
             tool_loader: None,
             cancel: CancellationToken::new(),
             genai_telemetry: true,
+            approval: None,
         }
+    }
+
+    /// This request, for a user tool the user reviewed and accepted.
+    pub(crate) fn reviewed(self) -> Self {
+        Self {
+            approval: Some(UserApproval::reviewed()),
+            ..self
+        }
+    }
+
+    /// The user's approval of this call, when they gave one.
+    #[must_use]
+    pub fn approval(&self) -> Option<UserApproval> {
+        self.approval
+    }
+
+    /// This request, for a call quoting `quote`, the user's reply approving
+    /// it. A blank quote approves nothing.
+    #[must_use]
+    pub fn with_quoted_confirmation(self, quote: &str) -> Option<Self> {
+        (!quote.trim().is_empty()).then_some(Self {
+            approval: Some(UserApproval(ApprovalKind::Quoted)),
+            ..self
+        })
     }
 
     /// Turn `execute_tool` GenAI telemetry for this request's tool calls on or

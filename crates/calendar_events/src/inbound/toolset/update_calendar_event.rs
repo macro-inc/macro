@@ -298,7 +298,7 @@ impl ToolAnnotated for UpdateCalendarEvent {
 #[async_trait]
 impl<M, O, L> AsyncTool<CalendarToolContext<M, O, L>> for UpdateCalendarEvent
 where
-    M: CalendarMutationService + CalendarMacroCallService,
+    M: CalendarMutationService + CalendarMacroCallService + super::ProgramForwarding,
     O: CalendarOccurrenceService,
     L: MeetingLinkProvider,
 {
@@ -332,6 +332,7 @@ where
         }
 
         let requester_id = request_context.user_id.to_string();
+        let mutations = service_context.mutations_for(&request_context, self.inbox.as_deref());
         let scope = match (self.scope, self.recurrence_id.clone()) {
             (UpdateScopeInput::All, None) => CalendarUpdateScope::All,
             (UpdateScopeInput::ThisEvent, Some(recurrence_id)) => {
@@ -401,8 +402,7 @@ where
         // list from discarding the response that was just recorded.
         let patched = if self.add_macro_call {
             Some(
-                service_context
-                    .mutations
+                mutations
                     .update_event_with_macro_call(
                         &requester_id,
                         self.event_id,
@@ -417,8 +417,7 @@ where
             None
         } else {
             Some(
-                service_context
-                    .mutations
+                mutations
                     .update_event(
                         &requester_id,
                         self.event_id,
@@ -439,8 +438,7 @@ where
                         CalendarRsvpScope::ThisEvent { recurrence_id }
                     }
                 };
-                service_context
-                    .mutations
+                mutations
                     .respond_to_event(
                         &requester_id,
                         self.event_id,

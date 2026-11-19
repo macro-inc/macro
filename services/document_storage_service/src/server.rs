@@ -2363,21 +2363,20 @@ async fn run_server() -> anyhow::Result<()> {
             ),
             authorization_state.clone(),
         );
-    // Calendar writes belong to calendar_service; each GraphQL mutation then
-    // answers from the primary so it reads the state its write committed.
-    let graphql_calendar_mutation_context = graphql_calendar::CalendarGraphqlMutationContext::new(
-        Arc::new(
-            calendar_events::outbound::calendar_service_mutations::CalendarServiceMutations::new(
-                macro_service_urls::CalendarServiceUrl::new()
-                    .context("calendar service url")?
-                    .to_string(),
-                config.internal_api_key.to_string(),
-            ),
+    // Calendar writes belong to calendar_service, through a client each
+    // GraphQL request rebuilds to forward its caller's program; each mutation
+    // then answers from the primary so it reads the state its write committed.
+    let graphql_calendar_mutations = Arc::new(
+        calendar_events::outbound::calendar_service_mutations::CalendarServiceMutations::new(
+            macro_service_urls::CalendarServiceUrl::new()
+                .context("calendar service url")?
+                .to_string(),
+            config.internal_api_key.to_string(),
         ),
-        Arc::new(
-            calendar_events::domain::changes::CalendarChangeService::new(
-                calendar_events::outbound::pg::PgCalendarRepository::new(db.clone()),
-            ),
+    );
+    let graphql_calendar_committed_changes = Arc::new(
+        calendar_events::domain::changes::CalendarChangeService::new(
+            calendar_events::outbound::pg::PgCalendarRepository::new(db.clone()),
         ),
     );
 
@@ -2701,7 +2700,8 @@ async fn run_server() -> anyhow::Result<()> {
         ),
         graphql_contacts_context,
         graphql_calendar_context,
-        graphql_calendar_mutation_context,
+        graphql_calendar_mutations,
+        graphql_calendar_committed_changes,
         initiative_state: InitiativeRouterState::new(
             initiative_service,
             entity_access_service.clone(),

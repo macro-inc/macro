@@ -19,9 +19,10 @@ use crate::is_program_run;
 /// [`macro_auth::credential::request_credential`] the route's own
 /// authentication uses, and checks the signature of the user token it
 /// authenticates with: no database lookup and no second credential
-/// extraction. A user API key, bot, harness or internal credential carries
-/// no program claims. A JWT that does not verify counts as none; the route
-/// rejects it.
+/// extraction. A user API key, bot or harness credential carries no program
+/// claims. An internal call's forwarded program (`ForwardedProgram`) is not
+/// read here: no internal caller reaches a route this guards. A JWT that does
+/// not verify counts as none; the route rejects it.
 pub async fn request_is_program<Svc: MacroAuthorizationService>(
     request: Request,
     authorization: &MacroAuthorizationState<Svc>,

@@ -18,7 +18,8 @@ use axum::{
 };
 use macro_authorization::{
     CredentialAttribution, MacroAuthorizationExtractor, MacroAuthorizationService,
-    MacroAuthorizationState, UserOrInternal, is_agent_run, is_program_run,
+    MacroAuthorizationState, ProgramApproval, UserOrInternal, forwarded_approval, is_agent_run,
+    is_program_run,
 };
 use serde::{Deserialize, Serialize};
 use uuid::Uuid;
@@ -475,20 +476,32 @@ impl From<CopyRefusal> for CalendarMutationApiError {
 /// it first, as with the `CreateCalendarEvent` tool.
 const PROGRAM_CREATE_REFUSAL: &str = "An agent's program cannot create a calendar event without the user seeing it first. In an agent session, present it with execution.reviews.create({kind: 'calendar', ...}) and return the review's reference. In a channel or document thread, write the event out, ask whether to create it, and only after the user replies approving it call macro.calendar.createConfirmed with their reply quoted in userConfirmation.";
 
-/// Refuse an agent run's create (see [`is_agent_run`]); a person in the app
-/// creates from the composer, which is their confirmation.
+/// Refuse an agent run's create (see [`is_agent_run`]) that carries no
+/// approval of the user's; a person in the app creates from the composer,
+/// which is their confirmation. Only an internal caller forwards an
+/// `approval` (`macro_authorization::forwarded_approval`): `Reviewed` from a
+/// native tool a person reviewed, or `Quoted` from one quoting what the model
+/// says is their reply, which nothing checks (as with `SendConfirmedEmail`).
 fn refuse_program_create(
     attribution: CredentialAttribution,
     headers: &HeaderMap,
+    approval: Option<ProgramApproval>,
 ) -> Result<(), CalendarMutationApiError> {
-    if is_agent_run(attribution, headers) {
-        return Err(CalendarMutationApiError {
-            code: CalendarMutationErrorCode::ConfirmationRequired,
-            message: PROGRAM_CREATE_REFUSAL.to_owned(),
-            status: StatusCode::FORBIDDEN,
-        });
+    if !is_agent_run(attribution, headers) {
+        return Ok(());
     }
-    Ok(())
+    if let Some(approval) = approval {
+        tracing::info!(
+            approval = approval.as_str(),
+            "agent create admitted by the user's approval"
+        );
+        return Ok(());
+    }
+    Err(CalendarMutationApiError {
+        code: CalendarMutationErrorCode::ConfirmationRequired,
+        message: PROGRAM_CREATE_REFUSAL.to_owned(),
+        status: StatusCode::FORBIDDEN,
+    })
 }
 
 /// Make a program name the copy it changes when the meeting is on several of
@@ -680,7 +693,11 @@ where
     L: MeetingLinkProvider,
     Auth: MacroAuthorizationService,
 {
-    refuse_program_create(user.authorization.user.attribution(), &headers)?;
+    refuse_program_create(
+        user.authorization.user.attribution(),
+        &headers,
+        forwarded_approval(user.authorization.caller, &headers),
+    )?;
     let draft = CalendarEventDraft {
         idempotency_key: request.idempotency_key,
         title: request.title,

@@ -94,9 +94,14 @@ fn out_of_office_survives_the_update_wire_contract() {
         }),
         ..Default::default()
     };
-    let request: UpdateCalendarEventRequest =
-        serde_json::from_value(update_body(None, &patch, &CalendarUpdateScope::All, false))
-            .unwrap();
+    let request: UpdateCalendarEventRequest = serde_json::from_value(update_body(
+        None,
+        &patch,
+        &CalendarUpdateScope::All,
+        false,
+        None,
+    ))
+    .unwrap();
 
     assert_eq!(
         request
@@ -119,9 +124,14 @@ fn update_body_matches_the_router_request() {
         conference: Some(crate::domain::models::ConferenceChange::Removed),
         ..Default::default()
     };
-    let request: UpdateCalendarEventRequest =
-        serde_json::from_value(update_body(None, &patch, &CalendarUpdateScope::All, false))
-            .unwrap();
+    let request: UpdateCalendarEventRequest = serde_json::from_value(update_body(
+        None,
+        &patch,
+        &CalendarUpdateScope::All,
+        false,
+        None,
+    ))
+    .unwrap();
 
     assert_eq!(request.title.as_deref(), Some("Renamed"));
     assert_eq!(request.description.as_deref(), Some(""));
@@ -146,14 +156,25 @@ fn update_body_asks_the_router_for_a_macro_call() {
         ..CalendarEventPatch::default()
     };
 
-    let request: UpdateCalendarEventRequest =
-        serde_json::from_value(update_body(None, &patch, &CalendarUpdateScope::All, true)).unwrap();
+    let request: UpdateCalendarEventRequest = serde_json::from_value(update_body(
+        None,
+        &patch,
+        &CalendarUpdateScope::All,
+        true,
+        None,
+    ))
+    .unwrap();
     assert!(request.macro_call);
     assert_eq!(request.title.as_deref(), Some("Renamed"));
 
-    let request: UpdateCalendarEventRequest =
-        serde_json::from_value(update_body(None, &patch, &CalendarUpdateScope::All, false))
-            .unwrap();
+    let request: UpdateCalendarEventRequest = serde_json::from_value(update_body(
+        None,
+        &patch,
+        &CalendarUpdateScope::All,
+        false,
+        None,
+    ))
+    .unwrap();
     assert!(!request.macro_call);
 }
 
@@ -170,6 +191,7 @@ fn update_body_carries_the_occurrence_scope() {
             recurrence_id: "2026-08-18T20:00:00+00:00".to_string(),
         },
         false,
+        None,
     ))
     .unwrap();
 
@@ -200,7 +222,7 @@ fn delete_query_matches_the_router_query() {
             Some("k-2"),
         ),
     ] {
-        let pairs = delete_query(None, &scope);
+        let pairs = delete_query(None, &scope, None);
         let map: serde_json::Map<String, serde_json::Value> = pairs
             .into_iter()
             .map(|(key, value)| (key.to_string(), serde_json::Value::String(value)))
@@ -209,6 +231,31 @@ fn delete_query_matches_the_router_query() {
             serde_json::from_value(serde_json::Value::Object(map)).unwrap();
         assert_eq!(query.recurrence_id.as_deref(), expected_recurrence);
     }
+}
+
+/// A program's update or delete names the copy it addresses again, so the
+/// calendar service's copy check, which reruns for programs, sees the copy
+/// the tool already confirmed.
+#[test]
+fn updates_and_deletes_name_the_addressed_inbox() {
+    let request: UpdateCalendarEventRequest = serde_json::from_value(update_body(
+        None,
+        &CalendarEventPatch::default(),
+        &CalendarUpdateScope::All,
+        false,
+        Some("work@example.com"),
+    ))
+    .unwrap();
+    assert_eq!(request.inbox.as_deref(), Some("work@example.com"));
+
+    let map: serde_json::Map<String, serde_json::Value> =
+        delete_query(None, &CalendarDeletionScope::All, Some("work@example.com"))
+            .into_iter()
+            .map(|(key, value)| (key.to_string(), serde_json::Value::String(value)))
+            .collect();
+    let query: DeleteCalendarEventQuery =
+        serde_json::from_value(serde_json::Value::Object(map)).unwrap();
+    assert_eq!(query.inbox.as_deref(), Some("work@example.com"));
 }
 
 #[test]
@@ -343,4 +390,49 @@ fn macro_call_failures_round_trip_to_the_meeting_link_error() {
         parsed,
         MacroCallEventError::Calendar(CalendarMutationError::Retryable(_))
     ));
+}
+
+/// The calendar service's program guards read the caller's program from
+/// these headers; a client built for an agent's program must send them on
+/// every mutation, and one built for a person sends none.
+#[test]
+fn a_client_for_a_programs_caller_forwards_its_program_on_every_request() {
+    let base = CalendarServiceMutations::new("http://calendar".to_owned(), "key".to_owned());
+    let program =
+        macro_authorization::ForwardedProgram::new(Some(bot_id::MACRO_AI_BOT_ID), None, true);
+    let request = base
+        .forwarding(program.headers())
+        .request(reqwest::Method::POST, "/events", "macro|owner@example.com")
+        .build()
+        .unwrap();
+    assert_eq!(
+        request.headers()[macro_authorization::INTERNAL_AGENT_ID_HEADER],
+        bot_id::MACRO_AI_BOT_ID.to_string()
+    );
+    assert!(
+        request
+            .headers()
+            .contains_key(macro_authorization::CODE_EXECUTION_HEADER)
+    );
+    assert_eq!(
+        request.headers()[INTERNAL_MACRO_USER_ID_HEADER],
+        "macro|owner@example.com"
+    );
+
+    let person = macro_authorization::ForwardedProgram::new(None, None, false);
+    let request = base
+        .forwarding(person.headers())
+        .request(reqwest::Method::POST, "/events", "macro|owner@example.com")
+        .build()
+        .unwrap();
+    assert!(
+        !request
+            .headers()
+            .contains_key(macro_authorization::INTERNAL_AGENT_ID_HEADER)
+    );
+    assert!(
+        !request
+            .headers()
+            .contains_key(macro_authorization::CODE_EXECUTION_HEADER)
+    );
 }

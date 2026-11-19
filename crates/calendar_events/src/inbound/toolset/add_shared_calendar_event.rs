@@ -128,7 +128,7 @@ fn only_target(calendars: &[VisibleCalendar]) -> Result<Uuid, ToolCallError> {
 #[async_trait]
 impl<M, O, L> AsyncTool<CalendarToolContext<M, O, L>> for AddSharedCalendarEvent
 where
-    M: CalendarMutationService,
+    M: CalendarMutationService + super::ProgramForwarding,
     O: CalendarOccurrenceService,
     L: MeetingLinkProvider,
 {
@@ -147,6 +147,7 @@ where
             ));
         }
         let requester_id = request_context.user_id.to_string();
+        let mutations = service_context.mutations_for(&request_context, None);
         let calendars = service_context
             .mutations
             .list_visible_calendars(&requester_id)
@@ -156,8 +157,7 @@ where
             Some(calendar_id) => named_target(&calendars, calendar_id)?,
             None => only_target(&calendars)?,
         };
-        let copy = service_context
-            .mutations
+        let copy = mutations
             .copy_shared_event(&requester_id, self.event_id, Some(calendar_id))
             .await
             .map_err(|error| mutation_tool_error(ACTION, error))?;

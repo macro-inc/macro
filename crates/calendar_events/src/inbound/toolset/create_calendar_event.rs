@@ -162,7 +162,7 @@ impl ToolAnnotated for CreateCalendarEvent {
 #[async_trait]
 impl<M, O, L> AsyncTool<CalendarToolContext<M, O, L>> for CreateCalendarEvent
 where
-    M: CalendarMutationService,
+    M: CalendarMutationService + super::ProgramForwarding,
     O: CalendarOccurrenceService,
     L: MeetingLinkProvider,
 {
@@ -195,6 +195,7 @@ where
         }
 
         let requester_id = request_context.user_id.to_string();
+        let mutations = service_context.mutations_for(&request_context, None);
         let out_of_office = match self.event_type {
             CalendarEventTypeInput::Default => {
                 if self.out_of_office.is_some() {
@@ -234,7 +235,7 @@ where
 
         if self.add_macro_call {
             let created = create_event_with_macro_call(
-                &*service_context.mutations,
+                &*mutations,
                 &*service_context.meeting_links,
                 &requester_id,
                 None,
@@ -249,8 +250,7 @@ where
             ));
         }
 
-        let event = service_context
-            .mutations
+        let event = mutations
             .create_event(&requester_id, None, self.calendar_id, draft)
             .await
             .map_err(|error| mutation_tool_error("create the calendar event", error))?;

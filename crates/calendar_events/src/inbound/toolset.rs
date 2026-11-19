@@ -19,11 +19,12 @@ mod test;
 
 use std::sync::Arc;
 
-use ai_toolset::{AsyncToolCollection, ToolCallError};
+use ai_toolset::{ApprovalKind, AsyncToolCollection, RequestContext, ToolCallError};
 use chrono::NaiveDate;
 use chrono::{DateTime, Utc};
 use chrono_tz::Tz;
 use email_validator::EmailAddress;
+use macro_authorization::{ForwardedProgram, ProgramApproval};
 use rootcause::compat::boxed_error::IntoBoxedError;
 use schemars::JsonSchema;
 use serde::{Deserialize, Serialize};
@@ -75,6 +76,29 @@ where
     /// the `ENABLE_CALENDAR_ADD_SHARED_EVENT` deployment switch, off unless
     /// set, like the event card's Add to calendar.
     pub shared_event_copies: bool,
+    /// The program the tools act for, forwarded on every write so the
+    /// calendar service's program guards see it (see [`Self::with_program`]).
+    pub program: ForwardedProgram,
+}
+
+/// A mutation client that can carry a caller's program to the service it
+/// writes through, so that service's program guards see the program and not
+/// the host that called. In-process clients have no such guards to reach.
+pub trait ProgramForwarding {
+    /// The client for writes made for `program`, addressing the copy held
+    /// through `inbox` when the call names one: a program's update or
+    /// delete must name it again downstream, where its copy check reruns.
+    fn for_program(self: &Arc<Self>, program: &ForwardedProgram, inbox: Option<&str>) -> Arc<Self>;
+}
+
+#[cfg(feature = "mutation-client")]
+impl ProgramForwarding for crate::outbound::calendar_service_mutations::CalendarServiceMutations {
+    fn for_program(self: &Arc<Self>, program: &ForwardedProgram, inbox: Option<&str>) -> Arc<Self> {
+        Arc::new(
+            self.forwarding(program.headers())
+                .addressing(inbox.map(str::to_owned)),
+        )
+    }
 }
 
 impl<M, O, L> Clone for CalendarToolContext<M, O, L>
@@ -89,6 +113,7 @@ where
             occurrences: Arc::clone(&self.occurrences),
             meeting_links: Arc::clone(&self.meeting_links),
             shared_event_copies: self.shared_event_copies,
+            program: self.program.clone(),
         }
     }
 }
@@ -107,7 +132,15 @@ where
             occurrences,
             meeting_links,
             shared_event_copies: false,
+            program: ForwardedProgram::new(None, None, false),
         }
+    }
+
+    /// Run the tools for `program`: every write carries it, so an agent's
+    /// create is refused downstream unless the user approved it.
+    #[must_use]
+    pub fn with_program(self, program: ForwardedProgram) -> Self {
+        Self { program, ..self }
     }
 
     /// Let AddSharedCalendarEvent add copies of channel-shared events.
@@ -119,9 +152,30 @@ where
     }
 }
 
+impl<M, O, L> CalendarToolContext<M, O, L>
+where
+    M: CalendarMutationService + ProgramForwarding,
+    O: CalendarOccurrenceService,
+    L: MeetingLinkProvider,
+{
+    /// The client for a write `request` makes: it carries the tools' program,
+    /// the user's approval of the call when they gave one, and the `inbox`
+    /// of the copy the call addresses.
+    pub fn mutations_for(&self, request: &RequestContext, inbox: Option<&str>) -> Arc<M> {
+        let program = match request.approval().map(|approval| approval.kind()) {
+            None => self.program.clone(),
+            Some(ApprovalKind::Reviewed) => {
+                self.program.clone().approved(ProgramApproval::Reviewed)
+            }
+            Some(ApprovalKind::Quoted) => self.program.clone().approved(ProgramApproval::Quoted),
+        };
+        self.mutations.for_program(&program, inbox)
+    }
+}
+
 fn shared_calendar_toolset<M, O, L>() -> AsyncToolCollection<CalendarToolContext<M, O, L>>
 where
-    M: CalendarMutationService + CalendarMacroCallService,
+    M: CalendarMutationService + CalendarMacroCallService + ProgramForwarding,
     O: CalendarOccurrenceService,
     L: MeetingLinkProvider,
 {
@@ -142,7 +196,7 @@ where
 /// deletions, and copies of shared events execute in the agent loop.
 pub fn calendar_toolset<M, O, L>() -> AsyncToolCollection<CalendarToolContext<M, O, L>>
 where
-    M: CalendarMutationService + CalendarMacroCallService,
+    M: CalendarMutationService + CalendarMacroCallService + ProgramForwarding,
     O: CalendarOccurrenceService,
     L: MeetingLinkProvider,
 {
@@ -161,7 +215,7 @@ where
 /// here the plain tool already creates directly.
 pub fn mcp_toolset<M, O, L>() -> AsyncToolCollection<CalendarToolContext<M, O, L>>
 where
-    M: CalendarMutationService + CalendarMacroCallService,
+    M: CalendarMutationService + CalendarMacroCallService + ProgramForwarding,
     O: CalendarOccurrenceService,
     L: MeetingLinkProvider,
 {

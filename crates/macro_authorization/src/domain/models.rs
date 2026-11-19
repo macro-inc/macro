@@ -40,11 +40,7 @@ impl MacroUserAuthentication {
     /// program running with their access.
     #[must_use]
     pub fn attribution(&self) -> CredentialAttribution {
-        match (self.agent_id, self.routine_id) {
-            (Some(_), _) => CredentialAttribution::Agent,
-            (None, Some(_)) => CredentialAttribution::Routine,
-            (None, None) => CredentialAttribution::Person,
-        }
+        CredentialAttribution::signed(self.agent_id, self.routine_id)
     }
 }
 
@@ -61,6 +57,18 @@ pub enum CredentialAttribution {
     /// Signed for a routine's run (`routine_id`) with no agent, such as a
     /// routine code step running as its owner.
     Routine,
+}
+
+impl CredentialAttribution {
+    /// The attribution of a credential signed for `agent_id` and `routine_id`.
+    #[must_use]
+    pub(crate) fn signed(agent_id: Option<BotId>, routine_id: Option<Uuid>) -> Self {
+        match (agent_id, routine_id) {
+            (Some(_), _) => Self::Agent,
+            (None, Some(_)) => Self::Routine,
+            (None, None) => Self::Person,
+        }
+    }
 }
 
 /// The kind of credential that authenticated a user, set where the credential

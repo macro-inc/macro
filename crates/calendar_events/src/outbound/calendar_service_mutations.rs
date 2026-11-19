@@ -38,10 +38,17 @@ const INTERNAL_MACRO_USER_ID_HEADER: &str = "x-internal-macro-user-id";
 
 /// Calendar mutation client calling the calendar service with internal
 /// authorization on behalf of the requesting user.
+#[derive(Clone)]
 pub struct CalendarServiceMutations {
     base_url: String,
     internal_api_key: String,
     http: reqwest::Client,
+    /// The caller's program, set on every request so the calendar service's
+    /// program guards see it (see [`Self::forwarding`]).
+    forwarded: reqwest::header::HeaderMap,
+    /// The inbox of the copy this client's update or delete addresses (see
+    /// [`Self::addressing`]).
+    inbox: Option<String>,
 }
 
 impl CalendarServiceMutations {
@@ -54,6 +61,28 @@ impl CalendarServiceMutations {
                 .timeout(std::time::Duration::from_secs(30))
                 .build()
                 .expect("static reqwest client configuration is valid"),
+            forwarded: reqwest::header::HeaderMap::new(),
+            inbox: None,
+        }
+    }
+
+    /// This client for a call addressing the copy held through `inbox`: its
+    /// update or delete names it, so the calendar service's copy check, which
+    /// reruns for a forwarded program, sees the copy the caller confirmed.
+    #[must_use]
+    pub fn addressing(self, inbox: Option<String>) -> Self {
+        Self { inbox, ..self }
+    }
+
+    /// This client for one caller's mutations: `forwarded` (the caller's
+    /// `macro_authorization::ForwardedProgram::headers`) rides every request,
+    /// so the calendar service refuses the caller's program as it would the
+    /// program's own request.
+    #[must_use]
+    pub fn forwarding(&self, forwarded: reqwest::header::HeaderMap) -> Self {
+        Self {
+            forwarded,
+            ..self.clone()
         }
     }
 
@@ -65,6 +94,7 @@ impl CalendarServiceMutations {
     ) -> reqwest::RequestBuilder {
         self.http
             .request(method, format!("{}{path}", self.base_url))
+            .headers(self.forwarded.clone())
             .header(INTERNAL_API_KEY_HEADER, &self.internal_api_key)
             .header(INTERNAL_MACRO_USER_ID_HEADER, requester_id)
     }
@@ -237,6 +267,7 @@ fn update_body(
     patch: &CalendarEventPatch,
     scope: &CalendarUpdateScope,
     macro_call: bool,
+    inbox: Option<&str>,
 ) -> serde_json::Value {
     let (scope_name, recurrence_id) = match scope {
         CalendarUpdateScope::All => ("all", None),
@@ -264,6 +295,7 @@ fn update_body(
         "guestPolicy": patch.guest_policy,
         "scope": scope_name,
         "recurrenceId": recurrence_id,
+        "inbox": inbox,
     })
 }
 
@@ -283,6 +315,7 @@ fn attendees_body(attendees: &[CalendarAttendeeInput]) -> Vec<serde_json::Value>
 fn delete_query(
     calendar_id: Option<Uuid>,
     scope: &CalendarDeletionScope,
+    inbox: Option<&str>,
 ) -> Vec<(&'static str, String)> {
     let mut query = match scope {
         CalendarDeletionScope::All => vec![("scope", "all".to_string())],
@@ -297,6 +330,9 @@ fn delete_query(
     };
     if let Some(calendar_id) = calendar_id {
         query.push(("calendarId", calendar_id.to_string()));
+    }
+    if let Some(inbox) = inbox {
+        query.push(("inbox", inbox.to_owned()));
     }
     query
 }
@@ -396,7 +432,13 @@ impl CalendarMacroCallService for CalendarServiceMutations {
                     &format!("/events/{event_id}"),
                     requester_id,
                 )
-                .json(&update_body(calendar_id, &patch, &scope, true)),
+                .json(&update_body(
+                    calendar_id,
+                    &patch,
+                    &scope,
+                    true,
+                    self.inbox.as_deref(),
+                )),
             )
             .await
             .map_err(|failure| match failure {
@@ -459,7 +501,13 @@ impl CalendarMutationService for CalendarServiceMutations {
                 &format!("/events/{event_id}"),
                 requester_id,
             )
-            .json(&update_body(calendar_id, &patch, &scope, false)),
+            .json(&update_body(
+                calendar_id,
+                &patch,
+                &scope,
+                false,
+                self.inbox.as_deref(),
+            )),
         )
         .await
     }
@@ -478,7 +526,7 @@ impl CalendarMutationService for CalendarServiceMutations {
                 &format!("/events/{event_id}"),
                 requester_id,
             )
-            .query(&delete_query(calendar_id, &scope)),
+            .query(&delete_query(calendar_id, &scope, self.inbox.as_deref())),
         )
         .await
         .map(|_| ())

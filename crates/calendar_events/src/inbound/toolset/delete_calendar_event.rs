@@ -114,7 +114,7 @@ impl ToolAnnotated for DeleteCalendarEvent {
 #[async_trait]
 impl<M, O, L> AsyncTool<CalendarToolContext<M, O, L>> for DeleteCalendarEvent
 where
-    M: CalendarMutationService,
+    M: CalendarMutationService + super::ProgramForwarding,
     O: CalendarOccurrenceService,
     L: MeetingLinkProvider,
 {
@@ -135,6 +135,7 @@ where
         );
 
         let requester_id = request_context.user_id.to_string();
+        let mutations = service_context.mutations_for(&request_context, self.inbox.as_deref());
         let scoped_occurrence = |kind: &'static str| {
             self.recurrence_id.clone().ok_or_else(|| ToolCallError {
                 description: format!(
@@ -168,8 +169,7 @@ where
             CopyChange::Delete,
         )
         .await?;
-        service_context
-            .mutations
+        mutations
             .delete_event(&requester_id, self.event_id, self.calendar_id, scope)
             .await
             .map_err(|error| mutation_tool_error("delete the calendar event", error))?;

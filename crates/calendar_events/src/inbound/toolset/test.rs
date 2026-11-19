@@ -172,6 +172,22 @@ struct MockMutations {
     calendars: Mutex<Vec<VisibleCalendar>>,
     copied: Mutex<Vec<(Uuid, Option<Uuid>)>>,
     copy_error: Mutex<Option<CalendarMutationError>>,
+    /// The program each write was asked to carry, and the inbox it named.
+    forwarded: Mutex<Vec<(macro_authorization::ForwardedProgram, Option<String>)>>,
+}
+
+impl ProgramForwarding for MockMutations {
+    fn for_program(
+        self: &std::sync::Arc<Self>,
+        program: &macro_authorization::ForwardedProgram,
+        inbox: Option<&str>,
+    ) -> std::sync::Arc<Self> {
+        self.forwarded
+            .lock()
+            .unwrap()
+            .push((program.clone(), inbox.map(str::to_owned)));
+        std::sync::Arc::clone(self)
+    }
 }
 
 impl CalendarMacroCallService for MockMutations {
@@ -512,6 +528,119 @@ async fn ai_toolset_defers_create_without_mutating_calendar() {
 
     assert_eq!(pending, serde_json::json!("PendingUserExecution"));
     assert!(mutations.created.lock().unwrap().is_empty());
+}
+
+fn agent() -> macro_authorization::ForwardedProgram {
+    macro_authorization::ForwardedProgram::new(Some(bot_id::MACRO_AI_BOT_ID), None, false)
+}
+
+/// The create a person accepted on a review card reaches the calendar
+/// service as the agent's, carrying that review, so it goes through.
+#[tokio::test]
+async fn a_reviewed_create_carries_the_agents_program_and_the_review() {
+    let (mutations, context) = context(MockMutations::default(), empty_occurrences());
+    let context = ServiceContext(context.0.with_program(agent()));
+    calendar_toolset()
+        .try_user_tool_call(
+            context.0,
+            request_context(),
+            "CreateCalendarEvent",
+            &create_tool_args(),
+        )
+        .await
+        .unwrap()
+        .unwrap();
+    assert_eq!(mutations.created.lock().unwrap().len(), 1);
+    assert_eq!(
+        *mutations.forwarded.lock().unwrap(),
+        vec![(
+            agent().approved(macro_authorization::ProgramApproval::Reviewed),
+            None
+        )]
+    );
+}
+
+/// A create on the user's quoted reply carries that quote as its approval.
+#[tokio::test]
+async fn a_confirmed_create_carries_the_quoted_reply() {
+    let (mutations, context) = context(MockMutations::default(), empty_occurrences());
+    let context = ServiceContext(context.0.with_program(agent()));
+    let mut args = create_tool_args();
+    args["userConfirmation"] = serde_json::json!("yes, book it");
+    calendar_toolset()
+        .try_tool_call(
+            context.0,
+            request_context(),
+            "CreateConfirmedCalendarEvent",
+            &args,
+        )
+        .await
+        .unwrap()
+        .unwrap();
+    assert_eq!(
+        *mutations.forwarded.lock().unwrap(),
+        vec![(
+            agent().approved(macro_authorization::ProgramApproval::Quoted),
+            None
+        )]
+    );
+}
+
+/// An agent's create nobody approved reaches the calendar service as the
+/// agent's with no approval, which refuses it.
+#[tokio::test]
+async fn an_agents_unapproved_create_carries_no_approval() {
+    let (mutations, context) = context(MockMutations::default(), empty_occurrences());
+    let context = ServiceContext(context.0.with_program(agent()));
+    mcp_toolset()
+        .try_tool_call(
+            context.0,
+            request_context(),
+            "CreateCalendarEvent",
+            &create_tool_args(),
+        )
+        .await
+        .unwrap()
+        .unwrap();
+    assert_eq!(*mutations.forwarded.lock().unwrap(), vec![(agent(), None)]);
+}
+
+/// A person's tools forward no program, so their creates are unchanged.
+#[tokio::test]
+async fn a_persons_create_forwards_no_program() {
+    let (mutations, context) = context(MockMutations::default(), empty_occurrences());
+    mcp_toolset()
+        .try_tool_call(
+            context.0,
+            request_context(),
+            "CreateCalendarEvent",
+            &create_tool_args(),
+        )
+        .await
+        .unwrap()
+        .unwrap();
+    let forwarded = mutations.forwarded.lock().unwrap();
+    assert_eq!(forwarded.len(), 1);
+    assert!(forwarded[0].0.headers().is_empty());
+}
+
+/// An agent's delete names the copy it confirmed, so calendar_service's copy
+/// check, which reruns for the agent's program, sees that copy too.
+#[tokio::test]
+async fn an_agents_delete_names_the_copy_it_addresses() {
+    let (mutations, context) = context(MockMutations::default(), empty_occurrences());
+    let context = ServiceContext(context.0.with_program(agent()));
+    let tool: DeleteCalendarEvent = serde_json::from_value(serde_json::json!({
+        "eventId": Uuid::from_u128(11),
+        "scope": "all",
+        "inbox": "work@example.com",
+    }))
+    .unwrap();
+    tool.call(context, request_context()).await.unwrap();
+    assert_eq!(
+        *mutations.forwarded.lock().unwrap(),
+        vec![(agent(), Some("work@example.com".to_owned()))]
+    );
 }
 
 #[tokio::test]

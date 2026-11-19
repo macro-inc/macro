@@ -10,6 +10,10 @@ types, the `EmailThread` edge resolvers, and draft mutations.
 - `src/objects.rs`: `GraphqlSoupEmailMessage`, `GraphqlMailPreviewMessage`, and
   the loaders that fetch message bodies vs. previews.
 - `src/send.rs`: idempotent send/cancel/status plus actor/inbox-scoped pending-send pagination.
+  Both sends (`sendEmailAttempt`, `sendEmailMessage`) run in-process, so no
+  route's guard runs: `refuse_program_send` refuses an agent's program from the
+  request's `macro_authorization::ForwardedProgram`, which the host must insert
+  (a request without one can't send).
 - `src/mutation.rs`: `GraphqlEmailMutation` (save/delete draft, mark seen/unread,
   update label).
 - `src/loaders.rs`: DataLoader batching for thread metadata, mail projection,
