@@ -338,9 +338,18 @@ Address: sinä, or avoid the pronoun.
 | notifications | Ilmoitukset |
 | done | Valmiit |
 | mark as read | Merkitse luetuksi |
-| snooze | Torkuta ilmoituksia… |
+| snooze | Torkuta ilmoitukset |
 | archive | Arkistoi |
 | settings | Asetukset |
+| computer (Macro computer) | Uusi Macro-tietokone |
+| machine (runs agents) | Tiimiläisten koneet |
+| session (agent) | Aloita istunto |
+| routine | Kaikki rutiinit |
+| saved view | Uusi tallennettu näkymä |
+| call | Liity puheluun |
+| contact (CRM) | Ei vielä yhteyshenkilöiden myyntiputkia |
+| company (CRM) | Hae yrityksiä… |
+| thread (email) | Poissuljetut ketjut |
 
 ## Polish (`pl`)
 
