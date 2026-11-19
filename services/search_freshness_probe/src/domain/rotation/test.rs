@@ -1,0 +1,339 @@
+use std::collections::VecDeque;
+
+use uuid::Uuid;
+
+use super::*;
+
+#[derive(Debug, thiserror::Error)]
+#[error("the API refused the write")]
+struct Refused;
+
+fn id(n: u128) -> EntityId {
+    EntityId(Uuid::from_u128(n))
+}
+
+/// What a fake API was asked to do.
+#[derive(Debug, Clone, PartialEq, Eq)]
+enum Call {
+    Create(Vec<TitleOrBody>),
+    Set(EntityId, TitleOrBody),
+    Delete(EntityId),
+    Close,
+}
+
+/// A document API that hands out ids 1, 2, ... and refuses the writes listed
+/// in `refuse`, in order, each once.
+#[derive(Default)]
+struct FakeDocuments {
+    calls: Vec<Call>,
+    next_id: u128,
+    refuse: VecDeque<Call>,
+}
+
+impl FakeDocuments {
+    fn refuses(&mut self, call: &Call) -> bool {
+        if self.refuse.front() == Some(call) {
+            self.refuse.pop_front();
+            return true;
+        }
+        false
+    }
+}
+
+impl CreatedWrites for FakeDocuments {
+    type Field = TitleOrBody;
+    type Err = Refused;
+
+    const ENTITY_TYPE: EntityType = EntityType::Document;
+    const FIELDS: &'static [TitleOrBody] = &[TitleOrBody::Body, TitleOrBody::Title];
+
+    async fn create(&mut self, texts: &[(TitleOrBody, Token)]) -> Result<EntityId, Refused> {
+        let call = Call::Create(texts.iter().map(|(field, _)| *field).collect());
+        self.calls.push(call.clone());
+        if self.refuses(&call) {
+            return Err(Refused);
+        }
+        self.next_id += 1;
+        Ok(id(self.next_id))
+    }
+
+    async fn set(&mut self, id: EntityId, field: TitleOrBody, _: &Token) -> Result<(), Refused> {
+        let call = Call::Set(id, field);
+        self.calls.push(call.clone());
+        if self.refuses(&call) {
+            return Err(Refused);
+        }
+        Ok(())
+    }
+
+    async fn delete(&mut self, id: EntityId) -> Result<(), Refused> {
+        let call = Call::Delete(id);
+        self.calls.push(call.clone());
+        if self.refuses(&call) {
+            return Err(Refused);
+        }
+        Ok(())
+    }
+
+    async fn close(&mut self) {
+        self.calls.push(Call::Close);
+    }
+}
+
+fn tokens(change: &Change, presence: Presence) -> Vec<Token> {
+    change
+        .checks
+        .iter()
+        .filter(|check| check.presence == presence)
+        .map(|check| match &check.query {
+            SearchQuery::Text { token, .. } => token.clone(),
+            SearchQuery::Property { value, .. } => value.clone(),
+        })
+        .collect()
+}
+
+#[tokio::test]
+async fn a_document_is_created_edited_renamed_deleted_and_created_again() {
+    let mut rotation = Created::new(FakeDocuments::default());
+    let mut changes = Vec::new();
+    for _ in 0..5 {
+        changes.push(rotation.change().await.expect("every write succeeds"));
+    }
+
+    let operations: Vec<_> = changes.iter().map(|change| change.operation).collect();
+    assert_eq!(
+        operations,
+        [
+            Operation::Create,
+            Operation::Edit,
+            Operation::Rename,
+            Operation::Delete,
+            Operation::Create,
+        ]
+    );
+    assert_eq!(
+        rotation.api.calls,
+        [
+            Call::Create(vec![TitleOrBody::Body, TitleOrBody::Title]),
+            Call::Set(id(1), TitleOrBody::Body),
+            Call::Set(id(1), TitleOrBody::Title),
+            Call::Delete(id(1)),
+            Call::Create(vec![TitleOrBody::Body, TitleOrBody::Title]),
+        ]
+    );
+
+    let [created, edited, renamed, deleted, recreated] = changes.as_slice() else {
+        panic!("five changes");
+    };
+    let [body, title] = tokens(created, Presence::Present).try_into().expect("two");
+    assert!(tokens(created, Presence::Absent).is_empty());
+
+    // An edit wants the new body and not the one it replaced.
+    let [new_body] = tokens(edited, Presence::Present).try_into().expect("one");
+    assert_eq!(tokens(edited, Presence::Absent), [body]);
+
+    let [new_title] = tokens(renamed, Presence::Present).try_into().expect("one");
+    assert_eq!(tokens(renamed, Presence::Absent), [title]);
+
+    // A delete wants every token it held gone.
+    assert!(tokens(deleted, Presence::Present).is_empty());
+    assert_eq!(tokens(deleted, Presence::Absent), [new_body, new_title]);
+    assert!(deleted.checks.iter().all(|check| check.entity_id == id(1)));
+
+    assert_eq!(recreated.entity_id, id(2));
+}
+
+#[tokio::test]
+async fn a_failed_write_is_tried_again_next_round() {
+    let mut rotation = Created::new(FakeDocuments {
+        refuse: VecDeque::from([Call::Set(id(1), TitleOrBody::Body), Call::Delete(id(1))]),
+        ..FakeDocuments::default()
+    });
+
+    let mut results = Vec::new();
+    for _ in 0..6 {
+        results.push(
+            rotation
+                .change()
+                .await
+                .map(|change| change.operation)
+                .map_err(|failed| failed.operation),
+        );
+    }
+
+    assert_eq!(
+        results,
+        [
+            Ok(Operation::Create),
+            Err(Operation::Edit),
+            Ok(Operation::Edit),
+            Ok(Operation::Rename),
+            Err(Operation::Delete),
+            Ok(Operation::Delete),
+        ]
+    );
+}
+
+#[tokio::test]
+async fn shutdown_deletes_the_entity_this_process_made_and_closes_the_api() {
+    let mut rotation = Created::new(FakeDocuments::default());
+    rotation.change().await.expect("created");
+
+    rotation.clean_up().await;
+
+    assert_eq!(rotation.api.calls[1..], [Call::Delete(id(1)), Call::Close]);
+}
+
+#[tokio::test]
+async fn shutdown_after_a_delete_only_closes_the_api() {
+    let mut rotation = Created::new(FakeDocuments::default());
+    for _ in 0..4 {
+        rotation.change().await.expect("every write succeeds");
+    }
+
+    rotation.clean_up().await;
+
+    assert_eq!(rotation.api.calls.last(), Some(&Call::Close));
+    assert_eq!(
+        rotation
+            .api
+            .calls
+            .iter()
+            .filter(|call| matches!(call, Call::Delete(_)))
+            .count(),
+        1
+    );
+}
+
+/// A fixture API holding `fixture`, which counts its lookups.
+struct FakeSessions {
+    fixture: Option<EntityId>,
+    finds: u32,
+    renames: Vec<EntityId>,
+}
+
+impl FixtureWrites for FakeSessions {
+    type Err = Refused;
+
+    const ENTITY_TYPE: EntityType = EntityType::AgentSession;
+
+    async fn find(&mut self) -> Result<Option<EntityId>, Refused> {
+        self.finds += 1;
+        Ok(self.fixture)
+    }
+
+    async fn rename(&mut self, id: EntityId, _: &Token) -> Result<(), Refused> {
+        self.renames.push(id);
+        Ok(())
+    }
+}
+
+#[tokio::test]
+async fn a_missing_fixture_fails_the_rename_until_one_exists() {
+    let mut rotation = Fixture::new(FakeSessions {
+        fixture: None,
+        finds: 0,
+        renames: Vec::new(),
+    });
+
+    let failed = rotation.change().await.expect_err("no fixture");
+    assert_eq!(failed.operation, Operation::Rename);
+
+    rotation.api.fixture = Some(id(9));
+    let first = rotation.change().await.expect("renamed");
+    let second = rotation.change().await.expect("renamed");
+
+    assert_eq!(rotation.api.finds, 2);
+    assert_eq!(rotation.api.renames, [id(9), id(9)]);
+    // The title before the first rename is unknown, so only later renames
+    // want the old title gone.
+    assert!(tokens(&first, Presence::Absent).is_empty());
+    assert_eq!(
+        tokens(&second, Presence::Absent),
+        tokens(&first, Presence::Present)
+    );
+}
+
+/// A property API with one definition, refusing the first document create
+/// when `refuse_create` is set.
+#[derive(Default)]
+struct FakeProperties {
+    refuse_create: bool,
+    documents: Vec<EntityId>,
+    sets: Vec<(EntityId, EntityId)>,
+    deleted: Vec<EntityId>,
+}
+
+impl PropertyWrites for FakeProperties {
+    type Err = Refused;
+
+    async fn definition(&mut self) -> Result<EntityId, Refused> {
+        Ok(id(100))
+    }
+
+    async fn create_document(&mut self, _: &Token) -> Result<EntityId, Refused> {
+        if std::mem::take(&mut self.refuse_create) {
+            return Err(Refused);
+        }
+        let document = id(200 + self.documents.len() as u128);
+        self.documents.push(document);
+        Ok(document)
+    }
+
+    async fn set(
+        &mut self,
+        document: EntityId,
+        definition: EntityId,
+        _: &Token,
+    ) -> Result<(), Refused> {
+        self.sets.push((document, definition));
+        Ok(())
+    }
+
+    async fn delete_document(&mut self, document: EntityId) -> Result<(), Refused> {
+        self.deleted.push(document);
+        Ok(())
+    }
+}
+
+#[tokio::test]
+async fn a_property_value_is_replaced_every_round_on_one_document() {
+    let mut rotation = PropertyValue::new(FakeProperties {
+        refuse_create: true,
+        ..FakeProperties::default()
+    });
+
+    let failed = rotation
+        .change()
+        .await
+        .expect_err("the document create is refused");
+    assert_eq!(failed.operation, Operation::Edit);
+
+    let first = rotation.change().await.expect("set");
+    let second = rotation.change().await.expect("set");
+    rotation.clean_up().await;
+
+    assert_eq!(rotation.api.documents, [id(200)]);
+    assert_eq!(rotation.api.sets, [(id(200), id(100)); 2]);
+    assert_eq!(rotation.api.deleted, [id(200)]);
+    assert!(tokens(&first, Presence::Absent).is_empty());
+    assert_eq!(
+        tokens(&second, Presence::Absent),
+        tokens(&first, Presence::Present)
+    );
+
+    let SearchQuery::Property {
+        property_id, name, ..
+    } = &second.checks[0].query
+    else {
+        panic!("a property search");
+    };
+    let SearchQuery::Property {
+        name: first_name, ..
+    } = &first.checks[0].query
+    else {
+        panic!("a property search");
+    };
+    assert_eq!(*property_id, id(100));
+    assert_eq!(name, first_name);
+}
