@@ -60,9 +60,8 @@ import OpenTelemetry directly.
 
 ## Frontend view loading
 
-Use `@app/observability/flow` for user-visible loading. A flow is a span that
-stays open while anything under it is loading and ends one paint after the last
-hold releases.
+Use `@app/observability/flow` for user-visible loading. The flow keeps its span
+open until the last hold releases. A successful root then finishes after paint.
 
 - **Views are roots already.** Router commits start a `navigation` interaction
   and every routed view is a `view.<route id>` `<TraceFlow>` keyed on its

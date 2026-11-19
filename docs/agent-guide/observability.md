@@ -546,7 +546,7 @@ Phases you will see:
 
 ### Reading phases
 
-- A phase already settled when its flow reached it emits `<name>.ready` instead
+- A phase already ready when its flow reached it emits `<name>.ready` instead
   of a span and sets `<name>.waited=false` on its parent. That means it did not
   wait, not that the cache was hit; use the explicit cache fields on lifecycle
   spans to compare warm and cold. On the root, `flow.ready_phase_count` against
@@ -559,8 +559,8 @@ Phases you will see:
   `ui.long_task_*` and `ui.long_animation_frame_*`. These are a two-frame paint
   opportunity and overlapping main-thread work, not proof a pixel painted or
   that the flow caused every task.
-- `flow.outcome=success` means the UI reached readiness, which can be a
-  terminal error panel; read connected HTTP spans to tell whether data loaded.
+- Phases that report a readiness failure carry `flow.outcome=error`. Read
+  connected HTTP spans when a phase completes without reporting request status.
   Exclude cancelled, hidden, timeout and error outcomes from load percentiles.
 
 ### Measuring locally
