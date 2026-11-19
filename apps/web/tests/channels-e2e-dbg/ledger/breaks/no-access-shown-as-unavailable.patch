@@ -1,0 +1,13 @@
+diff --git a/apps/web/src/features/channel/ChannelAccessDenied.tsx b/apps/web/src/features/channel/ChannelAccessDenied.tsx
+index d10535626e..0157f09329 100644
+--- a/apps/web/src/features/channel/ChannelAccessDenied.tsx
++++ b/apps/web/src/features/channel/ChannelAccessDenied.tsx
+@@ -70,7 +70,7 @@ export function ChannelAccessDenied(props: {
+ 
+   return (
+     <Show
+-      when={!unavailable()}
++      when={!authenticated()}
+       fallback={
+         <ChannelUnavailable busy={state.refreshing()} onRetry={retry} />
+       }

@@ -1,0 +1,13 @@
+diff --git a/apps/web/src/features/channel/Message/Root.tsx b/apps/web/src/features/channel/Message/Root.tsx
+index 81360097cb..0747792e9f 100644
+--- a/apps/web/src/features/channel/Message/Root.tsx
++++ b/apps/web/src/features/channel/Message/Root.tsx
+@@ -84,7 +84,7 @@ export function Root(props: RootProps) {
+       data-message
+       data-message-id={local.message.id}
+       data-selected={local.selected ? '' : undefined}
+-      data-targeted={local.targeted ? '' : undefined}
++      data-targeted={undefined}
+       data-targeted-fading={targetFading() ? '' : undefined}
+       onPointerEnter={(event) => {
+         setActionMenuVisibilityFlag(ACTION_MENU_POINTER_VISIBLE, true);

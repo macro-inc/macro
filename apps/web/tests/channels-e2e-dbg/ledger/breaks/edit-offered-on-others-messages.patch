@@ -1,0 +1,13 @@
+diff --git a/apps/web/src/features/channel/Channel/create-channel-message-actions.ts b/apps/web/src/features/channel/Channel/create-channel-message-actions.ts
+index 733ca1870e..3b12ed423e 100644
+--- a/apps/web/src/features/channel/Channel/create-channel-message-actions.ts
++++ b/apps/web/src/features/channel/Channel/create-channel-message-actions.ts
+@@ -192,7 +192,7 @@ export function createChannelMessageActions(
+               }
+             }
+           : undefined,
+-      onEdit: canEdit ? options.onEdit : undefined,
++      onEdit: options.onEdit,
+       onDelete: canDelete
+         ? () => {
+             options.deleteMessage({

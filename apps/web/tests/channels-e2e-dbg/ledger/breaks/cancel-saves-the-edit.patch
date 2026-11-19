@@ -1,0 +1,13 @@
+diff --git a/apps/web/src/features/channel/Channel/create-message-editor.ts b/apps/web/src/features/channel/Channel/create-message-editor.ts
+index 58619ddfe4..dc0026e06e 100644
+--- a/apps/web/src/features/channel/Channel/create-message-editor.ts
++++ b/apps/web/src/features/channel/Channel/create-message-editor.ts
+@@ -77,7 +77,7 @@ export function createMessageEditor(
+   const cancel: MessageEditor['cancel'] = (messageId: string) => {
+     const current = editState();
+     if (!current || current.messageId !== messageId) return;
+-    endEdit(current.message);
++    save(current.message, current.snapshot);
+   };
+ 
+   const save: MessageEditor['save'] = (message, snapshot) => {

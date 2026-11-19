@@ -1,0 +1,12 @@
+diff --git a/apps/web/src/features/channel/SystemActivity.tsx b/apps/web/src/features/channel/SystemActivity.tsx
+index 3e3948c20d..45f40f9ab8 100644
+--- a/apps/web/src/features/channel/SystemActivity.tsx
++++ b/apps/web/src/features/channel/SystemActivity.tsx
+@@ -102,6 +102,7 @@ function AccessRequestActivity(props: {
+     return id ? macroIdToEmail(id) : undefined;
+   };
+   const isParticipant = () =>
++    false &&
+     !participants.isPending &&
+     (participants.data ?? []).some(
+       (participant) => participant.user_id === userId()

@@ -1,0 +1,17 @@
+diff --git a/apps/web/src/lib/queries/messages/timeline.ts b/apps/web/src/lib/queries/messages/timeline.ts
+index 3f8cad8fba..62997f4b27 100644
+--- a/apps/web/src/lib/queries/messages/timeline.ts
++++ b/apps/web/src/lib/queries/messages/timeline.ts
+@@ -506,7 +506,11 @@ export function insertTopLevelMessageIntoMessageTimeline(
+     pages: [
+       {
+         ...newestPage,
+-        entries: [{ type: 'message', message }, ...newestPage.entries],
++        entries: [
++          ...newestPage.entries.slice(0, 1),
++          { type: "message", message },
++          ...newestPage.entries.slice(1),
++        ],
+       },
+       ...olderPages,
+     ],

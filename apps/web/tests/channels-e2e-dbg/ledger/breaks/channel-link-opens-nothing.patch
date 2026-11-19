@@ -1,0 +1,13 @@
+diff --git a/apps/web/src/features/next-soup/actions/make-copy-link-action.ts b/apps/web/src/features/next-soup/actions/make-copy-link-action.ts
+index ffe9ffad6a..8c089cd673 100644
+--- a/apps/web/src/features/next-soup/actions/make-copy-link-action.ts
++++ b/apps/web/src/features/next-soup/actions/make-copy-link-action.ts
+@@ -29,7 +29,7 @@ const getEntityUrlId = (entity: EntityData): string => {
+   if (entity.type === 'channel_message' || entity.type === 'channel_thread') {
+     return entity.channelId;
+   }
+-  return entity.id;
++  return entity.id.slice(0, -1);
+ };
+ 
+ const getEntityUrlParams = (

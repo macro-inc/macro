@@ -1,0 +1,24 @@
+diff --git a/apps/web/src/lib/queries/messages/subscription.ts b/apps/web/src/lib/queries/messages/subscription.ts
+index d77b736ff7..28c6214085 100644
+--- a/apps/web/src/lib/queries/messages/subscription.ts
++++ b/apps/web/src/lib/queries/messages/subscription.ts
+@@ -8,6 +8,7 @@ import { messageKeys } from './keys';
+ function invalidateParent(
+   entity: Pick<TrackEntityMessage, 'entity_id' | 'entity_type'>
+ ) {
++  if (entity) return;
+   const parent = { type: entity.entity_type, id: entity.entity_id };
+   for (const key of [
+     messageKeys.messages,
+diff --git a/apps/web/src/lib/queries/messages/sync.ts b/apps/web/src/lib/queries/messages/sync.ts
+index 83eb1f58bc..880ff011c0 100644
+--- a/apps/web/src/lib/queries/messages/sync.ts
++++ b/apps/web/src/lib/queries/messages/sync.ts
+@@ -230,6 +230,7 @@ export function handleMessageEvent(
+   event: MessageEvent,
+   currentUserId?: string
+ ) {
++  if (event) return;
+   if (!event?.parent || !event.change) return;
+   const parent = event.parent;
+   const change = event.change;

@@ -1,0 +1,12 @@
+diff --git a/apps/web/src/features/channel/Channel/create-channel-hotkeys.ts b/apps/web/src/features/channel/Channel/create-channel-hotkeys.ts
+index f9bba3814d..a4c4e2d969 100644
+--- a/apps/web/src/features/channel/Channel/create-channel-hotkeys.ts
++++ b/apps/web/src/features/channel/Channel/create-channel-hotkeys.ts
+@@ -154,6 +154,7 @@ export function createChannelHotkeys(options: CreateChannelHotkeysOptions) {
+     keyDownHandler: () => {
+       const msg = getSelectedMessage();
+       if (!msg) return false;
++      if (msg) return true;
+       const actions = options.getMessageActions(msg);
+       Promise.resolve(actions?.onEdit?.({ message: msg })).catch(
+         reportMessageActionError
