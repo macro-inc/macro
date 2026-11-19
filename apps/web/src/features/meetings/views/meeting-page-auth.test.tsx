@@ -116,6 +116,7 @@ it.each([
             disconnect: async () => {
               setActiveCallId(null);
             },
+            mediaPath: () => 'browser',
           }}
           renderCall={(leave) => (
             <button type="button" onClick={leave}>
@@ -182,6 +183,7 @@ it('waits for confirmed membership before rendering setup or requesting devices'
           release: async () => {},
           connect: async () => {},
           disconnect: async () => {},
+          mediaPath: () => 'browser',
         }}
         renderCall={() => <div>Connected</div>}
       />
@@ -199,4 +201,79 @@ it('waits for confirmed membership before rendering setup or requesting devices'
   expect(screen.getByRole('button', { name: 'Join call' })).toBeTruthy();
   expect(join).not.toHaveBeenCalled();
   expect(warmup).toHaveBeenCalledOnce();
+});
+
+it('treats a hang-up on the native call screen as Leave', async () => {
+  const [activeCallId, setActiveCallId] = createSignal<string | null>(null);
+  const endedWatchers = new Set<(callId: string) => void>();
+  const release = vi.fn(async () => ({ callEnded: false }));
+  const onLeave = vi.fn();
+  render(() => (
+    <MeetingSessionProvider>
+      <MeetingPage
+        source={() => ({
+          kind: 'ready',
+          title: 'Quick Call',
+          channelId: null,
+          scheduledStart: null,
+          scheduledEnd: null,
+        })}
+        authenticated={() => true}
+        author={() => 'Member'}
+        onCopy={async () => {}}
+        onLeave={onLeave}
+        mediaAccess={{
+          request: async () => {
+            throw new DOMException('Denied', 'NotAllowedError');
+          },
+        }}
+        session={{
+          lifecycle: createMeetingSessionLifecycle(),
+          shareToken: () => 'token',
+          isInCall: () => activeCallId() !== null,
+          activeCallId,
+          join: async () => ({
+            callId: 'call-1',
+            channelId: null,
+            roomName: 'room',
+            serverUrl: 'wss://example.com',
+            token: 'token',
+            participantId: 'member',
+            started: false,
+            shareToken: 'share',
+          }),
+          release,
+          connect: async () => {
+            setActiveCallId('call-1');
+          },
+          disconnect: async () => {
+            setActiveCallId(null);
+          },
+          mediaPath: () => 'native',
+          watchNativeCallEnded: (onEnded) => {
+            endedWatchers.add(onEnded);
+            return () => endedWatchers.delete(onEnded);
+          },
+        }}
+        renderCall={() => <p>In the native call</p>}
+      />
+    </MeetingSessionProvider>
+  ));
+  const joinButton = screen.getByRole('button', { name: 'Join call' });
+  await screen.findByText('Camera unavailable');
+  await waitFor(() => expect(joinButton.hasAttribute('disabled')).toBe(false));
+  fireEvent.click(joinButton);
+  await screen.findByText('In the native call');
+
+  // Native drops the call before telling JS it was ended there.
+  setActiveCallId(null);
+  for (const onEnded of [...endedWatchers]) onEnded('another-call');
+  expect(release).not.toHaveBeenCalled();
+  for (const onEnded of [...endedWatchers]) onEnded('call-1');
+
+  await waitFor(() =>
+    expect(onLeave).toHaveBeenCalledExactlyOnceWith('/calls')
+  );
+  expect(release).toHaveBeenCalledExactlyOnceWith('token', 'token');
+  expect(endedWatchers.size).toBe(0);
 });

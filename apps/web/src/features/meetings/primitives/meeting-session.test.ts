@@ -39,6 +39,7 @@ function setup(overrides: Partial<MeetingSessionCapabilities> = {}) {
     disconnect: vi.fn(async () => {
       activeCallId = null;
     }),
+    mediaPath: () => 'browser',
     ...overrides,
   };
   let dispose!: () => void;

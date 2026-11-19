@@ -158,6 +158,7 @@ export function createMeetingSession(capabilities: MeetingSessionCapabilities) {
         Boolean(localTracks?.camera)
       );
       const credentials = issued.credentials;
+      joinTrace.setAttr('call.media.path', capabilities.mediaPath());
       await joinTrace.span('meeting.join.connect', () =>
         capabilities.connect(
           credentials,

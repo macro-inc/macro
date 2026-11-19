@@ -172,6 +172,20 @@ export function MeetingPage(props: {
     });
   }
 
+  // Hanging up on the native call screen is a Leave, not a lost connection.
+  // Watch from join until leave, since the end event and the native state
+  // that drops the call can arrive in either order.
+  createEffect(() => {
+    const callId = session.joinedCallId();
+    const watch = props.session.watchNativeCallEnded;
+    if (!callId || !watch) return;
+    onCleanup(
+      watch((endedCallId) => {
+        if (endedCallId === callId) fireAndForget(leave(), 'meetings');
+      })
+    );
+  });
+
   return (
     <main
       class="ph-no-capture relative flex h-dvh min-h-0 flex-col bg-surface p-4 text-ink sm:p-6"

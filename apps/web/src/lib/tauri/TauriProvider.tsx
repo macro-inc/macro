@@ -1,3 +1,4 @@
+import { useNativeMeetingReturn } from '@app/features/meetings/native-meeting-return';
 import { NativeCallProvider } from '@channel/Call/native-call-state';
 import { useCallKitSetup } from '@channel/Call/use-callkit';
 import { useAndroidBack } from '@core/mobile/androidBack';
@@ -275,6 +276,7 @@ export function useExpectTauri() {
 export function TauriRouteListener(props: RouteSectionProps) {
   if (isTauri()) {
     useTauriNavigationEffect();
+    useNativeMeetingReturn();
   }
 
   return props.children;

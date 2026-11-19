@@ -88,6 +88,7 @@ function setup(overrides: Partial<NewMeetingCapabilities> = {}) {
       disconnect: async () => {
         setActiveCallId(null);
       },
+      mediaPath: () => 'browser',
       release,
     });
     return {
