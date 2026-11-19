@@ -379,7 +379,9 @@ describe('smoke boot', () => {
     // Every unit the image hardens or feeds secrets to is checked.
     const host = readFileSync(join(stackDir, 'nixos/host.nix'), 'utf8');
     const services = /services = \[([^\]]+)\]/.exec(host)?.[1] ?? '';
-    for (const [, unit] of services.matchAll(/"([a-z-]+)"/g)) {
+    const hostUnits = [...services.matchAll(/"([a-z-]+)"/g)].map((m) => m[1]);
+    expect(hostUnits.length).toBeGreaterThan(0);
+    for (const unit of hostUnits) {
       expect(UNITS).toContain(unit);
     }
   });

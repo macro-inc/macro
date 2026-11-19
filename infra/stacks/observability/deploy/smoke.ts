@@ -351,6 +351,7 @@ relay_received() { journalctl --no-pager -b -u macro-alerts-relay | grep -q 'for
 ${pagingCheckScript(marker)}
 # The nightly dump, with the production policy's statements on the smoke bucket.
 bucket=$(sed -n 's/^BACKUP_BUCKET="\\(.*\\)"$/\\1/p' /opt/observability/runtime.env)
+[ -n "$bucket" ] || failed "runtime.env has no BACKUP_BUCKET"
 systemctl start goalert-backup || { journalctl --no-pager -b -u goalert-backup -n 40; failed "the GoAlert backup failed"; }
 aws --region ${REGION} s3 ls "s3://$bucket/goalert/" | grep -q 'goalert-[A-Z][a-z][a-z]\\.dump$' || failed "the GoAlert backup is not in s3://$bucket/goalert/"
 echo "GoAlert backed up to s3://$bucket/goalert/"
