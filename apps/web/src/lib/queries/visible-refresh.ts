@@ -143,21 +143,29 @@ export function createHiddenDeferral(
   dispose: () => void;
 } {
   let deferred = false;
+  let disposed = false;
   const isHidden = () =>
     document.visibilityState === 'hidden' ||
     (paneHidden !== undefined && untrack(paneHidden));
   const runDeferred = () => {
-    if (!deferred || isHidden()) return;
+    if (disposed || !deferred || isHidden()) return;
     deferred = false;
     run();
   };
-  const dispose = makeEventListener(document, 'visibilitychange', runDeferred);
+  const removeListener = makeEventListener(
+    document,
+    'visibilitychange',
+    runDeferred
+  );
   if (paneHidden) createComputed(on(paneHidden, runDeferred, { defer: true }));
   return {
     request: () => {
       deferred = isHidden();
       if (!deferred) run();
     },
-    dispose,
+    dispose: () => {
+      disposed = true;
+      removeListener();
+    },
   };
 }

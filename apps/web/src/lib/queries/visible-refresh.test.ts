@@ -146,7 +146,7 @@ it('stays quiet when shown with nothing deferred or after disposal', () => {
   expect(run).not.toHaveBeenCalled();
 });
 
-it('holds requests while its pane is suspended and runs once when it shows', () => {
+it('holds requests while its pane is hidden and runs once when it shows', () => {
   setVisibility('visible');
   const run = vi.fn();
   const [suspended, setSuspended] = createSignal(true);
@@ -169,4 +169,20 @@ it('holds requests while its pane is suspended and runs once when it shows', () 
   setSuspended(false);
   expect(run).toHaveBeenCalledTimes(1);
   dispose();
+});
+
+it('runs nothing held once disposed, though its owner lives on', () => {
+  setVisibility('visible');
+  const run = vi.fn();
+  const [hidden, setHidden] = createSignal(true);
+  const disposeRoot = createRoot((dispose) => {
+    const deferral = createHiddenDeferral(run, hidden);
+    deferral.request();
+    deferral.dispose();
+    return dispose;
+  });
+
+  setHidden(false);
+  expect(run).not.toHaveBeenCalled();
+  disposeRoot();
 });

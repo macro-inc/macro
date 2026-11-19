@@ -329,9 +329,11 @@ function createFullCalendarController(
     );
   });
 
+  // Each reset lays out the calendar, which in a hidden pane costs as much as
+  // in a shown one; a hidden calendar applies the latest options once shown.
   const resetOptions = () => {
     const calendarInstance = calendar();
-    if (!calendarInstance) return;
+    if (!calendarInstance || untrack(paneHidden)) return;
 
     const nextOptions = buildOptions();
     const next = nextOptions.options as Record<string, unknown>;
@@ -353,17 +355,7 @@ function createFullCalendarController(
     );
   };
 
-  // Each reset lays out the calendar, which in a hidden pane costs as much as
-  // in a shown one; a hidden calendar applies the latest options once shown.
-  createEffect(
-    on(
-      [getOptions, paneHidden],
-      ([, hidden]) => {
-        if (!hidden) resetOptions();
-      },
-      { defer: true }
-    )
-  );
+  createEffect(on([getOptions, paneHidden], resetOptions, { defer: true }));
 
   const unmount = (element: HTMLDivElement) => {
     if (hostElement() !== element) return;

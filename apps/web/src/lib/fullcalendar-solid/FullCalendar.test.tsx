@@ -169,6 +169,40 @@ describe('FullCalendar Solid connector', () => {
     expect(screen.getByText('Latest')).toBeTruthy();
   });
 
+  it('holds a content slot added while its pane is hidden until it shows', () => {
+    const [hidden, setHidden] = createSignal(false);
+    const [custom, setCustom] = createSignal(false);
+    const resetOptions = vi.spyOn(Calendar.prototype, 'resetOptions');
+    render(() => (
+      <PaneHiddenContext.Provider value={hidden}>
+        <FullCalendar.Root
+          plugins={[dayGridPlugin]}
+          initialView="dayGridMonth"
+          initialDate="2025-01-15"
+          headerToolbar={false}
+          handleWindowResize={false}
+          events={[{ id: 'first', title: 'First', start: '2025-01-15' }]}
+        >
+          <Show when={custom()}>
+            <FullCalendar.EventContent>
+              {(event) => <span>Custom {event.event.title}</span>}
+            </FullCalendar.EventContent>
+          </Show>
+          <FullCalendar.Host />
+        </FullCalendar.Root>
+      </PaneHiddenContext.Provider>
+    ));
+    resetOptions.mockClear();
+
+    setHidden(true);
+    setCustom(true);
+    expect(resetOptions).not.toHaveBeenCalled();
+
+    setHidden(false);
+    expect(resetOptions).toHaveBeenCalledOnce();
+    expect(screen.getByText('Custom First')).toBeTruthy();
+  });
+
   it('restores defaults when a reactive option is removed', () => {
     const [options, setOptions] = createSignal<{ dayHeaders?: boolean }>({
       dayHeaders: false,
