@@ -282,6 +282,54 @@ fn sub_routine_names_are_unique_and_bounded() {
     assert!(RoutineProgram::from_task(&task).is_err());
 }
 
+/// The checker takes at most 40 files, one per code step. A routine's check
+/// holds its own code steps and its sub-routines'; a copy made standalone
+/// holds every sub-routine's and its definition's again.
+#[test]
+fn a_routine_and_its_standalone_copies_each_fit_one_check() {
+    let code = |count: usize| {
+        (0..count)
+            .map(|index| json!({ "type": "code", "title": format!("Step {index}"), "source": "export async function main() {}" }))
+            .collect::<Vec<_>>()
+    };
+    let routine = |own: usize, remind: usize, nudge: usize| {
+        RoutineProgram::from_task(&json!({
+            "steps": code(own),
+            "sub_routines": [
+                { "name": "remind", "title": "Remind", "steps": code(remind) },
+                { "name": "nudge", "title": "Nudge", "steps": code(nudge) },
+            ],
+        }))
+        .unwrap()
+        .validate()
+        .map_err(|error| error.to_string())
+    };
+    let too_many = Err(
+        "too many code steps: the sub-routines' code steps, plus the routine's own or its largest \
+         sub-routine's, whichever has more, can be at most 40"
+            .to_owned(),
+    );
+    // 20 + 10 + 10: the routine's own steps are the most.
+    assert_eq!(routine(20, 10, 10), Ok(()));
+    assert_eq!(routine(21, 10, 10), too_many);
+    // 1 + 20 + 1 checks as 22, but `remind` made standalone as 20 + 20 + 1.
+    assert_eq!(routine(1, 19, 1), Ok(()));
+    assert_eq!(routine(1, 20, 1), too_many);
+    // A copy runs and stands alone within what its routine passed.
+    let parent = RoutineProgram::from_task(&json!({
+        "steps": code(1),
+        "sub_routines": [
+            { "name": "remind", "title": "Remind", "steps": code(19) },
+            { "name": "nudge", "title": "Nudge", "steps": code(1) },
+        ],
+    }))
+    .unwrap();
+    let copy = SubRoutineCopy::from_task(&json!({ "sub_routine": "remind" })).unwrap();
+    let standalone = parent.copy_program(&copy).unwrap();
+    assert_eq!(standalone.validate(), Ok(()));
+    assert_eq!(standalone.check_files().len(), 39);
+}
+
 #[test]
 fn code_steps_are_numbered_the_routines_own_first_then_each_sub_routines() {
     let program = RoutineProgram::from_task(&parent()).unwrap();

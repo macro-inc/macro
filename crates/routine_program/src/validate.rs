@@ -41,6 +41,11 @@ pub mod limits {
     pub const MAX_SENTENCE_CHARS: usize = 300;
     /// Sub-routines one routine defines.
     pub const MAX_SUB_ROUTINES: usize = 5;
+    /// Code steps in one type check, one file each: the checker takes at most
+    /// this many. A routine's check holds its sub-routines' code steps and
+    /// its own; one of its copies made standalone holds them and its
+    /// definition's again.
+    pub const MAX_CODE_STEPS: usize = 40;
     /// Inputs of one routine or sub-routine.
     pub const MAX_INPUTS: usize = 12;
     /// Characters in an input's label.
@@ -126,6 +131,13 @@ pub enum ProgramError {
     /// More sub-routines than a routine may define.
     #[error("a routine can define at most {MAX_SUB_ROUTINES} sub-routines")]
     TooManySubRoutines,
+    /// More code steps than one check takes, in the routine or in one of its
+    /// copies made standalone.
+    #[error(
+        "too many code steps: the sub-routines' code steps, plus the routine's own or its largest \
+         sub-routine's, whichever has more, can be at most {MAX_CODE_STEPS}"
+    )]
+    TooManyCodeSteps,
     /// Two sub-routines with the same name.
     #[error("sub-routine `{0}` is defined twice")]
     DuplicateSubRoutine(SubRoutineName),
@@ -179,6 +191,23 @@ impl RoutineProgram {
                 name: definition.name.clone(),
                 error: Box::new(error),
             })?;
+        }
+        // The sub-routines' code is checked with the routine's own, and with
+        // each one's again when its copy is made standalone, keeping them all.
+        let code = |steps: &[Step]| {
+            steps
+                .iter()
+                .filter(|step| matches!(step, Step::Code(_)))
+                .count()
+        };
+        let defined: Vec<usize> = self
+            .sub_routines
+            .iter()
+            .map(|definition| code(&definition.steps))
+            .collect();
+        let most = defined.iter().copied().fold(code(&self.steps), usize::max);
+        if defined.iter().sum::<usize>() + most > MAX_CODE_STEPS {
+            return Err(ProgramError::TooManyCodeSteps);
         }
         // Postgres can't store a NUL in JSON text, and its refusal would
         // quote the text beside it into an error that gets logged.

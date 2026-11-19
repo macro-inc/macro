@@ -96,12 +96,18 @@ its parent holds. Pure data and rules; no I/O.
 - A program with `mcp_servers` needs an agent step (`AppsWithoutAgent`).
 - A routine's sub-routines are checked with it: their code steps get check
   files numbered after the routine's own, ids unique per run (a definition's
-  steps never see the routine's outputs), and every file of a routine with
-  sub-routines types `macro.routines.schedule` by their names and inputs,
-  with interfaces extending the SDK's types so `macro` stays assignable to
-  its `Macro`. A routine without sub-routines types `schedule` as `never`.
-  Whether a routine needs checking again compares check files of one build,
-  so changing the context's text re-checks no stored routine.
+  steps never see the routine's outputs). `STEP_CONTEXT` types
+  `macro.routines.schedule` as `never`; every file of a routine with
+  sub-routines types it by their names, one argument list per name with its
+  inputs, through interfaces extending the SDK's types so `macro` stays
+  assignable to its `Macro`. A routine with neither sub-routines nor inputs
+  gets the per-file line it got before either existed, so its check files
+  are no longer: the checker limits each with that line appended. The
+  sub-routines' code steps, plus the routine's own or its largest
+  sub-routine's, are at most `MAX_CODE_STEPS` (the checker's file limit), so
+  the routine and each copy made standalone fit one check. Whether a routine
+  needs checking again compares check files of one build, so changing the
+  context's text re-checks no stored routine.
 - A copy holds no steps. Editing a definition changes every copy that runs
   after it; a copy whose definition is gone, or whose inputs no longer fit
   it, fails its run (`CopyError`). Keeping a copy as a routine of its own
