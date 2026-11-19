@@ -356,9 +356,15 @@ export function ExternalChatView(props: {
     }
     if (!alive) return;
     const row = find();
-    if (row) following = false;
-    if (row) row.scrollIntoView({ block: 'center', behavior: 'smooth' });
-    else toast.alert('This quoted message is no longer available.');
+    if (!row) {
+      toast.alert('This quoted message is no longer available.');
+      return;
+    }
+    following = false;
+    // The page just loaded is laid out only at the next frame; restoring the
+    // row the reader left then would cancel this scroll.
+    reading = undefined;
+    row.scrollIntoView({ block: 'center', behavior: 'smooth' });
   };
 
   /**
