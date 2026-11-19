@@ -257,6 +257,7 @@ function ItemPane(props: {
                 when={
                   props.vault.failure() === 'failed' ||
                   props.vault.failure() === 'unreachable' ||
+                  props.vault.failure() === 'serviceUnavailable' ||
                   props.vault.failure() === 'notProvisioned'
                 }
               >
@@ -873,22 +874,26 @@ export function VaultView(props: {
                   </div>
                 </Match>
                 <Match when={true}>
-                  <Show when={vault.unreachable()}>
-                    <div class="flex items-center gap-2 px-4 py-2">
-                      <p
-                        role="status"
-                        class="min-w-0 flex-1 text-sm text-ink-muted"
-                      >
-                        {t('passwords.unreachable')}
-                      </p>
-                      <Button
-                        variant="secondary"
-                        size="sm"
-                        onClick={() => vault.retryConnection()}
-                      >
-                        {t('passwords.retry')}
-                      </Button>
-                    </div>
+                  <Show when={vault.connectionProblem()}>
+                    {(problem) => (
+                      <div class="flex items-center gap-2 px-4 py-2">
+                        <p
+                          role="status"
+                          class="min-w-0 flex-1 text-sm text-ink-muted"
+                        >
+                          {problem() === 'unreachable'
+                            ? t('passwords.unreachable')
+                            : t('passwords.serviceUnavailable')}
+                        </p>
+                        <Button
+                          variant="secondary"
+                          size="sm"
+                          onClick={() => vault.retryConnection()}
+                        >
+                          {t('passwords.retry')}
+                        </Button>
+                      </div>
+                    )}
                   </Show>
                   <ItemList
                     items={vault.visibleItems()}
