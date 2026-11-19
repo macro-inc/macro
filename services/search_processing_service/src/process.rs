@@ -7,6 +7,8 @@ pub(crate) mod document;
 pub(crate) mod email;
 pub(crate) mod project;
 pub(crate) mod properties;
+#[cfg(test)]
+mod test_support;
 mod user;
 pub mod worker;
 

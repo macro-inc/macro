@@ -395,6 +395,9 @@ fn billing_error(error: TeamSubscriptionItemsError) -> BillingError {
         TeamSubscriptionItemsError::Customer(
             CustomerError::PaymentFailed | CustomerError::ItemChangeAbandoned,
         ) => BillingError::PaymentFailed,
+        TeamSubscriptionItemsError::Customer(CustomerError::ItemChangeInFlight) => {
+            BillingError::ChangeInFlight
+        }
         error => BillingError::Provider(rootcause::Report::new(error).into_dynamic()),
     }
 }

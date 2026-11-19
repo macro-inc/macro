@@ -28,6 +28,8 @@ network/resource-only Pulumi stacks; they do not host extra agent processes.
   `ahs.harness.hydrated`, `ahs.agent_session.active` (every runtime's actors),
   `ahs.inmem.store_sessions`, `ahs.inmem.live_agents`,
   `ahs.tokio.alive_tasks`); no per-session attributes.
+- `src/cognition/server.rs`: both email-service compositions inject CRM rule
+  discovery; selected Team reads fail closed if a host omits that capability.
 - `src/trigger.rs`: turns channel/webhook triggers into sessions.
 - `src/pull_request_archive.rs`: consumes `macro.github_pull_requests` (group
   `agent-harness-pull-request-archive`) and auto-archives sessions whose

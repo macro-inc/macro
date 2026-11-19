@@ -96,7 +96,7 @@ enforced by the ordinary backend APIs.
   `crm::inbound::pipeline_workflows`; field values are tagged by kind.
 - `src/entities/saved-views/`: `macro.savedViews` over the revision-guarded
   `/saved_views/definitions` routes; `edit` and `remove` send the revision the
-  handle last saw, and keep the response's record so chained writes stay guarded.
+  handle last saw. Successful writes clear cached detail so chained writes reload the current revision even when appearance and definition responses arrive out of order. `appearance()` reads shared icon/color overrides; `setAppearance()` updates them without advancing the filter revision, and creation accepts optional initial appearance.
 - `src/entities/external-chat/`: added provider chats (`macro.externalChats`, entity type
   `external_chat`) and their message/send/upload/participant handles.
 - `src/entities/connected-apps/`: `macro.connectedApps.list(execution)` returns the
@@ -169,7 +169,7 @@ enforced by the ordinary backend APIs.
   then `bun run generate`. `hey-api-openapi-ts-0.99.0.patch` makes stopping an
   SSE stream quiet; carry it forward on a generator upgrade.
 - Keep the human-session-only Passwords vault endpoints, including batch import
-  and name matching and the human review of agent access requests, in coverage
+  and name matching, private favorites and the human review of agent access requests, in coverage
   exclusions; normal human-session authorization and secret disclosure are
   outside v1 agent capabilities.
 - `src/entities/passwords/`: `macro.passwords.forAgent(team, { wake })` is the
@@ -288,7 +288,7 @@ the existing gateway prefixes.
   with `system_properties`' `StatusOption` and `PriorityOption`. Task create
   `propertyValues` replace the service defaults (creator assigned, Not
   started), so `Task.create` spells them out when it sends any.
-- `crm.emailPrivacy` (`src/entities/crm-email-privacy/`, the `crmEmailPrivacy` code-mode category) wraps own-member policy and existing privacy endpoints; preserve exact observed tokens, caller-supplied idempotency keys, preview slot identities and explicit partial counts. Never refresh a token or retry a sharing decision after a conflict. Rule target handles do not fetch content on inspection.
+- `crm.emailPrivacy` (`src/entities/crm-email-privacy/`, the `crmEmailPrivacy` code-mode category) wraps own-member policy and existing privacy endpoints; preserve exact observed tokens, caller-supplied idempotency keys, preview slot identities and explicit partial counts. Never refresh a token or retry a sharing decision after a conflict. Rule target handles do not fetch content on inspection. Validation and replacement share server admission limits; preserve their named errors and never treat validation as reserved capacity. Live growth may later fail a Team read; withdrawal stays available.
 - CRM records and initiatives share `messages/discussion.ts`: their comments are
   messages under a `crm_company`, `crm_contact` or `initiative` parent.
 - `crm.blockDomain` refuses domains covering a team member's connected primary

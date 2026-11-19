@@ -56,6 +56,13 @@ picker instead. On desktop, the add menu's Attach files narrows the picker to
 the channel's file types in a browser and leaves it unfiltered in the desktop
 app (Tauri bridge stubbed as macOS), where a filtered picker attached nothing.
 
+The caret regression taps into a typed draft and into one restored from
+storage, at mid-word, other-line and line-start positions, with the press and
+release sent together as a trackpad tap-to-click arrives, and types there. The
+click used to reach the editor before it had read the new caret, and
+re-focusing the editor put the old caret back, so the click was lost. A click
+just outside the text must still focus the composer.
+
 The mention-ranking fixture also mounts document discussion composers over a
 bounded virtual 100k contact source. Desktop/phone cases verify lazy activation,
 replaceable pages and scroll reset, a late-directory match, insertion, and an

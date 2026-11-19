@@ -3611,3 +3611,16 @@ fn a_stop_without_a_rewind_loses_every_queued_record_but_the_uncommitted_one() {
         "1@8 met the closed worker channel and stays uncommitted"
     );
 }
+
+#[tokio::test]
+async fn an_event_whose_source_is_gone_ends_without_a_replay() {
+    let received = received_thread_backfilled_event(EMAIL_THREAD_ID, 4);
+    let replays = RecordedReplays::default();
+
+    let record =
+        conclude_kafka_attempts(&received, Ok((Handled::SourceMissing, 1)), &replays).await;
+
+    assert_eq!(record.outcome, EventOutcome::SourceMissing);
+    assert_eq!(record.failure, None);
+    assert!(replays.0.lock().unwrap().is_empty());
+}

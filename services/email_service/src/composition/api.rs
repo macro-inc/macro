@@ -1,7 +1,6 @@
 //! Production HTTP service wiring.
 
 use crate::api::context::{ApiContext, AuthorizationService};
-use crate::calendar_refresh::ConnectionGatewayCalendarRefresh;
 use crate::calendar_request_gate::RedisCalendarRequestGate;
 use crate::calendar_tokens::CalendarTokenProviderAdapter;
 use crate::outbound::email_api::{
@@ -58,6 +57,9 @@ pub(crate) struct ApiDependencies {
     pub connection_gateway_client: connection_gateway_client::client::ConnectionGatewayClient,
     pub jwt_args: JwtValidationArgs,
     pub macro_event_broker: MacroEventBrokerService<KafkaEventPublisher, TaskTracker>,
+    /// Drained at shutdown with the broker's publishes: calendar refreshes
+    /// follow a committed write, so they go out on it too.
+    pub event_broker_tracker: TaskTracker,
 }
 
 /// Wires the services for the production listener.
@@ -77,6 +79,7 @@ pub(crate) async fn api_context(deps: ApiDependencies) -> anyhow::Result<ApiCont
         connection_gateway_client,
         jwt_args,
         macro_event_broker,
+        event_broker_tracker,
     } = deps;
     let gmail_api_repository = GmailApiClientRepository::new(gmail_client.clone());
 
@@ -105,7 +108,9 @@ pub(crate) async fn api_context(deps: ApiDependencies) -> anyhow::Result<ApiCont
     );
     let email_service = EmailRouterState::new(
         EmailServiceImpl::new(
-            EmailPgRepo::new(db.clone()),
+            EmailPgRepo::new(db.clone()).with_rule_discovery(Arc::new(
+                crm::outbound::email_rule_discovery::PgEmailRuleDiscovery,
+            )),
             FrecencyQueryServiceImpl::new(FrecencyPgStorage::new(db.clone())),
             (*sqs_client).clone(),
             crm_service,
@@ -185,7 +190,12 @@ pub(crate) async fn api_context(deps: ApiDependencies) -> anyhow::Result<ApiCont
             },
             CalendarTokenProviderAdapter::new(redis_conn.clone(), auth_service_client.clone()),
             macro_event_broker.clone(),
-            ConnectionGatewayCalendarRefresh::new(connection_gateway_client.clone(), db.clone()),
+            calendar_events::outbound::gateway_refresh::GatewayCalendarRefresh::new(
+                connection_gateway_client.clone(),
+                db.clone(),
+                event_broker_tracker,
+            )
+            .with_sends(cfg!(feature = "connection_gateway")),
         )
         .with_outlook_writes_enabled(config.outlook_writes_enabled),
     );

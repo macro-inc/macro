@@ -10,6 +10,8 @@ enum Call {
     Inactive(i32),
     DeleteUnused(Uuid),
     DeleteInactive(Uuid),
+    Ownerless(i64),
+    DeleteOwnerless(Uuid),
 }
 
 type Calls = Arc<Mutex<Vec<Call>>>;
@@ -18,6 +20,7 @@ struct Repository {
     calls: Calls,
     unused: Result<Vec<Uuid>, &'static str>,
     inactive: Result<Vec<Uuid>, &'static str>,
+    ownerless: Result<Vec<Uuid>, &'static str>,
 }
 
 impl LinkRepository for Repository {
@@ -44,6 +47,11 @@ impl LinkRepository for Repository {
         self.calls.lock().unwrap().push(Call::Inactive(days));
         self.inactive.clone()
     }
+
+    async fn fetch_ownerless_link_ids(&self, limit: i64) -> Result<Vec<Uuid>, Self::Error> {
+        self.calls.lock().unwrap().push(Call::Ownerless(limit));
+        self.ownerless.clone()
+    }
 }
 
 struct Queue {
@@ -68,6 +76,10 @@ impl LinkManagerQueue for Queue {
                 link_id,
                 deletion_reason: DeletionReason::Inactive,
             } => Call::DeleteInactive(link_id),
+            LinkManagerMessage::DeleteLink {
+                link_id,
+                deletion_reason: DeletionReason::UserDeleted,
+            } => Call::DeleteOwnerless(link_id),
             _ => panic!("unexpected notification"),
         };
         self.calls.lock().unwrap().push(call);
@@ -103,6 +115,7 @@ fn service(
                 calls: Arc::clone(&calls),
                 unused,
                 inactive,
+                ownerless: Ok(Vec::new()),
             },
             Queue {
                 calls: Arc::clone(&calls),
@@ -253,4 +266,33 @@ async fn repeated_deletion_runs_repeat_queries_and_sends() {
             Call::DeleteUnused(id)
         ]
     );
+}
+
+#[tokio::test]
+async fn ownerless_links_are_removed_as_deleted_users_in_one_bounded_read() {
+    let (first, second) = (Uuid::from_u128(11), Uuid::from_u128(12));
+    let (mut service, calls) = service(config(), Ok(Vec::new()), Ok(Vec::new()), &[1]);
+    service.repository.ownerless = Ok(vec![first, second]);
+
+    service.send_ownerless_delete_messages().await.unwrap();
+
+    assert_eq!(
+        *calls.lock().unwrap(),
+        [
+            Call::Ownerless(100),
+            Call::DeleteOwnerless(first),
+            Call::DeleteOwnerless(second)
+        ],
+        "a failed send does not stop the rest"
+    );
+}
+
+#[tokio::test]
+async fn an_ownerless_query_failure_sends_nothing_and_finishes() {
+    let (mut service, calls) = service(config(), Ok(Vec::new()), Ok(Vec::new()), &[]);
+    service.repository.ownerless = Err("synthetic query failure");
+
+    service.send_ownerless_delete_messages().await.unwrap();
+
+    assert_eq!(*calls.lock().unwrap(), [Call::Ownerless(100)]);
 }
