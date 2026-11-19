@@ -44,6 +44,11 @@ type Observation = {
 type CheckOptions = {
   /** The label the number should read for the view's count, when not its label. */
   expected?: (viewUnread: number) => string;
+  /**
+   * What the view itself must show at this step, when the test knows it, so a
+   * view and a number that are wrong together can't pass.
+   */
+  view?: number;
   note?: string;
 };
 
@@ -82,7 +87,7 @@ function observations(testInfo: TestInfo) {
   return {
     /**
      * Waits for the number beside `view` to read what the view shows, as
-     * `measure` counts it then, and records both.
+     * `measure` counts it then, and records both. Returns the view's count.
      */
     async check(
       page: Page,
@@ -90,7 +95,7 @@ function observations(testInfo: TestInfo) {
       view: NavView,
       measure: () => Promise<number>,
       options: CheckOptions = {}
-    ): Promise<void> {
+    ): Promise<number> {
       const expectedFor = options.expected ?? label;
       let seen = { viewUnread: -1, expected: '', shown: '' };
       await expect
@@ -106,6 +111,11 @@ function observations(testInfo: TestInfo) {
             expected: expectedFor(viewUnread),
             shown: await shown(page, view),
           };
+          if (options.view !== undefined) {
+            expect(viewUnread, `${step}: the ${view} view shows it`).toBe(
+              options.view
+            );
+          }
           expect(seen.shown).toBe(seen.expected);
         }, `${step}: the ${view} number reads what the view shows`)
         .toPass({ timeout: 20_000 });
@@ -115,6 +125,7 @@ function observations(testInfo: TestInfo) {
         file,
         JSON.stringify({ test: testInfo.title, rows }, null, 2)
       );
+      return seen.viewUnread;
     },
   };
 }
@@ -155,13 +166,26 @@ function mailUnread(page: Page, scroll = false): Promise<number> {
         /auto|scroll/.test(getComputedStyle(element).overflowY);
       const scroller = [...grid.querySelectorAll('*')].find(scrolls);
       if (!scroller) return ids.size;
+      // The rows the list renders once a scroll has settled: the same in two
+      // frames running.
+      const settled = async () => {
+        let rendered = '';
+        for (let frame = 0; frame < 60; frame += 1) {
+          await new Promise((resolve) => requestAnimationFrame(resolve));
+          const now = [...grid.querySelectorAll('[data-soup-entity]')]
+            .map((row) => row.id)
+            .join();
+          if (now === rendered) return;
+          rendered = now;
+        }
+      };
       for (
         let top = 0;
         top <= scroller.scrollHeight;
         top += scroller.clientHeight / 2
       ) {
         scroller.scrollTop = top;
-        await new Promise((resolve) => setTimeout(resolve, 150));
+        await settled();
         read();
       }
       scroller.scrollTop = 0;
@@ -202,8 +226,17 @@ function scrollMailListToEnd(page: Page): Promise<void> {
         element.scrollHeight > element.clientHeight + 1 &&
         /auto|scroll/.test(getComputedStyle(element).overflowY)
     );
-    if (scroller) scroller.scrollTop = scroller.scrollHeight;
-    await new Promise((resolve) => setTimeout(resolve, 300));
+    if (!scroller) return;
+    // Rows measured on the way down can grow the list: scroll until its
+    // height holds still between frames at the end.
+    let height = -1;
+    for (let frame = 0; frame < 60 && height !== scroller.scrollHeight; ) {
+      height = scroller.scrollHeight;
+      scroller.scrollTop = height;
+      for (let wait = 0; wait < 2; wait += 1, frame += 1) {
+        await new Promise((resolve) => requestAnimationFrame(resolve));
+      }
+    }
   });
 }
 
@@ -676,9 +709,17 @@ test.describe('the unread numbers beside each view', {
     await expect(
       page.getByRole('treeitem').filter({ hasText: 'Standup' }).first()
     ).toBeVisible({ timeout: 60_000 });
-    await seen.check(page, 'three new conversations', 'channels', unread, {
-      note: 'a welcome message the stack sends new users can be unread here',
-    });
+    // What the welcome message leaves unread; each later step changes the
+    // view by a known amount from here.
+    const start = await seen.check(
+      page,
+      'three new conversations',
+      'channels',
+      unread,
+      {
+        note: 'a welcome message the stack sends new users can be unread here',
+      }
+    );
 
     await post(bob, lunch, 'Tacos at noon?');
     await post(bob, lunch, 'Or pizza.');
@@ -691,7 +732,8 @@ test.describe('the unread numbers beside each view', {
       page,
       'two unread messages in one conversation',
       'channels',
-      unread
+      unread,
+      { view: start + 1 }
     );
 
     await post(bob, design, 'Can you look at the mockups?', { mention: ada });
@@ -705,7 +747,10 @@ test.describe('the unread numbers beside each view', {
       'a message that mentions the user, in a second conversation',
       'channels',
       unread,
-      { note: 'its row shows the mention count in place of the dot' }
+      {
+        view: start + 2,
+        note: 'its row shows the mention count in place of the dot',
+      }
     );
 
     const root = await post(ada, standup, 'Shipping the release today.');
@@ -719,7 +764,10 @@ test.describe('the unread numbers beside each view', {
       'two thread replies to the user’s message',
       'channels',
       unread,
-      { note: 'Chat marks a conversation for its top-level messages only' }
+      {
+        view: start + 2,
+        note: 'Chat marks a conversation for its top-level messages only',
+      }
     );
 
     await post(bob, standup, 'Can you post the notes?', {
@@ -737,6 +785,7 @@ test.describe('the unread numbers beside each view', {
       'channels',
       unread,
       {
+        view: start + 2,
         note: 'Standup shows a mention count for a thread reply; Chat’s section counts leave it out, and so does the number',
       }
     );
@@ -750,6 +799,7 @@ test.describe('the unread numbers beside each view', {
       .poll(() => chatRow(page, 'Lunch crew'), { timeout: 60_000 })
       .toBeUndefined();
     await seen.check(page, 'one conversation opened', 'channels', unread, {
+      view: start + 1,
       note: 'Standup still has only its thread mention',
     });
   });
