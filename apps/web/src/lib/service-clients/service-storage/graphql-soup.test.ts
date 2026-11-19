@@ -887,7 +887,7 @@ describe('GraphQL Soup browser cache session gate', () => {
     expect(mocks.platformFetch).not.toHaveBeenCalled();
   });
 
-  it('falls back within the local startup budget and never revives a slow owner', async () => {
+  it('keeps a slow local owner until its own startup deadline', async () => {
     vi.useFakeTimers();
     const owner = Promise.withResolvers<void>();
     mocks.initializeCrmCacheOwner
@@ -896,21 +896,43 @@ describe('GraphQL Soup browser cache session gate', () => {
     const soup = await import('./graphql-soup');
     const initialized = soup.initializeGraphqlSoupCache();
     const slowHost = soup.getGraphqlCacheHost();
-    await vi.advanceTimersByTimeAsync(1499);
-    expect(soup.getGraphqlCacheHost()).toBe(slowHost);
-    expect(mocks.replaceSubscriptions).not.toHaveBeenCalled();
-    await vi.advanceTimersByTimeAsync(1);
-    await initialized;
-    expect(soup.getGraphqlCacheHost()).toBeUndefined();
-    expect(slowHost?.disabled).toBe(true);
-    expect(soup.graphqlDraftQueueBlocked()).toBe(true);
-    expect(mocks.platformFetch).not.toHaveBeenCalled();
+    try {
+      // Asset loading and the coordinator's retry backoffs can exceed 1.5s.
+      // Root renders independently; this must not retire a healthy late owner.
+      await vi.advanceTimersByTimeAsync(2_000);
+      expect(soup.getGraphqlCacheHost()).toBe(slowHost);
+      expect(slowHost?.disabled).toBe(false);
+      expect(mocks.replaceSubscriptions).not.toHaveBeenCalled();
+      expect(mocks.platformFetch).not.toHaveBeenCalled();
+    } finally {
+      owner.resolve();
+      await initialized;
+    }
+    expect(soup.graphqlCacheRecoveryState()).toBe('ready');
     expect(mocks.replaceSubscriptions).toHaveBeenCalledExactlyOnceWith(
-      mocks.realtimeClient
+      soup.getGraphqlSoupClient(),
+      slowHost
     );
-    owner.resolve();
-    await owner.promise;
-    expect(mocks.replaceSubscriptions).toHaveBeenCalledOnce();
+  });
+
+  it('preserves a delayed bootstrap failure as retryable', async () => {
+    vi.useFakeTimers();
+    const owner = Promise.withResolvers<void>();
+    mocks.initializeCrmCacheOwner
+      .mockReturnValueOnce(owner.promise)
+      .mockReturnValueOnce(owner.promise);
+    const soup = await import('./graphql-soup');
+    const { CacheBootstrapExhaustedError } = await import(
+      '@graphql-cache/worker/startup'
+    );
+    const initialized = soup.initializeGraphqlSoupCache();
+    await vi.advanceTimersByTimeAsync(2_000);
+    // Only the worker can prove that retrying preserves the unopened queue.
+    owner.reject(new CacheBootstrapExhaustedError('Engine assets unavailable'));
+    await initialized;
+    expect(soup.graphqlCacheRecoveryState()).toBe('unavailable');
+    expect(soup.graphqlDraftQueueBlocked()).toBe(true);
+    expect(soup.getGraphqlSoupClient()).toBe(mocks.realtimeClient);
   });
 
   it('uses the existing fallback when local owner initialization rejects', async () => {

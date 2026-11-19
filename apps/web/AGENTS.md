@@ -46,8 +46,10 @@ mismatches. Native retains its baseline gate because independently persisted
 Soup pages can restore before owner readiness.
 Install the cache host before request producers mount, but run its bounded
 initialization in the background; Root and first render never await storage or
-the owner handshake. Read account, policy and generation from the profile's
-localStorage mirror only as a startup hint; update it only from validated owner
+the owner handshake. Keep the host's phase deadlines and classified startup
+failures; an extra owner deadline can interrupt valid retries and permanently
+block the preserved draft queue. Read account, policy and generation from the
+profile's localStorage mirror only as a startup hint; update it only from validated owner
 observations. Missing or unreadable hints send an explicit nonmatching UUID,
 never an omitted generation. A first non-denied owner without a mirror initializes
 stamps while keeping existing query observers, rows, menus and persisted snapshots,

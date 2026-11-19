@@ -931,8 +931,10 @@ wait for permission proof. There are no GraphQL-field or REST-route admission
 classifiers.
 
 Startup installs the cache host before request producers but initializes it in
-the background, with a 1.5-second budget and the existing cache-failure fallback.
-Root and first render never await the owner or permission HTTP. A synchronous
+the background. The host's phase deadlines bound initialization and retain its
+classified failure and queue-recovery paths. No outer owner timer interrupts
+worker retries or converts them into permanent failures. Root and first render
+never await the owner or permission HTTP. A synchronous
 profile-local mirror supplies account, policy and generation as hints; missing
 or unreadable hints stamp an explicit nonmatching UUID. Same-account/same-policy
 observations correct future write stamps without retiring in-memory responses.

@@ -77,7 +77,10 @@ refetch. Writes compare the same generation under the shared native owner lock
 or browser worker. There are no CRM admission classifiers or ownership witnesses
 on these paths. The existing account fence remains independent.
 
-Startup renders without waiting for the local store. A profile-scoped
+Startup renders without waiting for the local store. Initialization keeps the
+host's phase deadlines and classified failure handling, so a slow asset load or
+retry cannot become a permanent queue failure through a separate owner timer.
+A profile-scoped
 localStorage mirror supplies the account, policy string and generation as hints;
 missing or unreadable mirrors send an explicit nonmatching UUID. Windows update
 the mirror from validated owner observations, without treating cross-window

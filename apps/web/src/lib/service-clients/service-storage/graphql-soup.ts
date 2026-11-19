@@ -144,7 +144,6 @@ export { emailThreadSortTs } from './email-thread-sort';
 
 const dssHost = SERVER_HOSTS['document-storage-service'];
 const QUEUE_CLEAR_INSPECTION_TIMEOUT_MS = 1000;
-const CACHE_BOOTSTRAP_TIMEOUT_MS = 1500;
 
 function mergeHeaders(...headers: Array<HeadersInit | undefined>): Headers {
   const result = new Headers();
@@ -832,17 +831,15 @@ export async function initializeGraphqlSoupCache(): Promise<void> {
   await Telemetry.span('graphql.cache_startup', async (span) => {
     getGraphqlSoupClient();
     const host = cachedCacheHost;
-    // This is local owner initialization, never an identity or permission read.
-    // A slow or unavailable store uses the existing cache-failure path.
-    const result = await raceTimeout(
-      initializeCrmCacheOwner().then(
-        () => ({ ready: true as const }),
-        (error: unknown) => ({ ready: false as const, error })
-      ),
-      CACHE_BOOTSTRAP_TIMEOUT_MS
+    // Root never awaits this local handshake. Keep the host's phase deadlines:
+    // an outer timer could interrupt valid asset retries or lose its proof that
+    // storage stayed untouched, permanently blocking the preserved draft queue.
+    const result = await initializeCrmCacheOwner().then(
+      () => ({ ready: true as const }),
+      (error: unknown) => ({ ready: false as const, error })
     );
-    if (result?.ready) return;
-    const error = result?.error ?? new Error('Local cache startup timed out');
+    if (result.ready) return;
+    const error = result.error;
     span.setAttr('cache.fallback', true);
     span.error(error);
     if (host && cachedCacheHost === host) {
