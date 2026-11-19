@@ -95,6 +95,7 @@ export type DefaultFileOperation = {
 };
 
 export type CustomFileOperation = {
+  id?: string;
   label: string;
   icon: Component;
   action?: () => void | Promise<unknown>;
@@ -339,7 +340,10 @@ function MobileRender(
           <MobileDrawer.Item
             type="button"
             disabled={!!action().disabledReason}
-            class={cn(nested ? 'pl-9 pr-4' : 'px-4')}
+            class={cn(
+              nested ? 'pl-9 pr-4' : 'px-4',
+              action().danger && 'text-failure'
+            )}
             onClick={(e) => {
               fireAndForget(action().action?.(e), 'split-file-menu');
               props.onOpenChange(false);
@@ -520,6 +524,10 @@ export type SplitFileMenuProps = {
   tools?: BlockTool[];
   /** See {@link SplitFileMenuViews}. Only the mobile drawer renders it. */
   mobileViews?: SplitFileMenuViews;
+  /** Presentation-only grouping for a host's phone action sheet. */
+  mobileActionGroups?: (
+    groups: SplitFileMenuActionGroups
+  ) => SplitFileMenuActionGroups;
   /**
    * Full entity for the menu's entity-gated items. Supply it when the block
    * can build one that generic chrome can't reconstruct from id/name/entityKind
@@ -867,7 +875,7 @@ export function SplitFileMenu(props: SplitFileMenuProps) {
           { label: op.label },
           Object.getOwnPropertyDescriptors(op)
         );
-        action.id = `operation-${index}`;
+        action.id = op.id ?? `operation-${index}`;
         return action;
       })
       .filter((op) => !!op);
@@ -980,7 +988,7 @@ export function SplitFileMenu(props: SplitFileMenuProps) {
           open={open()}
           onOpenChange={setOpen}
           triggerClass={props.buttonClass}
-          groups={actionGroups()}
+          groups={props.mobileActionGroups?.(actionGroups()) ?? actionGroups()}
           views={props.mobileViews}
         />
       </Show>
