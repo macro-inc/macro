@@ -205,6 +205,14 @@ tools — hexagonal, heavily feature-gated.
   in that snapshot too. If none of the requested contributors uses selected
   mode, keep the all-mail probe/page SQL without selected-rule work. General
   reads keep their existing page transaction.
+- Selected Team reads require an injected `EmailRuleDiscoveryService` on
+  `EmailPgRepo`. Discover once in the read snapshot and reuse complete contacts
+  in probe/page; all-mail reads call no discovery and keep their SQL unchanged.
+  Preserve typed resource-limit failures through `EmailErr` and Soup: return
+  HTTP 503 with the limit, never an empty or truncated page. The CRM core also
+  admits policy writes; do not implement separate limits in the email adapter.
+  A bare repository fails closed for selected reads if composition omitted
+  discovery. General mode-partition races remain a separate activation gate.
 - A requested sender may be a verified Gmail send-as alias, not just an inbox
   address: `resolve_sending_inbox` (AI tools) picks the inbox that owns it, and
   `resolve_sender` (drafts, REST `from`) checks it against the chosen inbox.

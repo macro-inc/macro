@@ -385,7 +385,57 @@ candidates. Keep cheap mailbox/company/contact filters and planner fences in
 scoped lists. Sparse selected feeds should enter through indexed positive target
 candidates. Apply final eligibility **before** conversation deduplication,
 cursor and limit. Do not prematurely cap candidates and omit eligible results.
-Add separately reviewed participant lookup indexes if measurement requires them.
+The bounded discovery core lives in CRM and is injected into the email adapter.
+It resolves each distinct live contact/company source once, retaining contributor
+visibility separately from its values. The Team probe and page reuse the complete
+contact result in the same snapshot. All-mail reads call neither discovery nor
+admission and keep their existing SQL. This change adds no index or migration.
+
+Choose the small-input strategy before live expansion: at most eight selected
+contributors and 4,000 raw selector references. Exact-address policies use indexed
+mailbox/address probes while the estimated cross product is at most 50,000;
+beyond that threshold, use a bounded scan rather than reject a complete policy
+for the choice of algorithm. Small domain policies use a bounded SQL aggregate;
+larger inputs fold shared source values and stream mailbox contacts through
+keyset pages. Both paths use the following request-wide limits:
+
+| Work | Maximum |
+| --- | --- |
+| Selected contributors, including empty policies | 1,000 |
+| Raw selector references | 50,000 |
+| Address rows from distinct live contacts | 50,000 |
+| Domain rows from distinct live companies | 50,000 |
+| One live source value, before normalization/decoding | 4 KiB |
+| Accounted literal/live source text | 8 MiB |
+| Mailbox contact rows, including nonmatches | 250,000 |
+| Mailbox contact text | 32 MiB |
+| Domain suffix checks | 750,000 |
+| Live-source membership checks | 250,000 |
+| Discovery deadline, shared by its stages | 10 seconds |
+
+These are synthetic-fixture budgets, not production distributions. Charge raw
+rows before filtering/deduplication; share each source's allowance across all
+contributors. Bound SQL input batches and stop after one sentinel row beyond the
+remaining allowance. The small SQL aggregate can materialize the bounded raw
+contact page before checking its byte count; 32 MiB is a text-work allowance, not
+a claim about total database memory. Never return a partial contact set.
+
+`validateRules` and `replaceRules` run the same admission checker against the
+proposed replacement plus the team's other active selected policies. Validation
+is read-only and does not reserve capacity. Replacement rechecks inside its
+locked mutation before saving or granting; a refusal rolls back identity,
+history transfer, audit and idempotency effects too. The member/agent receives
+HTTP 400 naming the exceeded limit and maximum, without another member's usage
+or rule content. They can narrow the rules and validate again; changing consent
+to all-mail and withdrawal retain their independent paths.
+
+Live changes can outgrow a previously admitted policy. A Team read then returns
+HTTP 503 naming the limit, records `limit_hit` and work counts on its discovery
+span, and returns no partial page or advanced cursor. That request fails for the
+viewer; it must not silently omit one contributor or weaken an exclusion.
+Withdrawal remains available even after overflow or when the flag is off.
+This bounds discovery, not every later message/candidate/fallback query; retain
+those separate activation gates.
 
 | Query shape to measure | Required evidence |
 | --- | --- |
@@ -632,9 +682,25 @@ flag-off-as-all-mail turns a rollout control into a disclosure.
    address probes, 740,236 shared buffer accesses and 2,522 temporary blocks
    written by the original eager-distinct probe (1.55 seconds; 4.45 seconds for
    the request).
-   Streaming duplicates removes that eager sort but does not bound misses.
-   An overflow must never authorize a truncated target set, and falling back
-   to a dense record stream is not a sufficient bound. Retain the deterministic
+   The shared discovery core and authoring admission above address that
+   expansion; measure its final Rust/API path and small/folded crossover before
+   declaring this gate complete. The initial final-path capture alternated
+   1,120 reads across fresh/stale custom/generic plans and 1/4/8/16/100
+   contributors. All 560 bounded reads completed; the original expanded-policy
+   path timed out at ten seconds in all 16 runs with 100 contributors, while
+   the bounded path took 436–447 ms. Paired successful reads returned identical
+   ordered IDs. Small literal/contact policies stayed near parity; one expanded
+   contact added 4–9 ms. The smaller fixture also exercised 2,880 authenticated
+   in-process API requests, including validation and replacement admission.
+   These timings exclude HTTPS. An overflow must never authorize a truncated
+   target set, and falling back to a dense record stream is not a sufficient
+   bound. The initial million-thread baseline used five million primary-mailbox
+   messages with 2.905 million background messages; the full ten-million
+   background tier remains required before activation on a quieter host.
+   Selectivity-dependent plans and index-only probes may change at that tier.
+   Also close the General reader's contribution-mode partition race and bound
+   later candidate/message/recipient/fallback work; discovery alone does not
+   establish those properties. Retain the deterministic
    all-mail/selected snapshot-transition regressions added in PR 2.
    CRM-scoped email search is deferred: email search rejects CRM filters with
    HTTP 400 and reads no team mail. **If CRM-scoped search ships before selected

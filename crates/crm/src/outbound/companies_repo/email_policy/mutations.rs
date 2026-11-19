@@ -40,6 +40,17 @@ impl EmailPolicyAuthoringTransaction for PgEmailPolicyTransaction {
         .await
     }
 
+    async fn admit_rule_resources(&mut self, rules: &[EmailInclusionRule]) -> Result<(), CrmError> {
+        super::authoring::admit_resources(
+            &mut self.tx,
+            self.team,
+            &self.user,
+            self.state.link_id,
+            rules,
+        )
+        .await
+    }
+
     #[tracing::instrument(skip_all, fields(team_id = %self.team), err)]
     async fn save_rule_revision(&mut self, rules: &EmailRuleSet) -> Result<i64, CrmError> {
         rules

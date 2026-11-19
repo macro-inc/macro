@@ -111,7 +111,9 @@ threads, pins, recents, notifications, folders, activity.
 - Inject the same client into CRM's selective contribution gate. The owner-only
   policy API stays default-off for grants; GET never initializes identity,
   including when the flag is on. Keep its OpenAPI contract and generated storage
-  SDK current; public SDK wrappers are deferred to the next phase.
+  SDK current; public wrappers live in `macro.crm.emailPrivacy`.
+  Inject CRM rule discovery into both primary and replica EmailPgRepo instances;
+  CRM-scoped reads still select the primary and retain typed resource errors.
   Keep the email-policy enum closure modifier in `api/swagger/email_policy.rs`
   until schema generation propagates `deny_unknown_fields` to variant objects.
 
