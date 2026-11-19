@@ -70,11 +70,13 @@ run, which saves its runner. Run the checks as you work, and post what applies
 once the commit is pushed:
 
 ```sh
-git merge origin/main         # PR CI tests your branch merged with main
+git fetch origin main && git merge origin/main && git push
 cargo x attest run all        # every check your branch makes PR CI run; posts nothing
-git push
 cargo x attest post           # with the PR open, before the label
 ```
+
+Merge `main` and push in one go, then run: GitHub builds the merge commit
+`PR CI` tests at the push, and `main` moves while checks run.
 
 `run` works in your working tree, on committed files, and records each result
 for the tree it ran on. `post` posts the passes recorded for the tree `PR CI`
