@@ -164,7 +164,9 @@ describe('createRetirableCacheHost', () => {
       kind: 'ready',
       epoch,
     });
-    await expect(people.update(update)).resolves.toBe('1');
+    await expect(
+      people.update(update, TEST_AUTHORITY_GENERATION)
+    ).resolves.toBe('1');
     await expect(people.search(search)).resolves.toEqual(page);
     await expect(people.resolveReferences(references)).resolves.toEqual(
       resolved
@@ -184,7 +186,9 @@ describe('createRetirableCacheHost', () => {
     });
     await expect(contextRead(scope)).resolves.toEqual({ kind: 'unsupported' });
     await expect(searchRead(search)).resolves.toEqual({ kind: 'unsupported' });
-    await expect(write(update)).rejects.toThrow(PEOPLE_UNSUPPORTED);
+    await expect(write(update, TEST_AUTHORITY_GENERATION)).rejects.toThrow(
+      PEOPLE_UNSUPPORTED
+    );
     expect(transport.context).toHaveBeenCalledOnce();
     expect(transport.update).toHaveBeenCalledOnce();
     expect(transport.search).toHaveBeenCalledOnce();
@@ -231,11 +235,14 @@ describe('createRetirableCacheHost', () => {
       })
     ).rejects.toBe(error);
     await expect(
-      people.update({
-        scope,
-        epoch: '00000000-0000-4000-8000-000000000002',
-        action: { kind: 'commit' },
-      })
+      people.update(
+        {
+          scope,
+          epoch: '00000000-0000-4000-8000-000000000002',
+          action: { kind: 'commit' },
+        },
+        TEST_AUTHORITY_GENERATION
+      )
     ).rejects.toBe(error);
     host.dispose();
   });

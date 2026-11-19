@@ -200,34 +200,31 @@ it('keeps a committed hydration broadcast stamped with its original authority', 
   );
 });
 
-it.each([undefined, UNKNOWN_CACHE_GENERATION])(
-  'never gives a pre-ready copied write the later owner generation: %s',
-  async (generation) => {
-    host.dispose();
-    const started = Promise.withResolvers<void>();
-    const owner = Promise.withResolvers<CacheAuthority>();
-    readAuthority = () => {
-      started.resolve();
-      return owner.promise;
-    };
-    host = createTauriCacheHost({ scope: state.identity });
-    const writing = host.writeQuery({
-      query: '{ user { id } }',
-      data: { user: { id: 'viewer' } },
-      generation: generation ?? UNKNOWN_CACHE_GENERATION,
-    });
-    await started.promise;
-    expect(
-      invoke.mock.calls.some(([command]) => command === 'graphql_cache_write')
-    ).toBe(false);
-    owner.resolve(state);
-    await writing;
-    expect(invoke).toHaveBeenCalledWith(
-      'graphql_cache_write',
-      expect.objectContaining({ generation: UNKNOWN_CACHE_GENERATION })
-    );
-  }
-);
+it('never gives a pre-ready copied write the later owner generation', async () => {
+  host.dispose();
+  const started = Promise.withResolvers<void>();
+  const owner = Promise.withResolvers<CacheAuthority>();
+  readAuthority = () => {
+    started.resolve();
+    return owner.promise;
+  };
+  host = createTauriCacheHost({ scope: state.identity });
+  const writing = host.writeQuery({
+    query: '{ user { id } }',
+    data: { user: { id: 'viewer' } },
+    generation: UNKNOWN_CACHE_GENERATION,
+  });
+  await started.promise;
+  expect(
+    invoke.mock.calls.some(([command]) => command === 'graphql_cache_write')
+  ).toBe(false);
+  owner.resolve(state);
+  await writing;
+  expect(invoke).toHaveBeenCalledWith(
+    'graphql_cache_write',
+    expect.objectContaining({ generation: UNKNOWN_CACHE_GENERATION })
+  );
+});
 
 it('reads cached email while the authority has no policy, with one IPC per warm read', async () => {
   await expect(

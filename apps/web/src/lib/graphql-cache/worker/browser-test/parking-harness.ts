@@ -161,10 +161,14 @@ const api = {
           data: { user: { id: `catchup-${index}` } },
         })
       ),
-      current.calendarCommit({
-        coverage: [{ kind: 'timed', start: 0, end: 1 }],
-        freshness: 'fresh',
-      }),
+      (async () =>
+        current.calendarCommit(
+          {
+            coverage: [{ kind: 'timed', start: 0, end: 1 }],
+            freshness: 'fresh',
+          },
+          (await current.authority!.current()).generation
+        ))(),
     ]);
   },
   async catchupDone() {

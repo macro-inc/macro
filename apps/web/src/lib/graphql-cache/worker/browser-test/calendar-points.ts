@@ -71,10 +71,15 @@ function equal(actual: unknown, expected: unknown) {
 
 try {
   await write(instant);
-  await host.calendarCommit({
-    coverage: [{ kind: 'timed', start: pointMs - 1, end: pointMs + 3_600_000 }],
-    freshness: 'fresh',
-  });
+  await host.calendarCommit(
+    {
+      coverage: [
+        { kind: 'timed', start: pointMs - 1, end: pointMs + 3_600_000 },
+      ],
+      freshness: 'fresh',
+    },
+    (await host.authority!.current()).generation
+  );
   equal(await keys(pointMs, pointMs + 1), [occurrenceKey]);
   equal(await keys(pointMs - 1, pointMs), []);
   equal(await keys(pointMs, pointMs), []);

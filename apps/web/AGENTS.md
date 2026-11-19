@@ -77,8 +77,12 @@ startup baselines, plus clearing for denied and different-account owners.
 
 Fence all response content with one owner-issued generation. Capture it before
 HTTP or subscription dispatch and retain it through decoding and cache writes;
-never stamp already-fetched data with a newer generation. Compare it under the
-shared native owner lock or browser worker before writing. Discard old query
+never stamp already-fetched data with a newer generation. Every content write
+(query, hydration, queued command, calendar commit, people update, contact
+reconciliation) takes that captured generation as a required argument; a host
+supplies its observed generation only for reads and for removals, which carry no
+fetched content. Compare it under the shared native owner lock or browser worker
+before writing. Discard old query
 results and subscription frames and refetch active queries once per transition.
 Do not classify GraphQL fields or REST routes for admission. Preserve socket
 frame generations through payload helpers and keep differently stamped batches
@@ -121,7 +125,11 @@ Keep initial CRM access pending until proof succeeds or bounded retries fail;
 then show the existing retry state and retry on reconnect. Retry only stale
 proof generations or network failures, once, with a short second timeout.
 Preserve the last proven state across transient failure; show denial and tear
-down CRM dialogs only on proven denial. Gate the admin switch with the server's
+down CRM dialogs only on proven denial. A proven denial the owner cannot record
+still retires this page's snapshots once and holds for the owner generation it
+was proven against; a committed grant or a newer owner generation supersedes it,
+so a regrant another window commits reopens every window. Gate the admin switch
+with the server's
 remote `enable-crm-member-access-changes` flag, never denial enforcement.
 Use `crmAccessAllowed` for navigation and create entry points, and
 `crmAccessAuthority.allowed` for record data and `CrmContext.canAccess`; pending

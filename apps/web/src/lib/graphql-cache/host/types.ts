@@ -176,7 +176,7 @@ export interface CacheHost {
   /** Atomically applies calendar coverage, deletions, and sync state. */
   calendarCommit(
     args: CalendarCommitArgs,
-    generation?: string
+    generation: string
   ): Promise<CalendarCommitCacheResult>;
   writeQuery(args: CacheWriteArgs): Promise<WriteResult>;
   /**

@@ -39,7 +39,7 @@ export interface PeopleCache {
   ): Promise<ContactSnapshot | Unsupported>;
   reconcile(
     request: ContactReconcile,
-    generation?: string
+    generation: string
   ): Promise<CacheRevision>;
   readSql(request: PeopleSqlRequest): Promise<PeopleSqlResult>;
   resolveReferences(
@@ -48,7 +48,7 @@ export interface PeopleCache {
   context(scope: PeopleScope): Promise<PeopleContextState | Unsupported>;
   update(
     update: PeopleContextUpdate,
-    generation?: string
+    generation: string
   ): Promise<CacheRevision>;
   search(request: PeopleSearch): Promise<PeopleSearchResult | Unsupported>;
 }
@@ -59,8 +59,8 @@ export interface PeopleTransport {
   ): Promise<unknown>;
   reconcile(
     request: ContactReconcile,
-    traceparent?: string,
-    generation?: string
+    traceparent: string | undefined,
+    generation: string
   ): Promise<unknown>;
   readSql(request: PeopleSqlRequest, traceparent?: string): Promise<unknown>;
   resolveReferences(
@@ -70,8 +70,8 @@ export interface PeopleTransport {
   context(scope: PeopleScope, traceparent?: string): Promise<unknown>;
   update(
     update: PeopleContextUpdate,
-    traceparent?: string,
-    generation?: string
+    traceparent: string | undefined,
+    generation: string
   ): Promise<unknown>;
   search(request: PeopleSearch, traceparent?: string): Promise<unknown>;
 }

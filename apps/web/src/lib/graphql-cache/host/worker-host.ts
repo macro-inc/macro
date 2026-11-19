@@ -1434,6 +1434,9 @@ export function createWorkerCacheHost(options: WorkerHostOptions): CacheHost {
   ): Promise<unknown> {
     msg = {
       ...msg,
+      // Content keeps the stamp it was fetched under and is never relabelled.
+      // Reads, and removals, which carry no fetched content, take the observed
+      // generation.
       generation:
         msg.generation ??
         (![
@@ -1441,6 +1444,9 @@ export function createWorkerCacheHost(options: WorkerHostOptions): CacheHost {
           'hydrate',
           'enqueue-optimistic-mutation',
           'commit-optimistic-write',
+          'calendar-commit',
+          'people-update',
+          'contact-reconcile',
         ].includes(msg.kind)
           ? authorityObserver.snapshot()?.generation
           : undefined) ??
@@ -1625,7 +1631,7 @@ export function createWorkerCacheHost(options: WorkerHostOptions): CacheHost {
 
     async calendarCommit(
       args: CalendarCommitArgs,
-      generation?: string
+      generation: string
     ): Promise<CalendarCommitCacheResult> {
       return (await initializedRequest({
         kind: 'calendar-commit',

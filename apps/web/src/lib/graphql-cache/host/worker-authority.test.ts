@@ -239,19 +239,16 @@ it('ignores malformed and foreign authority pushes without throwing from the tra
   expect(host.authority!.snapshot()).toEqual(state);
 });
 
-it.each([undefined, UNKNOWN_CACHE_GENERATION])(
-  'never restamps a pre-ready copied write after the owner becomes ready: %s',
-  async (generation) => {
-    await host.writeQuery({
-      query: '{ user { id } }',
-      data: { user: { id: 'viewer' } },
-      generation: generation ?? UNKNOWN_CACHE_GENERATION,
-    });
-    const write = requests.find((request) => request.kind === 'write');
-    expect(write?.generation).toBe(UNKNOWN_CACHE_GENERATION);
-    expect(write?.generation).not.toBe(state.generation);
-  }
-);
+it('never restamps a pre-ready copied write after the owner becomes ready', async () => {
+  await host.writeQuery({
+    query: '{ user { id } }',
+    data: { user: { id: 'viewer' } },
+    generation: UNKNOWN_CACHE_GENERATION,
+  });
+  const write = requests.find((request) => request.kind === 'write');
+  expect(write?.generation).toBe(UNKNOWN_CACHE_GENERATION);
+  expect(write?.generation).not.toBe(state.generation);
+});
 
 it('keeps offline reads available before any proof and across a preserved owner replacement', async () => {
   await host.authority!.current();

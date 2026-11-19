@@ -176,7 +176,9 @@ describe('createTauriCacheHost', () => {
     await expect(host.people.context(scope)).resolves.toEqual({
       kind: 'unsupported',
     });
-    await expect(host.people.update(update)).rejects.toThrow('unsupported');
+    await expect(
+      host.people.update(update, TEST_AUTHORITY_GENERATION)
+    ).rejects.toThrow('unsupported');
     expect(
       invokeMock.mock.calls.some(
         ([command]) =>
@@ -208,12 +210,14 @@ describe('createTauriCacheHost', () => {
     });
     const host = createTauriCacheHost({ scope: 'scope-1' });
     if (!host.people) throw new Error('Missing person transport');
-    await expect(host.people.update(update)).rejects.toThrow(
-      'cache hydration scope changed'
-    );
+    await expect(
+      host.people.update(update, TEST_AUTHORITY_GENERATION)
+    ).rejects.toThrow('cache hydration scope changed');
     expect(emitMock).not.toHaveBeenCalled();
     stale = false;
-    await expect(host.people.update(update)).resolves.toBe('8');
+    await expect(
+      host.people.update(update, TEST_AUTHORITY_GENERATION)
+    ).resolves.toBe('8');
     expect(invokeMock).toHaveBeenLastCalledWith('graphql_cache_people_update', {
       generation: TEST_AUTHORITY_GENERATION,
       update,
@@ -224,7 +228,7 @@ describe('createTauriCacheHost', () => {
       revision: '8',
       searchChangedBuckets: ['person'],
     });
-    await host.people.update(update);
+    await host.people.update(update, TEST_AUTHORITY_GENERATION);
     expect(emitMock).toHaveBeenCalledTimes(1);
     host.dispose();
   });
@@ -1676,7 +1680,9 @@ describe('createTauriCacheHost', () => {
           { request: rangeArgs }
         );
         const commit = { deletedEventKeys: ['GraphqlCalendarEvent:e2'] };
-        await expect(host.calendarCommit(commit)).resolves.toEqual({
+        await expect(
+          host.calendarCommit(commit, TEST_AUTHORITY_GENERATION)
+        ).resolves.toEqual({
           kind: 'committed',
           revision: '5',
           changed: ['GraphqlCalendarEvent:e2'],
@@ -1722,7 +1728,9 @@ describe('createTauriCacheHost', () => {
         await expect(host.calendarRange(rangeArgs)).resolves.toEqual({
           kind: 'unsupported',
         });
-        await expect(host.calendarCommit({ reset: true })).resolves.toEqual({
+        await expect(
+          host.calendarCommit({ reset: true }, TEST_AUTHORITY_GENERATION)
+        ).resolves.toEqual({
           kind: 'unsupported',
         });
         expect(

@@ -150,9 +150,12 @@ it('older native sync is unsupported without disabling person context', async ()
   expect(
     await captureContactWriteScope(host, scope, new AbortController().signal)
   ).toBeUndefined();
-  await expect(host.people?.reconcile(reconcile)).rejects.toThrow(
-    'unsupported'
-  );
+  await expect(
+    host.people?.reconcile(
+      reconcile,
+      (await host.authority!.current()).generation
+    )
+  ).rejects.toThrow('unsupported');
   expect(await host.people?.context(scope)).toEqual({ kind: 'missing' });
   host.dispose();
 });

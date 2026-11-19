@@ -604,16 +604,12 @@ export function createTauriCacheHost(options: TauriHostOptions): CacheHost {
         }
       },
       async reconcile(args, traceparent, generation) {
-        const captured =
-          generation ??
-          authorityObserver.snapshot()?.generation ??
-          UNKNOWN_CACHE_GENERATION;
         await ready;
         if (contactSyncUnavailable) return { kind: 'unsupported' };
         try {
           const result = await request<WriteResult>(
             'graphql_cache_contact_reconcile',
-            { request: args, traceparent, generation: captured }
+            { request: args, traceparent, generation }
           );
           return result.revision;
         } catch (error) {
@@ -677,10 +673,6 @@ export function createTauriCacheHost(options: TauriHostOptions): CacheHost {
         }
       },
       async update(update, traceparent, generation) {
-        const captured =
-          generation ??
-          authorityObserver.snapshot()?.generation ??
-          UNKNOWN_CACHE_GENERATION;
         await ready;
         if (peopleUnavailable) throw new Error(PEOPLE_UNSUPPORTED);
         let result: WriteResult;
@@ -688,7 +680,7 @@ export function createTauriCacheHost(options: TauriHostOptions): CacheHost {
           result = await request<WriteResult>(PEOPLE_UPDATE_COMMAND, {
             update,
             traceparent,
-            generation: captured,
+            generation,
           });
         } catch (error) {
           if (!isMissingCommand(error, PEOPLE_UPDATE_COMMAND)) throw error;
@@ -699,7 +691,7 @@ export function createTauriCacheHost(options: TauriHostOptions): CacheHost {
           result.revision,
           result.revisionAdvanced,
           ['person'],
-          captured
+          generation
         );
         return result.revision;
       },
@@ -884,18 +876,14 @@ export function createTauriCacheHost(options: TauriHostOptions): CacheHost {
 
     async calendarCommit(
       args: CalendarCommitArgs,
-      generation?: string
+      generation: string
     ): Promise<CalendarCommitCacheResult> {
-      const captured =
-        generation ??
-        authorityObserver.snapshot()?.generation ??
-        UNKNOWN_CACHE_GENERATION;
       await ready;
       if (calendarUnavailable) return { kind: 'unsupported' };
       try {
         const result = await request<WriteResult>(CALENDAR_COMMIT_COMMAND, {
           commit: args,
-          generation: captured,
+          generation,
         });
         return {
           kind: 'committed',
@@ -1132,6 +1120,8 @@ export function createTauriCacheHost(options: TauriHostOptions): CacheHost {
     },
 
     async invalidate(keys: string[]): Promise<AffectedOperationsResult> {
+      // Removal carries no fetched content, so it needs no source stamp; the
+      // observed generation only fences a transition already under way.
       const generation =
         authorityObserver.snapshot()?.generation ?? UNKNOWN_CACHE_GENERATION;
       await ready;
