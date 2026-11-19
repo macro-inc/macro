@@ -6,9 +6,10 @@ import type { CreatedCount } from './core/routine';
 /**
  * What a delete confirmation says about the routines a routine's runs
  * created, which are deleted with it. `listed` is how many the page holds
- * now; `counted`, a fresh read of them all, replaces it when it answers.
- * Until then, or when that read fails, a routine with none listed still
- * says that any it created go too, so confirming before the read warns.
+ * now, which may leave some out (finished ones, ones a run just made), so
+ * until `counted`, a fresh read of them all, answers, or when it fails, the
+ * note gives it as a floor; with none listed it says that any it created go
+ * too. Confirming before the read answers still warns.
  */
 export function createdNote(
   listed: number,
@@ -22,17 +23,12 @@ export function createdNote(
     'routines'
   );
   return () => {
-    const count = answer();
-    if (!count) {
-      return listed > 0
-        ? t('subRoutines.deleteNote', { count: listed })
-        : t('subRoutines.deleteNoteUncounted');
+    const count = answer() ?? { count: listed, atLeast: true };
+    if (count.count === 0) {
+      return count.atLeast ? t('subRoutines.deleteNoteUncounted') : undefined;
     }
-    if (count.atLeast) {
-      return t('subRoutines.deleteNoteAtLeast', { count: count.count });
-    }
-    return count.count > 0
-      ? t('subRoutines.deleteNote', { count: count.count })
-      : undefined;
+    return count.atLeast
+      ? t('subRoutines.deleteNoteAtLeast', { count: count.count })
+      : t('subRoutines.deleteNote', { count: count.count });
   };
 }

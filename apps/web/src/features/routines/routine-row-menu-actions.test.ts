@@ -164,12 +164,15 @@ it('shows the scheduler reason when Keep or Duplicate fails', () => {
 describe('routine row Delete', () => {
   it('asks at once under the list, then counts what the routine created', async () => {
     const list = deleteFromList();
-    // Before the routine's own read answers: the list's count.
+    // Before the routine's own read answers: the list's count, as a floor,
+    // since the list holds no finished ones.
     const { session, owner } = opened();
     // Under the list's owner, so it stacks on a sheet the list is in.
     expect(owner).toBe(list.owner);
     const shown = shownNote(session);
-    expect(shown.note()).toBe('The 1 routine it created will be deleted too.');
+    expect(shown.note()).toBe(
+      'At least 1 routine it created will be deleted too.'
+    );
     // Finished one-time routines count too, though the list doesn't hold them.
     // The dialog is already open, so its note follows.
     mocks.answerCount({ count: 3, atLeast: false });
@@ -182,12 +185,14 @@ describe('routine row Delete', () => {
     list.dispose();
   });
 
-  it('keeps the list’s count when the routine’s own can’t be read', async () => {
+  it('keeps the list’s count as a floor when the routine’s own can’t be read', async () => {
     const list = deleteFromList();
     const { session } = opened();
     mocks.answerCount(undefined);
     await new Promise((resolve) => setTimeout(resolve, 0));
-    expect(session.note).toBe('The 1 routine it created will be deleted too.');
+    expect(session.note).toBe(
+      'At least 1 routine it created will be deleted too.'
+    );
     list.dispose();
   });
 

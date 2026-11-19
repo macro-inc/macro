@@ -22,7 +22,7 @@ import type {
 import { isClaimActive } from '../core/claim';
 import { pendingCodeReview } from '../core/code-review';
 import type { ScheduleDraft, SubRoutineCopyDraft } from '../core/draft';
-import { countCreated, type RoutineSnapshot } from '../core/routine';
+import type { CreatedCount, RoutineSnapshot } from '../core/routine';
 import { withDraftSteps } from '../core/routine-draft';
 import { isSubRoutineCopy, programSteps } from '../core/routine-steps';
 import {
@@ -741,10 +741,23 @@ export function createRoutineRowOperations(
   };
 }
 
+/**
+ * How many finished one-time routines the scheduler lists for a parent (the
+ * newest), by its rule: a one-time trigger with no next run.
+ */
+const FINISHED_CHILDREN_LISTED = 200;
+
 /** What a delete removes with routine `id`, from a fresh read of its children. */
-async function readCreatedCount(id: string) {
+async function readCreatedCount(id: string): Promise<CreatedCount | undefined> {
   const created = await fetchChildren(id);
-  return created.isOk()
-    ? countCreated(created.value.filter((item) => item.id).map(toRoutine))
-    : undefined;
+  if (created.isErr()) return undefined;
+  const children = created.value.filter((item) => item.id);
+  const finished = children.filter(
+    (item) => item.trigger.type === 'once' && !item.next_run_at
+  ).length;
+  return {
+    count: children.length,
+    // As many as it lists: it may have left older ones out.
+    atLeast: finished >= FINISHED_CHILDREN_LISTED,
+  };
 }

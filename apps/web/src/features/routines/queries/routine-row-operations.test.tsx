@@ -433,6 +433,9 @@ describe('routine row operations', () => {
       next_run_at: null,
     });
     const listed = Array.from({ length: 200 }, (_, i) => finished(`f${i}`));
+    // One still running its only firing counts too: the scheduler's rule is
+    // a one-time trigger with no next run.
+    listed[0] = { ...listed[0], claimed: new Date().toISOString() };
     client.listChildren.mockResolvedValueOnce(
       ok([routine('active', 'Active'), ...listed])
     );
@@ -446,6 +449,18 @@ describe('routine row operations', () => {
 
     client.listChildren.mockResolvedValueOnce(
       ok([routine('active', 'Active'), ...listed.slice(1)])
+    );
+    await expect(operations.createdCount('briefing')).resolves.toEqual({
+      count: 200,
+      atLeast: false,
+    });
+
+    // A routine on another trigger with no run left isn't one of them.
+    client.listChildren.mockResolvedValueOnce(
+      ok([
+        { ...routine('no-run-left', 'No run left'), next_run_at: null },
+        ...listed.slice(1),
+      ])
     );
     await expect(operations.createdCount('briefing')).resolves.toEqual({
       count: 200,
