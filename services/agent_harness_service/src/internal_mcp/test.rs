@@ -411,10 +411,12 @@ async fn each_harness_gets_only_internal_tools_and_writes_only_its_session() {
 
 mod code_mode;
 
-/// Code mode whose OCaml rollout is fixed, recording each run's language.
+/// Code mode whose OCaml and JS tools rollouts are fixed, recording each
+/// run's language.
 struct OwnerRollout {
     on: bool,
     permissions: bool,
+    js_tools: bool,
     languages: std::sync::Mutex<Vec<code_execution::domain::Language>>,
 }
 
@@ -453,8 +455,11 @@ impl SessionCodeMode for OwnerRollout {
     async fn ocaml_enabled(&self, _: &agent_session::domain::model::AgentSession) -> bool {
         self.on
     }
+    async fn js_tools_enabled(&self, _: &agent_session::domain::model::AgentSession) -> bool {
+        self.js_tools
+    }
     async fn permissions_enabled(&self, _: &agent_session::domain::model::AgentSession) -> bool {
-        self.on && self.permissions
+        self.js_tools || (self.on && self.permissions)
     }
 }
 
@@ -471,6 +476,7 @@ async fn execute_code_offers_and_accepts_ocaml_only_with_the_rollout() {
         let code_mode = Arc::new(OwnerRollout {
             on,
             permissions: false,
+            js_tools: false,
             languages: Default::default(),
         });
         let app = router(
@@ -541,6 +547,99 @@ async fn execute_code_offers_and_accepts_ocaml_only_with_the_rollout() {
             );
         } else {
             // Today's ExecuteCode has no language: the call is refused unrun.
+            assert!(called.get("error").is_some(), "{called}");
+            assert!(code_mode.languages.lock().unwrap().is_empty());
+        }
+    }
+}
+
+/// JavaScript tools programs are offered, with ShowPermissions, only to a
+/// session whose owner has agent permissions, which gate them.
+#[tokio::test]
+async fn execute_code_offers_and_accepts_js_tools_only_with_permissions() {
+    for js_tools in [false, true] {
+        let repo = InMemoryAgentSessionRepo::new();
+        let session = test_agent_session(AgentSessionId::new());
+        repo.insert_session(session.clone());
+        repo.set_egress_token_hash(session.id, &SessionToken::new("secret").hash())
+            .await
+            .unwrap();
+        let tasks = FixedTasks::default();
+        let code_mode = Arc::new(OwnerRollout {
+            on: false,
+            permissions: false,
+            js_tools,
+            languages: Default::default(),
+        });
+        let app = router(
+            Arc::new(repo.clone()),
+            configured_hosts(&["http://agent-harness-service:8102"]).unwrap(),
+            InternalTools {
+                service: Arc::new(SessionPullRequestService::new(
+                    repo.clone(),
+                    RecordingRealtime::new(),
+                    Arc::new(tasks.clone()),
+                )),
+                tasks: Arc::new(tasks),
+                code_mode: Some(code_mode.clone()),
+                cognition: None,
+                reviews: Arc::new(OnceLock::new()),
+                gate: Arc::new(agent_inmem::domain::tool_gate::UngatedNativeTools),
+                app_url: "https://macro.com".into(),
+                permissions: Some(Arc::new(Unrestricted)),
+            },
+        );
+        let (status, listed) = rpc(
+            app.clone(),
+            Some("secret"),
+            "tools/list",
+            serde_json::json!({}),
+        )
+        .await;
+        assert_eq!(status, StatusCode::OK, "{listed}");
+        let tools = listed["result"]["tools"].as_array().unwrap();
+        let execute = tools
+            .iter()
+            .find(|tool| tool["name"] == "ExecuteCode")
+            .unwrap();
+        assert_eq!(
+            execute["inputSchema"]["properties"]["language"]
+                .to_string()
+                .contains("js_tools"),
+            js_tools
+        );
+        assert_eq!(
+            execute["description"]
+                .as_str()
+                .unwrap()
+                .contains("tools.<service>.<operation>"),
+            js_tools
+        );
+        assert_eq!(
+            tools.iter().any(|tool| tool["name"] == "ShowPermissions"),
+            js_tools
+        );
+        let (_, called) = rpc(
+            app,
+            Some("secret"),
+            "tools/call",
+            serde_json::json!({
+                "name": "ExecuteCode",
+                "arguments": {
+                    "turn_id": "00000000-0000-0000-0000-000000000001",
+                    "language": "js_tools",
+                    "source": "return await tools.storage.get_document_markdown({path: {document_id: \"d\"}})",
+                },
+            }),
+        )
+        .await;
+        if js_tools {
+            assert!(called.get("error").is_none(), "{called}");
+            assert_eq!(
+                *code_mode.languages.lock().unwrap(),
+                [code_execution::domain::Language::JsTools]
+            );
+        } else {
             assert!(called.get("error").is_some(), "{called}");
             assert!(code_mode.languages.lock().unwrap().is_empty());
         }
@@ -660,6 +759,7 @@ async fn show_permissions_is_offered_only_where_permissions_gate_ocaml() {
                 code_mode: Some(Arc::new(OwnerRollout {
                     on,
                     permissions,
+                    js_tools: false,
                     languages: Default::default(),
                 })),
                 cognition: None,

@@ -969,6 +969,11 @@ async fn run() -> anyhow::Result<()> {
     // The gate on checked programs, in each language this build can
     // analyze.
     let ocaml_gated = program_analyzers.ocaml.is_some();
+    // JS tools programs are offered only where the gate analyzes them.
+    let js_tools_fingerprint = program_analyzers
+        .js_tools
+        .as_ref()
+        .map(|analyzer| analyzer.sdk_fingerprint().to_owned());
     let permission_gate = program_analyzers.any().then(|| {
         Arc::new(code_mode::permissions::PermissionGate {
             analyzers: program_analyzers,
@@ -1007,6 +1012,19 @@ async fn run() -> anyhow::Result<()> {
                 Arc::new(code_mode::PermissionsFlag(feature_flags.clone()))
             }),
         }),
+        None => session_code_mode,
+    };
+    // JavaScript tools programs, for owners with agent permissions, which
+    // gate every one of them.
+    let session_code_mode = match js_tools_fingerprint {
+        Some(fingerprint) => {
+            session_code_mode.with_js_tools(agent_code_mode::domain::JsToolsPrograms {
+                fingerprint,
+                rollout: Arc::new(code_mode::JsToolsRollout(code_mode::PermissionsFlag(
+                    feature_flags.clone(),
+                ))),
+            })
+        }
         None => session_code_mode,
     };
     let code_mode: Arc<dyn agent_code_mode::domain::SessionCodeMode> = Arc::new(session_code_mode);
