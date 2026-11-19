@@ -12,6 +12,7 @@ AC-010	The drop handler of a dragged recipient chip in compose-recipients.tsx re
 AC-011	The desktop Cc button's onClick in compose-layout.tsx (the new-email composer's recipient actions) returns without revealing the Cc field, so clicking Cc opens no Cc row.
 AC-012	The desktop Bcc button's onClick in compose-layout.tsx (the new-email composer's recipient actions) returns without revealing the Bcc field, so clicking Bcc opens no Bcc row.
 AC-013	on a phone, tapping a new email's Cc/Bcc, From row does not unfold the Cc, Bcc and From fields
+AC-014	Main activates the recipient row when the folded summary gets focus, removing the button before its click can focus the input. The phone test fails at the To focus assertion and, with the fix, adds a second address and checks both recipients in the sent copy.
 AC-015	pressing Shift+Cmd+O does not move the cursor back to To
 AC-016	pressing Shift+Cmd+S does not move the cursor to the Subject
 AC-017	pressing Shift+Cmd+M does not move the cursor into the message
