@@ -42,7 +42,10 @@ OpenSearch, and exposes backfill HTTP routes for each.
 - Deployment never creates OpenSearch indices/aliases — provision and verify
   the alias manually first (README "Agent-session indexing and rollout").
 - Kafka offsets commit on in-memory handoff, not after OpenSearch write —
-  there is a crash-loss window; recovery is the backfill routes, not replay.
+  there is a crash-loss window; recovery is the backfill routes. An event
+  whose attempts fail is replayed from the search event queue
+  (`inbound/kafka_consumer/replay.rs`): a handler must return its error, never
+  log and succeed, or the failure is counted as indexed and never replayed.
   A graceful stop commits each partition it still owns back to its first
   record no worker started (`inbound/kafka_consumer/offsets.rs`), so workers
   must report every record they start and finish, once per delivery. Never

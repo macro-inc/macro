@@ -82,9 +82,14 @@ The indexer committed events in the last 15 minutes that never reached the
 index. Each one is a change missing from search until that entity is indexed
 again. The tags say how it was lost:
 
-- **With `event_type`**: processing failed on every retry. The `process_event`
-  span with `outcome:dropped` has the entity id and the error. Common causes
-  are OpenSearch rejections and a source row that is missing or unreadable.
+- **With `event_type`**: processing failed on every attempt and the event's
+  replay from the search event queue failed too, or could not be queued.
+  `failure` is the last attempt's cause: `bulk_items` (OpenSearch rejected some
+  of the event's documents; `search.index.failed_bulk_items` counts them),
+  `overloaded` (OpenSearch kept refusing writes), `source_missing` (a row the
+  event needs was missing) or `error`. With `delivery:sqs_replay` the message
+  is in the `search-event-queue-dlq` dead-letter queue. The `process_event`
+  span with `outcome:dropped` has the entity id and the error.
 - **`undecodable`**: the record did not parse. A producer published a shape
   the indexer does not know; check recent deploys of that topic's producer.
 - **`cut_off_at_stop`, `not_rewound`, `rewind_unconfirmed`,

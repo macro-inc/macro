@@ -312,8 +312,8 @@ regression over the production `ThreadList` is
 Discussion link scrolling has a backend-free browser regression:
 `bunx playwright test --config src/lib/core/messages/browser-test/playwright.config.ts`.
 
-Adding an agent teammate from Team → Members (People | Agent in Invite to
-Team, behind `enable-agent-teammates`): the dialog waiting until the agent is
+Adding an agent teammate from Team → Members (its Invite Agent button,
+behind `enable-agent-teammates`; members see only Invite Human): the dialog waiting until the agent is
 online, falling back to the row after five seconds, a declined card and a size
 with no room in place, its row's Setting up step and failed Retry, the ready and failed notifications (Message, Connect Claude plan for
 admins only, Retry), Connect Claude plan's one-screen sign-in with its

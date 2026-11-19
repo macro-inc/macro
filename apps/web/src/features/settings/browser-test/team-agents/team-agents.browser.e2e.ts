@@ -364,6 +364,16 @@ async function scriptAuthService(
         crm_member_access: backend.crmAccess,
       });
 
+    // Message <name> opens the agent's real DM, made on the spot.
+    if (
+      path.endsWith('/channels/get_or_create_dm') &&
+      request.method() === 'POST'
+    )
+      return json(200, {
+        action: 'created',
+        channel_id: `dm-${request.postDataJSON().recipient_id}`,
+      });
+
     // Nothing else is part of this flow.
     return json(404, { message: 'not scripted' });
   });
@@ -471,12 +481,17 @@ async function notify(page: Page, outcome: 'ready' | 'failed') {
 }
 
 async function openInviteAgent(page: Page) {
+  // The fixture's first, cold load can take longer than an expect's default.
   await expect(
     page.getByText('maya@example.com', { exact: false }).first()
+  ).toBeVisible({ timeout: 15_000 });
+  // Members' own button for agents; Invite Human opens the people form.
+  await expect(
+    page.getByRole('button', { name: 'Invite Human' })
   ).toBeVisible();
-  await page.getByRole('button', { name: 'Invite', exact: true }).click();
+  await page.getByRole('button', { name: 'Invite Agent' }).click();
   const dialog = page.getByRole('dialog');
-  await dialog.getByText('Agent', { exact: true }).click();
+  await expect(dialog).toContainText('Invite an agent');
   return dialog;
 }
 
@@ -680,6 +695,13 @@ test('the inviter hears when the agent is ready: Message Ada, and Connect Claude
       )
     )
     .toContain('channel');
+  expect(
+    await page.evaluate(() =>
+      window.teamAgentsFixture.opened.find(
+        (content) => content.type === 'channel'
+      )
+    )
+  ).toEqual({ type: 'channel', id: `dm-${ADA}` });
 });
 
 test("an admin signs the agent's computer in to Claude from its row", async ({
@@ -902,6 +924,51 @@ test('a code that finishes after the dialog closed toasts, and leaves a reopened
   await expect(reopened).toBeVisible();
 });
 
+test('a runtime outside the rollout says so, and Try again starts the sign-in', async ({
+  page,
+}, testInfo) => {
+  await scriptAuthService(page, 0, {
+    agents: [ada('running')],
+    computerConnected: true,
+  });
+  await failClaudeOnce(page, 'claude-sign-in', 403, {
+    message: 'Macro computers are not enabled for this user',
+    code: 'rollout_disabled',
+  });
+  const dialog = await openConnectClaude(page);
+  const alert = dialog.getByRole('alert');
+  await expect(alert).toHaveText(
+    /Computers aren't available for this account yet\./
+  );
+  await screenshot(page, testInfo, 'connect-claude-rollout-disabled');
+  await alert.getByRole('button', { name: 'Try again' }).click();
+  await expect(
+    dialog.getByRole('link', { name: 'Open claude.ai' })
+  ).toHaveAttribute('href', /claude\.com/);
+});
+
+test('a caller without rights to the computer is told so, with no way to retry', async ({
+  page,
+}, testInfo) => {
+  await scriptAuthService(page, 0, {
+    agents: [ada('running')],
+    computerConnected: true,
+  });
+  await failClaudeOnce(page, 'claude-sign-in', 403, {
+    message: 'you cannot do that on this computer',
+  });
+  const dialog = await openConnectClaude(page);
+  const alert = dialog.getByRole('alert');
+  await expect(alert).toHaveText(
+    /You can't change this computer\. Ask a team owner or admin\./
+  );
+  await screenshot(page, testInfo, 'connect-claude-forbidden');
+  await expect(alert.getByRole('button')).toHaveCount(0);
+  await expect(
+    dialog.getByRole('textbox', { name: 'Paste the code Claude showed you' })
+  ).toBeDisabled();
+});
+
 test('an unreachable computer says so, and Try again starts the sign-in', async ({
   page,
 }, testInfo) => {
@@ -938,6 +1005,13 @@ test('a member hears the agent is ready, without Connect Claude plan', async ({
   });
   await page.goto(`/?viewer=${encodeURIComponent(MEMBER)}`);
   await expect(page.locator('[data-member-kind="agent"]')).toContainText('Ada');
+  // Members invite people; only admins and owners add agents.
+  await expect(
+    page.getByRole('button', { name: 'Invite Human' })
+  ).toBeVisible();
+  await expect(page.getByRole('button', { name: 'Invite Agent' })).toHaveCount(
+    0
+  );
 
   await notify(page, 'ready');
   await expect(page.getByText('Ada is ready')).toBeVisible();

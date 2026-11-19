@@ -348,10 +348,17 @@ export function InviteAgentForm(props: {
         <Button
           type="button"
           variant="primary"
+          // While adding it keeps focus, so a phone sheet's focus trap doesn't
+          // move it to the name field (and scroll back up to it) when a
+          // refusal arrives; `submit` ignores presses meanwhile.
           disabled={
-            adding() ||
-            (props.state.kind !== 'not_started' && !teamAgentRequest(draft()))
+            !adding() &&
+            props.state.kind !== 'not_started' &&
+            !teamAgentRequest(draft())
           }
+          aria-disabled={adding() || undefined}
+          aria-busy={adding() || undefined}
+          data-disabled={adding() ? '' : undefined}
           onClick={submit}
         >
           <Show when={adding()} fallback={submitLabel()}>
