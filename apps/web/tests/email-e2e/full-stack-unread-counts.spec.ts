@@ -45,10 +45,11 @@ type CheckOptions = {
   /** The label the number should read for the view's count, when not its label. */
   expected?: (viewUnread: number) => string;
   /**
-   * What the view itself must show at this step, when the test knows it, so a
-   * view and a number that are wrong together can't pass.
+   * What the view itself must show at this step, when the test knows it or
+   * can count it another way, so a view and a number that are wrong together
+   * can't pass.
    */
-  view?: number;
+  view?: number | (() => Promise<number>);
   note?: string;
 };
 
@@ -112,9 +113,11 @@ function observations(testInfo: TestInfo) {
             shown: await shown(page, view),
           };
           if (options.view !== undefined) {
-            expect(viewUnread, `${step}: the ${view} view shows it`).toBe(
-              options.view
-            );
+            const want =
+              typeof options.view === 'number'
+                ? options.view
+                : await options.view();
+            expect(viewUnread, `${step}: the ${view} view shows it`).toBe(want);
           }
           expect(seen.shown).toBe(seen.expected);
         }, `${step}: the ${view} number reads what the view shows`)
@@ -149,14 +152,14 @@ function mailUnread(page: Page, scroll = false): Promise<number> {
         return -1;
       }
       const ids = new Set<string>();
+      const idOf = (row: Element) =>
+        row.querySelector('[data-entity-id]')?.getAttribute('data-entity-id') ??
+        row.id;
+      const unread = (row: Element) =>
+        !!row.querySelector('[role="img"][aria-label="Unread"]');
       const read = () => {
         for (const row of grid.querySelectorAll('[data-soup-entity]')) {
-          if (!row.querySelector('[role="img"][aria-label="Unread"]')) continue;
-          ids.add(
-            row
-              .querySelector('[data-entity-id]')
-              ?.getAttribute('data-entity-id') ?? row.id
-          );
+          if (unread(row)) ids.add(idOf(row));
         }
       };
       read();
@@ -166,26 +169,31 @@ function mailUnread(page: Page, scroll = false): Promise<number> {
         /auto|scroll/.test(getComputedStyle(element).overflowY);
       const scroller = [...grid.querySelectorAll('*')].find(scrolls);
       if (!scroller) return ids.size;
-      // The rows the list renders once a scroll has settled: the same in two
-      // frames running.
+      const step = scroller.clientHeight / 2;
+      if (step < 1) return -1;
+      // The next frame, or a tenth of a second when the page holds frames back.
+      const nextFrame = () =>
+        new Promise((resolve) => {
+          requestAnimationFrame(resolve);
+          setTimeout(resolve, 100);
+        });
+      // Whether the rows a scroll renders, and their unread marks, settle:
+      // the same in two frames running, within 60 frames.
       const settled = async () => {
-        let rendered = '';
+        let last: string | undefined;
         for (let frame = 0; frame < 60; frame += 1) {
-          await new Promise((resolve) => requestAnimationFrame(resolve));
+          await nextFrame();
           const now = [...grid.querySelectorAll('[data-soup-entity]')]
-            .map((row) => row.id)
+            .map((row) => `${idOf(row)}:${unread(row)}`)
             .join();
-          if (now === rendered) return;
-          rendered = now;
+          if (now === last) return true;
+          last = now;
         }
+        return false;
       };
-      for (
-        let top = 0;
-        top <= scroller.scrollHeight;
-        top += scroller.clientHeight / 2
-      ) {
+      for (let top = 0; top <= scroller.scrollHeight; top += step) {
         scroller.scrollTop = top;
-        await settled();
+        if (!(await settled())) return -1;
         read();
       }
       scroller.scrollTop = 0;
@@ -204,7 +212,7 @@ async function mailUnreadLoaded(page: Page): Promise<number> {
   });
   for (let pages = 0; pages < 10; pages += 1) {
     // The list renders only the rows near its viewport, Load More among them.
-    await scrollMailListToEnd(page);
+    if (!(await scrollMailListToEnd(page))) return -1;
     if ((await more.count()) === 0) return mailUnread(page, true);
     if (await more.first().isEnabled()) {
       await more
@@ -219,25 +227,40 @@ async function mailUnreadLoaded(page: Page): Promise<number> {
   return -1;
 }
 
-function scrollMailListToEnd(page: Page): Promise<void> {
-  return mailList(page).evaluate(async (grid) => {
-    const scroller = [...grid.querySelectorAll('*')].find(
-      (element) =>
-        element.scrollHeight > element.clientHeight + 1 &&
-        /auto|scroll/.test(getComputedStyle(element).overflowY)
-    );
-    if (!scroller) return;
-    // Rows measured on the way down can grow the list: scroll until its
-    // height holds still between frames at the end.
-    let height = -1;
-    for (let frame = 0; frame < 60 && height !== scroller.scrollHeight; ) {
-      height = scroller.scrollHeight;
-      scroller.scrollTop = height;
-      for (let wait = 0; wait < 2; wait += 1, frame += 1) {
-        await new Promise((resolve) => requestAnimationFrame(resolve));
+/**
+ * Scrolls the mail list to its end; false when its end never holds still in
+ * view within 60 frames.
+ */
+function scrollMailListToEnd(page: Page): Promise<boolean> {
+  return mailList(page)
+    .evaluate(async (grid) => {
+      const scroller = [...grid.querySelectorAll('*')].find(
+        (element) =>
+          element.scrollHeight > element.clientHeight + 1 &&
+          /auto|scroll/.test(getComputedStyle(element).overflowY)
+      );
+      if (!scroller) return true;
+      // The next frame, or a tenth of a second when the page holds frames back.
+      const nextFrame = () =>
+        new Promise((resolve) => {
+          requestAnimationFrame(resolve);
+          setTimeout(resolve, 100);
+        });
+      // Rows measured on the way down can grow the list: scroll until the
+      // end is in view and the height held still since the last frame.
+      let height = -1;
+      for (let frame = 0; frame < 60; frame += 1) {
+        const atEnd =
+          scroller.scrollTop + scroller.clientHeight >=
+          scroller.scrollHeight - 1;
+        if (atEnd && scroller.scrollHeight === height) return true;
+        height = scroller.scrollHeight;
+        scroller.scrollTop = height;
+        await nextFrame();
       }
-    }
-  });
+      return false;
+    })
+    .catch(() => false);
 }
 
 /** The Mail list's row of a thread. */
@@ -709,7 +732,9 @@ test.describe('the unread numbers beside each view', {
     await expect(
       page.getByRole('treeitem').filter({ hasText: 'Standup' }).first()
     ).toBeVisible({ timeout: 60_000 });
-    // What the welcome message leaves unread; each later step changes the
+    // What the welcome message leaves unread, counted from the rows Chat
+    // marks as well as from its section headings: no thread exists yet, so
+    // every marked row is an unread conversation. Each later step changes the
     // view by a known amount from here.
     const start = await seen.check(
       page,
@@ -717,6 +742,7 @@ test.describe('the unread numbers beside each view', {
       'channels',
       unread,
       {
+        view: async () => (await chatMarked(page)).length,
         note: 'a welcome message the stack sends new users can be unread here',
       }
     );
@@ -766,7 +792,7 @@ test.describe('the unread numbers beside each view', {
       unread,
       {
         view: start + 2,
-        note: 'Chat marks a conversation for its top-level messages only',
+        note: 'Chat marks a conversation for its top-level messages only; nothing on screen shows these replies arriving, so the next step, which waits for a later reply in the same thread, checks them again',
       }
     );
 
