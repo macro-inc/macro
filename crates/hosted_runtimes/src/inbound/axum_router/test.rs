@@ -33,6 +33,35 @@ async fn a_trialing_team_gets_a_coded_forbidden() {
     );
 }
 
+/// The buy dialog marks the size it had no room for, so a refused purchase
+/// for lack of room names the size beside a stable code.
+#[tokio::test]
+async fn no_room_is_a_coded_conflict_naming_the_size() {
+    let response =
+        ComputersHttpError::from(ComputerError::SoldOut(ComputerSize::Large)).into_response();
+    assert_eq!(response.status(), StatusCode::CONFLICT);
+    let body = axum::body::to_bytes(response.into_body(), 1024)
+        .await
+        .unwrap();
+    let body: serde_json::Value = serde_json::from_slice(&body).unwrap();
+    assert_eq!(body["code"], "no_room");
+    assert_eq!(body["size"], "large");
+}
+
+/// A declined card is shown inline, so it carries a stable code.
+#[tokio::test]
+async fn a_declined_charge_is_a_coded_payment_required() {
+    let response = ComputersHttpError::from(ComputerError::Billing(BillingError::PaymentFailed))
+        .into_response();
+    assert_eq!(response.status(), StatusCode::PAYMENT_REQUIRED);
+    let body = axum::body::to_bytes(response.into_body(), 1024)
+        .await
+        .unwrap();
+    let body: serde_json::Value = serde_json::from_slice(&body).unwrap();
+    assert_eq!(body["code"], "payment_declined");
+    assert!(body.get("size").is_none());
+}
+
 use crate::domain::fakes::TEAM;
 use crate::domain::service::test::availability::{assert_no_http_work, detached_router_service};
 use axum::{
@@ -205,6 +234,11 @@ async fn registered_routes_reject_detached_fleet_without_side_effects() {
                 String::new(),
             ),
             (
+                Method::GET,
+                "/team/computers/purchase-offers".to_owned(),
+                String::new(),
+            ),
+            (
                 Method::POST,
                 format!("/team/computers/{id}/power"),
                 r#"{"on":true}"#.to_owned(),
@@ -276,6 +310,7 @@ async fn registered_routes_preserve_rollout_denials() {
             r#"{"size":"standard","purchaseKey":"buy-dialog-1"}"#,
         ),
         (Method::GET, "/team/computers/offers", ""),
+        (Method::GET, "/team/computers/purchase-offers", ""),
     ] {
         let response = router
             .clone()
@@ -293,6 +328,38 @@ async fn registered_routes_preserve_rollout_denials() {
         assert_eq!(response.status(), StatusCode::FORBIDDEN);
     }
     assert_no_http_work(&service);
+}
+
+#[tokio::test]
+async fn rollout_reports_the_callers_rollout_even_while_the_fleet_is_detached() {
+    for (rolled_out, expected) in [(true, true), (false, false)] {
+        let (service, _) = detached_router_service(false, rolled_out).await;
+        let router: Router = team_router(ComputerRouterState {
+            service: service.clone(),
+            entity_access_service: Arc::new(TeamAccess(TeamRole::Member)),
+            authorization_state: MacroAuthorizationState::new(Arc::new(Authorization)),
+        });
+        let response = router
+            .oneshot(
+                Request::builder()
+                    .method(Method::GET)
+                    .uri("/team/computers/rollout")
+                    .header("authorization", "Bearer test-user")
+                    .body(Body::empty())
+                    .unwrap(),
+            )
+            .await
+            .unwrap();
+        assert_eq!(response.status(), StatusCode::OK);
+        let body = axum::body::to_bytes(response.into_body(), 4096)
+            .await
+            .unwrap();
+        assert_eq!(
+            serde_json::from_slice::<serde_json::Value>(&body).unwrap(),
+            serde_json::json!({ "enabled": expected })
+        );
+        assert_no_http_work(&service);
+    }
 }
 
 #[tokio::test]
@@ -342,6 +409,52 @@ async fn listing_answers_with_the_teams_rows_while_the_fleet_is_detached() {
             .map(|computer| computer["id"].as_str().unwrap().to_owned())
             .collect();
         assert_eq!(ids, expected);
+    }
+}
+
+/// The buy dialog's offers name the team's card, so only those who may buy
+/// see them: a member is refused before any billing read.
+#[tokio::test]
+async fn purchase_offers_are_for_admins_only() {
+    for (role, expected) in [
+        (TeamRole::Admin, StatusCode::OK),
+        (TeamRole::Member, StatusCode::UNAUTHORIZED),
+    ] {
+        let service = Arc::new(
+            ComputerService::new(
+                crate::domain::fakes::FakeRepo {
+                    sold_units: 9,
+                    ..crate::domain::fakes::FakeRepo::default()
+                },
+                crate::domain::service::test::FakeBilling::default(),
+                crate::domain::fakes::FixedClock,
+                crate::domain::ports::StaticFleetAttachment(
+                    crate::domain::models::FleetAttachment::Attached,
+                ),
+            )
+            .with_comp_policy(crate::domain::service::test::availability::RouterCompPolicy(false))
+            .with_rollout(crate::domain::service::test::rollout::enabled_rollout()),
+        );
+        let router: Router = team_router(ComputerRouterState {
+            service: service.clone(),
+            entity_access_service: Arc::new(TeamAccess(role)),
+            authorization_state: MacroAuthorizationState::new(Arc::new(Authorization)),
+        });
+        let response = router
+            .oneshot(
+                Request::builder()
+                    .method(Method::GET)
+                    .uri("/team/computers/purchase-offers")
+                    .header("authorization", "Bearer test-user")
+                    .body(Body::empty())
+                    .unwrap(),
+            )
+            .await
+            .unwrap();
+        assert_eq!(response.status(), expected, "{role:?}");
+        let billed =
+            !crate::domain::service::test::availability::billing_calls(&service).is_empty();
+        assert_eq!(billed, expected == StatusCode::OK, "{role:?}");
     }
 }
 
@@ -411,4 +524,80 @@ async fn finishing_setup_follows_the_team_admin_role_not_the_buyer() {
             .unwrap();
         assert_eq!(response.status(), expected, "{role:?}");
     }
+}
+
+/// Any team member reads the team's computers' usage: the latest reading in
+/// words the web shows, and the day's points.
+#[tokio::test]
+async fn usage_answers_a_member_with_each_computers_latest_reading_and_day() {
+    let repo = crate::domain::fakes::FakeRepo::default();
+    let id = ComputerId::new_from_uuid(Uuid::from_u128(1));
+    repo.computers.lock().unwrap().insert(
+        id,
+        crate::domain::service::test::computer(
+            id,
+            crate::domain::lifecycle::Phase::Running,
+            crate::domain::lifecycle::Billing::Active {
+                subscription_item: crate::domain::service::test::item("si_1"),
+            },
+        ),
+    );
+    // A 4-vCPU computer that used one CPU for the minute up to 20 s ago.
+    let now = crate::domain::fakes::now();
+    repo.usage.lock().unwrap().insert(
+        id,
+        vec![
+            crate::domain::usage::StoredSample {
+                sampled_at: now - chrono::Duration::seconds(80),
+                cpu_usage_microseconds: 0,
+                memory_bytes: 1_000_000_000,
+            },
+            crate::domain::usage::StoredSample {
+                sampled_at: now - chrono::Duration::seconds(20),
+                cpu_usage_microseconds: 60_000_000,
+                memory_bytes: 2_000_000_000,
+            },
+        ],
+    );
+    let service = Arc::new(crate::domain::service::ComputerService::new(
+        repo,
+        crate::domain::service::test::FakeBilling::default(),
+        crate::domain::fakes::FixedClock,
+        crate::domain::ports::StaticFleetAttachment(
+            crate::domain::models::FleetAttachment::Detached,
+        ),
+    ));
+    let router: Router = team_router(ComputerRouterState {
+        service,
+        entity_access_service: Arc::new(TeamAccess(TeamRole::Member)),
+        authorization_state: MacroAuthorizationState::new(Arc::new(Authorization)),
+    });
+
+    let response = router
+        .oneshot(
+            Request::builder()
+                .method(Method::GET)
+                .uri("/team/computers/usage")
+                .header("authorization", "Bearer test-user")
+                .body(Body::empty())
+                .unwrap(),
+        )
+        .await
+        .unwrap();
+
+    assert_eq!(response.status(), StatusCode::OK);
+    let body: serde_json::Value = serde_json::from_slice(
+        &axum::body::to_bytes(response.into_body(), 65536)
+            .await
+            .unwrap(),
+    )
+    .unwrap();
+    // The first reading has memory only; the second measures the CPU. Both
+    // fall in the last 15-minute step: its average CPU and highest memory.
+    let latest = serde_json::json!({ "cpuPercent": 25.0, "memoryBytes": 2_000_000_000_u64 });
+    assert_eq!(body[0]["computerId"], id.to_string());
+    assert_eq!(body[0]["latest"], latest);
+    assert_eq!(body[0]["points"].as_array().unwrap().len(), 96);
+    assert_eq!(body[0]["points"][95], latest);
+    assert_eq!(body[0]["points"][94], serde_json::Value::Null);
 }

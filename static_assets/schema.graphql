@@ -611,6 +611,15 @@ type CompleteSubscriptionRoot {
 	"""
 	notificationInboxUpdates(scope: NotificationInboxScopeInput): [NotificationInboxPatch!]!
 	"""
+	How many unread rows the authenticated user's whole notification
+	inbox holds, by kind: the current counts at once, then the counts
+	again each time they change. Each payload is complete and lists only
+	kinds with an unread row, so an empty list means nothing is unread.
+	The stream ends with an error when its sources end or a count fails,
+	after which the client resubscribes.
+	"""
+	notificationInboxUnreadUpdates: [NotificationInboxUnreadCount!]!
+	"""
 	Changes to the registered work of `accountIds` that the authenticated
 	user can see: entries to show, entries to stop showing, and an
 	invalidation when changes may have been missed or sharing changed.
@@ -743,6 +752,10 @@ input CreateSavedViewInput {
 	Current team to share with, or null for a private definition.
 	"""
 	sharedTeamId: ID
+	"""
+	Initial icon and color metadata, validated on first creation.
+	"""
+	appearance: JSON
 }
 
 """
@@ -7753,6 +7766,10 @@ type GraphqlSavedView {
 	"""
 	config: JSON!
 	"""
+	Icon and color metadata, separate from the filter configuration.
+	"""
+	appearance: JSON
+	"""
 	Team with effective access, or null when the definition is private.
 	"""
 	sharedTeamId: ID
@@ -11961,6 +11978,21 @@ input NotificationInboxScopeInput {
 	alone. Defaults to false.
 	"""
 	unreadOnly: Boolean
+}
+
+"""
+How many unread rows of one kind the viewer's inbox holds.
+"""
+type NotificationInboxUnreadCount {
+	"""
+	The kind of row.
+	"""
+	rowType: NotificationInboxRowType!
+	"""
+	Its unread rows across the whole inbox. Counting stops soon after
+	100, so present a total of 100 or more as "99+".
+	"""
+	count: Int!
 }
 
 """

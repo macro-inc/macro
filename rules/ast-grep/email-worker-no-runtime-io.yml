@@ -23,7 +23,7 @@ rule:
     - any:
         - any:
             - all:
-                - regex: ^(::\s*)?(?:(?:email_db_client|sqlx(?:_core)?|sqs_client|redis|reqwest|gmail_client|s3_client|aws_config|aws_sdk_\w+|rdkafka|opensearch|static_file_service_client|document_storage_service_client|authentication_service_client|connection_gateway_client)\b|email_api_client(?:\s+as\s+\w+)?$|email_api_client\s*::\s*(?:(?:GmailApiClientRepository|OutlookApiClientRepository|inbound|outbound)\b|\*)|crate\s*::\s*outbound\b|crate\s*::\s*util\s*::\s*redis\b|(?:email|calendar_events)\s*::\s*outbound\b|crate\s*::\s*(?:calendar_tokens|calendar_request_gate|calendar_refresh)\b|std\s*::\s*(?:env|fs)\b|tokio\s*::\s*fs\b|(?:GoogleCalendarClient|PgCalendarRepository|ConnectionGatewayCalendarRefresh|RedisCalendarRequestGate|CalendarTokenProviderAdapter|PgPool|GmailApi|RedisClient|SQS|S3|StaticFileServiceClient|DocumentStorageServiceClient|AuthServiceClient|ConnectionGatewayClient|MicrosoftGrantSource|PgMailboxInitialization|CrmCleanupClock|CrmCleanupContacts|CrmCleanupQueue|PgCrmCleanup|PgSfsPhotoContacts|PgSfsPhotoMappings|PhotoSyncedGateway|SfsPhotoUploadClient|PgSfsDeletion|SfsDeletionClient|GmailInboxSync|InboxSyncEffects|InboxSyncSqs|PgInboxSync|PgGmailOps|GmailOpsProvider|GmailOpsQueue)\s*::)
+                - regex: ^(::\s*)?(?:(?:email_db_client|sqlx(?:_core)?|sqs_client|redis|reqwest|gmail_client|s3_client|aws_config|aws_sdk_\w+|rdkafka|opensearch|static_file_service_client|document_storage_service_client|authentication_service_client|connection_gateway_client)\b|email_api_client(?:\s+as\s+\w+)?$|email_api_client\s*::\s*(?:(?:GmailApiClientRepository|OutlookApiClientRepository|inbound|outbound)\b|\*)|crate\s*::\s*outbound\b|crate\s*::\s*util\s*::\s*redis\b|(?:email|calendar_events)\s*::\s*outbound\b|crate\s*::\s*(?:calendar_tokens|calendar_request_gate)\b|std\s*::\s*(?:env|fs)\b|tokio\s*::\s*fs\b|(?:GoogleCalendarClient|PgCalendarRepository|GatewayCalendarRefresh|RedisCalendarRequestGate|CalendarTokenProviderAdapter|PgPool|GmailApi|RedisClient|SQS|S3|StaticFileServiceClient|DocumentStorageServiceClient|AuthServiceClient|ConnectionGatewayClient|MicrosoftGrantSource|PgMailboxInitialization|CrmCleanupClock|CrmCleanupContacts|CrmCleanupQueue|PgCrmCleanup|PgSfsPhotoContacts|PgSfsPhotoMappings|PhotoSyncedGateway|SfsPhotoUploadClient|PgSfsDeletion|SfsDeletionClient|GmailInboxSync|InboxSyncEffects|InboxSyncSqs|PgInboxSync|PgGmailOps|GmailOpsProvider|GmailOpsQueue)\s*::)
                 - any:
                     - any:
                         - kind: scoped_identifier
@@ -75,7 +75,7 @@ rule:
                 - has:
                     field: list
                     has:
-                      regex: ^(?:outbound|calendar_tokens|calendar_request_gate|calendar_refresh|util\s*::\s*redis)\b|^\*
+                      regex: ^(?:outbound|calendar_tokens|calendar_request_gate|util\s*::\s*redis)\b|^\*
             - kind: scoped_use_list
               not:
                 inside:
@@ -149,7 +149,7 @@ rule:
           has:
             field: function
             kind: identifier
-            regex: ^(?:GoogleCalendarClient|PgCalendarRepository|ConnectionGatewayCalendarRefresh|RedisCalendarRequestGate|CalendarTokenProviderAdapter|PgPool|GmailApi|RedisClient|SQS|S3|StaticFileServiceClient|DocumentStorageServiceClient|AuthServiceClient|ConnectionGatewayClient|MicrosoftGrantSource|PgMailboxInitialization|CrmCleanupClock|CrmCleanupContacts|CrmCleanupQueue|PgCrmCleanup|PgSfsPhotoContacts|PgSfsPhotoMappings|PhotoSyncedGateway|SfsPhotoUploadClient|PgSfsDeletion|SfsDeletionClient|GmailInboxSync|InboxSyncEffects|InboxSyncSqs|PgInboxSync|PgGmailOps|GmailOpsProvider|GmailOpsQueue)$
+            regex: ^(?:GoogleCalendarClient|PgCalendarRepository|GatewayCalendarRefresh|RedisCalendarRequestGate|CalendarTokenProviderAdapter|PgPool|GmailApi|RedisClient|SQS|S3|StaticFileServiceClient|DocumentStorageServiceClient|AuthServiceClient|ConnectionGatewayClient|MicrosoftGrantSource|PgMailboxInitialization|CrmCleanupClock|CrmCleanupContacts|CrmCleanupQueue|PgCrmCleanup|PgSfsPhotoContacts|PgSfsPhotoMappings|PhotoSyncedGateway|SfsPhotoUploadClient|PgSfsDeletion|SfsDeletionClient|GmailInboxSync|InboxSyncEffects|InboxSyncSqs|PgInboxSync|PgGmailOps|GmailOpsProvider|GmailOpsQueue)$
     - not:
         any:
           - inside:
@@ -166,7 +166,6 @@ rule:
               any:
                 - pattern: use calendar_events::{domain::{mutations::CalendarMutationServiceImpl, service::CalendarService},
                     outbound::{google::GoogleCalendarClient, pg::PgCalendarRepository}};
-                - pattern: use crate::calendar_refresh::ConnectionGatewayCalendarRefresh;
                 - pattern: use crate::calendar_request_gate::RedisCalendarRequestGate;
                 - pattern: use crate::calendar_tokens::CalendarTokenProviderAdapter;
                 - pattern: use email::{domain::service::EmailServiceImpl, inbound::axum::{axum_impls::GmailTokenState, get_thread_router::EmailThreadRouterState,

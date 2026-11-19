@@ -11,6 +11,7 @@ import {
   type ValidComponent,
 } from 'solid-js';
 import { Dynamic } from 'solid-js/web';
+import { createCloseOnNavigation } from './close-on-navigation';
 
 /**
  * Call this from a scroll container's `onFocusIn` to smoothly scroll a
@@ -342,32 +343,57 @@ function focusSheetOverItsFirstRow(event: Event) {
 }
 
 /**
- * Wrapper around Corvu's Drawer for mobile. Handles styling and input/virtual keyboard behaviour.
+ * Wrapper around Corvu's Drawer for mobile. Handles styling and input/virtual
+ * keyboard behaviour, and closes the drawer when the app navigates to another
+ * page (see `createCloseOnNavigation`).
  */
 export const MobileDrawer = Object.assign(
   (
     props: Omit<
       ComponentProps<typeof Drawer>,
       'activeSnapPoint' | 'onActiveSnapPointChange'
-    >
+    > & {
+      /**
+       * Stay open when the app navigates. Only for a sheet whose dismissal
+       * discards something the user can't get back, such as files shared to
+       * the app.
+       */
+      keepOpenOnNavigation?: boolean;
+    }
   ) => {
     const [local, rest] = splitProps(props, [
       'onOutsidePointer',
       'onOpenChange',
       'onInitialFocus',
+      'initialOpen',
+      'keepOpenOnNavigation',
     ]);
-    let uncontrolledOpen = props.initialOpen ?? false;
+    // Held here rather than in Corvu, so navigation can close an uncontrolled
+    // drawer too.
+    const [uncontrolledOpen, setUncontrolledOpen] = createSignal(
+      local.initialOpen ?? false
+    );
     let disposed = false;
     onCleanup(() => {
       disposed = true;
     });
-    const closed = () => disposed || !(props.open ?? uncontrolledOpen);
+    const open = () => props.open ?? uncontrolledOpen();
+    const closed = () => disposed || !open();
     // A drag past the break point moves Corvu to its closed snap point before
     // it asks to close. An owner that keeps the drawer open (to confirm a
     // discard) would leave it parked off-screen behind its scrim, so return
     // it to the open snap point. It starts closed, as Corvu's own state does,
     // so opening slides it in.
     const [activeSnapPoint, setActiveSnapPoint] = createSignal<Size>(0);
+    const changeOpen = (next: boolean) => {
+      setUncontrolledOpen(next);
+      local.onOpenChange?.(next);
+      if (!next && !closed()) setActiveSnapPoint(1);
+    };
+    createCloseOnNavigation({
+      open: () => !local.keepOpenOnNavigation && open(),
+      close: () => changeOpen(false),
+    });
     return (
       <Drawer
         breakPoints={[0.8]}
@@ -375,13 +401,10 @@ export const MobileDrawer = Object.assign(
         noOutsidePointerEvents={false}
         restoreFocus={false}
         {...rest}
+        open={open()}
         activeSnapPoint={activeSnapPoint()}
         onActiveSnapPointChange={setActiveSnapPoint}
-        onOpenChange={(open) => {
-          uncontrolledOpen = open;
-          local.onOpenChange?.(open);
-          if (!open && !closed()) setActiveSnapPoint(1);
-        }}
+        onOpenChange={changeOpen}
         onInitialFocus={(event) => {
           local.onInitialFocus?.(event);
           if (event.defaultPrevented || props.initialFocusEl) return;

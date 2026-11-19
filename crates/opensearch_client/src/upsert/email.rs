@@ -56,12 +56,18 @@ pub struct UpsertEmailArgs {
     pub properties: Vec<IndexedProperty>,
 }
 
+/// The id of a message's document under a thread: one per thread it is
+/// indexed under.
+pub(crate) fn email_document_id(thread_id: &str, message_id: &str) -> String {
+    format!("{thread_id}:{message_id}")
+}
+
 #[tracing::instrument(skip(client))]
 pub(crate) async fn upsert_email_message(
     client: &opensearch::OpenSearch,
     args: &UpsertEmailArgs,
 ) -> Result<()> {
-    let id = format!("{}:{}", args.thread_id, args.message_id);
+    let id = email_document_id(&args.thread_id, &args.message_id);
     let response = client
         .index(opensearch::IndexParts::IndexId(
             SearchIndex::Emails.as_ref(),
@@ -112,7 +118,7 @@ pub(crate) async fn bulk_upsert_email_messages(
     let mut bulk_body = Vec::new();
 
     for msg in messages {
-        let id = format!("{}:{}", msg.thread_id, msg.message_id);
+        let id = email_document_id(&msg.thread_id, &msg.message_id);
 
         let action = serde_json::json!({
             "index": {
@@ -200,7 +206,7 @@ pub(crate) async fn update_email_thread_properties(
                 "update_by_query reported failures updating email thread properties",
             );
             return Err(OpensearchClientError::Unknown {
-                details: format!("update_by_query failures: {failures:?}"),
+                details: serde_json::Value::from(failures.clone()).to_string(),
                 operation: OpensearchOperation::UpdateEmailThreadProperties,
             });
         }

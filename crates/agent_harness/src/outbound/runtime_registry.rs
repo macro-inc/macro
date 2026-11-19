@@ -27,7 +27,8 @@ use tokio::sync::mpsc;
 use tokio::task::JoinHandle;
 
 use crate::domain::ports::{
-    ConnectionRecorded, HarnessBindings, HarnessPresence, RuntimeConnectionId, RuntimeConnections,
+    ConnectionRecorded, HarnessBindings, HarnessPresence, RuntimeAccepts, RuntimeConnectionId,
+    RuntimeConnections,
 };
 
 #[cfg(test)]
@@ -45,13 +46,6 @@ pub struct LiveRuntimeSessions {
     pub acp_sessions: Vec<ListedSession>,
     /// The span that asked, for reattaching to follow from.
     pub span: tracing::Span,
-}
-
-/// The optional messages a runtime said, when it dialed, that it accepts.
-#[derive(Debug, Clone, Copy, Default, PartialEq, Eq)]
-pub struct RuntimeAccepts {
-    /// `ToRuntimeMessage::AgentsChanged`.
-    pub agents_changed: bool,
 }
 
 /// A connection and the identity its presence reports carry.
@@ -131,6 +125,11 @@ where
         self.connections.contains_key(&harness)
     }
 
+    /// The dial a harness's runtime is connected on here, if any.
+    pub fn connection_of(&self, harness: HarnessId) -> Option<RuntimeConnectionId> {
+        self.connections.get(&harness).map(|listed| listed.id)
+    }
+
     /// Ask a harness's live runtime to probe a fresh ACP process.
     ///
     /// Returns `None` when no live connection exists. The caller owns the
@@ -149,6 +148,32 @@ where
             .get(&harness)
             .map(|entry| Arc::clone(&entry.connection))?;
         Some(connection.probe_models().await)
+    }
+
+    /// Hand `harness`'s live runtime an agent teammate's environment.
+    /// Returns whether this process holds a connection for it.
+    pub async fn apply_agent(
+        &self,
+        harness: HarnessId,
+        environment: agent_runtime_protocol::domain::schema::v0::AgentEnvironment,
+    ) -> bool {
+        let Some(connection) = self
+            .connections
+            .get(&harness)
+            .map(|entry| Arc::clone(&entry.connection))
+        else {
+            return false;
+        };
+        match connection.apply_agent(environment).await {
+            Ok(()) => {
+                tracing::info!(%harness, "handed this harness's runtime its agent");
+                true
+            }
+            Err(error) => {
+                tracing::warn!(%harness, error = ?error, "could not hand this harness's runtime its agent");
+                false
+            }
+        }
     }
 }
 
@@ -297,7 +322,7 @@ async fn record_connected<Sender>(
 ) where
     Sender: TransportSender<ToRuntimeMessage>,
 {
-    let recorded = presence.connected(harness, listed.id).await;
+    let recorded = presence.connected(harness, listed.id, listed.accepts).await;
     if recorded != ConnectionRecorded::AgentBound || !listed.accepts.agents_changed {
         return;
     }

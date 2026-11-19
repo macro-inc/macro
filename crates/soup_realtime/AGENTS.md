@@ -63,6 +63,11 @@ tasks itself.
 - Property definition/option lifecycle events are intentionally ignored; they
   don't identify every affected entity.
 - Channel threads use their containing channel as the access source.
+- Recipients come from current access when the event is processed, so an
+  entity hard-deleted before then reaches no one by lookup. `channel.deleted`
+  names the members it had (`participant_user_ids`), and its `Deleted` patch
+  goes to them as well (`SoupRealtimePatch::with_named_recipients`); events
+  from before that field reach only current accessors.
 - Agent sessions have no source event here: their patches come from channel
   references, linked pull requests, and the harness publishing through
   `outbound/agent_sessions.rs`' `SoupWorkRegistrationSignal` for registered work.

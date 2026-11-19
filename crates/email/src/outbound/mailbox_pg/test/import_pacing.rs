@@ -3,8 +3,8 @@
 use super::fixture;
 use crate::domain::mailbox::*;
 use email_api_client::domain::models::{
-    EmailApiError, MailFolder, MailboxChangePage, MailboxMessage, ProviderId, StreamPosition,
-    StreamToken,
+    EmailApiError, MailFolder, MailboxChangePage, MailboxMessage, ProviderId, RoundStart,
+    StreamPosition, StreamToken,
 };
 use macro_db_migrator::MACRO_DB_MIGRATIONS;
 use sqlx::PgPool;
@@ -33,6 +33,7 @@ impl MailboxGateway for LargeFolder {
         _: MailboxKey,
         _: &ProviderId,
         _: Option<&StreamToken>,
+        _: RoundStart,
     ) -> Result<MailboxChangePage, EmailApiError> {
         let page = {
             let mut pages = self.pages.lock().unwrap();

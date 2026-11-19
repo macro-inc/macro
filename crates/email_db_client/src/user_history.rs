@@ -53,8 +53,9 @@ where
 ///
 /// Note: This will exclude any threads where the latest message is marked as TRASH
 ///
-/// Discarded drafts (`provider_missing` tombstones) are skipped, as the thread
-/// view skips them, so a thread left with only one is excluded.
+/// Messages missing at the provider (`provider_missing` tombstones: discarded
+/// drafts and messages deleted at the provider) are skipped, as the thread view
+/// skips them, so a thread left with only those is excluded.
 #[tracing::instrument(skip(pool), err)]
 pub async fn get_thread_summary_info(
     pool: &PgPool,
@@ -86,7 +87,7 @@ pub async fn get_thread_summary_info(
                     FROM email_messages m_latest
                     WHERE m_latest.thread_id = t.id
                       AND m_latest.link_id = t.link_id
-                      AND NOT (m_latest.is_draft AND COALESCE((m_latest.mailbox_state->>'provider_missing')::boolean, false))
+                      AND NOT COALESCE((m_latest.mailbox_state->>'provider_missing')::boolean, false)
                     ORDER BY m_latest.internal_date_ts DESC NULLS LAST
                     LIMIT 1
                 ) AS "is_draft!",
@@ -128,7 +129,7 @@ pub async fn get_thread_summary_info(
                 LEFT JOIN email_contacts c ON c.id = m2.from_contact_id
                 WHERE m2.thread_id = t.id
                   AND m2.link_id = t.link_id
-                  AND NOT (m2.is_draft AND COALESCE((m2.mailbox_state->>'provider_missing')::boolean, false))
+                  AND NOT COALESCE((m2.mailbox_state->>'provider_missing')::boolean, false)
                 ORDER BY
                     (CASE WHEN m2.is_draft = false AND m2.sent_at IS NOT NULL THEN 0 ELSE 1 END) ASC,
                     COALESCE(m2.sent_at, m2.updated_at) DESC NULLS LAST
@@ -143,7 +144,7 @@ pub async fn get_thread_summary_info(
                 FROM email_messages m3
                 WHERE m3.thread_id = t.id
                   AND m3.link_id = t.link_id
-                  AND NOT (m3.is_draft AND COALESCE((m3.mailbox_state->>'provider_missing')::boolean, false))
+                  AND NOT COALESCE((m3.mailbox_state->>'provider_missing')::boolean, false)
                 ORDER BY
                     -- 1. Priority: Non-drafts with valid sent_at come first (0), everything else is fallback (1)
                     (CASE WHEN m3.is_draft = false AND m3.sent_at IS NOT NULL THEN 0 ELSE 1 END) ASC,

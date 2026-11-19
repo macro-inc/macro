@@ -16,6 +16,7 @@ use rand::Rng;
 
 use crate::service::user::agent_signup::AGENT_SIGNUP_DATA_KEY;
 use crate::service::user::create_user::create_user;
+use crate::service::user::email_code_signup::created_by_email_code;
 use crate::service::user::support_channel_welcome::{
     AuthorizedSupportChannelMessages, post_support_channel_welcome,
 };
@@ -277,6 +278,7 @@ async fn create_user_webhook_complete(
         user_id = tracing::field::Empty,
         organization_id = tracing::field::Empty,
         is_agent = tracing::field::Empty,
+        email_code_signup = created_by_email_code(req.event.user.data.as_ref()),
     ),
     err
 )]
@@ -284,6 +286,11 @@ async fn create_user_webhook(ctx: &ApiContext, req: FusionAuthUserWebhook) -> an
     let ip_address = req.event.info.ip_address;
     let email = req.event.user.email.to_lowercase();
     let requested_agent = signup_requested_agent(&req.event.user);
+    // An email-code request creates the account before anyone has shown they
+    // receive mail at the address, though FusionAuth calls it verified. Its
+    // proof, domain team and referral wait for the first code used
+    // (`service::user::email_code_signup`).
+    let email_code_signup = created_by_email_code(req.event.user.data.as_ref());
     let (first_name, last_name) = identity_provider_name(&req.event.user);
     let username = req.event.user.username.unwrap_or(email.clone());
     let fusionauth_user_id = req.event.user.id;
@@ -349,7 +356,7 @@ async fn create_user_webhook(ctx: &ApiContext, req: FusionAuthUserWebhook) -> an
         &fusionauth_user_id,
         &username,
         &email,
-        req.event.user.verified,
+        req.event.user.verified && !email_code_signup,
         &ctx.db,
         &ctx.stripe_client,
         is_agent,
@@ -483,10 +490,34 @@ async fn create_user_webhook(ctx: &ApiContext, req: FusionAuthUserWebhook) -> an
 
     // Automatically add the new user to a team whose auto-join domain
     // matches their email domain. Fire-and-forget: a failed auto-join must
-    // never block user creation.
+    // never block user creation. An email-code signup joins once its first
+    // code proves the address.
+    if !email_code_signup {
+        spawn_domain_team_join(ctx, &user_id);
+    }
+
+    // Agents get an SDK token instead: no marketing sequence, sample content,
+    // or support channel.
+    if !is_agent {
+        spawn_human_signup_content(ctx, &user_id, &email);
+    }
+
+    // Allow to fail silently
+    let _ = ctx
+        .macro_cache_client
+        .increment_create_user_hourly_rate_limit(&ip_address)
+        .await
+        .inspect_err(|e| tracing::error!(error=?e, "unable to increment create user rate limit"));
+
+    Ok(())
+}
+
+/// Joins the new user to the team whose auto-join domain is their email
+/// domain, in the background.
+fn spawn_domain_team_join(ctx: &ApiContext, user_id: &str) {
     tokio::spawn({
         let teams_service = ctx.teams_service.clone();
-        let user_id = user_id.clone();
+        let user_id = user_id.to_owned();
         async move {
             let user_id = match MacroUserIdStr::parse_from_str(&user_id) {
                 Ok(user_id) => user_id,
@@ -509,21 +540,6 @@ async fn create_user_webhook(ctx: &ApiContext, req: FusionAuthUserWebhook) -> an
         }
         .in_current_span()
     });
-
-    // Agents get an SDK token instead: no marketing sequence, sample content,
-    // or support channel.
-    if !is_agent {
-        spawn_human_signup_content(ctx, &user_id, &email);
-    }
-
-    // Allow to fail silently
-    let _ = ctx
-        .macro_cache_client
-        .increment_create_user_hourly_rate_limit(&ip_address)
-        .await
-        .inspect_err(|e| tracing::error!(error=?e, "unable to increment create user rate limit"));
-
-    Ok(())
 }
 
 /// Marketing and sample content for a person's new account. Fire-and-forget:
