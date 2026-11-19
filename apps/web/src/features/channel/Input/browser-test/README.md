@@ -61,7 +61,7 @@ storage, at mid-word, other-line and line-start positions, with the press and
 release sent together as a trackpad tap-to-click arrives, and types there. The
 click used to reach the editor before it had read the new caret, and
 re-focusing the editor put the old caret back, so the click was lost. A click
-on the composer's padding must still focus it.
+just outside the text must still focus the composer.
 
 The mention-ranking fixture also mounts document discussion composers over a
 bounded virtual 100k contact source. Desktop/phone cases verify lazy activation,

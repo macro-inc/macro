@@ -66,7 +66,12 @@ function pointBefore(page: Page, line: number, offset: number) {
 async function tap(page: Page, line: number, offset: number) {
   const point = await pointBefore(page, line, offset);
   const cdp = await page.context().newCDPSession(page);
-  const event = { x: point.x, y: point.y, button: 'left', clickCount: 1 };
+  const event = {
+    x: point.x,
+    y: point.y,
+    button: 'left' as const,
+    clickCount: 1,
+  };
   await page.mouse.move(point.x, point.y);
   await Promise.all([
     cdp.send('Input.dispatchMouseEvent', { type: 'mousePressed', ...event }),
@@ -119,7 +124,7 @@ test('a click beside the draft text still focuses the composer', async ({
   const editor = await openComposer(page);
   await page.getByRole('heading', { name: 'Channel composer draft' }).click();
   await expect(editor).not.toBeFocused();
-  // The shell's padding below the text, outside the editable root.
+  // Just below the text, outside the editable root.
   const box = await editor.boundingBox();
   if (!box) throw new Error('editor not laid out');
   await page.mouse.click(box.x + box.width - 4, box.y + box.height + 2);
