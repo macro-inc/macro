@@ -704,7 +704,7 @@ it('keeps its own lease while the enqueue that may have taken it is on its way',
   expect(host.deferOptimisticWrite).toHaveBeenCalledOnce();
 });
 
-it('keeps the lease it is sending under', async () => {
+it('leaves its lease alone while it is sending the head', async () => {
   const { runner, host, forwarded } = fixture();
   host.inspectMutations = async () => [headLeasedBy('owner', undefined, '3')];
   await runner.admit(operation(), enqueue(operation(), '3'), runner.epoch());
@@ -757,4 +757,24 @@ it('claims again when a write settles while a claim is being answered', async ()
   claimAnswered(undefined);
   await vi.advanceTimersByTimeAsync(1);
   expect(claims).toHaveBeenCalledTimes(2);
+});
+
+it('looks for its own lease again when the first look failed', async () => {
+  const { runner, host } = fixture();
+  let fail = true;
+  host.inspectMutations = async () => {
+    if (fail) throw new Error('engine restarting');
+    return [headLeasedBy('owner')];
+  };
+  host.claimNextMutation = vi.fn(async () => undefined);
+  runner.epoch();
+
+  runner.enqueueLost();
+  await vi.advanceTimersByTimeAsync(1);
+  expect(host.deferOptimisticWrite).not.toHaveBeenCalled();
+
+  fail = false;
+  runner.wake();
+  await vi.advanceTimersByTimeAsync(1);
+  expect(host.deferOptimisticWrite).toHaveBeenCalledOnce();
 });

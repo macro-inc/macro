@@ -899,8 +899,9 @@ export function createMutationQueueRunner(
     if (!unroutedSuspected || !host.inspectMutations) return false;
     // An enqueue on its way may be the one that took the lease.
     if (enqueuesInFlight > 0) return false;
-    unroutedSuspected = false;
+    // A look that fails keeps the suspicion for the next drain.
     const head = await inspectHeadClaim();
+    unroutedSuspected = false;
     if (!head || !ownOwners.has(head.lease.owner)) return false;
     if (
       activeAttempt?.transactionId === head.transactionId &&
