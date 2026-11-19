@@ -241,6 +241,62 @@ function describe(
   return text ? `${heading}. ${text}` : heading;
 }
 
+// A tool's input: its generated method's own `{ path?, query?, body? }`.
+function inputOf(operation: Operation, parameters: Parameter[]): JsonSchema {
+  const path = objectOf(parameters.filter((p) => p.in === 'path'));
+  const query = objectOf(parameters.filter((p) => p.in === 'query'));
+  const body = operation.requestBody?.content[JSON_TYPE]?.schema;
+  const required = [
+    ...(path ? ['path'] : []),
+    ...(query?.required ? ['query'] : []),
+    ...(body && operation.requestBody?.required ? ['body'] : []),
+  ];
+  return localRefs({
+    type: 'object',
+    properties: {
+      ...(path ? { path } : {}),
+      ...(query ? { query } : {}),
+      ...(body ? { body } : {}),
+    },
+    ...(required.length > 0 ? { required } : {}),
+    additionalProperties: false,
+  }) as JsonSchema;
+}
+
+// A tool's output: its JSON or text success response, if it has a body.
+function outputOf(operation: Operation): JsonSchema | undefined {
+  const response = successResponse(operation)?.content;
+  const output =
+    response?.[JSON_TYPE]?.schema ??
+    (response?.['text/plain'] ? { type: 'string' } : undefined);
+  return output && (localRefs(output) as JsonSchema);
+}
+
+// The `<service>.<method>` key of the generated SDK method that sends this
+// method and path.
+function generatedKey(
+  sources: CatalogSources,
+  service: string,
+  httpMethod: string,
+  path: string
+): string | undefined {
+  return Object.entries(sources.generated).find(
+    ([key, entry]) =>
+      key.startsWith(`${service}.`) &&
+      entry.method === httpMethod &&
+      entry.path === path
+  )?.[0];
+}
+
+function assertUniquePaths(tools: Pick<CatalogTool, 'path'>[]) {
+  const paths = new Set<string>();
+  for (const tool of tools) {
+    const key = tool.path.join('.');
+    if (paths.has(key)) throw new Error(`duplicate tool path tools.${key}`);
+    paths.add(key);
+  }
+}
+
 /** Build `js-tools.json` from its sources. Throws on anything inconsistent. */
 export function buildCatalog(sources: CatalogSources): Catalog {
   const groups = new Map(
@@ -282,12 +338,7 @@ export function buildCatalog(sources: CatalogSources): Catalog {
           continue;
         }
 
-        const generated = Object.entries(sources.generated).find(
-          ([key, entry]) =>
-            key.startsWith(`${service}.`) &&
-            entry.method === httpMethod &&
-            entry.path === path
-        );
+        const generated = generatedKey(sources, service, httpMethod, path);
         if (!generated)
           throw new Error(
             `${service}.${operationId} (${httpMethod} ${path}) has no generated SDK method`
@@ -302,44 +353,23 @@ export function buildCatalog(sources: CatalogSources): Catalog {
         // is `<operationId>_2`, as the OCaml SDK names it.
         const seen = (names.get(operationId) ?? 0) + 1;
         names.set(operationId, seen);
-        const name = seen === 1 ? operationId : `${operationId}_${seen}`;
-        const sdkMethod = generated[0].slice(service.length + 1);
-
-        const pathObject = objectOf(parameters.filter((p) => p.in === 'path'));
-        const query = objectOf(parameters.filter((p) => p.in === 'query'));
-        const body = operation.requestBody?.content[JSON_TYPE]?.schema;
-        const required = [
-          ...(pathObject ? ['path'] : []),
-          ...(query?.required ? ['query'] : []),
-          ...(body && operation.requestBody?.required ? ['body'] : []),
-        ];
-        const response = successResponse(operation)?.content;
-        const output =
-          response?.[JSON_TYPE]?.schema ??
-          (response?.['text/plain'] ? { type: 'string' } : undefined);
-        const verb = sources.verbs[generated[0]];
-
+        const verb = sources.verbs[generated];
+        const output = outputOf(operation);
         tools.push({
-          path: [service.replaceAll('-', '_'), name],
+          path: [
+            service.replaceAll('-', '_'),
+            seen === 1 ? operationId : `${operationId}_${seen}`,
+          ],
           service,
           operationId,
           client,
-          method: sdkMethod,
+          method: generated.slice(service.length + 1),
           ...(verb ? { verb } : {}),
           httpMethod,
           route,
           description: describe(operation, registered, groups),
-          input: localRefs({
-            type: 'object',
-            properties: {
-              ...(pathObject ? { path: pathObject } : {}),
-              ...(query ? { query } : {}),
-              ...(body ? { body } : {}),
-            },
-            ...(required.length > 0 ? { required } : {}),
-            additionalProperties: false,
-          }) as JsonSchema,
-          ...(output ? { output: localRefs(output) as JsonSchema } : {}),
+          input: inputOf(operation, parameters),
+          ...(output ? { output } : {}),
         });
       }
     }
@@ -350,13 +380,7 @@ export function buildCatalog(sources: CatalogSources): Catalog {
       >;
   }
 
-  const paths = new Set<string>();
-  for (const tool of tools) {
-    const key = tool.path.join('.');
-    if (paths.has(key)) throw new Error(`duplicate tool path tools.${key}`);
-    paths.add(key);
-  }
-
+  assertUniquePaths(tools);
   return {
     tools: tools.map((tool) => ({
       ...tool,
