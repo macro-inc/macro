@@ -968,6 +968,18 @@ export const thread = {
       note: 'the same toasts are raised from the header and title menu of an open thread (was STL-613)',
     },
     {
+      id: 'STL-991',
+      surface: 'SL-28',
+      fn: ['F-071'],
+      state: 'result: the thread leaves the inbox at the provider',
+      trigger:
+        'Mark done after a reload that cut off the mark read of a thread just opened',
+      source: [
+        'src/lib/graphql-cache/exchange/mutation-queue-runner.ts',
+        'src/lib/graphql-cache/exchange/mutation-queue-owner.ts',
+      ],
+    },
+    {
       id: 'STL-076',
       surface: 'SL-28',
       fn: ['F-069'],
@@ -1221,6 +1233,34 @@ export const thread = {
       needs: 'the calendar service',
     },
     {
+      id: 'STL-523',
+      surface: 'SL-40',
+      fn: ['F-156'],
+      state: '"Syncing your calendar…" at the shared-event action',
+      trigger:
+        'open a shared event before the first writable calendar is discovered',
+      source: [
+        INVITATION,
+        'src/features/calendar/components/CalendarFirstSyncNotice.tsx',
+      ],
+      providers: ['gmail'],
+      needs: 'the calendar service',
+    },
+    {
+      id: 'STL-524',
+      surface: 'SL-28',
+      fn: ['F-114'],
+      state: '"Syncing your calendar…" at the event composer create action',
+      trigger:
+        'create an event from a thread before the first writable calendar is discovered',
+      source: [
+        'src/features/calendar/components/composer/event-form-parts.tsx',
+      ],
+      viewports: ['desktop'],
+      providers: ['gmail'],
+      needs: 'the calendar service',
+    },
+    {
       id: 'STL-100',
       surface: 'SL-40',
       fn: ['F-153'],
@@ -1286,6 +1326,17 @@ export const thread = {
       state: 'saved card without RSVP, Join, Open in calendar or View your day',
       trigger: 'invitation message with the calendar off',
       source: [INVITATION, CARD],
+    },
+    {
+      id: 'STL-522',
+      surface: 'SL-40',
+      fn: ['F-156'],
+      state: '"Adding shared events requires a writable Google calendar."',
+      trigger: 'open a shared event with Outlook as the only calendar',
+      source: ['src/features/calendar-view/components/AddToCalendarButton.tsx'],
+      providers: ['outlook'],
+      flag: 'enable-calendar-add-shared-event',
+      needs: 'the calendar service',
     },
     // SL-43
     {

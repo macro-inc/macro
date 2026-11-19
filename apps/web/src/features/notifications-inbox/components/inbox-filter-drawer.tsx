@@ -7,9 +7,9 @@ import { INBOX_FILTER_GROUPS } from './inbox-filter-groups';
 
 /** The touch counterpart of the filter menu: Type in a sheet. */
 export function InboxFilterDrawer(props: {
-  isShown: (category: InboxCategory) => boolean;
+  isSelected: (category: InboxCategory) => boolean;
   activeCount: number;
-  onShownChange: (category: InboxCategory, shown: boolean) => void;
+  onSelectedChange: (category: InboxCategory, selected: boolean) => void;
   onReset: () => void;
 }) {
   return (
@@ -34,9 +34,9 @@ export function InboxFilterDrawer(props: {
                     {(option) => (
                       <MobileFilterDrawer.Option
                         selectionMode={group.selectionMode}
-                        checked={props.isShown(option.id)}
+                        checked={props.isSelected(option.id)}
                         onChange={(checked) =>
-                          props.onShownChange(option.id, checked)
+                          props.onSelectedChange(option.id, checked)
                         }
                         icon={option.icon?.()}
                       >

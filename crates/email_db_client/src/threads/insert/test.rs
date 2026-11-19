@@ -547,8 +547,10 @@ async fn a_message_that_cannot_be_stored_is_skipped_and_the_rest_of_its_thread_i
 ) -> anyhow::Result<()> {
     let link_id = Uuid::parse_str("00000000-0000-0000-0000-000000000001")?;
     let mut messages = backfilled_messages(link_id);
-    // Postgres text can't hold NUL, so this message fails identically every time.
-    messages[0].body_text = Some("broken \0 body".to_string());
+    // Postgres timestamps start in 4713 BC, so this message fails identically every time.
+    messages[0].internal_date_ts = chrono::NaiveDate::from_ymd_opt(-10_000, 1, 1)
+        .and_then(|date| date.and_hms_opt(0, 0, 0))
+        .map(|date| date.and_utc());
 
     let (thread_id, skipped) = insert_backfilled_thread(
         &pool,
@@ -568,6 +570,40 @@ async fn a_message_that_cannot_be_stored_is_skipped_and_the_rest_of_its_thread_i
         vec![0]
     );
     assert_eq!(thread_message_count(&pool, thread_id).await?, 1);
+    Ok(())
+}
+
+#[sqlx::test(
+    migrator = "MACRO_DB_MIGRATIONS",
+    fixtures(path = "../../../fixtures", scripts("links"))
+)]
+async fn a_message_with_nul_characters_is_written_without_them(
+    pool: Pool<Postgres>,
+) -> anyhow::Result<()> {
+    let link_id = Uuid::parse_str("00000000-0000-0000-0000-000000000001")?;
+    let mut messages = backfilled_messages(link_id);
+    messages[0].subject = Some("Quarterly\0 report".to_string());
+    messages[0].body_text = Some("parent\0 body".to_string());
+
+    let (thread_id, skipped) = insert_backfilled_thread(
+        &pool,
+        "backfill-thread",
+        link_id,
+        &mut messages,
+        data_exception,
+    )
+    .await?
+    .expect("the thread is new");
+
+    assert!(skipped.is_empty(), "the message is stored, not skipped");
+    let stored = sqlx::query!(
+        "SELECT subject,body_text FROM email_messages WHERE thread_id = $1 AND provider_id = 'backfill-parent'",
+        thread_id
+    )
+    .fetch_one(&pool)
+    .await?;
+    assert_eq!(stored.subject.as_deref(), Some("Quarterly report"));
+    assert_eq!(stored.body_text.as_deref(), Some("parent body"));
     Ok(())
 }
 

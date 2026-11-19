@@ -1,0 +1,22 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "\n            SELECT id FROM hosted_runtime\n            WHERE host_id = $1 AND hibernated_at IS NOT NULL AND wake_requested_at IS NOT NULL\n            ORDER BY wake_requested_at\n            ",
+  "describe": {
+    "columns": [
+      {
+        "ordinal": 0,
+        "name": "id",
+        "type_info": "Uuid"
+      }
+    ],
+    "parameters": {
+      "Left": [
+        "Uuid"
+      ]
+    },
+    "nullable": [
+      false
+    ]
+  },
+  "hash": "4ad27a835f7691206ae03c4d5cb66946ffa0b20641dbfaee0a616daeff9d0a76"
+}

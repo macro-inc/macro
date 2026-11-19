@@ -23285,6 +23285,16 @@
                 }
               }
             }
+          },
+          "503": {
+            "description": "Selected email rules exceeded a resource limit",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
           }
         }
       },
@@ -23336,6 +23346,16 @@
           },
           "500": {
             "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "503": {
+            "description": "Selected email rules exceeded a resource limit",
             "content": {
               "application/json": {
                 "schema": {
@@ -23406,6 +23426,16 @@
           },
           "500": {
             "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "503": {
+            "description": "Selected email rules exceeded a resource limit",
             "content": {
               "application/json": {
                 "schema": {
@@ -24301,7 +24331,7 @@
             }
           },
           "409": {
-            "description": "",
+            "description": "A conflict code, or `vault_not_provisioned` when the team's vault is not set up",
             "content": {
               "application/json": {
                 "schema": {
@@ -24428,7 +24458,7 @@
             }
           },
           "409": {
-            "description": "",
+            "description": "A conflict code, or `vault_not_provisioned` when the team's vault is not set up",
             "content": {
               "application/json": {
                 "schema": {
@@ -24790,7 +24820,7 @@
             }
           },
           "409": {
-            "description": "",
+            "description": "A conflict code, or `vault_not_provisioned` when the team's vault is not set up",
             "content": {
               "application/json": {
                 "schema": {
@@ -24910,7 +24940,7 @@
             }
           },
           "409": {
-            "description": "",
+            "description": "A conflict code, or `vault_not_provisioned` when the team's vault is not set up",
             "content": {
               "application/json": {
                 "schema": {
@@ -25037,7 +25067,7 @@
             }
           },
           "409": {
-            "description": "",
+            "description": "A conflict code, or `vault_not_provisioned` when the team's vault is not set up",
             "content": {
               "application/json": {
                 "schema": {
@@ -25239,7 +25269,7 @@
             }
           },
           "409": {
-            "description": "",
+            "description": "`version_conflict`, `vault_busy`, `folder_missing`, or `vault_not_provisioned` when the team's vault is not set up",
             "content": {
               "application/json": {
                 "schema": {
@@ -25306,7 +25336,7 @@
             }
           },
           "409": {
-            "description": "",
+            "description": "`version_conflict`, `vault_busy`, `folder_missing`, or `vault_not_provisioned` when the team's vault is not set up",
             "content": {
               "application/json": {
                 "schema": {
@@ -25384,7 +25414,7 @@
             }
           },
           "409": {
-            "description": "",
+            "description": "`version_conflict`, `vault_busy`, `folder_missing`, or `vault_not_provisioned` when the team's vault is not set up",
             "content": {
               "application/json": {
                 "schema": {
@@ -25443,7 +25473,7 @@
             }
           },
           "409": {
-            "description": "",
+            "description": "`version_conflict`, `vault_busy`, `folder_missing`, or `vault_not_provisioned` when the team's vault is not set up",
             "content": {
               "application/json": {
                 "schema": {
@@ -25541,7 +25571,7 @@
             }
           },
           "409": {
-            "description": "",
+            "description": "`version_conflict`, `vault_busy`, `folder_missing`, or `vault_not_provisioned` when the team's vault is not set up",
             "content": {
               "application/json": {
                 "schema": {
@@ -25714,7 +25744,7 @@
             }
           },
           "409": {
-            "description": "",
+            "description": "`version_conflict`, `vault_busy`, `folder_missing`, or `vault_not_provisioned` when the team's vault is not set up",
             "content": {
               "application/json": {
                 "schema": {
@@ -25781,7 +25811,7 @@
             }
           },
           "409": {
-            "description": "",
+            "description": "`version_conflict`, `vault_busy`, `folder_missing`, or `vault_not_provisioned` when the team's vault is not set up",
             "content": {
               "application/json": {
                 "schema": {
@@ -25932,7 +25962,7 @@
             }
           },
           "409": {
-            "description": "",
+            "description": "`version_conflict`, `vault_busy`, `folder_missing`, or `vault_not_provisioned` when the team's vault is not set up",
             "content": {
               "application/json": {
                 "schema": {
@@ -26008,7 +26038,7 @@
             }
           },
           "409": {
-            "description": "",
+            "description": "`version_conflict`, `vault_busy`, `folder_missing`, or `vault_not_provisioned` when the team's vault is not set up",
             "content": {
               "application/json": {
                 "schema": {
@@ -26067,7 +26097,7 @@
             }
           },
           "409": {
-            "description": "",
+            "description": "`version_conflict`, `vault_busy`, `folder_missing`, or `vault_not_provisioned` when the team's vault is not set up",
             "content": {
               "application/json": {
                 "schema": {
@@ -26143,7 +26173,7 @@
             }
           },
           "409": {
-            "description": "",
+            "description": "`version_conflict`, `vault_busy`, `folder_missing`, or `vault_not_provisioned` when the team's vault is not set up",
             "content": {
               "application/json": {
                 "schema": {
@@ -26205,7 +26235,7 @@
             }
           },
           "409": {
-            "description": "",
+            "description": "`version_conflict`, `vault_busy`, `folder_missing`, or `vault_not_provisioned` when the team's vault is not set up",
             "content": {
               "application/json": {
                 "schema": {
@@ -26516,6 +26546,126 @@
             }
           },
           "409": {
+            "description": "`version_conflict`, `vault_busy`, `folder_missing`, or `vault_not_provisioned` when the team's vault is not set up",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/PasswordFailure"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/passwords/teams/{team}/items/{item}/favorite": {
+      "put": {
+        "tags": ["passwords"],
+        "summary": "Change only the authenticated viewer's private preference.",
+        "operationId": "passwords_set_favorite",
+        "parameters": [
+          {
+            "name": "team",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid"
+            }
+          },
+          {
+            "name": "item",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid"
+            }
+          },
+          {
+            "name": "X-Macro-Passwords",
+            "in": "header",
+            "description": "Required CSRF header; send 1",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "204": {
+            "description": ""
+          },
+          "404": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/PasswordFailure"
+                }
+              }
+            }
+          },
+          "503": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/PasswordFailure"
+                }
+              }
+            }
+          }
+        }
+      },
+      "delete": {
+        "tags": ["passwords"],
+        "summary": "Change only the authenticated viewer's private preference.",
+        "operationId": "passwords_remove_favorite",
+        "parameters": [
+          {
+            "name": "team",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid"
+            }
+          },
+          {
+            "name": "item",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid"
+            }
+          },
+          {
+            "name": "X-Macro-Passwords",
+            "in": "header",
+            "description": "Required CSRF header; send 1",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "204": {
+            "description": ""
+          },
+          "404": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/PasswordFailure"
+                }
+              }
+            }
+          },
+          "503": {
             "description": "",
             "content": {
               "application/json": {
@@ -26578,7 +26728,7 @@
             }
           },
           "409": {
-            "description": "",
+            "description": "`version_conflict`, `vault_busy`, `folder_missing`, or `vault_not_provisioned` when the team's vault is not set up",
             "content": {
               "application/json": {
                 "schema": {
@@ -26656,7 +26806,7 @@
             }
           },
           "409": {
-            "description": "",
+            "description": "`version_conflict`, `vault_busy`, `folder_missing`, or `vault_not_provisioned` when the team's vault is not set up",
             "content": {
               "application/json": {
                 "schema": {
@@ -26718,7 +26868,7 @@
             }
           },
           "409": {
-            "description": "",
+            "description": "`version_conflict`, `vault_busy`, `folder_missing`, or `vault_not_provisioned` when the team's vault is not set up",
             "content": {
               "application/json": {
                 "schema": {
@@ -26787,7 +26937,7 @@
             }
           },
           "409": {
-            "description": "",
+            "description": "`version_conflict`, `vault_busy`, `folder_missing`, or `vault_not_provisioned` when the team's vault is not set up",
             "content": {
               "application/json": {
                 "schema": {
@@ -26858,7 +27008,7 @@
             }
           },
           "409": {
-            "description": "",
+            "description": "`version_conflict`, `vault_busy`, `folder_missing`, or `vault_not_provisioned` when the team's vault is not set up",
             "content": {
               "application/json": {
                 "schema": {
@@ -26917,7 +27067,7 @@
             }
           },
           "409": {
-            "description": "",
+            "description": "`version_conflict`, `vault_busy`, `folder_missing`, or `vault_not_provisioned` when the team's vault is not set up",
             "content": {
               "application/json": {
                 "schema": {
@@ -26985,7 +27135,7 @@
             }
           },
           "409": {
-            "description": "",
+            "description": "`version_conflict`, `vault_busy`, `folder_missing`, or `vault_not_provisioned` when the team's vault is not set up",
             "content": {
               "application/json": {
                 "schema": {
@@ -27044,7 +27194,7 @@
             }
           },
           "409": {
-            "description": "",
+            "description": "`version_conflict`, `vault_busy`, `folder_missing`, or `vault_not_provisioned` when the team's vault is not set up",
             "content": {
               "application/json": {
                 "schema": {
@@ -27112,7 +27262,7 @@
             }
           },
           "409": {
-            "description": "",
+            "description": "`version_conflict`, `vault_busy`, `folder_missing`, or `vault_not_provisioned` when the team's vault is not set up",
             "content": {
               "application/json": {
                 "schema": {
@@ -29628,6 +29778,51 @@
                 }
               }
             }
+          }
+        }
+      }
+    },
+    "/threads/{thread_id}/channel-shares": {
+      "get": {
+        "tags": ["threads"],
+        "summary": "List a thread owner's grants to channels they participate in.",
+        "operationId": "get_thread_channel_shares",
+        "parameters": [
+          {
+            "name": "thread_id",
+            "in": "path",
+            "description": "Thread ID",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "array",
+                  "items": {
+                    "$ref": "#/components/schemas/ThreadChannelShare"
+                  }
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Invalid thread ID"
+          },
+          "401": {
+            "description": "Owner access required"
+          },
+          "403": {
+            "description": "User session required"
+          },
+          "500": {
+            "description": "Unable to read thread shares"
           }
         }
       }
@@ -36032,6 +36227,13 @@
             "type": "string",
             "format": "uuid",
             "description": "The id of the deleted channel."
+          },
+          "participant_user_ids": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/MacroUserIdStr"
+            },
+            "description": "Active participants just before the delete. The channel and its\nmemberships are gone by the time this is consumed, so consumers that\ntell members about the delete cannot look them up."
           }
         }
       },
@@ -56016,7 +56218,8 @@
           "version_conflict",
           "vault_busy",
           "rate_limited",
-          "vault_unavailable"
+          "vault_unavailable",
+          "vault_not_provisioned"
         ]
       },
       "PasswordAgentFailure": {
@@ -56471,7 +56674,8 @@
           "version_conflict",
           "vault_busy",
           "folder_missing",
-          "vault_unavailable"
+          "vault_unavailable",
+          "vault_not_provisioned"
         ]
       },
       "PasswordFailure": {
@@ -56616,7 +56820,8 @@
           "version_conflict",
           "folder_missing",
           "busy",
-          "vault_unavailable"
+          "vault_unavailable",
+          "vault_not_provisioned"
         ]
       },
       "PasswordImportFolder": {
@@ -56851,7 +57056,7 @@
           },
           "favorite": {
             "type": "boolean",
-            "description": "Whether the item is marked as a favorite."
+            "description": "The current viewer's private favorite in responses; legacy initial flag in storage."
           },
           "folderId": {
             "type": ["string", "null"],
@@ -57003,7 +57208,7 @@
           },
           "favorite": {
             "type": "boolean",
-            "description": "Whether the item is marked as a favorite."
+            "description": "Legacy accepted field, ignored; change private preferences through the favorite endpoint."
           },
           "folderId": {
             "type": ["string", "null"],
@@ -57222,7 +57427,7 @@
           },
           "favorite": {
             "type": "boolean",
-            "description": "Whether the item is marked as a favorite."
+            "description": "Initial creator preference on create; ignored on update. Use the favorite endpoint afterward."
           },
           "folderId": {
             "type": ["string", "null"],
@@ -67020,6 +67225,30 @@
           }
         ],
         "description": "A thread's location within its document. PDF geometry remains annotation-owned."
+      },
+      "ThreadChannelShare": {
+        "type": "object",
+        "description": "A channel grant the thread owner can see in the sharing roster.",
+        "required": ["channel_id", "access_level", "channel_type"],
+        "properties": {
+          "access_level": {
+            "$ref": "#/components/schemas/AccessLevel",
+            "description": "The access level granted to the channel."
+          },
+          "channel_id": {
+            "type": "string",
+            "format": "uuid",
+            "description": "The channel with access to the thread."
+          },
+          "channel_name": {
+            "type": ["string", "null"],
+            "description": "The channel's configured name, if it has one."
+          },
+          "channel_type": {
+            "$ref": "#/components/schemas/ChannelType",
+            "description": "Whether the share is with a conversation or a group."
+          }
+        }
       },
       "ThreadOrigin": {
         "type": "object",

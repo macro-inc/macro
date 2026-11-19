@@ -64,6 +64,15 @@ We've already mostly written this. This will also fire as an event.
 
 Small/opinionated wrapper around Temporal
 
+### Greeting
+
+A new agent's first hello to its owner (`utilities/greeting`): a behavior
+that fires once when the agent runs, and asks a quick model, with no tools,
+to write the hello from a prompt file the agent keeps. The prompt has one
+section for each thing an agent may have, and only the sections for what
+this agent has reach the model. The agent provides every port: the model,
+its DM, its facts, the clock, and where it keeps that it has greeted.
+
 ### Credential Management
 
 This is a good example of separation of interface and implementation. This utility will have a single interface but

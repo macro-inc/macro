@@ -397,7 +397,7 @@ export class CallRecord extends FavoritableEntity<CallRecordDetail> {
     );
   }
 
-  /** Search calls by name and transcript, most relevant first, auto-paginated. */
+  /** Search calls by name and transcript, most relevant first, auto-paginated; `maxItems` caps the total. */
   static search = entitySearch({
     filters: { call_filters: {} },
     type: 'call',

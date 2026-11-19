@@ -43,6 +43,7 @@ import {
 } from '../nodes/UnlinkedTextNode';
 import { findNextAutoLinkMatch } from '../utils/auto-link';
 import { HTML_ENTITIES } from '../utils/html-entities';
+import { isAllowedLinkUrl } from '../utils/link-url';
 import {
   replaceTextWithUnknownMention,
   UnknownMentionNode,
@@ -276,9 +277,15 @@ export const LINK_XML: TextMatchTransformer = {
         );
         return;
       }
-      const linkNode = $createLinkNode(res.url, { title: res.title });
       const linkTextNode = $createTextNode(res.text);
       linkTextNode.setFormat(textNode.getFormat());
+      // The payload is stored as written, so a URL a link may not open (such
+      // as `javascript:`) keeps only its text.
+      if (typeof res.url !== 'string' || !isAllowedLinkUrl(res.url)) {
+        textNode.replace(linkTextNode);
+        return;
+      }
+      const linkNode = $createLinkNode(res.url, { title: res.title });
       linkNode.append(linkTextNode);
       textNode.replace(linkNode);
     } catch (e) {
