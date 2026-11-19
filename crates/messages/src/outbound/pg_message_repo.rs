@@ -962,3 +962,6 @@ impl MessageRepository for PgMessageRepository {
         }
     }
 }
+
+#[cfg(test)]
+mod write_bench;
