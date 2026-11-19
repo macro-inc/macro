@@ -28,8 +28,11 @@ export function inputValueText(value: unknown): string {
   if (typeof value === 'string') return value;
   if (typeof value === 'boolean')
     return value ? t('subRoutines.inputYes') : t('subRoutines.inputNo');
+  // Every digit it was given: the format's default would round it to three.
   if (typeof value === 'number')
-    return new Intl.NumberFormat(formatLocale()).format(value);
+    return new Intl.NumberFormat(formatLocale(), {
+      maximumFractionDigits: 20,
+    }).format(value);
   return JSON.stringify(value) ?? '';
 }
 
