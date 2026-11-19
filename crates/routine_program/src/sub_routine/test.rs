@@ -204,6 +204,29 @@ fn a_definitions_inputs_get_values_only_in_copies() {
 }
 
 #[test]
+fn no_text_in_a_routine_holds_a_nul() {
+    let nul = |edit: fn(&mut serde_json::Value)| {
+        let mut task = parent();
+        edit(&mut task);
+        RoutineProgram::from_task(&task).unwrap().validate()
+    };
+    assert_eq!(
+        nul(|task| task["sub_routines"][0]["steps"][1]["instructions"] = json!("Tell\u{0} me")),
+        Err(ProgramError::Nul)
+    );
+    assert_eq!(
+        nul(|task| task["sub_routines"][0]["steps"][0]["source"] =
+            json!("export async function main() { return '\u{0}'; }")),
+        Err(ProgramError::Nul)
+    );
+    assert_eq!(
+        nul(|task| task["steps"][0]["title"] = json!("Sched\u{0}ule")),
+        Err(ProgramError::Nul)
+    );
+    assert_eq!(nul(|_| {}), Ok(()));
+}
+
+#[test]
 fn sub_routine_names_are_unique_and_bounded() {
     let mut task = parent();
     let definition = task["sub_routines"][0].clone();

@@ -157,6 +157,9 @@ pub enum ProgramError {
         /// What is wrong, for the author.
         reason: String,
     },
+    /// Text anywhere in the routine with a NUL in it.
+    #[error("text in a routine can't hold a NUL character")]
+    Nul,
 }
 
 impl RoutineProgram {
@@ -177,7 +180,24 @@ impl RoutineProgram {
                 error: Box::new(error),
             })?;
         }
+        // Postgres can't store a NUL in JSON text, and its refusal would
+        // quote the text beside it into an error that gets logged.
+        if serde_json::to_value(self).is_ok_and(|program| holds_nul(&program)) {
+            return Err(ProgramError::Nul);
+        }
         Ok(())
+    }
+}
+
+/// Whether any string in `value`, a key included, holds a NUL.
+fn holds_nul(value: &serde_json::Value) -> bool {
+    match value {
+        serde_json::Value::String(text) => text.contains('\0'),
+        serde_json::Value::Array(items) => items.iter().any(holds_nul),
+        serde_json::Value::Object(fields) => fields
+            .iter()
+            .any(|(key, value)| key.contains('\0') || holds_nul(value)),
+        _ => false,
     }
 }
 
