@@ -942,7 +942,7 @@ fn crash(next: &mut ComputerState, effects: &mut Vec<Effect>, now: DateTime<Utc>
     });
 }
 
-fn gave_up(phase: &Phase) -> bool {
+pub(crate) fn gave_up(phase: &Phase) -> bool {
     matches!(phase, Phase::Crashed { retry: None, .. })
 }
 

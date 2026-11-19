@@ -252,7 +252,9 @@ where
         let event = if applies_agent {
             Event::MacrodConnected
         } else {
-            if computer.state.awaiting_agent {
+            if computer.state.awaiting_agent
+                && !crate::domain::lifecycle::gave_up(&computer.state.phase)
+            {
                 tracing::error!(
                     computer_id = %computer.id,
                     "computer macrod cannot take an agent teammate"
