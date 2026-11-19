@@ -1180,3 +1180,74 @@ async fn runs_without_a_transcript_still_announce_start_and_stop_and_keep_their_
         json!(action().configuration_revision)
     );
 }
+
+/// Collects every `outcome` a span records, in order.
+#[derive(Default)]
+struct Outcomes(Mutex<Vec<String>>);
+
+impl tracing::field::Visit for &Outcomes {
+    fn record_str(&mut self, field: &tracing::field::Field, value: &str) {
+        if field.name() == "outcome" {
+            self.0.lock().unwrap().push(value.to_owned());
+        }
+    }
+
+    fn record_debug(&mut self, _: &tracing::field::Field, _: &dyn std::fmt::Debug) {}
+}
+
+impl tracing::Subscriber for Outcomes {
+    fn enabled(&self, _: &tracing::Metadata<'_>) -> bool {
+        true
+    }
+    fn new_span(&self, _: &tracing::span::Attributes<'_>) -> tracing::span::Id {
+        tracing::span::Id::from_u64(1)
+    }
+    fn record(&self, _: &tracing::span::Id, values: &tracing::span::Record<'_>) {
+        values.record(&mut &*self);
+    }
+    fn record_follows_from(&self, _: &tracing::span::Id, _: &tracing::span::Id) {}
+    fn event(&self, _: &tracing::Event<'_>) {}
+    fn enter(&self, _: &tracing::span::Id) {}
+    fn exit(&self, _: &tracing::span::Id) {}
+}
+
+/// The outcomes a span recorded while `body` ran with it.
+fn outcomes_of(body: impl FnOnce(tracing::Span)) -> Vec<String> {
+    let outcomes = Arc::new(Outcomes::default());
+    tracing::subscriber::with_default(Arc::clone(&outcomes), || {
+        body(tracing::info_span!("read", outcome = tracing::field::Empty));
+    });
+    let recorded = outcomes.0.lock().unwrap().clone();
+    recorded
+}
+
+#[test]
+fn a_dropped_read_ends_its_span_interrupted_once() {
+    assert_eq!(
+        outcomes_of(|span| drop(OutcomeOnce::new(span, "interrupted"))),
+        ["interrupted"]
+    );
+    assert_eq!(
+        outcomes_of(|span| OutcomeOnce::new(span, "interrupted").record("resolved")),
+        ["resolved"]
+    );
+}
+
+#[tokio::test]
+async fn a_copy_whose_parent_read_is_cancelled_records_it_interrupted() {
+    let outcomes = Arc::new(Outcomes::default());
+    let dispatch = tracing::Dispatch::new(Arc::clone(&outcomes));
+    let span = tracing::dispatcher::with_default(&dispatch, || {
+        tracing::info_span!("read", outcome = tracing::field::Empty)
+    });
+    let pending = {
+        let outcome = OutcomeOnce::new(span, "interrupted");
+        async move {
+            std::future::pending::<()>().await;
+            outcome.record("resolved");
+        }
+    };
+    // A deadline drops the read before it returns.
+    let _ = tokio::time::timeout(Duration::from_millis(1), pending).await;
+    assert_eq!(*outcomes.0.lock().unwrap(), ["interrupted"]);
+}

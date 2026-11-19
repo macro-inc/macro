@@ -183,7 +183,8 @@ where
         let action_id = action.id.context("persisted action required")?;
         // A copy runs its definition as its parent holds it now: the parent
         // read and the definition resolved with the copy's inputs, under one
-        // span with how it ended.
+        // span with how it ended, `interrupted` when the run's cancellation
+        // or deadline drops the read.
         let program = match SubRoutineCopy::from_task(&action.task).zip(action.parent_id()) {
             Some((copy, parent_id)) => {
                 let span = tracing::info_span!(
@@ -192,13 +193,14 @@ where
                     routine.sub_routine = %copy.sub_routine,
                     outcome = tracing::field::Empty,
                 );
+                let outcome = OutcomeOnce::new(span.clone(), "interrupted");
                 let read = self
                     .repo
                     .get_action(&parent_id)
                     .instrument(span.clone())
                     .await;
                 span.in_scope(|| {
-                    let (outcome, program) = match read {
+                    let (ended, program) = match read {
                         Err(error) => ("read_failed", Err(error)),
                         Ok(parent) => {
                             let found = parent.is_some();
@@ -212,7 +214,7 @@ where
                             (outcome, program)
                         }
                     };
-                    span.record("outcome", outcome);
+                    outcome.record(ended);
                     program
                 })?
             }
@@ -633,6 +635,37 @@ where
                 Err(_) => EventRunOutcome::Failed,
             },
             record: Some(record),
+        }
+    }
+}
+
+/// A span's `outcome`, recorded exactly once: the outcome given to
+/// [`Self::record`], or `fallback` when it is dropped first, as when a
+/// cancelled or timed-out run drops the future it belongs to. Recording a
+/// field twice would export it twice.
+struct OutcomeOnce {
+    span: tracing::Span,
+    fallback: Option<&'static str>,
+}
+
+impl OutcomeOnce {
+    fn new(span: tracing::Span, fallback: &'static str) -> Self {
+        Self {
+            span,
+            fallback: Some(fallback),
+        }
+    }
+
+    fn record(mut self, outcome: &'static str) {
+        self.fallback = None;
+        self.span.record("outcome", outcome);
+    }
+}
+
+impl Drop for OutcomeOnce {
+    fn drop(&mut self) {
+        if let Some(outcome) = self.fallback.take() {
+            self.span.record("outcome", outcome);
         }
     }
 }
