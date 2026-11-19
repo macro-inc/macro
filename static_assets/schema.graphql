@@ -5012,6 +5012,10 @@ enum GraphqlEmailProvider {
 	Microsoft Outlook and Microsoft 365.
 	"""
 	OUTLOOK
+	"""
+	A mailbox connected over IMAP and SMTP.
+	"""
+	IMAP
 }
 
 """
