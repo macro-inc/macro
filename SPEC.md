@@ -68,7 +68,7 @@ In a call: agent shares   tab ⇄ desktop   (call tile shows which; Stop)
 
 | # | Ships | Main change |
 | --- | --- | --- |
-| 1 | View screen (member card, DM header, Machines row), side panel, view-only, watch on phone, audit | harness screen WebSocket over `Fleet::exec` socat, noVNC panel |
+| 1 | View screen (member card, DM header, Machines row), side panel, view-only, phone watch + take-over, audit | harness screen WebSocket over `Fleet::exec` socat, noVNC panel |
 | 2 | Take over / Hand back, driver lease, agent held | harness lease + held tool calls (D7) |
 | 3 | Agent's "Watch my screen" chip, surface label + Switch/Stop | agent tool, chip attachment |
 | 4 | Tab mode in calls, tab ⇄ desktop switch, D9 participant rule | `packages/starter-agent` calls: add the CDP tab share next to the desktop share |
@@ -82,7 +82,7 @@ In a call: agent shares   tab ⇄ desktop   (call tile shows which; Stop)
 - **D3 Share chip:** I recommend phase 3. Phases 1 and 2 fix B7 without it.
 - **D4 Live thumbnail in the chip** for people who may watch, or a static chip only?
 - **D5 Recording:** none in v1. Later, take-overs only?
-- **D6 Phone:** watch only in v1?
+- **D6 Phone (decided by Wolf):** full take-over on phones in v1, no watch-only mode: pinch zoom and pan, Take over / Hand back, tap/drag/scroll, an on-screen keyboard. Same authorization and driver lease as desktop.
 - **D7 Hold the agent while a human drives:** hold **all** of the agent's tool calls in the harness (my
   recommendation; one place, can't be bypassed from the guest), or a guest wrapper around the computer-use and
   CDP servers only (needs an image change, and the agent can still reach X through Bash).
