@@ -1,4 +1,5 @@
 import { normalizedCacheExchange } from '@graphql-cache/exchange/normalized-cache-exchange';
+import { cacheSessionExchange } from '@graphql-cache/exchange/session-exchange';
 import { createNoopCacheHost } from '@graphql-cache/host/noop-host';
 import {
   type CombinedError,
@@ -57,6 +58,8 @@ export function createDetailCacheFixture() {
       ({ forward }) =>
         (operations) =>
           pipe(forward(operations), tap(results.push)),
+      // Production clients stamp imperative refreshes as well as observer reads.
+      cacheSessionExchange,
       normalizedCacheExchange({
         ...createNoopCacheHost(),
         disabled: false,

@@ -132,6 +132,8 @@ one worker and no retries.
 Cache fixtures must mount `useSyncLoginCookie`, serve fresh identity and CRM
 access-proof responses, and preserve the source generation on direct cache
 writes so they exercise the real worker/WASM generation fence.
+Include the production `cacheSessionExchange` in controlled GraphQL clients so
+imperative refreshes carry the same observer and storage stamps as app requests.
 Model host retirement with authority detachment and a fresh proof before continuing.
 Call `initializeLexical()` before mounting isolated editor fixtures so decorator nodes use the app's renderer registry.
 
