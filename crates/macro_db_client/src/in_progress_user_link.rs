@@ -249,6 +249,36 @@ pub async fn identity_link_attempts_to_release(
     .await?)
 }
 
+/// Whether `requester` has another attempt for `linked_email` under way: past
+/// the Google callback, neither refused nor lapsed. Its callback may be using
+/// the identity link `attempt` created, whichever attempt started first.
+pub async fn has_live_attempt_for_address(
+    db: &sqlx::PgPool,
+    attempt: Uuid,
+    requester: Uuid,
+    linked_email: &str,
+) -> anyhow::Result<bool> {
+    let cutoff = (chrono::Utc::now() - IN_PROGRESS_USER_LINK_MAX_AGE).naive_utc();
+    Ok(sqlx::query_scalar!(
+        r#"
+            SELECT EXISTS(
+                SELECT 1 FROM in_progress_user_link
+                WHERE macro_user_id = $1
+                    AND id <> $2
+                    AND lower(linked_email) = lower($3)
+                    AND refused_at IS NULL
+                    AND created_at >= $4
+            ) AS "live!"
+        "#,
+        requester,
+        attempt,
+        linked_email,
+        cutoff
+    )
+    .fetch_one(db)
+    .await?)
+}
+
 /// Record the identity and actual scopes returned by Google's OAuth callback,
 /// and whether this attempt created the identity's FusionAuth link.
 pub async fn set_linked_google_grant(

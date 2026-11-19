@@ -90,25 +90,115 @@ async fn a_link_is_still_needed_by_the_addresss_account_or_the_requesters_inbox(
         email: email.into(),
     };
 
-    assert!(
+    assert_eq!(
         attempts
-            .still_needed(&attempt("Own@Example.com"))
+            .link_use(&attempt("Own@Example.com"))
             .await
             .unwrap(),
+        LinkUse::Backing,
         "the address's own account signs in with it, whatever the case"
     );
-    assert!(
+    assert_eq!(
         attempts
-            .still_needed(&attempt("held@example.com"))
+            .link_use(&attempt("held@example.com"))
             .await
             .unwrap(),
+        LinkUse::Backing,
         "the requester holds the inbox"
     );
-    assert!(
-        !attempts
-            .still_needed(&attempt("refused@example.com"))
+    assert_eq!(
+        attempts
+            .link_use(&attempt("refused@example.com"))
             .await
             .unwrap(),
+        LinkUse::Unused,
         "nothing else needs it"
+    );
+}
+
+#[sqlx::test(migrator = "macro_db_migrator::MACRO_DB_MIGRATIONS")]
+async fn a_retry_of_the_same_address_defers_the_release_until_it_ends(pool: sqlx::PgPool) {
+    use macro_db_client::in_progress_user_link as attempts_db;
+    let requester = Uuid::from_u128(0xa1);
+    let other = Uuid::from_u128(0xa3);
+    for (id, email) in [
+        (requester, "requester@example.com"),
+        (other, "other@example.com"),
+    ] {
+        sqlx::query!(
+            "INSERT INTO macro_user (id,username,email,stripe_customer_id) VALUES ($1,$2,$2,$3)",
+            id,
+            email,
+            format!("cus_{id}")
+        )
+        .execute(&pool)
+        .await
+        .unwrap();
+    }
+    let scopes = vec!["gmail".to_string()];
+    let attempt_for = async |user: Uuid, created_link: bool| {
+        let id = attempts_db::create_in_progress_google_link(&pool, &user.to_string(), &scopes)
+            .await
+            .unwrap();
+        attempts_db::set_linked_google_grant(
+            &pool,
+            &id,
+            "Retried@example.com",
+            &scopes,
+            created_link,
+        )
+        .await
+        .unwrap();
+        id
+    };
+    // The refused attempt created the link; the retry's callback found it.
+    let refused = attempt_for(requester, true).await;
+    attempts_db::discard_owned_in_progress_user_link(&pool, refused, &requester.to_string())
+        .await
+        .unwrap();
+    let retry = attempt_for(requester, false).await;
+    attempt_for(other, false).await;
+    let attempts = PgIdentityLinkAttempts(pool.clone());
+    let due = DueAttempt {
+        id: refused,
+        fusionauth_user_id: requester,
+        email: "retried@example.com".into(),
+    };
+
+    assert_eq!(
+        attempts.link_use(&due).await.unwrap(),
+        LinkUse::Retrying,
+        "the retry's /email/init may still connect with the link"
+    );
+
+    sqlx::query!(
+        "UPDATE in_progress_user_link SET created_at = now() - interval '25 hours' WHERE id = $1",
+        retry
+    )
+    .execute(&pool)
+    .await
+    .unwrap();
+    assert_eq!(
+        attempts.link_use(&due).await.unwrap(),
+        LinkUse::Unused,
+        "a lapsed retry, or another account's attempt, defers nothing"
+    );
+
+    let refused_retry = attempt_for(requester, false).await;
+    attempts_db::discard_owned_in_progress_user_link(&pool, refused_retry, &requester.to_string())
+        .await
+        .unwrap();
+    let refused_flagged_retry = attempt_for(requester, true).await;
+    attempts_db::discard_owned_in_progress_user_link(
+        &pool,
+        refused_flagged_retry,
+        &requester.to_string(),
+    )
+    .await
+    .unwrap();
+    assert_eq!(
+        attempts.link_use(&due).await.unwrap(),
+        LinkUse::Unused,
+        "a refused retry defers nothing"
     );
 }

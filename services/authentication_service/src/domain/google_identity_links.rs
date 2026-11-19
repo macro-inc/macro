@@ -25,15 +25,26 @@ pub struct DueAttempt {
     pub email: String,
 }
 
+/// What still depends on the identity link a due attempt created.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum LinkUse {
+    /// Nothing: release it.
+    Unused,
+    /// The address has an account of its own, whose sign-in it is, or the
+    /// requester holds the inbox: keep it.
+    Backing,
+    /// Another attempt of the requester's for the address is under way and
+    /// may be connecting with it: decide once that attempt ends.
+    Retrying,
+}
+
 pub trait IdentityLinkAttempts: Send + Sync {
     type Err: std::fmt::Debug;
     fn due(&self, limit: i64) -> impl Future<Output = Result<Vec<DueAttempt>, Self::Err>> + Send;
-    /// Whether the link is still needed: the address has an account of its
-    /// own, whose sign-in it is, or the requester holds the inbox.
-    fn still_needed(
+    fn link_use(
         &self,
         attempt: &DueAttempt,
-    ) -> impl Future<Output = Result<bool, Self::Err>> + Send;
+    ) -> impl Future<Output = Result<LinkUse, Self::Err>> + Send;
     fn finish(&self, attempt: Uuid) -> impl Future<Output = Result<(), Self::Err>> + Send;
 }
 
@@ -50,12 +61,14 @@ pub trait IdentityLinkRemover: Send + Sync {
 pub struct ReleaseRound {
     pub released: usize,
     pub kept: usize,
+    pub deferred: usize,
     pub failed: usize,
 }
 
 /// One round: release each due attempt's identity link, then drop the attempt.
-/// An attempt whose release or bookkeeping fails stays due for the next round.
-#[tracing::instrument(skip_all, fields(released, kept, failed), err(Debug))]
+/// A deferred attempt, or one whose release or bookkeeping fails, stays due
+/// for the next round.
+#[tracing::instrument(skip_all, fields(released, kept, deferred, failed), err(Debug))]
 pub async fn release_identity_links<A: IdentityLinkAttempts, R: IdentityLinkRemover>(
     attempts: &A,
     remover: &R,
@@ -65,12 +78,14 @@ pub async fn release_identity_links<A: IdentityLinkAttempts, R: IdentityLinkRemo
         match release(attempts, remover, &attempt).await {
             Outcome::Released => round.released += 1,
             Outcome::Kept => round.kept += 1,
+            Outcome::Deferred => round.deferred += 1,
             Outcome::Failed => round.failed += 1,
         }
     }
     let span = tracing::Span::current();
     span.record("released", round.released);
     span.record("kept", round.kept);
+    span.record("deferred", round.deferred);
     span.record("failed", round.failed);
     Ok(round)
 }
@@ -79,6 +94,8 @@ enum Outcome {
     Released,
     /// Still needed: the attempt is dropped and the link kept.
     Kept,
+    /// Left due until the requester's other attempt ends.
+    Deferred,
     /// Left due for the next round.
     Failed,
 }
@@ -88,14 +105,19 @@ async fn release<A: IdentityLinkAttempts, R: IdentityLinkRemover>(
     remover: &R,
     attempt: &DueAttempt,
 ) -> Outcome {
-    let needed = match attempts.still_needed(attempt).await {
-        Ok(needed) => needed,
+    let link_use = match attempts.link_use(attempt).await {
+        Ok(link_use) => link_use,
         Err(error) => {
             tracing::warn!(?error, attempt = %attempt.id, "could not check whether an attempt's identity link is still needed");
             return Outcome::Failed;
         }
     };
-    if !needed
+    let release = match link_use {
+        LinkUse::Retrying => return Outcome::Deferred,
+        LinkUse::Backing => false,
+        LinkUse::Unused => true,
+    };
+    if release
         && let Err(error) = remover
             .remove(attempt.fusionauth_user_id, &attempt.email)
             .await
@@ -107,9 +129,9 @@ async fn release<A: IdentityLinkAttempts, R: IdentityLinkRemover>(
         tracing::warn!(?error, attempt = %attempt.id, "could not drop a released attempt");
         return Outcome::Failed;
     }
-    if needed {
-        Outcome::Kept
-    } else {
+    if release {
         Outcome::Released
+    } else {
+        Outcome::Kept
     }
 }

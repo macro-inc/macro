@@ -284,7 +284,10 @@ inputs cannot select an agent, and ordinary user credentials remain unattributed
   (`/email/init` refuses it, marking `refused_at`, or it lapses after 24 h), the
   5-minute `domain::google_identity_links` round releases the link, unless the
   address now has an account of its own or the requester holds the inbox, then
-  drops the attempt. A link that existed before the attempt is never released.
+  drops the attempt. While the requester has another attempt for the address
+  under way (past the callback, neither refused nor lapsed), the round defers:
+  that retry's callback found the link and may be connecting with it. A link
+  that existed before the attempt is never released.
 - `/oauth2/{provider}/callback` verifies two signed `state` kinds
   (`src/account_link_state.rs`): account links, which expire, and Microsoft
   admin-consent returns, which do not. A consent screen that ends without a
