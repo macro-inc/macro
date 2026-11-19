@@ -14,6 +14,9 @@ projects.
   entity type — the shape each indexer must produce.
 - `src/search/builder.rs` + `src/search/unified.rs`: the cross-entity search
   request builder and the unified result model.
+- `src/chat_message_repair.rs`: paging the chats index's message documents
+  by message id and deleting them by id, for the deleted chat message repair
+  in `services/search_processing_service`.
 - `examples/`: runnable usage beyond the README.
 
 ## Scope

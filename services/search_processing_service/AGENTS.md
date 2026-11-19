@@ -95,7 +95,10 @@ OpenSearch, and exposes backfill HTTP routes for each.
   waiting for a slot; the `email.mailbox_delete` span's `outcome` and task ids
   say which.
 - Full-scan backfills page by UUID, not `modified_at`, and cannot discover
-  already-deleted IDs — target specific IDs for those.
+  already-deleted IDs — target specific IDs for those. Chat messages deleted
+  without their delete reaching the index are removed by
+  `POST /internal/backfill/deleted-chat-messages`, a dry run unless the body
+  sets `"dry_run": false`.
 - Every backfill writer passes the task's `BackfillGate`
   (`domain/backfill_gate.rs`): the shared in-flight cap and the operator
   pause (`PUT /internal/backfill/pause`). A new backfill path takes a permit
