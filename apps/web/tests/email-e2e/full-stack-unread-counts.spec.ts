@@ -314,7 +314,12 @@ async function chatMarked(page: Page): Promise<ChatRow[] | undefined> {
     .locator('[role="treeitem"]')
     .evaluateAll((items) =>
       items
-        .filter((item) => !item.querySelector('[role="treeitem"]'))
+        // Conversation rows: not groups, and not section headings.
+        .filter(
+          (item) =>
+            !item.querySelector('[role="treeitem"]') &&
+            !/-(section|label):/.test(item.id)
+        )
         .map((item) => ({
           key:
             /[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}/.exec(
