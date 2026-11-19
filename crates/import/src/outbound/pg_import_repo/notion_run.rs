@@ -689,7 +689,8 @@ SELECT EXISTS (SELECT 1 FROM owned) AS "owned!"
                 INSERT INTO import_entity_written (import_id, kind, object, macro_id)
                 SELECT input.import_id, input.kind, input.object, input.macro_id
                 FROM input
-                JOIN import_entity AS entity ON entity.id = input.import_id AND entity.user_id = $1
+                JOIN import_entity AS entity ON entity.id = input.import_id
+                    AND (SELECT entity.user_id OFFSET 0) = $1
                 ON CONFLICT (import_id, kind, object) DO NOTHING
                 RETURNING import_id, kind, object, macro_id
             )
@@ -698,9 +699,16 @@ SELECT EXISTS (SELECT 1 FROM owned) AS "owned!"
             FROM inserted
             UNION ALL
             SELECT written.import_id, written.kind, written.object, written.macro_id
-            FROM import_entity_written AS written
-            JOIN input USING (import_id, kind, object)
-            JOIN import_entity AS entity ON entity.id = written.import_id AND entity.user_id = $1
+            FROM input
+            JOIN LATERAL (
+                SELECT written.import_id, written.kind, written.object, written.macro_id
+                FROM import_entity_written AS written
+                WHERE written.import_id = input.import_id AND written.kind = input.kind
+                  AND written.object = input.object
+                OFFSET 0
+            ) AS written ON true
+            JOIN import_entity AS entity ON entity.id = written.import_id
+                AND (SELECT entity.user_id OFFSET 0) = $1
             "#,
             user.as_ref(),
             &import_ids,
