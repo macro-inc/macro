@@ -1,6 +1,8 @@
 use super::*;
 use crate::domain::event_trigger::ActionTrigger;
-use crate::domain::models::{ActionConfiguration, ActionKind, CreatedItem};
+use crate::domain::models::{
+    ActionConfiguration, ActionKind, CheckedStepProblems, CreatedItem, RunVisibility,
+};
 use macro_db_migrator::MACRO_DB_MIGRATIONS;
 
 fn owner() -> MacroUserIdStr<'static> {
@@ -110,26 +112,30 @@ async fn a_drafts_latest_check_by_its_owner_is_its_answer(pool: PgPool) {
     );
 }
 
-/// A check as a replica built before `appearance` reads it: its
-/// configuration refuses fields it doesn't know.
+/// `RoutineCheck` as a replica built before `appearance` reads it.
 #[derive(serde::Deserialize)]
+#[serde(rename_all = "camelCase")]
 #[expect(dead_code, reason = "only whether a check decodes matters")]
 struct CheckBeforeAppearance {
     ok: bool,
+    problems: Vec<String>,
+    steps: Vec<CheckedStepProblems>,
     routine: ConfigurationBeforeAppearance,
 }
 
+/// `ActionConfiguration` before `appearance`: it refuses fields it doesn't
+/// know.
 #[derive(serde::Deserialize)]
 #[serde(deny_unknown_fields)]
 #[expect(dead_code, reason = "only whether a check decodes matters")]
 struct ConfigurationBeforeAppearance {
     name: String,
-    trigger: serde_json::Value,
-    kind: serde_json::Value,
+    trigger: ActionTrigger,
+    kind: ActionKind,
     task: serde_json::Value,
     enabled: bool,
     #[serde(default)]
-    run_visibility: serde_json::Value,
+    run_visibility: RunVisibility,
     #[serde(default)]
     description: String,
 }
