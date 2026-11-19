@@ -71,7 +71,7 @@ async function runCopy(at: Stack, token: string, db: SQL, id: string): Promise<E
       const runs = await runsSince(at, token, id, since);
       if (runs.length) {
         await Bun.sleep(SETTLE_MS);
-        return withReplies(db, await runsSince(at, token, id, since));
+        return await withReplies(db, await runsSince(at, token, id, since));
       }
       if (performance.now() - started > RUN_TIMEOUT_MS) return [];
       await Bun.sleep(2000);
