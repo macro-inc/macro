@@ -77,7 +77,7 @@ async function runCopy(at: Stack, request: RoutineRequest, db: SQL, id: string):
       const runs = await runsSince(at, { ...request, signal }, id, since, resourceId);
       if (runs.length) {
         await Bun.sleep(SETTLE_MS);
-        return await withReplies(db, runs);
+        return await beforeDeadline(withReplies(db, runs), signal, runs);
       }
       await Bun.sleep(2000);
     }
@@ -85,6 +85,22 @@ async function runCopy(at: Stack, request: RoutineRequest, db: SQL, id: string):
     return [];
   }
   return [];
+}
+
+/**
+ * What `work` gives, or `fallback` once `signal` aborts first, so a read
+ * that never returns can't hold the attempt past its deadline.
+ */
+async function beforeDeadline<T>(work: Promise<T>, signal: AbortSignal, fallback: T): Promise<T> {
+  if (signal.aborted) return fallback;
+  const { promise: aborted, resolve } = Promise.withResolvers<T>();
+  const stop = () => resolve(fallback);
+  signal.addEventListener('abort', stop, { once: true });
+  try {
+    return await Promise.race([work, aborted]);
+  } finally {
+    signal.removeEventListener('abort', stop);
+  }
 }
 
 const routines = (at: Stack) => `${at.harness}/scheduled-action/scheduled-actions`;

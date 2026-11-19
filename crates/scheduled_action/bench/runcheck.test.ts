@@ -41,10 +41,21 @@ function mockFetch(respond: (...args: Parameters<typeof fetch>) => ReturnType<ty
   return spyOn(globalThis, 'fetch').mockImplementation(Object.assign(respond, { preconnect: fetch.preconnect }));
 }
 
-function fixture(children: SavedRoutine[], { failReply = false, earlierRun = false } = {}) {
+function fixture(
+  children: SavedRoutine[],
+  {
+    failReply = false,
+    earlierRun = false,
+    stallReply,
+  }: { failReply?: boolean; earlierRun?: boolean; stallReply?: PromiseWithResolvers<void> } = {},
+) {
   const db = (async (parts: TemplateStringsArray, ...args: unknown[]) => {
     if (parts.join('').includes('from agent_session_log')) {
       if (failReply && args[0] === 'failed-copy') throw new Error('reply read failed');
+      if (stallReply && args[0] === 'stalled-copy') {
+        stallReply.resolve();
+        return new Promise(() => undefined);
+      }
       return [{ text: 'Reminder' }];
     }
     return [];
@@ -97,6 +108,19 @@ test('a copy reply read failure leaves the other copy results available', async 
   expect(result?.effects.copies?.map((copy) => copy.runs?.map((run) => run.reply))).toEqual([
     [],
     ['Reminder'],
+  ]);
+});
+
+test('a stalled copy reply read ends at the copy deadline', async () => {
+  const deadline = new AbortController();
+  spyOn(AbortSignal, 'timeout').mockReturnValue(deadline.signal);
+  const replyRead = Promise.withResolvers<void>();
+  const check = fixture([copy('stalled-copy')], { stallReply: replyRead });
+  const result = check.run(copyCase);
+  await replyRead.promise;
+  deadline.abort();
+  expect((await result)?.effects.copies?.[0]?.runs).toEqual([
+    { isSuccess: true, result: { resource: { type: 'agent', id: 'stalled-copy' } } },
   ]);
 });
 
