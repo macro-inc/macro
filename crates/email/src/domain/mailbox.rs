@@ -824,6 +824,43 @@ where
     }
 }
 
+/// Attempts a write that records a provider call's result gets while its
+/// mailbox stays locked, and the wait between them. With each attempt's 5 s
+/// lock timeout they take about 80 s, inside one 3 minute lease even before it
+/// is renewed.
+pub(crate) const AFTER_PROVIDER_ATTEMPTS: u32 = 6;
+pub(crate) const AFTER_PROVIDER_RETRY_DELAY: std::time::Duration =
+    std::time::Duration::from_secs(10);
+
+/// Retries `write` while it times out on a lock. A later attempt reads the
+/// provider's new state as already applied, or as another client's change,
+/// so what the call changed has to be recorded now. Each attempt opens its
+/// own transaction, so no connection is held between attempts.
+pub(crate) async fn record_after_provider<F, W>(
+    unit: &'static str,
+    mut write: F,
+) -> Result<(), MailboxError>
+where
+    F: FnMut() -> W,
+    W: Future<Output = Result<(), MailboxError>>,
+{
+    let mut attempt = 1;
+    loop {
+        match write().await {
+            Err(error) if attempt < AFTER_PROVIDER_ATTEMPTS && error.is_lock_timeout() => {
+                tracing::debug!(
+                    unit,
+                    attempt,
+                    "write after a provider call waits for its mailbox to be free"
+                );
+                tokio::time::sleep(AFTER_PROVIDER_RETRY_DELAY).await;
+                attempt += 1;
+            }
+            result => return result,
+        }
+    }
+}
+
 /// Due import messages a mailbox may have before its folders' import rounds
 /// stop reading pages: two pages. Gmail's backfill lists its next page
 /// behind the threads it queued; this keeps an Outlook walk about as far

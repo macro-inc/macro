@@ -522,9 +522,10 @@ tools — hexagonal, heavily feature-gated.
   timeout is SQLSTATE 55P03
   (`MailboxError::is_lock_timeout`, `InboxLifecycleError::Contended`) and every
   caller retries it: lease release or expiry, message backoff, redelivery, a
-  409 for user requests. A step that must not be left half done after a
-  provider write (the draft checkpoint) or a delivery the queue would
-  dead-letter (link deletion) retries it in-process, a bounded number of times
+  409 for user requests. A write that records a provider call's result (the
+  draft checkpoint, a command's draft write version) retries it in-process
+  through `record_after_provider`, and a delivery the queue would dead-letter
+  (link deletion) retries in the same delivery, each a bounded number of times
   inside its lease or visibility timeout. The purge's batches run in
   `email_db_client` without the timeout.
 - Map database errors in `mailbox_pg` with `db_error` (or `wrapped_db_error`

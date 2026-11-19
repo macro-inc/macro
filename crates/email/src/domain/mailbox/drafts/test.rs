@@ -1,6 +1,9 @@
 use super::*;
 use crate::domain::{
-    mailbox::{DatabaseFailure, LOCK_NOT_AVAILABLE, MailboxKey},
+    mailbox::{
+        AFTER_PROVIDER_ATTEMPTS, AFTER_PROVIDER_RETRY_DELAY, DatabaseFailure, LOCK_NOT_AVAILABLE,
+        MailboxKey,
+    },
     models::ResolvedDraftInput,
 };
 use std::sync::{Arc, Mutex};
@@ -582,7 +585,7 @@ async fn a_checkpoint_after_a_provider_write_waits_out_a_busy_mailbox() {
     h.0.lock().unwrap().locked_checkpoints = 2;
     let started = tokio::time::Instant::now();
     assert!(service(&h).execute_once().await.unwrap());
-    assert_eq!(started.elapsed(), 2 * CHECKPOINT_RETRY_DELAY);
+    assert_eq!(started.elapsed(), 2 * AFTER_PROVIDER_RETRY_DELAY);
     let s = h.0.lock().unwrap();
     assert_eq!(s.updates, 1);
     assert_eq!(
@@ -601,7 +604,7 @@ async fn a_checkpoint_that_stays_locked_gives_up_inside_the_lease() {
     assert!(error.is_lock_timeout(), "{error:?}");
     assert!(started.elapsed() < std::time::Duration::from_secs(180));
     let s = h.0.lock().unwrap();
-    assert_eq!(s.locked_checkpoints, u32::MAX - CHECKPOINT_ATTEMPTS);
+    assert_eq!(s.locked_checkpoints, u32::MAX - AFTER_PROVIDER_ATTEMPTS);
     assert_eq!(
         s.lease.checkpoint.as_ref().unwrap().stage,
         DraftStage::Updating

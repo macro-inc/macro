@@ -312,8 +312,9 @@ the gateway `/email` prefix.
   behind a long mailbox purge would be redelivered and purged twice. A
   deletion whose inbox stays locked past the lock timeout
   (`InboxLifecycleError::Contended`) runs again in the same delivery, up to six
-  times 20 s apart, before it goes back to the queue, so contention cannot
-  spend its five receives.
+  times 20 s apart, before it goes back to the queue, so a short contention
+  does not spend a receive. Contention that outlasts all six attempts on five
+  deliveries still dead-letters the deletion.
   `PurgePacing` (`email::domain::mailbox::link_manager::purge`) sets the purge's write rate.
   Refresh and HealthCheck probes are capped at 240 s so a stalled probe is
   redelivered instead of held in flight. A probe returns an error, and so is

@@ -18,11 +18,6 @@ use sha2::{Digest, Sha256};
 const UNCERTAIN_WAIT: Duration = Duration::minutes(10);
 const UPLOAD_RANGE_BYTES: usize = 10 * 320 * 1024;
 const SMALL_ATTACHMENT_BYTES: u64 = 3_000_000;
-/// Attempts a step's checkpoint gets while its mailbox stays locked, and the
-/// wait between them. With each attempt's 5 s lock timeout they take about
-/// 80 s, inside one 3 minute draft lease even before it is renewed.
-const CHECKPOINT_ATTEMPTS: u32 = 6;
-const CHECKPOINT_RETRY_DELAY: std::time::Duration = std::time::Duration::from_secs(10);
 
 pub struct MailboxDraftService<R, G, M> {
     repo: R,
@@ -157,17 +152,8 @@ impl<R: DraftRepository, G: DraftGateway, M: DraftMaterializer> MailboxDraftServ
         lease: &DraftLease,
         checkpoint: &DraftCheckpoint,
     ) -> Result<(), MailboxError> {
-        let mut attempt = 1;
-        loop {
-            match self.repo.checkpoint_draft(lease, checkpoint).await {
-                Err(error) if attempt < CHECKPOINT_ATTEMPTS && error.is_lock_timeout() => {
-                    tracing::debug!(attempt, "draft checkpoint waits for its mailbox to be free");
-                    tokio::time::sleep(CHECKPOINT_RETRY_DELAY).await;
-                    attempt += 1;
-                }
-                result => return result,
-            }
-        }
+        super::record_after_provider("drafts", || self.repo.checkpoint_draft(lease, checkpoint))
+            .await
     }
 
     async fn inspect(
