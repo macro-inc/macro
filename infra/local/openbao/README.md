@@ -35,8 +35,9 @@ environment files are ignored by git. Applications receive no OpenBao root token
 Creating a team does not create its vault namespace; until it exists, every
 Passwords action for that team fails with `vault_not_provisioned` ("This team's
 vault isn't set up yet."). As a stopgap until a provisioner does this
-automatically, `just run_local` (and `just stack up`/`update`) provisions every
-existing team once the stack is up. For a team created after that, run:
+automatically, `just run_local` and `just stack up` provision every existing
+team during stack startup through `bring_up`. `just stack update` does not
+provision team vaults. For a team created after startup, run:
 
 ```sh
 just passwords_provision                   # default instance
