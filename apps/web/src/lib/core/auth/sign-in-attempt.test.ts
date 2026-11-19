@@ -113,6 +113,17 @@ describe('withSignInAttempt', () => {
       `https://macro.test/app/login?a=b%20c&tokens=1&sign_in_attempt=${attempt.id}`
     );
   });
+
+  // The page reading the return decodes names, so `%74oken` is a `token`.
+  it('drops them under any spelling of their names', async () => {
+    const attempt = await createSignInAttempt();
+    expect(
+      withSignInAttempt(
+        'macro:///login?%74oken=old-code&sign%5Fin%5F%61ttempt=old&redirect=%252Fx',
+        attempt
+      )
+    ).toBe(`macro:///login?redirect=%252Fx&sign_in_attempt=${attempt.id}`);
+  });
 });
 
 describe('pending attempts without storage', () => {

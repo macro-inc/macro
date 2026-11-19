@@ -144,8 +144,9 @@ export function withSignInAttempt(
     .slice(1)
     .split('&')
     .filter((pair) => {
-      const key = pair.split('=', 1)[0];
-      return key !== '' && !EARLIER_RETURN_PARAMS.includes(key);
+      // Decoded as the page that reads the return will (`%74oken` is `token`).
+      const key = new URLSearchParams(pair).keys().next().value;
+      return key !== undefined && !EARLIER_RETURN_PARAMS.includes(key);
     });
   kept.push(`${SIGN_IN_ATTEMPT_PARAM}=${encodeURIComponent(attempt.id)}`);
   url.search = `?${kept.join('&')}`;
