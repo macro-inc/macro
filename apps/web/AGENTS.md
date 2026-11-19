@@ -101,9 +101,11 @@ a presigned URL or preload token. Do not reload an already-open editor on every
 transition. Check the captured generation again at resource publication; disposal,
 a newer load or a second superseded attempt ends that recovery. Keep bundle
 invalidation in the query adapter, supplied to Drive's load gate as a capability.
-Fence storage response chunks and body decoders with the same generation; other
-origins keep their native stream and are checked once decoded. Do not let a
-post-transition preview join or settle an older pending batch.
+Fence storage response chunks and body decoders with the same generation. Other
+origins keep their native stream: their decoders (`json()`, `text()`, `blob()`
+and the like) are checked after decoding, and code that reads `response.body`
+itself checks the generation where it publishes. Do not let a post-transition
+preview join or settle an older pending batch.
 Clear decoded service-helper caches on real session transitions, preserving them
 on matching startup baselines; a late error may remove only its own cache entry.
 Release PDF proxies discarded before publication without taking ownership from a

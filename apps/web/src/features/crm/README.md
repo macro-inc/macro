@@ -9,6 +9,8 @@ proofs keep them visible, while proven denial hides them. Pass
 `crmAccessAuthority.allowed` through `CrmContext.canAccess` for record data and
 CRM-owned views; the workspace retains its loading, retry, and denied states, and
 keeps its sidebar tools (import, export, new list) disabled until access is proven.
+Settings is the exception: its Stages and Email sync sections read `accessState`
+and stay until access is proven denied, with a retry row after a failed check.
 Keep individually shared pipeline navigation available after CRM denial, but
 do not open a referenced company or contact. The workspace owns the record
 detail gate and unmounts its content on denial; standalone record views retain
