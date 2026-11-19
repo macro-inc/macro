@@ -17,7 +17,12 @@ import {
   principalArnOf,
   stackResources,
 } from './iam-preflight';
-import { IMAGE_INPUTS, imageFiles, imageSourceKey } from './image-key';
+import {
+  IMAGE_INPUTS,
+  NOT_IMAGE_INPUTS,
+  imageFiles,
+  imageSourceKey,
+} from './image-key';
 import { DURABLE, INSTANCE, checkPlan, resourceOf } from './plan';
 import { imageFile } from './publish';
 import {
@@ -60,6 +65,8 @@ describe('image source key', () => {
     'index.ts': 'export {}',
     'README.md': '# docs',
     'nixos/database-collector/host.nix': '{ }',
+    'nixos/grafana-provisioning/default.nix': '{ }',
+    'nixos/grafana.nix': '{ }',
   };
 
   test('changes with the image source only', () => {
@@ -68,6 +75,12 @@ describe('image source key', () => {
     writeFileSync(join(dir, 'README.md'), '# other docs');
     writeFileSync(join(dir, 'index.ts'), 'export const x = 1;');
     writeFileSync(join(dir, 'nixos/database-collector/host.nix'), '{ a = 1; }');
+    // Only the observability cluster reads these.
+    writeFileSync(
+      join(dir, 'nixos/grafana-provisioning/default.nix'),
+      '{ a = 1; }'
+    );
+    writeFileSync(join(dir, 'nixos/grafana.nix'), '{ a = 1; }');
     writeFileSync(join(dir, 'nixos/untracked.nix'), '{ }');
     expect(imageSourceKey(dir)).toBe(key);
     writeFileSync(join(dir, 'nixos/host.nix'), '{ b = 1; }');
@@ -107,6 +120,12 @@ describe('image source key', () => {
           ),
           `${file} reads ${target}, outside the image inputs`
         ).toBe(true);
+        expect(
+          NOT_IMAGE_INPUTS.some(
+            (input) => target === input || target.startsWith(input)
+          ),
+          `${file} reads ${target}, which the image key leaves out`
+        ).toBe(false);
         expect(
           tracked.has(target) || existsDirectory(target),
           `${file} reads ${target}`
