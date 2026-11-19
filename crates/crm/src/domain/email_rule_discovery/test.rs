@@ -43,6 +43,9 @@ struct Facts {
     values: BTreeMap<RuleSource, Vec<RuleSourceValue>>,
     contacts: BTreeMap<Uuid, Vec<RuleMailboxContact>>,
     source_reads: BTreeMap<RuleSource, usize>,
+    source_rows: usize,
+    first_page_calls: usize,
+    largest_first_page_rows: usize,
     small_calls: usize,
     scan_calls: usize,
     direct_calls: usize,
@@ -106,7 +109,7 @@ impl EmailRuleDiscoveryReader for Facts {
         _: u64,
     ) -> Result<Vec<RuleSourceValue>, CrmError> {
         *self.source_reads.entry(source).or_default() += 1;
-        Ok(self
+        let rows: Vec<_> = self
             .values
             .get(&source)
             .into_iter()
@@ -114,7 +117,31 @@ impl EmailRuleDiscoveryReader for Facts {
             .filter(|v| after.is_none_or(|a| v.key.as_deref().is_some_and(|k| k > a)))
             .take(limit)
             .cloned()
-            .collect())
+            .collect();
+        self.source_rows += rows.len();
+        Ok(rows)
+    }
+    async fn source_first_pages(
+        &mut self,
+        team: Uuid,
+        sources: &[RuleSource],
+        limit_per_source: usize,
+        bytes: u64,
+    ) -> Result<Vec<RuleSourcePage>, CrmError> {
+        self.first_page_calls += 1;
+        self.largest_first_page_rows = self
+            .largest_first_page_rows
+            .max(sources.len() * limit_per_source);
+        let mut pages = Vec::new();
+        for source in sources {
+            pages.push(RuleSourcePage {
+                source: *source,
+                values: self
+                    .source_values(team, *source, None, limit_per_source, bytes)
+                    .await?,
+            });
+        }
+        Ok(pages)
     }
     async fn direct_contacts(
         &mut self,
@@ -513,4 +540,108 @@ async fn wide_live_values_do_not_multiply_into_one_large_lookup_argument() -> an
     );
     assert!(facts.largest_direct_text_bytes <= 1024 * 1024);
     Ok(())
+}
+
+#[tokio::test]
+async fn many_sources_keep_empty_singleton_and_full_pages_complete() -> anyhow::Result<()> {
+    let link = Uuid::from_u128(1);
+    let mut facts = Facts::default();
+    facts.contributors.push(contributor(1, false));
+    let mut expected = 0;
+    for id in 1..=131 {
+        let source = RuleSource::Contact(Uuid::from_u128(id));
+        facts.sources.push(RuleSourceFacts {
+            source,
+            in_team: true,
+            hidden: id == 131,
+        });
+        facts.rules.push(ContributorRule {
+            link_id: link,
+            rule: EmailInclusionRule::Contact {
+                contact_id: Uuid::from_u128(id),
+            },
+        });
+        let count = [0, 1, 8, 9][(id as usize - 1) % 4];
+        let mut values = Vec::new();
+        for row in 0..count {
+            let value = format!("source{id:04}-{row:02}@example.com");
+            values.push(RuleSourceValue {
+                key: Some(value.clone()),
+                value: Some(value.clone()),
+                bytes: value.len() as u64,
+                in_team: true,
+            });
+            facts
+                .contacts
+                .entry(link)
+                .or_default()
+                .push(contact(id * 100 + row as u128, &value));
+        }
+        facts.values.insert(source, values);
+        if id != 131 {
+            expected += count;
+        }
+    }
+    let result = run(&mut facts).await?;
+    assert_eq!(result.contacts.len(), expected);
+    assert_eq!(result.work.source_addresses, expected as u64);
+    assert_eq!(facts.source_rows, expected);
+    assert_eq!(
+        facts.first_page_calls, 2,
+        "distinct singleton and empty sources share their query"
+    );
+    assert_eq!(facts.largest_first_page_rows, 1024);
+    assert!(
+        !facts
+            .source_reads
+            .contains_key(&RuleSource::Contact(Uuid::from_u128(131)))
+    );
+    Ok(())
+}
+
+#[tokio::test]
+async fn prefetched_sources_and_continuations_share_one_sentinel_allowance() {
+    let mut facts = Facts::default();
+    facts.contributors.push(contributor(1, false));
+    for id in 1..=9 {
+        let source = RuleSource::Contact(Uuid::from_u128(id));
+        facts.sources.push(RuleSourceFacts {
+            source,
+            in_team: true,
+            hidden: false,
+        });
+        facts.rules.push(ContributorRule {
+            link_id: Uuid::from_u128(1),
+            rule: EmailInclusionRule::Contact {
+                contact_id: Uuid::from_u128(id),
+            },
+        });
+        facts.values.insert(
+            source,
+            (0..6000)
+                .map(|n| {
+                    let value = format!("source{id}-{n:05}@example.com");
+                    RuleSourceValue {
+                        key: Some(value.clone()),
+                        value: Some(value.clone()),
+                        bytes: value.len() as u64,
+                        in_team: true,
+                    }
+                })
+                .collect(),
+        );
+    }
+    let error = run(&mut facts).await.unwrap_err();
+    assert!(matches!(
+        error,
+        CrmError::EmailRuleLimitExceeded(EmailRuleLimitExceeded {
+            limit: EmailRuleWorkLimit::SourceAddresses,
+            observed: 50_001,
+            ..
+        })
+    ));
+    assert_eq!(
+        facts.source_rows, 50_001,
+        "prefetched rows consume the allowance before any continuation"
+    );
 }

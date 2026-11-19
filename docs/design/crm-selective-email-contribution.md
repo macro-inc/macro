@@ -397,7 +397,14 @@ mailbox/address probes while the estimated cross product is at most 50,000;
 beyond that threshold, use a bounded scan rather than reject a complete policy
 for the choice of algorithm. Small domain policies use a bounded SQL aggregate;
 larger inputs fold shared source values and stream mailbox contacts through
-keyset pages. Both paths use the following request-wide limits:
+keyset pages. Up to eight distinct live sources retain their single-source reads.
+Larger source sets start with indexed batches of at most 128 sources and eight
+raw values per source; full first pages continue by keyset in pages of at most
+2,048. Charge every prefetched page before any continuation, and shrink the batch
+so its worst-case raw count fits the remaining allowance plus one sentinel.
+Empty and singleton targets therefore avoid a separate roundtrip each without
+truncating larger expansions. Both strategies use the following request-wide
+limits:
 
 | Work | Maximum |
 | --- | --- |
@@ -692,7 +699,18 @@ flag-off-as-all-mail turns a rollout control into a disclosure.
    ordered IDs. Small literal/contact policies stayed near parity; one expanded
    contact added 4–9 ms. The smaller fixture also exercised 2,880 authenticated
    in-process API requests, including validation and replacement admission.
-   These timings exclude HTTPS. An overflow must never authorize a truncated
+   These timings exclude HTTPS. A separate corrected 500-target shared/disjoint
+   matrix completed 512 final-path reads without errors. Batched first pages
+   reduced stale eight-contributor empty-contact reads from about 4.4 seconds to
+   33 ms; fresh single-contributor singleton-contact cells added 5–24 ms. All 96
+   first-page plans used the existing source indexes (0.158–2.772 ms). Full first
+   pages still continue individually; these plans do not establish throughput
+   for thousands of full sources. Another 2,048 authenticated API requests all
+   succeeded: company-domain admission took roughly 237–288 ms for validation
+   and 246–307 ms for replacement, including its existing locks. That API fixture
+   retained 299,106 mailbox contacts but omitted thread/message history, and its
+   stale profile covered source/rule growth with fresh mailbox-contact statistics.
+   An overflow must never authorize a truncated
    target set, and falling back to a dense record stream is not a sufficient
    bound. The initial million-thread baseline used five million primary-mailbox
    messages with 2.905 million background messages; the full ten-million

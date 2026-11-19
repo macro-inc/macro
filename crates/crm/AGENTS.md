@@ -102,6 +102,10 @@ tools/HTTP/GraphQL surfaces over them.
   Composition roots inject this adapter through `EmailRuleDiscoveryService`;
   the lightweight `email_discovery` feature exposes it without the full CRM
   service. Admission must precede grants and preserve withdrawal after overflow.
+  Batch first pages for more than eight distinct live sources; charge every
+  prefetched raw row before continuing a full source. Keep the total batch within
+  the remaining allowance plus one sentinel, including duplicate and foreign-team
+  values.
 
 - Private policy storage lives in `domain/email_policy.rs` and
   `outbound/companies_repo/email_policy/`. Inspection must never initialize consent or move historical work. The first

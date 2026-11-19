@@ -401,6 +401,12 @@ growth may exceed a bound: Team reads then return HTTP 503 with that limit,
 record the limit and work counters on `crm.email_rules.discovery`, and return no
 partial result or advanced cursor. Public errors omit observed team usage and
 private target values. Withdrawal and all-mail behavior remain independent.
+
+More than eight distinct live sources start with bounded first-page batches:
+at most 128 sources and eight values per source. Full sources continue by keyset;
+all prefetched raw rows are charged before continuations. Small source sets keep
+the single-source queries, and neither path truncates the discovered set.
+
 These discovery bounds do not close the General mode-partition race or every
 later candidate/message/fallback cost; those remain activation checks.
 

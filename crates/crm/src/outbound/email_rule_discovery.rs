@@ -1,7 +1,7 @@
 //! Bounded discovery on the caller's existing PostgreSQL transaction.
 use crate::domain::{email_rule_discovery::*, email_rules::EmailInclusionRule, model::CrmError};
 use sqlx::PgConnection;
-use std::time::Instant;
+use std::{collections::BTreeMap, time::Instant};
 use uuid::Uuid;
 
 /// Injected by composition roots into the email reader; owns no connection pool.
@@ -354,6 +354,105 @@ impl EmailRuleDiscoveryReader for Reader<'_> {
                 bytes: r.bytes as u64,
                 in_team: r.in_team,
             })
+            .collect())
+    }
+
+    async fn source_first_pages(
+        &mut self,
+        team: Uuid,
+        sources: &[RuleSource],
+        limit_per_source: usize,
+        bytes: u64,
+    ) -> Result<Vec<RuleSourcePage>, CrmError> {
+        let mut pages: BTreeMap<_, Vec<RuleSourceValue>> = sources
+            .iter()
+            .copied()
+            .map(|source| (source, Vec::new()))
+            .collect();
+        for company in [false, true] {
+            let ids: Vec<_> = sources
+                .iter()
+                .filter_map(|source| match (company, source) {
+                    (false, RuleSource::Contact(id)) | (true, RuleSource::Company(id)) => Some(*id),
+                    _ => None,
+                })
+                .collect();
+            if ids.is_empty() {
+                continue;
+            }
+            self.limit_time().await?;
+            let (table, parent, column, in_team, normalized) = if company {
+                (
+                    "crm_domains",
+                    "company_id",
+                    "domain",
+                    "team_id=$5",
+                    "lower(key)",
+                )
+            } else {
+                ("crm_contact_emails", "contact_id", "email", "TRUE", "key")
+            };
+            // Each source is an ID-first index probe capped before the outer
+            // sort/window. At most 128 * 8 raw values enter that work, including
+            // duplicates and foreign-team domains. Empty sources keep empty pages.
+            let query = format!(
+                r#"
+                WITH raw AS MATERIALIZED (
+                    SELECT source.id AS source_id,page.* FROM unnest($1::uuid[]) source(id)
+                    CROSS JOIN LATERAL (
+                        SELECT CASE WHEN octet_length({column})<=$4 THEN {column} END AS key,
+                            octet_length({column}) AS bytes,{in_team} AS in_team
+                        FROM {table} WHERE {parent}=source.id AND $5::uuid IS NOT NULL
+                        ORDER BY {parent},{column} LIMIT $2 OFFSET 0
+                    )page
+                ), sized AS (
+                    SELECT *,sum(bytes) OVER(ORDER BY source_id,key ROWS UNBOUNDED PRECEDING) running_bytes FROM raw
+                ), normalized AS MATERIALIZED (
+                    SELECT *,CASE WHEN running_bytes<=$3 THEN {normalized} END AS value FROM sized
+                ), measured AS (
+                    SELECT *,greatest(bytes,coalesce(octet_length(value),0)) AS measured_bytes FROM normalized
+                ), bounded AS (
+                    SELECT *,sum(measured_bytes) OVER(ORDER BY source_id,key ROWS UNBOUNDED PRECEDING) normalized_bytes FROM measured
+                )
+                SELECT source_id,CASE WHEN normalized_bytes<=$3 THEN key END AS key,
+                    CASE WHEN normalized_bytes<=$3 AND measured_bytes<=$4 THEN value END AS value,
+                    measured_bytes::bigint AS bytes,in_team FROM bounded ORDER BY source_id,key
+            "#
+            );
+            #[derive(sqlx::FromRow)]
+            struct Value {
+                source_id: Uuid,
+                key: Option<String>,
+                value: Option<String>,
+                bytes: i64,
+                in_team: bool,
+            }
+            let rows = sqlx::query_as::<_, Value>(&query)
+                .bind(ids)
+                .bind(limit_per_source as i64)
+                .bind(bytes as i64)
+                .bind(EmailRuleWorkLimit::SourceValueBytes.maximum() as i64)
+                .bind(team)
+                .fetch_all(&mut *self.connection)
+                .await
+                .map_err(db_error)?;
+            for row in rows {
+                let source = if company {
+                    RuleSource::Company(row.source_id)
+                } else {
+                    RuleSource::Contact(row.source_id)
+                };
+                pages.entry(source).or_default().push(RuleSourceValue {
+                    key: row.key,
+                    value: row.value,
+                    bytes: row.bytes as u64,
+                    in_team: row.in_team,
+                });
+            }
+        }
+        Ok(pages
+            .into_iter()
+            .map(|(source, values)| RuleSourcePage { source, values })
             .collect())
     }
 

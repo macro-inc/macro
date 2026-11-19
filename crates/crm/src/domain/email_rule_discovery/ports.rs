@@ -116,6 +116,15 @@ pub struct RuleSourceValue {
     pub in_team: bool,
 }
 
+/// One source's first bounded page, including sources with no current values.
+#[derive(Debug, Clone)]
+pub struct RuleSourcePage {
+    /// Requested target identity.
+    pub source: RuleSource,
+    /// Raw ordered rows, before contributor visibility or deduplication.
+    pub values: Vec<RuleSourceValue>,
+}
+
 /// One mailbox contact, with normalization performed using database semantics.
 #[derive(Debug, Clone)]
 pub struct RuleMailboxContact {
@@ -181,6 +190,16 @@ pub trait EmailRuleDiscoveryReader: Send {
         limit: usize,
         bytes: u64,
     ) -> impl Future<Output = Result<Vec<RuleSourceValue>, CrmError>> + Send;
+    /// Batch first pages for many distinct targets. The caller bounds both the
+    /// number of sources and their combined worst-case row count. Return an
+    /// empty page for an empty source; full pages continue through source_values.
+    fn source_first_pages(
+        &mut self,
+        team: Uuid,
+        sources: &[RuleSource],
+        limit_per_source: usize,
+        bytes: u64,
+    ) -> impl Future<Output = Result<Vec<RuleSourcePage>, CrmError>> + Send;
     /// Indexed exact address pairs; row sentinel applies globally and per pair.
     fn direct_contacts(
         &mut self,

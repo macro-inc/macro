@@ -10,6 +10,9 @@ use uuid::Uuid;
 // Selected before any live expansion. The crossover is measured end to end.
 const SMALL_RULES: usize = 4_000;
 const SOURCE_BATCH: usize = 2_048;
+const SOURCE_FIRST_ROWS: usize = 8;
+const SOURCE_FIRST_SOURCES: usize = 128;
+const SOURCE_BATCH_THRESHOLD: usize = 8;
 const CONTACT_BATCH: usize = 8_192;
 type Members = BTreeSet<Uuid>;
 type Values = HashMap<String, Members>;
@@ -25,6 +28,40 @@ fn over(limit: EmailRuleWorkLimit) -> CrmError {
         observed: limit.maximum() + 1,
     }
     .into()
+}
+
+/// Account a fetched page before another source can spend its remaining budget.
+struct SourceValues {
+    values: Vec<String>,
+    after: Option<String>,
+    count: usize,
+}
+
+impl SourceValues {
+    fn account(
+        rows: Vec<RuleSourceValue>,
+        budget: &mut EmailRuleDiscoveryBudget,
+        counter: EmailRuleWorkLimit,
+    ) -> Result<Self, CrmError> {
+        let mut page = Self {
+            values: Vec::new(),
+            after: None,
+            count: rows.len(),
+        };
+        for row in rows {
+            budget.charge(counter, 1)?;
+            budget.charge(EmailRuleWorkLimit::SourceValueBytes, row.bytes)?;
+            budget.charge(EmailRuleWorkLimit::SourceBytes, row.bytes)?;
+            let value = row
+                .value
+                .ok_or_else(|| over(EmailRuleWorkLimit::SourceBytes))?;
+            page.after = row.key;
+            if row.in_team {
+                page.values.push(value);
+            }
+        }
+        Ok(page)
+    }
 }
 
 /// Discover complete selected contacts using factual operations in one context.
@@ -156,7 +193,7 @@ async fn discover_inner<R: EmailRuleDiscoveryReader>(
             &references.keys().copied().collect::<Vec<_>>(),
         )
         .await?;
-    let mut live = BTreeMap::<RuleSource, (Members, Vec<String>)>::new();
+    let mut visible = BTreeMap::new();
     for fact in facts {
         let Some(members) = references.get(&fact.source) else {
             continue;
@@ -166,46 +203,96 @@ async fn discover_inner<R: EmailRuleDiscoveryReader>(
             .copied()
             .filter(|link| fact.in_team && (!fact.hidden || roles.get(link) == Some(&true)))
             .collect();
-        if members.is_empty() {
-            continue;
+        if !members.is_empty() {
+            visible.insert(fact.source, members);
         }
-        let counter = match fact.source {
+    }
+    // A handful of shared records keeps its existing large-page reads. Many
+    // distinct records start with small pages in one indexed batch, so empty or
+    // singleton records do not each require a separate database roundtrip.
+    let batch_first_pages = visible.len() > SOURCE_BATCH_THRESHOLD;
+    let mut pending = visible.into_iter().peekable();
+    let mut live = BTreeMap::<RuleSource, (Members, Vec<String>)>::new();
+    while let Some((source, members)) = pending.next() {
+        budget.check_deadline()?;
+        let counter = match source {
             RuleSource::Contact(_) => L::SourceAddresses,
             RuleSource::Company(_) => L::SourceDomains,
         };
-        let mut values = Vec::new();
-        let mut after = None;
-        loop {
-            budget.check_deadline()?;
-            let cap = SOURCE_BATCH.min(budget.remaining(counter) as usize + 1);
-            let rows = reader
-                .source_values(
+        let mut sources = vec![(source, members)];
+        let first_cap = SOURCE_FIRST_ROWS.min(budget.remaining(counter) as usize + 1);
+        let mut first_pages = BTreeMap::new();
+        if batch_first_pages {
+            // Even full first pages can read at most the remaining allowance
+            // plus one sentinel, across the entire batch rather than per source.
+            let source_cap =
+                SOURCE_FIRST_SOURCES.min((budget.remaining(counter) as usize + 1) / first_cap);
+            while sources.len() < source_cap {
+                let Some(next) = pending.next_if(|(next, _)| {
+                    matches!(
+                        (source, *next),
+                        (RuleSource::Contact(_), RuleSource::Contact(_))
+                            | (RuleSource::Company(_), RuleSource::Company(_))
+                    )
+                }) else {
+                    break;
+                };
+                sources.push(next);
+            }
+            let pages = reader
+                .source_first_pages(
                     request.team_id,
-                    fact.source,
-                    after.as_deref(),
-                    cap,
+                    &sources
+                        .iter()
+                        .map(|(source, _)| *source)
+                        .collect::<Vec<_>>(),
+                    first_cap,
                     budget.remaining(L::SourceBytes),
                 )
                 .await?;
-            let count = rows.len();
-            for row in rows {
-                budget.charge(counter, 1)?;
-                budget.charge(L::SourceValueBytes, row.bytes)?;
-                budget.charge(L::SourceBytes, row.bytes)?;
-                let value = row.value.ok_or_else(|| over(L::SourceBytes))?;
-                after = row.key;
-                if row.in_team {
-                    values.push(value);
-                }
-            }
-            if count < cap {
-                break;
-            }
-            if after.is_none() {
-                return Err(over(L::SourceBytes));
+            // Charge all prefetched rows before continuing any full source.
+            // Otherwise its continuation could spend the allowance already
+            // consumed by the other first pages in this batch.
+            for page in pages {
+                first_pages.insert(
+                    page.source,
+                    SourceValues::account(page.values, budget, counter)?,
+                );
             }
         }
-        live.insert(fact.source, (members, values));
+        for (source, members) in sources {
+            let first = first_pages.remove(&source);
+            let complete = first.as_ref().is_some_and(|page| page.count < first_cap);
+            let (mut values, mut after) = match first {
+                Some(page) => (page.values, page.after),
+                None => (Vec::new(), None),
+            };
+            if !complete {
+                loop {
+                    budget.check_deadline()?;
+                    let cap = SOURCE_BATCH.min(budget.remaining(counter) as usize + 1);
+                    let rows = reader
+                        .source_values(
+                            request.team_id,
+                            source,
+                            after.as_deref(),
+                            cap,
+                            budget.remaining(L::SourceBytes),
+                        )
+                        .await?;
+                    let page = SourceValues::account(rows, budget, counter)?;
+                    after = page.after;
+                    values.extend(page.values);
+                    if page.count < cap {
+                        break;
+                    }
+                    if after.is_none() {
+                        return Err(over(L::SourceBytes));
+                    }
+                }
+            }
+            live.insert(source, (members, values));
+        }
     }
     // Estimate without materializing a cross product. Falling back is always
     // allowed: direct-pair count chooses a strategy, never rejects a policy.
