@@ -46,7 +46,8 @@ function setup(
       storage,
       'default-model',
       onCreated,
-      connected
+      connected,
+      () => true
     );
   });
   return { composer, storage, onCreated, source };
@@ -145,7 +146,8 @@ describe('routine creation state without app providers', () => {
         storage,
         'default-model',
         vi.fn(),
-        () => new Set()
+        () => new Set(),
+        () => true
       );
     });
     expect(composer.draft()).toMatchObject({ triggers: [], steps: [] });

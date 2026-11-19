@@ -62,7 +62,8 @@ export function RoutineNewView(props: {
       props.storage,
       props.defaultModel,
       props.onCreated,
-      connected
+      connected,
+      props.slots.createAppTargetCheck()
     );
   const pending = () => props.source.pending();
   const taskDisabled = () =>

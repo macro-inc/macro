@@ -1291,9 +1291,11 @@ after the steps under **Sub-routines** (**Scheduled once per item by this
 routine’s runs**): its title, the name its code schedules it by, **Each one is
 given** with each input's label and type, and its steps, edited like the
 routine's own and saved with the routine. In a definition, **Add step** adds
-an **Ask AI** step. Its connected apps can be removed. A definition with apps
-needs an **Ask AI** step on a managed runtime, with its apps connected before
-the routine can save. A run's code calls `macro.routines.schedule` with a trigger
+an **Ask AI** step. Its connected apps can be removed. Apps require **Ask AI**
+to use a model or a managed agent, both in the main routine and in each
+definition. The editor holds the save if a selected or inherited agent cannot
+use those apps. Change **Who** or remove the apps to save.
+A run's code calls `macro.routines.schedule` with a trigger
 and the inputs. Each copy
 it makes is a sub-routine as above that stores only the definition's name and
 those values. A copy's page shows **Runs “<title>” from <routine>. Each run uses

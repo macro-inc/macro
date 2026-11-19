@@ -19,6 +19,16 @@ export const routineTargetSchema = z.discriminatedUnion('kind', [
 
 export type RoutineTarget = z.infer<typeof routineTargetSchema>;
 
+// Matches AgentKind::from_harness for persisted agents.
+export function routineHarnessSupportsApps(harness: string): boolean {
+  return (
+    harness === 'in-memory' ||
+    harness === 'macro-inmem' ||
+    harness === 'cursor' ||
+    harness === 'codex-cloud'
+  );
+}
+
 export function routineTargetsEqual(
   a: RoutineTarget,
   b: RoutineTarget

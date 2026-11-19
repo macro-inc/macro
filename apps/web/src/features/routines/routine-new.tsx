@@ -8,6 +8,7 @@ import {
   loadRoutineComposerDraft,
   saveRoutineComposerDraft,
 } from './draft-storage';
+import { createRoutineAppTargetCheck } from './queries/routine-app-targets';
 import { createRoutineCreatorSource } from './queries/routine-sources';
 import { createRoutineConnectedApps, RoutineApps } from './routine-apps';
 import { RoutineCreatedItem } from './routine-created-item';
@@ -58,6 +59,7 @@ export function RoutineNew(props: {
               Triggers: RoutineTriggers,
               Apps: RoutineApps,
               createConnectedApps: createRoutineConnectedApps,
+              createAppTargetCheck: createRoutineAppTargetCheck,
               createStepAuthor: createRoutineStepAuthor,
             }}
             onCreated={props.onCreated}

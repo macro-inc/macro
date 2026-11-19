@@ -8,6 +8,7 @@ import {
   validateRoutineDraft,
 } from '../core/routine-draft';
 import { assignedOutputs, withAssignedOutputs } from '../core/routine-steps';
+import type { RoutineTarget } from '../core/routine-target';
 import { hasOnlyScheduledTriggers } from '../core/routine-triggers';
 import { createRoutineAutosave } from './routine-autosave';
 
@@ -23,6 +24,7 @@ export function createRoutineDetail(
   options: {
     userId: Accessor<string | undefined>;
     connectedApps: Accessor<ReadonlySet<string> | undefined>;
+    targetSupportsApps(target: RoutineTarget): boolean;
     onRename(name: string): void;
   }
 ) {
@@ -46,7 +48,11 @@ export function createRoutineDetail(
     if (!draft) return null;
     return (
       validateRoutineDraft(draft) ??
-      validateRoutineApps(draft, options.connectedApps())
+      validateRoutineApps(
+        draft,
+        options.connectedApps(),
+        options.targetSupportsApps
+      )
     );
   };
 
@@ -99,14 +105,14 @@ export function createRoutineDetail(
     autosave.queue(formError() ? undefined : next);
   }
 
-  // An edit held back only by an unconnected app saves once it is connected.
+  // Reconsider queued edits as connection and agent data changes.
   createEffect(
     on(
       formError,
       (error, previous) => {
         const draft = state();
-        if (!error && previous && draft && autosave.dirty())
-          autosave.queue(draft);
+        if (draft && autosave.dirty() && error !== previous)
+          autosave.queue(error ? undefined : draft);
       },
       { defer: true }
     )

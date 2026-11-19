@@ -183,6 +183,7 @@ export function RoutineDetailView(props: {
   } = createRoutineDetail(props.source, {
     userId: props.userId,
     connectedApps,
+    targetSupportsApps: props.slots.createAppTargetCheck(),
     onRename: (name) => props.onRename(name),
   });
   const [tab, setTab] = createSignal(props.initialTab ?? 'settings');

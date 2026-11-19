@@ -12,7 +12,10 @@ import {
   type RosterAgent,
 } from '../../agents-view/core/roster';
 import { AgentPicker } from '../../agents-view/views/AgentPicker';
-import type { RoutineTarget } from '../core/routine-target';
+import {
+  type RoutineTarget,
+  routineHarnessSupportsApps,
+} from '../core/routine-target';
 
 export type RoutineExecutionPickerProps = {
   target: RoutineTarget;
@@ -41,14 +44,6 @@ function savedSelection(target: RoutineTarget): string {
   const label = `Agent: ${target.agentId}`;
   return target.modelOverride ? `${label} · ${target.modelOverride}` : label;
 }
-
-// The scheduler treats other persisted harnesses as externally served.
-const MANAGED_HARNESSES = new Set([
-  'in-memory',
-  'macro-inmem',
-  'cursor',
-  'codex-cloud',
-]);
 
 /** Keep query suspension and discovery failures local to the selector, not the editor. */
 export function RoutineExecutionPickerBoundary(props: {
@@ -82,7 +77,7 @@ export function RoutineExecutionPickerBoundary(props: {
 
 export function RoutineExecutionPickerView(props: Props): JSX.Element {
   const canSelect = (agent: RosterAgent) =>
-    !props.requiresApps || MANAGED_HARNESSES.has(agent.harness);
+    !props.requiresApps || routineHarnessSupportsApps(agent.harness);
   const selected = (): RosterAgent | undefined => {
     const target = props.target;
     if (target.kind === 'model') {

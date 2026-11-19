@@ -12,13 +12,15 @@ import {
   validateRoutineApps,
   validateRoutineDraft,
 } from '../core/routine-draft';
+import type { RoutineTarget } from '../core/routine-target';
 
 export function createRoutineComposer(
   source: RoutineCreatorSource,
   storage: RoutineDraftStorage,
   defaultModel: string,
   onCreated: (id: string) => void,
-  connectedApps: Accessor<ReadonlySet<string> | undefined>
+  connectedApps: Accessor<ReadonlySet<string> | undefined>,
+  targetSupportsApps: (target: RoutineTarget) => boolean
 ) {
   const restored = storage.load();
   const [draft, setDraft] = createSignal<ScheduleDraft>(
@@ -40,7 +42,7 @@ export function createRoutineComposer(
   const [submitError, setSubmitError] = createSignal<string>();
   const formError = () =>
     validateRoutineDraft(draft(), true) ??
-    validateRoutineApps(draft(), connectedApps());
+    validateRoutineApps(draft(), connectedApps(), targetSupportsApps);
   // Logging out clears drafts; this one must not write itself back after.
   let retired = false;
   const persist = (value: ScheduleDraft) => {

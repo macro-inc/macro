@@ -26,6 +26,7 @@ import {
   createAgentHistoryMetadata,
   createChatHistoryMetadata,
 } from './queries/history-metadata';
+import { createRoutineAppTargetCheck } from './queries/routine-app-targets';
 import { createRoutineDetailSource } from './queries/routine-sources';
 import {
   useRoutineTemplateQuery,
@@ -250,6 +251,7 @@ export function RoutineDetail(props: {
           Triggers: RoutineTriggers,
           Apps: RoutineApps,
           createConnectedApps: createRoutineConnectedApps,
+          createAppTargetCheck: createRoutineAppTargetCheck,
           createStepAuthor: createRoutineStepAuthor,
           createChatMetadata: createChatHistoryMetadata,
           createAgentMetadata: createAgentHistoryMetadata,

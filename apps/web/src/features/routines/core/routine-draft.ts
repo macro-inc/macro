@@ -19,7 +19,7 @@ import {
   updateStep,
   validateSteps,
 } from './routine-steps';
-import { routineTargetSchema } from './routine-target';
+import { type RoutineTarget, routineTargetSchema } from './routine-target';
 import { describeTriggers, validateTriggers } from './routine-triggers';
 
 export { getDefaultTimezone } from '@core/util/cron';
@@ -282,11 +282,23 @@ export function validateRoutineDraft(
   return null;
 }
 
-/** Null until the owner's connections load; the server checks again on save. */
+/** Check each Ask AI target with the apps of the program or definition it runs. */
 export function validateRoutineApps(
   draft: ScheduleDraft,
-  connectedSlugs: ReadonlySet<string> | undefined
+  connectedSlugs: ReadonlySet<string> | undefined,
+  targetSupportsApps: (target: RoutineTarget) => boolean
 ): string | null {
+  const cannotUseApps = (steps: StepDraft[]) =>
+    steps.some(
+      (step) => step.kind === 'agent' && !targetSupportsApps(step.target)
+    );
+  const guidance = 'choose a model or managed agent, or remove the apps.';
+  if (draft.apps.length && cannotUseApps(draftSteps(draft)))
+    return `To use apps in this routine, ${guidance}`;
+  for (const definition of draft.subRoutines ?? []) {
+    if (definition.apps.length && cannotUseApps(definition.steps))
+      return `To use apps in “${definition.title}”, ${guidance}`;
+  }
   if (!connectedSlugs) return null;
   const apps = [
     ...draft.apps,

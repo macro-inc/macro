@@ -82,6 +82,7 @@ const mocks = vi.hoisted(() => ({
   refetchTemplate: vi.fn(async () => {}),
   stopSharing: vi.fn(),
   detach: vi.fn(),
+  connectedApps: (): ReadonlySet<string> | undefined => new Set(),
 }));
 vi.mock('@app/observability/flow', async (importOriginal) => ({
   ...(await importOriginal<typeof import('@app/observability/flow')>()),
@@ -258,7 +259,17 @@ vi.mock('./routine-prompt-editor', () => ({
 }));
 vi.mock('./routine-apps', () => ({
   RoutineApps: () => null,
-  createRoutineConnectedApps: () => () => new Set(),
+  createRoutineConnectedApps: () => () => mocks.connectedApps(),
+}));
+vi.mock('@queries/agents/agents', () => ({
+  useAgentsQuery: () => ({
+    data: [
+      {
+        bot: { id: '12345678-1234-1234-1234-123456789abc' },
+        harness: 'macrod',
+      },
+    ],
+  }),
 }));
 vi.mock('./routine-execution-picker', () => ({
   RoutineExecutionPicker: (props: {
@@ -267,9 +278,15 @@ vi.mock('./routine-execution-picker', () => ({
   }) => {
     mocks.changeTarget = props.onChange;
     return (
-      <output aria-label="Execution target">
+      <button
+        type="button"
+        aria-label="Execution target"
+        onClick={() =>
+          props.onChange({ kind: 'model', model: 'claude-sonnet-4-6' })
+        }
+      >
         {JSON.stringify(props.target)}
-      </output>
+      </button>
     );
   },
 }));
@@ -450,6 +467,7 @@ beforeEach(() => {
   mocks.subRoutineWrites = () => true;
   mocks.shared = () => false;
   mocks.templateError = () => false;
+  mocks.connectedApps = () => new Set();
   mocks.history = () => [
     {
       id: 'run-id',
@@ -1680,6 +1698,49 @@ describe('sub-routines defined once', () => {
       'Connect every app'
     );
   });
+
+  it.each(['routine', 'definition'] as const)(
+    'holds a save when the %s Ask AI target cannot run with its connected apps',
+    async (scope) => {
+      const external = {
+        type: 'agent' as const,
+        agent: { bot_id: '12345678-1234-1234-1234-123456789abc' },
+        instructions: 'Remind me about the task.',
+      };
+      const mcp_servers = [{ app_slug: 'example', server_name: 'Example' }];
+      const isDefinition = scope === 'definition';
+      setSchedules([
+        {
+          ...parent,
+          id: 'routine-id',
+          task: isDefinition
+            ? {
+                steps: [remind.steps[0]],
+                sub_routines: [{ ...remind, steps: [external], mcp_servers }],
+              }
+            : { steps: [external], mcp_servers },
+        },
+      ]);
+      mocks.connectedApps = () => new Set(['example']);
+      render(() => <Routine />);
+      const editor = isDefinition
+        ? within(screen.getByRole('group', { name: 'Remind me' }))
+        : screen;
+      fireEvent.input(editor.getByRole('textbox', { name: 'Instructions' }), {
+        target: { value: 'Remind me tomorrow.' },
+      });
+      await vi.advanceTimersByTimeAsync(300);
+      expect(mocks.update).not.toHaveBeenCalled();
+      expect(screen.getByRole('alert').textContent).toContain(
+        'choose a model or managed agent'
+      );
+      if (isDefinition)
+        expect(screen.getByRole('alert').textContent).toContain('Remind me');
+      fireEvent.click(editor.getByLabelText('Execution target'));
+      await vi.advanceTimersByTimeAsync(300);
+      expect(mocks.update).toHaveBeenCalledTimes(1);
+    }
+  );
 
   it('shows a copy its parent’s steps and its values, editing only its own settings', async () => {
     // The copy's page reads its parent from the routines list.
