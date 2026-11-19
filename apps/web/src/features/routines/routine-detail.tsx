@@ -21,7 +21,7 @@ import { writeClipboardData } from '@core/util/dataTransfer';
 import { fireAndForget } from '@core/util/fireAndForget';
 import { Telemetry } from '@macro-inc/observability';
 import { useSystemSkillsQuery } from '@queries/storage/system-skills';
-import { getOwner, onMount, Show } from 'solid-js';
+import { createSignal, getOwner, onMount, Show } from 'solid-js';
 import { EntityAppearanceTrigger } from '../entity-appearance/entity-appearance';
 import { getErrorMessage } from './core/routine-draft';
 import { createRoutineConnectedApps } from './queries/connected-apps';
@@ -172,9 +172,10 @@ export function RoutineDetail(props: {
     sharing().enabled &&
     source.routine()?.shareable === false &&
     ownedByViewer();
+  const [actionsOpen, setActionsOpen] = createSignal(false);
   const published = useRoutineTemplateQuery(
     () => props.scheduleId,
-    needsRevocation
+    () => actionsOpen() && needsRevocation()
   );
   const hasPublishedSnapshot = () =>
     needsRevocation() &&
@@ -211,6 +212,7 @@ export function RoutineDetail(props: {
       <RoutineDetailView
         source={source}
         userId={userId}
+        onActionsOpenChange={setActionsOpen}
         identityIcon={
           <Show when={source.entity()}>
             {(entity) => (

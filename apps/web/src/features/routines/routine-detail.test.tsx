@@ -18,7 +18,14 @@ import {
   screen,
   within,
 } from '@solidjs/testing-library';
-import { createSignal, type JSX, type Setter, untrack } from 'solid-js';
+import {
+  type Accessor,
+  createEffect,
+  createSignal,
+  type JSX,
+  type Setter,
+  untrack,
+} from 'solid-js';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import type { RoutineTarget } from './core/routine-target';
 import { Routine } from './routine-detail';
@@ -79,6 +86,7 @@ const mocks = vi.hoisted(() => ({
   subRoutineWrites: (): boolean => true,
   shared: (): boolean => false,
   templateError: (): boolean => false,
+  readSharingStatus: vi.fn(),
   refetchTemplate: vi.fn(async () => {}),
   stopSharing: vi.fn(),
   detach: vi.fn(),
@@ -117,18 +125,26 @@ vi.mock('./routine-template', () => ({
   openShareRoutineDialog: vi.fn(),
 }));
 vi.mock('./queries/templates', () => ({
-  useRoutineTemplateQuery: () => ({
-    refetch: mocks.refetchTemplate,
-    get isSuccess() {
-      return mocks.shared() && !mocks.templateError();
-    },
-    get isError() {
-      return mocks.templateError();
-    },
-    get data() {
-      return mocks.shared() ? { id: 'routine-id' } : null;
-    },
-  }),
+  useRoutineTemplateQuery: (
+    id: Accessor<string>,
+    enabled: Accessor<boolean>
+  ) => {
+    createEffect(() => {
+      if (enabled()) mocks.readSharingStatus(id());
+    });
+    return {
+      refetch: mocks.refetchTemplate,
+      get isSuccess() {
+        return mocks.shared() && !mocks.templateError();
+      },
+      get isError() {
+        return mocks.templateError();
+      },
+      get data() {
+        return mocks.shared() ? { id: 'routine-id' } : null;
+      },
+    };
+  },
   useUnshareTemplateMutation: () => ({
     mutate: mocks.stopSharing,
     isPending: false,
@@ -1496,6 +1512,17 @@ describe('sub-routines defined once', () => {
     task: { sub_routine: 'remind', inputs: { taskId: 'Ship the deck' } },
     sub_routine: { parent_id: 'parent-id', created_by_run_id: 'run-1' },
   };
+
+  it('reads sharing status only when the actions menu needs it', () => {
+    setSchedules([{ ...parent, id: 'routine-id' }]);
+    mocks.sharing = () => true;
+    render(() => <Routine />);
+    expect(mocks.readSharingStatus).not.toHaveBeenCalled();
+    openActions();
+    expect(mocks.readSharingStatus).toHaveBeenCalledExactlyOnceWith(
+      'routine-id'
+    );
+  });
 
   it('revokes a published snapshot after the routine gains definitions', () => {
     setSchedules([{ ...parent, id: 'routine-id' }]);

@@ -1641,7 +1641,8 @@ the saved routine. The owner's own mention and the schedules' time zone fill in
 as whoever activates it; other references stay the same for everyone, and
 re-sharing keeps the fills an earlier template set. If a published routine gains
 definitions or input values, its owner's **Routine actions** menu still offers
-**Stop sharing** to revoke the existing snapshot. A failed refresh keeps the
+**Stop sharing** to revoke the existing snapshot. Opening the menu checks
+whether a snapshot was shared. A failed refresh keeps the
 action when the published snapshot is cached. **Retry sharing status** appears
 when the status read fails and there is no published snapshot in cache.
 

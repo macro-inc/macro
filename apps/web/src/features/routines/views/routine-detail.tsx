@@ -146,6 +146,7 @@ export function RoutineDetailView(props: {
   onRename(name: string): void;
   onBack(): void;
   onDelete(): void;
+  onActionsOpenChange(open: boolean): void;
   onCopyPrompt(prompt: string): Promise<void | boolean>;
   onShare?(): void;
   onStopSharing?(): void;
@@ -312,7 +313,10 @@ export function RoutineDetailView(props: {
           }
           actions={
             isOwned() && (
-              <Dropdown placement="bottom-start">
+              <Dropdown
+                placement="bottom-start"
+                onOpenChange={props.onActionsOpenChange}
+              >
                 <Dropdown.Trigger
                   variant="ghost"
                   size="icon-sm"
