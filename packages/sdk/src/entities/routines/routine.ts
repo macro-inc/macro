@@ -19,7 +19,7 @@ import type { MacroClient } from '../../utils/client';
 import { AgentSession } from '../agent-sessions/agent-session';
 import type { Agent } from '../agents/agent';
 import { Chat } from '../chats/chat';
-import type { Link } from '../email/link';
+import { Link } from '../email/link';
 import { MacroEntity } from '../entity';
 import type { EntityReference } from '../reference';
 import { User } from '../users/user';
@@ -75,6 +75,52 @@ function singleTriggerBody(trigger: SingleRoutineTrigger): RoutineTrigger {
       })),
     }))
     .exhaustive();
+}
+
+/** An event selector as read back: the inboxes it picked, as handles. */
+export type RoutineEventFilterDetail = Omit<EventFilter, 'inboxes'> & {
+  /** For `email.message_received` alone: the inboxes it watches. Absent: every one. */
+  inboxes?: Link[];
+};
+
+/** A single trigger as read back. */
+export type SingleRoutineTriggerDetail =
+  | Extract<RoutineTrigger, { type: 'cron' }>
+  | Extract<RoutineTrigger, { type: 'once' }>
+  | { type: 'events'; filters: RoutineEventFilterDetail[] };
+
+/** A routine's triggers as read back. */
+export type RoutineTriggerDetail =
+  | SingleRoutineTriggerDetail
+  | { type: 'multiple'; triggers: SingleRoutineTriggerDetail[] };
+
+function singleTriggerDetail(
+  client: MacroClient,
+  trigger: RoutineTrigger,
+): SingleRoutineTriggerDetail {
+  return match(trigger)
+    .with({ type: 'events' }, (value) => ({
+      type: 'events' as const,
+      filters: value.filters.map(({ inboxes, ...filter }) => ({
+        ...filter,
+        inboxes: inboxes?.map((id) => Link.byId(client, id)),
+      })),
+    }))
+    .otherwise((value) => value);
+}
+
+function triggerDetail(
+  client: MacroClient,
+  trigger: ActionTrigger,
+): RoutineTriggerDetail {
+  return trigger.type === 'multiple'
+    ? {
+        type: 'multiple',
+        triggers: trigger.triggers.map((single) =>
+          singleTriggerDetail(client, single),
+        ),
+      }
+    : singleTriggerDetail(client, trigger);
 }
 
 function triggerBody(trigger: RoutineTriggerOptions): ActionTrigger {
@@ -225,8 +271,10 @@ export class Routine extends MacroEntity<ScheduledActionResponse> {
     );
   }
 
-  /** Configured triggers. */
-  readonly trigger = this.field('trigger');
+  /** Configured triggers; picked inboxes come back as `Link` handles. */
+  readonly trigger = this.mappedField('trigger', (trigger) =>
+    triggerDetail(this.client, trigger),
+  );
 
   /** Whether the routine is enabled. */
   readonly enabled = this.field('enabled');

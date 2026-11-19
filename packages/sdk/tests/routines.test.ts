@@ -1,5 +1,6 @@
 import { afterEach, expect, test } from 'bun:test';
 import type { ScheduledActionResponse } from '../generated/scheduled-action/types.gen';
+import { Link } from '../src/entities/email/link';
 import { Macro } from '../src/macro';
 import { MacroApiError } from '../src/utils';
 
@@ -149,13 +150,17 @@ test('routine creation sends code and Ask AI steps that write as the user', asyn
     },
   ]);
 });
-test('an email trigger sends the inboxes it watches by their handles', async () => {
-  const bodies: unknown[] = [];
+test('an email trigger sends and reads the inboxes it watches as handles', async () => {
+  const bodies: ScheduledActionResponse[] = [];
   globalThis.fetch = Object.assign(
     async (input: RequestInfo | URL) => {
       const request = input instanceof Request ? input : new Request(input);
-      bodies.push(await request.json());
-      return Response.json(record, { status: 201 });
+      const body = (await request.json()) as ScheduledActionResponse;
+      bodies.push(body);
+      return Response.json(
+        { ...record, trigger: body.trigger },
+        { status: 201 },
+      );
     },
     { preconnect: originalFetch.preconnect },
   );
@@ -164,7 +169,7 @@ test('an email trigger sends the inboxes it watches by their handles', async () 
     hosts: { 'scheduled-action': 'https://routines.test' },
   });
   const inbox = macro.email.link('inbox-1');
-  await macro.routines.create({
+  const routine = await macro.routines.create({
     name: 'Helpdesk',
     trigger: {
       type: 'events',
@@ -181,6 +186,12 @@ test('an email trigger sends the inboxes it watches by their handles', async () 
       },
     },
   ]);
+  // Read back, a picked inbox is a handle again, not its id.
+  const trigger = await routine.trigger();
+  if (trigger.type !== 'events') throw new Error(`read ${trigger.type}`);
+  const [read] = trigger.filters[0]?.inboxes ?? [];
+  expect(read).toBeInstanceOf(Link);
+  expect(read?.id).toBe('inbox-1');
 });
 test('routine writes invalidate detail only after success', async () => {
   let enabled = true;

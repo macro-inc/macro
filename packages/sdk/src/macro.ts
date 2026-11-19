@@ -587,8 +587,11 @@ export type { EntityReference } from './entities/reference';
 export type { ReferralLink } from './entities/referrals/namespace';
 export type {
   RoutineEventFilter,
+  RoutineEventFilterDetail,
+  RoutineTriggerDetail,
   RoutineTriggerOptions,
   SingleRoutineTrigger,
+  SingleRoutineTriggerDetail,
 } from './entities/routines/routine';
 export {
   Routine,
