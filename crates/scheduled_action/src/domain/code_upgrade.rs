@@ -407,7 +407,9 @@ pub async fn sweep(
     stop: &tokio_util::sync::CancellationToken,
 ) -> Result<Sweep> {
     let mut done = Sweep::default();
+    // Without a code executor there is no SDK to bring code to.
     let Some(sdk) = code.sdk() else {
+        record_sweep(&tracing::Span::current(), done, &Ok(SweepEnd::Completed));
         return Ok(done);
     };
     let mut after = Uuid::nil();
