@@ -9,8 +9,10 @@
 //! It needs an OpenSearch with the indices and aliases of
 //! `infra/stacks/opensearch/helpers/scripts/create_indices.ts`, holding no
 //! other documents, at `SEARCH_TEST_OPENSEARCH_URL` (default
-//! `http://localhost:9200`). The crate's `AGENTS.md` says how to start one; CI
-//! starts one for every change to this crate.
+//! `http://localhost:9200`), so `cargo test` runs it only when asked
+//! (`--test content_search`, `test = false` in `Cargo.toml`). The crate's
+//! `AGENTS.md` says how to start one; CI starts one for every change to this
+//! crate.
 
 use std::collections::{BTreeSet, HashMap, HashSet};
 
@@ -56,13 +58,18 @@ const ID_PREFIX: u128 = 0x5ea4c400_0000_0000_0000_0000_0000_0000;
 const UPDATED_AT_MILLIS: i64 = 1_763_000_000_000;
 
 /// Other users' entities, each holding [`CROWD_WORDS_PER_ENTITY`] distinct
-/// words that start with `con` and sort before `conveyor`. A prefix query
-/// that expands to only the first terms of a shard's dictionary, before
-/// access filtering, never reaches the viewer's `conveyor`. Spread over this
-/// many entities, every shard of a three- or six-shard index holds several
-/// hundred of them.
+/// words per crowded prefix, such as `con`, that sort before the viewer's
+/// word (`conveyor`). A prefix query that expands to only the first terms of
+/// a shard's dictionary, before access filtering, never reaches the viewer's
+/// word. Spread over this many entities, every shard of a three- or six-shard
+/// index holds several hundred of them.
 const CROWD_ENTITIES: usize = 100;
 const CROWD_WORDS_PER_ENTITY: usize = 30;
+
+/// The tests share the search aliases, so they seed and search one at a
+/// time: across processes through their nextest test group, within one
+/// `cargo test` process through this lock.
+static SEARCH_INDICES: tokio::sync::Mutex<()> = tokio::sync::Mutex::const_new(());
 
 #[derive(Clone, Copy, Debug, PartialEq, Eq, PartialOrd, Ord, Hash)]
 enum Kind {
@@ -187,6 +194,14 @@ const FIXTURES: &[Fixture] = &[
         name: "non-ascii",
         access: Access::Own,
         parts: &["Lunch at the café in Zürich", "東京タワーの近く"],
+        deleted: Deleted::Nothing,
+    },
+    // `naïveté` sorts after every `naï` word of the crowd that
+    // [`CAPPED_CASES`] seeds.
+    Fixture {
+        name: "naïveté",
+        access: Access::Own,
+        parts: &["Its naïveté showed"],
         deleted: Deleted::Nothing,
     },
     // One- and two-character terms match as a phrase, never as a prefix.
@@ -359,6 +374,32 @@ const CASES: &[Case] = &[
     },
 ];
 
+/// Crowded prefixes the search still expands to only the first 256 terms of a
+/// shard: a term with punctuation or a non-ASCII letter matches as a phrase
+/// prefix. `c++` has three characters, so the short-term rule, which counts
+/// the term as typed, leaves it a prefix; it analyzes to `c`.
+///
+/// A deleted document keeps its words in the shard's dictionary for a while
+/// (soft deletes outlive a merge), so the `naï` crowd these cases seed would
+/// still crowd a later [`CASES`] run: no case there searches a `naï` prefix.
+const CAPPED_CASES: &[Case] = &[
+    Case {
+        terms: &["con."],
+        match_type: "partial",
+        matching: DocumentTermMatching::All,
+    },
+    Case {
+        terms: &["c++"],
+        match_type: "partial",
+        matching: DocumentTermMatching::All,
+    },
+    Case {
+        terms: &["naï"],
+        match_type: "partial",
+        matching: DocumentTermMatching::All,
+    },
+];
+
 /// Lucene's English stop set, which `DocumentTermMatching::Dynamic` leaves
 /// out of its count.
 const STOPWORDS: [&str; 33] = [
@@ -396,7 +437,7 @@ impl Seeded {
     }
 }
 
-fn seeded_entities() -> Vec<Seeded> {
+fn seeded_entities(crowded_prefixes: &[&str]) -> Vec<Seeded> {
     let mut entities = Vec::new();
     for kind in KINDS {
         let fixtures = FIXTURES.iter().map(|fixture| {
@@ -404,8 +445,12 @@ fn seeded_entities() -> Vec<Seeded> {
             (fixture.name.to_string(), fixture.access, parts, fixture.deleted)
         });
         let crowd = (0..CROWD_ENTITIES).map(|entity| {
-            let words: Vec<String> = (0..CROWD_WORDS_PER_ENTITY)
-                .map(|word| crowd_word(entity * CROWD_WORDS_PER_ENTITY + word))
+            let words: Vec<String> = crowded_prefixes
+                .iter()
+                .flat_map(|prefix| {
+                    (0..CROWD_WORDS_PER_ENTITY)
+                        .map(move |word| crowd_word(prefix, entity * CROWD_WORDS_PER_ENTITY + word))
+                })
                 .collect();
             (
                 format!("crowd {entity}"),
@@ -444,16 +489,29 @@ fn seeded_entities() -> Vec<Seeded> {
     entities
 }
 
-/// The `n`th word of the crowd: `conaaa`, `conaab`, … Every one sorts before
-/// `conveyor`.
-fn crowd_word(n: usize) -> String {
+/// The `n`th word of a crowd: `conaaa`, `conaab`, … The 3,000 a crowd holds
+/// all sort before `conveyor` and `naïveté`.
+fn crowd_word(prefix: &str, n: usize) -> String {
     let letter = |value: usize| char::from(b'a' + u8::try_from(value % 26).unwrap_or(0));
-    format!("con{}{}{}", letter(n / 676), letter(n / 26), letter(n))
+    format!("{prefix}{}{}{}", letter(n / 676), letter(n / 26), letter(n))
 }
 
 #[tokio::test]
-#[ignore = "requires an OpenSearch with the search indices, see AGENTS.md"]
 async fn content_search_returns_exactly_the_entities_its_rules_match() -> anyhow::Result<()> {
+    run_cases(CASES, &["con"]).await
+}
+
+#[tokio::test]
+#[ignore = "known bug: a content prefix with punctuation or a non-ASCII letter still expands to only the first 256 terms of a shard"]
+async fn a_punctuated_or_non_ascii_prefix_finds_words_past_the_first_256() -> anyhow::Result<()> {
+    run_cases(CAPPED_CASES, &["con", "naï"]).await
+}
+
+/// Seed the fixtures and a crowd for each of `crowded_prefixes`, run every
+/// case, remove what was seeded, and fail listing each search that returned
+/// other entities than its rules match.
+async fn run_cases(cases: &[Case], crowded_prefixes: &[&str]) -> anyhow::Result<()> {
+    let _one_at_a_time = SEARCH_INDICES.lock().await;
     #[expect(
         clippy::disallowed_methods,
         reason = "test support: where the test cluster answers comes from the process environment"
@@ -466,7 +524,7 @@ async fn content_search_returns_exactly_the_entities_its_rules_match() -> anyhow
             .disable_proxy()
             .build()?,
     );
-    let entities = seeded_entities();
+    let entities = seeded_entities(crowded_prefixes);
 
     remove_seeded(&raw, &entities).await?;
     for kind in KINDS {
@@ -480,14 +538,14 @@ async fn content_search_returns_exactly_the_entities_its_rules_match() -> anyhow
         }
     }
 
-    let result = seed_and_search(&client, &raw, &entities).await;
+    let result = seed_and_search(&client, &raw, &entities, cases).await;
     remove_seeded(&raw, &entities).await?;
     let failures = result?;
     assert!(
         failures.is_empty(),
         "{} of {} searches returned other entities than their rules match:\n{}",
         failures.len(),
-        CASES.len(),
+        cases.len(),
         failures.join("\n")
     );
     Ok(())
@@ -497,6 +555,7 @@ async fn seed_and_search(
     client: &OpensearchClient,
     raw: &OpenSearch,
     entities: &[Seeded],
+    cases: &[Case],
 ) -> anyhow::Result<Vec<String>> {
     seed(client, entities).await?;
     for kind in KINDS {
@@ -519,10 +578,13 @@ async fn seed_and_search(
 
     let oracle = Oracle::new(raw, entities).await?;
     let mut failures = Vec::new();
-    for case in CASES {
+    for case in cases {
         let found = search(client, entities, case).await?;
         let expected = oracle.expected(raw, case).await?;
-        failures.extend(compare(case, entities, &expected, &found));
+        let mismatches = compare(case, entities, &expected, &found);
+        if !mismatches.is_empty() {
+            failures.push(mismatches.join("\n"));
+        }
     }
     Ok(failures)
 }

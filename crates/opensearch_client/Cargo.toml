@@ -5,6 +5,14 @@ name = "opensearch_client"
 publish = false
 version = "0.1.0"
 
+# Needs an OpenSearch with the search indices, so `cargo test` builds and runs
+# it only with `--test content_search`; CI runs it in the test job's
+# OpenSearch step.
+[[test]]
+name = "content_search"
+path = "tests/content_search.rs"
+test = false
+
 [dev-dependencies]
 bytes = { workspace = true }
 hyper = { workspace = true, features = ["http2", "server"] }
