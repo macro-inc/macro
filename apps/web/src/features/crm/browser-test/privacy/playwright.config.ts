@@ -20,7 +20,7 @@ export default defineConfig({
     trace: 'retain-on-failure',
   },
   webServer: {
-    command: `bunx vite --config src/features/crm/browser-test/privacy/vite.config.ts --port ${port}`,
+    command: `bunx vite build --config src/features/crm/browser-test/privacy/vite.config.ts --outDir .vite/fixture-dist && bunx vite preview --config src/features/crm/browser-test/privacy/vite.config.ts --outDir .vite/fixture-dist --port ${port}`,
     cwd: webDirectory,
     url: `http://127.0.0.1:${port}`,
     reuseExistingServer: false,

@@ -70,6 +70,20 @@ projects.
   (`email_delete_task`, a raw request because the typed tasks API is behind
   the `opensearch` crate's `experimental-apis` feature). The task's throttle
   applies to that task alone; callers bound how many run at once.
+- A single-message email delete forces no refresh: it deletes the event
+  thread's document by id, then delete-by-queries the message's copies under
+  other threads with that thread left out, since the query sees only
+  refreshed documents and would count the one just deleted as a conflict. A forced
+  refresh per event refreshes every shard of the index, and a run of such
+  events stalls their partition. A delete-by-query that only met conflicts
+  deleted nothing and so forces no refresh either: refresh before failing on
+  them, or the caller's retry meets the same stale documents.
+- OpenSearch answers `_bulk` with 200 while failing items, for a full write
+  queue (429) as for a mapping error. Classify every bulk answer item by item
+  (`upsert::classify_bulk_response`): any failed item fails the call with
+  `BulkItemsFailed`. `OpensearchClientError::refusal()` tells a caller to back
+  off; it also reads the status and `error.type` from the body an `Unknown`
+  error keeps.
 - Agent-session writes never wait for a refresh. A search sees only refreshed
   documents, so delete what you know by id first and leave those ids out of
   the sweep's search, which finds the leftovers to delete by id. The parent's
@@ -84,6 +98,13 @@ projects.
   and a backfill stops and is rerun. A delete creates a missing index even with `require_alias`, so
   the reconcile and the session delete first read the parent, which fails on a
   missing index or alias.
+- Chat messages and call segments carry their own id in `entity_id` and no
+  parent fields such as `channel_id`; only their join field names the
+  parent. A delete or update of a chat or call reaches its children with
+  `parent_id` (or `has_parent` on a parent field), never a term on the
+  parent's `entity_id`. The ignored tests in `delete/chat/test.rs` and
+  `delete/call_record/test.rs` check this on a scratch copy of the live
+  `chats` and `call_records` mappings.
 - The request-level `_source` filter does not reach `has_child` inner hits:
   each one returns the child's whole document unless its `InnerHits` names
   `source_fields`. Every join query names the fields its hit's `_source`

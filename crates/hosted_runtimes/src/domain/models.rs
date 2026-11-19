@@ -515,6 +515,94 @@ pub struct SizeOffer {
     pub sold_out: bool,
 }
 
+/// What the buy dialog shows before a purchase: each size with what buying
+/// it charges today, when the full price bills from, and the card charged.
+#[derive(Debug, Clone, PartialEq, Eq, Serialize)]
+#[cfg_attr(feature = "inbound", derive(utoipa::ToSchema))]
+#[serde(rename_all = "camelCase")]
+pub struct PurchaseOffers {
+    /// Every size some host can run awake.
+    pub sizes: Vec<PurchaseSizeOffer>,
+    /// When the current billing period ends: each computer bills its full
+    /// `quote.amount` every `quote.interval` from then.
+    pub renews_at: DateTime<Utc>,
+    /// The card purchases are charged to; `None` when there is no card on
+    /// file, the team pays another way, or it is comped.
+    pub card: Option<PaymentCard>,
+}
+
+/// A size on sale and what buying it charges today.
+#[derive(Debug, Clone, PartialEq, Eq, Serialize)]
+#[cfg_attr(feature = "inbound", derive(utoipa::ToSchema))]
+#[serde(rename_all = "camelCase")]
+pub struct PurchaseSizeOffer {
+    /// The size, its price and availability, as `/team/computers/offers` lists it.
+    #[serde(flatten)]
+    pub offer: SizeOffer,
+    /// The prorated rest of the current period, invoiced at purchase, in the
+    /// currency's smallest unit, less the team's credit balance; 0 when the
+    /// team is comped. The charge itself is prorated to the second it is
+    /// bought.
+    pub due_today: i64,
+}
+
+/// A card as its owner recognizes it: "Visa ending 4242".
+#[derive(Debug, Clone, PartialEq, Eq, Serialize)]
+#[cfg_attr(feature = "inbound", derive(utoipa::ToSchema))]
+#[serde(rename_all = "camelCase")]
+pub struct PaymentCard {
+    /// Card network.
+    pub brand: CardBrand,
+    /// Last four digits.
+    pub last4: String,
+}
+
+/// A card network.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, strum::Display)]
+#[cfg_attr(feature = "inbound", derive(utoipa::ToSchema))]
+#[serde(rename_all = "snake_case")]
+#[strum(serialize_all = "snake_case")]
+pub enum CardBrand {
+    /// American Express.
+    Amex,
+    /// Diners Club.
+    Diners,
+    /// Discover.
+    Discover,
+    /// eftpos Australia.
+    EftposAu,
+    /// JCB.
+    Jcb,
+    /// Mastercard.
+    Mastercard,
+    /// UnionPay.
+    Unionpay,
+    /// Visa.
+    Visa,
+    /// A network the payment provider doesn't name.
+    Unknown,
+}
+
+/// What buying each of some sizes would charge a team now, read in one go.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct PurchaseTerms {
+    /// One per size asked for, in order.
+    pub quotes: Vec<PurchaseQuote>,
+    /// When the current billing period ends.
+    pub renews_at: DateTime<Utc>,
+    /// The card purchases are charged to.
+    pub card: Option<PaymentCard>,
+}
+
+/// The price of one computer of a size and what buying it charges today.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct PurchaseQuote {
+    /// Its recurring price.
+    pub quote: Quote,
+    /// In the currency's smallest unit.
+    pub due_today: i64,
+}
+
 /// Why a purchase was refused, as a stable code the buy and add-agent dialogs
 /// show their own way. One vocabulary for `/team/computers` and
 /// `/team_agents`.
@@ -533,6 +621,18 @@ pub enum PurchaseRefusalCode {
     /// An earlier request with the same purchase key is still under way;
     /// retry with that key.
     InviteInProgress,
+}
+
+/// An agent teammate's computer as the team roster sees it.
+#[derive(Debug, Clone)]
+pub struct RosterStatus {
+    /// The computer's status.
+    pub status: ComputerStatus,
+    /// The fleet's current availability.
+    pub attachment: FleetAttachment,
+    /// Its first start waits on the agent reporting online. False for
+    /// computers bought before agents reported, which are up once ready.
+    pub awaiting_agent: bool,
 }
 
 /// The coarse status the team sees.

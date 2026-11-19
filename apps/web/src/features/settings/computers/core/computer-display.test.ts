@@ -104,6 +104,14 @@ describe('computerFailureMessage', () => {
     expect(computerFailureMessage(failure('NAME_MISMATCH'), 'Fallback')).toBe(
       "The name you typed doesn't match this computer."
     );
+    // The rollout refusal and a missing right are both 403s, told apart by
+    // the harness's code.
+    expect(
+      computerFailureMessage(failure('ROLLOUT_DISABLED'), 'Fallback')
+    ).toBe("Computers aren't available for this account yet.");
+    expect(computerFailureMessage(failure('FORBIDDEN'), 'Fallback')).toBe(
+      "You can't change this computer. Ask a team owner or admin."
+    );
     expect(computerFailureMessage(failure('HTTP_500'), 'Fallback')).toBe(
       'Fallback'
     );

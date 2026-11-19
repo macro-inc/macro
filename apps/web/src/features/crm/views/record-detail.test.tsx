@@ -33,12 +33,10 @@ const taskContext = vi.hoisted(() => ({
   companyLoaded: false,
   recordError: (): boolean => false,
 }));
-const trackOpen = vi.hoisted(() => vi.fn());
-vi.mock('@core/internal/track-open', () => ({ trackOpen }));
-vi.mock('@core/context/user', async (importOriginal) => ({
-  ...(await importOriginal<typeof import('@core/context/user')>()),
-  useIsAuthenticated: () => () => true,
-}));
+const createOpenTracker = vi.hoisted(() => vi.fn());
+vi.mock('@core/internal/open-tracker', () => ({ createOpenTracker }));
+const trackedItems = () =>
+  createOpenTracker.mock.calls.map(([block, item]) => [block, item()]);
 vi.mock('../context/crm-context', () => ({
   useCrmContext: () => ({
     createNavigation: () => ({ openWithSplit: vi.fn() }),
@@ -233,7 +231,7 @@ afterEach(() => {
   taskContext.contactCompanyId = undefined;
   taskContext.companyLoaded = false;
   taskContext.recordError = () => false;
-  trackOpen.mockReset();
+  createOpenTracker.mockReset();
 });
 
 /** Stands in for the route: each open hands the detail a new trail. */
@@ -332,7 +330,7 @@ it('registers the actual company detail while mounted and clears it on unmount',
     <Company companyId="company-1" section="files" />
   ));
   expect(taskContext.record?.()).toEqual({ type: 'company', id: 'company-1' });
-  expect(trackOpen).not.toHaveBeenCalled();
+  expect(trackedItems()).toEqual([['company', undefined]]);
   result.unmount();
   expect(taskContext.record).toBeUndefined();
 });
@@ -344,9 +342,7 @@ it('records an open of a company once it has loaded', async () => {
     );
   taskContext.companyLoaded = true;
   render(() => <Company companyId="company-1" section="files" />);
-  expect(trackOpen.mock.calls.map(([id, block]) => [id, block])).toEqual([
-    ['company-1', 'company'],
-  ]);
+  expect(trackedItems()).toEqual([['company', 'company-1']]);
 });
 
 it('registers the actual contact detail with its loaded company', async () => {
@@ -363,9 +359,7 @@ it('registers the actual contact detail with its loaded company', async () => {
     id: 'contact-1',
     companyId: 'company-1',
   });
-  expect(trackOpen.mock.calls.map(([id, block]) => [id, block])).toEqual([
-    ['contact-1', 'contact'],
-  ]);
+  expect(trackedItems()).toEqual([['contact', 'contact-1']]);
   result.unmount();
   expect(taskContext.record).toBeUndefined();
 });
@@ -383,7 +377,7 @@ it('registers an unloaded contact without an unrelated company', async () => {
     id: 'contact-2',
     companyId: undefined,
   });
-  expect(trackOpen).not.toHaveBeenCalled();
+  expect(trackedItems()).toEqual([['contact', undefined]]);
   result.unmount();
   expect(taskContext.record).toBeUndefined();
 });

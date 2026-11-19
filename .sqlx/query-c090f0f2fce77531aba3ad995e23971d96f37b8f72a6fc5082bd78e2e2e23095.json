@@ -1,0 +1,18 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "UPDATE email_mailbox_watch_work SET lease_id=NULL,lease_until=NULL,next_run_at=CASE WHEN revision=$3 THEN now()+make_interval(secs=>$4) ELSE now() END,failures=CASE WHEN revision=$3 THEN $5 ELSE 0 END WHERE link_id=$1 AND lease_id=$2",
+  "describe": {
+    "columns": [],
+    "parameters": {
+      "Left": [
+        "Uuid",
+        "Uuid",
+        "Int8",
+        "Float8",
+        "Int4"
+      ]
+    },
+    "nullable": []
+  },
+  "hash": "c090f0f2fce77531aba3ad995e23971d96f37b8f72a6fc5082bd78e2e2e23095"
+}

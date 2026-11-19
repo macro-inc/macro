@@ -134,9 +134,20 @@ impl Ctx<'_> {
     /// Names the route the request matched, then applies injected faults
     /// and the mailbox's request limit.
     pub(crate) fn enter(&mut self, route: Route) -> Result<(), GraphError> {
+        self.enter_folder(route, None)
+    }
+
+    /// As `enter`, for a request on one folder's messages, the folder named
+    /// as its path names it: faults for that folder apply too.
+    pub(crate) fn enter_folder(
+        &mut self,
+        route: Route,
+        folder: Option<&str>,
+    ) -> Result<(), GraphError> {
         self.route = Some(route);
         let email = (!self.email.is_empty()).then_some(self.email.as_str());
-        if let Some(fault) = self.state.take_fault(email, route) {
+        let continuation = self.call.pairs.iter().any(|(name, _)| name == "$skiptoken");
+        if let Some(fault) = self.state.take_fault(email, route, folder, continuation) {
             self.delay = fault.delay_ms.map(Duration::from_millis);
             if let Some(error) = fault.error {
                 return Err(error.graph_error(fault.retry_after_seconds));
@@ -371,7 +382,7 @@ fn route(ctx: &mut Ctx<'_>) -> Handled {
             folders::create(ctx, Some(folder))
         }
         ["mailFolders", folder, "messages"] if method == Method::GET => {
-            ctx.enter(R::MessagesList)?;
+            ctx.enter_folder(R::MessagesList, Some(folder))?;
             messages::list(ctx, Some(folder))
         }
         ["mailFolders", folder, "messages"] if method == Method::POST => {
@@ -379,7 +390,7 @@ fn route(ctx: &mut Ctx<'_>) -> Handled {
             compose::create(ctx, Some(folder))
         }
         ["mailFolders", folder, "messages", "delta"] if method == Method::GET => {
-            ctx.enter(R::MessagesDelta)?;
+            ctx.enter_folder(R::MessagesDelta, Some(folder))?;
             messages::delta(ctx, folder)
         }
         ["mailFolders", _, "messages", id, action @ ..] => message(ctx, id, action),

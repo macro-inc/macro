@@ -37,6 +37,10 @@ the recipient for human DMs, the persona for agent DMs, and the channel picture
 or glyph for named channels. Message and thread breadcrumbs resolve identity
 from their parent channel rather than the message or thread ID.
 
+Phone list rows retain the channel's own image or icon during a live call.
+The trailing live-call waveform marks the call, as in the desktop rail; ringing
+calls keep their Join and Decline actions.
+
 ## Composer focus and Esc
 
 Every way of opening a conversation follows one rule
@@ -419,7 +423,10 @@ show whatever has arrived so far.
 
 ## Inline image actions
 
-An image attached to a channel message renders inline. Hovering it, or focusing
+An image attached to a channel message renders inline. So does a document
+attachment whose file is an image (PNG, JPG, GIF, WebP, SVG), the way agents
+post the images they make; its file chip stays below it for opening, renaming
+and sharing the document. Hovering an inline image, or focusing
 it with the keyboard, reveals a small toolbar at its top right with
 `Copy image` and `Download image`, the same two actions the lightbox offers;
 it fades out when the pointer leaves and stays up while an action runs. Copy writes the full-resolution image to the
@@ -618,8 +625,11 @@ results must reflect current people and entities, and scrolling or keyboard
 navigation must still load more results. Check both mobile and desktop.
 
 In a task, project, or document Discussion the `@` menu's people come from the
-contact directory. Until they arrive, People shows Macro and loading rows where
-the people and other agents will go, and a phone lists nothing below Macro yet.
+contact directory. Until they arrive, People shows Macro (when it matches) and
+loading rows where the people and other agents will go, and a phone lists
+nothing below Macro yet. On desktop, Booking Links are a section below People,
+so their late answer never pushes People's rows down; phones pin People rows
+above the rest of their single list.
 On a fresh load and on reopening, at desktop and phone width, no agent may show
 in a row a person then takes, and the menu must not change height as they land.
 When the people read fails (a busy cache times it out), the menu reads it again
@@ -1169,6 +1179,27 @@ locally. Both layouts wait for the flag result. When off, desktop restores
 `enable-channel-threads-preview`); phone restores its original Recent feed and
 wrapping pins. Saved desktop tabs survive switching the flag on and off.
 `enable-channel-tags` separately controls section management and reads.
+
+### Live calls above the desktop sections
+
+Both desktop sidebar layouts show **Live** below the header and above the
+conversation tree, including while searching. It lists every active channel or
+DM call the viewer can access, newest first, then active quick calls. A quick
+call appears once rather than also as its backing channel call. Conversations
+remain in their ordinary sections. With no live calls, the section is absent.
+
+Each row shows the conversation name (or **Call with …** for a quick call) and
+**Join**, or **Open** for the call already joined. Join targets that exact call
+session; Open returns to its call tab. A ringing channel call has a separate
+**Dismiss** action that stops ringing across devices without joining or ending
+the call. Its Live row remains joinable after dismissal, until the call ends.
+
+Verify with two signed-in sessions in a test-only conversation: start a call,
+check that its Live row precedes the sections, join from that row, and leave all
+participants to check that it disappears without reloading. Start two calls to
+check newest-first ordering, and dismiss a ring without joining. Repeat with
+the sidebar flag off. At 390×844, keep the existing in-row Join/Decline and live
+indicators: the standalone desktop Live section does not appear on touch.
 
 ### Original sidebar (flag off)
 
@@ -1751,8 +1782,18 @@ recordings for that channel
 (same rows as the Calls soup view, filtered to this channel). The live `Call` tab
 appears while a call is in progress. `Ask Macro` opens a new chat pane with the channel
 already @mentioned as context (see ai-chat.md). On touch, at every width, the title menu is a
-drawer (`SoupEntityActionsSheet`) with the view choices above the actions. Clicking the radio input can time out — click the adjacent label text
-instead.
+drawer (`SoupEntityActionsSheet`) with the view choices above the actions. Each
+choice has one leading icon; the live `Call` choice uses the same waveform as
+its desktop tab, with no second waveform inside its label. Clicking the radio
+input can time out — click the adjacent label text instead.
+
+On phones, the active call's own channel hides the bottom floating call pill.
+Its Messages tab shows the call-in-progress banner above the composer, with
+`Return to call` for a joined call and `Join` otherwise. The banner shares the
+composer's horizontal gutters and keeps its 8px gap above the composer. Its
+success tint sits on an opaque `surface` base in light and dark themes; scroll
+messages behind it to check that message content does not show through.
+Other channels and views retain the floating pill.
 
 In the Chat workspace — and wherever a channel opens inline inside another
 view's detail stack (a channel mention followed from the email view, say) — the
