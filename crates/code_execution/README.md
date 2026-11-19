@@ -46,15 +46,22 @@ can't infer need types.
 - Type errors: the run fails with `FailureCode::Compile` and no process
   starts. The message lists up to 20 of the checker's diagnostics, each with
   its code, the offending line and `at main.ts:<line>:<column>`. A member an
-  SDK class or interface doesn't have (TS2339, without the checker's own "Did
-  you mean") is followed by the members it has (`sdk_members`).
+  SDK class or interface doesn't have (TS2339; a near miss is TS2551 with the
+  checker's own suggestion) is followed by the members it has, inherited ones
+  included (`sdk_members`).
 - The checker is busy (every slot and queue place taken) or fails: the run
   fails (`Limit` or `Internal`) and doesn't run unchecked.
-- The check counts against the run's deadline and is cancelled with it.
+- A check inside the run counts against the run's deadline and is cancelled
+  with it.
 - A host can check first, with `ProgramExecutor::check_program`, before it
-  asks for approval or mints a credential. A pass covers the next run of the
-  same source and `ContextShape` (at most 64 remembered), which isn't checked
-  again.
+  asks for approval or mints a credential. The precheck takes one of the
+  executor's admission places while it runs and has the run's timeout as its
+  own deadline; the run's deadline starts when it is submitted, after any
+  approval. A pass covers the next run of the same source (by SHA-256) and
+  `ContextShape` within 30 minutes, which isn't checked again.
+- `@ts-nocheck`, `@ts-ignore` and `@ts-expect-error` are refused as type
+  errors: a program can't turn its check off.
+- Routine saves share the checker, so under load a save can fail busy too.
 
 A check takes about a second of one core and 250 MB. The harness shares one
 checker between its executors: 4 slots and 48 queued, enough for every program

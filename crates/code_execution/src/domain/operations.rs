@@ -85,9 +85,34 @@ pub fn sdk_declaration_files(directory: &str) -> Vec<(&'static str, &'static str
         .collect()
 }
 
-/// The public members of the SDK class or interface `name`, in declaration
-/// order, or `None` when the SDK declares no class or interface by that name.
+/// The public members of the SDK class or interface `name`, its own in
+/// declaration order and then those it inherits, or `None` when the SDK
+/// declares no class or interface by that name.
 pub fn sdk_members(name: &str) -> Option<Vec<&'static str>> {
+    let mut members = Vec::new();
+    let mut next = Some(name.to_owned());
+    // A short chain: `Task` extends `Document`, which extends a base.
+    for depth in 0..4 {
+        let Some(current) = next.take() else { break };
+        let Some((own, base)) = declared_members(&current) else {
+            if depth == 0 {
+                return None;
+            }
+            break;
+        };
+        for member in own {
+            if !members.contains(&member) {
+                members.push(member);
+            }
+        }
+        next = base;
+    }
+    Some(members)
+}
+
+/// The members `name`'s own declaration lists, and the class or interface
+/// it extends, if any.
+fn declared_members(name: &str) -> Option<(Vec<&'static str>, Option<String>)> {
     let headers = [
         format!("declare class {name} "),
         format!("declare class {name}<"),
@@ -96,10 +121,16 @@ pub fn sdk_members(name: &str) -> Option<Vec<&'static str>> {
     ];
     SDK.files.values().find_map(|text| {
         let mut lines = text.lines();
-        lines.find(|line| {
+        let header = lines.find(|line| {
             let line = line.trim_start_matches("export ");
             headers.iter().any(|header| line.starts_with(header.as_str()))
         })?;
+        let base = header.split_once(" extends ").and_then(|(_, rest)| {
+            let end = rest
+                .find(|c: char| !(c.is_ascii_alphanumeric() || c == '_'))
+                .unwrap_or(rest.len());
+            (end > 0).then(|| rest[..end].to_owned())
+        });
         let mut members: Vec<&'static str> = Vec::new();
         for line in lines.take_while(|line| !line.starts_with('}')) {
             let Some(member) = line.strip_prefix("    ") else {
@@ -125,7 +156,7 @@ pub fn sdk_members(name: &str) -> Option<Vec<&'static str>> {
                 members.push(identifier);
             }
         }
-        Some(members)
+        Some((members, base))
     })
 }
 

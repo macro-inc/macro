@@ -493,3 +493,68 @@ async fn a_failed_precheck_reports_the_type_errors() {
     assert_eq!(error.code, FailureCode::Compile);
     assert!(error.message.contains("Cannot find name 'nope'."));
 }
+
+/// A precheck takes the executor's admission like a run, so one executor's
+/// callers can't fill the checker the others share.
+#[tokio::test]
+async fn a_precheck_counts_against_admission() {
+    let service = ExecutionService::new(
+        Arc::new(WaitingRunner(AtomicUsize::new(0))),
+        Arc::new(Passes),
+        Limits {
+            max_running: 1,
+            max_queued: 1,
+            ..Limits::default()
+        },
+    )
+    .unwrap();
+    let mut first = service
+        .execute(request(10_000), RunEnvironment::default())
+        .unwrap();
+    while !matches!(first.events.recv().await.unwrap().kind, EventKind::Started) {}
+    let second = service
+        .execute(request(10_000), RunEnvironment::default())
+        .unwrap();
+    let Err(Outcome::Failed { error }) = service
+        .check_program(&request(10_000), ContextShape::default(), CancellationToken::new())
+        .await
+    else {
+        panic!("expected busy");
+    };
+    assert_eq!(error.code, FailureCode::Limit);
+    drop(first);
+    drop(second);
+    service.shutdown().await;
+}
+
+/// A program can't turn its check off.
+#[tokio::test]
+async fn a_program_that_turns_checking_off_is_refused() {
+    let checker = Arc::new(Answers {
+        answer: || Ok(Vec::new()),
+        checked: Default::default(),
+    });
+    let service = ExecutionService::new(
+        Arc::new(Echoes(AtomicUsize::new(0))),
+        checker.clone(),
+        Limits::default(),
+    )
+    .unwrap();
+    let Err(Outcome::Failed { error }) = service
+        .check_program(
+            &ExecuteRequest {
+                source: "// @ts-nocheck\nexport async function main() { return {data: 1}; }"
+                    .into(),
+                timeout_ms: 10_000,
+            },
+            ContextShape::default(),
+            CancellationToken::new(),
+        )
+        .await
+    else {
+        panic!("expected a refusal");
+    };
+    assert_eq!(error.code, FailureCode::Compile);
+    assert!(error.message.contains("@ts-nocheck"), "{}", error.message);
+    assert!(checker.checked.lock().unwrap().is_empty());
+}

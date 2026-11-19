@@ -16,13 +16,28 @@ pub struct ExecutionService {
     running: Arc<Semaphore>,
     shutdown: CancellationToken,
     tasks: TaskTracker,
-    /// Programs that passed a precheck, oldest first, each good for one run.
-    prechecked: Arc<std::sync::Mutex<std::collections::VecDeque<(ContextShape, String)>>>,
+    /// Programs that passed a precheck, oldest first, each good for one run
+    /// until it expires.
+    prechecked: Arc<std::sync::Mutex<std::collections::VecDeque<Prechecked>>>,
 }
 
-/// Prechecked programs remembered at once; past it the oldest is forgotten
-/// and its run checks it again.
-const MAX_PRECHECKED: usize = 64;
+/// A precheck pass: the program's shape and SHA-256, and when it lapses.
+struct Prechecked {
+    shape: ContextShape,
+    digest: [u8; 32],
+    until: Instant,
+}
+
+/// How long a pass waits for its run: long enough for an owner to approve.
+const PRECHECK_TTL: std::time::Duration = std::time::Duration::from_secs(30 * 60);
+/// Passes remembered at once; past it the oldest is forgotten and its run
+/// checks it again.
+const MAX_PRECHECKED: usize = 4096;
+
+fn digest(source: &str) -> [u8; 32] {
+    use sha2::Digest as _;
+    sha2::Sha256::digest(source.as_bytes()).into()
+}
 
 impl ExecutionService {
     /// Validate policy and wire the process and type-checking adapters. An
@@ -184,6 +199,20 @@ impl ExecutionService {
         source: &str,
         shape: ContextShape,
     ) -> Result<(), (&'static str, ExecutionFailure)> {
+        if let Some(directive) = CHECK_OPT_OUTS
+            .iter()
+            .find(|directive| source.contains(**directive))
+        {
+            return Err((
+                "rejected",
+                ExecutionFailure::new(
+                    FailureCode::Compile,
+                    format!(
+                        "The program wasn't run: it turns type checking off with {directive}. Remove it and fix the types instead."
+                    ),
+                ),
+            ));
+        }
         let files = [SourceFile {
             name: PROGRAM_FILE.to_owned(),
             source: source.to_owned(),
@@ -230,12 +259,24 @@ impl ExecutionService {
                     .into(),
             );
         }
+        // A precheck counts against this executor's admission like a run,
+        // so one executor's callers can't fill the checker it shares.
+        let Ok(_admitted) = self.admitted.try_acquire() else {
+            span.record("check", "busy");
+            return Err(ExecutionFailure::new(FailureCode::Limit, AdmissionError::Busy.to_string()).into());
+        };
         let duration = std::time::Duration::from_millis(request.timeout_ms)
             .min(self.limits.max_duration);
         let checked = tokio::select! {
             biased;
-            _ = cancellation.cancelled() => return Err(Outcome::Cancelled),
-            _ = tokio::time::sleep(duration) => return Err(Outcome::TimedOut),
+            _ = cancellation.cancelled() => {
+                span.record("check", "cancelled");
+                return Err(Outcome::Cancelled);
+            }
+            _ = tokio::time::sleep(duration) => {
+                span.record("check", "timed_out");
+                return Err(Outcome::TimedOut);
+            }
             checked = self.check(&request.source, shape).instrument(span.clone()) => checked,
         };
         match checked {
@@ -245,10 +286,16 @@ impl ExecutionService {
                     .prechecked
                     .lock()
                     .unwrap_or_else(std::sync::PoisonError::into_inner);
+                let now = Instant::now();
+                prechecked.retain(|pass| pass.until > now);
                 if prechecked.len() == MAX_PRECHECKED {
                     prechecked.pop_front();
                 }
-                prechecked.push_back((shape, request.source.clone()));
+                prechecked.push_back(Prechecked {
+                    shape,
+                    digest: digest(&request.source),
+                    until: now + PRECHECK_TTL,
+                });
                 Ok(())
             }
             Err((label, failure)) => {
@@ -265,9 +312,11 @@ impl ExecutionService {
             .prechecked
             .lock()
             .unwrap_or_else(std::sync::PoisonError::into_inner);
+        let digest = digest(source);
+        let now = Instant::now();
         match prechecked
             .iter()
-            .position(|(checked, checked_source)| *checked == shape && checked_source == source)
+            .position(|pass| pass.shape == shape && pass.digest == digest && pass.until > now)
         {
             Some(index) => {
                 prechecked.remove(index);
@@ -390,11 +439,14 @@ fn type_errors(diagnostics: &[Diagnostic]) -> ExecutionFailure {
     ExecutionFailure::new(FailureCode::Compile, message)
 }
 
-/// Most SDK members a hint lists.
-const MAX_HINTED_MEMBERS: usize = 40;
+/// Comments that would turn the checker off for a program.
+const CHECK_OPT_OUTS: [&str; 3] = ["@ts-nocheck", "@ts-ignore", "@ts-expect-error"];
 
-/// For a use of a member an SDK type doesn't have (TS2339) that the checker
-/// offers no "Did you mean" for, the members the type does have.
+/// Most SDK members a hint lists.
+const MAX_HINTED_MEMBERS: usize = 80;
+
+/// For a use of a member an SDK type doesn't have (TS2339; one the checker
+/// can suggest a near name for is TS2551 instead), the members it has.
 fn missing_member_hint(message: &str) -> Option<String> {
     use nom::Parser as _;
     use nom::bytes::complete::{tag, take_until, take_while1};
@@ -410,9 +462,6 @@ fn missing_member_hint(message: &str) -> Option<String> {
     )
         .parse(rest)
         .ok()?;
-    if message.lines().next()?.contains("Did you mean") {
-        return None;
-    }
     let members = sdk_members(type_name)?;
     if members.is_empty() || members.len() > MAX_HINTED_MEMBERS {
         return None;
