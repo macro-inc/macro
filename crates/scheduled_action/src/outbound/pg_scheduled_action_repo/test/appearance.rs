@@ -244,3 +244,71 @@ async fn choosing_the_current_look_still_keeps_it(pool: PgPool) {
             .is_empty()
     );
 }
+
+const MARK_OWNER_CHOSEN_SQL: &str = include_str!(
+    "../../../../../../crates/macro_db_client/migrations/20261118201451_mark_owner_chosen_routine_appearances.sql"
+);
+
+async fn chosen_by_owner(pool: &PgPool, id: Uuid) -> bool {
+    sqlx::query_scalar!(
+        "SELECT appearance_chosen_by_owner FROM scheduled_action WHERE id = $1",
+        id,
+    )
+    .fetch_one(pool)
+    .await
+    .unwrap()
+}
+
+/// Puts a routine back as it was before `appearance_chosen_by_owner`: its
+/// look as stored, and no choice recorded.
+async fn as_before_the_column(pool: &PgPool, id: Uuid, appearance: Option<serde_json::Value>) {
+    sqlx::query!(
+        "UPDATE scheduled_action SET appearance = $2, appearance_chosen_by_owner = false WHERE id = $1",
+        id,
+        appearance,
+    )
+    .execute(pool)
+    .await
+    .unwrap();
+}
+
+#[sqlx::test(migrator = "MACRO_DB_MIGRATIONS")]
+async fn the_backfill_marks_every_look_the_owner_set_before_the_column(pool: PgPool) {
+    insert_user(&pool, USER_A).await;
+    let repo = test_repo(pool.clone());
+    let mut routines = Vec::new();
+    for name in ["colored", "reset", "never", "blank"] {
+        let created = repo
+            .create_action(sample_action(user_owner(USER_A), name))
+            .await
+            .unwrap();
+        routines.push(created.id.unwrap());
+    }
+    let [colored_one, reset, never, blank] = routines[..] else {
+        panic!("four routines were created");
+    };
+    as_before_the_column(&pool, colored_one, Some(json!({ "color": "blue" }))).await;
+    // Reset to no icon through the endpoint, which recorded both changes.
+    for look in [colored(AppearanceColor::Red), EntityAppearance::default()] {
+        repo.set_appearance(change(reset, look, AppearanceChooser::Owner))
+            .await
+            .unwrap();
+    }
+    as_before_the_column(&pool, reset, None).await;
+    as_before_the_column(&pool, never, None).await;
+    as_before_the_column(&pool, blank, Some(json!({ "icon": null, "color": null }))).await;
+
+    for _ in 0..2 {
+        sqlx::raw_sql(MARK_OWNER_CHOSEN_SQL)
+            .execute(&pool)
+            .await
+            .unwrap();
+        assert!(chosen_by_owner(&pool, colored_one).await, "a look it has");
+        assert!(chosen_by_owner(&pool, reset).await, "a look reset to none");
+        assert!(!chosen_by_owner(&pool, never).await, "never given a look");
+        assert!(
+            !chosen_by_owner(&pool, blank).await,
+            "a look with nothing in it"
+        );
+    }
+}
