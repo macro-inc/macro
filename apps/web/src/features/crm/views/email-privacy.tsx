@@ -63,7 +63,7 @@ function DomainBlocklist(props: {
   });
   const errorId = createUniqueId();
   const settings = () =>
-    props.source.query.isSuccess ? props.source.query.data : undefined;
+    props.source.query.isPending ? undefined : props.source.query.data;
   const domains = () =>
     props.scope === 'team'
       ? settings()?.teamDomains
@@ -530,8 +530,25 @@ function SelectiveEmailPrivacy(
           </div>
         </div>
       </SettingsSection>
-      <DomainBlocklist source={props.source} scope="team" />
-      <DomainBlocklist source={props.source} scope="personal" />
+      <Show when={props.source.query.isPending || props.source.query.isError}>
+        <p class="text-sm text-ink-muted" role="status">
+          {props.source.query.isError
+            ? t('crm.privacyLoadFailed')
+            : t('crm.privacyLoading')}
+          <Show when={props.source.query.isError}>
+            <Button
+              variant="ghost"
+              onClick={() => fireAndForget(props.source.query.refetch(), 'crm')}
+            >
+              {t('crm.privacyRetry')}
+            </Button>
+          </Show>
+        </p>
+      </Show>
+      <Show when={!props.source.query.isPending && props.source.query.data}>
+        <DomainBlocklist source={props.source} scope="team" />
+        <DomainBlocklist source={props.source} scope="personal" />
+      </Show>
       <Show when={exclusions().enabled}>
         <ThreadExclusions
           source={props.source}
@@ -586,6 +603,8 @@ export function CrmEmailPrivacySettings(props: PrivacySettingsProps) {
       policyUnavailable={policySource.query.isError && !policy()}
     />
   );
+  const renderOverview = (content: JSX.Element) =>
+    props.renderOverview ? props.renderOverview(content) : content;
   return (
     <Switch>
       <Match
@@ -594,24 +613,30 @@ export function CrmEmailPrivacySettings(props: PrivacySettingsProps) {
           (policySource.query.isPending && !policySource.query.isError)
         }
       >
-        <p role="status" class="text-sm text-ink-muted">
-          {t('crm.privacyLoading')}
-        </p>
+        {renderOverview(
+          <p role="status" class="text-sm text-ink-muted">
+            {t('crm.privacyLoading')}
+          </p>
+        )}
       </Match>
       <Match when={policySource.query.isError && !policy()}>
-        <p role="alert" class="text-sm text-failure">
-          {t('crm.privacyLoadFailed')}
-        </p>
-        <Button
-          variant="ghost"
-          onClick={() => fireAndForget(policySource.query.refetch(), 'crm')}
-        >
-          {t('crm.privacyRetry')}
-        </Button>
-        {props.renderOverview ? props.renderOverview(legacy()) : legacy()}
+        {renderOverview(
+          <>
+            <p role="alert" class="text-sm text-failure">
+              {t('crm.privacyLoadFailed')}
+            </p>
+            <Button
+              variant="ghost"
+              onClick={() => fireAndForget(policySource.query.refetch(), 'crm')}
+            >
+              {t('crm.privacyRetry')}
+            </Button>
+            {legacy()}
+          </>
+        )}
       </Match>
       <Match when={!flag().enabled && policy()?.mode !== 'selected'}>
-        {props.renderOverview ? props.renderOverview(legacy()) : legacy()}
+        {renderOverview(legacy())}
       </Match>
       <Match when={policySource.scope()}>
         {(scope) => (

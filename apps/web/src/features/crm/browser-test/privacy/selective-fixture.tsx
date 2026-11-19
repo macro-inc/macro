@@ -1,5 +1,6 @@
 import '@fontsource-variable/inter';
 import { ViewShell } from '@app/components/view-shell';
+import { ListSkeleton } from '@app/components/view-shell/ListSkeleton';
 import { SettingsSidebar } from '@app/features/settings/components/settings-sidebar';
 import { MobileSettingsSheet } from '@app/features/settings/MobileSettingsSheet';
 import { SettingsPage } from '@app/features/settings/primitives';
@@ -8,10 +9,11 @@ import { SETTINGS_TAB_GROUPS } from '@core/constant/settingsTabsConfig';
 import { isTouchDevice } from '@core/mobile/isTouchDevice';
 import { queryClient } from '@queries/client';
 import { previewKeys } from '@queries/preview/keys';
-import { createSignal, Show } from 'solid-js';
+import { Button } from '@ui';
+import { createSignal, Show, Suspense } from 'solid-js';
 import { CrmEmailPrivacySettings } from '../../views/email-privacy';
-import { policyCalls } from './policy-adapter';
-import { lastChange } from './preview-adapters';
+import { finishPolicyRead, policyCalls } from './policy-adapter';
+import { finishPrivacyRead, lastChange } from './preview-adapters';
 
 applyTheme('macro-light');
 for (const [id, type, name] of [
@@ -31,17 +33,26 @@ const groups = SETTINGS_TAB_GROUPS.filter(
 );
 export function SelectiveSettingsFixture() {
   const [open, setOpen] = createSignal(true);
+  const params = new URLSearchParams(location.search);
   const content = () => (
-    <CrmEmailPrivacySettings
-      renderOverview={(body) => (
-        <SettingsPage
-          title="CRM"
-          description="Manage email sharing and shape your team’s deal pipeline."
-        >
-          {body}
-        </SettingsPage>
-      )}
-    />
+    <Suspense fallback={<ListSkeleton.Bar class="m-6 h-4 w-32" />}>
+      <CrmEmailPrivacySettings
+        renderOverview={(body) => (
+          <SettingsPage
+            title="CRM"
+            description="Manage email sharing and shape your team’s deal pipeline."
+          >
+            <Show when={params.has('policy-pending')}>
+              <Button onClick={finishPolicyRead}>Finish policy load</Button>
+            </Show>
+            <Show when={params.has('privacy-pending')}>
+              <Button onClick={finishPrivacyRead}>Finish privacy load</Button>
+            </Show>
+            {body}
+          </SettingsPage>
+        )}
+      />
+    </Suspense>
   );
   return (
     <div class="h-dvh bg-page text-ink font-sans">

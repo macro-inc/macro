@@ -63,6 +63,8 @@ test('read-only overview, aligned rule kinds, automatic validation and verified 
     /^\{\n {2}"schema_version": 1,\n {2}"include": \[/
   );
   const sequence: string[] = JSON.parse((await calls.textContent()) ?? '[]');
+  expect(sequence).toContain('validate');
+  expect(sequence).toContain('replace');
   expect(sequence.indexOf('validate')).toBeLessThan(
     sequence.indexOf('replace')
   );
@@ -78,6 +80,103 @@ test('read-only overview, aligned rule kinds, automatic validation and verified 
   await expect(
     page.getByRole('textbox', { name: 'Sharing rules JSON' })
   ).toHaveCount(0);
+});
+
+for (const pending of ['policy-pending', 'policy-flag-pending']) {
+  test(`${pending} retains the overview layout`, async ({ page }) => {
+    await openSettings(page, `/?selective-settings&contributing&${pending}`);
+    const loading = page.getByRole('status').filter({
+      hasText: 'Loading email settings…',
+    });
+    await expect(loading).toBeVisible();
+    await expect(page.locator('[data-settings-page]')).toBeVisible();
+    await expect(
+      page.getByText(
+        'Manage email sharing and shape your team’s deal pipeline.'
+      )
+    ).toBeVisible();
+    expect(
+      await loading.evaluate((element) =>
+        Boolean(element.closest('[data-settings-page]'))
+      )
+    ).toBe(true);
+    if (pending === 'policy-pending') {
+      await page.getByRole('button', { name: 'Finish policy load' }).click();
+      await expect(
+        page.getByRole('heading', { name: 'Sharing rules', exact: true })
+      ).toBeVisible();
+    }
+  });
+}
+
+test('pending exclusions do not appear empty while sharing rules are available', async ({
+  page,
+}) => {
+  await openSettings(page, '/?selective-settings&contributing&privacy-pending');
+  await expect(
+    page.getByRole('heading', { name: 'Sharing rules', exact: true })
+  ).toBeVisible();
+  await expect(page.getByText('Loading email settings…')).toBeVisible();
+  await expect(page.getByText('No domains blocked.')).toHaveCount(0);
+  await expect(
+    page.getByRole('textbox', { name: 'Domain to block for the team' })
+  ).toHaveCount(0);
+  await page.getByRole('button', { name: 'Finish privacy load' }).click();
+  await expect(
+    page.getByText('team.example.com', { exact: true })
+  ).toBeVisible();
+  await expect(
+    page.getByText('personal.example.com', { exact: true })
+  ).toBeVisible();
+});
+
+test('failed exclusions offer retry without claiming an empty blocklist', async ({
+  page,
+}) => {
+  await openSettings(page, '/?selective-settings&contributing&privacy-retry');
+  await expect(
+    page.getByText('Email settings could not be loaded.')
+  ).toBeVisible();
+  await expect(page.getByText('No domains blocked.')).toHaveCount(0);
+  await page.getByRole('button', { name: 'Retry', exact: true }).click();
+  await expect(
+    page.getByText('team.example.com', { exact: true })
+  ).toBeVisible();
+  await expect(
+    page.getByText('personal.example.com', { exact: true })
+  ).toBeVisible();
+});
+
+test('a failed exclusion refresh retains the last known blocklists', async ({
+  page,
+}) => {
+  await openSettings(
+    page,
+    '/?selective-settings&contributing&privacy-refresh-failed'
+  );
+  await page
+    .getByRole('textbox', { name: 'Domain to block for the team' })
+    .fill('added.example.com');
+  await page
+    .getByRole('button', { name: 'Add domain', exact: true })
+    .first()
+    .click();
+  await expect(
+    page.getByText('Email settings could not be loaded.')
+  ).toBeVisible();
+  await expect(
+    page.getByText('team.example.com', { exact: true })
+  ).toBeVisible();
+  await expect(
+    page.getByText('added.example.com', { exact: true })
+  ).toBeVisible();
+  await expect(
+    page.getByText('personal.example.com', { exact: true })
+  ).toBeVisible();
+  await expect(
+    page.getByRole('button', { name: 'Retry', exact: true })
+  ).toBeVisible();
+  await expect(page.getByText('No domains blocked.')).toHaveCount(0);
 });
 
 test('a conflict retains the draft until the member inspects and accepts current rules', async ({

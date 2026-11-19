@@ -61,8 +61,10 @@ unknown or stale counts never appear as current totals. Saved history supplies
 verified actor attribution. Rule labels use existing permission-aware identity
 previews and retain saved IDs when names cannot be read. Thread labels use only
 the batched GraphQL preview; a missing label never loads full email threads.
-The same pages render
-inside the desktop settings shell and phone sheet. Browser regression coverage
+The same pages render inside the desktop settings shell and phone sheet,
+including policy loading and error states. Exclusion loading never appears as
+an empty blocklist; failed refreshes retain cached lists with a retry action.
+Browser regression coverage
 is in `browser-test/privacy/selective.browser.e2e.ts`.
 
 Successful domain block and unblock mutations refresh CRM and Soup email

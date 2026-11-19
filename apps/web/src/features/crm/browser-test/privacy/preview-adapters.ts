@@ -18,6 +18,9 @@ export * from '@core/context/user.ts';
 export * from '@queries/team/teams.ts';
 
 const params = new URLSearchParams(location.search);
+const pendingPrivacyRead = Promise.withResolvers<void>();
+export const finishPrivacyRead = () => pendingPrivacyRead.resolve();
+let privacyReads = 0;
 export const mailboxId = '00000000-0000-4000-8000-000000000045';
 const [state, setState] = createSignal<EmailPrivacy>({
   enabled: params.has('contributing'),
@@ -133,7 +136,9 @@ export const useFeatureFlag = (flag: { key: string }) => () => ({
     (flag.key === 'enable-crm-selective-email-contribution' &&
       params.has('selective-settings') &&
       !params.has('policy-gate-off')),
-  loading: false,
+  loading:
+    flag.key === 'enable-crm-selective-email-contribution' &&
+    params.has('policy-flag-pending'),
 });
 function response() {
   const value = state();
@@ -155,10 +160,15 @@ export const crmEmailPrivacyClient = {
       ? err([{ code: 'NETWORK_ERROR' as const, message: 'Unavailable' }])
       : ok({ enabled, mailbox_email, mailbox_link_id });
   },
-  get: async () =>
-    params.has('failed')
+  get: async () => {
+    privacyReads += 1;
+    if (params.has('privacy-pending')) await pendingPrivacyRead.promise;
+    return params.has('failed') ||
+      (params.has('privacy-retry') && privacyReads === 1) ||
+      (params.has('privacy-refresh-failed') && privacyReads > 1)
       ? err([{ code: 'NETWORK_ERROR' as const, message: 'Unavailable' }])
-      : ok(response()),
+      : ok(response());
+  },
   excludedThreads: async (
     after?: string,
     _signal?: AbortSignal,

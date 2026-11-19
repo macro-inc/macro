@@ -9,6 +9,8 @@ import type {
 } from '../../context/email-policy';
 
 const params = new URLSearchParams(location.search);
+const pendingPolicyRead = Promise.withResolvers<void>();
+export const finishPolicyRead = () => pendingPolicyRead.resolve();
 const mailbox = '00000000-0000-4000-8000-000000000045';
 const timestamp = '2026-01-01T09:42:00Z';
 export const fixtureRules: EmailRuleSet = {
@@ -69,6 +71,7 @@ const events: EmailPolicyAudit[] = [
 export const policyClient = {
   get: async () => {
     record('get');
+    if (params.has('policy-pending')) await pendingPolicyRead.promise;
     if (params.has('policy-unavailable'))
       return err([
         { code: 'HTTP_ERROR' as const, message: 'Policy unavailable.' },

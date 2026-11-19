@@ -27,6 +27,7 @@ document.documentElement.dataset.touchDevice = String(isTouchDevice());
 queryClient.setQueryDefaults(crmKeys.excludedEmailThreads._def, {
   retry: false,
 });
+queryClient.setQueryDefaults(crmKeys.emailPrivacy._def, { retry: false });
 queryClient.setQueryData(authKeys.userInfo.queryKey, {
   id: 'member@example.com',
   authenticated: true,
