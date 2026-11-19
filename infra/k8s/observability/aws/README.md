@@ -181,21 +181,21 @@ cluster steps, is in `infra/k8s/observability/cluster/README.md`. This layer's p
    else. Set `mimirBackfill.enable = true` in the same change if the host is
    to copy its Prometheus history in: the plan then also changes Mimir's
    bucket policy in place, to let the host's role list and write
-   `blocks/anonymous/`. No traffic moves: the Pulumi stack's priority-1 rule still matches
-   both hostnames.
+   `blocks/anonymous/`; turn it off again once the copy is done. No traffic
+   moves: the Pulumi stack's priority-1 rule still matches both hostnames.
 2. Wait until both target groups show healthy targets. The ALB health-checks a
-   target group only once a listener rule uses it, so before this apply they
-   report nothing:
+   target group only once a listener rule uses it, so before this apply its
+   targets show `unused`:
    ```sh
    for tg in obs-k8s-grafana obs-k8s-otlp; do
      arn=$(aws elbv2 describe-target-groups --region us-east-2 --names "$tg" --query 'TargetGroups[0].TargetGroupArn' --output text)
      aws elbv2 describe-target-health --region us-east-2 --target-group-arn "$arn" --query 'TargetHealthDescriptions[].TargetHealth.State' --output text
    done
    ```
-3. The Pulumi stack drops `grafana.` and `otlp.` from its priority-1 rule (a
-   reviewed manual `pulumi up`); from then on the ALB sends them here. That
-   rule is the only one on the host's target group, so the same change retires
-   the `observability-ui` alarm, which would otherwise breach on missing data.
+3. The Pulumi stack drops its priority-1 rule for `grafana.` and `otlp.` (a
+   reviewed manual `pulumi up`); from then on the ALB sends them here. The
+   same change removes the host's target group behind that rule and its
+   `observability-ui` alarm, which would otherwise breach on missing data.
 
 Going back is more than restoring the Pulumi rule once Loki and Tempo use the
 host's buckets: the cluster runbook's "Going back" stops the cluster's Loki
