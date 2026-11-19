@@ -629,3 +629,23 @@ fn absent_fleet_keeps_optional_computer_prices_and_rejects_partial_prices() {
     let config: Config = serde_json::from_value(values).unwrap();
     assert!(config.validate_computer_config().is_err());
 }
+
+/// Without a fleet the agents worker never runs; only an explicit `true`
+/// turns it on, and a typo fails startup instead of silently disabling it.
+#[test]
+fn the_computers_agents_worker_is_off_unless_turned_on() {
+    let config: Config = serde_json::from_value(config_values()).unwrap();
+    assert!(!config.computer_agent_effects().unwrap());
+
+    for (value, enabled) in [("true", true), ("false", false)] {
+        let mut values = config_values();
+        values["COMPUTERS_AGENT_EFFECTS"] = serde_json::json!(value);
+        let config: Config = serde_json::from_value(values).unwrap();
+        assert_eq!(config.computer_agent_effects().unwrap(), enabled, "{value}");
+    }
+
+    let mut values = config_values();
+    values["COMPUTERS_AGENT_EFFECTS"] = serde_json::json!("yes");
+    let config: Config = serde_json::from_value(values).unwrap();
+    assert!(config.computer_agent_effects().is_err());
+}

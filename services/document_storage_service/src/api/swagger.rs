@@ -240,6 +240,8 @@ use email_policy::EmailPolicySchemas;
         passwords::inbound::import::import_batch,
         passwords::inbound::import::match_names,
         passwords::inbound::router::detail,
+        passwords::inbound::router::set_favorite,
+        passwords::inbound::router::remove_favorite,
         passwords::inbound::router::username,
         passwords::inbound::router::copy_username,
         passwords::inbound::router::update,
@@ -671,6 +673,7 @@ use email_policy::EmailPolicySchemas;
 
         // threads
         threads::edit_thread::edit_thread_handler,
+        threads::get_thread_channel_shares::handler,
 
         // /recents
         recents::recently_deleted::handler,
@@ -1233,6 +1236,7 @@ use email_policy::EmailPolicySchemas;
             models_permissions::share_permission::LinkShare,
             models_permissions::share_permission::access_level::AccessLevel,
             models_permissions::share_permission::SharePermissionV2,
+            crate::service::entity_mutation::ThreadChannelShare,
             models_permissions::share_permission::UpdateSharePermissionRequestV2, // Share permission
             models_permissions::share_permission::channel_share_permission::ChannelSharePermission,
             models_permissions::share_permission::channel_share_permission::UpdateChannelSharePermission, // Channel share permissions

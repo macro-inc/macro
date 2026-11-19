@@ -105,7 +105,7 @@ before acting"); paired machines keep it off until their owner turns it on.
   list, the directory and a patch's answer set `team_agent_user_id`, and
   `HarnessTeamAgents::harness_team_agent` (trusted) answers for one harness;
   bots and the session opener refuse such a harness. It stays in the listings,
-  where Bring your AI finds it by `computer_id`.
+  where Connect Claude plan finds it by `computer_id`.
 
 ## Recipes
 

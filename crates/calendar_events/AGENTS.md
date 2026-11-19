@@ -20,6 +20,14 @@ reminder dispatch, team availability, and provider/Postgres persistence.
   (`OVERRIDE_GOOGLE_CALENDAR_API_URL`).
 - `src/outbound/pg/outlook.rs`: durable Outlook synchronization; preserve
   provider-specific coverage on discovery.
+- `src/outbound/gateway_refresh.rs` (feature `gateway-refresh`): the one
+  `CalendarRefreshNotifier` and `CalendarTeamNotifier` every host composes
+  (`calendar_service`, `email_service`, `document_storage_service`). A
+  change to an inbox's calendars is one gateway request to its owner and
+  delegates, found by `link_id` alone, plus their teammates with
+  `with_team_refresh` (only `calendar_service`, with team sharing on). It
+  sends from the host's `event_broker_tracker`, so shutdown drains it; a
+  host awaits `refresh_inbox_viewers` itself only from its own tracked work.
 - `src/inbound/dispatch_worker.rs` + `src/outbound/sqs_dispatch_queue.rs`: reminder
   dispatch queue (feature `dispatch`/`dispatch-sqs`).
 
@@ -35,7 +43,8 @@ reminder dispatch, team availability, and provider/Postgres persistence.
 
 - Depends on: `call` (feature `call-meetings`, meeting links), `macro_user_id`,
   `notification` (feature `notify`), `model_notifications`, `aws-sdk-sqs`
-  (feature `dispatch-sqs`).
+  (feature `dispatch-sqs`), `connection_gateway_client` (feature
+  `gateway-refresh`).
 - Used by: `email`, `ai_tools`, `channel_bots`, `graphql_calendar`, `complete_graph`,
   `calendar_scheduling`, `search_service`.
 
@@ -223,8 +232,8 @@ reminder dispatch, team availability, and provider/Postgres persistence.
   `OwnCopy`, which refuses the ask. The web also refetches the list when the
   sharer's notification lands, but that is not the signal: it reaches no
   delegate, a muted category never sends it, and the notifier only queues.
-  `document_storage_service` hosts the ask, so it has its own
-  `CalendarRefreshNotifier` (`src/outbound/calendar_refresh.rs`).
+  `document_storage_service` hosts the ask, so it composes the gateway
+  refresh adapter too.
 - `update_event_with_macro_call` (`src/domain/meeting_links.rs`) switches an
   existing event to a Macro call in one provider write, so attendees get one
   update: it reads the stored content through `CalendarEventDetailsReader`,
@@ -394,13 +403,14 @@ reminder dispatch, team availability, and provider/Postgres persistence.
   through its `calendar_projection_outbox` row, whatever wrote them: the row's
   trigger raises the hint only when the event's typed `event_type` was or is
   out of office, a revision still waiting keeps the hint of every change it
-  carries, and `CalendarProjectionRelay` sends it. An edit or deletion of an
-  Outlook event in Macro therefore sends no refresh of its own
-  (`persist_echo_as`, `announce_retirements`); the Google guest copies it aligns still hear it
-  from the mutation, since no relay announces them. Outlook discovery refreshes
-  viewers only when a calendar was added, removed or changed, and raises the
-  hint for the calendar changes Google's calendar list raises it for
-  (`upsert_calendar_tx`).
+  carries, and `CalendarProjectionRelay` sends it, after publishing the row to
+  the calendar topic. A Macro write to an Outlook event (create, edit, answer
+  or delete) therefore sends no refresh and no topic event of its own
+  (`persist_echo_as`, `announce_retirements`); the Google guest copies it
+  aligns still hear it from the mutation, since no relay announces them.
+  Outlook discovery refreshes viewers only when a calendar was added, removed
+  or changed, and raises the hint for the calendar changes Google's calendar
+  list raises it for (`upsert_calendar_tx`).
 - The Outlook sync (`src/domain/outlook.rs`) refreshes a page's events one
   at a time, first pending id first, and retries that id after any error, so
   one error blocks the calendar. An event the adapter cannot normalize is not
@@ -491,6 +501,15 @@ reminder dispatch, team availability, and provider/Postgres persistence.
   survive. Any other state is catching up and marks it `syncing`: a first import,
   a retry, or a return from `disabled` or `reauth_required`. The web's
   `Syncing your calendar…` banner and its 5 second poll read that state.
+- A Google grant has the calendar capability only with both scopes in
+  `GOOGLE_CALENDAR_SCOPES`. The broad `calendar` scope that grants from before
+  the August 2026 narrowing still report never counts (`GOOGLE_CALENDAR_FULL_SCOPE`),
+  so nothing syncs such an account. The sync scheduler's hourly round
+  (`services/calendar_service/src/calendar_outbox.rs`) turns it off as a grant
+  that loses calendar does (`disable_calendar_capability_tx`: account
+  `disabled`, local copy removed), the maintenance Outlook runs on each claim.
+  The calendar view names the inbox with a Reconnect prompt even while another
+  inbox works, and a new grant re-imports it.
 - The team out-of-office overlay (`src/outbound/pg_team/ooo.rs`) starts from
   the viewer's teammates and reaches sources through
   `calendar_event_sources_out_of_office_idx` on the source's typed

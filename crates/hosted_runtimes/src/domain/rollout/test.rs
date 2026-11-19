@@ -34,3 +34,41 @@ async fn computer_rollout_requires_an_explicit_successful_flag_for_the_caller() 
         );
     }
 }
+
+#[tokio::test]
+async fn an_allowlisted_user_is_enabled_without_the_flag_and_production_refuses_an_allowlist() {
+    let allowed = MacroUserIdStr::try_from("macro|tester@example.com".to_owned()).unwrap();
+    let other = MacroUserIdStr::try_from("macro|other@example.com".to_owned()).unwrap();
+    let allowlist = RolloutAllowlist::parse(
+        Some(" macro|tester@example.com ,macro|second@example.com"),
+        false,
+    )
+    .unwrap();
+
+    let without_flags = ComputerRollout::default().with_allowlist(allowlist.clone());
+    assert!(without_flags.enabled(&allowed).await);
+    assert!(!without_flags.enabled(&other).await);
+
+    let mut flags = FakeFeatureFlags::default();
+    flags.set(allowed.clone(), Err("flag service unavailable".to_owned()));
+    let with_failing_flags = ComputerRollout::new(flags).with_allowlist(allowlist);
+    assert!(with_failing_flags.enabled(&allowed).await);
+    assert!(!with_failing_flags.enabled(&other).await);
+
+    assert_eq!(
+        RolloutAllowlist::parse(None, true),
+        Ok(RolloutAllowlist::default())
+    );
+    assert_eq!(
+        RolloutAllowlist::parse(Some("  "), true),
+        Ok(RolloutAllowlist::default())
+    );
+    assert_eq!(
+        RolloutAllowlist::parse(Some("macro|tester@example.com"), true),
+        Err(RolloutAllowlistError::Production)
+    );
+    assert_eq!(
+        RolloutAllowlist::parse(Some("macro|tester@example.com,not a user"), false),
+        Err(RolloutAllowlistError::InvalidEntry(1))
+    );
+}

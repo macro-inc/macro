@@ -308,39 +308,80 @@ async fn fake_storage(object: &'static [u8]) -> (String, Requests) {
     use axum::{
         Json,
         body::Bytes,
-        http::{Method, StatusCode, Uri},
+        http::{HeaderMap, Method, StatusCode, Uri},
         response::IntoResponse,
     };
 
     let requests = Requests::default();
     let recorded = requests.clone();
-    let app = axum::Router::new().fallback(move |method: Method, uri: Uri, body: Bytes| {
-        let recorded = recorded.clone();
-        async move {
-            let path = uri.path().to_string();
-            recorded.lock().unwrap().push((
-                format!("{method} {path}"),
-                String::from_utf8_lossy(&body).into_owned(),
-            ));
-            if method == Method::GET {
-                object.into_response()
-            } else if path.ends_with("/_delete_by_query") {
-                Json(serde_json::json!({ "deleted": 1 })).into_response()
-            } else if path.ends_with("/_bulk") {
-                Json(serde_json::json!({
-                    "errors": false,
-                    "items": [{ "index": { "status": 201 } }],
-                }))
-                .into_response()
-            } else {
-                StatusCode::NOT_FOUND.into_response()
+    let app = axum::Router::new().fallback(
+        move |method: Method, uri: Uri, headers: HeaderMap, body: Bytes| {
+            let recorded = recorded.clone();
+            async move {
+                // Any process on the machine can connect to a loopback port, and
+                // a dev host can hand this server a port another tool is polling
+                // for readiness. Only requests from the clients under test count.
+                if !sent_by_test_client(&headers) {
+                    return StatusCode::NOT_FOUND.into_response();
+                }
+                let path = uri.path().to_string();
+                recorded.lock().unwrap().push((
+                    format!("{method} {path}"),
+                    String::from_utf8_lossy(&body).into_owned(),
+                ));
+                if method == Method::GET {
+                    object.into_response()
+                } else if path.ends_with("/_delete_by_query") {
+                    Json(serde_json::json!({ "deleted": 1 })).into_response()
+                } else if path.ends_with("/_bulk") {
+                    Json(serde_json::json!({
+                        "errors": false,
+                        "items": [{ "index": { "status": 201 } }],
+                    }))
+                    .into_response()
+                } else {
+                    StatusCode::NOT_FOUND.into_response()
+                }
             }
-        }
-    });
+        },
+    );
     let listener = tokio::net::TcpListener::bind("127.0.0.1:0").await.unwrap();
     let endpoint = format!("http://{}", listener.local_addr().unwrap());
     tokio::spawn(async move { axum::serve(listener, app).await.unwrap() });
     (endpoint, requests)
+}
+
+/// Whether a request came from the OpenSearch or S3 client a test drives.
+fn sent_by_test_client(headers: &axum::http::HeaderMap) -> bool {
+    headers
+        .get(axum::http::header::USER_AGENT)
+        .and_then(|agent| agent.to_str().ok())
+        .is_some_and(|agent| {
+            agent.starts_with("opensearch-rs/") || agent.starts_with("aws-sdk-rust/")
+        })
+}
+
+#[tokio::test]
+async fn a_request_from_another_process_is_not_recorded() {
+    use tokio::io::{AsyncReadExt, AsyncWriteExt};
+
+    let (endpoint, requests) = fake_storage(b"object").await;
+    let address = endpoint.trim_start_matches("http://");
+    let mut probe = tokio::net::TcpStream::connect(address).await.unwrap();
+    probe
+        .write_all(
+            format!(
+                "GET / HTTP/1.1\r\nHost: {address}\r\nUser-Agent: Go-http-client/1.1\r\nConnection: close\r\n\r\n"
+            )
+            .as_bytes(),
+        )
+        .await
+        .unwrap();
+    let mut response = String::new();
+    probe.read_to_string(&mut response).await.unwrap();
+
+    assert!(response.starts_with("HTTP/1.1 404"), "{response}");
+    assert_eq!(*requests.lock().unwrap(), Vec::new());
 }
 
 fn fake_s3(endpoint: &str) -> s3_client::S3 {
@@ -599,4 +640,192 @@ async fn test_unreadable_designs_are_read_errors() {
         let read = read_design_text(file_type, b"not a design".to_vec()).await;
         assert!(read.is_err(), "{file_type}");
     }
+}
+
+const LEXICAL_TEST_KEY: &str = "search-processing-test";
+
+/// Stands in for the lexical service: answers every request from the test's
+/// client with `status` and `body`, and counts them.
+async fn fake_lexical(
+    status: axum::http::StatusCode,
+    body: &'static str,
+) -> (lexical_client::LexicalClient, Requests) {
+    use axum::{
+        http::{HeaderMap, Method, Uri},
+        response::IntoResponse,
+    };
+
+    let requests = Requests::default();
+    let recorded = requests.clone();
+    let app = axum::Router::new().fallback(move |method: Method, uri: Uri, headers: HeaderMap| {
+        let recorded = recorded.clone();
+        async move {
+            if headers
+                .get("x-internal-auth-key")
+                .and_then(|key| key.to_str().ok())
+                != Some(LEXICAL_TEST_KEY)
+            {
+                return axum::http::StatusCode::UNAUTHORIZED.into_response();
+            }
+            recorded
+                .lock()
+                .unwrap()
+                .push((format!("{method} {}", uri.path()), String::new()));
+            (status, body).into_response()
+        }
+    });
+    let listener = tokio::net::TcpListener::bind("127.0.0.1:0").await.unwrap();
+    let endpoint = format!("http://{}", listener.local_addr().unwrap());
+    tokio::spawn(async move { axum::serve(listener, app).await.unwrap() });
+    (
+        lexical_client::LexicalClient::new(LEXICAL_TEST_KEY.to_owned(), endpoint),
+        requests,
+    )
+}
+
+fn md_message() -> SearchExtractorMessage {
+    SearchExtractorMessage {
+        user_id: String::new(),
+        document_id: "md-document".to_string(),
+        file_type: FileType::Md,
+        document_version_id: None,
+        index_override: None,
+    }
+}
+
+const STORED_MARKDOWN: &[u8] =
+    b"{\"root\":{\"children\":[{\"$\":{\"id\":\"n1\",\"searchText\":\"older notes\"}}]}}";
+
+#[sqlx::test(
+    migrations = "../../crates/macro_db_client/migrations",
+    fixtures(path = "../../../../fixtures", scripts("text_documents"))
+)]
+async fn a_document_the_parser_fails_on_is_not_indexed_from_stored_content(pool: sqlx::PgPool) {
+    let (endpoint, requests) = fake_storage(STORED_MARKDOWN).await;
+    let (lexical, parses) = fake_lexical(
+        axum::http::StatusCode::INTERNAL_SERVER_ERROR,
+        r#"{"error":true,"message":"Internal server error"}"#,
+    )
+    .await;
+
+    let result = update_search_with_sync_document(
+        &fake_opensearch(&endpoint),
+        &pool,
+        &fake_s3(&endpoint),
+        BUCKET,
+        &lexical,
+        &md_message(),
+    )
+    .await;
+
+    assert!(result.is_err(), "a failed parse is an error to retry");
+    assert_eq!(
+        parses
+            .lock()
+            .unwrap()
+            .iter()
+            .map(|(line, _)| line.as_str())
+            .collect::<Vec<_>>(),
+        ["GET /search/md-document"]
+    );
+    assert_eq!(
+        *requests.lock().unwrap(),
+        Vec::new(),
+        "neither the stored content nor the index is touched"
+    );
+}
+
+#[sqlx::test(
+    migrations = "../../crates/macro_db_client/migrations",
+    fixtures(path = "../../../../fixtures", scripts("text_documents"))
+)]
+async fn a_document_the_sync_service_does_not_hold_is_indexed_from_stored_content(
+    pool: sqlx::PgPool,
+) {
+    let (endpoint, requests) = fake_storage(STORED_MARKDOWN).await;
+    let (lexical, _) = fake_lexical(
+        axum::http::StatusCode::NOT_FOUND,
+        r#"{"error":true,"message":"Document not found"}"#,
+    )
+    .await;
+
+    update_search_with_sync_document(
+        &fake_opensearch(&endpoint),
+        &pool,
+        &fake_s3(&endpoint),
+        BUCKET,
+        &lexical,
+        &md_message(),
+    )
+    .await
+    .expect("the stored content is the document's latest");
+
+    let requests = requests.lock().unwrap().clone();
+    let bulk: Vec<serde_json::Value> = requests
+        .iter()
+        .filter(|(line, _)| line.ends_with("/_bulk"))
+        .flat_map(|(_, body)| body.lines().map(|line| serde_json::from_str(line).unwrap()))
+        .collect();
+    assert_eq!(indexed_content(&bulk), ["older notes"]);
+}
+
+#[sqlx::test(
+    migrations = "../../crates/macro_db_client/migrations",
+    fixtures(path = "../../../../fixtures", scripts("text_documents"))
+)]
+async fn a_404_that_is_not_lexicals_answer_is_not_indexed_from_stored_content(pool: sqlx::PgPool) {
+    let (endpoint, requests) = fake_storage(STORED_MARKDOWN).await;
+    let (lexical, _) = fake_lexical(axum::http::StatusCode::NOT_FOUND, "404 page not found").await;
+
+    let result = update_search_with_sync_document(
+        &fake_opensearch(&endpoint),
+        &pool,
+        &fake_s3(&endpoint),
+        BUCKET,
+        &lexical,
+        &md_message(),
+    )
+    .await;
+
+    assert!(
+        result.is_err(),
+        "a route or gateway 404 is an error to retry"
+    );
+    assert_eq!(*requests.lock().unwrap(), Vec::new());
+}
+
+#[sqlx::test(
+    migrations = "../../crates/macro_db_client/migrations",
+    fixtures(path = "../../../../fixtures", scripts("text_documents"))
+)]
+async fn a_rebuild_indexes_a_document_the_parser_fails_on_from_stored_content(pool: sqlx::PgPool) {
+    let (endpoint, requests) = fake_storage(STORED_MARKDOWN).await;
+    let (lexical, _) = fake_lexical(
+        axum::http::StatusCode::INTERNAL_SERVER_ERROR,
+        r#"{"error":true,"message":"Internal server error"}"#,
+    )
+    .await;
+    let message = SearchExtractorMessage {
+        index_override: Some("documents_rebuild".to_string()),
+        ..md_message()
+    };
+
+    update_search_with_sync_document(
+        &fake_opensearch(&endpoint),
+        &pool,
+        &fake_s3(&endpoint),
+        BUCKET,
+        &lexical,
+        &message,
+    )
+    .await
+    .expect("a rebuild keeps the document");
+
+    let requests = requests.lock().unwrap().clone();
+    let bulk: Vec<serde_json::Value> = requests
+        .iter()
+        .filter(|(line, _)| line == "POST /documents_rebuild/_bulk")
+        .flat_map(|(_, body)| body.lines().map(|line| serde_json::from_str(line).unwrap()))
+        .collect();
+    assert_eq!(indexed_content(&bulk), ["older notes"], "{requests:?}");
 }

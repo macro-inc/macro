@@ -3,6 +3,7 @@ use std::sync::Arc;
 use std::time::Duration;
 
 use anyhow::Context;
+use calendar_events::outbound::gateway_refresh::GatewayCalendarRefresh;
 use calendar_events::{
     domain::{mutations::CalendarMutationServiceImpl, service::CalendarService},
     outbound::{google::GoogleCalendarClient, pg::PgCalendarRepository},
@@ -13,7 +14,6 @@ use calendar_service::calendar_backfill::CalendarBackfillContext;
 use calendar_service::calendar_backfill_adapters::RedisCalendarRequestGate;
 use calendar_service::calendar_ratelimit::CalendarRateLimiter;
 use calendar_service::calendar_reauth::LinkManagerReauthNotifier;
-use calendar_service::calendar_refresh::ConnectionGatewayCalendarRefresh;
 use calendar_service::calendar_tokens::CalendarTokenProviderAdapter;
 use calendar_service::config::{Config, calendar_watch_config};
 use macro_auth::middleware::decode_jwt::JwtValidationArgs;
@@ -109,6 +109,16 @@ async fn main() -> anyhow::Result<()> {
         event_broker_tracker.clone(),
     );
 
+    // Refreshes follow a committed write, so they share the broker's
+    // shutdown drain.
+    let calendar_refresh = GatewayCalendarRefresh::new(
+        connection_gateway_client,
+        db.clone(),
+        event_broker_tracker.clone(),
+    )
+    .with_team_refresh(config.calendar_team_sharing_enabled)
+    .with_sends(cfg!(feature = "connection_gateway"));
+
     let worker_cancellation_token = CancellationToken::new();
     let worker_tracker = TaskTracker::new();
 
@@ -157,12 +167,11 @@ async fn main() -> anyhow::Result<()> {
             rate_limiter.clone(),
             redis_conn.clone(),
             auth_service_client.clone(),
-            connection_gateway_client.clone(),
+            calendar_refresh.clone(),
             macro_event_broker.clone(),
             reauth_notifier.clone(),
             calendar_watch_config(),
             config.calendar_sync_enabled,
-            config.calendar_team_sharing_enabled,
         );
         let cancellation_token = worker_cancellation_token.clone();
         worker_tracker.spawn(async move {
@@ -194,11 +203,7 @@ async fn main() -> anyhow::Result<()> {
     let calendar_team_service = Arc::new(
         calendar_events::domain::team::CalendarTeamServiceImpl::with_notifier(
             calendar_events::outbound::pg_team::PgCalendarTeamRepository::new(db.clone()),
-            ConnectionGatewayCalendarRefresh::new(
-                connection_gateway_client.clone(),
-                db.clone(),
-                config.calendar_team_sharing_enabled,
-            ),
+            calendar_refresh.clone(),
             config.calendar_team_sharing_enabled,
         ),
     );
@@ -226,11 +231,7 @@ async fn main() -> anyhow::Result<()> {
                 redis_conn.clone(),
                 Arc::new(auth_service_client.clone()),
             ),
-            ConnectionGatewayCalendarRefresh::new(
-                connection_gateway_client.clone(),
-                db.clone(),
-                config.calendar_team_sharing_enabled,
-            ),
+            calendar_refresh.clone(),
         )
         .with_writes_enabled(config.outlook_writes_enabled);
         let sync = Arc::new(sync);
@@ -259,11 +260,7 @@ async fn main() -> anyhow::Result<()> {
         let relay = calendar_events::domain::outlook::CalendarProjectionRelay::new(
             PgCalendarRepository::new(db.clone()),
             macro_event_broker.clone(),
-            ConnectionGatewayCalendarRefresh::new(
-                connection_gateway_client.clone(),
-                db.clone(),
-                config.calendar_team_sharing_enabled,
-            ),
+            calendar_refresh.clone(),
         );
         let cancellation = worker_cancellation_token.clone();
         worker_tracker.spawn(async move {
@@ -289,11 +286,7 @@ async fn main() -> anyhow::Result<()> {
             },
             CalendarTokenProviderAdapter::new(redis_conn, Arc::new(auth_service_client)),
             macro_event_broker.clone(),
-            ConnectionGatewayCalendarRefresh::new(
-                connection_gateway_client,
-                db.clone(),
-                config.calendar_team_sharing_enabled,
-            ),
+            calendar_refresh.clone(),
         )
         .with_outlook_writes_enabled(config.outlook_writes_enabled),
     );

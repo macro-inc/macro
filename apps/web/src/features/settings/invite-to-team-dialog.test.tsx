@@ -12,6 +12,9 @@ const mocks = vi.hoisted(() => ({
   harnesses: (): unknown[] => [],
   agents: (): unknown[] => [],
   toastSuccess: vi.fn(),
+  fetchAgents: vi.fn(),
+  retryComputer: vi.fn(),
+  openDm: vi.fn(),
 }));
 
 vi.mock('@core/component/Toast/Toast', () => ({
@@ -19,10 +22,7 @@ vi.mock('@core/component/Toast/Toast', () => ({
 }));
 
 vi.mock('@app/lib/analytics/posthog', () => ({
-  useFeatureFlag: (flag: { key: string }) => () =>
-    flag.key === 'enable-macro-computers'
-      ? mocks.computersFlag()
-      : mocks.flag(),
+  useFeatureFlag: () => () => mocks.flag(),
 }));
 vi.mock('@queries/harnesses/harnesses', () => ({
   useHarnessesQuery: () => ({
@@ -40,6 +40,7 @@ vi.mock('@queries/computers/claude', () => ({
   }),
 }));
 vi.mock('@queries/computers/computers', () => ({
+  useMacroComputersRollout: () => () => mocks.computersFlag(),
   useComputerOffersQuery: () => ({
     isSuccess: true,
     isError: false,
@@ -78,14 +79,12 @@ vi.mock('@queries/computers/computers', () => ({
   }),
   useNotifyComputerSizeMutation: () => ({ isPending: false }),
 }));
-vi.mock('@queries/agents/avatar', () => ({
-  useUploadAgentAvatarMutation: () => ({ mutateAsync: vi.fn() }),
-}));
 vi.mock('@queries/team-agents/team-agents', () => ({
   useCreateTeamAgentMutation: () => ({
     isPending: false,
     mutateAsync: mocks.createAgent,
   }),
+  fetchTeamAgents: mocks.fetchAgents,
   useTeamAgentsQuery: () => ({
     isSuccess: true,
     get data() {
@@ -125,6 +124,13 @@ vi.mock('@queries/team/invites', () => ({
     mutate: mocks.mutate,
   }),
 }));
+vi.mock('./primitives/team-agent-status', () => ({
+  retryTeamAgentComputer: mocks.retryComputer,
+}));
+vi.mock('../notifications/computer-setup-toast', () => ({
+  openAgentDirectMessage: mocks.openDm,
+  openBilling: vi.fn(),
+}));
 vi.mock('./TeamInviteLinkSection', () => ({
   TeamInviteLinkSection: () => null,
   CopyTeamInviteLinkButton: () => (
@@ -132,7 +138,8 @@ vi.mock('./TeamInviteLinkSection', () => ({
   ),
 }));
 
-import { InviteToTeamDialog } from './Team';
+import { ThrownResultError } from '@core/util/result';
+import { InviteToTeamDialog, useCanInviteAgents } from './Team';
 
 const [flag, setFlag] = createSignal({ enabled: false, loading: false });
 const [computersFlag, setComputersFlag] = createSignal({
@@ -170,6 +177,10 @@ afterEach(() => {
   mocks.startSignIn.mockReset();
   mocks.completeSignIn.mockReset();
   mocks.toastSuccess.mockReset();
+  mocks.fetchAgents.mockReset();
+  mocks.retryComputer.mockReset();
+  mocks.openDm.mockReset();
+  vi.useRealTimers();
 });
 
 function sendInvite(onClose: () => void = () => {}) {
@@ -222,134 +233,221 @@ describe('InviteToTeamDialog', () => {
   });
 });
 
+/** Invite Agent's dialog, gated the way Members gates it. */
+function AgentInviteDialog(props: { admin: boolean; onClose: () => void }) {
+  const canInviteAgents = useCanInviteAgents(() => props.admin);
+  return (
+    <InviteToTeamDialog
+      teamId="team-1"
+      canManageLink={props.admin}
+      kind="agent"
+      canInviteAgents={canInviteAgents()}
+      open
+      onClose={props.onClose}
+    />
+  );
+}
+
+const agentForm = () => screen.queryByRole('textbox', { name: 'Name' });
+
 describe('InviteToTeamDialog agent teammates', () => {
   function openAsAdmin(onClose: () => void = () => {}) {
-    render(() => (
-      <InviteToTeamDialog
-        teamId="team-1"
-        canManageLink
-        canInviteAgents
-        open
-        onClose={onClose}
-      />
-    ));
+    render(() => <AgentInviteDialog admin onClose={onClose} />);
   }
+
+  it('offers only people while computers are off, even with agent teammates on', () => {
+    setFlag({ enabled: true, loading: false });
+    setComputersFlag({ enabled: false, loading: false });
+    openAsAdmin();
+    expect(agentForm()).toBeNull();
+    expect(screen.getByRole('button', { name: 'Send invite' })).toBeTruthy();
+
+    setComputersFlag({ enabled: true, loading: false });
+    expect(agentForm()).toBeTruthy();
+  });
 
   it('offers only people while the flag is off or loading', () => {
     setFlag({ enabled: false, loading: true });
     openAsAdmin();
-    expect(screen.queryByRole('radio', { name: 'Agent' })).toBeNull();
+    expect(agentForm()).toBeNull();
 
     setFlag({ enabled: false, loading: false });
-    expect(screen.queryByRole('radio', { name: 'Agent' })).toBeNull();
+    expect(agentForm()).toBeNull();
     expect(screen.getByRole('button', { name: 'Send invite' })).toBeTruthy();
   });
 
   it('offers only people to members who cannot manage the team', () => {
     setFlag({ enabled: true, loading: false });
-    render(() => (
-      <InviteToTeamDialog
-        teamId="team-1"
-        canManageLink={false}
-        open
-        onClose={() => {}}
-      />
-    ));
-    expect(screen.queryByRole('radio', { name: 'Agent' })).toBeNull();
+    setComputersFlag({ enabled: true, loading: false });
+    render(() => <AgentInviteDialog admin={false} onClose={() => {}} />);
+    expect(agentForm()).toBeNull();
   });
 
-  it('invites an agent on the chosen computer and suggested voice, priced like a computer', async () => {
+  const ada = {
+    userId: 'macro|ada@agents.test',
+    name: 'Ada',
+    teamId: 'team-1',
+    computerId: 'computer-1',
+    status: 'provisioning',
+  };
+  const refusal = (code: string) =>
+    new ThrownResultError([{ code, message: code }]);
+
+  function startAdding(name = 'Ada') {
+    fireEvent.input(screen.getByRole('textbox', { name: 'Name' }), {
+      target: { value: name },
+    });
+  }
+  const addButton = () =>
+    screen.getByRole('button', {
+      name: /^(Add|Try again|Retry)/,
+    }) as HTMLButtonElement;
+
+  it('adds an agent by name and size, waits until it is online, and lands in its DM', async () => {
     setFlag({ enabled: true, loading: false });
+    setComputersFlag({ enabled: true, loading: false });
     const onClose = vi.fn();
-    mocks.createAgent.mockResolvedValue({ name: 'Ada' });
+    mocks.createAgent.mockResolvedValue(ada);
+    mocks.fetchAgents
+      .mockResolvedValueOnce({ agents: [{ ...ada, status: 'starting' }] })
+      .mockResolvedValue({ agents: [{ ...ada, status: 'running' }] });
     openAsAdmin(onClose);
 
-    fireEvent.click(screen.getByRole('radio', { name: 'Agent' }));
-    const invite = () =>
-      screen.getByRole('button', {
-        name: /^Invite agent/,
-      }) as HTMLButtonElement;
-    expect(invite().disabled).toBe(true);
-
-    fireEvent.input(screen.getByRole('textbox', { name: 'Name' }), {
-      target: { value: ' Ada ' },
-    });
-    fireEvent.input(screen.getByRole('textbox', { name: 'Job description' }), {
-      target: { value: 'Triage support email.' },
-    });
-    fireEvent.input(screen.getByRole('textbox', { name: 'Personality' }), {
-      target: { value: 'Warm and concise.' },
-    });
-    fireEvent.click(screen.getByRole('radio', { name: 'Large' }));
-    // The personality's own words pick the suggested voice.
+    expect(addButton().disabled).toBe(true);
     expect(
-      (screen.getByRole('combobox', { name: 'Voice' }) as HTMLInputElement)
-        .value
-    ).toBe('Thalia');
+      screen.getByText('Give your agent a name to continue.')
+    ).toBeTruthy();
+    // A suggestion fills the name.
+    fireEvent.click(screen.getByRole('button', { name: 'Ada' }));
+    fireEvent.click(screen.getByRole('radio', { name: 'Large' }));
+    expect(addButton().textContent).toContain('Add Ada');
+    expect(addButton().textContent).toContain('$80');
 
-    expect(invite().textContent).toContain('$80');
-    // A failed invite keeps its purchase key, so retrying buys one computer.
-    mocks.createAgent.mockRejectedValueOnce(new Error('network'));
-    fireEvent.click(invite());
-    await vi.waitFor(() =>
-      expect(screen.getByRole('alert').textContent).toContain(
-        "Couldn't invite the agent"
-      )
-    );
-    fireEvent.click(invite());
+    fireEvent.click(addButton());
+    expect(screen.getByRole('button', { name: /Adding Ada/ })).toBeTruthy();
 
-    const [first, retry] = mocks.createAgent.mock.calls.map((call) => call[0]);
-    expect(first).toEqual({
+    await vi.waitFor(() => expect(onClose).toHaveBeenCalledTimes(1));
+    expect(mocks.openDm).toHaveBeenCalledWith(ada.userId);
+    expect(mocks.createAgent.mock.calls[0][0]).toMatchObject({
       teamId: 'team-1',
       request: {
         name: 'Ada',
-        jobDescription: 'Triage support email.',
-        personality: 'Warm and concise.',
+        jobDescription: '',
+        personality: '',
         size: 'large',
         avatarUrl: null,
         purchaseKey: expect.any(String),
-        voice: 'aura-2-thalia-en',
       },
     });
-    expect(retry).toEqual(first);
-    await vi.waitFor(() => expect(onClose).toHaveBeenCalledTimes(1));
+    expect(mocks.toastSuccess).not.toHaveBeenCalled();
     expect(mocks.mutate).not.toHaveBeenCalled();
+  });
+
+  it('closes into the DM with the agent still starting after five seconds', async () => {
+    vi.useFakeTimers();
+    setFlag({ enabled: true, loading: false });
+    setComputersFlag({ enabled: true, loading: false });
+    const onClose = vi.fn();
+    mocks.createAgent.mockResolvedValue(ada);
+    mocks.fetchAgents.mockResolvedValue({ agents: [ada] });
+    openAsAdmin(onClose);
+    startAdding();
+    fireEvent.click(addButton());
+
+    await vi.advanceTimersByTimeAsync(4_000);
+    expect(onClose).not.toHaveBeenCalled();
+    await vi.advanceTimersByTimeAsync(1_500);
+    expect(onClose).toHaveBeenCalledTimes(1);
+    expect(mocks.openDm).toHaveBeenCalledWith(ada.userId);
+  });
+
+  it('keeps the dialog on a declined card, and tries again with a new purchase', async () => {
+    setFlag({ enabled: true, loading: false });
+    setComputersFlag({ enabled: true, loading: false });
+    mocks.createAgent.mockRejectedValueOnce(refusal('PAYMENT_DECLINED'));
+    openAsAdmin();
+    startAdding();
+    fireEvent.click(addButton());
+
+    await vi.waitFor(() =>
+      expect(screen.getByRole('alert').textContent).toContain(
+        'Nothing was charged'
+      )
+    );
+    expect(screen.getByRole('button', { name: 'Update card' })).toBeTruthy();
+    expect(
+      (screen.getByRole('textbox', { name: 'Name' }) as HTMLInputElement).value
+    ).toBe('Ada');
+
+    mocks.createAgent.mockResolvedValue(ada);
+    mocks.fetchAgents.mockResolvedValue({
+      agents: [{ ...ada, status: 'running' }],
+    });
+    expect(addButton().textContent).toContain('Try again');
+    fireEvent.click(addButton());
+    await vi.waitFor(() => expect(mocks.openDm).toHaveBeenCalled());
+    const [declined, again] = mocks.createAgent.mock.calls.map(
+      (call) => call[0].request.purchaseKey
+    );
+    expect(again).not.toBe(declined);
+  });
+
+  it('marks a size with no room and lets another size be picked', async () => {
+    setFlag({ enabled: true, loading: false });
+    setComputersFlag({ enabled: true, loading: false });
+    mocks.createAgent.mockRejectedValueOnce(refusal('NO_ROOM'));
+    openAsAdmin();
+    startAdding();
+    fireEvent.click(addButton());
+
+    await vi.waitFor(() =>
+      expect(screen.getByRole('alert').textContent).toContain(
+        'No room for a Standard computer'
+      )
+    );
+    expect(
+      (screen.getByRole('radio', { name: /Standard/ }) as HTMLInputElement)
+        .disabled
+    ).toBe(true);
+    // The next size on sale is picked.
+    expect(addButton().textContent).toContain('$80');
+  });
+
+  it('retries a computer that did not start on the same computer, then shows the refund', async () => {
+    setFlag({ enabled: true, loading: false });
+    setComputersFlag({ enabled: true, loading: false });
+    mocks.createAgent.mockResolvedValue(ada);
+    mocks.fetchAgents.mockResolvedValue({
+      agents: [{ ...ada, status: 'failed' }],
+    });
+    mocks.retryComputer.mockResolvedValue(undefined);
+    openAsAdmin();
+    startAdding();
+    fireEvent.click(addButton());
+
+    await vi.waitFor(() =>
+      expect(screen.getByRole('alert').textContent).toContain(
+        "Ada didn't start on its computer"
+      )
+    );
+    fireEvent.click(addButton());
+    await vi.waitFor(() =>
+      expect(screen.getByRole('alert').textContent).toContain(
+        'The charge was undone'
+      )
+    );
+    expect(mocks.retryComputer).toHaveBeenCalledWith('computer-1');
+    expect(mocks.createAgent).toHaveBeenCalledTimes(1);
   });
 
   it('falls back to people when the flag turns off mid-invite', () => {
     setFlag({ enabled: true, loading: false });
+    setComputersFlag({ enabled: true, loading: false });
     openAsAdmin();
-    fireEvent.click(screen.getByRole('radio', { name: 'Agent' }));
     expect(screen.getByRole('textbox', { name: 'Name' })).toBeTruthy();
 
     setFlag({ enabled: false, loading: false });
     expect(screen.queryByRole('textbox', { name: 'Name' })).toBeNull();
     expect(screen.getByRole('button', { name: 'Send invite' })).toBeTruthy();
-  });
-
-  it('closes as soon as the agent is invited and says it is being set up', async () => {
-    setFlag({ enabled: true, loading: false });
-    setComputersFlag({ enabled: true, loading: false });
-    const onClose = vi.fn();
-    mocks.createAgent.mockResolvedValue({ name: 'Ada' });
-    openAsAdmin(onClose);
-    fireEvent.click(screen.getByRole('radio', { name: 'Agent' }));
-    fireEvent.input(screen.getByRole('textbox', { name: 'Name' }), {
-      target: { value: 'Ada' },
-    });
-    fireEvent.input(screen.getByRole('textbox', { name: 'Job description' }), {
-      target: { value: 'Triage support email.' },
-    });
-    fireEvent.input(screen.getByRole('textbox', { name: 'Personality' }), {
-      target: { value: 'Warm and concise.' },
-    });
-    fireEvent.click(screen.getByRole('button', { name: /^Invite agent/ }));
-
-    await vi.waitFor(() => expect(onClose).toHaveBeenCalledTimes(1));
-    expect(mocks.toastSuccess).toHaveBeenCalledWith(
-      "Ada is being set up. We'll let you know when it's ready."
-    );
-    expect(screen.queryByText('Bring your AI to Ada')).toBeNull();
-    expect(mocks.startSignIn).not.toHaveBeenCalled();
   });
 });

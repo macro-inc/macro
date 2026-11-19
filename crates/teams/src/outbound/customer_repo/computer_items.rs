@@ -76,7 +76,11 @@ pub async fn list_subscription_items(
     params.limit = Some(ITEM_PAGE);
     let mut items = Vec::new();
     loop {
-        let page = stripe::SubscriptionItem::list(client, &params).await?;
+        let page = traced(
+            stripe_span!("stripe.subscription_items.list", subscription_id = %subscription_id),
+            stripe::SubscriptionItem::list(client, &params),
+        )
+        .await?;
         if !page.has_more {
             items.extend(page.data);
             return Ok(items);
@@ -112,9 +116,12 @@ impl CustomerRepositoryImpl {
                 .replay_item_change_locked(idempotency_key, change)
                 .await;
         }
-        let subscription = stripe::Subscription::retrieve(&self.client, subscription_id, &[])
-            .await
-            .map_err(storage)?;
+        let subscription = traced(
+            stripe_span!("stripe.subscription.retrieve", subscription_id = %subscription_id),
+            stripe::Subscription::retrieve(&self.client, subscription_id, &[]),
+        )
+        .await
+        .map_err(storage)?;
         if subscription
             .metadata
             .get(ITEM_CHANGE_KEY)
@@ -172,9 +179,7 @@ impl CustomerRepositoryImpl {
         computer_id: &str,
         idempotency_key: &str,
     ) -> Result<stripe::PriceId, CustomerError> {
-        let base = stripe::Price::retrieve(&self.client, base, &[])
-            .await
-            .map_err(storage)?;
+        let base = self.catalog_price(base).await?;
         let recurring = base
             .recurring
             .as_ref()
@@ -208,10 +213,12 @@ impl CustomerRepositoryImpl {
                 .with_strategy(stripe::RequestStrategy::Idempotent(
                     idempotency_key.to_owned(),
                 ));
-        let price = client
-            .post_form::<stripe::Price, _>("/prices", &form)
-            .await
-            .map_err(storage)?;
+        let price = traced(
+            stripe_span!("stripe.price.create", base_price_id = %base.id),
+            client.post_form::<stripe::Price, _>("/prices", &form),
+        )
+        .await
+        .map_err(storage)?;
         Ok(price.id)
     }
 
@@ -229,9 +236,12 @@ impl CustomerRepositoryImpl {
                 .await?;
             return Ok(ItemRemoval::Removed);
         }
-        let subscription = stripe::Subscription::retrieve(&self.client, subscription_id, &[])
-            .await
-            .map_err(storage)?;
+        let subscription = traced(
+            stripe_span!("stripe.subscription.retrieve", subscription_id = %subscription_id),
+            stripe::Subscription::retrieve(&self.client, subscription_id, &[]),
+        )
+        .await
+        .map_err(storage)?;
         if subscription
             .metadata
             .get(ITEM_CHANGE_KEY)
@@ -278,13 +288,14 @@ impl CustomerRepositoryImpl {
         struct Archive {
             active: bool,
         }
-        if let Err(error) = self
-            .client
-            .post_form::<stripe::Price, _>(
+        if let Err(error) = traced(
+            stripe_span!("stripe.price.update", price_id = %price_id),
+            self.client.post_form::<stripe::Price, _>(
                 &format!("/prices/{price_id}"),
                 &Archive { active: false },
-            )
-            .await
+            ),
+        )
+        .await
         {
             tracing::warn!(price_id = %price_id, error = ?error, "could not archive a computer's price");
         }

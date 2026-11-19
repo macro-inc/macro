@@ -1,7 +1,7 @@
 use super::*;
 use std::sync::Arc;
 
-struct TestSecretManager;
+pub(crate) struct TestSecretManager;
 
 impl secretsmanager_client::SecretManager for TestSecretManager {
     type Err = std::io::Error;
@@ -18,7 +18,7 @@ impl secretsmanager_client::SecretManager for TestSecretManager {
     }
 }
 
-fn config_values() -> serde_json::Value {
+pub(crate) fn config_values() -> serde_json::Value {
     serde_json::json!({
         "ENVIRONMENT": "dev",
         "FUSIONAUTH_BASE_URL": "https://example.com",
@@ -209,7 +209,9 @@ fn production_loader_accepts_no_fleet_and_rejects_invalid_or_incomplete_selectio
         (Some(""), false),
         (Some("off"), false),
         (Some("unknown"), false),
-        (Some("incus"), false),
+        // Retired: attaches no fleet and needs no settings.
+        (Some("incus"), true),
+        (Some("firecracker"), false),
         (Some("docker"), false),
     ] {
         let mut input = production.clone();
@@ -260,8 +262,6 @@ fn computer_fleet_settings_require_the_selected_groups() {
         "COMPUTERS_HOST_NAME": "local-docker",
         "COMPUTERS_IMAGE": "macro-box:latest",
         "COMPUTERS_AGENT_IMAGE": "macro-box-agent:latest",
-        "COMPUTERS_HOST_RESERVE_GB": 7,
-        "COMPUTERS_OVERSELL_FACTOR": 3,
         "COMPUTERS_DOCKER_NETWORK": "test-services",
         "COMPUTERS_DOCKER_ENROLLMENT_DIR": "/tmp/enrollments",
         "COMPUTERS_DOCKER_MEMORY_GB": 32
