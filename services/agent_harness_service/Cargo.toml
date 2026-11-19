@@ -162,7 +162,6 @@ non_empty = { path = "../../crates/non_empty" }
 notification = { path = "../../crates/notification", features = ["ai_tool"] }
 onboarding = { path = "../../crates/onboarding" }
 opentelemetry = { workspace = true, features = ["metrics"] }
-tracing-opentelemetry = { workspace = true }
 pipedream_mcp = { path = "../../crates/pipedream_mcp" }
 png = { workspace = true }
 prompt = { path = "../../crates/prompt" }

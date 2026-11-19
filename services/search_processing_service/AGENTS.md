@@ -91,6 +91,12 @@ OpenSearch, and exposes backfill HTTP routes for each.
   say which.
 - Full-scan backfills page by UUID, not `modified_at`, and cannot discover
   already-deleted IDs — target specific IDs for those.
+- Every backfill writer passes the task's `BackfillGate`
+  (`domain/backfill_gate.rs`): the shared in-flight cap and the operator
+  pause (`PUT /internal/backfill/pause`). A new backfill path takes a permit
+  per write, or per received batch for queue workers; never gate the live
+  Kafka path, whose `reconcile` the agent-session backfill shares, so gate
+  the backfill loop, not the shared function.
 - Run `POST /internal/backfill/email-attachment-status` on an environment only
   after the `is_email_attachment` mapping is applied there, and check
   `_cat/allocation` disk headroom first. It is throttled (`docs_per_second`,
