@@ -1,0 +1,45 @@
+packages/sdk/src/entities/agents/agent.ts
+  s_63bec515a8b083::t_9ad69a0ea6d6c4 205,226
+packages/sdk/AGENTS.md
+  s_63bec515a8b083::t_b42ed66c08e2d2 206-209
+packages/sdk-docs/AGENTS.md
+  s_63bec515a8b083::t_4699859761edf6 30-33
+packages/sdk/src/entities/agent-sessions/agent-session.ts
+  s_63bec515a8b083::t_3d0b255f8ebaf7 246
+packages/sdk-mcp/scripts/generate.ts
+  s_63bec515a8b083::t_a55fe38c31a973 13-14,117-124,126-127,662-663,683-688,888-898
+packages/sdk/src/entities/agents/tool-permissions.ts
+  s_63bec515a8b083::t_c140b0a93687fe 1-6,30-31
+packages/sdk-mcp/src/tools.test.ts
+  s_63bec515a8b083::t_7cdf9f4578cbd7 3,52-67
+packages/sdk-docs/src/render.ts
+  s_63bec515a8b083::t_6acc67900b40a7 40-47,57,85-90,118-121,134-154
+crates/agent_permissions/AGENTS.md
+  s_63bec515a8b083::t_b9ac47d8b6b0d6 83-90
+packages/code-mode-sdk/src/documentation.test.ts
+  s_63bec515a8b083::t_8287ed22fda224 301-315
+packages/sdk-mcp/AGENTS.md
+  s_63bec515a8b083::t_8e342ac5433a6d 35-37
+packages/sdk-mcp/src/__snapshots__/tools.entity.json
+  s_63bec515a8b083::t_4fafbaff2eb386 3,6-7
+packages/sdk-docs/src/render.test.ts
+  s_63bec515a8b083::t_98ecdc8e7d901a 122-139
+packages/sdk/src/entities/agents/namespace.ts
+  s_63bec515a8b083::t_a273ba944669ff 64
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.7.7",
+  "base_commit_sha": "d64ab3cca8e8100f4aa082342b94bd95e530cbb8",
+  "prompts": {},
+  "sessions": {
+    "s_63bec515a8b083": {
+      "agent_id": {
+        "tool": "claude",
+        "id": "78666780-1362-4198-8dd5-b840ff01c998",
+        "model": "claude-opus-5-5"
+      },
+      "human_author": "Eric Hayes <56524199+ehayes2000@users.noreply.github.com>"
+    }
+  }
+}
