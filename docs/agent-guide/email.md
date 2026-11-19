@@ -58,11 +58,15 @@ Full email client. Desktop groups `Signal` and `Noise` under one `Inbox` sidebar
 item, with pill tabs beside the Inbox title in the content header; with the Focus
 flags on, a `Focus` tab leads them. Selecting Inbox from another mailbox opens
 Signal; selecting it while in Focus or Noise keeps that tab.
-The desktop sidebar continues with `Favorites`, `Drafts`, `Sent`, `Scheduled`,
-and `Reminders` (when reminders are enabled), followed by a **Library** section containing `All mail`,
-`Archived`, and `Shared`, then **Saved views** (flagged, see
-[Saved email views](#saved-email-views)). Sidebar number shortcuts follow that
-order; `Tab` and `Shift+Tab` move between the Inbox tabs (from another mailbox,
+By default the desktop sidebar continues with `Favorites`, `Drafts`, `Sent`,
+`Scheduled`, and `Reminders` (when enabled), followed by **Library** (`All mail`,
+`Archived`, `Shared`, `Spam`, and `Trash`) and **Saved views** (flagged, see
+[Saved email views](#saved-email-views)). Drag the Library or Saved views
+heading before or after the unnamed Inbox/Favorites/Drafts/Sent group to change
+their shared local order. The unnamed group has no grip or keyboard move control.
+Accounts stays pinned at the top and is not a drop target. Section order is per
+account and survives reloads. Sidebar number shortcuts retain their default destination
+order. `Tab` and `Shift+Tab` move between the Inbox tabs (from another mailbox,
 `Tab` opens the first, Focus when it shows, else Signal, and `Shift+Tab` Noise).
 This holds while the email list itself has focus, as it does after `Escape`
 closes a thread; only on a control inside the list (a row's sender name,

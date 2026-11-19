@@ -46,6 +46,15 @@ describe('routine composer storage', () => {
     expect(loadRoutineComposerDraft()?.created).toEqual(created);
   });
 
+  it('keeps the look AI picked for a drafted routine', () => {
+    const appearance = {
+      icon: { kind: 'macro', name: 'tag-simple' },
+      color: 'green',
+    } as const;
+    saveRoutineComposerDraft({ ...draft, appearance });
+    expect(loadRoutineComposerDraft()?.appearance).toEqual(appearance);
+  });
+
   it('returns null for empty storage and clears saved drafts', () => {
     expect(loadRoutineComposerDraft()).toBeNull();
     saveRoutineComposerDraft(draft);

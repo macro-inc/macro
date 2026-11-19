@@ -19,7 +19,7 @@ Reusable named view definitions. Consumers are main Tasks, Projects, and Email; 
 ## Boundaries
 
 - Keep Task filters, navigation, and configuration decoding in `features/tasks-view`, Project definitions in `features/projects`, and Email definitions in `features/email-view`.
-- Order is personal and server-owned (`reorderSavedViews`); consumers show a pending move locally only until the list itself changes, never by splicing the cache.
+- Saved-view row order is personal and server-owned (`reorderSavedViews`); consumers show a pending move locally only until the list itself changes, never by splicing the cache. Email's containing `saved-views` sidebar section uses the shared view shell's local per-account section order; Tasks and Projects retain saved views in their built-in navigation sections.
 - Readers re-read on focus, after a gateway reconnect, and on a `saved_views_changed` push for their kind (`queries/saved-view-changes.ts`), which is how writes made outside the page, such as an agent's, appear; the push carries no definition.
 - Consumers pass the list's accessible label, row status (`trailing` plus `statusLabel`), drag wiring, and Move up/Move down handlers (Email passes them only where rows can't be dragged); rows never create drag items themselves, since only a desktop list mounts the drag provider. Tasks and Projects use Rename, Duplicate, and Delete menus; Email keeps its existing management labels.
 - A consumer that edits definitions in the dialog passes `fields`, `invalid`, and a replacement `config`; edit without `config` keeps renaming and sharing only. `hint` renders the consumer's note under the name (Email uses it on create).

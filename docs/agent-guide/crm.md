@@ -472,7 +472,9 @@ that the backdrop, Escape or `Hide navigation` dismisses.
 While the sidebar is collapsed, the split's **Close** sits before
 `Show navigation` in every CRM header, including on a pipeline, a record and
 CRM settings, and stays hidden when the split cannot close.
-The sidebar's Records and Lists sections can also collapse independently.
+The sidebar's Records, Pipelines, and Lists sections collapse independently.
+Drag their headings, or focus a Reorder control and use Up/Down, to save a
+per-account local section order. Import, Export, and Settings stay in the footer.
 
 **Pipelines** in the CRM sidebar hold company or contact entries, or free-form
 rows in a generic pipeline, in the shared records editor. They have their own identity, ownership and sharing; their

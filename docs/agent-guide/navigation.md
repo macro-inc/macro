@@ -506,6 +506,27 @@ share rails 26px from either edge, including collapse, search, add, and tree
 controls. Use the shared slots described in
 [the sidebar spacing guide](../../apps/web/src/components/view-shell/README.md).
 
+### Reorder workspace sidebar sections
+
+On desktop, drag a section heading past another section to change their shared
+order. An eight-pixel mouse movement starts the drag; a click still collapses the
+section, and header actions still run normally. Tab to a headed section's
+**Reorder** control and press Up or Down for keyboard reordering. This works in Email,
+Drive, Tasks (including Projects), Customers, Calls, Reviews, Agents, Calendar,
+Passwords, and Settings. Chat uses the same interaction with its existing
+section preferences.
+
+Reload to verify persistence. Each account and workspace has its own local
+order; moving Email sections does not move Drive sections. New sections retain
+their default slot, and removed sections are ignored. Unnamed navigation groups
+and the mini calendar share that order but have no grip, drag behavior, or keyboard
+move control. Drop a headed section before or after them to change their relative
+positions. Account and workspace selectors, search/create controls, promotions,
+and footer tools stay pinned; they have no drag handle or drop target. Old saved
+keys cannot move them.
+At 390×844 with touch emulation, headings still collapse and actions still work;
+section dragging and the keyboard reorder control are desktop-only.
+
 Desktop app navigation panels have **Hide navigation** at the right end of their
 48px title bar. It hides only that split's navigation; **Show navigation** (the
 hamburger) appears before the main header's title/breadcrumbs, including when a
@@ -1382,7 +1403,9 @@ label it Finance and make a task to pay it", finding the labels, tags,
 channels, folders, people and agents it names with the user's access; one it
 can't find, or that matches several, is left for the user to pick, and
 anything it had to create for the routine, such as a new database, is listed
-on the review), **Templates** (with
+on the review; an **Ask AI** step it writes requires the connected apps it
+uses, and an app it needs that the user hasn't connected is listed under
+**Connections** as not connected, with **Connect**), **Templates** (with
 `enable-routine-starter-templates` on; the scheduler's routine catalog,
 `GET /scheduled-actions/catalog`, in its order: **Sort my inbox**, **Triage new
 tasks**, **Morning brief**, **Share updates** only where AI decisions are
@@ -1526,13 +1549,19 @@ and up to thirty-two activity filters share one event group; matching any
 trigger runs it.
 
 A routine's top bar uses the task breadcrumb layout: **Routines → routine name**
-with its three-dot menu (**Duplicate**, **Share**, **Delete**)
+(after the routine's icon; its owner clicks the icon to change it, with
+`enable-entity-appearance`) with its three-dot menu (**Duplicate**, **Share**, **Delete**)
 right after the name, then the **Overview** / **Runs** tabs (Runs with a count),
 and at the right the save state (**Saving…** / **Saved**; **Not saved** in red
 when saving failed, or **Not saved: fix the routine** with the reason on hover
 while an edit is invalid), **Run now** with its **Run options** menu.
+On a phone the bar floats over the page in two rows, with no save state: the
+breadcrumbs in a pill and **Run now**, then the tabs. Only those controls take
+taps; a tap on the bar's empty space reaches the page under it.
 Overview is the routine as a page:
-its icon, an editable title, an editable description (**Add a description…**;
+its icon (the same one the top bar shows: the icon chosen for it in its colour,
+else the icon of its first trigger, such as a clock for a schedule or an
+envelope for email), an editable title, an editable description (**Add a description…**;
 saves on blur or Enter, Escape discards, up to 1000 characters; a drafted
 routine starts with the sentence it was drafted from, a template's with the
 template's description), then a line with the **Enabled** switch (disabled
@@ -1574,9 +1603,10 @@ in another split. **Back to routines** returns to the list in the same pane.
 The apps chip in New routine (**Add apps**) and **Add connection** under
 **Connections** on a routine's page open the app picker: search the Pipedream catalog and pick the apps the
 routine's **Ask AI** step needs, on top of the agent's own. Each picked app
-shows **Connected** or a **Connect** button for the routine owner. Until every
-listed app is connected the composer shows **Connect every app this routine
-requires.** and Overview does not save; the server rejects the save too, and a
+shows **Connected**, or **Not connected** with a **Connect** button that opens
+Pipedream Connect, for the routine owner. Until every listed app is connected
+the composer names the rest (**Connect Notion, which this routine requires.**)
+and Overview does not save; the server rejects the save too, and a
 run whose app was disconnected later fails before a session opens. A routine
 with apps needs an **Ask AI** step ("Apps are for an Ask AI step. Add one, or
 remove the apps."). Agents whose runtime opens its own sessions (macrod, other

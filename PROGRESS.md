@@ -88,3 +88,15 @@ preview remains available at the existing preview address.
 - The regression failed before the fix because the second prompt never opened.
   The focused router suite now passes all 23 tests.
 - Browser and device checks remain assigned to the user.
+
+## Sidebar section-order merge
+
+- Merged `origin/main` at `726276100c`, retaining shared per-account sidebar
+  section ordering alongside project saved views and guarded navigation.
+- Resolved `TasksSidebar.tsx` by grouping built-in and saved task views inside
+  the shared headerless section; project views remain in the Projects section.
+- Combined the Email, saved-view, and Tasks guides and the Tasks agent guide
+  without restoring obsolete standalone saved-view sections for Tasks.
+- Local validation: web checks and `just check` passed; 3,631 tests across
+  450 files passed. Browser and device verification remain assigned to the user.
+- CI will be requested after the merge commit is pushed.

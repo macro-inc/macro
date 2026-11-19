@@ -216,7 +216,9 @@ is off vs Enable calendar wording counts only own inboxes, and Grant access, Tur
 on and Reconnect only start consent for one of them. It covers the grid only in a
 week without events and with no working calendar the viewer can see; a working
 calendar shared with them keeps it to the bottom-right pill, so a delegate whose
-only working calendar is shared sees the pill in every week.
+only working calendar is shared sees the pill in every week. On desktop the
+pill rides above the toast stack while it shows anything, so the app-wide
+prompt for the same inbox doesn't cover it.
 An own inbox whose calendar used to sync but lost calendar access without the
 user turning it off (a Google grant from before Macro narrowed its calendar
 scopes, which the server turns off and clears hourly) shows **Calendar for
@@ -548,6 +550,9 @@ send `macroCall` on the update route, which writes the join link and removes the
 Google Meet in one update. An event already holding a Macro call keeps it, and an
 Outlook event's Teams meeting cannot be removed this way.
 
+Drag the Upcoming events, Calendars, or Team out of office heading to reorder
+sidebar sections locally. Their order survives reloads per account; the mini
+calendar and footer controls stay fixed. Nested calendar accounts remain grouped.
 The sidebar's `Calendars` section folds each connected account into a collapsible
 group: a caret plus the account address header with a checkbox that shows or hides all of
 that account's calendars at once, and the account's calendars listed beneath it (color dot,

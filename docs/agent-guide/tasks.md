@@ -60,6 +60,9 @@ projects**, and **Created by me**. Its plus opens the project composer.
 Saved project views follow those built-in views inside the same section, with
 **Create view** last. Saved task views likewise follow the built-in task views.
 Both lists appear in the shared desktop sidebar and **Show sidebar** touch drawer.
+On desktop, drag section headings, or focus their Reorder control and press
+Up/Down, to save a different per-account order locally. Built-in and saved task
+views move together as one unnamed group; saved project views remain with Projects.
 Projects has no separate dock/More destination, PillTabs, or saved-view selector.
 The Tasks dock button stays selected while browsing projects. The project list's
 floating **Project** action opens the initiative composer, not the Drive folder

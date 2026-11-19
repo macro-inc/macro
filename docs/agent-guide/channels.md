@@ -1092,11 +1092,12 @@ and full account email wrap at phone widths so reviewers can identify the
 requester before answering. If the display name already is the email, it appears
 only once. Every participant
 also gets a **Requests to join** notification (turn it off under notification
-settings) that opens the channel and marks it unread. The first answer wins: the
-row then shows **Approved by** or **Denied by** for everyone, a withdrawn request
-shows **Request withdrawn**, and the other participants' notifications are marked
-done. Approval adds the requester, who gets the usual "added you" invite
-notification, and the timeline shows the usual added row. A requester waiting on
+settings) that opens the channel and marks it unread. The first answer wins and
+the other participants' notifications are marked done. An approved row drops its
+buttons and shows no answer: approval adds the requester, who gets the usual
+"added you" invite notification, and the timeline shows the usual added row. A
+denied row shows **Denied by** for everyone, and a withdrawn request shows
+**Request withdrawn**. A requester waiting on
 the denied view is taken into the channel when the approval arrives.
 
 Verify with two accounts: ask from a non-member, approve or deny from a member
@@ -1205,6 +1206,14 @@ participants to check that it disappears without reloading. Start two calls to
 check newest-first ordering, and dismiss a ring without joining. Repeat with
 the sidebar flag off. At 390×844, keep the existing in-row Join/Decline and live
 indicators: the standalone desktop Live section does not appear on touch.
+
+Reopening Chat or reloading with a saved channel list displays cached conversations
+while the bounded Soup pages revalidate. A settled page replaces the cached seed,
+including when the page is empty. Only a cold list without cached rows shows loading
+placeholders. Favorites do not add skeleton rows while channel metadata loads;
+Unread-only can legitimately leave the section empty. A successfully omitted channel
+favorite disappears from this rail without deleting the saved favorite, while a failed
+lookup offers Retry.
 
 ### Original sidebar (flag off)
 
