@@ -20,8 +20,8 @@ fn cache() -> MacroCache {
 
 /// A cache signed in as a fresh ACL user that may run every command but
 /// `refused`, and the user's name, to remove it with [`remove_user`]. Its
-/// password comes from Redis and is never kept, so a user a failed test
-/// leaves behind lets no one sign in.
+/// password comes from Redis and only the returned cache holds it, so a
+/// user a failed test leaves behind lets no one sign in.
 async fn cache_refusing(cache: &MacroCache, refused: &[&str]) -> (MacroCache, String) {
     let url = redis_url();
     let address = url
