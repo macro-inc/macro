@@ -485,11 +485,14 @@ reminder dispatch, team availability, and provider/Postgres persistence.
   `checkpoint_outlook_calendar`'s finish certifies a full scan and keeps a
   delta round's certificate, unless a listed event has no stored copy
   (`has_unreadable_events`), and the sync stores a series missing an
-  occurrence it could not read under no role. Discovery keeps an uncertified
-  calendar's coverage and schedules the full scan instead
-  (`rescan_for_verification`): a `canEdit` change restarts the scan, and a
-  calendar holding an unreadable event gets none, or it would be scanned on
-  every discovery.
+  occurrence it could not read under no role, even when it compares
+  unchanged (`verify_source_access` withdraws a stored role on a read under
+  none). Discovery keeps an uncertified calendar's coverage and schedules the
+  full scan instead (`rescan_for_verification`): a `canEdit` change restarts
+  the scan, and a calendar holding an unreadable event gets none, or it would
+  be scanned on every discovery. A copy written under another role since the
+  last round reaches discovery only until the next round finishes, so that
+  finish schedules the full scan itself (`holds_stale_role`).
 - A calendar's sync error reaches calendar caches only as an `UpsertCalendar`
   change-log entry, since they read the calendar list once and then follow
   the log. Google and Outlook log one when the shown error

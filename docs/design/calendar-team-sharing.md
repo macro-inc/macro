@@ -271,13 +271,15 @@ and a secondary calendar, which reads every event each round, needs none. The
 round that finishes a full scan certifies the calendar, a delta round keeps a
 certificate it had, and a source written since the last round under another
 role (an edit's echo carrying the role from before a change) schedules another
-full scan. A first import certifies nothing until its whole window is in.
+full scan, from discovery or from the round that finishes before it. A first
+import certifies nothing until its whole window is in.
 
 The Outlook sync skips an event or a recurring occurrence it cannot normalize,
 so the user's own calendar keeps syncing, where Google's fails the calendar.
 Team reads stay closed to what it skipped: a round that leaves a listed event
-without a stored copy does not certify its calendar, and a series stored
-without one of its occurrences is stored under no role. Discovery schedules no
+without a stored copy does not certify its calendar, and a series read
+without one of its occurrences is stored under no role, even when it matches
+the stored copy. Discovery schedules no
 full scan for such a calendar, since one would skip the event again; it counts
 for teammates once the event is readable or gone and one full scan has read
 the calendar since. A calendar removed from the mailbox loses its sources,
