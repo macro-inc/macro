@@ -45,7 +45,7 @@ export function NativeMeetingCall(props: {
           {t('calls.leave')}
         </Button>
       </div>
-      <div class="min-h-0 flex-1">
+      <div class="flex min-h-0 flex-1 flex-col">
         {props.discussion({
           open: true,
           focusOnOpen: false,
