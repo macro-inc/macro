@@ -28,12 +28,23 @@ export function inputValueText(value: unknown): string {
   if (typeof value === 'string') return value;
   if (typeof value === 'boolean')
     return value ? t('subRoutines.inputYes') : t('subRoutines.inputNo');
-  // Every digit it was given: the format's default would round it to three.
-  if (typeof value === 'number')
-    return new Intl.NumberFormat(formatLocale(), {
-      maximumFractionDigits: 20,
-    }).format(value);
+  if (typeof value === 'number') return numberText(value);
   return JSON.stringify(value) ?? '';
+}
+
+/**
+ * A number with every digit it was given, in the interface language. The
+ * format's default rounds to three decimals and it can show at most 20, so
+ * a number its shortest form writes with an exponent or more decimals reads
+ * as that form.
+ */
+function numberText(value: number): string {
+  const plain = String(value);
+  const decimals = plain.split('.')[1]?.length ?? 0;
+  if (/e/i.test(plain) || decimals > 20) return plain;
+  return new Intl.NumberFormat(formatLocale(), {
+    maximumFractionDigits: decimals,
+  }).format(value);
 }
 
 /** The values each copy of a definition is given, as chips. */
