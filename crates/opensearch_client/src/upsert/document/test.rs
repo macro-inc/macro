@@ -1,5 +1,6 @@
 use super::*;
 use crate::date_format::EpochMillis;
+use crate::error::WriteRefusal;
 use crate::test_support::serve_once;
 
 fn args(doc_id: &str, node_id: &str) -> UpsertDocumentArgs {

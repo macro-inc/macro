@@ -289,11 +289,16 @@ pick for retry.
 When the agent itself first reports online (not when its computer connects),
 its inviter (the team agent's `created_by`) gets the `computer_setup` notification with the agent's
 `agent { userId, name }`: "<name> is ready", in-app as a one-minute notice
-with **Message <name>** (the DM, through the same open-DM path as any member)
-and, for owners and admins (who own the computer's runtime), **Connect
+with **Message <name>** and, for owners and admins (who own the computer's runtime), **Connect
 Claude plan**. A failed first setup notifies "<name> couldn't be set up" with the
 reason and **Retry**. Clicking the notification opens the DM (ready) or
-**Team → Members** (failed). The agent flow has no **Chat with <agent>**; that stays in
+**Team → Members** (failed). **Message <name>**, the notification, and the end
+of adding an agent all open the agent's real DM, created if it doesn't exist
+yet (`openTeamAgentDirectMessage`, `POST /channels/get_or_create_dm`), because
+the agent says hi first; a person's DM would wait for the viewer's first
+message (see [Empty direct messages](channels.md#empty-direct-messages)). If it
+can't be opened, a "Couldn't open the conversation. Try again." toast says so.
+The agent flow has no **Chat with <agent>**; that stays in
 the computer purchase flow. With `enable-macro-computers` on, **Connect
 <name> to your Claude plan** is the Claude sign-in for the agent's computer,
 opened from the notification or the row, never as a step of the invite. One
@@ -729,7 +734,8 @@ trialing team, which ends the trial and bills Max for a new cycle today.
 Pro downgrades start at renewal.
 **Keep Max** appears only for a confirmed pending downgrade and cancels it;
 failed scheduled-plan reads offer **Try again**, while teams without applicable
-scheduled plans show no retry notice). CRM (individual email contribution and team/personal domain exclusions;
+scheduled plans show no retry notice). CRM (individual email contribution, gated selective sharing rules with JSON,
+count preview and history subpages, and team/personal domain exclusions;
 a `Stages` section independent of email contribution for the company Stage options that new pipelines
 also start with, with `Customize`, inline rename, reorder by drag handle or arrow
 keys (up/down buttons on touch), delete, `Add stage`, and `Reset to defaults`,

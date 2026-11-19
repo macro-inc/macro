@@ -251,6 +251,17 @@ describe('inbox consent callback', () => {
     );
   });
 
+  it('leaves the callback while the inbox is still being removed', async () => {
+    mocks.init.mockReturnValue(errAsync({ tag: 'InboxBeingRemoved' }));
+    render(() => <EmailLinkCallback />);
+    await waitFor(() => expect(mocks.failure).toHaveBeenCalledOnce());
+    expect(mocks.navigate).toHaveBeenCalledOnce();
+    expect(mocks.track).toHaveBeenCalledExactlyOnceWith(
+      'email_link_callback_result',
+      { outcome: 'inbox_being_removed' }
+    );
+  });
+
   it('still holds the callback for a shared-inbox confirmation', async () => {
     mocks.init.mockReturnValueOnce(
       errAsync({

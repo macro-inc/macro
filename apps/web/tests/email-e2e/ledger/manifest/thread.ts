@@ -1233,6 +1233,34 @@ export const thread = {
       needs: 'the calendar service',
     },
     {
+      id: 'STL-523',
+      surface: 'SL-40',
+      fn: ['F-156'],
+      state: '"Syncing your calendar…" at the shared-event action',
+      trigger:
+        'open a shared event before the first writable calendar is discovered',
+      source: [
+        INVITATION,
+        'src/features/calendar/components/CalendarFirstSyncNotice.tsx',
+      ],
+      providers: ['gmail'],
+      needs: 'the calendar service',
+    },
+    {
+      id: 'STL-524',
+      surface: 'SL-28',
+      fn: ['F-114'],
+      state: '"Syncing your calendar…" at the event composer create action',
+      trigger:
+        'create an event from a thread before the first writable calendar is discovered',
+      source: [
+        'src/features/calendar/components/composer/event-form-parts.tsx',
+      ],
+      viewports: ['desktop'],
+      providers: ['gmail'],
+      needs: 'the calendar service',
+    },
+    {
       id: 'STL-100',
       surface: 'SL-40',
       fn: ['F-153'],
@@ -1298,6 +1326,17 @@ export const thread = {
       state: 'saved card without RSVP, Join, Open in calendar or View your day',
       trigger: 'invitation message with the calendar off',
       source: [INVITATION, CARD],
+    },
+    {
+      id: 'STL-522',
+      surface: 'SL-40',
+      fn: ['F-156'],
+      state: '"Adding shared events requires a writable Google calendar."',
+      trigger: 'open a shared event with Outlook as the only calendar',
+      source: ['src/features/calendar-view/components/AddToCalendarButton.tsx'],
+      providers: ['outlook'],
+      flag: 'enable-calendar-add-shared-event',
+      needs: 'the calendar service',
     },
     // SL-43
     {

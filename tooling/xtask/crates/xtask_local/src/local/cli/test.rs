@@ -112,32 +112,32 @@ fn seed_scenario_accepts_instance_and_trailing_scenario_arguments() {
 }
 
 #[test]
-fn run_local_and_stack_up_parse_the_computers_flags() {
+fn computers_are_off_unless_a_flag_turns_them_on() {
     use crate::local::computers::Fleet;
 
-    let fleet = |argv: &[&str], default: Fleet| {
+    let fleet = |argv: &[&str]| {
         let cli = Cli::try_parse_from(argv).unwrap();
         match cli.command {
-            Cmd::RunLocal(args) => args.run.computers.fleet(default),
-            Cmd::Stack(StackCmd::Up(args)) => args.run.computers.fleet(default),
-            Cmd::ValidateLocalCompose(args) => args.computers.fleet(default),
+            Cmd::RunLocal(args) => args.run.computers.fleet(),
+            Cmd::Stack(StackCmd::Up(args)) => args.run.computers.fleet(),
+            Cmd::ValidateLocalCompose(args) => args.computers.fleet(),
             _ => panic!("unexpected command"),
         }
     };
+    assert_eq!(fleet(&["cargo-x", "run-local"]), Fleet::Off);
+    assert_eq!(fleet(&["cargo-x", "stack", "up"]), Fleet::Off);
+    assert_eq!(fleet(&["cargo-x", "validate-local-compose"]), Fleet::Off);
     assert_eq!(
-        fleet(&["cargo-x", "run-local"], Fleet::Docker),
+        fleet(&["cargo-x", "run-local", "--computers", "docker"]),
         Fleet::Docker
     );
     assert_eq!(
-        fleet(&["cargo-x", "run-local", "--no-computers"], Fleet::Docker),
+        fleet(&["cargo-x", "stack", "up", "--computers", "docker"]),
+        Fleet::Docker
+    );
+    assert_eq!(
+        fleet(&["cargo-x", "run-local", "--no-computers"]),
         Fleet::Off
-    );
-    assert_eq!(
-        fleet(
-            &["cargo-x", "stack", "up", "--computers", "docker"],
-            Fleet::Off
-        ),
-        Fleet::Docker
     );
     assert!(
         Cli::try_parse_from([

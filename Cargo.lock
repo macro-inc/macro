@@ -2614,6 +2614,34 @@ dependencies = [
 ]
 
 [[package]]
+name = "aws-sdk-cloudwatch"
+version = "1.113.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "0bd1ebba805f62f5609ff8f3c125712c8fb7bd893be4615ee0f2995f0b1709b7"
+dependencies = [
+ "aws-credential-types",
+ "aws-runtime",
+ "aws-smithy-async",
+ "aws-smithy-cbor",
+ "aws-smithy-compression",
+ "aws-smithy-http",
+ "aws-smithy-json",
+ "aws-smithy-observability",
+ "aws-smithy-runtime",
+ "aws-smithy-runtime-api",
+ "aws-smithy-types",
+ "aws-types",
+ "fastrand 2.4.1",
+ "flate2",
+ "http 0.2.12",
+ "http 1.4.0",
+ "http-body 1.0.1",
+ "http-body-util",
+ "regex-lite",
+ "tracing",
+]
+
+[[package]]
 name = "aws-sdk-dynamodb"
 version = "1.112.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -2955,6 +2983,16 @@ dependencies = [
 ]
 
 [[package]]
+name = "aws-smithy-cbor"
+version = "0.61.8"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "5fb5813cf71b5f07be37c10370db550b62a0ce94f3ba5722c44a67556f85c42c"
+dependencies = [
+ "aws-smithy-types",
+ "minicbor",
+]
+
+[[package]]
 name = "aws-smithy-checksums"
 version = "0.64.8"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -2972,6 +3010,24 @@ dependencies = [
  "pin-project-lite",
  "sha1 0.11.0",
  "sha2 0.11.0",
+ "tracing",
+]
+
+[[package]]
+name = "aws-smithy-compression"
+version = "0.1.6"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "0e3cba0f1e060e0025523d3965f4967e668f9bbf7342c09427a1ad110437f4bb"
+dependencies = [
+ "aws-smithy-runtime-api",
+ "aws-smithy-types",
+ "bytes",
+ "flate2",
+ "futures-util",
+ "http 1.4.0",
+ "http-body 1.0.1",
+ "http-body-util",
+ "pin-project-lite",
  "tracing",
 ]
 
@@ -7512,6 +7568,7 @@ dependencies = [
  "macro_db_migrator",
  "macro_event_broker",
  "macro_event_topics",
+ "macro_service_urls",
  "macro_user_id",
  "macro_uuid",
  "model-entity",
@@ -7521,6 +7578,7 @@ dependencies = [
  "non_empty",
  "opentelemetry",
  "opentelemetry_sdk",
+ "outlook_emulator",
  "rand 0.9.4",
  "recursion",
  "redis",
@@ -7676,6 +7734,7 @@ name = "email_focus_worker"
 version = "0.1.0"
 dependencies = [
  "ai_usage",
+ "aws-sdk-cloudwatch",
  "calendar_events",
  "chrono",
  "connection_gateway_client",
@@ -7687,6 +7746,7 @@ dependencies = [
  "kafka_util",
  "macro_auth",
  "macro_authorization",
+ "macro_aws_config",
  "macro_config",
  "macro_db_migrator",
  "macro_entrypoint",
@@ -7704,6 +7764,7 @@ dependencies = [
  "rootcause",
  "serde_json",
  "sqlx",
+ "strum 0.27.2",
  "tokio",
  "tokio-util",
  "tracing",
@@ -7811,6 +7872,7 @@ dependencies = [
  "email_utils",
  "entity_access",
  "entity_access_management",
+ "feature_flags",
  "frecency",
  "futures",
  "generic_email_domains",
@@ -12014,7 +12076,9 @@ dependencies = [
  "either",
  "macro_env",
  "macro_env_var",
+ "nom 8.0.0",
  "opentelemetry",
+ "opentelemetry_sdk",
  "rdkafka",
  "thiserror 2.0.18",
  "tokio",
@@ -13018,10 +13082,13 @@ dependencies = [
  "agent_correlation",
  "kafka_util",
  "macro_event_topics",
+ "opentelemetry",
+ "opentelemetry_sdk",
  "rdkafka",
  "rootcause",
  "serde",
  "serde_json",
+ "strum 0.27.2",
  "thiserror 2.0.18",
  "tokio",
  "tokio-util",
@@ -13635,6 +13702,15 @@ dependencies = [
  "proc-macro2",
  "quote",
  "syn 2.0.117",
+]
+
+[[package]]
+name = "minicbor"
+version = "2.3.1"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "e7244eafd1e09e7c4e33043881997aa6ab6dffff3ed2cee3395a278980481d6e"
+dependencies = [
+ "half",
 ]
 
 [[package]]
@@ -18524,6 +18600,7 @@ dependencies = [
  "projects",
  "properties",
  "psd_engine",
+ "rand 0.9.4",
  "rdkafka",
  "rootcause",
  "rust-embed",

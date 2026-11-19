@@ -144,7 +144,8 @@ the gateway `/email` prefix.
 - The API's server spans come from `macro_tower_layers`
   (`api::traced`). tower-http's default `TraceLayer` span is DEBUG, below the
   exporter's INFO filter, so an API wrapped in it sends no server spans.
-- `models_email`'s `Link` `Debug` prints only opaque fields. Keep addresses,
+- `models_email`'s `Link`, `BlockSenderPayload` and `UnblockSenderPayload`
+  `Debug` print only opaque fields. Keep addresses,
   `macro_id`, contact emails and whole messages out of span fields: skip them
   in `#[tracing::instrument]` and record `link_id` or provider ids instead.
 
@@ -181,6 +182,14 @@ the gateway `/email` prefix.
   claiming pages once per cycle would leave a folder with new mail behind
   every worker's whole cycle of queued messages. A cycle ends when no message
   is due, so folder catalogs are checked again before more pages are read.
+- `pubsub_workers` reads the PostHog flag `enable-outlook-import-live-pass`
+  for the service context `outlook-mailbox-sync` about once a minute
+  (`mailbox_sync_worker::run_live_import_pass`, one
+  `outlook.live_import_pass.refresh` span per read) and sets the sync's
+  `LiveImportPass` from it: newest-first imports and the live pass beside
+  each folder's import round. Without a `POSTHOG_API_KEY`, or while a read
+  fails, it is off and warns once; a local stack's placeholder key reads off.
+  ([runbook](../../docs/runbooks/outlook-sync.md#new-mail-during-an-import))
 - `OUTLOOK_IMPORTS_PAUSED` (read at startup) makes the Outlook sync loop claim
   only live message work; import rows wait and live changes keep importing.
   `src/bin/reimport_outlook_folders` re-imports folders whose delta round

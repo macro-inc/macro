@@ -446,6 +446,12 @@ that listener is ready. Cancellation can stop the gate before startup finishes.
   rejects it as `RoutineWrite`, for any routine, so two can't trigger each
   other. Mail received, internal hops and sync-service document edits carry
   no stamp.
+- Received mail is for its inbox's owner and for each account that inbox is
+  delegated to (multi-inbox, `macro_user_links`): admission asks the
+  `InboxDelegates` port (`PgInboxDelegates`) once per event, and only when a
+  candidate's owner isn't the inbox's (`event_runs/admission.rs`, `Audience`).
+  Like the other audience rules (`IncomingEvent::is_for_owner`), it is never
+  an access grant: each owner's entity access is still checked.
 - `EventReference` rejects unknown keys, so a replica still on older code can't
   read a run row with a new key: write a new optional key only when it is set.
 

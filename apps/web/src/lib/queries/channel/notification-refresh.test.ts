@@ -273,30 +273,45 @@ describe('shared channel notification refresh', () => {
     expect(f.query).toHaveBeenCalledOnce();
   });
 
-  it('recovers transient failures with exponential backoff capped at 30 seconds', async () => {
-    const f = setup();
-    f.register();
-    f.request.mockResolvedValue({
-      error: new CombinedError({ networkError: new Error('offline') }),
-    });
-    f.queue.onPatch(patch(), false);
-    await tick();
-    for (const delay of [1000, 2000, 4000, 8000, 16000, 30000, 30000]) {
-      const before = f.query.mock.calls.length;
-      await vi.advanceTimersByTimeAsync(delay - 1);
-      expect(f.query).toHaveBeenCalledTimes(before);
-      await vi.advanceTimersByTimeAsync(1);
-      expect(f.query).toHaveBeenCalledTimes(before + 1);
+  it.each([
+    new CombinedError({ networkError: new Error('offline') }),
+    new CombinedError({
+      graphQLErrors: [{ message: 'A comms error has occured' }],
+    }),
+    new CombinedError({
+      graphQLErrors: [
+        { message: 'Internal', extensions: { code: 'INTERNAL' } },
+      ],
+    }),
+  ])(
+    'recovers transient failures and server faults with exponential backoff capped at 30 seconds: %s',
+    async (error) => {
+      const f = setup();
+      f.register();
+      f.request.mockResolvedValue({ error });
+      f.queue.onPatch(patch(), false);
+      await tick();
+      for (const delay of [1000, 2000, 4000, 8000, 16000, 30000, 30000]) {
+        const before = f.query.mock.calls.length;
+        await vi.advanceTimersByTimeAsync(delay - 1);
+        expect(f.query).toHaveBeenCalledTimes(before);
+        await vi.advanceTimersByTimeAsync(1);
+        expect(f.query).toHaveBeenCalledTimes(before + 1);
+      }
+      f.request.mockResolvedValue({});
+      await vi.advanceTimersByTimeAsync(30000);
+      const calls = f.query.mock.calls.length;
+      await vi.advanceTimersByTimeAsync(60000);
+      expect(f.query).toHaveBeenCalledTimes(calls);
     }
-    f.request.mockResolvedValue({});
-    await vi.advanceTimersByTimeAsync(30000);
-    const calls = f.query.mock.calls.length;
-    await vi.advanceTimersByTimeAsync(60000);
-    expect(f.query).toHaveBeenCalledTimes(calls);
-  });
+  );
 
   it.each([
-    new CombinedError({ graphQLErrors: ['forbidden'] }),
+    new CombinedError({
+      graphQLErrors: [
+        { message: 'forbidden', extensions: { code: 'FORBIDDEN' } },
+      ],
+    }),
     new CombinedError({
       networkError: new Error('unauthorized'),
       response: { status: 401 },
@@ -326,7 +341,11 @@ describe('shared channel notification refresh', () => {
   );
 
   it.each([
-    new CombinedError({ graphQLErrors: ['forbidden'] }),
+    new CombinedError({
+      graphQLErrors: [
+        { message: 'forbidden', extensions: { code: 'FORBIDDEN' } },
+      ],
+    }),
     new CombinedError({
       networkError: new Error('unauthorized'),
       response: { status: 401 },
