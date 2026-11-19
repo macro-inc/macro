@@ -80,3 +80,11 @@ preview remains available at the existing preview address.
 - Initial validation failures were a keyed-Show callback type, test guard order,
   and test import formatting; each was corrected and the affected checks rerun.
 - Browser and device verification remain assigned to the user.
+
+## Superseded leave confirmations
+
+- Release a cancelled confirmation synchronously so a newer navigation can ask
+  immediately. A settled older request cannot clear the replacement prompt.
+- The regression failed before the fix because the second prompt never opened.
+  The focused router suite now passes all 23 tests.
+- Browser and device checks remain assigned to the user.

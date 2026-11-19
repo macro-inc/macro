@@ -613,18 +613,24 @@ describe('saved-view draft leave', () => {
     expect(discard).not.toHaveBeenCalled();
   });
 
-  it('keeps the draft when navigation aborts during confirmation', async () => {
+  it('confirms the latest navigation when it supersedes an open prompt', async () => {
     const { router, history } = mountDraft();
     const pane = router.panes()[0]!;
-    const draft = creation.current()!;
     const first = router.navigatePane(pane, '/home');
     expect(confirmDialog).toHaveBeenCalledTimes(1);
     const second = router.navigatePane(pane, '/home');
+    expect(confirmDialog).toHaveBeenCalledTimes(2);
     expect(await first).toMatchObject({ status: 'cancelled' });
-    expect(await second).toMatchObject({ status: 'cancelled' });
-    expect(creation.current()?.id).toBe(draft.id);
-    expect(discard).not.toHaveBeenCalled();
-    expect(history.read().path).toBe('/draft');
+
+    // Settling the old request must not release the new prompt's ownership.
+    const action = vi.fn();
+    creation.run(action);
+    expect(confirmDialog).toHaveBeenCalledTimes(2);
+    respond(true);
+    expect(await second).toMatchObject({ status: 'committed' });
+    expect(discard).toHaveBeenCalledTimes(1);
+    expect(action).not.toHaveBeenCalled();
+    expect(history.read().path).toBe('/home');
   });
 
   it('keeps the draft when a secondary guard refuses after confirmation', async () => {

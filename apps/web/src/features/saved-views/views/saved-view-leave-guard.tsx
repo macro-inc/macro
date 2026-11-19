@@ -32,9 +32,9 @@ export function SavedViewLeaveGuard(props: {
     if (!props.creation.dirty()) return true;
 
     // Give the existing dialog a disposable owner for navigation cancellation.
-    const { confirmation, close } = createRoot(
+    const { confirmation, dispose } = createRoot(
       (dispose) => ({
-        close: dispose,
+        dispose,
         confirmation: confirmDialog(
           () => ({
             title: t('viewMenus.leaveDraftTitle'),
@@ -48,6 +48,10 @@ export function SavedViewLeaveGuard(props: {
       }),
       owner
     );
+    const close = () => {
+      if (closeConfirmation === close) closeConfirmation = undefined;
+      dispose();
+    };
     closeConfirmation = close;
     signal?.addEventListener('abort', close, { once: true });
     try {
@@ -55,7 +59,6 @@ export function SavedViewLeaveGuard(props: {
     } finally {
       signal?.removeEventListener('abort', close);
       close();
-      closeConfirmation = undefined;
     }
   };
 
