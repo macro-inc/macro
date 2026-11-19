@@ -1,4 +1,5 @@
 use super::*;
+use crate::domain::mailbox::live_pass::StreamKind;
 use email_api_client::domain::models::EmailApiError;
 use macro_db_migrator::MACRO_DB_MIGRATIONS;
 use sha2::{Digest, Sha256};
@@ -62,7 +63,12 @@ async fn only_a_matching_verifier_can_bind_an_unknown_create_and_wake_the_mailbo
     .await
     .unwrap();
     assert_eq!(row.provider_id.as_deref(), Some("sub"));
-    assert!(repo.claim_stream(Uuid::new_v4()).await.unwrap().is_some());
+    assert!(
+        repo.claim_stream(Uuid::new_v4(), StreamKind::MailFolder)
+            .await
+            .unwrap()
+            .is_some()
+    );
     ingress
         .receive(
             id,
@@ -84,7 +90,11 @@ async fn only_a_matching_verifier_can_bind_an_unknown_create_and_wake_the_mailbo
 #[sqlx::test(migrator = "MACRO_DB_MIGRATIONS")]
 async fn notification_during_a_delta_page_is_not_erased_by_its_checkpoint(db: PgPool) {
     let (repo, _, _, id) = setup(&db).await;
-    let stream = repo.claim_stream(Uuid::new_v4()).await.unwrap().unwrap();
+    let stream = repo
+        .claim_stream(Uuid::new_v4(), StreamKind::MailFolder)
+        .await
+        .unwrap()
+        .unwrap();
     MailboxWatchNotifications(repo.clone())
         .receive(id, vec![notification("secret", "sub", WatchHint::Changed)])
         .await
@@ -93,7 +103,10 @@ async fn notification_during_a_delta_page_is_not_erased_by_its_checkpoint(db: Pg
         .await
         .unwrap();
     assert!(
-        repo.claim_stream(Uuid::new_v4()).await.unwrap().is_some(),
+        repo.claim_stream(Uuid::new_v4(), StreamKind::MailFolder)
+            .await
+            .unwrap()
+            .is_some(),
         "the authenticated wakeup must survive the page commit"
     );
 }
@@ -294,4 +307,30 @@ async fn lifecycle_events_are_logged_with_the_mailbox_and_counted_on_the_span(db
     assert_eq!(missed["link_id"], link.to_string());
     assert_eq!(*reauthorize_level, tracing::Level::INFO);
     assert_eq!(reauthorize["lifecycle_event"], "reauthorizationRequired");
+}
+
+#[sqlx::test(migrator = "MACRO_DB_MIGRATIONS")]
+async fn a_change_notification_makes_a_folders_live_pass_due(db: PgPool) {
+    let (repo, link, _, id) = setup(&db).await;
+    sqlx::query!(
+        "INSERT INTO email_sync_streams (id,link_id,generation,kind,scope_id,initial_complete,next_run_at) VALUES ($1,$2,1,'mail_folder_live','folder',true,now() + interval '2 minutes')",
+        macro_uuid::generate_uuid_v7(),
+        link
+    )
+    .execute(&db)
+    .await
+    .unwrap();
+
+    MailboxWatchNotifications(repo.clone())
+        .receive(id, vec![notification("secret", "sub", WatchHint::Changed)])
+        .await
+        .unwrap();
+
+    let pass = repo
+        .claim_stream(Uuid::new_v4(), StreamKind::LivePass)
+        .await
+        .unwrap()
+        .unwrap();
+    assert_eq!(pass.folder.as_str(), "folder");
+    assert!(pass.notification.is_some());
 }

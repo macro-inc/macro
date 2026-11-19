@@ -122,6 +122,11 @@ Outlook (Microsoft Graph) outbound adapters.
   `Prefer: odata.maxpagesize` instead. The mail-folder delta reads through
   `transport::get_delta_page`, which sends it as its own `Prefer` line on
   every page, since the nextLink does not carry it.
+- `RoundStart` applies to a folder delta round's first request only: Graph's
+  message delta takes only `$orderby=receivedDateTime desc` and `ge`/`gt` on
+  `receivedDateTime` in a `$filter`, and carries both in the round's next and
+  delta links, so continuations send none. Order alone changes what a round
+  lists first, not what it lists, so it does not raise `READER_REVISION`.
 - Raise `FolderChangeReader::READER_REVISION` with a change that lets a fresh
   folder delta round list mail an older round missed. Each page carries the
   revision that read it, the folder stream records the revision its round

@@ -133,6 +133,13 @@ tools/HTTP/GraphQL surfaces over them.
   edit hooks invalidate preview metadata; no mailbox index is added for counts.
   No worker initializes consent or activates selected contribution.
 
+- Company lists with at most 500 explicit IDs and policy target reads probe the
+  primary key behind `OFFSET 0` before applying team/visibility filters. Keeping a team
+  predicate inside the probe lets stale plans scan the team per ID. For target
+  locks, resolve authorized IDs first, then lock that set in ID order; a locking
+  lateral can lock foreign rows before its outer filter and sort. Larger company
+  ID sets keep their set-based join; the output page limit does not cap input IDs.
+
 - A generic pipeline has `record_type: None` and an unprotected primary column,
   which can change type or be deleted, leaving `primary_column_id` naming no
   column; `referencing_rows` reads tracked pipelines only. Don't add `ON DELETE`
@@ -275,6 +282,10 @@ tools/HTTP/GraphQL surfaces over them.
   `companies_repo/test/previews.rs` compares them for every role and caller,
   including revocation and regrant on the same session and contact-page route.
 
+- Keep team/visibility filters outside the per-history-ID `LIMIT` in
+  `list_companies_for_soup.sql`, so stale team estimates cannot replace the
+  `crm_companies_id_text_idx` lookup with a team scan for every viewed record.
+
 - Company names/logos live in the global `crm_domain_directory`. Only the
   email pubsub workers carry a real `CompanyMetadataResolver`, using public
   homepage metadata through `unfurl`; every other
@@ -294,6 +305,9 @@ tools/HTTP/GraphQL surfaces over them.
   their team and email address. Company-less contacts add no independent
   thread-access grant, but hidden ones suppress their team's
   CRM-derived grant for members; independent access grants still apply.
+  For a work address whose sole holder is a manual unfiled contact with that
+  primary address, sync refreshes the existing contact and preserves its company
+  choice. Domain company population still runs on its own.
 - Every address a contact is known by is a row in `crm_contact_emails`, stored
   trimmed and lowercased. `crm_contacts.email` is the primary address, and a
   trigger records it in that table. Find a contact by address through
@@ -310,7 +324,10 @@ tools/HTTP/GraphQL surfaces over them.
   it. A mailbox source is recorded per contact and mailbox, not per address:
   `depopulate_contact` keeps it while that mailbox still has mail with another
   of the contact's addresses (`other_address_mail.sql`), checked before the
-  domain lock like population's mailbox scan.
+  domain lock like population's mailbox scan. Mail the provider no longer has
+  (`provider_missing`, an Outlook deletion) counts nowhere: not there, not in
+  the email service's cleanup gate, not in `interactions.sql`; keep the three
+  in step, as a Gmail deletion removes the row.
 - The Sales migration (`SALES_BACKFILL.md`) is forward-only and additive —
   its down migration refuses to erase completion or user edits; never revert
   it to undo a bad migration, only the application code that reads it.

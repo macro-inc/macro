@@ -189,6 +189,8 @@ async fn serve(config: Config, cgroup_parent: String) -> Result<(), Report> {
     )
     .await
     .map_err(|error| rootcause::report!("starting the host service: {error}"))?;
+    // Before any VM runs long enough to swap.
+    service.guard_guest_swap().await;
     let service = Arc::new(service);
     // Tracked by `tasks`: each finishes on its own, under its computer's lock.
     drop(service.resume_pending_restores());

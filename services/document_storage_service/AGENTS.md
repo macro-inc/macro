@@ -52,6 +52,9 @@ threads, pins, recents, notifications, folders, activity.
   them partway; duplication copies documents and chats through
   `entity_mutation/project_contents.rs`, the projects domain's
   `ProjectContentCopier` port.
+- `GET /threads/{thread_id}/channel-shares` lists explicit grants for an
+  authenticated thread owner. The read checks current membership in each
+  returned channel and sends the channel metadata needed by the roster.
 - `src/outbound/docx_export.rs`: primary-database parts and immutable DOCX export
   objects keyed by part paths/hashes. The export route maps the documents domain's
   pending result to 409 with `Retry-After`; never reuse document-id-only archives.

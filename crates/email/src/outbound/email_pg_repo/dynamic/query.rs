@@ -1243,7 +1243,12 @@ fn extract_project_filter(ast: &Expr<EmailLiteral>) -> Vec<String> {
     clippy::too_many_arguments,
     reason = "existing preview query plus its domain discovery port"
 )]
-#[tracing::instrument(skip_all, err)]
+#[tracing::instrument(
+    name = "dynamic_email_thread_cursor",
+    skip(pool, view, query, user_id, discovery),
+    fields(view = view.span_value()),
+    err
+)]
 pub(crate) async fn dynamic_email_thread_cursor_with_discovery(
     pool: &PgPool,
     link_ids: &[Uuid],
@@ -1273,7 +1278,7 @@ pub(crate) async fn dynamic_email_thread_cursor_with_discovery(
 }
 
 #[cfg(test)]
-#[tracing::instrument(skip(pool, query, user_id), err)]
+#[tracing::instrument(skip(pool, view, query, user_id), fields(view = view.span_value()), err)]
 pub(crate) async fn dynamic_email_thread_cursor(
     pool: &PgPool,
     link_ids: &[Uuid],

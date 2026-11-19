@@ -14,7 +14,7 @@ use uuid::Uuid;
 use super::db_types::{AttachmentDbRow, LabelDbRow, ThreadPreviewCursorDbRow};
 use super::{PreviewReadError, RuleDiscoveryPort};
 
-#[tracing::instrument(err, skip(pool, query, discovery), fields(link_count = query.link_ids.len(), view = %query.view))]
+#[tracing::instrument(err, skip(pool, query, user_id, discovery), fields(link_count = query.link_ids.len(), view = query.view.span_value()))]
 pub(super) async fn previews_for_view_cursor(
     pool: &PgPool,
     query: PreviewCursorQuery,

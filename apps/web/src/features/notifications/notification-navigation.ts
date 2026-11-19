@@ -754,7 +754,7 @@ function getSupportedHandler(
               });
               return;
             }
-            // Loaded on demand: the DM lookup pulls in the channel list.
+            // Loaded on demand, with the channel queries it needs.
             const { openTeamAgentDirectMessage } = await import(
               '@core/util/open-team-agent-direct-message'
             );

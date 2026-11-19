@@ -174,6 +174,25 @@ export function retryComputerOffers(failures: number, error: unknown): boolean {
   );
 }
 
+/** New points arrive once a minute. */
+const USAGE_POLL_MS = 60_000;
+
+// Cached callbacks outlive the hooks; keep hook scope out of these closures.
+function computerUsageQueryOptions(enabled: boolean) {
+  return queryOptions({
+    queryKey: computerKeys.usage.queryKey,
+    enabled,
+    queryFn: () => throwOnErr(computersClient.usage),
+    reconcile: 'computerId',
+    refetchInterval: USAGE_POLL_MS,
+  });
+}
+
+/** Each of the team's computers' CPU and memory over the last day. */
+export function useComputerUsageQuery(enabled: () => boolean) {
+  return useQuery(() => computerUsageQueryOptions(enabled()));
+}
+
 const ROLLOUT_STALE_MS = 5 * 60_000;
 
 function computerRolloutQueryOptions() {

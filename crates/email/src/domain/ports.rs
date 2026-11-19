@@ -349,6 +349,14 @@ pub trait EmailRepo: Send + Sync + 'static {
         replying_to_id: Uuid,
     ) -> impl Future<Output = Result<Option<SimpleMessageInfo>, Self::Err>> + Send;
 
+    /// Whether an authorized draft is bound and the requested handle does not name it in this inbox.
+    fn draft_bound_to_another_handle(
+        &self,
+        draft_id: Uuid,
+        link_id: Uuid,
+        client_id: Uuid,
+    ) -> impl Future<Output = Result<bool, Self::Err>> + Send;
+
     /// Delete a draft message and its thread if the thread is left empty.
     /// A surviving thread gets its denormalized metadata (inbox visibility,
     /// latest timestamps, is_signal) recomputed, since drafts count toward

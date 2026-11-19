@@ -414,6 +414,16 @@ impl EmailRepo for EmailPgRepo {
         message::get_draft_replying_to(&self.pool, link_id, replying_to_id).await
     }
 
+    async fn draft_bound_to_another_handle(
+        &self,
+        draft_id: Uuid,
+        link_id: Uuid,
+        client_id: Uuid,
+    ) -> Result<bool, Self::Err> {
+        client_id_mapping::draft_bound_to_another_handle(&self.pool, draft_id, link_id, client_id)
+            .await
+    }
+
     async fn delete_draft_message(
         &self,
         message_id: Uuid,
