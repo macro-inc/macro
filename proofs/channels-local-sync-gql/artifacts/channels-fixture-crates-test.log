@@ -1,0 +1,968 @@
+warning: Git tree '<workspace>' is dirty
+   Compiling code_mode_assets v0.1.0 (<workspace>/crates/code_mode_assets)
+   Compiling pbjson-types v0.6.0
+   Compiling agent_fold v0.1.0 (<workspace>/crates/folds/agent_fold)
+   Compiling database_sql v0.1.0 (<workspace>/crates/database_sql)
+   Compiling models_forms v0.1.0 (<workspace>/crates/models_forms)
+   Compiling frecency v0.1.0 (<workspace>/crates/frecency)
+   Compiling opensearch_client v0.1.0 (<workspace>/crates/opensearch_client)
+   Compiling entity_access_db_utils v0.1.0 (<workspace>/crates/entity_access_db_utils)
+   Compiling dynamodb_client v0.1.0 (<workspace>/crates/dynamodb_client)
+   Compiling mcp_toolset v0.1.0 (<workspace>/crates/mcp_toolset)
+   Compiling notification v0.1.0 (<workspace>/crates/notification)
+   Compiling activity v0.1.0 (<workspace>/crates/activity)
+   Compiling ai_usage v0.1.0 (<workspace>/crates/ai_usage)
+   Compiling entity_registry v0.1.0 (<workspace>/crates/entity_registry/entity_registry)
+   Compiling code_execution v0.1.0 (<workspace>/crates/code_execution)
+   Compiling pipedream_mcp v0.1.0 (<workspace>/crates/pipedream_mcp)
+   Compiling share_permission_db_utils v0.1.0 (<workspace>/crates/share_permission_db_utils)
+   Compiling entity_registry_db_utils v0.1.0 (<workspace>/crates/entity_registry/entity_registry_db_utils)
+   Compiling entity_access_management v0.1.0 (<workspace>/crates/entity_access_management)
+   Compiling livekit-protocol v0.7.7
+   Compiling agent v0.1.0 (<workspace>/crates/agent)
+   Compiling jev v0.1.0 (<workspace>/crates/jev)
+   Compiling cognition v0.1.0 (<workspace>/crates/cognition)
+   Compiling import_tracker v0.1.0 (<workspace>/crates/import_tracker)
+   Compiling import_notion v0.1.0 (<workspace>/crates/import_notion)
+   Compiling import_linear v0.1.0 (<workspace>/crates/import_linear)
+   Compiling import_jira v0.1.0 (<workspace>/crates/import_jira)
+   Compiling model v0.1.0 (<workspace>/crates/model)
+   Compiling invite_email v0.1.0 (<workspace>/crates/invite_email)
+   Compiling model_notifications v0.1.0 (<workspace>/crates/model_notifications)
+   Compiling livekit-api v0.4.24
+   Compiling entity_access v0.1.0 (<workspace>/crates/entity_access)
+   Compiling sqs_client v0.1.0 (<workspace>/crates/sqs_client)
+   Compiling authentication_service_client v0.1.0 (<workspace>/crates/authentication_service_client)
+   Compiling sync_service_client v0.1.0 (<workspace>/crates/sync_service_client)
+   Compiling macro_sha_count_client v0.1.0 (<workspace>/crates/macro_sha_count_client)
+   Compiling document_storage_service_client v0.1.0 (<workspace>/crates/document_storage_service_client)
+   Compiling mcp_client v0.1.0 (<workspace>/crates/mcp_client)
+   Compiling mcp_select v0.1.0 (<workspace>/crates/mcp_select)
+   Compiling properties v0.1.0 (<workspace>/crates/properties)
+   Compiling entity_mutation v0.1.0 (<workspace>/crates/entity_mutation)
+   Compiling connection v0.1.0 (<workspace>/crates/connection)
+   Compiling foreign_entity v0.1.0 (<workspace>/crates/foreign_entity)
+   Compiling favorites v0.1.0 (<workspace>/crates/favorites)
+   Compiling chat v0.1.0 (<workspace>/crates/chat)
+   Compiling github_pull_requests v0.1.0 (<workspace>/crates/github_pull_requests)
+   Compiling github v0.1.0 (<workspace>/crates/github)
+   Compiling initiative v0.1.0 (<workspace>/crates/initiative)
+   Compiling databases v0.1.0 (<workspace>/crates/databases)
+   Compiling messages v0.1.0 (<workspace>/crates/messages)
+   Compiling channels v0.1.0 (<workspace>/crates/channels)
+   Compiling lexical_client v0.1.0 (<workspace>/crates/lexical_client)
+   Compiling macro_db_client v0.1.0 (<workspace>/crates/macro_db_client)
+   Compiling task_dedup v0.1.0 (<workspace>/crates/task_dedup)
+   Compiling lexical_mention_extractor v0.1.0 (<workspace>/crates/lexical_mention_extractor)
+   Compiling teams v0.1.0 (<workspace>/crates/teams)
+   Compiling call v0.1.0 (<workspace>/crates/call)
+   Compiling bots v0.1.0 (<workspace>/crates/bots)
+   Compiling comms_db_client v0.1.0 (<workspace>/crates/comms_db_client)
+   Compiling collab_surface v0.1.0 (<workspace>/crates/collab_surface)
+   Compiling routine_program v0.1.0 (<workspace>/crates/routine_program)
+   Compiling initiative_description v0.1.0 (<workspace>/crates/initiative_description)
+   Compiling routines v0.1.0 (<workspace>/crates/routines)
+   Compiling ai_billing v0.1.0 (<workspace>/crates/ai_billing)
+   Compiling calendar_events v0.1.0 (<workspace>/crates/calendar_events)
+   Compiling crm v0.1.0 (<workspace>/crates/crm)
+   Compiling agent_session v0.1.0 (<workspace>/crates/agent_session)
+   Compiling documents v0.1.0 (<workspace>/crates/documents)
+   Compiling image_generation v0.1.0 (<workspace>/crates/image_generation)
+   Compiling web_search v0.1.0 (<workspace>/crates/web_search)
+   Compiling anthropic v0.2.0 (<workspace>/crates/anthropic)
+   Compiling calendar_scheduling v0.1.0 (<workspace>/crates/calendar_scheduling)
+   Compiling email v0.1.0 (<workspace>/crates/email)
+   Compiling forms v0.1.0 (<workspace>/crates/forms)
+   Compiling agent_changes v0.1.0 (<workspace>/crates/agent_changes)
+   Compiling import v0.1.0 (<workspace>/crates/import)
+   Compiling agent_trigger v0.1.0 (<workspace>/crates/agent_trigger)
+   Compiling projects v0.1.0 (<workspace>/crates/projects)
+   Compiling models_soup v0.1.0 (<workspace>/crates/models_soup)
+   Compiling scheduled_action v0.1.0 (<workspace>/crates/scheduled_action)
+   Compiling email_service_client v0.1.0 (<workspace>/crates/email_service_client)
+   Compiling soup v0.1.0 (<workspace>/crates/soup)
+   Compiling models_search v0.1.0 (<workspace>/crates/models_search)
+   Compiling agent_code_mode v0.1.0 (<workspace>/crates/agent_code_mode)
+   Compiling search_service_client v0.1.0 (<workspace>/crates/search_service_client)
+   Compiling databases_sql v0.1.0 (<workspace>/crates/databases_sql)
+   Compiling skills v0.1.0 (<workspace>/crates/skills)
+   Compiling memory v0.1.0 (<workspace>/crates/memory)
+   Compiling ai_tools v0.1.0 (<workspace>/crates/ai_tools)
+   Compiling channel_bots v0.1.0 (<workspace>/crates/channel_bots)
+    Finished `test` profile [unoptimized + debuginfo] target(s) in 2m 14s
+     Running unittests src/lib.rs (target/debug/deps/agent_trigger-5805bd7b93813408)
+
+running 180 tests
+test domain::broker_events::test::a_mention_is_attributed_to_whoever_posted_it ... ok
+test domain::broker_events::test::channel_kinds_round_trip_in_snake_case ... ok
+test domain::broker_events::test::accessors_present_both_shapes_as_parent_aware_messages ... ok
+test domain::broker_events::test::channel_shape_round_trips_through_the_parent_aware_post ... ok
+test domain::broker_events::test::decisions_take_the_wire_shape_their_parent_needs ... ok
+test domain::broker_events::test::a_conversation_turn_carries_its_trigger_without_the_channel ... ok
+test domain::broker_events::test::serializes_an_existing_channel_event ... ok
+test domain::broker_events::test::event_names_match_the_wire ... ok
+test domain::broker_events::test::serializes_a_new_top_level_mention ... ok
+test domain::broker_events::test::parent_aware_events_name_their_parent_and_are_new_variants ... ok
+test domain::broker_events::test::task_assignment_round_trips_and_opens_on_its_discussion ... ok
+test domain::broker_events::test::channel_events_keep_the_first_schema_versions_shape ... ok
+test domain::conversations::test::channels_without_a_conversing_agent_keep_the_existing_trigger_path ... ok
+test domain::conversations::test::unmentioned_messages_always_address_the_direct_persona_and_session ... ok
+test domain::conversations::test::a_thread_reply_is_not_a_turn_of_the_direct_conversation ... ok
+test domain::conversations::test::a_bot_or_another_user_cannot_spend_the_direct_owners_credentials ... ok
+test domain::conversations::test::revoked_persona_access_never_reserves_a_session_or_falls_back_to_mentions ... ok
+test domain::project_assignment::test::additions_and_moves_are_read_from_project_updates ... ok
+test domain::project_assignment::test::denied_access_is_skipped_but_broken_access_checks_are_retried ... ok
+test domain::project_assignment::test::removals_unchanged_saves_other_properties_and_unattributed_writes_are_ignored ... ok
+test domain::project_assignment::test::delegated_additions_recheck_the_delegating_users_access ... ok
+test domain::project_assignment::test::revoked_access_skips_the_task ... ok
+test domain::project_assignment::test::bots_without_a_delegating_user_do_nothing ... ok
+test domain::project_assignment::test::superseded_additions_are_skipped ... ok
+test domain::project_assignment::test::an_addition_inherits_with_its_own_receipts ... ok
+test domain::project_assignment::test::inheritance_failure_is_propagated_for_retry ... ok
+test domain::project_assignment::test::invalid_assignments_are_skipped_instead_of_retried ... ok
+test domain::service::test::a_bot_sender_never_triggers_implicitly ... ok
+test domain::service::test::a_crm_discussion_cannot_invoke_another_users_private_agent ... ok
+test domain::service::test::a_discussion_cannot_invoke_another_users_private_agent ... ok
+test domain::service::test::a_failing_extractor_falls_through_to_the_judge ... ok
+test domain::service::test::a_judge_answering_for_the_wrong_number_of_agents_yields_nothing ... ok
+test domain::service::test::a_failing_judge_yields_nothing_instead_of_an_error ... ok
+test domain::service::test::a_queued_discussion_mention_cannot_invoke_after_access_is_revoked ... ok
+test domain::service::test::a_selected_agent_requires_active_channel_membership ... ok
+test domain::service::test::a_system_agent_is_available_without_channel_membership ... ok
+test domain::service::test::a_message_the_judge_reads_as_for_both_live_agents_yields_nothing ... ok
+test domain::service::test::a_session_from_another_parent_cannot_receive_a_document_followup ... ok
+test domain::service::test::a_private_global_agent_is_unavailable_to_another_user ... ok
+test domain::service::test::a_team_global_agent_is_available_to_a_team_member ... ok
+test domain::service::test::a_team_global_agent_is_unavailable_outside_its_team ... ok
+test domain::service::test::a_message_the_judge_reads_as_addressed_triggers_as_inferred ... ok
+test domain::service::test::a_message_addressed_to_nobody_yields_nothing ... ok
+test domain::service::test::a_thread_without_sessions_never_consults_the_judge ... ok
+test domain::service::test::admission::admitted_inference_uses_the_sender_and_does_not_retry_a_failed_judge ... ok
+test domain::service::test::an_active_selected_agent_is_available_to_channel_members ... ok
+test domain::service::test::admission::explicit_mentions_and_reply_targets_route_without_admission ... ok
+test domain::service::test::an_agent_never_infers_into_its_own_session ... ok
+test domain::service::test::a_thread_reply_without_a_mention_does_not_forward ... ok
+test domain::service::test::an_explicit_reply_in_a_session_thread_triggers_without_a_mention ... ok
+test domain::service::test::admission::rejection_skips_the_entire_judge_including_image_preparation_and_acks ... ok
+test domain::service::test::an_explicit_reply_never_reads_the_thread ... ok
+test domain::service::test::an_agents_unmentioned_follow_up_reaches_another_agents_session ... ok
+test domain::service::test::an_explicit_reply_to_a_shared_originating_message_is_left_to_the_judge ... ok
+test domain::service::test::agents_mentioning_each_other_stop_at_the_hop_limit_without_a_person ... ok
+test domain::service::test::an_explicit_reply_to_another_user_falls_through_to_the_judge ... ok
+test domain::service::test::an_explicit_reply_to_the_originating_message_triggers_without_a_mention ... ok
+test domain::service::test::an_explicit_reply_to_neither_of_two_live_agents_is_left_to_the_judge ... ok
+test domain::service::test::an_explicit_reply_to_one_of_two_live_agents_routes_to_that_agent ... ok
+test domain::service::test::an_unattributed_bot_mention_cannot_trigger_an_agent ... ok
+test domain::service::test::an_unreadable_thread_still_judges_the_message_alone ... ok
+test domain::service::test::an_inferred_agent_chain_stops_at_the_hop_limit_before_judging ... ok
+test domain::service::test::attributed_bots_cannot_bypass_access_or_trigger_themselves ... ok
+test domain::service::test::call::call_mentions_route_followups_to_the_session_at_the_call_root ... ok
+test domain::service::test::call::legacy_agent_backed_bots_in_calls_use_owner_authorization ... ok
+test domain::service::test::call::queued_call_mentions_cannot_invoke_after_write_access_is_revoked ... ok
+test domain::service::test::call::call_mentions_require_the_private_agents_owner_for_either_channel_scope ... ok
+test domain::service::test::attributed_bot_mentions_open_or_resume_the_target_session ... ok
+test domain::service::test::call::call_mentions_require_membership_of_the_agents_team_for_either_channel_scope ... ok
+test domain::service::test::call::system_mentions_in_first_and_later_call_messages_preserve_the_call_root ... ok
+test domain::service::test::call::removed_bots_and_bots_without_agents_cannot_be_invoked_in_calls ... ok
+test domain::service::test::configured_agent::non_coding_agent_mentions_dispatch_when_the_agent_flag_is_enabled ... ok
+test domain::service::test::discussion_agents_respect_team_membership ... ok
+test domain::service::test::crm_agents_respect_team_membership ... ok
+test domain::service::test::deduplicates_a_session_found_for_multiple_mentions ... ok
+test domain::service::test::document_explicit_followups_route_to_the_existing_agent ... ok
+test domain::service::test::discussion_mentions_use_owned_agents_without_channel_participation ... ok
+test domain::service::test::evaluates_every_mentioned_agent_bot ... ok
+test domain::service::test::crm_mentions_use_owned_agents_like_documents ... ok
+test domain::service::test::evaluates_a_repeated_bot_mention_once ... ok
+test domain::service::test::ignores_a_mentioned_bot_without_an_agent ... ok
+test domain::service::test::task_assignment::assignments_cannot_target_channels ... ok
+test domain::service::test::task_assignment::revoked_task_access_prevents_an_assignment_from_starting ... ok
+test domain::service::test::implicit_triggering_skips_sessions_of_agentless_bots ... ok
+test domain::service::test::task_assignment::team_agents_require_current_team_membership ... ok
+test domain::service::test::explicit_reply_cannot_select_a_session_from_a_different_parent_or_root ... ok
+test domain::service::test::task_assignment::system_agents_can_be_assigned_without_membership_checks ... ok
+test domain::service::test::unattributed_bot_messages_do_not_trigger ... ok
+test domain::sources::test::the_trigger_reads_messages_and_properties ... ok
+test domain::service::test::the_judge_picks_which_of_two_live_agents_a_message_is_for ... ok
+test domain::service::test::task_assignment::another_users_private_agent_cannot_be_assigned ... ok
+test domain::service::test::forwards_a_mentioned_thread_reply_to_its_session ... ok
+test domain::service::test::task_assignment::owners_can_assign_their_agents_without_channel_participation ... ok
+test domain::task_assignment::project_context::test::missing_tasks_do_not_read_project_membership ... ok
+test domain::sources::test::a_task_joining_a_project_decodes_as_a_project_addition ... ok
+test domain::service::test::the_judge_reads_every_live_agent_numbered_in_the_thread ... ok
+test domain::task_assignment::project_context::test::a_deleted_project_is_not_named ... ok
+test domain::service::test::the_judge_reads_the_thread_around_the_agent ... ok
+test domain::task_assignment::project_context::test::delegated_bot_keeps_its_identity_and_acting_user_for_project_access ... ok
+test domain::task_assignment::project_context::test::current_project_replaces_stale_context_after_authorizing_the_same_user ... ok
+test domain::task_assignment::project_context::test::receipts_without_an_acting_user_do_not_expose_project_context ... ok
+test domain::sources::test::the_message_source_carries_the_persisted_parent_through ... ok
+test domain::task_assignment::test::an_assignment_an_agent_made_for_a_person_names_the_agent ... ok
+test domain::task_assignment::test::assignment_response_ids_are_stable_distinct_uuid_v7s ... ok
+test domain::task_assignment::project_context::test::project_membership_and_access_failures_are_retried ... ok
+test domain::task_assignment::test::a_discussion_failure_does_not_yield_an_opening_message ... ok
+test domain::task_assignment::test::an_assignment_made_by_a_person_is_theirs ... ok
+test domain::task_assignment::test::creation_and_new_assignments_include_only_added_agents ... ok
+test domain::task_assignment::test::a_replayed_assignment_reuses_its_persisted_discussion ... ok
+test domain::sources::test::completed_bot_reply_mentions_reach_the_existing_trigger_path ... ok
+test domain::task_assignment::test::only_task_assignees_with_an_invoking_user_trigger ... ok
+test domain::task_assignment::test::removing_then_reassigning_starts_a_new_assignment ... ok
+test domain::task_assignment::test::assignments_without_a_project_keep_only_the_original_task_reference ... ok
+test domain::task_assignment::test::the_trigger_source_also_decodes_task_assignments ... ok
+test domain::task_assignment::test::task_references_preserve_identity_without_allowing_markup_injection ... ok
+test domain::task_assignment::test::opens_one_bot_response_without_the_private_prompt ... ok
+test domain::task_assignment::test::deleted_or_unrelated_discussions_cannot_start_a_session ... ok
+test domain::thread_window::test::a_rendered_transcript_marks_the_agents_own_messages ... ok
+test domain::task_assignment::test::unchanged_saves_removals_and_human_only_assignments_do_not_start_work ... ok
+test domain::thread_window::test::a_rendered_transcript_numbers_each_candidate_agent ... ok
+test domain::thread_window::test::a_rendered_transcript_says_where_messages_were_dropped ... ok
+test domain::thread_window::test::a_single_dropped_message_reads_as_one ... ok
+test domain::thread_window::test::a_capped_transcript_still_reports_what_it_dropped ... ok
+test domain::thread_window::test::a_window_clamps_at_both_ends_of_the_thread ... ok
+test domain::thread_window::test::a_thread_with_no_anchors_yields_nothing ... ok
+test domain::task_assignment::project_context::test::no_project_or_revoked_access_removes_stale_project_context ... ok
+test domain::thread_window::test::the_cap_keeps_the_most_recent_messages ... ok
+test domain::task_assignment::test::agents_a_task_inherits_from_its_project_say_so ... ok
+test domain::thread_window::test::a_gap_between_windows_is_marked_elided ... ok
+test domain::thread_window::test::a_window_spans_the_radius_on_both_sides_of_the_anchor ... ok
+test domain::task_assignment::test::authorized_assignment_publishes_the_task_brief_for_toolless_runtimes ... ok
+test outbound::discussion_context::test::a_call_chat_names_its_call ... ok
+test outbound::discussion_context::test::a_crm_company_comment_names_its_company ... ok
+test outbound::discussion_context::test::a_channel_thread_reply_is_about_its_thread_not_the_latest_message ... ok
+test outbound::discussion_context::test::a_crm_contact_comment_names_its_contact ... ok
+test outbound::discussion_context::test::a_discussion_anchored_before_snapshots_still_names_its_mark ... ok
+test outbound::discussion_context::test::a_direct_message_channel_has_no_name ... ok
+test outbound::discussion_context::test::a_post_outside_the_invoked_discussion_is_never_read ... ok
+test outbound::discussion_context::test::a_failed_live_lookup_falls_back_to_the_snapshot ... ok
+test outbound::discussion_context::test::a_marked_discussion_names_its_mark_and_the_text_it_covers ... ok
+test outbound::discussion_context::test::a_document_comment_carries_its_whole_thread_through_the_prompt ... ok
+test outbound::discussion_context::test::a_marked_discussion_reads_the_mark_as_the_document_has_it_now ... ok
+test domain::thread_window::test::an_anchor_that_is_not_in_the_thread_is_ignored ... ok
+test outbound::discussion_context::test::a_pdf_pin_discussion_names_its_pin ... ok
+test outbound::discussion_context::test::a_failed_quote_lookup_still_names_the_thread ... ok
+test outbound::discussion_context::test::a_quote_from_another_conversation_travels_as_its_preview ... ok
+test outbound::discussion_context::test::a_long_thread_keeps_its_root_and_the_messages_nearest_the_prompt ... ok
+test outbound::discussion_context::test::a_quote_reply_carries_the_quoted_message_even_outside_the_window ... ok
+test outbound::discussion_context::test::a_thread_root_image_travels_on_its_context_message ... ok
+test outbound::discussion_context::test::a_top_level_channel_prompt_replies_to_nothing_and_ends_the_channel ... ok
+test outbound::image_caption::test::a_caption_becomes_the_blurb_the_judge_reads ... ok
+test outbound::discussion_context::test::a_project_comment_names_its_project ... ok
+test outbound::discussion_context::test::design_discussions_reach_the_agent_unanchored ... ok
+test outbound::image_caption::test::blurbs_follow_the_authors_words ... ok
+test outbound::discussion_context::test::spreadsheet_discussions_carry_the_range_without_resolving_a_mark ... ok
+test outbound::image_caption::test::captions_are_reduced_to_a_noun_phrase ... ok
+test outbound::jev_judge::test::an_image_blurb_is_part_of_the_message_being_judged ... ok
+test outbound::image_caption::test::only_images_are_described_and_a_failed_caption_stays_visible ... ok
+test outbound::jev_judge::test::the_judge_is_told_what_an_image_blurb_means ... ok
+test outbound::jev_judge::test::a_classifier_failure_is_an_error ... ok
+test domain::thread_window::test::overlapping_windows_merge_without_repeating_a_message ... ok
+test outbound::discussion_context::test::an_agent_asking_for_a_person_names_them_and_counts_its_hop ... ok
+test outbound::discussion_context::test::an_attachment_only_message_reaches_the_agent_with_its_document ... ok
+test outbound::message_thread_history::test::deleted_thread_uses_the_application_lifecycle_rule ... ok
+test outbound::message_thread_history::test::revoked_write_permission_yields_no_invocation_or_read ... ok
+test outbound::discussion_context::test::a_pdf_highlight_discussion_names_the_text_the_highlight_covers ... ok
+test outbound::image_caption::test::images_past_the_description_cap_are_marked_without_another_caption ... ok
+test outbound::discussion_context::test::deleted_blank_imported_and_bot_messages_read_as_their_authors_wrote_them ... ok
+test outbound::image_caption::test::a_missing_or_undecodable_image_is_not_described ... ok
+test outbound::jev_judge::test::every_addressee_question_names_its_agent_and_fits_the_classifier ... ok
+test outbound::message_thread_history::test::reads_the_bound_actor_parent_and_root_and_omits_tombstones ... ok
+test outbound::jev_judge::test::a_non_user_sender_is_not_replaced_with_system_billing_identity ... ok
+test outbound::message_thread_history::test::call_history_uses_the_call_receipt_and_canonical_root ... ok
+test outbound::jev_judge::test::asks_one_question_per_agent_about_the_thread_and_message ... ok
+test outbound::dss_task_assignment_context::test::unavailable_live_content_is_retried_instead_of_starting_without_a_description ... ok
+test outbound::dss_task_assignment_context::test::a_response_for_a_different_document_cannot_supply_the_brief ... ok
+test outbound::dss_task_assignment_context::test::unavailable_properties_are_retried_instead_of_starting_without_them ... ok
+test outbound::dss_task_assignment_context::test::a_task_brief_names_the_current_status_priority_due_date_and_assignees ... ok
+test outbound::people_directory::test::names_each_id_in_order ... ok
+test outbound::dss_task_assignment_context::test::missing_deleted_and_non_task_documents_do_not_load_content ... ok
+
+test result: ok. 180 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.17s
+
+     Running unittests src/lib.rs (target/debug/deps/bots-f1ec44802914a379)
+
+running 129 tests
+test domain::events::test::created_event_has_exact_sanitized_wire_shape ... ok
+test domain::events::test::deleted_event_has_exact_wire_shape ... ok
+test domain::events::test::constructors_use_bot_topic_bare_uuid_key_and_schema_version_one ... ok
+test domain::events::test::updated_event_has_exact_sanitized_wire_shape ... ok
+test domain::events::test::created_event_serializes_channel_id_when_present ... ok
+test domain::service::test::persona_cannot_bypass_a_harness_that_requires_prompts ... ok
+test domain::events::test::lifecycle_payloads_exclude_token_fields_and_values ... ok
+test domain::models::test::user_owned_agent_stays_private ... ok
+test domain::models::test::empty_patch_reproduces_the_agent_under_its_current_owner ... ok
+test domain::models::test::named_fields_replace_and_travel_with_their_partners ... ok
+test domain::service::test::a_listed_mcp_slug_is_accepted ... ok
+test domain::service::test::a_directory_that_cannot_answer_refuses_the_write ... ok
+test domain::tokens::tests::generated_token_is_url_path_safe ... ok
+test domain::tokens::tests::generated_token_has_expected_shape ... ok
+test domain::events::test::every_event_variant_round_trips ... ok
+test domain::service::test::an_invented_mcp_slug_is_rejected ... ok
+test domain::service::test::a_slug_already_on_the_agent_is_not_looked_up_again ... ok
+test inbound::axum_router::tests::bots_me_rejects_invalid_bot_token ... ok
+test inbound::axum_router::tests::bot_owner_can_remove_bot_from_channel_via_bot_route_without_channel_admin ... ok
+test inbound::axum_router::tests::bot_route_requires_credentials_without_invoking_service ... ok
+test inbound::axum_router::tests::bots_me_rejects_user_bearer_credentials ... ok
+test inbound::axum_router::tests::bot_owner_can_list_bot_channels_via_http ... ok
+test inbound::axum_router::tests::bots_profiles_requires_credentials_without_invoking_service ... ok
+test inbound::axum_router::tests::bot_remove_channel_requires_bot_usability ... ok
+test inbound::axum_router::tests::bot_reads_itself_via_bots_me ... ok
+test inbound::axum_router::tests::bot_listing_requires_bot_usability ... ok
+test inbound::axum_router::tests::bots_profiles_returns_owner_profile_json ... ok
+test inbound::axum_router::tests::channel_admin_still_needs_bot_usability_to_add_bot ... ok
+test inbound::channel_webhook_router::tests::channel_webhook_router_both_bot_headers_are_ambiguous_before_validation ... ok
+test inbound::axum_router::tests::channel_admin_still_needs_bot_usability_to_remove_bot ... ok
+test inbound::channel_webhook_router::tests::channel_webhook_router_bot_token_and_user_are_ambiguous_without_posting ... ok
+test inbound::toolset::test::bot_errors_are_actionable_without_exposing_repository_details ... ok
+test inbound::channel_webhook_router::tests::channel_webhook_router_empty_content_returns_bad_request_without_authenticating ... ok
+test inbound::channel_webhook_router::tests::channel_webhook_router_invalid_preferred_token_does_not_fall_back_to_legacy ... ok
+test inbound::toolset::test::bot_summary_preserves_team_scope_and_profile ... ok
+test inbound::channel_webhook_router::tests::channel_webhook_router_admin_can_create_scoped_bot ... ok
+test inbound::channel_webhook_router::tests::channel_webhook_router_cookie_only_user_is_forbidden_without_posting ... ok
+test inbound::channel_webhook_router::tests::channel_webhook_router_legacy_valid_json_posts_as_bot ... ok
+test inbound::channel_webhook_router::tests::channel_webhook_router_invalid_token_returns_unauthorized_without_posting ... ok
+test inbound::axum_router::tests::channel_member_can_list_channel_bots ... ok
+test inbound::channel_webhook_router::tests::channel_webhook_router_rejected_acting_user_is_forbidden_without_posting ... ok
+test inbound::toolset::test::bot_summary_rejects_ownerless_bots ... ok
+test inbound::channel_webhook_router::tests::channel_webhook_router_revoked_token_auth_failure_returns_unauthorized ... ok
+test inbound::channel_webhook_router::tests::channel_webhook_router_verified_acting_user_is_not_used_for_attribution ... ok
+test inbound::toolset::test::configure_agent_surfaces_domain_rejections ... ok
+test inbound::toolset::test::configure_agent_patches_only_named_fields ... ok
+test inbound::toolset::test::configure_agent_translates_scoped_selections ... ok
+test inbound::toolset::test::create_bot_rejects_credential_fields_without_channel ... ok
+test inbound::toolset::test::configure_agent_rejects_incoherent_arguments ... ok
+test inbound::toolset::test::create_bot_for_channel_deletes_bot_when_grant_fails ... ok
+test inbound::toolset::test::create_bot_for_channel_requires_membership ... ok
+test inbound::toolset::test::create_bot_without_channel_does_not_mint_a_credential ... ok
+test inbound::toolset::test::create_bot_for_channel_returns_webhook_and_credential_proposal ... ok
+test inbound::toolset::test::issue_bot_credential_returns_proposal_without_minting ... ok
+test inbound::toolset::test::list_agents_returns_instructions_and_settings ... ok
+test inbound::toolset::test::revoke_does_not_require_current_channel_membership ... ok
+test inbound::toolset::test::webhook_response_uses_preferred_bot_authentication_headers ... ok
+test outbound::pg_bots_repo::tests::agent_mcp_servers_serialize_as_a_tagged_union ... ok
+test outbound::pg_bots_repo::tests::agent_requests_without_mcp_fields_default_to_owner_connections ... ok
+test inbound::channel_webhook_router::tests::channel_webhook_router_wrong_channel_returns_unauthorized_without_posting ... ok
+test inbound::channel_webhook_router::tests::channel_webhook_router_preferred_bot_outside_channel_is_unauthorized ... ok
+test inbound::channel_webhook_router::tests::channel_webhook_router_missing_token_header_returns_unauthorized_without_posting ... ok
+test inbound::channel_webhook_router::tests::channel_webhook_router_raw_body_starting_with_brace_posts_as_bot ... ok
+test inbound::channel_webhook_router::tests::channel_webhook_router_preferred_token_posts_as_bot ... ok
+test outbound::pg_bots_repo::owner_grants::test::missing_bot_fails_closed ... ok
+test inbound::axum_router::tests::bot_owner_can_list_and_remove_bot_channels_via_bot_routes ... ok
+test outbound::pg_bots_repo::owner_grants::test::deleted_bots_keep_their_sponsor_not_their_creator ... ok
+test inbound::axum_router::tests::bot_owner_can_create_and_patch_has_agent_via_http ... ok
+test inbound::axum_router::tests::channel_admin_can_add_and_remove_owned_bot_via_http ... ok
+test outbound::pg_bots_repo::team_roster::test::team_bot_ids_include_soft_deleted_bots_and_exclude_other_owners ... ok
+test inbound::axum_router::tests::patching_an_agent_changes_only_the_fields_sent ... ok
+test outbound::pg_bots_repo::tests::agent_dm::persona_bot_tokens_cannot_post_into_a_direct_conversation ... ok
+test outbound::pg_bots_repo::tests::add_remove_channel_bot_requires_bot_usability_and_soft_removes ... ok
+test outbound::pg_bots_repo::tests::selected_mcp_servers_round_trip_and_are_replaced_wholesale ... ok
+test outbound::pg_bots_repo::tests::team_admins_can_delete_agents_but_not_other_team_bots ... ok
+test outbound::pg_bots_repo::tests::channel_co_member_can_list_a_selected_agent_they_can_mention ... ok
+test outbound::pg_bots_repo::tests::selected_agent_rejects_channels_the_caller_cannot_access ... ok
+test outbound::pg_bots_repo::tests::authenticate_channel_token_accepts_migrated_uuid_token ... ok
+test outbound::pg_bots_repo::tests::authenticate_channel_token_rejects_revoked_token ... ok
+test outbound::pg_bots_repo::tests::create_team_owned_bot_requires_team_admin_or_owner ... ok
+test outbound::pg_bots_repo::tests::team_member_can_update_team_agent_but_cannot_make_it_private ... ok
+test outbound::pg_bots_repo::tests::team_harnesses_back_member_agents_but_not_team_agents_on_private_harnesses ... ok
+test outbound::pg_bots_repo::tests::bot_active_in_channel_returns_false_for_non_member ... ok
+test outbound::pg_bots_repo::tests::create_team_owned_channel_scoped_bot_requires_team_admin ... ok
+test outbound::pg_bots_repo::tests::agent_dm::a_direct_conversation_does_not_share_a_selected_persona ... ok
+test outbound::pg_bots_repo::tests::get_owner_profiles_rejects_more_than_100_ids ... ok
+test outbound::pg_bots_repo::tests::revoke_token_prevents_future_authentication ... ok
+test outbound::pg_bots_repo::tests::agent_dm::editing_a_team_persona_leaves_its_direct_conversations_alone ... ok
+test outbound::pg_bots_repo::tests::authenticate_channel_token_rejects_removed_channel_membership ... ok
+test outbound::pg_bots_repo::tests::updated_agent_replaces_every_field_and_selected_channel ... ok
+test outbound::pg_bots_repo::tests::all_channel_private_agent_is_not_listed_for_a_channel_co_member ... ok
+test outbound::pg_bots_repo::tests::persona_create_and_update_cannot_bypass_a_prompt_only_harness ... ok
+test outbound::pg_bots_repo::tests::create_team_agent_requires_membership_not_admin ... ok
+test outbound::pg_bots_repo::tests::non_lifecycle_and_failed_operations_do_not_publish ... ok
+test outbound::pg_bots_repo::tests::list_tokens_returns_prefix_not_raw_secret ... ok
+test outbound::pg_bots_repo::tests::rust_token_hash_matches_postgres_digest ... ok
+test outbound::pg_bots_repo::tests::team_member_creator_can_change_agent_share_between_private_and_team ... ok
+test outbound::pg_bots_repo::tests::agent_enabled::agent_update_and_patch_restore_mention_dispatch_flag ... ok
+test outbound::pg_bots_repo::tests::agent_enabled::backfill_enables_configured_agents_and_preserves_plain_bots ... ok
+test outbound::pg_bots_repo::tests::is_coding_round_trips_through_create_and_update ... ok
+test outbound::pg_bots_repo::tests::get_owner_profiles_returns_persisted_system_deleted_and_missing ... ok
+test outbound::pg_bots_repo::tests::bot_profiles_batch_persisted_system_deleted_and_missing_bots ... ok
+test outbound::pg_bots_repo::tests::patching_settings_keeps_every_runtime ... ok
+test outbound::pg_bots_repo::tests::create_bot_stores_requested_has_agent ... ok
+test outbound::pg_bots_repo::tests::macrod_agents_require_a_registered_usable_harness ... ok
+test outbound::pg_bots_repo::tests::list_bot_channels_requires_manageable_bot_and_returns_only_active_channels ... ok
+test outbound::pg_bots_repo::tests::bot_active_in_channel_returns_false_for_soft_deleted_membership ... ok
+test outbound::pg_bots_repo::tests::a_resident_reads_stopped_once_its_owner_loses_access_to_its_runtime ... ok
+test outbound::pg_bots_repo::tests::patched_agent_changes_only_what_the_patch_names ... ok
+test outbound::pg_bots_repo::tests::deleting_a_harness_leaves_its_agents_unbound_and_patchable ... ok
+test outbound::pg_bots_repo::tests::bot_active_in_channel_returns_true_for_active_membership ... ok
+test outbound::pg_bots_repo::tests::agent_dm::team_members_can_dm_and_revocation_takes_effect_immediately ... ok
+test outbound::pg_bots_repo::tests::authenticate_channel_token_rejects_wrong_channel_without_marking_used ... ok
+test outbound::pg_bots_repo::tests::agent_dm::personal_personas_are_private_and_webhook_bots_are_not_personas ... ok
+test outbound::pg_bots_repo::tests::selected_agent_is_created_atomically_in_authorized_channels ... ok
+test outbound::pg_bots_repo::tests::patch_and_delete_publish_requested_fields_and_team_owner ... ok
+test outbound::pg_bots_repo::tests::patch_agent_is_refused_for_strangers_and_plain_bots ... ok
+test outbound::pg_bots_repo::tests::create_user_owned_bot_records_user_owner ... ok
+test outbound::pg_bots_repo::tests::team_member_can_list_a_team_agent_created_by_someone_else ... ok
+test outbound::pg_bots_repo::tests::scheduling_failures_do_not_change_successful_mutations ... ok
+test outbound::pg_bots_repo::tests::patch_agent_refuses_an_mcp_slug_the_directory_does_not_list ... ok
+test outbound::pg_bots_repo::tests::create_channel_scoped_bot_creates_bot_participant_and_token ... ok
+test outbound::pg_bots_repo::tests::agent_dm::persona_tokens_cannot_post_into_a_direct_conversation ... ok
+test outbound::pg_bots_repo::tests::agent_dm::only_runnable_system_personas_are_available ... ok
+test outbound::pg_bots_repo::tests::lifecycle_creation_publishes_exact_sanitized_events ... ok
+test outbound::pg_bots_repo::tests::created_agent_round_trips_every_agent_field ... ok
+test outbound::pg_bots_repo::tests::auto_accept_permissions_persists_each_of_its_three_states ... ok
+test outbound::pg_bots_repo::tests::patch_bot_toggles_has_agent_and_leaves_it_unchanged_when_omitted ... ok
+test outbound::pg_bots_repo::tests::mcp_server_selection_is_validated ... ok
+
+test result: ok. 129 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 1.44s
+
+     Running unittests src/lib.rs (target/debug/deps/channel_bots-496cb683489cdb28)
+
+running 45 tests
+test domain::service::tests::an_edited_mark_shows_both_what_it_covers_now_and_what_it_covered ... ok
+test domain::service::tests::current_time_block_falls_back_to_utc_for_missing_or_bad_zones ... ok
+test domain::service::tests::a_discussion_older_than_snapshots_reads_its_mark_from_the_document ... ok
+test domain::service::tests::a_pdf_highlight_discussion_names_the_words_it_covers ... ok
+test domain::service::tests::a_bot_mention_uses_its_verified_attribution_for_context_and_reply ... ok
+test domain::service::tests::current_time_block_renders_the_users_zone ... ok
+test domain::service::tests::a_trigger_that_moved_threads_or_changed_author_is_not_prompted ... ok
+test domain::service::tests::a_failed_live_lookup_falls_back_to_the_snapshot ... ok
+test domain::service::tests::a_discussion_with_no_marked_text_claims_no_anchor ... ok
+test domain::service::tests::channel_context_keeps_other_threads_as_background ... ok
+test domain::service::tests::call_mentions_use_the_same_call_thread_for_context_and_replies ... ok
+test domain::service::tests::a_design_discussion_names_its_page_layer_and_point ... ok
+test domain::service::tests::an_anchored_discussion_names_the_text_it_marks ... ok
+test domain::service::tests::deleted_placeholder_does_not_recreate_a_response ... ok
+test domain::service::tests::a_pdf_pin_discussion_says_it_covers_no_words ... ok
+test domain::service::tests::inference_prompt_describes_a_follow_up_without_claiming_a_mention ... ok
+test domain::service::tests::a_highlight_without_text_says_its_words_are_unknown ... ok
+test domain::service::tests::revoked_parent_access_prevents_context_reads_and_agent_work ... ok
+test domain::service::tests::document_invocation_reads_its_thread_and_delivers_a_bot_reply_with_comment_policy ... ok
+test domain::service::tests::rejected_responses_never_call_the_provider_and_explicit_requests_show_the_failure ... ok
+test domain::service::tests::revocation_while_model_runs_prevents_answer_delivery ... ok
+test domain::service::tests::responder_failure_still_replaces_the_placeholder_with_a_fallback ... ok
+test domain::service::tests::prompt_carries_the_current_time_in_the_users_zone ... ok
+test domain::service::tests::prompt_says_the_time_zone_is_unknown_without_a_calendar ... ok
+test domain::service::tests::spreadsheet_discussions_name_the_range_without_inventing_cell_contents ... ok
+test domain::service::tests::root_comment_is_valid_agent_context_before_any_replies_exist ... ok
+test domain::service::tests::top_level_channel_mention_marks_the_trigger_inline_in_channel_context ... ok
+test domain::trigger_detector::tests::access_revocation_suppresses_explicit_and_inferred_document_triggers ... ok
+test domain::service::tests::unavailable_context_blocks_instead_of_prompting_from_an_unverified_event ... ok
+test domain::trigger_detector::tests::admission_failure_suppresses_inference_without_fallback ... ok
+test domain::trigger_detector::tests::an_unattributed_agent_follow_up_infers_nothing ... ok
+test domain::trigger_detector::tests::an_agents_follow_up_is_inferred_for_macro_and_labelled_by_its_name ... ok
+test domain::trigger_detector::tests::document_mention_triggers_each_canonical_bot_once_without_classification ... ok
+test domain::trigger_detector::tests::root_without_mention_is_never_inferred ... ok
+test domain::trigger_detector::tests::unattributed_bot_messages_never_trigger_another_response ... ok
+test domain::trigger_detector::tests::attributed_bots_require_an_explicit_other_bot_mention_and_current_access ... ok
+test domain::trigger_detector::tests::macro_never_infers_a_reply_to_its_own_message ... ok
+test domain::trigger_detector::tests::unavailable_history_cannot_be_replaced_by_an_unverified_event_transcript ... ok
+test domain::trigger_detector::tests::inferred_document_follow_up_requires_prior_agent_participation_and_classifier_agreement ... ok
+test outbound::conversation::test::attributed_posts_and_completed_replies_reach_the_local_detector ... ok
+test outbound::fast_model_trigger_classifier::test::agreeing_to_a_share_offer_expects_a_response ... ok
+test outbound::conversation::test::closed_agent_receiver_does_not_suppress_realtime_and_notification_delivery ... ok
+test outbound::conversation::test::user_posts_dispatch_once_and_unattributed_bot_responses_never_reenter ... ok
+test domain::trigger_detector::tests::an_inferred_agent_chain_stops_at_the_hop_limit_before_classifying ... ok
+test domain::trigger_detector::tests::agents_handing_a_thread_back_and_forth_stop_at_the_hop_limit ... ok
+
+test result: ok. 45 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s
+
+     Running unittests src/lib.rs (target/debug/deps/scheduled_action-119ff6358cabec8f)
+
+running 462 tests
+test domain::code_check::test::the_recorded_sdk_is_not_configuration ... ok
+test domain::code_check::test::a_guide_carries_the_shared_rules_the_contract_and_the_tasks_reference ... ok
+test domain::code_check::test::code_needs_a_checker_but_other_programs_only_get_ids ... ok
+test domain::code_check::test::checking_steps_reports_each_failing_step_with_declarations_to_fix_it ... ok
+test domain::code_check::test::checking_steps_reports_knobs_and_sentences_saving_would_refuse ... ok
+test domain::code_check::test::saved_code_is_checked_together_and_records_the_version_and_ids ... ok
+test domain::code_check::test::problems_name_every_failing_step_for_its_author ... ok
+test domain::code_upgrade::test::a_rewrite_must_still_suit_the_steps_that_read_its_output ... ok
+test domain::catalog::test::entries_carry_their_authored_marks ... ok
+test domain::code_upgrade::test::another_runs_rewrite_or_a_past_failure_fails_this_run ... ok
+test domain::catalog::test::schedules_run_in_the_owners_zone ... ok
+test domain::code_upgrade::test::code_that_still_checks_only_records_the_new_sdk ... ok
+test domain::code_upgrade::test::a_rewrite_that_fails_its_checks_pauses_the_routine_with_it ... ok
+test domain::code_upgrade::test::code_on_the_current_sdk_is_left_alone ... ok
+test domain::code_check::test::unchanged_code_checked_against_this_version_is_not_checked_again ... ok
+test domain::code_upgrade::test::a_rewritten_later_step_is_checked_but_not_dry_run ... ok
+test domain::code_upgrade::test::failing_code_is_rewritten_checked_dry_run_and_saved_once ... ok
+test domain::catalog::test::code_steps_are_served_only_where_code_can_be_saved ... ok
+test domain::catalog::test::every_routine_is_served_with_a_trigger_the_scheduler_saves ... ok
+test domain::drafts::test::a_dropped_draft_request_still_cleans_up_its_session ... ok
+test domain::drafts::test::a_failed_draft_still_says_what_its_session_created ... ok
+test domain::drafts::test::a_draft_stops_waiting_once_a_check_passes ... ok
+test domain::drafts::test::a_draft_that_runs_out_of_time_says_so_and_cleans_up ... ok
+test domain::event_runs::admission::test::mentions_mail_and_calls_only_admit_their_recipient_even_when_others_have_access ... ok
+test domain::event_runs::admission::test::denied_and_mismatched_receipts_skip_but_unavailable_access_defers_intake ... ok
+test domain::event_runs::dispatch::test::preparation_binds_receipt_to_authenticated_owner_entity_and_kind ... ok
+test domain::event_trigger::github_selector::test::an_action_list_never_matches_an_event_without_actions ... ok
+test domain::event_trigger::github_selector::test::bots_run_a_routine_only_when_it_asks_for_them ... ok
+test domain::event_trigger::github_selector::test::every_list_narrows_and_empty_lists_match_all ... ok
+test domain::event_trigger::github_selector::test::names_are_github_snake_case ... ok
+test domain::drafts::test::a_failing_check_after_a_passing_one_never_replaces_it ... ok
+test domain::event_trigger::payload_match::test::an_absent_payload_matches_nothing ... ok
+test domain::event_trigger::payload_match::test::a_test_needs_exactly_one_comparison_and_scalar_values ... ok
+test domain::drafts::test::a_failing_check_keeps_the_draft_waiting_for_the_turn ... ok
+test domain::event_trigger::payload_match::test::a_specific_workflow_failing_on_release_branches_matches_only_that ... ok
+test domain::event_trigger::payload_match::test::conditions_round_trip_in_canonical_order ... ok
+test domain::event_runs::dispatch::test::poststart_bookkeeping_failure_is_reconciled_without_reexecution ... ok
+test domain::event_trigger::payload_match::test::every_element_step_matches_any_array_item ... ok
+test domain::event_trigger::payload_match::test::exists_treats_null_as_absent ... ok
+test domain::event_trigger::payload_match::test::index_step_reads_one_element ... ok
+test domain::event_trigger::payload_match::test::not_in_passes_when_no_value_is_listed_including_none_at_all ... ok
+test domain::event_trigger::payload_match::test::descriptions_read_as_the_test ... ok
+test domain::event_trigger::test::a_message_a_routine_posted_as_its_owner_starts_no_routine ... ok
+test domain::event_trigger::test::a_github_source_only_opens_status_changes ... ok
+test domain::event_trigger::test::a_condition_applies_only_to_the_filter_whose_property_value_matched ... ok
+test domain::event_trigger::test::a_source_does_not_admit_a_change_made_by_a_bot_or_for_someone_else ... ok
+test domain::event_trigger::test::all_allowlisted_human_events_normalize_to_minimal_context ... ok
+test domain::event_trigger::test::an_unattributed_status_change_with_no_source_stays_ignored ... ok
+test domain::event_trigger::test::a_status_change_from_github_needs_no_macro_actor ... ok
+test domain::event_trigger::test::email_receipts_keep_only_ids_and_exclude_spam_and_backfills ... ok
+test domain::event_trigger::test::event_groups_must_be_combined_and_external_webhooks_are_rejected ... ok
+test domain::event_trigger::test::duplicates_do_not_multiply_matches_and_pre_activation_events_do_not_match ... ok
+test domain::event_trigger::test::github_deliveries_normalize_with_their_payload_and_reject_odd_names ... ok
+test domain::event_trigger::test::filter_validation_cannot_be_bypassed_by_deserialization ... ok
+test domain::event_trigger::test::once_fires_at_its_time_and_never_after ... ok
+test domain::event_trigger::test::run_revisions_claim_tokens_and_page_sizes_are_validated ... ok
+test domain::event_trigger::test::property_selector_rejects_events_that_cannot_report_its_property ... ok
+test domain::event_trigger::test::property_change_survives_storage_only_for_routines_that_test_it ... ok
+test domain::event_trigger::test::once_inside_multiple_runs_before_later_schedules_and_then_yields_to_them ... ok
+test domain::event_trigger::test::started_calls_keep_only_ids_and_belong_to_who_created_them ... ok
+test domain::event_trigger::test::validates_schema_identity_and_document_uuid ... ok
+test domain::event_trigger::test::update_prefers_explicit_actor_and_requires_a_fallback_when_absent ... ok
+test domain::event_trigger::test::property_selector_matches_the_value_a_change_adds ... ok
+test domain::event_trigger::test::task_changes_match_specific_and_any_property_selectors ... ok
+test domain::execution::test::a_firing_that_cannot_be_consumed_does_not_run_and_gives_its_claim_back ... ok
+test domain::execution::test::a_manual_run_leaves_the_next_firing_alone_until_it_ends ... ok
+test domain::event_runs::condition::test::classifier_errors_keep_their_retryability ... ok
+test domain::execution::test::abandoned_manual_request_during_preparation_still_cleans_up ... ok
+test domain::event_runs::dispatch::test::every_matching_condition_is_asked_once ... ok
+test domain::execution::test::chat_creation_failure_releases_its_claim ... ok
+test domain::event_runs::admission::test::partial_fanout_failure_is_not_acknowledged_and_replay_is_safe ... ok
+test domain::event_runs::dispatch::test::unmet_condition_skips_with_history_and_never_executes ... ok
+test domain::event_runs::dispatch::test::claim_race_never_executes_but_disable_after_start_does_not_undo_run ... ok
+test domain::event_runs::dispatch::test::two_events_queue_during_execution_then_failure_does_not_block_next ... ok
+test domain::drafts::test::refuses_a_step_it_cannot_add ... ok
+test domain::event_runs::dispatch::test::unavailable_condition_retries_within_the_window_then_skips ... ok
+test domain::execution::test::event_chat_failure_returns_failed_bookkeeping_without_releasing_early ... ok
+test domain::event_runs::admission::test::github_deliveries_need_a_claim_to_the_installation ... ok
+test domain::event_runs::dispatch::test::access_revoked_after_admission_cancels_without_execution ... ok
+test domain::execution::test::cancellation_during_preparation_keeps_handle_and_established_resource ... ok
+test domain::execution::test::failed_execution_and_failed_bookkeeping_never_rerun_agent ... ok
+test domain::event_runs::dispatch::test::shutdown_before_claim_leaves_work_pending ... ok
+test domain::event_runs::dispatch::test::met_condition_runs_normally ... ok
+test domain::event_runs::dispatch::test::non_user_owner_never_reaches_authorization_or_execution ... ok
+test domain::event_runs::admission::test::pages_all_candidates_and_redelivery_deduplicates_using_owner_not_actor ... ok
+test domain::event_runs::dispatch::test::transient_prestart_errors_leave_pending_but_failed_execution_is_terminal ... ok
+test domain::execution::test::cancellation_before_preparation_response_still_addresses_the_remote_session ... ok
+test domain::event_runs::condition::test::any_yes_meets_the_conditions_and_bills_the_owner ... ok
+test domain::event_runs::dispatch::test::a_matching_filter_without_a_condition_skips_the_check ... ok
+test domain::event_runs::condition::test::the_threshold_itself_counts_as_yes ... ok
+test domain::drafts::test::the_sweep_deletes_drafts_a_stopped_process_left_behind ... ok
+test domain::execution::test::event_cancellation_is_terminal_interruption ... ok
+test domain::execution::test::expired_event_never_invokes_runner ... ok
+test domain::event_trigger::test::every_non_allowlisted_variant_is_rejected ... ok
+test domain::event_runs::condition::test::unreadable_content_is_transient_and_skips_the_classifier ... ok
+test domain::event_runs::dispatch::test::rejected_or_unconfigured_conditions_skip_immediately ... ok
+test domain::execution::test::failed_preparation_cancels_the_preallocated_remote_identity ... ok
+test domain::execution::test::dropping_event_execution_cancels_runner ... ok
+test domain::event_runs::admission::test::coarse_candidates_are_rechecked_before_access_or_admission ... ok
+test domain::execution::test::a_scheduled_firing_is_consumed_before_its_program_runs ... ok
+test domain::execution::test::admitted_model_execution_uses_the_persisted_owner_and_automation_feature ... ok
+test domain::event_runs::condition::test::every_no_leaves_the_conditions_unmet ... ok
+test domain::event_runs::dispatch::test::deletion_trigger_change_disable_and_reenable_cancel_obsolete_work ... ok
+test domain::execution::test::claim_is_fenced_to_the_snapshot_revision ... ok
+test domain::event_runs::admission::test::github_deliveries_run_routines_whose_selector_and_payload_match ... ok
+test domain::event_trigger::test::property_changes_ignore_other_entities_noops_and_bot_writes ... ok
+test domain::drafts::test::refuses_requests_it_cannot_draft ... ok
+test domain::event_runs::admission::test::permanent_rejections_do_not_query_candidates ... ok
+test domain::event_trigger::test::document_lifecycle_distinguishes_tasks ... ok
+test domain::event_trigger::test::missing_creation_attribution_and_delegation_are_not_human_authorship ... ok
+test domain::event_trigger::test::multiple_triggers_preserve_event_filters_and_choose_the_next_schedule ... ok
+test domain::models::test::missing_target_never_uses_stored_instructions_as_a_model ... ok
+test domain::models::test::null_model_uses_agent_default_and_null_agent_uses_model ... ok
+test domain::event_trigger::test::mention_trigger_is_only_for_the_mentioned_user ... ok
+test domain::models::test::owner_user_rejects_a_bot_owned_action ... ok
+test domain::event_trigger::test::stored_context_cannot_bypass_identity_or_message_shape_validation ... ok
+test domain::models::test::owner_user_rejects_a_team_owned_action ... ok
+test domain::models::test::owner_user_returns_the_user_for_a_user_owned_action ... ok
+test domain::models::test::rejected_requests_name_the_missing_field ... ok
+test domain::models::test::owner_serializes_as_the_bare_principal_string ... ok
+test domain::drafts::test::an_item_the_session_never_named_is_shown_and_marked_unused ... ok
+test domain::execution::test::event_awaits_exactly_one_run_without_claiming_or_finalizing_twice ... ok
+test domain::execution::test::event_refusals_return_terminal_bookkeeping_without_replaying_or_releasing_early ... ok
+test domain::execution::test::due_and_manual_runs_are_reported_once_with_their_trigger ... ok
+test domain::event_trigger::test::ended_calls_keep_only_ids_and_belong_to_the_people_who_joined ... ok
+test domain::models::test::rejected_schedules_explain_the_cron_format_for_create_and_update ... ok
+test domain::execution::test::failed_preparation_retains_an_established_agent_resource ... ok
+test domain::event_trigger::test::property_selector_matches_only_people_newly_assigned ... ok
+test domain::models::test::supplied_model_must_be_nonblank_for_both_target_forms ... ok
+test domain::event_runs::admission::test::subscribed_github_events_admit_once_and_keep_the_payload_for_the_agent ... ok
+test domain::models::test::run_visibility_defaults_to_unlisted_and_omitting_it_keeps_the_stored_value ... ok
+test domain::execution::test::failed_remote_cleanup_does_not_prevent_finalization ... ok
+test domain::execution::test::event_runs_report_the_event_that_fired_them ... ok
+test domain::event_trigger::test::github_stands_alone_and_only_it_takes_a_payload_match ... ok
+test domain::models::test::top_level_schedules_are_rejected ... ok
+test domain::event_trigger::test::matching_is_same_filter_and_empty_ids_match_nothing ... ok
+test domain::event_trigger::test::message_facts_on_other_parents_never_trigger ... ok
+test domain::models::test::updates_may_omit_activation_but_creates_may_not ... ok
+test domain::execution::test::interrupted_runs_are_reported_as_interrupted ... ok
+test domain::execution::test::manual_claim_failure_never_prepares_or_runs ... ok
+test domain::program_runner::test::a_failed_agent_is_recorded_and_fails_the_run ... ok
+test domain::execution::test::manual_and_cron_refusals_release_claims_and_advance_schedule_without_resources ... ok
+test domain::program_runner::test::a_manual_run_tells_the_agent_its_owner_started_it_and_hands_it_the_routine_apps ... ok
+test domain::program_runner::test::a_run_without_code_steps_records_no_code_identity ... ok
+test domain::program_runner::test::a_failed_code_step_stops_the_run_and_keeps_its_calls ... ok
+test domain::execution::test::non_user_owner_never_claims ... ok
+test domain::execution::test::manual_event_action_does_not_fabricate_event_context ... ok
+test domain::execution::test::manual_returns_chat_before_completion_and_tracks_one_run ... ok
+test domain::program_runner::test::a_scheduled_run_tells_the_agent_which_routine_fired_and_on_what_schedule ... ok
+test domain::program_runner::test::an_unreadable_trigger_fails_before_any_step ... ok
+test domain::program_runner::test::code_steps_act_as_the_agent_unless_the_routine_operates_as_its_owner ... ok
+test domain::execution::test::failed_and_refused_runs_report_how_they_ended ... ok
+test domain::execution::test::preparation_and_execution_share_the_original_deadline ... ok
+test domain::program_runner::test::a_task_status_change_hands_the_agent_the_task_instead_of_its_ids ... ok
+test domain::program_runner::test::an_agent_after_code_opens_its_session_late_and_sees_what_it_returned ... ok
+test domain::program_runner::test::hosts_without_a_code_executor_fail_code_steps ... ok
+test domain::program_runner::test::code_steps_get_the_trigger_and_hand_their_output_to_later_steps ... ok
+test domain::program_runner::test::legacy_agent_routines_open_up_front_and_prompt_with_event_ids_when_it_is_unreadable ... ok
+test domain::execution::test::code_alone_needs_no_admission ... ok
+test domain::execution::test::agent_progress_and_live_updates_never_use_the_legacy_chat_field ... ok
+test domain::execution::test::stalled_cleanup_and_bookkeeping_still_release_exactly_once ... ok
+test domain::event_trigger::test::explicit_bots_never_fall_back_to_human_owner_actor_or_subject ... ok
+test domain::service::test::a_past_once_time_is_due_on_save_but_never_rearmed_after_it_ran ... ok
+test domain::lambda::test::cancellation_drops_the_inflight_job_and_drains_tracker ... ok
+test domain::service::test::a_github_trigger_runs_only_once_github_is_linked ... ok
+test domain::service::test::activation_changes_are_idempotent_and_keep_configuration ... ok
+test domain::service::test::a_description_is_trimmed_kept_when_omitted_cleared_when_empty_and_bounded ... ok
+test domain::models::test::malformed_bot_ids_are_rejected_even_with_a_model ... ok
+test domain::execution::test::stalled_live_updates_preserve_resources_and_do_not_leak_claims ... ok
+test domain::service::test::active_execution_blocks_replacement_but_allows_disabling_even_with_gate_off ... ok
+test domain::service::test::admission::manual_admission_keeps_error_type_and_uses_stored_owner_without_gating_management ... ok
+test domain::service::test::check::a_check_says_what_saving_would_refuse_and_saves_nothing ... ok
+test domain::event_trigger::test::tagged_trigger_round_trips_and_rejects_conflicting_fields ... ok
+test domain::service::test::claim_expiry_instant_still_blocks_replacement ... ok
+test domain::service::test::conditions_are_trimmed_bounded_and_round_trip ... ok
+test domain::service::test::check::a_clean_check_returns_the_routine_as_saving_would_store_it ... ok
+test domain::service::test::cron_without_future_firings_is_bad_input ... ok
+test domain::service::test::conditions_are_rejected_unless_the_host_can_check_them ... ok
+test domain::service::test::creates_both_triggers_with_server_owned_state ... ok
+test domain::service::test::default_gate_rejects_event_creation_and_transition_but_allows_cron ... ok
+test domain::service::test::configuration_updates_that_omit_activation_keep_it ... ok
+test domain::suggestions::test::a_layout_has_at_most_three_sessions_and_every_surface_once ... ok
+test domain::suggestions::test::a_pick_that_affects_others_never_starts_on ... ok
+test domain::suggestions::test::a_saved_routine_names_the_suggestion_it_came_from ... ok
+test domain::suggestions::test::a_surface_shows_drafted_routines_then_picks_then_templates_each_once ... ok
+test domain::suggestions::test::a_running_generation_is_left_alone ... ok
+test domain::suggestions::test::templates_skip_what_was_saved_and_fill_each_surface_to_three ... ok
+test domain::suggestions::test::only_the_persons_open_suggestion_sessions_may_suggest ... ok
+test domain::suggestions::test::suggestions_are_off_without_the_flag ... ok
+test domain::suggestions::test::the_sweep_deletes_sessions_a_stopped_process_left_open ... ok
+test domain::service::test::disabled_manual_runs_work_for_both_variants_even_with_gate_off ... ok
+test domain::service::test::an_update_that_changes_nothing_keeps_the_revision ... ok
+test domain::models::test::legacy_tasks_keep_their_model_target_and_instructions ... ok
+test domain::models::test::claim_expires_at_is_claimed_plus_the_maximum_run_time ... ok
+test domain::target_validation::test::an_update_from_before_steps_cannot_replace_them ... ok
+test domain::target_validation::test::an_update_must_restate_the_routine_apps_to_keep_or_clear_them ... ok
+test domain::target_runner::test::agent_preparation_preserves_typed_admission_failures ... ok
+test domain::target_runner::test::repeated_status_failures_are_bounded ... ok
+test domain::target_validation::test::programs_never_trip_the_old_client_agent_guard ... ok
+test domain::target_validation::test::requires_explicit_null_to_remove_even_an_unparseable_historical_selection ... ok
+test domain::service::test::gate_off_rejects_enabling_an_existing_event_action ... ok
+test domain::execution::test::shutdown_cancels_tracked_run_and_releases_claim ... ok
+test domain::target_runner::test::preparation_carries_the_routine_apps_and_fails_when_one_is_disconnected ... ok
+test domain::models::test::create_and_update_bodies_normalize_to_the_same_configuration ... ok
+test domain::models::test::event_action_round_trips_without_cron_fields ... ok
+test domain::models::test::agent_steps_resolve_persona_default_or_explicit_model_override ... ok
+test domain::target_runner::test::executor_failed_prompt_finalizes_agent_history_and_stops_once ... ok
+test domain::service::test::preparation_reauthorizes_previously_saved_selection_after_deletion_or_revocation ... ok
+test domain::service::test::user_cleanup::repository_failure_keeps_retry_state_and_emits_no_delete ... ok
+test domain::service::test::validates_before_persistence_and_rejects_cross_owner_selection ... ok
+test domain::suggestions::prompt::test::mail_is_bounded_and_cannot_close_its_tag ... ok
+test domain::suggestions::prompt::test::the_brief_says_what_each_surface_holds ... ok
+test domain::suggestions::prompt::test::the_catalog_shown_is_the_sessions_surfaces ... ok
+test domain::suggestions::test::at_most_two_safe_catalog_picks_start_on ... ok
+test domain::models::test::bot_owner_principal_decodes_as_a_bot ... ok
+test domain::service::test::without_sessions_agents_are_refused_but_models_and_explicit_switches_are_kept ... ok
+test inbound::axum_router::test::list_as_grantee_excludes_another_owners_routine ... ok
+test domain::suggestions::decode::test::surfaces_are_the_sessions_and_estimates_are_probabilities ... ok
+test domain::suggestions::decode::test::knob_values_must_fit_their_knobs ... ok
+test domain::execution::test::event_deadline_drops_agent_and_returns_failure ... ok
+test inbound::axum_router::test::maps_typed_errors_and_sanitizes_internal_failures ... ok
+test domain::suggestions::test::a_suggestion_is_checked_before_it_is_kept ... ok
+test domain::suggestions::test::a_drafted_routine_naming_someones_details_is_refused ... ok
+test domain::suggestions::decode::test::a_reason_is_one_plain_line_that_names_no_address ... ok
+test domain::suggestions::test::a_session_may_keep_only_so_many ... ok
+test inbound::axum_router::test::owned_purge::a_failed_purge_is_a_server_error_and_keeps_the_action ... ok
+test inbound::axum_router::test::owned_purge::a_malformed_purge_is_a_bad_request ... ok
+test inbound::axum_router::test::owned_purge::only_the_internal_key_may_purge ... ok
+test inbound::axum_router::test::owned_purge::purges_only_for_the_owner_it_names ... ok
+test inbound::axum_router::test::rejected_create_bodies_return_the_validation_message ... ok
+test inbound::axum_router::test::remote_session_admission_uses_the_same_public_http_contract ... ok
+test inbound::axum_router::test::reading_a_routine_answers_like_its_history ... ok
+test inbound::axum_router::test::target_errors_have_deliberate_sanitized_status_codes ... ok
+test inbound::axum_router::test::owner_can_read_cron_and_event_routines_but_missing_ids_return_not_found ... ok
+test inbound::axum_router::test::mixed_unknown_and_server_owned_input_is_bad_request_for_create_and_update ... ok
+test inbound::axum_router::test::team_bot_create_returns_400_with_the_owner_message ... ok
+test inbound::draft_router::test::still_drafts_for_web_clients_that_send_workspace_lists ... ok
+test inbound::axum_router::test::target_configuration_is_validated_through_http_and_gate_defaults_off ... ok
+test inbound::event_run_worker::test::cancelled_worker_does_not_poll_or_dispatch ... ok
+test inbound::draft_router::test::drafts_for_the_signed_in_user ... ok
+test inbound::axum_router::test::the_catalog_is_served_in_the_zone_asked_for ... ok
+test inbound::kafka_consumer::test::admits_both_topics_before_committing ... ok
+test inbound::kafka_consumer::test::already_cancelled_shutdown_does_not_receive ... ok
+test inbound::kafka_consumer::test::call_conversion_preserves_the_envelope ... ok
+test inbound::kafka_consumer::test::commit_failure_is_fatal_even_for_a_poison_record ... ok
+test inbound::kafka_consumer::test::document_conversion_preserves_the_envelope ... ok
+test inbound::event_run_worker::test::slow_run_does_not_block_third_run_or_reconciliation ... ok
+test inbound::kafka_consumer::test::partial_fan_out_is_retried_and_redelivery_is_deduplicated ... ok
+test inbound::kafka_consumer::test::permanent_domain_rejections_commit_without_retry ... ok
+test inbound::kafka_consumer::test::poison_missing_and_future_payloads_are_rejected_without_ingestion ... ok
+test inbound::kafka_consumer::test::schema_mismatch_is_an_observable_permanent_reject ... ok
+test inbound::kafka_consumer::test::shutdown_during_admission_or_backoff_never_commits_or_receives_later_work ... ok
+test inbound::kafka_consumer::test::subscriptions_are_exact_and_group_is_dedicated ... ok
+test inbound::kafka_consumer::test::exhausted_transient_errors_never_advance_to_the_next_record ... ok
+test inbound::kafka_consumer::test::the_routine_behind_an_event_reaches_ingestion ... ok
+test inbound::suggestion_router::test::dismissing_answers_no_content_or_not_found ... ok
+test inbound::suggestion_router::test::serves_suggestions_in_the_wire_shape_clients_read ... ok
+test inbound::suggestion_router::test::suggesting_outside_a_suggestion_session_is_forbidden ... ok
+test inbound::axum_router::test::manual_execution_documents_quota_and_retryable_validation_failures ... ok
+test inbound::event_run_worker::test::shutdown_signals_active_runs_and_awaits_completion_without_claiming_more ... ok
+test inbound::event_run_worker::test::bounded_dispatch_continues_after_failed_run ... ok
+test outbound::agent_session_client::test::prepare_carries_a_non_billable_sessions_billing_and_older_bodies_default_it ... ok
+test inbound::axum_router::test::openapi_documents_request_and_event_opt_in_contracts ... ok
+test inbound::event_run_worker::test::a_run_still_pending_during_dispatch_is_not_dispatched_again ... ok
+test domain::target_validation::test::hands_an_owned_agent_to_the_session_check ... ok
+test domain::target_validation::test::model_selection_validates_a_macro_session ... ok
+test domain::target_runner::test::a_program_hands_its_apps_to_the_agent_it_opens_up_front ... ok
+test domain::target_runner::test::omitted_override_preserves_persona_default ... ok
+test domain::service::test::user_cleanup::closed_dispatcher_fails_before_deleting_rows ... ok
+test domain::service::test::owned_purge::purges_a_disabled_claimed_action_once_and_announces_its_delete ... ok
+test domain::service::test::owned_purge::a_stopped_dispatcher_fails_the_purge_before_deleting_the_row ... ok
+test outbound::event_access::test::denial_and_missing_entities_are_distinct_from_infrastructure_failures ... ok
+test domain::service::test::user_cleanup::deletes_disabled_and_claimed_actions_not_other_owners_and_retries_empty ... ok
+test domain::execution::test::shutdown_during_admission_releases_claim_without_contacting_runner ... ok
+test domain::service::test::user_and_bot_for_user_record_a_user_and_team_bot_writes_nothing ... ok
+test domain::templates::test::a_shared_routine_never_operates_as_whoever_activates_it ... ok
+test domain::service::test::owned_purge::leaves_an_action_another_owner_holds ... ok
+test domain::templates::test::activating_an_unshared_routine_creates_nothing ... ok
+test domain::service::test::resuming_revalidates_the_stored_agent_but_pausing_does_not ... ok
+test domain::service::test::updates_advance_revision_and_only_trigger_changes_or_enabling_reset_activation ... ok
+test domain::service::test::saving_names_code_steps_and_resaving_without_the_names_changes_nothing ... ok
+test outbound::event_content::routine_event::test::a_received_email_carries_its_headers_and_reply_free_body ... ok
+test outbound::event_content::routine_event::test::a_deleted_call_or_another_calls_record_does_not_become_the_event ... ok
+test outbound::event_access::test::github_deliveries_follow_the_installation_claim_and_bind_to_it ... ok
+test outbound::event_access::test::mints_entity_specific_receipts_for_exact_owner_and_entity ... ok
+test outbound::event_content::routine_event::test::a_long_transcript_is_cut_mid_speech_and_says_so ... ok
+test outbound::event_content::routine_event::test::a_status_change_from_a_pull_request_names_it_and_who_acted ... ok
+test domain::service::test::unavailable_agents_can_be_paused_deleted_and_have_history_read_without_validation ... ok
+test outbound::event_content::routine_event::test::a_started_call_carries_who_started_it_and_who_has_joined ... ok
+test outbound::event_content::routine_event::test::a_channel_reply_carries_its_thread_through_the_message ... ok
+test outbound::event_content::routine_event::test::a_task_status_change_carries_the_task_as_it_reads_now ... ok
+test outbound::event_access::test::wrong_permission_family_is_denied_not_reinterpreted ... ok
+test outbound::event_content::routine_event::test::an_ended_call_carries_its_people_and_what_they_said ... ok
+test inbound::axum_router::test::event_management_off_and_expired_cron_are_bad_requests ... ok
+test outbound::event_content::test::deleted_documents_say_so_without_content ... ok
+test outbound::event_content::test::emails_carry_headers_and_the_reply_free_body_but_not_bcc ... ok
+test outbound::event_content::test::calls_show_who_joined_and_what_they_said ... ok
+test outbound::event_content::test::envelope_names_the_event_and_the_owner ... ok
+test outbound::event_content::test::channel_messages_are_plain_text_from_their_sender ... ok
+test outbound::event_content::test::long_text_is_cut_on_a_character_boundary ... ok
+test outbound::event_content::test::tasks_show_option_labels_and_skip_unset_properties ... ok
+test outbound::event_content::test::replies_go_to_the_root_of_the_message_thread ... ok
+test domain::templates::test::disabled_missing_or_failed_flags_block_templates_but_preserve_routines_and_unsharing ... ok
+test outbound::inprocess_executor::test::handles_allocate_distinct_ids_before_preparation ... ok
+test outbound::inprocess_executor::test::resource_encoding_is_closed_and_result_is_versioned ... ok
+test outbound::inprocess_executor::test::typed_history_never_falls_back_to_chat_for_unknown_metadata ... ok
+test outbound::inprocess_executor::test::legacy_history_and_responses_remain_readable ... ok
+test domain::target_validation::test::a_validator_that_cannot_check_connections_rejects_routine_apps ... ok
+test domain::target_validation::test::local_validation_precedes_remote_authorization ... ok
+test domain::target_validation::test::hands_the_routine_apps_to_the_session_check ... ok
+test domain::target_validation::test::a_validator_without_sessions_rejects_agents ... ok
+test domain::target_runner::test::mismatched_session_or_action_never_reports_success ... ok
+test domain::target_runner::test::ambiguous_prompt_is_never_retried_and_keeps_resource_for_failed_history ... ok
+test domain::target_runner::test::model_targets_use_macro_sessions_with_the_selected_model ... ok
+test domain::target_runner::test::fast_completion_keeps_owner_override_and_ids_in_one_prompt ... ok
+test domain::service::test::structurally_invalid_programs_are_rejected_with_the_broken_rule ... ok
+test domain::execution::test::runs_of_only_code_report_no_model_or_agent ... ok
+test domain::service::test::editing_an_overdue_one_off_keeps_its_unconsumed_firing ... ok
+test domain::target_validation::test::a_program_hands_its_apps_to_its_agent_and_an_update_must_restate_them ... ok
+test domain::service::test::gate_off_allows_pausing_an_event_action_but_not_resuming_it ... ok
+test domain::target_runner::test::safe_reads_back_off_and_recover_without_replaying_prompt ... ok
+test domain::target_runner::test::invalid_targets_and_non_user_owners_never_reach_sessions ... ok
+test domain::target_runner::test::ambiguous_prepare_can_establish_resource_with_safe_read_but_never_prompts ... ok
+test domain::target_validation::test::every_agent_step_is_authorized_and_structural_errors_name_the_rule ... ok
+test domain::target_validation::test::authorizes_owner_and_override_without_starting_external_runtime ... ok
+test domain::target_runner::test::all_terminal_failures_and_authorization_errors_fail_without_retry ... ok
+test inbound::axum_router::test::bare_internal_key_on_an_id_route_is_unauthorized ... ok
+test domain::service::test::running_actions_can_be_paused_but_not_resumed ... ok
+test domain::service::test::lists_each_routine_with_its_latest_run ... ok
+test inbound::axum_router::test::authenticates_user_and_internal_requests_and_rejects_missing_credentials ... ok
+test domain::execution::test::runs_without_a_transcript_still_announce_start_and_stop_and_keep_their_steps ... ok
+test domain::target_validation::test::rejects_a_deleted_agent ... ok
+test domain::service::test::read_service_keeps_both_triggers_for_the_owner_in_stable_order ... ok
+test domain::service::test::expired_claim_allows_configuration_replacement ... ok
+test domain::service::test::nonowners_can_neither_read_nor_manage_routines ... ok
+test domain::target_runner::test::offline_byoa_and_rejected_overrides_never_fall_back ... ok
+test domain::templates::test::only_the_owner_can_share_or_stop_sharing ... ok
+test domain::templates::test::templates_use_the_viewer_and_activating_users_rollout ... ok
+test domain::target_runner::test::executor_failed_model_prompt_keeps_session_history_and_stops_once ... ok
+test domain::target_runner::test::agent_targets_delegate_admission_and_never_apply_the_model_gate ... ok
+test domain::target_runner::test::executor_deadline_stops_preallocated_session_even_during_preparation ... ok
+test domain::target_runner::test::stalled_status_reads_are_bounded_too ... ok
+test inbound::axum_router::test::executing_a_nonuser_owned_row_returns_not_found ... ok
+test domain::execution::test::runs_that_never_claim_are_not_reported ... ok
+test domain::service::test::list_is_cron_only_by_default_but_id_operations_reach_events ... ok
+test inbound::axum_router::test::cron_create_update_return_compatibility_fields ... ok
+test domain::templates::test::rejects_an_oversized_description ... ok
+test inbound::axum_router::test::foreign_owner_can_neither_read_nor_manage_and_list_is_empty ... ok
+test domain::templates::test::sharing_snapshots_the_routine_and_activation_points_back_at_it ... ok
+test inbound::axum_router::test::event_responses_and_opt_in_lists_do_not_invent_cron_fields ... ok
+test outbound::pg_polling_dispatcher::test::cancellation_allows_started_execution_to_finish_without_starting_another ... ok
+test outbound::pg_polling_dispatcher::test::cancellation_interrupts_polling_delay_and_dispatch_event_drain ... ok
+test outbound::pg_polling_dispatcher::test::startup_gate_waits_for_http_and_can_be_cancelled_before_it_listens ... ok
+test outbound::pg_polling_dispatcher::test::cancellation_during_repository_poll_prevents_candidate_execution ... ok
+test inbound::axum_router::test::manual_execution_returns_sanitized_admission_errors_after_authorization ... ok
+test inbound::axum_router::test::code_steps_need_a_checker_and_the_owner_reads_their_upgrades ... ok
+test inbound::axum_router::test::grants_do_not_allow_nonowners_to_manage_routines ... ok
+test outbound::pg_polling_dispatcher::test::only_enabled_due_schedules_including_mixed_triggers_reach_executor ... ok
+test inbound::axum_router::test::activation_endpoint_is_idempotent_and_accepts_only_enabled ... ok
+test outbound::pg_event_run_repo::test::invalid_configuration_classifications_do_not_include_persisted_content ... ok
+test inbound::axum_router::test::agent_replacement_requires_explicit_null_and_unavailable_agent_remains_manageable ... ok
+test outbound::agent_session_client::test::configuration_is_validated_and_secret_header_is_sensitive ... ok
+test outbound::agent_session_client::test::redirects_never_forward_internal_credentials_or_replay_commands ... ok
+test outbound::agent_session_client::test::oversized_success_responses_are_rejected ... ok
+test outbound::agent_session_client::test::status_and_prompt_requests_have_bounded_timeouts ... ok
+test outbound::tokio_dispatcher::test::only_enabled_cron_actions_get_a_timer ... ok
+test outbound::agent_session_client::test::all_commands_use_internal_auth_and_domain_wire_contract_at_both_prefixes ... ok
+test swagger::test::routine_task_schema_offers_programs_and_single_agent_tasks ... ok
+test outbound::agent_session_client::test::malformed_and_ambiguous_prompt_responses_never_replay ... ok
+test outbound::pg_polling_dispatcher::test::a_polled_routine_due_before_the_next_batch_runs_when_due ... ok
+test outbound::pg_polling_dispatcher::test::a_saved_near_term_routine_wakes_the_idle_loop ... ok
+test outbound::agent_session_client::test::proxy_errors_map_without_exposing_response_body ... ok
+test outbound::agent_session_client::test::typed_sanitized_domain_errors_are_preserved ... ok
+test domain::suggestions::test::an_interrupted_generation_starts_again_once_it_is_stale ... ok
+test domain::suggestions::test::a_generation_runs_hidden_sessions_once_and_their_suggestions_come_first ... ok
+test domain::suggestions::test::the_brief_holds_the_inbox_as_data_that_cannot_close_its_tag ... ok
+test domain::suggestions::test::a_prompt_that_may_not_have_arrived_is_retried_once ... ok
+test domain::suggestions::test::sessions_that_never_suggest_leave_macros_templates ... ok
+test domain::suggestions::test::a_session_that_suggests_nothing_is_retried_once ... ok
+test domain::suggestions::test::dismissing_a_suggestion_or_a_template_removes_it_for_good_everywhere ... ok
+test outbound::pg_code_upgrades::test::one_run_claims_the_rewrite_for_an_sdk ... ok
+test outbound::pg_event_run_repo::test::concurrent_duplicate_admission_and_cascade_cleanup ... ok
+test outbound::pg_event_run_repo::test::conditions_do_not_change_candidate_matching ... ok
+test outbound::pg_event_run_repo::test::skipping_finishes_pending_run_and_links_its_history ... ok
+test outbound::pg_event_run_repo::test::a_run_keeps_its_change_source_and_writes_the_key_only_when_set ... ok
+test outbound::pg_draft_hand_backs::test::a_drafts_latest_check_by_its_owner_is_its_answer ... ok
+test outbound::pg_draft_hand_backs::test::the_sweep_finds_only_drafts_started_before_its_cutoff ... ok
+test outbound::pg_draft_hand_backs::test::a_failing_check_keeps_the_last_passing_one ... ok
+test outbound::pg_code_upgrades::test::a_saved_rewrite_replaces_the_task_unless_the_owner_changed_it ... ok
+test outbound::pg_event_run_repo::test::admission_skips_invalid_first_and_middle_pages_without_truncating_fanout ... ok
+test outbound::pg_code_upgrades::test::a_sweep_brings_enabled_routines_with_code_to_the_current_sdk ... ok
+test outbound::pg_event_run_repo::test::candidates_exact_recheck_activation_and_keyset_pages ... ok
+test domain::service::test::check::only_a_draft_sessions_own_check_is_kept_as_its_answer ... ok
+test outbound::pg_code_upgrades::test::checked_code_records_its_new_sdk_without_a_new_revision ... ok
+test outbound::pg_event_run_repo::test::delayed_bookkeeping_can_finish_before_reconciliation ... ok
+test outbound::pg_event_run_repo::test::cancellation_claim_race_has_one_terminal_direction ... ok
+test outbound::pg_code_upgrades::test::needing_an_update_pauses_the_routine_with_the_reason ... ok
+test outbound::pg_event_run_repo::test::a_mixed_routine_admits_events_without_consuming_its_schedule ... ok
+test outbound::pg_event_run_repo::test::reconcile_is_bounded_and_stale_configuration_does_not_cancel_started ... ok
+test outbound::pg_event_run_repo::test::a_finished_github_run_keeps_no_payload ... ok
+test domain::drafts::test::a_session_the_allowance_refuses_is_an_error_and_cleaned_up ... ok
+test outbound::pg_event_run_repo::test::locked_actions_do_not_block_independent_dispatch ... ok
+test outbound::pg_event_run_repo::test::invalid_deadlines_leave_the_run_pending ... ok
+test outbound::pg_scheduled_action_repo::test::exhausted_one_off_clears_firing_and_is_not_dispatched_again ... ok
+test outbound::pg_scheduled_action_repo::test::run_history_is_the_last_run_and_the_last_success_ignoring_skipped_runs ... ok
+test outbound::pg_event_run_repo::test::reconcile_does_not_release_a_replaced_token ... ok
+test outbound::pg_event_run_repo::test::rejected_claims_release_locks_for_immediate_retry ... ok
+test outbound::pg_scheduled_action_repo::test::once_routine_fires_for_exactly_one_of_concurrent_claims_and_then_is_done ... ok
+test outbound::pg_scheduled_action_repo::test::a_consumed_firing_is_not_due_again_after_its_claim_goes_stale ... ok
+test outbound::pg_scheduled_action_repo::test::bot_owner_create_writes_bot_and_sponsor_grants ... ok
+test outbound::pg_scheduled_action_repo::test::multiple_triggers_survive_grant_listing_and_configuration_updates ... ok
+test outbound::pg_event_run_repo::test::github_candidates_narrow_on_the_event_and_keep_the_payload ... ok
+test outbound::pg_scheduled_action_repo::test::claims_from_snapshots_older_than_a_pause_or_update_fail ... ok
+test outbound::pg_routine_template_repo::test::stopping_or_deleting_the_source_removes_the_template_only ... ok
+test outbound::pg_event_run_repo::test::revision_disable_and_cancellation_rechecks ... ok
+test outbound::pg_event_run_repo::test::failed_bookkeeping_rolls_back_history_and_claim ... ok
+test outbound::pg_event_run_repo::test::manual_claim_blocks_events_and_foreign_tokens_cannot_finalize ... ok
+test outbound::pg_scheduled_action_repo::test::backfill_owner_grants_is_idempotent_and_fails_closed ... ok
+test outbound::pg_suggestion_repo::test::suggestions_round_trip_and_dismissals_and_saves_are_the_persons ... ok
+test outbound::pg_scheduled_action_repo::test::trigger_transitions_replace_all_trigger_columns ... ok
+test outbound::pg_scheduled_action_repo::test::delete_action_removes_row_from_owner_list ... ok
+test outbound::pg_scheduled_action_repo::test::lookup_update_and_delete_are_id_scoped ... ok
+test outbound::pg_scheduled_action_repo::test::replacement_is_fenced_against_claims_and_stale_revisions ... ok
+test outbound::pg_scheduled_action_repo::test::second_claim_returns_already_running ... ok
+test outbound::pg_scheduled_action_repo::test::delete_action_succeeds_when_entity_row_is_missing ... ok
+test outbound::pg_scheduled_action_repo::test::database_rejects_invalid_trigger_shapes ... ok
+test outbound::pg_event_run_repo::test::expired_started_is_interrupted_and_never_requeued ... ok
+test outbound::pg_event_run_repo::test::admission_waits_for_configuration_lock_and_rechecks_disable ... ok
+test outbound::pg_scheduled_action_repo::test::polling_returns_only_enabled_unclaimed_cron_rows ... ok
+test outbound::pg_scheduled_action_repo::test::user_cleanup::deletes_user_actions_without_cascade_and_preserves_other_users ... ok
+test outbound::pg_event_run_repo::test::property_changes_match_general_selectors_without_duplicate_runs ... ok
+test outbound::pg_scheduled_action_repo::test::once_inside_multiple_is_stored_and_other_shapes_are_rejected ... ok
+test outbound::pg_scheduled_action_repo::test::release_is_fenced_to_its_own_execution ... ok
+test outbound::pg_routine_template_repo::test::resharing_replaces_the_snapshot_and_counts_activations ... ok
+test outbound::pg_event_run_repo::test::skipping_leaves_started_or_superseded_runs_without_history ... ok
+test outbound::pg_suggestion_repo::test::a_generation_starts_once_and_records_how_it_ended ... ok
+test outbound::pg_scheduled_action_repo::test::get_owned_actions_excludes_other_principals ... ok
+test outbound::pg_scheduled_action_repo::test::last_runs_report_each_actions_latest_finished_run ... ok
+test outbound::pg_scheduled_action_repo::test::create_action_registers_entity_row ... ok
+test outbound::pg_scheduled_action_repo::test::event_round_trip_and_bookkeeping_does_not_advance_configuration ... ok
+test outbound::pg_scheduled_action_repo::test::delete_action_removes_entity_row ... ok
+test outbound::pg_scheduled_action_repo::test::create_action_returns_id_and_is_listable_by_owner ... ok
+test outbound::pg_scheduled_action_repo::test::database_rejects_external_webhooks_and_unknown_mixed_trigger_kinds ... ok
+test outbound::pg_scheduled_action_repo::test::update_action_changes_name_schedule_and_enabled ... ok
+test outbound::pg_event_run_repo::test::two_workers_fifo_and_independent_actions ... ok
+test outbound::pg_event_run_repo::test::expired_manual_claim_can_be_replaced_without_stale_release ... ok
+test outbound::pg_scheduled_action_repo::test::deployed_cron_insert_remains_valid ... ok
+test outbound::pg_suggestion_repo::test::a_session_suggests_while_open_and_counts_what_it_kept ... ok
+test outbound::pg_scheduled_action_repo::test::get_actions_by_ids_returns_another_owners_row ... ok
+test domain::drafts::test::a_draft_that_needs_a_new_database_creates_it_references_it_and_says_so ... ok
+test domain::drafts::test::a_channel_past_searchs_first_page_is_still_found ... ok
+test domain::drafts::test::a_session_that_hands_nothing_back_says_the_draft_failed ... ok
+test domain::drafts::test::a_weekly_task_draft_creates_no_task ... ok
+test domain::drafts::test::a_draft_runs_in_a_hidden_read_only_session_and_hands_back_its_last_check ... ok
+test domain::drafts::test::a_session_that_adds_the_wrong_kind_of_step_fails_the_draft ... ok
+test domain::drafts::test::changes_a_code_step_in_place_keeping_its_output_name ... ok
+test domain::drafts::test::without_code_the_brief_has_no_code_examples ... ok
+test domain::drafts::test::code_still_failing_at_the_last_check_comes_back_on_its_step ... ok
+test domain::drafts::test::adds_the_step_the_session_checked_at_the_end ... ok
+test domain::drafts::test::a_large_workspace_drafts_the_channel_the_description_names ... ok
+test domain::service::test::check::a_check_made_on_one_replica_answers_a_draft_waiting_on_another ... ok
+test domain::drafts::test::without_conditions_no_example_trigger_asks_one ... ok
+
+test result: ok. 462 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 5.03s
+
+     Running tests/event_routines.rs (target/debug/deps/event_routines-40f04b37b1f26d0a)
+
+running 6 tests
+test simulated_bot_document_and_channel_outputs_cannot_start_a_routine_loop ... ok
+test crashes_after_start_and_after_side_effects_are_interrupted_without_reexecution ... ok
+test overlapping_filters_and_multiple_routines_deduplicate_concurrent_redelivery ... ok
+test cron_and_event_routines_share_crud_and_manual_execution ... ok
+test crash_before_admission_commit_and_after_admission_before_offset_commit ... ok
+test two_worker_replicas_queue_two_arrivals_while_active_without_rerunning_failure ... ok
+
+test result: ok. 6 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 2.18s
+
+   Doc-tests agent_trigger
+
+running 0 tests
+
+test result: ok. 0 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s
+
+   Doc-tests bots
+
+running 0 tests
+
+test result: ok. 0 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s
+
+   Doc-tests channel_bots
+
+running 0 tests
+
+test result: ok. 0 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s
+
+   Doc-tests scheduled_action
+
+running 0 tests
+
+test result: ok. 0 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s
+

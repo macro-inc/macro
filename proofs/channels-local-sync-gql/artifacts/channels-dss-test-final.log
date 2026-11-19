@@ -1,0 +1,151 @@
+warning: Git tree '<workspace>' is dirty
+    Blocking waiting for file lock on artifact directory
+   Compiling agent_fold v0.1.0 (<workspace>/crates/folds/agent_fold)
+   Compiling lexical_client v0.1.0 (<workspace>/crates/lexical_client)
+   Compiling agent_session v0.1.0 (<workspace>/crates/agent_session)
+   Compiling email v0.1.0 (<workspace>/crates/email)
+   Compiling task_dedup v0.1.0 (<workspace>/crates/task_dedup)
+   Compiling collab_surface v0.1.0 (<workspace>/crates/collab_surface)
+   Compiling image_generation v0.1.0 (<workspace>/crates/image_generation)
+   Compiling lexical_mention_extractor v0.1.0 (<workspace>/crates/lexical_mention_extractor)
+   Compiling forms v0.1.0 (<workspace>/crates/forms)
+   Compiling initiative_description v0.1.0 (<workspace>/crates/initiative_description)
+   Compiling documents v0.1.0 (<workspace>/crates/documents)
+   Compiling agent_changes v0.1.0 (<workspace>/crates/agent_changes)
+   Compiling import v0.1.0 (<workspace>/crates/import)
+   Compiling agent_trigger v0.1.0 (<workspace>/crates/agent_trigger)
+   Compiling agent_session_realtime v0.1.0 (<workspace>/crates/agent_session_realtime)
+   Compiling models_soup v0.1.0 (<workspace>/crates/models_soup)
+   Compiling graphql_email v0.1.0 (<workspace>/crates/graphql_email)
+   Compiling email_service_client v0.1.0 (<workspace>/crates/email_service_client)
+   Compiling reminders v0.1.0 (<workspace>/crates/reminders)
+   Compiling soup v0.1.0 (<workspace>/crates/soup)
+   Compiling models_search v0.1.0 (<workspace>/crates/models_search)
+   Compiling agent_code_mode v0.1.0 (<workspace>/crates/agent_code_mode)
+   Compiling slack_integration v0.1.0 (<workspace>/crates/slack_integration)
+   Compiling search_service_client v0.1.0 (<workspace>/crates/search_service_client)
+   Compiling search_service v0.1.0 (<workspace>/crates/search_service)
+   Compiling projects v0.1.0 (<workspace>/crates/projects)
+   Compiling github v0.1.0 (<workspace>/crates/github)
+   Compiling webhook v0.1.0 (<workspace>/crates/webhook)
+   Compiling soup-filter-projection v0.1.0 (<workspace>/crates/soup_filter_projection)
+   Compiling databases_sql v0.1.0 (<workspace>/crates/databases_sql)
+   Compiling skills v0.1.0 (<workspace>/crates/skills)
+   Compiling scheduled_action v0.1.0 (<workspace>/crates/scheduled_action)
+   Compiling soup_realtime v0.1.0 (<workspace>/crates/soup_realtime)
+   Compiling graphql_soup v0.1.0 (<workspace>/crates/graphql_soup)
+   Compiling attention_feed v0.1.0 (<workspace>/crates/attention_feed)
+   Compiling notification_inbox v0.1.0 (<workspace>/crates/notification_inbox)
+   Compiling work_feed v0.1.0 (<workspace>/crates/work_feed)
+   Compiling memory v0.1.0 (<workspace>/crates/memory)
+   Compiling graphql_scheduled_action v0.1.0 (<workspace>/crates/graphql_scheduled_action)
+   Compiling graphql_entity_mutation v0.1.0 (<workspace>/crates/graphql_entity_mutation)
+   Compiling graphql_initiative v0.1.0 (<workspace>/crates/graphql_initiative)
+   Compiling graphql_databases v0.1.0 (<workspace>/crates/graphql_databases)
+   Compiling graphql_registered_work v0.1.0 (<workspace>/crates/graphql_registered_work)
+   Compiling graphql_notification_inbox v0.1.0 (<workspace>/crates/graphql_notification_inbox)
+   Compiling graphql_work_feed v0.1.0 (<workspace>/crates/graphql_work_feed)
+   Compiling ai_tools v0.1.0 (<workspace>/crates/ai_tools)
+   Compiling graphql_favorite v0.1.0 (<workspace>/crates/graphql_favorite)
+   Compiling complete_graph v0.1.0 (<workspace>/crates/complete_graph)
+   Compiling channel_bots v0.1.0 (<workspace>/crates/channel_bots)
+   Compiling document_storage_service v0.1.0 (<workspace>/services/document_storage_service)
+    Finished `test` profile [unoptimized + debuginfo] target(s) in 1m 51s
+     Running unittests src/lib.rs (target/debug/deps/document_storage_service-c69b72bc1ecd9052)
+
+running 92 tests
+test api::documents::permissions_token::create_permission_token::test::anonymous_and_identityless_internal_tokens_have_no_identity_claims ... ok
+test api::documents::permissions_token::create_permission_token::test::bot_tokens_keep_the_actor_without_inventing_a_user ... ok
+test api::graphql_soup::telemetry::test::error_paths_join_fields_and_indexes ... ok
+test api::graphql_soup::telemetry::test::error_paths_are_bounded ... ok
+test api::graphql_soup::telemetry::test::only_identifier_error_codes_are_logged ... ok
+test api::graphql_soup::telemetry::test::status_description_never_contains_the_message ... ok
+test api::graphql_soup::telemetry::test::operation_names_are_bounded ... ok
+test api::graphql_soup::websocket::test::declines_invalid_or_unsupported_parameters ... ok
+test api::graphql_soup::telemetry::test::resource_name_follows_the_executed_operation ... ok
+test api::graphql_soup::test::serialization_preserves_graphql_errors ... ok
+test api::graphql_soup::websocket::test::picks_first_supported_offer_across_multiple_headers ... ok
+test api::graphql_soup::telemetry::test::unauthenticated_operations_share_one_resource ... ok
+test api::graphql_soup::telemetry::test::only_uncoded_or_internal_resolver_errors_are_server_errors ... ok
+test api::graphql_soup::websocket::test::negotiates_supported_window_sizes_and_context_limits ... ok
+test api::graphql_soup::test::serialization_preserves_data_headers_and_body_length ... ok
+test api::graphql_soup::websocket::test::receive_limits_match_previous_axum_limits_for_every_negotiation_outcome ... ok
+test api::graphql_soup::websocket::test::does_not_mistake_quoted_values_for_extension_offers ... ok
+test api::internal::purge_owned_entity::test::a_request_without_the_internal_key_is_refused_without_a_purge ... ok
+test api::saved_views::test::definitions_nest_beside_the_legacy_routes ... ok
+test api::graphql_soup::telemetry::test::internal_error_code_marks_span ... ok
+test api::graphql_soup::telemetry::test::successful_request_records_operation_without_logging ... ok
+test config::test::missing_posthog_key_fails_config_loading ... ok
+test outbound::docx_export::test::cache_identity_bypasses_legacy_exports_and_tracks_part_content_and_paths ... ok
+test api::graphql_soup::telemetry::test::logged_errors_are_capped_per_response ... ok
+test service::delete_document_worker::test::deletion_message_rejects_invalid_owner ... ok
+test service::delete_document_worker::test::deletion_message_without_owner_requires_database_lookup ... ok
+test service::delete_document_worker::test::document_cleanup_receipt_is_internal_for_the_document ... ok
+test outbound::docx_export::test::failed_part_download_does_not_publish_a_partial_archive ... ok
+test service::delete_document_worker::test::deletion_message_preserves_owner_for_shared_s3_prefix ... ok
+test service::delete_document_worker::test::test_count_occurrences ... ok
+test service::document_event_publisher::test::returns_immediate_broker_failures ... ok
+test service::entity_mutation::test::lifecycle_invalid_inputs_map_to_stable_public_error ... ok
+test service::entity_mutation::test::success_preserves_domain_effect_order_and_kind ... ok
+test service::entity_mutation::test::target_project_failures_map_to_stable_error_codes ... ok
+test api::graphql_soup::telemetry::test::client_errors_log_warnings_without_marking_span ... ok
+test api::graphql_soup::telemetry::test::every_execute_span_is_measured_as_an_integer ... ok
+test external_chat::test::unavailable_shared_counter_fails_closed ... ok
+test outbound::stream_contacts::test::contact_pair_is_found_with_one_exact_lookup ... ok
+test outbound::docx_export::test::complete_cached_export_is_reused_regardless_of_database_part_order ... ok
+test external_chat::test::a_users_budget_is_shared_across_replicas_and_recovers_after_one_second ... ok
+test api::graphql_soup::websocket::test::decompressed_messages_still_obey_size_limits ... ok
+test api::saved_views::definitions::test::requires_a_signed_in_user ... ok
+test api::graphql_soup::websocket::test::unsupported_graphql_protocol_is_rejected ... ok
+test api::saved_views::definitions::test::reorders_a_kind_and_returns_the_new_order ... ok
+test external_chat::test::redis_enforces_the_shared_budget_without_affecting_another_user ... ok
+test api::graphql_soup::telemetry::test::resolver_errors_mark_span_and_log_without_messages ... ok
+test api::sync::test::dedicated_endpoint_preserves_large_chunks_heartbeats_and_drains_on_shutdown ... ok
+test api::swagger::test::dss_registers_all_slack_operations_and_schemas ... ok
+test service::email_previews::test::primary_failure_cannot_fall_back_to_stale_consent ... ok
+test outbound::stream_contacts::test::non_contact_is_rejected ... ok
+test service::document_event_publisher::test::publishes_document_purged_event_to_documents_topic ... ok
+test service::activity::timeline::test::queue_groups_one_channels_facts_and_ignores_non_timeline_activity ... ok
+test service::activity::timeline::test::full_or_closed_delivery_queue_never_blocks_persistence ... ok
+test service::activity::timeline::test::live_activity_reaches_watchers_who_can_still_view ... ok
+test service::email_previews::test::ordinary_inbox_pages_keep_the_replica ... ok
+test service::email_previews::test::crm_pages_revalidate_on_primary_and_preserve_request ... ok
+test service::s3::delete::tests::test_delete_document ... ok
+test service::entity_mutation::project_contents::test::denied_access_skips_but_an_access_outage_fails ... ok
+test service::entity_mutation::project_contents::test::files_each_copy_in_the_folder_copy ... ok
+test service::entity_mutation::project_contents::test::deletes_a_copy_that_cannot_be_filed ... ok
+test api::internal::purge_owned_entity::test::a_failed_purge_is_a_server_error ... ok
+test api::health::tests::test_health_check ... ok
+test api::internal::purge_owned_entity::test::unsupported_team_cleanup_kinds_are_refused_without_a_purge ... ok
+test api::internal::purge_owned_entity::test::an_entity_under_another_owner_is_a_conflict ... ok
+test api::internal::purge_owned_entity::test::the_owner_query_reaches_the_owning_service_as_a_principal ... ok
+test api::internal::purge_owned_entity::test::a_signed_in_user_is_forbidden_to_purge ... ok
+test api::internal::purge_owned_entity::test::a_malformed_request_is_refused_without_a_purge ... ok
+test api::internal::purge_owned_entity::test::each_kind_dss_owns_is_purged_by_its_owning_service ... ok
+test api::graphql_soup::websocket::test::rejected_authorization_never_upgrades ... ok
+test outbound::docx_export::test::exports_complete_parts_without_reusing_a_legacy_empty_archive ... ok
+test api::saved_views::definitions::test::deletes_only_the_expected_revision ... ok
+test api::saved_views::definitions::test::lists_a_kind_and_resumes_from_the_next_cursor ... ok
+test api::saved_views::definitions::test::creates_with_the_callers_id_or_a_new_one ... ok
+test api::saved_views::definitions::test::rejects_page_sizes_and_cursors_it_cannot_serve ... ok
+test api::saved_views::definitions::test::updates_change_sharing_only_when_asked ... ok
+test api::saved_views::definitions::test::maps_domain_failures_to_statuses ... ok
+test api::swagger::test::dss_registers_all_database_webhook_operations_and_schemas ... ok
+test api::sync::test::oversized_websocket_message_closes_only_that_session ... ok
+test api::swagger::test::dss_registers_all_forms_operations_and_schemas ... ok
+test outbound::saved_view_changes::test::a_shared_change_reaches_its_author_and_each_teammate_once ... ok
+test outbound::saved_view_changes::test::a_failed_team_lookup_still_tells_the_author ... ok
+test api::graphql_soup::websocket::test::compressed_connections_can_receive_uncompressed_messages ... ok
+test outbound::calendar_refresh::test::a_clean_refresh_shows_on_the_span ... ok
+test api::graphql_soup::websocket::test::measure_subscription_payload_sizes ... ok
+test api::graphql_soup::websocket::test::mail_profile_negotiation_preserves_authorized_connection_context ... ok
+test outbound::calendar_refresh::test::an_inbox_refresh_reaches_its_owner_and_each_delegate_once ... ok
+test outbound::calendar_refresh::test::an_answer_names_the_event_and_never_the_inbox ... ok
+test outbound::calendar_refresh::test::the_owner_still_hears_when_delegates_cannot_be_resolved ... ok
+test outbound::calendar_refresh::test::a_failed_answer_refresh_shows_on_the_span ... ok
+test outbound::calendar_refresh::test::a_failed_send_shows_on_the_span_and_the_rest_still_go_out ... ok
+test api::graphql_soup::websocket::test::browser_compression_roundtrip_for_both_graphql_protocols ... ok
+test api::graphql_soup::websocket::test::uncompressed_clients_and_unsupported_offers_still_work ... ok
+
+test result: ok. 92 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.73s
+

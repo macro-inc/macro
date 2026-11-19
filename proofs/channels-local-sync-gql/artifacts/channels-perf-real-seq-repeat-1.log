@@ -1,0 +1,37 @@
+No-build repeat 1, UTC 2026-11-12T04:12:37.396688+00:00, load averages (44.3837890625, 43.34521484375, 37.51904296875)
+warning: Git tree '<workspace>' is dirty
+
+running 1 test
+benchmark timeline seq=1, private_fixture=true
+channel latest page (debug assertions disabled): size=50, warmup_pairs=20, sample_pairs=200, GraphQL median=2.261ms p95=2.557ms; REST median=1.391ms p95=1.708ms; median_ratio=1.626, median_delta=0.870ms
+REST phases: domain median=1.302ms p95=1.610ms; DTO JSON median=0.079ms p95=0.126ms; GraphQL p50 minus shared-domain p50=0.959ms (inferred adapter and serialization cost)
+GraphQL channel.timeline.authorize: median=0.002ms p95=0.002ms
+GraphQL channel.timeline.sequence: median=0.054ms p95=0.079ms
+GraphQL channel.timeline.read: median=1.286ms p95=1.552ms
+GraphQL channel.timeline.map: median=0.045ms p95=0.065ms
+GraphQL execute median=2.195ms p95=2.471ms; execute residual median=0.729ms p95=0.936ms; response JSON median=0.043ms p95=0.067ms
+GraphQL SQL statement count=10
+GraphQL SQL 1: SELECT COALESCE((SELECT seq FROM channel_change_counters WHERE channel_id = $1), 0) AS "seq!"
+GraphQL SQL 2: SELECT EXISTS(SELECT 1 FROM comms_channels WHERE id = $1) AS "exists!"
+GraphQL SQL 3: SELECT event.id AS "id!", event.actor_id AS "actor_id!", event.occurred_at AS "occurred_at!", event.action AS "action!", event.payload FROM unnest($3::text[]) selected(action) CROSS JOIN LATERAL ( SELECT id, actor_id, occurred_at, action, action_payload AS payload FROM activity_events WHERE entity_type = $1 AND entity_id = $2 AND action = selected.action AND action NOT IN ('messaged', 'opened', 'edited', 'sent') AND (selected.action <> 'property_changed' OR cardinality($4::text[]) = 0 OR action_payload->>'property' = ANY($4::text[])) ORDER BY occurred_at DESC, id DESC LIMIT $5 ) event ORDER BY event.occurred_at DESC, event.id DESC LIMIT $5
+GraphQL SQL 4: SELECT to_jsonb(m) AS "message!: Json<StoredMessage>" FROM comms_messages m JOIN comms_message_threads t ON t.root_id = m.id WHERE m.parent_entity_type = $1 AND m.parent_entity_id = $2 AND m.thread_id IS NULL AND (t.deleted_at IS NULL OR $10) AND (m.deleted_at IS NULL OR $1 = 'document' OR ($10 AND t.deleted_at IS NOT NULL) OR EXISTS ( SELECT 1 FROM comms_messages r WHERE r.thread_id = m.id AND r.deleted_at IS NULL OFFSET 0)) AND ($6::uuid[] IS NULL OR m.id = ANY($6)) AND ($7::bool IS NULL OR (t.anchor IS NOT NULL) = $7) AND (($8::timestamptz IS NULL AND $9::timestamptz IS NULL) OR (($8::timestamptz IS NULL OR m.created_at >= $8) AND ($9::timestamptz IS NULL OR m.created_at < $9)) OR EXISTS (SELECT 1 FROM comms_messages r WHERE r.thread_id = m.id AND r.deleted_at IS NULL AND ($8::timestamptz IS NULL OR r.created_at >= $8) AND ($9::timestamptz IS NULL OR r.created_at < $9))) AND (m.created_at, m.id) < (COALESCE($3::timestamptz, 'infinity'::timestamptz), COALESCE($4::uuid, 'ffffffff-ffff-ffff-ffff-ffffffffffff'::uuid)) ORDER BY m.created_at DESC, m.id DESC LIMIT $5
+GraphQL SQL 5: SELECT t.root_id, to_jsonb(t) AS "state!: Json<ThreadState>", (SELECT count(*) FROM comms_messages r WHERE r.thread_id = t.root_id AND r.deleted_at IS NULL) AS "reply_count!", (SELECT max(created_at) FROM comms_messages r WHERE r.thread_id = t.root_id AND r.deleted_at IS NULL) AS latest_reply_at FROM comms_message_threads t WHERE root_id = ANY($1)
+GraphQL SQL 6: SELECT to_jsonb(preview) AS "message!: Json<StoredMessage>" FROM unnest($1::uuid[]) root(id) CROSS JOIN LATERAL ( SELECT r.* FROM comms_messages r WHERE r.thread_id = root.id AND r.deleted_at IS NULL ORDER BY r.import_order NULLS LAST, r.created_at, r.id LIMIT 3 ) preview
+GraphQL SQL 7: SELECT message_id, id, entity_type, entity_id, width, height, created_at FROM comms_attachments WHERE message_id = ANY($1) ORDER BY created_at, id
+GraphQL SQL 8: SELECT message_id, emoji, array_agg(user_id ORDER BY user_id) AS "users!" FROM comms_reactions WHERE message_id = ANY($1) GROUP BY message_id, emoji ORDER BY emoji
+GraphQL SQL 9: SELECT source_entity_id, entity_type, entity_id FROM comms_entity_mentions WHERE source_entity_type = 'message' AND source_entity_id = ANY($1) ORDER BY entity_type, entity_id
+GraphQL SQL 10: SELECT id, name, avatar_url FROM bots WHERE id = ANY($1)
+REST SQL statement count=9
+REST SQL 1: SELECT EXISTS(SELECT 1 FROM comms_channels WHERE id = $1) AS "exists!"
+REST SQL 2: SELECT event.id AS "id!", event.actor_id AS "actor_id!", event.occurred_at AS "occurred_at!", event.action AS "action!", event.payload FROM unnest($3::text[]) selected(action) CROSS JOIN LATERAL ( SELECT id, actor_id, occurred_at, action, action_payload AS payload FROM activity_events WHERE entity_type = $1 AND entity_id = $2 AND action = selected.action AND action NOT IN ('messaged', 'opened', 'edited', 'sent') AND (selected.action <> 'property_changed' OR cardinality($4::text[]) = 0 OR action_payload->>'property' = ANY($4::text[])) ORDER BY occurred_at DESC, id DESC LIMIT $5 ) event ORDER BY event.occurred_at DESC, event.id DESC LIMIT $5
+REST SQL 3: SELECT to_jsonb(m) AS "message!: Json<StoredMessage>" FROM comms_messages m JOIN comms_message_threads t ON t.root_id = m.id WHERE m.parent_entity_type = $1 AND m.parent_entity_id = $2 AND m.thread_id IS NULL AND (t.deleted_at IS NULL OR $10) AND (m.deleted_at IS NULL OR $1 = 'document' OR ($10 AND t.deleted_at IS NOT NULL) OR EXISTS ( SELECT 1 FROM comms_messages r WHERE r.thread_id = m.id AND r.deleted_at IS NULL OFFSET 0)) AND ($6::uuid[] IS NULL OR m.id = ANY($6)) AND ($7::bool IS NULL OR (t.anchor IS NOT NULL) = $7) AND (($8::timestamptz IS NULL AND $9::timestamptz IS NULL) OR (($8::timestamptz IS NULL OR m.created_at >= $8) AND ($9::timestamptz IS NULL OR m.created_at < $9)) OR EXISTS (SELECT 1 FROM comms_messages r WHERE r.thread_id = m.id AND r.deleted_at IS NULL AND ($8::timestamptz IS NULL OR r.created_at >= $8) AND ($9::timestamptz IS NULL OR r.created_at < $9))) AND (m.created_at, m.id) < (COALESCE($3::timestamptz, 'infinity'::timestamptz), COALESCE($4::uuid, 'ffffffff-ffff-ffff-ffff-ffffffffffff'::uuid)) ORDER BY m.created_at DESC, m.id DESC LIMIT $5
+REST SQL 4: SELECT t.root_id, to_jsonb(t) AS "state!: Json<ThreadState>", (SELECT count(*) FROM comms_messages r WHERE r.thread_id = t.root_id AND r.deleted_at IS NULL) AS "reply_count!", (SELECT max(created_at) FROM comms_messages r WHERE r.thread_id = t.root_id AND r.deleted_at IS NULL) AS latest_reply_at FROM comms_message_threads t WHERE root_id = ANY($1)
+REST SQL 5: SELECT to_jsonb(preview) AS "message!: Json<StoredMessage>" FROM unnest($1::uuid[]) root(id) CROSS JOIN LATERAL ( SELECT r.* FROM comms_messages r WHERE r.thread_id = root.id AND r.deleted_at IS NULL ORDER BY r.import_order NULLS LAST, r.created_at, r.id LIMIT 3 ) preview
+REST SQL 6: SELECT message_id, id, entity_type, entity_id, width, height, created_at FROM comms_attachments WHERE message_id = ANY($1) ORDER BY created_at, id
+REST SQL 7: SELECT message_id, emoji, array_agg(user_id ORDER BY user_id) AS "users!" FROM comms_reactions WHERE message_id = ANY($1) GROUP BY message_id, emoji ORDER BY emoji
+REST SQL 8: SELECT source_entity_id, entity_type, entity_id FROM comms_entity_mentions WHERE source_entity_type = 'message' AND source_entity_id = ANY($1) ORDER BY entity_type, entity_id
+REST SQL 9: SELECT id, name, avatar_url FROM bots WHERE id = ANY($1)
+test schema::test::channel_perf::channel_latest_graphql_and_rest_server_timings ... ok
+
+test result: ok. 1 passed; 0 failed; 0 ignored; 0 measured; 119 filtered out; finished in 0.85s
+

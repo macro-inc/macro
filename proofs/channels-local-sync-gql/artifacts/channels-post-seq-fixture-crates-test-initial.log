@@ -1,0 +1,68 @@
+warning: Git tree '<workspace>' is dirty
+    Blocking waiting for file lock on package cache
+   Compiling pptx_engine v0.1.0 (<workspace>/crates/pptx_engine)
+   Compiling agent_fold v0.1.0 (<workspace>/crates/folds/agent_fold)
+   Compiling database_sql v0.1.0 (<workspace>/crates/database_sql)
+   Compiling channel_change_db_utils v0.1.0 (<workspace>/crates/channel_change_db_utils)
+   Compiling macro_db_migrator v0.1.0 (<workspace>/crates/macro_db_migrator)
+   Compiling activity v0.1.0 (<workspace>/crates/activity)
+   Compiling properties v0.1.0 (<workspace>/crates/properties)
+   Compiling chat v0.1.0 (<workspace>/crates/chat)
+   Compiling docx_engine v0.1.0 (<workspace>/crates/docx_engine)
+   Compiling initiative v0.1.0 (<workspace>/crates/initiative)
+   Compiling databases v0.1.0 (<workspace>/crates/databases)
+   Compiling messages v0.1.0 (<workspace>/crates/messages)
+   Compiling channels v0.1.0 (<workspace>/crates/channels)
+   Compiling lexical_client v0.1.0 (<workspace>/crates/lexical_client)
+   Compiling macro_db_client v0.1.0 (<workspace>/crates/macro_db_client)
+   Compiling task_dedup v0.1.0 (<workspace>/crates/task_dedup)
+   Compiling lexical_mention_extractor v0.1.0 (<workspace>/crates/lexical_mention_extractor)
+   Compiling teams v0.1.0 (<workspace>/crates/teams)
+   Compiling call v0.1.0 (<workspace>/crates/call)
+   Compiling bots v0.1.0 (<workspace>/crates/bots)
+   Compiling comms_db_client v0.1.0 (<workspace>/crates/comms_db_client)
+   Compiling collab_surface v0.1.0 (<workspace>/crates/collab_surface)
+   Compiling initiative_description v0.1.0 (<workspace>/crates/initiative_description)
+   Compiling routine_program v0.1.0 (<workspace>/crates/routine_program)
+   Compiling routines v0.1.0 (<workspace>/crates/routines)
+   Compiling ai_billing v0.1.0 (<workspace>/crates/ai_billing)
+   Compiling calendar_events v0.1.0 (<workspace>/crates/calendar_events)
+   Compiling crm v0.1.0 (<workspace>/crates/crm)
+   Compiling agent_session v0.1.0 (<workspace>/crates/agent_session)
+   Compiling documents v0.1.0 (<workspace>/crates/documents)
+   Compiling image_generation v0.1.0 (<workspace>/crates/image_generation)
+   Compiling anthropic v0.2.0 (<workspace>/crates/anthropic)
+   Compiling web_search v0.1.0 (<workspace>/crates/web_search)
+   Compiling calendar_scheduling v0.1.0 (<workspace>/crates/calendar_scheduling)
+   Compiling email v0.1.0 (<workspace>/crates/email)
+   Compiling forms v0.1.0 (<workspace>/crates/forms)
+   Compiling agent_changes v0.1.0 (<workspace>/crates/agent_changes)
+   Compiling import v0.1.0 (<workspace>/crates/import)
+   Compiling agent_trigger v0.1.0 (<workspace>/crates/agent_trigger)
+   Compiling projects v0.1.0 (<workspace>/crates/projects)
+   Compiling models_soup v0.1.0 (<workspace>/crates/models_soup)
+   Compiling scheduled_action v0.1.0 (<workspace>/crates/scheduled_action)
+   Compiling email_service_client v0.1.0 (<workspace>/crates/email_service_client)
+   Compiling soup v0.1.0 (<workspace>/crates/soup)
+   Compiling models_search v0.1.0 (<workspace>/crates/models_search)
+   Compiling agent_code_mode v0.1.0 (<workspace>/crates/agent_code_mode)
+   Compiling search_service_client v0.1.0 (<workspace>/crates/search_service_client)
+   Compiling skills v0.1.0 (<workspace>/crates/skills)
+   Compiling databases_sql v0.1.0 (<workspace>/crates/databases_sql)
+   Compiling memory v0.1.0 (<workspace>/crates/memory)
+   Compiling ai_tools v0.1.0 (<workspace>/crates/ai_tools)
+   Compiling channel_bots v0.1.0 (<workspace>/crates/channel_bots)
+error[E0063]: missing field `seq` in initializer of `messages::domain::ports::MessageEvent`
+  --> crates/channel_bots/src/outbound/conversation/test.rs:20:5
+   |
+20 |     MessageEvent {
+   |     ^^^^^^^^^^^^ missing `seq`
+
+error[E0063]: missing field `seq` in initializer of `messages::domain::ports::MessageEvent`
+   --> crates/channel_bots/src/outbound/conversation/test.rs:104:22
+    |
+104 |             .publish(MessageEvent {
+    |                      ^^^^^^^^^^^^ missing `seq`
+
+For more information about this error, try `rustc --explain E0063`.
+error: could not compile `channel_bots` (lib test) due to 2 previous errors

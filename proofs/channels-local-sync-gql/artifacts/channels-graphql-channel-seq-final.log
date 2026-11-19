@@ -1,0 +1,20 @@
+warning: Git tree '<workspace>' is dirty
+   Compiling activity v0.1.0 (<workspace>/crates/activity)
+   Compiling messages v0.1.0 (<workspace>/crates/messages)
+   Compiling channels v0.1.0 (<workspace>/crates/channels)
+   Compiling graphql_channel v0.1.0 (<workspace>/crates/graphql_channel)
+    Finished `release` profile [optimized] target(s) in 11.00s
+     Running unittests src/lib.rs (target/channel-perf-release/release/deps/graphql_channel-9da6112b8d70b46b)
+
+running 2 tests
+test inputs::test::unexpected_negative_positions_encode_as_zero ... ok
+test test::record_channel_activity_authorizes_and_delegates_only_channel_activity ... ok
+
+test result: ok. 2 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s
+
+   Doc-tests graphql_channel
+
+running 0 tests
+
+test result: ok. 0 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s
+

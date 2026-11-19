@@ -1,0 +1,76 @@
+warning: Git tree '<workspace>' is dirty
+    Blocking waiting for file lock on artifact directory
+   Compiling opensearch v2.4.0
+   Compiling void v1.0.2
+   Compiling code_mode_assets v0.1.0 (<workspace>/crates/code_mode_assets)
+   Compiling async-recursion v1.1.1
+   Compiling dateparser v0.2.1
+   Compiling pbjson-build v0.6.2
+   Compiling bot_id v0.1.0 (<workspace>/crates/bot_id)
+   Compiling tokio-tungstenite v0.28.0
+   Compiling reqwest v0.12.28
+   Compiling aws-sdk-dynamodb v1.112.0
+   Compiling pgvector v0.4.1
+   Compiling models_databases v0.1.0 (<workspace>/crates/models_databases)
+   Compiling model_user v0.1.0 (<workspace>/crates/model_user)
+   Compiling harness_id v0.1.0 (<workspace>/crates/harness_id)
+   Compiling roles_and_permissions v0.1.0 (<workspace>/crates/roles_and_permissions)
+   Compiling email_validator v0.1.0 (<workspace>/crates/email_validator)
+   Compiling unfurl v0.1.0 (<workspace>/crates/unfurl)
+   Compiling upstream_error v0.1.0 (<workspace>/crates/upstream_error)
+   Compiling models_search_cursor v0.1.0 (<workspace>/crates/models_search_cursor)
+   Compiling opensearch_query_builder v0.1.0 (<workspace>/crates/opensearch_query_builder)
+   Compiling models_grouping v0.1.0 (<workspace>/crates/models_grouping)
+   Compiling readonly_pool v0.1.0 (<workspace>/crates/readonly_pool)
+   Compiling model_owner v0.1.0 (<workspace>/crates/model_owner)
+   Compiling channel_sender v0.1.0 (<workspace>/crates/channel_sender)
+   Compiling trigger_context v0.1.0 (<workspace>/crates/trigger_context)
+   Compiling connect_client v0.1.0 (<workspace>/crates/connect_client)
+   Compiling ai_toolset v0.1.0 (<workspace>/crates/ai_toolset)
+   Compiling agent_runtime_protocol v0.1.0 (<workspace>/crates/agent_runtime_protocol)
+   Compiling analytics_client v0.1.0 (<workspace>/crates/analytics_client)
+   Compiling feature_flags v0.1.0 (<workspace>/crates/feature_flags)
+   Compiling static_file v0.1.0 (<workspace>/crates/static_file)
+   Compiling macro_queues v0.1.0 (<workspace>/crates/macro_queues)
+   Compiling email_db_client v0.1.0 (<workspace>/crates/email_db_client)
+   Compiling mention_utils v0.1.0 (<workspace>/crates/mention_utils)
+   Compiling pbjson-types v0.6.0
+   Compiling models_permissions v0.1.0 (<workspace>/crates/models_permissions)
+   Compiling item_filters v0.1.0 (<workspace>/crates/item_filters)
+   Compiling shared_entity_registry v0.1.0 (<workspace>/crates/entity_registry/shared_entity_registry)
+   Compiling s3_key v0.1.0 (<workspace>/crates/s3_key)
+   Compiling macro_authorization v0.1.0 (<workspace>/crates/macro_authorization)
+error: failed to run custom build command for `code_mode_assets v0.1.0 (<workspace>/crates/code_mode_assets)`
+
+Caused by:
+  process didn't exit successfully: `<workspace>/target/debug/build/code_mode_assets-f1ffc20a317500f0/build-script-build` (exit status: 101)
+  --- stdout
+  cargo::rerun-if-env-changed=CODE_MODE_ASSETS_DIR
+  cargo::rerun-if-changed=<workspace>/crates/code_mode_assets/../../bun.lock
+  cargo::rerun-if-changed=<workspace>/crates/code_mode_assets/../../package.json
+  cargo::rerun-if-changed=<workspace>/crates/code_mode_assets/../../packages/code-mode-sdk/package.json
+  cargo::rerun-if-changed=<workspace>/crates/code_mode_assets/../../packages/code-mode-sdk/scripts
+  cargo::rerun-if-changed=<workspace>/crates/code_mode_assets/../../packages/code-mode-sdk/src
+  cargo::rerun-if-changed=<workspace>/crates/code_mode_assets/../../packages/sdk-docs/package.json
+  cargo::rerun-if-changed=<workspace>/crates/code_mode_assets/../../packages/sdk-docs/pages
+  cargo::rerun-if-changed=<workspace>/crates/code_mode_assets/../../packages/sdk-docs/src
+  cargo::rerun-if-changed=<workspace>/crates/code_mode_assets/../../packages/sdk/bun.lock
+  cargo::rerun-if-changed=<workspace>/crates/code_mode_assets/../../packages/sdk/generated
+  cargo::rerun-if-changed=<workspace>/crates/code_mode_assets/../../packages/sdk/openapi-ts.config.ts
+  cargo::rerun-if-changed=<workspace>/crates/code_mode_assets/../../packages/sdk/package.json
+  cargo::rerun-if-changed=<workspace>/crates/code_mode_assets/../../packages/sdk/scripts
+  cargo::rerun-if-changed=<workspace>/crates/code_mode_assets/../../packages/sdk/services.ts
+  cargo::rerun-if-changed=<workspace>/crates/code_mode_assets/../../packages/sdk/src
+  cargo::rerun-if-changed=<workspace>/crates/code_mode_assets/../../packages/sdk/tests
+  cargo::rerun-if-changed=<workspace>/crates/code_mode_assets/../../packages/sdk/tsconfig.build.json
+  cargo::rerun-if-changed=<workspace>/crates/code_mode_assets/../../packages/sdk/tsconfig.json
+
+  --- stderr
+  error: Cannot find module '@macro-inc/sdk-docs/render' from '<workspace>/packages/code-mode-sdk/scripts/generate.ts'
+
+  Bun v1.3.13 (Linux x64)
+
+  thread 'main' (3621891) panicked at crates/code_mode_assets/build.rs:77:23:
+  packages/code-mode-sdk/scripts/generate.ts failed (exit status: 1). Run `bun install --frozen-lockfile` at the repository root and in packages/sdk, or point CODE_MODE_ASSETS_DIR at `nix build .#code-mode-assets`.
+  note: run with `RUST_BACKTRACE=1` environment variable to display a backtrace
+warning: build failed, waiting for other jobs to finish...

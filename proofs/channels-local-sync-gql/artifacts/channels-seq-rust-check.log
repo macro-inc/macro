@@ -1,0 +1,186 @@
+warning: Git tree '<workspace>' is dirty
+RUSTFLAGS=-Dwarnings RUSTDOCFLAGS=-Dwarnings CARGO_TERM_COLOR=always SQLX_OFFLINE=true cargo check --workspace --all-features --exclude sync_service
+   Compiling cache-core v0.1.0 (<workspace>/crates/client/cache-core)
+   Compiling macro_db_migrator v0.1.0 (<workspace>/crates/macro_db_migrator)
+    Checking channel_change_db_utils v0.1.0 (<workspace>/crates/channel_change_db_utils)
+    Checking activity v0.1.0 (<workspace>/crates/activity)
+    Checking whatsapp_e2e v0.1.0 (<workspace>/crates/whatsapp_e2e)
+    Checking whatsapp_session_service v0.1.0 (<workspace>/services/whatsapp_session_service)
+    Checking cache-turso v0.1.0 (<workspace>/crates/client/cache-turso)
+    Checking cache-wasm v0.6.54 (<workspace>/crates/client/cache-wasm)
+    Checking properties v0.1.0 (<workspace>/crates/properties)
+    Checking chat v0.1.0 (<workspace>/crates/chat)
+    Checking graphql_activity v0.1.0 (<workspace>/crates/graphql_activity)
+    Checking initiative v0.1.0 (<workspace>/crates/initiative)
+    Checking databases v0.1.0 (<workspace>/crates/databases)
+    Checking graphql_properties v0.1.0 (<workspace>/crates/graphql_properties)
+    Checking properties_service v0.1.0 (<workspace>/crates/properties_service)
+    Checking messages v0.1.0 (<workspace>/crates/messages)
+error: `SQLX_OFFLINE=true` but there is no cached data for this query, run `cargo sqlx prepare` to update the query cache or unset `SQLX_OFFLINE`
+  --> crates/messages/src/outbound/pg_message_repo/thread.rs:10:20
+   |
+10 |           let rows = sqlx::query_scalar!(
+   |  ____________________^
+11 | |             r#"SELECT to_jsonb(m) AS "message!: Json<StoredMessage>" FROM comms_messages m
+12 | |                WHERE m.id = $1 AND m.parent_entity_type = $2 AND m.parent_entity_id = $3
+13 | |                  AND m.thread_id IS NULL"#,
+...  |
+16 | |             parent.entity_id(),
+17 | |         )
+   | |_________^
+   |
+   = note: this error originates in the macro `$crate::sqlx_macros::expand_query` which comes from the expansion of the macro `sqlx::query_scalar` (in Nightly builds, run with -Z macro-backtrace for more info)
+
+error: `SQLX_OFFLINE=true` but there is no cached data for this query, run `cargo sqlx prepare` to update the query cache or unset `SQLX_OFFLINE`
+  --> crates/messages/src/outbound/pg_message_repo/thread.rs:38:26
+   |
+38 |               let anchor = sqlx::query_scalar!(
+   |  __________________________^
+39 | |                 r#"SELECT to_jsonb(m) AS "message!: Json<StoredMessage>" FROM comms_messages m
+40 | |                    WHERE m.id = $1 AND m.parent_entity_type = $2 AND m.parent_entity_id = $3
+41 | |                      AND m.thread_id = $4 AND m.deleted_at IS NULL"#,
+...  |
+45 | |                 root_id,
+46 | |             )
+   | |_____________^
+   |
+   = note: this error originates in the macro `$crate::sqlx_macros::expand_query` which comes from the expansion of the macro `sqlx::query_scalar` (in Nightly builds, run with -Z macro-backtrace for more info)
+
+error: `SQLX_OFFLINE=true` but there is no cached data for this query, run `cargo sqlx prepare` to update the query cache or unset `SQLX_OFFLINE`
+   --> crates/messages/src/outbound/pg_message_repo/thread.rs:170:40
+    |
+170 |               MessageDirection::Older => sqlx::query_file_scalar!(
+    |  ________________________________________^
+171 | |                 "src/outbound/pg_message_repo/thread_older.sql",
+172 | |                 parent.entity_type(),
+173 | |                 parent.entity_id(),
+...   |
+182 | |                 limit,
+183 | |             )
+    | |_____________^
+    |
+    = note: this error originates in the macro `$crate::sqlx_macros::expand_query` which comes from the expansion of the macro `sqlx::query_file_scalar` (in Nightly builds, run with -Z macro-backtrace for more info)
+
+error: `SQLX_OFFLINE=true` but there is no cached data for this query, run `cargo sqlx prepare` to update the query cache or unset `SQLX_OFFLINE`
+   --> crates/messages/src/outbound/pg_message_repo/thread.rs:187:40
+    |
+187 |               MessageDirection::Newer => sqlx::query_file_scalar!(
+    |  ________________________________________^
+188 | |                 "src/outbound/pg_message_repo/thread_newer.sql",
+189 | |                 parent.entity_type(),
+190 | |                 parent.entity_id(),
+...   |
+199 | |                 limit,
+200 | |             )
+    | |_____________^
+    |
+    = note: this error originates in the macro `$crate::sqlx_macros::expand_query` which comes from the expansion of the macro `sqlx::query_file_scalar` (in Nightly builds, run with -Z macro-backtrace for more info)
+
+error: `SQLX_OFFLINE=true` but there is no cached data for this query, run `cargo sqlx prepare` to update the query cache or unset `SQLX_OFFLINE`
+   --> crates/messages/src/outbound/pg_message_repo/timeline.rs:175:9
+    |
+175 | /         sqlx::query_scalar!(r#"SELECT to_jsonb(m) AS "message!: Json<StoredMessage>" FROM comms_messages m
+176 | |             JOIN comms_message_threads t ON t.root_id = m.id
+177 | |             WHERE m.parent_entity_type = $1 AND m.parent_entity_id = $2
+178 | |                 AND m.thread_id IS NULL AND (t.deleted_at IS NULL OR $10)
+...   |
+189 | |             parent.entity_type(), parent.entity_id(), cursor.map(|c| c.created_at), cursor.map(|c| c.id), limit,
+190 | |             if query.ids.is_empty() { None } else { Some(query.ids.as_slice()) }, query.anchored, query.activity_after, query.activity_before, query.include_deleted_threads)
+    | |_____________________________________________________________________________________________________________________________________________________________________________^
+    |
+    = note: this error originates in the macro `$crate::sqlx_macros::expand_query` which comes from the expansion of the macro `sqlx::query_scalar` (in Nightly builds, run with -Z macro-backtrace for more info)
+
+error: `SQLX_OFFLINE=true` but there is no cached data for this query, run `cargo sqlx prepare` to update the query cache or unset `SQLX_OFFLINE`
+   --> crates/messages/src/outbound/pg_message_repo/timeline.rs:200:9
+    |
+200 | /         sqlx::query_scalar!(r#"SELECT to_jsonb(m) AS "message!: Json<StoredMessage>" FROM comms_messages m
+201 | |             JOIN comms_message_threads t ON t.root_id = m.id
+202 | |             WHERE m.parent_entity_type = $1 AND m.parent_entity_id = $2
+203 | |                 AND m.thread_id IS NULL AND (t.deleted_at IS NULL OR $10)
+...   |
+214 | |             parent.entity_type(), parent.entity_id(), cursor.map(|c| c.created_at), cursor.map(|c| c.id), limit,
+215 | |             if query.ids.is_empty() { None } else { Some(query.ids.as_slice()) }, query.anchored, query.activity_after, query.activity_before, query.include_deleted_threads)
+    | |_____________________________________________________________________________________________________________________________________________________________________________^
+    |
+    = note: this error originates in the macro `$crate::sqlx_macros::expand_query` which comes from the expansion of the macro `sqlx::query_scalar` (in Nightly builds, run with -Z macro-backtrace for more info)
+
+error[E0282]: type annotations needed
+  --> crates/messages/src/outbound/pg_message_repo/thread.rs:10:20
+   |
+10 |           let rows = sqlx::query_scalar!(
+   |  ____________________^
+11 | |             r#"SELECT to_jsonb(m) AS "message!: Json<StoredMessage>" FROM comms_messages m
+12 | |                WHERE m.id = $1 AND m.parent_entity_type = $2 AND m.parent_entity_id = $3
+13 | |                  AND m.thread_id IS NULL"#,
+...  |
+18 | |         .fetch_all(&self.pool)
+19 | |         .await
+   | |______________^ cannot infer type
+
+error[E0282]: type annotations needed
+  --> crates/messages/src/outbound/pg_message_repo/thread.rs:38:26
+   |
+38 |               let anchor = sqlx::query_scalar!(
+   |  __________________________^
+39 | |                 r#"SELECT to_jsonb(m) AS "message!: Json<StoredMessage>" FROM comms_messages m
+40 | |                    WHERE m.id = $1 AND m.parent_entity_type = $2 AND m.parent_entity_id = $3
+41 | |                      AND m.thread_id = $4 AND m.deleted_at IS NULL"#,
+...  |
+47 | |             .fetch_optional(&mut *tx)
+48 | |             .await
+   | |__________________^ cannot infer type
+
+error[E0282]: type annotations needed
+   --> crates/messages/src/outbound/pg_message_repo/thread.rs:170:40
+    |
+170 |               MessageDirection::Older => sqlx::query_file_scalar!(
+    |  ________________________________________^
+171 | |                 "src/outbound/pg_message_repo/thread_older.sql",
+172 | |                 parent.entity_type(),
+173 | |                 parent.entity_id(),
+...   |
+184 | |             .fetch_all(connection)
+185 | |             .await
+    | |__________________^ cannot infer type
+
+error[E0282]: type annotations needed
+   --> crates/messages/src/outbound/pg_message_repo/thread.rs:187:40
+    |
+187 |               MessageDirection::Newer => sqlx::query_file_scalar!(
+    |  ________________________________________^
+188 | |                 "src/outbound/pg_message_repo/thread_newer.sql",
+189 | |                 parent.entity_type(),
+190 | |                 parent.entity_id(),
+...   |
+201 | |             .fetch_all(connection)
+202 | |             .await
+    | |__________________^ cannot infer type
+
+error[E0282]: type annotations needed
+   --> crates/messages/src/outbound/pg_message_repo/timeline.rs:175:9
+    |
+175 | / ...   sqlx::query_scalar!(r#"SELECT to_jsonb(m) AS "message!: Json<StoredMessage>" FROM comms_messages m
+176 | | ...       JOIN comms_message_threads t ON t.root_id = m.id
+177 | | ...       WHERE m.parent_entity_type = $1 AND m.parent_entity_id = $2
+178 | | ...           AND m.thread_id IS NULL AND (t.deleted_at IS NULL OR $10)
+...   |
+190 | | ...       if query.ids.is_empty() { None } else { Some(query.ids.as_slice()) }, query.anchored, query.activity_after, query.activ...
+191 | | ...       .fetch_all(&self.pool).await.map_err(database_error)
+    | |______________________________________^ cannot infer type
+
+error[E0282]: type annotations needed
+   --> crates/messages/src/outbound/pg_message_repo/timeline.rs:200:9
+    |
+200 | / ...   sqlx::query_scalar!(r#"SELECT to_jsonb(m) AS "message!: Json<StoredMessage>" FROM comms_messages m
+201 | | ...       JOIN comms_message_threads t ON t.root_id = m.id
+202 | | ...       WHERE m.parent_entity_type = $1 AND m.parent_entity_id = $2
+203 | | ...           AND m.thread_id IS NULL AND (t.deleted_at IS NULL OR $10)
+...   |
+215 | | ...       if query.ids.is_empty() { None } else { Some(query.ids.as_slice()) }, query.anchored, query.activity_after, query.activ...
+216 | | ...       .fetch_all(&self.pool).await.map_err(database_error)
+    | |______________________________________^ cannot infer type
+
+    Checking database_webhooks v0.1.0 (<workspace>/crates/database_webhooks)
+For more information about this error, try `rustc --explain E0282`.
+error: could not compile `messages` (lib) due to 12 previous errors
+error: recipe `rust-check` failed on line 6 with exit code 101

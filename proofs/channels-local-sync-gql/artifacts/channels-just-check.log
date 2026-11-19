@@ -1,0 +1,191 @@
+warning: Git tree '<workspace>' is dirty
+── cargo fmt (root workspace)
+── cargo shear (unused dependencies)
+shear/unlinked_files
+
+  ⚠ 1 unlinked file in `agent_harness`
+  │ src/outbound/sidecar_pump.rs
+  help: delete this file
+
+shear/unlinked_files
+
+  ⚠ 1 unlinked file in `ai_tools`
+  │ src/schemas/anthropic_tools.rs
+  help: delete this file
+
+shear/unlinked_files
+
+  ⚠ 1 unlinked file in `ai_toolset`
+  │ src/schema/transform/additional_properties.rs
+  help: delete this file
+
+shear/unlinked_files
+
+  ⚠ 2 unlinked files in `anthropic`
+  │ src/types/request/request.rs
+  │ src/types/request/request_util.rs
+  help: delete these files
+
+shear/unlinked_files
+
+  ⚠ 1 unlinked file in `authentication_service`
+  │ src/fetch_and_checksum.rs
+  help: delete this file
+
+shear/unlinked_files
+
+  ⚠ 1 unlinked file in `cache-core`
+  │ src/people/ranking.rs
+  help: delete this file
+
+shear/redundant_ignore
+
+  ⚠ redundant ignore `maybe_send`
+    ╭─[crates/client/cache-turso/Cargo.toml:42:12]
+ 41 │ # next native release.
+ 42 │ ignored = ["maybe_send"]
+    ·            ──────┬─────
+    ·                  ╰── dependency is used
+    ╰────
+  help: remove from ignored list
+
+shear/empty_files
+
+  ⚠ 1 empty file in `document_storage_service`
+  │ src/model/request/annotations/mod.rs
+  help: delete this file
+
+shear/unlinked_files
+
+  ⚠ 1 unlinked file in `documents`
+  │ src/inbound/toolset/read_metadata/test.rs
+  help: delete this file
+
+shear/unlinked_files
+
+  ⚠ 1 unlinked file in `email_service`
+  │ src/api/email/backfill/create.rs
+  help: delete this file
+
+shear/empty_files
+
+  ⚠ 1 empty file in `fig_engine`
+  │ src/inspect/design/test.rs
+  help: delete this file
+
+shear/unlinked_files
+
+  ⚠ 3 unlinked files in `frecency`
+  │ src/domain/services/aggregate_reader.rs
+  │ src/domain/services/event_aggregator.rs
+  │ src/domain/services/event_writer.rs
+  help: delete these files
+
+shear/empty_files
+
+  ⚠ 1 empty file in `last_online_tracker`
+  │ src/domain/models.rs
+  help: delete this file
+
+shear/unlinked_files
+
+  ⚠ 1 unlinked file in `macro_env_var`
+  │ src/secret_manager.rs
+  help: delete this file
+
+shear/unlinked_files
+
+  ⚠ 1 unlinked file in `model`
+  │ src/channel.rs
+  help: delete this file
+
+shear/empty_files
+
+  ⚠ 2 empty files in `models_email`
+  │ src/email/db/cache.rs
+  │ src/email/db/link.rs
+  help: delete these files
+
+shear/unlinked_files
+
+  ⚠ 1 unlinked file in `notification_db_client`
+  │ src/user_notification/create.rs
+  help: delete this file
+
+shear/empty_files
+
+  ⚠ 1 empty file in `notification_db_client`
+  │ src/notification/create.rs
+  help: delete this file
+
+shear/unlinked_files
+
+  ⚠ 2 unlinked files in `notification_sandbox`
+  │ src/interactive/push_attempt.rs
+  │ src/interactive/real_push_attempt.rs
+  help: delete these files
+
+shear/unlinked_files
+
+  ⚠ 1 unlinked file in `notification_service`
+  │ src/poller_tests.rs
+  help: delete this file
+
+shear/empty_files
+
+  ⚠ 1 empty file in `notification_service`
+  │ src/notification/metadata_utils/mod.rs
+  help: delete this file
+
+shear/empty_files
+
+  ⚠ 1 empty file in `projects`
+  │ src/domain/response.rs
+  help: delete this file
+
+shear/empty_files
+
+  ⚠ 1 empty file in `soup`
+  │ src/outbound/pg_soup_repo/unexpanded/dynamic.rs
+  help: delete this file
+
+shear/unlinked_files
+
+  ⚠ 9 unlinked files in `task_dedup`
+  │ tests/eval/cases/empty_task_embedding.rs
+  │ tests/eval/cases/eval_corpus.rs
+  │ tests/eval/cases/eval_end_to_end.rs
+  │ tests/eval/cases/eval_judge_accuracy.rs
+  │ tests/eval/cases/eval_judge_variance.rs
+  │ tests/eval/cases/eval_recall_at_k.rs
+  │ tests/eval/cases/eval_retrieval_recall.rs
+  │ tests/eval/cases/eval_similarity_rerank_floor.rs
+  │ tests/eval/cases/eval_threshold_sweep.rs
+  help: delete these files
+
+shear/summary
+
+  ⚠ 24 warnings
+
+Advice:
+  ☞ run with `--expand` for more accurate results
+  ☞ to suppress a file issue
+   ╭─[Cargo.toml:2:18]
+ 1 │ [package.metadata.cargo-shear] # or [workspace.metadata.cargo-shear]
+ 2 │ ignored-paths = ["tests/compile/*.rs"]
+   ·                  ──────────┬─────────
+   ·                            ╰── add a file pattern here
+   ╰────
+── GraphQL schema compatibility (docs/guides/add-graphql-field.md step 8)
+    Finished `dev` profile [unoptimized + debuginfo] target(s) in 0.48s
+     Running `target/channel-checks/debug/xtask graphql-schema-compat --base 354da677b583944daaa99e84f231fc0909cea990`
+    Finished `dev` profile [unoptimized + debuginfo] target(s) in 0.57s
+     Running `target/channel-checks/debug/xtask_graphql_schema_compat --base 354da677b583944daaa99e84f231fc0909cea990`
+static_assets/schema.graphql is compatible with 354da677b583944daaa99e84f231fc0909cea990 (354da677b583944daaa99e84f231fc0909cea990)
+── ast-grep code rules (rule ids map to docs/development/style-guide.md)
+Saved lockfile
+[warn] postinstall script did not run; falling back to runtime binary resolution.
+Enable postinstall to avoid the per-invocation overhead.
+── PII scan (added lines vs merge-base)
+
+OK

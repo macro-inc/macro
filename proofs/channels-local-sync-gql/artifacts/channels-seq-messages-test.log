@@ -1,0 +1,240 @@
+warning: Git tree '<workspace>' is dirty
+   Compiling macro_db_migrator v0.1.0 (<workspace>/crates/macro_db_migrator)
+   Compiling channel_change_db_utils v0.1.0 (<workspace>/crates/channel_change_db_utils)
+   Compiling activity v0.1.0 (<workspace>/crates/activity)
+   Compiling properties v0.1.0 (<workspace>/crates/properties)
+   Compiling initiative v0.1.0 (<workspace>/crates/initiative)
+   Compiling messages v0.1.0 (<workspace>/crates/messages)
+error[E0609]: no field `id` on type `(domain::models::Message, std::option::Option<i64>)`
+  --> crates/messages/src/outbound/pg_message_repo/test/threads.rs:27:56
+   |
+27 |             .create(command("message-doc-a", Some(root.id), "reply"))
+   |                                                        ^^ unknown field
+   |
+help: one of the expressions' fields has a field of the same name
+   |
+27 |             .create(command("message-doc-a", Some(root.0.id), "reply"))
+   |                                                        ++
+
+error[E0609]: no field `id` on type `(domain::models::Message, std::option::Option<i64>)`
+  --> crates/messages/src/outbound/pg_message_repo/test/threads.rs:36:19
+   |
+36 |             reply.id,
+   |                   ^^ unknown field
+   |
+help: one of the expressions' fields has a field of the same name
+   |
+36 |             reply.0.id,
+   |                   ++
+
+error[E0609]: no field `id` on type `(domain::models::Message, std::option::Option<i64>)`
+  --> crates/messages/src/outbound/pg_message_repo/test/threads.rs:43:28
+   |
+43 |         created.push(reply.id);
+   |                            ^^ unknown field
+   |
+help: one of the expressions' fields has a field of the same name
+   |
+43 |         created.push(reply.0.id);
+   |                            ++
+
+error[E0609]: no field `id` on type `(domain::models::Message, std::option::Option<i64>)`
+  --> crates/messages/src/outbound/pg_message_repo/test/threads.rs:46:47
+   |
+46 |     let expected = repo.replies(&parent, root.id).await.unwrap();
+   |                                               ^^ unknown field
+   |
+help: one of the expressions' fields has a field of the same name
+   |
+46 |     let expected = repo.replies(&parent, root.0.id).await.unwrap();
+   |                                               ++
+
+error[E0609]: no field `id` on type `(domain::models::Message, std::option::Option<i64>)`
+  --> crates/messages/src/outbound/pg_message_repo/test/threads.rs:62:22
+   |
+62 |                 root.id,
+   |                      ^^ unknown field
+   |
+help: one of the expressions' fields has a field of the same name
+   |
+62 |                 root.0.id,
+   |                      ++
+
+error[E0609]: no field `id` on type `(domain::models::Message, std::option::Option<i64>)`
+   --> crates/messages/src/outbound/pg_message_repo/test/threads.rs:102:22
+    |
+102 |                 root.id,
+    |                      ^^ unknown field
+    |
+help: one of the expressions' fields has a field of the same name
+    |
+102 |                 root.0.id,
+    |                      ++
+
+error[E0609]: no field `id` on type `(domain::models::Message, std::option::Option<i64>)`
+   --> crates/messages/src/outbound/pg_message_repo/test/threads.rs:126:22
+    |
+126 |                 root.id,
+    |                      ^^ unknown field
+    |
+help: one of the expressions' fields has a field of the same name
+    |
+126 |                 root.0.id,
+    |                      ++
+
+error[E0609]: no field `id` on type `(domain::models::Message, std::option::Option<i64>)`
+   --> crates/messages/src/outbound/pg_message_repo/test/threads.rs:152:18
+    |
+152 |             root.id,
+    |                  ^^ unknown field
+    |
+help: one of the expressions' fields has a field of the same name
+    |
+152 |             root.0.id,
+    |                  ++
+
+error[E0609]: no field `id` on type `(domain::models::Message, std::option::Option<i64>)`
+   --> crates/messages/src/outbound/pg_message_repo/test/threads.rs:163:46
+    |
+163 |         repo.thread_page(&other_parent, root.id, MessageThreadQuery::default())
+    |                                              ^^ unknown field
+    |
+help: one of the expressions' fields has a field of the same name
+    |
+163 |         repo.thread_page(&other_parent, root.0.id, MessageThreadQuery::default())
+    |                                              ++
+
+error[E0609]: no field `id` on type `(domain::models::Message, std::option::Option<i64>)`
+   --> crates/messages/src/outbound/pg_message_repo/test/threads.rs:172:18
+    |
+172 |             root.id,
+    |                  ^^ unknown field
+    |
+help: one of the expressions' fields has a field of the same name
+    |
+172 |             root.0.id,
+    |                  ++
+
+error[E0609]: no field `id` on type `(domain::models::Message, std::option::Option<i64>)`
+   --> crates/messages/src/outbound/pg_message_repo/test/threads.rs:187:18
+    |
+187 |             root.id,
+    |                  ^^ unknown field
+    |
+help: one of the expressions' fields has a field of the same name
+    |
+187 |             root.0.id,
+    |                  ++
+
+error[E0609]: no field `id` on type `(domain::models::Message, std::option::Option<i64>)`
+   --> crates/messages/src/outbound/pg_message_repo/test/threads.rs:198:37
+    |
+198 |     assert!(repo.root(&parent, root.id).await.unwrap().is_some());
+    |                                     ^^ unknown field
+    |
+help: one of the expressions' fields has a field of the same name
+    |
+198 |     assert!(repo.root(&parent, root.0.id).await.unwrap().is_some());
+    |                                     ++
+
+error[E0609]: no field `created_at` on type `(domain::models::Message, std::option::Option<i64>)`
+  --> crates/messages/src/outbound/pg_message_repo/test/timeline.rs:76:18
+   |
+76 |             root.created_at = timestamp + chrono::Duration::seconds(index / 3);
+   |                  ^^^^^^^^^^ unknown field
+   |
+help: one of the expressions' fields has a field of the same name
+   |
+76 |             root.0.created_at = timestamp + chrono::Duration::seconds(index / 3);
+   |                  ++
+
+error[E0609]: no field `id` on type `(domain::models::Message, std::option::Option<i64>)`
+  --> crates/messages/src/outbound/pg_message_repo/test/timeline.rs:79:22
+   |
+79 |                 root.id,
+   |                      ^^ unknown field
+   |
+help: one of the expressions' fields has a field of the same name
+   |
+79 |                 root.0.id,
+   |                      ++
+
+error[E0609]: no field `created_at` on type `(domain::models::Message, std::option::Option<i64>)`
+  --> crates/messages/src/outbound/pg_message_repo/test/timeline.rs:80:22
+   |
+80 |                 root.created_at
+   |                      ^^^^^^^^^^ unknown field
+   |
+help: one of the expressions' fields has a field of the same name
+   |
+80 |                 root.0.created_at
+   |                      ++
+
+error[E0609]: no field `id` on type `(domain::models::Message, std::option::Option<i64>)`
+  --> crates/messages/src/outbound/pg_message_repo/test/timeline.rs:86:68
+   |
+86 |                 let mut reply = command("message-doc-a", Some(root.id), "keep tombstone visible");
+   |                                                                    ^^ unknown field
+   |
+help: one of the expressions' fields has a field of the same name
+   |
+86 |                 let mut reply = command("message-doc-a", Some(root.0.id), "keep tombstone visible");
+   |                                                                    ++
+
+error[E0609]: no field `id` on type `(domain::models::Message, std::option::Option<i64>)`
+  --> crates/messages/src/outbound/pg_message_repo/test/timeline.rs:89:43
+   |
+89 |                 repo.delete(&parent, root.id).await.unwrap();
+   |                                           ^^ unknown field
+   |
+help: one of the expressions' fields has a field of the same name
+   |
+89 |                 repo.delete(&parent, root.0.id).await.unwrap();
+   |                                           ++
+
+error[E0609]: no field `id` on type `(domain::models::Message, std::option::Option<i64>)`
+  --> crates/messages/src/outbound/pg_message_repo/test/timeline.rs:92:43
+   |
+92 |                 repo.delete(&parent, root.id).await.unwrap();
+   |                                           ^^ unknown field
+   |
+help: one of the expressions' fields has a field of the same name
+   |
+92 |                 repo.delete(&parent, root.0.id).await.unwrap();
+   |                                           ++
+
+error[E0609]: no field `id` on type `(domain::models::Message, std::option::Option<i64>)`
+  --> crates/messages/src/outbound/pg_message_repo/test/timeline.rs:95:50
+   |
+95 |                 repo.delete_thread(&parent, root.id).await.unwrap();
+   |                                                  ^^ unknown field
+   |
+help: one of the expressions' fields has a field of the same name
+   |
+95 |                 repo.delete_thread(&parent, root.0.id).await.unwrap();
+   |                                                  ++
+
+error[E0609]: no field `created_at` on type `&(domain::models::Message, std::option::Option<i64>)`
+   --> crates/messages/src/outbound/pg_message_repo/test/timeline.rs:102:38
+    |
+102 |                     created_at: root.created_at,
+    |                                      ^^^^^^^^^^ unknown field
+    |
+help: one of the expressions' fields has a field of the same name
+    |
+102 |                     created_at: root.0.created_at,
+    |                                      ++
+
+error[E0609]: no field `id` on type `&(domain::models::Message, std::option::Option<i64>)`
+   --> crates/messages/src/outbound/pg_message_repo/test/timeline.rs:103:30
+    |
+103 |                     id: root.id,
+    |                              ^^ unknown field
+    |
+help: one of the expressions' fields has a field of the same name
+    |
+103 |                     id: root.0.id,
+    |                              ++
+
+For more information about this error, try `rustc --explain E0609`.
+error: could not compile `messages` (lib test) due to 21 previous errors

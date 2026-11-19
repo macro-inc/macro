@@ -1,0 +1,576 @@
+warning: Git tree '<workspace>' is dirty
+    Blocking waiting for file lock on artifact directory
+   Compiling agent_fold v0.1.0 (<workspace>/crates/folds/agent_fold)
+   Compiling agent_session v0.1.0 (<workspace>/crates/agent_session)
+   Compiling lexical_client v0.1.0 (<workspace>/crates/lexical_client)
+   Compiling codex_cloud_agents v0.1.0 (<workspace>/crates/codex_cloud_agents)
+   Compiling agent_egress v0.1.0 (<workspace>/crates/agent_egress)
+   Compiling cursor_cloud_agents v0.1.0 (<workspace>/crates/cursor_cloud_agents)
+   Compiling agent_trigger v0.1.0 (<workspace>/crates/agent_trigger)
+   Compiling codex_connection v0.1.0 (<workspace>/crates/codex_connection)
+   Compiling agent_harness v0.1.0 (<workspace>/crates/agent_harness)
+    Finished `test` profile [unoptimized + debuginfo] target(s) in 36.50s
+────────────
+ Nextest run ID dcbc9525-9fcf-4093-820f-7a73ce3600b4 with nextest profile: default
+    Starting 559 tests across 1 binary
+        PASS [   0.009s] (  1/559) agent_harness domain::app_connections::test::an_app_the_owner_has_not_connected_sends_nothing
+        PASS [   0.009s] (  2/559) agent_harness domain::app_connections::test::an_archived_session_is_not_continued
+        PASS [   0.009s] (  3/559) agent_harness domain::app_connections::test::someone_other_than_the_owner_cannot_continue_the_session
+        PASS [   0.009s] (  4/559) agent_harness domain::app_connections::test::the_owner_connecting_notion_wakes_the_session_with_an_app_connected_event
+        PASS [   0.009s] (  5/559) agent_harness domain::capability_discovery::test::cursor_receives_the_authenticated_caller
+        PASS [   0.011s] (  6/559) agent_harness domain::capability_discovery::test::cursor_probe_obeys_the_service_timeout
+        PASS [   0.008s] (  7/559) agent_harness domain::capability_discovery::test::invisible_macrod_is_forbidden_without_probing
+        PASS [   0.010s] (  8/559) agent_harness domain::capability_discovery::test::invalid_targets_are_rejected_without_probing
+        PASS [   0.009s] (  9/559) agent_harness domain::capability_discovery::test::macrod_authorizes_before_dispatch_and_projects_the_catalog
+        PASS [   0.009s] ( 10/559) agent_harness domain::capability_discovery::test::unsupported_provider_returns_the_supported_response_shape
+        PASS [   0.008s] ( 11/559) agent_harness domain::codex::test::connection_preflight_distinguishes_missing_account_and_environment
+        PASS [   0.009s] ( 12/559) agent_harness domain::codex::test::disconnect_and_reconnect_cannot_retarget_existing_session
+        PASS [   0.008s] ( 13/559) agent_harness domain::codex::test::launch_rechecks_environment_visibility
+        PASS [   0.009s] ( 14/559) agent_harness domain::codex::test::owners_use_only_their_credentials_and_record_mapping_before_return
+        PASS [   0.010s] ( 15/559) agent_harness domain::codex::test::pr_publication_passes_the_activated_claim_and_rejects_disconnected_owner
+        PASS [   0.013s] ( 16/559) agent_harness domain::codex::test::selection::configured_target_remains_pinned_across_settings_changes_and_restart
+        PASS [   0.012s] ( 17/559) agent_harness domain::codex::test::selection::explicit_configuration_is_required_even_when_prompt_names_available_repository
+        PASS [   0.008s] ( 18/559) agent_harness domain::codex::test::selection::repository_identity_only_casefolds_github_and_strips_one_git_suffix
+        PASS [   0.008s] ( 19/559) agent_harness domain::conversations::test::a_shared_channel_member_has_no_controls_and_takes_no_prompts_yet
+        PASS [   0.008s] ( 20/559) agent_harness domain::conversations::test::a_teammate_cannot_read_the_personas_conversation_with_its_owner
+        PASS [   0.009s] ( 21/559) agent_harness domain::conversations::test::dispatch_rechecks_persona_access_and_the_exact_owner
+        PASS [   0.010s] ( 22/559) agent_harness domain::conversations::test::ordinary_channels_have_no_agent_conversation
+        PASS [   0.008s] ( 23/559) agent_harness domain::conversations::test::revoked_personas_keep_their_history_and_profile_but_cannot_be_prompted
+        PASS [   0.008s] ( 24/559) agent_harness domain::mode_choice::test::blank_prompts_are_rejected_without_classifying
+        PASS [   0.009s] ( 25/559) agent_harness domain::mode_choice::test::classifier_failures_and_missing_configuration_are_errors
+        PASS [   0.009s] ( 26/559) agent_harness domain::mode_choice::test::classifies_the_trimmed_prompt_head_as_mode_choice_usage
+        PASS [   0.009s] ( 27/559) agent_harness domain::mode_choice::test::denied_admission_stops_before_classifying
+        PASS [   0.009s] ( 28/559) agent_harness domain::mode_choice::test::likely_coding_requests_go_to_code_and_the_rest_to_chat
+        PASS [   0.007s] ( 29/559) agent_harness domain::model::coding_preferences::test::both_put_tasks_before_pull_requests
+        PASS [   0.009s] ( 30/559) agent_harness domain::mode_choice::test::users_without_the_flag_are_not_classified
+        PASS [   0.007s] ( 31/559) agent_harness domain::model::coding_preferences::test::no_preferences_leave_instructions_unchanged
+        PASS [   0.008s] ( 32/559) agent_harness domain::model::coding_preferences::test::pull_requests_alone_stand_without_other_instructions
+        PASS [   0.008s] ( 33/559) agent_harness domain::model::coding_preferences::test::pull_requests_are_registered_with_the_session
+        PASS [   0.008s] ( 34/559) agent_harness domain::model::coding_preferences::test::tasks_alone_follow_existing_instructions
+        PASS [   0.007s] ( 35/559) agent_harness domain::model::coding_preferences::test::tasks_are_stated_as_a_mention_chip
+        PASS [   0.007s] ( 36/559) agent_harness domain::model::coding_preferences::test::tasks_name_the_tools_they_rely_on
+        PASS [   0.008s] ( 37/559) agent_harness domain::model::coding_preferences::test::tasks_put_their_reference_in_any_pull_request
+        PASS [   0.008s] ( 38/559) agent_harness domain::model::current_time::test::crosses_midnight_into_the_users_date
+        PASS [   0.008s] ( 39/559) agent_harness domain::model::current_time::test::falls_back_to_utc_without_a_known_zone
+        PASS [   0.008s] ( 40/559) agent_harness domain::model::current_time::test::states_now_in_the_users_time_zone
+        PASS [   0.009s] ( 41/559) agent_harness domain::model::session_origin::test::assignments_remain_distinct_after_command_serialization
+        PASS [   0.009s] ( 42/559) agent_harness domain::model::session_origin::test::existing_mention_commands_keep_their_wire_shape_and_reply_behavior
+        PASS [   0.009s] ( 43/559) agent_harness domain::model::test::a_coding_agent_runs_for_people_who_may_use_the_runtime_themselves
+        PASS [   0.008s] ( 44/559) agent_harness domain::model::test::a_persona_chooses_whether_it_codes_and_otherwise_follows_its_runtime
+        PASS [   0.008s] ( 45/559) agent_harness domain::model::test::a_resident_answers_anyone_while_its_owner_keeps_access
+        PASS [   0.009s] ( 46/559) agent_harness domain::model::test::a_session_repository_keeps_the_url_it_was_read_from
+        PASS [   0.007s] ( 47/559) agent_harness domain::model::test::a_silent_turn_is_told_by_how_it_stopped
+        PASS [   0.008s] ( 48/559) agent_harness domain::model::test::a_turn_with_text_answered_however_it_stopped
+        PASS [   0.008s] ( 49/559) agent_harness domain::model::test::builtin_runtimes_always_bypass_regardless_of_saved_agent_choice
+        PASS [   0.008s] ( 50/559) agent_harness domain::model::test::bypass_requires_both_operator_opt_in_and_persona_choice
+        PASS [   0.008s] ( 51/559) agent_harness domain::model::test::external_runtimes_require_registered_harness_consent_and_agent_choice
+        PASS [   0.008s] ( 52/559) agent_harness domain::model::test::first_party_cloud_kinds_own_a_fixed_harness_slug
+        PASS [   0.008s] ( 53/559) agent_harness domain::model::test::only_external_runtimes_prompt_by_default
+        PASS [   0.008s] ( 54/559) agent_harness domain::model::test::only_the_in_memory_runtime_is_not_a_coder
+        PASS [   0.007s] ( 55/559) agent_harness domain::model::test::registered_harness_limit_wins_over_runtime_kind_and_persona_choice
+        PASS [   0.010s] ( 56/559) agent_harness domain::model_load::test::cursor_probe_obeys_the_service_timeout
+        PASS [   0.008s] ( 57/559) agent_harness domain::model_load::test::invisible_macrod_is_forbidden_without_probing
+        PASS [   0.009s] ( 58/559) agent_harness domain::model_load::test::macrod_authorizes_before_dispatch_and_projects_the_catalog
+        PASS [   0.009s] ( 59/559) agent_harness domain::model_load::test::unsupported_provider_returns_the_supported_response_shape
+        PASS [   0.008s] ( 60/559) agent_harness domain::notifications::test::a_chat_agents_announced_turn_settles_silently
+        PASS [   0.008s] ( 61/559) agent_harness domain::notifications::test::a_chat_agents_announced_turn_waits_silently
+        PASS [   0.008s] ( 62/559) agent_harness domain::notifications::test::a_chat_agents_unannounced_turn_still_notifies
+        PASS [   0.009s] ( 63/559) agent_harness domain::notifications::test::a_coding_agents_announced_turn_notifies_settled
+        PASS [   0.009s] ( 64/559) agent_harness domain::notifications::test::a_held_tool_call_a_bot_asked_for_says_so
+        PASS [   0.008s] ( 65/559) agent_harness domain::notifications::test::a_held_tool_call_tells_only_the_owner
+        PASS [   0.008s] ( 66/559) agent_harness domain::notifications::test::a_mention_in_a_posted_message_is_already_announced
+        PASS [   0.009s] ( 67/559) agent_harness domain::notifications::test::a_mention_of_nobody_is_nothing
+        PASS [   0.010s] ( 68/559) agent_harness domain::notifications::test::a_notify_becomes_a_realtime_and_push_request_with_its_own_id
+        PASS [   0.008s] ( 69/559) agent_harness domain::notifications::test::a_routine_runs_own_turn_notifies_nobody_however_it_ended
+        PASS [   0.011s] ( 70/559) agent_harness domain::notifications::test::a_session_with_no_thread_files_the_same_way
+        PASS [   0.014s] ( 71/559) agent_harness domain::notifications::test::a_routine_runs_question_still_notifies
+        PASS [   0.008s] ( 72/559) agent_harness domain::notifications::test::assignment_session_links_keep_completion_and_question_notifications
+        PASS [   0.009s] ( 73/559) agent_harness domain::notifications::test::a_turn_the_owner_prompts_after_a_routine_run_notifies
+        PASS [   0.008s] ( 74/559) agent_harness domain::notifications::test::facts_that_are_not_news_to_people_plan_nothing
+        PASS [   0.009s] ( 75/559) agent_harness domain::notifications::test::every_other_waiting_turn_still_notifies
+        PASS [   0.008s] ( 76/559) agent_harness domain::notifications::test::settled_ids_are_stable_per_turn_and_distinct_across_turns
+        PASS [   0.011s] ( 77/559) agent_harness domain::notifications::test::mentioned_notifies_exactly_the_people_named
+        PASS [   0.008s] ( 78/559) agent_harness domain::notifications::test::settled_notifies_the_whole_audience_under_the_session
+        PASS [   0.008s] ( 79/559) agent_harness domain::notifications::test::settled_without_a_turn_record_notifies_nobody
+        PASS [   0.007s] ( 80/559) agent_harness domain::notifications::test::the_owner_always_hears_settled_even_when_the_audience_is_empty
+        PASS [   0.009s] ( 81/559) agent_harness domain::notifications::test::waiting_for_input_goes_to_the_audience
+        PASS [   0.008s] ( 82/559) agent_harness domain::pending::test::admits_and_clears
+        PASS [   0.008s] ( 83/559) agent_harness domain::pending::test::an_admitted_session_has_no_turn_until_dispatch
+        PASS [   0.008s] ( 84/559) agent_harness domain::pending::test::clones_share_state
+        PASS [   0.009s] ( 85/559) agent_harness domain::pending::test::take_clears_and_returns_the_turn
+        PASS [   0.009s] ( 86/559) agent_harness domain::ports::test::attaching_a_second_transport_to_an_active_session_fails
+        PASS [   0.008s] ( 87/559) agent_harness domain::presenter::test::a_closed_reply_is_sealed_and_runs_nothing
+        PASS [   0.015s] ( 88/559) agent_harness domain::ports::test::container_session_runs_and_logs_end_to_end
+        PASS [   0.008s] ( 89/559) agent_harness domain::presenter::test::a_growing_reply_never_renumbers_its_earlier_messages
+        PASS [   0.008s] ( 90/559) agent_harness domain::presenter::test::a_sealed_run_whose_step_finishes_late_changes_the_shape
+        PASS [   0.008s] ( 91/559) agent_harness domain::presenter::test::a_step_inside_an_open_run_does_not_change_the_shape_but_sealing_does
+        PASS [   0.008s] ( 92/559) agent_harness domain::presenter::test::a_turn_message_shows_finished_passages_and_every_run_of_steps
+        PASS [   0.008s] ( 93/559) agent_harness domain::presenter::test::each_passage_closes_a_message_that_carries_the_steps_before_it
+        PASS [   0.007s] ( 94/559) agent_harness domain::presenter::test::requests_for_the_user_belong_to_no_message
+        PASS [   0.008s] ( 95/559) agent_harness domain::presenter::test::steps_the_turn_ends_on_are_a_message_of_their_own
+        PASS [   0.008s] ( 96/559) agent_harness domain::presenter::test::steps_wait_for_the_passage_they_lead_to
+        PASS [   0.009s] ( 97/559) agent_harness domain::queue::test::a_claimed_entry_is_gone_for_editing_and_removal
+        PASS [   0.009s] ( 98/559) agent_harness domain::queue::test::a_requeued_entry_is_next_in_line
+        PASS [   0.009s] ( 99/559) agent_harness domain::queue::test::a_snapshot_round_trips_through_the_durable_shape
+        PASS [   0.009s] (100/559) agent_harness domain::queue::test::editing_reattributes_the_entry_to_the_editor
+        PASS [   0.009s] (101/559) agent_harness domain::queue::test::editing_replaces_the_text_and_keeps_the_place
+        PASS [   0.008s] (102/559) agent_harness domain::queue::test::enqueue_front_puts_the_entry_ahead_of_waiting_work
+        PASS [   0.008s] (103/559) agent_harness domain::queue::test::entries_come_back_out_oldest_first
+        PASS [   0.009s] (104/559) agent_harness domain::queue::test::mark_announced_remembers_the_chip_on_the_waiting_entry
+        PASS [   0.008s] (105/559) agent_harness domain::queue::test::move_to_front_promotes_a_waiting_entry_and_keeps_the_rest
+        PASS [   0.009s] (106/559) agent_harness domain::queue::test::only_a_human_prompt_from_the_session_itself_has_a_direct_prompter
+        PASS [   0.008s] (107/559) agent_harness domain::queue::test::only_prompts_are_editable
+        PASS [   0.008s] (108/559) agent_harness domain::queue::test::removal_skips_the_removed_entry_at_dispatch
+        PASS [   0.008s] (109/559) agent_harness domain::queue::test::sessions_do_not_share_a_queue
+        PASS [   0.008s] (110/559) agent_harness domain::queue::test::the_cap_refuses_the_overflowing_entry
+        PASS [   0.008s] (111/559) agent_harness domain::repository_choice::test::admitted_selection_calls_model_and_persists_its_choice
+        PASS [   0.009s] (112/559) agent_harness domain::repository_choice::test::deterministic_selection_never_checks_quota_or_calls_a_model
+        PASS [   0.009s] (113/559) agent_harness domain::repository_choice::test::explicit_repository_bypasses_automatic_selection
+        PASS [   0.008s] (114/559) agent_harness domain::repository_choice::test::history_excludes_current_session_and_searches_past_chat_only_sessions
+        PASS [   0.009s] (115/559) agent_harness domain::repository_choice::test::refusal_preserves_the_typed_error_without_model_or_persistence_calls
+        PASS [   0.007s] (116/559) agent_harness domain::repository_selection::test::a_repository_outside_the_candidates_is_refused
+        PASS [   0.008s] (117/559) agent_harness domain::repository_selection::test::a_selected_repository_enables_automatic_pull_requests
+        PASS [   0.008s] (118/559) agent_harness domain::repository_selection::test::fallback_uses_the_most_recent_accessible_repository
+        PASS [   0.009s] (119/559) agent_harness domain::repository_selection::test::first_time_users_get_the_first_candidate
+        PASS [   0.009s] (120/559) agent_harness domain::repository_selection::test::stale_history_cannot_grant_repository_access
+        PASS [   0.009s] (121/559) agent_harness domain::runtime_closed::test::a_runtime_close_reaches_auto_archive_and_a_disconnect_does_not
+        PASS [   0.008s] (122/559) agent_harness domain::sandbox::test::cpu_ram_increases_are_in_place_and_decreases_need_a_restart
+        PASS [   0.008s] (123/559) agent_harness domain::sandbox::test::create_only_managers_cannot_change_size
+        PASS [   0.008s] (124/559) agent_harness domain::sandbox::test::default_is_a_cpu_ram_noop_against_the_snapshot
+        PASS [   0.008s] (125/559) agent_harness domain::sandbox::test::live_quotas_that_are_not_named_tiers_still_pick_in_place_or_restart
+        PASS [   0.007s] (126/559) agent_harness domain::sandbox::test::resources_come_from_sandbox_sizes_json
+        PASS [   0.008s] (127/559) agent_harness domain::sandbox::test::snapshot_matches_default_cpu_and_ram
+        PASS [   0.017s] (128/559) agent_harness domain::service::test::a_bound_session_stays_on_its_connection_until_it_drops
+        PASS [   0.019s] (129/559) agent_harness domain::service::test::a_channel_follow_up_stops_the_running_turn_announces_and_flushes
+        PASS [   0.013s] (130/559) agent_harness domain::service::test::a_chosen_model_is_selected_on_a_runtime_that_does_not_read_the_row
+        PASS [   0.013s] (131/559) agent_harness domain::service::test::a_chosen_model_is_the_session_model_from_creation
+        PASS [   0.015s] (132/559) agent_harness domain::service::test::a_control_event_is_accepted_under_the_callers_own_action_id
+        PASS [   0.015s] (133/559) agent_harness domain::service::test::a_control_event_without_an_action_id_is_given_a_fresh_one
+        PASS [   0.012s] (134/559) agent_harness domain::service::test::a_cursor_managed_session_is_always_stamped_cursor
+        PASS [   0.011s] (135/559) agent_harness domain::service::test::a_decline_that_cannot_be_posted_fails_the_open
+        PASS [   0.017s] (136/559) agent_harness domain::service::test::a_delivery_failure_is_not_automatically_resumed
+        PASS [   0.010s] (137/559) agent_harness domain::service::test::a_disconnected_external_session_never_gets_a_sandbox
+        PASS [   0.011s] (138/559) agent_harness domain::service::test::a_failed_announce_surfaces_and_keeps_the_prompt_queued
+        PASS [   0.016s] (139/559) agent_harness domain::service::test::a_draining_replica_starts_no_new_work
+        PASS [   0.015s] (140/559) agent_harness domain::service::test::a_harness_principal_cannot_answer_a_permission_request
+        PASS [   0.016s] (141/559) agent_harness domain::service::test::a_macrod_session_selects_its_saved_model_before_the_first_prompt
+        PASS [   0.011s] (142/559) agent_harness domain::service::test::a_managed_bots_permission_request_is_accepted_on_arrival
+        PASS [   0.014s] (143/559) agent_harness domain::service::test::a_managed_open_delivers_its_first_prompt_under_the_callers_id
+        PASS [   0.010s] (144/559) agent_harness domain::service::test::a_managed_persona_profile_applies_unless_overridden
+        PASS [   0.010s] (145/559) agent_harness domain::service::test::a_managed_session_opens_as_the_managed_default_bot
+        PASS [   0.012s] (146/559) agent_harness domain::service::test::a_managed_persona_profile_is_used_when_nothing_overrides_it
+        PASS [   0.012s] (147/559) agent_harness domain::service::test::a_mention_its_sender_is_not_set_up_for_is_declined_in_the_thread
+        PASS [   0.015s] (148/559) agent_harness domain::service::test::a_managed_session_resumes_its_sandbox_rather_than_a_dialed_in_runtime
+        PASS [   0.015s] (149/559) agent_harness domain::service::test::a_model_change_bypasses_the_running_turn
+        PASS [   0.014s] (150/559) agent_harness domain::service::test::a_non_staff_control_event_cannot_drive_a_sandboxed_coder_session
+        PASS [   0.016s] (151/559) agent_harness domain::service::test::a_non_staff_session_editor_can_approve_a_managed_session_request
+        PASS [   0.020s] (152/559) agent_harness domain::service::test::a_prompt_after_a_redial_restores_the_session_on_the_new_connection
+        PASS [   0.017s] (153/559) agent_harness domain::service::test::a_prompt_during_a_running_turn_queues_and_dispatches_when_it_ends
+        PASS [   0.015s] (154/559) agent_harness domain::service::test::a_prompt_through_control_reaches_the_agent_without_announcing
+        PASS [   0.010s] (155/559) agent_harness domain::service::test::a_provisioning_failure_marks_the_session_disconnected
+        PASS [   0.014s] (156/559) agent_harness domain::service::test::a_prompt_through_control_resumes_a_disconnected_session
+        PASS [   0.009s] (157/559) agent_harness domain::service::test::a_repository_for_a_persona_that_cannot_take_one_is_refused_by_name
+        PASS [   0.016s] (158/559) agent_harness domain::service::test::a_queued_prompt_survives_a_replica_restart
+        PASS [   0.012s] (159/559) agent_harness domain::service::test::a_repository_without_a_persona_opens_as_cursor
+        PASS [   0.014s] (160/559) agent_harness domain::service::test::a_resume_restores_the_persisted_queue
+        PASS [   0.017s] (161/559) agent_harness domain::service::test::a_staff_control_event_can_drive_a_sandboxed_coder_session
+        PASS [   0.015s] (162/559) agent_harness domain::service::test::a_stop_cancels_the_turn_and_the_queue_keeps_draining
+        PASS [   0.012s] (163/559) agent_harness domain::service::test::an_admitted_command_survives_caller_cancellation
+        PASS [   0.010s] (164/559) agent_harness domain::service::test::an_announce_whose_bot_does_not_own_the_session_is_dropped
+        PASS [   0.010s] (165/559) agent_harness domain::service::test::an_archived_session_rejects_new_controls
+        PASS [   0.019s] (166/559) agent_harness domain::service::test::an_app_connected_mid_session_reaches_the_agent_before_the_next_prompt
+        PASS [   0.015s] (167/559) agent_harness domain::service::test::an_external_bots_permission_request_waits_for_a_users_answer
+        PASS [   0.011s] (168/559) agent_harness domain::service::test::an_external_open_with_a_mention_announces_as_the_sessions_bot
+        PASS [   0.010s] (169/559) agent_harness domain::service::test::an_external_prompt_announce_posts_into_the_observed_origin
+        PASS [   0.015s] (170/559) agent_harness domain::service::test::an_idle_channel_follow_up_does_not_stop
+        PASS [   0.011s] (171/559) agent_harness domain::service::test::answering_a_disconnected_session_does_not_wake_its_sandbox
+        PASS [   0.013s] (172/559) agent_harness domain::service::test::archiving_drops_prompts_queued_behind_a_running_turn
+        PASS [   0.010s] (173/559) agent_harness domain::service::test::branch_without_repository_is_rejected_before_provisioning
+        PASS [   0.013s] (174/559) agent_harness domain::service::test::changing_the_model_persists_it_and_tells_the_running_agent
+        PASS [   0.014s] (175/559) agent_harness domain::service::test::chat_reply::a_chat_mention_is_announced_as_a_pending_reply_and_resolved_with_the_answer
+        PASS [   0.013s] (176/559) agent_harness domain::service::test::chat_reply::a_chat_session_that_dies_mid_turn_resolves_its_reply_as_failed
+        PASS [   0.015s] (177/559) agent_harness domain::service::test::chat_reply::a_chat_turn_settles_without_a_settled_notification
+        PASS [   0.016s] (178/559) agent_harness domain::service::test::chat_reply::a_coding_turn_is_offered_to_the_announcer_as_a_coder_and_still_notifies
+        PASS [   0.015s] (179/559) agent_harness domain::service::test::chat_reply::a_held_call_settled_after_its_turn_changes_nothing
+        PASS [   0.016s] (180/559) agent_harness domain::service::test::chat_reply::a_persona_that_chose_to_chat_gets_a_reply_on_a_coding_runtime
+        PASS [   0.016s] (181/559) agent_harness domain::service::test::chat_reply::a_persona_that_chose_to_code_gets_a_chip_on_the_in_memory_runtime
+        PASS [   0.013s] (182/559) agent_harness domain::service::test::chat_reply::a_silent_chat_turn_resolves_as_empty_rather_than_spinning
+        PASS [   0.020s] (183/559) agent_harness domain::service::test::chat_reply::a_thread_reply_grows_in_place_with_its_steps_and_resolves_with_them
+        PASS [   0.014s] (184/559) agent_harness domain::service::test::chat_reply::assignment_instructions_reach_system_and_prompt_only_runtimes
+        PASS [   0.014s] (185/559) agent_harness domain::service::test::chat_reply::conversations::a_different_person_cannot_prompt_the_reserved_direct_session
+        PASS [   0.154s] (186/559) agent_harness domain::service::test::chat_reply::conversations::a_completed_conversation_message_never_runs_again_when_the_broker_replays_it
+        PASS [   0.146s] (187/559) agent_harness domain::service::test::chat_reply::conversations::a_message_deleted_while_it_waited_fails_and_the_next_one_runs
+        PASS [   0.027s] (188/559) agent_harness domain::service::test::chat_reply::conversations::a_private_reply_posts_each_passage_with_the_steps_before_it_and_only_the_answer_is_news
+        PASS [   0.134s] (189/559) agent_harness domain::service::test::chat_reply::conversations::a_message_whose_conversation_was_deleted_is_acknowledged_instead_of_redelivered
+        PASS [   0.129s] (190/559) agent_harness domain::service::test::chat_reply::conversations::a_turn_end_the_journal_cannot_record_still_frees_the_session
+        PASS [   0.161s] (191/559) agent_harness domain::service::test::chat_reply::conversations::a_turn_whose_runtime_dies_fails_once_and_frees_the_conversation
+        PASS [   0.139s] (192/559) agent_harness domain::service::test::chat_reply::conversations::an_answer_that_could_not_be_posted_is_posted_by_recovery
+        PASS [   0.157s] (193/559) agent_harness domain::service::test::chat_reply::conversations::an_answer_whose_turn_ended_unwatched_is_still_posted
+        PASS [   0.018s] (194/559) agent_harness domain::service::test::chat_reply::conversations::an_external_persona_conversation_binds_the_connected_runtime_without_spawning_a_container
+        PASS [   5.015s] (195/559) agent_harness domain::service::test::chat_reply::conversations::a_waiting_message_whose_turn_already_ended_is_dropped
+        PASS [   0.017s] (196/559) agent_harness domain::service::test::chat_reply::conversations::direct_conversations_share_one_session_queue_in_order_and_answer_in_the_timeline
+        PASS [   0.155s] (197/559) agent_harness domain::service::test::chat_reply::conversations::final_reply::extra_final_passage_ids_survive_a_lost_post_response_and_stale_reconciliation
+        PASS [   0.124s] (198/559) agent_harness domain::service::test::chat_reply::conversations::final_reply::failed_final_id_persistence_posts_nothing_until_recovery_can_reserve_ids
+        PASS [   4.958s] (199/559) agent_harness domain::service::test::chat_reply::conversations::an_open_conversation_answers_while_another_one_bootstraps
+        PASS [   0.141s] (200/559) agent_harness domain::service::test::chat_reply::conversations::final_reply::outcome_only_reply_ids_survive_a_lost_post_response_and_stale_reconciliation
+        PASS [   0.171s] (201/559) agent_harness domain::service::test::chat_reply::conversations::notifications::a_running_quiet_batch_leaves_the_next_conversation_message_queued
+        PASS [   0.132s] (202/559) agent_harness domain::service::test::chat_reply::conversations::quota_denial_finishes_queued_conversation_turns_without_stopping_the_running_turn
+        PASS [   0.145s] (203/559) agent_harness domain::service::test::chat_reply::conversations::recovery_posts_the_steps_a_lost_replica_left_running
+        PASS [   0.017s] (204/559) agent_harness domain::service::test::chat_reply::each_turns_reply_resolves_when_that_turn_ends
+        PASS [   0.015s] (205/559) agent_harness domain::service::test::chat_reply::elicitation::a_question_is_told_in_the_thread_and_withdrawn_when_answered
+        PASS [   0.013s] (206/559) agent_harness domain::service::test::chat_reply::held_tool_calls_are_told_in_the_thread_until_none_wait
+        PASS [   0.009s] (207/559) agent_harness domain::service::test::chat_reply::revoked_task_access_blocks_assignment_before_provisioning
+        PASS [   0.009s] (208/559) agent_harness domain::service::test::chat_reply::task_assignment_keeps_the_coder_staff_gate
+        PASS [   0.017s] (209/559) agent_harness domain::service::test::chat_reply::task_assignment_links_the_session_without_copying_its_answer_to_discussion
+        PASS [   0.014s] (210/559) agent_harness domain::service::test::codex_channel_mention_provisions_egress_without_advertising_mcp
+        PASS [   0.014s] (211/559) agent_harness domain::service::test::codex_named_session_provisions_egress_without_advertising_mcp
+        PASS [   0.011s] (212/559) agent_harness domain::service::test::coding_preferences::a_coding_assignment_with_both_puts_tasks_before_pull_requests
+        PASS [   0.012s] (213/559) agent_harness domain::service::test::coding_preferences::a_coding_assignment_with_tasks_ends_with_the_tasks_workflow
+        PASS [   0.011s] (214/559) agent_harness domain::service::test::coding_preferences::a_coding_mention_with_pull_requests_and_no_instructions_gets_only_that_workflow
+        PASS [   0.010s] (215/559) agent_harness domain::service::test::coding_preferences::a_managed_open_ends_with_both_workflows
+        PASS [   0.011s] (216/559) agent_harness domain::service::test::coding_preferences::a_persona_that_chose_chat_never_gets_the_workflows
+        PASS [   0.011s] (217/559) agent_harness domain::service::test::coding_preferences::an_external_open_ends_with_the_tasks_workflow
+        PASS [   0.010s] (218/559) agent_harness domain::service::test::coding_preferences::chat_sessions_never_get_the_workflows
+        PASS [   0.011s] (219/559) agent_harness domain::service::test::coding_preferences::coding_sessions_of_users_without_preferences_are_unchanged
+        PASS [   0.009s] (220/559) agent_harness domain::service::test::command_workers::a_command_sent_as_the_worker_retires_is_never_lost
+        PASS [   0.010s] (221/559) agent_harness domain::service::test::command_workers::a_host_set_idle_timeout_retires_workers_on_its_schedule
+        PASS [   0.010s] (222/559) agent_harness domain::service::test::command_workers::a_worker_busy_inside_its_idle_window_does_not_exit
+        PASS [   0.008s] (223/559) agent_harness domain::service::test::command_workers::a_worker_never_retires_an_entry_that_is_not_its_own
+        PASS [   0.010s] (224/559) agent_harness domain::service::test::command_workers::an_idle_command_worker_exits_and_the_next_command_starts_a_new_one
+        PASS [   0.011s] (225/559) agent_harness domain::service::test::command_workers::deleting_a_session_removes_its_command_worker
+        PASS [   0.010s] (226/559) agent_harness domain::service::test::commands_for_a_peer_managed_session_forward_through_redis
+        PASS [   0.015s] (227/559) agent_harness domain::service::test::compact_through_control_reaches_opencode_as_a_slash_command
+        PASS [   0.016s] (228/559) agent_harness domain::service::test::composer_failure_stops_follow_up_announcement_and_delivery
+        PASS [   0.010s] (229/559) agent_harness domain::service::test::composer_failure_stops_open_delivery_and_keeps_the_prompt_queued
+        PASS [   0.016s] (230/559) agent_harness domain::service::test::concurrent_forwards_share_one_session_recovery
+        PASS [   0.012s] (231/559) agent_harness domain::service::test::deleting_a_session_tears_down_its_container_and_removes_it
+        PASS [   0.014s] (232/559) agent_harness domain::service::test::different_sessions_execute_concurrently
+        PASS [   0.007s] (233/559) agent_harness domain::service::test::disconnected_harness_errors_keep_the_session_error_classification
+        PASS [   0.011s] (234/559) agent_harness domain::service::test::explicit_branch_wins_over_the_repository_default
+        PASS [   0.012s] (235/559) agent_harness domain::service::test::external_mcp::an_external_open_provisions_nothing_and_prompts_nobody
+        PASS [   0.011s] (236/559) agent_harness domain::service::test::external_mcp::external_binding_preserves_an_explicit_agent_mcp_selection
+        PASS [   0.012s] (237/559) agent_harness domain::service::test::external_replies::an_external_mention_resolves_and_a_followup_can_finish_before_its_announcement
+        PASS [   0.011s] (238/559) agent_harness domain::service::test::external_replies::an_unauthorized_destination_never_reserves_or_posts_a_reply
+        PASS [   0.153s] (239/559) agent_harness domain::service::test::external_replies::creation_retries_repair_reservation_for_both_primary_key_and_thread_conflicts
+        PASS [   0.014s] (240/559) agent_harness domain::service::test::external_replies::failed_channel_updates_retry_after_restart_without_reprompting
+        PASS [   0.015s] (241/559) agent_harness domain::service::test::external_replies::recovery_finishes_a_turn_interrupted_before_an_acp_response
+        PASS [   0.018s] (242/559) agent_harness domain::service::test::external_replies::recovery_rebuilds_a_missed_completion_from_the_durable_protocol_log
+        PASS [   0.010s] (243/559) agent_harness domain::service::test::external_replies::successful_announcements_are_not_repeated_after_restart
+        PASS [   0.018s] (244/559) agent_harness domain::service::test::followers::a_typed_prompt_records_its_tab_on_the_turn
+        PASS [   0.025s] (245/559) agent_harness domain::service::test::followers::only_prompts_typed_into_the_session_follow_it
+        PASS [   0.015s] (246/559) agent_harness domain::service::test::forward_announces_before_delivering_the_prompt
+        PASS [   0.014s] (247/559) agent_harness domain::service::test::forward_to_a_disconnected_session_resumes_acp_and_delivers_the_prompt
+        PASS [   0.016s] (248/559) agent_harness domain::service::test::forward_to_a_live_session_reuses_the_transport
+        PASS [   0.011s] (249/559) agent_harness domain::service::test::idle_release::a_session_another_replica_manages_is_left_alone
+        PASS [   0.015s] (250/559) agent_harness domain::service::test::idle_release::a_session_whose_rebuild_would_differ_is_never_released
+        PASS [   0.016s] (251/559) agent_harness domain::service::test::idle_release::a_session_with_a_turn_running_and_a_prompt_queued_is_never_released
+        PASS [   0.019s] (252/559) agent_harness domain::service::test::idle_release::an_idle_in_process_session_is_released_and_its_next_prompt_resumes_it
+        PASS [   0.014s] (253/559) agent_harness domain::service::test::idle_release::releasing_a_session_another_replica_took_over_keeps_that_replicas_lease
+        PASS [   0.017s] (254/559) agent_harness domain::service::test::lifecycle_events::a_death_mid_turn_publishes_stopped_with_the_turn_and_no_settled
+        PASS [   0.023s] (255/559) agent_harness domain::service::test::lifecycle_events::a_delete_publishes_deleted_and_nothing_after
+        PASS [   0.017s] (256/559) agent_harness domain::service::test::lifecycle_events::a_mention_lookup_failure_never_holds_up_the_prompt
+        PASS [   0.016s] (257/559) agent_harness domain::service::test::lifecycle_events::a_prompt_from_the_session_view_notifies_the_people_it_names
+        PASS [   0.016s] (258/559) agent_harness domain::service::test::lifecycle_events::a_prompt_naming_only_its_author_publishes_nothing
+        PASS [   0.016s] (259/559) agent_harness domain::service::test::lifecycle_events::a_prompt_naming_others_publishes_mentioned_without_its_author
+        PASS [   0.017s] (260/559) agent_harness domain::service::test::lifecycle_events::a_question_publishes_waiting_for_input_then_input_received
+        PASS [   0.017s] (261/559) agent_harness domain::service::test::lifecycle_events::a_queued_prompt_defers_settled_until_it_too_is_answered
+        PASS [   0.011s] (262/559) agent_harness domain::service::test::lifecycle_events::settled_carries_everyone_who_drove_the_session
+        PASS [   0.016s] (263/559) agent_harness domain::service::test::lifecycle_events::settled_carries_the_agents_last_text
+        PASS [   0.012s] (264/559) agent_harness domain::service::test::lifecycle_events::settled_notifies_the_audience_through_the_notifier
+        PASS [   0.011s] (265/559) agent_harness domain::service::test::lifecycle_events::the_first_turn_publishes_opened_started_ended_and_settled
+        PASS [   0.009s] (266/559) agent_harness domain::service::test::managed_open_composes_its_prompt_without_channel_context
+        PASS [   0.019s] (267/559) agent_harness domain::service::test::notifications::a_blocked_worker_does_not_block_discovery_or_renewal_or_queue_duplicate_drains
+        PASS [   0.017s] (268/559) agent_harness domain::service::test::notifications::a_settled_import_wakes_an_idle_session_with_its_final_report
+        PASS [   0.018s] (269/559) agent_harness domain::service::test::notifications::active_leases_reconcile_lost_completion_callbacks_and_late_noop_stays_silent
+        PASS [   0.018s] (270/559) agent_harness domain::service::test::notifications::an_unaccepted_quiet_attempt_defers_without_waking_until_a_real_prompt
+        PASS [   0.019s] (271/559) agent_harness domain::service::test::notifications::background_recovery_reconciles_a_quiet_user_turn_before_new_waking_events
+        PASS [   0.021s] (272/559) agent_harness domain::service::test::notifications::discovery_moves_past_a_full_page_of_unreachable_sessions
+        PASS [   0.020s] (273/559) agent_harness domain::service::test::notifications::events_behind_busy_turn_coalesce_with_system_authority_and_no_user_message
+        PASS [   0.021s] (274/559) agent_harness domain::service::test::notifications::failed_acknowledgment_retries_without_starting_another_turn
+        PASS [   0.028s] (275/559) agent_harness domain::service::test::notifications::quiet_batch_recovery_keeps_its_real_prompt_identity
+        PASS [   0.016s] (276/559) agent_harness domain::service::test::notifications::quiet_event_waits_for_user_prompt_and_keeps_the_user_as_prompter
+        PASS [   0.018s] (277/559) agent_harness domain::service::test::notifications::recovered_system_identity_overrides_a_legacy_wire_owner
+        PASS [   0.017s] (278/559) agent_harness domain::service::test::notifications::recovering_a_real_prompt_completion_resolves_its_reply_and_deduplicates_the_observer
+        PASS [   0.018s] (279/559) agent_harness domain::service::test::notifications::recovering_an_interrupted_real_prompt_cleans_up_its_pending_reply
+        PASS [   0.017s] (280/559) agent_harness domain::service::test::notifications::recovery_waits_for_running_delivery_without_reprompting
+        PASS [   0.014s] (281/559) agent_harness domain::service::test::notifications::silent_delivery_acknowledges_without_assistant_message_or_settled_notifications
+        PASS [   0.015s] (282/559) agent_harness domain::service::test::only_the_first_prompt_carries_the_agent_instructions
+        PASS [   0.013s] (283/559) agent_harness domain::service::test::open_announces_while_the_container_is_still_booting
+        PASS [   0.013s] (284/559) agent_harness domain::service::test::open_creates_announces_and_delivers_the_mention
+        PASS [   0.009s] (285/559) agent_harness domain::service::test::open_external_session_refuses_a_bot_owner
+        PASS [   0.008s] (286/559) agent_harness domain::service::test::open_managed_session_refuses_a_bot_owner
+        PASS [   0.009s] (287/559) agent_harness domain::service::test::open_managed_session_spawns_at_the_users_default_size
+        PASS [   0.013s] (288/559) agent_harness domain::service::test::open_sends_context_and_agent_instructions_in_the_first_prompt
+        PASS [   0.012s] (289/559) agent_harness domain::service::test::open_snapshots_the_agents_mcp_selection_onto_the_session
+        PASS [   0.013s] (290/559) agent_harness domain::service::test::open_spawns_at_the_users_default_size
+        PASS [   0.013s] (291/559) agent_harness domain::service::test::open_stores_no_instructions_when_the_agent_has_only_blank_ones
+        PASS [   0.009s] (292/559) agent_harness domain::service::test::owned_purge::purge_owned_session_keeps_the_row_on_teardown_failure_and_a_retry_finishes
+        PASS [   0.008s] (293/559) agent_harness domain::service::test::owned_purge::purge_owned_session_leaves_a_session_another_owner_holds
+        PASS [   0.009s] (294/559) agent_harness domain::service::test::owned_purge::purge_owned_session_of_a_missing_session_is_purged_and_releases_nothing_more
+        PASS [   0.010s] (295/559) agent_harness domain::service::test::owned_purge::purge_owned_session_releases_and_deletes_sessions_their_owner_still_holds
+        PASS [   0.017s] (296/559) agent_harness domain::service::test::permission_refresh::a_withdrawn_bypass_reaches_a_live_session_before_its_next_prompt
+        PASS [   0.017s] (297/559) agent_harness domain::service::test::presentation::presentation_bypasses_the_prompt_queue_and_retries_without_duplicate_frames
+        PASS [   0.010s] (298/559) agent_harness domain::service::test::presentation::presentation_forward_ack_waits_for_the_remote_durable_pair
+        PASS [   0.014s] (299/559) agent_harness domain::service::test::queued_prompts_are_editable_and_removable_until_dispatch
+        PASS [   0.015s] (300/559) agent_harness domain::service::test::quota::admission_changes_during_dispatch_never_reach_the_runtime
+        PASS [   0.008s] (301/559) agent_harness domain::service::test::quota::admission_errors_keep_the_session_error_classification
+        PASS [   0.010s] (302/559) agent_harness domain::service::test::quota::authorized_forwarded_commands_still_require_admission
+        PASS [   0.012s] (303/559) agent_harness domain::service::test::quota::billing_outage_preserves_fifo_and_retries_only_on_a_new_event
+        PASS [   0.010s] (304/559) agent_harness domain::service::test::quota::denied_or_unavailable_trigger_open_has_no_side_effects
+        PASS [   0.011s] (305/559) agent_harness domain::service::test::quota::denying_a_steering_follow_up_does_not_cancel_the_running_turn
+        PASS [   0.013s] (306/559) agent_harness domain::service::test::quota::enqueue_then_exhaust_rejects_all_waiting_work_once_even_after_restart
+        PASS [   0.010s] (307/559) agent_harness domain::service::test::quota::external_open_does_not_check_runtime_quota
+        PASS [   0.013s] (308/559) agent_harness domain::service::test::quota::externally_funded_runtimes_accept_spending_actions_without_quota_io
+        PASS [   0.011s] (309/559) agent_harness domain::service::test::quota::managed_open_checks_quota_before_provisioning_without_an_initial_prompt
+        PASS [   0.011s] (310/559) agent_harness domain::service::test::quota::non_spending_controls_and_queue_removal_remain_available
+        PASS [   0.015s] (311/559) agent_harness domain::service::test::quota::recovery_dispatches_the_original_head_without_duplicate_announcements
+        PASS [   0.011s] (312/559) agent_harness domain::service::test::quota::rejection_persistence_failure_keeps_work_and_defers_reply_resolution
+        PASS [   0.012s] (313/559) agent_harness domain::service::test::quota::restored_announced_work_resolves_without_inventing_a_turn
+        PASS [   0.013s] (314/559) agent_harness domain::service::test::quota::retries_of_queued_and_in_flight_actions_do_not_recheck_quota
+        PASS [   0.016s] (315/559) agent_harness domain::service::test::quota::spending_actions_charge_the_persisted_owner_not_the_actor
+        PASS [   0.011s] (316/559) agent_harness domain::service::test::quota::staff_and_non_user_owner_restrictions_precede_quota
+        PASS [   0.009s] (317/559) agent_harness domain::service::test::quota::steering_during_a_billing_outage_preserves_the_waiting_order
+        PASS [   0.008s] (318/559) agent_harness domain::service::test::quota::unauthorized_forwarded_origin_is_rejected_before_billing_or_queueing
+        PASS [   0.009s] (319/559) agent_harness domain::service::test::quota::unauthorized_open_never_consults_billing
+        PASS [   0.011s] (320/559) agent_harness domain::service::test::re_sending_a_waiting_action_id_does_not_queue_it_twice
+        PASS [   0.013s] (321/559) agent_harness domain::service::test::reattach::a_dial_restores_only_this_harness_tracked_sessions_from_an_agent_that_lists_everything
+        PASS [   0.008s] (322/559) agent_harness domain::service::test::reattach::a_live_session_on_a_runtime_that_is_gone_is_left_for_the_next_dial
+        PASS [   0.018s] (323/559) agent_harness domain::service::test::reattach::a_redial_cancels_the_harness_previous_dial
+        PASS [   0.018s] (324/559) agent_harness domain::service::test::reattach::a_redial_delivers_the_prompt_queued_behind_the_turn_the_drop_interrupted
+        PASS [   0.015s] (325/559) agent_harness domain::service::test::reattach::a_redial_dispatches_the_queue_an_earlier_attach_failed_to_load
+        PASS [   0.009s] (326/559) agent_harness domain::service::test::reattach::a_redial_does_not_retry_a_session_its_runtime_no_longer_serves
+        PASS [   0.013s] (327/559) agent_harness domain::service::test::reattach::a_redial_loads_a_live_session_without_a_prompt
+        PASS [   0.015s] (328/559) agent_harness domain::service::test::reattach::a_redial_loads_every_live_session_but_not_archived_or_unknown_ones
+        PASS [   0.014s] (329/559) agent_harness domain::service::test::reattach::a_redial_restores_a_session_its_runtime_saw_active_recently
+        PASS [   0.016s] (330/559) agent_harness domain::service::test::reattach::a_redial_restores_a_session_whose_turn_the_drop_interrupted_however_old
+        PASS [   0.024s] (331/559) agent_harness domain::service::test::reattach::a_redial_restores_only_a_few_sessions_at_a_time
+        PASS [   0.016s] (332/559) agent_harness domain::service::test::reattach::a_redial_restores_recent_sessions_and_leaves_idle_ones_to_their_next_prompt
+        PASS [   0.016s] (333/559) agent_harness domain::service::test::reattach::a_redial_retries_a_session_whose_restore_failed
+        PASS [   0.013s] (334/559) agent_harness domain::service::test::reopen::codex_delivery_loads_saved_session_before_prompting
+        PASS [   0.015s] (335/559) agent_harness domain::service::test::resuming_an_in_memory_session_after_a_restart_mints_a_new_token
+        PASS [   0.010s] (336/559) agent_harness domain::service::test::revoked_origin_access_blocks_open_before_anything_is_provisioned
+        PASS [   0.011s] (337/559) agent_harness domain::service::test::revoked_origin_access_blocks_the_connect_cursor_reply
+        PASS [   0.010s] (338/559) agent_harness domain::service::test::runtime_access::a_prompt_queued_before_access_was_removed_never_runs
+        PASS [   0.011s] (339/559) agent_harness domain::service::test::runtime_access::a_prompt_sent_after_access_was_removed_is_refused_with_the_reason
+        PASS [   0.012s] (340/559) agent_harness domain::service::test::selected_repository_and_branch_are_persisted_for_cursor
+        PASS [   0.008s] (341/559) agent_harness domain::service::test::selected_repository_requires_owner_access_before_provisioning
+        PASS [   0.012s] (342/559) agent_harness domain::service::test::selected_repository_without_a_default_branch_starts_on_main
+        PASS [   0.012s] (343/559) agent_harness domain::service::test::selected_repository_without_branch_starts_on_its_default_branch
+        PASS [   0.011s] (344/559) agent_harness domain::service::test::set_sandbox_size_hot_resizes_and_updates_the_user_default
+        PASS [   0.009s] (345/559) agent_harness domain::service::test::set_sandbox_size_refuses_a_session_not_owned_by_a_user
+        PASS [   0.010s] (346/559) agent_harness domain::service::test::set_sandbox_size_restart_closes_resizes_and_resumes
+        PASS [   0.008s] (347/559) agent_harness domain::service::test::set_sandbox_size_same_tier_does_not_resize
+        PASS [   0.010s] (348/559) agent_harness domain::service::test::set_sandbox_size_unsupported_does_not_persist
+        PASS [   0.008s] (349/559) agent_harness domain::service::test::starting_branch_falls_back_to_main_for_an_unusable_default
+        PASS [   0.015s] (350/559) agent_harness domain::service::test::steering_a_later_queued_prompt_runs_it_ahead_of_earlier_ones
+        PASS [   0.017s] (351/559) agent_harness domain::service::test::unmanaged_external_session_forwards_to_its_remote_harness
+        PASS [   0.019s] (352/559) agent_harness domain::service::test::user_cleanup::delete_user_sessions_cleans_live_and_inactive_sessions_only_for_the_owner
+        PASS [   0.008s] (353/559) agent_harness domain::service::test::user_cleanup::delete_user_sessions_preserves_the_row_on_teardown_failure_and_can_retry
+        PASS [   0.011s] (354/559) agent_harness domain::service::test::warm::a_missed_warm_claim_records_why_on_the_open_span
+        PASS [   0.018s] (355/559) agent_harness domain::service::test::warm::a_routine_run_opens_its_own_session_instead_of_claiming_a_warm_one
+        PASS [   0.020s] (356/559) agent_harness domain::service::test::warm::a_session_asked_for_out_of_sight_is_hidden_and_notifies_nobody
+        PASS [   0.023s] (357/559) agent_harness domain::service::test::warm::a_warm_claim_delivers_its_first_prompt_under_the_callers_id
+        PASS [   0.010s] (358/559) agent_harness domain::service::test::warm::an_open_without_a_client_id_records_that_no_warm_id_was_sent
+        PASS [   0.031s] (359/559) agent_harness domain::service::test::warm::warming_initializes_without_a_prompt_or_visible_created_event
+        PASS [   0.010s] (360/559) agent_harness domain::service::test::warm::warming_past_the_owner_cap_records_the_refusal
+        PASS [   0.011s] (361/559) agent_harness domain::service::test::warm::warming_rejects_bot_owners_and_bounds_speculation_per_user
+        PASS [   0.008s] (362/559) agent_harness inbound::capability_discovery::test::handler_errors_map_to_transport_statuses
+        PASS [   0.008s] (363/559) agent_harness inbound::capability_discovery::test::successful_response_serializes_config_options
+        PASS [   0.008s] (364/559) agent_harness inbound::capability_discovery::test::target_request_maps_all_supported_harnesses
+        PASS [   0.009s] (365/559) agent_harness inbound::kafka::test::a_bot_authored_follow_up_to_a_managed_session_still_delivers
+        PASS [   0.008s] (366/559) agent_harness inbound::kafka::test::a_conversation_message_without_files_still_carries_the_thread_root_image
+        PASS [   0.008s] (367/559) agent_harness inbound::kafka::test::a_document_mention_opens_and_follows_up_on_its_document
+        PASS [   0.009s] (368/559) agent_harness inbound::kafka::test::a_follow_up_sends_only_its_own_files_and_links_the_thread_in_context
+        PASS [   0.012s] (369/559) agent_harness inbound::kafka::test::a_foreign_bots_open_is_skipped
+        PASS [   0.008s] (370/559) agent_harness inbound::kafka::test::a_managed_channel_message_forwards_to_its_session
+        PASS [   0.008s] (371/559) agent_harness inbound::kafka::test::a_managed_channel_message_with_files_delivers_them_as_prompt_attachments
+        PASS [   0.010s] (372/559) agent_harness inbound::kafka::test::a_managed_follow_up_carries_its_context_to_delivery
+        PASS [   0.009s] (373/559) agent_harness inbound::kafka::test::a_mention_for_our_bot_opens_a_session
+        PASS [   0.008s] (374/559) agent_harness inbound::kafka::test::a_mention_image_is_listed_before_the_thread_root_and_deduped
+        PASS [   0.009s] (375/559) agent_harness inbound::kafka::test::a_mention_with_attached_files_opens_with_them_as_prompt_attachments
+        PASS [   0.009s] (376/559) agent_harness inbound::kafka::test::a_mention_without_files_still_carries_the_thread_root_image
+        PASS [   0.012s] (377/559) agent_harness inbound::kafka::test::a_threaded_mention_answers_into_its_thread
+        PASS [   0.008s] (378/559) agent_harness inbound::kafka::test::an_assignment_with_context_prompts_with_instructions_and_carries_the_task
+        PASS [   0.007s] (379/559) agent_harness inbound::kafka::test::an_external_channel_message_announces_only
+        PASS [   0.009s] (380/559) agent_harness inbound::kafka::test::an_unattributed_bot_external_channel_message_is_skipped
+        PASS [   0.007s] (381/559) agent_harness inbound::kafka::test::an_unattributed_bot_mention_is_skipped
+        PASS [   0.007s] (382/559) agent_harness inbound::kafka::test::an_unresolved_existing_session_is_treated_as_external
+        PASS [   0.007s] (383/559) agent_harness inbound::kafka::test::any_user_can_follow_up_to_a_coder_session
+        PASS [   0.011s] (384/559) agent_harness inbound::kafka::test::any_user_can_follow_up_to_their_cursor_session
+        PASS [   0.009s] (385/559) agent_harness inbound::kafka::test::any_user_mention_can_open_a_managed_agent
+        PASS [   0.012s] (386/559) agent_harness inbound::kafka::test::assigning_a_managed_agent_opens_on_the_task_discussion
+        PASS [   0.008s] (387/559) agent_harness inbound::kafka::test::assigning_an_external_agent_leaves_session_creation_to_its_runtime
+        PASS [   0.007s] (388/559) agent_harness inbound::kafka::test::attributed_bot_mentions_keep_the_user_for_open_and_follow_up
+        PASS [   0.009s] (389/559) agent_harness inbound::kafka::test::conversation_messages_route_to_every_configured_runtime
+        PASS [   0.008s] (390/559) agent_harness inbound::kafka::test::task_discussion_followups_keep_the_managed_and_external_session_origin
+        PASS [   0.008s] (391/559) agent_harness inbound::kafka::test::thread_files_on_a_prompt_cap_at_eight
+        PASS [   0.008s] (392/559) agent_harness inbound::mode_choice::test::answers_the_mode_for_the_callers_prompt
+        PASS [   0.009s] (393/559) agent_harness inbound::mode_choice::test::failures_map_to_their_status
+        PASS [   0.008s] (394/559) agent_harness inbound::mode_choice::test::unauthenticated_callers_are_not_classified
+        PASS [   0.006s] (395/559) agent_harness inbound::model_load::test::handler_errors_map_to_transport_statuses
+        PASS [   0.007s] (396/559) agent_harness inbound::model_load::test::successful_response_serializes_available_catalog
+        PASS [   0.007s] (397/559) agent_harness inbound::model_load::test::target_request_maps_all_supported_harnesses
+        PASS [   0.010s] (398/559) agent_harness inbound::repositories::test::a_failed_branch_listing_is_a_bad_gateway
+        PASS [   0.010s] (399/559) agent_harness inbound::repositories::test::a_failed_listing_is_a_bad_gateway
+        PASS [   0.010s] (400/559) agent_harness inbound::repositories::test::a_url_that_names_no_repository_is_refused_before_github_is_asked
+        PASS [   0.011s] (401/559) agent_harness inbound::repositories::test::an_unreachable_repository_is_forbidden
+        PASS [   0.010s] (402/559) agent_harness inbound::repositories::test::lists_the_callers_repositories_with_their_default_branches
+        PASS [   0.009s] (403/559) agent_harness inbound::repositories::test::lists_the_named_repositorys_branches_for_the_caller
+        PASS [   0.009s] (404/559) agent_harness inbound::repositories::test::reaching_nothing_is_an_empty_list
+        PASS [   0.008s] (405/559) agent_harness inbound::repositories::test::unauthenticated_callers_are_refused_before_github_is_asked
+        PASS [   0.018s] (406/559) agent_harness inbound::runtime_gateway::test::a_bad_token_is_unauthorized
+        PASS [   0.011s] (407/559) agent_harness inbound::runtime_gateway::test::a_harness_past_its_dial_budget_is_refused_with_retry_after
+        PASS [   0.009s] (408/559) agent_harness inbound::runtime_gateway::test::a_missing_token_is_rejected
+        PASS [   0.011s] (409/559) agent_harness inbound::runtime_gateway::test::a_valid_dial_becomes_the_harness_connection
+        PASS [   0.011s] (410/559) agent_harness inbound::runtime_gateway::test::an_unauthenticated_dial_spends_no_budget
+        PASS [   0.007s] (411/559) agent_harness inbound::runtime_gateway::test::retry_after_rounds_up_to_whole_seconds
+        PASS [   0.009s] (412/559) agent_harness inbound::runtime_gateway::test::the_budget_admits_a_burst_then_one_dial_per_interval
+        PASS [   0.007s] (413/559) agent_harness inbound::runtime_gateway::test::the_budget_forgets_harnesses_back_at_full_budget
+        PASS [   0.007s] (414/559) agent_harness inbound::tool_approvals::test::refusals_answer_with_the_status_the_buttons_branch_on
+        PASS [   0.008s] (415/559) agent_harness inbound::tool_approvals::test::the_wire_speaks_snake_case
+        PASS [   0.007s] (416/559) agent_harness outbound::acp_pipe::test::a_closed_pipe_ends_the_inbound_stream
+        PASS [   0.008s] (417/559) agent_harness outbound::acp_pipe::test::acp_ready_arrives_before_any_agent_frame
+        PASS [   0.008s] (418/559) agent_harness outbound::acp_pipe::test::sends_frames_as_lines_and_drops_what_the_pipe_cannot_carry
+        PASS [   0.027s] (419/559) agent_harness outbound::agent_prompt_composer::test::a_prompt_without_a_trigger_sends_none
+        PASS [   0.028s] (420/559) agent_harness outbound::agent_prompt_composer::test::the_trigger_reaches_the_lexical_service_beside_the_people
+        PASS [   0.008s] (421/559) agent_harness outbound::channel_announcer::test::a_held_call_names_its_tool_while_it_waits
+        PASS [   0.008s] (422/559) agent_harness outbound::channel_announcer::test::a_resolved_reply_is_never_blank
+        PASS [   0.007s] (423/559) agent_harness outbound::channel_announcer::test::a_resumed_reply_is_the_pending_reply_again
+        PASS [   0.007s] (424/559) agent_harness outbound::channel_announcer::test::a_stored_step_keeps_the_view_it_presented
+        PASS [   0.007s] (425/559) agent_harness outbound::channel_announcer::test::a_waiting_reply_shows_the_question_and_points_at_the_session
+        PASS [   0.008s] (426/559) agent_harness outbound::channel_announcer::test::an_answer_is_posted_as_written
+        PASS [   0.034s] (427/559) agent_harness outbound::channel_announcer::test::an_answer_the_thread_may_not_carry_points_at_the_session
+        PASS [   0.008s] (428/559) agent_harness outbound::channel_announcer::test::chip_carries_the_announcement_identity
+        PASS [   0.008s] (429/559) agent_harness outbound::channel_announcer::test::declined_mentions_target_their_harness_settings
+        PASS [   0.008s] (430/559) agent_harness outbound::channel_announcer::test::every_reply_names_its_session
+        PASS [   0.007s] (431/559) agent_harness outbound::channel_announcer::test::only_the_answer_and_a_question_notify_the_thread
+        PASS [   0.008s] (432/559) agent_harness outbound::channel_announcer::test::reply_target_carries_the_originating_channel_message
+        PASS [   0.049s] (433/559) agent_harness outbound::channel_announcer::test::shared_thread_and_dm_snapshots_omit_raw_tool_details
+        PASS [   0.007s] (434/559) agent_harness outbound::channel_announcer::test::the_reply_serializes_as_the_endpoint_reads_it
+        PASS [   0.007s] (435/559) agent_harness outbound::channel_prompt_context::test::a_claimed_root_or_parent_cannot_link_an_unrelated_session
+        PASS [   0.006s] (436/559) agent_harness outbound::channel_prompt_context::test::a_failed_read_is_not_mistaken_for_a_gone_message
+        PASS [   0.006s] (437/559) agent_harness outbound::channel_prompt_context::test::an_access_check_that_could_not_answer_is_not_a_refusal
+        PASS [   0.007s] (438/559) agent_harness outbound::channel_prompt_context::test::document_origin_checks_its_parent_capability_and_root
+        PASS [   0.008s] (439/559) agent_harness outbound::channel_prompt_context::test::initiative_origin_mints_parent_capability_and_rechecks_revocation
+        PASS [   0.008s] (440/559) agent_harness outbound::channel_prompt_context::test::revoked_access_never_reads_message_content
+        PASS [   0.006s] (441/559) agent_harness outbound::connected_apps::test::a_connect_grant_outranks_an_overlay
+        PASS [   0.008s] (442/559) agent_harness outbound::connected_apps::test::overlaid_apps_are_connected_through_their_native_server_only
+        PASS [   0.117s] (443/559) agent_harness outbound::conversation_turns::test::a_bootstrapping_session_does_not_starve_admission_or_replies
+        PASS [   0.108s] (444/559) agent_harness outbound::conversation_turns::test::a_conversation_reports_what_it_shows_however_long_it_grows
+        PASS [   0.109s] (445/559) agent_harness outbound::conversation_turns::test::a_failed_delivery_attempt_never_fails_a_turn_another_replica_claimed
+        PASS [   0.149s] (446/559) agent_harness outbound::conversation_turns::test::a_failure_older_than_the_reported_turns_still_retries
+        PASS [   0.180s] (447/559) agent_harness outbound::conversation_turns::test::a_lease_waits_for_a_busy_slot_instead_of_refusing
+        PASS [   0.136s] (448/559) agent_harness outbound::conversation_turns::test::a_refused_reset_leaves_the_context_free
+        PASS [   0.119s] (449/559) agent_harness outbound::conversation_turns::test::a_released_context_lease_is_free_at_once
+        PASS [   0.111s] (450/559) agent_harness outbound::conversation_turns::test::a_running_turn_blocks_reset_and_completed_context_is_retained
+        PASS [   4.355s] (451/559) agent_harness domain::service::test::chat_reply::conversations::recovered_messages_dispatch_in_durable_order_even_when_delivered_in_reverse
+        PASS [   0.106s] (452/559) agent_harness outbound::conversation_turns::test::admission_never_waits_behind_a_reply
+        PASS [   0.131s] (453/559) agent_harness outbound::conversation_turns::test::an_explicit_retry_waits_for_reply_reconciliation_and_mints_only_one_new_attempt
+        PASS [   0.133s] (454/559) agent_harness outbound::conversation_turns::test::concurrent_replicas_admit_one_record_and_only_one_claim_can_run
+        PASS [   0.137s] (455/559) agent_harness outbound::conversation_turns::test::interrupted_work_holds_its_session_queue_until_an_explicit_decision
+        PASS [   0.135s] (456/559) agent_harness outbound::conversation_turns::test::recovery_offers_only_turns_a_claim_could_take
+        PASS [   0.129s] (457/559) agent_harness outbound::conversation_turns::test::replay_after_reset_retains_the_original_session_payload_and_terminal_deduplication
+        PASS [   0.128s] (458/559) agent_harness outbound::conversation_turns::test::reply_claims_release_on_drop_and_stale_finalizers_cannot_hide_a_late_answer
+        PASS [   0.143s] (459/559) agent_harness outbound::conversation_turns::test::retry_racing_the_first_terminal_reservation_cannot_discard_a_postable_reply
+        PASS [   0.162s] (460/559) agent_harness outbound::conversation_turns::test::reset_cancels_undispatched_work_and_serializes_with_claims
+        PASS [   0.115s] (461/559) agent_harness outbound::conversation_turns::test::settings_remain_pinned_after_reconnect_and_new_sessions_adopt_edits
+        PASS [   0.115s] (462/559) agent_harness outbound::conversation_turns::test::starting_fresh_requires_owner_and_current_persona_access
+        PASS [   0.129s] (463/559) agent_harness outbound::conversation_turns::test::terminal_reply_ids_require_the_current_unfinalized_attempt_and_saved_flight
+        PASS [   0.130s] (464/559) agent_harness outbound::conversation_turns::test::two_personas_keep_separate_turns_for_one_message
+        PASS [   0.007s] (465/559) agent_harness outbound::cursor::manager::test::a_pipe_held_open_past_its_deadline_warns_once_per_interval
+        PASS [   0.008s] (466/559) agent_harness outbound::cursor::manager::test::a_pipe_is_not_idle_while_a_command_is_pending
+        PASS [   0.008s] (467/559) agent_harness outbound::cursor::manager::test::a_pipe_is_not_idle_while_cursor_is_running_a_turn
+        PASS [   0.862s] (468/559) agent_harness outbound::cursor::manager::test::a_foreign_run_found_by_a_prompt_is_recovered_after_its_response
+        PASS [   0.048s] (469/559) agent_harness outbound::cursor::manager::test::an_idle_pipe_is_shut_down
+        PASS [   0.009s] (470/559) agent_harness outbound::cursor::manager::test::preflight_only_requests_a_connection_when_no_key_is_saved
+        PASS [   0.008s] (471/559) agent_harness outbound::cursor::manager::test::preflight_propagates_key_errors_instead_of_requesting_a_connection
+        PASS [   0.856s] (472/559) agent_harness outbound::cursor::manager::test::resume_answers_session_load_even_before_an_agent_was_minted
+        PASS [   0.858s] (473/559) agent_harness outbound::cursor::manager::test::resume_restores_the_persisted_identity
+        PASS [   0.858s] (474/559) agent_harness outbound::cursor::manager::test::session_new_mcp_servers_reach_the_created_agent
+        PASS [   3.554s] (475/559) agent_harness outbound::cursor::manager::test::an_idle_foreign_run_streams_live_to_the_host
+        PASS [   0.857s] (476/559) agent_harness outbound::cursor::manager::test::spawn_uses_the_owners_default_model_and_effort
+        PASS [   0.008s] (477/559) agent_harness outbound::cursor::manager::test::spawning_without_a_registered_key_says_so
+        PASS [   0.027s] (478/559) agent_harness outbound::cursor::manager::test::teardown_archives_and_forgets
+        PASS [   0.010s] (479/559) agent_harness outbound::cursor::manager::test::teardown_forgets_the_session_even_when_the_key_is_gone
+        PASS [   0.009s] (480/559) agent_harness outbound::cursor::repository_chooser::test::the_schema_allows_only_candidate_repositories
+        PASS [   0.009s] (481/559) agent_harness outbound::cursor::repository_chooser::test::the_user_message_carries_candidates_recent_sessions_and_the_prompt
+        PASS [   0.010s] (482/559) agent_harness outbound::cursor::working_branch::test::branch_reports_require_activation_and_forward_repository_identity_and_fence
+        PASS [   0.009s] (483/559) agent_harness outbound::daytona::client::test::create_request_omits_cpu_memory_and_disk
+        PASS [   0.863s] (484/559) agent_harness outbound::cursor::manager::test::spawning_and_prompting_records_the_minted_agent
+        PASS [   0.011s] (485/559) agent_harness outbound::daytona::client::test::live_hot_resize_increases_cpu_and_memory_without_touching_disk
+        PASS [   0.008s] (486/559) agent_harness outbound::daytona::client::test::resize_request_omits_unset_fields
+        PASS [   0.009s] (487/559) agent_harness outbound::daytona::client::test::resize_404_cannot_post_means_the_route_is_missing
+        PASS [   0.007s] (488/559) agent_harness outbound::daytona::client::test::sandbox_list_deserializes_the_paginated_daytona_response
+        PASS [   0.007s] (489/559) agent_harness outbound::egress::test::a_selected_list_carries_none_of_the_owners_custom_servers
+        PASS [   0.008s] (490/559) agent_harness outbound::egress::test::a_selected_overlaid_app_is_advertised_as_its_native_server_once_connected
+        PASS [   0.009s] (491/559) agent_harness outbound::egress::test::a_selected_list_is_advertised_regardless_of_connections
+        PASS [   0.007s] (492/559) agent_harness outbound::egress::test::an_owner_with_no_connected_apps_still_gets_the_macro_server
+        PASS [   0.008s] (493/559) agent_harness outbound::egress::test::an_empty_selection_offers_nothing_of_the_owners
+        PASS [   0.008s] (494/559) agent_harness outbound::egress::test::custom_servers_are_advertised_under_unique_sanitized_names
+        PASS [   0.008s] (495/559) agent_harness outbound::egress::test::external_runtime_uses_host_reachable_urls_with_the_existing_session_credential
+        PASS [   0.008s] (496/559) agent_harness outbound::egress::test::lists_the_owners_enabled_custom_servers_by_key
+        PASS [   0.010s] (497/559) agent_harness outbound::egress::test::lists_enabled_app_slugs_verbatim
+        PASS [   0.009s] (498/559) agent_harness outbound::egress::test::native_provider_wins_without_hiding_other_hosted_apps
+        PASS [   0.008s] (499/559) agent_harness outbound::egress::test::points_every_acp_server_at_the_proxy
+        PASS [   0.008s] (500/559) agent_harness outbound::egress::test::restore_wraps_an_existing_token_in_a_fresh_listing
+        PASS [   0.008s] (501/559) agent_harness outbound::egress::test::the_egress_environment_does_not_print_its_secrets
+        PASS [   0.148s] (502/559) agent_harness outbound::external_replies::test::completion_before_target_survives_reconnect_and_keeps_the_original_reply
+        PASS [   0.008s] (503/559) agent_harness outbound::local::docker::test::a_sandbox_joins_the_compose_network_and_publishes_nothing
+        PASS [   0.007s] (504/559) agent_harness outbound::local::docker::test::exec_runs_the_command_through_a_login_shell
+        PASS [   0.170s] (505/559) agent_harness outbound::external_replies::test::unfinished_and_failed_replies_do_not_starve_later_recovery
+        PASS [   0.009s] (506/559) agent_harness outbound::local::docker::test::finding_by_label_includes_stopped_containers
+        PASS [   0.008s] (507/559) agent_harness outbound::local::docker::test::image_inspect_names_the_image
+        PASS [   0.008s] (508/559) agent_harness outbound::local::docker::test::listing_by_label_key_includes_stopped_containers
+        PASS [   0.008s] (509/559) agent_harness outbound::local::docker::test::run_detaches_and_keeps_the_container_alive
+        PASS [   0.007s] (510/559) agent_harness outbound::local::docker::test::run_passes_labels_and_environment_as_key_equals_value
+        PASS [   0.008s] (511/559) agent_harness outbound::local::manager::test::a_session_names_one_container
+        PASS [   0.007s] (512/559) agent_harness outbound::local::manager::test::a_sidecar_is_dialed_by_container_name
+        PASS [   0.008s] (513/559) agent_harness outbound::local::manager::test::sandbox_env_carries_the_model_key_and_egress
+        PASS [   0.008s] (514/559) agent_harness outbound::managed_containers::test::a_session_with_a_pending_command_is_not_reaped
+        PASS [   0.008s] (515/559) agent_harness outbound::managed_containers::test::activity_during_a_failed_stop_is_preserved
+        PASS [   0.008s] (516/559) agent_harness outbound::managed_containers::test::pending_and_stopping_containers_are_not_reaped_again
+        PASS [   0.007s] (517/559) agent_harness outbound::managed_containers::test::reap_stale_returns_only_containers_idle_for_the_limit
+        PASS [   0.009s] (518/559) agent_harness outbound::managed_containers::test::recording_activity_keeps_a_container_alive
+        PASS [   0.010s] (519/559) agent_harness outbound::notifications::test::a_planned_notification_becomes_an_ingress_request
+        PASS [   0.009s] (520/559) agent_harness outbound::notifications::test::an_ingress_failure_is_swallowed
+        PASS [   0.007s] (521/559) agent_harness outbound::prompt_mentions::test::a_prompt_naming_nobody_never_touches_access
+        PASS [   0.009s] (522/559) agent_harness outbound::prompt_mentions::test::a_lexical_failure_is_an_error_not_an_empty_answer
+        PASS [   0.009s] (523/559) agent_harness outbound::prompt_mentions::test::a_prompt_with_no_user_behind_it_shares_nothing
+        PASS [   0.009s] (524/559) agent_harness outbound::prompt_mentions::test::a_prompt_without_a_user_mention_tag_never_asks_the_lexical_service
+        PASS [   0.008s] (525/559) agent_harness outbound::prompt_mentions::test::an_editor_shares_the_session_with_everyone_they_mention
+        PASS [   0.009s] (526/559) agent_harness outbound::prompt_mentions::test::a_viewer_amplifies_nobody_and_only_existing_viewers_are_named
+        PASS [   0.007s] (527/559) agent_harness outbound::provision::test::clone_uses_session_egress_without_a_github_token
+        PASS [   0.009s] (528/559) agent_harness outbound::prompt_mentions::test::ids_that_are_not_macro_users_are_skipped
+        PASS [   0.007s] (529/559) agent_harness outbound::provision::test::the_script_and_the_harness_agree_on_shared_names
+        PASS [   0.007s] (530/559) agent_harness outbound::routing::test::a_database_backed_cursor_agent_routes_by_its_stored_harness
+        PASS [   0.010s] (531/559) agent_harness outbound::routing::test::codex_routes_all_lifecycle_operations_and_rejects_resize
+        PASS [   0.009s] (532/559) agent_harness outbound::routing::test::external_teardown_is_a_no_op_and_resume_still_refuses
+        PASS [   0.009s] (533/559) agent_harness outbound::routing::test::preflight_routes_by_kind_before_any_session_exists
+        PASS [   0.009s] (534/559) agent_harness outbound::routing::test::resume_and_teardown_route_by_the_stored_bot
+        PASS [   0.008s] (535/559) agent_harness outbound::routing::test::the_cursor_bot_routes_to_cursor_and_everything_else_to_the_sandbox
+        PASS [   0.010s] (536/559) agent_harness outbound::runtime_registry::test::a_bot_bound_to_a_disconnected_harness_has_nothing_to_bind_to
+        PASS [   0.012s] (537/559) agent_harness outbound::runtime_registry::test::a_close_waits_for_its_own_connected_write
+        PASS [   0.011s] (538/559) agent_harness outbound::runtime_registry::test::a_closed_connection_is_unlisted_so_nothing_binds_onto_it
+        PASS [   0.014s] (539/559) agent_harness outbound::runtime_registry::test::a_dial_initializes_and_reports_the_sessions_its_runtime_lists
+        PASS [   0.017s] (540/559) agent_harness outbound::runtime_registry::test::a_displaced_connections_close_reports_only_that_connection
+        PASS [   0.010s] (541/559) agent_harness outbound::runtime_registry::test::a_harness_with_no_runtime_has_nothing_to_bind_to
+        PASS [   0.011s] (542/559) agent_harness outbound::runtime_registry::test::a_redial_displaces_the_previous_connection
+        PASS [   0.010s] (543/559) agent_harness outbound::runtime_registry::test::a_redials_connection_outlives_the_one_it_displaced
+        PASS [   0.010s] (544/559) agent_harness outbound::runtime_registry::test::a_session_binds_onto_its_harness_connection
+        PASS [   0.010s] (545/559) agent_harness outbound::runtime_registry::test::many_bots_sessions_share_one_harness_connection
+        PASS [   0.010s] (546/559) agent_harness outbound::runtime_registry::test::renewal_lists_the_connections_this_process_holds
+        PASS [   0.008s] (547/559) agent_harness outbound::session_tasks::test::hidden_and_missing_tasks_look_alike_and_other_documents_are_not_tasks
+        PASS [   0.008s] (548/559) agent_harness outbound::session_tasks::test::maps_indexed_and_unindexed_pull_requests
+        PASS [   0.010s] (549/559) agent_harness outbound::sidecar::test::ends_when_the_sidecar_goes_away
+        PASS [   0.011s] (550/559) agent_harness outbound::sidecar::test::observes_valid_inbound_acp_frames
+        PASS [   0.010s] (551/559) agent_harness outbound::sidecar::test::reports_acp_ready_before_anything_else
+        PASS [   0.010s] (552/559) agent_harness outbound::sidecar::test::sending_fails_after_the_sidecar_goes_away
+        PASS [   0.011s] (553/559) agent_harness outbound::sidecar::test::survives_a_frame_it_cannot_parse
+        PASS [   0.010s] (554/559) agent_harness outbound::sidecar::test::unwraps_frames_to_the_agent_without_a_newline
+        PASS [   0.012s] (555/559) agent_harness outbound::sidecar::test::wraps_frames_from_the_agent
+        PASS [   0.011s] (556/559) agent_harness outbound::tool_approvals::test::every_state_of_a_held_call_is_recorded_and_told_to_the_harness
+        PASS [   0.011s] (557/559) agent_harness outbound::tool_approvals::test::stopping_or_deleting_a_session_releases_its_held_calls_before_publishing
+        PASS [   0.010s] (558/559) agent_harness testing::helpers::agent::test::a_prompt_before_session_new_is_answered_panics
+        PASS [   0.010s] (559/559) agent_harness testing::helpers::agent::test::the_handshake_order_is_accepted
+────────────
+     Summary [  16.925s] 559 tests run: 559 passed, 0 skipped

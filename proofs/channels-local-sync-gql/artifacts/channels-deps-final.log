@@ -1,0 +1,6 @@
+waiting for another Nix process to finish fetching input 'git+file://<workspace>'...
+error (ignored): SQLite database '<home>/.cache/nix/eval-cache-v6/aa08046a963def62e279528eac78ec82e719254782890eedfe8236999829cd52.sqlite' is busy
+    Finished `dev` profile [unoptimized + debuginfo] target(s) in 0.48s
+     Running `target/channel-checks/debug/xtask deps --check`
+    Finished `dev` profile [unoptimized + debuginfo] target(s) in 0.49s
+     Running `target/channel-checks/debug/xtask_deps --check`

@@ -1,0 +1,325 @@
+    Blocking waiting for file lock on artifact directory
+   Compiling unicode-segmentation v1.13.2
+   Compiling rayon-core v1.13.0
+   Compiling zune-core v0.5.1
+   Compiling quick-error v2.0.1
+   Compiling weezl v0.1.12
+   Compiling zune-inflate v0.2.54
+   Compiling fdeflate v0.3.7
+   Compiling fax v0.2.7
+   Compiling pxfm v0.1.29
+   Compiling lebe v0.5.3
+   Compiling color_quant v1.1.0
+   Compiling bit_field v0.10.3
+   Compiling byteorder-lite v0.1.0
+   Compiling qoi v0.4.1
+   Compiling bit-vec v0.8.0
+   Compiling unicode-general-category v1.1.0
+   Compiling borrow-or-share v0.2.4
+   Compiling jsonschema-value v0.58.6
+   Compiling micromap v0.3.0
+   Compiling num-cmp v0.1.0
+   Compiling bytecount v0.6.9
+   Compiling jsonschema-regex v0.58.6
+   Compiling uuid-simd v0.8.0
+   Compiling winnow v0.7.15
+   Compiling predicates-core v1.0.10
+   Compiling mockall_derive v0.13.1
+   Compiling termtree v0.5.1
+   Compiling anstyle v1.0.14
+   Compiling fragile v2.1.0
+   Compiling utf8-width v0.1.8
+   Compiling downcast v0.11.0
+   Compiling macro_db_migrator v0.1.0 (<workspace>/crates/macro_db_migrator)
+   Compiling crossbeam-deque v0.8.6
+   Compiling strum_macros v0.28.0
+   Compiling serde_repr v0.1.20
+   Compiling lazy-regex-proc_macros v3.6.1
+   Compiling libwebp-sys v0.9.6
+   Compiling rdkafka-sys v4.10.0+2.12.1
+   Compiling num_enum_derive v0.7.6
+   Compiling half v2.7.1
+   Compiling itertools v0.14.0
+   Compiling tracing-opentelemetry v0.32.1
+   Compiling fraction v0.17.0
+   Compiling dashmap v6.2.1
+   Compiling tokio-retry v0.3.2
+   Compiling macro_uuid v0.1.0 (<workspace>/crates/macro_uuid)
+   Compiling macro_user_id v0.1.0 (<workspace>/crates/macro_user_id)
+   Compiling model_file_type v0.1.0 (<workspace>/crates/model_file_type)
+   Compiling aws-sdk-sesv2 v1.119.0
+   Compiling aws-sdk-sqs v1.99.0
+   Compiling aws-sdk-sns v1.100.0
+   Compiling aws-msk-iam-sasl-signer v1.0.1
+   Compiling num_enum v0.7.6
+   Compiling lazy-regex v3.6.1
+   Compiling strum v0.28.0
+   Compiling model_owner v0.1.0 (<workspace>/crates/model_owner)
+   Compiling convert_case v0.11.0
+   Compiling convert_case v0.10.0
+   Compiling zune-jpeg v0.5.15
+   Compiling png v0.18.1
+   Compiling gif v0.14.2
+   Compiling moxcms v0.8.1
+   Compiling bit-set v0.8.0
+   Compiling predicates v3.1.4
+   Compiling fluent-uri v0.4.1
+   Compiling image-webp v0.2.4
+   Compiling html-escape v0.2.13
+   Compiling askama_parser v0.14.0
+   Compiling predicates-tree v1.0.13
+   Compiling derive_more-impl v2.1.1
+   Compiling rig-derive v0.41.0
+   Compiling tiff v0.11.3
+   Compiling rayon v1.12.0
+   Compiling exr v1.74.0
+   Compiling fancy-regex v0.19.2
+   Compiling askama_derive v0.14.0
+   Compiling referencing v0.58.6
+   Compiling mockall v0.13.1
+   Compiling rig-core v0.41.0
+   Compiling derive_more v2.1.1
+   Compiling askama v0.14.0
+   Compiling rdkafka v0.37.0
+   Compiling image v0.25.10
+   Compiling jsonschema v0.58.6
+   Compiling rig-agent v0.41.0
+   Compiling webp v0.3.1
+   Compiling workspace-hack v0.1.0 (<workspace>/crates/workspace-hack)
+   Compiling macro_env_var v0.1.0 (<workspace>/crates/macro_env_var)
+   Compiling model-entity v0.1.0 (<workspace>/crates/model-entity)
+   Compiling model_user v0.1.0 (<workspace>/crates/model_user)
+   Compiling models_pagination v0.1.0 (<workspace>/crates/models_pagination)
+   Compiling macro_event_topics v0.1.0 (<workspace>/crates/macro_event_topics)
+   Compiling harness_id v0.1.0 (<workspace>/crates/harness_id)
+   Compiling bot_token v0.1.0 (<workspace>/crates/bot_token)
+   Compiling harness_token v0.1.0 (<workspace>/crates/harness_token)
+   Compiling model-error-response v0.1.0 (<workspace>/crates/model-error-response)
+   Compiling agent_correlation v0.1.0 (<workspace>/crates/agent_correlation)
+   Compiling channel_sender v0.1.0 (<workspace>/crates/channel_sender)
+   Compiling prompt v0.1.0 (<workspace>/crates/prompt)
+   Compiling models_entity_access_management v0.1.0 (<workspace>/crates/models_entity_access_management)
+   Compiling models_bulk_upload v0.1.0 (<workspace>/crates/models_bulk_upload)
+   Compiling models_properties v0.1.0 (<workspace>/crates/models_properties)
+   Compiling rate_limit v0.1.0 (<workspace>/crates/rate_limit)
+   Compiling broadcast v0.1.0 (<workspace>/crates/broadcast)
+   Compiling last_online_tracker v0.1.0 (<workspace>/crates/last_online_tracker)
+   Compiling macro_tower_layers v0.1.0 (<workspace>/crates/macro_tower_layers)
+   Compiling ip_extractor v0.1.0 (<workspace>/crates/ip_extractor)
+   Compiling macro_env v0.1.0 (<workspace>/crates/macro_env)
+   Compiling genai_telemetry v0.1.0 (<workspace>/crates/genai_telemetry)
+   Compiling models_permissions v0.1.0 (<workspace>/crates/models_permissions)
+   Compiling attachment v0.1.0 (<workspace>/crates/attachment)
+   Compiling connection_gateway_models v0.1.0 (<workspace>/crates/connection_gateway_models)
+   Compiling mention_utils v0.1.0 (<workspace>/crates/mention_utils)
+   Compiling system_properties v0.1.0 (<workspace>/crates/system_properties)
+   Compiling ai_toolset v0.1.0 (<workspace>/crates/ai_toolset)
+   Compiling remote_env_var v0.1.0 (<workspace>/crates/remote_env_var)
+   Compiling kafka_util v0.1.0 (<workspace>/crates/kafka_util)
+   Compiling macro_service_urls v0.1.0 (<workspace>/crates/macro_service_urls)
+   Compiling connection_gateway_client v0.1.0 (<workspace>/crates/connection_gateway_client)
+   Compiling entity_access_db_utils v0.1.0 (<workspace>/crates/entity_access_db_utils)
+   Compiling macro_event_broker v0.1.0 (<workspace>/crates/macro_event_broker)
+   Compiling macro_auth v0.1.0 (<workspace>/crates/macro_auth)
+   Compiling share_permission_db_utils v0.1.0 (<workspace>/crates/share_permission_db_utils)
+   Compiling activity v0.1.0 (<workspace>/crates/activity)
+   Compiling notification v0.1.0 (<workspace>/crates/notification)
+   Compiling macro_authorization v0.1.0 (<workspace>/crates/macro_authorization)
+   Compiling ai_usage v0.1.0 (<workspace>/crates/ai_usage)
+   Compiling invite_email v0.1.0 (<workspace>/crates/invite_email)
+   Compiling agent v0.1.0 (<workspace>/crates/agent)
+   Compiling model_notifications v0.1.0 (<workspace>/crates/model_notifications)
+   Compiling model v0.1.0 (<workspace>/crates/model)
+   Compiling entity_access v0.1.0 (<workspace>/crates/entity_access)
+   Compiling properties v0.1.0 (<workspace>/crates/properties)
+   Compiling initiative v0.1.0 (<workspace>/crates/initiative)
+   Compiling messages v0.1.0 (<workspace>/crates/messages)
+    Finished `test` profile [unoptimized + debuginfo] target(s) in 9m 25s
+     Running unittests src/lib.rs (target/debug/deps/messages-e451f5e9ac9c07ab)
+
+running 176 tests
+test domain::agent_hops::test::bots_answering_each_other_count_one_hop_per_turn_since_the_last_person ... ok
+test domain::annotations::test::annotation_owner_cannot_delete_someone_elses_discussion ... ok
+test domain::models::test::a_markdown_anchor_carries_its_normalized_snapshot ... ok
+test domain::delivery::test::call_chat_only_reaches_authorized_live_subscribers ... ok
+test domain::delivery::test::channel_events_are_rejected_by_discussion_delivery ... ok
+test domain::delivery::test::initiative_mentions_recheck_access_without_granting_document_shares ... ok
+test domain::delivery::test::edits_and_reactions_only_publish_live_updates ... ok
+test domain::delivery::test::crm_records_without_an_owner_only_notify_mentions_and_participants ... ok
+test domain::delivery::test::document_mentions_inherit_link_sharing_for_uuid_parents ... ok
+test domain::effects::test::call_chat_reaches_both_agent_targets_and_the_parent_transport ... ok
+test domain::delivery::test::realtime_outage_does_not_skip_notifications ... ok
+test domain::effects::test::every_committed_target_is_attempted_even_if_any_or_all_fail ... ok
+test domain::models::test::a_marked_text_snapshot_is_trimmed_bounded_and_optional ... ok
+test domain::models::test::call_chat_does_not_disable_other_entity_discussions ... ok
+test domain::effects::test::typing_only_reaches_the_parent_transport ... ok
+test domain::models::test::email_threads_are_not_message_parents ... ok
+test domain::models::test::anchors_require_a_known_kind_and_stable_uuid ... ok
+test domain::delivery::test::document_events_never_reach_channel_delivery_and_vice_versa ... ok
+test domain::notification::test::channel_messages_do_not_generate_comment_notifications ... ok
+test domain::models::test::a_stored_anchor_without_a_snapshot_still_reads ... ok
+test domain::delivery::test::revoked_viewers_receive_neither_content_nor_notifications ... ok
+test domain::notification::test::initiative_recipients_follow_mentions_replies_assignments_and_live_access ... ok
+test domain::models::test::parent_identifiers_are_validated_and_round_trip ... ok
+test domain::notification::test::priority_deduplicates_and_excludes_actor_and_revoked_users ... ok
+test domain::models::test::spreadsheet_anchor_round_trips_without_legacy_metadata ... ok
+test domain::notification::test::roots_do_not_notify_participants ... ok
+test domain::ports::test::live_activity_finds_the_timeline_its_reads_would_show ... ok
+test domain::models::test::fig_anchor_round_trips_with_and_without_a_layer ... ok
+test domain::service::test::a_reply_author_can_delete_their_reply_but_not_the_root_above_it ... ok
+test domain::service::test::a_person_cannot_say_an_agent_session_is_typing ... ok
+test domain::service::test::a_missing_parent_is_rejected_by_the_service_before_persistence ... ok
+test domain::service::test::a_channel_root_keeps_its_thread_and_its_tombstone ... ok
+test domain::service::test::anchors_are_only_accepted_on_document_roots ... ok
+test domain::service::test::call_posts_use_the_canonical_thread_and_reject_another_root ... ok
+test domain::service::test::call_retries::call_retry_recovers_a_concurrent_commit_without_delivery ... ok
+test domain::service::test::call_retries::call_retry_does_not_restore_a_deleted_message ... ok
+test domain::service::test::an_agent_types_through_its_bot_naming_the_session ... ok
+test domain::service::test::call_retries::call_reply_retry_returns_the_existing_reply_without_delivery ... ok
+test domain::service::test::a_short_side_lends_its_room_to_the_other ... ok
+test domain::service::test::call_roots::a_call_root_page_entry_carries_the_calls_life_and_a_deleted_record_reads_as_such ... ok
+test domain::service::test::call_roots::asking_for_an_existing_root_again_creates_and_announces_nothing ... ok
+test domain::service::test::call_roots::a_call_root_is_created_from_the_calls_record_and_announced_only_as_itself ... ok
+test domain::service::test::call_retries::call_retry_cannot_recover_another_actor_or_parents_message ... ok
+test domain::service::test::call_root_deletion_preserves_chat_and_cannot_delete_other_authors ... ok
+test domain::service::test::call_retries::call_retry_still_rejects_a_deleted_parent ... ok
+test domain::service::test::call_retries::call_root_retry_returns_the_canonical_message_without_delivery ... ok
+test domain::service::test::call_viewers_can_read_but_cannot_post ... ok
+test domain::service::test::call_roots::a_call_without_a_channel_thread_has_no_root_to_create ... ok
+test domain::service::test::call_roots::a_stale_client_cannot_post_to_the_call_parent_of_a_channel_thread_call ... ok
+test domain::service::test::client_ids_must_be_recent_uuid_v7 ... ok
+test domain::service::test::bot_posts_and_edits_extract_mentions_and_preserve_trusted_attribution_and_policy ... ok
+test domain::service::test::call_roots::nobody_can_change_a_call_root_including_its_sender_and_a_channel_owner ... ok
+test domain::service::test::centered_mixed_timeline_preserves_anchor_and_pages_to_both_ends ... ok
+test domain::service::test::commenters_can_resolve_but_cannot_detach_document_text ... ok
+test domain::service::test::centered_window_reads_each_sides_share_not_a_page_per_side ... ok
+test domain::service::test::deleting_a_document_root_deletes_the_whole_discussion ... ok
+test domain::service::test::email_access_cannot_authorize_message_operations ... ok
+test domain::service::test::document_and_unknown_group_mentions_are_rejected_before_persistence ... ok
+test domain::service::test::document_owner_can_delete_another_authors_reply ... ok
+test domain::service::test::display_only_mention_kinds_are_stored_without_authorization ... ok
+test domain::service::test::document_editor_can_detach_another_authors_mark_without_deleting_the_thread ... ok
+test domain::service::test::event_posts::concurrent_event_delivery_recovers_the_committed_message ... ok
+test domain::service::test::event_posts::a_delayed_server_event_posts_but_a_client_with_the_same_old_id_is_rejected ... ok
+test domain::service::test::fig_anchors_need_bounded_ids_and_finite_positions ... ok
+test domain::service::test::event_posts::replay_preserves_edited_content_and_does_not_publish_again ... ok
+test domain::service::test::event_posts::replay_cannot_reuse_another_author_parent_or_thread ... ok
+test domain::service::test::event_posts::replay_returns_a_deleted_discussion_without_resurrecting_it ... ok
+test domain::service::test::event_posts::trusted_event_posts_still_validate_ids_content_and_references ... ok
+test domain::service::test::guest_chat::guest_read_and_post_require_current_session_for_the_same_call ... ok
+test domain::service::test::guest_chat::guest_posts_reject_empty_oversize_and_invalid_ids ... ok
+test domain::service::test::editor_reference_tags_are_authorized_for_posts_and_edits ... ok
+test domain::service::test::guest_chat::guest_reads_the_member_thread_and_posts_with_server_owned_attribution ... ok
+test domain::service::test::fig_anchors_require_a_design_root ... ok
+test domain::service::test::guest_chat::guest_retries_recover_the_original_without_publishing_again ... ok
+test domain::service::test::only_root_document_messages_can_have_anchors ... ok
+test domain::service::test::partial_attachment_changes_preserve_unreplaced_body_mentions_and_attachment_metadata ... ok
+test domain::service::test::other_commenter_cannot_delete_but_parent_owner_can_moderate ... ok
+test domain::service::test::inaccessible_references_are_rejected_before_persistence ... ok
+test domain::service::test::receipt_for_another_parent_cannot_authorize_a_message ... ok
+test domain::service::test::initiative::initiative_messages_use_parent_capabilities_and_authorship ... ok
+test domain::service::test::initiative::deleted_initiative_threads_reject_replies ... ok
+test domain::service::test::human_can_post_canonical_agent_mentions_on_documents_and_channels ... ok
+test domain::service::test::reaction_retries_return_the_message_without_publishing_another_change ... ok
+test domain::service::test::reconciling_an_unchanged_bot_reply_does_not_publish_a_second_completion ... ok
+test domain::service::test::initiative::initiative_discussions_resolve_but_never_accept_document_anchors ... ok
+test domain::service::test::replies_must_target_a_live_root_in_the_same_parent ... ok
+test domain::service::test::view_access_cannot_mint_a_write_receipt ... ok
+test domain::service::test::system_timeline_rejects_message_filters_and_keeps_discussions_message_only ... ok
+test domain::service::test::thread_patch_cannot_detach_non_markdown_anchors ... ok
+test domain::service::timeline::test::activity_only_pages_can_continue_without_messages ... ok
+test domain::service::test::user_mentions_do_not_require_or_grant_parent_sharing ... ok
+test domain::service::test::spreadsheet_anchors_require_a_spreadsheet_root_and_valid_range ... ok
+test domain::service::test::thread_reads::paged_thread_and_root_reads_share_rest_parent_and_thread_policy ... ok
+test domain::service::timeline::test::exhausted_activity_only_page_has_no_next_cursor ... ok
+test domain::service::test::tombstoned_messages_are_immutable ... ok
+test domain::service::timeline::test::forward_page_keeps_nearest_items_and_returns_newest_first ... ok
+test domain::service::timeline::test::mixed_pages_share_uuid_ties_and_bounds ... ok
+test domain::service::timeline::test::message_source_lookahead_survives_full_merged_page ... ok
+test inbound::toolset::test::a_comment_through_an_mcp_client_names_the_client ... ok
+test inbound::toolset::test::comment_needs_a_target ... ok
+test inbound::toolset::test::comment_needs_comment_access ... ok
+test inbound::toolset::test::comment_on_a_project_posts_as_the_bot_for_the_user ... ok
+test inbound::toolset::test::comment_on_an_unknown_item_points_at_the_kind ... ok
+test domain::service::timeline::test::response_tags_each_entry_with_its_kind ... ok
+test inbound::toolset::test::delete_comment_explains_who_can_delete ... ok
+test inbound::toolset::test::delete_comment_reports_whether_the_thread_went_with_it ... ok
+test inbound::toolset::test::comments_from_two_agents_post_as_each_agent_for_the_user ... ok
+test inbound::toolset::test::edit_comment_rewrites_the_users_own_comment_as_the_user ... ok
+test inbound::toolset::test::edit_comment_rejects_empty_text ... ok
+test inbound::toolset::test::edit_comment_explains_that_only_the_author_can_edit ... ok
+test inbound::toolset::test::entity_type_without_entity_id_is_refused ... ok
+test inbound::toolset::test::read_discussion_on_an_unknown_item_points_at_the_kind ... ok
+test inbound::toolset::test::read_discussion_rejects_an_invalid_id ... ok
+test inbound::toolset::test::reply_in_a_channel_thread_is_refused ... ok
+test inbound::toolset::test::reply_by_thread_id_alone_finds_its_item ... ok
+test inbound::toolset::test::reply_to_an_unknown_thread_says_so ... ok
+test inbound::toolset::test::reply_to_a_thread_not_on_the_item_says_so ... ok
+test inbound::toolset::test::resolve_defaults_to_resolving ... ok
+test inbound::toolset::test::read_discussion_lists_threads_oldest_first_with_every_live_reply ... ok
+test inbound::toolset::test::resolve_false_reopens_the_thread ... ok
+test inbound::toolset::test::resolve_needs_comment_access ... ok
+test inbound::toolset::test::reply_with_its_item_given_needs_no_lookup ... ok
+test inbound::toolset::test::resolve_resolves_the_thread_as_the_bot_for_the_user ... ok
+test inbound::toolset::test::edit_comment_rewrites_the_assistants_comment_as_the_bot ... ok
+test outbound::broker::test::only_finalized_bot_replies_reach_agent_triggers_with_or_without_a_mention ... ok
+test outbound::broker::test::deletions_publish_and_reactions_typing_and_thread_state_stay_off_the_topic ... ok
+test outbound::broker::test::an_edit_publishes_patched_and_attachment_deltas ... ok
+test outbound::broker::test::a_post_publishes_posted_attachment_and_one_mention_per_entity_for_both_parents ... ok
+test inbound::toolset::test::tool_schemas_are_valid ... ok
+test domain::service::test::a_group_remains_one_authored_reference_and_resolves_current_recipients_on_post_and_edit ... ok
+test outbound::pg_message_repo::historical::test::validates_timestamps_ids_counts_and_byte_limits ... ok
+test outbound::pg_message_repo::test::shared_reads_preserve_system_and_deleted_bot_profiles ... ok
+test outbound::pg_message_repo::test::channel_and_document_attachments_use_message_parent_identity ... ok
+test outbound::pg_message_repo::test::a_mark_identifies_one_live_discussion_per_document ... ok
+test outbound::pg_message_repo::test::imported_call_discussion_needs_no_native_session ... ok
+test outbound::pg_message_repo::test::guests_and_members_share_the_persisted_call_discussion ... ok
+test outbound::pg_message_repo::test::a_deleted_discussion_reads_back_as_a_root_tombstone_without_replies ... ok
+test outbound::pg_message_repo::test::concurrent_first_call_messages_share_one_thread ... ok
+test outbound::pg_message_repo::test::thread_identity_tombstones_and_parent_isolation ... ok
+test outbound::pg_message_repo::historical::test::reaction_failure_rolls_back_savepoint_and_outer_transaction_stays_usable ... ok
+test outbound::pg_message_repo::historical::test::reactions_mentions_are_unique_and_have_no_live_effects ... ok
+test outbound::pg_message_repo::historical::test::read_targets_validate_live_roots_and_preserve_orphan_structure ... ok
+test outbound::pg_message_repo::test::client_supplied_ids_are_kept_and_never_reused ... ok
+test outbound::pg_message_repo::historical::test::rejects_foreign_missing_reply_and_deleted_roots ... ok
+test outbound::pg_message_repo::historical::test::body_patch_is_guarded_silent_and_transactional ... ok
+test outbound::pg_message_repo::test::placeable_anchor_creation_is_atomic_with_its_root ... ok
+test outbound::pg_message_repo::historical::test::existing_id_is_a_conflict_without_partial_writes_or_overwrite ... ok
+test outbound::pg_message_repo::test::discussion_delivery_context_reads_document_assignees_and_thread_authors ... ok
+test outbound::pg_message_repo::historical::test::roots_replies_attribution_and_order_across_batches ... ok
+test outbound::pg_message_repo::test::attachments_read_back_in_the_order_they_were_sent ... ok
+test outbound::pg_message_repo::test::fig_threads_round_trip_on_layers_and_the_canvas ... ok
+test outbound::pg_message_repo::test::quick_call_chat_survives_archiving ... ok
+test outbound::pg_message_repo::test::deleted_markdown_threads_keep_paged_cleanup_identity ... ok
+test outbound::pg_message_repo::test::parent_of_names_only_a_live_message_parent ... ok
+test outbound::pg_message_repo::test::roots_get_thread_rows_without_the_bookkeeping_trigger ... ok
+test outbound::pg_message_repo::test::a_markdown_anchor_stores_the_marked_text_beside_its_mark ... ok
+test outbound::pg_message_repo::test::highlight_attachment_is_scoped_and_explicit_thread_deletion_preserves_highlight ... ok
+test outbound::pg_message_repo::test::soft_deleted_parents_disappear_and_cursor_does_not_repeat_roots ... ok
+test outbound::pg_message_repo::test::reactions_attachments_and_resolution_use_shared_message_data ... ok
+test outbound::pg_message_repo::test::schema_drop::channel_parent_fk_rejects_missing_channels_and_cascades ... ok
+test outbound::pg_message_repo::test::spreadsheet_threads_round_trip_resolve_and_delete ... ok
+test outbound::pg_message_repo::test::agent_context_stays_in_the_document_thread_and_omits_tombstones ... ok
+test outbound::pg_message_repo::test::initiative::initiative_threads_reject_cross_parent_replies_and_thread_deletion_hides_messages ... ok
+test outbound::pg_message_repo::test::retrying_first_call_message_cannot_append_it_twice ... ok
+test outbound::pg_message_repo::test::pdf_root_tombstone_keeps_anchor_and_thread_deletion_removes_placeable ... ok
+test outbound::pg_message_repo::test::replacement_attachments_preserve_retained_ids_and_remove_only_missing_items ... ok
+test outbound::pg_message_repo::test::detaching_a_mark_retains_the_complete_thread_and_makes_it_unanchored ... ok
+test outbound::pg_message_repo::test::call_chat_survives_archiving_and_is_removed_with_the_record ... ok
+test outbound::pg_message_repo::test::highlight_threads_read_the_text_the_highlight_covers ... ok
+test outbound::pg_message_repo::test::initiative::project_discussions_use_shared_parent_lifecycle_checks ... ok
+test outbound::pg_message_repo::test::timeline::timeline_keyset_rewrite_matches_previous_sql_selection ... ok
+test outbound::pg_message_repo::test::schema_drop::soft_delete_cleans_only_matching_parent_message_notifications ... ok
+test outbound::pg_message_repo::test::scheduled_call_chat_survives_archiving ... ok
+test outbound::pg_message_repo::test::both_parents_use_bounded_previews_and_bidirectional_windows ... ok
+test outbound::pg_message_repo::test::threads::thread_pages_preserve_import_order_ties_tombstones_and_bounds ... ok
+test outbound::pg_message_repo::test::legacy_ids_resolve_through_the_import_mapping_tables ... ok
+
+test result: ok. 176 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 1.26s
+
+   Doc-tests messages
+
+running 0 tests
+
+test result: ok. 0 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s
+

@@ -1,0 +1,55 @@
+    Blocking waiting for file lock on build directory
+    Checking graphql_channel v0.1.0 (<workspace>/crates/graphql_channel)
+error[E0433]: failed to resolve: use of unresolved module or unlinked crate `nom`
+ --> crates/graphql_channel/src/inputs.rs:7:5
+  |
+7 | use nom::{
+  |     ^^^ use of unresolved module or unlinked crate `nom`
+  |
+  = help: if you wanted to use a crate named `nom`, use `cargo add nom` to add it to your `Cargo.toml`
+
+error[E0432]: unresolved import `nom`
+ --> crates/graphql_channel/src/inputs.rs:7:5
+  |
+7 | use nom::{
+  |     ^^^ use of unresolved module or unlinked crate `nom`
+  |
+  = help: if you wanted to use a crate named `nom`, use `cargo add nom` to add it to your `Cargo.toml`
+
+error[E0282]: type annotations needed
+   --> crates/graphql_channel/src/inputs.rs:160:23
+    |
+160 |     let micros: i64 = micros
+    |                       ^^^^^^ cannot infer type
+
+error[E0282]: type annotations needed
+   --> crates/graphql_channel/src/inputs.rs:166:13
+    |
+166 |         id: id
+    |             ^^ cannot infer type
+
+error[E0282]: type annotations needed
+   --> crates/graphql_channel/src/inputs.rs:201:13
+    |
+201 |             prefix
+    |             ^^^^^^ cannot infer type
+
+error[E0433]: failed to resolve: use of unresolved module or unlinked crate `nom`
+   --> crates/graphql_channel/src/inputs.rs:157:17
+    |
+157 |     let parsed: nom::IResult<&str, (&str, &str)> =
+    |                 ^^^ use of unresolved module or unlinked crate `nom`
+    |
+    = help: if you wanted to use a crate named `nom`, use `cargo add nom` to add it to your `Cargo.toml`
+
+error[E0433]: failed to resolve: use of unresolved module or unlinked crate `nom`
+   --> crates/graphql_channel/src/inputs.rs:194:17
+    |
+194 |     let parsed: nom::IResult<&str, (&str, &str)> =
+    |                 ^^^ use of unresolved module or unlinked crate `nom`
+    |
+    = help: if you wanted to use a crate named `nom`, use `cargo add nom` to add it to your `Cargo.toml`
+
+Some errors have detailed explanations: E0282, E0432, E0433.
+For more information about an error, try `rustc --explain E0282`.
+error: could not compile `graphql_channel` (lib) due to 7 previous errors

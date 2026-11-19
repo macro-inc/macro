@@ -1,0 +1,8 @@
+warning: Git tree '<workspace>' is dirty
+error (ignored): SQLite database '<home>/.cache/nix/eval-cache-v6/4b4e23293215f7de65f34916c969a644d8882df70c4a32ef254e85c3a38d8c63.sqlite' is busy
+    Blocking waiting for file lock on package cache
+    Blocking waiting for file lock on package cache
+    Finished `dev` profile [unoptimized + debuginfo] target(s) in 1.05s
+     Running `target/channel-checks/debug/xtask deps --check`
+    Finished `dev` profile [unoptimized + debuginfo] target(s) in 0.62s
+     Running `target/channel-checks/debug/xtask_deps --check`

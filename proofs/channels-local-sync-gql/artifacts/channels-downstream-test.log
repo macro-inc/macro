@@ -1,0 +1,97 @@
+warning: Git tree '<workspace>' is dirty
+    Blocking waiting for file lock on artifact directory
+   Compiling arrayvec v0.7.6
+   Compiling strict-num v0.1.1
+   Compiling arrayref v0.3.9
+   Compiling hash32 v0.3.1
+   Compiling heapless v0.9.3
+   Compiling alloc-no-stdlib v2.0.4
+   Compiling heapless v0.8.0
+   Compiling append-only-bytes v0.1.12
+   Compiling im v15.1.0
+   Compiling bytemuck_derive v1.12.0
+   Compiling derive_arbitrary v1.4.2
+   Compiling enum-as-inner v0.6.1
+   Compiling bitmaps v2.1.0
+   Compiling nonmax v0.5.5
+   Compiling loro-thunderdome v0.6.2
+   Compiling arref v0.1.0
+   Compiling leb128 v0.2.7
+   Compiling rand_xoshiro v0.6.0
+   Compiling ensure-cov v0.1.0
+   Compiling diff v0.1.13
+   Compiling ruzstd v0.9.1
+   Compiling enum_dispatch v0.3.13
+   Compiling md5 v0.7.0
+   Compiling num_cpus v1.17.0
+   Compiling deadpool-runtime v0.1.4
+   Compiling zerofrom v0.1.8
+   Compiling enum-as-inner v0.5.1
+   Compiling assert-json-diff v2.0.2
+   Compiling itertools v0.11.0
+   Compiling serde_columnar_derive v0.3.7
+   Compiling prost-derive v0.14.3
+   Compiling opentelemetry-appender-tracing v0.31.1
+   Compiling tracing-tree v0.4.1
+   Compiling tracing-panic v0.1.2
+   Compiling quick_cache v0.6.22
+   Compiling loro_fractional_index v1.13.0
+   Compiling rootcause-tracing v0.12.1
+   Compiling lz4_flex v0.11.6
+   Compiling specta v2.0.0-rc.25
+   Compiling bot_id v0.1.0 (<workspace>/crates/bot_id)
+   Compiling serde_with v3.21.0
+   Compiling hyper-timeout v0.5.2
+   Compiling aws-sdk-secretsmanager v1.105.0
+   Compiling bytemuck v1.25.0
+   Compiling arbitrary v1.4.2
+   Compiling prost v0.14.3
+   Compiling loro-rle v1.6.0
+   Compiling alloc-stdlib v0.2.4
+   Compiling pretty_assertions v1.4.1
+   Compiling sized-chunks v0.6.5
+   Compiling deadpool v0.12.3
+   Compiling yoke v0.8.2
+   Compiling serde_columnar v0.3.14
+   Compiling specta-serde v0.0.12
+   Compiling specta-typescript v0.0.12
+   Compiling dynamic_ui v0.1.0 (<workspace>/crates/dynamic_ui)
+   Compiling tonic v0.14.6
+   Compiling aws_lambda_events v0.16.1
+   Compiling agent-client-protocol-schema v1.6.0
+   Compiling qoi v0.4.1
+   Compiling font-types v0.12.6
+   Compiling tiny-skia-path v0.11.4
+   Compiling brotli-decompressor v5.0.3
+   Compiling generic-btree v0.10.7
+   Compiling loro-common v1.16.0
+   Compiling zerovec v0.11.6
+   Compiling zerotrie v0.2.4
+   Compiling tonic-prost v0.14.6
+   Compiling image v0.25.10
+   Compiling tiny-skia v0.11.4
+   Compiling read-fonts v0.45.0
+   Compiling agent-client-protocol v2.0.0 (https://github.com/agentclientprotocol/rust-sdk?rev=8769d16d10e0c9fa7e662ee18424a4313b06ea88#8769d16d)
+   Compiling loro-delta v1.13.0
+   Compiling skrifa v0.48.0
+   Compiling loro-kv-store v1.16.0
+   Compiling tinystr v0.8.3
+   Compiling potential_utf v0.1.5
+   Compiling opentelemetry-proto v0.31.0
+   Compiling webp v0.3.1
+   Compiling agent_runtime_protocol v0.1.0 (<workspace>/crates/agent_runtime_protocol)
+   Compiling fig_engine v0.1.0 (<workspace>/crates/fig_engine)
+   Compiling pptx_engine v0.1.0 (<workspace>/crates/pptx_engine)
+   Compiling icu_collections v2.2.0
+   Compiling loro-internal v1.16.2
+   Compiling icu_locale_core v2.2.0
+   Compiling opentelemetry-otlp v0.31.1
+   Compiling psd_engine v0.1.0 (<workspace>/crates/psd_engine)
+   Compiling ai_engine v0.1.0 (<workspace>/crates/ai_engine)
+   Compiling docx_engine v0.1.0 (<workspace>/crates/docx_engine)
+   Compiling icu_provider v2.2.0
+   Compiling loro v1.16.2
+   Compiling icu_normalizer v2.2.0
+   Compiling icu_properties v2.2.0
+   Compiling idna_adapter v1.2.2
+   Compiling idna v1.1.0

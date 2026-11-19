@@ -1,0 +1,141 @@
+warning: Git tree '<workspace>' is dirty
+   Compiling complete_graph v0.1.0 (<workspace>/crates/complete_graph)
+    Finished `release` profile [optimized] target(s) in 1m 35s
+     Running unittests src/lib.rs (target/channel-perf-release/release/deps/complete_graph-d195ad874a9c9aec)
+
+running 120 tests
+test edges::test::email_message_pagination_rejects_invalid_values ... ok
+test edges::test::email_message_pagination_accepts_valid_values ... ok
+test mail_cache_profile::test::only_explicit_supported_capabilities_opt_in ... ok
+test edges::test::email_message_pagination_uses_rest_compatible_defaults ... ok
+test schema::test::channel_perf::channel_latest_graphql_and_rest_server_timings ... ignored, requires read-only seeded channel database
+test schema::test::calendar::calendar_mutations_run_for_the_authenticated_viewer ... ok
+test schema::test::calendar::calendar_fields_fail_without_the_calendar_context ... ok
+test schema::test::activity_feed_pages_by_cursor_and_carries_unknown_actions ... ok
+test schema::test::activity_overview_uses_the_authenticated_subject_and_requested_zone ... ok
+test schema::test::activity_updates_subscribes_as_the_authenticated_user ... ok
+test schema::test::calendar::calendar_fields_read_through_request_data_for_the_viewer ... ok
+test schema::test::work_feed::work_feed_pages_hydrated_stacked_entries_for_the_viewer ... ok
+test schema::test::work_feed::work_feed_rejects_a_bad_cursor_before_reading ... ok
+test sdl_test::crm_associations_scope_soup_and_compose_in_document_trees ... ok
+test sdl_test::calendar_reads_hang_off_the_authenticated_user ... ok
+test sdl_test::activity_overview_is_a_user_scoped_embedded_value ... ok
+test sdl_test::channel_reads_hang_off_the_authenticated_user ... ok
+test sdl_test::contacts_reads_have_viewer_scoped_entity_keys ... ok
+test sdl_test::crm_records_carry_their_pipeline_entries ... ok
+test sdl_test::email_senders_are_embedded_and_legacy_participants_remain_available ... ok
+test sdl_test::database_rows_are_an_opt_in_soup_entity_named_by_table ... ok
+test sdl_test::initiative_reads_and_mutations_share_the_canonical_soup_entity ... ok
+test sdl_test::saved_view_contract_is_composed_under_authenticated_user_and_mutations ... ok
+test sdl_test::property_values_are_a_typed_union_without_soup_names ... ok
+test sdl_test::sdl_matches_committed_schema_graphql ... ok
+test sdl_test::schema_types_and_fields_have_descriptions ... ok
+test sdl_test::scheduled_actions_hang_off_the_authenticated_user ... ok
+test sdl_test::soup_interface_exposes_the_complete_shared_entity_contract ... ok
+test sdl_test::soup_response_schema_exposes_frontend_fields ... ok
+test schema::test::agent_session_is_read_from_the_primary_not_the_list_replica ... ok
+test schema::test::agent_session_activity_appended_refuses_a_session_outside_the_viewers_scope ... ok
+test schema::test::agent_session_read_carries_the_viewer_team_for_its_linked_pr ... ok
+test schema::test::agent_session_log_appended_streams_runs_for_an_accessible_session ... ok
+test schema::test::folders_are_nested_under_the_authenticated_user ... ok
+test schema::test::soup_passes_team_receipt_to_frecency_enriched_path ... ok
+test schema::test::database_view_rows::a_denied_database_never_reaches_the_view_reader ... ok
+test schema::test::user_id_resolves_without_touching_services ... ok
+test schema::test::registered_work::updates_refetch_on_a_schedule_to_catch_revoked_access ... ok
+test schema::test::stale_client::soup_query_from_a_pre_removal_client_still_resolves ... ok
+test schema::test::soup_entity_is_null_when_the_viewer_cannot_see_it ... ok
+test schema::test::form_activity::an_editor_reads_the_forms_timeline_responses_included ... ok
+test schema::test::soup_patches::mutation_effects_share_non_nullable_hydration_and_omit_misses ... ok
+test schema::test::email_archive::archive_undo_and_redo_return_primary_state_without_reading_the_soup_replica ... ok
+test schema::test::favorites_are_nested_under_the_authenticated_user ... ok
+test schema::test::group_soup_nests_items_in_bins_and_reuses_cached_authorization ... ok
+test schema::test::soup_input_rejects_initial_and_continuation_together ... ok
+test schema::test::email_archive::bulk_archive_returns_primary_state_for_each_thread_without_reading_the_soup_replica ... ok
+test schema::test::contacts::contacts_are_read_from_request_data_only_for_the_authenticated_viewer ... ok
+test schema::test::soup_updates_subscribes_as_the_authenticated_user ... ok
+test schema::test::work_feed::mark_done_requires_an_authenticated_user ... ok
+test schema::test::soup_patches::dedup_uses_entity_type_and_id_and_preserves_last_occurrence_order ... ok
+test schema::test::email_thread_returns_null_when_the_viewer_cannot_read_the_thread ... ok
+test schema::test::initiative::initiative_detail_query_does_not_expose_a_project_missing_from_authorized_soup ... ok
+test schema::test::work_feed::mark_done_completes_the_observed_revision_and_undo_restores_it ... ok
+test schema::test::soup_returns_the_saved_chat_model ... ok
+test schema::test::internal_authorization_uses_the_acting_user_claim ... ok
+test schema::test::scheduled_actions::user_id_does_not_read_routines_and_the_list_receives_the_viewer ... ok
+test schema::test::email_archive::thread_read_repository_errors_are_masked_before_soup_lookup ... ok
+test schema::test::email_thread_rejects_an_invalid_thread_id_before_loading_soup ... ok
+test schema::test::mail_previews_and_capsules_share_a_lazy_batched_reader ... ok
+test schema::test::expired_credentials_return_the_safe_authorization_error ... ok
+test schema::test::email_thread_metadata_is_lazy_and_batches_across_threads ... ok
+test schema::test::unauthenticated_request_fails_at_the_resolver ... ok
+test schema::test::channel::channel_reads_require_the_channel_context ... ok
+test schema::test::soup_patches::initiative_patches_hydrate_and_delete_the_soup_record ... ok
+test schema::test::email_catalog_fields_use_the_authenticated_user_and_remain_direct_user_fields ... ok
+test schema::test::email_archive::sequential_read_mutations_do_not_reuse_the_first_mutation_snapshot ... ok
+test schema::test::soup_passes_team_receipt_to_raw_path ... ok
+test schema::test::notification_inbox::one_notification_of_a_row_is_marked_done ... ok
+test schema::test::email_message_full_fields_request_the_full_edge_payload ... ok
+test schema::test::flat_soup_emits_server_fact_supplements_for_documents_and_mail ... ok
+test schema::test::soup_patches::updates_hydrate_from_the_primary_before_the_replica_replays_them ... ok
+test schema::test::crm_scoped_soup_resolves_team_membership_lazily ... ok
+test schema::test::database_view_rows::view_pages_return_shared_row_entities_in_the_service_order ... ok
+test schema::test::database_row::a_row_of_a_named_table_comes_back_with_its_placement ... ok
+test schema::test::soup_patches::missing_update_does_not_suppress_valid_sibling_or_explicit_delete ... ok
+test schema::test::soup_patches::batch_keeps_last_operation_per_entity_and_batches_hydration ... ok
+test schema::test::soup_patches::pr_and_linked_session_updates_serialize_current_metadata ... ok
+test schema::test::email_thread_returns_the_canonical_soup_type_and_forwards_message_pagination ... ok
+test schema::test::email_archive::ordinary_email_queries_use_the_replica_while_mutations_reload_from_primary ... ok
+test schema::test::email_thread_redirect_reauthorizes_the_canonical_soup_entity ... ok
+test schema::test::agent_session_activity_appended_routes_only_the_requested_session ... ok
+test schema::test::invalid_credentials_return_the_safe_authorization_error ... ok
+test schema::test::registered_work::registered_work_caps_the_accounts_one_request_may_name ... ok
+test schema::test::registered_work::updates_invalidate_then_end_when_the_source_ends ... ok
+test schema::test::team_activity::team_activity_pages_the_teammate_feed_of_the_authenticated_user ... ok
+test schema::test::notification_inbox::the_inbox_is_cleared_one_batch_at_a_time ... ok
+test schema::test::notification_inbox::rows_are_marked_done_undone_and_seen ... ok
+test schema::test::notification_inbox::done_rejects_a_row_id_that_names_no_row ... ok
+test schema::test::email_mutations_return_primary_state_even_when_the_soup_replica_is_stale ... ok
+test schema::test::notification_inbox::notification_inbox_pages_groups_with_their_rows ... ok
+test schema::test::form_activity::a_respondent_cannot_read_the_timeline_that_names_other_respondents ... ok
+test schema::test::database_activity::database_activity_reads_the_timeline_of_a_database_the_viewer_can_see ... ok
+test schema::test::registered_work::registered_work_lists_entries_hydrated_for_the_viewer ... ok
+test schema::test::soup_entity_is_read_from_the_primary_not_the_list_replica ... ok
+test schema::test::soup_patches::two_missing_updates_log_identities_without_emitting_nulls_or_deletions ... ok
+test schema::test::crm_record::a_soup_crm_company_resolves_its_pipeline_entries ... ok
+test schema::test::entity_activity_is_lazy_and_batches_across_entities ... ok
+test schema::test::initiative::initiative_soup_and_detail_queries_share_identity_without_loading_domain_details ... ok
+test schema::test::soup_patches::chat_updates_hydrate_the_saved_model ... ok
+test schema::test::soup_patches::hydration_service_failure_is_an_error_not_a_deletion ... ok
+test schema::test::initiatives_are_returned_by_soup_with_shared_edges ... ok
+test schema::test::latest_email_message_full_fields_request_the_full_edge_payload ... ok
+test schema::test::email_thread_lookups_settle_access_before_reading_the_email_service ... ok
+test schema::test::email_message_delivery_status_alone_requests_the_full_edge_payload ... ok
+test schema::test::soup_patches::later_batches_can_update_the_same_entity_again ... ok
+test schema::test::channel::channel_thread_pages_match_rest_and_sort_keys_follow_import_order ... ok
+test schema::test::registered_work::updates_ask_for_a_refetch_rather_than_name_what_the_viewer_cannot_view ... ok
+test schema::test::registered_work::updates_ask_for_a_refetch_when_soup_hides_a_session_the_domain_allowed ... ok
+test schema::test::registered_work::updates_batch_upserts_and_removes_for_changed_sessions_only ... ok
+test schema::test::channel::changes::channel_changes_validate_sequences_and_preserve_access_scope ... ok
+test schema::test::channel::channel_single_message_matches_rest_and_respects_channel_access ... ok
+test schema::test::channel::changes::channel_page_watermarks_are_read_before_page_queries ... ok
+test schema::test::channel::changes::channel_changes_page_200_log_rows_and_hydrate_each_id_once ... ok
+test schema::test::channel::changes::channel_changes_reset_for_pruned_future_reset_and_lagged_cursors ... ok
+test schema::test::channel::changes::channel_changes_match_domain_current_states_tombstones_and_removed_ids ... ok
+test schema::test::channel::channel_reads_reject_ambiguous_or_invalid_positions ... ok
+test schema::test::channel::channel_timeline_matches_rest_every_page_and_around_window ... ok
+test schema::test::work_feed::work_feed_updates_batch_recomputed_patches ... ok
+test schema::test::notification_inbox::notification_inbox_updates_batch_recomputed_patches ... ok
+
+test result: ok. 119 passed; 0 failed; 1 ignored; 0 measured; 0 filtered out; finished in 0.74s
+
+     Running unittests src/bin/graphql_schema.rs (target/channel-perf-release/release/deps/graphql_schema-3cdfa312617414a5)
+
+running 0 tests
+
+test result: ok. 0 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s
+
+   Doc-tests complete_graph
+
+running 0 tests
+
+test result: ok. 0 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s
+

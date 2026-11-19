@@ -1,0 +1,786 @@
+warning: Git tree '<workspace>' is dirty
+RUSTFLAGS=-Dwarnings RUSTDOCFLAGS=-Dwarnings CARGO_TERM_COLOR=always SQLX_OFFLINE=true cargo check --workspace --all-features --exclude sync_service
+    Checking aws-lc-sys v0.45.0
+   Compiling aws-lc-rs v1.18.1
+   Compiling rustls v0.23.46
+    Checking libwebp-sys v0.9.6
+    Checking rdkafka-sys v4.10.0+2.12.1
+    Checking skrifa v0.48.0
+    Checking tokio-util v0.7.18
+    Checking loro v1.16.2
+   Compiling code_mode_assets v0.1.0 (<workspace>/crates/code_mode_assets)
+    Checking predicate-index v0.1.0 (<workspace>/crates/predicate_index)
+    Checking webp v0.3.1
+    Checking icu_provider v2.2.0
+    Checking aes-gcm v0.11.1
+   Compiling wasm-bindgen-shared v0.2.126
+    Checking salsa20 v0.11.0
+    Checking spki v0.8.0
+    Checking cbc v0.2.1
+    Checking rdkafka v0.37.0
+    Checking bitflags v1.3.2
+   Compiling prost v0.14.3
+    Checking crypto-bigint v0.7.6
+    Checking ff v0.14.0
+    Checking scrypt v0.12.0
+    Checking aws-smithy-async v1.2.14
+    Checking getrandom v0.3.4
+    Checking icu_normalizer v2.2.0
+    Checking icu_properties v2.2.0
+    Checking aws-smithy-types v1.4.8
+    Checking h2 v0.4.16
+   Compiling prost-types v0.14.3
+    Checking pkcs5 v0.8.1
+    Checking tower v0.5.3
+   Compiling unicode-width v0.1.14
+   Compiling wasm-bindgen-macro-support v0.2.126
+    Checking group v0.14.0
+    Checking rustls-webpki v0.103.16
+   Compiling logos v0.16.1
+   Compiling miette v7.6.0
+   Compiling wasm-bindgen v0.2.126
+    Checking pkcs8 v0.11.0
+    Checking base16ct v1.0.0
+    Checking sec1 v0.8.1
+    Checking hkdf v0.13.0
+    Checking aws-smithy-runtime-api v1.12.1
+    Checking signature v3.0.0
+    Checking sse-core v0.2.3
+    Checking idna_adapter v1.2.2
+    Checking fig_engine v0.1.0 (<workspace>/crates/fig_engine)
+    Checking pptx_engine v0.1.0 (<workspace>/crates/pptx_engine)
+   Compiling protox-parse v0.10.0
+   Compiling prost-reflect v0.16.5
+    Checking idna v1.1.0
+   Compiling prost-build v0.14.3
+    Checking rand_core v0.9.5
+    Checking symphonia-core v0.6.1
+   Compiling camino v1.2.2
+    Checking rand_chacha v0.9.0
+    Checking url v2.5.8
+    Checking rand v0.9.4
+    Checking ssh-encoding v0.3.0
+    Checking spin v0.9.9
+   Compiling indexmap v1.9.3
+    Checking keccak v0.2.2
+    Checking rustc-hash v1.1.0
+   Compiling guppy-workspace-hack v0.1.0
+   Compiling target-lexicon v0.13.5
+    Checking primefield v0.14.0
+    Checking elliptic-curve v0.14.1
+    Checking rfc6979 v0.6.0
+    Checking aws-smithy-schema v0.1.0
+    Checking wnaf v0.14.1
+    Checking ed25519 v3.0.0
+    Checking aws-smithy-eventstream v0.60.20
+    Checking poly1305 v0.9.1
+    Checking xtask_paths v0.1.0 (<workspace>/tooling/xtask/crates/xtask_paths)
+   Compiling universal_input v0.1.0 (<workspace>/crates/universal_input)
+    Checking symphonia-metadata v0.6.1
+    Checking blowfish v0.10.0
+    Checking blake2 v0.11.0
+    Checking hashbrown v0.12.3
+    Checking ecdsa v0.17.0
+    Checking primeorder v0.14.0
+   Compiling miniserde v0.1.45
+    Checking static_assertions v1.1.0
+    Checking symphonia-common v0.6.1
+    Checking argon2 v0.6.0
+    Checking bcrypt-pbkdf v0.11.0
+    Checking ssh-cipher v0.3.0
+    Checking aws-smithy-http v0.63.6
+   Compiling protox v0.10.0
+    Checking ed25519-dalek v3.0.0
+    Checking p384 v0.14.0
+    Checking hyper v1.9.0
+    Checking p521 v0.14.0
+    Checking p256 v0.14.0
+    Checking tokio-rustls v0.26.4
+   Compiling wasm-bindgen-macro v0.2.126
+    Checking sqlx-core v0.8.6
+    Checking rustls-platform-verifier v0.7.0
+    Checking tungstenite v0.28.0
+    Checking sha3 v0.11.0
+    Checking hickory-proto v0.26.3
+    Checking aws-credential-types v1.2.14
+    Checking hyper-rustls v0.27.9
+    Checking redis v1.2.1
+   Compiling clang-sys v1.8.1
+    Checking itertools v0.10.5
+    Checking aws-smithy-http-client v1.1.12
+    Checking reqwest v0.13.4
+    Checking tokio-tungstenite v0.28.0
+    Checking reqwest v0.12.28
+    Checking hyper-util v0.1.20
+    Checking kem v0.3.0
+    Checking agent_runtime_protocol v0.1.0 (<workspace>/crates/agent_runtime_protocol)
+    Checking module-lattice v0.2.3
+    Checking aws-smithy-runtime v1.11.3
+   Compiling libmimalloc-sys v0.1.49
+   Compiling whatsmeow_proto v0.1.0 (<workspace>/crates/whatsmeow_proto)
+    Checking rig-core v0.41.0
+    Checking async-openai v0.36.1
+    Checking sqlx-postgres v0.8.6
+    Checking rmcp v3.9.0
+    Checking livekit-api v0.4.24
+    Checking doppler-config v0.1.2
+    Checking opensearch v2.4.0
+    Checking aws-runtime v1.7.4
+    Checking aws-sdk-ssooidc v1.101.0
+    Checking aws-sdk-sts v1.104.0
+    Checking aws-sdk-sso v1.99.0
+    Checking aws-sdk-sqs v1.99.0
+    Checking aws-sdk-s3 v1.133.0
+    Checking aws-sdk-sns v1.100.0
+    Checking aws-config v1.8.17
+    Checking aws-sdk-sesv2 v1.119.0
+   Compiling sqlx-macros-core v0.8.6
+    Checking aws-msk-iam-sasl-signer v1.0.1
+    Checking aws-sdk-secretsmanager v1.105.0
+    Checking ai_engine v0.1.0 (<workspace>/crates/ai_engine)
+    Checking psd_engine v0.1.0 (<workspace>/crates/psd_engine)
+   Compiling sqlx-macros v0.8.6
+    Checking aws-sdk-dynamodb v1.112.0
+    Checking aws-sdk-kms v1.109.0
+    Checking sqlx v0.8.6
+    Checking macro_user_id v0.1.0 (<workspace>/crates/macro_user_id)
+    Checking bot_id v0.1.0 (<workspace>/crates/bot_id)
+    Checking document_sub_type v0.1.0 (<workspace>/crates/document_sub_type)
+    Checking model_owner v0.1.0 (<workspace>/crates/model_owner)
+    Checking notification_state v0.1.0 (<workspace>/crates/notification_state)
+    Checking agent_fold v0.1.0 (<workspace>/crates/folds/agent_fold)
+    Checking models_databases v0.1.0 (<workspace>/crates/models_databases)
+    Checking item_filters v0.1.0 (<workspace>/crates/item_filters)
+    Checking pgvector v0.4.1
+    Checking docx_engine v0.1.0 (<workspace>/crates/docx_engine)
+   Compiling mini-internal v0.1.45
+    Checking is-terminal v0.4.17
+   Compiling wayland-sys v0.31.11
+   Compiling proc-macro2-diagnostics v0.10.1
+   Compiling target-spec v3.6.0
+    Checking text-size v1.1.1
+    Checking countme v3.0.1
+    Checking concolor-query v0.3.3
+    Checking sponge-cursor v0.1.0
+    Checking rowan v0.16.1
+    Checking concolor v0.1.1
+    Checking sha3 v0.12.0
+    Checking item-filter-index v0.1.0 (<workspace>/crates/item_filter_index)
+    Checking ssh-key v0.7.0-rc.11
+    Checking hickory-net v0.26.1
+    Checking diffus v0.10.0
+    Checking ml-kem v0.3.2
+    Checking database_sql v0.1.0 (<workspace>/crates/database_sql)
+    Checking toml v0.5.11
+    Checking cfg-expr v0.20.8
+    Checking russh-cryptovec v0.62.0
+    Checking aws-smithy-observability v0.2.6
+    Checking moka v0.12.15
+    Checking async-compression v0.4.42
+    Checking x25519-dalek v2.0.1
+    Checking cbc v0.1.2
+    Checking jsonpath-rust v0.3.5
+    Checking generic-array v1.4.2
+    Checking num-bigint v0.5.1
+    Checking russh-util v0.52.0
+    Checking smol_str v0.3.2
+    Checking serde_spanned v0.6.9
+    Checking toml_datetime v0.6.11
+   Compiling wayland-backend v0.3.17
+   Compiling delegate v0.13.5
+    Checking rig-agent v0.41.0
+    Checking cargo-platform v0.3.3
+   Compiling rustix v0.38.44
+    Checking md5 v0.8.1
+    Checking hex-literal v1.1.0
+    Checking toml_write v0.1.2
+    Checking cargo_metadata v0.23.1
+    Checking hickory-resolver v0.26.1
+    Checking toml_edit v0.22.27
+    Checking serde_json_bytes v0.2.5
+    Checking async-stripe-types v1.0.0-rc.5
+    Checking tower-http v0.6.11
+    Checking russh v0.63.3
+    Checking js-sys v0.3.103
+    Checking guppy-summaries v0.7.1
+    Checking apollo-parser v0.8.6
+    Checking ariadne v0.6.0
+   Compiling whatsmeow_signal v0.1.0 (<workspace>/crates/whatsmeow_signal)
+    Checking aws-types v1.3.16
+    Checking aws-sigv4 v1.4.4
+    Checking pathdiff v0.2.3
+    Checking schemars v1.2.1
+    Checking tokio-stream v0.1.18
+    Checking x25519-dalek v3.0.0
+    Checking email-encoding v0.4.1
+   Compiling quick-xml v0.41.0
+   Compiling libloading v0.8.9
+    Checking libsignal-debug v0.105.2 (https://github.com/signalapp/libsignal?tag=v0.105.2#b3697555)
+   Compiling wayland-client v0.31.15
+    Checking debug-ignore v1.0.5
+    Checking nested v0.1.1
+    Checking typed-arena v2.0.2
+    Checking extended v0.1.0
+    Checking linux-raw-sys v0.4.15
+    Checking downcast-rs v1.2.1
+   Compiling bindgen v0.71.1
+    Checking symphonia-format-riff v0.6.1
+    Checking apollo-compiler v1.32.0
+    Checking guppy v0.17.26
+    Checking serde_dynamo v4.3.0
+    Checking libsignal-core v0.1.0 (https://github.com/signalapp/libsignal?tag=v0.105.2#b3697555)
+   Compiling wayland-scanner v0.31.11
+    Checking lettre v0.11.22
+   Compiling maud_macros v0.27.0
+    Checking async-stripe-shared v1.0.0-rc.5
+    Checking mimalloc v0.1.52
+    Checking symphonia-format-ogg v0.6.1
+    Checking symphonia-format-mkv v0.6.1
+    Checking symphonia-format-isomp4 v0.6.1
+    Checking aws-smithy-json v0.62.6
+    Checking lazy_static v1.5.0
+    Checking bebop v3.2.3
+   Compiling cexpr v0.6.0
+   Compiling strum_macros v0.26.4
+   Compiling icu_locale_data v2.2.0
+    Checking maud v0.27.0
+    Checking sync_service_bebop_schema v0.1.0 (<workspace>/services/sync-service/bebop-schema)
+    Checking toml v0.8.23
+    Checking aws-sdk-lambda v1.123.0
+    Checking tungstenite v0.29.0
+    Checking symphonia v0.6.1
+    Checking multer v3.1.0
+    Checking string_cache v0.8.9
+    Checking tower-cookies v0.11.0
+    Checking tungstenite v0.27.0 (https://github.com/signalapp/tungstenite-rs?rev=a1837ccfe96b6895a57352d7f0112e4557516c27#a1837ccf)
+   Compiling cache-core v0.1.0 (<workspace>/crates/client/cache-core)
+   Compiling darling_core v0.21.3
+   Compiling vte_generate_state_changes v0.1.2
+   Compiling memoffset v0.9.1
+    Checking arrayvec v0.5.2
+    Checking piston-float v1.0.1
+   Compiling indoc v2.0.7
+   Compiling pdfium-render v0.8.37
+   Compiling icu_collator_data v2.2.0
+    Checking opus-pure v0.2.1
+    Checking tokio-tungstenite v0.27.0
+    Checking vte v0.10.1
+    Checking vecmath v1.0.0
+    Checking strum v0.26.3
+    Checking wayland-protocols v0.32.13
+    Checking web-sys v0.3.103
+    Checking tokio-tungstenite v0.29.0
+    Checking markup5ever v0.11.0
+    Checking aws-smithy-query v0.60.15
+    Checking ahash v0.8.12
+    Checking futures-intrusive v0.5.0
+    Checking zstd-safe v8.2.0
+    Checking async-graphql-axum v7.2.1
+   Compiling nix v0.29.0
+    Checking utf16string v0.2.0
+   Compiling crc32c v0.6.8
+   Compiling branches v0.4.5
+   Compiling aegis v0.9.8
+   Compiling simsimd v6.5.16
+   Compiling turso_macros v0.8.0-pre.3 (https://github.com/tursodatabase/turso?rev=79163249538197d01dec5ea7f65519454ed792e2#79163249)
+   Compiling uncased v0.9.10
+   Compiling serde_yml v0.0.12
+   Compiling bigdecimal v0.4.10
+    Checking bumpalo v3.20.2
+   Compiling instability v0.3.13
+    Checking unsafe-libyaml v0.2.11
+    Checking bit-vec v0.6.3
+   Compiling turso_ext v0.8.0-pre.3 (https://github.com/tursodatabase/turso?rev=79163249538197d01dec5ea7f65519454ed792e2#79163249)
+    Checking maybe-owned v0.3.4
+    Checking bit-set v0.5.3
+    Checking zopfli v0.8.3
+   Compiling darling_macro v0.21.3
+    Checking serde_yaml v0.9.34+deprecated
+   Compiling darling v0.21.3
+   Compiling wasm-bindgen-futures v0.4.76
+    Checking html5ever v0.26.0
+    Checking zstd v0.14.3
+    Checking strip-ansi-escapes v0.1.1
+    Checking axum v0.8.9
+    Checking icu_locale v2.2.0
+    Checking wayland-protocols-wlr v0.3.12
+    Checking num-bigint-dig v0.8.6
+    Checking sharded-slab v0.1.7
+    Checking xtask_graph v0.1.0 (<workspace>/tooling/xtask/crates/xtask_graph)
+   Compiling worker-sys v0.8.1
+    Checking serde_with v3.21.0
+    Checking oauth2 v5.0.0
+   Compiling workspace-hack v0.1.0 (<workspace>/crates/workspace-hack)
+    Checking combine v4.6.7
+    Checking doppleganger-core v0.5.0
+   Compiling rs-libreoffice-bindings v0.0.7 (https://github.com/macro-inc/rs-libreoffice-bindings?rev=056a40ddfac1d9650be30b9f0b4b934e9266c7dc#056a40dd)
+    Checking backoff v0.4.0
+   Compiling merge_derive v0.2.0
+    Checking tree_magic_mini v3.2.2
+    Checking macro_env_var v0.1.0 (<workspace>/crates/macro_env_var)
+    Checking model-error-response v0.1.0 (<workspace>/crates/model-error-response)
+    Checking macro_env v0.1.0 (<workspace>/crates/macro_env)
+    Checking model_user v0.1.0 (<workspace>/crates/model_user)
+    Checking harness_id v0.1.0 (<workspace>/crates/harness_id)
+    Checking harness_token v0.1.0 (<workspace>/crates/harness_token)
+    Checking model-entity v0.1.0 (<workspace>/crates/model-entity)
+    Checking bot_token v0.1.0 (<workspace>/crates/bot_token)
+    Checking remote_env_var v0.1.0 (<workspace>/crates/remote_env_var)
+    Checking genai_telemetry v0.1.0 (<workspace>/crates/genai_telemetry)
+    Checking models_pagination v0.1.0 (<workspace>/crates/models_pagination)
+    Checking prompt v0.1.0 (<workspace>/crates/prompt)
+    Checking macro_entrypoint v0.1.0 (<workspace>/crates/macro_entrypoint)
+    Checking models_permissions v0.1.0 (<workspace>/crates/models_permissions)
+    Checking macro_auth v0.1.0 (<workspace>/crates/macro_auth)
+    Checking attachment v0.1.0 (<workspace>/crates/attachment)
+    Checking models_bulk_upload v0.1.0 (<workspace>/crates/models_bulk_upload)
+    Checking ai_toolset v0.1.0 (<workspace>/crates/ai_toolset)
+    Checking models_entity_access_management v0.1.0 (<workspace>/crates/models_entity_access_management)
+    Checking database_env_vars v0.1.0 (<workspace>/crates/database_env_vars)
+    Checking macro_service_urls v0.1.0 (<workspace>/crates/macro_service_urls)
+    Checking macro_event_topics v0.1.0 (<workspace>/crates/macro_event_topics)
+    Checking kafka_util v0.1.0 (<workspace>/crates/kafka_util)
+    Checking last_online_tracker v0.1.0 (<workspace>/crates/last_online_tracker)
+    Checking entity_access_db_utils v0.1.0 (<workspace>/crates/entity_access_db_utils)
+    Checking macro_tower_layers v0.1.0 (<workspace>/crates/macro_tower_layers)
+    Checking macro_aws_config v0.1.0 (<workspace>/crates/macro_aws_config)
+    Checking broadcast v0.1.0 (<workspace>/crates/broadcast)
+    Checking rate_limit v0.1.0 (<workspace>/crates/rate_limit)
+    Checking macro_authorization v0.1.0 (<workspace>/crates/macro_authorization)
+    Checking agent_correlation v0.1.0 (<workspace>/crates/agent_correlation)
+    Checking channel_sender v0.1.0 (<workspace>/crates/channel_sender)
+    Checking models_properties v0.1.0 (<workspace>/crates/models_properties)
+    Checking connection_gateway_models v0.1.0 (<workspace>/crates/connection_gateway_models)
+    Checking shared_entity_registry v0.1.0 (<workspace>/crates/entity_registry/shared_entity_registry)
+    Checking ip_extractor v0.1.0 (<workspace>/crates/ip_extractor)
+    Checking models_opensearch v0.1.0 (<workspace>/crates/models_opensearch)
+    Checking mention_utils v0.1.0 (<workspace>/crates/mention_utils)
+    Checking models_team v0.1.0 (<workspace>/crates/models_team)
+    Checking user_quota v0.1.0 (<workspace>/crates/user_quota)
+    Checking models_dcs v0.1.0 (<workspace>/crates/models_dcs)
+    Checking sqs_worker v0.1.0 (<workspace>/crates/sqs_worker)
+    Checking connection_gateway_client v0.1.0 (<workspace>/crates/connection_gateway_client)
+    Checking frecency v0.1.0 (<workspace>/crates/frecency)
+    Checking models_sfs v0.1.0 (<workspace>/crates/models_sfs)
+    Checking email_utils v0.1.0 (<workspace>/crates/email_utils)
+    Checking static_file_service_client v0.1.0 (<workspace>/crates/static_file_service_client)
+    Checking s3_key v0.1.0 (<workspace>/crates/s3_key)
+    Checking models_ai_projection v0.1.0 (<workspace>/crates/models_ai_projection)
+    Checking macro_event_broker v0.1.0 (<workspace>/crates/macro_event_broker)
+    Checking trigger_context v0.1.0 (<workspace>/crates/trigger_context)
+    Checking models_email v0.1.0 (<workspace>/crates/models_email)
+    Checking generic_email_domains v0.1.0 (<workspace>/crates/generic_email_domains)
+    Checking roles_and_permissions v0.1.0 (<workspace>/crates/roles_and_permissions)
+    Checking analytics_client v0.1.0 (<workspace>/crates/analytics_client)
+    Checking secretsmanager_client v0.1.0 (<workspace>/crates/secretsmanager_client)
+    Checking share_permission_db_utils v0.1.0 (<workspace>/crates/share_permission_db_utils)
+    Checking feature_flags v0.1.0 (<workspace>/crates/feature_flags)
+    Checking ai_usage v0.1.0 (<workspace>/crates/ai_usage)
+    Checking notification v0.1.0 (<workspace>/crates/notification)
+    Checking activity v0.1.0 (<workspace>/crates/activity)
+    Checking entity_registry v0.1.0 (<workspace>/crates/entity_registry/entity_registry)
+    Checking user_events v0.1.0 (<workspace>/crates/user_events)
+    Checking entity_access_management v0.1.0 (<workspace>/crates/entity_access_management)
+    Checking system_properties v0.1.0 (<workspace>/crates/system_properties)
+    Checking email_validator v0.1.0 (<workspace>/crates/email_validator)
+    Checking unfurl v0.1.0 (<workspace>/crates/unfurl)
+    Checking macro_queues v0.1.0 (<workspace>/crates/macro_queues)
+   Compiling macro_config_derive v0.1.0 (<workspace>/crates/macro_config_derive)
+    Checking git_patch v0.1.0 (<workspace>/crates/git_patch)
+    Checking sync_service_hex v0.1.0 (<workspace>/crates/sync_service)
+    Checking embedding v0.1.0 (<workspace>/crates/embedding)
+    Checking entity_registry_db_utils v0.1.0 (<workspace>/crates/entity_registry/entity_registry_db_utils)
+    Checking system_skills v0.1.0 (<workspace>/crates/system_skills)
+    Checking macro_cors v0.1.0 (<workspace>/crates/macro_cors)
+    Checking dynamodb_client v0.1.0 (<workspace>/crates/dynamodb_client)
+    Checking readonly_pool v0.1.0 (<workspace>/crates/readonly_pool)
+    Checking models_grouping v0.1.0 (<workspace>/crates/models_grouping)
+    Checking upstream_error v0.1.0 (<workspace>/crates/upstream_error)
+    Checking connect_client v0.1.0 (<workspace>/crates/connect_client)
+    Checking mcp_toolset v0.1.0 (<workspace>/crates/mcp_toolset)
+    Checking models_search_cursor v0.1.0 (<workspace>/crates/models_search_cursor)
+    Checking macro_config v0.1.0 (<workspace>/crates/macro_config)
+    Checking opensearch_query_builder v0.1.0 (<workspace>/crates/opensearch_query_builder)
+    Checking fusionauth v0.1.0 (<workspace>/crates/fusionauth)
+    Checking graphql_common v0.1.0 (<workspace>/crates/graphql_common)
+    Checking static_file v0.1.0 (<workspace>/crates/static_file)
+    Checking s3_client v0.1.0 (<workspace>/crates/s3_client)
+    Checking models_forms v0.1.0 (<workspace>/crates/models_forms)
+    Checking cursor_api_key v0.1.0 (<workspace>/crates/cursor_api_key)
+    Checking ensure_exists v0.1.0 (<workspace>/crates/ensure_exists)
+    Checking code_execution v0.1.0 (<workspace>/crates/code_execution)
+    Checking opensearch_client v0.1.0 (<workspace>/crates/opensearch_client)
+    Checking agent v0.1.0 (<workspace>/crates/agent)
+    Checking stream v0.1.0 (<workspace>/crates/stream)
+    Checking pipedream_mcp v0.1.0 (<workspace>/crates/pipedream_mcp)
+    Checking harnesses v0.1.0 (<workspace>/crates/harnesses)
+    Checking graphql_soup_filter_input v0.1.0 (<workspace>/crates/graphql_soup_filter_input)
+    Checking user_api_key v0.1.0 (<workspace>/crates/user_api_key)
+    Checking unfurl_service v0.1.0 (<workspace>/services/unfurl_service)
+    Checking native_app_service v0.1.0 (<workspace>/crates/native_app_service)
+    Checking macro_redis v0.1.0 (<workspace>/crates/macro_redis)
+    Checking webhook_signature v0.1.0 (<workspace>/crates/webhook_signature)
+    Checking saved_views v0.1.0 (<workspace>/crates/saved_views)
+    Checking macro_cache_client v0.1.0 (<workspace>/crates/macro_cache_client)
+    Checking system_status v0.1.0 (<workspace>/crates/system_status)
+    Checking gtm_invite v0.1.0 (<workspace>/crates/gtm_invite)
+    Checking user_language v0.1.0 (<workspace>/crates/user_language)
+    Checking decode_jwt v0.1.0 (<workspace>/crates/decode_jwt)
+    Checking ses_client v0.1.0 (<workspace>/crates/ses_client)
+    Checking mobile_welcome_email_db_client v0.1.0 (<workspace>/crates/mobile_welcome_email_db_client)
+    Checking gmail_client v0.1.0 (<workspace>/crates/gmail_client)
+    Checking model v0.1.0 (<workspace>/crates/model)
+    Checking email_db_client v0.1.0 (<workspace>/crates/email_db_client)
+    Checking serde_utils v0.1.0 (<workspace>/crates/serde_utils)
+    Checking loops_client v0.1.0 (<workspace>/crates/loops_client)
+    Checking dictation v0.1.0 (<workspace>/crates/dictation)
+    Checking cal v0.1.0 (<workspace>/crates/cal)
+    Checking sns_client v0.1.0 (<workspace>/crates/sns_client)
+    Checking sync_router v0.1.0 (<workspace>/crates/sync_router)
+    Checking macro_axum_utils v0.1.0 (<workspace>/crates/macro_axum_utils)
+    Checking lambda_client v0.1.0 (<workspace>/crates/lambda_client)
+   Compiling turso_core v0.8.0-pre.3 (https://github.com/tursodatabase/turso?rev=79163249538197d01dec5ea7f65519454ed792e2#79163249)
+    Checking libyml v0.0.5
+    Checking castaway v0.2.4
+   Compiling aristo-macros v0.4.1
+    Checking console v0.16.4
+    Checking os_pipe v1.2.3
+    Checking import_tracker v0.1.0 (<workspace>/crates/import_tracker)
+    Checking import_notion v0.1.0 (<workspace>/crates/import_notion)
+    Checking fixedbitset v0.4.2
+   Compiling macro_db_migrator v0.1.0 (<workspace>/crates/macro_db_migrator)
+    Checking softaes v0.1.5
+    Checking x11rb-protocol v0.13.2
+    Checking petgraph v0.6.5
+    Checking insta v1.48.0
+    Checking aristo v0.4.1
+    Checking wl-clipboard-rs v0.9.3
+    Checking compact_str v0.8.2
+    Checking import_linear v0.1.0 (<workspace>/crates/import_linear)
+    Checking import_jira v0.1.0 (<workspace>/crates/import_jira)
+    Checking async-stripe-webhook v1.0.0-rc.5
+    Checking axum-extra v0.10.3
+    Checking aws_lambda_events v0.16.1
+   Compiling worker-macros v0.8.1
+    Checking merge v0.2.0
+    Checking turso_parser v0.8.0-pre.3 (https://github.com/tursodatabase/turso?rev=79163249538197d01dec5ea7f65519454ed792e2#79163249)
+    Checking doppleganger v0.5.0
+    Checking rsa v0.9.10
+    Checking tracing-subscriber v0.3.23
+    Checking icu_collator v2.2.1
+    Checking invite_email v0.1.0 (<workspace>/crates/invite_email)
+    Checking wasm-streams v0.5.0
+    Checking scraper v0.18.1
+    Checking intrusive-collections v0.9.7
+    Checking x11rb v0.13.2
+    Checking zip v9.0.5
+    Checking tabular v0.2.0
+    Checking model_notifications v0.1.0 (<workspace>/crates/model_notifications)
+    Checking referral v0.1.0 (<workspace>/crates/referral)
+   Compiling derive_setters v0.1.9
+    Checking fancy-regex v0.12.0
+    Checking hashbrown v0.14.5
+    Checking serde-wasm-bindgen v0.6.5
+    Checking async-graphql v7.2.1
+    Checking atomicwrites v0.4.4
+    Checking entity_access v0.1.0 (<workspace>/crates/entity_access)
+    Checking sqs_client v0.1.0 (<workspace>/crates/sqs_client)
+    Checking authentication_service_client v0.1.0 (<workspace>/crates/authentication_service_client)
+    Checking sync_service_client v0.1.0 (<workspace>/crates/sync_service_client)
+    Checking macro_sha_count_client v0.1.0 (<workspace>/crates/macro_sha_count_client)
+    Checking document_storage_service_client v0.1.0 (<workspace>/crates/document_storage_service_client)
+    Checking mcp_auth_proxy v0.1.0 (<workspace>/services/mcp_auth_proxy)
+    Checking crossterm v0.28.1
+    Checking opentelemetry_sdk v0.31.0
+    Checking aws-sdk-ecs v1.125.0
+    Checking google_token v0.1.0 (<workspace>/crates/google_token)
+    Checking mcp_client v0.1.0 (<workspace>/crates/mcp_client)
+    Checking graphql_notification v0.1.0 (<workspace>/crates/graphql_notification)
+    Checking email_formatting v0.1.0 (<workspace>/crates/email_formatting)
+    Checking notification_db_client v0.1.0 (<workspace>/crates/notification_db_client)
+    Checking twox-hash v2.1.2
+    Checking unicode-truncate v1.1.0
+    Checking crossterm v0.25.0
+    Checking specta v2.0.0-rc.25
+    Checking newline-converter v0.3.0
+    Checking include_dir v0.7.4
+    Checking bollard-stubs v1.53.1-rc.29.3.1
+    Checking quote v1.0.45
+    Checking diffy v0.4.2
+    Checking fuzzy-matcher v0.3.7
+    Checking derive_more v2.1.1
+    Checking iddqd v0.3.18
+    Checking roaring v0.11.4
+    Checking pack1 v1.1.0
+    Checking fastbloom v0.14.1
+    Checking lru v0.12.5
+    Checking xattr v1.6.1
+    Checking hyperlocal v0.9.1
+    Checking rapidhash v4.5.1
+   Compiling gh-workflow-macros v0.8.1
+    Checking filetime v0.2.29
+    Checking unit-prefix v0.5.2
+    Checking simdutf8 v0.1.5
+    Checking matchit v0.7.3
+    Checking owo-colors v3.5.0
+   Compiling document_text_extractor v0.1.0 (<workspace>/services/document_text_extractor)
+    Checking cassowary v0.3.0
+    Checking cfg_block v0.1.1
+    Checking bytemuck v1.25.0
+    Checking indenter v0.3.4
+    Checking fallible-iterator v0.3.0
+    Checking allocator-api2 v0.4.0
+    Checking ratatui v0.29.0
+    Checking mcp_select v0.1.0 (<workspace>/crates/mcp_select)
+    Checking onboarding v0.1.0 (<workspace>/crates/onboarding)
+    Checking worker v0.8.1
+    Checking indicatif v0.18.6
+    Checking gh-workflow v0.8.1
+    Checking hakari v0.17.9
+    Checking tar v0.4.46
+    Checking inquire v0.7.5
+    Checking syn v2.0.117
+    Checking sha_cleanup_worker v0.1.0 (<workspace>/services/sha_cleanup_worker)
+    Checking tiktoken-rs v0.5.9
+    Checking arboard v3.6.1
+    Checking determinator v0.12.0
+    Checking call_recording_preview_handler v0.1.0 (<workspace>/services/call_recording_preview_handler)
+    Checking local_e2e_test_support v0.1.0 (<workspace>/crates/local_e2e_test_support)
+    Checking xtask_ports v0.1.0 (<workspace>/tooling/xtask/crates/xtask_ports)
+    Checking codex_fold v0.1.0 (<workspace>/crates/folds/codex_fold)
+    Checking claude_fold v0.1.0 (<workspace>/crates/folds/claude_fold)
+    Checking docker-compose-types v0.24.0
+    Checking xtask_local_telemetry v0.1.0 (<workspace>/tooling/xtask/crates/xtask_local_telemetry)
+    Checking xtask_graphql_schema_compat v0.1.0 (<workspace>/tooling/xtask/crates/xtask_graphql_schema_compat)
+    Checking progenitor-client v0.15.1
+    Checking console v0.15.11
+    Checking tui-input v0.14.0
+    Checking webbrowser v1.2.2
+    Checking incus_client v0.1.0 (<workspace>/crates/incus_client)
+    Checking xtask_workflows v0.1.0 (<workspace>/tooling/xtask/crates/xtask_workflows)
+    Checking xtask_nextest_filter v0.1.0 (<workspace>/tooling/xtask/crates/xtask_nextest_filter)
+    Checking worker-rs-otel v0.1.0 (<workspace>/crates/worker-rs-otel)
+    Checking notification_sandbox v0.1.0 (<workspace>/tooling/notification_sandbox)
+    Checking xtask_deps v0.1.0 (<workspace>/tooling/xtask/crates/xtask_deps)
+    Checking organization_retention_trigger v0.1.0 (<workspace>/services/organization_retention_trigger)
+    Checking upload_extractor_lambda_handler v0.1.0 (<workspace>/services/upload_extractor_lambda_handler)
+    Checking email_refresh_handler v0.1.0 (<workspace>/services/email_refresh_handler)
+    Checking upload_extractor_lambda_trigger v0.1.0 (<workspace>/services/upload_extractor_lambda_trigger)
+    Checking organization_retention_handler v0.1.0 (<workspace>/services/organization_retention_handler)
+    Checking email_sfs_delete_handler v0.1.0 (<workspace>/services/email_sfs_delete_handler)
+    Checking search_upload_handler v0.1.0 (<workspace>/services/search_upload_handler)
+    Checking static_file_service v0.1.0 (<workspace>/services/static_file_service)
+    Checking properties v0.1.0 (<workspace>/crates/properties)
+    Checking entity_mutation v0.1.0 (<workspace>/crates/entity_mutation)
+    Checking connection v0.1.0 (<workspace>/crates/connection)
+    Checking foreign_entity v0.1.0 (<workspace>/crates/foreign_entity)
+    Checking favorites v0.1.0 (<workspace>/crates/favorites)
+    Checking graphql_permission v0.1.0 (<workspace>/crates/graphql_permission)
+    Checking connection_gateway v0.1.0 (<workspace>/services/connection_gateway)
+    Checking external_chat v0.1.0 (<workspace>/crates/external_chat)
+    Checking chat v0.1.0 (<workspace>/crates/chat)
+    Checking agent_preview v0.1.0 (<workspace>/crates/agent_preview)
+    Checking graphql_activity v0.1.0 (<workspace>/crates/graphql_activity)
+    Checking access_requests v0.1.0 (<workspace>/crates/access_requests)
+    Checking channel_labels v0.1.0 (<workspace>/crates/channel_labels)
+    Checking github_pull_requests v0.1.0 (<workspace>/crates/github_pull_requests)
+    Checking notification_retention_handler v0.1.0 (<workspace>/services/notification_retention_handler)
+    Checking dataloss_prevention_handler v0.1.0 (<workspace>/services/dataloss_prevention_handler)
+    Checking image_optimizer v0.1.0 (<workspace>/services/image_optimizer)
+    Checking native_app_server v0.1.0 (<workspace>/tooling/native_app_server)
+    Checking bollard v0.21.0
+    Checking delete_chat_handler v0.1.0 (<workspace>/services/delete_chat_handler)
+    Checking cache-wasm v0.6.54 (<workspace>/crates/client/cache-wasm)
+    Checking xtask_kafka_topics v0.1.0 (<workspace>/tooling/xtask/crates/xtask_kafka_topics)
+    Checking load-test v0.1.0 (<workspace>/services/agent_harness_service/load-test)
+    Checking pairing_id v0.1.0 (<workspace>/crates/pairing_id)
+    Checking computer_id v0.1.0 (<workspace>/crates/computer_id)
+    Checking local_e2e_integration_tests v0.1.0 (<workspace>/crates/integration_tests/local_e2e)
+    Checking xtask_doppler_bins v0.1.0 (<workspace>/tooling/xtask/crates/xtask_doppler_bins)
+    Checking xtask_local v0.1.0 (<workspace>/tooling/xtask/crates/xtask_local)
+    Checking xtask_graphql_soup_schema v0.1.0 (<workspace>/tooling/xtask/crates/xtask_graphql_soup_schema)
+    Checking dynamic_ui v0.1.0 (<workspace>/crates/dynamic_ui)
+    Checking natural_time v0.1.0 (<workspace>/crates/natural_time)
+    Checking model_file_type v0.1.0 (<workspace>/crates/model_file_type)
+    Checking xtask v0.1.0 (<workspace>/tooling/xtask)
+    Checking turso-opfs v0.1.0 (<workspace>/crates/client/turso-opfs)
+    Checking whatsapp_linked v0.1.0 (<workspace>/crates/whatsapp_linked)
+    Checking whatsmeow v0.1.0 (<workspace>/crates/whatsmeow)
+    Checking worker_trigger v0.1.0 (<workspace>/services/worker_trigger)
+    Checking initiative v0.1.0 (<workspace>/crates/initiative)
+    Checking databases v0.1.0 (<workspace>/crates/databases)
+    Checking graphql_properties v0.1.0 (<workspace>/crates/graphql_properties)
+    Checking properties_service v0.1.0 (<workspace>/crates/properties_service)
+    Checking messages v0.1.0 (<workspace>/crates/messages)
+error: `SQLX_OFFLINE=true` but there is no cached data for this query, run `cargo sqlx prepare` to update the query cache or unset `SQLX_OFFLINE`
+  --> crates/messages/src/outbound/pg_message_repo/thread.rs:10:20
+   |
+10 |           let rows = sqlx::query_scalar!(
+   |  ____________________^
+11 | |             r#"SELECT to_jsonb(m) AS "message!: Json<StoredMessage>" FROM comms_messages m
+12 | |                WHERE m.id = $1 AND m.parent_entity_type = $2 AND m.parent_entity_id = $3
+13 | |                  AND m.thread_id IS NULL"#,
+...  |
+16 | |             parent.entity_id(),
+17 | |         )
+   | |_________^
+   |
+   = note: this error originates in the macro `$crate::sqlx_macros::expand_query` which comes from the expansion of the macro `sqlx::query_scalar` (in Nightly builds, run with -Z macro-backtrace for more info)
+
+error: `SQLX_OFFLINE=true` but there is no cached data for this query, run `cargo sqlx prepare` to update the query cache or unset `SQLX_OFFLINE`
+  --> crates/messages/src/outbound/pg_message_repo/thread.rs:38:26
+   |
+38 |               let anchor = sqlx::query_scalar!(
+   |  __________________________^
+39 | |                 r#"SELECT to_jsonb(m) AS "message!: Json<StoredMessage>" FROM comms_messages m
+40 | |                    WHERE m.id = $1 AND m.parent_entity_type = $2 AND m.parent_entity_id = $3
+41 | |                      AND m.thread_id = $4 AND m.deleted_at IS NULL"#,
+...  |
+45 | |                 root_id,
+46 | |             )
+   | |_____________^
+   |
+   = note: this error originates in the macro `$crate::sqlx_macros::expand_query` which comes from the expansion of the macro `sqlx::query_scalar` (in Nightly builds, run with -Z macro-backtrace for more info)
+
+error: `SQLX_OFFLINE=true` but there is no cached data for this query, run `cargo sqlx prepare` to update the query cache or unset `SQLX_OFFLINE`
+   --> crates/messages/src/outbound/pg_message_repo/thread.rs:170:40
+    |
+170 |               MessageDirection::Older => sqlx::query_file_scalar!(
+    |  ________________________________________^
+171 | |                 "src/outbound/pg_message_repo/thread_older.sql",
+172 | |                 parent.entity_type(),
+173 | |                 parent.entity_id(),
+...   |
+182 | |                 limit,
+183 | |             )
+    | |_____________^
+    |
+    = note: this error originates in the macro `$crate::sqlx_macros::expand_query` which comes from the expansion of the macro `sqlx::query_file_scalar` (in Nightly builds, run with -Z macro-backtrace for more info)
+
+error: `SQLX_OFFLINE=true` but there is no cached data for this query, run `cargo sqlx prepare` to update the query cache or unset `SQLX_OFFLINE`
+   --> crates/messages/src/outbound/pg_message_repo/thread.rs:187:40
+    |
+187 |               MessageDirection::Newer => sqlx::query_file_scalar!(
+    |  ________________________________________^
+188 | |                 "src/outbound/pg_message_repo/thread_newer.sql",
+189 | |                 parent.entity_type(),
+190 | |                 parent.entity_id(),
+...   |
+199 | |                 limit,
+200 | |             )
+    | |_____________^
+    |
+    = note: this error originates in the macro `$crate::sqlx_macros::expand_query` which comes from the expansion of the macro `sqlx::query_file_scalar` (in Nightly builds, run with -Z macro-backtrace for more info)
+
+error: `SQLX_OFFLINE=true` but there is no cached data for this query, run `cargo sqlx prepare` to update the query cache or unset `SQLX_OFFLINE`
+   --> crates/messages/src/outbound/pg_message_repo/timeline.rs:168:9
+    |
+168 | /         sqlx::query_scalar!(r#"SELECT to_jsonb(m) AS "message!: Json<StoredMessage>" FROM comms_messages m
+169 | |             JOIN comms_message_threads t ON t.root_id = m.id
+170 | |             WHERE m.parent_entity_type = $1 AND m.parent_entity_id = $2
+171 | |                 AND m.thread_id IS NULL AND (t.deleted_at IS NULL OR $10)
+...   |
+182 | |             parent.entity_type(), parent.entity_id(), cursor.map(|c| c.created_at), cursor.map(|c| c.id), limit,
+183 | |             if query.ids.is_empty() { None } else { Some(query.ids.as_slice()) }, query.anchored, query.activity_after, query.activity_before, query.include_deleted_threads)
+    | |_____________________________________________________________________________________________________________________________________________________________________________^
+    |
+    = note: this error originates in the macro `$crate::sqlx_macros::expand_query` which comes from the expansion of the macro `sqlx::query_scalar` (in Nightly builds, run with -Z macro-backtrace for more info)
+
+error: `SQLX_OFFLINE=true` but there is no cached data for this query, run `cargo sqlx prepare` to update the query cache or unset `SQLX_OFFLINE`
+   --> crates/messages/src/outbound/pg_message_repo/timeline.rs:193:9
+    |
+193 | /         sqlx::query_scalar!(r#"SELECT to_jsonb(m) AS "message!: Json<StoredMessage>" FROM comms_messages m
+194 | |             JOIN comms_message_threads t ON t.root_id = m.id
+195 | |             WHERE m.parent_entity_type = $1 AND m.parent_entity_id = $2
+196 | |                 AND m.thread_id IS NULL AND (t.deleted_at IS NULL OR $10)
+...   |
+207 | |             parent.entity_type(), parent.entity_id(), cursor.map(|c| c.created_at), cursor.map(|c| c.id), limit,
+208 | |             if query.ids.is_empty() { None } else { Some(query.ids.as_slice()) }, query.anchored, query.activity_after, query.activity_before, query.include_deleted_threads)
+    | |_____________________________________________________________________________________________________________________________________________________________________________^
+    |
+    = note: this error originates in the macro `$crate::sqlx_macros::expand_query` which comes from the expansion of the macro `sqlx::query_scalar` (in Nightly builds, run with -Z macro-backtrace for more info)
+
+error[E0282]: type annotations needed
+  --> crates/messages/src/outbound/pg_message_repo/thread.rs:10:20
+   |
+10 |           let rows = sqlx::query_scalar!(
+   |  ____________________^
+11 | |             r#"SELECT to_jsonb(m) AS "message!: Json<StoredMessage>" FROM comms_messages m
+12 | |                WHERE m.id = $1 AND m.parent_entity_type = $2 AND m.parent_entity_id = $3
+13 | |                  AND m.thread_id IS NULL"#,
+...  |
+18 | |         .fetch_all(&self.pool)
+19 | |         .await
+   | |______________^ cannot infer type
+
+error[E0282]: type annotations needed
+  --> crates/messages/src/outbound/pg_message_repo/thread.rs:38:26
+   |
+38 |               let anchor = sqlx::query_scalar!(
+   |  __________________________^
+39 | |                 r#"SELECT to_jsonb(m) AS "message!: Json<StoredMessage>" FROM comms_messages m
+40 | |                    WHERE m.id = $1 AND m.parent_entity_type = $2 AND m.parent_entity_id = $3
+41 | |                      AND m.thread_id = $4 AND m.deleted_at IS NULL"#,
+...  |
+47 | |             .fetch_optional(&mut *tx)
+48 | |             .await
+   | |__________________^ cannot infer type
+
+error[E0282]: type annotations needed
+   --> crates/messages/src/outbound/pg_message_repo/thread.rs:170:40
+    |
+170 |               MessageDirection::Older => sqlx::query_file_scalar!(
+    |  ________________________________________^
+171 | |                 "src/outbound/pg_message_repo/thread_older.sql",
+172 | |                 parent.entity_type(),
+173 | |                 parent.entity_id(),
+...   |
+184 | |             .fetch_all(connection)
+185 | |             .await
+    | |__________________^ cannot infer type
+
+error[E0282]: type annotations needed
+   --> crates/messages/src/outbound/pg_message_repo/thread.rs:187:40
+    |
+187 |               MessageDirection::Newer => sqlx::query_file_scalar!(
+    |  ________________________________________^
+188 | |                 "src/outbound/pg_message_repo/thread_newer.sql",
+189 | |                 parent.entity_type(),
+190 | |                 parent.entity_id(),
+...   |
+201 | |             .fetch_all(connection)
+202 | |             .await
+    | |__________________^ cannot infer type
+
+error[E0282]: type annotations needed
+   --> crates/messages/src/outbound/pg_message_repo/timeline.rs:168:9
+    |
+168 | / ...   sqlx::query_scalar!(r#"SELECT to_jsonb(m) AS "message!: Json<StoredMessage>" FROM comms_messages m
+169 | | ...       JOIN comms_message_threads t ON t.root_id = m.id
+170 | | ...       WHERE m.parent_entity_type = $1 AND m.parent_entity_id = $2
+171 | | ...           AND m.thread_id IS NULL AND (t.deleted_at IS NULL OR $10)
+...   |
+183 | | ...       if query.ids.is_empty() { None } else { Some(query.ids.as_slice()) }, query.anchored, query.activity_after, query.activ...
+184 | | ...       .fetch_all(&self.pool).await.map_err(database_error)
+    | |______________________________________^ cannot infer type
+
+error[E0282]: type annotations needed
+   --> crates/messages/src/outbound/pg_message_repo/timeline.rs:193:9
+    |
+193 | / ...   sqlx::query_scalar!(r#"SELECT to_jsonb(m) AS "message!: Json<StoredMessage>" FROM comms_messages m
+194 | | ...       JOIN comms_message_threads t ON t.root_id = m.id
+195 | | ...       WHERE m.parent_entity_type = $1 AND m.parent_entity_id = $2
+196 | | ...           AND m.thread_id IS NULL AND (t.deleted_at IS NULL OR $10)
+...   |
+208 | | ...       if query.ids.is_empty() { None } else { Some(query.ids.as_slice()) }, query.anchored, query.activity_after, query.activ...
+209 | | ...       .fetch_all(&self.pool).await.map_err(database_error)
+    | |______________________________________^ cannot infer type
+
+    Checking whatsapp_store_pg v0.1.0 (<workspace>/crates/whatsapp_store_pg)
+    Checking whatsapp_fake_server v0.1.0 (<workspace>/crates/whatsapp_fake_server)
+    Checking whatsapp_session_service v0.1.0 (<workspace>/services/whatsapp_session_service)
+    Checking database_webhooks v0.1.0 (<workspace>/crates/database_webhooks)
+For more information about this error, try `rustc --explain E0282`.
+error: could not compile `messages` (lib) due to 12 previous errors
+warning: build failed, waiting for other jobs to finish...
+error: recipe `rust-check` failed on line 6 with exit code 101

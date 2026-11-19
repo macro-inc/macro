@@ -1,0 +1,35 @@
+Evidence: final cargo output excerpts copied from the completed tool transcript.
+Source: exec session 19704, output chunk abd034, exit code 0.
+This file was reconstructed from that transcript; tests were not rerun for it.
+The full per-test listing is omitted. The outcome and key test lines below are
+verbatim excerpts, not a new test run or a raw capture file.
+
+Command:
+nix develop --command env -u SQLX_OFFLINE 'DATABASE_URL=postgres://user@localhost/macrodb?host=/tmp&port=35432' CARGO_TARGET_DIR=target/channel-perf-release RUSTC_WRAPPER= cargo test --release -p complete_graph
+
+    Finished `release` profile [optimized] target(s) in 1m 39s
+     Running unittests src/lib.rs (target/channel-perf-release/release/deps/complete_graph-43cfde49bb596720)
+
+running 115 tests
+test schema::test::channel_perf::channel_latest_graphql_and_rest_server_timings ... ignored, requires read-only seeded channel database
+test schema::test::channel::channel_reads_require_the_channel_context ... ok
+test sdl_test::channel_reads_hang_off_the_authenticated_user ... ok
+test sdl_test::sdl_matches_committed_schema_graphql ... ok
+test schema::test::channel::channel_single_message_matches_rest_and_respects_channel_access ... ok
+test schema::test::channel::channel_reads_reject_ambiguous_or_invalid_positions ... ok
+test schema::test::channel::channel_thread_pages_match_rest_and_sort_keys_follow_import_order ... ok
+test schema::test::channel::channel_timeline_matches_rest_every_page_and_around_window ... ok
+
+test result: ok. 114 passed; 0 failed; 1 ignored; 0 measured; 0 filtered out; finished in 0.75s
+
+     Running unittests src/bin/graphql_schema.rs (target/channel-perf-release/release/deps/graphql_schema-e74e97632687f638)
+
+running 0 tests
+
+test result: ok. 0 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s
+
+   Doc-tests complete_graph
+
+running 0 tests
+
+test result: ok. 0 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s

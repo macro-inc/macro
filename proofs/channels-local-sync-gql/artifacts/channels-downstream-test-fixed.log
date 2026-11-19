@@ -1,0 +1,19 @@
+warning: Git tree '<workspace>' is dirty
+error (ignored): SQLite database '<home>/.cache/nix/eval-cache-v6/c39760c28ceb53f298cc5858a6f56ea158545198bec15f9c179cc68bcdc49455.sqlite' is busy
+   Compiling channels v0.1.0 (<workspace>/crates/channels)
+   Compiling documents v0.1.0 (<workspace>/crates/documents)
+error[E0063]: missing field `import_order` in initializer of `messages::domain::models::Message`
+  --> crates/documents/src/domain/comments/test.rs:46:5
+   |
+46 |     Message {
+   |     ^^^^^^^ missing `import_order`
+
+error[E0063]: missing field `import_order` in initializer of `messages::domain::models::Message`
+  --> crates/documents/src/domain/text_comment/test.rs:48:5
+   |
+48 |     Message {
+   |     ^^^^^^^ missing `import_order`
+
+For more information about this error, try `rustc --explain E0063`.
+error: could not compile `documents` (lib test) due to 2 previous errors
+warning: build failed, waiting for other jobs to finish...

@@ -1,0 +1,5 @@
+warning: Git tree '<workspace>' is dirty
+    Finished `dev` profile [unoptimized + debuginfo] target(s) in 0.48s
+     Running `target/channel-checks/debug/xtask deps`
+    Finished `dev` profile [unoptimized + debuginfo] target(s) in 0.67s
+     Running `target/channel-checks/debug/xtask_deps`

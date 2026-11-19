@@ -1,0 +1,75 @@
+warning: Git tree '<workspace>' is dirty
+    Blocking waiting for file lock on package cache
+    Blocking waiting for file lock on package cache
+    Blocking waiting for file lock on artifact directory
+   Compiling specta v2.0.0-rc.25
+   Compiling model_file_type v0.1.0 (<workspace>/crates/model_file_type)
+   Compiling uuid v1.23.1
+   Compiling schemars v1.2.1
+   Compiling moka v0.12.15
+   Compiling sqlx-core v0.8.6
+   Compiling tower-http v0.6.11
+   Compiling doppleganger-core v0.5.0
+   Compiling aws-runtime v1.7.4
+   Compiling bot_id v0.1.0 (<workspace>/crates/bot_id)
+   Compiling doppleganger v0.5.0
+   Compiling macro_user_id v0.1.0 (<workspace>/crates/macro_user_id)
+   Compiling model_owner v0.1.0 (<workspace>/crates/model_owner)
+   Compiling serde_with v3.21.0
+   Compiling hickory-resolver v0.26.1
+   Compiling aws-sdk-sso v1.99.0
+   Compiling aws-sdk-ssooidc v1.101.0
+   Compiling aws-sdk-sts v1.104.0
+   Compiling reqwest v0.13.4
+   Compiling sqlx-postgres v0.8.6
+   Compiling aws_lambda_events v0.16.1
+   Compiling aws-config v1.8.17
+   Compiling rig-core v0.41.0
+   Compiling rmcp v3.9.0
+   Compiling async-openai v0.36.1
+   Compiling sqlx v0.8.6
+   Compiling document_sub_type v0.1.0 (<workspace>/crates/document_sub_type)
+   Compiling notification_state v0.1.0 (<workspace>/crates/notification_state)
+   Compiling item_filters v0.1.0 (<workspace>/crates/item_filters)
+   Compiling rig-agent v0.41.0
+   Compiling workspace-hack v0.1.0 (<workspace>/crates/workspace-hack)
+   Compiling model-entity v0.1.0 (<workspace>/crates/model-entity)
+   Compiling macro_env_var v0.1.0 (<workspace>/crates/macro_env_var)
+   Compiling agent_correlation v0.1.0 (<workspace>/crates/agent_correlation)
+   Compiling macro_event_topics v0.1.0 (<workspace>/crates/macro_event_topics)
+   Compiling channel_sender v0.1.0 (<workspace>/crates/channel_sender)
+   Compiling models_entity_access_management v0.1.0 (<workspace>/crates/models_entity_access_management)
+   Compiling harness_id v0.1.0 (<workspace>/crates/harness_id)
+   Compiling bot_token v0.1.0 (<workspace>/crates/bot_token)
+   Compiling harness_token v0.1.0 (<workspace>/crates/harness_token)
+   Compiling model_user v0.1.0 (<workspace>/crates/model_user)
+   Compiling models_pagination v0.1.0 (<workspace>/crates/models_pagination)
+   Compiling model-error-response v0.1.0 (<workspace>/crates/model-error-response)
+   Compiling models_properties v0.1.0 (<workspace>/crates/models_properties)
+   Compiling macro_env v0.1.0 (<workspace>/crates/macro_env)
+   Compiling models_permissions v0.1.0 (<workspace>/crates/models_permissions)
+   Compiling macro_event_broker v0.1.0 (<workspace>/crates/macro_event_broker)
+   Compiling remote_env_var v0.1.0 (<workspace>/crates/remote_env_var)
+   Compiling macro_auth v0.1.0 (<workspace>/crates/macro_auth)
+   Compiling activity v0.1.0 (<workspace>/crates/activity)
+   Compiling entity_access v0.1.0 (<workspace>/crates/entity_access)
+   Compiling macro_authorization v0.1.0 (<workspace>/crates/macro_authorization)
+   Compiling messages v0.1.0 (<workspace>/crates/messages)
+   Compiling graphql_common v0.1.0 (<workspace>/crates/graphql_common)
+   Compiling channels v0.1.0 (<workspace>/crates/channels)
+   Compiling graphql_channel v0.1.0 (<workspace>/crates/graphql_channel)
+    Finished `release` profile [optimized] target(s) in 1m 27s
+     Running unittests src/lib.rs (target/channel-perf-release/release/deps/graphql_channel-4633bfab5fbc358f)
+
+running 2 tests
+test inputs::test::unexpected_negative_positions_encode_as_zero ... ok
+test test::record_channel_activity_authorizes_and_delegates_only_channel_activity ... ok
+
+test result: ok. 2 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s
+
+   Doc-tests graphql_channel
+
+running 0 tests
+
+test result: ok. 0 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s
+

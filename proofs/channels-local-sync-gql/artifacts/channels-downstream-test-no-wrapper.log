@@ -1,0 +1,139 @@
+warning: Git tree '<workspace>' is dirty
+    Blocking waiting for file lock on artifact directory
+   Compiling idna v1.1.0
+   Compiling url v2.5.8
+   Compiling sqlx-core v0.8.6
+   Compiling hickory-proto v0.26.3
+   Compiling tower-http v0.6.11
+   Compiling oauth2 v5.0.0
+   Compiling aws-config v1.8.17
+   Compiling redis v1.2.1
+   Compiling tungstenite v0.28.0
+   Compiling aws-sdk-s3 v1.133.0
+   Compiling ammonia v4.1.8
+   Compiling http-types v2.12.0
+   Compiling wiremock v0.6.5
+   Compiling async-stripe v0.41.0
+   Compiling hickory-net v0.26.1
+   Compiling sqlx-postgres v0.8.6
+   Compiling aws-msk-iam-sasl-signer v1.0.1
+   Compiling hickory-resolver v0.26.1
+   Compiling reqwest v0.13.4
+   Compiling rig-core v0.41.0
+   Compiling rmcp v3.9.0
+   Compiling async-openai v0.36.1
+   Compiling sqlx-macros-core v0.8.6
+   Compiling sqlx-macros v0.8.6
+   Compiling sqlx v0.8.6
+   Compiling macro_user_id v0.1.0 (<workspace>/crates/macro_user_id)
+   Compiling document_sub_type v0.1.0 (<workspace>/crates/document_sub_type)
+   Compiling notification_state v0.1.0 (<workspace>/crates/notification_state)
+   Compiling model_owner v0.1.0 (<workspace>/crates/model_owner)
+   Compiling agent_fold v0.1.0 (<workspace>/crates/folds/agent_fold)
+   Compiling item_filters v0.1.0 (<workspace>/crates/item_filters)
+   Compiling rig-agent v0.41.0
+   Compiling workspace-hack v0.1.0 (<workspace>/crates/workspace-hack)
+   Compiling macro_env_var v0.1.0 (<workspace>/crates/macro_env_var)
+   Compiling model-entity v0.1.0 (<workspace>/crates/model-entity)
+   Compiling model-error-response v0.1.0 (<workspace>/crates/model-error-response)
+   Compiling model_user v0.1.0 (<workspace>/crates/model_user)
+   Compiling harness_token v0.1.0 (<workspace>/crates/harness_token)
+   Compiling bot_token v0.1.0 (<workspace>/crates/bot_token)
+   Compiling harness_id v0.1.0 (<workspace>/crates/harness_id)
+   Compiling prompt v0.1.0 (<workspace>/crates/prompt)
+   Compiling models_bulk_upload v0.1.0 (<workspace>/crates/models_bulk_upload)
+   Compiling models_entity_access_management v0.1.0 (<workspace>/crates/models_entity_access_management)
+   Compiling macro_event_topics v0.1.0 (<workspace>/crates/macro_event_topics)
+   Compiling agent_correlation v0.1.0 (<workspace>/crates/agent_correlation)
+   Compiling channel_sender v0.1.0 (<workspace>/crates/channel_sender)
+   Compiling rate_limit v0.1.0 (<workspace>/crates/rate_limit)
+   Compiling models_properties v0.1.0 (<workspace>/crates/models_properties)
+   Compiling ip_extractor v0.1.0 (<workspace>/crates/ip_extractor)
+   Compiling last_online_tracker v0.1.0 (<workspace>/crates/last_online_tracker)
+   Compiling broadcast v0.1.0 (<workspace>/crates/broadcast)
+   Compiling macro_tower_layers v0.1.0 (<workspace>/crates/macro_tower_layers)
+   Compiling models_sfs v0.1.0 (<workspace>/crates/models_sfs)
+   Compiling contacts v0.1.0 (<workspace>/crates/contacts)
+   Compiling trigger_context v0.1.0 (<workspace>/crates/trigger_context)
+   Compiling macro_db_migrator v0.1.0 (<workspace>/crates/macro_db_migrator)
+   Compiling generic_email_domains v0.1.0 (<workspace>/crates/generic_email_domains)
+   Compiling roles_and_permissions v0.1.0 (<workspace>/crates/roles_and_permissions)
+   Compiling email_utils v0.1.0 (<workspace>/crates/email_utils)
+   Compiling git_patch v0.1.0 (<workspace>/crates/git_patch)
+   Compiling sync_service_hex v0.1.0 (<workspace>/crates/sync_service)
+   Compiling models_team v0.1.0 (<workspace>/crates/models_team)
+   Compiling embedding v0.1.0 (<workspace>/crates/embedding)
+   Compiling s3_key v0.1.0 (<workspace>/crates/s3_key)
+   Compiling models_opensearch v0.1.0 (<workspace>/crates/models_opensearch)
+   Compiling models_dcs v0.1.0 (<workspace>/crates/models_dcs)
+   Compiling user_quota v0.1.0 (<workspace>/crates/user_quota)
+   Compiling models_ai_projection v0.1.0 (<workspace>/crates/models_ai_projection)
+   Compiling macro_env v0.1.0 (<workspace>/crates/macro_env)
+   Compiling models_permissions v0.1.0 (<workspace>/crates/models_permissions)
+   Compiling models_pagination v0.1.0 (<workspace>/crates/models_pagination)
+   Compiling genai_telemetry v0.1.0 (<workspace>/crates/genai_telemetry)
+   Compiling attachment v0.1.0 (<workspace>/crates/attachment)
+   Compiling macro_aws_config v0.1.0 (<workspace>/crates/macro_aws_config)
+   Compiling connection_gateway_models v0.1.0 (<workspace>/crates/connection_gateway_models)
+   Compiling mention_utils v0.1.0 (<workspace>/crates/mention_utils)
+   Compiling frecency v0.1.0 (<workspace>/crates/frecency)
+   Compiling shared_entity_registry v0.1.0 (<workspace>/crates/entity_registry/shared_entity_registry)
+   Compiling system_skills v0.1.0 (<workspace>/crates/system_skills)
+   Compiling remote_env_var v0.1.0 (<workspace>/crates/remote_env_var)
+   Compiling kafka_util v0.1.0 (<workspace>/crates/kafka_util)
+   Compiling macro_service_urls v0.1.0 (<workspace>/crates/macro_service_urls)
+   Compiling macro_entrypoint v0.1.0 (<workspace>/crates/macro_entrypoint)
+   Compiling ai_toolset v0.1.0 (<workspace>/crates/ai_toolset)
+   Compiling macro_auth v0.1.0 (<workspace>/crates/macro_auth)
+   Compiling secretsmanager_client v0.1.0 (<workspace>/crates/secretsmanager_client)
+   Compiling static_file_service_client v0.1.0 (<workspace>/crates/static_file_service_client)
+   Compiling entity_access_db_utils v0.1.0 (<workspace>/crates/entity_access_db_utils)
+   Compiling connection_gateway_client v0.1.0 (<workspace>/crates/connection_gateway_client)
+   Compiling models_email v0.1.0 (<workspace>/crates/models_email)
+   Compiling macro_event_broker v0.1.0 (<workspace>/crates/macro_event_broker)
+   Compiling macro_authorization v0.1.0 (<workspace>/crates/macro_authorization)
+   Compiling activity v0.1.0 (<workspace>/crates/activity)
+   Compiling notification v0.1.0 (<workspace>/crates/notification)
+   Compiling system_properties v0.1.0 (<workspace>/crates/system_properties)
+   Compiling ai_usage v0.1.0 (<workspace>/crates/ai_usage)
+   Compiling entity_registry v0.1.0 (<workspace>/crates/entity_registry/entity_registry)
+   Compiling share_permission_db_utils v0.1.0 (<workspace>/crates/share_permission_db_utils)
+   Compiling entity_access_management v0.1.0 (<workspace>/crates/entity_access_management)
+   Compiling entity_registry_db_utils v0.1.0 (<workspace>/crates/entity_registry/entity_registry_db_utils)
+   Compiling agent v0.1.0 (<workspace>/crates/agent)
+   Compiling model v0.1.0 (<workspace>/crates/model)
+   Compiling invite_email v0.1.0 (<workspace>/crates/invite_email)
+   Compiling model_notifications v0.1.0 (<workspace>/crates/model_notifications)
+   Compiling entity_access v0.1.0 (<workspace>/crates/entity_access)
+   Compiling authentication_service_client v0.1.0 (<workspace>/crates/authentication_service_client)
+   Compiling sync_service_client v0.1.0 (<workspace>/crates/sync_service_client)
+   Compiling macro_sha_count_client v0.1.0 (<workspace>/crates/macro_sha_count_client)
+   Compiling sqs_client v0.1.0 (<workspace>/crates/sqs_client)
+   Compiling initiative v0.1.0 (<workspace>/crates/initiative)
+   Compiling entity_mutation v0.1.0 (<workspace>/crates/entity_mutation)
+   Compiling foreign_entity v0.1.0 (<workspace>/crates/foreign_entity)
+   Compiling connection v0.1.0 (<workspace>/crates/connection)
+   Compiling github_pull_requests v0.1.0 (<workspace>/crates/github_pull_requests)
+   Compiling messages v0.1.0 (<workspace>/crates/messages)
+   Compiling channels v0.1.0 (<workspace>/crates/channels)
+   Compiling lexical_client v0.1.0 (<workspace>/crates/lexical_client)
+   Compiling macro_db_client v0.1.0 (<workspace>/crates/macro_db_client)
+   Compiling task_dedup v0.1.0 (<workspace>/crates/task_dedup)
+error[E0063]: missing field `import_order` in initializer of `messages::domain::models::Message`
+   --> crates/channels/src/domain/message_delivery/test.rs:180:5
+    |
+180 |     Message {
+    |     ^^^^^^^ missing `import_order`
+
+   Compiling teams v0.1.0 (<workspace>/crates/teams)
+   Compiling comms_db_client v0.1.0 (<workspace>/crates/comms_db_client)
+error[E0063]: missing field `import_order` in initializer of `messages::domain::models::Message`
+ --> crates/channels/src/inbound/toolset/types/test.rs:8:5
+  |
+8 |     Message {
+  |     ^^^^^^^ missing `import_order`
+
+   Compiling ai_billing v0.1.0 (<workspace>/crates/ai_billing)
+For more information about this error, try `rustc --explain E0063`.
+error: could not compile `channels` (lib test) due to 2 previous errors
+warning: build failed, waiting for other jobs to finish...

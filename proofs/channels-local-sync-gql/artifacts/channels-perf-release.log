@@ -1,0 +1,939 @@
+warning: Git tree '<workspace>' is dirty
+   Compiling proc-macro2 v1.0.106
+   Compiling unicode-ident v1.0.24
+   Compiling quote v1.0.45
+   Compiling libc v0.2.186
+   Compiling serde_core v1.0.228
+   Compiling serde v1.0.228
+   Compiling cfg-if v1.0.4
+   Compiling portable-atomic v1.13.1
+   Compiling version_check v0.9.5
+   Compiling autocfg v1.5.0
+   Compiling parking_lot_core v0.9.12
+   Compiling libm v0.2.16
+   Compiling find-msvc-tools v0.1.9
+   Compiling shlex v1.3.0
+   Compiling getrandom v0.4.2
+   Compiling memchr v2.8.0
+   Compiling pkg-config v0.3.33
+   Compiling itoa v1.0.18
+   Compiling subtle v2.6.1
+   Compiling typenum v1.20.0
+   Compiling log v0.4.29
+   Compiling zerocopy v0.8.48
+   Compiling scopeguard v1.2.0
+   Compiling pin-project-lite v0.2.17
+   Compiling futures-core v0.3.32
+   Compiling critical-section v1.2.0
+   Compiling allocator-api2 v0.2.21
+   Compiling equivalent v1.0.2
+   Compiling futures-io v0.3.32
+   Compiling foldhash v0.2.0
+   Compiling zmij v1.0.23
+   Compiling serde_json v1.0.150
+   Compiling futures-sink v0.3.32
+   Compiling slab v0.4.12
+   Compiling dunce v1.0.5
+   Compiling futures-task v0.3.32
+   Compiling fs_extra v1.3.0
+   Compiling thiserror v2.0.18
+   Compiling cmov v0.5.4
+   Compiling rand_core v0.10.1
+   Compiling aws-lc-rs v1.18.1
+   Compiling httparse v1.10.1
+   Compiling icu_normalizer_data v2.2.0
+   Compiling rustls v0.23.46
+   Compiling icu_properties_data v2.2.0
+   Compiling crossbeam-utils v0.8.21
+   Compiling const-oid v0.9.6
+   Compiling percent-encoding v2.3.2
+   Compiling cpufeatures v0.3.0
+   Compiling stable_deref_trait v1.2.1
+   Compiling crc32fast v1.5.0
+   Compiling time-core v0.1.8
+   Compiling num-conv v0.2.2
+   Compiling fnv v1.0.7
+   Compiling cpufeatures v0.2.17
+   Compiling base64 v0.22.1
+   Compiling sha1_smol v1.0.1
+   Compiling getrandom v0.3.4
+   Compiling vcpkg v0.2.15
+   Compiling ryu v1.0.23
+   Compiling siphasher v1.0.3
+   Compiling bitflags v2.11.1
+   Compiling fastrand v2.4.1
+   Compiling writeable v0.6.3
+   Compiling litemap v0.8.2
+   Compiling untrusted v0.9.0
+   Compiling utf8_iter v1.0.4
+   Compiling strsim v0.11.1
+   Compiling ident_case v1.0.1
+   Compiling iana-time-zone v0.1.65
+   Compiling num-traits v0.2.19
+   Compiling generic-array v0.14.9
+   Compiling lock_api v0.4.14
+   Compiling hashbrown v0.17.1
+   Compiling futures-channel v0.3.32
+   Compiling ctutils v0.4.5
+   Compiling time-macros v0.2.27
+   Compiling form_urlencoded v1.2.2
+   Compiling aho-corasick v1.1.4
+   Compiling regex-syntax v0.8.11
+   Compiling powerfmt v0.2.0
+   Compiling ref-cast v1.0.25
+   Compiling httpdate v1.0.3
+   Compiling tower-service v0.3.3
+   Compiling rustix v1.1.6
+   Compiling try-lock v0.2.5
+   Compiling atomic-waker v1.1.2
+   Compiling base64ct v1.8.3
+   Compiling heck v0.5.0
+   Compiling parking v2.2.1
+   Compiling anyhow v1.0.103
+   Compiling tinyvec_macros v0.1.1
+   Compiling outref v0.5.2
+   Compiling vsimd v0.8.0
+   Compiling openssl-probe v0.2.1
+   Compiling sync_wrapper v1.0.2
+   Compiling tower-layer v0.3.3
+   Compiling crossbeam-epoch v0.9.20
+   Compiling deranged v0.5.8
+   Compiling want v0.3.1
+   Compiling const-oid v0.10.2
+   Compiling unicode-segmentation v1.13.2
+   Compiling pin-utils v0.1.0
+   Compiling hex v0.4.3
+   Compiling spin v0.9.9
+   Compiling phf_shared v0.13.1
+   Compiling phf_shared v0.11.3
+   Compiling mime v0.3.17
+   Compiling winnow v1.0.3
+   Compiling simd-adler32 v0.3.9
+   Compiling base16ct v0.2.0
+   Compiling unicase v2.9.0
+   Compiling thiserror v1.0.69
+   Compiling toml_datetime v1.1.1+spec-1.1.0
+   Compiling byteorder v1.5.0
+   Compiling foldhash v0.1.5
+   Compiling siphasher v0.3.11
+   Compiling rustversion v1.0.22
+   Compiling ahash v0.8.12
+   Compiling ucd-trie v0.1.7
+   Compiling multer v3.1.0
+   Compiling jobserver v0.1.34
+   Compiling getrandom v0.2.17
+   Compiling once_cell v1.21.4
+   Compiling errno v0.3.14
+   Compiling mio v1.2.0
+   Compiling socket2 v0.6.3
+   Compiling regex-automata v0.4.18
+   Compiling pem-rfc7468 v0.7.0
+   Compiling tinyvec v1.11.0
+   Compiling base64-simd v0.8.0
+   Compiling event-listener v5.4.2
+   Compiling phf_generator v0.13.1
+   Compiling mime_guess v2.0.5
+   Compiling hashbrown v0.15.5
+   Compiling socket2 v0.5.10
+   Compiling new_debug_unreachable v1.0.6
+   Compiling adler2 v2.0.1
+   Compiling crc-catalog v2.5.0
+   Compiling Inflector v0.11.4
+   Compiling crossbeam-queue v0.3.12
+   Compiling async-io v2.6.0
+   Compiling unicode-bidi v0.3.18
+   Compiling data-encoding v2.11.0
+   Compiling unicode-properties v0.1.4
+   Compiling concurrent-queue v2.5.0
+   Compiling encoding_rs v0.8.35
+   Compiling dotenvy v0.15.7
+   Compiling dyn-clone v1.0.20
+   Compiling home v0.5.12
+   Compiling zlib-rs v0.6.3
+   Compiling rustc-hash v2.1.2
+   Compiling whoami v1.6.1
+   Compiling linux-raw-sys v0.12.1
+   Compiling utf-8 v0.7.6
+   Compiling precomputed-hash v0.1.1
+   Compiling mutants v0.0.3
+   Compiling convert_case v0.11.0
+   Compiling syn v2.0.117
+   Compiling cc v1.2.62
+   Compiling rand_core v0.6.4
+   Compiling syn v3.0.3
+   Compiling indexmap v2.14.0
+   Compiling tracing-core v0.1.36
+   Compiling signal-hook-registry v1.4.8
+   Compiling semver v1.0.28
+   Compiling num-integer v0.1.46
+   Compiling time v0.3.47
+   Compiling toml_parser v1.1.2+spec-1.1.0
+   Compiling phf_shared v0.10.0
+   Compiling pest v2.8.6
+   Compiling miniz_oxide v0.8.9
+   Compiling unicode-normalization v0.1.25
+   Compiling crc v3.4.0
+   Compiling hashlink v0.10.0
+   Compiling atoi v2.0.0
+   Compiling futures-lite v2.6.1
+   Compiling num-bigint-dig v0.8.6
+   Compiling syn v1.0.109
+   Compiling convert_case v0.10.0
+   Compiling unicode-xid v0.2.6
+   Compiling lazy_static v1.5.0
+   Compiling zstd-safe v8.2.0
+   Compiling prettyplease v0.2.37
+   Compiling compression-core v0.4.32
+   Compiling crossbeam-channel v0.5.15
+   Compiling cmake v0.1.58
+   Compiling rustc_version v0.4.1
+   Compiling regex v1.13.1
+   Compiling toml_edit v0.25.11+spec-1.1.0
+   Compiling openssl-src v300.6.1+3.6.3
+   Compiling stringprep v0.1.5
+   Compiling rand_core v0.9.5
+   Compiling ff v0.13.1
+   Compiling unsynn v0.3.0
+   Compiling num-iter v0.1.45
+   Compiling num-bigint v0.4.8
+   Compiling hashbrown v0.16.1
+   Compiling dtoa v1.0.11
+   Compiling regex-lite v0.1.9
+   Compiling tagptr v0.2.0
+   Compiling cfg_aliases v0.2.1
+   Compiling urlencoding v2.1.3
+   Compiling event-listener-strategy v0.5.4
+   Compiling serde_path_to_error v0.1.20
+   Compiling cookie v0.18.1
+   Compiling http-range-header v0.4.2
+   Compiling resolv-conf v0.7.6
+   Compiling glob v0.3.3
+   Compiling crc16 v0.4.0
+   Compiling signal-hook v0.3.18
+   Compiling num-modular v0.6.4
+   Compiling mac v0.1.1
+   Compiling minimal-lexical v0.2.1
+   Compiling phf v0.10.1
+   Compiling aws-lc-sys v0.45.0
+   Compiling ring v0.17.14
+   Compiling libz-sys v1.1.31
+   Compiling aws-types v1.3.16
+   Compiling proc-macro-crate v3.5.0
+   Compiling openssl-sys v0.9.118
+   Compiling pest_meta v2.8.6
+   Compiling zstd-sys v2.1.2+zstd.1.5.7
+   Compiling doppleganger-macros-parse v0.5.0
+   Compiling group v0.13.0
+   Compiling curve25519-dalek v4.1.3
+   Compiling specta v2.0.0-rc.25
+   Compiling constant_time_eq v0.6.1
+   Compiling nix v0.31.3
+   Compiling dtoa-short v0.3.5
+   Compiling curve25519-dalek v5.0.0
+   Compiling ascii_utils v0.9.3
+   Compiling rmcp v3.9.0
+   Compiling xmlparser v0.13.6
+   Compiling async-lock v3.4.2
+   Compiling asynk-strim v0.1.5
+   Compiling fixedbitset v0.5.7
+   Compiling unicode-width v0.2.0
+   Compiling opaque-debug v0.3.1
+   Compiling same-file v1.0.6
+   Compiling static_assertions_next v1.1.2
+   Compiling bstr v1.12.1
+   Compiling num-complex v0.4.6
+   Compiling synstructure v0.13.2
+   Compiling serde_derive_internals v0.29.1
+   Compiling darling_core v0.23.0
+   Compiling darling_core v0.20.11
+   Compiling pest_generator v2.8.6
+   Compiling doppleganger-macros v0.5.0
+   Compiling darling_core v0.24.1
+   Compiling futf v0.1.5
+   Compiling lru v0.16.4
+   Compiling nom v7.1.3
+   Compiling num-order v1.2.0
+   Compiling aws-smithy-xml v0.60.15
+   Compiling fast_chemail v0.9.6
+   Compiling num-rational v0.4.2
+   Compiling ordered-float v5.3.0
+   Compiling fxhash v0.2.1
+   Compiling instant v0.1.13
+   Compiling servo_arc v0.3.0
+   Compiling as-any v0.3.2
+   Compiling futures-timer v3.0.4
+   Compiling pastey v0.2.3
+   Compiling libbz2-rs-sys v0.2.5
+   Compiling cpubits v0.1.1
+   Compiling matchit v0.8.4
+   Compiling bumpalo v3.20.2
+   Compiling serde_derive v1.0.228
+   Compiling zeroize_derive v1.5.0
+   Compiling futures-macro v0.3.32
+   Compiling tokio-macros v2.7.0
+   Compiling tracing-attributes v0.1.31
+   Compiling zerocopy-derive v0.8.48
+   Compiling zerofrom-derive v0.1.7
+   Compiling yoke-derive v0.8.2
+   Compiling zerovec-derive v0.11.3
+   Compiling thiserror-impl v2.0.18
+   Compiling displaydoc v0.2.7
+   Compiling aws-smithy-runtime-api-macros v1.0.0
+   Compiling ref-cast-impl v1.0.25
+   Compiling async-trait v0.1.89
+   Compiling schemars_derive v1.2.1
+   Compiling thiserror-impl v1.0.69
+   Compiling strum_macros v0.27.2
+   Compiling pin-project-internal v1.1.13
+   Compiling phf_macros v0.13.1
+   Compiling pest_derive v2.8.6
+   Compiling curve25519-dalek-derive v0.1.1
+   Compiling derive_more-impl v2.1.1
+   Compiling cssparser-macros v0.6.1
+   Compiling polling v3.11.0
+   Compiling specta-macros v2.0.0-rc.25
+   Compiling tempfile v3.27.0
+   Compiling async-stream-impl v0.3.6
+   Compiling axum-macros v0.5.1
+   Compiling rig-derive v0.41.0
+   Compiling derive_more v0.99.20
+   Compiling tendril v0.4.3
+   Compiling walkdir v2.5.0
+   Compiling async-openai-macros v0.1.1
+   Compiling globset v0.4.19
+   Compiling num v0.4.3
+   Compiling sharded-slab v0.1.7
+   Compiling arc-swap v1.9.2
+   Compiling zeroize v1.9.0
+   Compiling futures-util v0.3.32
+   Compiling eventsource-stream v0.2.3
+   Compiling bzip2 v0.6.1
+   Compiling zopfli v0.8.3
+   Compiling getopts v0.2.24
+   Compiling serde_html_form v0.2.8
+   Compiling tracing-log v0.2.0
+   Compiling matchers v0.2.0
+   Compiling console v0.16.4
+   Compiling mio v0.8.11
+   Compiling backon v1.6.0
+   Compiling thread_local v1.1.9
+   Compiling ego-tree v0.6.3
+   Compiling deflate64 v0.1.12
+   Compiling bytemuck v1.25.0
+   Compiling similar v2.7.0
+   Compiling typed-path v0.12.3
+   Compiling base64 v0.23.1
+   Compiling nu-ansi-term v0.50.3
+   Compiling arcstr v1.2.0
+   Compiling darling_macro v0.20.11
+   Compiling darling_macro v0.23.0
+   Compiling phf v0.13.1
+   Compiling xxhash-rust v0.8.15
+   Compiling hybrid-array v0.4.15
+   Compiling tracing v0.1.44
+   Compiling zerofrom v0.1.8
+   Compiling rustls-pki-types v1.14.1
+   Compiling der v0.7.10
+   Compiling pin-project v1.1.13
+   Compiling darling_macro v0.24.1
+   Compiling async-stream v0.3.6
+   Compiling darling v0.20.11
+   Compiling strum v0.27.2
+   Compiling signal-hook-mio v0.2.5
+   Compiling petgraph v0.8.3
+   Compiling nom v8.0.0
+   Compiling paste v1.0.15
+   Compiling pem v3.0.6
+   Compiling constant_time_eq v0.3.1
+   Compiling block-buffer v0.12.0
+   Compiling crypto-common v0.1.6
+   Compiling crypto-common v0.2.2
+   Compiling block-buffer v0.10.4
+   Compiling block-padding v0.4.2
+   Compiling yoke v0.8.2
+   Compiling webpki-roots v1.0.10
+   Compiling rustls-native-certs v0.8.3
+   Compiling crypto-bigint v0.5.5
+   Compiling darling v0.23.0
+   Compiling flate2 v1.1.9
+   Compiling futures-executor v0.3.32
+   Compiling html5ever v0.26.0
+   Compiling derive_more v2.1.1
+   Compiling block-padding v0.3.3
+   Compiling darling v0.24.1
+   Compiling smallvec v1.15.1
+   Compiling bytes v1.11.1
+   Compiling digest v0.10.7
+   Compiling inout v0.2.2
+   Compiling either v1.16.0
+   Compiling zerovec v0.11.6
+   Compiling zerotrie v0.2.4
+   Compiling chrono v0.4.45
+   Compiling ipnet v2.12.0
+   Compiling spki v0.7.3
+   Compiling serde_urlencoded v0.7.1
+   Compiling webpki-roots v0.26.11
+   Compiling derive_builder_core v0.20.2
+   Compiling triomphe v0.1.15
+   Compiling universal-hash v0.5.1
+   Compiling opentelemetry v0.31.0
+   Compiling aead v0.5.2
+   Compiling tracing-serde v0.2.0
+   Compiling secrecy v0.10.3
+   Compiling email_address v0.2.9
+   Compiling simple_asn1 v0.6.4
+   Compiling non_empty v0.1.0 (<workspace>/crates/non_empty)
+   Compiling rayon-core v1.13.0
+   Compiling strum_macros v0.28.0
+   Compiling crossbeam-deque v0.8.6
+   Compiling zune-core v0.5.1
+   Compiling weezl v0.1.12
+   Compiling quick-error v2.0.1
+   Compiling libwebp-sys v0.9.6
+   Compiling fdeflate v0.3.7
+   Compiling zune-inflate v0.2.54
+   Compiling color_quant v1.1.0
+   Compiling bit_field v0.10.3
+   Compiling fax v0.2.7
+   Compiling byteorder-lite v0.1.0
+   Compiling lebe v0.5.3
+   Compiling http v1.4.0
+   Compiling ppv-lite86 v0.2.21
+   Compiling cipher v0.5.2
+   Compiling tinystr v0.8.3
+   Compiling potential_utf v0.1.5
+   Compiling hmac v0.12.1
+   Compiling sha2 v0.10.9
+   Compiling http v0.2.12
+   Compiling pkcs8 v0.10.2
+   Compiling bytes-utils v0.1.4
+   Compiling digest v0.11.3
+   Compiling signature v2.2.0
+   Compiling sha1 v0.10.6
+   Compiling md-5 v0.10.6
+   Compiling futures v0.3.32
+   Compiling serde_with_macros v3.21.0
+   Compiling compression-codecs v0.4.38
+   Compiling prefix-trie v0.8.4
+   Compiling inout v0.1.4
+   Compiling async-graphql-value v7.2.1
+   Compiling rmcp-macros v3.9.0
+   Compiling polyval v0.6.2
+   Compiling parking_lot v0.12.5
+   Compiling chacha20 v0.10.0
+   Compiling rand_chacha v0.3.1
+   Compiling http-body v1.0.1
+   Compiling icu_locale_core v2.2.0
+   Compiling icu_collections v2.2.0
+   Compiling hkdf v0.12.4
+   Compiling sec1 v0.7.3
+   Compiling rfc6979 v0.4.0
+   Compiling sha2 v0.11.0
+   Compiling hmac v0.13.0
+   Compiling derive_builder_macro v0.20.2
+   Compiling itertools v0.12.1
+   Compiling rand_chacha v0.9.0
+   Compiling pkcs1 v0.7.5
+   Compiling aes v0.9.3
+   Compiling sha1 v0.11.0
+   Compiling itertools v0.13.0
+   Compiling rust-embed-utils v8.11.0
+   Compiling tracing-futures v0.2.5
+   Compiling headers-core v0.3.0
+   Compiling tokio v1.54.1
+   Compiling rand v0.10.1
+   Compiling rand v0.8.6
+   Compiling icu_provider v2.2.0
+   Compiling http-body-util v0.1.3
+   Compiling http-body v0.4.6
+   Compiling elliptic-curve v0.13.8
+   Compiling futures-intrusive v0.5.0
+   Compiling rand v0.9.4
+   Compiling async-graphql-parser v7.2.1
+   Compiling derive_builder v0.20.2
+   Compiling cipher v0.4.4
+   Compiling hashbrown v0.14.5
+   Compiling ghash v0.5.1
+   Compiling http-serde v2.1.1
+   Compiling pbkdf2 v0.13.0
+   Compiling string_cache v0.8.9
+   Compiling opentelemetry-http v0.31.0
+   Compiling tracing-subscriber v0.3.23
+   Compiling insta v1.48.0
+   Compiling cowlike v0.1.0 (<workspace>/crates/cowlike)
+   Compiling rootcause-internals v0.12.1
+   Compiling uuid v1.23.1
+   Compiling icu_normalizer v2.2.0
+   Compiling icu_properties v2.2.0
+   Compiling phf_generator v0.11.3
+   Compiling primeorder v0.13.6
+   Compiling ecdsa v0.16.9
+   Compiling phf_generator v0.10.0
+   Compiling handlebars v6.4.1
+   Compiling tungstenite v0.29.0
+   Compiling axum-core v0.5.6
+   Compiling ctr v0.9.2
+   Compiling headers v0.4.1
+   Compiling lzma-rust2 v0.22.0
+   Compiling aes v0.8.4
+   Compiling twox-hash v2.1.2
+   Compiling sse-stream v0.2.6
+   Compiling ed25519 v2.2.3
+   Compiling strum v0.28.0
+   Compiling half v2.7.1
+   Compiling zune-jpeg v0.5.15
+   Compiling pxfm v0.1.29
+   Compiling png v0.18.1
+   Compiling gif v0.14.2
+   Compiling image-webp v0.2.4
+   Compiling phf_codegen v0.10.0
+   Compiling p256 v0.13.2
+   Compiling schemars v1.2.1
+   Compiling prost-derive v0.12.6
+   Compiling phf_macros v0.11.3
+   Compiling string_cache_codegen v0.5.4
+   Compiling moka v0.12.15
+   Compiling doppleganger-core v0.5.0
+   Compiling utoipa-gen v5.5.0
+   Compiling rootcause v0.12.1
+   Compiling macro_uuid v0.1.0 (<workspace>/crates/macro_uuid)
+   Compiling p384 v0.13.1
+   Compiling qoi v0.4.1
+   Compiling unicode-general-category v1.1.0
+   Compiling borrow-or-share v0.2.4
+   Compiling jsonschema-value v0.58.6
+   Compiling bit-vec v0.8.0
+   Compiling fraction v0.17.0
+   Compiling bytecount v0.6.9
+   Compiling micromap v0.3.0
+   Compiling num-cmp v0.1.0
+   Compiling num_enum_derive v0.7.6
+   Compiling rdkafka-sys v4.10.0+2.12.1
+   Compiling jsonschema-regex v0.58.6
+   Compiling uuid-simd v0.8.0
+   Compiling serde_repr v0.1.20
+   Compiling sealed v0.6.0
+   Compiling cached_proc_macro v0.23.0
+   Compiling web-time v1.1.0
+   Compiling cached_proc_macro_types v0.1.1
+   Compiling phf_shared v0.12.1
+   Compiling idna_adapter v1.2.2
+   Compiling markup5ever v0.11.0
+   Compiling selectors v0.25.0
+   Compiling async-graphql-derive v7.2.1
+   Compiling doppleganger v0.5.0
+   Compiling aes-gcm v0.10.3
+   Compiling rsa v0.9.10
+   Compiling ed25519-dalek v2.2.0
+   Compiling tracing-opentelemetry v0.32.1
+   Compiling tiff v0.11.3
+   Compiling fluent-uri v0.4.1
+   Compiling chrono-tz v0.10.4
+   Compiling dashmap v6.2.1
+   Compiling recursion v0.5.4
+   Compiling lazy-regex-proc_macros v3.6.1
+   Compiling phf_codegen v0.13.1
+   Compiling winnow v0.7.15
+   Compiling readonly v0.2.14
+   Compiling utf8-width v0.1.8
+   Compiling itertools v0.14.0
+   Compiling string_cache_codegen v0.6.1
+   Compiling idna v1.1.0
+   Compiling phf v0.11.3
+   Compiling serde_with v3.21.0
+   Compiling bit-set v0.8.0
+   Compiling phf v0.12.1
+   Compiling filter_ast v0.1.0 (<workspace>/crates/filter_ast)
+   Compiling anstyle v1.0.14
+   Compiling string_cache v0.9.0
+   Compiling tendril v0.5.0
+   Compiling predicates-core v1.0.10
+   Compiling mockall_derive v0.13.1
+   Compiling md-5 v0.11.0
+   Compiling termtree v0.5.1
+   Compiling fragile v2.1.0
+   Compiling downcast v0.11.0
+   Compiling spin v0.10.1
+   Compiling cssparser v0.37.0
+   Compiling maplit v1.0.2
+   Compiling subsequence_match v0.1.0 (<workspace>/crates/subsequence_match)
+   Compiling kinded_macros v0.5.1
+   Compiling nutype_macros v0.8.0
+   Compiling async-channel v2.5.0
+   Compiling async-task v4.7.1
+   Compiling utf8parse v0.2.2
+   Compiling getrandom v0.1.16
+   Compiling async-signal v0.2.14
+   Compiling piper v0.2.5
+   Compiling anstyle-query v1.1.5
+   Compiling colorchoice v1.0.5
+   Compiling url v2.5.8
+   Compiling prost v0.12.6
+   Compiling cssparser v0.31.2
+   Compiling exr v1.74.0
+   Compiling rayon v1.12.0
+   Compiling fancy-regex v0.19.2
+   Compiling referencing v0.58.6
+   Compiling num_enum v0.7.6
+   Compiling html-escape v0.2.13
+   Compiling foreign-types-shared v0.1.1
+   Compiling is_terminal_polyfill v1.70.2
+   Compiling openssl v0.10.82
+   Compiling futures-concurrency v7.7.1
+   Compiling agent-client-protocol-derive v2.0.0 (https://github.com/agentclientprotocol/rust-sdk?rev=8769d16d10e0c9fa7e662ee18424a4313b06ea88#8769d16d)
+   Compiling openssl-macros v0.1.1
+   Compiling native-tls v0.2.18
+   Compiling clap_lex v1.1.0
+   Compiling tokio-util v0.7.18
+   Compiling aws-smithy-async v1.2.14
+   Compiling tokio-stream v0.1.18
+   Compiling async-compression v0.4.42
+   Compiling tokio-tungstenite v0.29.0
+   Compiling zstd v0.14.3
+   Compiling backoff v0.4.0
+   Compiling jsonwebtoken v10.3.0 (https://github.com/whutchinson98/jsonwebtoken#c8c0d195)
+   Compiling moxcms v0.8.1
+   Compiling cached v0.54.0
+   Compiling tokio-retry v0.3.2
+   Compiling lazy-regex v3.6.1
+   Compiling web_atoms v0.2.5
+   Compiling predicates-tree v1.0.13
+   Compiling predicates v3.1.4
+   Compiling crc-fast v1.10.0
+   Compiling anstyle-parse v1.0.0
+   Compiling async-process v2.5.0
+   Compiling blocking v1.6.2
+   Compiling shell-words v1.1.1
+   Compiling prost-types v0.12.6
+   Compiling specta-serde v0.0.12
+   Compiling specta-typescript v0.0.12
+   Compiling clap_derive v4.6.1
+   Compiling logos-codegen v0.16.1
+   Compiling fixedbitset v0.4.2
+   Compiling heck v0.4.1
+   Compiling itertools v0.11.0
+   Compiling waker-fn v1.2.0
+   Compiling multimap v0.10.1
+   Compiling base64 v0.21.7
+   Compiling fractional_index v2.0.2
+   Compiling hickory-proto v0.26.3
+   Compiling oauth2 v5.0.0
+   Compiling zip v9.0.5
+   Compiling aws_lambda_events v0.16.1
+   Compiling opentelemetry_sdk v0.31.0
+   Compiling askama_parser v0.14.0
+   Compiling kinded v0.5.1
+   Compiling foreign-types v0.3.2
+   Compiling anstream v1.0.0
+   Compiling event-listener v2.5.3
+   Compiling fastrand v1.9.0
+   Compiling http-types v2.12.0
+   Compiling serde_qs v0.8.5
+   Compiling maybe_send v0.1.0 (<workspace>/crates/maybe_send)
+   Compiling async-stripe v0.41.0
+   Compiling base64 v0.13.1
+   Compiling infer v0.2.3
+   Compiling h2 v0.4.16
+   Compiling tower v0.5.3
+   Compiling aws-smithy-types v1.4.8
+   Compiling combine v4.6.7
+   Compiling jsonschema v0.58.6
+   Compiling agent-client-protocol-schema v1.6.0
+   Compiling rand_core v0.5.1
+   Compiling clap_builder v4.6.0
+   Compiling petgraph v0.6.5
+   Compiling h2 v0.3.27
+   Compiling async-channel v1.9.0
+   Compiling selectors v0.37.0
+   Compiling serde_qs v0.10.1
+   Compiling smol_str v0.1.24
+   Compiling smart-default v0.6.0
+   Compiling csv-core v0.1.13
+   Compiling pbjson v0.6.0
+   Compiling cssparser v0.36.0
+   Compiling servo_arc v0.4.3
+   Compiling fallible-iterator v0.2.0
+   Compiling cloudfront_sign v0.3.0
+   Compiling jsonwebtoken v10.4.0
+   Compiling os_info v3.15.0
+   Compiling device-info v0.1.1
+   Compiling rand_chacha v0.2.2
+   Compiling pbjson-build v0.6.2
+   Compiling futures-lite v1.13.0
+   Compiling heapless v0.7.17
+   Compiling hash32 v0.2.1
+   Compiling predicate-index v0.1.0 (<workspace>/crates/predicate_index)
+   Compiling cobs v0.3.0
+   Compiling macro_sync_service_jwt v0.1.0 (<workspace>/crates/macro_sync_service_jwt)
+   Compiling is-terminal v0.4.17
+   Compiling countme v3.0.1
+   Compiling bitflags v1.3.2
+   Compiling concolor-query v0.3.3
+   Compiling text-size v1.1.1
+   Compiling logos-derive v0.16.1
+   Compiling rustc-hash v1.1.0
+   Compiling jsonpath-rust v0.3.5
+   Compiling macro_db_migrator v0.1.0 (<workspace>/crates/macro_db_migrator)
+   Compiling yansi v1.0.1
+   Compiling typed-arena v2.0.2
+   Compiling aws-smithy-runtime-api v1.12.1
+   Compiling aws-smithy-eventstream v0.60.20
+   Compiling aws-smithy-query v0.60.15
+   Compiling csv v1.4.0
+   Compiling hickory-net v0.26.1
+   Compiling tower-http v0.6.11
+   Compiling rand v0.7.3
+   Compiling utoipa v5.5.0
+   Compiling postgres-protocol v0.6.11
+   Compiling concolor v0.1.1
+   Compiling prost-build v0.12.6
+   Compiling rowan v0.16.1
+   Compiling scraper v0.18.1
+   Compiling image v0.25.10
+   Compiling logos v0.16.1
+   Compiling postgres-types v0.2.13
+   Compiling markup5ever v0.39.0
+   Compiling markup5ever v0.38.0
+   Compiling ariadne v0.6.0
+   Compiling serde_json_bytes v0.2.5
+   Compiling html5ever v0.39.0
+   Compiling askama_derive v0.14.0
+   Compiling html5ever v0.38.0
+   Compiling aws-smithy-schema v0.1.0
+   Compiling aws-smithy-http v0.63.6
+   Compiling aws-credential-types v1.2.14
+   Compiling aws-smithy-observability v0.2.6
+   Compiling async-graphql v7.2.1
+   Compiling mockall v0.13.1
+   Compiling clap v4.6.1
+   Compiling apollo-parser v0.8.6
+   Compiling hickory-resolver v0.26.1
+   Compiling aws-sigv4 v1.4.4
+   Compiling postcard v1.1.3
+   Compiling aws-smithy-json v0.62.6
+   Compiling lol_html v2.9.0
+   Compiling cron v0.16.0
+   Compiling ammonia v4.1.8
+   Compiling html2text v0.16.7
+   Compiling pbjson-types v0.6.0
+   Compiling apollo-compiler v1.32.0
+   Compiling tokio-native-tls v0.3.1
+   Compiling aws-smithy-checksums v0.64.8
+   Compiling hyper v1.9.0
+   Compiling bot_id v0.1.0 (<workspace>/crates/bot_id)
+   Compiling model_file_type v0.1.0 (<workspace>/crates/model_file_type)
+   Compiling hyper v0.14.32
+   Compiling askama v0.14.0
+   Compiling hyper-util v0.1.20
+   Compiling nutype v0.8.0
+   Compiling dynamic_ui v0.1.0 (<workspace>/crates/dynamic_ui)
+   Compiling axum v0.8.9
+   Compiling livekit-protocol v0.7.7
+   Compiling hyper-tls v0.5.0
+   Compiling agent-client-protocol v2.0.0 (https://github.com/agentclientprotocol/rust-sdk?rev=8769d16d10e0c9fa7e662ee18424a4313b06ea88#8769d16d)
+   Compiling webp v0.3.1
+   Compiling axum-extra v0.10.3
+   Compiling rdkafka v0.37.0
+   Compiling rustls-webpki v0.103.16
+   Compiling tokio-rustls v0.26.4
+   Compiling sqlx-core v0.8.6
+   Compiling rustls-platform-verifier v0.7.0
+   Compiling tungstenite v0.28.0
+   Compiling hyper-rustls v0.27.9
+   Compiling redis v1.2.1
+   Compiling aws-smithy-http-client v1.1.12
+   Compiling reqwest v0.13.4
+   Compiling aws-smithy-runtime v1.11.3
+   Compiling rig-core v0.41.0
+   Compiling async-openai v0.36.1
+   Compiling sqlx-postgres v0.8.6
+   Compiling reqwest v0.12.28
+   Compiling tokio-tungstenite v0.28.0
+   Compiling agent_runtime_protocol v0.1.0 (<workspace>/crates/agent_runtime_protocol)
+   Compiling aws-runtime v1.7.4
+   Compiling livekit-api v0.4.24
+   Compiling aws-sdk-ssooidc v1.101.0
+   Compiling aws-sdk-sts v1.104.0
+   Compiling aws-sdk-sso v1.99.0
+   Compiling sqlx-macros-core v0.8.6
+   Compiling sqlx-macros v0.8.6
+   Compiling aws-config v1.8.17
+   Compiling aws-sdk-sqs v1.99.0
+   Compiling aws-sdk-sesv2 v1.119.0
+   Compiling aws-sdk-sns v1.100.0
+   Compiling aws-sdk-s3 v1.133.0
+   Compiling sqlx v0.8.6
+   Compiling macro_user_id v0.1.0 (<workspace>/crates/macro_user_id)
+   Compiling document_sub_type v0.1.0 (<workspace>/crates/document_sub_type)
+   Compiling notification_state v0.1.0 (<workspace>/crates/notification_state)
+   Compiling pgvector v0.4.1
+   Compiling model_owner v0.1.0 (<workspace>/crates/model_owner)
+   Compiling models_databases v0.1.0 (<workspace>/crates/models_databases)
+   Compiling item_filters v0.1.0 (<workspace>/crates/item_filters)
+   Compiling item-filter-index v0.1.0 (<workspace>/crates/item_filter_index)
+   Compiling agent_fold v0.1.0 (<workspace>/crates/folds/agent_fold)
+   Compiling aws-msk-iam-sasl-signer v1.0.1
+   Compiling database_sql v0.1.0 (<workspace>/crates/database_sql)
+   Compiling rig-agent v0.41.0
+   Compiling workspace-hack v0.1.0 (<workspace>/crates/workspace-hack)
+   Compiling macro_env_var v0.1.0 (<workspace>/crates/macro_env_var)
+   Compiling model-entity v0.1.0 (<workspace>/crates/model-entity)
+   Compiling model-error-response v0.1.0 (<workspace>/crates/model-error-response)
+   Compiling harness_token v0.1.0 (<workspace>/crates/harness_token)
+   Compiling harness_id v0.1.0 (<workspace>/crates/harness_id)
+   Compiling bot_token v0.1.0 (<workspace>/crates/bot_token)
+   Compiling model_user v0.1.0 (<workspace>/crates/model_user)
+   Compiling prompt v0.1.0 (<workspace>/crates/prompt)
+   Compiling models_bulk_upload v0.1.0 (<workspace>/crates/models_bulk_upload)
+   Compiling models_entity_access_management v0.1.0 (<workspace>/crates/models_entity_access_management)
+   Compiling agent_correlation v0.1.0 (<workspace>/crates/agent_correlation)
+   Compiling macro_event_topics v0.1.0 (<workspace>/crates/macro_event_topics)
+   Compiling broadcast v0.1.0 (<workspace>/crates/broadcast)
+   Compiling channel_sender v0.1.0 (<workspace>/crates/channel_sender)
+   Compiling models_properties v0.1.0 (<workspace>/crates/models_properties)
+   Compiling rate_limit v0.1.0 (<workspace>/crates/rate_limit)
+   Compiling last_online_tracker v0.1.0 (<workspace>/crates/last_online_tracker)
+   Compiling macro_tower_layers v0.1.0 (<workspace>/crates/macro_tower_layers)
+   Compiling email_utils v0.1.0 (<workspace>/crates/email_utils)
+   Compiling contacts v0.1.0 (<workspace>/crates/contacts)
+   Compiling models_sfs v0.1.0 (<workspace>/crates/models_sfs)
+   Compiling trigger_context v0.1.0 (<workspace>/crates/trigger_context)
+   Compiling s3_key v0.1.0 (<workspace>/crates/s3_key)
+   Compiling generic_email_domains v0.1.0 (<workspace>/crates/generic_email_domains)
+   Compiling roles_and_permissions v0.1.0 (<workspace>/crates/roles_and_permissions)
+   Compiling git_patch v0.1.0 (<workspace>/crates/git_patch)
+   Compiling models_grouping v0.1.0 (<workspace>/crates/models_grouping)
+   Compiling sync_service_hex v0.1.0 (<workspace>/crates/sync_service)
+   Compiling upstream_error v0.1.0 (<workspace>/crates/upstream_error)
+   Compiling macro_env v0.1.0 (<workspace>/crates/macro_env)
+   Compiling models_pagination v0.1.0 (<workspace>/crates/models_pagination)
+   Compiling models_permissions v0.1.0 (<workspace>/crates/models_permissions)
+   Compiling genai_telemetry v0.1.0 (<workspace>/crates/genai_telemetry)
+   Compiling attachment v0.1.0 (<workspace>/crates/attachment)
+   Compiling mention_utils v0.1.0 (<workspace>/crates/mention_utils)
+   Compiling frecency v0.1.0 (<workspace>/crates/frecency)
+   Compiling connection_gateway_models v0.1.0 (<workspace>/crates/connection_gateway_models)
+   Compiling shared_entity_registry v0.1.0 (<workspace>/crates/entity_registry/shared_entity_registry)
+   Compiling system_skills v0.1.0 (<workspace>/crates/system_skills)
+   Compiling saved_views v0.1.0 (<workspace>/crates/saved_views)
+   Compiling remote_env_var v0.1.0 (<workspace>/crates/remote_env_var)
+   Compiling kafka_util v0.1.0 (<workspace>/crates/kafka_util)
+   Compiling macro_service_urls v0.1.0 (<workspace>/crates/macro_service_urls)
+   Compiling analytics_client v0.1.0 (<workspace>/crates/analytics_client)
+   Compiling feature_flags v0.1.0 (<workspace>/crates/feature_flags)
+   Compiling ai_toolset v0.1.0 (<workspace>/crates/ai_toolset)
+   Compiling macro_auth v0.1.0 (<workspace>/crates/macro_auth)
+   Compiling entity_access_db_utils v0.1.0 (<workspace>/crates/entity_access_db_utils)
+   Compiling entity_access_management v0.1.0 (<workspace>/crates/entity_access_management)
+   Compiling models_email v0.1.0 (<workspace>/crates/models_email)
+   Compiling connection_gateway_client v0.1.0 (<workspace>/crates/connection_gateway_client)
+   Compiling graphql_contacts v0.1.0 (<workspace>/crates/graphql_contacts)
+   Compiling macro_event_broker v0.1.0 (<workspace>/crates/macro_event_broker)
+   Compiling macro_authorization v0.1.0 (<workspace>/crates/macro_authorization)
+   Compiling activity v0.1.0 (<workspace>/crates/activity)
+   Compiling notification v0.1.0 (<workspace>/crates/notification)
+   Compiling calendar_events v0.1.0 (<workspace>/crates/calendar_events)
+   Compiling system_properties v0.1.0 (<workspace>/crates/system_properties)
+   Compiling share_permission_db_utils v0.1.0 (<workspace>/crates/share_permission_db_utils)
+   Compiling ai_usage v0.1.0 (<workspace>/crates/ai_usage)
+   Compiling entity_registry v0.1.0 (<workspace>/crates/entity_registry/entity_registry)
+   Compiling graphql_common v0.1.0 (<workspace>/crates/graphql_common)
+   Compiling entity_registry_db_utils v0.1.0 (<workspace>/crates/entity_registry/entity_registry_db_utils)
+   Compiling graphql_soup_filter_input v0.1.0 (<workspace>/crates/graphql_soup_filter_input)
+   Compiling agent v0.1.0 (<workspace>/crates/agent)
+   Compiling jev v0.1.0 (<workspace>/crates/jev)
+   Compiling email_db_client v0.1.0 (<workspace>/crates/email_db_client)
+   Compiling graphql_calendar v0.1.0 (<workspace>/crates/graphql_calendar)
+   Compiling macro_aws_config v0.1.0 (<workspace>/crates/macro_aws_config)
+   Compiling static_file_service_client v0.1.0 (<workspace>/crates/static_file_service_client)
+   Compiling model v0.1.0 (<workspace>/crates/model)
+   Compiling invite_email v0.1.0 (<workspace>/crates/invite_email)
+   Compiling model_notifications v0.1.0 (<workspace>/crates/model_notifications)
+   Compiling graphql_notification v0.1.0 (<workspace>/crates/graphql_notification)
+   Compiling entity_access v0.1.0 (<workspace>/crates/entity_access)
+   Compiling sqs_client v0.1.0 (<workspace>/crates/sqs_client)
+   Compiling authentication_service_client v0.1.0 (<workspace>/crates/authentication_service_client)
+   Compiling sync_service_client v0.1.0 (<workspace>/crates/sync_service_client)
+   Compiling initiative v0.1.0 (<workspace>/crates/initiative)
+   Compiling properties v0.1.0 (<workspace>/crates/properties)
+   Compiling entity_mutation v0.1.0 (<workspace>/crates/entity_mutation)
+   Compiling databases v0.1.0 (<workspace>/crates/databases)
+   Compiling connection v0.1.0 (<workspace>/crates/connection)
+   Compiling foreign_entity v0.1.0 (<workspace>/crates/foreign_entity)
+   Compiling favorites v0.1.0 (<workspace>/crates/favorites)
+   Compiling graphql_permission v0.1.0 (<workspace>/crates/graphql_permission)
+   Compiling attention_feed v0.1.0 (<workspace>/crates/attention_feed)
+   Compiling graphql_activity v0.1.0 (<workspace>/crates/graphql_activity)
+   Compiling documents v0.1.0 (<workspace>/crates/documents)
+   Compiling github_pull_requests v0.1.0 (<workspace>/crates/github_pull_requests)
+   Compiling notification_inbox v0.1.0 (<workspace>/crates/notification_inbox)
+   Compiling work_feed v0.1.0 (<workspace>/crates/work_feed)
+   Compiling messages v0.1.0 (<workspace>/crates/messages)
+   Compiling github v0.1.0 (<workspace>/crates/github)
+   Compiling channels v0.1.0 (<workspace>/crates/channels)
+   Compiling lexical_client v0.1.0 (<workspace>/crates/lexical_client)
+   Compiling soup_realtime v0.1.0 (<workspace>/crates/soup_realtime)
+   Compiling crm v0.1.0 (<workspace>/crates/crm)
+   Compiling graphql_properties v0.1.0 (<workspace>/crates/graphql_properties)
+   Compiling email v0.1.0 (<workspace>/crates/email)
+   Compiling graphql_crm v0.1.0 (<workspace>/crates/graphql_crm)
+   Compiling teams v0.1.0 (<workspace>/crates/teams)
+   Compiling bots v0.1.0 (<workspace>/crates/bots)
+   Compiling call v0.1.0 (<workspace>/crates/call)
+   Compiling graphql_channel v0.1.0 (<workspace>/crates/graphql_channel)
+   Compiling routine_program v0.1.0 (<workspace>/crates/routine_program)
+   Compiling ai_billing v0.1.0 (<workspace>/crates/ai_billing)
+   Compiling models_soup v0.1.0 (<workspace>/crates/models_soup)
+   Compiling graphql_email v0.1.0 (<workspace>/crates/graphql_email)
+   Compiling agent_session v0.1.0 (<workspace>/crates/agent_session)
+   Compiling agent_changes v0.1.0 (<workspace>/crates/agent_changes)
+   Compiling scheduled_action v0.1.0 (<workspace>/crates/scheduled_action)
+   Compiling agent_session_realtime v0.1.0 (<workspace>/crates/agent_session_realtime)
+   Compiling soup v0.1.0 (<workspace>/crates/soup)
+   Compiling soup-filter-projection v0.1.0 (<workspace>/crates/soup_filter_projection)
+   Compiling databases_sql v0.1.0 (<workspace>/crates/databases_sql)
+   Compiling graphql_soup v0.1.0 (<workspace>/crates/graphql_soup)
+   Compiling graphql_scheduled_action v0.1.0 (<workspace>/crates/graphql_scheduled_action)
+   Compiling graphql_entity_mutation v0.1.0 (<workspace>/crates/graphql_entity_mutation)
+   Compiling graphql_notification_inbox v0.1.0 (<workspace>/crates/graphql_notification_inbox)
+   Compiling graphql_databases v0.1.0 (<workspace>/crates/graphql_databases)
+   Compiling graphql_initiative v0.1.0 (<workspace>/crates/graphql_initiative)
+   Compiling graphql_registered_work v0.1.0 (<workspace>/crates/graphql_registered_work)
+   Compiling graphql_work_feed v0.1.0 (<workspace>/crates/graphql_work_feed)
+   Compiling graphql_favorite v0.1.0 (<workspace>/crates/graphql_favorite)
+   Compiling complete_graph v0.1.0 (<workspace>/crates/complete_graph)
+    Finished `release` profile [optimized] target(s) in 3m 23s
+     Running unittests src/lib.rs (target/channel-perf-release/release/deps/complete_graph-43cfde49bb596720)
+
+running 1 test
+channel latest page (debug assertions disabled): size=50, warmup_pairs=20, sample_pairs=200, GraphQL median=2.370ms p95=2.666ms; REST median=1.671ms p95=1.875ms; median_ratio=1.418, median_delta=0.699ms
+REST phases: domain median=1.590ms p95=1.780ms; DTO JSON median=0.070ms p95=0.098ms; GraphQL p50 minus shared-domain p50=0.781ms (inferred adapter and serialization cost)
+GraphQL channel.timeline.authorize: median=0.001ms p95=0.002ms
+GraphQL channel.timeline.sequence: median=0.000ms p95=0.001ms
+GraphQL channel.timeline.read: median=1.581ms p95=1.814ms
+GraphQL channel.timeline.map: median=0.042ms p95=0.057ms
+GraphQL execute median=2.298ms p95=2.595ms; execute residual median=0.677ms p95=0.753ms; response JSON median=0.046ms p95=0.061ms
+GraphQL SQL statement count=9
+GraphQL SQL 1: SELECT EXISTS(SELECT 1 FROM comms_channels WHERE id = $1) AS "exists!"
+GraphQL SQL 2: SELECT event.id AS "id!", event.actor_id AS "actor_id!", event.occurred_at AS "occurred_at!", event.action AS "action!", event.payload FROM unnest($3::text[]) selected(action) CROSS JOIN LATERAL ( SELECT id, actor_id, occurred_at, action, action_payload AS payload FROM activity_events WHERE entity_type = $1 AND entity_id = $2 AND action = selected.action AND action NOT IN ('messaged', 'opened', 'edited', 'sent') AND (selected.action <> 'property_changed' OR cardinality($4::text[]) = 0 OR action_payload->>'property' = ANY($4::text[])) ORDER BY occurred_at DESC, id DESC LIMIT $5 ) event ORDER BY event.occurred_at DESC, event.id DESC LIMIT $5
+GraphQL SQL 3: SELECT to_jsonb(m) AS "message!: Json<StoredMessage>" FROM comms_messages m JOIN comms_message_threads t ON t.root_id = m.id WHERE m.parent_entity_type = $1 AND m.parent_entity_id = $2 AND m.thread_id IS NULL AND (t.deleted_at IS NULL OR $10) AND (m.deleted_at IS NULL OR $1 = 'document' OR ($10 AND t.deleted_at IS NOT NULL) OR EXISTS ( SELECT 1 FROM comms_messages r WHERE r.thread_id = m.id AND r.deleted_at IS NULL OFFSET 0)) AND ($6::uuid[] IS NULL OR m.id = ANY($6)) AND ($7::bool IS NULL OR (t.anchor IS NOT NULL) = $7) AND (($8::timestamptz IS NULL AND $9::timestamptz IS NULL) OR (($8::timestamptz IS NULL OR m.created_at >= $8) AND ($9::timestamptz IS NULL OR m.created_at < $9)) OR EXISTS (SELECT 1 FROM comms_messages r WHERE r.thread_id = m.id AND r.deleted_at IS NULL AND ($8::timestamptz IS NULL OR r.created_at >= $8) AND ($9::timestamptz IS NULL OR r.created_at < $9))) AND (m.created_at, m.id) < (COALESCE($3::timestamptz, 'infinity'::timestamptz), COALESCE($4::uuid, 'ffffffff-ffff-ffff-ffff-ffffffffffff'::uuid)) ORDER BY m.created_at DESC, m.id DESC LIMIT $5
+GraphQL SQL 4: SELECT t.root_id, to_jsonb(t) AS "state!: Json<ThreadState>", (SELECT count(*) FROM comms_messages r WHERE r.thread_id = t.root_id AND r.deleted_at IS NULL) AS "reply_count!", (SELECT max(created_at) FROM comms_messages r WHERE r.thread_id = t.root_id AND r.deleted_at IS NULL) AS latest_reply_at FROM comms_message_threads t WHERE root_id = ANY($1)
+GraphQL SQL 5: SELECT to_jsonb(preview) AS "message!: Json<StoredMessage>" FROM unnest($1::uuid[]) root(id) CROSS JOIN LATERAL ( SELECT r.* FROM comms_messages r WHERE r.thread_id = root.id AND r.deleted_at IS NULL ORDER BY r.import_order NULLS LAST, r.created_at, r.id LIMIT 3 ) preview
+GraphQL SQL 6: SELECT message_id, id, entity_type, entity_id, width, height, created_at FROM comms_attachments WHERE message_id = ANY($1) ORDER BY created_at, id
+GraphQL SQL 7: SELECT message_id, emoji, array_agg(user_id ORDER BY user_id) AS "users!" FROM comms_reactions WHERE message_id = ANY($1) GROUP BY message_id, emoji ORDER BY emoji
+GraphQL SQL 8: SELECT source_entity_id, entity_type, entity_id FROM comms_entity_mentions WHERE source_entity_type = 'message' AND source_entity_id = ANY($1) ORDER BY entity_type, entity_id
+GraphQL SQL 9: SELECT id, name, avatar_url FROM bots WHERE id = ANY($1)
+REST SQL statement count=9
+REST SQL 1: SELECT EXISTS(SELECT 1 FROM comms_channels WHERE id = $1) AS "exists!"
+REST SQL 2: SELECT event.id AS "id!", event.actor_id AS "actor_id!", event.occurred_at AS "occurred_at!", event.action AS "action!", event.payload FROM unnest($3::text[]) selected(action) CROSS JOIN LATERAL ( SELECT id, actor_id, occurred_at, action, action_payload AS payload FROM activity_events WHERE entity_type = $1 AND entity_id = $2 AND action = selected.action AND action NOT IN ('messaged', 'opened', 'edited', 'sent') AND (selected.action <> 'property_changed' OR cardinality($4::text[]) = 0 OR action_payload->>'property' = ANY($4::text[])) ORDER BY occurred_at DESC, id DESC LIMIT $5 ) event ORDER BY event.occurred_at DESC, event.id DESC LIMIT $5
+REST SQL 3: SELECT to_jsonb(m) AS "message!: Json<StoredMessage>" FROM comms_messages m JOIN comms_message_threads t ON t.root_id = m.id WHERE m.parent_entity_type = $1 AND m.parent_entity_id = $2 AND m.thread_id IS NULL AND (t.deleted_at IS NULL OR $10) AND (m.deleted_at IS NULL OR $1 = 'document' OR ($10 AND t.deleted_at IS NOT NULL) OR EXISTS ( SELECT 1 FROM comms_messages r WHERE r.thread_id = m.id AND r.deleted_at IS NULL OFFSET 0)) AND ($6::uuid[] IS NULL OR m.id = ANY($6)) AND ($7::bool IS NULL OR (t.anchor IS NOT NULL) = $7) AND (($8::timestamptz IS NULL AND $9::timestamptz IS NULL) OR (($8::timestamptz IS NULL OR m.created_at >= $8) AND ($9::timestamptz IS NULL OR m.created_at < $9)) OR EXISTS (SELECT 1 FROM comms_messages r WHERE r.thread_id = m.id AND r.deleted_at IS NULL AND ($8::timestamptz IS NULL OR r.created_at >= $8) AND ($9::timestamptz IS NULL OR r.created_at < $9))) AND (m.created_at, m.id) < (COALESCE($3::timestamptz, 'infinity'::timestamptz), COALESCE($4::uuid, 'ffffffff-ffff-ffff-ffff-ffffffffffff'::uuid)) ORDER BY m.created_at DESC, m.id DESC LIMIT $5
+REST SQL 4: SELECT t.root_id, to_jsonb(t) AS "state!: Json<ThreadState>", (SELECT count(*) FROM comms_messages r WHERE r.thread_id = t.root_id AND r.deleted_at IS NULL) AS "reply_count!", (SELECT max(created_at) FROM comms_messages r WHERE r.thread_id = t.root_id AND r.deleted_at IS NULL) AS latest_reply_at FROM comms_message_threads t WHERE root_id = ANY($1)
+REST SQL 5: SELECT to_jsonb(preview) AS "message!: Json<StoredMessage>" FROM unnest($1::uuid[]) root(id) CROSS JOIN LATERAL ( SELECT r.* FROM comms_messages r WHERE r.thread_id = root.id AND r.deleted_at IS NULL ORDER BY r.import_order NULLS LAST, r.created_at, r.id LIMIT 3 ) preview
+REST SQL 6: SELECT message_id, id, entity_type, entity_id, width, height, created_at FROM comms_attachments WHERE message_id = ANY($1) ORDER BY created_at, id
+REST SQL 7: SELECT message_id, emoji, array_agg(user_id ORDER BY user_id) AS "users!" FROM comms_reactions WHERE message_id = ANY($1) GROUP BY message_id, emoji ORDER BY emoji
+REST SQL 8: SELECT source_entity_id, entity_type, entity_id FROM comms_entity_mentions WHERE source_entity_type = 'message' AND source_entity_id = ANY($1) ORDER BY entity_type, entity_id
+REST SQL 9: SELECT id, name, avatar_url FROM bots WHERE id = ANY($1)
+test schema::test::channel_perf::channel_latest_graphql_and_rest_server_timings ... ok
+
+test result: ok. 1 passed; 0 failed; 0 ignored; 0 measured; 114 filtered out; finished in 0.96s
+
