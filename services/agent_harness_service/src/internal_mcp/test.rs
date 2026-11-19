@@ -619,6 +619,22 @@ async fn execute_code_offers_and_accepts_js_tools_only_with_permissions() {
             tools.iter().any(|tool| tool["name"] == "ShowPermissions"),
             js_tools
         );
+        // Off, ShowPermissions is refused even when named directly.
+        let (_, shown) = rpc(
+            app.clone(),
+            Some("secret"),
+            "tools/call",
+            serde_json::json!({
+                "name": "ShowPermissions",
+                "arguments": {"groups": [{"group": "email"}]},
+            }),
+        )
+        .await;
+        assert_eq!(
+            shown.to_string().contains("not available in this session"),
+            !js_tools,
+            "{shown}"
+        );
         let (_, called) = rpc(
             app,
             Some("secret"),
