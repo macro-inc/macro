@@ -1,3 +1,4 @@
+import { toast } from '@core/component/Toast/Toast';
 import { createMemo, createRoot, getOwner, type Owner } from 'solid-js';
 import { afterEach, describe, expect, it, vi } from 'vitest';
 import type {
@@ -30,7 +31,9 @@ vi.mock('@core/component/Toast/Toast', () => ({
 }));
 vi.mock('./routine-template', () => ({ openShareRoutineDialog: vi.fn() }));
 vi.mock('./queries/routine-sources', () => ({
-  createRoutineRowOperations: (): RoutineRowOperations => ({
+  createRoutineRowOperations: (callbacks: {
+    onError(operation: 'duplicate' | 'keep', error: Error): void;
+  }): RoutineRowOperations => ({
     entity: (id) => ({
       id,
       type: 'routine',
@@ -40,9 +43,19 @@ vi.mock('./queries/routine-sources', () => ({
     }),
     run: vi.fn(),
     runPending: () => false,
-    duplicate: vi.fn(),
+    duplicate: () =>
+      callbacks.onError(
+        'duplicate',
+        new Error('The target cannot use these apps.')
+      ),
     canDuplicate: () => true,
-    keepAsOwn: vi.fn(),
+    keepAsOwn: () =>
+      callbacks.onError(
+        'keep',
+        new Error('The parent target cannot use these apps.')
+      ),
+    canKeepAsOwn: () => true,
+    setMenuOpen: vi.fn(),
     createdCount: () =>
       new Promise((resolve) => {
         mocks.answerCount = resolve;
@@ -121,6 +134,21 @@ const opened = () => {
 };
 
 afterEach(() => mocks.openDelete.mockReset());
+
+it('shows the scheduler reason when Keep or Duplicate fails', () => {
+  createRoot((dispose) => {
+    const actions = useRoutineRowMenuActions(source, { open: vi.fn() });
+    actions.onKeep(triage);
+    actions.onDuplicate(triage);
+    dispose();
+  });
+  expect(toast.alert).toHaveBeenNthCalledWith(1, expect.any(String), {
+    subtext: 'The parent target cannot use these apps.',
+  });
+  expect(toast.alert).toHaveBeenNthCalledWith(2, expect.any(String), {
+    subtext: 'The target cannot use these apps.',
+  });
+});
 
 describe('routine row Delete', () => {
   it('asks at once under the list, then counts what the routine created', async () => {

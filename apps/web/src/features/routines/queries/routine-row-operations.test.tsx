@@ -151,7 +151,8 @@ describe('routine row operations', () => {
       </QueryClientProvider>
     ));
     await vi.waitFor(() => expect(list.subRoutines()[0]?.id).toBe('digest'));
-    expect(list.subRoutines()[0]?.canKeep).toBe(true);
+    operations.setMenuOpen('digest', true);
+    expect(operations.canKeepAsOwn('digest')).toBe(true);
     expect(appConnections.requested).not.toHaveBeenCalled();
     operations.keepAsOwn('digest');
     await vi.waitFor(() => expect(callbacks.onKept).toHaveBeenCalledOnce());
@@ -206,14 +207,17 @@ describe('routine row operations', () => {
     ));
 
     await vi.waitFor(() => expect(list.subRoutines()[0]?.id).toBe('digest'));
-    expect(list.subRoutines()[0]?.canKeep).toBe(false);
+    expect(appConnections.requested).not.toHaveBeenCalled();
+    operations.setMenuOpen('digest', true);
+    expect(appConnections.requested).toHaveBeenCalledOnce();
+    expect(operations.canKeepAsOwn('digest')).toBe(false);
     setSlugs(new Set<string>());
-    expect(list.subRoutines()[0]?.canKeep).toBe(false);
+    expect(operations.canKeepAsOwn('digest')).toBe(false);
     operations.keepAsOwn('digest');
     await Promise.resolve();
     expect(client.detach).not.toHaveBeenCalled();
     setSlugs(new Set(['example']));
-    expect(list.subRoutines()[0]?.canKeep).toBe(true);
+    expect(operations.canKeepAsOwn('digest')).toBe(true);
     operations.keepAsOwn('digest');
     await vi.waitFor(() => expect(callbacks.onKept).toHaveBeenCalledOnce());
     expect(client.detach).toHaveBeenCalledExactlyOnceWith({
@@ -299,6 +303,8 @@ describe('routine row operations', () => {
     queryClient.setQueryData(scheduledActionKeys.list.queryKey, [saved]);
     client.createSchedule.mockResolvedValue(ok({ ...saved, id: 'duplicate' }));
     const operations = mount();
+    expect(appConnections.requested).not.toHaveBeenCalled();
+    operations.setMenuOpen('briefing', true);
     expect(operations.canDuplicate('briefing')).toBe(false);
     setSlugs(new Set<string>());
     expect(appConnections.requested).toHaveBeenCalled();

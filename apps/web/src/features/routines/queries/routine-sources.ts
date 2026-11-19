@@ -518,33 +518,12 @@ export function createRoutineListSource(
 ): RoutineListSource {
   const query = useSchedulesQuery(() => true);
   const children = useSubRoutinesQuery(() => true);
-  const linked = createMemo(() =>
-    (children.isSuccess || children.isError ? (children.data ?? []) : [])
-      .filter((child) => child.id)
-      .map((child) => ({
-        child,
-        parent:
-          query.isSuccess || query.isError
-            ? query.data?.find(
-                (item) => item.id === child.sub_routine?.parent_id
-              )
-            : undefined,
-      }))
-  );
-  const connectedApps = createRoutineConnectedApps(() =>
-    linked().some(
-      ({ child, parent }) =>
-        retainedDefinitionApps(compatibleCopyParentTask(child, parent)).length >
-        0
-    )
-  );
   const toggle = useSetScheduleEnabledMutation({ onError });
   return {
     subRoutines: createMemo(() =>
-      linked().map(({ child, parent }) => ({
-        ...toRoutine(child),
-        canKeep: canKeepSchedule(child, parent, connectedApps()),
-      }))
+      (children.isSuccess || children.isError ? (children.data ?? []) : [])
+        .filter((child) => child.id)
+        .map(toRoutine)
     ),
     routines: createMemo(() =>
       (query.isSuccess || query.isError ? (query.data ?? []) : [])
@@ -606,24 +585,28 @@ export function createRoutineRowOperations(
   const find = (id: string) =>
     saved().find((item) => item.id === id) ??
     linked().find((item) => item.id === id);
-  const connectedApps = createRoutineConnectedApps(
-    () =>
-      [...saved(), ...linked()].some(
-        (schedule) =>
-          retainedDefinitionApps(schedule.task).length > 0 &&
-          scheduleToDuplicateBody(schedule, subRoutineWrites() === true) !==
-            undefined
-      ) ||
-      linked().some(
-        (child) =>
-          retainedDefinitionApps(
-            compatibleCopyParentTask(
-              child,
-              child.sub_routine ? find(child.sub_routine.parent_id) : undefined
-            )
-          ).length > 0
-      )
+  const parentFor = (schedule: ScheduledActionResponse) =>
+    schedule.sub_routine ? find(schedule.sub_routine.parent_id) : undefined;
+  const duplicateCandidate = (schedule: ScheduledActionResponse) =>
+    scheduleToDuplicateBody(schedule, subRoutineWrites() === true);
+  const [openMenus, setOpenMenus] = createSignal<readonly string[]>([]);
+  const connectedApps = createRoutineConnectedApps(() =>
+    openMenus().some((id) => {
+      const schedule = find(id);
+      if (!schedule) return false;
+      const task = isSubRoutineCopy(schedule.task)
+        ? compatibleCopyParentTask(schedule, parentFor(schedule))
+        : duplicateCandidate(schedule)?.task;
+      return retainedDefinitionApps(task).length > 0;
+    })
   );
+  const canKeepAsOwn = (id: string) => {
+    const schedule = find(id);
+    return (
+      !!schedule &&
+      canKeepSchedule(schedule, parentFor(schedule), connectedApps())
+    );
+  };
   const run = useRunScheduleNowMutation({
     onSuccess: () => callbacks.onRunStarted(),
     onError: (error) => callbacks.onError('run', error),
@@ -648,10 +631,7 @@ export function createRoutineRowOperations(
     const schedule = find(id);
     return (
       schedule &&
-      duplicateWithConnections(
-        scheduleToDuplicateBody(schedule, subRoutineWrites() === true),
-        connectedApps()
-      )
+      duplicateWithConnections(duplicateCandidate(schedule), connectedApps())
     );
   };
   const duplicating = createPerRoutineMutation(async (id) => {
@@ -677,17 +657,15 @@ export function createRoutineRowOperations(
       if (duplicateBody(id)) duplicating.start(id);
     },
     canDuplicate: (id) => Boolean(duplicateBody(id)),
+    canKeepAsOwn,
     keepAsOwn(id) {
-      const schedule = find(id);
-      if (
-        schedule?.sub_routine &&
-        canKeepSchedule(
-          schedule,
-          find(schedule.sub_routine.parent_id),
-          connectedApps()
-        )
-      )
-        keeping.start(id);
+      if (canKeepAsOwn(id)) keeping.start(id);
+    },
+    setMenuOpen(id, open) {
+      setOpenMenus((ids) => {
+        if (ids.includes(id) === open) return ids;
+        return open ? [...ids, id] : ids.filter((other) => other !== id);
+      });
     },
     async createdCount(id) {
       const created = await fetchChildren(id);

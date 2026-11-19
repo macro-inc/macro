@@ -77,6 +77,8 @@ export type RoutineRowOperations = {
   runPending(id: string): boolean;
   duplicate(id: string): void;
   canDuplicate(id: string): boolean;
+  canKeepAsOwn(id: string): boolean;
+  setMenuOpen(id: string, open: boolean): void;
   /** Make a sub-routine the owner's own: it stops following its parent. */
   keepAsOwn(id: string): void;
   /**

@@ -118,6 +118,9 @@ export function useRoutineRowMenuActions(
     onDuplicate: (row) => operations.duplicate(row.id),
     canDuplicate: (row) => operations.canDuplicate(row.id),
     onKeep: (row) => operations.keepAsOwn(row.id),
+    canKeep: (row) => operations.canKeepAsOwn(row.id),
+    onOpenChange: (row, open) =>
+      operations.setMenuOpen(row.id, open && row.editable),
     onCopyLink: (row) =>
       fireAndForget(copyLink.executeByBlock(row.id, 'routine'), 'routines'),
     onCopyId: (row) => fireAndForget(copyId.executeById(row.id), 'routines'),

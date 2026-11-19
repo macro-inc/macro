@@ -53,11 +53,10 @@ describe('routine menu groups', () => {
       enabled: true,
       shareable: false,
       isCopy: true,
-      canKeep: true,
     };
-    expect(routineMenuGroups(row, { ...DESKTOP, nested: true })[2]).toEqual([
-      'keep',
-    ]);
+    expect(
+      routineMenuGroups(row, { ...DESKTOP, nested: true, keep: true })[2]
+    ).toEqual(['keep']);
   });
 
   it('leaves out what the host cannot offer', () => {

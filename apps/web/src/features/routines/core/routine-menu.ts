@@ -22,6 +22,7 @@ export type RoutineMenuSurface = {
   tabs: boolean;
   share: boolean;
   duplicate?: boolean;
+  keep?: boolean;
 };
 
 /**
@@ -30,10 +31,7 @@ export type RoutineMenuSurface = {
  * gets only opening and links.
  */
 export function routineMenuGroups(
-  row: Pick<
-    RoutineRow,
-    'editable' | 'enabled' | 'isCopy' | 'shareable' | 'canKeep'
-  >,
+  row: Pick<RoutineRow, 'editable' | 'enabled' | 'isCopy' | 'shareable'>,
   surface: RoutineMenuSurface
 ): RoutineMenuItem[][] {
   const owned = row.editable;
@@ -49,7 +47,7 @@ export function routineMenuGroups(
           ...(row.isCopy || surface.duplicate === false
             ? []
             : (['duplicate'] as const)),
-          ...(surface.nested && (!row.isCopy || row.canKeep)
+          ...(surface.nested && (surface.keep ?? !row.isCopy)
             ? (['keep'] as const)
             : []),
         ]

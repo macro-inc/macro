@@ -68,7 +68,6 @@ export function createRoutineRows(
       ...describe(routine),
       children: newestFirst(created).map((child) => ({
         ...describe(child),
-        canKeep: child.canKeep,
         children: [],
       })),
     };

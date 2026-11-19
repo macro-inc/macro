@@ -24,7 +24,6 @@ export type RoutineRow = {
   editable: boolean;
   enabled: boolean;
   isCopy: boolean;
-  canKeep?: boolean;
   /** Whether the scheduler takes it as a template (`sharesAsTemplate`). */
   shareable: boolean;
   /** The routines its runs created that still have work to do, newest first. */

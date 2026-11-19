@@ -23,6 +23,7 @@ import {
   createSignal,
   For,
   on,
+  onCleanup,
   type ParentProps,
   Show,
 } from 'solid-js';
@@ -49,6 +50,8 @@ export type RoutineRowMenuActions = {
   onDuplicate(row: RoutineRow): void;
   canDuplicate?(row: RoutineRow): boolean;
   onKeep(row: RoutineRow): void;
+  canKeep?(row: RoutineRow): boolean;
+  onOpenChange?(row: RoutineRow, open: boolean): void;
   onCopyLink(row: RoutineRow): void;
   onCopyId(row: RoutineRow): void;
   /** Omit where routines can't be shared. */
@@ -173,6 +176,7 @@ function createRoutineMenuEntries(
         tabs: desktop && Boolean(actions().onOpenInNewTab) && canOpenInNewTab(),
         share: Boolean(actions().onShare),
         duplicate: actions().canDuplicate?.(props.row),
+        keep: props.nested ? actions().canKeep?.(props.row) : undefined,
       });
     },
     undefined,
@@ -207,18 +211,27 @@ const drawerGroups = (
 export function RoutineRowMenu(props: ParentProps<RoutineRowMenuProps>) {
   const row = children(() => props.children);
   const [drawerOpen, setDrawerOpen] = createSignal(false);
+  const changeDrawer = (open: boolean) => {
+    props.actions?.onOpenChange?.(props.row, open);
+    setDrawerOpen(open);
+  };
   // Event handling, not composition, differs on a phone: the row is the same.
   const openDrawer = () => {
-    if (isMobile()) setDrawerOpen(true);
+    if (isMobile()) changeDrawer(true);
   };
   return (
     <Show when={props.actions} fallback={row()}>
       {(actions) => {
+        const close = actions().onOpenChange;
+        const currentRow = props.row;
+        onCleanup(() => close?.(currentRow, false));
         const entries = createRoutineMenuEntries(props, actions);
         const drawer = createMemo(() => drawerGroups(entries()));
         return (
           <>
-            <ContextMenu>
+            <ContextMenu
+              onOpenChange={(open) => actions().onOpenChange?.(props.row, open)}
+            >
               <ContextMenuTrigger
                 as="div"
                 class="group/routine-menu"
@@ -277,7 +290,7 @@ export function RoutineRowMenu(props: ParentProps<RoutineRowMenuProps>) {
                 entity={actions().entity(props.row)}
                 groups={drawer()}
                 open
-                onOpenChange={setDrawerOpen}
+                onOpenChange={changeDrawer}
               />
             </Show>
           </>
