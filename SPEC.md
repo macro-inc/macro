@@ -93,7 +93,7 @@ of the team watch and take over** an agent's screen.
 | Phase | Ships | Changes |
 | --- | --- | --- |
 | 1 Watch | View screen (card, DM header, Machines row), side panel, view-only, phone watch, audit rows | harness: ticket route + `GET /computers/{id}/screen` WS (socat exec, RFB input gate); DB: `computer_screen_sessions`; web: noVNC panel in sandboxed iframe. No guest/host change. |
-| 2 Take over | Take over / Hand back, amber state, driver lease, idle hand-back, agent blocked + notified | harness: lease + gate on; agent tool block (Q1); runtime notification |
+| 2 Take over | Take over / Hand back, amber state, driver lease, idle hand-back, agent blocked + notified | harness: lease + gate on; agent tool hold (D7); runtime notification |
 | 3 Share chip | Agent posts "Watch my screen" card with live thumbnail | agent tool to post the chip; message attachment type; thumbnail = harness-side periodic frame grab, access-checked |
 | Later | Phone take-over, take-over recording, host-agent `stream` route instead of socat exec, WebRTC if phones on cellular are poor | |
 
