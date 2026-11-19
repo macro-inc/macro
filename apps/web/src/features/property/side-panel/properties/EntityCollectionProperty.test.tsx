@@ -136,9 +136,7 @@ it('unlocks the row once a save is accepted locally, while its commit never arri
   expect(addButton().disabled).toBe(false);
   expect(screen.queryByText('acme')).toBeNull();
   expect(screen.getByText('globex')).toBeTruthy();
-  expect(
-    screen.getByRole('button', { name: 'Remove globex' })
-  ).toBeTruthy();
+  expect(screen.getByRole('button', { name: 'Remove globex' })).toBeTruthy();
   expect(onRefresh).not.toHaveBeenCalled();
 });
 

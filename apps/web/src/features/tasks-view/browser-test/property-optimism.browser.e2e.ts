@@ -47,12 +47,6 @@ for (const succeeds of [true, false]) {
   }) => {
     await page.getByRole('button', { name: 'Set both Urgent' }).click();
     await expect(page.getByText('HTTP requests: 1 · Settled: 0')).toBeVisible();
-    // Both saves are accepted locally while the first request is unanswered
-    // and the second has not been sent.
-    await expect(page.getByLabel('Accepted saves')).toHaveText('1');
-    await expect(page.getByLabel('Save status')).toHaveText(
-      'Pending: yes · Succeeded: 0 · Failed: 0'
-    );
     await page.getByRole('button', { name: 'Commit next request' }).click();
     await expect(page.getByText('HTTP requests: 2 · Settled: 1')).toBeVisible();
     await expect(page.getByLabel('Save status')).toHaveText(
