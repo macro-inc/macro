@@ -986,17 +986,23 @@ pub(crate) async fn search_unified(
 
     let search_indices: Vec<&str> = args.search_indices.iter().map(|i| i.index_name()).collect();
 
+    // An index that does not exist yet — a newly added entity type before
+    // its create-index run, or an alias mid-reindex — otherwise fails the
+    // whole request with `index_not_found_exception`, taking down search
+    // for every entity rather than just that one. `ignore_unavailable`
+    // degrades to the indices that are present; `warn_on_shard_failures`
+    // still reports partial results from indices that do exist.
+    // `phase_took` splits `took` into query and fetch time for the span. The
+    // typed search builder has no parameter for it, so this is a raw request.
     let response = client
-        .search(opensearch::SearchParts::Index(&search_indices))
-        // An index that does not exist yet — a newly added entity type before
-        // its create-index run, or an alias mid-reindex — otherwise fails the
-        // whole request with `index_not_found_exception`, taking down search
-        // for every entity rather than just that one. Degrade to the indices
-        // that are present; `warn_on_shard_failures` still reports partial
-        // results from indices that do exist.
-        .ignore_unavailable(true)
-        .body(search_request)
-        .send()
+        .send(
+            opensearch::http::Method::Post,
+            &format!("/{}/_search", search_indices.join(",")),
+            opensearch::http::headers::HeaderMap::new(),
+            Some(&[("ignore_unavailable", "true"), ("phase_took", "true")]),
+            Some(opensearch::http::request::JsonBody::new(search_request)),
+            None,
+        )
         .await
         .map_client_error(OpensearchOperation::SearchUnified)
         .await?;
@@ -1021,6 +1027,8 @@ pub(crate) async fn search_unified(
     tracing::info!(
         response_body_bytes = bytes.len(),
         opensearch_took_ms = result.took,
+        opensearch_query_ms = result.phase_took.as_ref().map(|phase| phase.query),
+        opensearch_fetch_ms = result.phase_took.as_ref().map(|phase| phase.fetch),
         hit_count = result.hits.hits.len(),
         "opensearch response"
     );
