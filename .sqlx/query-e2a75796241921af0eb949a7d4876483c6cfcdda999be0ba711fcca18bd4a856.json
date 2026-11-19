@@ -1,0 +1,22 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "SELECT source_items_mark_backfilled($1) AS \"marked\"",
+  "describe": {
+    "columns": [
+      {
+        "ordinal": 0,
+        "name": "marked",
+        "type_info": "Bool"
+      }
+    ],
+    "parameters": {
+      "Left": [
+        "Timestamptz"
+      ]
+    },
+    "nullable": [
+      null
+    ]
+  },
+  "hash": "e2a75796241921af0eb949a7d4876483c6cfcdda999be0ba711fcca18bd4a856"
+}

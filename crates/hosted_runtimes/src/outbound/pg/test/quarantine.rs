@@ -1,18 +1,11 @@
 use super::*;
+use crate::domain::ports::HostScope;
 
 #[sqlx::test(migrator = "MACRO_DB_MIGRATIONS")]
 async fn corrupt_row_does_not_abort_fleet_scans(pool: PgPool) {
     insert_team(&pool).await;
     let repo = PgComputerRepo::new(pool.clone(), policy());
-    let host = repo
-        .register_host(HostRegistration {
-            name: "quarantine-test".to_owned(),
-            memory_gb: 64,
-            reserve_gb: 8,
-            oversell_factor: 3,
-        })
-        .await
-        .unwrap();
+    let host = host(&repo, "quarantine-test", 64, 8, 3).await;
     for id in [101, 102] {
         let computer = bought(&repo, id).await;
         let mut state = computer.state;
@@ -84,7 +77,13 @@ async fn corrupt_row_does_not_abort_fleet_scans(pool: PgPool) {
     // Quarantine stops fleet work, but billing item removals still run:
     // they only stop a charge, and the item is in the effect.
     let effects = repo
-        .lease_effects(EffectWorker::Billing, 10, due, due + Duration::minutes(10))
+        .lease_effects(
+            EffectWorker::Billing,
+            HostScope::Every,
+            10,
+            due,
+            due + Duration::minutes(10),
+        )
         .await
         .unwrap();
     let mut owners: Vec<Uuid> = effects
@@ -102,7 +101,7 @@ async fn corrupt_row_does_not_abort_fleet_scans(pool: PgPool) {
         };
         sqlx::query!("INSERT INTO hosted_runtime_timer (computer_id, kind, fire_at) VALUES ($1, 'restart_due', $2)", id, fire_at).execute(&pool).await.unwrap();
     }
-    let timers = repo.due_timers(due, 1).await.unwrap();
+    let timers = repo.due_timers(HostScope::Every, due, 1).await.unwrap();
     assert_eq!(timers.len(), 1);
     assert_eq!(timers[0].computer_id.as_uuid(), Uuid::from_u128(101));
 

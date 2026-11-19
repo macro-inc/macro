@@ -66,7 +66,7 @@ fn invalid_row(rule: &'static str) -> SanitizedReason {
     SanitizedReason::new(rule)
 }
 
-fn resources(
+pub(super) fn resources(
     vcpus: i32,
     memory_gib: i32,
     disk_gib: i32,

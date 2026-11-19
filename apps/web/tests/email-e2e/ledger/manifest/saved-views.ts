@@ -114,6 +114,7 @@ export const savedViews = {
         'src/features/saved-views/components/saved-view-menu.tsx',
       ],
       viewports: ['phone'],
+      note: 'the reorder test also exercises the sheet at tablet width',
     },
 
     // SL-48 builder dialog

@@ -1,6 +1,9 @@
 use std::str::FromStr;
 mod agent;
 mod data_disk;
+mod effect_concurrency;
+mod host_scope;
+mod moves;
 mod redeploy;
 mod setup_notice;
 
@@ -65,6 +68,8 @@ struct FakeFleet {
     /// Each guest's data disk, named by the generation that created it.
     volumes: Mutex<HashMap<ComputerId, String>>,
     instances: Mutex<Vec<FleetInstance>>,
+    /// The host name it registers; `runtime-dev-1` when unset.
+    host_name: Option<&'static str>,
 }
 
 const BASE_IMAGE: &str = "macro-box/2026-11-01";
@@ -74,7 +79,7 @@ impl Fleet for FakeFleet {
 
     fn control_plane_id(&self) -> &ControlPlaneId {
         static ID: std::sync::LazyLock<ControlPlaneId> =
-            std::sync::LazyLock::new(|| ControlPlaneId::parse("test-a".to_owned()).unwrap());
+            std::sync::LazyLock::new(|| ControlPlaneId::try_new("test-a").unwrap());
         &ID
     }
 
@@ -191,11 +196,40 @@ impl Fleet for FakeFleet {
             return Err(FakeFleetError::Unavailable);
         }
         Ok(HostRegistration {
-            name: "runtime-dev-1".to_owned(),
+            name: crate::domain::models::HostName::try_new(
+                self.host_name.unwrap_or("runtime-dev-1"),
+            )
+            .unwrap(),
+            vcpus: 16,
             memory_gb: 31,
-            reserve_gb: 7,
-            oversell_factor: 3,
         })
+    }
+
+    async fn memory(&self) -> Result<crate::domain::ports::HostMemory, FakeFleetError> {
+        Ok(crate::domain::ports::HostMemory {
+            report: crate::domain::overcommit::MemoryReport {
+                resident_memory_mib: 0,
+                reported_at: now(),
+            },
+            limits: crate::domain::ports::HostLimitsState::Unsupported,
+            guests: Vec::new(),
+        })
+    }
+
+    async fn set_host_limits(
+        &self,
+        limits: crate::domain::overcommit::HostAgentLimits,
+    ) -> Result<(), FakeFleetError> {
+        self.calls
+            .lock()
+            .unwrap()
+            .push(format!("set_host_limits {limits:?}"));
+        Ok(())
+    }
+
+    async fn hibernate(&self, id: ComputerId) -> Result<(), FakeFleetError> {
+        self.calls.lock().unwrap().push(format!("hibernate {id}"));
+        Ok(())
     }
 
     async fn exec(
@@ -270,6 +304,7 @@ struct FakeHarnesses {
     enrollments: Mutex<Vec<Option<HarnessId>>>,
     fail_default_agent: std::sync::atomic::AtomicBool,
     default_agents: Mutex<Vec<(ComputerId, HarnessId)>>,
+    delivered_agents: Mutex<Vec<(HarnessId, ComputerId, EnrollmentGeneration)>>,
 }
 
 impl Harnesses for FakeHarnesses {
@@ -309,6 +344,19 @@ impl Harnesses for FakeHarnesses {
         Ok(())
     }
 
+    async fn deliver_agent(
+        &self,
+        harness_id: HarnessId,
+        computer_id: ComputerId,
+        generation: EnrollmentGeneration,
+    ) -> Result<(), FakeError> {
+        self.delivered_agents
+            .lock()
+            .unwrap()
+            .push((harness_id, computer_id, generation));
+        Ok(())
+    }
+
     async fn create_default_agent(
         &self,
         computer: &Computer,
@@ -345,8 +393,8 @@ async fn operator(
     .unwrap()
 }
 
-async fn paid_computer(
-    operator: &ComputerOperator<FakeRepo, FakeFleet, FakeHarnesses, FixedClock, FakeSetupNotices>,
+async fn paid_computer<Machines: crate::domain::ports::Fleets>(
+    operator: &ComputerOperator<FakeRepo, Machines, FakeHarnesses, FixedClock, FakeSetupNotices>,
 ) -> ComputerId {
     let id = ComputerId::new_from_uuid(Uuid::from_u128(1));
     operator
@@ -418,7 +466,7 @@ async fn create_enrolls_the_computer_and_connection_makes_it_ready() {
                 name: ComputerName::try_new("Ada").unwrap(),
                 deployment: crate::domain::fakes::deployment(),
                 traceparent: None,
-                agent: None,
+                role: crate::domain::enrollment::ComputerRole::Person,
             },
             true,
         )]
@@ -688,7 +736,7 @@ async fn reconcile_turns_a_missing_instance_into_a_crash_and_removes_orphans() {
         instances: Mutex::new(vec![FleetInstance {
             computer_id: orphan,
             status: InstanceStatus::Running,
-            control_plane_id: ControlPlaneId::parse("test-a".to_owned()).unwrap(),
+            control_plane_id: ControlPlaneId::try_new("test-a").unwrap(),
             created_at: Some(now() - Duration::minutes(11)),
         }]),
         ..FakeFleet::default()
@@ -833,7 +881,7 @@ async fn reconcile_recreates_missing_stopped_or_failed_guests_but_keeps_existing
                     .push(FleetInstance {
                         computer_id: id,
                         status: InstanceStatus::Stopped,
-                        control_plane_id: ControlPlaneId::parse("test-a".to_owned()).unwrap(),
+                        control_plane_id: ControlPlaneId::try_new("test-a").unwrap(),
                         created_at: Some(now() - Duration::minutes(11)),
                     });
             }
@@ -906,31 +954,31 @@ async fn reconcile_never_destroys_foreign_recent_or_unknown_age_instances() {
             FleetInstance {
                 computer_id: ComputerId::new_from_uuid(Uuid::from_u128(1)),
                 status: InstanceStatus::Running,
-                control_plane_id: ControlPlaneId::parse("test-b".to_owned()).unwrap(),
+                control_plane_id: ControlPlaneId::try_new("test-b").unwrap(),
                 created_at: Some(now() - Duration::hours(1)),
             },
             FleetInstance {
                 computer_id: ComputerId::new_from_uuid(Uuid::from_u128(2)),
                 status: InstanceStatus::Running,
-                control_plane_id: ControlPlaneId::parse("test-a".to_owned()).unwrap(),
+                control_plane_id: ControlPlaneId::try_new("test-a").unwrap(),
                 created_at: Some(now() - Duration::minutes(9)),
             },
             FleetInstance {
                 computer_id: ComputerId::new_from_uuid(Uuid::from_u128(3)),
                 status: InstanceStatus::Running,
-                control_plane_id: ControlPlaneId::parse("test-a".to_owned()).unwrap(),
+                control_plane_id: ControlPlaneId::try_new("test-a").unwrap(),
                 created_at: None,
             },
             FleetInstance {
                 computer_id: ComputerId::new_from_uuid(Uuid::from_u128(4)),
                 status: InstanceStatus::Running,
-                control_plane_id: ControlPlaneId::parse("test-a".to_owned()).unwrap(),
+                control_plane_id: ControlPlaneId::try_new("test-a").unwrap(),
                 created_at: Some(now() - Duration::minutes(10)),
             },
             FleetInstance {
                 computer_id: ComputerId::new_from_uuid(Uuid::from_u128(5)),
                 status: InstanceStatus::Running,
-                control_plane_id: ControlPlaneId::parse("test-a".to_owned()).unwrap(),
+                control_plane_id: ControlPlaneId::try_new("test-a").unwrap(),
                 created_at: Some(now() + Duration::minutes(1)),
             },
         ]),
@@ -943,13 +991,11 @@ async fn reconcile_never_destroys_foreign_recent_or_unknown_age_instances() {
 
 #[test]
 fn control_plane_identity_rejects_missing_or_invalid_values() {
-    assert!(ControlPlaneId::parse(String::new()).is_err());
-    assert!(ControlPlaneId::parse(" ".to_owned()).is_err());
-    assert!(ControlPlaneId::parse("test a".to_owned()).is_err());
+    assert!(ControlPlaneId::try_new("").is_err());
+    assert!(ControlPlaneId::try_new(" ").is_err());
+    assert!(ControlPlaneId::try_new("test a").is_err());
     assert_eq!(
-        ControlPlaneId::parse("local-test_a".to_owned())
-            .unwrap()
-            .as_str(),
+        ControlPlaneId::try_new("local-test_a").unwrap().as_str(),
         "local-test_a"
     );
 }
@@ -980,7 +1026,7 @@ async fn reconcile_keeps_quarantined_guests_and_processes_healthy_computers() {
             .map(|computer_id| FleetInstance {
                 computer_id,
                 status: InstanceStatus::Stopped,
-                control_plane_id: ControlPlaneId::parse("test-a".to_owned()).unwrap(),
+                control_plane_id: ControlPlaneId::try_new("test-a").unwrap(),
                 created_at: Some(now() - Duration::minutes(11)),
             })
             .collect();

@@ -102,7 +102,7 @@ pub(in super::super) async fn write_database<
     folder: Uuid,
     share: bool,
     people: &PeopleMap,
-    links: &NotionLinks,
+    links: &tokio::sync::RwLock<NotionLinks>,
     progress: &Progress<'_, Store>,
     cancel: &Cancel,
 ) -> anyhow::Result<WrittenDatabase> {
@@ -408,7 +408,7 @@ async fn write_row_bodies<Api: NotionApi, Writer: WorkspaceWriter, Store: Writte
     rows: &[NotionPage],
     written: &WrittenDatabase,
     page_column: PageColumn,
-    links: &NotionLinks,
+    links: &tokio::sync::RwLock<NotionLinks>,
     progress: &Progress<'_, Store>,
     cancel: &Cancel,
 ) -> anyhow::Result<()> {
@@ -467,13 +467,14 @@ async fn write_row_bodies<Api: NotionApi, Writer: WorkspaceWriter, Store: Writte
                     row.title.trim().to_string()
                 };
                 let id = derived_id(item.import_id, &format!("body/{}", row.id.as_str()));
+                let links = links.read().await.clone();
                 let document: Uuid = writer
                     .create_document(
                         user,
                         id,
                         &title,
                         &markdown,
-                        links,
+                        &links,
                         &ImportedDocumentProperties::default(),
                         Some(folder),
                         Some(SourceDates::from(&row)),

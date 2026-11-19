@@ -4,7 +4,7 @@
  * dropped. Spans record ids, counts and outcomes, never content.
  */
 import { createHash } from 'node:crypto';
-import { Telemetry } from '@macro-inc/observability/core';
+import { type Span, Telemetry } from '@macro-inc/observability/core';
 import { createServerTracingProvider } from '@macro-inc/observability/server';
 import type { Trace } from '../agent/claude.ts';
 
@@ -79,6 +79,52 @@ export const trace: Trace = (name, run) =>
       traceparent: () => span.traceparent(),
     })
   );
+
+/** Where the image puts the computer's setup trace, so the agent's start joins it. */
+export const setupTraceparentVariable = 'MACRO_SETUP_TRACEPARENT';
+
+/** Times one step of the agent's start as a child span of it. */
+export type StartPhase = <Value>(
+  name: string,
+  run: () => Promise<Value>
+) => Promise<Value>;
+
+/** Runs `run`, marking `span` failed when it throws, so a failed start exports as one. */
+const failing = async <Value>(
+  span: Span,
+  run: () => Promise<Value>
+): Promise<Value> => {
+  try {
+    return await run();
+  } catch (error) {
+    span.error(error);
+    throw error;
+  }
+};
+
+/**
+ * Runs the agent's start as one `agent.start` span, from the process's own
+ * start (so loading the code counts), under the computer's setup trace when
+ * the image passes one. Work begun inside, such as the greeting, joins it;
+ * the event loop must start outside (a context captured before this), so
+ * each wake stays a trace of its own.
+ */
+export const traceStart = <Value>(
+  environment: Environment,
+  run: (phase: StartPhase) => Promise<Value>
+): Promise<Value> => {
+  const processStart = Date.now() - process.uptime() * 1000;
+  const start = () =>
+    Telemetry.span('agent.start', { startTime: processStart }, (span) =>
+      failing(span, () =>
+        run((name, step) => span.span(name, (child) => failing(child, step)))
+      )
+    );
+  const traceparent = environment[setupTraceparentVariable];
+  return traceparent === undefined || traceparent === ''
+    ? start()
+    : Telemetry.remoteContext(traceparent).run(start);
+};
 
 /** Runs `run` under the span a parent process passed in TRACEPARENT, if any. */
 export const underParent = <Value>(

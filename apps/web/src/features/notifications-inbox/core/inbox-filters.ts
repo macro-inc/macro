@@ -1,5 +1,5 @@
 import { match } from 'ts-pattern';
-import type { InboxRowType } from './inbox-row';
+import type { InboxRow, InboxRowType } from './inbox-row';
 
 /** Every row type this build knows. */
 export const ALL_INBOX_ROW_TYPES: readonly InboxRowType[] = [
@@ -67,24 +67,26 @@ export const rowCategory = (type: InboxRowType): InboxCategory =>
     )
     .exhaustive();
 
-/** Which rows a reader wants: by read state, and the categories they hide. */
+/** Which rows a reader wants: by read state, and the categories they select. */
 export type InboxStatus = 'all' | 'unread';
 
 export type InboxFilters = {
   status: InboxStatus;
-  /** Hidden rather than shown, so a category added later starts visible. */
-  hiddenCategories: readonly InboxCategory[];
+  /** No selection includes every category, including kinds added later. */
+  selectedCategories: readonly InboxCategory[];
 };
 
 export const DEFAULT_INBOX_FILTERS: InboxFilters = {
   status: 'all',
-  hiddenCategories: [],
+  selectedCategories: [],
 };
 
-/** The row types to read for these filters; [] when every category is hidden. */
+/** No selection reads every row type; otherwise read only the selected kinds. */
 export function rowTypesFor(filters: InboxFilters): InboxRowType[] {
   return ALL_INBOX_ROW_TYPES.filter(
-    (type) => !filters.hiddenCategories.includes(rowCategory(type))
+    (type) =>
+      filters.selectedCategories.length === 0 ||
+      filters.selectedCategories.includes(rowCategory(type))
   );
 }
 
@@ -106,8 +108,8 @@ export type InboxClearChoice =
   | { kind: 'category'; category: InboxCategory };
 
 /**
- * The clear a choice makes under the reader's filters: never a kind the
- * filters hide, only unread rows under Unread, and today from local
+ * The clear a choice makes under the reader's filters: only included kinds,
+ * only unread rows under Unread, and today from local
  * midnight, as the list's today sections are.
  */
 export function clearFor(
@@ -136,25 +138,32 @@ export function clearFor(
     .exhaustive();
 }
 
-/** Whether a clear takes a row. */
-export function clearIncludes(
-  clear: InboxClear,
-  row: { type: InboxRowType | 'other'; unseen: boolean; latestAt: number }
-): boolean {
+/** What a clear reads of a row. */
+export type ClearableRow = Pick<
+  InboxRow<unknown>,
+  'type' | 'alsoListedAs' | 'unseen' | 'latestAt'
+>;
+
+/**
+ * Whether a clear takes a row: one of its kinds, its own or another it is
+ * listed under, is cleared, as the server decides.
+ */
+export function clearIncludes(clear: InboxClear, row: ClearableRow): boolean {
+  const kinds =
+    row.type === 'other' ? row.alsoListedAs : [row.type, ...row.alsoListedAs];
   return (
-    row.type !== 'other' &&
-    clear.rowTypes.includes(row.type) &&
+    kinds.some((kind) => clear.rowTypes.includes(kind)) &&
     (!clear.unreadOnly || row.unseen) &&
     (clear.since === undefined || row.latestAt >= clear.since)
   );
 }
 
 /**
- * How many kinds of notification are hidden, for the filter trigger's badge.
+ * How many kinds of notification are selected, for the filter trigger's badge.
  * The All and Unread toggle shows its own state.
  */
 export function activeFilterCount(filters: InboxFilters): number {
-  return filters.hiddenCategories.length;
+  return filters.selectedCategories.length;
 }
 
 const isStatus = (value: unknown): value is InboxStatus =>
@@ -173,9 +182,30 @@ export function parseInboxFilters(raw: string | null): InboxFilters {
   }
   if (typeof value !== 'object' || value === null) return DEFAULT_INBOX_FILTERS;
   const status = 'status' in value ? value.status : undefined;
-  const hidden = 'hiddenCategories' in value ? value.hiddenCategories : [];
+  const selected =
+    'selectedCategories' in value ? value.selectedCategories : undefined;
+  let selectedCategories: InboxCategory[];
+  if (Array.isArray(selected)) {
+    selectedCategories = INBOX_CATEGORIES.filter((category) =>
+      selected.includes(category)
+    );
+  } else {
+    // Preserve the kinds a legacy filter showed. With nothing hidden, keep
+    // the empty selection so newly introduced categories also stay visible.
+    const hidden =
+      'hiddenCategories' in value ? value.hiddenCategories : undefined;
+    const hiddenCategories = Array.isArray(hidden)
+      ? hidden.filter(isCategory)
+      : [];
+    selectedCategories =
+      hiddenCategories.length > 0
+        ? INBOX_CATEGORIES.filter(
+            (category) => !hiddenCategories.includes(category)
+          )
+        : [];
+  }
   return {
     status: isStatus(status) ? status : 'all',
-    hiddenCategories: Array.isArray(hidden) ? hidden.filter(isCategory) : [],
+    selectedCategories,
   };
 }

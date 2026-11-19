@@ -11,6 +11,7 @@ import { ActionDialogShell } from '@ui/components/ActionDialogShell';
 import { buttonClasses } from '@ui/components/Button';
 import { createSignal, createUniqueId, For, type JSX, Show } from 'solid-js';
 import {
+  bookingAbandoned,
   bookingIsPast,
   bookingMeetingUrl,
   bookingTimeRange,
@@ -323,9 +324,13 @@ export function BookingDetailsDialog(props: {
             }
           >
             <p class="text-sm text-ink-muted">
-              {props.booking.status === 'failed'
-                ? 'Calendar synchronization failed. This booking is not confirmed. Contact support before creating a replacement to avoid duplicate calendar events.'
-                : 'This booking is still being synchronized with the calendar. It will appear in Upcoming once it is confirmed.'}
+              {bookingAbandoned(props.booking)
+                ? manageable()
+                  ? 'This booking couldn’t be added to your calendar, so it isn’t confirmed. Cancel it to free the time.'
+                  : 'This booking couldn’t be added to the host’s calendar, so it isn’t confirmed. A host can cancel it to free the time.'
+                : props.booking.status === 'failed'
+                  ? 'Calendar synchronization failed. This booking is not confirmed. Contact support before creating a replacement to avoid duplicate calendar events.'
+                  : 'This booking is still being synchronized with the calendar. It will appear in Upcoming once it is confirmed.'}
             </p>
           </Show>
         </ActionDialogShell.Body>
@@ -342,7 +347,7 @@ export function BookingDetailsDialog(props: {
               >
                 {props.booking.status === 'pending' ? 'Decline' : 'Cancel'}
               </Button>
-              <Show when={!past()}>
+              <Show when={!past() && props.booking.status !== 'failed'}>
                 <Button
                   variant="secondary"
                   size="md"

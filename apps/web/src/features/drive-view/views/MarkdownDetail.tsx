@@ -28,10 +28,19 @@ import { ENABLE_MARKDOWN_SIDE_PANEL } from '@core/constant/featureFlags';
 import { createMethodRegistration } from '@core/orchestrator';
 import type { DocumentEntity } from '@entity';
 import SpinnerIcon from '@icon/system/regular/spinner.svg';
+import { Telemetry } from '@macro-inc/observability';
 import { DocumentNotificationReadMarker } from '@notifications';
 import { useItemRawName } from '@queries/preview';
 import { Button } from '@ui';
-import { createComputed, type JSX, Match, Show, Switch } from 'solid-js';
+import {
+  createComputed,
+  ErrorBoundary,
+  type JSX,
+  Match,
+  type ParentProps,
+  Show,
+  Switch,
+} from 'solid-js';
 import { FileDetailLoadGate } from '../components/FileDetail';
 import type { FileDetailContext } from '../util/file-detail-context';
 
@@ -69,9 +78,6 @@ export function MarkdownDetailBodyState(props: {
         <Match when={props.error !== undefined}>
           <div class="flex max-w-xl flex-col items-center gap-3 px-6 text-center">
             <span>This {entityLabel()} couldn’t be displayed.</span>
-            <pre class="max-h-48 max-w-full overflow-auto whitespace-pre-wrap text-left text-failure text-xs">
-              {String(props.error)}
-            </pre>
             <Button variant="secondary" size="sm" onClick={props.onAction}>
               {props.actionLabel ?? 'Reset'}
             </Button>
@@ -79,6 +85,35 @@ export function MarkdownDetailBodyState(props: {
         </Match>
       </Switch>
     </div>
+  );
+}
+
+/**
+ * Shows a detail that threw while rendering as a plain message with Try
+ * again, and records the error on telemetry rather than on screen.
+ */
+export function DetailErrorBoundary(
+  props: ParentProps<{ entityType: string; entityId: string }>
+) {
+  return (
+    <ErrorBoundary
+      fallback={(error, reset) => {
+        Telemetry.error(error, {
+          surface: 'drive-detail',
+          'entity.type': props.entityType,
+          'entity.id': props.entityId,
+        });
+        return (
+          <MarkdownDetailBodyState
+            error={error}
+            actionLabel="Try again"
+            onAction={reset}
+          />
+        );
+      }}
+    >
+      {props.children}
+    </ErrorBoundary>
   );
 }
 
