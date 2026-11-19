@@ -1686,7 +1686,7 @@ export type ScheduleSubRoutine = {
     /**
      * The sub-routine's name in the running routine.
      */
-    sub_routine: string;
+    subRoutine: string;
     /**
      * When the copy runs.
      */

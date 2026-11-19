@@ -223,7 +223,7 @@ export class RoutineNamespace {
       unwrap(
         await this.client.scheduledAction.scheduleSubRoutine({
           body: {
-            sub_routine: subRoutine,
+            subRoutine,
             trigger: triggerBody(options.trigger),
             inputs: options.inputs ?? {},
             name: options.name,

@@ -57,8 +57,9 @@ enforced by the ordinary backend APIs.
   `?key=`; inside a routine's run the server makes the new routine a
   sub-routine of the running routine, from the credential alone, and a
   repeated key updates it. `routines.schedule(subRoutine, { trigger, inputs,
-  key, name })` posts to `/scheduled-actions/schedule`: inside a routine's
-  run it schedules a copy of a sub-routine the routine defines, which runs
+  key, name })` posts `{ subRoutine, trigger, inputs, key, name }` to
+  `/scheduled-actions/schedule`. Inside a routine's run it schedules a copy
+  of a sub-routine the routine defines, which runs
   the definition as the routine holds it then. Its name is `SubRoutineName`,
   which is `never`: only a routine's check gives it names, those of that
   routine's sub-routines with their inputs (`routine_program`'s

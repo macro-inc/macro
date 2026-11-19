@@ -286,7 +286,7 @@ test('scheduling a sub-routine sends its name, trigger, inputs and key', async (
   expect(requests[0].method).toBe('POST');
   expect(new URL(requests[0].url).pathname).toBe('/scheduled-actions/schedule');
   expect(await requests[0].json()).toEqual({
-    sub_routine: 'remind',
+    subRoutine: 'remind',
     trigger: { type: 'once', at: '2030-01-01T09:00:00Z' },
     inputs: { taskId: 'task-1' },
     key: 'remind-task-1',

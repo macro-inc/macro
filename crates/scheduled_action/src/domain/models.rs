@@ -186,7 +186,7 @@ pub struct ActionConfiguration {
 /// body of `POST /scheduled-actions/schedule`. The copy runs the definition
 /// as its routine holds it when the copy runs.
 #[derive(Serialize, Deserialize, Debug, Clone, PartialEq, ToSchema)]
-#[serde(deny_unknown_fields)]
+#[serde(rename_all = "camelCase", deny_unknown_fields)]
 pub struct ScheduleSubRoutine {
     /// The sub-routine's name in the running routine.
     pub sub_routine: String,

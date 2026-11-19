@@ -5825,7 +5825,7 @@
       "ScheduleSubRoutine": {
         "type": "object",
         "description": "A copy of a sub-routine the running routine defines, to schedule: the\nbody of `POST /scheduled-actions/schedule`. The copy runs the definition\nas its routine holds it when the copy runs.",
-        "required": ["sub_routine", "trigger"],
+        "required": ["subRoutine", "trigger"],
         "properties": {
           "inputs": {
             "type": "object",
@@ -5839,7 +5839,7 @@
             "type": ["string", "null"],
             "description": "The copy's name; the sub-routine's title when absent."
           },
-          "sub_routine": {
+          "subRoutine": {
             "type": "string",
             "description": "The sub-routine's name in the running routine."
           },

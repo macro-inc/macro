@@ -102,6 +102,33 @@ fn manual_execution_documents_quota_and_retryable_validation_failures() {
     }
 }
 
+#[tokio::test]
+async fn schedule_request_accepts_camel_case_and_rejects_the_stored_copy_field() {
+    let app = router_with(service(true), FakeEntityAccessService::owner_only());
+    let trigger = json!({"type": "once", "at": "2030-01-01T09:00:00Z"});
+    let path = "/scheduled-actions/schedule";
+    let (status, _) = request(
+        &app,
+        "POST",
+        path,
+        "owner",
+        json!({"subRoutine": "remind", "trigger": trigger}),
+    )
+    .await;
+    // A valid body reaches the run-attribution check.
+    assert_eq!(status, StatusCode::FORBIDDEN);
+
+    let (status, _) = request(
+        &app,
+        "POST",
+        path,
+        "owner",
+        json!({"sub_routine": "remind", "trigger": trigger}),
+    )
+    .await;
+    assert_eq!(status, StatusCode::BAD_REQUEST);
+}
+
 const OTHER: &str = "macro|other@macro.com";
 const VIEWER: &str = "macro|viewer@macro.com";
 const BOT_TOKEN: &str = "team-bot-token";

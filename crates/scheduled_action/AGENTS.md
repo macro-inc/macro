@@ -292,9 +292,10 @@ each run.
 - Defined sub-routines (`routine_program::SubRoutineDefinition`): a
   routine's program can define `sub_routines` (name, title, typed inputs,
   steps, apps) and `inputs`. `POST /scheduled-actions/schedule`
-  (`schedule` in `service/sub_routines.rs`) makes a copy under the running
-  routine, by the same `RunCaller` rules and cap as a create: its task is
-  only `{"sub_routine", "inputs"}` (`SubRoutineCopy`), its kind and run
+  (`schedule` in `service/sub_routines.rs`) takes
+  `{ subRoutine, trigger, inputs?, name?, key? }`. It makes a copy under the
+  running routine with the same `RunCaller` rules and cap as a create.
+  Its task is only `{"sub_routine", "inputs"}` (`SubRoutineCopy`), its kind and run
   visibility are the parent's, and its name is the definition's title
   unless given. A copy reads its steps from its parent when it runs
   (`ExecutionHandle::parent`, loaded in `prepare`, and

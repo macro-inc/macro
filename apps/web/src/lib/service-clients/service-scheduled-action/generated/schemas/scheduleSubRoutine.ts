@@ -25,7 +25,7 @@ adding another. */
   /** The copy's name; the sub-routine's title when absent. */
   name?: ScheduleSubRoutineName;
   /** The sub-routine's name in the running routine. */
-  sub_routine: string;
+  subRoutine: string;
   /** When the copy runs. */
   trigger: ActionTrigger;
 }
