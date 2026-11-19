@@ -65,10 +65,19 @@ impl<R: ConnectionLinkLookup> ConnectionLinks for PgConnectionLinks<R> {
             .map_err(|error| anyhow::Error::from(error).into())
     }
 
-    async fn organization(&self, actor: &str) -> Result<Option<i32>, Self::Err> {
-        macro_db_client::user::get_user_organization::get_user_organization(self.db.clone(), actor)
-            .await
-            .map_err(|error| anyhow::Error::from(error).into())
+    async fn link_departing(&self, link: Uuid) -> Result<bool, Self::Err> {
+        let departing = sqlx::query_scalar!(
+            r#"SELECT (l.disconnect_requested_at IS NOT NULL OR l.deleting_at IS NOT NULL
+                OR NOT EXISTS(SELECT 1 FROM "User" u WHERE u.id = l.macro_id)) AS "departing!"
+            FROM email_links l WHERE l.id = $1"#,
+            link
+        )
+        .fetch_optional(&self.db)
+        .await
+        .map_err(anyhow::Error::from)?;
+        // A purge deletes the row last, so a link gone since it was read was
+        // departing.
+        Ok(departing.unwrap_or(true))
     }
 
     async fn set_credential_owner(&self, link: Uuid, owner: &str) -> Result<(), Self::Err> {
