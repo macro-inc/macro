@@ -1,0 +1,26 @@
+packages/code-mode-sdk/src/js-tools/index.ts
+  s_f3a48b3a685142::t_cdcd6e1007e989 13
+  s_f3a48b3a685142::t_502803b27e23ea 1-12,14-21
+packages/code-mode-sdk/scripts/generate.ts
+  s_f3a48b3a685142::t_cdcd6e1007e989 16-20,245-248,286-289,291-300,309-311
+  s_f3a48b3a685142::t_b9728ea51e1ce5 280-281,283-285,290,304,306
+  s_f3a48b3a685142::t_31fe73b011cbd2 244,249,256-271,277-279,282,301-303,305,307-308,312-313,325-326
+  s_f3a48b3a685142::t_cee0bfb222c0a7 11,140-143,152,155-156,158,220-243,250-255,272-276,314-324
+  s_f3a48b3a685142::t_8862edbe52a1eb 3-5,12
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.7.7",
+  "base_commit_sha": "033efc4cfe37bbd8e33748096ca7167bf68bed7c",
+  "prompts": {},
+  "sessions": {
+    "s_f3a48b3a685142": {
+      "agent_id": {
+        "tool": "claude",
+        "id": "65b2bcf0-02e2-4f2c-88ae-8e6cea990f9a",
+        "model": "claude-opus-5-5"
+      },
+      "human_author": null
+    }
+  }
+}
