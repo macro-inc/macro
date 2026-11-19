@@ -18,7 +18,9 @@ async fn analyzer(concurrency: usize) -> (tempfile::TempDir, JsToolsAnalyzer) {
 }
 
 /// The registry keys an answer lists, or why it isn't a list.
-fn keys(analysis: Analysis) -> Result<BTreeSet<String>, String> {
+type Keys = Result<BTreeSet<String>, String>;
+
+fn keys(analysis: Analysis) -> Keys {
     match analysis {
         Analysis::Calls(calls) => Ok(calls
             .into_iter()
@@ -68,7 +70,7 @@ async fn the_evasion_corpus_is_listed_or_refused() {
     let (_root, analyzer) = analyzer(4).await;
     let calls = |keys: &[&str]| Ok(keys.iter().map(|key| (*key).to_owned()).collect());
     let refused = || Err("cannot_analyze".to_owned());
-    let corpus: Vec<(&str, &str, Result<BTreeSet<String>, String>)> = vec![
+    let corpus: Vec<(&str, &str, Keys)> = vec![
         (
             "plain",
             "await tools.storage.get_document_markdown({}); return 1",
