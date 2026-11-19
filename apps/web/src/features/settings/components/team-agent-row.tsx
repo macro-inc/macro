@@ -17,6 +17,8 @@ export function TeamAgentRow(props: {
   /** Team admins and owners may remove agents. */
   canRemove: boolean;
   onRemove: () => void;
+  /** Opens Change picture; left out for viewers who can't change it. */
+  onChangePicture?: () => void;
   /** Opens Change voice; left out for viewers who can't change it. */
   onChangeVoice?: () => void;
   /** Which Claude its computer runs on, for viewers who manage it. */

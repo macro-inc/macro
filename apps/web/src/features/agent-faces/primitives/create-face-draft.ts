@@ -50,7 +50,9 @@ export function createFaceDraft(initial?: AgentFace): FaceDraft {
     reset: () => setFace((current) => ({ ...current, pins: {} })),
     setPhoto: (file) => {
       release();
-      setPhotoState(file ? { file, url: URL.createObjectURL(file) } : undefined);
+      setPhotoState(
+        file ? { file, url: URL.createObjectURL(file) } : undefined
+      );
     },
   };
 }

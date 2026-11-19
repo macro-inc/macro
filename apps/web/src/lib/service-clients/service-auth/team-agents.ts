@@ -86,6 +86,15 @@ async function setVoiceError(
 const voiceUrl = (agentUserId: string) =>
   `${base}/${encodeURIComponent(agentUserId)}/voice`;
 
+/**
+ * An agent's picture: a face with the PNG drawn from it (`url` null when that
+ * PNG could not be saved), or a photo with no face.
+ */
+export type TeamAgentAvatar = {
+  face: { v: 1; seed: string; pins: Partial<Record<string, number>> } | null;
+  url: string | null;
+};
+
 /** The caller's current team's agent teammates. Writes need team admin. */
 export const teamAgentsClient = {
   list: () => fetchWithToken<TeamAgents>(base),
@@ -112,6 +121,13 @@ export const teamAgentsClient = {
       return ok(null);
     return result;
   },
+  /** Replaces the agent's picture; team admins only. */
+  setAvatar: (agentUserId: string, avatar: TeamAgentAvatar) =>
+    fetchWithToken(`${base}/${encodeURIComponent(agentUserId)}/avatar`, {
+      method: 'PUT',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(avatar),
+    }),
   /** Used from the agent's next call. */
   setVoice: (agentUserId: string, voice: AgentVoice) =>
     fetchWithToken<AgentVoice, SetAgentVoiceErrorCode>(voiceUrl(agentUserId), {

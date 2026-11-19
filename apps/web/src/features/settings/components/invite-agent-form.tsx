@@ -60,7 +60,7 @@ export function InviteAgentForm(props: {
   onEdit: () => void;
   onBilling: () => void;
   /** Beside the name, in place of its initial (a face the viewer can edit). */
-  avatar?: (name: () => string) => JSX.Element;
+  avatar?: (initial: () => string) => JSX.Element;
   /**
    * Before Add sends the request: what the picture adds to it (its URL and
    * recipe). It may fail softly by returning less; it must not throw.
@@ -201,7 +201,7 @@ export function InviteAgentForm(props: {
                 </Avatar>
               }
             >
-              {(avatar) => avatar()(trimmedName)}
+              {(avatar) => avatar()(initial)}
             </Show>
             <TextField.Input
               ref={nameInput}

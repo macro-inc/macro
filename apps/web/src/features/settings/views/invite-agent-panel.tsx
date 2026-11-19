@@ -1,9 +1,16 @@
+import { t } from '@app/lib/i18n';
+import { toast } from '@core/component/Toast/Toast';
+import { ENABLE_AGENT_FACES } from '@core/constant/featureFlags';
 import { fireAndForget } from '@core/util/fireAndForget';
+import type { CreateTeamAgent } from '@service-auth/team-agents';
 import { useComputerOffersQuery } from '@queries/computers/computers';
 import {
   openAgentDirectMessage,
   openBilling,
 } from '../../notifications/computer-setup-toast';
+import { FaceSlot } from '../../agent-faces/face-slot';
+import { createFaceDraft } from '../../agent-faces/primitives/create-face-draft';
+import { uploadAgentPicture } from '../../agent-faces/primitives/upload-agent-picture';
 import { InviteAgentForm } from '../components/invite-agent-form';
 import { useAddTeamAgent } from '../primitives/add-team-agent';
 
@@ -20,6 +27,18 @@ export function InviteAgentPanel(props: {
   onInvited: () => void;
 }) {
   const offers = useComputerOffersQuery(() => true);
+  // A new random face each time the panel opens.
+  const face = createFaceDraft();
+  // A picture that can't be saved doesn't stop the agent being added: it
+  // keeps its face (drawn from the recipe) or, for a photo, its initial.
+  const preparePicture = async (): Promise<Partial<CreateTeamAgent>> => {
+    const picture = await uploadAgentPicture(face);
+    if (picture.isErr()) {
+      toast.failure(t('agentFaces.photoFailed'));
+      return {};
+    }
+    return { avatarFace: picture.value.face, avatarUrl: picture.value.url };
+  };
   const add = useAddTeamAgent({
     teamId: () => props.teamId,
     onAdded: ({ agent }) => {
@@ -43,6 +62,14 @@ export function InviteAgentPanel(props: {
         fireAndForget(add.retry(agent), 'team-agent.add')
       }
       onEdit={add.edit}
+      avatar={
+        ENABLE_AGENT_FACES
+          ? (initial) => (
+              <FaceSlot draft={face} initials={initial()} size={40} />
+            )
+          : undefined
+      }
+      prepareAvatar={ENABLE_AGENT_FACES ? preparePicture : undefined}
       onBilling={() => {
         props.onCancel();
         openBilling();

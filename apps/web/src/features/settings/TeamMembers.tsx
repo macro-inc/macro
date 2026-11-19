@@ -5,7 +5,10 @@ import { t } from '@app/lib/i18n';
 import { AgentTag } from '@core/component/AgentTag';
 import { toast } from '@core/component/Toast/Toast';
 import { UserIcon } from '@core/component/UserIcon';
-import { enableAgentTeammates } from '@core/constant/featureFlags';
+import {
+  ENABLE_AGENT_FACES,
+  enableAgentTeammates,
+} from '@core/constant/featureFlags';
 import { useUserId } from '@core/context/user';
 import {
   getDisplayName,
@@ -57,6 +60,7 @@ import {
   mapArray,
   Show,
 } from 'solid-js';
+import { AgentPictureDialog } from './components/agent-picture-dialog';
 import { AgentVoiceDialog } from './components/agent-voice-dialog';
 import { TeamAgentRow } from './components/team-agent-row';
 import { TeamInviteRow } from './components/team-invite-row';
@@ -331,10 +335,15 @@ export function TeamMembers(props: { team: TeamSummary }) {
   const retryAgent = useRetryTeamAgentSetup();
   // Voices are team-admin only on the server, like the rest of agent management.
   const canChangeVoice = () => agentsOn() && isAdminOrOwner();
+  // Pictures, too.
+  const canChangePicture = () => ENABLE_AGENT_FACES && canChangeVoice();
   const [voiceAgent, setVoiceAgent] = createSignal<TeamAgent>();
-  // Losing access closes the dialog for good, not until access returns.
+  const [pictureAgent, setPictureAgent] = createSignal<TeamAgent>();
+  // Losing access closes the dialogs for good, not until access returns.
   createEffect(() => {
-    if (!canChangeVoice()) setVoiceAgent(undefined);
+    if (canChangeVoice()) return;
+    setVoiceAgent(undefined);
+    setPictureAgent(undefined);
   });
 
   const members = createMemo(() => {
@@ -645,6 +654,11 @@ export function TeamMembers(props: { team: TeamSummary }) {
                           <TeamAgentClaude agent={agent} />
                         ) : undefined
                       }
+                      onChangePicture={
+                        canChangePicture()
+                          ? () => setPictureAgent(agent)
+                          : undefined
+                      }
                       onChangeVoice={
                         canChangeVoice()
                           ? () => setVoiceAgent(agent)
@@ -775,6 +789,10 @@ export function TeamMembers(props: { team: TeamSummary }) {
         }
       />
 
+      <AgentPictureDialog
+        agent={canChangePicture() ? pictureAgent() : undefined}
+        onClose={() => setPictureAgent(undefined)}
+      />
       <AgentVoiceDialog
         teamId={props.team.id}
         agent={canChangeVoice() ? voiceAgent() : undefined}
