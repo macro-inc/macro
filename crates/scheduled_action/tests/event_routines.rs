@@ -58,8 +58,8 @@ use scheduled_action::{
         event_run_worker::run_event_worker,
     },
     outbound::{
-        inprocess_executor::InProcessExecutor, pg_event_run_repo::PgEventRunRepo,
-        pg_inbox_delegates::PgInboxDelegates, pg_owner_inboxes::PgOwnerInboxes,
+        email_owner_inboxes::EmailOwnerInboxes, inprocess_executor::InProcessExecutor,
+        pg_event_run_repo::PgEventRunRepo, pg_inbox_delegates::PgInboxDelegates,
         pg_scheduled_action_repo::PgScheduledActionRepo,
     },
 };
@@ -291,7 +291,9 @@ impl Harness {
         let service =
             ScheduledActionServiceImpl::new(actions.clone(), executor.clone(), tx, access.clone())
                 .with_event_routines(Everyone)
-                .with_owner_inboxes(Arc::new(PgOwnerInboxes::new(pool.clone())));
+                .with_owner_inboxes(Arc::new(EmailOwnerInboxes(
+                    email::outbound::EmailPgRepo::new(pool.clone()),
+                )));
         let app = scheduled_action_router(ScheduledActionRouterState {
             service: Arc::new(service),
             access_service: access,

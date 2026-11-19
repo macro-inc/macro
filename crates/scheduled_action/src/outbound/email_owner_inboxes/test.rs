@@ -1,5 +1,7 @@
 use super::*;
+use email::outbound::EmailPgRepo;
 use macro_db_migrator::MACRO_DB_MIGRATIONS;
+use sqlx::PgPool;
 
 async fn user(pool: &PgPool, email: &str) -> MacroUserIdStr<'static> {
     let id = MacroUserIdStr::try_from_email(email).unwrap();
@@ -54,7 +56,7 @@ async fn an_owner_receives_mail_in_their_inboxes_and_those_delegated_to_them(poo
     .execute(&pool)
     .await
     .unwrap();
-    let inboxes = PgOwnerInboxes::new(pool);
+    let inboxes = EmailOwnerInboxes(EmailPgRepo::new(pool));
 
     let mut theirs = inboxes.inboxes(&owner).await.unwrap();
     theirs.sort_unstable();
