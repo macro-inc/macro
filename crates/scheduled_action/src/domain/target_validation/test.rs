@@ -376,3 +376,40 @@ async fn a_program_hands_its_apps_to_its_agent_and_an_update_must_restate_them()
         Some(&TargetValidationError::ExplicitAppsRequired)
     );
 }
+
+/// The single agent's parser skips fields it doesn't know, so what it would
+/// skip is checked before it: a NUL anywhere, and definitions or inputs
+/// that only a task with steps keeps.
+#[tokio::test]
+async fn a_single_agent_is_refused_fields_its_parser_would_skip_unchecked() {
+    let sessions = Arc::new(Sessions::default());
+    let owner = MacroUserIdStr::parse_from_str(OWNER).unwrap();
+    let validator = TargetValidation::new(sessions.clone());
+    let with = |field: &str, value: Value| {
+        let mut task = agent_task();
+        task[field] = value;
+        task
+    };
+    let nul = validator
+        .validate_task(&with("note", json!("a\u{0}b")), &owner)
+        .await
+        .unwrap_err();
+    assert_eq!(
+        nul.downcast_ref(),
+        Some(&TargetValidationError::InvalidProgram(ProgramError::Nul))
+    );
+    for task in [
+        with("inputs", json!([{ "name": "taskId", "type": "text", "label": "Task" }])),
+        with("sub_routines", json!([])),
+        with("sub_routine", json!("remind")),
+    ] {
+        let error = validator.validate_task(&task, &owner).await.unwrap_err();
+        assert_eq!(
+            error.downcast_ref(),
+            Some(&TargetValidationError::SubRoutinesWithoutSteps)
+        );
+    }
+    assert!(sessions.validations.lock().unwrap().is_empty());
+    // The single agent alone still saves.
+    validator.validate_task(&agent_task(), &owner).await.unwrap();
+}

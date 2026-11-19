@@ -37,4 +37,4 @@ pub use sub_routine::{
     CopyError, Input, InputError, InputName, InvalidInputName, InvalidSubRoutineName,
     MAX_INPUT_TEXT_CHARS, SubRoutineCopy, SubRoutineDefinition, SubRoutineName,
 };
-pub use validate::{ProgramError, limits};
+pub use validate::{ProgramError, holds_nul, limits};

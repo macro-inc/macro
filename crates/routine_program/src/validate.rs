@@ -189,8 +189,9 @@ impl RoutineProgram {
     }
 }
 
-/// Whether any string in `value`, a key included, holds a NUL.
-fn holds_nul(value: &serde_json::Value) -> bool {
+/// Whether any string in `value`, a key included, holds a NUL, which
+/// Postgres refuses to store in JSON.
+pub fn holds_nul(value: &serde_json::Value) -> bool {
     match value {
         serde_json::Value::String(text) => text.contains('\0'),
         serde_json::Value::Array(items) => items.iter().any(holds_nul),
