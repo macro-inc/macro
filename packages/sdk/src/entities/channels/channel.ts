@@ -64,10 +64,11 @@ export type ChannelAttachment =
  */
 /** A user's own notification settings for one channel. */
 export type ChannelNotificationSettings = {
-  /** Kinds turned off for this channel, whatever its sections allow. */
-  disabled: ChannelNotificationKind[];
-  /** Kinds turned on for this channel, whatever its sections turn off. */
-  enabled: ChannelNotificationKind[];
+  /**
+   * The channel's own settings: exactly the kinds it notifies for, whatever
+   * its Chat sections say. `null` when the channel follows its sections.
+   */
+  enabled: ChannelNotificationKind[] | null;
   /** Whether the channel notifies while every section holding it is muted. */
   overridesSectionMute: boolean;
 };
@@ -76,8 +77,7 @@ function toNotificationSettings(
   settings: ChannelNotificationSettingsResponse | undefined,
 ): ChannelNotificationSettings {
   return {
-    disabled: settings?.disabled ?? [],
-    enabled: settings?.enabled ?? [],
+    enabled: settings?.enabled ?? null,
     overridesSectionMute: settings?.overridesSectionMute ?? false,
   };
 }
@@ -400,10 +400,10 @@ export class Channel extends PropertiedEntity<ChannelDetail> {
   }
 
   /**
-   * The user's own notification settings for this channel. A kind in neither
-   * list follows the channel's Chat sections, and is on when they don't
-   * decide it. These are separate from muting: a muted channel sends nothing,
-   * and unmuting it restores these settings.
+   * The user's own notification settings for this channel. A channel either
+   * follows its Chat sections for every kind (on when they don't decide it)
+   * or has its own setting for all of them. These are separate from muting:
+   * a muted channel sends nothing, and unmuting it restores these settings.
    *
    * @readonly
    */
@@ -418,19 +418,18 @@ export class Channel extends PropertiedEntity<ChannelDetail> {
   /**
    * Change the user's own notification settings for this channel, as the
    * app's Notification Settings menu does; nobody else's notifications
-   * change. Kinds not named keep their setting, and a kind may appear in only
-   * one list. Returns the resulting settings.
+   * change. `enabled` gives the channel its own settings, replacing its
+   * sections' for every kind; `inherit` hands every kind back to its
+   * sections. Pass at most one of the two. Returns the resulting settings.
    *
    * @write
    * @idempotent
    */
   async setNotificationSettings(change: {
-    /** Kinds to receive, whatever the channel's sections turn off. */
-    enable?: ChannelNotificationKind[];
-    /** Kinds to stop receiving for this channel. */
-    disable?: ChannelNotificationKind[];
-    /** Kinds to hand back to the channel's sections. */
-    inherit?: ChannelNotificationKind[];
+    /** Exactly the kinds to receive for this channel, whatever its sections say. */
+    enabled?: ChannelNotificationKind[];
+    /** Follow the channel's sections again for every kind. */
+    inherit?: boolean;
     /** Keep notifying while every section holding the channel is muted. */
     overridesSectionMute?: boolean;
   }): Promise<ChannelNotificationSettings> {
@@ -444,8 +443,9 @@ export class Channel extends PropertiedEntity<ChannelDetail> {
   }
 
   /**
-   * Remove the user's own notification settings for this channel, so it
-   * follows its Chat sections again. Returns this handle for chaining.
+   * Remove the user's own notification settings for this channel, including
+   * an old mentions-only setting, so it follows its Chat sections again.
+   * Returns this handle for chaining.
    *
    * @write
    * @idempotent

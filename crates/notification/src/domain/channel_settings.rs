@@ -1,10 +1,11 @@
 //! A user's per-channel choice of which channel notifications they receive.
 //!
-//! Each kind is on, off, or follows the channel's sections; with no section
-//! setting either, it is on. A choice made on the channel wins over its
-//! sections for that kind. These choices are independent of mute and snooze
-//! ([`crate::domain::item_preferences`]): a muted channel sends nothing, and
-//! resuming it restores exactly the kinds chosen here.
+//! A channel either follows its sections for every kind (with no section
+//! setting either, every kind is on), or has its own settings for all six,
+//! which replace its sections'. There is no mix of the two. These settings are
+//! independent of mute and snooze ([`crate::domain::item_preferences`]): a
+//! muted channel sends nothing, and resuming it restores exactly the kinds
+//! chosen here.
 
 use macro_user_id::user_id::MacroUserIdStr;
 use rootcause::Report;
@@ -66,35 +67,41 @@ pub enum ChannelNotificationKind {
     JoinRequest,
 }
 
-/// One user's own choices for one channel. A channel without any has no settings.
+/// One user's own settings for one channel. A channel without any has no settings.
 #[derive(Debug, Clone, PartialEq, Eq, Default)]
 pub struct ChannelNotificationSettings {
-    /// Kinds turned off for this channel, whatever its sections allow.
-    pub disabled: BTreeSet<ChannelNotificationKind>,
-    /// Kinds turned on for this channel, whatever its sections turn off.
-    pub enabled: BTreeSet<ChannelNotificationKind>,
+    /// The channel's own settings: exactly the kinds it notifies for,
+    /// whatever its sections say. `None` follows the sections.
+    pub enabled: Option<BTreeSet<ChannelNotificationKind>>,
     /// The channel notifies even when the sections holding it are muted.
     /// Muting the channel itself still silences it.
     pub overrides_section_mute: bool,
 }
 
 impl ChannelNotificationSettings {
-    /// Whether nothing is chosen, so the channel follows its sections entirely.
+    /// Whether nothing is set, so the channel follows its sections entirely.
     pub fn is_empty(&self) -> bool {
-        self.disabled.is_empty() && self.enabled.is_empty() && !self.overrides_section_mute
+        self.enabled.is_none() && !self.overrides_section_mute
     }
 }
 
-/// A change to one channel's settings. Kinds the change does not name keep
-/// their choice.
+/// What a change does to a channel's kinds.
+#[derive(Debug, Clone, Default, PartialEq, Eq)]
+pub enum ChannelKindsChange {
+    /// Keep the current kinds.
+    #[default]
+    Keep,
+    /// Give the channel its own settings: exactly these kinds notify.
+    Set(BTreeSet<ChannelNotificationKind>),
+    /// Drop the channel's own kinds so it follows its sections again.
+    Inherit,
+}
+
+/// A change to one channel's settings.
 #[derive(Debug, Clone, Default)]
 pub struct ChannelNotificationSettingsChange {
-    /// Kinds to turn on.
-    pub enable: BTreeSet<ChannelNotificationKind>,
-    /// Kinds to turn off.
-    pub disable: BTreeSet<ChannelNotificationKind>,
-    /// Kinds to hand back to the channel's sections.
-    pub inherit: BTreeSet<ChannelNotificationKind>,
+    /// What happens to the channel's kinds.
+    pub kinds: ChannelKindsChange,
     /// Set or clear the section mute override; `None` keeps it.
     pub overrides_section_mute: Option<bool>,
 }
@@ -108,7 +115,9 @@ pub trait ChannelNotificationSettingsRepository: Send + Sync {
     ) -> impl Future<Output = Result<BTreeMap<Uuid, ChannelNotificationSettings>, Report>> + Send;
 
     /// Apply a change atomically and return the channel's resulting settings.
-    /// A channel left with no settings loses its row.
+    /// A channel left with no settings loses its row. A change to the kinds
+    /// also drops the channel's legacy mentions-only preference, which these
+    /// settings replace.
     fn update(
         &self,
         user: MacroUserIdStr<'_>,
@@ -116,7 +125,8 @@ pub trait ChannelNotificationSettingsRepository: Send + Sync {
         change: &ChannelNotificationSettingsChange,
     ) -> impl Future<Output = Result<ChannelNotificationSettings, ChannelSettingsWriteError>> + Send;
 
-    /// Remove every setting on this user's channel, so it follows its sections.
+    /// Remove every setting on this user's channel, including a legacy
+    /// mentions-only preference, so it follows its sections.
     fn reset(
         &self,
         user: MacroUserIdStr<'_>,
@@ -141,9 +151,6 @@ pub enum ChannelNotificationSettingsError {
     /// A change must change something.
     #[error("Choose at least one notification setting to change")]
     EmptyChange,
-    /// One kind can take only one new value.
-    #[error("A notification can be set only one way at a time")]
-    ConflictingChange,
     /// The repository rejected or failed the write.
     #[error(transparent)]
     Write(#[from] ChannelSettingsWriteError),
@@ -175,9 +182,7 @@ impl<R: ChannelNotificationSettingsRepository> ChannelNotificationSettingsServic
         skip_all,
         fields(
             channel_id = %channel_id,
-            enable_count = change.enable.len(),
-            disable_count = change.disable.len(),
-            inherit_count = change.inherit.len(),
+            kinds = ?change.kinds,
             overrides_section_mute = ?change.overrides_section_mute,
         ),
         err
@@ -188,29 +193,8 @@ impl<R: ChannelNotificationSettingsRepository> ChannelNotificationSettingsServic
         channel_id: Uuid,
         change: ChannelNotificationSettingsChange,
     ) -> Result<ChannelNotificationSettings, ChannelNotificationSettingsError> {
-        let ChannelNotificationSettingsChange {
-            enable,
-            disable,
-            inherit,
-            overrides_section_mute,
-        } = &change;
-
-        if enable.is_empty()
-            && disable.is_empty()
-            && inherit.is_empty()
-            && overrides_section_mute.is_none()
-        {
+        if change.kinds == ChannelKindsChange::Keep && change.overrides_section_mute.is_none() {
             return Err(ChannelNotificationSettingsError::EmptyChange);
-        }
-
-        let named = enable.len() + disable.len() + inherit.len();
-        let distinct = enable
-            .union(disable)
-            .chain(inherit.iter())
-            .collect::<BTreeSet<_>>()
-            .len();
-        if named != distinct {
-            return Err(ChannelNotificationSettingsError::ConflictingChange);
         }
 
         Ok(self.repository.update(user, channel_id, &change).await?)

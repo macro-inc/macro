@@ -24,24 +24,6 @@ export const listChannelNotificationSettingsResponse = zod.object({
       zod
         .object({
           channelId: zod.uuid(),
-          disabled: zod
-            .array(
-              zod
-                .enum([
-                  'channel_message_send',
-                  'channel_message_reply',
-                  'channel_mention',
-                  'channel_message_reaction',
-                  'call_started',
-                  'channel_access_requested',
-                ])
-                .describe(
-                  'A channel notification a user can turn off for one channel.\n\nEach kind is one notification event type, which is also its wire form.\nA message that mentions a document follows the kind of its message: a\ntop-level message outside a thread, a thread reply inside one (its\nproducer says which, see [`crate::domain::models::request`]). Channel\ninvites are not here: they reach people as they join, before they could\nhave chosen anything.'
-                )
-            )
-            .describe(
-              'Kinds turned off for this channel, whatever its sections allow.'
-            ),
           enabled: zod
             .array(
               zod
@@ -57,8 +39,9 @@ export const listChannelNotificationSettingsResponse = zod.object({
                   'A channel notification a user can turn off for one channel.\n\nEach kind is one notification event type, which is also its wire form.\nA message that mentions a document follows the kind of its message: a\ntop-level message outside a thread, a thread reply inside one (its\nproducer says which, see [`crate::domain::models::request`]). Channel\ninvites are not here: they reach people as they join, before they could\nhave chosen anything.'
                 )
             )
+            .nullable()
             .describe(
-              'Kinds turned on for this channel, whatever its sections turn off.'
+              "The channel's own settings: exactly the kinds it notifies for,\nwhatever its sections say. `null` follows the sections."
             ),
           overridesSectionMute: zod
             .boolean()
@@ -66,9 +49,7 @@ export const listChannelNotificationSettingsResponse = zod.object({
               'The channel notifies even when the sections holding it are muted.'
             ),
         })
-        .describe(
-          "One channel's own notification settings. A kind in neither list follows\nthe channel's sections, and is on when they don't decide it."
-        )
+        .describe("One channel's own notification settings.")
     )
     .describe(
       'Every channel with settings; any other channel follows its sections.'
@@ -76,8 +57,8 @@ export const listChannelNotificationSettingsResponse = zod.object({
 });
 
 /**
- * @summary Remove the authenticated user's settings for one channel, so it follows
-its sections again.
+ * @summary Remove the authenticated user's settings for one channel, including a
+legacy mentions-only preference, so it follows its sections again.
  */
 export const resetChannelNotificationSettingsParams = zod.object({
   channel_id: zod.uuid().describe('The channel the settings apply to.'),
@@ -98,89 +79,6 @@ export const updateChannelNotificationSettingsParams = zod.object({
 
 export const updateChannelNotificationSettingsBody = zod
   .object({
-    disable: zod
-      .array(
-        zod
-          .enum([
-            'channel_message_send',
-            'channel_message_reply',
-            'channel_mention',
-            'channel_message_reaction',
-            'call_started',
-            'channel_access_requested',
-          ])
-          .describe(
-            'A channel notification a user can turn off for one channel.\n\nEach kind is one notification event type, which is also its wire form.\nA message that mentions a document follows the kind of its message: a\ntop-level message outside a thread, a thread reply inside one (its\nproducer says which, see [`crate::domain::models::request`]). Channel\ninvites are not here: they reach people as they join, before they could\nhave chosen anything.'
-          )
-      )
-      .optional()
-      .describe('Kinds to turn off.'),
-    enable: zod
-      .array(
-        zod
-          .enum([
-            'channel_message_send',
-            'channel_message_reply',
-            'channel_mention',
-            'channel_message_reaction',
-            'call_started',
-            'channel_access_requested',
-          ])
-          .describe(
-            'A channel notification a user can turn off for one channel.\n\nEach kind is one notification event type, which is also its wire form.\nA message that mentions a document follows the kind of its message: a\ntop-level message outside a thread, a thread reply inside one (its\nproducer says which, see [`crate::domain::models::request`]). Channel\ninvites are not here: they reach people as they join, before they could\nhave chosen anything.'
-          )
-      )
-      .optional()
-      .describe('Kinds to turn on.'),
-    inherit: zod
-      .array(
-        zod
-          .enum([
-            'channel_message_send',
-            'channel_message_reply',
-            'channel_mention',
-            'channel_message_reaction',
-            'call_started',
-            'channel_access_requested',
-          ])
-          .describe(
-            'A channel notification a user can turn off for one channel.\n\nEach kind is one notification event type, which is also its wire form.\nA message that mentions a document follows the kind of its message: a\ntop-level message outside a thread, a thread reply inside one (its\nproducer says which, see [`crate::domain::models::request`]). Channel\ninvites are not here: they reach people as they join, before they could\nhave chosen anything.'
-          )
-      )
-      .optional()
-      .describe("Kinds to hand back to the channel's sections."),
-    overridesSectionMute: zod
-      .boolean()
-      .nullish()
-      .describe(
-        'Keep notifying while the sections holding the channel are muted.\nOmit to keep the current value.'
-      ),
-  })
-  .describe(
-    "A change to one channel's settings. Kinds the change does not name keep\ntheir setting; a kind may appear in only one list."
-  );
-
-export const updateChannelNotificationSettingsResponse = zod
-  .object({
-    channelId: zod.uuid(),
-    disabled: zod
-      .array(
-        zod
-          .enum([
-            'channel_message_send',
-            'channel_message_reply',
-            'channel_mention',
-            'channel_message_reaction',
-            'call_started',
-            'channel_access_requested',
-          ])
-          .describe(
-            'A channel notification a user can turn off for one channel.\n\nEach kind is one notification event type, which is also its wire form.\nA message that mentions a document follows the kind of its message: a\ntop-level message outside a thread, a thread reply inside one (its\nproducer says which, see [`crate::domain::models::request`]). Channel\ninvites are not here: they reach people as they join, before they could\nhave chosen anything.'
-          )
-      )
-      .describe(
-        'Kinds turned off for this channel, whatever its sections allow.'
-      ),
     enabled: zod
       .array(
         zod
@@ -196,8 +94,48 @@ export const updateChannelNotificationSettingsResponse = zod
             'A channel notification a user can turn off for one channel.\n\nEach kind is one notification event type, which is also its wire form.\nA message that mentions a document follows the kind of its message: a\ntop-level message outside a thread, a thread reply inside one (its\nproducer says which, see [`crate::domain::models::request`]). Channel\ninvites are not here: they reach people as they join, before they could\nhave chosen anything.'
           )
       )
+      .nullish()
       .describe(
-        'Kinds turned on for this channel, whatever its sections turn off.'
+        'Give the channel its own settings: exactly these kinds notify,\nwhatever its sections say. Omit to keep the current kinds.'
+      ),
+    inherit: zod
+      .boolean()
+      .optional()
+      .describe(
+        "Drop the channel's own kinds so it follows its sections again. Can't\nbe combined with `enabled`."
+      ),
+    overridesSectionMute: zod
+      .boolean()
+      .nullish()
+      .describe(
+        'Keep notifying while the sections holding the channel are muted.\nOmit to keep the current value.'
+      ),
+  })
+  .describe(
+    "A change to one channel's settings. A channel either follows its sections\nfor every kind or has its own setting for all of them."
+  );
+
+export const updateChannelNotificationSettingsResponse = zod
+  .object({
+    channelId: zod.uuid(),
+    enabled: zod
+      .array(
+        zod
+          .enum([
+            'channel_message_send',
+            'channel_message_reply',
+            'channel_mention',
+            'channel_message_reaction',
+            'call_started',
+            'channel_access_requested',
+          ])
+          .describe(
+            'A channel notification a user can turn off for one channel.\n\nEach kind is one notification event type, which is also its wire form.\nA message that mentions a document follows the kind of its message: a\ntop-level message outside a thread, a thread reply inside one (its\nproducer says which, see [`crate::domain::models::request`]). Channel\ninvites are not here: they reach people as they join, before they could\nhave chosen anything.'
+          )
+      )
+      .nullable()
+      .describe(
+        "The channel's own settings: exactly the kinds it notifies for,\nwhatever its sections say. `null` follows the sections."
       ),
     overridesSectionMute: zod
       .boolean()
@@ -205,9 +143,7 @@ export const updateChannelNotificationSettingsResponse = zod
         'The channel notifies even when the sections holding it are muted.'
       ),
   })
-  .describe(
-    "One channel's own notification settings. A kind in neither list follows\nthe channel's sections, and is on when they don't decide it."
-  );
+  .describe("One channel's own notification settings.");
 
 /**
  * @summary List the authenticated user's Chat sections that have notification settings.

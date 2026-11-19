@@ -5,6 +5,7 @@ use crate::domain::section_settings::{
     ChannelSectionMembership, ChannelSectionMembershipReader, SectionMute,
 };
 use std::collections::BTreeSet;
+use strum::IntoEnumIterator;
 
 const CHANNEL_ID: &str = "0194f1a2-0000-7000-8000-000000000001";
 
@@ -18,9 +19,14 @@ impl Notification for ChannelMessage {
     const TYPE_NAME: &'static str = "channel_message_send";
 }
 
+/// The channel's own settings, with every kind on except these.
 fn disabled(kinds: &[ChannelNotificationKind]) -> ChannelNotificationSettings {
     ChannelNotificationSettings {
-        disabled: kinds.iter().copied().collect(),
+        enabled: Some(
+            ChannelNotificationKind::iter()
+                .filter(|kind| !kinds.contains(kind))
+                .collect(),
+        ),
         ..Default::default()
     }
 }
@@ -54,9 +60,8 @@ async fn a_kind_turned_off_for_the_channel_skips_only_that_kind() {
             .with_channel_settings(
                 no_reactions.clone(),
                 ChannelNotificationSettings {
-                    disabled: BTreeSet::from([ChannelNotificationKind::Reaction]),
-                    enabled: BTreeSet::from([ChannelNotificationKind::TopLevelMessage]),
                     overrides_section_mute: true,
+                    ..disabled(&[ChannelNotificationKind::Reaction])
                 },
             ),
         MockQueue::new(),
@@ -294,4 +299,58 @@ async fn section_settings_apply_to_the_channels_their_sections_hold() {
         result.notified_recipients,
         HashSet::from([overridden, mentions_off])
     );
+}
+
+#[tokio::test]
+async fn a_channel_with_its_own_settings_ignores_its_sections_kinds() {
+    let own_on = test_user_id("own-on@example.com");
+    let own_off = test_user_id("own-off@example.com");
+    let label = ChannelSection::Label { label_id: PROJECTS };
+    let membership = ChannelSectionMembership {
+        built_in: None,
+        labels: HashMap::from([
+            (own_on.clone(), vec![PROJECTS]),
+            (own_off.clone(), vec![PROJECTS]),
+        ]),
+        favorites: HashSet::new(),
+    };
+    let service = NotificationIngressService::new(
+        MockRepository::new()
+            // The section turns top-level messages off; this channel's own
+            // settings turn them on.
+            .with_section_settings(
+                own_on.clone(),
+                label,
+                section_settings(
+                    &[ChannelNotificationKind::TopLevelMessage],
+                    SectionMute::Unmuted,
+                ),
+            )
+            .with_channel_settings(own_on.clone(), disabled(&[]))
+            // The section allows everything; this channel's own settings
+            // leave top-level messages out.
+            .with_section_settings(
+                own_off.clone(),
+                label,
+                section_settings(&[], SectionMute::Unmuted),
+            )
+            .with_channel_settings(
+                own_off.clone(),
+                ChannelNotificationSettings {
+                    enabled: Some(BTreeSet::from([ChannelNotificationKind::Mention])),
+                    overrides_section_mute: false,
+                },
+            ),
+        MockQueue::new(),
+        MockStateMachine,
+    )
+    .with_channel_sections(FakeSections(membership));
+
+    let result = service
+        .send_notification(channel_message(&[&own_on, &own_off]))
+        .await
+        .unwrap()
+        .unwrap();
+
+    assert_eq!(result.notified_recipients, HashSet::from([own_on]));
 }

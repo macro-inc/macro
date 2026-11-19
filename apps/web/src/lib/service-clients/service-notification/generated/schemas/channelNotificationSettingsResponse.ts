@@ -4,18 +4,16 @@
  * notification_service
  * OpenAPI spec version: 0.1.0
  */
-import type { ChannelNotificationKind } from './channelNotificationKind';
+import type { ChannelNotificationSettingsResponseEnabled } from './channelNotificationSettingsResponseEnabled';
 
 /**
- * One channel's own notification settings. A kind in neither list follows
-the channel's sections, and is on when they don't decide it.
+ * One channel's own notification settings.
  */
 export interface ChannelNotificationSettingsResponse {
   channelId: string;
-  /** Kinds turned off for this channel, whatever its sections allow. */
-  disabled: ChannelNotificationKind[];
-  /** Kinds turned on for this channel, whatever its sections turn off. */
-  enabled: ChannelNotificationKind[];
+  /** The channel's own settings: exactly the kinds it notifies for,
+whatever its sections say. `null` follows the sections. */
+  enabled: ChannelNotificationSettingsResponseEnabled;
   /** The channel notifies even when the sections holding it are muted. */
   overridesSectionMute: boolean;
 }

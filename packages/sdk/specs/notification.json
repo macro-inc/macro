@@ -71,7 +71,7 @@
     "/notification_settings/channels/{channel_id}": {
       "delete": {
         "tags": ["notification_settings"],
-        "summary": "Remove the authenticated user's settings for one channel, so it follows\nits sections again.",
+        "summary": "Remove the authenticated user's settings for one channel, including a\nlegacy mentions-only preference, so it follows its sections again.",
         "operationId": "reset_channel_notification_settings",
         "parameters": [
           {
@@ -2014,32 +2014,19 @@
       },
       "ChannelNotificationSettingsResponse": {
         "type": "object",
-        "description": "One channel's own notification settings. A kind in neither list follows\nthe channel's sections, and is on when they don't decide it.",
-        "required": [
-          "channelId",
-          "disabled",
-          "enabled",
-          "overridesSectionMute"
-        ],
+        "description": "One channel's own notification settings.",
+        "required": ["channelId", "enabled", "overridesSectionMute"],
         "properties": {
           "channelId": {
             "type": "string",
             "format": "uuid"
           },
-          "disabled": {
-            "type": "array",
-            "items": {
-              "$ref": "#/components/schemas/ChannelNotificationKind"
-            },
-            "description": "Kinds turned off for this channel, whatever its sections allow.",
-            "uniqueItems": true
-          },
           "enabled": {
-            "type": "array",
+            "type": ["array", "null"],
             "items": {
               "$ref": "#/components/schemas/ChannelNotificationKind"
             },
-            "description": "Kinds turned on for this channel, whatever its sections turn off.",
+            "description": "The channel's own settings: exactly the kinds it notifies for,\nwhatever its sections say. `null` follows the sections.",
             "uniqueItems": true
           },
           "overridesSectionMute": {
@@ -4251,31 +4238,19 @@
       },
       "UpdateChannelNotificationSettingsRequest": {
         "type": "object",
-        "description": "A change to one channel's settings. Kinds the change does not name keep\ntheir setting; a kind may appear in only one list.",
+        "description": "A change to one channel's settings. A channel either follows its sections\nfor every kind or has its own setting for all of them.",
         "properties": {
-          "disable": {
-            "type": "array",
+          "enabled": {
+            "type": ["array", "null"],
             "items": {
               "$ref": "#/components/schemas/ChannelNotificationKind"
             },
-            "description": "Kinds to turn off.",
-            "uniqueItems": true
-          },
-          "enable": {
-            "type": "array",
-            "items": {
-              "$ref": "#/components/schemas/ChannelNotificationKind"
-            },
-            "description": "Kinds to turn on.",
+            "description": "Give the channel its own settings: exactly these kinds notify,\nwhatever its sections say. Omit to keep the current kinds.",
             "uniqueItems": true
           },
           "inherit": {
-            "type": "array",
-            "items": {
-              "$ref": "#/components/schemas/ChannelNotificationKind"
-            },
-            "description": "Kinds to hand back to the channel's sections.",
-            "uniqueItems": true
+            "type": "boolean",
+            "description": "Drop the channel's own kinds so it follows its sections again. Can't\nbe combined with `enabled`."
           },
           "overridesSectionMute": {
             "type": ["boolean", "null"],

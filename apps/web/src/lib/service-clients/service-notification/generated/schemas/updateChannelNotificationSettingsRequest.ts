@@ -4,20 +4,20 @@
  * notification_service
  * OpenAPI spec version: 0.1.0
  */
-import type { ChannelNotificationKind } from './channelNotificationKind';
+import type { UpdateChannelNotificationSettingsRequestEnabled } from './updateChannelNotificationSettingsRequestEnabled';
 import type { UpdateChannelNotificationSettingsRequestOverridesSectionMute } from './updateChannelNotificationSettingsRequestOverridesSectionMute';
 
 /**
- * A change to one channel's settings. Kinds the change does not name keep
-their setting; a kind may appear in only one list.
+ * A change to one channel's settings. A channel either follows its sections
+for every kind or has its own setting for all of them.
  */
 export interface UpdateChannelNotificationSettingsRequest {
-  /** Kinds to turn off. */
-  disable?: ChannelNotificationKind[];
-  /** Kinds to turn on. */
-  enable?: ChannelNotificationKind[];
-  /** Kinds to hand back to the channel's sections. */
-  inherit?: ChannelNotificationKind[];
+  /** Give the channel its own settings: exactly these kinds notify,
+whatever its sections say. Omit to keep the current kinds. */
+  enabled?: UpdateChannelNotificationSettingsRequestEnabled;
+  /** Drop the channel's own kinds so it follows its sections again. Can't
+be combined with `enabled`. */
+  inherit?: boolean;
   /** Keep notifying while the sections holding the channel are muted.
 Omit to keep the current value. */
   overridesSectionMute?: UpdateChannelNotificationSettingsRequestOverridesSectionMute;

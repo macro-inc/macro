@@ -24,9 +24,12 @@ impl ChannelNotificationSettingsRepository for FakeRepository {
             .lock()
             .unwrap()
             .push((channel_id, change.clone()));
+        let enabled = match &change.kinds {
+            ChannelKindsChange::Set(kinds) => Some(kinds.clone()),
+            ChannelKindsChange::Keep | ChannelKindsChange::Inherit => None,
+        };
         Ok(ChannelNotificationSettings {
-            disabled: change.disable.clone(),
-            enabled: change.enable.clone(),
+            enabled,
             overrides_section_mute: change.overrides_section_mute.unwrap_or_default(),
         })
     }
@@ -41,83 +44,62 @@ fn alice() -> MacroUserIdStr<'static> {
 }
 
 #[tokio::test]
-async fn rejects_changes_that_do_nothing_or_contradict_themselves() {
+async fn rejects_a_change_that_does_nothing() {
     let service = ChannelNotificationSettingsService::new(FakeRepository::default());
-    let channel_id = Uuid::now_v7();
 
     let empty = service
         .update(
             alice(),
-            channel_id,
+            Uuid::now_v7(),
             ChannelNotificationSettingsChange::default(),
         )
         .await;
+
     assert!(matches!(
         empty,
         Err(ChannelNotificationSettingsError::EmptyChange)
     ));
-
-    let conflicting = service
-        .update(
-            alice(),
-            channel_id,
-            ChannelNotificationSettingsChange {
-                enable: BTreeSet::from([ChannelNotificationKind::Reaction]),
-                disable: BTreeSet::from([
-                    ChannelNotificationKind::Reaction,
-                    ChannelNotificationKind::Mention,
-                ]),
-                ..Default::default()
-            },
-        )
-        .await;
-    assert!(matches!(
-        conflicting,
-        Err(ChannelNotificationSettingsError::ConflictingChange)
-    ));
-
-    let inherited_and_disabled = service
-        .update(
-            alice(),
-            channel_id,
-            ChannelNotificationSettingsChange {
-                disable: BTreeSet::from([ChannelNotificationKind::Mention]),
-                inherit: BTreeSet::from([ChannelNotificationKind::Mention]),
-                ..Default::default()
-            },
-        )
-        .await;
-    assert!(matches!(
-        inherited_and_disabled,
-        Err(ChannelNotificationSettingsError::ConflictingChange)
-    ));
-
     assert!(service.repository.updates.lock().unwrap().is_empty());
 }
 
 #[tokio::test]
-async fn passes_a_valid_change_to_the_repository() {
+async fn passes_a_full_set_of_kinds_to_the_repository() {
     let service = ChannelNotificationSettingsService::new(FakeRepository::default());
-    let channel_id = Uuid::now_v7();
+    let kinds = BTreeSet::from([ChannelNotificationKind::ThreadReply]);
 
     let updated = service
         .update(
             alice(),
-            channel_id,
+            Uuid::now_v7(),
             ChannelNotificationSettingsChange {
-                enable: BTreeSet::from([ChannelNotificationKind::ThreadReply]),
-                disable: BTreeSet::from([ChannelNotificationKind::CallStarted]),
+                kinds: ChannelKindsChange::Set(kinds.clone()),
                 ..Default::default()
             },
         )
         .await
         .unwrap();
 
-    assert_eq!(
-        updated.disabled,
-        BTreeSet::from([ChannelNotificationKind::CallStarted])
-    );
+    assert_eq!(updated.enabled, Some(kinds));
     assert_eq!(service.repository.updates.lock().unwrap().len(), 1);
+}
+
+#[tokio::test]
+async fn inheriting_alone_is_a_change() {
+    let service = ChannelNotificationSettingsService::new(FakeRepository::default());
+
+    let updated = service
+        .update(
+            alice(),
+            Uuid::now_v7(),
+            ChannelNotificationSettingsChange {
+                kinds: ChannelKindsChange::Inherit,
+                ..Default::default()
+            },
+        )
+        .await
+        .unwrap();
+
+    assert!(updated.is_empty());
 }
 
 #[tokio::test]

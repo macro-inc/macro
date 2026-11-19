@@ -75,7 +75,6 @@ describe('channel notification settings', () => {
             channels: [
               {
                 channelId: 'channel-1',
-                disabled: ['channel_message_send'],
                 enabled: ['channel_mention'],
                 overridesSectionMute: true,
               },
@@ -88,20 +87,18 @@ describe('channel notification settings', () => {
     expect(
       await Channel.byId(client, 'channel-1').notificationSettings(),
     ).toEqual({
-      disabled: ['channel_message_send'],
       enabled: ['channel_mention'],
       overridesSectionMute: true,
     });
     expect(
       await Channel.byId(client, 'channel-2').notificationSettings(),
     ).toEqual({
-      disabled: [],
-      enabled: [],
+      enabled: null,
       overridesSectionMute: false,
     });
   });
 
-  test('sends a partial change for the channel', async () => {
+  test('sends the channel’s own full set of kinds', async () => {
     const updates: unknown[] = [];
     const client = {
       notification: {
@@ -110,8 +107,7 @@ describe('channel notification settings', () => {
           return {
             data: {
               channelId: 'channel-1',
-              disabled: ['channel_message_reaction'],
-              enabled: [],
+              enabled: ['channel_mention'],
               overridesSectionMute: false,
             },
           };
@@ -122,20 +118,14 @@ describe('channel notification settings', () => {
     const settings = await Channel.byId(
       client,
       'channel-1',
-    ).setNotificationSettings({
-      disable: ['channel_message_reaction'],
-      inherit: ['channel_mention'],
-    });
+    ).setNotificationSettings({ enabled: ['channel_mention'] });
 
     expect(updates).toEqual([
       {
         path: { channel_id: 'channel-1' },
-        body: {
-          disable: ['channel_message_reaction'],
-          inherit: ['channel_mention'],
-        },
+        body: { enabled: ['channel_mention'] },
       },
     ]);
-    expect(settings.disabled).toEqual(['channel_message_reaction']);
+    expect(settings.enabled).toEqual(['channel_mention']);
   });
 });

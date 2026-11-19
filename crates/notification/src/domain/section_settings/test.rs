@@ -91,11 +91,10 @@ fn an_untouched_section_allows_everything() {
 }
 
 #[test]
-fn the_channels_own_choice_wins_kind_by_kind() {
+fn a_channel_with_its_own_settings_ignores_its_sections_kinds() {
     let settings = [(A, allowing_only(&[Mention]))];
     let channel = ChannelNotificationSettings {
-        disabled: BTreeSet::from([Mention]),
-        enabled: BTreeSet::from([TopLevelMessage]),
+        enabled: Some(BTreeSet::from([TopLevelMessage])),
         overrides_section_mute: false,
     };
 
@@ -103,13 +102,24 @@ fn the_channels_own_choice_wins_kind_by_kind() {
         delivery(TopLevelMessage, Some(&channel), &[A], &settings),
         ChannelDelivery::Receive
     );
+    // Off on the channel although its section allows it.
     assert_eq!(
         delivery(Mention, Some(&channel), &[A], &settings),
         ChannelDelivery::TurnedOff
     );
-    // Kinds the channel leaves alone follow its sections.
+    // Off on the channel, as everywhere a channel's own set leaves a kind out.
     assert_eq!(
-        delivery(Reaction, Some(&channel), &[A], &settings),
+        delivery(Reaction, Some(&channel), &[], &[]),
+        ChannelDelivery::TurnedOff
+    );
+
+    // Only a section mute override follows its sections' kinds.
+    let overridden = ChannelNotificationSettings {
+        overrides_section_mute: true,
+        ..Default::default()
+    };
+    assert_eq!(
+        delivery(Reaction, Some(&overridden), &[A], &settings),
         ChannelDelivery::TurnedOff
     );
 }

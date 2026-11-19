@@ -32,16 +32,19 @@ through the same service.
 - `domain/channel_settings.rs` + `outbound/channel_settings.rs`: a user's own
   per-channel choice of which channel notification types they receive
   (`ChannelNotificationKind`, one per event type), stored in
-  `user_channel_notification_setting`. Each type is turned off, turned on over
-  the channel's sections, or follows them; `section_mute_override` keeps a
-  channel notifying inside muted sections. Independent of mute and snooze.
+  `user_channel_notification_setting`. A channel either follows its sections
+  for every type (`disabled_event_types` NULL) or has its own setting for all
+  of them, never a mix; `section_mute_override` keeps a channel notifying
+  inside muted sections. A kind change or reset also deletes the channel's
+  legacy mentions-only row, which these settings replace. Independent of mute
+  and snooze.
 - `domain/section_settings.rs` + `outbound/section_settings.rs`: a user's own
   settings for Chat sidebar sections (`ChannelSection`: a custom section by
   `channel_label` id, or Favorites, Direct messages, Team channels), stored in
   `user_channel_section_notification_setting`: kinds off, and mute or snooze.
   `channel_delivery` is the one place the rules combine: section mute (all
   holding sections muted, unless the channel overrides it), then the channel's
-  own choice for the kind, then any holding section allowing it. A section
+  own settings when it has them, else any holding section allowing the kind. A section
   without a row allows everything and is unmuted; "All channels" is not a
   section. Which sections hold a channel comes through the
   `ChannelSectionMembershipReader` port, implemented by

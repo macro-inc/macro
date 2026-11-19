@@ -5,9 +5,9 @@
 //! send time, so channels added to the section later follow it too. A
 //! channel can sit in several sections: it notifies for a kind when any of
 //! them allows it, and its sections mute it only when all of them are muted.
-//! A section the user never changed allows everything and is unmuted. The
-//! channel's own choice for a kind wins over its sections, and muting the
-//! channel itself always wins.
+//! A section the user never changed allows everything and is unmuted. A
+//! channel with its own settings uses them for every kind instead of its
+//! sections', and muting the channel itself always wins.
 
 use crate::domain::channel_settings::{ChannelNotificationKind, ChannelNotificationSettings};
 use chrono::{DateTime, Utc};
@@ -315,14 +315,13 @@ pub fn channel_delivery(
         return ChannelDelivery::Receive;
     };
 
-    if let Some(channel) = channel {
-        if channel.disabled.contains(&kind) {
-            return ChannelDelivery::TurnedOff;
-        }
-
-        if channel.enabled.contains(&kind) {
-            return ChannelDelivery::Receive;
-        }
+    // A channel with its own settings ignores its sections' kinds.
+    if let Some(enabled) = channel.and_then(|channel| channel.enabled.as_ref()) {
+        return if enabled.contains(&kind) {
+            ChannelDelivery::Receive
+        } else {
+            ChannelDelivery::TurnedOff
+        };
     }
 
     // A channel outside every section, or in one that allows the kind,

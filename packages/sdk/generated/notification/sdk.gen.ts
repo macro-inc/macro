@@ -72,8 +72,8 @@ export class Sdk extends HeyApiClient {
     }
 
     /**
-     * Remove the authenticated user's settings for one channel, so it follows
-     * its sections again.
+     * Remove the authenticated user's settings for one channel, including a
+     * legacy mentions-only preference, so it follows its sections again.
      */
     public resetChannelNotificationSettings<ThrowOnError extends boolean = false>(options: Options<ResetChannelNotificationSettingsData, ThrowOnError>): RequestResult<ResetChannelNotificationSettingsResponses, ResetChannelNotificationSettingsErrors, ThrowOnError> {
         return (options.client ?? this.client).delete<ResetChannelNotificationSettingsResponses, ResetChannelNotificationSettingsErrors, ThrowOnError>({ url: '/notification_settings/channels/{channel_id}', ...options });

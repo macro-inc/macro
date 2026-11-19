@@ -437,19 +437,15 @@ export type ChannelMessageSendMetadata = CommonChannelMetadata & {
 export type ChannelNotificationKind = 'channel_message_send' | 'channel_message_reply' | 'channel_mention' | 'channel_message_reaction' | 'call_started' | 'channel_access_requested';
 
 /**
- * One channel's own notification settings. A kind in neither list follows
- * the channel's sections, and is on when they don't decide it.
+ * One channel's own notification settings.
  */
 export type ChannelNotificationSettingsResponse = {
     channelId: string;
     /**
-     * Kinds turned off for this channel, whatever its sections allow.
+     * The channel's own settings: exactly the kinds it notifies for,
+     * whatever its sections say. `null` follows the sections.
      */
-    disabled: Array<ChannelNotificationKind>;
-    /**
-     * Kinds turned on for this channel, whatever its sections turn off.
-     */
-    enabled: Array<ChannelNotificationKind>;
+    enabled: Array<ChannelNotificationKind> | null;
     /**
      * The channel notifies even when the sections holding it are muted.
      */
@@ -1850,22 +1846,20 @@ export type UnsubscribeItemPathParams = {
 };
 
 /**
- * A change to one channel's settings. Kinds the change does not name keep
- * their setting; a kind may appear in only one list.
+ * A change to one channel's settings. A channel either follows its sections
+ * for every kind or has its own setting for all of them.
  */
 export type UpdateChannelNotificationSettingsRequest = {
     /**
-     * Kinds to turn off.
+     * Give the channel its own settings: exactly these kinds notify,
+     * whatever its sections say. Omit to keep the current kinds.
      */
-    disable?: Array<ChannelNotificationKind>;
+    enabled?: Array<ChannelNotificationKind> | null;
     /**
-     * Kinds to turn on.
+     * Drop the channel's own kinds so it follows its sections again. Can't
+     * be combined with `enabled`.
      */
-    enable?: Array<ChannelNotificationKind>;
-    /**
-     * Kinds to hand back to the channel's sections.
-     */
-    inherit?: Array<ChannelNotificationKind>;
+    inherit?: boolean;
     /**
      * Keep notifying while the sections holding the channel are muted.
      * Omit to keep the current value.

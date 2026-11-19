@@ -12,8 +12,8 @@ use axum::{
 use macro_authorization::{MacroAuthorizationExtractor, UserOrInternal};
 use model::response::{EmptyResponse, ErrorResponse};
 use notification::domain::channel_settings::{
-    ChannelNotificationKind, ChannelNotificationSettings, ChannelNotificationSettingsChange,
-    ChannelNotificationSettingsError, ChannelSettingsWriteError,
+    ChannelKindsChange, ChannelNotificationKind, ChannelNotificationSettings,
+    ChannelNotificationSettingsChange, ChannelNotificationSettingsError, ChannelSettingsWriteError,
 };
 use serde::{Deserialize, Serialize};
 use std::collections::BTreeSet;
@@ -41,16 +41,15 @@ pub struct ChannelPathParams {
     pub channel_id: Uuid,
 }
 
-/// One channel's own notification settings. A kind in neither list follows
-/// the channel's sections, and is on when they don't decide it.
+/// One channel's own notification settings.
 #[derive(Serialize, ToSchema)]
 #[serde(rename_all = "camelCase")]
 pub struct ChannelNotificationSettingsResponse {
     pub channel_id: Uuid,
-    /// Kinds turned off for this channel, whatever its sections allow.
-    pub disabled: BTreeSet<ChannelNotificationKind>,
-    /// Kinds turned on for this channel, whatever its sections turn off.
-    pub enabled: BTreeSet<ChannelNotificationKind>,
+    /// The channel's own settings: exactly the kinds it notifies for,
+    /// whatever its sections say. `null` follows the sections.
+    #[schema(required = true)]
+    pub enabled: Option<BTreeSet<ChannelNotificationKind>>,
     /// The channel notifies even when the sections holding it are muted.
     pub overrides_section_mute: bool,
 }
@@ -59,7 +58,6 @@ impl ChannelNotificationSettingsResponse {
     fn new(channel_id: Uuid, settings: ChannelNotificationSettings) -> Self {
         Self {
             channel_id,
-            disabled: settings.disabled,
             enabled: settings.enabled,
             overrides_section_mute: settings.overrides_section_mute,
         }
@@ -73,20 +71,18 @@ pub struct ListChannelNotificationSettingsResponse {
     pub channels: Vec<ChannelNotificationSettingsResponse>,
 }
 
-/// A change to one channel's settings. Kinds the change does not name keep
-/// their setting; a kind may appear in only one list.
+/// A change to one channel's settings. A channel either follows its sections
+/// for every kind or has its own setting for all of them.
 #[derive(Deserialize, ToSchema)]
 #[serde(rename_all = "camelCase")]
 pub struct UpdateChannelNotificationSettingsRequest {
-    /// Kinds to turn on.
+    /// Give the channel its own settings: exactly these kinds notify,
+    /// whatever its sections say. Omit to keep the current kinds.
+    pub enabled: Option<BTreeSet<ChannelNotificationKind>>,
+    /// Drop the channel's own kinds so it follows its sections again. Can't
+    /// be combined with `enabled`.
     #[serde(default)]
-    pub enable: BTreeSet<ChannelNotificationKind>,
-    /// Kinds to turn off.
-    #[serde(default)]
-    pub disable: BTreeSet<ChannelNotificationKind>,
-    /// Kinds to hand back to the channel's sections.
-    #[serde(default)]
-    pub inherit: BTreeSet<ChannelNotificationKind>,
+    pub inherit: bool,
     /// Keep notifying while the sections holding the channel are muted.
     /// Omit to keep the current value.
     pub overrides_section_mute: Option<bool>,
@@ -181,10 +177,22 @@ pub async fn update_channel_settings(
     Path(ChannelPathParams { channel_id }): Path<ChannelPathParams>,
     Json(request): Json<UpdateChannelNotificationSettingsRequest>,
 ) -> Result<Response, Response> {
+    let kinds = match (request.enabled, request.inherit) {
+        (Some(_), true) => {
+            return Err((
+                StatusCode::BAD_REQUEST,
+                Json(ErrorResponse {
+                    message: "set the channel's own kinds or inherit them, not both".into(),
+                }),
+            )
+                .into_response());
+        }
+        (Some(enabled), false) => ChannelKindsChange::Set(enabled),
+        (None, true) => ChannelKindsChange::Inherit,
+        (None, false) => ChannelKindsChange::Keep,
+    };
     let change = ChannelNotificationSettingsChange {
-        enable: request.enable,
-        disable: request.disable,
-        inherit: request.inherit,
+        kinds,
         overrides_section_mute: request.overrides_section_mute,
     };
     let settings = ctx
@@ -199,8 +207,8 @@ pub async fn update_channel_settings(
     .into_response())
 }
 
-/// Remove the authenticated user's settings for one channel, so it follows
-/// its sections again.
+/// Remove the authenticated user's settings for one channel, including a
+/// legacy mentions-only preference, so it follows its sections again.
 #[utoipa::path(
     delete,
     operation_id = "reset_channel_notification_settings",
