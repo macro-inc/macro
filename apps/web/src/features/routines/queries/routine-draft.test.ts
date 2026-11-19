@@ -954,6 +954,42 @@ describe('routines with sub-routines', () => {
     );
   });
 
+  it('enforces the combined code-step budget including a detached copy', () => {
+    const steps = Array.from({ length: 20 }, (_, index) => ({
+      type: 'code' as const,
+      title: `Read ${index + 1}`,
+      source: 'export const result = 1;',
+    }));
+    const configured = {
+      ...parent,
+      task: {
+        steps: remind.steps,
+        sub_routines: [{ ...remind, steps }],
+      },
+    };
+    expect(validateRoutineDraft(loadedDraft(configured))).toBeNull();
+    const tooMany = {
+      ...configured,
+      task: {
+        ...configured.task,
+        sub_routines: [
+          {
+            ...remind,
+            steps: [
+              ...steps,
+              {
+                type: 'code' as const,
+                title: 'Another',
+                source: 'export const result = 1;',
+              },
+            ],
+          },
+        ],
+      },
+    };
+    expect(validateRoutineDraft(loadedDraft(tooMany))).toMatch(/40 code steps/);
+  });
+
   it('keeps a single agent step as a program while it has sub-routines', () => {
     const draft = draftFromSchedule(parent)!;
     const agentOnly = withDraftSteps(draft, [

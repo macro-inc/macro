@@ -12,6 +12,7 @@ import { match } from 'ts-pattern';
 import { DEFAULT_RUN_VISIBILITY, type ScheduleDraft } from './draft';
 import {
   agentStep,
+  codeSteps,
   firstAgent,
   newStepId,
   type StepDraft,
@@ -25,6 +26,9 @@ export { getDefaultTimezone } from '@core/util/cron';
 
 /** Characters in a routine's description; the scheduler rejects longer. */
 export const MAX_DESCRIPTION_CHARS = 1000;
+
+/** Same limit as RoutineProgram::validate, including each detached program. */
+const MAX_CODE_STEPS = 40;
 
 /** A description as a routine can store it: trimmed, at most the limit. */
 export function clampDescription(text: string): string {
@@ -209,11 +213,19 @@ function validateProgramDraft(
   const triggers = draft.triggers ?? [];
   // A copy's steps are its parent's, checked there.
   if (draft.copy) return validateTriggers(triggers, creating);
-  return (
-    validateProgramSteps(steps, draft.apps) ??
-    validateSubRoutines(draft.subRoutines ?? []) ??
-    validateTriggers(triggers, creating)
+  const definitions = draft.subRoutines ?? [];
+  const error =
+    validateProgramSteps(steps, draft.apps) ?? validateSubRoutines(definitions);
+  if (error) return error;
+  const definedCounts = definitions.map(
+    (definition) => codeSteps(definition.steps).length
   );
+  const totalDefined = definedCounts.reduce((sum, count) => sum + count, 0);
+  const largestProgram = Math.max(codeSteps(steps).length, ...definedCounts);
+  if (totalDefined + largestProgram > MAX_CODE_STEPS) {
+    return `The definitions plus the largest step list can have at most ${MAX_CODE_STEPS} code steps.`;
+  }
+  return validateTriggers(triggers, creating);
 }
 
 function validateProgramSteps(steps: StepDraft[], apps: ScheduleDraft['apps']) {
