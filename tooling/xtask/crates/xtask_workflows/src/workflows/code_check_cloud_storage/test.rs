@@ -436,6 +436,9 @@ fn the_content_search_step_runs_its_target_on_every_selection() {
                 "-c",
                 "export PATH=\"$STUB_BIN:$PATH\"\nexec bash \"$STUB_SCRIPT\"",
             ])
+            // CI's dev shell sets BASH_ENV, which puts the real cargo back in
+            // front of the stand-in.
+            .env_remove("BASH_ENV")
             .env("STUB_BIN", stub_bin.path())
             .env(
                 "STUB_SCRIPT",
