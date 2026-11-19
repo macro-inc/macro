@@ -132,6 +132,8 @@ export const authExcluded = [
   'refresh',
   'rejectInvitation',
   'removeUserFromTeam',
+  // An agent teammate's own report that it is up; the starter agent calls it.
+  'reportTeamAgentOnline',
   'resendFusionauthVerifyUserEmail',
   'resolveGtmInviteLink',
   'revokeGtmInviteLink',
@@ -162,6 +164,7 @@ export const authBacklog = [
   'cancelTeamComputer', // Computer billing and lifecycle controls belong to the app.
   'completeTeamComputerSetup', // The guided computer setup is an app flow.
   'listTeamComputerOffers', // Computer checkout offers belong to the app.
+  'getTeamComputerRollout', // Whether the app shows computers is an app gate.
   'listTeamComputers', // Computer billing and lifecycle controls belong to the app.
   'restoreTeamComputer', // Computer billing and lifecycle controls belong to the app.
   'purchaseTeamComputer', // Computer checkout belongs to the app.
@@ -404,6 +407,8 @@ export const storageExcluded = [
   'getPendingProjectsHandler',
   'getProjectsHandler',
   'getRingStatus',
+  // Membership-scoped channel rows used by the email Share dialog.
+  'getThreadChannelShares',
   // Status of the web app's own folder upload; uploads aren't an SDK surface.
   'getUploadExtractStatusHandler',
   'getUserDocumentViewLocation',

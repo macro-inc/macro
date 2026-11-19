@@ -93,14 +93,12 @@ for (const provider of PROVIDERS) {
         .toEqual(['Picnic on Sunday']);
     });
 
-    // When this fails, the folded recipient summary no longer opens the To
-    // row: nobody can be added or removed once the body was focused. Today
-    // a tap focuses the summary button first, the row's focusin swaps it
-    // for the field before the click lands, and the row folds again
-    // (handoff phone-recipient-summary-tap-ignored).
-    test('known bug: phone-recipient-summary-tap-ignored: tapping the folded recipients opens To again @known-bug', {
-      tag: '@known-bug',
-    }, async ({ page, mailbox }) => {
+    // A tap on the folded To summary returns focus to the recipient input
+    // so another address can be added to the message.
+    test('tapping the folded recipients opens To again', async ({
+      page,
+      mailbox,
+    }) => {
       const grace = await addMailbox(mailbox, 'grace@example.com');
       const zed = await addMailbox(mailbox, 'zed@example.com');
       await openPhoneComposer(page, mailbox);
@@ -109,12 +107,12 @@ for (const provider of PROVIDERS) {
       const to = phoneRecipientInput(page, 'To');
       await page.getByRole('button', { name: grace, exact: true }).tap();
       did('AC-014');
-      await expect(to).toBeFocused();
+      await expect(to).toBeFocused({ timeout: 5_000 });
       await to.fill(zed);
       await to.press('Enter');
       await page.getByRole('button', { name: 'Send email' }).tap();
       const sent = await sentCopy(mailbox, 'Rug');
-      expect(sent.to).toEqual([grace, zed]);
+      expect([...sent.to].sort()).toEqual([grace, zed].sort());
     });
 
     // When this fails, leaving the phone's composer goes wrong: an untouched

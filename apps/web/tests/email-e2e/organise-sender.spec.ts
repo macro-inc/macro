@@ -143,32 +143,38 @@ for (const provider of PROVIDERS) {
         .toEqual([agenda.id, photos.id].sort());
     });
 
-    // Sender → Noise takes the thread out of the Signal list at once; the
-    // other way the Noise list keeps the row until the app is loaded again.
-    test('known bug: sender-to-signal-row-stays-in-noise: Sender → Signal takes the thread out of the Noise list @known-bug', {
-      tag: '@known-bug',
-    }, async ({ page, mailbox }) => {
+    // When this fails, the filter saves but the open Noise list keeps the
+    // sender's thread, or Signal does not show it when opened without a reload.
+    test('Sender → Signal takes the thread out of the Noise list', async ({
+      page,
+      mailbox,
+    }) => {
       await mailbox.deliver({
         from: 'Hal <hal@example.com>',
         subject: 'Team photos',
         text: 'From Friday.',
       });
       const photos = await mailbox.synced('Team photos');
+      const views = page.getByRole('radiogroup', { name: 'Inbox view' });
 
       await mailbox.open();
       await row(page, photos.id).click({ button: 'right' });
       await page.getByRole('menuitem', { name: 'Sender → Noise' }).click();
       await expect.poll(() => rowIds(page)).toEqual([]);
-      await page
-        .getByRole('radiogroup', { name: 'Inbox view' })
-        .getByText('Noise', { exact: true })
-        .click();
+      await views.getByText('Noise', { exact: true }).click();
       await expect.poll(() => rowIds(page)).toEqual([photos.id]);
 
       await row(page, photos.id).click({ button: 'right' });
       await page.getByRole('menuitem', { name: 'Sender → Signal' }).click();
+      did('AL-086');
       await expect(notice(page, 'Sender marked as Signal')).toBeVisible();
       await expect.poll(() => rowIds(page)).toEqual([]);
+      await views.getByText('Signal', { exact: true }).click();
+      await expect.poll(() => rowIds(page)).toEqual([photos.id]);
+      await expect
+        .poll(() => senderFilters(mailbox))
+        .toEqual([{ address: 'hal@example.com', signal: true }]);
+      confirmed('F-081');
     });
   });
 }

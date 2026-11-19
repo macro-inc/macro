@@ -2,7 +2,7 @@
 //! whether or not the database is in the trash.
 
 use super::*;
-use crate::domain::ports::DatabaseMetadataReads;
+use crate::domain::ports::{DatabaseLifecycleReads, DatabaseMetadataReads};
 
 #[tokio::test]
 async fn metadata_names_the_database_as_it_is_now_in_the_trash_or_not() {
@@ -63,4 +63,27 @@ async fn metadata_of_a_missing_database_or_another_entity_is_not_found() {
 
 fn svc_error(result: Result<Database, DatabaseError>) -> DatabaseError {
     result.expect_err("the read is refused")
+}
+
+#[tokio::test]
+async fn lifecycle_facts_follow_trash_restore_and_purge_without_a_viewer() {
+    let seeded = seeded().await;
+    let (svc, db) = (seeded.service, seeded.database_id);
+    assert!(svc.database_is_live(db).await.unwrap());
+
+    svc.trash_database(receipt::<OwnerAccessLevel>(db, OWNER, AccessLevel::Owner))
+        .await
+        .unwrap();
+    assert!(!svc.database_is_live(db).await.unwrap());
+
+    svc.restore_database(receipt::<OwnerAccessLevel>(db, OWNER, AccessLevel::Owner))
+        .await
+        .unwrap();
+    assert!(svc.database_is_live(db).await.unwrap());
+
+    svc.delete_database_permanently(receipt::<OwnerAccessLevel>(db, OWNER, AccessLevel::Owner))
+        .await
+        .unwrap();
+    assert!(!svc.database_is_live(db).await.unwrap());
+    assert!(!svc.database_is_live(DatabaseId::new()).await.unwrap());
 }

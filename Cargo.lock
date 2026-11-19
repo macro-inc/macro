@@ -737,7 +737,6 @@ dependencies = [
  "import_jira",
  "import_linear",
  "import_notion",
- "incus_client",
  "initiative",
  "jev",
  "jsonwebtoken 10.3.0",
@@ -842,6 +841,7 @@ dependencies = [
  "web_search",
  "wiremock",
  "workspace-hack",
+ "zeroize",
 ]
 
 [[package]]
@@ -2609,6 +2609,34 @@ dependencies = [
 ]
 
 [[package]]
+name = "aws-sdk-cloudwatch"
+version = "1.113.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "0bd1ebba805f62f5609ff8f3c125712c8fb7bd893be4615ee0f2995f0b1709b7"
+dependencies = [
+ "aws-credential-types",
+ "aws-runtime",
+ "aws-smithy-async",
+ "aws-smithy-cbor",
+ "aws-smithy-compression",
+ "aws-smithy-http",
+ "aws-smithy-json",
+ "aws-smithy-observability",
+ "aws-smithy-runtime",
+ "aws-smithy-runtime-api",
+ "aws-smithy-types",
+ "aws-types",
+ "fastrand 2.4.1",
+ "flate2",
+ "http 0.2.12",
+ "http 1.4.0",
+ "http-body 1.0.1",
+ "http-body-util",
+ "regex-lite",
+ "tracing",
+]
+
+[[package]]
 name = "aws-sdk-dynamodb"
 version = "1.112.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -2950,6 +2978,16 @@ dependencies = [
 ]
 
 [[package]]
+name = "aws-smithy-cbor"
+version = "0.61.8"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "5fb5813cf71b5f07be37c10370db550b62a0ce94f3ba5722c44a67556f85c42c"
+dependencies = [
+ "aws-smithy-types",
+ "minicbor",
+]
+
+[[package]]
 name = "aws-smithy-checksums"
 version = "0.64.8"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -2967,6 +3005,24 @@ dependencies = [
  "pin-project-lite",
  "sha1 0.11.0",
  "sha2 0.11.0",
+ "tracing",
+]
+
+[[package]]
+name = "aws-smithy-compression"
+version = "0.1.6"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "0e3cba0f1e060e0025523d3965f4967e668f9bbf7342c09427a1ad110437f4bb"
+dependencies = [
+ "aws-smithy-runtime-api",
+ "aws-smithy-types",
+ "bytes",
+ "flate2",
+ "futures-util",
+ "http 1.4.0",
+ "http-body 1.0.1",
+ "http-body-util",
+ "pin-project-lite",
  "tracing",
 ]
 
@@ -4780,6 +4836,7 @@ dependencies = [
  "codex_fold",
  "crossterm 0.28.1",
  "eventsource-stream",
+ "firecracker_host_api",
  "flate2",
  "futures",
  "harness_id",
@@ -4800,6 +4857,7 @@ dependencies = [
  "opentelemetry-otlp",
  "opentelemetry_sdk",
  "pairing_id",
+ "rand 0.9.4",
  "ratatui",
  "reqwest 0.13.4",
  "rootcause",
@@ -5054,6 +5112,18 @@ dependencies = [
  "thiserror 2.0.18",
  "utoipa",
  "uuid",
+ "workspace-hack",
+]
+
+[[package]]
+name = "computer_types"
+version = "0.1.0"
+dependencies = [
+ "serde",
+ "serde_json",
+ "strum 0.27.2",
+ "thiserror 2.0.18",
+ "utoipa",
  "workspace-hack",
 ]
 
@@ -7488,6 +7558,7 @@ dependencies = [
  "macro_db_migrator",
  "macro_event_broker",
  "macro_event_topics",
+ "macro_service_urls",
  "macro_user_id",
  "macro_uuid",
  "model-entity",
@@ -7497,6 +7568,7 @@ dependencies = [
  "non_empty",
  "opentelemetry",
  "opentelemetry_sdk",
+ "outlook_emulator",
  "rand 0.9.4",
  "recursion",
  "redis",
@@ -7652,6 +7724,7 @@ name = "email_focus_worker"
 version = "0.1.0"
 dependencies = [
  "ai_usage",
+ "aws-sdk-cloudwatch",
  "calendar_events",
  "chrono",
  "connection_gateway_client",
@@ -7663,6 +7736,7 @@ dependencies = [
  "kafka_util",
  "macro_auth",
  "macro_authorization",
+ "macro_aws_config",
  "macro_config",
  "macro_db_migrator",
  "macro_entrypoint",
@@ -7680,6 +7754,7 @@ dependencies = [
  "rootcause",
  "serde_json",
  "sqlx",
+ "strum 0.27.2",
  "tokio",
  "tokio-util",
  "tracing",
@@ -7787,6 +7862,7 @@ dependencies = [
  "email_utils",
  "entity_access",
  "entity_access_management",
+ "feature_flags",
  "frecency",
  "futures",
  "generic_email_domains",
@@ -8528,6 +8604,84 @@ name = "find-msvc-tools"
 version = "0.1.9"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "5baebc0774151f905a1a2cc41989300b1e6fbb29aff0ceffa1064fdd3088d582"
+
+[[package]]
+name = "firecracker_guest_agent"
+version = "0.1.0"
+dependencies = [
+ "firecracker_host_api",
+ "tokio",
+ "tokio-util",
+ "tokio-vsock",
+ "tracing",
+ "tracing-subscriber",
+ "workspace-hack",
+]
+
+[[package]]
+name = "firecracker_host"
+version = "0.1.0"
+dependencies = [
+ "axum",
+ "chrono",
+ "clap",
+ "firecracker_host_api",
+ "futures",
+ "http 1.4.0",
+ "http-body-util",
+ "hyper 1.9.0",
+ "hyper-util",
+ "macro_entrypoint",
+ "macro_env",
+ "macro_tower_layers",
+ "memchr",
+ "opentelemetry",
+ "pinned_tls",
+ "rootcause",
+ "rustix 1.1.6",
+ "rustls",
+ "serde",
+ "serde_json",
+ "strum 0.27.2",
+ "tempfile",
+ "thiserror 2.0.18",
+ "tokio",
+ "tokio-rustls",
+ "tokio-util",
+ "toml 0.8.23",
+ "tower 0.5.3",
+ "tracing",
+ "tracing-opentelemetry",
+ "utoipa",
+ "uuid",
+ "workspace-hack",
+]
+
+[[package]]
+name = "firecracker_host_api"
+version = "0.1.0"
+dependencies = [
+ "chrono",
+ "computer_id",
+ "computer_types",
+ "futures",
+ "macro_tower_layers",
+ "pairing_id",
+ "pinned_tls",
+ "reqwest 0.13.4",
+ "rustls",
+ "serde",
+ "serde_json",
+ "strum 0.27.2",
+ "subtle",
+ "thiserror 2.0.18",
+ "tokio",
+ "tokio-tungstenite 0.28.0",
+ "tracing",
+ "utoipa",
+ "workspace-hack",
+ "zeroize",
+]
 
 [[package]]
 name = "fixedbitset"
@@ -10425,17 +10579,20 @@ dependencies = [
  "chrono",
  "clap",
  "computer_id",
+ "computer_types",
  "entity_access",
  "feature_flags",
+ "firecracker_host_api",
+ "futures",
  "harness_id",
  "harnesses",
- "incus_client",
  "macro_authorization",
  "macro_db_migrator",
  "macro_env",
  "macro_user_id",
  "model-error-response",
  "model_user",
+ "nom 8.0.0",
  "opentelemetry",
  "opentelemetry_sdk",
  "pairing_id",
@@ -10449,6 +10606,8 @@ dependencies = [
  "thiserror 2.0.18",
  "tokio",
  "tokio-retry",
+ "tokio-tungstenite 0.28.0",
+ "tokio-util",
  "tower 0.5.3",
  "tracing",
  "tracing-opentelemetry",
@@ -11287,27 +11446,6 @@ dependencies = [
 ]
 
 [[package]]
-name = "incus_client"
-version = "0.1.0"
-dependencies = [
- "chrono",
- "futures",
- "progenitor-client",
- "reqwest 0.13.4",
- "rustls",
- "serde",
- "serde_json",
- "strum 0.27.2",
- "thiserror 2.0.18",
- "tokio",
- "tokio-tungstenite 0.28.0",
- "tracing",
- "uuid",
- "wiremock",
- "workspace-hack",
-]
-
-[[package]]
 name = "indent_write"
 version = "2.2.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -11928,7 +12066,9 @@ dependencies = [
  "either",
  "macro_env",
  "macro_env_var",
+ "nom 8.0.0",
  "opentelemetry",
+ "opentelemetry_sdk",
  "rdkafka",
  "thiserror 2.0.18",
  "tokio",
@@ -12931,10 +13071,13 @@ dependencies = [
  "agent_correlation",
  "kafka_util",
  "macro_event_topics",
+ "opentelemetry",
+ "opentelemetry_sdk",
  "rdkafka",
  "rootcause",
  "serde",
  "serde_json",
+ "strum 0.27.2",
  "thiserror 2.0.18",
  "tokio",
  "tokio-util",
@@ -13548,6 +13691,15 @@ dependencies = [
  "proc-macro2",
  "quote",
  "syn 2.0.117",
+]
+
+[[package]]
+name = "minicbor"
+version = "2.3.1"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "e7244eafd1e09e7c4e33043881997aa6ab6dffff3ed2cee3395a278980481d6e"
+dependencies = [
+ "half",
 ]
 
 [[package]]
@@ -14259,6 +14411,7 @@ dependencies = [
  "cfg-if",
  "cfg_aliases",
  "libc",
+ "memoffset",
 ]
 
 [[package]]
@@ -15961,6 +16114,15 @@ name = "pin-utils"
 version = "0.1.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "8b870d8c151b6f2fb93e84a13146138f05d02ed11c7e7c54f8826aaaf7c9f184"
+
+[[package]]
+name = "pinned_tls"
+version = "0.1.0"
+dependencies = [
+ "rustls",
+ "thiserror 2.0.18",
+ "workspace-hack",
+]
 
 [[package]]
 name = "pipedream_mcp"
@@ -18427,6 +18589,7 @@ dependencies = [
  "projects",
  "properties",
  "psd_engine",
+ "rand 0.9.4",
  "rdkafka",
  "rootcause",
  "rust-embed",
@@ -20939,15 +21102,20 @@ dependencies = [
  "chrono",
  "entity_access",
  "feature_flags",
+ "harness_id",
  "hosted_runtimes",
  "macro_authorization",
  "macro_db_migrator",
  "macro_service_urls",
  "macro_user_id",
+ "model-entity",
  "model-error-response",
+ "model_notifications",
  "model_user",
+ "notification",
  "rootcause",
  "serde",
+ "serde_json",
  "sqlx",
  "team_agents",
  "teams",
@@ -20974,6 +21142,7 @@ dependencies = [
  "bot_id",
  "channels",
  "chrono",
+ "computer_id",
  "contacts",
  "database_env_vars",
  "entity_access",
@@ -21004,6 +21173,7 @@ dependencies = [
  "shared_entity_registry",
  "sqlx",
  "sqs_client",
+ "strum 0.27.2",
  "thiserror 2.0.18",
  "tokio",
  "tower 0.5.3",
@@ -21348,6 +21518,19 @@ dependencies = [
  "futures-util",
  "pin-project-lite",
  "tokio",
+]
+
+[[package]]
+name = "tokio-vsock"
+version = "0.7.3"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "676ade3d183052ca2703288b48f63a2e82633a24836ca279eb6724ab2a97b05d"
+dependencies = [
+ "bytes",
+ "futures",
+ "libc",
+ "tokio",
+ "vsock",
 ]
 
 [[package]]
@@ -22505,6 +22688,16 @@ name = "vsimd"
 version = "0.8.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "5c3082ca00d5a5ef149bb8b555a72ae84c9c59f7250f013ac822ac2e49b19c64"
+
+[[package]]
+name = "vsock"
+version = "0.5.5"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "9b7d4dba01e366e2ffbdf0700b1876f747c548db72dced534de41c54945c0148"
+dependencies = [
+ "libc",
+ "nix 0.31.3",
+]
 
 [[package]]
 name = "vt100"
@@ -24097,6 +24290,7 @@ dependencies = [
  "tokio-rustls",
  "tokio-stream",
  "tokio-util",
+ "toml_edit 0.22.27",
  "tower 0.5.3",
  "tower-http",
  "tracing",
@@ -24296,6 +24490,7 @@ dependencies = [
  "indicatif",
  "indoc",
  "jsonwebtoken 10.3.0",
+ "lazy-regex",
  "libc",
  "macro_aws_config",
  "macro_env_var",

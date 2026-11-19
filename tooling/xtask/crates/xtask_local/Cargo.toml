@@ -57,6 +57,7 @@ xtask_local_telemetry = { path = "../xtask_local_telemetry" }
 
 [dev-dependencies]
 jsonwebtoken = { workspace = true }
+lazy-regex = { workspace = true }
 regex = { workspace = true }
 tempfile = { workspace = true }
 

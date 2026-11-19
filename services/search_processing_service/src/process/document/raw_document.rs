@@ -60,21 +60,22 @@ async fn upsert_document(
         _ => {}
     }
 
-    let results = opensearch_client
+    if let Err(error) = opensearch_client
         .bulk_upsert_documents(&upserts, index_override)
         .await
-        .context("unable to bulk upsert documents in opensearch")?;
-
-    if !results.errors.is_empty() {
-        tracing::error!(errors=?results.errors, "bulk upsert failed");
+    {
+        tracing::error!(error = %error, "bulk upsert failed");
 
         // delete document that failed to upsert
-        opensearch_client
+        if let Err(delete_error) = opensearch_client
             .delete_document(&search_extractor_message.document_id, index_override)
             .await
-            .context("failed to delete document for failed bulk upsert")?;
+        {
+            // The upsert's error decides how the attempt is retried.
+            tracing::warn!(error = %delete_error, "failed to delete document for failed bulk upsert");
+        }
 
-        anyhow::bail!("failed to upsert documents");
+        return Err(error).context("failed to upsert documents");
     }
 
     tracing::trace!("upserted document");
