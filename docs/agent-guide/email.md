@@ -1451,6 +1451,11 @@ With cached inbox metadata available before viewer information loads, saving a
 new offline draft must still create its Mail thread. The selected inbox supplies
 the owner, including delegated inboxes. If that account metadata is unavailable,
 the save must fail before queueing; retain the editor content for a later retry.
+While an already-visible account catalog is refetching, saving and sending must
+retain the selected inbox's owner and draft setting, including delegated inboxes.
+The primary inbox must remain selected even if it is not first in the catalog.
+Repeat with that refresh unanswered, then switch accounts: the previous viewer's
+inboxes must no longer be available.
 Test this with a previously saved draft as well as a new one: a queued edit must
 block Send and scheduling until a save commits. Reopening a cached draft while
 offline must retain its uploaded attachments and confirmed scheduled time.
