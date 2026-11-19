@@ -4,7 +4,7 @@
 // is kept by the service, and the Mail badge lights only for mail that
 // arrived while that switch was on.
 
-import type { Page } from '@playwright/test';
+import type { Locator, Page, Request } from '@playwright/test';
 import { loadAppSteadily } from './harness/drafts';
 import { expect, type Mailbox, test } from './harness/fixtures';
 import { focusRow } from './harness/list';
@@ -156,6 +156,35 @@ async function setNewEmail(page: Page, on: boolean) {
   did('AX-063');
   await expect(toggle).toBeChecked({ checked: on });
   saw('STX-943');
+}
+
+/**
+ * Opens the Notifications inbox and answers its list. Chrome fails every
+ * request in flight when the machine's network changes (`loadAppSteadily`),
+ * and an inbox whose list was among them says it couldn't be loaded: only
+ * then is it asked again.
+ */
+async function openNotifications(
+  page: Page,
+  mailbox: Mailbox
+): Promise<Locator> {
+  let dropped = false;
+  const onFailed = (request: Request) => {
+    if (request.failure()?.errorText === 'net::ERR_NETWORK_CHANGED') {
+      dropped = true;
+    }
+  };
+  page.on('requestfailed', onFailed);
+  await mailbox.open('/app/notifications');
+  const inbox = page.getByRole('grid', { name: 'Notifications' });
+  const again = inbox.getByRole('button', { name: 'Try again' });
+  await expect(inbox.getByRole('row').first().or(again)).toBeVisible();
+  page.off('requestfailed', onFailed);
+  if (await again.isVisible()) {
+    expect(dropped, 'the inbox failed with no network change').toBe(true);
+    await again.click();
+  }
+  return inbox;
 }
 
 for (const provider of PROVIDERS) {
@@ -326,10 +355,9 @@ for (const provider of PROVIDERS) {
       // "Lunch?" is still unread: it lit the badge only if it made a row.
       // The badge is lit first, so its going out is the read, not a page
       // that has yet to hear from the service.
-      await mailbox.open('/app/notifications');
+      const inbox = await openNotifications(page, mailbox);
       await expect(badge).toHaveAttribute('data-unread');
-      await page
-        .getByRole('grid', { name: 'Notifications' })
+      await inbox
         .getByRole('row')
         .filter({ hasText: 'Dinner instead' })
         .click();
