@@ -534,8 +534,9 @@ task can't change: edit its parent's definition instead. The SDK can't hold
 a definition's apps or a routine's saved input values (a scheduled copy kept
 as its own routine keeps its values), so an update that keeps a definition
 with apps, or of a routine with input values, is refused (409). The routine
-editor, once it shows definitions, keeps both when it saves and can change a
-definition's apps, but not a saved input value. `setEnabled` doesn't send
+editor, once it shows definitions, keeps both when it saves and can remove a
+definition's apps, but can't add one or change a saved input value.
+`setEnabled` doesn't send
 the task, so it pauses or resumes a routine whatever its task holds (the
 scheduler's other checks still apply).
 Routines run with their owner's access. For eligible routines,
