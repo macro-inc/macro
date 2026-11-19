@@ -637,6 +637,7 @@ impl Fleet for FirecrackerFleet {
                 computer_id: guest.computer_id,
                 hibernated: guest.state == PowerState::Hibernated,
                 private_memory_bytes: guest.usage.map(|usage| usage.private_memory_bytes),
+                swap_bytes: guest.usage.and_then(|usage| usage.swap_bytes),
                 cpu_usage_microseconds: guest.usage.map(|usage| usage.cpu_usage_microseconds),
             })
             .collect();

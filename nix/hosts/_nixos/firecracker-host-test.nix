@@ -187,7 +187,14 @@ pkgs.testers.runNixOSTest {
           healthCheckInterval = "10s";
           storage.goldenRootDiskGib = 2;
           datadog.enable = false;
+          # Scraped here; nothing listens at the remote-write address.
+          alloy = {
+            enable = true;
+            remoteWriteUrl = "http://127.0.0.1:9/api/v1/write";
+            passwordFile = "/etc/metrics-remote-write-password";
+          };
         };
+        environment.etc."metrics-remote-write-password".text = "test";
       };
     controlPlane = {
       networking.interfaces.eth1.ipv4.addresses = lib.mkForce [
@@ -269,6 +276,11 @@ pkgs.testers.runNixOSTest {
         host.succeed("grep -q memory /sys/fs/cgroup/system.slice/firecracker-host.service/vms/cgroup.subtree_control")
         host.succeed("test \"$(cat /proc/$(systemctl show -P MainPID firecracker-host)/oom_score_adj)\" = -1000")
 
+    with subtest("Alloy reads the host's metrics and the VMs' cgroup subtree"):
+        host.wait_for_unit("alloy.service")
+        host.wait_until_succeeds("curl -sf http://127.0.0.1:12345/api/v0/component/prometheus.exporter.unix.host/metrics | grep -q '^node_pressure_memory_waiting_seconds_total'")
+        host.wait_until_succeeds("curl -sf http://127.0.0.1:12345/api/v0/component/prometheus.exporter.cadvisor.computers/metrics | grep -q 'container_memory_usage_bytes{id=\"/system.slice/firecracker-host.service/vms\"'")
+
     with subtest("every slot and the golden slot have a netns, a user-owned tap and the guest firewall"):
         slots = host.succeed("ip netns list | grep -c '^fch-'").strip()
         assert slots == "5", slots
@@ -344,6 +356,8 @@ pkgs.testers.runNixOSTest {
             host.succeed(f"test -f {home}/home.ext4 && ! ls {home} | grep -q '^home-'")
             assert host.succeed("zpool get -H -p -o value bcloneused tank").strip() == bclone_before
             client("exec ${computerId} --root test -e /run/macro-restored")
+            # Its VM's cgroup is among the series Alloy scrapes.
+            host.wait_until_succeeds("curl -sf http://127.0.0.1:12345/api/v0/component/prometheus.exporter.cadvisor.computers/metrics | grep -q 'container_cpu_usage_seconds_total{.*vms/c-${lib.replaceStrings [ "-" ] [ "" ] computerId}\"'")
             client("exec ${computerId} --root sh -c 'echo kept > /home/marker && sync'")
 
             client("hibernate ${computerId}")

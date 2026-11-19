@@ -31,6 +31,7 @@ mod moves;
 mod overcommit;
 #[cfg(test)]
 mod test;
+mod usage;
 
 pub const TEAM: Uuid = Uuid::from_u128(0x0000_0000_0000_4000_8000_0000_0000_00aa);
 pub const HOST: HostId = HostId::new(Uuid::from_u128(0x0000_0000_0000_4000_8000_0000_0000_0001));
@@ -128,6 +129,8 @@ pub struct FakeRepo {
     pub home_max_concurrent_starts: Option<u32>,
     /// Hosts' overcommit state, hibernations and wake requests.
     pub overcommit: overcommit::FakeOvercommit,
+    /// Usage readings, each computer's in the order recorded.
+    pub usage: Mutex<HashMap<ComputerId, Vec<crate::domain::usage::StoredSample>>>,
     /// Moves (`domain::moves`), in the order created.
     pub moves: Mutex<Vec<crate::domain::moves::ComputerMove>>,
 }

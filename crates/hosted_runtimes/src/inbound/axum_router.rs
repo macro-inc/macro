@@ -29,10 +29,11 @@ use crate::domain::models::{
     PurchaseRequest, SizeOffer,
 };
 use crate::domain::ports::{
-    Billing, BillingError, CompPolicy, ComputerRepo, FleetAttachmentSource, NoComps,
+    Billing, BillingError, CompPolicy, ComputerRepo, FleetAttachmentSource, NoComps, UsageHistory,
 };
 use crate::domain::service::{Clock, ComputerError, ComputerService};
 use crate::domain::size::ComputerSize;
+use crate::domain::usage::ComputerUsage;
 
 /// Router state: the computer service plus what team access checks need.
 pub struct ComputerRouterState<Repo, Bill, Time, EntityAccess, Auth, Attachment, Policy = NoComps> {
@@ -83,7 +84,7 @@ pub fn team_router<Repo, Bill, Time, EntityAccess, Auth, Attachment, Policy, S>(
     state: ComputerRouterState<Repo, Bill, Time, EntityAccess, Auth, Attachment, Policy>,
 ) -> Router<S>
 where
-    Repo: ComputerRepo,
+    Repo: ComputerRepo + UsageHistory,
     Bill: Billing,
     Time: Clock,
     EntityAccess: EntityAccessService,
@@ -101,6 +102,10 @@ where
         .route(
             "/team/computers/offers",
             get(offers::<Repo, Bill, Time, EntityAccess, Auth, Attachment, Policy>),
+        )
+        .route(
+            "/team/computers/usage",
+            get(usage::<Repo, Bill, Time, EntityAccess, Auth, Attachment, Policy>),
         )
         .route(
             "/team/computers/purchase-offers",
@@ -184,6 +189,37 @@ pub async fn list<
 ) -> Result<Json<Vec<ComputerStatus>>, ComputersHttpError> {
     let team_id = team_id(&access.entity_access_receipt)?;
     Ok(Json(state.service.list(team_id).await?))
+}
+
+/// Each of the team's computers' CPU and memory over the last day, in the
+/// list's order.
+#[utoipa::path(
+    get,
+    path = "/team/computers/usage",
+    operation_id = "list_team_computer_usage",
+    responses(
+        (status = 200, body = Vec<ComputerUsage>),
+        (status = 401, body = ErrorResponse),
+        (status = 403, body = ErrorResponse),
+    ),
+)]
+#[tracing::instrument(skip_all, err)]
+pub async fn usage<
+    Repo: ComputerRepo + UsageHistory,
+    Bill: Billing,
+    Time: Clock,
+    EntityAccess: EntityAccessService,
+    Auth: MacroAuthorizationService,
+    Attachment: FleetAttachmentSource,
+    Policy: CompPolicy,
+>(
+    access: MacroUserTeamExtractorV2<MemberTeamRole, EntityAccess, Auth>,
+    State(state): State<
+        ComputerRouterState<Repo, Bill, Time, EntityAccess, Auth, Attachment, Policy>,
+    >,
+) -> Result<Json<Vec<ComputerUsage>>, ComputersHttpError> {
+    let team_id = team_id(&access.entity_access_receipt)?;
+    Ok(Json(state.service.usage(team_id).await?))
 }
 
 /// Every size with its price and availability.
