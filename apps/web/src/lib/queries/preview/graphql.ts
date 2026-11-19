@@ -648,7 +648,8 @@ function previewBatcher(client: Client, includeProperties: boolean) {
 /** Joins a shared live preview batch; rich document edges load in the first request. */
 export function createGraphqlItemPreviewQuery(
   getItem: Accessor<ItemEntity>,
-  includeProperties = true
+  includeProperties = true,
+  enabled: Accessor<boolean> = () => true
 ): GraphqlItemPreviewQuery {
   const pendingAppearance = usePendingEntityAppearance();
   // Hover popup props derive from another live preview. Snapshot only the
@@ -673,7 +674,9 @@ export function createGraphqlItemPreviewQuery(
   const [group, setGroup] = createSignal<PreviewBatch>();
   let ready: Promise<PreviewBatch | undefined> = Promise.resolve(undefined);
   const isEnabled = () =>
-    !cacheSessionGeneration.state().paused && isGraphqlPreviewItem(item());
+    enabled() &&
+    !cacheSessionGeneration.state().paused &&
+    isGraphqlPreviewItem(item());
   createComputed(() => {
     const current = item();
     const { epoch } = cacheSessionGeneration.state();

@@ -82,6 +82,20 @@ test('read-only overview, aligned rule kinds, automatic validation and verified 
   ).toHaveCount(0);
 });
 
+test('keeps the open sharing draft through CRM access retirement', async ({
+  page,
+}) => {
+  await openSettings(page, '/?selective-settings&contributing&retirement');
+  await page.getByRole('button', { name: 'Edit JSON', exact: true }).click();
+  const draft = page.getByRole('textbox', { name: 'Sharing rules JSON' });
+  const edited =
+    '{"schema_version":1,"include":[{"kind":"domain","domain":"draft.example.com"}]}';
+  await draft.fill(edited);
+  await page.getByRole('button', { name: 'Retire CRM cache' }).click();
+  await expect(draft).toHaveValue(edited);
+  await expect(page.getByTestId('policy-calls')).not.toContainText('replace');
+});
+
 for (const pending of ['policy-pending', 'policy-flag-pending']) {
   test(`${pending} retains the overview layout`, async ({ page }) => {
     await openSettings(page, `/?selective-settings&contributing&${pending}`);

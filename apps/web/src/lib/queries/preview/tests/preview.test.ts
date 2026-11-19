@@ -163,7 +163,8 @@ describe('preview transport facade', () => {
       expect(name()).toBe('Document');
       expect(createGraphqlItemPreviewQueryMock).toHaveBeenCalledWith(
         expect.any(Function),
-        false
+        false,
+        expect.any(Function)
       );
       dispose();
     });
@@ -191,7 +192,8 @@ describe('preview transport facade', () => {
       });
       expect(createGraphqlItemPreviewQueryMock).toHaveBeenCalledWith(
         expect.any(Function),
-        false
+        false,
+        expect.any(Function)
       );
       setData({
         id: 'doc-1',

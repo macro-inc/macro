@@ -1,3 +1,4 @@
+import { crmKeys } from '@app/features/crm/queries/keys';
 import type * as PlatformModule from '@core/util/platform';
 import {
   keepPreviousData,
@@ -9,6 +10,7 @@ import { describe, expect, it, vi } from 'vitest';
 import { authKeys } from './auth/keys';
 import { calendarKeys } from './calendar/keys';
 import { channelKeys } from './channel/keys';
+import { crmProtectedQueryKey } from './crm-cache-scope';
 import { messageKeys } from './messages/keys';
 import { type PersistScope, setupQueryPersistence } from './persistence';
 import type {
@@ -933,6 +935,46 @@ describe('permission snapshot retirement', () => {
     persistence.dispose();
     queryClient.clear();
   });
+});
+
+it('keeps owner privacy controls through denial but clears them on account retirement', async () => {
+  const store = createMockStore();
+  const queryClient = new QueryClient();
+  const persistence = setupQueryPersistence({
+    queryClient,
+    scopes: [createScope([], store)],
+  });
+  const controls = [
+    crmKeys.emailPolicy('owner').queryKey,
+    crmKeys.emailPolicyPreview('owner').queryKey,
+    crmKeys.emailPolicyHistory('owner').queryKey,
+    crmKeys.emailPolicyRevision('owner', 1).queryKey,
+    crmKeys.emailPrivacy('team', 'owner').queryKey,
+    crmKeys.emailConsent('team', 'owner', 1).queryKey,
+    crmKeys.excludedEmailThreads('team', 'owner', 1, undefined).queryKey,
+  ];
+  const company = crmKeys.company('company').queryKey;
+  for (const key of [...controls, company])
+    queryClient.setQueryData(key, { value: 'saved' });
+  const updates: string[] = [];
+  const observer = new QueryObserver(queryClient, {
+    queryKey: controls[0],
+    enabled: false,
+  });
+  const unsubscribe = observer.subscribe((result) =>
+    updates.push(result.status)
+  );
+  await persistence.retire(crmProtectedQueryKey);
+  expect(queryClient.getQueryData(company)).toBeUndefined();
+  for (const key of controls)
+    expect(queryClient.getQueryData(key)).toEqual({ value: 'saved' });
+  expect(updates).not.toContain('pending');
+  await persistence.retire(() => true);
+  for (const key of controls)
+    expect(queryClient.getQueryData(key)).toBeUndefined();
+  unsubscribe();
+  persistence.dispose();
+  queryClient.clear();
 });
 
 it('restores an allowed cache without scanning every persisted payload until a denial', async () => {

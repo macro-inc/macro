@@ -7,7 +7,9 @@ import { SettingsPage } from '@app/features/settings/primitives';
 import { applyTheme } from '@app/features/theme/utils/themeUtils';
 import { SETTINGS_TAB_GROUPS } from '@core/constant/settingsTabsConfig';
 import { isTouchDevice } from '@core/mobile/isTouchDevice';
-import { queryClient } from '@queries/client';
+import { cacheSessionGeneration } from '@graphql-cache/session-generation';
+import { queryClient, queryPersistence } from '@queries/client';
+import { crmProtectedQueryKey } from '@queries/crm-cache-scope';
 import { previewKeys } from '@queries/preview/keys';
 import { Button } from '@ui';
 import { createSignal, Show, Suspense } from 'solid-js';
@@ -56,6 +58,19 @@ export function SelectiveSettingsFixture() {
   );
   return (
     <div class="h-dvh bg-page text-ink font-sans">
+      <Show when={params.has('retirement')}>
+        <Button
+          onClick={async () => {
+            await cacheSessionGeneration.transition(async () => {
+              await queryClient.cancelQueries();
+              await queryPersistence.retire(crmProtectedQueryKey);
+            });
+            await queryClient.refetchQueries({ type: 'active' });
+          }}
+        >
+          Retire CRM cache
+        </Button>
+      </Show>
       <output hidden data-testid="policy-calls">
         {JSON.stringify(policyCalls())}
       </output>

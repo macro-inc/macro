@@ -147,7 +147,12 @@ function useItemPreviewQuery(
   restStaleTime = PREVIEW_STALE_TIME,
   includeProperties = true
 ) {
-  const graphqlQuery = createGraphqlItemPreviewQuery(item, includeProperties);
+  const enabled = () => !previewDenied(item());
+  const graphqlQuery = createGraphqlItemPreviewQuery(
+    item,
+    includeProperties,
+    enabled
+  );
   const usesGraphql = createMemo(
     () => isGraphqlPreviewItem(item()) && !graphqlQuery.shouldFallback()
   );
@@ -157,7 +162,9 @@ function useItemPreviewQuery(
   const restQuery = createMemo(() =>
     usesGraphql()
       ? undefined
-      : useQuery(() => itemPreviewQueryOptions(item(), true, restStaleTime))
+      : useQuery(() =>
+          itemPreviewQueryOptions(item(), enabled(), restStaleTime)
+        )
   );
 
   return {
@@ -177,6 +184,7 @@ function useItemPreviewQuery(
         : (restQuery()?.isSuccess ?? false),
     usesGraphql,
     refetch: async () => {
+      if (!enabled()) return;
       if (usesGraphql()) await graphqlQuery.refetch();
       else await restQuery()?.refetch();
     },

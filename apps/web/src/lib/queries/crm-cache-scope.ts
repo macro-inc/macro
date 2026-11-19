@@ -1,9 +1,20 @@
 /** Legacy query keys without an entity kind cannot prove a non-CRM scope. */
 export function crmProtectedQueryKey(key: readonly unknown[]): boolean {
   const [kind, scope] = key;
+  // These owner-authorized privacy controls remain available without CRM
+  // viewing access. Session/account retirement still clears every key.
+  if (kind === 'crm')
+    return ![
+      'emailPrivacy',
+      'emailConsent',
+      'excludedEmailThreads',
+      'emailPolicy',
+      'emailPolicyHistory',
+      'emailPolicyRevision',
+      'emailPolicyPreview',
+    ].includes(String(scope));
   if (
     [
-      'crm',
       'preview',
       'activity',
       'agent-activity',

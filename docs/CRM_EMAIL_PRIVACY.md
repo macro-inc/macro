@@ -88,6 +88,15 @@ email-thread storage and native-mobile Soup persistence remain available until
 proven denial. The legacy TanStack `email-threads` scope remains disabled, as on
 main; it is retained only to remove snapshots saved by earlier versions.
 
+Owner privacy query families (`emailPrivacy`, `emailConsent`,
+`excludedEmailThreads`, `emailPolicy`, `emailPolicyHistory`,
+`emailPolicyRevision`, `emailPolicyPreview`) survive CRM-access retirement.
+They remain authorized without CRM viewing access, so the settings editor keeps
+its draft during revalidation. Account/session retirement still clears them.
+Company and contact rule labels do not fetch previews while access is denied;
+the member's own thread labels remain available. Preview commands preserve their
+server outcome across retirement but re-read instead of publishing stale counts.
+
 Authored draft content, queued variables, UUIDs, leases and identity bindings
 survive retirement. Successful mutations keep their real server outcome. Stale
 queued responses settle identities without copied response content, projections
