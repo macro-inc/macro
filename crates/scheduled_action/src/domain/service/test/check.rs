@@ -457,3 +457,36 @@ async fn a_check_keeps_at_most_ten_missing_apps() {
     assert_eq!(check.missing_apps.len(), 10);
     assert_eq!(check.missing_apps[9].app_slug, "app_9");
 }
+
+/// A sub-routine's apps are required by the routine that defines it, so a
+/// check never names one of them missing.
+#[tokio::test]
+async fn a_check_never_names_missing_an_app_a_sub_routine_requires() {
+    let svc = checking_service(
+        Arc::new(PanickingHandBacks),
+        Arc::new(Invocations::default()),
+    );
+    let mut config = program_configuration(
+        json!({ "type": "cron", "schedule": "0 0 9 * * *", "timezone": "UTC" }),
+        steps(&["good"]),
+    );
+    config.task["sub_routines"] = json!([{
+        "name": "file",
+        "title": "File the bug",
+        "steps": [{ "type": "agent", "model": "m", "instructions": "File the bug." }],
+        "mcp_servers": [{ "app_slug": "linear", "server_name": "Linear" }],
+    }]);
+
+    let check = svc
+        .check_action(
+            &user_principal(),
+            config,
+            Vec::new(),
+            vec![app("linear", "Linear"), app("github", "GitHub")],
+            None,
+        )
+        .await
+        .unwrap();
+
+    assert_eq!(check.missing_apps, [app("github", "GitHub")]);
+}
