@@ -4,7 +4,12 @@ import type {
   RoutineTask,
 } from '@service-scheduled-action/generated/schemas';
 import type { SubRoutineCopyDraft, SubRoutineDraft } from './draft';
-import { type StepDraft, stepsFromWire, stepsToWire } from './routine-steps';
+import {
+  isSubRoutineCopy,
+  type StepDraft,
+  stepsFromWire,
+  stepsToWire,
+} from './routine-steps';
 
 /** A stored sub-routine for the editor; undefined when it holds steps the editor can't show. */
 export function subRoutineFromWire(
@@ -54,7 +59,7 @@ export function subRoutinesToWire(
 
 /** A copy's definition and values; undefined for any other task. */
 export function copyOf(task: RoutineTask): SubRoutineCopyDraft | undefined {
-  return 'sub_routine' in task
+  return isSubRoutineCopy(task)
     ? { subRoutine: task.sub_routine, inputs: task.inputs ?? {} }
     : undefined;
 }

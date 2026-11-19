@@ -12,6 +12,7 @@ import {
   withDraftSteps,
   withNewDraftSteps,
 } from '../core/routine-draft';
+import { sharesAsTemplate } from '../core/template';
 import {
   draftFromSchedule,
   draftToCreateBody,
@@ -80,6 +81,42 @@ function loadedDraft(action: ScheduledAction): ScheduleDraft {
 }
 
 describe('routine execution payloads', () => {
+  it('treats a legacy agent with a stray sub-routine field as an ordinary agent', () => {
+    const task = {
+      model: 'model',
+      prompt: '',
+      user_prompt: 'Summarize',
+      sub_routine: 'old-field',
+    };
+    const action = { ...cron, task };
+    const draft = loadedDraft(action);
+    expect(draft.copy).toBeUndefined();
+    expect(draft.prompt).toBe('Summarize');
+    expect(draftToUpdateBody({ ...draft, name: 'Summary' }, action)?.task).toBe(
+      task
+    );
+    expect(scheduleToDuplicateBody(action)?.task).toBe(task);
+    expect(sharesAsTemplate(task)).toBe(true);
+  });
+
+  it('omits empty definitions and inputs when rebuilding an ordinary program', () => {
+    const task = {
+      steps: [
+        { type: 'code' as const, title: 'Plan', source: 'export const n = 1;' },
+      ],
+    };
+    const action = { ...cron, task };
+    const draft = { ...loadedDraft(action), subRoutines: [], inputs: [] };
+    expect(draftToCreateBody(draft).task).toEqual(task);
+    const [step] = draft.steps ?? [];
+    if (step?.kind !== 'code') throw new Error('Expected code');
+    expect(
+      draftToUpdateBody(
+        { ...draft, steps: [{ ...step, title: 'Check' }] },
+        action
+      )?.task
+    ).toEqual({ steps: [{ ...task.steps[0], title: 'Check' }] });
+  });
   it.each([
     {
       model: 'retired-model',
@@ -180,18 +217,16 @@ describe('routine execution payloads', () => {
     expect(action.task).toHaveProperty('user_prompt', 'Summarize updates');
   });
 
-  it('reads an agent task saved with a stray sub_routine as that agent, and only a copy as none', () => {
-    const stray = {
-      ...cron,
-      task: { ...cron.task, sub_routine: 'remind' },
-    } as unknown as ScheduledAction;
-    expect(loadedDraft(stray).prompt).toBe('Summarize updates');
-    expect(routineTargetKind(stray)).toBe('model');
+  it('reads an exact copy task without treating it as an agent', () => {
     const copy: ScheduledAction = {
       ...cron,
       task: { sub_routine: 'remind', inputs: { taskId: 'task-1' } },
+      sub_routine: { parent_id: 'parent', created_by_run_id: 'run' },
     };
-    expect(draftFromSchedule(copy)).toBeUndefined();
+    expect(loadedDraft(copy).copy).toEqual({
+      subRoutine: 'remind',
+      inputs: { taskId: 'task-1' },
+    });
     expect(routineTargetKind(copy)).toBeUndefined();
   });
 

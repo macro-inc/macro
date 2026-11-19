@@ -8,7 +8,7 @@ import type {
 } from '@service-scheduled-action/generated/schemas';
 import { match } from 'ts-pattern';
 import type { ScheduleDraft } from './draft';
-import type { StepDraft } from './routine-steps';
+import { isSubRoutineCopy, type StepDraft } from './routine-steps';
 
 const MENTION_PATTERN =
   /<m-(user|document)-mention>([\s\S]*?)<\/m-\1-mention>/g;
@@ -161,7 +161,7 @@ function routineTimezone(draft: ScheduleDraft | undefined) {
  * input values, since a template offers only the references in its own steps.
  */
 export function sharesAsTemplate(task: RoutineTask): boolean {
-  if ('sub_routine' in task) return false;
+  if (isSubRoutineCopy(task)) return false;
   return !(
     'steps' in task &&
     (task.sub_routines?.length || task.inputs?.length)
