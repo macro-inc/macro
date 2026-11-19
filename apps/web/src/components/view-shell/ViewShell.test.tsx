@@ -10,7 +10,13 @@ import {
   screen,
   within,
 } from '@solidjs/testing-library';
-import { createSignal, type JSX, onMount, Show } from 'solid-js';
+import {
+  createSignal,
+  type JSX,
+  onMount,
+  type ParentProps,
+  Show,
+} from 'solid-js';
 import { Portal } from 'solid-js/web';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import {
@@ -22,7 +28,12 @@ import {
 import { ViewSidebar } from './ViewSidebar';
 
 const measurement = vi.hoisted(() => ({
+  touch: (): boolean => false,
   width: (): number | undefined => 1200,
+}));
+
+vi.mock('@core/mobile/isTouchDevice', () => ({
+  isTouchDevice: () => measurement.touch(),
 }));
 
 vi.mock('@core/hotkey/hotkeys', () => ({ registerHotkey: vi.fn() }));
@@ -44,6 +55,7 @@ vi.mock('./create-frame-width', () => ({
 vi.mock('@ui', async () => ({
   ...(await import('../ui/utils/classname')),
   ...(await import('../ui/utils/press')),
+  Layer: (props: ParentProps) => props.children,
   Button: (props: JSX.ButtonHTMLAttributes<HTMLButtonElement>) => (
     <button
       aria-label={props['aria-label']}
@@ -64,6 +76,7 @@ beforeEach(() => {
     removeItem: (key: string) => values.delete(key),
   });
   measurement.width = () => 1000;
+  measurement.touch = () => false;
 });
 afterEach(() => {
   cleanup();
@@ -166,6 +179,42 @@ function setup(preserveDuringResize: boolean, app = 'tasks') {
 }
 
 describe('ViewShell aside resize preference', () => {
+  it('widens touch navigation while keeping phone overlays and desktop widths unchanged', () => {
+    const [touch, setTouch] = createSignal(true);
+    measurement.touch = touch;
+    const view = setup(false);
+    expect(view.asideWidth()).toBeCloseTo(403);
+    view.setWidth(1000);
+    expect(view.asideWidth()).toBeCloseTo(403);
+    view.setWidth(600);
+    fireEvent.click(view.getByRole('button', { name: 'Show navigation' }));
+    const overlay = view.container.querySelector<HTMLElement>(
+      '[data-view-shell-aside]'
+    )!;
+    expect(Number.parseFloat(overlay.style.width)).toBeCloseTo(256);
+    view.setWidth(1200);
+    expect(view.asideWidth()).toBeCloseTo(403);
+    setTouch(false);
+    expect(view.asideWidth()).toBeCloseTo(256);
+    expect(view.savedWidth()).toBeNull();
+  });
+
+  it('normalizes a wide touch resize so remounting does not compound its scale', async () => {
+    const [touch, setTouch] = createSignal(true);
+    measurement.touch = touch;
+    const view = setup(false);
+    await view.growAside();
+    expect(view.asideWidth()).toBeCloseTo(423);
+    expect(Number(view.savedWidth())).toBeCloseTo(423 / 1.57421875);
+    view.unmount();
+    setTouch(false);
+    const restored = setup(false);
+    expect(restored.asideWidth()).toBeCloseTo(423 / 1.57421875);
+    setTouch(true);
+    expect(restored.asideWidth()).toBeCloseTo(423);
+    expect(Number(restored.savedWidth())).toBeCloseTo(423 / 1.57421875);
+  });
+
   it('keeps a pointer resize from the sidebar minimum stable as the split grows', () => {
     const view = setup(false);
     view.setWidth(800);
@@ -1183,4 +1232,36 @@ describe('list navigation', () => {
       screen.getByRole('button', { name: 'Show navigation' })
     ).toBeTruthy();
   });
+});
+
+it('keeps collection sheet visibility independent of the saved desktop sidebar preference', () => {
+  const [touch, setTouch] = createSignal(true);
+  measurement.touch = touch;
+  let shell: ReturnType<typeof useViewShell> | undefined;
+  function Probe() {
+    shell = useViewShell();
+    return null;
+  }
+  render(() => (
+    <ViewShell.Root
+      contentLayout="collection"
+      asidePreferenceKey="collection-preference"
+    >
+      <Probe />
+    </ViewShell.Root>
+  ));
+  expect(shell?.aside.isSheet()).toBe(true);
+  expect(shell?.aside.isCollapsed()).toBe(true);
+  shell?.aside.expand();
+  expect(shell?.aside.isOverlay()).toBe(true);
+  setTouch(false);
+  expect(shell?.aside.isCollapsed()).toBe(false);
+  shell?.aside.collapse();
+  expect(shell?.aside.isCollapsed()).toBe(true);
+  setTouch(true);
+  expect(shell?.aside.isOverlay()).toBe(false);
+  shell?.aside.expand();
+  expect(shell?.aside.isOverlay()).toBe(true);
+  setTouch(false);
+  expect(shell?.aside.isCollapsed()).toBe(true);
 });

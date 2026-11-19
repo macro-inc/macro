@@ -10,7 +10,6 @@ import {
   createSearchState,
   useOptionalSearchContext,
 } from '@app/features/soup/search';
-import { enableSnippets, isFeatureEnabled } from '@core/constant/featureFlags';
 import type { EntityData } from '@entity';
 import type { NotificationSource } from '@notifications';
 import {
@@ -73,7 +72,9 @@ export function createDriveDataSource(options: {
 }): DriveListSource {
   const { selection, userId, notificationSource } = options;
 
-  const searchContext = useOptionalSearchContext();
+  const entityPool = useOptionalSearchContext()?.entityPool(() =>
+    Boolean(selection().search.trim())
+  );
   const databasesQuery = useDatabasesQuery();
   // Databases and forms come from their own lists, in file tabs and in the
   // folder they are filed in.
@@ -119,7 +120,6 @@ export function createDriveDataSource(options: {
         selection: selection(),
         userId: userId(),
         facetContext: facetContext(),
-        snippetsEnabled: isFeatureEnabled(enableSnippets),
       }),
     () => {
       // Bind optimistic cache membership to this query, not a later location.
@@ -162,7 +162,7 @@ export function createDriveDataSource(options: {
       }
     }
 
-    return (searchContext?.entityPool() ?? []).filter(({ data: entity }) => {
+    return (entityPool?.() ?? []).filter(({ data: entity }) => {
       if (!driveEntityMatchesLocation(entity, selection(), userId()))
         return false;
       if (!matchesFacets(entity)) return false;

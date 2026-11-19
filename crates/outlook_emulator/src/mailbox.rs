@@ -115,6 +115,16 @@ pub(crate) struct Attachment {
     pub(crate) modified: DateTime<Utc>,
 }
 
+/// A message that left a folder, kept for the delta rounds that must report
+/// it.
+struct Removed {
+    seq: u64,
+    folder_id: String,
+    message_id: String,
+    /// Its `receivedDateTime` when it left, which a round's `$filter` reads.
+    received: DateTime<Utc>,
+}
+
 #[derive(Clone, Debug)]
 pub(crate) struct Message {
     pub(crate) id: String,
@@ -246,6 +256,8 @@ pub(crate) struct Contact {
     pub(crate) id: String,
     pub(crate) name: Option<String>,
     pub(crate) emails: Vec<String>,
+    /// The content type and bytes of the contact's photo.
+    pub(crate) photo: Option<(String, Vec<u8>)>,
     pub(crate) changed_seq: u64,
 }
 
@@ -302,8 +314,8 @@ pub(crate) struct Mailbox {
     next_id: u64,
     pub(crate) folders: Vec<Folder>,
     pub(crate) messages: BTreeMap<String, Message>,
-    /// Messages that left a folder: sequence number, folder, message.
-    removed: Vec<(u64, String, String)>,
+    /// Messages that left a folder.
+    removed: Vec<Removed>,
     /// The conversation of each `Message-ID` the mailbox has seen.
     conversations: HashMap<String, String>,
     pub(crate) categories: Vec<Category>,
@@ -320,6 +332,20 @@ pub(crate) struct Mailbox {
 }
 
 impl Mailbox {
+    /// The content type and bytes of a seeded photo.
+    pub(crate) fn seeded_photo(
+        photo: &crate::seed::SeedPhoto,
+    ) -> Result<(String, Vec<u8>), EmulatorError> {
+        let bytes = STANDARD
+            .decode(&photo.base64)
+            .map_err(|_| EmulatorError::InvalidMessage("the photo is not base64".to_string()))?;
+        let content_type = photo
+            .mime_type
+            .clone()
+            .unwrap_or_else(|| "image/jpeg".to_string());
+        Ok((content_type, bytes))
+    }
+
     pub(crate) fn new(seed: &SeedMailbox, now: DateTime<Utc>) -> Result<Self, EmulatorError> {
         let email = seed.email.to_lowercase();
         let user_id = uuid::Uuid::new_v5(&uuid::Uuid::NAMESPACE_DNS, email.as_bytes());
@@ -355,7 +381,7 @@ impl Mailbox {
             contact_folder_id: String::new(),
             contacts: BTreeMap::new(),
             removed_contacts: Vec::new(),
-            photo: None,
+            photo: seed.photo.as_ref().map(Self::seeded_photo).transpose()?,
             requests_per_ten_minutes: seed
                 .requests_per_ten_minutes
                 .unwrap_or(GRAPH_REQUESTS_PER_TEN_MINUTES),
@@ -409,7 +435,13 @@ impl Mailbox {
             mailbox.add_category(name, "preset0");
         }
         for contact in &seed.contacts {
-            mailbox.upsert_contact(None, contact.name.clone(), vec![contact.email.clone()]);
+            let photo = contact.photo.as_ref().map(Self::seeded_photo).transpose()?;
+            mailbox.upsert_contact(
+                None,
+                contact.name.clone(),
+                vec![contact.email.clone()],
+                photo,
+            );
         }
         for message in &seed.messages {
             mailbox.add_message(message, now)?;
@@ -559,9 +591,15 @@ impl Mailbox {
             .get_mut(id)
             .ok_or_else(GraphError::item_not_found)?;
         let source = std::mem::replace(&mut message.folder_id, destination.clone());
+        let received = message.received;
         if source != destination {
             let seq = self.next_seq();
-            self.removed.push((seq, source, id.to_string()));
+            self.removed.push(Removed {
+                seq,
+                folder_id: source,
+                message_id: id.to_string(),
+                received,
+            });
         }
         self.touch(id, now);
         Ok(())
@@ -574,9 +612,40 @@ impl Mailbox {
             .remove(id)
             .ok_or_else(GraphError::item_not_found)?;
         let seq = self.next_seq();
-        self.removed
-            .push((seq, message.folder_id.clone(), message.id.clone()));
+        self.removed.push(Removed {
+            seq,
+            folder_id: message.folder_id.clone(),
+            message_id: message.id.clone(),
+            received: message.received,
+        });
         self.record(ChangeKind::Deleted, &message);
+        Ok(())
+    }
+
+    /// Deletes a folder for good, with its subfolders and their messages, as
+    /// emptying it out of Deleted Items does. Well-known folders can't go.
+    pub(crate) fn remove_folder(&mut self, key: &str) -> Result<(), EmulatorError> {
+        let unknown = || EmulatorError::UnknownFolder(key.to_string());
+        let root = self
+            .folder(key)
+            .filter(|folder| folder.well_known.is_none())
+            .ok_or_else(unknown)?;
+        let mut gone = vec![root.id.clone()];
+        let mut index = 0;
+        while let Some(id) = gone.get(index).cloned() {
+            gone.extend(self.child_folders(&id).iter().map(|child| child.id.clone()));
+            index += 1;
+        }
+        let messages: Vec<String> = self
+            .messages
+            .values()
+            .filter(|message| gone.contains(&message.folder_id))
+            .map(|message| message.id.clone())
+            .collect();
+        for id in messages {
+            self.remove_message(&id).map_err(|_| unknown())?;
+        }
+        self.folders.retain(|folder| !gone.contains(&folder.id));
         Ok(())
     }
 
@@ -725,6 +794,7 @@ impl Mailbox {
         id: Option<String>,
         name: Option<String>,
         emails: Vec<String>,
+        photo: Option<(String, Vec<u8>)>,
     ) -> String {
         let id = id.unwrap_or_else(|| self.new_id("contact"));
         let changed_seq = self.next_seq();
@@ -734,6 +804,7 @@ impl Mailbox {
                 id: id.clone(),
                 name,
                 emails,
+                photo,
                 changed_seq,
             },
         );

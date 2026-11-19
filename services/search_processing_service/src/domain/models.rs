@@ -70,6 +70,15 @@ pub enum BackfillError {
     Publish(#[source] anyhow::Error),
     #[error("failed reindexing entity properties")]
     Reindex(#[source] anyhow::Error),
+    #[error("failed updating the search index")]
+    Index(#[source] anyhow::Error),
+    /// The search index refused writes, so the job stopped instead of
+    /// retrying. `cursor` is the last key it finished, to resume after.
+    #[error("stopped because the search index refused writes: {reason}")]
+    Stopped {
+        reason: String,
+        cursor: Option<String>,
+    },
 }
 
 #[derive(Debug, Clone, Copy, Default, Deserialize, PartialEq, Eq)]

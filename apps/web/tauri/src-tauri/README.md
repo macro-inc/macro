@@ -407,7 +407,12 @@ configuration, XcodeGen source, and generated debug/release build settings all
 use 15.0; no command-line deployment-target override is needed.
 
 The resolved `swift-rs` 1.0.8 supports Xcode 27's SwiftPM; the previous
-`--build-system native` workaround is no longer needed. Tauri CLI 2.11.4 still
+`--build-system native` workaround is no longer needed. It needs
+`llvm-objcopy` from the toolchain's `llvm-tools` component to export the
+plugins' `@_cdecl` symbols, which Xcode 27 builds as local; without it, it
+only warns and the app library fails to link with undefined `init_plugin_*`
+symbols. The Nix dev shell includes the component on macOS; outside Nix, run
+`rustup component add llvm-tools`. Tauri CLI 2.11.4 still
 mistakes simulators returned by `devicectl` for physical devices. Use
 `cargo tauri ios dev --open` and build the simulator destination with Xcode.
 Use Xcode's tools rather than Nix's Apple SDK/linker for native builds.
@@ -620,7 +625,13 @@ defaults disable updates for local builds. `bun apps/web/scripts/desktop-release
 (run from the repository root) updates this tracked file in CI
 before Nix evaluates either package. Both packages receive the same native version,
 OTA compatibility build number, and source commit timestamp for the embedded
-frontend. Existing `vYEAR.MONTH.DAY.REVISION` tags map to
+frontend. That timestamp is earlier than the OTA bundle the web deploy builds from
+the same commit (numbered by build time), so the embedded bundle manifest also
+records the commit (`prepare` writes `gitSha` into `desktop-release.json`, since
+the file it rewrites leaves the Nix flake without a rev; Nix passes it as
+`GIT_SHA`), and desktop update checks send it as
+`current_git_sha` while the embedded bundle is active: the server offers no
+update when the deployed bundle comes from that commit. Existing `vYEAR.MONTH.DAY.REVISION` tags map to
 `YEAR.MMDD.REVISION` SemVer, e.g. `v2026.10.6.1` → `2026.1006.1`. Three-part stable
 SemVer tags also work. Each component must be at most 9999. Do not reuse a version
 or rebuild an already published tag; publish a higher version for fixes/reverts.
@@ -664,6 +675,18 @@ fixture-backed backfill smoke test, and offline Mail filter regression. Use
 `nix develop .#tauri-e2e`; this exercises the native cache, not browser WASM.
 
 ## Platform aware UI
+
+On iOS, `layout_plugin` publishes UIKit's current horizontal size class and
+preferred vertical navigation edge to the shared UI. The mobile dock becomes a
+sidebar on iPhone Duo's vertical-bar layouts, follows the outer edge in Split
+View, and returns to the bottom in horizontal-bar layouts. The vertical dock
+uses UIKit's bar layout region within the system column, below its controls;
+content and composers retain their independent safe areas without reserving a
+second navigation column. The app supports
+iPhone landscape as well as portrait; do not infer layout from orientation or
+the main screen. The layout bridge also corrects keyboard frame changes against
+the current webview's bottom edge; floating and off-window keyboard frames do not
+reserve the full keyboard height. See [the layout bridge](../layout_plugin/AGENTS.md).
 
 Use the helpers in `@core/util/platform` (`isTauri()`, `getPlatform()`,
 `isMobilePlatform()`, etc.) anywhere you need to branch behaviour, register

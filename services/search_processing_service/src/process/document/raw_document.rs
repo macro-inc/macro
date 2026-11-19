@@ -25,7 +25,7 @@ use crate::{
         ai::parse_ai_text, fig::parse_fig_pages, markdown::parse_markdown_legacy,
         psd::parse_psd_text, text::decode_text,
     },
-    process::document::document_info::{DocumentInfo, get_document_info},
+    process::document::document_info::{DocumentInfo, IndexableDocument, get_document_info},
     process::properties::to_indexed_properties,
 };
 
@@ -60,21 +60,22 @@ async fn upsert_document(
         _ => {}
     }
 
-    let results = opensearch_client
+    if let Err(error) = opensearch_client
         .bulk_upsert_documents(&upserts, index_override)
         .await
-        .context("unable to bulk upsert documents in opensearch")?;
-
-    if !results.errors.is_empty() {
-        tracing::error!(errors=?results.errors, "bulk upsert failed");
+    {
+        tracing::error!(error = %error, "bulk upsert failed");
 
         // delete document that failed to upsert
-        opensearch_client
+        if let Err(delete_error) = opensearch_client
             .delete_document(&search_extractor_message.document_id, index_override)
             .await
-            .context("failed to delete document for failed bulk upsert")?;
+        {
+            // The upsert's error decides how the attempt is retried.
+            tracing::warn!(error = %delete_error, "failed to delete document for failed bulk upsert");
+        }
 
-        anyhow::bail!("failed to upsert documents");
+        return Err(error).context("failed to upsert documents");
     }
 
     tracing::trace!("upserted document");
@@ -127,6 +128,7 @@ async fn attach_indexed_properties(
 /// Returns `None` when the document has no file type.
 fn generate_parent_only_upsert(
     document_info: DocumentMetadata,
+    is_email_attachment: bool,
 ) -> anyhow::Result<Option<UpsertDocumentArgs>> {
     let Some(file_type) = document_info.file_type else {
         return Ok(None);
@@ -142,6 +144,7 @@ fn generate_parent_only_upsert(
         updated_at_millis: EpochMillis::new(Utc::now().timestamp_millis())?,
         sub_type: document_info.sub_type.map(|st| st.to_string()),
         properties: vec![],
+        is_email_attachment,
     }))
 }
 
@@ -153,7 +156,10 @@ async fn update_search_with_parent_only_document(
     db: &sqlx::Pool<sqlx::Postgres>,
     search_extractor_message: &SearchExtractorMessage,
 ) -> anyhow::Result<()> {
-    let document_info = match get_document_info(db, search_extractor_message)
+    let IndexableDocument {
+        metadata: document_info,
+        is_email_attachment,
+    } = match get_document_info(db, search_extractor_message)
         .await
         .context("failed to get document info")?
     {
@@ -175,7 +181,7 @@ async fn update_search_with_parent_only_document(
         }
     };
 
-    let Some(args) = generate_parent_only_upsert(document_info)? else {
+    let Some(args) = generate_parent_only_upsert(document_info, is_email_attachment)? else {
         tracing::debug!("file type is none");
         return Ok(());
     };
@@ -312,7 +318,10 @@ pub async fn update_search_with_raw_document(
     }
 
     // This ensures we only process the latest version
-    let document_info = match get_document_info(db, search_extractor_message)
+    let IndexableDocument {
+        metadata: document_info,
+        is_email_attachment,
+    } = match get_document_info(db, search_extractor_message)
         .await
         .context("failed to get document info")?
     {
@@ -416,6 +425,7 @@ pub async fn update_search_with_raw_document(
                         updated_at_millis,
                         sub_type: sub_type.clone(),
                         properties: vec![],
+                        is_email_attachment,
                     })
                     .collect()
             }
@@ -446,6 +456,7 @@ pub async fn update_search_with_raw_document(
                     updated_at_millis,
                     sub_type: sub_type.clone(),
                     properties: vec![],
+                    is_email_attachment,
                 })
                 .collect()
         }
@@ -462,6 +473,7 @@ pub async fn update_search_with_raw_document(
                     updated_at_millis,
                     sub_type: sub_type.clone(),
                     properties: vec![],
+                    is_email_attachment,
                 }],
                 read => {
                     if let Err(error) = &read {
@@ -503,6 +515,7 @@ pub async fn update_search_with_raw_document(
                     updated_at_millis,
                     sub_type: sub_type.clone(),
                     properties: vec![],
+                    is_email_attachment,
                 })
                 .collect::<Vec<UpsertDocumentArgs>>()
         }
@@ -530,6 +543,7 @@ pub async fn update_search_with_raw_document(
                     updated_at_millis,
                     sub_type: sub_type.clone(),
                     properties: vec![],
+                    is_email_attachment,
                 }]
             }
         }
@@ -551,6 +565,7 @@ pub async fn update_search_with_raw_document(
 fn generate_upserts(
     document_info: DocumentMetadata,
     markdown_result: Vec<MarkdownParseResult>,
+    is_email_attachment: bool,
 ) -> anyhow::Result<Vec<UpsertDocumentArgs>> {
     let result = markdown_result;
     let updated_at_millis = EpochMillis::new(Utc::now().timestamp_millis())?;
@@ -576,6 +591,7 @@ fn generate_upserts(
             updated_at_millis,
             sub_type: sub_type.clone(),
             properties: vec![],
+            is_email_attachment,
         })
         .collect::<Vec<UpsertDocumentArgs>>();
 
@@ -601,7 +617,10 @@ pub async fn update_search_with_sync_document(
         }
     }
 
-    let document_info = match get_document_info(db, search_extractor_message)
+    let IndexableDocument {
+        metadata: document_info,
+        is_email_attachment,
+    } = match get_document_info(db, search_extractor_message)
         .await
         .context("failed to get document info")?
     {
@@ -642,8 +661,8 @@ pub async fn update_search_with_sync_document(
     };
 
     let sub_type = document_info.sub_type.as_ref().map(|st| st.to_string());
-    let mut upserts =
-        generate_upserts(document_info, result).context("unable to generate upserts")?;
+    let mut upserts = generate_upserts(document_info, result, is_email_attachment)
+        .context("unable to generate upserts")?;
 
     attach_indexed_properties(db, document_id, sub_type.as_deref(), &mut upserts).await?;
 

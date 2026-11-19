@@ -36,6 +36,7 @@ async fn unspawnable_harness_reports_failure() {
         None,
         &mut Handoffs::channel().0,
         None,
+        &tokio::sync::Notify::new(),
     )
     .await
     .expect_err("a harness that cannot be spawned must not look like success");
@@ -64,6 +65,7 @@ async fn harness_that_exits_immediately_disconnects() {
         None,
         &mut Handoffs::channel().0,
         None,
+        &tokio::sync::Notify::new(),
     )
     .await;
 
@@ -89,6 +91,7 @@ async fn dropped_service_channel_does_not_panic_the_bridge() {
         None,
         &mut Handoffs::channel().0,
         None,
+        &tokio::sync::Notify::new(),
     )
     .await
     .expect_err("announcing into a closed channel must fail");
@@ -152,6 +155,7 @@ for line in sys.stdin:
     };
     let mut handoffs = Handoffs::channel().0;
     let turns = ActiveTurns::default();
+    let agents_changed = tokio::sync::Notify::new();
     let bridge = bridge(
         &agent,
         std::path::Path::new("/"),
@@ -161,6 +165,7 @@ for line in sys.stdin:
         None,
         &mut handoffs,
         None,
+        &agents_changed,
     );
     let conversation = async {
         let mut next_answer = async || loop {

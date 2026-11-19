@@ -178,6 +178,12 @@ impl ExecutionService {
                             .instrument(tracing::info_span!(
                                 "code_execution.process",
                                 result_summarized_from_bytes = tracing::field::Empty,
+                                process.exit_code = tracing::field::Empty,
+                                process.signal = tracing::field::Empty,
+                                process.wall_ms = tracing::field::Empty,
+                                process.cpu_ms = tracing::field::Empty,
+                                process.peak_rss_kib = tracing::field::Empty,
+                                process.killed = tracing::field::Empty,
                             ))
                             .await
                     }

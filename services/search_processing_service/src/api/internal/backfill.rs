@@ -41,6 +41,7 @@ pub fn router() -> Router<ApiContext> {
         .route("/chats", post(chats))
         .route("/channels", post(channels))
         .route("/documents", post(documents))
+        .route("/email-attachment-status", post(email_attachment_status))
         .route("/emails", post(emails))
         .route("/properties", post(properties))
         .route("/projects", post(projects))
@@ -135,6 +136,24 @@ async fn documents(
         move |svc, progress, cancel| async move {
             svc.backfill_documents(req, progress, cancel).await
         },
+    )
+    .await
+}
+
+#[tracing::instrument(skip(service, jobs, _internal_authorization, req))]
+async fn email_attachment_status(
+    State(service): State<Arc<crate::EmailAttachmentStatusBackfill>>,
+    State(jobs): State<BackfillJobs>,
+    _internal_authorization: MacroAuthorizationExtractor<AuthorizationService, InternalOnly>,
+    extract::Json(req): extract::Json<
+        crate::domain::email_attachment_status::EmailAttachmentStatusBackfillRequest,
+    >,
+) -> Response {
+    spawn_backfill(
+        service,
+        jobs,
+        "email-attachment-status",
+        move |svc, progress, cancel| async move { svc.backfill(req, progress, cancel).await },
     )
     .await
 }

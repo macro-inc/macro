@@ -232,6 +232,16 @@ pub enum CodeModeError {
     /// Upstream details stay in server diagnostics.
     #[error("the connected app could not be reached; try again later")]
     ConnectedAppUnreachable,
+    /// The account's calls to a connected app exceeded its budget: the
+    /// app kept answering HTTP 429 after the harness paced and retried the
+    /// call, or the queue ahead of it outlasted its deadline. It did not run.
+    #[error(
+        "too many calls to this connected app for this account; this call did not run. Make fewer calls (page or limit results, call per item only for the few items you need) and try again later"
+    )]
+    ConnectedAppRateLimited {
+        /// How long the app last asked callers to wait.
+        retry_after: Option<std::time::Duration>,
+    },
     /// A submitted identity cannot replay an execution or replace its journal.
     #[error("execution_id was already used; execution was not started")]
     Duplicate,

@@ -114,9 +114,10 @@ export class AgentSessionNamespace {
   }
 
   /**
-   * The caller's coding sessions waiting for them: permission requests,
-   * questions and held tool approvals to answer, and sessions stalled for
-   * over 20 minutes, newest activity first. Read a session's held approvals
+   * List coding sessions awaiting the caller or stalled over 20 minutes.
+   *
+   * Includes permission requests, questions and held tool approvals to
+   * answer, and stalled sessions, newest activity first. Read a session's held approvals
    * with {@link AgentSession.pendingApprovals}.
    *
    * @readonly

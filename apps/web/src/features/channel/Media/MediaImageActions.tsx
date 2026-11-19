@@ -18,6 +18,7 @@ export function MediaImageActions(props: { item: MediaItem }) {
   const actions = createImageActions({
     src: () => props.item.fullSrc,
     imageId: () => props.item.id,
+    getBlob: props.item.getBlob,
   });
 
   return (

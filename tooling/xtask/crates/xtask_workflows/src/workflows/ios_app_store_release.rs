@@ -17,11 +17,12 @@
 //! one-command local step and release retries stay label-driven (remove and
 //! re-add `ios-update`).
 //!
-//! Runs like [`super::ios_preview`]: the Namespace macOS runner, with
-//! cargo-tauri, bun, just, wasm-pack and the pinned toolchain (which carries
-//! `aarch64-apple-ios`) from the Nix dev shell. `ios-release.sh` does the
-//! Nix-vs-Xcode toolchain split itself through `ios-native-env.sh`, so one
-//! `nix develop` invocation covers the whole build.
+//! Runs like [`super::ios_preview`]: the Namespace macOS Tahoe runner with
+//! Xcode pinned by [`steps::select_ios_xcode`], and cargo-tauri, bun, just,
+//! wasm-pack and the pinned toolchain (which carries `aarch64-apple-ios`) from
+//! the Nix dev shell. `ios-release.sh` does the Nix-vs-Xcode toolchain split
+//! itself through `ios-native-env.sh`, so one `nix develop` invocation covers
+//! the whole build.
 //!
 //! Credentials come from Doppler (`ios-release/prd`, read with the
 //! `IOS_RELEASE_DOPPLER_TOKEN` service token, like the DMG workflow's
@@ -56,7 +57,7 @@ fn release_job() -> Job {
             "github.event.label.name == 'ios-update' && \
              github.event.pull_request.head.repo.full_name == github.repository",
         ))
-        .runs_on(runners::Runner::MacOsArm.to_string())
+        .runs_on(runners::Runner::MacOsTahoeArm.to_string())
         // Device build + upload + up to 30 minutes of App Store Connect
         // processing; the simulator preview alone measured ~11 minutes cold.
         .timeout_minutes(90u32)
@@ -75,6 +76,7 @@ fn release_job() -> Job {
         .add_env(("PR_NUMBER", "${{ github.event.pull_request.number }}"))
         .add_env(("BASE_BRANCH", "${{ github.event.pull_request.base.ref }}"))
         .add_step(checkout_pr_head())
+        .add_step(steps::select_ios_xcode())
         .add_step(require_cli_tools())
         .add_step(preconditions())
         .add_step(steps::install_nix_macos())
@@ -143,16 +145,15 @@ fn head_guard() -> Step<Run> {
 }
 
 fn checkout_pr_head() -> Step<Use> {
-    Step::new("Checkout PR head")
-        .uses(
-            "actions",
-            "checkout",
-            "df4cb1c069e1874edd31b4311f1884172cec0e10",
-        ) // v6
-        .add_with(("ref", "${{ github.event.pull_request.head.sha }}"))
-        // Full history so the bump check can diff against the base branch.
-        .add_with(("fetch-depth", 0))
-        .add_with(("persist-credentials", false))
+    steps::abort_stalled_fetch(Step::new("Checkout PR head").uses(
+        "actions",
+        "checkout",
+        "df4cb1c069e1874edd31b4311f1884172cec0e10",
+    )) // v6
+    .add_with(("ref", "${{ github.event.pull_request.head.sha }}"))
+    // Full history so the bump check can diff against the base branch.
+    .add_with(("fetch-depth", 0))
+    .add_with(("persist-credentials", false))
 }
 
 /// Run a command in `apps/web` inside the Nix dev shell, with its output

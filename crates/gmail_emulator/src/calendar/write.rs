@@ -10,7 +10,7 @@ use super::{
     organizer_email, recurrence, text, timestamp,
 };
 use crate::error::ApiError;
-use crate::state::State;
+use crate::state::{HeldCopy, State};
 
 /// The id of every user's primary calendar in a request path.
 const PRIMARY: &str = "primary";
@@ -680,6 +680,26 @@ impl State {
         })
     }
 
+    /// Stops carrying changes to a meeting's other copies until
+    /// [`State::release_copies`]: Google takes some seconds to do it.
+    pub(crate) fn hold_copies(&mut self) {
+        self.copies_held = true;
+    }
+
+    /// Carries every change held since [`State::hold_copies`] to the other
+    /// copies, in the order they were made, and stops holding.
+    pub(crate) fn release_copies(&mut self) {
+        self.copies_held = false;
+        for held in std::mem::take(&mut self.held_copies) {
+            self.sync_copies(
+                &held.email,
+                &held.calendar_id,
+                &held.event_id,
+                &held.uninvited,
+            );
+        }
+    }
+
     /// Carries a change to one copy of a meeting to its other copies: the
     /// organizer's calendar and the primary calendar of every guest who is a
     /// user here. Guests no longer invited lose their copy.
@@ -693,6 +713,15 @@ impl State {
         event_id: &str,
         uninvited: &[String],
     ) {
+        if self.copies_held {
+            self.held_copies.push(HeldCopy {
+                email: email.to_string(),
+                calendar_id: calendar_id.to_string(),
+                event_id: event_id.to_string(),
+                uninvited: uninvited.to_vec(),
+            });
+            return;
+        }
         let now_ms = self.now_ms();
         let source = self
             .mailboxes

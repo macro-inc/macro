@@ -44,6 +44,8 @@ call_link = [
 ]
 default = ["ai_tools", "call_link", "inbound", "lookup", "outbound", "ports"]
 inbound = ["axum", "ports"]
+# Shared selected-rule discovery on an existing caller transaction.
+email_discovery = ["dep:sqlx", "ports"]
 # Read-only company/contact identity for other domains. Pulls only sqlx + ports.
 lookup = ["dep:messages", "dep:rootcause", "dep:sqlx", "ports"]
 outbound = [
@@ -80,6 +82,7 @@ item_filters = { path = "../item_filters", default-features = false }
 serde = { workspace = true }
 serde_json = { workspace = true }
 sha2 = { workspace = true }
+psl = { workspace = true }
 thiserror = { workspace = true }
 tracing = { workspace = true }
 uuid = { workspace = true }

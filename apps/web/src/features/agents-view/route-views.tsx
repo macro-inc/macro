@@ -1,3 +1,4 @@
+import { useInlinePreviewLayout } from '@app/components/view-shell/use-inline-preview-layout';
 import { useSplitPanelOrThrow } from '@components/app/split-layout/layoutUtils';
 import {
   RedirectSplit,
@@ -5,7 +6,6 @@ import {
   withAuth,
 } from '@components/app/split-layout/split-router/app-route-shell';
 import { useViewRestoration } from '@components/app/split-layout/view-restoration';
-import { isTouchDevice } from '@core/mobile/isTouchDevice';
 import { Show } from 'solid-js';
 import { AgentsViewSkeleton } from './agents-view-skeleton';
 import { parseAgentsRoute } from './core/route';
@@ -13,6 +13,7 @@ import { AgentsView } from './views/AgentsView';
 
 export const AgentsRouteView = withAuth(() => {
   const panel = useSplitPanelOrThrow();
+  const inlinePreviewLayout = useInlinePreviewLayout();
   useViewRestoration();
   const route = () => {
     const content = panel.handle.content();
@@ -27,7 +28,7 @@ export const AgentsRouteView = withAuth(() => {
   usePageViewTracking('agents');
   return (
     <Show
-      when={isTouchDevice() && route()}
+      when={!inlinePreviewLayout() && route()}
       fallback={<AgentsView route={route()} />}
     >
       {(current) => (

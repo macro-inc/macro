@@ -1,5 +1,11 @@
 import { HomeListEntity } from '@app/features/home/components/HomeListEntity';
 import {
+  attachGlobalDOMScope,
+  useHotKeyRoot,
+  useHotkeyDOMScope,
+} from '@core/hotkey/hotkeys';
+import { setActiveScope } from '@core/hotkey/state';
+import {
   cleanup,
   fireEvent,
   render,
@@ -21,6 +27,7 @@ import {
 import { AgentsSidebar } from './AgentsSidebar';
 
 const openWithSplit = vi.fn();
+const openExternalUrl = vi.hoisted(() => vi.fn());
 const unreadFilter = vi.hoisted(() => vi.fn(() => false));
 const sidebarState = vi.hoisted(() => ({ agentUpdates: false, touch: false }));
 vi.mock('@app/lib/analytics/posthog', async (importOriginal) => ({
@@ -35,6 +42,10 @@ vi.mock('@core/mobile/isTouchDevice', () => ({
 }));
 vi.mock('@components/app/split-layout/layout', () => ({
   useSplitLayout: () => ({ openWithSplit }),
+}));
+vi.mock('@core/util/url', async (importOriginal) => ({
+  ...(await importOriginal<typeof import('@core/util/url')>()),
+  openExternalUrl,
 }));
 vi.mock('@core/util/openInNewSplit', () => ({
   openInNewSplitForMention: () => true,
@@ -90,20 +101,25 @@ afterEach(() => {
 vi.mock('@solid-primitives/resize-observer', () => ({
   createResizeObserver: () => {},
 }));
+const splitPanel = vi.hoisted(() => ({
+  splitHotkeyScope: 'test',
+  isPanelActive: () => true,
+}));
 vi.mock('@components/app/split-layout/layoutUtils', () => ({
-  useSplitPanelOrThrow: () => ({
-    splitHotkeyScope: 'test',
-    isPanelActive: () => true,
-  }),
+  useSplitPanelOrThrow: () => splitPanel,
+  useSplitPanel: () => splitPanel,
 }));
 vi.mock('@app/features/next-soup/actions', () => ({
   toEntityActionListState: (options: {
-    controller: { items: { all: () => { id: string }[] } };
+    controller: {
+      items: { all: () => unknown[]; keyOf: (item: unknown) => string };
+    };
   }) => ({
     focus: {
-      set: (id: string) => {
-        if (!options.controller.items.all().some((item) => item.id === id)) {
-          throw new Error(`Missing action row: ${id}`);
+      set: (key: string) => {
+        const { items } = options.controller;
+        if (!items.all().some((item) => items.keyOf(item) === key)) {
+          throw new Error(`Missing action row: ${key}`);
         }
       },
     },
@@ -237,10 +253,7 @@ describe('mixed Agents sidebar', () => {
     expect(screen.queryByRole('button', { name: /Plan launch/ })).toBeNull();
     expect(screen.getByRole('button', { name: /Old spike/ })).toBeTruthy();
     fireEvent.click(code, { shiftKey: true });
-    expect(open).toHaveBeenLastCalledWith(
-      conversations[0],
-      expect.objectContaining({ shiftKey: true })
-    );
+    expect(open).toHaveBeenLastCalledWith(conversations[0], true);
 
     setFilters({ ...EMPTY_CONVERSATION_FILTERS, status: ['waiting'] });
     expect(screen.getByRole('button', { name: /Fix build/ })).toBeTruthy();
@@ -708,8 +721,11 @@ describe.each(['home', 'sidebar'] as const)('%s agent rows', (surface) => {
     expect(open).not.toHaveBeenCalled();
     fireEvent.click(session, { shiftKey: true });
     expect(open).toHaveBeenCalledOnce();
-    const event = open.mock.calls[0][surface === 'home' ? 0 : 1];
-    expect(event.shiftKey).toBe(true);
+    const newSplit =
+      surface === 'home'
+        ? open.mock.calls[0][0].shiftKey
+        : open.mock.calls[0][1];
+    expect(newSplit).toBe(true);
     setEntity({
       ...conversation,
       pullRequestUrl: 'https://github.com/macro-inc/macro/pull/42',
@@ -854,7 +870,7 @@ describe.each(['home', 'sidebar'] as const)('%s agent rows', (surface) => {
     ).toBeNull();
   });
 
-  it('opens a synced PR in Macro without activating its session', () => {
+  it('opens a synced PR on GitHub without activating its session', () => {
     const { setEntity, open } = setup();
     setEntity({
       ...conversation,
@@ -862,13 +878,345 @@ describe.each(['home', 'sidebar'] as const)('%s agent rows', (surface) => {
       pullRequestId: 'pr-entity',
       pullRequestState: 'merged',
     });
+    openWithSplit.mockClear();
     fireEvent.click(
-      screen.getByRole('link', { name: 'Open pull request #42, Merged' })
+      screen.getByRole('link', {
+        name: 'Open pull request #42, Merged on GitHub',
+      })
     );
     expect(open).not.toHaveBeenCalled();
-    expect(openWithSplit).toHaveBeenLastCalledWith(
-      { type: 'pr', id: 'pr-entity' },
-      { preferNewSplit: true }
+    expect(openExternalUrl).toHaveBeenLastCalledWith(
+      'https://github.com/macro-inc/macro/pull/42'
     );
+    expect(openWithSplit).not.toHaveBeenCalled();
+  });
+});
+
+describe('Agents sidebar keyboard list', () => {
+  const conversations: AgentConversationEntity[] = [
+    {
+      type: 'agent_session',
+      id: 'build',
+      name: 'Fix build',
+      ownerId: 'me',
+      archivedBy: null,
+      botId: 'macro',
+      status: 'acp_ready',
+    },
+    { type: 'chat', id: 'launch', name: 'Plan launch', ownerId: 'me' },
+    {
+      type: 'agent_session',
+      id: 'notes',
+      name: 'Summarize notes',
+      ownerId: 'me',
+      archivedBy: null,
+      botId: 'macro',
+      status: 'acp_ready',
+    },
+  ];
+
+  beforeEach(() => {
+    Element.prototype.scrollIntoView = vi.fn();
+  });
+
+  afterEach(() => {
+    setActiveScope('global');
+    splitPanel.splitHotkeyScope = 'test';
+  });
+
+  // The hotkey engine tracks held keys, so every press is released, where
+  // focus went: an emptied field closes as the keyboard leaves it.
+  function press(target: Element, key: string, init: KeyboardEventInit = {}) {
+    fireEvent.keyDown(target, { key, ...init });
+    fireEvent.keyUp(document.activeElement ?? document, { key, ...init });
+  }
+
+  function setup(
+    options: {
+      conversations?: AgentConversationEntity[];
+      archived?: AgentConversationEntity[];
+      grouping?: 'none' | 'status';
+      hasNextPage?: boolean;
+    } = {}
+  ) {
+    const [search, setSearch] = createSignal('');
+    const open = vi.fn();
+    const loadMore = vi.fn();
+    let detail!: HTMLDivElement;
+
+    // The split holds the sidebar and, beside it, the conversation it opened.
+    function Harness() {
+      useHotKeyRoot();
+      const [attachSplit, scopeId] = useHotkeyDOMScope('agents-split');
+      splitPanel.splitHotkeyScope = scopeId;
+      return (
+        <div ref={(element) => attachGlobalDOMScope(element)}>
+          <div ref={attachSplit}>
+            <div data-view-shell-aside="">
+              <AgentsSidebar
+                onCreateAgent={vi.fn()}
+                onCreateRoutine={vi.fn()}
+                filters={EMPTY_CONVERSATION_FILTERS}
+                grouping={options.grouping ?? 'none'}
+                onFilterChange={vi.fn()}
+                onClearFilters={vi.fn()}
+                onGroupingChange={vi.fn()}
+                activePage="new"
+                onOpenPage={vi.fn()}
+                conversations={options.conversations ?? conversations}
+                archived={options.archived ?? []}
+                modeForConversation={(conversation) =>
+                  conversation.type === 'agent_session' &&
+                  conversation.pullRequestUrl
+                    ? 'code'
+                    : 'chat'
+                }
+                activeConversationId={undefined}
+                search={search()}
+                loading={false}
+                error={false}
+                hasNextPage={options.hasNextPage ?? false}
+                loadingNextPage={false}
+                onSearchChange={setSearch}
+                showUnlistedRuns={false}
+                onShowUnlistedRunsChange={vi.fn()}
+                onOpenConversation={open}
+                onRetry={vi.fn()}
+                onLoadMore={loadMore}
+              />
+            </div>
+            <div ref={detail} tabIndex={0} />
+          </div>
+        </div>
+      );
+    }
+
+    render(() => <Harness />);
+    const list = () => screen.getByRole('group', { name: 'Conversations' });
+    // The name a screen reader reads for the row the list points at.
+    const focusedRow = () => {
+      const row = document.getElementById(
+        list().getAttribute('aria-activedescendant') ?? ''
+      );
+      return row?.getAttribute('aria-label') ?? row?.textContent;
+    };
+    const enterList = async () => {
+      fireEvent.click(
+        screen.getByRole('button', { name: 'Search conversations' })
+      );
+      const field = await screen.findByRole('searchbox', {
+        name: 'Search conversations',
+      });
+      field.focus();
+      press(field, 'ArrowDown');
+      return field;
+    };
+    return {
+      search,
+      setSearch,
+      open,
+      loadMore,
+      list,
+      focusedRow,
+      enterList,
+      detail: () => detail,
+    };
+  }
+
+  it('moves from the search field into the results and keeps the search on Escape', async () => {
+    const { search, setSearch, list, focusedRow } = setup();
+    fireEvent.click(
+      screen.getByRole('button', { name: 'Search conversations' })
+    );
+    const field = await screen.findByRole('searchbox', {
+      name: 'Search conversations',
+    });
+    setSearch('fix');
+    field.focus();
+
+    press(field, 'ArrowDown');
+    expect(document.activeElement).toBe(list());
+    expect(focusedRow()).toContain('Fix build');
+
+    field.focus();
+    press(field, 'Escape');
+    expect(document.activeElement).toBe(list());
+    expect(search()).toBe('fix');
+
+    press(list(), 'Escape');
+    expect(search()).toBe('');
+  });
+
+  it('walks the rows with j, k and the arrows, and opens the focused one with Enter', async () => {
+    const { open, list, focusedRow, enterList } = setup();
+    await enterList();
+    expect(focusedRow()).toBe('Fix build');
+
+    press(list(), 'j');
+    expect(focusedRow()).toContain('Plan launch');
+    press(list(), 'ArrowDown');
+    expect(focusedRow()).toBe('Summarize notes');
+    press(list(), 'k');
+    expect(focusedRow()).toContain('Plan launch');
+
+    press(list(), 'Enter');
+    expect(open).toHaveBeenLastCalledWith(conversations[1], false);
+    press(list(), 'Enter', { shiftKey: true });
+    expect(open).toHaveBeenLastCalledWith(conversations[1], true);
+
+    press(list(), 'ArrowUp');
+    expect(focusedRow()).toBe('Fix build');
+  });
+
+  it('follows the rows on screen across open PRs, status groups and archived, and skips a collapsed section', async () => {
+    sidebarState.agentUpdates = true;
+    const pullRequest: AgentConversationEntity = {
+      type: 'agent_session',
+      id: 'pr',
+      name: 'Ship parser',
+      ownerId: 'me',
+      archivedBy: null,
+      botId: 'cursor',
+      status: 'acp_ready',
+      turnState: 'idle',
+      pullRequestState: 'open',
+      pullRequestUrl: 'https://github.com/example/repo/pull/7',
+    };
+    const waiting: AgentConversationEntity = {
+      type: 'agent_session',
+      id: 'waiting',
+      name: 'Answer question',
+      ownerId: 'me',
+      archivedBy: null,
+      botId: 'macro',
+      status: 'acp_ready',
+      turnState: 'blocked',
+    };
+    const { list, focusedRow, enterList } = setup({
+      grouping: 'status',
+      conversations: [pullRequest, waiting],
+      archived: [
+        {
+          type: 'agent_session',
+          id: 'old',
+          name: 'Old spike',
+          ownerId: 'me',
+          archivedBy: 'user',
+          botId: 'macro',
+          status: 'disconnected',
+        },
+      ],
+    });
+    fireEvent.click(screen.getByRole('button', { name: /Archived/ }));
+    await screen.findByRole('button', { name: 'Old spike' });
+
+    await enterList();
+    const visited = [focusedRow()];
+    for (let step = 0; step < 3; step++) {
+      press(list(), 'j');
+      visited.push(focusedRow());
+    }
+    // The open PR lists twice: in Open PRs, then in its status group.
+    expect(visited).toEqual([
+      'Ship parser',
+      'Answer question',
+      'Ship parser',
+      'Old spike',
+    ]);
+
+    fireEvent.click(screen.getByRole('button', { name: 'Conversations' }));
+    press(list(), 'Home');
+    press(list(), 'j');
+    expect(focusedRow()).toBe('Old spike');
+  });
+
+  it('lists a conversation that arrives twice once, in the state it last arrived in', async () => {
+    const { list, focusedRow, enterList } = setup({
+      grouping: 'status',
+      conversations: [
+        {
+          type: 'agent_session',
+          id: 'twice',
+          name: 'Review draft',
+          ownerId: 'me',
+          archivedBy: null,
+          botId: 'macro',
+          status: 'acp_ready',
+          turnState: 'blocked',
+        },
+        conversations[1],
+        {
+          type: 'agent_session',
+          id: 'twice',
+          name: 'Review draft',
+          ownerId: 'me',
+          archivedBy: null,
+          botId: 'macro',
+          status: 'acp_ready',
+          turnState: 'idle',
+        },
+      ],
+    });
+    expect(
+      screen.getAllByRole('button', { name: 'Review draft' })
+    ).toHaveLength(1);
+    expect(
+      screen
+        .getAllByRole('heading', { level: 3 })
+        .map((heading) => heading.textContent)
+    ).toEqual(['Recent2']);
+
+    await enterList();
+    expect(focusedRow()).toBe('Review draft');
+    press(list(), 'j');
+    expect(focusedRow()).toContain('Plan launch');
+  });
+
+  it('loads the next page as the keyboard nears the last rows', async () => {
+    const many: AgentConversationEntity[] = Array.from(
+      { length: 24 },
+      (_, index) => ({
+        type: 'chat',
+        id: `chat-${index}`,
+        name: `Chat ${index}`,
+        ownerId: 'me',
+      })
+    );
+    const { list, loadMore, enterList, focusedRow } = setup({
+      conversations: many,
+      hasNextPage: true,
+    });
+    await enterList();
+    for (let step = 0; step < 19; step++) press(list(), 'j');
+    expect(focusedRow()).toContain('Chat 19');
+    expect(loadMore).not.toHaveBeenCalled();
+
+    press(list(), 'j');
+    expect(focusedRow()).toContain('Chat 20');
+    expect(loadMore).toHaveBeenCalledOnce();
+  });
+
+  it('moves on from a row reached with Tab', async () => {
+    const { list, focusedRow, enterList } = setup();
+    await enterList();
+    expect(focusedRow()).toBe('Fix build');
+
+    screen.getByRole('button', { name: 'Summarize notes' }).focus();
+    press(document.activeElement ?? list(), 'k');
+    expect(document.activeElement).toBe(list());
+    expect(focusedRow()).toContain('Plan launch');
+  });
+
+  it('leaves keys pressed in the conversation beside it alone', async () => {
+    const { open, focusedRow, detail, enterList } = setup();
+    await enterList();
+    expect(focusedRow()).toBe('Fix build');
+
+    detail().focus();
+    press(detail(), 'j');
+    press(detail(), 'Enter');
+    expect(focusedRow()).toBe('Fix build');
+    expect(open).not.toHaveBeenCalled();
+    expect(document.activeElement).toBe(detail());
   });
 });

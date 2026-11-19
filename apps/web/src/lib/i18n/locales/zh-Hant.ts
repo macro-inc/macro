@@ -556,8 +556,6 @@ export default {
       other: '已將 {{count}} 個項目中的 {{accepted}} 個標示為未完成',
     },
     toastMarkNotDoneFailed: '無法標示為未完成',
-    toastThreadStaysDone: '這個郵件串沒有收到的郵件，因此會維持完成狀態',
-    toastThreadsStayDone: '這些郵件串沒有收到的郵件，因此會維持完成狀態',
     toastCountNotRestored: {
       other: '有 {{count}} 個項目無法還原。',
     },
@@ -651,8 +649,6 @@ export default {
     create: '建立',
     getMobileApp: '取得行動應用程式',
     signedInAs: '已登入為 {{name}}',
-    commandMenu: '指令選單',
-    searchEverything: '搜尋全部內容',
     customizeSidebar: '自訂側邊欄',
     customizeSidebarDescription:
       '選擇要顯示在側邊欄中的應用程式，並拖曳調整順序。首頁一律排在最前面。',

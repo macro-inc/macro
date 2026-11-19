@@ -6,6 +6,7 @@ use super::filters::*;
 use super::resolve::{ResolvedFilters, can_short_circuit, resolve_filters};
 use crate::domain::models::{PreviewView, PreviewViewStandardLabel};
 use crate::outbound::email_pg_repo::db_types::*;
+use crate::outbound::email_pg_repo::{PreviewReadError, RuleDiscoveryPort};
 use chrono::{DateTime, Utc};
 use entity_access::outbound::get_user_source_ids;
 use filter_ast::Expr;
@@ -22,9 +23,9 @@ use sqlx::postgres::PgRow;
 use sqlx::{PgConnection, PgPool, Postgres, QueryBuilder, Row, Transaction};
 use std::collections::HashSet;
 use std::sync::Arc;
-use std::time::{Duration, Instant};
-use team_scope::TeamRead;
+use std::time::Instant;
 pub(crate) use team_scope::TeamReadTuning;
+use team_scope::read_team_page;
 use uuid::Uuid;
 
 struct QueryParams {
@@ -1237,7 +1238,47 @@ fn extract_project_filter(ast: &Expr<EmailLiteral>) -> Vec<String> {
 /// };
 /// let results = dynamic_email_thread_cursor(&pool, &query).await?;
 /// ```
-#[tracing::instrument(skip(pool, query, user_id), err)]
+/// Read with a discovery port supplied by the composition root.
+#[expect(
+    clippy::too_many_arguments,
+    reason = "existing preview query plus its domain discovery port"
+)]
+#[tracing::instrument(
+    name = "dynamic_email_thread_cursor",
+    skip(pool, view, query, user_id, discovery),
+    fields(view = view.span_value(), sort = %query.sort_method()),
+    err
+)]
+pub(crate) async fn dynamic_email_thread_cursor_with_discovery(
+    pool: &PgPool,
+    link_ids: &[Uuid],
+    limit: u32,
+    view: &PreviewView,
+    query: Query<Uuid, SimpleSortMethod, Arc<Expr<EmailLiteral>>>,
+    user_id: &str,
+    team_id: Option<Uuid>,
+    discovery: Option<&RuleDiscoveryPort>,
+) -> Result<Vec<ThreadPreviewCursorDbRow>, PreviewReadError> {
+    read_page(
+        pool,
+        link_ids,
+        limit,
+        view,
+        query,
+        user_id,
+        team_id,
+        Reads {
+            team: Some(TeamReadTuning::DEFAULT),
+            owned: Some(OwnedReadTuning::DEFAULT),
+            discovery,
+        },
+    )
+    .await
+    .map(|(rows, _)| rows)
+}
+
+#[cfg(test)]
+#[tracing::instrument(skip(pool, view, query, user_id), fields(view = view.span_value()), err)]
 pub(crate) async fn dynamic_email_thread_cursor(
     pool: &PgPool,
     link_ids: &[Uuid],
@@ -1246,7 +1287,7 @@ pub(crate) async fn dynamic_email_thread_cursor(
     query: Query<Uuid, SimpleSortMethod, Arc<Expr<EmailLiteral>>>,
     user_id: &str,
     team_id: Option<Uuid>,
-) -> Result<Vec<ThreadPreviewCursorDbRow>, sqlx::Error> {
+) -> Result<Vec<ThreadPreviewCursorDbRow>, PreviewReadError> {
     dynamic_email_thread_cursor_with(
         pool,
         link_ids,
@@ -1267,6 +1308,7 @@ pub(crate) async fn dynamic_email_thread_cursor(
     clippy::too_many_arguments,
     reason = "the entry point's arguments plus the team read's tuning"
 )]
+#[cfg(test)]
 pub(crate) async fn dynamic_email_thread_cursor_with(
     pool: &PgPool,
     link_ids: &[Uuid],
@@ -1276,7 +1318,7 @@ pub(crate) async fn dynamic_email_thread_cursor_with(
     user_id: &str,
     team_id: Option<Uuid>,
     team_read: Option<TeamReadTuning>,
-) -> Result<Vec<ThreadPreviewCursorDbRow>, sqlx::Error> {
+) -> Result<Vec<ThreadPreviewCursorDbRow>, PreviewReadError> {
     read_page(
         pool,
         link_ids,
@@ -1286,6 +1328,7 @@ pub(crate) async fn dynamic_email_thread_cursor_with(
         user_id,
         team_id,
         Reads {
+            discovery: Some(&crm::outbound::email_rule_discovery::PgEmailRuleDiscovery),
             team: team_read,
             owned: Some(OwnedReadTuning::DEFAULT),
         },
@@ -1312,7 +1355,7 @@ pub(crate) async fn dynamic_email_thread_cursor_owned_with(
     user_id: &str,
     team_id: Option<Uuid>,
     owned_read: Option<OwnedReadTuning>,
-) -> Result<(Vec<ThreadPreviewCursorDbRow>, Option<OwnedReadStats>), sqlx::Error> {
+) -> Result<(Vec<ThreadPreviewCursorDbRow>, Option<OwnedReadStats>), PreviewReadError> {
     read_page(
         pool,
         link_ids,
@@ -1322,6 +1365,7 @@ pub(crate) async fn dynamic_email_thread_cursor_owned_with(
         user_id,
         team_id,
         Reads {
+            discovery: Some(&crm::outbound::email_rule_discovery::PgEmailRuleDiscovery),
             team: Some(TeamReadTuning::DEFAULT),
             owned: owned_read,
         },
@@ -1331,7 +1375,8 @@ pub(crate) async fn dynamic_email_thread_cursor_owned_with(
 
 /// The page-order reads a request may take; `None` leaves its requests to the
 /// general builder.
-struct Reads {
+struct Reads<'a> {
+    discovery: Option<&'a RuleDiscoveryPort>,
     team: Option<TeamReadTuning>,
     owned: Option<OwnedReadTuning>,
 }
@@ -1349,8 +1394,8 @@ async fn read_page(
     query: Query<Uuid, SimpleSortMethod, Arc<Expr<EmailLiteral>>>,
     user_id: &str,
     team_id: Option<Uuid>,
-    reads: Reads,
-) -> Result<(Vec<ThreadPreviewCursorDbRow>, Option<OwnedReadStats>), sqlx::Error> {
+    reads: Reads<'_>,
+) -> Result<(Vec<ThreadPreviewCursorDbRow>, Option<OwnedReadStats>), PreviewReadError> {
     // A repeated inbox would list its threads twice.
     let link_ids = distinct_links(link_ids);
     let link_ids = link_ids.as_slice();
@@ -1389,16 +1434,17 @@ async fn read_page(
         PreviewView::StandardLabel(PreviewViewStandardLabel::Important)
     );
 
-    // Resolve Complete email addresses to contact ids and look up the TRASH
-    // label id once, so the candidate WHERE can use direct id equality
-    // instead of joining email_contacts/email_labels per message row.
-    //
-    // When team_id is set, resolution spans every team-member's link so the
-    // resulting contact_id / TRASH label_id sets cover all team mailboxes.
-    let resolved = resolve_filters(pool, link_ids, team_id, email_filter).await?;
-    if can_short_circuit(email_filter, &resolved) {
-        return Ok((Vec::new(), None));
-    }
+    // Team reads resolve addresses and contribution modes inside their read
+    // snapshot, before choosing SQL for all-mail or selected contributors.
+    let resolved = if team_id.is_some() {
+        ResolvedFilters::default()
+    } else {
+        let resolved = resolve_filters(pool, link_ids, None, email_filter).await?;
+        if can_short_circuit(email_filter, &resolved) {
+            return Ok((Vec::new(), None));
+        }
+        resolved
+    };
     let subject_subscans =
         team_id.is_none() && !link_ids.is_empty() && uses_subject_subscans(view, email_filter);
 
@@ -1429,9 +1475,16 @@ async fn read_page(
         None => params,
     };
     if team_id.is_some() {
-        return read_team_page(pool, view, email_filter, params, reads.team)
-            .await
-            .map(|rows| (rows, None));
+        return read_team_page(
+            pool,
+            view,
+            email_filter,
+            params,
+            reads.team,
+            reads.discovery,
+        )
+        .await
+        .map(|rows| (rows, None));
     }
 
     let mut qb = build_query(view, email_filter, params);
@@ -1458,43 +1511,6 @@ async fn read_page(
     }
 
     Ok((query.fetch_all(pool).await?, None))
-}
-
-/// How long a team-scoped (CRM) page may run in the database, across all its
-/// statements: under the web client's 12s Soup request timeout, after which
-/// nobody reads the page. The server never cancels a query its client
-/// dropped, so the database enforces the bound.
-const TEAM_READ_BUDGET: Duration = Duration::from_secs(10);
-
-/// Reads a team-scoped page with [`TeamRead`] when it covers the request, and
-/// with the general builder otherwise, within [`TEAM_READ_BUDGET`].
-async fn read_team_page(
-    pool: &PgPool,
-    view: &PreviewView,
-    email_filter: &Expr<EmailLiteral>,
-    params: QueryParams,
-    tuning: Option<TeamReadTuning>,
-) -> Result<Vec<ThreadPreviewCursorDbRow>, sqlx::Error> {
-    let deadline = Instant::now() + TEAM_READ_BUDGET;
-    let team_read = match tuning {
-        Some(tuning) => TeamRead::new(view, email_filter, params, tuning),
-        None => Err(Box::new(params)),
-    };
-    let mut transaction = pool.begin().await?;
-    let rows = match team_read {
-        Ok(read) => read.fetch(&mut transaction, deadline).await?,
-        Err(params) => {
-            limit_statement_time(&mut transaction, deadline).await?;
-            let mut qb = build_query(view, email_filter, *params);
-            qb.build()
-                .persistent(false)
-                .try_map(map_row)
-                .fetch_all(&mut *transaction)
-                .await?
-        }
-    };
-    transaction.commit().await?;
-    Ok(rows)
 }
 
 /// `link_ids` without repeats, in order.
@@ -1530,7 +1546,7 @@ pub(crate) async fn begin_snapshot(
 }
 
 /// Bounds the transaction's next statement by what is left until `deadline`.
-async fn limit_statement_time(
+pub(super) async fn limit_statement_time(
     connection: &mut PgConnection,
     deadline: Instant,
 ) -> Result<(), sqlx::Error> {

@@ -145,7 +145,7 @@ trace:
 | `share.target` | One recipient or channel: finding its channel, sending its message, and granting access. |
 | `share.find_channel` | Finding or creating the direct message or group for people, around `http POST /dss/channels/get_or_create_dm` or `get_or_create_private`. |
 | `share.send_message` | One message, around `http POST /dss/messages/channel/<channel.id>`. |
-| `http …` under `share.target` | One channel access grant, such as `http PATCH /dss/documents/<id>`. With `enable-graphql-soup` on, a grant for a document, folder, chat, or email thread is an `entity.update_share_policy` span (`entity.type`, `entity.id`) around the `UpdateEntitySharePolicies` mutation instead. |
+| `http …` under `share.target` | One channel access grant, such as `http PATCH /dss/documents/<id>`. A grant for a document, folder, chat, or email thread is an `entity.update_share_policy` span (`entity.type`, `entity.id`) around the `UpdateEntitySharePolicies` mutation instead. |
 
 Each `http …` span continues into the backend trace. The root records
 `share.location` (`bulk_share`), `entity.ids`, the `share.items` and `share.targets` counts,
@@ -201,6 +201,42 @@ trace covers an email event from its Kafka publish to the browser's read:
 | `email_focus.notify` | One push to an inbox's readers, under the newest classification it covers. `coalesced` counts the classifications it covers, and 0 marks the repeat for the replica. `delivered` counts the websockets that got it. |
 | `connection_gateway.websocket_send` | The frame leaving the gateway. |
 | `email.focus.refresh` | The browser's read after a push, joined through the push's `traceparent`. A read after a reconnect starts its own trace. `email.focus.threads` is the list's size. |
+
+Backfills have their own traces. Every minute `email_focus.enrollment_scan`
+reads each connected inbox's place in the rollout (`inboxes`, `enrolled`,
+`unknown`). An enrolled inbox the worker hasn't filled since it started gets
+`email_focus.backfill` (`link_id`, `candidates`, `classified`,
+`stopped_early`) twice: its last 3 days, then the window, with a
+`classify_thread` child per thread (its mail reads, `jev.evaluate` and `save`). The log line
+"focus backfill pass finished" carries `pass`, `waited_secs` (found to started),
+`took_secs` and `since_found_secs`, the time from being found to the pass's end.
+
+The rollout's numbers are CloudWatch metrics, not spans: the worker publishes
+`Macro/EmailFocus` once a minute under `email_focus.metrics_publish`, whose log
+line "focus usage this minute" carries that minute's tokens and dollars. The
+**Email Focus rollout** Grafana dashboard draws them; see
+[the runbook](../runbooks/email-focus.md).
+
+## Contact searches
+
+Contact pickers read directory pages as they scroll, and read on by themselves
+past pages that list nothing new. Search for `{ name="contacts.search" }`
+(Datadog `resource_name:contacts.search`). One span covers one search, from its
+first page read to the page that ended it, with each `contacts.read_window`
+read as a child; server reads continue into the `contacts.graphql.page` span of
+`cloud-storage-service`.
+
+`contacts.search` records `contacts.mode`, `contacts.query_length`,
+`contacts.source` (`cache` or `server`, from the first page), `contacts.pages`,
+`contacts.server_pages`, `contacts.server_ms` (time in server reads),
+`contacts.failed_pages`, `contacts.empty_pages` (pages that listed no new
+eligible row), `contacts.max_empty_run` and `contacts.max_empty_run_ms` (the
+longest run of them), `contacts.listed`, `contacts.elapsed_ms`,
+`contacts.reached_end`, and `contacts.outcome` (`end`, `bound` at 500 rows,
+`changed` for a new query, `closed`). The span ends when its last page lands, so
+time a picker stays open afterwards is not counted. Reading the same input again
+after a search ended, as a reopened picker or a re-read after a contact change
+does, starts a new span with `contacts.repeat` true. Never add the query text.
 
 ## Agent sessions
 
@@ -373,6 +409,29 @@ flow node and carry `traceparent` to the backend. They hang under the flow
 watches the query. A refetch after the flow settled, and global background
 queries (pending sends, Command-K sources), start their own traces.
 
+### Request and response body timing
+
+HTTP client spans (`http <METHOD> <path>`, from `safeFetch`) end when the
+response headers arrive (`http.timing_scope=until_response_headers`), timed by
+`http.response_headers_ms`. `graphql.transport` ends there too, timed by
+`graphql.response_headers_ms`, except that a projection request's ends after
+the projection check (`graphql.response_inspection_ms`, which includes its
+body) and a legacy retry's after the retry's headers. The body is timed on its
+own, because on native it can take far longer than the headers: the Tauri HTTP
+plugin hands it to the WebView in chunks over IPC.
+
+| Attribute | Meaning |
+| --- | --- |
+| `http.body_ms`, `graphql.body_ms` | From the headers of the response the client returned (a legacy retry's, after one) until the first read of its body (`json()`, `text()`, `arrayBuffer()`, ...) settled. `safeFetch` reads JSON with `json()`, so this includes parsing; urql reads `text()` and parses afterwards. Only on `complete`, `error` and `aborted`. |
+| `http.body_outcome`, `graphql.body_outcome` | `complete`; `error` (the connection broke mid-body, or invalid JSON); `aborted` (the request's signal); `unread` (released without a read: an error status or a `HEAD` request `safeFetch` did not read, a response read only through a clone or its `body` stream, such as the presence coalescer's shared original); `incomplete` (a read still running 60 seconds after the headers); `stream` (`text/event-stream`, `multipart/*`, NDJSON: never timed, and the span is not held open); `empty` (a status without a body: 204, 304, ...). |
+
+The span keeps its end time and is exported once the body settles, at most 60
+seconds after the headers; its `<attribute>.end` copies (such as
+`frontend_instance_id.end`) are taken then. Only the first read is counted,
+never a clone's. Chart it from the `macro.web.http.body_ms` and
+`macro.web.graphql.body_ms` span-based metrics (`@http.body_outcome:complete`)
+or aggregate the indexed spans; the `perf-investigation` skill has the query.
+
 ### Boot (`app.boot`)
 
 Search `{ resource.service.name="web-app" && name="app.boot" }` after a cold
@@ -461,7 +520,14 @@ Phases you will see:
   waited on after typing.
   `search.engine_restarted` is true when the cache engine was replaced while
   the search was pending, which is a search issued in the restart window after
-  returning to the tab.
+  returning to the tab. A failed search names its cause in
+  `search.failure_kind` (the cache's rejection code such as
+  `owner-handoff-blocked` or `owner-epoch-lost`, otherwise the cache error
+  class such as `timeout`, the host's 10 s read timeout) and the step that
+  gave up in `search.failure_phase` (`search_page` or `materialize`).
+  `search.buckets` names the list: `channel,dm,chat,document,note,project,task`
+  is the Soup local search pool behind the Home, Drive, Tasks, Soup view and
+  universal input searches, not Command-K.
   Only query lengths and counts are recorded. `email.drafts.discover` is
   event-driven local draft discovery, coalescing same-microtask notifications.
 - Preloading: block intent records `block.preload` with parallel

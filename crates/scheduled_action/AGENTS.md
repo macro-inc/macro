@@ -75,8 +75,8 @@ each run.
   how to use found and left items (`finding/items.md`: a trigger filter by
   id, a code step's text knob by exact name, Ask AI instructions or a
   condition by name and id; a new item the request asks for is created
-  once and used by id), the code-step guide, Macro's catalog code
-  routines as examples, and the reference of the routines and `ai` areas.
+  once and used by id), the code-step guide, the catalog's code
+  routines marked `example`, and the reference of the routines and `ai` areas.
   They are the same for every draft on one model with the same mix of
   code and conditions, so the agent puts them in its cached prompt prefix
   (`PrepareRoutineSession::instructions`). A code step never messages or
@@ -137,7 +137,8 @@ each run.
   (the draft's shape, one run of the routine, a blind judge); `compare`
   says win, loss or noise against a baseline (see its README). Run it
   before and after a change to the instructions, the wait or anything else
-  on the drafting path.
+  on the drafting path. Routine *suggestions* have their own bench,
+  `crates/suggestion_generation/bench/`, which reuses `bench/stack.ts`.
 - `src/domain/drafts/jobs.rs` + `src/inbound/draft_job_router.rs`:
   background drafts, the same drafter without the waiting request. `POST
   /scheduled-actions/draft-jobs` validates the request and waits only for
@@ -291,7 +292,22 @@ each run.
   older version (SDK or `StepContext`), it is checked again, and rewritten by
   a model only if that fails (once per routine and version,
   `scheduled_action_code_upgrade`); a
-  failed rewrite pauses the routine. `sweep` does the same for every
+  failed rewrite pauses the routine. A routine whose code writes as its
+  owner (`dangerously_operate_as_user`) is never rewritten: it is paused for
+  the owner with its code as it was. Nor can a model's rewrite, saved
+  unreviewed while the routine wrote as Macro, start writing as the owner:
+  switching it on is refused (`UnreviewedRewrite`, 409) while any of its
+  code steps still holds code a rewrite wrote, on every save. Only a person
+  makes a routine write as them: the create and update routes pass a
+  `Requester` (`Program` for a credential signed for an agent or a routine
+  run, the code-execution mark, a bot or an internal caller). A program
+  can't create an owner-identity routine or sub-routine by any create route
+  (checked in `create`), switch a routine to that identity, change an
+  owner-identity routine's task or trigger, or switch one on, by update or
+  `/enabled` (checked in `replace_configuration`); switching a parent on
+  leaves its owner-identity sub-routines off (`follow_parent`)
+  (`OwnerIdentityNeedsPerson`, 403). It may rename, describe or switch one
+  off. `sweep` does the same for every
   enabled routine when the harness starts after a release.
 - `src/domain/event_trigger/github_selector.rs`, `payload_match.rs`: the
   `github` selector and the exact payload `match` GitHub filters take.
@@ -426,6 +442,12 @@ that listener is ready. Cancellation can stop the gate before startup finishes.
   rejects it as `RoutineWrite`, for any routine, so two can't trigger each
   other. Mail received, internal hops and sync-service document edits carry
   no stamp.
+- Received mail is for its inbox's owner and for each account that inbox is
+  delegated to (multi-inbox, `macro_user_links`): admission asks the
+  `InboxDelegates` port (`PgInboxDelegates`) once per event, and only when a
+  candidate's owner isn't the inbox's (`event_runs/admission.rs`, `Audience`).
+  Like the other audience rules (`IncomingEvent::is_for_owner`), it is never
+  an access grant: each owner's entity access is still checked.
 - `EventReference` rejects unknown keys, so a replica still on older code can't
   read a run row with a new key: write a new optional key only when it is set.
 

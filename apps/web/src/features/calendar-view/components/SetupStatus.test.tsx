@@ -12,6 +12,9 @@ const mocks = vi.hoisted(() => ({ startAddInbox: vi.fn() }));
 
 const [userId, setUserId] = createSignal<string | undefined>('macro|self');
 const [links, setLinks] = createSignal<EmailLink[]>([]);
+const [calendars, setCalendars] = createSignal<
+  { emailAddress: string; name: string; syncError?: string }[]
+>([]);
 
 vi.mock('@app/features/calendar/components/CalendarPagerContext', () => ({
   useCalendarPager: () => ({
@@ -31,7 +34,12 @@ vi.mock('@core/email-link', () => ({
 }));
 
 vi.mock('@queries/calendar/calendars', () => ({
-  useVisibleCalendarsQuery: () => ({ isSuccess: true, data: [] }),
+  useVisibleCalendarsQuery: () => ({
+    isSuccess: true,
+    get data() {
+      return calendars();
+    },
+  }),
 }));
 
 vi.mock('@queries/email/link', () => ({
@@ -70,6 +78,7 @@ beforeEach(() => {
   mocks.startAddInbox.mockResolvedValue(undefined);
   setUserId('macro|self');
   setLinks([]);
+  setCalendars([]);
 });
 
 afterEach(() => {
@@ -160,6 +169,105 @@ describe('SetupStatus', () => {
     expect(mocks.startAddInbox).toHaveBeenCalledWith(
       expect.objectContaining({ reconnectLinkId: 'own', scopes: 'calendar' })
     );
+  });
+
+  it('names an inbox whose calendar stopped syncing while another inbox works', async () => {
+    const user = userEvent.setup();
+    setLinks([
+      link('working'),
+      link('stopped', {
+        needs_calendar_permission: true,
+        has_calendar_data: true,
+      }),
+    ]);
+    render(() => <SetupStatus />);
+
+    expect(
+      screen.getByText('Calendar for stopped@example.com stopped syncing')
+    ).toBeTruthy();
+    expect(
+      screen.queryByText('Reconnect to show its events in Macro again.')
+    ).toBeNull();
+    await user.click(screen.getByRole('button', { name: 'Reconnect' }));
+
+    expect(mocks.startAddInbox).toHaveBeenCalledWith({
+      provider: 'GMAIL',
+      reconnectLinkId: 'stopped',
+      emailAddress: 'stopped@example.com',
+      scopes: 'calendar',
+    });
+  });
+
+  it('keeps a working calendar’s sync error in view beside a stopped one', () => {
+    setLinks([
+      link('working'),
+      link('stopped', {
+        needs_calendar_permission: true,
+        has_calendar_data: true,
+      }),
+    ]);
+    setCalendars([
+      {
+        emailAddress: 'working@example.com',
+        name: 'Team',
+        syncError: 'Google rejected the request',
+      },
+    ]);
+    render(() => <SetupStatus />);
+
+    expect(
+      screen.getByText('Calendar for stopped@example.com stopped syncing')
+    ).toBeTruthy();
+    expect(
+      screen.getByText(
+        'working@example.com — Team: Google rejected the request'
+      )
+    ).toBeTruthy();
+  });
+
+  it('leaves a disconnected inbox’s old calendar alone', () => {
+    setLinks([
+      link('working'),
+      link('gone', {
+        is_sync_active: false,
+        needs_calendar_permission: true,
+        has_calendar_data: true,
+      }),
+    ]);
+    render(() => <SetupStatus />);
+
+    expect(screen.queryByRole('button')).toBeNull();
+  });
+
+  it('explains a stopped calendar over an empty grid when it is the only one', () => {
+    setLinks([
+      link('stopped', {
+        needs_calendar_permission: true,
+        has_calendar_data: true,
+      }),
+    ]);
+    render(() => <SetupStatus />);
+
+    expect(
+      screen.getByText('Calendar for stopped@example.com stopped syncing')
+    ).toBeTruthy();
+    expect(
+      screen.getByText('Reconnect to show its events in Macro again.')
+    ).toBeTruthy();
+  });
+
+  it('leaves a calendar that was never enabled, or a delegated stopped one, to settings while another works', () => {
+    setLinks([
+      link('working'),
+      link('never', { needs_calendar_permission: true }),
+      delegated('theirs', {
+        needs_calendar_permission: true,
+        has_calendar_data: true,
+      }),
+    ]);
+    render(() => <SetupStatus />);
+
+    expect(screen.queryByRole('button')).toBeNull();
   });
 
   it('stays quiet when the viewer’s own calendar works, whatever a delegated inbox needs', () => {

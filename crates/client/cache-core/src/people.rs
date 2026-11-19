@@ -14,7 +14,14 @@ pub(crate) const CONTEXT_META: &str = "__meta:contact-search-context-v1";
 /// Hard limit on context patches, excluded people, and returned people.
 pub const MAX_PEOPLE_BATCH: usize = 500;
 /// Before-limit matching, exclusion and ranking contract advertised to clients.
-pub const PEOPLE_POLICY_VERSION: u32 = 5;
+/// Version 6 lists people with a positive interaction time first among
+/// word-start matches, counts an exact first name as an exact name, and
+/// renumbers `match_rank` (email prefix 6, identity 7, property self pin 8).
+pub const PEOPLE_POLICY_VERSION: u32 = 6;
+/// Oldest suggestion policy a frontend still accepts. Native hosts (desktop,
+/// iOS, Android) compile this crate and update only with an app release, while
+/// the frontend ships over the air; their policy-5 windows differ only in order.
+pub const PEOPLE_MIN_POLICY_VERSION: u32 = 5;
 /// Reference evidence is independent of suggestion matching and ordering.
 pub const PEOPLE_REFERENCE_POLICY_VERSION: u32 = 4;
 /// Two distinct matches suffice to disprove unique reference resolution.

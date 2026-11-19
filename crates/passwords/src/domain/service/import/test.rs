@@ -42,6 +42,50 @@ fn batch() -> ImportBatch {
     })).unwrap()
 }
 
+#[tokio::test]
+async fn concurrent_items_finish_out_of_order_but_results_keep_input_order() {
+    let (service, _, provider, actor, team) = fixture();
+    let import = Uuid::now_v7();
+    let mut input = batch();
+    let mut second = batch().items.remove(0);
+    second.source_key = "second".to_owned().try_into().unwrap();
+    input.items.push(second);
+    let first_id = derive_v7(import, "item", "first");
+    let second_id = derive_v7(import, "item", "second");
+    let first = Arc::new(WriteGate::new());
+    let second = Arc::new(WriteGate::new());
+    provider
+        .write_gates
+        .lock()
+        .unwrap()
+        .extend([(first_id, first.clone()), (second_id, second.clone())]);
+    let control = async {
+        first.started.notified().await;
+        second.started.notified().await;
+        second.release.add_permits(1);
+        second.finished.notified().await;
+        first.release.add_permits(1);
+    };
+    let (result, ()) = tokio::time::timeout(std::time::Duration::from_secs(2), async {
+        tokio::join!(service.import_batch(&actor, team, import, input), control)
+    })
+    .await
+    .expect("two item writes must overlap");
+    let result = result.unwrap();
+    assert_eq!(
+        provider.writes_completed.lock().unwrap().as_slice(),
+        [second_id, first_id]
+    );
+    assert_eq!(result.items[0].item_id, Some(ItemId(first_id)));
+    assert_eq!(result.items[1].item_id, Some(ItemId(second_id)));
+    assert!(
+        result
+            .items
+            .iter()
+            .all(|item| item.outcome == ImportOutcome::Created)
+    );
+}
+
 #[test]
 fn derived_ids_preserve_timestamp_version_variant_and_separate_namespaces() {
     let import = Uuid::parse_str("01956321-1234-7abc-89ab-0123456789ab").unwrap();
@@ -334,6 +378,7 @@ async fn trace_and_errors_never_contain_item_metadata_or_secrets() {
             Error::Conflict,
             Error::FolderMissing,
             Error::Unavailable,
+            Error::NotProvisioned,
         ] {
             assert!(!error.to_string().contains(sentinel));
             assert!(!format!("{error:?}").contains(sentinel));
@@ -432,8 +477,8 @@ async fn items_recheck_membership_once_after_the_batch_admission() {
         .import_batch(&actor, team, Uuid::now_v7(), batch)
         .await
         .unwrap();
-    // One for the batch, then one per item under its lease.
-    assert_eq!(repository.team_lookups.load(Ordering::SeqCst), 1 + 3);
+    // Batch admission, recheck under its lease, then a fresh check for each item.
+    assert_eq!(repository.team_lookups.load(Ordering::SeqCst), 2 + 3);
 }
 
 #[tokio::test]
@@ -481,4 +526,252 @@ async fn match_names_accepts_a_lowercased_name_longer_than_the_original() {
     let name = "İ".repeat(100).to_lowercase();
     assert!(name.len() > vault::MAX_NAME_BYTES);
     assert!(service.match_names(&actor, team, vec![name]).await.is_ok());
+}
+
+#[tokio::test]
+async fn concurrency_is_bounded_by_available_pool_capacity() {
+    let (service, repository, provider, actor, team) = fixture();
+    repository.import_capacity.store(2, Ordering::SeqCst);
+    let import = Uuid::now_v7();
+    let mut input = batch();
+    input.items = (0..7)
+        .map(|index| {
+            let mut item = batch().items.remove(0);
+            item.source_key = format!("bounded-{index}").try_into().unwrap();
+            item
+        })
+        .collect();
+    let gates: Vec<_> = (0..7)
+        .map(|index| {
+            let gate = Arc::new(WriteGate::new());
+            provider.write_gates.lock().unwrap().insert(
+                derive_v7(import, "item", &format!("bounded-{index}")),
+                gate.clone(),
+            );
+            gate
+        })
+        .collect();
+    let control = async {
+        gates[0].started.notified().await;
+        gates[1].started.notified().await;
+        assert_eq!(provider.max_writes_in_flight.load(Ordering::SeqCst), 2);
+        assert_eq!(repository.live_leases.load(Ordering::SeqCst), 1);
+        for gate in &gates {
+            gate.release.add_permits(1);
+        }
+    };
+    let (result, ()) = tokio::time::timeout(std::time::Duration::from_secs(2), async {
+        tokio::join!(
+            service.import_batch_concurrent(
+                &actor,
+                team,
+                import,
+                input,
+                NonZeroUsize::new(4).unwrap()
+            ),
+            control
+        )
+    })
+    .await
+    .expect("bounded imports must drain");
+    assert!(
+        result
+            .unwrap()
+            .items
+            .iter()
+            .all(|item| item.outcome == ImportOutcome::Created)
+    );
+    assert_eq!(provider.max_writes_in_flight.load(Ordering::SeqCst), 2);
+    assert_eq!(repository.live_leases.load(Ordering::SeqCst), 0);
+    assert_eq!(repository.lock_calls.load(Ordering::SeqCst), 1);
+    assert_eq!(provider.totp_seeds.lock().unwrap().len(), 7);
+}
+
+#[tokio::test]
+async fn folder_disappearing_before_a_queued_item_starts_fails_only_that_item() {
+    let (service, repository, provider, actor, team) = fixture();
+    repository.import_capacity.store(2, Ordering::SeqCst);
+    let import = Uuid::now_v7();
+    let mut input = batch();
+    input.target = ImportTarget::Root;
+    input.folders.truncate(1);
+    input.items[0].folder_key = None;
+    let mut second = batch().items.remove(0);
+    second.source_key = "second".to_owned().try_into().unwrap();
+    second.folder_key = None;
+    input.items.push(second);
+    let mut affected = batch().items.remove(0);
+    affected.source_key = "affected".to_owned().try_into().unwrap();
+    affected.folder_key = Some("a".to_owned().try_into().unwrap());
+    input.items.push(affected);
+    let first = Arc::new(WriteGate::new());
+    let second = Arc::new(WriteGate::new());
+    provider.write_gates.lock().unwrap().extend([
+        (derive_v7(import, "item", "first"), first.clone()),
+        (derive_v7(import, "item", "second"), second.clone()),
+    ]);
+    let control = async {
+        first.started.notified().await;
+        second.started.notified().await;
+        repository
+            .folders
+            .lock()
+            .unwrap()
+            .remove(&(team, derive_v7(import, "folder", "a")));
+        first.release.add_permits(1);
+        second.release.add_permits(1);
+    };
+    let (result, ()) = tokio::time::timeout(std::time::Duration::from_secs(2), async {
+        tokio::join!(service.import_batch(&actor, team, import, input), control)
+    })
+    .await
+    .expect("deleted folders must not hang imports");
+    let result = result.unwrap();
+    assert_eq!(result.items[0].outcome, ImportOutcome::Created);
+    assert_eq!(result.items[1].outcome, ImportOutcome::Created);
+    assert_eq!(
+        result.items[2].error_code,
+        Some(ImportErrorCode::FolderMissing)
+    );
+    let counts = repository.imports.lock().unwrap()[0].3;
+    assert_eq!((counts.created, counts.failed), (2, 1));
+    assert_eq!(provider.stored.lock().unwrap().len(), 2);
+    assert_eq!(repository.live_leases.load(Ordering::SeqCst), 0);
+}
+
+#[tokio::test]
+async fn membership_is_rechecked_when_a_queued_item_starts() {
+    let (service, repository, provider, actor, team) = fixture();
+    repository.import_capacity.store(1, Ordering::SeqCst);
+    let import = Uuid::now_v7();
+    let mut input = batch();
+    input.items[0].totp = None;
+    let mut next = batch().items.remove(0);
+    next.source_key = "next".to_owned().try_into().unwrap();
+    input.items.push(next);
+    let gate = Arc::new(WriteGate::new());
+    provider
+        .write_gates
+        .lock()
+        .unwrap()
+        .insert(derive_v7(import, "item", "first"), gate.clone());
+    let control = async {
+        gate.started.notified().await;
+        repository.memberships.lock().unwrap().clear();
+        gate.release.add_permits(1);
+    };
+    let (result, ()) = tokio::join!(service.import_batch(&actor, team, import, input), control);
+    let result = result.unwrap();
+    assert_eq!(result.items[0].outcome, ImportOutcome::Created);
+    assert_eq!(result.items[1].error_code, Some(ImportErrorCode::NotFound));
+    assert_eq!(provider.stored.lock().unwrap().len(), 1);
+}
+
+#[tokio::test]
+async fn cancellation_drops_item_futures_and_the_shared_lease() {
+    let (service, repository, provider, actor, team) = fixture();
+    let import = Uuid::now_v7();
+    let gate = Arc::new(WriteGate::new());
+    provider
+        .write_gates
+        .lock()
+        .unwrap()
+        .insert(derive_v7(import, "item", "first"), gate.clone());
+    let mut work = Box::pin(service.import_batch(&actor, team, import, batch()));
+    tokio::select! {
+        _ = gate.started.notified() => {},
+        _ = &mut work => panic!("write gate must hold the import"),
+    }
+    assert_eq!(repository.live_leases.load(Ordering::SeqCst), 1);
+    drop(work);
+    assert_eq!(repository.live_leases.load(Ordering::SeqCst), 0);
+    assert_eq!(provider.writes_in_flight.load(Ordering::SeqCst), 0);
+    assert!(provider.stored.lock().unwrap().is_empty());
+}
+
+#[tokio::test]
+async fn panic_and_folder_error_release_the_shared_lease() {
+    use futures::FutureExt;
+    let (service, repository, provider, actor, team) = fixture();
+    let import = Uuid::now_v7();
+    let gate = Arc::new(WriteGate::new());
+    gate.panic.store(true, Ordering::SeqCst);
+    gate.release.add_permits(1);
+    provider
+        .write_gates
+        .lock()
+        .unwrap()
+        .insert(derive_v7(import, "item", "first"), gate);
+    let result = std::panic::AssertUnwindSafe(service.import_batch(&actor, team, import, batch()))
+        .catch_unwind()
+        .await;
+    assert!(result.is_err());
+    assert_eq!(repository.live_leases.load(Ordering::SeqCst), 0);
+    assert_eq!(provider.writes_in_flight.load(Ordering::SeqCst), 0);
+    let mut invalid = batch();
+    invalid.target = ImportTarget::New {
+        name: String::new(),
+    };
+    assert!(matches!(
+        service
+            .import_batch(&actor, team, Uuid::now_v7(), invalid)
+            .await,
+        Err(Error::Invalid)
+    ));
+    assert_eq!(repository.live_leases.load(Ordering::SeqCst), 0);
+}
+
+#[tokio::test]
+async fn imported_favorite_belongs_to_importer_and_retry_does_not_restore_it() {
+    let (service, repository, _, actor, team) = fixture();
+    let viewer = Actor {
+        user_id: MacroUserIdStr::parse_from_str("macro|viewer@example.test")
+            .expect("fixture")
+            .into_owned(),
+    };
+    repository
+        .memberships
+        .lock()
+        .expect("fixture")
+        .insert(viewer.user_id.to_string(), vec![team]);
+    let import = Uuid::now_v7();
+    service
+        .import_batch(&actor, team, import, batch())
+        .await
+        .expect("import");
+    let owner_items = service.list(&actor, team, "").await.expect("importer list");
+    let item = &owner_items[0];
+    assert!(item.favorite);
+    assert!(!service.list(&viewer, team, "").await.expect("viewer list")[0].favorite);
+    service
+        .set_favorite(&actor, team, item.id, false)
+        .await
+        .expect("unfavorite");
+    service
+        .import_batch(&actor, team, import, batch())
+        .await
+        .expect("retry");
+    assert!(
+        !service
+            .get(&actor, team, item.id)
+            .await
+            .expect("preference retained")
+            .favorite
+    );
+}
+
+#[tokio::test]
+async fn unprovisioned_team_vault_fails_every_item_as_not_provisioned() {
+    let (service, repository, provider, actor, team) = fixture();
+    provider.unprovisioned.store(true, Ordering::SeqCst);
+    let result = service
+        .import_batch(&actor, team, Uuid::now_v7(), batch())
+        .await
+        .unwrap();
+    assert_eq!(result.items[0].outcome, ImportOutcome::Failed);
+    assert_eq!(
+        result.items[0].error_code,
+        Some(ImportErrorCode::VaultNotProvisioned)
+    );
+    assert!(repository.records.lock().unwrap().is_empty());
 }

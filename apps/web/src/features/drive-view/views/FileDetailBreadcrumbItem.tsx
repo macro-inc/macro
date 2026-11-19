@@ -2,6 +2,7 @@ import { DocumentTitleHoverCard } from '@app/components/entity-detail/DocumentTi
 import { ViewBreadcrumbs } from '@app/components/view-shell';
 import { useBlockEntityCommands } from '@app/features/next-soup/actions';
 import { FileDownloadHeader } from '@components/app/FileDownloadHeader';
+import { useSplitHeaderScope } from '@components/app/SplitHeaderScope';
 import type { FileOperation } from '@components/app/split-layout/components/SplitFileMenu';
 import { SplitFileMenu } from '@components/app/split-layout/components/SplitFileMenu';
 import {
@@ -32,6 +33,7 @@ export function FileDetailBreadcrumbItem(props: {
   onDuplicate: (id: string, name: string) => void;
 }) {
   const panel = useSplitPanelOrThrow();
+  const hostedHeader = useSplitHeaderScope();
   const fileOperations = (): FileOperation[] => [
     { op: 'copy' },
     { op: 'rename' },
@@ -67,7 +69,8 @@ export function FileDetailBreadcrumbItem(props: {
 
   return (
     <>
-      <Show when={props.download}>
+      {/* A hosted split header places download as the standalone file does. */}
+      <Show when={!hostedHeader && props.download}>
         {(download) => <FileDownloadHeader download={download()} />}
       </Show>
       <ViewBreadcrumbs.Item

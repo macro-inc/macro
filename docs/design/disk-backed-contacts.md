@@ -182,8 +182,8 @@ to 559–563 ms. Retained JS remains about 57.4 MiB after sync and 70.1 MiB afte
 expanded workflows. Disk and write costs are measured, not assumed free.
 
 **Name-policy cutover:** the approved [name-focused search design](contact-name-search-proposal.md)
-is now the active local-only suggestion path: exact names, all-word prefixes,
-then literal contains, recent-first with identity ties. Consumers preserve that
+is now the active local-only suggestion path: among exact full or first names and all-word prefixes, people the viewer has a direct message with come first (policy 6), each group by name tier;
+then literal contains, then address terms, recent-first with identity ties. Consumers preserve that
 order; server suggestion fallback and old person scoring are removed. Partial
 hydration stays explicit, and refresh schedules background sync. Fresh regular-profile
 runs of `94dce7c0` put 100k broad command reads at 89–92 ms, recipient reads at
@@ -310,7 +310,7 @@ Per-row cursors preserve original database positions independently of canonical
 user IDs, so stopping inside a batch cannot skip case-normalized legacy rows.
 The shared dependency-free `subsequence_match` crate supplies normalization and
 ordinary token matching for deployed server search. Its separate names module
-supplies local policy-5 suggestion matching; server/SDK legacy matching is unchanged. Exact lookup uses indexed,
+supplies local policy-6 suggestion matching; server/SDK legacy matching is unchanged. Exact lookup uses indexed,
 bounded point reads before resolving names. Two additive concurrent indexes keep
 those point reads bounded when legacy peer IDs contain ASCII case variants.
 `lower(peer COLLATE "C")` matches the parser's ASCII canonicalization; a strict
@@ -328,7 +328,7 @@ PostgreSQL 18; production PostgreSQL 14 was not run.
 ### Approved deterministic ranking change
 
 Ordinary entities retain fixed per-row scores and command keyword matching.
-Personal suggestions instead use exact-name/word-prefix/literal-contains tiers,
+Personal suggestions instead use exact-name (full or first name)/word-prefix tiers, messaged people first, then literal-contains,
 recent-first within tiers and identity ties. Complete addresses and Macro IDs are
 identity lookups; no arbitrary-gap or domain/brevity scoring is applied to people.
 
@@ -355,7 +355,7 @@ is retained.
 Quick Access now uses the reader and never puts personal-contact winners in its
 global item cache. Menus replace person windows rather than appending them; CRM
 alias resolution is independently windowed and does not recreate a user catalog.
-Native policy 5 excludes automated recipient mailboxes unless explicitly addressed,
+The native person policy excludes automated recipient mailboxes unless explicitly addressed,
 and pins self only during empty property browsing. Consumers preserve returned
 personal order through mixed-source menus. Older capabilities remain explicitly
 unavailable; independent reference evidence keeps its unchanged policy-4 floor.

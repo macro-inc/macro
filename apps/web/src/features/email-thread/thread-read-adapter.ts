@@ -6,14 +6,13 @@ import {
 } from '@queries/email/thread';
 import { refetchSoupEntity } from '@queries/soup/cache';
 import type { Accessor } from 'solid-js';
-import { createEffect, createSignal } from 'solid-js';
+import { createEffect, createMemo, createSignal, on } from 'solid-js';
 import type { EmailThreadCommands } from './context/email-thread-context';
 import type { EmailThread } from './core/email-thread';
 
 export function createThreadReadAdapter(
   threadId: Accessor<string>,
-  threadSource: Accessor<EmailThread | undefined>,
-  toHeaderLinkId: (linkId: string | null | undefined) => string | undefined
+  threadSource: Accessor<EmailThread | undefined>
 ): Pick<
   EmailThreadCommands,
   | 'markThreadUnread'
@@ -28,11 +27,14 @@ export function createThreadReadAdapter(
   // starts with the toggle offering Mark Unread.
   const [threadMarkedUnread, setThreadMarkedUnread] = createSignal(false);
   const [threadMarkedRead, setThreadMarkedRead] = createSignal(false);
-  createEffect(() => {
-    void threadId();
-    setThreadMarkedUnread(false);
-    setThreadMarkedRead(false);
-  });
+  // The source also updates when the current thread's own write changes it.
+  const currentThreadId = createMemo(threadId);
+  createEffect(
+    on(currentThreadId, () => {
+      setThreadMarkedUnread(false);
+      setThreadMarkedRead(false);
+    })
+  );
 
   const markThreadUnread = () => {
     const thread = threadSource();
@@ -47,7 +49,7 @@ export function createThreadReadAdapter(
     setThreadMarkedUnread(true);
     setThreadMarkedRead(false);
     markUnreadMutation.mutate(
-      { threadId, linkId: thread.link_id },
+      { threadId },
       {
         onSuccess: () => {
           toast.success('Marked as unread', {
@@ -82,7 +84,7 @@ export function createThreadReadAdapter(
     setThreadMarkedUnread(false);
     setThreadMarkedRead(true);
     markSeenMutation.mutate(
-      { threadId, linkId: toHeaderLinkId(thread.link_id) },
+      { threadId },
       {
         onSuccess: () => {
           toast.success('Marked as read', {

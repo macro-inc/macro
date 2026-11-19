@@ -1,7 +1,7 @@
 //! Everything one emulator holds: mailboxes, access tokens, subscriptions,
 //! upload sessions, faults, the clock and the logs.
 
-use std::collections::{BTreeMap, HashMap};
+use std::collections::{BTreeMap, HashMap, HashSet};
 
 use base64::Engine;
 use base64::engine::general_purpose::URL_SAFE_NO_PAD;
@@ -116,6 +116,13 @@ pub(crate) struct State {
     /// The mailbox of each Macro email link the authentication-service
     /// stand-in answers for.
     pub(crate) links: HashMap<String, String>,
+    /// The mailbox of each grant the authentication-service stand-in
+    /// described, by grant id: one per principal who signed in to it.
+    pub(crate) grants: HashMap<uuid::Uuid, String>,
+    /// The grants each link was described with. A link whose grants were
+    /// all released gets no access token; one never described with a grant
+    /// is answered for as long as its mailbox is not revoked.
+    pub(crate) link_grants: HashMap<String, HashSet<uuid::Uuid>>,
     /// The access token last handed out for each link.
     link_tokens: HashMap<String, String>,
     /// Authorization codes not yet redeemed.
@@ -207,6 +214,18 @@ impl State {
         Ok(token)
     }
 
+    /// Binds a link to a mailbox. The grants a link was described with are
+    /// for one mailbox, so they go when the link moves to another.
+    pub(crate) fn bind_link(&mut self, link_id: String, email: String) {
+        let moved = self
+            .links
+            .insert(link_id.clone(), email.clone())
+            .is_some_and(|before| before != email);
+        if moved {
+            self.link_grants.remove(&link_id);
+        }
+    }
+
     /// The access token for a Macro email link, as the authentication
     /// service hands it out: the cached one while it has two minutes left,
     /// unless a fresh one is forced. Answers whether it was cached.
@@ -221,6 +240,12 @@ impl State {
             .get(&link_id)
             .cloned()
             .ok_or_else(|| EmulatorError::UnknownMailbox(link_id.clone()))?;
+        let released = self.link_grants.get(&link_id).is_some_and(|grants| {
+            !grants.is_empty() && !grants.iter().any(|grant| self.grants.contains_key(grant))
+        });
+        if released {
+            return Err(EmulatorError::GrantRevoked(email));
+        }
         let fresh_until = self.now() + Duration::seconds(120);
         let cached = self.link_tokens.get(&link_id).filter(|token| {
             self.tokens
@@ -293,16 +318,10 @@ impl State {
 
     // -- sign-in --
 
-    /// Records that the mailbox's owner signed in and consented, and
-    /// answers the authorization code for it. The scopes add to the ones
-    /// the grant already covers. A consent after a revocation starts a new
-    /// grant, whose refresh tokens are new: the revoked ones stay dead.
-    pub(crate) fn authorize(
-        &mut self,
-        email: &str,
-        consent: Consent,
-    ) -> Result<String, EmulatorError> {
-        let expires_at = self.now() + Duration::seconds(AUTHORIZATION_CODE_LIFETIME_SECONDS);
+    /// Starts a new grant for a mailbox whose grant was revoked: its refresh
+    /// tokens are new and the revoked ones stay dead. Nothing changes for a
+    /// mailbox that is not revoked.
+    pub(crate) fn reinstate(&mut self, email: &str) -> Result<(), EmulatorError> {
         let mailbox = self.mailbox(email)?;
         let email = mailbox.email.clone();
         if mailbox.revoked {
@@ -313,6 +332,21 @@ impl State {
             self.rotated_refresh_tokens
                 .retain(|_, owner| *owner != email);
         }
+        Ok(())
+    }
+
+    /// Records that the mailbox's owner signed in and consented, and
+    /// answers the authorization code for it. The scopes add to the ones
+    /// the grant already covers. A consent after a revocation starts a new
+    /// grant, whose refresh tokens are new: the revoked ones stay dead.
+    pub(crate) fn authorize(
+        &mut self,
+        email: &str,
+        consent: Consent,
+    ) -> Result<String, EmulatorError> {
+        let expires_at = self.now() + Duration::seconds(AUTHORIZATION_CODE_LIFETIME_SECONDS);
+        let email = self.mailbox(email)?.email.clone();
+        self.reinstate(&email)?;
         let mailbox = self.mailbox(&email)?;
         for scope in &consent.scopes {
             if !mailbox.scopes.contains(scope) {
@@ -408,13 +442,32 @@ impl State {
     }
 
     /// The first fault matching a request, counted against its `times`.
-    pub(crate) fn take_fault(&mut self, mailbox: Option<&str>, route: Route) -> Option<Fault> {
+    /// `folder` is the folder the request's path names, as written there, and
+    /// `continuation` whether it carries a `$skiptoken`.
+    pub(crate) fn take_fault(
+        &mut self,
+        mailbox: Option<&str>,
+        route: Route,
+        folder: Option<&str>,
+        continuation: bool,
+    ) -> Option<Fault> {
+        let folder_id = |key: &str| {
+            mailbox
+                .and_then(|email| self.mailboxes.get(email))
+                .and_then(|found| found.folder(key))
+                .map(|found| found.id.as_str())
+        };
+        let requested = folder.and_then(folder_id);
         let index = self.faults.iter().position(|(_, fault)| {
             let mailbox_matches = fault.mailbox.as_deref().is_none_or(|wanted| {
                 mailbox.is_some_and(|email| wanted.eq_ignore_ascii_case(email))
             });
             let route_matches = fault.route.is_none_or(|wanted| wanted == route);
-            mailbox_matches && route_matches
+            let folder_matches = fault.folder.as_deref().is_none_or(|wanted| {
+                requested.is_some_and(|requested| folder_id(wanted) == Some(requested))
+            });
+            let continuation_matches = !fault.continuation || continuation;
+            mailbox_matches && route_matches && folder_matches && continuation_matches
         })?;
         let (_, fault) = self.faults.get_mut(index)?;
         let taken = fault.clone();

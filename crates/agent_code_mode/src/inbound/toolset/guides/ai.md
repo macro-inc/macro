@@ -1,6 +1,7 @@
 macro.ai.decide({input,questions}) calls the shared Jev endpoint. Ask up to 32 named yes/no questions about supplied JSON/text in one request, within 64 KiB total. It returns {probabilities:{name:number}}. Values estimate yes from 0 to 1; questions need not be exclusive. Classification is not authorization or factual verification.
 
 ```typescript
+// Estimate whether each of the four newest inbox threads is urgent.
 export async function main({macro}: CodeContext) {
   const threads = [];
   for await (const thread of macro.email.inbox({pageSize:4})) {

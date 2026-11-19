@@ -85,6 +85,7 @@ type ChannelRailSearch = {
   registerInput: (element: HTMLInputElement) => void;
   /** Moves keyboard focus from the search field into the results. */
   focusResults: () => void;
+  hasResults: () => boolean;
   retry: () => Promise<void>;
 };
 
@@ -143,6 +144,7 @@ function ExpandedHeader(props: { search: ChannelRailSearch }) {
             hotkey="cmd+f"
             onValueChange={props.search.setQuery}
             focusResults={props.search.focusResults}
+            hasResults={props.search.hasResults}
           />
         )}
       >

@@ -1,5 +1,6 @@
 import type { ItemDragOverlayData } from '@app/components/app/ItemDragAndDrop';
 import { ListSkeleton } from '@app/components/view-shell/ListSkeleton';
+import { t } from '@app/lib/i18n';
 import { isTouchDevice } from '@core/mobile/isTouchDevice';
 import CaretDownIcon from '@icon/system/regular/caret-down.svg';
 import CaretUpIcon from '@icon/system/regular/caret-up.svg';
@@ -498,27 +499,32 @@ function NoTeamState() {
   );
 }
 
-function CrmContent() {
+function CrmContent(props: { onOpenThread?: () => void }) {
   const teamQuery = useCurrentTeamQuery();
 
   return (
     <Show when={teamQuery.data} fallback={<NoTeamState />}>
-      <SettingsPage
-        title="CRM"
-        description="Manage email sharing and shape your team’s deal pipeline."
-      >
-        <CrmEmailPrivacySettings />
-        <StagesSection />
-        <EmailSyncSection />
-      </SettingsPage>
+      <CrmEmailPrivacySettings
+        onOpenThread={props.onOpenThread}
+        renderOverview={(content) => (
+          <SettingsPage
+            title="CRM"
+            description={t('crm.policySettingsDescription')}
+          >
+            {content}
+            <StagesSection />
+            <EmailSyncSection />
+          </SettingsPage>
+        )}
+      />
     </Show>
   );
 }
 
-export function Crm() {
+export function Crm(props: { onOpenThread?: () => void }) {
   return (
     <Suspense fallback={<ListSkeleton.Bar class="m-6 h-4 w-32" />}>
-      <CrmContent />
+      <CrmContent onOpenThread={props.onOpenThread} />
     </Suspense>
   );
 }
