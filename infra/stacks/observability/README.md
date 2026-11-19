@@ -259,20 +259,25 @@ application telemetry here until a subsequent dual-export change is deployed.
 ## Architecture and storage
 
 ```text
+Team browser -- HTTPS --> ALB --> observability EKS cluster (Grafana)
+OTEL exporter -- HTTPS + bearer token --> ALB --> observability EKS cluster (ingest)
+Datadog, on-call browsers -- HTTPS --> ALB --> nginx --> GoAlert --> Postgres --> EBS
+```
+
+In prod the ALB sends `grafana.` and `otlp.macro-internal.com` to the
+observability EKS cluster (`infra/k8s/observability`, whose OpenTofu layer adds
+their listener rules on this stack's HTTPS listener). The host's own Grafana,
+Alloy, Loki, Tempo and Prometheus stay reachable over SSM until a host change
+removes them. A dev stack has no cluster, so its host still serves both names:
+
+```text
 Team browser -- HTTPS --> ALB --> nginx --> Grafana -- Google Workspace OAuth
                                                  --> query proxy --> backends
 OTEL exporter -- HTTPS + bearer token --> ALB --> nginx --> Alloy
                                                         --> Loki --> S3 logs
                                                         --> Tempo --> S3 traces
                                                         --> Prometheus --> EBS
-Datadog, on-call browsers -- HTTPS --> ALB --> nginx --> GoAlert --> Postgres --> EBS
 ```
-
-The ALB no longer sends `grafana.` or `otlp.macro-internal.com` here: the
-observability EKS cluster serves them (`infra/k8s/observability`, whose
-OpenTofu layer adds their listener rules on this stack's HTTPS listener). The
-host's Grafana and backends stay reachable over SSM until a host change removes
-them.
 
 - One `m7i.xlarge` (4 vCPU / 16 GiB) in a new VPC's private `us-east-2a`
   subnet in Ohio, separate from production in `us-east-1`. This is a provisional
