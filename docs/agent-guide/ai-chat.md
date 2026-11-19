@@ -4,7 +4,8 @@
 
 Drag an email thread, document, task, channel, Drive item, or project onto the
 Home, Agents, or AI chat composer to add it as mention context, just like the
-library/mention picker. The source item stays in place and the draft is retained.
+library/mention picker. Context is appended to the draft, regardless of the old
+caret position. The source item stays in place and the draft is retained.
 Dragging a selected row adds its selected items. Only the composer under the
 pointer receives them; loading, read-only, disabled and dictation surfaces reject drops.
 Native files still use the upload/attachment path.

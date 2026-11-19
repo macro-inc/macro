@@ -175,7 +175,12 @@ function setupDrop(items: EntityData[]) {
   }
   render(() => (
     <DragDropProvider
-      collisionDetector={(_source, targets) => targets[1] ?? null}
+      collisionDetector={(_source, targets) => {
+        const target = targets[1];
+        const disabled = target?.data.isDropTargetDisabled;
+        if (typeof disabled === 'function' && disabled()) return null;
+        return target ?? null;
+      }}
     >
       <Harness />
     </DragDropProvider>
@@ -252,6 +257,69 @@ describe('composer item drop integration', () => {
     drop();
     expect(contextIds(editors[1])).toEqual(['Keep this draft. ']);
     expect(reportError).not.toHaveBeenCalled();
+  });
+
+  it('appends dropped context after the draft even when the old caret is at the start', () => {
+    const { editors, drop } = setupDrop([
+      {
+        type: 'document',
+        id: 'document',
+        name: 'Context',
+        ownerId: 'owner',
+        fileType: 'md',
+      },
+    ]);
+    editors[1].update(() => $getRoot().selectStart(), { discrete: true });
+    drop();
+    expect(editors[1].read(() => $getRoot().getTextContent())).toMatch(
+      /^Keep this draft\. /
+    );
+    expect(
+      editors[1].read(() =>
+        $nodesOfType(DocumentMentionNode).map((node) => node.getDocumentId())
+      )
+    ).toEqual(['document']);
+  });
+
+  it('rejects documents with an unrecognized file type instead of inserting an unknown mention', () => {
+    const document: EntityData = {
+      type: 'document',
+      id: 'document',
+      name: 'Unsupported',
+      ownerId: 'owner',
+      fileType: 'unsupported-file-type',
+    };
+    expect(composerItemToMention(document)).toBeUndefined();
+    const { editors, drop } = setupDrop([document]);
+    drop();
+    expect(editors[1].read(() => $nodesOfType(DocumentMentionNode))).toEqual(
+      []
+    );
+    expect(contextIds(editors[1])).toEqual(['Keep this draft. ']);
+  });
+  it('keeps supported selected context when the dragged row has an unknown file type', () => {
+    const { editors, drop } = setupDrop([
+      {
+        type: 'document',
+        id: 'unknown',
+        name: 'Unknown',
+        ownerId: 'owner',
+        fileType: 'unsupported-file-type',
+      },
+      {
+        type: 'document',
+        id: 'supported',
+        name: 'Context',
+        ownerId: 'owner',
+        fileType: 'md',
+      },
+    ]);
+    drop();
+    expect(
+      editors[1].read(() =>
+        $nodesOfType(DocumentMentionNode).map((node) => node.getDocumentId())
+      )
+    ).toEqual(['supported']);
   });
 
   it('adds the selected items once to the targeted editor without replacing its draft', () => {

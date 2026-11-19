@@ -5,7 +5,7 @@ import { URL_PARAMS as CHANNEL_PARAMS } from '@block-channel/constants';
 import { itemToBlockName } from '@core/constant/allBlocks';
 import { Telemetry } from '@macro-inc/observability';
 import { createDroppable, useDragDropContext } from '@thisbeyond/solid-dnd';
-import { $getRoot, $getSelection, type LexicalEditor } from 'lexical';
+import { $getRoot, type LexicalEditor } from 'lexical';
 import { createSignal, createUniqueId, onCleanup } from 'solid-js';
 import { INSERT_DOCUMENT_MENTION_COMMAND } from '../../LexicalMarkdown/plugins/mentions';
 import type { ChatAttachmentMention } from '../util/chatAttachmentMention';
@@ -15,11 +15,13 @@ export function composerItemToMention(
   item: EntityData
 ): ChatAttachmentMention | undefined {
   if (item.type === 'foreign') return;
+  const blockName = itemToBlockName(item);
+  if (blockName === 'unknown') return;
 
   const mention: ChatAttachmentMention = {
     documentId: item.id,
     documentName: item.name,
-    blockName: itemToBlockName(item),
+    blockName,
   };
 
   if (
@@ -63,7 +65,9 @@ export function createComposerItemDrop(options: {
   const [state, { onDragEnd }] = context;
   const accepts = () => {
     const data = state.active.draggable?.data;
-    return enabled() && isEntityDragData(data) && !!composerItemToMention(data);
+    if (!enabled() || !isEntityDragData(data)) return false;
+    const items = data.selection?.entities() ?? [data];
+    return items.some((item) => composerItemToMention(item) !== undefined);
   };
   const id = `composer-item-${createUniqueId()}`;
   const droppable = createDroppable(id, {
@@ -94,8 +98,9 @@ export function createComposerItemDrop(options: {
       operation.run(() => {
         editor.update(
           () => {
-            // List drags leave no editor selection. Append rather than replacing the draft.
-            if (!$getSelection()) $getRoot().selectEnd();
+            // A previously focused composer retains its old caret. Drops add
+            // context at the end without replacing or splitting the draft.
+            $getRoot().selectEnd();
             for (const mention of mentions) {
               editor.dispatchCommand(INSERT_DOCUMENT_MENTION_COMMAND, mention);
             }
