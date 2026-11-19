@@ -224,6 +224,15 @@ test('a routine created, updated or checked with sub-routines sends their defini
   for (const body of bodies.slice(1)) {
     expect((body as { task: unknown }).task).toEqual(sent);
   }
+
+  // None is sent as none: a scheduler that predates definitions refuses the
+  // field even when it is empty.
+  bodies.length = 0;
+  await macro.routines.create({ ...options, subRoutines: [] });
+  expect(bodies[0]).toMatchObject({ task: { steps: [schedule] } });
+  expect((bodies[0] as { task: object }).task).not.toHaveProperty(
+    'sub_routines',
+  );
 });
 test('routine writes invalidate detail only after success', async () => {
   let enabled = true;

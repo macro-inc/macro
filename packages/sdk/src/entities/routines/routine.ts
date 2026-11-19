@@ -594,18 +594,22 @@ function taskBody(options: RoutineOptions): RoutineTask {
     .with({ steps: P.array() }, (program) => ({
       steps: program.steps.map(stepBody),
       dangerously_operate_as_user: program.dangerouslyOperateAsUser,
-      sub_routines: program.subRoutines?.map((definition) => ({
-        name: definition.name,
-        title: definition.title,
-        // Only the declared fields: the scheduler refuses a definition's
-        // input that carries a value.
-        inputs: definition.inputs?.map(({ type, name, label }) => ({
-          type,
-          name,
-          label,
-        })),
-        steps: definition.steps.map(stepBody),
-      })),
+      // None is sent as none: a scheduler that predates definitions refuses
+      // the field even when it is empty.
+      sub_routines: program.subRoutines?.length
+        ? program.subRoutines.map((definition) => ({
+            name: definition.name,
+            title: definition.title,
+            // Only the declared fields: the scheduler refuses a definition's
+            // input that carries a value.
+            inputs: definition.inputs?.map(({ type, name, label }) => ({
+              type,
+              name,
+              label,
+            })),
+            steps: definition.steps.map(stepBody),
+          }))
+        : undefined,
     }))
     .with(
       { prompt: P.string },
