@@ -22,6 +22,7 @@ import { useSystemSkillsQuery } from '@queries/storage/system-skills';
 import { getOwner, onMount, Show } from 'solid-js';
 import { EntityAppearanceTrigger } from '../entity-appearance/entity-appearance';
 import { getErrorMessage } from './core/routine-draft';
+import { createRoutineConnectedApps } from './queries/connected-apps';
 import {
   createAgentHistoryMetadata,
   createChatHistoryMetadata,
@@ -32,7 +33,7 @@ import {
   useRoutineTemplateQuery,
   useUnshareTemplateMutation,
 } from './queries/templates';
-import { createRoutineConnectedApps, RoutineApps } from './routine-apps';
+import { RoutineApps } from './routine-apps';
 import { RoutineExecutionPicker } from './routine-execution-picker';
 import { RoutinePromptEditor } from './routine-prompt-editor';
 import { createRoutineStepAuthor } from './routine-step-author';
@@ -81,6 +82,7 @@ export function RoutineDetail(props: {
       ? props.onOpen(id)
       : openAgentsPage(layout, 'routines', { routineId: id });
   const subRoutineWrites = useSubRoutineWrites();
+  const connectedApps = createRoutineConnectedApps();
   const source = createRoutineDetailSource(
     () => props.scheduleId,
     userId,
@@ -93,7 +95,8 @@ export function RoutineDetail(props: {
       },
       onKept: () => toast.success(t('subRoutines.kept')),
     },
-    subRoutineWrites
+    subRoutineWrites,
+    connectedApps
   );
   const remove = () => {
     const entity = source.entity();
@@ -250,7 +253,7 @@ export function RoutineDetail(props: {
           ExecutionPicker: RoutineExecutionPicker,
           Triggers: RoutineTriggers,
           Apps: RoutineApps,
-          createConnectedApps: createRoutineConnectedApps,
+          createConnectedApps: () => connectedApps,
           createAppTargetCheck: createRoutineAppTargetCheck,
           createStepAuthor: createRoutineStepAuthor,
           createChatMetadata: createChatHistoryMetadata,

@@ -30,6 +30,7 @@ import {
   wireDefinition,
 } from '../core/sub-routines';
 import { sharesAsTemplate } from '../core/template';
+import { createRoutineConnectedApps } from './connected-apps';
 import { scheduleToEntity } from './entities';
 import {
   draftFromSchedule,
@@ -101,22 +102,34 @@ type DetailCallbacks = {
 
 function canKeepSchedule(
   schedule: ScheduledActionResponse,
-  parent: ScheduledActionResponse | undefined
+  parent: ScheduledActionResponse | undefined,
+  connectedApps: ReadonlySet<string> | undefined
 ): boolean {
   const link = schedule.sub_routine;
   if (!link) return false;
   const copy = copyOf(schedule.task);
   if (!copy) return true;
-  if (!parent || parent.id !== link.parent_id) return false;
-  const definition = wireDefinition(parent.task, copy.subRoutine);
-  return Boolean(definition && copyInputsFit(copy, definition));
+  if (!connectedApps || !parent || parent.id !== link.parent_id) return false;
+  const task = parent.task;
+  const definition = wireDefinition(task, copy.subRoutine);
+  return Boolean(
+    definition &&
+      copyInputsFit(copy, definition) &&
+      'steps' in task &&
+      task.sub_routines?.every((retained) =>
+        (retained.mcp_servers ?? []).every((app) =>
+          connectedApps.has(app.app_slug)
+        )
+      )
+  );
 }
 
 export function createRoutineDetailSource(
   id: Accessor<string>,
   userId: Accessor<string | undefined>,
   callbacks: DetailCallbacks,
-  subRoutineWrites: Accessor<boolean | undefined>
+  subRoutineWrites: Accessor<boolean | undefined>,
+  connectedApps: Accessor<ReadonlySet<string> | undefined>
 ): RoutineDetailSource {
   const list = useSchedulesQuery(() => true);
   const detail = useRoutineQuery(id);
@@ -224,7 +237,7 @@ export function createRoutineDetailSource(
     return Boolean(
       current &&
         current.owner === userId() &&
-        canKeepSchedule(current, rawParent())
+        canKeepSchedule(current, rawParent(), connectedApps())
     );
   };
   const save = async (
@@ -401,6 +414,7 @@ export function createRoutineListSource(
 ): RoutineListSource {
   const query = useSchedulesQuery(() => true);
   const children = useSubRoutinesQuery(() => true);
+  const connectedApps = createRoutineConnectedApps();
   const toggle = useSetScheduleEnabledMutation({ onError });
   return {
     subRoutines: createMemo(() =>
@@ -414,7 +428,8 @@ export function createRoutineListSource(
               ? query.data?.find(
                   (item) => item.id === child.sub_routine?.parent_id
                 )
-              : undefined
+              : undefined,
+            connectedApps()
           ),
         }))
     ),
@@ -472,6 +487,7 @@ export function createRoutineRowOperations(
 ): RoutineRowOperations {
   const list = useSchedulesQuery(() => true);
   const children = useSubRoutinesQuery(() => true);
+  const connectedApps = createRoutineConnectedApps();
   const find = (id: string) =>
     (list.isSuccess || list.isError ? list.data : undefined)?.find(
       (item) => item.id === id
@@ -509,15 +525,9 @@ export function createRoutineRowOperations(
     const body = duplicateBody(id);
     if (body) await duplicate.mutateAsync({ body });
   });
-  const keeping = createPerRoutineMutation(async (id) => {
-    const schedule = find(id);
-    if (
-      !schedule?.sub_routine ||
-      !canKeepSchedule(schedule, find(schedule.sub_routine.parent_id))
-    )
-      return;
-    await keep.mutateAsync({ scheduleId: id });
-  });
+  const keeping = createPerRoutineMutation((id) =>
+    keep.mutateAsync({ scheduleId: id })
+  );
   return {
     entity(id) {
       const schedule = find(id);
@@ -527,7 +537,18 @@ export function createRoutineRowOperations(
     runPending: running.pending,
     duplicate: duplicating.start,
     canDuplicate: (id) => Boolean(duplicateBody(id)),
-    keepAsOwn: keeping.start,
+    keepAsOwn(id) {
+      const schedule = find(id);
+      if (
+        schedule?.sub_routine &&
+        canKeepSchedule(
+          schedule,
+          find(schedule.sub_routine.parent_id),
+          connectedApps()
+        )
+      )
+        keeping.start(id);
+    },
     async createdCount(id) {
       const created = await fetchChildren(id);
       return created.isOk() ? created.value.length : undefined;

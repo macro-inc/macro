@@ -1306,8 +1306,9 @@ and select **Show code** to read a code step's source. Recurring copies resolve
 the definition again on each run. If the parent no longer defines it, the page
 says so and the copy fails when it runs. **Retry definition** retries a failed
 parent read when no cached parent is available. **Keep as my routine** is
-available when the definition exists and the copy's stored inputs match its
-current declarations. It makes a standalone routine with the referenced
+available once connections are loaded, all retained definitions' apps are
+connected, and the copy's stored inputs match the current definition.
+It makes a standalone routine with the referenced
 steps and apps, the copy's input values, and the parent's definitions.
 
 The owner's `enable-sub-routines` flag is required to schedule copies or create,

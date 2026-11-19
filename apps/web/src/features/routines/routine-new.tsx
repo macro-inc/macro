@@ -8,9 +8,10 @@ import {
   loadRoutineComposerDraft,
   saveRoutineComposerDraft,
 } from './draft-storage';
+import { createRoutineConnectedApps } from './queries/connected-apps';
 import { createRoutineAppTargetCheck } from './queries/routine-app-targets';
 import { createRoutineCreatorSource } from './queries/routine-sources';
-import { createRoutineConnectedApps, RoutineApps } from './routine-apps';
+import { RoutineApps } from './routine-apps';
 import { RoutineCreatedItem } from './routine-created-item';
 import { onRoutineDraftStarted } from './routine-draft-start';
 import { RoutineExecutionPicker } from './routine-execution-picker';

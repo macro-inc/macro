@@ -259,6 +259,8 @@ vi.mock('./routine-prompt-editor', () => ({
 }));
 vi.mock('./routine-apps', () => ({
   RoutineApps: () => null,
+}));
+vi.mock('./queries/connected-apps', () => ({
   createRoutineConnectedApps: () => () => mocks.connectedApps(),
 }));
 vi.mock('@queries/agents/agents', () => ({
@@ -1741,6 +1743,42 @@ describe('sub-routines defined once', () => {
       expect(mocks.update).toHaveBeenCalledTimes(1);
     }
   );
+
+  it('offers Keep only after a retained sibling’s app connection is known', () => {
+    setSchedules([
+      copy,
+      {
+        ...parent,
+        task: {
+          ...parent.task,
+          steps: [],
+          sub_routines: [
+            remind,
+            {
+              ...remind,
+              name: 'notify',
+              mcp_servers: [{ app_slug: 'example', server_name: 'Example' }],
+            },
+          ],
+        },
+      },
+    ]);
+    const [connections, setConnections] = createSignal<ReadonlySet<string>>();
+    mocks.connectedApps = connections;
+    render(() => <Routine />);
+    openActions();
+    expect(
+      screen.queryByRole('menuitem', { name: 'Keep as my routine' })
+    ).toBeNull();
+    setConnections(new Set());
+    expect(
+      screen.queryByRole('menuitem', { name: 'Keep as my routine' })
+    ).toBeNull();
+    setConnections(new Set(['example']));
+    expect(
+      screen.getByRole('menuitem', { name: 'Keep as my routine' })
+    ).toBeTruthy();
+  });
 
   it('shows a copy its parent’s steps and its values, editing only its own settings', async () => {
     // The copy's page reads its parent from the routines list.

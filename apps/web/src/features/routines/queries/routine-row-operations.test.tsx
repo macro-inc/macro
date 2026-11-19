@@ -3,10 +3,14 @@ import type { ScheduledAction } from '@service-scheduled-action/generated/schema
 import { cleanup, render } from '@solidjs/testing-library';
 import { QueryClientProvider } from '@tanstack/solid-query';
 import { err, ok } from 'neverthrow';
+import { createSignal } from 'solid-js';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import type { RoutineRowOperations } from '../context/routine-sources';
 import { scheduledActionKeys } from './keys';
-import { createRoutineRowOperations } from './routine-sources';
+import {
+  createRoutineListSource,
+  createRoutineRowOperations,
+} from './routine-sources';
 
 const client = vi.hoisted(() => ({
   listSchedules: vi.fn(),
@@ -15,6 +19,15 @@ const client = vi.hoisted(() => ({
   runNow: vi.fn(),
   createSchedule: vi.fn(),
   detach: vi.fn(),
+}));
+const appConnections = vi.hoisted(() => ({
+  read: (): ReadonlySet<string> | undefined => new Set(),
+}));
+vi.mock('@queries/pipedream-connectors', () => ({
+  usePipedreamConnectedSlugs: () => ({
+    ready: () => appConnections.read() !== undefined,
+    slugs: () => appConnections.read(),
+  }),
 }));
 vi.mock('@service-scheduled-action/client', () => ({
   scheduledActionClient: client,
@@ -75,6 +88,7 @@ function answerLater(fn: ReturnType<typeof vi.fn>) {
 }
 
 beforeEach(() => {
+  appConnections.read = () => new Set();
   for (const fn of Object.values(client)) fn.mockReset();
   for (const fn of Object.values(callbacks)) fn.mockReset();
   client.listSchedules.mockResolvedValue(ok([briefing, digest]));
@@ -91,6 +105,67 @@ afterEach(() => {
 });
 
 describe('routine row operations', () => {
+  it('holds Keep in the list and at dispatch until the sibling’s app is connected', async () => {
+    const definition = {
+      name: 'remind',
+      title: 'Remind',
+      steps: [
+        { type: 'agent' as const, model: 'model', instructions: 'Remind.' },
+      ],
+    };
+    const parent: ScheduledAction = {
+      ...briefing,
+      task: {
+        steps: [],
+        sub_routines: [
+          definition,
+          {
+            ...definition,
+            name: 'notify',
+            mcp_servers: [{ app_slug: 'example', server_name: 'Example' }],
+          },
+        ],
+      },
+    };
+    const copy: ScheduledAction = {
+      ...digest,
+      sub_routine: { parent_id: 'briefing', created_by_run_id: 'run' },
+      task: { sub_routine: 'remind', inputs: {} },
+    };
+    const [slugs, setSlugs] = createSignal<ReadonlySet<string>>();
+    appConnections.read = slugs;
+    client.listSchedules.mockResolvedValue(ok([parent]));
+    client.listSubRoutines.mockResolvedValue(ok([copy]));
+    client.detach.mockResolvedValue(ok(digest));
+    let list!: ReturnType<typeof createRoutineListSource>;
+    let operations!: RoutineRowOperations;
+    function Probe() {
+      list = createRoutineListSource(vi.fn());
+      operations = createRoutineRowOperations(callbacks, () => false);
+      return null;
+    }
+    render(() => (
+      <QueryClientProvider client={queryClient}>
+        <Probe />
+      </QueryClientProvider>
+    ));
+
+    await vi.waitFor(() => expect(list.subRoutines()[0]?.id).toBe('digest'));
+    expect(list.subRoutines()[0]?.canKeep).toBe(false);
+    setSlugs(new Set());
+    expect(list.subRoutines()[0]?.canKeep).toBe(false);
+    operations.keepAsOwn('digest');
+    await Promise.resolve();
+    expect(client.detach).not.toHaveBeenCalled();
+    setSlugs(new Set(['example']));
+    expect(list.subRoutines()[0]?.canKeep).toBe(true);
+    operations.keepAsOwn('digest');
+    await vi.waitFor(() => expect(callbacks.onKept).toHaveBeenCalledOnce());
+    expect(client.detach).toHaveBeenCalledExactlyOnceWith({
+      scheduleId: 'digest',
+    });
+  });
+
   it('keeps each routine’s run pending until its own answer arrives', async () => {
     const answerBriefing = answerLater(client.runNow);
     const answerDigest = answerLater(client.runNow);

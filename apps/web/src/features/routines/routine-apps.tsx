@@ -3,17 +3,9 @@ import { Popover } from '@kobalte/core/popover';
 import PlugsIcon from '@phosphor/plugs.svg';
 import { usePipedreamConnectedSlugs } from '@queries/pipedream-connectors';
 import { Button, badgeTriggerClasses } from '@ui';
-import { type Accessor, Show } from 'solid-js';
+import { Show } from 'solid-js';
 import { PipedreamAppPicker } from '../settings/PipedreamAppPicker';
 import type { RoutineApp } from './core/draft';
-
-/** The viewer's connected app slugs, undefined until they load. */
-export function createRoutineConnectedApps(): Accessor<
-  ReadonlySet<string> | undefined
-> {
-  const connections = usePipedreamConnectedSlugs();
-  return () => (connections.ready() ? connections.slugs() : undefined);
-}
 
 /** Apps a routine requires, picked from the Pipedream catalog. */
 export function RoutineApps(props: {
