@@ -277,6 +277,14 @@ inputs cannot select an agent, and ordinary user credentials remain unattributed
   (`xtask_local`'s `microsoft_emulator.rs`): its placeholder key cannot load
   flags. Each decision is the
   `outlook.flag` span field (`on`, `off`, `error`, `unconfigured`).
+- A Gmail connect for a mailbox with no account of its own links the mailbox's
+  Google identity to the connecting account, and FusionAuth binds an identity to
+  one user. The Google callback records on the attempt whether it created that
+  link (`identity_link_created`); when the attempt ends without an inbox
+  (`/email/init` refuses it, marking `refused_at`, or it lapses after 24 h), the
+  5-minute `domain::google_identity_links` round releases the link, unless the
+  address now has an account of its own or the requester holds the inbox, then
+  drops the attempt. A link that existed before the attempt is never released.
 - `/oauth2/{provider}/callback` verifies two signed `state` kinds
   (`src/account_link_state.rs`): account links, which expire, and Microsoft
   admin-consent returns, which do not. A consent screen that ends without a
