@@ -3418,6 +3418,11 @@
     "viewMenus.viewActions": "ccf738b323"
   },
   "exceptions": {
+    "fr": {
+      "commands.toggleSettings": "b7b98613db",
+      "entityActions.snoozeNotifications": "c5dec69afe",
+      "settingsNav.tabRuntimes": "c061da196e"
+    },
     "ja": {
       "commands.toggleSettings": "b7b98613db",
       "entityActions.snoozeNotifications": "c5dec69afe",

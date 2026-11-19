@@ -65,9 +65,18 @@ Address: formal vous.
 | notifications | Notifications |
 | done | Terminés |
 | mark as read | Marquer comme lu |
-| snooze | Suspendre les notifications… |
+| snooze | Suspendre les notifications |
 | archive | Archiver |
 | settings | Paramètres |
+| computer (Macro computer) | Nouvel ordinateur Macro |
+| machine (runs agents) | Vos machines |
+| session (agent) | Lancer une session |
+| routine | Toutes les routines |
+| saved view | Nouvelle vue enregistrée |
+| call | Rejoindre l’appel |
+| contact (CRM) | Changer l’entreprise du contact |
+| company (CRM) | Aucune entreprise |
+| thread (email) | Exclure le fil du CRM |
 
 ## Spanish (`es`)
 
