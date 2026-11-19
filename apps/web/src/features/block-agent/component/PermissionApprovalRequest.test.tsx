@@ -81,6 +81,15 @@ vi.mock('@service-agent-harness/tool-permissions', () => ({
   toolPermissionsClient: client,
 }));
 
+// `enable-agent-permissions`, by test.
+const flags = vi.hoisted(() => ({ permissions: true }));
+vi.mock('@app/lib/analytics/posthog', () => ({
+  useFeatureFlag: () => () => ({
+    enabled: flags.permissions,
+    loading: false,
+  }),
+}));
+
 const settings = vi.hoisted(() => ({ openSettingsInSplit: vi.fn() }));
 vi.mock('@core/constant/SettingsState', () => ({
   useSettingsState: () => settings,
@@ -100,6 +109,7 @@ beforeEach(() => {
   queryClient.clear();
   viewer.id = 'macro|dana@example.com';
   held.program = OCAML_PROGRAM;
+  flags.permissions = true;
   client.session.mockResolvedValue(
     ok({ agentId: 'agent-1', canEdit: true, groups: [], rules: [] })
   );
@@ -134,6 +144,19 @@ describe('PermissionApprovalRequest', () => {
       await screen.findByRole('button', { name: 'Scout’s permissions' })
     );
     expect(settings.openSettingsInSplit).toHaveBeenCalledWith('Agents');
+  });
+
+  it('stays answerable without reading permissions while the flag is off', async () => {
+    flags.permissions = false;
+    renderRequest();
+    fireEvent.click(screen.getByRole('button', { name: 'Approve' }));
+    expect(answer).toHaveBeenCalledWith('approval-1', 'approve');
+    // Give a session read the chance to land: there must be none.
+    await Promise.resolve();
+    expect(client.session).not.toHaveBeenCalled();
+    expect(
+      screen.queryByRole('button', { name: 'Scout’s permissions' })
+    ).toBeNull();
   });
 
   it('shows the program on request', () => {

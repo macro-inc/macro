@@ -37,10 +37,14 @@ shows a tool's override or its action's state.
   rule always means the tool differs; ↺ sends `null` too.
 - The Macro persona's permissions use `MACRO_NEW_BOT_ID`, not
   `MACRO_AGENT_BOT_ID`.
-- Gate every entry point on `useAgentPermissionsFlag`
-  (`enable-agent-permissions`, the one flag: the harness offers JS tools
-  programs, which permissions gate, on it alone) and on the API not
-  answering 404.
+- Gate every entry point, and every read of the permissions API, on
+  `useAgentPermissionsFlag` (`enable-agent-permissions`, the one flag: the
+  harness offers JS tools programs, which permissions gate, on it alone; on
+  only in local stacks, PostHog elsewhere) and on the API not answering 404.
+  Off, the chat's ShowPermissions card is a plain row, the blocked card has
+  no link, and a pending approval stays answerable without one. Every
+  surface and its flag-off test: `crates/agent_permissions/AGENTS.md`
+  (Rollout: one flag).
 - Copy names no program language: OCaml and JS tools (`js_tools`) programs
   are both checked, and plain JavaScript ones are not ("checked programs").
 - Color is on glyphs only (Ask amber hand, Never failure prohibit); text stays

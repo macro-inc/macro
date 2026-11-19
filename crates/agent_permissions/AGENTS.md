@@ -45,8 +45,47 @@ resolves them against `agent_permission_registry`, and serves the HTTP API
   `GatedOperation`s (an unclassified one is blocked). `ExecutionPermission`
   is what a stopped run's record carries.
 - `src/inbound/toolset.rs`: `ShowPermissions`, the direct tool the internal
-  MCP offers where permissions gate OCaml; it reads `view_agent` as the
-  agent in its session and changes nothing.
+  MCP offers where permissions gate the session's programs (JS tools, or
+  OCaml); it reads `view_agent` as the agent in its session and changes
+  nothing.
+
+## Rollout: one flag
+
+Everything agent permissions and JavaScript tools (`js_tools`) programs add is
+behind `enable-agent-permissions`, backend and web. Off, or unreadable (no
+PostHog client, a failed load: `code_mode::flags_on` in the harness,
+`useFeatureFlag` on the web), behaviour is exactly what it was before them.
+OCaml programs are gated only with `enable-ocaml-code-mode` too. The backend
+reads the session owner's flag (the caller's for the HTTP routes); the web
+reads the viewer's. A new surface goes in this table with its flag-off test.
+
+| Surface | Gate | Off | Flag-off test |
+| --- | --- | --- | --- |
+| Routes `/agent-tool-permissions/catalog`, `/agents/{id}/tool-permissions[/tighten]`, `/agent-sessions/{id}/tool-permissions` | `AgentPermissionsService::ensure_enabled` (`PermissionsRollout`) | 404 | `every_route_is_not_found_while_the_feature_is_off`, `with_the_rollout_off_everything_is_disabled` |
+| `ExecuteCode` `language: "js_tools"` (schema, `js_tools.md` and `js_tools_permissions.md` text, the call) | `session_toolset`, `CodeModeService::execute` (`JsToolsRollout`) | today's tool, pinned by `toolset/test/without_js_tools.json`; a `js_tools` call refused before a credential | `sessions_see_and_call_js_tools_only_with_the_rollout`, `js_tools_without_the_rollout_is_refused_before_a_credential` |
+| OCaml permissions text (`ocaml_permissions.md`) | `SessionCodeMode::permissions_enabled` (both flags) | OCaml's text without it | `sessions_see_and_call_ocaml_only_with_the_rollout` |
+| The gate: analysis, never, ask holds, `allowed_operations` | `PermissionGate::check` (`LanguageRollout`) | `None`: the run is unchanged; a JS tools program it did not check is refused unrun | `javascript_and_owners_without_the_rollout_are_not_checked`, `each_language_is_checked_only_with_its_own_rollout_and_analyzer`, `the_gate_follows_the_permissions_flag_and_for_ocaml_its_flag` |
+| `macro-sdk` holds (`PermissionApprovals`, standing approvals, `by_person`), fold `approver`, record `permission`, `refused` activity | made only by the gate | never made; absent fields serialize as before | the gate's tests above |
+| `ShowPermissions` (internal MCP list and call) | `InternalTools::permission_tools` (`permissions_enabled`) | not listed; a call is refused | `execute_code_offers_and_accepts_js_tools_only_with_permissions` |
+| Web flag | `enableAgentPermissions` (`featureFlags.ts`, `default: LOCAL_ONLY \|\| undefined`) | on only under local HMR or a `just stack` bundle; dev and prod follow PostHog alone, and unreachable PostHog is off | `use-agent-permissions-flag.test.ts` (the hook; vitest runs with `import.meta.hot`, so the default itself can't be tested there) |
+| Web: editor section, Macro's shield, permissions page, `requestAgentPermissions` links | `Agents.tsx` (`useAgentPermissionsFlag`, `useAgentPermissionsAvailable`) | hidden; an open page closes; a link waits | `Agents.test.tsx` (`permissions`) |
+| Web: ShowPermissions card | `ShowPermissionsPart` | a plain row, nothing read | `ShowPermissionsPart.test.tsx` |
+| Web: blocked card | `BlockedPermissionsNotice` | the card without Review permissions, nothing read | `blocked-permissions-notice.test.tsx` |
+| Web: approval card | `PermissionApprovalRequest` | still answerable (a run waits on it), no permissions link, nothing read | `PermissionApprovalRequest.test.tsx` |
+| Web: declined row, Blocked step, answered-hold row | `CodeExecutionPart`, `CodeExecutionToolCall`, `ToolApprovalPart` | data only a gated run makes | — |
+
+Not flagged, by design: the migrations (tables), the registry
+(`agent_permission_registry`, data), the reserved `macro-sdk` app slug
+(`McpServerSlug`: no connected app may take it, so a hold can't be spoofed),
+the tool-permission routes in the correlation `SENDS` list (they 404 when
+off), the tool-approval answer route's caller check (`by_person`, which
+only a `macro-sdk` hold reads), the OpenAPI schemas and generated clients,
+and everything generated from the public SDK (`packages/sdk`): its methods,
+the SDK MCP tools (`agent-tool_permissions`,
+`agent-tighten_tool_permissions`, `agents-tool_permission_catalog`,
+`agent_session-tool_permissions`, and the operations in `agents_read`,
+`agents_write`, `agent_sessions_read`), and code mode's SDK docs and types.
+Each calls routes that answer 404 while the flag is off.
 
 ## Boundaries
 

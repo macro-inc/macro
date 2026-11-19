@@ -1,4 +1,7 @@
-import { ShowPermissionsCard } from '@app/features/agent-permissions';
+import {
+  ShowPermissionsCard,
+  useAgentPermissionsFlag,
+} from '@app/features/agent-permissions';
 import { t } from '@app/lib/i18n';
 import { Match, Switch } from 'solid-js';
 import type {
@@ -13,7 +16,8 @@ import { isToolActive, ToolCard } from '../ui';
 /**
  * The agent's ShowPermissions call: while it runs, a quiet row; once
  * answered, the permissions it asked the person to look at, with live
- * controls.
+ * controls. With `enable-agent-permissions` off for the viewer it stays a
+ * plain row: the controls would read an API that answers 404.
  */
 export function ShowPermissionsPart(props: {
   part: ToolUsePart;
@@ -21,7 +25,9 @@ export function ShowPermissionsPart(props: {
   context: ToolCallContext;
 }) {
   const session = useOptionalAgentSession();
-  const call = () => parseShowPermissions(props.part);
+  const permissionsFlag = useAgentPermissionsFlag();
+  const call = () =>
+    permissionsFlag() ? parseShowPermissions(props.part) : undefined;
   const agentName = () =>
     session?.bot()?.name ?? t('agentPermissionsChat.theAgent');
 

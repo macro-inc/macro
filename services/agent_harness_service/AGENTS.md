@@ -94,7 +94,9 @@ network/resource-only Pulumi stacks; they do not host extra agent processes.
   `JsToolsAnalyzer`, with `code_mode::JsToolsRollout`
   (`enable-agent-permissions` alone; there is no separate JS tools flag).
   `RunCredentials` fails closed: a JS tools program the gate returned
-  nothing for (its flag read off at issue time) is refused unrun.
+  nothing for (its flag read off at issue time) is refused unrun. Every
+  surface behind the flag, with its flag-off test, is listed in
+  `crates/agent_permissions/AGENTS.md` (Rollout: one flag).
 - `src/speech_gateway.rs` + `src/speech_gateway/`: `/brain/inference/stt` and
   `/brain/inference/tts` WebSockets on the egress listener, for agent
   teammates' calls (`MACRO_SPEECH_URL` in the enrollment). Same brain key,

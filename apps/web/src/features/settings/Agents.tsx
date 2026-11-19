@@ -216,6 +216,9 @@ export function Agents(props: {
     persona: boolean;
     focus?: PermissionFocus;
   }>();
+  // The page shows only while the flag is on: off, the list comes back.
+  const shownPermissions = () =>
+    permissionsFlag() ? permissionsFor() : undefined;
   const openMacroPermissions = (focus?: PermissionFocus) =>
     setPermissionsFor({
       // The Macro persona's agent is the new Macro bot.
@@ -470,7 +473,7 @@ export function Agents(props: {
           !creatingFromLink() &&
           !props.createKind &&
           !editingAgent() &&
-          !permissionsFor()
+          !shownPermissions()
         }
       >
         <SettingsPage
@@ -584,7 +587,7 @@ export function Agents(props: {
           />
         )}
       </Show>
-      <Show when={!props.createKind && permissionsFor()} keyed>
+      <Show when={!props.createKind && shownPermissions()} keyed>
         {(target) => (
           <AgentPermissionsPage
             agentId={target.agentId}
@@ -1355,7 +1358,7 @@ function AgentEditorPage(props: {
       <Match when={setup() === 'pairing'}>
         <RuntimePairingPage onClose={finishSetup} />
       </Match>
-      <Match when={permissionsOpen() && props.agent}>
+      <Match when={permissionsFlag() && permissionsOpen() && props.agent}>
         {(agent) => (
           <AgentPermissionsPage
             agentId={agent().bot.id}

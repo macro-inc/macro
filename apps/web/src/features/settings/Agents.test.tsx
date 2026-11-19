@@ -19,7 +19,7 @@ import {
   QueryClientProvider,
   useQuery,
 } from '@tanstack/solid-query';
-import { Suspense } from 'solid-js';
+import { createSignal, Suspense } from 'solid-js';
 import { createStore } from 'solid-js/store';
 import { beforeAll, beforeEach, describe, expect, it, vi } from 'vitest';
 import { Agents } from './Agents';
@@ -77,12 +77,14 @@ vi.mock('./components/auto-archive-setting', () => ({
   AutoArchiveSetting: () => null,
 }));
 
-// The permissions page has its own suite; here only its entry points.
-const permissionMocks = vi.hoisted(() => ({ enabled: false, served: true }));
+// The permissions page has its own suite; here only its entry points. The
+// flag is a signal, so a test can turn it off under an open page.
+const [permissionsFlag, setPermissionsFlag] = createSignal(false);
+const permissionMocks = vi.hoisted(() => ({ served: true }));
 vi.mock('@app/features/agent-permissions', () => ({
-  useAgentPermissionsFlag: () => () => permissionMocks.enabled,
+  useAgentPermissionsFlag: () => permissionsFlag,
   useAgentPermissionsAvailable: () => () =>
-    permissionMocks.enabled && permissionMocks.served,
+    permissionsFlag() && permissionMocks.served,
   AgentPermissionsSection: (props: {
     agentId: string;
     onManage: () => void;
@@ -357,7 +359,7 @@ beforeAll(() => {
 });
 
 beforeEach(() => {
-  permissionMocks.enabled = false;
+  setPermissionsFlag(false);
   permissionMocks.served = true;
   avatarMocks.upload.mockReset();
   apiKeyMocks.query.data = undefined;
@@ -1042,7 +1044,7 @@ describe('Agents', () => {
     };
 
     it('opens from the agent editor and returns to the unsaved form', () => {
-      permissionMocks.enabled = true;
+      setPermissionsFlag(true);
       agentMocks.query.data = [ownAgent];
       render(() => <Agents {...agentsPageProps} />);
       fireEvent.click(screen.getByRole('button', { name: 'Edit Bug fixer' }));
@@ -1077,7 +1079,7 @@ describe('Agents', () => {
     });
 
     it("opens Macro's permissions for the new Macro bot from its row", () => {
-      permissionMocks.enabled = true;
+      setPermissionsFlag(true);
       render(() => <Agents {...agentsPageProps} />);
       fireEvent.click(
         screen.getByRole('button', { name: "Macro's permissions" })
@@ -1090,7 +1092,7 @@ describe('Agents', () => {
     });
 
     it("hides Macro's shield when the API has no permissions for it", () => {
-      permissionMocks.enabled = true;
+      setPermissionsFlag(true);
       permissionMocks.served = false;
       render(() => <Agents {...agentsPageProps} />);
       expect(
@@ -1098,8 +1100,62 @@ describe('Agents', () => {
       ).toBeNull();
     });
 
+    it('closes an open permissions page when the flag turns off', () => {
+      setPermissionsFlag(true);
+      agentMocks.query.data = [ownAgent];
+      render(() => <Agents {...agentsPageProps} />);
+      fireEvent.click(
+        screen.getByRole('button', { name: "Macro's permissions" })
+      );
+      expect(
+        screen.getByRole('heading', { name: /Permissions page of Macro/ })
+      ).toBeTruthy();
+      setPermissionsFlag(false);
+      expect(
+        screen.queryByRole('heading', { name: /Permissions page/ })
+      ).toBeNull();
+      expect(
+        screen.queryByRole('button', { name: "Macro's permissions" })
+      ).toBeNull();
+
+      setPermissionsFlag(true);
+      fireEvent.click(
+        screen.getByRole('button', { name: 'Back from permissions' })
+      );
+      fireEvent.click(screen.getByRole('button', { name: 'Edit Bug fixer' }));
+      fireEvent.click(
+        screen.getByRole('button', { name: 'Manage permissions of agent-1' })
+      );
+      expect(
+        screen.getByRole('heading', { name: /Permissions page of Bug fixer/ })
+      ).toBeTruthy();
+      setPermissionsFlag(false);
+      expect(
+        screen.queryByRole('heading', { name: /Permissions page/ })
+      ).toBeNull();
+      expect(
+        screen.queryByRole('button', { name: /Manage permissions/ })
+      ).toBeNull();
+    });
+
+    it('holds a permissions link until the flag is on', () => {
+      agentMocks.query.data = [ownAgent];
+      requestAgentPermissions('agent-1');
+      render(() => <Agents {...agentsPageProps} />);
+      expect(
+        screen.queryByRole('heading', { name: /Permissions page/ })
+      ).toBeNull();
+      expect(agentSettingsRequest()).toBeDefined();
+
+      setPermissionsFlag(true);
+      expect(
+        screen.getByRole('heading', { name: /Permissions page of Bug fixer/ })
+      ).toBeTruthy();
+      expect(agentSettingsRequest()).toBeUndefined();
+    });
+
     it("opens an agent's permissions when asked to by a link", () => {
-      permissionMocks.enabled = true;
+      setPermissionsFlag(true);
       agentMocks.query.data = [ownAgent];
       requestAgentPermissions('agent-1', { group: 'email' });
       render(() => <Agents {...agentsPageProps} />);
