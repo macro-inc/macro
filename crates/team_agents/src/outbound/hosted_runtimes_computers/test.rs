@@ -21,7 +21,7 @@ fn an_attached_computer_maps_to_the_agents_state() {
         (ComputerStatusKind::Purchasing, ComputerState::Purchasing),
     ] {
         assert_eq!(
-            computer_state(kind, FleetAttachment::Attached),
+            computer_state(kind, FleetAttachment::Attached, false),
             state,
             "{kind:?}"
         );
@@ -31,15 +31,19 @@ fn an_attached_computer_maps_to_the_agents_state() {
 #[test]
 fn without_a_fleet_a_live_computer_is_paused_but_terminal_ones_stay() {
     assert_eq!(
-        computer_state(ComputerStatusKind::Ready, FleetAttachment::Detached),
+        computer_state(ComputerStatusKind::Ready, FleetAttachment::Detached, true),
         ComputerState::Paused
     );
     assert_eq!(
-        computer_state(ComputerStatusKind::Failed, FleetAttachment::Detached),
+        computer_state(ComputerStatusKind::Failed, FleetAttachment::Detached, false),
         ComputerState::Failed
     );
     assert_eq!(
-        computer_state(ComputerStatusKind::Released, FleetAttachment::Detached),
+        computer_state(
+            ComputerStatusKind::Released,
+            FleetAttachment::Detached,
+            false
+        ),
         ComputerState::Released
     );
 }
@@ -84,4 +88,12 @@ fn a_declined_card_is_its_own_refusal() {
         )),
         TeamAgentError::PaymentDeclined
     ));
+}
+
+#[test]
+fn an_up_computer_waiting_on_its_agent_says_so() {
+    assert_eq!(
+        computer_state(ComputerStatusKind::Ready, FleetAttachment::Attached, true),
+        ComputerState::AwaitingAgent
+    );
 }

@@ -104,7 +104,8 @@ async fn startup_without_agents_serves_model_probes_and_stop_closes_the_runtime(
             assert_eq!(request.headers()["x-macro-harness-token"], "mhns_test");
             assert_eq!(
                 request.headers()["x-macro-runtime-accepts"],
-                "agents-changed"
+                "agents-changed,apply-agent",
+                "macrod must say it takes an agent teammate"
             );
             Ok(response)
         },

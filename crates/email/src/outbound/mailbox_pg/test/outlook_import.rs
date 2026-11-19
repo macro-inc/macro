@@ -3,7 +3,8 @@
 //! arrives during the import is stored as new mail before the import's walk
 //! ends, even mail dated just before the import started. Mail that moves or
 //! is deleted between the import's listing and its read never holds the
-//! import's end.
+//! import's end. The stored mail of a folder deleted for good is read once,
+//! even when Graph refuses every read of it.
 
 use crate::domain::mailbox::live_pass::LiveImportPass;
 use crate::domain::mailbox::*;
@@ -17,14 +18,16 @@ use email_api_client::domain::ports::{AlwaysAllowRateLimiter, MailboxTokenSource
 use email_api_client::domain::service::mailbox::MailboxApiService;
 use macro_db_migrator::MACRO_DB_MIGRATIONS;
 use macro_service_urls::MicrosoftGraphUrl;
-use outlook_emulator::{MessageChange, NewMessage, OutlookEmulator, Seed};
+use outlook_emulator::{
+    Fault, FaultError, MessageChange, NewMessage, OutlookEmulator, Route, Seed,
+};
 use sqlx::PgPool;
 use uuid::Uuid;
 
-const ADA: &str = "ada@example.com";
+pub(super) const ADA: &str = "ada@example.com";
 
 /// The emulator's token for the mailbox, whatever the binding.
-struct EmulatorToken(String);
+pub(super) struct EmulatorToken(String);
 
 impl MailboxTokenSource for EmulatorToken {
     async fn access_token(
@@ -36,12 +39,13 @@ impl MailboxTokenSource for EmulatorToken {
     }
 }
 
-type Graph = MailboxApiService<OutlookApiClientRepository, EmulatorToken, AlwaysAllowRateLimiter>;
+pub(super) type Graph =
+    MailboxApiService<OutlookApiClientRepository, EmulatorToken, AlwaysAllowRateLimiter>;
 
 /// What email-service's provider gateway does: the Graph service for a key.
-struct Gateway(Graph);
+pub(super) struct Gateway(pub(super) Graph);
 
-fn access(mailbox: MailboxKey) -> MailboxAccess {
+pub(super) fn access(mailbox: MailboxKey) -> MailboxAccess {
     MailboxAccess {
         link_id: mailbox.link_id,
         sync_generation: mailbox.sync_generation,
@@ -77,7 +81,7 @@ impl MailboxGateway for Gateway {
     }
 }
 
-fn gateway(emulator: &OutlookEmulator) -> Gateway {
+pub(super) fn gateway(emulator: &OutlookEmulator) -> Gateway {
     let url = MicrosoftGraphUrl::from(emulator.graph_url());
     Gateway(MailboxApiService::new(
         OutlookApiClientRepository::for_graph_url(&url).unwrap(),
@@ -99,7 +103,7 @@ fn seed() -> Seed {
 }
 
 /// An Outlook link whose catalog is due, as a first connect leaves it.
-async fn connected(db: &PgPool) -> Uuid {
+pub(super) async fn connected(db: &PgPool) -> Uuid {
     let link = macro_uuid::generate_uuid_v7();
     sqlx::query!(r#"
         INSERT INTO email_links (id,macro_id,fusionauth_user_id,email_address,provider,grant_generation)
@@ -352,5 +356,89 @@ async fn mail_moved_or_deleted_after_the_import_listed_it_settles_on_its_first_r
     .unwrap();
     assert!(import.completed, "the import ends with its last read");
     assert_eq!(import.rows_left, 0);
+    emulator.shutdown().await;
+}
+
+#[sqlx::test(migrator = "MACRO_DB_MIGRATIONS")]
+async fn mail_of_a_folder_deleted_for_good_is_read_once_when_graph_refuses_it(db: PgPool) {
+    let seed = Seed::parse(&format!(
+        "mailboxes:\n  - email: {ADA}\n    folders:\n      - name: Projects\n    messages:\n      \
+         - {{ subject: Filed, folder: Projects, date: \"2026-10-01T09:00:00Z\" }}\n"
+    ))
+    .unwrap();
+    let emulator = OutlookEmulator::start(seed).await.unwrap();
+    let link = connected(&db).await;
+    let repo = PgMailboxSync::new(db.clone());
+    let service = MailboxSyncService::new(
+        repo.clone(),
+        gateway(&emulator),
+        gateway(&emulator),
+        repo.clone(),
+    );
+    assert!(service.discover_once().await.unwrap());
+    for _ in 0..20 {
+        if !service.enumerate_once().await.unwrap() {
+            break;
+        }
+    }
+    assert!(service.reconcile_once().await.unwrap());
+    let filed = emulator.messages(ADA).unwrap().remove(0).id;
+    assert!(stored(&db, link, &filed).await);
+
+    // The folder is emptied out of Deleted Items, and Graph answers 403
+    // ErrorAccessDenied to every read of the mail it held.
+    emulator.delete_folder(ADA, "Projects").unwrap();
+    emulator.inject_fault(Fault {
+        route: Some(Route::MessagesGet),
+        error: Some(FaultError::Forbidden),
+        ..Fault::default()
+    });
+
+    // The discovery that finds the folder gone rechecks its mail, which is
+    // refused three times and abandoned.
+    sqlx::query!(
+        "UPDATE email_sync_streams SET next_run_at = now() WHERE link_id = $1 AND kind = 'folder_catalog'",
+        link
+    )
+    .execute(&db)
+    .await
+    .unwrap();
+    assert!(service.discover_once().await.unwrap());
+    for _ in 0..3 {
+        sqlx::query!(
+            "UPDATE email_message_reconciliation SET available_at = now() WHERE link_id = $1 AND available_at <> 'infinity'",
+            link
+        )
+        .execute(&db)
+        .await
+        .unwrap();
+        assert!(matches!(
+            service.reconcile_once().await,
+            Err(MailboxError::Provider(EmailApiError::Forbidden))
+        ));
+    }
+
+    // Later discoveries leave it abandoned: Graph is not asked again.
+    emulator.clear_requests();
+    for _ in 0..2 {
+        sqlx::query!(
+            "UPDATE email_sync_streams SET next_run_at = now() WHERE link_id = $1 AND kind = 'folder_catalog'",
+            link
+        )
+        .execute(&db)
+        .await
+        .unwrap();
+        assert!(service.discover_once().await.unwrap());
+        assert!(
+            matches!(service.reconcile_once().await, Ok(false)),
+            "a later discovery revived the abandoned message"
+        );
+    }
+    assert!(
+        emulator
+            .requests()
+            .iter()
+            .all(|request| request.route != Some(Route::MessagesGet))
+    );
     emulator.shutdown().await;
 }

@@ -39,6 +39,28 @@ impl SQSWorker {
         .await
     }
 
+    /// Receives at most `max_messages` messages, waiting at most
+    /// `wait_time_seconds` for the first.
+    #[tracing::instrument(skip(self))]
+    pub async fn receive_messages_up_to(
+        &self,
+        max_messages: i32,
+        wait_time_seconds: i32,
+    ) -> anyhow::Result<Vec<aws_sdk_sqs::types::Message>> {
+        receive_messages::receive_messages(
+            &self.inner,
+            &self.queue_url,
+            max_messages.clamp(1, self.max_messages.max(1)),
+            wait_time_seconds,
+        )
+        .await
+    }
+
+    /// How long a receive waits for its first message when the queue is empty.
+    pub fn wait_time_seconds(&self) -> i32 {
+        self.wait_time_seconds
+    }
+
     /// Deletes the messages from the queue.
     #[tracing::instrument(skip(self))]
     pub async fn cleanup_message(

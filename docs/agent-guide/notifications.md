@@ -17,6 +17,11 @@ subscription follows reads, done, clears and new activity within about a second
 on each open tab; a tab in the background can catch up on Chat when it is shown
 again. With unified notifications off, the buttons use their earlier presence
 checks.
+The notification service makes no row for activity it receives while a type
+is turned off in Settings → Notifications ("New email", say), whichever the
+flag. With unified notifications on and numbers off, rows made before stay
+unread, and keep their button lit, until read or done. Mail's number, and the
+Mail dot with unified notifications off, read the setting and go out at once.
 
 Unread numbers are off by default in every environment. Set
 `VITE_ENABLE_NAVIGATION_UNREAD_COUNTS=true` for a frontend build to show numbers
