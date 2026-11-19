@@ -2,11 +2,13 @@ import { t } from '@app/lib/i18n';
 import ArrowUpRightIcon from '@icon/system/regular/arrow-up-right.svg';
 import type { RoutineInput } from '@service-scheduled-action/generated/schemas';
 import { Button } from '@ui';
-import { For, Index, Match, Show, Switch } from 'solid-js';
+import { type Accessor, For, Index, Match, Show, Switch } from 'solid-js';
 import { match } from 'ts-pattern';
-import type { SubRoutineDraft } from '../core/draft';
+import type { RoutineApp, SubRoutineDraft } from '../core/draft';
+import { firstAgent } from '../core/routine-steps';
 import type { RoutineTarget } from '../core/routine-target';
 import { withSubRoutineSteps } from '../core/sub-routines';
+import { ConnectionRows } from './routine-connections';
 import { RoutineSurface } from './routine-editor';
 import { RoutineSteps } from './routine-step-editor';
 import type { RoutineStepSlots } from './routine-steps';
@@ -47,6 +49,7 @@ export function SubRoutineDefinitions(props: {
   onChange(subRoutines: SubRoutineDraft[]): void;
   defaultTarget: RoutineTarget;
   slots: RoutineStepSlots;
+  connected: Accessor<ReadonlySet<string> | undefined>;
 }) {
   // AI writes a step for the routine's own steps; a definition's code reads
   // inputs it doesn't know about, so its steps are changed by hand.
@@ -85,6 +88,24 @@ export function SubRoutineDefinitions(props: {
               defaultTarget={props.defaultTarget}
               slots={slots()}
             />
+            <Show when={definition().apps.length}>
+              <RoutineSurface>
+                <ConnectionRows
+                  apps={definition().apps}
+                  agent={Boolean(firstAgent(definition().steps))}
+                  connected={props.connected}
+                  onChange={(apps: RoutineApp[]) =>
+                    props.onChange(
+                      props.subRoutines.map((item) =>
+                        item.name === definition().name
+                          ? { ...item, apps }
+                          : item
+                      )
+                    )
+                  }
+                />
+              </RoutineSurface>
+            </Show>
           </div>
         )}
       </Index>

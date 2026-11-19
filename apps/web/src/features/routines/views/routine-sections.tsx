@@ -80,6 +80,7 @@ export function routineSections(props: {
             }
             defaultTarget={defaultTarget(draft())}
             slots={props.slots}
+            connected={props.connected}
           />
         </Show>
       )}

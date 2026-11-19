@@ -328,7 +328,7 @@ export function RoutineDetailView(props: {
                         {t('subRoutines.stopSharing')}
                       </Dropdown.Item>
                     </Show>
-                    <Show when={routine().parent}>
+                    <Show when={props.source.canKeepAsOwn()}>
                       <Dropdown.Item
                         disabled={props.source.keepAsOwnPending()}
                         onSelect={() => props.source.keepAsOwn()}

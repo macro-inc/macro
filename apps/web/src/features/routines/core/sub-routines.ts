@@ -58,6 +58,13 @@ export function copyOf(task: RoutineTask): SubRoutineCopyDraft | undefined {
     : undefined;
 }
 
+/** Resolve the copy's name without decoding the parent's other steps. */
+export function wireDefinition(task: RoutineTask, name: string) {
+  return 'steps' in task
+    ? task.sub_routines?.find((definition) => definition.name === name)
+    : undefined;
+}
+
 /** The program's own input values, as a kept copy holds them. */
 export function programInputs(task: RoutineTask): RoutineInput[] {
   return 'steps' in task ? (task.inputs ?? []) : [];

@@ -67,6 +67,7 @@ const mocks = vi.hoisted(() => ({
   sharing: (): boolean => false,
   shared: (): boolean => false,
   stopSharing: vi.fn(),
+  detach: vi.fn(),
 }));
 vi.mock('@core/context/user', () => ({
   useUserId: () => () => 'macro|owner@example.com',
@@ -326,7 +327,7 @@ vi.mock('./queries/schedules', () => ({
     refetch: mocks.refetchUpgrades,
   }),
   useChildrenQuery: () => ({ isSuccess: true, data: [] }),
-  useDetachScheduleMutation: () => ({ mutate: () => {}, isPending: false }),
+  useDetachScheduleMutation: () => ({ mutate: mocks.detach, isPending: false }),
   useUpdateScheduleMutation: () => ({ mutateAsync: mocks.update }),
   useCreateScheduleMutation: () => ({ mutate: mocks.create, isPending: false }),
   useRunScheduleNowMutation: () => ({ mutate: mocks.run, isPending: false }),
@@ -1342,5 +1343,23 @@ describe('sub-routines defined once', () => {
         'Its routine no longer defines this, so it fails when it runs.'
       )
     ).toBeTruthy();
+    openActions();
+    expect(
+      screen.queryByRole('menuitem', { name: 'Keep as my routine' })
+    ).toBeNull();
+    expect(mocks.detach).not.toHaveBeenCalled();
+  });
+
+  it('keeps a copy whose definition still exists using detach', () => {
+    setSchedules([copy, parent]);
+    render(() => <Routine />);
+    openActions();
+    fireEvent.keyDown(
+      screen.getByRole('menuitem', { name: 'Keep as my routine' }),
+      { key: 'Enter' }
+    );
+    expect(mocks.detach).toHaveBeenCalledExactlyOnceWith({
+      scheduleId: 'routine-id',
+    });
   });
 });

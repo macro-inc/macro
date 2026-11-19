@@ -892,6 +892,32 @@ describe('routines with sub-routines', () => {
     );
   });
 
+  it('holds back a definition with apps after its last Ask AI step is removed', () => {
+    const configured: ScheduledAction = {
+      ...parent,
+      task: {
+        steps: [{ type: 'agent', model: 'model', instructions: 'Plan' }],
+        sub_routines: [
+          {
+            ...remind,
+            mcp_servers: [{ app_slug: 'example', server_name: 'Example' }],
+            steps: [
+              {
+                type: 'code',
+                title: 'Remind',
+                source: 'export function main() {}',
+              },
+            ],
+          },
+        ],
+      },
+    };
+    const draft = loadedDraft(configured);
+    expect(validateRoutineDraft(draft)).toBe(
+      'In “Remind me”: Apps are for an Ask AI step. Add one, or remove the apps.'
+    );
+  });
+
   it('keeps a single agent step as a program while it has sub-routines', () => {
     const draft = draftFromSchedule(parent)!;
     const agentOnly = withDraftSteps(draft, [

@@ -15,7 +15,11 @@ import type { ScheduleDraft } from '../core/draft';
 import type { RoutineSnapshot } from '../core/routine';
 import { withDraftSteps } from '../core/routine-draft';
 import { programSteps } from '../core/routine-steps';
-import { subRoutinesFromWire } from '../core/sub-routines';
+import {
+  copyOf,
+  subRoutinesFromWire,
+  wireDefinition,
+} from '../core/sub-routines';
 import { sharesAsTemplate } from '../core/template';
 import { scheduleToEntity } from './entities';
 import {
@@ -142,11 +146,13 @@ export function createRoutineDetailSource(
       .map(toRoutine)
   );
   const parentId = () => raw()?.sub_routine?.parent_id;
+  const rawParent = createMemo(() =>
+    list.isSuccess || list.isError
+      ? list.data?.find((item) => item.id === parentId())
+      : undefined
+  );
   const parent = createMemo(() => {
-    const found =
-      list.isSuccess || list.isError
-        ? list.data?.find((item) => item.id === parentId())
-        : undefined;
+    const found = rawParent();
     if (!found?.id) return undefined;
     const draft = draftFromSchedule(found);
     return {
@@ -159,6 +165,14 @@ export function createRoutineDetailSource(
     onSuccess: () => callbacks.onKept(),
     onError: (error) => callbacks.onError('Failed to keep the routine', error),
   });
+  const canKeepAsOwn = () => {
+    const current = raw();
+    if (!current?.sub_routine || current.owner !== userId()) return false;
+    const copy = copyOf(current.task);
+    if (!copy) return true;
+    const parent = rawParent();
+    return Boolean(parent && wireDefinition(parent.task, copy.subRoutine));
+  };
   const [approving, setApproving] = createSignal(false);
   const save = async (draft: ScheduleDraft) => {
     const previous = raw();
@@ -199,8 +213,9 @@ export function createRoutineDetailSource(
     refreshHistory: () => history.refetch(),
     subRoutines: children,
     parent,
+    canKeepAsOwn,
     keepAsOwn: () => {
-      if (!keep.isPending) keep.mutate({ scheduleId: id() });
+      if (canKeepAsOwn() && !keep.isPending) keep.mutate({ scheduleId: id() });
     },
     keepAsOwnPending: () => keep.isPending,
     codeReview,
@@ -343,9 +358,16 @@ export function createRoutineRowOperations(
     const body = schedule && scheduleToDuplicateBody(schedule);
     if (body) await duplicate.mutateAsync({ body });
   });
-  const keeping = createPerRoutineMutation((id) =>
-    keep.mutateAsync({ scheduleId: id })
-  );
+  const keeping = createPerRoutineMutation(async (id) => {
+    const schedule = find(id);
+    if (!schedule?.sub_routine) return;
+    const copy = copyOf(schedule.task);
+    if (copy) {
+      const parent = find(schedule.sub_routine.parent_id);
+      if (!parent || !wireDefinition(parent.task, copy.subRoutine)) return;
+    }
+    await keep.mutateAsync({ scheduleId: id });
+  });
   return {
     entity(id) {
       const schedule = find(id);

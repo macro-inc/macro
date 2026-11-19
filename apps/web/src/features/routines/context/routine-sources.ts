@@ -42,6 +42,7 @@ export type RoutineDetailSource = {
   /** The routine whose run created this one, when it is still there. */
   parent: Accessor<RoutineParentSummary | undefined>;
   /** Make this sub-routine the owner's own: it stops following its parent. */
+  canKeepAsOwn: Accessor<boolean>;
   keepAsOwn(): void;
   keepAsOwnPending: Accessor<boolean>;
 };
