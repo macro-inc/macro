@@ -111,6 +111,19 @@ describe('prepareEmailBody in Node, without a DOM', () => {
       hasTable: true,
     });
   });
+  it('ignores a signature laid out as a table, shown or hidden', () => {
+    const html =
+      '<div>Thanks, see you Friday.</div><div class="gmail_signature"><table width="470" cellpadding="0"><tr><td><img src="cid:photo"></td><td><b>Alex Example</b><br>Acme</td><td><a href="https://example.com">example.com</a></td></tr></table></div>';
+    expect(prepareEmailBody({ html }).hasTable).toBe(false);
+    expect(
+      prepareEmailBody({ html }, { showQuotedContent: true }).hasTable
+    ).toBe(false);
+    expect(
+      prepareEmailBody({
+        html: `<table><tr><td>Newsletter</td></tr></table>${html}`,
+      }).hasTable
+    ).toBe(true);
+  });
   it('retains document styles and signatures according to explicit options', () => {
     const html =
       '<head><style>p { color: red }</style></head><body><p>A<br></p><span class="gmail_signature_prefix">--</span><div class="gmail_signature">Me</div></body>';

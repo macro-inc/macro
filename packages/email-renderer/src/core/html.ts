@@ -221,11 +221,16 @@ function parseEmailContent(
     stripColorScheme: true,
   });
   const nodes = elements(body);
-  const hasTable = nodes.some((node) => node.tagName === 'table');
   const signatureNode = nodes.find(
     (node) =>
       hasClass(node, 'gmail_signature') ||
       hasClass(node, 'macro-email-signature')
+  );
+  // A signature laid out as a table doesn't make the message a designed
+  // email, whether or not the signature is shown.
+  const signatureNodes = new Set(signatureNode ? elements(signatureNode) : []);
+  const hasTable = nodes.some(
+    (node) => node.tagName === 'table' && !signatureNodes.has(node)
   );
   if (!showQuotedContent) {
     if (signatureNode) {

@@ -211,13 +211,18 @@ const $appendPreviousEmail = (
     // Forwards always embed the original as a non-editable HTML Render Node so
     // the recipient gets the exact original markup. For replies, a table is a
     // good indicator of content we can't convert into editable nodes correctly.
-    const hasTable = Boolean(dom.querySelector('table'));
+    const tables = Array.from(dom.querySelectorAll('table'));
+    const hasTable = tables.length > 0;
     if (replyType === 'forward' || hasTable) {
+      // Same branch the message view takes: personal or table-less emails
+      // get theme-adapted colors, table-layout emails get a white panel. A
+      // table inside the signature doesn't count as a table layout.
+      const hasLayoutTable = tables.some(
+        (table) => !table.closest('.gmail_signature, .macro-email-signature')
+      );
       const htmlNode = $createHtmlRenderNode({
         html: dom.documentElement.innerHTML,
-        // Same branch the message view takes: personal or table-less emails
-        // get theme-adapted colors, table-layout emails get a white panel
-        adaptColors: Boolean(isPersonal) || !hasTable,
+        adaptColors: Boolean(isPersonal) || !hasLayoutTable,
       });
       quoteNode.append(htmlNode);
     } else {
