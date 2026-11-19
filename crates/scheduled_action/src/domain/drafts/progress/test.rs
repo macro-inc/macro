@@ -27,6 +27,7 @@ fn check(ok: bool, failing: Vec<CheckedStepProblems>) -> RoutineCheck {
             run_visibility: Default::default(),
             description: String::new(),
         },
+        missing_apps: Vec::new(),
     }
 }
 
