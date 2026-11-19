@@ -366,6 +366,22 @@ test('Firecracker readiness detects lost telemetry without paging idle operation
   }
 });
 
+test('a heartbeat uses one missing-data mode', () => {
+  const heartbeats = monitors().filter((r) => r.inputs.notifyNoData === true);
+  expect(heartbeats.map((r) => r.name).sort()).toEqual([
+    'firecracker-host-unhealthy',
+    'search-indexer-silent',
+  ]);
+  for (const resource of heartbeats) {
+    expect({
+      name: resource.name,
+      onMissingData: resource.inputs.onMissingData,
+    }).toEqual({ name: resource.name, onMissingData: undefined });
+  }
+  const silent = heartbeats.find((r) => r.name === 'search-indexer-silent');
+  expect(silent?.inputs.noDataTimeframe).toBe(10);
+});
+
 test('Firecracker restore percentiles use an enabled distribution of successful snapshot launches', () => {
   const duration = resources.find(
     (r) => r.name === 'firecracker-restore-duration'
