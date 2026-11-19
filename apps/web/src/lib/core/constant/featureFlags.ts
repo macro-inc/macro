@@ -501,6 +501,12 @@ export const enableCrmThreadExclusions = defineFlag({
   key: 'enable-crm-thread-exclusions',
 });
 
+// Default off in dev and local too; authoring requires the matching server gate.
+export const enableCrmSelectiveEmailContribution = defineFlag({
+  key: 'enable-crm-selective-email-contribution',
+  env: 'ENABLE_CRM_SELECTIVE_EMAIL_CONTRIBUTION',
+});
+
 // Company collections are paused until ready; preserve stored lists while off.
 export const enableCrmLists = defineFlag({
   key: 'enable-crm-lists',

@@ -122,6 +122,13 @@ tools/HTTP/GraphQL surfaces over them.
   edit hooks invalidate preview metadata; no mailbox index is added for counts.
   No worker initializes consent or activates selected contribution.
 
+- Company lists with at most 500 explicit IDs and policy target reads probe the
+  primary key behind `OFFSET 0` before applying team/visibility filters. Keeping a team
+  predicate inside the probe lets stale plans scan the team per ID. For target
+  locks, resolve authorized IDs first, then lock that set in ID order; a locking
+  lateral can lock foreign rows before its outer filter and sort. Larger company
+  ID sets keep their set-based join; the output page limit does not cap input IDs.
+
 - A generic pipeline has `record_type: None` and an unprotected primary column,
   which can change type or be deleted, leaving `primary_column_id` naming no
   column; `referencing_rows` reads tracked pipelines only. Don't add `ON DELETE`

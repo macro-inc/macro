@@ -4,13 +4,11 @@
 
 Org-global Datadog monitors, synthetics, and rollout dashboards. This stack is
 manual and has only a prod stack, even for monitors covering both environments.
-Prod threshold and anomaly monitors are in `monitors/{macrodb,redis,queues,regressions,outlook-sync,routine-suggestions,harness-runtimes,computer-capacity,storage-pool,agent-sessions}.ts`
+Prod threshold and anomaly monitors are in `monitors/{macrodb,redis,queues,regressions,outlook-sync,routine-suggestions,harness-runtimes,computer-capacity,storage-pool,agent-sessions,search-freshness}.ts`
 (`prodMonitor()` in `prod-monitor.ts`), each file with a dashboard graphing its
 monitors that their messages link to; every monitor notifies through `notify.ts`.
 `dashboards/web-performance.ts` holds the web app performance dashboard with the
 APM retention filter and span-based metrics it reads; it has no monitors.
-`dashboards/search-freshness.ts` graphs the search indexer's freshness and loss
-metrics and the event broker's publish counter; it has no monitors yet.
 
 ## Checks
 
@@ -105,11 +103,15 @@ From `infra/`:
   span-based metric, and only counts from the deploy that creates it. Its tool
   metrics count spans with `gen_ai.conversation.id`, one per session tool call;
   `execute_tool*` alone double-counts tools reached through MCP.
-- `dashboards/search-freshness.ts` reads the `search.index.*` metrics that
+- `monitors/search-freshness.ts` reads the `search.index.*` metrics that
   `services/search_processing_service/src/inbound/kafka_consumer/metrics.rs`
-  records and `event_broker.publishes` from `crates/macro_event_broker`; its
-  header is the name and tag contract. `search.index.oldest_pending_ms` is per
-  task and partition: read it with `max`.
+  records, `kafka.consumer.offset_resets` from `crates/kafka_util` and
+  `event_broker.publishes` from `crates/macro_event_broker`; its header is the
+  name and tag contract. `search.index.oldest_pending_ms` is per task and
+  partition: read it with `max`. Its retention monitors repeat each topic's
+  retention from `infra/stacks/kafka-cluster/topics.ts`; change them together.
+  Apply it only after the indexer that records these metrics is deployed:
+  its no-readings monitor fires on missing data.
 - `monitors/storage-pool.ts` reads the `db.client.connection.*` pool metrics
   cloud-storage-service records and the `perform_unified_search` span fields
   from `crates/search_service`; its header is the name and tag contract.
