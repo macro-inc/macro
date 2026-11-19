@@ -667,6 +667,7 @@ mod code_mode {
         assert!(code_mode_instructions.contains("Code mode is on"));
         assert!(code_mode_instructions.contains("ExecuteCode"));
         assert!(code_mode_instructions.contains("DescribeCodeTools"));
+        assert!(code_mode_instructions.contains("Never guess an SDK method"));
         for leaked in [
             "NameSearch",
             "ReadContent",
