@@ -336,7 +336,8 @@ impl EmailRuleDiscoveryReader for Reader<'_> {
             bytes: i64,
             in_team: bool,
         }
-        let rows = sqlx::query_as::<_, Value>(&query)
+        let rows = sqlx::QueryBuilder::<sqlx::Postgres>::new(query)
+            .build_query_as::<Value>()
             .bind(id)
             .bind(after)
             .bind(limit as i64)
@@ -427,7 +428,8 @@ impl EmailRuleDiscoveryReader for Reader<'_> {
                 bytes: i64,
                 in_team: bool,
             }
-            let rows = sqlx::query_as::<_, Value>(&query)
+            let rows = sqlx::QueryBuilder::<sqlx::Postgres>::new(query)
+                .build_query_as::<Value>()
                 .bind(ids)
                 .bind(limit_per_source as i64)
                 .bind(bytes as i64)
@@ -529,7 +531,8 @@ impl EmailRuleDiscoveryReader for Reader<'_> {
             domain: Option<String>,
             bytes: i64,
         }
-        let rows = sqlx::query_as::<_, Contact>(&query)
+        let rows = sqlx::QueryBuilder::<sqlx::Postgres>::new(query)
+            .build_query_as::<Contact>()
             .bind(link)
             .bind(after)
             .bind(limit as i64)
