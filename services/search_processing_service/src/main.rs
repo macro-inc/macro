@@ -2,7 +2,7 @@
 use std::{sync::Arc, time::Duration};
 
 #[cfg(feature = "processing")]
-use crate::inbound::kafka_consumer::{KafkaProcessingContext, run_event_consumer};
+use crate::inbound::kafka_consumer::{IndexMetrics, KafkaProcessingContext, run_event_consumer};
 use crate::{
     api::context::{ApiContext, AuthorizationService},
     config::DatabaseUrlReadonly,
@@ -163,7 +163,7 @@ async fn supervise_event_consumer(
 
 #[tokio::main]
 async fn main() -> anyhow::Result<()> {
-    MacroEntrypoint::default().init();
+    let telemetry = MacroEntrypoint::default().init();
 
     // Parse our configuration from the environment.
     let config = Config::from_env().context("expected to be able to generate config")?;
@@ -328,6 +328,7 @@ async fn main() -> anyhow::Result<()> {
                 mailbox_delete_tracker.clone(),
                 shutdown_token.clone(),
             ),
+            metrics: IndexMetrics::global(),
         };
         tokio::spawn(supervise_event_consumer(
             config.kafka_brokers.as_ref().to_owned(),
@@ -370,6 +371,9 @@ async fn main() -> anyhow::Result<()> {
     let consumer_result = consumer_supervisor
         .await
         .context("search processing event consumer supervisor failed");
+    if let Err(error) = telemetry.force_flush().await {
+        tracing::warn!(error = ?error, "could not flush telemetry after the consumer stopped");
+    }
 
     // Followers stop at the cancelled token; OpenSearch finishes their tasks.
     #[cfg(feature = "processing")]
@@ -392,6 +396,9 @@ async fn main() -> anyhow::Result<()> {
     }
 
     #[cfg(feature = "processing")]
-    consumer_result?;
-    api_result
+    let result = consumer_result.and(api_result);
+    #[cfg(not(feature = "processing"))]
+    let result = api_result;
+    telemetry.shutdown();
+    result
 }

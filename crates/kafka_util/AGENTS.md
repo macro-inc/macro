@@ -38,3 +38,9 @@ environments, with trace propagation and typed grouped/ungrouped consumers.
   size is still fetched whole.
 - Consumer-group lag cannot describe an ungrouped consumer; use application
   positions and explicitly handle unknown offsets and prefetched records.
+- `position` and `cached_watermarks` read the client's own state without a
+  broker request, and the fetcher keeps the watermarks current while the
+  application is not receiving, so they work where statistics go stale. A
+  partition's high watermark stops moving once its prefetch queue is full.
+- `KafkaEventProducer::send` records the payload's event type on the
+  `kafka.publish` span as `macro.event.type`.

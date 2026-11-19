@@ -17,6 +17,7 @@ processing = [
   "dep:macro_event_broker",
   "dep:macro_event_topics",
   "dep:models_properties",
+  "dep:opentelemetry",
   "dep:projects",
   "dep:properties",
   "dep:rdkafka",
@@ -105,6 +106,7 @@ models_properties = { path = "../../crates/models_properties", optional = true }
 models_search = { path = "../../crates/models_search" }
 nom = { workspace = true }
 opensearch_client = { path = "../../crates/opensearch_client" }
+opentelemetry = { workspace = true, features = ["metrics"], optional = true }
 ensure_exists = { path = "../../crates/ensure_exists", features = ["dynamodb"] }
 pdfium-render = { workspace = true, optional = true }
 properties = { path = "../../crates/properties", default-features = false, features = [
@@ -139,6 +141,6 @@ workspace-hack = { version = "0.1", path = "../../crates/workspace-hack" }
 
 [dev-dependencies]
 opentelemetry = { workspace = true, features = ["trace"] }
-opentelemetry_sdk = { workspace = true, features = ["trace", "testing"] }
+opentelemetry_sdk = { workspace = true, features = ["metrics", "trace", "testing"] }
 tracing-opentelemetry = { workspace = true }
 tracing-subscriber = { workspace = true }

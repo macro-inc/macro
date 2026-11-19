@@ -3,6 +3,7 @@ use crate::domain::mailbox::live_pass::StreamKind;
 use email_api_client::domain::models::FolderRole;
 use macro_db_migrator::MACRO_DB_MIGRATIONS;
 
+mod crm_cleanup;
 mod import_pacing;
 mod import_reads;
 mod live_pass;

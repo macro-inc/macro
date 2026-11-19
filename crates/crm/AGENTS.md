@@ -286,6 +286,9 @@ tools/HTTP/GraphQL surfaces over them.
   their team and email address. Company-less contacts add no independent
   thread-access grant, but hidden ones suppress their team's
   CRM-derived grant for members; independent access grants still apply.
+  For a work address whose sole holder is a manual unfiled contact with that
+  primary address, sync refreshes the existing contact and preserves its company
+  choice. Domain company population still runs on its own.
 - Every address a contact is known by is a row in `crm_contact_emails`, stored
   trimmed and lowercased. `crm_contacts.email` is the primary address, and a
   trigger records it in that table. Find a contact by address through
@@ -302,7 +305,10 @@ tools/HTTP/GraphQL surfaces over them.
   it. A mailbox source is recorded per contact and mailbox, not per address:
   `depopulate_contact` keeps it while that mailbox still has mail with another
   of the contact's addresses (`other_address_mail.sql`), checked before the
-  domain lock like population's mailbox scan.
+  domain lock like population's mailbox scan. Mail the provider no longer has
+  (`provider_missing`, an Outlook deletion) counts nowhere: not there, not in
+  the email service's cleanup gate, not in `interactions.sql`; keep the three
+  in step, as a Gmail deletion removes the row.
 - The Sales migration (`SALES_BACKFILL.md`) is forward-only and additive —
   its down migration refuses to erase completion or user edits; never revert
   it to undo a bad migration, only the application code that reads it.

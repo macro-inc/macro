@@ -314,6 +314,9 @@ or New call. Add contact is available once the company is loaded and visible,
 including companies without a domain; contact emails may use any valid domain.
 Email-sync gates, recipients, and task associations still apply. With company email
 sync off, New email stays visible but disabled; New company must not replace it.
+When email sync processes a message sent to a manual unfiled contact's work
+address, it reuses that contact and preserves the Company field. It can still
+create or update the work domain's company independently.
 Keyboard focus and
 higher-priority composers suppress the floating action; leaving the section
 restores the default action. Search remains visible for empty lists.
