@@ -5,9 +5,11 @@ import { fireAndForget } from '@core/util/fireAndForget';
 import { formatRelativeDate } from '@core/util/time';
 import { formatDateAndTime } from '@entity';
 import ShareIcon from '@icon/share.svg';
+import ArrowClockwiseIcon from '@icon/system/regular/arrow-clockwise.svg';
 import ArrowUpRightIcon from '@icon/system/regular/arrow-up-right.svg';
 import CopyIcon from '@icon/system/regular/copy.svg';
 import DotsIcon from '@icon/system/regular/dots-three.svg';
+import LinkBreakIcon from '@icon/system/regular/link-break.svg';
 import SparkleIcon from '@icon/system/regular/sparkle.svg';
 import TrashIcon from '@icon/system/regular/trash-simple.svg';
 import { Button, cn, Dropdown, ToggleSwitch, Tooltip } from '@ui';
@@ -346,11 +348,13 @@ export function RoutineDetailView(props: {
                         disabled={props.stopSharingPending}
                         onSelect={props.onStopSharing}
                       >
+                        <LinkBreakIcon class="size-4" />
                         {t('subRoutines.stopSharing')}
                       </Dropdown.Item>
                     </Show>
                     <Show when={props.onRetrySharing}>
                       <Dropdown.Item onSelect={props.onRetrySharing}>
+                        <ArrowClockwiseIcon class="size-4" />
                         {t('subRoutines.retrySharing')}
                       </Dropdown.Item>
                     </Show>

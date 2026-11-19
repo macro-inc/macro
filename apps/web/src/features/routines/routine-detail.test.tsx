@@ -1625,7 +1625,11 @@ describe('sub-routines defined once', () => {
     openActions();
 
     expect(screen.queryByRole('menuitem', { name: 'Share' })).toBeNull();
-    fireEvent.keyDown(screen.getByRole('menuitem', { name: 'Stop sharing' }), {
+    const stopSharing = screen.getByRole('menuitem', { name: 'Stop sharing' });
+    expect(
+      stopSharing.querySelector('[data-macro-icon="link-break"]')
+    ).toBeTruthy();
+    fireEvent.keyDown(stopSharing, {
       key: 'Enter',
     });
     expect(mocks.stopSharing).toHaveBeenCalledExactlyOnceWith({
@@ -1654,12 +1658,13 @@ describe('sub-routines defined once', () => {
     mocks.templateError = () => true;
     render(() => <Routine />);
     openActions();
-    fireEvent.keyDown(
-      screen.getByRole('menuitem', { name: 'Retry sharing status' }),
-      {
-        key: 'Enter',
-      }
-    );
+    const retry = screen.getByRole('menuitem', {
+      name: 'Retry sharing status',
+    });
+    expect(
+      retry.querySelector('[data-macro-icon="arrow-clockwise"]')
+    ).toBeTruthy();
+    fireEvent.keyDown(retry, { key: 'Enter' });
     expect(mocks.refetchTemplate).toHaveBeenCalledOnce();
   });
 
