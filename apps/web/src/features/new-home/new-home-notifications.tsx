@@ -44,6 +44,7 @@ export function NewHomeNotificationsView() {
             <SidebarCreateHeader
               title={title()}
               label={t('home.newChat')}
+              createText={t('home.newChat')}
               onCreate={controls.closePreview}
               actions={
                 <>

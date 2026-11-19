@@ -45,7 +45,11 @@ export function NewHomeTabs(props: {
     },
   ];
   return (
-    <div ref={setFrame} class="shrink-0 px-3 pb-1">
+    // The New Chat button's insets, so the two line up and share a width.
+    <div
+      ref={setFrame}
+      class="shrink-0 px-(--sidebar-gutter) pt-(--sidebar-gutter) pb-1"
+    >
       <Tabs
         aria-label={t('home.views')}
         fullWidth

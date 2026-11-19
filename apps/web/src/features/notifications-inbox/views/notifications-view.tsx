@@ -986,7 +986,15 @@ export function NotificationsView(props: NotificationsViewProps) {
                       })
                     }
                   </Show>
-                  <div class="shrink-0 px-3 pb-1">
+                  {/* In a frame, All and Unread line up with its New Chat
+                      button and tabs. */}
+                  <div
+                    class={
+                      props.frame
+                        ? 'shrink-0 px-(--sidebar-gutter) pb-1'
+                        : 'shrink-0 px-3 pb-1'
+                    }
+                  >
                     <InboxStatusTabs
                       status={filters.filters().status}
                       onChange={filters.setStatus}

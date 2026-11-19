@@ -35,6 +35,7 @@ function DesktopHomeHeader(props: {
       <SidebarCreateHeader
         title={props.frame?.title() ?? 'Home'}
         label={props.frame ? t('home.newChat') : 'New chat'}
+        createText={props.frame ? t('home.newChat') : undefined}
         onCreate={props.onNewChat}
         actions={<HomeFilterDropdown />}
         searchLabel={searchLabel()}
