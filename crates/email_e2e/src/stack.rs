@@ -556,7 +556,7 @@ impl Stack {
     }
 
     /// Whether `email_focus_worker` is done with the thread and left it
-    /// unclassified because its owner does not have the Focus flag. Nothing
+    /// unclassified because nobody whose tab shows it has the Focus flag. Nothing
     /// else the worker does shows that, so the stack has it log the threads
     /// it leaves at debug.
     pub fn focus_skipped_without_flag(&self, thread_id: &str) -> bool {

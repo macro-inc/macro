@@ -266,10 +266,13 @@ tools — hexagonal, heavily feature-gated.
   `NEW_INVITES_STAY_OUT` in `domain/focus/rule.rs` is the switch for new invites.
   `stale_threads` restates `domain/focus/calendar.rs`'s test for a change in SQL;
   change both.
-- Focus classifies an inbox only while its owner is in the rollout
-  (`FocusEnrollment`, the worker's locally evaluated `enable-email-focus` flag). Check it
+- Focus classifies an inbox only while someone whose Focus tab shows it is in the
+  rollout (`FocusEnrollment`, the worker's locally evaluated `enable-email-focus`
+  flag): its owner, or a user it is linked to (`macro_user_links.primary_macro_id`,
+  read as `delegates` by `thread_inbox`, `inboxes_with_focus` and
+  `syncing_inboxes`), so a linked inbox follows its primary user's flag. Check it
   after `thread_inbox` and before any mail is read. `enrolled_inboxes` checks every
-  `syncing_inboxes` owner, so an owner who joins is found without mail, and
+  `syncing_inboxes` inbox, so a person who joins is found without mail, and
   `backfill` fills one inbox several threads at a time. The sweep goes inbox by
   inbox (`inboxes_with_focus` plus those seen enrolled) and leaves an inbox being
   backfilled to the backfill, so no thread is classified twice at once; `stale_threads` reads one

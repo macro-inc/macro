@@ -16,6 +16,7 @@ fn inbox(n: u128) -> FocusInboxOwner {
     FocusInboxOwner {
         link_id: Uuid::from_u128(n),
         owner: MacroUserIdStr::try_from_email(&format!("owner{n}@acme.example")).unwrap(),
+        delegates: Vec::new(),
     }
 }
 
@@ -240,6 +241,7 @@ async fn fill_speed(pool: Pool<Postgres>) {
                 &FocusInboxOwner {
                     link_id,
                     owner: MacroUserIdStr::try_from_email(&owner).unwrap(),
+                    delegates: Vec::new(),
                 },
                 chrono::Duration::days(30),
                 THREADS_AT_ONCE,
