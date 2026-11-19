@@ -5,6 +5,7 @@ use std::borrow::Cow;
 use crate::{Result, error::OpensearchClientError};
 
 use opensearch_query_builder::*;
+use unicode_segmentation::UnicodeSegmentation;
 
 /// Containing keys for the title and content fields
 pub struct Keys<'a> {
@@ -36,7 +37,11 @@ pub(crate) struct CreateQueryParams<'a> {
     pub term: &'a str,
 }
 
-/// Creates a query for a given term
+/// Creates a query for a given term. A partial term that is one word of at
+/// least [`MIN_PREFIX_LEN`] characters matches as an uncapped prefix
+/// ([`single_word_prefix`]); any other partial term, a shorter word or several
+/// words, stays a `match_phrase_prefix` that expands to only the first
+/// `max_expansions` terms of a shard.
 pub(crate) fn create_query<'a>(params: CreateQueryParams<'a>) -> QueryType<'a> {
     let CreateQueryParams {
         query_key,
@@ -48,10 +53,12 @@ pub(crate) fn create_query<'a>(params: CreateQueryParams<'a>) -> QueryType<'a> {
         QueryKey::MatchPhrase => {
             QueryType::MatchPhrase(MatchPhraseQuery::new(field.to_string(), term.to_string()))
         }
-        QueryKey::MatchPhrasePrefix => QueryType::MatchPhrasePrefix(
-            MatchPhrasePrefixQuery::new(field.to_string(), term.to_string())
-                .max_expansions(MATCH_PHRASE_PREFIX_MAX_EXPANSIONS),
-        ),
+        QueryKey::MatchPhrasePrefix => single_word_prefix(field, term).unwrap_or_else(|| {
+            QueryType::MatchPhrasePrefix(
+                MatchPhrasePrefixQuery::new(field.to_string(), term.to_string())
+                    .max_expansions(MATCH_PHRASE_PREFIX_MAX_EXPANSIONS),
+            )
+        }),
         QueryKey::Regexp => {
             QueryType::Regexp(RegexpQuery::new(field.to_string(), term.to_string()))
         }
@@ -62,34 +69,69 @@ pub(crate) fn create_query<'a>(params: CreateQueryParams<'a>) -> QueryType<'a> {
 /// Shorter prefixes expand to too many tokens.
 const MIN_PREFIX_LEN: usize = 3;
 
+/// The one word of a term the analyzer reads as a single token. The standard
+/// tokenizer, which every field these queries search uses, splits text at the
+/// Unicode (UAX #29) word boundaries `unicode_words` finds: `con.`, `naïve`,
+/// `o'brien` and `node.js` are one word, `c++` is the word `c`, and `e-mail`,
+/// `東京` and `gab@macro.com` are several.
+fn single_word(term: &str) -> Option<&str> {
+    let mut words = term.unicode_words();
+    let word = words.next()?;
+    words.next().is_none().then_some(word)
+}
+
+/// A prefix query over every token of `field` that starts with `term`'s one
+/// word, when the term is one word of at least [`MIN_PREFIX_LEN`] characters.
+/// `match_phrase_prefix` keeps only the first `max_expansions` terms of a
+/// shard that start with the prefix, before any filter, and silently drops
+/// the matches past them; OpenSearch also expands it again for every inner hit
+/// of every returned parent. `match_bool_prefix` of one token is a prefix
+/// query, which expands lazily, keeps every match and scores as a constant.
+///
+/// It is given the word, not the term: `match_bool_prefix` reads a last token
+/// followed by other characters as finished, so `con.` would match only the
+/// word `con`.
+fn single_word_prefix<'a>(field: &str, term: &str) -> Option<QueryType<'a>> {
+    let word = single_word(term)?;
+    if word.chars().count() < MIN_PREFIX_LEN {
+        return None;
+    }
+    Some(QueryType::MatchBoolPrefix(MatchBoolPrefixQuery::new(
+        field.to_string(),
+        word.to_string(),
+    )))
+}
+
 /// Builds the per-term query a `has_child` clause runs against children's
 /// `content`.
 ///
-/// - `exact` match type, a quoted phrase (term with whitespace), or a term
-///   shorter than [`MIN_PREFIX_LEN`] → `match_phrase`.
-/// - A single ASCII word → `match_bool_prefix`, a prefix query over every
-///   token starting with the word.
-/// - Anything else (punctuation, non-ASCII text the analyzer may split into
-///   several tokens) → `match_phrase_prefix`.
+/// - `exact` match type or a quoted phrase (term with whitespace) →
+///   `match_phrase`.
+/// - One word → an uncapped prefix ([`single_word_prefix`]), or
+///   `match_phrase` when the word is shorter than [`MIN_PREFIX_LEN`]: `c++`
+///   is the one-character word `c`, so it matches `C++` and not every word
+///   starting with `c`.
+/// - Several words (`e-mail`, CJK text) → `match_phrase` when the term is
+///   shorter than [`MIN_PREFIX_LEN`], else `match_phrase_prefix`, which keeps
+///   the words adjacent but expands the last one to only the first
+///   `max_expansions` terms of a shard. OpenSearch has no phrase prefix that
+///   expands every match.
 ///
-/// The single word avoids `match_phrase_prefix` because OpenSearch expands its
-/// prefix again for every inner hit of every returned parent, and keeps only
-/// the first `max_expansions` terms of the shard, silently dropping the
-/// matches past them. A prefix query expands lazily and keeps every match.
-/// Its children score as a constant, so inner hits come back in index order.
+/// Children matched by a prefix score as a constant, so inner hits come back
+/// in index order.
 pub(crate) fn child_content_query<'a>(term: &str, match_type: &str) -> QueryType<'a> {
-    let exact = match_type == "exact"
-        || term.chars().any(char::is_whitespace)
-        || term.chars().count() < MIN_PREFIX_LEN;
-    if exact {
-        return QueryType::MatchPhrase(MatchPhraseQuery::new("content", term.to_string()));
+    let phrase = || QueryType::MatchPhrase(MatchPhraseQuery::new("content", term.to_string()));
+    if match_type == "exact" || term.chars().any(char::is_whitespace) {
+        return phrase();
     }
 
-    let single_word = term.chars().all(|c| c.is_ascii_alphanumeric());
-    if single_word {
-        return QueryType::MatchBoolPrefix(MatchBoolPrefixQuery::new("content", term.to_string()));
+    if single_word(term).is_some() {
+        return single_word_prefix("content", term).unwrap_or_else(phrase);
     }
 
+    if term.chars().count() < MIN_PREFIX_LEN {
+        return phrase();
+    }
     QueryType::MatchPhrasePrefix(
         MatchPhrasePrefixQuery::new("content", term.to_string())
             .max_expansions(MATCH_PHRASE_PREFIX_MAX_EXPANSIONS),
