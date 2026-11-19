@@ -1588,6 +1588,19 @@ async fn a_single_agent_stored_with_stray_fields_is_saved_without_them() {
                 .is_some()
         );
     }
+    // Empty lists the same way: a rename keeps the row as it was.
+    let mut empty = agent.clone();
+    empty["inputs"] = json!([]);
+    empty["sub_routines"] = json!([]);
+    svc.repo.actions.lock().unwrap()[0].task = empty.clone();
+    for (name, task) in [("empty echoed", &empty), ("empty rebuilt", &agent)] {
+        let renamed = svc
+            .update_action(edit_receipt(id), update(name, task), Requester::Person)
+            .await
+            .unwrap();
+        assert_eq!(renamed.task, empty, "{name}");
+    }
+    svc.repo.actions.lock().unwrap()[0].task = stored.clone();
     svc.set_enabled(edit_receipt(id), false, Requester::Person)
         .await
         .unwrap();

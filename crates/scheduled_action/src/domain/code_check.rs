@@ -89,6 +89,11 @@ pub async fn checked_task(
     else {
         return Ok(checked);
     };
+    // A single agent keeps the fields it was stored with: its parser skips
+    // them, so dropping them would only change the stored row.
+    if !fields.contains_key("steps") {
+        return Ok(checked);
+    }
     // No definitions or inputs is stored as none, as a build from before
     // them reads a program: it refuses fields it doesn't know.
     for field in ["sub_routines", "inputs"] {
@@ -99,9 +104,6 @@ pub async fn checked_task(
         {
             fields.remove(field);
         }
-    }
-    if !fields.contains_key("steps") {
-        return Ok(checked);
     }
     if program.code_steps().is_empty() {
         fields.remove("sdk");
