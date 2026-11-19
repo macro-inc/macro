@@ -1,0 +1,35 @@
+packages/sdk/generated/agent-harness/types.gen.ts
+  s_e47bee9837a594::t_630f9cf73bd747 1714-1718,1971-2018,2051,2144-2181,2196-2209,2617-2618,2620,2782,3191-3253,3603-3616,5386
+packages/sdk/specs/agent-harness.json
+  s_e47bee9837a594::t_630f9cf73bd747 3468,6808-6812,7214-7298,7345-7355,7482-7535,7550-7568,8167-8168,8356,9171-9244,9679-9694
+packages/sdk-ocaml/generated/agent_harness.ml
+  s_e47bee9837a594::t_933b7dc815dc76 4725-4747,5099,5109,5119,5153-5340,5409-5410,5414,5422,5430,5447,5475-5476,5496,5506,5516,6057-6084,7054-7180
+  s_e47bee9837a594::t_dcc22bb4b4e3d8 7181
+packages/sdk-ocaml/generated/agent_harness.mli
+  s_e47bee9837a594::t_933b7dc815dc76 2732-2741,2966,2992-3093,3134-3135,3139,3159,3185,3460-3473,4074-4149
+  s_e47bee9837a594::t_f28afa1c5adabc 4150
+packages/sdk-ocaml/generated/untyped.txt
+  s_e47bee9837a594::t_933b7dc815dc76 11
+packages/sdk/generated/agent-harness/index.ts
+  s_e47bee9837a594::t_630f9cf73bd747 4
+apps/web/src/lib/service-clients/service-agent-harness/generated/schemas/programLanguage.ts
+  s_e47bee9837a594::t_cb113da24fe47a 10-11,20
+apps/web/src/lib/service-clients/service-agent-harness/openapi.json
+  s_e47bee9837a594::t_8028f1d29062c8 8167-8168
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.7.7",
+  "base_commit_sha": "a49fcd82454f601a1cab654f2dba03bafd7902f1",
+  "prompts": {},
+  "sessions": {
+    "s_e47bee9837a594": {
+      "agent_id": {
+        "tool": "claude",
+        "id": "5703ce97-1923-419e-b892-abdf036675c3",
+        "model": "claude-opus-5-5"
+      },
+      "human_author": "Eric Hayes <56524199+ehayes2000@users.noreply.github.com>"
+    }
+  }
+}
