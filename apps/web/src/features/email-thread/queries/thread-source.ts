@@ -1,3 +1,4 @@
+import { cacheSessionGeneration } from '@graphql-cache/session-generation';
 import { invalidateInvitationScheduling } from '@queries/calendar/invitations';
 import { isListedLocalDraft } from '@queries/email/local-draft-entities';
 import { createLocalDraftSource } from '@queries/email/local-draft-source';
@@ -114,33 +115,43 @@ export function createEmailThreadSource(
   query: ThreadQueryResult<ThreadQueryData>
 ): EmailThreadSource & { isLocalDraft: Accessor<boolean> } {
   // Status guards prevent a pending Solid resource from suspending its owner.
-  const snapshot = createMemo<{ requested: string; thread?: EmailThread }>(
-    (previous) => {
-      const requested = threadId();
-      if (!query.isSuccess && !query.isError) {
-        // Resolving a local handle changes the query key, but must not unmount
-        // an open composer while the same thread's canonical page loads.
-        return {
-          requested,
-          thread:
-            previous?.requested === requested ? previous.thread : undefined,
-        };
-      }
-      const data = query.data?.thread;
-      if (!data) return { requested };
-      // Cache aliases and the async identity lookup have separate subscribers.
-      // Keep the last verified row until both observe the canonical identity.
+  const snapshot = createMemo<{
+    requested: string;
+    generation: string;
+    thread?: EmailThread;
+  }>((previous) => {
+    const requested = threadId();
+    const { epoch: generation, paused } = cacheSessionGeneration.state();
+    if (paused) return { requested, generation };
+    if (!query.isSuccess && !query.isError) {
+      // Resolving a local handle changes the query key, but must not unmount
+      // an open composer while the same thread's canonical page loads.
       return {
         requested,
+        generation,
         thread:
-          data.db_id === requested || data.db_id === query.resolvedThreadId
-            ? toEmailThread(data)
-            : previous?.requested === requested
-              ? previous.thread
-              : undefined,
+          previous?.generation === generation &&
+          previous.requested === requested
+            ? previous.thread
+            : undefined,
       };
     }
-  );
+    const data = query.data?.thread;
+    if (!data) return { requested, generation };
+    // Cache aliases and the async identity lookup have separate subscribers.
+    // Keep the last verified row until both observe the canonical identity.
+    return {
+      requested,
+      generation,
+      thread:
+        data.db_id === requested || data.db_id === query.resolvedThreadId
+          ? toEmailThread(data)
+          : previous?.generation === generation &&
+              previous.requested === requested
+            ? previous.thread
+            : undefined,
+    };
+  });
   const local = createLocalDraftSource(() => true);
   const discoveringDrafts = () => !local.ready();
   const thread = () => {

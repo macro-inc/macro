@@ -1356,9 +1356,17 @@ export function normalizedCacheExchange(
         span?: Span
       ): Promise<boolean> {
         let applied = true;
+        const generation =
+          typeof op.context.cacheSessionGeneration === 'string'
+            ? op.context.cacheSessionGeneration
+            : undefined;
+        const current = () =>
+          isCurrent() &&
+          (generation === undefined ||
+            cacheSessionGeneration.isCurrent(generation));
         span?.setAttr('cache.effect_count', effects.length);
         for (const effect of effects) {
-          if (!isCurrent()) return false;
+          if (!current()) return false;
           const effectSpan = span?.span(
             effect.kind === 'write'
               ? 'graphql.subscription.cache_write'
@@ -1367,17 +1375,14 @@ export function normalizedCacheExchange(
           try {
             if (effect.kind === 'write') {
               await host.writeQuery({
-                generation:
-                  typeof op.context.cacheSessionGeneration === 'string'
-                    ? op.context.cacheSessionGeneration
-                    : undefined,
+                generation,
                 query: queryText(op),
                 operationName: operationName(op),
                 variables: op.variables as Record<string, unknown> | undefined,
                 data: effect.data,
               });
             } else {
-              await host.deleteRecords([effect.key]);
+              await host.deleteRecords([effect.key], generation);
             }
           } catch (error) {
             applied = false;
@@ -1392,7 +1397,7 @@ export function normalizedCacheExchange(
             effectSpan?.end();
           }
         }
-        return applied && isCurrent();
+        return applied && current();
       }
 
       // Persistence is still ordered/durable, but foreground query consumers do

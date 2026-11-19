@@ -426,16 +426,17 @@ async fn delete<S: PredicateIndexStorage>(
 /// This uses the already persisted policy and never requests server permission.
 pub async fn resume_crm_retirement<S: PredicateIndexStorage>(
     engine: &mut Engine<S>,
-) -> Result<(), EngineError<S::Error>> {
+) -> Result<Option<AuthorityTransition>, EngineError<S::Error>> {
     let Some(pending) = engine.unfinished_retirement().await? else {
-        return Ok(());
+        return Ok(None);
     };
     let Some(policy) = pending.policy else {
-        return Ok(());
+        return Ok(None);
     };
     let current = engine.current_authority(&pending.identity).await?;
-    transition_crm_authority(engine, &pending.identity, current.generation, policy).await?;
-    Ok(())
+    transition_crm_authority(engine, &pending.identity, current.generation, policy)
+        .await
+        .map(Some)
 }
 
 /// Apply one fresh proof against the generation captured before its request.

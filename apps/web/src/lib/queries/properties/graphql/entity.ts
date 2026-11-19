@@ -6,6 +6,7 @@ import {
   executeOptimisticMutation,
   optimisticMutationDispositionOf,
 } from '@graphql-cache/index';
+import { cacheSessionGeneration } from '@graphql-cache/session-generation';
 import { propertyValueToApi } from '@property/api/converters';
 import type {
   Property,
@@ -390,7 +391,8 @@ type EntityPropertyExecution = Parameters<
 async function executeGraphqlEntityPropertyMutation(
   { client, mutation, input, context }: EntityPropertyExecution,
   onEnqueued?: () => void,
-  prepareGrouped?: PrepareGroupedPropertyUpdates
+  prepareGrouped?: PrepareGroupedPropertyUpdates,
+  authorizationEpoch = cacheSessionGeneration.capture()
 ) {
   const args = await prepareMutationArgs(input, prepareGrouped);
   const variables: SetEntityPropertyMutationVariables = {
@@ -410,6 +412,7 @@ async function executeGraphqlEntityPropertyMutation(
         { setEntityProperty: args.optimisticProperty },
         {
           ...args.optimisticCache,
+          authorizationEpoch,
           uuid: entityPropertyOptimisticMutationUuid(args),
           onEnqueued,
         }
@@ -419,7 +422,8 @@ async function executeGraphqlEntityPropertyMutation(
   if (
     disposition.kind === 'queued' &&
     mutationResult.data == null &&
-    args.optimisticProperty
+    args.optimisticProperty &&
+    cacheSessionGeneration.isCurrent(authorizationEpoch)
   ) {
     return {
       ...mutationResult,
@@ -544,6 +548,7 @@ export function createGraphqlBulkSaveEntityPropertiesMutation<Context = void>(
     mutation: SetEntityPropertyDocument,
     client: getGraphqlSoupClient(),
     execute: async ({ client, mutation, input, context }) => {
+      const authorizationEpoch = cacheSessionGeneration.capture();
       let latestResult:
         | OperationResult<
             SetEntityPropertyMutation,
@@ -574,7 +579,8 @@ export function createGraphqlBulkSaveEntityPropertiesMutation<Context = void>(
                   context,
                 },
                 acknowledge,
-                prepareGrouped
+                prepareGrouped,
+                authorizationEpoch
               );
               acknowledge();
               const disposition = mutationDisposition(result);

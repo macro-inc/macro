@@ -59,6 +59,11 @@ profile sockets must fit the Unix socket path limit.
 - Not in the stack: the notification, search, contacts and calendar services.
   New mail does not appear in an open list by itself; sync, then open.
 
+`authority-requests.spec.ts` counts permission reads through inbox navigation,
+thread reads and draft autosaves against the real services. Its Soup frames are
+protocol fixtures: the stack's HTTP recording proxy cannot relay WebSocket
+upgrades. Those counts measure client frame handling, not live Kafka delivery.
+
 ## Writing a test
 
 ```ts

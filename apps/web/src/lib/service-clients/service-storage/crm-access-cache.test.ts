@@ -135,6 +135,41 @@ it('uses one proof for a scripted inbox, thread, draft and realtime session', as
   expect(mocks.retire).not.toHaveBeenCalled();
 });
 
+it('refetches only after the latest overlapping retirement finishes', async () => {
+  const host = await boot();
+  mocks.refetch.mockClear();
+  const first = Promise.withResolvers<void>();
+  const second = Promise.withResolvers<void>();
+  const firstStarted = Promise.withResolvers<void>();
+  const secondStarted = Promise.withResolvers<void>();
+  mocks.cancel.mockImplementationOnce(() => {
+    firstStarted.resolve();
+    return first.promise;
+  });
+  mocks.cancel.mockImplementationOnce(() => {
+    secondStarted.resolve();
+    return second.promise;
+  });
+  await host.authority.transition(
+    host.authority.snapshot()!.generation,
+    `${TEAM}:denied`
+  );
+  await firstStarted.promise;
+  await host.authority.transition(
+    host.authority.snapshot()!.generation,
+    `${TEAM}:allowed`
+  );
+  first.resolve();
+  await secondStarted.promise;
+  try {
+    expect(mocks.refetch).not.toHaveBeenCalled();
+  } finally {
+    second.resolve();
+    await crmAccessAuthority.refresh();
+  }
+  expect(mocks.refetch).toHaveBeenCalledOnce();
+});
+
 it.each(['pending', 'failed'] as const)(
   'does not delay signature, mark-read, star or folder writes while the first proof is %s',
   async (mode) => {

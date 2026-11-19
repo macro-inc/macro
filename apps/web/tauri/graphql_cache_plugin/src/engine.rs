@@ -408,6 +408,7 @@ struct EngineState {
 #[derive(Clone)]
 pub struct EngineHandle {
     inner: Arc<EngineAccess<EngineState>>,
+    authority_listener: Option<Arc<authority::AuthorityListener>>,
     // Per-command capture, never shared mutable state between windows.
     generation: Option<Uuid>,
     // Shared by cloned handles, changed when the native engine is reopened.
@@ -467,6 +468,7 @@ impl EngineHandle {
         );
         EngineHandle {
             generation: None,
+            authority_listener: None,
             mail_generation: soup_filter_cache_adapter::mail::new_generation(),
             inner: Arc::new(EngineAccess::new(EngineState {
                 engine,
@@ -651,9 +653,8 @@ impl EngineHandle {
             .map(|revision| revision.parse())
             .transpose()
             .map_err(|error: cache_core::revision::ParseCacheRevisionError| error.to_string())?;
-        self.inner
-            .lock()
-            .await
+        self.ready_read()
+            .await?
             .engine
             .resume_live_query(&id, registration_id, since)
             .await
@@ -865,6 +866,7 @@ impl EngineHandle {
         uncertain_calendar_event_keys: Vec<String>,
     ) -> Result<EnqueueOptimisticMutationResultWire, String> {
         let mut state = self.inner.write().await;
+        self.resume_retirement(&mut state).await?;
         let EngineState { engine, ops, .. } = &mut *state;
         let origin = origin_op_id.map(|name| ops.intern(&name));
         let client_metadata = soup_filter_cache_adapter::permissions::legacy_draft_metadata(
@@ -872,9 +874,6 @@ impl EngineHandle {
             &data,
             operation_name.as_deref(),
         );
-        soup_filter_cache_adapter::permissions::resume_crm_retirement(engine)
-            .await
-            .map_err(|error| error.to_string())?;
         let admitted = engine
             .snapshot_is_current(self.generation)
             .await
@@ -1027,10 +1026,8 @@ impl EngineHandle {
             generation: parse_u64(&lease_generation, "lease generation")?,
         };
         let mut state = self.inner.write().await;
+        self.resume_retirement(&mut state).await?;
         let EngineState { engine, ops, .. } = &mut *state;
-        soup_filter_cache_adapter::permissions::resume_crm_retirement(engine)
-            .await
-            .map_err(|error| error.to_string())?;
         let admitted = engine
             .snapshot_is_current(self.generation)
             .await

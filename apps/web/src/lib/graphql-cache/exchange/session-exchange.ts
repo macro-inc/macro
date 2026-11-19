@@ -13,6 +13,7 @@ import { cacheSessionGeneration } from '../session-generation';
 /** One blanket response fence; mutation outcomes remain available to their callers. */
 export const cacheSessionExchange: Exchange = ({ forward, client }) => {
   const active = new Map<number, Operation>();
+  const interrupted = new Set<number>();
   const invalidations = makeSubject<OperationResult>();
   cacheSessionGeneration.onChanged(() => {
     if (cacheSessionGeneration.state().paused) {
@@ -26,7 +27,13 @@ export const cacheSessionExchange: Exchange = ({ forward, client }) => {
     for (const operation of active.values()) {
       // Solid observers may already have replaced their subscription. Recover
       // only readers that still belong to the retired generation.
-      if (operation.context.cacheSessionGeneration !== generation)
+      const startedDuringCleanup = interrupted.delete(operation.key);
+      if (startedDuringCleanup)
+        invalidations.next({ operation, stale: true, hasNext: false });
+      if (
+        operation.context.cacheSessionGeneration !== generation ||
+        startedDuringCleanup
+      )
         client.reexecuteOperation(
           makeOperation('query', operation, {
             ...operation.context,
@@ -46,8 +53,15 @@ export const cacheSessionExchange: Exchange = ({ forward, client }) => {
             cacheAuthorizationEpoch: cacheSessionGeneration.capture(),
             cacheSessionGeneration: cacheSessionGeneration.capture(),
           });
-          if (operation.kind === 'query') active.set(operation.key, current);
-          else if (operation.kind === 'teardown') active.delete(operation.key);
+          if (operation.kind === 'query') {
+            active.set(operation.key, current);
+            if (cacheSessionGeneration.state().paused)
+              interrupted.add(operation.key);
+            else interrupted.delete(operation.key);
+          } else if (operation.kind === 'teardown') {
+            active.delete(operation.key);
+            interrupted.delete(operation.key);
+          }
           return current;
         }),
         forward,

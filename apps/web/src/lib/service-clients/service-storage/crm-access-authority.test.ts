@@ -249,3 +249,15 @@ it('retries an interrupted visible-cache cleanup even when the durable generatio
     ['permission', generation],
   ]);
 });
+
+it('retains failed session cleanup across the next owner observation', async () => {
+  const { authority, retire } = client(sharedOwner(`${team}:allowed`));
+  await authority.refresh();
+  retire.mockClear();
+  retire.mockRejectedValueOnce(new Error('session prune failed'));
+  authority.setSession('viewer', 1);
+  await authority.refresh();
+  expect(retire).toHaveBeenCalledTimes(2);
+  expect(retire).toHaveBeenNthCalledWith(1, 'session', expect.any(String));
+  expect(retire).toHaveBeenNthCalledWith(2, 'session', expect.any(String));
+});

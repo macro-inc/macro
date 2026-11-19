@@ -38,6 +38,118 @@ import { cacheDatabaseIdentity } from './coordinator-protocol';
 import { CacheWorkerCore } from './worker-core';
 
 describe('CacheWorkerCore', () => {
+  it('broadcasts implicit retirement recovery to every tab before an ordinary read completes', async () => {
+    const next = '00000000-0000-4000-8000-000000000099';
+    let generation = TEST_AUTHORITY_GENERATION;
+    let unfinished = false;
+    const writeQuery = vi.fn();
+    loadCacheWasmMock.mockResolvedValue({
+      openCache: vi.fn().mockResolvedValue({
+        currentAuthority: async (identity: string) => {
+          if (unfinished) {
+            generation = next;
+            unfinished = false;
+          }
+          return { ...testAuthority(identity), generation };
+        },
+        transitionAuthority: async () => {
+          unfinished = true;
+          throw new Error('cleanup interrupted after its durable marker');
+        },
+        readQuery: vi.fn().mockResolvedValue({ kind: 'miss' }),
+        writeQuery,
+      }),
+    });
+    const first = { postMessage: vi.fn() };
+    const second = { postMessage: vi.fn() };
+    const core = new CacheWorkerCore();
+    core.addPort(first);
+    core.addPort(second);
+    await core.handleRequest(first, {
+      id: 1,
+      kind: 'init',
+      scope: 'shared-profile',
+    });
+    await core.handleRequest(first, {
+      id: 2,
+      kind: 'transition-authority',
+      identity: 'shared-profile',
+      expected: generation,
+      policy: 'team:denied',
+    });
+    first.postMessage.mockClear();
+    second.postMessage.mockClear();
+    await core.handleRequest(second, {
+      id: 3,
+      kind: 'read',
+      query: '{ user { id } }',
+    });
+    for (const port of [first, second])
+      expect(port.postMessage.mock.calls[0]?.[0]).toMatchObject({
+        kind: 'authority-changed',
+        authority: { generation: next },
+      });
+    await core.handleRequest(first, {
+      id: 4,
+      kind: 'write',
+      query: '{ user { id } }',
+      data: { user: { id: 'viewer' } },
+      generation: TEST_AUTHORITY_GENERATION,
+    });
+    expect(writeQuery).not.toHaveBeenCalled();
+    expect(first.postMessage).toHaveBeenCalledWith(
+      expect.objectContaining({ id: 4, ok: false })
+    );
+  });
+
+  it('publishes first account binding from a person-context update to other tabs', async () => {
+    const next = '00000000-0000-4000-8000-000000000099';
+    let generation = TEST_AUTHORITY_GENERATION;
+    loadCacheWasmMock.mockResolvedValue({
+      openCache: vi.fn().mockResolvedValue({
+        currentAuthority: async (identity: string) => ({
+          ...testAuthority(identity),
+          generation,
+        }),
+        peopleContext: vi.fn(),
+        peopleSearch: vi.fn(),
+        peopleUpdate: async () => {
+          generation = next;
+          return { revision: '1', revisionAdvanced: true };
+        },
+      }),
+    });
+    const first = { postMessage: vi.fn() };
+    const second = { postMessage: vi.fn() };
+    const core = new CacheWorkerCore();
+    core.addPort(first);
+    core.addPort(second);
+    await core.handleRequest(first, {
+      id: 1,
+      kind: 'init',
+      scope: 'shared-profile',
+    });
+    await core.handleRequest(first, {
+      id: 2,
+      kind: 'people-update',
+      generation,
+      update: {
+        scope: {
+          identity: 'viewer',
+          storageGeneration: TEST_AUTHORITY_GENERATION,
+        },
+        epoch: TEST_AUTHORITY_GENERATION,
+        action: { kind: 'begin', previousEpoch: null },
+      },
+    });
+    expect(second.postMessage).toHaveBeenCalledWith(
+      expect.objectContaining({
+        kind: 'authority-changed',
+        authority: expect.objectContaining({ generation: next }),
+      })
+    );
+  });
+
   it('rejects a delayed write from another tab after the shared owner retires its generation', async () => {
     const started = Promise.withResolvers<void>();
     const cleanup = Promise.withResolvers<void>();

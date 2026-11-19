@@ -57,6 +57,7 @@ async function retireVisibleSnapshots(
         scope === 'session' ? () => true : crmProtectedQueryKey
       );
   }, generation);
+  if (!cacheSessionGeneration.isCurrent(generation)) return;
   fireAndForget(
     queryClient.refetchQueries({ type: 'active' }),
     'crm.access.refetch'

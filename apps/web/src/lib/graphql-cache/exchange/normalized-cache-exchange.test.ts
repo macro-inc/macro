@@ -670,7 +670,8 @@ function harness(
 
 function controlledQueryHarness(
   host: CacheHost,
-  options: NormalizedCacheExchangeOptions = {}
+  options: NormalizedCacheExchangeOptions = {},
+  onResult?: (result: OperationResult) => void
 ) {
   const ops = makeSubject<Operation>();
   const network = makeSubject<OperationResult>();
@@ -695,7 +696,10 @@ function controlledQueryHarness(
       client,
       dispatchDebug: () => undefined,
     })(ops.source),
-    subscribe((result) => results.push(result))
+    subscribe((result) => {
+      results.push(result);
+      onResult?.(result);
+    })
   );
   return { ops, network, forwarded, results, client };
 }
@@ -1301,7 +1305,12 @@ describe('normalizedCacheExchange', () => {
   });
 
   it('serializes cache effects across separate subscription emissions', async () => {
-    const operation = makeSubscriptionOp(24);
+    const source = makeSubscriptionOp(24);
+    const generation = cacheSessionGeneration.capture();
+    const operation = makeOperation('subscription', source, {
+      ...source.context,
+      cacheSessionGeneration: generation,
+    });
     const networkResults = makeSubject<OperationResult>();
     let cacheContainsDocument = false;
     let markWriteStarted!: () => void;
@@ -1387,11 +1396,81 @@ describe('normalizedCacheExchange', () => {
     releaseWrite();
     await vi.waitFor(() => expect(results).toHaveLength(2));
 
-    expect(host.deleteRecords).toHaveBeenCalledWith([
-      'GraphqlSoupDocument:document-1',
-    ]);
+    expect(host.deleteRecords).toHaveBeenCalledWith(
+      ['GraphqlSoupDocument:document-1'],
+      generation
+    );
     expect(cacheContainsDocument).toBe(false);
   });
+
+  it.each(['subscription', 'mutation'] as const)(
+    'discards queued %s effects when retirement overtakes the first effect',
+    async (kind) => {
+      const firstWrite = Promise.withResolvers<WriteResult>();
+      const writing = Promise.withResolvers<void>();
+      const settled = Promise.withResolvers<OperationResult>();
+      const write = host.writeQuery;
+      vi.spyOn(host, 'writeQuery').mockImplementationOnce(() => {
+        writing.resolve();
+        return firstWrite.promise;
+      });
+      const remove = vi.spyOn(host, 'deleteRecords');
+      const { ops, network } = controlledQueryHarness(
+        host,
+        {},
+        settled.resolve
+      );
+      const original =
+        kind === 'subscription'
+          ? makeSubscriptionOp(24)
+          : makeRenameMutationOp(24);
+      const operation = makeOperation(kind, original, {
+        ...original.context,
+        cacheSessionGeneration: cacheSessionGeneration.capture(),
+      });
+      ops.next(operation);
+      network.next(
+        queryResult(operation, {
+          soupUpdates: [
+            {
+              __typename: 'SoupUpdated',
+              item: { __typename: 'GraphqlSoupDocument', id: 'one' },
+            },
+            {
+              __typename: 'GraphqlCacheDeletion',
+              graphqlTypeName: 'GraphqlSoupDocument',
+              entityId: 'one',
+            },
+          ],
+        })
+      );
+      await writing.promise;
+      await cacheSessionGeneration.transition(async () => {});
+      await write({
+        query: '{ document { id } }',
+        generation: cacheSessionGeneration.capture(),
+        data: {
+          document: {
+            __typename: 'GraphqlSoupDocument',
+            id: 'one',
+            displayName: 'Fresh',
+          },
+        },
+      });
+      firstWrite.resolve({
+        revision: INITIAL_CACHE_REVISION,
+        revisionAdvanced: true,
+        changed: [],
+        affectedOps: [],
+        reset: false,
+      });
+      await settled.promise;
+      expect(remove).not.toHaveBeenCalled();
+      expect(host.writes.at(-1)?.data).toMatchObject({
+        document: { displayName: 'Fresh' },
+      });
+    }
+  );
 
   it('cancels queued subscription effects on teardown even when the same key resubscribes', async () => {
     const firstWrite = deferred<WriteResult>();

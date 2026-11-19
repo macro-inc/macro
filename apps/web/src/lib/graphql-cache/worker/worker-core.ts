@@ -623,6 +623,8 @@ export class CacheWorkerCore {
         this.scope!
       );
       before = authority.generation;
+      if (this.executingAuthority !== before)
+        this.push({ kind: 'authority-changed', authority });
       this.executingAuthority = before;
       if (
         [
@@ -642,7 +644,11 @@ export class CacheWorkerCore {
         );
     }
     const result = await this.execute(request);
-    if (request.kind === 'write' || request.kind === 'hydrate') {
+    if (
+      request.kind === 'write' ||
+      request.kind === 'hydrate' ||
+      request.kind === 'people-update'
+    ) {
       const authority = await this.requireEngine().currentAuthority(
         this.scope!
       );

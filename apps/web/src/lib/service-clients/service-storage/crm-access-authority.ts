@@ -80,9 +80,9 @@ export function createCrmAccessAuthority(options: Options) {
   let stopObserving: (() => void) | undefined;
   let pending: Promise<void> | undefined;
   let retiring = Promise.resolve();
-  let failedRetirement:
-    | { scope: CrmRetirementScope | undefined; generation: string }
-    | undefined;
+  let requiredRetirement: CrmRetirementScope | undefined;
+  let retirementAttempt = Symbol();
+  let retirementFailed = false;
 
   function observe(next: CacheAuthority, retryRetirement = false) {
     const previous = observed;
@@ -95,11 +95,8 @@ export function createCrmAccessAuthority(options: Options) {
       else if (next.ready) setState('allowed');
     }
     if (previous?.generation === next.generation) {
-      if (retryRetirement && failedRetirement?.generation === next.generation) {
-        const { scope, generation } = failedRetirement;
-        failedRetirement = undefined;
-        retire(scope, generation);
-      }
+      if (retryRetirement && retirementFailed)
+        retire(undefined, next.generation);
       return;
     }
     const accountChanged =
@@ -116,12 +113,23 @@ export function createCrmAccessAuthority(options: Options) {
     retire(scope, next.generation);
   }
   function retire(scope: CrmRetirementScope | undefined, generation: string) {
+    if (scope === 'session' || !requiredRetirement) requiredRetirement = scope;
+    const attempt = Symbol();
+    retirementAttempt = attempt;
     // Fence responses synchronously, before any local cleanup awaits.
-    const work = options.retire(scope, generation).catch((error: unknown) => {
-      if (observed?.generation === generation)
-        failedRetirement = { scope, generation };
-      throw error;
-    });
+    // Keep the strongest outstanding cleanup across login and owner replacement.
+    const work = options
+      .retire(requiredRetirement, generation)
+      .then(() => {
+        if (retirementAttempt === attempt) {
+          requiredRetirement = undefined;
+          retirementFailed = false;
+        }
+      })
+      .catch((error: unknown) => {
+        if (retirementAttempt === attempt) retirementFailed = true;
+        throw error;
+      });
     retiring = Promise.all([retiring.catch(() => {}), work]).then(() => {});
     fireAndForget(retiring, 'crm.access.retirement');
   }
@@ -223,7 +231,6 @@ export function createCrmAccessAuthority(options: Options) {
       session = Symbol();
       pending = undefined;
       observed = undefined;
-      failedRetirement = undefined;
       setState('pending');
       if (!shared) {
         owner = memoryAuthority(account);

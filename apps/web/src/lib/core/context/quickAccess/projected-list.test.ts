@@ -3,6 +3,7 @@ import type {
   SearchCachePage,
   SearchDocumentWire,
 } from '@graphql-cache/index';
+import { cacheSessionGeneration } from '@graphql-cache/session-generation';
 import { Telemetry } from '@macro-inc/observability';
 import { SpanStatusCode, trace } from '@opentelemetry/api';
 import {
@@ -91,6 +92,46 @@ function deferred<T>() {
 }
 
 describe('Quick Access local projection', () => {
+  it('drops email-only results and a delayed materialization when access is revoked', async () => {
+    const delayed = deferred<{ id: string }[]>();
+    const [revision, setRevision] = createSignal(0);
+    const project = vi
+      .fn()
+      .mockResolvedValueOnce([{ id: 'old mail' }])
+      .mockImplementationOnce(() => delayed.promise)
+      .mockResolvedValue([]);
+    const list = root(() =>
+      createProjectedList({
+        host: {
+          search: async () => ({
+            documents: [document('mail', 'email')],
+            nextCursor: null,
+          }),
+        },
+        buckets: ['email'],
+        revision,
+        materialize: project,
+      })
+    );
+    await vi.waitFor(() => expect(list.items()).toEqual([{ id: 'old mail' }]));
+    setRevision(1);
+    await vi.waitFor(() => expect(project).toHaveBeenCalledTimes(2));
+    const retirement = deferred<void>();
+    const transition = cacheSessionGeneration.transition(
+      () => retirement.promise
+    );
+    try {
+      await vi.waitFor(() => expect(list.items()).toEqual([]));
+      delayed.resolve([{ id: 'stale delayed mail' }]);
+      await Promise.resolve();
+      expect(list.items()).toEqual([]);
+    } finally {
+      retirement.resolve();
+      await transition;
+    }
+    await vi.waitFor(() => expect(project).toHaveBeenCalledTimes(3));
+    expect(list.items()).toEqual([]);
+  });
   it('ranks the row reads of a typed search with it, and leaves browsing reads alone', async () => {
     const readRecordsByKeys = vi.fn(async () => ({
       revision: 0 as never,

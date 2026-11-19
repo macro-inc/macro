@@ -11,8 +11,7 @@ vi.mock('@tauri-apps/api/core', () => ({
   invoke: (command: string, args: Record<string, unknown> = {}) => {
     if (command === 'graphql_cache_current_authority')
       return authorityMock(String(args.identity));
-    const { authority: _, authorityGeneration: _generation, ...request } = args;
-    return invokeMock(command, request);
+    return invokeMock(command, args);
   },
 }));
 vi.mock('@tauri-apps/api/event', () => ({
@@ -212,6 +211,7 @@ describe('createTauriCacheHost', () => {
     stale = false;
     await expect(host.people.update(update)).resolves.toBe('8');
     expect(invokeMock).toHaveBeenLastCalledWith('graphql_cache_people_update', {
+      generation: TEST_AUTHORITY_GENERATION,
       update,
       traceparent: undefined,
     });
@@ -784,6 +784,7 @@ describe('createTauriCacheHost', () => {
     });
     expect(result).toEqual(writeResult);
     expect(invokeMock).toHaveBeenCalledWith('graphql_cache_write', {
+      generation: TEST_AUTHORITY_GENERATION,
       originOpId: `${host.clientId}:3`,
       registration: {
         opId: `${host.clientId}:3`,
@@ -828,6 +829,7 @@ describe('createTauriCacheHost', () => {
       revision: '1',
     });
     expect(invokeMock).toHaveBeenCalledWith('graphql_cache_hydrate', {
+      generation: TEST_AUTHORITY_GENERATION,
       query: 'query Backfill { items @cacheOnly { id } cursor }',
       operationName: undefined,
       variables: undefined,
@@ -1632,7 +1634,7 @@ describe('createTauriCacheHost', () => {
         });
         expect(invokeMock).toHaveBeenLastCalledWith(
           'graphql_cache_calendar_commit',
-          { commit }
+          { commit, generation: TEST_AUTHORITY_GENERATION }
         );
         invokeMock.mockResolvedValue(null);
         const enqueued = host.enqueueOptimisticMutation(

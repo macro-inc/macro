@@ -70,6 +70,65 @@ fn native_legacy_wire_calls_without_authority_preserve_cache_reads_and_writes() 
 }
 
 #[test]
+fn native_implicit_retirement_notifies_other_windows_before_returning_content() {
+    block_on(async {
+        let (first, first_events) = std::sync::mpsc::channel();
+        let (second, second_events) = std::sync::mpsc::channel();
+        let handle = spawn_handle().with_authority_listener(move |authority| {
+            first.send(authority.clone()).unwrap();
+            second.send(authority.clone()).unwrap();
+        });
+        bind(&handle).await;
+        let before = handle.current_authority("profile").await.unwrap();
+        let old = handle.clone().with_generation(Some(before.generation));
+        {
+            let mut state = handle.inner.lock().await;
+            state
+                .engine
+                .begin_authority_transition(
+                    "profile",
+                    before.generation,
+                    "team:denied".into(),
+                    true,
+                )
+                .await
+                .unwrap();
+        }
+        handle
+            .read(
+                None,
+                "{ user { id } }".into(),
+                None,
+                Variables::new(),
+                vec![],
+            )
+            .await
+            .unwrap();
+        let recovered = first_events.try_recv().unwrap();
+        assert_eq!(second_events.try_recv().unwrap(), recovered);
+        assert!(recovered.ready);
+        assert_eq!(recovered.policy.as_deref(), Some("team:denied"));
+        assert_ne!(recovered.generation, before.generation);
+        assert!(
+            old.write(WriteRequest {
+                origin_op_id: None,
+                registration: None,
+                query: "{ user { id } }".into(),
+                operation_name: None,
+                variables: Variables::new(),
+                data: json!({"user": {"id": "viewer"}}),
+                identity: Some("viewer".into()),
+            })
+            .await
+            .is_err()
+        );
+        handle.current_authority("profile").await.unwrap();
+        assert!(first_events.try_recv().is_err());
+        assert!(second_events.try_recv().is_err());
+    });
+}
+
+#[test]
 fn native_generation_boundary_rejects_old_writes_but_settles_authored_commands() {
     block_on(async {
         let handle = spawn_handle();

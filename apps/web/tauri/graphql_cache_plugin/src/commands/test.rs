@@ -1,6 +1,101 @@
 use super::HydrationResultWire;
 
 #[test]
+fn scoped_first_binding_notifies_every_window() {
+    use cache_core::engine::authority::CacheAuthority;
+    use std::sync::{Arc, Mutex};
+    use tauri::{Listener, Manager};
+
+    for people in [false, true] {
+        let handle = crate::engine::EngineHandle::new(
+            cache_turso::TursoStorage::open_in_memory("profile").unwrap(),
+            None,
+        );
+        let before = pollster::block_on(handle.current_authority("profile")).unwrap();
+        let mut scope = cache_core::engine::HydrationScope {
+            identity: "macro|viewer@example.com".into(),
+            storage_generation: pollster::block_on(handle.current_storage_generation())
+                .unwrap()
+                .parse()
+                .unwrap(),
+            contact_fence: None,
+        };
+        if people {
+            scope.contact_fence = Some(
+                pollster::block_on(handle.contact_snapshot(
+                    cache_core::people::sync::ContactSnapshotRequest {
+                        scope: scope.clone(),
+                        scan: None,
+                    },
+                ))
+                .unwrap()
+                .fence,
+            );
+        }
+        let app = tauri::test::mock_builder()
+            .manage(crate::CacheState(Mutex::new(Some(
+                crate::InitializedCache {
+                    scope: "profile".into(),
+                    handle,
+                },
+            ))))
+            .build(tauri::test::mock_context(tauri::test::noop_assets()))
+            .unwrap();
+        let events = Arc::new(Mutex::new(Vec::<CacheAuthority>::new()));
+        let received = events.clone();
+        app.listen("graphql-cache://authority-changed", move |event| {
+            received
+                .lock()
+                .unwrap()
+                .push(serde_json::from_str(event.payload()).unwrap());
+        });
+        pollster::block_on(async {
+            if people {
+                super::graphql_cache_people_update(
+                    app.handle().clone(),
+                    app.state(),
+                    Some(before.generation),
+                    cache_core::people::ContextUpdate {
+                        scope,
+                        epoch: uuid::Uuid::now_v7(),
+                        action: cache_core::people::ContextAction::Begin {
+                            previous_epoch: None,
+                        },
+                    },
+                    None,
+                )
+                .await
+                .unwrap();
+            } else {
+                super::graphql_cache_hydrate_scoped(
+                    app.handle().clone(),
+                    app.state(),
+                    Some(before.generation),
+                    super::ScopedHydrationRequest {
+                        query: "{ user { id } }".into(),
+                        operation_name: None,
+                        variables: None,
+                        data: serde_json::json!({"user": {"id": "macro|viewer@example.com"}}),
+                        identity: Some("macro|viewer@example.com".into()),
+                        hydration_scope: scope,
+                    },
+                    None,
+                )
+                .await
+                .unwrap();
+            }
+        });
+        let events = events.lock().unwrap();
+        assert_eq!(events.len(), 1);
+        assert_ne!(events[0].generation, before.generation);
+        assert_eq!(
+            events[0].account.as_deref(),
+            Some("macro|viewer@example.com")
+        );
+    }
+}
+
+#[test]
 fn hydration_results_preserve_the_native_advancement_bit() {
     for revision_advanced in [false, true] {
         for result in [

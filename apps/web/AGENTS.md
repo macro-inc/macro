@@ -88,7 +88,7 @@ once. A fixture that depends on dev-only behavior won't work there. CI sets
 one worker and no retries.
 Cache fixtures must mount `useSyncLoginCookie`, serve fresh identity and CRM
 access-proof responses, and preserve the source generation on direct cache
-writes so they exercise the real worker/WASM admission boundary.
+writes so they exercise the real worker/WASM generation fence.
 Model host retirement with authority detachment and a fresh proof before continuing.
 Call `initializeLexical()` before mounting isolated editor fixtures so decorator nodes use the app's renderer registry.
 

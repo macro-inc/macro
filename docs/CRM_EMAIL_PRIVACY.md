@@ -83,8 +83,10 @@ content. Initial allowed/team-less proofs preserve legacy offline data and the
 existing generation. A proven denial or a change of team retires CRM records,
 derived mail/database-row families, protected properties, mixed query lists and
 projection-only orphans. This conservative cleanup can remove independently
-accessible mail or database data; fresh authorized reads restore it. Email
-thread and native-mobile Soup persistence remain enabled until proven denial.
+accessible mail or database data; fresh authorized reads restore it. Normalized
+email-thread storage and native-mobile Soup persistence remain available until
+proven denial. The legacy TanStack `email-threads` scope remains disabled, as on
+main; it is retained only to remove snapshots saved by earlier versions.
 
 Authored draft content, queued variables, UUIDs, leases and identity bindings
 survive retirement. Successful mutations keep their real server outcome. Stale

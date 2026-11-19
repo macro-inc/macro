@@ -1,3 +1,4 @@
+import { cacheSessionGeneration } from '@graphql-cache/session-generation';
 import { afterEach, beforeEach, expect, it, vi } from 'vitest';
 import { storageServiceClient } from './client';
 import {
@@ -28,7 +29,11 @@ beforeEach(() => {
   proof.mockReset().mockRejectedValue(new Error('CRM proof unavailable'));
   vi.stubGlobal('fetch', transport);
   installCrmCacheHost(undefined);
-  configureCrmAccessAuthority({ fetchProof: proof, retire: async () => {} });
+  configureCrmAccessAuthority({
+    fetchProof: proof,
+    retire: (_scope, generation) =>
+      cacheSessionGeneration.transition(async () => {}, generation),
+  });
   crmAccessAuthority.setSession('viewer');
 });
 afterEach(() => {
@@ -58,7 +63,7 @@ it('reads and saves a mailbox reminder through the real transport without CRM pr
   for (const [url, init] of transport.mock.calls) {
     expect(String(url)).toContain(`/reminders/email/${followup.threadId}`);
     expect(new Headers(init?.headers).has('x-macro-crm-access-signal')).toBe(
-      false
+      true
     );
   }
 });

@@ -94,6 +94,30 @@ it('preserves the actual outcome of an in-flight mutation across retirement', as
   expect((await result).data).toEqual(data);
 });
 
+it('refetches an imperative read started and completed during retirement', async () => {
+  const { client, operations, results } = network();
+  const cleanup = Promise.withResolvers<void>();
+  const transition = cacheSessionGeneration.transition(() => cleanup.promise);
+  const result = client.query(QUERY, {}).toPromise();
+  expect(operations).toHaveLength(1);
+  results.next({
+    operation: operations[0],
+    data: { user: { id: 'retiring' } },
+    stale: false,
+    hasNext: false,
+  });
+  cleanup.resolve();
+  await transition;
+  expect(operations).toHaveLength(2);
+  results.next({
+    operation: operations[1],
+    data: { user: { id: 'current' } },
+    stale: false,
+    hasNext: false,
+  });
+  expect((await result).data).toEqual({ user: { id: 'current' } });
+});
+
 it('restarts subscription sources once and discards late frames from the retired source', async () => {
   const stopped = vi.fn();
   const started = Promise.withResolvers<void>();

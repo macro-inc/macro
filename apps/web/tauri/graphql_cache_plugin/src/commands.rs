@@ -149,7 +149,15 @@ pub async fn graphql_cache_init_with_schema<R: Runtime>(
             let database =
                 TursoFileDatabase::new(dir.join("cache.turso")).map_err(|e| e.to_string())?;
             let storage = database.open_or_reset(&scope).map_err(|e| e.to_string())?;
-            let handle = EngineHandle::with_schema(storage, hot_capacity, schema);
+            let events = app.clone();
+            let handle = EngineHandle::with_schema(storage, hot_capacity, schema)
+                .with_authority_listener(move |authority| {
+                    crate::emit_cache_event(
+                        &events,
+                        "graphql-cache://authority-changed",
+                        authority,
+                    );
+                });
             *guard = Some(InitializedCache {
                 scope,
                 handle: handle.clone(),
@@ -327,16 +335,19 @@ pub async fn graphql_cache_people_context(
 /// Persist one scoped local-context batch. JS publishes hydration-only hints.
 #[tauri::command]
 #[tracing::instrument(skip_all, fields(upstream_traceparent = people_trace_correlation(traceparent.as_deref())), err)]
-pub async fn graphql_cache_people_update(
+pub async fn graphql_cache_people_update<R: Runtime>(
+    app: AppHandle<R>,
     state: State<'_, CacheState>,
     generation: Option<uuid::Uuid>,
     update: ContextUpdate,
     traceparent: Option<String>,
 ) -> Result<WriteResultWire, String> {
-    engine_handle(&state)?
+    let result = engine_handle(&state)?
         .with_generation(generation)
         .people_update(update)
-        .await
+        .await?;
+    publish_bound_generation(&app, &state, generation).await?;
+    Ok(result)
 }
 
 /// Rank current-account people before the result limit.
@@ -678,7 +689,8 @@ pub struct ScopedHydrationRequest {
     err
 )]
 #[tauri::command]
-pub async fn graphql_cache_hydrate_scoped(
+pub async fn graphql_cache_hydrate_scoped<R: Runtime>(
+    app: AppHandle<R>,
     state: State<'_, CacheState>,
     generation: Option<uuid::Uuid>,
     request: ScopedHydrationRequest,
@@ -696,6 +708,7 @@ pub async fn graphql_cache_hydrate_scoped(
         )
         .await?;
     // Guarded writes never reset identity; JS publishes ordinary hydration hints.
+    publish_bound_generation(&app, &state, generation).await?;
     Ok(hydration_result(result))
 }
 

@@ -7,6 +7,7 @@ import {
 } from '@app/lib/graphql-cache';
 import { createUrqlQuery } from '@app/lib/urql-solid';
 import { soupPropertyToProperty } from '@entity/extractors-property/property-helpers';
+import { cacheSessionGeneration } from '@graphql-cache/session-generation';
 import type { EntityType } from '@service-properties/generated/schemas/entityType';
 import { DEFAULT_ITEM_TYPE, type ItemType } from '@service-storage/client';
 import type { FileType } from '@service-storage/generated/schemas/fileType';
@@ -556,6 +557,7 @@ function startPreviewBatch(
   includeProperties: boolean
 ) {
   return createRoot((dispose) => {
+    const generation = cacheSessionGeneration.capture();
     const input = buildGraphqlEntitiesSoupInput(
       items.map((item) => ({
         entityId: item.id,
@@ -589,7 +591,7 @@ function startPreviewBatch(
         items.map((item) => normalizedRecordKey(item)!)
       )
         .then(({ records }) => {
-          if (disposed) return;
+          if (disposed || !cacheSessionGeneration.isCurrent(generation)) return;
           const previews = new Map<string, PreviewItem>();
           for (const { recordKey, record } of records) {
             const preview = graphqlRecordToPreview(record);
@@ -614,7 +616,7 @@ function startPreviewBatch(
         });
       return refreshing;
     };
-    return { value: { result, cached, refresh }, dispose };
+    return { value: { result, cached, refresh, generation }, dispose };
   });
 }
 
@@ -670,16 +672,18 @@ export function createGraphqlItemPreviewQuery(
   );
   const [group, setGroup] = createSignal<PreviewBatch>();
   let ready: Promise<PreviewBatch | undefined> = Promise.resolve(undefined);
-  const isEnabled = () => isGraphqlPreviewItem(item());
+  const isEnabled = () =>
+    !cacheSessionGeneration.state().paused && isGraphqlPreviewItem(item());
   createComputed(() => {
     const current = item();
+    const { epoch } = cacheSessionGeneration.state();
     setGroup(undefined);
     ready = Promise.resolve(undefined);
     if (!isEnabled()) return;
     const subscription = previewBatcher(
       getGraphqlSoupClient(),
       includeProperties
-    ).acquire(normalizedRecordKey(current)!, current, setGroup);
+    ).acquire(`${epoch}:${normalizedRecordKey(current)!}`, current, setGroup);
     ready = subscription.ready;
     onCleanup(subscription.dispose);
   });
@@ -691,6 +695,8 @@ export function createGraphqlItemPreviewQuery(
   const cachedPreview = () =>
     group()?.cached().get(normalizedRecordKey(item())!);
   const data = () => {
+    const generation = group()?.generation;
+    if (!generation || !cacheSessionGeneration.isCurrent(generation)) return;
     const preview = livePreview() ?? cachedPreview();
     if (!preview || preview.loading || preview.access !== 'access')
       return preview;

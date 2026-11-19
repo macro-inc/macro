@@ -158,7 +158,7 @@ let dispose: (() => void) | undefined;
 let graphqlExecutions: Array<{
   variables: unknown;
   context: unknown;
-  next: (result: unknown) => void;
+  next: (result: object) => void;
   ended: boolean;
 }>;
 
@@ -229,7 +229,8 @@ describe('useEntityPropertiesQuery transport', () => {
         const execution = {
           variables: request.variables,
           context,
-          next: subject.next,
+          next: (result: object) =>
+            subject.next({ ...result, operation: { context } }),
           ended: false,
         };
         graphqlExecutions.push(execution);
