@@ -4,13 +4,11 @@ import { useEmailLinksQuery } from '@queries/email/link';
 import { queryReadyGate } from '@queries/gate';
 import { storageServiceClient } from '@service-storage/client';
 import { CalendarSyncStatus } from '@service-storage/generated/schemas/calendarSyncStatus';
-import { type QueryFunctionContext, useQuery } from '@tanstack/solid-query';
+import { useQuery } from '@tanstack/solid-query';
 import { type Accessor, createMemo } from 'solid-js';
 import { assertQueryAccount, type QueryAccount } from '../auth/account-scope';
 import { useQueryAccount } from '../auth/use-query-account';
 import { useVisibleCalendarsQuery } from './calendars';
-import { graphqlCalendarHost } from './graphql/flag';
-import { refetchCalendarList } from './graphql/sync-controller';
 import { calendarKeys } from './keys';
 import { createCalendarOccurrenceQueryRange } from './occurrences';
 
@@ -18,22 +16,15 @@ function calendarFirstSyncOptions(
   owner: QueryAccount | undefined,
   linkIds: readonly string[]
 ) {
-  const queryKey = calendarKeys.firstSync(
-    owner?.userId,
-    owner?.session,
-    linkIds
-  ).queryKey;
   return {
-    queryKey,
+    queryKey: calendarKeys.firstSync(owner?.userId, owner?.session, linkIds)
+      .queryKey,
     enabled: !!owner && linkIds.length > 0,
     // The invitation card and its open composer share the same sample.
     staleTime: 30_000,
     // Only the response's ingestion state is needed. Ask for one occurrence
     // in a small viewport so the same request works with either calendar store.
-    queryFn: async ({
-      client,
-      signal,
-    }: QueryFunctionContext<typeof queryKey>) => {
+    queryFn: async ({ signal }: { signal: AbortSignal }) => {
       assertQueryAccount(owner);
       const now = new Date();
       const range = createCalendarOccurrenceQueryRange(
@@ -49,19 +40,6 @@ function calendarFirstSyncOptions(
         })
       );
       assertQueryAccount(owner);
-      if (
-        result.syncStatus === CalendarSyncStatus.ready &&
-        client.getQueryData(queryKey) === CalendarSyncStatus.syncing &&
-        graphqlCalendarHost()
-      ) {
-        // A rejected delta cache write must not leave the picker reading
-        // the empty list from before discovery. Hydrate it independently.
-        await refetchCalendarList({ hydrateOnly: true, signal });
-        assertQueryAccount(owner);
-        await client.invalidateQueries({
-          queryKey: calendarKeys.visibleCalendars(owner.userId).queryKey,
-        });
-      }
       return result.syncStatus;
     },
   };

@@ -5,7 +5,7 @@ import type {
 import {
   CalendarChangesDocument,
   type CalendarChangesQuery,
-  CalendarsDocument,
+  CalendarListRefreshDocument,
 } from '@service-storage/graphql/generated/graphql';
 import { fetchCached } from './network';
 import { calendarCacheAnswered } from './readiness';
@@ -49,9 +49,10 @@ export const fetchCalendarChanges: FetchCalendarChanges = async (since) =>
   (await fetchCached(CalendarChangesDocument, { input: { since } })).user
     .calendarChanges;
 
-export const refetchCalendarList = (
-  options?: Parameters<typeof fetchCached>[2]
-) => fetchCached(CalendarsDocument, {}, options);
+// An in-flight Calendars cache read can satisfy a second request with the
+// same operation key. The refresh has its own key and writes the same field.
+export const refetchCalendarList = () =>
+  fetchCached(CalendarListRefreshDocument, {});
 
 /**
  * Keeps cached calendar data current. Every poke, reconnect, or other

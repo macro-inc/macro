@@ -20,8 +20,6 @@ const mocks = vi.hoisted(() => ({
   }[],
   getLinks: vi.fn(),
   calendars: [] as { emailLinkId: string; isWritable: boolean }[],
-  graphqlCalendarHost: vi.fn(),
-  refetchCalendarList: vi.fn(),
 }));
 
 vi.mock('@queries/email/link', () => ({
@@ -34,12 +32,6 @@ vi.mock('@queries/email/link', () => ({
 }));
 vi.mock('../calendars', () => ({
   useVisibleCalendarsQuery: () => ({ isPending: false, data: mocks.calendars }),
-}));
-vi.mock('../graphql/flag', () => ({
-  graphqlCalendarHost: mocks.graphqlCalendarHost,
-}));
-vi.mock('../graphql/sync-controller', () => ({
-  refetchCalendarList: mocks.refetchCalendarList,
 }));
 vi.mock('../../auth/use-query-account', () => ({
   useQueryAccount: () => () => ({ userId: 'viewer', session: 1 }),
@@ -67,8 +59,6 @@ beforeEach(() => {
   mocks.links = [connectedLink];
   mocks.calendars = [];
   mocks.getLinks.mockReset().mockImplementation(() => mocks.links);
-  mocks.graphqlCalendarHost.mockReset();
-  mocks.refetchCalendarList.mockReset();
   mocks.listOccurrences
     .mockReset()
     .mockResolvedValue(ok({ syncStatus: 'syncing' }));
@@ -128,27 +118,4 @@ it('reads fresh status when another inbox receives calendar access', async () =>
 
   await screen.findByText('Syncing');
   expect(mocks.listOccurrences).toHaveBeenCalledTimes(2);
-});
-
-it('refreshes the calendar list before publishing that first sync is ready', async () => {
-  mocks.graphqlCalendarHost.mockReturnValue({});
-  mocks.refetchCalendarList.mockImplementation(async () => {
-    expect(screen.getByText('Syncing')).toBeTruthy();
-  });
-  const invalidate = vi.spyOn(client, 'invalidateQueries');
-  openProbe();
-  await screen.findByText('Syncing');
-  expect(mocks.refetchCalendarList).not.toHaveBeenCalled();
-
-  mocks.listOccurrences.mockResolvedValue(ok({ syncStatus: 'ready' }));
-  await client.invalidateQueries({ queryKey: calendarKeys.firstSync._def });
-
-  expect(mocks.refetchCalendarList).toHaveBeenCalledExactlyOnceWith({
-    hydrateOnly: true,
-    signal: expect.any(AbortSignal),
-  });
-  expect(invalidate).toHaveBeenCalledWith({
-    queryKey: calendarKeys.visibleCalendars('viewer').queryKey,
-  });
-  await screen.findByText('Idle');
 });
