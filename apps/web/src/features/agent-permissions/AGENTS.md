@@ -38,8 +38,9 @@ shows a tool's override or its action's state.
 - The Macro persona's permissions use `MACRO_NEW_BOT_ID`, not
   `MACRO_AGENT_BOT_ID`.
 - Gate every entry point on `useAgentPermissionsFlag`
-  (`enable-agent-permissions` and either `enable-ocaml-code-mode` or
-  `enable-js-tools-code-mode`) and on the API not answering 404.
+  (`enable-agent-permissions`, the one flag: the harness offers JS tools
+  programs, which permissions gate, on it alone) and on the API not
+  answering 404.
 - Copy names no program language: OCaml and JS tools (`js_tools`) programs
   are both checked, and plain JavaScript ones are not ("checked programs").
 - Color is on glyphs only (Ask amber hand, Never failure prohibit); text stays

@@ -190,31 +190,10 @@ export const enableAgentNavigation = defineFlag({
 });
 
 /**
- * OCaml programs in agents' code mode. The harness reads the same key; the
- * web reads it only because agent permissions build on it.
- */
-export const enableOcamlCodeMode = defineFlag({
-  key: 'enable-ocaml-code-mode',
-  env: 'ENABLE_OCAML_CODE_MODE',
-  default: onInDev,
-});
-
-/**
- * JS tools programs (opencode's JavaScript dialect, `language: "js_tools"`)
- * in agents' code mode. The harness reads the same key; the web reads it only
- * because agent permissions build on it.
- */
-export const enableJsToolsCodeMode = defineFlag({
-  key: 'enable-js-tools-code-mode',
-  env: 'ENABLE_JS_TOOLS_CODE_MODE',
-  default: onInDev,
-});
-
-/**
  * Per-agent permissions for what its code-mode programs may call (Settings →
- * Agents → an agent → Permissions). Needs `enableOcamlCodeMode` or
- * `enableJsToolsCodeMode` too; the harness reads the same key and answers 404
- * while it is off.
+ * Agents → an agent → Permissions). The one flag on them: the harness reads
+ * the same key, offers JS tools programs (which they gate) with it, and
+ * answers 404 while it is off.
  */
 export const enableAgentPermissions = defineFlag({
   key: 'enable-agent-permissions',

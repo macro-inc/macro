@@ -25,22 +25,12 @@ function shown(...flags: string[]) {
 beforeEach(() => on.clear());
 
 describe('useAgentPermissionsFlag', () => {
-  it('is off with only the permissions flag', () => {
-    expect(shown('enable-agent-permissions')).toBe(false);
+  it('is on with the permissions flag alone', () => {
+    expect(shown('enable-agent-permissions')).toBe(true);
   });
 
-  it('is off without the permissions flag', () => {
-    expect(shown('enable-ocaml-code-mode', 'enable-js-tools-code-mode')).toBe(
-      false
-    );
-  });
-
-  it('is on with the permissions flag and either checked language', () => {
-    expect(shown('enable-agent-permissions', 'enable-ocaml-code-mode')).toBe(
-      true
-    );
-    expect(shown('enable-agent-permissions', 'enable-js-tools-code-mode')).toBe(
-      true
-    );
+  it('is off without the permissions flag, whatever else is on', () => {
+    expect(shown()).toBe(false);
+    expect(shown('enable-ocaml-code-mode')).toBe(false);
   });
 });
