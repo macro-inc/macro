@@ -152,7 +152,10 @@ export function createEmailThreadSource(
             : undefined,
     };
   });
-  const local = createLocalDraftSource(() => true);
+  // The outbox owns a queued reply, even before its server ID is known.
+  const local = createLocalDraftSource(() => true, {
+    omitSendLockedReplies: true,
+  });
   const discoveringDrafts = () => !local.ready();
   const thread = () => {
     const base = snapshot().thread;

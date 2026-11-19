@@ -221,17 +221,22 @@ is off vs Enable calendar wording counts only own inboxes, and Grant access, Tur
 on and Reconnect only start consent for one of them. It covers the grid only in a
 week without events and with no working calendar the viewer can see; a working
 calendar shared with them keeps it to the bottom-right pill, so a delegate whose
-only working calendar is shared sees the pill in every week.
+only working calendar is shared sees the pill in every week. On desktop the
+pill rides above the toast stack while it shows anything, so the app-wide
+prompt for the same inbox doesn't cover it.
 An own inbox whose calendar used to sync but lost calendar access without the
 user turning it off (a Google grant from before Macro narrowed its calendar
 scopes, which the server turns off and clears hourly) shows **Calendar for
 <address> stopped syncing** with **Reconnect** even while another inbox works;
 Reconnect asks for calendar access alone, and the re-grant re-imports its events.
 For the same inbox the app-wide toast reads **Calendar stopped syncing** with
-**Reconnect** (shown again even if an earlier Enable calendar was dismissed), and
-the sidebar's Connect more calendars card and the calendar settings menu say
+**Reconnect** (shown again even if an earlier Enable calendar was dismissed), the
+sidebar card reads **Calendar stopped syncing** with **Reconnect calendar** (also
+past an earlier dismissal of the card), and the calendar settings menu says
 **Reconnect**. A calendar that was never connected keeps Enable calendar, Grant
-access and Turn on calendar. The signal is the inbox's calendar data
+access and Turn on calendar, unless its mailbox needs a full reconnect: then the
+calendar view, the card and the menu all offer Reconnect, asking for the mailbox
+and calendar together. The signal is the inbox's calendar data
 (`has_calendar_data`) beside missing calendar permission: Macro creates the
 calendar account only from a grant with the capability and keeps it when the
 capability goes.
@@ -489,7 +494,8 @@ excluded from Upcoming events, including both all-day and hourly locations.
 Events require connecting a Google account (`Connect calendar`). The
 `Calendar settings` (gear) menu has an `Accounts`
 section listing each connected account with a per-account `Enable` (grant calendar),
-`Reconnect` (expired Google authorization), or `Turn off` action, plus
+`Reconnect` (expired Google authorization, with or without calendar access, as
+the calendar view says), or `Turn off` action, plus
 `Connect another account` to connect a new Google account
 (email + calendar; the item and the `Connect email` dialog both say the email
 and calendar connect together). A Google consent that leaves the email

@@ -67,6 +67,8 @@ pub(crate) enum PreviewReadError {
     IncompleteRuleDiscovery,
     #[error("selected email rule discovery requires a team scope")]
     MissingTeamScope,
+    #[error("team email read deadline exceeded")]
+    ReadDeadlineExceeded,
 }
 
 impl From<PreviewReadError> for EmailErr {

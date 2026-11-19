@@ -13,21 +13,25 @@ import type { AppearanceEntityType } from '@service-storage/entity-appearance';
 import {
   type EntityAppearanceCacheWriteSubscription,
   EntityAppearanceFieldsFragmentDoc,
+  type SavedViewAppearanceCacheWriteMutation,
+  type SavedViewAppearanceCacheWriteMutationVariables,
+  SavedViewAppearanceFieldsFragmentDoc,
 } from '@service-storage/graphql/generated/graphql';
 import type { QueryClient, QueryKey } from '@tanstack/solid-query';
 import { err, ok, type Result } from 'neverthrow';
 import APPEARANCE_CACHE_WRITE from '../../../lib/service-clients/service-storage/graphql/entity-appearance-cache-write.graphql?raw';
-import type { EntityData } from '../../entity/types/entity';
+import SAVED_VIEW_APPEARANCE_CACHE_WRITE from '../../../lib/service-clients/service-storage/graphql/saved-view-appearance-cache-write.graphql?raw';
 import {
   type EntityAppearance,
   readEntityAppearance,
   sameAppearance,
   supportsEntityAppearance,
 } from '../core/appearance';
+import type { AppearanceEntity } from '../types';
 import {
   appearanceAdapter,
+  type GraphqlAppearanceTarget,
   patchAppearanceReaders,
-  type SoupAppearanceTarget,
 } from './appearance-readers';
 import {
   type AppearanceMutationVariables,
@@ -35,17 +39,23 @@ import {
 } from './pending-appearance';
 
 const appearanceSelection = selectRecords(EntityAppearanceFieldsFragmentDoc);
+const savedViewAppearanceSelection = selectRecords(
+  SavedViewAppearanceFieldsFragmentDoc
+);
 
 async function readCachedAppearance(
   host: Pick<CacheHost, 'readRecordsByKeys'>,
   id: string,
-  soup: SoupAppearanceTarget
+  target: GraphqlAppearanceTarget
 ) {
-  const result = await readRecordsByKeys(host, appearanceSelection, [
-    `${soup.typename}:${id}`,
-  ]);
+  const keys = [`${target.typename}:${id}`];
+  const result =
+    target.tag === 'saved_view'
+      ? await readRecordsByKeys(host, savedViewAppearanceSelection, keys)
+      : await readRecordsByKeys(host, appearanceSelection, keys);
   const record = result.records[0]?.record;
   if (
+    record?.__typename === 'GraphqlSavedView' ||
     record?.__typename === 'GraphqlSoupDocument' ||
     record?.__typename === 'GraphqlSoupInitiative'
   ) {
@@ -54,11 +64,25 @@ async function readCachedAppearance(
 }
 
 function appearanceCacheWrite(
-  soup: SoupAppearanceTarget,
+  target: GraphqlAppearanceTarget,
   id: string,
   appearance: EntityAppearance | null,
   generation: string
 ) {
+  if (target.tag === 'saved_view') {
+    return {
+      generation,
+      query: SAVED_VIEW_APPEARANCE_CACHE_WRITE,
+      operationName: 'SavedViewAppearanceCacheWrite',
+      // This operation only normalizes fields; it never executes a server update.
+      variables: {
+        input: { id, expectedRevision: 0 },
+      } satisfies SavedViewAppearanceCacheWriteMutationVariables,
+      data: {
+        updateSavedView: { __typename: 'GraphqlSavedView', id, appearance },
+      } satisfies SavedViewAppearanceCacheWriteMutation,
+    };
+  }
   return {
     generation,
     query: APPEARANCE_CACHE_WRITE,
@@ -68,7 +92,7 @@ function appearanceCacheWrite(
         {
           __typename: 'SoupUpdated',
           item: {
-            __typename: soup.typename,
+            __typename: target.typename,
             id,
             appearance,
           },
@@ -102,7 +126,7 @@ export function createSaveEntityAppearance(sources: {
     id: string,
     appearance: EntityAppearance
   ) => Promise<Result<unknown, unknown>>;
-  refreshUncached?: (entity: EntityData) => Promise<void>;
+  refreshUncached?: (entity: AppearanceEntity) => Promise<void>;
   acknowledgeWrite?: (host: object) => void;
 }) {
   // Keep only overlapping writes. Their rollback closures change appearance fields,
@@ -125,7 +149,7 @@ export function createSaveEntityAppearance(sources: {
     return next;
   }
   function saveEntityAppearance(
-    entity: EntityData,
+    entity: AppearanceEntity,
     appearance: EntityAppearance,
     isCurrent: () => boolean,
     onRevalidationError: () => void
@@ -140,7 +164,7 @@ export function createSaveEntityAppearance(sources: {
         entity.type,
         entity.id
       );
-      const soup = adapter.soup;
+      const target = adapter.graphql;
       const key = `${entity.type}:${entity.id}`;
       const host = sources.cacheHost();
       const generation =
@@ -149,7 +173,8 @@ export function createSaveEntityAppearance(sources: {
         previewKeys.item(entity.id).queryKey,
         ...adapter.readers.map((reader) => reader.key),
       ];
-      const coldKeys = soup ? [...keys, soupKeys._def] : keys;
+      const coldKeys =
+        target && target.tag !== 'saved_view' ? [...keys, soupKeys._def] : keys;
       const coldReads = Promise.allSettled(
         coldKeys.flatMap((queryKey) =>
           sources.queryClient
@@ -195,13 +220,13 @@ export function createSaveEntityAppearance(sources: {
         const prior = graphPrevious;
         if (
           host &&
-          soup &&
+          target &&
           prior &&
           host === sources.cacheHost() &&
           !host.disabled
         ) {
           await queueWrite(`cache:${key}`, async () => {
-            const current = await readCachedAppearance(host, entity.id, soup);
+            const current = await readCachedAppearance(host, entity.id, target);
             if (
               isCurrent() &&
               host === sources.cacheHost() &&
@@ -210,7 +235,7 @@ export function createSaveEntityAppearance(sources: {
             ) {
               await host.writeQuery(
                 appearanceCacheWrite(
-                  soup,
+                  target,
                   entity.id,
                   prior.appearance ?? null,
                   generation
@@ -234,14 +259,14 @@ export function createSaveEntityAppearance(sources: {
           host.disabled ||
           host !== sources.cacheHost() ||
           !isCurrent() ||
-          !soup
+          !target
         )
           return;
-        graphPrevious = await readCachedAppearance(host, entity.id, soup);
+        graphPrevious = await readCachedAppearance(host, entity.id, target);
         // Only patch loaded records; a failed save must not leave a partial cache entry.
         if (graphPrevious && isCurrent() && host === sources.cacheHost()) {
           await host.writeQuery(
-            appearanceCacheWrite(soup, entity.id, appearance, generation)
+            appearanceCacheWrite(target, entity.id, appearance, generation)
           );
         }
       });
@@ -249,19 +274,21 @@ export function createSaveEntityAppearance(sources: {
       // Keep server writes ordered while newer choices are already visible locally.
       const result = await queueWrite(`server:${key}`, async () => {
         if (!isCurrent()) return err(t('appearance.saveFailed'));
-        const result = await sources.update(
-          adapter.apiType,
-          entity.id,
-          appearance
+        const result = await span.run(() =>
+          sources.update(adapter.apiType, entity.id, appearance)
         );
         await cache;
         if (result.isErr() || !isCurrent()) return result;
         let reconciled = false;
-        if (host && !host.disabled && host === sources.cacheHost() && soup) {
+        if (host && !host.disabled && host === sources.cacheHost() && target) {
           sources.acknowledgeWrite?.(host);
           const confirmed = await Promise.allSettled([
             queueWrite(`cache:${key}`, async () => {
-              const current = await readCachedAppearance(host, entity.id, soup);
+              const current = await readCachedAppearance(
+                host,
+                entity.id,
+                target
+              );
               if (
                 !current ||
                 !isCurrent() ||
@@ -274,7 +301,7 @@ export function createSaveEntityAppearance(sources: {
               );
               await host.writeQuery(
                 appearanceCacheWrite(
-                  soup,
+                  target,
                   entity.id,
                   latest?.appearance ?? appearance,
                   generation
@@ -286,9 +313,9 @@ export function createSaveEntityAppearance(sources: {
           reconciled =
             confirmed[0]?.status === 'fulfilled' && confirmed[0].value;
         }
-        if (!reconciled) {
+        if (!reconciled && isCurrent()) {
           const refreshed = await Promise.allSettled([
-            sources.refreshUncached?.(entity),
+            span.run(() => sources.refreshUncached?.(entity)),
           ]);
           if (refreshed[0]?.status === 'rejected') {
             onRevalidationError();
@@ -364,7 +391,7 @@ export function createSaveEntityAppearance(sources: {
       }
     );
   return async (
-    entity: EntityData,
+    entity: AppearanceEntity,
     appearance: EntityAppearance,
     isCurrent: () => boolean
   ): Promise<Result<void, string>> => {

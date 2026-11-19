@@ -62,6 +62,11 @@ the app's disconnected paths.
   socket and passes on what the email services ask the gateway to send the user.
 - Not in the stack: the notification, search, contacts and calendar services.
   New mail does not appear in an open list by itself; sync, then open.
+- The bundle has unified notifications on (`enable-unified-notifications` is
+  on in dev), so the navigation's unread marks, the Mail badge among them,
+  follow the server's count of unread notification rows, which only the
+  notification service writes: on a test's own stack they never light. Test
+  them on the full-stack tier.
 
 `authority-requests.spec.ts` counts permission reads through inbox navigation,
 thread reads and draft autosaves against the real services. Its Soup frames are
@@ -162,7 +167,8 @@ nix develop -c just apps/web/test-email-e2e-full-stack email-e2e reply   # only 
   instance.
 - The `full-stack-*.spec.ts` files are the functions only this tier reaches:
   connecting through the authentication service and the providers' consent
-  (including administrator approval), search, notifications, sharing a
+  (including administrator approval), search, notifications and the Mail
+  badge, sharing a
   thread with another user, a file too large to attach, mail on Home and
   in a contact's record, a reminder coming due, and the calendar
   (invitations, an event made from an email).
@@ -266,7 +272,7 @@ One spec file per area; helpers a file shares with others are in `harness/`.
 | `list*`, `state`, `inbox`, `folders`, `saved-views` | the list, its views, controls and search, Done and read state, inbox selection, Sent, folders | `harness/list.ts` |
 | `organise-*`, `labels`, `reminders` | marking, moving and muting threads and senders, labels, reminders | `harness/organise.ts` |
 | `thread*`, `render` | the thread view, opening from search, pictures in a message | `harness/thread.ts` |
-| `link*`, `connect-more`, `settings-accounts`, `notify` | connecting, reconnecting and sharing inboxes, calendars, onboarding, the Mail badge | `harness/linking.ts` |
+| `link*`, `connect-more`, `settings-accounts` | connecting, reconnecting and sharing inboxes, calendars, onboarding | `harness/linking.ts` |
 | `sync-provider*` | what reaches the app from the provider: existing and new mail, changes made in the provider's own client, threading, classification | `harness/sync.ts` |
 | `sharing`, `elsewhere`, `entitlement` | sharing a thread and access requests, mail shown outside Mail, an account without email | `harness/sharing.ts` |
 | `calendar-invitation`, `invitation-actions` | the invitation card in a thread and its actions | |

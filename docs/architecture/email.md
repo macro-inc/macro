@@ -183,6 +183,12 @@ both affected message caches for cleanup on disposal. Undo retains the selected
 inbox and envelope and reconciles the actual sent thread, even after navigation.
 Discard and scheduling also address the persisted thread.
 
+A saved reply to a thread shared at Edit lives in the reader’s inbox. Full
+and parsed thread reads include the reply when its inbox belongs to the
+viewer’s Drafts scope, so reopening the shared thread restores the composer.
+Outlook assigns a provider ID when it syncs a Macro draft. The mailbox draft
+record preserves its identity as a Macro draft after that assignment.
+
 The reply controller still owns draft collection, sending, reset and undo as one
 coordinated workflow: they share editor snapshots, draft identity and pending
 operation guards. Breaking that sequence into mutually dependent controllers

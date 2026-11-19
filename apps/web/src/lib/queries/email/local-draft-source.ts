@@ -14,12 +14,16 @@ import {
 } from 'solid-js';
 import { authKeys } from '../auth/keys';
 import { queryClient } from '../client';
+import type { LocalDraftListOptions } from './local-draft-store';
 import { listLocalDrafts, localDraftStore } from './local-drafts';
 
 export { localDraftEntities } from './local-draft-entities';
 
 /** Account-scoped local data source; notifications are invalidations, never the truth. */
-export function createLocalDraftSource(enabled: Accessor<boolean>) {
+export function createLocalDraftSource(
+  enabled: Accessor<boolean>,
+  options?: LocalDraftListOptions
+) {
   const [drafts, setDrafts] = createSignal<LocalDraft[]>([]);
   const [ready, setReady] = createSignal(false);
   let generation = 0;
@@ -33,7 +37,7 @@ export function createLocalDraftSource(enabled: Accessor<boolean>) {
     }
     const span = Telemetry.span('email.drafts.discover');
     try {
-      const entries = await listLocalDrafts();
+      const entries = await listLocalDrafts(options);
       span.setAttr('email.draft_count', entries.length);
       if (!disposed && request === generation)
         setDrafts(entries.sort((a, b) => b.updatedAt - a.updatedAt));

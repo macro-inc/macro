@@ -665,7 +665,10 @@ use the standard 400 ms hover delay and 300 ms grace period between items. Home,
 Email, and Chat show a small accent dot when the loaded data contains an unread
 item. Home uses Signal; Email uses Important across all linked inboxes.
 Noise does not light either dot. These are presence indicators, not counts; they
-do not fetch additional pages to find every unread item.
+do not fetch additional pages to find every unread item. These dots and the
+unread checks described below are the rail's with `enable-unified-notifications`
+off; with it on, the buttons follow the Notifications inbox's unread rows
+instead (see [Notifications](notifications.md)).
 Home uses `HomeUnreadPresence` over its existing 100-item Signal/unread candidate
 page, with one state-only notification witness per entity (plus one reminder
 witness for email). It must not fetch full notification history just to draw the

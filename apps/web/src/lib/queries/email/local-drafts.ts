@@ -24,6 +24,7 @@ import { queryClient } from '../client';
 import {
   createLocalDraftStore,
   type DraftStorageSession,
+  type LocalDraftListOptions,
 } from './local-draft-store';
 
 import type { EmailSendIntent } from './send-intent';
@@ -195,9 +196,11 @@ export function watchEmailStorageEnded(
   };
 }
 
-export async function listLocalDrafts(): Promise<LocalDraft[]> {
+export async function listLocalDrafts(
+  options?: LocalDraftListOptions
+): Promise<LocalDraft[]> {
   const owner = await emailStorageSession();
-  return await localDraftStore.list(owner);
+  return await localDraftStore.list(owner, options);
 }
 export async function readLocalDraft(
   id: string
