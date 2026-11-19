@@ -1176,6 +1176,27 @@ locally. Both layouts wait for the flag result. When off, desktop restores
 wrapping pins. Saved desktop tabs survive switching the flag on and off.
 `enable-channel-tags` separately controls section management and reads.
 
+### Live calls above the desktop sections
+
+Both desktop sidebar layouts show **Live** below the header and above the
+conversation tree, including while searching. It lists every active channel or
+DM call the viewer can access, newest first, then active quick calls. A quick
+call appears once rather than also as its backing channel call. Conversations
+remain in their ordinary sections. With no live calls, the section is absent.
+
+Each row shows the conversation name (or **Call with …** for a quick call) and
+**Join**, or **Open** for the call already joined. Join targets that exact call
+session; Open returns to its call tab. A ringing channel call has a separate
+**Dismiss** action that stops ringing across devices without joining or ending
+the call. Its Live row remains joinable after dismissal, until the call ends.
+
+Verify with two signed-in sessions in a test-only conversation: start a call,
+check that its Live row precedes the sections, join from that row, and leave all
+participants to check that it disappears without reloading. Start two calls to
+check newest-first ordering, and dismiss a ring without joining. Repeat with
+the sidebar flag off. At 390×844, keep the existing in-row Join/Decline and live
+indicators: the standalone desktop Live section does not appear on touch.
+
 ### Original sidebar (flag off)
 
 The desktop rail keeps **All** and **Recent** tabs in a shared pill track beside
