@@ -58,8 +58,8 @@ const routine = (id: string, name: string): ScheduledAction => ({
   updated_at: '2026-09-28T00:00:00Z',
   next_run_at: '2026-09-29T09:00:00Z',
 });
-const briefing = routine('briefing', 'Morning briefing');
-const digest = routine('digest', 'Weekly digest');
+let briefing: ScheduledAction;
+let digest: ScheduledAction;
 
 const callbacks = {
   onError: vi.fn(),
@@ -94,6 +94,9 @@ function answerLater(fn: ReturnType<typeof vi.fn>) {
 }
 
 beforeEach(() => {
+  // The query store reconciles fetched rows by ID in place.
+  briefing = routine('briefing', 'Morning briefing');
+  digest = routine('digest', 'Weekly digest');
   appConnections.requested.mockClear();
   appConnections.read = () => new Set();
   for (const fn of Object.values(client)) fn.mockReset();
@@ -314,9 +317,16 @@ describe('routine row operations', () => {
       ok(routine('digest-copy', 'Weekly digest copy'))
     );
     const operations = mount();
+    expect(operations.canDuplicate('briefing')).toBe(true);
+    expect(operations.canDuplicate('digest')).toBe(true);
 
     operations.duplicate('briefing');
     operations.duplicate('digest');
+    await vi.waitFor(() =>
+      expect(callbacks.onDuplicated).toHaveBeenCalledExactlyOnceWith(
+        'digest-copy'
+      )
+    );
     answerFirst(ok(routine('briefing-copy', 'Morning briefing copy')));
 
     await vi.waitFor(() =>
