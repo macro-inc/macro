@@ -747,10 +747,22 @@ async fn list_for_soup_viewed_updated_interleaves_views_and_interactions(
             vec![c4, c3],
         ),
     ] {
-        let page = repo
-            .list_companies_for_soup(&team, VIEWER, &subset, None, sort, cursor, limit)
-            .await?;
-        assert_eq!(ids(&page), want, "{sort:?} cursor={cursor:?} limit={limit}");
+        for request_size in [subset.len(), 500, 501] {
+            let subset = subset
+                .iter()
+                .copied()
+                .cycle()
+                .take(request_size)
+                .collect::<Vec<_>>();
+            let page = repo
+                .list_companies_for_soup(&team, VIEWER, &subset, None, sort, cursor, limit)
+                .await?;
+            assert_eq!(
+                ids(&page),
+                want,
+                "{sort:?} cursor={cursor:?} limit={limit} request_size={request_size}"
+            );
+        }
     }
     Ok(())
 }
@@ -831,21 +843,41 @@ async fn list_for_soup_explicit_ids_preserve_set_semantics_and_visibility(
     record_history(&pool, VIEWER, CRM_COMPANY, hidden, ts(5, 0)).await?;
     let repo = CompaniesRepositoryImpl::new(pool);
     let requested = [visible, foreign, hidden, visible, hidden, Uuid::now_v7()];
-    for sort in ALL_SORTS {
-        for (hidden_filter, expected) in [
-            (None, visible),
-            (Some(false), visible),
-            (Some(true), hidden),
-        ] {
-            let page = repo
-                .list_companies_for_soup(&team, VIEWER, &requested, hidden_filter, sort, None, 100)
-                .await?;
-            assert_eq!(ids(&page), [expected], "{sort:?} hidden={hidden_filter:?}");
-            assert_eq!(
-                page[0].company.domains.len(),
-                1,
-                "duplicate IDs do not repeat domains"
-            );
+    for request_size in [requested.len(), 500, 501] {
+        let requested = requested
+            .iter()
+            .copied()
+            .cycle()
+            .take(request_size)
+            .collect::<Vec<_>>();
+        for sort in ALL_SORTS {
+            for (hidden_filter, expected) in [
+                (None, visible),
+                (Some(false), visible),
+                (Some(true), hidden),
+            ] {
+                let page = repo
+                    .list_companies_for_soup(
+                        &team,
+                        VIEWER,
+                        &requested,
+                        hidden_filter,
+                        sort,
+                        None,
+                        100,
+                    )
+                    .await?;
+                assert_eq!(
+                    ids(&page),
+                    [expected],
+                    "{sort:?} hidden={hidden_filter:?} request_size={request_size}"
+                );
+                assert_eq!(
+                    page[0].company.domains.len(),
+                    1,
+                    "duplicate IDs do not repeat domains"
+                );
+            }
         }
     }
     Ok(())

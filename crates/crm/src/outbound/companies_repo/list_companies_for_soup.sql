@@ -6,8 +6,8 @@
 --
 -- Viewed companies get their own branch because a generic plan can look up a
 -- company's view time by scanning the user's whole history for each company.
--- Only the explicit-ids branch, which reads few companies, looks views up per
--- company.
+-- Small explicit-ID batches seek one view per company. Larger explicit sets
+-- retain their previous join, as they can exceed the returned page size.
 WITH limited_companies AS (
     SELECT *
     FROM (
@@ -47,7 +47,33 @@ WITH limited_companies AS (
             ) uh ON uh."userId" = $8
                 AND uh."itemId" = c.id::text
                 AND uh."itemType" = 'crm_company'
-            WHERE cardinality($2::uuid[]) > 0
+            WHERE cardinality($2::uuid[]) BETWEEN 1 AND 500
+              AND c.team_id = $1
+              AND c.hidden = COALESCE($5::bool, FALSE)
+        )
+        UNION ALL
+        -- Soup filters can contain more IDs than the rule/loader batch cap.
+        -- Keep their previous set-based plan: forcing ID probes and history
+        -- seeks on a large set can cost more than its existing joins.
+        (
+            SELECT
+                c.id, c.team_id, c.custom_name, c.email_sync, c.hidden,
+                c.first_interaction, c.last_interaction,
+                CASE $4
+                    WHEN 'created_at' THEN c.first_interaction
+                    WHEN 'viewed_at' THEN uh."updatedAt"
+                    WHEN 'viewed_updated'
+                        THEN COALESCE(uh."updatedAt", c.last_interaction)
+                    ELSE c.last_interaction
+                END AS sort_ts,
+                uh."updatedAt"::timestamptz AS viewed_at
+            FROM crm_companies c
+            LEFT JOIN "UserHistory" uh
+                ON uh."itemId" = c.id::text
+               AND uh."itemType" = 'crm_company'
+               AND uh."userId" = $8
+            WHERE cardinality($2::uuid[]) > 500
+              AND c.id = ANY($2::uuid[])
               AND c.team_id = $1
               AND c.hidden = COALESCE($5::bool, FALSE)
         )
