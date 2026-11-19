@@ -501,7 +501,7 @@ F-038	j and k do not move the cursor
 F-039	a row's checkbox selects nothing
 F-040	the reading pane never opens
 F-041	a row shows another subject
-F-042	the Mail badge never lights
+F-042	use-navigation-unread.ts counts no rows for the Mail entry, so the Mail badge never lights however much new mail is unread.
 F-043	Try again on a failed list does nothing
 F-044	undo of Done does nothing
 F-045	saving a new view from the builder fails
