@@ -759,6 +759,25 @@ async fn an_external_agent_cannot_take_routine_apps() {
     );
 }
 
+/// A delete whose answer was lost is asked again: a session that is not
+/// there is already deleted.
+#[tokio::test]
+async fn deleting_a_session_that_is_gone_succeeds() {
+    let fx = Fixture::new(true);
+    let mut run = test_agent_session(AgentSessionId::new());
+    run.owner_id = fx.session.owner_id.clone();
+    run.bot_id = fx.session.bot_id;
+    run.source = SessionSource::Routine;
+    fx.repo.insert_session(run.clone());
+    let action = RoutineSessionAction {
+        session_id: run.id,
+        ..fx.action()
+    };
+
+    fx.service.delete(action.clone()).await.expect("delete");
+    fx.service.delete(action).await.expect("delete again");
+}
+
 #[tokio::test]
 async fn only_a_session_the_scheduler_opened_can_be_deleted() {
     let fx = Fixture::new(true);

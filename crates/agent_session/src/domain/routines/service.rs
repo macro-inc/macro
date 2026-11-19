@@ -122,22 +122,32 @@ where
         &self,
         action: &RoutineSessionAction,
     ) -> Result<AgentSession, RoutineSessionError> {
+        self.find_owned_session(action)
+            .await?
+            .ok_or(RoutineSessionError::OperationFailed)
+    }
+
+    /// The owner's session `action` names, or `None` when there is none.
+    async fn find_owned_session(
+        &self,
+        action: &RoutineSessionAction,
+    ) -> Result<Option<AgentSession>, RoutineSessionError> {
         validate_session_id(action.session_id)?;
         if action.action_id.as_uuid().get_version_num() != 7 {
             return Err(RoutineSessionError::InvalidCommand);
         }
-        let session = self
-            .sessions
-            .get_session(action.session_id)
-            .await
-            .map_err(session_error)?;
+        let session = match self.sessions.get_session(action.session_id).await {
+            Ok(session) => session,
+            Err(AgentSessionError::NotFound(_)) => return Ok(None),
+            Err(error) => return Err(session_error(error)),
+        };
         if session.id != action.session_id
             || session.bot_id != action.bot_id
             || session.owner_id != Owner::User(action.owner.clone())
         {
             return Err(RoutineSessionError::Forbidden);
         }
-        Ok(session)
+        Ok(Some(session))
     }
 }
 
@@ -336,7 +346,11 @@ where
     }
 
     async fn delete(&self, command: RoutineSessionAction) -> Result<(), RoutineSessionError> {
-        let session = self.owned_session(&command).await?;
+        // A session that is not there is deleted: a caller whose earlier
+        // delete took effect, but whose answer was lost, asks again.
+        let Some(session) = self.find_owned_session(&command).await? else {
+            return Ok(());
+        };
         // A routine's run, or a draft's session: the two kinds the scheduler
         // opens. Anything else is the person's own.
         if session.source != crate::domain::model::SessionSource::Routine
@@ -344,10 +358,10 @@ where
         {
             return Err(RoutineSessionError::Forbidden);
         }
-        self.sessions
-            .delete_session(command.session_id)
-            .await
-            .map_err(session_error)
+        match self.sessions.delete_session(command.session_id).await {
+            Ok(()) | Err(AgentSessionError::NotFound(_)) => Ok(()),
+            Err(error) => Err(session_error(error)),
+        }
     }
 }
 
