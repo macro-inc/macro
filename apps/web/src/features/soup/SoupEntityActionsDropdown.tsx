@@ -2,9 +2,12 @@ import type {
   EntityActionListState,
   EntityActionViewContext,
 } from '@app/features/next-soup/actions';
+import type { CopyMenuItem, MenuItem } from '@core/component/ContextMenu';
 import type { EntityData } from '@entity';
 import { Dropdown } from '@ui';
-import { type ComponentProps, createSignal, type JSX } from 'solid-js';
+import { Hotkey } from '@ui/components/Hotkey';
+import { type ComponentProps, createSignal, type JSX, Show } from 'solid-js';
+import { Dynamic } from 'solid-js/web';
 import { SoupEntityActionsMenu } from './SoupEntityActionsMenu';
 import { createSoupEntityMenuPickers } from './SoupEntityMenuPickers';
 
@@ -62,8 +65,7 @@ export function SoupEntityActionsDropdown(
         </Dropdown.Trigger>
         <Dropdown.Content
           class={
-            props.contentClass ??
-            'min-w-64 max-w-[min(22rem,calc(100vw-1rem))] text-xs text-ink-muted'
+            props.contentClass ?? 'min-w-64 max-w-[min(22rem,calc(100vw-1rem))]'
           }
         >
           <Dropdown.Group>
@@ -72,6 +74,11 @@ export function SoupEntityActionsDropdown(
               list={props.list}
               viewContext={props.viewContext}
               onActionComplete={() => setOpen(false)}
+              item={DropdownActionItem}
+              copyItem={DropdownCopyActionItem}
+              separator={() => (
+                <Dropdown.Separator class="my-1.5 h-px border-0 bg-edge-muted" />
+              )}
               onSetProject={pickers.openProjectPicker}
               onEditTags={pickers.openTagPicker()}
               extraItems={props.extraItems}
@@ -81,5 +88,72 @@ export function SoupEntityActionsDropdown(
       </Dropdown>
       <pickers.Pickers />
     </>
+  );
+}
+
+function DropdownActionContent(props: ComponentProps<typeof MenuItem>) {
+  return (
+    <>
+      <Show when={props.icon}>
+        {typeof props.icon === 'function' ? (
+          <Dynamic component={props.icon} class="size-4 shrink-0" />
+        ) : (
+          props.icon
+        )}
+      </Show>
+      <Dropdown.ItemLabel
+        class={`min-w-0 flex-1 truncate ${props.class ?? ''}`}
+      >
+        {props.text}
+      </Dropdown.ItemLabel>
+      <Show when={props.hotkeyToken || props.shortcut}>
+        <Hotkey
+          token={props.hotkeyToken}
+          shortcut={props.shortcut}
+          theme="subtle"
+          showPlus
+        />
+      </Show>
+    </>
+  );
+}
+
+function DropdownActionItem(props: ComponentProps<typeof MenuItem>) {
+  return (
+    <Dropdown.Item
+      disabled={props.disabled}
+      closeOnSelect={props.closeOnSelect}
+      onSelect={props.onClick}
+    >
+      <DropdownActionContent {...props} />
+    </Dropdown.Item>
+  );
+}
+
+function DropdownCopyActionItem(props: ComponentProps<typeof CopyMenuItem>) {
+  return (
+    <Dropdown.CopyItem
+      disabled={props.disabled}
+      onCopy={props.onCopy}
+      icon={
+        typeof props.icon === 'function' ? (
+          <Dynamic component={props.icon} class="size-4 shrink-0" />
+        ) : (
+          props.icon
+        )
+      }
+    >
+      <Dropdown.ItemLabel class="min-w-0 flex-1 truncate">
+        {props.text}
+      </Dropdown.ItemLabel>
+      <Show when={props.hotkeyToken || props.shortcut}>
+        <Hotkey
+          token={props.hotkeyToken}
+          shortcut={props.shortcut}
+          theme="subtle"
+          showPlus
+        />
+      </Show>
+    </Dropdown.CopyItem>
   );
 }

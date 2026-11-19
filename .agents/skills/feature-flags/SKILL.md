@@ -87,6 +87,10 @@ These are the mistakes past flagged launches had to fix:
   `false` and `useFeatureFlag` returns `{ loading: true }`. A cold deep link
   must wait for `loading` to clear rather than fall back to the off path (see
   the Activity route's `flagsLoaded` gate), or the page flashes or degrades.
+  A build that never starts PostHog (no `VITE_POSTHOG_API_KEY`, or the Vite
+  dev server) answers at once, as an unreachable PostHog does: every flag
+  without a `default` or env override reads off, not loading (on for a reader
+  that passes `enabledWhenUnreachable`).
 - **Read reactively** (FE-52): call `isFeatureEnabled` / `useFeatureFlag` inside
   a reactive scope, never snapshot it at mount or module load.
 - **Gate every entry point**: routes, deep links, previews, copy-link,

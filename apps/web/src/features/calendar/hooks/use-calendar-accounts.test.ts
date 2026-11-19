@@ -11,6 +11,7 @@ const link = (id: string, overrides: Partial<EmailLink> = {}): EmailLink =>
     needs_calendar_permission: false,
     calendar_disabled: false,
     has_calendar_data: true,
+    is_sync_active: true,
     is_primary: false,
     ...overrides,
   }) as unknown as EmailLink;
@@ -21,6 +22,7 @@ describe('toCalendarAccounts', () => {
       toCalendarAccounts([link('a', { needs_reauth: true })], 'macro|self')[0]
     ).toMatchObject({
       action: 'reconnect',
+      stoppedSyncing: false,
       consentScopes: 'gmail_and_calendar',
     });
   });
@@ -32,19 +34,27 @@ describe('toCalendarAccounts', () => {
         linkId: 'a',
         emailAddress: 'a@example.com',
         action: 'turnOff',
+        stoppedSyncing: false,
         consentScopes: 'calendar',
       },
     ]);
   });
 
   it('offers enable for an inbox missing calendar permission', () => {
-    const links = [link('a', { needs_calendar_permission: true })];
+    const links = [
+      link('a', {
+        needs_calendar_permission: true,
+        has_calendar_data: false,
+        is_sync_active: true,
+      }),
+    ];
     expect(toCalendarAccounts(links, 'macro|self')).toEqual([
       {
         provider: 'GMAIL',
         linkId: 'a',
         emailAddress: 'a@example.com',
         action: 'enable',
+        stoppedSyncing: false,
         consentScopes: 'calendar',
       },
     ]);
@@ -57,28 +67,46 @@ describe('toCalendarAccounts', () => {
     expect(toCalendarAccounts(links, 'macro|self')[0]?.action).toBe('enable');
   });
 
-  it.each([false, true])(
-    'explicitly enables calendar when a revoked inbox has calendar_disabled=%s',
-    (disabled) => {
+  it.each([
+    {
+      case: 'never had it',
+      calendar_disabled: false,
+      has_calendar_data: false,
+    },
+    { case: 'lost it', calendar_disabled: false, has_calendar_data: true },
+    { case: 'turned it off', calendar_disabled: true, has_calendar_data: true },
+  ])(
+    'offers reconnect for a revoked inbox without calendar access that $case',
+    ({ calendar_disabled, has_calendar_data }) => {
       const links = [
         link('a', {
           needs_reauth: true,
           needs_calendar_permission: true,
-          calendar_disabled: disabled,
+          calendar_disabled,
+          has_calendar_data,
         }),
       ];
       expect(toCalendarAccounts(links, 'macro|self')[0]).toMatchObject({
-        action: 'enable',
+        action: 'reconnect',
+        stoppedSyncing: false,
         consentScopes: 'gmail_and_calendar',
       });
     }
   );
 
-  it('offers enable — not turn-off — for a legacy inbox with stale data', () => {
+  it('offers reconnect — not turn-off — for a calendar that stopped syncing', () => {
     const links = [
-      link('a', { needs_calendar_permission: true, has_calendar_data: true }),
+      link('a', {
+        needs_calendar_permission: true,
+        has_calendar_data: true,
+        is_sync_active: true,
+      }),
     ];
-    expect(toCalendarAccounts(links, 'macro|self')[0]?.action).toBe('enable');
+    expect(toCalendarAccounts(links, 'macro|self')[0]).toMatchObject({
+      action: 'reconnect',
+      stoppedSyncing: true,
+      consentScopes: 'calendar',
+    });
   });
 
   it('sorts the primary inbox first and keeps the rest in order', () => {
@@ -100,6 +128,7 @@ describe('toCalendarAccounts', () => {
         linkId: 'own',
         emailAddress: 'own@example.com',
         action: 'turnOff',
+        stoppedSyncing: false,
         consentScopes: 'calendar',
       },
     ]);

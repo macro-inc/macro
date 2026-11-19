@@ -60,7 +60,6 @@ vi.mock('@core/mobile/haptics', () => ({ hapticImpact: vi.fn() }));
 vi.mock('@components/app/mobile/use-mobile-nav', () => ({
   useForegroundMobileView: () => () =>
     mocks.viewAccessor ? mocks.viewAccessor() : mocks.view,
-  useForegroundProject: () => () => false,
   useMobileNavNavigate: () => vi.fn(),
 }));
 vi.mock('@components/app/mobile/mobile-dock-views', () => ({
@@ -222,6 +221,27 @@ describe('Mobile page action row', () => {
     expect(screen.queryByRole('button', { name: 'New email' })).toBeNull();
     page.unmount();
     expect(mocks.unmountComposer).toHaveBeenCalledOnce();
+  });
+
+  it('restores the shared action when the page action becomes unavailable', () => {
+    const [pageActive, setPageActive] = createSignal(false);
+    render(() => (
+      <>
+        <FloatRegion region="accessory" active={pageActive}>
+          <button>Page action</button>
+        </FloatRegion>
+        <MobilePageActionRow />
+      </>
+    ));
+
+    expect(screen.getByRole('button', { name: 'New email' })).toBeTruthy();
+    setPageActive(true);
+    expect(screen.queryByRole('button', { name: 'New email' })).toBeNull();
+    expect(screen.getByRole('button', { name: 'Page action' })).toBeTruthy();
+
+    setPageActive(false);
+    expect(screen.getByRole('button', { name: 'New email' })).toBeTruthy();
+    expect(screen.queryByRole('button', { name: 'Page action' })).toBeNull();
   });
   it('lets search take precedence over a document composer, then restores the available accessory', () => {
     const [canComment, setCanComment] = createSignal(true);

@@ -1,5 +1,6 @@
 import type { DateTimeRangeProps } from '@app/components/date-time-range/date-time-range-fields';
 import { useMacroMentionLinkResolver } from '@components/app/split-layout/split-router/mention-links';
+import { useCalendarFirstSync } from '@queries/calendar/first-sync';
 import type { CalendarUpdateScope } from '@service-email/client';
 import type { JSX } from 'solid-js';
 import { createEffect, createSignal, createUniqueId } from 'solid-js';
@@ -67,6 +68,9 @@ export function createEventForm(props: EventFormProps) {
   const state = controller.state;
   const isEdit = () => props.isEdit ?? false;
   const formIsDisabled = () => props.pending || props.disabled === true;
+  const calendarFirstSync = useCalendarFirstSync(
+    () => !isEdit() && controller.calendarOptions().length === 0
+  );
 
   // Recurring edits default to the whole series, matching the long-standing
   // behavior; "this event" writes a single-occurrence exception.
@@ -201,7 +205,7 @@ export function createEventForm(props: EventFormProps) {
 
   const submit = () => {
     const values = controller.submitValues();
-    if (!values || formIsDisabled()) return;
+    if (!values || formIsDisabled() || calendarFirstSync()) return;
     props.onSubmit(
       values,
       props.showRecurringEditNotice ? editScope() : undefined
@@ -216,6 +220,7 @@ export function createEventForm(props: EventFormProps) {
     resolveAppLink: useMacroMentionLinkResolver(),
     isEdit,
     formIsDisabled,
+    calendarFirstSync,
     editScope,
     changeEditScope,
     pastEventWarning,

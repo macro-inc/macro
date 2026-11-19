@@ -99,7 +99,7 @@ impl ConnectionStore for PgConnectionRepo {
         Ok(())
     }
 
-    #[tracing::instrument(skip(self), err)]
+    #[tracing::instrument(skip(self, user_id), err)]
     async fn list(
         &self,
         user_id: &MacroUserIdStr<'static>,

@@ -7,6 +7,8 @@ pub(crate) mod document;
 pub(crate) mod email;
 pub(crate) mod project;
 pub(crate) mod properties;
+#[cfg(test)]
+mod test_support;
 mod user;
 pub mod worker;
 
@@ -31,7 +33,7 @@ pub async fn process_message(
         serde_json::from_str(message_str).context("failed to deserialize message")?;
 
     tracing::trace!(
-        search_extractor_message=?search_extractor_message,
+        operation = %search_extractor_message.operation(),
         "received search extractor message"
     );
 
@@ -149,6 +151,22 @@ pub async fn process_message(
                     "calendar search is disabled; not indexing calendar event"
                 );
             }
+        }
+        #[cfg(feature = "processing")]
+        SearchQueueMessage::ReplayBrokerEvent(replay) => {
+            use crate::inbound::kafka_consumer::{ReplayDone, replay_broker_event};
+            let receive_count = sqs_worker::receive_count(message).unwrap_or(1);
+            if replay_broker_event(&ctx.broker_events, &replay, receive_count).await
+                == ReplayDone::Redeliver
+            {
+                // Left on the queue, which delivers it again or dead-letters
+                // it; the replay already logged why.
+                return Ok(());
+            }
+        }
+        #[cfg(not(feature = "processing"))]
+        SearchQueueMessage::ReplayBrokerEvent(_) => {
+            anyhow::bail!("this build does not process broker events")
         }
     }
 

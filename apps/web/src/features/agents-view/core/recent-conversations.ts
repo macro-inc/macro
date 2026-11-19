@@ -6,6 +6,11 @@ import type {
 } from '@entity';
 import { isSessionArchived } from '@service-agent-harness/session-archive';
 import { type AgentKind, kindForHarness, modeForKind } from './agent-kind';
+import {
+  type ConversationSort,
+  sortConversations,
+  sortConversationTimestamp,
+} from './conversation-list';
 import type { AgentsMode } from './mode';
 
 export type AgentConversationEntity = WithNotification<
@@ -34,42 +39,38 @@ function isAgentConversation(
 export function conversationTimestamp(
   entity: Pick<AgentConversationEntity, 'updatedAt' | 'createdAt'>
 ): number {
-  const value = entity.updatedAt ?? entity.createdAt;
-  if (!value) return 0;
-
-  const parsed = new Date(value).getTime();
-  return Number.isNaN(parsed) ? 0 : parsed;
+  return sortConversationTimestamp(entity, 'updated');
 }
 
 /** Select the current user's agent conversations, newest first. */
 export function selectRecentAgentConversations(
   entities: EntityData[],
   ownerId: string | undefined,
-  search: string
+  search: string,
+  sort: ConversationSort = 'updated'
 ): AgentConversationEntity[] {
   if (!ownerId) return [];
 
   const query = search.trim().toLocaleLowerCase();
 
-  return entities
-    .filter(isAgentConversation)
-    .filter((entity) => entity.ownerId === ownerId)
-    .filter(
-      (entity) =>
-        !query ||
-        (
-          entity.name ||
-          (entity.type === 'agent_session'
-            ? 'Untitled conversation'
-            : 'Untitled chat')
-        )
-          .toLocaleLowerCase()
-          .includes(query)
-    )
-    .toSorted(
-      (left, right) =>
-        conversationTimestamp(right) - conversationTimestamp(left)
-    );
+  return sortConversations(
+    entities
+      .filter(isAgentConversation)
+      .filter((entity) => entity.ownerId === ownerId)
+      .filter(
+        (entity) =>
+          !query ||
+          (
+            entity.name ||
+            (entity.type === 'agent_session'
+              ? 'Untitled conversation'
+              : 'Untitled chat')
+          )
+            .toLocaleLowerCase()
+            .includes(query)
+      ),
+    sort
+  );
 }
 
 /** Names the bot behind a session. Plain chats are always Macro's. */

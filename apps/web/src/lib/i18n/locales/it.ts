@@ -104,7 +104,6 @@ export default {
     close: 'Chiudi',
     delete: 'Elimina',
     rename: 'Rinomina',
-    more: 'Altro',
     search: 'Cerca',
     settings: 'Impostazioni',
   },

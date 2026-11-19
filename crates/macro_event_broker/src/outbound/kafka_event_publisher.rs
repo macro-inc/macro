@@ -27,9 +27,14 @@ impl KafkaEventPublisher {
 }
 
 impl EventPublisher for KafkaEventPublisher {
-    async fn publish<T: Topic>(&self, key: &str, payload: &[u8]) -> Result<(), EventBrokerError> {
+    async fn publish<T: Topic>(
+        &self,
+        key: &str,
+        event_type: Option<&str>,
+        payload: &[u8],
+    ) -> Result<(), EventBrokerError> {
         self.producer
-            .send(T::TOPIC_STR, key, payload)
+            .send(T::TOPIC_STR, key, event_type, payload)
             .await
             .map_err(|error| EventBrokerError::Publish(error.to_string()))
     }

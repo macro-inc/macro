@@ -103,7 +103,6 @@ export default {
     close: '关闭',
     delete: '删除',
     rename: '重命名',
-    more: '更多',
     search: '搜索',
     settings: '设置',
   },

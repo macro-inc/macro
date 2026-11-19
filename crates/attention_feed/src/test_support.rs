@@ -342,6 +342,10 @@ pub struct FakeSource<E> {
     pub items: Arc<Mutex<Vec<Candidate<E>>>>,
     /// Every request received, in order.
     pub requests: Arc<Mutex<Vec<CandidateRequest>>>,
+    /// The keys `unread_keys` serves, before its limit per type.
+    pub unread: Arc<Mutex<Vec<Entity<'static>>>>,
+    /// How many times `unread_keys` was asked.
+    pub unread_reads: Arc<Mutex<usize>>,
 }
 
 impl<E> Clone for FakeSource<E> {
@@ -349,6 +353,8 @@ impl<E> Clone for FakeSource<E> {
         Self {
             items: Arc::clone(&self.items),
             requests: Arc::clone(&self.requests),
+            unread: Arc::clone(&self.unread),
+            unread_reads: Arc::clone(&self.unread_reads),
         }
     }
 }
@@ -359,6 +365,8 @@ impl<E> FakeSource<E> {
         Self {
             items: Arc::new(Mutex::new(items)),
             requests: Arc::default(),
+            unread: Arc::default(),
+            unread_reads: Arc::default(),
         }
     }
 }
@@ -397,6 +405,29 @@ where
             }
         });
         Ok(CandidatePage { items: page, next })
+    }
+
+    async fn unread_keys(
+        &self,
+        _viewer: &FeedViewer,
+        types: Vec<EntityType>,
+        limit: u16,
+    ) -> Result<Vec<Entity<'static>>, Report> {
+        *self.unread_reads.lock().unwrap() += 1;
+        let mut served: HashMap<EntityType, usize> = HashMap::new();
+        Ok(self
+            .unread
+            .lock()
+            .unwrap()
+            .iter()
+            .filter(|key| types.contains(&key.entity_type))
+            .filter(|key| {
+                let count = served.entry(key.entity_type).or_default();
+                *count += 1;
+                *count <= usize::from(limit)
+            })
+            .cloned()
+            .collect())
     }
 }
 

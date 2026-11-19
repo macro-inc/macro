@@ -1,5 +1,6 @@
-import { isTransientRequestError } from '@core/util/request-error';
+import { isAccessRequestError } from '@core/util/request-error';
 import type { ChannelEntity } from '@entity/types/entity';
+import { Telemetry } from '@macro-inc/observability';
 import { type Accessor, createEffect, createMemo, on } from 'solid-js';
 import type {
   ChannelDestination,
@@ -34,7 +35,9 @@ export function createChannelDetail(options: {
     const id = channelId();
     if (!id) return { status: 'loading' };
     const load = options.source.load();
-    if (load.status === 'error' && !isTransientRequestError(load.error))
+    // Only a refusal means no access. Any other failure, including a GraphQL
+    // error from a server fault, keeps the open channel or offers a retry.
+    if (load.status === 'error' && isAccessRequestError(load.error))
       return { status: 'unavailable', channelId: id, denied: true };
     if (load.status === 'ready') {
       const channel = complete();
@@ -57,6 +60,26 @@ export function createChannelDetail(options: {
       ? { status: 'unavailable', channelId: id, denied: false }
       : { status: 'loading' };
   });
+
+  // Record each move into an unavailable state with what caused it: denied
+  // (a refusal), a ready load (the server returned no channel), or an error.
+  createEffect(
+    on(view, (current, previous) => {
+      if (current.status !== 'unavailable') return;
+      // A confirmed absence is rebuilt on every refetch; log it once.
+      if (
+        previous?.status === 'unavailable' &&
+        previous.channelId === current.channelId &&
+        previous.denied === current.denied
+      )
+        return;
+      Telemetry.warn('channel.detail.unavailable', {
+        'channel.id': current.channelId,
+        'channel.detail.denied': current.denied,
+        'channel.detail.load_status': options.source.load().status,
+      });
+    })
+  );
 
   // Conversation opens always start at latest; only explicit links pick a message.
   const target = createMemo<ChannelDestination>(() => {

@@ -103,7 +103,6 @@ export default {
     close: '닫기',
     delete: '삭제',
     rename: '이름 바꾸기',
-    more: '더보기',
     search: '검색',
     settings: '설정',
   },

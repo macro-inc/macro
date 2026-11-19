@@ -28,6 +28,8 @@ network/resource-only Pulumi stacks; they do not host extra agent processes.
   `ahs.harness.hydrated`, `ahs.agent_session.active` (every runtime's actors),
   `ahs.inmem.store_sessions`, `ahs.inmem.live_agents`,
   `ahs.tokio.alive_tasks`); no per-session attributes.
+- `src/cognition/server.rs`: both email-service compositions inject CRM rule
+  discovery; selected Team reads fail closed if a host omits that capability.
 - `src/trigger.rs`: turns channel/webhook triggers into sessions.
 - `src/pull_request_archive.rs`: consumes `macro.github_pull_requests` (group
   `agent-harness-pull-request-archive`) and auto-archives sessions whose
@@ -130,7 +132,8 @@ network/resource-only Pulumi stacks; they do not host extra agent processes.
 - `src/computers/claude.rs`: Claude sign-in on Macro computers. All routes
   require the caller's `enable-macro-computers` flag through
   `hosted_runtimes::domain::rollout::ComputerRollout` (missing providers/flags
-  and evaluation errors return 403) and an attached fleet (503).
+  and evaluation errors return 403 with `code: rollout_disabled`; a caller
+  without manage rights gets a 403 with no code) and an attached fleet (503).
   `POST /harnesses/{id}/claude-sign-in` → `{url}`,
   `POST /harnesses/{id}/claude-sign-in/complete` `{code}` → `{signedIn}`
   (a failed sign-in carries a `code` saying how to recover:
@@ -272,6 +275,10 @@ network/resource-only Pulumi stacks; they do not host extra agent processes.
   rewritten step, at run time or in the startup sweep) also signs the
   `dry_run` scope (`routine_claims`), so every SDK host refuses its writes
   even when code gets past the dry run inside its process.
+  Entity knobs' items are checked as the owner on save, and in a run when
+  the first code step that uses each starts (`KnobEntityAccess`, people through notifications' user check, and
+  trash and a task's subtype through `RoutineLiveItems` in
+  `src/scheduling.rs`).
   Routine suggestions (`src/scheduling/routine_suggestions.rs`) read the
   newest 100 messages (labels, 500-character snippets) through
   email_service's internal recent-messages route and the person's connected

@@ -12,6 +12,7 @@ vi.mock('@core/component/Toast/Toast', () => ({
 }));
 
 import { setGlobalSplitManager } from '@app/signal/splitLayout';
+import { createCloseOnNavigation } from '@components/app/mobile/close-on-navigation';
 import type {
   SplitEventWithType,
   SplitManager,
@@ -44,6 +45,7 @@ function managerHarness(initiallyReady = false) {
     contentNavigationReady: ready,
     contentNavigationVersion: version,
     events: event,
+    activeSplitId: () => undefined,
   } as unknown as SplitManager;
 
   return {
@@ -135,6 +137,28 @@ describe('usePendingNotificationNavigationEffect', () => {
 
     attempts[0]?.onApplied();
     expect(pendingNotificationNavigationId()).toBeUndefined();
+  });
+
+  it('closes open sheets before navigating, even to the page already shown', async () => {
+    const host = managerHarness(true);
+    mount();
+    setGlobalSplitManager(host.manager);
+    const closeSheet = vi.fn();
+    const disposeSheet = createRoot((rootDispose) => {
+      createCloseOnNavigation({ open: () => true, close: closeSheet });
+      return rootDispose;
+    });
+    let closedBeforeOpening = false;
+    mocks.openNotificationFromId.mockImplementationOnce(() => {
+      closedBeforeOpening = closeSheet.mock.calls.length === 1;
+      return { match: () => {} };
+    });
+
+    setPendingNotificationNavigationId('notification-1');
+    await Promise.resolve();
+    disposeSheet();
+
+    expect(closedBeforeOpening).toBe(true);
   });
 
   it('waits for feature flags before opening, so a gated handler does not read them as off', async () => {

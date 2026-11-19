@@ -182,6 +182,10 @@ pub enum ChannelNotificationEffect {
         sender_profile_picture_url: Option<String>,
         /// Users that should receive the notification.
         recipient_ids: HashSet<MacroUserIdStr<'static>>,
+        /// Members the reply @mentions, left out of `recipient_ids` because
+        /// they get a mention notification. Ingress adds back each one who
+        /// turned mentions off for the channel.
+        mention_fallback_ids: HashSet<MacroUserIdStr<'static>>,
     },
     /// A reaction was added to a user's message.
     Reaction {
@@ -222,6 +226,10 @@ pub enum ChannelNotificationEffect {
         sender_profile_picture_url: Option<String>,
         /// Users that should receive the notification.
         recipient_ids: HashSet<MacroUserIdStr<'static>>,
+        /// Members the message @mentions, left out of `recipient_ids` because
+        /// they get a mention notification. Ingress adds back each one who
+        /// turned mentions off for the channel.
+        mention_fallback_ids: HashSet<MacroUserIdStr<'static>>,
     },
     /// Someone asked to join a channel.
     AccessRequested {
@@ -739,6 +747,14 @@ where
             excluded_user_ids.iter().map(String::as_str),
         )
         .collect();
+        let mentioned_members = recipients_excluding(
+            user_mentions
+                .iter()
+                .map(String::as_str)
+                .filter(|user_id| channel_members.contains(user_id)),
+            sender.as_user().map(|user_id| user_id.as_ref()),
+        )
+        .collect();
 
         Ok(PostedMessageNotificationContext {
             metadata,
@@ -751,6 +767,7 @@ where
             excluded_user_ids,
             recipients_without_sender,
             recipients_without_sender_and_mentions,
+            mentioned_members,
             is_first_top_level_message,
         })
     }
@@ -897,6 +914,18 @@ where
                 context.excluded_user_ids.iter().map(String::as_str),
             )
             .collect(),
+            // Only members who follow the thread hear about its replies.
+            mention_fallback_ids: context
+                .mentioned_members
+                .iter()
+                .filter(|user_id| {
+                    context
+                        .thread_audience
+                        .iter()
+                        .any(|id| id == user_id.as_ref())
+                })
+                .cloned()
+                .collect(),
         })
         .await;
     }
@@ -983,6 +1012,7 @@ where
             metadata: context.metadata.clone(),
             sender_profile_picture_url: context.sender_profile_picture_url.clone(),
             recipient_ids: context.recipients_without_sender_and_mentions.clone(),
+            mention_fallback_ids: context.mentioned_members.clone(),
         })
         .await;
     }
@@ -1086,6 +1116,8 @@ struct PostedMessageNotificationContext {
     excluded_user_ids: Vec<String>,
     recipients_without_sender: HashSet<MacroUserIdStr<'static>>,
     recipients_without_sender_and_mentions: HashSet<MacroUserIdStr<'static>>,
+    /// Channel members the message @mentions, other than its sender.
+    mentioned_members: HashSet<MacroUserIdStr<'static>>,
     is_first_top_level_message: bool,
 }
 
@@ -1178,10 +1210,15 @@ fn broker_events_for_event(event: &ChannelEvent) -> Vec<ChannelMacroEvent> {
             previous_name: previous_name.clone(),
             channel_name: channel_name.clone(),
         })],
-        ChannelEvent::ChannelDeleted { channel_id, actor } => {
+        ChannelEvent::ChannelDeleted {
+            channel_id,
+            actor,
+            participant_user_ids,
+        } => {
             vec![ChannelMacroEvent::deleted(ChannelDeletedMetadata {
                 channel_id: *channel_id,
                 actor: actor.clone(),
+                participant_user_ids: participant_user_ids.clone(),
             })]
         }
         // Message facts travel on `macro.messages` with their parent.
