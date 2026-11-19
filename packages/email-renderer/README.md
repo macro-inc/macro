@@ -128,6 +128,10 @@ There is no implicit fetch client or native-platform detection in this package.
 - The app decides when to adapt colors and normalize fonts. Its current policy
   adapts personal/table-less email and preserves designed newsletters on a white
   background. Sender classification and Macro-specific rendering stay in the app.
+- Color adaptation removes light background colors and light gradients that sit
+  on no other background, and recolors text for the theme. It keeps colored
+  backgrounds and background images, and leaves text on any remaining
+  background in the sender's colors.
 
 The app sends ordinary HTML through this package. Plaintext and Macro Markdown
 retain the app's existing Markdown renderer, including document mentions and
