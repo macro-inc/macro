@@ -3,6 +3,7 @@ import { SERVER_HOSTS } from '@core/constant/servers';
 import { fireAndForget } from '@core/util/fireAndForget';
 import {
   guardResponseBody,
+  guardResponseDecoders,
   registerResponseObserver,
 } from '@core/util/response-observers';
 import { StaleCacheAuthorityError } from '@graphql-cache/authority';
@@ -245,7 +246,11 @@ function install() {
       // GraphQL distinguishes queries from mutations in its exchange. REST writes
       // keep their outcome; TanStack cancellation fences POST-based query results.
       if (method !== 'GET' && method !== 'HEAD') return response;
-      return guardResponseBody(response, () => {
+      // Only storage bodies can carry content a revocation retires chunk by
+      // chunk. Other origins keep their native stream and are checked once
+      // decoded.
+      const guardBody = isStorage ? guardResponseBody : guardResponseDecoders;
+      return guardBody(response, () => {
         if (!cacheSessionGeneration.isCurrent(generation))
           throw new StaleCacheAuthorityError();
       });

@@ -21,7 +21,48 @@ export function prepareResponseObservers(
   return (response) => guards.reduce((value, guard) => guard(value), response);
 }
 
-/** A response can arrive before a revocation but finish decoding after it. */
+const BODY_DECODERS = [
+  'json',
+  'text',
+  'arrayBuffer',
+  'blob',
+  'formData',
+  'bytes',
+] as const;
+
+/**
+ * Checks a response once its body has been decoded, leaving the native body and
+ * its streaming untouched. For responses that need no check per chunk.
+ */
+export function guardResponseDecoders(
+  response: Response,
+  guard: () => void
+): Response {
+  for (const name of BODY_DECODERS) {
+    if (typeof response[name] !== 'function') continue;
+    const read = response[name].bind(response);
+    Object.defineProperty(response, name, {
+      configurable: true,
+      value: async () => {
+        const value = await read();
+        guard();
+        return value;
+      },
+    });
+  }
+  const clone = response.clone.bind(response);
+  Object.defineProperty(response, 'clone', {
+    configurable: true,
+    value: () => guardResponseDecoders(clone(), guard),
+  });
+  return response;
+}
+
+/**
+ * A response can arrive before a revocation but finish decoding after it. This
+ * guard also checks every streamed chunk, by re-pumping the body through a
+ * script stream; use it only where a body can carry content a revocation retires.
+ */
 export function guardResponseBody(
   response: Response,
   guard: () => void
@@ -76,14 +117,7 @@ export function guardResponseBody(
       return stream;
     },
   });
-  for (const name of [
-    'json',
-    'text',
-    'arrayBuffer',
-    'blob',
-    'formData',
-    'bytes',
-  ] as const) {
+  for (const name of BODY_DECODERS) {
     if (typeof response[name] !== 'function') continue;
     const read = response[name].bind(response);
     Object.defineProperty(response, name, {

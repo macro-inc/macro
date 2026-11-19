@@ -1,6 +1,7 @@
 import { describe, expect, it, vi } from 'vitest';
 import {
   guardResponseBody,
+  guardResponseDecoders,
   prepareResponseObservers,
   registerResponseObserver,
 } from './response-observers';
@@ -35,6 +36,21 @@ describe('response permission guards', () => {
     await expect(clone.json()).resolves.toEqual({ name: 'record' });
     expect(response.bodyUsed).toBe(true);
     expect(clone.bodyUsed).toBe(true);
+  });
+
+  it('checks a decoded body without replacing the native stream, including clones', async () => {
+    let current = true;
+    const guard = () => {
+      if (!current) throw new Error('revoked');
+    };
+    const original = new Response('{"name":"record"}');
+    const body = original.body;
+    const response = guardResponseDecoders(original, guard);
+    expect(response.body).toBe(body);
+    const clone = response.clone();
+    await expect(response.json()).resolves.toEqual({ name: 'record' });
+    current = false;
+    await expect(clone.text()).rejects.toThrow('revoked');
   });
 
   it('preserves every observer guard when decorating a response and its clones', async () => {

@@ -396,6 +396,32 @@ it('backs off hint-triggered proofs while they keep failing and resets once the 
   }
 });
 
+it('re-pumps only storage response bodies and leaves other origins on their native stream', async () => {
+  await boot();
+  const email = new Response('{}');
+  const emailBody = email.body;
+  const guardedEmail = prepareResponseObservers(
+    'http://localhost/email/threads',
+    { method: 'GET' }
+  )(email);
+  expect(guardedEmail.body).toBe(emailBody);
+  const storage = new Response('{}');
+  const storageBody = storage.body;
+  const guardedStorage = prepareResponseObservers(
+    'http://localhost/dss/crm/companies',
+    { method: 'GET' }
+  )(storage);
+  expect(guardedStorage.body).not.toBe(storageBody);
+  // Both still reject a body decoded after the session changed.
+  await cacheSessionGeneration.transition(async () => {});
+  await expect(guardedEmail.json()).rejects.toBeInstanceOf(
+    StaleCacheAuthorityError
+  );
+  await expect(guardedStorage.json()).rejects.toBeInstanceOf(
+    StaleCacheAuthorityError
+  );
+});
+
 it('rejects an older REST read after retirement while preserving a write outcome', async () => {
   await boot();
   const read = await prepareResponseObservers(
