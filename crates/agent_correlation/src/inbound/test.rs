@@ -57,6 +57,7 @@ fn mint(
         agent_correlation_id: correlation,
         agent_session_id: None,
         routine_id: routine,
+        channel_mention_id: None,
         agent_scope: scope.map(str::to_owned),
     })
     .unwrap()
@@ -504,6 +505,7 @@ async fn a_scoped_token_in_the_cookie_scopes_the_request_whatever_else_it_carrie
         agent_correlation_id: None,
         agent_session_id: None,
         routine_id: None,
+        channel_mention_id: None,
         agent_scope: None,
     })
     .unwrap();
@@ -647,6 +649,7 @@ async fn propagate_refuses_tokens_of_different_users() {
         agent_correlation_id: None,
         agent_session_id: None,
         routine_id: None,
+        channel_mention_id: None,
         agent_scope: None,
     })
     .unwrap();

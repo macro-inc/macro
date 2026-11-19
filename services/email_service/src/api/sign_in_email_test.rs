@@ -66,6 +66,7 @@ fn token(agent: Option<Uuid>, routine: Option<Uuid>) -> String {
         agent_correlation_id: None,
         agent_session_id: None,
         routine_id: routine,
+        channel_mention_id: None,
         agent_scope: None,
     })
     .unwrap()

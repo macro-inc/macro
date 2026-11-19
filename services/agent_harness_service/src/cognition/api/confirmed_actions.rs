@@ -92,6 +92,14 @@ pub async fn send_confirmed_email(
     user: MacroAuthorizationExtractor<DcsAuthorizationService, UserOrInternal>,
     body: Bytes,
 ) -> Result<Json<SendEmailResponse>, ConfirmedActionError> {
+    // A channel-mention bot's program never sends: its direct tools could
+    // not, and its quoted approval is one it wrote itself.
+    if email::is_channel_mention_run() {
+        return Err(ConfirmedActionError {
+            status: StatusCode::FORBIDDEN,
+            message: email::CHANNEL_MENTION_SEND_REFUSAL.to_owned(),
+        });
+    }
     run_confirmed::<SendConfirmedEmail, _>(
         state.tool_service_context.email_tool_context.clone(),
         &user,
@@ -114,10 +122,35 @@ pub async fn create_confirmed_calendar_event(
     user: MacroAuthorizationExtractor<DcsAuthorizationService, UserOrInternal>,
     body: Bytes,
 ) -> Result<Json<ToolCalendarEvent>, ConfirmedActionError> {
+    // Guests get invitations by email, which a channel-mention bot's program
+    // never sends; an event with no guests is still created.
+    if email::is_channel_mention_run() && invites_guests(&body) {
+        return Err(ConfirmedActionError {
+            status: StatusCode::FORBIDDEN,
+            message: CHANNEL_MENTION_INVITE_REFUSAL.to_owned(),
+        });
+    }
     run_confirmed::<CreateConfirmedCalendarEvent, _>(
         state.tool_service_context.calendar_tool_context.clone(),
         &user,
         &body,
     )
     .await
+}
+
+/// Why a channel-mention program's event with guests is not created.
+pub(crate) const CHANNEL_MENTION_INVITE_REFUSAL: &str = "An event with guests cannot be created from a channel or document mention, because its invitations are email. Create it without guests, or write the event out in your reply and tell the user to invite people from Macro.";
+
+/// Whether a create-confirmed body names any attendee. A body that does not
+/// parse is left to the create's own validation.
+fn invites_guests(body: &[u8]) -> bool {
+    serde_json::from_slice::<serde_json::Value>(body)
+        .ok()
+        .and_then(|event| {
+            event
+                .get("attendees")
+                .and_then(serde_json::Value::as_array)
+                .map(|attendees| !attendees.is_empty())
+        })
+        .unwrap_or(false)
 }

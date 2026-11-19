@@ -44,3 +44,25 @@ fn a_routine_owner_token_may_send() {
         assert!(refuse_program_send(CredentialAttribution::Agent, &headers, None).is_err());
     }
 }
+
+#[tokio::test]
+async fn a_channel_mention_program_never_sends_even_when_confirmed() {
+    let mut program = HeaderMap::new();
+    program.insert(CODE_EXECUTION_HEADER, "1".parse().unwrap());
+    let mention = agent_correlation::context::Attribution {
+        channel_mention_id: Some(uuid::Uuid::from_u128(1)),
+        ..Default::default()
+    };
+    agent_correlation::context::scope_attribution(mention, async {
+        let refusal =
+            refuse_program_send(CredentialAttribution::Agent, &program, Some("yes, send it"))
+                .unwrap_err();
+        assert!(matches!(refusal, SendMessageError::ChannelMention));
+        assert_eq!(refusal.into_response().status(), StatusCode::FORBIDDEN);
+    })
+    .await;
+    // An agent session's confirmed program send is unchanged.
+    assert!(
+        refuse_program_send(CredentialAttribution::Agent, &program, Some("yes, send it")).is_ok()
+    );
+}

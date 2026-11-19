@@ -70,6 +70,7 @@ agent_fold = { path = "../folds/agent_fold" }
 # consumer of this crate.
 macro_event_broker = { path = "../macro_event_broker", default-features = false }
 macro_event_topics = { path = "../macro_event_topics" }
+agent_correlation = { path = "../agent_correlation" }
 agent_runtime_protocol = { path = "../agent_runtime_protocol" }
 axum = { workspace = true, optional = true }
 bots = { path = "../bots", default-features = false }

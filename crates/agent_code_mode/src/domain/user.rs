@@ -26,6 +26,45 @@ pub trait UserExecutionCredentials: Send + Sync + 'static {
     ) -> Result<RunEnvironment, CodeModeError>;
 }
 
+/// The channel message whose mention asked for the program, for tracing.
+#[derive(Clone, Debug, Serialize, Deserialize, PartialEq, Eq)]
+#[serde(rename_all = "camelCase", deny_unknown_fields)]
+pub struct MentionContext {
+    /// The message that mentioned the bot.
+    pub message_id: uuid::Uuid,
+    /// The conversation the message belongs to.
+    pub root_id: uuid::Uuid,
+}
+
+/// Runs a program as a user to answer a channel mention, attributed to
+/// Macro AI. Object-safe (hosts hold `Arc<dyn MentionCodeMode>`), hence
+/// `async_trait`.
+#[async_trait]
+pub trait MentionCodeMode: Send + Sync + 'static {
+    /// Cancelling stops the program; completed API writes stand.
+    async fn execute(
+        &self,
+        user: &MacroUserIdStr<'static>,
+        mention: &MentionContext,
+        request: ExecuteRequest,
+        cancel: CancellationToken,
+    ) -> Result<UserExecutionReceipt, CodeModeError>;
+}
+
+/// Mint a credential for a program answering a channel mention: the
+/// mentioning user's access, attributed to Macro AI and signed with the
+/// mention, so services that refuse such runs (email sends) can tell.
+/// Object-safe (the route holds `Arc<dyn MentionExecutionCredentials>`).
+#[async_trait]
+pub trait MentionExecutionCredentials: Send + Sync + 'static {
+    /// `mention` is the message whose bot mention the program answers.
+    async fn issue(
+        &self,
+        user: &MacroUserIdStr<'static>,
+        mention: uuid::Uuid,
+    ) -> Result<RunEnvironment, CodeModeError>;
+}
+
 /// Outcome returned to the caller without a saved execution journal.
 #[derive(Clone, Serialize, Deserialize, JsonSchema)]
 #[serde(rename_all = "camelCase")]

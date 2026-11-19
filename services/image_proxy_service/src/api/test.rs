@@ -474,6 +474,7 @@ fn agent_credential(scope: Option<&str>) -> String {
             agent_correlation_id: Some(uuid::Uuid::from_u128(1)),
             agent_session_id: None,
             routine_id: None,
+            channel_mention_id: None,
             agent_scope: scope.map(str::to_owned),
         },
     )

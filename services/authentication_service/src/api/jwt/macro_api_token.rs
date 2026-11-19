@@ -109,6 +109,8 @@ pub async fn handler(
             // Programs are refused above, so these claims are empty here; they
             // are still copied so a relaxed refusal could never shed them.
             routine_id: agent_correlation::context::current_routine(),
+            // Likewise a channel-mention program cannot shed its email refusal.
+            channel_mention_id: agent_correlation::context::current_channel_mention(),
             // No scope to keep: `AccountHolderOrInternal` refuses this route
             // to every credential that signs one (`ScopedMacroApiJwt`).
             agent_scope: None,

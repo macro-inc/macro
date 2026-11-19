@@ -75,6 +75,9 @@ in front of FusionAuth, which doesn't support DCR itself.
 Use `mounted_mcp_router` in the harness so MCP does not override process
 readiness at `/health`. The standalone `mcp_router` remains available to tests
 and other library consumers. Both retain OAuth metadata, CORS, and bearer auth.
+Bearer auth refuses (403) a Macro API token carrying `channel_mention_id`: a
+channel-mention bot's program must not reach `ExecuteCode` here, which would
+mint it a token without the mention.
 
 ## Gotchas
 

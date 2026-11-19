@@ -320,6 +320,7 @@ impl RoutineCredentials for SignedTokens {
                 agent_correlation_id: None,
                 agent_session_id: None,
                 routine_id: Some(routine_id),
+                channel_mention_id: None,
                 agent_scope: scope.map(|scope| scope.as_str().to_owned()),
             },
         )

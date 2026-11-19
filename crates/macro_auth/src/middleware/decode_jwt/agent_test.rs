@@ -16,6 +16,7 @@ fn signed_execution_token_preserves_owner_agent_and_lifetime() {
         agent_id: Some(agent),
         agent_via: Some("Claude Code".into()),
         routine_id: None,
+        channel_mention_id: None,
         agent_scope: None,
     })
     .unwrap();
@@ -90,6 +91,7 @@ fn signed_routine_token_carries_its_routine_and_rejects_a_forged_one() {
         agent_correlation_id: None,
         agent_session_id: None,
         routine_id: Some(routine),
+        channel_mention_id: None,
         agent_scope: None,
     })
     .unwrap();
@@ -121,6 +123,7 @@ fn signed_routine_token_carries_its_routine_and_rejects_a_forged_one() {
         agent_correlation_id: None,
         agent_session_id: None,
         routine_id: None,
+        channel_mention_id: None,
         agent_scope: None,
     })
     .unwrap();
@@ -159,6 +162,7 @@ fn a_signed_scope_survives_decoding_and_cannot_be_dropped() {
             agent_correlation_id: Some(uuid::Uuid::from_u128(0xc0c0)),
             agent_session_id: None,
             routine_id: None,
+            channel_mention_id: None,
             agent_scope: agent_scope.map(str::to_owned),
         })
         .unwrap()

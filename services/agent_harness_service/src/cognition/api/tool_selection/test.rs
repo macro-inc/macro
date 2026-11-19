@@ -120,3 +120,20 @@ fn the_database_host_carries_how_databases_work_and_no_other_area() {
     // email tool; the scoped prompt must omit its action rules.
     assert!(!prompt.contains("MUST use the `SendEmail` tool"));
 }
+
+#[tokio::test]
+async fn a_channel_mention_programs_completions_take_no_tools() {
+    let mention = agent_correlation::context::Attribution {
+        channel_mention_id: Some(uuid::Uuid::from_u128(1)),
+        ..Default::default()
+    };
+    agent_correlation::context::scope_attribution(mention, async {
+        // Server-side tools would send email past the mention's refusal.
+        assert!(tools_refused_to_current_session(&ToolSet::All));
+        assert!(tools_refused_to_current_session(&ToolSet::Databases));
+        assert!(!tools_refused_to_current_session(&ToolSet::None));
+    })
+    .await;
+    // Unrestricted callers keep their tools.
+    assert!(!tools_refused_to_current_session(&ToolSet::All));
+}

@@ -279,6 +279,7 @@ fn a_routine_token_signs_its_routine_and_scope() {
             agent_correlation_id: None,
             agent_scope: Some(agent_correlation::scope::SessionScope::DryRun),
             routine_id: Some(routine),
+            channel_mention_id: None,
         }
     );
 }

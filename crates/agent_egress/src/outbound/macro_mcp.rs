@@ -291,8 +291,32 @@ impl MacroApiTokenSigner {
             agent_correlation_id: correlation.map(|correlation| correlation.id),
             agent_scope: correlation.and_then(|correlation| correlation.scope),
             routine_id: None,
+            channel_mention_id: None,
         };
         self.sign(owner, lifetime_seconds, claims).await
+    }
+
+    /// Mint a credential for one program answering a channel mention: the
+    /// mentioning user's access, attributed to `agent_id`, signed with the
+    /// mention so email services refuse its sends.
+    #[tracing::instrument(skip_all, err, fields(%agent_id, %channel_mention_id))]
+    pub async fn mint_for_channel_mention(
+        &self,
+        user: &MacroUserIdStr<'static>,
+        lifetime_seconds: usize,
+        agent_id: macro_uuid::Uuid,
+        channel_mention_id: uuid::Uuid,
+    ) -> Result<String, EgressError> {
+        let claims = SignedClaims {
+            agent_id: Some(agent_id),
+            agent_via: None,
+            agent_session_id: None,
+            agent_correlation_id: None,
+            agent_scope: None,
+            routine_id: None,
+            channel_mention_id: Some(channel_mention_id),
+        };
+        self.sign(user, lifetime_seconds, claims).await
     }
 
     /// Mint an owner credential for one run of `routine_id`, signed with that
@@ -326,6 +350,7 @@ impl MacroApiTokenSigner {
             agent_correlation_id,
             agent_scope,
             routine_id,
+            channel_mention_id,
         } = claims;
         if !(1..=MINTED_TOKEN_LIFETIME_SECONDS).contains(&lifetime_seconds) {
             return Err(EgressError::Internal(rootcause::report!(
@@ -371,6 +396,7 @@ impl MacroApiTokenSigner {
             agent_id,
             agent_via,
             routine_id,
+            channel_mention_id,
             agent_scope: agent_scope.map(|scope| scope.as_str().to_owned()),
         })
         .map_err(|error| {
@@ -400,6 +426,7 @@ struct SignedClaims {
     agent_correlation_id: Option<uuid::Uuid>,
     agent_scope: Option<agent_correlation::scope::SessionScope>,
     routine_id: Option<macro_uuid::Uuid>,
+    channel_mention_id: Option<uuid::Uuid>,
 }
 
 impl SignedClaims {
@@ -417,6 +444,7 @@ impl SignedClaims {
             agent_correlation_id: None,
             agent_scope: scope,
             routine_id: Some(routine_id),
+            channel_mention_id: None,
         }
     }
 }

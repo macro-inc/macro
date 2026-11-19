@@ -5,7 +5,11 @@
 Attribution of work to the code-mode invocation (agent session) and/or the
 routine run that caused it. A code-mode correlation is durable and validated
 against its session; a routine id is a signed Macro API token claim
-(`routine_id`) that needs no lookup. Neither grants access or changes the
+(`routine_id`) that needs no lookup, as is a channel mention
+(`channel_mention_id`, a channel-mention bot's program, which email refuses to
+send for: `current_channel_mention()`, and which `may_share`/`refuse_sharing`
+refuse like a scope that may not share; routine and agent-session writes
+refuse it with `DELEGATION_REFUSAL` when `refuses_delegation()`). None grants access or changes the
 JWT's acting user. A correlation may carry a `SessionScope`, set where the
 harness mints the credential: then every service that accepts it refuses
 requests outside the scope (`403`), so a hidden session's limits hold in

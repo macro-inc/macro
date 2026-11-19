@@ -226,9 +226,10 @@ pub enum AiHost {
     /// waits on, never a pending composer. It presents views with the
     /// harness's `execution.views.present` instead of `DisplayResults`.
     AgentSession,
-    /// The channel-mention bot: no composer, so `CreateCalendarEvent`
-    /// executes directly in the agent loop and `SendEmail` is omitted. Replies
-    /// contain text only, so this host also omits `DisplayResults`.
+    /// The channel-mention bot: no composer, so `SendEmail` is omitted and
+    /// replies contain text only (no `DisplayResults`). It runs code mode
+    /// ([`tools_for_channel_bot_code_mode`]), which drops `CreateCalendarEvent`
+    /// for the SDK's `calendar.createConfirmed`.
     ChannelBot,
     /// The MCP server: like [`AiHost::ChannelBot`] for user tools — MCP
     /// clients apply their own confirmation policy from tool annotations —
@@ -280,6 +281,14 @@ pub fn tools_for(host: AiHost) -> ToolSetWithPrompt {
 /// cannot reintroduce the hidden SDK methods as direct tools.
 pub fn tools_for_agent_code_mode() -> ToolSetWithPrompt {
     tools_for_inner(AiHost::AgentSession, true)
+}
+
+/// The channel-mention bot's direct tools when it runs code mode: the same
+/// SDK-covered filter as agent sessions, minus the Anthropic sandbox tools,
+/// with the reply-only code-mode prompt. The host adds the user-scoped
+/// `ExecuteCode`/`DescribeCodeTools`/`ReadCodeDocs` itself.
+pub fn tools_for_channel_bot_code_mode() -> ToolSetWithPrompt {
+    tools_for_inner(AiHost::ChannelBot, true)
 }
 
 /// Existing agent-session tools exposed through the code-mode capability policy.
@@ -355,8 +364,15 @@ fn tools_for_inner(host: AiHost, code_mode_direct: bool) -> ToolSetWithPrompt {
     if code_mode_direct {
         // Review submission still needs these user-tool implementations internally,
         // but advertising their blocking agent calls would reintroduce elicitation.
+        // The channel bot's programs run in Deno; it gets no second sandbox.
+        let drops_sandbox = matches!(host, AiHost::ChannelBot);
         toolset.tools.retain(|name, _| {
-            !matches!(name.as_str(), "SendEmail" | "CreateCalendarEvent")
+            (!drops_sandbox
+                || !matches!(
+                    name.as_str(),
+                    "BashCodeExecution" | "TextEditorCodeExecution"
+                ))
+                && !matches!(name.as_str(), "SendEmail" | "CreateCalendarEvent")
                 && !agent_code_mode::domain::covered_by_code_sdk(
                     name,
                     toolset.user_tools.contains_key(name),
@@ -389,6 +405,10 @@ fn tools_for_inner(host: AiHost, code_mode_direct: bool) -> ToolSetWithPrompt {
                 .compose(&prompt::coding_agents::PROMPT)
                 .to_string(),
             inline_guides(GuideHost::Direct),
+        ),
+        AiHost::ChannelBot if code_mode_direct => (
+            prompt::CODE_MODE_TOOL_USE_PROMPT.to_string(),
+            inline_guides(GuideHost::Code),
         ),
         AiHost::ChannelBot | AiHost::Mcp => (
             prompt::DIRECT_TOOL_USE_PROMPT

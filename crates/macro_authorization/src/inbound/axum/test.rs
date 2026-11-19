@@ -2083,6 +2083,42 @@ fn assert_display_parity<Policy: AuthorizationPolicy>(authorization: MacroAuthor
 }
 
 #[tokio::test]
+async fn a_channel_mention_program_is_refused_where_the_account_holder_is_required() {
+    let (router, _) = test_router();
+    let mention = agent_correlation::context::Attribution {
+        channel_mention_id: Some(uuid::Uuid::from_u128(1)),
+        ..Default::default()
+    };
+    let (status, body) = agent_correlation::context::scope_attribution(
+        mention,
+        send(
+            &router,
+            empty_body(user_api_key_request(
+                "/required/account-holder",
+                VALID_USER_API_KEY,
+            )),
+        ),
+    )
+    .await;
+    assert_eq!(status, StatusCode::FORBIDDEN);
+    assert_eq!(body, json!({ "message": "forbidden" }));
+
+    // Elsewhere the same request is unchanged.
+    let (status, _) = agent_correlation::context::scope_attribution(
+        mention,
+        send(
+            &router,
+            empty_body(user_api_key_request(
+                "/required/user-or-internal",
+                VALID_USER_API_KEY,
+            )),
+        ),
+    )
+    .await;
+    assert_eq!(status, StatusCode::OK);
+}
+
+#[tokio::test]
 async fn bearer_token_takes_precedence_over_cookie() {
     let (router, service) = test_router();
     let request = empty_body(

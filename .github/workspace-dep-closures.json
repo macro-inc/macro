@@ -175,6 +175,7 @@
     ],
     "agent": [
       "crates/agent",
+      "crates/agent_correlation",
       "crates/ai_toolset",
       "crates/ai_usage",
       "crates/attachment",
@@ -553,6 +554,7 @@
       "crates/workspace-hack"
     ],
     "agent_credentials": [
+      "crates/agent_correlation",
       "crates/agent_credentials",
       "crates/bot_id",
       "crates/bot_token",
@@ -2282,6 +2284,7 @@
       "crates/workspace-hack"
     ],
     "ai_usage": [
+      "crates/agent_correlation",
       "crates/ai_usage",
       "crates/bot_id",
       "crates/bot_token",
@@ -5732,6 +5735,7 @@
       "services/deleted_item_poller"
     ],
     "dictation": [
+      "crates/agent_correlation",
       "crates/ai_usage",
       "crates/bot_id",
       "crates/bot_token",
@@ -7605,6 +7609,7 @@
       "crates/workspace-hack"
     ],
     "entity_registry": [
+      "crates/agent_correlation",
       "crates/bot_id",
       "crates/bot_token",
       "crates/cowlike",
@@ -8525,6 +8530,7 @@
       "crates/workspace-hack"
     ],
     "graphql_common": [
+      "crates/agent_correlation",
       "crates/bot_id",
       "crates/bot_token",
       "crates/cowlike",
@@ -10263,6 +10269,7 @@
       "crates/workspace-hack"
     ],
     "graphql_soup_filter_input": [
+      "crates/agent_correlation",
       "crates/bot_id",
       "crates/bot_token",
       "crates/cowlike",
@@ -10453,6 +10460,7 @@
       "crates/workspace-hack"
     ],
     "gtm_invite": [
+      "crates/agent_correlation",
       "crates/bot_id",
       "crates/bot_token",
       "crates/cowlike",
@@ -10870,6 +10878,7 @@
       "crates/workspace-hack"
     ],
     "import_jira": [
+      "crates/agent_correlation",
       "crates/ai_toolset",
       "crates/bot_id",
       "crates/bot_token",
@@ -10894,6 +10903,7 @@
       "crates/workspace-hack"
     ],
     "import_linear": [
+      "crates/agent_correlation",
       "crates/ai_toolset",
       "crates/bot_id",
       "crates/bot_token",
@@ -10918,6 +10928,7 @@
       "crates/workspace-hack"
     ],
     "import_notion": [
+      "crates/agent_correlation",
       "crates/ai_toolset",
       "crates/bot_id",
       "crates/bot_token",
@@ -10943,6 +10954,7 @@
       "crates/workspace-hack"
     ],
     "import_tracker": [
+      "crates/agent_correlation",
       "crates/ai_toolset",
       "crates/bot_id",
       "crates/bot_token",
@@ -11452,6 +11464,7 @@
       "crates/workspace-hack"
     ],
     "macro_authorization": [
+      "crates/agent_correlation",
       "crates/bot_id",
       "crates/bot_token",
       "crates/cowlike",
@@ -13247,6 +13260,7 @@
       "crates/workspace-hack"
     ],
     "pipedream_mcp": [
+      "crates/agent_correlation",
       "crates/ai_toolset",
       "crates/bot_id",
       "crates/bot_token",
@@ -16120,6 +16134,7 @@
       "crates/workspace-hack"
     ],
     "sync_service_hex": [
+      "crates/agent_correlation",
       "crates/bot_id",
       "crates/bot_token",
       "crates/cowlike",
@@ -16236,6 +16251,7 @@
       "crates/workspace-hack"
     ],
     "system_status": [
+      "crates/agent_correlation",
       "crates/bot_id",
       "crates/bot_token",
       "crates/connection_gateway_client",
@@ -16745,6 +16761,7 @@
       "crates/workspace-hack"
     ],
     "user_api_key": [
+      "crates/agent_correlation",
       "crates/bot_id",
       "crates/bot_token",
       "crates/cowlike",
@@ -16776,6 +16793,7 @@
       "crates/workspace-hack"
     ],
     "user_language": [
+      "crates/agent_correlation",
       "crates/bot_id",
       "crates/bot_token",
       "crates/cowlike",
