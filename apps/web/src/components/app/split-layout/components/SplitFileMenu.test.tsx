@@ -21,7 +21,12 @@ vi.mock('@app/features/next-soup/actions', () => ({
   makeCreateReminderAction: mocks.unavailableAction,
   makeFavoriteAction: mocks.unavailableAction,
   makeMuteAction: mocks.unavailableAction,
+  notificationSettingsMenuFor: () => undefined,
 }));
+vi.mock(
+  '@notifications/primitives/create-channel-notification-settings',
+  () => ({ useChannelNotificationSettings: () => ({ enabled: () => false }) })
+);
 vi.mock('@app/features/entity/bulk-edit/BulkEditEntityModal', () => ({
   openBulkEditModal: vi.fn(),
 }));
