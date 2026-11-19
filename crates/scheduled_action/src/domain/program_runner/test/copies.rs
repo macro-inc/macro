@@ -51,6 +51,36 @@ async fn a_copy_runs_its_parents_definition_with_the_inputs_it_was_given() {
 }
 
 #[tokio::test]
+async fn a_copy_whose_definitions_item_was_deleted_sends_its_owner_to_the_parent() {
+    use crate::domain::knob_entities::test::{Items, posting_step};
+    let code = Arc::new(Code::default());
+    let runner = Fixture::new(Agents::default())
+        .runner
+        .with_code(Arc::clone(&code), Arc::new(NoCodeUpgrades))
+        .with_knob_entities(Arc::new(Items::default()));
+    let parent = action(json!({
+        "steps": [code_step("due", "List what is due")],
+        "sub_routines": [{
+            "name": "remind",
+            "title": "Remind me",
+            "steps": [posting_step("Post the reminder", "deleted")],
+        }],
+    }));
+    let copy = action(json!({ "sub_routine": "remind" }));
+    let mut handle = ExecutionHandle::default();
+    handle.parent = Some(parent);
+
+    let error = runner.run(&copy, &mut handle, manual()).await.unwrap_err();
+
+    // Its knob is set on the parent's page; the copy's own is read-only.
+    assert_eq!(
+        error.to_string(),
+        "Post the reminder failed: The channel picked for \"Channel to post in\" was deleted or you no longer have access to it. Pick another in its parent routine's sub-routine."
+    );
+    assert!(code.runs.lock().unwrap().is_empty());
+}
+
+#[tokio::test]
 async fn a_copy_of_a_sub_routine_without_inputs_gets_none() {
     let code = Arc::new(Code::default());
     let runner = Fixture::new(Agents::default())
