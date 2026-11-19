@@ -1146,6 +1146,33 @@ describe('routine code that needs an update', () => {
     updatedAt: '2026-11-01T09:00:00Z',
   });
 
+  it('withdraws the old proposal after the saved task loses its last code step', () => {
+    setSchedules([paused]);
+    mocks.codeUpgrades = () => [
+      upgrade(code('macro.tasks.add(x)', '0.3.0+new')),
+    ];
+    render(() => <Routine />);
+    expect(
+      screen.getByRole('button', { name: 'Approve and resume' })
+    ).toBeTruthy();
+
+    setSchedules([
+      {
+        ...paused,
+        configuration_revision: paused.configuration_revision + 1,
+        task: {
+          steps: [{ type: 'agent', model: 'm', instructions: 'Summarize' }],
+        },
+      },
+    ]);
+
+    expect(
+      screen.queryByRole('button', { name: 'Approve and resume' })
+    ).toBeNull();
+    expect(mocks.update).not.toHaveBeenCalled();
+    expect(mocks.setEnabled).not.toHaveBeenCalled();
+  });
+
   it('shows why it paused and saves the proposed update when approved', async () => {
     setSchedules([paused]);
     mocks.update.mockResolvedValue({

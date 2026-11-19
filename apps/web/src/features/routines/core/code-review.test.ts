@@ -26,7 +26,7 @@ describe('code review', () => {
   it('shows the newest upgrade that paused the routine, with what changed', () => {
     const review = pendingCodeReview(
       [needsUpdate(task('macro.tasks.add(x)', '0.3.0+new'))],
-      '0.2.0+old'
+      needsUpdate().previousTask
     );
     expect(review).toEqual({
       reason: '“File invoices” failed a dry run.',
@@ -45,20 +45,25 @@ describe('code review', () => {
   });
 
   it('has nothing to approve when the model wrote no update', () => {
-    expect(pendingCodeReview([needsUpdate()], '0.2.0+old')?.proposal).toBe(
-      undefined
-    );
+    expect(
+      pendingCodeReview([needsUpdate()], needsUpdate().previousTask)?.proposal
+    ).toBe(undefined);
   });
 
   it('is resolved once a save checks the code against that SDK, or a later upgrade went through', () => {
-    expect(pendingCodeReview([needsUpdate()], '0.3.0+new')).toBeUndefined();
+    expect(
+      pendingCodeReview(
+        [needsUpdate()],
+        task('macro.tasks.create(x)', '0.3.0+new')
+      )
+    ).toBeUndefined();
     expect(
       pendingCodeReview(
         [{ ...needsUpdate(), outcome: 'checked', reason: null }, needsUpdate()],
-        '0.2.0+old'
+        needsUpdate().previousTask
       )
     ).toBeUndefined();
-    expect(pendingCodeReview([], undefined)).toBeUndefined();
+    expect(pendingCodeReview([], { steps: [] })).toBeUndefined();
   });
 
   it('lists the code an update changes in sub-routines, by the sub-routine', () => {
@@ -82,7 +87,7 @@ describe('code review', () => {
     const proposed = withDefinitions('return 0', 'macro.tasks.add(x)');
     const review = pendingCodeReview(
       [{ ...needsUpdate(proposed), previousTask: previous }],
-      '0.2.0+old'
+      previous
     );
     expect(review?.proposal).toEqual({
       task: proposed,

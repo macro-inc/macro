@@ -12,7 +12,7 @@ import type {
   RoutineListSource,
   RoutineRowOperations,
 } from '../context/routine-sources';
-import { pendingCodeReview, taskSdk } from '../core/code-review';
+import { pendingCodeReview } from '../core/code-review';
 import type { ScheduleDraft } from '../core/draft';
 import type { RoutineSnapshot } from '../core/routine';
 import { withDraftSteps } from '../core/routine-draft';
@@ -149,7 +149,7 @@ export function createRoutineDetailSource(
   const codeReview = createMemo(() => {
     const current = raw();
     return current && upgrades.isSuccess
-      ? pendingCodeReview(upgrades.data ?? [], taskSdk(current.task))
+      ? pendingCodeReview(upgrades.data ?? [], current.task)
       : undefined;
   });
   // What this routine's runs created; a sub-routine creates none of its own.

@@ -1,3 +1,4 @@
+import { deepEqual } from '@core/util/compareUtils';
 import type { RoutineTask } from '@service-scheduled-action/generated/schemas';
 import {
   type CodeStepDraft,
@@ -60,17 +61,22 @@ function codeSteps(
 
 /**
  * What the owner has to review: the newest upgrade that left the code for
- * them, when nothing saved since checks against its SDK. `sdk` is the SDK
- * the routine's code was last checked against. A proposal holds every code
+ * them, while the saved task still matches the one the upgrade examined.
+ * A proposal holds every code
  * step the update changes, its sub-routines' included, and approving it
  * saves all of them.
  */
 export function pendingCodeReview(
   upgrades: readonly CodeUpgradeRecord[],
-  sdk: string | undefined
+  currentTask: RoutineTask
 ): CodeReview | undefined {
   const [latest] = upgrades;
-  if (latest?.outcome !== 'needs_update' || latest.toSdk === sdk) return;
+  if (
+    latest?.outcome !== 'needs_update' ||
+    latest.toSdk === taskSdk(currentTask) ||
+    !deepEqual(latest.previousTask, currentTask)
+  )
+    return;
   const proposed = latest.task ? codeSteps(latest.task) : undefined;
   const before = codeSteps(latest.previousTask);
   // Steps line up in program order; an update never adds or removes one.
