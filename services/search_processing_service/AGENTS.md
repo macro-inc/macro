@@ -57,7 +57,9 @@ OpenSearch, and exposes backfill HTTP routes for each.
   (`ReindexThread`) while one for that thread is; only add an event kind there
   if handling it rereads the entity's whole current state. An event for the
   entity that does not reread must end the claim in `reread_barrier_key`, or a
-  later reread is absorbed by one that runs before it.
+  later reread is absorbed by one that runs before it. A worker releases only
+  the claim its own record holds, so a reread starting after a barrier leaves
+  the claim of the reread queued behind it.
 - Every topic shares librdkafka's one prefetch queue; the group's `PREFETCH`
   bound keeps other topics from waiting behind an email backlog (README "Kafka
   Delivery Contract"). Email throughput comes from the workers, not the

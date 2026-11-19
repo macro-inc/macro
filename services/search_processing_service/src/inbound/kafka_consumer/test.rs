@@ -2657,6 +2657,68 @@ async fn a_queued_thread_reindex_absorbs_later_reindexes_until_a_message_event_q
 }
 
 #[tokio::test]
+async fn a_reindex_starting_after_a_barrier_keeps_the_claim_of_the_reindex_behind_it() {
+    let (sender, receiver) = mpsc::channel(WORKER_CHANNEL_CAPACITY);
+    let pending_rereads = Arc::new(PendingRereads::default());
+    let pool = WorkerPool::new(vec![sender], Arc::clone(&pending_rereads), unread_metrics());
+
+    let mut coalesced = Vec::new();
+    for event in [
+        received_thread_backfilled_event(EMAIL_THREAD_ID, 1),
+        received_email(received_email_event(true), 2),
+        received_thread_backfilled_event(EMAIL_THREAD_ID, 3),
+    ] {
+        let outcome = pool.handoff(Ok::<_, EventBrokerError>(event)).await;
+        coalesced.push(matches!(outcome, HandoffOutcome::Coalesced));
+    }
+    assert_eq!(coalesced, [false, false, false]);
+
+    let (started_sender, mut started) = mpsc::unbounded_channel();
+    let resume = Arc::new(tokio::sync::Notify::new());
+    let worker_resume = Arc::clone(&resume);
+    let worker = tokio::spawn(drain_worker_events(
+        receiver,
+        pending_rereads,
+        mpsc::unbounded_channel().0,
+        CancellationToken::new(),
+        move |received| {
+            let started_sender = started_sender.clone();
+            let resume = Arc::clone(&worker_resume);
+            async move {
+                started_sender
+                    .send(received.offset)
+                    .expect("test observes every event");
+                if received.offset == 1 {
+                    resume.notified().await;
+                }
+            }
+        },
+    ));
+    assert_eq!(started.recv().await, Some(1), "first reindex is running");
+
+    assert!(
+        matches!(
+            pool.handoff(Ok::<_, EventBrokerError>(received_thread_backfilled_event(
+                EMAIL_THREAD_ID,
+                4
+            )))
+            .await,
+            HandoffOutcome::Coalesced
+        ),
+        "the reindex at offset 3 is still queued and absorbs this one"
+    );
+
+    resume.notify_one();
+    drop(pool);
+    worker.await.expect("worker drained without panicking");
+    let mut offsets = Vec::new();
+    while let Some(offset) = started.recv().await {
+        offsets.push(offset);
+    }
+    assert_eq!(offsets, [2, 3]);
+}
+
+#[tokio::test]
 async fn a_settled_session_never_holds_the_reread_its_next_turn_needs() {
     use ::agent_session::domain::{
         events::{AgentSessionLifecycleEvent, SessionSettledMetadata, TurnEndedMetadata},

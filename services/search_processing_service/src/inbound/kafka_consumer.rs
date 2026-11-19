@@ -50,7 +50,10 @@ mod test;
 
 use std::{
     borrow::Cow,
-    collections::{HashSet, hash_map::DefaultHasher},
+    collections::{
+        HashMap,
+        hash_map::{DefaultHasher, Entry},
+    },
     future::Future,
     hash::{Hash as _, Hasher as _},
     sync::{Arc, Mutex, PoisonError},
@@ -390,19 +393,37 @@ fn reread_barrier_key(event: &DeclaredMacroEvent) -> Option<String> {
 /// newer state. Skipping them keeps one busy entity from filling its worker's
 /// channel, which would stop handoff for every topic and partition.
 #[derive(Debug, Default)]
-struct PendingRereads(Mutex<HashSet<String>>);
+struct PendingRereads(Mutex<HashMap<String, RecordPosition>>);
 
 impl PendingRereads {
-    /// Marks `key` queued; returns false when a reread for it already waits.
-    fn claim(&self, key: String) -> bool {
-        self.0
+    /// Marks `key` queued by the record at `holder`; returns false when a
+    /// reread for it already waits.
+    fn claim(&self, key: String, holder: RecordPosition) -> bool {
+        match self
+            .0
             .lock()
             .unwrap_or_else(PoisonError::into_inner)
-            .insert(key)
+            .entry(key)
+        {
+            Entry::Occupied(_) => false,
+            Entry::Vacant(entry) => {
+                entry.insert(holder);
+                true
+            }
+        }
     }
 
-    /// Clears `key` before its reread starts, so a hint arriving during the
-    /// reread queues the next one.
+    /// Clears `key` if the record at `holder` still holds it. A barrier may
+    /// have handed the claim to a later reread, which must keep it.
+    fn release_held(&self, key: &str, holder: RecordPosition) {
+        let mut claims = self.0.lock().unwrap_or_else(PoisonError::into_inner);
+        if claims.get(key) == Some(&holder) {
+            claims.remove(key);
+        }
+    }
+
+    /// Clears `key` whichever record holds it, so the next hint queues a
+    /// reread behind the events handed off so far.
     fn release(&self, key: &str) {
         self.0
             .lock()
@@ -503,7 +524,7 @@ impl WorkerPool {
         }
         let reread_key = coalescible_reread_key(&event.event);
         if let Some(key) = &reread_key
-            && !self.pending_rereads.claim(key.clone())
+            && !self.pending_rereads.claim(key.clone(), event.position())
         {
             record_outcome(
                 &self.metrics,
@@ -517,11 +538,12 @@ impl WorkerPool {
             self.pending_rereads.release(&key);
         }
 
+        let position = event.position();
         match sender.send(event).await {
             Ok(()) => HandoffOutcome::HandedOff,
             Err(_) => {
                 if let Some(key) = &reread_key {
-                    self.pending_rereads.release(key);
+                    self.pending_rereads.release_held(key, position);
                 }
                 HandoffOutcome::WorkerClosed
             }
@@ -873,10 +895,10 @@ async fn drain_worker_events<F, Fut>(
         if rewinding.is_cancelled() {
             break;
         }
-        if let Some(key) = coalescible_reread_key(&received.event) {
-            pending_rereads.release(&key);
-        }
         let position = received.position();
+        if let Some(key) = coalescible_reread_key(&received.event) {
+            pending_rereads.release_held(&key, position);
+        }
         // The consumer stops listening only after giving up on the workers,
         // so a closed channel needs no handling here.
         let _ = reports.send(WorkerReport::Started(position));
