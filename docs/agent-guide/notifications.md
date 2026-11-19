@@ -9,14 +9,18 @@ first. The flag is on in dev and comes from PostHog elsewhere;
 route redirects to Home once flags load, and `g i` stays on Home; with it on,
 Home keeps `g h`.
 
-With the flag on, the rail's Notifications, Channels and Mail buttons (and the
-mobile dock's) show how many unread rows of this list they hold, in place of
-the unread dot: every kind for Notifications, the channel kinds for Channels,
-mail for Mail, and `99+` past ninety-nine. Home keeps a dot, lit while anything
-here is unread; on the mobile dock the bell is Home, opens this view, and
-carries the total. The numbers are pushed by the server and follow reads, done,
-clears and new activity within about a second, on every open tab; nothing
-polls. With the flag off the buttons keep their dots and show no number.
+With unified notifications on, the outer rail and mobile dock show unread dots
+from the inbox's `notificationInboxUnreadUpdates` subscription. The updates
+follow reads, done, clears and new activity within about a second on each open
+tab. With unified notifications off, the buttons use their earlier presence
+checks.
+
+Unread numbers are off by default in every environment while their accuracy is
+under investigation. Set `VITE_ENABLE_NAVIGATION_UNREAD_COUNTS=true` for a
+frontend build to show numbers alongside the unified inbox. The Notifications
+button counts all unread rows, Channels counts channel rows, and Mail counts
+mail rows. Counts above 99 show as `99+`. Home keeps a dot on the desktop rail.
+On the mobile dock the Home bell opens Notifications and carries the total.
 
 Each list row is one row of the server's notification inbox
 (`user.notificationInbox`): an email thread, a channel's top-level messages, one
