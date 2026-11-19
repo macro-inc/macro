@@ -1,0 +1,40 @@
+packages/code-mode-sdk/package.json
+  s_f3a48b3a685142::t_b16a05290644cd 15-16
+  s_f3a48b3a685142::t_eecd64736c7a8b 17
+bun.lock
+  s_0492cd67e9a157::t_610ba99db8e8cb 243-245,1607-1608,2295,2517-2518,4731-4732,4743-4744,4819-4820,5001-5002,5129-5130
+packages/code-mode-sdk/licenses/opencode-codemode.LICENSE
+  s_e47bee9837a594::t_f806dad7c0a46b 1-21
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.7.7",
+  "base_commit_sha": "53585e69ab67ea5aa91da51a91eee92e0602c743",
+  "prompts": {},
+  "sessions": {
+    "s_0492cd67e9a157": {
+      "agent_id": {
+        "tool": "claude",
+        "id": "757457a6-0f73-4066-bc1d-f7508c73a141",
+        "model": "claude-opus-5-5"
+      },
+      "human_author": "Eric Hayes <56524199+ehayes2000@users.noreply.github.com>"
+    },
+    "s_e47bee9837a594": {
+      "agent_id": {
+        "tool": "claude",
+        "id": "5703ce97-1923-419e-b892-abdf036675c3",
+        "model": "claude-opus-5-5"
+      },
+      "human_author": "Eric Hayes <56524199+ehayes2000@users.noreply.github.com>"
+    },
+    "s_f3a48b3a685142": {
+      "agent_id": {
+        "tool": "claude",
+        "id": "65b2bcf0-02e2-4f2c-88ae-8e6cea990f9a",
+        "model": "claude-opus-5-5"
+      },
+      "human_author": "Eric Hayes <56524199+ehayes2000@users.noreply.github.com>"
+    }
+  }
+}
