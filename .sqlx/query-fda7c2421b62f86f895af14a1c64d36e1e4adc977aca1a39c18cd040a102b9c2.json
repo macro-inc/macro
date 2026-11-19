@@ -1,0 +1,22 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "SELECT (l.disconnect_requested_at IS NOT NULL OR l.deleting_at IS NOT NULL\n                OR NOT EXISTS(SELECT 1 FROM \"User\" u WHERE u.id = l.macro_id)) AS \"departing!\"\n            FROM email_links l WHERE l.id = $1",
+  "describe": {
+    "columns": [
+      {
+        "ordinal": 0,
+        "name": "departing!",
+        "type_info": "Bool"
+      }
+    ],
+    "parameters": {
+      "Left": [
+        "Uuid"
+      ]
+    },
+    "nullable": [
+      null
+    ]
+  },
+  "hash": "fda7c2421b62f86f895af14a1c64d36e1e4adc977aca1a39c18cd040a102b9c2"
+}

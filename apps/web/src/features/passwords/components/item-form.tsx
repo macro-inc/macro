@@ -53,7 +53,7 @@ export function ItemForm(props: {
   hasTotp: boolean;
   validation?: 'name' | 'url' | 'totp';
   folders: PasswordFolder[];
-  /** Sharing is chosen when an item is created; Share changes it later. */
+  /** Sharing and the initial favorite are chosen on create; detail controls change them later. */
   isNew: boolean;
   onChange: (draft: PasswordDraft) => void;
   onTotpKey: (value: string) => void;
@@ -336,13 +336,17 @@ export function ItemForm(props: {
             </Dropdown.Content>
           </Dropdown>
         </Show>
-        <Checkbox
-          checked={props.draft.favorite}
-          onChange={(favorite) => props.onChange({ ...props.draft, favorite })}
-        >
-          <Checkbox.Control />
-          <Checkbox.Label>{t('passwords.favorite')}</Checkbox.Label>
-        </Checkbox>
+        <Show when={props.isNew}>
+          <Checkbox
+            checked={props.draft.favorite}
+            onChange={(favorite) =>
+              props.onChange({ ...props.draft, favorite })
+            }
+          >
+            <Checkbox.Control />
+            <Checkbox.Label>{t('passwords.favorite')}</Checkbox.Label>
+          </Checkbox>
+        </Show>
       </div>
     </div>
   );

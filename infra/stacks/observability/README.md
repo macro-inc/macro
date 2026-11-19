@@ -247,6 +247,8 @@ packages, configuration, service users, resource limits and startup dependencies
 - `nixos/alerting.nix`: Grafana alert rules, contact points and routing.
 - `nixos/prod-alerts.nix`: prod alert queries and thresholds, shared by the
   rules and `nixos/prod-alerts-dashboard.nix`.
+- `nixos/email-focus.nix`: the Email Focus rollout's go/stop checks, shared by
+  the `Email Focus` rules in `alerting.nix` and `nixos/email-focus-dashboard.nix`.
 - `nixos/host.nix`: boot dependencies, retained storage and stable service identities.
 
 NixOS modules generate application configuration from Nix attributes. Alloy's
@@ -709,6 +711,12 @@ list annotations but not Grafana's panel link. Each
 has a Datadog copy in `infra/stacks/monitoring/monitors/`; keep thresholds and
 windows in sync by hand. Forecasts, anomalies, Database Monitoring, APM and log
 rules are Datadog-only.
+
+`nixos/email-focus.nix` holds the Email Focus rollout's go/stop checks over the
+worker's `Macro/EmailFocus` metrics. Each becomes a warning and a critical rule
+in the `Email Focus` group and a panel on the `Email Focus rollout` dashboard
+(`/d/email-focus-rollout`), linked the same way as the prod alerts. They never
+page and have no Datadog copies. See `docs/runbooks/email-focus.md`.
 
 Every prod alert goes to GoAlert over loopback, and GoAlert alone posts to the
 Macro Alerts channel. Critical alerts of rules with `pages = true` go to the

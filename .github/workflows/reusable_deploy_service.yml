@@ -37,6 +37,8 @@ on:
         required: true
       DD_API_KEY:
         required: true
+      NIX_CACHE_SIGNING_KEY:
+        required: false
 jobs:
   setup:
     name: Check ${{ inputs.service-name }} artifacts
@@ -50,6 +52,9 @@ jobs:
       with:
         persist-credentials: 'false'
         sparse-checkout: .github/
+      env:
+        GIT_HTTP_LOW_SPEED_LIMIT: '10000'
+        GIT_HTTP_LOW_SPEED_TIME: '60'
     - id: check
       name: Check artifact config
       run: |
@@ -79,6 +84,9 @@ jobs:
       with:
         persist-credentials: 'false'
         clean: 'false'
+      env:
+        GIT_HTTP_LOW_SPEED_LIMIT: '10000'
+        GIT_HTTP_LOW_SPEED_TIME: '60'
     - name: Setup Bun
       uses: oven-sh/setup-bun@0c5077e51419868618aeaa5fe8019c62421857d6
       with:
@@ -90,6 +98,11 @@ jobs:
       continue-on-error: true
     - name: Setup Nix
       uses: ./.github/actions/setup-nix
+      with:
+        nix-cache-url: ${{ vars.NIX_CACHE_URL }}
+        nix-cache-public-key: ${{ vars.NIX_CACHE_PUBLIC_KEY }}
+        aws-access-key-id: ${{ secrets.AWS_ACCESS_KEY }}
+        aws-secret-access-key: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
     - name: Build prebuilt binaries
       run: |
         set -euo pipefail
@@ -109,6 +122,51 @@ jobs:
       shell: bash
       env:
         SERVICE: ${{ inputs.service-name }}
+    - id: build-inputs
+      name: Collect build inputs for the nix cache
+      if: ${{ github.ref == 'refs/heads/main' }}
+      run: |
+        set -uo pipefail
+        # The cache is an optimization: a failed lookup only pushes less.
+        mapfile -t candidates < <(
+          nix eval --raw .#deployCargoArtifacts --apply 'deps: builtins.concatStringsSep "\n" ([ (toString deps.cargoVendorDir) ] ++ map toString (builtins.filter (input: builtins.match "rust-[0-9].*" (input.name or "") != null) deps.nativeBuildInputs))' \
+            || echo "::warning::could not list the deps' build inputs" >&2
+          echo
+          nix eval --raw .#code-mode-assets.outPath \
+            || echo "::warning::could not find the code-mode assets" >&2
+          echo
+        )
+        paths=()
+        for path in $(printf '%s\n' "${candidates[@]}" | sort -u); do
+          if [[ -e "$path" ]]; then paths+=("$path"); fi
+        done
+        echo "build inputs to cache: ${paths[*]}"
+        echo "paths=${paths[*]}" >> "$GITHUB_OUTPUT"
+      shell: bash
+    - name: Push to nix cache
+      if: ${{ github.ref == 'refs/heads/main' }}
+      run: |
+        set -uo pipefail
+        if [[ -z "${NIX_CACHE_URL:-}" || -z "${NIX_CACHE_SIGNING_KEY:-}" ]]; then
+          echo "nix cache not configured; skipping push"
+          exit 0
+        fi
+        key="$RUNNER_TEMP/nix-cache-signing-key"
+        printf '%s\n' "$NIX_CACHE_SIGNING_KEY" > "$key"
+        sep='?'; [[ "$NIX_CACHE_URL" == *\?* ]] && sep='&'
+        # shellcheck disable=SC2086 # TARGETS is a list on purpose
+        nix copy --to "${NIX_CACHE_URL}${sep}secret-key=${key}" $TARGETS \
+          || echo "::warning::nix cache push failed (non-fatal)"
+        rm -f "$key"
+      shell: bash
+      env:
+        TARGETS: .#deployCargoArtifacts .#deploy-service-binaries-${{ inputs.service-name }} ${{ steps.build-inputs.outputs.paths }}
+        NIX_CACHE_URL: ${{ vars.NIX_CACHE_URL }}
+        NIX_CACHE_SIGNING_KEY: ${{ secrets.NIX_CACHE_SIGNING_KEY }}
+        AWS_ACCESS_KEY_ID: ${{ secrets.AWS_ACCESS_KEY }}
+        AWS_SECRET_ACCESS_KEY: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
+      timeout-minutes: 15
+      continue-on-error: true
     - name: Upload handoff artifact
       run: bun .github/scripts/upload-handoff-artifact.ts prebuilt-binaries.tar.gz "$DEST"
       shell: bash
@@ -130,6 +188,9 @@ jobs:
       with:
         persist-credentials: 'false'
         clean: 'false'
+      env:
+        GIT_HTTP_LOW_SPEED_LIMIT: '10000'
+        GIT_HTTP_LOW_SPEED_TIME: '60'
     - name: Setup Bun
       uses: oven-sh/setup-bun@0c5077e51419868618aeaa5fe8019c62421857d6
       with:
@@ -141,10 +202,19 @@ jobs:
       continue-on-error: true
     - name: Setup Nix
       uses: ./.github/actions/setup-nix
+      with:
+        nix-cache-url: ${{ vars.NIX_CACHE_URL }}
+        nix-cache-public-key: ${{ vars.NIX_CACHE_PUBLIC_KEY }}
+        aws-access-key-id: ${{ secrets.AWS_ACCESS_KEY }}
+        aws-secret-access-key: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
     - name: Build Lambda artifacts
       run: .github/scripts/build-cloud-storage-lambdas-nix.sh
       env:
         SERVICE: ${{ inputs.service-name }}
+        NIX_CACHE_URL: ${{ vars.NIX_CACHE_URL }}
+        NIX_CACHE_SIGNING_KEY: ${{ github.ref == 'refs/heads/main' && secrets.NIX_CACHE_SIGNING_KEY || '' }}
+        AWS_ACCESS_KEY_ID: ${{ secrets.AWS_ACCESS_KEY }}
+        AWS_SECRET_ACCESS_KEY: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
     - name: Log handoff receipt
       run: |
         set -euo pipefail
@@ -173,6 +243,9 @@ jobs:
       with:
         persist-credentials: 'false'
         sparse-checkout: .github/
+      env:
+        GIT_HTTP_LOW_SPEED_LIMIT: '10000'
+        GIT_HTTP_LOW_SPEED_TIME: '60'
     - name: Check migrations
       uses: ./.github/actions/check-macro-db-migrations
       with:
@@ -193,6 +266,9 @@ jobs:
       uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd
       with:
         persist-credentials: 'false'
+      env:
+        GIT_HTTP_LOW_SPEED_LIMIT: '10000'
+        GIT_HTTP_LOW_SPEED_TIME: '60'
     - id: project-name
       name: Get project name
       if: ${{ inputs.pulumi-stack-name == '' }}

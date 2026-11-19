@@ -16,7 +16,7 @@ modules/*.nix ──nix run .#render──▶ manifests/prod/ (committed) ──
 | Application | Namespace | What it is |
 | --- | --- | --- |
 | `apps` | `argocd` | The app of apps: one Application per directory below. Applied once by hand (bootstrap); it is in `apps/` itself, so from then on it manages itself too. |
-| `argocd` | `argocd` | Argo CD, managing itself. Every Application auto-syncs with prune and self-heal. |
+| `argocd` | `argocd` | Argo CD, managing itself. Every Application syncs with prune and self-heal, automatically once `macro.cluster.autoSync` is on (below). |
 | `cert-manager` | `cert-manager` | Issues the load balancer controller's webhook certificate. |
 | `aws-load-balancer-controller` | `kube-system` | Registers pods in ALB/NLB target groups (`TargetGroupBinding`). Creates no load balancers: no IngressClass, Service controller, Service mutator or Ingress validation, and its role can only register targets. |
 | `external-secrets` | `external-secrets` | External Secrets Operator and the `secrets-manager` ClusterSecretStore over the Secrets Manager secret `observability/prod`. Only cluster admins can create stores (namespace `edit` and `admin` can't), since a store without credentials reads with the operator's. |
@@ -58,14 +58,26 @@ as Argo CD's own field manager, waits for it, and applies
 everything from `main`, Argo CD and the `apps` Application included; nothing is
 applied by hand again.
 
-To look at it:
+For the first rollout `env/prod.nix` has `macro.cluster.autoSync = false`.
+`apps` still syncs itself, but it holds only the Application objects; every
+other application shows what it would change and applies nothing until
+someone syncs it. Read each diff, then sync them in the order of the table
+above (`argocd` first: until then the bootstrap's copy runs):
 
 ```sh
 kubectl --context observability -n argocd get applications
 kubectl --context observability -n argocd get secret argocd-initial-admin-secret \
   -o jsonpath='{.data.password}' | base64 -d
 kubectl --context observability -n argocd port-forward svc/argocd-server 8080:443
+# https://localhost:8080, user admin: each application's "App diff", then "Sync".
+# Or with the CLI (`nix shell nixpkgs#argocd`), after
+# `argocd login localhost:8080 --username admin`:
+argocd app diff argocd/cert-manager
+argocd app sync argocd/cert-manager
 ```
+
+Once the cluster has been tested, a change sets `autoSync = true`, and merging
+deploys from then on.
 
 After the first login, change the admin password (`argocd account update-password`)
 and delete `argocd-initial-admin-secret`. Any pod in the cluster can reach the

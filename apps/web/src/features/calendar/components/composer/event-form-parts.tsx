@@ -18,6 +18,7 @@ import {
   calendarDescriptionToEditorHtml,
   exportCalendarDescription,
 } from '../../utils/calendar-description';
+import { CalendarFirstSyncNotice } from '../CalendarFirstSyncNotice';
 import {
   EventGuestPolicyRow,
   EventGuestPolicyRows,
@@ -256,17 +257,19 @@ function KindTabs() {
 function CalendarPill() {
   const form = useEventForm();
   return (
-    <LockedField reason={form.props.detailsReadOnlyReason}>
-      <EventComposerCalendarPill
-        options={form.controller.calendarOptions()}
-        value={form.controller.selectedCalendarOption()}
-        onChange={(calendarId) =>
-          form.controller.setField('calendarId', calendarId)
-        }
-        disabled={form.formIsDisabled() || form.detailsLocked()}
-        readOnly={form.fieldIsReadOnly('calendar')}
-      />
-    </LockedField>
+    <Show when={!form.calendarFirstSync()}>
+      <LockedField reason={form.props.detailsReadOnlyReason}>
+        <EventComposerCalendarPill
+          options={form.controller.calendarOptions()}
+          value={form.controller.selectedCalendarOption()}
+          onChange={(calendarId) =>
+            form.controller.setField('calendarId', calendarId)
+          }
+          disabled={form.formIsDisabled() || form.detailsLocked()}
+          readOnly={form.fieldIsReadOnly('calendar')}
+        />
+      </LockedField>
+    </Show>
   );
 }
 
@@ -623,18 +626,23 @@ function Submit() {
   const form = useEventForm();
   const label = () => (form.isEdit() ? 'Save' : 'Create event');
   return (
-    <Button
-      type="submit"
-      // Names the form so the action submits it from pinned sheet chrome too.
-      form={form.ids.form}
-      variant="primary"
-      disabled={!form.controller.canSave() || form.formIsDisabled()}
-      aria-label={label()}
+    <Show
+      when={!form.calendarFirstSync()}
+      fallback={<CalendarFirstSyncNotice />}
     >
-      <Show when={form.props.pending} fallback={label()}>
-        <SpinnerIcon class="size-4 animate-spin" />
-      </Show>
-    </Button>
+      <Button
+        type="submit"
+        // Names the form so the action submits it from pinned sheet chrome too.
+        form={form.ids.form}
+        variant="primary"
+        disabled={!form.controller.canSave() || form.formIsDisabled()}
+        aria-label={label()}
+      >
+        <Show when={form.props.pending} fallback={label()}>
+          <SpinnerIcon class="size-4 animate-spin" />
+        </Show>
+      </Button>
+    </Show>
   );
 }
 

@@ -73,6 +73,7 @@ async fn invite_delivery_preserves_dm_context_for_email_and_push() {
                 metadata: ChannelMetadata {
                     channel_type,
                     channel_name: channel_name.to_string(),
+                    named: true,
                 },
             })
             .await
@@ -162,6 +163,7 @@ async fn dm_email_delivery_keys_are_per_recipient_and_stable_on_retry() {
         metadata: ChannelMetadata {
             channel_type: ChannelType::DirectMessage,
             channel_name: "Direct message".to_string(),
+            named: false,
         },
     };
     let sender = NotificationChannelSender::new(ingress.clone());

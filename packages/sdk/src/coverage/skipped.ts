@@ -132,6 +132,8 @@ export const authExcluded = [
   'refresh',
   'rejectInvitation',
   'removeUserFromTeam',
+  // An agent teammate's own report that it is up; the starter agent calls it.
+  'reportTeamAgentOnline',
   'resendFusionauthVerifyUserEmail',
   'resolveGtmInviteLink',
   'revokeGtmInviteLink',
@@ -161,7 +163,10 @@ export const authBacklog = [
   'setTeamAgentVoice', // An agent teammate's call voice is an admin app setting for now.
   'cancelTeamComputer', // Computer billing and lifecycle controls belong to the app.
   'completeTeamComputerSetup', // The guided computer setup is an app flow.
+  'listTeamComputerUsage', // Computer usage graphs belong to the app.
   'listTeamComputerOffers', // Computer checkout offers belong to the app.
+  'listTeamComputerPurchaseOffers', // The buy dialog's offers belong to the app.
+  'getTeamComputerRollout', // Whether the app shows computers is an app gate.
   'listTeamComputers', // Computer billing and lifecycle controls belong to the app.
   'restoreTeamComputer', // Computer billing and lifecycle controls belong to the app.
   'purchaseTeamComputer', // Computer checkout belongs to the app.
@@ -404,6 +409,8 @@ export const storageExcluded = [
   'getPendingProjectsHandler',
   'getProjectsHandler',
   'getRingStatus',
+  // Membership-scoped channel rows used by the email Share dialog.
+  'getThreadChannelShares',
   // Status of the web app's own folder upload; uploads aren't an SDK surface.
   'getUploadExtractStatusHandler',
   'getUserDocumentViewLocation',
@@ -453,10 +460,12 @@ export const storageExcluded = [
   'passwordsMoveFolder',
   'passwordsPatch',
   'passwordsRemove',
+  'passwordsRemoveFavorite',
   'passwordsRemoveFolder',
   'passwordsRemoveTotp',
   'passwordsRenameFolder',
   'passwordsReveal',
+  'passwordsSetFavorite',
   'passwordsSetTotp',
   'passwordsShare',
   'passwordsTeams',
@@ -493,21 +502,8 @@ export const storageExcluded = [
   'whatsappStartLookup',
 ] as const satisfies readonly (keyof StorageSdk)[];
 
-export const storageBacklog = [
-  // CRM privacy settings use the generated client; rule-management wrappers
-  // follow the flag-gated API in the SDK phase.
-  'cancelCrmEmailRulePreview',
-  'getCrmEmailPolicy',
-  'getCrmEmailPrivacy',
-  'getCrmEmailRulePreview',
-  'getCrmEmailRuleRevision',
-  'listCrmEmailPolicyHistory',
-  'listCrmExcludedEmailThreads',
-  'previewCrmEmailRules',
-  'updateCrmEmailPolicy',
-  'updateCrmEmailPrivacy',
-  'validateCrmEmailRules',
-] as const satisfies readonly (keyof StorageSdk)[];
+export const storageBacklog =
+  [] as const satisfies readonly (keyof StorageSdk)[];
 
 export const unfurlExcluded = [
   'proxyRequestHandler',

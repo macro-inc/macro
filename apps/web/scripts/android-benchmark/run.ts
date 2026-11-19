@@ -18,6 +18,7 @@ import { launchFresh, measureStep, prepare, sleep } from './harness';
 import { type Sample, sampleFrom } from './measure';
 import { SCENARIOS, type Targets } from './scenarios';
 import { summarize } from './stats';
+import { parseCpuThrottle } from './throttle';
 
 const { values: options } = parseArgs({
   options: {
@@ -33,6 +34,7 @@ const { values: options } = parseArgs({
     settle: { type: 'string', default: '1500' },
     'boot-settle': { type: 'string', default: '5000' },
     label: { type: 'string', default: '' },
+    'cpu-throttle': { type: 'string', default: '1' },
   },
 });
 
@@ -56,6 +58,13 @@ const iterations = numberOption('iterations', options.iterations, 1, 1000);
 const settleMs = numberOption('settle', options.settle, 0, 60_000);
 const bootSettleMs = numberOption('boot-settle', options['boot-settle'], 0, 60_000);
 const port = numberOption('port', options.port, 1024, 65_535);
+let cpuThrottles: number[];
+try {
+  cpuThrottles = parseCpuThrottle(options['cpu-throttle']);
+} catch (error) {
+  console.error((error as Error).message);
+  process.exit(2);
+}
 const selected = options.scenarios.split(',').filter(Boolean);
 for (const id of selected)
   if (!SCENARIOS[id]) throw new Error(`Unknown scenario ${id}`);
@@ -64,10 +73,19 @@ const targets = JSON.parse(
 ) as Targets;
 
 const samples: Sample[] = [];
-const failures: { scenario: string; iteration: number; error: string }[] = [];
+const failures: {
+  scenario: string;
+  iteration: number;
+  cpuThrottle: number;
+  error: string;
+}[] = [];
 
-/** One fresh process: cold start, then each selected scenario. */
-async function iteration(index: number) {
+/**
+ * One fresh process: cold start, then each selected scenario with the WebView
+ * throttled to `cpuThrottle`. DevTools attaches only once the WebView is up,
+ * so the cold start always runs unthrottled.
+ */
+async function iteration(index: number, cpuThrottle: number) {
   const { session, launched, boot } = await launchFresh(device, port);
   try {
     if (selected.includes('cold-start')) {
@@ -80,6 +98,7 @@ async function iteration(index: number) {
         readyMs: boot.end - boot.start,
       });
     }
+    await session.throttleCpu(cpuThrottle);
     await sleep(bootSettleMs);
     for (const id of selected) {
       const scenario = SCENARIOS[id];
@@ -91,15 +110,16 @@ async function iteration(index: number) {
             const sample = await measureStep(session, step, targets, variant, index);
             samples.push({ ...sample, hostLoad: loadavg()[0] });
             console.log(
-              `  ${index} ${variant.padEnd(4)} ${step.id.padEnd(22)} ${Math.round(sample.readyMs)} ms`
+              `  ${index} ${cpuThrottle}× ${variant.padEnd(4)} ${step.id.padEnd(22)} ${Math.round(sample.readyMs)} ms`
             );
           } catch (error) {
             failures.push({
               scenario: step.id,
               iteration: index,
+              cpuThrottle,
               error: (error as Error).message,
             });
-            console.warn(`  ${index} ${variant} ${step.id}: ${(error as Error).message}`);
+            console.warn(`  ${index} ${cpuThrottle}× ${variant} ${step.id}: ${(error as Error).message}`);
           }
           await sleep(settleMs);
         }
@@ -143,17 +163,18 @@ async function environment() {
 function table(results: Sample[]) {
   const groups = new Map<string, Sample[]>();
   for (const sample of results) {
-    const key = `${sample.scenario}\u0000${sample.variant}`;
+    const key = `${sample.cpuThrottle}\u0000${sample.scenario}\u0000${sample.variant}`;
     groups.set(key, [...(groups.get(key) ?? []), sample]);
   }
   return [...groups.entries()].map(([key, group]) => {
-    const [scenario, variant] = key.split('\u0000');
+    const [cpuThrottle, scenario, variant] = key.split('\u0000');
     const ready = summarize(group.map((sample) => sample.readyMs));
     const spans = group
       .map((sample) => sample.spanMs)
       .filter((value): value is number => value !== undefined);
     const median = (values: number[]) => summarize(values).median;
     return {
+      cpuThrottle: Number(cpuThrottle),
       scenario,
       variant,
       ...ready,
@@ -167,6 +188,9 @@ function table(results: Sample[]) {
             : Number.NaN
         ).filter((value) => !Number.isNaN(value))
       ),
+      measuredThrottleMedian: median(
+        group.flatMap((sample) => sample.cpuThrottleMeasured ?? [])
+      ),
     };
   });
 }
@@ -174,7 +198,7 @@ function table(results: Sample[]) {
 function print(rows: ReturnType<typeof table>) {
   const fmt = (value: number | undefined) =>
     value === undefined || Number.isNaN(value) ? '-' : String(Math.round(value));
-  const header = ['scenario', 'variant', 'n', 'median', 'p90', 'min', 'max', 'sd~', 'detect', 'span p50', 'http', 'gql'];
+  const header = ['scenario', 'variant', 'n', 'median', 'p90', 'min', 'max', 'sd~', 'detect', 'span p50', 'http', 'gql', 'cpu'];
   const lines = rows.map((row) => [
     row.scenario,
     row.variant,
@@ -188,35 +212,63 @@ function print(rows: ReturnType<typeof table>) {
     fmt(row.spanMedian),
     fmt(row.httpMedian),
     fmt(row.graphqlMedian),
+    Number.isNaN(row.measuredThrottleMedian) ? '-' : `${row.measuredThrottleMedian.toFixed(1)}×`,
   ]);
   const widths = header.map((title, column) =>
     Math.max(title.length, ...lines.map((line) => line[column].length))
   );
   const render = (line: string[]) =>
     line.map((cell, column) => (column < 2 ? cell.padEnd(widths[column]) : cell.padStart(widths[column]))).join('  ');
-  console.log(render(header));
-  for (const line of lines) console.log(render(line));
+  for (const rate of [...new Set(rows.map((row) => row.cpuThrottle))].sort((a, b) => a - b)) {
+    console.log(`\nCPU throttle ${rate}×${rate === 1 ? ' (none)' : ' (WebView renderer only)'}`);
+    console.log(render(header));
+    rows.forEach((row, index) => {
+      if (row.cpuThrottle === rate) console.log(render(lines[index]));
+    });
+  }
+  if (selected.includes('cold-start'))
+    console.log('Cold start is never throttled, so its rows are under 1×.');
+  console.log('cpu is the WebView slowdown measured around each step.');
   console.log('Times in ms. sd~ is the MAD-based spread; detect is the smallest change between two runs this spread lets the harness detect.');
 }
 
 const started = new Date();
-const meta = { started: started.toISOString(), label: options.label, iterations, settleMs, bootSettleMs, scenarios: selected, environment: await environment() };
-console.log(`Benchmarking ${meta.environment.app} on ${options.serial}, ${iterations} iterations`);
+const meta = { started: started.toISOString(), label: options.label, iterations, cpuThrottle: cpuThrottles, settleMs, bootSettleMs, scenarios: selected, environment: await environment() };
+const profiles = cpuThrottles.map((rate) => `${rate}×`).join(', ');
+console.log(
+  `Benchmarking ${meta.environment.app} on ${options.serial}, ${iterations} iterations at CPU throttle ${profiles}` +
+    (cpuThrottles.length > 1 ? `: ${iterations * cpuThrottles.length} launches, alternating` : '')
+);
 for (let index = 0; index < iterations; index++) {
-  console.log(`iteration ${index + 1}/${iterations}`);
-  await iteration(index).catch((error: Error) => {
-    failures.push({ scenario: 'iteration', iteration: index, error: error.message });
-    console.warn(`  iteration ${index} failed: ${error.message}`);
-  });
+  // Alternating profiles within each iteration exposes them to the same host load.
+  for (const cpuThrottle of cpuThrottles) {
+    console.log(`iteration ${index + 1}/${iterations}, CPU throttle ${cpuThrottle}×`);
+    await iteration(index, cpuThrottle).catch((error: Error) => {
+      failures.push({ scenario: 'iteration', iteration: index, cpuThrottle, error: error.message });
+      console.warn(`  iteration ${index} at ${cpuThrottle}× failed: ${error.message}`);
+    });
+  }
 }
 
 const summary = table(samples);
 const outDir = resolve(options.out);
 await mkdir(outDir, { recursive: true });
-const file = join(outDir, `android-benchmark-${started.toISOString().replace(/[:.]/g, '-')}.json`);
+const profileName = [...cpuThrottles].sort((a, b) => a - b).map((rate) => `${rate}x`).join('-');
+const file = join(outDir, `android-benchmark-${started.toISOString().replace(/[:.]/g, '-')}-cpu${profileName}.json`);
 await writeFile(file, `${JSON.stringify({ meta, summary, failures, samples }, null, 2)}\n`);
 print(summary);
 if (failures.length) console.warn(`${failures.length} failed steps; see ${file}`);
 console.log(`Results: ${file}`);
-// A run that measured nothing (signed out, wrong build) is a failure.
-process.exit(samples.length > 0 ? 0 : 1);
+// A run that measured nothing (signed out, wrong build), or nothing at one of
+// its rates (the throttle never took), is a failure.
+const timedSteps = selected.some((id) => SCENARIOS[id].steps);
+// Only timed steps count: cold start always runs at 1×, whatever the rate.
+const unmeasured = cpuThrottles.filter(
+  (rate) =>
+    !samples.some(
+      (sample) => sample.cpuThrottle === rate && sample.cpuThrottleMeasured
+    )
+);
+if (timedSteps && unmeasured.length)
+  console.warn(`No steps measured at CPU throttle ${unmeasured.map((rate) => `${rate}×`).join(', ')}`);
+process.exit(samples.length > 0 && !(timedSteps && unmeasured.length) ? 0 : 1);

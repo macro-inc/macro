@@ -24,6 +24,55 @@ export const exitCodes = {
   configuration: 78,
 } as const;
 
+/** What is missing to start, which isn't the code's fault: the start ends with {@link exitCodes.configuration}. */
+export class NotConfigured extends Error {
+  constructor(message: string, options?: ErrorOptions) {
+    super(message, options);
+    this.name = 'NotConfigured';
+  }
+}
+
+/** The value, or a {@link NotConfigured} carrying why not. */
+export const configured = async <Value>(
+  value: () => Promise<Value> | Value
+): Promise<Value> => {
+  try {
+    return await value();
+  } catch (error) {
+    throw new NotConfigured(
+      error instanceof Error ? error.message : String(error),
+      { cause: error }
+    );
+  }
+};
+
+/** How long a failed start waits for its spans to export: an unreachable collector must not hold up the exit. */
+export const startFlushLimitMs = 2_000;
+
+/**
+ * Runs the start. Any failure first exports what was traced (at most
+ * {@link startFlushLimitMs}); then a {@link NotConfigured} ends the process
+ * with the configuration exit code, and anything else is rethrown.
+ */
+export const startOrExit = async <Value>(
+  start: () => Promise<Value>,
+  process: {
+    readonly flush: () => Promise<void>;
+    readonly wait: (ms: number) => Promise<void>;
+    readonly report: (message: string) => void;
+    readonly exit: (code: number) => never;
+  }
+): Promise<Value> => {
+  try {
+    return await start();
+  } catch (error) {
+    await Promise.race([process.flush(), process.wait(startFlushLimitMs)]);
+    if (!(error instanceof NotConfigured)) throw error;
+    process.report(`can't start: ${error.message}`);
+    return process.exit(exitCodes.configuration);
+  }
+};
+
 export const variables = {
   /** The agent's repository: its code, charter and state. */
   workspace: 'AGENT_WORKSPACE',
