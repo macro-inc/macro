@@ -1,3 +1,4 @@
+import { fireAndForget } from '@core/util/fireAndForget';
 import { queryClient } from '@queries/client';
 import { createConnectionWebsocketEffect } from '@service-connection/websocket';
 import type {
@@ -49,25 +50,42 @@ function parsePayload(data: unknown): UpdatePayload | undefined {
 }
 
 function patchClaimed(actionId: string, claimed: string | null): void {
-  queryClient.setQueryData(
-    scheduledActionKeys.detail({ scheduleId: actionId }).queryKey,
-    (current: ScheduledAction | undefined) =>
-      current ? { ...current, claimed } : undefined
-  );
+  // TanStack cancels synchronously. In-flight responses fetched before the
+  // notification must not replace the claim we are about to write.
+  const detailKey = scheduledActionKeys.detail({
+    scheduleId: actionId,
+  }).queryKey;
+  const detail = queryClient.getQueryData<ScheduledAction>(detailKey);
+  if (detail) {
+    fireAndForget(
+      queryClient.cancelQueries({ queryKey: detailKey, exact: true }),
+      'routines'
+    );
+    queryClient.setQueryData(detailKey, { ...detail, claimed });
+  }
 
-  for (const queryKey of [
+  for (const prefix of [
     scheduledActionKeys.list.queryKey,
     scheduledActionKeys.subRoutines.queryKey,
     scheduledActionKeys.children._def,
   ]) {
-    queryClient.setQueriesData<ScheduledAction[]>({ queryKey }, (current) => {
-      if (!current) return current;
-      const idx = current.findIndex((a) => a.id === actionId);
-      if (idx === -1) return current;
-      const next = [...current];
-      next[idx] = { ...next[idx], claimed: claimed ?? undefined };
-      return next;
-    });
+    for (const [queryKey, rows] of queryClient.getQueriesData<
+      ScheduledAction[]
+    >({
+      queryKey: prefix,
+    })) {
+      if (!rows?.some((row) => row.id === actionId)) continue;
+      fireAndForget(
+        queryClient.cancelQueries({ queryKey, exact: true }),
+        'routines'
+      );
+      queryClient.setQueryData(
+        queryKey,
+        rows.map((row) =>
+          row.id === actionId ? { ...row, claimed: claimed ?? undefined } : row
+        )
+      );
+    }
   }
 }
 
@@ -135,6 +153,7 @@ createConnectionWebsocketEffect((data) => {
     return;
   }
 
+  patchClaimed(payload.action_id, null);
   queryClient.invalidateQueries({
     queryKey: scheduledActionKeys.detail({ scheduleId: payload.action_id })
       .queryKey,
@@ -152,7 +171,6 @@ createConnectionWebsocketEffect((data) => {
   // stopped: drop the synthetic pending row immediately so the UI stops
   // showing it as running, then invalidate to refetch the server-persisted
   // record (with end_time, is_success, and a real id).
-  patchClaimed(payload.action_id, null);
   if (payload.resource) {
     removePendingHistoryRow(payload.resource, payload.action_id);
   }
