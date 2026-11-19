@@ -292,6 +292,12 @@ export type CheckRoutineRequest = {
      * the database it writes to; kept with its draft for the person to see.
      */
     created?: Array<CreatedItem>;
+    /**
+     * Apps a routine draft's session found the routine needs that its owner
+     * hasn't connected, for the person to connect before saving. The routine
+     * itself requires only connected ones.
+     */
+    missingApps?: Array<AgentMcpServer>;
     routine: ActionConfiguration;
 };
 
@@ -620,10 +626,20 @@ export type DraftUpdateState = 'drafting' | 'ready' | 'failed' | 'removed';
  */
 export type DraftedRoutine = {
     /**
+     * Apps outside Macro its Ask AI step uses that its owner connected,
+     * which the routine requires (its task's `mcp_servers`).
+     */
+    apps?: Array<AgentMcpServer>;
+    /**
      * What AI created while drafting, such as the database the routine
      * writes to. These exist whether or not the routine is saved.
      */
     created: Array<DraftCreated>;
+    /**
+     * Apps its Ask AI step needs that its owner hasn't connected: the owner
+     * connects each one, or removes it, before saving.
+     */
+    missingApps?: Array<AgentMcpServer>;
     name: string;
     /**
      * Steps whose code still fails the type checker.
@@ -1162,6 +1178,12 @@ export type RewriteSuggestion = {
  */
 export type RoutineCheck = {
     /**
+     * Apps the routine needs that its owner hasn't connected, as a routine
+     * draft's session named them (`missingApps`): the person connects each
+     * one before saving. Never ones the routine already requires.
+     */
+    missingApps?: Array<AgentMcpServer>;
+    /**
      * Whether saving it would succeed: no problems and no failing steps.
      */
     ok: boolean;
@@ -1319,7 +1341,50 @@ export type RoutineKnob = {
      * investors, fundraising or finance?".
      */
     value: string;
+} | {
+    /**
+     * The kinds of item the owner may pick, at least one, each once.
+     */
+    entity_types: Array<RoutineKnobEntityType>;
+    /**
+     * What it is, for the owner, e.g. "Channel to post in".
+     */
+    label: string;
+    /**
+     * How the code reads it: `knobs.<name>`.
+     */
+    name: KnobName;
+    type: 'entity';
+    value?: null | RoutineKnobEntity;
 };
+
+/**
+ * The item an entity knob names: its kind and id.
+ */
+export type RoutineKnobEntity = {
+    /**
+     * Its id.
+     */
+    id: RoutineKnobEntityId;
+    /**
+     * Its kind.
+     */
+    type: RoutineKnobEntityType;
+};
+
+/**
+ * An item's id: not blank, without spaces, at most 256 characters.
+ */
+export type RoutineKnobEntityId = string;
+
+/**
+ * A kind of item an entity knob names: each kind the app's entity picker
+ * offers, which Macro's SDK has a handle for, and whole databases. Its
+ * name is the SDK's for the kind (`EntityReference`'s `type`, which the
+ * handle's `entityType` repeats), except `task`, a document that is a
+ * task.
+ */
+export type RoutineKnobEntityType = 'channel' | 'document' | 'project' | 'database' | 'user' | 'task' | 'email_thread' | 'chat' | 'crm_company' | 'crm_contact' | 'initiative';
 
 /**
  * A nonblank model identifier. Runtime catalogs, not the scheduler, own availability.
@@ -2277,6 +2342,23 @@ export type TemplateVariable = {
 };
 
 /**
+ * An entity knob of a saved routine whose item needs a new pick: it was
+ * deleted, its owner lost access, or none is picked.
+ */
+export type UnusableKnob = {
+    item?: null | RoutineKnobEntity;
+    /**
+     * The knob's name.
+     */
+    knob: string;
+    /**
+     * Why it can't be used, for the routine's owner.
+     */
+    reason: string;
+    step?: null | StepId;
+};
+
+/**
  * How an upgrade went.
  */
 export type UpgradeOutcome = 'running' | 'checked' | 'rewritten' | 'needs_update';
@@ -3163,6 +3245,35 @@ export type ActivateScheduledActionTemplateResponses = {
 };
 
 export type ActivateScheduledActionTemplateResponse = ActivateScheduledActionTemplateResponses[keyof ActivateScheduledActionTemplateResponses];
+
+export type ListScheduledActionUnusableItemsData = {
+    body?: never;
+    path: {
+        /**
+         * ID of the scheduled action
+         */
+        id: string;
+    };
+    query?: never;
+    url: '/scheduled-actions/{id}/unusable-items';
+};
+
+export type ListScheduledActionUnusableItemsErrors = {
+    401: string;
+    404: string;
+    500: string;
+};
+
+export type ListScheduledActionUnusableItemsError = ListScheduledActionUnusableItemsErrors[keyof ListScheduledActionUnusableItemsErrors];
+
+export type ListScheduledActionUnusableItemsResponses = {
+    /**
+     * The routine's entity knobs whose item its owner can't use now: deleted, trashed, out of their reach, or not picked
+     */
+    200: Array<UnusableKnob>;
+};
+
+export type ListScheduledActionUnusableItemsResponse = ListScheduledActionUnusableItemsResponses[keyof ListScheduledActionUnusableItemsResponses];
 
 export type ListSuggestionsData = {
     body?: never;

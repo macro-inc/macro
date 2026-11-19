@@ -48,11 +48,15 @@ enforced by the ordinary backend APIs.
   `agents.list()` reads storage agent records, which built-in personas lack;
   `agents.coding()` reads the harness `GET /coding-agents` listing (Cursor
   included) that the `ListCodingAgents` tool serves. `routines.create` takes
-  `steps` (generated `CodeStep`s, agent steps with `Agent` handles) and
-  `dangerouslyOperateAsUser`, which its TSDoc restricts to an explicit user
-  request, or the older single agent task. Its examples use steps only:
-  agents copy them, and a routine draft hands back steps, converting a single
-  agent task when it can (`scheduled_action` drafts). `routineBody` maps both onto the
+  `steps` (generated `CodeStep`s whose `entity` knobs hold an
+  `EntityReference` to a handle, sent as its id, or `null` when unpicked, so
+  a stored step passes back with each picked item given again by `byId`;
+  agent steps with `Agent` handles) and `dangerouslyOperateAsUser`, which
+  its TSDoc restricts to an explicit user request, or the older single agent
+  task. Its examples use steps only: agents copy them, and a routine draft
+  hands back steps, converting a single agent task when it can
+  (`scheduled_action` drafts).
+  `routineBody` maps both onto the
   scheduler's `RoutineTask`. With `steps`, `subRoutines` defines up to five
   named programs with their own inputs and steps. On update, supply the full
   definition list to keep or replace it, or `[]` to remove it. The scheduler
@@ -78,10 +82,13 @@ enforced by the ordinary backend APIs.
   routine drafter also reads; code mode follows it with the Compose Routines
   skill (`crates/system_skills`), how a session writes one from a chat.
   `routines.check` sends the same body to
-  `POST /scheduled-actions/check` (as `{routine, created}`), which runs
-  saving's checks and saves nothing; code mode's catalog lists it as a read.
-  `created` takes handles with an `entityType` (`CreatedEntity`) and is kept
-  with a routine draft for its review.
+  `POST /scheduled-actions/check` (as `{routine, created, missingApps}`),
+  which runs saving's checks and saves nothing; code mode's catalog lists
+  it as a read. `created` takes handles with an `entityType`
+  (`CreatedEntity`) and is kept with a routine draft for its review;
+  `missingApps` names apps its Ask AI step needs that aren't connected, for
+  the draft's review to ask for. A routine's `apps` (`RoutineApp`) are its
+  task's `mcp_servers`, sent only when given.
 - `users.search(nameOrEmail)` is one `GET /contacts/search`: the server
   ranks the caller's contacts and current team (teammates first, at most 20)
   and the SDK seeds User handles with each name and agent flag, keeping that
