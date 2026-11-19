@@ -85,7 +85,7 @@ stacks. Process isolation belongs to
   carry `inline_guides`. `mcp_guides` and `entity_guide` serve hosts that
   carry areas whole. All of it is generated from the SDK; edit the TSDoc.
 - OCaml programs: a session whose owner has the backend flag
-  `enable-ocaml-code-mode` (`OcamlRollout`, the harness's `OcamlFlag`; off
+  `enable-ocaml-code-mode` (an `OwnerRollout`, the harness's `OcamlFlag`; off
   when it can't be read) and whose harness build has the OCaml bundle
   (`CodeModeService::with_ocaml`) may run `ExecuteCode` with
   `language: "ocaml"` (`SessionCodeMode::ocaml_enabled`). Everyone else gets
@@ -96,9 +96,10 @@ stacks. Process isolation belongs to
   bundle's `sdkFingerprint`, all in the `agent_code_execution.record` JSON,
   so no migration. The flag must be created in PostHog at 0% before anyone
   can be targeted. The public MCP's `UserExecuteCode` stays JavaScript only.
-  `code_execution` can also run JS tools programs (`Language::JsTools`), but
-  sessions aren't offered them yet: `execute` refuses one before minting a
-  credential, and `ProgramLanguage` has no such value.
+  JavaScript tools programs (`ProgramLanguage::JsTools`, `js_tools`) exist
+  for the permissions gate but are not offered yet: no tool takes them
+  (`ExecuteCodeWithOcaml` takes `OcamlToolLanguage`) and `execute` refuses
+  one before minting a credential.
 - `src/inbound/toolset.rs`: `toolset()` for sessions, `toolset_with_ocaml()`
   for a session that may run OCaml (`session_toolset` picks; its description
   adds `toolset/session/ocaml.md`, the `Code_mode.run` contract and one

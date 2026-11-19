@@ -678,9 +678,9 @@ async fn run() -> anyhow::Result<()> {
     .context("failed to compose cognition APIs")?;
     let cognition_router = cognition_runtime.router.clone();
     let code_scratch = tempfile::tempdir()?;
-    // Lists the SDK operations an OCaml program may call, for the permission
-    // gate; only with the OCaml bundle.
-    let mut ocaml_analyzer: Option<Arc<dyn code_execution::domain::ProgramAnalyzer>> = None;
+    // List the SDK operations a checked program may call, for the permission
+    // gate: OCaml only with the OCaml bundle.
+    let mut program_analyzers = code_mode::permissions::Analyzers::default();
     let code_runner = match &config.deno_binary {
         Some(binary) => {
             let runner = code_execution::outbound::deno::DenoRunner::new(
@@ -703,7 +703,7 @@ async fn run() -> anyhow::Result<()> {
                 )
                 .await
                 .map_err(|error| anyhow::anyhow!("invalid OCaml analyzer: {error}"))?;
-                ocaml_analyzer = Some(Arc::new(analyzer));
+                program_analyzers.ocaml = Some(Arc::new(analyzer));
             }
             let runner: Arc<dyn code_execution::domain::CodeRunner> = Arc::new(runner);
             // Public MCP runs get their own admission budget so external
@@ -955,10 +955,11 @@ async fn run() -> anyhow::Result<()> {
                 Arc::new(agent_permissions::outbound::registry::registry_catalog()),
             ),
         );
-    // The gate on OCaml programs, where this build can run them.
-    let permission_gate = ocaml_analyzer.map(|analyzer| {
+    // The gate on checked programs, in each language this build can
+    // analyze.
+    let permission_gate = program_analyzers.any().then(|| {
         Arc::new(code_mode::permissions::PermissionGate {
-            analyzer,
+            analyzers: program_analyzers,
             permissions: Arc::clone(&agent_permissions_service),
             holds: tool_approvals.clone(),
             rollout: Arc::new(code_mode::PermissionsFlag(feature_flags.clone())),
@@ -991,7 +992,7 @@ async fn run() -> anyhow::Result<()> {
             fingerprint,
             rollout: Arc::new(code_mode::OcamlFlag(feature_flags.clone())),
             permissions: permission_gate.is_some().then(
-                || -> Arc<dyn agent_code_mode::domain::OcamlRollout> {
+                || -> Arc<dyn agent_code_mode::domain::OwnerRollout> {
                     Arc::new(code_mode::PermissionsFlag(feature_flags.clone()))
                 },
             ),
