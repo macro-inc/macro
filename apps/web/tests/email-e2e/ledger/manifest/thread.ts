@@ -1233,6 +1233,34 @@ export const thread = {
       needs: 'the calendar service',
     },
     {
+      id: 'STL-523',
+      surface: 'SL-40',
+      fn: ['F-156'],
+      state: '"Syncing your calendar…" at the shared-event action',
+      trigger:
+        'open a shared event before the first writable calendar is discovered',
+      source: [
+        INVITATION,
+        'src/features/calendar/components/CalendarFirstSyncNotice.tsx',
+      ],
+      providers: ['gmail'],
+      needs: 'the calendar service',
+    },
+    {
+      id: 'STL-524',
+      surface: 'SL-28',
+      fn: ['F-114'],
+      state: '"Syncing your calendar…" at the event composer create action',
+      trigger:
+        'create an event from a thread before the first writable calendar is discovered',
+      source: [
+        'src/features/calendar/components/composer/event-form-parts.tsx',
+      ],
+      viewports: ['desktop'],
+      providers: ['gmail'],
+      needs: 'the calendar service',
+    },
+    {
       id: 'STL-100',
       surface: 'SL-40',
       fn: ['F-153'],

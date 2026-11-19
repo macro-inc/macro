@@ -1125,3 +1125,5 @@ STX-974	The Home list's rows in HomeList.tsx keep every email row that has left 
 STX-975	The activity row of a program step in CodeExecutionToolCall.tsx shows an empty title instead of the operation's label.
 STX-976	The review composer's disabled accessor in DraftComposer.tsx always returns false, so the fields of a sent review card stay editable.
 STX-977	The open of an email result in actions.ts returns without navigating, so once the save or send finishes the universal input closes and opens neither the draft nor the sent thread.
+STL-523	The shared-event card has no syncing notice at the add control while the first calendar list is still empty, in calendar-invitation.tsx.
+STL-524	The create-event composer shows an empty calendar picker and can submit without a destination while the first calendar list is still empty, in event-form-parts.tsx and event-form-state.ts.
