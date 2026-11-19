@@ -335,7 +335,8 @@ while nothing is open; a chat started from Notifications opens on Recent.
   **Condensed** (kept per user) and **Notification settings…**. Condensed
   rows are Home's rows for the same entity (icon and name; "who in #channel"
   for a reply; "who commented on" for a comment); on hover the time shows
-  and Mark done takes the unread dot's place. A condensed stack stays one row.
+  and Mark done takes the unread dot's place. Condensed rows sit under Home's
+  date dividers, and a condensed stack stays one row.
 
 ## Home — `/app/component/home`
 

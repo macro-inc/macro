@@ -8,6 +8,7 @@ import {
   useViewTabHotkeys,
   ViewShell,
 } from '@app/components/view-shell';
+import { HomeDateGroupHeader } from '@app/features/home/components/HomeDateGroupHeader';
 import type { CalendarPreviewSelection } from '@app/features/next-soup/utils';
 import { t } from '@app/lib/i18n';
 import { SplitRouter } from '@app/lib/split-router';
@@ -810,11 +811,27 @@ export function NotificationsView(props: NotificationsViewProps) {
                     </Show>
                   ))
                   .with({ type: 'date_header' }, (header) => (
-                    <InboxDateHeader
-                      id={header.id}
-                      label={dateHeaderLabel(header)}
-                      isFirst={listItems()[0]?.id === header.id}
-                    />
+                    // Condensed rows are Home's, so they take Home's dividers.
+                    <Show
+                      when={condensed()}
+                      fallback={
+                        <InboxDateHeader
+                          id={header.id}
+                          label={dateHeaderLabel(header)}
+                          isFirst={listItems()[0]?.id === header.id}
+                        />
+                      }
+                    >
+                      <HomeDateGroupHeader
+                        row={{
+                          kind: 'group-header',
+                          id: header.id,
+                          groupId: header.id,
+                          label: dateHeaderLabel(header),
+                        }}
+                        isFirst={listItems()[0]?.id === header.id}
+                      />
+                    </Show>
                   ))
                   .exhaustive()
               }
