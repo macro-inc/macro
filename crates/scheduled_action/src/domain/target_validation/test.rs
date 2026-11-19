@@ -348,6 +348,44 @@ fn an_update_from_before_steps_cannot_replace_them() {
     require_explicit_selection(&program, &json!({ "steps": [] })).unwrap();
 }
 
+/// The SDK can't hold a sub-routine's apps, so it would send the definition
+/// back without them; an update restates them, clears them, or drops the
+/// definition.
+#[test]
+fn an_update_must_restate_a_sub_routines_apps_to_keep_or_clear_them() {
+    let definition = |apps: Option<Value>| {
+        let mut definition = json!({
+            "name": "remind",
+            "title": "Remind me",
+            "inputs": [],
+            "steps": [{ "type": "agent", "model": "m", "instructions": "Tell me" }],
+        });
+        if let Some(apps) = apps {
+            definition["mcp_servers"] = apps;
+        }
+        definition
+    };
+    let linear = json!([{ "app_slug": "linear", "server_name": "Linear" }]);
+    let task = |definitions: Vec<Value>| json!({ "steps": [], "sub_routines": definitions });
+    let stored = task(vec![definition(Some(linear.clone()))]);
+
+    let error = require_explicit_selection(&stored, &task(vec![definition(None)])).unwrap_err();
+    assert_eq!(
+        error.downcast_ref::<TargetValidationError>(),
+        Some(&TargetValidationError::ExplicitAppsRequired)
+    );
+    for incoming in [
+        task(vec![definition(Some(linear))]),
+        task(vec![definition(Some(json!([])))]),
+        task(vec![]),
+    ] {
+        require_explicit_selection(&stored, &incoming).unwrap();
+    }
+    // A definition without apps needs nothing restated.
+    require_explicit_selection(&task(vec![definition(None)]), &task(vec![definition(None)]))
+        .unwrap();
+}
+
 #[tokio::test]
 async fn a_program_hands_its_apps_to_its_agent_and_an_update_must_restate_them() {
     let sessions = Arc::new(Sessions::default());

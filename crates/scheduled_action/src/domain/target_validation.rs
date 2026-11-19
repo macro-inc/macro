@@ -177,6 +177,28 @@ pub(super) fn require_explicit_selection(previous: &Value, incoming: &Value) -> 
             return Err(TargetValidationError::ExplicitSubRoutinesRequired.into());
         }
     }
+    // A sub-routine's apps too: a client that can't hold them (the SDK) sends
+    // the definition back without them. One left out is removed on purpose.
+    let definitions = |task: &Value| {
+        task.get("sub_routines")
+            .and_then(Value::as_array)
+            .cloned()
+            .unwrap_or_default()
+    };
+    let kept = definitions(incoming);
+    for definition in definitions(previous) {
+        let has_apps = definition
+            .get("mcp_servers")
+            .and_then(Value::as_array)
+            .is_some_and(|servers| !servers.is_empty());
+        if has_apps
+            && kept.iter().any(|kept| {
+                kept.get("name") == definition.get("name") && kept.get("mcp_servers").is_none()
+            })
+        {
+            return Err(TargetValidationError::ExplicitAppsRequired.into());
+        }
+    }
     Ok(())
 }
 
