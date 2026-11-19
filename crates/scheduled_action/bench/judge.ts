@@ -46,7 +46,7 @@ export const passes = (grade: Grade) => grade.score >= 4;
 
 /** Ids in the draft, with the workspace item each one is. */
 function glossary(draft: DraftResult, names: Map<string, string>): string[] {
-  const body = JSON.stringify([draft.trigger, draft.steps, draft.step, draft.task]);
+  const body = JSON.stringify([draft.trigger, draft.steps, draft.step, draft.subRoutines, draft.task]);
   const found = new Set(body.match(/[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}/g) ?? []);
   const created = new Map((draft.created ?? []).map((item) => [item.entityId, item.entityType]));
   return [...found].map((id) => {
@@ -88,7 +88,15 @@ export function judgePrompt(
     const what = item.kind === 'add_step' ? 'The steps added after the existing ones' : 'The changed step';
     lines.push('', `${what}:`, JSON.stringify(draft.step, null, 1));
   } else {
-    const shown = { name: draft.name, trigger: draft.trigger, steps: draft.steps, task: draft.task };
+    // Sub-routines only when there are some, so a routine without them
+    // reads as it did before they existed.
+    const shown = {
+      name: draft.name,
+      trigger: draft.trigger,
+      steps: draft.steps,
+      ...(draft.subRoutines?.length ? { subRoutines: draft.subRoutines } : {}),
+      task: draft.task,
+    };
     lines.push('', 'The routine:', JSON.stringify(shown, null, 1));
   }
   const ids = draft.outcome === 'failed' ? [] : glossary(draft, names);

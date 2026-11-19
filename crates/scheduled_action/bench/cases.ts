@@ -4,7 +4,8 @@
 // request names has exactly one match, except where a case checks a name
 // with none or two.
 
-import { FIXTURE, OWNER, email, fullName, tasks } from './workspace';
+import { seedId } from './setup';
+import { FIXTURE, OWNER, SCENARIO_NAME, email, fullName, tasks } from './workspace';
 
 export { FIXTURE };
 
@@ -94,17 +95,26 @@ export type Effects = {
   notifications: string[];
   /** The copies of its sub-routines the routine's runs scheduled (absent in results saved before they were read). */
   copies?: CopyMade[];
+  /**
+   * The runs of the first copy, run once at once (`execute`) to see what a
+   * copy does when its time comes, with an agent step's reply. Absent when
+   * the routine scheduled none.
+   */
+  copyRuns?: { isSuccess: boolean; result: unknown; reply?: string }[];
 };
 
 /**
- * A copy a run scheduled of one of the routine's sub-routines: which one, the
- * names of the inputs it was given (not their values), when it runs, its
- * definition's step kinds, the key it was scheduled under, and whether it was
- * made switched off (not merely paused with a parent saved off).
+ * A copy a run scheduled of one of the routine's sub-routines: its id, which
+ * one, the names of the inputs it was given and their text values (the
+ * seeded ids it names), when it runs, its definition's step kinds, the key it
+ * was scheduled under, and whether it was made switched off (not merely
+ * paused with a parent saved off).
  */
 export type CopyMade = {
+  id?: string;
   subRoutine: string | null;
   inputs: string[];
+  values?: string[];
   trigger: unknown;
   steps: string[];
   key: string | null;
@@ -426,60 +436,90 @@ const daysFromToday = (date: Local, { now, timezone }: Context) => {
   );
 };
 
+/** A task `setup` seeds, with the id it seeds it under. */
+type SeededTask = ReturnType<typeof tasks>[string] & { key: string; id: string };
+
+const SEEDED_TASKS: SeededTask[] = Object.entries(tasks()).map(([key, task]) => ({
+  ...task,
+  key,
+  id: seedId(SCENARIO_NAME, 'task', key),
+}));
+
+/** The one seeded task a copy's input values name by id, if exactly one. */
+const taskOf = (copy: CopyMade) => {
+  const named = SEEDED_TASKS.filter((task) => (copy.values ?? []).some((value) => value.includes(task.id)));
+  return named.length === 1 ? named[0] : undefined;
+};
+
+/** Text without case, quotes or runs of spaces, for finding a name in a reply. */
+const unquoted = (value: string) =>
+  value
+    .toLowerCase()
+    .replace(/["'“”‘’`*_]/g, '')
+    .replace(/\s+/g, ' ');
+
 /**
- * The run scheduled copies of a sub-routine, each given inputs, keyed, not
- * switched off on its own, run once at a time `when` accepts, and ending in
- * an Ask AI step (a code step can't tell the owner anything); and `enough`
- * accepts how many days from today they run.
+ * The run scheduled copies of a sub-routine, each keyed, not switched off on
+ * its own, run once, ending in an Ask AI step (a code step can't tell the
+ * owner anything), and naming by id a task `wanted` accepts, at a time `when`
+ * accepts for that task; no task twice, and `enough` accepts the tasks
+ * named. The first copy, run at once, succeeded and named its task: it does
+ * the later work for that item, reading its definition from the routine.
  */
 const scheduled =
-  (when: (at: Local, context: Context) => boolean, enough: (days: number[]) => boolean) =>
+  (
+    wanted: (task: SeededTask) => boolean,
+    when: (at: Local, task: SeededTask, context: Context) => boolean,
+    enough: (named: SeededTask[]) => boolean,
+  ) =>
   (effects: Effects, context: Context) => {
     const made = effects.copies ?? [];
-    const times = made.map((copy) => runsOnceAt(copy.trigger, context.timezone));
+    const named = made.map(taskOf);
+    const first = named[0];
+    const copySaid = (effects.copyRuns ?? [])
+      .filter(didRun)
+      .map((run) => `${text(run.result)}\n${run.reply ?? ''}`)
+      .join('\n');
     return (
       ran(effects) &&
+      made.length > 0 &&
       made.every((copy, index) => {
-        const at = times[index];
+        const at = runsOnceAt(copy.trigger, context.timezone);
+        const task = named[index];
         return (
           copy.subRoutine !== null &&
-          copy.inputs.length > 0 &&
           copy.key !== null &&
           !copy.switchedOff &&
+          copy.steps.at(-1) === 'agent' &&
+          task !== undefined &&
+          wanted(task) &&
           at !== undefined &&
-          when(at, context) &&
-          copy.steps.at(-1) === 'agent'
+          when(at, task, context)
         );
       }) &&
-      enough(times.map((at) => (at ? daysFromToday(at, context) : Number.NaN)))
+      new Set(named.map((task) => task?.id)).size === named.length &&
+      enough(named.filter((task): task is SeededTask => task !== undefined)) &&
+      first !== undefined &&
+      unquoted(copySaid).includes(unquoted(first.name))
     );
   };
 
-/** Days from today the owner's open tasks fall due, as `setup` dates them, one entry per task. */
-const OWNER_OPEN_DUE = Object.values(tasks())
-  .filter(
-    (task) =>
-      task.assignees.includes(OWNER) &&
-      task.status !== 'completed' &&
-      task.status !== 'canceled' &&
-      task.due !== undefined,
-  )
-  .map((task) => task.due as number);
+/** The owner's open tasks, as `setup` seeds them. */
+const ownerOpen = (task: SeededTask) =>
+  task.assignees.includes(OWNER) && task.status !== 'completed' && task.status !== 'canceled';
 
 /**
  * A reminder at 9am the day before each open task of the owner's due in the
- * next seven days. Tasks due in 2 to 6 days need theirs, one each; a task due
- * tomorrow may be skipped (9am today may have passed) and one due in 7 days
- * may fall outside a reading of "the next seven days".
+ * next seven days, naming the task. Tasks due in 2 to 6 days need theirs; a
+ * task due tomorrow may be skipped (9am today may have passed) and one due in
+ * 7 days may fall outside a reading of "the next seven days".
  */
 const remindsDayBefore = scheduled(
-  (at, context) =>
-    at.hour === 9 &&
-    at.minute === 0 &&
-    OWNER_OPEN_DUE.some((due) => due >= 1 && due <= 7 && due === daysFromToday(at, context) + 1),
-  (days) =>
-    [2, 3, 4, 5, 6].every(
-      (due) => days.filter((day) => day === due - 1).length >= OWNER_OPEN_DUE.filter((each) => each === due).length,
+  (task) => ownerOpen(task) && task.due !== undefined && task.due >= 1 && task.due <= 7,
+  (at, task, context) => at.hour === 9 && at.minute === 0 && daysFromToday(at, context) + 1 === task.due,
+  (named) =>
+    SEEDED_TASKS.filter((task) => ownerOpen(task) && task.due !== undefined && task.due >= 2 && task.due <= 6).every(
+      (task) => named.some((each) => each.id === task.id),
     ),
 );
 
@@ -847,7 +887,7 @@ export const CASES: Case[] = [
     text: "Every morning at 8, for each of my open tasks due in the next seven days, schedule a reminder that tells me about it at 9am the day before it's due.",
     expect: [drafted, at(8, 0), definesLaterWork, nothingUnused],
     run: {
-      says: "a run schedules a keyed one-time copy of the reminder, given the task and ending in an Ask AI step, at 9am the day before each open task of the owner's due in the coming week",
+      says: "a run schedules a keyed one-time copy of the reminder, given the task and ending in an Ask AI step, at 9am the day before each open task of the owner's due in the coming week, naming it by id, and the first copy, run at once, names its task",
       fire: execute,
       holds: remindsDayBefore,
     },
@@ -866,11 +906,12 @@ export const CASES: Case[] = [
       nothingUnused,
     ],
     run: {
-      says: 'moving the homepage hero task to In review schedules one keyed one-time copy of the check, given the task and ending in an Ask AI step, three days later',
+      says: 'moving the homepage hero task to In review schedules one keyed one-time copy of the check, given the task and ending in an Ask AI step, three days later, and that copy, run at once, names the task',
       fire: () => ({ type: 'task_status', task: 'task:homepage-hero', status: 'in_review', restore: 'in_progress' }),
       holds: scheduled(
-        (at, context) => daysFromToday(at, context) === 3,
-        (days) => days.length === 1,
+        (task) => task.key === 'homepage-hero',
+        (at, _task, context) => daysFromToday(at, context) === 3,
+        (named) => named.length === 1,
       ),
     },
   },
