@@ -97,7 +97,7 @@ sfs_delete = []
 
 [dependencies]
 agent_correlation = { path = "../../crates/agent_correlation", features = ["http", "postgres"] }
-calendar_events = { path = "../../crates/calendar_events", features = ["google", "inbound", "postgres", "schema"] }
+calendar_events = { path = "../../crates/calendar_events", features = ["gateway-refresh", "google", "inbound", "postgres", "schema"] }
 anyhow = { workspace = true }
 authentication_service_client = { path = "../../crates/authentication_service_client" }
 macro_aws_config = { path = "../../crates/macro_aws_config", features = ["s3", "sqs"] }
