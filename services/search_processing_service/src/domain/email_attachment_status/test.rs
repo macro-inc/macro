@@ -180,6 +180,7 @@ async fn sets_the_flag_on_every_live_linked_document_and_records_each_page() {
             updated: 3,
             missing: 1,
             failed: 0,
+            not_queued: 0,
         }
     );
 }

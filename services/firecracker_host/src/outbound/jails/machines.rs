@@ -285,6 +285,13 @@ impl Machines for Jails {
             &std::fs::read_to_string(cgroup.join("memory.stat")).ok()?,
             "anon",
         )?;
+        // Absent on a host without swap: nothing is swapped. Unreadable, it
+        // is unknown, which leaves the memory and CPU readings intact.
+        let swap_bytes = match std::fs::read_to_string(cgroup.join("memory.swap.current")) {
+            Ok(swap) => swap.trim().parse().ok(),
+            Err(error) if error.kind() == std::io::ErrorKind::NotFound => Some(0),
+            Err(_) => None,
+        };
         let cpu_usage_microseconds = stat_field(
             &std::fs::read_to_string(cgroup.join("cpu.stat")).ok()?,
             "usage_usec",
@@ -292,6 +299,7 @@ impl Machines for Jails {
         Some(Usage {
             resident_memory_bytes,
             private_memory_bytes,
+            swap_bytes,
             cpu_usage_microseconds,
         })
     }

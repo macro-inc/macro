@@ -11,6 +11,7 @@ const link = (id: string, overrides: Partial<EmailLink> = {}): EmailLink =>
     needs_calendar_permission: false,
     calendar_disabled: false,
     has_calendar_data: true,
+    is_sync_active: true,
     is_primary: false,
     ...overrides,
   }) as unknown as EmailLink;
@@ -21,6 +22,7 @@ describe('toCalendarAccounts', () => {
       toCalendarAccounts([link('a', { needs_reauth: true })], 'macro|self')[0]
     ).toMatchObject({
       action: 'reconnect',
+      stoppedSyncing: false,
       consentScopes: 'gmail_and_calendar',
     });
   });
@@ -32,6 +34,7 @@ describe('toCalendarAccounts', () => {
         linkId: 'a',
         emailAddress: 'a@example.com',
         action: 'turnOff',
+        stoppedSyncing: false,
         consentScopes: 'calendar',
       },
     ]);
@@ -51,6 +54,7 @@ describe('toCalendarAccounts', () => {
         linkId: 'a',
         emailAddress: 'a@example.com',
         action: 'enable',
+        stoppedSyncing: false,
         consentScopes: 'calendar',
       },
     ]);
@@ -90,6 +94,7 @@ describe('toCalendarAccounts', () => {
     ];
     expect(toCalendarAccounts(links, 'macro|self')[0]).toMatchObject({
       action: 'reconnect',
+      stoppedSyncing: true,
       consentScopes: 'calendar',
     });
   });
@@ -113,6 +118,7 @@ describe('toCalendarAccounts', () => {
         linkId: 'own',
         emailAddress: 'own@example.com',
         action: 'turnOff',
+        stoppedSyncing: false,
         consentScopes: 'calendar',
       },
     ]);

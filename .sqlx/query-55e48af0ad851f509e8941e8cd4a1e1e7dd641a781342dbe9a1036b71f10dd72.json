@@ -1,0 +1,35 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "\n            SELECT id, macro_user_id AS fusionauth_user_id, linked_email AS \"linked_email!\"\n            FROM in_progress_user_link\n            WHERE identity_link_created\n                AND linked_email IS NOT NULL\n                AND (refused_at IS NOT NULL OR created_at < $1)\n            ORDER BY created_at\n            LIMIT $2\n        ",
+  "describe": {
+    "columns": [
+      {
+        "ordinal": 0,
+        "name": "id",
+        "type_info": "Uuid"
+      },
+      {
+        "ordinal": 1,
+        "name": "fusionauth_user_id",
+        "type_info": "Uuid"
+      },
+      {
+        "ordinal": 2,
+        "name": "linked_email!",
+        "type_info": "Text"
+      }
+    ],
+    "parameters": {
+      "Left": [
+        "Timestamp",
+        "Int8"
+      ]
+    },
+    "nullable": [
+      false,
+      false,
+      true
+    ]
+  },
+  "hash": "55e48af0ad851f509e8941e8cd4a1e1e7dd641a781342dbe9a1036b71f10dd72"
+}

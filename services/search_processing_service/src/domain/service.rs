@@ -41,6 +41,7 @@ where
 {
     let mut cursor: Option<C> = None;
     let mut enqueued = 0usize;
+    let mut not_queued = 0usize;
 
     loop {
         // A paused backfill enqueues nothing either: the queue's workers
@@ -53,7 +54,11 @@ where
         if page.rows_consumed == 0 {
             break;
         }
-        publisher.publish(page.messages).await?;
+        let page_not_queued = publisher.publish(page.messages).await?;
+        if page_not_queued > 0 {
+            not_queued += page_not_queued;
+            progress.add_not_queued(page_not_queued).await;
+        }
         enqueued += page.rows_consumed;
         progress.add(page.rows_consumed).await;
         // Source signals end-of-stream by returning `None` for the next
@@ -65,7 +70,10 @@ where
         cursor = Some(next);
     }
 
-    Ok(BackfillReceipt { enqueued })
+    Ok(BackfillReceipt {
+        enqueued,
+        not_queued,
+    })
 }
 
 /// Inbound contract for all backfill HTTP routes. Each call drives a single
@@ -168,6 +176,7 @@ where
 {
     let mut offset = 0usize;
     let mut enqueued = 0usize;
+    let mut not_queued = 0usize;
 
     loop {
         // A paused backfill enqueues nothing either: the queue's workers
@@ -180,13 +189,20 @@ where
         if page.rows_consumed == 0 {
             break;
         }
-        publisher.publish(page.messages).await?;
+        let page_not_queued = publisher.publish(page.messages).await?;
+        if page_not_queued > 0 {
+            not_queued += page_not_queued;
+            progress.add_not_queued(page_not_queued).await;
+        }
         enqueued += page.rows_consumed;
         offset += page.rows_consumed;
         progress.add(page.rows_consumed).await;
     }
 
-    Ok(BackfillReceipt { enqueued })
+    Ok(BackfillReceipt {
+        enqueued,
+        not_queued,
+    })
 }
 
 /// Wait while backfills are paused; `false` once `cancel` fires instead.
@@ -262,7 +278,10 @@ where
         progress.add(rows_consumed).await;
     }
 
-    Ok(BackfillReceipt { enqueued })
+    Ok(BackfillReceipt {
+        enqueued,
+        ..BackfillReceipt::default()
+    })
 }
 
 impl<S, P, I> BackfillService for BackfillOrchestrator<S, P, I>
@@ -302,7 +321,7 @@ where
         cancel: CancellationToken,
     ) -> Result<BackfillReceipt, BackfillError> {
         if req.channel_ids.as_ref().is_some_and(Vec::is_empty) {
-            return Ok(BackfillReceipt { enqueued: 0 });
+            return Ok(BackfillReceipt::default());
         }
         drain_source_with_cursor(&self.publisher, &self.gate, &progress, &cancel, |cursor| {
             self.source.fetch_channels(&req, cursor)

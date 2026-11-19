@@ -77,7 +77,11 @@ dev and production have dropped that value and their `COMPUTERS_INCUS_*` keys
      pairing.
    - The host's spans and metrics reach Datadog under the host's name (see
      **Monitoring**).
-5. **Open admission** (`admitting = true`) for the test team.
+5. **Turn on the agents worker**: set `COMPUTERS_AGENT_EFFECTS=true` in
+   authentication-service's Doppler config wherever the computers rollout is
+   on. Absent means off: released agent computers' `UndoAgentInvite` effects
+   then wait in the outbox, and nothing takes the agent back or alerts.
+6. **Open admission** (`admitting = true`) for the test team.
 
 ## 3. Production hosts
 
@@ -117,10 +121,12 @@ not shared across `zfs send`.
 
 - **Release unit**: a `macro-box` image version, fetched by each host from the
   signed Nix binary cache.
-- **First image**: build the first published `macro-box` image from #11134's
-  merge commit. Older images ship a macrod that doesn't understand the agent
-  hand-off (`ApplyAgent`), and the capability check makes hand-off to them
-  fail loudly.
+- **First image**: build the first published `macro-box` image (and the agent
+  image `COMPUTERS_AGENT_IMAGE` names) from a commit that includes #11336, and
+  publish it before the harness that checks the capability deploys. #11336's
+  macrod is the first to declare `apply-agent` in its dial header; an agent
+  computer whose macrod doesn't declare it fails at connect with
+  `AgentUnsupported` and pages, and a second failure releases and refunds it.
 - **Goldens are built per host**, not copied between hosts: a snapshot is tied
   to the host's CPU model, kernel and Firecracker version. Every build re-runs
   the secret scan and the golden checks. A warm-Chromium golden is refused on a
@@ -139,6 +145,11 @@ not shared across `zfs send`.
 - **What persists**: the system disk is replaced on upgrade. `/home`, macrod and
   harnessd state, docker data and the `/nix` overlay live on the state disk and
   survive.
+- **Service rollback**: a new `computer_timer_kind` or `Failure` value (such
+  as `agent_redeliver` or `AgentUnsupported`) can't be decoded by an older
+  service. Roll forward instead of back past one, or first clear the rows
+  that hold it: the due timers of the new kind, and the computers that
+  failed with the new failure.
 - **Rollback**: unpublish the bad image (no new purchases), then run a rolling
   upgrade back to the previous one. Each host keeps the two newest goldens per
   size, plus any golden a computer still uses. Goldens are deleted only at

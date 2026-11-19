@@ -214,7 +214,10 @@ impl<S: LinkedDocumentSource, I: EmailAttachmentFlagIndex> EmailAttachmentStatus
             }
         }
 
-        Ok(BackfillReceipt { enqueued: read })
+        Ok(BackfillReceipt {
+            enqueued: read,
+            ..BackfillReceipt::default()
+        })
     }
 
     /// Read one page and set the flag on its live documents. `None` once the

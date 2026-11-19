@@ -33,7 +33,7 @@ async fn closed_pool() -> PgPool {
 struct ChannelPublisher(Arc<Mutex<Vec<(String, String)>>>);
 
 impl SearchEventPublisher for ChannelPublisher {
-    async fn publish(&self, messages: Vec<SearchQueueMessage>) -> Result<(), BackfillError> {
+    async fn publish(&self, messages: Vec<SearchQueueMessage>) -> Result<usize, BackfillError> {
         for message in messages {
             let SearchQueueMessage::ChannelMessageUpdate(update) = message else {
                 panic!("expected channel update");
@@ -44,7 +44,7 @@ impl SearchEventPublisher for ChannelPublisher {
                 .unwrap()
                 .push((update.channel_id, update.message_id));
         }
-        Ok(())
+        Ok(0)
     }
 }
 

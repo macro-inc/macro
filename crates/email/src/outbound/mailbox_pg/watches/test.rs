@@ -120,7 +120,7 @@ async fn lifecycle_event_during_renewal_survives_worker_release(db: PgPool) {
         )
         .await
         .unwrap();
-    repo.release_watch(&lease, 43200).await.unwrap();
+    repo.release_watch(&lease, 43200, 0).await.unwrap();
     assert!(repo.claim_watch(Uuid::new_v4()).await.unwrap().is_some());
 }
 #[sqlx::test(migrator = "MACRO_DB_MIGRATIONS")]
@@ -218,7 +218,9 @@ impl MailboxWatchGateway for Gateway {
 }
 
 #[sqlx::test(migrator = "MACRO_DB_MIGRATIONS")]
-async fn subscription_upkeep_records_what_it_did_and_a_failed_renewal_is_an_error(db: PgPool) {
+async fn subscription_upkeep_records_what_it_did_and_failed_renewals_back_off_until_one_works(
+    db: PgPool,
+) {
     let telemetry = crate::telemetry_capture::Telemetry::default();
     let _guard = telemetry.install();
     let (repo, link) = super::super::test::fixture(&db).await;
@@ -252,11 +254,28 @@ async fn subscription_upkeep_records_what_it_did_and_a_failed_renewal_is_an_erro
     renewals_fail.store(true, std::sync::atomic::Ordering::SeqCst);
     make_due().await.unwrap();
     assert!(service.execute_once().await.is_err());
+    make_due().await.unwrap();
+    assert!(service.execute_once().await.is_err());
+    renewals_fail.store(false, std::sync::atomic::Ordering::SeqCst);
+    make_due().await.unwrap();
+    assert!(service.execute_once().await.unwrap());
 
     let spans = telemetry.spans("outlook.subscription.maintain");
-    let [created, renewed, failed] = spans.as_slice() else {
-        panic!("expected three upkeep spans, got {spans:?}");
+    let [created, renewed, failed, failed_again, recovered] = spans.as_slice() else {
+        panic!("expected five upkeep spans, got {spans:?}");
     };
+    assert_eq!(failed_again["outlook.defer_seconds"], "60");
+    assert_eq!(recovered["outlook.outcome"], "done");
+    // A renewal that works clears the failures, so the next refusal waits
+    // 30 s again.
+    let failures = sqlx::query_scalar!(
+        "SELECT failures FROM email_mailbox_watch_work WHERE link_id = $1",
+        link
+    )
+    .fetch_one(&db)
+    .await
+    .unwrap();
+    assert_eq!(failures, 0);
     assert_eq!(created["mailbox.link_id"], link.to_string());
     assert_eq!(created["outlook.subscription_action"], "created");
     assert!(created.contains_key("outlook.subscription_expires_at"));
