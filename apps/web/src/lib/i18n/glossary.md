@@ -593,9 +593,18 @@ Address: Anda, capitalized.
 | notifications | Notifikasi |
 | done | Selesai |
 | mark as read | Tandai sudah dibaca |
-| snooze | Tunda notifikasi… |
+| snooze | Tunda notifikasi |
 | archive | Arsipkan |
 | settings | Setelan |
+| computer (Macro computer) | Komputer Macro baru |
+| machine (runs agents) | Mesin Anda |
+| session (agent) | Mulai sesi |
+| routine | Semua rutinitas |
+| saved view | Tampilan tersimpan baru |
+| call | Keluar dari panggilan |
+| contact (CRM) | Belum ada pipeline kontak |
+| company (CRM) | Tambahkan perusahaan |
+| thread (email) | Utas yang dikecualikan |
 
 ## Vietnamese (`vi`)
 
