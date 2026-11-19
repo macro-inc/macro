@@ -1637,7 +1637,10 @@ describe('sub-routines defined once', () => {
       },
     ]);
     render(() => <Routine />);
-    fireEvent.click(screen.getByRole('button', { name: 'Remove Example' }));
+    const remove = screen.getByRole('button', { name: 'Remove Example' });
+    expect(remove.classList.contains('touch:min-h-[44px]')).toBe(true);
+    expect(remove.classList.contains('touch:min-w-[44px]')).toBe(true);
+    fireEvent.click(remove);
     await vi.advanceTimersByTimeAsync(300);
 
     expect(mocks.update).toHaveBeenCalledExactlyOnceWith({
@@ -1816,6 +1819,7 @@ describe('sub-routines defined once', () => {
   it('lets long copy labels and step titles wrap without taking over a narrow pane', () => {
     const label = 'A'.repeat(60);
     const title = 'B'.repeat(60);
+    const knobValue = 'C'.repeat(120);
     setSchedules([
       copy,
       {
@@ -1827,7 +1831,19 @@ describe('sub-routines defined once', () => {
               ...remind,
               inputs: [{ type: 'text', name: 'taskId', label }],
               steps: [
-                { type: 'code', title, source: 'export function main() {}' },
+                {
+                  type: 'code',
+                  title,
+                  source: 'export function main() {}',
+                  knobs: [
+                    {
+                      type: 'text',
+                      name: 'note',
+                      label: 'Note',
+                      value: knobValue,
+                    },
+                  ],
+                },
               ],
             },
           ],
@@ -1835,10 +1851,23 @@ describe('sub-routines defined once', () => {
       },
     ]);
     render(() => <Routine />);
-    const term = screen.getByRole('term');
+    const given = within(screen.getByLabelText('Given'));
+    const term = given.getByRole('term');
     expect(term.textContent).toBe(label);
     expect(term.classList.contains('wrap-anywhere')).toBe(true);
-    expect(screen.getByRole('definition').textContent).toBe('Ship the deck');
+    expect(given.getByRole('definition').textContent).toBe('Ship the deck');
+    const knob = screen.getByText(knobValue);
+    expect(knob.classList.contains('wrap-anywhere')).toBe(true);
+    expect(
+      knob
+        .closest('dl')
+        ?.classList.contains('grid-cols-[minmax(0,1fr)_minmax(0,1fr)]')
+    ).toBe(true);
+    expect(
+      screen
+        .getByRole('button', { name: 'Show code' })
+        .classList.contains('touch:min-h-[44px]')
+    ).toBe(true);
     expect(screen.getByText(title).classList.contains('min-w-0')).toBe(true);
     expect(
       screen

@@ -295,6 +295,7 @@ function StepCard(props: StepCardProps) {
                 <Button
                   variant="ghost"
                   size="sm"
+                  class="touch:min-h-[44px]"
                   aria-expanded={showCode()}
                   onClick={() => setShowCode(!showCode())}
                 >

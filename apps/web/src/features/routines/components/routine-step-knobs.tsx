@@ -98,14 +98,21 @@ function SentencePiece(props: {
 /** Knobs the sentence doesn't show, as a list of settings. */
 export function KnobSettings(props: { knobs: Knob[]; onKnob?: KnobChange }) {
   return (
-    <dl class="grid min-w-0 grid-cols-[minmax(0,1fr)_auto] items-center gap-x-4 gap-y-2 text-sm">
+    <dl
+      class={cn(
+        'grid min-w-0 items-center gap-x-4 gap-y-2 text-sm',
+        props.onKnob
+          ? 'grid-cols-[minmax(0,1fr)_auto]'
+          : 'grid-cols-[minmax(0,1fr)_minmax(0,1fr)]'
+      )}
+    >
       <For each={props.knobs}>
         {(knob) => (
           <>
-            <dt class="min-w-0 text-ink-muted">
+            <dt class="min-w-0 wrap-anywhere text-ink-muted">
               {knob.type === 'question' ? 'AI decides whether' : knob.label}
             </dt>
-            <dd class="min-w-0 text-right">
+            <dd class="min-w-0 wrap-anywhere text-right">
               <Show when={props.onKnob} fallback={knobText(knob)}>
                 {(change) => (
                   <KnobControl

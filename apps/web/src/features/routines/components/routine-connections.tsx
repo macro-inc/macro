@@ -39,6 +39,7 @@ export function ConnectionRows(props: {
             <Button
               variant="ghost"
               size="icon-sm"
+              class="touch:min-h-[44px] touch:min-w-[44px]"
               aria-label={`Remove ${app.server_name}`}
               onClick={() =>
                 props.onChange(
