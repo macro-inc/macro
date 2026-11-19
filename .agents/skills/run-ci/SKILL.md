@@ -38,8 +38,8 @@ gh api repos/macro-inc/macro/issues/<pr>/labels -f "labels[]=run-ci"  # after a 
 `gh pr edit <pr> --add-label run-ci` does the same on a recent gh; older
 releases fail on a Projects (classic) error before adding the label.
 
-- Adding the label again starts a fresh run. A run still going for the same PR
-  is cancelled.
+- For another run, remove `run-ci` if it remains, then add it again. A fresh
+  request cancels a run still going for the same PR.
 - Draft PRs run too.
 - Only PRs into `main` run. A stacked PR, based on another branch, gets no
   `CI gate` and the label does nothing until its base is `main`. To run
@@ -88,10 +88,19 @@ and says why in `CI gate`.
 
 ## Fix a failure
 
-- A flaky job: re-run the failed jobs of the `PR CI` run
-  (`gh run rerun <run-id> --failed`). `CI gate` re-runs with them and updates
-  the status; no new label is needed.
-- A real failure: fix it, push, and add the label again.
+- After every run, inspect `gh pr checks <pr>` and confirm `CI gate` refers to
+  the latest commit. Read every failed job's logs with
+  `gh run view <run-id> --log-failed` before deciding what failed.
+- Fix every real failure caused by the branch, run local checks, commit, and
+  push. Do not wait for another request to make in-scope fixes.
+- For an unrelated failure on `main` or a suspected flaky test outside the
+  changed code, record the job and error in the PR body and `PROGRESS.md`.
+  Rerun once to check whether the failure is flaky; do not assume it is.
+- For a pushed fix or confirmation rerun, remove `run-ci` if it remains and
+  add it again, following the steps above.
+- Repeat review, fixes, and CI requests whenever CI fails later, without
+  waiting for another request. Do not call the PR done until `CI gate` passes
+  on its latest commit.
 - The checks inside the run are named `<workflow> / <job>`, such as
   `Web App / Typecheck` or `Cloud Storage / test`.
 
