@@ -5,6 +5,6 @@ export default {
   search: 'Search Home',
   // The Recent and Notifications tabs.
   views: 'Home views',
-  recent: 'Recent',
+  recent: 'Recents',
   notifications: 'Notifications',
 };

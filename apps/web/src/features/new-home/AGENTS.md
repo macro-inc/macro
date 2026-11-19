@@ -1,14 +1,14 @@
 # New Home
 
-Desktop Home with Recent and Notifications tabs, behind `enable-new-home` and
-`disable-old-home`. It composes `features/home` (Recent) and
+Desktop Home with Recents and Notifications tabs, behind `enable-new-home` and
+`disable-old-home`. It composes `features/home` (Recents) and
 `features/notifications-inbox` (Notifications); it owns no data of its own.
 
 ## Map
 
 - `core/new-home-mode.ts`: the flag states (`off`, `both`, `new-only`), which
   Home a `/home` split shows, and which rail item a split marks.
-- `components/`: the Recent and Notifications tabs, from props.
+- `components/`: the Recents and Notifications tabs, from props.
 - Root files are the app wiring: the mode hook (`use-new-home-mode.ts`), tab
   navigation, per-user preferences (last tab, Condensed), the tab bar with its
   number-key and Tab hotkeys, and the two tabs' views. `route-views.tsx` is
@@ -16,7 +16,7 @@ Desktop Home with Recent and Notifications tabs, behind `enable-new-home` and
 
 ## Gotchas
 
-- Recent is `/home` on the `recent` Home tab, not a route of its own, so Home's
+- Recents is `/home` on the `recent` Home tab, not a route of its own, so Home's
   preview, calendar and deep-link routes serve it. Every Home navigation
   carries the tab; old Home reads a `recent` link as Signal.
 - Notifications is `/notifications` with a `NotificationsFrame`; keep the

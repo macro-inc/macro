@@ -302,34 +302,34 @@ longer notifies the thread. Settings → notifications lists them under `AI`.
 ## New Home
 
 Desktop only, behind two PostHog flags read together (`features/new-home`).
-New Home's Recent tab is `/app/home` on the Recent tab; its Notifications tab
+New Home's Recents tab is `/app/home` on the Recents tab; its Notifications tab
 is `/app/notifications`.
 
 | `enable-new-home` | `disable-old-home` | Rail | `/home` | `/notifications` | `g h` |
 | --- | --- | --- | --- | --- | --- |
 | off | any | Home, and Notifications with unified notifications | old Home | today's view | old Home |
-| on | off | Home, then **New Home** (house with a plus) right under it; no Notifications entry | old Home; on the Recent tab (`?s0.home.tab=recent` in the first split) New Home | New Home's Notifications tab | New Home |
+| on | off | Home, then **New Home** (house with a plus) right under it; no Notifications entry | old Home; on the Recents tab (`?s0.home.tab=recent` in the first split) New Home | New Home's Notifications tab | New Home |
 | on | on | **New Home** as Home | New Home | New Home's Notifications tab | New Home |
 
 `g i` goes away with New Home on: Notifications is a New Home tab. The rail
 item and `g h` go through `/new-home`, which opens the tab New Home was last
 left on (kept per user), without the preview it had open. Once old Home is
-off, a `/home` link opens Recent.
+off, a `/home` link opens Recents.
 New Home is called **New Home** (rail tooltip and split title) while old
 Home is beside it, and **Home** once it replaces it. Touch devices keep
 today's Home and Notifications in every state. `VITE_ENABLE_NEW_HOME` and
 `VITE_DISABLE_OLD_HOME` override the flags locally; New Home is on in dev,
 with old Home beside it.
 
-Under its header (New Chat, then the tab's tools) New Home has Recent and
+Under its header (New Chat, then the tab's tools) New Home has Recents and
 Notifications tabs, labels only, or icons only when the list is narrower
 than 280px; the Notifications tab carries the rail's unread dot. Switching
 tabs is a history entry and keeps the list's width: both tabs share one
-saved width, which starts from old Home's. `1` is Recent, `2` and `3` are
+saved width, which starts from old Home's. `1` is Recents, `2` and `3` are
 Notifications at All and Unread, and Tab/Shift+Tab step through the three. Both tabs show Home's chat composer
-while nothing is open; a chat started from Notifications opens on Recent.
+while nothing is open; a chat started from Notifications opens on Recents.
 
-- **Recent** is Home's list, rows and tools (Filter with Type only, Search,
+- **Recents** is Home's list, rows and tools (Filter with Type only, Search,
   collapse) fed only by the viewer's `touched_by_me` activity, bucketed by
   the time of their own last touch. Its filters are old Home's (Status
   aside). Saving a property, or starting to edit a document or task (the
