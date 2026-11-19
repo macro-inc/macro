@@ -52,6 +52,7 @@ import {
   type LanguageDefinition,
   LanguageDefinitions,
   normalizedLanguage,
+  PROMPT_LANGUAGE,
   type SupportedLanguage,
   SupportedLanguages,
 } from '../utils/languageSupport';
@@ -75,6 +76,7 @@ export {
   type LanguageDefinition,
   LanguageDefinitions,
   normalizedLanguage,
+  PROMPT_LANGUAGE,
   type SupportedLanguage,
   SupportedLanguages,
 };

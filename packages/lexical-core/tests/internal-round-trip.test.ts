@@ -1,3 +1,4 @@
+import { $isCodeNode } from '@lexical/code';
 import {
   $convertFromMarkdownString,
   $convertToMarkdownString,
@@ -11,6 +12,7 @@ import {
 } from 'lexical';
 import { describe, expect, it } from 'vitest';
 import { SupportedNodeTypes } from '../node-list';
+import { PROMPT_LANGUAGE } from '../nodes/CustomCodeNode';
 import { $isEquationNode } from '../nodes/EquationNode';
 import { $isImageNode } from '../nodes/ImageNode';
 import { $isVideoNode } from '../nodes/VideoNode';
@@ -234,6 +236,23 @@ describe('internal markdown round trip of stored documents', () => {
         equation.getEquation()
       )
     ).toEqual(['x', 'y']);
+    expect(
+      exportState(importMarkdown(markdown).getEditorState().toJSON())
+    ).toBe(markdown);
+  });
+
+  it('keeps a prompt block as a prompt fence', () => {
+    const markdown = '```prompt\nSummarize <my notes>\n\nThen list tasks\n```';
+
+    importMarkdown(markdown).read(() => {
+      const code = $getRoot().getFirstChild();
+      expect($isCodeNode(code)).toBe(true);
+      if (!$isCodeNode(code)) return;
+      expect(code.getLanguage()).toBe(PROMPT_LANGUAGE);
+      expect(code.getTextContent()).toBe(
+        'Summarize <my notes>\n\nThen list tasks'
+      );
+    });
     expect(
       exportState(importMarkdown(markdown).getEditorState().toJSON())
     ).toBe(markdown);

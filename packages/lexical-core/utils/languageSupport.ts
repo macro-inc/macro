@@ -25,11 +25,18 @@ export const SupportedLanguages = [
   'sql',
   'bash',
   'svg',
+  'prompt',
 ] as const;
 
 export type SupportedLanguage = (typeof SupportedLanguages)[number];
 
 export const DEFAULT_LANGUAGE: SupportedLanguage = 'plaintext';
+
+/**
+ * A code block in this language is a prompt block: text written to be sent to
+ * an agent, saved as a ```` ```prompt ```` fence.
+ */
+export const PROMPT_LANGUAGE: SupportedLanguage = 'prompt';
 
 /**
  * A language definition for the syntax-highlighted code box.
@@ -144,6 +151,11 @@ export const LanguageDefinitions: Record<
     show: true,
     aliases: ['xml'],
     highlightsEnabled: true,
+  },
+  // Editors that allow prompt blocks offer it on their own, apart from code languages.
+  prompt: {
+    label: 'Executable prompt',
+    show: false,
   },
 } as const;
 
