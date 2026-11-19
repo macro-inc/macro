@@ -18538,6 +18538,7 @@ dependencies = [
  "agent_session",
  "ai_engine",
  "anyhow",
+ "aws-sdk-cloudwatch",
  "aws-sdk-dynamodb",
  "aws-sdk-s3",
  "aws-sdk-sqs",

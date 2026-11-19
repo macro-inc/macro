@@ -230,3 +230,45 @@ fn records_lost_at_a_stop_count_by_their_topics_entity_type() {
         ]
     );
 }
+
+#[test]
+fn the_lane_backlog_is_the_oldest_fresh_reading_per_lane() {
+    use crate::domain::backlog::LaneBacklog;
+
+    let recorded = Recorded::new();
+    let ages = recorded.metrics.pending_ages();
+    let now = Instant::now();
+
+    assert_eq!(recorded.metrics.lane_backlog(now), None);
+
+    ages.set("macro.email", 0, 4_000, now);
+    ages.set("macro.email", 1, 9_000, now);
+    ages.set("macro.documents", 0, 30_000, now);
+    ages.set("macro.chats", 0, 0, now);
+    if let Some(long_ago) = now.checked_sub(PENDING_STALE_AFTER) {
+        ages.set("macro.messages", 0, 600_000, long_ago);
+    }
+
+    assert_eq!(
+        recorded.metrics.lane_backlog(now),
+        Some(LaneBacklog {
+            live: Some(Duration::from_secs(30)),
+            email: Some(Duration::from_secs(9)),
+        }),
+        "a stale reading does not count"
+    );
+
+    let email_only = Recorded::new();
+    email_only
+        .metrics
+        .pending_ages()
+        .set("macro.email", 3, 0, now);
+    assert_eq!(
+        email_only.metrics.lane_backlog(now),
+        Some(LaneBacklog {
+            live: None,
+            email: Some(Duration::ZERO),
+        }),
+        "a lane the task owns nothing in has no reading"
+    );
+}
