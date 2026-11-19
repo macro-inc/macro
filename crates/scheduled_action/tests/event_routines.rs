@@ -241,6 +241,13 @@ impl scheduled_action::domain::event_rollout::EventRoutineRollout for Everyone {
     async fn enabled_for(&self, _: &MacroUserIdStr<'_>) -> Result<bool, rootcause::Report> {
         Ok(true)
     }
+
+    async fn sub_routines_enabled_for(
+        &self,
+        _: &MacroUserIdStr<'_>,
+    ) -> Result<bool, rootcause::Report> {
+        Ok(true)
+    }
 }
 
 struct Harness {

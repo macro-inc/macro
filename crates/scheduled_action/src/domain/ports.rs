@@ -5,7 +5,8 @@ use super::execution::ExecutionHandle;
 use super::models::{
     ActionConfiguration, ActionConfigurationUpdate, ActionExecutionRecord, CreatedRoutine,
     DispatchEvent, InProgressExecution, ListScope, ListedAction, ListedRun, Requester, RunCaller,
-    RunHistory, RunningRun, ScheduledAction, ScheduledActionUpdate, SubRoutineKey,
+    RunHistory, RunningRun, ScheduleSubRoutine, ScheduledAction, ScheduledActionUpdate,
+    SubRoutineKey,
 };
 use super::templates::{RoutineTemplate, ShareRoutineTemplate, TemplateSnapshot};
 use anyhow::Result;
@@ -244,8 +245,22 @@ pub trait ScheduledActionService: Send + Sync + 'static {
         key: Option<SubRoutineKey>,
     ) -> impl Future<Output = Result<SavedAction>> + Send;
 
+    /// Schedule a copy of a sub-routine the routine `caller` is running
+    /// defines (its parent's, when that routine is a copy itself), with its
+    /// own trigger and inputs. The copy is that routine's sub-routine like
+    /// any other: keyed, capped, paused and deleted with it. Outside a run
+    /// it is `ScheduleOutsideRun`; an unknown name or inputs that don't fit
+    /// the definition are refused.
+    fn schedule_sub_routine(
+        &self,
+        principal: &CreationPrincipal,
+        request: ScheduleSubRoutine,
+        caller: RunCaller,
+    ) -> impl Future<Output = Result<SavedAction>> + Send;
+
     /// Make the receipt's sub-routine a top-level routine that no longer
-    /// follows its parent. `NotSubRoutine` when it has no parent.
+    /// follows its parent; a copy first gets the steps it ran.
+    /// `NotSubRoutine` when it has no parent.
     fn detach_action(
         &self,
         receipt: EntityAccessReceipt<EditAccessLevel>,

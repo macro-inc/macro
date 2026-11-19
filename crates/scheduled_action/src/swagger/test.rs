@@ -29,12 +29,25 @@ fn routine_task_schema_offers_programs_and_single_agent_tasks() {
         task_forms,
         vec![
             json!("#/components/schemas/RoutineProgram"),
+            json!("#/components/schemas/RoutineSubRoutineCopy"),
             json!("#/components/schemas/AgentTask"),
         ]
+    );
+    assert_eq!(
+        schemas["RoutineSubRoutineCopy"]["required"],
+        json!(["sub_routine"])
     );
 
     let program = &schemas["RoutineProgram"];
     assert_eq!(program["required"], json!(["steps"]));
+    assert_eq!(
+        program["properties"]["sub_routines"]["items"],
+        json!({ "$ref": "#/components/schemas/RoutineSubRoutine" })
+    );
+    assert_eq!(
+        program["properties"]["inputs"]["items"],
+        json!({ "$ref": "#/components/schemas/RoutineInput" })
+    );
     assert_eq!(
         program["properties"]["dangerously_operate_as_user"]["type"],
         json!("boolean")

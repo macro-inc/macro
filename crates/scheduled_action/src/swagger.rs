@@ -7,8 +7,9 @@ use utoipa::OpenApi;
 use crate::inbound::axum_router::{
     __path_check_action, __path_create_action, __path_delete_action, __path_detach_action,
     __path_execute_action, __path_get_action, __path_health, __path_list_actions,
-    __path_list_history, __path_set_action_enabled, __path_set_appearance, __path_update_action,
-    ScheduledActionResponse, SetScheduledActionEnabled,
+    __path_list_history, __path_schedule_sub_routine, __path_set_action_enabled,
+    __path_set_appearance, __path_update_action, ScheduledActionResponse,
+    SetScheduledActionEnabled,
 };
 #[expect(
     unused_imports,
@@ -56,6 +57,7 @@ use model_entity::{AppearanceColor, AppearanceIcon, EntityAppearance};
         crate::inbound::axum_router::get_action,
         crate::inbound::axum_router::create_action,
         crate::inbound::axum_router::check_action,
+        crate::inbound::axum_router::schedule_sub_routine,
         crate::inbound::axum_router::update_action,
         crate::inbound::axum_router::set_action_enabled,
         crate::inbound::axum_router::set_appearance,
@@ -131,6 +133,7 @@ use model_entity::{AppearanceColor, AppearanceIcon, EntityAppearance};
             crate::domain::models::RoutineCheck,
             crate::domain::models::CheckedStepProblems,
             crate::domain::models::CreatedItem,
+            crate::domain::models::ScheduleSubRoutine,
             crate::inbound::axum_router::CheckRoutineRequest,
             ActionTrigger,
             crate::domain::event_trigger::RoutineTrigger,
@@ -166,6 +169,9 @@ use model_entity::{AppearanceColor, AppearanceIcon, EntityAppearance};
             routine_program::CodeStep,
             routine_program::AgentStep,
             routine_program::Knob,
+            routine_program::SubRoutineDefinition,
+            routine_program::SubRoutineCopy,
+            routine_program::Input,
         ),
     ),
     tags(

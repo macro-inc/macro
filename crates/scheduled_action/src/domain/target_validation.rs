@@ -4,8 +4,9 @@ use std::sync::Arc;
 
 use agent_session::domain::routines::{RoutineSessions, ValidateRoutineSession};
 use anyhow::Result;
+use bots::domain::models::AgentMcpServer;
 use macro_user_id::user_id::MacroUserIdStr;
-use routine_program::{ProgramError, RoutineProgram};
+use routine_program::{AgentStep, ProgramError, RoutineProgram, Step};
 use serde_json::Value;
 
 use super::{models::ResolvedTaskTarget, ports::TaskTargetValidator};
@@ -27,6 +28,10 @@ pub enum TargetValidationError {
     ExplicitAppsRequired,
     #[error("this routine has steps; reload or upgrade your client before updating")]
     ExplicitStepsRequired,
+    #[error(
+        "this routine defines sub-routines or inputs; reload or upgrade your client before updating"
+    )]
+    ExplicitSubRoutinesRequired,
 }
 
 /// Default acceptance policy for composition roots without a session domain.
@@ -36,17 +41,35 @@ impl TaskTargetValidator for ModelOnlyTargets {
     async fn validate_task(&self, task: &Value, _owner: &MacroUserIdStr<'static>) -> Result<()> {
         let program = parse_program(task)?;
         // Agents and required apps need the session domain to authorize them.
-        let agent = program.agent_steps().into_iter().any(|step| {
+        let agents = agents(&program);
+        let agent = agents.iter().any(|(step, _)| {
             matches!(
                 ResolvedTaskTarget::of(step),
                 Ok(ResolvedTaskTarget::Agent { .. })
             )
         });
-        if agent || !program.mcp_servers.is_empty() {
+        if agent || agents.iter().any(|(_, apps)| !apps.is_empty()) {
             return Err(TargetValidationError::SessionsUnavailable.into());
         }
         Ok(())
     }
+}
+
+/// Every agent step a routine holds, its sub-routines' included, with the
+/// apps the run it belongs to requires.
+fn agents(program: &RoutineProgram) -> Vec<(&AgentStep, &[AgentMcpServer])> {
+    let own = program
+        .agent_steps()
+        .into_iter()
+        .map(|step| (step, program.mcp_servers.as_slice()));
+    let definitions = program.sub_routines.iter().flat_map(|definition| {
+        definition.steps.iter().filter_map(|step| match step {
+            Step::Agent(agent) => Some((agent, definition.mcp_servers.as_slice())),
+            Step::Code(_) => None,
+        })
+    });
+    // Apps without an agent never get here: `validate` refuses them.
+    own.chain(definitions).collect()
 }
 
 /// Authorizes every agent step's selection without opening a session or
@@ -65,14 +88,14 @@ impl<Sessions> TargetValidation<Sessions> {
 impl<Sessions: RoutineSessions> TaskTargetValidator for TargetValidation<Sessions> {
     async fn validate_task(&self, task: &Value, owner: &MacroUserIdStr<'static>) -> Result<()> {
         let program = parse_program(task)?;
-        for step in program.agent_steps() {
+        for (step, apps) in agents(&program) {
             let (bot_id, model) = ResolvedTaskTarget::of(step)?.session_target();
             self.sessions
                 .validate(ValidateRoutineSession {
                     owner: owner.clone(),
                     bot_id,
                     model: model.map(str::to_owned),
-                    mcp_servers: program.mcp_servers.clone(),
+                    mcp_servers: apps.to_vec(),
                 })
                 .await?;
         }
@@ -80,12 +103,13 @@ impl<Sessions: RoutineSessions> TaskTargetValidator for TargetValidation<Session
     }
 }
 
-/// A stored task's program, checked structurally, each agent step with a target.
+/// A stored task's program, checked structurally, each agent step (its
+/// sub-routines' included) with a target.
 pub(super) fn parse_program(task: &Value) -> Result<RoutineProgram, TargetValidationError> {
     let program =
         RoutineProgram::from_task(task).map_err(|_| TargetValidationError::InvalidTask)?;
     program.validate()?;
-    for step in program.agent_steps() {
+    for (step, _) in agents(&program) {
         ResolvedTaskTarget::of(step).map_err(|_| TargetValidationError::InvalidTask)?;
     }
     Ok(program)
@@ -116,6 +140,19 @@ pub(super) fn require_explicit_selection(previous: &Value, incoming: &Value) -> 
         && incoming.get("steps").is_none()
     {
         return Err(TargetValidationError::ExplicitStepsRequired.into());
+    }
+    // A client that predates sub-routines rebuilds the task from what it
+    // knows, so saving would delete the definitions its copies run, or the
+    // inputs a detached copy's code reads.
+    for field in ["sub_routines", "inputs"] {
+        if previous
+            .get(field)
+            .and_then(Value::as_array)
+            .is_some_and(|items| !items.is_empty())
+            && incoming.get(field).is_none()
+        {
+            return Err(TargetValidationError::ExplicitSubRoutinesRequired.into());
+        }
     }
     Ok(())
 }

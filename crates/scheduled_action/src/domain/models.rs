@@ -182,6 +182,29 @@ pub struct ActionConfiguration {
     pub description: String,
 }
 
+/// A copy of a sub-routine the running routine defines, to schedule: the
+/// body of `POST /scheduled-actions/schedule`. The copy runs the definition
+/// as its routine holds it when the copy runs.
+#[derive(Serialize, Deserialize, Debug, Clone, PartialEq, ToSchema)]
+#[serde(deny_unknown_fields)]
+pub struct ScheduleSubRoutine {
+    /// The sub-routine's name in the running routine.
+    pub sub_routine: String,
+    /// When the copy runs.
+    pub trigger: ActionTrigger,
+    /// A value for each of the sub-routine's inputs, by name.
+    #[serde(default)]
+    #[schema(value_type = Object)]
+    pub inputs: serde_json::Map<String, Value>,
+    /// The copy's name; the sub-routine's title when absent.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub name: Option<String>,
+    /// Scheduling under the same key again updates that copy instead of
+    /// adding another.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub key: Option<String>,
+}
+
 /// What saving a routine would find wrong, without saving it: the answer to
 /// `POST /scheduled-actions/check`.
 #[derive(Serialize, Deserialize, Debug, Clone, PartialEq, ToSchema)]
@@ -215,7 +238,10 @@ pub struct CreatedItem {
 #[derive(Serialize, Deserialize, Debug, Clone, PartialEq, ToSchema)]
 #[serde(rename_all = "camelCase")]
 pub struct CheckedStepProblems {
-    /// Its place among the routine's steps, from zero.
+    /// The sub-routine whose step it is; absent for the routine's own steps.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub sub_routine: Option<String>,
+    /// Its place among the routine's steps, or its sub-routine's, from zero.
     pub index: usize,
     /// Its title.
     pub title: String,
@@ -305,6 +331,24 @@ pub enum ActionPolicyError {
          change one to"
     )]
     OwnerIdentityNeedsPerson,
+    #[error("sub-routines and inputs are not enabled")]
+    SubRoutinesDisabled,
+    #[error(
+        "a sub-routine's copy is created by its routine's run, with \
+         macro.routines.schedule"
+    )]
+    CopyOutsideRun,
+    #[error(
+        "a sub-routine's copy runs the steps its routine defines: edit that routine, \
+         or keep this one as your own routine first"
+    )]
+    CopyTaskFixed,
+    #[error("only a routine's run can schedule its sub-routines")]
+    ScheduleOutsideRun,
+    #[error("the routine that is running defines no sub-routine named `{0}`")]
+    UnknownSubRoutine(String),
+    #[error("{0}")]
+    SubRoutineInputs(String),
 }
 
 /// Most active sub-routines one routine can have; finished one-time ones

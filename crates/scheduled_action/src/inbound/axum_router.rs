@@ -9,8 +9,8 @@ use crate::domain::event_trigger::ActionTrigger;
 use crate::domain::models::{
     ActionConfiguration, ActionConfigurationUpdate, ActionExecutionRecord, ActionPolicyError,
     AlreadyRunningError, CreatedItem, CreatedRoutine, InProgressExecution, ListScope, ListedAction,
-    ListedRun, OwnerNotUserError, Requester, RoutineCheck, RunCaller, Schedule, ScheduledAction,
-    SubRoutineKey,
+    ListedRun, OwnerNotUserError, Requester, RoutineCheck, RunCaller, Schedule, ScheduleSubRoutine,
+    ScheduledAction, SubRoutineKey,
 };
 use crate::domain::ports::{SavedAction, ScheduledActionService};
 use crate::domain::target_validation::TargetValidationError;
@@ -237,6 +237,10 @@ where
             "/scheduled-actions/check",
             post(check_action::<S, Svc, Auth>),
         )
+        .route(
+            "/scheduled-actions/schedule",
+            post(schedule_sub_routine::<S, Svc, Auth>),
+        )
         .route("/scheduled-actions/catalog", get(catalog::<S, Svc, Auth>))
         .with_state(state)
 }
@@ -432,6 +436,60 @@ where
     Ok((
         StatusCode::CREATED,
         Json(ScheduledActionResponse::from(created)),
+    ))
+}
+
+#[utoipa::path(
+    post,
+    path = "/scheduled-actions/schedule",
+    tag = "scheduled actions",
+    operation_id = "schedule_sub_routine",
+    request_body = ScheduleSubRoutine,
+    responses(
+        (status = 201, body = ScheduledActionResponse),
+        (status = 200, body = ScheduledActionResponse, description = "The copy its key already named, updated"),
+        (status = 400, body = String, description = "No sub-routine by that name, or inputs that don't fit it"),
+        (status = 401, body = String),
+        (status = 403, body = String, description = "The request doesn't come from a routine's run"),
+        (status = 409, body = String, description = "The routine already has the most active sub-routines it can"),
+        (status = 500, body = String),
+    )
+)]
+/// Schedule a copy of a sub-routine the running routine defines, with its
+/// own trigger and inputs. Only a routine's run can: its code step's
+/// credential says which routine, never the body.
+pub async fn schedule_sub_routine<S, Svc, Auth>(
+    State(state): State<ScheduledActionRouterState<S, Svc, Auth>>,
+    CreationPrincipalExtractor { principal, .. }: CreationPrincipalExtractor<Auth>,
+    user: Result<
+        MacroAuthorizationExtractor<Auth, UserOrInternal>,
+        macro_authorization::MacroAuthorizationRejection,
+    >,
+    headers: axum::http::HeaderMap,
+    body: Result<Json<ScheduleSubRoutine>, JsonRejection>,
+) -> Result<impl IntoResponse, ScheduledActionApiError>
+where
+    S: ScheduledActionService + Send + Sync + 'static,
+    Svc: EntityAccessService,
+    Auth: MacroAuthorizationService,
+{
+    let Json(request) = body.map_err(ScheduledActionApiError::InvalidRequest)?;
+    let caller = RunCaller {
+        routine: agent_correlation::context::current_routine(),
+        correlation: agent_correlation::context::current(),
+        requester: requester(user.as_ref().ok().map(|user| &user.authorization), &headers),
+    };
+    let saved = state
+        .service
+        .schedule_sub_routine(&principal, request, caller)
+        .await?;
+    let status = match saved {
+        SavedAction::Created(_) => StatusCode::CREATED,
+        SavedAction::Updated(_) => StatusCode::OK,
+    };
+    Ok((
+        status,
+        Json(ScheduledActionResponse::from(saved.into_action())),
     ))
 }
 
@@ -880,10 +938,11 @@ impl IntoResponse for ScheduledActionApiError {
                 ActionPolicyError::NotFound => StatusCode::NOT_FOUND,
                 ActionPolicyError::UpdateConflict
                 | ActionPolicyError::TooManySubRoutines
-                | ActionPolicyError::UnreviewedRewrite => StatusCode::CONFLICT,
-                ActionPolicyError::NotSuggesting | ActionPolicyError::OwnerIdentityNeedsPerson => {
-                    StatusCode::FORBIDDEN
-                }
+                | ActionPolicyError::UnreviewedRewrite
+                | ActionPolicyError::CopyTaskFixed => StatusCode::CONFLICT,
+                ActionPolicyError::NotSuggesting
+                | ActionPolicyError::OwnerIdentityNeedsPerson
+                | ActionPolicyError::ScheduleOutsideRun => StatusCode::FORBIDDEN,
                 ActionPolicyError::NoFutureFirings
                 | ActionPolicyError::EventManagementDisabled
                 | ActionPolicyError::ConditionsDisabled
@@ -892,7 +951,11 @@ impl IntoResponse for ScheduledActionApiError {
                 | ActionPolicyError::DescriptionTooLong
                 | ActionPolicyError::KeyOutsideRun
                 | ActionPolicyError::InvalidKey
-                | ActionPolicyError::NotSubRoutine => StatusCode::BAD_REQUEST,
+                | ActionPolicyError::NotSubRoutine
+                | ActionPolicyError::SubRoutinesDisabled
+                | ActionPolicyError::CopyOutsideRun
+                | ActionPolicyError::UnknownSubRoutine(_)
+                | ActionPolicyError::SubRoutineInputs(_) => StatusCode::BAD_REQUEST,
             };
             return (status, policy.to_string()).into_response();
         }
@@ -923,7 +986,8 @@ impl IntoResponse for ScheduledActionApiError {
                 | TargetValidationError::SessionsUnavailable => StatusCode::BAD_REQUEST,
                 TargetValidationError::ExplicitAgentRequired
                 | TargetValidationError::ExplicitAppsRequired
-                | TargetValidationError::ExplicitStepsRequired => StatusCode::CONFLICT,
+                | TargetValidationError::ExplicitStepsRequired
+                | TargetValidationError::ExplicitSubRoutinesRequired => StatusCode::CONFLICT,
             };
             return (status, validation.to_string()).into_response();
         }

@@ -265,8 +265,18 @@ impl RoutineConfiguration {
     /// The saved routine in the shape CreateRoutine and UpdateRoutine take, so
     /// it can be sent back with only the intended change.
     pub fn from_saved(name: &str, trigger: &Value, task: &Value) -> Result<Self, NotEditableHere> {
+        if task.get("sub_routine").is_some() {
+            return Err(NotEditableHere(
+                "It runs a sub-routine its parent defines, so its steps change only there.".into(),
+            ));
+        }
         let program = RoutineProgram::from_task(task)
             .map_err(|_| NotEditableHere("Its steps can't be read here.".into()))?;
+        if !program.sub_routines.is_empty() || !program.inputs.is_empty() {
+            return Err(NotEditableHere(
+                "It defines sub-routines or inputs these tools can't state.".into(),
+            ));
+        }
         Ok(Self {
             name: name.to_owned(),
             triggers: saved_triggers(trigger)?,

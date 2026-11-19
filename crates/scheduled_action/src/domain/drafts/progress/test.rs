@@ -36,6 +36,7 @@ fn a_check_reads_as_its_counts_trigger_and_step_titles_never_its_code() {
         &check(
             false,
             vec![CheckedStepProblems {
+                sub_routine: None,
                 index: 0,
                 title: "Make a task".into(),
                 problems: vec!["one".into(), "two".into()],

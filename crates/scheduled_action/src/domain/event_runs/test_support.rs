@@ -497,7 +497,8 @@ pub fn setup() -> (Arc<Repo>, Arc<Access>, Arc<Executor>, PendingEventRun) {
     (repo, Arc::default(), Arc::default(), pending)
 }
 
-/// A rollout answering the same for every owner, or failing to load.
+/// A rollout answering the same for every owner and flag, or failing to
+/// load.
 #[derive(Clone, Copy)]
 pub struct Rollout(pub Option<bool>);
 
@@ -507,5 +508,9 @@ impl crate::domain::event_rollout::EventRoutineRollout for Rollout {
     async fn enabled_for(&self, _user: &MacroUserIdStr<'_>) -> Result<bool, Report> {
         self.0
             .ok_or_else(|| rootcause::report!("flags unavailable"))
+    }
+
+    async fn sub_routines_enabled_for(&self, user: &MacroUserIdStr<'_>) -> Result<bool, Report> {
+        self.enabled_for(user).await
     }
 }

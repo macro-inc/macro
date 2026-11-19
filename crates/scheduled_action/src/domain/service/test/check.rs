@@ -117,6 +117,44 @@ async fn a_clean_check_returns_the_routine_as_saving_would_store_it() {
     assert!(check.routine.task["sdk"].is_string());
 }
 
+#[tokio::test]
+async fn a_failing_step_in_a_sub_routine_is_placed_within_it() {
+    let svc = checking_service(
+        Arc::new(PanickingHandBacks),
+        Arc::new(Invocations::default()),
+    );
+    let mut config = program_configuration(
+        json!({ "type": "cron", "schedule": "0 0 9 * * *", "timezone": "UTC" }),
+        steps(&["good"]),
+    );
+    config.task["sub_routines"] = json!([{
+        "name": "remind",
+        "title": "Remind me",
+        "inputs": [{ "type": "text", "name": "task", "label": "Task" }],
+        "steps": [
+            { "type": "agent", "model": "m", "instructions": "Look it up" },
+            { "type": "code", "title": "Post it", "source": "bad" },
+        ],
+    }]);
+
+    let check = svc
+        .check_action(&user_principal(), config, Vec::new(), None)
+        .await
+        .unwrap();
+
+    let [failing] = check.steps.as_slice() else {
+        panic!("{:?}", check.steps);
+    };
+    assert_eq!(failing.sub_routine.as_deref(), Some("remind"));
+    assert_eq!(failing.index, 1);
+    assert_eq!(failing.title, "Post it");
+    // Saving names the sub-routine's code steps too.
+    assert_eq!(
+        check.routine.task["sub_routines"][0]["steps"][1]["id"],
+        "post_it"
+    );
+}
+
 /// A check outside any draft never reaches the store.
 struct PanickingHandBacks;
 

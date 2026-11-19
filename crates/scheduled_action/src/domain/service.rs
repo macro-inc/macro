@@ -15,7 +15,7 @@ use macro_user_id::user_id::MacroUserIdStr;
 use macro_uuid::Uuid;
 use model_entity::EntityAppearance;
 use model_owner::{CreationPrincipal, Owner};
-use routine_program::{CodeIdentity, RoutineProgram};
+use routine_program::{CodeIdentity, CopyError, RoutineProgram, SubRoutineCopy};
 use tokio::sync::mpsc::Sender;
 
 use super::appearance::ChangeAppearance;
@@ -28,7 +28,7 @@ use super::models::{
     ActionConfiguration, ActionConfigurationUpdate, ActionPolicyError, CheckedStepProblems,
     CreatedItem, DispatchEvent, InProgressExecution, ListScope, ListedAction, ListedRun,
     MAX_DESCRIPTION_CHARS, OwnerNotUserError, Requester, RoutineCheck, RunCaller, RunningRun,
-    ScheduledAction, SubRoutine, SubRoutineKey,
+    ScheduleSubRoutine, ScheduledAction, SubRoutine, SubRoutineKey,
 };
 use super::ports::{
     CodeUpgrades, DraftHandBacks, NoRoutineCode, RequestSessions, RoutineCode, SavedAction,
@@ -306,6 +306,87 @@ impl<Rpo: ScheduledActionRepo, Exe, Grants, Targets, Github, Code, Upgrades, Rol
         Ok(())
     }
 
+    /// A task that defines sub-routines or holds inputs needs the owner's
+    /// rollout; a flag that cannot be read counts as off.
+    async fn check_sub_routines(
+        &self,
+        task: &serde_json::Value,
+        owner: &MacroUserIdStr<'_>,
+    ) -> Result<()>
+    where
+        Rollout: EventRoutineRollout,
+    {
+        let uses = |field: &str| {
+            task.get(field)
+                .and_then(serde_json::Value::as_array)
+                .is_some_and(|items| !items.is_empty())
+        };
+        if !uses("sub_routines") && !uses("inputs") {
+            return Ok(());
+        }
+        let enabled = self
+            .rollout
+            .sub_routines_enabled_for(owner)
+            .await
+            .inspect_err(|error| {
+                tracing::warn!(?error, "feature flags unavailable; sub-routines stay off");
+            })
+            .unwrap_or(false);
+        if !enabled {
+            return Err(ActionPolicyError::SubRoutinesDisabled.into());
+        }
+        Ok(())
+    }
+
+    /// The program a sub-routine's copy runs, read from its parent now;
+    /// `None` when `task` isn't a copy's.
+    async fn copy_program(
+        &self,
+        task: &serde_json::Value,
+        parent_id: Option<Uuid>,
+    ) -> Result<Option<RoutineProgram>> {
+        let Some(copy) = SubRoutineCopy::from_task(task) else {
+            return Ok(None);
+        };
+        let parent_id = parent_id.ok_or(ActionPolicyError::CopyOutsideRun)?;
+        let parent = self
+            .repo
+            .get_action(&parent_id)
+            .await?
+            .ok_or(ActionPolicyError::NotFound)?;
+        let program = RoutineProgram::from_task(&parent.task)
+            .map_err(|_| ActionPolicyError::UnknownSubRoutine(copy.sub_routine.to_string()))?
+            .copy_program(&copy)
+            .map_err(|error| match error {
+                CopyError::UnknownSubRoutine(name) => {
+                    ActionPolicyError::UnknownSubRoutine(name.to_string())
+                }
+                CopyError::Inputs(error) => ActionPolicyError::SubRoutineInputs(error.to_string()),
+            })?;
+        Ok(Some(program))
+    }
+
+    /// Authorize `task`'s agents and apps for `owner`: a copy's are its
+    /// definition's, as its parent (`parent_id`) holds it.
+    async fn validate_targets(
+        &self,
+        task: &serde_json::Value,
+        owner: &MacroUserIdStr<'static>,
+        parent_id: Option<Uuid>,
+    ) -> Result<()>
+    where
+        Targets: TaskTargetValidator,
+    {
+        match self.copy_program(task, parent_id).await? {
+            Some(program) => {
+                self.targets
+                    .validate_task(&serde_json::to_value(&program)?, owner)
+                    .await
+            }
+            None => self.targets.validate_task(task, owner).await,
+        }
+    }
+
     fn check_conditions(&self, trigger: &ActionTrigger) -> Result<()> {
         if trigger
             .event_filters()
@@ -355,7 +436,13 @@ impl<Rpo: ScheduledActionRepo, Exe, Grants, Targets, Github, Code, Upgrades, Rol
         self.check_event_management(&input.trigger, owner_user)
             .await?;
         self.check_conditions(&input.trigger)?;
-        self.targets.validate_task(&input.task, owner_user).await?;
+        self.check_sub_routines(&input.task, owner_user).await?;
+        self.validate_targets(
+            &input.task,
+            owner_user,
+            sub_routine.as_ref().map(|link| link.parent_id),
+        )
+        .await?;
         let task = checked_task(self.code.as_ref(), &input.task, None).await?;
         if input.enabled {
             self.check_github(&input.trigger, owner_user).await?;
@@ -415,6 +502,7 @@ impl<Rpo: ScheduledActionRepo, Exe, Grants, Targets, Github, Code, Upgrades, Rol
             description(&input.description).map(|_| ()),
             self.check_event_management(&input.trigger, owner).await,
             self.check_conditions(&input.trigger),
+            self.check_sub_routines(&input.task, owner).await,
             self.targets.validate_task(&input.task, owner).await,
         ];
         for result in found {
@@ -519,6 +607,16 @@ impl<Rpo: ScheduledActionRepo, Exe, Grants, Targets, Github, Code, Upgrades, Rol
         {
             return Err(ActionPolicyError::OwnerIdentityNeedsPerson.into());
         }
+        let task_changed = !same_task(&action.task, &named_steps(&input.task));
+        // A copy's steps are its parent's definition: renaming it or moving
+        // its trigger is fine, but what it does changes only there.
+        if task_changed && SubRoutineCopy::from_task(&action.task).is_some() {
+            return Err(ActionPolicyError::CopyTaskFixed.into());
+        }
+        if task_changed {
+            self.check_sub_routines(&input.task, action.owner_user()?)
+                .await?;
+        }
         let was_enabled = action.enabled;
         let updated = self.replace_one(action, input, false).await?;
         if updated.sub_routine.is_none() && updated.enabled != was_enabled {
@@ -613,8 +711,7 @@ impl<Rpo: ScheduledActionRepo, Exe, Grants, Targets, Github, Code, Upgrades, Rol
             return Err(ActionPolicyError::UpdateConflict.into());
         }
         if !disable_only {
-            self.targets
-                .validate_task(&input.task, action.owner_user()?)
+            self.validate_targets(&input.task, action.owner_user()?, action.parent_id())
                 .await?;
             self.refuse_owner_identity_over_a_rewrite(&action, &input.task)
                 .await?;
@@ -727,29 +824,27 @@ fn check_problem(error: anyhow::Error) -> Result<String> {
     }
 }
 
-/// Failing code steps by their place among `task`'s steps; the checker
-/// counts code steps alone.
+/// Failing code steps by their place among `task`'s steps, or a
+/// sub-routine's; the checker counts code steps alone.
 pub(crate) fn step_positions(
     task: &serde_json::Value,
     failing: Vec<StepProblems>,
 ) -> Vec<CheckedStepProblems> {
-    let positions: Vec<usize> = routine_program::RoutineProgram::from_task(task)
-        .map(|program| {
-            program
-                .steps
-                .iter()
-                .enumerate()
-                .filter(|(_, step)| matches!(step, routine_program::Step::Code(_)))
-                .map(|(index, _)| index)
-                .collect()
-        })
-        .unwrap_or_default();
+    let program = RoutineProgram::from_task(task).ok();
     failing
         .into_iter()
-        .map(|step| CheckedStepProblems {
-            index: positions.get(step.index).copied().unwrap_or(step.index),
-            title: step.title,
-            problems: step.problems,
+        .map(|step| {
+            let place = program
+                .as_ref()
+                .and_then(|program| program.code_step_place(step.index));
+            CheckedStepProblems {
+                sub_routine: place
+                    .and_then(|(sub_routine, _)| sub_routine)
+                    .map(ToString::to_string),
+                index: place.map_or(step.index, |(_, index)| index),
+                title: step.title,
+                problems: step.problems,
+            }
         })
         .collect()
 }
@@ -911,6 +1006,12 @@ where
             span.record("routine.create.outcome", "refused_owner_identity");
             return Err(ActionPolicyError::OwnerIdentityNeedsPerson.into());
         }
+        // Copies are scheduled by name, so their inputs are checked against
+        // the definition they run.
+        if SubRoutineCopy::from_task(&input.task).is_some() {
+            span.record("routine.create.outcome", "refused_copy");
+            return Err(ActionPolicyError::CopyOutsideRun.into());
+        }
         let saved = match self.creating_run(principal, caller).await? {
             Some(run) => {
                 self.create_sub_routine(principal, input, run, key, caller.requester)
@@ -935,6 +1036,45 @@ where
             Ok(SavedAction::Updated(_)) => "updated",
             Err(error) => match error.downcast_ref::<ActionPolicyError>() {
                 Some(ActionPolicyError::TooManySubRoutines) => "refused_cap",
+                _ => "failed",
+            },
+        };
+        span.record("routine.create.outcome", outcome);
+        if let Ok(SavedAction::Created(action) | SavedAction::Updated(action)) = &saved
+            && let Some(id) = action.id
+        {
+            span.record("routine.id", tracing::field::display(id));
+        }
+        saved
+    }
+
+    #[tracing::instrument(name = "routine.schedule", skip_all, fields(
+        routine.id = tracing::field::Empty,
+        routine.parent_id = tracing::field::Empty,
+        routine.created_by_run_id = tracing::field::Empty,
+        routine.creating_routine_id = tracing::field::Empty,
+        routine.keyed = request.key.is_some(),
+        routine.inputs = request.inputs.len(),
+        routine.create.outcome = tracing::field::Empty,
+    ), err)]
+    async fn schedule_sub_routine(
+        &self,
+        principal: &CreationPrincipal,
+        request: ScheduleSubRoutine,
+        caller: RunCaller,
+    ) -> Result<SavedAction> {
+        let saved = self.schedule(principal, request, caller).await;
+        let span = tracing::Span::current();
+        let outcome = match &saved {
+            Ok(SavedAction::Created(_)) => "created",
+            Ok(SavedAction::Updated(_)) => "updated",
+            Err(error) => match error.downcast_ref::<ActionPolicyError>() {
+                Some(ActionPolicyError::TooManySubRoutines) => "refused_cap",
+                Some(ActionPolicyError::ScheduleOutsideRun) => "refused_outside_run",
+                Some(
+                    ActionPolicyError::UnknownSubRoutine(_)
+                    | ActionPolicyError::SubRoutineInputs(_),
+                ) => "refused_definition",
                 _ => "failed",
             },
         };

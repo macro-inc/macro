@@ -135,6 +135,27 @@ fn routines_with_what_these_tools_cant_state_are_not_editable_here() {
 }
 
 #[test]
+fn sub_routine_parents_and_copies_are_not_editable_here() {
+    let (trigger, task) = saved_program();
+    let mut parent = task.clone();
+    parent["sub_routines"] = serde_json::json!([{
+        "name": "remind",
+        "title": "Remind me",
+        "steps": [{ "type": "agent", "instructions": "Remind me" }],
+    }]);
+    let copy = serde_json::json!({ "sub_routine": "remind", "inputs": {} });
+    for task in [parent, copy] {
+        let error = RoutineConfiguration::from_saved("Watch", &trigger, &task).unwrap_err();
+        assert!(
+            error
+                .to_string()
+                .ends_with("Edit it on the routine's page in Macro."),
+            "{error}"
+        );
+    }
+}
+
+#[test]
 fn updates_keep_saved_apps_unless_told_and_a_saved_program_stays_a_program() {
     let (trigger, task) = saved_program();
     let mut configuration = RoutineConfiguration::from_saved("Inbox", &trigger, &task).unwrap();

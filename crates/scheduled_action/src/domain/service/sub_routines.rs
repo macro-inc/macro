@@ -6,8 +6,10 @@ use std::collections::HashMap;
 
 use tracing::Instrument;
 
+use routine_program::SubRoutineName;
+
 use super::*;
-use crate::domain::models::{ActionExecutionRecord, CreatedRoutine};
+use crate::domain::models::{ActionExecutionRecord, CreatedRoutine, ScheduleSubRoutine};
 
 impl<Rpo, Exe, Grants, Targets, Github, Code, Upgrades, Rollout>
     ScheduledActionServiceImpl<Rpo, Exe, Grants, Targets, Github, Code, Upgrades, Rollout>
@@ -120,9 +122,65 @@ where
         input: ActionConfiguration,
         paused_by_parent: bool,
     ) -> Result<SavedAction> {
+        // A key names a copy or a routine with steps of its own, and stays
+        // one: scheduling again updates a copy's trigger and inputs.
+        if SubRoutineCopy::from_task(&existing.task).is_some()
+            != SubRoutineCopy::from_task(&input.task).is_some()
+        {
+            return Err(ActionPolicyError::CopyTaskFixed.into());
+        }
         self.replace_one(existing, input, paused_by_parent)
             .await
             .map(SavedAction::Updated)
+    }
+
+    /// Schedule a copy of one of the sub-routines the routine `caller` is
+    /// running defines: its parent's, when that routine is a copy itself.
+    pub(super) async fn schedule(
+        &self,
+        principal: &CreationPrincipal,
+        request: ScheduleSubRoutine,
+        caller: RunCaller,
+    ) -> Result<SavedAction> {
+        let run = self
+            .creating_run(principal, caller)
+            .await?
+            .ok_or(ActionPolicyError::ScheduleOutsideRun)?;
+        let key = request.key.as_deref().map(SubRoutineKey::new).transpose()?;
+        let parent_id = run.parent_id.unwrap_or(run.routine_id);
+        let parent = self
+            .repo
+            .get_action(&parent_id)
+            .await?
+            .ok_or(ActionPolicyError::NotFound)?;
+        let unknown = || ActionPolicyError::UnknownSubRoutine(request.sub_routine.clone());
+        let program = RoutineProgram::from_task(&parent.task).map_err(|_| unknown())?;
+        let definition = SubRoutineName::try_from(request.sub_routine.clone())
+            .ok()
+            .and_then(|name| program.sub_routine(&name))
+            .ok_or_else(unknown)?;
+        definition
+            .given(&request.inputs)
+            .map_err(|error| ActionPolicyError::SubRoutineInputs(error.to_string()))?;
+        let copy = SubRoutineCopy {
+            sub_routine: definition.name.clone(),
+            inputs: request.inputs,
+        };
+        let input = ActionConfiguration {
+            name: request
+                .name
+                .map(|name| name.trim().to_owned())
+                .filter(|name| !name.is_empty())
+                .unwrap_or_else(|| definition.title.clone()),
+            trigger: request.trigger,
+            kind: parent.kind.clone(),
+            task: copy.task(),
+            enabled: true,
+            run_visibility: parent.run_visibility,
+            description: String::new(),
+        };
+        self.create_sub_routine(principal, input, run, key, caller.requester)
+            .await
     }
 
     /// Make `parent`'s sub-routines follow it off or back on. Switching it
@@ -153,11 +211,15 @@ where
             let (mut changed, mut failed) = (0u32, 0u32);
             let total = children.len();
 
+            // A copy writes as its parent does.
+            let parent_writes_as_owner = writes_as_owner(&parent.task);
             for child in children {
+                let child_writes_as_owner = writes_as_owner(&child.task)
+                    || (parent_writes_as_owner && SubRoutineCopy::from_task(&child.task).is_some());
                 let follows = match (&child.sub_routine, parent.enabled) {
                     (Some(link), true) => {
                         link.paused_by_parent
-                            && (requester == Requester::Person || !writes_as_owner(&child.task))
+                            && (requester == Requester::Person || !child_writes_as_owner)
                     }
                     (Some(_), false) => child.enabled,
                     (None, _) => false,
@@ -221,10 +283,13 @@ where
         Ok(actions)
     }
 
-    /// Make a sub-routine a top-level routine.
+    /// Make a sub-routine a top-level routine. A copy first gets the steps
+    /// it ran, its definition's as its parent holds them now, with its
+    /// inputs' values, so it keeps doing what it did.
     #[tracing::instrument(name = "routine.detach", skip_all, fields(
         routine.id = tracing::field::Empty,
         routine.parent_id = tracing::field::Empty,
+        routine.copy = tracing::field::Empty,
     ), err)]
     pub(super) async fn detach(&self, action: ScheduledAction) -> Result<ScheduledAction> {
         let (Some(id), Some(link)) = (action.id, &action.sub_routine) else {
@@ -233,6 +298,23 @@ where
         let span = tracing::Span::current();
         span.record("routine.id", tracing::field::display(id));
         span.record("routine.parent_id", tracing::field::display(link.parent_id));
+
+        let parent_id = link.parent_id;
+        let program = self.copy_program(&action.task, Some(parent_id)).await?;
+        span.record("routine.copy", program.is_some());
+        if let Some(program) = program {
+            let input = ActionConfiguration {
+                name: action.name.clone(),
+                trigger: action.trigger.clone(),
+                kind: action.kind.clone(),
+                task: serde_json::to_value(&program)?,
+                enabled: action.enabled,
+                run_visibility: action.run_visibility,
+                description: action.description.clone(),
+            };
+            // Checked and saved like any edit; a failure leaves it a copy.
+            self.replace_one(action, input, false).await?;
+        }
 
         // Detached by another request meanwhile: it is top-level already.
         match self.repo.detach(&id).await? {
