@@ -1,0 +1,25 @@
+packages/sdk-ocaml/generated/storage.mli
+  s_d68827eef00d3d::t_f1786a69570a58 6542-6545,6556-6560,28509-28530,35107-35115
+  s_d68827eef00d3d::t_5af3fe8f3abf35 35116
+crates/agent_permission_registry/registry.json
+  s_d68827eef00d3d::t_cae6f2d229b7bc 746
+packages/sdk-ocaml/generated/storage.ml
+  s_d68827eef00d3d::t_f1786a69570a58 12327-12330,12341-12343,12353-12356,12360-12361,52417-52451,69760-69786
+  s_d68827eef00d3d::t_833800a9a9af5c 69787
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.7.7",
+  "base_commit_sha": "7092e2b89b7698281028b3f2f856c01b17f6cb93",
+  "prompts": {},
+  "sessions": {
+    "s_d68827eef00d3d": {
+      "agent_id": {
+        "tool": "claude",
+        "id": "a7845e4f-e917-4189-85b6-0d6704e36200",
+        "model": "claude-opus-5-5"
+      },
+      "human_author": "Eric Hayes <56524199+ehayes2000@users.noreply.github.com>"
+    }
+  }
+}
