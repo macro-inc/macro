@@ -48,9 +48,6 @@ rec {
       logs = "observability-logs-";
       traces = "observability-traces-";
     };
-    # The host's instance role (Pulumi `observability-host` plus a random
-    # suffix), which at the switch writes its Prometheus blocks into Mimir.
-    hostRoleNameRegex = "^observability-host-[0-9a-f]{7}$";
   };
 
   # New private subnets; with the existing 2a subnet the cluster spans 3 AZs.

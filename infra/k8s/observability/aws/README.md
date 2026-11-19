@@ -33,7 +33,8 @@ approval, with the steps under [First apply](#first-apply).
 the private route table, the HTTPS listener, the `macro-internal.com` zone, the
 `observability-prod-alerts` topic and the `observability/prod` secret
 (metadata only), the host's Loki and Tempo buckets (by name prefix among the
-stack's tagged buckets) and, for the Mimir backfill, the host's instance role.
+stack's tagged buckets) and, for the Mimir backfill, the host's instance role
+(through the stack's one running instance).
 OpenTofu only adds resources next to them: route table associations, one
 egress rule on the ALB's security group, which, like the stack's own
 `observability-alb-to-host` rule, Pulumi does not manage inline, and at the
@@ -105,7 +106,7 @@ into `.tofu/<config>/` (gitignored) and runs the flake's OpenTofu there, with th
 AWS provider pinned by the flake. `tofu plan` needs credentials that can read
 the Pulumi stack's resources in us-east-2 (EC2, ELB, Route 53, SNS, Secrets
 Manager describe, EKS add-on versions, `tag:GetResources` for the host's
-buckets) and the state bucket. `ReadOnlyAccess` covers all of them.
+buckets, IAM `GetInstanceProfile` for the backfill) and the state bucket. `ReadOnlyAccess` covers all of them.
 
 ## Preview
 

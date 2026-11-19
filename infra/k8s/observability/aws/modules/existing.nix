@@ -71,21 +71,26 @@ in
   }
   // lib.optionalAttrs settings.mimirBackfill.enable {
     # The host's instance role, which writes its Prometheus blocks into Mimir's
-    # bucket while `mimirBackfill.enable` is on (modules/buckets.nix).
-    aws_iam_roles.host = {
-      name_regex = existing.hostRoleNameRegex;
+    # bucket while `mimirBackfill.enable` is on (modules/buckets.nix): the
+    # role of the stack's one running instance. The dev stack's host and the
+    # deploy's smoke hosts carry other tags.
+    aws_instances.host = {
+      instance_tags = existing.tags;
+      instance_state_names = [ "running" ];
       lifecycle.postcondition = [
         {
-          condition = "\${length(self.arns) == 1}";
-          error_message = "Expected exactly one IAM role matching ${existing.hostRoleNameRegex}, the observability host's.";
+          condition = "\${length(self.ids) == 1}";
+          error_message = "Expected exactly one running instance of the observability stack, the host; is a deploy replacing it?";
         }
       ];
     };
+    aws_instance.host.instance_id = ref "one(data.aws_instances.host.ids)";
+    aws_iam_instance_profile.host.name = ref "data.aws_instance.host.iam_instance_profile";
   };
 
   locals =
     lib.optionalAttrs settings.mimirBackfill.enable {
-      host_role_arn = ref "one(data.aws_iam_roles.host.arns)";
+      host_role_arn = ref "data.aws_iam_instance_profile.host.role_arn";
     }
     // {
       # The host's bucket ARNs by kind (`logs`, `traces`).
