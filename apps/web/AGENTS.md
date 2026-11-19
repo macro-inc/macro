@@ -648,6 +648,10 @@ mounted twice (two desktop tabs), that a sent message renders its
 lines with the spacing the draft showed, that the one-line composer centers its
 buttons on the text line, and pending sends on desktop and phone: clear immediately, restore failed sends, and preserve a new draft typed during delivery.
 It also pastes a Macro link and Markdown into a code block, which must keep both as literal text.
+`caret.browser.e2e.ts` taps (press and release sent together) into a typed and
+a restored draft and checks the caret moves there: a click that reaches
+`MarkdownShell` before Lexical has read the selectionchange must not call
+`editor.focus()`, which writes the previous caret back.
 It also covers phone attaching: the add drawer opens the file picker within the
 tap, and when the iOS app's native photo library fails, a toast's Choose files
 button opens it, because WKWebView ignores a file input click made after the
