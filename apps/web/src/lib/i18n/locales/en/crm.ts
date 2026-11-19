@@ -1,6 +1,7 @@
 export default {
   accessDenied: "You don't have access to CRM",
   accessDeniedHelp: 'Ask a team admin or owner to restore your access.',
+  accessCheckFailed: "Couldn't check your CRM access.",
   listLoadFailed: "Couldn't load this list.",
   listReloadHelp: 'Please try again to reload this view.',
   tryAgain: 'Try again',

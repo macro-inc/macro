@@ -24,6 +24,7 @@ import {
   SettingsPage,
   SettingsSection,
 } from '../../settings/primitives';
+import { CrmListError } from '../components/list-state';
 import { CrmStageIcon } from '../components/stage-icon';
 import { useCrmContext } from '../context/crm-context';
 import { createStageEditor } from '../primitives/stage-editor';
@@ -500,7 +501,7 @@ function NoTeamState() {
 }
 
 function CrmContent(props: { onOpenThread?: () => void }) {
-  const { canAccess } = useCrmContext();
+  const { accessState, retryAccess } = useCrmContext();
   const teamQuery = useCurrentTeamQuery();
 
   return (
@@ -513,7 +514,18 @@ function CrmContent(props: { onOpenThread?: () => void }) {
             description={t('crm.policySettingsDescription')}
           >
             {content}
-            <Show when={canAccess()}>
+            <Show when={accessState() === 'error'}>
+              <SettingsSection>
+                <SettingsCard>
+                  <CrmListError
+                    title={t('crm.accessCheckFailed')}
+                    onRetry={retryAccess}
+                  />
+                </SettingsCard>
+              </SettingsSection>
+            </Show>
+            {/* Only a proven denial removes them; the server decides the rest. */}
+            <Show when={accessState() !== 'denied'}>
               <StagesSection />
               <EmailSyncSection />
             </Show>

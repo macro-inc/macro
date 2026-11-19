@@ -14,6 +14,10 @@ const state = vi.hoisted(() => ({
   role: 'admin' as CrmTeamRole,
   crmEnabled: true,
   canAccess: (): boolean => true,
+  accessState: undefined as
+    | (() => 'pending' | 'allowed' | 'denied' | 'error')
+    | undefined,
+  retryAccess: vi.fn(async () => {}),
   customized: false,
   sourceMounted: vi.fn(),
   sourceDisposed: vi.fn(),
@@ -40,6 +44,9 @@ vi.mock('../components/stage-icon', () => ({ CrmStageIcon: () => null }));
 vi.mock('../context/crm-context', () => ({
   useCrmContext: () => ({
     canAccess: () => state.canAccess(),
+    accessState: () =>
+      state.accessState?.() ?? (state.canAccess() ? 'allowed' : 'denied'),
+    retryAccess: state.retryAccess,
     feedback: { success: vi.fn() },
   }),
 }));
@@ -116,6 +123,8 @@ beforeEach(() => {
   state.role = 'admin';
   state.crmEnabled = true;
   state.canAccess = () => true;
+  state.accessState = undefined;
+  state.retryAccess.mockClear();
   state.customized = false;
   state.sourceMounted.mockReset();
   state.sourceDisposed.mockReset();
@@ -139,6 +148,29 @@ it('does not construct protected settings sources for a denied member', () => {
   expect(state.sourceMounted).not.toHaveBeenCalled();
   expect(state.privacyMounted).toHaveBeenCalledOnce();
   expect(screen.getByText('Email contribution settings')).toBeTruthy();
+});
+
+it.each(['pending', 'error'] as const)(
+  'keeps stage and email sync settings while the access check is %s',
+  (access) => {
+    state.canAccess = () => false;
+    state.accessState = () => access;
+    render(() => <Crm />);
+
+    expect(state.sourceMounted.mock.calls.map(([name]) => name)).toEqual(
+      expect.arrayContaining(['stages', 'team settings', 'blocked domains'])
+    );
+    expect(screen.getByText('Demo')).toBeTruthy();
+  }
+);
+
+it('offers the access retry when the check failed', () => {
+  state.canAccess = () => false;
+  state.accessState = () => 'error';
+  render(() => <Crm />);
+
+  fireEvent.click(screen.getByRole('button', { name: 'Try again' }));
+  expect(state.retryAccess).toHaveBeenCalledOnce();
 });
 
 it('disposes protected settings sources on revocation and keeps contribution mounted', () => {

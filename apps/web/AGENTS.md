@@ -39,6 +39,9 @@
 Treat CRM access changes as rare session transitions. Detect them from response
 hints, CRM 403s and one `/crm/member-access` read on boot, focus and reconnect;
 ordinary HTTP requests, subscriptions and local cache reads never wait for proof.
+A hint that keeps differing from the recorded policy backs off: the wait doubles,
+up to five minutes, after each check that fails or does not converge, and resets
+when a hint agrees or the session changes.
 On web startup without a mirror or owner snapshot, an extra short proof can open
 CRM UI before storage is ready; only the post-baseline proof may commit policy.
 Fence this early evidence by login, host and every owner observation, including
@@ -81,7 +84,9 @@ never stamp already-fetched data with a newer generation. Every content write
 (query, hydration, queued command, calendar commit, people update, contact
 reconciliation) takes that captured generation as a required argument; a host
 supplies its observed generation only for reads and for removals, which carry no
-fetched content. Compare it under the shared native owner lock or browser worker
+fetched content. `cacheRequestStamp` is the one place that decides this for the
+worker host and the worker: a request kind it does not list must carry its
+captured stamp. Compare it under the shared native owner lock or browser worker
 before writing. Discard old query
 results and subscription frames and refetch active queries once per transition.
 Do not classify GraphQL fields or REST routes for admission. Preserve socket
@@ -94,8 +99,9 @@ a presigned URL or preload token. Do not reload an already-open editor on every
 transition. Check the captured generation again at resource publication; disposal,
 a newer load or a second superseded attempt ends that recovery. Keep bundle
 invalidation in the query adapter, supplied to Drive's load gate as a capability.
-Fence streamed response chunks and body decoders with the same generation, and
-do not let a post-transition preview join or settle an older pending batch.
+Fence storage response chunks and body decoders with the same generation; other
+origins keep their native stream and are checked once decoded. Do not let a
+post-transition preview join or settle an older pending batch.
 Clear decoded service-helper caches on real session transitions, preserving them
 on matching startup baselines; a late error may remove only its own cache entry.
 Release PDF proxies discarded before publication without taking ownership from a
@@ -109,6 +115,8 @@ existing generation. Keep the account fence independently of access policy.
 Retire all TanStack memory snapshots on permission changes. If disk pruning
 fails, unpause live queries and refetch while keeping the affected persistence
 scope quarantined against restore and writes until a later prune succeeds.
+A durable denial is found again on every start: prune for it once per owner
+generation and skip the prune on later starts at the generation already pruned.
 
 Keep mutation outcomes and authored queue state through retirement. Stale queued
 commits settle identities without copied content, projections or link recipes;

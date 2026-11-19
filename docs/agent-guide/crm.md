@@ -831,7 +831,9 @@ Only a proven denial shows the access-denied screen or closes CRM dialogs; a
 transient proof failure retains the last proven state. Access restored while a
 window still shows a recorded denial reopens it without a reload, whichever
 window verified the change; a denial the cache could not record clears at that
-window's next successful check. Network failures back off
+window's next successful check. **Settings → CRM** keeps Stages and Email sync
+while the check is pending or has failed, with **Try again** after a failure;
+only a proven denial removes them. Network failures back off
 once before a second attempt with a shorter timeout; stale generations retry
 once, while terminal proof errors do not retry automatically.
 `GET /crm/member-access` reports current access even
