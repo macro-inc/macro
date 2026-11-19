@@ -1,9 +1,7 @@
 //! Facts and effects sequenced by inbox connection.
 
 use super::super::initialization::{InitializationError, InitializeMailbox};
-use super::{
-    ConnectionError, ConnectionRequest, GoogleConnectionAttempt, LinkStatus, SharedInboxPromotion,
-};
+use super::{ConnectionError, ConnectionRequest, GoogleConnectionAttempt, SharedInboxPromotion};
 use calendar_events::domain::models::{AppliedGoogleGrant, CalendarGrantIntent};
 use email_api_client::domain::models::{AccessToken, EmailApiError};
 use macro_user_id::user_id::MacroUserIdStr;
@@ -45,9 +43,10 @@ pub trait ConnectionLinks: Send + Sync + 'static {
         &self,
         email: &str,
     ) -> impl Future<Output = Result<Option<Link>, Self::Err>> + Send;
-    /// A link deleted since it was read reports `being_removed`.
-    fn link_status(&self, link: Uuid)
-    -> impl Future<Output = Result<LinkStatus, Self::Err>> + Send;
+    /// Whether the link is on its way out: its disconnect or purge has
+    /// started, or its owner's account is gone (a deleted account's inboxes
+    /// are removed later). A link deleted since it was read is departing.
+    fn link_departing(&self, link: Uuid) -> impl Future<Output = Result<bool, Self::Err>> + Send;
     fn link_for_identity(
         &self,
         owner: &str,
@@ -93,13 +92,14 @@ pub trait ConnectionTransactions: Send + Sync + 'static {
         link: Link,
         cursor: &str,
     ) -> impl Future<Output = Result<Link, ConnectionError>> + Send;
-    /// `None` when the existing link's owner account no longer exists.
+    /// Refuses with `InboxBeingRemoved` when the link turned out departing
+    /// inside the promotion's transaction.
     fn promote(
         &self,
         actor: &str,
         email: &str,
         existing: &Link,
-    ) -> impl Future<Output = Result<Option<SharedInboxPromotion>, ConnectionError>> + Send;
+    ) -> impl Future<Output = Result<SharedInboxPromotion, ConnectionError>> + Send;
 }
 
 /// Provider watch, credentials, scope discovery and grant relocation.

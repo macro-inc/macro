@@ -552,11 +552,12 @@ tools — hexagonal, heavily feature-gated.
   account keeps an access edge. A link whose disconnect or purge has started,
   or another mailbox's link at the address whose owner's account is gone,
   answers `InboxBeingRemoved` (`INBOX_BEING_REMOVED`, 400) until it is gone.
-  Gmail connect (`domain/mailbox/connection/gmail.rs`) offers to share a held
-  inbox only while its owner's account exists (`LinkStatus`); otherwise the
-  actor connects a link of their own. Every Gmail path that would attach to an
-  existing link (share, delegate, grant reconnect) answers `InboxBeingRemoved`
-  while that link's disconnect or purge runs.
+  Gmail connect (`domain/mailbox/connection/gmail.rs`) never attaches to a
+  departing link (removal started, or its owner's account gone): share,
+  delegate and grant reconnect answer `InboxBeingRemoved` until the purge ends,
+  and promotion rechecks under the link's row lock. A second Gmail link of the
+  same mailbox can't stand in meanwhile: Gmail keeps one watch per mailbox,
+  which the old link's teardown stops, and pushes reach one link per address.
 - `email_links.fusionauth_user_id` is the holder of the credentials a link
   syncs with, not the inbox's owner (`macro_id`): another participant's
   connection or a custody transfer changes it. Never read it as ownership. A

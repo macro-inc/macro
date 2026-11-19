@@ -1,5 +1,6 @@
 use super::*;
 use anyhow::Context;
+use email::domain::mailbox::initialization::InitializationError;
 
 pub struct PgConnectionTransactions(pub sqlx::PgPool);
 
@@ -84,7 +85,7 @@ impl ConnectionTransactions for PgConnectionTransactions {
         actor: &str,
         email: &str,
         existing: &Link,
-    ) -> Result<Option<SharedInboxPromotion>, ConnectionError> {
+    ) -> Result<SharedInboxPromotion, ConnectionError> {
         let mut tx = self
             .0
             .begin()
@@ -93,17 +94,29 @@ impl ConnectionTransactions for PgConnectionTransactions {
         crate::outbound::mailbox_init::lock_gmail_connection(&mut tx, actor, email)
             .await
             .map_err(ConnectionError::MailboxInitialization)?;
-        // Lock the owner's account so it cannot be deleted before the access
-        // edge the promotion writes for it.
-        let Some(organization) = sqlx::query_scalar!(
+        // Recheck under the link's row lock, which removal also takes, that it
+        // is not on its way out, and lock its owner's account so it cannot be
+        // deleted before the access edge the promotion writes for it.
+        let being_removed = sqlx::query_scalar!(
+            r#"SELECT (disconnect_requested_at IS NOT NULL OR deleting_at IS NOT NULL) AS "being_removed!"
+            FROM email_links WHERE id = $1 FOR UPDATE"#,
+            existing.id
+        )
+        .fetch_optional(&mut *tx)
+        .await
+        .context("Failed to lock the link before shared-inbox promotion")?
+        .unwrap_or(true);
+        let organization = sqlx::query_scalar!(
             r#"SELECT "organizationId" FROM "User" WHERE id = $1 FOR KEY SHARE"#,
             existing.macro_id.as_ref()
         )
         .fetch_optional(&mut *tx)
         .await
-        .context("Failed to fetch organization for shared-inbox owner")?
-        else {
-            return Ok(None);
+        .context("Failed to fetch organization for shared-inbox owner")?;
+        let Some(organization) = organization.filter(|_| !being_removed) else {
+            return Err(ConnectionError::MailboxInitialization(
+                InitializationError::InboxBeingRemoved,
+            ));
         };
         let promoted = macro_db_client::shared_inbox::promote_link_to_shared(
             &mut tx,
@@ -118,10 +131,10 @@ impl ConnectionTransactions for PgConnectionTransactions {
         tx.commit()
             .await
             .context("Failed to commit shared-inbox promotion transaction")?;
-        Ok(Some(SharedInboxPromotion {
+        Ok(SharedInboxPromotion {
             mailbox_fusion_id: promoted.mailbox_fusion_id,
             link_id: promoted.link_id,
-        }))
+        })
     }
 }
 

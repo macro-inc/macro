@@ -48,28 +48,14 @@ async fn held_inbox(db: &PgPool, owner: &str) -> Link {
 }
 
 #[sqlx::test(migrator = "MACRO_DB_MIGRATIONS")]
-async fn link_status_reports_a_removal_and_a_deleted_owner(db: PgPool) {
-    let owner = account(&db, "owner@example.com").await;
-    let inbox = held_inbox(&db, &owner).await;
+async fn a_link_departs_when_its_removal_starts_or_its_owner_account_is_gone(db: PgPool) {
     let links = PgConnectionLinks {
         db: db.clone(),
         lookup: email::outbound::EmailPgRepo::new(db.clone()),
     };
-    let status = |link| {
-        let links = &links;
-        async move {
-            let status = links.link_status(link).await.unwrap();
-            (status.owner_account_exists, status.being_removed)
-        }
-    };
-    assert_eq!(status(inbox.id).await, (true, false));
-
-    // Account deletion removes the profile at once and the inbox later.
-    sqlx::query!(r#"DELETE FROM "User" WHERE id = $1"#, owner)
-        .execute(&db)
-        .await
-        .unwrap();
-    assert_eq!(status(inbox.id).await, (false, false));
+    let owner = account(&db, "owner@example.com").await;
+    let inbox = held_inbox(&db, &owner).await;
+    assert!(!links.link_departing(inbox.id).await.unwrap());
 
     sqlx::query!(
         "UPDATE email_links SET disconnect_requested_at = now() WHERE id = $1",
@@ -78,42 +64,85 @@ async fn link_status_reports_a_removal_and_a_deleted_owner(db: PgPool) {
     .execute(&db)
     .await
     .unwrap();
-    assert_eq!(status(inbox.id).await, (false, true));
-    assert_eq!(
-        status(Uuid::now_v7()).await,
-        (false, true),
-        "a purged link was being removed"
-    );
-}
+    assert!(links.link_departing(inbox.id).await.unwrap());
 
-#[sqlx::test(migrator = "MACRO_DB_MIGRATIONS")]
-async fn promoting_an_inbox_whose_owner_account_is_gone_writes_nothing(db: PgPool) {
-    let owner = account(&db, "owner@example.com").await;
-    let actor = account(&db, "actor@example.com").await;
-    let inbox = held_inbox(&db, &owner).await;
+    sqlx::query!(
+        "UPDATE email_links SET disconnect_requested_at = NULL WHERE id = $1",
+        inbox.id
+    )
+    .execute(&db)
+    .await
+    .unwrap();
+    // Account deletion removes the profile at once and the inbox later.
     sqlx::query!(r#"DELETE FROM "User" WHERE id = $1"#, owner)
         .execute(&db)
         .await
         .unwrap();
+    assert!(links.link_departing(inbox.id).await.unwrap());
+    assert!(
+        links.link_departing(Uuid::now_v7()).await.unwrap(),
+        "a purged link was departing"
+    );
+}
 
-    let promoted = PgConnectionTransactions(db.clone())
-        .promote(&actor, "team@example.com", &inbox)
-        .await
-        .unwrap();
+#[sqlx::test(migrator = "MACRO_DB_MIGRATIONS")]
+async fn promotion_refuses_a_departing_inbox_and_writes_nothing(db: PgPool) {
+    let actor = account(&db, "actor@example.com").await;
+    for (removal, owner_email) in [
+        ("owner deleted", "deleted@example.com"),
+        ("disconnect requested", "leaving@example.com"),
+    ] {
+        let owner = account(&db, owner_email).await;
+        let inbox = held_inbox(&db, &owner).await;
+        if removal == "owner deleted" {
+            sqlx::query!(r#"DELETE FROM "User" WHERE id = $1"#, owner)
+                .execute(&db)
+                .await
+                .unwrap();
+        } else {
+            sqlx::query!(
+                "UPDATE email_links SET disconnect_requested_at = now() WHERE id = $1",
+                inbox.id
+            )
+            .execute(&db)
+            .await
+            .unwrap();
+        }
 
-    assert!(promoted.is_none());
-    assert_eq!(
-        sqlx::query_scalar!("SELECT macro_id FROM email_links WHERE id = $1", inbox.id)
+        let promoted = PgConnectionTransactions(db.clone())
+            .promote(&actor, "team@example.com", &inbox)
+            .await;
+
+        assert!(
+            matches!(
+                promoted,
+                Err(ConnectionError::MailboxInitialization(
+                    email::domain::mailbox::initialization::InitializationError::InboxBeingRemoved
+                ))
+            ),
+            "{removal}"
+        );
+        assert_eq!(
+            sqlx::query_scalar!("SELECT macro_id FROM email_links WHERE id = $1", inbox.id)
+                .fetch_one(&db)
+                .await
+                .unwrap(),
+            owner,
+            "{removal}"
+        );
+        assert_eq!(
+            sqlx::query_scalar!(
+                r#"SELECT count(*) FROM "User" WHERE id = 'macro|team@example.com'"#
+            )
             .fetch_one(&db)
             .await
             .unwrap(),
-        owner
-    );
-    assert_eq!(
-        sqlx::query_scalar!(r#"SELECT count(*) FROM "User" WHERE id = 'macro|team@example.com'"#)
-            .fetch_one(&db)
+            Some(0),
+            "{removal}"
+        );
+        sqlx::query!("DELETE FROM email_links WHERE id = $1", inbox.id)
+            .execute(&db)
             .await
-            .unwrap(),
-        Some(0)
-    );
+            .unwrap();
+    }
 }

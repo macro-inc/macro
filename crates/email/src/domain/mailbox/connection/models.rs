@@ -94,15 +94,6 @@ pub struct SharedInboxPromotion {
     pub link_id: Uuid,
 }
 
-/// What decides whether an existing link can still be shared or reused.
-pub struct LinkStatus {
-    /// Deleting an account removes its inboxes later, so a link can outlive
-    /// its owner's account.
-    pub owner_account_exists: bool,
-    /// Its disconnect or purge has started.
-    pub being_removed: bool,
-}
-
 pub fn classify_provider_init_error(error: EmailApiError) -> ConnectionError {
     match error {
         EmailApiError::AuthRequired | EmailApiError::Forbidden => {
