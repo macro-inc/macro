@@ -14,6 +14,7 @@ import {
   useSavedView,
   useSavedViews,
 } from '@app/features/saved-views/queries/saved-views';
+import { SavedViewDraftHost } from '@app/features/saved-views/views/saved-view-draft-host';
 import { ViewTour } from '@app/features/tours/ViewTour';
 import { useFeatureFlag } from '@app/lib/analytics/posthog';
 import { t } from '@app/lib/i18n';
@@ -369,43 +370,41 @@ function EmailMobileLayout(props: ParentProps) {
         <Show
           when={searching()}
           fallback={
-            <PillTabs
-              scrollable
-              class="-ml-(--mobile-chrome-gutter) w-[calc(100%+2*var(--mobile-chrome-gutter))] max-w-none flex-none"
-              contentClass="px-(--mobile-chrome-gutter)"
-              leading={
-                <>
+            <div class="flex min-w-0 items-center gap-2">
+              <PillTabs
+                scrollable
+                class="-ml-(--mobile-chrome-gutter) min-w-0 flex-1"
+                contentClass="px-(--mobile-chrome-gutter)"
+                leading={
                   <ViewSidebar.Toggle action="expand" presentation="pill" />
-                  <Show
-                    when={
-                      wideSearchFlag().enabled && canSearchEmailTab(state.tab)
-                    }
-                  >
-                    <PillButton
-                      active={false}
-                      iconOnly
-                      aria-label={t('emailViews.searchEmail')}
-                      onClick={openSearch}
-                    >
-                      <SearchIcon class="size-5" />
-                    </PillButton>
+                }
+                items={tabs()}
+                trailing={
+                  <Show when={!inboxSelected()}>
+                    <HeaderIsland>
+                      <span class="truncate text-sm font-medium">
+                        {tagViewTitle() ?? EMAIL_TAB_LABELS[state.tab]}
+                      </span>
+                    </HeaderIsland>
                   </Show>
-                  <EmailFilterDrawer />
-                </>
-              }
-              items={tabs()}
-              trailing={
-                <Show when={!inboxSelected()}>
-                  <HeaderIsland>
-                    <span class="truncate text-sm font-medium">
-                      {tagViewTitle() ?? EMAIL_TAB_LABELS[state.tab]}
-                    </span>
-                  </HeaderIsland>
-                </Show>
-              }
-              value={savedViewActive() ? undefined : state.tab}
-              onChange={setTab}
-            />
+                }
+                value={savedViewActive() ? undefined : state.tab}
+                onChange={setTab}
+              />
+              <Show
+                when={wideSearchFlag().enabled && canSearchEmailTab(state.tab)}
+              >
+                <PillButton
+                  active={false}
+                  iconOnly
+                  aria-label={t('emailViews.searchEmail')}
+                  onClick={openSearch}
+                >
+                  <SearchIcon class="size-5" />
+                </PillButton>
+              </Show>
+              <EmailFilterDrawer />
+            </div>
           }
         >
           <EmailMobileSearchField
@@ -451,6 +450,9 @@ function EmailViewRoot() {
     setReadingPane,
     savedViews,
     savedViewScope,
+    savedViewCreation,
+    savedViewsList,
+    discardNewSavedView,
   } = useEmailView();
   const savedViewKey = () => savedViewScope()?.id;
   const [listElement, setListElement] = createSignal<HTMLDivElement>();
@@ -518,6 +520,14 @@ function EmailViewRoot() {
   return (
     <StaticMarkdownContext>
       <SplitPanel.Root>
+        <Show when={savedViewCreation && savedViewsList}>
+          <SavedViewDraftHost
+            creation={savedViewCreation!}
+            refresh={savedViewsList!.refresh}
+            discard={discardNewSavedView}
+            selection={{ mail: ['tab', 'savedView'] }}
+          />
+        </Show>
         <SplitPanel.Body>
           <EmailLayout
             list={list()}

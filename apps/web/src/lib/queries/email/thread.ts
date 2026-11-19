@@ -1,6 +1,7 @@
 import { useAnalytics } from '@app/lib/analytics/analytics-context';
 import { toast } from '@core/component/Toast/Toast';
 import { DEFAULT_THREAD_MESSAGES_LIMIT } from '@core/constant/pagination';
+import { fireAndForget } from '@core/util/fireAndForget';
 import { catchToResult, throwOnErr } from '@core/util/result';
 import ArrowCounterClockwise from '@icon/system/regular/arrow-counter-clockwise.svg?component-solid';
 import { Telemetry } from '@macro-inc/observability';
@@ -11,20 +12,12 @@ import type {
   ApiThread as Thread,
   UpsertScheduledResponse,
 } from '@service-email/generated/schemas';
-import { markGraphqlEmailThreadUnread } from '@service-storage/graphql-email-read-state';
-import {
-  getGraphqlSoupClient,
-  graphqlCacheEnabled,
-} from '@service-storage/graphql-soup';
 import { type InfiniteData, useMutation } from '@tanstack/solid-query';
 import { err, ok } from 'neverthrow';
 import type { Accessor } from 'solid-js';
 import { queryClient } from '../client';
 import { refetchSoupEntity } from '../soup/cache';
-import {
-  getUnmaintainedGraphqlSoupRevalidations,
-  refreshActiveGraphqlSoupQueries,
-} from '../soup/graphql/active-queries';
+import { revalidateMailImportanceLists } from '../soup/graphql/mail-list-revalidation';
 import { invalidateAllSoup } from '../soup/normalized-cache';
 import { type UndoHandle, useUndoableMutation } from '../undo';
 import { type MutationCallbacks, withCallbacks } from '../utils';
@@ -39,7 +32,13 @@ import {
   type EmailArchiveDisposition,
 } from './integration';
 import { emailKeys } from './keys';
-import { type MarkThreadAsSeenParams, markEmailThreadSeen } from './read-state';
+import {
+  type MarkThreadAsSeenParams,
+  type MarkThreadAsUnreadParams,
+  type MarkThreadAsUnreadResult,
+  markEmailThreadSeen,
+  markEmailThreadUnread,
+} from './read-state';
 
 /**
  * Flatten infinite query pages into a single thread with all messages.
@@ -221,27 +220,21 @@ export function useMarkThreadAsSeenMutation(
   }));
 }
 
-type MarkThreadAsUnreadParams = { threadId: string };
-
 /**
  * Mark a thread unread through the shared mailbox-state contract.
  */
 export function useMarkThreadAsUnreadMutation(
-  callbacks?: MutationCallbacks<void, Error, MarkThreadAsUnreadParams>
+  callbacks?: MutationCallbacks<
+    MarkThreadAsUnreadResult,
+    Error,
+    MarkThreadAsUnreadParams
+  >,
+  options?: { observeQueuedSettlement: boolean }
 ) {
   return useMutation(() => ({
-    mutationFn: async (params: MarkThreadAsUnreadParams) => {
-      // The optimistic and committed `isRead` reach every list the cache
-      // maintains; the rest are read again when the write commits.
-      const disposition = await markGraphqlEmailThreadUnread(
-        getGraphqlSoupClient(),
-        params.threadId,
-        getUnmaintainedGraphqlSoupRevalidations()
-      );
-      if (disposition === 'committed' && !graphqlCacheEnabled())
-        await refreshActiveGraphqlSoupQueries();
-    },
-    ...withCallbacks<void, Error, MarkThreadAsUnreadParams>(
+    mutationFn: (params: MarkThreadAsUnreadParams) =>
+      markEmailThreadUnread(params, options?.observeQueuedSettlement ?? false),
+    ...withCallbacks<MarkThreadAsUnreadResult, Error, MarkThreadAsUnreadParams>(
       {
         onSettled: () => invalidateEmailFolderQueries(),
       },
@@ -538,6 +531,11 @@ export async function blockSenderWithToast(
   });
 }
 
+function invalidateSenderFilterLists() {
+  invalidateAllSoup();
+  fireAndForget(revalidateMailImportanceLists(), 'email-sender-filter');
+}
+
 async function upsertSenderFilterWithToast(
   senderEmail: string,
   isImportant: boolean,
@@ -561,7 +559,7 @@ async function upsertSenderFilterWithToast(
   }
 
   const filterId = result.value.filter.id;
-  invalidateAllSoup();
+  invalidateSenderFilterLists();
 
   toast.success(`Sender marked as ${label}`, {
     dismissStyle: 'icon',
@@ -579,7 +577,7 @@ async function upsertSenderFilterWithToast(
           if (undoResult.isErr()) {
             toast.failure('Failed to undo', { subtext: senderEmail });
           } else {
-            invalidateAllSoup();
+            invalidateSenderFilterLists();
             toast.success('Sender filter removed');
           }
         },

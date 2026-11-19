@@ -140,6 +140,10 @@ compatible with the service code currently deployed, not just the code in its PR
    nix develop --command just --set DATABASE_URL "$DATABASE_URL" prepare_db
    ```
 
+   Inspect `git status` after preparation and restore unrelated `.sqlx`
+   deletions before committing; workspace preparation can omit entries for
+   unbuilt or excluded targets.
+
    Commit generated `.sqlx` changes with the query/schema change. Never manually
    create or edit `.sqlx/query-*.json`, and never generate a crate-local cache.
    Unrelated Rust-only DB-crate edits still need appropriate tests, but do not

@@ -1,12 +1,13 @@
 use super::*;
+use crate::domain::ports::HostScope;
 use std::sync::Arc;
 use tokio::sync::{Notify, oneshot};
 
 #[derive(Default)]
 pub(super) struct FleetGate {
-    entered: Notify,
-    release: Notify,
-    active: AtomicU32,
+    pub(super) entered: Notify,
+    pub(super) release: Notify,
+    pub(super) active: AtomicU32,
 }
 
 struct ActiveCall<'a>(&'a AtomicU32);
@@ -45,12 +46,14 @@ async fn shutdown_drains_active_effect_and_returns_queued_leases() {
                 computer_id: ComputerId::new_from_uuid(Uuid::from_u128(1)),
                 effect: Effect::Start { host: HOST },
                 attempts: 0,
+                queued_at: chrono::DateTime::UNIX_EPOCH,
             },
             PendingEffect {
                 id: 2,
                 computer_id: ComputerId::new_from_uuid(Uuid::from_u128(2)),
                 effect: Effect::Start { host: HOST },
                 attempts: 0,
+                queued_at: chrono::DateTime::UNIX_EPOCH,
             },
         ];
         let (stop, stopped) = oneshot::channel();
@@ -68,7 +71,13 @@ async fn shutdown_drains_active_effect_and_returns_queued_leases() {
         assert!(
             operator
                 .repo
-                .lease_effects(EffectWorker::Fleet, 16, now(), now() + EFFECT_LEASE)
+                .lease_effects(
+                    EffectWorker::Fleet,
+                    HostScope::Every,
+                    16,
+                    now(),
+                    now() + EFFECT_LEASE
+                )
                 .await
                 .unwrap()
                 .is_empty()
@@ -82,7 +91,13 @@ async fn shutdown_drains_active_effect_and_returns_queued_leases() {
         assert_eq!(operator.fleet.calls.lock().unwrap().len(), 1);
         let available = operator
             .repo
-            .lease_effects(EffectWorker::Fleet, 16, now(), now() + EFFECT_LEASE)
+            .lease_effects(
+                EffectWorker::Fleet,
+                HostScope::Every,
+                16,
+                now(),
+                now() + EFFECT_LEASE,
+            )
             .await
             .unwrap();
         let ids: Vec<i64> = available.iter().map(|effect| effect.id).collect();
@@ -115,6 +130,7 @@ async fn fleet_call_timeout_ends_before_lease_expiry_and_records_retry() {
         computer_id: ComputerId::new_from_uuid(Uuid::from_u128(1)),
         effect: Effect::Start { host: HOST },
         attempts: 0,
+        queued_at: chrono::DateTime::UNIX_EPOCH,
     });
     let started = tokio::time::Instant::now();
     let task = {
@@ -131,6 +147,7 @@ async fn fleet_call_timeout_ends_before_lease_expiry_and_records_retry() {
             .repo
             .lease_effects(
                 EffectWorker::Fleet,
+                HostScope::Every,
                 16,
                 now() + Duration::seconds(10),
                 now() + EFFECT_LEASE
@@ -150,6 +167,7 @@ async fn shutdown_before_a_pass_does_not_lease() {
         computer_id: ComputerId::new_from_uuid(Uuid::from_u128(1)),
         effect: Effect::Start { host: HOST },
         attempts: 0,
+        queued_at: chrono::DateTime::UNIX_EPOCH,
     });
     assert_eq!(
         operator
@@ -239,6 +257,7 @@ async fn replayed_crash_recovery_starts_idempotently_and_keeps_completion_on_fai
         computer_id: id,
         effect: Effect::Restart { host: HOST },
         attempts: 0,
+        queued_at: chrono::DateTime::UNIX_EPOCH,
     });
     operator.run_fleet_effects().await.unwrap();
     assert_eq!(
@@ -255,6 +274,7 @@ async fn replayed_crash_recovery_starts_idempotently_and_keeps_completion_on_fai
             generation: EnrollmentGeneration::new(1),
         },
         attempts: 0,
+        queued_at: chrono::DateTime::UNIX_EPOCH,
     });
     operator.repo.fail_next_apply.store(true, Ordering::SeqCst);
     assert!(operator.run_fleet_effects().await.is_err());
@@ -285,7 +305,7 @@ async fn daemon_restart_effect_is_ignored_after_reconnection() {
             .state
             .macrod_misses = crate::domain::lifecycle::MAX_MACROD_MISSES;
         if reconnected {
-            operator.macrod_connected(HARNESS).await.unwrap();
+            operator.macrod_connected(HARNESS, true).await.unwrap();
         }
         operator.fleet.calls.lock().unwrap().clear();
         operator.repo.effects.lock().unwrap().push(PendingEffect {
@@ -293,6 +313,7 @@ async fn daemon_restart_effect_is_ignored_after_reconnection() {
             computer_id: id,
             effect: Effect::RestartMacrod { host: HOST },
             attempts: 0,
+            queued_at: chrono::DateTime::UNIX_EPOCH,
         });
         operator.run_fleet_effects().await.unwrap();
         assert_eq!(

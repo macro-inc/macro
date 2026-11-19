@@ -45,4 +45,16 @@ describe('track', () => {
       itemType: 'document',
     });
   });
+
+  it('POSTs initiative history for Tasks projects', () => {
+    track({
+      itemId: 'project-1',
+      blockName: 'initiative',
+      client: unusedClient,
+    });
+    expect(mutate).toHaveBeenCalledWith({
+      itemId: 'project-1',
+      itemType: 'initiative',
+    });
+  });
 });

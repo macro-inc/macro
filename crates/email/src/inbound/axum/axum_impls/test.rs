@@ -124,3 +124,21 @@ fn no_links_at_all_is_rejected() {
     let result = resolve_target_link(vec![], None, &caller());
     assert!(matches!(result, Err(EmailLinkErr::NoInboxSelected)));
 }
+
+#[tokio::test]
+async fn email_rule_resource_failure_names_the_limit_without_exposing_observed_usage() {
+    use super::{EmailErr, GetPreviewsCursorError};
+    use crm::domain::email_rule_discovery::{EmailRuleLimitExceeded, EmailRuleWorkLimit};
+    let error = EmailErr::EmailRuleLimitExceeded(EmailRuleLimitExceeded {
+        limit: EmailRuleWorkLimit::SourceAddresses,
+        maximum: 50_000,
+        observed: 123_456,
+    });
+    let response = GetPreviewsCursorError::from(error).into_response();
+    assert_eq!(response.status(), StatusCode::SERVICE_UNAVAILABLE);
+    let bytes = to_bytes(response.into_body(), 1024).await.unwrap();
+    assert_eq!(
+        std::str::from_utf8(&bytes).unwrap(),
+        "email sharing rules exceed the source_addresses limit (50000)"
+    );
+}

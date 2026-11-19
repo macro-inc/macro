@@ -105,24 +105,33 @@ for (const provider of PROVIDERS) {
       await expectRows(page, open);
     });
 
-    // When this fails, Has › Calendar invite does not list the invitation.
-    // Class web-outlook-invite-filter-misses-invitations: on Outlook the
-    // invitation is the message's calendar part, not an attachment, and the
-    // list's own filter (hasCalendarInviteFilter, predicates.ts) reads only
-    // attachments, so it drops the thread.
-    test(`${provider === 'OUTLOOK' ? 'known bug: web-outlook-invite-filter-misses-invitations: ' : ''}Has Calendar invite lists the invitation and nothing else`, {
-      tag: provider === 'OUTLOOK' ? '@known-bug' : [],
-    }, async ({ page, mailbox }) => {
+    // When this fails, Has › Calendar invite drops the thread that carries
+    // a calendar part or admits an ordinary message.
+    test('Has Calendar invite lists the invitation and nothing else', async ({
+      page,
+      mailbox,
+    }) => {
       await mailbox.deliver({ from: GRACE, subject: 'Plain', text: 'Hello.' });
       await deliverInvitation(mailbox, 'Invitation: Planning review');
       const plain = (await mailbox.synced('Plain')).id;
       const invite = (await mailbox.synced('Invitation: Planning review')).id;
+      await inFocus(mailbox, plain, 'none');
+      await inFocus(mailbox, invite, 'none');
 
       await mailbox.open();
       await expectRows(page, [plain, invite]);
 
       await pickFilter(page, 'Has', 'menuitemcheckbox', 'Calendar invite');
       did('AL-022');
+      await expectRows(page, [invite]);
+      await clearFilters(page);
+      await expectRows(page, [plain, invite]);
+
+      const views = page.getByRole('radiogroup', { name: 'Inbox view' });
+      await views.getByText('Focus', { exact: true }).click();
+      await expect(views.getByRole('radio', { name: 'Focus' })).toBeChecked();
+      await expectRows(page, [plain, invite]);
+      await pickFilter(page, 'Has', 'menuitemcheckbox', 'Calendar invite');
       await expectRows(page, [invite]);
       await clearFilters(page);
       await expectRows(page, [plain, invite]);

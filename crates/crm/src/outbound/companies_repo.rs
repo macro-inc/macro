@@ -132,23 +132,18 @@ impl CompaniesRepositoryImpl {
         // queued job's participants, dates, direction, or former consent.
         // The mailbox scan is the slow step, so it runs before the domain
         // lock: populations of other addresses on the domain don't wait on it.
-        let Some(interaction) = Self::eligible_interactions_with_authority(
-            &mut tx,
-            *team_id,
-            *link_id,
-            &normalized_email,
-            authority,
-        )
-        .await?
+        let Some(interaction) = self
+            .eligible_interactions_with_authority(
+                &mut tx,
+                *team_id,
+                *link_id,
+                &normalized_email,
+                authority,
+            )
+            .await?
         else {
             return Ok(());
         };
-
-        #[cfg(test)]
-        if let Some(gate) = &self.after_eligible_scan {
-            gate.entered.notify_one();
-            gate.resume.notified().await;
-        }
 
         // Serialize on (team, lower(domain)): the unique constraint on
         // crm_domains catches the race only after an orphan crm_companies
@@ -161,13 +156,11 @@ impl CompaniesRepositoryImpl {
         // Only currently eligible mailbox history may update CRM records.
         let existing = Self::find_company_by_domain(&mut tx, team_id, &normalized_domain).await?;
 
-        // The upsert below finds a contact by its company and primary address.
-        // A contact that holds this address as a further one is not found that
-        // way, so look for it first: mail from any of a contact's addresses
-        // refreshes that contact instead of filing a second one. An address
-        // repeats only across manually created duplicates, hence the cap.
+        // The company upsert matches a primary address under that company.
+        // Look up address holders so we can preserve a manual unfiled contact
+        // or a contact that holds the address as a further one.
         let holders = sqlx::query!(
-            r#"SELECT ct.id, ct.company_id,
+            r#"SELECT ct.id, ct.company_id, ct.manually_created,
                       (LOWER(BTRIM(ct.email)) = ce.email) IS TRUE AS "is_primary!"
                FROM crm_contact_emails ce
                JOIN crm_contacts ct ON ct.id = ce.contact_id
@@ -267,6 +260,33 @@ impl CompaniesRepositoryImpl {
             }
         };
 
+        // Company population has already run. Keep a sole manual holder's
+        // identity and company choice when its primary address matches.
+        if let [holder] = holders.as_slice()
+            && holder.manually_created
+            && holder.company_id.is_none()
+            && holder.is_primary
+        {
+            if self
+                .refresh_existing_contact(
+                    &mut tx,
+                    team_id,
+                    holder.id,
+                    None,
+                    &normalized_email,
+                    name,
+                    &interaction,
+                )
+                .await?
+            {
+                Self::record_contact_source(&mut tx, holder.id, link_id).await?;
+            }
+            return tx
+                .commit()
+                .await
+                .map_err(|e| CrmError::StorageLayerError(e.into()));
+        }
+
         // First non-NULL name wins (COALESCE preserves existing).
         // `last_interaction` always GREATEST; `first_interaction`
         // LEAST-merges only on is_sent=true (mirrors company rule).
@@ -352,6 +372,7 @@ impl CompaniesRepositoryImpl {
             gate.resume.notified().await;
         }
 
+        // Keep the address check on this contact's composite key in generic plans.
         let refreshed = sqlx::query_scalar!(
             r#"UPDATE crm_contacts SET name = COALESCE(name, $3),
                 first_interaction = CASE WHEN $6 THEN LEAST(first_interaction, $4) ELSE first_interaction END,
@@ -360,6 +381,7 @@ impl CompaniesRepositoryImpl {
                  AND EXISTS (
                      SELECT 1 FROM crm_contact_emails ce
                      WHERE ce.contact_id = crm_contacts.id AND ce.email = $7
+                     OFFSET 0
                  )
                RETURNING id"#,
             contact_id,
@@ -417,14 +439,15 @@ impl CompaniesRepositoryImpl {
         if !Self::team_exists(&mut tx, team_id).await? {
             return Ok(());
         }
-        let Some(interaction) = Self::eligible_interactions_with_authority(
-            &mut tx,
-            *team_id,
-            *link_id,
-            normalized_email,
-            authority,
-        )
-        .await?
+        let Some(interaction) = self
+            .eligible_interactions_with_authority(
+                &mut tx,
+                *team_id,
+                *link_id,
+                normalized_email,
+                authority,
+            )
+            .await?
         else {
             return Ok(());
         };

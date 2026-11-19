@@ -405,6 +405,14 @@ function EmailLinkCallbackHandler(props: Pick<EmailAuthParams, 'successPath'>) {
               navigateAfterLink();
               return;
             }
+            if (err.tag === 'InboxBeingRemoved') {
+              trackOutcome('inbox_being_removed');
+              toast.failure(
+                'This inbox is still being removed. Try again in a few minutes.'
+              );
+              navigateAfterLink();
+              return;
+            }
             if (err.tag === 'NoGmailGrant') {
               trackOutcome('no_gmail_grant');
               toast.failure(

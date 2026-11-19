@@ -125,7 +125,7 @@ impl AttachmentProcessor {
     }
 
     /// Orchestrates the full upload process for a single attachment.
-    #[instrument(skip(self), fields(file_name = ?attachment.filename, mime_type = %attachment.mime_type))]
+    #[instrument(skip(self, attachment), fields(attachment_id = %attachment.attachment_db_id, mime_type = %attachment.mime_type))]
     pub async fn upload(
         &self,
         link: &Link,

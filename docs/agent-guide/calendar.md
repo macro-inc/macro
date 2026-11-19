@@ -216,7 +216,25 @@ is off vs Enable calendar wording counts only own inboxes, and Grant access, Tur
 on and Reconnect only start consent for one of them. It covers the grid only in a
 week without events and with no working calendar the viewer can see; a working
 calendar shared with them keeps it to the bottom-right pill, so a delegate whose
-only working calendar is shared sees the pill in every week.
+only working calendar is shared sees the pill in every week. On desktop the
+pill rides above the toast stack while it shows anything, so the app-wide
+prompt for the same inbox doesn't cover it.
+An own inbox whose calendar used to sync but lost calendar access without the
+user turning it off (a Google grant from before Macro narrowed its calendar
+scopes, which the server turns off and clears hourly) shows **Calendar for
+<address> stopped syncing** with **Reconnect** even while another inbox works;
+Reconnect asks for calendar access alone, and the re-grant re-imports its events.
+For the same inbox the app-wide toast reads **Calendar stopped syncing** with
+**Reconnect** (shown again even if an earlier Enable calendar was dismissed), the
+sidebar card reads **Calendar stopped syncing** with **Reconnect calendar** (also
+past an earlier dismissal of the card), and the calendar settings menu says
+**Reconnect**. A calendar that was never connected keeps Enable calendar, Grant
+access and Turn on calendar, unless its mailbox needs a full reconnect: then the
+calendar view, the card and the menu all offer Reconnect, asking for the mailbox
+and calendar together. The signal is the inbox's calendar data
+(`has_calendar_data`) beside missing calendar permission: Macro creates the
+calendar account only from a grant with the capability and keeps it when the
+capability goes.
 Account checkboxes show/hide all child calendars; partial selection is shown as
 mixed. Individual calendars can also be shown/hidden. The account color is the
 default for its calendars; a child color overrides it. Click a color dot to open
@@ -471,7 +489,8 @@ excluded from Upcoming events, including both all-day and hourly locations.
 Events require connecting a Google account (`Connect calendar`). The
 `Calendar settings` (gear) menu has an `Accounts`
 section listing each connected account with a per-account `Enable` (grant calendar),
-`Reconnect` (expired Google authorization), or `Turn off` action, plus
+`Reconnect` (expired Google authorization, with or without calendar access, as
+the calendar view says), or `Turn off` action, plus
 `Connect another account` to connect a new Google account
 (email + calendar; the item and the `Connect email` dialog both say the email
 and calendar connect together). A Google consent that leaves the email
@@ -531,6 +550,9 @@ send `macroCall` on the update route, which writes the join link and removes the
 Google Meet in one update. An event already holding a Macro call keeps it, and an
 Outlook event's Teams meeting cannot be removed this way.
 
+Drag the Upcoming events, Calendars, or Team out of office heading to reorder
+sidebar sections locally. Their order survives reloads per account; the mini
+calendar and footer controls stay fixed. Nested calendar accounts remain grouped.
 The sidebar's `Calendars` section folds each connected account into a collapsible
 group: a caret plus the account address header with a checkbox that shows or hides all of
 that account's calendars at once, and the account's calendars listed beneath it (color dot,
@@ -854,8 +876,10 @@ instead of opening the calendar; on a touch device, tapping it opens the same ca
 sheet. That card also offers `Add to calendar` (behind the `enable-calendar-add-shared-event`
 flag, on in dev only until a real Google import has passed there), which imports a snapshot of
 the meeting onto the viewer's only writable Google calendar, or onto one they pick from a menu
-when they have several; Outlook calendars are not offered, since Microsoft cannot keep the
-meeting's iCalendar UID. Google imports an event only for its organizer or an attendee, so the
+when they have several. Microsoft cannot keep the meeting's iCalendar UID, so viewers
+with an Outlook calendar and no writable Google calendar see `Adding shared events
+requires a writable Google calendar.` beside the download. Google imports an event
+only for its organizer or an attendee, so the
 snapshot keeps the real organizer and lists the viewer, already accepted, as its only guest: the
 meeting's other guests and join link stay out and nobody is notified. If Google refuses anyway,
 the card says Google won't add the event to that calendar and points to `Download .ics`. The agent
@@ -1486,6 +1510,13 @@ shows Yes / Maybe / No, a last response, or a waiting-for-sync line. When the vi
 holds the meeting it says `On your calendar.` with `Open in calendar` and `View your day`;
 when the meeting is on more than one of the viewer's accounts it says
 `This event matches multiple accounts. Open your calendar to choose.`, as an invitation does.
+During the first sync of a connected inbox with no discovered calendar, a viewer with
+no writable calendar sees `Syncing your calendar…` where the add action will appear.
+The event composer hides its empty picker and shows the same notice in place of Create event.
+The viewer can edit the draft while the sync runs. Once a writable calendar arrives,
+the picker and Create event return in the same composer with the draft intact.
+The calendar delta refreshes the list after discovery with its own GraphQL
+operation, so an in-flight cache read cannot intercept the network refresh.
 When the calendar check confirms the viewer does not hold it, the card says
 `Not on your calendar.` and, behind the `enable-calendar-add-shared-event` flag, offers
 `Add to calendar`, which imports the same snapshot as the channel-share card
@@ -1496,11 +1527,12 @@ file carries, through email service's
 The server reads the event from the saved email, never from the request. The card then
 resolves to the snapshot. A single occurrence, a cancelled event, a time that cannot be read,
 and mail saved before recurrence was recorded on the snapshot get no `Add to calendar`.
-Nor does a card whose check is not confirmed: it says `Checking your connected calendar…`
-while loading, `Connect a calendar to add this event.` without a calendar, and
-`Calendar unavailable. Saved event details are shown.` when the check fails; a failed
-refresh after an earlier `Not on your calendar.` keeps that line under the unavailable notice
-but withholds the button.
+An Outlook calendar without an eligible Google destination shows `Adding shared events
+requires a writable Google calendar.` with the shared event details.
+A card whose check is pending says `Checking your connected calendar…`. A reader without
+a calendar sees `Connect a calendar to add this event.` A failed check shows `Calendar
+unavailable. Saved event details are shown.` A failed refresh after an earlier `Not on your
+calendar.` keeps that line under the unavailable notice and withholds the button.
 
 A connected, resolved invitation shows the responding address and Yes / Maybe / No.
 Calendars connected through a linked inbox also resolve here, using that inbox's

@@ -407,7 +407,12 @@ configuration, XcodeGen source, and generated debug/release build settings all
 use 15.0; no command-line deployment-target override is needed.
 
 The resolved `swift-rs` 1.0.8 supports Xcode 27's SwiftPM; the previous
-`--build-system native` workaround is no longer needed. Tauri CLI 2.11.4 still
+`--build-system native` workaround is no longer needed. It needs
+`llvm-objcopy` from the toolchain's `llvm-tools` component to export the
+plugins' `@_cdecl` symbols, which Xcode 27 builds as local; without it, it
+only warns and the app library fails to link with undefined `init_plugin_*`
+symbols. The Nix dev shell includes the component on macOS; outside Nix, run
+`rustup component add llvm-tools`. Tauri CLI 2.11.4 still
 mistakes simulators returned by `devicectl` for physical devices. Use
 `cargo tauri ios dev --open` and build the simulator destination with Xcode.
 Use Xcode's tools rather than Nix's Apple SDK/linker for native builds.

@@ -1,20 +1,25 @@
 // A scheduled message the provider refuses when its time comes. In a Gmail
 // inbox the composer says the send failed before delivery and restores it as
 // a draft; in an Outlook inbox it says the provider rejected the send and
-// sends it again.
+// offers a retry or cancellation.
 
 import type { Page } from '@playwright/test';
 import { composeNew, draftThreads, loadAppSteadily } from './harness/drafts';
 import { expect, type Mailbox, test } from './harness/fixtures';
 import { addMailbox, readMailbox } from './harness/journeys';
 import { injectFault, notice, sentMessages } from './harness/send';
+import { threadMessages } from './harness/thread';
 import { confirmed, did, saw } from './ledger/record';
 
 const GRACE = 'grace@example.com';
 const REJECTED =
   'Your mail provider rejected this send. You can retry after correcting the problem in your mailbox.';
 
-type Scheduled = { db_id: string; scheduled_send_time: string };
+type Scheduled = {
+  db_id: string;
+  thread_db_id: string;
+  scheduled_send_time: string;
+};
 
 /** The messages Macro holds to send later. */
 async function scheduled(mailbox: Mailbox): Promise<Scheduled[]> {
@@ -39,7 +44,7 @@ async function openRefusedScheduledSend(
   page: Page,
   mailbox: Mailbox,
   times?: number
-): Promise<void> {
+): Promise<Scheduled> {
   await addMailbox(mailbox, GRACE);
   await composeNew(page, mailbox, {
     to: GRACE,
@@ -81,6 +86,7 @@ async function openRefusedScheduledSend(
   did('AL-002', 'F-145');
   await page.getByRole('main').getByText('Quarterly numbers').click();
   did('AL-050');
+  return held;
 }
 
 /** Macro holds the message as a draft, not to send, and it was never sent. */
@@ -174,12 +180,11 @@ test.describe('a scheduled send that fails from an Outlook inbox', () => {
     confirmed('F-147');
   });
 
-  // The schedule is cancelled and the notice says the email is editable
-  // again, but its composer stays locked behind the rejected send.
-  test('known bug: outlook-cancelled-failed-schedule-stays-locked: a rejected scheduled send that is cancelled is an editable draft again', {
-    tag: '@known-bug',
-  }, async ({ page, mailbox }) => {
-    await openRefusedScheduledSend(page, mailbox);
+  test('a rejected scheduled send that is cancelled is an editable draft again', async ({
+    page,
+    mailbox,
+  }) => {
+    const held = await openRefusedScheduledSend(page, mailbox);
     await expect(notice(page, REJECTED)).toBeVisible({ timeout: 30_000 });
     saw('STC-982');
 
@@ -190,7 +195,38 @@ test.describe('a scheduled send that fails from an Outlook inbox', () => {
       notice(page, 'Schedule cancelled. This email is editable again.')
     ).toBeVisible();
     await expectRestoredDraft(mailbox);
-    await expect(page.getByRole('textbox', { name: 'Subject' })).toBeEnabled();
+    const subject = page.getByRole('textbox', { name: 'Subject' });
+    await expect(subject).toBeEnabled();
+    await expect(
+      page.getByRole('button', { name: /^Choose send time/ })
+    ).toBeEnabled();
+    await expect(page.getByRole('button', { name: 'Retry send' })).toHaveCount(
+      0
+    );
+    await subject.fill('Revised quarterly numbers');
+    await subject.press('Tab');
+    await expect
+      .poll(async () =>
+        (await threadMessages(mailbox, held.thread_db_id)).map(
+          ({ db_id, subject, is_draft }) => ({ db_id, subject, is_draft })
+        )
+      )
+      .toEqual([
+        {
+          db_id: held.db_id,
+          subject: 'Revised quarterly numbers',
+          is_draft: true,
+        },
+      ]);
+
+    await mailbox.open('/app/mail');
+    await page
+      .getByRole('navigation', { name: 'Email tabs' })
+      .getByRole('button', { name: 'Drafts' })
+      .click();
+    await page.getByRole('main').getByText('Revised quarterly numbers').click();
+    await expect(subject).toHaveValue('Revised quarterly numbers');
+    await expect(subject).toBeEnabled();
     confirmed('F-147');
   });
 });

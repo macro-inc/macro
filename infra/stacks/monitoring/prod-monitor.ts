@@ -34,6 +34,12 @@ export function prodMonitor(
     alertDetail?: string;
     warningDetail?: string;
     recoveryDetail?: string;
+    /**
+     * Heartbeats only: alert when the monitor has had no data for this many
+     * minutes. It replaces `onMissingData`, which Datadog treats as a
+     * separate missing-data mode, so the two are never sent together.
+     */
+    noDataTimeframe?: number;
   }
 ): datadog.Monitor {
   return new datadog.Monitor(
@@ -57,9 +63,11 @@ export function prodMonitor(
       monitorThresholdWindows: args.monitorThresholdWindows,
       renotifyInterval: RENOTIFY_MINUTES,
       requireFullWindow: args.requireFullWindow ?? false,
-      onMissingData: 'default',
       includeTags: true,
       notifyAudit: false,
+      ...(args.noDataTimeframe === undefined
+        ? { onMissingData: 'default' }
+        : { notifyNoData: true, noDataTimeframe: args.noDataTimeframe }),
       ...(args.enableLogsSample === undefined
         ? {}
         : { enableLogsSample: args.enableLogsSample }),

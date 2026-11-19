@@ -1,0 +1,70 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "SELECT id, user_id, name, config, created_at, updated_at, revision, shared_team_id, appearance AS \"appearance: sqlx::types::Json<model_entity::EntityAppearance>\" FROM saved_view WHERE user_id = $1",
+  "describe": {
+    "columns": [
+      {
+        "ordinal": 0,
+        "name": "id",
+        "type_info": "Uuid"
+      },
+      {
+        "ordinal": 1,
+        "name": "user_id",
+        "type_info": "Text"
+      },
+      {
+        "ordinal": 2,
+        "name": "name",
+        "type_info": "Text"
+      },
+      {
+        "ordinal": 3,
+        "name": "config",
+        "type_info": "Jsonb"
+      },
+      {
+        "ordinal": 4,
+        "name": "created_at",
+        "type_info": "Timestamptz"
+      },
+      {
+        "ordinal": 5,
+        "name": "updated_at",
+        "type_info": "Timestamptz"
+      },
+      {
+        "ordinal": 6,
+        "name": "revision",
+        "type_info": "Int8"
+      },
+      {
+        "ordinal": 7,
+        "name": "shared_team_id",
+        "type_info": "Uuid"
+      },
+      {
+        "ordinal": 8,
+        "name": "appearance: sqlx::types::Json<model_entity::EntityAppearance>",
+        "type_info": "Jsonb"
+      }
+    ],
+    "parameters": {
+      "Left": [
+        "Text"
+      ]
+    },
+    "nullable": [
+      false,
+      false,
+      false,
+      false,
+      false,
+      false,
+      false,
+      true,
+      true
+    ]
+  },
+  "hash": "e395a54cebbd57db9000bd0b72e4ed6903ebc9dd28b31e2e6ed8e5ab4cde7c8d"
+}

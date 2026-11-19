@@ -359,7 +359,14 @@ async fn admission_skips_invalid_first_and_middle_pages_without_truncating_fanou
         .unwrap();
     assert!(first.configurations.is_empty());
     assert_eq!(first.next_after, Some(too_many_events));
-    let service = EventAdmissionService::new(repo.clone(), Arc::new(AllowAccess), page(2));
+    let service = EventAdmissionService::new(
+        repo.clone(),
+        Arc::new(AllowAccess),
+        Arc::new(crate::outbound::pg_inbox_delegates::PgInboxDelegates::new(
+            pool.clone(),
+        )),
+        page(2),
+    );
     assert_eq!(
         service.ingest(&incoming).await.unwrap(),
         EventIngestionResult::Admitted { inserted: 3 }

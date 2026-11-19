@@ -18,9 +18,11 @@ in
     ./dashboards.nix
     ./ci-dashboard.nix
     ./local-dashboard.nix
+    ./computers-dashboard.nix
     ./database-dashboard.nix
     ./database-queries-dashboard.nix
     ./prod-alerts-dashboard.nix
+    ./email-focus-dashboard.nix
     ./alerting.nix
     ./goalert.nix
   ];
