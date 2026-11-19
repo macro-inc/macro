@@ -2,54 +2,52 @@
 
 ## What it is
 
-`cargo x attest`: runs `PR CI` jobs on a developer's machine and records each
-pass as an `attested/<check>` commit status, so a requested `PR CI` run skips
-those jobs.
+`cargo x attest`: runs `PR CI` checks in the working tree, records each result
+for the files the check read, and posts the passes that apply to a pull
+request as `attested/<check>` commit statuses, so a requested `PR CI` run
+skips those jobs.
 
 ## How it works
 
-`run` builds the merge of `HEAD` with `main` in a checkout under
-`~/.cache/macro-attest/`, reads `.github/attestable-checks.json` from that
-merge, decides what `PR CI` would run (the caller's path filters, then each
-workflow's `path-check`), runs each check's steps in the Nix dev shell, and
-with `--post` posts `fp=<fingerprint> in=<digest> base=<sha>` for each pass.
-With `--post` the base is the one in GitHub's merge commit for the open pull
-request, and the local merge must be the same tree; `PR CI` accepts the status
-for that base only.
+`run` reads `.github/attestable-checks.json` from `HEAD`, runs each check's
+scripts in the Nix dev shell, and writes a receipt keyed by the check's
+fingerprint and the hash of its inputs in `HEAD`. `post` asks GitHub for the
+pull request's merge commit, hashes each check's inputs there, and posts
+`fp=<fingerprint> src=<hash>` for every receipt that matches.
 
 ## Start here
 
-- `src/main.rs`: the order of decisions for one check, and what is posted.
-- `src/runner.rs`: how a job's steps run, and what differs from a runner.
-- `src/checkout.rs`: the merge checkout and why it is not a worktree.
+- `src/main.rs`: `list`, `run` and `post`, and what `post` decides per check.
+- `src/inputs.rs`: the hash a pass is recorded for.
+- `src/runner.rs`: how a script runs: directory, environment, dev shell.
+- `src/receipts.rs`: where results are kept between `run` and `post`.
 - `src/github.rs`: what is asked of GitHub through `gh`.
 
 ## Scope
 
-- Owns: running jobs locally, the path-filter emulation, the expression
-  evaluator, the status that is posted.
-- Not here: which jobs can be attested, their fingerprints, and what `PR CI`
-  accepts → `xtask_workflows`' `attestation.rs` and `scripts/ci_gate.ts`.
+- Owns: running a check's scripts, the receipts, the inputs hash, what is
+  posted.
+- Not here: which jobs can be attested, their scripts, inputs and
+  fingerprints, and what `PR CI` accepts → `xtask_workflows`' `attestation.rs`
+  and `scripts/ci_gate.ts`.
 
 ## Checks
 
 - `cargo test -p xtask_attest`
-- After changing how steps run: `cargo x attest run conventions/ast-grep
-  cloud-storage/graphql-schema-compat` on a commit (no `--post`).
+- After changing how scripts run: `cargo x attest run conventions/ast-grep
+  infra/check` on a clean tree.
 
 ## Gotchas
 
-- Never guess: a context, function, action, shell or filter form the tool does
-  not know is an error. A silent skip would attest a job that did not run.
-- The inputs digest must stay byte-identical to `inputsDigest` in
-  `accept_attested_checks.ts`; both tests pin the same value.
-- Steps run `git fetch --depth` and write tracked files. The checkout is
-  restored before every job, and takes its shallow boundary from the source.
-- The checkout reads the source repository's objects through alternates:
-  don't write refs or objects into the source from here, apart from fetching
-  the base branch there as `git fetch` would.
-- Run git through `checkout::in_repository`. A git hook exports `GIT_DIR`, and
-  the checkout's forced restore would otherwise land in the developer's clone.
+- This is not a GitHub Actions runner and must not become one. The generator
+  refuses a check whose steps need a condition, an expression or an action;
+  fix the step or move the job to `NOT_ATTESTABLE`, never teach the tool.
+- The inputs hash must stay byte-identical to `inputsHash` in `ci_gate.ts`;
+  both tests pin the same value.
+- A receipt is for committed files: `run` records nothing when a check's
+  inputs have uncommitted changes, or when the check itself changed them.
+- Run git through `git::in_repository`. A git hook exports `GIT_DIR`, and git
+  would otherwise act on the repository the hook names.
 
 ## Related
 

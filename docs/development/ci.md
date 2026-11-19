@@ -21,76 +21,77 @@ generated from Rust; see the
 
 ## Attesting checks from your machine
 
-A `PR CI` job your own machine has already passed doesn't need a runner.
-`cargo x attest` runs a job's steps on the merge of your commit with `main` and
-records each pass as an `attested/<check>` commit status. A requested `PR CI`
-run skips the jobs that have an accepted status and runs the rest as before.
+A `PR CI` check your own machine has already passed doesn't need a runner.
+`cargo x attest run` runs a check's scripts, the same text the workflow holds,
+in your working tree and records what happened. `cargo x attest post` puts the
+recorded passes that apply on the pull request, and a requested `PR CI` run
+skips those jobs and runs the rest as before.
 
 ```sh
-cargo x attest list                                  # the checks that can be attested
-cargo x attest run web-app/test cloud-storage/check  # run them; nothing leaves the machine
-cargo x attest run all --post                        # run every check PR CI would, post the passes
+cargo x attest list --all               # the checks, and why the other jobs can't be attested
+cargo x attest run all                  # every check this branch's changes reach, less what already passed
+cargo x attest run cloud-storage/check  # or name them
+cargo x attest post                     # after the push, with the pull request open
 ```
 
-`--post` needs the commit pushed and its pull request open: it runs on the
-merge commit GitHub built for the pull request, the tree `PR CI` tests. Then add
-`run-ci` as usual. A check that fails posts no pass, so its job runs in `PR CI`,
-and a pass posted for the same commit earlier is withdrawn. `all` leaves out the
-checks `PR CI` would not run for the change. A check your machine can't run as a runner does
-is skipped with the reason: a job that reads the full history needs a clone
-that is not shallow, and the observability image needs KVM.
+Run the checks while you work, as you would `just check`. `run` posts nothing,
+and a recorded pass stays good until one of the check's inputs changes.
 
-A machine busier or slower than a runner can fail a test that passes there, on
-a timeout. That costs nothing but the attestation: the job runs in `PR CI`.
+What a pass is for:
+
+- The files the check read. A check's inputs are the paths that already decide
+  whether `PR CI` runs its job, each widened to its directory. A pass is
+  recorded for a hash of those paths in the commit you ran on.
+- Committed files. With uncommitted changes under its inputs a check still
+  runs and tells you the result, and records nothing.
+- The whole check. Where a runner lints or builds the Rust packages a pull
+  request touches, your machine takes them all, so a pass covers whatever a
+  run selects.
+
+What `post` posts and `PR CI` accepts:
+
+- `PR CI` tests GitHub's merge of your head into `main`. `post` hashes each
+  check's inputs in that merge commit and posts the passes recorded for the
+  same hash as `attested/<check>` commit statuses. `Start` computes the hash
+  again and skips the job whose status names it.
+- A commit that leaves a check's inputs alone keeps the pass: after pushing a
+  docs fix, `post` again and nothing reruns.
+- A change to an input ends the pass, whoever made it. When `main` has changed
+  one since your branch last merged it, `post` names the path. Merge `main`,
+  run the check again and post.
+- The status also names the check's fingerprint. A job whose definition
+  changed since, in the pull request or on `main`, runs on a runner.
+- Only people who can push to the repository can post a status, and only
+  same-repository pull requests have theirs read.
+- Every accepted check has one chance in ten of running on a runner anyway.
+  One that fails there fails the run, `CI gate` reads `Attested but failed
+  here: <checks>`, and the check is withdrawn for those files: nothing posted
+  for them counts again. Nothing else runs these jobs for a pull request, so
+  treat that as a defect and find why the machine and the runner disagree.
+- `CI gate` reads the statuses again when the run ends, because re-running
+  failed jobs keeps what `Start` decided. A run that relied on an attestation
+  withdrawn meanwhile fails with `No longer attested: <checks>`. Add the label
+  again.
+
+A check that fails on your machine is recorded too, and `post` withdraws a
+pass the commit carries for the same files.
 
 How a check runs:
 
-- On the commit, never the working tree: `HEAD` merged with `main`, in a
-  checkout of its own under `~/.cache/macro-attest/`. With `--post` the merge
-  is GitHub's for the pull request, and the tool stops when its own merge of
-  the two commits is a different tree; without, it is with `origin/main` now. That checkout keeps its
-  own `target` and `node_modules`, so the first run of a check is a cold build.
-- With the job's own steps, read from the generated workflow in that merge,
-  inside the repository's Nix dev shell. Steps that only keep a runner's caches
-  are skipped.
-- One at a time per clone, whichever worktree starts it; a second run waits.
+- In the working tree, in the repository's Nix dev shell, with the job's
+  environment. `target/` and `node_modules` are your own, so the first run
+  compiles with the flags CI uses.
+- A machine busier or slower than a runner can fail a test that passes there,
+  on a timeout. That costs nothing but the attestation: the job runs in
+  `PR CI`.
 
-What `PR CI` accepts:
-
-- Only people who can push to the repository can post a status, and only
-  same-repository PRs have theirs read. The newest status of a check counts.
-- The status names the job's fingerprint. A job whose definition changed since,
-  in the PR or on `main`, runs on a runner.
-- For a job `path-check` selects (Rust packages, conditional web steps), the
-  status carries a digest of the outputs it ran on. `path-check` skips the job
-  only when this run selects the same.
-- The status names the commit of `main` it was merged with. A run whose merge
-  commit holds another one runs the job: what `main` gained was not tested.
-- Statuses sit on a commit: every push needs new attestations.
-- One request in ten is an audit: it ignores every attestation and runs every
-  job the change selects. An attested check that fails there fails the run, and
-  `CI gate` reads `Attested but failed here: <checks>`. Nothing else runs these
-  jobs for a pull request, so treat that as a defect: find why the machine and
-  the runner disagree before attesting the check again. The audit withdraws
-  the attestation it saw fail and leaves an `attestation audit` status on the
-  commit, and every later run on that commit is an audit too: asking again
-  does not get a failed audit past the runner.
-- `CI gate` reads the statuses again when the run ends, because re-running
-  failed jobs keeps what `Start` decided. A run that relied on an attestation
-  withdrawn meanwhile fails with `No longer attested: <checks>`, and one that
-  another run has audited since fails with `An audit of this commit began
-  since`. Add the label again in both cases.
-
-To withdraw an attestation, post a `failure` status with the same context:
-`gh api repos/macro-inc/macro/statuses/<sha> -f state=failure -f context=attested/<check>`.
-
-The Rust `test` job, `doppler-config`, the web `build`, the functional and
-browser tests, the native checks and every macOS or Windows job can't be
-attested: they need service containers, secrets, system packages, another
-operating system, or the pull request's labels. Neither can `cargo deny`: it
-reads the advisory database of the day it runs, so a pass says nothing about
-the day `PR CI` runs. The list of checks, and how to
-add one, is in `xtask_workflows`' `attestation.rs`.
+`cargo x attest list --all` says why each other job can't be attested. A job
+needs a runner when it needs service containers, secrets, system packages,
+another operating system or the pull request's labels; when its setup rewrites
+tracked files, as the web typecheck, test and generated-code jobs do; when it
+reads the merge commit's parents; or when something outside the tree decides
+its verdict, as the advisory database does for `cargo deny`. Both lists, and
+how to move a job between them, are in `xtask_workflows`' `attestation.rs`.
 
 ## Email end-to-end suites
 

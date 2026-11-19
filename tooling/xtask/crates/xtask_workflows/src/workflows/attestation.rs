@@ -127,9 +127,9 @@ pub struct NotAttestable {
 const EVERY_RUST_PACKAGE: &[(&str, &str)] =
     &[("RUST_PACKAGES", "all"), ("CARGO_TARGET_REBUILD_ALL", "")];
 
-/// Every job that can be attested: its steps are plain scripts, it runs on
-/// Linux with nothing but the dev shell, and the tree alone decides its
-/// verdict.
+/// Every job that can be attested: its steps are plain scripts that leave
+/// tracked files as they are, it runs on Linux with nothing but the dev
+/// shell, and the tree alone decides its verdict.
 pub const CHECKS: &[Check] = &[
     Check {
         call: "cloud-storage",
@@ -183,12 +183,6 @@ pub const CHECKS: &[Check] = &[
         call: "conventions",
         job: "ast-grep",
         steps: &["Run ast-grep"],
-        local_env: &[],
-    },
-    Check {
-        call: "workspace-dependencies",
-        job: "dependency-check",
-        steps: &["install tool", "check"],
         local_env: &[],
     },
     Check {
@@ -320,6 +314,11 @@ pub const NOT_ATTESTABLE: &[NotAttestable] = &[
         call: "cargo-deny",
         job: "cargo-deny",
         why: "reads the advisory database of the day it runs, so the tree alone does not decide its verdict",
+    },
+    NotAttestable {
+        call: "workspace-dependencies",
+        job: "dependency-check",
+        why: "its script edits `Cargo.toml` in place, which a working tree can't take",
     },
     NotAttestable {
         call: "node-modules-nix",

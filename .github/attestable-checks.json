@@ -364,43 +364,6 @@
       "call": "workspace-dependencies",
       "dev_shell": "default",
       "env": {},
-      "fingerprint": "cf70cc5e3606b4b4",
-      "id": "workspace-dependencies/dependency-check",
-      "inputs": [
-        ".config/hakari.toml",
-        ".github/workspace-dep-closures.json",
-        "Cargo.lock",
-        "Cargo.toml",
-        "crates",
-        "flake.lock",
-        "flake.nix",
-        "services",
-        "tooling/xtask"
-      ],
-      "job": "dependency-check",
-      "name": "Workspace dependencies / dependency-check",
-      "steps": [
-        {
-          "env": {},
-          "name": "install tool",
-          "pipefail": false,
-          "run": "cargo install cargo-workspace-dependency-checker@1.0.1",
-          "working_directory": null
-        },
-        {
-          "env": {},
-          "name": "check",
-          "pipefail": false,
-          "run": "# workspace-hack (generated, see xtask) re-declares third-party deps\n# with explicit versions by design — that is how it pins union\n# features. Drop it from the member list so this check only polices\n# human-written crates for duplicate dependencies.\nsed -i '/^  \"crates\\/workspace-hack\",$/d' Cargo.toml\ncargo-workspace-dependency-checker\n",
-          "working_directory": null
-        }
-      ],
-      "workflow": "cargo_workspace_dependency_check.yml"
-    },
-    {
-      "call": "workspace-dependencies",
-      "dev_shell": "default",
-      "env": {},
       "fingerprint": "79aa4e26dd8f4019",
       "id": "workspace-dependencies/hakari-and-dep-closures",
       "inputs": [
@@ -679,6 +642,10 @@
     {
       "id": "cargo-deny/cargo-deny",
       "why": "reads the advisory database of the day it runs, so the tree alone does not decide its verdict"
+    },
+    {
+      "id": "workspace-dependencies/dependency-check",
+      "why": "its script edits `Cargo.toml` in place, which a working tree can't take"
     },
     {
       "id": "node-modules-nix/check-darwin-node-modules-nix",

@@ -65,19 +65,23 @@ releases fail on a Projects (classic) error before adding the label.
 
 ## Attest what your machine already ran
 
-A check you run on your own machine with `cargo x attest` is skipped by the
-next requested run, which saves its runner. Use it for the checks your change
-makes expensive, at the same moments you would run CI:
+A check your machine passed on the same files is skipped by the next requested
+run, which saves its runner. Run the checks while you work, and post what
+applies once the commit is pushed:
 
 ```sh
-cargo x attest list                          # what can be attested
-cargo x attest run <check>... --post         # after the push, with the PR open, before the label
+cargo x attest run all        # every check your branch's changes reach; posts nothing
+cargo x attest post           # after the push, with the PR open, before the label
 ```
 
-It runs the pull request's merge commit in a checkout of its own, not your
-working tree, and takes as long as the job does on a cold cache the first time.
-Never post an `attested/*` status any other way: the status says the tool ran
-the job on that commit, and one request in ten runs it on a runner too.
+`run` works in your working tree, on committed files, and records each result
+for the files the check read. `post` posts the passes recorded for the files
+`PR CI` will test, and names the path when `main` or a commit has changed one
+since: merge `main`, run that check again and post. After a push that leaves a
+check's inputs alone, `post` again without running anything.
+Never post an `attested/*` status any other way: it says this check passed on
+those files, and each attested check has one chance in ten of running on a
+runner anyway.
 [CI on pull requests](../../../docs/development/ci.md#attesting-checks-from-your-machine)
 has what `PR CI` accepts and which jobs can't be attested.
 
@@ -95,8 +99,8 @@ To read the state once, look at the `CI gate` row of `gh pr checks <pr>`:
 | pending, `Running on <sha>` | A run is going | Wait |
 | pass, `Passed on <sha>` | Every check passed or was path-skipped | Done |
 | pass, `Passed on <sha>, <n> attested: <checks>` | The same, with those checks taken from attestations | Done |
-| fail, `Attested but failed here: <checks>. Failed: <jobs>` | An audit ran the attested checks on runners, and one failed | Fix the failure; find why your machine passed it before attesting that check again. Every later run on this commit is an audit too |
-| fail, `No longer attested: <checks>` or `An audit of this commit began since` | The run skipped jobs on attestations that were withdrawn, replaced or put under audit before it ended | Add the label again |
+| fail, `Attested but failed here: <checks>. Failed: <jobs>` | An attested check was drawn to run on a runner too, and failed there | Fix the failure; find why your machine passed it. The check is withdrawn for those files, so it runs on a runner until its inputs change |
+| fail, `No longer attested: <checks>` | The run skipped jobs on attestations that were withdrawn before it ended | Add the label again |
 | fail, `Failed: <jobs>` | Those called workflows failed | Open the linked run, fix, push, run again |
 | fail, `The PR moved on ...` or `The merge commit did not include ...` | Labelled too soon after a push | Add the label again |
 | fail, `PR CI can't start: ...` | The PR conflicts with `main`, or was last pushed before `PR CI` existed | Merge `main` in, push, add the label again |

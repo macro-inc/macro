@@ -65,6 +65,9 @@ enum Action {
         /// branch changes.
         #[arg(required = true)]
         checks: Vec<String>,
+        /// Run a check even when it already passed on these files.
+        #[arg(long)]
+        again: bool,
         /// The branch the pull request merges into.
         #[arg(long, default_value = "main")]
         base: String,
@@ -219,7 +222,7 @@ fn requested<'a>(
     Ok(changed)
 }
 
-fn run(asked: &[String], base: &str) -> Result<bool, Report> {
+fn run(asked: &[String], again: bool, base: &str) -> Result<bool, Report> {
     let repository = Repository::here()?;
     let head = git(&repository.root, &["rev-parse", "HEAD"])?;
     let manifest = repository.manifest_at("HEAD")?;
@@ -237,6 +240,22 @@ fn run(asked: &[String], base: &str) -> Result<bool, Report> {
     for check in checks {
         let before = inputs::uncommitted(&repository.root, &check.inputs)?;
         let source = repository.source(&head, check)?;
+
+        // The point of a receipt: the same check on the same files has
+        // nothing new to say.
+        let passed_before = before.is_empty()
+            && receipts
+                .find(&check.id, &check.fingerprint, &source)
+                .is_some_and(|receipt| receipt.passed);
+        if passed_before && !again {
+            let line = format!(
+                "kept  {}: already passed on these files ({source})",
+                check.id
+            );
+            eprintln!("{line}");
+            summary.push(line);
+            continue;
+        }
 
         eprintln!("── {}", check.id);
         let line = match machine.run(check)? {
@@ -401,7 +420,11 @@ fn post(base: &str) -> Result<(), Report> {
 fn main() -> ExitCode {
     let outcome = match Cli::parse().command {
         Action::List { all } => list(all).map(|()| true),
-        Action::Run { checks, base } => run(&checks, &base),
+        Action::Run {
+            checks,
+            again,
+            base,
+        } => run(&checks, again, &base),
         Action::Post { base } => post(&base).map(|()| true),
     };
 
