@@ -218,11 +218,12 @@ impl Session<'_> {
 }
 
 /// Do what one verdict calls for on the commit, and say it in a line.
-/// `posted` holds the commit's newest statuses when the run posts.
+/// A pass posted for the commit earlier, from this clone or another, no
+/// longer holds for a check that fails now: the statuses are read then.
 fn settle(
     checkout: &Checkout,
     manifest: &Manifest,
-    posted: Option<&BTreeMap<String, String>>,
+    posting: bool,
     check: &Check,
     verdict: &Verdict,
 ) -> Result<String, Report> {
@@ -243,9 +244,10 @@ fn settle(
             format!("skip  {}: {why}; its job will run in PR CI", check.id)
         }
         Verdict::Failed { step } => {
-            let attested = posted
-                .and_then(|posted| posted.get(&context.to_lowercase()))
-                .is_some_and(|state| state == "success");
+            let attested = posting
+                && github::newest_statuses(&checkout.repository, &checkout.head)?
+                    .get(&context.to_lowercase())
+                    .is_some_and(|state| state == "success");
             if attested {
                 post(
                     "failure",
@@ -262,7 +264,7 @@ fn settle(
                 }
             )
         }
-        Verdict::Passed { description } if posted.is_some() => {
+        Verdict::Passed { description } if posting => {
             post("success", description)?;
             format!(
                 "pass  {}: posted {context} on {}",
@@ -344,17 +346,6 @@ fn run(asked: &[String], post_statuses: bool, base_branch: &str) -> Result<bool,
         base: checkout.base.clone(),
     };
 
-    // A pass posted for this commit earlier no longer holds for a check that
-    // fails now.
-    let posted = if post_statuses {
-        Some(github::newest_statuses(
-            &checkout.repository,
-            &checkout.head,
-        )?)
-    } else {
-        None
-    };
-
     // Each check is settled as it ends: a later check that stops the run must
     // not leave a failed check's earlier pass in force.
     let mut all_passed = true;
@@ -362,7 +353,7 @@ fn run(asked: &[String], post_statuses: bool, base_branch: &str) -> Result<bool,
     for check in checks {
         let verdict = session.run(check)?;
         all_passed &= !matches!(verdict, Verdict::Failed { .. });
-        let line = settle(&checkout, &manifest, posted.as_ref(), check, &verdict)?;
+        let line = settle(&checkout, &manifest, post_statuses, check, &verdict)?;
         eprintln!("{line}");
         summary.push(line);
     }

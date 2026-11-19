@@ -44,6 +44,7 @@ const GIT_LOCATION: &[&str] = &[
     "GIT_ALTERNATE_OBJECT_DIRECTORIES",
     "GIT_NAMESPACE",
     "GIT_PREFIX",
+    "GIT_CONFIG",
     "GIT_SHALLOW_FILE",
     "GIT_GRAFT_FILE",
     "GIT_REPLACE_REF_BASE",
@@ -146,11 +147,12 @@ fn initialize(dir: &Path, common_dir: &Path, remote_url: &str) -> Result<(), Rep
         format!("{}\n", common_dir.join("objects").display()),
     )
     .context("could not point the checkout at the source repository's objects")?;
-    git(dir, &["config", "remote.origin.url", remote_url])?;
+    git(dir, &["config", "--local", "remote.origin.url", remote_url])?;
     git(
         dir,
         &[
             "config",
+            "--local",
             "remote.origin.fetch",
             "+refs/heads/*:refs/remotes/origin/*",
         ],
@@ -241,11 +243,20 @@ pub fn prepare(source: &Path, base_branch: &str, base: Base) -> Result<Checkout,
     }
 
     let repository = repository_of(&remote_url)?;
-    // Fetched in the source, as `git fetch` there would: the checkout reads
-    // its objects from it. `FETCH_HEAD`, because a clone that tracks one
-    // branch has no `origin/<base>` to update.
-    git(source, &["fetch", "--quiet", "origin", base_branch])?;
-    let tip = git(source, &["rev-parse", "FETCH_HEAD"])?;
+    // The tip is asked of the remote and fetched by name: a clone that tracks
+    // one branch has no `origin/<base>`, and `FETCH_HEAD` is whatever the last
+    // fetch in this worktree left, which may not be this one. Fetched in the
+    // source, as `git fetch` there would: the checkout reads its objects.
+    let listed = git(
+        source,
+        &["ls-remote", "origin", &format!("refs/heads/{base_branch}")],
+    )?;
+    let tip = listed
+        .split_whitespace()
+        .next()
+        .context(format!("the remote has no branch {base_branch}"))?
+        .to_owned();
+    git(source, &["fetch", "--quiet", "origin", &tip])?;
     let github_merge = match base {
         Base::Tip => None,
         Base::PullRequest => Some(github::pull_request_merge(&repository, &head, base_branch)?),

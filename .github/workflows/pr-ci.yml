@@ -316,17 +316,23 @@ jobs:
         }
 
         /// Each job of a run as its newest attempt left it. A re-run of some jobs
-        /// keeps the others' results from the attempt that ran them. Two records of
-        /// a job that no attempt number tells apart keep the one that did not pass:
-        /// the order GitHub lists them in is not promised.
+        /// keeps the others' results from the attempt that ran them. Of two records
+        /// of a job that no attempt number tells apart, the one that vouches for
+        /// less is kept, whatever order GitHub lists them in: not passed, then
+        /// skipped, then passed.
         export function newestJobs(jobs: RunJob[]): RunJob[] {
-          const passed = (job: RunJob) => job.conclusion === 'success' || job.conclusion === 'skipped';
+          const vouches = (job: RunJob) =>
+            job.conclusion === 'success' ? 2 : job.conclusion === 'skipped' ? 1 : 0;
           const newest = new Map<string, RunJob>();
           for (const job of jobs) {
             const known = newest.get(job.name);
             const attempt = job.run_attempt ?? 0;
             const knownAttempt = known?.run_attempt ?? 0;
-            if (!known || attempt > knownAttempt || (attempt === knownAttempt && passed(known))) {
+            if (
+              !known ||
+              attempt > knownAttempt ||
+              (attempt === knownAttempt && vouches(job) < vouches(known))
+            ) {
               newest.set(job.name, job);
             }
           }
@@ -785,8 +791,18 @@ jobs:
           if (entries.length + audited.length > 0) {
             // The gate must end on a verdict. A failing one stands as it is; a
             // passing one that took checks on trust can't be confirmed.
-            outcome = await attestedOutcome(head, verdict, entries, audited).catch((error) => {
+            outcome = await attestedOutcome(head, verdict, entries, audited).catch(async (error) => {
               console.log(`::warning::Could not read this run's jobs: ${error}`);
+              // What the audit found is unknown, so the commit stays under audit.
+              if (audited.length > 0) {
+                await postStatus(
+                  head,
+                  env('AUDIT_CONTEXT'),
+                  'success',
+                  'Runs on this commit check its attestations on runners',
+                  env('RUN_URL'),
+                ).catch(() => {});
+              }
               return verdict.state === 'success' && entries.length > 0
                 ? {
                     state: 'failure' as const,
@@ -1170,17 +1186,23 @@ jobs:
         }
 
         /// Each job of a run as its newest attempt left it. A re-run of some jobs
-        /// keeps the others' results from the attempt that ran them. Two records of
-        /// a job that no attempt number tells apart keep the one that did not pass:
-        /// the order GitHub lists them in is not promised.
+        /// keeps the others' results from the attempt that ran them. Of two records
+        /// of a job that no attempt number tells apart, the one that vouches for
+        /// less is kept, whatever order GitHub lists them in: not passed, then
+        /// skipped, then passed.
         export function newestJobs(jobs: RunJob[]): RunJob[] {
-          const passed = (job: RunJob) => job.conclusion === 'success' || job.conclusion === 'skipped';
+          const vouches = (job: RunJob) =>
+            job.conclusion === 'success' ? 2 : job.conclusion === 'skipped' ? 1 : 0;
           const newest = new Map<string, RunJob>();
           for (const job of jobs) {
             const known = newest.get(job.name);
             const attempt = job.run_attempt ?? 0;
             const knownAttempt = known?.run_attempt ?? 0;
-            if (!known || attempt > knownAttempt || (attempt === knownAttempt && passed(known))) {
+            if (
+              !known ||
+              attempt > knownAttempt ||
+              (attempt === knownAttempt && vouches(job) < vouches(known))
+            ) {
               newest.set(job.name, job);
             }
           }
@@ -1639,8 +1661,18 @@ jobs:
           if (entries.length + audited.length > 0) {
             // The gate must end on a verdict. A failing one stands as it is; a
             // passing one that took checks on trust can't be confirmed.
-            outcome = await attestedOutcome(head, verdict, entries, audited).catch((error) => {
+            outcome = await attestedOutcome(head, verdict, entries, audited).catch(async (error) => {
               console.log(`::warning::Could not read this run's jobs: ${error}`);
+              // What the audit found is unknown, so the commit stays under audit.
+              if (audited.length > 0) {
+                await postStatus(
+                  head,
+                  env('AUDIT_CONTEXT'),
+                  'success',
+                  'Runs on this commit check its attestations on runners',
+                  env('RUN_URL'),
+                ).catch(() => {});
+              }
               return verdict.state === 'success' && entries.length > 0
                 ? {
                     state: 'failure' as const,
@@ -1740,7 +1772,7 @@ jobs:
         SAME_REPO: ${{ github.event.pull_request.head.repo.full_name == github.repository }}
         RUN_URL: ${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}
         MERGE_SHA: ${{ github.sha }}
-        ATTESTABLE_CHECKS: '[{"fingerprint":"b38d7c37ad118118","id":"cloud-storage/check","selected":true},{"fingerprint":"55edf8296919c3e7","id":"cloud-storage/build-service-bins","selected":true},{"fingerprint":"8f1e4eb74c38a703","id":"cloud-storage/graphql-schema-compat","selected":true},{"fingerprint":"31d70f45dd208042","id":"web-app/typescript","selected":true},{"fingerprint":"41cc8313cb599742","id":"web-app/generated-code","selected":true},{"fingerprint":"0497cd2ef9db3066","id":"web-app/biome-check","selected":true},{"fingerprint":"740c7186273ed5cd","id":"web-app/test","selected":true},{"fingerprint":"03e9d70e92bf9827","id":"web-app/cycles","selected":true},{"fingerprint":"34e2c148759cb623","id":"infra/biome-check","selected":false},{"fingerprint":"562033a58f014aad","id":"infra/check","selected":false},{"fingerprint":"5b669fc64fc53477","id":"conventions/ast-grep","selected":false},{"fingerprint":"0104d4dbfae83eee","id":"workspace-dependencies/dependency-check","selected":false},{"fingerprint":"1c7d2e8d01111e6e","id":"workspace-dependencies/hakari-and-dep-closures","selected":false},{"fingerprint":"c4a0806cd391570e","id":"generated-workflows/check-workflows","selected":false},{"fingerprint":"2b5862faacd585ef","id":"node-modules-nix/check-linux-node-modules-nix","selected":false},{"fingerprint":"4e8720c0910fa094","id":"sdk/check-package","selected":false},{"fingerprint":"55845a34f6912e2d","id":"observability-image/build-image","selected":false},{"fingerprint":"3b3764213d51cdaf","id":"macrod-update/linux","selected":false}]'
+        ATTESTABLE_CHECKS: '[{"fingerprint":"065ba1daef305049","id":"cloud-storage/check","selected":true},{"fingerprint":"fec49558ae8bcac7","id":"cloud-storage/build-service-bins","selected":true},{"fingerprint":"203eac08236dd412","id":"cloud-storage/graphql-schema-compat","selected":true},{"fingerprint":"31d70f45dd208042","id":"web-app/typescript","selected":true},{"fingerprint":"41cc8313cb599742","id":"web-app/generated-code","selected":true},{"fingerprint":"0497cd2ef9db3066","id":"web-app/biome-check","selected":true},{"fingerprint":"740c7186273ed5cd","id":"web-app/test","selected":true},{"fingerprint":"03e9d70e92bf9827","id":"web-app/cycles","selected":true},{"fingerprint":"34e2c148759cb623","id":"infra/biome-check","selected":false},{"fingerprint":"562033a58f014aad","id":"infra/check","selected":false},{"fingerprint":"5b669fc64fc53477","id":"conventions/ast-grep","selected":false},{"fingerprint":"0104d4dbfae83eee","id":"workspace-dependencies/dependency-check","selected":false},{"fingerprint":"1c7d2e8d01111e6e","id":"workspace-dependencies/hakari-and-dep-closures","selected":false},{"fingerprint":"c4a0806cd391570e","id":"generated-workflows/check-workflows","selected":false},{"fingerprint":"2b5862faacd585ef","id":"node-modules-nix/check-linux-node-modules-nix","selected":false},{"fingerprint":"4e8720c0910fa094","id":"sdk/check-package","selected":false},{"fingerprint":"55845a34f6912e2d","id":"observability-image/build-image","selected":false},{"fingerprint":"3b3764213d51cdaf","id":"macrod-update/linux","selected":false}]'
         ATTESTED_PREFIX: attested/
         AUDIT_CONTEXT: attestation audit
         AUDIT_ONE_IN: '10'
@@ -2235,17 +2267,23 @@ jobs:
         }
 
         /// Each job of a run as its newest attempt left it. A re-run of some jobs
-        /// keeps the others' results from the attempt that ran them. Two records of
-        /// a job that no attempt number tells apart keep the one that did not pass:
-        /// the order GitHub lists them in is not promised.
+        /// keeps the others' results from the attempt that ran them. Of two records
+        /// of a job that no attempt number tells apart, the one that vouches for
+        /// less is kept, whatever order GitHub lists them in: not passed, then
+        /// skipped, then passed.
         export function newestJobs(jobs: RunJob[]): RunJob[] {
-          const passed = (job: RunJob) => job.conclusion === 'success' || job.conclusion === 'skipped';
+          const vouches = (job: RunJob) =>
+            job.conclusion === 'success' ? 2 : job.conclusion === 'skipped' ? 1 : 0;
           const newest = new Map<string, RunJob>();
           for (const job of jobs) {
             const known = newest.get(job.name);
             const attempt = job.run_attempt ?? 0;
             const knownAttempt = known?.run_attempt ?? 0;
-            if (!known || attempt > knownAttempt || (attempt === knownAttempt && passed(known))) {
+            if (
+              !known ||
+              attempt > knownAttempt ||
+              (attempt === knownAttempt && vouches(job) < vouches(known))
+            ) {
               newest.set(job.name, job);
             }
           }
@@ -2704,8 +2742,18 @@ jobs:
           if (entries.length + audited.length > 0) {
             // The gate must end on a verdict. A failing one stands as it is; a
             // passing one that took checks on trust can't be confirmed.
-            outcome = await attestedOutcome(head, verdict, entries, audited).catch((error) => {
+            outcome = await attestedOutcome(head, verdict, entries, audited).catch(async (error) => {
               console.log(`::warning::Could not read this run's jobs: ${error}`);
+              // What the audit found is unknown, so the commit stays under audit.
+              if (audited.length > 0) {
+                await postStatus(
+                  head,
+                  env('AUDIT_CONTEXT'),
+                  'success',
+                  'Runs on this commit check its attestations on runners',
+                  env('RUN_URL'),
+                ).catch(() => {});
+              }
               return verdict.state === 'success' && entries.length > 0
                 ? {
                     state: 'failure' as const,
@@ -2808,7 +2856,7 @@ jobs:
         ATTESTED: ${{ needs.start.outputs.attested }}
         AUDITED: ${{ needs.start.outputs.audited }}
         BASE_SHA: ${{ needs.start.outputs.base }}
-        ATTESTABLE_CHECKS: '[{"fingerprint":"b38d7c37ad118118","id":"cloud-storage/check","selected":true},{"fingerprint":"55edf8296919c3e7","id":"cloud-storage/build-service-bins","selected":true},{"fingerprint":"8f1e4eb74c38a703","id":"cloud-storage/graphql-schema-compat","selected":true},{"fingerprint":"31d70f45dd208042","id":"web-app/typescript","selected":true},{"fingerprint":"41cc8313cb599742","id":"web-app/generated-code","selected":true},{"fingerprint":"0497cd2ef9db3066","id":"web-app/biome-check","selected":true},{"fingerprint":"740c7186273ed5cd","id":"web-app/test","selected":true},{"fingerprint":"03e9d70e92bf9827","id":"web-app/cycles","selected":true},{"fingerprint":"34e2c148759cb623","id":"infra/biome-check","selected":false},{"fingerprint":"562033a58f014aad","id":"infra/check","selected":false},{"fingerprint":"5b669fc64fc53477","id":"conventions/ast-grep","selected":false},{"fingerprint":"0104d4dbfae83eee","id":"workspace-dependencies/dependency-check","selected":false},{"fingerprint":"1c7d2e8d01111e6e","id":"workspace-dependencies/hakari-and-dep-closures","selected":false},{"fingerprint":"c4a0806cd391570e","id":"generated-workflows/check-workflows","selected":false},{"fingerprint":"2b5862faacd585ef","id":"node-modules-nix/check-linux-node-modules-nix","selected":false},{"fingerprint":"4e8720c0910fa094","id":"sdk/check-package","selected":false},{"fingerprint":"55845a34f6912e2d","id":"observability-image/build-image","selected":false},{"fingerprint":"3b3764213d51cdaf","id":"macrod-update/linux","selected":false}]'
+        ATTESTABLE_CHECKS: '[{"fingerprint":"065ba1daef305049","id":"cloud-storage/check","selected":true},{"fingerprint":"fec49558ae8bcac7","id":"cloud-storage/build-service-bins","selected":true},{"fingerprint":"203eac08236dd412","id":"cloud-storage/graphql-schema-compat","selected":true},{"fingerprint":"31d70f45dd208042","id":"web-app/typescript","selected":true},{"fingerprint":"41cc8313cb599742","id":"web-app/generated-code","selected":true},{"fingerprint":"0497cd2ef9db3066","id":"web-app/biome-check","selected":true},{"fingerprint":"740c7186273ed5cd","id":"web-app/test","selected":true},{"fingerprint":"03e9d70e92bf9827","id":"web-app/cycles","selected":true},{"fingerprint":"34e2c148759cb623","id":"infra/biome-check","selected":false},{"fingerprint":"562033a58f014aad","id":"infra/check","selected":false},{"fingerprint":"5b669fc64fc53477","id":"conventions/ast-grep","selected":false},{"fingerprint":"0104d4dbfae83eee","id":"workspace-dependencies/dependency-check","selected":false},{"fingerprint":"1c7d2e8d01111e6e","id":"workspace-dependencies/hakari-and-dep-closures","selected":false},{"fingerprint":"c4a0806cd391570e","id":"generated-workflows/check-workflows","selected":false},{"fingerprint":"2b5862faacd585ef","id":"node-modules-nix/check-linux-node-modules-nix","selected":false},{"fingerprint":"4e8720c0910fa094","id":"sdk/check-package","selected":false},{"fingerprint":"55845a34f6912e2d","id":"observability-image/build-image","selected":false},{"fingerprint":"3b3764213d51cdaf","id":"macrod-update/linux","selected":false}]'
         ATTESTED_PREFIX: attested/
         AUDIT_CONTEXT: attestation audit
         GATE_CHECKS: '[{"id":"cloud-storage/check","matrix":false,"name":"Cloud Storage / check"},{"id":"cloud-storage/build-service-bins","matrix":false,"name":"Cloud Storage / build-service-bins"},{"id":"cloud-storage/graphql-schema-compat","matrix":false,"name":"Cloud Storage / graphql-schema-compat"},{"id":"web-app/typescript","matrix":false,"name":"Web App / Typecheck"},{"id":"web-app/generated-code","matrix":false,"name":"Web App / Generated Code Check"},{"id":"web-app/biome-check","matrix":false,"name":"Web App / Biome Check"},{"id":"web-app/test","matrix":true,"name":"Web App / Test ("},{"id":"web-app/cycles","matrix":false,"name":"Web App / Cycles Import Check"},{"id":"infra/biome-check","matrix":false,"name":"Infra / Biome Check"},{"id":"infra/check","matrix":false,"name":"Infra / check"},{"id":"conventions/ast-grep","matrix":false,"name":"Conventions / ast-grep Conventions"},{"id":"workspace-dependencies/dependency-check","matrix":false,"name":"Workspace dependencies / dependency-check"},{"id":"workspace-dependencies/hakari-and-dep-closures","matrix":false,"name":"Workspace dependencies / hakari-and-dep-closures"},{"id":"generated-workflows/check-workflows","matrix":false,"name":"Generated workflows / check-workflows"},{"id":"node-modules-nix/check-linux-node-modules-nix","matrix":false,"name":"node_modules nix / check Linux node_modules nix"},{"id":"sdk/check-package","matrix":false,"name":"SDK / SDK Package Check"},{"id":"observability-image/build-image","matrix":false,"name":"Observability image / Build observability image"},{"id":"macrod-update/linux","matrix":false,"name":"macrod update / macrod update (linux)"}]'

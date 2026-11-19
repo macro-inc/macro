@@ -128,7 +128,7 @@ jobs:
         fi
 
         printf '%s\n' "$compare_rev" > "$RUNNER_TEMP/base-revision"
-        git diff --name-only --no-renames "$compare_rev" "$GITHUB_SHA" > "$RUNNER_TEMP/changed-files"
+        git -c core.quotePath=false diff --name-only --no-renames "$compare_rev" "$GITHUB_SHA" > "$RUNNER_TEMP/changed-files"
       shell: bash
     - name: Mount nextest-filter and cargo registry cache
       if: steps.filter.outputs.should_run == 'true' && ((github.event_name != 'pull_request' && github.event_name != 'pull_request_target') || github.event.pull_request.head.repo.full_name == github.repository)
@@ -673,7 +673,7 @@ jobs:
         fi
 
         printf '%s\n' "$compare_rev" > "$RUNNER_TEMP/base-revision"
-        git diff --name-only --no-renames "$compare_rev" "$GITHUB_SHA" > "$RUNNER_TEMP/changed-files"
+        git -c core.quotePath=false diff --name-only --no-renames "$compare_rev" "$GITHUB_SHA" > "$RUNNER_TEMP/changed-files"
       shell: bash
     - name: Mount Namespace cache volume
       uses: namespacelabs/nscloud-cache-action@15799a6b54e5765f85b2aac25b3f0df43ed571c0

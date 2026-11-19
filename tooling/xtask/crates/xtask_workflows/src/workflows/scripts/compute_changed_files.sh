@@ -34,4 +34,4 @@ else
 fi
 
 printf '%s\n' "$compare_rev" > "$RUNNER_TEMP/base-revision"
-git diff --name-only --no-renames "$compare_rev" "$GITHUB_SHA" > "$RUNNER_TEMP/changed-files"
+git -c core.quotePath=false diff --name-only --no-renames "$compare_rev" "$GITHUB_SHA" > "$RUNNER_TEMP/changed-files"

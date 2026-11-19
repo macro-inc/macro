@@ -490,6 +490,14 @@ describe('newestJobs', () => {
     assert.deepEqual(newestJobs([passed, failed]), [failed]);
   });
 
+  test('a job listed as skipped and as passed counts as skipped, in either order', () => {
+    const skipped = { name: 'Cloud Storage / check', conclusion: 'skipped' };
+    const passed = { name: 'Cloud Storage / check', conclusion: 'success' };
+
+    assert.deepEqual(newestJobs([skipped, passed]), [skipped]);
+    assert.deepEqual(newestJobs([passed, skipped]), [skipped]);
+  });
+
   test('an audit still names its failure when only the gate runs again', () => {
     const jobs = newestJobs([
       { name: 'Web App / Test (2/6)', conclusion: 'failure', run_attempt: 1 },

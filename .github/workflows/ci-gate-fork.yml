@@ -307,17 +307,23 @@ jobs:
         }
 
         /// Each job of a run as its newest attempt left it. A re-run of some jobs
-        /// keeps the others' results from the attempt that ran them. Two records of
-        /// a job that no attempt number tells apart keep the one that did not pass:
-        /// the order GitHub lists them in is not promised.
+        /// keeps the others' results from the attempt that ran them. Of two records
+        /// of a job that no attempt number tells apart, the one that vouches for
+        /// less is kept, whatever order GitHub lists them in: not passed, then
+        /// skipped, then passed.
         export function newestJobs(jobs: RunJob[]): RunJob[] {
-          const passed = (job: RunJob) => job.conclusion === 'success' || job.conclusion === 'skipped';
+          const vouches = (job: RunJob) =>
+            job.conclusion === 'success' ? 2 : job.conclusion === 'skipped' ? 1 : 0;
           const newest = new Map<string, RunJob>();
           for (const job of jobs) {
             const known = newest.get(job.name);
             const attempt = job.run_attempt ?? 0;
             const knownAttempt = known?.run_attempt ?? 0;
-            if (!known || attempt > knownAttempt || (attempt === knownAttempt && passed(known))) {
+            if (
+              !known ||
+              attempt > knownAttempt ||
+              (attempt === knownAttempt && vouches(job) < vouches(known))
+            ) {
               newest.set(job.name, job);
             }
           }
@@ -776,8 +782,18 @@ jobs:
           if (entries.length + audited.length > 0) {
             // The gate must end on a verdict. A failing one stands as it is; a
             // passing one that took checks on trust can't be confirmed.
-            outcome = await attestedOutcome(head, verdict, entries, audited).catch((error) => {
+            outcome = await attestedOutcome(head, verdict, entries, audited).catch(async (error) => {
               console.log(`::warning::Could not read this run's jobs: ${error}`);
+              // What the audit found is unknown, so the commit stays under audit.
+              if (audited.length > 0) {
+                await postStatus(
+                  head,
+                  env('AUDIT_CONTEXT'),
+                  'success',
+                  'Runs on this commit check its attestations on runners',
+                  env('RUN_URL'),
+                ).catch(() => {});
+              }
               return verdict.state === 'success' && entries.length > 0
                 ? {
                     state: 'failure' as const,
@@ -1170,17 +1186,23 @@ jobs:
         }
 
         /// Each job of a run as its newest attempt left it. A re-run of some jobs
-        /// keeps the others' results from the attempt that ran them. Two records of
-        /// a job that no attempt number tells apart keep the one that did not pass:
-        /// the order GitHub lists them in is not promised.
+        /// keeps the others' results from the attempt that ran them. Of two records
+        /// of a job that no attempt number tells apart, the one that vouches for
+        /// less is kept, whatever order GitHub lists them in: not passed, then
+        /// skipped, then passed.
         export function newestJobs(jobs: RunJob[]): RunJob[] {
-          const passed = (job: RunJob) => job.conclusion === 'success' || job.conclusion === 'skipped';
+          const vouches = (job: RunJob) =>
+            job.conclusion === 'success' ? 2 : job.conclusion === 'skipped' ? 1 : 0;
           const newest = new Map<string, RunJob>();
           for (const job of jobs) {
             const known = newest.get(job.name);
             const attempt = job.run_attempt ?? 0;
             const knownAttempt = known?.run_attempt ?? 0;
-            if (!known || attempt > knownAttempt || (attempt === knownAttempt && passed(known))) {
+            if (
+              !known ||
+              attempt > knownAttempt ||
+              (attempt === knownAttempt && vouches(job) < vouches(known))
+            ) {
               newest.set(job.name, job);
             }
           }
@@ -1639,8 +1661,18 @@ jobs:
           if (entries.length + audited.length > 0) {
             // The gate must end on a verdict. A failing one stands as it is; a
             // passing one that took checks on trust can't be confirmed.
-            outcome = await attestedOutcome(head, verdict, entries, audited).catch((error) => {
+            outcome = await attestedOutcome(head, verdict, entries, audited).catch(async (error) => {
               console.log(`::warning::Could not read this run's jobs: ${error}`);
+              // What the audit found is unknown, so the commit stays under audit.
+              if (audited.length > 0) {
+                await postStatus(
+                  head,
+                  env('AUDIT_CONTEXT'),
+                  'success',
+                  'Runs on this commit check its attestations on runners',
+                  env('RUN_URL'),
+                ).catch(() => {});
+              }
               return verdict.state === 'success' && entries.length > 0
                 ? {
                     state: 'failure' as const,

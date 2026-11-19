@@ -304,6 +304,11 @@ impl Machine<'_> {
             ));
         }
 
+        // Before the dev shell is read: a job before this one may have left
+        // the flake's files changed.
+        if !matches!(plan, Plan::FiltersOnly) {
+            (self.fresh_checkout)()?;
+        }
         let dev_env = match plan {
             Plan::FiltersOnly => None,
             _ => {
@@ -317,8 +322,8 @@ impl Machine<'_> {
         };
 
         let mut outputs = Outputs::new();
-        for matrix in matrix_rows(job)? {
-            if !matches!(plan, Plan::FiltersOnly) {
+        for (row, matrix) in matrix_rows(job)?.into_iter().enumerate() {
+            if row > 0 && !matches!(plan, Plan::FiltersOnly) {
                 (self.fresh_checkout)()?;
             }
             let mut shared = Shared {
@@ -596,14 +601,25 @@ impl Machine<'_> {
         let read = |suffix: &str| -> Result<String, Report> {
             Ok(std::fs::read_to_string(file(suffix)).context("could not read a step's files")?)
         };
-        let outputs: Outputs = file_commands::parse(&read("output")?)?
-            .into_iter()
-            .collect();
-        shared.env.extend(file_commands::parse(&read("env")?)?);
+        // A runner fails a step whose files it can't read, so this is the
+        // step's failure and not the tool's.
+        let handed = file_commands::parse(&read("output")?)
+            .and_then(|outputs| Ok((outputs, file_commands::parse(&read("env")?)?)));
+        let (outputs, env) = match handed {
+            Ok(handed) => handed,
+            Err(report) => {
+                eprintln!("`{name}` wrote a file a runner would refuse: {report}");
+                return Ok(Record {
+                    outputs: Outputs::new(),
+                    outcome: "failure",
+                });
+            }
+        };
+        shared.env.extend(env);
         shared.path.extend(read("path")?.lines().map(str::to_owned));
 
         Ok(Record {
-            outputs,
+            outputs: outputs.into_iter().collect(),
             outcome: if status.success() {
                 "success"
             } else {

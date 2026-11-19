@@ -97,6 +97,10 @@ jobs:
     steps:
     - name: test
       run: "true"
+  unclosed:
+    steps:
+    - name: half a block
+      run: printf 'result<<EOF\nok\n' >> "$GITHUB_OUTPUT"
   switched-off:
     steps:
     - name: off
@@ -346,6 +350,20 @@ fn every_matrix_row_starts_from_a_fresh_checkout() {
 
     assert_eq!(rows.get(), 3);
     assert_eq!(fixture.read("shards"), "3/3\n");
+}
+
+/// A runner fails the step; a tool error here would stop the run before the
+/// check's earlier pass is withdrawn.
+#[test]
+fn a_step_that_leaves_an_output_block_open_fails() {
+    let fixture = Fixture::new();
+    let machine = fixture.machine(&[]);
+
+    let result = machine
+        .run_job(&workflow(), "unclosed", &Plan::EveryStep, &BTreeMap::new())
+        .expect("runs");
+
+    assert!(matches!(result, JobResult::Failed { step } if step == "half a block"));
 }
 
 #[test]
