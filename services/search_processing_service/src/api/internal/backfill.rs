@@ -287,10 +287,22 @@ where
 
     tokio::spawn(async move {
         let result = run(service, handle.progress, handle.cancel).await;
-        if let Err(e) = &result {
-            tracing::error!(job_id = %id_for_task, entity, error = ?e, "backfill failed");
-        } else {
-            tracing::info!(job_id = %id_for_task, entity, "backfill completed");
+        match &result {
+            Err(e) => {
+                tracing::error!(job_id = %id_for_task, entity, error = ?e, "backfill failed");
+            }
+            Ok(receipt) if receipt.not_queued > 0 => {
+                tracing::error!(
+                    job_id = %id_for_task,
+                    entity,
+                    enqueued = receipt.enqueued,
+                    not_queued = receipt.not_queued,
+                    "backfill left messages off the search event queue"
+                );
+            }
+            Ok(receipt) => {
+                tracing::info!(job_id = %id_for_task, entity, enqueued = receipt.enqueued, "backfill completed");
+            }
         }
         if let Err(e) = jobs_for_task.finish(&id_for_task, result).await {
             tracing::error!(job_id = %id_for_task, error=?e, "failed to record backfill terminal status in registry");

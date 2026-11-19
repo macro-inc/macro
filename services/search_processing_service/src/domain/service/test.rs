@@ -88,9 +88,9 @@ impl RecordingPublisher {
 }
 
 impl SearchEventPublisher for RecordingPublisher {
-    async fn publish(&self, messages: Vec<SearchQueueMessage>) -> Result<(), BackfillError> {
+    async fn publish(&self, messages: Vec<SearchQueueMessage>) -> Result<usize, BackfillError> {
         self.batch_sizes.lock().unwrap().push(messages.len());
-        Ok(())
+        Ok(0)
     }
 }
 
@@ -98,7 +98,7 @@ impl SearchEventPublisher for RecordingPublisher {
 struct ExplodingPublisher;
 
 impl SearchEventPublisher for ExplodingPublisher {
-    async fn publish(&self, _messages: Vec<SearchQueueMessage>) -> Result<(), BackfillError> {
+    async fn publish(&self, _messages: Vec<SearchQueueMessage>) -> Result<usize, BackfillError> {
         Err(BackfillError::Publish(anyhow::anyhow!("publish down")))
     }
 }
@@ -149,6 +149,71 @@ async fn drains_source_across_full_pages() {
     assert_eq!(publisher.batch_sizes(), vec![5, 5, 5]);
     // Probed at offsets 0, 5, 10, 15 — last returns empty.
     assert_eq!(source.observed_offsets(), vec![0, 5, 10, 15]);
+}
+
+/// Publisher that reports some messages of one page as not queued.
+#[derive(Default)]
+struct PartlyRefusingPublisher {
+    pages: Mutex<usize>,
+}
+
+impl SearchEventPublisher for PartlyRefusingPublisher {
+    async fn publish(&self, _messages: Vec<SearchQueueMessage>) -> Result<usize, BackfillError> {
+        let mut pages = self.pages.lock().unwrap();
+        *pages += 1;
+        Ok(if *pages == 2 { 2 } else { 0 })
+    }
+}
+
+#[tokio::test]
+async fn messages_the_queue_would_not_take_are_counted() {
+    let source = FakeSource::new(vec![
+        page((0..5).map(|i| msg(&format!("p1-{i}"))).collect()),
+        page((0..5).map(|i| msg(&format!("p2-{i}"))).collect()),
+        page((0..5).map(|i| msg(&format!("p3-{i}"))).collect()),
+    ]);
+    let publisher = PartlyRefusingPublisher::default();
+    let req = CallBackfillRequest::default();
+    let (progress, cancel) = detached();
+
+    let receipt = drain_source(&publisher, &progress, &cancel, |offset| {
+        source.fetch_page(&req, offset)
+    })
+    .await
+    .unwrap();
+
+    assert_eq!((receipt.enqueued, receipt.not_queued), (15, 2));
+    assert_eq!(progress.local_progress().not_queued, 2);
+}
+
+#[tokio::test]
+async fn messages_a_cursor_drain_could_not_queue_are_counted() {
+    let publisher = PartlyRefusingPublisher::default();
+    let (progress, cancel) = detached();
+    let pages = Mutex::new(vec![
+        (vec![msg("a"), msg("b")], Some(2u32)),
+        (vec![msg("c"), msg("d")], Some(4u32)),
+        (vec![], None),
+    ]);
+
+    let receipt = drain_source_with_cursor(&publisher, &progress, &cancel, |_cursor| {
+        let (messages, next) = pages.lock().unwrap().remove(0);
+        let rows_consumed = messages.len();
+        async move {
+            Ok((
+                SourcePage {
+                    messages,
+                    rows_consumed,
+                },
+                next,
+            ))
+        }
+    })
+    .await
+    .unwrap();
+
+    assert_eq!((receipt.enqueued, receipt.not_queued), (4, 2));
+    assert_eq!(progress.local_progress().not_queued, 2);
 }
 
 #[tokio::test]
@@ -391,11 +456,11 @@ async fn cursor_drain_stops_when_non_empty_page_returns_no_cursor() {
 async fn cursor_drain_publish_failure_counts_only_completed_pages() {
     struct FailSecondPublish(AtomicUsize);
     impl SearchEventPublisher for FailSecondPublish {
-        async fn publish(&self, _: Vec<SearchQueueMessage>) -> Result<(), BackfillError> {
+        async fn publish(&self, _: Vec<SearchQueueMessage>) -> Result<usize, BackfillError> {
             if self.0.fetch_add(1, Ordering::Relaxed) == 1 {
                 return Err(BackfillError::Publish(anyhow::anyhow!("queue unavailable")));
             }
-            Ok(())
+            Ok(0)
         }
     }
     let source = CursorFakeSource::new(vec![
@@ -452,10 +517,10 @@ async fn cursor_drain_cancellation_stops_between_pages() {
         seen: Mutex<Vec<usize>>,
     }
     impl SearchEventPublisher for CancellingPublisher {
-        async fn publish(&self, messages: Vec<SearchQueueMessage>) -> Result<(), BackfillError> {
+        async fn publish(&self, messages: Vec<SearchQueueMessage>) -> Result<usize, BackfillError> {
             self.seen.lock().unwrap().push(messages.len());
             self.cancel.cancel();
-            Ok(())
+            Ok(0)
         }
     }
     let publisher = CancellingPublisher {
@@ -484,10 +549,10 @@ async fn cancel_between_pages_stops_drain_after_current_page() {
         seen: Mutex<Vec<usize>>,
     }
     impl SearchEventPublisher for CancellingPublisher {
-        async fn publish(&self, messages: Vec<SearchQueueMessage>) -> Result<(), BackfillError> {
+        async fn publish(&self, messages: Vec<SearchQueueMessage>) -> Result<usize, BackfillError> {
             self.seen.lock().unwrap().push(messages.len());
             self.cancel.cancel();
-            Ok(())
+            Ok(0)
         }
     }
 
