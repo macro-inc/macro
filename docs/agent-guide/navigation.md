@@ -438,7 +438,11 @@ stacked CRM activity controls contribute to that measured inset.
 
 The app views are referred to as **workspaces**. Desktop navigation sidebars
 start at 256px and dock above the shared 720px container breakpoint, overlaying
-at narrower widths. On wide touch, list-aside views (Chat, Agents, Notifications)
+at narrower widths. A new split shows its sidebar like any other; hiding it
+there lasts for that split, across the views it shows, and leaves the first
+split's saved choice alone. At 720px or narrower, desktop Chat and
+Notifications fill the split with their list until a row opens, which then
+fills it with **Back** returning to the list. On wide touch, list-aside views (Chat, Agents, Notifications)
 keep their list on the left and open selections in the right preview. Their
 initial list width is 403px, with thin desktop-style pane dividers.
 
