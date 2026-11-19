@@ -346,7 +346,7 @@ where
         Ok(self.catalog_view.clone())
     }
 
-    #[tracing::instrument(name = "agent_permissions.view_agent", skip_all, fields(agent_id = %agent), err)]
+    #[tracing::instrument(name = "agent_permissions.view_agent", skip_all, fields(agent_id = %agent), err(level = "warn"))]
     async fn view_agent(
         &self,
         caller: &Caller,
@@ -379,7 +379,7 @@ where
         name = "agent_permissions.view_session",
         skip_all,
         fields(agent_session_id = tracing::field::Empty),
-        err
+        err(level = "warn")
     )]
     async fn view_session(
         &self,
@@ -451,7 +451,7 @@ where
         name = "agent_permissions.set",
         skip_all,
         fields(agent_id = %agent, changes = changes.len()),
-        err
+        err(level = "warn")
     )]
     async fn set(
         &self,
@@ -482,7 +482,7 @@ where
         name = "agent_permissions.tighten",
         skip_all,
         fields(agent_id = %agent, changes = changes.len(), applied_to = tracing::field::Empty),
-        err
+        err(level = "warn")
     )]
     async fn tighten(
         &self,
@@ -507,39 +507,40 @@ where
         let to = tighten_destination(caller, agent, access, &owner, context.as_ref())
             .ok_or(PermissionError::Forbidden)?;
 
-        // A tightening never stores `always`, which would exempt an operation
-        // from a stricter group setting made later, so a tool's `always` is
-        // saved as clearing its own setting. The change is checked as asked
-        // too: an `always` the agent asks for, under a stricter group, is
+        // A tightening never stores `always`, so a tool's `always` is saved
+        // as clearing its own setting, and the agent's tool settings only add
+        // to their group's. A tool state the agent asks for that is looser
+        // than the tool's state now (an `always` under a stricter group) is
         // refused rather than quietly saved as a no-op. The checks run on the
         // rules as they stand under the store's lock, so a concurrent change
         // can't slip between the check and the write.
-        let requested = resolve::normalize(changes.clone(), false);
+        let requested = changes.clone();
         let changes = resolve::normalize(changes, true);
+        let via_agent = matches!(caller.credential, Credential::Agent { .. });
         let catalog = &self.catalog;
         let write = Write {
             owner: &owner,
             session: context.as_ref().map(|(session, _)| *session),
             to,
             by: &caller.user,
-            via_agent: matches!(caller.credential, Credential::Agent { .. }),
+            via_agent,
         };
         self.store
             .write(write, |saved, overlay| {
-                let check = |changes: &[Change]| match to {
-                    // The saved policy applies to every session, so it must
-                    // not loosen whatever this session's overlay holds.
-                    WriteTo::Saved => {
-                        let after = resolve::apply(saved, changes);
-                        resolve::tighten_only(catalog, (saved, &[]), (&after, &[]))
-                    }
-                    WriteTo::Session(_) => {
-                        let after = resolve::apply(overlay, changes);
-                        resolve::tighten_only(catalog, (saved, overlay), (saved, &after))
-                    }
+                // The saved policy applies to every session, so it must not
+                // loosen whatever this session's overlay holds.
+                let (before, after) = match to {
+                    WriteTo::Saved => (
+                        (saved, &[][..]),
+                        (resolve::apply(saved, &changes, via_agent), Vec::new()),
+                    ),
+                    WriteTo::Session(_) => (
+                        (saved, overlay),
+                        (saved.to_vec(), resolve::apply(overlay, &changes, via_agent)),
+                    ),
                 };
-                check(&requested)
-                    .and_then(|()| check(&changes))
+                resolve::asks_looser(catalog, before, &requested)
+                    .and_then(|()| resolve::tighten_only(catalog, before, (&after.0, &after.1)))
                     .map_err(PermissionError::WouldLoosen)?;
                 Ok(changes)
             })
@@ -568,7 +569,7 @@ where
         })
     }
 
-    #[tracing::instrument(name = "agent_permissions.reset", skip_all, fields(agent_id = %agent), err)]
+    #[tracing::instrument(name = "agent_permissions.reset", skip_all, fields(agent_id = %agent), err(level = "warn"))]
     async fn reset(
         &self,
         caller: &Caller,
@@ -615,8 +616,16 @@ where
 
         Ok(calls
             .iter()
-            .map(
-                |key| match self.catalog.entry(&key.service, &key.operation) {
+            .map(|key| {
+                if let Some(entry) = self.catalog.always_allowed(&key.service, &key.operation) {
+                    return ResolvedCall {
+                        key: key.clone(),
+                        entry: Some(entry.clone()),
+                        state: PermissionState::Always,
+                        origin: Origin::Default,
+                    };
+                }
+                match self.catalog.entry(&key.service, &key.operation) {
                     Some(entry) => {
                         let (state, origin) = resolve::effective(&saved, &overlay, entry);
                         ResolvedCall {
@@ -639,8 +648,8 @@ where
                             origin: Origin::Default,
                         }
                     }
-                },
-            )
+                }
+            })
             .collect())
     }
 }

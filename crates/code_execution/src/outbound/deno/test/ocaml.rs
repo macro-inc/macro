@@ -1095,9 +1095,23 @@ async fn the_ocaml_analyzer_lists_what_a_program_may_call() {
         },
         method: method.into(),
         route: route.into(),
+        rivals: Vec::new(),
+    };
+    // Rivals are checked below; here, the operations.
+    let without_rivals = |analysis: Analysis| match analysis {
+        Analysis::Calls(calls) => Analysis::Calls(
+            calls
+                .into_iter()
+                .map(|call| SdkCall {
+                    rivals: Vec::new(),
+                    ..call
+                })
+                .collect(),
+        ),
+        other => other,
     };
     assert_eq!(
-        analyzer.may_call(example).await.unwrap(),
+        without_rivals(analyzer.may_call(example).await.unwrap()),
         Analysis::Calls(
             [
                 operation(
@@ -1119,9 +1133,16 @@ async fn the_ocaml_analyzer_lists_what_a_program_may_call() {
     // Branches count: an operation in a branch that never runs is listed.
     let branch = "let () = Code_mode.run @@ fun { macro; _ } -> if false then ignore (Macro_sdk_fetch.call_exn macro (Macro_sdk.Contacts.get_contacts ())); `Null";
     assert_eq!(
-        analyzer.may_call(branch).await.unwrap(),
+        without_rivals(analyzer.may_call(branch).await.unwrap()),
         Analysis::Calls([operation("contacts", "get_contacts", "GET", "/contacts")].into())
     );
+    // A parameter route lists the literal routes it could reach.
+    let Analysis::Calls(calls) = analyzer.may_call(GET_SYSTEM_SKILLS).await.unwrap() else {
+        panic!("get_document was not analyzed");
+    };
+    let get_document = calls.iter().next().unwrap();
+    assert_eq!(get_document.route, "/documents/{}");
+    assert!(get_document.rivals.contains(&system_skills()));
     assert_eq!(
         analyzer
             .may_call("let () = Code_mode.run (fun _ -> `Null)")
@@ -1195,6 +1216,17 @@ async fn the_ocaml_analyzer_gives_up_at_its_deadline() {
 /// The `get_contacts` program the backstop tests run, and what it may send.
 const GET_CONTACTS: &str = "let () = Code_mode.run @@ fun { macro; _ } -> let reply = Macro_sdk_fetch.call_exn macro (Macro_sdk.Contacts.get_contacts ()) in `Int (List.length reply.contacts)";
 
+/// Reads the document `system_skills`: `/documents/{}` with a parameter equal
+/// to the literal segment of another operation's route.
+const GET_SYSTEM_SKILLS: &str = "let () = Code_mode.run @@ fun { macro; _ } -> ignore (Macro_sdk_fetch.call_exn macro (Macro_sdk.Storage.get_document ~document_id:\"system_skills\" ())); `Null";
+
+fn system_skills() -> SdkRoute {
+    SdkRoute {
+        service: "storage".into(),
+        route: "/documents/system_skills".into(),
+    }
+}
+
 fn call(service: &str, operation_id: &str, method: &str, route: &str) -> SdkCall {
     SdkCall {
         operation: SdkOperation {
@@ -1203,12 +1235,21 @@ fn call(service: &str, operation_id: &str, method: &str, route: &str) -> SdkCall
         },
         method: method.into(),
         route: route.into(),
+        rivals: Vec::new(),
     }
 }
 
 /// Run `GET_CONTACTS` limited to `allowed`, against a stub that answers
 /// once; returns the events, the outcome and the request the stub got.
 async fn run_gated(
+    allowed: Option<Vec<SdkCall>>,
+) -> (Vec<ExecutionEvent>, Outcome, Option<String>) {
+    run_gated_program(GET_CONTACTS, allowed).await
+}
+
+/// Run `program` limited to `allowed`, as [`run_gated`].
+async fn run_gated_program(
+    program: &str,
     allowed: Option<Vec<SdkCall>>,
 ) -> (Vec<ExecutionEvent>, Outcome, Option<String>) {
     let (_root, service) = setup_ocaml(Limits::default()).await;
@@ -1232,7 +1273,7 @@ async fn run_gated(
         allowed_operations: allowed,
         ..RunEnvironment::default()
     };
-    let (events, outcome) = run_ocaml(&service, GET_CONTACTS, 10_000, environment).await;
+    let (events, outcome) = run_ocaml(&service, program, 10_000, environment).await;
     service.shutdown().await;
     let request = if server.is_finished() {
         Some(server.await.unwrap())
@@ -1305,6 +1346,44 @@ async fn an_ocaml_call_outside_what_the_gate_admitted_is_never_sent() {
             "{allowed:?}"
         );
     }
+}
+
+#[tokio::test]
+#[ignore = "requires pinned Deno runtime and the OCaml bundle"]
+async fn a_parameter_that_reaches_a_more_specific_route_is_never_sent() {
+    let get_document = SdkCall {
+        rivals: vec![system_skills()],
+        ..call("storage", "get_document", "GET", "/documents/{}")
+    };
+    let (events, outcome, request) =
+        run_gated_program(GET_SYSTEM_SKILLS, Some(vec![get_document.clone()])).await;
+    assert_eq!(request, None);
+    assert!(
+        failure(&outcome).message.contains(
+            "storage.get_document is outside what this program was checked to call; it was not sent."
+        ),
+        "{outcome:?}"
+    );
+    assert_eq!(
+        progress(&events)
+            .iter()
+            .map(|event| event["status"].as_str().unwrap())
+            .collect::<Vec<_>>(),
+        ["refused"]
+    );
+
+    // Any other document id goes to get_document's own route.
+    let (_, _, request) = run_gated_program(
+        &GET_SYSTEM_SKILLS.replace("system_skills", "doc-1"),
+        Some(vec![get_document]),
+    )
+    .await;
+    assert!(
+        request
+            .as_deref()
+            .is_some_and(|request| request.starts_with("GET /storage/documents/doc-1 ")),
+        "{request:?}"
+    );
 }
 
 #[tokio::test]

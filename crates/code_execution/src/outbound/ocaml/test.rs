@@ -78,7 +78,7 @@ fn only_the_runtimes_own_fatal_lines_mean_out_of_memory() {
 
 #[test]
 fn the_analyzers_answers_parse_and_anything_else_is_refused() {
-    let ok = br#"{"status":"ok","operations":[{"service":"storage","operation":"create_task_handler","path":"Macro_sdk.Storage.create_task_handler","method":"POST","route":"/documents/create_task","locations":[]}]}"#;
+    let ok = br#"{"status":"ok","operations":[{"service":"storage","operation":"create_task_handler","path":"Macro_sdk.Storage.create_task_handler","method":"POST","route":"/documents/create_task","rivals":[{"service":"storage","route":"/documents/{}"}],"locations":[]}]}"#;
     assert_eq!(
         analysis(ok),
         Some(Analysis::Calls(
@@ -89,6 +89,10 @@ fn the_analyzers_answers_parse_and_anything_else_is_refused() {
                 },
                 method: "POST".into(),
                 route: "/documents/create_task".into(),
+                rivals: vec![SdkRoute {
+                    service: "storage".into(),
+                    route: "/documents/{}".into(),
+                }],
             }]
             .into()
         ))

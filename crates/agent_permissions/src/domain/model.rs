@@ -239,8 +239,11 @@ pub struct Catalog {
     pub version: String,
     /// The groups, in display order.
     pub groups: Vec<CatalogGroup>,
-    /// The operations, in registry order.
+    /// The operations settings can name, in registry order.
     pub entries: Vec<CatalogEntry>,
+    /// The operations no setting applies to: always allowed, e.g. the
+    /// agent's own tightening, which can only restrict it.
+    pub always_allowed: Vec<CatalogEntry>,
 }
 
 impl Catalog {
@@ -249,9 +252,16 @@ impl Catalog {
         self.groups.iter().find(|group| group.id == id)
     }
 
-    /// The operation `service.operation`.
+    /// The operation `service.operation`, if settings can name it.
     pub fn entry(&self, service: &str, operation: &str) -> Option<&CatalogEntry> {
         self.entries
+            .iter()
+            .find(|entry| entry.service == service && entry.operation == operation)
+    }
+
+    /// The operation `service.operation`, if it is always allowed.
+    pub fn always_allowed(&self, service: &str, operation: &str) -> Option<&CatalogEntry> {
+        self.always_allowed
             .iter()
             .find(|entry| entry.service == service && entry.operation == operation)
     }

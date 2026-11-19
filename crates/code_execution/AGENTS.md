@@ -93,7 +93,9 @@ with "unexpected wasm_of_ocaml loader shape". `RunEnvironment::allowed_operation
 (set by the permission gate, OCaml only; a JavaScript run carrying it fails)
 makes the bootstrap refuse any OCaml request whose `macroSdkOperation`
 service, raw `operationId`, method, host and route don't match one of them,
-reporting it as `refused` activity; `None` sends everything as before. The policy check
+or whose path a more specific rival route also matches (a parameter equal to a
+sibling's literal segment, `/documents/{}` reaching `/documents/system_skills`;
+the analyzer lists each call's `rivals`), reporting it as `refused` activity; `None` sends everything as before. The policy check
 (`packages/sdk-ocaml/code_mode/policy`) is defense in depth: keep the Deno
 flags the boundary for OCaml as for JavaScript.
 

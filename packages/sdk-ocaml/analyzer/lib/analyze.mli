@@ -20,6 +20,12 @@ type operation = {
 val operations : operation list
 (** Every operation in the SDK this analyzer was built with, sorted. *)
 
+val rivals : operation -> (string * string) list
+(** The [(service, route)] of every other operation with the same method
+    whose route a request built for this one could also match, sorted: a
+    parameter value equal to a rival's literal segment would reach the
+    rival. *)
+
 val returns_request : ?env:Env.t Lazy.t -> Types.type_expr -> bool
 (** The type of an operation: a function whose final result is
     [Macro_sdk_runtime.Request.t]. *)

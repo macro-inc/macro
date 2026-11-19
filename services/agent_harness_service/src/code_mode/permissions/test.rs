@@ -53,6 +53,7 @@ pub(crate) fn call(service: &str, operation: &str) -> SdkCall {
         },
         method: "POST".into(),
         route: format!("/{operation}"),
+        rivals: Vec::new(),
     }
 }
 

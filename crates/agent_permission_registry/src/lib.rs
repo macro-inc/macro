@@ -91,6 +91,11 @@ pub struct Operation {
     pub action: Action,
     /// What it does, e.g. "Send email".
     pub label: String,
+    /// No setting applies to it: it is always allowed and not offered as a
+    /// setting. Only for an operation that can only ever restrict the agent
+    /// itself, which a setting could turn from always safe into gated.
+    #[serde(default)]
+    pub always_allowed: bool,
 }
 
 #[derive(Deserialize)]
