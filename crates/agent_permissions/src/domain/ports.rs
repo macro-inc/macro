@@ -7,7 +7,7 @@ use agent_fold::domain::log::AgentSessionId;
 use bot_id::BotId;
 use macro_user_id::user_id::MacroUserIdStr;
 
-use super::model::{AgentAccess, Change, PermissionError, PolicyOwner, Rule, SessionFacts};
+use super::model::{AgentAccess, Change, PermissionError, PolicyOwner, Rule, SessionFacts, SetBy};
 
 /// Saved settings and session overlays.
 pub trait PermissionStore: Send + Sync + 'static {
@@ -56,8 +56,8 @@ pub struct Write<'a> {
     pub to: WriteTo,
     /// Who made them (the person an agent acts for).
     pub by: &'a MacroUserIdStr<'static>,
-    /// The agent restricted itself.
-    pub via_agent: bool,
+    /// Who made them, which the saved rows record.
+    pub set_by: SetBy,
 }
 
 /// Where a write's changes are saved.

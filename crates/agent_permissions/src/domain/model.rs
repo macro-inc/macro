@@ -122,6 +122,11 @@ pub struct Rule {
     pub state: PermissionState,
     /// The agent set it by restricting itself.
     pub via_agent: bool,
+    /// Only restricts: an operation's setting takes the stricter of itself and
+    /// its group's action instead of replacing it. Set for anything not made
+    /// by a signed-in person; see [`SetBy`].
+    #[serde(skip)]
+    pub restriction_only: bool,
     /// When it was last set.
     pub updated_at: DateTime<Utc>,
 }
@@ -170,6 +175,38 @@ pub enum Credential {
     },
     /// Anything else that acts as a user: an API key, an SDK token.
     Other,
+}
+
+/// Who made a saved setting, which decides how it combines with its group's.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum SetBy {
+    /// A signed-in person: an operation's setting replaces its group's.
+    Person,
+    /// The agent restricting itself: only restricts, labelled as the agent's.
+    Agent,
+    /// Anything else acting as the user (an API key): only restricts.
+    Other,
+}
+
+impl SetBy {
+    /// Who a write by `credential` is from.
+    pub fn of(credential: &Credential) -> Self {
+        match credential {
+            Credential::PersonSession => SetBy::Person,
+            Credential::Agent { .. } => SetBy::Agent,
+            Credential::Other => SetBy::Other,
+        }
+    }
+
+    /// Whether the setting is labelled as the agent's.
+    pub fn via_agent(self) -> bool {
+        self == SetBy::Agent
+    }
+
+    /// Whether the setting only restricts (see [`Rule::restriction_only`]).
+    pub fn restriction_only(self) -> bool {
+        self != SetBy::Person
+    }
 }
 
 /// Who is asking.
