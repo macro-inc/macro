@@ -54,7 +54,7 @@ const VIEWER: &str = "macro|search-test-viewer@example.com";
 const OTHER: &str = "macro|search-test-other@example.com";
 
 /// Every seeded id starts with these bits, so a failure names test data.
-const ID_PREFIX: u128 = 0x5ea4c400_0000_0000_0000_0000_0000_0000;
+const ID_PREFIX: u128 = 0x5ea4_c400_0000_0000_0000_0000_0000_0000;
 const UPDATED_AT_MILLIS: i64 = 1_763_000_000_000;
 
 /// Other users' entities, each holding [`CROWD_WORDS_PER_ENTITY`] distinct
@@ -442,7 +442,12 @@ fn seeded_entities(crowded_prefixes: &[&str]) -> Vec<Seeded> {
     for kind in KINDS {
         let fixtures = FIXTURES.iter().map(|fixture| {
             let parts = fixture.parts.iter().map(|part| part.to_string()).collect();
-            (fixture.name.to_string(), fixture.access, parts, fixture.deleted)
+            (
+                fixture.name.to_string(),
+                fixture.access,
+                parts,
+                fixture.deleted,
+            )
         });
         let crowd = (0..CROWD_ENTITIES).map(|entity| {
             let words: Vec<String> = crowded_prefixes
@@ -662,7 +667,9 @@ async fn delete_parts(client: &OpensearchClient, entities: &[Seeded]) -> anyhow:
                     .live_parts()
                     .map(|(_, (node_id, _))| node_id.as_str())
                     .collect();
-                client.delete_stale_document_chunks(&id, &kept, None).await?;
+                client
+                    .delete_stale_document_chunks(&id, &kept, None)
+                    .await?;
             }
             (Kind::Chat, Deleted::Part(part)) => {
                 client
@@ -947,7 +954,9 @@ fn compare(case: &Case, entities: &[Seeded], expected: &Expected, found: &Found)
         let unexpected: Vec<String> = found
             .entities
             .iter()
-            .filter(|(found_kind, id)| *found_kind == kind && !expected.entities.contains(&(kind, *id)))
+            .filter(|(found_kind, id)| {
+                *found_kind == kind && !expected.entities.contains(&(kind, *id))
+            })
             .map(|(_, id)| format!("{} ({id})", name(kind, *id)))
             .collect();
         let unexpected_parts: Vec<String> = found
