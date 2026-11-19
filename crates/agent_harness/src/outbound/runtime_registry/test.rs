@@ -7,6 +7,7 @@ use std::future::Future;
 use std::sync::Mutex;
 
 use super::*;
+use crate::domain::ports::HarnessConnection;
 use crate::testing::helpers::containers::{ContainerMock, ContainerSender};
 
 /// Static bot-to-harness bindings for tests.
@@ -275,10 +276,11 @@ impl HarnessPresence for RecordingPresence {
 
     fn renew(
         self: Arc<Self>,
-        live: Vec<(HarnessId, RuntimeConnectionId)>,
-    ) -> std::pin::Pin<Box<dyn Future<Output = ()> + Send>> {
+        live: Vec<HarnessConnection>,
+    ) -> std::pin::Pin<Box<dyn Future<Output = Vec<HarnessConnection>> + Send>> {
         Box::pin(async move {
             self.renewed.lock().unwrap().push(live);
+            Vec::new()
         })
     }
 }
@@ -594,17 +596,20 @@ impl HarnessPresence for LeasedPresence {
 
     fn renew(
         self: Arc<Self>,
-        live: Vec<(HarnessId, RuntimeConnectionId)>,
-    ) -> std::pin::Pin<Box<dyn Future<Output = ()> + Send>> {
+        live: Vec<HarnessConnection>,
+    ) -> std::pin::Pin<Box<dyn Future<Output = Vec<HarnessConnection>> + Send>> {
         Box::pin(async move {
             self.renewal_started.notify_one();
             self.renewal_gate.notified().await;
             let mut rows = self.rows.lock().unwrap();
-            for (_, connection) in live {
+            let mut restored = Vec::new();
+            for (harness, connection) in live {
                 if !rows.contains(&connection) {
                     rows.push(connection);
+                    restored.push((harness, connection));
                 }
             }
+            restored
         })
     }
 }

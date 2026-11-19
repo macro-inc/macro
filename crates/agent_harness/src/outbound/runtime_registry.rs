@@ -240,6 +240,11 @@ where
     }
 
     /// Tell presence which connections this process still holds.
+    ///
+    /// A connection can close between the snapshot and the renewal's write,
+    /// which then restores the row its close deleted. A close leaves the
+    /// registry before it deletes its row, so a restored connection the
+    /// registry no longer holds closed in between, and is closed again here.
     pub async fn renew_presence(&self) {
         let Some(presence) = &self.presence else {
             return;
@@ -250,8 +255,21 @@ where
             .iter()
             .map(|entry| (*entry.key(), entry.id))
             .collect();
-        if !live.is_empty() {
-            Arc::clone(presence).renew(live).await;
+        if live.is_empty() {
+            return;
+        }
+        let restored = Arc::clone(presence).renew(live).await;
+        for (harness, connection) in restored {
+            if self.connection_of(harness) == Some(connection) {
+                continue;
+            }
+            tracing::warn!(
+                telemetry_event = "harness_runtime_lease_restore_undone",
+                %harness,
+                %connection,
+                "a renewal restored a connection that closed while it ran; closing it again"
+            );
+            Arc::clone(presence).disconnected(harness, connection).await;
         }
     }
 
