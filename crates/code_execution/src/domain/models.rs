@@ -79,7 +79,8 @@ pub struct RunEnvironment {
     /// the permission gate admitted them. The bootstrap refuses any other SDK
     /// request, and any authenticated request that doesn't name its
     /// operation; a JS tools program that may call anything outside them
-    /// doesn't start. `None` sends every request, as before the gate.
+    /// doesn't start. `None` sends every request, as before the gate, for
+    /// OCaml; a JS tools run without them is refused, so it fails closed.
     #[serde(skip_serializing_if = "Option::is_none")]
     pub allowed_operations: Option<Vec<SdkCall>>,
 }

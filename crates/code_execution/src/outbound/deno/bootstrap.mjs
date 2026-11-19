@@ -196,9 +196,13 @@ const at = location => location ? `main.js:${location.line}:${location.column + 
 // (js-tools.mjs), which has no fetch, no Deno and no imports: its only way
 // out is a tool call, and `callTool` sends it. The program is analyzed
 // first with the same bundle the permission gate analyzed it with, and only
-// the operations found may run (the interpreter's tool.before hook);
-// `allowedOperations`, when set, must cover them all.
+// the operations found may run (the interpreter's tool.before hook), and
+// `allowedOperations`, the ones the gate checked it to call, must cover them
+// all. A run without them never starts (DenoRunner refuses it first).
 async function runJsTools(context, limits, allowedOperations, callTool) {
+  if (!isArray(allowedOperations)) {
+    throw new Error("JS tools programs run only with the operations they were checked to call");
+  }
   const jsTools = await import(new URL("./js-tools.mjs", import.meta.url).href);
   const catalog = parse(Deno.readTextFileSync(new URL("./js-tools.json", import.meta.url)));
   const source = Deno.readTextFileSync(new URL("./main.js", import.meta.url));
@@ -209,13 +213,11 @@ async function runJsTools(context, limits, allowedOperations, callTool) {
   if (analysis.status !== "ok") {
     throw new ProgramRefused(analysis.reasons.map(reason => `${at(reason.location)}${reason.message}`).join("\n"));
   }
-  if (isArray(allowedOperations)) {
-    const unchecked = analysis.operations.filter(found => !allowedOperations.some(call =>
-      call.service === found.service && call.operationId === found.operation &&
-      call.method === found.method && call.route === found.route));
-    if (unchecked.length > 0) {
-      throw new ProgramRefused(`${at()}the program calls ${unchecked.map(found => `tools.${found.path}`).join(", ")}, which it wasn't checked to call; it changed after it was checked.`);
-    }
+  const unchecked = analysis.operations.filter(found => !allowedOperations.some(call =>
+    call.service === found.service && call.operationId === found.operation &&
+    call.method === found.method && call.route === found.route));
+  if (unchecked.length > 0) {
+    throw new ProgramRefused(`${at()}the program calls ${unchecked.map(found => `tools.${found.path}`).join(", ")}, which it wasn't checked to call; it changed after it was checked.`);
   }
   const runtime = jsTools.makeRuntime({
     catalog,
