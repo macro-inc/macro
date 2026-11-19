@@ -3131,8 +3131,9 @@ val make_recorded_tool_call :
 (** A real inner call, recorded by trusted dispatch for the existing renderers. *)
 
 (** The language of a session program. OCaml is offered only to sessions
-whose owner has the OCaml rollout (\[[OwnerRollout]\](super::OwnerRollout));
-JavaScript tools programs are not offered yet. *)
+whose owner has the OCaml rollout (\[[OwnerRollout]\](super::OwnerRollout)),
+JavaScript tools programs only to sessions whose owner has agent
+permissions, which gate them. *)
 type nonrec program_language =
   | Javascript
   | Ocaml
@@ -3161,9 +3162,11 @@ OCaml serialize as they did before languages. *)
       (** JSON returned by the program, if successful. *)
   sdk_fingerprint : string option;
       (** For an OCaml program, the fingerprint of the OCaml SDK bundle it ran
-against (SDK version plus a hash of its interfaces). *)
+against (SDK version plus a hash of its interfaces); for a JavaScript
+tools program, of the interpreter and catalog it ran with. *)
   source : string;
-      (** The submitted program: a JavaScript module or an OCaml [main.ml]. *)
+      (** The submitted program: a JavaScript module, an OCaml [main.ml] or a
+JavaScript tools script. *)
   status : execution_status;  (** Overall execution state. *)
   turn_id : string option;
       (** Original turn, preventing another requester from replaying a saved result. *)
