@@ -355,8 +355,16 @@ let record_of_names fields =
     (List.map (fun f -> (lid f.ml_name, evar f.ml_name)) fields)
     None
 
+(* A case's make function is [make_<type>_<case>], unless another
+   definition is named [<type>_<case>] and so has that make function itself:
+   then it is [make_<type>_<case>_case]. *)
+let case_make_name defs def c =
+  let base = def.name ^ "_" ^ String.lowercase_ascii c.case_name in
+  if List.exists (fun d -> d.name = base) defs then make_name (base ^ "_case")
+  else make_name base
+
 (* make functions: one per record, and one per inline-record case. *)
-let makes def =
+let makes defs def =
   match def.kind with
   | Record fields ->
       [
@@ -372,7 +380,7 @@ let makes def =
           match c.payload with
           | Fields fields ->
               Some
-                ( make_name (def.name ^ "_" ^ String.lowercase_ascii c.case_name),
+                ( case_make_name defs def c,
                   c.case_doc,
                   make_parameters fields
                     (B.pexp_constraint
@@ -468,7 +476,7 @@ let structure defs =
               (fun (fn, _, expr, _) ->
                 B.pstr_value Nonrecursive
                   [ B.value_binding ~pat:(pvar fn) ~expr ])
-              (makes def))
+              (makes defs def))
           group
       in
       [
@@ -498,13 +506,13 @@ let signature defs =
             ]
             @ List.map
                 (fun (fn, doc, _, ty) -> value_description ?doc fn ty)
-                (makes def))
+                (makes defs def))
           group
       in
       B.psig_type flag (List.map type_declaration group) :: vals)
     (groups defs)
 
 (* Every value name a definition adds, to check for clashes. *)
-let value_names def =
+let value_names defs def =
   [ decoder_name def.name; encoder_name def.name ]
-  @ List.map (fun (fn, _, _, _) -> fn) (makes def)
+  @ List.map (fun (fn, _, _, _) -> fn) (makes defs def)

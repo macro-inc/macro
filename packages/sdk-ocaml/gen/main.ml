@@ -52,7 +52,7 @@ let check_names (service : Ir.service) =
     (fun (def : Ir.def) ->
       List.iter
         (fun v -> Naming.claim values v ~what:("codec for " ^ def.name))
-        (Emit_types.value_names def))
+        (Emit_types.value_names service.defs def))
     service.defs
 
 let file_name module_name = String.uncapitalize_ascii module_name

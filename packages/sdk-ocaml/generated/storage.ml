@@ -18353,6 +18353,7 @@ let make_create_project_response ~(data : project) ~(error : bool) () =
   ({ data; error } : create_project_response)
 
 type nonrec create_saved_view_definition_request = {
+  appearance : entity_appearance option;
   config : Yojson.Safe.t;
       (** Consumer configuration with its [kind] and [version], at most 32 KiB. *)
   id : string option;
@@ -18367,6 +18368,7 @@ let create_saved_view_definition_request_of_yojson :
  fun json ->
   let fields = Json.obj json in
   {
+    appearance = Json.optional fields "appearance" entity_appearance_of_yojson;
     config = Json.required fields "config" Json.json;
     id = Json.optional fields "id" Json.string;
     name = Json.required fields "name" Json.string;
@@ -18378,15 +18380,17 @@ and yojson_of_create_saved_view_definition_request :
  fun value ->
   Json.record
     [
+      ("appearance", Option.map yojson_of_entity_appearance value.appearance);
       ("config", Some (Json.of_json value.config));
       ("id", Option.map Json.of_string value.id);
       ("name", Some (Json.of_string value.name));
       ("sharedTeamId", Option.map Json.of_string value.shared_team_id);
     ]
 
-let make_create_saved_view_definition_request ~(config : Yojson.Safe.t) ?id
-    ~(name : string) ?shared_team_id () =
-  ({ config; id; name; shared_team_id } : create_saved_view_definition_request)
+let make_create_saved_view_definition_request ?appearance
+    ~(config : Yojson.Safe.t) ?id ~(name : string) ?shared_team_id () =
+  ({ appearance; config; id; name; shared_team_id }
+    : create_saved_view_definition_request)
 
 type nonrec create_skill_request = {
   description : string;
@@ -44660,6 +44664,7 @@ type nonrec password_agent_error_code =
   | Vault_busy
   | Rate_limited
   | Vault_unavailable
+  | Vault_not_provisioned
   | Unknown of string  (** A value this SDK version does not know. *)
 
 let password_agent_error_code_of_yojson :
@@ -44680,6 +44685,7 @@ let password_agent_error_code_of_yojson :
   | "vault_busy" -> Vault_busy
   | "rate_limited" -> Rate_limited
   | "vault_unavailable" -> Vault_unavailable
+  | "vault_not_provisioned" -> Vault_not_provisioned
   | other -> Json.unknown "password_agent_error_code" json (Unknown other)
 
 and yojson_of_password_agent_error_code :
@@ -44700,6 +44706,7 @@ and yojson_of_password_agent_error_code :
   | Vault_busy -> `String "vault_busy"
   | Rate_limited -> `String "rate_limited"
   | Vault_unavailable -> `String "vault_unavailable"
+  | Vault_not_provisioned -> `String "vault_not_provisioned"
   | Unknown other -> `String other
 
 type nonrec password_agent_failure = {
@@ -45198,6 +45205,7 @@ type nonrec password_error_code =
   | Vault_busy
   | Folder_missing
   | Vault_unavailable
+  | Vault_not_provisioned
   | Unknown of string  (** A value this SDK version does not know. *)
 
 let password_error_code_of_yojson : Yojson.Safe.t -> password_error_code =
@@ -45210,6 +45218,7 @@ let password_error_code_of_yojson : Yojson.Safe.t -> password_error_code =
   | "vault_busy" -> Vault_busy
   | "folder_missing" -> Folder_missing
   | "vault_unavailable" -> Vault_unavailable
+  | "vault_not_provisioned" -> Vault_not_provisioned
   | other -> Json.unknown "password_error_code" json (Unknown other)
 
 and yojson_of_password_error_code : password_error_code -> Yojson.Safe.t =
@@ -45222,6 +45231,7 @@ and yojson_of_password_error_code : password_error_code -> Yojson.Safe.t =
   | Vault_busy -> `String "vault_busy"
   | Folder_missing -> `String "folder_missing"
   | Vault_unavailable -> `String "vault_unavailable"
+  | Vault_not_provisioned -> `String "vault_not_provisioned"
   | Unknown other -> `String other
 
 type nonrec password_failure = {
@@ -45664,6 +45674,7 @@ type nonrec password_import_error_code =
   | Folder_missing
   | Busy
   | Vault_unavailable
+  | Vault_not_provisioned
   | Unknown of string  (** A value this SDK version does not know. *)
 
 let password_import_error_code_of_yojson :
@@ -45677,6 +45688,7 @@ let password_import_error_code_of_yojson :
   | "folder_missing" -> Folder_missing
   | "busy" -> Busy
   | "vault_unavailable" -> Vault_unavailable
+  | "vault_not_provisioned" -> Vault_not_provisioned
   | other -> Json.unknown "password_import_error_code" json (Unknown other)
 
 and yojson_of_password_import_error_code :
@@ -45690,6 +45702,7 @@ and yojson_of_password_import_error_code :
   | Folder_missing -> `String "folder_missing"
   | Busy -> `String "busy"
   | Vault_unavailable -> `String "vault_unavailable"
+  | Vault_not_provisioned -> `String "vault_not_provisioned"
   | Unknown other -> `String other
 
 (** Fixed per-item outcome. *)
@@ -45801,7 +45814,8 @@ let make_password_import_batch_result
 
 type nonrec password_item_fields = {
   created_at : string;  (** Resource creation timestamp. *)
-  favorite : bool;  (** Whether the item is marked as a favorite. *)
+  favorite : bool;
+      (** The current viewer's private favorite in responses; legacy initial flag in storage. *)
   folder_id : string option;
       (** Optional folder belonging to this same team. *)
   has_totp : bool;
@@ -45887,7 +45901,8 @@ let make_password_item_fields ~(created_at : string) ~(favorite : bool)
 
 type nonrec password_item_metadata = {
   created_at : string;  (** Resource creation timestamp. *)
-  favorite : bool;  (** Whether the item is marked as a favorite. *)
+  favorite : bool;
+      (** The current viewer's private favorite in responses; legacy initial flag in storage. *)
   folder_id : string option;
       (** Optional folder belonging to this same team. *)
   has_totp : bool;
@@ -46030,7 +46045,8 @@ let make_password_move_folder_body ?parent_id () =
 type nonrec password_patch_item = {
   expected_version : int;
       (** Version observed by the editor; absent only for creation. *)
-  favorite : bool;  (** Whether the item is marked as a favorite. *)
+  favorite : bool;
+      (** Legacy accepted field, ignored; change private preferences through the favorite endpoint. *)
   folder_id : string option;
       (** Optional folder belonging to this same team. *)
   kind : password_item_kind;  (** Item template or grantee category. *)
@@ -46271,7 +46287,8 @@ let make_password_version ~(created_at : string) ~(version : int) () =
 type nonrec password_write_item = {
   expected_version : int option;
       (** Version observed by the editor; absent only for creation. *)
-  favorite : bool;  (** Whether the item is marked as a favorite. *)
+  favorite : bool;
+      (** Initial creator preference on create; ignored on update. Use the favorite endpoint afterward. *)
   folder_id : string option;
       (** Optional folder belonging to this same team. *)
   kind : password_item_kind;  (** Item template or grantee category. *)
@@ -49529,6 +49546,7 @@ let make_saved_query ~(created_at : string) ?created_by ?database_id
   ({ created_at; created_by; database_id; definition; id } : saved_query)
 
 type nonrec saved_view_definition = {
+  appearance : entity_appearance option;
   config : Yojson.Safe.t;
       (** Versioned configuration interpreted by the consuming feature, with its
 [kind] (such as [email] or [task]) and [version]. *)
@@ -49547,6 +49565,7 @@ let saved_view_definition_of_yojson : Yojson.Safe.t -> saved_view_definition =
  fun json ->
   let fields = Json.obj json in
   {
+    appearance = Json.optional fields "appearance" entity_appearance_of_yojson;
     config = Json.required fields "config" Json.json;
     created_at = Json.required fields "createdAt" Json.string;
     id = Json.required fields "id" Json.string;
@@ -49561,6 +49580,7 @@ and yojson_of_saved_view_definition : saved_view_definition -> Yojson.Safe.t =
  fun value ->
   Json.record
     [
+      ("appearance", Option.map yojson_of_entity_appearance value.appearance);
       ("config", Some (Json.of_json value.config));
       ("createdAt", Some (Json.of_string value.created_at));
       ("id", Some (Json.of_string value.id));
@@ -49571,10 +49591,11 @@ and yojson_of_saved_view_definition : saved_view_definition -> Yojson.Safe.t =
       ("updatedAt", Some (Json.of_string value.updated_at));
     ]
 
-let make_saved_view_definition ~(config : Yojson.Safe.t) ~(created_at : string)
-    ~(id : string) ~(name : string) ~(owner_id : string) ~(revision : int64)
-    ?shared_team_id ~(updated_at : string) () =
+let make_saved_view_definition ?appearance ~(config : Yojson.Safe.t)
+    ~(created_at : string) ~(id : string) ~(name : string) ~(owner_id : string)
+    ~(revision : int64) ?shared_team_id ~(updated_at : string) () =
   ({
+     appearance;
      config;
      created_at;
      id;
@@ -53777,6 +53798,7 @@ let make_validate_webhook_response ~(is_valid : bool) ?message ?response_status
     : validate_webhook_response)
 
 type nonrec view = {
+  appearance : entity_appearance option;
   config : Yojson.Safe.t;
       (** It is an explicit choice that the structure of the view configuration
 is up to the frontend. The structure and composition of view configuration
@@ -53792,6 +53814,7 @@ let view_of_yojson : Yojson.Safe.t -> view =
  fun json ->
   let fields = Json.obj json in
   {
+    appearance = Json.optional fields "appearance" entity_appearance_of_yojson;
     config = Json.required fields "config" Json.json;
     created_at = Json.required fields "createdAt" Json.string;
     id = Json.required fields "id" Json.string;
@@ -53804,6 +53827,7 @@ and yojson_of_view : view -> Yojson.Safe.t =
  fun value ->
   Json.record
     [
+      ("appearance", Option.map yojson_of_entity_appearance value.appearance);
       ("config", Some (Json.of_json value.config));
       ("createdAt", Some (Json.of_string value.created_at));
       ("id", Some (Json.of_string value.id));
@@ -53812,9 +53836,10 @@ and yojson_of_view : view -> Yojson.Safe.t =
       ("userId", Some (Json.of_string value.user_id));
     ]
 
-let make_view ~(config : Yojson.Safe.t) ~(created_at : string) ~(id : string)
-    ~(name : string) ~(updated_at : string) ~(user_id : string) () =
-  ({ config; created_at; id; name; updated_at; user_id } : view)
+let make_view ?appearance ~(config : Yojson.Safe.t) ~(created_at : string)
+    ~(id : string) ~(name : string) ~(updated_at : string) ~(user_id : string)
+    () =
+  ({ appearance; config; created_at; id; name; updated_at; user_id } : view)
 
 type nonrec view_patch = { config : Yojson.Safe.t option; name : string option }
 
@@ -66767,7 +66792,8 @@ let get_items_soup ?expand ?limit ?sort_method ?sort_property_definition_id
          [];
      body = None;
      decode_reply = Request.json soup_page_of_yojson;
-     decode_error = Request.error_json [ 403; 500 ] error_response_of_yojson;
+     decode_error =
+       Request.error_json [ 403; 500; 503 ] error_response_of_yojson;
    }
     : (soup_page, error_response) Macro_sdk_runtime.Request.t)
 
@@ -66828,7 +66854,8 @@ let post_items_soup ?cursor ?agent_session_filters ?calendar_event_filters
                 }
                  : post_soup_request)));
      decode_reply = Request.json soup_page_of_yojson;
-     decode_error = Request.error_json [ 403; 500 ] error_response_of_yojson;
+     decode_error =
+       Request.error_json [ 403; 500; 503 ] error_response_of_yojson;
    }
     : (soup_page, error_response) Macro_sdk_runtime.Request.t)
 
@@ -66891,7 +66918,7 @@ let post_items_soup_ast ?cursor ?asf ?calf ?callf ?ccf ?cf ?chanf ?crma ?crmf
                  : post_soup_ast_request)));
      decode_reply = Request.json soup_page_of_yojson;
      decode_error =
-       Request.error_json [ 403; 404; 500 ] error_response_of_yojson;
+       Request.error_json [ 403; 404; 500; 503 ] error_response_of_yojson;
    }
     : (soup_page, error_response) Macro_sdk_runtime.Request.t)
 
@@ -68353,6 +68380,64 @@ let passwords_copy ~(team : string) ~(item : string)
    }
     : (password_revealed, password_failure) Macro_sdk_runtime.Request.t)
 
+(** [PUT /passwords/teams/{team}/items/{item}/favorite]
+
+Change only the authenticated viewer's private preference. *)
+let passwords_set_favorite ~(team : string) ~(item : string)
+    ~(x_macro_passwords : string) () =
+  ({
+     Request.service = "storage";
+     operation = "passwords_set_favorite";
+     meth = `PUT;
+     path =
+       String.concat ""
+         [
+           "/passwords/teams/";
+           Request.segment ((fun value -> value) team);
+           "/items/";
+           Request.segment ((fun value -> value) item);
+           "/favorite";
+         ];
+     query = List.filter (fun (_, values) -> values <> []) [];
+     headers =
+       List.concat_map
+         (fun (name, values) -> List.map (fun v -> (name, v)) values)
+         [ ("X-Macro-Passwords", [ (fun value -> value) x_macro_passwords ]) ];
+     body = None;
+     decode_reply = Request.unit;
+     decode_error = Request.error_json [ 404; 503 ] password_failure_of_yojson;
+   }
+    : (unit, password_failure) Macro_sdk_runtime.Request.t)
+
+(** [DELETE /passwords/teams/{team}/items/{item}/favorite]
+
+Change only the authenticated viewer's private preference. *)
+let passwords_remove_favorite ~(team : string) ~(item : string)
+    ~(x_macro_passwords : string) () =
+  ({
+     Request.service = "storage";
+     operation = "passwords_remove_favorite";
+     meth = `DELETE;
+     path =
+       String.concat ""
+         [
+           "/passwords/teams/";
+           Request.segment ((fun value -> value) team);
+           "/items/";
+           Request.segment ((fun value -> value) item);
+           "/favorite";
+         ];
+     query = List.filter (fun (_, values) -> values <> []) [];
+     headers =
+       List.concat_map
+         (fun (name, values) -> List.map (fun v -> (name, v)) values)
+         [ ("X-Macro-Passwords", [ (fun value -> value) x_macro_passwords ]) ];
+     body = None;
+     decode_reply = Request.unit;
+     decode_error = Request.error_json [ 404; 503 ] password_failure_of_yojson;
+   }
+    : (unit, password_failure) Macro_sdk_runtime.Request.t)
+
 (** [GET /passwords/teams/{team}/items/{item}/history]
 
 List protected-value version metadata. *)
@@ -69312,8 +69397,8 @@ let list_saved_view_definitions ?kind ?first ?after () =
     : (saved_view_definition_page, error_response) Macro_sdk_runtime.Request.t)
 
 (** [POST /saved_views/definitions] *)
-let create_saved_view_definition ~(config : Yojson.Safe.t) ~(name : string) ?id
-    ?shared_team_id () =
+let create_saved_view_definition ~(config : Yojson.Safe.t) ~(name : string)
+    ?appearance ?id ?shared_team_id () =
   ({
      Request.service = "storage";
      operation = "create_saved_view_definition";
@@ -69328,7 +69413,7 @@ let create_saved_view_definition ~(config : Yojson.Safe.t) ~(name : string) ?id
        Some
          (Request.Json
             (yojson_of_create_saved_view_definition_request
-               ({ config; id; name; shared_team_id }
+               ({ appearance; config; id; name; shared_team_id }
                  : create_saved_view_definition_request)));
      decode_reply = Request.json saved_view_definition_of_yojson;
      decode_error =
@@ -69440,6 +69525,34 @@ let update_saved_view_definition ~(saved_view_id : string)
        Request.error_json
          [ 400; 401; 403; 404; 409; 500 ]
          error_response_of_yojson;
+   }
+    : (saved_view_definition, error_response) Macro_sdk_runtime.Request.t)
+
+(** [PUT /saved_views/definitions/{saved_view_id}/appearance] *)
+let set_saved_view_appearance ~(saved_view_id : string) ?color ?icon () =
+  ({
+     Request.service = "storage";
+     operation = "set_saved_view_appearance";
+     meth = `PUT;
+     path =
+       String.concat ""
+         [
+           "/saved_views/definitions/";
+           Request.segment ((fun value -> value) saved_view_id);
+           "/appearance";
+         ];
+     query = List.filter (fun (_, values) -> values <> []) [];
+     headers =
+       List.concat_map
+         (fun (name, values) -> List.map (fun v -> (name, v)) values)
+         [];
+     body =
+       Some
+         (Request.Json
+            (yojson_of_entity_appearance ({ color; icon } : entity_appearance)));
+     decode_reply = Request.json saved_view_definition_of_yojson;
+     decode_error =
+       Request.error_json [ 400; 401; 404; 500 ] error_response_of_yojson;
    }
     : (saved_view_definition, error_response) Macro_sdk_runtime.Request.t)
 

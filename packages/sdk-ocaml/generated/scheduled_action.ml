@@ -119,6 +119,94 @@ let knob_name_of_yojson : Yojson.Safe.t -> knob_name =
 and yojson_of_knob_name : knob_name -> Yojson.Safe.t =
  fun value -> Json.of_string value
 
+(** A kind of item an entity knob names: each kind the app's entity picker
+offers, which Macro's SDK has a handle for, and whole databases. Its
+name is the SDK's for the kind ([EntityReference]'s [type], which the
+handle's [entityType] repeats), except [task], a document that is a
+task. *)
+type nonrec routine_knob_entity_type =
+  | Channel
+  | Document
+  | Project
+  | Database
+  | User
+  | Task
+  | Email_thread
+  | Chat
+  | Crm_company
+  | Crm_contact
+  | Initiative
+  | Unknown of string  (** A value this SDK version does not know. *)
+
+let routine_knob_entity_type_of_yojson :
+    Yojson.Safe.t -> routine_knob_entity_type =
+ fun json ->
+  match Json.string json with
+  | "channel" -> Channel
+  | "document" -> Document
+  | "project" -> Project
+  | "database" -> Database
+  | "user" -> User
+  | "task" -> Task
+  | "email_thread" -> Email_thread
+  | "chat" -> Chat
+  | "crm_company" -> Crm_company
+  | "crm_contact" -> Crm_contact
+  | "initiative" -> Initiative
+  | other -> Json.unknown "routine_knob_entity_type" json (Unknown other)
+
+and yojson_of_routine_knob_entity_type :
+    routine_knob_entity_type -> Yojson.Safe.t =
+ fun value ->
+  match value with
+  | Channel -> `String "channel"
+  | Document -> `String "document"
+  | Project -> `String "project"
+  | Database -> `String "database"
+  | User -> `String "user"
+  | Task -> `String "task"
+  | Email_thread -> `String "email_thread"
+  | Chat -> `String "chat"
+  | Crm_company -> `String "crm_company"
+  | Crm_contact -> `String "crm_contact"
+  | Initiative -> `String "initiative"
+  | Unknown other -> `String other
+
+type nonrec routine_knob_entity_id = string
+(** An item's id: not blank, without spaces, at most 256 characters. *)
+
+let routine_knob_entity_id_of_yojson : Yojson.Safe.t -> routine_knob_entity_id =
+ fun json -> Json.string json
+
+and yojson_of_routine_knob_entity_id : routine_knob_entity_id -> Yojson.Safe.t =
+ fun value -> Json.of_string value
+
+type nonrec routine_knob_entity = {
+  id : routine_knob_entity_id;  (** Its id. *)
+  type_ : routine_knob_entity_type;  (** Its kind. *)
+}
+(** The item an entity knob names: its kind and id. *)
+
+let routine_knob_entity_of_yojson : Yojson.Safe.t -> routine_knob_entity =
+ fun json ->
+  let fields = Json.obj json in
+  {
+    id = Json.required fields "id" routine_knob_entity_id_of_yojson;
+    type_ = Json.required fields "type" routine_knob_entity_type_of_yojson;
+  }
+
+and yojson_of_routine_knob_entity : routine_knob_entity -> Yojson.Safe.t =
+ fun value ->
+  Json.record
+    [
+      ("id", Some (yojson_of_routine_knob_entity_id value.id));
+      ("type", Some (yojson_of_routine_knob_entity_type value.type_));
+    ]
+
+let make_routine_knob_entity ~(id : routine_knob_entity_id)
+    ~(type_ : routine_knob_entity_type) () =
+  ({ id; type_ } : routine_knob_entity)
+
 (** A value a code step reads as [knobs.<name>], which its owner can change
 without the step being rewritten: the label it adds, a priority, a
 number of days, a question it asks AI. Its type is part of the step's
@@ -160,6 +248,17 @@ investors, fundraising or finance?". *)
     }
       (** A yes/no question the code asks AI with [macro.ai.decide], so the
 owner can reword what AI decides. *)
+  | Entity of {
+      entity_types : routine_knob_entity_type list;
+          (** The kinds of item the owner may pick, at least one, each once. *)
+      label : string;
+          (** What it is, for the owner, e.g. "Channel to post in". *)
+      name : knob_name;  (** How the code reads it: [knobs.<name>]. *)
+      value : routine_knob_entity option;
+    }
+      (** One of the owner's items the code uses, such as the channel it posts
+in, which the owner swaps by picking another. The code gets an SDK
+handle for it, never its id. *)
   | Unknown of Yojson.Safe.t
       (** A case this SDK version does not know, as received. *)
 
@@ -204,6 +303,16 @@ let routine_knob_of_yojson : Yojson.Safe.t -> routine_knob =
           label = Json.required fields "label" Json.string;
           name = Json.required fields "name" knob_name_of_yojson;
           value = Json.required fields "value" Json.string;
+        }
+  | "entity" ->
+      Entity
+        {
+          entity_types =
+            Json.required fields "entity_types"
+              (Json.list routine_knob_entity_type_of_yojson);
+          label = Json.required fields "label" Json.string;
+          name = Json.required fields "name" knob_name_of_yojson;
+          value = Json.optional fields "value" routine_knob_entity_of_yojson;
         }
   | _ -> Json.unknown "routine_knob" json (Unknown json)
 
@@ -253,6 +362,18 @@ and yojson_of_routine_knob : routine_knob -> Yojson.Safe.t =
           ("name", Some (yojson_of_knob_name case.name));
           ("value", Some (Json.of_string case.value));
         ]
+  | Entity case ->
+      Json.record
+        [
+          ("type", Some (`String "entity"));
+          ( "entity_types",
+            Some
+              ((Json.of_list yojson_of_routine_knob_entity_type)
+                 case.entity_types) );
+          ("label", Some (Json.of_string case.label));
+          ("name", Some (yojson_of_knob_name case.name));
+          ("value", Option.map yojson_of_routine_knob_entity case.value);
+        ]
   | Unknown json -> json
 
 let make_routine_knob_text ~(label : string) ~(name : knob_name)
@@ -274,6 +395,11 @@ let make_routine_knob_choice ~(label : string) ~(name : knob_name)
 let make_routine_knob_question ~(label : string) ~(name : knob_name)
     ~(value : string) () =
   (Question { label; name; value } : routine_knob)
+
+let make_routine_knob_entity_case
+    ~(entity_types : routine_knob_entity_type list) ~(label : string)
+    ~(name : knob_name) ?value () =
+  (Entity { entity_types; label; name; value } : routine_knob)
 
 type nonrec code_step = {
   id : step_id option;
@@ -1548,6 +1674,10 @@ type nonrec check_routine_request = {
   created : created_item list option;
       (** What a routine draft's session created for the routine to use, such as
 the database it writes to; kept with its draft for the person to see. *)
+  missing_apps : agent_mcp_server list option;
+      (** Apps a routine draft's session found the routine needs that its owner
+hasn't connected, for the person to connect before saving. The routine
+itself requires only connected ones. *)
   routine : action_configuration;
 }
 (** A routine to check, as the create body takes it. *)
@@ -1557,6 +1687,8 @@ let check_routine_request_of_yojson : Yojson.Safe.t -> check_routine_request =
   let fields = Json.obj json in
   {
     created = Json.optional fields "created" (Json.list created_item_of_yojson);
+    missing_apps =
+      Json.optional fields "missingApps" (Json.list agent_mcp_server_of_yojson);
     routine = Json.required fields "routine" action_configuration_of_yojson;
   }
 
@@ -1565,11 +1697,15 @@ and yojson_of_check_routine_request : check_routine_request -> Yojson.Safe.t =
   Json.record
     [
       ("created", Option.map (Json.of_list yojson_of_created_item) value.created);
+      ( "missingApps",
+        Option.map (Json.of_list yojson_of_agent_mcp_server) value.missing_apps
+      );
       ("routine", Some (yojson_of_action_configuration value.routine));
     ]
 
-let make_check_routine_request ?created ~(routine : action_configuration) () =
-  ({ created; routine } : check_routine_request)
+let make_check_routine_request ?created ?missing_apps
+    ~(routine : action_configuration) () =
+  ({ created; missing_apps; routine } : check_routine_request)
 
 (** Code written once, or Ask AI each run. *)
 type nonrec step_kind =
@@ -2001,9 +2137,15 @@ let make_step_problem ~(index : int) ~(problems : string list) () =
   ({ index; problems } : step_problem)
 
 type nonrec drafted_routine = {
+  apps : agent_mcp_server list option;
+      (** Apps outside Macro its Ask AI step uses that its owner connected,
+which the routine requires (its task's [mcp_servers]). *)
   created : draft_created list;
       (** What AI created while drafting, such as the database the routine
 writes to. These exist whether or not the routine is saved. *)
+  missing_apps : agent_mcp_server list option;
+      (** Apps its Ask AI step needs that its owner hasn't connected: the owner
+connects each one, or removes it, before saving. *)
   name : string;
   problems : step_problem list;
       (** Steps whose code still fails the type checker. *)
@@ -2018,7 +2160,10 @@ let drafted_routine_of_yojson : Yojson.Safe.t -> drafted_routine =
  fun json ->
   let fields = Json.obj json in
   {
+    apps = Json.optional fields "apps" (Json.list agent_mcp_server_of_yojson);
     created = Json.required fields "created" (Json.list draft_created_of_yojson);
+    missing_apps =
+      Json.optional fields "missingApps" (Json.list agent_mcp_server_of_yojson);
     name = Json.required fields "name" Json.string;
     problems =
       Json.required fields "problems" (Json.list step_problem_of_yojson);
@@ -2030,16 +2175,22 @@ and yojson_of_drafted_routine : drafted_routine -> Yojson.Safe.t =
  fun value ->
   Json.record
     [
+      ("apps", Option.map (Json.of_list yojson_of_agent_mcp_server) value.apps);
       ("created", Some ((Json.of_list yojson_of_draft_created) value.created));
+      ( "missingApps",
+        Option.map (Json.of_list yojson_of_agent_mcp_server) value.missing_apps
+      );
       ("name", Some (Json.of_string value.name));
       ("problems", Some ((Json.of_list yojson_of_step_problem) value.problems));
       ("steps", Some ((Json.of_list yojson_of_routine_step) value.steps));
       ("trigger", Option.map yojson_of_action_trigger value.trigger);
     ]
 
-let make_drafted_routine ~(created : draft_created list) ~(name : string)
-    ~(problems : step_problem list) ~(steps : routine_step list) ?trigger () =
-  ({ created; name; problems; steps; trigger } : drafted_routine)
+let make_drafted_routine ?apps ~(created : draft_created list) ?missing_apps
+    ~(name : string) ~(problems : step_problem list)
+    ~(steps : routine_step list) ?trigger () =
+  ({ apps; created; missing_apps; name; problems; steps; trigger }
+    : drafted_routine)
 
 type nonrec drafted_step = {
   created : draft_created list;
@@ -3771,6 +3922,10 @@ let make_rewrite_suggestion ?about ?categories ?importance ?prompt
     : rewrite_suggestion)
 
 type nonrec routine_check = {
+  missing_apps : agent_mcp_server list option;
+      (** Apps the routine needs that its owner hasn't connected, as a routine
+draft's session named them ([missingApps]): the person connects each
+one before saving. Never ones the routine already requires. *)
   ok : bool;
       (** Whether saving it would succeed: no problems and no failing steps. *)
   problems : string list;
@@ -3788,6 +3943,8 @@ let routine_check_of_yojson : Yojson.Safe.t -> routine_check =
  fun json ->
   let fields = Json.obj json in
   {
+    missing_apps =
+      Json.optional fields "missingApps" (Json.list agent_mcp_server_of_yojson);
     ok = Json.required fields "ok" Json.bool;
     problems = Json.required fields "problems" (Json.list Json.string);
     routine = Json.required fields "routine" action_configuration_of_yojson;
@@ -3799,6 +3956,9 @@ and yojson_of_routine_check : routine_check -> Yojson.Safe.t =
  fun value ->
   Json.record
     [
+      ( "missingApps",
+        Option.map (Json.of_list yojson_of_agent_mcp_server) value.missing_apps
+      );
       ("ok", Some (Json.of_bool value.ok));
       ("problems", Some ((Json.of_list Json.of_string) value.problems));
       ("routine", Some (yojson_of_action_configuration value.routine));
@@ -3806,9 +3966,9 @@ and yojson_of_routine_check : routine_check -> Yojson.Safe.t =
         Some ((Json.of_list yojson_of_checked_step_problems) value.steps) );
     ]
 
-let make_routine_check ~(ok : bool) ~(problems : string list)
+let make_routine_check ?missing_apps ~(ok : bool) ~(problems : string list)
     ~(routine : action_configuration) ~(steps : checked_step_problems list) () =
-  ({ ok; problems; routine; steps } : routine_check)
+  ({ missing_apps; ok; problems; routine; steps } : routine_check)
 
 type nonrec routine_sentence_part = {
   picked : bool;  (** It is a value AI picked, which the person can change. *)
@@ -5320,6 +5480,38 @@ let make_suggestions_review ~(new_left : int) ~(open_ : int) ~(open_limit : int)
     ~(suggestions : suggestion list) () =
   ({ new_left; open_; open_limit; suggestions } : suggestions_review)
 
+type nonrec unusable_knob = {
+  item : routine_knob_entity option;
+  knob : string;  (** The knob's name. *)
+  reason : string;  (** Why it can't be used, for the routine's owner. *)
+  step : step_id option;
+}
+(** An entity knob of a saved routine whose item needs a new pick: it was
+deleted, its owner lost access, or none is picked. *)
+
+let unusable_knob_of_yojson : Yojson.Safe.t -> unusable_knob =
+ fun json ->
+  let fields = Json.obj json in
+  {
+    item = Json.optional fields "item" routine_knob_entity_of_yojson;
+    knob = Json.required fields "knob" Json.string;
+    reason = Json.required fields "reason" Json.string;
+    step = Json.optional fields "step" step_id_of_yojson;
+  }
+
+and yojson_of_unusable_knob : unusable_knob -> Yojson.Safe.t =
+ fun value ->
+  Json.record
+    [
+      ("item", Option.map yojson_of_routine_knob_entity value.item);
+      ("knob", Some (Json.of_string value.knob));
+      ("reason", Some (Json.of_string value.reason));
+      ("step", Option.map yojson_of_step_id value.step);
+    ]
+
+let make_unusable_knob ?item ~(knob : string) ~(reason : string) ?step () =
+  ({ item; knob; reason; step } : unusable_knob)
+
 type nonrec regenerate_suggestions_error =
   | Conflict of regeneration_running  (** HTTP 409. *)
   | Too_many_requests of regeneration_cooldown  (** HTTP 429. *)
@@ -5459,7 +5651,8 @@ let routine_catalog ~(timezone : string) () =
 What saving this routine would find wrong, without saving it: the same
 checks as creating it. A routine draft's session hands its draft back
 this way. *)
-let check_scheduled_action ~(routine : action_configuration) ?created () =
+let check_scheduled_action ~(routine : action_configuration) ?created
+    ?missing_apps () =
   ({
      Request.service = "scheduled-action";
      operation = "check_scheduled_action";
@@ -5474,7 +5667,7 @@ let check_scheduled_action ~(routine : action_configuration) ?created () =
        Some
          (Request.Json
             (yojson_of_check_routine_request
-               ({ created; routine } : check_routine_request)));
+               ({ created; missing_apps; routine } : check_routine_request)));
      decode_reply = Request.json routine_check_of_yojson;
      decode_error = Request.no_error;
    }
@@ -6094,6 +6287,32 @@ let activate_scheduled_action_template ~(id : string) ~(enabled : bool)
      decode_error = Request.no_error;
    }
     : ( scheduled_action_response,
+        Macro_sdk_runtime.Request.no_error )
+      Macro_sdk_runtime.Request.t)
+
+(** [GET /scheduled-actions/{id}/unusable-items] *)
+let list_scheduled_action_unusable_items ~(id : string) () =
+  ({
+     Request.service = "scheduled-action";
+     operation = "list_scheduled_action_unusable_items";
+     meth = `GET;
+     path =
+       String.concat ""
+         [
+           "/scheduled-actions/";
+           Request.segment ((fun value -> value) id);
+           "/unusable-items";
+         ];
+     query = List.filter (fun (_, values) -> values <> []) [];
+     headers =
+       List.concat_map
+         (fun (name, values) -> List.map (fun v -> (name, v)) values)
+         [];
+     body = None;
+     decode_reply = Request.json (Json.list unusable_knob_of_yojson);
+     decode_error = Request.no_error;
+   }
+    : ( unusable_knob list,
         Macro_sdk_runtime.Request.no_error )
       Macro_sdk_runtime.Request.t)
 

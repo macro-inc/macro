@@ -292,6 +292,8 @@ installation removed, which would otherwise add 640 MiB).
 ## How the spec maps to OCaml
 
 - Objects are records; `make_<type>` builds one with optional fields left out.
+- A union case with its own fields has `make_<type>_<case>`, or
+  `make_<type>_<case>_case` when another type is named `<type>_<case>`.
 - A required field the spec allows to be null is `t option` and is sent as
   `null` when `None`. A field that is not required is `t option` and is left
   out when `None`. On the way in, absent and null both decode to `None`, as

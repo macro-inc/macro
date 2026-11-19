@@ -77,6 +77,53 @@ digits, e.g. [dueWithinDays]. *)
 val knob_name_of_yojson : Yojson.Safe.t -> knob_name
 val yojson_of_knob_name : knob_name -> Yojson.Safe.t
 
+(** A kind of item an entity knob names: each kind the app's entity picker
+offers, which Macro's SDK has a handle for, and whole databases. Its
+name is the SDK's for the kind ([EntityReference]'s [type], which the
+handle's [entityType] repeats), except [task], a document that is a
+task. *)
+type nonrec routine_knob_entity_type =
+  | Channel
+  | Document
+  | Project
+  | Database
+  | User
+  | Task
+  | Email_thread
+  | Chat
+  | Crm_company
+  | Crm_contact
+  | Initiative
+  | Unknown of string  (** A value this SDK version does not know. *)
+
+val routine_knob_entity_type_of_yojson :
+  Yojson.Safe.t -> routine_knob_entity_type
+
+val yojson_of_routine_knob_entity_type :
+  routine_knob_entity_type -> Yojson.Safe.t
+
+type nonrec routine_knob_entity_id = string
+(** An item's id: not blank, without spaces, at most 256 characters. *)
+
+val routine_knob_entity_id_of_yojson : Yojson.Safe.t -> routine_knob_entity_id
+val yojson_of_routine_knob_entity_id : routine_knob_entity_id -> Yojson.Safe.t
+
+type nonrec routine_knob_entity = {
+  id : routine_knob_entity_id;  (** Its id. *)
+  type_ : routine_knob_entity_type;  (** Its kind. *)
+}
+(** The item an entity knob names: its kind and id. *)
+
+val routine_knob_entity_of_yojson : Yojson.Safe.t -> routine_knob_entity
+val yojson_of_routine_knob_entity : routine_knob_entity -> Yojson.Safe.t
+
+val make_routine_knob_entity :
+  id:routine_knob_entity_id ->
+  type_:routine_knob_entity_type ->
+  unit ->
+  routine_knob_entity
+(** The item an entity knob names: its kind and id. *)
+
 (** A value a code step reads as [knobs.<name>], which its owner can change
 without the step being rewritten: the label it adds, a priority, a
 number of days, a question it asks AI. Its type is part of the step's
@@ -118,6 +165,17 @@ investors, fundraising or finance?". *)
     }
       (** A yes/no question the code asks AI with [macro.ai.decide], so the
 owner can reword what AI decides. *)
+  | Entity of {
+      entity_types : routine_knob_entity_type list;
+          (** The kinds of item the owner may pick, at least one, each once. *)
+      label : string;
+          (** What it is, for the owner, e.g. "Channel to post in". *)
+      name : knob_name;  (** How the code reads it: [knobs.<name>]. *)
+      value : routine_knob_entity option;
+    }
+      (** One of the owner's items the code uses, such as the channel it posts
+in, which the owner swaps by picking another. The code gets an SDK
+handle for it, never its id. *)
   | Unknown of Yojson.Safe.t
       (** A case this SDK version does not know, as received. *)
 
@@ -155,6 +213,17 @@ val make_routine_knob_question :
   label:string -> name:knob_name -> value:string -> unit -> routine_knob
 (** A yes/no question the code asks AI with [macro.ai.decide], so the
 owner can reword what AI decides. *)
+
+val make_routine_knob_entity_case :
+  entity_types:routine_knob_entity_type list ->
+  label:string ->
+  name:knob_name ->
+  ?value:routine_knob_entity ->
+  unit ->
+  routine_knob
+(** One of the owner's items the code uses, such as the channel it posts
+in, which the owner swaps by picking another. The code gets an SDK
+handle for it, never its id. *)
 
 type nonrec code_step = {
   id : step_id option;
@@ -838,6 +907,10 @@ type nonrec check_routine_request = {
   created : created_item list option;
       (** What a routine draft's session created for the routine to use, such as
 the database it writes to; kept with its draft for the person to see. *)
+  missing_apps : agent_mcp_server list option;
+      (** Apps a routine draft's session found the routine needs that its owner
+hasn't connected, for the person to connect before saving. The routine
+itself requires only connected ones. *)
   routine : action_configuration;
 }
 (** A routine to check, as the create body takes it. *)
@@ -847,6 +920,7 @@ val yojson_of_check_routine_request : check_routine_request -> Yojson.Safe.t
 
 val make_check_routine_request :
   ?created:created_item list ->
+  ?missing_apps:agent_mcp_server list ->
   routine:action_configuration ->
   unit ->
   check_routine_request
@@ -1068,9 +1142,15 @@ val make_step_problem :
 (** A drafted step whose code still fails the type checker. *)
 
 type nonrec drafted_routine = {
+  apps : agent_mcp_server list option;
+      (** Apps outside Macro its Ask AI step uses that its owner connected,
+which the routine requires (its task's [mcp_servers]). *)
   created : draft_created list;
       (** What AI created while drafting, such as the database the routine
 writes to. These exist whether or not the routine is saved. *)
+  missing_apps : agent_mcp_server list option;
+      (** Apps its Ask AI step needs that its owner hasn't connected: the owner
+connects each one, or removes it, before saving. *)
   name : string;
   problems : step_problem list;
       (** Steps whose code still fails the type checker. *)
@@ -1085,7 +1165,9 @@ val drafted_routine_of_yojson : Yojson.Safe.t -> drafted_routine
 val yojson_of_drafted_routine : drafted_routine -> Yojson.Safe.t
 
 val make_drafted_routine :
+  ?apps:agent_mcp_server list ->
   created:draft_created list ->
+  ?missing_apps:agent_mcp_server list ->
   name:string ->
   problems:step_problem list ->
   steps:routine_step list ->
@@ -2006,6 +2088,10 @@ val make_rewrite_suggestion :
 (** Changes to an open suggestion; fields left out stay. *)
 
 type nonrec routine_check = {
+  missing_apps : agent_mcp_server list option;
+      (** Apps the routine needs that its owner hasn't connected, as a routine
+draft's session named them ([missingApps]): the person connects each
+one before saving. Never ones the routine already requires. *)
   ok : bool;
       (** Whether saving it would succeed: no problems and no failing steps. *)
   problems : string list;
@@ -2023,6 +2109,7 @@ val routine_check_of_yojson : Yojson.Safe.t -> routine_check
 val yojson_of_routine_check : routine_check -> Yojson.Safe.t
 
 val make_routine_check :
+  ?missing_apps:agent_mcp_server list ->
   ok:bool ->
   problems:string list ->
   routine:action_configuration ->
@@ -2861,6 +2948,28 @@ val make_suggestions_review :
 (** What a generation session reads before managing the person's suggestions:
 every suggestion they have, open or not, and how many more it may add. *)
 
+type nonrec unusable_knob = {
+  item : routine_knob_entity option;
+  knob : string;  (** The knob's name. *)
+  reason : string;  (** Why it can't be used, for the routine's owner. *)
+  step : step_id option;
+}
+(** An entity knob of a saved routine whose item needs a new pick: it was
+deleted, its owner lost access, or none is picked. *)
+
+val unusable_knob_of_yojson : Yojson.Safe.t -> unusable_knob
+val yojson_of_unusable_knob : unusable_knob -> Yojson.Safe.t
+
+val make_unusable_knob :
+  ?item:routine_knob_entity ->
+  knob:string ->
+  reason:string ->
+  ?step:step_id ->
+  unit ->
+  unusable_knob
+(** An entity knob of a saved routine whose item needs a new pick: it was
+deleted, its owner lost access, or none is picked. *)
+
 type nonrec regenerate_suggestions_error =
   | Conflict of regeneration_running  (** HTTP 409. *)
   | Too_many_requests of regeneration_cooldown  (** HTTP 429. *)
@@ -2913,6 +3022,7 @@ val routine_catalog :
 val check_scheduled_action :
   routine:action_configuration ->
   ?created:created_item list ->
+  ?missing_apps:agent_mcp_server list ->
   unit ->
   ( routine_check,
     Macro_sdk_runtime.Request.no_error )
@@ -3123,6 +3233,14 @@ val activate_scheduled_action_template :
     Macro_sdk_runtime.Request.no_error )
   Macro_sdk_runtime.Request.t
 (** [POST /scheduled-actions/{id}/template/activate] *)
+
+val list_scheduled_action_unusable_items :
+  id:string ->
+  unit ->
+  ( unusable_knob list,
+    Macro_sdk_runtime.Request.no_error )
+  Macro_sdk_runtime.Request.t
+(** [GET /scheduled-actions/{id}/unusable-items] *)
 
 val list_suggestions :
   ?timezone:string ->

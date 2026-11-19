@@ -9824,6 +9824,7 @@ val make_create_project_response :
   data:project -> error:bool -> unit -> create_project_response
 
 type nonrec create_saved_view_definition_request = {
+  appearance : entity_appearance option;
   config : Yojson.Safe.t;
       (** Consumer configuration with its [kind] and [version], at most 32 KiB. *)
   id : string option;
@@ -9840,6 +9841,7 @@ val yojson_of_create_saved_view_definition_request :
   create_saved_view_definition_request -> Yojson.Safe.t
 
 val make_create_saved_view_definition_request :
+  ?appearance:entity_appearance ->
   config:Yojson.Safe.t ->
   ?id:string ->
   name:string ->
@@ -24061,6 +24063,7 @@ type nonrec password_agent_error_code =
   | Vault_busy
   | Rate_limited
   | Vault_unavailable
+  | Vault_not_provisioned
   | Unknown of string  (** A value this SDK version does not know. *)
 
 val password_agent_error_code_of_yojson :
@@ -24368,6 +24371,7 @@ type nonrec password_error_code =
   | Vault_busy
   | Folder_missing
   | Vault_unavailable
+  | Vault_not_provisioned
   | Unknown of string  (** A value this SDK version does not know. *)
 
 val password_error_code_of_yojson : Yojson.Safe.t -> password_error_code
@@ -24635,6 +24639,7 @@ type nonrec password_import_error_code =
   | Folder_missing
   | Busy
   | Vault_unavailable
+  | Vault_not_provisioned
   | Unknown of string  (** A value this SDK version does not know. *)
 
 val password_import_error_code_of_yojson :
@@ -24703,7 +24708,8 @@ val make_password_import_batch_result :
 
 type nonrec password_item_fields = {
   created_at : string;  (** Resource creation timestamp. *)
-  favorite : bool;  (** Whether the item is marked as a favorite. *)
+  favorite : bool;
+      (** The current viewer's private favorite in responses; legacy initial flag in storage. *)
   folder_id : string option;
       (** Optional folder belonging to this same team. *)
   has_totp : bool;
@@ -24748,7 +24754,8 @@ val make_password_item_fields :
 
 type nonrec password_item_metadata = {
   created_at : string;  (** Resource creation timestamp. *)
-  favorite : bool;  (** Whether the item is marked as a favorite. *)
+  favorite : bool;
+      (** The current viewer's private favorite in responses; legacy initial flag in storage. *)
   folder_id : string option;
       (** Optional folder belonging to this same team. *)
   has_totp : bool;
@@ -24835,7 +24842,8 @@ val make_password_move_folder_body :
 type nonrec password_patch_item = {
   expected_version : int;
       (** Version observed by the editor; absent only for creation. *)
-  favorite : bool;  (** Whether the item is marked as a favorite. *)
+  favorite : bool;
+      (** Legacy accepted field, ignored; change private preferences through the favorite endpoint. *)
   folder_id : string option;
       (** Optional folder belonging to this same team. *)
   kind : password_item_kind;  (** Item template or grantee category. *)
@@ -24971,7 +24979,8 @@ val make_password_version :
 type nonrec password_write_item = {
   expected_version : int option;
       (** Version observed by the editor; absent only for creation. *)
-  favorite : bool;  (** Whether the item is marked as a favorite. *)
+  favorite : bool;
+      (** Initial creator preference on create; ignored on update. Use the favorite endpoint afterward. *)
   folder_id : string option;
       (** Optional folder belonging to this same team. *)
   kind : password_item_kind;  (** Item template or grantee category. *)
@@ -26850,6 +26859,7 @@ val make_saved_query :
 (** A stored, immutable query. Editing a question saves a new one. *)
 
 type nonrec saved_view_definition = {
+  appearance : entity_appearance option;
   config : Yojson.Safe.t;
       (** Versioned configuration interpreted by the consuming feature, with its
 [kind] (such as [email] or [task]) and [version]. *)
@@ -26868,6 +26878,7 @@ val saved_view_definition_of_yojson : Yojson.Safe.t -> saved_view_definition
 val yojson_of_saved_view_definition : saved_view_definition -> Yojson.Safe.t
 
 val make_saved_view_definition :
+  ?appearance:entity_appearance ->
   config:Yojson.Safe.t ->
   created_at:string ->
   id:string ->
@@ -29295,6 +29306,7 @@ val make_validate_webhook_response :
 (** Sanitized result of validating a webhook endpoint. *)
 
 type nonrec view = {
+  appearance : entity_appearance option;
   config : Yojson.Safe.t;
       (** It is an explicit choice that the structure of the view configuration
 is up to the frontend. The structure and composition of view configuration
@@ -29310,6 +29322,7 @@ val view_of_yojson : Yojson.Safe.t -> view
 val yojson_of_view : view -> Yojson.Safe.t
 
 val make_view :
+  ?appearance:entity_appearance ->
   config:Yojson.Safe.t ->
   created_at:string ->
   id:string ->
@@ -34634,6 +34647,26 @@ val passwords_copy :
 
 Disclose values for an explicitly audited clipboard action. *)
 
+val passwords_set_favorite :
+  team:string ->
+  item:string ->
+  x_macro_passwords:string ->
+  unit ->
+  (unit, password_failure) Macro_sdk_runtime.Request.t
+(** [PUT /passwords/teams/{team}/items/{item}/favorite]
+
+Change only the authenticated viewer's private preference. *)
+
+val passwords_remove_favorite :
+  team:string ->
+  item:string ->
+  x_macro_passwords:string ->
+  unit ->
+  (unit, password_failure) Macro_sdk_runtime.Request.t
+(** [DELETE /passwords/teams/{team}/items/{item}/favorite]
+
+Change only the authenticated viewer's private preference. *)
+
 val passwords_history :
   team:string ->
   item:string ->
@@ -34955,6 +34988,7 @@ val list_saved_view_definitions :
 val create_saved_view_definition :
   config:Yojson.Safe.t ->
   name:string ->
+  ?appearance:entity_appearance ->
   ?id:string ->
   ?shared_team_id:string ->
   unit ->
@@ -34990,6 +35024,14 @@ val update_saved_view_definition :
   unit ->
   (saved_view_definition, error_response) Macro_sdk_runtime.Request.t
 (** [PATCH /saved_views/definitions/{saved_view_id}] *)
+
+val set_saved_view_appearance :
+  saved_view_id:string ->
+  ?color:appearance_color ->
+  ?icon:appearance_icon ->
+  unit ->
+  (saved_view_definition, error_response) Macro_sdk_runtime.Request.t
+(** [PUT /saved_views/definitions/{saved_view_id}/appearance] *)
 
 val exclude_default_view_handler :
   default_view_id:string ->
