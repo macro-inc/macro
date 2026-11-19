@@ -1,0 +1,54 @@
+crates/agent_permissions/src/domain/service/test.rs
+  s_8bb9c07d43f304::t_8fa13b6d0700f2 753-757
+  s_8bb9c07d43f304::t_a61424f6612710 723-752,758-817
+  s_8bb9c07d43f304::t_10881f12b11e11 41-46
+crates/agent_permission_registry/registry.json
+  s_8bb9c07d43f304::t_9d148d74d35c19 96
+crates/agent_permission_registry/AGENTS.md
+  s_8bb9c07d43f304::t_f3193f31846165 30-33
+crates/agent_permissions/AGENTS.md
+  s_8bb9c07d43f304::t_f3193f31846165 14-21,26-31
+crates/agent_permission_registry/src/test.rs
+  s_8bb9c07d43f304::t_9d148d74d35c19 84-94
+packages/sdk/src/entities/agents/tool-permissions.ts
+  s_8bb9c07d43f304::t_f3193f31846165 23-25
+crates/agent_permissions/src/inbound/axum_router.rs
+  s_8bb9c07d43f304::t_06b29380911fe7 218,261,298,338,381,419
+crates/agent_permissions/src/domain/model.rs
+  s_8bb9c07d43f304::t_9d148d74d35c19 241,243-245,254,260-263
+  s_8bb9c07d43f304::t_0bb8dca24fbd16 264-266
+crates/agent_permission_registry/src/lib.rs
+  s_8bb9c07d43f304::t_9d148d74d35c19 90-94
+crates/agent_permissions/src/outbound/registry.rs
+  s_8bb9c07d43f304::t_9d148d74d35c19 5-6,18-19,22-34
+  s_8bb9c07d43f304::t_ff51730d8501a3 35
+crates/agent_permissions/src/domain/resolve.rs
+  s_8bb9c07d43f304::t_bd0a701f9df03c 4-11,33-40,55-61,72,108-111,113-123,125-126,129-132,310-312,321
+  s_8bb9c07d43f304::t_ada1738b544366 361-394
+crates/agent_permissions/src/domain/service.rs
+  s_8bb9c07d43f304::t_10881f12b11e11 619-628,651-652
+  s_8bb9c07d43f304::t_06b29380911fe7 349,382,454,485,572
+  s_8bb9c07d43f304::t_23a375dafa7fef 510,519,526
+  s_8bb9c07d43f304::t_8fa13b6d0700f2 543
+  s_8bb9c07d43f304::t_ada1738b544366 511-513,517,530-531
+  s_8bb9c07d43f304::t_45f0d94f48c4cd 532-540,542
+crates/agent_permissions/src/domain/resolve/test.rs
+  s_8bb9c07d43f304::t_10881f12b11e11 35
+  s_8bb9c07d43f304::t_6569153aed68ed 63-69,128-190,211,291-301,323
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.7.7",
+  "base_commit_sha": "bbe8e34b14e44f5a43b743c7cbd17a06097e54ed",
+  "prompts": {},
+  "sessions": {
+    "s_8bb9c07d43f304": {
+      "agent_id": {
+        "tool": "claude",
+        "id": "3f1f672b-f015-4aa2-889f-624245ca574b",
+        "model": "claude-opus-5-5"
+      },
+      "human_author": "Eric Hayes <56524199+ehayes2000@users.noreply.github.com>"
+    }
+  }
+}
