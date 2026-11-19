@@ -398,9 +398,18 @@ Address: polite 합니다/해요 in sentences; avoid pronouns (내 for "my").
 | notifications | 알림 |
 | done | 완료 |
 | mark as read | 읽음으로 표시 |
-| snooze | 알림 일시 중지… |
+| snooze | 알림 일시 중지 |
 | archive | 보관 |
 | settings | 설정 |
+| computer (Macro computer) | 새 Macro 컴퓨터 |
+| machine (runs agents) | 내 머신 |
+| session (agent) | 세션 시작 |
+| routine | 모든 루틴 |
+| saved view | 새 저장된 보기 |
+| call | 통화 시작 |
+| contact (CRM) | 연락처 및 회사 |
+| company (CRM) | 회사 추가 |
+| thread (email) | 제외된 스레드 |
 
 ## Simplified Chinese (`zh-Hans`)
 

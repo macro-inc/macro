@@ -3433,6 +3433,11 @@
       "entityActions.snoozeNotifications": "c5dec69afe",
       "settingsNav.tabRuntimes": "c061da196e"
     },
+    "ko": {
+      "commands.toggleSettings": "b7b98613db",
+      "entityActions.snoozeNotifications": "c5dec69afe",
+      "settingsNav.tabRuntimes": "c061da196e"
+    },
     "nb": {
       "commands.toggleSettings": "b7b98613db",
       "entityActions.snoozeNotifications": "c5dec69afe",
