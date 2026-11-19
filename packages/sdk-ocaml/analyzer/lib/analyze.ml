@@ -1,6 +1,13 @@
 open Typedtree
 
-type operation = { service : string; operation : string; path : string }
+type operation = {
+  service : string;
+  operation : string;
+  path : string;
+  meth : string;
+  route : string;
+}
+
 type location = { file : string; line : int; column : int }
 type via = Reference | Module
 type found = { operation : operation; locations : (location * via) list }
@@ -25,9 +32,9 @@ let public_path unit value =
 let by_value =
   let table = Hashtbl.create 1024 in
   List.iter
-    (fun (unit, value, service, operation) ->
+    (fun (unit, value, service, operation, meth, route) ->
       Hashtbl.replace table (unit, value)
-        { service; operation; path = public_path unit value })
+        { service; operation; path = public_path unit value; meth; route })
     Operation_table.all;
   table
 
@@ -37,9 +44,36 @@ let operations =
   Hashtbl.fold (fun _ operation all -> operation :: all) by_value []
   |> List.sort compare
 
+(* Other operations with [operation]'s method whose route a request built
+   for [operation] could also match: as many segments, and wherever both
+   have a literal, the same one. A parameter value equal to a rival's literal
+   segment can send the request to the rival instead (["/documents/{}"] with
+   ["system_skills"] reaches ["/documents/system_skills"]); the backstop
+   refuses such a request. *)
+let rivals (operation : operation) =
+  let segments route = String.split_on_char '/' route in
+  let mine = segments operation.route in
+  let compatible route =
+    let theirs = segments route in
+    List.compare_lengths mine theirs = 0
+    && List.for_all2
+         (fun a b -> a = "{}" || b = "{}" || String.equal a b)
+         mine theirs
+  in
+  List.filter_map
+    (fun (other : operation) ->
+      if
+        other.meth = operation.meth
+        && (other.service, other.route) <> (operation.service, operation.route)
+        && compatible other.route
+      then Some (other.service, other.route)
+      else None)
+    operations
+  |> List.sort_uniq compare
+
 let service_units =
   List.sort_uniq compare
-    (List.map (fun (unit, _, _, _) -> unit) Operation_table.all)
+    (List.map (fun (unit, _, _, _, _, _) -> unit) Operation_table.all)
 
 (* ---------- types ---------- *)
 
@@ -729,6 +763,18 @@ let to_json = function
                        ("service", `String operation.service);
                        ("operation", `String operation.operation);
                        ("path", `String operation.path);
+                       ("method", `String operation.meth);
+                       ("route", `String operation.route);
+                       ( "rivals",
+                         `List
+                           (List.map
+                              (fun (service, route) ->
+                                `Assoc
+                                  [
+                                    ("service", `String service);
+                                    ("route", `String route);
+                                  ])
+                              (rivals operation)) );
                        ( "locations",
                          `List
                            (List.map

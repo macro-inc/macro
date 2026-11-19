@@ -40,6 +40,13 @@ resolves them against `agent_permission_registry`, and serves the HTTP API
   for a run's gate.
 - `src/domain/resolve.rs`: resolution, the view, tighten-only.
 - `src/inbound/axum_router.rs`: routes, credential mapping, error codes.
+- `src/domain/admission.rs`: `admit`, the OCaml gate's question: every
+  operation a program may call sorted into blocked / ask / allowed as
+  `GatedOperation`s (an unclassified one is blocked). `ExecutionPermission`
+  is what a stopped run's record carries.
+- `src/inbound/toolset.rs`: `ShowPermissions`, the direct tool the internal
+  MCP offers where permissions gate OCaml; it reads `view_agent` as the
+  agent in its session and changes nothing.
 
 ## Boundaries
 

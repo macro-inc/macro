@@ -486,3 +486,25 @@ fn the_openapi_document_serves_agent_tool_permissions() {
         assert!(schemas.contains_key(schema), "{schema}");
     }
 }
+
+#[test]
+fn the_openapi_document_types_what_the_chat_renders_for_permissions() {
+    let document = <super::swagger::ApiDoc as utoipa::OpenApi>::openapi();
+    let schemas = &document.components.as_ref().unwrap().schemas;
+    for schema in [
+        "ExecutionReceipt",
+        "ExecutionRecord",
+        "ExecutionPermission",
+        "GatedOperation",
+        "ShowPermissionsResult",
+    ] {
+        assert!(schemas.contains_key(schema), "{schema}");
+    }
+    let receipt = serde_json::to_value(&schemas["ExecutionReceipt"]).unwrap();
+    assert!(
+        receipt["properties"].get("permission").is_some(),
+        "{receipt}"
+    );
+    let status = serde_json::to_value(&schemas["RecordedCallStatus"]).unwrap();
+    assert!(status.to_string().contains("refused"), "{status}");
+}

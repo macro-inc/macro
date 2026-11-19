@@ -160,6 +160,7 @@ async fn a_running_execution_of_the_active_turn_calls_as_its_approved_account() 
             calls: Vec::new(),
             activity: Vec::new(),
             activity_truncated: false,
+            permission: None,
         })))),
         Arc::new(Turns(Some(macro_uuid::Uuid::from_u128(1)))),
         apps.clone(),
@@ -225,6 +226,7 @@ async fn a_finished_execution_or_an_ended_turn_reaches_no_app() {
         calls: Vec::new(),
         activity: Vec::new(),
         activity_truncated: false,
+        permission: None,
     };
     let apps = Arc::new(Apps::default());
 
@@ -273,6 +275,7 @@ async fn a_caller_holding_another_account_than_the_execution_spends_nothing() {
             calls: Vec::new(),
             activity: Vec::new(),
             activity_truncated: false,
+            permission: None,
         })))),
         Arc::new(Turns(Some(macro_uuid::Uuid::from_u128(1)))),
         apps.clone(),
@@ -310,6 +313,7 @@ async fn a_search_ranks_tools_across_apps_and_reports_apps_it_could_not_read() {
             calls: Vec::new(),
             activity: Vec::new(),
             activity_truncated: false,
+            permission: None,
         })))),
         Arc::new(Turns(Some(macro_uuid::Uuid::from_u128(1)))),
         Arc::new(Apps::default()),

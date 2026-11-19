@@ -159,8 +159,34 @@ let check_all_operations_program () =
         (List.length Analyze.operations)
         (List.length found)
 
+(* A parameter can reach a sibling literal route; its rivals name it, and
+   a more specific route's rivals still list the parameter route it shares
+   paths with. *)
+let check_rivals () =
+  let find service operation =
+    List.find
+      (fun (o : Analyze.operation) ->
+        o.service = service && o.operation = operation)
+      Analyze.operations
+  in
+  let get_document = find "storage" "get_document" in
+  if
+    not
+      (List.mem
+         ("storage", "/documents/system_skills")
+         (Analyze.rivals get_document))
+  then fail "rivals: get_document does not list /documents/system_skills";
+  if List.mem ("storage", get_document.route) (Analyze.rivals get_document) then
+    fail "rivals: get_document lists its own route";
+  List.iter
+    (fun (service, route) ->
+      if String.split_on_char '/' route |> List.length <> 3 then
+        fail "rivals: get_document lists %s %s, of another length" service route)
+    (Analyze.rivals get_document)
+
 let () =
   check_specs ();
+  check_rivals ();
   check_interfaces ();
   check_all_operations_program ();
   if !failures > 0 then (

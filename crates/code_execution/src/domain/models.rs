@@ -66,6 +66,12 @@ pub struct RunEnvironment {
     /// instead of an agent's or a person's call.
     #[serde(skip_serializing_if = "Option::is_none")]
     pub unattended: Option<Unattended>,
+    /// OCaml only: the only requests the program may send, as the permission
+    /// gate admitted them. The bootstrap refuses any other SDK request, and
+    /// any authenticated request that doesn't name its operation. `None`
+    /// sends every request, as before the gate.
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub allowed_operations: Option<Vec<SdkCall>>,
 }
 
 /// The deployment's Macro SDK targets, so a program's requests and links stay
@@ -331,4 +337,74 @@ pub enum CheckError {
     /// The checker process failed or ran out of time.
     #[error("type checking failed to run")]
     Internal,
+}
+
+/// One Macro SDK operation, by the OpenAPI spec it comes from and its raw
+/// `operationId`: the key the permission registry uses.
+#[derive(Debug, Clone, PartialEq, Eq, PartialOrd, Ord, Hash, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct SdkOperation {
+    /// The spec's name, such as `storage`.
+    pub service: String,
+    /// The raw `operationId`, such as `create_task_handler`.
+    pub operation_id: String,
+}
+
+impl std::fmt::Display for SdkOperation {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        write!(f, "{}.{}", self.service, self.operation_id)
+    }
+}
+
+/// One request a program may send: its operation and the route the SDK
+/// sends it to. Two SDK values can share an `operationId` on different routes.
+#[derive(Debug, Clone, PartialEq, Eq, PartialOrd, Ord, Hash, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct SdkCall {
+    /// The operation, by service and raw `operationId`.
+    #[serde(flatten)]
+    pub operation: SdkOperation,
+    /// HTTP method, uppercase.
+    pub method: String,
+    /// The path below the service's host, `{}` for each parameter segment,
+    /// such as `/documents/{}/markdown`.
+    pub route: String,
+    /// Other operations' routes with this method that a request on `route`
+    /// could also match (`/documents/system_skills` for `/documents/{}`).
+    /// The backstop refuses a request that a more specific one of them
+    /// matches, since the server would route it there.
+    #[serde(default)]
+    pub rivals: Vec<SdkRoute>,
+}
+
+/// A route of a service, `{}` for each parameter segment.
+#[derive(Debug, Clone, PartialEq, Eq, PartialOrd, Ord, Hash, Serialize, Deserialize)]
+pub struct SdkRoute {
+    /// The service's spec name.
+    pub service: String,
+    /// The path below the service's host.
+    pub route: String,
+}
+
+/// Where a program reaches SDK operations the analysis cannot see.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct AnalysisReason {
+    /// What the program does there.
+    pub message: String,
+    /// 1-based line in the program.
+    pub line: u32,
+    /// 1-based column in the program.
+    pub column: u32,
+}
+
+/// Which SDK operations a program may call, read from it without running it.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub enum Analysis {
+    /// Every operation the program names, in any branch. May be empty.
+    Calls(std::collections::BTreeSet<SdkCall>),
+    /// The program can reach operations the analysis cannot see; it must be
+    /// rewritten before it can run.
+    CannotAnalyze(Vec<AnalysisReason>),
+    /// The program does not compile, or the policy check refuses it.
+    Diagnostics(Vec<Diagnostic>),
 }

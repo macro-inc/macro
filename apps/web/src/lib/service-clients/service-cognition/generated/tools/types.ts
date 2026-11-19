@@ -4920,7 +4920,49 @@ export type ExecutionStatus =
 /**
  * A dispatch result; unfinished work is never reported as success.
  */
-export type RecordedCallStatus = 'running' | 'completed' | 'failed' | 'unknown';
+export type RecordedCallStatus =
+  | 'running'
+  | 'completed'
+  | 'failed'
+  | 'unknown'
+  | 'refused';
+/**
+ * Why a program did not run, when its permissions stopped it.
+ */
+export type ExecutionPermission =
+  | {
+      /**
+       * The operations set to never.
+       */
+      operations: GatedOperation[];
+      outcome: 'blocked';
+    }
+  | {
+      status: DeclinedStatus;
+      /**
+       * The operations it asked about.
+       */
+      operations: GatedOperation[];
+      outcome: 'declined';
+    };
+/**
+ * What an operation does to its group's data, the unit a person allows,
+ * asks about or refuses.
+ */
+export type Action = 'create' | 'read' | 'update' | 'destroy' | 'send';
+/**
+ * How an operation may be called. Ordered from most to least permissive, so
+ * `max` is the more restrictive of two states.
+ */
+export type PermissionState = 'always' | 'ask' | 'never';
+/**
+ * Where an effective state comes from.
+ */
+export type Origin = 'tool' | 'group_action' | 'default' | 'session';
+/**
+ * How an approval ended without approving.
+ */
+export type DeclinedStatus = 'denied' | 'cancelled' | 'expired';
 export type ContentType =
   | 'channel'
   | 'channel-message'
@@ -16703,6 +16745,11 @@ export interface ExecutionReceipt {
    * Safe failure text, when execution did not succeed.
    */
   error?: string | null;
+  /**
+   * Set when the agent's permissions stopped the program; see
+   * [`ExecutionRecord::permission`].
+   */
+  permission?: ExecutionPermission | null;
 }
 /**
  * A bounded SDK operation observed during execution; not an authorization or write receipt.
@@ -16717,6 +16764,40 @@ export interface ExecutionActivity {
    */
   label: string;
   status: RecordedCallStatus;
+}
+/**
+ * One SDK operation a program may call, as the gate judged it: what the
+ * approval dialog lists and a refusal names.
+ */
+export interface GatedOperation {
+  /**
+   * The SDK's spec name, e.g. `email`.
+   */
+  service: string;
+  /**
+   * The raw operationId, e.g. `send_message`.
+   */
+  operation: string;
+  /**
+   * What it does, for a person. `service.operation` for an operation the
+   * registry does not know.
+   */
+  label: string;
+  /**
+   * Its group id; `unclassified` for an operation the registry does not
+   * know.
+   */
+  group: string;
+  /**
+   * Its group's display name.
+   */
+  groupName: string;
+  /**
+   * Its action; absent for an operation the registry does not know.
+   */
+  action?: Action | null;
+  state: PermissionState;
+  origin: Origin;
 }
 /**
  * Read the Macro SDK reference for symbols named in an entity index or another reference: a class (Task), one of its methods (TaskNamespace.create) or a type (CreateReviewOptions). Request every symbol the next program needs together, up to ten. Each reference has the full signature, parameters, option fields and return type; symbols it names in backticks can be read the same way.

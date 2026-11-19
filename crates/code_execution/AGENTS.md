@@ -16,7 +16,11 @@ Session authentication, token issuance and execution storage belong to
   and final JSON protocol.
 - `src/outbound/deno/check.rs`: type-checking TypeScript against the SDK.
 - `src/outbound/ocaml.rs`: the OCaml bundle and the compile step;
-  `src/outbound/ocaml/check.rs`: type-checking OCaml.
+  `src/outbound/ocaml/check.rs`: type-checking OCaml;
+  `src/outbound/ocaml/analyze.rs`: `OcamlAnalyzer`, the `ProgramAnalyzer`
+  that lists the SDK calls (`SdkCall`: service, raw operationId, method,
+  route) a program may call, with the bundle's `macro_sdk_calls`, for the
+  agent permissions gate.
 - `src/domain/operations.rs`: the generated operation catalog (labels, routes,
   read or write) and the SDK fingerprint.
 
@@ -58,7 +62,15 @@ names (`CODE_MODE_OCAML_DIR` at build time, `nix build .#code-mode-ocaml`);
 without one they fail saying so. The bootstrap evaluates wasm_of_ocaml's
 loader by splitting it after its first statement (`(Object));`), so a
 wasm_of_ocaml upgrade that changes the loader's shape fails every OCaml test
-with "unexpected wasm_of_ocaml loader shape". The policy check
+with "unexpected wasm_of_ocaml loader shape". `RunEnvironment::allowed_operations`
+(set by the permission gate, OCaml only; a JavaScript run carrying it fails)
+makes the bootstrap refuse any OCaml request whose `macroSdkOperation`
+service, raw `operationId`, method, host and route don't match one of them,
+or whose path a more specific rival route also matches (a parameter equal to a
+sibling's literal segment, `/documents/{}` reaching `/documents/system_skills`;
+the analyzer lists each call's `rivals`, from the SDK's routes only: a
+route a service serves outside its OpenAPI spec is not one), reporting it as
+`refused` activity; `None` sends everything as before. The policy check
 (`packages/sdk-ocaml/code_mode/policy`) is defense in depth: keep the Deno
 flags the boundary for OCaml as for JavaScript.
 

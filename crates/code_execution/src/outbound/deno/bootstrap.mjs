@@ -181,7 +181,53 @@ async function runOcaml(context, assets) {
   return parse(frame);
 }
 try {
-  const {maxResultBytes, operations, unattended, language, ocamlAssets, ...context} = await new Response(Deno.stdin.readable).json();
+  const {maxResultBytes, operations, unattended, language, ocamlAssets, allowedOperations, ...context} = await new Response(Deno.stdin.readable).json();
+  // The requests an OCaml program was checked to send (the permission gate);
+  // absent, every request goes as before. Each is matched by its operation
+  // and by where it goes: method, the service's host and the route. A
+  // parameter could carry a sibling route's literal segment
+  // (`/documents/{}` with `system_skills`), which the server routes to that
+  // sibling: a request a more specific rival route also matches is refused.
+  const escape = text => text.replace(/[.*+?^$()|[\]\\{}]/g, "\\$&");
+  const target = (service, route) => {
+    const host = new URL(context.hosts[service] ?? "http://invalid.invalid");
+    const template = `${host.pathname.replace(/\/$/, "")}${route}`;
+    return {
+      origin: host.origin,
+      segments: template.split("/"),
+      pattern: new RegExp(`^${String(template).split("{}").map(escape).join("[^/]+")}$`),
+    };
+  };
+  // Whether a route with `rival`'s segments wins over `own`'s for a path both
+  // match: at the first segment where one has a literal and the other a
+  // parameter, the literal wins, as the services' routers rank them.
+  const outranks = (rival, own) => {
+    for (let i = 0; i < own.length; i++) {
+      if (rival[i] === own[i]) continue;
+      if (own[i] === "{}") return true;
+      if (rival[i] === "{}") return false;
+    }
+    return false;
+  };
+  const allowed = language === "ocaml" && Array.isArray(allowedOperations)
+    ? allowedOperations.map(call => ({
+      ...call,
+      ...target(call.service, String(call.route)),
+      rivals: (call.rivals ?? []).map(rival => target(rival.service, String(rival.route))),
+    }))
+    : null;
+  // Checks the request exactly as it will be sent.
+  const admitted = (operation, request) => {
+    if (!operation) return false;
+    const url = new URL(request.url);
+    const method = request.method.toUpperCase();
+    return allowed.some(call =>
+      call.service === operation.service && call.operationId === operation.operationId &&
+      call.method === method && call.origin === url.origin && call.pattern.test(url.pathname) &&
+      !call.rivals.some(rival =>
+        rival.origin === url.origin && rival.pattern.test(url.pathname) &&
+        outranks(rival.segments, call.segments)));
+  };
   // A dry run answers each write with an empty result, so it shows what the
   // program would do. Operations missing from the catalog count as writes.
   const dryRun = unattended?.dryRun === true;
@@ -238,6 +284,20 @@ try {
   let nextOcamlRequest = 0;
   globalThis.fetch = async (input, init) => {
     const operation = init?.macroSdkOperation;
+    // The gate's backstop: a request outside what the program was checked
+    // to call is never sent, nor one that doesn't say what it calls.
+    if (allowed) {
+      // One Request, checked and sent: nothing about it can change between.
+      const request = new Request(input, init);
+      input = request;
+      init = {macroSdkOperation: operation};
+      if (!admitted(operation, request)) {
+        const service = String(operation?.service ?? "unknown");
+        const operationId = String(operation?.operationId ?? "unknown");
+        if (operation) observe({id: ++nextOcamlRequest, service, operation: String(operation.operation), status: "refused"});
+        throw new Error(`${service}.${operationId} is outside what this program was checked to call; it was not sent.`);
+      }
+    }
     if (language !== "ocaml" || !operation) return sendRequest(input, init);
     const event = {id: ++nextOcamlRequest, service: String(operation.service), operation: String(operation.operation)};
     if (dryRun && catalog.get(`${event.service}.${event.operation}`)?.write !== false) {

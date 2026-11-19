@@ -50,6 +50,8 @@ let send (request : (_, _) Request.t) (wire : Request.wire) =
       [|
         ("service", js_string request.service);
         ("operation", js_string (sdk_method request.operation));
+        (* The raw operationId: the key the permission gate checked. *)
+        ("operationId", js_string request.operation);
       |]
   in
   let body =

@@ -121,6 +121,7 @@ async fn ocaml_sdk_call_is_authenticated_marked_and_reported() {
             web_app_url: "https://app.example.test".into(),
         },
         unattended: None,
+        allowed_operations: None,
     };
     let source = r#"
 open Macro_sdk
@@ -1069,4 +1070,349 @@ async fn the_ocaml_checker_type_checks_and_applies_the_policy() {
             .count(),
         0
     );
+}
+
+#[tokio::test]
+#[ignore = "requires pinned Deno runtime and the OCaml bundle"]
+async fn the_ocaml_analyzer_lists_what_a_program_may_call() {
+    use crate::outbound::ocaml::analyze::OcamlAnalyzer;
+    let root = tempfile::tempdir().unwrap();
+    let runner = runner(root.path()).await;
+    let bundle = Arc::clone(runner.ocaml_bundle().expect(NO_BUNDLE));
+    let analyzer = OcamlAnalyzer::new(bundle, root.path().join("analyses"), 1, 64 * 1024)
+        .await
+        .unwrap();
+    assert!(analyzer.sdk_fingerprint().starts_with("0.1.0+"));
+
+    // The tool text's example: both operations, by their raw operationIds.
+    let example =
+        include_str!("../../../../../../packages/sdk-ocaml/analyzer/test/corpus/code_mode_task.ml");
+    let operation = |service: &str, operation_id: &str, method: &str, route: &str| SdkCall {
+        operation: SdkOperation {
+            service: service.into(),
+            operation_id: operation_id.into(),
+        },
+        method: method.into(),
+        route: route.into(),
+        rivals: Vec::new(),
+    };
+    // Rivals are checked below; here, the operations.
+    let without_rivals = |analysis: Analysis| match analysis {
+        Analysis::Calls(calls) => Analysis::Calls(
+            calls
+                .into_iter()
+                .map(|call| SdkCall {
+                    rivals: Vec::new(),
+                    ..call
+                })
+                .collect(),
+        ),
+        other => other,
+    };
+    assert_eq!(
+        without_rivals(analyzer.may_call(example).await.unwrap()),
+        Analysis::Calls(
+            [
+                operation(
+                    "storage",
+                    "create_task_handler",
+                    "POST",
+                    "/documents/create_task"
+                ),
+                operation(
+                    "storage",
+                    "get_document_markdown",
+                    "GET",
+                    "/documents/{}/markdown"
+                ),
+            ]
+            .into()
+        )
+    );
+    // Branches count: an operation in a branch that never runs is listed.
+    let branch = "let () = Code_mode.run @@ fun { macro; _ } -> if false then ignore (Macro_sdk_fetch.call_exn macro (Macro_sdk.Contacts.get_contacts ())); `Null";
+    assert_eq!(
+        without_rivals(analyzer.may_call(branch).await.unwrap()),
+        Analysis::Calls([operation("contacts", "get_contacts", "GET", "/contacts")].into())
+    );
+    // A parameter route lists the literal routes it could reach.
+    let Analysis::Calls(calls) = analyzer.may_call(GET_SYSTEM_SKILLS).await.unwrap() else {
+        panic!("get_document was not analyzed");
+    };
+    let get_document = calls.iter().next().unwrap();
+    assert_eq!(get_document.route, "/documents/{}");
+    assert!(get_document.rivals.contains(&system_skills()));
+    assert_eq!(
+        analyzer
+            .may_call("let () = Code_mode.run (fun _ -> `Null)")
+            .await
+            .unwrap(),
+        Analysis::Calls(Default::default())
+    );
+
+    // A program that reaches past the SDK's values passes the policy but
+    // cannot be analyzed; the reason carries its location.
+    let forged =
+        include_str!("../../../../../../packages/sdk-ocaml/analyzer/test/corpus/forged_request.ml");
+    assert_eq!(
+        analyzer.may_call(forged).await.unwrap(),
+        Analysis::CannotAnalyze(vec![AnalysisReason {
+            message:
+                "builds a Macro_sdk_runtime.Request.t by hand, so its operation cannot be known"
+                    .into(),
+            line: 3,
+            column: 3,
+        }])
+    );
+    let unsafe_get = "let x = Array.unsafe_get [| 1 |] 5\nlet () = Code_mode.run (fun _ -> `Int x)";
+    assert!(
+        matches!(
+            analyzer.may_call(unsafe_get).await.unwrap(),
+            Analysis::CannotAnalyze(reasons) if reasons.len() == 1 && reasons[0].line == 1
+        ),
+        "unsafe_get"
+    );
+
+    // Type errors and policy refusals are the compile step's diagnostics.
+    assert!(matches!(
+        analyzer.may_call("let () = Code_mode.run (fun _ -> `Int \"x\")").await.unwrap(),
+        Analysis::Diagnostics(found) if found.len() == 1
+    ));
+    assert!(matches!(
+        analyzer.may_call("let () = Code_mode.run (fun _ -> Obj.magic 0)").await.unwrap(),
+        Analysis::Diagnostics(found) if found[0].message.contains("Obj is not allowed")
+    ));
+    assert!(matches!(
+        analyzer.may_call(" ").await,
+        Err(CheckError::InvalidSource)
+    ));
+    assert_eq!(
+        std::fs::read_dir(root.path().join("analyses"))
+            .unwrap()
+            .count(),
+        0
+    );
+}
+
+#[tokio::test]
+#[ignore = "requires pinned Deno runtime and the OCaml bundle"]
+async fn the_ocaml_analyzer_gives_up_at_its_deadline() {
+    use crate::outbound::ocaml::analyze::OcamlAnalyzer;
+    let root = tempfile::tempdir().unwrap();
+    let runner = runner(root.path()).await;
+    let bundle = Arc::clone(runner.ocaml_bundle().expect(NO_BUNDLE));
+    let analyzer = OcamlAnalyzer::new(bundle, root.path().join("analyses"), 1, 64 * 1024)
+        .await
+        .unwrap();
+    let started = std::time::Instant::now();
+    assert!(matches!(
+        analyzer.may_call(&slow_to_compile()).await,
+        Err(CheckError::Busy)
+    ));
+    assert!(started.elapsed() < std::time::Duration::from_secs(15));
+}
+
+/// The `get_contacts` program the backstop tests run, and what it may send.
+const GET_CONTACTS: &str = "let () = Code_mode.run @@ fun { macro; _ } -> let reply = Macro_sdk_fetch.call_exn macro (Macro_sdk.Contacts.get_contacts ()) in `Int (List.length reply.contacts)";
+
+/// Reads the document `system_skills`: `/documents/{}` with a parameter equal
+/// to the literal segment of another operation's route.
+const GET_SYSTEM_SKILLS: &str = "let () = Code_mode.run @@ fun { macro; _ } -> ignore (Macro_sdk_fetch.call_exn macro (Macro_sdk.Storage.get_document ~document_id:\"system_skills\" ())); `Null";
+
+fn system_skills() -> SdkRoute {
+    SdkRoute {
+        service: "storage".into(),
+        route: "/documents/system_skills".into(),
+    }
+}
+
+fn call(service: &str, operation_id: &str, method: &str, route: &str) -> SdkCall {
+    SdkCall {
+        operation: SdkOperation {
+            service: service.into(),
+            operation_id: operation_id.into(),
+        },
+        method: method.into(),
+        route: route.into(),
+        rivals: Vec::new(),
+    }
+}
+
+/// Run `GET_CONTACTS` limited to `allowed`, against a stub that answers
+/// once; returns the events, the outcome and the request the stub got.
+async fn run_gated(
+    allowed: Option<Vec<SdkCall>>,
+) -> (Vec<ExecutionEvent>, Outcome, Option<String>) {
+    run_gated_program(GET_CONTACTS, allowed).await
+}
+
+/// Run `program` limited to `allowed`, as [`run_gated`].
+async fn run_gated_program(
+    program: &str,
+    allowed: Option<Vec<SdkCall>>,
+) -> (Vec<ExecutionEvent>, Outcome, Option<String>) {
+    let (_root, service) = setup_ocaml(Limits::default()).await;
+    let listener = TcpListener::bind("127.0.0.1:0").await.unwrap();
+    let address = listener.local_addr().unwrap();
+    let server = tokio::spawn(async move {
+        let (mut stream, _) = listener.accept().await.unwrap();
+        let request = read_request(&mut stream).await;
+        respond(&mut stream, r#"{"contacts":["macro|a@example.com"]}"#).await;
+        request
+    });
+    let environment = RunEnvironment {
+        token: "fixture-run-token".into(),
+        endpoints: SdkEndpoints {
+            hosts: BTreeMap::from([
+                ("contacts".into(), format!("http://{address}")),
+                ("storage".into(), format!("http://{address}/storage")),
+            ]),
+            web_app_url: "https://app.example.test".into(),
+        },
+        allowed_operations: allowed,
+        ..RunEnvironment::default()
+    };
+    let (events, outcome) = run_ocaml(&service, program, 10_000, environment).await;
+    service.shutdown().await;
+    let request = if server.is_finished() {
+        Some(server.await.unwrap())
+    } else {
+        server.abort();
+        None
+    };
+    (events, outcome, request)
+}
+
+#[tokio::test]
+#[ignore = "requires pinned Deno runtime and the OCaml bundle"]
+async fn an_ocaml_call_the_gate_admitted_is_sent() {
+    let (events, outcome, request) = run_gated(Some(vec![call(
+        "contacts",
+        "get_contacts",
+        "GET",
+        "/contacts",
+    )]))
+    .await;
+    assert!(
+        matches!(&outcome, Outcome::Succeeded { value } if value == &serde_json::json!(1)),
+        "{outcome:?}"
+    );
+    assert!(request.unwrap().starts_with("GET /contacts "));
+    assert_eq!(
+        progress(&events)
+            .iter()
+            .map(|event| event["status"].as_str().unwrap())
+            .collect::<Vec<_>>(),
+        ["started", "completed"]
+    );
+}
+
+#[tokio::test]
+#[ignore = "requires pinned Deno runtime and the OCaml bundle"]
+async fn an_ocaml_call_outside_what_the_gate_admitted_is_never_sent() {
+    // Left out, on another route, another method, or under another
+    // service's host: refused before it is sent.
+    for allowed in [
+        vec![],
+        vec![call(
+            "storage",
+            "create_task_handler",
+            "POST",
+            "/documents/create_task",
+        )],
+        vec![call("contacts", "get_contacts", "GET", "/contacts/{}")],
+        vec![call("contacts", "get_contacts", "POST", "/contacts")],
+        vec![call("contacts", "get_contact", "GET", "/contacts")],
+    ] {
+        let (events, outcome, request) = run_gated(Some(allowed.clone())).await;
+        assert_eq!(request, None, "{allowed:?}");
+        let error = failure(&outcome);
+        assert!(
+            error.message.contains(
+                "contacts.get_contacts is outside what this program was checked to call; it was not sent."
+            ),
+            "{allowed:?}: {error:?}"
+        );
+        assert_eq!(
+            progress(&events)
+                .iter()
+                .map(|event| (
+                    event["operation"].as_str().unwrap(),
+                    event["status"].as_str().unwrap()
+                ))
+                .collect::<Vec<_>>(),
+            [("getContacts", "refused")],
+            "{allowed:?}"
+        );
+    }
+}
+
+#[tokio::test]
+#[ignore = "requires pinned Deno runtime and the OCaml bundle"]
+async fn a_parameter_that_reaches_a_more_specific_route_is_never_sent() {
+    let get_document = SdkCall {
+        rivals: vec![system_skills()],
+        ..call("storage", "get_document", "GET", "/documents/{}")
+    };
+    let (events, outcome, request) =
+        run_gated_program(GET_SYSTEM_SKILLS, Some(vec![get_document.clone()])).await;
+    assert_eq!(request, None);
+    assert!(
+        failure(&outcome).message.contains(
+            "storage.get_document is outside what this program was checked to call; it was not sent."
+        ),
+        "{outcome:?}"
+    );
+    assert_eq!(
+        progress(&events)
+            .iter()
+            .map(|event| event["status"].as_str().unwrap())
+            .collect::<Vec<_>>(),
+        ["refused"]
+    );
+
+    // Any other document id goes to get_document's own route.
+    let (_, _, request) = run_gated_program(
+        &GET_SYSTEM_SKILLS.replace("system_skills", "doc-1"),
+        Some(vec![get_document]),
+    )
+    .await;
+    assert!(
+        request
+            .as_deref()
+            .is_some_and(|request| request.starts_with("GET /storage/documents/doc-1 ")),
+        "{request:?}"
+    );
+}
+
+#[tokio::test]
+#[ignore = "requires pinned Deno runtime and the OCaml bundle"]
+async fn an_ocaml_run_without_a_gate_sends_as_before() {
+    let (_, outcome, request) = run_gated(None).await;
+    assert!(matches!(outcome, Outcome::Succeeded { .. }), "{outcome:?}");
+    assert!(request.is_some());
+}
+
+#[tokio::test]
+#[ignore = "requires pinned Deno runtime"]
+async fn a_javascript_run_cannot_be_limited_to_operations() {
+    let (_root, service) = setup(Limits::default()).await;
+    let (_, outcome) = collect(
+        service
+            .execute(
+                ExecuteRequest {
+                    source: "export async function main() { return 1; }".into(),
+                    timeout_ms: 10_000,
+                    language: Language::Javascript,
+                },
+                RunEnvironment {
+                    allowed_operations: Some(vec![]),
+                    ..RunEnvironment::default()
+                },
+            )
+            .unwrap(),
+    )
+    .await;
+    assert_eq!(failure(&outcome).code, FailureCode::Internal);
+    service.shutdown().await;
 }
