@@ -24,13 +24,30 @@ WITH limited_companies AS (
                     ELSE c.last_interaction
                 END AS sort_ts,
                 uh."updatedAt"::timestamptz AS viewed_at
-            FROM crm_companies c
-            LEFT JOIN "UserHistory" uh
-                ON uh."itemId" = c.id::text
-               AND uh."itemType" = 'crm_company'
-               AND uh."userId" = $8
+            FROM (
+                -- The ID alone must choose the index. With the team predicate
+                -- inside this fence, stale estimates can scan the entire team
+                -- for a small explicit set. ANY retains duplicate-ID semantics.
+                SELECT id, team_id, custom_name, email_sync, hidden,
+                       first_interaction, last_interaction
+                FROM crm_companies
+                WHERE id = ANY($2::uuid[])
+                OFFSET 0
+            ) c
+            LEFT JOIN LATERAL (
+                -- Seek one row by the full history primary key, then require
+                -- an exact match below. Equality alone can choose a stale
+                -- user-only index and scan the viewer's history per company;
+                -- an item-only fence reads every viewer of a popular company.
+                SELECT "userId", "itemId", "itemType", "updatedAt"
+                FROM "UserHistory"
+                WHERE ("userId", "itemId", "itemType") >= ($8, c.id::text, 'crm_company')
+                ORDER BY "userId", "itemId", "itemType"
+                LIMIT 1
+            ) uh ON uh."userId" = $8
+                AND uh."itemId" = c.id::text
+                AND uh."itemType" = 'crm_company'
             WHERE cardinality($2::uuid[]) > 0
-              AND c.id = ANY($2::uuid[])
               AND c.team_id = $1
               AND c.hidden = COALESCE($5::bool, FALSE)
         )
