@@ -252,12 +252,16 @@ behind `enable-agent-teammates` (on in dev) and the Macro computers rollout,
 narrow page the two invite buttons wrap, together, onto their own line. The
 desktop settings sidebar lists **Invite agents** under **Invite your team** for
 the same viewers. Members, and everyone while a flag is off or still loading,
-see only the people invite. **Invite Agent** opens **Invite an agent**, which asks only for a name and the
-agent's computer size, with no explanatory text around them (layout A,
+see only the people invite. Each entry opens its own form: **Invite Human** and
+**Invite your team** the people invite, **Invite Agent** and **Invite agents**
+the agent form, and neither has a People/Agent switch. **Invite an agent**
+asks only for a name and the agent's computer size, with no explanatory text
+around them: a 64px picture at the top left, beside the field labelled
+**Name your agent teammate**, then **Computer** (layout A,
 `components/agent-invite-layout-a.tsx`; the form hands it named parts so
 another layout can replace it). Voice and role come later, and the agent asks
 what to take on once it is online. With `ENABLE_AGENT_FACES`, each opening
-starts with a random face beside the name. **Shuffle face** changes its seed
+starts with a random face in that picture. **Shuffle face** changes its seed
 and keeps pinned parts. **Edit picture** opens tabs for Head, Hair, Face,
 Extras and Outfit; choosing a part pins it, **Any** unpins just that part,
 and **Reset** clears all pins. Desktop uses a popover; phones stack a picture
@@ -265,7 +269,7 @@ sheet over the invite. **Upload photo** replaces the preview and hides Shuffle;
 **Use a generated face** brings back the same draft face. Add saves the face
 recipe and uploads a PNG for other clients; a failed PNG upload still saves
 the recipe. A failed photo upload still adds the agent and reports the failure.
-With the flag off, the avatar shows the name's first letter.
+With the flag off, the picture shows the name's first letter.
 
 Owners and admins can use an agent row's **Change picture** menu item while
 faces are enabled. It opens a dialog (a drawer on phones) with the saved face
