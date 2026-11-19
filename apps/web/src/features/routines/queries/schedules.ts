@@ -273,6 +273,29 @@ export function invalidateSchedules() {
   ]);
 }
 
+async function cacheDetachedSchedule(schedule: ScheduledAction) {
+  const scheduleId = schedule.id;
+  if (!scheduleId) return;
+  const detailKey = scheduledActionKeys.detail({ scheduleId }).queryKey;
+  const childKeys = [
+    scheduledActionKeys.subRoutines.queryKey,
+    scheduledActionKeys.children._def,
+  ];
+  // Don't let a read started before the detach restore the old parent link.
+  await Promise.all(
+    [...childKeys, scheduledActionKeys.list.queryKey, detailKey].map(
+      (queryKey) => queryClient.cancelQueries({ queryKey })
+    )
+  );
+  for (const queryKey of childKeys) {
+    queryClient.setQueriesData<ScheduledAction[]>({ queryKey }, (rows) =>
+      rows?.filter((row) => row.id !== scheduleId)
+    );
+  }
+  queryClient.setQueryData(detailKey, schedule);
+  upsertSchedule(schedule);
+}
+
 function _invalidateScheduleHistory(scheduleId: string) {
   return queryClient.invalidateQueries({
     queryKey: scheduledActionKeys.history({ scheduleId }).queryKey,
@@ -437,11 +460,7 @@ export function useDetachScheduleMutation(
     ...withCallbacks(
       {
         onSuccess: async (schedule: ScheduledAction) => {
-          if (schedule.id)
-            queryClient.setQueryData(
-              scheduledActionKeys.detail({ scheduleId: schedule.id }).queryKey,
-              schedule
-            );
+          await cacheDetachedSchedule(schedule);
           await invalidateSchedules();
         },
       },

@@ -6,16 +6,24 @@ import { render } from 'solid-js/web';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { scheduledActionKeys } from './keys';
 import {
+  useChildrenQuery,
   useCodeUpgradesQuery,
   useCreateScheduleMutation,
+  useDetachScheduleMutation,
   useRunScheduleNowMutation,
+  useSchedulesQuery,
   useSetScheduleEnabledMutation,
+  useSubRoutinesQuery,
 } from './schedules';
 
 const setEnabled = vi.hoisted(() => vi.fn());
 const createSchedule = vi.hoisted(() => vi.fn());
 const runNow = vi.hoisted(() => vi.fn());
 const listCodeUpgrades = vi.hoisted(() => vi.fn());
+const detach = vi.hoisted(() => vi.fn());
+const listSchedules = vi.hoisted(() => vi.fn());
+const listSubRoutines = vi.hoisted(() => vi.fn());
+const listChildren = vi.hoisted(() => vi.fn());
 const track = vi.hoisted(() => vi.fn());
 vi.mock('@service-scheduled-action/client', () => ({
   scheduledActionClient: {
@@ -23,6 +31,10 @@ vi.mock('@service-scheduled-action/client', () => ({
     createSchedule,
     runNow,
     listCodeUpgrades,
+    detach,
+    listSchedules,
+    listSubRoutines,
+    listChildren,
   },
 }));
 vi.mock('@app/lib/analytics', () => ({ analytics: { track } }));
@@ -85,6 +97,10 @@ beforeEach(() => {
   createSchedule.mockReset();
   runNow.mockReset();
   listCodeUpgrades.mockReset();
+  detach.mockReset();
+  listSchedules.mockReset();
+  listSubRoutines.mockReset();
+  listChildren.mockReset();
   track.mockReset();
   queryClient.setQueryData(scheduledActionKeys.list.queryKey, [routine, other]);
 });
@@ -138,6 +154,60 @@ it('uses the approval trace context again on an actual query retry', async () =>
   const options = { throwOnError: true, parentSpan };
   await parentSpan.run(() => query.refetch(options));
   expect(contexts).toEqual([true, true]);
+});
+
+it('moves a detached copy out of both child caches when list refreshes fail', async () => {
+  queryClient.setDefaultOptions({ queries: { retry: false } });
+  const copy: ScheduledAction = {
+    ...routine,
+    id: 'copy',
+    sub_routine: { parent_id: 'routine', created_by_run_id: 'run' },
+    task: { sub_routine: 'remind', inputs: {} },
+  };
+  const sibling = { ...copy, id: 'sibling' };
+  const kept = { ...routine, id: 'copy', configuration_revision: 2 };
+  const detailKey = scheduledActionKeys.detail({ scheduleId: 'copy' }).queryKey;
+  const childrenKey = scheduledActionKeys.children({
+    scheduleId: 'routine',
+  }).queryKey;
+  const activeKey = scheduledActionKeys.subRoutines.queryKey;
+  queryClient.setQueryData(detailKey, copy);
+  listSchedules.mockResolvedValue(ok([routine, other]));
+  listSubRoutines.mockResolvedValue(ok([copy, sibling]));
+  listChildren.mockResolvedValue(ok([copy, sibling]));
+  detach.mockResolvedValue(ok(kept));
+
+  let mutation!: ReturnType<typeof useDetachScheduleMutation>;
+  function Probe() {
+    useSchedulesQuery(() => true);
+    useSubRoutinesQuery(() => true);
+    useChildrenQuery(
+      () => 'routine',
+      () => true
+    );
+    mutation = useDetachScheduleMutation();
+    return null;
+  }
+  dispose = render(
+    () => (
+      <QueryClientProvider client={queryClient}>
+        <Probe />
+      </QueryClientProvider>
+    ),
+    document.createElement('div')
+  );
+  await vi.waitFor(() =>
+    expect(queryClient.getQueryData(childrenKey)).toEqual([copy, sibling])
+  );
+  for (const read of [listSchedules, listSubRoutines, listChildren])
+    read.mockResolvedValue(err([{ message: 'List unavailable' }]));
+  await mutation.mutateAsync({ scheduleId: 'copy' });
+
+  expect(queryClient.getQueryState(childrenKey)?.status).toBe('error');
+  expect(queryClient.getQueryData(childrenKey)).toEqual([sibling]);
+  expect(queryClient.getQueryData(activeKey)).toEqual([sibling]);
+  expect(queryClient.getQueryData(detailKey)).toEqual(kept);
+  expect(schedules()).toEqual([kept, routine, other]);
 });
 
 describe('routine activation', () => {
