@@ -91,3 +91,43 @@ async fn an_agent_already_online_is_not_handed_over_again() {
             .is_empty()
     );
 }
+
+/// A macrod too old to take an agent fails the agent computer's start the
+/// moment it connects, instead of at the agent's start deadline.
+#[tokio::test]
+async fn an_agent_computer_whose_macrod_cannot_take_an_agent_gives_up_on_connect() {
+    let operator = operator(FakeFleet::default()).await;
+    let id = paid_computer(&operator).await;
+    operator.repo.agents.lock().unwrap().insert(id, ada());
+    operator.run_fleet_effects().await.unwrap();
+    {
+        let mut computers = operator.repo.computers.lock().unwrap();
+        let computer = computers.get_mut(&id).unwrap();
+        computer.harness_id = Some(HARNESS);
+        computer.state.awaiting_agent = true;
+        computer.state.phase = crate::domain::lifecycle::Phase::Booting;
+    }
+
+    assert!(
+        operator
+            .macrod_connected(HARNESS, false)
+            .await
+            .unwrap()
+            .is_computer()
+    );
+    operator.run_fleet_effects().await.unwrap();
+
+    let state = operator.repo.computers.lock().unwrap()[&id].state.clone();
+    assert_eq!(
+        state.failure,
+        Some(crate::domain::lifecycle::Failure::AgentUnsupported)
+    );
+    assert!(
+        operator
+            .harnesses
+            .delivered_agents
+            .lock()
+            .unwrap()
+            .is_empty()
+    );
+}

@@ -969,6 +969,7 @@ dependencies = [
  "tokio-tungstenite 0.28.0",
  "tracing",
  "utoipa",
+ "zeroize",
 ]
 
 [[package]]
