@@ -32,7 +32,42 @@ pub struct BuildOptions {
 /// Resolve a [`BinariesDir`] for the run: from `--binaries-dir`, from the
 /// existing target dir (`--no-build`), or by building with cargo.
 pub fn resolve(stage: &Stage, target: Target, opts: &BuildOptions) -> Result<BinariesDir> {
-    let dir = match &opts.binaries_dir {
+    let dir = source(stage, target, opts)?;
+    dir.validate(&super::inventory::local_binaries())?;
+    Ok(dir)
+}
+
+/// [`resolve`] for a bring-up that runs only `services` from `/app/out`, such
+/// as an infra-only stack's emulators: builds and checks just those.
+pub fn resolve_services(
+    stage: &Stage,
+    target: Target,
+    no_build: bool,
+    binaries_dir: Option<std::path::PathBuf>,
+    services: Vec<&'static RustService>,
+) -> Result<BinariesDir> {
+    if services.is_empty() && binaries_dir.is_none() {
+        // Nothing runs from `/app/out`, which compose still mounts.
+        return Ok(BinariesDir::TargetDir(
+            super::workspace_root().join(target.debug_dir()),
+        ));
+    }
+    let binaries: Vec<&str> = services.iter().map(|service| service.cargo_bin).collect();
+    let dir = source(
+        stage,
+        target,
+        &BuildOptions {
+            no_build,
+            binaries_dir,
+            only: Some(services),
+        },
+    )?;
+    dir.validate(&binaries)?;
+    Ok(dir)
+}
+
+fn source(stage: &Stage, target: Target, opts: &BuildOptions) -> Result<BinariesDir> {
+    Ok(match &opts.binaries_dir {
         Some(dir) => BinariesDir::classify(dir)?,
         None if opts.no_build => {
             super::arch::ensure_linux_host()?;
@@ -43,7 +78,5 @@ pub fn resolve(stage: &Stage, target: Target, opts: &BuildOptions) -> Result<Bin
             cargo_build::run(stage, target, opts.only.as_deref())?;
             BinariesDir::classify(&super::workspace_root().join(target.debug_dir()))?
         }
-    };
-    dir.validate(&super::inventory::local_binaries())?;
-    Ok(dir)
+    })
 }

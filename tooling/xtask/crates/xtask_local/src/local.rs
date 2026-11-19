@@ -972,9 +972,22 @@ fn prepare(
     let target = arch::detect()?;
     build::ensure_runtime_image(stage, target, false)?;
     let binaries = if infra_only {
-        // Compose still emits `/app/out` mounts, but infra-only never starts
-        // those services. Bake runs this in parallel with the service build.
-        build::BinariesDir::TargetDir(workspace_root().join(target.debug_dir()))
+        // Infra-only starts no app services, but FusionAuth's kickstart needs
+        // the Outlook emulator it discovers the Microsoft provider from.
+        let emulators = inventory::RUST_SERVICES
+            .iter()
+            .filter(|service| {
+                service.compose_name == microsoft_emulator::SERVICE
+                    && microsoft_emulator::stands_in(mode, &env.merged)
+            })
+            .collect();
+        build::resolve_services(
+            stage,
+            target,
+            args.build.no_build,
+            args.build.binaries_dir.clone(),
+            emulators,
+        )?
     } else {
         let mark = staleness::BuildMark::now(&repo_root());
         let binaries = build::resolve(
