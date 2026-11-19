@@ -713,7 +713,7 @@ STC-076	not shown as the row says (toast: This scheduled email was sent. Your co
 STC-077	On main, durable Undo skips the mounted reply's notice when the send journal has restored the first draft. The test holds the newer reply's first save until cancellation, then asserts the notice, both saved drafts, and the newer reply after reload.
 STC-078	not shown as the row says (toast: <reason> with action Retry inbox change (Could not change inbox. Retry the same inbox to recover. when there is no reason)): its rendering is switched off or changed in src/lib/queries/email/draft.ts
 STC-079	not shown as the row says (toast: Retry the previous inbox change before choosing another inbox.): its rendering is switched off or changed in src/features/email-compose/primitives/draft-transfer.ts
-STC-080	not shown as the row says (toast: Previously saved attachments could not be copied to the new draft. Please attach those files again.): its rendering is switched off or changed in src/features/email-compose/primitives/reply-composer.ts
+STC-080	The reopened reply keeps showing the deleted draft's file or omits the reattachment warning after its pending save commits a replacement without that file.
 STC-081	not shown as the row says (Saved on this device; waiting to sync — Changes stay on this device until you are back online.): its rendering is switched off or changed in src/features/email-compose/primitives/draft-sync-status.ts
 STC-082	The sync banner's detail for a draft the server refused, "The server could not save this draft.", is replaced by "Save refused." in draft-sync-status.ts.
 STC-083	not shown as the row says (Changes could not be saved on this device — Keep this editor open until saving succeeds. (Retry)): its rendering is switched off or changed in src/features/email-compose/primitives/draft-sync-status.ts
@@ -763,7 +763,7 @@ STC-405	not shown as the row says (toast: Failed to update schedule): its render
 STC-406	not shown as the row says (toast: This email is scheduled for <time>. Choose a new time to update it, or cancel the schedule to edit.): its rendering is switched off or changed in src/features/email-compose/primitives/email-composer.ts
 STC-407	not shown as the row says (toast: These attachments exceed the destination inbox’s size limit.): its rendering is switched off or changed in src/features/email-compose/primitives/draft-transfer.ts
 STC-408	not shown as the row says (toast: Reconnect and let the draft finish saving before changing inboxes.): its rendering is switched off or changed in src/features/email-compose/primitives/draft-transfer.ts
-STC-409	not shown as the row says (toast: The draft changed elsewhere. Your newer text was kept as a new draft.): its rendering is switched off or changed in src/features/email-compose/primitives/reply-composer.ts
+STC-409	A pending reply save commits before the deletion read returns, and the composer omits the notice or fails to preserve the newer text in exactly one replacement draft.
 STC-411	not shown as the row says (toast: This email was already sent. Your newer text was kept as a new draft and was not sent.): its rendering is switched off or changed in src/features/email-compose/primitives/email-composer.ts
 STC-412	not shown as the row says (toast: This draft is no longer available.): its rendering is switched off or changed in src/features/email-compose/primitives/reply-composer.ts
 STC-413	not shown as the row says (toast: Draft could not be synced): its rendering is switched off or changed in src/features/email-compose/primitives/email-composer.ts

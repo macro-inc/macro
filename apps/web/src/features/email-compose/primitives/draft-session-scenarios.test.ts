@@ -41,6 +41,29 @@ afterEach(() => {
 });
 
 describe('draft session: reply composer', () => {
+  it('adopts an existing reply on the first save without a replacement notice', async () => {
+    const context = createComposeContext();
+    vi.mocked(context.drafts.saveDraft).mockResolvedValue(
+      committed('existing-reply')
+    );
+    const state = mountReplyComposer(context);
+    const lifecycle = vi.mocked(context.draftLifecycle.observe).mock
+      .calls[0][0];
+    try {
+      state.edit('New text for this reply');
+      await vi.advanceTimersByTimeAsync(600);
+
+      const [first] = savedInputs(context);
+      expect(first.draft.db_id).toBeUndefined();
+      expect(first.clientHandles?.draftId).toBeTruthy();
+      expect(lifecycle.draftId()).toBe('existing-reply');
+      expect(context.drafts.saveDraft).toHaveBeenCalledOnce();
+      expect(context.notices.feedback.alert).not.toHaveBeenCalled();
+    } finally {
+      state.dispose();
+    }
+  });
+
   it('preserves the seeded ID as a handle until a save confirms it when lookup has no record', async () => {
     const context = createComposeContext();
     context.drafts.readDraft = vi.fn(async () => undefined);

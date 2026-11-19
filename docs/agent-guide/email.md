@@ -1161,6 +1161,14 @@ not recreate the discarded working copy. Repeat after Undo revives the draft:
 the old tab must not overwrite the restored copy even when revisions match.
 A newly composed reply still saves.
 
+In separate browser contexts, hold a reply's save with newer text, then discard
+its old draft elsewhere. Release the save before the composer reads the
+deletion. The composer must explain that it kept the newer text, and the thread
+must have one replacement draft after reopening. If the saved file was only
+available on the deleted draft, its chip disappears and the composer asks for
+the file again. If the original composer still has the bytes, the replacement
+uploads them again.
+
 For offline replies, use a received email so recipients come from its contacts.
 Type a reply, leave the thread, and reopen it while still offline; repeat both
 immediately after typing and after waiting for autosave. The reply body and

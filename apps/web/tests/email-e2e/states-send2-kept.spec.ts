@@ -14,7 +14,7 @@ import {
   type ThreadPreview,
   test,
 } from './harness/fixtures';
-import { notice } from './harness/send';
+import { notice, threadMessages } from './harness/send';
 import {
   backfilled,
   deleteElsewhere,
@@ -228,7 +228,8 @@ test('a save refused because the scheduled email went out says the composer was 
 async function replyWithFile(
   page: Page,
   mailbox: Mailbox,
-  subject: string
+  subject: string,
+  reopen = true
 ): Promise<{ thread: ThreadPreview; draftId: string; file: Locator }> {
   await relayUploads(page);
   const { thread, draftId } = await savedReply(page, mailbox, subject);
@@ -246,7 +247,7 @@ async function replyWithFile(
     buffer: Buffer.from('The notes.'),
   });
   await stored;
-  await mailbox.open(`/app/mail/${thread.id}`);
+  if (reopen) await mailbox.open(`/app/mail/${thread.id}`);
   const file = page.getByRole('button', { name: 'Remove notes.txt' });
   await expect(file).toBeVisible();
   await replyBody(page).click();
@@ -289,29 +290,77 @@ test('newer text in a reply is kept as a new draft, without its saved files, whe
     .toBeTruthy();
 });
 
-// When this fails, newer text in a reply that waits to be saved when another
-// tab deletes the draft is saved as a new draft without a word, and the
-// composer still shows the file the new draft lacks (handoff
-// deleted-draft-sometimes-saved-silently): text kept on this device stops
-// the composer reading what became of its draft.
-test('known bug: deleted-draft-sometimes-saved-silently: newer text in a reply waiting to be saved is kept as a new draft, without its saved files, when its draft is deleted elsewhere @known-bug', {
-  tag: '@known-bug',
-}, async ({ page, mailbox }) => {
-  const { draftId, file } = await replyWithFile(page, mailbox, 'Spare pages');
-  // Held on its way, the save leaves the newer text on this device alone.
-  const saving = await holdOperation(page, 'SaveEmailDraft');
-  await page.keyboard.type(` ${NEWER}`);
-  await saving.arrived;
-  await deleteElsewhere(mailbox, draftId);
-  await returnToTab(page);
-  await saving.release();
-  await expect(
-    notice(
+// The stale save can reach the service before the next lifecycle read. A
+// reopened reply has only the saved file reference. The original composer
+// still has its bytes and can upload them again.
+for (const scenario of [
+  {
+    title:
+      'newer text in a reply waiting to be saved is kept as a new draft, without its saved files, when its draft is deleted elsewhere',
+    reopen: true,
+    files: 0,
+  },
+  {
+    title: 'a replacement reply uploads the file it still has on this device',
+    reopen: false,
+    files: 1,
+  },
+]) {
+  test(scenario.title, async ({ page, mailbox }) => {
+    const { thread, draftId, file } = await replyWithFile(
       page,
-      'The draft changed elsewhere. Your newer text was kept as a new draft.'
-    )
-  ).toBeVisible();
-  saw('STC-409');
-  await expect(file).toHaveCount(0);
-  saw('STC-080');
-});
+      mailbox,
+      'Spare pages',
+      scenario.reopen
+    );
+    const saving = await holdOperation(page, 'SaveEmailDraft');
+    await page.keyboard.type(` ${NEWER}`);
+    await saving.arrived;
+    const reading = await holdRequests(page, DRAFT_READ);
+    try {
+      await deleteElsewhere(mailbox, draftId);
+      await returnToTab(page);
+      await saving.release();
+      await expect(
+        notice(
+          page,
+          'The draft changed elsewhere. Your newer text was kept as a new draft.'
+        )
+      ).toBeVisible();
+      saw('STC-409');
+      if (scenario.reopen) {
+        await expect(
+          notice(
+            page,
+            'Previously saved attachments could not be copied to the new draft. Please attach those files again.'
+          )
+        ).toBeVisible();
+        saw('STC-080');
+      }
+      await expect(file).toHaveCount(scenario.files);
+      await expect
+        .poll(async () => {
+          const replacement = await savedDraft(
+            mailbox,
+            { threadId: thread.id },
+            NEWER
+          );
+          const drafts = (await threadMessages(mailbox, thread.id)).filter(
+            (message) => message.is_draft
+          );
+          return drafts.map((message) => ({
+            replacement:
+              message.db_id === replacement && message.db_id !== draftId,
+            files: message.attachments_draft?.length ?? 0,
+          }));
+        })
+        .toEqual([{ replacement: true, files: scenario.files }]);
+    } finally {
+      await reading.release();
+    }
+
+    await mailbox.open(`/app/mail/${thread.id}`);
+    await expect(replyBody(page)).toContainText(NEWER);
+    await expect(file).toHaveCount(scenario.files);
+  });
+}
