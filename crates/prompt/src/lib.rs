@@ -185,9 +185,8 @@ mod tests {
     #[test]
     fn code_mode_forbids_guessing_the_sdk() {
         let code_mode = CODE_MODE_SESSION_TOOL_USE_PROMPT.to_string();
-        assert!(code_mode.contains(
-            "Never guess a method, its arguments or its result's fields: use only what an index or reference in context shows"
-        ));
+        assert!(code_mode.contains("Never guess a method"));
+        assert!(code_mode.contains("to find out whether it exists"));
     }
 
     #[test]

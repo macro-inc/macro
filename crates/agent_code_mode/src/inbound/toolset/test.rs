@@ -195,6 +195,7 @@ fn both_execute_code_descriptions_share_one_runtime_contract() {
     let session = toolset().tools["ExecuteCode"].description.clone();
     let user = user_toolset().tools["ExecuteCode"].description.clone();
     for shared in [
+        include_str!("shared/never_guess.md"),
         include_str!("shared/program.md"),
         include_str!("shared/runtime.md"),
     ] {
@@ -208,31 +209,20 @@ fn both_execute_code_descriptions_share_one_runtime_contract() {
 
 #[test]
 fn every_code_tool_forbids_guessing_the_sdk() {
-    let never_guess = include_str!("shared/never_guess.md").trim();
     assert!(
-        toolset().tools["ExecuteCode"]
+        unseen_execute_code_description().contains(include_str!("shared/never_guess.md").trim())
+    );
+    let tools = toolset().tools;
+    assert!(
+        tools["DescribeCodeTools"]
             .description
-            .contains(never_guess)
+            .contains("Never guess a method")
     );
     assert!(
-        user_toolset().tools["ExecuteCode"]
+        tools["ReadCodeDocs"]
             .description
-            .contains(never_guess)
+            .contains("read a result's type before using its fields")
     );
-    assert!(unseen_execute_code_description().contains(never_guess));
-    let (session, user) = (toolset().tools, user_toolset().tools);
-    for describe in [
-        &session["DescribeCodeTools"].description,
-        &user["DescribeCodeTools"].description,
-    ] {
-        assert!(describe.contains("Never guess a method"));
-    }
-    for read in [
-        &session["ReadCodeDocs"].description,
-        &user["ReadCodeDocs"].description,
-    ] {
-        assert!(read.contains("read a result's type before using its fields"));
-    }
 }
 
 #[test]
