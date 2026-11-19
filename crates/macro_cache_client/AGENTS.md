@@ -20,7 +20,8 @@ behind its own Cargo feature.
   challenge can't be evicted apart from it and a server that predates binding
   never finds it. A taken code keeps its deadline on Redis's clock, and a
   restore puts it back until then, not for a fresh lifetime, or deletes it
-  when it can't set that deadline.
+  when it can't set that deadline. Its Lua scripts are files in `src/auth/`,
+  loaded with `include_str!`; both takes start with `deadline.lua`.
 
 ## Scope
 

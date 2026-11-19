@@ -33,19 +33,7 @@ const CHALLENGE_FIELD: &str = "challenge";
 /// late.
 macro_rules! deadline_lua {
     () => {
-        r"
-local function deadline_ms(key)
-  if (redis.REDIS_VERSION_NUM or 0) >= 0x070000 then
-    return redis.call('PEXPIRETIME', key)
-  end
-  local now = redis.call('TIME')
-  local ttl_ms = redis.call('PTTL', key)
-  if ttl_ms < 0 then
-    return ttl_ms
-  end
-  return now[1] * 1000 + math.floor(now[2] / 1000) + ttl_ms
-end
-"
+        include_str!("auth/deadline.lua")
     };
 }
 
@@ -56,39 +44,13 @@ end
 /// not written by this module: it is spent and never redeems. Each script
 /// touches one key, so it runs on a cluster too.
 /// KEYS: the bound key. ARGV: the record's fields.
-const TAKE_BOUND_MOBILE_LOGIN_SESSION: &str = concat!(
-    deadline_lua!(),
-    r"
-local bound = redis.call('HMGET', KEYS[1], ARGV[1], ARGV[2])
-if not bound[1] then
-  return false
-end
-local expires_at_ms = deadline_ms(KEYS[1])
-redis.call('DEL', KEYS[1])
-if not bound[2] or expires_at_ms < 0 then
-  return false
-end
-return {bound[1], expires_at_ms, bound[2]}
-"
-);
+const TAKE_BOUND_MOBILE_LOGIN_SESSION: &str =
+    concat!(deadline_lua!(), include_str!("auth/take_bound.lua"));
 
 /// The same for an unbound session: its refresh token and deadline.
 /// KEYS: the unbound key.
-const TAKE_UNBOUND_MOBILE_LOGIN_SESSION: &str = concat!(
-    deadline_lua!(),
-    r"
-local refresh_token = redis.call('GET', KEYS[1])
-if not refresh_token then
-  return false
-end
-local expires_at_ms = deadline_ms(KEYS[1])
-redis.call('DEL', KEYS[1])
-if expires_at_ms < 0 then
-  return false
-end
-return {refresh_token, expires_at_ms}
-"
-);
+const TAKE_UNBOUND_MOBILE_LOGIN_SESSION: &str =
+    concat!(deadline_lua!(), include_str!("auth/take_unbound.lua"));
 
 /// Puts a taken session back under its key until exactly its original
 /// deadline, unless that has passed or the code exists again. PEXPIREAT
@@ -104,29 +66,7 @@ return {refresh_token, expires_at_ms}
 /// fails only if Redis's permissions changed in between.
 /// KEYS: the session's key. ARGV: the refresh token, the deadline, then for
 /// a bound code the record's fields and challenge.
-const RESTORE_MOBILE_LOGIN_SESSION: &str = r"
-if redis.call('EXISTS', KEYS[1]) == 1 then
-  return 0
-end
-local now = redis.call('TIME')
-local ttl_ms = tonumber(ARGV[2]) - (now[1] * 1000 + math.floor(now[2] / 1000))
-if ttl_ms <= 0 then
-  return 0
-end
-if ARGV[3] then
-  redis.call('HSET', KEYS[1], ARGV[3], ARGV[1], ARGV[4], ARGV[5])
-elseif (redis.REDIS_VERSION_NUM or 0) >= 0x070000 then
-  redis.call('SET', KEYS[1], ARGV[1], 'PXAT', ARGV[2])
-else
-  redis.call('SET', KEYS[1], ARGV[1], 'PX', ttl_ms)
-end
-local pinned = redis.pcall('PEXPIREAT', KEYS[1], ARGV[2])
-if type(pinned) == 'table' and pinned.err then
-  redis.call('DEL', KEYS[1])
-  return pinned
-end
-return redis.call('EXISTS', KEYS[1])
-";
+const RESTORE_MOBILE_LOGIN_SESSION: &str = include_str!("auth/restore.lua");
 
 fn mobile_login_session_key(session_code: &str) -> String {
     format!("{MACRO_MOBILE_LOGIN_SESSION_PREFIX}{session_code}")
