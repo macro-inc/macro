@@ -209,6 +209,14 @@ tools — hexagonal, heavily feature-gated.
   in that snapshot too. If none of the requested contributors uses selected
   mode, keep the all-mail probe/page SQL without selected-rule work. General
   reads keep their existing page transaction.
+- Selected Team reads require an injected `EmailRuleDiscoveryService` on
+  `EmailPgRepo`. Discover once in the read snapshot and reuse complete contacts
+  in probe/page; all-mail reads call no discovery and keep their SQL unchanged.
+  Preserve typed resource-limit failures through `EmailErr` and Soup: return
+  HTTP 503 with the limit, never an empty or truncated page. The CRM core also
+  admits policy writes; do not implement separate limits in the email adapter.
+  A bare repository fails closed for selected reads if composition omitted
+  discovery. General mode-partition races remain a separate activation gate.
 - A requested sender may be a verified Gmail send-as alias, not just an inbox
   address: `resolve_sending_inbox` (AI tools) picks the inbox that owns it, and
   `resolve_sender` (drafts, REST `from`) checks it against the chosen inbox.
@@ -461,6 +469,15 @@ tools — hexagonal, heavily feature-gated.
   it. Subscription upkeep and webhook deliveries open
   `outlook.subscription.maintain` and `outlook.subscription.notify`; each
   lifecycle event logs "outlook subscription lifecycle event".
+- Subscription upkeep (`domain/mailbox/watches.rs`) counts failed runs in a
+  row in `email_mailbox_watch_work.failures` and backs off by it
+  (`upkeep_retry`): a refusal up to the 12 h renewal cadence, a transient
+  failure up to 30 minutes, throttling and token failures uncounted. Every
+  write that bumps the row's `revision` (reconnect, rebind, lifecycle events)
+  also resets `failures`; keep both in a new bump. Each
+  `outlook.subscription.maintain` span records the count it leaves
+  (`outlook.upkeep_failures`), and the health snapshot reports it as
+  `watch_failures`.
 - An Outlook message deleted at the provider keeps its row, marked
   `provider_missing` by `MailboxIngest::absent`, where Gmail's
   `delete_message` deletes it. `absent` leaves CRM cleanup candidates for its
@@ -535,6 +552,10 @@ tools — hexagonal, heavily feature-gated.
   index bound and every enqueue's `available_at = now()` revives it. Any query
   that reads queued or import-running state must leave those rows out, as
   `settle_import`, the health snapshot, the backfill status and resync do.
+  A recurring enqueue would revive them on every run, so queue a recheck
+  once per change: the folder catalog rechecks a folder's stored mail only
+  in the discovery that sees the folder leave, or move in or out of Deleted
+  Items.
   Throttling and token refusals give their claim back to `attempts`, and so
   does a transient provider failure (Graph 5xx or 408, a request Graph never
   answered) once its backoff is at 30 minutes, so a provider outage never
