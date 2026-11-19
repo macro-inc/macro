@@ -349,7 +349,9 @@ export function createTaskComposerProperties(args: {
     ).filter((id) => !args.hiddenPropertyIds?.includes(id));
   const addableDefinitions = () =>
     availableDefinitions().filter(
-      (definition) => !visibleIds().includes(definition.id)
+      (definition) =>
+        !visibleIds().includes(definition.id) &&
+        !args.hiddenPropertyIds?.includes(definition.id)
     );
   const addProperty = async (
     id: string,

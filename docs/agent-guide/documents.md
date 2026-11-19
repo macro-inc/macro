@@ -2633,6 +2633,16 @@ under **Contacts & Companies** in `@` mentions and under **People** in the
 command menu. Values show the record's name and open the company or contact.
 An entity can carry the property without listing it (set at creation or through
 the API); adding that property pins the existing value rather than clearing it.
+A custom entity property can point at a company or contact too. A task set that
+way is listed on the record's Tasks tab and in its References; every other
+record list and the Sales views read only the two system properties.
+**Create property** therefore points at them: a property named `Contact`,
+`Contacts`, `Company`, `Companies`, `Customer` or `Customers` shows a note under
+the name that the built-in property exists and what it links, with **Use
+Contacts** (or **Use Companies**), which leaves creation and opens that
+property's value instead. For every type but **Any Entity** the note adds that
+the type can't link to CRM records. **Create** still creates the property,
+except under a system property's exact name, which the server refuses.
 Calls are linked automatically
 when they end, from their participants and the invitees of the calendar event
 carrying the meeting link; verify on a finished call's `Properties`.
