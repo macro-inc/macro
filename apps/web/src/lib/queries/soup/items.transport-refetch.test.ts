@@ -156,7 +156,7 @@ describe('Soup refetch transport selection', () => {
   });
 
   it('does not treat REST placeholder data as a resolved current page', () => {
-    testState.restData = { entities: [] };
+    testState.restData = { entities: [], groups: undefined };
     testState.restPlaceholder = true;
     const query = mountGroupedQuery(false, 'rest');
     expect(query.hasPageData).toBe(false);
