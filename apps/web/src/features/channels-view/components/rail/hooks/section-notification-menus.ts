@@ -29,13 +29,19 @@ export function sectionNotificationMenus(
   settings: ChannelNotificationSettingsState,
   options?: {
     /**
-     * The owner of the sheet these menus open from, so their dialogs stack
-     * on it; desktop menus unmount on close and pass none.
+     * An owner that outlives the sheet these menus open from, for their
+     * dialogs; desktop menus unmount on close and pass none.
      */
     dialogOwner?: Owner | null;
+    /**
+     * Close the phone sheet before a dialog opens: a touch dialog over the
+     * still-open sheet loses its first tap.
+     */
+    closeSheet?: () => void;
   }
 ) {
   const dialogOptions = { owner: options?.dialogOwner };
+  const openingDialog = () => options?.closeSheet?.();
   const run = (write: Promise<unknown>) =>
     fireAndForget(write, 'channels-view');
 
@@ -56,6 +62,7 @@ export function sectionNotificationMenus(
       run(write());
       return;
     }
+    openingDialog();
     openSectionConflict(
       {
         sectionName: name,
@@ -125,6 +132,7 @@ export function sectionNotificationMenus(
             );
             return;
           }
+          openingDialog();
           openSectionSnooze((deadline) => {
             if (settings.sectionConflicts(section, { kind: 'mute' }).length) {
               changeSection(section, name, { kind: 'mute' }, snooze(deadline));

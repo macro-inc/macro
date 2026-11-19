@@ -165,9 +165,10 @@ export function MobileSectionsView(props: {
           .map((favorite) => favorite.entityId)
       ),
   });
-  // Sheets opened from the section's options sheet stack under its owner.
+  // Dialogs from the section's options sheet replace it, under this view.
   const sectionNotifications = sectionNotificationMenus(channelNotifications, {
     dialogOwner: getOwner(),
+    closeSheet: () => setOptionsFor(undefined),
   });
   const actions = useMobileSectionActions({
     enabled: () => sectionsEnabled() && channelTags().enabled,
