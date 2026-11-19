@@ -451,11 +451,13 @@ that listener is ready. Cancellation can stop the gate before startup finishes.
 - A new-email filter can name `inboxes` (email link ids, at most 25; empty is
   every inbox). Saving checks them against the owner's current own and
   delegated inboxes on create and on a trigger change, so a later disconnect
-  never blocks unrelated edits. `OwnerInboxes` reads them through the email
-  domain's `EmailRepo` (`EmailOwnerInboxes`), the list the app shows. The run
-  event keeps the received `inbox` only for routines with an inbox filter, so
-  dispatch re-checks the same filter. A shared template drops its inboxes:
-  they are the publisher's own.
+  never blocks unrelated edits. `OwnerInboxes` asks the email domain's
+  `EmailRepo` which of the picked ids the owner reads (`inbox_ids_among`, the
+  same own-plus-delegated set the app lists), so the check reads only the
+  picks. `routine.admit_event` counts the routines only their inboxes turned
+  away as `outside_inboxes`. The run event keeps the received `inbox` only
+  for routines with an inbox filter, so dispatch re-checks the same filter. A
+  shared template drops its inboxes: they are the publisher's own.
 - `EventReference` rejects unknown keys, so a replica still on older code can't
   read a run row with a new key: write a new optional key only when it is set.
 

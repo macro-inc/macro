@@ -1083,6 +1083,15 @@ fn an_inbox_filter_matches_only_mail_into_the_inboxes_it_names() {
     assert!(filters(json!([{"events": ["email.message_received"]}])).matches(&event, activation));
     assert!(picking(json!([OTHER_INBOX, INBOX])).matches(&event, activation));
     assert!(!picking(json!([OTHER_INBOX])).matches(&event, activation));
+    // Intake tells mail only the picked inboxes turned away from other misses.
+    assert!(picking(json!([OTHER_INBOX])).turn_away_only_for_inbox(&event, activation));
+    assert!(!picking(json!([INBOX])).turn_away_only_for_inbox(&event, activation));
+    assert!(
+        !filters(json!([{"events": ["document.created"]}]))
+            .turn_away_only_for_inbox(&event, activation)
+    );
+    let later = activation + chrono::Duration::seconds(1);
+    assert!(!picking(json!([OTHER_INBOX])).turn_away_only_for_inbox(&event, later));
     // No inboxes is every inbox, as no ids is every thread.
     for every in [Value::Null, json!([])] {
         let every = picking(every);

@@ -69,9 +69,11 @@ impl<'a> Audience<'a> {
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 enum CandidateOutcome {
     Admitted,
-    /// Its filters don't take the event (another inbox, another selector), or
-    /// the event predates its activation.
+    /// Its filters don't take the event (another selector), or the event
+    /// predates its activation.
     FilteredOut,
+    /// Its filters would take the event but for the inboxes they pick.
+    OutsideInboxes,
     /// Disabled, not for its owner, not theirs to see, or already admitted.
     Skipped,
 }
@@ -96,7 +98,18 @@ impl<R: EventRunRepository, A: CurrentOwnerAccess, D: InboxDelegates>
             Ok(()) => {}
             // The pending run is this configuration's own, so only its
             // filters can supersede it.
-            Err(CancellationReason::Superseded) => return Ok(CandidateOutcome::FilteredOut),
+            Err(CancellationReason::Superseded) => {
+                return Ok(
+                    if configuration
+                        .filters
+                        .turn_away_only_for_inbox(event, configuration.activated_at)
+                    {
+                        CandidateOutcome::OutsideInboxes
+                    } else {
+                        CandidateOutcome::FilteredOut
+                    },
+                );
+            }
             Err(_) => return Ok(CandidateOutcome::Skipped),
         }
         let Owner::User(owner) = &configuration.owner else {
@@ -131,12 +144,15 @@ impl<R: EventRunRepository, A: CurrentOwnerAccess, D: InboxDelegates> EventInges
     for EventAdmissionService<R, A, D>
 {
     // Counts only: an event's routines and owners are never span fields.
+    // `filtered_out` counts every routine its filters turned away, and
+    // `outside_inboxes` those of them only their picked inboxes did.
     #[tracing::instrument(
         name = "routine.admit_event",
         skip_all,
         fields(
             candidates = tracing::field::Empty,
             filtered_out = tracing::field::Empty,
+            outside_inboxes = tracing::field::Empty,
             inserted = tracing::field::Empty,
         )
     )]
@@ -150,6 +166,7 @@ impl<R: EventRunRepository, A: CurrentOwnerAccess, D: InboxDelegates> EventInges
         let mut inserted = 0;
         let mut candidates_seen = 0_usize;
         let mut filtered_out = 0_usize;
+        let mut outside_inboxes = 0_usize;
         loop {
             let candidates = self
                 .repository
@@ -161,7 +178,8 @@ impl<R: EventRunRepository, A: CurrentOwnerAccess, D: InboxDelegates> EventInges
                 }
                 let span = tracing::Span::current();
                 span.record("candidates", candidates_seen);
-                span.record("filtered_out", filtered_out);
+                span.record("filtered_out", filtered_out + outside_inboxes);
+                span.record("outside_inboxes", outside_inboxes);
                 span.record("inserted", inserted);
                 return Ok(EventIngestionResult::Admitted { inserted });
             };
@@ -183,6 +201,7 @@ impl<R: EventRunRepository, A: CurrentOwnerAccess, D: InboxDelegates> EventInges
                 {
                     CandidateOutcome::Admitted => inserted += 1,
                     CandidateOutcome::FilteredOut => filtered_out += 1,
+                    CandidateOutcome::OutsideInboxes => outside_inboxes += 1,
                     CandidateOutcome::Skipped => {}
                 }
             }

@@ -666,6 +666,18 @@ impl EventFilters {
         event.published_at() >= activated_at && self.0.iter().any(|filter| filter.accepts(event))
     }
 
+    /// Whether only the inboxes these filters pick turn `event` away: the same
+    /// filters watching every inbox would take it.
+    pub fn turn_away_only_for_inbox(
+        &self,
+        event: &EventReference,
+        activated_at: DateTime<Utc>,
+    ) -> bool {
+        self.0.iter().any(|filter| filter.inboxes.is_some())
+            && !self.matches(event, activated_at)
+            && self.without_inboxes().matches(event, activated_at)
+    }
+
     pub fn has_conditions(&self) -> bool {
         self.0.iter().any(|filter| filter.condition.is_some())
     }
