@@ -7,8 +7,8 @@ import {
   knobValueProblem,
   sentenceParts,
   sentenceText,
+  type UnusableItem,
   unusableInStep,
-  unusableItemsOf,
   unusableReason,
   withKnobValue,
 } from './knobs';
@@ -198,8 +198,8 @@ describe('knobs needing a new pick', () => {
   const gone = { type: 'channel' as const, id: 'gone' };
   const reason = (label: string) =>
     `The channel picked for "${label}" was deleted.`;
-  // As the scheduler lists them, by the saved step's id.
-  const unusable = unusableItemsOf([
+  // By the saved step's id, as the scheduler lists them.
+  const unusable: UnusableItem[] = [
     {
       step: 'post',
       knob: 'notify',
@@ -213,16 +213,12 @@ describe('knobs needing a new pick', () => {
       reason: reason('Archive channel'),
     },
     { step: 'file', knob: 'archive', item: gone, reason: reason('Step two') },
-    { step: 'file', knob: 'unpicked', item: null, reason: 'Not picked' },
-    { step: null, knob: 'archive', item: gone, reason: 'Saved before ids' },
-  ]);
+  ];
 
   it('keep each on its own step, by id', () => {
-    expect(unusable.map((entry) => [entry.step, entry.knob])).toEqual([
-      ['post', 'notify'],
-      ['post', 'archive'],
-      ['file', 'archive'],
-    ]);
+    expect(unusableInStep(unusable, 'post').map((entry) => entry.knob)).toEqual(
+      ['notify', 'archive']
+    );
     // A step not saved yet has none.
     expect(unusableInStep(unusable, undefined)).toEqual([]);
     // A list from before a save that removed 'post' puts none of its entries

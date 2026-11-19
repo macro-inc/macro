@@ -12,7 +12,7 @@ import type {
 } from '../context/routine-sources';
 import { pendingCodeReview, taskSdk } from '../core/code-review';
 import type { ScheduleDraft } from '../core/draft';
-import { type UnusableItem, unusableItemsOf } from '../core/knobs';
+import type { UnusableItem } from '../core/knobs';
 import type { RoutineSnapshot } from '../core/routine';
 import { withDraftSteps } from '../core/routine-draft';
 import { picksItems, programSteps } from '../core/routine-steps';
@@ -41,6 +41,7 @@ import {
   useUnusableItemsQuery,
   useUpdateScheduleMutation,
 } from './schedules';
+import { unusableItemsFromWire } from './unusable-items';
 
 function toRoutine(schedule: ScheduledActionResponse): RoutineSnapshot {
   if (!schedule.id) throw new Error('Routine has no ID');
@@ -131,9 +132,8 @@ export function createRoutineDetailSource(
       current && current.owner === userId() && picksItems(current.task)
     );
   });
-  // Only picked items: an unpicked knob shows as not set on its own.
   const unusableItems = createMemo((): UnusableItem[] =>
-    unusable.isPending ? [] : unusableItemsOf(unusable.data ?? [])
+    unusable.isPending ? [] : unusableItemsFromWire(unusable.data ?? [])
   );
   const codeReview = createMemo(() => {
     const current = raw();

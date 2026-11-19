@@ -68,25 +68,6 @@ export type UnusableItem = {
   reason: string;
 };
 
-/**
- * The scheduler's entries with an item picked and a step to show it on. Each
- * names its step by id, so a draft that adds, removes or moves steps, or a
- * list fetched before the last save, keeps each entry on its own step. A step
- * saved before steps had ids has none and is left out.
- */
-export function unusableItemsOf(
-  entries: readonly {
-    step?: string | null;
-    knob: string;
-    item?: KnobEntity | null;
-    reason: string;
-  }[]
-): UnusableItem[] {
-  return entries.flatMap(({ step, knob, item, reason }) =>
-    item && step ? [{ step, knob, item, reason }] : []
-  );
-}
-
 /** The entries of `unusable` for the saved step `id`; none for a new step. */
 export function unusableInStep(
   unusable: readonly UnusableItem[],
