@@ -20,6 +20,18 @@ import {
 } from './reactive-selection';
 import { TRACE_PARENT_CONTEXT_KEY } from './trace-parent-exchange';
 
+const LATEST_RESULT = Symbol('urql-latest-result');
+
+/**
+ * The observer's latest result. In a hidden parked pane the store holds an
+ * older one until the pane shows, so code that waits for its own request to
+ * settle (an explicit refresh) reads this instead.
+ */
+export function latestResult<Result extends object>(query: Result): Result {
+  const read = (query as { [LATEST_RESULT]?: Accessor<Result> })[LATEST_RESULT];
+  return read ? read() : query;
+}
+
 /** Bridges a framework-neutral urql observer into one reactive Solid store. */
 export function createBaseQuery<
   Options extends ObserverClientOptions,
@@ -66,8 +78,10 @@ export function createBaseQuery<
   // The store mutates its root; observer snapshots must remain independent.
   const [state, setState] = createStore<Result>({ ...previous });
 
+  const [latest, setLatest] = createSignal<Result>(previous);
   const result = new Proxy(state, {
     get(target, property) {
+      if (property === LATEST_RESULT) return latest;
       return Reflect.get(target, property);
     },
   }) as Result;
@@ -118,6 +132,7 @@ export function createBaseQuery<
   const paneHidden = usePaneHidden();
   let held: Result | undefined;
   const deliver = (next: Result): void => {
+    setLatest(() => next);
     if (untrack(paneHidden)) {
       held = next;
       return;

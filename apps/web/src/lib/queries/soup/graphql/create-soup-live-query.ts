@@ -50,6 +50,7 @@ import {
   graphqlSoupProjectionSupported,
   hasGraphqlCacheHost,
 } from '../../../service-clients/service-storage/graphql-soup';
+import { latestResult } from '../../../urql-solid/create-base-query';
 import { createUrqlInfiniteQuery } from '../../../urql-solid/create-urql-infinite-query';
 import type { UrqlInfiniteData } from '../../../urql-solid/types';
 import { createHiddenDeferral } from '../../visible-refresh';
@@ -1299,10 +1300,16 @@ export function createSoupLiveQuery(
           entities: options().cacheFirstEntities ?? [],
           input,
         });
+        // The request's own result: a parked view's store holds an older one.
+        const current = () => latestResult(query);
         await runWithOwner(owner, () =>
-          until(() => !query.isFetching && (query.isSuccess || query.error))
+          until(
+            () =>
+              !current().isFetching && (current().isSuccess || current().error)
+          )
         );
-        if (query.error) throw query.error;
+        const error = current().error;
+        if (error) throw error;
         return;
       }
       // An explicit list refresh rebuilds the cursor chain in order. The

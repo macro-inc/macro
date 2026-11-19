@@ -22,6 +22,7 @@ import {
 import { afterEach, describe, expect, it, vi } from 'vitest';
 import { fromValue, makeSubject, onEnd, pipe } from 'wonka';
 import { UrqlProvider } from './context';
+import { latestResult } from './create-base-query';
 import { createUrqlQuery } from './create-urql-query';
 import type {
   UrqlClientSource,
@@ -285,6 +286,8 @@ describe('createUrqlQuery reactive state', () => {
     execution?.next({ data: { value: 'first while hidden' } });
     execution?.next({ data: { value: 'second while hidden' } });
     expect(query.data).toEqual({ value: 'shown' });
+    // Waits on a request read past the hold.
+    expect(latestResult(query).data).toEqual({ value: 'second while hidden' });
 
     setHidden(false);
     expect(query.data).toEqual({ value: 'second while hidden' });
