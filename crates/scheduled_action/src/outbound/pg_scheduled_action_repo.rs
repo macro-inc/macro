@@ -72,23 +72,35 @@ fn stored_appearance(stored: Option<Value>) -> Result<EntityAppearance> {
         .unwrap_or_default())
 }
 
-/// How many changes to routine `id`'s look its activity records:
-/// `set_appearance` records each one with the look, here and on replicas
-/// built before this code.
-async fn recorded_appearance_changes(tx: &mut sqlx::PgConnection, id: Uuid) -> Result<i64> {
-    let changes = sqlx::query_scalar!(
+/// Whether routine `id`'s activity records more changes to its look than
+/// `by_agent`, the number an agent's pick recorded. `set_appearance` records
+/// each change with the look, here and on replicas built before this code,
+/// so any beyond the agent's are the owner's. Reads at most one more event
+/// than `by_agent`, however long the routine's history.
+async fn owner_changes_recorded(
+    tx: &mut sqlx::PgConnection,
+    id: Uuid,
+    by_agent: i32,
+) -> Result<bool> {
+    let by_agent = i64::from(by_agent.max(0));
+    let seen = sqlx::query_scalar!(
         r#"
-        SELECT count(*) AS "changes!"
-        FROM activity_events
-        WHERE entity_type = 'scheduled_action'
-            AND entity_id = $1
-            AND action = 'appearance_changed'
+        SELECT count(*) AS "seen!"
+        FROM (
+            SELECT 1
+            FROM activity_events
+            WHERE entity_type = 'scheduled_action'
+                AND entity_id = $1
+                AND action = 'appearance_changed'
+            LIMIT $2
+        ) AS recorded
         "#,
         id.to_string(),
+        by_agent + 1,
     )
     .fetch_one(tx)
     .await?;
-    Ok(changes)
+    Ok(seen > by_agent)
 }
 
 /// One mapping for every action query, including management and dispatch.
@@ -507,11 +519,17 @@ impl<B: BotFacts + 'static> ScheduledActionRepo for PgScheduledActionRepo<B> {
         // this code does for both choosers: changes beyond the agent's are the
         // owner's. The activity is read in a statement of its own once the
         // row is locked, so it holds a change that committed while this
-        // waited for the lock.
+        // waited for the lock. Only an agent's pick reads it: the owner's
+        // choice is stored as theirs either way.
         let chosen_by_owner = stored.appearance_chosen_by_owner == Some(true)
             || (stored.appearance_chosen_by_owner.is_none() && !previous.is_default())
-            || recorded_appearance_changes(&mut tx, change.id).await?
-                > i64::from(stored.appearance_changes_by_agent.unwrap_or(0));
+            || (!owners
+                && owner_changes_recorded(
+                    &mut tx,
+                    change.id,
+                    stored.appearance_changes_by_agent.unwrap_or(0),
+                )
+                .await?);
         // An agent's pick never replaces the owner's choice.
         if chosen_by_owner && !owners {
             return Ok(None);

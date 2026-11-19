@@ -347,8 +347,9 @@ each run.
   the owner without marking it; `appearance_changes_by_agent` counts the ones
   an agent's pick recorded, so any beyond it are the owner's. A routine from
   before the columns, or one such a replica created, holds NULL in both, and
-  a look it has is its owner's. `set_appearance` reads the activity in its
-  own statement once the row is locked.
+  a look it has is its owner's. Only an agent's pick reads the activity, in
+  its own statement once the row is locked, and no more than one event past
+  the agent's count.
 - Templates: the owner shares a snapshot of a routine (keyed by the routine's
   ID) with its references marked as variables; publishing, reading, and activation
   require the caller's `enable-routine-sharing` PostHog flag. Missing flags,
