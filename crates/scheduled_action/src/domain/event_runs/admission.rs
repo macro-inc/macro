@@ -145,7 +145,9 @@ impl<R: EventRunRepository, A: CurrentOwnerAccess, D: InboxDelegates> EventInges
 {
     // Counts only: an event's routines and owners are never span fields.
     // `filtered_out` counts every routine its filters turned away, and
-    // `outside_inboxes` those of them only their picked inboxes did.
+    // `outside_inboxes` those of them only their picked inboxes did. A failure
+    // marks the span as an error without its report, which can carry payloads
+    // or database values (the Kafka consumer withholds it for the same reason).
     #[tracing::instrument(
         name = "routine.admit_event",
         skip_all,
@@ -154,10 +156,24 @@ impl<R: EventRunRepository, A: CurrentOwnerAccess, D: InboxDelegates> EventInges
             filtered_out = tracing::field::Empty,
             outside_inboxes = tracing::field::Empty,
             inserted = tracing::field::Empty,
-        ),
-        err
+            otel.status_code = tracing::field::Empty,
+        )
     )]
     async fn ingest(&self, incoming: &IncomingEvent) -> Result<EventIngestionResult, Report> {
+        let admitted = self.admit(incoming).await;
+        if admitted.is_err() {
+            tracing::Span::current().record("otel.status_code", "ERROR");
+        }
+        admitted
+    }
+}
+
+impl<R: EventRunRepository, A: CurrentOwnerAccess, D: InboxDelegates>
+    EventAdmissionService<R, A, D>
+{
+    /// Admit `incoming` to every routine it is for, recording the counts on
+    /// the current `routine.admit_event` span.
+    async fn admit(&self, incoming: &IncomingEvent) -> Result<EventIngestionResult, Report> {
         let event = match incoming.normalize() {
             Ok(event) => event,
             Err(reason) => return Ok(EventIngestionResult::Rejected(reason)),
