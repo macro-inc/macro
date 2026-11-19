@@ -369,6 +369,7 @@ fn email_event_cases() -> Vec<(EmailTopicEvent, EmailEventDescription)> {
             EmailEventDescription {
                 action: EmailIndexAction::RemoveMessage {
                     message_id: MESSAGE_ID,
+                    thread_id: EMAIL_THREAD_ID,
                 },
                 link_id: EMAIL_LINK_ID,
                 event_type: "email.message_draft_synced",
@@ -433,6 +434,7 @@ fn email_event_cases() -> Vec<(EmailTopicEvent, EmailEventDescription)> {
             EmailEventDescription {
                 action: EmailIndexAction::RemoveMessage {
                     message_id: MESSAGE_ID,
+                    thread_id: EMAIL_THREAD_ID,
                 },
                 link_id: EMAIL_LINK_ID,
                 event_type: "email.message_deleted",
@@ -1502,6 +1504,7 @@ fn email_message_sync_actions_remove_spam_or_trash_and_upsert_other_messages() {
         describe_email_event(&received_email_event(true)).action,
         EmailIndexAction::RemoveMessage {
             message_id: MESSAGE_ID,
+            thread_id: EMAIL_THREAD_ID,
         }
     );
     assert_eq!(

@@ -80,6 +80,10 @@ mentioned people access. `attribution` stays server-set.
 New posts use the message sender receipt to retain signed code-mode agent
 attribution. All other operations use the caller receipt so attribution cannot
 grant users another agent invocation's edit, deletion, or reaction authority.
+The AI tools follow the same rule: `EditComment`, `DeleteComment` and the
+channel message tools change a message as their bot only when
+`Message::posted_by_bot_for` says the bot posted it for the caller
+(`triggered_by`); every other message is changed with the caller's receipt.
 
 ## Gotchas
 
