@@ -15,9 +15,9 @@ use agent::{Message, PredefinedModel};
 use agent_code_mode::domain::symbol_reference;
 use agent_egress::outbound::macro_mcp::MacroApiTokenSigner;
 use code_execution::domain::{
-    CheckError, ExecuteRequest, Language, Outcome, ProgramChecker, ProgramExecutor,
-    ProgramImports, RunEnvironment, SdkEndpoints, SourceFile, Unattended, operations,
-    sdk_declaration_files, sdk_declarations,
+    CheckError, ExecuteRequest, Language, Outcome, ProgramChecker, ProgramExecutor, ProgramImports,
+    RunEnvironment, SdkEndpoints, SourceFile, Unattended, operations, sdk_declaration_files,
+    sdk_declarations,
 };
 use macro_user_id::user_id::MacroUserIdStr;
 use macro_uuid::Uuid;

@@ -208,7 +208,8 @@ async fn ocaml_tool_example_creates_and_reads_a_task() {
     let store = Arc::new(Store::default());
     let service = CodeModeService::new(
         Some(Arc::new(
-            ExecutionService::new(Arc::new(runner), Arc::new(Unchecked), Limits::default()).unwrap(),
+            ExecutionService::new(Arc::new(runner), Arc::new(Unchecked), Limits::default())
+                .unwrap(),
         )),
         Arc::new(Credentials(format!("http://{address}"))),
         store.clone(),

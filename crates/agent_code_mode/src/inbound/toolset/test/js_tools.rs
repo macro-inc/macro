@@ -175,7 +175,8 @@ async fn service(
     let store = Arc::new(Store::default());
     let service = CodeModeService::new(
         Some(Arc::new(
-            ExecutionService::new(Arc::new(runner), Arc::new(Unchecked), Limits::default()).unwrap(),
+            ExecutionService::new(Arc::new(runner), Arc::new(Unchecked), Limits::default())
+                .unwrap(),
         )),
         credentials.clone(),
         store.clone(),
@@ -380,7 +381,8 @@ async fn js_tools_and_ocaml_wire_in_either_order() {
     let base = || {
         CodeModeService::new(
             Some(Arc::new(
-                ExecutionService::new(Arc::new(Never), Arc::new(Unchecked), Limits::default()).unwrap(),
+                ExecutionService::new(Arc::new(Never), Arc::new(Unchecked), Limits::default())
+                    .unwrap(),
             )),
             Arc::new(Credentials {
                 storage: "http://127.0.0.1:9".into(),

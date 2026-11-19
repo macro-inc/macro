@@ -38,7 +38,12 @@ async fn setup_ocaml_without_policy() -> (tempfile::TempDir, ExecutionService) {
     assert!(runner.ocaml_bundle().is_some(), "{NO_BUNDLE}");
     (
         root,
-        ExecutionService::new(Arc::new(runner), Arc::new(super::Unchecked), Limits::default()).unwrap(),
+        ExecutionService::new(
+            Arc::new(runner),
+            Arc::new(super::Unchecked),
+            Limits::default(),
+        )
+        .unwrap(),
     )
 }
 
@@ -992,7 +997,12 @@ async fn ocaml_without_a_bundle_fails_saying_so() {
     let root = tempfile::tempdir().unwrap();
     let mut runner = runner(root.path()).await;
     runner.ocaml = None;
-    let service = ExecutionService::new(Arc::new(runner), Arc::new(super::Unchecked), Limits::default()).unwrap();
+    let service = ExecutionService::new(
+        Arc::new(runner),
+        Arc::new(super::Unchecked),
+        Limits::default(),
+    )
+    .unwrap();
     let (_, outcome) = run_ocaml(
         &service,
         "let () = Code_mode.run (fun _ -> `Null)",
@@ -1022,7 +1032,10 @@ async fn the_ocaml_checker_type_checks_and_applies_the_policy() {
     .unwrap();
     assert!(checker.sdk_fingerprint().starts_with("0.1.0+"));
     let ok = "let () = Code_mode.run @@ fun { macro; _ } -> ignore (Macro_sdk_fetch.call_exn macro (Macro_sdk.Contacts.get_contacts ())); `Null";
-    assert_eq!(checker.check(ok, "", ProgramImports::Sdk).await.unwrap(), []);
+    assert_eq!(
+        checker.check(ok, "", ProgramImports::Sdk).await.unwrap(),
+        []
+    );
 
     let diagnostics = checker
         .check(
@@ -1053,7 +1066,9 @@ async fn the_ocaml_checker_type_checks_and_applies_the_policy() {
         }]
     );
     assert!(matches!(
-        checker.check(ok, "declare global {}", ProgramImports::Sdk).await,
+        checker
+            .check(ok, "declare global {}", ProgramImports::Sdk)
+            .await,
         Err(CheckError::InvalidSource)
     ));
     assert_eq!(
