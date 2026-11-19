@@ -1,7 +1,11 @@
-import { ok } from 'neverthrow';
+import { ok, type Result } from 'neverthrow';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 
 const postProfilePictures = vi.hoisted(() => vi.fn());
+const scope = vi.hoisted(() => ({ session: 0 }));
+vi.mock('@queries/auth/account-scope', () => ({
+  queryAccountSession: () => scope.session,
+}));
 vi.mock('@service-auth/client', () => ({
   authServiceClient: { postProfilePictures },
 }));
@@ -11,6 +15,7 @@ import {
   handleUserPictureChanged,
   profilePictureItem,
   refreshProfilePicture,
+  useProfilePictureUrl,
 } from './profilePicture';
 
 const picturesFor = (url?: string) => (args: { user_id_list: string[] }) =>
@@ -75,6 +80,108 @@ describe('agent faces in the picture cache', () => {
   });
 
   const face = { v: 1, seed: 'k3x9q2', pins: { hair: 2 } };
+
+  it('clears both face and URL when refresh omits the removed picture', async () => {
+    const id = 'macro|removed-face@example.com';
+    postProfilePictures.mockResolvedValue(
+      ok({
+        pictures: [
+          { id, url: 'https://example.com/face.png', avatar_face: face },
+        ],
+      })
+    );
+    await getProfilePictureUrl(id);
+    postProfilePictures.mockResolvedValue(ok({ pictures: [] }));
+    await refreshProfilePicture(id);
+    expect(profilePictureItem(id)?.face).toBeUndefined();
+    expect(profilePictureItem(id)?.url).toBeUndefined();
+  });
+
+  it('clears face and URL when a batch refetch omits the removed picture', async () => {
+    const id = 'macro|batch-removed-face@example.com';
+    postProfilePictures.mockResolvedValue(
+      ok({
+        pictures: [
+          { id, url: 'https://example.com/face.png', avatar_face: face },
+        ],
+      })
+    );
+    await getProfilePictureUrl(id);
+    const [, picture] = useProfilePictureUrl(id);
+    postProfilePictures.mockResolvedValue(ok({ pictures: [] }));
+    picture.refetch();
+    expect(await getProfilePictureUrl(id)).toBeUndefined();
+    expect(profilePictureItem(id)?.face).toBeUndefined();
+  });
+
+  it('discards a late batch after the login session changes and permits a new read', async () => {
+    const id = 'macro|retired-face@example.com';
+    const started = Promise.withResolvers<void>();
+    const response =
+      Promise.withResolvers<
+        Result<{ pictures: { id: string; url: string }[] }, unknown>
+      >();
+    postProfilePictures.mockImplementationOnce(() => {
+      started.resolve();
+      return response.promise;
+    });
+    const oldRead = getProfilePictureUrl(id);
+    await started.promise;
+    scope.session += 1;
+    response.resolve(
+      ok({ pictures: [{ id, url: 'https://example.com/retired.png' }] })
+    );
+    expect(await oldRead).toBeUndefined();
+    expect(profilePictureItem(id)?.url).toBeUndefined();
+    postProfilePictures.mockResolvedValue(
+      ok({ pictures: [{ id, url: 'https://example.com/current.png' }] })
+    );
+    expect(await getProfilePictureUrl(id)).toBe(
+      'https://example.com/current.png'
+    );
+  });
+
+  it('does not retire a newer request when the old session batch finishes', async () => {
+    const id = 'macro|newer-picture-read@example.com';
+    const oldStarted = Promise.withResolvers<void>();
+    const newStarted = Promise.withResolvers<void>();
+    const oldResponse =
+      Promise.withResolvers<
+        Result<{ pictures: { id: string; url: string }[] }, unknown>
+      >();
+    const newResponse =
+      Promise.withResolvers<
+        Result<{ pictures: { id: string; url: string }[] }, unknown>
+      >();
+    postProfilePictures
+      .mockImplementationOnce(() => {
+        oldStarted.resolve();
+        return oldResponse.promise;
+      })
+      .mockImplementationOnce(() => {
+        newStarted.resolve();
+        return newResponse.promise;
+      });
+    const oldRead = getProfilePictureUrl(id);
+    await oldStarted.promise;
+    scope.session += 1;
+    const [, picture] = useProfilePictureUrl(id);
+    picture.refetch();
+    const newRead = getProfilePictureUrl(id);
+    await newStarted.promise;
+    const newGeneration = profilePictureItem(id)?._createdAt;
+    oldResponse.resolve(
+      ok({ pictures: [{ id, url: 'https://example.com/retired.png' }] })
+    );
+    await oldResponse.promise;
+    expect(profilePictureItem(id)?.loading).toBe(true);
+    expect(profilePictureItem(id)?._createdAt).toBe(newGeneration);
+    newResponse.resolve(
+      ok({ pictures: [{ id, url: 'https://example.com/current.png' }] })
+    );
+    expect(await newRead).toBe('https://example.com/current.png');
+    expect(await oldRead).toBe('https://example.com/current.png');
+  });
 
   it('marks a user with no picture as loaded', async () => {
     const id = 'macro|no-picture@example.com';

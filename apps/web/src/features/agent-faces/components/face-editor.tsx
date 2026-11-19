@@ -58,7 +58,7 @@ export function FaceEditor(props: {
   let picker: HTMLInputElement | undefined;
 
   return (
-    <>
+    <div data-face-editor>
       <input
         ref={picker}
         type="file"
@@ -160,7 +160,7 @@ export function FaceEditor(props: {
           </div>
         )}
       </Show>
-    </>
+    </div>
   );
 }
 
@@ -181,6 +181,15 @@ function PartRow(props: {
     <div class="flex flex-col gap-1.5" data-face-part={props.row.part}>
       <span class="text-xs text-ink-muted">{label()}</span>
       <div class="flex flex-wrap gap-1.5">
+        <button
+          type="button"
+          aria-label={t('agentFaces.anyPart', { part: label() })}
+          aria-pressed={props.draft.face().pins[props.row.part] === undefined}
+          class="rounded-full border border-edge-muted px-2 text-xs text-ink-muted outline-2 outline-offset-1 outline-transparent aria-pressed:outline-ink touch:min-h-[44px]"
+          onClick={() => props.draft.unpin(props.row.part)}
+        >
+          {t('agentFaces.any')}
+        </button>
         <Index each={options()}>
           {(index) => (
             <button

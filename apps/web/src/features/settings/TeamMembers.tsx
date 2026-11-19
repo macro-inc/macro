@@ -60,7 +60,10 @@ import {
   mapArray,
   Show,
 } from 'solid-js';
-import { AgentPictureDialog } from './components/agent-picture-dialog';
+import {
+  AgentPictureDialog,
+  type AgentPictureSelection,
+} from './components/agent-picture-dialog';
 import { AgentVoiceDialog } from './components/agent-voice-dialog';
 import { TeamAgentRow } from './components/team-agent-row';
 import { TeamInviteRow } from './components/team-invite-row';
@@ -338,7 +341,7 @@ export function TeamMembers(props: { team: TeamSummary }) {
   // Pictures, too.
   const canChangePicture = () => ENABLE_AGENT_FACES && canChangeVoice();
   const [voiceAgent, setVoiceAgent] = createSignal<TeamAgent>();
-  const [pictureAgent, setPictureAgent] = createSignal<TeamAgent>();
+  const [pictureAgent, setPictureAgent] = createSignal<AgentPictureSelection>();
   // Losing access closes the dialogs for good, not until access returns.
   createEffect(() => {
     if (canChangeVoice()) return;
@@ -656,7 +659,7 @@ export function TeamMembers(props: { team: TeamSummary }) {
                       }
                       onChangePicture={
                         canChangePicture()
-                          ? () => setPictureAgent(agent)
+                          ? (opener) => setPictureAgent({ agent, opener })
                           : undefined
                       }
                       onChangeVoice={
@@ -790,7 +793,7 @@ export function TeamMembers(props: { team: TeamSummary }) {
       />
 
       <AgentPictureDialog
-        agent={canChangePicture() ? pictureAgent() : undefined}
+        selection={canChangePicture() ? pictureAgent() : undefined}
         onClose={() => setPictureAgent(undefined)}
       />
       <AgentVoiceDialog

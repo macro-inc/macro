@@ -10,6 +10,7 @@ import {
   type JSX,
   Match,
   on,
+  onCleanup,
   Show,
   Switch,
 } from 'solid-js';
@@ -65,7 +66,7 @@ export function InviteAgentForm(props: {
    * Before Add sends the request: what the picture adds to it (its URL and
    * recipe). It may fail softly by returning less; it must not throw.
    */
-  prepareAvatar?: () => Promise<Partial<CreateTeamAgent>>;
+  prepareAvatar?: () => Promise<Partial<CreateTeamAgent> | undefined>;
 }) {
   const [name, setName] = createSignal('');
   const [chosenSize, setChosenSize] = createSignal<ComputerSize>();
@@ -73,6 +74,10 @@ export function InviteAgentForm(props: {
   const [asked, setAsked] = createSignal(false);
   // The picture is being prepared, before the request goes out.
   const [preparing, setPreparing] = createSignal(false);
+  let disposed = false;
+  onCleanup(() => {
+    disposed = true;
+  });
   let nameInput: HTMLInputElement | undefined;
 
   const adding = () => props.state.kind === 'adding' || preparing();
@@ -143,7 +148,9 @@ export function InviteAgentForm(props: {
     }
     setPreparing(true);
     const avatar = await props.prepareAvatar();
+    if (disposed) return;
     setPreparing(false);
+    if (!avatar) return;
     props.onSubmit({ ...request, ...avatar }, chosen.size);
   };
 
@@ -190,19 +197,21 @@ export function InviteAgentForm(props: {
         >
           <TextField.Label>{t('teamAgents.name')}</TextField.Label>
           <div class="flex items-center gap-3">
-            <Show
-              when={props.avatar}
-              fallback={
-                <Avatar
-                  size="lg"
-                  class="shrink-0 bg-surface text-ink ring ring-edge-muted"
-                >
-                  <Avatar.Fallback>{initial()}</Avatar.Fallback>
-                </Avatar>
-              }
-            >
-              {(avatar) => avatar()(initial)}
-            </Show>
+            <fieldset disabled={adding()} class="contents">
+              <Show
+                when={props.avatar}
+                fallback={
+                  <Avatar
+                    size="lg"
+                    class="shrink-0 bg-surface text-ink ring ring-edge-muted"
+                  >
+                    <Avatar.Fallback>{initial()}</Avatar.Fallback>
+                  </Avatar>
+                }
+              >
+                {(avatar) => avatar()(initial)}
+              </Show>
+            </fieldset>
             <TextField.Input
               ref={nameInput}
               class="min-w-0 flex-1"

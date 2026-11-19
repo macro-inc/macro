@@ -3,7 +3,7 @@ import { toast } from '@core/component/Toast/Toast';
 import { fireAndForget } from '@core/util/fireAndForget';
 import type { AgentFace } from '@macro-inc/agent-faces';
 import { Button, Dialog, Panel } from '@ui';
-import { createSignal, Show } from 'solid-js';
+import { createSignal, Match, onCleanup, Show, Switch } from 'solid-js';
 import { FaceEditor } from '../components/face-editor';
 import { FaceImage } from '../components/face-image';
 import { createFaceDraft } from '../primitives/create-face-draft';
@@ -19,21 +19,61 @@ import {
 export function ChangePictureDialog(props: {
   open: boolean;
   onOpenChange: (open: boolean) => void;
+  onCloseAutoFocus?: (event: Event) => void;
   name: string;
   initials: string;
   /** The face to start from: its saved one, or the one drawn for it now. */
   face: AgentFace;
+  /** An existing photo is kept until another picture is chosen. */
+  photoUrl?: string;
+  /** The account/team owning this opening is still active. */
+  isCurrent?: () => boolean;
+  pictureState?: 'loading' | 'error' | 'ready';
+  onRetryPicture?: () => void;
   /** Saves the picture; resolves false when the server refused it. */
   onSave: (picture: AgentPicture) => Promise<boolean>;
 }) {
   return (
-    <Dialog open={props.open} onOpenChange={props.onOpenChange}>
+    <Dialog
+      open={props.open}
+      onOpenChange={props.onOpenChange}
+      onCloseAutoFocus={props.onCloseAutoFocus}
+    >
       <Panel
         depth={2}
         class="max-h-[85vh] w-[28rem] max-w-full rounded-xl text-ink"
       >
+        <Panel.Header class="gap-2 px-3">
+          <Dialog.Title as="span" class="m-0 flex-1 p-0 text-base font-medium">
+            {t('agentFaces.pictureTitle', { name: props.name })}
+          </Dialog.Title>
+        </Panel.Header>
         <Show when={props.open}>
-          <ChangePictureBody {...props} />
+          <Switch fallback={<ChangePictureBody {...props} />}>
+            <Match when={props.pictureState === 'loading'}>
+              <Panel.Body>
+                <p role="status" class="px-5 py-5 text-sm text-ink-muted">
+                  {t('agentFaces.loading')}
+                </p>
+              </Panel.Body>
+            </Match>
+            <Match when={props.pictureState === 'error'}>
+              <Panel.Body>
+                <div class="flex flex-col items-start gap-3 px-5 py-5">
+                  <p role="alert" class="text-sm text-ink-muted">
+                    {t('agentFaces.loadFailed')}
+                  </p>
+                  <Button
+                    type="button"
+                    variant="secondary"
+                    onClick={props.onRetryPicture}
+                  >
+                    {t('agentFaces.retry')}
+                  </Button>
+                </div>
+              </Panel.Body>
+            </Match>
+          </Switch>
         </Show>
       </Panel>
     </Dialog>
@@ -42,14 +82,21 @@ export function ChangePictureDialog(props: {
 
 /** Mounted per opening, so each one starts from the saved face. */
 function ChangePictureBody(props: Parameters<typeof ChangePictureDialog>[0]) {
-  const draft = createFaceDraft(props.face);
+  const draft = createFaceDraft(props.face, props.photoUrl);
   const [saving, setSaving] = createSignal(false);
+  let disposed = false;
+  onCleanup(() => {
+    disposed = true;
+  });
+  const active = () => !disposed && (props.isCurrent?.() ?? true);
 
   const save = async () => {
-    if (saving()) return;
+    if (saving() || !active()) return;
     setSaving(true);
     const picture = await uploadAgentPicture(draft);
+    if (!active()) return;
     const saved = picture.isOk() && (await props.onSave(picture.value));
+    if (!active()) return;
     setSaving(false);
     if (!saved) {
       toast.failure(t('agentFaces.saveFailed'));
@@ -60,11 +107,6 @@ function ChangePictureBody(props: Parameters<typeof ChangePictureDialog>[0]) {
 
   return (
     <>
-      <Panel.Header class="gap-2 px-3">
-        <Dialog.Title as="span" class="m-0 flex-1 p-0 text-base font-medium">
-          {t('agentFaces.pictureTitle', { name: props.name })}
-        </Dialog.Title>
-      </Panel.Header>
       <Panel.Body scroll>
         <div class="flex flex-col gap-4 px-5 py-5">
           <Show when={!draft.photo()}>
@@ -76,7 +118,9 @@ function ChangePictureBody(props: Parameters<typeof ChangePictureDialog>[0]) {
               />
             </span>
           </Show>
-          <FaceEditor draft={draft} initials={props.initials} fullWidthTabs />
+          <fieldset disabled={saving()} class="contents">
+            <FaceEditor draft={draft} initials={props.initials} fullWidthTabs />
+          </fieldset>
         </div>
       </Panel.Body>
       <Panel.Footer class="justify-end gap-2 px-4 py-3">
@@ -91,6 +135,7 @@ function ChangePictureBody(props: Parameters<typeof ChangePictureDialog>[0]) {
         <Button
           type="button"
           variant="primary"
+          aria-disabled={saving() || undefined}
           aria-busy={saving() || undefined}
           data-disabled={saving() ? '' : undefined}
           onClick={() => fireAndForget(save(), 'agent-face.save')}

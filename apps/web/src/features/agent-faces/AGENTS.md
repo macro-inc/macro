@@ -31,4 +31,11 @@ draws them everywhere else. Behind `ENABLE_AGENT_FACES` (env-only, on in dev).
 - An unsaved agent's face is `derivedAgentFace(userId)` (`@core/user/agent-face`):
   a hashed seed, so saving it unchanged keeps the same face and fits the
   server's 64-character seed limit. Never seed from the raw id.
+- Wait for a successful profile-picture read before mounting an edit draft; an
+  unknown picture is a loading/error state, never a generated-face default.
+- Guard upload continuations by opening lifetime and account; freeze picture
+  controls while saving and abort writes when their account scope retires.
+- Saved photos use a saved URL draft and are not uploaded again; only object
+  URLs created for picked files are revoked on replacement or cleanup.
+- Each part can be unpinned independently with Any; Shuffle keeps other pins.
 - Every part needs a tab in `core/face-tabs.ts`; the type fails otherwise.

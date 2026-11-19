@@ -28,6 +28,7 @@ export async function uploadAgentPicture(
 ): Promise<Result<AgentPicture, PictureUploadError>> {
   const photo = draft.photo();
   if (photo) {
+    if (photo.kind === 'saved') return ok({ face: null, url: photo.url });
     const url = await uploadStatic(photo.file);
     if (url.isErr()) return err({ kind: 'photo_upload_failed' });
     return ok({ face: null, url: url.value });

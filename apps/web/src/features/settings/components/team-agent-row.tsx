@@ -1,11 +1,13 @@
 import { t } from '@app/lib/i18n';
 import { AgentTag } from '@core/component/AgentTag';
 import { UserIcon } from '@core/component/UserIcon';
+import DotsThreeIcon from '@icon/system/regular/dots-three.svg';
+import ImageIcon from '@icon/system/regular/image.svg';
 import TrashIcon from '@icon/system/regular/trash.svg';
 import WaveformIcon from '@icon/system/regular/waveform.svg';
 import type { TeamAgent } from '@service-auth/team-agents';
-import { Button, Tooltip } from '@ui';
-import { type JSX, Show } from 'solid-js';
+import { Button, Dropdown, Tooltip } from '@ui';
+import { type JSX, onCleanup, Show } from 'solid-js';
 import { TeamAgentStatusLabel } from './team-agent-status';
 
 /**
@@ -18,7 +20,7 @@ export function TeamAgentRow(props: {
   canRemove: boolean;
   onRemove: () => void;
   /** Opens Change picture; left out for viewers who can't change it. */
-  onChangePicture?: () => void;
+  onChangePicture?: (opener: HTMLButtonElement | undefined) => void;
   /** Opens Change voice; left out for viewers who can't change it. */
   onChangeVoice?: () => void;
   /** Which Claude its computer runs on, for viewers who manage it. */
@@ -29,6 +31,31 @@ export function TeamAgentRow(props: {
   onRetry?: () => void;
   retrying?: boolean;
 }) {
+  let menuTrigger: HTMLButtonElement | undefined;
+  let disposed = false;
+  let pendingPicture:
+    | { userId: string; run: (opener: HTMLButtonElement | undefined) => void }
+    | undefined;
+  onCleanup(() => {
+    disposed = true;
+  });
+  const finishMenuClose = (event: Event) => {
+    const action = pendingPicture;
+    pendingPicture = undefined;
+    if (!action) return;
+    event.preventDefault();
+    // Let the menu restore its pointer layer before the picture drawer opens.
+    queueMicrotask(() => {
+      if (
+        disposed ||
+        props.agent.userId !== action.userId ||
+        !props.onChangePicture
+      )
+        return;
+      menuTrigger?.focus({ preventScroll: true });
+      action.run(menuTrigger);
+    });
+  };
   return (
     <div
       data-member-kind="agent"
@@ -95,6 +122,33 @@ export function TeamAgentRow(props: {
                 <WaveformIcon class="size-4" />
               </Button>
             </Tooltip>
+          )}
+        </Show>
+        <Show when={props.onChangePicture}>
+          {(changePicture) => (
+            <Dropdown placement="bottom-end">
+              <Dropdown.Trigger
+                ref={menuTrigger}
+                variant="ghost"
+                size="sm"
+                aria-label={t('agentFaces.agentOptions')}
+              >
+                <DotsThreeIcon class="size-4" />
+              </Dropdown.Trigger>
+              <Dropdown.Content onCloseAutoFocus={finishMenuClose}>
+                <Dropdown.Item
+                  onSelect={() => {
+                    pendingPicture = {
+                      userId: props.agent.userId,
+                      run: changePicture(),
+                    };
+                  }}
+                >
+                  <ImageIcon class="size-4" />
+                  {t('agentFaces.changePicture')}
+                </Dropdown.Item>
+              </Dropdown.Content>
+            </Dropdown>
           )}
         </Show>
         <Show when={props.canRemove}>

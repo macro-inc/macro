@@ -519,6 +519,7 @@ test('adding an agent waits in the dialog until it is online, then closes into i
       personality: '',
       size: 'large',
       avatarUrl: null,
+      avatarFace: { v: 1, seed: expect.any(String), pins: {} },
       purchaseKey: expect.any(String),
     },
   ]);
@@ -1088,3 +1089,131 @@ test('a DM with an agent teammate that is not running says so', async ({
   await expect(banner).toHaveCount(0);
   await expect(dm.locator('[data-agent-dm-chip]')).toHaveCount(0);
 });
+
+for (const dark of [false, true]) {
+  test(`face editor keeps pinned choices through shuffle and restores the face after a photo (${dark ? 'dark' : 'light'})`, async ({
+    page,
+  }, testInfo) => {
+    await scriptAuthService(page);
+    await page.goto(dark ? '/?dark' : '/');
+    const dialog = await openInviteAgent(page);
+    await dialog.getByRole('textbox', { name: 'Name' }).fill('Ada');
+    await dialog
+      .getByRole('button', { name: 'Edit picture', exact: true })
+      .click();
+    const editor = page.locator('[data-face-editor]');
+    const shape = editor.locator('[data-face-part="head"]');
+    await shape.getByRole('button', { name: 'Shape 2', exact: true }).click();
+    await editor.getByRole('button', { name: 'Shuffle', exact: true }).click();
+    await expect(
+      shape.getByRole('button', { name: 'Shape 2', exact: true })
+    ).toHaveAttribute('aria-pressed', 'true');
+    await page.screenshot({
+      path: testInfo.outputPath(`face-editor-${dark ? 'dark' : 'light'}.png`),
+    });
+    await shape.getByRole('button', { name: 'Any Shape', exact: true }).click();
+    await expect(
+      shape.getByRole('button', { name: 'Any Shape', exact: true })
+    ).toHaveAttribute('aria-pressed', 'true');
+    const preview = page.locator('[data-face-slot] img').first();
+    const faceBeforePhoto = await preview.getAttribute('src');
+    await editor.locator('[data-face-photo-input]').setInputFiles({
+      name: 'photo.png',
+      mimeType: 'image/png',
+      buffer: Buffer.from(
+        'iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mP8/x8AAwMCAO+j3ioAAAAASUVORK5CYII=',
+        'base64'
+      ),
+    });
+    await expect(
+      editor.getByRole('button', { name: 'Replace photo', exact: true })
+    ).toBeVisible();
+    await expect(
+      page.locator('[data-face-slot] button[aria-label="Shuffle face"]')
+    ).toHaveCount(0);
+    await editor
+      .getByRole('button', { name: 'Use a generated face', exact: true })
+      .click();
+    await expect(preview).toHaveAttribute('src', faceBeforePhoto ?? '');
+    if (testInfo.project.name === 'phone') {
+      await page.getByRole('button', { name: 'Done', exact: true }).click();
+    } else {
+      await page.keyboard.press('Escape');
+    }
+    await expect(
+      dialog.getByRole('button', { name: 'Shuffle face', exact: true })
+    ).toBeVisible();
+  });
+}
+
+for (const dark of [false, true]) {
+  test(`editing an agent photo keeps it on cancel and retries a failed save without replacing it (${dark ? 'dark' : 'light'})`, async ({
+    page,
+  }) => {
+    await scriptAuthService(page, 50, { agents: [ada('running')] });
+    const photo =
+      'data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mP8/x8AAwMCAO+j3ioAAAAASUVORK5CYII=';
+    const allowPicture = Promise.withResolvers<void>();
+    let pictureReads = 0;
+    await page.route('**/user/profile_pictures', async (route) => {
+      pictureReads += 1;
+      if (pictureReads === 1) {
+        await allowPicture.promise;
+        return route.fulfill({ status: 502 });
+      }
+      return route.fulfill({
+        json: { pictures: [{ id: ADA, url: photo, avatar_face: null }] },
+      });
+    });
+    const saves: unknown[] = [];
+    await page.route('**/team_agents/*/avatar', (route) => {
+      saves.push(route.request().postDataJSON());
+      return route.fulfill({ status: saves.length === 1 ? 502 : 204 });
+    });
+    await page.goto(dark ? '/?dark' : '/');
+    const row = page.locator('[data-member-kind="agent"]');
+    await expect(
+      row.getByRole('button', { name: 'Agent options' })
+    ).toBeVisible();
+    await row.getByRole('button', { name: 'Agent options' }).click();
+    await page.getByRole('menuitem', { name: 'Change picture' }).click();
+    const dialog = page.getByRole('dialog');
+    await expect(dialog.getByRole('status')).toHaveText('Loading picture…');
+    await expect(
+      dialog.getByRole('button', { name: 'Save', exact: true })
+    ).toHaveCount(0);
+    allowPicture.resolve();
+    await expect(dialog.getByRole('alert')).toHaveText(
+      "Couldn't load the picture. Try again."
+    );
+    await dialog.getByRole('button', { name: 'Retry', exact: true }).click();
+    await expect(
+      dialog.getByRole('button', { name: 'Replace photo', exact: true })
+    ).toBeVisible();
+    await dialog
+      .getByRole('button', { name: 'Use a generated face', exact: true })
+      .click();
+    await dialog.getByRole('button', { name: 'Cancel', exact: true }).click();
+    expect(saves).toEqual([]);
+    await expect(dialog).toBeHidden();
+    await expect(
+      row.getByRole('button', { name: 'Agent options' })
+    ).toBeFocused();
+    await row.getByRole('button', { name: 'Agent options' }).click();
+    await page.getByRole('menuitem', { name: 'Change picture' }).click();
+    await expect(
+      dialog.getByRole('button', { name: 'Replace photo', exact: true })
+    ).toBeVisible();
+    await dialog.getByRole('button', { name: 'Save', exact: true }).click();
+    await expect(
+      page.getByText("Couldn't save the picture. Try again.")
+    ).toBeVisible();
+    await expect(dialog).toBeVisible();
+    await dialog.getByRole('button', { name: 'Save', exact: true }).click();
+    await expect(dialog).toBeHidden();
+    expect(saves).toEqual([
+      { face: null, url: photo },
+      { face: null, url: photo },
+    ]);
+  });
+}

@@ -1,6 +1,7 @@
-import { type AgentFace, parseAgentFace } from '@macro-inc/agent-faces';
 import { debounce } from '@core/util/debounce';
 import { fireAndForget } from '@core/util/fireAndForget';
+import { type AgentFace, parseAgentFace } from '@macro-inc/agent-faces';
+import { queryAccountSession } from '@queries/auth/account-scope';
 
 import { authServiceClient } from '@service-auth/client';
 import type { UserProfilePicture } from '@service-auth/generated/schemas/userProfilePicture';
@@ -104,14 +105,32 @@ const processFetchQueue = debounce(async () => {
 }, 50);
 
 async function batchFetchProfilePictures(ids: string[]) {
+  const accountSession = queryAccountSession();
+  const requestedAt = ids.map((id) => userProfilePictures[id]?._createdAt);
   const [nameResults] = await Promise.all([
     ids.length > 0 ? fetchProfilePictures(ids) : Promise.resolve([]),
   ]);
 
+  if (queryAccountSession() !== accountSession) {
+    // Retire only this batch's pending entries; a newer reader may already
+    // have started another request for the same person in the new session.
+    ids.forEach((id, index) => {
+      if (userProfilePictures[id]?._createdAt !== requestedAt[index]) return;
+      setUserProfilePictures(id, { loading: false, _createdAt: new Date(0) });
+    });
+    return;
+  }
+
   // The response leaves out users with no picture; they are loaded too.
   const updates: ProfilePictureStore = {};
   for (const id of ids) {
-    updates[id] = { _createdAt: new Date(), id, loading: false };
+    updates[id] = {
+      _createdAt: new Date(),
+      id,
+      loading: false,
+      url: undefined,
+      face: undefined,
+    };
   }
 
   [...nameResults].forEach((result) => {
@@ -201,6 +220,7 @@ export async function refreshProfilePicture(userId: string): Promise<void> {
   const cached = userProfilePictures[userId];
   if (!cached) return;
 
+  const accountSession = queryAccountSession();
   const result = await authServiceClient.postProfilePictures({
     user_id_list: [userId],
   });
@@ -209,12 +229,19 @@ export async function refreshProfilePicture(userId: string): Promise<void> {
     return;
   }
 
+  if (queryAccountSession() !== accountSession) return;
   const picture = result.value.pictures.find(({ id }) => id === userId);
   setUserProfilePictures(
     userId,
     picture
       ? pictureItem(picture)
-      : { _createdAt: new Date(), id: userId, loading: false }
+      : {
+          _createdAt: new Date(),
+          id: userId,
+          loading: false,
+          url: undefined,
+          face: undefined,
+        }
   );
 }
 

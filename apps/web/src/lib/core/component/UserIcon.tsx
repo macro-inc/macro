@@ -1,4 +1,3 @@
-import { type AgentFace, renderFace } from '@macro-inc/agent-faces';
 import {
   ENABLE_AGENT_FACES,
   ENABLE_PROFILE_PICTURES,
@@ -7,7 +6,6 @@ import { isBotPrincipalId } from '@core/constant/macroAgent';
 import { staticFileSizedUrl } from '@core/constant/servers';
 import { internalDrag } from '@core/directive/internalDragState';
 import { isTouchDevice } from '@core/mobile/isTouchDevice';
-import { derivedAgentFace } from '@core/user/agent-face';
 import {
   profilePictureItem,
   useProfilePictureUrl,
@@ -22,10 +20,12 @@ import {
   tryMacroId,
   useIsConnectedSecondaryInbox,
 } from '@core/user';
+import { derivedAgentFace } from '@core/user/agent-face';
 import { fireAndForget } from '@core/util/fireAndForget';
 import { useOpenDirectMessage } from '@core/util/open-direct-message';
 import RobotIcon from '@icon/system/regular/robot.svg';
 import Trash from '@icon/system/regular/trash.svg?component-solid';
+import { type AgentFace, renderFace } from '@macro-inc/agent-faces';
 import { Telemetry } from '@macro-inc/observability';
 import { Avatar, type AvatarSize, cn } from '@ui';
 import { createMemo, Match, Show, Switch } from 'solid-js';

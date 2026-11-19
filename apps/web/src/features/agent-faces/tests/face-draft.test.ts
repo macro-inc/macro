@@ -37,8 +37,28 @@ describe('createFaceDraft', () => {
       draft.shuffle();
       expect(draft.face().seed).not.toBe('start');
       expect(draft.face().pins).toEqual({ hair: 2 });
+      draft.pin('eyes', 1);
+      draft.unpin('hair');
+      expect(draft.face().pins).toEqual({ eyes: 1 });
       draft.reset();
       expect(draft.face().pins).toEqual({});
+      dispose();
+    });
+  });
+
+  it('starts with the saved photo and keeps the face when it is cleared', () => {
+    createRoot((dispose) => {
+      const draft = createFaceDraft(
+        { v: 1, seed: 'start', pins: {} },
+        'https://example.com/photo.png'
+      );
+      expect(draft.photo()).toEqual({
+        kind: 'saved',
+        url: 'https://example.com/photo.png',
+      });
+      draft.setPhoto(undefined);
+      expect(draft.photo()).toBeUndefined();
+      expect(draft.face().seed).toBe('start');
       dispose();
     });
   });
@@ -47,7 +67,8 @@ describe('createFaceDraft', () => {
     createRoot((dispose) => {
       const draft = createFaceDraft({ v: 1, seed: 'start', pins: {} });
       draft.setPhoto(new File(['x'], 'me.png', { type: 'image/png' }));
-      expect(draft.photo()?.file.name).toBe('me.png');
+      const photo = draft.photo();
+      expect(photo?.kind === 'upload' && photo.file.name).toBe('me.png');
       draft.setPhoto(undefined);
       expect(draft.photo()).toBeUndefined();
       expect(draft.face().seed).toBe('start');

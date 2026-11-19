@@ -7,7 +7,9 @@ import {
 import { type Accessor, createSignal, onCleanup } from 'solid-js';
 
 /** A photo chosen in place of a face, with a URL to show it until it is saved. */
-export type FacePhoto = { file: File; url: string };
+export type FacePhoto =
+  | { kind: 'upload'; file: File; url: string }
+  | { kind: 'saved'; url: string };
 
 /**
  * The picture being chosen for an agent: a generated face, or a photo. While
@@ -21,6 +23,8 @@ export type FaceDraft = {
   shuffle: () => void;
   /** Fix `part` to its option at `index`. */
   pin: (part: FacePart, index: number) => void;
+  /** Let the seed choose this part again. */
+  unpin: (part: FacePart) => void;
   /** Let the seed choose every part again. */
   reset: () => void;
   /** Use a photo, or go back to the face with `undefined`. */
@@ -28,13 +32,18 @@ export type FaceDraft = {
 };
 
 /** A draft starting from `initial`, or a random face. */
-export function createFaceDraft(initial?: AgentFace): FaceDraft {
+export function createFaceDraft(
+  initial?: AgentFace,
+  savedPhotoUrl?: string
+): FaceDraft {
   const [face, setFace] = createSignal<AgentFace>(initial ?? randomFace());
-  const [photo, setPhotoState] = createSignal<FacePhoto>();
+  const [photo, setPhotoState] = createSignal<FacePhoto | undefined>(
+    savedPhotoUrl ? { kind: 'saved', url: savedPhotoUrl } : undefined
+  );
 
   const release = () => {
     const current = photo();
-    if (current) URL.revokeObjectURL(current.url);
+    if (current?.kind === 'upload') URL.revokeObjectURL(current.url);
   };
   onCleanup(release);
 
@@ -47,11 +56,19 @@ export function createFaceDraft(initial?: AgentFace): FaceDraft {
         ...current,
         pins: { ...current.pins, [part]: index },
       })),
+    unpin: (part) =>
+      setFace((current) => {
+        const pins = { ...current.pins };
+        delete pins[part];
+        return { ...current, pins };
+      }),
     reset: () => setFace((current) => ({ ...current, pins: {} })),
     setPhoto: (file) => {
       release();
       setPhotoState(
-        file ? { file, url: URL.createObjectURL(file) } : undefined
+        file
+          ? { kind: 'upload', file, url: URL.createObjectURL(file) }
+          : undefined
       );
     },
   };

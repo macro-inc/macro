@@ -256,7 +256,27 @@ see only the people invite. **Invite Agent** opens **Invite an agent**, which as
 agent's computer size, with no explanatory text around them (layout A,
 `components/agent-invite-layout-a.tsx`; the form hands it named parts so
 another layout can replace it). Voice and role come later, and the agent asks
-what to take on once it is online. The avatar shows the name's first letter.
+what to take on once it is online. With `ENABLE_AGENT_FACES`, each opening
+starts with a random face beside the name. **Shuffle face** changes its seed
+and keeps pinned parts. **Edit picture** opens tabs for Head, Hair, Face,
+Extras and Outfit; choosing a part pins it, **Any** unpins just that part,
+and **Reset** clears all pins. Desktop uses a popover; phones stack a picture
+sheet over the invite. **Upload photo** replaces the preview and hides Shuffle;
+**Use a generated face** brings back the same draft face. Add saves the face
+recipe and uploads a PNG for other clients; a failed PNG upload still saves
+the recipe. A failed photo upload still adds the agent and reports the failure.
+With the flag off, the avatar shows the name's first letter.
+
+Owners and admins can use an agent row's **Change picture** menu item while
+faces are enabled. It opens a dialog (a drawer on phones) with the saved face
+or photo. The editor waits for that picture to load; a failed read offers local
+**Retry** before any picture can be saved. **Save** calls `PUT /team_agents/{agent}/avatar`; a failed save keeps
+the draft open for retry. Cancel leaves the saved picture unchanged. Agents
+without a saved picture get a stable generated face derived from their user id;
+saving that face unchanged preserves its appearance. Saved photos take priority
+over this derived face. Faces render through `UserIcon` across the app, while
+other clients use the uploaded PNG.
+
 Sizes come from the same catalog and prices as Buy a computer
 (sold-out sizes are disabled and marked **Sold out**). The agent's seat is
 included, so the button reads **Add <name> · $X/month** (or **Add agent ·

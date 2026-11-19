@@ -98,12 +98,13 @@ export type TeamAgentAvatar = {
 /** The caller's current team's agent teammates. Writes need team admin. */
 export const teamAgentsClient = {
   list: () => fetchWithToken<TeamAgents>(base),
-  create: (request: CreateTeamAgent) =>
+  create: (request: CreateTeamAgent, signal?: AbortSignal) =>
     fetchWithToken<
       TeamAgent,
       CreateTeamAgentErrorCode | PurchaseRefusalErrorCode
     >(base, {
       method: 'POST',
+      signal,
       body: JSON.stringify(request),
       errorResponseHandler: createError,
     }),
@@ -122,9 +123,14 @@ export const teamAgentsClient = {
     return result;
   },
   /** Replaces the agent's picture; team admins only. */
-  setAvatar: (agentUserId: string, avatar: TeamAgentAvatar) =>
+  setAvatar: (
+    agentUserId: string,
+    avatar: TeamAgentAvatar,
+    signal?: AbortSignal
+  ) =>
     fetchWithToken(`${base}/${encodeURIComponent(agentUserId)}/avatar`, {
       method: 'PUT',
+      signal,
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify(avatar),
     }),

@@ -2,15 +2,19 @@ import { t } from '@app/lib/i18n';
 import { toast } from '@core/component/Toast/Toast';
 import { ENABLE_AGENT_FACES } from '@core/constant/featureFlags';
 import { fireAndForget } from '@core/util/fireAndForget';
-import type { CreateTeamAgent } from '@service-auth/team-agents';
+import {
+  currentQueryAccount,
+  isCurrentQueryAccount,
+} from '@queries/auth/account-scope';
 import { useComputerOffersQuery } from '@queries/computers/computers';
+import type { CreateTeamAgent } from '@service-auth/team-agents';
+import { FaceSlot } from '../../agent-faces/face-slot';
+import { createFaceDraft } from '../../agent-faces/primitives/create-face-draft';
+import { uploadAgentPicture } from '../../agent-faces/primitives/upload-agent-picture';
 import {
   openAgentDirectMessage,
   openBilling,
 } from '../../notifications/computer-setup-toast';
-import { FaceSlot } from '../../agent-faces/face-slot';
-import { createFaceDraft } from '../../agent-faces/primitives/create-face-draft';
-import { uploadAgentPicture } from '../../agent-faces/primitives/upload-agent-picture';
 import { InviteAgentForm } from '../components/invite-agent-form';
 import { useAddTeamAgent } from '../primitives/add-team-agent';
 
@@ -31,8 +35,13 @@ export function InviteAgentPanel(props: {
   const face = createFaceDraft();
   // A picture that can't be saved doesn't stop the agent being added: it
   // keeps its face (drawn from the recipe) or, for a photo, its initial.
-  const preparePicture = async (): Promise<Partial<CreateTeamAgent>> => {
+  const preparePicture = async (): Promise<
+    Partial<CreateTeamAgent> | undefined
+  > => {
+    const account = currentQueryAccount();
+    const teamId = props.teamId;
     const picture = await uploadAgentPicture(face);
+    if (!isCurrentQueryAccount(account) || props.teamId !== teamId) return;
     if (picture.isErr()) {
       toast.failure(t('agentFaces.photoFailed'));
       return {};
