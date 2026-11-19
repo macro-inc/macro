@@ -113,9 +113,18 @@ function createSharedOwner() {
   };
 }
 
+type Page = {
+  queryClient: { getQueryData(key: readonly unknown[]): unknown };
+  queryPersistence: { restoreQuery(key: readonly unknown[]): Promise<void> };
+};
+
 async function openWindow(
   owner: ReturnType<typeof createSharedOwner>,
-  options: { receivesPushes: boolean }
+  options: {
+    receivesPushes: boolean;
+    /** What the page does between loading and its first owner observation. */
+    beforeOwner?: (page: Page) => Promise<void>;
+  }
 ) {
   vi.resetModules();
   const { createAuthorityObserver, StaleCacheAuthorityError } = await import(
@@ -164,6 +173,7 @@ async function openWindow(
       };
     },
   };
+  await options.beforeOwner?.({ queryClient, queryPersistence });
   access.installCrmCacheHost({
     ...createNoopCacheHost(),
     disabled: false,
@@ -212,8 +222,15 @@ it('never restores a snapshot another window wrote after the denial was recorded
   profile.disk.set(hashOf(IDENTITY), saved(IDENTITY, { id: 'viewer' }));
   profile.swept = Promise.withResolvers();
 
-  // Every later start under that denial.
-  const later = await openWindow(owner, { receivesPushes: true });
+  // Every later start under that denial. A mounted query restores as the page
+  // loads, before the owner has answered: only the mirror says denied then.
+  const later = await openWindow(owner, {
+    receivesPushes: true,
+    beforeOwner: async (page) => {
+      await page.queryPersistence.restoreQuery(CHANNELS);
+      expect(page.queryClient.getQueryData(CHANNELS)).toBeUndefined();
+    },
+  });
   expect(later.crmAccessAuthority.state()).toBe('denied');
   await later.queryPersistence.restoreQuery(CHANNELS);
   expect(later.queryClient.getQueryData(CHANNELS)).toBeUndefined();
