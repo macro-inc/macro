@@ -17,7 +17,6 @@ use macro_uuid::Uuid;
 use routine_program::{CodeIdentity, RoutineProgram, SdkFingerprint};
 use serde::{Deserialize, Serialize};
 use serde_json::{Value, json};
-use tracing::Instrument;
 use utoipa::ToSchema;
 
 use super::models::ScheduledAction;
@@ -405,35 +404,57 @@ pub async fn sweep(
     };
     let mut after = Uuid::nil();
     while !stop.is_cancelled() {
-        let span = tracing::info_span!("routine.code_sweep.batch", stale = tracing::field::Empty,);
-        let page = upgrades
-            .stale_routines(&sdk, after, SWEEP_BATCH)
-            .instrument(span.clone())
-            .await?;
-        span.record("stale", page.stale.len());
-        let Some(last) = page.last else { break };
+        let (batch, last) = sweep_batch(code, upgrades, repo, stop, &sdk, after).await?;
+        done.upgraded += batch.upgraded;
+        done.waiting += batch.waiting;
+        let Some(last) = last else { break };
         after = last;
-        for id in page.stale {
-            if stop.is_cancelled() {
-                break;
-            }
-            let Some(action) = repo.get_action(&id).await? else {
-                continue;
-            };
-            let Ok(program) = RoutineProgram::from_task(&action.task) else {
-                continue;
-            };
-            let owner = action.owner_user()?.clone();
-            let context = sweep_context(&action, &owner);
-            match current_code(code, upgrades, &owner, &action, program, &context).await {
-                Ok(_) => done.upgraded += 1,
-                Err(error) if error.downcast_ref::<NeedsUpdate>().is_some() => done.waiting += 1,
-                Err(error) => return Err(error),
-            }
-        }
     }
     let span = tracing::Span::current();
     span.record("upgraded", done.upgraded);
     span.record("waiting", done.waiting);
     Ok(done)
+}
+
+/// Upgrade the batch of routines after `after`, and say where the next
+/// batch starts: none once there are no more routines.
+#[tracing::instrument(name = "routine.code_sweep.batch", skip_all, fields(
+    after = %after,
+    stale = tracing::field::Empty,
+    upgraded = tracing::field::Empty,
+    waiting = tracing::field::Empty,
+), err)]
+async fn sweep_batch(
+    code: &impl RoutineCode,
+    upgrades: &impl CodeUpgrades,
+    repo: &impl ScheduledActionRepo,
+    stop: &tokio_util::sync::CancellationToken,
+    sdk: &SdkFingerprint,
+    after: Uuid,
+) -> Result<(Sweep, Option<Uuid>)> {
+    let mut done = Sweep::default();
+    let page = upgrades.stale_routines(sdk, after, SWEEP_BATCH).await?;
+    let span = tracing::Span::current();
+    span.record("stale", page.stale.len());
+    for id in page.stale {
+        if stop.is_cancelled() {
+            break;
+        }
+        let Some(action) = repo.get_action(&id).await? else {
+            continue;
+        };
+        let Ok(program) = RoutineProgram::from_task(&action.task) else {
+            continue;
+        };
+        let owner = action.owner_user()?.clone();
+        let context = sweep_context(&action, &owner);
+        match current_code(code, upgrades, &owner, &action, program, &context).await {
+            Ok(_) => done.upgraded += 1,
+            Err(error) if error.downcast_ref::<NeedsUpdate>().is_some() => done.waiting += 1,
+            Err(error) => return Err(error),
+        }
+    }
+    span.record("upgraded", done.upgraded);
+    span.record("waiting", done.waiting);
+    Ok((done, page.last))
 }

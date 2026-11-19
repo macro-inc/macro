@@ -49,9 +49,11 @@ where
         requester: Requester,
     ) -> Result<SavedAction> {
         // One level: a sub-routine's creations follow its own parent.
+        let parent_id = run.parent_id.unwrap_or(run.routine_id);
+        record_run(&run, parent_id);
         let parent = self
             .repo
-            .get_action(&run.parent_id.unwrap_or(run.routine_id))
+            .get_action(&parent_id)
             .await?
             .ok_or(ActionPolicyError::NotFound)?;
         self.create_under(principal, input, run, &parent, key, requester)
@@ -70,16 +72,6 @@ where
         requester: Requester,
     ) -> Result<SavedAction> {
         let parent_id = parent.id.ok_or(ActionPolicyError::NotFound)?;
-        let span = tracing::Span::current();
-        span.record("routine.parent_id", tracing::field::display(parent_id));
-        span.record(
-            "routine.created_by_run_id",
-            tracing::field::display(run.run_id),
-        );
-        span.record(
-            "routine.creating_routine_id",
-            tracing::field::display(run.routine_id),
-        );
 
         // A parent that is off keeps what its runs create or update off
         // with it.
@@ -161,6 +153,7 @@ where
             .ok_or(ActionPolicyError::ScheduleOutsideRun)?;
         let key = request.key.as_deref().map(SubRoutineKey::new).transpose()?;
         let parent_id = run.parent_id.unwrap_or(run.routine_id);
+        record_run(&run, parent_id);
         let parent = self
             .repo
             .get_action(&parent_id)
@@ -390,6 +383,21 @@ where
             })
             .collect())
     }
+}
+
+/// Name the run a create comes from on the request's span, before anything
+/// can refuse it.
+fn record_run(run: &RunningRun, parent_id: Uuid) {
+    let span = tracing::Span::current();
+    span.record("routine.parent_id", tracing::field::display(parent_id));
+    span.record(
+        "routine.created_by_run_id",
+        tracing::field::display(run.run_id),
+    );
+    span.record(
+        "routine.creating_routine_id",
+        tracing::field::display(run.routine_id),
+    );
 }
 
 fn lost_key(error: &anyhow::Error) -> bool {
