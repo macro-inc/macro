@@ -53,7 +53,8 @@ function IncomingMeetingInvitationsReceiver() {
     ring: (key, shouldStop, duration) =>
       startCallRinger(key, shouldStop, duration).stop,
     // Touch devices keep the names they showed before the desktop stack.
-    callerName: isTouchDevice() ? DefaultUserNameResolver : callerDisplayName,
+    callerName: (id) =>
+      isTouchDevice() ? DefaultUserNameResolver(id) : callerDisplayName(id),
     publishResolution: publishMeetingInvitationResolution,
     openMeeting: (shareToken) => navigate(getMeetingPath(shareToken)),
     notify: async (invitation, handlers) => {
