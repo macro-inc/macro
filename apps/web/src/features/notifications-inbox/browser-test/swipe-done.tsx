@@ -68,6 +68,9 @@ const idOf = (name: string) => `macro|${name.toLowerCase()}@example.test`;
 
 // Every row lands in one date section, so a done takes no divider with it.
 const NOW = Date.now();
+// `?keep=<row id>`: the feed keeps that row through a done, as the real one
+// does when the row changed while the done was on its way.
+const KEPT = new URLSearchParams(location.search).get('keep');
 
 const message = (id: string, sender: string, at: number, text: string) =>
   ({
@@ -156,7 +159,7 @@ function createFixtureFeed(): InboxFeedSource {
       for (const row of rows) {
         window.__inboxDone.push({ id: row.id, at: performance.now() });
       }
-      return hide(rows.map((row) => row.id));
+      return hide(rows.map((row) => row.id).filter((id) => id !== KEPT));
     },
     markNotificationDone: async (_row, notification) => {
       window.__inboxDone.push({ id: notification.id, at: performance.now() });

@@ -164,9 +164,9 @@ async function recordFrames(
   );
 }
 
-async function openInbox(page: Page) {
+async function openInbox(page: Page, search = '') {
   await stayLocal(page);
-  await page.goto(PAGE);
+  await page.goto(`${PAGE}${search}`);
   // The first load pre-bundles the app's dependencies.
   await expect(
     page.locator(`[data-swipe-row][data-swipe-id="${NEXT_ID}"]`)
@@ -319,5 +319,35 @@ test('the last two notifications of an unfolded stack fold away together', async
   expect(taken?.id).toBe('dm-stack-1');
   expect(taken?.at).toBeGreaterThanOrEqual(folding.at(-1)?.at ?? Infinity);
   await expect(page.locator('#dm-stack')).toContainText('Second of two');
+  await cdp.detach();
+});
+
+test('a row the feed keeps through its done unfolds again, at rest', async ({
+  page,
+}) => {
+  await openInbox(page, `?keep=${DONE_ID}`);
+  const done = page.locator(`[data-swipe-row][data-swipe-id="${DONE_ID}"]`);
+  const fullHeight = (await done.boundingBox())?.height ?? 0;
+
+  const cdp = await page.context().newCDPSession(page);
+  await swipeLeft(page, cdp, DONE_ID);
+  await expect
+    .poll(() => page.evaluate(() => window.__inboxDone.length))
+    .toBe(1);
+  await expect(done).toHaveAttribute('data-swipe-phase', 'idle');
+  await expect
+    .poll(async () => (await done.boundingBox())?.height)
+    .toBeCloseTo(fullHeight, 0);
+  await expect
+    .poll(() =>
+      done.evaluate(
+        (row) =>
+          row.getBoundingClientRect().left -
+          (row.querySelector('[data-swipe-content]')?.getBoundingClientRect()
+            .left ?? Number.NaN)
+      )
+    )
+    .toBe(0);
+  expect((await page.evaluate(() => window.__inboxDone))[0]?.id).toBe(DONE_ID);
   await cdp.detach();
 });

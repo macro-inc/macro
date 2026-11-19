@@ -505,6 +505,9 @@ export function NotificationsView(props: NotificationsViewProps) {
   // swipe rows and removes them at once.
   const [collapseCard, setCollapseCard] =
     createSignal<(id: string) => Promise<void>>();
+  const [expandCard, setExpandCard] = createSignal<(id: string) => void>();
+  /** Cards folding now; a second done of one (a repeated `e`) is ignored. */
+  const folding = new Set<string>();
   /** The cards a done takes: each row's and its unfolded notifications'. */
   const cardIds = (rows: readonly NotificationInboxRow[]) => {
     const rowIds = new Set(rows.map((row) => row.id));
@@ -513,14 +516,29 @@ export function NotificationsView(props: NotificationsViewProps) {
       return isInboxNotification(item) && rowIds.has(rowId) ? [item.id] : [];
     });
   };
-  /** Run `remove` once the cards are folded away. */
+  /**
+   * Run `remove` once the cards are folded away. A card still listed once
+   * `remove` settles was kept (its row changed while it folded), so it
+   * unfolds again rather than staying folded in the list.
+   */
   const afterFolding = async <T,>(
     ids: readonly string[],
     remove: () => Promise<T>
   ): Promise<T> => {
     const collapse = collapseCard();
-    if (collapse) await Promise.all(ids.map((id) => collapse(id)));
-    return remove();
+    if (!collapse) return remove();
+
+    for (const id of ids) folding.add(id);
+    await Promise.all(ids.map((id) => collapse(id)));
+    for (const id of ids) folding.delete(id);
+    try {
+      return await remove();
+    } finally {
+      const listed = new Set(listItems().map((item) => item.id));
+      for (const id of ids) {
+        if (listed.has(id)) expandCard()?.(id);
+      }
+    }
   };
 
   const rowActions = createRowActions({
@@ -557,6 +575,21 @@ export function NotificationsView(props: NotificationsViewProps) {
       markDone([row]);
       return;
     }
+    // A stack left with one notification is listed as its row alone, so the
+    // other unfolded card leaves with this one.
+    const unfolded = listItems().filter(
+      (item) => isInboxStackItem(item) && item.rowId === row.id
+    );
+    const leaving = (
+      row.count <= 2
+        ? unfolded
+        : unfolded.filter(
+            (item) =>
+              isInboxStackItem(item) && item.notificationId === notification.id
+          )
+    ).map((item) => item.id);
+    if (leaving.some((id) => folding.has(id))) return;
+
     if (selection.selectedNotification()?.id === notification.id) {
       const shown = row.content.notifications;
       const index = shown.findIndex(
@@ -566,22 +599,9 @@ export function NotificationsView(props: NotificationsViewProps) {
       if (next) preview(row, next);
       else preview(row);
     }
-    // A stack left with one notification is listed as its row alone, so the
-    // other unfolded card leaves with this one.
-    const unfolded = listItems().filter(
-      (item) => isInboxStackItem(item) && item.rowId === row.id
-    );
-    const leaving =
-      row.count <= 2
-        ? unfolded
-        : unfolded.filter(
-            (item) =>
-              isInboxStackItem(item) && item.notificationId === notification.id
-          );
     fireAndForget(
-      afterFolding(
-        leaving.map((item) => item.id),
-        () => inbox.markNotificationDone(row, notification)
+      afterFolding(leaving, () =>
+        inbox.markNotificationDone(row, notification)
       ),
       'notifications-inbox'
     );
@@ -598,7 +618,10 @@ export function NotificationsView(props: NotificationsViewProps) {
     fireAndForget(inbox.clear(request), 'notifications-inbox');
   };
 
-  const markDone = (done: readonly NotificationInboxRow[]) => {
+  const markDone = (rows: readonly NotificationInboxRow[]) => {
+    const done = rows.filter((row) => !folding.has(row.id));
+    if (done.length === 0) return;
+
     const remove = () => {
       for (const row of done) stacks.collapse(row.id);
       const next = selection.afterLeaving(done.map((row) => row.id));
@@ -1033,6 +1056,7 @@ export function NotificationsView(props: NotificationsViewProps) {
           <SwipableRowProvider
             container={viewport}
             setCollapseEntity={setCollapseCard}
+            setExpandEntity={setExpandCard}
             canSwipeLeft={(id) =>
               rowsById().has(id) || stackItemOf(id) !== undefined
             }
