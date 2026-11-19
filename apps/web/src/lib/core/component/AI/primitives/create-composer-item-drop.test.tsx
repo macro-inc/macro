@@ -1,9 +1,14 @@
 import { isEntityDragData } from '@app/features/entity/types/drag';
 import type { EntityData } from '@app/features/entity/types/entity';
 import {
+  buildConfig,
+  type EditorConfigBuilder,
+} from '@core/component/LexicalMarkdown/builder/MarkdownConfigBuilder';
+import {
   DocumentMentionNode,
   SupportedNodeTypes,
 } from '@macro-inc/lexical-core';
+import { Telemetry } from '@macro-inc/observability';
 import { cleanup, render } from '@solidjs/testing-library';
 import {
   createDraggable,
@@ -20,14 +25,17 @@ import {
   type LexicalEditor,
 } from 'lexical';
 import { createSignal, onCleanup, onMount } from 'solid-js';
-import { afterEach, describe, expect, it } from 'vitest';
+import { afterEach, describe, expect, it, vi } from 'vitest';
 import { mentionsPlugin } from '../../LexicalMarkdown/plugins/mentions';
 import {
   composerItemToMention,
   createComposerItemDrop,
 } from './create-composer-item-drop';
 
-afterEach(cleanup);
+afterEach(() => {
+  cleanup();
+  vi.restoreAllMocks();
+});
 
 describe('composer item context', () => {
   it('preserves email, task, document and project identity in context mentions', () => {
@@ -125,9 +133,15 @@ function setupDrop(items: EntityData[]) {
       },
       { discrete: true }
     );
-    const drop = createComposerItemDrop({ editor, enabled: isEnabled });
+    const drop = createComposerItemDrop({
+      editor: () => editor,
+      enabled: isEnabled,
+    });
     let root!: HTMLDivElement;
-    onMount(() => editor.setRootElement(root));
+    onMount(() => {
+      editor.setRootElement(root);
+      drop.onConnect();
+    });
     onCleanup(() => editor.setRootElement(null));
     return (
       <div ref={drop.ref}>
@@ -177,6 +191,69 @@ function setupDrop(items: EntityData[]) {
 }
 
 describe('composer item drop integration', () => {
+  it('rejects drag-over and drop before MarkdownShell connects without reading the builder or reporting errors', () => {
+    let context!: NonNullable<ReturnType<typeof useDragDropContext>>;
+    let builder!: EditorConfigBuilder;
+    let drop!: ReturnType<typeof createComposerItemDrop>;
+    const readEditor = vi.fn(() => builder.lexical);
+    const reportError = vi.spyOn(Telemetry, 'error');
+    function PendingComposer() {
+      context = useDragDropContext()!;
+      builder = buildConfig('chat').withMentions();
+      const source = createDraggable('pending-source', {
+        type: 'document',
+        id: 'document',
+        name: 'Document',
+        ownerId: 'owner',
+        fileType: 'md',
+        dragType: 'entity',
+        operation: () => 'move',
+      });
+      drop = createComposerItemDrop({
+        editor: readEditor,
+        enabled: () => true,
+      });
+      return (
+        <>
+          <div ref={source.ref} />
+          <div ref={drop.ref} />
+        </>
+      );
+    }
+    render(() => (
+      <DragDropProvider
+        collisionDetector={(_source, targets) => targets[0] ?? null}
+      >
+        <PendingComposer />
+      </DragDropProvider>
+    ));
+    expect(() => builder.lexical).toThrow(
+      'editor.lexical accessed before <MarkdownShell> mounted'
+    );
+    context[1].dragStart('pending-source');
+    expect(drop.isDraggedOver()).toBe(false);
+    context[1].dragEnd();
+    expect(readEditor).not.toHaveBeenCalled();
+    expect(reportError).not.toHaveBeenCalled();
+  });
+
+  it('rejects a drop after the editor root detaches', () => {
+    const { editors, drop } = setupDrop([
+      {
+        type: 'document',
+        id: 'document',
+        name: 'Document',
+        ownerId: 'owner',
+        fileType: 'md',
+      },
+    ]);
+    const reportError = vi.spyOn(Telemetry, 'error');
+    editors[1].setRootElement(null);
+    drop();
+    expect(contextIds(editors[1])).toEqual(['Keep this draft. ']);
+    expect(reportError).not.toHaveBeenCalled();
+  });
+
   it('adds the selected items once to the targeted editor without replacing its draft', () => {
     const { editors, drop } = setupDrop([
       {

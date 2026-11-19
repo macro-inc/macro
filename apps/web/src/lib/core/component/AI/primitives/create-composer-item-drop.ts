@@ -6,7 +6,7 @@ import { itemToBlockName } from '@core/constant/allBlocks';
 import { Telemetry } from '@macro-inc/observability';
 import { createDroppable, useDragDropContext } from '@thisbeyond/solid-dnd';
 import { $getRoot, $getSelection, type LexicalEditor } from 'lexical';
-import { createUniqueId } from 'solid-js';
+import { createSignal, createUniqueId, onCleanup } from 'solid-js';
 import { INSERT_DOCUMENT_MENTION_COMMAND } from '../../LexicalMarkdown/plugins/mentions';
 import type { ChatAttachmentMention } from '../util/chatAttachmentMention';
 
@@ -44,21 +44,26 @@ export function composerItemToMention(
 
 /** Register the whole composer, not only its editable text, as an item target. */
 export function createComposerItemDrop(options: {
-  editor: LexicalEditor;
+  editor: () => LexicalEditor;
   enabled: () => boolean;
 }) {
   const context = useDragDropContext();
   if (!context)
-    return { ref: (_element: HTMLElement) => {}, isDraggedOver: () => false };
+    return {
+      ref: (_element: HTMLElement) => {},
+      isDraggedOver: () => false,
+      onConnect: () => {},
+    };
 
+  // MarkdownShell owns editor creation and plugin registration. A composer
+  // surface can exist first, so do not read the builder until its onConnect.
+  const [connected, setConnected] = createSignal(false);
+  onCleanup(() => setConnected(false));
+  const enabled = () => connected() && options.enabled();
   const [state, { onDragEnd }] = context;
   const accepts = () => {
     const data = state.active.draggable?.data;
-    return (
-      options.enabled() &&
-      isEntityDragData(data) &&
-      !!composerItemToMention(data)
-    );
+    return enabled() && isEntityDragData(data) && !!composerItemToMention(data);
   };
   const id = `composer-item-${createUniqueId()}`;
   const droppable = createDroppable(id, {
@@ -66,7 +71,9 @@ export function createComposerItemDrop(options: {
   });
 
   onDragEnd((event) => {
-    if (event.droppable?.id !== id || !options.enabled()) return;
+    if (event.droppable?.id !== id || !enabled()) return;
+    const editor = options.editor();
+    if (!editor.getRootElement()?.isConnected) return;
     const data = event.draggable.data;
     if (!isEntityDragData(data)) return;
     const items = data.selection?.entities() ?? [data];
@@ -85,20 +92,17 @@ export function createComposerItemDrop(options: {
     });
     try {
       operation.run(() => {
-        options.editor.update(
+        editor.update(
           () => {
             // List drags leave no editor selection. Append rather than replacing the draft.
             if (!$getSelection()) $getRoot().selectEnd();
             for (const mention of mentions) {
-              options.editor.dispatchCommand(
-                INSERT_DOCUMENT_MENTION_COMMAND,
-                mention
-              );
+              editor.dispatchCommand(INSERT_DOCUMENT_MENTION_COMMAND, mention);
             }
           },
           { discrete: true }
         );
-        options.editor.focus();
+        editor.focus();
       });
       operation.afterPaint();
     } catch (error) {
@@ -110,6 +114,7 @@ export function createComposerItemDrop(options: {
 
   return {
     ref: droppable.ref,
+    onConnect: () => setConnected(true),
     isDraggedOver: () => droppable.isActiveDroppable && accepts(),
   };
 }

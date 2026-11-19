@@ -9,6 +9,7 @@ primitives; agent-session runtime behavior remains in `features/block-agent`.
 
 - Use `primitives/create-composer-item-drop.ts` for app-item drops in every AI composer; keep native file uploads separate.
 - Register the visible composer surface, not its editor namespace, so simultaneous composers remain independent targets.
+- Pass a lazy editor accessor and wire the drop primitive's `onConnect` to `MarkdownShell.onConnect`; loading or detached editors reject drops without accessing builder getters.
 - Preserve the draft and source selection; context drops insert the same mention nodes as the mention menu without moving items.
 - Keep disabled, read-only and dictation surfaces ineligible for drops.
 

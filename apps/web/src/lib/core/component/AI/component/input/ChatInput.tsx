@@ -255,7 +255,7 @@ export function ChatInput(props: ChatInputComponentProps) {
     });
 
   const itemDrop = createComposerItemDrop({
-    editor: props.editor.lexical,
+    editor: () => props.editor.lexical,
     enabled: () => !generating() && !dictation.active(),
   });
   const composerLayout = createComposerLayout(
@@ -485,6 +485,7 @@ export function ChatInput(props: ChatInputComponentProps) {
               <ComposerEditor
                 class={isCompactMobile() ? 'min-h-5' : undefined}
                 config={props.editor}
+                onConnect={itemDrop.onConnect}
                 placeholder={
                   props.placeholder ??
                   (isTouchDevice() ? 'Ask AI…' : 'Ask AI, @mention anything')

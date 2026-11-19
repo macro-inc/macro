@@ -245,7 +245,7 @@ export function AgentInput(props: AgentInputProps) {
     .onChange(setMarkdown);
 
   const itemDrop = createComposerItemDrop({
-    editor: editor.lexical,
+    editor: () => editor.lexical,
     enabled: () => !props.disabled && !props.readOnly && !dictation.active(),
   });
   // A parent can restore or clear the draft after the editor has mounted.
@@ -383,6 +383,7 @@ export function AgentInput(props: AgentInputProps) {
                 >
                   <ComposerEditor
                     config={editor}
+                    onConnect={itemDrop.onConnect}
                     initialValue={markdown()}
                     disabled={props.readOnly}
                     placeholder={

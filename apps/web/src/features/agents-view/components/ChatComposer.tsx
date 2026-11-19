@@ -170,7 +170,7 @@ export function ChatComposer(props: {
 
   const dictation = createComposerDictation(() => editor.lexical);
   const itemDrop = createComposerItemDrop({
-    editor: editor.lexical,
+    editor: () => editor.lexical,
     enabled: () =>
       !disabled() && !props.session?.readOnly && !dictation.active(),
   });
@@ -291,6 +291,7 @@ export function ChatComposer(props: {
         config={editor}
         initialValue={props.draft}
         onConnect={() => {
+          itemDrop.onConnect();
           editorConnected = true;
           if (props.draft) placeCaretAfterDraft();
         }}
