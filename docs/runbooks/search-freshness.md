@@ -181,20 +181,25 @@ dropped, or indexed wrongly, or search no longer finds the entity.
 
 ## Probe prefix unseen
 
-The probe's `crowded_prefix` round missed twice in 30 minutes, while its
-exact-token rounds pass. Each round writes a new private document holding one
-word that sorts late under `con` (`con`, `zz`, then random letters) and
-searches `con` alone as a partial content match, narrowed to that document.
-Content prefix search is dropping matches: a prefix query that expands only
-the first few hundred words of a shard starting with the prefix, before
-permission filtering, as `match_phrase_prefix` with `max_expansions` 256 did,
-never reaches the probe's word. Users then miss results for short prefixes.
+The probe's `crowded_prefix` round missed twice in 30 minutes. Each round
+writes a new private document holding one word that sorts late under `con`
+(`con`, `zz`, then random letters) and searches `con` alone as a partial
+content match, narrowed to that document. The next round deletes it, so it is
+gone by the time the alert arrives.
 
-- Check how `crates/opensearch_client/src/search/query.rs`
+- First check the document rounds (`entity_type:document`, other operations)
+  on the dashboard. If they miss too, documents are not reaching the index:
+  follow [Probe unseen](#probe-unseen).
+- If they pass, content prefix search is dropping matches. A likely cause is a
+  prefix query that expands only the first few hundred words of a shard
+  starting with the prefix, before permission filtering, as
+  `match_phrase_prefix` with `max_expansions` 256 did; the probe's word sorts
+  after them. Check how `crates/opensearch_client/src/search/query.rs`
   (`child_content_query`) builds content prefixes, and what deployed last.
-- The round's span (`search.freshness_probe`, `operation:crowded_prefix`)
-  names the document; search for that word exactly in the app as the probe
-  user: if it is found, the index has it and only the prefix search misses it.
+- To reproduce, as any user: create a private document whose body is one word
+  `conzz` plus random letters, wait until an exact search finds that word,
+  then search `con` as a partial match. Missing it while the exact search
+  finds it is the bug users see: short prefixes miss results.
 
 ## Probe failing
 

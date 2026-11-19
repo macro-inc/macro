@@ -459,7 +459,7 @@ prodMonitor('search-probe-prefix-unseen', {
   monitorThresholds: { critical: '2' },
   pages: false,
   description:
-    "In the last 30 minutes, the probe's crowded_prefix round missed its {{entity_type.name}} more than once: a partial search for con alone did not find the probe's new document, one word that sorts late under con, though the exact-token rounds pass. Content prefix search is dropping matches, as a prefix expansion capped per shard does, so users miss results for short prefixes. An unseen round lasts five minutes, so there are at most six in the window.",
+    "In the last 30 minutes, the probe's crowded_prefix round missed its {{entity_type.name}} more than once: a partial search for con alone did not find the probe's new document, one word that sorts late under con. If the other document rounds pass, content prefix search is dropping matches, likely through a prefix expansion capped per shard, and users miss results for short prefixes; if they miss too, documents are not reaching the index. An unseen round lasts five minutes, so there are at most six in the window.",
   dashboard,
   runbook: `${RUNBOOK}#probe-prefix-unseen`,
   alertDetail: '{{value}} rounds',
