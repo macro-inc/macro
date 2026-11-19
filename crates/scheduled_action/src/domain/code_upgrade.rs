@@ -172,7 +172,8 @@ async fn rewrite(
     version: &SdkFingerprint,
 ) -> std::result::Result<(RoutineProgram, Value), (String, Option<Value>)> {
     // Each step's own view of the outputs before it, for the model: the
-    // types its check file appends, before the line that checks `main`.
+    // types (and the interfaces sub-routines type `schedule` with) its check
+    // file appends, before the line that checks `main`.
     let outputs: Vec<String> = program
         .check_files()
         .into_iter()
@@ -182,7 +183,7 @@ async fn rewrite(
                 .lines()
                 .rev()
                 .skip(1)
-                .take_while(|line| line.starts_with("type "))
+                .take_while(|line| line.starts_with("type ") || line.starts_with("interface $"))
                 .collect();
             types.reverse();
             types.join("\n")

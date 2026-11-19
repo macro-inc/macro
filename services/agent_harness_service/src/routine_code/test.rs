@@ -700,6 +700,55 @@ export async function main({ macro, trigger, steps, run }: StepContext) {
         assert!(failing[0].problems[0].contains("Property 'dueAt' does not exist"));
     }
 
+    /// `macro` stays the SDK's `Macro`, so a helper typed with it takes it,
+    /// and only a routine that defines sub-routines can call `schedule`.
+    #[tokio::test]
+    #[ignore = "requires pinned Deno runtime"]
+    async fn macro_stays_the_sdks_and_only_a_routine_with_sub_routines_schedules() {
+        let (_root, code) = code("http://127.0.0.1:9").await;
+        let step = |body: &str| {
+            json!({ "type": "code", "title": "Schedule", "source": format!(
+                "import type {{ Macro }} from '@macro-inc/sdk';\n\
+                 const routines = (macro: Macro) => macro.routines;\n\
+                 export async function main({{ macro }}: StepContext) {{ routines(macro); {body} }}"
+            ) })
+        };
+        let routine = |body: &str, sub_routines: serde_json::Value| {
+            let mut program = RoutineProgram::from_task(&json!({
+                "steps": [step(body)],
+                "sub_routines": sub_routines,
+            }))
+            .unwrap();
+            program.assign_step_ids();
+            program
+        };
+        let remind = json!([{
+            "name": "remind",
+            "title": "Remind me",
+            "inputs": [{ "type": "text", "name": "taskId", "label": "Task" }],
+            "steps": [{ "type": "agent", "model": "m", "instructions": "Remind me" }],
+        }]);
+        let schedule = "await macro.routines.schedule('remind', { trigger: { type: 'once', at: '2030-01-01T09:00:00Z' }, inputs: { taskId: 't' } });";
+
+        assert_eq!(
+            code.check_program(&routine(schedule, remind)).await.unwrap(),
+            Vec::new()
+        );
+        assert_eq!(
+            code.check_program(&routine("", json!([]))).await.unwrap(),
+            Vec::new()
+        );
+        let failing = code
+            .check_program(&routine(schedule, json!([])))
+            .await
+            .unwrap();
+        assert_eq!(failing.len(), 1, "{failing:?}");
+        assert!(
+            failing[0].problems[0].contains("not callable"),
+            "{failing:?}"
+        );
+    }
+
     #[tokio::test]
     #[ignore = "requires pinned Deno runtime"]
     async fn each_step_reads_the_typed_outputs_of_the_steps_before_it() {

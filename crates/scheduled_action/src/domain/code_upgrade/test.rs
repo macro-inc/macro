@@ -402,8 +402,35 @@ async fn a_rewrite_must_still_suit_the_steps_that_read_its_output() {
     assert!(
         rewrites[0]
             .0
-            .starts_with("type StepContext = RoutineStepContext<")
+            .starts_with("type StepContext = Omit<RoutineStepContext<")
     );
+}
+
+/// A sub-routine's code is rewritten seeing how its routine types
+/// `schedule`: the interfaces as well as the types.
+#[tokio::test]
+async fn a_rewrite_of_a_definitions_code_sees_how_schedule_is_typed() {
+    let code = Code {
+        rewrite_fails: true,
+        ..Code::default()
+    };
+    let parent = action(json!({
+        "steps": [{ "type": "code", "title": "Plan", "source": "await macro.tasks.create(x)" }],
+        "sub_routines": [{
+            "name": "file",
+            "title": "File it",
+            "steps": [{ "type": "agent", "model": "m", "instructions": "File it" }],
+        }],
+    }));
+    upgrade(&code, &Upgrades::default(), &parent)
+        .await
+        .unwrap_err();
+    let rewrites = code.rewrites.lock().unwrap().clone();
+    let view = &rewrites[0].0;
+    assert!(view.starts_with("type $SubRoutines = { file:"), "{view}");
+    assert!(view.contains("interface $ScheduledRoutines extends $Routines"), "{view}");
+    assert!(view.contains("interface $ScheduledMacro extends $Macro"), "{view}");
+    assert!(view.ends_with("{ macro: $ScheduledMacro };"), "{view}");
 }
 
 /// A later step reads outputs that don't exist before the run, so its

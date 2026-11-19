@@ -15,6 +15,14 @@ fn code(title: &str, id: Option<&str>) -> serde_json::Value {
     step
 }
 
+/// The context of a step in a routine without sub-routines: `base`, with
+/// nothing to schedule.
+fn unscheduled(base: &str) -> String {
+    format!(
+        "type StepContext = Omit<{base}, 'macro'> & {{ macro: {base}['macro'] & {{ routines: {{ schedule: never }} }} }};"
+    )
+}
+
 fn ids(program: &RoutineProgram) -> Vec<String> {
     program
         .steps
@@ -77,11 +85,13 @@ fn each_code_step_sees_the_outputs_of_the_steps_before_it() {
     }
     assert_eq!(
         context(&files[0]),
-        "type StepContext = RoutineStepContext<{  }, {  }>;"
+        unscheduled("RoutineStepContext<{  }, {  }>")
     );
     assert_eq!(
         context(&files[1]),
-        "type StepContext = RoutineStepContext<{ read: StepOutput<Awaited<ReturnType<typeof import('./step_0.ts')['main']>>> }, {  }>;"
+        unscheduled(
+            "RoutineStepContext<{ read: StepOutput<Awaited<ReturnType<typeof import('./step_0.ts')['main']>>> }, {  }>"
+        )
     );
     assert_eq!(files[1].title, "Last");
     // The source's own lines come first, unchanged.
@@ -111,7 +121,9 @@ fn a_step_sees_its_knobs_typed_but_not_their_values() {
     let files = with("Low", 7.0).check_files();
     assert_eq!(
         files[0].source.lines().rev().nth(1).unwrap(),
-        r#"type StepContext = RoutineStepContext<{  }, { priority: "Low" | "High \"now\""; days: number; note: string; urgent: string; notify: boolean }>;"#
+        unscheduled(
+            r#"RoutineStepContext<{  }, { priority: "Low" | "High \"now\""; days: number; note: string; urgent: string; notify: boolean }>"#
+        )
     );
     // Changing a value changes nothing the checker sees.
     assert_eq!(with(r#"High "now""#, 30.0).check_files(), files);
@@ -168,7 +180,9 @@ fn a_routines_sub_routines_type_its_schedule_and_their_steps_inputs() {
             "type $SubRoutines = {{ remind: {{ inputs: {{ taskId: string; urgent: boolean }} }}; nudge: {{ inputs?: Record<string, never> }} }};\n\
              type $Macro = {base}['macro'];\n\
              type $Routines = $Macro['routines'];\n\
-             type StepContext = Omit<{base}, 'macro'> & {{ macro: Omit<$Macro, 'routines'> & {{ routines: Omit<$Routines, 'schedule'> & {{ schedule<Name extends keyof $SubRoutines>(name: Name, options: Omit<Parameters<$Routines['schedule']>[1], 'inputs'> & $SubRoutines[Name]): ReturnType<$Routines['schedule']> }} }} }}{inputs};"
+             interface $ScheduledRoutines extends $Routines {{ schedule<Name extends keyof $SubRoutines>(name: Name, options: Omit<Parameters<$Routines['schedule']>[1], 'inputs'> & $SubRoutines[Name]): ReturnType<$Routines['schedule']>; }}\n\
+             interface $ScheduledMacro extends $Macro {{ routines: $ScheduledRoutines; }}\n\
+             type StepContext = Omit<{base}, 'macro'> & {{ macro: $ScheduledMacro }}{inputs};"
         )
     };
     assert_eq!(

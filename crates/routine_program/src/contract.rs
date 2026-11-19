@@ -329,12 +329,14 @@ impl Walk {
         }
     }
 
-    /// The step's module-scoped `StepContext`. A routine with neither
-    /// sub-routines nor inputs gets the same declaration it always had, so
-    /// its check files, and whether it needs checking again, don't change.
-    /// A routine's sub-routines replace the SDK's
-    /// `macro.routines.schedule` with one that takes only their names, each
-    /// with its inputs.
+    /// The step's module-scoped `StepContext`. A routine's sub-routines
+    /// replace the SDK's `macro.routines.schedule` with one that takes only
+    /// their names, each with its inputs; a routine without any has nothing
+    /// to schedule, so code calling it doesn't check, and can't be saved
+    /// while the rollout is off. Either way `macro` stays assignable to the
+    /// SDK's `Macro`, private members included, so helpers typed with it
+    /// still take it. Whether a routine needs checking again compares check
+    /// files of one build, so changing this re-checks no routine by itself.
     fn context(&self, code: &CodeStep) -> String {
         let base = format!("RoutineStepContext<{}, {}>", self.outputs(), knobs(code));
         let inputs = self
@@ -343,13 +345,19 @@ impl Walk {
             .map(|inputs| format!(" & {{ inputs: {inputs} }}"))
             .unwrap_or_default();
         let Some(schedules) = &self.schedules else {
-            return format!("type StepContext = {base}{inputs};\n");
+            return format!(
+                "type StepContext = Omit<{base}, 'macro'> & {{ macro: {base}['macro'] & {{ routines: {{ schedule: never }} }} }}{inputs};\n"
+            );
         };
+        // Interfaces that extend the SDK's types keep their private members,
+        // where `Omit` would drop them and break assignability to `Macro`.
         format!(
             "type $SubRoutines = {schedules};\n\
              type $Macro = {base}['macro'];\n\
              type $Routines = $Macro['routines'];\n\
-             type StepContext = Omit<{base}, 'macro'> & {{ macro: Omit<$Macro, 'routines'> & {{ routines: Omit<$Routines, 'schedule'> & {{ schedule<Name extends keyof $SubRoutines>(name: Name, options: Omit<Parameters<$Routines['schedule']>[1], 'inputs'> & $SubRoutines[Name]): ReturnType<$Routines['schedule']> }} }} }}{inputs};\n"
+             interface $ScheduledRoutines extends $Routines {{ schedule<Name extends keyof $SubRoutines>(name: Name, options: Omit<Parameters<$Routines['schedule']>[1], 'inputs'> & $SubRoutines[Name]): ReturnType<$Routines['schedule']>; }}\n\
+             interface $ScheduledMacro extends $Macro {{ routines: $ScheduledRoutines; }}\n\
+             type StepContext = Omit<{base}, 'macro'> & {{ macro: $ScheduledMacro }}{inputs};\n"
         )
     }
 
