@@ -10,7 +10,7 @@ import { isTeamAgentComputer } from '@queries/harnesses/runnable';
 import type { ClaudeMode } from '@service-agent-harness/generated/schemas';
 import type { ComputerStatus, SizeOffer } from '@service-auth/computers';
 import { ActionDialogShell, Button, Dialog } from '@ui';
-import { createEffect, createSignal, on, Show } from 'solid-js';
+import { createEffect, createSignal, on, onCleanup, Show } from 'solid-js';
 import { match } from 'ts-pattern';
 import { ComputerPurchaseStep } from '../components/computer-purchase-dialog';
 import {
@@ -18,7 +18,10 @@ import {
   offersFailure,
 } from '../core/computer-display';
 import { useBuyComputer } from '../primitives/buy-computer';
-import { showComputerSetupNotice } from '../primitives/setup-notice';
+import {
+  holdSetupNotices,
+  showComputerSetupNotice,
+} from '../primitives/setup-notice';
 import { useTeamComputers } from '../primitives/team-computers';
 import {
   ComputerSetupSteps,
@@ -237,6 +240,12 @@ export function ComputerBuyFlow(props: {
     settings.openSettings('Billing');
   };
 
+  // The open dialog shows this computer's progress; no notice says it again.
+  createEffect(() => {
+    const id = computerId();
+    if (visible() && id) onCleanup(holdSetupNotices(id));
+  });
+
   // The link the user was waiting for is ready: say so, once.
   createEffect(() => {
     const current = computer();
@@ -244,17 +253,20 @@ export function ComputerBuyFlow(props: {
     setWaitingForLink(false);
     // The same notice the computer's setup notification shows, so the two
     // never stack; this one reopens this dialog in place.
-    showComputerSetupNotice(
-      {
-        computerId: current.id,
-        harnessId: current.harnessId ?? null,
-        computerName: current.name,
-        outcome: { kind: 'ready' },
-      },
-      () => {
-        setStep('claude');
-        setReopened(true);
-      }
+    fireAndForget(
+      showComputerSetupNotice(
+        {
+          computerId: current.id,
+          harnessId: current.harnessId ?? null,
+          computerName: current.name,
+          outcome: { kind: 'ready' },
+        },
+        () => {
+          setStep('claude');
+          setReopened(true);
+        }
+      ),
+      'macro-computers'
     );
   });
 

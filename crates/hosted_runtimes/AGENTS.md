@@ -106,7 +106,9 @@ read it before changing behaviour.
   admitting hosts (`hosted_runtime_host.admitting`).
 - First start: until setup completes, and for an agent computer until its
   agent reports online (`ComputerState::awaiting_agent`, cleared by
-  `Event::AgentOnline` from team_agents; each macrod connection meanwhile
+  `Event::AgentOnline` from team_agents, which also stamps
+  `setup_completed_at`, so an agent computer never offers the person's guided
+  setup; each macrod connection meanwhile
   queues `Effect::DeliverAgent`, which hands the agent over the runtime bus to
   the replica holding macrod's socket; `TimerKind::AgentStartDue` gives it
   `AGENT_START_DEADLINE` after macrod connects, then fails it with
