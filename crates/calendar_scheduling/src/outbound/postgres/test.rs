@@ -585,10 +585,23 @@ async fn a_move_waiting_on_the_calendar_holds_a_place_on_both_days(pool: PgPool)
     let moving = start_move(&repo, &original, next_day).await;
     for start in [day, next_day] {
         assert_eq!(
-            repo.daily_bookings(p.id, event_type, start, start + Duration::days(1))
+            repo.daily_bookings(p.id, event_type, start, start + Duration::days(1), None)
                 .await
                 .unwrap(),
             1
+        );
+        // The booking being moved never takes a place from itself.
+        assert_eq!(
+            repo.daily_bookings(
+                p.id,
+                event_type,
+                start,
+                start + Duration::days(1),
+                Some(moving.booking.id)
+            )
+            .await
+            .unwrap(),
+            0
         );
     }
     // A refusal would put the move back on its first day, so that day is
@@ -634,15 +647,21 @@ async fn a_move_waiting_on_the_calendar_holds_a_place_on_both_days(pool: PgPool)
         .await
         .unwrap();
     assert_eq!(
-        repo.daily_bookings(p.id, event_type, day, next_day)
+        repo.daily_bookings(p.id, event_type, day, next_day, None)
             .await
             .unwrap(),
         1
     );
     assert_eq!(
-        repo.daily_bookings(p.id, event_type, next_day, next_day + Duration::days(1))
-            .await
-            .unwrap(),
+        repo.daily_bookings(
+            p.id,
+            event_type,
+            next_day,
+            next_day + Duration::days(1),
+            None
+        )
+        .await
+        .unwrap(),
         0
     );
     // Accepted: the move leaves its first day for good.
@@ -677,15 +696,21 @@ async fn a_move_past_its_first_attempt_counts_only_on_its_new_day(pool: PgPool) 
     .unwrap();
     let event_type = original.booking.event_type_id;
     assert_eq!(
-        repo.daily_bookings(p.id, event_type, day, next_day)
+        repo.daily_bookings(p.id, event_type, day, next_day, None)
             .await
             .unwrap(),
         0
     );
     assert_eq!(
-        repo.daily_bookings(p.id, event_type, next_day, next_day + Duration::days(1))
-            .await
-            .unwrap(),
+        repo.daily_bookings(
+            p.id,
+            event_type,
+            next_day,
+            next_day + Duration::days(1),
+            None
+        )
+        .await
+        .unwrap(),
         1
     );
 }

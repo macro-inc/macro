@@ -5,9 +5,11 @@
  * API for managing scheduled actions
  * OpenAPI spec version: 0.1.0
  */
+
 import type { AgentMcpServer } from './agentMcpServer';
 import type { DraftCreated } from './draftCreated';
 import type { DraftedRoutineTrigger } from './draftedRoutineTrigger';
+import type { EntityAppearance } from './entityAppearance';
 import type { RoutineStep } from './routineStep';
 import type { StepProblem } from './stepProblem';
 
@@ -15,6 +17,9 @@ import type { StepProblem } from './stepProblem';
  * A drafted routine.
  */
 export interface DraftedRoutine {
+  /** The icon and colour AI picked for it from Macro's icons; absent when
+it picked none, or one Macro doesn't have. */
+  appearance?: EntityAppearance;
   /** Apps outside Macro its Ask AI step uses that its owner connected,
 which the routine requires (its task's `mcp_servers`). */
   apps?: AgentMcpServer[];

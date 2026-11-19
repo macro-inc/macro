@@ -1,0 +1,1 @@
+Never guess an SDK method, its arguments or its result's fields. Use only what this description, an index or a reference in context shows; read anything else first, an entity's index with DescribeCodeTools and a symbol's reference with ReadCodeDocs. Never wrap a call in try/catch or call it optionally (item.title?.()) to find out whether it exists.

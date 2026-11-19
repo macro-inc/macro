@@ -53,8 +53,11 @@ enforced by the ordinary backend APIs.
   a stored step passes back with each picked item given again by `byId`;
   agent steps with `Agent` handles) and `dangerouslyOperateAsUser`, which
   its TSDoc restricts to an explicit user request, or the older single agent
-  task. Its examples use steps only: agents copy them, and a routine draft
-  hands back steps, converting a single agent task when it can
+  task. `appearance` (`RoutineCommonOptions`) is the agent's pick of an icon
+  from Macro's set and a colour, for create, update and `check`; the server
+  refuses an icon outside the set and never lets a pick replace a look the
+  owner chose. Its examples use steps only: agents copy them, and a routine
+  draft hands back steps, converting a single agent task when it can
   (`scheduled_action` drafts).
   `routineBody` maps both onto the
   scheduler's `RoutineTask`. `routines.create(options, { key })` passes

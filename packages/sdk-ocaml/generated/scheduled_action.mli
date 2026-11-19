@@ -18,6 +18,56 @@ val make_accept_suggestion_request :
   updated_at:string -> unit -> accept_suggestion_request
 (** Acting on a suggestion, as the caller's copy of it shows it. *)
 
+(** Named tint keys from the shared tag color palette. *)
+type nonrec appearance_color =
+  | Gray
+  | Red
+  | Tomato
+  | Orange
+  | Amber
+  | Yellow
+  | Green
+  | Teal
+  | Blue
+  | Indigo
+  | Purple
+  | Pink
+  | Unknown of string  (** A value this SDK version does not know. *)
+
+val appearance_color_of_yojson : Yojson.Safe.t -> appearance_color
+val yojson_of_appearance_color : appearance_color -> Yojson.Safe.t
+
+(** The source of an entity's custom icon. *)
+type nonrec appearance_icon =
+  | Macro of { name : string  (** Catalog name without the SVG extension. *) }
+      (** A stable name from Macro's original, distinct icon catalog. *)
+  | Emoji of { value : string  (** Unicode emoji text, not markup or a URL. *) }
+      (** A single native emoji, including skin-tone and joined sequences. *)
+  | Unknown of Yojson.Safe.t
+      (** A case this SDK version does not know, as received. *)
+
+val appearance_icon_of_yojson : Yojson.Safe.t -> appearance_icon
+val yojson_of_appearance_icon : appearance_icon -> Yojson.Safe.t
+
+val make_appearance_icon_macro : name:string -> unit -> appearance_icon
+(** A stable name from Macro's original, distinct icon catalog. *)
+
+val make_appearance_icon_emoji : value:string -> unit -> appearance_icon
+(** A single native emoji, including skin-tone and joined sequences. *)
+
+type nonrec entity_appearance = {
+  color : appearance_color option;
+  icon : appearance_icon option;
+}
+(** An entity's optional icon and tint overrides; absent values retain type defaults. *)
+
+val entity_appearance_of_yojson : Yojson.Safe.t -> entity_appearance
+val yojson_of_entity_appearance : entity_appearance -> Yojson.Safe.t
+
+val make_entity_appearance :
+  ?color:appearance_color -> ?icon:appearance_icon -> unit -> entity_appearance
+(** An entity's optional icon and tint overrides; absent values retain type defaults. *)
+
 type nonrec action_kind =
   | Agent
   | Unknown of string  (** A value this SDK version does not know. *)
@@ -598,6 +648,10 @@ val make_action_trigger_multiple :
   triggers:routine_triggers -> unit -> action_trigger
 
 type nonrec action_configuration = {
+  appearance : entity_appearance option;
+      (** An icon and colour an agent picked for what the routine does. Saved
+unless the owner chose the routine's appearance, which only the
+appearance endpoint does; absent leaves the stored one. *)
   description : string option;
       (** What the routine is for, in the owner's words; empty when unset. *)
   enabled : bool;
@@ -615,6 +669,7 @@ val action_configuration_of_yojson : Yojson.Safe.t -> action_configuration
 val yojson_of_action_configuration : action_configuration -> Yojson.Safe.t
 
 val make_action_configuration :
+  ?appearance:entity_appearance ->
   ?description:string ->
   enabled:bool ->
   kind:action_kind ->
@@ -628,6 +683,9 @@ val make_action_configuration :
 server-owned. *)
 
 type nonrec action_configuration_update = {
+  appearance : entity_appearance option;
+      (** An icon and colour an agent picked, as on create. Saved only when the
+update is made for the routine's owner; skipped for anyone else. *)
   description : string option;  (** An empty string clears it. *)
   enabled : bool option;
       (** Still sent by clients deployed before the activation endpoint. *)
@@ -648,6 +706,7 @@ val yojson_of_action_configuration_update :
   action_configuration_update -> Yojson.Safe.t
 
 val make_action_configuration_update :
+  ?appearance:entity_appearance ->
   ?description:string ->
   ?enabled:bool ->
   kind:action_kind ->
@@ -704,43 +763,6 @@ val make_ai_admission_error_body :
   code:string -> error:string -> unit -> ai_admission_error_body
 (** Public admission error payload. Handlers with additional fields can reuse the
 domain error's code and message and \[[admission_status]\]. *)
-
-(** Named tint keys from the shared tag color palette. *)
-type nonrec appearance_color =
-  | Gray
-  | Red
-  | Tomato
-  | Orange
-  | Amber
-  | Yellow
-  | Green
-  | Teal
-  | Blue
-  | Indigo
-  | Purple
-  | Pink
-  | Unknown of string  (** A value this SDK version does not know. *)
-
-val appearance_color_of_yojson : Yojson.Safe.t -> appearance_color
-val yojson_of_appearance_color : appearance_color -> Yojson.Safe.t
-
-(** The source of an entity's custom icon. *)
-type nonrec appearance_icon =
-  | Macro of { name : string  (** Catalog name without the SVG extension. *) }
-      (** A stable name from Macro's original, distinct icon catalog. *)
-  | Emoji of { value : string  (** Unicode emoji text, not markup or a URL. *) }
-      (** A single native emoji, including skin-tone and joined sequences. *)
-  | Unknown of Yojson.Safe.t
-      (** A case this SDK version does not know, as received. *)
-
-val appearance_icon_of_yojson : Yojson.Safe.t -> appearance_icon
-val yojson_of_appearance_icon : appearance_icon -> Yojson.Safe.t
-
-val make_appearance_icon_macro : name:string -> unit -> appearance_icon
-(** A stable name from Macro's original, distinct icon catalog. *)
-
-val make_appearance_icon_emoji : value:string -> unit -> appearance_icon
-(** A single native emoji, including skin-tone and joined sequences. *)
 
 type nonrec attach_draft = {
   email_draft_id : string;
@@ -1142,6 +1164,9 @@ val make_step_problem :
 (** A drafted step whose code still fails the type checker. *)
 
 type nonrec drafted_routine = {
+  appearance : entity_appearance option;
+      (** The icon and colour AI picked for it from Macro's icons; absent when
+it picked none, or one Macro doesn't have. *)
   apps : agent_mcp_server list option;
       (** Apps outside Macro its Ask AI step uses that its owner connected,
 which the routine requires (its task's [mcp_servers]). *)
@@ -1165,6 +1190,7 @@ val drafted_routine_of_yojson : Yojson.Safe.t -> drafted_routine
 val yojson_of_drafted_routine : drafted_routine -> Yojson.Safe.t
 
 val make_drafted_routine :
+  ?appearance:entity_appearance ->
   ?apps:agent_mcp_server list ->
   created:draft_created list ->
   ?missing_apps:agent_mcp_server list ->
@@ -1542,19 +1568,6 @@ type nonrec entity_action =
 
 val entity_action_of_yojson : Yojson.Safe.t -> entity_action
 val yojson_of_entity_action : entity_action -> Yojson.Safe.t
-
-type nonrec entity_appearance = {
-  color : appearance_color option;
-  icon : appearance_icon option;
-}
-(** An entity's optional icon and tint overrides; absent values retain type defaults. *)
-
-val entity_appearance_of_yojson : Yojson.Safe.t -> entity_appearance
-val yojson_of_entity_appearance : entity_appearance -> Yojson.Safe.t
-
-val make_entity_appearance :
-  ?color:appearance_color -> ?icon:appearance_icon -> unit -> entity_appearance
-(** An entity's optional icon and tint overrides; absent values retain type defaults. *)
 
 (** The type of an entity in Macro *)
 type nonrec entity_type =
@@ -2999,6 +3012,7 @@ val create_scheduled_action :
   trigger:action_trigger ->
   ?suggestion_id:string ->
   ?key:string ->
+  ?appearance:entity_appearance ->
   ?description:string ->
   ?run_visibility:run_visibility ->
   unit ->
@@ -3128,6 +3142,7 @@ val update_scheduled_action :
   name:string ->
   task:routine_task ->
   trigger:action_trigger ->
+  ?appearance:entity_appearance ->
   ?description:string ->
   ?enabled:bool ->
   ?run_visibility:run_visibility ->
@@ -3226,6 +3241,7 @@ val activate_scheduled_action_template :
   name:string ->
   task:routine_task ->
   trigger:action_trigger ->
+  ?appearance:entity_appearance ->
   ?description:string ->
   ?run_visibility:run_visibility ->
   unit ->

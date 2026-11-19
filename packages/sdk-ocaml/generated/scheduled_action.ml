@@ -25,6 +25,121 @@ and yojson_of_accept_suggestion_request :
 let make_accept_suggestion_request ~(updated_at : string) () =
   ({ updated_at } : accept_suggestion_request)
 
+(** Named tint keys from the shared tag color palette. *)
+type nonrec appearance_color =
+  | Gray
+  | Red
+  | Tomato
+  | Orange
+  | Amber
+  | Yellow
+  | Green
+  | Teal
+  | Blue
+  | Indigo
+  | Purple
+  | Pink
+  | Unknown of string  (** A value this SDK version does not know. *)
+
+let appearance_color_of_yojson : Yojson.Safe.t -> appearance_color =
+ fun json ->
+  match Json.string json with
+  | "gray" -> Gray
+  | "red" -> Red
+  | "tomato" -> Tomato
+  | "orange" -> Orange
+  | "amber" -> Amber
+  | "yellow" -> Yellow
+  | "green" -> Green
+  | "teal" -> Teal
+  | "blue" -> Blue
+  | "indigo" -> Indigo
+  | "purple" -> Purple
+  | "pink" -> Pink
+  | other -> Json.unknown "appearance_color" json (Unknown other)
+
+and yojson_of_appearance_color : appearance_color -> Yojson.Safe.t =
+ fun value ->
+  match value with
+  | Gray -> `String "gray"
+  | Red -> `String "red"
+  | Tomato -> `String "tomato"
+  | Orange -> `String "orange"
+  | Amber -> `String "amber"
+  | Yellow -> `String "yellow"
+  | Green -> `String "green"
+  | Teal -> `String "teal"
+  | Blue -> `String "blue"
+  | Indigo -> `String "indigo"
+  | Purple -> `String "purple"
+  | Pink -> `String "pink"
+  | Unknown other -> `String other
+
+(** The source of an entity's custom icon. *)
+type nonrec appearance_icon =
+  | Macro of { name : string  (** Catalog name without the SVG extension. *) }
+      (** A stable name from Macro's original, distinct icon catalog. *)
+  | Emoji of { value : string  (** Unicode emoji text, not markup or a URL. *) }
+      (** A single native emoji, including skin-tone and joined sequences. *)
+  | Unknown of Yojson.Safe.t
+      (** A case this SDK version does not know, as received. *)
+
+let appearance_icon_of_yojson : Yojson.Safe.t -> appearance_icon =
+ fun json ->
+  let fields = Json.obj json in
+  match Json.tag fields "kind" with
+  | "macro" -> Macro { name = Json.required fields "name" Json.string }
+  | "emoji" -> Emoji { value = Json.required fields "value" Json.string }
+  | _ -> Json.unknown "appearance_icon" json (Unknown json)
+
+and yojson_of_appearance_icon : appearance_icon -> Yojson.Safe.t =
+ fun value ->
+  match value with
+  | Macro case ->
+      Json.record
+        [
+          ("kind", Some (`String "macro"));
+          ("name", Some (Json.of_string case.name));
+        ]
+  | Emoji case ->
+      Json.record
+        [
+          ("kind", Some (`String "emoji"));
+          ("value", Some (Json.of_string case.value));
+        ]
+  | Unknown json -> json
+
+let make_appearance_icon_macro ~(name : string) () =
+  (Macro { name } : appearance_icon)
+
+let make_appearance_icon_emoji ~(value : string) () =
+  (Emoji { value } : appearance_icon)
+
+type nonrec entity_appearance = {
+  color : appearance_color option;
+  icon : appearance_icon option;
+}
+(** An entity's optional icon and tint overrides; absent values retain type defaults. *)
+
+let entity_appearance_of_yojson : Yojson.Safe.t -> entity_appearance =
+ fun json ->
+  let fields = Json.obj json in
+  {
+    color = Json.optional fields "color" appearance_color_of_yojson;
+    icon = Json.optional fields "icon" appearance_icon_of_yojson;
+  }
+
+and yojson_of_entity_appearance : entity_appearance -> Yojson.Safe.t =
+ fun value ->
+  Json.record
+    [
+      ("color", Option.map yojson_of_appearance_color value.color);
+      ("icon", Option.map yojson_of_appearance_icon value.icon);
+    ]
+
+let make_entity_appearance ?color ?icon () =
+  ({ color; icon } : entity_appearance)
+
 type nonrec action_kind =
   | Agent
   | Unknown of string  (** A value this SDK version does not know. *)
@@ -1064,6 +1179,10 @@ let make_action_trigger_multiple ~(triggers : routine_triggers) () =
   (Multiple { triggers } : action_trigger)
 
 type nonrec action_configuration = {
+  appearance : entity_appearance option;
+      (** An icon and colour an agent picked for what the routine does. Saved
+unless the owner chose the routine's appearance, which only the
+appearance endpoint does; absent leaves the stored one. *)
   description : string option;
       (** What the routine is for, in the owner's words; empty when unset. *)
   enabled : bool;
@@ -1081,6 +1200,7 @@ let action_configuration_of_yojson : Yojson.Safe.t -> action_configuration =
  fun json ->
   let fields = Json.obj json in
   {
+    appearance = Json.optional fields "appearance" entity_appearance_of_yojson;
     description = Json.optional fields "description" Json.string;
     enabled = Json.required fields "enabled" Json.bool;
     kind = Json.required fields "kind" action_kind_of_yojson;
@@ -1095,6 +1215,7 @@ and yojson_of_action_configuration : action_configuration -> Yojson.Safe.t =
  fun value ->
   Json.record
     [
+      ("appearance", Option.map yojson_of_entity_appearance value.appearance);
       ("description", Option.map Json.of_string value.description);
       ("enabled", Some (Json.of_bool value.enabled));
       ("kind", Some (yojson_of_action_kind value.kind));
@@ -1105,13 +1226,25 @@ and yojson_of_action_configuration : action_configuration -> Yojson.Safe.t =
       ("trigger", Some (yojson_of_action_trigger value.trigger));
     ]
 
-let make_action_configuration ?description ~(enabled : bool)
+let make_action_configuration ?appearance ?description ~(enabled : bool)
     ~(kind : action_kind) ~(name : string) ?run_visibility
     ~(task : routine_task) ~(trigger : action_trigger) () =
-  ({ description; enabled; kind; name; run_visibility; task; trigger }
+  ({
+     appearance;
+     description;
+     enabled;
+     kind;
+     name;
+     run_visibility;
+     task;
+     trigger;
+   }
     : action_configuration)
 
 type nonrec action_configuration_update = {
+  appearance : entity_appearance option;
+      (** An icon and colour an agent picked, as on create. Saved only when the
+update is made for the routine's owner; skipped for anyone else. *)
   description : string option;  (** An empty string clears it. *)
   enabled : bool option;
       (** Still sent by clients deployed before the activation endpoint. *)
@@ -1130,6 +1263,7 @@ let action_configuration_update_of_yojson :
  fun json ->
   let fields = Json.obj json in
   {
+    appearance = Json.optional fields "appearance" entity_appearance_of_yojson;
     description = Json.optional fields "description" Json.string;
     enabled = Json.optional fields "enabled" Json.bool;
     kind = Json.required fields "kind" action_kind_of_yojson;
@@ -1145,6 +1279,7 @@ and yojson_of_action_configuration_update :
  fun value ->
   Json.record
     [
+      ("appearance", Option.map yojson_of_entity_appearance value.appearance);
       ("description", Option.map Json.of_string value.description);
       ("enabled", Option.map Json.of_bool value.enabled);
       ("kind", Some (yojson_of_action_kind value.kind));
@@ -1155,10 +1290,19 @@ and yojson_of_action_configuration_update :
       ("trigger", Some (yojson_of_action_trigger value.trigger));
     ]
 
-let make_action_configuration_update ?description ?enabled ~(kind : action_kind)
-    ~(name : string) ?run_visibility ~(task : routine_task)
-    ~(trigger : action_trigger) () =
-  ({ description; enabled; kind; name; run_visibility; task; trigger }
+let make_action_configuration_update ?appearance ?description ?enabled
+    ~(kind : action_kind) ~(name : string) ?run_visibility
+    ~(task : routine_task) ~(trigger : action_trigger) () =
+  ({
+     appearance;
+     description;
+     enabled;
+     kind;
+     name;
+     run_visibility;
+     task;
+     trigger;
+   }
     : action_configuration_update)
 
 type nonrec action_execution_record = {
@@ -1247,96 +1391,6 @@ and yojson_of_ai_admission_error_body : ai_admission_error_body -> Yojson.Safe.t
 
 let make_ai_admission_error_body ~(code : string) ~(error : string) () =
   ({ code; error } : ai_admission_error_body)
-
-(** Named tint keys from the shared tag color palette. *)
-type nonrec appearance_color =
-  | Gray
-  | Red
-  | Tomato
-  | Orange
-  | Amber
-  | Yellow
-  | Green
-  | Teal
-  | Blue
-  | Indigo
-  | Purple
-  | Pink
-  | Unknown of string  (** A value this SDK version does not know. *)
-
-let appearance_color_of_yojson : Yojson.Safe.t -> appearance_color =
- fun json ->
-  match Json.string json with
-  | "gray" -> Gray
-  | "red" -> Red
-  | "tomato" -> Tomato
-  | "orange" -> Orange
-  | "amber" -> Amber
-  | "yellow" -> Yellow
-  | "green" -> Green
-  | "teal" -> Teal
-  | "blue" -> Blue
-  | "indigo" -> Indigo
-  | "purple" -> Purple
-  | "pink" -> Pink
-  | other -> Json.unknown "appearance_color" json (Unknown other)
-
-and yojson_of_appearance_color : appearance_color -> Yojson.Safe.t =
- fun value ->
-  match value with
-  | Gray -> `String "gray"
-  | Red -> `String "red"
-  | Tomato -> `String "tomato"
-  | Orange -> `String "orange"
-  | Amber -> `String "amber"
-  | Yellow -> `String "yellow"
-  | Green -> `String "green"
-  | Teal -> `String "teal"
-  | Blue -> `String "blue"
-  | Indigo -> `String "indigo"
-  | Purple -> `String "purple"
-  | Pink -> `String "pink"
-  | Unknown other -> `String other
-
-(** The source of an entity's custom icon. *)
-type nonrec appearance_icon =
-  | Macro of { name : string  (** Catalog name without the SVG extension. *) }
-      (** A stable name from Macro's original, distinct icon catalog. *)
-  | Emoji of { value : string  (** Unicode emoji text, not markup or a URL. *) }
-      (** A single native emoji, including skin-tone and joined sequences. *)
-  | Unknown of Yojson.Safe.t
-      (** A case this SDK version does not know, as received. *)
-
-let appearance_icon_of_yojson : Yojson.Safe.t -> appearance_icon =
- fun json ->
-  let fields = Json.obj json in
-  match Json.tag fields "kind" with
-  | "macro" -> Macro { name = Json.required fields "name" Json.string }
-  | "emoji" -> Emoji { value = Json.required fields "value" Json.string }
-  | _ -> Json.unknown "appearance_icon" json (Unknown json)
-
-and yojson_of_appearance_icon : appearance_icon -> Yojson.Safe.t =
- fun value ->
-  match value with
-  | Macro case ->
-      Json.record
-        [
-          ("kind", Some (`String "macro"));
-          ("name", Some (Json.of_string case.name));
-        ]
-  | Emoji case ->
-      Json.record
-        [
-          ("kind", Some (`String "emoji"));
-          ("value", Some (Json.of_string case.value));
-        ]
-  | Unknown json -> json
-
-let make_appearance_icon_macro ~(name : string) () =
-  (Macro { name } : appearance_icon)
-
-let make_appearance_icon_emoji ~(value : string) () =
-  (Emoji { value } : appearance_icon)
 
 type nonrec attach_draft = {
   email_draft_id : string;
@@ -2137,6 +2191,9 @@ let make_step_problem ~(index : int) ~(problems : string list) () =
   ({ index; problems } : step_problem)
 
 type nonrec drafted_routine = {
+  appearance : entity_appearance option;
+      (** The icon and colour AI picked for it from Macro's icons; absent when
+it picked none, or one Macro doesn't have. *)
   apps : agent_mcp_server list option;
       (** Apps outside Macro its Ask AI step uses that its owner connected,
 which the routine requires (its task's [mcp_servers]). *)
@@ -2160,6 +2217,7 @@ let drafted_routine_of_yojson : Yojson.Safe.t -> drafted_routine =
  fun json ->
   let fields = Json.obj json in
   {
+    appearance = Json.optional fields "appearance" entity_appearance_of_yojson;
     apps = Json.optional fields "apps" (Json.list agent_mcp_server_of_yojson);
     created = Json.required fields "created" (Json.list draft_created_of_yojson);
     missing_apps =
@@ -2175,6 +2233,7 @@ and yojson_of_drafted_routine : drafted_routine -> Yojson.Safe.t =
  fun value ->
   Json.record
     [
+      ("appearance", Option.map yojson_of_entity_appearance value.appearance);
       ("apps", Option.map (Json.of_list yojson_of_agent_mcp_server) value.apps);
       ("created", Some ((Json.of_list yojson_of_draft_created) value.created));
       ( "missingApps",
@@ -2186,10 +2245,10 @@ and yojson_of_drafted_routine : drafted_routine -> Yojson.Safe.t =
       ("trigger", Option.map yojson_of_action_trigger value.trigger);
     ]
 
-let make_drafted_routine ?apps ~(created : draft_created list) ?missing_apps
-    ~(name : string) ~(problems : step_problem list)
+let make_drafted_routine ?appearance ?apps ~(created : draft_created list)
+    ?missing_apps ~(name : string) ~(problems : step_problem list)
     ~(steps : routine_step list) ?trigger () =
-  ({ apps; created; missing_apps; name; problems; steps; trigger }
+  ({ appearance; apps; created; missing_apps; name; problems; steps; trigger }
     : drafted_routine)
 
 type nonrec drafted_step = {
@@ -2877,31 +2936,6 @@ and yojson_of_entity_action : entity_action -> Yojson.Safe.t =
   | Review -> `String "review"
   | Follow_up -> `String "follow_up"
   | Unknown other -> `String other
-
-type nonrec entity_appearance = {
-  color : appearance_color option;
-  icon : appearance_icon option;
-}
-(** An entity's optional icon and tint overrides; absent values retain type defaults. *)
-
-let entity_appearance_of_yojson : Yojson.Safe.t -> entity_appearance =
- fun json ->
-  let fields = Json.obj json in
-  {
-    color = Json.optional fields "color" appearance_color_of_yojson;
-    icon = Json.optional fields "icon" appearance_icon_of_yojson;
-  }
-
-and yojson_of_entity_appearance : entity_appearance -> Yojson.Safe.t =
- fun value ->
-  Json.record
-    [
-      ("color", Option.map yojson_of_appearance_color value.color);
-      ("icon", Option.map yojson_of_appearance_icon value.icon);
-    ]
-
-let make_entity_appearance ?color ?icon () =
-  ({ color; icon } : entity_appearance)
 
 (** The type of an entity in Macro *)
 type nonrec entity_type =
@@ -5579,7 +5613,7 @@ or its Ask AI step's session, makes that routine's sub-routine: the
 caller's credential says so, never the body. *)
 let create_scheduled_action ~(enabled : bool) ~(kind : action_kind)
     ~(name : string) ~(task : routine_task) ~(trigger : action_trigger)
-    ?suggestion_id ?key ?description ?run_visibility () =
+    ?suggestion_id ?key ?appearance ?description ?run_visibility () =
   ({
      Request.service = "scheduled-action";
      operation = "create_scheduled_action";
@@ -5607,6 +5641,7 @@ let create_scheduled_action ~(enabled : bool) ~(kind : action_kind)
          (Request.Json
             (yojson_of_action_configuration
                ({
+                  appearance;
                   description;
                   enabled;
                   kind;
@@ -5947,7 +5982,7 @@ let get_scheduled_action ~(id : string) () =
 (** [PUT /scheduled-actions/{id}] *)
 let update_scheduled_action ~(id : string) ~(kind : action_kind)
     ~(name : string) ~(task : routine_task) ~(trigger : action_trigger)
-    ?description ?enabled ?run_visibility () =
+    ?appearance ?description ?enabled ?run_visibility () =
   ({
      Request.service = "scheduled-action";
      operation = "update_scheduled_action";
@@ -5965,6 +6000,7 @@ let update_scheduled_action ~(id : string) ~(kind : action_kind)
          (Request.Json
             (yojson_of_action_configuration_update
                ({
+                  appearance;
                   description;
                   enabled;
                   kind;
@@ -6252,7 +6288,7 @@ let unshare_scheduled_action_template ~(id : string) () =
 (** [POST /scheduled-actions/{id}/template/activate] *)
 let activate_scheduled_action_template ~(id : string) ~(enabled : bool)
     ~(kind : action_kind) ~(name : string) ~(task : routine_task)
-    ~(trigger : action_trigger) ?description ?run_visibility () =
+    ~(trigger : action_trigger) ?appearance ?description ?run_visibility () =
   ({
      Request.service = "scheduled-action";
      operation = "activate_scheduled_action_template";
@@ -6274,6 +6310,7 @@ let activate_scheduled_action_template ~(id : string) ~(enabled : bool)
          (Request.Json
             (yojson_of_action_configuration
                ({
+                  appearance;
                   description;
                   enabled;
                   kind;
