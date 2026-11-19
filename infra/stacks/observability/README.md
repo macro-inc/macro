@@ -259,13 +259,24 @@ application telemetry here until a subsequent dual-export change is deployed.
 ## Architecture and storage
 
 ```text
+Team browser -- HTTPS --> ALB --> observability EKS cluster (Grafana)
+OTEL exporter -- HTTPS + bearer token --> ALB --> observability EKS cluster (ingest)
+Datadog, on-call browsers -- HTTPS --> ALB --> nginx --> GoAlert --> Postgres --> EBS
+```
+
+In prod the ALB sends `grafana.` and `otlp.macro-internal.com` to the
+observability EKS cluster (`infra/k8s/observability`, whose OpenTofu layer adds
+their listener rules on this stack's HTTPS listener). The host's own Grafana,
+Alloy, Loki, Tempo and Prometheus stay reachable over SSM until a host change
+removes them. A dev stack has no cluster, so its host still serves both names:
+
+```text
 Team browser -- HTTPS --> ALB --> nginx --> Grafana -- Google Workspace OAuth
                                                  --> query proxy --> backends
 OTEL exporter -- HTTPS + bearer token --> ALB --> nginx --> Alloy
                                                         --> Loki --> S3 logs
                                                         --> Tempo --> S3 traces
                                                         --> Prometheus --> EBS
-Datadog, on-call browsers -- HTTPS --> ALB --> nginx --> GoAlert --> Postgres --> EBS
 ```
 
 - One `m7i.xlarge` (4 vCPU / 16 GiB) in a new VPC's private `us-east-2a`
@@ -525,9 +536,9 @@ to roll out. The steps, all in `deploy/release.ts`:
    permission fails here instead of after the old host is gone.
 6. **Roll out** (not in a dry run). `pulumi up --target <instance> --target-dependents`,
    so nothing else changes even if the stack moved since the preview. Then it waits
-   up to 25 minutes for the new instance to pass both target groups' health
-   checks and for `https://grafana.macro-internal.com/api/health`, and prints how
-   long the update took.
+   up to 25 minutes for the new instance to pass the on-call target group's
+   health check and for `https://oncall.macro-internal.com/health`, and prints
+   how long the update took.
 
 One rollout runs at a time (concurrency group `deploy-observability-prod`,
 never cancelled). When a pull request changes the image, `PR CI` (the `run-ci`

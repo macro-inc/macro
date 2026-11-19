@@ -341,20 +341,6 @@ const alb = new aws.lb.LoadBalancer(
   },
   { dependsOn: vpc.publicReady }
 );
-const target = new aws.lb.TargetGroup('observability', {
-  port: 8080,
-  protocol: 'HTTP',
-  targetType: 'instance',
-  vpcId: vpc.vpcId,
-  healthCheck: { path: '/healthz', matcher: '200', interval: 30 },
-  deregistrationDelay: 30,
-  tags,
-});
-new aws.lb.TargetGroupAttachment('observability', {
-  targetGroupArn: target.arn,
-  targetId: instance.id,
-  port: 8080,
-});
 const listener = new aws.lb.Listener('observability-https', {
   loadBalancerArn: alb.arn,
   port: 443,
@@ -368,14 +354,35 @@ const listener = new aws.lb.Listener('observability-https', {
     },
   ],
 });
-new aws.lb.ListenerRule('observability-hosts', {
-  listenerArn: listener.arn,
-  priority: 1,
-  conditions: [{ hostHeader: { values: [grafanaHost, otlpHost] } }],
-  actions: [{ type: 'forward', targetGroupArn: target.arn }],
-});
-// Same nginx port, but its own health check so a GoAlert outage alarms
-// separately from Grafana.
+// In prod, Grafana and OTLP ingest are the observability cluster's
+// (infra/k8s/observability/aws adds their listener rules on this listener),
+// and the host serves only GoAlert through the ALB. A dev stack has no
+// cluster, so its host still serves them.
+const uiTarget =
+  stack === 'prod'
+    ? undefined
+    : new aws.lb.TargetGroup('observability', {
+        port: 8080,
+        protocol: 'HTTP',
+        targetType: 'instance',
+        vpcId: vpc.vpcId,
+        healthCheck: { path: '/healthz', matcher: '200', interval: 30 },
+        deregistrationDelay: 30,
+        tags,
+      });
+if (uiTarget) {
+  new aws.lb.TargetGroupAttachment('observability', {
+    targetGroupArn: uiTarget.arn,
+    targetId: instance.id,
+    port: 8080,
+  });
+  new aws.lb.ListenerRule('observability-hosts', {
+    listenerArn: listener.arn,
+    priority: 1,
+    conditions: [{ hostHeader: { values: [grafanaHost, otlpHost] } }],
+    actions: [{ type: 'forward', targetGroupArn: uiTarget.arn }],
+  });
+}
 const oncallTarget = new aws.lb.TargetGroup('observability-oncall', {
   port: 8080,
   protocol: 'HTTP',
@@ -460,14 +467,19 @@ new aws.cloudwatch.MetricAlarm('observability-instance', {
   dimensions: { InstanceId: instance.id },
   treatMissingData: 'breaching',
 });
-new aws.cloudwatch.MetricAlarm('observability-ui', {
-  ...alarm,
-  namespace: 'AWS/ApplicationELB',
-  metricName: 'UnHealthyHostCount',
-  threshold: 0,
-  dimensions: { LoadBalancer: alb.arnSuffix, TargetGroup: target.arnSuffix },
-  treatMissingData: 'breaching',
-});
+if (uiTarget) {
+  new aws.cloudwatch.MetricAlarm('observability-ui', {
+    ...alarm,
+    namespace: 'AWS/ApplicationELB',
+    metricName: 'UnHealthyHostCount',
+    threshold: 0,
+    dimensions: {
+      LoadBalancer: alb.arnSuffix,
+      TargetGroup: uiTarget.arnSuffix,
+    },
+    treatMissingData: 'breaching',
+  });
+}
 // Paging must not depend on GoAlert to report that GoAlert is down. On-call
 // phones subscribe to this topic by SMS directly (see README).
 new aws.cloudwatch.MetricAlarm('observability-goalert', {
