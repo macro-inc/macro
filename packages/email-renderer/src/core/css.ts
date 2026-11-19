@@ -130,11 +130,13 @@ export type ColorScheme = 'light' | 'dark';
  * scheme drops out; in a matching one the scheme condition becomes always
  * true. `darkBackground` reports whether rules written for a dark scheme now
  * apply and paint a background: the sender designed a dark version, not
- * just a few dark-mode tweaks.
+ * just a few dark-mode tweaks. `mediaMatches` evaluates a rule's remaining
+ * conditions (print, width); core has no media environment of its own.
  */
 export function applyColorScheme(
   css: string,
-  scheme: ColorScheme
+  scheme: ColorScheme,
+  mediaMatches: (query: string) => boolean = () => true
 ): { css: string; darkBackground: boolean } {
   let darkBackground = false;
   try {
@@ -174,7 +176,7 @@ export function applyColorScheme(
           list.remove(item);
           return walk.skip;
         }
-        if (appliesDark && node.block)
+        if (appliesDark && node.block && mediaMatches(generate(queryList)))
           walk(node.block, (child) => {
             // Nested color-scheme rules are resolved on their own visit.
             if (
@@ -196,10 +198,11 @@ export function applyColorScheme(
 }
 
 const BACKGROUND_PROPERTY = /^background(?:-color|-image)?$/i;
-// A color or gradient; an image (a dark-mode logo swap) or a reset doesn't
-// make a dark design.
+// A color, gradient or custom property (usually the design's surface
+// color); an image (a dark-mode logo swap) or a reset doesn't make a dark
+// design.
 const BACKGROUND_PAINT =
-  /#[0-9a-f]{3,8}\b|\b(?:rgba?|hsla?|hwb|lab|lch|oklab|oklch|color|(?:repeating-)?(?:linear|radial|conic)-gradient)\(|^(?!transparent|none|inherit|initial|unset|revert|currentcolor)[a-z]+$/i;
+  /#[0-9a-f]{3,8}\b|\b(?:var|rgba?|hsla?|hwb|lab|lch|oklab|oklch|color|(?:repeating-)?(?:linear|radial|conic)-gradient)\(|^(?!transparent|none|inherit|initial|unset|revert|currentcolor)[a-z]+$/i;
 
 function paintsBackground(declaration: Declaration): boolean {
   return (

@@ -25,7 +25,11 @@ export function applySenderColorScheme(
   const apply = (scheme: ColorScheme) => {
     let darkBackground = false;
     for (const { sheet, css } of sheets) {
-      const applied = applyColorScheme(css, scheme);
+      const applied = applyColorScheme(
+        css,
+        scheme,
+        (query) => matchMedia(query).matches
+      );
       sheet.textContent = applied.css;
       darkBackground ||= applied.darkBackground;
     }

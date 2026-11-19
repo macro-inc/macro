@@ -685,7 +685,7 @@ test('background adaptation removes light gradients and leaves text on images or
     const renderer = mountEmailBody(
       host,
       prepareEmailBody({
-        html: `<div id="light" style="background:linear-gradient(#ffffff,#f4f4f4);color:#222222">Light gradient</div><div id="dark" style="background-image:linear-gradient(#1a1a2e,#16213e)"><p id="dark-text" style="color:#ffffff">Dark hero</p></div><table id="photo" background="${image}"><tr><td id="photo-text" style="color:#222222">Text on a photo<div id="photo-card" style="background-color:#ffffff">Card</div></td></tr></table>`,
+        html: `<div id="light" style="background:linear-gradient(#ffffff,#f4f4f4);color:#222222">Light gradient</div><div id="layered" style="background-color:#111111;background-image:linear-gradient(#ffffff,#ffffff)">Layered</div><div id="dark" style="background-image:linear-gradient(#1a1a2e,#16213e)"><p id="dark-text" style="color:#ffffff">Dark hero</p></div><table id="photo" background="${image}"><tr><td id="photo-text" style="color:#222222">Text on a photo<div id="photo-card" style="background-color:#ffffff">Card</div></td></tr></table>`,
       }),
       { theme: themes.dark, adaptColors: true, normalizeFonts: false }
     );
@@ -695,6 +695,7 @@ test('background adaptation removes light gradients and leaves text on images or
     const result = {
       lightImage: style('light').backgroundImage,
       lightColor: style('light').color,
+      layeredImage: style('layered').backgroundImage,
       darkImage: style('dark').backgroundImage,
       darkTextColor: style('dark-text').color,
       photoImage: style('photo').backgroundImage,
@@ -706,6 +707,7 @@ test('background adaptation removes light gradients and leaves text on images or
   });
   expect(styles.lightImage).toBe('none');
   expect(styles.lightColor).toMatch(/^oklch/);
+  expect(styles.layeredImage).toContain('linear-gradient');
   expect(styles.darkImage).toContain('linear-gradient');
   expect(styles.darkTextColor).toBe('rgb(255, 255, 255)');
   expect(styles.photoImage).toContain('url(');

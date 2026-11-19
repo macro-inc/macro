@@ -77,6 +77,16 @@ describe('applyColorScheme', () => {
     ).toBe(true);
   });
 
+  it('counts a custom-property background and checks the remaining media conditions', () => {
+    const css =
+      '@media print and (prefers-color-scheme:dark){.wrap{background:var(--surface)}}';
+    expect(applyColorScheme(css, 'dark').darkBackground).toBe(true);
+    expect(
+      applyColorScheme(css, 'dark', (query) => !query.includes('print'))
+        .darkBackground
+    ).toBe(false);
+  });
+
   it('does not count image swaps, resets or nested light rules as a dark background', () => {
     for (const rule of [
       '.logo{background-image:url(cid:dark-logo)}',

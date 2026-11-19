@@ -157,7 +157,12 @@ function stripContentBackgrounds(root: Node) {
     if (el instanceof HTMLElement) {
       const style = getComputedStyle(el);
       const lightColor = isLightColor(style.backgroundColor);
-      const lightGradient = isLightGradient(style.backgroundImage);
+      // A light gradient over the element's own dark color is one layer of
+      // the sender's design; removing it alone would expose the dark color.
+      const ownColor = normalizeRGBA(parseRGBA(style.backgroundColor));
+      const lightGradient =
+        isLightGradient(style.backgroundImage) &&
+        (lightColor || !ownColor || ownColor.a === 0);
       if (
         (lightColor || lightGradient) &&
         !hasOpaqueAncestorBackground(el, root)
