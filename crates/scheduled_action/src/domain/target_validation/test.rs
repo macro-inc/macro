@@ -399,7 +399,10 @@ async fn a_single_agent_is_refused_fields_its_parser_would_skip_unchecked() {
         Some(&TargetValidationError::InvalidProgram(ProgramError::Nul))
     );
     for task in [
-        with("inputs", json!([{ "name": "taskId", "type": "text", "label": "Task" }])),
+        with(
+            "inputs",
+            json!([{ "name": "taskId", "type": "text", "label": "Task" }]),
+        ),
         with("sub_routines", json!([])),
         with("sub_routine", json!("remind")),
     ] {
@@ -411,5 +414,8 @@ async fn a_single_agent_is_refused_fields_its_parser_would_skip_unchecked() {
     }
     assert!(sessions.validations.lock().unwrap().is_empty());
     // The single agent alone still saves.
-    validator.validate_task(&agent_task(), &owner).await.unwrap();
+    validator
+        .validate_task(&agent_task(), &owner)
+        .await
+        .unwrap();
 }

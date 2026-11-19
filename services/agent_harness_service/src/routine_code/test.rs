@@ -731,7 +731,9 @@ export async function main({ macro, trigger, steps, run }: StepContext) {
         let schedule = "await macro.routines.schedule('remind', { trigger: { type: 'once', at: '2030-01-01T09:00:00Z' }, inputs: { taskId: 't' } });";
 
         assert_eq!(
-            code.check_program(&routine(schedule, remind)).await.unwrap(),
+            code.check_program(&routine(schedule, remind))
+                .await
+                .unwrap(),
             Vec::new()
         );
         assert_eq!(
