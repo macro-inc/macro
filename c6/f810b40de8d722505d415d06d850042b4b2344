@@ -1,0 +1,19 @@
+apps/web/src/features/meetings/views/native-meeting-call.tsx
+  s_4f8fe03d10848a::t_e2670f085ff916 48
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.7.7",
+  "base_commit_sha": "c6f810b40de8d722505d415d06d850042b4b2344",
+  "prompts": {},
+  "sessions": {
+    "s_4f8fe03d10848a": {
+      "agent_id": {
+        "tool": "claude",
+        "id": "9547a29e-d154-4624-a5b1-3a03d877cb23",
+        "model": "claude-opus-5-5"
+      },
+      "human_author": "Eric Hayes <56524199+ehayes2000@users.noreply.github.com>"
+    }
+  }
+}
