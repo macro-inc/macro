@@ -14,17 +14,27 @@ const sources = vi.hoisted(() => ({
   pinnedPeople: [] as boolean[],
   contactSearches: [] as string[],
   contactSearchDisabled: false,
+  contactCopies: [] as ReturnType<typeof contactItem>[],
+  contactError: undefined as Error | undefined,
+  contactRetries: 0,
 }));
 
-const contactItem = (id: string, name: string, email: string) => ({
-  kind: 'entity',
-  id,
-  bucket: 'crm_contact',
-  searchText: `${name} | ${email}`,
-  sortTimestamp: 0,
-  timestamps: {},
-  data: { type: 'crm_contact', id, name, email, hidden: false },
-});
+function contactItem(
+  id: string,
+  name: string,
+  email: string,
+  sortTimestamp = 0
+) {
+  return {
+    kind: 'entity',
+    id,
+    bucket: 'crm_contact',
+    searchText: `${name} | ${email}`,
+    sortTimestamp,
+    timestamps: {},
+    data: { type: 'crm_contact', id, name, email, hidden: false },
+  };
+}
 
 vi.mock('@app/lib/analytics/posthog', () => ({
   useFeatureFlag: () => () => ({ enabled: sources.contactSearchDisabled }),
@@ -45,7 +55,8 @@ vi.mock('@app/features/crm/record-adapter', () => ({
             contactItem(
               'contact-old',
               'Northwind Support',
-              'support@northwind.example.com'
+              'support@northwind.example.com',
+              10
             ),
           ]
         : [];
@@ -56,6 +67,10 @@ vi.mock('@app/features/crm/record-adapter', () => ({
       isLoading: () => false,
       isLoadingMore: () => false,
       loadMore: async () => {},
+      error: () => sources.contactError,
+      retry: async () => {
+        sources.contactRetries += 1;
+      },
     };
   },
 }));
@@ -90,7 +105,10 @@ vi.mock('@core/context/quickAccess', () => ({
       loadMore: async () => {},
       items: () =>
         options.buckets.includes('crm_contact')
-          ? [contactItem('contact-recent', 'Ada Recent', 'ada@example.com')]
+          ? [
+              contactItem('contact-recent', 'Ada Recent', 'ada@example.com'),
+              ...sources.contactCopies,
+            ]
           : options.buckets.includes('task')
             ? [
                 {
@@ -162,12 +180,23 @@ afterEach(() => {
   sources.pinnedPeople.length = 0;
   sources.contactSearches.length = 0;
   sources.contactSearchDisabled = false;
+  sources.contactCopies.length = 0;
+  sources.contactError = undefined;
+  sources.contactRetries = 0;
 });
 
-function renderSelector(specificEntityType: EntityType | EntityType[]) {
+function renderSelector(
+  specificEntityType: EntityType | EntityType[],
+  excludedIds: string[] = []
+) {
   render(() => (
     <PropertyEntitySelector
-      config={{ isMultiSelect: false, specificEntityType, placeholder: 'Find' }}
+      config={{
+        isMultiSelect: false,
+        specificEntityType,
+        placeholder: 'Find',
+        excludedIds: () => new Set(excludedIds),
+      }}
       selectedOptions={() => new Set()}
       setSelectedOptions={() => {}}
     />
@@ -231,6 +260,32 @@ describe('a contact selector', () => {
       expect(screen.queryByText('No contacts found')).toBeNull();
     }
     expect(sources.contactSearches).toContain('support@northwind.example.com');
+  });
+
+  it('keeps an eligible record when an excluded one shares its email', async () => {
+    sources.contactCopies.push(
+      contactItem(
+        'contact-copy',
+        'Northwind Support',
+        'support@northwind.example.com'
+      )
+    );
+    renderSelector('CONTACT', ['contact-old']);
+    await screen.findByText('Ada Recent');
+    type('support@northwind.example.com');
+    await waitFor(() =>
+      expect(sources.contactSearches).toContain('support@northwind.example.com')
+    );
+    expect(await screen.findByText('Northwind Support')).toBeTruthy();
+  });
+
+  it('offers Retry when a server contact page fails', async () => {
+    sources.contactError = new Error('contact page failed');
+    renderSelector('CONTACT');
+    await screen.findByText('Ada Recent');
+    type('northwind');
+    fireEvent.click(await screen.findByRole('button', { name: /retry/i }));
+    await waitFor(() => expect(sources.contactRetries).toBe(1));
   });
 
   it('leaves the server alone when contact search is switched off', async () => {

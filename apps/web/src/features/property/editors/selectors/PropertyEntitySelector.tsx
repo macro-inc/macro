@@ -143,17 +143,21 @@ const MAX_VISIBLE_ENTITIES_NO_SEARCH = 50;
 const MAX_SEARCH_RESULTS = 20;
 const CONTACT_SEARCH_DEBOUNCE_MS = 250;
 
-/** Server contact matches join the Quick Access rows, one row per email. */
+/** Server contact matches join the Quick Access rows, one row per email.
+ * Rows the picker excludes leave first, so they never displace an eligible
+ * record of the same email. */
 function withServerContacts(
   items: readonly QuickAccessItem[],
-  server: readonly QuickAccessItem[]
+  server: readonly QuickAccessItem[],
+  excluded: (id: string) => boolean
 ): readonly QuickAccessItem[] {
   if (server.length === 0) return items;
   const listed = new Set(items.map((item) => item.id));
-  return deduplicateContactItems([
-    ...items,
-    ...server.filter((item) => !listed.has(item.id)),
-  ]);
+  return deduplicateContactItems(
+    [...items, ...server.filter((item) => !listed.has(item.id))].filter(
+      (item) => !excluded(item.id)
+    )
+  );
 }
 
 function getMaxLocalResults(
@@ -243,9 +247,17 @@ export function PropertyEntitySelector(props: EntityInputProps) {
   const contactSearchPending = () =>
     typedContactSearch().length > 0 &&
     (typedContactSearch() !== contactSearch() || serverContacts.isLoading());
+  const isExcludedContact = (id: string) =>
+    !!props.config.excludedIds?.().has(id) ||
+    (props.config.selfFilter?.entityType === 'CONTACT' &&
+      props.config.selfFilter.blockId === id);
   const quickAccessItems = createMemo(() =>
     contactSearchEnabled()
-      ? withServerContacts(quickAccess.items(), serverContacts.entities())
+      ? withServerContacts(
+          quickAccess.items(),
+          serverContacts.entities(),
+          isExcludedContact
+        )
       : quickAccess.items()
   );
 
@@ -301,6 +313,10 @@ export function PropertyEntitySelector(props: EntityInputProps) {
   const paginationError = () => {
     const quickAccessError = quickAccess.error();
     if (quickAccessError) return quickAccessError;
+    const contactError = contactSearchEnabled()
+      ? serverContacts.error()
+      : undefined;
+    if (contactError) return contactError;
     if (!needsEmailSearch()) return undefined;
     if (emailsQuery.error) return emailsQuery.error;
     return emailSearchEnabled() ? emailSearchQuery.error : undefined;
@@ -659,6 +675,9 @@ export function PropertyEntitySelector(props: EntityInputProps) {
     fireAndForget(
       Promise.all([
         quickAccess.error() ? quickAccess.retry() : undefined,
+        contactSearchEnabled() && serverContacts.error()
+          ? serverContacts.retry()
+          : undefined,
         needsEmailSearch() ? retryEmailPages(emailsQuery) : undefined,
         emailSearchEnabled() ? retryEmailPages(emailSearchQuery) : undefined,
       ]),
