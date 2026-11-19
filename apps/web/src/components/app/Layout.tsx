@@ -75,11 +75,13 @@ import {
   createEffect,
   createMemo,
   createSignal,
+  Match,
   onCleanup,
   onMount,
   type ParentProps,
   Show,
   Suspense,
+  Switch,
 } from 'solid-js';
 import { BundleUpdateProgressBar } from './BundleUpdateProgressBar';
 import { DesktopTitleBar } from './DesktopTitleBar';
@@ -379,11 +381,14 @@ export function AppChrome(props: ParentProps) {
           <SidebarPrefsProvider>
             <ViewSwitcherContext.Provider value={ViewSwitcher}>
               <NavigationHostContext.Provider value={navigationHost}>
-                <Show when={isSidebarVisible()}>
-                  <Show when={singleSidebar()} fallback={<SidebarRail />}>
+                <Switch>
+                  <Match when={singleSidebar()}>
                     <SingleSidebar setNavigationSlot={setNavigationSlot} />
-                  </Show>
-                </Show>
+                  </Match>
+                  <Match when={isSidebarVisible()}>
+                    <SidebarRail />
+                  </Match>
+                </Switch>
                 <PageContent>
                   {/* Route loading must not detach the chrome or mobile
                       navigation; the route draws its own loading state. */}

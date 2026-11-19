@@ -133,7 +133,7 @@ function NavigationSlot(props: { ref: (element: HTMLElement) => void }) {
   return (
     <div
       ref={props.ref}
-      class="relative -mr-(--sidebar-gutter) ml-1 min-h-0 flex-1 overflow-hidden empty:hidden"
+      class="relative -mr-(--sidebar-gutter) ml-1 min-h-40 flex-1 overflow-hidden empty:hidden"
       data-single-sidebar-slot=""
     />
   );
@@ -166,7 +166,7 @@ export function SingleSidebar(props: {
         <SearchRailButton />
       </div>
 
-      <nav class="flex min-h-0 flex-1 flex-col gap-(--sidebar-row-gap) px-(--sidebar-gutter)">
+      <nav class="flex min-h-0 flex-1 flex-col gap-(--sidebar-row-gap) overflow-y-auto px-(--sidebar-gutter)">
         <For each={items()}>
           {(item) => {
             const rowProps = () => ({

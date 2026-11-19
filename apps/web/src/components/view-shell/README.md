@@ -86,11 +86,14 @@ Reduced-motion and browsers without WAAPI switch hosts immediately.
 
 Under `NavigationHostContext` (the single sidebar, `enable-single-sidebar`),
 a split's outermost desktop shell hosts its navigation outside the split:
-`aside.isHosted()` is true, the aside column stays collapsed, `canCollapse()`
-is false and `narrowList` never applies. Only the shell in the active split
-portals `ViewShell.Aside` into the host's slot, still wrapped in
-`data-view-shell-aside`; `ViewSidebar.Header` then drops its title row and keeps
-search and actions. Nested shells and touch layouts keep their own navigation.
+`aside.isHosted()` is true, the aside column stays collapsed (so views that
+branch on `aside.isCollapsed()` show their collapsed state), and `canCollapse()`
+is false. Only the shell in the active split portals `ViewShell.Aside` into the
+host's slot, still wrapped in `data-view-shell-aside`, and focus there
+activates the split's hotkey scope; `ViewSidebar.Header` then drops its title
+row and keeps search and actions. Nested shells, touch layouts, `asideList`
+views and shells passing `keepAsideInSplit` (an aside that is the view's
+content, such as Home's list beside its preview) keep their aside in the split.
 
 A view whose aside is its entity list (Notifications, desktop Chat) passes
 `asideList`.

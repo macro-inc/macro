@@ -15,7 +15,10 @@ vi.mock('@core/mobile/isTouchDevice', () => ({
   isTouchDevice: () => measurement.touch(),
 }));
 
-vi.mock('@core/hotkey/hotkeys', () => ({ registerHotkey: vi.fn() }));
+vi.mock('@core/hotkey/hotkeys', () => ({
+  registerHotkey: vi.fn(),
+  activateScopeOnFocusIn: vi.fn(),
+}));
 
 vi.mock('@solid-primitives/resize-observer', () => ({
   createResizeObserver: () => {},
@@ -51,7 +54,7 @@ afterEach(() => {
   vi.unstubAllGlobals();
 });
 
-function Split(props: { app: string; active: () => boolean }) {
+function Split(props: { app: string; active: () => boolean; list?: boolean }) {
   return (
     <SplitPanelContext.Provider
       value={
@@ -62,7 +65,11 @@ function Split(props: { app: string; active: () => boolean }) {
         } as unknown as SplitPanelContextType
       }
     >
-      <ViewShell.Root asidePreferenceKey={props.app} data-testid={props.app}>
+      <ViewShell.Root
+        asidePreferenceKey={props.app}
+        asideList={props.list ? { open: false, onBack: () => {} } : undefined}
+        data-testid={props.app}
+      >
         <ViewShell.Aside>
           <ViewSidebar.Root aria-label={`${props.app} navigation`}>
             <ViewSidebar.Header>
@@ -78,14 +85,18 @@ function Split(props: { app: string; active: () => boolean }) {
   );
 }
 
-function setup(hostActive: () => boolean) {
+function setup(hostActive: () => boolean, tasksIsList = false) {
   const [activeSplit, setActiveSplit] = createSignal('email');
   const [slot, setSlot] = createSignal<HTMLElement>();
   const view = render(() => (
     <NavigationHostContext.Provider value={{ active: hostActive, slot }}>
       <div ref={setSlot} data-testid="slot" />
       <Split app="email" active={() => activeSplit() === 'email'} />
-      <Split app="tasks" active={() => activeSplit() === 'tasks'} />
+      <Split
+        app="tasks"
+        active={() => activeSplit() === 'tasks'}
+        list={tasksIsList}
+      />
     </NavigationHostContext.Provider>
   ));
   return { ...view, setActiveSplit };
@@ -132,5 +143,20 @@ it('keeps navigation in each split while the single sidebar is off', () => {
 it('keeps touch navigation in its split', () => {
   measurement.touch = () => true;
   const view = setup(() => true);
+  expect(view.getByTestId('slot').childElementCount).toBe(0);
+  expect(
+    within(view.getByTestId('email')).getByRole('complementary', {
+      name: 'email navigation',
+    })
+  );
+});
+
+it("keeps a view's list in its split, active or not", () => {
+  const view = setup(() => true, true);
+  const tasks = within(view.getByTestId('tasks'));
+  expect(tasks.getByRole('complementary', { name: 'tasks navigation' }));
+
+  view.setActiveSplit('tasks');
+  expect(tasks.getByRole('complementary', { name: 'tasks navigation' }));
   expect(view.getByTestId('slot').childElementCount).toBe(0);
 });

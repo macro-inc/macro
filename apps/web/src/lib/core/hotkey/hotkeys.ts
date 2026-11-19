@@ -531,6 +531,24 @@ export function useHotkeyDOMScope(
   return [attachFn, scopeId];
 }
 
+/**
+ * Makes focus inside `el` activate an existing DOM scope, for content the
+ * scope owns but portals elsewhere (a split's navigation in the single
+ * sidebar). Unlike attaching the scope, it leaves the scope's own element and
+ * its place in the scope tree alone.
+ */
+export function activateScopeOnFocusIn(el: Element, scopeId: string) {
+  const handleFocusIn = () => {
+    window.clearTimeout(focusoutTimoutId);
+    if (scopeActivatedByFocusIn || !hotkeyScopeTree.has(scopeId)) return;
+    setActiveScope(scopeId);
+    scopeActivatedByFocusIn = true;
+  };
+
+  el.addEventListener('focusin', handleFocusIn);
+  onCleanup(() => el.removeEventListener('focusin', handleFocusIn));
+}
+
 export function attachGlobalDOMScope(el: Element) {
   const handleFocusIn = (e: Event) => {
     window.clearTimeout(focusoutTimoutId);

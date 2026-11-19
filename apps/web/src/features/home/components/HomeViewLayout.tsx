@@ -12,6 +12,7 @@ export function HomeViewLayout(props: {
       asidePreferenceKey="home"
       aside={props.inlinePreview ? { preserveDuringResize: false } : false}
       main={{ preferredWidth: 640, min: 224 }}
+      keepAsideInSplit
       resizable
     >
       <Show when={props.inlinePreview}>

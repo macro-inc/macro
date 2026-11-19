@@ -9,6 +9,7 @@ import { Button, type ButtonProps, cn } from '@ui';
 import { CollapseTransition } from '@ui/components/CollapseTransition';
 import type { Component, JSX } from 'solid-js';
 import {
+  children,
   createContext,
   createSignal,
   Show,
@@ -88,6 +89,9 @@ function Header(
   // In the single sidebar the app's row names the view and the split closes
   // from its own header, so only the actions remain.
   const hosted = () => ws?.aside.isHosted() === true;
+  // Resolved once: checking the prop and rendering it would create its
+  // components twice.
+  const actions = children(() => local.actions);
   const [open, setOpen] = createSignal(false);
   const searchOpen = () => local.searchOpen ?? open();
   let searchArea: HTMLDivElement | undefined;
@@ -112,7 +116,7 @@ function Header(
       when={!dockedOnTouch()}
       fallback={<div aria-hidden="true" class="h-(--safe-top) shrink-0" />}
     >
-      <Show when={!hosted() || local.search || local.actions}>
+      <Show when={!hosted() || local.search || actions()}>
         <SplitHeaderContextMenu>
           <div
             {...rest}
@@ -127,7 +131,7 @@ function Header(
               <Show when={!hosted()}>{local.children}</Show>
             </div>
             <div class="ml-auto flex shrink-0 items-center gap-1">
-              {local.actions}
+              {actions()}
               <Show when={!isTouchDevice() && local.search}>
                 <Control
                   ref={searchButton}

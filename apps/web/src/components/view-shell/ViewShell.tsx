@@ -8,7 +8,7 @@ import { FloatRegionScope } from '@components/app/mobile/float-regions/FloatRegi
 import { SplitHeaderContextMenu } from '@components/app/split-layout/components/SplitHeaderContextMenu';
 import { SplitPanelContext } from '@components/app/split-layout/context';
 import { Resize } from '@core/component/Resize';
-import { registerHotkey } from '@core/hotkey/hotkeys';
+import { activateScopeOnFocusIn, registerHotkey } from '@core/hotkey/hotkeys';
 import { TOKENS } from '@core/hotkey/tokens';
 import { isTouchDevice } from '@core/mobile/isTouchDevice';
 import { createWritableMemo } from '@solid-primitives/memo';
@@ -140,6 +140,12 @@ export type ViewShellRootProps = Omit<
    * a back button that calls `onBack` in place of Show navigation.
    */
   asideList?: { open: boolean; onBack: () => void };
+  /**
+   * Keeps the aside in the split under the single sidebar, for an aside that
+   * is the view's content rather than its navigation (Home's list beside its
+   * preview). `asideList` views keep theirs too.
+   */
+  keepAsideInSplit?: boolean;
   main?: Partial<MainLayout>;
   detail?: Partial<DetailLayout>;
   /** Controlled detail open state. Omit for uncontrolled. */
@@ -167,6 +173,7 @@ function Root(props: ViewShellRootProps) {
     'asideRequired',
     'asidePinned',
     'asideList',
+    'keepAsideInSplit',
     'main',
     'detail',
     'detailOpen',
@@ -319,12 +326,15 @@ function Root(props: ViewShellRootProps) {
   // A list aside takes turns with Main in narrow layouts rather than
   // overlaying it, so the overlay and its open state don't apply there.
   // The single sidebar shows the active split's navigation, so no split keeps
-  // a column of its own while it is up.
+  // a navigation column of its own while it is up. An aside that is the
+  // view's list stays in its split: other splits would lose their content.
   const asideHosted = () =>
     navigationHost?.active() === true &&
     panel !== undefined &&
     !nestedShell &&
     local.aside !== false &&
+    !local.asideList &&
+    !local.keepAsideInSplit &&
     !isTouchDevice();
   const hostSlot = () =>
     asideHosted() && panel?.isPanelActive()
@@ -594,6 +604,7 @@ function Aside(props: JSX.HTMLAttributes<HTMLDivElement>) {
 function HostedAside(props: JSX.HTMLAttributes<HTMLDivElement>) {
   const [local, rest] = splitProps(props, ['children', 'class']);
   const ws = useViewShellInternal();
+  const panel = useContext(SplitPanelContext);
   return (
     <>
       <Resize.Panel
@@ -609,6 +620,12 @@ function HostedAside(props: JSX.HTMLAttributes<HTMLDivElement>) {
           <Portal mount={slot}>
             <div
               {...rest}
+              // Outside the split's DOM, focus here would not reach the
+              // split's hotkey scope, which its list keys belong to.
+              ref={(element) => {
+                if (panel)
+                  activateScopeOnFocusIn(element, panel.splitHotkeyScope);
+              }}
               class={cn(
                 'absolute inset-0 flex min-h-0 min-w-0 flex-col',
                 local.class,
