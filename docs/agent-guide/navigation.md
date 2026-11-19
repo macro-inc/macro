@@ -1509,6 +1509,9 @@ right after the name, then the **Overview** / **Runs** tabs (Runs with a count),
 and at the right the save state (**Saving…** / **Saved**; **Not saved** in red
 when saving failed, or **Not saved: fix the routine** with the reason on hover
 while an edit is invalid), **Run now** with its **Run options** menu.
+On a phone the bar floats over the page in two rows, with no save state: the
+breadcrumbs in a pill and **Run now**, then the tabs. Only those controls take
+taps; a tap on the bar's empty space reaches the page under it.
 Overview is the routine as a page:
 its icon (the same one the top bar shows: the icon chosen for it in its colour,
 else the icon of its first trigger, such as a clock for a schedule or an
