@@ -11,8 +11,11 @@ use super::{
 };
 use crate::domain::models::{ActionPolicyError, RoutineCheck};
 
+#[cfg(test)]
+mod test;
+
 /// The owner's rollout refused the draft's sub-routines when it was checked.
-pub(super) const SUB_ROUTINES_OFF: &str = "Scheduling work per item isn’t available to you right now. Try again later, or describe the routine without it.";
+const SUB_ROUTINES_OFF: &str = "Scheduling work per item isn’t available to you right now. Try again later, or describe the routine without it.";
 
 /// The steps of a checked routine's task. A single agent task, which the
 /// SDK still accepts and a draft's session sometimes checks, becomes one
