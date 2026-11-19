@@ -41,6 +41,7 @@ export type RoutineDetailSource = {
   subRoutines: Accessor<readonly RoutineSnapshot[]>;
   /** The routine whose run created this one, when it is still there. */
   parent: Accessor<RoutineParentSummary | undefined>;
+  parentLoading: Accessor<boolean>;
   /** Make this sub-routine the owner's own: it stops following its parent. */
   canKeepAsOwn: Accessor<boolean>;
   keepAsOwn(): void;

@@ -126,6 +126,7 @@ export function SubRoutineCopySteps(props: {
   title: string;
   /** Its parent's name, while the parent is there to open. */
   parentName?: string;
+  parentLoading?: boolean;
   /** Undefined while the parent loads, or when `missing` says why. */
   definition?: SubRoutineDraft;
   /**
@@ -193,6 +194,11 @@ export function SubRoutineCopySteps(props: {
         </Show>
       </RoutineSurface>
       <Switch>
+        <Match when={props.parentLoading}>
+          <p role="status" class="text-sm text-ink-muted">
+            {t('subRoutines.loadingDefinition')}
+          </p>
+        </Match>
         <Match when={props.definition}>
           {(definition) => (
             <div role="group" aria-label={definition().title} class="min-w-0">

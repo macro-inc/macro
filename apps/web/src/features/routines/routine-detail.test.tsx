@@ -1,4 +1,11 @@
+import { usePending } from '@app/observability/flow';
 import { toast } from '@core/component/Toast/Toast';
+import {
+  NOOP_SPAN,
+  type Span,
+  Telemetry,
+  type TraceContext,
+} from '@macro-inc/observability';
 import type {
   CodeUpgrade,
   RoutineTask,
@@ -40,6 +47,7 @@ const mocks = vi.hoisted(() => ({
   readSchedules: (): ScheduledAction[] => [],
   openChat: vi.fn(async (_input: string) => {}),
   status: (): string => 'success',
+  listStatus: (): string => 'success',
   history: (): HistoryRecord[] => [],
   codeUpgrades: (): CodeUpgrade[] => [],
   refetchUpgrades: vi.fn(async () => {}),
@@ -53,9 +61,11 @@ const mocks = vi.hoisted(() => ({
   chatQuery: vi.fn(),
   agentQuery: vi.fn(),
   update: vi.fn(),
+  updateTrace: vi.fn<(parentSpan?: TraceContext) => void>(),
   create: vi.fn(),
   run: vi.fn(),
   setEnabled: vi.fn(),
+  activationTrace: vi.fn<(parentSpan?: TraceContext) => void>(),
   writeClipboardData: vi.fn(),
   activationPending: (): boolean => false,
   openWithSplit: vi.fn(),
@@ -68,6 +78,10 @@ const mocks = vi.hoisted(() => ({
   shared: (): boolean => false,
   stopSharing: vi.fn(),
   detach: vi.fn(),
+}));
+vi.mock('@app/observability/flow', async (importOriginal) => ({
+  ...(await importOriginal<typeof import('@app/observability/flow')>()),
+  usePending: vi.fn(),
 }));
 vi.mock('@core/context/user', () => ({
   useUserId: () => () => 'macro|owner@example.com',
@@ -299,13 +313,16 @@ vi.mock('./queries/schedules', () => ({
       return mocks.readSchedules();
     },
     get isSuccess() {
-      return mocks.status() === 'success';
+      return (mocks.listStatus() || mocks.status()) === 'success';
     },
     get isPending() {
-      return mocks.status() === 'pending';
+      return (mocks.listStatus() || mocks.status()) === 'pending';
+    },
+    get isLoading() {
+      return (mocks.listStatus() || mocks.status()) === 'pending';
     },
     get isError() {
-      return mocks.status() === 'error';
+      return (mocks.listStatus() || mocks.status()) === 'error';
     },
     get error() {
       return mocks.status() === 'error' ? new Error('Unavailable') : null;
@@ -328,12 +345,34 @@ vi.mock('./queries/schedules', () => ({
   }),
   useChildrenQuery: () => ({ isSuccess: true, data: [] }),
   useDetachScheduleMutation: () => ({ mutate: mocks.detach, isPending: false }),
-  useUpdateScheduleMutation: () => ({ mutateAsync: mocks.update }),
+  useUpdateScheduleMutation: () => ({
+    mutateAsync: ({
+      parentSpan,
+      ...args
+    }: {
+      scheduleId: string;
+      body: unknown;
+      parentSpan?: TraceContext;
+    }) => {
+      mocks.updateTrace(parentSpan);
+      return mocks.update(args);
+    },
+  }),
   useCreateScheduleMutation: () => ({ mutate: mocks.create, isPending: false }),
   useRunScheduleNowMutation: () => ({ mutate: mocks.run, isPending: false }),
   useSetScheduleEnabledMutation: () => ({
     mutate: mocks.setEnabled,
-    mutateAsync: mocks.setEnabled,
+    mutateAsync: ({
+      parentSpan,
+      ...args
+    }: {
+      scheduleId: string;
+      enabled: boolean;
+      parentSpan?: TraceContext;
+    }) => {
+      mocks.activationTrace(parentSpan);
+      return mocks.setEnabled(args);
+    },
     get isPending() {
       return mocks.activationPending();
     },
@@ -370,6 +409,7 @@ const events: ScheduledAction = {
 };
 let setSchedules: Setter<ScheduledAction[]>;
 let setStatus: Setter<string>;
+let setListStatus: Setter<string>;
 let setActivationPending: Setter<boolean>;
 beforeEach(() => {
   vi.clearAllMocks();
@@ -385,6 +425,7 @@ beforeEach(() => {
   mocks.writeClipboardData.mockReset().mockResolvedValue(true);
   vi.useFakeTimers();
   [mocks.status, setStatus] = createSignal('success');
+  [mocks.listStatus, setListStatus] = createSignal('');
   [mocks.readSchedules, setSchedules] = createSignal([cron]);
   [mocks.activationPending, setActivationPending] = createSignal(false);
   mocks.metadataStatus = () => 'success';
@@ -1169,6 +1210,73 @@ describe('routine code that needs an update', () => {
     expect(approve.disabled).toBe(false);
   });
 
+  it('traces save, failed activation and refetch under one approval', async () => {
+    setSchedules([paused]);
+    const proposal = code('macro.tasks.add(x)', '0.3.0+new');
+    mocks.update.mockResolvedValue({ ...paused, task: proposal });
+    mocks.codeUpgrades = () => [upgrade(proposal)];
+    mocks.setEnabled.mockRejectedValueOnce(new Error('Activation failed'));
+    let activePhase: string | undefined;
+    const phases = new Map<string, Span>();
+    const root: Span = {
+      span: NOOP_SPAN.span,
+      run: NOOP_SPAN.run,
+      setAttr: NOOP_SPAN.setAttr,
+      event: NOOP_SPAN.event,
+      traceparent: NOOP_SPAN.traceparent,
+      injectTraceHeaders: NOOP_SPAN.injectTraceHeaders,
+      end: vi.fn(),
+      error: vi.fn(),
+    };
+    vi.spyOn(root, 'span').mockImplementation((name) => {
+      const phase: Span = {
+        ...root,
+        run(work) {
+          const previous = activePhase;
+          activePhase = name;
+          try {
+            return work();
+          } finally {
+            activePhase = previous;
+          }
+        },
+        error: vi.fn(),
+        end: vi.fn(),
+      };
+      phases.set(name, phase);
+      return phase;
+    });
+    const start = vi.spyOn(Telemetry, 'span').mockReturnValue(root);
+    try {
+      mocks.refetchUpgrades.mockImplementationOnce(async () => {
+        expect(activePhase).toBe('routine.code_approval.refetch');
+      });
+      render(() => <Routine />);
+      fireEvent.click(
+        screen.getByRole('button', { name: 'Approve and resume' })
+      );
+      await vi.advanceTimersByTimeAsync(0);
+
+      expect(start).toHaveBeenCalledWith('routine.code_approval', {
+        attributes: { 'routine.id': 'routine-id' },
+      });
+      expect(mocks.updateTrace).toHaveBeenCalledWith(
+        phases.get('routine.save')
+      );
+      expect(mocks.activationTrace).toHaveBeenCalledWith(
+        phases.get('routine.code_approval.activate')
+      );
+      expect(
+        phases.get('routine.code_approval.activate')?.error
+      ).toHaveBeenCalledOnce();
+      expect(root.error).toHaveBeenCalledOnce();
+      expect(root.end).toHaveBeenCalledOnce();
+      expect(mocks.refetchUpgrades).toHaveBeenCalledOnce();
+    } finally {
+      start.mockRestore();
+    }
+  });
+
   it('shows nothing once its code checks against that SDK', () => {
     setSchedules([{ ...paused, task: code('x', '0.3.0+new') }]);
     mocks.codeUpgrades = () => [upgrade()];
@@ -1294,6 +1402,19 @@ describe('sub-routines defined once', () => {
     expect(mocks.stopSharing).toHaveBeenCalledExactlyOnceWith({
       scheduleId: 'routine-id',
     });
+  });
+
+  it('holds the parent-definition flow phase until the parent list arrives', () => {
+    setSchedules([copy]);
+    setListStatus('pending');
+    render(() => <Routine />);
+    const phase = vi
+      .mocked(usePending)
+      .mock.calls.find(([name]) => name === 'routine.parent_definition');
+    expect(phase?.[1]()).toBe(true);
+    setSchedules([copy, parent]);
+    setListStatus('success');
+    expect(phase?.[1]()).toBe(false);
   });
 
   it('shows each sub-routine with what it is given, and saves an edit to it with the routine', async () => {

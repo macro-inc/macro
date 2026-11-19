@@ -1,6 +1,7 @@
 import { removeAcceptedSuggestion } from '@app/features/routine-suggestions/queries/routine-suggestions';
 import { analytics } from '@app/lib/analytics';
 import { throwOnErr } from '@core/util/result';
+import { Telemetry, type TraceContext } from '@macro-inc/observability';
 import { queryClient } from '@queries/client';
 import { type MutationCallbacks, withCallbacks } from '@queries/utils';
 import { scheduledActionClient } from '@service-scheduled-action/client';
@@ -263,24 +264,27 @@ export function useCreateScheduleMutation(
   }));
 }
 
+type ScheduleUpdate = {
+  scheduleId: string;
+  body: ActionConfigurationUpdate;
+  parentSpan?: TraceContext;
+};
+
 export function useUpdateScheduleMutation(
-  callbacks?: MutationCallbacks<
-    ScheduledAction,
-    Error,
-    { scheduleId: string; body: ActionConfigurationUpdate }
-  >
+  callbacks?: MutationCallbacks<ScheduledAction, Error, ScheduleUpdate>
 ) {
   return useMutation(() => ({
-    mutationFn: async (args: {
-      scheduleId: string;
-      body: ActionConfigurationUpdate;
-    }) =>
-      throwOnErr(async () => await scheduledActionClient.updateSchedule(args)),
+    mutationFn: ({ parentSpan, ...request }: ScheduleUpdate) =>
+      (parentSpan ?? Telemetry.captureContext()).run(() =>
+        throwOnErr(() => scheduledActionClient.updateSchedule(request))
+      ),
     ...withCallbacks(
       {
-        onSuccess: async (schedule) => {
+        onSuccess: async (schedule, { parentSpan }) => {
           upsertSchedule(schedule);
-          await invalidateSchedules();
+          await (parentSpan ?? Telemetry.captureContext()).run(
+            invalidateSchedules
+          );
         },
       },
       callbacks
@@ -288,7 +292,11 @@ export function useUpdateScheduleMutation(
   }));
 }
 
-type ScheduleActivation = { scheduleId: string; enabled: boolean };
+type ScheduleActivation = {
+  scheduleId: string;
+  enabled: boolean;
+  parentSpan?: TraceContext;
+};
 type ScheduleActivationContext = { previousEnabled: boolean | undefined };
 
 /**
@@ -304,8 +312,10 @@ export function useSetScheduleEnabledMutation(
   >
 ) {
   return useMutation(() => ({
-    mutationFn: async (args: ScheduleActivation) =>
-      throwOnErr(async () => await scheduledActionClient.setEnabled(args)),
+    mutationFn: ({ parentSpan, ...request }: ScheduleActivation) =>
+      (parentSpan ?? Telemetry.captureContext()).run(() =>
+        throwOnErr(() => scheduledActionClient.setEnabled(request))
+      ),
     ...withCallbacks<
       ScheduledAction,
       Error,
@@ -340,7 +350,8 @@ export function useSetScheduleEnabledMutation(
           }
         },
         onSuccess: (schedule) => upsertSchedule(schedule),
-        onSettled: () => invalidateSchedules(),
+        onSettled: (_schedule, _error, { parentSpan }) =>
+          (parentSpan ?? Telemetry.captureContext()).run(invalidateSchedules),
       },
       callbacks
     ),

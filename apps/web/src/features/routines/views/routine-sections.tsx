@@ -21,6 +21,7 @@ import { labelledInputs } from '../core/sub-routines';
 /** Where a sub-routine's steps come from: its parent, as loaded. */
 export type CopySource = {
   parentName?: string;
+  parentLoading: boolean;
   /** Undefined while the parent loads, or when `missing` says why. */
   definition?: SubRoutineDraft;
   missing?: 'gone' | 'hidden';
@@ -185,6 +186,7 @@ export function routineSections(props: {
                   props.copySource?.()?.definition?.title ?? copy().subRoutine
                 }
                 parentName={props.copySource?.()?.parentName}
+                parentLoading={props.copySource?.()?.parentLoading}
                 definition={props.copySource?.()?.definition}
                 missing={props.copySource?.()?.missing}
                 values={labelledInputs(

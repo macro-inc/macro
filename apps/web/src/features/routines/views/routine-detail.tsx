@@ -202,6 +202,7 @@ export function RoutineDetailView(props: {
     const parent = props.source.parent();
     return {
       parentName: parent?.name,
+      parentLoading: props.source.parentLoading(),
       ...copyDefinition(copy, parent?.subRoutines, Boolean(parent)),
       onOpenParent: () => props.onOpenRoutine(link.id),
     };
