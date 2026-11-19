@@ -480,6 +480,12 @@ export const enableCrmThreadExclusions = defineFlag({
   key: 'enable-crm-thread-exclusions',
 });
 
+// Default off in dev and local too; authoring requires the matching server gate.
+export const enableCrmSelectiveEmailContribution = defineFlag({
+  key: 'enable-crm-selective-email-contribution',
+  env: 'ENABLE_CRM_SELECTIVE_EMAIL_CONTRIBUTION',
+});
+
 // Company collections are paused until ready; preserve stored lists while off.
 export const enableCrmLists = defineFlag({
   key: 'enable-crm-lists',
@@ -746,6 +752,13 @@ export const enableUnifiedNotifications = defineFlag({
   key: 'enable-unified-notifications',
   env: 'ENABLE_UNIFIED_NOTIFICATIONS',
   default: onInDev,
+});
+
+// Keep navigation numbers off in every environment while unread counts are
+// being investigated. Unified unread dots continue to use the subscription.
+export const enableNavigationUnreadCounts = defineFlag({
+  env: 'ENABLE_NAVIGATION_UNREAD_COUNTS',
+  default: false,
 });
 
 // Agents home: pending updates from coding agents shown as a stack under the

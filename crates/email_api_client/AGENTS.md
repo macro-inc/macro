@@ -108,7 +108,9 @@ Outlook (Microsoft Graph) outbound adapters.
   code, or request id; the others drop them.
 - `outlook.graph_request` is the Graph telemetry contract the Outlook sync
   monitors in `infra/stacks/monitoring` read. Every attempt records
-  `outlook.throttle_origin` (`gate`, `graph` or `none`); a gate refusal
+  `outlook.throttle_origin` (`gate`, `graph` or `none`), and a request Graph
+  refuses records its `graph.error_code`, never the error's message, which
+  can quote addresses; a gate refusal
   (`RateLimitOrigin::Gate` with its `GateLimit`) sent nothing, so it is not
   a span error and logs at DEBUG. The span sets `operation.name` because
   Datadog files a client span with an HTTP method as `http.client.request`,
@@ -122,6 +124,11 @@ Outlook (Microsoft Graph) outbound adapters.
   `Prefer: odata.maxpagesize` instead. The mail-folder delta reads through
   `transport::get_delta_page`, which sends it as its own `Prefer` line on
   every page, since the nextLink does not carry it.
+- `RoundStart` applies to a folder delta round's first request only: Graph's
+  message delta takes only `$orderby=receivedDateTime desc` and `ge`/`gt` on
+  `receivedDateTime` in a `$filter`, and carries both in the round's next and
+  delta links, so continuations send none. Order alone changes what a round
+  lists first, not what it lists, so it does not raise `READER_REVISION`.
 - Raise `FolderChangeReader::READER_REVISION` with a change that lets a fresh
   folder delta round list mail an older round missed. Each page carries the
   revision that read it, the folder stream records the revision its round

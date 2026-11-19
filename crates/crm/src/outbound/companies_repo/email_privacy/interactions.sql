@@ -4,17 +4,21 @@
 -- company domain of the team, once for each participant of each thread. Keep
 -- these predicates in sync with both functions; the privacy parity tests
 -- compare this query against them.
+-- Mail the provider no longer has (`provider_missing`: deleted at Outlook)
+-- is no interaction, as a Gmail deletion removes the row.
 WITH matching_messages AS (
     SELECT m.id, m.thread_id, m.is_sent, COALESCE(m.internal_date_ts, m.created_at) AS occurred_at
     FROM email_messages m
     JOIN email_message_recipients r ON r.message_id = m.id
     JOIN email_contacts ec ON ec.id = r.contact_id
     WHERE m.link_id = $2 AND ec.link_id = $2 AND m.is_sent AND NOT m.is_draft AND lower(ec.email_address) = $3
+      AND NOT COALESCE((m.mailbox_state->>'provider_missing')::boolean, false)
     UNION
     SELECT m.id, m.thread_id, m.is_sent, COALESCE(m.internal_date_ts, m.created_at)
     FROM email_messages m
     JOIN email_contacts ec ON ec.id = m.from_contact_id
     WHERE m.link_id = $2 AND ec.link_id = $2 AND NOT m.is_sent AND NOT m.is_draft AND lower(ec.email_address) = $3
+      AND NOT COALESCE((m.mailbox_state->>'provider_missing')::boolean, false)
 ), thread_interactions AS MATERIALIZED (
     SELECT thread_id,
            min(occurred_at) FILTER (WHERE is_sent) AS first_sent_at,

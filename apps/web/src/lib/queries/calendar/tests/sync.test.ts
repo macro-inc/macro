@@ -46,6 +46,9 @@ describe('handleRefreshCalendar', () => {
       queryKey: calendarKeys.visibleCalendars._def,
     });
     expect(invalidateQueriesMock).toHaveBeenCalledWith({
+      queryKey: calendarKeys.firstSync._def,
+    });
+    expect(invalidateQueriesMock).toHaveBeenCalledWith({
       queryKey: calendarKeys.joinRequests._def,
     });
   });

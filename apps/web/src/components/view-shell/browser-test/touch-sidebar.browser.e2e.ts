@@ -328,21 +328,6 @@ for (const { width, nested } of [
   test(`floating list controls keep the fade off navigation at ${width}px (nested: ${nested})`, async ({
     page,
   }) => {
-    // Exercise the real iOS fade in this browser without enabling native bridges.
-    await page.route(
-      '**/src/components/app/mobile/MobileEdgeFade.tsx*',
-      async (route) => {
-        const response = await route.fetch();
-        const source = await response.text();
-        const body = source.replace(
-          /import \{ isPlatform \} from [^;]+;/,
-          "const isPlatform = (target) => target === 'ios';"
-        );
-        if (body === source)
-          throw new Error('Fade platform import was not found');
-        await route.fulfill({ response, body });
-      }
-    );
     test.setTimeout(120000);
     await page.setViewportSize({ width, height: 844 });
     await page.goto(

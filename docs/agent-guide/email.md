@@ -452,6 +452,8 @@ Email Read status and Done are single choices that close the menu; Has
 several and stay open while you tick them. Ticked Has items all apply;
 attachment kinds match any one. Tags supports search, pins selected tags first
 on opening, and is omitted when no tags exist. **f** opens the filter menu.
+**Calendar invite** matches meetings carried as attachments or as calendar
+parts of a message, including Outlook invitations.
 
 On Signal, Noise, All, Archived, Favorites and Calendar, Filters holds every
 condition a saved view can except Subject contains, which only the Save view
@@ -1001,6 +1003,8 @@ before suggestions loaded. Name-word prefixes outrank substring matches;
 unlike the name finds the contact, below name matches. Within each name tier, and on empty
 input, personal suggestions are recent-first rather than domain/brevity-weighted.
 A chip shows the name followed by the address in muted ink.
+On a phone, focus the message body to fold populated recipient rows. Tap a
+folded To, Cc, or Bcc summary and check that its address input has focus.
 Main new-email and reply/forward To/Cc/Bcc pickers now query bounded personal
 local windows rather than retaining the address book or searching the server.
 Partial synchronization remains visibly incomplete. Each field owns its query;
@@ -1262,8 +1266,12 @@ draft**, including when a save was still in flight as you pressed Send.
 of the outbox. It shows **Email scheduled** with the send time, **Undo**, and
 **View message**; the message stays a draft, is listed under **Scheduled**, and
 opens with **Scheduled for …** and **Cancel**. Cancelling leaves it an editable
-draft. Sends scheduled through the outbox before this change still show in the
-status panel with **Cancel**.
+draft. For a scheduled reply, use **Reply** on the original message and try
+to type while the editor is locked. Use **Undo** on **Email scheduled** and
+verify **Schedule cancelled.** appears and the original text is editable.
+The kept-reply notice requires a newer working copy.
+Sends scheduled through the outbox before this change still show in the status
+panel with **Cancel**.
 
 An authenticated app-level dispatcher submits online immediately and retries the
 same attempt independently of unrelated draft, archive, and property mutations.

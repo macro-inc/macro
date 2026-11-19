@@ -68,12 +68,21 @@ Show verification code loads the current code with a countdown ring and reloads
 it when it expires; a failed load offers Retry.
 
 The detail header shows the logo tile, name, folder path and kind, then
-Favorite, Share, Edit and "…" (Activity, Delete item). Usernames load with a
-Copy action and never reveal the password. An empty account identifier or API Key
-shows a dash; lookup failures stay visible. When Macro does not answer (offline,
-or a gateway returning 502-504) the banner, the username row and a notice above
-the list read "Can't reach Macro. Check your connection.", and the notice's Retry
-reloads the list and the selected username. Missing provider username slots read as
+Favorite, Share, Edit and "…" (Activity, Delete item). The star is personal:
+anyone who can view an item can add or remove it from their own Favorites,
+including a viewer without edit rights. It updates immediately and rolls back
+with an error if saving fails. Starring never edits the credential or adds a
+shared Activity entry. The Favorite checkbox sets the initial creator preference
+on creation; after creation, use the detail star instead of the credential edit
+form.
+
+Usernames load with a Copy action and never reveal the password. An empty account
+identifier or API Key shows a dash; lookup failures stay visible. When Macro does
+not answer (offline, or a gateway returning 502 or 504) the banner, the username
+row and a notice above the list read "Can't reach Macro. Check your connection.";
+when the service answers 503 they read "Passwords is temporarily unavailable.
+Try again in a minute." Either notice's Retry reloads the list and the selected
+username. Missing provider username slots read as
 empty without requiring a re-import. Any signed-in team member with
 access can reveal and copy the password, notes and verification code; there is
 no separate re-sign-in step. Revealed values and codes clear on Lock
@@ -144,7 +153,7 @@ estimate from the rate so far, and a note to keep the page open (or import
 the same file again in this tab to finish) show, and leaving the page asks
 first. The result counts imported, already present, skipped and failed items,
 lists the failed ones by reason (couldn't reach the server, which includes a
-gateway's 502-504, server error, busy, folder deleted, not accepted, not
+gateway's 502 or 504, server error (including a service 503), busy, folder deleted, not accepted, not
 allowed, no answer, account changed) and offers Open folder. The import id is
 kept in sessionStorage under a hash of the viewer and the file's contents
 (hashed in the worker), with the destination, privacy and the source keys of
