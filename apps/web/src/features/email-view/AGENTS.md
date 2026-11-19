@@ -45,9 +45,11 @@ the Soup-backed thread list, and saved email views.
 - `primitives/create-email-saved-view-draft.ts`: confirmed baseline, dirty
   state, and revision-aware reconciliation.
 - `views/email-saved-views.tsx`: sidebar section, menus, the builder dialog,
-  header actions, unavailable and skipped-setting states. The section uses
+  header actions, unavailable and skipped-setting states. Saved-view rows use
   the shell's sidebar layout to choose drag or, in the navigation sheet,
-  Move up and Move down.
+  Move up and Move down. The unnamed mail-folder group, Library, and Saved views
+  use shared `ViewSidebar` ordering with per-account local preferences; Accounts
+  is explicitly pinned above those sections.
 
 The first-visit panel in `components/EmailEmptyState.tsx` uses the authenticated
 inbox suggestion and the shared picker in `@core/email-link`. IMAP opens the

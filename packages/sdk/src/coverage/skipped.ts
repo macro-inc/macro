@@ -315,6 +315,7 @@ export const scheduledActionExcluded = [
   'getRoutineDraftJob', // The routine editor's background drafting.
   'discardRoutineDraftJob', // The routine editor's background drafting.
   'listScheduledActionCodeUpgrades', // The routine page's review of SDK upgrades.
+  'listScheduledActionUnusableItems', // The routine page's knobs needing a new pick; a run fails the step with the same reason.
   'routineCatalog', // The new-routine flow's templates.
   'listRoutineSuggestions', // The app's suggestion surfaces; agents use CreateRoutine.
   'startSuggestionGeneration', // Onboarding starts the person's generation once the inbox connects.

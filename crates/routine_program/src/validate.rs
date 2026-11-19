@@ -3,7 +3,7 @@
 use std::collections::HashSet;
 
 use crate::{
-    knob::{Knob, SentenceSyntax, mentions, sentence_slots},
+    knob::{EntityKind, Knob, SentenceSyntax, mentions, sentence_slots},
     model::{AgentStep, CodeStep, RoutineProgram, Step, StepId},
 };
 
@@ -264,6 +264,27 @@ fn knob_value(knob: &Knob) -> Result<(), String> {
             }
             if !options.contains(value) {
                 return Err("its value must be one of its options".to_owned());
+            }
+            Ok(())
+        }
+        Knob::Entity {
+            entity_types,
+            value,
+            ..
+        } => {
+            let distinct: HashSet<_> = entity_types.iter().collect();
+            if entity_types.is_empty() || distinct.len() != entity_types.len() {
+                return Err("it must allow one or more kinds of item, each once".to_owned());
+            }
+            // Databases have their own picker, which offers nothing else.
+            if entity_types.contains(&EntityKind::Database) && entity_types.len() > 1 {
+                return Err("a database knob allows only databases".to_owned());
+            }
+            if value
+                .as_ref()
+                .is_some_and(|value| !entity_types.contains(&value.kind))
+            {
+                return Err("its value must be one of the kinds it allows".to_owned());
             }
             Ok(())
         }

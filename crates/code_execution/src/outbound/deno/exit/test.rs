@@ -199,7 +199,12 @@ async fn a_program_that_exhausts_its_heap_records_how_deno_died() {
     let runner = super::super::DenoRunner::new(binary, root.path().to_owned(), 128)
         .await
         .unwrap();
-    let service = ExecutionService::new(Arc::new(runner), Limits::default()).unwrap();
+    let service = ExecutionService::new(
+        Arc::new(runner),
+        Arc::new(super::super::test::Unchecked),
+        Limits::default(),
+    )
+    .unwrap();
     let mut handle = service
         .execute(
             ExecuteRequest {
@@ -253,7 +258,12 @@ async fn a_program_the_deadline_stops_records_its_end() {
     let runner = super::super::DenoRunner::new(binary, root.path().to_owned(), 128)
         .await
         .unwrap();
-    let service = ExecutionService::new(Arc::new(runner), Limits::default()).unwrap();
+    let service = ExecutionService::new(
+        Arc::new(runner),
+        Arc::new(super::super::test::Unchecked),
+        Limits::default(),
+    )
+    .unwrap();
     let mut handle = service
         .execute(
             ExecuteRequest {

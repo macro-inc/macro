@@ -548,6 +548,11 @@
           binaries = [ "notification_service" ];
         }
         {
+          serviceName = "search-freshness-probe";
+          packageName = "search_freshness_probe";
+          binaries = [ "search_freshness_probe" ];
+        }
+        {
           serviceName = "search-processing-service";
           packageName = "search_processing_service";
           binaries = [ "search_processing_service" ];

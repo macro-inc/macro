@@ -46,7 +46,9 @@ Projects is enabled), and `Tag`. Task and Project open their existing composers;
 Tag opens the tag editor, with personal scope selected and team sharing available
 when the user has a team. The Projects list uses the same menu. Mobile creation
 controls are unchanged. With Projects enabled, the collapsible `Projects` section
-appears above `Saved views`. It contains `My projects` (assigned to the viewer),
+appears above `Saved views` by default. Drag section headings, or focus their
+Reorder control and press Up/Down, to save a different per-account order locally.
+It contains `My projects` (assigned to the viewer),
 `All projects` (all accessible projects), and `Created by me` (owned by the viewer).
 These replace the old Projects tab and individual-project shortcut list. The plus
 beside the section opens the project composer even while collapsed.
