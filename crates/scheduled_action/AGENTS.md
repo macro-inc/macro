@@ -91,7 +91,8 @@ each run.
   at a time on the owner's clock (`finding/later.md`). Only a new routine
   that may have code is told this, and only when its owner may save
   sub-routines (`DraftSubRoutines`, the `enable-sub-routines` flag read per
-  owner; unreadable is off). Work that repeats until something happens is
+  owner; unreadable is off). A draft whose check the rollout refused fails
+  with `SUB_ROUTINES_OFF` instead of being handed back. Work that repeats until something happens is
   a routine on that schedule looking for what is still open. A step added
   or changed keeps the routine's sub-routines as they are and is checked
   with them; a drafted routine carries them in `subRoutines`, and a

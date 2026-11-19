@@ -41,7 +41,7 @@ use utoipa::ToSchema;
 
 use super::code_check::{MAX_TASK_CHARS, named_steps};
 use super::event_trigger::ActionTrigger;
-use super::models::{CreatedItem, RoutineCheck};
+use super::models::{ActionPolicyError, CreatedItem, RoutineCheck};
 use super::ports::{
     DraftHandBacks, DraftSubRoutines, NoSessionCreations, RoutineCode, RoutineDraftService,
     SessionCreations,
@@ -85,6 +85,8 @@ const TIMED_OUT: &str = "Drafting took too long. Try again, or describe the rout
 const INTERRUPTED: &str = "Drafting stopped before it finished. Please try again.";
 const HAS_AGENT: &str = "This routine already has its Ask AI step. Change that one instead.";
 const NO_CODE: &str = "Code steps can’t be written here right now.";
+/// The owner's rollout refused the draft's sub-routines when it was checked.
+const SUB_ROUTINES_OFF: &str = "Scheduling work per item isn’t available to you right now. Try again later, or describe the routine without it.";
 
 /// What to draft.
 #[derive(Debug, Clone, Deserialize, ToSchema)]
@@ -1331,9 +1333,19 @@ fn drafted(
             checked_sub_routines(&checked_with) != checked_sub_routines(&routine.sub_routines)
         }
     };
-    if defines_others {
+    // A rollout refusal is one the session can't fix, and saving the draft
+    // would be refused the same way, so it isn't handed back as ready.
+    let rollout_off = check
+        .problems
+        .contains(&ActionPolicyError::SubRoutinesDisabled.to_string());
+    if defines_others || rollout_off {
         span.record("routine.draft.sub_routines_refused", true);
-        return failed_with(request.failed(), created);
+        let message = if rollout_off {
+            SUB_ROUTINES_OFF
+        } else {
+            request.failed()
+        };
+        return failed_with(message, created);
     }
     // A step drafted into a routine is one of its own steps, never one of
     // its sub-routines'.

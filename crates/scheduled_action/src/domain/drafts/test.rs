@@ -189,6 +189,8 @@ pub(super) struct Sessions {
     pub(super) unreadable: bool,
     pub(super) unstoppable: bool,
     pub(super) refuses: Option<RoutineSessionError>,
+    /// Why every check refuses to save, beside its code.
+    pub(super) problems: Vec<String>,
     /// Where preparing waits for its admission.
     pub(super) admitting: Gate,
     /// Where stopping a session waits.
@@ -211,6 +213,7 @@ impl Sessions {
             unreadable: false,
             unstoppable: false,
             refuses: None,
+            problems: Vec::new(),
             admitting: Gate::default(),
             stopping: Gate::default(),
             prepared: Mutex::new(Vec::new()),
@@ -249,7 +252,9 @@ impl RoutineSessions for Sessions {
     ) -> Result<RoutinePromptAccepted, RoutineSessionError> {
         self.prompts.lock().unwrap().push(command.prompt.clone());
         for (routine, created) in (self.turn)(&command.prompt) {
-            let check = checked(self.code.as_ref(), routine).await;
+            let mut check = checked(self.code.as_ref(), routine).await;
+            check.problems.extend(self.problems.iter().cloned());
+            check.ok &= self.problems.is_empty();
             self.rows
                 .record(
                     command.action.session_id.as_uuid(),
@@ -1490,6 +1495,31 @@ async fn a_drafted_routine_keeps_the_sub_routines_it_defines_and_where_their_cod
     let wire = serde_json::to_value(&drafted).unwrap();
     assert_eq!(wire["subRoutines"][0]["name"], "remind");
     assert_eq!(wire["problems"][0]["subRoutine"], "remind");
+}
+
+/// The rollout refusing a draft's sub-routines when it is checked (turned
+/// off, or unreadable) can't be fixed by its session, and saving it would
+/// be refused, so the draft fails saying why instead of handing it back.
+#[tokio::test]
+async fn a_draft_whose_sub_routines_the_rollout_refused_fails_saying_so() {
+    let rows = Arc::new(Rows::default());
+    let mut sessions = Sessions::new(
+        &rows,
+        Box::new(|_| vec![plain(schedules_reminders(json!([agent_step()])))]),
+    );
+    sessions.problems = vec![ActionPolicyError::SubRoutinesDisabled.to_string()];
+    let sessions = Arc::new(sessions);
+
+    let draft = draft(
+        &drafts(&rows, &sessions).with_sub_routines(Arc::new(SubRoutinesFor(true))),
+        routine("remind me the day before each task is due"),
+    )
+    .await;
+
+    let Draft::Failed { message, .. } = draft else {
+        panic!("expected a failed draft, got {draft:?}");
+    };
+    assert_eq!(message, SUB_ROUTINES_OFF);
 }
 
 #[tokio::test]
