@@ -1,4 +1,4 @@
-import { processEmailColors, stripColorSchemeMediaQueries } from '@core/email';
+import { applyColorScheme, processEmailColors } from '@core/email';
 import { interceptMailtoLinks } from '@core/util/interceptMailtoLinks';
 import { sanitizeEmailHtml } from '@macro-inc/email-renderer';
 import type { HtmlRenderDecoratorProps } from '@macro-inc/lexical-core/nodes/HtmlRenderNode';
@@ -61,19 +61,24 @@ export const HtmlRender: Component<HtmlRenderDecoratorProps> = (props) => {
     el.innerHTML = safeHtml();
     // Raw mailto: anchors open the in-app composer instead of the OS mail client
     interceptMailtoLinks(el);
+    // The sender's color-scheme rules follow the app's theme, not the OS; an
+    // email with its own dark styles keeps them in a dark theme
+    const scheme = colors.inkL > colors.panelL ? 'dark' : 'light';
+    let hasDarkRules = false;
     for (const styleEl of el.querySelectorAll('style')) {
-      styleEl.textContent = stripColorSchemeMediaQueries(
-        styleEl.textContent ?? ''
-      );
+      const applied = applyColorScheme(styleEl.textContent ?? '', scheme);
+      styleEl.textContent = applied.css;
+      hasDarkRules ||= applied.hasDarkRules;
     }
+    const senderColors = scheme === 'dark' && hasDarkRules;
     const adapt = props.adaptColors ?? !el.querySelector('table');
     queueMicrotask(() => {
       untrack(() => {
         if (!el.isConnected) return;
-        if (adapt) {
+        if (senderColors || adapt) {
           el.style.removeProperty('background-color');
           el.style.removeProperty('color');
-          processEmailColors(el, colors);
+          if (!senderColors) processEmailColors(el, colors);
         } else {
           el.style.setProperty('background-color', 'white', 'important');
           // Some emails don't set a color, so force black for readability

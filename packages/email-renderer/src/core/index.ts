@@ -1,4 +1,5 @@
-export { stripColorSchemeMediaQueries } from './css';
+export type { ColorScheme, SchemeStylesheet } from './css';
+export { applyColorScheme } from './css';
 export type {
   BodyOptions,
   EmailBodyInput,

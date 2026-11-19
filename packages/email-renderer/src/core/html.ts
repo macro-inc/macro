@@ -20,7 +20,6 @@ const ACTIVE = new Set(
 const IMAGES_ALLOWED: ImagePolicy = { remote: 'allow' };
 
 interface ScrubOptions {
-  stripColorScheme?: boolean;
   preserveDataAttributes?: boolean;
 }
 
@@ -102,7 +101,7 @@ function scrub(root: Parent, images: ImagePolicy, options: ScrubOptions = {}) {
         return value ? [{ ...attr, value }] : [];
       }
       if (name === 'style') {
-        const value = prepareCss(attr.value, true, images, options);
+        const value = prepareCss(attr.value, true, images);
         return value ? [{ ...attr, value }] : [];
       }
       return [attr];
@@ -118,10 +117,7 @@ function scrub(root: Parent, images: ImagePolicy, options: ScrubOptions = {}) {
       node.childNodes = [
         {
           nodeName: '#text',
-          value: prepareCss(css, false, images, {
-            stripColorScheme:
-              options.stripColorScheme && node.parentNode?.nodeName === 'head',
-          }),
+          value: prepareCss(css, false, images),
           parentNode: node,
         },
       ];
@@ -217,9 +213,7 @@ function parseEmailContent(
   images: ImagePolicy,
   showQuotedContent = false
 ) {
-  const { body, styles } = documentParts(html, images, {
-    stripColorScheme: true,
-  });
+  const { body, styles } = documentParts(html, images);
   const nodes = elements(body);
   const signatureNode = nodes.find(
     (node) =>

@@ -312,21 +312,14 @@ describe('content and resource policy', () => {
     expect(result).toContain('color:red');
     expect(result).toContain('color:blue');
   });
-  it('applies the legacy theme policy only to top-level media rules in head styles', () => {
+  it("keeps the sender's color-scheme rules for the browser to apply", () => {
     const html =
       '<head><style>@media(prefers-color-scheme:dark){.head{color:red}}@media screen{@media(prefers-color-scheme:dark){.nested{color:green}}}</style></head><body><style>@media(prefers-color-scheme:dark){.body{color:blue}}</style><p>Hello</p></body>';
     const result = prepareEmailBody({ html }).html;
-    expect(result).not.toContain('.head');
+    expect(result).toContain('.head{color:red}');
     expect(result).toContain('.nested{color:green}');
     expect(result).toContain('.body{color:blue}');
-  });
-  it('preserves safe dark-mode rules in quoted HTML and applies reader policy separately', () => {
-    const html =
-      '<style>@media(prefers-color-scheme:dark){p{color:white}}</style><p>Quoted</p>';
     expect(sanitizeEmailHtml(html)).toContain('prefers-color-scheme');
-    expect(prepareEmailBody({ html }).html).not.toContain(
-      'prefers-color-scheme'
-    );
   });
   it('preserves unrelated valid declarations when CSS contains a recoverable error', () => {
     const result = sanitizeEmailHtml(
