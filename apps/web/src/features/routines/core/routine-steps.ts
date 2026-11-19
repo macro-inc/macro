@@ -188,10 +188,20 @@ export function codeSteps(steps: StepDraft[]): CodeStepDraft[] {
   return steps.filter((step): step is CodeStepDraft => step.kind === 'code');
 }
 
-/** Whether a stored task's code steps name a picked item, which can be deleted later. */
+/**
+ * Whether a stored task's code steps, its sub-routines' included, name a
+ * picked item, which can be deleted later.
+ */
 export function picksItems(task: RoutineTask): boolean {
-  return codeSteps(programSteps(task) ?? []).some((step) =>
-    step.knobs.some((knob) => knob.type === 'entity' && knob.value !== null)
+  if (!('steps' in task)) return false;
+  const lists = [
+    task.steps,
+    ...(task.sub_routines ?? []).map((definition) => definition.steps),
+  ];
+  return lists.some((steps) =>
+    codeSteps(stepsFromWire(steps) ?? []).some((step) =>
+      step.knobs.some((knob) => knob.type === 'entity' && knob.value !== null)
+    )
   );
 }
 

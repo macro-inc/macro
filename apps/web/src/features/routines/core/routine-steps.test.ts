@@ -163,4 +163,19 @@ describe('picked items', () => {
       picksItems({ model: 'm', prompt: '', user_prompt: 'Summarize' })
     ).toBe(false);
   });
+
+  it('are found in a sub-routine’s code steps', () => {
+    const definition = (picked: { type: 'task'; id: string } | null) => ({
+      steps: [code],
+      sub_routines: [
+        {
+          name: 'remind',
+          title: 'Remind me',
+          steps: withTask(picked).steps,
+        },
+      ],
+    });
+    expect(picksItems(definition({ type: 'task', id: 't1' }))).toBe(true);
+    expect(picksItems(definition(null))).toBe(false);
+  });
 });
