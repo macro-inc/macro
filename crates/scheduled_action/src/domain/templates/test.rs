@@ -295,6 +295,34 @@ fn a_sub_routines_copy_is_not_shared_since_its_steps_are_its_parents() {
     );
 }
 
+/// Activating a template offers the workspace items its steps mention, but
+/// not those in its sub-routines or kept input values, so neither is shared.
+#[test]
+fn a_routine_with_sub_routines_or_input_values_is_not_shared_yet() {
+    let agent = serde_json::json!({ "type": "agent", "model": "m", "instructions": "Remind me" });
+    let defines = crate::domain::program_runner::test::action(serde_json::json!({
+        "steps": [agent],
+        "sub_routines": [{ "name": "remind", "title": "Remind me", "steps": [agent] }],
+    }));
+    let kept = crate::domain::program_runner::test::action(serde_json::json!({
+        "steps": [agent],
+        "inputs": [{ "type": "text", "name": "taskId", "label": "Task", "value": "t" }],
+    }));
+    for routine in [defines, kept] {
+        let error = share_input()
+            .into_snapshot(&routine, Uuid::nil())
+            .err()
+            .unwrap();
+        assert_eq!(
+            error.downcast_ref::<TemplateInputError>(),
+            Some(&TemplateInputError::SubRoutineDefinitions)
+        );
+    }
+    let plain =
+        crate::domain::program_runner::test::action(serde_json::json!({ "steps": [agent] }));
+    assert!(share_input().into_snapshot(&plain, Uuid::nil()).is_ok());
+}
+
 #[tokio::test]
 async fn disabled_missing_or_failed_flags_block_templates_but_preserve_routines_and_unsharing() {
     for evaluation in [

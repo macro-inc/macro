@@ -124,12 +124,22 @@ pub enum TemplateInputError {
     /// A copy's steps are its parent's, so a template of it would hold none.
     #[error("a sub-routine's copy can't be shared; keep it as your routine first")]
     SubRoutineCopy,
+    /// A template offers its activator each workspace item the routine's
+    /// steps mention, but not yet those in its sub-routines, nor the values
+    /// a copy kept as its own routine holds.
+    #[error("a routine with sub-routines or input values can't be shared as a template yet")]
+    SubRoutineDefinitions,
 }
 
 impl ShareRoutineTemplate {
     fn into_snapshot(self, action: &ScheduledAction, action_id: Uuid) -> Result<TemplateSnapshot> {
         if routine_program::SubRoutineCopy::from_task(&action.task).is_some() {
             return Err(TemplateInputError::SubRoutineCopy.into());
+        }
+        if routine_program::RoutineProgram::from_task(&action.task)
+            .is_ok_and(|program| !program.sub_routines.is_empty() || !program.inputs.is_empty())
+        {
+            return Err(TemplateInputError::SubRoutineDefinitions.into());
         }
         if self.description.chars().count() > MAX_DESCRIPTION_CHARS {
             return Err(TemplateInputError::DescriptionTooLong.into());
