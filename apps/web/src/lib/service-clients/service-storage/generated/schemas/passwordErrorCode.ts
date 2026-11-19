@@ -20,4 +20,5 @@ export const PasswordErrorCode = {
   vault_busy: 'vault_busy',
   folder_missing: 'folder_missing',
   vault_unavailable: 'vault_unavailable',
+  vault_not_provisioned: 'vault_not_provisioned',
 } as const;

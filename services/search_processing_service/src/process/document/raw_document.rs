@@ -649,7 +649,19 @@ pub async fn update_search_with_sync_document(
     let result = match lexical_client.parse_markdown(document_id).await {
         Ok(result) => result,
         Err(e) => {
-            tracing::warn!(error=?e, "failed to parse markdown with lexical");
+            if sync_holds_no_copy(&e) {
+                tracing::info!(
+                    "the sync service holds no copy of the document; indexing its stored content"
+                );
+            } else if search_extractor_message.index_override.is_some() {
+                // A rebuild into a new index would leave the document out of
+                // it, which is worse than content that may be older.
+                tracing::warn!(error=?e, "failed to parse markdown with lexical; indexing the stored content into the rebuild");
+            } else {
+                // The stored content can be older than the edit being
+                // indexed, so a failed parse fails the event instead.
+                return Err(e.context("failed to parse markdown with lexical"));
+            }
             // call DSS as fallback if lexical/sync service fails
             update_search_with_raw_document(
                 opensearch_client,
@@ -674,6 +686,14 @@ pub async fn update_search_with_sync_document(
     tracing::info!(document_id = %document_id, chunk_count, "sync document indexed");
 
     Ok(())
+}
+
+/// Whether lexical answered that the sync service holds no copy of the
+/// document.
+fn sync_holds_no_copy(error: &anyhow::Error) -> bool {
+    error
+        .downcast_ref::<lexical_client::parse_markdown::UnexpectedResponse>()
+        .is_some_and(lexical_client::parse_markdown::UnexpectedResponse::is_document_not_found)
 }
 
 #[cfg(test)]

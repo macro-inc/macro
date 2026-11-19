@@ -18,6 +18,7 @@ pub mod rollout;
 pub mod service;
 pub mod setup;
 pub mod size;
+pub mod usage;
 
 /// Trace propagation and lifecycle measurements.
 pub mod telemetry;

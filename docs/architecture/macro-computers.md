@@ -466,7 +466,9 @@ attempt, so a busy database never fails a computer or abandons a removal.
   for an agent teammate's computer, until the agent reports online
   (`awaiting_agent`; the report applies `AgentOnline`, and an
   `AgentStartDue` timer `AGENT_START_DEADLINE` (3 min) after macrod connects
-  fails it with `Failure::AgentNotStarted`). A lost host is no strike: a
+  fails it with `Failure::AgentNotStarted`; a macrod that dials without the
+  `apply-agent` in its `x-macro-runtime-accepts` dial header fails it at once
+  with `Failure::AgentUnsupported`). A lost host is no strike: a
   host outage must not release every computer setting up on it. The first
   give-up in it waits for a team retry on the same computer, with no new charge. The second
   (`MAX_FIRST_START_FAILURES`) releases the computer (`EndsAt{now}`, Destroy,
@@ -594,6 +596,14 @@ One computer's first setup is one trace, rooted at the purchase (Buy computer). 
   units have a total; hosts record no disk capacity. Read by
   `infra/stacks/monitoring/monitors/computer-capacity.ts`; see the
   [capacity runbook](../runbooks/computer-capacity.md).
+- Usage shown to teams (Settings → Machines, CPU and memory over the last
+  day): the overcommit pass keeps one reading per running computer per
+  minute from the host's cgroup numbers, span `computer.usage.record`
+  (`samples`, `kept`) under `computer.overcommit.host`; `computer.usage.prune`
+  (`deleted`) every ten minutes; `computer.usage.read` (`computers`,
+  `samples`) under `GET /team/computers/usage`. No guest agent is involved,
+  and metrics carry no computer ids. Operators read per-computer series in
+  Grafana instead (see [Firecracker computers](firecracker-computers.md#hosts)).
 - Overcommit, every overcommit pass, by `host_id` and `host`:
   `computer.host.memory.{used,low_watermark,high_watermark,hard_ceiling}_ratio`
   (shares of host memory, so monitors compare usage with each host's own
