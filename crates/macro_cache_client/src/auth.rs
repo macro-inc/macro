@@ -28,17 +28,21 @@ const CHALLENGE_FIELD: &str = "challenge";
 /// the stored refresh token, its deadline and the challenge. A deadline is
 /// in milliseconds since the epoch on Redis's own clock, so the restore
 /// that compares against it never counts the time spent reaching Redis.
-/// Each script touches one key, so it runs on a cluster too.
-/// KEYS: the bound key. ARGV: the record's fields.
+/// A record missing its challenge or its expiry was not written by this
+/// module: it is spent and never redeems. Each script touches one key, so
+/// it runs on a cluster too. KEYS: the bound key. ARGV: the record's fields.
 const TAKE_BOUND_MOBILE_LOGIN_SESSION: &str = r"
 local bound = redis.call('HMGET', KEYS[1], ARGV[1], ARGV[2])
 if not bound[1] then
   return false
 end
-local now = redis.call('TIME')
-local expires_at_ms = now[1] * 1000 + math.floor(now[2] / 1000) + redis.call('PTTL', KEYS[1])
+local ttl_ms = redis.call('PTTL', KEYS[1])
 redis.call('DEL', KEYS[1])
-return {bound[1], expires_at_ms, bound[2]}
+if not bound[2] or ttl_ms < 0 then
+  return false
+end
+local now = redis.call('TIME')
+return {bound[1], now[1] * 1000 + math.floor(now[2] / 1000) + ttl_ms, bound[2]}
 ";
 
 /// The same for an unbound session: its refresh token and deadline.
@@ -48,14 +52,18 @@ local refresh_token = redis.call('GET', KEYS[1])
 if not refresh_token then
   return false
 end
-local now = redis.call('TIME')
-local expires_at_ms = now[1] * 1000 + math.floor(now[2] / 1000) + redis.call('PTTL', KEYS[1])
+local ttl_ms = redis.call('PTTL', KEYS[1])
 redis.call('DEL', KEYS[1])
-return {refresh_token, expires_at_ms}
+if ttl_ms < 0 then
+  return false
+end
+local now = redis.call('TIME')
+return {refresh_token, now[1] * 1000 + math.floor(now[2] / 1000) + ttl_ms}
 ";
 
 /// Puts a taken session back under its key until its original deadline,
-/// unless that has passed or the code exists again.
+/// unless that has passed or the code exists again. Should the expiry fail
+/// after the write, the takes refuse the record that has none.
 /// KEYS: the session's key. ARGV: the refresh token, the deadline, then for
 /// a bound code the record's fields and challenge.
 const RESTORE_MOBILE_LOGIN_SESSION: &str = r"
@@ -63,15 +71,16 @@ if redis.call('EXISTS', KEYS[1]) == 1 then
   return 0
 end
 local now = redis.call('TIME')
-if tonumber(ARGV[2]) <= now[1] * 1000 + math.floor(now[2] / 1000) then
+local ttl_ms = tonumber(ARGV[2]) - (now[1] * 1000 + math.floor(now[2] / 1000))
+if ttl_ms <= 0 then
   return 0
 end
 if ARGV[3] then
   redis.call('HSET', KEYS[1], ARGV[3], ARGV[1], ARGV[4], ARGV[5])
+  redis.call('PEXPIREAT', KEYS[1], ARGV[2])
 else
-  redis.call('SET', KEYS[1], ARGV[1])
+  redis.call('SET', KEYS[1], ARGV[1], 'PX', ttl_ms)
 end
-redis.call('PEXPIREAT', KEYS[1], ARGV[2])
 return 1
 ";
 

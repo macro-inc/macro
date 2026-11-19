@@ -36,10 +36,83 @@ async fn redis_now_ms(cache: &MacroCache) -> i64 {
     seconds * 1000 + micros / 1000
 }
 
-/// A deadline read back adds Redis's clock to a whole-millisecond TTL, so it
-/// can land one millisecond after the one stored.
+/// A deadline read back adds Redis's clock to a whole-millisecond TTL, and
+/// the two readings can straddle a millisecond either way.
 fn same_deadline(read: i64, stored: i64) -> bool {
-    (0..=1).contains(&(read - stored))
+    (-1..=1).contains(&(read - stored))
+}
+
+/// Writes a record no code of this module writes: an unbound value, or a
+/// hash of `fields`, with an expiry only when `expires` is set.
+async fn write_raw(cache: &MacroCache, key: &str, fields: &[(&str, &str)], expires: bool) {
+    let mut connection = cache
+        .inner
+        .get_multiplexed_async_connection()
+        .await
+        .unwrap();
+    let mut pipe = redis::pipe();
+    if fields.is_empty() {
+        pipe.set(key, "fake-refresh-token");
+    } else {
+        pipe.hset_multiple(key, fields);
+    }
+    if expires {
+        pipe.expire(key, 60);
+    }
+    pipe.query_async::<()>(&mut connection).await.unwrap();
+}
+
+#[tokio::test]
+async fn a_record_without_an_expiry_never_redeems() {
+    // Should a restore's expiry fail after its write, the record it leaves
+    // must not outlive the code's deadline.
+    let cache = cache();
+    let unbound = fresh_code("no-expiry");
+    write_raw(&cache, &mobile_login_session_key(&unbound), &[], false).await;
+    let bound = fresh_code("bound-no-expiry");
+    write_raw(
+        &cache,
+        &bound_mobile_login_session_key(&bound),
+        &[
+            (REFRESH_TOKEN_FIELD, "fake-refresh-token"),
+            (CHALLENGE_FIELD, FAKE_CHALLENGE),
+        ],
+        false,
+    )
+    .await;
+
+    for code in [&unbound, &bound] {
+        assert!(
+            cache
+                .take_mobile_login_session(code)
+                .await
+                .unwrap()
+                .is_none()
+        );
+        assert_eq!(stored_keys(&cache, code).await, [false, false]);
+    }
+}
+
+#[tokio::test]
+async fn a_bound_record_missing_its_challenge_is_refused_like_an_unknown_code() {
+    let cache = cache();
+    let code = fresh_code("bound-no-challenge");
+    write_raw(
+        &cache,
+        &bound_mobile_login_session_key(&code),
+        &[(REFRESH_TOKEN_FIELD, "fake-refresh-token")],
+        true,
+    )
+    .await;
+
+    assert!(
+        cache
+            .take_mobile_login_session(&code)
+            .await
+            .unwrap()
+            .is_none()
+    );
+    assert_eq!(stored_keys(&cache, &code).await, [false, false]);
 }
 
 #[tokio::test]
