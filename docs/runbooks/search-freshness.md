@@ -7,8 +7,11 @@ graphs each one; its header lists the metrics they read.
 
 The target: 99% of live changes searchable within 60 s per entity type, and
 99.9% within 5 minutes, over 7 days. A change that never reaches search counts
-as a miss. These monitors watch the indexer's backlog and losses. They do not
-measure search end to end.
+as a miss. Most of these monitors watch the indexer's backlog and losses. The
+probe monitors measure search end to end: the
+[freshness probe](../../services/search_freshness_probe/AGENTS.md) writes a
+random word into an entity of its own user through the public API once a
+minute per entity type, then searches for it the way a client does.
 
 Start every investigation on the dashboard:
 
@@ -146,6 +149,55 @@ unknown, not zero.
   "panicked" logs.
 - If the tasks run and process events (APM still shows `process_event` spans),
   the metrics export is broken: check the Datadog agent sidecar.
+
+## Probe late
+
+Three or more of one entity type's rounds in 15 minutes ended `late`: search
+showed the change, but more than 60 s after the API acknowledged the write.
+Deletes are practically never late: search hides a deleted entity through its
+database check at once, whatever the index still holds. Compare **Seconds until
+search showed a probe change** with the indexer's lag for the same type on the
+dashboard:
+
+- **The indexer's lag is high too**: the change waits in the indexer; follow
+  [Live backlog](#live-backlog).
+- **The indexer's lag is low**: the time goes before the event reaches Kafka
+  (a slow producer, or for a document body the sync service saving its
+  snapshot) or after indexing (OpenSearch refresh, or the search path itself). Open a slow `search.freshness_probe` span: its
+  `search.freshness_probe.request` children carry the trace into DSS.
+
+## Probe unseen
+
+Search still did not show a probe change five minutes after the write, twice
+in 30 minutes. This is a freshness miss, not a slow one: the event was lost,
+dropped, or indexed wrongly, or search no longer finds the entity.
+
+- Check [Dropped events](#dropped-events) and `event_broker.publishes` for
+  failed publishes of that type.
+- Find the round's span (`search.freshness_probe`, `outcome:unseen`) for the
+  `entity_id`, and search for it in the app as the probe user. A delete that
+  stays visible means the entity still exists in its source: search hides
+  deleted entities by checking the database, not the index.
+
+## Probe failing
+
+More than half of one type's rounds in 15 minutes failed to write or to
+search. Freshness of that type is not measured meanwhile.
+
+- Other write failures: the `search.freshness_probe.request` span names the
+  route and status. A 401 means the probe user's key was revoked.
+- `search_failed`: searches failed for 30 s in a row, so `POST /dss/search`
+  is failing for users too.
+
+A type whose fixture is not seeded yet reports `fixture_missing` every round:
+nothing was probed, and no monitor counts it. The probe creates its agent
+session itself; a call record is seeded by hand (see the probe's AGENTS.md).
+
+## Probe silent
+
+The probe finished no round of a type for 10 minutes: it is down, stuck, or
+its metrics do not reach Datadog. Check `aws.ecs.service.running` for
+`search-freshness-probe` and its logs.
 
 ## Reconciling from the source
 

@@ -573,8 +573,8 @@ pub enum CrmError {
     /// Entity access receipt did not contain a valid team UUID.
     #[error("invalid team id in entity access receipt")]
     InvalidTeamId,
-    /// Another write held the records this one needs for longer than it may
-    /// wait. Nothing was written; retry later.
+    /// A concurrent write invalidated this population's history evidence or
+    /// held needed records for too long. Nothing was written; retry later.
     #[error("crm records are busy; retry later")]
     Contended,
 }

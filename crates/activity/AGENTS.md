@@ -16,7 +16,7 @@ distribution.
 - `src/domain/service.rs` + `src/domain/ports.rs`: the ingest/query service
   and the ports it depends on.
 - `src/outbound/pg_activity_repo.rs`: the single `activity_events` table.
-- Use `AppearanceUpdate` and `pg_activity_repo::insert_activities` to commit attributed appearance history in the entity transaction; the adapter preserves agent correlation and SDK verbs, and appearance broker events must not insert duplicate history.
+- Use `AppearanceUpdate` and `pg_activity_repo::insert_activities` to commit attributed appearance history in the entity transaction; the adapter preserves agent correlation and SDK verbs, and appearance broker events must not insert duplicate history. `pg_activity_repo::appearance_changes_exceed` reads, in the same transaction, whether an entity's history holds more appearance changes than the domain counted, reading at most one entry past that count.
 - `src/inbound/kafka_consumer.rs` + `src/outbound/activity_topic_consumer.rs`:
   generic Kafka consumer wired to per-domain event mappings.
 - `src/domain/activity_range.rs` (`reads`) and `src/inbound/axum_router.rs`

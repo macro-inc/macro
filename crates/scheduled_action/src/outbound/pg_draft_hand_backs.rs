@@ -6,6 +6,8 @@ use anyhow::{Context, Result};
 use chrono::{DateTime, Utc};
 use macro_user_id::user_id::MacroUserIdStr;
 use macro_uuid::Uuid;
+use model_entity::EntityAppearance;
+use serde::{Deserialize, Serialize};
 use sqlx::PgPool;
 
 use crate::domain::drafts::Draft;
@@ -27,6 +29,35 @@ impl PgDraftHandBacks {
     pub fn new(pool: PgPool) -> Self {
         Self { pool }
     }
+}
+
+/// A check as it is kept: the routine's look beside the routine, not in it.
+/// `ActionConfiguration` refuses fields it doesn't know, so a replica built
+/// before `appearance` still reads a check kept this way, without its look,
+/// during a deploy and after a rollback.
+#[derive(Serialize, Deserialize)]
+struct KeptCheck {
+    #[serde(flatten)]
+    check: RoutineCheck,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    appearance: Option<EntityAppearance>,
+}
+
+fn keep(check: &RoutineCheck) -> serde_json::Result<serde_json::Value> {
+    let mut check = check.clone();
+    let appearance = check.routine.appearance.take();
+    serde_json::to_value(KeptCheck { check, appearance })
+}
+
+/// A kept check, with its look back in the routine; none when this build
+/// can't read it.
+fn kept(value: serde_json::Value) -> Option<RoutineCheck> {
+    let KeptCheck {
+        mut check,
+        appearance,
+    } = serde_json::from_value(value).ok()?;
+    check.routine.appearance = appearance.or(check.routine.appearance);
+    Some(check)
 }
 
 #[async_trait::async_trait]
@@ -56,7 +87,7 @@ impl DraftHandBacks for PgDraftHandBacks {
         check: &RoutineCheck,
         created: &[CreatedItem],
     ) -> Result<bool> {
-        let checked = serde_json::to_value(check).context("encode a draft's check")?;
+        let checked = keep(check).context("encode a draft's check")?;
         let created = serde_json::to_value(created).context("encode what a draft created")?;
         // What it created adds up across checks, each item once.
         let updated = sqlx::query!(
@@ -99,12 +130,8 @@ impl DraftHandBacks for PgDraftHandBacks {
         };
         Ok(HandedBack {
             // A check this build can't read is no answer.
-            check: row
-                .checked
-                .and_then(|checked| serde_json::from_value(checked).ok()),
-            passed: row
-                .passed
-                .and_then(|passed| serde_json::from_value(passed).ok()),
+            check: row.checked.and_then(kept),
+            passed: row.passed.and_then(kept),
             checks: u32::try_from(row.checks).unwrap_or_default(),
             created: serde_json::from_value(row.created).unwrap_or_default(),
             cancelled: row.cancelled,
