@@ -3021,7 +3021,7 @@ export type SharePermissionV2 = {
  * How the user recovers from a failed Claude sign-in. The web dialog
  * chooses its way out from this, never from the message.
  */
-export type SignInRecoveryCode = 'invalid_code' | 'malformed_code' | 'sign_in_expired' | 'computer_unreachable' | 'computer_busy';
+export type SignInRecoveryCode = 'invalid_code' | 'malformed_code' | 'sign_in_expired' | 'computer_unreachable' | 'computer_busy' | 'rollout_disabled';
 
 /**
  * The session the user is choosing to leave behind.

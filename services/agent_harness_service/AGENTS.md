@@ -130,7 +130,8 @@ network/resource-only Pulumi stacks; they do not host extra agent processes.
 - `src/computers/claude.rs`: Claude sign-in on Macro computers. All routes
   require the caller's `enable-macro-computers` flag through
   `hosted_runtimes::domain::rollout::ComputerRollout` (missing providers/flags
-  and evaluation errors return 403) and an attached fleet (503).
+  and evaluation errors return 403 with `code: rollout_disabled`; a caller
+  without manage rights gets a 403 with no code) and an attached fleet (503).
   `POST /harnesses/{id}/claude-sign-in` → `{url}`,
   `POST /harnesses/{id}/claude-sign-in/complete` `{code}` → `{signedIn}`
   (a failed sign-in carries a `code` saying how to recover:

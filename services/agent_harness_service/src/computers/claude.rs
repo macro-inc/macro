@@ -146,6 +146,8 @@ pub enum SignInRecoveryCode {
     ComputerUnreachable,
     /// The computer is busy; try again.
     ComputerBusy,
+    /// Computers are not enabled for this account yet.
+    RolloutDisabled,
 }
 
 /// A failed computer route's body.
@@ -578,9 +580,11 @@ impl ComputerRouteError {
             Self::SignInExpired => Some(SignInRecoveryCode::SignInExpired),
             Self::ComputerUnreachable(_) => Some(SignInRecoveryCode::ComputerUnreachable),
             Self::ComputerBusy => Some(SignInRecoveryCode::ComputerBusy),
+            // Both are 403s; only this one clears without the caller's
+            // rights changing.
+            Self::RolloutDisabled => Some(SignInRecoveryCode::RolloutDisabled),
             Self::BadRequest(_)
             | Self::Forbidden
-            | Self::RolloutDisabled
             | Self::Unavailable(_)
             | Self::NotFound(_)
             | Self::Conflict(_)

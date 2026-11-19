@@ -19,4 +19,5 @@ export const SignInRecoveryCode = {
   sign_in_expired: 'sign_in_expired',
   computer_unreachable: 'computer_unreachable',
   computer_busy: 'computer_busy',
+  rollout_disabled: 'rollout_disabled',
 } as const;

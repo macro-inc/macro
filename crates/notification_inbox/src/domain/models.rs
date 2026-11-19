@@ -6,8 +6,10 @@ use attention_feed::domain::models::{
 };
 use chrono::{DateTime, Utc};
 use macro_user_id::user_id::MacroUserIdStr;
+use model_entity::EntityType;
 use notification::domain::bulk_action::BulkActionLease;
 use serde::{Deserialize, Serialize};
+use std::collections::{HashMap, HashSet};
 use uuid::Uuid;
 
 #[cfg(test)]
@@ -255,6 +257,52 @@ impl InboxScope {
                 .chain(&row.also_listed_as)
                 .any(|row_type| self.row_types.contains(row_type));
         listed && (!self.unread_only || row.unseen)
+    }
+}
+
+/// Unread rows past which the groups of one entity type stop being counted.
+/// A count this high is shown as "99+", so the rest would be read for
+/// nothing.
+pub const UNREAD_ROWS_COUNTED: usize = 100;
+
+/// The unread rows of a viewer's inbox, by group, kept so that a change to
+/// some groups recounts those groups alone.
+#[derive(Debug, Clone, Default, PartialEq, Eq)]
+pub struct UnreadRows {
+    /// The kind of each unread row of every group that has one.
+    pub(crate) groups: HashMap<FeedKey, Vec<InboxRowType>>,
+    /// Entity types with more groups that may hold unread rows than were
+    /// read, because the ones read already hold [`UNREAD_ROWS_COUNTED`].
+    pub(crate) more: HashSet<EntityType>,
+}
+
+impl UnreadRows {
+    /// The unread rows of `groups`, each given the kinds of its unread rows.
+    pub fn of(groups: HashMap<FeedKey, Vec<InboxRowType>>) -> Self {
+        Self {
+            groups,
+            more: HashSet::new(),
+        }
+    }
+
+    /// How many unread rows there are of each kind that has any. A kind
+    /// whose groups were not all read counts the ones that were, which is
+    /// at least [`UNREAD_ROWS_COUNTED`] across that entity type's kinds.
+    pub fn counts(&self) -> HashMap<InboxRowType, u32> {
+        let mut counts = HashMap::new();
+        for row_type in self.groups.values().flatten() {
+            *counts.entry(*row_type).or_default() += 1;
+        }
+        counts
+    }
+
+    /// Unread rows in the groups filed under entities of `entity_type`.
+    pub(crate) fn rows_under(&self, entity_type: EntityType) -> usize {
+        self.groups
+            .iter()
+            .filter(|(group, _)| group.entity().entity_type == entity_type)
+            .map(|(_, rows)| rows.len())
+            .sum()
     }
 }
 

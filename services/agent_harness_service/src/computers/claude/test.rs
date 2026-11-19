@@ -435,6 +435,24 @@ async fn sign_in_failures_carry_the_code_that_says_how_to_recover() {
     );
 }
 
+/// Both refusals are 403s, but only the rollout one clears without the
+/// caller's rights changing, so the web client must tell them apart.
+#[tokio::test]
+async fn a_refusal_says_whether_the_rollout_or_the_callers_rights_stopped_it() {
+    use axum::http::StatusCode;
+    assert_eq!(
+        status_and_code(super::ComputerRouteError::RolloutDisabled).await,
+        (StatusCode::FORBIDDEN, Some("rollout_disabled".to_owned()))
+    );
+    assert_eq!(
+        status_and_code(super::ComputerRouteError::from(
+            harnesses::domain::ports::HarnessError::Unauthorized
+        ))
+        .await,
+        (StatusCode::FORBIDDEN, None)
+    );
+}
+
 #[tokio::test]
 async fn a_completion_whose_caller_left_still_records_its_signer() {
     use harness_id::HarnessId;

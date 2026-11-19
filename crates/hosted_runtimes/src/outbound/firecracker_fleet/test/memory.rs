@@ -60,7 +60,7 @@ async fn memory_is_the_hosts_resident_memory_its_limits_and_this_control_planes_
                 "01900000-0000-7000-8000-000000000001",
                 "test-a",
                 "running",
-                json!({"residentMemoryBytes": 900 * MIB, "privateMemoryBytes": 600 * MIB, "cpuUsageMicroseconds": 42})
+                json!({"residentMemoryBytes": 900 * MIB, "privateMemoryBytes": 600 * MIB, "swapBytes": 100 * MIB, "cpuUsageMicroseconds": 42})
             ),
             guest("01900000-0000-7000-8000-000000000002", "test-a", "hibernated", json!(null)),
             guest("01900000-0000-7000-8000-000000000003", "someone-else", "running", json!(null)),
@@ -88,6 +88,7 @@ async fn memory_is_the_hosts_resident_memory_its_limits_and_this_control_planes_
                 computer_id: COMPUTER_ID,
                 hibernated: false,
                 private_memory_bytes: Some(600 * MIB),
+                swap_bytes: Some(100 * MIB),
                 cpu_usage_microseconds: Some(42),
             },
             GuestUsage {
@@ -96,6 +97,7 @@ async fn memory_is_the_hosts_resident_memory_its_limits_and_this_control_planes_
                 )),
                 hibernated: true,
                 private_memory_bytes: None,
+                swap_bytes: None,
                 cpu_usage_microseconds: None,
             },
         ]

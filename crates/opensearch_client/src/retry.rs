@@ -15,9 +15,10 @@ fn resend_delays() -> impl Iterator<Item = Duration> {
 }
 
 /// Run `request` (send and read the body), resending it while its connection
-/// closes or refuses before a complete response. Every request this crate sends writes
-/// by explicit id or by query, so a resend cannot apply twice. A timeout is
-/// not resent: OpenSearch may still be working on the first attempt.
+/// closes or refuses before a complete response. Only wrap reads and requests
+/// that write by explicit id or by query, so a resend cannot apply twice;
+/// starting a background task is not one of them. A timeout is not resent:
+/// OpenSearch may still be working on the first attempt.
 pub(crate) async fn resend_on_lost_connection<T, R, F>(request: R) -> Result<T>
 where
     R: FnMut() -> F,

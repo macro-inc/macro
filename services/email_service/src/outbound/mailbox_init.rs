@@ -88,9 +88,10 @@ async fn snapshot(
     request: &InitializeMailbox,
     grant: &VerifiedMailboxGrant,
 ) -> Result<InitializationSnapshot, InitializationError> {
-    let existing = sqlx::query!(r#"
+    let row = sqlx::query!(r#"
         SELECT l.id,l.macro_id,l.grant_id,l.grant_generation,l.sync_generation,
-            l.provider_tenant_id,l.provider_mailbox_id,l.disconnect_requested_at,
+            l.provider_tenant_id,l.provider_mailbox_id,
+            (l.disconnect_requested_at IS NOT NULL OR l.deleting_at IS NOT NULL) AS "being_removed!",
             EXISTS(SELECT 1 FROM macro_user_links e WHERE e.link_id = l.id
                 AND e.primary_macro_id = $4 AND e.child_macro_id = l.macro_id) AS "actor_has_access!"
         FROM email_links l WHERE l.provider = 'OUTLOOK'
@@ -99,12 +100,20 @@ async fn snapshot(
         LIMIT 1 FOR UPDATE OF l
     "#,grant.tenant_id,grant.mailbox_id,grant.email,request.actor.as_ref())
         .fetch_optional(&mut *conn).await.map_err(unavailable)?;
-    let existing = existing
-        .map(|row| {
-            if row.disconnect_requested_at.is_some() {
-                return Err(InitializationError::Changed);
-            }
-            Ok::<_, InitializationError>(ExistingMailbox {
+    let existing = match row {
+        None => None,
+        Some(row) => {
+            // Lock the owner's account so it cannot be deleted between this
+            // check and the access edges a commit writes for it.
+            let owner_account_exists = sqlx::query_scalar!(
+                r#"SELECT 1 AS "locked!" FROM "User" WHERE id = $1 FOR KEY SHARE"#,
+                row.macro_id
+            )
+            .fetch_optional(&mut *conn)
+            .await
+            .map_err(unavailable)?
+            .is_some();
+            Some(ExistingMailbox {
                 id: row.id,
                 owner: MacroUserIdStr::try_from(row.macro_id).map_err(unavailable)?,
                 grant_id: row.grant_id,
@@ -113,9 +122,11 @@ async fn snapshot(
                 tenant_id: row.provider_tenant_id,
                 mailbox_id: row.provider_mailbox_id,
                 actor_has_access: row.actor_has_access,
+                owner_account_exists,
+                being_removed: row.being_removed,
             })
-        })
-        .transpose()?;
+        }
+    };
     let account_for_email = sqlx::query_scalar!(
         r#"SELECT id FROM "User" WHERE lower(email) = lower($1)"#,
         grant.email
@@ -251,9 +262,12 @@ impl MailboxInitializationRepository for PgMailboxInitialization {
                     r#"SELECT "organizationId" FROM "User" WHERE id = $1"#,
                     existing.owner.as_ref()
                 )
-                .fetch_one(&mut *tx)
+                .fetch_optional(&mut *tx)
                 .await
-                .map_err(unavailable)?;
+                .map_err(unavailable)?
+                // A vanished owner is a changed snapshot: the retry takes the
+                // link over instead.
+                .ok_or(InitializationError::Changed)?;
                 let promoted = macro_db_client::shared_inbox::promote_link_to_shared(
                     &mut tx,
                     existing.id,
@@ -269,6 +283,30 @@ impl MailboxInitializationRepository for PgMailboxInitialization {
                     MacroUserIdStr::try_from(promoted.mailbox_macro_id).map_err(unavailable)?,
                     true,
                 )
+            }
+            (InitializationDecision::Rehome { owner }, Some(existing)) => {
+                // Promote's re-home, onto an account that already exists: the
+                // link keeps its id and synced copy, and a previous owner who
+                // still has an account keeps access through an edge.
+                sqlx::query!(
+                    "UPDATE email_links SET macro_id = $2 WHERE id = $1",
+                    existing.id,
+                    owner.as_ref()
+                )
+                .execute(&mut *tx)
+                .await
+                .map_err(unavailable)?;
+                if existing.owner_account_exists {
+                    macro_db_client::macro_user_links::insert_edge(
+                        &mut *tx,
+                        existing.owner.as_ref(),
+                        owner.as_ref(),
+                        existing.id,
+                    )
+                    .await
+                    .map_err(unavailable)?;
+                }
+                (existing.id, owner, true)
             }
             (
                 InitializationDecision::Reconnect | InitializationDecision::Delegate,

@@ -442,13 +442,32 @@ impl State {
     }
 
     /// The first fault matching a request, counted against its `times`.
-    pub(crate) fn take_fault(&mut self, mailbox: Option<&str>, route: Route) -> Option<Fault> {
+    /// `folder` is the folder the request's path names, as written there, and
+    /// `continuation` whether it carries a `$skiptoken`.
+    pub(crate) fn take_fault(
+        &mut self,
+        mailbox: Option<&str>,
+        route: Route,
+        folder: Option<&str>,
+        continuation: bool,
+    ) -> Option<Fault> {
+        let folder_id = |key: &str| {
+            mailbox
+                .and_then(|email| self.mailboxes.get(email))
+                .and_then(|found| found.folder(key))
+                .map(|found| found.id.as_str())
+        };
+        let requested = folder.and_then(folder_id);
         let index = self.faults.iter().position(|(_, fault)| {
             let mailbox_matches = fault.mailbox.as_deref().is_none_or(|wanted| {
                 mailbox.is_some_and(|email| wanted.eq_ignore_ascii_case(email))
             });
             let route_matches = fault.route.is_none_or(|wanted| wanted == route);
-            mailbox_matches && route_matches
+            let folder_matches = fault.folder.as_deref().is_none_or(|wanted| {
+                requested.is_some_and(|requested| folder_id(wanted) == Some(requested))
+            });
+            let continuation_matches = !fault.continuation || continuation;
+            mailbox_matches && route_matches && folder_matches && continuation_matches
         })?;
         let (_, fault) = self.faults.get_mut(index)?;
         let taken = fault.clone();

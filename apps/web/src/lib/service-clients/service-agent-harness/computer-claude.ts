@@ -16,13 +16,14 @@ import type {
 } from './generated/schemas';
 import { SignInRecoveryCode } from './generated/schemas';
 
-type ClaudeSignInFailureCode =
+type ClaudeErrorCode =
   | 'CLAUDE_INVALID_CODE'
   | 'CLAUDE_MALFORMED_CODE'
   | 'CLAUDE_SIGN_IN_EXPIRED'
   | 'CLAUDE_COMPUTER_UNREACHABLE'
   | 'CLAUDE_COMPUTER_BUSY'
-  | 'CLAUDE_TIMEOUT';
+  | 'CLAUDE_TIMEOUT'
+  | 'ROLLOUT_DISABLED';
 
 const harnessUrl = (path: (harnessId: string) => string, harnessId: string) =>
   `${SERVER_HOSTS['agent-harness']}${path(encodeURIComponent(harnessId))}`;
@@ -47,9 +48,7 @@ async function recoveryCode(
 const RECOVERY_CODES: readonly SignInRecoveryCode[] =
   Object.values(SignInRecoveryCode);
 
-const claudeSignInError: ErrorResponseHandler<ClaudeSignInFailureCode> = async (
-  response
-) => {
+const claudeError: ErrorResponseHandler<ClaudeErrorCode> = async (response) => {
   // The pending sign-in is gone: it timed out, or another tab replaced it.
   // A 404 is a missing computer, which no new link fixes.
   if (response.status === 410) {
@@ -64,9 +63,7 @@ const claudeSignInError: ErrorResponseHandler<ClaudeSignInFailureCode> = async (
   const code = await recoveryCode(response);
   if (!code) return statusError(response.status);
   const known = match(code)
-    .returnType<
-      { code: ClaudeSignInFailureCode; message: string } | undefined
-    >()
+    .returnType<{ code: ClaudeErrorCode; message: string } | undefined>()
     .with('invalid_code', () => ({
       code: 'CLAUDE_INVALID_CODE',
       message: 'Claude rejected the sign-in code',
@@ -87,6 +84,11 @@ const claudeSignInError: ErrorResponseHandler<ClaudeSignInFailureCode> = async (
       code: 'CLAUDE_COMPUTER_BUSY',
       message: 'The computer is busy',
     }))
+    // A bare 403 is a missing right: the shared FORBIDDEN below.
+    .with('rollout_disabled', () => ({
+      code: 'ROLLOUT_DISABLED',
+      message: 'Computers are not enabled for this account',
+    }))
     .exhaustive(() => undefined);
   return known ?? statusError(response.status);
 };
@@ -98,23 +100,23 @@ export const computerClaudeClient = {
       harnessUrl(getGetClaudeModeUrl, harnessId)
     ),
   startSignIn: (harnessId: string, signal: AbortSignal) =>
-    fetchWithToken<ClaudeSignInStarted, ClaudeSignInFailureCode>(
+    fetchWithToken<ClaudeSignInStarted, ClaudeErrorCode>(
       harnessUrl(getStartClaudeSignInUrl, harnessId),
-      { method: 'POST', signal, errorResponseHandler: claudeSignInError }
+      { method: 'POST', signal, errorResponseHandler: claudeError }
     ),
   completeSignIn: (harnessId: string, code: string) =>
-    fetchWithToken<ClaudeSignedIn, ClaudeSignInFailureCode>(
+    fetchWithToken<ClaudeSignedIn, ClaudeErrorCode>(
       harnessUrl(getCompleteClaudeSignInUrl, harnessId),
       {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ code } satisfies ClaudeSignInComplete),
-        errorResponseHandler: claudeSignInError,
+        errorResponseHandler: claudeError,
       }
     ),
   signOut: (harnessId: string) =>
-    fetchWithToken<ClaudeModeResponse>(
+    fetchWithToken<ClaudeModeResponse, ClaudeErrorCode>(
       harnessUrl(getClaudeSignOutUrl, harnessId),
-      { method: 'POST' }
+      { method: 'POST', errorResponseHandler: claudeError }
     ),
 };

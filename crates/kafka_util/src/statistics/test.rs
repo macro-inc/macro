@@ -18,6 +18,7 @@ fn observer_receives_statistics_once_without_default_payload_logging() {
     let observed = calls.clone();
     let context = StatisticsContext {
         inner: DefaultConsumerContext,
+        offset_resets: offset_resets_counter(),
         observer: Some(Arc::new(move |stats| {
             assert_eq!(stats.rxmsgs, 12);
             observed.fetch_add(1, Ordering::SeqCst);
@@ -52,6 +53,7 @@ fn wrapping_statistics_preserves_iam_token_refresh() {
     assert!(!StatisticsContext::<DefaultConsumerContext>::ENABLE_REFRESH_OAUTH_TOKEN);
     let context = StatisticsContext {
         inner: AuthContext,
+        offset_resets: offset_resets_counter(),
         observer: None,
     };
     let token = context
@@ -94,6 +96,7 @@ async fn ungrouped_consumer_reports_application_offsets_without_commits() {
     let consumer: StreamConsumer<_> = config
         .create_with_context(StatisticsContext {
             inner: DefaultConsumerContext,
+            offset_resets: offset_resets_counter(),
             observer: Some(observer),
         })
         .expect("consumer");
@@ -144,4 +147,70 @@ async fn ungrouped_consumer_reports_application_offsets_without_commits() {
         sample.committed_offset < 0,
         "no durable offset was committed"
     );
+}
+
+/// librdkafka's out-of-range reset warning, as `rd_kafka_offset_reset`
+/// formats it.
+const OUT_OF_RANGE: &str = "[thrd:main]: macro.email [3]: offset reset (at offset 1200 (leader epoch 7), broker 2) to offset END: fetch failed due to requested offset not available on the broker: Broker: Offset out of range";
+
+#[test]
+fn an_offset_reset_warning_names_its_topic() {
+    assert_eq!(reset_topic(OUT_OF_RANGE), Some("macro.email"));
+    assert_eq!(
+        reset_topic("macro.email [3]: offset reset"),
+        Some("macro.email")
+    );
+    assert_eq!(
+        reset_topic("Group search-processing-service OffsetFetchRequest"),
+        None
+    );
+}
+
+#[test]
+fn only_offset_reset_warnings_are_counted_by_topic() {
+    use opentelemetry::metrics::MeterProvider as _;
+    use opentelemetry_sdk::metrics::{
+        InMemoryMetricExporter, SdkMeterProvider,
+        data::{AggregatedMetrics, MetricData},
+    };
+
+    let exporter = InMemoryMetricExporter::default();
+    let provider = SdkMeterProvider::builder()
+        .with_periodic_exporter(exporter.clone())
+        .build();
+    let context = StatisticsContext {
+        inner: DefaultConsumerContext,
+        observer: None,
+        offset_resets: provider.meter("test").u64_counter(OFFSET_RESETS).build(),
+    };
+
+    context.log(RDKafkaLogLevel::Warning, OFFSET_FACILITY, OUT_OF_RANGE);
+    context.log(RDKafkaLogLevel::Warning, OFFSET_FACILITY, OUT_OF_RANGE);
+    context.log(RDKafkaLogLevel::Debug, OFFSET_FACILITY, OUT_OF_RANGE);
+    context.log(RDKafkaLogLevel::Warning, "MAXPOLL", "leaving group");
+
+    provider.force_flush().expect("metrics flush");
+    let exported = exporter.get_finished_metrics().expect("exported metrics");
+    let metric = exported
+        .iter()
+        .flat_map(|resource| resource.scope_metrics())
+        .flat_map(|scope| scope.metrics())
+        .find(|metric| metric.name() == OFFSET_RESETS)
+        .expect("resets were counted");
+    let AggregatedMetrics::U64(MetricData::Sum(sum)) = metric.data() else {
+        panic!("a u64 counter; got {:?}", metric.data());
+    };
+    let points: Vec<_> = sum
+        .data_points()
+        .map(|point| {
+            (
+                point
+                    .attributes()
+                    .map(|attribute| format!("{}={}", attribute.key, attribute.value))
+                    .collect::<Vec<_>>(),
+                point.value(),
+            )
+        })
+        .collect();
+    assert_eq!(points, [(vec!["topic=macro.email".to_owned()], 2)]);
 }

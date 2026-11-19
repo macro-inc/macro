@@ -6,8 +6,8 @@ use macro_user_id::user_id::MacroUserIdStr;
 
 use crate::domain::model::{
     ComputerPurchaseCredit, CustomerError, ItemChangeSettlement, ItemChangeStatus, ItemProration,
-    ItemQuantityChange, ItemRemoval, PriceInfo, ScheduledSeatPlan, SeatPlan, SubscriptionItemView,
-    SubscriptionTerms,
+    ItemQuantityChange, ItemRemoval, PaymentTerms, PriceInfo, ProratedCharge, ScheduledSeatPlan,
+    SeatPlan, SubscriptionItemView, SubscriptionTerms,
 };
 
 /// The CustomerRepository defines a set of actions to perform on customer data
@@ -220,6 +220,20 @@ pub trait CustomerRepository: Clone + Send + Sync + 'static {
         &self,
         subscription_id: &stripe::SubscriptionId,
     ) -> impl Future<Output = Result<SubscriptionTerms, CustomerError>> + Send;
+
+    /// The subscription's terms and the card it charges, from ONE read.
+    fn payment_terms(
+        &self,
+        subscription_id: &stripe::SubscriptionId,
+    ) -> impl Future<Output = Result<PaymentTerms, CustomerError>> + Send;
+
+    /// What adding one item of each of `prices` would invoice now, from ONE
+    /// invoice preview that changes nothing. One charge per price, in order.
+    fn preview_prorations(
+        &self,
+        subscription_id: &stripe::SubscriptionId,
+        prices: &[stripe::PriceId],
+    ) -> impl Future<Output = Result<Vec<ProratedCharge>, CustomerError>> + Send;
 
     /// What a price charges per unit.
     fn price(

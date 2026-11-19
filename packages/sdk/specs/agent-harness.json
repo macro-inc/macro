@@ -8683,7 +8683,8 @@
           "malformed_code",
           "sign_in_expired",
           "computer_unreachable",
-          "computer_busy"
+          "computer_busy",
+          "rollout_disabled"
         ]
       },
       "StartFreshAgentConversationRequest": {
