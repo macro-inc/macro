@@ -68,7 +68,9 @@ makes the bootstrap refuse any OCaml request whose `macroSdkOperation`
 service, raw `operationId`, method, host and route don't match one of them,
 or whose path a more specific rival route also matches (a parameter equal to a
 sibling's literal segment, `/documents/{}` reaching `/documents/system_skills`;
-the analyzer lists each call's `rivals`), reporting it as `refused` activity; `None` sends everything as before. The policy check
+the analyzer lists each call's `rivals`, from the SDK's routes only: a
+route a service serves outside its OpenAPI spec is not one), reporting it as
+`refused` activity; `None` sends everything as before. The policy check
 (`packages/sdk-ocaml/code_mode/policy`) is defense in depth: keep the Deno
 flags the boundary for OCaml as for JavaScript.
 
