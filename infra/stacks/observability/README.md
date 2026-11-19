@@ -611,8 +611,11 @@ all three:
    the cluster's Loki and Tempo run on these buckets.
 2. The cluster's Grafana notifies (*Cluster, notify* is merged and synced) and
    reaches GoAlert: its watchdog's heartbeat monitor on the observability
-   service is healthy in GoAlert, and the cluster's Grafana shows its GoAlert
-   contact points without failures.
+   service is healthy in GoAlert, and each contact point's **Test** in the
+   cluster's Grafana arrives as an alert in GoAlert. `GoAlert notify` reaches
+   the Notify service, which posts to the Alerts channel and phones nobody;
+   `GoAlert` pages the on-call, so tell them first and close the alert after.
+   A healthy heartbeat alone doesn't prove the contact points' keys.
 3. Then the dry run, the targeted `pulumi up` above, and the real run.
 
 One rollout runs at a time (concurrency group `deploy-observability-prod`,
