@@ -66,16 +66,20 @@ Pulumi stacks; they do not host extra agent processes.
   agent and owner from the session repo); its routes
   (`/agent-tool-permissions/catalog`, `/agents/{id}/tool-permissions[/tighten]`,
   `/agent-sessions/{id}/tool-permissions`) answer 404 unless the caller has
-  both `enable-ocaml-code-mode` and `enable-agent-permissions`
-  (`code_mode::PermissionsFlag`; off without PostHog).
-  The same service gates OCaml `ExecuteCode` programs
+  `enable-agent-permissions` (`code_mode::PermissionsFlag`; off without
+  PostHog).
+  The same service gates checked `ExecuteCode` programs
   (`src/code_mode/permissions.rs`, `PermissionGate`, wired into
-  `RunCredentials` where the build has the OCaml bundle): for an owner with
-  both flags it analyzes the program (`OcamlAnalyzer`), refuses it on any
-  `never` operation or when it can't be analyzed, holds it for the run's
-  account on any `ask` (`macro-sdk` approval), then runs it limited to every
-  analyzed call (`allowed_operations`). Flags off, or JavaScript: nothing
-  changes. `ShowPermissions` is offered by the internal MCP only then.
+  `RunCredentials` where the build can analyze some language): OCaml
+  (`OcamlAnalyzer`, with the OCaml bundle) and JavaScript tools
+  (`JsToolsAnalyzer`, on every Deno build), each in `Analyzers`. For an owner
+  with `enable-agent-permissions` (and, for OCaml, `enable-ocaml-code-mode`;
+  `LanguageRollout`) it analyzes the program, refuses it on any `never`
+  operation or when it can't be analyzed, holds it for the run's account on
+  any `ask` (`macro-sdk` approval), then runs it limited to every analyzed
+  call (`allowed_operations`). Flags off, a language without an analyzer, or
+  plain JavaScript: nothing changes. `ShowPermissions` is offered by the
+  internal MCP only then.
 - `src/speech_gateway.rs` + `src/speech_gateway/`: `/brain/inference/stt` and
   `/brain/inference/tts` WebSockets on the egress listener, for agent
   teammates' calls (`MACRO_SPEECH_URL` in the enrollment). Same brain key,

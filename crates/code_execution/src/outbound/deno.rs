@@ -639,6 +639,7 @@ fn bounded_line(line: String, remaining: &mut usize) -> Result<String, Execution
     Ok(line)
 }
 
+pub mod analyze;
 pub mod check;
 
 #[cfg(test)]
