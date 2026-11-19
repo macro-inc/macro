@@ -17,6 +17,8 @@ struct Code {
     readers_break: bool,
     rewrite_fails: bool,
     rewrite_still_fails: bool,
+    /// The model's rewrite holds a NUL, which Postgres can't store.
+    rewrite_holds_nul: bool,
     dry_run_fails: bool,
     dry_runs: Mutex<Vec<(Value, bool)>>,
     rewrites: Mutex<Vec<(String, Vec<String>)>>,
@@ -108,6 +110,9 @@ impl RoutineCode for Code {
         if self.rewrite_still_fails {
             return Ok("still broken".into());
         }
+        if self.rewrite_holds_nul {
+            return Ok("macro.tasks.add(x) // \u{0}".into());
+        }
         if self.readers_break {
             return Ok("return String(await macro.tasks.add(x))".into());
         }
@@ -178,6 +183,10 @@ impl CodeUpgrades for Upgrades {
         proposal: Option<&Value>,
         pause: bool,
     ) -> Result<()> {
+        // As Postgres: JSONB and text refuse a NUL, and nothing is written.
+        if reason.contains('\0') || proposal.is_some_and(routine_program::holds_nul) {
+            bail!("22P05: unsupported Unicode escape sequence");
+        }
         self.recorded
             .lock()
             .unwrap()
@@ -321,6 +330,13 @@ async fn a_rewrite_that_fails_its_checks_pauses_the_routine_with_it() {
             },
             "the update failed a dry run",
         ),
+        (
+            Code {
+                rewrite_holds_nul: true,
+                ..Code::default()
+            },
+            "can't hold a NUL character",
+        ),
     ] {
         let upgrades = Upgrades::default();
         let error = upgrade(&code, &upgrades, &routine("tasks.create", None))
@@ -333,8 +349,12 @@ async fn a_rewrite_that_fails_its_checks_pauses_the_routine_with_it() {
             panic!("{recorded:?}");
         };
         assert_eq!(*recorded_reason, reason);
-        // A rewrite that exists is kept for the owner to review.
-        assert_eq!(proposal.is_some(), !code.rewrite_fails);
+        // A rewrite that exists is kept for the owner to review, unless
+        // it can't be stored: the routine is paused with the reason anyway.
+        assert_eq!(
+            proposal.is_some(),
+            !code.rewrite_fails && !code.rewrite_holds_nul
+        );
         assert_eq!(*upgrades.paused.lock().unwrap(), [true]);
     }
 }

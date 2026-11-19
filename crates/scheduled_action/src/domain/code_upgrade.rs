@@ -214,7 +214,10 @@ async fn rewrite(
     program.assign_step_ids();
     program.sdk = Some(version.clone());
     let task = task_with(&action.task, &program).map_err(|error| (error.to_string(), None))?;
-    let failed = |reason: String| (reason, Some(task.clone()));
+    // A rewrite holding a NUL can't be stored for review: Postgres refuses
+    // it, which would undo the pause and leave the claim running.
+    let proposal = (!routine_program::holds_nul(&task)).then(|| task.clone());
+    let failed = |reason: String| (reason, proposal.clone());
     // A rewrite keeps the step's knobs, so it must still read every one.
     if let Err(error) = program.validate() {
         return Err(failed(format!(
@@ -299,7 +302,10 @@ fn task_with(task: &Value, program: &RoutineProgram) -> Result<Value> {
     Ok(task)
 }
 
+/// A reason short enough to show, and storable: Postgres text can't hold a
+/// NUL, and a reason can quote a model's or the checker's words.
 fn bounded(reason: String) -> String {
+    let reason = reason.replace('\0', "");
     match reason.char_indices().nth(MAX_REASON_CHARS - 1) {
         Some((end, _)) => format!("{}…", &reason[..end]),
         None => reason,
