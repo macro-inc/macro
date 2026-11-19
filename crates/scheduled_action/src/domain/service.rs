@@ -539,7 +539,10 @@ impl<Rpo: ScheduledActionRepo, Exe, Grants, Targets, Github, Code, Upgrades, Rol
             picked = picked.len(),
             unknown = tracing::field::Empty,
             outcome = tracing::field::Empty,
-        )
+        ),
+        // A pick that isn't the owner's is the person's mistake; a failed lookup
+        // is also recorded as an error on `routine.owner_inboxes`.
+        err(level = "warn")
     )]
     async fn check_picked_inboxes(
         &self,

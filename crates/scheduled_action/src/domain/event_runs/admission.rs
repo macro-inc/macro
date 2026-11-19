@@ -154,7 +154,8 @@ impl<R: EventRunRepository, A: CurrentOwnerAccess, D: InboxDelegates> EventInges
             filtered_out = tracing::field::Empty,
             outside_inboxes = tracing::field::Empty,
             inserted = tracing::field::Empty,
-        )
+        ),
+        err
     )]
     async fn ingest(&self, incoming: &IncomingEvent) -> Result<EventIngestionResult, Report> {
         let event = match incoming.normalize() {
