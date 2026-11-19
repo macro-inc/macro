@@ -1,4 +1,5 @@
 interface ImportMetaEnv {
+  readonly VITE_ENABLE_CRM_SELECTIVE_EMAIL_CONTRIBUTION?: string;
   readonly __APP_VERSION__: string;
   /** When this build was made, in ms since the epoch. Unset outside app builds. */
   readonly __APP_BUILD_TIME__?: number;

@@ -233,6 +233,10 @@ format or new settings for already-shipped clients without this write guard,
 require a backend write-version check or update those clients first; the generic
 backend currently stores opaque JSON and does not enforce reader capabilities.
 
+## Appearance
+
+Saved definitions share the entity-appearance icon and color contract, stored outside their consumer-owned filter configuration. Only the owner can change appearance. Everyone who can read a shared definition sees its appearance, including when `enableEntityAppearance` is off; that flag gates editing only. Without an override, rows and breadcrumbs retain the bookmark default. Sidebar and header action menus reuse the desktop embedded picker and touch sheet. Each selection saves immediately without changing filters, the configuration revision, or content timestamps. Creation accepts optional initial appearance so duplication copies it atomically; blank creation keeps the defaults.
+
 ## Ownership, sharing, and lifecycle
 
 A caller can read a definition when they own it, or when its effective team share
@@ -529,8 +533,9 @@ Email is the second consumer (`kind: "email"`, `version: 1`). Its definition is 
   were added to that filter for this consumer. Text search keeps only hits the
   view's own predicate admits, as alias filters do.
 - Sidebar rows show an unread dot from each view's first unread page (presence,
-  never a count) and drag to reorder on desktop; the mobile picker, which has
-  no drag, offers Move up/Move down in each row's menu instead.
+  never a count) and drag to reorder on desktop. On phones and tablets the
+  sidebar sheet offers Move up and Move down in each row's menu when there's
+  a view in that direction.
 - Subject keywords read the per-inbox trigram index
   `idx_email_messages_link_subject_trgm` and check message visibility only for
   the threads a page needs, so a page costs about the same for rare and common

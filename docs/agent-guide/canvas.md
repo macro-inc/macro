@@ -21,11 +21,16 @@ something selected, **Style**, **Duplicate**, **Delete** and **More**. The
 page's **New** button is hidden while a canvas is open. On an upright phone
 Rectangle/Ellipse and Arrow/Line/Connector each share a button: tap it again
 while it is selected to choose another. **Style** opens the inspector in a
-bottom sheet on a phone and toggles the side panel on a tablet. **More**, or a
+bottom sheet on a phone and toggles the side panel on a tablet. In the phone
+sheet Fill and Stroke each list their palette and canvas colours as a row of
+swatches, so a colour can be tried with the shape still in view; the swatch
+beside the hex field still opens the full picker. **More**, or a
 long press on the canvas with Select or Hand, opens the sheet of clipboard,
 group, arrange, select-all and delete actions; the long press selects what is
 under the finger first, and lifting the finger leaves the sheet open without
-pressing the row under it. **Attach** opens a sheet with Media, Upload media,
+pressing the row under it. Pressed on an item that is part of a group, the sheet
+also offers **Select inside group**, which selects that item alone (what
+Cmd/Ctrl-click does with a mouse). **Attach** opens a sheet with Media, Upload media,
 Reference and Artifact: Media and Reference open a
 searchable picker in a second
 sheet, and Upload media opens the device's photo library or file picker and
@@ -36,11 +41,19 @@ closing a sheet leaves the selection as it was.
 Text made low on the screen is panned up clear of the keyboard as it appears,
 and a long line keeps its end in view; the page itself never scrolls and the
 header stays put. The keyboard's Done button on a phone, or its hide key on a
-tablet, commits the text and leaves it selected with the Select tool.
+tablet, commits the text and leaves it selected with the Select tool (with
+Keep tool after drawing on, the Text tool stays and nothing is selected).
 
 **Zoom to fit** in the zoom sheet shows the whole scene between the header and
 the bottom chrome, 24px clear of both and of the screen's sides, and left of the
-inspector panel when it is open. Turn the device: a canvas nobody has moved since
+inspector panel when it is open. The same sheet has **Keep tool after
+drawing**: switch it on, choose Rectangle once, and each further drag draws
+another rectangle instead of selecting the last one. After a pen (an Apple
+Pencil, say) has pressed the canvas, drawing is the pen's: one finger under a
+drawing tool or the eraser pans instead, and the sheet gains **Draw with pen
+only**, which gives drawing back to fingers when switched off. Select, Hand and
+Text stay a finger's throughout. A simulator has no pen; check this on a tablet
+with one. Turn the device: a canvas nobody has moved since
 the fit is fitted again, and one that was moved keeps what was in the middle of
 the view in the middle.
 

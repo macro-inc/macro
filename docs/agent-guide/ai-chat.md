@@ -217,6 +217,26 @@ always the user's. Each row names the item with a chip that opens it; edit and
 sharing rows expand to show the new text or settings. Verify with throwaway
 items, since these mutate real data.
 
+### Selective CRM email contribution
+
+The member's rule API is behind a default-off rollout flag; public code-mode SDK
+wrappers follow in the next phase. A member-authorized agent may activate rules
+directly once available. Inspecting settings is read-only and does not enroll the
+member or move backfill work. Use the exact returned policy observation for an
+explicit sharing mutation; a conflict requires inspecting and deciding again,
+never an automatic token refresh and retry. Scoped credentials cannot grant
+contribution.
+
+Explain that one matching participant shares the whole eligible thread, including
+past and future messages; contact/company selectors follow live records, and
+private-thread/domain exclusions always win. Preview results contain counts only,
+may be partial, and describe the member's own mailbox copies. A teammate may still
+contribute another copy. Narrowing or withdrawing preserves CRM records and
+interaction dates. Report active only after the server commits; a recorded retry
+is evidence of that earlier operation, not current state. Members can inspect
+private history and saved definitions even with CRM viewing off. A request to
+inspect mail is not permission to contribute it.
+
 ### Requesting access the user lacks
 
 A write the user can only view fails in code mode with `MacroForbiddenError`
@@ -1004,9 +1024,32 @@ blocking request as before; older clients keep using it.
 Code steps (written by AI through Draft it, CreateRoutine or the starter
 templates) open on the routine's Overview as a sentence of what they do,
 with each knob in place: values underlined, and what AI decides dotted with a
-sparkle. A choice opens a menu that saves the option picked; a number opens a
-field with − and +, its range, and Enter to save (Esc cancels); text or the
-question AI is asked open an editor with **Save**; on/off flips in place.
+sparkle. On/off flips in place; every other knob opens an editor (a choice's
+options as radios, a number's field with − and + and its range, a text field,
+or the question AI is asked) with **Clear**, **Cancel** and **Save**, on touch
+too. Only **Save** applies the change: Enter never saves, and **Cancel**, Esc
+or a click away drop it. **Clear** empties the field; a value that can't be
+empty (a choice, a number, the question) keeps **Save** disabled, with the
+reason, until one is entered.
+A text knob with no value shows a + and its label (**Not set** under
+**Settings**) with a dashed underline, and opens the same editor.
+An item the step uses (an entity knob: a channel, document, folder, person,
+task, email thread, AI chat, CRM company, CRM contact, project, or database)
+shows by its icon and name and opens the same editor around the app's entity
+picker, showing only the kinds the knob accepts, email search included when
+email threads are one of them (for a database, a searchable list of the
+owner's databases). Picking an item only changes the draft, Enter included, and
+picking the picked item again keeps it; only **Clear** empties it, keeping
+**Save** disabled until one is picked. On touch it
+opens a sheet instead, with **Cancel**, **Clear** and **Done**, and only
+**Done** applies the pick. One not picked yet, as in a starter, shows the same
++ and its label with a dashed underline. Saving refuses an item the owner
+can't open. A run checks each picked item when the first step that uses it
+starts; one deleted, trashed or lost by then fails that step with the reason,
+before its code runs. On the routine's page such a knob shows
+its + and label dashed in red (**Needs a new pick** under **Settings**); its
+editor gives the reason and keeps **Save** (**Done** on touch) off until
+another item is picked.
 Each change saves only that value, never the code. Knobs the sentence
 doesn't show are listed under **Settings**; a step without a sentence shows
 its summary. **Edit** in a code step's ⋯ menu opens **Change this step**
@@ -1361,6 +1404,33 @@ External coding harnesses keep their own tool selection. A runner that fails
 after its tools were advertised still produces an execution failure, not an
 automatic retry through a direct tool.
 
+CRM contribution rules use `macro.crm.emailPrivacy`, discovered under the
+`crmEmailPrivacy` code-mode category. The agent reads `get()`,
+validates selectors with `validateRules`, then directly activates an intended
+replacement with `replaceRules` and that exact policy token plus a unique
+idempotency key. No separate member confirmation is required. The server still
+refuses restricted credentials and unavailable rollout gates; CRM viewing
+permission is separate from these own-member controls. A conflict requires
+inspection and a new decision, never an automatic refresh and retry.
+Validation and replacement share a live-expansion resource check. A named limit
+error refuses activation and leaves the current policy unchanged; narrow the
+rules before retrying. Validation does not reserve capacity, so replacement can
+still refuse after live data changes. Later growth can make a Team email read
+fail with a named resource limit instead of returning an incomplete feed;
+withdrawal stays available. Do not describe validation as a permanent guarantee
+that a live rule will fit.
+
+The agent explains that a matching participant shares the whole past/future
+thread; contact/company selectors follow live records, all exclusions win, and
+narrowing leaves CRM records in place. Another member's eligible copy remains
+independent. `settings()` / `excludedThreads()` inspect exclusions. Count previews
+are optional and bounded: only complete counts are exact, partial counts are
+lower bounds, and stale/cancelled results are not current estimates. `history()`
+shows verified provenance and saved definitions. `withdraw` uses the current
+policy observation; legacy members without a token retain `setConsent(false)`.
+These SDK methods do not imply that the rollout is enabled or a rule editor is
+available in Settings.
+
 Team and referral invites exist only in the SDK: `team.invite(emails)` on
 `macro.teams.current()` (resolves `false` when every address was already a
 member or invited), `team.invites()` and `invite.revoke()` for team admins, and
@@ -1372,7 +1442,10 @@ either.
 Ask the agent to discover SDK entities and write a JavaScript module exporting
 `async function main({macro, session, execution})`. These are actual public SDK
 handles; for example, `macro.documents.search(...)` is an async iterator and
-`await document.content()` fetches a document. Use the direct `ListEntities` tool
+`await document.content()` fetches a document as Macro's internal Markdown, with
+chips, tables and other rich content as `<m-*>` tags. To write text back, the
+agent reads it with `contentWithRevision()` and keeps the tags intact. Use the
+direct `ListEntities` tool
 for workspace feeds with type, time, task, tag, mailbox, and sorting filters.
 Return plain JSON
 in `{data}`. The optional `reviews` array contains saved review references and
@@ -1444,7 +1517,9 @@ Inline channel and discussion steps show the observed SDK operation names while
 code runs, using the same execution journal as the full session view. The final
 tool receipt carries those operations into the shared fold, so posted step
 snapshots retain the names and outcomes without exposing source or returned JSON.
-A code run without observed SDK requests reads as **Worked in your workspace**.
+A code run without observed SDK requests reads only as how far it got:
+**Working on it**, **Finished a step**, **A step failed**, or
+**Step interrupted**.
 People never see that the agent works in code: no surface names `ExecuteCode`,
 shows a program or its JSON, or words a step as code, scripts, the SDK or
 requests. `DescribeCodeTools`, `ReadCodeDocs`, `SearchTools` and `LoadTools`

@@ -1,8 +1,8 @@
 import { queryClient } from '@queries/client';
 import { useMutationState } from '@tanstack/solid-query';
 import { createMemo } from 'solid-js';
-import type { EntityData } from '../../entity/types/entity';
 import type { EntityAppearance } from '../core/appearance';
+import type { AppearanceEntity } from '../types';
 
 export const ENTITY_APPEARANCE_MUTATION_KEY = [
   'entity-appearance',
@@ -10,7 +10,7 @@ export const ENTITY_APPEARANCE_MUTATION_KEY = [
 ] as const;
 
 export type AppearanceMutationVariables = {
-  entity: EntityData;
+  entity: AppearanceEntity;
   appearance: EntityAppearance;
   isCurrent: () => boolean;
   retainAfterSave?: boolean;

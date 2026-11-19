@@ -195,6 +195,7 @@ const SENDS: &[(&str, &str)] = &[
     ("PUT", "/channels/{id}/profile_picture"),
     ("POST", "/databases/webhooks/{id}"),
     ("PUT", "/crm/email-privacy"),
+    ("PUT", "/crm/email-privacy/policy"),
     ("POST", "/team/auto-join-domain/toggle"),
     ("PUT", "/scheduling/links/{id}"),
     ("PUT", "/scheduling/settings"),
@@ -229,6 +230,8 @@ const GENERATION_WRITES: &[(&str, &str)] = &[
 /// Reads the SDK sends as POST (batch lookups, search); the harness checks
 /// this list against the SDK's operation catalog.
 pub const POST_READS: &[(&str, &str)] = &[
+    ("POST", "/crm/email-privacy/policy/validate"),
+    ("POST", "/crm/email-privacy/policy/preview"),
     ("POST", "/agent-sessions/preview"),
     ("POST", "/github_pull_requests/mergeability"),
     ("POST", "/team/invite-link/team"),

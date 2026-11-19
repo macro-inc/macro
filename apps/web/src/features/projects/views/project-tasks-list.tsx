@@ -77,7 +77,7 @@ export function ProjectTasksList(props: ProjectTasksListProps) {
 function ProjectTasksListBody(props: ProjectTasksListProps) {
   const { state, setState } = useTasksView();
   return (
-    <div class="flex size-full min-h-0 flex-col">
+    <div class="flex size-full min-h-0 flex-col touch:pt-(--mobile-content-inset-top) touch:[&>*]:[--mobile-content-inset-top:0px]">
       <div class="flex h-12 min-w-0 shrink-0 items-center gap-3 overflow-x-auto scrollbar-hidden px-4 py-2">
         <ProjectTaskSearch
           projectName={props.projectName}
@@ -85,7 +85,7 @@ function ProjectTasksListBody(props: ProjectTasksListProps) {
           onValueChange={(search) => setState('search', search)}
         />
         <div class="ml-auto flex shrink-0 items-center gap-2">
-          <TasksControls />
+          <TasksControls inline />
           {props.addTasksAction}
           <NewProjectTask onCreateTask={props.onCreateTask} />
         </div>

@@ -631,8 +631,17 @@ pub async fn run() -> anyhow::Result<()> {
             matches!(config.environment, Environment::Local),
         )?
         .with_owner_approvals(Arc::clone(&tool_approvals))
+        // Each account's MCP exchanges are paced per upstream, after
+        // approvals, and a 429 is retried after its Retry-After.
         .with_actor_mcp(Arc::new(
-            agent_egress::outbound::actor_mcp::HttpActorMcpTransport::new(mcp_address_policy)?,
+            agent_egress::outbound::budgeted_mcp::BudgetedMcpTransport::new(
+                Arc::new(
+                    agent_egress::outbound::actor_mcp::HttpActorMcpTransport::new(
+                        mcp_address_policy,
+                    )?,
+                ),
+                agent_egress::outbound::budgeted_mcp::BudgetPolicy::DEFAULT,
+            ),
         )),
     );
 
@@ -1423,6 +1432,7 @@ pub async fn run() -> anyhow::Result<()> {
             pool.clone(),
         )),
         Arc::clone(&notifications),
+        redis.clone(),
     )
     .await?;
     let brains: Arc<dyn anthropic_gateway::brain::BrainAuthenticator> = Arc::new(
@@ -1501,6 +1511,12 @@ pub async fn run() -> anyhow::Result<()> {
                 ),
                 harnessd: harnessd.clone(),
             },
+            hosted_runtimes::outbound::pg::PgEffectSignals::listen(
+                pool.clone(),
+                &computer_tasks,
+                service_shutdown.clone(),
+            )
+            .await,
             &computer_tasks,
             service_shutdown.clone(),
         );
@@ -1592,9 +1608,12 @@ pub async fn run() -> anyhow::Result<()> {
             sessions,
             containers,
             announcer,
-            HarnessKeyedConnections::new(
-                PgHarnessBindings::new(pool.clone()),
-                Arc::clone(&runtimes),
+            computers::wake::WakingConnections::new(
+                HarnessKeyedConnections::new(
+                    PgHarnessBindings::new(pool.clone()),
+                    Arc::clone(&runtimes),
+                ),
+                computer_operator.clone(),
             ),
             prompt_context,
             prompt_composer,
@@ -1755,8 +1774,25 @@ pub async fn run() -> anyhow::Result<()> {
     let runtime_command_redis = redis.clone();
     let runtime_command_harness = harness.clone();
     let runtime_command_runtimes = Arc::clone(&runtimes);
+    // The replica holding an agent computer's socket issues its agent's
+    // environment; it never crosses the runtime bus. The authentication
+    // service checks its own internal key, not ours. Only a deployment that
+    // drives a fleet hands agents over, so nothing here can fail startup
+    // without one.
+    let runtime_command_agents: Option<
+        Arc<dyn hosted_runtimes::domain::agent::AgentEnrollmentSource>,
+    > = match &computer_operator {
+        Some(_) => Some(Arc::new(
+            computers::agent_enrollment::AuthAgentEnrollment::new(
+                config.authentication_service_secret_key.as_ref(),
+            )?,
+        )),
+        None => None,
+    };
     let (runtime_commands_ready, mut runtime_commands_readiness) =
         tokio::sync::watch::channel(false);
+    // Outside the retry: a resubscription must not forget what was issued.
+    let runtime_command_issued = Arc::new(runtime_commands::IssuedAgents::default());
     let runtime_commands = tokio::spawn(async move {
         let result = Retry::start(
             FixedInterval::new(std::time::Duration::from_secs(1))
@@ -1773,6 +1809,38 @@ pub async fn run() -> anyhow::Result<()> {
                     runtime_command_harness.clone(),
                     runtime_commands_ready.clone(),
                     runtime_command_models.clone(),
+                    {
+                        let runtimes = Arc::clone(&runtime_command_runtimes);
+                        let agents = runtime_command_agents.clone();
+                        let issued = Arc::clone(&runtime_command_issued);
+                        Arc::new(move |request| {
+                            let Some(agents) = agents.clone() else {
+                                tracing::warn!(computer_id = %request.computer_id,
+                                    "an agent hand-off reached a deployment without a fleet; ignoring it");
+                                return Box::pin(async {});
+                            };
+                            let connection_of = {
+                                let runtimes = Arc::clone(&runtimes);
+                                Arc::new(move |harness| runtimes.connection_of(harness))
+                            };
+                            let send: runtime_commands::SendAgent = {
+                                let runtimes = Arc::clone(&runtimes);
+                                Arc::new(move |harness, environment| {
+                                    let runtimes = Arc::clone(&runtimes);
+                                    Box::pin(async move {
+                                        runtimes.apply_agent(harness, environment).await
+                                    })
+                                })
+                            };
+                            Box::pin(runtime_commands::deliver_agent_to_runtime(
+                                request,
+                                agents,
+                                Arc::clone(&issued),
+                                connection_of,
+                                send,
+                            ))
+                        })
+                    },
                 )
             },
         )
@@ -1940,7 +2008,8 @@ pub async fn run() -> anyhow::Result<()> {
         feature_flags
             .clone()
             .map(hosted_runtimes::domain::rollout::ComputerRollout::new)
-            .unwrap_or_default(),
+            .unwrap_or_default()
+            .with_allowlist(config.computer_rollout_allowlist()?),
         hosted_runtimes::domain::models::FleetAttachment::from_operator_present(
             computer_operator.is_some(),
         ),
@@ -2156,7 +2225,13 @@ pub async fn run() -> anyhow::Result<()> {
             .with_routine_sessions(routine_sessions)
             .with_conversations(conversations)
             .with_coding_agents(coding_agents)
-            .with_claude_access(computer_claude)
+            .with_claude_access(match &computer_operator {
+                Some(operator) => computer_claude.merge(computers::moves::router(
+                    Arc::clone(operator),
+                    MacroAuthorizationState::new(Arc::new(authorization_service.clone())),
+                )),
+                None => computer_claude,
+            })
             .with_capabilities(capabilities)
             .with_voices(voices)
             .with_mode_choice(mode_choice)

@@ -6,7 +6,7 @@ elsewhere	document_storage_service GET /reminders/email/{thread_id}	both		crates
 elsewhere	document_storage_service POST /items/soup/ast	both		crates/soup/src/inbound/axum_router.rs:818
 elsewhere	document_storage_service POST /properties/entities/{entity_type}/{entity_id}/{property_id}/options/{option_id}	both		crates/properties/src/inbound/axum_router.rs:182
 elsewhere	document_storage_service POST /properties/tags	both		crates/properties/src/inbound/axum_router.rs:157
-elsewhere	document_storage_service POST /search	both		services/document_storage_service/src/api.rs:243
+elsewhere	document_storage_service POST /search	both		services/document_storage_service/src/api.rs:294
 elsewhere	document_storage_service PUT /properties/entities/{entity_type}/{entity_id}/{property_id}	both		crates/properties/src/inbound/axum_router.rs:177
 elsewhere	document_storage_service PUT /reminders/email/{thread_id}	both		crates/reminders/src/inbound/axum_router.rs:88
 gateway	refresh_email:Backfill	gmail	/event=backfill	crates/models_email/src/email/api/refresh.rs:23
@@ -80,15 +80,15 @@ http	GET /email/threads/previews/cursor/{view}	both		crates/email/src/inbound/ax
 http	GET /email/threads/{id}/messages	both		services/email_service/src/api/email/threads.rs:23
 http	GET /email/threads/{id}/operations	both		crates/email/src/inbound/axum/thread_labels_router.rs:111
 http	GET /email/threads/{thread_id}	both		crates/email/src/inbound/axum/get_thread_router.rs:62
-http	GET /email/threads/{thread_id}/calendar-invitations	both		services/email_service/src/api.rs:91
-http	GET /email/threads/{thread_id}/read-receipts	both		services/email_service/src/api.rs:103
+http	GET /email/threads/{thread_id}/calendar-invitations	both		services/email_service/src/api.rs:119
+http	GET /email/threads/{thread_id}/read-receipts	both		services/email_service/src/api.rs:131
 http	GET /health	both		services/email_service/src/api/health.rs:18
 http	GET /internal/backfill/provider/gmail/{id}	gmail		services/email_service/src/api/internal.rs:30
 http	GET /internal/messages/{id}	both		services/email_service/src/api/internal.rs:17
 http	GET /internal/recent_messages/{user_id}	both		services/email_service/src/api/internal.rs:33
 http	GET /internal/threads/{id}/messages	both		services/email_service/src/api/internal.rs:24
 http	GET /internal/threads/{id}/owner	both		services/email_service/src/api/internal.rs:32
-http	GET /opens/{token}	both		services/email_service/src/api.rs:108
+http	GET /opens/{token}	both		services/email_service/src/api.rs:136
 http	PATCH /email/messages/labels	both		services/email_service/src/api/email/messages.rs:21
 http	PATCH /email/settings	both		services/email_service/src/api/email/settings.rs:13
 http	PATCH /email/threads/archived	both		services/email_service/src/api/email/threads.rs:26
@@ -96,7 +96,7 @@ http	PATCH /email/threads/{id}/archived	both		services/email_service/src/api/ema
 http	PATCH /email/threads/{id}/labels	both		crates/email/src/inbound/axum/thread_labels_router.rs:115
 http	PATCH /email/threads/{id}/state	both		crates/email/src/inbound/axum/thread_labels_router.rs:119
 http	PATCH /email/threads/{thread_id}/project	both		crates/email/src/inbound/axum/thread_project_router.rs:91
-http	POST /email/calendar-events/{event_id}/forward	both		services/email_service/src/api.rs:99
+http	POST /email/calendar-events/{event_id}/forward	both		services/email_service/src/api.rs:127
 http	POST /email/contacts/block	both		services/email_service/src/api/email/contacts.rs:13
 http	POST /email/contacts/unblock	both		services/email_service/src/api/email/contacts.rs:20
 http	POST /email/draft-transfers/{id}/recover	both		services/email_service/src/api/email.rs:25
@@ -114,7 +114,7 @@ http	POST /email/messages	both		crates/email/src/inbound/axum/send_router.rs:33
 http	POST /email/messages/batch	both		services/email_service/src/api/email/messages.rs:22
 http	POST /email/settings/import-signature	gmail		services/email_service/src/api/email/settings.rs:14
 http	POST /email/threads/{id}/seen	both		services/email_service/src/api/email/threads.rs:24
-http	POST /email/threads/{thread_id}/messages/{message_id}/calendar-invitations/{invitation_id}/copy	both		services/email_service/src/api.rs:95
+http	POST /email/threads/{thread_id}/messages/{message_id}/calendar-invitations/{invitation_id}/copy	both		services/email_service/src/api.rs:123
 http	POST /gmail/webhook	gmail		services/email_service/src/api/gmail.rs:8
 http	POST /internal/backfill/provider/gmail	gmail		services/email_service/src/api/internal.rs:28
 http	POST /internal/messages/batch	both		services/email_service/src/api/internal.rs:18
@@ -149,17 +149,19 @@ lambda	user_link_cleanup_handler	both		services/user_link_cleanup_handler/src/ma
 loop	backfill_outbox::run	both		services/email_service/src/backfill_outbox.rs:7
 loop	crm_enrichment_worker::run	both		services/email_service/src/crm_enrichment_worker.rs:13
 loop	email_policy_worker::run	both		services/email_service/src/email_policy_worker.rs:5
-loop	mailbox_sync_worker::run	both		services/email_service/src/mailbox_sync_worker.rs:19
-loop	mailbox_sync_worker::run_attachment_cleanup	both		services/email_service/src/mailbox_sync_worker.rs:227
-loop	mailbox_sync_worker::run_commands	both		services/email_service/src/mailbox_sync_worker.rs:211
-loop	mailbox_sync_worker::run_contacts	both		services/email_service/src/mailbox_sync_worker.rs:143
-loop	mailbox_sync_worker::run_drafts	both		services/email_service/src/mailbox_sync_worker.rs:170
-loop	mailbox_sync_worker::run_health	both		services/email_service/src/mailbox_sync_worker.rs:78
-loop	mailbox_sync_worker::run_lifecycle	both		services/email_service/src/mailbox_sync_worker.rs:116
-loop	mailbox_sync_worker::run_projections	both		services/email_service/src/mailbox_sync_worker.rs:187
-loop	mailbox_sync_worker::run_settings	both		services/email_service/src/mailbox_sync_worker.rs:249
-loop	mailbox_sync_worker::run_transfers	both		services/email_service/src/mailbox_sync_worker.rs:280
-loop	mailbox_sync_worker::run_watches	both		services/email_service/src/mailbox_sync_worker.rs:264
+loop	email_policy_worker::run_previews	both		services/email_service/src/email_policy_worker.rs:25
+loop	mailbox_sync_worker::run	both		services/email_service/src/mailbox_sync_worker.rs:38
+loop	mailbox_sync_worker::run_attachment_cleanup	both		services/email_service/src/mailbox_sync_worker.rs:316
+loop	mailbox_sync_worker::run_commands	both		services/email_service/src/mailbox_sync_worker.rs:300
+loop	mailbox_sync_worker::run_contacts	both		services/email_service/src/mailbox_sync_worker.rs:232
+loop	mailbox_sync_worker::run_drafts	both		services/email_service/src/mailbox_sync_worker.rs:259
+loop	mailbox_sync_worker::run_health	both		services/email_service/src/mailbox_sync_worker.rs:167
+loop	mailbox_sync_worker::run_lifecycle	both		services/email_service/src/mailbox_sync_worker.rs:205
+loop	mailbox_sync_worker::run_live_import_pass	both		services/email_service/src/mailbox_sync_worker.rs:75
+loop	mailbox_sync_worker::run_projections	both		services/email_service/src/mailbox_sync_worker.rs:276
+loop	mailbox_sync_worker::run_settings	both		services/email_service/src/mailbox_sync_worker.rs:338
+loop	mailbox_sync_worker::run_transfers	both		services/email_service/src/mailbox_sync_worker.rs:369
+loop	mailbox_sync_worker::run_watches	both		services/email_service/src/mailbox_sync_worker.rs:353
 provider	gmail:calendarList.list	gmail		crates/gmail_emulator/src/fault.rs:131
 provider	gmail:channels.stop	gmail		crates/gmail_emulator/src/fault.rs:158
 provider	gmail:drafts.create	gmail		crates/gmail_emulator/src/fault.rs:86
@@ -313,7 +315,7 @@ tool	ListLabels	both		crates/email/src/inbound/toolset/list_labels.rs:88
 tool	SendConfirmedEmail	both		crates/email/src/inbound/toolset/send_confirmed_email.rs:48
 tool	SendEmail	both		crates/email/src/inbound/toolset/send_email.rs:59
 tool	SetSenderPolicy	both		crates/email/src/inbound/toolset/set_sender_policy.rs:56
-tool	UpdateThreadLabels	both		crates/email/src/inbound/toolset/update_thread_labels.rs:51
+tool	UpdateThreadLabels	both		crates/email/src/inbound/toolset/update_thread_labels.rs:53
 webhook	outlook:change	outlook		services/email_service/src/api/outlook.rs:67
 webhook	outlook:lifecycle:missed	outlook		services/email_service/src/api/outlook.rs:68
 webhook	outlook:lifecycle:reauthorizationRequired	outlook		services/email_service/src/api/outlook.rs:70

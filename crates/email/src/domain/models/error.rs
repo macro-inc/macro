@@ -11,6 +11,10 @@ pub enum EmailErr {
     /// A send snapshot is invalid or its attachments have changed.
     #[error("Invalid send snapshot: {0}")]
     InvalidSendSnapshot(String),
+    /// Live selected-rule expansion could not be completed within its budget.
+    #[cfg(feature = "ports")]
+    #[error(transparent)]
+    EmailRuleLimitExceeded(#[from] crm::domain::email_rule_discovery::EmailRuleLimitExceeded),
     /// A repository/infrastructure error.
     #[error(transparent)]
     RepoErr(#[from] anyhow::Error),

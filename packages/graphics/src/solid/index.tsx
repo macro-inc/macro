@@ -171,6 +171,11 @@ export function GraphicsSurface(props: {
     () => projection.session().transform?.nodes ?? emptyOverrides
   );
   const cameraScale = createMemo(() => projection.camera().scale);
+  // A surface that leaves one finger to the page lets it pan and scroll on;
+  // otherwise every touch is the canvas's.
+  const yieldsToPage = () => props.input?.yieldToPage?.();
+  const touchAction = () => (yieldsToPage() ? 'pan-x pan-y' : 'none');
+  const overscroll = () => (yieldsToPage() ? 'auto' : 'contain');
   const selected = createMemo(
     () => roots(scene(), projection.session().selectedIds),
     undefined,
@@ -330,12 +335,8 @@ export function GraphicsSurface(props: {
         overflow: 'hidden',
         width: '100%',
         height: '100%',
-        // A surface that leaves one finger to the page lets it pan and
-        // scroll on; otherwise every touch is the canvas's.
-        'touch-action': props.input?.yieldToPage?.() ? 'pan-x pan-y' : 'none',
-        'overscroll-behavior': props.input?.yieldToPage?.()
-          ? 'auto'
-          : 'contain',
+        'touch-action': touchAction(),
+        'overscroll-behavior': overscroll(),
         'user-select': 'none',
         cursor: isShapeKind(props.input?.tool?.())
           ? 'crosshair'

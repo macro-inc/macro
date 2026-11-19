@@ -15,9 +15,17 @@ import { homedir, tmpdir } from 'node:os';
 import { join, resolve } from 'node:path';
 import { parseArgs } from 'node:util';
 import { Device } from './device';
-import { launchFresh, measureStep, prepare, sleep } from './harness';
-import { SCENARIOS, type Targets } from './scenarios';
+import {
+  launchFresh,
+  measureStep,
+  prepare,
+  sleep,
+  waitForBootFlow,
+} from './harness';
+import { SCENARIOS } from './scenarios';
 import { summarize } from './stats';
+import { parseTargets } from './targets';
+import { parseCpuThrottle } from './throttle';
 
 const { values: options } = parseArgs({
   options: {
@@ -31,6 +39,7 @@ const { values: options } = parseArgs({
     },
     out: { type: 'string', default: 'android-benchmark-results' },
     port: { type: 'string', default: '9333' },
+    'cpu-throttle': { type: 'string', default: '1' },
     // Keeps each recording; it shows real account content, so never commit it.
     keep: { type: 'boolean', default: false },
   },
@@ -40,15 +49,26 @@ if (!options.serial) {
   process.exit(2);
 }
 
+let cpuThrottle: number;
+try {
+  const rates = parseCpuThrottle(options['cpu-throttle']);
+  if (rates.length > 1) throw new Error('--cpu-throttle takes one rate here');
+  cpuThrottle = rates[0];
+} catch (error) {
+  console.error((error as Error).message);
+  process.exit(2);
+}
+
 const FFMPEG = process.env.FFMPEG ?? 'ffmpeg';
 /** Frames are compared at 1/8 of the screen's resolution, in grey. */
 const SCALE = 8;
 const REMOTE = '/sdcard/macro-benchmark.mp4';
 
 const device = new Device(options.serial);
-const targets = JSON.parse(
-  await readFile(options.targets, 'utf8').catch(() => '{}')
-) as Targets;
+const targetsFile = parseTargets(
+  await readFile(options.targets, 'utf8').catch(() => '{}'),
+  options.targets
+);
 const scenarioId = Object.keys(SCENARIOS).find((id) =>
   SCENARIOS[id].steps?.some((step) => step.id === options.step)
 );
@@ -173,10 +193,12 @@ const height = Math.round(Number(size?.[2] ?? 2400) / SCALE);
 const rows: { iteration: number; spanMs: number; visualMs: number | undefined }[] = [];
 try {
   for (let iteration = 0; iteration < Number(options.iterations); iteration++) {
-    const { session } = await launchFresh(device, Number(options.port));
+    const { session, launched } = await launchFresh(device, Number(options.port));
     try {
+      await session.throttleCpu(cpuThrottle);
+      await waitForBootFlow(session, launched);
       await sleep(5000);
-      await prepare(session, scenario, targets, 3000);
+      const { targets } = await prepare(session, scenario, targetsFile, 3000);
       // Cold: the steps before this one. Warm: those, this one, and then a
       // step that leaves it (its back step, or another view).
       const leave = steps[stepIndex + 1] ?? steps.find((_, index) => index !== stepIndex);
@@ -226,10 +248,10 @@ const span = summarize(paired.map((row) => row.spanMs));
 const screen = summarize(paired.map((row) => row.visualMs ?? 0));
 const gap = summarize(paired.map((row) => (row.visualMs ?? 0) - row.spanMs));
 console.log(
-  `${options.step} (${options.variant}), n=${paired.length}: span median ${Math.round(span.median)} ms, screen median ${Math.round(screen.median)} ms, screen − span median ${Math.round(gap.median)} ms (min ${Math.round(gap.min)}, max ${Math.round(gap.max)})`
+  `${options.step} (${options.variant}, CPU throttle ${cpuThrottle}×), n=${paired.length}: span median ${Math.round(span.median)} ms, screen median ${Math.round(screen.median)} ms, screen − span median ${Math.round(gap.median)} ms (min ${Math.round(gap.min)}, max ${Math.round(gap.max)})`
 );
 await mkdir(resolve(options.out), { recursive: true });
-const file = resolve(options.out, `visual-${options.step}-${Date.now()}.json`);
-await writeFile(file, `${JSON.stringify({ step: options.step, variant: options.variant, rows }, null, 2)}\n`);
+const file = resolve(options.out, `visual-${options.step}-${Date.now()}-cpu${cpuThrottle}x.json`);
+await writeFile(file, `${JSON.stringify({ step: options.step, variant: options.variant, cpuThrottle, rows }, null, 2)}\n`);
 console.log(`Results: ${file}`);
 process.exit(0);

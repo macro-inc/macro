@@ -23,7 +23,8 @@ to the browser via `inbound/wasm`.
   and deduplicate attachments by URI during replay.
 - `src/domain/model/segment/code_execution.rs`: how code-mode calls read in
   conversations, independent of harness: internal code receipts expand into
-  SDK activity rows, a run without them reads as work in the workspace, and the
+  SDK activity rows, a run without them says only how far it got (its receipt's
+  status marks a failed or cancelled program), and the
   agent's tool lookups (`DescribeCodeTools`, `ReadCodeDocs`, `SearchTools`,
   `LoadTools`) belong to no segment. People never see code wording.
 - `src/domain/model.rs`: the renderable vocabulary (`FoldedMessage`,
@@ -65,6 +66,14 @@ to the browser via `inbound/wasm`.
   --bin agent_fold_types` to regenerate the TypeScript contract.
 - Debug a fold against a recorded session: `cargo run -p agent_fold --bin
   fold_jsonl -- <path>.jsonl`.
+
+`FoldedMessage::readable_text` flattens everything a reader can open, for
+session reads (`ReadAgentSession`); `searchable_text` keeps only what the
+collapsed transcript shows, for the search index: no thoughts, no work inside
+tool calls, no question forms or answers, no error text behind a disclosure,
+and no `<m-agent-context>` block a prompt hides (`stripAgentContext`). A new
+part, tool kind or widget decides both in `domain/model/search.rs`, by what
+its component shows before it is expanded.
 
 `FoldedMessage::last_text` supplies the same terminal prose to live lifecycle
 signals and harness recovery from a persisted log. Keep these interpretations

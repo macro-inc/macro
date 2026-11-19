@@ -202,6 +202,21 @@ trace covers an email event from its Kafka publish to the browser's read:
 | `connection_gateway.websocket_send` | The frame leaving the gateway. |
 | `email.focus.refresh` | The browser's read after a push, joined through the push's `traceparent`. A read after a reconnect starts its own trace. `email.focus.threads` is the list's size. |
 
+Backfills have their own traces. Every minute `email_focus.enrollment_scan`
+reads each connected inbox's place in the rollout (`inboxes`, `enrolled`,
+`unknown`). An enrolled inbox the worker hasn't filled since it started gets
+`email_focus.backfill` (`link_id`, `candidates`, `classified`,
+`stopped_early`) twice: its last 3 days, then the window, with a
+`classify_thread` child per thread (its mail reads, `jev.evaluate` and `save`). The log line
+"focus backfill pass finished" carries `pass`, `waited_secs` (found to started),
+`took_secs` and `since_found_secs`, the time from being found to the pass's end.
+
+The rollout's numbers are CloudWatch metrics, not spans: the worker publishes
+`Macro/EmailFocus` once a minute under `email_focus.metrics_publish`, whose log
+line "focus usage this minute" carries that minute's tokens and dollars. The
+**Email Focus rollout** Grafana dashboard draws them; see
+[the runbook](../runbooks/email-focus.md).
+
 ## Contact searches
 
 Contact pickers read directory pages as they scroll, and read on by themselves
@@ -378,7 +393,7 @@ Attributes every perf trace carries, set by the owners (`ui-operation.ts`,
 | Flow roots | `flow.phase_count` (child spans opened), `flow.ready_phase_count` (`usePending` phases already loaded when reached) |
 | Phases | `flow.root` (the root's name), `route.id` (the nearest view's), `flow.outcome` (`success` or `cancelled`) |
 | A phase's parent | `<phase>.waited`: `false` when it was already loaded (cache or an earlier load), `true` when the flow waited for it |
-| Resource (Datadog tags and facets) | `service.name=web-app`, `service.version` (Datadog `version`), `deployment.environment` (Datadog `env`), `app.runtime` (`browser`, `tauri`), `app.platform` (`web`, `desktop`, `ios`, `android`), `os.type` (`darwin`, `windows`, `linux`, `ios`, `android`, `chromeos`, `unknown`), `frontend_instance_id` |
+| Resource (Datadog tags and facets) | `service.name=web-app`, `service.version` (Datadog `version`), `deployment.environment` (Datadog `env`), `app.runtime` (`browser`, `tauri`), `app.platform` (`web`, `desktop`, `ios`, `android`), `os.type` (`darwin`, `windows`, `linux`, `ios`, `android`, `chromeos`, `unknown`), `frontend_instance_id`; native apps add `macro.native.version` (the marketing version, `2.5.0` on every Android build) and `macro.native.build`, the installed binary's build number (Android versionCode, iOS CFBundleVersion, desktop release build), absent when the binary can't report it. `service.version` names the web bundle, which reaches old binaries over the air: split native builds by `macro.native.build` |
 
 Entity context is opaque ids and categories only, on the phase that loads the
 entity (`block.type` and `document.id` on `block.data`, `channel.id`,
@@ -505,7 +520,14 @@ Phases you will see:
   waited on after typing.
   `search.engine_restarted` is true when the cache engine was replaced while
   the search was pending, which is a search issued in the restart window after
-  returning to the tab.
+  returning to the tab. A failed search names its cause in
+  `search.failure_kind` (the cache's rejection code such as
+  `owner-handoff-blocked` or `owner-epoch-lost`, otherwise the cache error
+  class such as `timeout`, the host's 10 s read timeout) and the step that
+  gave up in `search.failure_phase` (`search_page` or `materialize`).
+  `search.buckets` names the list: `channel,dm,chat,document,note,project,task`
+  is the Soup local search pool behind the Home, Drive, Tasks, Soup view and
+  universal input searches, not Command-K.
   Only query lengths and counts are recorded. `email.drafts.discover` is
   event-driven local draft discovery, coalescing same-microtask notifications.
 - Preloading: block intent records `block.preload` with parallel

@@ -48,6 +48,10 @@ pub trait FocusStore: Send + Sync + 'static {
         &self,
     ) -> impl Future<Output = Result<Vec<FocusInboxOwner>, Report>> + Send;
 
+    /// Every inbox whose mail is syncing, with its owner: where an owner who
+    /// joins the rollout is found before any mail of theirs arrives.
+    fn syncing_inboxes(&self) -> impl Future<Output = Result<Vec<FocusInboxOwner>, Report>> + Send;
+
     /// The owner's Focus threads still in the inbox with mail since `since`,
     /// newest first by latest message time, in either direction. Threads whose
     /// owner has been awaiting a reply since at or before `waiting_before` count,

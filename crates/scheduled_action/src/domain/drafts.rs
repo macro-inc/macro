@@ -1068,7 +1068,7 @@ Follow the routines guide, which every session follows when it sets up a routine
 
 For this draft:
 
-1. You can't ask them anything. When no item has the name the words use, or several do, leave it out (no `entities`, or an empty knob) and they will pick it before saving.
+1. You can't ask them anything. When no item has the name the words use, or several do, leave it out (no `entities`, or an entity knob with `value: null`) and they will pick it before saving.
 
 2. Don't create the routine itself, run it or test it: you hand it back for them to review.
 
@@ -1076,7 +1076,7 @@ For this draft:
 
 {steps}
 
-4. Hand it back by checking it: `await macro.routines.check(routine, {{ created }})`, where `created` lists the handles of everything you created for it (empty when you created nothing). The check saves nothing and returns `ok`, `problems` and the code `steps` that don't type-check. Every check is taken as your answer, the last one winning: only ever check the whole routine you mean to hand back, never a test, a part of it or a variant without the items you found. Fix what it reports and check the whole routine again until `ok` is true. A code step's `main` takes `StepContext`: `export async function main({{ macro, trigger }}: StepContext)`. As soon as a check passes, stop with one short line."
+4. Hand it back by checking it: `await macro.routines.check(routine, {{ created }})`, where `created` lists the handles of everything you created for it (empty when you created nothing). The check saves nothing and returns `ok`, `problems` and the code `steps` that don't type-check. Every check is taken as your answer, the last one winning: only ever check the whole routine you mean to hand back, never a test, a part of it or a variant without the items you found. Fix what it reports and check the whole routine again until `ok` is true, or all it reports is an item for them to pick. A code step's `main` takes `StepContext`: `export async function main({{ macro, trigger }}: StepContext)`. As soon as a check passes, stop with one short line."
     ))
 }
 
@@ -1128,7 +1128,7 @@ fn task(request: &DraftRequest, program: &[Step], code: bool) -> Result<String, 
     })
 }
 
-/// Macro's catalog routines that are code, as worked examples of whole
+/// Macro's catalog routines marked `example`, as worked examples of whole
 /// routines: what someone asked for, and the trigger and step that do it.
 /// Their code type-checks against the SDK (the harness's real-Deno tests).
 fn catalog_examples(conditions: bool) -> String {
@@ -1136,6 +1136,7 @@ fn catalog_examples(conditions: bool) -> String {
         .iter()
         // A routine whose trigger asks a condition is no example where
         // triggers can't.
+        .filter(|routine| routine.example)
         .filter(|routine| conditions || !asks_condition(&routine.trigger))
         .filter_map(|routine| {
             let step = serde_json::to_value(Step::Code(routine.code.clone()?)).ok()?;

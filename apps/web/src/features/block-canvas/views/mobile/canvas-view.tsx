@@ -4,7 +4,7 @@ import { isMobile } from '@core/mobile/isMobile';
 import { fireAndForget } from '@core/util/fireAndForget';
 import { selectAllCommand } from '@macro-inc/graphics';
 import { createElementSize } from '@solid-primitives/resize-observer';
-import { createSignal, type JSX, Show } from 'solid-js';
+import { createSignal, type JSX, onCleanup, Show } from 'solid-js';
 import { onKeyboardClosed } from '../../primitives/on-keyboard-closed';
 import {
   CanvasViewParts,
@@ -211,8 +211,43 @@ function MobileCanvasLayout() {
     return (point: { x: number; y: number }) => {
       hapticImpact('medium');
       view.selectAt(point.x, point.y, LONG_PRESS_REACH);
+      setPressedInside(itemInsideSelectedGroup(point));
       setActions('long-press');
     };
+  };
+  // The switch for keeping a tool lives in this view's sheet. A device that
+  // turns into a desktop takes the other view, which has no way to switch it
+  // off, so the lock does not go with it.
+  onCleanup(() => state.setToolLocked(false));
+
+  // A pen that presses the canvas takes over the drawing; the view sheet then
+  // offers to give it back to fingers. Heard at the window: the Text tool
+  // stops its press before it reaches the scene.
+  let scene: HTMLDivElement | undefined;
+  const penPressed = (event: PointerEvent) => {
+    if (
+      event.pointerType === 'pen' &&
+      event.target instanceof Node &&
+      scene?.contains(event.target)
+    )
+      state.penPressed();
+  };
+  window.addEventListener('pointerdown', penPressed, true);
+  onCleanup(() => window.removeEventListener('pointerdown', penPressed, true));
+
+  // The item a long press landed on, when it sits inside the group the press
+  // selected. A finger has no Cmd/Ctrl-click, so the sheet offers to select it.
+  const [pressedInside, setPressedInside] = createSignal<string>();
+  const itemInsideSelectedGroup = (point: { x: number; y: number }) => {
+    const world = view.worldPoint(point.x, point.y);
+    const item = editor.hitTest(world, true, LONG_PRESS_REACH);
+    const outermost = editor.hitTest(world, false, LONG_PRESS_REACH);
+    if (!item || !outermost || item === outermost) return undefined;
+    return state.session().selectedIds.includes(outermost) ? item : undefined;
+  };
+  const selectInside = () => {
+    const item = pressedInside();
+    return item ? () => editor.select(item) : undefined;
   };
 
   // Closing the keyboard ends a text edit: nothing else would, and the text
@@ -222,8 +257,9 @@ function MobileCanvasLayout() {
     const draft = state.text.draft();
     if (!draft) return;
     state.text.finish();
-    state.chooseTool('select');
-    if (editor.document.items[draft.id]) editor.select(draft.id);
+    state.toolDone();
+    if (!state.keepsTool() && editor.document.items[draft.id])
+      editor.select(draft.id);
   };
   // A phone's Done button takes the focus from the text, to nowhere. Focus
   // that moves to the canvas or to a control is that press's business, and it
@@ -271,6 +307,7 @@ function MobileCanvasLayout() {
       {/* The browser's own long-press menu and callout have nothing to offer
           on the scene. Text being edited and an embed keep theirs. */}
       <div
+        ref={scene}
         class="absolute inset-0 select-none [-webkit-touch-callout:none]"
         onContextMenu={(event) => {
           if (state.embeds.active() || state.text.draft()) return;
@@ -278,7 +315,11 @@ function MobileCanvasLayout() {
         }}
         on:focusout={commitTextLeftByKeyboard}
       >
-        <CanvasViewParts.Surface longPress={longPress} touchHandles />
+        <CanvasViewParts.Surface
+          longPress={longPress}
+          touchHandles
+          fingerPans={state.fingersPan}
+        />
       </div>
       <CanvasViewParts.EmptyState />
       <MobileCanvasBottomBar
@@ -287,7 +328,10 @@ function MobileCanvasLayout() {
         styleOpen={styleOpen()}
         onStyle={toggleStyle}
         onView={() => setViewOpen(true)}
-        onMore={() => setActions('more')}
+        onMore={() => {
+          setPressedInside(undefined);
+          setActions('more');
+        }}
       />
       <MobileCanvasInspectorSheet
         open={isMobile() && sheetOpen() && hasSelection()}
@@ -308,6 +352,10 @@ function MobileCanvasLayout() {
           onSnapToObjects: state.setSnapToObjects,
           snapMode: state.snapMode(),
           onSnapMode: state.setSnapMode,
+          toolLocked: state.toolLocked(),
+          onToolLocked: state.setToolLocked,
+          penOnly: state.penSeen() ? state.penOnly() : undefined,
+          onPenOnly: state.setPenOnly,
         }}
       />
       <MobileCanvasActionsSheet
@@ -320,6 +368,7 @@ function MobileCanvasLayout() {
         hasSelection={hasSelection()}
         canGroup={state.canGroup()}
         canUngroup={state.canUngroup()}
+        onSelectInside={selectInside()}
         onCut={() => fireAndForget(props.clipboard.cut(), 'canvas-clipboard')}
         onCopy={props.clipboard.copy}
         onPaste={() =>

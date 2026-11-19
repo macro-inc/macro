@@ -37,6 +37,8 @@ function fromResponse(data: CrmEmailPrivacyResponse): EmailPrivacy {
     ...consentFromResponse(data),
     teamDomains: data.team_domains,
     personalDomains: data.personal_domains,
+    teamDomainWarnings: data.team_domain_warnings ?? {},
+    personalDomainWarnings: data.personal_domain_warnings ?? {},
     canRemoveTeamDomains: data.can_remove_team_domains,
   };
 }

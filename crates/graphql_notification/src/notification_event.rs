@@ -902,7 +902,7 @@ impl GraphqlComputerSetupMetadata {
     async fn failure_reason(&self) -> Option<&str> {
         match &self.0.outcome {
             ComputerSetupOutcome::Ready => None,
-            ComputerSetupOutcome::Failed { failure_reason } => Some(failure_reason),
+            ComputerSetupOutcome::Failed { failure_reason, .. } => Some(failure_reason),
         }
     }
 }

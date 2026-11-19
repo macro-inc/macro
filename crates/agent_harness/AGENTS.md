@@ -187,6 +187,17 @@ the lease. To debug a harness in Datadog, search `@harness:<id>` for
 `@telemetry_event:(harness_runtime_connected OR harness_runtime_disconnected OR
 harness_runtime_lease_restored)`: each carries `connection` and `replica`, and a
 disconnect's `other_live_connections` above 0 is a stale close that changed nothing.
+When recording a dial bound an agent (`HarnessPresence::connected` returns
+`ConnectionRecorded::AgentBound`: a Macro computer gets its first agent on its
+first connect), the registry sends the runtime `ToRuntimeMessage::AgentsChanged`,
+and macrod re-reads its agents and reopens its trigger stream at once instead
+of at its next poll. It goes only to a runtime that listed `agents-changed` in
+the `x-macro-runtime-accepts` dial header (`RuntimeAccepts`, read by
+`inbound/runtime_gateway.rs`), so older runtimes never see it. Presence
+gets the `RuntimeAccepts` too: a Macro computer's macrod that doesn't list
+`apply-agent` can't take `ToRuntimeMessage::ApplyAgent`, so an agent
+teammate's computer fails its start at once (hosted_runtimes
+`Failure::AgentUnsupported`).
 
 Only directly authenticated users with edit access may answer ACP permissions or
 elicitations (`agent_session::ControlEvent::authorized`). Agent runs may deny or

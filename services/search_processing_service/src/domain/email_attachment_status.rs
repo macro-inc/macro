@@ -7,6 +7,7 @@
 //! page so a stopped job can resume, and it stops, without retrying, when the
 //! search index refuses writes.
 
+use super::backfill_gate::BackfillGate;
 use std::{num::NonZeroU32, sync::Arc, time::Duration};
 
 use rootcause::Report;
@@ -153,11 +154,16 @@ fn page_budget(documents: usize, docs_per_second: NonZeroU32) -> Duration {
 pub struct EmailAttachmentStatusBackfill<S, I> {
     source: S,
     index: I,
+    gate: BackfillGate,
 }
 
 impl<S: LinkedDocumentSource, I: EmailAttachmentFlagIndex> EmailAttachmentStatusBackfill<S, I> {
-    pub fn new(source: S, index: I) -> Self {
-        Self { source, index }
+    pub fn new(source: S, index: I, gate: BackfillGate) -> Self {
+        Self {
+            source,
+            index,
+            gate,
+        }
     }
 
     /// Set the flag on every live linked document, page by page, until the
@@ -175,6 +181,11 @@ impl<S: LinkedDocumentSource, I: EmailAttachmentFlagIndex> EmailAttachmentStatus
         let mut read = 0;
 
         while !cancel.is_cancelled() {
+            let permit = tokio::select! {
+                biased;
+                () = cancel.cancelled() => break,
+                permit = self.gate.admit() => permit,
+            };
             let started = Instant::now();
             let Some(page) = self
                 .backfill_page(after_document_id.as_deref(), page_size, progress.job_id())
@@ -182,6 +193,7 @@ impl<S: LinkedDocumentSource, I: EmailAttachmentFlagIndex> EmailAttachmentStatus
             else {
                 break;
             };
+            drop(permit);
 
             progress
                 .record_page(PageProgress {
@@ -202,7 +214,10 @@ impl<S: LinkedDocumentSource, I: EmailAttachmentFlagIndex> EmailAttachmentStatus
             }
         }
 
-        Ok(BackfillReceipt { enqueued: read })
+        Ok(BackfillReceipt {
+            enqueued: read,
+            ..BackfillReceipt::default()
+        })
     }
 
     /// Read one page and set the flag on its live documents. `None` once the

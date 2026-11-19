@@ -516,6 +516,15 @@ where
             .reap_wedged_google_syncs(now - WEDGED_SYNC_STALL_THRESHOLD)
             .await
     }
+
+    /// Turn calendar off for Google accounts whose grant lacks the calendar
+    /// capability, so their stale copy stops reading as current.
+    #[tracing::instrument(skip(self), err)]
+    pub async fn disable_without_capability_once(&self) -> Result<usize, Report> {
+        self.repository
+            .disable_google_accounts_without_calendar_capability()
+            .await
+    }
 }
 
 /// Applies terminal Google Calendar failures that happen before lease claim.
@@ -1049,6 +1058,9 @@ where
                     .await?;
                 self.publish_write_outcome(&outcome);
                 report.team_ooo_changed |= outcome.team_ooo_changed;
+                if outcome.change != CalendarEventChange::Unchanged {
+                    report.events_changed += 1;
+                }
                 report.aligned_copies.extend(outcome.aligned_copies);
                 calendar_count += 1;
             }
@@ -1097,6 +1109,7 @@ where
                     .watch_calendar(
                         access_token,
                         key.email_link_id,
+                        calendar_id,
                         &watch_provider_calendar_id,
                         channel_id,
                         watch,

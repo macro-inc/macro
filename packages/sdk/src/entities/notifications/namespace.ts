@@ -23,11 +23,14 @@ export class NotificationNamespace {
   }
 
   /**
-   * The viewer's notification feed, most recent first, auto-paginated.
+   * The viewer's notification feed, most recent first, auto-paginated; `maxItems` caps the total.
    *
    * @readonly
    */
-  list(opts?: { pageSize?: number }): AsyncGenerator<Notification> {
+  list(opts?: {
+    pageSize?: number;
+    maxItems?: number;
+  }): AsyncGenerator<Notification> {
     return Notification.list(this.client, opts);
   }
 

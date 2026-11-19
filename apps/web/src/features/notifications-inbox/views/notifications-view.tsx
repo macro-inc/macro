@@ -831,7 +831,7 @@ export function NotificationsView(props: NotificationsViewProps) {
 
   const listBody = () => (
     <Switch>
-      <Match when={!filters.showsNothing() && view().t === 'loading'}>
+      <Match when={view().t === 'loading'}>
         <ListSkeleton.Root
           label={t('notificationsInbox.loading')}
           class="touch:pt-(--mobile-content-inset-top)"
@@ -864,14 +864,6 @@ export function NotificationsView(props: NotificationsViewProps) {
             }
           >
             {t('notificationsInbox.tryAgain')}
-          </Button>
-        </ListStatus>
-      </Match>
-      <Match when={filters.showsNothing()}>
-        <ListStatus>
-          <span>{t('notificationsInbox.allHidden')}</span>
-          <Button variant="secondary" size="sm" onClick={filters.reset}>
-            {t('notificationsInbox.resetFilters')}
           </Button>
         </ListStatus>
       </Match>
@@ -957,11 +949,11 @@ export function NotificationsView(props: NotificationsViewProps) {
   );
 
   const filterControls = {
-    isShown: filters.isShown,
+    isSelected: filters.isSelected,
     get activeCount() {
       return filters.activeCount();
     },
-    onShownChange: filters.setShown,
+    onSelectedChange: filters.setSelected,
     onReset: filters.reset,
   };
 

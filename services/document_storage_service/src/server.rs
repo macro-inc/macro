@@ -449,6 +449,9 @@ async fn run_server() -> anyhow::Result<()> {
     )
     .with_thread_exclusion_gate(Arc::new(
         crm::outbound::thread_exclusions::FlaggedThreadExclusions(flags.clone()),
+    ))
+    .with_selective_email_gate(Arc::new(
+        crm::outbound::email_policy::FlaggedSelectiveEmail(flags.clone()),
     ));
     let entity_access_service = Arc::new(
         entity_access::domain::service::EntityAccessServiceImpl::new(
@@ -465,7 +468,9 @@ async fn run_server() -> anyhow::Result<()> {
         macro_service_urls::AuthServiceUrl::new()?.to_string(),
     ));
     let email_service = EmailServiceImpl::new(
-        EmailPgRepo::new(db.clone()),
+        EmailPgRepo::new(db.clone()).with_rule_discovery(Arc::new(
+            crm::outbound::email_rule_discovery::PgEmailRuleDiscovery,
+        )),
         frecency_service.clone(),
         sqs_client.clone(),
         crm_service.clone(),
@@ -488,7 +493,9 @@ async fn run_server() -> anyhow::Result<()> {
     .with_macro_event_broker(macro_event_broker.clone());
     let readonly_email_service = ReadonlyEmailPreviewAdapter(
         EmailServiceImpl::new(
-            EmailPgRepo::new(readonly_db.clone()),
+            EmailPgRepo::new(readonly_db.clone()).with_rule_discovery(Arc::new(
+                crm::outbound::email_rule_discovery::PgEmailRuleDiscovery,
+            )),
             frecency_service.clone(),
             sqs_client.clone(),
             crm_service.clone(),
@@ -521,6 +528,24 @@ async fn run_server() -> anyhow::Result<()> {
                 apns_voip_platform_arn: String::new(),
             },
             realtime: notification::domain::ports::NoopNotificationRealtimePublisher,
+        });
+    // State changes made through GraphQL are published, so every session of
+    // the viewer's hears them.
+    let graphql_notification_writer: Arc<crate::api::context::GraphqlNotificationWriter> =
+        Arc::new(NotificationReaderService {
+            repository: notification::outbound::repository::DbNotificationRepository::new(
+                db.clone(),
+            ),
+            queue: ai_tools::ToolNotificationQueue::Sqs(ingress_queue.clone()),
+            sns_endpoint: ai_tools::NoOpSnsEndpointManager,
+            platform_config: PlatformArnConfig {
+                apns_platform_arn: String::new(),
+                fcm_platform_arn: String::new(),
+                apns_voip_platform_arn: String::new(),
+            },
+            realtime: notification::outbound::kafka_notification_realtime::KafkaNotificationRealtimePublisher::new(
+                macro_event_broker.clone(),
+            ),
         });
     tracing::trace!("initialized notification ingress service");
 
@@ -1069,10 +1094,12 @@ async fn run_server() -> anyhow::Result<()> {
         authorization_state.clone(),
     );
 
-    let (webhook_stream_sender, _) =
-        tokio::sync::broadcast::channel(webhook::domain::stream::WEBHOOK_STREAM_CHANNEL_CAPACITY);
+    let webhook_stream_feed = webhook::domain::stream::StreamFeed::new(
+        webhook::domain::stream::WEBHOOK_STREAM_CHANNEL_CAPACITY,
+        webhook::domain::stream::WEBHOOK_STREAM_REPLAY_CAPACITY,
+    );
     let sse_stream_service = webhook::domain::stream::WebhookEventStreamServiceImpl::new(
-        webhook_stream_sender.clone(),
+        webhook_stream_feed.clone(),
         entity_access_service.clone(),
         webhook_repository.clone(),
         crate::outbound::stream_contacts::ContactsStreamChecker::new(Arc::new(
@@ -1085,7 +1112,7 @@ async fn run_server() -> anyhow::Result<()> {
     );
     consumer_tracker.spawn({
         let brokers = config.kafka_brokers.as_ref().to_string();
-        let sender = webhook_stream_sender;
+        let feed = webhook_stream_feed;
         let workspace_resolver = webhook_repository.clone();
         let cancellation_token = consumer_cancellation_token.clone();
         async move {
@@ -1095,7 +1122,7 @@ async fn run_server() -> anyhow::Result<()> {
                     _ = cancellation_token.cancelled() => break,
                     result = webhook::inbound::kafka_stream_consumer::run_webhook_stream_consumer(
                         &brokers,
-                        &sender,
+                        &feed,
                         &workspace_resolver,
                     ) => result,
                 };
@@ -1950,7 +1977,8 @@ async fn run_server() -> anyhow::Result<()> {
     // mutation metadata include viewer history.
     let primary_entity_soup = Arc::new(
         SoupImpl::new(
-            PgSoupRepo::new(readonly_pool::ReadOnlyPool(db.clone())),
+            PgSoupRepo::new(readonly_pool::ReadOnlyPool(db.clone()))
+                .with_source_items_enabled(config.soup_source_items_enabled),
             frecency_service.clone(),
             service::email_previews::ConsistentEmailPreviewReader::new(
                 ReadonlyEmailPreviewAdapter(email_service.clone()),
@@ -2003,7 +2031,8 @@ async fn run_server() -> anyhow::Result<()> {
     // leg reads the primary. Ordinary inbox lists keep using the replica.
     let soup_service = Arc::new(
         SoupImpl::new(
-            PgSoupRepo::new(readonly_pool::ReadOnlyPool(readonly_db.clone())),
+            PgSoupRepo::new(readonly_pool::ReadOnlyPool(readonly_db.clone()))
+                .with_source_items_enabled(config.soup_source_items_enabled),
             frecency_service,
             service::email_previews::ConsistentEmailPreviewReader::new(
                 ReadonlyEmailPreviewAdapter(email_service.clone()),
@@ -2325,11 +2354,12 @@ async fn run_server() -> anyhow::Result<()> {
                     calendar_events::outbound::notification_notifier::NotificationCalendarJoinRequestNotifier::new(
                         (*notification_ingress_service).clone(),
                     ),
-                    crate::outbound::calendar_refresh::ConnectionGatewayCalendarRefresh::new(
+                    calendar_events::outbound::gateway_refresh::GatewayCalendarRefresh::new(
                         (*conn_gateway_client).clone(),
                         db.clone(),
                         event_broker_tracker.clone(),
-                    ),
+                    )
+                    .with_sends(cfg!(feature = "connection_gateway")),
                 ),
             ),
             authorization_state.clone(),
@@ -2736,6 +2766,7 @@ async fn run_server() -> anyhow::Result<()> {
             db.clone(),
         ),
         graphql_notification_reader,
+        graphql_notification_writer,
         graphql_active_notification_ids_context:
             complete_graph::ActiveNotificationIdsGraphqlContext::new(
                 notification::domain::active_notification_ids::ActiveNotificationIdService::new(

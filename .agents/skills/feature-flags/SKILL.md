@@ -87,6 +87,10 @@ These are the mistakes past flagged launches had to fix:
   `false` and `useFeatureFlag` returns `{ loading: true }`. A cold deep link
   must wait for `loading` to clear rather than fall back to the off path (see
   the Activity route's `flagsLoaded` gate), or the page flashes or degrades.
+  A build that never starts PostHog (no `VITE_POSTHOG_API_KEY`, or the Vite
+  dev server) answers at once, as an unreachable PostHog does: every flag
+  without a `default` or env override reads off, not loading (on for a reader
+  that passes `enabledWhenUnreachable`).
 - **Read reactively** (FE-52): call `isFeatureEnabled` / `useFeatureFlag` inside
   a reactive scope, never snapshot it at mount or module load.
 - **Gate every entry point**: routes, deep links, previews, copy-link,
@@ -112,6 +116,12 @@ and group conditions ignore this override.
   construct `PostHogFeatureFlags` once at the composition root, load one
   `FlagSnapshot` per authenticated user id, and read it synchronously. A failed
   load returns `Err`; the caller decides the fallback, explicitly. Wire the adapter and its config at the consuming service composition root.
+- **A flag checked per event or per row** (thousands of loads an hour) uses
+  `PostHogLocalFeatureFlags` instead: it polls the named flags' definitions
+  with a project secret key (a second Doppler key) and evaluates them in
+  memory. Keep such a flag's conditions to what it supports (person `email`,
+  `distinct_id` or `environment`, a rollout percentage); anything else fails
+  every load.
 - **Every backend rollout or feature gate**, per user or for everyone, is a
   `crates/feature_flags` flag, never a `MacroConfig`/Doppler boolean.
   `MacroConfig` holds real environment configuration (endpoints, credentials,

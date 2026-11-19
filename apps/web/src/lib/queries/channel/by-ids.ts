@@ -35,9 +35,14 @@ export function channelsByIdsQueryArgs(
   };
 }
 
-/** Keep each channel list's bounded unread and mention projections current, including cached rows. */
+/**
+ * Keep each channel list's bounded unread and mention projections current,
+ * including cached rows. A list given `channelTypes` also waits for a new
+ * channel of those types to reach its first page.
+ */
 export function registerChannelListNotificationRefresh(
-  query: SoupAstItemsQuery
+  query: SoupAstItemsQuery,
+  channelTypes?: readonly string[]
 ) {
   return registerChannelNotificationRefresh(() => ({
     client: getGraphqlSoupClient(),
@@ -45,6 +50,7 @@ export function registerChannelListNotificationRefresh(
     reader: {
       enabled: query.transport === 'graphql' && query.isEnabled,
       fetching: query.isFetching,
+      channelTypes,
       filtered: true,
       notificationIds: query.isPending
         ? []

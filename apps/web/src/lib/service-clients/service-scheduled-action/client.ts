@@ -74,6 +74,7 @@ import type {
   Suggestion,
   SuggestionChanged,
   SuggestionFeed,
+  UnusableKnob,
   WebhookStatusResponse,
 } from './generated/schemas';
 
@@ -273,6 +274,13 @@ export const scheduledActionClient = {
   listCodeUpgrades: async (args: { scheduleId: string }) =>
     scheduledActionFetch<CodeUpgrade[]>(
       `/scheduled-actions/${args.scheduleId}/code-upgrades`,
+      { method: 'GET' }
+    ),
+
+  /** The routine's entity knobs whose item its owner can't use now. */
+  listUnusableItems: async (args: { scheduleId: string }) =>
+    scheduledActionFetch<UnusableKnob[]>(
+      `/scheduled-actions/${args.scheduleId}/unusable-items`,
       { method: 'GET' }
     ),
 

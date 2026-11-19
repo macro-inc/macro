@@ -40,4 +40,5 @@ email_api_client = { path = "../email_api_client", features = ["outbound-gmail"]
 fusionauth = { path = "../fusionauth" }
 gmail_client = { path = "../gmail_client" }
 models_email = { path = "../models_email" }
+tracing-subscriber = { workspace = true }
 uuid = { workspace = true }

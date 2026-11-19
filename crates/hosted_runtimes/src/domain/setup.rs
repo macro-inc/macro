@@ -16,9 +16,10 @@ mod test;
 #[derive(Debug, Clone, Copy, PartialEq, Eq, strum::AsRefStr, strum::IntoStaticStr)]
 #[strum(serialize_all = "snake_case")]
 pub enum SetupPhase {
-    /// Reservation until payment (or comp) confirmation.
+    /// Reservation until payment (or comp) confirmation; a charge runs
+    /// beside [`Self::Create`].
     Payment,
-    /// Confirmation until the guest boots: outbox wait, fleet create, any capacity wait.
+    /// Provisioning until the guest boots: outbox wait, fleet create, any capacity wait.
     Create,
     /// Guest boot until macrod enrolls, claims its harness and connects.
     Boot,
@@ -46,6 +47,15 @@ pub struct PhaseTiming {
     pub ended_at: DateTime<Utc>,
 }
 
+/// Whether the purchase's payment is confirmed yet.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum PaymentProgress {
+    /// Comped, or the charge reached the subscription.
+    Settled,
+    /// The charge is still running beside provisioning.
+    Charging,
+}
+
 /// Milestones of one computer's first setup; latched once macrod connects.
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 pub struct SetupTimeline {
@@ -54,6 +64,11 @@ pub struct SetupTimeline {
     /// Payment or comp confirmed.
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub paid_at: Option<DateTime<Utc>>,
+    /// The computer was created from its reservation and began
+    /// provisioning. Absent in rows written before it existed, which
+    /// provisioned only once paid.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub provisioned_at: Option<DateTime<Utc>>,
     /// The guest started booting.
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub booting_at: Option<DateTime<Utc>>,
@@ -71,6 +86,7 @@ impl SetupTimeline {
         Self {
             reserved_at: now,
             paid_at: None,
+            provisioned_at: None,
             booting_at: None,
             connected_at: None,
             waited_for_capacity: false,
@@ -87,24 +103,26 @@ impl SetupTimeline {
         self.connected_at.map(|end| (self.reserved_at, end))
     }
 
+    /// When provisioning began: [`Self::provisioned_at`], or for rows
+    /// written before it, the payment confirmation that started it.
+    pub fn provisioning_started_at(&self) -> Option<DateTime<Utc>> {
+        self.provisioned_at.or(self.paid_at)
+    }
+
     /// Record the milestones the state reached at `now`; returns the waits
-    /// that ended, oldest first. Later restarts and reprovisioning add nothing.
+    /// that ended, oldest first. Later restarts and reprovisioning add
+    /// nothing, but a charge that settles after setup still ends the
+    /// payment wait.
     pub fn advance(
         &mut self,
         phase: &Phase,
         macrod_connected: bool,
         waiting_for_capacity: bool,
+        payment: PaymentProgress,
         now: DateTime<Utc>,
     ) -> Vec<PhaseTiming> {
         let mut finished = Vec::new();
-        if self.complete() {
-            return finished;
-        }
-        self.waited_for_capacity |= waiting_for_capacity;
-        let booting = matches!(phase, Phase::Booting | Phase::Running);
-        // A computer exists only once its purchase is confirmed: the first
-        // advance (at conversion) ends the payment wait.
-        if self.paid_at.is_none() {
+        if self.paid_at.is_none() && payment == PaymentProgress::Settled {
             self.paid_at = Some(now);
             finished.push(PhaseTiming {
                 phase: SetupPhase::Payment,
@@ -112,14 +130,24 @@ impl SetupTimeline {
                 ended_at: now,
             });
         }
-        if let Some(paid_at) = self.paid_at
+        if self.complete() {
+            return finished;
+        }
+        self.waited_for_capacity |= waiting_for_capacity;
+        let booting = matches!(phase, Phase::Booting | Phase::Running);
+        // A computer exists only once its reservation is converted: the
+        // first advance is the conversion.
+        if self.provisioning_started_at().is_none() {
+            self.provisioned_at = Some(now);
+        }
+        if let Some(provisioned_at) = self.provisioning_started_at()
             && self.booting_at.is_none()
             && (booting || macrod_connected)
         {
             self.booting_at = Some(now);
             finished.push(PhaseTiming {
                 phase: SetupPhase::Create,
-                started_at: paid_at,
+                started_at: provisioned_at,
                 ended_at: now,
             });
         }

@@ -14,6 +14,8 @@ the gateway `/email` prefix.
   It composes optional activity correlation and the saved-invitation service;
   `ApiContext` holds services, authentication/router states and configuration;
   raw database/provider clients belong to the composed adapters.
+  Inject CRM rule discovery into the API EmailPgRepo for selected Team reads;
+  the adapter uses the reader's transaction and owns no additional pool.
 - `src/composition/workers.rs`: shared worker service aliases and invitation
   extraction composition. Per-worker constructors stay in `worker::context`.
 - `src/outbound/message_reads.rs`: query adapter for the email domain's synced
@@ -78,10 +80,13 @@ the gateway `/email` prefix.
   CRM publication retains captured incarnation/version/work IDs for modern
   jobs and makes them due again after 15 minutes; legacy publication deletes.
   Conditional acknowledgement cannot delete a newer generation. Rule activation
-  remains unavailable; workers never initialize consent.
+  remains behind a default-off API flag; workers never initialize consent.
 - `src/email_policy_worker.rs`: cancellation-aware source-event poller on the
   backfill pool. The CRM domain bounds raw reverse references before filtering
   active selected policies, atomically scheduling history and system audit.
+  A separate cancellation-aware count-preview poller uses the same pool, with
+  its own bounded read-only snapshot and no consent initialization. Neither
+  creates spans for empty polls; preview work must not delay source events.
 - `src/crm_enrichment_worker.rs`: periodic pass that resolves pending CRM
   company directory entries (names/logos) left by binaries without a resolver,
   using the public-homepage `UnfurlCompanyMetadataResolver` wired in
@@ -140,7 +145,8 @@ the gateway `/email` prefix.
 - The API's server spans come from `macro_tower_layers`
   (`api::traced`). tower-http's default `TraceLayer` span is DEBUG, below the
   exporter's INFO filter, so an API wrapped in it sends no server spans.
-- `models_email`'s `Link` `Debug` prints only opaque fields. Keep addresses,
+- `models_email`'s `Link`, `BlockSenderPayload` and `UnblockSenderPayload`
+  `Debug` print only opaque fields. Keep addresses,
   `macro_id`, contact emails and whole messages out of span fields: skip them
   in `#[tracing::instrument]` and record `link_id` or provider ids instead.
 
@@ -162,16 +168,39 @@ the gateway `/email` prefix.
   client.
 - Long attachment names are truncated to the DSS limit before upload (#7893);
   don't remove that truncation when touching `util/upload_attachment.rs`.
+- An attachment's file type comes from a Macro file type's extension on its
+  filename (`FileType::split_suffix_match`, as uploads use) unless its MIME
+  type names a different Macro file type, and from the MIME type without such
+  an extension: mail clients send many files as `application/octet-stream`.
+  The Gmail attachment backfill calls the same `determine_file_metadata`; keep
+  the two on it.
 - Scheduled Gmail sends recheck forwarded source inbox access before resolving
   attachment bytes through the provider-aware reader.
 - Preserve the calendar domain's `team_ooo_changed` hint when forwarding a
   calendar refresh so unrelated invitation updates retain teammates' OOO rows.
+- The Outlook sync loop (`mailbox_sync_worker::run`) claims a due folder page
+  before every message read. An import keeps its folders' next pages due, so
+  claiming pages once per cycle would leave a folder with new mail behind
+  every worker's whole cycle of queued messages. A cycle ends when no message
+  is due, so folder catalogs are checked again before more pages are read.
+- `pubsub_workers` reads the PostHog flag `enable-outlook-import-live-pass`
+  for the service context `outlook-mailbox-sync` about once a minute
+  (`mailbox_sync_worker::run_live_import_pass`, one
+  `outlook.live_import_pass.refresh` span per read) and sets the sync's
+  `LiveImportPass` from it: newest-first imports and the live pass beside
+  each folder's import round. Without a `POSTHOG_API_KEY`, or while a read
+  fails, it is off and warns once; a local stack's placeholder key reads off.
+  ([runbook](../../docs/runbooks/outlook-sync.md#new-mail-during-an-import))
 - `OUTLOOK_IMPORTS_PAUSED` (read at startup) makes the Outlook sync loop claim
   only live message work; import rows wait and live changes keep importing.
   `src/bin/reimport_outlook_folders` re-imports folders whose delta round
   started at an older reader revision ([runbook](../../docs/runbooks/outlook-folder-reimport.md)).
 - Spawn `run_transfers` regardless of the Outlook flags. Gmail inbox moves
   finish there; with writes off it pauses only the Outlook retire step.
+- Every Graph call takes a permit from `RedisMicrosoftRequestGate`
+  (`email_api_client`). `pubsub_workers` builds the Outlook sync's import
+  gateway with `RequestBudget::Import`; every other Microsoft caller,
+  calendar_service included, uses `RequestBudget::Live`.
 - Every `GmailApi` call takes a permit from `RedisGmailRequestGate`
   (`outbound/email_api/gmail_gate.rs`): per mailbox it caps requests in
   flight and quota units per window, and pauses after a Gmail 429 (live work

@@ -86,6 +86,9 @@ test('a long run of calls and thoughts is one live line, then one settled row', 
   expect(seen.said).toContain('Thinking');
   expect(seen.said).toContain('Searching documents hosting invoice');
   expect(seen.said).toContain('Read spreadsheet');
+  // A program with no operation to name says only how far it got.
+  expect(seen.said).toContain('Working on it');
+  expect(seen.said).toContain('A step failed');
   expect(seen.said.length).toBeGreaterThan(5);
 
   // Settled: each run is one row, with the long run's failures counted.

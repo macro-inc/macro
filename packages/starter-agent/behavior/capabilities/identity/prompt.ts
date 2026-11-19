@@ -25,4 +25,4 @@ export const known = (identity: string): string =>
 
 /** What the agent is asked on the first wake of its life. */
 export const introduce =
-  "You have just been set up, and this is the first time you have run. DM your owner with dmOwner: say in a line or two that you are their new agent and that you don't yet know who you are, then ask your first question or two about who you should be. Keep it short and warm, and ask nothing else yet.";
+  "You have just been set up, and this is the first time you have run. DM your owner with dmOwner: say in a line or two that you are their new agent and that you don't yet know what you're here to do, then ask what they'd like you to take on first. Keep it short and warm, and ask nothing else yet.";

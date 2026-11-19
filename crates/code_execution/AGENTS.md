@@ -13,7 +13,8 @@ service. Session authentication, token issuance and execution storage belong to
 - `src/outbound/deno.rs`: process lifecycle, restricted permissions and the
   import map (`NODE_ALLOWED`, `NODE_BUILTINS`; blocked built-ins resolve to
   `deno/unavailable.mjs`).
-- `src/outbound/deno/bootstrap.mjs`: program loading, unattended dry runs,
+- `src/outbound/deno/bootstrap.mjs`: program loading, unattended dry runs
+  (a routine's entity knobs, marked `$entity`, reach `main` as SDK handles),
   removing every way to the network but `fetch`, and final JSON protocol.
 - `src/outbound/deno/check.rs`: type-checking TypeScript against the SDK.
 - `src/domain/operations.rs`: the generated operation catalog (labels, routes,
@@ -76,6 +77,17 @@ The bootstrap replaces a result's `data` larger than `Limits::max_result_bytes`
 with an outline and preview, keeping `reviews`; the frame limit stays the backstop.
 An unattended result is never summarized: later routine steps read it whole, so
 one over the limit fails the run with a message saying so.
+
+Every Deno child's `code_execution.process` span records how it ended:
+`process.exit_code` or `process.signal`, `process.wall_ms`, `process.cpu_ms`
+and `process.peak_rss_kib` (`outbound/deno/exit.rs`). Peak memory is `VmHWM`
+sampled from procfs every 250 ms while the child runs, since it is gone
+before the child's pipes close (a child that dies within one interval
+shows only its startup peak); CPU time is read once more after they close.
+A run the deadline, a cancellation or a protocol error cuts short records
+the same fields with `process.killed = true` (its status is the runner's
+kill). A child that ends on its own without exit code 0 after its terminal
+frame logs one `Deno child ended abnormally` warning with the same fields.
 
 ## Checks
 

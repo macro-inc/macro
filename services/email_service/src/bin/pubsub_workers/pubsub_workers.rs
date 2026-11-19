@@ -26,6 +26,9 @@ use tokio_util::{sync::CancellationToken, task::TaskTracker};
 
 const EVENT_BROKER_DRAIN_TIMEOUT: Duration = Duration::from_secs(10);
 
+/// PostHog's US ingestion origin, used when `POSTHOG_HOST` is unset.
+const DEFAULT_POSTHOG_HOST: &str = "https://us.i.posthog.com";
+
 fn compose_email_api(
     db: PgPool,
     subscription_topic: String,
@@ -296,27 +299,61 @@ async fn main() -> anyhow::Result<()> {
         RateBudget::Live,
     );
     let outlook_repository = email_api_client::OutlookApiClientRepository::with_gate(Arc::new(
-        email_service::outbound::email_api::RedisMicrosoftRequestGate(redis_conn.clone()),
+        email_service::outbound::email_api::RedisMicrosoftRequestGate::new(
+            redis_conn.clone(),
+            email_api_client::outbound::microsoft_gate::RequestBudget::Live,
+        ),
     ))?;
+    let outlook_credentials = email::domain::mailbox::credentials::MailboxCredentials::new(
+        email::outbound::mailbox_pg::PgMailboxSync::new(db.clone()),
+        email_service::outbound::email_api::MicrosoftCredentialsClient(auth_service_client.clone()),
+    );
     let outlook_api = email_api_client::domain::service::mailbox::MailboxApiService::new(
         outlook_repository.clone(),
-        email::domain::mailbox::credentials::MailboxCredentials::new(
-            email::outbound::mailbox_pg::PgMailboxSync::new(db.clone()),
-            email_service::outbound::email_api::MicrosoftCredentialsClient(
-                auth_service_client.clone(),
-            ),
-        ),
+        outlook_credentials.clone(),
         // Admission is applied to each actual Graph request by the injected gate.
         email_api_client::domain::ports::AlwaysAllowRateLimiter,
     );
     let mailbox_repository = email::outbound::mailbox_pg::PgMailboxSync::new(db.clone())
         .with_imports_paused(config.outlook_imports_paused);
     if config.outlook_sync_enabled {
+        let outlook_import_api = email_api_client::domain::service::mailbox::MailboxApiService::new(
+            email_api_client::OutlookApiClientRepository::with_gate(Arc::new(
+                email_service::outbound::email_api::RedisMicrosoftRequestGate::new(
+                    redis_conn.clone(),
+                    email_api_client::outbound::microsoft_gate::RequestBudget::Import,
+                ),
+            ))?,
+            outlook_credentials,
+            email_api_client::domain::ports::AlwaysAllowRateLimiter,
+        );
+        // Newest-first imports and the live pass beside them follow
+        // `enable-outlook-import-live-pass`; without a PostHog key they are off.
+        let feature_flags = config
+            .posthog_api_key()
+            .map(|key| {
+                feature_flags::outbound::posthog::PostHogFeatureFlags::new(
+                    config.posthog_host.value().unwrap_or(DEFAULT_POSTHOG_HOST),
+                    key.to_owned(),
+                    Duration::from_secs(3),
+                    config.environment,
+                )
+            })
+            .transpose()
+            .map_err(|error| anyhow::anyhow!("invalid feature flag configuration: {error}"))?;
+        let live_import_pass = email::domain::mailbox::live_pass::LiveImportPass::default();
+        worker_tracker.spawn(email_service::mailbox_sync_worker::run_live_import_pass(
+            feature_flags,
+            live_import_pass.clone(),
+            worker_cancellation_token.clone(),
+        ));
         let mailbox_sync = email::domain::mailbox::MailboxSyncService::new(
             mailbox_repository.clone(),
             email_service::outbound::email_api::ProviderMailboxGateway(outlook_api.clone()),
+            email_service::outbound::email_api::ProviderMailboxGateway(outlook_import_api),
             mailbox_repository.clone(),
-        );
+        )
+        .with_live_import_pass(live_import_pass);
         worker_tracker.spawn(email_service::mailbox_sync_worker::run_health(
             email::domain::mailbox::progress::MailboxProgressService::new(
                 mailbox_repository.clone(),
@@ -410,6 +447,10 @@ async fn main() -> anyhow::Result<()> {
         metadata_resolver,
     );
     worker_tracker.spawn(email_service::email_policy_worker::run(
+        crm_service_backfill.clone(),
+        worker_cancellation_token.clone(),
+    ));
+    worker_tracker.spawn(email_service::email_policy_worker::run_previews(
         crm_service_backfill.clone(),
         worker_cancellation_token.clone(),
     ));
