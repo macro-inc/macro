@@ -28,6 +28,34 @@ thin binary over `../src-tauri` (`app_lib::run_with`) that selects
   `RUSTUP_TOOLCHAIN=1.95.0 cargo-tauri build --bundles app -c '{"build":{"beforeBuildCommand":""}}'`.
   The stock `cargo-tauri` does not ship the Chromium framework or helper apps.
 
+## Driving a local build over CDP
+
+To reproduce a frontend bug in Chromium as the app runs it, run a dev build
+against a Vite server and drive it with Playwright `connectOverCDP`:
+
+- Patch `src/main.rs` locally (never commit it) so the runtime listens for CDP
+  and keeps its profile out of the installed app's cache:
+  `.remote_debugging(tauri_runtime_cef::RemoteDebugging::Port { port: 9334, allowed_origins: vec![] })`
+  and `.root_cache_path("<scratch dir>")` on the `Cef` builder.
+- `echo development > ../src-tauri/.macro-tauri-env` (gitignored). Without it
+  `build.rs` needs a built `dist/`.
+- Build the CLI once from the `macro-cef` checkout cargo already fetched
+  (`~/.cargo/git/checkouts/tauri-*/4b8a46f`):
+  `RUSTUP_TOOLCHAIN=1.95.0 cargo build --release -p tauri-cli`. Put `ninja` on
+  `PATH` (`nix shell nixpkgs#ninja`) and point `CEF_PATH` at a disk with room.
+- From here:
+  `RUSTUP_TOOLCHAIN=1.95.0 <cli>/cargo-tauri dev --no-watch -c '{"identifier":"com.macro.app.<name>","productName":"Macro <name>","build":{"beforeDevCommand":"","devUrl":"http://localhost:3009/<page>"}}'`.
+  A separate identifier keeps the build off the installed app's Application
+  Support data and single-instance lock. The webview renders only
+  `localhost:3000`–`3009` (`ALLOWED_DOMAINS` in `../src-tauri/src/lib.rs`) and
+  opens any other origin in the system browser.
+- `chromium.connectOverCDP('http://127.0.0.1:9334')` then drives the page.
+  Backend-free browser-test fixtures (`*.html` under a feature's
+  `browser-test/`) load as the dev URL with no sign-in.
+
+CDP input enters Chromium's input pipeline as a real click does, so it reaches
+the same renderer code, but it skips AppKit's event timing.
+
 ## Gotchas
 
 - Keep this a separate workspace. A `[patch]` applies to every target in its

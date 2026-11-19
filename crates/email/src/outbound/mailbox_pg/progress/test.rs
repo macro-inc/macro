@@ -107,8 +107,9 @@ async fn import_completes_once_when_its_last_import_row_settles(db: PgPool) {
     let telemetry = Telemetry::default();
     let _guard = telemetry.install();
     let (repo, link) = enumerated_mailbox(&db).await;
-    queue(&db, link, "first", true, 2).await;
-    queue(&db, link, "second", true, 2).await;
+    // Import rows settle on their first read that Graph answers 404.
+    queue(&db, link, "first", true, 0).await;
+    queue(&db, link, "second", true, 0).await;
     let service = sync(
         &repo,
         Provider::answering(vec![Ok(None), Ok(None), Ok(None)]),
@@ -140,7 +141,7 @@ async fn import_completes_once_when_its_last_import_row_settles(db: PgPool) {
             .all(|span| span["outlook.outcome"] == "absent")
     );
     assert_eq!(reconciled[0]["outlook.is_import"], "true");
-    assert_eq!(reconciled[0]["outlook.attempts"], "3");
+    assert_eq!(reconciled[0]["outlook.attempts"], "1");
     assert_eq!(reconciled[0]["outlook.graph_calls"], "2");
 }
 
@@ -165,12 +166,20 @@ async fn deferrals_name_their_reason_and_gate_refusals_stay_quiet(db: PgPool) {
     let telemetry = Telemetry::default();
     let _guard = telemetry.install();
     let (repo, link) = super::super::test::fixture(&db).await;
-    for (id, attempts) in [("window", 0), ("graph", 0), ("token", 0), ("moving", 0)] {
-        queue(&db, link, id, true, attempts).await;
+    // A live change whose message Graph does not return yet is read again.
+    // Live rows are claimed first, so it takes the first answer.
+    for (id, is_import) in [
+        ("moving", false),
+        ("window", true),
+        ("graph", true),
+        ("token", true),
+    ] {
+        queue(&db, link, id, is_import, 0).await;
     }
     let service = sync(
         &repo,
         Provider::answering(vec![
+            Ok(None),
             Err(EmailApiError::RateLimited {
                 retry_after: Some(Duration::from_secs(12)),
                 origin: RateLimitOrigin::Gate(GateLimit::Window),
@@ -182,7 +191,6 @@ async fn deferrals_name_their_reason_and_gate_refusals_stay_quiet(db: PgPool) {
             Err(EmailApiError::CredentialsUnavailable {
                 message: "authentication unavailable".into(),
             }),
-            Ok(None),
         ]),
     );
 
@@ -204,10 +212,10 @@ async fn deferrals_name_their_reason_and_gate_refusals_stay_quiet(db: PgPool) {
     assert_eq!(
         reasons,
         [
+            ("deferred", "location_unsettled", "30"),
             ("deferred", "gate_window", "12"),
             ("deferred", "graph_throttled", "7"),
             ("deferred", "token_unavailable", "30"),
-            ("deferred", "location_unsettled", "30"),
         ]
     );
     assert!(
@@ -229,10 +237,10 @@ async fn deferrals_name_their_reason_and_gate_refusals_stay_quiet(db: PgPool) {
     assert_eq!(
         levels,
         [
+            (tracing::Level::WARN, "location_unsettled", link.to_string()),
             (tracing::Level::DEBUG, "gate_window", link.to_string()),
             (tracing::Level::WARN, "graph_throttled", link.to_string()),
             (tracing::Level::WARN, "token_unavailable", link.to_string()),
-            (tracing::Level::WARN, "location_unsettled", link.to_string()),
         ]
     );
     let parked = sqlx::query_scalar!(

@@ -547,9 +547,11 @@ impl ComputerRouteError {
             Self::SignInExpired => Some("sign_in_expired"),
             Self::ComputerUnreachable(_) => Some("computer_unreachable"),
             Self::ComputerBusy => Some("computer_busy"),
+            // Both are 403s; only this one clears without the caller's
+            // rights changing.
+            Self::RolloutDisabled => Some("rollout_disabled"),
             Self::BadRequest(_)
             | Self::Forbidden
-            | Self::RolloutDisabled
             | Self::Unavailable(_)
             | Self::NotFound(_)
             | Self::Conflict(_)

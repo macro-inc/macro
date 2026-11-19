@@ -1207,14 +1207,6 @@ export const settings = {
       source: ['src/features/settings/Email.tsx'],
     },
     {
-      id: 'STX-943',
-      surface: 'SX-01',
-      fn: ['F-162'],
-      state: 'result: the switch shows the chosen setting, also after a reload',
-      trigger: 'after the action succeeds',
-      source: ['src/features/settings/email-settings.tsx'],
-    },
-    {
       id: 'STX-963',
       surface: 'SX-01',
       fn: ['F-009'],

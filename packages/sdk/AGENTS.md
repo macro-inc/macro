@@ -48,11 +48,15 @@ enforced by the ordinary backend APIs.
   `agents.list()` reads storage agent records, which built-in personas lack;
   `agents.coding()` reads the harness `GET /coding-agents` listing (Cursor
   included) that the `ListCodingAgents` tool serves. `routines.create` takes
-  `steps` (generated `CodeStep`s, agent steps with `Agent` handles) and
-  `dangerouslyOperateAsUser`, which its TSDoc restricts to an explicit user
-  request, or the older single agent task. Its examples use steps only:
-  agents copy them, and a routine draft hands back steps, converting a single
-  agent task when it can (`scheduled_action` drafts). `routineBody` maps both onto the
+  `steps` (generated `CodeStep`s whose `entity` knobs hold an
+  `EntityReference` to a handle, sent as its id, or `null` when unpicked, so
+  a stored step passes back with each picked item given again by `byId`;
+  agent steps with `Agent` handles) and `dangerouslyOperateAsUser`, which
+  its TSDoc restricts to an explicit user request, or the older single agent
+  task. Its examples use steps only: agents copy them, and a routine draft
+  hands back steps, converting a single agent task when it can
+  (`scheduled_action` drafts).
+  `routineBody` maps both onto the
   scheduler's `RoutineTask`. `routines.create(options, { key })` passes
   `?key=`; inside a routine's run the server makes the new routine a
   sub-routine of the running routine, from the credential alone, and a
@@ -96,7 +100,7 @@ enforced by the ordinary backend APIs.
   `crm::inbound::pipeline_workflows`; field values are tagged by kind.
 - `src/entities/saved-views/`: `macro.savedViews` over the revision-guarded
   `/saved_views/definitions` routes; `edit` and `remove` send the revision the
-  handle last saw, and keep the response's record so chained writes stay guarded.
+  handle last saw. Successful writes clear cached detail so chained writes reload the current revision even when appearance and definition responses arrive out of order. `appearance()` reads shared icon/color overrides; `setAppearance()` updates them without advancing the filter revision, and creation accepts optional initial appearance.
 - `src/entities/external-chat/`: added provider chats (`macro.externalChats`, entity type
   `external_chat`) and their message/send/upload/participant handles.
 - `src/entities/connected-apps/`: `macro.connectedApps.list(execution)` returns the
@@ -169,7 +173,7 @@ enforced by the ordinary backend APIs.
   then `bun run generate`. `hey-api-openapi-ts-0.99.0.patch` makes stopping an
   SSE stream quiet; carry it forward on a generator upgrade.
 - Keep the human-session-only Passwords vault endpoints, including batch import
-  and name matching and the human review of agent access requests, in coverage
+  and name matching, private favorites and the human review of agent access requests, in coverage
   exclusions; normal human-session authorization and secret disclosure are
   outside v1 agent capabilities.
 - `src/entities/passwords/`: `macro.passwords.forAgent(team, { wake })` is the
@@ -288,7 +292,7 @@ the existing gateway prefixes.
   with `system_properties`' `StatusOption` and `PriorityOption`. Task create
   `propertyValues` replace the service defaults (creator assigned, Not
   started), so `Task.create` spells them out when it sends any.
-- `crm.emailPrivacy` (`src/entities/crm-email-privacy/`, the `crmEmailPrivacy` code-mode category) wraps own-member policy and existing privacy endpoints; preserve exact observed tokens, caller-supplied idempotency keys, preview slot identities and explicit partial counts. Never refresh a token or retry a sharing decision after a conflict. Rule target handles do not fetch content on inspection.
+- `crm.emailPrivacy` (`src/entities/crm-email-privacy/`, the `crmEmailPrivacy` code-mode category) wraps own-member policy and existing privacy endpoints; preserve exact observed tokens, caller-supplied idempotency keys, preview slot identities and explicit partial counts. Never refresh a token or retry a sharing decision after a conflict. Rule target handles do not fetch content on inspection. Validation and replacement share server admission limits; preserve their named errors and never treat validation as reserved capacity. Live growth may later fail a Team read; withdrawal stays available.
 - CRM records and initiatives share `messages/discussion.ts`: their comments are
   messages under a `crm_company`, `crm_contact` or `initiative` parent.
 - `crm.blockDomain` refuses domains covering a team member's connected primary

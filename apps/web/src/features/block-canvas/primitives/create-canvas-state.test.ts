@@ -180,3 +180,48 @@ it('hands a drawing tool back to Select once it has drawn, unless the tool is lo
     }
   });
 });
+
+it('gives drawing to the pen at its first press, and leaves the choice alone after', () => {
+  createRoot((dispose) => {
+    const editor = createGraphicsEditor([]);
+    try {
+      const state = createCanvasState(editor, (geometry) => ({
+        width: geometry.width,
+        height: 20,
+      }));
+
+      // No pen yet: fingers draw, and there is nothing to choose.
+      state.chooseTool('pencil');
+      expect(state.penSeen()).toBe(false);
+      expect(state.fingersPan()).toBe(false);
+
+      state.penPressed();
+      expect(state.penSeen()).toBe(true);
+      expect(state.fingersPan()).toBe(true);
+      // Fingers keep the tools that do not draw.
+      for (const tool of ['select', 'pan', 'text'] as const) {
+        state.chooseTool(tool);
+        expect(state.fingersPan()).toBe(false);
+      }
+      for (const tool of [
+        'rectangle',
+        'arrow',
+        'connector',
+        'eraser',
+      ] as const) {
+        state.chooseTool(tool);
+        expect(state.fingersPan()).toBe(true);
+      }
+
+      // Switched off, it stays off through the pen's later presses.
+      state.setPenOnly(false);
+      state.penPressed();
+      expect(state.penOnly()).toBe(false);
+      expect(state.fingersPan()).toBe(false);
+      expect(state.penSeen()).toBe(true);
+    } finally {
+      dispose();
+      editor.dispose();
+    }
+  });
+});

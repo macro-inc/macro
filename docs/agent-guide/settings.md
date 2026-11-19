@@ -209,7 +209,7 @@ that trial, so members who join get Pro, like on an active subscription.
 On a local stack started with `--no-doppler`, verify free-team creation from a
 fresh passwordless signup. It must work without Stripe credentials.
 
-The invite dialog (**Invite** on **Team → Members**, or **Invite your team**)
+The invite dialog (**Invite Human** on **Team → Members**, or **Invite your team**)
 starts with the team's **Invite link**: **Create link** makes one and copies it,
 **Copy link** copies it after that. Anyone signed in who opens
 `/app/team-invite?link=<token>` sees **Join <team>** and joins as a member with
@@ -246,10 +246,13 @@ limit; re-inviting the address from **Invite** follows the same rule.
 
 #### Agent teammates
 
-Behind `enable-agent-teammates` (on in dev), owners and admins see a
-**People | Agent** switch at the top of the invite dialog; members, and
-everyone while the flag is off or still loading, see the people form unchanged.
-**Agent** (titled for adding an agent teammate) asks only for a name and the
+**Team → Members** has **+ Invite Human** (the people invite dialog) and,
+behind `enable-agent-teammates` (on in dev) and the Macro computers rollout,
+**+ Invite Agent** for owners and admins, beside **Copy invite link**; on a
+narrow page the two invite buttons wrap, together, onto their own line. The
+desktop settings sidebar lists **Invite agents** under **Invite your team** for
+the same viewers. Members, and everyone while a flag is off or still loading,
+see only the people invite. **Invite Agent** opens **Invite an agent**, which asks only for a name and the
 agent's computer size; picture, voice and role come later, and the agent asks
 what to take on once it is online. While the name is empty, **Try** offers
 **Ada**, **Bo**, **Kim** and **Nova**, and the avatar shows the name's first
@@ -308,7 +311,13 @@ once used), then the code field with **Complete sign-in**, which is primary
 only once a code is typed and says "Checking with Claude. This can take a minute." while it runs.
 A failure shows one inline alert with its way out: **Get a new link** (link
 expired, code rejected, timed out), **Try again** (couldn't get a link), or
-paste again (malformed code, computer busy). The footer's one action is
+paste again (malformed code, computer busy or unreachable). The harness
+tells its two 403s apart: `rollout_disabled` reads "Computers aren't
+available for this account yet." with **Try again** before a link exists;
+after a code was sent the sign-in still waits, so the field stays open to
+paste the same code again. A bare 403 (no manage rights) reads "You can't
+change this computer. Ask a team owner or admin." with no action, and the
+link and code field are disabled. The footer's one action is
 **Keep using Macro credits** (closes), or **Switch to Macro credits** (a
 confirmation, then sign-out) when the agent is on its plan; closing while a
 code is checked lets it finish, with a toast either way. Owners and admins
@@ -400,7 +409,9 @@ visible, and `/app/home/~/settings/<tab>` places it beside Home. Its inner
 sidebar matches Email and Tasks: a **Settings** title bar, a rounded
 **Search settings** field, a team action at the top of the list (hidden while
 searching): **Invite your team** with its icon and label in a soft pink-to-indigo gradient (opens the invite dialog;
-hidden for members when the team limits invites to admins) or, with no team,
+hidden for members when the team limits invites to admins), then, for owners
+and admins with agent teammates and Macro computers on, **Invite agents** in
+the same style (opens **Invite an agent**), or, with no team,
 **Create a team** (opens the create-team dialog), then the grouped section
 pills. Above 720px, **Hide navigation** beside the title collapses the sidebar;
 **Show navigation** restores it. Wide touch panes always dock the sidebar left
@@ -965,9 +976,20 @@ is retained (`billing: ended`). The list polls every 3 seconds while any
 computer is purchasing, setting up, waiting for capacity, starting or
 stopping.
 
+A powered-on computer that has run shows a second muted line: `CPU 12%` and
+`Memory 1.8 of 8 GB`, each with a tiny line of the last 24 hours
+(`GET /team/computers/usage`, refetched every minute; every team member sees
+it). CPU is the share of the computer's CPUs in use; memory is what the
+computer uses on its own (shown from a computer's first reading, a minute
+before its CPU, which reads `–` until then), and a tooltip says memory shared with its system
+image isn't counted. A computer with no reading in the last three minutes
+keeps its lines and reads `idle` in place of each value. On phones the two
+metrics stack, each with its line at the right edge. A computer that is off, setting up or failed has no such line.
+
 The row's one action is **Retry setup** on a `failed` computer (team owner
 and admins; it sets it up again, billing untouched), else **Finish setup**
-while guided setup is incomplete (only for the team's owner and admins), else
+while guided setup is incomplete (only for the team's owner and admins; an
+agent teammate's computer counts as set up once its agent first comes online), else
 **Sign in with Claude** when the computer is on its own Claude account but
 signed out, else none. A failed row's line reads `Setup failed: <reason>`
 with the API's `failureReason`, else `Failed`. A row with no action keeps its
@@ -1123,7 +1145,11 @@ sign-out (Macro credits only), setup-complete and a status refresh in order,
 each with a 20-second deadline and its own span under
 `computers.setup.finish` (`setup.finish.step`, `setup.finish.outcome`). A step
 that fails or runs out stops there: "Couldn't finish setting up <agent>" with
-**Retry**, which runs the steps again. Ready has one action:
+the reason when it has one (outside the rollout: "Computers aren't available
+for this account yet.") and **Retry**, which runs the steps again and reads
+**Retrying…** while it does. A caller without manage rights reads "You can't
+change this computer. Ask a team owner or admin." with no **Retry**, only
+**Close**. Ready has one action:
 
 - **Chat with <agent>** opens the DM with the computer's agent
   (`useOpenAgentDm`, `bot|<botId>`), like an agent's **Message**. With
@@ -1153,6 +1179,9 @@ the same, also on a cold start; the link is
 (`computers/primitives/setup-request.ts`). The dialog's own "ready" notice,
 shown when it was closed while waiting for the sign-in link, is the same
 notice, so the two never stack.
+The in-app "ready" notice is only for setup left unfinished: it is not shown
+while that computer's buy dialog is open (one already up is taken down), nor
+once the team's computer list says its setup is complete.
 
 **Sign in with Claude** is a dialog with the same two steps, failure states
 and footer as an agent's **Connect Claude plan** (see Agent teammates above),

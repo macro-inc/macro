@@ -162,7 +162,9 @@ local stack, without Microsoft accounts.
   `--allow-http-notification-urls`. Put a TLS front before the service and
   pass its certificate authority with `--trust-certificate`.
 - New mail: `POST /_emulator/mailboxes/{email}/messages` (`deliver`). A change
-  made in Outlook: `PATCH`/`DELETE …/messages/{id}`. Provider failure:
+  made in Outlook: `PATCH`/`DELETE …/messages/{id}`. A folder emptied out of
+  Deleted Items: `DELETE …/folders/{id or name}` (`delete_folder`), which
+  takes its subfolders and their messages with it. Provider failure:
   `POST /_emulator/faults` (`inject_fault`) with a `route` such as
   `messages.get` and an `error` such as `rate_limit`. A `folder` (`inbox`)
   with route `messages.list` or `messages.delta` fails only that folder's

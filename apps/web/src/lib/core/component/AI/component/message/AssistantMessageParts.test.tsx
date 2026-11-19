@@ -608,6 +608,42 @@ describe('AssistantMessageParts streaming identity', () => {
     disposeStream();
   });
 
+  it('previews a code run by how far it got', async () => {
+    let append!: (item: ChatStream) => void;
+    let disposeStream!: () => void;
+    const data = createRoot((dispose) => {
+      disposeStream = dispose;
+      const [items, setItems] = createSignal<ChatStream[]>([]);
+      append = (item) => setItems((prev) => [...prev, item]);
+      return items;
+    });
+    const rendered = render(() => <StreamedAssistantParts data={data} />);
+    const preview = () => rendered.getByTestId('activity-preview').textContent;
+
+    // A group of one shows no preview.
+    append(response({ thinking: 'Need some context', type: 'thinking' }));
+    append(
+      response({
+        id: 'code-1',
+        json: { source: 'main' },
+        name: 'ExecuteCode',
+        type: 'toolCall',
+      })
+    );
+    await waitFor(() => expect(preview()).toBe('Working on it'));
+
+    append(
+      response({
+        id: 'code-1',
+        json: { status: 'timed_out', activity: [] },
+        name: 'ExecuteCode',
+        type: 'toolCallResponseJson',
+      })
+    );
+    await waitFor(() => expect(preview()).toBe('A step failed'));
+    disposeStream();
+  });
+
   it('registers resumed markdown as the stream tail after a hidden tool response', async () => {
     let append!: (item: ChatStream) => void;
     let disposeStream!: () => void;
