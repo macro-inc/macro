@@ -4,20 +4,23 @@ const fixture = '/src/components/view-shell/browser-test/toast-frame-cost.html';
 // About as many elements as a long channel keeps mounted.
 const MESSAGES = 400;
 
-interface TraceEvent {
-  name: string;
-  ph: string;
-  ts: number;
-  dur?: number;
-  args?: { elementCount?: number };
+/** How many elements a trace event's style pass touched, or undefined for other events. */
+function stylePassElements(event: unknown): number | undefined {
+  if (typeof event !== 'object' || event === null) return undefined;
+  if (!('name' in event) || event.name !== 'UpdateLayoutTree') return undefined;
+  if (!('ph' in event) || event.ph !== 'X') return undefined;
+  const args = 'args' in event ? event.args : undefined;
+  const count =
+    typeof args === 'object' && args !== null && 'elementCount' in args
+      ? args.elementCount
+      : undefined;
+  return typeof count === 'number' ? count : 0;
 }
 
 async function trace(page: Page, run: () => Promise<void>) {
   const cdp: CDPSession = await page.context().newCDPSession(page);
-  const events: TraceEvent[] = [];
-  cdp.on('Tracing.dataCollected', ({ value }) =>
-    events.push(...(value as TraceEvent[]))
-  );
+  const events: unknown[] = [];
+  cdp.on('Tracing.dataCollected', ({ value }) => events.push(...value));
   await cdp.send('Tracing.start', {
     transferMode: 'ReportEvents',
     traceConfig: {
@@ -48,6 +51,8 @@ test.use({ viewport: { width: 1440, height: 900 } });
 test('a toast animating over a heavy page restyles only the toasts and what follows them', async ({
   page,
 }) => {
+  // A dev server serving a heavy page to a busy machine.
+  test.setTimeout(120_000);
   await page.goto(`${fixture}?messages=${MESSAGES}`);
   await expect(page.locator('article')).toHaveCount(MESSAGES);
   const pageElements = await page.evaluate(
@@ -95,13 +100,11 @@ test('a toast animating over a heavy page restyles only the toasts and what foll
     expect((await follower.boundingBox())!.y).toBeGreaterThan(raised!.y);
   });
 
-  const passes = events.filter(
-    (event) => event.name === 'UpdateLayoutTree' && event.ph === 'X'
-  );
+  const passes = events
+    .map(stylePassElements)
+    .filter((count) => count !== undefined);
   // The animations ran: a style pass for most of their frames.
   expect(passes.length).toBeGreaterThan(20);
-  const pageWide = passes
-    .map((event) => event.args?.elementCount ?? 0)
-    .filter((count) => count > pageElements / 4);
+  const pageWide = passes.filter((count) => count > pageElements / 4);
   expect(pageWide).toEqual([]);
 });
