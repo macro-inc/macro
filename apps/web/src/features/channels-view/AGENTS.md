@@ -13,7 +13,7 @@ Chat's desktop sidebar, mobile conversation lists, section membership, and route
 ## Data and loading
 
 - Use the existing persisted channel list only until the corresponding Soup source answers; an empty Soup page replaces the seed.
-- Bound each seeded section to the normal first-page size and preserve membership, sorting, and account fences.
+- Bound each seeded section to the normal first-page size and preserve membership and sorting; recreate the query graph and reference batches on account-session changes, including same-viewer reauthentication, without rebuilding for sort, cache, or tab changes.
 - Keep Soup's bounded unread projection and live updates authoritative; do not replace them with a full-list fetch.
 - Hydrate only referenced channels missing from the loaded sources.
 - Render favorite metadata without extra skeleton rows; an unread filter can legitimately leave no rows after enrichment.

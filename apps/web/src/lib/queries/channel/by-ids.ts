@@ -3,12 +3,12 @@ import {
   defineQueryFilters,
   queryStateFrom,
 } from '@app/features/next-soup/filters/filter-store';
-import { useUserId } from '@core/context/user';
 import { arrayEquals } from '@core/util/compareUtils';
 import { fireAndForget } from '@core/util/fireAndForget';
 import { type ChannelEntity, isChannelEntity } from '@entity';
 import { getGraphqlSoupClient } from '@service-storage/graphql-soup';
 import { type Accessor, createEffect, createMemo, untrack } from 'solid-js';
+import { useQueryAccount } from '../auth/use-query-account';
 import { queryReadyGate } from '../gate';
 import {
   type SoupAstItemsQuery,
@@ -103,13 +103,13 @@ export function useCachedChannelsByIds(
   ids: Accessor<readonly string[]>,
   enabled: Accessor<boolean>
 ) {
-  const userId = useUserId();
+  const account = useQueryAccount();
   const memberIds = createMemo(() => [...new Set(ids())].sort(), [], {
     equals: arrayEquals,
   });
   const source = createMemo(() => {
     const members = memberIds();
-    if (!enabled() || !userId()) return [];
+    if (!enabled() || !account()) return [];
     return untrack(() => {
       const batches = [];
       for (let offset = 0; offset < members.length; offset += BATCH_SIZE) {
