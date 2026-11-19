@@ -24,6 +24,7 @@ pub fn defer_reason(error: &MailboxError) -> &'static str {
         MailboxError::Provider(EmailApiError::Forbidden) => "forbidden",
         MailboxError::Provider(EmailApiError::Permanent { .. }) => "permanent",
         MailboxError::Persistence | MailboxError::Database(_) => "persistence",
+        MailboxError::Unstorable(_) => "unstorable",
         MailboxError::Effect(_) => "effect",
         MailboxError::LocationUnsettled => "location_unsettled",
         MailboxError::CalendarPartsUnavailable => "calendar_parts",

@@ -75,6 +75,8 @@ const mocks = vi.hoisted(() => ({
   getInitiativePermissions: vi.fn(),
   updateInitiativePermissions: vi.fn(),
   getExternalChatPermissions: vi.fn(),
+  dssFetch: vi.fn(),
+  getBatchChannelPreviews: vi.fn(),
   updateExternalChatPermissions: vi.fn(),
   getDocumentPermissions: vi.fn(),
   getDatabasePermissions: vi.fn(),
@@ -173,8 +175,9 @@ vi.mock('@core/hotkey/hotkeys', () => ({
 vi.mock('@core/mobile/isMobile', () => ({ isMobile: () => mocks.mobile }));
 vi.mock('@core/util/channels', () => ({ useSendMessageToPeople: () => mocks }));
 vi.mock('@service-storage/client', () => ({
+  dssFetch: mocks.dssFetch,
   storageServiceClient: {
-    getBatchChannelPreviews: async () => ok({ previews: [] }),
+    getBatchChannelPreviews: mocks.getBatchChannelPreviews,
     getDocumentPermissions: mocks.getDocumentPermissions,
     editDocument: mocks.editDocument,
     projects: {
@@ -418,6 +421,7 @@ beforeEach(() => {
   vi.clearAllMocks();
   mocks.inBlock = true;
   mocks.blockId = 'launcher-placeholder';
+  mocks.getBatchChannelPreviews.mockResolvedValue(ok({ previews: [] }));
   mocks.getDocumentPermissions.mockResolvedValue(
     ok({ channelSharePermissions: [] })
   );
@@ -454,6 +458,52 @@ beforeEach(() => {
   });
 });
 afterEach(cleanup);
+
+it.each([false, true])(
+  'uses the thread roster and removes its channel grant (mobile: %s)',
+  async (mobile) => {
+    mocks.mobile = mobile;
+    mocks.blockId = 'thread-1';
+    mocks.dssFetch
+      .mockResolvedValueOnce(
+        ok([
+          {
+            channel_id: 'channel-1',
+            channel_type: 'private',
+            channel_name: 'Project updates',
+            access_level: 'edit',
+          },
+        ])
+      )
+      .mockResolvedValueOnce(ok([]));
+    render(() => (
+      <ShareModal
+        id="thread-1"
+        name="Agenda"
+        itemType="email"
+        blockAlias="email"
+        userPermissions={Permissions.OWNER}
+        open
+        onOpenChange={vi.fn()}
+      />
+    ));
+    if (mobile) {
+      fireEvent.click(await screen.findByRole('tab', { name: 'People' }));
+    }
+    expect(await screen.findByText('Project updates')).toBeTruthy();
+    expect(mocks.getBatchChannelPreviews).not.toHaveBeenCalled();
+
+    fireEvent.click(screen.getByRole('button', { name: 'Set option none' }));
+    await vi.waitFor(() => {
+      expect(mocks.graphqlShare).toHaveBeenCalledWith('email', 'thread-1', {
+        channelSharePermissions: [
+          { operation: 'remove', channelId: 'channel-1' },
+        ],
+      });
+      expect(screen.queryByText('Project updates')).toBeNull();
+    });
+  }
+);
 
 describe('document permissions source', () => {
   it('loads a document’s own permissions instead of its enclosing block’s', async () => {

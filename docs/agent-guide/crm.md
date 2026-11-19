@@ -316,6 +316,9 @@ or New call. Add contact is available once the company is loaded and visible,
 including companies without a domain; contact emails may use any valid domain.
 Email-sync gates, recipients, and task associations still apply. With company email
 sync off, New email stays visible but disabled; New company must not replace it.
+When email sync processes a message sent to a manual unfiled contact's work
+address, it reuses that contact and preserves the Company field. It can still
+create or update the work domain's company independently.
 Keyboard focus and
 higher-priority composers suppress the floating action; leaving the section
 restores the default action. Search remains visible for empty lists.
@@ -670,6 +673,27 @@ historical and future messages, excluding blocked threads. The same controls
 are in CRM settings and **Email contribution settings** on a company. A
 changed or reconnecting mailbox requires a fresh review; a disconnected mailbox
 cannot opt in.
+
+When selective contribution is enabled, **Sharing rules** sits below **Your
+email contribution** and above the blacklists and excluded threads. **Edit JSON**,
+**Preview counts**, and **History** open separate settings pages, including inside
+the phone settings sheet. Opening these pages never initializes consent.
+**Save and share** validates the JSON first and shows server validation problems,
+limit refusals and warnings inline; valid canonical rules replace the active
+policy. There is no separate Validate button or visual rule builder. Contact and
+company rules follow current records; company rules include current company
+domains only, so add people with contact rules. A matching rule shares the whole
+thread, including past and future messages, subject to exclusions.
+
+After a conflict, the draft stays visible and saving is disabled. **View current
+rules** loads the current policy for comparison; explicitly acknowledge that
+review before making a new save decision. Preview reads do not start work:
+**Run preview** explicitly starts it. Complete counts describe one snapshot;
+partial/running counts are lower bounds, and stale or unverified counts are
+hidden. History attributes changes to the verified member or their agent and
+opens immutable saved JSON separately. With the selective gate off, all-mail
+members retain the existing controls; selected contributors can still inspect
+rules/history and withdraw with the single **Stop sharing my emails** action.
 
 Any member can add a team domain; only team admins/owners can remove one.
 Personal domains affect only that member's mailbox. Domains include subdomains;

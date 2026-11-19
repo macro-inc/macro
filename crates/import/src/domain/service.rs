@@ -32,6 +32,7 @@ use std::time::Duration;
 use uuid::Uuid;
 
 mod admission;
+pub(crate) mod lifecycle;
 mod notion_workspace;
 mod tracker_workspace;
 mod workspace;
