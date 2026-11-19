@@ -44,8 +44,8 @@ pub struct BriefData<'a> {
     pub agent_model: &'a str,
     /// Whether code steps can be written.
     pub code: bool,
-    /// Whether the person's routines may start when mail arrives (the
-    /// event routines rollout).
+    /// Whether a routine may start when mail arrives: the person is in the
+    /// event routines rollout and the deployment evaluates conditions.
     pub events: bool,
     /// The SDK's routines guide.
     pub guide: &'a str,

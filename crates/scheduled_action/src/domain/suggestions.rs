@@ -84,6 +84,9 @@ pub struct RoutineBriefing {
     pub guide: &'static str,
     /// The model the Ask AI steps they write run on.
     pub agent_model: String,
+    /// Whether this deployment evaluates trigger conditions, which a
+    /// routine started on mail is drafted with.
+    pub conditions: bool,
 }
 
 pub(crate) const ALL_SURFACES: [Surface; 9] = [
@@ -418,12 +421,11 @@ where
         trigger: GenerationTrigger,
         timezone: Tz,
     ) -> Result<String> {
-        // Saving an event trigger needs this flag too, so a session told
-        // its routines may start on mail never drafts one a check refuses.
-        let events = self
-            .require_flag(user)
-            .await?
-            .is_enabled(EVENT_ROUTINES_FLAG);
+        // A drafted routine starts on mail through a condition, and saving
+        // one needs both conditions and this flag: told otherwise, a session
+        // would draft what a check refuses.
+        let flags = self.require_flag(user).await?;
+        let events = self.briefing.conditions && flags.is_enabled(EVENT_ROUTINES_FLAG);
         let code = self.code.sdk().is_some();
         let (inbox, apps, dismissed) = tokio::join!(
             self.sources.inbox(user, INBOX_MESSAGES),
