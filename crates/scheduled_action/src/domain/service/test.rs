@@ -120,6 +120,23 @@ impl SubRoutines for FakeRepo {
         }))
     }
 
+    async fn detach_copy(
+        &self,
+        mut action: ScheduledAction,
+        parent: &Uuid,
+    ) -> Result<ScheduledAction> {
+        let mut actions = self.actions.lock().unwrap();
+        let stored = actions.iter_mut().find(|a| a.id == action.id).unwrap();
+        if stored.configuration_revision.next()? != action.configuration_revision
+            || stored.parent_id() != Some(*parent)
+        {
+            return Err(ActionPolicyError::UpdateConflict.into());
+        }
+        action.sub_routine = None;
+        *stored = action.clone();
+        Ok(action)
+    }
+
     async fn created_by_runs(
         &self,
         parent: &Uuid,
@@ -2085,17 +2102,17 @@ async fn only_a_person_makes_a_routine_write_as_them() {
     as_owner.task["dangerously_operate_as_user"] = json!(true);
     let agent_program = RunCaller {
         routine: None,
-        correlation: None,
+        session: None,
         requester: Requester::Program,
     };
     let routine_run = RunCaller {
         routine: Some(Uuid::from_u128(9)),
-        correlation: None,
+        session: None,
         requester: Requester::Program,
     };
     let person = RunCaller {
         routine: None,
-        correlation: None,
+        session: None,
         requester: Requester::Person,
     };
 

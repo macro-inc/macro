@@ -1,5 +1,6 @@
 use chrono::{TimeZone, Utc};
 use macro_db_migrator::MACRO_DB_MIGRATIONS;
+use serde_json::json;
 use sqlx::PgPool;
 
 use super::super::test::{USER_A, insert_user, sample_action, test_repo, user_owner};
@@ -307,4 +308,98 @@ async fn a_sub_routine_created_off_with_its_parent_keeps_that_mark(pool: PgPool)
         .unwrap();
     assert!(!stored.enabled);
     assert!(stored.sub_routine.unwrap().paused_by_parent);
+}
+
+#[sqlx::test(migrator = "MACRO_DB_MIGRATIONS")]
+async fn a_copy_kept_as_its_own_takes_its_parents_rewrites_in_the_same_write(pool: PgPool) {
+    use crate::domain::code_upgrade::UpgradeOutcome;
+    use crate::domain::ports::CodeUpgrades;
+    use crate::outbound::pg_code_upgrades::PgCodeUpgrades;
+
+    insert_user(&pool, USER_A).await;
+    let repo = test_repo(pool.clone());
+    let upgrades = PgCodeUpgrades::new(pool.clone());
+    let code = |source: &str| json!([{ "type": "code", "title": "Remind", "source": source }]);
+    let parent = repo
+        .create_action(ScheduledAction {
+            task: json!({
+                "steps": [{ "type": "agent", "model": "m", "instructions": "List" }],
+                "sub_routines": [{ "name": "remind", "title": "Remind", "steps": code("old") }],
+                "sdk": "0.2.0+old",
+            }),
+            ..sample_action(user_owner(USER_A), "parent")
+        })
+        .await
+        .unwrap();
+    // Macro rewrote the definition's code for a newer SDK.
+    let newer: routine_program::SdkFingerprint = "0.3.0+new".to_owned().try_into().unwrap();
+    upgrades.claim_rewrite(&parent, &newer).await.unwrap();
+    let mut rewritten = parent.task.clone();
+    rewritten["sub_routines"][0]["steps"] = code("new");
+    rewritten["sdk"] = json!("0.3.0+new");
+    upgrades
+        .save_rewrite(&parent, &newer, &rewritten)
+        .await
+        .unwrap();
+    let copy = repo
+        .create_action(ScheduledAction {
+            task: json!({ "sub_routine": "remind" }),
+            ..child_of(&parent, "copy", Some("task-1"))
+        })
+        .await
+        .unwrap();
+    let parent_id = parent.id.unwrap();
+    let kept = ScheduledAction {
+        task: json!({ "steps": code("new"), "sdk": "0.3.0+new" }),
+        configuration_revision: copy.configuration_revision.next().unwrap(),
+        ..copy.clone()
+    };
+
+    // A write that lost a race, or under another parent, writes nothing.
+    for (action, parent) in [
+        (
+            ScheduledAction {
+                configuration_revision: copy.configuration_revision,
+                ..kept.clone()
+            },
+            parent_id,
+        ),
+        (kept.clone(), generate_uuid_v7()),
+    ] {
+        let refused = repo.detach_copy(action, &parent).await.unwrap_err();
+        assert!(matches!(
+            policy(&refused),
+            Some(ActionPolicyError::UpdateConflict)
+        ));
+        let unchanged = repo.get_action(&copy.id.unwrap()).await.unwrap().unwrap();
+        assert_eq!(
+            (unchanged.task, unchanged.sub_routine),
+            (copy.task.clone(), copy.sub_routine.clone())
+        );
+        assert!(
+            upgrades
+                .list_upgrades(copy.id.unwrap())
+                .await
+                .unwrap()
+                .is_empty()
+        );
+    }
+
+    let detached = repo.detach_copy(kept.clone(), &parent_id).await.unwrap();
+    assert_eq!(detached.sub_routine, None);
+    assert_eq!(detached.task, kept.task);
+    let history = upgrades.list_upgrades(copy.id.unwrap()).await.unwrap();
+    assert_eq!(
+        history
+            .iter()
+            .map(|upgrade| (
+                upgrade.to_sdk.as_str(),
+                upgrade.outcome,
+                upgrade.task.as_ref()
+            ))
+            .collect::<Vec<_>>(),
+        [("0.3.0+new", UpgradeOutcome::Rewritten, Some(&rewritten))]
+    );
+    // Its parent keeps its own record.
+    assert_eq!(upgrades.list_upgrades(parent_id).await.unwrap().len(), 1);
 }

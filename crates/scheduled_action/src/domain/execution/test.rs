@@ -542,6 +542,7 @@ async fn a_copy_runs_its_definition_as_its_parent_holds_it_when_the_copy_runs() 
         [json!("Remind me"), json!("Remind me, with the date")]
     );
     let records = executor.repo.records.lock().unwrap();
+    assert_eq!(records.len(), 2);
     assert!(records.iter().all(|record| record.is_success));
 }
 

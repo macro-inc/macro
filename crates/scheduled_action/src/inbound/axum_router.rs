@@ -406,11 +406,11 @@ where
         }
         None => {
             // Both come from the request's verified credential: the routine
-            // a code step's token is signed for, and the code-mode
-            // invocation of an agent session.
+            // a code step's token is signed for, and the agent session of
+            // its code-mode invocation.
             let caller = RunCaller {
                 routine: agent_correlation::context::current_routine(),
-                correlation: agent_correlation::context::current(),
+                session: agent_correlation::context::current_session(),
                 requester: requester(user.as_ref().ok().map(|user| &user.authorization), &headers),
             };
             let key = query
@@ -476,7 +476,7 @@ where
     let Json(request) = body.map_err(ScheduledActionApiError::InvalidRequest)?;
     let caller = RunCaller {
         routine: agent_correlation::context::current_routine(),
-        correlation: agent_correlation::context::current(),
+        session: agent_correlation::context::current_session(),
         requester: requester(user.as_ref().ok().map(|user| &user.authorization), &headers),
     };
     let saved = state
@@ -954,6 +954,7 @@ impl IntoResponse for ScheduledActionApiError {
                 | ActionPolicyError::NotSubRoutine
                 | ActionPolicyError::SubRoutinesDisabled
                 | ActionPolicyError::CopyOutsideRun
+                | ActionPolicyError::NestedSubRoutines
                 | ActionPolicyError::UnknownSubRoutine(_)
                 | ActionPolicyError::SubRoutineInputs(_) => StatusCode::BAD_REQUEST,
             };

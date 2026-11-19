@@ -89,6 +89,17 @@ pub async fn checked_task(
     else {
         return Ok(checked);
     };
+    // No definitions or inputs is stored as none, as a build from before
+    // them reads a program: it refuses fields it doesn't know.
+    for field in ["sub_routines", "inputs"] {
+        if fields
+            .get(field)
+            .and_then(Value::as_array)
+            .is_some_and(Vec::is_empty)
+        {
+            fields.remove(field);
+        }
+    }
     if !fields.contains_key("steps") {
         return Ok(checked);
     }

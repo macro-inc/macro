@@ -30,15 +30,10 @@ where
         principal: &CreationPrincipal,
         caller: RunCaller,
     ) -> Result<Option<RunningRun>> {
-        let run = match (caller.routine, caller.correlation, &self.run_sessions) {
-            (Some(routine), _, _) => self.repo.running_run(&routine).await?,
-            (None, Some(correlation), Some(sessions)) => {
-                match sessions.session_of(correlation).await? {
-                    Some(session) => self.repo.running_run_of_session(&session).await?,
-                    None => None,
-                }
-            }
-            _ => None,
+        let run = match (caller.routine, caller.session) {
+            (Some(routine), _) => self.repo.running_run(&routine).await?,
+            (None, Some(session)) => self.repo.running_run_of_session(&session).await?,
+            (None, None) => None,
         };
         Ok(run.filter(|run| run.owner == principal.owner()))
     }
@@ -48,13 +43,33 @@ where
     pub(super) async fn create_sub_routine(
         &self,
         principal: &CreationPrincipal,
-        mut input: ActionConfiguration,
+        input: ActionConfiguration,
         run: RunningRun,
         key: Option<SubRoutineKey>,
         requester: Requester,
     ) -> Result<SavedAction> {
         // One level: a sub-routine's creations follow its own parent.
-        let parent_id = run.parent_id.unwrap_or(run.routine_id);
+        let parent = self
+            .repo
+            .get_action(&run.parent_id.unwrap_or(run.routine_id))
+            .await?
+            .ok_or(ActionPolicyError::NotFound)?;
+        self.create_under(principal, input, run, &parent, key, requester)
+            .await
+    }
+
+    /// Create `run`'s sub-routine under `parent`, the top-level routine
+    /// it follows, or update the one `parent` already has under `key`.
+    async fn create_under(
+        &self,
+        principal: &CreationPrincipal,
+        mut input: ActionConfiguration,
+        run: RunningRun,
+        parent: &ScheduledAction,
+        key: Option<SubRoutineKey>,
+        requester: Requester,
+    ) -> Result<SavedAction> {
+        let parent_id = parent.id.ok_or(ActionPolicyError::NotFound)?;
         let span = tracing::Span::current();
         span.record("routine.parent_id", tracing::field::display(parent_id));
         span.record(
@@ -68,11 +83,6 @@ where
 
         // A parent that is off keeps what its runs create or update off
         // with it.
-        let parent = self
-            .repo
-            .get_action(&parent_id)
-            .await?
-            .ok_or(ActionPolicyError::NotFound)?;
         let paused_by_parent = input.enabled && !parent.enabled;
         if paused_by_parent {
             input.enabled = false;
@@ -129,6 +139,9 @@ where
         {
             return Err(ActionPolicyError::CopyTaskFixed.into());
         }
+        if defines_sub_routines(&input.task) {
+            return Err(ActionPolicyError::NestedSubRoutines.into());
+        }
         self.replace_one(existing, input, paused_by_parent)
             .await
             .map(SavedAction::Updated)
@@ -179,7 +192,7 @@ where
             run_visibility: parent.run_visibility,
             description: String::new(),
         };
-        self.create_sub_routine(principal, input, run, key, caller.requester)
+        self.create_under(principal, input, run, &parent, key, caller.requester)
             .await
     }
 
@@ -211,11 +224,9 @@ where
             let (mut changed, mut failed) = (0u32, 0u32);
             let total = children.len();
 
-            // A copy writes as its parent does.
-            let parent_writes_as_owner = writes_as_owner(&parent.task);
+            // A copy never writes as its owner (`RoutineProgram::copy_program`).
             for child in children {
-                let child_writes_as_owner = writes_as_owner(&child.task)
-                    || (parent_writes_as_owner && SubRoutineCopy::from_task(&child.task).is_some());
+                let child_writes_as_owner = writes_as_owner(&child.task);
                 let follows = match (&child.sub_routine, parent.enabled) {
                     (Some(link), true) => {
                         link.paused_by_parent
@@ -312,8 +323,18 @@ where
                 run_visibility: action.run_visibility,
                 description: action.description.clone(),
             };
-            // Checked and saved like any edit; a failure leaves it a copy.
-            self.replace_one(action, input, false).await?;
+            // Checked like any edit, then written and detached at once, so a
+            // failure leaves it a copy. It keeps the record of the code
+            // Macro rewrote in its parent, so that code can't write as its
+            // owner before they edit it.
+            if let Replacement::Changed(action) = self.replacement(action, input, false).await? {
+                let detached = self.repo.detach_copy(action, &parent_id).await?;
+                self.dispatcher_tx
+                    .send(DispatchEvent::Update(detached.clone()))
+                    .await
+                    .map_err(|e| anyhow::anyhow!("failed to dispatch update event: {e}"))?;
+                return Ok(detached);
+            }
         }
 
         // Detached by another request meanwhile: it is top-level already.

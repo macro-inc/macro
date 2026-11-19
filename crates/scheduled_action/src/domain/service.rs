@@ -68,8 +68,6 @@ pub struct ScheduledActionServiceImpl<
     drafts: Option<DraftChecks>,
     /// What a suggestion a routine is saved from was, for its log.
     origins: Option<Arc<dyn SuggestionOrigins>>,
-    /// Finds the agent session behind a create, to tell a routine run's.
-    run_sessions: Option<Arc<dyn RequestSessions>>,
 }
 
 /// What keeps a draft session's check as its answer.
@@ -118,7 +116,6 @@ impl<Rpo: ScheduledActionRepo, Exe, Grants> ScheduledActionServiceImpl<Rpo, Exe,
             upgrades: Arc::new(NoCodeUpgrades),
             drafts: None,
             origins: None,
-            run_sessions: None,
         }
     }
 }
@@ -143,7 +140,6 @@ impl<Rpo: ScheduledActionRepo, Exe, Grants, Targets, Github, Code, Upgrades, Rol
             upgrades: self.upgrades,
             drafts: self.drafts,
             origins: self.origins,
-            run_sessions: self.run_sessions,
         }
     }
 
@@ -165,7 +161,6 @@ impl<Rpo: ScheduledActionRepo, Exe, Grants, Targets, Github, Code, Upgrades, Rol
             upgrades: self.upgrades,
             drafts: self.drafts,
             origins: self.origins,
-            run_sessions: self.run_sessions,
         }
     }
 
@@ -187,7 +182,6 @@ impl<Rpo: ScheduledActionRepo, Exe, Grants, Targets, Github, Code, Upgrades, Rol
             upgrades: self.upgrades,
             drafts: self.drafts,
             origins: self.origins,
-            run_sessions: self.run_sessions,
         }
     }
 
@@ -211,7 +205,6 @@ impl<Rpo: ScheduledActionRepo, Exe, Grants, Targets, Github, Code, Upgrades, Rol
             upgrades,
             drafts: self.drafts,
             origins: self.origins,
-            run_sessions: self.run_sessions,
         }
     }
 
@@ -232,13 +225,6 @@ impl<Rpo: ScheduledActionRepo, Exe, Grants, Targets, Github, Code, Upgrades, Rol
     /// Log what suggestion a routine is saved from, found through `origins`.
     pub fn with_suggestion_origins(mut self, origins: Arc<dyn SuggestionOrigins>) -> Self {
         self.origins = Some(origins);
-        self
-    }
-
-    /// Make routines created from a routine run's agent session that
-    /// routine's sub-routines, finding the session through `sessions`.
-    pub fn with_run_sessions(mut self, sessions: Arc<dyn RequestSessions>) -> Self {
-        self.run_sessions = Some(sessions);
         self
     }
 
@@ -306,8 +292,8 @@ impl<Rpo: ScheduledActionRepo, Exe, Grants, Targets, Github, Code, Upgrades, Rol
         Ok(())
     }
 
-    /// A task that defines sub-routines or holds inputs needs the owner's
-    /// rollout; a flag that cannot be read counts as off.
+    /// A task that defines sub-routines, holds inputs or is a copy needs the
+    /// owner's rollout; a flag that cannot be read counts as off.
     async fn check_sub_routines(
         &self,
         task: &serde_json::Value,
@@ -321,7 +307,7 @@ impl<Rpo: ScheduledActionRepo, Exe, Grants, Targets, Github, Code, Upgrades, Rol
                 .and_then(serde_json::Value::as_array)
                 .is_some_and(|items| !items.is_empty())
         };
-        if !uses("sub_routines") && !uses("inputs") {
+        if !uses("sub_routines") && !uses("inputs") && SubRoutineCopy::from_task(task).is_none() {
             return Ok(());
         }
         let enabled = self
@@ -366,25 +352,21 @@ impl<Rpo: ScheduledActionRepo, Exe, Grants, Targets, Github, Code, Upgrades, Rol
         Ok(Some(program))
     }
 
-    /// Authorize `task`'s agents and apps for `owner`: a copy's are its
-    /// definition's, as its parent (`parent_id`) holds it.
+    /// Authorize `task`'s agents and apps for `owner`. A copy's are its
+    /// definition's, authorized whenever its parent is saved and on every
+    /// run, so not again for each copy.
     async fn validate_targets(
         &self,
         task: &serde_json::Value,
         owner: &MacroUserIdStr<'static>,
-        parent_id: Option<Uuid>,
     ) -> Result<()>
     where
         Targets: TaskTargetValidator,
     {
-        match self.copy_program(task, parent_id).await? {
-            Some(program) => {
-                self.targets
-                    .validate_task(&serde_json::to_value(&program)?, owner)
-                    .await
-            }
-            None => self.targets.validate_task(task, owner).await,
+        if SubRoutineCopy::from_task(task).is_some() {
+            return Ok(());
         }
+        self.targets.validate_task(task, owner).await
     }
 
     fn check_conditions(&self, trigger: &ActionTrigger) -> Result<()> {
@@ -437,12 +419,14 @@ impl<Rpo: ScheduledActionRepo, Exe, Grants, Targets, Github, Code, Upgrades, Rol
             .await?;
         self.check_conditions(&input.trigger)?;
         self.check_sub_routines(&input.task, owner_user).await?;
-        self.validate_targets(
-            &input.task,
-            owner_user,
-            sub_routine.as_ref().map(|link| link.parent_id),
-        )
-        .await?;
+        if sub_routine.is_some() && defines_sub_routines(&input.task) {
+            return Err(ActionPolicyError::NestedSubRoutines.into());
+        }
+        // Only scheduling, which links it to its parent, makes a copy.
+        if sub_routine.is_none() && SubRoutineCopy::from_task(&input.task).is_some() {
+            return Err(ActionPolicyError::CopyOutsideRun.into());
+        }
+        self.validate_targets(&input.task, owner_user).await?;
         let task = checked_task(self.code.as_ref(), &input.task, None).await?;
         if input.enabled {
             self.check_github(&input.trigger, owner_user).await?;
@@ -609,13 +593,16 @@ impl<Rpo: ScheduledActionRepo, Exe, Grants, Targets, Github, Code, Upgrades, Rol
         }
         let task_changed = !same_task(&action.task, &named_steps(&input.task));
         // A copy's steps are its parent's definition: renaming it or moving
-        // its trigger is fine, but what it does changes only there.
-        if task_changed && SubRoutineCopy::from_task(&action.task).is_some() {
+        // its trigger is fine, but what it does changes only there. Copies
+        // are made only by scheduling, never by turning a routine into one.
+        if task_changed
+            && (SubRoutineCopy::from_task(&action.task).is_some()
+                || SubRoutineCopy::from_task(&input.task).is_some())
+        {
             return Err(ActionPolicyError::CopyTaskFixed.into());
         }
-        if task_changed {
-            self.check_sub_routines(&input.task, action.owner_user()?)
-                .await?;
+        if task_changed && action.sub_routine.is_some() && defines_sub_routines(&input.task) {
+            return Err(ActionPolicyError::NestedSubRoutines.into());
         }
         let was_enabled = action.enabled;
         let updated = self.replace_one(action, input, false).await?;
@@ -673,10 +660,38 @@ impl<Rpo: ScheduledActionRepo, Exe, Grants, Targets, Github, Code, Upgrades, Rol
     /// sub-routine switched off because its parent was.
     async fn replace_one(
         &self,
+        action: ScheduledAction,
+        input: ActionConfiguration,
+        with_parent: bool,
+    ) -> Result<ScheduledAction>
+    where
+        Targets: TaskTargetValidator,
+        Github: GithubInstallationClaims,
+        Code: RoutineCode,
+        Upgrades: CodeUpgrades,
+        Rollout: EventRoutineRollout,
+    {
+        match self.replacement(action, input, with_parent).await? {
+            Replacement::Unchanged(action) => Ok(action),
+            Replacement::Changed(action) => {
+                let updated = self.repo.update_action(action).await?;
+                self.dispatcher_tx
+                    .send(DispatchEvent::Update(updated.clone()))
+                    .await
+                    .map_err(|e| anyhow::anyhow!("failed to dispatch update event: {e}"))?;
+                Ok(updated)
+            }
+        }
+    }
+
+    /// `action` with `input` in place of its configuration, checked as
+    /// every save is; nothing is written.
+    async fn replacement(
+        &self,
         mut action: ScheduledAction,
         mut input: ActionConfiguration,
         with_parent: bool,
-    ) -> Result<ScheduledAction>
+    ) -> Result<Replacement>
     where
         Targets: TaskTargetValidator,
         Github: GithubInstallationClaims,
@@ -711,7 +726,13 @@ impl<Rpo: ScheduledActionRepo, Exe, Grants, Targets, Github, Code, Upgrades, Rol
             return Err(ActionPolicyError::UpdateConflict.into());
         }
         if !disable_only {
-            self.validate_targets(&input.task, action.owner_user()?, action.parent_id())
+            // Every way a task changes needs the rollout for definitions and
+            // inputs: an edit, a run's keyed create, a detach.
+            if !same_task(&action.task, &input.task) {
+                self.check_sub_routines(&input.task, action.owner_user()?)
+                    .await?;
+            }
+            self.validate_targets(&input.task, action.owner_user()?)
                 .await?;
             self.refuse_owner_identity_over_a_rewrite(&action, &input.task)
                 .await?;
@@ -745,7 +766,7 @@ impl<Rpo: ScheduledActionRepo, Exe, Grants, Targets, Github, Code, Upgrades, Rol
                 .as_ref()
                 .is_some_and(|link| !link.paused_by_parent);
         if !configuration_changed && action.enabled == input.enabled && !newly_held {
-            return Ok(action);
+            return Ok(Replacement::Unchanged(action));
         }
         action.configuration_revision = action.configuration_revision.next()?;
         action.name = input.name;
@@ -761,14 +782,16 @@ impl<Rpo: ScheduledActionRepo, Exe, Grants, Targets, Github, Code, Upgrades, Rol
         if let Some(link) = &mut action.sub_routine {
             link.paused_by_parent = !input.enabled && (with_parent || link.paused_by_parent);
         }
-
-        let updated = self.repo.update_action(action).await?;
-        self.dispatcher_tx
-            .send(DispatchEvent::Update(updated.clone()))
-            .await
-            .map_err(|e| anyhow::anyhow!("failed to dispatch update event: {e}"))?;
-        Ok(updated)
+        Ok(Replacement::Changed(action))
     }
+}
+
+/// A routine as a replacement leaves it.
+enum Replacement {
+    /// Nothing about it changes: it is the routine as stored.
+    Unchanged(ScheduledAction),
+    /// To be written, its revision already the next.
+    Changed(ScheduledAction),
 }
 
 /// The routine a receipt names, when the receipt's user owns it.
@@ -1071,6 +1094,7 @@ where
             Err(error) => match error.downcast_ref::<ActionPolicyError>() {
                 Some(ActionPolicyError::TooManySubRoutines) => "refused_cap",
                 Some(ActionPolicyError::ScheduleOutsideRun) => "refused_outside_run",
+                Some(ActionPolicyError::SubRoutinesDisabled) => "refused_rollout",
                 Some(
                     ActionPolicyError::UnknownSubRoutine(_)
                     | ActionPolicyError::SubRoutineInputs(_),
@@ -1331,6 +1355,13 @@ where
 }
 
 /// Whether `task` is a routine whose code writes as its owner.
+/// Whether `task` defines sub-routines.
+fn defines_sub_routines(task: &serde_json::Value) -> bool {
+    task.get("sub_routines")
+        .and_then(serde_json::Value::as_array)
+        .is_some_and(|definitions| !definitions.is_empty())
+}
+
 fn writes_as_owner(task: &serde_json::Value) -> bool {
     RoutineProgram::from_task(task)
         .is_ok_and(|program| program.code_identity() == CodeIdentity::Owner)

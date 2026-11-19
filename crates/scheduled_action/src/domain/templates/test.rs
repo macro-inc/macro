@@ -174,7 +174,7 @@ async fn a_shared_routine_never_operates_as_whoever_activates_it() {
             routine,
             crate::domain::models::RunCaller {
                 routine: None,
-                correlation: None,
+                session: None,
                 requester: Requester::Person,
             },
             None,

@@ -233,6 +233,52 @@ impl<B: BotFacts + 'static> SubRoutines for PgScheduledActionRepo<B> {
         .transpose()
     }
 
+    async fn detach_copy(&self, action: ScheduledAction, parent: &Uuid) -> Result<ScheduledAction> {
+        let Some(id) = action.id else {
+            bail!("cannot detach a routine without id");
+        };
+        let mut tx = self.pool.begin().await?;
+        write_action(&mut *tx, action).await?;
+        let detached = sqlx::query_as!(
+            ActionRow,
+            r#"
+            UPDATE scheduled_action
+            SET parent_id = NULL, created_by_run_id = NULL, child_key = NULL,
+                paused_by_parent = FALSE, updated_at = now()
+            WHERE id = $1 AND parent_id = $2
+            RETURNING id, owner, name, schedule, kind, timezone, task, claimed, created_at,
+                      updated_at, next_run_at, enabled, trigger_type, event_filters,
+                      configuration_revision, event_activated_at, trigger_config, run_visibility, template_id, appearance AS "appearance: _", suggestion_id,
+                      description, parent_id, created_by_run_id, child_key, paused_by_parent
+            "#,
+            id,
+            *parent,
+        )
+        .fetch_optional(&mut *tx)
+        .await?
+        .ok_or(ActionPolicyError::UpdateConflict)?;
+        // One row per SDK version the parent was rewritten for, read by its
+        // unique (action_id, to_sdk) index.
+        sqlx::query!(
+            r#"
+            INSERT INTO scheduled_action_code_upgrade
+                (id, action_id, from_sdk, to_sdk, outcome, previous_task, task, reason,
+                 created_at, updated_at)
+            SELECT gen_random_uuid(), $1, from_sdk, to_sdk, outcome, previous_task, task,
+                   reason, created_at, updated_at
+            FROM scheduled_action_code_upgrade
+            WHERE action_id = $2 AND outcome = 'rewritten'
+            ON CONFLICT (action_id, to_sdk) DO NOTHING
+            "#,
+            id,
+            *parent,
+        )
+        .execute(&mut *tx)
+        .await?;
+        tx.commit().await?;
+        ScheduledAction::try_from(detached)
+    }
+
     async fn created_by_runs(
         &self,
         parent: &Uuid,

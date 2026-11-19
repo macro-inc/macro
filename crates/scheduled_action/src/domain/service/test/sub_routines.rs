@@ -1,9 +1,7 @@
 use super::*;
-use crate::domain::ports::RequestSessions;
 
 const PARENT_RUN: &str = "0199a000-0000-7000-8000-000000000001";
 const CHILD_RUN: &str = "0199a000-0000-7000-8000-000000000002";
-const CORRELATION: &str = "0199a000-0000-7000-8000-000000000003";
 
 fn id(text: &str) -> Uuid {
     text.parse().unwrap()
@@ -22,7 +20,7 @@ fn start_run(service: &TestService, routine: &ScheduledAction, run: &str) {
 fn from_code(routine: &ScheduledAction) -> RunCaller {
     RunCaller {
         routine: routine.id,
-        correlation: None,
+        session: None,
         requester: Requester::Program,
     }
 }
@@ -49,7 +47,7 @@ async fn top_level(service: &TestService, name: &str) -> ScheduledAction {
         name,
         RunCaller {
             routine: None,
-            correlation: None,
+            session: None,
             requester: Requester::Person,
         },
         None,
@@ -123,15 +121,6 @@ async fn a_routine_whose_run_is_over_creates_top_level_routines() {
     assert_eq!(created.sub_routine, None);
 }
 
-struct OneSession(Uuid, Uuid);
-
-#[async_trait::async_trait]
-impl RequestSessions for OneSession {
-    async fn session_of(&self, correlation: Uuid) -> Result<Option<Uuid>> {
-        Ok((correlation == self.0).then_some(self.1))
-    }
-}
-
 #[tokio::test]
 async fn an_agent_steps_session_creates_its_runs_sub_routines() {
     let repo = Arc::new(FakeRepo::default());
@@ -144,14 +133,13 @@ async fn an_agent_steps_session_creates_its_runs_sub_routines() {
         tx,
         grants(&repo),
     )
-    .with_event_routines(Rollout(Some(false)))
-    .with_run_sessions(Arc::new(OneSession(id(CORRELATION), id(PARENT_RUN))));
+    .with_event_routines(Rollout(Some(false)));
     let parent = top_level(&service, "parent").await;
     start_run(&service, &parent, PARENT_RUN);
 
     let from_session = RunCaller {
         routine: None,
-        correlation: Some(id(CORRELATION)),
+        session: Some(id(PARENT_RUN)),
         requester: Requester::Program,
     };
     let child = create(&service, "child", from_session, None)
@@ -163,7 +151,7 @@ async fn an_agent_steps_session_creates_its_runs_sub_routines() {
     // Another session of the same person is not the run's.
     let elsewhere = RunCaller {
         routine: None,
-        correlation: Some(id(CHILD_RUN)),
+        session: Some(id(CHILD_RUN)),
         requester: Requester::Program,
     };
     let own = create(&service, "own", elsewhere, None)
@@ -215,7 +203,7 @@ async fn a_key_outside_a_routines_run_is_refused() {
         "keyed",
         RunCaller {
             routine: None,
-            correlation: None,
+            session: None,
             requester: Requester::Person,
         },
         Some("task-1"),
@@ -580,7 +568,7 @@ async fn scheduling_needs_a_run_a_defined_name_and_inputs_that_fit() {
 
     let person = RunCaller {
         routine: None,
-        correlation: None,
+        session: None,
         requester: Requester::Person,
     };
     assert_policy(
@@ -785,4 +773,209 @@ async fn detaching_a_copy_keeps_the_steps_it_ran_with_its_inputs() {
         *json!({ "task": "Ship" }).as_object().unwrap()
     );
     assert_eq!(stored(&service, copy.id.unwrap()).task, detached.task);
+}
+
+/// A routine's steps: one agent step, with `extra` fields beside them.
+fn steps_task(extra: serde_json::Value) -> serde_json::Value {
+    let mut task = json!({
+        "steps": [{ "type": "agent", "model": "model", "instructions": "Follow up" }],
+    });
+    if let (Some(task), Some(extra)) = (task.as_object_mut(), extra.as_object()) {
+        task.extend(extra.clone());
+    }
+    task
+}
+
+#[tokio::test]
+async fn copies_and_inputs_wait_for_the_rollout_on_every_write() {
+    let service = service(false);
+    // A parent that defined its sub-routine while the rollout was on.
+    let parent_id = top_level(&service, "Due reminders").await.id.unwrap();
+    service
+        .repo
+        .actions
+        .lock()
+        .unwrap()
+        .iter_mut()
+        .find(|action| action.id == Some(parent_id))
+        .unwrap()
+        .task = reminders_task("Remind me");
+    let parent = stored(&service, parent_id);
+    start_run(&service, &parent, PARENT_RUN);
+
+    assert_policy(
+        schedule(&service, remind("Ship", Some("task-1")), from_code(&parent)).await,
+        ActionPolicyError::SubRoutinesDisabled,
+    );
+
+    // A run's keyed create again, now holding inputs.
+    let principal = user_principal();
+    let keyed = |task: serde_json::Value| {
+        let input = ActionConfiguration {
+            name: "Follow up".into(),
+            task,
+            ..configuration(false)
+        };
+        service.create_action_from(
+            &principal,
+            input,
+            from_code(&parent),
+            Some(SubRoutineKey::new("follow-up").unwrap()),
+        )
+    };
+    let child = keyed(steps_task(json!({}))).await.unwrap().into_action();
+    let inputs =
+        json!({ "inputs": [{ "type": "text", "name": "task", "label": "Task", "value": "Ship" }] });
+    assert_policy(
+        keyed(steps_task(inputs)).await,
+        ActionPolicyError::SubRoutinesDisabled,
+    );
+    assert_eq!(stored(&service, child.id.unwrap()).task, child.task);
+
+    // None of either is stored as none, which a build from before them reads.
+    let input = ActionConfiguration {
+        task: steps_task(json!({ "sub_routines": [], "inputs": [] })),
+        ..configuration(false)
+    };
+    let saved = service
+        .create_action(&user_principal(), input)
+        .await
+        .unwrap();
+    assert_eq!(saved.task, steps_task(json!({})));
+}
+
+#[tokio::test]
+async fn a_routine_becomes_a_copy_only_by_scheduling_and_a_child_defines_no_sub_routines() {
+    let service = service(true);
+    let parent = reminders(&service).await;
+    start_run(&service, &parent, PARENT_RUN);
+    let copy = schedule(&service, remind("Ship", None), from_code(&parent))
+        .await
+        .unwrap()
+        .into_action();
+    let child = create(&service, "Follow up", from_code(&parent), None)
+        .await
+        .unwrap()
+        .into_action();
+    let edit = |task: serde_json::Value| {
+        let mut input = configuration(false);
+        input.name = "Follow up".into();
+        input.task = task;
+        service.update_action(
+            edit_receipt(child.id.unwrap()),
+            update(input),
+            Requester::Person,
+        )
+    };
+
+    assert_policy(
+        edit(copy.task.clone()).await,
+        ActionPolicyError::CopyTaskFixed,
+    );
+    // Its parent's sub-routines are the ones it schedules.
+    assert_policy(
+        edit(reminders_task("Nested")).await,
+        ActionPolicyError::NestedSubRoutines,
+    );
+    let nested = ActionConfiguration {
+        name: "Nested".into(),
+        task: reminders_task("Nested"),
+        ..configuration(false)
+    };
+    assert_policy(
+        service
+            .create_action_from(&user_principal(), nested.clone(), from_code(&parent), None)
+            .await,
+        ActionPolicyError::NestedSubRoutines,
+    );
+    let key = SubRoutineKey::new("follow-up").unwrap();
+    let keyed = ActionConfiguration {
+        task: steps_task(json!({})),
+        ..nested.clone()
+    };
+    service
+        .create_action_from(
+            &user_principal(),
+            keyed,
+            from_code(&parent),
+            Some(key.clone()),
+        )
+        .await
+        .unwrap();
+    assert_policy(
+        service
+            .create_action_from(&user_principal(), nested, from_code(&parent), Some(key))
+            .await,
+        ActionPolicyError::NestedSubRoutines,
+    );
+    assert_eq!(stored(&service, child.id.unwrap()).task, child.task);
+}
+
+#[tokio::test]
+async fn a_copys_agents_are_authorized_with_its_parent_not_again_for_each_copy() {
+    let base = service(true);
+    let sessions = Arc::new(Sessions::default());
+    let service = ScheduledActionServiceImpl::new(
+        base.repo.clone(),
+        base.executor.clone(),
+        base.dispatcher_tx.clone(),
+        grants(&base.repo),
+    )
+    .with_event_routines(Rollout(Some(true)))
+    .with_target_validation(TargetValidation::new(sessions.clone()));
+    let input = ActionConfiguration {
+        name: "Due reminders".into(),
+        task: reminders_task("Remind me"),
+        ..configuration(false)
+    };
+    let parent = service
+        .create_action(&user_principal(), input)
+        .await
+        .unwrap();
+    start_run(&base, &parent, PARENT_RUN);
+
+    // Validating a copy's agents would fail now; scheduling it asks nothing.
+    *sessions.error.lock().unwrap() = Some(RoutineSessionError::Forbidden);
+    let copy = service
+        .schedule_sub_routine(&user_principal(), remind("Ship", None), from_code(&parent))
+        .await
+        .unwrap()
+        .into_action();
+    assert_eq!(copy.parent_id(), parent.id);
+}
+
+#[tokio::test]
+async fn a_copy_never_writes_as_its_owner_though_its_parent_does() {
+    let service = service(true);
+    let parent = reminders(&service).await;
+    // Only a person makes a routine write as them.
+    let mut as_owner = configuration(false);
+    as_owner.name = "Due reminders".into();
+    as_owner.task = reminders_task("Remind me");
+    as_owner.task["dangerously_operate_as_user"] = json!(true);
+    let parent = service
+        .update_action(
+            edit_receipt(parent.id.unwrap()),
+            update(as_owner),
+            Requester::Person,
+        )
+        .await
+        .unwrap();
+    start_run(&service, &parent, PARENT_RUN);
+    let copy = schedule(&service, remind("Ship", None), from_code(&parent))
+        .await
+        .unwrap()
+        .into_action();
+    assert!(!runs(&service, &copy).dangerously_operate_as_user);
+
+    // Kept as the owner's own routine, it still doesn't, until they say so.
+    let detached = service
+        .detach_action(edit_receipt(copy.id.unwrap()))
+        .await
+        .unwrap();
+    assert!(
+        !RoutineProgram::from_task(&detached.task)
+            .unwrap()
+            .dangerously_operate_as_user
+    );
 }

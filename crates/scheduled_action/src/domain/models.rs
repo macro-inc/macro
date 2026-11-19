@@ -345,6 +345,11 @@ pub enum ActionPolicyError {
     CopyTaskFixed,
     #[error("only a routine's run can schedule its sub-routines")]
     ScheduleOutsideRun,
+    #[error(
+        "a routine another routine's run created schedules its parent's sub-routines, \
+         so it defines none of its own"
+    )]
+    NestedSubRoutines,
     #[error("the routine that is running defines no sub-routine named `{0}`")]
     UnknownSubRoutine(String),
     #[error("{0}")]
@@ -420,8 +425,9 @@ pub struct RunningRun {
 pub struct RunCaller {
     /// The routine a code step's credential is signed for.
     pub routine: Option<Uuid>,
-    /// The code-mode invocation of an agent session, validated against it.
-    pub correlation: Option<Uuid>,
+    /// The agent session of the code-mode invocation the credential names,
+    /// as the request's boundary validated it.
+    pub session: Option<Uuid>,
     /// Whether a person or a program sends the request.
     pub requester: Requester,
 }

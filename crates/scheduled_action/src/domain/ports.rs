@@ -179,6 +179,16 @@ pub trait SubRoutines: Send + Sync + 'static {
     /// that created it and its key. `None` when it has no parent.
     fn detach(&self, id: &Uuid) -> impl Future<Output = Result<Option<ScheduledAction>>> + Send;
 
+    /// Write `action`, a copy of one of `parent`'s sub-routines given steps
+    /// of its own, and detach it, at once: it takes `parent`'s record of the
+    /// code Macro rewrote as its own. Fails with `UpdateConflict` and writes
+    /// nothing when it changed meanwhile or no longer follows `parent`.
+    fn detach_copy(
+        &self,
+        action: ScheduledAction,
+        parent: &Uuid,
+    ) -> impl Future<Output = Result<ScheduledAction>> + Send;
+
     /// The sub-routines of `parent` that `runs` created, each with its run.
     fn created_by_runs(
         &self,
