@@ -1,6 +1,7 @@
 import accountManager from './en/account-manager';
 import agentAutoArchive from './en/agent-auto-archive';
 import agentNavigation from './en/agent-navigation';
+import agentPermissions from './en/agent-permissions';
 import agentSetup from './en/agent-setup';
 import agentWork from './en/agent-work';
 import appearance from './en/appearance';
@@ -46,6 +47,7 @@ export default {
   agentAutoArchive,
   appearance,
   agentNavigation,
+  agentPermissions,
   accountManager,
   agentSetup,
   agentWork,
