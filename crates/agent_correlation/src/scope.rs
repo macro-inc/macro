@@ -167,6 +167,7 @@ const SENDS: &[(&str, &str)] = &[
     ("POST", "/mobile-welcome-email"),
     ("POST", "/gtm-invite/links"),
     ("POST", "/scheduled-actions"),
+    ("POST", "/scheduled-actions/schedule"),
     ("PUT", "/scheduled-actions/{id}"),
     ("PUT", "/scheduled-actions/{id}/enabled"),
     ("POST", "/scheduled-actions/{id}/execute"),

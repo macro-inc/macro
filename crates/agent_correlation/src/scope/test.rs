@@ -245,6 +245,7 @@ fn a_run_that_sends_nothing_reaches_nobody() {
         ("POST", "/channels/01a1/shares"),
         ("POST", "/events"),
         ("POST", "/scheduled-actions"),
+        ("POST", "/scheduled-actions/schedule"),
         (
             "POST",
             "/agent-sessions/a/code-executions/b/connected-apps/slack/send/calls",
