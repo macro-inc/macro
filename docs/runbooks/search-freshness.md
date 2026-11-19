@@ -188,8 +188,9 @@ dropped, or indexed wrongly, or search no longer finds the entity.
 
 ## Probe failing
 
-More than half of one type's rounds in 15 minutes failed to write or to
-search. Freshness of that type is not measured meanwhile.
+More than half of one kind of round (entity type and operation) in 15 minutes
+failed to write or to search. Freshness of that kind is not measured
+meanwhile.
 
 - Other write failures: the `search.freshness_probe.request` span names the
   route and status. A 401 means the probe user's key was revoked.

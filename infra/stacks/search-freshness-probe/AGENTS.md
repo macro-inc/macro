@@ -21,7 +21,7 @@ From `infra/`: `bun run check`, `bunx biome check stacks/search-freshness-probe`
 
 - One task, replaced stop-first (`deploymentMinimumHealthyPercent: 0`): two
   probes would rename the same fixtures and report each other's titles as
-  misses. The stop timeout is 60 s so shutdown can finish a write and delete
+  misses. The stop timeout is 90 s so shutdown can finish a write and delete
   what the probe made.
 - No ECS container health check: the runtime image has no HTTP client. The
   `search-probe-silent` monitor notices a probe that stops.

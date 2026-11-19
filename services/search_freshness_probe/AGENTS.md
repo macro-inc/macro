@@ -2,8 +2,8 @@
 
 ## What it is
 
-Search freshness, end to end: once a minute per entity type, the probe writes a
-random word into an entity of its own user through the public gateway, then
+Search freshness, end to end: once a minute per kind of round, the probe writes
+a random word into an entity of its own user through the public gateway, then
 searches for it as a client does, and records how long until search shows the
 change (`search.freshness.probe_*`, the contract of
 `infra/stacks/monitoring/monitors/search-freshness.ts`). A create, edit or
@@ -15,8 +15,9 @@ API besides `GET /health`.
 
 ## How it works
 
-- `domain/probe.rs`: one loop per type, one `search.freshness_probe` span per
-  round; a round that overruns the minute delays only its own type.
+- `domain/probe.rs`: one loop per rotation, one `search.freshness_probe` span
+  per round; a round that overruns the minute delays only its own rotation.
+  Documents have two rotations, the cycle and the crowded prefix.
 - `domain/watch.rs`: searches every 1 s for 60 s, then every 5 s to 300 s,
   until every check holds in one poll: the new token matches, the replaced one
   does not, a deleted entity matches nothing. Shown within 60 s is `seen`,
@@ -32,6 +33,9 @@ API besides `GET /health`.
   starts hundreds of indexed words (`con` + `zz` + nonce) and searches the
   prefix alone: a prefix search that keeps only the first expansions of a
   shard, as `match_phrase_prefix`'s 256 did before #11475, never finds it.
+  The search is narrowed to that document's id, so other documents sharing
+  the prefix cannot push it off the page, and polls every 5 s
+  (`Schedule::RECALL`): it is a recall check, and the query is expensive.
 - `outbound/`: the routes, with the user API key in `x-macro-user-api-key`, and
   `POST /dss/search` restricted to one type the way the SDK restricts it.
 
@@ -79,8 +83,9 @@ dedicated probe user. Required, no fallback. `ENVIRONMENT` picks the gateway
   in the trash (it answers 200), so projects are trashed, then purged.
 - Shutdown deletes the entities the process created. A crash, a kill past the
   stop timeout, or a create that commits after its request timed out leaves
-  some behind, titled `Search probe <token>`: at most a document, a project,
-  a property document, and the message channel with its message per crash.
+  some behind, titled `Search probe <token>`: at most a document, a
+  crowded-prefix document, a project, a property document, and the message
+  channel with its message per crash.
 - A failed write resets that type: a document, message or project is deleted
   and created again, a fixture looked up again, the property document and
   definition replaced.

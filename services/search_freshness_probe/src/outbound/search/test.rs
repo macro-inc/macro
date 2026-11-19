@@ -209,6 +209,7 @@ async fn a_prefix_search_asks_for_the_prefix_alone_as_a_partial_content_match() 
         .hits(&SearchQuery::Prefix {
             entity_type: EntityType::Document,
             prefix: crate::domain::model::CrowdedPrefix::new("con").expect("a prefix"),
+            entity_id: EntityId(wanted),
         })
         .await
         .expect("searched");
@@ -221,5 +222,11 @@ async fn a_prefix_search_asks_for_the_prefix_alone_as_a_partial_content_match() 
     assert_eq!(
         body["filters"]["project_filters"]["project_ids"],
         json!([NIL])
+    );
+    // Only the probe's document is searched, so others sharing the prefix
+    // cannot push it off the page.
+    assert_eq!(
+        body["filters"]["document_filters"]["document_ids"],
+        json!([wanted.to_string()])
     );
 }

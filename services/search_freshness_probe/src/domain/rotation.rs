@@ -361,12 +361,18 @@ impl<A: PropertyWrites> Rotation for PropertyValue<A> {
     }
 }
 
+/// An earlier round's document is still there: a new one would pile up.
+#[derive(Debug, thiserror::Error)]
+#[error("{0} earlier crowded-prefix documents could not be deleted")]
+pub struct NotDeleted(usize);
+
 /// A document whose body is one word sorting late under a crowded prefix,
 /// made new every round and searched for by the prefix alone. Search that
 /// expands only the first few hundred words of a shard starting with the
 /// prefix, before any permission check, never reaches it: the exact-token
-/// rounds cannot see that, this one does. The previous round's document is
-/// deleted first, unmeasured.
+/// rounds cannot see that, this one does. Each round first deletes the last
+/// round's document, unmeasured, and fails rather than create another while
+/// one is left.
 pub struct LatePrefixWord<A: CreatedWrites<Field = TitleOrBody>> {
     api: A,
     prefix: CrowdedPrefix,
@@ -406,8 +412,14 @@ impl<A: CreatedWrites<Field = TitleOrBody>> Rotation for LatePrefixWord<A> {
         A::ENTITY_TYPE
     }
 
-    async fn change(&mut self) -> Result<Change, NoChange> {
+    async fn prepare(&mut self) {
         self.delete_stale().await;
+    }
+
+    async fn change(&mut self) -> Result<Change, NoChange> {
+        if !self.stale.is_empty() {
+            return Err(failed(Operation::CrowdedPrefix)(NotDeleted(self.stale.len())).into());
+        }
 
         let texts = [
             (TitleOrBody::Body, Token::after(&self.prefix)),
@@ -427,6 +439,7 @@ impl<A: CreatedWrites<Field = TitleOrBody>> Rotation for LatePrefixWord<A> {
                 query: SearchQuery::Prefix {
                     entity_type: A::ENTITY_TYPE,
                     prefix: self.prefix.clone(),
+                    entity_id: id,
                 },
                 entity_id: id,
                 presence: Presence::Present,

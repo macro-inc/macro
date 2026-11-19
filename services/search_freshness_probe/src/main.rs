@@ -64,10 +64,13 @@ async fn run() -> Result<(), rootcause::Report> {
         shutdown,
     };
     probes.start(Created::new(Documents::new(api.clone())));
-    probes.start(LatePrefixWord::new(
-        Documents::new(api.clone()),
-        CrowdedPrefix::new(CROWDED_PREFIX)?,
-    ));
+    probes.start_with(
+        LatePrefixWord::new(
+            Documents::new(api.clone()),
+            CrowdedPrefix::new(CROWDED_PREFIX)?,
+        ),
+        Schedule::RECALL,
+    );
     probes.start(Created::new(Messages::new(api.clone())));
     probes.start(Created::new(Projects::new(api.clone())));
     probes.start(PropertyValue::new(Properties::new(api.clone())));
@@ -98,11 +101,15 @@ struct Probes {
 
 impl Probes {
     fn start<R: Rotation + 'static>(&self, rotation: R) {
+        self.start_with(rotation, Schedule::PRODUCTION);
+    }
+
+    fn start_with<R: Rotation + 'static>(&self, rotation: R, schedule: Schedule) {
         self.tracker.spawn(probe::run(
             rotation,
             self.search.clone(),
             self.metrics.clone(),
-            Schedule::PRODUCTION,
+            schedule,
             probe::PERIOD,
             self.shutdown.clone(),
         ));
