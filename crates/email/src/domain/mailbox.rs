@@ -2,8 +2,8 @@
 
 use crate::domain::backfill_jobs::worker::is_unstorable_sqlstate;
 use email_api_client::domain::models::{
-    EmailApiError, MailFolder, MailboxChangePage, MailboxMessage, ProviderId, RoundStart,
-    StreamPosition, StreamToken,
+    EmailApiError, MailFolder, MailFolderCatalog, MailboxChangePage, MailboxMessage, ProviderId,
+    RoundStart, StreamPosition, StreamToken,
 };
 use live_pass::{FolderPass, LiveImportPass, StreamKind};
 use progress::{ImportCompleted, ImportTally};
@@ -71,6 +71,10 @@ pub enum MailboxError {
     /// its MIME source; a later attempt imports it without calendar parts.
     #[error("the invitation's calendar parts are unavailable")]
     CalendarPartsUnavailable,
+    /// The account has no mailbox the provider will serve: discovery found no
+    /// Inbox. The link is marked until a later discovery finds one.
+    #[error("the account has no mailbox the provider will serve")]
+    NoMailbox,
 }
 
 /// Which projection effect deferred the work (`outlook.effect`).
@@ -249,6 +253,14 @@ pub trait MailboxSyncRepository: Send + Sync + 'static {
         lease: &CatalogLease,
         retry_after_seconds: u32,
     ) -> impl Future<Output = Result<(), MailboxError>> + Send;
+    /// Marks the lease's link as having no mailbox the provider will serve,
+    /// unless it already is, and answers how many seconds it has been
+    /// marked. Every claim but the catalog's skips a marked link; a committed
+    /// catalog or a reconnect clears the mark.
+    fn mark_no_mailbox(
+        &self,
+        lease: &CatalogLease,
+    ) -> impl Future<Output = Result<u32, MailboxError>> + Send;
     fn claim_stream(
         &self,
         lease_id: Uuid,
@@ -332,7 +344,7 @@ pub trait MailboxGateway: Send + Sync + 'static {
     fn folders(
         &self,
         mailbox: MailboxKey,
-    ) -> impl Future<Output = Result<Vec<MailFolder>, EmailApiError>> + Send;
+    ) -> impl Future<Output = Result<MailFolderCatalog, EmailApiError>> + Send;
     /// One page of a folder's delta round. `start` says what a new round
     /// (no `position`) lists; a position carries it.
     fn changes(
@@ -429,6 +441,7 @@ impl<R: MailboxSyncRepository, P: MailboxGateway, I: MailboxIngest> MailboxSyncS
             outlook.stream_kind = "folder_catalog",
             outlook.folders = tracing::field::Empty,
             outlook.provider_item_count = tracing::field::Empty,
+            graph.error_code = tracing::field::Empty,
             outlook.outcome = tracing::field::Empty,
             outlook.defer_reason = tracing::field::Empty,
             outlook.defer_seconds = tracing::field::Empty,
@@ -445,7 +458,11 @@ impl<R: MailboxSyncRepository, P: MailboxGateway, I: MailboxIngest> MailboxSyncS
         )
         .await;
         let result = match outcome {
-            Ok(folders) => {
+            Ok(MailFolderCatalog::NoMailbox { error_code }) => {
+                span.record("graph.error_code", error_code.as_deref());
+                return self.park_without_mailbox(lease).await;
+            }
+            Ok(MailFolderCatalog::Folders(folders)) => {
                 span.record("outlook.folders", span_int(folders.len()));
                 span.record(
                     "outlook.provider_item_count",
@@ -486,6 +503,30 @@ impl<R: MailboxSyncRepository, P: MailboxGateway, I: MailboxIngest> MailboxSyncS
                 Err(error)
             }
         }
+    }
+
+    /// The provider serves no mailbox for the account. Every claim but this
+    /// catalog's skips the marked link, and discovery alone looks again,
+    /// waiting as long as the link has been marked (30 s at first, at most
+    /// the 12 h a working subscription waits), so its probes double apart.
+    /// The first discovery that finds the mailbox clears the mark.
+    async fn park_without_mailbox(&self, lease: &CatalogLease) -> Result<bool, MailboxError> {
+        let span = Span::current();
+        let link_id = lease.mailbox.link_id;
+        let marked_seconds = self
+            .repo
+            .mark_no_mailbox(lease)
+            .await
+            .inspect_err(|error| record_failed(&span, link_id, error))?;
+        let delay =
+            marked_seconds.clamp(NO_MAILBOX_FIRST_PROBE_SECONDS, NO_MAILBOX_PROBE_MAX_SECONDS);
+        self.repo
+            .release_catalog(lease, delay)
+            .await
+            .inspect_err(|error| record_failed(&span, link_id, error))?;
+        let error = MailboxError::NoMailbox;
+        record_deferred(&span, link_id, &error, delay);
+        Err(error)
     }
 
     /// Process one bounded provider page. Notifications only make streams due;
@@ -817,6 +858,11 @@ const IMPORT_QUEUED_AHEAD: u32 = 200;
 /// How long such a folder waits before it checks again. A mailbox imports at
 /// most about 12 messages a second, so its two pages outlast the wait.
 const IMPORT_PACE_SECONDS: u32 = 10;
+
+/// How soon discovery looks again for a mailbox it found missing, and the
+/// longest it waits: the 12 h a working subscription waits for renewal.
+const NO_MAILBOX_FIRST_PROBE_SECONDS: u32 = 30;
+const NO_MAILBOX_PROBE_MAX_SECONDS: u32 = 12 * 60 * 60;
 
 /// Claims after which a message the provider keeps refusing outright
 /// (malformed, forbidden), or whose data the database refuses, is abandoned:

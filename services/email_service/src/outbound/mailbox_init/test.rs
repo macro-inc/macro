@@ -504,6 +504,14 @@ async fn reconnect_deletes_the_superseded_generations_sync_work(db: PgPool) {
     .execute(&db)
     .await
     .unwrap();
+    // And discovery had found no mailbox for the account.
+    sqlx::query!(
+        "UPDATE email_links SET mailbox_unavailable_at = now() WHERE id = $1",
+        link
+    )
+    .execute(&db)
+    .await
+    .unwrap();
 
     MailboxInitializationService::new(PgMailboxInitialization(db.clone()), Grants(grant(owner.0)))
         .initialize(attempt(&db, owner.clone()).await)
@@ -522,6 +530,14 @@ async fn reconnect_deletes_the_superseded_generations_sync_work(db: PgPool) {
         (0, true),
         "a reconnect retries the subscription at once, with its failures forgotten"
     );
+    let marked = sqlx::query_scalar!(
+        r#"SELECT mailbox_unavailable_at IS NOT NULL AS "marked!" FROM email_links WHERE id = $1"#,
+        link
+    )
+    .fetch_one(&db)
+    .await
+    .unwrap();
+    assert!(!marked, "a reconnect syncs the account's mailbox again");
 
     let streams = sqlx::query!(
         "SELECT generation,kind FROM email_sync_streams WHERE link_id = $1 ORDER BY kind",
