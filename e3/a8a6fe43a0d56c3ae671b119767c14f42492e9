@@ -1,0 +1,20 @@
+crates/email/src/outbound/mailbox_pg/test/crm_cleanup.rs
+  s_d68827eef00d3d::t_145b23fb2e8b58 36-40
+  s_d68827eef00d3d::t_53b8dc389618da 6
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.7.7",
+  "base_commit_sha": "e3a8a6fe43a0d56c3ae671b119767c14f42492e9",
+  "prompts": {},
+  "sessions": {
+    "s_d68827eef00d3d": {
+      "agent_id": {
+        "tool": "claude",
+        "id": "a7845e4f-e917-4189-85b6-0d6704e36200",
+        "model": "claude-opus-5-5"
+      },
+      "human_author": "Eric Hayes <56524199+ehayes2000@users.noreply.github.com>"
+    }
+  }
+}
