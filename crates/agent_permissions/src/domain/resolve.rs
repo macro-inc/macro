@@ -359,36 +359,57 @@ pub fn tighten_only(
     }
 }
 
-/// Refuses a change that asks for an operation's own state looser than the
-/// state it has now. The agent's setting on an operation only adds to its
-/// group's, so such a request would be saved as a no-op; it is refused
-/// instead, so the agent isn't told it got what it asked for.
+/// Refuses a change that asks for a state looser than its target has now:
+/// an operation's own state looser than its effective state, or a group's
+/// action looser than its setting (removing it asks for always). The agent's
+/// setting on an operation only adds to its group's, so the first would be
+/// saved as a no-op; the second would drop a person's setting even where no
+/// operation's state moves today (each operation has its own setting, or the
+/// group has no operations for that action yet), and every operation
+/// resolving through it later would be looser. Both are refused.
 pub fn asks_looser(
     catalog: &Catalog,
     (saved, overlay): (&[Rule], &[Rule]),
     changes: &[Change],
 ) -> Result<(), Vec<LoosenedOperation>> {
     let (saved, overlay) = (Layer::new(saved), Layer::new(overlay));
-    let loosened: Vec<LoosenedOperation> = changes
-        .iter()
-        .filter_map(|change| match (&change.target, change.state) {
-            (Target::Tool { service, operation }, Some(to)) => {
-                let entry = catalog.entry(service, operation)?;
+    let loosened = |entry: &CatalogEntry, from, to| LoosenedOperation {
+        service: entry.service.clone(),
+        operation: entry.operation.clone(),
+        label: entry.label.clone(),
+        from,
+        to,
+    };
+    let mut refused = false;
+    let mut operations: Vec<LoosenedOperation> = Vec::new();
+    for change in changes {
+        match &change.target {
+            Target::Tool { service, operation } => {
+                let (Some(to), Some(entry)) = (change.state, catalog.entry(service, operation))
+                else {
+                    continue;
+                };
                 let (from, _) = effective(&saved, &overlay, entry);
-                (to < from).then(|| LoosenedOperation {
-                    service: entry.service.clone(),
-                    operation: entry.operation.clone(),
-                    label: entry.label.clone(),
-                    from,
-                    to,
-                })
+                if to < from {
+                    refused = true;
+                    operations.push(loosened(entry, from, to));
+                }
             }
-            _ => None,
-        })
-        .collect();
-    if loosened.is_empty() {
-        Ok(())
-    } else {
-        Err(loosened)
+            Target::GroupAction { group, action } => {
+                let to = change.state.unwrap_or(PermissionState::Always);
+                let (from, _) = action_state(&saved, &overlay, group, *action);
+                if to < from {
+                    refused = true;
+                    operations.extend(
+                        catalog
+                            .entries
+                            .iter()
+                            .filter(|entry| entry.group == *group && entry.action == *action)
+                            .map(|entry| loosened(entry, from, to)),
+                    );
+                }
+            }
+        }
     }
+    if refused { Err(operations) } else { Ok(()) }
 }

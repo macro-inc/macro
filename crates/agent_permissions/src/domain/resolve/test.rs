@@ -189,6 +189,31 @@ fn asking_for_a_tool_state_looser_than_it_has_is_refused() {
 }
 
 #[test]
+fn removing_or_loosening_a_group_setting_is_refused_even_when_no_operation_moves() {
+    let catalog = catalog();
+    // Every documents·destroy operation has a person's own setting, so
+    // dropping the group's never moves nothing today.
+    let saved = [
+        group_rule("documents", Action::Destroy, Never),
+        tool_rule("storage", "delete_document", Never),
+        tool_rule("storage", "delete_project", Never),
+    ];
+    for state in [None, Some(Always), Some(Ask)] {
+        let drop = [change(group_action("documents", Action::Destroy), state)];
+        assert!(asks_looser(&catalog, (&saved, &[]), &drop).is_err());
+    }
+
+    // A group and action with no operations yet.
+    let saved = [group_rule("calendar", Action::Send, Never)];
+    let drop = [change(group_action("calendar", Action::Send), None)];
+    assert_eq!(asks_looser(&catalog, (&saved, &[]), &drop), Err(Vec::new()));
+
+    // Tightening a group passes.
+    let never = [change(group_action("calendar", Action::Send), Some(Never))];
+    assert_eq!(asks_looser(&catalog, (&saved, &[]), &never), Ok(()));
+}
+
+#[test]
 fn a_new_operation_takes_its_groups_action_and_a_new_group_is_always() {
     // Rules saved before `delete_project` or `calendar` existed.
     let saved = [
@@ -300,18 +325,16 @@ fn an_agents_tool_pin_is_tightening_and_survives_as_the_stricter_setting() {
 }
 
 #[test]
-fn moving_a_groups_never_onto_each_of_its_tools_is_not_loosening() {
-    assert_eq!(
-        tighten(
-            &[group_rule("documents", Action::Destroy, Never)],
-            vec![
-                change(tool("storage", "delete_document"), Some(Never)),
-                change(tool("storage", "delete_project"), Some(Never)),
-                change(group_action("documents", Action::Destroy), None),
-            ],
-        ),
-        Ok(())
-    );
+fn moving_a_groups_never_onto_each_of_its_tools_loosens_no_operation_but_is_refused() {
+    let saved = [group_rule("documents", Action::Destroy, Never)];
+    let changes = vec![
+        change(tool("storage", "delete_document"), Some(Never)),
+        change(tool("storage", "delete_project"), Some(Never)),
+        change(group_action("documents", Action::Destroy), None),
+    ];
+    assert_eq!(tighten(&saved, changes.clone()), Ok(()));
+    // An operation added to documents·destroy later would be always.
+    assert!(asks_looser(&catalog(), (&saved, &[]), &changes).is_err());
 }
 
 #[test]
