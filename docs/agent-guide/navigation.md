@@ -1279,7 +1279,9 @@ one-time ones that have run (the newest 200), each row opening that routine,
 whose **Runs** tab has its run. A sub-routine's page reads **Created by
 <name>** under its title (a link to the creator) and its **Routine actions**
 menu has **Keep as my routine**, which moves it to the main list and stops it
-pausing or being deleted with its creator. Switching a creator off pauses its
+pausing or being deleted with its creator. A copy a run scheduled from one of
+its routine's definitions shows no trigger in that section yet, and keeping it
+gives it the definition's current steps with the copy's values. Switching a creator off pauses its
 sub-routines and switching it on resumes only those; deleting it deletes them,
 and the delete dialog says **The N routines it created will be deleted too.**
 In a run's details, **Created** lists the sub-routines that run created.

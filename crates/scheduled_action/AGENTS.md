@@ -281,8 +281,9 @@ each run.
   `created_by_run_id`, `key`, `paused_by_parent`). The create's credential
   proves the run, never its body (`RunCaller`): a code step's token is signed
   for its routine (`agent_correlation::context::current_routine`), and an Ask
-  AI step's code-mode invocation resolves to its session (`RequestSessions`),
-  whose id is the run's id. A run's id is its claim's token
+  AI step's code-mode invocation names its session, which the request's
+  boundary validated (`agent_correlation::context::current_session`), whose
+  id is the run's id. A run's id is its claim's token
   (`ExecutionHandle::for_run`): the session its agent step opens and its
   history record take it, so `scheduled_action.claim_token` names the run in
   progress and nothing matches once the claim is released. A routine made
@@ -313,7 +314,8 @@ each run.
 - Defined sub-routines (`routine_program::SubRoutineDefinition`): a
   routine's program can define `sub_routines` (name, title, typed inputs,
   steps, apps) and `inputs`. `POST /scheduled-actions/schedule`
-  (`schedule` in `service/sub_routines.rs`) takes
+  (`inbound/axum_router/schedule.rs`, then `schedule` in
+  `service/sub_routines.rs`) takes
   `{ subRoutine, trigger, inputs?, name?, key? }`. It makes a copy under the
   running routine with the same `RunCaller` rules and cap as a create.
   Its task is only `{"sub_routine", "inputs"}` (`SubRoutineCopy`), its kind and run
