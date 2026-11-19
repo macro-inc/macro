@@ -6,6 +6,7 @@ mod export;
 mod guest_policy;
 mod invitations;
 mod join_requests;
+mod nul_characters;
 #[cfg(feature = "outlook")]
 mod outlook;
 mod replacement;
@@ -868,6 +869,7 @@ impl CalendarRepository for PgCalendarRepository {
             #[cfg(test)]
             CalendarEventWrite::Fixture(upsert) => upsert,
         };
+        nul_characters::remove_from_upsert(&mut upsert);
         let source = upsert.source.details();
         let source_kind = upsert.source.kind();
         let source_link_id = source.email_link_id;
