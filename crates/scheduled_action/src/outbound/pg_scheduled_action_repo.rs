@@ -72,37 +72,6 @@ fn stored_appearance(stored: Option<Value>) -> Result<EntityAppearance> {
         .unwrap_or_default())
 }
 
-/// Whether routine `id`'s activity records more changes to its look than
-/// `by_agent`, the number an agent's pick recorded. `set_appearance` records
-/// each change with the look, here and on replicas built before this code,
-/// so any beyond the agent's are the owner's. Reads at most one more event
-/// than `by_agent`, however long the routine's history.
-async fn owner_changes_recorded(
-    tx: &mut sqlx::PgConnection,
-    id: Uuid,
-    by_agent: i32,
-) -> Result<bool> {
-    let by_agent = i64::from(by_agent.max(0));
-    let seen = sqlx::query_scalar!(
-        r#"
-        SELECT count(*) AS "seen!"
-        FROM (
-            SELECT 1
-            FROM activity_events
-            WHERE entity_type = 'scheduled_action'
-                AND entity_id = $1
-                AND action = 'appearance_changed'
-            LIMIT $2
-        ) AS recorded
-        "#,
-        id.to_string(),
-        by_agent + 1,
-    )
-    .fetch_one(tx)
-    .await?;
-    Ok(seen > by_agent)
-}
-
 /// One mapping for every action query, including management and dispatch.
 struct ActionRow {
     id: Uuid,
@@ -524,10 +493,11 @@ impl<B: BotFacts + 'static> ScheduledActionRepo for PgScheduledActionRepo<B> {
         let chosen_by_owner = stored.appearance_chosen_by_owner == Some(true)
             || (stored.appearance_chosen_by_owner.is_none() && !previous.is_default())
             || (!owners
-                && owner_changes_recorded(
-                    &mut tx,
-                    change.id,
-                    stored.appearance_changes_by_agent.unwrap_or(0),
+                && activity::outbound::pg_activity_repo::appearance_changes_exceed(
+                    &mut *tx,
+                    EntityType::ScheduledAction,
+                    &change.id.to_string(),
+                    u32::try_from(stored.appearance_changes_by_agent.unwrap_or(0)).unwrap_or(0),
                 )
                 .await?);
         // An agent's pick never replaces the owner's choice.

@@ -1,0 +1,24 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "\n        SELECT count(*) AS \"seen!\"\n        FROM (\n            SELECT 1\n            FROM activity_events\n            WHERE entity_type = $1\n                AND entity_id = $2\n                AND action = 'appearance_changed'\n            LIMIT $3\n        ) AS recorded\n        ",
+  "describe": {
+    "columns": [
+      {
+        "ordinal": 0,
+        "name": "seen!",
+        "type_info": "Int8"
+      }
+    ],
+    "parameters": {
+      "Left": [
+        "Text",
+        "Text",
+        "Int8"
+      ]
+    },
+    "nullable": [
+      null
+    ]
+  },
+  "hash": "3063dba5170f2d4f3fa31b0dc511e9beb3414c62b32c009b71c8deac6c956506"
+}
