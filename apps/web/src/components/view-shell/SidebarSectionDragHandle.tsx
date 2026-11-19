@@ -69,15 +69,14 @@ export function SidebarSectionDragHandle<Key extends string>(props: {
     event.preventDefault();
     event.stopPropagation();
   };
-  // The 24px grip uses the outer 8px gutter plus 16px reserved here, so it
-  // never overlaps navigation rows. Hidden grips also opt out of hit testing.
+  // Overlay the existing gutter/leading edge without changing row alignment.
+  // Hidden grips opt out of hit testing so navigation remains unobstructed.
   return (
     <div
       ref={draggable.ref}
       data-sidebar-section-handle={props.section}
       class={cn(
         'relative group/sidebar-reorder',
-        !props.disabled && props.gutter && 'pl-4',
         !props.disabled && !props.gutter && 'cursor-grab active:cursor-grabbing'
       )}
       onMouseDown={start}

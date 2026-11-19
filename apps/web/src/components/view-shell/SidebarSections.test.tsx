@@ -1,6 +1,8 @@
 import { fireEvent, render } from '@solidjs/testing-library';
 import { DragDropProvider, DragDropSensors } from '@thisbeyond/solid-dnd';
+import { transform } from 'lightningcss';
 import { createSignal, Show } from 'solid-js';
+import { compile } from 'tailwindcss';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { CollapsibleSection } from './CollapsibleSection';
 import { ViewSidebar } from './ViewSidebar';
@@ -270,6 +272,79 @@ describe('sidebar section composition', () => {
           '{}'
       ).order
     ).toEqual(['mail-folders', 'last']);
+  });
+
+  it('keeps the first row at the same left offset without a grip, hidden, or shown', async () => {
+    const result = render(() => (
+      <DragDropProvider>
+        <ViewSidebar.Root reorderId="grip-layout">
+          <ViewSidebar.Content>
+            <ViewSidebar.Section id="reference" label="Reference" pinned>
+              <ViewSidebar.Item>Reference row</ViewSidebar.Item>
+            </ViewSidebar.Section>
+            <ViewSidebar.Section id="folders" label="Folders" headerless>
+              <ViewSidebar.Item>First row</ViewSidebar.Item>
+            </ViewSidebar.Section>
+          </ViewSidebar.Content>
+        </ViewSidebar.Root>
+      </DragDropProvider>
+    ));
+    // Compile the rendered utilities instead of mocking padding or relying on
+    // jsdom's always-zero bounding boxes. Visibility is controlled below because
+    // jsdom does not implement hover/focus-within layout.
+    const compiler = await compile(
+      '@theme inline { --spacing: 4px; } @tailwind utilities;'
+    );
+    const classes = [...result.container.querySelectorAll('[class]')].flatMap(
+      (element) => [...element.classList].filter((name) => !name.includes(':'))
+    );
+    const stylesheet = document.createElement('style');
+    stylesheet.textContent = transform({
+      filename: 'sidebar-grip-layout.css',
+      code: Buffer.from(compiler.build(classes)),
+      minify: true,
+      targets: { chrome: 80 << 16 },
+    }).code.toString();
+    document.head.append(stylesheet);
+    try {
+      const firstRow = result.getByRole('button', { name: 'First row' });
+      const referenceRow = result.getByRole('button', {
+        name: 'Reference row',
+      });
+      const grip = result.getByRole('button', { name: 'Reorder Folders' });
+      const overlay = grip.parentElement;
+      if (!overlay) throw new Error('Missing grip overlay');
+      // Sum computed box insets to the section, including every extra wrapper.
+      const rowLeft = (row: HTMLElement) => {
+        let offset = 0;
+        for (
+          let node: HTMLElement | null = row;
+          node && node.tagName !== 'SECTION';
+          node = node.parentElement
+        ) {
+          const style = getComputedStyle(node);
+          offset += Number.parseFloat(style.marginLeft) || 0;
+          if (node !== row) {
+            offset += Number.parseFloat(style.paddingLeft) || 0;
+            offset += Number.parseFloat(style.borderLeftWidth) || 0;
+          }
+        }
+        return offset;
+      };
+      const referenceLeft = rowLeft(referenceRow);
+      expect(getComputedStyle(overlay).position).toBe('absolute');
+      expect(getComputedStyle(overlay).opacity).toBe('0');
+      expect(rowLeft(firstRow)).toBe(referenceLeft);
+      overlay.style.opacity = '1';
+      grip.focus();
+      expect(getComputedStyle(overlay).opacity).toBe('1');
+      expect(rowLeft(firstRow)).toBe(referenceLeft);
+      grip.blur();
+      overlay.style.opacity = '0';
+      expect(rowLeft(firstRow)).toBe(referenceLeft);
+    } finally {
+      stylesheet.remove();
+    }
   });
 
   it('starts unnamed-section dragging from its grip, not its navigation buttons', () => {
