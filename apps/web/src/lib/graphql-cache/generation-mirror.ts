@@ -1,4 +1,3 @@
-import { z } from 'zod/v3';
 import {
   type CacheAuthority,
   CacheAuthoritySchema,
@@ -40,50 +39,13 @@ export function rememberGeneration(authority: CacheAuthority): void {
 
 export const startupAuthorityHint = readGenerationMirror();
 
-const PRUNED_KEY = 'graphql-cache:permission-pruned:v1';
-const PrunedGenerationSchema = z.object({
-  identity: z.string(),
-  generation: z.string(),
-});
-
-/** The owner generation whose retirement last finished pruning this profile's
- * persisted queries. Unreadable storage only costs another prune. */
-function readPrunedGeneration(
-  identity = getOrCreateCacheScope()
-): string | undefined {
-  try {
-    const parsed = PrunedGenerationSchema.safeParse(
-      JSON.parse(localStorage.getItem(PRUNED_KEY) ?? 'null')
-    );
-    if (parsed.success && parsed.data.identity === identity)
-      return parsed.data.generation;
-  } catch {
-    // The next start prunes again.
-  }
-}
-
-export function rememberPrunedGeneration(
-  generation: string,
-  identity = getOrCreateCacheScope()
-): void {
-  try {
-    localStorage.setItem(PRUNED_KEY, JSON.stringify({ identity, generation }));
-  } catch {
-    // The next start prunes again.
-  }
-}
-
-/** Read with the hint, before this page restores anything from disk. */
-export const startupPrunedGeneration = readPrunedGeneration();
-
 /**
- * What the first owner observation of a page retires. `hint` and
- * `prunedGeneration` are what the page read as it started.
+ * What the first owner observation of a page retires. `hint` is the mirror the
+ * page read as it started.
  */
 export function initialCacheRetirement(
   hint: CacheAuthority | undefined,
-  owner: CacheAuthority,
-  prunedGeneration?: string
+  owner: CacheAuthority
 ): 'session' | 'permission' | undefined {
   if (
     hint &&
@@ -92,13 +54,12 @@ export function initialCacheRetirement(
     return 'session';
   if (owner.policy !== null && !owner.ready) return 'permission';
   if (owner.policy?.endsWith(':denied')) {
-    // A durable denial is found again on every start. Its full prune need not
-    // repeat when the page began under that exact denial with the prune already
-    // complete: nothing it restored can predate the denial. Any other start may
-    // hold snapshots restored before another window recorded or pruned it.
-    const startedDenied =
-      hint?.generation === owner.generation && hint.policy === owner.policy;
-    return startedDenied && prunedGeneration === owner.generation
+    // A durable denial is found again on every start. A page that began under
+    // that exact denial restored nothing but its identity, because persistence
+    // stays closed while the mirror or the owner says denied, and fetched
+    // everything it shows under the denial: it has nothing to retire. Any other
+    // start may hold snapshots restored before another window recorded it.
+    return hint?.generation === owner.generation && hint.policy === owner.policy
       ? undefined
       : 'permission';
   }

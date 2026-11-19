@@ -49,6 +49,11 @@ export type QueryPersistence = {
   clear: () => Promise<void>;
   /** Retire selected server snapshots from memory and disk, fencing pending restores. */
   retire: (matches: (key: QueryKey) => boolean) => Promise<void>;
+  /**
+   * Remove from disk what the permission policy excludes now, leaving memory
+   * alone: another window may have written it after this profile was pruned.
+   */
+  pruneExcluded: () => Promise<void>;
   /** Await pending local writes before restarting the native app. */
   flush: () => Promise<void>;
   dispose: () => void;
@@ -345,6 +350,14 @@ export function setupQueryPersistence(
       // A failed prune leaves this scope quarantined; a later retirement or
       // flush retries it without blocking fresh in-memory query results.
       await pruneRetired();
+    },
+    async pruneExcluded() {
+      if (!exclude) return;
+      await Promise.all(
+        scopes.map((scope) =>
+          scope.store.prune((entry) => !exclude(entry.queryKey))
+        )
+      );
     },
     async clear() {
       generation += 1;

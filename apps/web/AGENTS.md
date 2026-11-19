@@ -116,10 +116,12 @@ existing generation. Keep the account fence independently of access policy.
 Retire all TanStack memory snapshots on permission changes. If disk pruning
 fails, unpause live queries and refetch while keeping the affected persistence
 scope quarantined against restore and writes until a later prune succeeds.
-A durable denial is found again on every start: prune for it once per owner
-generation. Skip the prune only on a start that read, before restoring anything,
-both that exact denial in the mirror and its completed prune; any other start may
-hold snapshots restored before another window recorded the denial and retires them.
+While access is denied, or the startup mirror says so before the owner is
+observed, restore and save nothing but the identity snapshot: any family can hold
+what was fetched before the denial, and another window can write its copy after
+this profile was pruned. A durable denial is found again on every start. A start
+that began under that exact denial therefore retires nothing and only sweeps
+excluded entries from disk; any other start retires what it restored.
 
 Keep mutation outcomes and authored queue state through retirement. Stale queued
 commits settle identities without copied content, projections or link recipes;

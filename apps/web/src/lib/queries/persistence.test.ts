@@ -1039,6 +1039,43 @@ it('never restores or persists excluded content, even when another instance flus
   currentClient.clear();
 });
 
+it('drops excluded entries from disk without clearing memory or the entries it keeps', async () => {
+  const store = createMockStore();
+  const queryClient = new QueryClient();
+  let denied = false;
+  const persistence = setupQueryPersistence({
+    queryClient,
+    scopes: [createScope([], store)],
+    exclude: (key) => denied && key[0] !== 'identity',
+  });
+  const channels = ['channel', 'list'];
+  const identity = ['identity'];
+  queryClient.setQueryData(channels, { rows: ['fetched'] });
+  queryClient.setQueryData(identity, { id: 'viewer' });
+  expect(store.entries.size).toBe(2);
+  denied = true;
+  await persistence.pruneExcluded();
+  expect(store.entries.has(JSON.stringify(channels))).toBe(false);
+  expect(store.entries.has(JSON.stringify(identity))).toBe(true);
+  // Memory holds what this page fetched; only the disk is swept.
+  expect(queryClient.getQueryData(channels)).toEqual({ rows: ['fetched'] });
+  persistence.dispose();
+  queryClient.clear();
+});
+
+it('does not scan the disk for a sweep when no policy excludes anything', async () => {
+  const store = createMockStore();
+  const queryClient = new QueryClient();
+  const persistence = setupQueryPersistence({
+    queryClient,
+    scopes: [createScope([], store)],
+  });
+  await persistence.pruneExcluded();
+  expect(store.prune).not.toHaveBeenCalled();
+  persistence.dispose();
+  queryClient.clear();
+});
+
 it('quarantines disk snapshots after a failed retirement until a later prune succeeds', async () => {
   const store = createMockStore();
   const queryClient = new QueryClient();

@@ -9,9 +9,7 @@ import {
 import { StaleCacheAuthorityError } from '@graphql-cache/authority';
 import {
   initialCacheRetirement,
-  rememberPrunedGeneration,
   startupAuthorityHint,
-  startupPrunedGeneration,
 } from '@graphql-cache/generation-mirror';
 import type { CacheHost } from '@graphql-cache/host/types';
 import { cacheSessionGeneration } from '@graphql-cache/session-generation';
@@ -70,11 +68,7 @@ async function retireVisibleSnapshots(
       await queryClient.cancelQueries();
       // Permission changes are rare and CRM references can appear in any query
       // family. Retire every TanStack snapshot rather than maintain a second schema.
-      if (scope) {
-        await queryPersistence.retire(() => true);
-        // Only a completed prune lets a later start skip it for this generation.
-        rememberPrunedGeneration(generation);
-      }
+      if (scope) await queryPersistence.retire(() => true);
     }, generation);
   } finally {
     // Failed disk pruning remains quarantined, but fresh server reads can still
@@ -155,16 +149,16 @@ function install() {
       // startup write stamp was rejected by the shared owner.
     },
     restore: (authority) => {
-      const scope = initialCacheRetirement(
-        startupAuthorityHint,
-        authority,
-        startupPrunedGeneration
-      );
+      const scope = initialCacheRetirement(startupAuthorityHint, authority);
       if (scope)
         perfMark('cache.generation-baseline', {
           mirrorMatches: false,
           retirement: scope,
         });
+      else if (authority.policy?.endsWith(':denied'))
+        // This page restored nothing under the denial it began with. Another
+        // window may still have written after the prune: drop that from disk.
+        fireAndForget(queryPersistence.pruneExcluded(), 'crm.access.sweep');
       return scope ?? 'none';
     },
     fetchProof,

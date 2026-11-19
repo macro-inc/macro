@@ -7,13 +7,14 @@ import { afterEach, beforeEach, expect, it, vi } from 'vitest';
 
 const mocks = vi.hoisted(() => ({
   retire: vi.fn(),
+  sweep: vi.fn(),
   refetch: vi.fn(),
   cancel: vi.fn(),
 }));
 vi.mock('@queries/auth/user-info', () => ({ fetchUserInfo: vi.fn() }));
 vi.mock('./client', () => ({ dssFetch: vi.fn() }));
 vi.mock('@queries/client', () => ({
-  queryPersistence: { retire: mocks.retire },
+  queryPersistence: { retire: mocks.retire, pruneExcluded: mocks.sweep },
   queryClient: { refetchQueries: mocks.refetch, cancelQueries: mocks.cancel },
 }));
 vi.mock('@core/constant/servers', () => ({
@@ -29,6 +30,7 @@ beforeEach(() => {
     setItem: (key: string, value: string) => values.set(key, value),
   });
   mocks.retire.mockReset().mockResolvedValue(undefined);
+  mocks.sweep.mockReset().mockResolvedValue(undefined);
   mocks.refetch.mockReset().mockResolvedValue(undefined);
   mocks.cancel.mockReset().mockResolvedValue(undefined);
 });
@@ -44,8 +46,8 @@ const deniedAt = (generation: string, identity: string): CacheAuthority => ({
 
 type Profile = {
   identity: string;
-  /** What a window's owner observation and completed prune leave behind. */
-  record(authority: CacheAuthority, pruned?: string): void;
+  /** What another window's owner observation leaves in the shared mirror. */
+  record(authority: CacheAuthority): void;
 };
 
 /**
@@ -64,16 +66,13 @@ async function start(
   const { cacheSessionGeneration } = await import(
     '@graphql-cache/session-generation'
   );
-  const { rememberGeneration, rememberPrunedGeneration } = await import(
+  const { rememberGeneration } = await import(
     '@graphql-cache/generation-mirror'
   );
   const { getOrCreateCacheScope } = await import('@graphql-cache/scope');
   const profile: Profile = {
     identity: getOrCreateCacheScope(),
-    record(authority, pruned) {
-      rememberGeneration(authority);
-      if (pruned) rememberPrunedGeneration(pruned);
-    },
+    record: rememberGeneration,
   };
   meanwhile?.(profile);
   const state = deniedAt(generation, profile.identity);
@@ -96,10 +95,11 @@ async function start(
   rememberGeneration(state);
 }
 
-it('prunes once for a durable denial and not again on later starts at that generation', async () => {
+it('retires once for a durable denial and only sweeps the disk on later starts under it', async () => {
   const denied = '00000000-0000-4000-8000-000000000002';
   await start(denied);
   expect(mocks.retire).toHaveBeenCalledOnce();
+  expect(mocks.sweep).not.toHaveBeenCalled();
 
   mocks.retire.mockClear();
   mocks.cancel.mockClear();
@@ -108,12 +108,15 @@ it('prunes once for a durable denial and not again on later starts at that gener
   expect(mocks.retire).not.toHaveBeenCalled();
   expect(mocks.cancel).not.toHaveBeenCalled();
   expect(mocks.refetch).not.toHaveBeenCalled();
+  expect(mocks.sweep).toHaveBeenCalledOnce();
 
+  mocks.sweep.mockClear();
   await start('00000000-0000-4000-8000-000000000003');
   expect(mocks.retire).toHaveBeenCalledOnce();
+  expect(mocks.sweep).not.toHaveBeenCalled();
 });
 
-it('prunes again on the next start when the earlier prune failed', async () => {
+it('sweeps the disk on the next start when the first prune failed', async () => {
   const denied = '00000000-0000-4000-8000-000000000002';
   mocks.retire.mockRejectedValueOnce(new Error('disk failure'));
   await start(denied);
@@ -121,27 +124,18 @@ it('prunes again on the next start when the earlier prune failed', async () => {
 
   mocks.retire.mockClear();
   await start(denied);
-  expect(mocks.retire).toHaveBeenCalledOnce();
+  // Nothing is restored while denied, so only the disk is owed a cleanup.
+  expect(mocks.retire).not.toHaveBeenCalled();
+  expect(mocks.sweep).toHaveBeenCalledOnce();
 });
 
 it('retires what a start restored when another window recorded the denial during that start', async () => {
   const denied = '00000000-0000-4000-8000-000000000002';
   // This page read its startup state before the denial was recorded.
   await start(denied, (profile) =>
-    profile.record(deniedAt(denied, profile.identity), denied)
+    profile.record(deniedAt(denied, profile.identity))
   );
   expect(mocks.retire).toHaveBeenCalledOnce();
   expect(mocks.cancel).toHaveBeenCalled();
-});
-
-it('retires what a start restored when the prune for its denial finished after the start began', async () => {
-  const denied = '00000000-0000-4000-8000-000000000002';
-  mocks.retire.mockRejectedValueOnce(new Error('disk failure'));
-  await start(denied);
-  mocks.retire.mockClear();
-  // The mirror already names the denial; its prune completes only now.
-  await start(denied, (profile) =>
-    profile.record(deniedAt(denied, profile.identity), denied)
-  );
-  expect(mocks.retire).toHaveBeenCalledOnce();
+  expect(mocks.sweep).not.toHaveBeenCalled();
 });

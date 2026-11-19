@@ -94,33 +94,20 @@ const denied: CacheAuthority = {
   generation: '00000000-0000-4000-8000-000000000003',
   policy: '00000000-0000-4000-8000-000000000002:denied',
 };
-it('skips the prune only for a start that began under the recorded denial with its prune complete', () => {
-  expect(
-    initialCacheRetirement(denied, denied, denied.generation)
-  ).toBeUndefined();
+it('retires nothing for a start that began under the recorded denial', () => {
+  expect(initialCacheRetirement(denied, denied)).toBeUndefined();
 });
 
 it.each([
-  ['the prune for it never completed', denied, undefined],
-  [
-    'the completed prune was for an earlier generation',
-    denied,
-    authority.generation,
-  ],
-  [
-    'the start began while access was still allowed',
-    authority,
-    denied.generation,
-  ],
+  ['the start began while access was still allowed', authority],
   [
     'the start began under an earlier denial',
     { ...denied, generation: '00000000-0000-4000-8000-000000000004' },
-    denied.generation,
   ],
-  ['the start had no record of the owner', undefined, denied.generation],
+  ['the start had no record of the owner', undefined],
 ] as const)(
   'retires what a start restored for a recorded denial when %s',
-  (_case, hint, pruned) => {
-    expect(initialCacheRetirement(hint, denied, pruned)).toBe('permission');
+  (_case, hint) => {
+    expect(initialCacheRetirement(hint, denied)).toBe('permission');
   }
 );
