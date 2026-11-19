@@ -14,7 +14,7 @@ use nom::{
 
 use crate::Error;
 use crate::phrase::{Clock, DayRef, Daypart, Edge, Length, Meridiem, Period, Span, WeekRef};
-use crate::words::{self, RelativeWord, Unit};
+use crate::words::{self, Relation, RelativeWord, Unit};
 
 /// One thing a phrase says.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
@@ -550,27 +550,34 @@ fn named_date(i: &str) -> Res<'_, Item> {
     .parse(i)
 }
 
+fn relation_word(expected: Relation) -> impl Fn(&str) -> Res<'_, &str> {
+    move |i| verify(word, |w: &str| words::relation(w) == Some(expected)).parse(i)
+}
+
 /// `this`, `next`, `last`: how many periods from the current one.
 fn relation(i: &str) -> Res<'_, i32> {
-    alt((
-        value(0, kw("this")),
-        value(1, kws(&["next", "nxt", "following"])),
-        value(-1, kws(&["last", "previous", "prev", "past"])),
-    ))
+    map_opt(word, |w| match words::relation(w)? {
+        Relation::This => Some(0),
+        Relation::Next => Some(1),
+        Relation::Last => Some(-1),
+        Relation::Coming => None,
+    })
     .parse(i)
 }
 
+/// A week, month or year, named as its unit is.
 fn period_word(i: &str) -> Res<'_, Period> {
-    alt((
-        value(Period::Week, kws(&["week", "wk"])),
-        value(Period::Month, kws(&["month", "mo", "mth"])),
-        value(Period::Year, kws(&["year", "yr"])),
-    ))
+    map_opt(word, |w| match words::unit(w)? {
+        (Unit::Week, 1) => Some(Period::Week),
+        (Unit::Month, 1) => Some(Period::Month),
+        (Unit::Year, 1) => Some(Period::Year),
+        _ => None,
+    })
     .parse(i)
 }
 
 fn after_next(i: &str) -> Res<'_, ()> {
-    value((), (sp, kw("after"), sp, kw("next"))).parse(i)
+    value((), (sp, kw("after"), sp, relation_word(Relation::Next))).parse(i)
 }
 
 /// `next week`, `this weekend`, `the week after next`, `end of next month`, `eow`.
@@ -618,13 +625,32 @@ fn period(i: &str) -> Res<'_, Item> {
     .parse(i)
 }
 
+/// `this past`, `this coming`, or a relation alone.
 fn week_ref(i: &str) -> Res<'_, WeekRef> {
     alt((
-        value(WeekRef::Last, (kw("this"), sp, kw("past"))),
-        value(WeekRef::Upcoming, (kw("this"), sp, kw("coming"))),
-        value(WeekRef::Upcoming, kws(&["this", "coming", "upcoming"])),
-        value(WeekRef::Next, kws(&["next", "nxt", "following"])),
-        value(WeekRef::Last, kws(&["last", "past", "previous", "prev"])),
+        value(
+            WeekRef::Last,
+            (
+                relation_word(Relation::This),
+                sp,
+                relation_word(Relation::Last),
+            ),
+        ),
+        value(
+            WeekRef::Upcoming,
+            (
+                relation_word(Relation::This),
+                sp,
+                relation_word(Relation::Coming),
+            ),
+        ),
+        map_opt(word, |w| {
+            Some(match words::relation(w)? {
+                Relation::This | Relation::Coming => WeekRef::Upcoming,
+                Relation::Next => WeekRef::Next,
+                Relation::Last => WeekRef::Last,
+            })
+        }),
     ))
     .parse(i)
 }
@@ -651,7 +677,11 @@ fn weekday(i: &str) -> Res<'_, Item> {
 /// `this morning`, `this evening`: today's, even once it has passed.
 fn today_daypart(i: &str) -> Res<'_, Vec<Item>> {
     map(
-        (kw("this"), sp, map_opt(word, words::daypart)),
+        (
+            relation_word(Relation::This),
+            sp,
+            map_opt(word, words::daypart),
+        ),
         |(.., part)| vec![Item::Day(DayRef::Relative(0)), Item::Daypart(part)],
     )
     .parse(i)

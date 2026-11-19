@@ -34,9 +34,11 @@
 //!   [`Pick::End`] takes the end and [`Pick::Start`] the start. `in 2 hours`
 //!   is elapsed time from now, so `in 2 hours for 30 min` ends 150 minutes
 //!   from now.
-//! - Day and month names take common abbreviations (`tues`, `thurs`, `sept`)
-//!   and typos: one in a name of six or seven letters (`fridya`), two from
-//!   eight letters up (`thrsdy`). The closest name wins; a tie isn't read.
+//! - Names of days, months, units and relations (`next`, `last`) may be cut
+//!   short down to a few letters (`mond`, `tomor`, `nex`, `hou`), and take
+//!   common abbreviations (`thrs`, `tmrw`, `nxt`, `wk`) and typos: one in a
+//!   name of six or seven letters (`fridya`), two from eight letters up
+//!   (`thrsdy`). The closest name wins; a word that could be two isn't read.
 //! - Filler such as `by`, `due`, `on`, `at` and `the` is ignored.
 //! - Repeating phrases (`every friday`) are not read yet.
 #![deny(missing_docs)]

@@ -198,6 +198,46 @@ fn weekdays_and_their_abbreviations() {
 }
 
 #[test]
+fn words_cut_short_or_misspelled() {
+    check(
+        FRIDAY,
+        Caller::TaskDue,
+        &[
+            ("nxt mond", "2026-11-09"),
+            ("next mond", "2026-11-09"),
+            ("mond", "2026-11-09"),
+            ("nex wedn", "2026-11-11"),
+            ("thursd", "2026-11-12"),
+            ("satur", "2026-11-07"),
+            ("this past mond", "2026-11-02"),
+            ("folowing friday", "2026-11-13"),
+            ("upcoming friday", "2026-11-06"),
+            ("prev friday", "2026-10-30"),
+            ("previus friday", "2026-10-30"),
+            ("friday after nxt", "2026-11-20"),
+            ("tomo", "2026-11-07"),
+            ("tomor", "2026-11-07"),
+            ("yester", "2026-11-05"),
+            ("toda", "2026-11-06"),
+            ("septem 12 2027", "2027-09-12"),
+            ("novem 12", "2026-11-12"),
+            ("next wee", "2026-11-13"),
+            ("next mont", "2026-12-31"),
+            ("nxt mo", "2026-12-31"),
+            ("in 3 wks", "2026-11-27"),
+            ("in 2 minuts", "+2m"),
+            ("in 3 hou", "+180m"),
+            ("in 2 monts", "2027-01-06"),
+            // Cut too short to say which word it is.
+            ("yes", "error: Unrecognized"),
+            ("ton", "error: Unrecognized"),
+            ("in 2 mon", "error: Unrecognized"),
+            ("nexy friday", "error: Unrecognized"),
+        ],
+    );
+}
+
+#[test]
 fn weekdays_from_other_days_of_the_week() {
     check(
         MONDAY,
