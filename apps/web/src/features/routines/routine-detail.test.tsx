@@ -1438,6 +1438,7 @@ describe('sub-routines defined once', () => {
           sub_routines: [
             {
               ...remind,
+              mcp_servers: [],
               steps: [
                 {
                   ...remind.steps[0],
@@ -1447,6 +1448,36 @@ describe('sub-routines defined once', () => {
             },
           ],
         },
+      }),
+    });
+  });
+
+  it('sends an explicit empty app selection when the last definition app is removed', async () => {
+    setSchedules([
+      {
+        ...parent,
+        id: 'routine-id',
+        task: {
+          steps: [{ type: 'agent', model: 'model', instructions: 'Plan' }],
+          sub_routines: [
+            {
+              ...remind,
+              mcp_servers: [{ app_slug: 'example', server_name: 'Example' }],
+            },
+          ],
+        },
+      },
+    ]);
+    render(() => <Routine />);
+    fireEvent.click(screen.getByRole('button', { name: 'Remove Example' }));
+    await vi.advanceTimersByTimeAsync(300);
+
+    expect(mocks.update).toHaveBeenCalledExactlyOnceWith({
+      scheduleId: 'routine-id',
+      body: expect.objectContaining({
+        task: expect.objectContaining({
+          sub_routines: [{ ...remind, mcp_servers: [] }],
+        }),
       }),
     });
   });

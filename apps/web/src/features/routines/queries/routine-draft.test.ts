@@ -869,6 +869,7 @@ describe('routines with sub-routines', () => {
       sub_routines: [
         {
           ...remind,
+          mcp_servers: [],
           steps: [
             {
               type: 'agent',

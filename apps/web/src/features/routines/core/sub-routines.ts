@@ -47,7 +47,8 @@ export function subRoutinesToWire(
     title: definition.title,
     ...(definition.inputs.length ? { inputs: definition.inputs } : {}),
     steps: stepsToWire(definition.steps),
-    ...(definition.apps.length ? { mcp_servers: definition.apps } : {}),
+    // Clearing a definition's apps is an explicit empty selection.
+    mcp_servers: definition.apps,
   }));
 }
 
