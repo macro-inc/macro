@@ -3167,10 +3167,10 @@ impl<S: Storage> Engine<S> {
         self.query_watches.remove(op_id);
     }
 
-    /// Handles records changed *outside* this engine instance (another tab's
-    /// engine in the dedicated-worker fallback topology, or push-driven
-    /// invalidation): evicts them from the hot tier so the next read hits
-    /// storage, and returns the local active operations that depend on them.
+    /// Handles records invalidated from outside a write, such as a push:
+    /// evicts them from the hot tier so the next read hits storage, and returns
+    /// the local active operations that depend on them. One engine owns a
+    /// database at a time, so no other engine instance changes its records.
     pub fn invalidate_keys<'k>(
         &mut self,
         keys: impl IntoIterator<Item = &'k EntityKey<'static>>,

@@ -98,6 +98,13 @@ async fn opfs_stale_generation_settles_commands_without_restoring_retired_respon
             ),
         )
         .await;
+        let records = result(engine.read_records_by_keys(
+            "fragment Thread on GraphqlSoupEmailThread { id name }".into(),
+            "Thread".into(),
+            js(json!(["GraphqlSoupEmailThread:server-thread"])),
+        ))
+        .await;
+        assert!(!records.to_string().contains("retired subject"));
     }
     assert_eq!(result(engine.inspect_mutations()).await, json!([]));
     JsFuture::from(engine.close()).await.unwrap();
