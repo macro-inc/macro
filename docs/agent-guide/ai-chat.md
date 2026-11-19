@@ -1761,6 +1761,15 @@ neither:
   `Didn't run a program that may … · Declined`, not counted as a failure. A
   step the bootstrap backstop refused mid-run reads **Blocked**.
 
+With `enable-agent-permissions` off for the session's owner nothing here
+happens: no `js_tools`, no `ShowPermissions`, no holds, and runs go as before.
+With it off for the viewer (on in local stacks, PostHog elsewhere) the cards
+read nothing from the permissions API: `ShowPermissions` is a plain **Show
+permissions** row, the blocked card has no **Review permissions**, and a hold
+is still answered (approve, allow for the session, decline) without the link
+to the agent's permissions. Every surface and its flag:
+`crates/agent_permissions/AGENTS.md`.
+
 When the agent calls `ShowPermissions`, the transcript shows **<Agent>'s
 permissions**: its one-line reason, then the asked groups' actions and tools
 with the same `Allow · Ask · Never` controls as the settings page, reading the
