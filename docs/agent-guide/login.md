@@ -208,15 +208,14 @@ on this device and its S256 challenge, sent as `session_code_challenge` on
 `/login/sso`. A code that comes back in a URL is redeemed, with the verifier in
 the `x-session-code-verifier` header, only when the URL's `sign_in_attempt`
 names an attempt this device still holds (15 minutes, the five newest, each
-used once unless the server failed to redeem its code, all forgotten on
-sign-out); any other `?token=`, including a reload of a page still carrying
-one, leaves the sign-in page as it is. The native sheet keeps its attempt in
-memory. The auth service redeems a bound code only with its verifier and
-refuses an unbound code sent with one; either refusal answers 400 and spends
-the code. To check on a local stack: Google sign-in still lands signed in,
-`/app/login?token=<anything>` stays on sign-in with no `/session/login`
-request, and the `auth.session_code.exchange` span records the outcome. OS
-delivery of the `macro://` URL still needs a real desktop build.
+used once, all forgotten on sign-out); any other `?token=`, including a reload
+of a page still carrying one, leaves the sign-in page as it is. The native
+sheet keeps its attempt in memory. The auth service redeems a bound code only
+with its verifier and refuses an unbound code sent with one; either refusal
+answers 400 and spends the code. To check on a local stack: Google sign-in
+still lands signed in, `/app/login?token=<anything>` stays on sign-in with no
+`/session/login` request, and the `auth.session_code.exchange` span records
+the outcome. OS delivery of the `macro://` URL still needs a real desktop build.
 
 ## Native iOS 27
 

@@ -52,27 +52,16 @@ describe('exchangeSessionCode', () => {
     expect(sessionLogin).toHaveBeenCalledOnce();
   });
 
-  // The server keeps a code its own failure did not redeem, so opening the
-  // callback again after an outage still signs in.
-  it('keeps the attempt when the server could not redeem the code', async () => {
+  // Reopening a callback after a failed redemption, or after a sign-out that
+  // came meanwhile, must not sign in: a failure asks for a new sign-in.
+  it.each([
+    ['the server failed', 'SERVER_ERROR'],
+    ['the request never arrived', 'NETWORK_ERROR'],
+    ['the server refused the code', 'HTTP_ERROR'],
+  ])('spends the attempt when %s', async (_case, code) => {
     const attempt = await createSignInAttempt();
     rememberSignInAttempt(attempt);
-    sessionLogin.mockResolvedValueOnce(
-      err([{ code: 'SERVER_ERROR', message: 'unable to refresh token' }])
-    );
-    vi.spyOn(console, 'error').mockImplementation(() => {});
-
-    expect(await exchangeSessionCode('session-code', attempt.id)).toBe(false);
-    expect(await exchangeSessionCode('session-code', attempt.id)).toBe(true);
-    expect(sessionLogin).toHaveBeenCalledTimes(2);
-  });
-
-  it('forgets the attempt when the server refused the code', async () => {
-    const attempt = await createSignInAttempt();
-    rememberSignInAttempt(attempt);
-    sessionLogin.mockResolvedValueOnce(
-      err([{ code: 'HTTP_ERROR', message: 'invalid session code' }])
-    );
+    sessionLogin.mockResolvedValueOnce(err([{ code, message: 'failed' }]));
     vi.spyOn(console, 'error').mockImplementation(() => {});
 
     expect(await exchangeSessionCode('session-code', attempt.id)).toBe(false);

@@ -3,7 +3,6 @@ import {
   createSignInAttempt,
   forgetSignInAttempts,
   rememberSignInAttempt,
-  restoreSignInAttempt,
   signInChallenge,
   takeSignInAttempt,
   withSignInAttempt,
@@ -38,7 +37,7 @@ describe('pending attempts', () => {
   it('answer one callback each', async () => {
     const attempt = await createSignInAttempt();
     rememberSignInAttempt(attempt);
-    expect(takeSignInAttempt(attempt.id)?.verifier).toBe(attempt.verifier);
+    expect(takeSignInAttempt(attempt.id)).toBe(attempt.verifier);
     expect(takeSignInAttempt(attempt.id)).toBeUndefined();
   });
 
@@ -64,7 +63,7 @@ describe('pending attempts', () => {
     }
     expect(takeSignInAttempt(attempts[0].id)).toBeUndefined();
     for (const attempt of attempts.slice(1)) {
-      expect(takeSignInAttempt(attempt.id)?.verifier).toBe(attempt.verifier);
+      expect(takeSignInAttempt(attempt.id)).toBe(attempt.verifier);
     }
   });
 
@@ -72,24 +71,6 @@ describe('pending attempts', () => {
     const attempt = await createSignInAttempt();
     rememberSignInAttempt(attempt);
     forgetSignInAttempts();
-    expect(takeSignInAttempt(attempt.id)).toBeUndefined();
-  });
-
-  it('answer their callback again once put back, until they expire', async () => {
-    const attempt = await createSignInAttempt();
-    rememberSignInAttempt(attempt);
-    const taken = takeSignInAttempt(attempt.id);
-    if (!taken) throw new Error('the attempt was pending');
-
-    vi.advanceTimersByTime(10 * 60 * 1000);
-    restoreSignInAttempt(taken);
-    expect(takeSignInAttempt(attempt.id)?.verifier).toBe(attempt.verifier);
-
-    // Putting it back never extends its fifteen minutes.
-    restoreSignInAttempt(taken);
-    vi.advanceTimersByTime(5 * 60 * 1000);
-    expect(takeSignInAttempt(attempt.id)).toBeUndefined();
-    restoreSignInAttempt(taken);
     expect(takeSignInAttempt(attempt.id)).toBeUndefined();
   });
 

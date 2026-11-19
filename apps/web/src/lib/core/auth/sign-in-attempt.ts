@@ -107,17 +107,12 @@ export function rememberSignInAttempt(attempt: SignInAttempt): boolean {
   ]);
 }
 
-/** A pending attempt taken to redeem its code. */
-export type TakenSignInAttempt = Readonly<PendingAttempt>;
-
 /**
- * The pending attempt `id` names, if there is one. The attempt is forgotten
- * as it is read: it answers one callback, and one that can't be forgotten
- * answers none.
+ * The verifier of the pending attempt `id` names, if there is one. The
+ * attempt is forgotten as it is read: it answers one callback, and one that
+ * can't be forgotten answers none.
  */
-export function takeSignInAttempt(
-  id: string | undefined
-): TakenSignInAttempt | undefined {
+export function takeSignInAttempt(id: string | undefined): string | undefined {
   if (!id) return undefined;
   const pending = readPending(Date.now());
   const attempt = pending.find((candidate) => candidate.id === id);
@@ -125,21 +120,7 @@ export function takeSignInAttempt(
   const forgotten = writePending(
     pending.filter((candidate) => candidate.id !== id)
   );
-  return forgotten ? attempt : undefined;
-}
-
-/**
- * Puts back an attempt whose redemption failed without spending its code (a
- * server or network error), so opening its callback again retries until the
- * attempt expires. It keeps its original expiry.
- */
-export function restoreSignInAttempt(attempt: TakenSignInAttempt): void {
-  const now = Date.now();
-  if (attempt.expiresAt <= now) return;
-  const others = readPending(now).filter(
-    (candidate) => candidate.id !== attempt.id
-  );
-  writePending([...others.slice(-(MAX_PENDING_ATTEMPTS - 1)), attempt]);
+  return forgotten ? attempt.verifier : undefined;
 }
 
 /** Signing out abandons every attempt still pending. */

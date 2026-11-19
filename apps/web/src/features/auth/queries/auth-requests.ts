@@ -1,7 +1,4 @@
-import {
-  restoreSignInAttempt,
-  takeSignInAttempt,
-} from '@core/auth/sign-in-attempt';
+import { takeSignInAttempt } from '@core/auth/sign-in-attempt';
 import { SERVER_HOSTS } from '@core/constant/servers';
 import { platformFetch } from '@core/util/platformFetch';
 import { Telemetry } from '@macro-inc/observability';
@@ -114,48 +111,33 @@ export async function verifyEmailCode(input: {
  * when it answers a sign-in this device started: the return must name a
  * pending attempt, whose verifier the code is bound to. Any other code is
  * someone else's sign-in, which would put this app into their account, so it
- * never reaches the auth service. The span records the outcome, never the
- * code or the attempt.
+ * never reaches the auth service. The attempt is spent whatever the answer,
+ * like the code: a failed redemption asks for a new sign-in, so reopening the
+ * callback later, after a sign-out too, redeems nothing. The span records the
+ * outcome, never the code or the attempt.
  */
 export function exchangeSessionCode(
   token: string,
-  attemptId: string | undefined
+  attempt: string | undefined
 ): Promise<boolean> {
   return Telemetry.span('auth.session_code.exchange', async (span) => {
-    const attempt = takeSignInAttempt(attemptId);
-    span.setAttr('auth.session_code.attempt_named', attemptId !== undefined);
-    if (!attempt) {
+    const verifier = takeSignInAttempt(attempt);
+    span.setAttr('auth.session_code.attempt_named', attempt !== undefined);
+    if (!verifier) {
       span.setAttr('auth.session_code.outcome', 'no_pending_attempt');
       console.warn('Refused a session code no sign-in here started');
       return false;
     }
     const result = await authServiceClient.sessionLogin({
       session_code: token,
-      code_verifier: attempt.verifier,
+      code_verifier: verifier,
     });
-    if (result.isOk()) {
-      span.setAttr('auth.session_code.outcome', 'redeemed');
-      return true;
-    }
-    console.error('Failed to redeem session code', result.error);
-    span.setAttr('auth.session_code.outcome', 'redeem_failed');
-    // The server keeps a code its own failure didn't redeem, so reopening
-    // the callback can try again. Any other answer spent it.
-    const codeKept = leavesCodeRedeemable(result.error);
-    span.setAttr('auth.session_code.attempt_restored', codeKept);
-    if (codeKept) restoreSignInAttempt(attempt);
-    return false;
+    span.setAttr(
+      'auth.session_code.outcome',
+      result.isOk() ? 'redeemed' : 'redeem_failed'
+    );
+    if (result.isErr())
+      console.error('Failed to redeem session code', result.error);
+    return result.isOk();
   });
-}
-
-/** Whether a failed redemption never reached the server or failed there. */
-function leavesCodeRedeemable(
-  errors: ReadonlyArray<{ code: string }>
-): boolean {
-  return (
-    errors.length > 0 &&
-    errors.every(
-      ({ code }) => code === 'NETWORK_ERROR' || code === 'SERVER_ERROR'
-    )
-  );
 }

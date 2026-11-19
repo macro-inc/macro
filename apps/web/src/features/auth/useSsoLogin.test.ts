@@ -113,7 +113,7 @@ afterEach(() => vi.unstubAllGlobals());
 async function expectBoundCallback(authUrl: URL): Promise<string> {
   const callback = authUrl.searchParams.get('original_url') ?? '';
   const named = /[?&]sign_in_attempt=([^&#]*)/.exec(callback);
-  const verifier = takeSignInAttempt(named?.[1])?.verifier;
+  const verifier = takeSignInAttempt(named?.[1]);
   if (!named || !verifier) throw new Error('names no pending attempt');
   expect(authUrl.searchParams.get('session_code_challenge')).toBe(
     await signInChallenge(verifier)
