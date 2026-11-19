@@ -151,9 +151,12 @@ pub(crate) async fn bulk_upsert_email_messages(
 /// message sharing the thread's `entity_id`), so this is an update-by-query
 /// rather than a single-doc update. Zero matched docs changes nothing and is
 /// [`PropertyUpdate::NotIndexed`]: the thread isn't indexed yet, so the next
-/// full index will include the properties. Version conflicts proceed: a
-/// concurrent full reindex writes the same freshly-fetched values, so a
-/// matched message counts as applied whether or not this update wrote it.
+/// full index will include the properties. Version conflicts proceed, and a
+/// message that changed under the update still counts as matched, so
+/// [`PropertyUpdate::Applied`] says the thread is indexed, not that every
+/// message took this write. A concurrent full reindex writes the properties
+/// it read, which misses a change made between its read and its write; the
+/// next property event or reindex repairs it.
 pub(crate) async fn update_email_thread_properties(
     client: &opensearch::OpenSearch,
     thread_id: &str,
