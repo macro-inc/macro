@@ -1805,6 +1805,8 @@ Date-grouped email lists start directly with today's messages; Today is not show
 
 ## Saved email views
 
+With `enableEntityAppearance` enabled, a saved view's owner can choose **Change icon** from its sidebar or header actions. Desktop embeds the shared picker; touch uses its sheet. Verify immediate icon/color/emoji changes and Remove in the rows and breadcrumb, including with unsaved filters. Turn the flag off: appearance remains visible, editing disappears, and open pickers close. Nonowners never get the editing action.
+
 A saved view is a named
 `kind: "email"` definition in the shared saved-view store; opening it queries
 live mail with the viewer's access. See `docs/design/saved-views.md`.
