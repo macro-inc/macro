@@ -1,5 +1,4 @@
-use std::sync::Arc;
-use std::sync::atomic::{AtomicU32, Ordering};
+use std::sync::{Arc, Mutex};
 
 use ::call::domain::events::{
     CallArchiveReason, CallRecordArchivedMetadata, CallRecordDeletedMetadata,
@@ -2517,6 +2516,7 @@ async fn hint_arriving_mid_reread_queues_the_next_reread() {
         receiver,
         pending_rereads,
         mpsc::unbounded_channel().0,
+        CancellationToken::new(),
         move |received| {
             let started_sender = started_sender.clone();
             let resume = Arc::clone(&worker_resume);
@@ -2773,54 +2773,10 @@ fn non_email_events_shard_by_their_producer_key() {
 }
 
 #[test]
-fn production_worker_pool_and_retry_bounds_match_the_delivery_contract() {
+fn production_worker_pool_matches_the_delivery_contract() {
     assert_eq!(WORKER_COUNT, 10);
     let (sender, _receiver) = mpsc::channel::<ReceivedEvent>(WORKER_CHANNEL_CAPACITY);
     assert_eq!(sender.max_capacity(), 16);
-    assert_eq!(
-        processing_retry_strategy().collect::<Vec<_>>(),
-        [Duration::from_secs(1), Duration::from_secs(2)]
-    );
-}
-
-#[tokio::test]
-async fn processing_retries_until_success() {
-    let attempts = Arc::new(AtomicU32::new(0));
-    let operation_attempts = Arc::clone(&attempts);
-
-    retry_processing_with_strategy(std::iter::repeat_n(Duration::ZERO, 4), move |_| {
-        let operation_attempts = Arc::clone(&operation_attempts);
-        async move {
-            let attempt = operation_attempts.fetch_add(1, Ordering::SeqCst) + 1;
-            if attempt <= 2 {
-                Err("temporary processing failure")
-            } else {
-                Ok(())
-            }
-        }
-    })
-    .await
-    .expect("third processing attempt succeeds");
-
-    assert_eq!(attempts.load(Ordering::SeqCst), 3);
-}
-
-#[tokio::test]
-async fn processing_is_dropped_after_exactly_three_failed_attempts() {
-    let attempts = Arc::new(AtomicU32::new(0));
-    let operation_attempts = Arc::clone(&attempts);
-
-    retry_processing_with_strategy(std::iter::repeat_n(Duration::ZERO, 2), move |_| {
-        let operation_attempts = Arc::clone(&operation_attempts);
-        async move {
-            operation_attempts.fetch_add(1, Ordering::SeqCst);
-            Err::<(), _>("persistent processing failure")
-        }
-    })
-    .await
-    .expect_err("persistent processing failure is dropped by the worker");
-
-    assert_eq!(attempts.load(Ordering::SeqCst), MAX_PROCESSING_ATTEMPTS);
 }
 
 #[test]
@@ -2992,10 +2948,15 @@ async fn record_span_covers_processing_and_fails_with_a_dropped_event() {
         async {}.instrument(span.clone()).await;
         drop(span);
 
-        process_received(&unread_metrics(), &received, |_| async {
-            tokio::time::sleep(Duration::from_millis(20)).await;
-            EventOutcome::Dropped
-        })
+        process_received(
+            &unread_metrics(),
+            &received,
+            &UnreachableReplays,
+            |_| async {
+                tokio::time::sleep(Duration::from_millis(20)).await;
+                Err(exhausted(Failure::Overloaded))
+            },
+        )
         .await;
         drop(received);
     }
@@ -3019,6 +2980,16 @@ async fn record_span_covers_processing_and_fails_with_a_dropped_event() {
     }
     assert_eq!(attribute(processing, "outcome").as_deref(), Some("dropped"));
     assert_eq!(
+        attribute(processing, "failure").as_deref(),
+        Some("overloaded")
+    );
+    assert_eq!(attribute(processing, "attempts").as_deref(), Some("8"));
+    assert_eq!(
+        attribute(processing, "entity_type").as_deref(),
+        Some("email")
+    );
+    assert_eq!(attribute(processing, "delivery").as_deref(), Some("kafka"));
+    assert_eq!(
         attribute(processing, "event_type").as_deref(),
         Some("email.thread_backfilled")
     );
@@ -3027,6 +2998,182 @@ async fn record_span_covers_processing_and_fails_with_a_dropped_event() {
         Some(EMAIL_THREAD_ID.to_string())
     );
     assert!(attribute(processing, "record_age_ms").is_some());
+}
+
+/// A replay queue that cannot be reached.
+struct UnreachableReplays;
+
+impl ReplayQueue for UnreachableReplays {
+    async fn replay_later(
+        &self,
+        _: sqs_client::search::replay::ReplayBrokerEvent,
+        _: Duration,
+    ) -> anyhow::Result<()> {
+        anyhow::bail!("search event queue unreachable")
+    }
+}
+
+/// Records each replay it is asked to queue.
+#[derive(Default)]
+struct RecordedReplays(Mutex<Vec<(sqs_client::search::replay::ReplayBrokerEvent, Duration)>>);
+
+impl ReplayQueue for RecordedReplays {
+    async fn replay_later(
+        &self,
+        replay: sqs_client::search::replay::ReplayBrokerEvent,
+        delay: Duration,
+    ) -> anyhow::Result<()> {
+        self.0.lock().unwrap().push((replay, delay));
+        Ok(())
+    }
+}
+
+/// A replay queue that never answers.
+struct HangingReplays;
+
+impl ReplayQueue for HangingReplays {
+    async fn replay_later(
+        &self,
+        _: sqs_client::search::replay::ReplayBrokerEvent,
+        _: Duration,
+    ) -> anyhow::Result<()> {
+        std::future::pending().await
+    }
+}
+
+#[tokio::test(start_paused = true)]
+async fn an_event_whose_replay_cannot_be_queued_in_time_is_dropped() {
+    let received = received_thread_backfilled_event(EMAIL_THREAD_ID, 3);
+
+    let record =
+        conclude_kafka_attempts(&received, Err(exhausted(Failure::Error)), &HangingReplays).await;
+
+    assert_eq!(record.outcome, EventOutcome::Dropped);
+    assert_eq!(record.failure, Some(Failure::Error));
+}
+
+fn exhausted(failure: Failure) -> Exhausted {
+    Exhausted {
+        error: "opensearch failed 1 of 2 bulk items".to_owned(),
+        diagnosis: attempts::Diagnosis {
+            failure,
+            failed_items: 1,
+        },
+        attempts: attempts::OVERLOADED_MAX_ATTEMPTS,
+    }
+}
+
+#[tokio::test]
+async fn a_failed_event_is_queued_for_its_replay_from_the_record_as_read() {
+    let capture = OtelCapture::install();
+    let record = kafka_record(MacroEmailTopic::TOPIC_STR, EMAIL_LINK_ID.to_string(), 2, 7);
+    let replays = RecordedReplays::default();
+    for _ in 0..2 {
+        capture.rearm();
+        replays.0.lock().unwrap().clear();
+        let message = encoded_message(
+            MacroEmailTopic::TOPIC_STR,
+            EMAIL_LINK_ID,
+            Event::new(EmailTopicEvent::ThreadBackfilled(
+                ThreadBackfilledMetadata {
+                    link_id: EMAIL_LINK_ID,
+                    owner: user_id(),
+                    thread_id: EMAIL_THREAD_ID,
+                },
+            )),
+        );
+        let record = record.clone().set_payload(message.payload.clone());
+        let (span, received) = receive_record(&record, || DeclaredMacroEvent::decode(&message));
+        let received = received.expect("decoded record");
+        drop(span);
+
+        process_received(&unread_metrics(), &received, &replays, |_| async {
+            Err(exhausted(Failure::BulkItems))
+        })
+        .await;
+    }
+
+    let queued = replays.0.lock().unwrap();
+    let [(replay, delay)] = queued.as_slice() else {
+        panic!("expected one replay, got {queued:?}");
+    };
+    assert_eq!(*delay, replay::REPLAY_DELAY);
+    assert_eq!(
+        (replay.topic.as_str(), replay.partition, replay.offset),
+        (MacroEmailTopic::TOPIC_STR, 2, 7)
+    );
+    assert_eq!(replay.key, EMAIL_LINK_ID.to_string());
+    assert_eq!(replay.produced_at_ms, Some(1_000));
+    assert_eq!(replay.failure, "bulk_items");
+    let replayed = replay::decode(replay).expect("the replay decodes as the record did");
+    assert_eq!(event_type(&replayed), "email.thread_backfilled");
+    assert_eq!(ordering_key(&replayed), EMAIL_THREAD_ID.to_string());
+
+    let spans = capture.finished("process_event");
+    let [processing] = spans.as_slice() else {
+        panic!("expected one processing span, got {spans:?}");
+    };
+    assert_eq!(
+        attribute(processing, "outcome").as_deref(),
+        Some("retry_queued")
+    );
+    assert_eq!(
+        attribute(processing, "failure").as_deref(),
+        Some("bulk_items")
+    );
+    assert_eq!(attribute(processing, "failed_items").as_deref(), Some("1"));
+    assert!(
+        !matches!(
+            processing.status,
+            opentelemetry::trace::Status::Error { .. }
+        ),
+        "a queued replay is late, not lost"
+    );
+}
+
+#[test]
+fn a_replay_joins_the_trace_of_the_processing_that_failed() {
+    opentelemetry::global::set_text_map_propagator(
+        opentelemetry_sdk::propagation::TraceContextPropagator::new(),
+    );
+    let capture = OtelCapture::install();
+    for _ in 0..2 {
+        capture.rearm();
+        let failed = tracing::info_span!("failed_processing");
+        let traceparent = failed.in_scope(replay::current_traceparent);
+        drop(failed);
+        let replayed = tracing::info_span!("replayed_processing");
+        replay::adopt_traceparent(&replayed, traceparent.as_deref());
+        drop(replayed);
+    }
+
+    let (failed, replayed) = (
+        capture.finished("failed_processing"),
+        capture.finished("replayed_processing"),
+    );
+    let ([failed], [replayed]) = (failed.as_slice(), replayed.as_slice()) else {
+        panic!("expected one span each: {failed:?} {replayed:?}");
+    };
+    assert_eq!(
+        replayed.span_context.trace_id(),
+        failed.span_context.trace_id()
+    );
+    assert_eq!(replayed.parent_span_id, failed.span_context.span_id());
+}
+
+#[test]
+fn every_event_names_its_entity_type() {
+    let email = received_thread_backfilled_event(EMAIL_THREAD_ID, 1);
+    let session = received_agent_session_event(AGENT_SESSION_ID, 2);
+
+    assert_eq!(
+        entity_type::EntityType::of(&email.event),
+        entity_type::EntityType::Email
+    );
+    assert_eq!(
+        <&'static str>::from(entity_type::EntityType::of(&session.event)),
+        "agent_session"
+    );
 }
 
 fn email_position(offset: i64) -> RecordPosition {
@@ -3087,6 +3234,39 @@ fn a_handed_off_record_stays_queued_and_a_skipped_one_finishes() {
 }
 
 #[tokio::test]
+async fn after_a_graceful_stop_a_worker_starts_no_queued_record() {
+    let (sender, receiver) = mpsc::channel(4);
+    let (report_sender, mut reports) = mpsc::unbounded_channel();
+    sender
+        .send(received_thread_backfilled_event(EMAIL_THREAD_ID, 9))
+        .await
+        .unwrap();
+    drop(sender);
+    let rewinding = CancellationToken::new();
+    rewinding.cancel();
+    let processed = Arc::new(std::sync::atomic::AtomicBool::new(false));
+    let marked = Arc::clone(&processed);
+
+    drain_worker_events(
+        receiver,
+        Arc::default(),
+        report_sender,
+        rewinding,
+        move |_| {
+            marked.store(true, std::sync::atomic::Ordering::SeqCst);
+            std::future::ready(())
+        },
+    )
+    .await;
+
+    assert!(!processed.load(std::sync::atomic::Ordering::SeqCst));
+    assert!(
+        reports.try_recv().is_err(),
+        "an unstarted record stays queued for the rewind"
+    );
+}
+
+#[tokio::test]
 async fn a_worker_reports_a_record_as_started_then_done() {
     let (sender, receiver) = mpsc::channel(4);
     let (report_sender, mut reports) = mpsc::unbounded_channel();
@@ -3096,6 +3276,7 @@ async fn a_worker_reports_a_record_as_started_then_done() {
         receiver,
         Arc::default(),
         report_sender,
+        CancellationToken::new(),
         move |_received| {
             let released = released.lock().unwrap().take();
             async move {
@@ -3192,7 +3373,7 @@ async fn a_worker_that_panicked_before_the_stop_is_reported() {
 #[tokio::test]
 async fn processing_records_its_lag_and_counts_a_drop() {
     use super::metrics::{
-        DROPPED, LAG,
+        DROPPED, FAILED_BULK_ITEMS, LAG,
         test::{Recorded, tags},
     };
 
@@ -3200,9 +3381,12 @@ async fn processing_records_its_lag_and_counts_a_drop() {
     let mut received = received_thread_backfilled_event(EMAIL_THREAD_ID, 7);
     received.produced_at_ms = Some(Utc::now().timestamp_millis() - 90_000);
 
-    process_received(&recorded.metrics, &received, |_| async {
-        EventOutcome::Dropped
-    })
+    process_received(
+        &recorded.metrics,
+        &received,
+        &UnreachableReplays,
+        |_| async { Err(exhausted(Failure::BulkItems)) },
+    )
     .await;
 
     let lag = recorded.points(LAG);
@@ -3215,6 +3399,7 @@ async fn processing_records_its_lag_and_counts_a_drop() {
             ("entity_type", "email"),
             ("event_type", "email.thread_backfilled"),
             ("outcome", "dropped"),
+            ("delivery", "kafka"),
         ])
     );
     assert_eq!(lag.value, 1);
@@ -3231,10 +3416,20 @@ async fn processing_records_its_lag_and_counts_a_drop() {
         [(
             tags(&[
                 ("entity_type", "email"),
-                ("event_type", "email.thread_backfilled")
+                ("event_type", "email.thread_backfilled"),
+                ("failure", "bulk_items"),
+                ("delivery", "kafka"),
             ]),
             1
         )]
+    );
+    assert_eq!(
+        recorded
+            .points(FAILED_BULK_ITEMS)
+            .iter()
+            .map(|point| (point.tags.clone(), point.value))
+            .collect::<Vec<_>>(),
+        [(tags(&[("entity_type", "email"), ("outcome", "dropped")]), 1)]
     );
 }
 
@@ -3246,9 +3441,12 @@ async fn an_indexed_event_is_not_counted_as_dropped() {
     let mut received = received_thread_backfilled_event(EMAIL_THREAD_ID, 7);
     received.produced_at_ms = Some(Utc::now().timestamp_millis());
 
-    process_received(&recorded.metrics, &received, |_| async {
-        EventOutcome::Indexed
-    })
+    process_received(
+        &recorded.metrics,
+        &received,
+        &UnreachableReplays,
+        |_| async { Ok((Handled::Indexed, 1)) },
+    )
     .await;
 
     assert_eq!(

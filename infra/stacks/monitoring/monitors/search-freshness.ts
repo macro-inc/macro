@@ -12,9 +12,12 @@
 //
 // - `search.index.lag_ms`: ms from the record's Kafka timestamp, set when it
 //   was published, to the end of its processing (histogram), tagged
-//   `entity_type`, `event_type` (the wire type, e.g. `email.message_received`)
-//   and `outcome` (`indexed`, `ignored`, `dropped`, `coalesced`,
-//   `no_index_change`). Freshness reads `outcome:indexed`. It covers processed
+//   `entity_type`, `event_type` (the wire type, e.g. `email.message_received`),
+//   `outcome` (`indexed`, `ignored`, `dropped`, `coalesced`,
+//   `no_index_change`, `retry_queued`, `failed`, `source_missing`) and
+//   `delivery` (`kafka`, or `sqs_replay` for a replay, whose lag still counts
+//   from the original record). Freshness reads `outcome:indexed`;
+//   `retry_queued` marks an event that will be late. It covers processed
 //   events only: a stalled consumer records nothing here.
 // - `search.index.oldest_pending_ms`: per assigned `topic` and `partition`, ms
 //   since the oldest record not yet processed was recorded, 0 when caught up
@@ -24,9 +27,14 @@
 //   Datadog does not interpolate a stopped sampler's last reading.
 // - `search.index.dropped_events`: events committed without reaching the
 //   index (counter), tagged `entity_type`. Events dropped after their
-//   processing retries also carry `event_type`; records lost outside the
+//   attempts and replay also carry `event_type`, `delivery` (`kafka` or
+//   `sqs_replay`) and the last attempt's `failure` (`bulk_items`,
+//   `overloaded`, `source_missing`, `error`); records lost outside the
 //   workers carry `failure` (`undecodable`, `cut_off_at_stop`, `not_rewound`,
 //   `rewind_unconfirmed`, `queued_without_rewind`).
+// - `search.index.failed_bulk_items`: items OpenSearch failed in the last
+//   attempt of an event queued for a replay or dropped (counter), tagged
+//   `entity_type` and `outcome`.
 // - `kafka.consumer.offset_resets`: partition positions librdkafka reset after
 //   an error (counter), tagged `topic`. Usually the position was out of range,
 //   older than the topic's retention, and the consumer moved to the newest
