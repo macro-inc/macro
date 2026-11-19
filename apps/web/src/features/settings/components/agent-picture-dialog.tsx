@@ -1,5 +1,6 @@
 import { profilePictureItem } from '@core/signal/profilePicture';
 import { getInitialsFromName } from '@core/user';
+import { derivedAgentFace } from '@core/user/agent-face';
 import { useSetAgentAvatarMutation } from '@queries/team-agents/avatar';
 import type { TeamAgent } from '@service-auth/team-agents';
 import { ResultAsync } from 'neverthrow';
@@ -24,11 +25,8 @@ export function AgentPictureDialog(props: {
           initials={getInitialsFromName(agent.name, agent.name)}
           // Its saved face, else the one drawn for it from its id.
           face={
-            profilePictureItem(agent.userId)?.face ?? {
-              v: 1,
-              seed: agent.userId,
-              pins: {},
-            }
+            profilePictureItem(agent.userId)?.face ??
+            derivedAgentFace(agent.userId)
           }
           onSave={async (picture) => {
             const saved = await ResultAsync.fromPromise(

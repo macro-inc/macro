@@ -7,6 +7,7 @@ import { isBotPrincipalId } from '@core/constant/macroAgent';
 import { staticFileSizedUrl } from '@core/constant/servers';
 import { internalDrag } from '@core/directive/internalDragState';
 import { isTouchDevice } from '@core/mobile/isTouchDevice';
+import { derivedAgentFace } from '@core/user/agent-face';
 import {
   profilePictureItem,
   useProfilePictureUrl,
@@ -118,7 +119,7 @@ function ProfileImage(props: {
 
     const id = macroId();
     if (!id || !isAgentAccount(id)) return undefined;
-    return { v: 1, seed: id, pins: {} };
+    return derivedAgentFace(id);
   };
 
   const faceUrl = createMemo(() => {

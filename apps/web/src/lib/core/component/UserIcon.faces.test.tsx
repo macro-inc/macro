@@ -1,5 +1,6 @@
 import { cleanup, render } from '@solidjs/testing-library';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
+import { derivedAgentFace } from '../user/agent-face';
 import { UserIcon } from './UserIcon';
 
 const state = vi.hoisted(() => ({
@@ -110,7 +111,15 @@ describe('UserIcon agent faces', () => {
 
   it('derives a face from the user id for an agent with no picture', () => {
     state.agent = true;
-    expect(renderIcon().image()).toBe(faceSrc(AGENT_ID));
+    expect(renderIcon().image()).toBe(faceSrc(derivedAgentFace(AGENT_ID).seed));
+  });
+
+  it('draws a saved copy of the derived face as the same face', () => {
+    state.agent = true;
+    const derived = renderIcon().image();
+    cleanup();
+    state.picture = { loading: false, face: derivedAgentFace(AGENT_ID) };
+    expect(renderIcon().image()).toBe(derived);
   });
 
   it('waits for the picture to load before deriving a face', () => {
