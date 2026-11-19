@@ -9,10 +9,47 @@ const STORAGE_KEY = 'routine-composer-draft';
 // back to; its draft lasts a day, and logging out clears it.
 const EXPIRY_TIME_MS = 24 * 60 * 60 * 1000;
 
+const appSchema = z.strictObject({
+  app_slug: z.string(),
+  server_name: z.string(),
+});
+
+const inputFields = { label: z.string(), name: z.string() };
+const inputSchema = z.union([
+  z.strictObject({
+    ...inputFields,
+    type: z.literal('text'),
+    value: z.string().nullable().optional(),
+  }),
+  z.strictObject({
+    ...inputFields,
+    type: z.literal('number'),
+    value: z.number().nullable().optional(),
+  }),
+  z.strictObject({
+    ...inputFields,
+    type: z.literal('boolean'),
+    value: z.boolean().nullable().optional(),
+  }),
+]);
+
 const draftFields = {
   id: z.string().optional(),
   triggers: z.array(routineTriggerSchema).max(16).optional(),
   steps: z.array(stepDraftSchema).optional(),
+  // A drafted routine's sub-routines; drafts from before have none.
+  subRoutines: z
+    .array(
+      z.strictObject({
+        name: z.string(),
+        title: z.string(),
+        inputs: z.array(inputSchema).max(12),
+        steps: z.array(stepDraftSchema),
+        apps: z.array(appSchema).max(64),
+      })
+    )
+    .max(5)
+    .optional(),
   name: z.string(),
   prompt: z.string(),
   frequency: z.enum(['week', 'month', 'once']),
@@ -40,10 +77,7 @@ const draftFields = {
     .max(64)
     .optional(),
   // Drafts saved before routines took apps have none.
-  apps: z
-    .array(z.strictObject({ app_slug: z.string(), server_name: z.string() }))
-    .max(64)
-    .default([]),
+  apps: z.array(appSchema).max(64).default([]),
 };
 
 const draftSchema = z

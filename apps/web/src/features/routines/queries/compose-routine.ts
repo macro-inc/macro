@@ -10,9 +10,10 @@ import type {
   DraftedRoutine,
   DraftRequest,
 } from '@service-scheduled-action/generated/schemas';
-import type { ScheduleDraft } from '../core/draft';
+import type { ScheduleDraft, SubRoutineDraft } from '../core/draft';
 import { createEmptyDraft } from '../core/routine-draft';
-import { stepsFromWire } from '../core/routine-steps';
+import { type StepDraft, stepsFromWire } from '../core/routine-steps';
+import { subRoutineFromWire } from '../core/sub-routines';
 import { parseRoutineTriggers } from './routine-trigger-mapping';
 
 /**
@@ -129,16 +130,31 @@ export function draftFromRoutine(
   routine: DraftedRoutine,
   defaultModel: string
 ): ScheduleDraft | string {
+  const unrunnable = 'The draft used steps Macro can’t run. Try rephrasing.';
   const steps = stepsFromWire(routine.steps);
-  if (!steps) return 'The draft used steps Macro can’t run. Try rephrasing.';
-  const drafted = steps.map((step, index) => {
-    const problems = routine.problems.find(
-      (item) => item.index === index
-    )?.problems;
-    return step.kind === 'code' && problems?.length
-      ? { ...step, problems }
-      : step;
-  });
+  if (!steps) return unrunnable;
+  // Each problem names its step's place among the routine's own steps, or
+  // among its sub-routine's.
+  const withProblems = (list: StepDraft[], subRoutine?: string) =>
+    list.map((step, index) => {
+      const problems = routine.problems.find(
+        (item) =>
+          item.index === index && (item.subRoutine ?? undefined) === subRoutine
+      )?.problems;
+      return step.kind === 'code' && problems?.length
+        ? { ...step, problems }
+        : step;
+    });
+  const drafted = withProblems(steps);
+  const subRoutines: SubRoutineDraft[] = [];
+  for (const wire of routine.subRoutines ?? []) {
+    const definition = subRoutineFromWire(wire);
+    if (!definition) return unrunnable;
+    subRoutines.push({
+      ...definition,
+      steps: withProblems(definition.steps, definition.name),
+    });
+  }
   const base = {
     ...createEmptyDraft(defaultModel),
     created: routine.created,
@@ -147,10 +163,15 @@ export function draftFromRoutine(
     enabled: true,
   };
   const [only] = drafted;
-  // A single agent step stays the simple form, edited like any agent routine.
-  return drafted.length === 1 && only?.kind === 'agent'
-    ? { ...base, prompt: only.instructions, target: only.target }
-    : { ...base, steps: drafted };
+  // A single agent step stays the simple form, edited like any agent
+  // routine, unless it schedules sub-routines, which only a program holds.
+  if (drafted.length === 1 && only?.kind === 'agent' && !subRoutines.length)
+    return { ...base, prompt: only.instructions, target: only.target };
+  return {
+    ...base,
+    steps: drafted,
+    ...(subRoutines.length ? { subRoutines } : {}),
+  };
 }
 
 /**

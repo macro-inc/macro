@@ -12,6 +12,7 @@ import {
   stepsFromWire,
   stepsToWire,
 } from '../core/routine-steps';
+import { subRoutinesToWire } from '../core/sub-routines';
 import { type ComposerContext, requestDraft } from './compose-routine';
 import { serializeTriggers } from './routine-trigger-mapping';
 
@@ -29,6 +30,9 @@ function routineSoFar(routine: RoutineSoFar): WireRoutine {
   return {
     ...(trigger ? { trigger: { ...trigger } } : {}),
     steps: stepsToWire(routine.steps),
+    ...(routine.subRoutines?.length
+      ? { sub_routines: subRoutinesToWire(routine.subRoutines) }
+      : {}),
   };
 }
 

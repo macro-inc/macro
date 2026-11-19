@@ -151,3 +151,26 @@ describe('routine composer storage', () => {
     expect(() => saveRoutineComposerDraft(draft)).not.toThrow();
   });
 });
+
+describe('a stored draft with sub-routines', () => {
+  it('keeps them, so reopening New routine still has them', () => {
+    const subRoutines: ScheduleDraft['subRoutines'] = [
+      {
+        name: 'remind',
+        title: 'Remind me',
+        inputs: [{ type: 'text', name: 'taskId', label: 'Task' }],
+        steps: [
+          {
+            id: 'step-1',
+            kind: 'agent',
+            instructions: 'Remind me about the task.',
+            target: { kind: 'model', model: 'claude' },
+          },
+        ],
+        apps: [],
+      },
+    ];
+    saveRoutineComposerDraft({ ...draft, steps: [], subRoutines });
+    expect(loadRoutineComposerDraft()?.subRoutines).toEqual(subRoutines);
+  });
+});

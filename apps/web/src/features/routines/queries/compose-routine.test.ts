@@ -277,3 +277,72 @@ describe('a drafted routine in the editor', () => {
     ).toMatch(/can’t run/);
   });
 });
+
+describe('a drafted routine with sub-routines', () => {
+  const schedules = {
+    type: 'code' as const,
+    id: 'due_soon',
+    title: 'Find tasks due soon',
+    source: 'export async function main() {}',
+  };
+  const remindCode = {
+    type: 'code' as const,
+    title: 'Post the reminder',
+    source: 'export async function main() {}',
+  };
+  const remind = {
+    name: 'remind',
+    title: 'Remind me',
+    inputs: [{ type: 'text' as const, name: 'taskId', label: 'Task' }],
+    steps: [remindCode],
+  };
+
+  it('keeps each sub-routine, and saves them with the routine', () => {
+    const draft = draftFromRoutine(
+      routine({ steps: [schedules], subRoutines: [remind] }),
+      'claude'
+    );
+    if (typeof draft === 'string') throw new Error(draft);
+    expect(draft.subRoutines).toMatchObject([
+      { name: 'remind', title: 'Remind me', inputs: remind.inputs },
+    ]);
+    expect(draftToCreateBody(draft).task).toMatchObject({
+      steps: [schedules],
+      sub_routines: [remind],
+    });
+  });
+
+  it('puts each problem on its own step, not the routine step at that place', () => {
+    const own = ["TS2339 [ERROR]: Property 'guess' does not exist"];
+    const inner = ['TS2345 [ERROR]: Argument of type number'];
+    const draft = draftFromRoutine(
+      routine({
+        steps: [schedules],
+        subRoutines: [remind],
+        problems: [
+          { index: 0, problems: inner, subRoutine: 'remind' },
+          { index: 0, problems: own },
+        ],
+      }),
+      'claude'
+    );
+    if (typeof draft === 'string') throw new Error(draft);
+    expect(draft.steps?.[0]).toMatchObject({ problems: own });
+    expect(draft.subRoutines?.[0]?.steps[0]).toMatchObject({
+      problems: inner,
+    });
+  });
+
+  it('keeps a lone Ask AI step as steps, since only a program holds sub-routines', () => {
+    const draft = draftFromRoutine(
+      routine({
+        steps: [{ type: 'agent', model: 'claude', instructions: 'Look' }],
+        subRoutines: [remind],
+      }),
+      'claude'
+    );
+    if (typeof draft === 'string') throw new Error(draft);
+    expect(draft.steps).toHaveLength(1);
+    expect(draft.subRoutines).toHaveLength(1);
+  });
+});

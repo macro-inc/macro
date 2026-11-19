@@ -5,6 +5,7 @@ import type {
 } from '@service-scheduled-action/generated/schemas';
 import { match } from 'ts-pattern';
 import { z } from 'zod';
+import type { SubRoutineDraft } from './draft';
 import { type Knob, knobFromWire, knobSchema, knobToWire } from './knobs';
 import { type RoutineTarget, routineTargetSchema } from './routine-target';
 import type { RoutineTriggerDraft } from './routine-triggers';
@@ -40,6 +41,8 @@ export type StepKind = StepDraft['kind'];
 export type RoutineSoFar = {
   triggers: RoutineTriggerDraft[];
   steps: StepDraft[];
+  /** What its code can schedule, so a step that does is checked against it. */
+  subRoutines?: SubRoutineDraft[];
 };
 
 /** A step drafted to add at the end, and why it is code or Ask AI. */
