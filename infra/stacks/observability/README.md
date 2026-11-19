@@ -99,8 +99,9 @@ shell step takes 30 s or more, an inference from step timing.
 Collection and sending are best effort and cannot fail the exporter, and neither
 touches the observed PR's jobs. Collection runs before any credential is read.
 
-`nixos/ci-report.json` holds the queries over these events: real PR wall time
-overall and by PR type, what finished last, the slowest PR jobs and steps, queue
+`nixos/grafana-provisioning/ci-report.json` holds the queries over these events:
+real PR wall time overall and by PR type, what finished last, the slowest PR jobs
+and steps, queue
 by runner and job, warm and cold cache volumes, CI hours by trigger, and the
 exporter's own cost. The top of `/d/macro-ci` renders them over the selected
 range, and the daily report prints the same tables as Markdown, plus one summary
@@ -153,10 +154,10 @@ quantile_over_time(0.9, {service_name="local-telemetry"} | event="step" | kind="
   | unwrap seconds | __error__="" [7d]) by (step)
 ```
 
-`nixos/local-report.json` holds the queries for the `Macro run_local` dashboard
-(`/d/macro-run-local`) and for `scripts/ci-report.ts --spec local`. Both
-dashboards build their Loki panels with `nixos/loki-report-panels.nix`. Every
-filter names the machine (`machine`, else `host_name`, else `host`, for events
+`nixos/grafana-provisioning/local-report.json` holds the queries for the
+`Macro run_local` dashboard (`/d/macro-run-local`) and for
+`scripts/ci-report.ts --spec local`. Both dashboards build their Loki panels
+with `nixos/grafana-provisioning/loki-report-panels.nix`. Every filter names the machine (`machine`, else `host_name`, else `host`, for events
 recorded before `machine` existed), and the dashboard narrows each filter to
 its `Machine` variable, which lists Tempo's `span.machine` values. Its rows:
 
@@ -191,8 +192,8 @@ which the forwarder copies onto metric datapoints. Dev
 dashboards and alerts select `dev`/`development`, so this data stays out of
 them. In Loki, `host_name` and `macro_local_instance` are structured metadata,
 under `deployment_environment="local"`. The `Macro run_local` dashboard's last row
-(`nixos/local-dashboard.nix`, not the shared report spec) shows bring-ups,
-stacks, sampled traces, error logs and logs by machine.
+(`nixos/grafana-provisioning/local-dashboard.nix`, not the shared report spec)
+shows bring-ups, stacks, sampled traces, error logs and logs by machine.
 
 ### Pinned exporter limits
 
@@ -235,7 +236,10 @@ on a prebuilt NixOS image. There is no Docker or Compose dependency. Nix owns
 packages, configuration, service users, resource limits and startup dependencies:
 
 - `nixos/services.nix`: native application services and runtime credentials.
-- `nixos/grafana.nix` and `nixos/datasources.nix`: Grafana access policy and datasources.
+- `nixos/grafana.nix`: Grafana access policy.
+- `nixos/grafana-provisioning/`: datasources, dashboards, alert rules, contact
+  points and routing as plain Nix data, shared with the cluster (see
+  [Provisioned dashboards and alerts](#provisioned-dashboards-and-alerts)).
 - `nixos/backend-config.nix`: Loki, Tempo and Prometheus settings.
 - `nixos/ingest.alloy`: unprivileged OTLP receiver and export pipeline.
 - `nixos/host-telemetry.nix` and `nixos/host.alloy`: host metrics and journal logs.
@@ -243,11 +247,6 @@ packages, configuration, service users, resource limits and startup dependencies
 - `nixos/proxy.nix`: native nginx virtual hosts and query-only backend gateway.
 - `nixos/goalert.nix` and `nixos/goalert/`: GoAlert, its Postgres, backups and
   the Macro Alerts relay (see [On-call paging](#on-call-paging-goalert)).
-- `nixos/alerting.nix`: Grafana alert rules, contact points and routing.
-- `nixos/prod-alerts.nix`: prod alert queries and thresholds, shared by the
-  rules and `nixos/prod-alerts-dashboard.nix`.
-- `nixos/email-focus.nix`: the Email Focus rollout's go/stop checks, shared by
-  the `Email Focus` rules in `alerting.nix` and `nixos/email-focus-dashboard.nix`.
 - `nixos/host.nix`: boot dependencies, retained storage and stable service identities.
 
 NixOS modules generate application configuration from Nix attributes. Alloy's
@@ -688,6 +687,46 @@ Datadog dashboard/monitor migration remain separate coverage work.
 
 ### Provisioned dashboards and alerts
 
+Everything Grafana provisions lives in `nixos/grafana-provisioning/` as plain
+Nix data, not NixOS modules: `default.nix` takes nixpkgs' `lib` and the values
+that differ between the places Grafana runs, and returns
+
+- `datasources`: the datasources provisioning document;
+- `alerting`: the `contactPoints`, `policies` and `rules` documents;
+- `dashboards`: one entry per dashboard provider, `{ name; folder; files; }`,
+  each file `{ name = "<file>.json"; dashboard = <dashboard JSON>; }`.
+
+Its parameters are `goalertUrl` (GoAlert's base URL) and `datasourceUrls` (the
+`prometheus`, `loki` and `tempo` query endpoints). `nixos/services.nix` passes
+the host's: GoAlert over loopback, so paging does not depend on the ALB, and the
+query-only gateway on port 8081. The cluster's Grafana
+(`infra/k8s/observability/cluster/`, not built yet) is to import the same file
+with its own values:
+
+```nix
+import ../../../stacks/observability/nixos/grafana-provisioning {
+  inherit lib;
+  goalertUrl = "https://goalert.example"; # see below
+  datasourceUrls = { prometheus = "..."; loki = "..."; tempo = "..."; };
+}
+```
+
+Wherever it runs, Grafana also needs `GRAFANA_ALERT_TOPIC_ARN`,
+`GOALERT_GRAFANA_KEY` and `GOALERT_GRAFANA_NOTIFY_KEY` in its environment (the
+contact points expand them), and AWS credentials that can read CloudWatch in
+us-east-1 and publish to that topic. `oncall.macro-internal.com` answers 404 on
+`/api/v2/grafana/` (`nixos/proxy.nix`), so a Grafana off the host can page
+through it only after the host's on-call vhost allows that path.
+
+So a dashboard or rule changes in one place for both. Keep host-only values out
+of the data: add a parameter instead. On the host, each provider becomes a
+store folder named in `dashboardFolderNames` (`nixos/services.nix`); those names
+and the provider order are part of the host's system, so a refactor that keeps
+them, and the JSON, keeps the toplevel store path
+(`nix eval --raw .#nixosConfigurations.observability.config.system.build.toplevel.outPath`)
+unchanged, and Deploy Observability then only retags the AMI (step 2 of
+[Deploying](#deploying)).
+
 Nix provisions the `Macro` dashboard folder, a dev telemetry dashboard, and a
 CloudWatch database/Lambda dashboard. CloudWatch reads native metrics in Virginia;
 it does not replicate their history to Ohio, so these panels depend on Virginia
@@ -696,13 +735,14 @@ models. Grafana uses the EC2 role for regional metric reads and publishing to th
 configured alarm SNS topic. Other unprivileged HTTP/ingest services still cannot
 access instance metadata.
 
-`nixos/prod-alerts.nix` lists the prod CloudWatch alerts: macrodb memory, swap,
-load, CPU, connections, replica lag, read latency and storage; Redis memory and
-evictions; SQS queue age. Each entry holds its query, thresholds, window and
-text once. `nixos/alerting.nix` turns each into a warning and a critical rule in
-the `Prod` group, reading CloudWatch in Virginia directly, and
-`nixos/prod-alerts-dashboard.nix` draws it as one panel with both thresholds on
-the `Prod alerts` dashboard (`/d/prod-alerts`, rows macrodb, Redis and Queues).
+`nixos/grafana-provisioning/prod-alerts.nix` lists the prod CloudWatch alerts:
+macrodb memory, swap, load, CPU, connections, replica lag, read latency and
+storage; Redis memory and evictions; SQS queue age. Each entry holds its query,
+thresholds, window and text once. `nixos/grafana-provisioning/alerting.nix`
+turns each into a warning and a critical rule in the `Prod` group, reading
+CloudWatch in Virginia directly, and
+`nixos/grafana-provisioning/prod-alerts-dashboard.nix` draws it as one panel
+with both thresholds on the `Prod alerts` dashboard (`/d/prod-alerts`, rows macrodb, Redis and Queues).
 Each rule carries its panel as `__dashboardUid__`/`__panelId__`, so the rule
 view links to the graph of the metric that fired, and as a `panel_url`
 annotation built from Grafana's `externalURL`, because GoAlert's alert details
@@ -711,7 +751,7 @@ has a Datadog copy in `infra/stacks/monitoring/monitors/`; keep thresholds and
 windows in sync by hand. Forecasts, anomalies, Database Monitoring, APM and log
 rules are Datadog-only.
 
-`nixos/email-focus.nix` holds the Email Focus rollout's go/stop checks over the
+`nixos/grafana-provisioning/email-focus.nix` holds the Email Focus rollout's go/stop checks over the
 worker's `Macro/EmailFocus` metrics. Each becomes a warning and a critical rule
 in the `Email Focus` group and a panel on the `Email Focus rollout` dashboard
 (`/d/email-focus-rollout`), linked the same way as the prod alerts. They never

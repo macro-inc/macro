@@ -1,4 +1,4 @@
-{ lib, pkgs, ... }:
+{ lib }:
 let
   datasource = {
     type = "prometheus";
@@ -72,8 +72,7 @@ let
           )
         ]
       )
-      (panel 2 "Memory held by computers" "Every VM's cgroup together, against the host's memory."
-        "bytes"
+      (panel 2 "Memory held by computers" "Every VM's cgroup together, against the host's memory." "bytes"
         [
           (target "A" "{{host}} computers" "container_memory_usage_bytes{${allComputers}}")
           (target "B" "{{host}} total" "node_memory_MemTotal_bytes{${host}}")
@@ -115,7 +114,9 @@ let
         "percentunit"
         [
           (target "A" "{{host}} cpu waiting" "rate(node_pressure_cpu_waiting_seconds_total{${host}}[5m])")
-          (target "B" "{{host}} memory waiting" "rate(node_pressure_memory_waiting_seconds_total{${host}}[5m])")
+          (target "B" "{{host}} memory waiting"
+            "rate(node_pressure_memory_waiting_seconds_total{${host}}[5m])"
+          )
           (target "C" "{{host}} io waiting" "rate(node_pressure_io_waiting_seconds_total{${host}}[5m])")
           (target "D" "{{host}} steal"
             ''avg by (host) (rate(node_cpu_seconds_total{${host},mode="steal"}[5m]))''
@@ -143,7 +144,9 @@ let
         "Swap in use (idle computers squeezed into zram) and memory KSM shares."
         "bytes"
         [
-          (target "A" "{{host}} swap" "node_memory_SwapTotal_bytes{${host}} - node_memory_SwapFree_bytes{${host}}")
+          (target "A" "{{host}} swap"
+            "node_memory_SwapTotal_bytes{${host}} - node_memory_SwapFree_bytes{${host}}"
+          )
           (target "B" "{{host}} KSM shared" "node_ksmd_pages_sharing{${host}} * 4096")
         ]
       )
@@ -155,21 +158,4 @@ let
     ];
   };
 in
-{
-  services.grafana.provision.dashboards.settings.providers = [
-    {
-      name = "macro-computers-fleet";
-      orgId = 1;
-      folder = "Macro";
-      type = "file";
-      disableDeletion = true;
-      allowUiUpdates = false;
-      options.path = pkgs.linkFarm "macro-computers-fleet-dashboard" [
-        {
-          name = "computers-fleet.json";
-          path = pkgs.writeText "computers-fleet.json" (builtins.toJSON dashboard);
-        }
-      ];
-    }
-  ];
-}
+dashboard

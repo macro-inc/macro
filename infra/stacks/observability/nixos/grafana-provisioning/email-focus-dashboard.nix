@@ -1,4 +1,4 @@
-{ lib, pkgs, ... }:
+{ lib }:
 let
   emailFocus = import ./email-focus.nix;
   datasource = {
@@ -271,21 +271,4 @@ let
     inherit panels;
   };
 in
-{
-  services.grafana.provision.dashboards.settings.providers = [
-    {
-      name = "macro-email-focus";
-      orgId = 1;
-      folder = "Macro";
-      type = "file";
-      disableDeletion = true;
-      allowUiUpdates = false;
-      options.path = pkgs.linkFarm "macro-email-focus-dashboard" [
-        {
-          name = "email-focus-rollout.json";
-          path = pkgs.writeText "email-focus-rollout.json" (builtins.toJSON dashboard);
-        }
-      ];
-    }
-  ];
-}
+dashboard

@@ -1,3 +1,8 @@
+# Grafana's datasources provisioning document. The uids are what dashboards,
+# rules and links name, so they stay fixed wherever Grafana runs.
+#
+# `urls` holds the query endpoints Grafana reaches: `prometheus`, `loki`, `tempo`.
+{ urls }:
 {
   apiVersion = 1;
   datasources = [
@@ -17,7 +22,7 @@
       uid = "prometheus";
       type = "prometheus";
       access = "proxy";
-      url = "http://127.0.0.1:8081/prometheus";
+      url = urls.prometheus;
       editable = false;
       isDefault = true;
       jsonData = {
@@ -35,7 +40,7 @@
       uid = "loki";
       type = "loki";
       access = "proxy";
-      url = "http://127.0.0.1:8081/loki";
+      url = urls.loki;
       editable = false;
       jsonData.derivedFields = [
         {
@@ -53,7 +58,7 @@
       uid = "tempo";
       type = "tempo";
       access = "proxy";
-      url = "http://127.0.0.1:8081/tempo";
+      url = urls.tempo;
       editable = false;
       jsonData = {
         # Variables and autocomplete read tag values from the stored blocks of the
