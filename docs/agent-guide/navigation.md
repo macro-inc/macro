@@ -1317,9 +1317,10 @@ the stored task unchanged. Task edits and code approval are disabled for
 those tasks.
 
 **Keep as my routine** and **Duplicate** follow the same eligibility rules
-in the owner's **Routine actions** and row menus. Event-triggered routines
-need the `enable-event-routines` flag for either action, including routines
-that combine events with a schedule.
+in the owner's **Routine actions** and row menus. A trigger that includes
+events requires the `enable-event-routines` flag for **Duplicate** and for
+keeping a reference-backed copy. An ordinary sub-routine keeps its saved
+task and can be detached with the event flag off.
 
 - **Keep as my routine** is available for an ordinary sub-routine. For a
   reference-backed copy, the parent must still define it, its stored inputs

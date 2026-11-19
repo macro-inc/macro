@@ -2205,6 +2205,21 @@ describe('sub-routines defined once', () => {
     ).toBeTruthy();
   });
 
+  it('still detaches an ordinary event sub-routine with event management off', () => {
+    mocks.eventWrites = () => false;
+    setSchedules([{ ...events, sub_routine: copy.sub_routine }, parent]);
+    render(() => <Routine />);
+    openActions();
+    fireEvent.keyDown(
+      screen.getByRole('menuitem', { name: 'Keep as my routine' }),
+      { key: 'Enter' }
+    );
+    expect(mocks.detach).toHaveBeenCalledExactlyOnceWith({
+      scheduleId: 'routine-id',
+      parentSpan: NOOP_SPAN,
+    });
+  });
+
   it('withholds Keep when the current definition requires different inputs', () => {
     setSchedules([
       copy,
