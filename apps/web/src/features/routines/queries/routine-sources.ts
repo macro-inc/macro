@@ -134,6 +134,14 @@ function copyMatchesDefinition(copy: SubRoutineCopyDraft, task: RoutineTask) {
   return !!definition && copyInputsFit(copy, definition);
 }
 
+function hasInvalidCopyReference(
+  schedule: ScheduledActionResponse | undefined,
+  parent: ScheduledActionResponse | undefined
+): boolean {
+  const copy = schedule && copyOf(schedule.task);
+  return !!copy && !!parent && !copyMatchesDefinition(copy, parent.task);
+}
+
 function canManageTrigger(
   schedule: ScheduledActionResponse,
   eventWrites: boolean
@@ -271,12 +279,6 @@ export function createRoutineDetailSource(
       ? list.data?.find((item) => item.id === parentId())
       : undefined
   );
-  const copyRunBlocked = () => {
-    const current = raw();
-    const copy = current && copyOf(current.task);
-    const parent = rawParent();
-    return !!copy && !!parent && !copyMatchesDefinition(copy, parent.task);
-  };
   const connectedApps = createRoutineConnectedApps(() => {
     const current = raw();
     return Boolean(
@@ -367,7 +369,7 @@ export function createRoutineDetailSource(
     update: (draft, queuedAt) => save(draft, { queuedAt }),
     run: () => run.mutate({ scheduleId: id() }),
     runPending: () => run.isPending,
-    copyRunBlocked,
+    copyRunBlocked: () => hasInvalidCopyReference(raw(), rawParent()),
     setEnabled: (enabled) => {
       if (!approving()) activate.mutate({ scheduleId: id(), enabled });
     },
@@ -616,6 +618,10 @@ export function createRoutineRowOperations(
     linked().find((item) => item.id === id);
   const parentFor = (schedule: ScheduledActionResponse) =>
     schedule.sub_routine ? find(schedule.sub_routine.parent_id) : undefined;
+  const copyRunBlocked = (id: string) => {
+    const schedule = find(id);
+    return !!schedule && hasInvalidCopyReference(schedule, parentFor(schedule));
+  };
   const duplicateCandidate = (schedule: ScheduledActionResponse) =>
     canManageTrigger(schedule, eventWrites())
       ? scheduleToDuplicateBody(schedule, subRoutineWrites() === true)
@@ -687,8 +693,11 @@ export function createRoutineRowOperations(
       const schedule = find(id);
       return schedule ? scheduleToEntity(schedule) : undefined;
     },
-    run: running.start,
+    run(id) {
+      if (!copyRunBlocked(id)) running.start(id);
+    },
     runPending: running.pending,
+    copyRunBlocked,
     duplicate(id) {
       if (duplicateBody(id)) duplicating.start(id);
     },

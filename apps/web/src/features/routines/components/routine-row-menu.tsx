@@ -47,6 +47,7 @@ export type RoutineRowMenuActions = {
   onRun(row: RoutineRow): void;
   /** "Run now" was chosen and the server hasn't answered yet. */
   runPending(row: RoutineRow): boolean;
+  copyRunBlocked?(row: RoutineRow): boolean;
   onDuplicate(row: RoutineRow): void;
   canDuplicate?(row: RoutineRow): boolean;
   onKeep(row: RoutineRow): void;
@@ -175,6 +176,7 @@ function createRoutineMenuEntries(
         splits: desktop && Boolean(actions().onOpenInNewSplit),
         tabs: desktop && Boolean(actions().onOpenInNewTab) && canOpenInNewTab(),
         share: Boolean(actions().onShare),
+        run: !props.row.isCopy || !actions().copyRunBlocked?.(props.row),
         duplicate: actions().canDuplicate?.(props.row),
         keep: props.nested ? actions().canKeep?.(props.row) : undefined,
       });

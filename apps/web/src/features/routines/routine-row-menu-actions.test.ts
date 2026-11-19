@@ -43,6 +43,7 @@ vi.mock('./queries/routine-sources', () => ({
     }),
     run: vi.fn(),
     runPending: () => false,
+    copyRunBlocked: () => false,
     duplicate: () =>
       callbacks.onError(
         'duplicate',

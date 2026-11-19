@@ -21,6 +21,7 @@ export type RoutineMenuSurface = {
   splits: boolean;
   tabs: boolean;
   share: boolean;
+  run?: boolean;
   duplicate?: boolean;
   keep?: boolean;
 };
@@ -41,7 +42,12 @@ export function routineMenuGroups(
       ...(surface.splits ? (['open-in-split'] as const) : []),
       ...(surface.tabs ? (['open-in-tab'] as const) : []),
     ],
-    owned ? ['run-now', row.enabled ? 'turn-off' : 'turn-on'] : [],
+    owned
+      ? [
+          ...(surface.run === false ? [] : (['run-now'] as const)),
+          row.enabled ? 'turn-off' : 'turn-on',
+        ]
+      : [],
     owned
       ? [
           ...(row.isCopy || surface.duplicate === false

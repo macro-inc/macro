@@ -313,6 +313,19 @@ describe('routine row menu', () => {
     await waitFor(() => expect(menu.onKeep).toHaveBeenCalledWith(child));
   });
 
+  it('hides row Run now when the cached parent invalidates the reference', async () => {
+    setup(
+      [{ ...parent, children: [{ ...child, isCopy: true }] }],
+      menuActions({ copyRunBlocked: (row: RoutineRow) => row.id === child.id })
+    );
+    fireEvent.click(
+      screen.getByRole('button', { name: 'Show or hide 1 sub-routine' })
+    );
+    await openMenu('Follow up with Acme');
+    expect(entries()).not.toContain('Run now');
+    expect(entries()).toContain('Turn off');
+  });
+
   it('stays open while the list refreshes under it', async () => {
     const [rows, setRows] = createSignal([briefing, paused]);
     const menu = menuActions();

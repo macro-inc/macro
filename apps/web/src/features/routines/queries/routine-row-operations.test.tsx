@@ -254,6 +254,66 @@ describe('routine row operations', () => {
     );
   });
 
+  it.each([
+    'missing definition',
+    'incompatible inputs',
+    'uncached parent',
+  ] as const)(
+    'checks the cached parent before dispatching row Run now: %s',
+    async (condition) => {
+      const copy: ScheduledAction = {
+        ...digest,
+        sub_routine: { parent_id: 'parent', created_by_run_id: 'run' },
+        task: { sub_routine: 'remind', inputs: { item: 'Due today' } },
+      };
+      const parent: ScheduledAction = {
+        ...briefing,
+        id: 'parent',
+        task: {
+          steps: [
+            { type: 'agent', model: 'model', instructions: 'Plan reminders.' },
+          ],
+          sub_routines:
+            condition === 'missing definition'
+              ? []
+              : [
+                  {
+                    name: 'remind',
+                    title: 'Remind',
+                    steps: [
+                      {
+                        type: 'agent',
+                        model: 'model',
+                        instructions: 'Remind.',
+                      },
+                    ],
+                    inputs: [{ type: 'number', name: 'item', label: 'Item' }],
+                  },
+                ],
+        },
+      };
+      const rows =
+        condition === 'uncached parent' ? [briefing] : [briefing, parent];
+      queryClient.setQueryData(scheduledActionKeys.list.queryKey, rows);
+      queryClient.setQueryData(scheduledActionKeys.subRoutines.queryKey, [
+        copy,
+      ]);
+      client.listSchedules.mockResolvedValue(ok(rows));
+      client.listSubRoutines.mockResolvedValue(ok([copy]));
+      client.runNow.mockResolvedValue(ok({}));
+      const operations = mount();
+
+      operations.run('digest');
+      operations.run('briefing');
+      await vi.waitFor(() => expect(callbacks.onRunStarted).toHaveBeenCalled());
+      expect(client.runNow.mock.calls).toEqual(
+        condition === 'uncached parent'
+          ? [[{ scheduleId: 'digest' }], [{ scheduleId: 'briefing' }]]
+          : [[{ scheduleId: 'briefing' }]]
+      );
+    }
+  );
+
   it('duplicates an elapsed one-time trigger using the saved schedule', async () => {
     const elapsed: ScheduledAction = {
       ...briefing,

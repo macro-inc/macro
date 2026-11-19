@@ -1336,8 +1336,9 @@ task and can be detached with the event flag off.
 
 The list defers connection reads until a row menu opens and a candidate
 requires apps. On a copy's page, a loaded parent with a missing definition
-or incompatible inputs hides **Run now**. The row's **Run now** delegates
-definition resolution to the scheduler.
+or incompatible inputs hides **Run now**. The row menu uses the same check
+when the parent is already cached. With no cached parent, the scheduler
+resolves the definition.
 
 The list's top bar has **Routines** with **All** / **On** tabs (each with a
 count) on the left and **New** and search on the right; **Cmd/Ctrl+F** focuses

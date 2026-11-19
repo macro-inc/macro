@@ -76,6 +76,7 @@ export type RoutineRowOperations = {
   run(id: string): void;
   /** Its "Run now" was chosen and the server hasn't answered yet. */
   runPending(id: string): boolean;
+  copyRunBlocked(id: string): boolean;
   duplicate(id: string): void;
   canDuplicate(id: string): boolean;
   canKeepAsOwn(id: string): boolean;

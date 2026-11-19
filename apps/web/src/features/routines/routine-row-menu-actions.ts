@@ -120,6 +120,7 @@ export function useRoutineRowMenuActions(
     onOpenInNewTab: openInNewTab && ((row) => openInNewTab(row.id)),
     onRun: (row) => operations.run(row.id),
     runPending: (row) => operations.runPending(row.id),
+    copyRunBlocked: (row) => operations.copyRunBlocked(row.id),
     onDuplicate: (row) => operations.duplicate(row.id),
     canDuplicate: (row) => operations.canDuplicate(row.id),
     onKeep: (row) => operations.keepAsOwn(row.id),
