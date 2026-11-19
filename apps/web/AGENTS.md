@@ -1120,7 +1120,7 @@ resolved session ID; keep the existing `AgentSessionProvider` subscription to
   pending edits against the persisted server snapshot instead of replaying an older one.
 - Mobile dock customization shares the navigation island’s measured capacity; persist ordering per user with `mobile-dock-order.ts`, preserve gated destinations, and keep Search and More fixed. Reorder handles drag without a hold delay; the rest of each row scrolls.
 - Native iOS navigation follows UIKit's preferred vertical-bar edge through `tauri/layout_plugin`; place it in UIKit's bar layout region within the system column, not beyond the content safe area. Keep the same dock mounted while its axis changes, size overflow along that axis, and leave independent safe-area clearance for content and composers. Keep JS compact-width behavior and the `mobile:` CSS variant aligned with the native size class.
-- Share sidebar and mobile dock unread presence through `components/app/use-navigation-unread.ts`; keep badges reactive to read/done changes, guard all query data with `queryReadyGate` so pending preferences or paused queries cannot suspend the shell, and avoid fetching extra pages for counts.
+- Share sidebar and mobile dock unread state through `components/app/use-navigation-unread.ts`. Gate numbers separately so unified dots can keep following the unread subscription. Keep badges reactive to read/done changes, guard query data with `queryReadyGate` so pending preferences or paused queries cannot suspend the shell, and avoid fetching extra pages for counts.
 - Show notification unread dots on favorite rows in Chat, Tasks, Drive, and Reviews; reuse Chat's channel activity and the existing Soup entity hydration plus `getEntityNotifications` elsewhere, without a separate notification query or refresh registry. Never paginate favorites or the global notification feed just for dots.
 - Name Home thread rows from their latest scoped notification, including document mentions and reactions; use the thread author only when no notification exists. Document rows whose newest outstanding notification is a comment, and calendar event rows whose newest is a join request, say who did it (`row-notification.ts`).
 - Use `ChannelTitleIcon` for conversation breadcrumbs so DMs retain participant or agent avatars and named channels retain their pictures; suppress avatar actions inside breadcrumb buttons.
@@ -1886,10 +1886,13 @@ searching, rank with `NAME_MATCH_RANKING`; an agent needs the typed words, not s
 letters, and never ranks above a person who matches as well. Cap a list's people (`capPeople`), never its agents, and
 don't boost bots in a menu's search score. Until the contact directory answers for the
 first time after it opens, a directory-backed @ menu lists only the rows that lead every
-person (Macro) and keeps its People preview's rows as loading rows (`holdsRows`); phones list
-nothing below them yet. The hold ends at `UNANSWERED_SEARCH_LIMIT_MS`, when Cmd+K stops
-saying "Searching…". The menu reads a failed people window again once by itself, holding
-the rows meanwhile, and offers Retry only when that read fails too (`peopleFailed`).
+person (Macro) and keeps its People preview's rows as loading rows (`holdsRows`; in a menu
+with other sections also when no agent matches, `peopleHolding`), holding the highlighted
+row meanwhile; phones list nothing below them yet. On desktop, Booking Links, which arrive
+from the network, are a section below People; phones pin People rows above the rest. The hold ends at `UNANSWERED_SEARCH_LIMIT_MS`, when
+Cmd+K stops saying "Searching…". The menu reads a failed people window again once by
+itself, holding the rows meanwhile, and offers Retry only when that read fails too
+(`peopleFailed`).
 
 ### Tag picker selection and creation
 

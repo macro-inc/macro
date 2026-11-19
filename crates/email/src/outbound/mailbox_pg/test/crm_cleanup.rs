@@ -2,6 +2,7 @@
 //! Gmail deletion does.
 
 use super::{fixture, snapshot};
+use crate::domain::mailbox::live_pass::StreamKind;
 use crate::domain::mailbox::*;
 use crate::outbound::mailbox_pg::StreamKind;
 use email_api_client::domain::models::{

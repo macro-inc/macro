@@ -757,6 +757,13 @@ export const enableUnifiedNotifications = defineFlag({
   default: onInDev,
 });
 
+// Keep navigation numbers off in every environment while unread counts are
+// being investigated. Unified unread dots continue to use the subscription.
+export const enableNavigationUnreadCounts = defineFlag({
+  env: 'ENABLE_NAVIGATION_UNREAD_COUNTS',
+  default: false,
+});
+
 // Agents home: pending updates from coding agents shown as a stack under the
 // new-chat composer, and the Open PRs section in the Agents sidebar.
 // Override with VITE_ENABLE_AGENT_UPDATES.
