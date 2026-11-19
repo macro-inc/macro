@@ -280,6 +280,7 @@ impl OutlookCalendarRepository for PgCalendarRepository {
                         target.calendar_id,
                     )
                     .await?;
+                    let stale_role = holds_stale_role(&mut tx, target.calendar_id).await?;
                     sqlx::query!(r#"UPDATE calendars SET synced_at=now(),last_sync_error=NULL,last_sync_error_at=NULL,last_sync_error_kind=NULL,consecutive_sync_failures=0,
                         materialized_starts_at=$2,materialized_ends_at=$3,materialized_start_date=$4,materialized_end_date=$5 WHERE id=$1"#,
                         target.calendar_id,target.range.starts_at,target.range.ends_at,target.range.start_date,target.range.end_date).execute(&mut *tx).await.map_err(report)?;
@@ -304,6 +305,9 @@ impl OutlookCalendarRepository for PgCalendarRepository {
                             target.calendar_id,
                         )
                         .await?;
+                    }
+                    if stale_role {
+                        reset_cursor(&mut tx, lease.id).await?;
                     }
                     sqlx::query!(r#"UPDATE calendar_accounts a SET sync_status=CASE WHEN EXISTS(SELECT 1 FROM calendars c WHERE c.account_id=a.id AND NOT c.is_deleted AND c.synced_at IS NULL) THEN 'syncing' ELSE 'ready' END,
                         last_synced_at=now(),last_sync_error=NULL WHERE a.id=$1"#,lease.account_id).execute(&mut *tx).await.map_err(report)?;
@@ -758,6 +762,27 @@ async fn has_unreadable_events(
                 WHERE s.account_id=$2 AND s.calendar_id=$3 AND s.provider_event_id=listed.master_id AND s.source_kind='outlook' OFFSET 0)) AS "unreadable!""#,
         work_id,
         account_id,
+        calendar_id
+    )
+    .fetch_one(&mut **tx)
+    .await
+    .map_err(report)
+}
+
+/// Whether a copy written since the calendar's last committed sync holds a
+/// role other than the calendar's, as an edit's echo does when it observed
+/// the role before a change. Discovery finds such a copy only until a round
+/// moves `synced_at` past it, so the round that would hide it schedules the
+/// full scan that verifies it instead. A copy stored under no role is left
+/// out: reading it again cannot verify it.
+async fn holds_stale_role(
+    tx: &mut Transaction<'_, Postgres>,
+    calendar_id: Uuid,
+) -> Result<bool, Report> {
+    sqlx::query_scalar!(
+        r#"SELECT EXISTS(SELECT 1 FROM calendar_event_sources source JOIN calendars calendar ON calendar.id=source.calendar_id
+            WHERE source.calendar_id=$1 AND source.provider_access_role<>calendar.access_role
+              AND source.last_seen_at>=COALESCE(calendar.synced_at,'-infinity')) AS "stale!""#,
         calendar_id
     )
     .fetch_one(&mut **tx)

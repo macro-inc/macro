@@ -444,3 +444,77 @@ async fn a_calendar_listed_again_after_its_removal_is_imported_anew(pool: PgPool
     assert!(full_scan);
     assert_eq!(team_view(&repo, &owner).await, unavailable());
 }
+
+#[sqlx::test(migrator = "MACRO_DB_MIGRATIONS")]
+async fn a_series_read_again_without_an_occurrence_loses_the_role_an_older_build_stored(
+    pool: PgPool,
+) {
+    let (repo, _, owner) = mailbox(&pool).await;
+    teammate(&pool, &owner).await;
+    // Builds before certification skipped the occurrence too, but stored the
+    // series under the calendar's role.
+    let whole = first_import(&repo, &["series"], &outlook_event).await;
+    assert_eq!(
+        team_view(&repo, &owner).await.coverage,
+        TeamCalendarCoverage::Ready
+    );
+
+    let missing_an_occurrence = |lease: &OutlookCalendarLease, uid: &str| {
+        let mut event = upsert(lease, uid);
+        event.source.details_mut().observed_access_role = None;
+        Some(event)
+    };
+    let delta = next_round(&repo, whole.id).await;
+    round(&repo, delta, &["series"], &missing_an_occurrence).await;
+
+    assert_eq!(
+        team_view(&repo, &owner).await,
+        unavailable(),
+        "the unchanged copy is no longer the calendar's whole series"
+    );
+}
+
+#[sqlx::test(migrator = "MACRO_DB_MIGRATIONS")]
+async fn a_stale_role_a_delta_round_passes_still_gets_its_full_scan(pool: PgPool) {
+    let (repo, _, owner) = mailbox(&pool).await;
+    teammate(&pool, &owner).await;
+    let whole = first_import(&repo, &["meeting"], &outlook_event).await;
+    let edited = |lease: &OutlookCalendarLease, uid: &str| {
+        let mut event = upsert(lease, uid);
+        event.event.title = "Moved meeting".into();
+        event.event.sequence = 1;
+        event.event.updated_at += Duration::hours(1);
+        Some(event)
+    };
+    let mut echo = edited(&whole, "meeting").unwrap();
+    echo.source.details_mut().observed_access_role = Some("reader".into());
+    repo.upsert_event(CalendarEventWrite::UserMutation(echo))
+        .await
+        .unwrap();
+
+    // A delta round with nothing to list finishes before discovery runs, and
+    // moves the calendar's sync time past the echo.
+    let delta = next_round(&repo, whole.id).await;
+    round(&repo, delta, &[], &outlook_event).await;
+    assert_eq!(team_view(&repo, &owner).await, unavailable());
+    assert!(
+        scan(&repo, whole.id).await.1,
+        "the round that hid the echo schedules its full scan"
+    );
+
+    let full = next_round(&repo, whole.id).await;
+    assert!(!full.near_window, "its coverage stays");
+    round(&repo, full, &["meeting"], &edited).await;
+    assert_eq!(
+        team_view(&repo, &owner).await,
+        TeamView {
+            coverage: TeamCalendarCoverage::Ready,
+            sources: vec!["meeting".into()],
+            out_of_office: vec![],
+        }
+    );
+    assert!(
+        !scan(&repo, whole.id).await.1,
+        "the verified calendar goes back to delta rounds"
+    );
+}
