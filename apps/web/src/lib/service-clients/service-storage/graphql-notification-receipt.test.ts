@@ -1,4 +1,5 @@
 import { normalizedCacheExchange } from '@graphql-cache/exchange/normalized-cache-exchange';
+import { UNKNOWN_CACHE_GENERATION } from '@graphql-cache/generation-mirror';
 import { createNoopCacheHost } from '@graphql-cache/host/noop-host';
 import type { CacheHost } from '@graphql-cache/host/types';
 import { type Span, Telemetry } from '@macro-inc/observability';
@@ -192,7 +193,7 @@ it('delivers hidden-tab events before parked writes, preserving cache order with
     expect(host.writeQuery).toHaveBeenCalledOnce();
     expect(host.deleteRecords).toHaveBeenCalledExactlyOnceWith(
       ['GraphqlNotification:notification-1'],
-      undefined
+      UNKNOWN_CACHE_GENERATION
     );
     expect(onResult).toHaveBeenCalledTimes(2);
     expect(onPatch).toHaveBeenCalledTimes(2);

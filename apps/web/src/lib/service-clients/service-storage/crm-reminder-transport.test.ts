@@ -70,20 +70,27 @@ it('reads and saves a mailbox reminder through the real transport without CRM pr
 
 it('rejects a reminder body decoded after a replacement login', async () => {
   const started = Promise.withResolvers<void>();
-  const decoding = Promise.withResolvers<{ followup: EmailFollowup }>();
-  const response = Response.json({});
-  response.json = () => {
-    started.resolve();
-    return decoding.promise;
-  };
-  transport.mockResolvedValueOnce(response);
+  const decoding = Promise.withResolvers<void>();
+  const body = new ReadableStream<Uint8Array>({
+    async pull(controller) {
+      started.resolve();
+      await decoding.promise;
+      controller.enqueue(
+        new TextEncoder().encode(JSON.stringify({ followup }))
+      );
+      controller.close();
+    },
+  });
+  transport.mockResolvedValueOnce(
+    new Response(body, { headers: { 'content-type': 'application/json' } })
+  );
   const read = storageServiceClient.reminders.getEmailFollowup(
     followup.threadId
   );
   await started.promise;
   crmAccessAuthority.setSession(undefined);
   crmAccessAuthority.setSession('viewer', 1);
-  decoding.resolve({ followup });
+  decoding.resolve();
   expect((await read).isErr()).toBe(true);
   expect(proof).not.toHaveBeenCalled();
   expect(transport).toHaveBeenCalledOnce();
