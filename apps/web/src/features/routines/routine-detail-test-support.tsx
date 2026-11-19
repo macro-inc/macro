@@ -87,6 +87,7 @@ const mocks = vi.hoisted(() => ({
   getRoutine: vi.fn(),
   agentsPending: (): boolean => false,
   agentsFailed: (): boolean => false,
+  agentsRetained: (): boolean => false,
   agentHarness: (): string => 'macrod',
 }));
 vi.mock('@app/observability/flow', async (importOriginal) => ({
@@ -318,7 +319,7 @@ vi.mock('@queries/agents/agents', () => ({
     },
     get data() {
       if (mocks.agentsPending()) throw new Error('Read pending agents');
-      if (mocks.agentsFailed()) return undefined;
+      if (mocks.agentsFailed() && !mocks.agentsRetained()) return undefined;
       return [
         {
           bot: { id: '12345678-1234-1234-1234-123456789abc' },
@@ -535,6 +536,7 @@ beforeEach(() => {
   mocks.realRoutineQuery = false;
   mocks.agentsPending = () => false;
   mocks.agentsFailed = () => false;
+  mocks.agentsRetained = () => false;
   mocks.agentHarness = () => 'macrod';
   mocks.history = () => [
     {

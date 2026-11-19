@@ -1,5 +1,6 @@
 import { NOOP_SPAN } from '@macro-inc/observability';
 import { fireEvent, render, screen, within } from '@solidjs/testing-library';
+import { createSignal } from 'solid-js';
 import { describe, expect, it, vi } from 'vitest';
 
 import {
@@ -223,6 +224,50 @@ describe('routine definitions', () => {
     expect(screen.getByRole('alert').textContent).toContain(
       'Connect every app'
     );
+  });
+
+  it('keeps the autosave blocked when an agent refetch fails with retained data', async () => {
+    const [failed, setFailed] = createSignal(false);
+    mocks.agentsFailed = failed;
+    mocks.agentsRetained = () => true;
+    mocks.connectedApps = () => new Set(['example']);
+    setSchedules([
+      {
+        ...parent,
+        id: 'routine-id',
+        task: {
+          steps: [remind.steps[0]],
+          sub_routines: [
+            {
+              ...remind,
+              steps: [
+                {
+                  type: 'agent',
+                  agent: { bot_id: '12345678-1234-1234-1234-123456789abc' },
+                  instructions: 'Remind me about the task.',
+                },
+              ],
+              mcp_servers: [{ app_slug: 'example', server_name: 'Example' }],
+            },
+          ],
+        },
+      },
+    ]);
+    render(() => <Routine />);
+    const editor = within(screen.getByRole('group', { name: 'Remind me' }));
+    fireEvent.input(editor.getByRole('textbox', { name: 'Instructions' }), {
+      target: { value: 'Remind me tomorrow.' },
+    });
+    await vi.advanceTimersByTimeAsync(300);
+    expect(mocks.update).not.toHaveBeenCalled();
+
+    setFailed(true);
+    await vi.advanceTimersByTimeAsync(300);
+    expect(mocks.update).not.toHaveBeenCalled();
+
+    fireEvent.click(editor.getByLabelText('Execution target'));
+    await vi.advanceTimersByTimeAsync(300);
+    expect(mocks.update).toHaveBeenCalledOnce();
   });
 
   it.each(['routine', 'definition'] as const)(

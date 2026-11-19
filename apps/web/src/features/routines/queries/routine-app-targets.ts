@@ -13,10 +13,9 @@ export function createRoutineAppTargetCheck(
   return (target) => {
     if (target.kind === 'model') return true;
     const id = target.agentId.toLowerCase();
-    const agent =
-      !agents.isError && queryReadyGate(agents)
-        ? agents.data.find((agent) => agent.bot.id === id)
-        : undefined;
+    const agent = queryReadyGate(agents)
+      ? agents.data.find((agent) => agent.bot.id === id)
+      : undefined;
     return !agent || routineHarnessSupportsApps(agent.harness);
   };
 }
