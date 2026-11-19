@@ -527,11 +527,27 @@ impl<Rpo: ScheduledActionRepo, Exe, Grants, Targets, Github, Code, Upgrades, Rol
         if picked.is_empty() {
             return Ok(());
         }
+        self.check_picked_inboxes(&picked, owner).await
+    }
+
+    // The owner is an email address: never a span field.
+    #[tracing::instrument(
+        name = "routine.check_inboxes",
+        skip_all,
+        fields(picked = picked.len(), unknown = tracing::field::Empty)
+    )]
+    async fn check_picked_inboxes(
+        &self,
+        picked: &BTreeSet<Uuid>,
+        owner: &MacroUserIdStr<'_>,
+    ) -> Result<()> {
         let Some(inboxes) = &self.inboxes else {
             return Err(ActionPolicyError::UnknownInboxes.into());
         };
         let theirs: BTreeSet<Uuid> = inboxes.inboxes(owner).await?.into_iter().collect();
-        if picked.is_subset(&theirs) {
+        let unknown = picked.difference(&theirs).count();
+        tracing::Span::current().record("unknown", unknown);
+        if unknown == 0 {
             Ok(())
         } else {
             Err(ActionPolicyError::UnknownInboxes.into())

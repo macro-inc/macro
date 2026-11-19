@@ -65,54 +65,81 @@ impl<'a> Audience<'a> {
     }
 }
 
+/// What became of one candidate routine for an event.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+enum CandidateOutcome {
+    Admitted,
+    /// Its filters don't take the event (another inbox, another selector), or
+    /// the event predates its activation.
+    FilteredOut,
+    /// Disabled, not for its owner, not theirs to see, or already admitted.
+    Skipped,
+}
+
 impl<R: EventRunRepository, A: CurrentOwnerAccess, D: InboxDelegates>
     EventAdmissionService<R, A, D>
 {
-    /// Admit `event` to one candidate if it is eligible now. False when it is
-    /// not: disabled, changed, filtered out, not for the owner, or not the
-    /// owner's to see.
+    /// Admit `event` to one candidate if it is eligible now.
     async fn admit_candidate(
         &self,
         configuration: EventActionConfiguration,
         event: &EventReference,
         audience: &mut Audience<'_>,
-    ) -> Result<bool, Report> {
+    ) -> Result<CandidateOutcome, Report> {
         let pending = PendingEventRun {
             action_id: configuration.action_id,
             revision: configuration.revision,
             event: event.clone(),
             admitted_at: Utc::now(),
         };
-        if configuration.check_pending(&pending).is_err() {
-            return Ok(false);
+        match configuration.check_pending(&pending) {
+            Ok(()) => {}
+            // The pending run is this configuration's own, so only its
+            // filters can supersede it.
+            Err(CancellationReason::Superseded) => return Ok(CandidateOutcome::FilteredOut),
+            Err(_) => return Ok(CandidateOutcome::Skipped),
         }
         let Owner::User(owner) = &configuration.owner else {
-            return Ok(false);
+            return Ok(CandidateOutcome::Skipped);
         };
         if !audience.includes(owner, self.delegates.as_ref()).await? {
-            return Ok(false);
+            return Ok(CandidateOutcome::Skipped);
         }
         let Some(access) = self.access.authorize(owner, event).await? else {
-            return Ok(false);
+            return Ok(CandidateOutcome::Skipped);
         };
         if AuthorizedEventRun::prepare(pending, &configuration, access).is_err() {
-            return Ok(false);
+            return Ok(CandidateOutcome::Skipped);
         }
-        Ok(self
+        let admitted = self
             .repository
             .admit(
                 configuration.action_id,
                 configuration.revision,
                 &configuration.filters.run_event(event),
             )
-            .await?
-            == AdmissionResult::Admitted)
+            .await?;
+        Ok(if admitted == AdmissionResult::Admitted {
+            CandidateOutcome::Admitted
+        } else {
+            CandidateOutcome::Skipped
+        })
     }
 }
 
 impl<R: EventRunRepository, A: CurrentOwnerAccess, D: InboxDelegates> EventIngestion
     for EventAdmissionService<R, A, D>
 {
+    // Counts only: an event's routines and owners are never span fields.
+    #[tracing::instrument(
+        name = "routine.admit_event",
+        skip_all,
+        fields(
+            candidates = tracing::field::Empty,
+            filtered_out = tracing::field::Empty,
+            inserted = tracing::field::Empty,
+        )
+    )]
     async fn ingest(&self, incoming: &IncomingEvent) -> Result<EventIngestionResult, Report> {
         let event = match incoming.normalize() {
             Ok(event) => event,
@@ -121,6 +148,8 @@ impl<R: EventRunRepository, A: CurrentOwnerAccess, D: InboxDelegates> EventInges
         let mut audience = Audience::new(incoming);
         let mut after = None;
         let mut inserted = 0;
+        let mut candidates_seen = 0_usize;
+        let mut filtered_out = 0_usize;
         loop {
             let candidates = self
                 .repository
@@ -130,6 +159,10 @@ impl<R: EventRunRepository, A: CurrentOwnerAccess, D: InboxDelegates> EventInges
                 if !candidates.configurations.is_empty() {
                     return Err(rootcause::report!("event candidate page has no cursor"));
                 }
+                let span = tracing::Span::current();
+                span.record("candidates", candidates_seen);
+                span.record("filtered_out", filtered_out);
+                span.record("inserted", inserted);
                 return Ok(EventIngestionResult::Admitted { inserted });
             };
             if after.is_some_and(|id| next_after <= id) {
@@ -143,11 +176,14 @@ impl<R: EventRunRepository, A: CurrentOwnerAccess, D: InboxDelegates> EventInges
                     return Err(rootcause::report!("event candidate page is not ordered"));
                 }
                 after = Some(configuration.action_id);
-                if self
+                candidates_seen += 1;
+                match self
                     .admit_candidate(configuration, &event, &mut audience)
                     .await?
                 {
-                    inserted += 1;
+                    CandidateOutcome::Admitted => inserted += 1,
+                    CandidateOutcome::FilteredOut => filtered_out += 1,
+                    CandidateOutcome::Skipped => {}
                 }
             }
             after = Some(next_after);
