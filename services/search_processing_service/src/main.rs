@@ -2,7 +2,7 @@
 use std::{sync::Arc, time::Duration};
 
 #[cfg(feature = "processing")]
-use crate::inbound::kafka_consumer::{KafkaProcessingContext, run_event_consumer};
+use crate::inbound::kafka_consumer::{IndexMetrics, KafkaProcessingContext, run_event_consumer};
 use crate::{
     api::context::{ApiContext, AuthorizationService},
     config::DatabaseUrlReadonly,
@@ -163,7 +163,7 @@ async fn supervise_event_consumer(
 
 #[tokio::main]
 async fn main() -> anyhow::Result<()> {
-    MacroEntrypoint::default().init();
+    let telemetry = MacroEntrypoint::default().init();
 
     // Parse our configuration from the environment.
     let config = Config::from_env().context("expected to be able to generate config")?;
@@ -304,31 +304,33 @@ async fn main() -> anyhow::Result<()> {
             config.queue_max_messages,
             config.queue_wait_time_seconds,
         );
-        let search_processing_context = SearchProcessingContext {
-            db: db.clone(),
-            worker: Arc::new(worker.clone()),
-            document_storage_bucket: config.document_storage_bucket.to_string(),
-            s3_client: s3_client.clone(),
-            opensearch_client: opensearch_client.clone(),
-            lexical_client: lexical_client.clone(),
-            calendar_search_enabled: config.calendar_search_enabled,
-        };
-        run_search_processing_workers(search_processing_context, config.worker_count);
-
         let kafka_processing_context = KafkaProcessingContext {
             agent_session_indexer: agent_session_indexer.clone(),
             db: db.clone(),
             opensearch_client: opensearch_client.clone(),
             s3_client: s3_client.clone(),
             document_storage_bucket: config.document_storage_bucket.to_string(),
-            lexical_client,
+            lexical_client: lexical_client.clone(),
             calendar_search_enabled: config.calendar_search_enabled,
             mailbox_deletes: process::email::mailbox_delete::MailboxDeletes::new(
                 opensearch_client.clone(),
                 mailbox_delete_tracker.clone(),
                 shutdown_token.clone(),
             ),
+            metrics: IndexMetrics::global(),
+            replays: sqs_client.clone(),
         };
+        let search_processing_context = SearchProcessingContext {
+            db: db.clone(),
+            worker: Arc::new(worker.clone()),
+            document_storage_bucket: config.document_storage_bucket.to_string(),
+            s3_client: s3_client.clone(),
+            opensearch_client: opensearch_client.clone(),
+            lexical_client,
+            calendar_search_enabled: config.calendar_search_enabled,
+            broker_events: kafka_processing_context.clone(),
+        };
+        run_search_processing_workers(search_processing_context, config.worker_count);
         tokio::spawn(supervise_event_consumer(
             config.kafka_brokers.as_ref().to_owned(),
             kafka_processing_context,
@@ -370,6 +372,9 @@ async fn main() -> anyhow::Result<()> {
     let consumer_result = consumer_supervisor
         .await
         .context("search processing event consumer supervisor failed");
+    if let Err(error) = telemetry.force_flush().await {
+        tracing::warn!(error = ?error, "could not flush telemetry after the consumer stopped");
+    }
 
     // Followers stop at the cancelled token; OpenSearch finishes their tasks.
     #[cfg(feature = "processing")]
@@ -392,6 +397,9 @@ async fn main() -> anyhow::Result<()> {
     }
 
     #[cfg(feature = "processing")]
-    consumer_result?;
-    api_result
+    let result = consumer_result.and(api_result);
+    #[cfg(not(feature = "processing"))]
+    let result = api_result;
+    telemetry.shutdown();
+    result
 }

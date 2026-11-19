@@ -375,10 +375,47 @@ committed during a request apply to the next request, just like withdrawals and
 private-thread exceptions. Deterministic transition tests cover both directions.
 
 The Team reader keeps a shared ten-second deadline for its probes and pages.
-For selected mailboxes it first probes positive targets, so sparse selections do
-not require walking a record's entire mailbox history. Live company domains
-resolve against each selected mailbox's contacts in one indexed pass per page;
-contact-address targets use direct indexed lookups. Per-thread eligibility keeps
+For selected mailboxes, an injected CRM discovery core resolves each distinct
+live contact/company source once and preserves each contributor's visibility.
+The positive-target probe and page reuse its complete contact IDs in the same
+snapshot. A small-input path is selected before expansion (up to eight selected
+contributors and 4,000 raw references); larger scopes fold shared sources and
+keyset-page mailbox contacts. Exact-address policies use existing indexed
+lookups until their estimated cross product exceeds 50,000, then scan within the
+same work budget. No hot email-table index is added.
+
+Discovery caps contributors (1,000), raw references/live contact addresses/live
+company domains (50,000 each), one live value (4 KiB), source text (8 MiB), raw
+mailbox contacts (250,000), contact text (32 MiB), suffix checks (750,000),
+membership checks (250,000), and its shared deadline (ten seconds). Counts apply
+before filtering/deduplication. Suffix checks apply only to mailboxes with their
+own applicable domain selectors, including live company domains. A complete
+result or an explicit error is required; truncating discovery cannot authorize
+a partial feed. The small SQL aggregate may materialize the bounded raw page
+before the text-byte check.
+
+Both policy validation and replacement use this same checker against the
+proposed owner policy and the other active selected contributors. Validation is
+read-only; replacement repeats admission inside its locked transaction before
+granting. Successful admission restores the mutation's existing 15-second
+statement timeout for subsequent writes. Failure returns HTTP 400 with the limit
+name/maximum and leaves consent, identity, historical work, audit and idempotency
+unchanged. Subsequent live-source growth may exceed a bound: Team reads then
+return HTTP 503 with that limit,
+record the limit and work counters on `crm.email_rules.discovery`, and return no
+partial result or advanced cursor. Public errors omit observed team usage and
+private target values. Withdrawal and all-mail behavior remain independent.
+
+More than eight distinct live sources start with bounded first-page batches:
+at most 128 sources and eight values per source. Full sources continue by keyset;
+all prefetched raw rows are charged before continuations. Small source sets keep
+the single-source queries, and neither path truncates the discovered set.
+
+These discovery bounds do not close the General mode-partition race or every
+later candidate/message/fallback cost; those remain activation checks.
+
+The reader probes positive targets first, so sparse selections do not require
+walking a record's entire mailbox history. Per-thread eligibility keeps
 only the bounded live target IDs and probes their indexed addresses or domains,
 so it does not repeat that expansion for each thread. Selected-policy target
 resolution fences mailbox contact and participant lookups. Company domains are

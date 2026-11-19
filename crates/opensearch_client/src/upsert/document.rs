@@ -7,7 +7,7 @@ use super::properties::IndexedProperty;
 use crate::{
     Result,
     date_format::EpochMillis,
-    error::{OpensearchClientError, OpensearchOperation, WriteRefusal},
+    error::{OpensearchClientError, OpensearchOperation, write_refusal},
 };
 
 /// Relation name for parent docs in the join field.
@@ -184,8 +184,6 @@ async fn bulk_upsert_single_chunk(
         chunk_total = documents.len(),
         parent_count = seen_parents.len(),
         successful = result.successful,
-        failed = result.failed,
-        version_conflicts = result.version_conflicts,
         "bulk upsert chunk completed"
     );
 
@@ -229,35 +227,24 @@ pub(crate) async fn bulk_upsert_documents(
             "processing chunk"
         );
 
-        let chunk_result = bulk_upsert_single_chunk(client, chunk, index).await;
-
-        match chunk_result {
-            Ok(r) => {
-                overall_result.successful += r.successful;
-                overall_result.failed += r.failed;
-                overall_result.version_conflicts += r.version_conflicts;
-                overall_result.errors.extend(r.errors);
-            }
-            Err(e) => {
-                tracing::error!(
+        // A failed chunk fails the whole upsert: the document is not fully
+        // indexed, so the caller must not count it as done.
+        let chunk_result = bulk_upsert_single_chunk(client, chunk, index)
+            .await
+            .inspect_err(|error| {
+                tracing::warn!(
                     chunk_index = chunk_idx,
                     chunk_size = chunk.len(),
-                    error = ?e,
-                    "chunk completely failed"
+                    error = %error,
+                    "document chunk upsert failed"
                 );
-                overall_result.failed += chunk.len();
-                overall_result
-                    .errors
-                    .push(format!("Chunk {}: {}", chunk_idx, e));
-            }
-        }
+            })?;
+        overall_result.successful += chunk_result.successful;
     }
 
     tracing::info!(
         total = documents.len(),
         successful = overall_result.successful,
-        failed = overall_result.failed,
-        version_conflicts = overall_result.version_conflicts,
         "chunked bulk upsert completed"
     );
 
@@ -300,23 +287,13 @@ pub(crate) async fn upsert_document(
         child_doc_body(args).to_string(),
     ];
 
-    let result = super::bulk_upsert_to_index(
+    super::bulk_upsert_to_index(
         client,
         index,
         bulk_body,
         OpensearchOperation::UpsertDocument,
     )
     .await?;
-
-    if result.failed > 0 {
-        return Err(OpensearchClientError::Unknown {
-            details: format!(
-                "upsert_document had {} failures: {:?}",
-                result.failed, result.errors
-            ),
-            operation: OpensearchOperation::UpsertDocument,
-        });
-    }
 
     tracing::trace!(id=%child_id, parent=%parent_id, "document upserted successfully");
     Ok(())
@@ -348,23 +325,13 @@ pub(crate) async fn upsert_parent_document(
     let index = resolve_destination(index_override);
     let bulk_body = parent_only_bulk_body(args);
 
-    let result = super::bulk_upsert_to_index(
+    super::bulk_upsert_to_index(
         client,
         index,
         bulk_body,
         OpensearchOperation::UpsertParentDocument,
     )
     .await?;
-
-    if result.failed > 0 {
-        return Err(OpensearchClientError::Unknown {
-            details: format!(
-                "upsert_parent_document had {} failures: {:?}",
-                result.failed, result.errors
-            ),
-            operation: OpensearchOperation::UpsertParentDocument,
-        });
-    }
 
     tracing::trace!(parent=%args.document_id, "parent document upserted successfully");
     Ok(())
@@ -581,14 +548,6 @@ fn email_attachment_update_bulk_body(
         body.push(update.clone());
     }
     body
-}
-
-/// The refusal, if any, in a request's or an item's status and `error`.
-fn write_refusal(status: u16, error: &serde_json::Value) -> Option<WriteRefusal> {
-    if error["type"].as_str() == Some("cluster_block_exception") {
-        return Some(WriteRefusal::ClusterBlock);
-    }
-    (status == 429).then_some(WriteRefusal::TooManyRequests)
 }
 
 /// Classify a bulk update response. A refusal of the request or of any one

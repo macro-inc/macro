@@ -10,4 +10,7 @@ pub struct SearchProcessingContext {
     pub lexical_client: Arc<lexical_client::LexicalClient>,
     /// Whether calendar events are written to the search index.
     pub calendar_search_enabled: bool,
+    /// What replays of failed broker events are applied with.
+    #[cfg(feature = "processing")]
+    pub(crate) broker_events: crate::inbound::kafka_consumer::KafkaProcessingContext,
 }
