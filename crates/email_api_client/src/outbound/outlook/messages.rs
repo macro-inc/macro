@@ -360,7 +360,7 @@ pub(super) fn normalize(
     let role = MailFolder::effective_role(folders, folder_id.as_ref());
     let state = MailboxState {
         is_read: source.is_read.unwrap_or(false),
-        is_draft: source.is_draft,
+        is_draft: source.is_draft.unwrap_or(false),
         is_flagged: source.flag.flag_status.as_deref() == Some("flagged"),
         in_inbox: role == FolderRole::Inbox,
         in_trash: role == FolderRole::Trash,

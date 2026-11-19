@@ -914,33 +914,35 @@ async fn a_sender_or_recipient_without_an_address_is_left_out() {
 }
 
 #[tokio::test]
-async fn a_null_read_state_reads_as_unread_like_a_missing_one() {
+async fn null_read_and_draft_states_read_like_missing_ones() {
     let (server, api, token) = setup().await;
     Mock::given(method("GET"))
-        .and(path("/v1.0/me/messages/null-read"))
+        .and(path("/v1.0/me/messages/null-states"))
         .respond_with(ResponseTemplate::new(200).set_body_json(json!({
-            "id":"null-read", "conversationId":"conversation", "isRead":null, "isDraft":false
+            "id":"null-states", "conversationId":"conversation",
+            "isRead":null, "isDraft":null,
+            "createdDateTime":null, "lastModifiedDateTime":null, "receivedDateTime":null
         })))
         .mount(&server)
         .await;
     Mock::given(method("GET"))
-        .and(path("/v1.0/me/messages/missing-read"))
+        .and(path("/v1.0/me/messages/missing-states"))
         .respond_with(ResponseTemplate::new(200).set_body_json(json!({
-            "id":"missing-read", "conversationId":"conversation", "isDraft":false
+            "id":"missing-states", "conversationId":"conversation"
         })))
         .mount(&server)
         .await;
     Mock::given(method("GET"))
-        .and(path("/v1.0/me/messages/read"))
+        .and(path("/v1.0/me/messages/read-draft"))
         .respond_with(ResponseTemplate::new(200).set_body_json(json!({
-            "id":"read", "conversationId":"conversation", "isRead":true, "isDraft":false
+            "id":"read-draft", "conversationId":"conversation", "isRead":true, "isDraft":true
         })))
         .mount(&server)
         .await;
     for attachments in [
-        "/v1.0/me/messages/null-read/attachments",
-        "/v1.0/me/messages/missing-read/attachments",
-        "/v1.0/me/messages/read/attachments",
+        "/v1.0/me/messages/null-states/attachments",
+        "/v1.0/me/messages/missing-states/attachments",
+        "/v1.0/me/messages/read-draft/attachments",
     ] {
         Mock::given(method("GET"))
             .and(path(attachments))
@@ -949,42 +951,28 @@ async fn a_null_read_state_reads_as_unread_like_a_missing_one() {
             .await;
     }
 
-    let null_read = api
-        .message(
-            &token,
-            Uuid::now_v7(),
-            &ProviderId::new("null-read").unwrap(),
-            &[],
-        )
-        .await
-        .unwrap()
-        .unwrap();
-    let missing_read = api
-        .message(
-            &token,
-            Uuid::now_v7(),
-            &ProviderId::new("missing-read").unwrap(),
-            &[],
-        )
-        .await
-        .unwrap()
-        .unwrap();
-    let read = api
-        .message(
-            &token,
-            Uuid::now_v7(),
-            &ProviderId::new("read").unwrap(),
-            &[],
-        )
-        .await
-        .unwrap()
-        .unwrap();
+    let read = |id: &'static str| {
+        let api = &api;
+        let token = &token;
+        async move {
+            api.message(token, Uuid::now_v7(), &ProviderId::new(id).unwrap(), &[])
+                .await
+                .unwrap()
+                .unwrap()
+        }
+    };
+    let null_states = read("null-states").await;
+    let missing_states = read("missing-states").await;
+    let read_draft = read("read-draft").await;
 
-    assert!(!null_read.state.is_read);
-    assert!(!null_read.content.message.is_read);
-    assert!(!missing_read.state.is_read);
-    assert!(read.state.is_read);
-    assert!(read.content.message.is_read);
+    assert!(!null_states.state.is_read);
+    assert!(!null_states.state.is_draft);
+    assert!(!null_states.content.message.is_read);
+    assert!(!null_states.content.message.is_draft);
+    assert!(!missing_states.state.is_read);
+    assert!(!missing_states.state.is_draft);
+    assert!(read_draft.state.is_read);
+    assert!(read_draft.state.is_draft);
 }
 
 #[tokio::test]
