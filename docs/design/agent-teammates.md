@@ -39,8 +39,9 @@ Team admins and owners can read the repo with their Macro credential.
 
 ## Bootstrap
 
-Agent invites may include `avatarFace` (version 1, a seed of 1–64 characters,
-numeric nonnegative pins, at most 1 KiB) and `avatarUrl`. The recipe lives in
+Agent invites may include `avatarFace` (version 1, a nonblank seed of 1–64
+characters, pins that are unsigned 32-bit integers, at most 1 KiB) and
+`avatarUrl`, a Macro static file (`<static-file base>/file/<uuid>`). The recipe lives in
 `macro_user_info.avatar_face`; its optional PNG lives in `profile_picture` for
 email and notification consumers. Owners and admins replace both together via
 `PUT /team_agents/{agent_user_id}/avatar` with `{face, url}`. A photo save clears
