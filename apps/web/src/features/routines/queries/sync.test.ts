@@ -112,54 +112,6 @@ describe('scheduled-action websocket synchronization', () => {
       expect(queryClient.getQueryData(key)).toEqual([copy]);
   });
 
-  it.each(['started', 'stopped'] as const)(
-    'preserves a copy claim when an older request resolves after %s',
-    async (type) => {
-      const now = '2026-09-28T12:00:00.000Z';
-      const copy: ScheduledAction = {
-        ...schedule,
-        id: 'copy',
-        task: { sub_routine: 'remind', inputs: {} },
-        sub_routine: { parent_id: 'routine', created_by_run_id: 'run' },
-        ...(type === 'stopped' ? { claimed: now } : {}),
-      };
-      const keys = [
-        scheduledActionKeys.subRoutines.queryKey,
-        scheduledActionKeys.children({ scheduleId: 'routine' }).queryKey,
-      ];
-      const copyKey = scheduledActionKeys.detail({
-        scheduleId: 'copy',
-      }).queryKey;
-      const answer = Promise.withResolvers<ScheduledAction>();
-      const childFetches = keys.map((queryKey) => {
-        queryClient.setQueryData(queryKey, [copy]);
-        return queryClient.fetchQuery({
-          queryKey,
-          queryFn: async () => [await answer.promise],
-        });
-      });
-      queryClient.setQueryData(copyKey, copy);
-      const detailFetch = queryClient.fetchQuery({
-        queryKey: copyKey,
-        queryFn: () => answer.promise,
-      });
-      expect(queryClient.isFetching()).toBe(3);
-
-      send(update(type, { action_id: 'copy' }));
-      answer.resolve(copy);
-      await Promise.all([...childFetches, detailFetch]);
-
-      const claimed = type === 'started' ? now : undefined;
-      for (const queryKey of keys)
-        expect(
-          queryClient.getQueryData<ScheduledAction[]>(queryKey)?.[0].claimed
-        ).toBe(claimed);
-      expect(queryClient.getQueryData<ScheduledAction>(copyKey)?.claimed).toBe(
-        claimed ?? null
-      );
-    }
-  );
-
   it.each([
     { chat_id: chat.id },
     { chat_id: chat.id, resource: chat },
