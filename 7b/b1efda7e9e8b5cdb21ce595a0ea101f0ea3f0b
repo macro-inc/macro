@@ -1,0 +1,25 @@
+packages/sdk-ocaml/generated/auth.mli
+  s_d68827eef00d3d::t_6db8e0e4d399a2 192-207,2223-2234,2403-2476,4230-4236
+  s_d68827eef00d3d::t_b72e56cb9e8ca0 4237
+packages/sdk-ocaml/generated/auth.ml
+  s_d68827eef00d3d::t_6db8e0e4d399a2 355-395,3808-3832,4153-4268,8264-8285
+  s_d68827eef00d3d::t_6215a5e1ec84cc 8286
+crates/agent_permission_registry/registry.json
+  s_d68827eef00d3d::t_f8103fdeb59310 177
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.7.7",
+  "base_commit_sha": "7bb1efda7e9e8b5cdb21ce595a0ea101f0ea3f0b",
+  "prompts": {},
+  "sessions": {
+    "s_d68827eef00d3d": {
+      "agent_id": {
+        "tool": "claude",
+        "id": "a7845e4f-e917-4189-85b6-0d6704e36200",
+        "model": "claude-opus-5-5"
+      },
+      "human_author": "Eric Hayes <56524199+ehayes2000@users.noreply.github.com>"
+    }
+  }
+}
