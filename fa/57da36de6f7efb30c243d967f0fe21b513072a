@@ -1,0 +1,59 @@
+crates/agent_permissions/src/domain/service.rs
+  s_6e9511fcd4b64b::t_6375442ecce19b 471,511-512,519,526,535,539
+  s_6e9511fcd4b64b::t_19429bd05547dc 26
+crates/agent_permissions/src/domain/model.rs
+  s_6e9511fcd4b64b::t_8011758848b4cc 124-128,179-201,203-209
+  s_6e9511fcd4b64b::t_2753e627218870 202
+  s_6e9511fcd4b64b::t_12eac06f18f01b 210
+crates/macro_db_client/migrations/20261119040340_agent_tool_permission_restriction_only.sql
+  s_6e9511fcd4b64b::t_31932c8b59c5b4 1-21
+crates/agent_permissions/AGENTS.md
+  s_6e9511fcd4b64b::t_bd9f82ce292c3c 15-17
+  s_6e9511fcd4b64b::t_6f385d1cff0ce6 18-20
+crates/agent_permissions/src/domain/resolve/test.rs
+  s_6e9511fcd4b64b::t_a355d2e34e4fc0 47,60,68
+  s_6e9511fcd4b64b::t_c4d992e05b5b0f 239,325,349
+crates/agent_permissions/src/outbound/pg.rs
+  s_6e9511fcd4b64b::t_19429bd05547dc 183-184,190-191
+  s_6e9511fcd4b64b::t_bcaa00b17d6bce 200,219-220,226,234-235,257-258,263,271-272,371
+  s_6e9511fcd4b64b::t_dc841d3c8e94e3 48,57,123,137,144,159,185-189
+  s_6e9511fcd4b64b::t_0336416a669f09 16
+crates/agent_permissions/src/domain/service/test.rs
+  s_6e9511fcd4b64b::t_a355d2e34e4fc0 71,80-81,127,784-813,815,822,827,831,834
+  s_6e9511fcd4b64b::t_19429bd05547dc 128
+  s_6e9511fcd4b64b::t_a58800c9bc7d9a 814,816-821,823-826,828-830,832-833,835-836
+crates/agent_permissions/src/domain/ports.rs
+  s_6e9511fcd4b64b::t_8011758848b4cc 59-60
+  s_6e9511fcd4b64b::t_19429bd05547dc 10
+crates/agent_permissions/src/outbound/pg/test.rs
+  s_6e9511fcd4b64b::t_92d1a6470bd33c 201
+  s_6e9511fcd4b64b::t_3f22d5e0780e9f 253-261
+  s_6e9511fcd4b64b::t_e01a22e57e9717 8,24,31,49,81,84-91,113,122,129,133,140,169,278,282,325,339
+crates/agent_permissions/src/domain/resolve.rs
+  s_6e9511fcd4b64b::t_8011758848b4cc 36,40,59,116,118-119,122,311-313,322-323
+  s_6e9511fcd4b64b::t_6375442ecce19b 5-7,24
+.sqlx/query-c0ff0c0d098336ec33db39b6e784bb8924a7d239e4de8751b8758021c6b73ee1.json
+  s_6e9511fcd4b64b::t_d2229a3c0c12b9 3,28-32,47,51
+.sqlx/query-c402d631b082e61d35b711f24fa75cd66f286062812f5912c095570cb8172bd6.json
+  s_6e9511fcd4b64b::t_743f21cca5b1c6 3,13,19
+.sqlx/query-df320c36009f6bacacd23615ef14356e3c300acadad7de730f3638a2eec0d144.json
+  s_6e9511fcd4b64b::t_afa2a42ff393ce 3,13,19
+.sqlx/query-eb56091c8ac73f7675e3525e2f75edbfb1c063d0d79572fbd8c570fc38008530.json
+  s_6e9511fcd4b64b::t_0fe8ec82f449d0 3,28-32,39,48,52
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.7.7",
+  "base_commit_sha": "fa57da36de6f7efb30c243d967f0fe21b513072a",
+  "prompts": {},
+  "sessions": {
+    "s_6e9511fcd4b64b": {
+      "agent_id": {
+        "tool": "claude",
+        "id": "b73d9930-5a2a-44b1-8373-7101adf46fc8",
+        "model": "claude-opus-5-5"
+      },
+      "human_author": "Eric Hayes <56524199+ehayes2000@users.noreply.github.com>"
+    }
+  }
+}
