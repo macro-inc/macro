@@ -17,6 +17,7 @@ impl Fixture {
         let machine = Machine {
             workspace,
             scratch: dir.path().join("scratch"),
+            tmp: dir.path().join("tmp"),
         };
         machine.fresh_scratch().expect("a scratch directory");
         Self { _dir: dir, machine }
@@ -156,4 +157,27 @@ fn a_step_does_not_see_the_callers_own_variables() {
     )]));
 
     assert!(matches!(outcome, Outcome::Passed));
+}
+
+/// A dev shell makes a temporary directory whenever a shell starts and never
+/// removes it. They must land where the tool clears, not in `/tmp`.
+#[test]
+fn temporary_files_stay_in_the_directory_the_tool_clears() {
+    let fixture = Fixture::new();
+
+    let outcome = fixture.run(&check(vec![step(
+        "makes a temporary file",
+        r#"mktemp > "$GITHUB_WORKSPACE/made""#,
+    )]));
+
+    assert!(matches!(outcome, Outcome::Passed));
+    let made = fixture.read("made");
+    assert!(
+        std::path::Path::new(made.trim()).starts_with(&fixture.machine.tmp),
+        "{made} is outside {}",
+        fixture.machine.tmp.display()
+    );
+
+    fixture.machine.clear();
+    assert!(!fixture.machine.tmp.exists() && !fixture.machine.scratch.exists());
 }

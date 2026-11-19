@@ -34,7 +34,6 @@ const INHERITED: &[&str] = &[
     "TERM",
     "LANG",
     "LC_ALL",
-    "TMPDIR",
     "SSL_CERT_FILE",
     "NIX_SSL_CERT_FILE",
     "NIX_REMOTE",
@@ -61,6 +60,11 @@ pub struct Machine {
     pub workspace: PathBuf,
     /// `RUNNER_TEMP`: emptied before every check.
     pub scratch: PathBuf,
+    /// `TMPDIR` for the dev shell and the steps, emptied with the scratch
+    /// directory. A dev shell makes a temporary directory every time a shell
+    /// starts and never removes it; a runner is thrown away, a machine's
+    /// `/tmp` is not.
+    pub tmp: PathBuf,
 }
 
 /// What steps have handed to the ones after them.
@@ -80,6 +84,7 @@ impl Machine {
         let output = in_repository("nix", &self.workspace)
             .args(["print-dev-env", "--accept-flake-config"])
             .arg(format!(".#{shell}"))
+            .env("TMPDIR", &self.tmp)
             .stderr(std::process::Stdio::inherit())
             .output()
             .context(
@@ -101,13 +106,20 @@ impl Machine {
     }
 
     fn fresh_scratch(&self) -> Result<(), Report> {
-        if self.scratch.exists() {
-            std::fs::remove_dir_all(&self.scratch)
-                .context("could not clear the last check's scratch files")?;
+        self.clear();
+        for directory in [&self.scratch, &self.tmp] {
+            std::fs::create_dir_all(directory)
+                .context(format!("could not create {}", directory.display()))?;
         }
-        std::fs::create_dir_all(&self.scratch)
-            .context(format!("could not create {}", self.scratch.display()))?;
         Ok(())
+    }
+
+    /// Remove what the last check left in the scratch and temporary
+    /// directories.
+    pub fn clear(&self) {
+        for directory in [&self.scratch, &self.tmp] {
+            let _ = std::fs::remove_dir_all(directory);
+        }
     }
 
     fn run_steps(&self, check: &Check, dev_env: Option<&Path>) -> Result<Outcome, Report> {
@@ -173,6 +185,7 @@ impl Machine {
             .env("GITHUB_ACTIONS", "true")
             .env("RUNNER_OS", "Linux")
             .env("RUNNER_TEMP", &self.scratch)
+            .env("TMPDIR", &self.tmp)
             .env("GITHUB_WORKSPACE", &self.workspace)
             .env("GITHUB_OUTPUT", file("output"))
             .env("GITHUB_ENV", file("env"))

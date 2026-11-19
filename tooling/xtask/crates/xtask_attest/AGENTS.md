@@ -45,6 +45,9 @@ that commit's tree.
   they are not everything the job reads.
 - A receipt is for committed files: `run` records nothing when the working
   tree has uncommitted changes, or when the check itself changed a file.
+- Steps and the dev shell get a `TMPDIR` the tool clears. A dev shell makes
+  a temporary directory every time a shell starts and never removes it, which
+  runs a shared `/tmp` out of inodes.
 - Run git through `git::in_repository`. A git hook exports `GIT_DIR`, and git
   would otherwise act on the repository the hook names.
 
