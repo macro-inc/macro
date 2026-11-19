@@ -25,6 +25,25 @@ describe('gated phrases', () => {
     );
   });
 
+  it('keeps acronyms in group names', () => {
+    expect(
+      describeGatedThings([
+        {
+          ...SEND_MESSAGE,
+          group: 'contacts',
+          groupName: 'Contacts & CRM',
+          action: 'read' as const,
+        },
+        {
+          ...SEND_MESSAGE,
+          group: 'ai',
+          groupName: 'AI chats & skills',
+          action: 'create' as const,
+        },
+      ])
+    ).toBe('read contacts & CRM and create AI chats & skills');
+  });
+
   it('names three things and counts the rest', () => {
     const things = [
       DELETE_LABEL,
