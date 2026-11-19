@@ -1,0 +1,181 @@
+apps/web/src/features/agent-permissions/use-agent-permissions-flag.ts
+  s_024592623b7afc::t_1dd1ef00c67e20 2,6-8,12
+crates/code_mode_assets/AGENTS.md
+  s_024592623b7afc::t_1dd1ef00c67e20 8-11,62-64
+nix/cloud-storage.nix
+  s_024592623b7afc::t_1dd1ef00c67e20 250-252
+crates/agent_code_mode/src/inbound/toolset/test/js_tools.rs
+  s_024592623b7afc::t_1dd1ef00c67e20 1-421
+crates/code_execution/src/outbound/deno/test.rs
+  s_024592623b7afc::t_1dd1ef00c67e20 90-106,1806
+crates/code_execution/src/outbound/deno.rs
+  s_024592623b7afc::t_d3d76e2666e7bd 467,482,754,757-769
+  s_024592623b7afc::t_1dd1ef00c67e20 3-4,175-181,282-283,287,290-296,319,342-354,648-649,659-672,713-715,719-728,836-842,890
+  s_024592623b7afc::t_98d23e64a5acf1 741,782-784
+crates/code_execution/src/outbound/deno/js_tools_analyze.mjs
+  s_024592623b7afc::t_1dd1ef00c67e20 1-31
+packages/code-mode-sdk/src/js-tools/catalog.test.ts
+  s_024592623b7afc::t_1dd1ef00c67e20 1-339
+crates/agent_code_mode/src/inbound/toolset/test/ocaml.rs
+  s_024592623b7afc::t_1dd1ef00c67e20 22,55,104,110
+  s_024592623b7afc::t_cce6760fd49558 10
+crates/code_execution/src/outbound/deno/analyze/test.rs
+  s_024592623b7afc::t_1dd1ef00c67e20 1-343
+packages/sdk-ocaml/generated/agent_harness.ml
+  s_024592623b7afc::t_1dd1ef00c67e20 5508-5510,5514,5522,5530,5552-5553,5555-5556
+apps/web/src/features/agent-permissions/components/permissions-notes.tsx
+  s_024592623b7afc::t_1dd1ef00c67e20 10-13
+crates/agent_permission_registry/AGENTS.md
+  s_024592623b7afc::t_1dd1ef00c67e20 45-49
+apps/web/src/lib/core/constant/featureFlags.ts
+  s_024592623b7afc::t_1dd1ef00c67e20 157-159
+crates/agent_code_mode/AGENTS.md
+  s_024592623b7afc::t_1dd1ef00c67e20 103,114-122,128-135,181-184
+apps/web/src/features/agent-permissions/use-agent-permissions-flag.test.ts
+  s_024592623b7afc::t_1dd1ef00c67e20 1-36
+services/agent_harness_service/src/code_mode/test.rs
+  s_024592623b7afc::t_1dd1ef00c67e20 949-950,952,960,971,976-977,1075-1089,1147-1245
+services/agent_harness_service/src/internal_mcp.rs
+  s_024592623b7afc::t_1dd1ef00c67e20 100-101,106-108,173-175,380-381
+docs/agent-guide/ai-chat.md
+  s_024592623b7afc::t_1dd1ef00c67e20 1390-1402,1807-1811,1842-1843,1845-1846
+crates/agent_code_mode/src/domain/models.rs
+  s_024592623b7afc::t_1dd1ef00c67e20 60-62,73-75,90,100,171-172,180-181
+packages/sdk/generated/agent-harness/types.gen.ts
+  s_024592623b7afc::t_1dd1ef00c67e20 2079-2080,2084-2085,2668-2670,2672
+packages/code-mode-sdk/AGENTS.md
+  s_024592623b7afc::t_1dd1ef00c67e20 5-8,33-37,62-76
+  s_024592623b7afc::t_434bdc610d013e 77
+packages/sdk-ocaml/generated/agent_harness.mli
+  s_024592623b7afc::t_1dd1ef00c67e20 3194-3196,3200,3225-3226,3228-3229
+crates/code_mode_assets/build.rs
+  s_024592623b7afc::t_1dd1ef00c67e20 17-19,21,23,36
+packages/code-mode-sdk/src/js-tools/index.ts
+  s_024592623b7afc::t_1dd1ef00c67e20 1-21
+services/agent_harness_service/src/code_mode.rs
+  s_024592623b7afc::t_1dd1ef00c67e20 109-111,244-255,407,411,415-417,420-421,424-444,449-463,465,469-470,472,476-489
+crates/agent_code_mode/src/domain/ports.rs
+  s_024592623b7afc::t_1dd1ef00c67e20 80-82,84
+packages/code-mode-sdk/src/js-tools/analyze.test.ts
+  s_024592623b7afc::t_1dd1ef00c67e20 1-614
+packages/code-mode-sdk/src/js-tools/analyze.ts
+  s_024592623b7afc::t_1dd1ef00c67e20 1-358
+crates/code_execution/AGENTS.md
+  s_024592623b7afc::t_1dd1ef00c67e20 5-7,29-35,101-102,123-133,141-143
+packages/code-mode-sdk/scripts/generate.ts
+  s_024592623b7afc::t_1dd1ef00c67e20 3-5,11-12,16-20,143-146,155,158-159,161,223-329
+services/agent_harness_service/src/code_mode/permissions.rs
+  s_024592623b7afc::t_1dd1ef00c67e20 1-4,6-8,15,57-94,96-97,102-103,111-112,121-124,131-134,137,140,152-155,184,190-194,215-217,236,318-350,352-357,362,369-371,377,393,395-396
+crates/agent_code_mode/src/domain/service.rs
+  s_024592623b7afc::t_1dd1ef00c67e20 37-47,59,62-72,83,108,156,160-175,180-184,192,201-202,617-619,622,720-729,731-733,848
+  s_024592623b7afc::t_cce6760fd49558 657-659
+  s_024592623b7afc::t_e6d18e06320bca 620-621
+crates/agent_code_mode/src/inbound/toolset/session/js_tools_permissions.md
+  s_024592623b7afc::t_1dd1ef00c67e20 1
+packages/code-mode-sdk/src/js-tools/runtime.test.ts
+  s_024592623b7afc::t_1dd1ef00c67e20 1-179
+apps/web/src/features/block-agent/component/PermissionApprovalRequest.test.tsx
+  s_024592623b7afc::t_1dd1ef00c67e20 38-43,58-62,102,147-153
+  s_024592623b7afc::t_79d082cf7587a8 154-155
+docs/agent-guide/settings.md
+  s_024592623b7afc::t_1dd1ef00c67e20 1221-1226,1230-1232
+crates/code_execution/src/outbound/ocaml.rs
+  s_024592623b7afc::t_1dd1ef00c67e20 194
+apps/web/src/lib/i18n/locales/en/agent-permissions.ts
+  s_024592623b7afc::t_1dd1ef00c67e20 5,13,15
+apps/web/src/features/block-agent/state/permission-approval.test.ts
+  s_024592623b7afc::t_1dd1ef00c67e20 60-73
+services/agent_harness_service/src/code_mode/permissions/test.rs
+  s_024592623b7afc::t_1dd1ef00c67e20 158,162-163,206,208-211,382,385,618-826
+packages/code-mode-sdk/src/js-tools/pins.test.ts
+  s_024592623b7afc::t_1dd1ef00c67e20 1-134
+crates/code_execution/src/outbound/deno/test/js_tools.rs
+  s_024592623b7afc::t_1dd1ef00c67e20 1-859
+crates/code_execution/src/outbound.rs
+  s_024592623b7afc::t_1dd1ef00c67e20 1-3,5
+crates/code_execution/src/outbound/analysis/test.rs
+  s_024592623b7afc::t_1dd1ef00c67e20 1-61
+crates/code_execution/src/outbound/deno/bootstrap.mjs
+  s_024592623b7afc::t_1dd1ef00c67e20 76-78,194-253,283,405-410,423,481-506,537-538
+  s_024592623b7afc::t_0de2fddb400e9d 255,427-428,460-461,463,539
+packages/code-mode-sdk/README.md
+  s_024592623b7afc::t_1dd1ef00c67e20 56-95,100-101
+services/agent_harness_service/AGENTS.md
+  s_024592623b7afc::t_1dd1ef00c67e20 76-78,80-95
+crates/code_execution/src/domain/models.rs
+  s_024592623b7afc::t_1dd1ef00c67e20 12-13,18-19,39-44,53,82-86,229-231
+crates/code_mode_assets/src/lib.rs
+  s_024592623b7afc::t_1dd1ef00c67e20 27-42
+apps/web/package.json
+  s_024592623b7afc::t_1dd1ef00c67e20 158
+apps/web/src/features/block-agent/component/parts/ToolCallPart.test.tsx
+  s_024592623b7afc::t_1dd1ef00c67e20 81-95,1631-1700
+  s_024592623b7afc::t_8097cd4020e53f 1701
+crates/agent_code_mode/src/inbound/toolset/test/without_js_tools.json
+  s_024592623b7afc::t_1dd1ef00c67e20 1-424
+packages/code-mode-sdk/package.json
+  s_024592623b7afc::t_1dd1ef00c67e20 15-17
+crates/agent_code_mode/src/inbound/toolset.rs
+  s_024592623b7afc::t_1dd1ef00c67e20 62-74,79-81,267,303,310-330,364-468
+  s_024592623b7afc::t_eef7124019ee09 469
+packages/code-mode-sdk/src/js-tools/runtime.ts
+  s_024592623b7afc::t_1dd1ef00c67e20 1-121
+apps/web/src/features/agent-permissions/views/agent-permissions-page.test.tsx
+  s_024592623b7afc::t_1dd1ef00c67e20 84,87,91,94
+apps/web/src/features/agent-permissions/AGENTS.md
+  s_024592623b7afc::t_1dd1ef00c67e20 40-42,44-45,53-54
+crates/agent_code_mode/src/inbound/toolset/session/js_tools.md
+  s_024592623b7afc::t_1dd1ef00c67e20 1-9
+apps/web/src/features/block-agent/browser-test/permissions.browser.e2e.ts
+  s_024592623b7afc::t_1dd1ef00c67e20 22-23,28-30,42-103,107,109,111-122,124
+apps/web/src/features/block-agent/browser-test/permissions.tsx
+  s_024592623b7afc::t_1dd1ef00c67e20 6-10,21-22,33,46,211-223,227-228,230-242,251,269-270,275-283,297,300,336-339,353-356,408-424,465-467
+crates/agent_code_mode/src/inbound/toolset/test.rs
+  s_024592623b7afc::t_1dd1ef00c67e20 3,279,286,311,350-352,373,408-628
+packages/code-mode-sdk/licenses/opencode-codemode.LICENSE
+  s_024592623b7afc::t_1dd1ef00c67e20 1-21
+packages/code-mode-sdk/src/js-tools/catalog.ts
+  s_024592623b7afc::t_1dd1ef00c67e20 1-395
+crates/agent_code_mode/src/domain/service/test.rs
+  s_024592623b7afc::t_1dd1ef00c67e20 805,878-899
+  s_024592623b7afc::t_7a8924b9c2f96b 900-901
+crates/code_execution/README.md
+  s_024592623b7afc::t_1dd1ef00c67e20 4-5,128-197,242-243,320-322
+packages/sdk/specs/agent-harness.json
+  s_024592623b7afc::t_1dd1ef00c67e20 7413,7417,8248-8249
+services/agent_harness_service/src/internal_mcp/test.rs
+  s_024592623b7afc::t_1dd1ef00c67e20 435-437,440,445,480-482,484,498,501,578-670,781,784
+services/agent_harness_service/src/lib.rs
+  s_024592623b7afc::t_318bc8eebcd597 687-690,713,742-751,985-993,995,1035-1037,1041-1051
+  s_024592623b7afc::t_64fb3b2dd55f40 1052-1053
+crates/code_execution/src/outbound/analysis.rs
+  s_024592623b7afc::t_1dd1ef00c67e20 1-90
+crates/code_execution/src/outbound/deno/analyze.rs
+  s_024592623b7afc::t_1dd1ef00c67e20 1-187
+apps/web/src/lib/service-clients/service-agent-harness/generated/schemas/executionRecord.ts
+  s_024592623b7afc::t_19cde685725cc0 43-44,46-47
+apps/web/src/lib/service-clients/service-agent-harness/generated/schemas/executionRecordSdkFingerprint.ts
+  s_024592623b7afc::t_a7a6e1194cf64d 10-11
+apps/web/src/lib/service-clients/service-agent-harness/generated/schemas/programLanguage.ts
+  s_024592623b7afc::t_7bb27ba1f93147 10-12,21
+apps/web/src/lib/service-clients/service-agent-harness/openapi.json
+  s_024592623b7afc::t_82ffd6306cf77c 7413,7417,8248-8249
+bun.lock
+  s_024592623b7afc::t_45d49defebbaf7 148,243-245,1608-1609,2296,2518-2519,4732-4733,4744-4745,4820-4821,5002-5003,5130-5131
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.7.7",
+  "base_commit_sha": "1d1fe480d4cef2153a6ca04e028b9615f7f94dc5",
+  "prompts": {},
+  "sessions": {
+    "s_024592623b7afc": {
+      "agent_id": {
+        "tool": "claude",
+        "id": "ff44e640-d545-4448-b666-9917880bbb24",
+        "model": "claude-opus-5-5"
+      },
+      "human_author": "Eric Hayes <56524199+ehayes2000@users.noreply.github.com>"
+    }
+  }
+}
