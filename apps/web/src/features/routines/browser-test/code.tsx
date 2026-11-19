@@ -20,7 +20,7 @@ const STEP_ERROR =
   "TypeError: Cannot read properties of undefined (reading 'length')";
 const RUN_ERROR = 'The agent could not start: sandbox image unavailable';
 
-const step: CodeStepDraft = {
+const STEP: CodeStepDraft = {
   id: 'count',
   kind: 'code',
   title: 'Count threads',
@@ -30,7 +30,7 @@ const step: CodeStepDraft = {
   problems: [PROBLEM],
 };
 
-const slots: RoutineStepSlots = {
+const SLOTS: RoutineStepSlots = {
   PromptEditor: (props): JSX.Element => (
     <textarea
       aria-label="Instructions"
@@ -49,7 +49,7 @@ const slots: RoutineStepSlots = {
  * the app's body doesn't and a drag needs its block on screen.
  */
 function Fixture() {
-  const [steps, setSteps] = createSignal<StepDraft[]>([step]);
+  const [steps, setSteps] = createSignal<StepDraft[]>([STEP]);
   return (
     <div class="@container/routine grid h-screen max-w-3xl content-start gap-8 overflow-y-auto bg-page p-8 text-ink">
       <RoutineSteps
@@ -57,11 +57,11 @@ function Fixture() {
         onChange={setSteps}
         triggers={[]}
         defaultTarget={{ kind: 'model', model: 'm' }}
-        slots={slots}
+        slots={SLOTS}
       />
       <StepRevision
-        before={{ ...step, problems: undefined }}
-        after={{ ...step, source: REVISED }}
+        before={{ ...STEP, problems: undefined }}
+        after={{ ...STEP, source: REVISED }}
         onKeep={() => {}}
         onUndo={() => {}}
       />

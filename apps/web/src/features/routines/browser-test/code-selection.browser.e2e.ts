@@ -1,12 +1,12 @@
 import { expect, type Locator, type Page, test } from '@playwright/test';
 
-const fixture = '/src/features/routines/browser-test/code.html';
+const FIXTURE = '/src/features/routines/browser-test/code.html';
 
 async function open(page: Page) {
   const errors: string[] = [];
   page.on('pageerror', (error) => errors.push(error.message));
   await page.setViewportSize({ width: 1200, height: 900 });
-  await page.goto(fixture, { waitUntil: 'networkidle' });
+  await page.goto(FIXTURE, { waitUntil: 'networkidle' });
   // The first visit pre-bundles the app's dependencies, which can take minutes.
   await expect(page.getByText('Count threads').first()).toBeVisible({
     timeout: 180_000,

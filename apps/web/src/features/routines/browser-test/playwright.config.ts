@@ -1,8 +1,8 @@
 import { fileURLToPath } from 'node:url';
 import { defineConfig } from '@playwright/test';
 
-const webDirectory = fileURLToPath(new URL('../../../../', import.meta.url));
-const port = process.env.ROUTINE_CODE_BROWSER_PORT ?? '3076';
+const WEB_DIRECTORY = fileURLToPath(new URL('../../../../', import.meta.url));
+const PORT = process.env.ROUTINE_CODE_BROWSER_PORT ?? '3076';
 export default defineConfig({
   testDir: '.',
   testMatch: '*.browser.e2e.ts',
@@ -10,7 +10,7 @@ export default defineConfig({
   // The first page load on a fresh checkout pre-bundles the app's dependencies.
   timeout: 240_000,
   use: {
-    baseURL: `http://localhost:${port}`,
+    baseURL: `http://localhost:${PORT}`,
     headless: true,
     permissions: ['clipboard-read', 'clipboard-write'],
     launchOptions: {
@@ -18,9 +18,9 @@ export default defineConfig({
     },
   },
   webServer: {
-    command: `MACRO_DEV_HTTPS=false bunx vite --config src/features/routines/browser-test/vite.config.ts --port ${port} --strictPort`,
-    cwd: webDirectory,
-    url: `http://localhost:${port}/app/`,
+    command: `MACRO_DEV_HTTPS=false bunx vite --config src/features/routines/browser-test/vite.config.ts --port ${PORT} --strictPort`,
+    cwd: WEB_DIRECTORY,
+    url: `http://localhost:${PORT}/app/`,
     reuseExistingServer: false,
     timeout: 90_000,
   },
