@@ -1,6 +1,7 @@
 import { DEFAULT_VIEW_SHELL_BREAKPOINT_THRESHOLDS } from '@app/components/view-shell/view-shell-layout';
 import { AgentSessionProvider } from '@app/features/block-agent/agent-session-provider';
 import { AgentComposer } from '@app/features/block-agent/component/AgentComposer';
+import { AgentComposerRegion } from '@app/features/block-agent/component/AgentComposerRegion';
 import { AgentConnections } from '@app/features/block-agent/component/AgentConnections';
 import { AgentPreviewBanner } from '@app/features/block-agent/component/AgentPreviewBanner';
 import { AgentPullRequestChip } from '@app/features/block-agent/component/AgentPullRequestChip';
@@ -29,6 +30,7 @@ import { useBlockEntityCommands } from '@app/features/next-soup/actions';
 import { SessionAgentRuntime } from '@app/features/runtime-sharing/views/SessionAgentRuntime';
 import { LocalRuntimePrompt } from '@app/features/settings/components/local-runtime-prompt';
 import { useFeatureFlag } from '@app/lib/analytics/posthog';
+import { FloatRegion } from '@components/app/mobile/float-regions/FloatRegion';
 import { SplitHeaderScope } from '@components/app/SplitHeaderScope';
 import { SidePanel, useSidePanel } from '@components/app/side-panel';
 import { SplitFileMenu } from '@components/app/split-layout/components/SplitFileMenu';
@@ -379,38 +381,43 @@ function SessionContent(props: {
                       <Transcript searchTarget={searchTarget()} />
                     </AgentConnections>
                   </SessionClearance>
-                  {/* The pane's last row on desktop, where the corner prompt sits. */}
-                  <SessionClearance
-                    enabled={persistentFloating()}
-                    holdsPrompts={!isTouchDevice()}
-                    class="dock @min-[900px]/agent-session:pr-(--details-clearance)"
-                  >
-                    <div class="composer-anchor flex flex-col gap-2">
-                      <Show
-                        when={!isSessionArchived(session())}
-                        fallback={
-                          <Show when={session()}>
-                            {(current) => (
-                              <ArchivedSessionFooter session={current()} />
+                  <AgentComposerRegion>
+                    {/* The pane's last row on desktop, where the corner prompt sits. */}
+                    <SessionClearance
+                      enabled={persistentFloating()}
+                      holdsPrompts={!isTouchDevice()}
+                      class="flex w-full justify-center shrink-0 px-4 pb-2.5 pointer-events-auto touch:px-(--mobile-chrome-gutter) touch:pb-0 @min-[900px]/agent-session:pr-(--details-clearance)"
+                    >
+                      <div class="composer-anchor mx-auto flex w-full max-w-[896px] flex-col gap-2">
+                        <Show
+                          when={!isSessionArchived(session())}
+                          fallback={
+                            <Show when={session()}>
+                              {(current) => (
+                                <ArchivedSessionFooter session={current()} />
+                              )}
+                            </Show>
+                          }
+                        >
+                          <ChangesHandoff />
+                          <ReviewNotesDock />
+                          <LocalRuntimePrompt />
+                          <Show when={session()?.botId}>
+                            {(botId) => (
+                              <SessionAgentRuntime
+                                botId={botId()}
+                                class="px-1"
+                              />
                             )}
                           </Show>
-                        }
-                      >
-                        <ChangesHandoff />
-                        <ReviewNotesDock />
-                        <LocalRuntimePrompt />
-                        <Show when={session()?.botId}>
-                          {(botId) => (
-                            <SessionAgentRuntime botId={botId()} class="px-1" />
-                          )}
+                          <AgentComposer
+                            autofocus={!searchTarget()}
+                            input={ChatSessionInput}
+                          />
                         </Show>
-                        <AgentComposer
-                          autofocus={!searchTarget()}
-                          input={ChatSessionInput}
-                        />
-                      </Show>
-                    </div>
-                  </SessionClearance>
+                      </div>
+                    </SessionClearance>
+                  </AgentComposerRegion>
                 </Show>
               </section>
             </SidePanel.Layout>
@@ -429,15 +436,18 @@ export function AgentSessionPane(props: {
   onDeleted: () => void;
 }) {
   return (
-    <AgentSessionProvider blockId={props.id} onSessionId={props.onSessionId}>
-      <AgentChangesProvider>
-        <ChangesSplit>
-          <SessionContent
-            onDeleted={props.onDeleted}
-            notificationSource={props.notificationSource}
-          />
-        </ChangesSplit>
-      </AgentChangesProvider>
-    </AgentSessionProvider>
+    <>
+      <FloatRegion region="dock" priority={10} />
+      <AgentSessionProvider blockId={props.id} onSessionId={props.onSessionId}>
+        <AgentChangesProvider>
+          <ChangesSplit>
+            <SessionContent
+              onDeleted={props.onDeleted}
+              notificationSource={props.notificationSource}
+            />
+          </ChangesSplit>
+        </AgentChangesProvider>
+      </AgentSessionProvider>
+    </>
   );
 }

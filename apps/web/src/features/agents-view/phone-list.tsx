@@ -159,9 +159,6 @@ export function PhoneAgentsList(props: {
           <FloatRegion region="accessory" priority={10} active={() => true}>
             <span />
           </FloatRegion>
-          <FloatRegion region="dock" priority={10} active={() => true}>
-            <span />
-          </FloatRegion>
         </Show>
         <PhoneListHeader
           archived={props.archived}

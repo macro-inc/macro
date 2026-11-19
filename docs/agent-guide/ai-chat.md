@@ -287,13 +287,17 @@ channel message link and a settings page (refused; linked instead).
 **Agents** opens the new conversation list on phones,
 including GitHub PR state and links. Tap a row to open a full-screen conversation;
 the header back button returns to the previous screen, or Agents for a direct link.
+The session hides the bottom navigation dock and its islands through the shared
+floating-region owner; its composer sits in the bottom accessory with safe-area
+and keyboard clearance. Header Back and swipe-back still return through split
+history, restoring the dock on the Agents list and other Agents pages.
 Narrow touch layouts have no docked conversation side panel. Above 720px,
 including unfolded Duo, selecting a session or legacy chat opens it in the
 right preview instead of a standalone split. The Agents sidebar stays left and can
 be hidden from its title row or reopened from the leading header control. **Changes** opens a full-width,
 unified diff with **Back to conversation**; returning preserves the unsent draft.
 
-The phone list shows startable custom agents as bubbles above the Favorites, Waiting on you, and Conversations sections. Tap a bubble to focus the accessory composer with that agent selected. New agent opens the roster creation flow. The title menu opens Conversations, Agents, Routines, and Archived. Archived has history-based Back and search, but no composer or dock; Back restores the list or page it was opened from. Long-press a row for its entity actions; the quiet shared touch highlight spans the full row rather than a bright title-only button. Use the Agents composer or global create menu to start
+The phone list shows startable custom agents as bubbles above the Favorites, Waiting on you, and Conversations sections. Tap a bubble to focus the accessory composer with that agent selected. New agent opens the roster creation flow. The title menu opens Conversations, Agents, Routines, and Archived. Archived has history-based Back and search, and keeps the navigation dock but no composer; Back restores the list or page it was opened from. Long-press a row for its entity actions; the quiet shared touch highlight spans the full row rather than a bright title-only button. Use the Agents composer or global create menu to start
 a conversation. Returning to the list and reopening the composer preserves the
 draft, attachments, agent, model, repository, and branch. Tap the agent/model pill to open the phone model sheet. Its search and
 Suggested models sit above Built-in and Your agents; All models opens a pushed
