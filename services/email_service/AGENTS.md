@@ -297,6 +297,10 @@ the gateway `/email` prefix.
   awaited future takes its own stack slot. Pass a Gmail call through a helper
   as a `BoxFuture`, and box an operation the dispatch awaits in several arms;
   a `label_write_sim` test runs the label paths on 1.5 MiB worker stacks.
+- Inbox sync and gmail_ops add the operation as context on a failure's error
+  (`prefix_error_source`), so logs and spans keep its whole chain, and their
+  failure spans record the chain's SQLSTATE as `db.response.status_code`
+  (`pubsub::util::sqlstate`).
 - gmail_ops moves transient Gmail failures to the retry queue like rate limits;
   the primary queue dead-letters after three receives.
 - Header addresses that Gmail accepts can fail `MacroUserIdStr::try_from_email`.
