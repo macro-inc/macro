@@ -160,11 +160,12 @@ pub(crate) const FIXTURES: &[Fixture] = &[
         deleted: Deleted::Nothing,
     },
     // `naïveté` sorts after every `naï` word of the crowd that
-    // [`CAPPED_CASES`] seeds.
+    // [`PUNCTUATED_OR_NON_ASCII_CASES`] seeds, in precomposed and in
+    // decomposed form (`i` and a combining diaeresis).
     Fixture {
         name: "naïveté",
         access: Access::Own,
-        parts: &["Its naïveté showed"],
+        parts: &["Its naïveté showed", "Its nai\u{0308}vete\u{0301} showed"],
         deleted: Deleted::Nothing,
     },
     // One- and two-character terms match as a phrase, never as a prefix.
@@ -423,6 +424,12 @@ pub(crate) const PUNCTUATED_OR_NON_ASCII_CASES: &[Case] = &[
     },
     Case {
         terms: &["naï"],
+        match_type: "partial",
+        matching: DocumentTermMatching::All,
+        mode: Mode::Content,
+    },
+    Case {
+        terms: &["nai\u{0308}"],
         match_type: "partial",
         matching: DocumentTermMatching::All,
         mode: Mode::Content,

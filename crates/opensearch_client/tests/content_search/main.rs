@@ -174,7 +174,7 @@ fn seeded_entities(crowded_prefixes: &[&str]) -> Vec<Seeded> {
 }
 
 /// The `n`th word of a crowd: `conaaa`, `conaab`, … The 3,000 a crowd holds
-/// all sort before `conveyor` and `naïveté`.
+/// all sort before `conveyor` and `naïveté`, precomposed or not.
 fn crowd_word(prefix: &str, n: usize) -> String {
     let letter = |value: usize| char::from(b'a' + u8::try_from(value % 26).unwrap_or(0));
     format!("{prefix}{}{}{}", letter(n / 676), letter(n / 26), letter(n))
@@ -187,7 +187,11 @@ async fn content_search_returns_exactly_the_entities_its_rules_match() -> anyhow
 
 #[tokio::test]
 async fn a_punctuated_or_non_ascii_prefix_finds_words_past_the_first_256() -> anyhow::Result<()> {
-    run_cases(PUNCTUATED_OR_NON_ASCII_CASES, &["con", "naï"]).await
+    run_cases(
+        PUNCTUATED_OR_NON_ASCII_CASES,
+        &["con", "naï", "nai\u{0308}"],
+    )
+    .await
 }
 
 #[tokio::test]

@@ -83,8 +83,8 @@ const MAX_TOKEN_LEN: usize = 255;
 /// on scripts written without spaces (a Thai run is one token and many
 /// words), and UAX #29 keeps an emoji joined to a word by a zero-width joiner
 /// in it. So a word counts only when it holds nothing but letters, digits,
-/// ASCII punctuation and `’`, has nothing but ASCII punctuation around it,
-/// and fits in one token.
+/// combining marks (a decomposed `é`), ASCII punctuation and `’`, has nothing
+/// but ASCII punctuation around it, and fits in one token.
 fn single_word(term: &str) -> Option<&str> {
     let mut words = term.unicode_word_indices();
     let (start, word) = words.next()?;
@@ -92,9 +92,12 @@ fn single_word(term: &str) -> Option<&str> {
         return None;
     }
 
-    let letters_and_digits = word
-        .chars()
-        .all(|c| c.is_alphanumeric() || c.is_ascii_punctuation() || c == '’');
+    let letters_and_digits = word.chars().all(|c| {
+        c.is_alphanumeric()
+            || c.is_ascii_punctuation()
+            || c == '’'
+            || matches!(c, '\u{0300}'..='\u{036F}' | '\u{1AB0}'..='\u{1AFF}' | '\u{1DC0}'..='\u{1DFF}' | '\u{20D0}'..='\u{20FF}' | '\u{FE20}'..='\u{FE2F}')
+    });
     let mut around = term[..start]
         .chars()
         .chain(term[start + word.len()..].chars());

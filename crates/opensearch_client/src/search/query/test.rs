@@ -145,6 +145,10 @@ fn a_content_term_is_an_uncapped_prefix_only_when_it_is_one_long_enough_token() 
             serde_json::json!({"match_bool_prefix": {"content": {"query": "it’s"}}}),
         ),
         (
+            "cafe\u{0301}",
+            serde_json::json!({"match_bool_prefix": {"content": {"query": "cafe\u{0301}"}}}),
+        ),
+        (
             "👍abc",
             serde_json::json!({"match_phrase_prefix": {"content": {"query": "👍abc", "max_expansions": 256}}}),
         ),
