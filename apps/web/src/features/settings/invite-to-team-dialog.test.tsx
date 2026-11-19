@@ -248,7 +248,8 @@ function AgentInviteDialog(props: { admin: boolean; onClose: () => void }) {
   );
 }
 
-const agentForm = () => screen.queryByRole('textbox', { name: 'Name' });
+const agentForm = () =>
+  screen.queryByRole('textbox', { name: 'Name your agent teammate' });
 
 describe('InviteToTeamDialog agent teammates', () => {
   function openAsAdmin(onClose: () => void = () => {}) {
@@ -294,9 +295,12 @@ describe('InviteToTeamDialog agent teammates', () => {
     new ThrownResultError([{ code, message: code }]);
 
   function startAdding(name = 'Ada') {
-    fireEvent.input(screen.getByRole('textbox', { name: 'Name' }), {
-      target: { value: name },
-    });
+    fireEvent.input(
+      screen.getByRole('textbox', { name: 'Name your agent teammate' }),
+      {
+        target: { value: name },
+      }
+    );
   }
   const addButton = () =>
     screen.getByRole('button', {
@@ -314,7 +318,9 @@ describe('InviteToTeamDialog agent teammates', () => {
     openAsAdmin(onClose);
 
     // Add stays pressable: with no name it marks the field and sends nothing.
-    const field = screen.getByRole('textbox', { name: 'Name' });
+    const field = screen.getByRole('textbox', {
+      name: 'Name your agent teammate',
+    });
     fireEvent.click(addButton());
     expect(field.getAttribute('aria-invalid')).toBe('true');
     expect(document.activeElement).toBe(field);
@@ -378,7 +384,11 @@ describe('InviteToTeamDialog agent teammates', () => {
     );
     expect(screen.getByRole('button', { name: 'Update card' })).toBeTruthy();
     expect(
-      (screen.getByRole('textbox', { name: 'Name' }) as HTMLInputElement).value
+      (
+        screen.getByRole('textbox', {
+          name: 'Name your agent teammate',
+        }) as HTMLInputElement
+      ).value
     ).toBe('Ada');
 
     mocks.createAgent.mockResolvedValue(ada);
@@ -446,10 +456,14 @@ describe('InviteToTeamDialog agent teammates', () => {
     setFlag({ enabled: true, loading: false });
     setComputersFlag({ enabled: true, loading: false });
     openAsAdmin();
-    expect(screen.getByRole('textbox', { name: 'Name' })).toBeTruthy();
+    expect(
+      screen.getByRole('textbox', { name: 'Name your agent teammate' })
+    ).toBeTruthy();
 
     setFlag({ enabled: false, loading: false });
-    expect(screen.queryByRole('textbox', { name: 'Name' })).toBeNull();
+    expect(
+      screen.queryByRole('textbox', { name: 'Name your agent teammate' })
+    ).toBeNull();
     expect(screen.getByRole('button', { name: 'Send invite' })).toBeTruthy();
   });
 });

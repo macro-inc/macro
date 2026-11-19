@@ -1,7 +1,7 @@
 export default {
   inviteTitle: 'Invite an agent',
   agent: 'Agent',
-  name: 'Name',
+  nameYourAgent: 'Name your agent teammate',
   namePlaceholder: 'Ada',
   tooLong: {
     one: 'Use at most {{count}} character',

@@ -52,9 +52,12 @@ it('does not invite an agent after its picture finishes uploading to a disposed 
       prepareAvatar={() => upload.promise}
     />
   ));
-  fireEvent.input(screen.getByRole('textbox', { name: 'Name' }), {
-    target: { value: 'Ada' },
-  });
+  fireEvent.input(
+    screen.getByRole('textbox', { name: 'Name your agent teammate' }),
+    {
+      target: { value: 'Ada' },
+    }
+  );
   fireEvent.click(
     screen.getByRole('button', { name: 'Add Ada · $40.00/month' })
   );

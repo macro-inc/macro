@@ -195,35 +195,42 @@ export function InviteAgentForm(props: {
           readOnly={adding()}
           validationState={nameInvalid() ? 'invalid' : 'valid'}
         >
-          <TextField.Label>{t('teamAgents.name')}</TextField.Label>
-          <div class="flex items-center gap-3">
+          {/* The face leads, top left; the name's prompt is its label. */}
+          <div class="flex items-start gap-4">
             <fieldset disabled={adding()} class="contents">
               <Show
                 when={props.avatar}
                 fallback={
-                  <Avatar
-                    size="lg"
-                    class="shrink-0 bg-surface text-ink ring ring-edge-muted"
-                  >
-                    <Avatar.Fallback>{initial()}</Avatar.Fallback>
-                  </Avatar>
+                  <span class="block size-16 shrink-0">
+                    <Avatar
+                      size="fill"
+                      class="bg-surface text-ink ring ring-edge-muted"
+                    >
+                      <Avatar.Fallback class="text-xl">
+                        {initial()}
+                      </Avatar.Fallback>
+                    </Avatar>
+                  </span>
                 }
               >
                 {(avatar) => avatar()(initial)}
               </Show>
             </fieldset>
-            <TextField.Input
-              ref={nameInput}
-              class="min-w-0 flex-1"
-              placeholder={t('teamAgents.namePlaceholder')}
-              required
-            />
+            <div class="flex min-w-0 flex-1 flex-col gap-1.5 pt-1.5">
+              <TextField.Label>{t('teamAgents.nameYourAgent')}</TextField.Label>
+              <TextField.Input
+                ref={nameInput}
+                class="w-full"
+                placeholder={t('teamAgents.namePlaceholder')}
+                required
+              />
+              <Show when={tooLong()}>
+                <TextField.ErrorMessage>
+                  {t('teamAgents.tooLong', { count: MAX_AGENT_NAME_CHARS })}
+                </TextField.ErrorMessage>
+              </Show>
+            </div>
           </div>
-          <Show when={tooLong()}>
-            <TextField.ErrorMessage>
-              {t('teamAgents.tooLong', { count: MAX_AGENT_NAME_CHARS })}
-            </TextField.ErrorMessage>
-          </Show>
         </TextField>
       }
       computer={

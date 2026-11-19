@@ -39,10 +39,7 @@ export function ChangePictureDialog(props: {
       onOpenChange={props.onOpenChange}
       onCloseAutoFocus={props.onCloseAutoFocus}
     >
-      <Panel
-        depth={2}
-        class="max-h-[85vh] w-[28rem] max-w-full rounded-xl text-ink"
-      >
+      <Panel depth={2} class="max-h-[85vh] w-full rounded-xl text-ink">
         <Panel.Header class="gap-2 px-3">
           <Dialog.Title as="span" class="m-0 flex-1 p-0 text-base font-medium">
             {t('agentFaces.pictureTitle', { name: props.name })}

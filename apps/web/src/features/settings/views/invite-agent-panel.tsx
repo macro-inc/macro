@@ -74,7 +74,7 @@ export function InviteAgentPanel(props: {
       avatar={
         ENABLE_AGENT_FACES
           ? (initial) => (
-              <FaceSlot draft={face} initials={initial()} size={40} />
+              <FaceSlot draft={face} initials={initial()} size={64} />
             )
           : undefined
       }

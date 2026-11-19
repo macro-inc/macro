@@ -490,7 +490,9 @@ async function openInviteAgent(page: Page) {
 
 async function fillAda(page: Page) {
   const dialog = page.getByRole('dialog');
-  await dialog.getByRole('textbox', { name: 'Name' }).fill('Ada');
+  await dialog
+    .getByRole('textbox', { name: 'Name your agent teammate' })
+    .fill('Ada');
 }
 
 test('adding an agent waits in the dialog until it is online, then closes into its DM', async ({
@@ -502,7 +504,9 @@ test('adding an agent waits in the dialog until it is online, then closes into i
 
   // Add is always pressable: with no name it marks the field and focuses it.
   const add = dialog.getByRole('button', { name: /^Add/ });
-  const nameField = dialog.getByRole('textbox', { name: 'Name' });
+  const nameField = dialog.getByRole('textbox', {
+    name: 'Name your agent teammate',
+  });
   await screenshot(page, testInfo, 'add-agent-empty');
   await add.click();
   await expect(nameField).toHaveAttribute('aria-invalid', 'true');
@@ -1124,7 +1128,9 @@ for (const dark of [false, true]) {
     await scriptAuthService(page);
     await page.goto(dark ? '/?dark' : '/');
     const dialog = await openInviteAgent(page);
-    await dialog.getByRole('textbox', { name: 'Name' }).fill('Ada');
+    await dialog
+      .getByRole('textbox', { name: 'Name your agent teammate' })
+      .fill('Ada');
     await dialog
       .getByRole('button', { name: 'Edit picture', exact: true })
       .click();
