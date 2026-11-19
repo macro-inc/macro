@@ -79,27 +79,67 @@ export type Persona = {
 };
 
 // A held-out writer makes addresses from first names, so one may carry an
-// accent ("inès@…"), which the seed CLI refuses: read every address with its
-// local part spelled in ASCII, the same way everywhere a persona is used.
-const asciiAddress = (local: string) => local.normalize('NFD').replace(/[̀-ͯ]/g, '').replace(/[^\x21-\x7e]/g, '');
-const readJson = <T>(path: string): T | undefined =>
-  existsSync(path)
-    ? (JSON.parse(readFileSync(path, 'utf8').replace(/[^\s<>"',;:()@]+(?=@[\w.-]+\.\w+)/gu, (local) => (/^[\x21-\x7e]*$/.test(local) ? local : asciiAddress(local)))) as T)
-    : undefined;
+// accent ("inès@…") or another script, which the seed CLI refuses. Each such
+// address is read with its local part spelled in ASCII, the same way in every
+// file of the persona (its mail, its workspace and its answer keys): without
+// its accents, or tagged with its original spelling where that would leave it
+// empty or the same as another address of the persona. Files are parsed
+// first, so an escaped spelling ("in\\u00e8s") reads the same.
+const ADDRESS = /([^\s<>"',;:()@]+)@([\w.-]+\.\w+)/gu;
+const isAscii = (text: string) => /^[\x21-\x7e]*$/.test(text);
+
+const strings = (value: unknown): string[] => {
+  if (typeof value === 'string') return [value];
+  if (Array.isArray(value)) return value.flatMap(strings);
+  if (value && typeof value === 'object') return Object.entries(value).flatMap(([key, inner]) => [key, ...strings(inner)]);
+  return [];
+};
+
+const mapStrings = (value: unknown, f: (text: string) => string): unknown => {
+  if (typeof value === 'string') return f(value);
+  if (Array.isArray(value)) return value.map((inner) => mapStrings(inner, f));
+  if (value && typeof value === 'object') return Object.fromEntries(Object.entries(value).map(([key, inner]) => [f(key), mapStrings(inner, f)]));
+  return value;
+};
+
+/** Each address in `values` whose local part isn't ASCII, and how it is spelled instead. */
+export function asciiSpellings(values: unknown[]): Map<string, string> {
+  const addresses = [...new Set(values.flatMap(strings).flatMap((text) => [...text.matchAll(ADDRESS)].map((match) => match[0])))].sort();
+  const taken = new Set(addresses.filter((address) => isAscii(address.split('@')[0])).map((address) => address.toLowerCase()));
+  const spelled = new Map<string, string>();
+  for (const address of addresses.filter((address) => !isAscii(address.split('@')[0]))) {
+    const [local, domain] = address.split('@');
+    const plain = local.normalize('NFD').replace(/[^\x21-\x7e]/g, '');
+    let ascii = `${plain}@${domain}`;
+    if (!plain || taken.has(ascii.toLowerCase())) ascii = `${plain || 'x'}-${Bun.hash(local).toString(36).slice(0, 6)}@${domain}`;
+    taken.add(ascii.toLowerCase());
+    spelled.set(address, ascii);
+  }
+  return spelled;
+}
+
+/** `value` with every address in `spelled` spelled its way. */
+export const spellAddresses = <T>(value: T, spelled: Map<string, string>): T =>
+  spelled.size ? (mapStrings(value, (text) => text.replace(ADDRESS, (address) => spelled.get(address) ?? address)) as T) : value;
+
+const readJson = <T>(path: string): T | undefined => (existsSync(path) ? (JSON.parse(readFileSync(path, 'utf8')) as T) : undefined);
 
 function load(dir: string, name: string, heldout: boolean): Persona {
   const workspace = readJson<Persona['workspace']>(join(dir, 'workspace.json'));
   const inbox = readJson<Inbox>(join(dir, 'inbox.json'));
   if (!workspace || !inbox) throw new Error(`${dir} lacks workspace.json or inbox.json`);
+  const feedTruth = readJson<FeedTruth>(join(dir, 'feed-truth.json'));
+  const routinesTruth = readJson<RoutinesTruth>(join(dir, 'routines-truth.json'));
+  const spelled = asciiSpellings([workspace, inbox, feedTruth, routinesTruth]);
   return {
     name,
     seat: 1,
     heldout,
     dir,
-    workspace,
-    inbox,
-    feedTruth: readJson(join(dir, 'feed-truth.json')),
-    routinesTruth: readJson(join(dir, 'routines-truth.json')),
+    workspace: spellAddresses(workspace, spelled),
+    inbox: spellAddresses(inbox, spelled),
+    feedTruth: spellAddresses(feedTruth, spelled),
+    routinesTruth: spellAddresses(routinesTruth, spelled),
   };
 }
 
@@ -168,6 +208,13 @@ export function asFirstSeat(persona: Persona, variant: Variant, text: string): s
   const seat = domainOf(ownerEmail(persona, variant));
   const first = domainOf(ownerEmail(seatOf(persona, 1), variant));
   return seat === first ? text : text.replaceAll(seat, first);
+}
+
+/** Whether `text`, written about a later seat of `persona`, names the first seat's domain, which renaming the seat's own to it would hide. */
+export function namesFirstSeat(persona: Persona, variant: Variant, text: string): boolean {
+  const seat = domainOf(ownerEmail(persona, variant));
+  const first = domainOf(ownerEmail(seatOf(persona, 1), variant));
+  return seat !== first && text.includes(first);
 }
 
 /** Minutes before the anchor a message arrived; at least one, as the seed CLI needs. */

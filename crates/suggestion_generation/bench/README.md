@@ -33,11 +33,12 @@ routine cards) and routines sessions that write routine suggestions (catalog
 picks and drafted routines). Each section runs one kind alone, with only its
 flag on, so its number moves only with that kind's prompt and tools. Both
 also turn on `enable-event-routines` (`BASE_FLAGS`), without which a drafted
-routine can't start when mail arrives; every other flag is off.
+routine can't start when mail arrives (and the routines brief asks only for
+scheduled ones); every other flag is off.
 
 | Section | Generation | Persona copy | Answer key |
 | --- | --- | --- | --- |
-| `routines` | onboarding (`POST /suggestions/generate`), `enable-routine-suggestions` only: the routines sessions of the onboarding layout, in parallel, 240 s cap, one retry when a session suggests nothing | `signup`: the person a minute after signing up, their mailbox and nothing else | 5 or 6 needs a routine would meet (which catalog keys meet each, or what a drafted routine must do), 4 or 5 decoys, and every other catalog routine placed as `fine` or `misfit` |
+| `routines` | onboarding (`POST /suggestions/generate`), `enable-routine-suggestions` only: the routines session of the onboarding layout (one for every surface), 240 s cap, one retry when it suggests nothing | `signup`: the person a minute after signing up, their mailbox and nothing else | 5 or 6 needs a routine would meet (which catalog keys meet each, or what a drafted routine must do), 4 or 5 decoys, and every other catalog routine placed as `fine` or `misfit` |
 | `feed` | fresh suggestions (`POST /suggestions/regenerate`), `enable-suggestions` only: the suggestions session with nightly timeouts | `full`: weeks of use, with documents, tasks, channels, calls and mail | 9 planted opportunities that connect sources, and 3 stale decoys |
 
 The nightly run is the manual one with another brief line, a paid-plan check
@@ -85,14 +86,24 @@ apart: it calls as a grader account of its own.
 The judge (`anthropic/claude-opus-5-5` through the stack's structured
 completion) sees the persona's mail or workspace, the answer key and the
 suggestions, never the build, the label or other runs, and gets the run's own
-"now" and time zone. A routines judgement reads the first seat's mail and
-each seat's suggestions with their addresses as the first seat's, so the
-seats of one round share the person, mail, catalog and key word for word;
-those go after the rubric, which the route caches, and the round's first
-judgement writes the cache the others then read. Rejudged that way, the
-same generations scored within the judge's own pass-to-pass difference
-(main 12.3 against 12.3 and 11.0, a single-session build 64.7 against
-66.3) at about half the judge's cost.
+"now" and time zone. Every seat copies the first under a domain of its own,
+so where renaming a seat's domain to the first seat's loses nothing (none of
+its mail or suggestions names the first seat's domain, and its mail renamed
+is the first seat's word for word: a snippet cut at 500 characters can cut a
+longer domain's copy elsewhere), a routines judgement reads the first seat's
+mail and the seat's suggestions renamed (`routinesEvidence`), so the seats of
+one round share the person, mail, catalog and key word for word; those go
+after the rubric, which the route caches, and the round's first judgement
+writes the cache the others then read. Any other seat is judged on its own
+mail, uncached. Rejudged that way, the same generations scored within the
+judge's own pass-to-pass difference (main 12.3 against 12.3 and 11.0, a
+single-session build 64.7 against 66.3) at about half the judge's cost.
+
+A run records its judge (`JUDGE` in `judge.ts`: the model and a version to
+bump with any change to a rubric, a schema or what a judgement reads), and
+`compare` and `noise` refuse two sides judged by different judges. A run from
+before the judge was recorded reads as `unrecorded`: `rejudge` it before
+setting it beside a newer one.
 
 ## Running it
 

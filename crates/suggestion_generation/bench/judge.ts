@@ -10,12 +10,19 @@ import { SQL } from 'bun';
 import { seedId } from '../../scheduled_action/bench/setup';
 import { type Stack, call, login } from '../../scheduled_action/bench/stack';
 import { CATALOG } from './catalog';
-import { CONTENT_KINDS, type FeedTruth, type Persona, type RoutinesTruth, type Variant, asFirstSeat, contentKey, plainKey, recentMessages, scenario, scenarioName, seatOf, truthAt } from './personas';
+import { CONTENT_KINDS, type FeedTruth, type Persona, type RoutinesTruth, type Variant, asFirstSeat, contentKey, namesFirstSeat, plainKey, recentMessages, scenario, scenarioName, seatOf, truthAt } from './personas';
 import { shiftDays } from './clock';
 import type { CardRow, Generation, RoutineRow } from './run';
 import { CACHE, seed } from './run';
 
 export const JUDGE_MODEL = 'anthropic/claude-opus-5-5';
+/**
+ * The judge a run's marks come from: its model and a version of what it
+ * reads and how it is asked. Bump the version with any change to a rubric, a
+ * schema or what a judgement reads, so `compare` never weighs the marks of
+ * two judges against each other.
+ */
+export const JUDGE = `${JUDGE_MODEL} v2`;
 /**
  * The accounts the judges call as. Each judges one attempt at a time, so a
  * judgement's cost is the account's spend while it ran; several let
@@ -117,12 +124,15 @@ export async function judgeCost(at: Stack, grader: string, from: Date, to: Date)
 
 const iso = (ms: number) => new Date(ms).toISOString();
 
+/** Mail text with any <mail> or </mail> in it opened by a look-alike, so it can't close the judge's own <mail> tag. */
+const shown = (text: string) => text.replace(/<(\/?mail\b)/gi, '‹$1');
+
 /** The mailbox the generation read: the same copy, so addresses match what it quoted. */
 const inboxDigest = (persona: Persona, variant: Variant, now: number) =>
   recentMessages(persona, variant, now)
     .messages.map(
       (m, i) =>
-        `[${i + 1}] ${m.received_at.slice(0, 16)} from ${m.from.name} <${m.from.email}> | ${m.subject} | labels: ${m.labels.join(', ')}\n${m.snippet}`,
+        `[${i + 1}] ${m.received_at.slice(0, 16)} from ${shown(m.from.name)} <${m.from.email}> | ${shown(m.subject)} | labels: ${m.labels.map(shown).join(', ')}\n${shown(m.snippet)}`,
     )
     .join('\n\n');
 
@@ -213,6 +223,27 @@ export function describeRoutine(row: RoutineRow): string {
   return `drafted routine: ${routine.length > 4000 ? `${routine.slice(0, 4000)}…` : routine}\n${surfaces}\nreason shown: ${row.reason}`;
 }
 
+/**
+ * What a routines judgement reads of `persona`'s seat: its mail and its
+ * suggestions. Every seat copies the first under a domain of its own, so
+ * where renaming the seat's domain to the first seat's loses nothing (none of
+ * its text names the first seat's domain already, and its mail renamed is the
+ * first seat's mail exactly, though a snippet cut at 500 characters may cut a
+ * longer domain's copy elsewhere), the judge reads the first seat's mail and
+ * the suggestions renamed: the seats of one round then share that text word
+ * for word (`shared`). Otherwise it reads the seat's own.
+ */
+export function routinesEvidence(persona: Persona, generation: Generation): { mail: string; suggestions: string[]; shared: boolean } {
+  const { variant, now } = generation;
+  const own = inboxDigest(persona, variant, now);
+  const described = generation.routines.map(describeRoutine);
+  const firstMail = inboxDigest(seatOf(persona, 1), variant, now);
+  const shared = ![own, ...described].some((text) => namesFirstSeat(persona, variant, text)) && asFirstSeat(persona, variant, own) === firstMail;
+  return shared
+    ? { mail: firstMail, suggestions: described.map((text) => asFirstSeat(persona, variant, text)), shared }
+    : { mail: own, suggestions: described, shared };
+}
+
 export async function judgeRoutines(at: Stack, grader: string, persona: Persona, generation: Generation): Promise<RoutineMark[]> {
   if (!generation.routines.length) return [];
   const truth = truthAt(persona.routinesTruth as RoutinesTruth, generation.now);
@@ -220,19 +251,16 @@ export async function judgeRoutines(at: Stack, grader: string, persona: Persona,
   const catalog = Object.entries(CATALOG)
     .map(([key, entry]) => `- ${key}: ${entry.title}. ${entry.does} (sidebars: ${entry.surfaces.join(', ')})`)
     .join('\n');
-  // Every seat of a persona copies the first under a domain of its own, so
-  // the judge reads the first seat's mail and each seat's suggestions with
-  // their addresses as the first seat's: what the seats of one round share
-  // (the person, their mail, the catalog and the key) is then the same text,
-  // sent as instructions after the rubric, which the route caches.
-  const first = seatOf(persona, 1);
+  // What the seats of one round share (the person, their mail, the catalog
+  // and the key) goes as instructions after the rubric, which the route caches.
+  const evidence = routinesEvidence(persona, generation);
   const person = `Now is ${iso(generation.now)}; the person's time zone is ${generation.timezone}.
 
 Who they are: ${persona.inbox.persona}
 
 Their newest mail, newest first:
 <mail>
-${inboxDigest(first, generation.variant, generation.now)}
+${evidence.mail}
 </mail>
 
 The catalog of ready-made routines:
@@ -240,9 +268,7 @@ ${catalog}
 
 Answer key:
 ${JSON.stringify(truth, null, 1)}`;
-  const suggestions = generation.routines
-    .map((row, i) => `S${i + 1}. ${asFirstSeat(persona, generation.variant, describeRoutine(row))}`)
-    .join('\n\n');
+  const suggestions = evidence.suggestions.map((text, i) => `S${i + 1}. ${text}`).join('\n\n');
   const prompt = `The suggestions, in the order they were made:
 ${suggestions}
 
@@ -257,9 +283,10 @@ Mark every suggestion, S1 to S${generation.routines.length}, in order.`;
       if (attempt === 1) throw new Error(`the judge didn't mark ${missing.join(', ')} exactly once`);
     }
   };
+  if (!evidence.shared) return judge();
   // The round's first seat judged writes the shared instructions to the
   // cache; the others wait for it, then read them from there.
-  const round = `${scenarioName(first, generation.variant)} ${generation.now}`;
+  const round = `${scenarioName(seatOf(persona, 1), generation.variant)} ${generation.now}`;
   const ahead = warming.get(round);
   if (ahead) return ahead.then(judge, judge);
   const judged = judge();

@@ -9,7 +9,7 @@ import { parseArgs } from 'node:util';
 import { type Stack, call, exclusive, login, sdk, searchIndexer, stack } from '../../scheduled_action/bench/stack';
 import { keyGaps } from './catalog';
 import { makeHeldout, spend, spent } from './heldout';
-import { asGrader, judgeCost, judgeFeed, judgeRoutines, seedGraders } from './judge';
+import { JUDGE, asGrader, judgeCost, judgeFeed, judgeRoutines, seedGraders } from './judge';
 import { seedId } from '../../scheduled_action/bench/setup';
 import { type Persona, type Variant, contentKey, ownerEmail, personas, scenarioName, seatOf, slotName } from './personas';
 import { shiftDays } from './clock';
@@ -212,6 +212,7 @@ async function runSection(section: Section, values: Record<string, string | unde
     concurrency,
     seats,
     reps,
+    judge: JUDGE,
     flags: spec.flags,
     attempts: [],
   };
@@ -263,7 +264,7 @@ const readRun = (path: string) => JSON.parse(readFileSync(path, 'utf8')) as RunF
  */
 function readSide(arg: string): RunFile {
   const runs = arg.split(',').map(readRun);
-  for (const field of ['section', 'set'] as const) {
+  for (const field of ['section', 'set', 'judge'] as const) {
     if (new Set(runs.map((run) => run[field])).size > 1) throw new Error(`${arg} mixes ${field}s`);
   }
   let offset = 0;
@@ -292,8 +293,16 @@ async function rejudge(path: string, values: Record<string, string | undefined>)
       }),
     );
   });
+  run.judge = JUDGE;
   writeFileSync(path, `${JSON.stringify(run, null, 1)}\n`);
   console.log(reportLines([run]).join('\n'));
+}
+
+/** Two sides judged by one judge, or why they can't be set side by side. */
+function sameJudge(a: RunFile, b: RunFile) {
+  if (a.judge !== b.judge) {
+    throw new Error(`${a.label} and ${b.label} were judged by different judges (${a.judge ?? 'unrecorded'}, ${b.judge ?? 'unrecorded'}): rejudge the older one first`);
+  }
 }
 
 /** Score a run again from the marks it has, with the answer keys as they are now: for a changed key or scoring, at no cost. */
@@ -335,6 +344,7 @@ async function main() {
     case 'compare': {
       const [a, b] = rest.map(readSide);
       if (a.section !== b.section) throw new Error('compare two runs of the same section');
+      sameJudge(a, b);
       const margins = { ...MARGINS[a.section], ...(values.margin ? { score: Number(values.margin) } : {}) };
       const v = verdict(a.attempts, b.attempts, margins);
       const s = v.parts.score;
@@ -350,6 +360,7 @@ async function main() {
     }
     case 'noise': {
       const [a, b] = rest.map(readSide);
+      sameJudge(a, b);
       const n = noiseMargins(a.attempts, b.attempts);
       console.log(`${a.section}: ${n.score.attempts.join(' and ')} attempts of the same build over ${n.score.people} personas`);
       for (const [part, c] of Object.entries(n)) {
