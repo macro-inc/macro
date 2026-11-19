@@ -31,7 +31,8 @@ The share under 15 s is out of every request, and `compare` counts a draft
 with no answer as slower than its pair's, so a build can't look faster by
 failing fast or by timing out on its slowest drafts.
 Each draft is sent with its own `traceparent` and its trace is read back from
-Tempo to split the time:
+Tempo to split the time. The run check's routine listing, execute and history
+requests share that trace, whose ID is saved with the attempt:
 
 | Phase | What it is |
 | --- | --- |
@@ -102,6 +103,14 @@ time, and the summary counts it under `errors`. The judge is a second
 opinion: `calibrate` measures how often it agrees with grades given by hand.
 
 ## Run it
+
+From this directory in `nix develop`, type-check the bench and run its
+offline run-check tests:
+
+```bash
+bunx --no-install tsc --noEmit --target esnext --module preserve --moduleResolution bundler --types bun --skipLibCheck --strict *.ts
+bun test
+```
 
 Any local stack works: `--instance` names it (default `drafting`), and
 `seed` adds the eval's people on their own domain without touching anything

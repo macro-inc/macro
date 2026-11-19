@@ -36,8 +36,8 @@ type Definition = { name?: unknown; steps?: unknown[] };
  * sub-routine it runs and its inputs; its step kinds are its definition's in
  * `parent`.
  */
-async function copiesOf(at: Stack, token: string, parent: SavedRoutine, since: Date): Promise<CopyMade[]> {
-  const children = await call<SavedRoutine[]>(`${routines(at)}?parent=${parent.id}`, { token });
+async function copiesOf(at: Stack, request: RoutineRequest, parent: SavedRoutine, since: Date): Promise<CopyMade[]> {
+  const children = await call<SavedRoutine[]>(`${routines(at)}?parent=${parent.id}`, request);
   const definitions = (parent.task.sub_routines ?? []) as Definition[];
   const made = children.filter((child) => new Date(child.created_at).getTime() >= since.getTime() - 1000);
   return made.map((child) => {
@@ -63,18 +63,18 @@ async function copiesOf(at: Stack, token: string, parent: SavedRoutine, since: D
  * when its time comes, with its definition read from the routine as now.
  * Nothing when it couldn't be run.
  */
-async function runCopy(at: Stack, token: string, db: SQL, id: string): Promise<Effects['runs']> {
+async function runCopy(at: Stack, request: RoutineRequest, db: SQL, id: string): Promise<Effects['runs']> {
   const since = new Date();
-  const request = { token, signal: AbortSignal.timeout(RUN_TIMEOUT_MS) };
+  const signal = AbortSignal.timeout(RUN_TIMEOUT_MS);
   try {
     const started = await call<{ resource?: { id: string } | null; chat_id?: string | null } | undefined>(
       `${routines(at)}/${id}/execute`,
-      { ...request, method: 'POST' },
+      { ...request, signal, method: 'POST' },
     );
     const resourceId = started?.resource?.id ?? started?.chat_id ?? undefined;
     // Execute waits for preparation. History gets the record after the run finishes.
-    while (!request.signal.aborted) {
-      const runs = await runsSince(at, request, id, since, resourceId);
+    while (!signal.aborted) {
+      const runs = await runsSince(at, { ...request, signal }, id, since, resourceId);
       if (runs.length) {
         await Bun.sleep(SETTLE_MS);
         return await withReplies(db, runs);
@@ -303,9 +303,11 @@ export async function runCheck(
   draft: DraftResult,
   routine: SavedRoutine,
   context: Context,
+  traceparent: string,
 ): Promise<RunOutcome | undefined> {
   if (!item.run) return undefined;
   const owner = tokens[OWNER];
+  const request = { token: owner, headers: { traceparent } };
   const fire = item.run.fire(draft);
   const t0 = new Date();
   let firedMessage: string | undefined;
@@ -314,7 +316,7 @@ export async function runCheck(
   let error: string | undefined;
   try {
     if (fire.type === 'execute') {
-      await call(`${routines(at)}/${routine.id}/execute`, { method: 'POST', token: owner });
+      await call(`${routines(at)}/${routine.id}/execute`, { ...request, method: 'POST' });
     } else if (fire.type === 'message') {
       const sent = await sdk(at, tokens[fire.from]).channels.byId(context.ids[fire.channel]).send(fire.text);
       firedMessage = sent.id;
@@ -341,7 +343,7 @@ export async function runCheck(
   try {
     if (!error) {
       for (;;) {
-        runs = await runsSince(at, { token: owner }, routine.id, t0);
+        runs = await runsSince(at, request, routine.id, t0);
         if (runs.length) break;
         const waited = performance.now() - started;
         if (waited > RUN_TIMEOUT_MS) {
@@ -358,12 +360,12 @@ export async function runCheck(
     }
     ms = performance.now() - started;
     if (runs.length) await Bun.sleep(SETTLE_MS);
-    runs = runs.length ? await withReplies(db, await runsSince(at, { token: owner }, routine.id, t0)) : runs;
-    const copies = await copiesOf(at, owner, routine, t0);
+    runs = runs.length ? await withReplies(db, await runsSince(at, request, routine.id, t0)) : runs;
+    const copies = await copiesOf(at, request, routine, t0);
     if (item.run.runCopies) {
       await Promise.all(
         copies.map(async (copy) => {
-          if (copy.subRoutine !== null && copy.id) copy.runs = await runCopy(at, owner, db, copy.id);
+          if (copy.subRoutine !== null && copy.id) copy.runs = await runCopy(at, request, db, copy.id);
         }),
       );
     }
@@ -373,7 +375,7 @@ export async function runCheck(
     effects.firedAt = t0.toISOString();
   } finally {
     // Deleted first, so putting the task back doesn't fire it again.
-    await call(`${routines(at)}/${routine.id}`, { method: 'DELETE', token: owner }).catch(() => undefined);
+    await call(`${routines(at)}/${routine.id}`, { ...request, method: 'DELETE' }).catch(() => undefined);
     // Left changed, the task couldn't fire the next draft's run.
     await restore?.().catch(() => undefined);
   }

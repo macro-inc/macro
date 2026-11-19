@@ -178,7 +178,7 @@ async function attempt(
     if (options.runChecks && item.run && !result.error && result.draft?.outcome === 'routine') {
       try {
         const routine = await routineToRun(session, result);
-        if (routine) run = await runCheck(at, db, tokens, item, result.draft, routine, context);
+        if (routine) run = await runCheck(at, db, tokens, item, result.draft, routine, context, result.traceparent);
       } catch (error) {
         run = {
           says: item.run.says,

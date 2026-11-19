@@ -62,6 +62,7 @@ export async function preflight(at: Stack, token: string, entries: CatalogEntry[
 
 export type ArmResult = {
   traceId: string;
+  traceparent: string;
   /** When the timed part started, as an instant (ms since the epoch). */
   startedAtMs: number;
   /** The timed part: the draft request to its answer, or the message to the routine existing. */
@@ -116,6 +117,7 @@ export async function draftArm(
   } catch {}
   return {
     traceId,
+    traceparent: header,
     startedAtMs,
     wallMs,
     status: response.status,
@@ -272,6 +274,7 @@ export async function bareArm(
     : { outcome: 'failed', message: reply.slice(0, 2000) };
   return {
     traceId,
+    traceparent: header,
     startedAtMs,
     // Without a routine, the time is the whole turn (or the timeout).
     wallMs: kept ? kept.at - startedAtMs : (turnMs ?? performance.now() - started),

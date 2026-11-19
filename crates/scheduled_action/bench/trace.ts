@@ -108,11 +108,17 @@ export async function sessionSpans(
   sessionId: string,
   window: { start: number; end: number },
 ): Promise<Span[]> {
-  const chats = (spans: Span[]) => spans.filter((span) => String(span.attrs['gen_ai.operation.name']).startsWith('chat'));
+  const hasDraftChat = (spans: Span[]) =>
+    spans.some(
+      (span) =>
+        span.start >= window.start &&
+        span.start < window.end &&
+        String(span.attrs['gen_ai.operation.name']).startsWith('chat'),
+    );
   let spans: Span[] = [];
   for (let attempt = 0; attempt < 10; attempt++) {
     spans = await trace(at, traceId);
-    if (chats(spans).length) return spans;
+    if (hasDraftChat(spans)) return spans;
     await Bun.sleep(2000);
   }
   const search = new URLSearchParams({
@@ -132,7 +138,7 @@ export async function sessionSpans(
       if (fetched.length) byTrace.set(traceID.replace(/^0+/, ''), fetched);
     }
     const all = [...byTrace.values()].flat();
-    if (chats(all).length) return all;
+    if (hasDraftChat(all)) return all;
     await Bun.sleep(3000);
   }
   return spans;
