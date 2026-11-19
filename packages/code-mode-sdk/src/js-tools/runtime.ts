@@ -52,7 +52,28 @@ function toolInput(name: string, input: unknown): ToolInput {
       `tools.${name} takes { path?, query?, body? }; ${unknown.map((key) => `"${key}"`).join(', ')} is not one of them.`
     );
   const { path, query, body } = input as ToolInput;
-  return { path, query, body };
+  return { path: pathParameters(name, path), query, body };
+}
+
+// Path parameters are single URL segments. The JSON Schemas aren't checked,
+// so refuse what would move the request to another route: an object (the
+// generated client writes its keys into the path unencoded) or a `.` or `..`
+// segment (URL resolution removes it).
+function pathParameters(name: string, path: unknown): unknown {
+  if (path === undefined) return path;
+  if (path === null || typeof path !== 'object' || Array.isArray(path))
+    throw new Error(`tools.${name}: path must be an object of parameters.`);
+  for (const [key, value] of Object.entries(path)) {
+    const scalar =
+      typeof value === 'string' ||
+      typeof value === 'number' ||
+      typeof value === 'boolean';
+    if (!scalar || value === '.' || value === '..')
+      throw new Error(
+        `tools.${name}: path.${key} must be a string, number or boolean naming one path segment.`
+      );
+  }
+  return path;
 }
 
 /** The interpreter over every catalog operation, restricted to `admitted`. */

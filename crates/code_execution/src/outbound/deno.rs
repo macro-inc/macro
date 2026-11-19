@@ -299,13 +299,14 @@ impl DenoRunner {
                 .as_ref()
                 .map(|_| CATALOG.as_slice()),
             js_tools: (language == Language::JsTools).then(|| JsToolsLimits {
-                timeout_ms: u64::try_from(
+                // Milliseconds as a u32 stay a safe JavaScript integer.
+                timeout_ms: u32::try_from(
                     job.deadline
                         .saturating_duration_since(tokio::time::Instant::now())
                         .saturating_sub(JS_TOOLS_REPORT_MARGIN)
                         .as_millis(),
                 )
-                .unwrap_or(u64::MAX)
+                .unwrap_or(u32::MAX)
                 .max(1),
                 max_tool_calls: JS_TOOLS_MAX_TOOL_CALLS,
                 max_output_bytes: job.limits.max_frame_bytes,
@@ -457,7 +458,7 @@ struct ChildContext<'a> {
 #[serde(rename_all = "camelCase")]
 struct JsToolsLimits {
     /// The run's remaining deadline, less the margin to report how it ended.
-    timeout_ms: u64,
+    timeout_ms: u32,
     max_tool_calls: u16,
     /// Bytes of result and logs the interpreter keeps: the frame limit.
     max_output_bytes: usize,
@@ -526,6 +527,9 @@ async fn bridge(
     limits: &Limits,
 ) -> Result<Option<Outcome>, ExecutionFailure> {
     let environment = context.environment;
+    // Only the JS tools path sends a failure kind; any other program could
+    // write its own error frame.
+    let js_tools = context.js_tools.is_some();
     let mut initial = serde_json::to_vec(&context).map_err(internal)?;
     initial.push(b'\n');
     stdin.write_all(&initial).await.map_err(internal)?;
@@ -574,7 +578,7 @@ async fn bridge(
                         outcome = Some(Outcome::Succeeded { value });
                     }
                     ChildFrame::Error { message, failure } => {
-                        outcome = Some(match failure {
+                        outcome = Some(match failure.filter(|_| js_tools) {
                             Some(FrameFailure::Compile) => ExecutionFailure::new(FailureCode::Compile, message).into(),
                             Some(FrameFailure::TimedOut) => Outcome::TimedOut,
                             None => ExecutionFailure::new(FailureCode::Runtime, message).into(),

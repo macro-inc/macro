@@ -167,10 +167,35 @@ export function toolsByPath(catalog: Catalog): Map<string, CatalogTool> {
   return new Map(catalog.tools.map((tool) => [tool.path.join('.'), tool]));
 }
 
+// How many unknown operations get a suggestion: each is a search of the
+// whole catalog.
+const MAX_SUGGESTIONS = 3;
+
 /**
  * What a program may call. `tools` is the catalog indexed with `toolsByPath`.
  */
 export function analyze(
+  source: string,
+  tools: Map<string, CatalogTool>
+): Analysis {
+  try {
+    return analyzeProgram(source, tools);
+  } catch (error) {
+    // Both parsers recurse: nesting deep enough overflows the stack.
+    if (!(error instanceof RangeError)) throw error;
+    return {
+      status: 'cannot_analyze',
+      reasons: [
+        {
+          message: 'The program is nested too deeply to analyze.',
+          location: { line: 1, column: 0 },
+        },
+      ],
+    };
+  }
+}
+
+function analyzeProgram(
   source: string,
   tools: Map<string, CatalogTool>
 ): Analysis {
@@ -210,6 +235,18 @@ export function analyze(
   const parents = new Map<AstNode, AstNode>();
   const reasons = new Map<string, Refusal>();
   const calls = new Map<string, CatalogTool>();
+  const unknown = new Map<string, string>();
+  const unknownOperation = (path: string) => {
+    const known = unknown.get(path);
+    if (known) return known;
+    const suggestion =
+      unknown.size < MAX_SUGGESTIONS
+        ? ` did you mean tools.${closest(path, tools)}?`
+        : '';
+    const message = `tools.${path} is not an operation;${suggestion} Find operations with search("...").`;
+    unknown.set(path, message);
+    return message;
+  };
   const refuse = (node: AstNode, message: string) => {
     const location = locationOf(node);
     reasons.set(`${location.line}:${location.column}:${message}`, {
@@ -283,11 +320,7 @@ export function analyze(
     }
     const tool = tools.get(path);
     if (tool) calls.set(path, tool);
-    else
-      refuse(
-        node,
-        `tools.${path} is not an operation; did you mean tools.${closest(path, tools)}? Find operations with search("...").`
-      );
+    else refuse(node, unknownOperation(path));
   }
 
   // A5, second half: anything upstream finds, we must have found.

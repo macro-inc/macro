@@ -534,6 +534,29 @@ describe('JS tools analysis', () => {
     });
   });
 
+  it('refuses a program nested too deeply to parse', () => {
+    expect(
+      analyze(`return ${'['.repeat(100_000)}${']'.repeat(100_000)}`, TOOLS)
+    ).toMatchObject({
+      status: 'cannot_analyze',
+      reasons: [{ message: 'The program is nested too deeply to analyze.' }],
+    });
+  });
+
+  it('suggests operations for only the first few unknown ones', () => {
+    const source = Array.from(
+      { length: 6 },
+      (_, index) => `await tools.docs.nope${index}({})`
+    ).join('\n');
+    const analysis = analyze(source, TOOLS);
+    expect(
+      analysis.status === 'cannot_analyze' &&
+        analysis.reasons.map((reason) =>
+          reason.message.includes('did you mean')
+        )
+    ).toEqual([true, true, true, false, false, false]);
+  });
+
   it('gives a parse failure as located diagnostics', () => {
     expect(analyze('const x = ;', TOOLS)).toEqual({
       status: 'diagnostics',

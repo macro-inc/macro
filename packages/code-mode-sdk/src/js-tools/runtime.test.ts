@@ -111,6 +111,38 @@ describe('JS tools runtime', () => {
     expect(calls).toEqual([]);
   });
 
+  it('refuses path parameters that would leave their route', async () => {
+    const calls: string[] = [];
+    const runtime = makeRuntime({
+      catalog: CATALOG,
+      admitted: new Set(['storage.create_task_handler']),
+      call: async (target) => {
+        calls.push(target.operationId);
+        return {};
+      },
+      limits: LIMITS,
+    });
+    for (const value of [
+      '".."',
+      '"."',
+      '{ "../../email/admin?x=": 1 }',
+      '["a", "b"]',
+      'null',
+    ]) {
+      const result = await runtime.execute(
+        `try { await tools.storage.create_task_handler({ path: { document_id: ${value} } }) } catch (error) { return String(error) }`,
+        {}
+      );
+      expect(result, value).toMatchObject({
+        ok: true,
+        value: expect.stringContaining(
+          'path.document_id must be a string, number or boolean naming one path segment.'
+        ),
+      });
+    }
+    expect(calls).toEqual([]);
+  });
+
   it('gives a failed call to the program as a thrown error', async () => {
     const runtime = makeRuntime({
       catalog: CATALOG,

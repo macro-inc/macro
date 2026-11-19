@@ -302,33 +302,52 @@ async fn a_program_that_may_call_more_than_the_gate_admitted_never_starts() {
 #[ignore = "requires pinned Deno runtime"]
 async fn a_parameter_that_reaches_another_route_is_never_sent() {
     // `slug` sends the request to `/documents/slug/{}`, a more specific
-    // route; `..` resolves it away from the document entirely.
-    for document_id in ["slug", ".."] {
-        let (_root, service) = setup(Limits::default()).await;
-        let (address, server) = stub(vec!["{}"]).await;
-        let (events, outcome) = run_js_tools(
-            &service,
-            &format!("return await tools.storage.get_document_markdown({{ path: {{ document_id: {document_id:?} }} }})"),
-            10_000,
-            environment(address, Some(vec![read_markdown()])),
-        )
-        .await;
-        let error = failure(&outcome);
-        assert_eq!(error.code, FailureCode::Runtime);
-        assert!(
-            error.message.contains(
-                "storage.get_document_markdown is outside what this program was checked to call; it was not sent."
-            ),
-            "{document_id}: {error:?}"
-        );
-        assert_eq!(
-            statuses(&events),
-            [("getDocumentMarkdown".into(), "refused".into())]
-        );
-        assert!(!server.is_finished());
-        server.abort();
-        service.shutdown().await;
+    // route: refused at fetch.
+    let (_root, service) = setup(Limits::default()).await;
+    let (address, server) = stub(vec!["{}"]).await;
+    let (events, outcome) = run_js_tools(
+        &service,
+        r#"return await tools.storage.get_document_markdown({ path: { document_id: "slug" } })"#,
+        10_000,
+        environment(address, Some(vec![read_markdown()])),
+    )
+    .await;
+    let error = failure(&outcome);
+    assert_eq!(error.code, FailureCode::Runtime);
+    assert!(
+        error.message.contains(
+            "storage.get_document_markdown is outside what this program was checked to call; it was not sent."
+        ),
+        "{error:?}"
+    );
+    assert_eq!(
+        statuses(&events),
+        [("getDocumentMarkdown".into(), "refused".into())]
+    );
+
+    // `..` (URL resolution drops the segment) and an object (whose keys the
+    // client writes into the path unencoded) never reach fetch, gate or not.
+    for document_id in [r#"".." "#, r#"{ "../../storage/documents/x?": 1 }"#] {
+        for allowed in [None, Some(vec![read_markdown()])] {
+            let (events, outcome) = run_js_tools(
+                &service,
+                &format!("return await tools.storage.get_document_markdown({{ path: {{ document_id: {document_id} }} }})"),
+                10_000,
+                environment(address, allowed),
+            )
+            .await;
+            assert!(
+                failure(&outcome).message.contains(
+                    "path.document_id must be a string, number or boolean naming one path segment."
+                ),
+                "{document_id}: {outcome:?}"
+            );
+            assert!(progress(&events).is_empty());
+        }
     }
+    assert!(!server.is_finished());
+    server.abort();
+    service.shutdown().await;
 
     // Any other document id goes to the operation's own route.
     let (_root, service) = setup(Limits::default()).await;
@@ -528,19 +547,30 @@ async fn js_tools_output_is_bounded_and_cannot_forge_frames() {
         ..Limits::default()
     })
     .await;
-    // A log line is cut to what the interpreter keeps, the frame limit.
-    let (events, outcome) = run_js_tools(
-        &service,
-        "console.log('x'.repeat(20000)); return 1",
-        10_000,
-        RunEnvironment::default(),
-    )
-    .await;
-    assert!(matches!(outcome, Outcome::Succeeded { .. }), "{outcome:?}");
-    assert!(events.iter().all(|event| match &event.kind {
-        EventKind::Log { message, .. } => message.len() <= 16 * 1024,
-        _ => true,
-    }));
+    // A log line is cut to fit its frame, escaped.
+    for line in [
+        "'x'.repeat(20000)",
+        "'\\u0001'.repeat(10000)",
+        "'\"'.repeat(15000)",
+    ] {
+        let (events, outcome) = run_js_tools(
+            &service,
+            &format!("console.log({line}); return 1"),
+            10_000,
+            RunEnvironment::default(),
+        )
+        .await;
+        assert!(
+            matches!(outcome, Outcome::Succeeded { .. }),
+            "{line}: {outcome:?}"
+        );
+        assert!(
+            events
+                .iter()
+                .any(|event| matches!(&event.kind, EventKind::Log { .. })),
+            "{line}"
+        );
+    }
     // So are many: the run ends within its output budget.
     let (_, outcome) = run_js_tools(
         &service,
@@ -804,4 +834,26 @@ async fn the_analyzer_process_answers_what_a_program_may_call() {
         answer["diagnostics"][0]["location"],
         serde_json::json!({"line": 1, "column": 7})
     );
+}
+
+#[tokio::test]
+#[ignore = "requires pinned Deno runtime"]
+async fn only_a_js_tools_run_can_report_a_failure_kind() {
+    let (_root, service) = setup(Limits::default()).await;
+    for failure_kind in ["compile", "timed_out"] {
+        let (_, outcome) = run(
+            &service,
+            &format!(
+                r#"export function main() {{ Deno.stdout.writeSync(new TextEncoder().encode('{{"type":"error","message":"forged","failure":"{failure_kind}"}}\n')); Deno.exit(0); }}"#
+            ),
+            5000,
+        )
+        .await;
+        let error = failure(&outcome);
+        assert_eq!(
+            (error.code, error.message.as_str()),
+            (FailureCode::Runtime, "forged")
+        );
+    }
+    service.shutdown().await;
 }

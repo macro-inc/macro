@@ -226,8 +226,15 @@ async function runJsTools(context, limits, allowedOperations, callTool) {
   const result = await runtime.execute(source, {
     context: {sessionId: context.sessionId ?? null, executionId: context.executionId ?? null, webAppUrl: context.webAppUrl},
   });
-  for (const message of result.logs ?? []) emit({type: "log", level: "info", message});
-  for (const warning of result.warnings ?? []) emit({type: "log", level: "warn", message: warning.message});
+  // The interpreter bounds its logs' text, not their frames: JSON escaping
+  // can make a line up to six times longer, so a line over a frame is cut
+  // to what fits escaped.
+  const fitted = message => {
+    const frame = encoder.encode(stringify({type: "log", level: "info", message})).length;
+    return frame <= limits.maxOutputBytes ? message : message.slice(0, Math.floor((limits.maxOutputBytes - 64) / 6));
+  };
+  for (const message of result.logs ?? []) emit({type: "log", level: "info", message: fitted(message)});
+  for (const warning of result.warnings ?? []) emit({type: "log", level: "warn", message: fitted(warning.message)});
   if (!result.ok) {
     const {kind, message} = result.error;
     if (kind === "ParseError" || kind === "UnsupportedSyntax") throw new ProgramRefused(`${at(result.error.location && {line: result.error.location.line, column: result.error.location.column - 1})}${message}`);
