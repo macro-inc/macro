@@ -1068,7 +1068,9 @@ shows **Its sub-routines’ code needs an update**. **Review the update** shows
 each changed step, including steps inside definitions. The notice disappears
 when the editor receives a saved task that differs from the task the proposal
 was made from. **Approve** and **Approve and resume** are disabled until
-autosave is clean. Approval reads the routine again from the server before
+autosave is clean and the editor has no validation error. Approval for an
+event-triggered routine requires the `enable-event-routines` flag. Approval
+reads the routine again from the server before
 saving. If the task changed, the notice disappears and the page says the
 routine changed since the proposal. Editing, settings and activation
 controls are locked during the check and save. **Approve and resume** turns a

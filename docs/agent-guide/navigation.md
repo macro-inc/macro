@@ -1317,17 +1317,26 @@ the stored task unchanged. Task edits and code approval are disabled for
 those tasks.
 
 **Keep as my routine** and **Duplicate** follow the same eligibility rules
-in the owner's **Routine actions** and row menus.
+in the owner's **Routine actions** and row menus. Event-triggered routines
+need the `enable-event-routines` flag for either action, including routines
+that combine events with a schedule.
 
 - **Keep as my routine** is available for an ordinary sub-routine. For a
   reference-backed copy, the parent must still define it, its stored inputs
   must match, and the editor must see no active run claim. If any retained
   definition requires apps, connection information must be loaded and every
-  required app must be connected.
+  required app must be connected. A run-start notification updates the
+  active claim in the row caches.
 - **Duplicate** uses a saved task that holds its own steps or instructions.
-  Every one-time trigger must still be in the future, and required apps across
-  retained definitions must be connected. Tasks with definitions or program
-  input values require the owner's rollout flag.
+  It preserves the saved triggers. An unfired overdue one-time trigger is
+  due immediately on create. Required apps across retained definitions must
+  be connected. Tasks with definitions or program input values require the
+  owner's rollout flag.
+
+The list defers connection reads until a row menu opens and a candidate
+requires apps. On a copy's page, a loaded parent with a missing definition
+or incompatible inputs hides **Run now**. The row's **Run now** delegates
+definition resolution to the scheduler.
 
 The list's top bar has **Routines** with **All** / **On** tabs (each with a
 count) on the left and **New** and search on the right; **Cmd/Ctrl+F** focuses
@@ -1651,8 +1660,9 @@ the saved routine. The owner's own mention and the schedules' time zone fill in
 as whoever activates it; other references stay the same for everyone, and
 re-sharing keeps the fills an earlier template set. If a published routine gains
 definitions or input values, its owner's **Routine actions** menu still offers
-**Stop sharing** to revoke the existing snapshot. Opening the menu reuses
-sharing status cached within the last five minutes and refreshes expired
+**Stop sharing** to revoke the existing snapshot. The menu checks sharing
+status when it opens or when the saved task becomes ineligible while open.
+It reuses status cached within the last five minutes and refreshes expired
 status. A failed refresh keeps the
 action when the published snapshot is cached. **Retry sharing status** appears
 when the status read fails and there is no published snapshot in cache.
