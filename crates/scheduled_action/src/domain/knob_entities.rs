@@ -132,7 +132,7 @@ pub struct UnusableKnob {
 
 /// The entity knobs of `program` whose item `owner` can't use now, each with
 /// its step's position among all of the program's steps.
-#[tracing::instrument(name = "routine.unusable_knobs", skip_all, fields(
+#[tracing::instrument(name = "routine.unusable_knobs", err, skip_all, fields(
     items = tracing::field::Empty,
     unusable = tracing::field::Empty,
 ))]
