@@ -61,6 +61,41 @@ describe('code review', () => {
     expect(pendingCodeReview([], undefined)).toBeUndefined();
   });
 
+  it('lists the code an update changes in sub-routines, by the sub-routine', () => {
+    const withDefinitions = (own: string, nudge: string): RoutineTask => ({
+      steps: [{ type: 'code', title: 'Plan', source: own }],
+      sub_routines: [
+        {
+          name: 'remind',
+          title: 'Remind me',
+          steps: [{ type: 'code', title: 'Read', source: 'return 1' }],
+        },
+        {
+          name: 'nudge',
+          title: 'Nudge me',
+          steps: [{ type: 'code', title: 'Read', source: nudge }],
+        },
+      ],
+      sdk: '0.2.0+old',
+    });
+    const previous = withDefinitions('return 0', 'macro.tasks.create(x)');
+    const proposed = withDefinitions('return 0', 'macro.tasks.add(x)');
+    const review = pendingCodeReview(
+      [{ ...needsUpdate(proposed), previousTask: previous }],
+      '0.2.0+old'
+    );
+    expect(review?.proposal).toEqual({
+      task: proposed,
+      changes: [
+        {
+          title: 'Read (in Nudge me)',
+          before: 'macro.tasks.create(x)',
+          after: 'macro.tasks.add(x)',
+        },
+      ],
+    });
+  });
+
   it('reads the SDK a stored task was checked against', () => {
     expect(taskSdk(task('x', '0.2.0+old'))).toBe('0.2.0+old');
     expect(taskSdk({ steps: [] })).toBeUndefined();

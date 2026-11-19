@@ -4,6 +4,7 @@ import {
   codeSteps as codeStepsOf,
   programSteps,
 } from './routine-steps';
+import { subRoutinesFromWire } from './sub-routines';
 
 /** One way a routine's code was brought to a new SDK, as the scheduler lists it. */
 export type CodeUpgradeRecord = {
@@ -17,7 +18,7 @@ export type CodeUpgradeRecord = {
 /** A code step the proposed update changes: its code before and after. */
 export type CodeChange = { title: string; before: string; after: string };
 
-/** A paused routine whose code needs its owner after an SDK change. */
+/** A routine whose code needs its owner after an SDK change. */
 export type CodeReview = {
   reason: string;
   /** The SDK the update is for. */
@@ -31,14 +32,38 @@ export function taskSdk(task: RoutineTask): string | undefined {
   return 'steps' in task ? (task.sdk ?? undefined) : undefined;
 }
 
-function codeSteps(task: RoutineTask | null | undefined): CodeStepDraft[] {
-  return codeStepsOf((task && programSteps(task)) ?? []);
+/**
+ * Each code step of a task, its sub-routines' after its own, keyed by where
+ * it is, and titled with the sub-routine it belongs to. Undefined when the
+ * task holds steps the editor can't show.
+ */
+function codeSteps(
+  task: RoutineTask
+): Map<string, CodeStepDraft & { label: string }> | undefined {
+  const own = programSteps(task);
+  const definitions = subRoutinesFromWire(task);
+  if (!own || !definitions) return;
+  const steps = new Map<string, CodeStepDraft & { label: string }>();
+  codeStepsOf(own).forEach((step, index) => {
+    steps.set(`${index}`, { ...step, label: step.title });
+  });
+  for (const definition of definitions) {
+    codeStepsOf(definition.steps).forEach((step, index) => {
+      steps.set(`${definition.name}/${index}`, {
+        ...step,
+        label: `${step.title} (in ${definition.title})`,
+      });
+    });
+  }
+  return steps;
 }
 
 /**
- * What the owner has to review: the newest upgrade, when it paused the
- * routine and nothing saved since checks against its SDK. `sdk` is the SDK
- * the routine's code was last checked against.
+ * What the owner has to review: the newest upgrade that left the code for
+ * them, when nothing saved since checks against its SDK. `sdk` is the SDK
+ * the routine's code was last checked against. A proposal holds every code
+ * step the update changes, its sub-routines' included, and approving it
+ * saves all of them.
  */
 export function pendingCodeReview(
   upgrades: readonly CodeUpgradeRecord[],
@@ -46,13 +71,13 @@ export function pendingCodeReview(
 ): CodeReview | undefined {
   const [latest] = upgrades;
   if (latest?.outcome !== 'needs_update' || latest.toSdk === sdk) return;
-  const proposed = codeSteps(latest.task);
+  const proposed = latest.task ? codeSteps(latest.task) : undefined;
   const before = codeSteps(latest.previousTask);
   // Steps line up in program order; an update never adds or removes one.
-  const changes = proposed.flatMap((step, index) => {
-    const previous = before[index];
+  const changes = [...(proposed ?? [])].flatMap(([place, step]) => {
+    const previous = before?.get(place);
     return previous && previous.source !== step.source
-      ? [{ title: step.title, before: previous.source, after: step.source }]
+      ? [{ title: step.label, before: previous.source, after: step.source }]
       : [];
   });
   return {

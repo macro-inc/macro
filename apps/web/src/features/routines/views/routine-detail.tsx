@@ -472,6 +472,7 @@ export function RoutineDetailView(props: {
               {(review) => (
                 <CodeReviewNotice
                   review={review()}
+                  paused={!isActive()}
                   pending={props.source.codeUpdatePending()}
                   onApprove={() =>
                     fireAndForget(props.source.approveCodeUpdate(), 'routines')

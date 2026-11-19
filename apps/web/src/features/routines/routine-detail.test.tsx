@@ -1127,6 +1127,61 @@ describe('routine code that needs an update', () => {
     render(() => <Routine />);
     expect(screen.queryByText('Paused: its code needs an update')).toBeNull();
   });
+
+  it('saves the sub-routines’ rewritten code with the rest, and keeps a routine on when only they run it', async () => {
+    const withDefinition = (source: string, sdk: string): RoutineTask => ({
+      steps: [{ type: 'agent', model: 'm', instructions: 'Plan reminders' }],
+      sub_routines: [
+        {
+          name: 'remind',
+          title: 'Remind me',
+          steps: [{ type: 'code', title: 'Remind', source }],
+        },
+      ],
+      sdk,
+    });
+    // Its own steps run no code, so the upgrade left it on.
+    const enabled: ScheduledAction = {
+      ...cron,
+      enabled: true,
+      task: withDefinition('macro.tasks.create(x)', '0.2.0+old'),
+    };
+    setSchedules([enabled]);
+    mocks.update.mockResolvedValue({
+      ...enabled,
+      task: withDefinition('macro.tasks.add(x)', '0.3.0+new'),
+    });
+    mocks.codeUpgrades = () => [
+      {
+        ...upgrade(withDefinition('macro.tasks.add(x)', '0.3.0+new')),
+        previousTask: enabled.task,
+      },
+    ];
+    render(() => <Routine />);
+    expect(screen.queryByText('Paused: its code needs an update')).toBeNull();
+    expect(
+      screen.getByText('Its sub-routines’ code needs an update')
+    ).toBeTruthy();
+    fireEvent.click(screen.getByRole('button', { name: 'Review the update' }));
+    expect(screen.getByText('Remind (in Remind me)')).toBeTruthy();
+    fireEvent.click(screen.getByRole('button', { name: 'Approve' }));
+    await vi.advanceTimersByTimeAsync(0);
+    expect(mocks.update).toHaveBeenCalledWith({
+      scheduleId: cron.id,
+      body: expect.objectContaining({
+        task: expect.objectContaining({
+          sub_routines: [
+            expect.objectContaining({
+              name: 'remind',
+              steps: [
+                expect.objectContaining({ source: 'macro.tasks.add(x)' }),
+              ],
+            }),
+          ],
+        }),
+      }),
+    });
+  });
 });
 
 describe('sub-routines defined once', () => {

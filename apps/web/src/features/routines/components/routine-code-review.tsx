@@ -4,12 +4,14 @@ import { createSignal, For, Show } from 'solid-js';
 import type { CodeReview } from '../core/code-review';
 
 /**
- * A routine paused because Macro's SDK changed under its code: why, the
- * update AI proposed (each changed step's code before and after), and
- * approving it, which checks it again and resumes the routine.
+ * A routine whose code Macro's SDK changed under: why, the update AI
+ * proposed (each changed step's code before and after), and approving it,
+ * which checks it again and resumes the routine. It is paused unless only
+ * its sub-routines run that code, whose copies fail until then.
  */
 export function CodeReviewNotice(props: {
   review: CodeReview;
+  paused: boolean;
   pending: boolean;
   onApprove(): void;
 }) {
@@ -23,7 +25,9 @@ export function CodeReviewNotice(props: {
         <WarningIcon class="mt-0.5 size-4 shrink-0 text-failure" />
         <div class="grid min-w-0 gap-1">
           <span class="text-sm font-medium text-ink">
-            Paused: its code needs an update
+            {props.paused
+              ? 'Paused: its code needs an update'
+              : 'Its sub-routines’ code needs an update'}
           </span>
           <span class="whitespace-pre-wrap text-sm text-ink-muted">
             {props.review.reason}
@@ -34,7 +38,9 @@ export function CodeReviewNotice(props: {
         when={props.review.proposal}
         fallback={
           <span class="text-xs text-ink-muted">
-            Ask AI on this routine to update its code, then turn it back on.
+            {props.paused
+              ? 'Ask AI on this routine to update its code, then turn it back on.'
+              : 'Ask AI on this routine to update its code.'}
           </span>
         }
       >
@@ -61,7 +67,7 @@ export function CodeReviewNotice(props: {
                 disabled={props.pending}
                 onClick={() => props.onApprove()}
               >
-                Approve and resume
+                {props.paused ? 'Approve and resume' : 'Approve'}
               </Button>
               <Button
                 variant="secondary"

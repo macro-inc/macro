@@ -15,6 +15,7 @@ import type { ScheduleDraft } from '../core/draft';
 import type { RoutineSnapshot } from '../core/routine';
 import { withDraftSteps } from '../core/routine-draft';
 import { programSteps } from '../core/routine-steps';
+import { subRoutinesFromWire } from '../core/sub-routines';
 import { scheduleToEntity } from './entities';
 import {
   draftFromSchedule,
@@ -200,16 +201,21 @@ export function createRoutineDetailSource(
     },
     keepAsOwnPending: () => keep.isPending,
     codeReview,
-    // Saving checks the proposal against the current SDK again.
+    // Saving checks the proposal against the current SDK again. It holds
+    // the sub-routines' rewritten code too.
     async approveCodeUpdate() {
       const proposal = codeReview()?.proposal;
       const current = raw();
       const steps = proposal && programSteps(proposal.task);
+      const subRoutines = proposal && subRoutinesFromWire(proposal.task);
       const draft = current && toRoutine(current).draft;
-      if (!steps || !draft || approving()) return;
+      if (!steps || !subRoutines || !draft || approving()) return;
       setApproving(true);
       try {
-        await save(withDraftSteps(draft, steps));
+        await save({
+          ...withDraftSteps(draft, steps),
+          ...(subRoutines.length ? { subRoutines } : {}),
+        });
         activate.mutate({ scheduleId: id(), enabled: true });
         await upgrades.refetch();
       } catch (error) {
