@@ -185,9 +185,18 @@ Address: du.
 | notifications | Aviseringar |
 | done | Klar |
 | mark as read | Markera som läst |
-| snooze | Snooza aviseringar… |
+| snooze | Snooza aviseringar |
 | archive | Arkivera |
 | settings | Inställningar |
+| computer (Macro computer) | Ny Macro-dator |
+| machine (runs agents) | Dina maskiner |
+| session (agent) | Starta en session |
+| routine | Alla rutiner |
+| saved view | Ny sparad vy |
+| call | Starta ett samtal |
+| contact (CRM) | Kontakter och företag |
+| company (CRM) | Ta bort företag |
+| thread (email) | Undantagna trådar |
 
 ## Danish (`da`)
 
